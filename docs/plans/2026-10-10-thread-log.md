@@ -17,7 +17,8 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 - One entry per block during a run. The full type list and who reads each type is the audience registry in SL1, summarized in Appendix E.
 - An entry is admitted to the log only when it is a durable fact of the conversation, something the user expects to see again a week later. Progress ticks, status transitions, takeover negotiation steps, and facts about the bot or the group stay in the `events` table or their own tables.
 - Entries form a tree. Each entry carries `parentId`. The head of a session is its entry with the highest `seq`, so readers need no pointer. The writer keeps `headEntryId` on the session row, updated in the same statement that bumps `nextEntrySeq`, only to spare a round trip per append. A `rewind` entry's parent is the target entry. A `clear` entry has no parent.
-- A reader walks from the head up the parent chain and stops at the first `compaction` entry, inclusive. Measured at 3.5 ms for 500 entries inside a 200 000 entry session, Appendix A.
+- A reader walks from the head up the parent chain, through the first `compaction` entry it meets, and stops at that compaction's `coveredUpToSeq`. The tail is the compaction, the kept window of real turns after `coveredUpToSeq`, and everything appended since. A thread that cannot compact (no owning bot, no summarizer) reads at most 200 entries. Measured at 3.5 ms for 500 entries inside a 200 000 entry session, Appendix A.
+- Compaction is relative to the model. With B the history budget the inference computes (`contextWindow` minus the reserve minus the non-history tokens), a thread compacts once its uncompacted turns exceed B/2 tokens or 50 turns, and the kept window is the newest exchanges within B/4 tokens, at least one. Without a known context window the fixed pi constants apply.
 - `run.started` carries a `SessionRunTrigger` sum type (message, direct, routine, webhook, steering, retry, handoff, bot_message, subagent) and the model and effort choice. `direct` is a run started without a carrier message, `subagent` is a helper's own run in its child session.
 - Bots talk to each other through three entry types grounded on the existing tools. `handoff` inside a group session, `bot.message.sent` and `bot.message.received` across sessions for `message_bot` and connected agents. One rendering rule in the inference projection, what another bot said is a `<bot_message>` user turn, what this bot said stays on its assistant side. There is one run entry type per fact, not one per trigger source.
 - A subagent gets its own `Run` row with `sessionId` and `parentRunId`. It executes in process on the same worker and gate as today. Queueing it to another worker is possible later and changes nothing in the log.
@@ -187,7 +188,7 @@ Each live lane runs in its own isolated worktree (`isolation: "worktree"`) at th
 
 - [ ] Lane 1. Regression lane against trunk. Trunk lacks the tables. Record that and gate the behavior the diff adds. Run `pnpm db:migrate` on an empty database at head, then `psql -c '\d session_entries'`. Save `migrate.png`. Pass when both tables and every index exist.
 - [ ] Lane 2. Run the migration on a database that already holds threads and messages from a trunk seed. Save `migrate-existing.png`. Pass when the migration exits zero, every thread has a `sessionId`, and `messages` is untouched.
-- [ ] Lane 3. Append 1 000 entries through `PostgresSessionLog` in a script and read the tail. Save `pg-tail.png`. Pass when the tail stops at the last compaction and is in seq order.
+- [ ] Lane 3. Append 1 000 entries through `PostgresSessionLog` in a script and read the tail. Save `pg-tail.png`. Pass when the tail starts at the last compaction, continues with the entries after its `coveredUpToSeq`, and is in seq order.
 - [ ] Lane 4. Append from two processes at once against real Postgres for 10 seconds. Save `pg-concurrent.png`. Pass when no seq collides and every entry's parent is the previous seq.
 - [ ] Lane 5. Rewind to an older entry through the log and read the tail. Save `pg-rewind.png`. Pass when entries after the target are absent from the tail and still present in the table.
 - [ ] Lane 6. Create a child session from a parent entry, append to both at once, read both tails. Save `pg-child.png`. Pass when the chains never cross and the child row points at the parent entry.
@@ -289,7 +290,7 @@ Each live lane runs in its own isolated worktree (`isolation: "worktree"`) at th
 - [ ] Edit `packages/adapters/src/reply-context.ts`.
 - [ ] Edit `packages/adapters/src/history-compaction.ts`.
 - [ ] Edit `packages/adapters/src/background-job-handlers.ts`.
-- [ ] Edit `packages/db/prisma/schema.prisma` and add a migration dropping `historyCompactedUpToSeq`, `historyCompactionSummary`, `historyCompactionGeneration`.
+- [ ] Leave `historyCompactedUpToSeq`, `historyCompactionSummary`, `historyCompactionGeneration` in `schema.prisma`. Delete their writers here; SL6 reads the summary for the backfill and drops the columns after it.
 - [ ] Delete `packages/db/src/messages.ts` function `loadRunHistoryMessages`.
 - [ ] Edit `packages/adapters/src/history-compaction.test.ts` and `executor.test.ts`.
 
@@ -297,7 +298,7 @@ Each live lane runs in its own isolated worktree (`isolation: "worktree"`) at th
 
 - [ ] The executor loads history through `deps.sessionLog.readTail(sessionId)` and `projectInferenceTurns` from SL1, then applies `selectHistoryWindow` unchanged. `LEGACY_HISTORY_WINDOW_SIZE` and `selectCompactedHistory` are deleted.
 - [ ] `messageToAgentHistoryTurn` and `messageToAgentHistoryParts` in `reply-context.ts` are deleted. Their rendering rules live in `projectInferenceTurns` from SL1, which this slice confirms against the executor tests.
-- [ ] `compactHistory` reads its batch from the log, skips entries whose audience is UI only, appends the summary as a `compaction` entry at the head of the session with `coveredUpToSeq` equal to its parent's seq, so every chain entry before it is covered and nothing sits between the summary and the reader's stop, and no longer touches `Thread` columns. `shouldEnqueueCompaction` counts entries after the last compaction. The batch it summarizes is the uncompacted prefix of the chain, and the entries it leaves verbatim for the model are the ones after that prefix, which the summary names as recent context inside its text, not through the chain.
+- [ ] `compactHistory` reads its batch from the log, skips entries whose audience is UI only, appends the summary as a `compaction` entry at the head of the session whose `coveredUpToSeq` is the seq of the last summarized entry, so the kept window after it stays real turns with tool replay, and no longer writes `Thread` columns. The summary text holds the summary only. A later compaction summarizes everything after the previous `coveredUpToSeq`, the previous kept window included, on top of the previous summary. `shouldEnqueueCompaction` takes the turns after `coveredUpToSeq` and the model-relative budget. A thread with no owning bot or no usable summarizer enqueues nothing.
 - [ ] The executor passes `resolveReplyTarget` to `projectInferenceTurns`, a lookup of an entry by id outside the chain, so a reply to an entry older than the compaction keeps its quote. A cancelled run's assistant stretches are already dropped by the projection, matching trunk, which writes no history row for a cancelled run.
 - [ ] The adapter-kit history types alias `AgentHistoryTurn` and `AgentHistoryTurnPart` from contracts. The tool caps, the replay helpers, `formatCompactedSummary` and the private copies of `escapePromptData` in adapters and the api are deleted in favor of the core exports SL1 added.
 - [ ] `learnDurableFacts` reads the same batch of entries and appends `memory.revised`.
@@ -311,7 +312,7 @@ Each live lane runs in its own isolated worktree (`isolation: "worktree"`) at th
 **Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
 - [ ] `executor.test.ts` gains a case where the session holds a compaction entry and asserts the literal history handed to the runtime starts with the summary block, and a case where a `subagent` entry replays as a tool result. Run `pnpm --filter @rakazo/adapters test`.
-- [ ] `history-compaction.test.ts` gains a case that compacts a 120 entry session holding UI-only entries and asserts a `compaction` entry exists, the next tail is 20 entries plus the summary, and the summary prompt never saw the UI-only entries. Run `pnpm --filter @rakazo/adapters test`.
+- [ ] `history-compaction.test.ts` gains a case that compacts a 120 entry session holding UI-only entries and asserts a `compaction` entry exists, the next tail is the summary plus the kept window as real turns with their tool parts, a second compaction covers the first kept window, and the summary prompt never saw the UI-only entries. Run `pnpm --filter @rakazo/adapters test`.
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `sonnet` at the PR head, per the boot recipe.
 
@@ -322,7 +323,7 @@ Each live lane runs in its own isolated worktree (`isolation: "worktree"`) at th
 - [ ] Lane 5. Group thread with two bots and a handoff, then a direct bot message between two other bots. Save `group-history.png` and `direct-history.png`. Pass when each bot's history wraps the other's words in `<bot_message>`, the receiver of the direct message sees it as its waking user turn, and the sender sees what it sent on its own side.
 - [ ] Lane 6. Channel thread mirrored from an external conversation. Save `channel-history.png`. Pass when only channel inputs and the bot's own output appear.
 - [ ] Lane 7. A conversation with a subagent, then one more message. Save `subagent-replay.png`. Pass when the runtime history holds the subagent's result as a tool result and none of the child session's entries.
-- [ ] Lane 8. Confirm the three `historyCompaction*` columns are gone with `psql -c '\d threads'`. Save `columns-gone.png`. Pass when none is listed.
+- [ ] Lane 8. Confirm nothing writes the three `historyCompaction*` columns anymore. Run a conversation past compaction, then `psql -c "select \"historyCompactedUpToSeq\" from threads"` for that thread. Save `columns-untouched.png`. Pass when the columns still exist and the thread's values are unchanged since before the run.
 - [ ] Lane 9. Run `pnpm lint` and `pnpm check` at head. Save `lint-check.png`. Pass when both exit zero.
 - [ ] Lane 10. Run `pnpm test:e2e:affected` at head. Save `e2e-affected.png`. Pass when the run exits zero.
 
@@ -415,7 +416,7 @@ Each live lane runs in its own isolated worktree (`isolation: "worktree"`) at th
 **Files.**
 
 - [ ] Create `packages/db/src/backfill-session-log.ts` and `scripts/backfill-session-log.ts`.
-- [ ] Edit `packages/db/prisma/schema.prisma` and add a migration that drops `messages`, `nextMessageSeq`, and repoints `Run.sourceMessageId`, `SteeringMessage.messageId`, `ExternalMessage.threadMessageId`, `Artifact` link preview relations to entry ids.
+- [ ] Edit `packages/db/prisma/schema.prisma` and add a migration that drops `messages`, `nextMessageSeq`, the three `historyCompaction*` thread columns once the backfill has read them, and repoints `Run.sourceMessageId`, `SteeringMessage.messageId`, `ExternalMessage.threadMessageId`, `Artifact` link preview relations to entry ids.
 - [ ] Delete `packages/adapters/src/pi-session.ts` and its wiring in both composition roots.
 - [ ] Delete the `subagent`, `steps`, `bot_message_sent` and `bot_message_received` members of `MessageBlock` in `packages/contracts/src/events.ts` once no reader remains.
 - [ ] Create `scripts/session-log-export.ts` and `scripts/session-log-import.ts`.
@@ -424,7 +425,7 @@ Each live lane runs in its own isolated worktree (`isolation: "worktree"`) at th
 
 **Build.**
 
-- [ ] `backfillThread(prisma, threadId)` converts `Message` rows in seq order into a linear chain in the thread's main session. A user row becomes `user.message`. A bot row becomes `run.started` with a `message` trigger, its steps as `tool.call` and `tool.result` pairs, a `subagent` block as a `subagent` entry with no `sessionId`, a `bot_message_sent` or `bot_message_received` block as the matching `bot.message.*` entry with the cross link resolved through the message id map when the peer thread is backfilled, its text as `assistant.text`, and `run.finished`. A thread with `historyCompactionSummary` from a database older than SL4 gets a `compaction` entry at the summarized seq. Idempotent, it skips a session whose entries already exist.
+- [ ] `backfillThread(prisma, threadId)` converts `Message` rows in seq order into a linear chain in the thread's main session. A user row becomes `user.message`. A bot row becomes `run.started` with a `message` trigger, its steps as `tool.call` and `tool.result` pairs, a `subagent` block as a `subagent` entry with no `sessionId`, a `bot_message_sent` or `bot_message_received` block as the matching `bot.message.*` entry with the cross link resolved through the message id map when the peer thread is backfilled, its text as `assistant.text`, and `run.finished`. A thread with `historyCompactionSummary` gets a `compaction` entry whose `coveredUpToSeq` is the summarized seq, read before the columns are dropped. Idempotent, it skips a session whose entries already exist.
 - [ ] The script runs the backfill for every thread before the drop migration, in batches, and logs progress per thread.
 - [ ] Export streams a thread's main session and every child session as JSONL files through `encodeEntries`, one file per session. Import reads them through `decodeEntries` and appends to new sessions, rewriting the `subagent` entries' `sessionId` to the imported child.
 - [ ] `PiJsonlSessionRecorder` and `PI_SESSION_RECORDING` are deleted. The log is the record.
