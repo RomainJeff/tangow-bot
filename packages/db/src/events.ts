@@ -1701,6 +1701,11 @@ export async function finalizeComputerControlRelease(
   realtime?: RealtimeFanout,
 ): Promise<FinalizeComputerControlReleaseResult | false> {
   const committed = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    // The bot's thread before the computer and the run, the order a stop and a grant take.
+    const [thread] = await tx.$queryRaw<Array<{ id: string; sessionId: string }>>`
+      SELECT threads.id, threads."sessionId" FROM threads JOIN bots ON bots.id = threads."botId"
+      WHERE bots.id = ${input.botId} AND bots."spaceId" = ${input.spaceId}
+      FOR UPDATE OF threads`;
     const cleared = await tx.computer.updateMany({
       where: {
         id: input.computerId,
@@ -1751,19 +1756,15 @@ export async function finalizeComputerControlRelease(
         : { count: 0 };
     const runId = resumed.count === 1 || stamped.count === 1 ? input.runId : null;
 
-    const bot = await tx.bot.findFirst({
-      where: { id: input.botId, spaceId: input.spaceId },
-      select: { thread: { select: { id: true, sessionId: true } } },
-    });
-    if (!bot?.thread) return { threadId: null, seq: null, runId };
+    if (!thread) return { threadId: null, seq: null, runId };
     await appendComputerControlInTransaction(tx, {
-      sessionId: bot.thread.sessionId as SessionId,
+      sessionId: thread.sessionId as SessionId,
       botId: input.botId,
       holder: "bot",
     });
     const event = await appendEventInTransaction(tx, {
       spaceId: input.spaceId,
-      threadId: bot.thread.id,
+      threadId: thread.id,
       botId: input.botId,
       runId: runId ?? undefined,
       type: "computer.takeover.released",

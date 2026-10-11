@@ -182,13 +182,8 @@ describe("finalizeComputerControlRelease", () => {
     const fanout = new TestFanout();
     const publish = vi.spyOn(fanout, "publish");
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([{ id: "thread-1", sessionId: "session-1" }]),
       computer: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
-      bot: {
-        findFirst: vi.fn().mockResolvedValue({
-          computerId: "computer-1",
-          thread: { id: "thread-1" },
-        }),
-      },
       run: {
         findUnique: vi.fn().mockResolvedValue({ status: "waiting_takeover" }),
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
@@ -262,13 +257,8 @@ describe("finalizeComputerControlRelease", () => {
 
   it("stamps a takeover checkpoint on a steered running run without clearing its lease", async () => {
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([{ id: "thread-1", sessionId: "session-1" }]),
       computer: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
-      bot: {
-        findFirst: vi.fn().mockResolvedValue({
-          computerId: "computer-1",
-          thread: { id: "thread-1" },
-        }),
-      },
       run: {
         findUnique: vi.fn().mockResolvedValue({ status: "running" }),
         updateMany: vi.fn().mockResolvedValueOnce({ count: 0 }).mockResolvedValueOnce({ count: 1 }),
@@ -329,8 +319,8 @@ describe("finalizeComputerControlRelease", () => {
 
   it("clears the lease even if its controlling bot was deleted", async () => {
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
       computer: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
-      bot: { findFirst: vi.fn().mockResolvedValue(null) },
     };
     const prisma = {
       message: { findUnique: vi.fn().mockResolvedValue(null) },

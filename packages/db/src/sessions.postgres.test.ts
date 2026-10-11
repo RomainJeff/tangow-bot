@@ -4,8 +4,12 @@ import { SessionId } from "@rakazo/contracts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { logCancelledRunsInTransaction } from "./cancel-runs.js";
 import { createDb, type PrismaClient } from "./client.js";
-import { clearThread } from "./events.js";
-import { appendRunFinishedInTransaction, appendSessionEntryInTransaction } from "./sessions.js";
+import { clearThread, finalizeComputerControlRelease } from "./events.js";
+import {
+  appendComputerControlInTransaction,
+  appendRunFinishedInTransaction,
+  appendSessionEntryInTransaction,
+} from "./sessions.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 const describePostgres =
@@ -214,6 +218,76 @@ describePostgres("appendSessionEntryInTransaction under contention (PostgreSQL)"
         ),
       ]),
     ).toEqual([["session.entry.appended", "run.finished cancelled", "clear"], ["thread.cleared"]]);
+  });
+
+  it("releases a computer behind its bot's thread lock, holding nothing a stop needs first", async () => {
+    const { sessionId, threadId, botId, runId } = await startedRun();
+    await prisma.run.update({ where: { id: runId }, data: { status: "waiting_takeover" } });
+    await prisma.$transaction((tx) =>
+      appendComputerControlInTransaction(tx, { sessionId, botId, holder: "user" }),
+    );
+    const computer = await prisma.computer.create({
+      data: {
+        spaceId: id,
+        userId: id,
+        scopeKey: `release-${runId}`,
+        homeKey: `release-${runId}`,
+        kind: "sandbox",
+        controlHolder: "user",
+        controlBotId: botId,
+        controlLeaseId: "lease-1",
+        controlRunId: runId,
+      },
+    });
+    let locked!: () => void;
+    let release!: () => void;
+    const holding = new Promise<void>((resolve) => {
+      locked = resolve;
+    });
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const stopLike = prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM threads WHERE id = ${threadId} FOR UPDATE`;
+      locked();
+      await released;
+    }, TRANSACTION);
+    await holding;
+    const finalized = finalizeComputerControlRelease(prisma, {
+      spaceId: id,
+      computerId: computer.id,
+      botId,
+      runId,
+      leaseId: "lease-1",
+      holder: "bot",
+      reason: "done",
+    });
+    await waitForLockWaiter();
+    const probe = (query: Promise<unknown>) =>
+      query.then(
+        () => "free",
+        (error: unknown) => String(error),
+      );
+    const probes = [
+      await probe(
+        prisma.$queryRaw`SELECT id FROM computers WHERE id = ${computer.id} FOR UPDATE NOWAIT`,
+      ),
+      await probe(
+        prisma.$queryRaw`SELECT id FROM runs WHERE id = ${runId} FOR NO KEY UPDATE NOWAIT`,
+      ),
+    ];
+    release();
+    await stopLike;
+
+    expect(probes).toEqual(["free", "free"]);
+    expect(await finalized).toEqual({ runId });
+    expect(
+      await prisma.sessionEntry.findMany({
+        where: { sessionId, type: "computer.control" },
+        orderBy: { seq: "asc" },
+        select: { payload: true },
+      }),
+    ).toEqual([{ payload: { holder: "user" } }, { payload: { holder: "bot" } }]);
   });
 
   it("gives two concurrent appends on one session distinct seqs on one chain", async () => {
