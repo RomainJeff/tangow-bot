@@ -65,7 +65,6 @@ export function shouldEnqueueCompaction(
   );
 }
 
-/** What a compaction keeps word for word: a quarter of the history budget, half the trigger. */
 function keptWindowTokens(historyBudget: number | undefined): number {
   return historyBudget === undefined
     ? DEFAULT_COMPACTION_SETTINGS.keepRecentTokens / 2
@@ -472,16 +471,15 @@ export interface CompactHistoryDeps {
 
 type Exchange = {
   entries: SessionEntry[];
-  turns: AgentHistoryTurn[];
   tokens: number;
   transcript: string;
   channel: boolean;
 };
 
-/** The entries split at each user message, an older compaction among them left out. */
 function exchangesOf(entries: readonly SessionEntry[], selfBotId: string): Exchange[] {
   const groups: SessionEntry[][] = [];
   for (const entry of entries) {
+    // An older compaction inside the window would project as a second summary turn.
     if (entry.type === "compaction") continue;
     const last = groups.at(-1);
     if (last && entry.type !== "user.message") last.push(entry);
@@ -491,7 +489,6 @@ function exchangesOf(entries: readonly SessionEntry[], selfBotId: string): Excha
     const turns = projectInferenceTurns(group, { selfBotId });
     return {
       entries: group,
-      turns,
       tokens: estimateHistoryTokens(turns),
       transcript: turns
         .map((turn) => `${turn.role === "assistant" ? "bot" : "user"}: ${turn.content}`)
@@ -508,7 +505,6 @@ function exchangesOf(entries: readonly SessionEntry[], selfBotId: string): Excha
   });
 }
 
-/** How many of the newest exchanges fit in `maxTokens`, and always the newest one. */
 function keptCount(exchanges: readonly Exchange[], maxTokens: number): number {
   let kept = 0;
   let tokens = 0;
