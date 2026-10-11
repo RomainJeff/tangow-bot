@@ -89,9 +89,8 @@ type ThreadFeed = {
   entries: SessionEntry[];
 };
 type Route = { sessionId: SessionId; threadId: string | null; originSessionId?: SessionId };
-/** Where a session sits: its thread's main session, that thread, and whether it is a child. */
 type Lineage = { mainSessionId: SessionId; threadId: string | null; child: boolean };
-/** The lineages a transaction resolved, by session, and the feed event it writes, by thread. */
+/** What a transaction already resolved: each session's lineage, and its feed event per thread. */
 type TransactionLog = { lineageOf: Map<string, Lineage>; feedOf: Map<string, ThreadFeed> };
 const transactionLogs = new WeakMap<Prisma.TransactionClient, TransactionLog>();
 

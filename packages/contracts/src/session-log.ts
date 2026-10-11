@@ -337,7 +337,6 @@ export const RUN_TRACE_TYPES: ReadonlySet<SessionEntryType> = new Set([
   "subagent",
 ] satisfies SessionEntryType[]);
 
-/** The block kinds that need the person: a card they must act on before anything happens. */
 export const BLOCK_KINDS_NEEDING_THE_PERSON: ReadonlySet<MessageBlock["kind"]> = new Set([
   "mcp_approval",
 ] satisfies MessageBlock["kind"][]);
