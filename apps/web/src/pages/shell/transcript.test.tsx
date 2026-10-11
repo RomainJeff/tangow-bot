@@ -74,7 +74,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-async function renderThread(lastEntry: number) {
+async function renderThread(lastEntry: number, activeRunIds: ReadonlySet<string> = new Set()) {
   await act(async () => {
     root.render(
       <Transcript
@@ -85,6 +85,7 @@ async function renderThread(lastEntry: number) {
         olderCursor={null}
         loadingOlder={false}
         running={false}
+        activeRunIds={activeRunIds}
         workingBots={[]}
         onLoadOlder={() => undefined}
         onOpenBot={() => undefined}
@@ -121,6 +122,17 @@ describe("the transcript", () => {
       "Find three competitors and summarize Acme's site",
       "Yes",
     ]);
+  });
+
+  it("says an open run is running only while the thread lists it, and needs input on a card", async () => {
+    await renderThread(6, new Set(["run_str_1"]));
+    expect(text('[data-testid="run-card"]')).toEqual(["emulator-1 · Running"]);
+
+    await renderThread(6);
+    expect(text('[data-testid="run-card"]')).toEqual(["emulator-1"]);
+
+    await renderThread(7, new Set(["run_str_1"]));
+    expect(text('[data-testid="run-card"]')).toEqual(["emulator-1 · Needs input"]);
   });
 
   it("opens a finished helper's own session, read-only", async () => {

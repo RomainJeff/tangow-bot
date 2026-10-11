@@ -43,6 +43,8 @@ export type RowContext = {
   inGroup: boolean;
   viewerUserId?: string;
   waiting: WaitingCard | null;
+  /** The thread's runs at work: only these read "Running" while their finish is not held. */
+  activeRunIds: ReadonlySet<string>;
   onAnswer?: (target: CardAnswerTarget, text: string, edits?: SpawnBotCardEdits) => Promise<void>;
   memberName?: (botId: string | undefined) => string | undefined;
   peerBot: PeerBot;
@@ -151,7 +153,16 @@ function itemBody(
     case "run":
       return (
         <BotSide inGroup={context.inGroup}>
-          <RunCard item={item} />
+          <RunCard
+            item={item}
+            live={
+              context.waiting?.runId === item.runId
+                ? "waiting"
+                : context.activeRunIds.has(item.runId)
+                  ? "running"
+                  : undefined
+            }
+          />
         </BotSide>
       );
     case "subagent":
@@ -249,18 +260,26 @@ function BotSide({ inGroup, children }: { inGroup: boolean; children: ReactNode 
   );
 }
 
-function RunCard({ item }: { item: ItemOf<"run"> }) {
+/**
+ * A run's model and state: its outcome once its finish is held, else whether it waits on a card or
+ * is at work. A run that is neither (its finish outside the page, or a crash) shows no state.
+ */
+function RunCard({ item, live }: { item: ItemOf<"run">; live?: "waiting" | "running" }) {
   const { t } = useLingui();
   const [open, setOpen] = useState(false);
-  const status = item.finished?.outcome.status ?? "running";
+  const status = item.finished?.outcome.status ?? live;
   const statusLabel =
-    status === "running"
-      ? t`Running`
-      : status === "completed"
-        ? t`Completed`
-        : status === "failed"
-          ? t`Failed`
-          : t`Cancelled`;
+    status === "waiting"
+      ? t`Needs input`
+      : status === "running"
+        ? t`Running`
+        : status === "completed"
+          ? t`Completed`
+          : status === "failed"
+            ? t`Failed`
+            : status === "cancelled"
+              ? t`Cancelled`
+              : undefined;
   const trigger =
     item.trigger.kind === "routine"
       ? item.trigger.name

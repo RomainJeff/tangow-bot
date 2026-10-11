@@ -50,6 +50,7 @@ describe("projectThreadItems", () => {
           { kind: "text", text: "Let me check." },
           {
             kind: "steps",
+            durationMs: 9000,
             steps: [
               {
                 label: "Get weather",
@@ -367,6 +368,7 @@ describe("projectThreadItems", () => {
         blocks: [
           {
             kind: "steps",
+            durationMs: 6000,
             steps: [
               {
                 label: "Fetch news",
@@ -564,7 +566,7 @@ describe("projectThreadItems", () => {
         ts: at(1),
         botId: "bot_ada",
         runId: "run_veille",
-        blocks: [{ kind: "ask", text: "Which outlets?", status: "answered", answer: "Le Monde" }],
+        blocks: [{ kind: "ask", text: "Which outlets?", status: "answered" }],
         origin: fromVeille,
       },
       {
@@ -672,6 +674,7 @@ describe("projectThreadItems", () => {
         blocks: [
           {
             kind: "steps",
+            durationMs: 4000,
             steps: [
               {
                 label: "Run subagent",
@@ -820,6 +823,7 @@ describe("projectThreadItems", () => {
         blocks: [
           {
             kind: "steps",
+            durationMs: 5000,
             steps: [
               {
                 label: "Message bot",
@@ -895,7 +899,7 @@ describe("projectThreadItems", () => {
     ]);
   });
 
-  it("opens on the clear divider and shows an ask and a choice answered by their answer records", async () => {
+  it("opens on the clear divider, settles an ask its reply answers and leaves a replied choice open", async () => {
     expect(projectThreadItems(await fixtureChain("cleared"))).toEqual([
       { kind: "divider", id: "clr-01", ts: at(1), reason: "clear" },
       {
@@ -948,7 +952,6 @@ describe("projectThreadItems", () => {
             kind: "ask",
             text: "Which day should it go out?",
             status: "answered",
-            answer: "Tuesday.",
           },
         ],
       },
@@ -1005,7 +1008,6 @@ describe("projectThreadItems", () => {
               { id: "inbox", letter: "A", label: "Clear my inbox" },
               { id: "week", letter: "B", label: "Plan my week" },
             ],
-            answerId: "Plan my week.",
           },
         ],
       },
@@ -1111,6 +1113,110 @@ describe("projectThreadItems", () => {
         readFiles("cut-3", [shown("b.md", "beta")]),
       ]);
     });
+  });
+
+  it("drops the running helper once its run is cancelled before the helper answered", () => {
+    const run = { botId: "bot_ada", runId: "run_1" };
+    const trigger = { kind: "webhook", routineId: "rtn_1" };
+    const input = JSON.stringify({ name: "scout", task: "List competitors" });
+    const usage = { inputTokens: 300, outputTokens: 5 };
+    const chain = linkEntries("stop", [
+      { ...run, type: "run.started", payload: { trigger, model, effort: null } },
+      {
+        ...run,
+        type: "tool.call",
+        payload: { callId: "call_scout", name: "run_subagent", input },
+      },
+      { ...run, type: "run.finished", payload: { status: "cancelled", usage } },
+    ]);
+    expect(projectThreadItems(chain)).toEqual([
+      {
+        kind: "run",
+        id: "stop-0",
+        ts: at(0),
+        ...run,
+        trigger,
+        model,
+        effort: null,
+        finished: { outcome: { status: "cancelled", usage }, durationMs: 2000 },
+      },
+      {
+        kind: "message",
+        role: "bot",
+        id: "stop-1",
+        ts: at(1),
+        ...run,
+        blocks: [
+          {
+            kind: "steps",
+            durationMs: 2000,
+            steps: [
+              {
+                label: "Run subagent",
+                count: 1,
+                calls: [{ name: "run_subagent", input, output: "", id: "call_scout" }],
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+  });
+
+  it("stamps the run's duration on the last steps block of its words once it finishes", () => {
+    const run = { botId: "bot_ada", runId: "run_1" };
+    const trigger = { kind: "webhook", routineId: "rtn_1" };
+    const usage = { inputTokens: 300, outputTokens: 5 };
+    const call = (callId: string) => ({
+      ...run,
+      type: "tool.call",
+      payload: { callId, name: "read_file", input: "{}" },
+    });
+    const result = (callId: string) => ({
+      ...run,
+      type: "tool.result",
+      payload: { callId, output: "ok", isError: false, artifactIds: [] },
+    });
+    const chain = linkEntries("timed", [
+      { ...run, type: "run.started", payload: { trigger, model, effort: null } },
+      call("call_a"),
+      result("call_a"),
+      { ...run, type: "assistant.text", payload: { blocks: text("Reading more.") } },
+      call("call_b"),
+      result("call_b"),
+      { ...run, type: "assistant.text", payload: { blocks: text("Done.") } },
+      { ...run, type: "run.finished", payload: { status: "completed", usage } },
+    ]);
+    const read = (id: string) => ({
+      label: "Read file",
+      count: 1,
+      calls: [{ name: "read_file", input: "{}", output: "ok", id }],
+    });
+    expect(projectThreadItems(chain)).toEqual([
+      {
+        kind: "run",
+        id: "timed-0",
+        ts: at(0),
+        ...run,
+        trigger,
+        model,
+        effort: null,
+        finished: { outcome: { status: "completed", usage }, durationMs: 7000 },
+      },
+      {
+        kind: "message",
+        role: "bot",
+        id: "timed-1",
+        ts: at(1),
+        ...run,
+        blocks: [
+          { kind: "steps", steps: [read("call_a")] },
+          { kind: "text", text: "Reading more." },
+          { kind: "steps", steps: [read("call_b")], durationMs: 7000 },
+          { kind: "text", text: "Done." },
+        ],
+      },
+    ]);
   });
 
   it("gives a run finished at a timestamp before its start a duration of zero", () => {

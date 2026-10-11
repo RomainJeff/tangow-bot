@@ -300,34 +300,54 @@ export const MessageView = memo(function MessageView({
   const skillLines = skills.map((skill) => skillLine(skill, skillLinesLive, onOpenSkill));
   if (!drawsSomething) return null;
   if (isNarration) {
-    const prose = visibleBlocks.flatMap((block) => {
-      if (block.kind === "progress") return [{ text: block.text, streaming: true }];
-      const text = block.kind === "text" && !linkOnly ? bubbleText(block.text) : undefined;
-      return text === undefined ? [] : [{ text, streaming: false }];
-    });
+    // Each run of prose is one bubble and a steps block stays where it is, as the bot produced them.
+    const parts: (
+      | { prose: { text: string; streaming: boolean }[] }
+      | { steps: Extract<MessageBlock, { kind: "steps" }> }
+    )[] = [];
+    for (const block of visibleBlocks) {
+      if (block.kind === "steps") {
+        parts.push({ steps: block });
+        continue;
+      }
+      const text =
+        block.kind === "progress"
+          ? block.text
+          : block.kind === "text" && !linkOnly
+            ? bubbleText(block.text)
+            : undefined;
+      if (text === undefined) continue;
+      const entry = { text, streaming: block.kind === "progress" };
+      const last = parts.at(-1);
+      if (last && "prose" in last) last.prose.push(entry);
+      else parts.push({ prose: [entry] });
+    }
+    const lastBubble = parts.findLastIndex((part) => "prose" in part);
     return botRow(
       <>
         {messageContext}
-        {visibleBlocks.map((block, i) =>
-          block.kind === "steps" ? <AgentSteps key={i} block={block} live={isLive} /> : null,
+        {parts.map((part, i) =>
+          "steps" in part ? (
+            <AgentSteps key={i} block={part.steps} live={isLive} />
+          ) : (
+            <MessageBubble
+              key={i}
+              data-testid="message-bot-bubble"
+              inGroup={inGroup}
+              className="space-y-2.5"
+              dir="auto"
+              meta={i === lastBubble && skillLines.length > 0 ? skillLines : undefined}
+            >
+              {part.prose.map((entry, j) => (
+                <div key={j}>
+                  <ChatMarkdown streaming={entry.streaming}>{entry.text}</ChatMarkdown>
+                </div>
+              ))}
+            </MessageBubble>
+          ),
         )}
-        {prose.length > 0 ? (
-          <MessageBubble
-            data-testid="message-bot-bubble"
-            inGroup={inGroup}
-            className="space-y-2.5"
-            dir="auto"
-            meta={skillLines.length > 0 ? skillLines : undefined}
-          >
-            {prose.map((entry, i) => (
-              <div key={i}>
-                <ChatMarkdown streaming={entry.streaming}>{entry.text}</ChatMarkdown>
-              </div>
-            ))}
-          </MessageBubble>
-        ) : null}
         {previewView()}
-        {prose.length === 0 && skillLines.length > 0 ? (
+        {lastBubble < 0 && skillLines.length > 0 ? (
           <MessageMeta lines={skillLines} className="px-3.5" />
         ) : null}
       </>,

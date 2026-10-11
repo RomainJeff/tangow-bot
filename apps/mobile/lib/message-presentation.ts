@@ -17,18 +17,30 @@ export function visibleMessageBlocks(
   );
 }
 
-export type MessagePresentationSegment = {
-  kind: "content";
-  blocks: MessageBlock[];
-};
+export type MessagePresentationSegment =
+  | { kind: "content"; blocks: MessageBlock[] }
+  | { kind: "steps"; block: Extract<MessageBlock, { kind: "steps" }> };
 
+/**
+ * What a message draws, in the order the bot produced it: each run of content is one segment, and
+ * a `steps` block the setting shows stays where it is. Mirrors web's narration bubbles.
+ */
 export function messagePresentationSegments(
   blocks: readonly MessageBlock[],
+  showSteps = false,
 ): MessagePresentationSegment[] {
-  const content = blocks.filter(
-    (block) => block.kind !== "app_connect" && !isToolActivityBlock(block),
-  );
-  return content.length > 0 ? [{ kind: "content", blocks: content }] : [];
+  const segments: MessagePresentationSegment[] = [];
+  for (const block of blocks) {
+    if (showSteps && block.kind === "steps") {
+      segments.push({ kind: "steps", block });
+      continue;
+    }
+    if (block.kind === "app_connect" || isToolActivityBlock(block)) continue;
+    const last = segments.at(-1);
+    if (last?.kind === "content") last.blocks.push(block);
+    else segments.push({ kind: "content", blocks: [block] });
+  }
+  return segments;
 }
 
 export function hasVisibleMessagePresentation(
@@ -36,14 +48,6 @@ export function hasVisibleMessagePresentation(
   showSteps = false,
 ): boolean {
   return visibleMessageBlocks(blocks, showSteps).length > 0;
-}
-
-export function stepsBlocks(
-  blocks: readonly MessageBlock[],
-): Extract<MessageBlock, { kind: "steps" }>[] {
-  return blocks.filter(
-    (block): block is Extract<MessageBlock, { kind: "steps" }> => block.kind === "steps",
-  );
 }
 
 /**

@@ -1,5 +1,5 @@
 import type { RealtimeFanout } from "@rakazo/adapter-kit";
-import type { EntryId, SessionId } from "@rakazo/contracts";
+import type { AskAnswers, EntryId, SessionId } from "@rakazo/contracts";
 import {
   ASK_DISMISSED_ANSWER,
   type AskQuestion,
@@ -943,10 +943,7 @@ export async function answerRunInputInTransaction(
         { selected?: unknown; other?: unknown; skipped?: unknown } | undefined
       >;
       const lines: string[] = [];
-      const storedAnswers: Record<
-        string,
-        { selected?: string[]; other?: string; skipped?: boolean }
-      > = {};
+      const storedAnswers: AskAnswers = {};
       for (let index = 0; index < questions.length; index += 1) {
         const question = questions[index]!;
         const entry = submitted[question.id] ?? {};
@@ -1007,6 +1004,11 @@ export async function answerRunInputInTransaction(
           : block,
       );
       await tx.message.update({ where: { id: message.id }, data: { blocks: answeredBlocks } });
+      await appendCardStateInTransaction(tx, {
+        type: "card.answered",
+        feedBotId: run.botId,
+        payload: { target: message.id as EntryId, answers: storedAnswers },
+      });
       await answerEntry(lines.join("\n"));
       const updated = await appendEventInTransaction(tx, {
         spaceId: input.spaceId,
@@ -1198,14 +1200,13 @@ export async function answerRunInputInTransaction(
           answerId: input.answer,
         },
       });
-    } else if (secretAsk) {
+    } else {
       await appendCardStateInTransaction(tx, {
         type: "card.answered",
         feedBotId: run.botId,
-        payload: { target: message.id as EntryId },
+        payload: { target: message.id as EntryId, answer: answeredAsk.answer },
       });
-    } else {
-      await answerEntry(selectedChoice?.label ?? (freeTextAnswer || input.answer));
+      if (!secretAsk) await answerEntry(selectedChoice?.label ?? (freeTextAnswer || input.answer));
     }
     if (spawnBotEdit) {
       // Before the message.updated event, so one notify covers both. The audit keeps what the model

@@ -131,6 +131,16 @@ export function mergeEntries(
   return byId([...held, ...incoming]);
 }
 
+/**
+ * Whether a page, oldest first, joins the entries held: it starts the chain or its oldest entry
+ * follows one held. A page that does not, such as the newest page refreshed under a jump window,
+ * would leave a silent gap if merged.
+ */
+export function joinsHeld(page: readonly SessionEntry[], held: readonly SessionEntry[]): boolean {
+  const oldest = page[0];
+  return !oldest || oldest.parentId === null || held.some((entry) => entry.id === oldest.parentId);
+}
+
 function byId(entries: readonly SessionEntry[]): SessionEntry[] {
   return [...new Map(entries.map((entry) => [entry.id, entry])).values()].sort(
     (a, b) => a.seq - b.seq,

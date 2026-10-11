@@ -205,7 +205,6 @@ import {
   messagePresentationSegments,
   skillLineRoute,
   skillLineSegment,
-  stepsBlocks,
   visibleMessageBlocks,
 } from "../lib/message-presentation";
 import { native, useMobileTokens, useResolvedAppearance } from "../lib/native";
@@ -675,6 +674,10 @@ function Thread() {
     const runs = snap?.activeRuns ?? (snap?.run ? [snap.run] : []);
     return runs.filter((run) => isWorkingStatus(run.status) && run.id !== waiting?.runId);
   }, [snap?.activeRuns, snap?.run, waiting?.runId]);
+  const activeRunIds = useMemo(() => {
+    const runs = snap?.activeRuns ?? (snap?.run ? [snap.run] : []);
+    return new Set(runs.flatMap((run) => (isWorkingStatus(run.status) ? [run.id] : [])));
+  }, [snap?.activeRuns, snap?.run]);
   const workingGroupBots = useMemo(() => {
     if (!inGroup) return [];
     const seen = new Set<string>();
@@ -2096,6 +2099,15 @@ function Thread() {
                 members={snap?.members}
                 isNew={isNew}
                 canAnswer={item.id === answerableAskMessageId}
+                liveRun={
+                  item.kind !== "run"
+                    ? undefined
+                    : item.runId === waiting?.runId
+                      ? "waiting"
+                      : activeRunIds.has(item.runId)
+                        ? "running"
+                        : undefined
+                }
                 viewerUserId={viewerUserId}
                 onAnswer={answerCard}
               />
@@ -3753,28 +3765,30 @@ const MessageBubble = memo(function MessageBubble({
       </Surface>
     );
   }
-  const segments = messagePresentationSegments(shownBlocks);
-  const steps = showSteps ? stepsBlocks(message.blocks) : [];
+  const segments = messagePresentationSegments(shownBlocks, showSteps);
   const live = isLiveMessage(message);
   const firstContent = segments.findIndex((segment) => segment.kind === "content");
   const lastContent = skillLineSegment(
-    segments.map((segment) => blockText({ ...message, blocks: segment.blocks })),
+    segments.map((segment) =>
+      segment.kind === "content" ? blockText({ ...message, blocks: segment.blocks }) : "",
+    ),
   );
   return (
     <View style={{ gap: 8, width: "100%" }}>
-      {steps.map((block, index) => (
-        <AgentSteps key={`${message.id}-steps-${index}`} block={block} live={live} />
-      ))}
-      {segments.map((segment, index) => (
-        <MessageText
-          key={`${message.id}-content-${index}`}
-          message={{ ...message, blocks: segment.blocks }}
-          replyPreview={index === firstContent ? replyPreview : undefined}
-          actionProps={actionProps}
-          mono={mono}
-          meta={index === lastContent ? metaLines : undefined}
-        />
-      ))}
+      {segments.map((segment, index) =>
+        segment.kind === "steps" ? (
+          <AgentSteps key={`${message.id}-steps-${index}`} block={segment.block} live={live} />
+        ) : (
+          <MessageText
+            key={`${message.id}-content-${index}`}
+            message={{ ...message, blocks: segment.blocks }}
+            replyPreview={index === firstContent ? replyPreview : undefined}
+            actionProps={actionProps}
+            mono={mono}
+            meta={index === lastContent ? metaLines : undefined}
+          />
+        ),
+      )}
       {appConnectBlocks.map((block, index) => (
         <AppConnectCard
           key={`${block.provider}-${index}`}
@@ -3925,6 +3939,7 @@ const ItemRow = memo(function ItemRow({
   members,
   isNew,
   canAnswer,
+  liveRun,
   viewerUserId,
   onAnswer,
   readOnly = false,
@@ -3938,6 +3953,8 @@ const ItemRow = memo(function ItemRow({
   members?: MobileSnapshot["members"];
   isNew: boolean;
   canAnswer: boolean;
+  /** A run row's run with no finish held: waiting on a card, or at work in the snapshot. */
+  liveRun?: "waiting" | "running";
   viewerUserId?: string;
   onAnswer?: (card: CardTarget, answer: string, edits?: SpawnBotEdits) => Promise<void>;
   readOnly?: boolean;
@@ -3977,7 +3994,7 @@ const ItemRow = memo(function ItemRow({
       case "message":
         return null;
       case "run":
-        return <RunRow item={item} />;
+        return <RunRow item={item} live={liveRun} />;
       case "subagent": {
         const title = item.name || t("subagent");
         if (item.status === "running") {
@@ -4115,15 +4132,24 @@ const ItemRow = memo(function ItemRow({
   );
 });
 
-/** A run as one quiet line: its model and how it went, opening to its duration and tokens. */
-function RunRow({ item }: { item: RunItem }) {
+/**
+ * A run as one quiet line: its model and how it went, opening to its duration and tokens. With no
+ * finish held it reads as waiting on a card or at work, and with neither (its finish outside the
+ * page, or a crash) it shows no state.
+ */
+function RunRow({ item, live }: { item: RunItem; live?: "waiting" | "running" }) {
   const tokens = mobileTokens();
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const outcome = item.finished?.outcome;
-  const state = !outcome ? "running" : outcome.status;
-  const word = stateWord(state === "completed" ? "done" : state);
-  const symbol = ROUTINE_STATE_SYMBOL[state];
+  const state = outcome?.status ?? live;
+  const word =
+    state === undefined
+      ? null
+      : state === "waiting"
+        ? t("Needs input")
+        : stateWord(state === "completed" ? "done" : state);
+  const symbol = ROUTINE_STATE_SYMBOL[outcome?.status ?? "running"];
   const statusStyle = {
     color: state === "failed" ? tokens.destructive : tokens.mutedForeground,
     ...nativeTextStyle("label", { weight: 500 }),
@@ -4139,7 +4165,7 @@ function RunRow({ item }: { item: RunItem }) {
     <View>
       <Pressable
         accessibilityRole={detail ? "button" : undefined}
-        accessibilityLabel={[item.model.id, word].join(", ")}
+        accessibilityLabel={[item.model.id, word].filter(Boolean).join(", ")}
         accessibilityState={detail ? { expanded: open } : undefined}
         disabled={!detail}
         onPress={() => setOpen(!open)}
@@ -4169,9 +4195,9 @@ function RunRow({ item }: { item: RunItem }) {
         </Text>
         {state === "running" ? (
           <ShimmerText style={statusStyle}>{word}</ShimmerText>
-        ) : (
+        ) : word ? (
           <Text style={statusStyle}>{word}</Text>
-        )}
+        ) : null}
         <View style={{ width: 14, alignItems: "center" }}>
           {detail ? <Disclosure open={open} /> : null}
         </View>

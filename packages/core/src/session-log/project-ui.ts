@@ -22,7 +22,6 @@ type RoutineItem = Extract<ThreadItem, { kind: "routine" }>;
 type MessageItem = Extract<ThreadItem, { kind: "message" }>;
 type SubagentItem = Extract<ThreadItem, { kind: "subagent" }>;
 type DividerItem = Extract<ThreadItem, { kind: "divider" }>;
-type AskBlock = Extract<MessageBlock, { kind: "ask" }>;
 
 /** Where a card that later entries settle sits: a block of a message, or an approval's card. */
 type CardSlot = { item: MessageItem; index: number } | { item: EffectItem };
@@ -57,14 +56,15 @@ export function projectThreadItems(entries: readonly SessionEntry[]): ThreadItem
 /**
  * What a thread shows, from a page of a session's chain oldest first. A run becomes one `run`
  * item where it started and one `message` item per unbroken stretch of its words, followed by a
- * running `subagent` item for each helper it launched that has not answered yet; a routine run,
- * whose words live in its own session, becomes one `routine` item its finish fills in. A run whose
- * start is outside the page gets no `run` item, though its words on the page still show; an
- * effect whose request is outside the page is left out, as is a tool result without its call. An
- * item whose entry rose from a child session names it as `origin`, with the routine's or the
- * helper's name when the page holds its start. Entries about an earlier card or message settle
- * that card or add to that message, and a reply that is a card's own answer record shows as the
- * answered card alone. A compaction's divider sits before the first item it did not summarize.
+ * running `subagent` item for each helper it launched that has not answered while the run is still
+ * open; a routine run, whose words live in its own session, becomes one `routine` item its finish
+ * fills in. A run whose start is outside the page gets no `run` item, though its words on the page
+ * still show; an effect whose request is outside the page is left out, as is a tool result without
+ * its call. An item whose entry rose from a child session names it as `origin`, with the
+ * routine's or the helper's name when the page holds its start. Entries about an earlier card or
+ * message settle that card or add to that message, and a reply that is a card's own answer record
+ * shows as the answered card alone. A compaction's divider sits before the first item it did not
+ * summarize.
  */
 export function projectThread(entries: readonly SessionEntry[]): ProjectedThread {
   const visible = entries.filter(isUiEntry);
@@ -81,7 +81,11 @@ export function projectThread(entries: readonly SessionEntry[]): ProjectedThread
     sessionId ? { origin: { sessionId, ...children.get(sessionId) } } : {};
   const outputs = toolOutputs(visible);
   const seqOf = new Map<string, number>(visible.map((entry) => [entry.id, entry.seq]));
+  const finishedRuns = new Set(
+    visible.flatMap((entry) => (entry.type === "run.finished" ? [entry.runId] : [])),
+  );
   const runs = new Map<string, RunItem>();
+  const runMessages = new Map<string, MessageItem[]>();
   const effects = new Map<string, EffectItem>();
   const routines = new Map<string, RoutineItem>();
   const items: ThreadItem[] = [];
@@ -123,6 +127,7 @@ export function projectThread(entries: readonly SessionEntry[]): ProjectedThread
           ...origin(originSessionId),
         };
         push(message, ...segment.entries.map((entry) => entry.id));
+        runMessages.set(runId, [...(runMessages.get(runId) ?? []), message]);
         const first = segment.entries.find((entry) => MESSAGE_ENTRY_TYPES.has(entry.type));
         if (first) messageIds.set(id, first.id);
         for (const [entryId, index] of segment.cards)
@@ -132,7 +137,7 @@ export function projectThread(entries: readonly SessionEntry[]): ProjectedThread
             runCards.push({ id: entry.id, runId: entry.runId, seq: entry.seq });
           }
           if (entry.type === "tool.call" && entry.payload.name === "run_subagent") {
-            if (outputs.has(entry.id)) continue;
+            if (outputs.has(entry.id) || finishedRuns.has(entry.runId)) continue;
             const helper: SubagentItem = {
               kind: "subagent",
               status: "running",
@@ -172,7 +177,9 @@ export function projectThread(entries: readonly SessionEntry[]): ProjectedThread
         const card = payload.replyTo ? questionAt(cards.get(payload.replyTo.entryId)) : undefined;
         if (card) {
           const block = cardOf(card);
-          if (block && !isSettled(block)) setCard(card, answerWith(block, textOf(payload.blocks)));
+          if (block?.kind === "ask" && !isSettled(block)) {
+            setCard(card, { ...block, status: "answered" });
+          }
           if (payload.clientNonce === undefined && payload.source === "app") {
             shownBy.set(segment.id, card.item.id);
             break;
@@ -211,11 +218,10 @@ export function projectThread(entries: readonly SessionEntry[]): ProjectedThread
         finishedAt.set(segment.runId, segment.seq);
         const run = runs.get(segment.runId);
         if (run) {
-          run.finished = {
-            outcome: segment.payload,
-            durationMs: Math.max(0, Date.parse(segment.ts) - Date.parse(run.ts)),
-          };
+          const durationMs = Math.max(0, Date.parse(segment.ts) - Date.parse(run.ts));
+          run.finished = { outcome: segment.payload, durationMs };
           shownBy.set(segment.id, run.id);
+          stampDuration(runMessages.get(segment.runId) ?? [], durationMs);
         }
         break;
       }
@@ -377,16 +383,17 @@ export function projectThread(entries: readonly SessionEntry[]): ProjectedThread
         break;
       }
       case "card.answered": {
-        const { target, answerId } = segment.payload;
+        const { target, answerId, answers } = segment.payload;
         const slots = cards.get(target) ?? [];
         const question = questionAt(slots.filter((slot) => isOpen(cardOf(slot))));
         const block = question && cardOf(question);
         if (question && block?.kind === "ask") {
-          const answer = answerId ?? (block.input === "secret" ? "" : undefined);
+          const answer = segment.payload.answer ?? (block.input === "secret" ? "" : undefined);
           setCard(question, {
             ...block,
             status: "answered",
             ...(answer === undefined ? {} : { answer }),
+            ...(answers ? { answers } : {}),
           });
         } else if (question && block?.kind === "choice") {
           setCard(question, { ...block, answerId: answerId ?? CHOICE_DISMISSED_ANSWER_ID });
@@ -484,6 +491,17 @@ export function projectThread(entries: readonly SessionEntry[]): ProjectedThread
   return { items, shownBy, messageIds, waiting };
 }
 
+/** Puts a finished run's wall-clock duration on the last steps block of its words. */
+function stampDuration(messages: readonly MessageItem[], durationMs: number) {
+  for (const message of messages.toReversed()) {
+    const index = message.blocks.findLastIndex((block) => block.kind === "steps");
+    const block = message.blocks[index];
+    if (block?.kind !== "steps") continue;
+    message.blocks[index] = { ...block, durationMs };
+    return;
+  }
+}
+
 function cardOf(slot: CardSlot): MessageBlock | undefined {
   return "index" in slot ? slot.item.blocks[slot.index] : slot.item.card;
 }
@@ -510,20 +528,6 @@ function isSettled(block: MessageBlock | undefined): boolean {
   if (block?.kind === "ask") return block.status === "answered";
   if (block?.kind === "choice") return block.answerId !== undefined;
   return false;
-}
-
-function answerWith(block: MessageBlock, reply: string): MessageBlock {
-  if (block.kind === "ask")
-    return { ...block, status: "answered", answer: reply } satisfies AskBlock;
-  if (block.kind === "choice") {
-    const chosen = block.options.find((option) => option.label === reply);
-    return { ...block, answerId: chosen?.id ?? reply };
-  }
-  return block;
-}
-
-function textOf(blocks: readonly MessageBlock[]): string {
-  return blocks.flatMap((block) => (block.kind === "text" ? [block.text] : [])).join("\n");
 }
 
 function subagentInput(input: string): { name: string; task: string } {

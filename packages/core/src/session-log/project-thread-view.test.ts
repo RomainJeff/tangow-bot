@@ -107,9 +107,9 @@ const answeredWork = {
     ts: at(2),
     ...ada,
     blocks: [
-      { kind: "steps", steps: [search, scoutCall("Globex, Initech")] },
+      { kind: "steps", steps: [search, scoutCall("Globex, Initech")], durationMs: 9000 },
       { kind: "text", text: "Acme, Globex, Initech" },
-      { kind: "ask", text: "Compare prices too?", status: "answered", answer: "Yes" },
+      { kind: "ask", text: "Compare prices too?", status: "answered" },
     ],
   },
   ...alone,
@@ -268,10 +268,11 @@ describe("projectThreadView cards", () => {
     payload: { trigger: { kind: "direct" }, model, effort: null },
   };
 
-  it("waits on an open ask, then shows its answer record as the answered card", () => {
+  it("waits on an open ask, then shows the answer given in the card, absorbing its record", () => {
     const chain = linkEntries("ans", [
       started,
       { ...run, type: "assistant.ask", payload: { block: { kind: "ask", text: "Which day?" } } },
+      { type: "card.answered", payload: { target: "ans-1", answer: "Tuesday" } },
       {
         type: "user.message",
         payload: { blocks: text("Tuesday"), replyTo: { entryId: "ans-1" }, source: "app" },
@@ -295,7 +296,49 @@ describe("projectThreadView cards", () => {
       },
     ]);
     expect(view.waiting).toBeNull();
-    expect(view.rowOf.get("ans-2")).toBe("ans-1");
+    expect(["ans-2", "ans-3"].map((id) => view.rowOf.get(id))).toEqual(["ans-1", "ans-1"]);
+  });
+
+  it("shows a multi-question card's answers given in the card", () => {
+    const ask = {
+      kind: "ask",
+      text: "A few questions",
+      questions: [
+        {
+          id: "city",
+          question: "Which city should I start with?",
+          options: [
+            { id: "paris", label: "Paris" },
+            { id: "lyon", label: "Lyon" },
+          ],
+        },
+      ],
+    };
+    const answers = { city: { selected: ["paris"] } };
+    const chain = linkEntries("multi", [
+      started,
+      { ...run, type: "assistant.ask", payload: { block: ask } },
+      { type: "card.answered", payload: { target: "multi-1", answers } },
+      {
+        type: "user.message",
+        payload: {
+          blocks: text("1. Which city should I start with? — Paris"),
+          replyTo: { entryId: "multi-1" },
+          source: "app",
+        },
+      },
+    ]);
+    expect(projectThreadView(chain).rows.map((row) => row.item)).toEqual([
+      expect.objectContaining({ kind: "run", id: "multi-0" }),
+      {
+        kind: "message",
+        role: "bot",
+        id: "multi-1",
+        ts: at(1),
+        ...run,
+        blocks: [{ ...ask, status: "answered", answers }],
+      },
+    ]);
   });
 
   it("answers a secret ask with nothing and an onboarding choice with the option picked", () => {

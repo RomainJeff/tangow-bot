@@ -1199,11 +1199,105 @@ describe("session log writers", () => {
       expect(await newest(owner.sessionId)).toEqual({
         type: "card.answered",
         sessionId: owner.sessionId,
-        payload: { target: messageId },
+        payload: { target: messageId, answer: "" },
       });
       expect(JSON.stringify(await log.readTail(owner.sessionId))).not.toContain(
         "placeholder-secret",
       );
+    });
+
+    describe("an answer given inside the card", () => {
+      const answered = async (owner: Awaited<ReturnType<typeof seedBot>>) =>
+        (await log.readTail(owner.sessionId))
+          .filter((entry) => entry.type === "card.answered" || entry.type === "user.message")
+          .map(({ type, payload }) => ({ type, payload }));
+
+      async function answer(blocks: MessageBlock[], value: string) {
+        const owner = await seedBot(database.prisma, `Answerer ${randomUUID()}`);
+        const { run, messageId } = await paused(owner, blocks);
+        await database.prisma.$transaction((tx) =>
+          answerRunInputInTransaction(tx, {
+            spaceId: SPACE,
+            threadId: owner.threadId,
+            runId: run.id,
+            messageId,
+            answeredByUserId: USER,
+            answer: value,
+          }),
+        );
+        return { entries: await answered(owner), target: messageId };
+      }
+
+      it("logs a typed answer to an ask, then the reply that carries it to the bot", async () => {
+        const { entries, target } = await answer([{ kind: "ask", text: "Which city?" }], "Lyon");
+        expect(entries).toEqual([
+          { type: "card.answered", payload: { target, answer: "Lyon" } },
+          {
+            type: "user.message",
+            payload: {
+              blocks: [{ kind: "text", text: "Lyon" }],
+              replyTo: { entryId: target },
+              source: "app",
+            },
+          },
+        ]);
+      });
+
+      it("logs a tapped action of an ask by its id, and its label as the reply", async () => {
+        const { entries, target } = await answer(
+          [
+            {
+              kind: "ask",
+              text: "Which city?",
+              actions: [
+                { id: "paris", label: "Paris" },
+                { id: "lyon", label: "Lyon" },
+              ],
+            },
+          ],
+          "paris",
+        );
+        expect(entries).toEqual([
+          { type: "card.answered", payload: { target, answer: "paris" } },
+          {
+            type: "user.message",
+            payload: {
+              blocks: [{ kind: "text", text: "Paris" }],
+              replyTo: { entryId: target },
+              source: "app",
+            },
+          },
+        ]);
+      });
+
+      it("logs a multi-question card's structured answers, and their lines as the reply", async () => {
+        const question = {
+          id: "city",
+          question: "Which city should I start with?",
+          options: [
+            { id: "paris", label: "Paris" },
+            { id: "lyon", label: "Lyon" },
+          ],
+        };
+        const { entries, target } = await answer(
+          [{ kind: "ask", text: "A few questions", questions: [question] }],
+          JSON.stringify({ city: { selected: ["paris"] } }),
+        );
+        expect(entries).toEqual([
+          {
+            type: "card.answered",
+            payload: { target, answers: { city: { selected: ["paris"] } } },
+          },
+          {
+            type: "user.message",
+            payload: {
+              blocks: [{ kind: "text", text: "1. Which city should I start with? — Paris" }],
+              replyTo: { entryId: target },
+              source: "app",
+            },
+          },
+        ]);
+      });
     });
 
     it("logs an ask the composer answered as answered", async () => {
