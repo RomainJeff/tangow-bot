@@ -116,7 +116,8 @@ export async function reshapeThreadPages(
       });
     } catch (error) {
       // Reload or the end of the test can cancel an in-flight intercepted request.
-      if (/already handled|Target closed|Request context disposed|Test ended/i.test(String(error))) return;
+      if (/already handled|Target closed|Request context disposed|Test ended/i.test(String(error)))
+        return;
       throw error;
     }
   };
