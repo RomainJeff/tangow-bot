@@ -1,6 +1,6 @@
 import { activeBotId, captureScreenshot, completeOnboarding, signup } from "./helpers";
-import { expect, type Locator, type Page, type Route, test } from "./test";
-import { threadEntries } from "./thread-log";
+import { expect, type Locator, type Page, test } from "./test";
+import { reshapeThreadPages, threadEntries } from "./thread-log";
 
 /** Submit from the Send control so an in-flight prior send cannot swallow Enter. */
 async function sendComposerMessage(page: Page, composer: Locator, text: string) {
@@ -348,38 +348,12 @@ test("reply preview jumps to parent outside the loaded page", async ({ page }) =
   await expect(replyRow).toBeVisible({ timeout: 20_000 });
   await expect(replyRow.getByTestId("reply-parent-preview")).toContainText(/Got it\./);
 
-  type LogPage = { entries?: Array<{ id: string; seq: number }>; olderCursor?: string | null };
-  const startAfterParent = (snapshot: LogPage | null | undefined) => {
-    const parent = snapshot?.entries?.find((entry) => entry.id === parentId);
-    if (!snapshot?.entries || !parent) return;
-    snapshot.entries = snapshot.entries.filter((entry) => entry.seq > parent.seq);
-    snapshot.olderCursor = snapshot.entries[0]?.id ?? null;
-  };
-  const stripParent = (body: { json?: LogPage & { thread?: LogPage | null } }) => {
-    startAfterParent(body.json);
-    startAfterParent(body.json?.thread);
-  };
-
-  // One handler for both hydrate RPCs avoids overlapping globs racing on reload
-  // (Playwright "Route is already handled" when fulfill runs twice).
-  const hydrateRpc = /\/rpc\/(bootstrap|threads\/get)(?:\?|$)/;
-  const stripHydrate = async (route: Route) => {
-    try {
-      const response = await route.fetch();
-      const body = (await response.json()) as Parameters<typeof stripParent>[0];
-      stripParent(body);
-      await route.fulfill({
-        status: response.status(),
-        headers: response.headers(),
-        body: JSON.stringify(body),
-      });
-    } catch (error) {
-      // Reload can cancel an in-flight intercepted request after fetch returns.
-      if (/already handled|Target closed|Request context disposed/i.test(String(error))) return;
-      throw error;
-    }
-  };
-  await page.route(hydrateRpc, stripHydrate);
+  const unroute = await reshapeThreadPages(page, (thread) => {
+    const parent = thread.entries.find((entry) => entry.id === parentId);
+    if (!parent) return;
+    thread.entries = thread.entries.filter((entry) => entry.seq > parent.seq);
+    thread.olderCursor = thread.entries[0]?.id ?? null;
+  });
 
   await page.reload({ waitUntil: "domcontentloaded" });
   await expect(page.getByRole("combobox", { name: /^Message/ })).toBeVisible({ timeout: 20_000 });
@@ -391,7 +365,7 @@ test("reply preview jumps to parent outside the loaded page", async ({ page }) =
   await expect(offlinePreview).toBeVisible();
   await expect(offlinePreview).toHaveText("Earlier message");
 
-  await page.unroute(hydrateRpc, stripHydrate);
+  await unroute();
   await offlinePreview.click();
   await expect(page.locator(`[data-message-id="${parentId}"]`)).toBeVisible({ timeout: 20_000 });
   await expect(page.locator(`[data-message-id="${parentId}"]`)).toContainText(/Got it\./);
@@ -441,33 +415,17 @@ test("a send after a search jump lands on the latest messages", async ({ page })
 
   // A long thread: the latest page starts at the second message, and the jump's window ends
   // before the entry the second message hangs from, so the two pages do not join.
-  type LogPage = { entries?: Array<{ id: string; seq: number }>; olderCursor?: string | null };
-  const keep = (snapshot: LogPage | null | undefined, kept: (seq: number) => boolean) => {
-    if (!snapshot?.entries) return;
-    snapshot.entries = snapshot.entries.filter((entry) => kept(entry.seq));
-    snapshot.olderCursor = snapshot.entries[0]?.id ?? null;
-  };
-  const reshape = async (route: Route) => {
-    try {
-      const around = route.request().postDataJSON()?.json?.around !== undefined;
-      const response = await route.fetch();
-      const body = (await response.json()) as { json?: LogPage & { thread?: LogPage | null } };
-      const kept = around
-        ? (seq: number) => seq < secondSeq - 1
-        : (seq: number) => seq >= secondSeq;
-      keep(body.json, kept);
-      keep(body.json?.thread, kept);
-      await route.fulfill({
-        status: response.status(),
-        headers: response.headers(),
-        body: JSON.stringify(body),
-      });
-    } catch (error) {
-      if (/already handled|Target closed|Request context disposed/i.test(String(error))) return;
-      throw error;
-    }
-  };
-  await page.route(/\/rpc\/(bootstrap|threads\/get|threads\/messages)(?:\?|$)/, reshape);
+  await reshapeThreadPages(
+    page,
+    (thread, request) => {
+      const around = request.postDataJSON()?.json?.around !== undefined;
+      thread.entries = thread.entries.filter((entry) =>
+        around ? entry.seq < secondSeq - 1 : entry.seq >= secondSeq,
+      );
+      thread.olderCursor = thread.entries[0]?.id ?? null;
+    },
+    /\/rpc\/(bootstrap|threads\/get|threads\/messages)(?:\?|$)/,
+  );
 
   await page.goto(`/app/${botId}?m=${firstId}`);
   const firstRow = transcript.locator(`[data-message-id="${firstId}"]`);

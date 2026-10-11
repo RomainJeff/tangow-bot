@@ -1,6 +1,6 @@
 import { activeBotId, captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
 import { expect, type Page, test } from "./test";
-import { type EntryDraft, showThread } from "./thread-log";
+import { at, type EntryDraft, runFinished, runStarted, showThread } from "./thread-log";
 
 /**
  * A user message followed by three consecutive prose messages from the same
@@ -13,7 +13,6 @@ import { type EntryDraft, showThread } from "./thread-log";
  * in a mono thread, but that has no header to assert on.
  */
 function groupedThread(botId: string): EntryDraft[] {
-  const at = (minute: number) => `2026-09-17T09:${String(minute).padStart(2, "0")}:00.000Z`;
   const words = (id: string, minute: number, text: string): EntryDraft => ({
     id,
     ts: at(minute),
@@ -39,20 +38,8 @@ function groupedThread(botId: string): EntryDraft[] {
 
 /** Two replies, each from its own run of the same bot, the shape every run reply takes. */
 function runRepliesThread(botId: string): EntryDraft[] {
-  const at = (minute: number) => `2026-09-17T09:${String(minute).padStart(2, "0")}:00.000Z`;
   const run = (id: string, minute: number, text: string): EntryDraft[] => [
-    {
-      id: `${id}-start`,
-      ts: at(minute),
-      type: "run.started",
-      botId,
-      runId: id,
-      payload: {
-        trigger: { kind: "message", entryId: "rr-user" },
-        model: { provider: "e2e", id: "grouping-model" },
-        effort: null,
-      },
-    },
+    runStarted(botId, id, minute, "rr-user"),
     {
       id: `${id}-reply`,
       ts: at(minute),
@@ -61,14 +48,7 @@ function runRepliesThread(botId: string): EntryDraft[] {
       runId: id,
       payload: { blocks: [{ kind: "text", text }] },
     },
-    {
-      id: `${id}-end`,
-      ts: at(minute),
-      type: "run.finished",
-      botId,
-      runId: id,
-      payload: { status: "completed", usage: { inputTokens: 900, outputTokens: 40 } },
-    },
+    runFinished(botId, id, minute),
   ];
   return [
     {

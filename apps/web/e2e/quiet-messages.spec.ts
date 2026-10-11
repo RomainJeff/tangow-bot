@@ -1,30 +1,9 @@
 import { activeBotId, captureScreenshot, completeOnboarding, signup } from "./helpers";
 import { expect, type Locator, type Page, test } from "./test";
-import { type EntryDraft, showThread } from "./thread-log";
+import { at, type EntryDraft, runFinished, runStarted, showThread } from "./thread-log";
 
 /** A thread that shows the whole message grammar at once, with stable content. */
 function quietThread(botId: string): EntryDraft[] {
-  const at = (minute: number) => `2026-09-17T09:${String(minute).padStart(2, "0")}:00.000Z`;
-  const run = (id: string, minute: number): EntryDraft => ({
-    id: `${id}-start`,
-    ts: at(minute),
-    type: "run.started",
-    botId,
-    runId: id,
-    payload: {
-      trigger: { kind: "message", entryId: "quiet-user" },
-      model: { provider: "e2e", id: "quiet-model" },
-      effort: null,
-    },
-  });
-  const finished = (id: string, minute: number, status: "completed" | "cancelled"): EntryDraft => ({
-    id: `${id}-end`,
-    ts: at(minute),
-    type: "run.finished",
-    botId,
-    runId: id,
-    payload: { status, usage: { inputTokens: 1200, outputTokens: 80 } },
-  });
   return [
     {
       id: "quiet-user",
@@ -55,7 +34,7 @@ function quietThread(botId: string): EntryDraft[] {
       type: "handoff",
       payload: { fromBotId: botId, toBotId: "quiet-research", text: "the Q3 sheet", hop: 1 },
     },
-    run("quiet-run", 25),
+    runStarted(botId, "quiet-run", 25, "quiet-user"),
     {
       id: "quiet-reply",
       ts: at(26),
@@ -86,8 +65,8 @@ function quietThread(botId: string): EntryDraft[] {
         ],
       },
     },
-    finished("quiet-run", 26, "completed"),
-    run("quiet-stopped", 27),
+    runFinished(botId, "quiet-run", 26, "completed"),
+    runStarted(botId, "quiet-stopped", 27, "quiet-user"),
     {
       id: "quiet-note",
       ts: at(27),
@@ -101,7 +80,7 @@ function quietThread(botId: string): EntryDraft[] {
         ],
       },
     },
-    finished("quiet-stopped", 27, "cancelled"),
+    runFinished(botId, "quiet-stopped", 27, "cancelled"),
   ];
 }
 

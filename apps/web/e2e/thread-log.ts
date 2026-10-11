@@ -1,7 +1,7 @@
 import type { MessageBlock, SessionEntry, SessionEntryType } from "@rakazo/contracts";
 import { SessionEntrySchema } from "@rakazo/contracts";
 import { rpc } from "./helpers";
-import type { Page, Route } from "./test";
+import type { Page, Request, Route } from "./test";
 
 type ThreadTarget = { botId: string } | { groupId: string };
 
@@ -45,27 +45,69 @@ export type EntryDraft = {
   runId?: string;
 };
 
+export const at = (minute: number) => `2026-09-17T09:${String(minute).padStart(2, "0")}:00.000Z`;
+
+export function runStarted(
+  botId: string,
+  runId: string,
+  minute: number,
+  triggerId: string,
+): EntryDraft {
+  return {
+    id: `${runId}-start`,
+    ts: at(minute),
+    type: "run.started",
+    botId,
+    runId,
+    payload: {
+      trigger: { kind: "message", entryId: triggerId },
+      model: { provider: "e2e", id: "e2e-model" },
+      effort: null,
+    },
+  };
+}
+
+export function runFinished(
+  botId: string,
+  runId: string,
+  minute: number,
+  status: "completed" | "cancelled" = "completed",
+): EntryDraft {
+  return {
+    id: `${runId}-end`,
+    ts: at(minute),
+    type: "run.finished",
+    botId,
+    runId,
+    payload: { status, usage: { inputTokens: 900, outputTokens: 40 } },
+  };
+}
+
+export type ThreadPage = {
+  entries: SessionEntry[];
+  olderCursor?: string | null;
+  [field: string]: unknown;
+};
+
 const HYDRATE_RPC = /\/rpc\/(bootstrap|threads\/get)(?:\?|$)/;
 
-export async function showThread(
+/**
+ * Rewrites every thread page the matching RPCs return, in place, until the returned unroute runs.
+ * One handler covers both hydrate RPCs: overlapping routes race on reload ("already handled").
+ */
+export async function reshapeThreadPages(
   page: Page,
-  drafts: readonly EntryDraft[],
-  snapshot: Record<string, unknown> = {},
-) {
-  await page.route(HYDRATE_RPC, async (route: Route) => {
+  transform: (thread: ThreadPage, request: Request) => void,
+  rpcPattern: RegExp = HYDRATE_RPC,
+): Promise<() => Promise<void>> {
+  const handler = async (route: Route) => {
     try {
       const response = await route.fetch();
       const body = (await response.json()) as {
-        json?: { entries?: SessionEntry[]; thread?: { entries?: SessionEntry[] } | null };
+        json?: Partial<ThreadPage> & { thread?: Partial<ThreadPage> | null };
       };
       for (const thread of [body.json, body.json?.thread]) {
-        if (!thread?.entries) continue;
-        Object.assign(thread, {
-          entries: chained(thread.entries, drafts),
-          olderCursor: null,
-          progress: [],
-          ...snapshot,
-        });
+        if (thread?.entries) transform(thread as ThreadPage, route.request());
       }
       await route.fulfill({
         status: response.status(),
@@ -73,9 +115,27 @@ export async function showThread(
         body: JSON.stringify(body),
       });
     } catch (error) {
+      // Reload can cancel an in-flight intercepted request after fetch returns.
       if (/already handled|Target closed|Request context disposed/i.test(String(error))) return;
       throw error;
     }
+  };
+  await page.route(rpcPattern, handler);
+  return () => page.unroute(rpcPattern, handler);
+}
+
+export async function showThread(
+  page: Page,
+  drafts: readonly EntryDraft[],
+  snapshot: Record<string, unknown> = {},
+) {
+  await reshapeThreadPages(page, (thread) => {
+    Object.assign(thread, {
+      entries: chained(thread.entries, drafts),
+      olderCursor: null,
+      progress: [],
+      ...snapshot,
+    });
   });
   await page.reload({ waitUntil: "domcontentloaded" });
 }
