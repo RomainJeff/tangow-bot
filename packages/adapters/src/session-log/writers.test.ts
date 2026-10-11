@@ -1484,6 +1484,45 @@ describe("session log writers", () => {
       ]);
     });
 
+    it("replays a run's progress since its entry rode in a feed event another run's entry led", async () => {
+      const { prisma } = database;
+      const owner = await seedBot(prisma, "Noether");
+      const lead = await seedRun(prisma, owner.bot.id, owner.threadId);
+      const run = await seedRun(prisma, owner.bot.id, owner.threadId);
+      const progress = (text: string) =>
+        prisma.$transaction((tx) =>
+          appendEventInTransaction(tx, {
+            spaceId: SPACE,
+            threadId: owner.threadId,
+            botId: owner.bot.id,
+            type: "thread.progress",
+            runId: run.id,
+            payload: { text },
+          }),
+        );
+      const said = (by: { id: string }, text: string) =>
+        ({
+          type: "assistant.text",
+          payload: { blocks: [{ kind: "text", text }] },
+          sessionId: owner.sessionId,
+          botId: owner.bot.id,
+          runId: by.id,
+        }) as SessionEntryDraft;
+
+      await progress("before its entry");
+      await prisma.$transaction(async (tx) => {
+        await appendSessionEntryInTransaction(tx, said(lead, "Leading."));
+        await appendSessionEntryInTransaction(tx, said(run, "Following."));
+      });
+      await progress("after its entry");
+
+      const replayed = await progressSinceLastEntry(prisma, owner.threadId, [run.id, run.id]);
+
+      expect(replayed.map(({ runId, payload }) => ({ runId, payload }))).toEqual([
+        { runId: run.id, payload: { text: "after its entry" } },
+      ]);
+    });
+
     it("finds the thread of a session through its top-most ancestor, only within its space", async () => {
       const { prisma } = database;
       const owner = await seedBot(prisma, "Meitner");
