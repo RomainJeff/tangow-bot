@@ -7,10 +7,6 @@ export type TaskCardState = "running" | "done" | "failed" | "cancelled";
 
 const STATE_ICON = { running: CircleDashed, failed: CircleX, cancelled: StopCircle } as const;
 
-function taskStatusLabel(state: TaskCardState, t: ReturnType<typeof useLingui>["t"]) {
-  return state === "running" ? t`Running` : state === "failed" ? t`Failed` : t`Cancelled`;
-}
-
 /**
  * The visual card alone, with no click behaviour of its own: a delegated
  * task's result on `Surface variant="outlined"`, full column width — a
@@ -21,6 +17,7 @@ function taskStatusLabel(state: TaskCardState, t: ReturnType<typeof useLingui>["
 export function TaskCardSurface({
   title,
   state,
+  statusLabel,
   meta,
   body,
   streaming = false,
@@ -29,6 +26,8 @@ export function TaskCardSurface({
 }: {
   title: string;
   state: TaskCardState;
+  /** The status word under the title; a finished task shows none. */
+  statusLabel: string;
   meta?: string;
   body?: string;
   streaming?: boolean;
@@ -39,7 +38,6 @@ export function TaskCardSurface({
 }) {
   const { t } = useLingui();
   const statusColorClass = state === "failed" ? "text-destructive" : "text-muted-foreground";
-  const statusLabel = taskStatusLabel(state, t);
   const StatusIcon = state === "done" ? null : STATE_ICON[state];
   return (
     <Surface variant="outlined" className="w-full overflow-hidden">
@@ -112,8 +110,17 @@ export function TaskCard({
   onOpen?: () => void;
 }) {
   const { t } = useLingui();
+  const statusLabel =
+    state === "running" ? t`Running` : state === "failed" ? t`Failed` : t`Cancelled`;
   const card = (
-    <TaskCardSurface title={title} state={state} meta={meta} body={body} streaming={streaming} />
+    <TaskCardSurface
+      title={title}
+      state={state}
+      statusLabel={statusLabel}
+      meta={meta}
+      body={body}
+      streaming={streaming}
+    />
   );
 
   if (!onOpen) {
@@ -130,9 +137,7 @@ export function TaskCard({
       </div>
       <button
         type="button"
-        aria-label={[title, state === "done" ? null : taskStatusLabel(state, t), meta]
-          .filter(Boolean)
-          .join(", ")}
+        aria-label={[title, state === "done" ? null : statusLabel, meta].filter(Boolean).join(", ")}
         aria-haspopup="dialog"
         onClick={onOpen}
         className="absolute inset-0 rounded-[inherit]"
