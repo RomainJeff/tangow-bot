@@ -393,6 +393,58 @@ describe("projectThreadItems", () => {
     ]);
   });
 
+  it("folds a routine's start and finish into one item at its start, open until it finishes", () => {
+    const started = (runId: string, name: string) => ({
+      botId: "bot_ada",
+      runId,
+      type: "routine.started",
+      payload: {
+        sessionId: `ses_${runId}`,
+        routineId: `rtn_${runId}`,
+        name,
+        trigger: "routine",
+        scheduledAt: at(0),
+        model,
+      },
+    });
+    const finished = (runId: string, payload: object) => ({
+      botId: "bot_ada",
+      runId,
+      type: "routine.finished",
+      payload: { usage: { inputTokens: 300, outputTokens: 9 }, ...payload },
+    });
+    const chain = linkEntries("rtn", [
+      finished("run_before_page", { status: "completed", result: "Older." }),
+      started("run_brief", "Morning brief"),
+      started("run_digest", "Digest"),
+      finished("run_brief", { status: "completed", result: "Two meetings today." }),
+    ]);
+    expect(projectThreadItems(chain)).toEqual([
+      {
+        kind: "routine",
+        id: "rtn-1",
+        ts: at(1),
+        runId: "run_brief",
+        botId: "bot_ada",
+        sessionId: "ses_run_brief",
+        routineId: "rtn_run_brief",
+        name: "Morning brief",
+        finished: { status: "completed", result: "Two meetings today." },
+      },
+      {
+        kind: "routine",
+        id: "rtn-2",
+        ts: at(2),
+        runId: "run_digest",
+        botId: "bot_ada",
+        sessionId: "ses_run_digest",
+        routineId: "rtn_run_digest",
+        name: "Digest",
+        finished: null,
+      },
+    ]);
+  });
+
   it("gives a subagent its own item that points at the child session", async () => {
     expect(projectThreadItems(await fixtureChain("subagent"))).toEqual([
       {

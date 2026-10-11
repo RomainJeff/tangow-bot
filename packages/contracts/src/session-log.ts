@@ -51,6 +51,14 @@ export const RunOutcome = z.discriminatedUnion("status", [
 ]);
 export type RunOutcome = z.infer<typeof RunOutcome>;
 
+/** How a routine run ended, as its thread learns it: the run's outcome and its final words. */
+const RoutineFinishedPayload = RunOutcome.and(
+  z.object({
+    /** The run's final text, empty when it ended without one. */
+    result: z.string(),
+  }),
+);
+
 const JsonObject = z.record(z.string(), z.unknown());
 const BotMessageHop = z.number().int().positive();
 
@@ -131,6 +139,19 @@ const EntryShapes = z.discriminatedUnion("type", [
   ),
   runEntry("run.finished", RunOutcome),
   runEntry("subagent", SubagentPayload),
+  /** In the thread's main session, when a routine run opens its own session `sessionId`. */
+  runEntry(
+    "routine.started",
+    z.object({
+      sessionId: SessionId,
+      routineId: Id,
+      name: z.string(),
+      trigger: z.enum(["routine", "webhook"]),
+      scheduledAt: IsoDate,
+      model: RunModel,
+    }),
+  ),
+  runEntry("routine.finished", RoutineFinishedPayload),
   /** A bot's words outside any run, such as an onboarding card or a teaching session's draft. */
   z.object({
     ...envelope,
@@ -247,6 +268,8 @@ export const ENTRY_AUDIENCE = {
   "tool.call": { inference: "yes", ui: true },
   "tool.result": { inference: "yes", ui: true },
   subagent: { inference: "yes", ui: true },
+  "routine.started": { inference: "context", ui: true },
+  "routine.finished": { inference: "yes", ui: true },
   "bot.text": { inference: "yes", ui: true },
   handoff: { inference: "yes", ui: true },
   "bot.message.sent": { inference: "yes", ui: true },
@@ -277,6 +300,20 @@ export type InferenceEntry = SessionEntryOf<
 export type UiEntry = SessionEntryOf<
   { [T in SessionEntryType]: Audience[T]["ui"] extends true ? T : never }[SessionEntryType]
 >;
+
+/**
+ * What a run writes about its own work. A routine session keeps only these; anything else its run
+ * writes is conversation with the person and lands in the thread's main session.
+ */
+export const RUN_TRACE_TYPES: ReadonlySet<SessionEntryType> = new Set([
+  "run.started",
+  "run.finished",
+  "assistant.text",
+  "assistant.reasoning",
+  "tool.call",
+  "tool.result",
+  "subagent",
+] satisfies SessionEntryType[]);
 
 export function isInferenceEntry(entry: SessionEntry): entry is InferenceEntry {
   return ENTRY_AUDIENCE[entry.type].inference !== "no";
@@ -338,6 +375,18 @@ export const ThreadItemSchema = z.discriminatedUnion("kind", [
       .nullable(),
   }),
   z.object({ kind: z.literal("subagent"), ...itemBase, runId: Id, ...SubagentPayload.shape }),
+  z.object({
+    kind: z.literal("routine"),
+    ...itemBase,
+    runId: Id,
+    botId: Id,
+    sessionId: SessionId,
+    routineId: Id,
+    name: z.string(),
+    finished: z
+      .object({ status: z.enum(["completed", "failed", "cancelled"]), result: z.string() })
+      .nullable(),
+  }),
   z.object({
     kind: z.literal("handoff"),
     ...itemBase,

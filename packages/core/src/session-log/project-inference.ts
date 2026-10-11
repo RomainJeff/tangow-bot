@@ -37,7 +37,9 @@ type ReplyTarget = { role: "user" | "bot"; blocks: MessageBlock[] };
  * ordinary turns; an older compaction among them adds nothing the leading summary lacks. A tool
  * call whose result is missing from the tail, cut by a rewind or still running, is left out so no
  * call replays unanswered. A cancelled run replays only its answered tool calls, so the bot knows
- * what its tools already did; its half-finished words are no history to build on.
+ * what its tools already did; its half-finished words are no history to build on. A routine run
+ * keeps its steps in its own session, so the thread replays only a line where it started and its
+ * final words, or how it ended without any, where it finished.
  */
 export function projectInferenceTurns(
   entries: readonly SessionEntry[],
@@ -126,6 +128,30 @@ function renderTurn(
     case "run.started": {
       const line = triggerContext(segment.payload.trigger);
       return line ? { role: "user", content: `[context] ${line}` } : undefined;
+    }
+    case "routine.started": {
+      const name = escapeDirectoryField(segment.payload.name);
+      const { scheduledAt } = segment.payload;
+      return {
+        role: "user",
+        content:
+          segment.payload.trigger === "webhook"
+            ? `[context] A webhook started the routine "${name}" at ${scheduledAt}.`
+            : `[context] The routine "${name}" started, scheduled for ${scheduledAt}.`,
+      };
+    }
+    case "routine.finished": {
+      const outcome = segment.payload;
+      if (outcome.result) return speakerTurn(segment.botId, outcome.result, options);
+      if (outcome.status === "failed") {
+        return {
+          role: "user",
+          content: `[context] The routine failed: ${escapeDirectoryField(outcome.error)}`,
+        };
+      }
+      return outcome.status === "cancelled"
+        ? { role: "user", content: "[context] The routine was cancelled." }
+        : undefined;
     }
     case "computer.control":
       return {

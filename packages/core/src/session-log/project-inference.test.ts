@@ -123,6 +123,68 @@ describe("projectInferenceTurns", () => {
     ]);
   });
 
+  it("replays a routine as the line where it started and its final words, or how it ended, where it finished", () => {
+    const routine = (runId: string, name: string, trigger: "routine" | "webhook") => ({
+      botId: "bot_ada",
+      runId,
+      type: "routine.started",
+      payload: {
+        sessionId: `ses_${runId}`,
+        routineId: `rtn_${runId}`,
+        name,
+        trigger,
+        scheduledAt: "2026-10-10T07:00:00.000Z",
+        model: { provider: "openai", id: "gpt-5" },
+      },
+    });
+    const usage = { inputTokens: 400, outputTokens: 20 };
+    const chain = linkEntries("routine", [
+      routine("run_brief", "Morning brief", "routine"),
+      routine("run_deploy", "Deploy hook", "webhook"),
+      { type: "user.message", payload: { blocks: text("Anything new?"), source: "app" } },
+      {
+        botId: "bot_ada",
+        runId: "run_brief",
+        type: "routine.finished",
+        payload: { status: "completed", usage, result: "Two meetings today." },
+      },
+      {
+        botId: "bot_ada",
+        runId: "run_deploy",
+        type: "routine.finished",
+        payload: { status: "failed", usage, error: "build timed out", result: "" },
+      },
+      routine("run_tidy", "Tidy inbox", "routine"),
+      {
+        botId: "bot_ada",
+        runId: "run_tidy",
+        type: "routine.finished",
+        payload: { status: "cancelled", usage, result: "" },
+      },
+    ]);
+    expect(turnsOf(chain, ada)).toEqual([
+      {
+        role: "user",
+        content:
+          '[context] The routine "Morning brief" started, scheduled for 2026-10-10T07:00:00.000Z.',
+      },
+      {
+        role: "user",
+        content:
+          '[context] A webhook started the routine "Deploy hook" at 2026-10-10T07:00:00.000Z.',
+      },
+      { role: "user", content: "Anything new?" },
+      { role: "assistant", content: "Two meetings today." },
+      { role: "user", content: "[context] The routine failed: build timed out" },
+      {
+        role: "user",
+        content:
+          '[context] The routine "Tidy inbox" started, scheduled for 2026-10-10T07:00:00.000Z.',
+      },
+      { role: "user", content: "[context] The routine was cancelled." },
+    ]);
+  });
+
   it("pairs a call id that every run reuses with its own run's result", () => {
     const chain = linkEntries("reuse", [
       ...readFile("run_1", "a.md", "alpha"),

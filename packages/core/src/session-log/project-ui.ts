@@ -4,10 +4,12 @@ import { foldRuns } from "./run-fold.js";
 
 type RunItem = Extract<ThreadItem, { kind: "run" }>;
 type EffectItem = Extract<ThreadItem, { kind: "effect" }>;
+type RoutineItem = Extract<ThreadItem, { kind: "routine" }>;
 
 /**
  * What a thread shows, from a page of a session's chain oldest first. A run becomes one `run`
- * item where it started and one `message` item per unbroken stretch of its words. A run whose
+ * item where it started and one `message` item per unbroken stretch of its words; a routine run,
+ * whose words live in its own session, becomes one `routine` item its finish fills in. A run whose
  * start is outside the page gets no `run` item, though its words on the page still show; an
  * effect whose request is outside the page is left out, as is a tool result without its call.
  */
@@ -23,6 +25,7 @@ export function projectThreadItems(entries: readonly SessionEntry[]): ThreadItem
   }
   const runs = new Map<string, RunItem>();
   const effects = new Map<string, EffectItem>();
+  const routines = new Map<string, RoutineItem>();
   const items: ThreadItem[] = [];
   for (const segment of foldRuns(visible)) {
     switch (segment.type) {
@@ -78,6 +81,30 @@ export function projectThreadItems(entries: readonly SessionEntry[]): ThreadItem
           ...segment.payload,
         });
         break;
+      case "routine.started": {
+        const { sessionId, routineId, name } = segment.payload;
+        const routine: RoutineItem = {
+          kind: "routine",
+          id: segment.id,
+          ts: segment.ts,
+          runId: segment.runId,
+          botId: segment.botId,
+          sessionId,
+          routineId,
+          name,
+          finished: null,
+        };
+        routines.set(segment.runId, routine);
+        items.push(routine);
+        break;
+      }
+      case "routine.finished": {
+        const routine = routines.get(segment.runId);
+        if (routine) {
+          routine.finished = { status: segment.payload.status, result: segment.payload.result };
+        }
+        break;
+      }
       case "handoff": {
         const { fromBotId, toBotId, text } = segment.payload;
         items.push({ kind: "handoff", id: segment.id, ts: segment.ts, fromBotId, toBotId, text });
