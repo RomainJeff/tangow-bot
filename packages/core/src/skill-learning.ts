@@ -1,15 +1,21 @@
 /**
- * Whether bots keep and improve their methods as skills on their own. "off" keeps today's
- * wording; "shadow" switches the wording and only records when the end-of-exchange nudge would
- * have run; "on" runs it. It stays off until every client shows the skill line.
+ * Whether bots keep and improve their methods as skills on their own. "off" keeps the bot's
+ * `/Name` announcement; "shadow" switches the wording and only records when the end-of-exchange
+ * nudge would have run; "on" runs it.
  */
 export type SkillLearningMode = "off" | "shadow" | "on";
 
 const MODES: readonly SkillLearningMode[] = ["off", "shadow", "on"];
 
-/** The deployment setting (`SKILL_LEARNING`): anything but "shadow" or "on" is off. */
+export const DEFAULT_SKILL_LEARNING: SkillLearningMode = "shadow";
+
+/**
+ * The deployment setting (`SKILL_LEARNING`): unset or empty is the default; a value that is not
+ * a mode is off, so a typo never stops the announcement on clients without the skill line.
+ */
 export function parseSkillLearningMode(raw: string | undefined): SkillLearningMode {
   const value = raw?.trim().toLowerCase();
+  if (!value) return DEFAULT_SKILL_LEARNING;
   return MODES.find((mode) => mode === value) ?? "off";
 }
 

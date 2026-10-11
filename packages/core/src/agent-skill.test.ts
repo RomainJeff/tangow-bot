@@ -364,10 +364,10 @@ describe("skill prompt helpers", () => {
     }
   });
 
-  it("reads the learning setting as off unless it says shadow or on", () => {
+  it("reads an unset learning setting as shadow and an unknown one as off", () => {
     expect(
-      [undefined, "", "yes", "true", " Shadow ", "ON", "off"].map(parseSkillLearningMode),
-    ).toEqual(["off", "off", "off", "off", "shadow", "on", "off"]);
+      [undefined, "", "  ", "yes", "true", " Shadow ", "ON", "Off"].map(parseSkillLearningMode),
+    ).toEqual(["shadow", "shadow", "shadow", "off", "off", "shadow", "on", "off"]);
   });
 
   it("points to skill_search when the catalog overflows", () => {
