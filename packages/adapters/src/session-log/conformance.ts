@@ -180,15 +180,23 @@ export function runSessionLogConformance<Tx>(makeLog: () => Promise<SessionLogHa
       expect((await harness.log.readTail(sessionId)).map(textOf)).toEqual(["clear", "fresh"]);
     });
 
-    it("reads the tail from the last compaction", async () => {
+    it("reads the tail from the newest compaction, then the chain after the seq it covers", async () => {
       const { sessionId } = await created();
-      const a = await append(said(sessionId, "a"));
-      await append(compacted(a, 0));
-      const b = await append(said(sessionId, "b"));
-      await append(compacted(b, 2));
-      await append(said(sessionId, "c"));
+      const [, , c] = await appendAll(["a", "b", "c"].map((text) => said(sessionId, text)));
+      await append(compacted(c!, 0));
+      await append(said(sessionId, "d"));
+      const first = (await harness.log.readTail(sessionId)).map(textOf);
+      const e = await append(said(sessionId, "e"));
+      await append(compacted(e, 3));
+      await append(said(sessionId, "f"));
 
-      expect((await harness.log.readTail(sessionId)).map(textOf)).toEqual(["up to 2", "c"]);
+      expect(first).toEqual(["up to 0", "b", "c", "d"]);
+      expect((await harness.log.readTail(sessionId)).map(textOf)).toEqual([
+        "up to 3",
+        "d",
+        "e",
+        "f",
+      ]);
     });
 
     it("appends a compaction that keeps the entries after the seq it covers", async () => {

@@ -13,6 +13,7 @@ import { PostgresSessionLog } from "./postgres.js";
 
 const ENTRIES = 200_000;
 const COMPACT_EVERY = 500;
+const KEPT = 20;
 const REWIND_EVERY = 5_000;
 const REWIND_DEPTH = 40;
 const RUNS = 5;
@@ -43,7 +44,7 @@ async function seedSession(tag: string, compact: boolean): Promise<SessionId> {
       kind,
       CASE kind
         WHEN 'rewind' THEN jsonb_build_object('reason', 'perf')
-        WHEN 'compaction' THEN jsonb_build_object('summary', body, 'coveredUpToSeq', s - 1)
+        WHEN 'compaction' THEN jsonb_build_object('summary', body, 'coveredUpToSeq', s - 1 - ${KEPT})
         WHEN 'user.message' THEN jsonb_build_object('blocks', jsonb_build_array(jsonb_build_object('kind', 'text', 'text', body)), 'source', 'app')
         WHEN 'assistant.text' THEN jsonb_build_object('blocks', jsonb_build_array(jsonb_build_object('kind', 'text', 'text', body)))
         WHEN 'tool.call' THEN jsonb_build_object('callId', 'call-' || s, 'name', 'web_search', 'input', body)

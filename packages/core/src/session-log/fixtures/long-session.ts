@@ -11,6 +11,9 @@ const RUN_SHAPE = [
   "run.finished",
 ] as const;
 
+/** How many entries before each compaction it keeps word for word. */
+export const LONG_SESSION_KEPT = 14;
+
 export function longSessionJsonl(options: {
   count: number;
   compactionEvery: number;
@@ -28,7 +31,10 @@ export function longSessionJsonl(options: {
     };
     const body =
       seq > 0 && seq % options.compactionEvery === 0
-        ? { type: "compaction", payload: { summary: FILLER, coveredUpToSeq: seq - 1 } }
+        ? {
+            type: "compaction",
+            payload: { summary: FILLER, coveredUpToSeq: seq - 1 - LONG_SESSION_KEPT },
+          }
         : rewinds
           ? { type: "rewind", payload: {} }
           : exchangeEntry(seq);

@@ -306,7 +306,10 @@ export interface SessionLog<Tx> {
   createSession(tx: Tx, session: NewSession): Promise<SessionId>;
   /** Append as the new head. A draft whose clientNonce is already in the session returns that entry. */
   append(tx: Tx, draft: SessionEntryDraft): Promise<SessionEntry>;
-  /** The chain from the last compaction, or from the chain's first entry, to the head. */
+  /**
+   * What the next run reads: the chain's newest compaction, then the chain entries after the last
+   * seq it covers, oldest first. Without a compaction, the whole chain.
+   */
   readTail(sessionId: SessionId): Promise<SessionEntry[]>;
   /** The newest `limit` chain entries before `before`, or ending at the head when it is left out. */
   readPage(

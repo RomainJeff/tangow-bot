@@ -32,22 +32,18 @@ const REPLY_TARGET_MAX_CHARS = 20_000;
 type ReplyTarget = { role: "user" | "bot"; blocks: MessageBlock[] };
 
 /**
- * The history a bot reads, from a session's chain oldest first. The chain starts at its last
- * `compaction` entry, whose summary becomes the first turn. A tool call whose result is missing
- * from the chain, cut by a rewind or still running, is left out so no call replays unanswered.
- * A cancelled run replays only its answered tool calls, so the bot knows what its tools already
- * did; its half-finished words are no history to build on.
+ * The history a bot reads, from a session's tail as `SessionLog.readTail` returns it. A leading
+ * `compaction` entry becomes the first turn, its summary, and the entries it kept follow as
+ * ordinary turns; an older compaction among them adds nothing the leading summary lacks. A tool
+ * call whose result is missing from the tail, cut by a rewind or still running, is left out so no
+ * call replays unanswered. A cancelled run replays only its answered tool calls, so the bot knows
+ * what its tools already did; its half-finished words are no history to build on.
  */
 export function projectInferenceTurns(
   entries: readonly SessionEntry[],
   options: InferenceProjectionOptions,
 ): AgentHistoryTurn[] {
-  const chain = entries.slice(
-    Math.max(
-      0,
-      entries.findLastIndex((entry) => entry.type === "compaction"),
-    ),
-  );
+  const chain = entries.filter((entry, index) => entry.type !== "compaction" || index === 0);
   const answered = toolOutputs(chain);
   const segments = foldRuns(
     chain
