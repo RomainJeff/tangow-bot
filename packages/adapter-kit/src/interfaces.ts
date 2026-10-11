@@ -1,3 +1,5 @@
+import type { EntryId, SessionEntry, SessionId } from "@rakazo/contracts";
+import type { NewSession, SessionEntryDraft } from "./session-log.js";
 import type {
   AdapterContext,
   AdapterDescriptor,
@@ -289,6 +291,27 @@ export interface RealtimeFanout {
   publish(topic: string, payload: string): Promise<void>;
   subscribe(topic: string, onMessage: (payload: string) => void): Promise<() => Promise<void>>;
   close(): Promise<void>;
+}
+
+/**
+ * The append-only log of a conversation, one per session. Appends to a session serialize, and
+ * reads return entries validated by `SessionEntrySchema`, oldest first. `Tx` is the backend's
+ * transaction, so an append commits together with the caller's other writes.
+ */
+export interface SessionLog<Tx> {
+  /** Create the session, or leave it as it is when it exists. */
+  createSession(tx: Tx, session: NewSession): Promise<void>;
+  /** Append as the new head. A draft whose clientNonce is already in the session returns that entry. */
+  append(tx: Tx, draft: SessionEntryDraft): Promise<SessionEntry>;
+  /** The chain from the last compaction, or from the chain's first entry, to the head. */
+  readTail(sessionId: SessionId): Promise<SessionEntry[]>;
+  /** The newest `limit` chain entries before `before`, or ending at the head when it is left out. */
+  readPage(
+    sessionId: SessionId,
+    page: { before?: EntryId; limit: number },
+  ): Promise<SessionEntry[]>;
+  /** A run's entries in seq order, whether or not a rewind left them on the chain. */
+  readRun(runId: string): Promise<SessionEntry[]>;
 }
 
 export interface NotificationProvider {
