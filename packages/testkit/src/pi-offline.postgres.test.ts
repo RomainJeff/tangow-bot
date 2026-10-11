@@ -246,6 +246,63 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
     );
   }, 30_000);
 
+  it("keeps a helper's log and its parent's result when the helper's writes fail", async () => {
+    await journey(
+      [
+        { expect() {}, response: DELEGATE },
+        { expect() {}, response: { type: "text", text: "checked" } },
+        {
+          expect(request) {
+            const result = request.messages.findLast((message) => message.role === "tool");
+            expect(String(result?.content)).toMatch(
+              /^Subagent failed: .*injected subagent entry failure/s,
+            );
+          },
+          response: { type: "text", text: "The helper failed." },
+        },
+      ],
+      async ({ prisma, send, log }) => {
+        await injectEntryFaults(prisma);
+        try {
+          const sent = await send("Have a helper check it.");
+          await sent.settled("completed");
+
+          const parent = await log.readTail(sent.sessionId);
+          const subagent = parent.find((entry) => entry.type === "subagent");
+          expect(parent.map((entry) => entry.type)).toEqual([
+            "user.message",
+            "run.started",
+            "tool.call",
+            "subagent",
+            "assistant.text",
+            "run.finished",
+          ]);
+          expect(payloadOf(subagent)).toMatchObject({
+            callId: "journey-delegate",
+            status: "failed",
+            result: expect.stringMatching(/^Subagent failed: .*injected subagent entry failure/s),
+          });
+          const helper = await log.readTail(payloadOf(subagent).sessionId as SessionId);
+          expect(helper.map((entry) => [entry.type, payloadOf(entry).status])).toEqual([
+            ["run.started", undefined],
+            ["run.finished", "failed"],
+          ]);
+          expect(
+            await prisma.run.findUniqueOrThrow({
+              where: { id: helper[0]!.runId! },
+              select: { status: true },
+            }),
+          ).toEqual({ status: "failed" });
+        } finally {
+          await prisma.$executeRawUnsafe("DROP TRIGGER IF EXISTS journey_fault ON session_entries");
+          await prisma.$executeRawUnsafe("DROP FUNCTION IF EXISTS journey_fault()");
+          await prisma.$executeRawUnsafe("DROP SEQUENCE IF EXISTS journey_text_fault");
+          await prisma.$executeRawUnsafe("DROP SEQUENCE IF EXISTS journey_subagent_fault");
+        }
+      },
+    );
+  }, 30_000);
+
   it("gives every call one result when the run pauses for an answer, then an approval", async () => {
     const secret = {
       label: "API key",
@@ -408,6 +465,31 @@ const DELEGATE = {
   name: "run_subagent",
   arguments: { name: "checker", task: "Say checked." },
 } as const;
+
+/** Fails a helper's first text entry and the first subagent entry, once each, at the database. */
+async function injectEntryFaults(prisma: JourneyFixture["prisma"]) {
+  await prisma.$executeRawUnsafe("CREATE SEQUENCE journey_text_fault");
+  await prisma.$executeRawUnsafe("CREATE SEQUENCE journey_subagent_fault");
+  await prisma.$executeRawUnsafe(`
+    CREATE FUNCTION journey_fault() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN
+      IF NEW.type = 'assistant.text'
+        AND EXISTS (SELECT 1 FROM sessions WHERE id = NEW."sessionId" AND kind = 'subagent') THEN
+        IF nextval('journey_text_fault') = 1 THEN
+          RAISE EXCEPTION 'injected helper text failure';
+        END IF;
+      END IF;
+      IF NEW.type = 'subagent' THEN
+        IF nextval('journey_subagent_fault') = 1 THEN
+          RAISE EXCEPTION 'injected subagent entry failure';
+        END IF;
+      END IF;
+      RETURN NEW;
+    END $$`);
+  await prisma.$executeRawUnsafe(
+    "CREATE TRIGGER journey_fault BEFORE INSERT ON session_entries FOR EACH ROW EXECUTE FUNCTION journey_fault()",
+  );
+}
 
 async function approveEdited(
   { app, cookie, bot, prisma, send, log }: JourneyFixture,

@@ -5690,17 +5690,12 @@ function deferred() {
   return { promise, resolve };
 }
 
+/** Each write starts once the one before it settled; a failed write fails only itself. */
 function serialWrites() {
   let tail: Promise<unknown> = Promise.resolve();
-  let failure: { error: unknown } | undefined;
   return <T>(write: () => Promise<T>): Promise<T> => {
-    const next = tail.then(() => {
-      if (failure) throw failure.error;
-      return write();
-    });
-    tail = next.catch((error: unknown) => {
-      failure ??= { error };
-    });
+    const next = tail.then(write);
+    tail = next.catch(() => undefined);
     return next;
   };
 }

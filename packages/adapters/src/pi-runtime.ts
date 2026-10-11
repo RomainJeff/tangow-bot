@@ -1337,18 +1337,40 @@ async function executeSubagent(host: ToolHost, executionId: string, args: Record
         sanitizeError(error instanceof Error ? error.message : String(error)),
       );
     }
+    const settled = log ? await finishSubagent(log, outcome, usage) : outcome;
     host.queue.push({
       type: "subagent",
       agentId,
       name,
       task,
-      status: outcome.status,
-      result: outcome.result,
+      status: settled.status,
+      result: settled.result,
     });
-    await log?.finish({ status: outcome.status, result: outcome.toolResult, usage });
-    return outcome.toolResult;
+    return settled.toolResult;
   } finally {
     host.subagentGate.release();
+  }
+}
+
+/** A helper whose log cannot close fails with that error, so the parent always gets a result. */
+async function finishSubagent(
+  log: SubagentLog,
+  outcome: SubagentOutcome,
+  usage: { inputTokens: number; outputTokens: number },
+): Promise<SubagentOutcome> {
+  try {
+    await log.finish({ status: outcome.status, result: outcome.toolResult, usage });
+    return outcome;
+  } catch (error) {
+    const failed = subagentFailed(
+      sanitizeError(error instanceof Error ? error.message : String(error)),
+    );
+    await log
+      .finish({ status: failed.status, result: failed.toolResult, usage })
+      .catch((retryError: unknown) =>
+        getLogger().warn("subagent log could not close", { error: retryError }),
+      );
+    return failed;
   }
 }
 
