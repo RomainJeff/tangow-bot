@@ -671,15 +671,19 @@ function Thread() {
   const hasLiveProgress = liveItems.length > 0;
   // One bot only: an activity line names one bot's tool, so it would mislabel a group.
   const activityLabel = latestActivityLabel(liveItems);
+  const busyRuns = useMemo(
+    () =>
+      (snap?.activeRuns ?? (snap?.run ? [snap.run] : [])).filter((run) =>
+        isWorkingStatus(run.status),
+      ),
+    [snap?.activeRuns, snap?.run],
+  );
   // The runs a working line speaks for: a run the thread waits on for an answer is not working.
-  const workingRuns = useMemo(() => {
-    const runs = snap?.activeRuns ?? (snap?.run ? [snap.run] : []);
-    return runs.filter((run) => isWorkingStatus(run.status) && run.id !== waiting?.runId);
-  }, [snap?.activeRuns, snap?.run, waiting?.runId]);
-  const activeRunIds = useMemo(() => {
-    const runs = snap?.activeRuns ?? (snap?.run ? [snap.run] : []);
-    return new Set(runs.flatMap((run) => (isWorkingStatus(run.status) ? [run.id] : [])));
-  }, [snap?.activeRuns, snap?.run]);
+  const workingRuns = useMemo(
+    () => busyRuns.filter((run) => run.id !== waiting?.runId),
+    [busyRuns, waiting?.runId],
+  );
+  const activeRunIds = useMemo(() => new Set(busyRuns.map((run) => run.id)), [busyRuns]);
   const workingGroupBots = useMemo(() => {
     if (!inGroup) return [];
     const seen = new Set<string>();

@@ -287,9 +287,8 @@ const PEER_RUN_KEPT_TYPES = new Set<SessionEntryType>([
  */
 export function visibleEntries(
   entries: readonly SessionEntry[],
-  options: { hiddenPeerRunIds: ReadonlySet<string>; includePeerRuns?: boolean },
+  options: { hiddenPeerRunIds: ReadonlySet<string> },
 ): SessionEntry[] {
-  if (options.includePeerRuns) return [...entries];
   return entries.filter(
     (entry) =>
       !entry.runId ||

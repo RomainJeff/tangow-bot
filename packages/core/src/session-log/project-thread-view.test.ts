@@ -691,7 +691,6 @@ describe("visibleEntries", () => {
       "vis-5",
       "vis-6",
     ]);
-    expect(ids(visibleEntries(chain, { hiddenPeerRunIds, includePeerRuns: true }))).toHaveLength(7);
   });
 });
 

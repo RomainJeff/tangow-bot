@@ -81,8 +81,8 @@ export function projectThread(entries: readonly SessionEntry[]): ProjectedThread
     sessionId ? { origin: { sessionId, ...children.get(sessionId) } } : {};
   const outputs = toolOutputs(visible);
   const seqOf = new Map<string, number>(visible.map((entry) => [entry.id, entry.seq]));
-  const finishedRuns = new Set(
-    visible.flatMap((entry) => (entry.type === "run.finished" ? [entry.runId] : [])),
+  const finishedAt = new Map(
+    visible.flatMap((entry) => (entry.type === "run.finished" ? [[entry.runId, entry.seq]] : [])),
   );
   const runs = new Map<string, RunItem>();
   const runMessages = new Map<string, MessageItem[]>();
@@ -94,7 +94,6 @@ export function projectThread(entries: readonly SessionEntry[]): ProjectedThread
   const messageIds = new Map<EntryId, EntryId>();
   const cards = new Map<string, CardSlot[]>();
   const runCards: { id: EntryId; runId: string; seq: number }[] = [];
-  const finishedAt = new Map<string, number>();
   const previews = new Map<string, { item: MessageItem; block: MessageBlock }>();
   const compactions = new Map<DividerItem, number>();
 
@@ -137,7 +136,7 @@ export function projectThread(entries: readonly SessionEntry[]): ProjectedThread
             runCards.push({ id: entry.id, runId: entry.runId, seq: entry.seq });
           }
           if (entry.type === "tool.call" && entry.payload.name === "run_subagent") {
-            if (outputs.has(entry.id) || finishedRuns.has(entry.runId)) continue;
+            if (outputs.has(entry.id) || finishedAt.has(entry.runId)) continue;
             const helper: SubagentItem = {
               kind: "subagent",
               status: "running",
@@ -147,8 +146,7 @@ export function projectThread(entries: readonly SessionEntry[]): ProjectedThread
               callId: entry.payload.callId,
               ...subagentInput(entry.payload.input),
             };
-            items.push(helper);
-            itemById.set(helper.id, helper);
+            push(helper);
           }
         }
         break;
@@ -215,7 +213,6 @@ export function projectThread(entries: readonly SessionEntry[]): ProjectedThread
         break;
       }
       case "run.finished": {
-        finishedAt.set(segment.runId, segment.seq);
         const run = runs.get(segment.runId);
         if (run) {
           const durationMs = Math.max(0, Date.parse(segment.ts) - Date.parse(run.ts));

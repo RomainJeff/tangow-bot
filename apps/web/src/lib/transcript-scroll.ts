@@ -26,5 +26,5 @@ export function arrivedAfterMount(
   ids: readonly string[],
 ): Set<string> {
   const lastKnown = ids.findLastIndex((id) => idsAtMount.has(id));
-  return new Set(ids.slice(lastKnown + 1).filter((id) => !idsAtMount.has(id)));
+  return new Set(ids.slice(lastKnown + 1));
 }

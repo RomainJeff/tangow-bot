@@ -156,7 +156,7 @@ export function CallView({
       setError(t`Hang up, then enter the code on screen.`);
       return;
     }
-    const pendingAsk = currentAsk(current);
+    const pendingAsk = current?.ask;
     if (pendingAsk && !canAnswerAskByVoice(pendingAsk.block)) {
       // A multi-question ask needs a structured answer the server can parse;
       // routing a spoken sentence into it always fails, so it is left for
@@ -189,7 +189,7 @@ export function CallView({
   }
 
   async function chooseAskAction(target: CardAnswerTarget, action: AskAction) {
-    const block = currentAsk(threadRef.current)?.block;
+    const block = threadRef.current?.ask?.block;
     if (block && !callAskActions(block).some((offered) => offered.id === action.id)) return;
     dictation.stop("cancel");
     setHeard(action.label);
@@ -310,7 +310,7 @@ export function CallView({
   }, [thread, botId]);
 
   useEffect(() => {
-    const pendingAsk = currentAsk(thread);
+    const pendingAsk = thread?.ask;
     if (!pendingAsk) return;
     if (isSecretAskBlock(pendingAsk.block) || !canAnswerAskByVoice(pendingAsk.block)) {
       dictation.stop("cancel");
@@ -318,7 +318,7 @@ export function CallView({
     }
   }, [thread]);
 
-  const pendingAsk = currentAsk(thread);
+  const pendingAsk = thread?.ask;
   const askTarget = pendingAsk?.target;
   const askBlock = pendingAsk?.block;
   const isApproval = Boolean(askBlock && isApprovalAskBlock(askBlock));
@@ -431,12 +431,8 @@ export function CallView({
 }
 
 function pendingSecretAsk(thread: CallThread | null): boolean {
-  const pending = currentAsk(thread);
+  const pending = thread?.ask;
   return Boolean(pending && isSecretAskBlock(pending.block));
-}
-
-function currentAsk(thread: CallThread | null): PendingAsk | null {
-  return thread?.ask ?? null;
 }
 
 function speakableProgress(text: string): string | null {

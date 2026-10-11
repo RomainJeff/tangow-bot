@@ -145,11 +145,6 @@ export const UpdateGroupInput = z.object({
 });
 export type UpdateGroupInput = z.infer<typeof UpdateGroupInput>;
 
-export const GroupDetailSchema = GroupSchema.extend({
-  messages: z.array(ThreadMessageSchema).optional(),
-});
-export type GroupDetail = z.infer<typeof GroupDetailSchema>;
-
 export const BotSectionSchema = z.object({
   id: Id,
   name: z.string(),

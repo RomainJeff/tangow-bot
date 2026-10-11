@@ -1581,16 +1581,13 @@ export function ShellPage() {
   );
   const activeReplyTarget = replyTarget && rowIndexOf.has(replyTarget.id) ? replyTarget : null;
   const activeRewindTarget = rewindTarget && rowIndexOf.has(rewindTarget.id) ? rewindTarget : null;
-  const currentRuns = activeThreadRuns(activeSnapshot);
+  const currentRuns = useMemo(() => activeThreadRuns(activeSnapshot), [activeSnapshot]);
   const workingRuns = currentRuns.filter((run) => isWorking(run, view));
   const transcriptRunning = workingRuns.length > 0;
   const composerRunning = currentRuns.some((run) => isActive(run.status));
   const activeRunIds = useMemo(
-    () =>
-      new Set(
-        activeThreadRuns(activeSnapshot).flatMap((run) => (isActive(run.status) ? [run.id] : [])),
-      ),
-    [activeSnapshot],
+    () => new Set(currentRuns.flatMap((run) => (isActive(run.status) ? [run.id] : []))),
+    [currentRuns],
   );
   const runError = threadRunError(activeSnapshot, dismissedRunErrorIds);
   const displayedRunError = !sendError ? runError : null;
