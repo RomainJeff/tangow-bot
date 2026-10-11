@@ -367,6 +367,25 @@ export function runSessionLogConformance<Tx>(makeLog: () => Promise<SessionLogHa
       expect(await page(e0, 2)).toEqual([]);
     });
 
+    it("reads the chain around an entry, and nothing for an entry a rewind left off it", async () => {
+      const { sessionId } = await created();
+      const [e0, e1, , e3, , e5] = await appendAll(
+        ["e0", "e1", "e2", "e3", "e4", "e5"].map((text) => said(sessionId, text)),
+      );
+      const rewind = await append({ sessionId, type: "rewind", parentId: e3!.id, payload: {} });
+      await append(said(sessionId, "e4 edited"));
+      const around = async (entry: SessionEntry, limit: number) =>
+        (await harness.log.readAround(sessionId, entry.id, limit)).map(textOf);
+
+      expect(await around(e3!, 4)).toEqual(["e1", "e2", "e3", "rewind"]);
+      expect(await around(e1!, 5)).toEqual(["e0", "e1", "e2", "e3", "rewind"]);
+      expect(await around(e0!, 3)).toEqual(["e0", "e1", "e2"]);
+      expect(await around(rewind, 4)).toEqual(["e2", "e3", "rewind", "e4 edited"]);
+      expect(await around(rewind, 7)).toEqual(["e1", "e2", "e3", "rewind", "e4 edited"]);
+      expect(await around(e5!, 4)).toEqual([]);
+      await expect(around(e0!, 0)).rejects.toThrow(RangeError);
+    });
+
     it("keeps one entry for a redelivered clientNonce", async () => {
       const { sessionId } = await created();
       const received = (text: string): SessionEntryDraft => ({

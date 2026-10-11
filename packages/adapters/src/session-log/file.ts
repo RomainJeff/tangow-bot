@@ -114,6 +114,22 @@ export class FileSessionLog implements SessionLog<undefined> {
     return page.reverse();
   }
 
+  async readAround(sessionId: SessionId, entryId: EntryId, limit: number): Promise<SessionEntry[]> {
+    assertEntryCount("limit", limit);
+    const entries = await this.readAll(sessionId);
+    const byId = new Map<string, SessionEntry>(entries.map((entry) => [entry.id, entry]));
+    const chain: SessionEntry[] = [];
+    for (let cursor = entries.at(-1); cursor; ) {
+      chain.push(cursor);
+      cursor = cursor.parentId ? byId.get(cursor.parentId) : undefined;
+    }
+    chain.reverse();
+    const at = chain.findIndex((entry) => entry.id === entryId);
+    if (at === -1) return [];
+    const start = Math.max(0, at - Math.floor(limit / 2));
+    return chain.slice(start, start + limit);
+  }
+
   async readRun(runId: string): Promise<SessionEntry[]> {
     const dir = path.join(this.root, "sessions");
     const names = await readdir(dir).catch((error: unknown) => {

@@ -51,6 +51,32 @@ export class PostgresSessionLog implements SessionLog<Prisma.TransactionClient> 
     return this.walk(sessionId, start, { stopAt: Prisma.sql`-1`, limit });
   }
 
+  async readAround(sessionId: SessionId, entryId: EntryId, limit: number): Promise<SessionEntry[]> {
+    assertEntryCount("limit", limit);
+    const older = Math.floor(limit / 2);
+    const rows = await this.prisma.$queryRaw<SessionEntryRow[]>`
+      WITH RECURSIVE chain AS (
+        (SELECT e.id, e.seq, e."parentId", 0 AS depth,
+            CASE WHEN e.id = ${entryId} THEN 0 END AS "targetDepth"
+          FROM session_entries e WHERE e."sessionId" = ${sessionId} ${HEAD})
+        UNION ALL
+        SELECT e.id, e.seq, e."parentId", chain.depth + 1,
+          COALESCE(chain."targetDepth", CASE WHEN e.id = ${entryId} THEN chain.depth + 1 END)
+        FROM session_entries e
+        JOIN chain ON e.id = chain."parentId" AND e."sessionId" = ${sessionId} AND e.seq < chain.seq
+        WHERE chain."targetDepth" IS NULL OR chain.depth < chain."targetDepth" + ${older}
+      ),
+      bounds AS (
+        SELECT max("targetDepth") AS target, max(depth) AS oldest FROM chain
+      )
+      SELECT e.* FROM chain
+      JOIN bounds ON bounds.target IS NOT NULL
+      JOIN session_entries e ON e.id = chain.id AND e."sessionId" = ${sessionId}
+      WHERE chain.depth >= bounds.target - (${limit - 1} - (bounds.oldest - bounds.target))
+      ORDER BY e.seq`;
+    return rows.map(sessionEntryFromRow);
+  }
+
   async readRun(runId: string): Promise<SessionEntry[]> {
     const rows = await this.prisma.$queryRaw<SessionEntryRow[]>`
       WITH run AS (SELECT * FROM session_entries WHERE "runId" = ${runId})

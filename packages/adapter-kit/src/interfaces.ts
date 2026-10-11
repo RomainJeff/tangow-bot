@@ -318,6 +318,11 @@ export interface SessionLog<Tx> {
     page: { before?: EntryId; limit: number },
   ): Promise<SessionEntry[]>;
   /**
+   * The chain entries around `entryId`, oldest first: up to `floor(limit / 2)` older ones, the
+   * entry, then newer ones up to `limit` in all. Empty when the entry is not on the chain.
+   */
+  readAround(sessionId: SessionId, entryId: EntryId, limit: number): Promise<SessionEntry[]>;
+  /**
    * A run's entries from every session it wrote to, with the person's answers to its asks and
    * choices, by `ts` then `seq`, whether or not a rewind left them on the chain. A child session's
    * run reads whole: its trace and what it raised to the thread.
