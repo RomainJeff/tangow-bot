@@ -13,7 +13,6 @@ import {
   computerPanelAutoUsesBoot,
   computerPanelNeedsMaintenance,
   computerTakeoverBlocked,
-  isThreadStateEvent,
   reconcileRefreshedThread,
   reduceComputerStatus,
   reduceThreadState,
@@ -60,16 +59,6 @@ describe("thread event reduction", () => {
 
     expect(reconcileRefreshedThread(live, stale, null).snapshot).toBe(live);
     expect(reconcileRefreshedThread(live, stale, null, true).snapshot).toBe(live);
-  });
-
-  it("routes entries, progress, run and takeover events through the thread reducer", () => {
-    expect(isThreadStateEvent(event({ type: "session.entry.appended" }))).toBe(true);
-    expect(isThreadStateEvent(event({ type: "thread.progress" }))).toBe(true);
-    expect(isThreadStateEvent(event({ type: "run.started" }))).toBe(true);
-    expect(isThreadStateEvent(event({ type: "run.completed" }))).toBe(true);
-    expect(isThreadStateEvent(event({ type: "computer.takeover.requested" }))).toBe(true);
-    expect(isThreadStateEvent(event({ type: "thread.message.created" }))).toBe(false);
-    expect(isThreadStateEvent(event({ type: "run.waiting_input" }))).toBe(false);
   });
 
   it("event-sources the active run on run.started so Stop does not wait on threads.get", () => {

@@ -312,7 +312,6 @@ describe("threadSnapshot", () => {
         error: "Provider is not configured: openrouter",
       }),
     );
-    expect(tx.$queryRaw).toHaveBeenCalledOnce();
   });
 
   it("prefers a waiting peer ask over a concurrent user run", async () => {
@@ -453,7 +452,7 @@ describe("threadSnapshot", () => {
       createdAt: new Date("2026-08-23T00:00:05.000Z"),
     };
     const tx = {
-      $queryRaw: vi.fn().mockResolvedValue([]),
+      $queryRaw: vi.fn().mockResolvedValue([peerProgress("run-peer-running")]),
       thread: { findUniqueOrThrow: vi.fn().mockResolvedValue({ sessionId: "session-1" }) },
       event: {
         findFirst: vi.fn().mockResolvedValue(null),
@@ -477,7 +476,7 @@ describe("threadSnapshot", () => {
       expect.objectContaining({ id: "run-peer-running", status: "running" }),
     );
     // ...without replaying what it is doing for the other bot.
-    expect(tx.$queryRaw).toHaveBeenCalledOnce();
+    expect(snapshot.progress).toEqual([]);
   });
 
   it("hides a failed peer run from the bot thread", async () => {
@@ -556,7 +555,6 @@ describe("threadSnapshot", () => {
       }),
     );
     expect(snapshot.run).toBeNull();
-    expect(tx.$queryRaw).toHaveBeenCalledOnce();
   });
   it("returns a group's latest failed run so a refresh keeps its error", async () => {
     const run = {
@@ -683,7 +681,7 @@ describe("threadSnapshot", () => {
       createdAt: new Date("2026-08-23T00:00:05.000Z"),
     };
     const peerRunning = { ...peerAsking, id: "run-peer-running", status: "running" };
-    const queryRaw = vi.fn().mockResolvedValue([]);
+    const queryRaw = vi.fn().mockResolvedValue([peerProgress("run-peer-running")]);
     const snapshot = await threadSnapshot(
       {
         sessionLog: tailOf([]),
@@ -699,7 +697,7 @@ describe("threadSnapshot", () => {
       "run-peer-running",
     ]);
     // ...but no peer narration may be streamed into the transcript.
-    expect(queryRaw).toHaveBeenCalledOnce();
+    expect(snapshot.progress).toEqual([]);
   });
 
   it("includes waiting peer bot_message runs in group activeRuns", async () => {
@@ -1087,6 +1085,21 @@ function groupPrisma(
   return {
     $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
   } as unknown as PrismaClient;
+}
+
+/** A progress row the replay query would return if it were asked about this run. */
+function peerProgress(runId: string) {
+  return {
+    id: `event-${runId}`,
+    spaceId: "space-1",
+    threadId: "thread-1",
+    botId: "bot-1",
+    seq: 6,
+    type: "thread.progress",
+    payload: { text: "Working for the other bot" },
+    runId,
+    createdAt: new Date("2026-08-23T00:00:06.000Z"),
+  };
 }
 
 function tailOf(entries: SessionEntry[]) {

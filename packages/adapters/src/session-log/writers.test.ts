@@ -1228,76 +1228,60 @@ describe("session log writers", () => {
         return { entries: await answered(owner), target: messageId };
       }
 
-      it("logs a typed answer to an ask, then the reply that carries it to the bot", async () => {
-        const { entries, target } = await answer([{ kind: "ask", text: "Which city?" }], "Lyon");
-        expect(entries).toEqual([
-          { type: "card.answered", payload: { target, answer: "Lyon" } },
+      const city = {
+        id: "city",
+        question: "Which city should I start with?",
+        options: [
+          { id: "paris", label: "Paris" },
+          { id: "lyon", label: "Lyon" },
+        ],
+      };
+      it.each<[string, MessageBlock, string, Record<string, unknown>, string]>([
+        [
+          "a typed answer to an ask",
+          { kind: "ask", text: "Which city?" },
+          "Lyon",
+          { answer: "Lyon" },
+          "Lyon",
+        ],
+        [
+          "a tapped action of an ask by its id",
           {
-            type: "user.message",
-            payload: {
-              blocks: [{ kind: "text", text: "Lyon" }],
-              replyTo: { entryId: target },
-              source: "app",
-            },
+            kind: "ask",
+            text: "Which city?",
+            actions: [
+              { id: "paris", label: "Paris" },
+              { id: "lyon", label: "Lyon" },
+            ],
           },
-        ]);
-      });
-
-      it("logs a tapped action of an ask by its id, and its label as the reply", async () => {
-        const { entries, target } = await answer(
-          [
-            {
-              kind: "ask",
-              text: "Which city?",
-              actions: [
-                { id: "paris", label: "Paris" },
-                { id: "lyon", label: "Lyon" },
-              ],
-            },
-          ],
           "paris",
-        );
-        expect(entries).toEqual([
-          { type: "card.answered", payload: { target, answer: "paris" } },
-          {
-            type: "user.message",
-            payload: {
-              blocks: [{ kind: "text", text: "Paris" }],
-              replyTo: { entryId: target },
-              source: "app",
-            },
-          },
-        ]);
-      });
-
-      it("logs a multi-question card's structured answers, and their lines as the reply", async () => {
-        const question = {
-          id: "city",
-          question: "Which city should I start with?",
-          options: [
-            { id: "paris", label: "Paris" },
-            { id: "lyon", label: "Lyon" },
-          ],
-        };
-        const { entries, target } = await answer(
-          [{ kind: "ask", text: "A few questions", questions: [question] }],
+          { answer: "paris" },
+          "Paris",
+        ],
+        [
+          "a multi-question card's structured answers",
+          { kind: "ask", text: "A few questions", questions: [city] },
           JSON.stringify({ city: { selected: ["paris"] } }),
-        );
-        expect(entries).toEqual([
-          {
-            type: "card.answered",
-            payload: { target, answers: { city: { selected: ["paris"] } } },
-          },
-          {
-            type: "user.message",
-            payload: {
-              blocks: [{ kind: "text", text: "1. Which city should I start with? — Paris" }],
-              replyTo: { entryId: target },
-              source: "app",
+          { answers: { city: { selected: ["paris"] } } },
+          "1. Which city should I start with? — Paris",
+        ],
+      ])(
+        "logs %s, then the reply that carries it to the bot",
+        async (_, block, value, logged, reply) => {
+          const { entries, target } = await answer([block], value);
+          expect(entries).toEqual([
+            { type: "card.answered", payload: { target, ...logged } },
+            {
+              type: "user.message",
+              payload: {
+                blocks: [{ kind: "text", text: reply }],
+                replyTo: { entryId: target },
+                source: "app",
+              },
             },
-          },
-        ]);
-      });
+          ]);
+        },
+      );
     });
 
     it("logs an ask the composer answered as answered", async () => {

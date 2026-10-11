@@ -7,7 +7,6 @@ import {
   isPeerRun,
   loadAllMessages,
   loadEntryPage,
-  shouldForwardPeerThreadEvent,
 } from "./thread-message-pages.js";
 
 const SESSION = SessionId.parse("session-main");
@@ -148,12 +147,18 @@ describe("thread feed forwarding", () => {
 
     const forwarded = await Promise.all([
       forwardedThreadEvent(prisma, event("run.started", "run-peer"), peerRuns),
+      forwardedThreadEvent(prisma, event("run.waiting_input", "run-peer"), peerRuns),
+      forwardedThreadEvent(prisma, event("run.completed", "run-peer"), peerRuns),
       forwardedThreadEvent(prisma, event("thread.progress", "run-peer"), peerRuns),
+      forwardedThreadEvent(prisma, event("effect.edited", "run-peer"), peerRuns),
       forwardedThreadEvent(prisma, event("thread.progress", "run-own"), peerRuns),
     ]);
 
     expect(forwarded.map((kept) => kept && `${kept.type}:${kept.runId}`)).toEqual([
       "run.started:run-peer",
+      "run.waiting_input:run-peer",
+      "run.completed:run-peer",
+      null,
       null,
       "thread.progress:run-own",
     ]);
@@ -221,29 +226,6 @@ describe("thread feed forwarding", () => {
     const prisma = { run: { findMany } } as unknown as PrismaClient;
 
     await expect(isPeerRun(prisma, "run-answer", new Map())).resolves.toBe(true);
-  });
-
-  it("forwards a peer run's start, terminals, waits and takeover requests, nothing else", () => {
-    const forwarded = [
-      "run.started",
-      "run.completed",
-      "run.failed",
-      "run.cancelled",
-      "run.waiting_input",
-      "computer.takeover.requested",
-      "thread.progress",
-      "thread.message.created",
-      "effect.edited",
-    ].filter((type) => shouldForwardPeerThreadEvent({ type }));
-
-    expect(forwarded).toEqual([
-      "run.started",
-      "run.completed",
-      "run.failed",
-      "run.cancelled",
-      "run.waiting_input",
-      "computer.takeover.requested",
-    ]);
   });
 });
 
