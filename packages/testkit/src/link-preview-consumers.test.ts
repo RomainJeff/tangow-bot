@@ -57,6 +57,8 @@ const chain = (bodies: readonly object[]): SessionEntry[] =>
     }),
   );
 
+/** A history budget so small that compaction summarizes everything before the newest exchange. */
+const KEEP_ONLY_THE_NEWEST_EXCHANGE = 1;
 const never = (value: unknown, where: string) =>
   expect(JSON.stringify(value) ?? "", where).not.toContain("wire the money");
 
@@ -115,6 +117,7 @@ describe("no consumer of a message's blocks repeats a preview's title (CA 12, CA
         deploymentModelKey: "key",
       },
       "t1",
+      KEEP_ONLY_THE_NEWEST_EXCHANGE,
     );
     const prompts = run.mock.calls.map(([request]) => request.prompt);
     expect(prompts.join("\n")).toContain(`read ${LINK}`);
