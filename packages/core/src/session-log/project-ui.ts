@@ -62,7 +62,6 @@ export function projectThread(entries: readonly SessionEntry[]): ProjectedThread
   const origin = (sessionId: SessionId | undefined) =>
     sessionId ? { origin: { sessionId, ...children.get(sessionId) } } : {};
   const answers = toolAnswers(visible);
-  const placedHelpers = new Set([...answers.values()].map((answer) => answer.id));
   const seqOf = new Map<string, number>(visible.map((entry) => [entry.id, entry.seq]));
   const finishedAt = new Map(
     visible.flatMap((entry) => (entry.type === "run.finished" ? [[entry.runId, entry.seq]] : [])),
@@ -120,7 +119,7 @@ export function projectThread(entries: readonly SessionEntry[]): ProjectedThread
             runCards.push({ id: entry.id, runId: entry.runId, seq: entry.seq });
           }
           if (entry.type !== "tool.call" || entry.payload.name !== "run_subagent") continue;
-          const answer = answers.get(entry.id);
+          const answer = answers.answerOf.get(entry.id);
           if (answer?.type === "subagent") {
             push(subagentItem(answer), answer.id);
           } else if (!answer && !finishedAt.has(entry.runId)) {
@@ -210,7 +209,7 @@ export function projectThread(entries: readonly SessionEntry[]): ProjectedThread
         break;
       }
       case "subagent":
-        if (!placedHelpers.has(segment.id)) push(subagentItem(segment), segment.id);
+        if (!answers.callOf.has(segment.id)) push(subagentItem(segment), segment.id);
         break;
       case "routine.started": {
         const { sessionId, routineId, name, notify } = segment.payload;

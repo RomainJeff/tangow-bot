@@ -20,6 +20,10 @@ const FOLDED_TYPES = [
 ] as const;
 type FoldedEntry = SessionEntryOf<(typeof FOLDED_TYPES)[number]>;
 export type ToolAnswer = SessionEntryOf<"tool.result" | "subagent">;
+export type ToolAnswers = {
+  answerOf: ReadonlyMap<EntryId, ToolAnswer>;
+  callOf: ReadonlyMap<EntryId, EntryId>;
+};
 const STRETCH_TYPES = new Set<SessionEntryType>([...FOLDED_TYPES, ...CARD_STATE_TYPES, "subagent"]);
 
 type RunMessage = {
@@ -48,11 +52,10 @@ export function foldRuns(
   {
     answers = toolAnswers(entries),
     splitAtHelpers = false,
-  }: { answers?: ReadonlyMap<EntryId, ToolAnswer>; splitAtHelpers?: boolean } = {},
+  }: { answers?: ToolAnswers; splitAtHelpers?: boolean } = {},
 ): (RunMessage | Exclude<SessionEntry, FoldedEntry>)[] {
   const segments: (RunMessage | Exclude<SessionEntry, FoldedEntry>)[] = [];
   const open = new Map<string, RunMessage>();
-  const callOf = new Map([...answers].map(([callId, answer]) => [answer.id, callId]));
   const holderOf = new Map<EntryId, RunMessage>();
   const stretchOf = (entry: FoldedEntry) => {
     const stretch = open.get(entry.runId);
@@ -95,7 +98,7 @@ export function foldRuns(
       case "tool.call": {
         const message = stretchOf(entry);
         const { callId, name, input } = entry.payload;
-        const answer = answers.get(entry.id);
+        const answer = answers.answerOf.get(entry.id);
         message.blocks = appendToolCallSegment(message.blocks, name, {
           name,
           input,
@@ -107,7 +110,7 @@ export function foldRuns(
         break;
       }
       case "tool.result": {
-        const call = callOf.get(entry.id);
+        const call = answers.callOf.get(entry.id);
         const holder = call === undefined ? undefined : holderOf.get(call);
         (holder ?? open.get(entry.runId))?.entries.push(entry);
         break;
@@ -120,15 +123,16 @@ export function foldRuns(
 }
 
 /**
- * Each tool call's answer by the call's entry id. Providers reuse call ids such as `call_0`, from
+ * Each tool call's answer by the call's entry id, and each answer's call by its own. Providers reuse call ids such as `call_0`, from
  * run to run and within a run once it resumes, so a `tool.result` or `subagent` entry answers the
  * latest earlier call of its run and call id that has no answer yet. A call a crash cut stays
  * unanswered under the replay that follows it, and a result whose call a compaction cut answers
  * nothing.
  */
-export function toolAnswers(entries: readonly SessionEntry[]): Map<EntryId, ToolAnswer> {
+export function toolAnswers(entries: readonly SessionEntry[]): ToolAnswers {
   const unanswered = new Map<string, EntryId[]>();
-  const answers = new Map<EntryId, ToolAnswer>();
+  const answerOf = new Map<EntryId, ToolAnswer>();
+  const callOf = new Map<EntryId, EntryId>();
   for (const entry of entries) {
     if (entry.type !== "tool.call" && entry.type !== "tool.result" && entry.type !== "subagent") {
       continue;
@@ -142,9 +146,10 @@ export function toolAnswers(entries: readonly SessionEntry[]): Map<EntryId, Tool
     }
     const call = calls.pop();
     if (call === undefined) continue;
-    answers.set(call, entry);
+    answerOf.set(call, entry);
+    callOf.set(entry.id, call);
   }
-  return answers;
+  return { answerOf, callOf };
 }
 
 function outputOf(answer: ToolAnswer): string {

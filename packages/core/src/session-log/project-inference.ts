@@ -53,7 +53,7 @@ export function projectInferenceTurns(
   const segments = foldRuns(
     chain
       .filter(isInferenceEntry)
-      .filter((entry) => entry.type !== "tool.call" || answered.has(entry.id)),
+      .filter((entry) => entry.type !== "tool.call" || answered.answerOf.has(entry.id)),
   );
   const cancelled = new Set(
     chain.flatMap((entry) =>
