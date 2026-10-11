@@ -97,7 +97,8 @@ const UserMessagePayload = z.object({
   blocks: z.array(MessageBlock),
   replyTo: z.object({ entryId: EntryId, quote: z.string().optional() }).optional(),
   clientNonce: z.string().optional(),
-  source: z.enum(["app", "steering", "channel", "routine"]),
+  /** `card`: the reply an answer given inside a card records, which the card shows in its place. */
+  source: z.enum(["app", "steering", "channel", "routine", "card"]),
 });
 
 const SubagentPayload = z.object({
@@ -181,6 +182,8 @@ const EntryShapes = z.discriminatedUnion("type", [
       trigger: z.enum(["routine", "webhook"]),
       scheduledAt: IsoDate,
       model: RunModel,
+      /** The person asked to hear when this routine finishes. */
+      notify: z.literal(true).optional(),
     }),
   ),
   runEntry("routine.finished", RoutineFinishedPayload),
@@ -307,7 +310,8 @@ const EntryShapes = z.discriminatedUnion("type", [
     ...envelope,
     parentId: z.null(),
     type: z.literal("clear"),
-    payload: z.strictObject({}),
+    /** `edit`: the person edited the session's first message, so nothing stood before it. */
+    payload: z.strictObject({ edit: z.literal(true).optional() }),
   }),
   entry("harness.session", z.object({ harness: z.string(), sessionId: z.string() })),
 ]);
@@ -538,6 +542,7 @@ export const ThreadItemSchema = z.discriminatedUnion("kind", [
     sessionId: SessionId,
     routineId: Id,
     name: z.string(),
+    notify: z.literal(true).optional(),
     finished: z
       .object({ status: z.enum(["completed", "failed", "cancelled"]), result: z.string() })
       .nullable(),

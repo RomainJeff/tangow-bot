@@ -128,7 +128,11 @@ const structuredMentionTarget = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("connector"), id: Id }),
 ]);
 
-const sessionEntriesOutput = z.object({ entries: z.array(SessionEntrySchema) });
+const sessionEntriesOutput = z.object({
+  entries: z.array(SessionEntrySchema),
+  /** The read stopped at its cap, so the oldest entries are missing. */
+  truncated: z.literal(true).optional(),
+});
 
 const threadSendInput = threadTarget
   .safeExtend({
