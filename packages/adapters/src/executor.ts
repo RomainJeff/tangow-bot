@@ -5721,6 +5721,7 @@ function serialWrites() {
 }
 
 type RunLogFacts = {
+  sessionId: string;
   logged: Array<{ type: string; payload: { callId: string; input?: string } }> | null;
   carrierType: string | null;
   steered: boolean;
@@ -5732,7 +5733,7 @@ type RunLogFacts = {
  * Open a run's log, once: `run.started`, after a routine run's own session and the routine's mark
  * in its thread. Returns the session the run writes to and the logged calls still awaiting a result.
  */
-async function openRunLog(
+export async function openRunLog(
   deps: Pick<ExecutorDeps, "prisma" | "sessionLog">,
   run: RunTriggerSource & { spaceId: string; threadId: string },
   log: RunLog,
@@ -5740,9 +5741,12 @@ async function openRunLog(
   effort: SessionEntryOf<"run.started">["payload"]["effort"],
 ): Promise<{ sessionId: SessionId; awaitingResult: Map<string, string> }> {
   return deps.prisma.$transaction(async (tx) => {
+    // Its own statement, so the facts below see what an open that held this lock committed.
+    await tx.$queryRaw`SELECT id FROM threads WHERE id = ${run.threadId} FOR UPDATE`;
     const spawnNonce = run.trigger === "spawn" ? run.clientNonce : null;
     const [facts] = await tx.$queryRaw<[RunLogFacts]>`
       SELECT
+        (SELECT "sessionId" FROM runs WHERE id = ${run.id}) AS "sessionId",
         (SELECT json_agg(json_build_object('type', type, 'payload', payload) ORDER BY seq)
           FROM session_entries
           WHERE "runId" = ${run.id} AND type IN ('run.started', 'tool.call', 'tool.result')
@@ -5760,7 +5764,7 @@ async function openRunLog(
       if (type === "tool.call") awaitingResult.set(payload.callId, payload.input ?? "");
       if (type === "tool.result") awaitingResult.delete(payload.callId);
     }
-    if (logged.length > 0) return { sessionId: log.sessionId, awaitingResult };
+    if (logged.length > 0) return { sessionId: facts.sessionId as SessionId, awaitingResult };
     const trigger = sessionRunTrigger(run, facts);
     const sessionId =
       trigger.kind === "routine" || trigger.kind === "webhook"
