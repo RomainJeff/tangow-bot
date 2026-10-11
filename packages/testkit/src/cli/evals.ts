@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { ModelConnectInputSchema } from "@rakazo/contracts";
+import { DEFAULT_SKILL_LEARNING } from "@rakazo/core";
 import { loadRootEnv } from "@rakazo/core/node/load-root-env";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import { EVAL_CASES } from "../evals/cases.js";
@@ -182,7 +183,7 @@ async function main() {
             mcpStdioAllowedCommands: [],
             updaterUrl: undefined,
             updaterToken: undefined,
-            skillLearning: scenario.skillLearning ? "on" : "off",
+            skillLearning: scenario.skillLearning ? "on" : DEFAULT_SKILL_LEARNING,
           });
           return { ...handles, dataDir: trialDataDir, harnessIssues: sandbox.harnessIssues };
         },

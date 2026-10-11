@@ -155,6 +155,7 @@ suite also verifies that a real model selects matching records across two local
 service emulators and posts a grounded reply to the originating Slack-like DM.
 It does not evaluate visual teaching or native mobile recording.
 
+The other cases run with the default `SKILL_LEARNING`, as a deployment does.
 Six cases measure skill learning and run with `SKILL_LEARNING=on`: a repeated
 task kept as one generic skill (`skill-learned-from-repeated-task`), a new
 requirement that improves the user's existing skill instead of adding one
