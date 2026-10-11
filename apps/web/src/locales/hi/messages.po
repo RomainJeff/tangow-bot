@@ -135,7 +135,7 @@ msgid "{days}d ago"
 msgstr "{days} दिन पहले"
 
 #: src/pages/shell/message-view.tsx:375
-#: src/pages/shell/thread-row.tsx:317
+#: src/pages/shell/thread-row.tsx:318
 msgid "{from} handed the thread to {to}"
 msgstr ""
 
@@ -570,10 +570,6 @@ msgstr "इसे चैट में स्वीकृत करें, या
 msgid "Approve this server to let your agent use its tools."
 msgstr "अपने एजेंट को इसके टूल उपयोग करने देने के लिए इस सर्वर को अनुमोदित करें।"
 
-#: src/pages/shell/thread-row.tsx:409
-msgid "Approved"
-msgstr ""
-
 #: src/pages/bot-page/BotPage.tsx:372
 #: src/pages/BotContextMenu.tsx:146
 msgid "Archive"
@@ -732,8 +728,8 @@ msgstr "{0} का कंप्यूटर शुरू हो रहा है
 #: src/pages/shell/message-view.tsx:363
 #: src/pages/shell/message-view.tsx:364
 #: src/pages/shell/message-view.tsx:455
-#: src/pages/shell/thread-row.tsx:308
 #: src/pages/shell/thread-row.tsx:309
+#: src/pages/shell/thread-row.tsx:310
 msgid "bot"
 msgstr "बॉट"
 
@@ -1207,7 +1203,7 @@ msgstr ""
 msgid "Continue with email"
 msgstr "ईमेल से जारी रखें"
 
-#: src/pages/shell/thread-row.tsx:394
+#: src/pages/shell/thread-row.tsx:395
 msgid "Conversation cleared"
 msgstr ""
 
@@ -1847,7 +1843,6 @@ msgid "Deleting…"
 msgstr "डिलीट किया जा रहा है…"
 
 #: src/components/AskCard.tsx:51
-#: src/pages/shell/thread-row.tsx:409
 msgid "Denied"
 msgstr "अस्वीकृत"
 
@@ -1995,7 +1990,7 @@ msgstr "डुप्लिकेट"
 msgid "Earlier message"
 msgstr "पुराना संदेश"
 
-#: src/pages/shell/thread-row.tsx:391
+#: src/pages/shell/thread-row.tsx:392
 msgid "Earlier messages summarized"
 msgstr ""
 
@@ -2206,7 +2201,7 @@ msgstr "मुफ़्त"
 msgid "Fullscreen"
 msgstr "फ़ुलस्क्रीन"
 
-#: src/pages/shell/thread-row.tsx:343
+#: src/pages/shell/thread-row.tsx:344
 msgid "FYI"
 msgstr ""
 
@@ -2696,7 +2691,7 @@ msgstr ""
 msgid "Message composer"
 msgstr "संदेश रचयिता"
 
-#: src/pages/shell/thread-row.tsx:393
+#: src/pages/shell/thread-row.tsx:394
 msgid "Message edited"
 msgstr ""
 
@@ -2705,8 +2700,8 @@ msgid "Message event"
 msgstr ""
 
 #: src/pages/shell/message-view.tsx:387
-#: src/pages/shell/thread-row.tsx:345
-#: src/pages/shell/thread-row.tsx:384
+#: src/pages/shell/thread-row.tsx:346
+#: src/pages/shell/thread-row.tsx:385
 msgid "Message from {peer}"
 msgstr "{peer} का संदेश"
 
@@ -2715,9 +2710,9 @@ msgid "Message…"
 msgstr "संदेश…"
 
 #: src/pages/shell/message-view.tsx:387
-#: src/pages/shell/thread-row.tsx:285
-#: src/pages/shell/thread-row.tsx:345
-#: src/pages/shell/thread-row.tsx:384
+#: src/pages/shell/thread-row.tsx:286
+#: src/pages/shell/thread-row.tsx:346
+#: src/pages/shell/thread-row.tsx:385
 msgid "Messaged {peer}"
 msgstr "{peer} को संदेश भेजा"
 
@@ -2853,7 +2848,7 @@ msgid "Name this routine"
 msgstr "इस रूटीन का नाम दें"
 
 #: src/pages/ActivityList.tsx:154
-#: src/pages/shell/thread-row.tsx:239
+#: src/pages/shell/thread-row.tsx:240
 msgid "Needs input"
 msgstr "इनपुट चाहिए"
 
@@ -3337,7 +3332,7 @@ msgstr "प्रोवाइडर"
 msgid "Providers"
 msgstr "प्रोवाइडर्स"
 
-#: src/pages/shell/thread-row.tsx:341
+#: src/pages/shell/thread-row.tsx:342
 msgid "Question"
 msgstr ""
 
@@ -3569,7 +3564,7 @@ msgstr "{replyName} को उत्तर दे रहे हैं"
 msgid "Report, {0} · Opens in full"
 msgstr ""
 
-#: src/pages/shell/thread-row.tsx:339
+#: src/pages/shell/thread-row.tsx:340
 msgid "Request"
 msgstr ""
 
@@ -3621,7 +3616,7 @@ msgstr "बिना सहेजा टेक्स्ट बहाल कर�
 msgid "Restoring your workspace"
 msgstr ""
 
-#: src/pages/shell/thread-row.tsx:340
+#: src/pages/shell/thread-row.tsx:341
 msgid "Result"
 msgstr ""
 
@@ -3675,7 +3670,7 @@ msgstr ""
 
 #: src/pages/bot-page/BotActivity.tsx:312
 #: src/pages/bot-page/RoutineCreateForm.tsx:44
-#: src/pages/shell/thread-row.tsx:472
+#: src/pages/shell/thread-row.tsx:464
 msgid "Routine"
 msgstr "रूटीन"
 
@@ -4068,7 +4063,7 @@ msgstr "शुरू हो रहा है"
 msgid "Starting…"
 msgstr "शुरू हो रहा है…"
 
-#: src/pages/shell/thread-row.tsx:342
+#: src/pages/shell/thread-row.tsx:343
 msgid "Status"
 msgstr ""
 
@@ -4106,8 +4101,8 @@ msgstr "एन्क्रिप्टेड रूप में संग्र
 msgid "Stored securely. Never shown here."
 msgstr "सुरक्षित रूप से संग्रहीत। यहां कभी नहीं दिखाया जाता।"
 
-#: src/pages/shell/thread-row.tsx:253
-#: src/pages/shell/thread-row.tsx:472
+#: src/pages/shell/thread-row.tsx:254
+#: src/pages/shell/thread-row.tsx:464
 msgid "subagent"
 msgstr "सबएजेंट"
 
@@ -4266,7 +4261,7 @@ msgstr "प्रति:"
 #: src/pages/bot-page/BotActivity.tsx:216
 #: src/pages/PeerMessagesOverlay.tsx:180
 #: src/pages/shell/routine-run-line.tsx:305
-#: src/pages/shell/thread-row.tsx:87
+#: src/pages/shell/thread-row.tsx:88
 msgid "Today"
 msgstr "आज"
 
@@ -4537,7 +4532,7 @@ msgstr "हर साल {date} को {time} बजे"
 #: src/pages/bot-page/BotActivity.tsx:217
 #: src/pages/PeerMessagesOverlay.tsx:181
 #: src/pages/shell/routine-run-line.tsx:306
-#: src/pages/shell/thread-row.tsx:88
+#: src/pages/shell/thread-row.tsx:89
 msgid "Yesterday"
 msgstr "कल"
 

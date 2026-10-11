@@ -135,7 +135,7 @@ msgid "{days}d ago"
 msgstr "{days} дн. назад"
 
 #: src/pages/shell/message-view.tsx:375
-#: src/pages/shell/thread-row.tsx:317
+#: src/pages/shell/thread-row.tsx:318
 msgid "{from} handed the thread to {to}"
 msgstr ""
 
@@ -570,10 +570,6 @@ msgstr "Подтвердите в чате или скажите «нет», ч�
 msgid "Approve this server to let your agent use its tools."
 msgstr "Одобрите этот сервер, чтобы ваш агент мог использовать его инструменты."
 
-#: src/pages/shell/thread-row.tsx:409
-msgid "Approved"
-msgstr ""
-
 #: src/pages/bot-page/BotPage.tsx:372
 #: src/pages/BotContextMenu.tsx:146
 msgid "Archive"
@@ -732,8 +728,8 @@ msgstr "Загрузка компьютера {0}"
 #: src/pages/shell/message-view.tsx:363
 #: src/pages/shell/message-view.tsx:364
 #: src/pages/shell/message-view.tsx:455
-#: src/pages/shell/thread-row.tsx:308
 #: src/pages/shell/thread-row.tsx:309
+#: src/pages/shell/thread-row.tsx:310
 msgid "bot"
 msgstr "бот"
 
@@ -1207,7 +1203,7 @@ msgstr "Продолжить в фоне"
 msgid "Continue with email"
 msgstr "Продолжить по электронной почте"
 
-#: src/pages/shell/thread-row.tsx:394
+#: src/pages/shell/thread-row.tsx:395
 msgid "Conversation cleared"
 msgstr ""
 
@@ -1847,7 +1843,6 @@ msgid "Deleting…"
 msgstr "Удаление…"
 
 #: src/components/AskCard.tsx:51
-#: src/pages/shell/thread-row.tsx:409
 msgid "Denied"
 msgstr "Отклонено"
 
@@ -1995,7 +1990,7 @@ msgstr "Дублировать"
 msgid "Earlier message"
 msgstr "Предыдущее сообщение"
 
-#: src/pages/shell/thread-row.tsx:391
+#: src/pages/shell/thread-row.tsx:392
 msgid "Earlier messages summarized"
 msgstr ""
 
@@ -2206,7 +2201,7 @@ msgstr "Бесплатно"
 msgid "Fullscreen"
 msgstr "Полноэкранный"
 
-#: src/pages/shell/thread-row.tsx:343
+#: src/pages/shell/thread-row.tsx:344
 msgid "FYI"
 msgstr "К сведению"
 
@@ -2696,7 +2691,7 @@ msgstr ""
 msgid "Message composer"
 msgstr "Поле сообщения"
 
-#: src/pages/shell/thread-row.tsx:393
+#: src/pages/shell/thread-row.tsx:394
 msgid "Message edited"
 msgstr ""
 
@@ -2705,8 +2700,8 @@ msgid "Message event"
 msgstr "Событие сообщения"
 
 #: src/pages/shell/message-view.tsx:387
-#: src/pages/shell/thread-row.tsx:345
-#: src/pages/shell/thread-row.tsx:384
+#: src/pages/shell/thread-row.tsx:346
+#: src/pages/shell/thread-row.tsx:385
 msgid "Message from {peer}"
 msgstr "Сообщение от {peer}"
 
@@ -2715,9 +2710,9 @@ msgid "Message…"
 msgstr "Сообщение…"
 
 #: src/pages/shell/message-view.tsx:387
-#: src/pages/shell/thread-row.tsx:285
-#: src/pages/shell/thread-row.tsx:345
-#: src/pages/shell/thread-row.tsx:384
+#: src/pages/shell/thread-row.tsx:286
+#: src/pages/shell/thread-row.tsx:346
+#: src/pages/shell/thread-row.tsx:385
 msgid "Messaged {peer}"
 msgstr "Отправлено сообщение {peer}"
 
@@ -2853,7 +2848,7 @@ msgid "Name this routine"
 msgstr "Назовите эту задачу"
 
 #: src/pages/ActivityList.tsx:154
-#: src/pages/shell/thread-row.tsx:239
+#: src/pages/shell/thread-row.tsx:240
 msgid "Needs input"
 msgstr "Требуется ввод данных"
 
@@ -3337,7 +3332,7 @@ msgstr "Поставщик"
 msgid "Providers"
 msgstr "Провайдеры"
 
-#: src/pages/shell/thread-row.tsx:341
+#: src/pages/shell/thread-row.tsx:342
 msgid "Question"
 msgstr "Вопрос"
 
@@ -3569,7 +3564,7 @@ msgstr "Ответ на {replyName}"
 msgid "Report, {0} · Opens in full"
 msgstr ""
 
-#: src/pages/shell/thread-row.tsx:339
+#: src/pages/shell/thread-row.tsx:340
 msgid "Request"
 msgstr "Запрос"
 
@@ -3621,7 +3616,7 @@ msgstr "Восстановить несохранённый текст"
 msgid "Restoring your workspace"
 msgstr "Восстановление вашего рабочего пространства"
 
-#: src/pages/shell/thread-row.tsx:340
+#: src/pages/shell/thread-row.tsx:341
 msgid "Result"
 msgstr "Результат"
 
@@ -3675,7 +3670,7 @@ msgstr ""
 
 #: src/pages/bot-page/BotActivity.tsx:312
 #: src/pages/bot-page/RoutineCreateForm.tsx:44
-#: src/pages/shell/thread-row.tsx:472
+#: src/pages/shell/thread-row.tsx:464
 msgid "Routine"
 msgstr "Задача"
 
@@ -4068,7 +4063,7 @@ msgstr "Запуск"
 msgid "Starting…"
 msgstr "Запуск…"
 
-#: src/pages/shell/thread-row.tsx:342
+#: src/pages/shell/thread-row.tsx:343
 msgid "Status"
 msgstr "Статус"
 
@@ -4106,8 +4101,8 @@ msgstr "Хранится в зашифрованном виде"
 msgid "Stored securely. Never shown here."
 msgstr "Хранится безопасно. Здесь не отображается."
 
-#: src/pages/shell/thread-row.tsx:253
-#: src/pages/shell/thread-row.tsx:472
+#: src/pages/shell/thread-row.tsx:254
+#: src/pages/shell/thread-row.tsx:464
 msgid "subagent"
 msgstr "субагент"
 
@@ -4266,7 +4261,7 @@ msgstr "К:"
 #: src/pages/bot-page/BotActivity.tsx:216
 #: src/pages/PeerMessagesOverlay.tsx:180
 #: src/pages/shell/routine-run-line.tsx:305
-#: src/pages/shell/thread-row.tsx:87
+#: src/pages/shell/thread-row.tsx:88
 msgid "Today"
 msgstr ""
 
@@ -4537,7 +4532,7 @@ msgstr "Ежегодно {date} в {time}"
 #: src/pages/bot-page/BotActivity.tsx:217
 #: src/pages/PeerMessagesOverlay.tsx:181
 #: src/pages/shell/routine-run-line.tsx:306
-#: src/pages/shell/thread-row.tsx:88
+#: src/pages/shell/thread-row.tsx:89
 msgid "Yesterday"
 msgstr ""
 

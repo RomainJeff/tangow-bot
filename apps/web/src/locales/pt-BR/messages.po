@@ -135,7 +135,7 @@ msgid "{days}d ago"
 msgstr "{days}d atrás"
 
 #: src/pages/shell/message-view.tsx:375
-#: src/pages/shell/thread-row.tsx:317
+#: src/pages/shell/thread-row.tsx:318
 msgid "{from} handed the thread to {to}"
 msgstr ""
 
@@ -570,10 +570,6 @@ msgstr "Aprove no chat ou diga não para cancelar."
 msgid "Approve this server to let your agent use its tools."
 msgstr "Aprove este servidor para permitir que seu agente use suas ferramentas."
 
-#: src/pages/shell/thread-row.tsx:409
-msgid "Approved"
-msgstr ""
-
 #: src/pages/bot-page/BotPage.tsx:372
 #: src/pages/BotContextMenu.tsx:146
 msgid "Archive"
@@ -732,8 +728,8 @@ msgstr "Inicializando o computador do {0}"
 #: src/pages/shell/message-view.tsx:363
 #: src/pages/shell/message-view.tsx:364
 #: src/pages/shell/message-view.tsx:455
-#: src/pages/shell/thread-row.tsx:308
 #: src/pages/shell/thread-row.tsx:309
+#: src/pages/shell/thread-row.tsx:310
 msgid "bot"
 msgstr "bot"
 
@@ -1207,7 +1203,7 @@ msgstr ""
 msgid "Continue with email"
 msgstr "Continuar com e-mail"
 
-#: src/pages/shell/thread-row.tsx:394
+#: src/pages/shell/thread-row.tsx:395
 msgid "Conversation cleared"
 msgstr ""
 
@@ -1847,7 +1843,6 @@ msgid "Deleting…"
 msgstr "Excluindo…"
 
 #: src/components/AskCard.tsx:51
-#: src/pages/shell/thread-row.tsx:409
 msgid "Denied"
 msgstr "Negado"
 
@@ -1995,7 +1990,7 @@ msgstr "Duplicar"
 msgid "Earlier message"
 msgstr "Mensagem anterior"
 
-#: src/pages/shell/thread-row.tsx:391
+#: src/pages/shell/thread-row.tsx:392
 msgid "Earlier messages summarized"
 msgstr ""
 
@@ -2206,7 +2201,7 @@ msgstr "Grátis"
 msgid "Fullscreen"
 msgstr "Tela Cheia"
 
-#: src/pages/shell/thread-row.tsx:343
+#: src/pages/shell/thread-row.tsx:344
 msgid "FYI"
 msgstr ""
 
@@ -2696,7 +2691,7 @@ msgstr ""
 msgid "Message composer"
 msgstr "Editor de mensagens"
 
-#: src/pages/shell/thread-row.tsx:393
+#: src/pages/shell/thread-row.tsx:394
 msgid "Message edited"
 msgstr ""
 
@@ -2705,8 +2700,8 @@ msgid "Message event"
 msgstr ""
 
 #: src/pages/shell/message-view.tsx:387
-#: src/pages/shell/thread-row.tsx:345
-#: src/pages/shell/thread-row.tsx:384
+#: src/pages/shell/thread-row.tsx:346
+#: src/pages/shell/thread-row.tsx:385
 msgid "Message from {peer}"
 msgstr "Mensagem de {peer}"
 
@@ -2715,9 +2710,9 @@ msgid "Message…"
 msgstr "Mensagem…"
 
 #: src/pages/shell/message-view.tsx:387
-#: src/pages/shell/thread-row.tsx:285
-#: src/pages/shell/thread-row.tsx:345
-#: src/pages/shell/thread-row.tsx:384
+#: src/pages/shell/thread-row.tsx:286
+#: src/pages/shell/thread-row.tsx:346
+#: src/pages/shell/thread-row.tsx:385
 msgid "Messaged {peer}"
 msgstr "Enviou mensagem para {peer}"
 
@@ -2853,7 +2848,7 @@ msgid "Name this routine"
 msgstr "Dê um nome a esta rotina"
 
 #: src/pages/ActivityList.tsx:154
-#: src/pages/shell/thread-row.tsx:239
+#: src/pages/shell/thread-row.tsx:240
 msgid "Needs input"
 msgstr "Precisa de entrada"
 
@@ -3337,7 +3332,7 @@ msgstr "Provedor"
 msgid "Providers"
 msgstr "Provedores"
 
-#: src/pages/shell/thread-row.tsx:341
+#: src/pages/shell/thread-row.tsx:342
 msgid "Question"
 msgstr ""
 
@@ -3569,7 +3564,7 @@ msgstr "Respondendo a {replyName}"
 msgid "Report, {0} · Opens in full"
 msgstr ""
 
-#: src/pages/shell/thread-row.tsx:339
+#: src/pages/shell/thread-row.tsx:340
 msgid "Request"
 msgstr ""
 
@@ -3621,7 +3616,7 @@ msgstr "Restaurar texto não salvo"
 msgid "Restoring your workspace"
 msgstr ""
 
-#: src/pages/shell/thread-row.tsx:340
+#: src/pages/shell/thread-row.tsx:341
 msgid "Result"
 msgstr ""
 
@@ -3675,7 +3670,7 @@ msgstr ""
 
 #: src/pages/bot-page/BotActivity.tsx:312
 #: src/pages/bot-page/RoutineCreateForm.tsx:44
-#: src/pages/shell/thread-row.tsx:472
+#: src/pages/shell/thread-row.tsx:464
 msgid "Routine"
 msgstr "Rotina"
 
@@ -4068,7 +4063,7 @@ msgstr "Iniciando"
 msgid "Starting…"
 msgstr "Iniciando…"
 
-#: src/pages/shell/thread-row.tsx:342
+#: src/pages/shell/thread-row.tsx:343
 msgid "Status"
 msgstr ""
 
@@ -4106,8 +4101,8 @@ msgstr "Armazenado criptografado"
 msgid "Stored securely. Never shown here."
 msgstr "Armazenado com segurança. Nunca mostrado aqui."
 
-#: src/pages/shell/thread-row.tsx:253
-#: src/pages/shell/thread-row.tsx:472
+#: src/pages/shell/thread-row.tsx:254
+#: src/pages/shell/thread-row.tsx:464
 msgid "subagent"
 msgstr "subagente"
 
@@ -4266,7 +4261,7 @@ msgstr "Para:"
 #: src/pages/bot-page/BotActivity.tsx:216
 #: src/pages/PeerMessagesOverlay.tsx:180
 #: src/pages/shell/routine-run-line.tsx:305
-#: src/pages/shell/thread-row.tsx:87
+#: src/pages/shell/thread-row.tsx:88
 msgid "Today"
 msgstr "Hoje"
 
@@ -4537,7 +4532,7 @@ msgstr "Todo ano em {date} às {time}"
 #: src/pages/bot-page/BotActivity.tsx:217
 #: src/pages/PeerMessagesOverlay.tsx:181
 #: src/pages/shell/routine-run-line.tsx:306
-#: src/pages/shell/thread-row.tsx:88
+#: src/pages/shell/thread-row.tsx:89
 msgid "Yesterday"
 msgstr "Ontem"
 

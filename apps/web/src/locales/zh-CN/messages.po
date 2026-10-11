@@ -135,7 +135,7 @@ msgid "{days}d ago"
 msgstr "{days} 天前"
 
 #: src/pages/shell/message-view.tsx:375
-#: src/pages/shell/thread-row.tsx:317
+#: src/pages/shell/thread-row.tsx:318
 msgid "{from} handed the thread to {to}"
 msgstr ""
 
@@ -570,10 +570,6 @@ msgstr "请在聊天中批准，或说“不”以取消。"
 msgid "Approve this server to let your agent use its tools."
 msgstr "批准此服务器后，Agent 才能使用它的工具。"
 
-#: src/pages/shell/thread-row.tsx:409
-msgid "Approved"
-msgstr ""
-
 #: src/pages/bot-page/BotPage.tsx:372
 #: src/pages/BotContextMenu.tsx:146
 msgid "Archive"
@@ -732,8 +728,8 @@ msgstr "正在启动 {0} 的电脑"
 #: src/pages/shell/message-view.tsx:363
 #: src/pages/shell/message-view.tsx:364
 #: src/pages/shell/message-view.tsx:455
-#: src/pages/shell/thread-row.tsx:308
 #: src/pages/shell/thread-row.tsx:309
+#: src/pages/shell/thread-row.tsx:310
 msgid "bot"
 msgstr "Bot"
 
@@ -1207,7 +1203,7 @@ msgstr ""
 msgid "Continue with email"
 msgstr "使用邮箱继续"
 
-#: src/pages/shell/thread-row.tsx:394
+#: src/pages/shell/thread-row.tsx:395
 msgid "Conversation cleared"
 msgstr ""
 
@@ -1847,7 +1843,6 @@ msgid "Deleting…"
 msgstr "正在删除…"
 
 #: src/components/AskCard.tsx:51
-#: src/pages/shell/thread-row.tsx:409
 msgid "Denied"
 msgstr "已拒绝"
 
@@ -1995,7 +1990,7 @@ msgstr "复制"
 msgid "Earlier message"
 msgstr "更早的消息"
 
-#: src/pages/shell/thread-row.tsx:391
+#: src/pages/shell/thread-row.tsx:392
 msgid "Earlier messages summarized"
 msgstr ""
 
@@ -2206,7 +2201,7 @@ msgstr "免费"
 msgid "Fullscreen"
 msgstr "全屏"
 
-#: src/pages/shell/thread-row.tsx:343
+#: src/pages/shell/thread-row.tsx:344
 msgid "FYI"
 msgstr "供参考"
 
@@ -2696,7 +2691,7 @@ msgstr ""
 msgid "Message composer"
 msgstr "消息输入框"
 
-#: src/pages/shell/thread-row.tsx:393
+#: src/pages/shell/thread-row.tsx:394
 msgid "Message edited"
 msgstr ""
 
@@ -2705,8 +2700,8 @@ msgid "Message event"
 msgstr ""
 
 #: src/pages/shell/message-view.tsx:387
-#: src/pages/shell/thread-row.tsx:345
-#: src/pages/shell/thread-row.tsx:384
+#: src/pages/shell/thread-row.tsx:346
+#: src/pages/shell/thread-row.tsx:385
 msgid "Message from {peer}"
 msgstr "来自 {peer} 的消息"
 
@@ -2715,9 +2710,9 @@ msgid "Message…"
 msgstr "消息…"
 
 #: src/pages/shell/message-view.tsx:387
-#: src/pages/shell/thread-row.tsx:285
-#: src/pages/shell/thread-row.tsx:345
-#: src/pages/shell/thread-row.tsx:384
+#: src/pages/shell/thread-row.tsx:286
+#: src/pages/shell/thread-row.tsx:346
+#: src/pages/shell/thread-row.tsx:385
 msgid "Messaged {peer}"
 msgstr "已发给 {peer}"
 
@@ -2853,7 +2848,7 @@ msgid "Name this routine"
 msgstr "给这个例行任务命名"
 
 #: src/pages/ActivityList.tsx:154
-#: src/pages/shell/thread-row.tsx:239
+#: src/pages/shell/thread-row.tsx:240
 msgid "Needs input"
 msgstr "需要输入"
 
@@ -3337,7 +3332,7 @@ msgstr "提供方"
 msgid "Providers"
 msgstr "提供方"
 
-#: src/pages/shell/thread-row.tsx:341
+#: src/pages/shell/thread-row.tsx:342
 msgid "Question"
 msgstr "问题"
 
@@ -3569,7 +3564,7 @@ msgstr "正在回复 {replyName}"
 msgid "Report, {0} · Opens in full"
 msgstr ""
 
-#: src/pages/shell/thread-row.tsx:339
+#: src/pages/shell/thread-row.tsx:340
 msgid "Request"
 msgstr "请求"
 
@@ -3621,7 +3616,7 @@ msgstr "恢复未保存的文本"
 msgid "Restoring your workspace"
 msgstr ""
 
-#: src/pages/shell/thread-row.tsx:340
+#: src/pages/shell/thread-row.tsx:341
 msgid "Result"
 msgstr "结果"
 
@@ -3675,7 +3670,7 @@ msgstr ""
 
 #: src/pages/bot-page/BotActivity.tsx:312
 #: src/pages/bot-page/RoutineCreateForm.tsx:44
-#: src/pages/shell/thread-row.tsx:472
+#: src/pages/shell/thread-row.tsx:464
 msgid "Routine"
 msgstr "例行任务"
 
@@ -4068,7 +4063,7 @@ msgstr "正在开始"
 msgid "Starting…"
 msgstr "正在开始…"
 
-#: src/pages/shell/thread-row.tsx:342
+#: src/pages/shell/thread-row.tsx:343
 msgid "Status"
 msgstr "状态"
 
@@ -4106,8 +4101,8 @@ msgstr "已加密存储"
 msgid "Stored securely. Never shown here."
 msgstr "已安全存储。不会显示在这里。"
 
-#: src/pages/shell/thread-row.tsx:253
-#: src/pages/shell/thread-row.tsx:472
+#: src/pages/shell/thread-row.tsx:254
+#: src/pages/shell/thread-row.tsx:464
 msgid "subagent"
 msgstr "子 Agent"
 
@@ -4266,7 +4261,7 @@ msgstr "至:"
 #: src/pages/bot-page/BotActivity.tsx:216
 #: src/pages/PeerMessagesOverlay.tsx:180
 #: src/pages/shell/routine-run-line.tsx:305
-#: src/pages/shell/thread-row.tsx:87
+#: src/pages/shell/thread-row.tsx:88
 msgid "Today"
 msgstr "今天"
 
@@ -4537,7 +4532,7 @@ msgstr "每年{date} {time}"
 #: src/pages/bot-page/BotActivity.tsx:217
 #: src/pages/PeerMessagesOverlay.tsx:181
 #: src/pages/shell/routine-run-line.tsx:306
-#: src/pages/shell/thread-row.tsx:88
+#: src/pages/shell/thread-row.tsx:89
 msgid "Yesterday"
 msgstr "昨天"
 

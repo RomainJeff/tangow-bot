@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 
+import type { SessionEntry } from "@rakazo/contracts";
 import { SessionEntrySchema } from "@rakazo/contracts";
 import { projectThreadView } from "@rakazo/core";
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { act, createRef } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -75,14 +76,18 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-async function renderThread(lastEntry: number) {
+async function renderThread(
+  entries: number | readonly SessionEntry[],
+  props: Partial<ComponentProps<typeof Transcript>> = {},
+) {
+  const shown = typeof entries === "number" ? fixture.slice(0, entries + 1) : entries;
   await act(async () => {
     root.render(
       <Transcript
         scrollRef={createRef<HTMLDivElement>()}
         artifactTarget={{ botId: "bot_ada" }}
         inGroup={false}
-        view={projectThreadView(fixture.slice(0, lastEntry + 1), {
+        view={projectThreadView(shown, {
           rendersNothing: (item) => drawsNothing(item, false),
         })}
         olderCursor={null}
@@ -105,6 +110,7 @@ async function renderThread(lastEntry: number) {
         voiceReady={false}
         speakingMessageId={null}
         onSpeak={() => undefined}
+        {...props}
       />,
     );
   });
@@ -142,6 +148,38 @@ describe("the transcript", () => {
         ?.closest("[data-message-id]")
         ?.getAttribute("data-message-id"),
     ).toBe("str-02");
+  });
+
+  it("draws nothing for an effect that carries no card", async () => {
+    await renderThread([
+      ...fixture.slice(0, 1),
+      ...[
+        {
+          id: "fx-01",
+          seq: 1,
+          type: "effect.requested",
+          payload: { effectId: "eff_1", effectKind: "send_email", proposal: {} },
+        },
+        {
+          id: "fx-02",
+          seq: 2,
+          type: "effect.resolved",
+          payload: { effectId: "eff_1", decision: "approved" },
+        },
+      ].map((entry) =>
+        SessionEntrySchema.parse({
+          ...entry,
+          sessionId: "ses_streamed",
+          parentId: entry.seq === 1 ? "str-00" : "fx-01",
+          ts: "2026-10-10T09:00:01.000Z",
+          botId: "bot_ada",
+        }),
+      ),
+    ]);
+
+    expect(
+      [...document.querySelectorAll("[data-message-id]")].map((row) => row.textContent),
+    ).toEqual(["Find three competitors and summarize Acme's site"]);
   });
 
   it("opens a finished helper's own session, read-only", async () => {

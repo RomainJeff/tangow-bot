@@ -135,7 +135,7 @@ msgid "{days}d ago"
 msgstr "{days}d ago"
 
 #: src/pages/shell/message-view.tsx:375
-#: src/pages/shell/thread-row.tsx:317
+#: src/pages/shell/thread-row.tsx:318
 msgid "{from} handed the thread to {to}"
 msgstr "{from} handed the thread to {to}"
 
@@ -570,10 +570,6 @@ msgstr "Approve it in the chat, or say no to cancel."
 msgid "Approve this server to let your agent use its tools."
 msgstr "Approve this server to let your agent use its tools."
 
-#: src/pages/shell/thread-row.tsx:409
-msgid "Approved"
-msgstr "Approved"
-
 #: src/pages/bot-page/BotPage.tsx:372
 #: src/pages/BotContextMenu.tsx:146
 msgid "Archive"
@@ -732,8 +728,8 @@ msgstr "Booting up {0}’s computer"
 #: src/pages/shell/message-view.tsx:363
 #: src/pages/shell/message-view.tsx:364
 #: src/pages/shell/message-view.tsx:455
-#: src/pages/shell/thread-row.tsx:308
 #: src/pages/shell/thread-row.tsx:309
+#: src/pages/shell/thread-row.tsx:310
 msgid "bot"
 msgstr "bot"
 
@@ -1207,7 +1203,7 @@ msgstr "Continue in Background"
 msgid "Continue with email"
 msgstr "Continue with email"
 
-#: src/pages/shell/thread-row.tsx:394
+#: src/pages/shell/thread-row.tsx:395
 msgid "Conversation cleared"
 msgstr "Conversation cleared"
 
@@ -1847,7 +1843,6 @@ msgid "Deleting…"
 msgstr "Deleting…"
 
 #: src/components/AskCard.tsx:51
-#: src/pages/shell/thread-row.tsx:409
 msgid "Denied"
 msgstr "Denied"
 
@@ -1995,7 +1990,7 @@ msgstr "Duplicate"
 msgid "Earlier message"
 msgstr "Earlier message"
 
-#: src/pages/shell/thread-row.tsx:391
+#: src/pages/shell/thread-row.tsx:392
 msgid "Earlier messages summarized"
 msgstr "Earlier messages summarized"
 
@@ -2206,7 +2201,7 @@ msgstr "Free"
 msgid "Fullscreen"
 msgstr "Fullscreen"
 
-#: src/pages/shell/thread-row.tsx:343
+#: src/pages/shell/thread-row.tsx:344
 msgid "FYI"
 msgstr "FYI"
 
@@ -2696,7 +2691,7 @@ msgstr "Message actions"
 msgid "Message composer"
 msgstr "Message composer"
 
-#: src/pages/shell/thread-row.tsx:393
+#: src/pages/shell/thread-row.tsx:394
 msgid "Message edited"
 msgstr "Message edited"
 
@@ -2705,8 +2700,8 @@ msgid "Message event"
 msgstr "Message event"
 
 #: src/pages/shell/message-view.tsx:387
-#: src/pages/shell/thread-row.tsx:345
-#: src/pages/shell/thread-row.tsx:384
+#: src/pages/shell/thread-row.tsx:346
+#: src/pages/shell/thread-row.tsx:385
 msgid "Message from {peer}"
 msgstr "Message from {peer}"
 
@@ -2715,9 +2710,9 @@ msgid "Message…"
 msgstr "Message…"
 
 #: src/pages/shell/message-view.tsx:387
-#: src/pages/shell/thread-row.tsx:285
-#: src/pages/shell/thread-row.tsx:345
-#: src/pages/shell/thread-row.tsx:384
+#: src/pages/shell/thread-row.tsx:286
+#: src/pages/shell/thread-row.tsx:346
+#: src/pages/shell/thread-row.tsx:385
 msgid "Messaged {peer}"
 msgstr "Messaged {peer}"
 
@@ -2853,7 +2848,7 @@ msgid "Name this routine"
 msgstr "Name this routine"
 
 #: src/pages/ActivityList.tsx:154
-#: src/pages/shell/thread-row.tsx:239
+#: src/pages/shell/thread-row.tsx:240
 msgid "Needs input"
 msgstr "Needs input"
 
@@ -3337,7 +3332,7 @@ msgstr "Provider"
 msgid "Providers"
 msgstr "Providers"
 
-#: src/pages/shell/thread-row.tsx:341
+#: src/pages/shell/thread-row.tsx:342
 msgid "Question"
 msgstr "Question"
 
@@ -3569,7 +3564,7 @@ msgstr "Replying to {replyName}"
 msgid "Report, {0} · Opens in full"
 msgstr "Report, {0} · Opens in full"
 
-#: src/pages/shell/thread-row.tsx:339
+#: src/pages/shell/thread-row.tsx:340
 msgid "Request"
 msgstr "Request"
 
@@ -3621,7 +3616,7 @@ msgstr "Restore unsaved text"
 msgid "Restoring your workspace"
 msgstr "Restoring your workspace"
 
-#: src/pages/shell/thread-row.tsx:340
+#: src/pages/shell/thread-row.tsx:341
 msgid "Result"
 msgstr "Result"
 
@@ -3675,7 +3670,7 @@ msgstr "Rotate key?"
 
 #: src/pages/bot-page/BotActivity.tsx:312
 #: src/pages/bot-page/RoutineCreateForm.tsx:44
-#: src/pages/shell/thread-row.tsx:472
+#: src/pages/shell/thread-row.tsx:464
 msgid "Routine"
 msgstr "Routine"
 
@@ -4068,7 +4063,7 @@ msgstr "Starting"
 msgid "Starting…"
 msgstr "Starting…"
 
-#: src/pages/shell/thread-row.tsx:342
+#: src/pages/shell/thread-row.tsx:343
 msgid "Status"
 msgstr "Status"
 
@@ -4106,8 +4101,8 @@ msgstr "Stored encrypted"
 msgid "Stored securely. Never shown here."
 msgstr "Stored securely. Never shown here."
 
-#: src/pages/shell/thread-row.tsx:253
-#: src/pages/shell/thread-row.tsx:472
+#: src/pages/shell/thread-row.tsx:254
+#: src/pages/shell/thread-row.tsx:464
 msgid "subagent"
 msgstr "subagent"
 
@@ -4266,7 +4261,7 @@ msgstr "To:"
 #: src/pages/bot-page/BotActivity.tsx:216
 #: src/pages/PeerMessagesOverlay.tsx:180
 #: src/pages/shell/routine-run-line.tsx:305
-#: src/pages/shell/thread-row.tsx:87
+#: src/pages/shell/thread-row.tsx:88
 msgid "Today"
 msgstr "Today"
 
@@ -4537,7 +4532,7 @@ msgstr "Yearly on {date} at {time}"
 #: src/pages/bot-page/BotActivity.tsx:217
 #: src/pages/PeerMessagesOverlay.tsx:181
 #: src/pages/shell/routine-run-line.tsx:306
-#: src/pages/shell/thread-row.tsx:88
+#: src/pages/shell/thread-row.tsx:89
 msgid "Yesterday"
 msgstr "Yesterday"
 

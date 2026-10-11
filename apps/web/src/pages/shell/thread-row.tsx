@@ -57,6 +57,7 @@ const SHOWN_NOTES = new Set<ItemOf<"note">["type"]>(["skill.learnt", "system.not
 
 export function drawsNothing(item: ThreadItem, showSteps: boolean): boolean {
   if (item.kind === "run") return true;
+  if (item.kind === "effect") return !item.card;
   if (item.kind === "message") return !hasRenderableBlock(item.blocks, showSteps);
   if (item.kind === "note") return !SHOWN_NOTES.has(item.type);
   return false;
@@ -402,17 +403,8 @@ function DividerLine({ reason }: { reason: ItemOf<"divider">["reason"] }) {
 }
 
 function EffectCard({ item, context }: { item: ItemOf<"effect">; context: RowContext }) {
-  const { t } = useLingui();
   const { waiting, onAnswer } = context;
-  if (!item.card) {
-    const decision =
-      item.decision === "approved" ? t`Approved` : item.decision === "denied" ? t`Denied` : null;
-    return (
-      <p className="text-meta text-muted-foreground">
-        {[item.effectKind, decision].filter(Boolean).join(" · ")}
-      </p>
-    );
-  }
+  if (!item.card) return null;
   const runId = item.runId ?? waiting?.runId;
   const answer =
     waiting?.itemId === item.id && onAnswer && runId
