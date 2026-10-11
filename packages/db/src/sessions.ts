@@ -10,7 +10,7 @@ import type {
   SessionEntryType,
 } from "@rakazo/contracts";
 import { SessionEntrySchema, SessionId } from "@rakazo/contracts";
-import { SessionEntryDecodeError, sanitizeJsonValue } from "@rakazo/core";
+import { ACTIVE_RUN_STATUSES, SessionEntryDecodeError, sanitizeJsonValue } from "@rakazo/core";
 import { Prisma } from "./client.js";
 import { RunHistoryWriteError } from "./messages.js";
 
@@ -312,8 +312,9 @@ type RunEnding =
 
 /**
  * Close a run's log with how the run ended. A run that never wrote `run.started` has no log to
- * close and a closed one stays closed, so every way a run ends can call this. Usage defaults to
- * what the run recorded.
+ * close and a closed one stays closed, so every way a run ends can call this. A cancel closes only
+ * a run still active, any other ending only the run whose status already says so. Usage defaults
+ * to what the run recorded.
  */
 export async function appendRunFinishedInTransaction(
   tx: Prisma.TransactionClient,
@@ -321,6 +322,17 @@ export async function appendRunFinishedInTransaction(
   ending: RunEnding,
   usage?: RunOutcome["usage"],
 ): Promise<void> {
+  // Thread, then run, then session, as finalize and every canceller take them, so that the run's
+  // status and its log are read after whichever of them committed first.
+  await tx.$queryRaw`
+    SELECT id FROM threads WHERE id = (SELECT "threadId" FROM runs WHERE id = ${runId}) FOR UPDATE`;
+  const [run] = await tx.$queryRaw<Array<{ status: string }>>`
+    SELECT status FROM runs WHERE id = ${runId} FOR NO KEY UPDATE`;
+  const endingNow =
+    ending.status === "cancelled"
+      ? ACTIVE_RUN_STATUSES.some((status) => status === run?.status)
+      : run?.status === ending.status;
+  if (!endingNow) return;
   const logged = await tx.sessionEntry.findMany({
     where: { runId, type: { in: ["run.started", "run.finished"] } },
     select: { type: true, sessionId: true, botId: true },
