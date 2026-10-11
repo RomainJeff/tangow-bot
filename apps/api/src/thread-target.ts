@@ -984,6 +984,7 @@ export async function sendThreadMessage(
         replyToMessageId: input.replyToMessageId,
         replyQuote,
         clientNonce: input.clientNonce,
+        feedBotId: memberBotIds[0],
       });
       const activeRuns = await tx.run.findMany({
         where: {
@@ -1170,6 +1171,7 @@ export async function reactToThreadMessage(
       blocks,
       replyToMessageId: parent.id,
       clientNonce: input.clientNonce,
+      feedBotId: botId,
     });
     if (target.kind === "group") await touchGroupUpdatedAt(tx, target.groupId);
     const event = await appendEventInTransaction(tx, {

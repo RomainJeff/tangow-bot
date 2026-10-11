@@ -541,6 +541,8 @@ export async function sendUserMessage(
         role: "user",
         blocks: input.blocks,
         clientNonce: input.clientNonce,
+        source: input.trigger === "messaging" || input.trigger === "webhook" ? "channel" : "app",
+        feedBotId: input.botId,
       });
       const createRun = input.createRun !== false;
       const busy =

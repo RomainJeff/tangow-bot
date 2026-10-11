@@ -1639,6 +1639,7 @@ export function createRouter(deps: RouterDeps) {
             threadId: target.threadId,
             role: "user",
             blocks,
+            feedBotId: botId,
           });
           const active = await tx.run.findFirst({
             where: {
