@@ -25,7 +25,12 @@ import {
   ATTACHMENT_MAX_COUNT,
   normalizeCreateBotProfile,
 } from "@rakazo/contracts";
-import type { ComposerMention, ComposerPageHead, HeldScreenUrl } from "@rakazo/core";
+import type {
+  ComposerMention,
+  ComposerPageHead,
+  HeldScreenUrl,
+  SkillSourceBlock,
+} from "@rakazo/core";
 import {
   attachmentsForThread,
   buildComposerMentionOptions,
@@ -134,6 +139,7 @@ import {
 import type { ScreenLinkHandlers } from "./shell/screen-frame";
 import { ComputerOverlay, SidePanel } from "./shell/side-panel";
 import { BotsSidebar } from "./shell/sidebar";
+import { skillPageView } from "./shell/skill-link";
 import { ThreadHeader } from "./shell/thread-header";
 import { Transcript } from "./shell/transcript";
 
@@ -2201,6 +2207,12 @@ export function ShellPage() {
     },
     [showBotPage],
   );
+  const openSkill = useCallback(
+    async (skill: SkillSourceBlock) => {
+      showBotPage(await skillPageView(skill, () => rpc.agentSkills.list().catch(() => [])));
+    },
+    [showBotPage],
+  );
   const speakingMessageIdRef = useRef(speakingMessageId);
   speakingMessageIdRef.current = speakingMessageId;
   const speakMessage = useCallback((message: ThreadMessage) => {
@@ -2830,6 +2842,7 @@ export function ShellPage() {
                 onRefresh={refreshActiveThread}
                 onBotChanged={refreshBots}
                 onAddRoutine={addSkillRoutine}
+                onOpenSkill={inGroup ? undefined : openSkill}
                 voiceReady={Boolean(voiceStatus?.ready)}
                 speakingMessageId={speakingMessageId}
                 onSpeak={speakMessage}

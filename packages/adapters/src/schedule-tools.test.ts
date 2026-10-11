@@ -201,6 +201,7 @@ describe("schedule tool persistence", () => {
       threadId: "thread-1",
       name: "Morning joke",
       prompt: "Tell a joke",
+      untrustedPrompt: false,
       schedule: { every: 1, unit: "minutes" },
     });
 
@@ -244,6 +245,7 @@ describe("schedule tool persistence", () => {
       threadId: "thread-1",
       name: "Morning joke",
       prompt: "Tell a joke",
+      untrustedPrompt: false,
       schedule: { every: 1, unit: "minutes" },
     };
 
@@ -307,6 +309,7 @@ describe("schedule tool persistence", () => {
       threadId: "thread-1",
       name: "Morning joke",
       prompt: "Tell a joke",
+      untrustedPrompt: false,
       schedule: { every: 1, unit: "minutes" },
     });
 
@@ -345,6 +348,7 @@ describe("schedule tool persistence", () => {
       threadId: "thread-1",
       name: "Morning joke",
       prompt: "Tell a joke",
+      untrustedPrompt: false,
       schedule: { every: 1, unit: "minutes" },
     });
 
@@ -385,6 +389,7 @@ describe("schedule tool persistence", () => {
       threadId: "thread-1",
       name: "Morning joke",
       prompt: "Tell a joke",
+      untrustedPrompt: false,
       schedule: { every: 1, unit: "minutes" },
     });
 
@@ -430,6 +435,7 @@ describe("schedule tool persistence", () => {
         threadId: "thread-1",
         name: "Morning joke",
         prompt: "Tell a joke",
+        untrustedPrompt: false,
         schedule: { every: 1, unit: "minutes" },
       }),
     ).rejects.toThrow("deactivate failed");

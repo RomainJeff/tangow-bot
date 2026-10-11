@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-10-11
+
+#### Added
+
+- **Bots now create and improve their own skills, and a line under their message says so.** On web, desktop and iPhone, "Skill learned", "Skill updated" or "Skill deleted" followed by the skill's name appears under the bot's reply and opens a skill it learned or updated, and a bot changes your skills only in a conversation you started, one of your routines or a sub-bot it created. Keeping a method on its own after a long task, or fixing it after a step failed, is off by default; a server admin turns it on with `SKILL_LEARNING` (see [Learned skills](docs/self-host.md#learned-skills)).
+
+#### Changed
+
+- A bot can no longer rename a skill, on web, desktop and iPhone; only you rename it, from its settings.
+
+#### Fixed
+
+- A bot asked to create another bot now shows the approval card even when it leaves the new bot's computer mode unset, instead of failing with a validation error and never offering the card.
+
 ### 2026-10-10
 
 #### Added

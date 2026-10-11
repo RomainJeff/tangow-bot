@@ -1,7 +1,12 @@
 import type { AgentHistoryMessage, AgentHistoryPart } from "@rakazo/adapter-kit";
 import type { MessageBlock } from "@rakazo/contracts";
 import { REPLY_QUOTE_MAX_LENGTH } from "@rakazo/contracts";
-import { blocksToAgentHistoryText, messageReaction, renderBotMessageBlock } from "@rakazo/core";
+import {
+  blocksToAgentHistoryText,
+  messageReaction,
+  renderBotMessageBlock,
+  skillSourcesOf,
+} from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 
 type QuotedMessage = { id: string; threadId: string; role: string; blocks: unknown };
@@ -142,7 +147,8 @@ function messageToAgentHistoryParts(
  * Stored `system` rows are thread asides ("Run stopped", "Created by …"), not
  * conversation. They keep their own role here so the caller can drop them by name
  * once it no longer needs their sequence numbers, rather than having them fall
- * through and read as a turn this bot took.
+ * through and read as a turn this bot took. A message the server wrote to carry
+ * skill lines alone is such an aside too: as a turn it reads as an empty reply.
  */
 export function messageToAgentHistoryTurn(
   message: HistoryMessage,
@@ -151,7 +157,13 @@ export function messageToAgentHistoryTurn(
 ): Omit<AgentHistoryMessage, "id"> {
   const content = messageToAgentHistoryText(message, groupMemberNames);
   if (message.role === "user") return { role: "user", content };
-  if (message.role === "system") return { role: "system", content };
+  const blocks = messageBlocks(message);
+  if (
+    message.role === "system" ||
+    (blocks.length > 0 && skillSourcesOf(blocks).length === blocks.length)
+  ) {
+    return { role: "system", content };
+  }
   const author = message.botId;
   if (!groupMemberNames || !author || author === selfBotId) {
     const parts = messageToAgentHistoryParts(message, groupMemberNames);

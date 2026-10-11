@@ -864,4 +864,7 @@ export const RU_MESSAGES: Record<string, string> = {
     "Добавьте расписание, вебхук, GitHub или триггер сообщения",
   "Add a run time for this one-shot.": "Добавьте время выполнения для разового запуска.",
   "Run time must be in the future.": "Время выполнения должно быть в будущем.",
+  "Skill learned · {name}": "Навык освоен · {name}",
+  "Skill updated · {name}": "Навык обновлён · {name}",
+  "Skill deleted · {name}": "Навык удалён · {name}",
 };

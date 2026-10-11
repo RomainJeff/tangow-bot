@@ -278,6 +278,8 @@ export async function createScheduleFromTool(
     /** "…and notify me every time" captured in natural language. Defaults to silent (the run
         stays a browsable card in this thread); the routine setup UI remains the point of truth. */
     notify?: boolean;
+    /** The user did not start the creating run: the routine's runs may not save skills. */
+    untrustedPrompt: boolean;
     /** The bot-to-bot chain hop of the creating run; a routine created mid-chain carries it on. */
     currentHop?: number;
     schedule: Record<string, unknown>;
@@ -311,6 +313,7 @@ export async function createScheduleFromTool(
       active: true,
       nextRunAt: resolved.nextRunAt,
       inheritedHop,
+      untrustedPrompt: input.untrustedPrompt,
     },
   });
 
@@ -401,6 +404,8 @@ export type RoutineChange = {
   messageProvider?: string | null;
   requireToolApproval?: boolean;
   inheritedHop?: number;
+  /** Whether the prompt now comes from a run the user did not start. */
+  untrustedPrompt?: boolean;
   /** When an active one-shot runs: arms it, moves it, or runs one that already ran again. */
   runAt?: string | Date;
 };
@@ -505,6 +510,7 @@ export async function updateRoutine(
         messageProvider: change.messageProvider,
         requireToolApproval: change.requireToolApproval,
         inheritedHop: change.inheritedHop,
+        untrustedPrompt: change.untrustedPrompt,
         nextRunAt,
       },
     });
@@ -621,6 +627,7 @@ export async function updateScheduleFromTool(
       ...(ranOnce ? { active: true } : {}),
       // Opting out of approvals trusted the owner's own instruction, not one from this run.
       ...(promptChanged && !input.startedByUser ? { requireToolApproval: true } : {}),
+      ...(promptChanged ? { untrustedPrompt: !input.startedByUser } : {}),
       ...(inheritedHop !== undefined ? { inheritedHop } : {}),
     },
     { spaceId: input.spaceId, botId: input.botId, threadId: input.threadId },

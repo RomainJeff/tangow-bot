@@ -41,9 +41,10 @@ export function openableLinkPreviewUrl(url: string): string | undefined {
 
 /**
  * Block kinds that can sit next to a bare link without giving the message a bubble of its own.
- * Reasoning is never drawn; steps are, when shown, so they keep the bubble.
+ * Reasoning is never drawn; steps are, when shown, so they keep the bubble. Skill lines hang under
+ * the card instead.
  */
-const CARD_COMPANION_KINDS = new Set<string>(["text", "link_preview", "reasoning"]);
+const CARD_COMPANION_KINDS = new Set<string>(["text", "link_preview", "reasoning", "skill_source"]);
 
 /**
  * True when the card takes the bubble's place: the message is nothing but this link (bare, in
