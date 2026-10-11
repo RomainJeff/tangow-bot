@@ -589,6 +589,8 @@ Decision. A. The head is the entry with the highest seq in its session, so the r
 - `apps/web/e2e/README.md` before editing any spec.
 - SL1 and SL4 get `.claude/skills/how/SKILL.md` on the executor history path and `.claude/skills/interrogate/SKILL.md` on the entry contract before code. The trail per `.claude/skills/show-me-your-work/SKILL.md` stays local per owner and is returned in each report.
 
+**Last slice, SL7, documentation.** `docs/architecture.md` explains the session log with progressive disclosure, the message system, the entry types and their audience, sessions and child sessions, compaction, the principles behind the shape. Its section is written with the operator once SL6 is in, like SL5.
+
 **Planned after the program, not in it.** Each one needs only what the program already lays down.
 
 - Run detail view. Click a run card, see its timeline of tool calls with input and output, reasoning, text, usage and duration. Needs `runs.entries` from SL5 and the `(runId, seq)` index from SL2. Reconsider the 4 000 character tool payload cap at that point, it decides how useful the view is.
