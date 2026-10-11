@@ -428,7 +428,7 @@ Each live lane runs in its own isolated worktree (`isolation: "worktree"`) at th
 
 - [ ] Four entry types join `SessionEntrySchema` and `ENTRY_AUDIENCE`, UI yes, inference no, each with a `target` entry id in its payload because `parentId` always points at the session head. `card.answered` carries `{ target, answerId?, answer?, answers?, dismissed? }` and records an answer given inside the card (an option, a free text, a multi-question set, a secret saved as an empty answer), a choice chosen, an onboarding or ask card dismissed, and a composer resume, the paths that leave no reply entry or no answer on the reply. `link.preview` carries `{ target, block, artifactId }` and `link.preview.removed` carries `{ target }`, the target being the preview entry. `skill.draft` carries `{ target, skillId, name, goal, playbook, status }`, one entry per revision, the projection keeps the last. `effect.resolved` gains `dismissed?: true` next to `decision`, and `effect.applied` carries `{ target, routineId?, failed? }` for what came of an approved routine card. An `app_connect` card that connects writes `card.answered` with the connector as `answerId`.
 - [ ] The eleven rewrite sites append their entry in the same transaction and keep writing `Message.blocks` until SL6 drops the table. The UI stops reading `thread.message.created`, `thread.message.updated`, `thread.subagent`, `thread.cleared`, `thread.rewound`, `agent.tool.called` and `run.waiting_input`. Their emitters stay until SL6 removes them.
-- [ ] `ThreadSnapshotSchema` and `ThreadMessagePageSchema` carry `entries: SessionEntry[]` in place of `messages`, with `olderCursor` an entry id or null. `threads.get` reads the tail through `readPage`, `threads.messages({ before })` pages the chain by entry id, and a new port method `readAround(sessionId, entryId, limit)` serves `threads.messages({ around })` for search jumps and Activity jumps, with its conformance case. The page size stays 100. `run`, `activeRuns`, `members` and `computer` keep reading their own tables.
+- [ ] `ThreadSnapshotSchema` and `ThreadMessagePageSchema` carry `entries: SessionEntry[]` in place of `messages`, with `olderCursor` an entry id or null. `threads.get` reads the tail through `readPage`, `threads.messages({ before })` pages the chain by entry id, and a new port method `readAround(sessionId, entryId, limit)` serves `threads.messages({ around })` for search jumps and Activity jumps, with its conformance case. A page holds about 400 entries, sized on 2026-10-11 by the operator for parity with trunk's 100 messages, since a plain exchange is four entries and a tool call two more. `run`, `activeRuns`, `members` and `computer` keep reading their own tables.
 - [ ] Peer visibility is computed once on the server. `visibleEntries(entries, { hiddenPeerRunIds, includePeerRuns })` in core keeps a hidden peer run's receipts, its asks and the user messages carrying the `user-message:` nonce, `threadSnapshot` and `loadMessagePage` apply it to pages, and `shouldForwardPeerThreadEvent` applies it to the entries inside `session.entry.appended` instead of dropping the event.
 - [ ] `projectThreadView(entries, options)` in core is the one chain. `projectThreadItems`, then reactions from emoji-only `user.message` entries that reply, then groups within five minutes of the same bot with no reply, then the routine fold, then time markers. `foldRuns` lets the four annotation types and `subagent` through without closing a stretch. An ask or choice block renders answered when a `user.message` replies to it or a `card.answered` targets it, and the card shows what main shows today, the chosen option or the per-question answers from `card.answered` when the person answered inside the card, a plain answered state when the answer came from the composer and lives in its own `user.message` below. A message item carries the previews that target it minus the removed ones, and the latest `skill.draft` that targets it. The compaction divider is placed before the first item whose seq exceeds `coveredUpToSeq`. A `rewind` entry cuts every item after its parent and leaves a divider, a `clear` entry cuts everything before it.
 - [ ] The web and mobile reducers follow one rule. On `session.entry.appended`, merge the entries by seq into the held entries, then project. No refetch on rewind or clear.
@@ -465,7 +465,7 @@ Each live lane runs in its own isolated worktree (`isolation: "worktree"`) at th
 
 **Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] Metric. `threads.get` response time on a 2 000 message thread, at trunk and at head, over fifty requests, and `projectThreadView` wall time on one 100 entry page in the browser.
+- [ ] Metric. `threads.get` response time on a 2 000 message thread, at trunk and at head, over fifty requests, and `projectThreadView` wall time on one page in the browser.
 - [ ] Probe. A script calling the RPC in a loop, interleaved trunk then head five times, and a `performance.now()` pair around the projection in the reducer, read from the console.
 - [ ] Baseline. Record the trunk median first. The projection has no trunk baseline, record head's median as the first.
 - [ ] Rule. Fail when the head median exceeds the trunk median by more than 10 percent, or when the projection median exceeds 5 ms.
@@ -617,19 +617,19 @@ Decision. A. The head is the entry with the highest seq in its session, so the r
 | Type | Written by | Inference | UI |
 | --- | --- | --- | --- |
 | `user.message` | API, steering, routines, channel mirrors | yes | yes |
-| `assistant.text` | Executor, per finished block | yes | yes |
+| `assistant.text` | Executor, per finished block, `toPerson` when addressed to the person | yes | yes |
 | `assistant.reasoning` | Executor | no | yes |
 | `assistant.ask`, `assistant.choice` | Executor, on pause for input | yes | yes |
 | `tool.call`, `tool.result` | Executor | yes | yes |
 | `subagent` | Parent run, once per helper | yes, as the tool result | yes, card to the child session |
-| `routine.started`, `routine.finished` | Executor, in the thread's main session at launch and at the end | context line, then the final words on the assistant side | yes, one card to the routine session, running, done or interrupted |
+| `routine.started` (with `notify`), `routine.finished` | Executor, in the thread's main session at launch and at the end | context line, then the final words on the assistant side | yes, one card to the routine session, running, done or interrupted |
 | `handoff` | `handoffToGroupBot`, in the group session | yes, assistant for the sender, `<bot_message>` for the receiver | yes, line naming both bots |
 | `bot.message.sent` | `messageBot`, in the sender's session | yes, assistant side | yes, card linking to the peer's thread |
 | `bot.message.received` | `messageBot`, in the receiver's session | yes, the waking `<bot_message>` user turn | yes, card linking back |
 | `run.started` | Executor | context | yes, run card |
 | `run.finished` | Executor, `finalizeRun` | no | yes, run card |
-| `effect.requested`, `effect.edited`, `effect.resolved` | Executor, approvals | no | yes |
-| `effect.applied` | Executor, what came of an approved routine card, `target` the card | no | yes |
+| `effect.requested`, `effect.edited`, `effect.resolved` | Executor, approvals, the card on requested and edited, `answerId` and `dismissed` on resolved | no | yes |
+| `effect.applied` | Executor, what came of an approved routine card, `target` the card, `change` | no | yes |
 | `card.answered` | API and executor, a choice chosen, a card dismissed, a composer resume, a secret ask, a connector connected, `target` the card | no | yes |
 | `link.preview`, `link.preview.removed` | API, `target` the message then the preview | no | yes |
 | `skill.draft` | API, one per revision, `target` the card | no | yes |
