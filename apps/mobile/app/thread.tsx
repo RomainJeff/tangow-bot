@@ -38,6 +38,7 @@ import {
   latestActivityLabel,
   mentionChipKey,
   projectThreadView,
+  queuedRunIdsOf,
   type RoutineLineRole,
   type RoutineLineRun,
   resolveComposerSendPlan,
@@ -655,10 +656,7 @@ function Thread() {
     () => busyRuns.filter((run) => run.id !== waiting?.runId),
     [busyRuns, waiting?.runId],
   );
-  const queuedRunIds = useMemo(
-    () => new Set(busyRuns.flatMap((run) => (run.status === "queued" ? [run.id] : []))),
-    [busyRuns],
-  );
+  const queuedRunIds = useMemo(() => queuedRunIdsOf(busyRuns), [busyRuns]);
   const workingGroupBots = useMemo(() => {
     if (!inGroup) return [];
     const seen = new Set<string>();
@@ -2027,6 +2025,7 @@ function Thread() {
       : "";
     const isNew = Boolean(!options?.enableJump && newMessageIds.has(item.id));
     const rewound = rewindIndex >= 0 && (rowIndex.get(item.id) ?? -1) >= rewindIndex;
+    const origin = originSession(item);
     return (
       <ThreadRowContext.Provider key={item.id} value={item.id}>
         <View
@@ -2060,13 +2059,16 @@ function Thread() {
             </Text>
           ) : null}
           <View style={{ opacity: rewound ? 0.4 : 1 }}>
-            <OriginLabel
-              item={item}
-              botId={botId ?? snap?.members?.[0]?.botId ?? ""}
-              groupId={groupId}
-              bots={mentionBots}
-              members={snap?.members}
-            />
+            {origin ? (
+              <OriginLabel
+                origin={origin}
+                alignEnd={item.kind === "message" && item.role === "user"}
+                botId={botId ?? snap?.members?.[0]?.botId ?? ""}
+                groupId={groupId}
+                bots={mentionBots}
+                members={snap?.members}
+              />
+            ) : null}
             {item.id === waiting?.itemId ? (
               <Text
                 style={{
@@ -4128,13 +4130,15 @@ function NoteRow({ item, isNew }: { item: NoteItem; isNew: boolean }) {
 }
 
 function OriginLabel({
-  item,
+  origin,
+  alignEnd,
   botId,
   groupId,
   bots,
   members,
 }: {
-  item: ThreadItem;
+  origin: { sessionId: string; title: string };
+  alignEnd: boolean;
   botId: string;
   groupId?: string;
   bots: MobileBot[];
@@ -4142,8 +4146,6 @@ function OriginLabel({
 }) {
   const tokens = mobileTokens();
   const [open, setOpen] = useState(false);
-  const origin = originSession(item);
-  if (!origin) return null;
   return (
     <>
       <Text
@@ -4151,7 +4153,7 @@ function OriginLabel({
         onPress={() => setOpen(true)}
         suppressHighlighting
         style={{
-          alignSelf: item.kind === "message" && item.role === "user" ? "flex-end" : "flex-start",
+          alignSelf: alignEnd ? "flex-end" : "flex-start",
           marginBottom: 4,
           color: tokens.mutedForeground,
           ...nativeTextStyle("label"),
