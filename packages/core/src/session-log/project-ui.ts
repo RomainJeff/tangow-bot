@@ -22,7 +22,6 @@ type RoutineItem = Extract<ThreadItem, { kind: "routine" }>;
 type MessageItem = Extract<ThreadItem, { kind: "message" }>;
 type SubagentItem = Extract<ThreadItem, { kind: "subagent" }>;
 type DividerItem = Extract<ThreadItem, { kind: "divider" }>;
-type AskBlock = Extract<MessageBlock, { kind: "ask" }>;
 
 /** Where a card that later entries settle sits: a block of a message, or an approval's card. */
 type CardSlot = { item: MessageItem; index: number } | { item: EffectItem };
@@ -178,7 +177,9 @@ export function projectThread(entries: readonly SessionEntry[]): ProjectedThread
         const card = payload.replyTo ? questionAt(cards.get(payload.replyTo.entryId)) : undefined;
         if (card) {
           const block = cardOf(card);
-          if (block && !isSettled(block)) setCard(card, answerWith(block, textOf(payload.blocks)));
+          if (block?.kind === "ask" && !isSettled(block)) {
+            setCard(card, { ...block, status: "answered" });
+          }
           if (payload.clientNonce === undefined && payload.source === "app") {
             shownBy.set(segment.id, card.item.id);
             break;
@@ -382,16 +383,17 @@ export function projectThread(entries: readonly SessionEntry[]): ProjectedThread
         break;
       }
       case "card.answered": {
-        const { target, answerId } = segment.payload;
+        const { target, answerId, answers } = segment.payload;
         const slots = cards.get(target) ?? [];
         const question = questionAt(slots.filter((slot) => isOpen(cardOf(slot))));
         const block = question && cardOf(question);
         if (question && block?.kind === "ask") {
-          const answer = answerId ?? (block.input === "secret" ? "" : undefined);
+          const answer = segment.payload.answer ?? (block.input === "secret" ? "" : undefined);
           setCard(question, {
             ...block,
             status: "answered",
             ...(answer === undefined ? {} : { answer }),
+            ...(answers ? { answers } : {}),
           });
         } else if (question && block?.kind === "choice") {
           setCard(question, { ...block, answerId: answerId ?? CHOICE_DISMISSED_ANSWER_ID });
@@ -526,20 +528,6 @@ function isSettled(block: MessageBlock | undefined): boolean {
   if (block?.kind === "ask") return block.status === "answered";
   if (block?.kind === "choice") return block.answerId !== undefined;
   return false;
-}
-
-function answerWith(block: MessageBlock, reply: string): MessageBlock {
-  if (block.kind === "ask")
-    return { ...block, status: "answered", answer: reply } satisfies AskBlock;
-  if (block.kind === "choice") {
-    const chosen = block.options.find((option) => option.label === reply);
-    return { ...block, answerId: chosen?.id ?? reply };
-  }
-  return block;
-}
-
-function textOf(blocks: readonly MessageBlock[]): string {
-  return blocks.flatMap((block) => (block.kind === "text" ? [block.text] : [])).join("\n");
 }
 
 function subagentInput(input: string): { name: string; task: string } {

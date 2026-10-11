@@ -566,7 +566,7 @@ describe("projectThreadItems", () => {
         ts: at(1),
         botId: "bot_ada",
         runId: "run_veille",
-        blocks: [{ kind: "ask", text: "Which outlets?", status: "answered", answer: "Le Monde" }],
+        blocks: [{ kind: "ask", text: "Which outlets?", status: "answered" }],
         origin: fromVeille,
       },
       {
@@ -899,7 +899,7 @@ describe("projectThreadItems", () => {
     ]);
   });
 
-  it("opens on the clear divider and shows an ask and a choice answered by their answer records", async () => {
+  it("opens on the clear divider, settles an ask its reply answers and leaves a replied choice open", async () => {
     expect(projectThreadItems(await fixtureChain("cleared"))).toEqual([
       { kind: "divider", id: "clr-01", ts: at(1), reason: "clear" },
       {
@@ -952,7 +952,6 @@ describe("projectThreadItems", () => {
             kind: "ask",
             text: "Which day should it go out?",
             status: "answered",
-            answer: "Tuesday.",
           },
         ],
       },
@@ -1009,7 +1008,6 @@ describe("projectThreadItems", () => {
               { id: "inbox", letter: "A", label: "Clear my inbox" },
               { id: "week", letter: "B", label: "Plan my week" },
             ],
-            answerId: "Plan my week.",
           },
         ],
       },
