@@ -27,7 +27,7 @@ import { claimSaveAnnouncement } from "../../lib/save-announce";
 import { nativeTextStyle } from "../../lib/typography";
 import { NativeSymbol } from "../native-symbol";
 
-/** A labelled group of rows on one surface, hairlines inset from the leading edge. */
+/** A labelled group of rows on one surface, hairlines inset from the leading edge; no surface without rows. */
 export function Group({
   label,
   trailing,
@@ -49,9 +49,11 @@ export function Group({
           {trailing}
         </View>
       ) : null}
-      <View style={styles.card}>
-        <Separated>{children}</Separated>
-      </View>
+      {Children.toArray(children).length > 0 ? (
+        <View style={styles.card}>
+          <Separated>{children}</Separated>
+        </View>
+      ) : null}
     </View>
   );
 }

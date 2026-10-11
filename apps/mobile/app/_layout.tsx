@@ -196,6 +196,8 @@ export default function Layout() {
                   name="bot-text"
                   options={{ presentation: "fullScreenModal", gestureEnabled: false }}
                 />
+                <Stack.Screen name="bot-routine" />
+                <Stack.Screen name="bot-routine-new" options={{ title: t("New routine") }} />
                 <Stack.Screen name="bot-model" options={{ title: t("Model") }} />
                 <Stack.Screen name="bot-voice" options={{ title: t("Voice and replies") }} />
                 <Stack.Screen name="bot-choice" options={{ title: "" }} />
@@ -215,7 +217,6 @@ export default function Layout() {
                 <Stack.Screen name="bot-file" options={{ title: t("Files") }} />
                 <Stack.Screen name="thread" options={{ title: t("Thread") }} />
                 <Stack.Screen name="peer-messages" options={{ title: t("Bot chat") }} />
-                <Stack.Screen name="routine" options={{ title: t("Routine") }} />
                 <Stack.Screen name="computer" options={{ title: t("Computer") }} />
               </Stack>
               <ComputerUpdateProgress />

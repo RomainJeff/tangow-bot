@@ -1,11 +1,15 @@
 import type { Routine, RunFailureKind } from "@rakazo/contracts";
 import {
+  type CronFreq,
   type CronPreset,
   type CronUnit,
   cronSchedule,
   cronSchedulePreset,
   cronScheduleTime,
+  type RoutineDraft,
+  type RoutineDraftError,
   routineCadence,
+  type TriggerRef,
 } from "@rakazo/core";
 import { dateLocaleForUi, getActiveUiLocale, t } from "./i18n";
 
@@ -43,7 +47,7 @@ function failureReason(kind: RunFailureKind | null): string | null {
   return null;
 }
 
-function unitLabel(n: number, unit: CronUnit): string {
+export function unitLabel(n: number, unit: CronUnit): string {
   if (getActiveUiLocale() === "ru") return russianUnit(n, unit);
   if (unit === "minutes") return n === 1 ? t("minute") : t("minutes");
   if (unit === "hours") return n === 1 ? t("hour") : t("hours");
@@ -121,7 +125,7 @@ export function describeSchedule(cron: string): string {
   return t("Cron {expression}", { expression: cron.trim() });
 }
 
-function messageLabel(provider: string | null): string {
+export function messageLabel(provider: string | null): string {
   if (provider === "slack") return t("Slack message");
   if (provider === "teams") return t("Teams message");
   return t("Message event");
@@ -131,6 +135,44 @@ function inboundLabel(source: "webhook" | "github" | "message", provider: string
   if (source === "webhook") return t("When a webhook fires");
   if (source === "github") return t("Git event");
   return messageLabel(provider);
+}
+
+/** The name of a schedule frequency, as the menus list it. */
+export function freqLabel(freq: CronFreq): string {
+  switch (freq) {
+    case "Every hour":
+      return t("Every hour");
+    case "Every day":
+      return t("Every day");
+    case "Weekdays":
+      return t("Weekdays");
+    case "Every week":
+      return t("Every week");
+    case "Every month":
+      return t("Every month");
+    case "Interval":
+      return t("Interval");
+    case "Advanced":
+      return t("Advanced");
+  }
+}
+
+/** A trigger's row in "When to run". */
+export function triggerLabel(draft: RoutineDraft, trigger: TriggerRef): string {
+  if (trigger.kind === "schedule") return t("On a schedule");
+  return inboundLabel(trigger.kind, draft.messageProvider);
+}
+
+/** Why a routine cannot be saved yet, in the words the web uses. */
+export function draftError(error: RoutineDraftError): string {
+  switch (error.code) {
+    case "no_trigger":
+      return t("Add a schedule, webhook, GitHub, or message trigger");
+    case "run_at_missing":
+      return t("Add a run time for this one-shot.");
+    case "run_at_past":
+      return t("Run time must be in the future.");
+  }
 }
 
 /** One line under a routine: when it runs and when next, how its last run failed, or that it is paused. */

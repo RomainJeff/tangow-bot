@@ -3697,12 +3697,8 @@ const MessageBubble = memo(function MessageBubble({
           accessibilityRole="link"
           onPress={() =>
             router.push({
-              pathname: "/routine",
-              params: {
-                botId: cardBotId,
-                botName: memberName(members, cardBotId) ?? botName ?? "",
-                routineId: created.id,
-              },
+              pathname: "/bot-routine",
+              params: { botId: cardBotId, routineId: created.id },
             })
           }
           style={{ flexDirection: "row", alignItems: "center", gap: 4, flexShrink: 1 }}

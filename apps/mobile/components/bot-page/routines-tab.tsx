@@ -1,12 +1,18 @@
 import type { Routine } from "@rakazo/contracts";
 import { routineFailing } from "@rakazo/core";
-import { StyleSheet, View } from "react-native";
-import { rpc } from "../../lib/api";
+import { Pressable, StyleSheet, View } from "react-native";
 import { mobileTokens } from "../../lib/appearance";
-import { type BotPageContext, useBotField } from "../../lib/bot-page";
+import {
+  type BotPageContext,
+  readRoutines,
+  updateRoutine,
+  useBotField,
+  useRoutineList,
+} from "../../lib/bot-page";
 import { useI18n } from "../../lib/i18n";
-import { useThemedStyles } from "../../lib/native";
+import { useMobileTokens, useThemedStyles } from "../../lib/native";
 import { cadenceLine, routinesSummary } from "../../lib/routine-copy";
+import { NativeSymbol } from "../native-symbol";
 import {
   Group,
   InkSwitch,
@@ -17,48 +23,59 @@ import {
   SaveMeta,
   useFocusedRead,
 } from "./kit";
+import { EDITS_TRIGGERS } from "./when-to-run";
 
-type Write = ReturnType<typeof useFocusedRead<Routine[]>>["write"];
+/**
+ * The bot's routines from the copy every screen shares, read again on focus and when `epoch`
+ * moves. `read` is this screen's own read: "ready" once one has answered since it opened.
+ */
+export function useRoutines(botId: string, epoch: number) {
+  const { read, retry } = useFocusedRead(() => readRoutines(botId), [botId, epoch]);
+  return { routines: useRoutineList(botId), read: read.kind, retry };
+}
 
 /**
  * The bot's routines: one row each, its switch apart from the row that opens it.
  * `epoch` changes when a run ends: a run may have changed a routine or how it last went.
+ * Where triggers cannot be edited, a new routine could never get one, so none is offered.
  */
 export function RoutinesTab({
   page,
   epoch,
   onOpen,
+  onCreate,
 }: {
   page: BotPageContext;
   epoch: number;
   onOpen: (routine: Routine) => void;
+  onCreate: () => void;
 }) {
   const { t } = useI18n();
-  const botId = page.bot.id;
-  const { read, write, retry } = useFocusedRead(
-    () => rpc<Routine[]>("routines/list", { botId }),
-    [botId, epoch],
-  );
-  if (read.kind === "loading") {
+  const { routines, read, retry } = useRoutines(page.bot.id, epoch);
+  if (!routines) {
+    if (read === "failed") return <LoadFailed onRetry={retry} />;
     return (
       <Group>
         <LoadingRows />
       </Group>
     );
   }
-  if (read.kind === "failed") return <LoadFailed onRetry={retry} />;
-  const routines = read.value;
-  if (routines.length === 0) return <QuietLine>{t("No routines yet")}</QuietLine>;
+  const creates = EDITS_TRIGGERS && !page.readOnly;
+  if (routines.length === 0) {
+    if (!EDITS_TRIGGERS) return <QuietLine>{t("No routines yet")}</QuietLine>;
+    return (
+      <Group>
+        <Row label={t("New routine")} disabled={page.readOnly} onPress={onCreate} chevron />
+      </Group>
+    );
+  }
   return (
-    <Group label={routinesSummary(routines)}>
+    <Group
+      label={routinesSummary(routines)}
+      trailing={creates ? <AddButton label={t("New routine")} onPress={onCreate} /> : null}
+    >
       {routines.map((routine) => (
-        <RoutineRow
-          key={routine.id}
-          page={page}
-          routine={routine}
-          write={write}
-          onOpen={() => onOpen(routine)}
-        />
+        <RoutineRow key={routine.id} page={page} routine={routine} onOpen={() => onOpen(routine)} />
       ))}
     </Group>
   );
@@ -67,32 +84,16 @@ export function RoutinesTab({
 function RoutineRow({
   page,
   routine,
-  write,
   onOpen,
 }: {
   page: BotPageContext;
   routine: Routine;
-  write: Write;
   onOpen: () => void;
 }) {
   const styles = useThemedStyles(createRoutineStyles);
   const { t } = useI18n();
-  const active = useBotField(
-    page,
-    `routine:${routine.id}:active`,
-    routine.active,
-    async (value) => {
-      const settle = write();
-      const saved = await rpc<Routine>("routines/update", { routineId: routine.id, active: value });
-      settle((current) =>
-        current.kind === "ready"
-          ? {
-              kind: "ready",
-              value: current.value.map((item) => (item.id === saved.id ? saved : item)),
-            }
-          : current,
-      );
-    },
+  const active = useBotField(page, `routine:${routine.id}:active`, routine.active, (value) =>
+    updateRoutine(page.bot.id, routine.id, { active: value }),
   );
   const shown = { ...routine, active: active.value };
   const state = !shown.active ? "paused" : routineFailing(shown) ? "failed" : "ok";
@@ -119,6 +120,29 @@ function RoutineRow({
   );
 }
 
+/** A round "+" on the group label's line, centred on it since a view has no text baseline. */
+function AddButton({ label, onPress }: { label: string; onPress: () => void }) {
+  const styles = useThemedStyles(createRoutineStyles);
+  const tokens = useMobileTokens();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      hitSlop={8}
+      onPress={onPress}
+      style={({ pressed }) => [styles.add, pressed && styles.addPressed]}
+    >
+      <NativeSymbol
+        ios="plus"
+        android="add"
+        size={15}
+        weight="semibold"
+        color={tokens.foreground}
+      />
+    </Pressable>
+  );
+}
+
 function createRoutineStyles() {
   const tokens = mobileTokens();
   return StyleSheet.create({
@@ -126,5 +150,17 @@ function createRoutineStyles() {
     ok: { backgroundColor: tokens.success },
     failed: { backgroundColor: tokens.destructive },
     paused: { backgroundColor: tokens.input },
+    // Negative margins keep the label line's height, so the circle never reaches the card below.
+    add: {
+      alignSelf: "center",
+      marginVertical: -5,
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: tokens.secondary,
+    },
+    addPressed: { opacity: 0.6 },
   });
 }

@@ -18,11 +18,11 @@ describe("mobileSearchDestination", () => {
     });
   });
 
-  it("opens routine matches on the routine detail screen", () => {
+  it("opens routine matches on the routine's screen", () => {
     const hit: SearchHit = { ...base, kind: "routine", routineId: "routine-1" };
     expect(mobileSearchDestination(hit)).toEqual({
-      pathname: "/routine",
-      params: { botId: "bot-1", botName: "Scout", routineId: "routine-1" },
+      pathname: "/bot-routine",
+      params: { botId: "bot-1", routineId: "routine-1" },
     });
   });
 
