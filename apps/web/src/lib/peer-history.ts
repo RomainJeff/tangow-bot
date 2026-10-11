@@ -1,12 +1,10 @@
-import type { ThreadMessage } from "@rakazo/contracts";
+import type { EntryId, SessionEntry, ThreadMessagePage } from "@rakazo/contracts";
+import { mergeEntries } from "@rakazo/core";
 
 const PEER_HISTORY_PAGE_TIMEOUT_MS = 15_000;
 const PEER_HISTORY_TOTAL_TIMEOUT_MS = 60_000;
 
-type PeerHistoryPage = {
-  messages: ThreadMessage[];
-  olderCursor: number | null;
-};
+type PeerHistoryPage = Pick<ThreadMessagePage, "entries" | "olderCursor">;
 
 /** Load every peer-history page without allowing one request or the full scan to hang forever. */
 export async function loadPeerHistory({
@@ -16,19 +14,19 @@ export async function loadPeerHistory({
   totalTimeoutMs = PEER_HISTORY_TOTAL_TIMEOUT_MS,
 }: {
   signal: AbortSignal;
-  loadPage: (before: number | undefined, signal: AbortSignal) => Promise<PeerHistoryPage>;
+  loadPage: (before: EntryId | undefined, signal: AbortSignal) => Promise<PeerHistoryPage>;
   pageTimeoutMs?: number;
   totalTimeoutMs?: number;
-}): Promise<ThreadMessage[]> {
+}): Promise<SessionEntry[]> {
   const deadline = AbortSignal.timeout(totalTimeoutMs);
-  let before: number | undefined;
-  let collected: ThreadMessage[] = [];
+  let before: EntryId | undefined;
+  let collected: SessionEntry[] = [];
   do {
     const page = await loadPage(
       before,
       AbortSignal.any([signal, deadline, AbortSignal.timeout(pageTimeoutMs)]),
     );
-    collected = [...page.messages, ...collected];
+    collected = mergeEntries(collected, page.entries);
     before = page.olderCursor ?? undefined;
   } while (before !== undefined);
   return collected;
