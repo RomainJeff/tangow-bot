@@ -214,10 +214,18 @@ function byId(entries: readonly SessionEntry[]): SessionEntry[] {
   );
 }
 
+const SessionEntries = SessionEntrySchema.array();
+const appendedOf = new WeakMap<ProductEvent, readonly SessionEntry[]>();
+
 /** The entries a `session.entry.appended` event carries, or none for any other event. */
-export function appendedEntries(event: ProductEvent): SessionEntry[] {
+export function appendedEntries(event: ProductEvent): readonly SessionEntry[] {
   if (event.type !== "session.entry.appended") return [];
-  return SessionEntrySchema.array().safeParse(event.payload.entries).data ?? [];
+  let entries = appendedOf.get(event);
+  if (!entries) {
+    entries = SessionEntries.safeParse(event.payload.entries).data ?? [];
+    appendedOf.set(event, entries);
+  }
+  return entries;
 }
 
 /**
