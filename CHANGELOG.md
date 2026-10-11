@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-10-11
+
+#### Added
+
+- **The iPhone app now has the bot page that web and desktop have, opened from the bot in a thread's header.** Activity lists the bot's runs with their recaps, Open in chat and a dot while a routine is failing; Routines lists them with switches and lets you create and edit them, each with its own runs and Test run, showing a webhook's address and masked key with an eye and Copy before you save; Knowledge holds memory, its scope when a memory provider is set up, open work, the computer's files and skills; and every field in Settings saves itself. It replaces the single long settings form, so routines, knowledge and activity are now reachable from the phone.
+
 ### 2026-10-10
 
 #### Added
