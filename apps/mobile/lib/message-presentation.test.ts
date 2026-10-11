@@ -1,6 +1,9 @@
 import type { MessageBlock } from "@rakazo/contracts";
+import { SessionEntrySchema } from "@rakazo/contracts";
+import { projectThreadView } from "@rakazo/core";
 import { describe, expect, it } from "vitest";
 import {
+  drawsNothing,
   hasVisibleMessagePresentation,
   messagePresentationSegments,
   skillLineRoute,
@@ -153,5 +156,47 @@ describe("skill lines", () => {
     expect(skillLineSegment(["Reading.", "Done.", ""])).toBe(1);
     expect(skillLineSegment([""])).toBe(-1);
     expect(skillLineSegment([])).toBe(-1);
+  });
+
+  it("draws a finished run as its bubbles alone, with no run line between them", () => {
+    const entries = [
+      { type: "user.message", payload: { blocks: [{ kind: "text", text: "Hi" }], source: "app" } },
+      {
+        runId: "run_1",
+        type: "run.started",
+        payload: {
+          trigger: { kind: "direct" },
+          model: { provider: "local", id: "emulator-1" },
+          effort: null,
+        },
+      },
+      {
+        runId: "run_1",
+        type: "assistant.text",
+        payload: { blocks: [{ kind: "text", text: "Hello" }] },
+      },
+      {
+        runId: "run_1",
+        type: "run.finished",
+        payload: { status: "completed", usage: { inputTokens: 1, outputTokens: 1 } },
+      },
+    ].map((entry, seq) =>
+      SessionEntrySchema.parse({
+        id: `e_${seq}`,
+        seq,
+        parentId: seq === 0 ? null : `e_${seq - 1}`,
+        ts: `2026-10-10T09:00:0${seq}.000Z`,
+        sessionId: "ses_main",
+        botId: "bot_ada",
+        ...entry,
+      }),
+    );
+    const rows = projectThreadView(entries, {
+      rendersNothing: (item) => drawsNothing(item, false),
+    }).rows;
+    expect(rows.map((row) => [row.item.kind, row.item.id, row.marker !== undefined])).toEqual([
+      ["message", "e_0", true],
+      ["message", "e_2", false],
+    ]);
   });
 });

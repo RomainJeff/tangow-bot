@@ -173,7 +173,6 @@ import {
 import { mobileTokens, resolveMobileAppearance } from "../lib/appearance";
 import { type MobileArtifactTarget, openMobileArtifact } from "../lib/artifact-open";
 import { presentAttachSheet } from "../lib/attach-sheet";
-import { stateWord } from "../lib/bot-activity";
 import {
   archiveBot,
   clearConversation,
@@ -184,7 +183,6 @@ import { botMessageCard } from "../lib/bot-message-card";
 import { noteBotRunEnded } from "../lib/bot-page-state";
 import { CHAT_MOTION, useChatReducedMotion } from "../lib/chat-motion";
 import { cancelFocusPrompt, focusPromptThreadActive } from "../lib/focus-prompt";
-import { formatShortDuration } from "../lib/format-elapsed";
 import { commitHaptic, selectionHaptic, sendHaptic, successHaptic } from "../lib/haptics";
 import { dateLocaleForUi, t, useI18n } from "../lib/i18n";
 import { unreadConversationCount } from "../lib/inbox-spaces";
@@ -202,7 +200,7 @@ import {
 } from "../lib/live-notifications";
 import { messageArrivalStaggerMs, useMessageArrivals } from "../lib/message-arrivals";
 import {
-  hasVisibleMessagePresentation,
+  drawsNothing,
   messagePresentationSegments,
   skillLineRoute,
   skillLineSegment,
@@ -217,7 +215,8 @@ import {
 } from "../lib/pick-attachments";
 import { reactionPopKey, useReactionPops } from "../lib/reaction-pop";
 import { threadRefreshDelayMs } from "../lib/refresh";
-import { isViewedRunLine } from "../lib/session-sheet";
+import { routineLine } from "../lib/routine-line";
+import { isViewedRunLine, originSession } from "../lib/session-sheet";
 import { closeSheet, openSheet } from "../lib/sheet";
 import type { SpawnBotEdits } from "../lib/spawn-bot-edit";
 import { openSpawnBotEdit, syncSpawnBotEdit } from "../lib/spawn-bot-edit";
@@ -235,7 +234,6 @@ import { speakText } from "../lib/voice";
 
 type PendingAttachment = PickedAttachment & { threadKey: string };
 type ReplyTarget = { message: MobileMessage; messageId: EntryId };
-type RunItem = Extract<ThreadItem, { kind: "run" }>;
 type NoteItem = Extract<ThreadItem, { kind: "note" }>;
 type CardTarget = { runId: string; entryId: string };
 type AskAction = NonNullable<Extract<MessageBlock, { kind: "ask" }>["actions"]>[number];
@@ -319,19 +317,6 @@ function formatAttachmentSkip(item: { name: string; reason: string }): string {
     });
   }
   return `${name} (${item.reason})`;
-}
-
-function drawsNothing(item: ThreadItem, showSteps: boolean): boolean {
-  switch (item.kind) {
-    case "message":
-      return !hasVisibleMessagePresentation(item.blocks, showSteps);
-    case "effect":
-      return !item.card;
-    case "note":
-      return item.type !== "system.note" && item.type !== "skill.learnt";
-    default:
-      return false;
-  }
 }
 
 function isLiveMessage(item: ThreadItem): item is Extract<MobileMessage, { role: "bot" }> {
@@ -671,7 +656,10 @@ function Thread() {
     () => busyRuns.filter((run) => run.id !== waiting?.runId),
     [busyRuns, waiting?.runId],
   );
-  const activeRunIds = useMemo(() => new Set(busyRuns.map((run) => run.id)), [busyRuns]);
+  const queuedRunIds = useMemo(
+    () => new Set(busyRuns.flatMap((run) => (run.status === "queued" ? [run.id] : []))),
+    [busyRuns],
+  );
   const workingGroupBots = useMemo(() => {
     if (!inGroup) return [];
     const seen = new Set<string>();
@@ -1738,8 +1726,8 @@ function Thread() {
       .catch(() => undefined);
   }, []);
   const listExtraData = useMemo(
-    () => ({ answerableAskMessageId, viewerUserId }),
-    [answerableAskMessageId, viewerUserId],
+    () => ({ answerableAskMessageId, viewerUserId, queuedRunIds }),
+    [answerableAskMessageId, viewerUserId, queuedRunIds],
   );
   const runError = snap?.run?.status === "failed" ? (snap.run.error ?? null) : null;
   const liveRows = useMemo(() => [...rows].reverse(), [rows]);
@@ -2073,6 +2061,13 @@ function Thread() {
             </Text>
           ) : null}
           <View style={{ opacity: rewound ? 0.4 : 1 }}>
+            <OriginLabel
+              item={item}
+              botId={botId ?? snap?.members?.[0]?.botId ?? ""}
+              groupId={groupId}
+              bots={mentionBots}
+              members={snap?.members}
+            />
             {item.kind === "message" ? (
               renderMessage(row, item, isNew, options?.enableJump)
             ) : (
@@ -2085,19 +2080,22 @@ function Thread() {
                 members={snap?.members}
                 isNew={isNew}
                 canAnswer={item.id === answerableAskMessageId}
-                liveRun={
-                  item.kind !== "run"
-                    ? undefined
-                    : item.runId === waiting?.runId
-                      ? "waiting"
-                      : activeRunIds.has(item.runId)
-                        ? "running"
-                        : undefined
-                }
+                queued={item.kind === "routine" && queuedRunIds.has(item.runId)}
                 viewerUserId={viewerUserId}
                 onAnswer={answerCard}
               />
             )}
+            {item.id === waiting?.itemId ? (
+              <Text
+                style={{
+                  marginTop: 4,
+                  color: tokens.mutedForeground,
+                  ...nativeTextStyle("label"),
+                }}
+              >
+                {t("Needs input")}
+              </Text>
+            ) : null}
           </View>
         </View>
       </ThreadRowContext.Provider>
@@ -3900,7 +3898,7 @@ const ItemRow = memo(function ItemRow({
   members,
   isNew,
   canAnswer,
-  liveRun,
+  queued = false,
   viewerUserId,
   onAnswer,
   readOnly = false,
@@ -3913,7 +3911,7 @@ const ItemRow = memo(function ItemRow({
   members?: MobileSnapshot["members"];
   isNew: boolean;
   canAnswer: boolean;
-  liveRun?: "waiting" | "running";
+  queued?: boolean;
   viewerUserId?: string;
   onAnswer?: (card: CardTarget, answer: string, edits?: SpawnBotEdits) => Promise<void>;
   readOnly?: boolean;
@@ -3951,9 +3949,8 @@ const ItemRow = memo(function ItemRow({
   const body = (() => {
     switch (item.kind) {
       case "message":
-        return null;
       case "run":
-        return <RunRow item={item} live={liveRun} />;
+        return null;
       case "subagent": {
         const title = item.name || t("subagent");
         if (item.status === "running") {
@@ -3968,10 +3965,7 @@ const ItemRow = memo(function ItemRow({
             onOpen={() =>
               setSession({
                 title,
-                load: () =>
-                  rpc<{ entries: SessionEntry[] }>("sessions/entries", {
-                    sessionId: item.sessionId,
-                  }).then((result) => result.entries),
+                load: () => sessionEntries(item.sessionId),
               })
             }
           />
@@ -4011,7 +4005,12 @@ const ItemRow = memo(function ItemRow({
         return role.kind === "group" ? (
           <RoutineGroup runs={role.runs} handoffFor={handoffFor} onOpen={openRun} />
         ) : (
-          <RoutineRunLine run={role.run} handoff={handoffFor(role.run)} onOpen={openRun} />
+          <RoutineRunLine
+            run={role.run}
+            queued={queued}
+            handoff={handoffFor(role.run)}
+            onOpen={openRun}
+          />
         );
       }
       case "handoff": {
@@ -4095,87 +4094,6 @@ const ItemRow = memo(function ItemRow({
   );
 });
 
-function RunRow({ item, live }: { item: RunItem; live?: "waiting" | "running" }) {
-  const tokens = mobileTokens();
-  const { t } = useI18n();
-  const [open, setOpen] = useState(false);
-  const outcome = item.finished?.outcome;
-  const state = outcome?.status ?? live;
-  const word =
-    state === undefined
-      ? null
-      : state === "waiting"
-        ? t("Needs input")
-        : stateWord(state === "completed" ? "done" : state);
-  const symbol = ROUTINE_STATE_SYMBOL[outcome?.status ?? "running"];
-  const statusStyle = {
-    color: state === "failed" ? tokens.destructive : tokens.mutedForeground,
-    ...nativeTextStyle("label", { weight: 500 }),
-  };
-  const detail = item.finished
-    ? `${formatShortDuration(item.finished.durationMs)} · ${t("{tokens} tokens", {
-        tokens: (
-          item.finished.outcome.usage.inputTokens + item.finished.outcome.usage.outputTokens
-        ).toLocaleString(dateLocaleForUi()),
-      })}`
-    : null;
-  return (
-    <View>
-      <Pressable
-        accessibilityRole={detail ? "button" : undefined}
-        accessibilityLabel={[item.model.id, word].filter(Boolean).join(", ")}
-        accessibilityState={detail ? { expanded: open } : undefined}
-        disabled={!detail}
-        onPress={() => setOpen(!open)}
-        unstable_pressDelay={130}
-        style={({ pressed }) => ({
-          minHeight: 32,
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 8,
-          marginHorizontal: -8,
-          paddingHorizontal: 8,
-          borderRadius: radii.row,
-          backgroundColor: pressed ? tokens.secondary : "transparent",
-        })}
-      >
-        <NativeSymbol
-          ios={symbol.ios}
-          android={symbol.android}
-          size={13}
-          color={state === "failed" ? tokens.destructive : tokens.mutedForeground}
-        />
-        <Text
-          numberOfLines={1}
-          style={{ flex: 1, color: tokens.mutedForeground, ...nativeTextStyle("label") }}
-        >
-          {item.model.id}
-        </Text>
-        {state === "running" ? (
-          <ShimmerText style={statusStyle}>{word}</ShimmerText>
-        ) : word ? (
-          <Text style={statusStyle}>{word}</Text>
-        ) : null}
-        <View style={{ width: 14, alignItems: "center" }}>
-          {detail ? <Disclosure open={open} /> : null}
-        </View>
-      </Pressable>
-      {open && detail ? (
-        <Text
-          style={{
-            marginStart: 21,
-            color: tokens.mutedForeground,
-            ...nativeTextStyle("time"),
-            fontVariant: ["tabular-nums"],
-          }}
-        >
-          {detail}
-        </Text>
-      ) : null}
-    </View>
-  );
-}
-
 function DividerRow({ reason }: { reason: Extract<ThreadItem, { kind: "divider" }>["reason"] }) {
   const tokens = mobileTokens();
   const { t } = useI18n();
@@ -4209,6 +4127,58 @@ function NoteRow({ item, isNew }: { item: NoteItem; isNew: boolean }) {
     );
   }
   return null;
+}
+
+function OriginLabel({
+  item,
+  botId,
+  groupId,
+  bots,
+  members,
+}: {
+  item: ThreadItem;
+  botId: string;
+  groupId?: string;
+  bots: MobileBot[];
+  members?: MobileSnapshot["members"];
+}) {
+  const tokens = mobileTokens();
+  const [open, setOpen] = useState(false);
+  const origin = originSession(item);
+  if (!origin) return null;
+  return (
+    <>
+      <Text
+        accessibilityRole="button"
+        onPress={() => setOpen(true)}
+        suppressHighlighting
+        style={{
+          alignSelf: item.kind === "message" && item.role === "user" ? "flex-end" : "flex-start",
+          marginBottom: 4,
+          color: tokens.mutedForeground,
+          ...nativeTextStyle("label"),
+        }}
+      >
+        {origin.title}
+      </Text>
+      {open ? (
+        <SessionSheet
+          session={{ title: origin.title, load: () => sessionEntries(origin.sessionId) }}
+          botId={botId}
+          groupId={groupId}
+          bots={bots}
+          members={members}
+          onClose={() => setOpen(false)}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function sessionEntries(sessionId: string): Promise<SessionEntry[]> {
+  return rpc<{ entries: SessionEntry[] }>("sessions/entries", { sessionId }).then(
+    (result) => result.entries,
+  );
 }
 
 function SessionSheet({
@@ -4607,12 +4577,14 @@ function sameLocalDay(left: string | undefined, right: string | undefined): bool
 
 function RoutineRunLine({
   run,
+  queued = false,
   handoff,
   onOpen,
   nested = false,
   withDay = false,
 }: {
   run: RoutineLineRun;
+  queued?: boolean;
   handoff?: RoutineHandoff;
   onOpen: (run: RoutineLineRun) => void;
   nested?: boolean;
@@ -4622,25 +4594,26 @@ function RoutineRunLine({
   const colorScheme = useResolvedAppearance();
   const { t } = useI18n();
   const { item } = run;
-  const state = item.finished?.status ?? "running";
-  const report = item.finished?.result.trim() || undefined;
+  const { state, report, subscribed, opensOnItsOwn } = routineLine(run, queued);
   const failed = state === "failed";
   const expands = Boolean(report || handoff);
   const [manualExpanded, setManualExpanded] = useState<boolean | null>(null);
-  const expanded = expands && (manualExpanded ?? Boolean(report && run.latest && failed));
+  const expanded = expands && (manualExpanded ?? opensOnItsOwn);
   const fromTap = useRef(false);
   // At accessibility text sizes the time and status move under the name.
   const stacked = PixelRatio.getFontScale() > 1.35;
   const symbolColor =
     state === "completed" ? tokens.success : failed ? tokens.destructive : tokens.mutedForeground;
   const statusLabel =
-    state === "running"
-      ? t("Running")
-      : state === "completed"
-        ? t("Completed")
-        : failed
-          ? t("Failed")
-          : t("Cancelled");
+    state === "queued"
+      ? t("Queued")
+      : state === "running"
+        ? t("Running")
+        : state === "completed"
+          ? t("Completed")
+          : failed
+            ? t("Failed")
+            : t("Cancelled");
   const statusStyle = {
     color: failed ? tokens.destructive : tokens.mutedForeground,
     ...nativeTextStyle("label", { weight: 500 }),
@@ -4667,7 +4640,13 @@ function RoutineRunLine({
     </>
   );
   const symbol = ROUTINE_STATE_SYMBOL[state];
-  const accessibilityLabel = [item.name, statusLabel, time, handoff?.label]
+  const accessibilityLabel = [
+    item.name,
+    statusLabel,
+    time,
+    subscribed ? t("Notifications on") : null,
+    handoff?.label,
+  ]
     .filter(Boolean)
     .join(", ");
   return (
@@ -4718,6 +4697,16 @@ function RoutineRunLine({
         {/* Fixed slots, kept when empty, so the columns line up down a run of routines. */}
         <View style={{ width: sizes.receipt, alignItems: "center" }}>
           {handoff && !expanded ? handoff.receipt : null}
+        </View>
+        <View style={{ width: 14, alignItems: "center" }}>
+          {subscribed ? (
+            <NativeSymbol
+              ios="bell"
+              android="notifications-outline"
+              size={14}
+              color={tokens.mutedForeground}
+            />
+          ) : null}
         </View>
         <View style={{ width: 14, alignItems: "center" }}>
           {expands ? <Disclosure open={expanded} /> : null}

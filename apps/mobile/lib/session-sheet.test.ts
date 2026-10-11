@@ -1,7 +1,7 @@
 import { SessionEntrySchema } from "@rakazo/contracts";
 import { projectThreadView } from "@rakazo/core";
 import { describe, expect, it } from "vitest";
-import { isViewedRunLine } from "./session-sheet";
+import { isViewedRunLine, originSession } from "./session-sheet";
 
 const entries = [
   {
@@ -42,5 +42,24 @@ describe("a session sheet", () => {
   it("leaves out the line of the routine run it shows, and keeps another run's", () => {
     expect(kinds("run_digest")).toEqual(["message"]);
     expect(kinds("run_other")).toEqual(["routine", "message"]);
+  });
+
+  it("names the routine an item rose from and opens that routine's session", () => {
+    const risen = SessionEntrySchema.parse({
+      id: "e_1",
+      seq: 1,
+      parentId: "e_0",
+      ts: "2026-10-10T09:00:01.000Z",
+      sessionId: "ses_main",
+      botId: "bot_ada",
+      runId: "run_digest",
+      type: "assistant.ask",
+      payload: { originSessionId: "ses_digest", block: { kind: "ask", text: "Pay them?" } },
+    });
+    const rows = projectThreadView([entries[0]!, risen]).rows;
+    expect(rows.map((row) => originSession(row.item))).toEqual([
+      null,
+      { sessionId: "ses_digest", title: "Digest" },
+    ]);
   });
 });
