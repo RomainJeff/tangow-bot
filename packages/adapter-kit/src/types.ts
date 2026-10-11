@@ -462,6 +462,8 @@ export interface SubagentLog {
     result: string;
     usage: { inputTokens: number; outputTokens: number };
   }): Promise<void>;
+  /** Answer the parent's call with `result` as an error when `finish` cannot close the log. */
+  abandon(result: string): Promise<void>;
 }
 
 /**

@@ -2097,6 +2097,18 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   if (!(error instanceof RunHistoryWriteError)) throw error;
                 }
               }),
+            abandon: (result) =>
+              inOrder(() =>
+                writeRunEntry({
+                  type: "tool.result",
+                  payload: {
+                    callId: call.callId,
+                    output: redactSecrets(result, runSecrets),
+                    isError: true,
+                    artifactIds: [],
+                  },
+                }),
+              ).then(() => undefined),
           };
         };
         let pendingProgress = "";

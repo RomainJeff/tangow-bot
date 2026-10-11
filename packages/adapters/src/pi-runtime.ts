@@ -1352,7 +1352,10 @@ async function executeSubagent(host: ToolHost, executionId: string, args: Record
   }
 }
 
-/** A helper whose log cannot close fails with that error, so the parent always gets a result. */
+/**
+ * A helper whose log cannot close fails with that error, so the parent always gets a result. When
+ * the log cannot close with the failure either, the parent's call still gets it as an error result.
+ */
 async function finishSubagent(
   log: SubagentLog,
   outcome: SubagentOutcome,
@@ -1367,8 +1370,12 @@ async function finishSubagent(
     );
     await log
       .finish({ status: failed.status, result: failed.toolResult, usage })
-      .catch((retryError: unknown) =>
-        getLogger().warn("subagent log could not close", { error: retryError }),
+      .catch((retryError: unknown) => {
+        getLogger().warn("subagent log could not close", { error: retryError });
+        return log.abandon(failed.toolResult);
+      })
+      .catch((abandonError: unknown) =>
+        getLogger().warn("subagent result could not be logged", { error: abandonError }),
       );
     return failed;
   }

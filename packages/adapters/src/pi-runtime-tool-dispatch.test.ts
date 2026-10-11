@@ -1087,6 +1087,7 @@ describe("Pi connector tool dispatch", () => {
           writes.push(`text ${text}`);
         }),
         finish,
+        abandon: vi.fn(async () => undefined),
       }));
       for await (const _event of new PiAgentRuntime().run(
         {
