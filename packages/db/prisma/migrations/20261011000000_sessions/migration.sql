@@ -1,6 +1,7 @@
 -- Session logs: sessions own identity and the seq counter, session_entries hold the entries.
 -- Every statement is guarded so a rerun converges, including on a database where some threads
 -- already have their main session.
+-- Locks threads and runs exclusively through the backfill and index builds; run it at a quiet moment.
 
 -- CreateTable
 CREATE TABLE IF NOT EXISTS "sessions" (
@@ -79,17 +80,23 @@ WHERE ("payload" ->> 'clientNonce') IS NOT NULL;
 
 -- AddForeignKey
 ALTER TABLE "sessions" DROP CONSTRAINT IF EXISTS "sessions_spaceId_fkey";
-ALTER TABLE "sessions" ADD CONSTRAINT "sessions_spaceId_fkey" FOREIGN KEY ("spaceId") REFERENCES "spaces"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "sessions" ADD CONSTRAINT "sessions_spaceId_fkey" FOREIGN KEY ("spaceId") REFERENCES "spaces"("id") ON DELETE CASCADE ON UPDATE CASCADE NOT VALID;
+ALTER TABLE "sessions" VALIDATE CONSTRAINT "sessions_spaceId_fkey";
 ALTER TABLE "sessions" DROP CONSTRAINT IF EXISTS "sessions_threadId_fkey";
-ALTER TABLE "sessions" ADD CONSTRAINT "sessions_threadId_fkey" FOREIGN KEY ("threadId") REFERENCES "threads"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "sessions" ADD CONSTRAINT "sessions_threadId_fkey" FOREIGN KEY ("threadId") REFERENCES "threads"("id") ON DELETE CASCADE ON UPDATE CASCADE NOT VALID;
+ALTER TABLE "sessions" VALIDATE CONSTRAINT "sessions_threadId_fkey";
 ALTER TABLE "sessions" DROP CONSTRAINT IF EXISTS "sessions_parentSessionId_fkey";
-ALTER TABLE "sessions" ADD CONSTRAINT "sessions_parentSessionId_fkey" FOREIGN KEY ("parentSessionId") REFERENCES "sessions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "sessions" ADD CONSTRAINT "sessions_parentSessionId_fkey" FOREIGN KEY ("parentSessionId") REFERENCES "sessions"("id") ON DELETE CASCADE ON UPDATE CASCADE NOT VALID;
+ALTER TABLE "sessions" VALIDATE CONSTRAINT "sessions_parentSessionId_fkey";
 ALTER TABLE "session_entries" DROP CONSTRAINT IF EXISTS "session_entries_sessionId_fkey";
-ALTER TABLE "session_entries" ADD CONSTRAINT "session_entries_sessionId_fkey" FOREIGN KEY ("sessionId") REFERENCES "sessions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "session_entries" ADD CONSTRAINT "session_entries_sessionId_fkey" FOREIGN KEY ("sessionId") REFERENCES "sessions"("id") ON DELETE CASCADE ON UPDATE CASCADE NOT VALID;
+ALTER TABLE "session_entries" VALIDATE CONSTRAINT "session_entries_sessionId_fkey";
 ALTER TABLE "runs" DROP CONSTRAINT IF EXISTS "runs_sessionId_fkey";
-ALTER TABLE "runs" ADD CONSTRAINT "runs_sessionId_fkey" FOREIGN KEY ("sessionId") REFERENCES "sessions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "runs" ADD CONSTRAINT "runs_sessionId_fkey" FOREIGN KEY ("sessionId") REFERENCES "sessions"("id") ON DELETE CASCADE ON UPDATE CASCADE NOT VALID;
+ALTER TABLE "runs" VALIDATE CONSTRAINT "runs_sessionId_fkey";
 ALTER TABLE "runs" DROP CONSTRAINT IF EXISTS "runs_parentRunId_fkey";
-ALTER TABLE "runs" ADD CONSTRAINT "runs_parentRunId_fkey" FOREIGN KEY ("parentRunId") REFERENCES "runs"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "runs" ADD CONSTRAINT "runs_parentRunId_fkey" FOREIGN KEY ("parentRunId") REFERENCES "runs"("id") ON DELETE SET NULL ON UPDATE CASCADE NOT VALID;
+ALTER TABLE "runs" VALIDATE CONSTRAINT "runs_parentRunId_fkey";
 
 -- Every thread gets its main session in the statement that inserts it, whichever writer that is.
 CREATE OR REPLACE FUNCTION create_thread_main_session() RETURNS trigger LANGUAGE plpgsql AS $$
