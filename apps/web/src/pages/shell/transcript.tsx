@@ -41,6 +41,8 @@ import type { RowContext } from "./thread-row";
 import { RowMarker, rowChrome, ThreadRowBody, WaitingLine } from "./thread-row";
 
 /** B1: hold this long on a touch bubble to open its action sheet. */
+/** How long a jump to a message holds off following the end while its smooth scroll gets going. */
+const JUMP_SETTLE_MS = 1500;
 const LONG_PRESS_MS = 450;
 /** The bubble settles (scale 0.96) this far into the hold, before the sheet opens. */
 const LONG_PRESS_SQUASH_MS = 150;
@@ -144,6 +146,7 @@ export const Transcript = memo(function Transcript({
     following.current = true;
   }
   const autoScrolling = useRef(false);
+  const jumpedAt = useRef(Number.NEGATIVE_INFINITY);
   const lastScrollTop = useRef<number | null>(null);
   const autoScrollTimer = useRef<number | undefined>(undefined);
   const jumpButtonRef = useRef<HTMLButtonElement>(null);
@@ -184,6 +187,7 @@ export const Transcript = memo(function Transcript({
       // A jump the person asked for leaves the end, so the next streamed row must not pull back.
       onJumpToMessage: (messageId) => {
         following.current = false;
+        jumpedAt.current = performance.now();
         onJumpToMessage(messageId);
       },
       onRefresh,
@@ -435,7 +439,10 @@ export const Transcript = memo(function Transcript({
           const nearEnd = transcriptIsNearEnd(event.currentTarget);
           setAtEnd(nearEnd);
           if (nearEnd) {
-            if (scrolledDown) following.current = true;
+            // While a jump's smooth scroll starts, a row landing at the end must not resume following.
+            if (scrolledDown && performance.now() - jumpedAt.current > JUMP_SETTLE_MS) {
+              following.current = true;
+            }
             if (autoScrolling.current) {
               autoScrolling.current = false;
               window.clearTimeout(autoScrollTimer.current);

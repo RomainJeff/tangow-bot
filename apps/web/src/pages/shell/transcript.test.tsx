@@ -153,6 +153,31 @@ describe("the transcript", () => {
     ).toBe("str-06");
   });
 
+  it("keeps a jump to a reply's parent from being pulled back to the end by the next row", async () => {
+    const following = { current: true };
+    const scrollRef = createRef<HTMLDivElement>();
+    const snaps = vi.fn();
+    Element.prototype.scrollTo = snaps;
+    await renderThread(9, { scrollRef, followingRef: following });
+    const preview = document.querySelector<HTMLElement>('[data-testid="reply-parent-preview"]');
+    await act(async () => preview?.click());
+    expect(following.current).toBe(false);
+
+    // The smooth scroll has not moved yet when a row lands: the browser reports a step down near the end.
+    const element = scrollRef.current!;
+    Object.defineProperty(element, "scrollHeight", { configurable: true, value: 1000 });
+    Object.defineProperty(element, "clientHeight", { configurable: true, value: 400 });
+    for (const top of [590, 595]) {
+      Object.defineProperty(element, "scrollTop", { configurable: true, value: top });
+      await act(async () => element.dispatchEvent(new Event("scroll")));
+    }
+    snaps.mockClear();
+    await renderThread(11, { scrollRef, followingRef: following });
+
+    expect(following.current).toBe(false);
+    expect(snaps).not.toHaveBeenCalled();
+  });
+
   it("draws nothing for an effect that carries no card", async () => {
     await renderThread([
       ...fixture.slice(0, 1),
