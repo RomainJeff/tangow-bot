@@ -36,7 +36,7 @@ export function Group({
   label?: string;
   /** A short action on the label's line, such as "Add". */
   trailing?: ReactNode;
-  children: ReactNode;
+  children?: ReactNode;
 }) {
   const styles = useThemedStyles(createKitStyles);
   return (
@@ -74,16 +74,20 @@ export function GroupAction({
   label,
   onPress,
   accessibilityLabel,
+  disabled,
 }: {
   label: string;
   onPress: () => void;
   accessibilityLabel?: string;
+  disabled?: boolean;
 }) {
   const styles = useThemedStyles(createKitStyles);
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
       hitSlop={10}
       onPress={onPress}
     >

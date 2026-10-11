@@ -846,4 +846,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Add a schedule, webhook, GitHub, or message trigger": "添加计划、Webhook、GitHub 或消息触发器",
   "Add a run time for this one-shot.": "为此一次性任务添加运行时间。",
   "Run time must be in the future.": "运行时间必须是将来的时间。",
+  "Test run": "测试运行",
+  "Running…": "正在运行…",
+  "Could not run routine": "无法运行例行任务",
 };
