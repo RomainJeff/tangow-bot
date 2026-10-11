@@ -63,19 +63,24 @@ export function projectInferenceTurns(
   const targetOf = (entryId: EntryId) =>
     targets.get(entryId) ?? resolvedTarget(options.resolveReplyTarget?.(entryId));
   return segments.flatMap((segment) => {
+    let turn: Turn | undefined;
     if (segment.type !== "run.message" || !cancelled.has(segment.runId)) {
-      return renderTurn(segment, options, targetOf) ?? [];
+      turn = renderTurn(segment, options, targetOf);
+    } else {
+      const blocks = segment.blocks.filter((block) => block.kind === "steps");
+      if (blocks.length > 0) turn = renderTurn({ ...segment, blocks }, options, targetOf);
     }
-    const blocks = segment.blocks.filter((block) => block.kind === "steps");
-    return blocks.length > 0 ? (renderTurn({ ...segment, blocks }, options, targetOf) ?? []) : [];
+    return turn ? { id: segment.id, ...turn } : [];
   });
 }
+
+type Turn = Omit<AgentHistoryTurn, "id">;
 
 function renderTurn(
   segment: ReturnType<typeof foldRuns>[number],
   options: InferenceProjectionOptions,
   targetOf: (entryId: EntryId) => ReplyTarget | undefined,
-): AgentHistoryTurn | undefined {
+): Turn | undefined {
   const { botNames } = options;
   const nameOf = (botId: string) => botNames?.get(botId) ?? botId;
   switch (segment.type) {
@@ -148,7 +153,7 @@ function speakerTurn(
   content: string,
   options: InferenceProjectionOptions,
   parts?: AgentHistoryTurnPart[],
-): AgentHistoryTurn {
+): Turn {
   if (authorBotId !== options.selfBotId) {
     const name = options.botNames?.get(authorBotId) ?? "";
     return { role: "user", content: renderBotMessageBlock(name, content) };

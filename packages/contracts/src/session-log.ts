@@ -284,6 +284,8 @@ export function isUiEntry(entry: SessionEntry): entry is UiEntry {
 
 /** A turn of the history the runtime replays, in the shape `AgentRunRequest.history` takes. */
 export type AgentHistoryTurn = {
+  /** The entry the turn renders, so the runtime can drop the turn it already holds as its prompt. */
+  id?: string;
   role: "user" | "assistant";
   content: string;
   /** The bot's own turns that ran tools, as ordered text and tool-call parts. */
