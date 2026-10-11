@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SessionEntrySchema } from "./index.js";
+import { isRunTrace, SessionEntrySchema } from "./index.js";
 
 const envelope = {
   id: "e-3",
@@ -90,5 +90,44 @@ describe("SessionEntrySchema", () => {
     ],
   ])("rejects %s", (_, entry, expected) => {
     expect(issues(entry)).toEqual(expected);
+  });
+});
+
+describe("isRunTrace", () => {
+  const approval = {
+    kind: "mcp_approval",
+    name: "Press",
+    serverId: "mcp_press",
+    transport: "streamable_http",
+    endpoint: null,
+    needsOAuth: false,
+  } as const;
+
+  it.each<[string, boolean, Parameters<typeof isRunTrace>[0]]>([
+    ["a tool call", true, { type: "tool.call", payload: { callId: "c", name: "n", input: "{}" } }],
+    [
+      "a chart",
+      true,
+      {
+        type: "assistant.text",
+        payload: { blocks: [{ kind: "chart", name: "Mentions", spec: {}, data: [] }] },
+      },
+    ],
+    ["an MCP approval card", false, { type: "assistant.text", payload: { blocks: [approval] } }],
+    [
+      "text with an MCP approval card",
+      false,
+      {
+        type: "assistant.text",
+        payload: { blocks: [{ kind: "text", text: "Approve?" }, approval] },
+      },
+    ],
+    [
+      "a question",
+      false,
+      { type: "assistant.ask", payload: { block: { kind: "ask", text: "Which?" } } },
+    ],
+  ])("counts %s as trace: %s", (_, trace, entry) => {
+    expect(isRunTrace(entry)).toBe(trace);
   });
 });

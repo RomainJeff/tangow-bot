@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { SessionEntryDraft } from "@rakazo/adapter-kit";
-import type { SessionEntry } from "@rakazo/contracts";
+import type { MessageBlock, SessionEntry } from "@rakazo/contracts";
 import { EntryId, EntrySeq, SessionId } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
 import {
@@ -574,6 +574,43 @@ describe("session log writers", () => {
       "assistant.ask",
       "assistant.choice",
       "user.message",
+    ]);
+  });
+
+  it("raises a routine's MCP approval card to the thread's session and keeps its chart", async () => {
+    const { prisma } = database;
+    const franklin = await seedBot(prisma, "Franklin");
+    const { run, routineSessionId } = await routineRun(prisma, franklin, "Veille presse");
+    const approval = {
+      kind: "mcp_approval",
+      name: "Press",
+      serverId: "mcp_press",
+      transport: "streamable_http",
+      endpoint: "https://mcp.example.test",
+      needsOAuth: true,
+    } as const;
+    const chart: MessageBlock = { kind: "chart", name: "Mentions", spec: {}, data: [] };
+
+    await prisma.$transaction((tx) =>
+      appendRunBlocksInTransaction(
+        tx,
+        { id: EntryId.parse(randomUUID()), runId: run.id, botId: franklin.bot.id },
+        [approval, chart],
+      ),
+    );
+
+    const blocksOf = async (sessionId: SessionId) =>
+      (await log.readTail(sessionId)).map(({ type, payload }) => ({
+        type,
+        blocks: "blocks" in payload ? payload.blocks : undefined,
+      }));
+    expect(await blocksOf(routineSessionId)).toEqual([
+      { type: "run.started", blocks: undefined },
+      { type: "assistant.text", blocks: [chart] },
+    ]);
+    expect(await blocksOf(franklin.sessionId)).toEqual([
+      { type: "routine.started", blocks: undefined },
+      { type: "assistant.text", blocks: [approval] },
     ]);
   });
 

@@ -9,7 +9,7 @@ import type {
   SessionEntryOf,
   SessionEntryType,
 } from "@rakazo/contracts";
-import { RUN_TRACE_TYPES, SessionEntrySchema, SessionId } from "@rakazo/contracts";
+import { isRunTrace, SessionEntrySchema, SessionId } from "@rakazo/contracts";
 import { ACTIVE_RUN_STATUSES, SessionEntryDecodeError, sanitizeJsonValue } from "@rakazo/core";
 import { Prisma } from "./client.js";
 import { RunHistoryWriteError } from "./messages.js";
@@ -106,8 +106,9 @@ function transactionLog(tx: Prisma.TransactionClient): TransactionLog {
 
 /**
  * The one rule for which session an entry lands in. A child session, a routine's or a helper's at
- * any depth, keeps its run's trace; whatever else is addressed to it, an ask, an approval, the
- * person's answer, rises to its thread's main session, the top-most ancestor. Every append locks
+ * any depth, keeps its run's trace; whatever else is addressed to it, an ask, an approval, a card
+ * the person must act on, the person's answer, rises to its thread's main session, the top-most
+ * ancestor. Every append locks
  * that thread before any session row, in the mode every thread writer uses, so neither a message
  * write nor a stop, which takes the thread, then the run, then the session, can deadlock with it.
  */
@@ -135,7 +136,7 @@ async function routeOf(tx: Prisma.TransactionClient, draft: SessionEntryDraft): 
     log.lineageOf.set(draft.sessionId, lineage);
   }
   if (!lineage.child) return { sessionId: draft.sessionId, threadId: lineage.threadId };
-  return RUN_TRACE_TYPES.has(draft.type)
+  return isRunTrace(draft)
     ? { sessionId: draft.sessionId, threadId: null }
     : { sessionId: lineage.mainSessionId, threadId: lineage.threadId };
 }

@@ -302,7 +302,7 @@ export type UiEntry = SessionEntryOf<
 >;
 
 /**
- * What a run writes about its own work. A routine session keeps only these; anything else its run
+ * What a run writes about its own work. A child session keeps only these; anything else its run
  * writes is conversation with the person and lands in the thread's main session.
  */
 export const RUN_TRACE_TYPES: ReadonlySet<SessionEntryType> = new Set([
@@ -314,6 +314,26 @@ export const RUN_TRACE_TYPES: ReadonlySet<SessionEntryType> = new Set([
   "tool.result",
   "subagent",
 ] satisfies SessionEntryType[]);
+
+/** The block kinds that need the person: a card they must act on before anything happens. */
+export const BLOCK_KINDS_NEEDING_THE_PERSON: ReadonlySet<MessageBlock["kind"]> = new Set([
+  "mcp_approval",
+] satisfies MessageBlock["kind"][]);
+
+type EntryBody = {
+  [T in SessionEntryType]: Pick<SessionEntryOf<T>, "type" | "payload">;
+}[SessionEntryType];
+
+/**
+ * Whether a child session keeps the entry: one of its run's trace types, except an
+ * `assistant.text` holding a block that needs the person, which goes to the person whole.
+ */
+export function isRunTrace(entry: EntryBody): boolean {
+  if (entry.type === "assistant.text") {
+    return !entry.payload.blocks.some((block) => BLOCK_KINDS_NEEDING_THE_PERSON.has(block.kind));
+  }
+  return RUN_TRACE_TYPES.has(entry.type);
+}
 
 export function isInferenceEntry(entry: SessionEntry): entry is InferenceEntry {
   return ENTRY_AUDIENCE[entry.type].inference !== "no";
