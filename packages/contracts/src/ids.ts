@@ -3,6 +3,9 @@ import * as z from "zod";
 export const Id = z.string().min(1);
 export const IsoDate = z.string().datetime({ offset: true });
 
+/** The id skills carried while they kept versions; skill lines written then still hold it. */
+export const SkillUidSchema = z.string().regex(/^[0-9a-f]{32}$/);
+
 export const ActorSchema = z.object({
   userId: Id,
   spaceId: Id,

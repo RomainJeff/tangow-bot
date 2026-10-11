@@ -318,6 +318,7 @@ const RUN_BLOCK_ENTRY: {
   bot_message_sent: null,
   bot_message_received: null,
   routine_run: null,
+  skill_source: null,
 };
 
 /**

@@ -2,8 +2,8 @@ import type { SearchHit } from "@rakazo/contracts";
 
 export function mobileSearchDestination(hit: SearchHit):
   | {
-      pathname: "/routine";
-      params: { botId: string; botName: string; routineId: string };
+      pathname: "/bot-routine";
+      params: { botId: string; routineId: string };
     }
   | {
       pathname: "/group-thread";
@@ -14,10 +14,7 @@ export function mobileSearchDestination(hit: SearchHit):
       params: { botId: string; name: string; messageId?: string };
     } {
   if (hit.routineId) {
-    return {
-      pathname: "/routine",
-      params: { botId: hit.botId!, botName: hit.botName!, routineId: hit.routineId },
-    };
+    return { pathname: "/bot-routine", params: { botId: hit.botId!, routineId: hit.routineId } };
   }
   if (hit.groupId) {
     return {

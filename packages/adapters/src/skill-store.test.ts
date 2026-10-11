@@ -1,4 +1,14 @@
-import { mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import {
+  link,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  stat,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { SKILL_BUNDLE_MAX_BYTES, SKILL_BUNDLE_MAX_ENTRIES } from "@rakazo/contracts";
@@ -118,6 +128,22 @@ describe("skill store", () => {
     expect(isExists(new Error("nope"))).toBe(false);
   });
 
+  it("skips a SKILL.md that is a link when listing", async () => {
+    const root = await tmpRoot();
+    const target = path.join(root, "elsewhere.md");
+    await writeFile(target, md("Sneaky"));
+    await mkdir(path.join(root, "sneaky"));
+    await symlink(target, path.join(root, "sneaky", "SKILL.md"));
+    expect(await listUserSkills(root)).toEqual([]);
+  });
+
+  it("lists a skill whose SKILL.md is hard-linked", async () => {
+    const root = await tmpRoot();
+    await writeUserSkill(root, { name: "Deploy", content: md("Deploy") }, "create");
+    await link(path.join(root, "deploy", "SKILL.md"), path.join(root, "snapshot.md"));
+    expect((await listUserSkills(root)).map((s) => s.id)).toEqual(["user:deploy"]);
+  });
+
   it("skips directories without a valid SKILL.md", async () => {
     const root = await tmpRoot();
     await writeUserSkill(root, { name: "Good", content: md("Good") }, "create");
@@ -136,10 +162,15 @@ describe("skill store", () => {
     for (const root of [a, b, other]) {
       await writeUserSkill(root, { name: "Alpha", content: md("Alpha") }, "create");
     }
+    const history = (userId: string) => path.join(dataDir, "skill-history", "ws-1", userId);
+    for (const userId of ["user-1", "user-2"]) {
+      await mkdir(path.join(history(userId), "skills"), { recursive: true });
+    }
     await removeUserSkillDirs(dataDir, "user-1");
     expect(await listUserSkills(a)).toEqual([]);
     expect(await listUserSkills(b)).toEqual([]);
     expect((await listUserSkills(other)).map((s) => s.name)).toEqual(["Alpha"]);
+    expect(await readdir(path.join(dataDir, "skill-history", "ws-1"))).toEqual(["user-2"]);
     await expect(
       removeUserSkillDirs(path.join(dataDir, "nope"), "user-1"),
     ).resolves.toBeUndefined();
@@ -266,13 +297,14 @@ describe("skill store", () => {
       executable,
     });
 
-    it("writes SKILL.md and nested files, keeping the executable bit", async () => {
+    it("writes SKILL.md and nested files, keeping the executable bit under scripts/", async () => {
       const root = await tmpRoot();
       await writeUserSkillFiles(
         root,
         [
           file("SKILL.md", md("Deploy")),
           file("scripts/run.sh", "echo hi", true),
+          file("tools/run.sh", "echo hi", true),
           file("references/api/notes.md", "n"),
         ],
         resolve,
@@ -285,6 +317,7 @@ describe("skill store", () => {
       expect(await readFile(path.join(dir, "references/api/notes.md"), "utf8")).toBe("n");
       expect((await stat(path.join(dir, "scripts/run.sh"))).mode & 0o111).toBe(0o111);
       expect((await stat(path.join(dir, "references/api/notes.md"))).mode & 0o111).toBe(0);
+      expect((await stat(path.join(dir, "tools/run.sh"))).mode & 0o111).toBe(0);
       expect(await readdir(root)).toEqual(["deploy"]);
     });
 
@@ -339,6 +372,17 @@ describe("skill store", () => {
       expect(isExists(error)).toBe(true);
       expect(await readdir(path.join(root, "deploy"))).toEqual(["SKILL.md"]);
       expect(await readdir(root)).toEqual(["deploy"]);
+    });
+
+    it("takes over the empty folder a write cut short left behind", async () => {
+      const root = await tmpRoot();
+      await mkdir(path.join(root, "deploy"));
+      await writeUserSkillFiles(
+        root,
+        [file("SKILL.md", md("Deploy")), file("x.txt", "x")],
+        resolve,
+      );
+      expect((await readdir(path.join(root, "deploy"))).sort()).toEqual(["SKILL.md", "x.txt"]);
     });
 
     it("rejects a folder without SKILL.md and cleans up", async () => {

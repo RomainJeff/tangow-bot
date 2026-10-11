@@ -26,6 +26,7 @@ import type {
   MemoryProviderResolver,
   PiOAuthLogins,
   RemoteConnectorDependencies,
+  SkillOwnerLock,
 } from "@rakazo/adapters";
 import {
   acquireComputerExecutionLease,
@@ -509,6 +510,8 @@ export interface RouterDeps {
   /** Test seams of the link preview reader. */
   linkPreview?: LinkPreviewApiDeps["linkPreview"];
   dataDir: string;
+  /** Serializes skill writes per owner with the worker's. */
+  skillLock: SkillOwnerLock;
   /** Present when the external messaging surface is enabled. */
   messaging?: { enabled: boolean; providers: string[]; openSignup: boolean };
   env: {
@@ -562,7 +565,7 @@ export function createRouter(deps: RouterDeps) {
     home: deps.home,
     dataDir: deps.dataDir,
   });
-  const agentSkills = createAgentSkillsService(deps.prisma, deps.dataDir);
+  const agentSkills = createAgentSkillsService(deps.prisma, deps.dataDir, deps.skillLock);
   const marketplaces = createMarketplacesService({ prisma: deps.prisma, dataDir: deps.dataDir });
 
   const authed = os.use(async ({ context, next }) => {
@@ -1068,25 +1071,28 @@ export function createRouter(deps: RouterDeps) {
             })),
           });
         }
-        // Per-bot skill overrides travel with the bot, like MCP assignments.
-        const skillAccess = await deps.prisma.botSkill.findMany({
-          where: {
-            botId: source.id,
-            spaceId: context.actor.spaceId,
-            userId: context.actor.userId,
-          },
-        });
-        if (skillAccess.length) {
-          await deps.prisma.botSkill.createMany({
-            data: skillAccess.map((row) => ({
+        // Per-bot skill overrides travel with the bot, like MCP assignments, copied under the
+        // owner's skill lock so no skill write lands between the read and the copy.
+        await deps.skillLock.run(context.actor, async () => {
+          const skillAccess = await deps.prisma.botSkill.findMany({
+            where: {
+              botId: source.id,
               spaceId: context.actor.spaceId,
               userId: context.actor.userId,
-              botId: duplicate.id,
-              skillKey: row.skillKey,
-              enabled: row.enabled,
-            })),
+            },
           });
-        }
+          if (skillAccess.length) {
+            await deps.prisma.botSkill.createMany({
+              data: skillAccess.map((row) => ({
+                spaceId: context.actor.spaceId,
+                userId: context.actor.userId,
+                botId: duplicate.id,
+                skillKey: row.skillKey,
+                enabled: row.enabled,
+              })),
+            });
+          }
+        });
         return duplicate;
       }),
       reorder: authed.bots.reorder.handler(async ({ context, input }) => {
@@ -2533,7 +2539,9 @@ export function createRouter(deps: RouterDeps) {
         if (!existing) throw new IsolationError();
         const bot = await repos.getBot(context.actor, existing.botId);
         const { routineId: _routineId, ...change } = input;
-        const updated = await updateRoutine(deps, existing, change, {
+        // A prompt the owner saves is theirs, whoever wrote it first.
+        const owned = change.prompt === undefined ? change : { ...change, untrustedPrompt: false };
+        const updated = await updateRoutine(deps, existing, owned, {
           spaceId: context.actor.spaceId,
           botId: bot.id,
           threadId: bot.thread?.id ?? null,

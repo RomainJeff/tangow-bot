@@ -13,7 +13,7 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
-#: src/pages/shell/sidebar.tsx:534
+#: src/pages/shell/sidebar.tsx:539
 msgid " (unread)"
 msgstr " (ungelesen)"
 
@@ -32,18 +32,18 @@ msgid "{0, plural, one {# routine} other {# routines}}"
 msgstr "{0, plural, one {# Routine} other {# Routinen}}"
 
 #. placeholder {0}: runs.length
-#: src/pages/bot-page/BotActivity.tsx:565
+#: src/pages/bot-page/BotActivity.tsx:525
 #: src/pages/shell/routine-run-line.tsx:335
 msgid "{0, plural, one {# run} other {# runs}}"
 msgstr ""
 
 #. placeholder {0}: file.name
-#: src/pages/Shell.tsx:1914
+#: src/pages/Shell.tsx:1879
 msgid "{0} (max {ATTACHMENT_MAX_COUNT} attachments)"
 msgstr "{0} (maximal {ATTACHMENT_MAX_COUNT} Anhänge)"
 
 #. placeholder {0}: file.name
-#: src/pages/Shell.tsx:1918
+#: src/pages/Shell.tsx:1883
 msgid "{0} (over 10 MiB)"
 msgstr "{0} (über 10 MiB)"
 
@@ -110,7 +110,7 @@ msgid "{0} will still respond to direct mentions."
 msgstr ""
 
 #. placeholder {0}: active.name
-#: src/pages/shell/side-panel.tsx:230
+#: src/pages/shell/side-panel.tsx:233
 msgid "{0}'s screen"
 msgstr "{0}s Bildschirm"
 
@@ -118,7 +118,7 @@ msgstr "{0}s Bildschirm"
 msgid "{botName} is speaking"
 msgstr ""
 
-#: src/pages/shell/side-panel.tsx:303
+#: src/pages/shell/side-panel.tsx:306
 msgid "{botName}’s computer"
 msgstr "Computer von {botName}"
 
@@ -134,7 +134,7 @@ msgstr "{count} · nächste {next}"
 msgid "{days}d ago"
 msgstr "vor {days} T."
 
-#: src/pages/shell/message-view.tsx:323
+#: src/pages/shell/message-view.tsx:367
 msgid "{from} handed the thread to {to}"
 msgstr ""
 
@@ -146,7 +146,7 @@ msgstr "vor {hours} Std."
 msgid "{minutes}m ago"
 msgstr "vor {minutes} Min."
 
-#: src/pages/bot-page/BotActivity.tsx:278
+#: src/pages/bot-page/BotActivity.tsx:282
 msgid "{name} created"
 msgstr "{name} erstellt"
 
@@ -198,12 +198,12 @@ msgstr ""
 msgid "{what} · paused"
 msgstr "{what} · pausiert"
 
-#: src/pages/shell/transcript.tsx:234
+#: src/pages/shell/transcript.tsx:238
 msgid "{workingBotName} is working"
 msgstr "{workingBotName} arbeitet"
 
 #. placeholder {0}: mention.name
-#: src/pages/shell/composer.tsx:763
+#: src/pages/shell/composer.tsx:754
 msgid "@{0}"
 msgstr "@{0}"
 
@@ -253,21 +253,21 @@ msgstr "Aktionsbestätigungen"
 #. placeholder {0}: bot.name
 #. placeholder {0}: group.spaceName
 #. placeholder {0}: sectionMenu.section.name
-#: src/pages/bot-page/BotPage.tsx:237
+#: src/pages/bot-page/BotPage.tsx:343
 #: src/pages/BotContextMenu.tsx:86
-#: src/pages/Shell.tsx:3213
-#: src/pages/shell/sidebar.tsx:405
+#: src/pages/Shell.tsx:3202
+#: src/pages/shell/sidebar.tsx:410
 msgid "Actions for {0}"
 msgstr "Aktionen für {0}"
 
-#: src/pages/Shell.tsx:3087
+#: src/pages/Shell.tsx:3076
 msgid "Actions for space"
 msgstr ""
 
-#: src/pages/bot-page/RoutineCreateForm.tsx:124
-#: src/pages/bot-page/RoutineCreateForm.tsx:126
-#: src/pages/bot-page/RoutineDetail.tsx:125
-#: src/pages/bot-page/RoutinesTab.tsx:102
+#: src/pages/bot-page/RoutineCreateForm.tsx:116
+#: src/pages/bot-page/RoutineCreateForm.tsx:118
+#: src/pages/bot-page/RoutineDetail.tsx:127
+#: src/pages/bot-page/RoutinesTab.tsx:107
 #: src/pages/KnowledgeSection.tsx:446
 msgid "Active"
 msgstr "Aktiv"
@@ -277,15 +277,20 @@ msgid "Active model"
 msgstr "Aktives Modell"
 
 #. placeholder {0}: routine.name
-#: src/pages/bot-page/RoutinesTab.tsx:123
+#: src/pages/bot-page/RoutinesTab.tsx:128
 msgid "Active: {0}"
 msgstr "Aktiv: {0}"
 
-#: src/pages/bot-page/BotPage.tsx:85
-#: src/pages/shell/sidebar.tsx:212
-#: src/pages/shell/sidebar.tsx:214
+#: src/pages/bot-page/BotPage.tsx:98
+#: src/pages/bot-page/RoutineDetail.tsx:191
+#: src/pages/shell/sidebar.tsx:217
+#: src/pages/shell/sidebar.tsx:219
 msgid "Activity"
 msgstr "Aktivität"
+
+#: src/pages/bot-page/BotPage.tsx:268
+msgid "Activity, last run failed"
+msgstr "Aktivität, letzter Lauf fehlgeschlagen"
 
 #: src/pages/PluginsOverlay.tsx:481
 #: src/pages/PluginsOverlay.tsx:996
@@ -379,7 +384,7 @@ msgstr "Zur Routine hinzufügen"
 msgid "Add Treg"
 msgstr "Treg hinzufügen"
 
-#: src/pages/bot-page/RoutineTriggers.tsx:109
+#: src/pages/bot-page/RoutineTriggers.tsx:95
 msgid "Add trigger"
 msgstr "Trigger hinzufügen"
 
@@ -405,7 +410,7 @@ msgstr "Wird hinzugefügt…"
 msgid "Advanced"
 msgstr "Erweitert"
 
-#: src/pages/bot-page/RoutineTriggers.tsx:97
+#: src/pages/bot-page/RoutineTriggers.tsx:83
 msgid "Advanced..."
 msgstr "Erweitert …"
 
@@ -465,7 +470,7 @@ msgstr ""
 msgid "Allowed once"
 msgstr "Einmal erlaubt"
 
-#: src/pages/Auth.tsx:228
+#: src/pages/Auth.tsx:230
 msgid "Already have an account?"
 msgstr "Du hast bereits ein Konto?"
 
@@ -531,8 +536,8 @@ msgstr "API-Schlüssel-Header"
 
 #: src/pages/AccountSettingsOverlay.tsx:112
 #: src/pages/AccountSettingsOverlay.tsx:542
-#: src/pages/bot-page/BotHero.tsx:117
-#: src/pages/bot-page/BotHero.tsx:134
+#: src/pages/bot-page/BotHero.tsx:123
+#: src/pages/bot-page/BotHero.tsx:143
 msgid "Appearance"
 msgstr "Erscheinungsbild"
 
@@ -564,20 +569,20 @@ msgstr "Bestätige es im Chat oder sag Nein, um abzubrechen."
 msgid "Approve this server to let your agent use its tools."
 msgstr "Genehmige diesen Server, damit dein Agent seine Tools verwenden kann."
 
-#: src/pages/bot-page/BotPage.tsx:258
+#: src/pages/bot-page/BotPage.tsx:372
 #: src/pages/BotContextMenu.tsx:146
 msgid "Archive"
 msgstr "Archivieren"
 
-#: src/pages/shell/message-view.tsx:413
+#: src/pages/shell/message-view.tsx:457
 msgid "archived"
 msgstr "archiviert"
 
-#: src/pages/shell/sidebar.tsx:574
+#: src/pages/shell/sidebar.tsx:579
 msgid "Archived"
 msgstr "Archiviert"
 
-#: src/pages/shell/message-view.tsx:424
+#: src/pages/shell/message-view.tsx:468
 msgid "Archived. Chat, memory, and files kept."
 msgstr "Archiviert. Chat, Erinnerungen und Dateien bleiben erhalten."
 
@@ -604,10 +609,10 @@ msgstr "Vor {0}-Connector nachfragen"
 msgid "Ask before email actions"
 msgstr "Vor E-Mail-Aktionen nachfragen"
 
-#: src/pages/bot-page/RoutineCreateForm.tsx:132
-#: src/pages/bot-page/RoutineCreateForm.tsx:134
-#: src/pages/bot-page/RoutineDetail.tsx:164
-#: src/pages/bot-page/RoutineDetail.tsx:168
+#: src/pages/bot-page/RoutineCreateForm.tsx:124
+#: src/pages/bot-page/RoutineCreateForm.tsx:126
+#: src/pages/bot-page/RoutineDetail.tsx:165
+#: src/pages/bot-page/RoutineDetail.tsx:169
 msgid "Ask before every action"
 msgstr "Vor jeder Aktion nachfragen"
 
@@ -638,11 +643,11 @@ msgstr "um {0}"
 msgid "at {timeSelect}"
 msgstr "um {timeSelect}"
 
-#: src/pages/shell/composer.tsx:894
+#: src/pages/shell/composer.tsx:885
 msgid "Attach file"
 msgstr "Datei anhängen"
 
-#: src/pages/shell/message-view.tsx:105
+#: src/pages/shell/message-view.tsx:109
 msgid "Attachment"
 msgstr "Anhang"
 
@@ -664,7 +669,7 @@ msgstr "Autorisieren"
 msgid "Authorize this server so agents can use its tools. A popup opens."
 msgstr "Autorisiere diesen Server, damit Agents seine Tools nutzen können. Ein Pop-up öffnet sich."
 
-#: src/pages/bot-page/BotHero.tsx:151
+#: src/pages/bot-page/BotHero.tsx:160
 msgid "Auto"
 msgstr "Automatisch"
 
@@ -676,7 +681,7 @@ msgstr ""
 msgid "Automated senders will appear after they post here."
 msgstr ""
 
-#: src/pages/bot-page/BotHero.tsx:142
+#: src/pages/bot-page/BotHero.tsx:151
 msgid "Automatic shape"
 msgstr "Automatische Form"
 
@@ -694,9 +699,9 @@ msgstr "Avatare"
 msgid "Back"
 msgstr "Zurück"
 
-#: src/pages/Auth.tsx:126
-#: src/pages/Auth.tsx:235
-#: src/pages/Auth.tsx:320
+#: src/pages/Auth.tsx:123
+#: src/pages/Auth.tsx:237
+#: src/pages/Auth.tsx:322
 msgid "Back to sign in"
 msgstr "Zurück zur Anmeldung"
 
@@ -710,24 +715,24 @@ msgstr "Basis-URL"
 msgid "Bearer token"
 msgstr "Bearer-Token"
 
-#: src/pages/shell/side-panel.tsx:295
+#: src/pages/shell/side-panel.tsx:298
 msgid "Booting live desktop…"
 msgstr "Live-Desktop wird gestartet…"
 
 #. placeholder {0}: active?.name
-#: src/pages/shell/side-panel.tsx:353
+#: src/pages/shell/side-panel.tsx:356
 msgid "Booting up {0}’s computer"
 msgstr "Computer von {0} wird gestartet"
 
-#: src/pages/shell/message-view.tsx:311
-#: src/pages/shell/message-view.tsx:312
-#: src/pages/shell/message-view.tsx:417
+#: src/pages/shell/message-view.tsx:355
+#: src/pages/shell/message-view.tsx:356
+#: src/pages/shell/message-view.tsx:461
 msgid "bot"
 msgstr "Bot"
 
 #: src/pages/IntegrationSetup.tsx:51
-#: src/pages/Shell.tsx:1683
-#: src/pages/shell/message-view.tsx:214
+#: src/pages/Shell.tsx:1648
+#: src/pages/shell/message-view.tsx:227
 msgid "Bot"
 msgstr "Bot"
 
@@ -736,16 +741,16 @@ msgstr "Bot"
 msgid "Bot"
 msgstr ""
 
-#: src/pages/shell/side-panel.tsx:480
+#: src/pages/shell/side-panel.tsx:483
 msgid "Bot screen"
 msgstr "Bot-Bildschirm"
 
-#: src/pages/shell/side-panel.tsx:195
+#: src/pages/shell/side-panel.tsx:198
 msgid "Bot screen preview"
 msgstr "Bot-Bildschirmvorschau"
 
-#: src/pages/Shell.tsx:3024
-#: src/pages/shell/composer.tsx:1178
+#: src/pages/Shell.tsx:3013
+#: src/pages/shell/composer.tsx:1172
 #: src/pages/shell/thread-header.tsx:154
 #: src/pages/shell/thread-header.tsx:155
 msgid "Bot settings"
@@ -759,7 +764,7 @@ msgstr "Zu verknüpfender Bot"
 msgid "Bots act without asking by default. Add an exception only when you want to review a type of action first."
 msgstr "Bots handeln standardmäßig ohne Nachfrage. Füge nur dann eine Ausnahme hinzu, wenn du eine Aktionsart zuerst prüfen möchtest."
 
-#: src/pages/shell/transcript.tsx:235
+#: src/pages/shell/transcript.tsx:239
 msgid "Bots are working"
 msgstr "Bots arbeiten"
 
@@ -785,10 +790,10 @@ msgstr "Server nicht erreichbar."
 #: src/components/ComputerUpdateProgress.tsx:233
 #: src/components/teach/TeachComputerOverlay.tsx:274
 #: src/lib/approval-labels.ts:14
-#: src/pages/bot-page/page-kit.tsx:102
-#: src/pages/bot-page/RoutineTriggers.tsx:329
-#: src/pages/KnowledgeSection.tsx:175
-#: src/pages/KnowledgeSection.tsx:610
+#: src/pages/bot-page/page-kit.tsx:149
+#: src/pages/bot-page/RoutineTriggers.tsx:296
+#: src/pages/KnowledgeSection.tsx:226
+#: src/pages/KnowledgeSection.tsx:684
 #: src/pages/PluginsOverlay.tsx:1168
 #: src/pages/shell/dialogs.tsx:88
 #: src/pages/shell/dialogs.tsx:199
@@ -799,11 +804,11 @@ msgstr "Server nicht erreichbar."
 msgid "Cancel"
 msgstr "Abbrechen"
 
-#: src/pages/shell/composer.tsx:1008
+#: src/pages/shell/composer.tsx:1002
 msgid "Cancel dictation"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:731
+#: src/pages/shell/composer.tsx:722
 msgid "Cancel edit"
 msgstr "Bearbeitung abbrechen"
 
@@ -815,13 +820,13 @@ msgstr "Neuen Bot abbrechen"
 msgid "Cancel new group"
 msgstr "Neue Gruppe abbrechen"
 
-#: src/pages/shell/composer.tsx:712
+#: src/pages/shell/composer.tsx:703
 msgid "Cancel reply"
 msgstr "Antwort abbrechen"
 
 #: src/components/AskCard.tsx:48
 #: src/pages/ActivityList.tsx:162
-#: src/pages/bot-page/BotActivity.tsx:302
+#: src/pages/bot-page/BotActivity.tsx:306
 #: src/pages/shell/routine-run-line.tsx:161
 msgid "Cancelled"
 msgstr "Abgebrochen"
@@ -864,7 +869,7 @@ msgstr "Prüfung fehlgeschlagen"
 msgid "Check for updates"
 msgstr "Nach Updates suchen"
 
-#: src/pages/bot-page/RoutineCreateForm.tsx:50
+#: src/pages/bot-page/RoutineCreateForm.tsx:45
 msgid "Check in."
 msgstr "Melde dich."
 
@@ -890,7 +895,7 @@ msgstr "Das Checkout hat lokale Änderungen. Bereinige es vor dem Update."
 msgid "Choose a bot…"
 msgstr "Bot auswählen …"
 
-#: src/pages/Auth.tsx:281
+#: src/pages/Auth.tsx:283
 msgid "Choose a new password"
 msgstr "Wähle ein neues Passwort"
 
@@ -898,7 +903,7 @@ msgstr "Wähle ein neues Passwort"
 msgid "Choose which connected model Rakazo uses."
 msgstr "Wähle das verbundene Modell aus, das Rakazo verwendet."
 
-#: src/pages/bot-page/page-kit.tsx:104
+#: src/pages/bot-page/page-kit.tsx:151
 #: src/pages/shell/dialogs.tsx:319
 msgid "Clear"
 msgstr "Leeren"
@@ -908,7 +913,7 @@ msgstr "Leeren"
 msgid "Clear {0}’s conversation?"
 msgstr "Unterhaltung mit {0} leeren?"
 
-#: src/pages/bot-page/BotPage.tsx:254
+#: src/pages/bot-page/BotPage.tsx:368
 #: src/pages/BotContextMenu.tsx:142
 msgid "Clear conversation"
 msgstr "Unterhaltung leeren"
@@ -934,8 +939,8 @@ msgid "Client secret"
 msgstr ""
 
 #: src/components/TaskCard.tsx:162
-#: src/pages/KnowledgeSection.tsx:610
-#: src/pages/KnowledgeSection.tsx:760
+#: src/pages/KnowledgeSection.tsx:684
+#: src/pages/KnowledgeSection.tsx:840
 #: src/pages/MessagingSettingsOverlay.tsx:361
 #: src/pages/PeerMessagesOverlay.tsx:133
 #: src/pages/PeerMessagesOverlay.tsx:136
@@ -947,7 +952,7 @@ msgstr "Schließen"
 msgid "Close chart"
 msgstr "Diagramm schließen"
 
-#: src/pages/shell/side-panel.tsx:458
+#: src/pages/shell/side-panel.tsx:461
 msgid "Close computer"
 msgstr "Computer schließen"
 
@@ -977,12 +982,12 @@ msgstr "Nachrichteneinstellungen schließen"
 msgid "Close model settings"
 msgstr "Modelleinstellungen schließen"
 
-#: src/pages/Shell.tsx:2679
+#: src/pages/Shell.tsx:2663
 msgid "Close navigation"
 msgstr "Navigation schließen"
 
-#: src/pages/bot-page/BotPage.tsx:136
-#: src/pages/shell/side-panel.tsx:170
+#: src/pages/bot-page/BotPage.tsx:183
+#: src/pages/shell/side-panel.tsx:173
 msgid "Close panel"
 msgstr "Panel schließen"
 
@@ -1016,12 +1021,12 @@ msgid "Code"
 msgstr "Code"
 
 #. placeholder {0}: group.title
-#: src/pages/shell/sidebar.tsx:379
+#: src/pages/shell/sidebar.tsx:384
 msgid "Collapse {0}"
 msgstr "{0} einklappen"
 
 #. placeholder {0}: index + 1
-#: src/pages/bot-page/BotHero.tsx:171
+#: src/pages/bot-page/BotHero.tsx:180
 msgid "Color {0}"
 msgstr "Farbe {0}"
 
@@ -1042,23 +1047,23 @@ msgstr ""
 #: src/pages/bot-page/SettingsTab.tsx:118
 #: src/pages/SettingsOverlay.tsx:104
 #: src/pages/shell/bot-panel.tsx:28
-#: src/pages/shell/message-view.tsx:580
+#: src/pages/shell/message-view.tsx:635
 msgid "Computer"
 msgstr "Computer"
 
-#: src/pages/shell/side-panel.tsx:298
+#: src/pages/shell/side-panel.tsx:301
 msgid "Computer failed to boot"
 msgstr "Computer konnte nicht gestartet werden"
 
-#: src/pages/shell/side-panel.tsx:499
+#: src/pages/shell/side-panel.tsx:502
 msgid "Computer is asleep"
 msgstr "Computer ist im Ruhezustand"
 
-#: src/pages/shell/side-panel.tsx:297
+#: src/pages/shell/side-panel.tsx:300
 msgid "Computer is asleep. Open it to wake."
 msgstr "Der Computer schläft. Öffne ihn, um ihn aufzuwecken."
 
-#: src/pages/shell/side-panel.tsx:299
+#: src/pages/shell/side-panel.tsx:302
 msgid "Computer is stopped"
 msgstr "Computer ist gestoppt"
 
@@ -1082,13 +1087,13 @@ msgstr "Durch die Bereitstellung konfiguriert"
 msgid "Configured servers"
 msgstr "Konfigurierte Server"
 
-#: src/pages/KnowledgeSection.tsx:621
+#: src/pages/KnowledgeSection.tsx:679
 #: src/pages/McpServersOverlay.tsx:506
 msgid "Confirm delete"
 msgstr "Löschen bestätigen"
 
 #: src/pages/AccountSettingsOverlay.tsx:474
-#: src/pages/Auth.tsx:301
+#: src/pages/Auth.tsx:303
 msgid "Confirm password"
 msgstr "Passwort bestätigen"
 
@@ -1194,7 +1199,7 @@ msgstr "Weiter"
 msgid "Continue in Background"
 msgstr ""
 
-#: src/pages/Auth.tsx:211
+#: src/pages/Auth.tsx:213
 msgid "Continue with email"
 msgstr "Mit E-Mail fortfahren"
 
@@ -1286,13 +1291,13 @@ msgstr "Anbieter konnte nicht verbunden werden"
 msgid "Could not connect this voice provider"
 msgstr "Stimmanbieter konnte nicht verbunden werden"
 
-#: src/pages/Shell.tsx:860
-#: src/pages/Shell.tsx:2526
+#: src/pages/Shell.tsx:861
+#: src/pages/Shell.tsx:2497
 msgid "Could not connect to the computer screen"
 msgstr "Verbindung zum Computerbildschirm nicht möglich"
 
-#: src/pages/Auth.tsx:99
-#: src/pages/Shell.tsx:2500
+#: src/pages/Auth.tsx:101
+#: src/pages/Shell.tsx:2471
 msgid "Could not continue"
 msgstr "Fortfahren fehlgeschlagen"
 
@@ -1332,7 +1337,7 @@ msgstr "MCP-Server konnte nicht gelöscht werden"
 msgid "Could not delete routine"
 msgstr "Routine konnte nicht gelöscht werden"
 
-#: src/pages/KnowledgeSection.tsx:354
+#: src/pages/KnowledgeSection.tsx:640
 msgid "Could not delete skill"
 msgstr "Skill konnte nicht gelöscht werden"
 
@@ -1369,7 +1374,7 @@ msgstr "{0} konnte nicht heruntergeladen werden. Versuche es erneut."
 msgid "Could not download {name}. Try again."
 msgstr "{name} konnte nicht heruntergeladen werden. Versuche es erneut."
 
-#: src/pages/KnowledgeSection.tsx:327
+#: src/pages/KnowledgeSection.tsx:365
 msgid "Could not import skill"
 msgstr "Skill konnte nicht importiert werden"
 
@@ -1381,18 +1386,18 @@ msgstr "Connector konnte nicht installiert werden"
 msgid "Could not install skills"
 msgstr "Skills konnten nicht installiert werden"
 
-#: src/pages/bot-page/BotActivity.tsx:479
-#: src/pages/KnowledgeSection.tsx:80
-#: src/pages/KnowledgeSection.tsx:121
-#: src/pages/KnowledgeSection.tsx:244
-#: src/pages/KnowledgeSection.tsx:301
-#: src/pages/KnowledgeSection.tsx:324
-#: src/pages/KnowledgeSection.tsx:351
-#: src/pages/KnowledgeSection.tsx:673
+#: src/pages/bot-page/KnowledgeTab.tsx:148
+#: src/pages/bot-page/page-kit.tsx:81
+#: src/pages/KnowledgeSection.tsx:89
+#: src/pages/KnowledgeSection.tsx:118
+#: src/pages/KnowledgeSection.tsx:300
+#: src/pages/KnowledgeSection.tsx:321
+#: src/pages/KnowledgeSection.tsx:361
+#: src/pages/KnowledgeSection.tsx:753
 msgid "Could not load"
 msgstr "Laden fehlgeschlagen"
 
-#: src/pages/bot-page/BotActivity.tsx:238
+#: src/pages/bot-page/BotActivity.tsx:241
 msgid "Could not load · Retry"
 msgstr "Laden fehlgeschlagen · Erneut versuchen"
 
@@ -1426,7 +1431,7 @@ msgstr "Modelleinstellungen konnten nicht geladen werden"
 msgid "Could not load plugins"
 msgstr "Plugins konnten nicht geladen werden"
 
-#: src/pages/KnowledgeSection.tsx:265
+#: src/pages/KnowledgeSection.tsx:601
 msgid "Could not load skill"
 msgstr "Skill konnte nicht geladen werden"
 
@@ -1461,8 +1466,8 @@ msgstr "Testclip konnte nicht abgespielt werden"
 
 #: src/pages/AccountSettingsOverlay.tsx:323
 #: src/pages/AccountSettingsOverlay.tsx:439
-#: src/pages/Auth.tsx:115
-#: src/pages/Auth.tsx:274
+#: src/pages/Auth.tsx:112
+#: src/pages/Auth.tsx:276
 msgid "Could not reach the server"
 msgstr "Server konnte nicht erreicht werden"
 
@@ -1471,7 +1476,7 @@ msgstr "Server konnte nicht erreicht werden"
 msgid "Could not reach this model server"
 msgstr "Modellserver konnte nicht erreicht werden"
 
-#: src/pages/KnowledgeSection.tsx:693
+#: src/pages/KnowledgeSection.tsx:773
 msgid "Could not read this file"
 msgstr "Diese Datei konnte nicht gelesen werden"
 
@@ -1507,7 +1512,7 @@ msgstr ""
 msgid "Could not render chart"
 msgstr "Diagramm konnte nicht angezeigt werden"
 
-#: src/pages/Auth.tsx:269
+#: src/pages/Auth.tsx:271
 msgid "Could not reset password"
 msgstr "Passwort konnte nicht zurückgesetzt werden"
 
@@ -1516,14 +1521,14 @@ msgstr "Passwort konnte nicht zurückgesetzt werden"
 msgid "Could not revoke connection"
 msgstr "Verbindung konnte nicht widerrufen werden"
 
-#: src/pages/bot-page/RoutineDetail.tsx:97
+#: src/pages/bot-page/RoutineDetail.tsx:99
 msgid "Could not run routine"
 msgstr "Routine konnte nicht ausgeführt werden"
 
-#: src/pages/bot-page/page-kit.tsx:48
-#: src/pages/bot-page/RoutineDetail.tsx:86
+#: src/pages/bot-page/page-kit.tsx:52
+#: src/pages/bot-page/RoutineDetail.tsx:87
 #: src/pages/ExternalConversationSettings.tsx:250
-#: src/pages/KnowledgeSection.tsx:102
+#: src/pages/KnowledgeSection.tsx:206
 msgid "Could not save"
 msgstr "Speichern fehlgeschlagen"
 
@@ -1539,7 +1544,7 @@ msgstr "Gruppe konnte nicht gespeichert werden"
 msgid "Could not save model"
 msgstr "Modell konnte nicht gespeichert werden"
 
-#: src/pages/bot-page/RoutineCreateForm.tsx:66
+#: src/pages/bot-page/RoutineCreateForm.tsx:59
 msgid "Could not save routine"
 msgstr "Routine konnte nicht gespeichert werden"
 
@@ -1547,7 +1552,7 @@ msgstr "Routine konnte nicht gespeichert werden"
 msgid "Could not save rule"
 msgstr "Regel konnte nicht gespeichert werden"
 
-#: src/pages/KnowledgeSection.tsx:304
+#: src/pages/KnowledgeSection.tsx:623
 msgid "Could not save skill"
 msgstr "Skill konnte nicht gespeichert werden"
 
@@ -1567,7 +1572,7 @@ msgstr "Diese Auswahl konnte nicht gespeichert werden"
 msgid "Could not search catalog"
 msgstr ""
 
-#: src/pages/Auth.tsx:84
+#: src/pages/Auth.tsx:86
 msgid "Could not send reset email"
 msgstr "E-Mail zum Zurücksetzen konnte nicht gesendet werden"
 
@@ -1592,7 +1597,7 @@ msgstr ""
 msgid "Could not submit this answer"
 msgstr "Antwort konnte nicht gesendet werden"
 
-#: src/pages/Shell.tsx:2353
+#: src/pages/Shell.tsx:2324
 msgid "Could not take control"
 msgstr "Kontrolle konnte nicht übernommen werden"
 
@@ -1600,7 +1605,7 @@ msgstr "Kontrolle konnte nicht übernommen werden"
 msgid "Could not update"
 msgstr "Aktualisierung fehlgeschlagen"
 
-#: src/pages/KnowledgeSection.tsx:281
+#: src/pages/KnowledgeSection.tsx:343
 #: src/pages/McpServersOverlay.tsx:210
 msgid "Could not update agent access"
 msgstr "Agent-Zugriff konnte nicht aktualisiert werden"
@@ -1613,7 +1618,7 @@ msgstr "Computer konnte nicht aktualisiert werden"
 msgid "Could not update plugin"
 msgstr "Plugin konnte nicht aktualisiert werden"
 
-#: src/pages/Shell.tsx:1900
+#: src/pages/Shell.tsx:1865
 msgid "Could not update reaction"
 msgstr "Reaktion konnte nicht aktualisiert werden"
 
@@ -1626,6 +1631,7 @@ msgid "Could not update your photo"
 msgstr ""
 
 #: src/components/AskCard.tsx:60
+#: src/pages/bot-page/RoutineTriggers.tsx:333
 msgid "Couldn't create"
 msgstr "Konnte nicht erstellt werden"
 
@@ -1641,10 +1647,10 @@ msgstr "Avatare konnten nicht aktualisiert werden"
 msgid "Couldn't update messaging settings"
 msgstr "Nachrichteneinstellungen konnten nicht aktualisiert werden"
 
-#: src/pages/bot-page/RoutineCreateForm.tsx:157
+#: src/pages/bot-page/RoutineCreateForm.tsx:149
 #: src/pages/shell/bot-panel.tsx:155
 #: src/pages/shell/dialogs.tsx:202
-#: src/pages/shell/sidebar.tsx:229
+#: src/pages/shell/sidebar.tsx:234
 msgid "Create"
 msgstr "Erstellen"
 
@@ -1653,7 +1659,7 @@ msgstr "Erstellen"
 msgid "Create a section and move {0} into it."
 msgstr "Erstelle einen Abschnitt und verschiebe {0} dorthin."
 
-#: src/pages/Auth.tsx:215
+#: src/pages/Auth.tsx:217
 msgid "Create account"
 msgstr "Konto erstellen"
 
@@ -1669,7 +1675,7 @@ msgstr "Bot erstellen?"
 msgid "Create group"
 msgstr "Gruppe erstellen"
 
-#: src/pages/Shell.tsx:2825
+#: src/pages/Shell.tsx:2812
 #: src/pages/shell/bot-picker.tsx:74
 msgid "Create new Bot"
 msgstr "Neuen Bot erstellen"
@@ -1741,7 +1747,7 @@ msgid "Customer support"
 msgstr "Kundensupport"
 
 #: src/pages/CustomizeOverlay.tsx:24
-#: src/pages/shell/sidebar.tsx:670
+#: src/pages/shell/sidebar.tsx:679
 msgid "Customize"
 msgstr "Anpassen"
 
@@ -1780,21 +1786,21 @@ msgstr ""
 msgid "Default scope"
 msgstr "Standardbereich"
 
-#: src/pages/bot-page/BotPage.tsx:262
+#: src/pages/bot-page/BotPage.tsx:378
 #: src/pages/BotContextMenu.tsx:150
-#: src/pages/KnowledgeSection.tsx:621
+#: src/pages/KnowledgeSection.tsx:679
 #: src/pages/McpServersOverlay.tsx:508
 #: src/pages/shell/dialogs.tsx:409
 #: src/pages/shell/dialogs.tsx:470
-#: src/pages/shell/sidebar.tsx:611
-#: src/pages/shell/sidebar.tsx:647
+#: src/pages/shell/sidebar.tsx:620
+#: src/pages/shell/sidebar.tsx:656
 msgid "Delete"
 msgstr "Löschen"
 
 #. placeholder {0}: bot.name
 #. placeholder {0}: group.name
-#: src/pages/shell/sidebar.tsx:608
-#: src/pages/shell/sidebar.tsx:644
+#: src/pages/shell/sidebar.tsx:617
+#: src/pages/shell/sidebar.tsx:653
 msgid "Delete {0}"
 msgstr "{0} löschen"
 
@@ -1813,15 +1819,15 @@ msgstr "Gruppe löschen"
 msgid "Delete memories too"
 msgstr "Erinnerungen ebenfalls löschen"
 
-#: src/pages/bot-page/RoutineDetail.tsx:203
+#: src/pages/bot-page/RoutineDetail.tsx:226
 msgid "Delete routine"
 msgstr "Routine löschen"
 
-#: src/pages/Shell.tsx:3101
+#: src/pages/Shell.tsx:3090
 msgid "Delete space"
 msgstr ""
 
-#: src/pages/shell/message-view.tsx:415
+#: src/pages/shell/message-view.tsx:459
 msgid "deleted"
 msgstr "gelöscht"
 
@@ -1863,11 +1869,11 @@ msgstr ""
 msgid "Desktop update"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:964
+#: src/pages/shell/composer.tsx:955
 msgid "Dictate"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:1046
+#: src/pages/shell/composer.tsx:1040
 msgid "Dictating"
 msgstr ""
 
@@ -1875,7 +1881,7 @@ msgstr ""
 msgid "Direct MCP"
 msgstr ""
 
-#: src/pages/KnowledgeSection.tsx:375
+#: src/pages/KnowledgeSection.tsx:386
 #: src/pages/KnowledgeSection.tsx:447
 msgid "Disabled"
 msgstr "Deaktiviert"
@@ -1899,7 +1905,7 @@ msgstr "Verbindung wird getrennt…"
 msgid "Dismiss"
 msgstr "Ausblenden"
 
-#: src/pages/shell/composer.tsx:691
+#: src/pages/shell/composer.tsx:682
 msgid "Dismiss error"
 msgstr "Fehler ausblenden"
 
@@ -1929,18 +1935,17 @@ msgstr "Docker"
 msgid "Docker limits access to your computer for added security. Using {hostLabel} lets bots work with your local files and tools."
 msgstr "Docker begrenzt für mehr Sicherheit den Zugriff auf deinen Computer. Wenn {hostLabel} verwendet wird, können Bots mit deinen lokalen Dateien und Werkzeugen arbeiten."
 
-#: src/pages/Auth.tsx:221
+#: src/pages/Auth.tsx:223
 msgid "Don’t have an account?"
 msgstr "Du hast noch kein Konto?"
 
 #: src/pages/ActivityList.tsx:158
-#: src/pages/bot-page/BotActivity.tsx:300
-#: src/pages/bot-page/RoutineTriggers.tsx:337
-#: src/pages/bot-page/RoutineTriggers.tsx:370
+#: src/pages/bot-page/BotActivity.tsx:304
+#: src/pages/bot-page/RoutineTriggers.tsx:304
 msgid "Done"
 msgstr "Fertig"
 
-#: src/pages/KnowledgeSection.tsx:753
+#: src/pages/KnowledgeSection.tsx:833
 msgid "Download"
 msgstr "Herunterladen"
 
@@ -1955,7 +1960,7 @@ msgstr "{0} herunterladen"
 msgid "Download {name}"
 msgstr "{name} herunterladen"
 
-#: src/pages/KnowledgeSection.tsx:189
+#: src/pages/KnowledgeSection.tsx:170
 msgid "Download as markdown"
 msgstr "Als Markdown herunterladen"
 
@@ -1971,12 +1976,12 @@ msgstr ""
 msgid "Draft skill"
 msgstr "Skill-Entwurf"
 
-#: src/pages/bot-page/BotPage.tsx:245
+#: src/pages/bot-page/BotPage.tsx:359
 #: src/pages/BotContextMenu.tsx:137
 msgid "Duplicate"
 msgstr "Duplizieren"
 
-#: src/pages/shell/message-view.tsx:189
+#: src/pages/shell/message-view.tsx:202
 msgid "Earlier message"
 msgstr "Frühere Nachricht"
 
@@ -1993,16 +1998,16 @@ msgstr "Bearbeiten und erneut senden"
 msgid "Edit first"
 msgstr "Zuerst bearbeiten"
 
-#: src/pages/Shell.tsx:3024
+#: src/pages/Shell.tsx:3013
 msgid "Edit Profile"
 msgstr "Profil bearbeiten"
 
 #. placeholder {0}: rewindRemovedCount ?? 0
-#: src/pages/shell/composer.tsx:727
+#: src/pages/shell/composer.tsx:718
 msgid "Editing message from {rewindTime} · {0} messages after it will be removed"
 msgstr "Nachricht von {rewindTime} wird bearbeitet · {0} nachfolgende Nachrichten werden entfernt"
 
-#: src/pages/Auth.tsx:149
+#: src/pages/Auth.tsx:146
 msgid "Email"
 msgstr "E-Mail"
 
@@ -2044,13 +2049,13 @@ msgstr "Alle"
 msgid "every {intervalAmountSelect} {intervalUnitSelect}"
 msgstr "alle {intervalAmountSelect} {intervalUnitSelect}"
 
-#: src/pages/bot-page/RoutineTriggers.tsx:92
+#: src/pages/bot-page/RoutineTriggers.tsx:78
 #: src/pages/RoutineSchedule.tsx:37
 #: src/pages/RoutineSchedule.tsx:166
 msgid "Every day"
 msgstr "Jeden Tag"
 
-#: src/pages/bot-page/RoutineTriggers.tsx:91
+#: src/pages/bot-page/RoutineTriggers.tsx:77
 #: src/pages/RoutineSchedule.tsx:35
 #: src/pages/RoutineSchedule.tsx:152
 msgid "Every hour"
@@ -2060,12 +2065,12 @@ msgstr "Jede Stunde"
 msgid "Every Monday"
 msgstr "Jeden Montag"
 
-#: src/pages/bot-page/RoutineTriggers.tsx:95
+#: src/pages/bot-page/RoutineTriggers.tsx:81
 #: src/pages/RoutineSchedule.tsx:43
 msgid "Every month"
 msgstr "Jeden Monat"
 
-#: src/pages/bot-page/RoutineTriggers.tsx:94
+#: src/pages/bot-page/RoutineTriggers.tsx:80
 #: src/pages/RoutineSchedule.tsx:41
 msgid "Every week"
 msgstr "Jede Woche"
@@ -2079,11 +2084,11 @@ msgid "Expand"
 msgstr "Erweitern"
 
 #. placeholder {0}: group.title
-#: src/pages/shell/sidebar.tsx:378
+#: src/pages/shell/sidebar.tsx:383
 msgid "Expand {0}"
 msgstr "{0} ausklappen"
 
-#: src/pages/bot-page/BotPage.tsx:249
+#: src/pages/bot-page/BotPage.tsx:363
 msgid "Export"
 msgstr "Exportieren"
 
@@ -2103,7 +2108,7 @@ msgid "Extra high"
 msgstr "Sehr hoch"
 
 #: src/pages/ActivityList.tsx:160
-#: src/pages/bot-page/BotActivity.tsx:301
+#: src/pages/bot-page/BotActivity.tsx:305
 #: src/pages/bot-page/routine-copy.ts:63
 #: src/pages/shell/routine-run-line.tsx:160
 msgid "Failed"
@@ -2113,14 +2118,14 @@ msgstr "Fehlgeschlagen"
 msgid "Failed {when}"
 msgstr "Fehlgeschlagen {when}"
 
-#: src/pages/Shell.tsx:2099
-#: src/pages/Shell.tsx:2101
-#: src/pages/Shell.tsx:2103
+#: src/pages/Shell.tsx:2064
+#: src/pages/Shell.tsx:2066
+#: src/pages/Shell.tsx:2068
 msgid "Failed to send message"
 msgstr "Nachricht konnte nicht gesendet werden"
 
-#: src/pages/Shell.tsx:2159
-#: src/pages/Shell.tsx:2178
+#: src/pages/Shell.tsx:2124
+#: src/pages/Shell.tsx:2143
 msgid "Failed to stop"
 msgstr "Stoppen fehlgeschlagen"
 
@@ -2137,7 +2142,7 @@ msgstr "Fehlerbehandlung"
 msgid "Featured"
 msgstr "Empfohlen"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:37
+#: src/pages/bot-page/KnowledgeTab.tsx:52
 msgid "Files"
 msgstr "Dateien"
 
@@ -2174,7 +2179,7 @@ msgstr "MCP-Verbindung wird abgeschlossen…"
 msgid "Flag unexpected actions"
 msgstr "Unerwartete Aktionen markieren"
 
-#: src/pages/Auth.tsx:196
+#: src/pages/Auth.tsx:193
 msgid "Forgot password?"
 msgstr "Passwort vergessen?"
 
@@ -2200,9 +2205,8 @@ msgid "Getting ready"
 msgstr ""
 
 #: src/pages/bot-page/routine-copy.ts:38
-#: src/pages/bot-page/RoutineTriggers.tsx:143
-#: src/pages/bot-page/RoutineTriggers.tsx:226
-#: src/pages/bot-page/RoutineTriggers.tsx:366
+#: src/pages/bot-page/RoutineTriggers.tsx:129
+#: src/pages/bot-page/RoutineTriggers.tsx:209
 msgid "Git event"
 msgstr "Git-Ereignis"
 
@@ -2210,7 +2214,7 @@ msgstr "Git-Ereignis"
 msgid "Git ref"
 msgstr "Git-Ref"
 
-#: src/pages/KnowledgeSection.tsx:376
+#: src/pages/KnowledgeSection.tsx:387
 msgid "Global"
 msgstr "Global"
 
@@ -2240,7 +2244,8 @@ msgstr "Lege zuerst auf und gib dann den Code auf dem Bildschirm ein."
 msgid "Hang up, then enter the code on screen."
 msgstr "Lege auf und gib dann den Code auf dem Bildschirm ein."
 
-#: src/pages/bot-page/RoutineTriggers.tsx:421
+#: src/pages/bot-page/RoutineTriggers.tsx:382
+#: src/pages/bot-page/RoutineTriggers.tsx:385
 msgid "header"
 msgstr "Kopfzeile"
 
@@ -2261,7 +2266,7 @@ msgstr "Beispiel anhören"
 msgid "Hi, this is how I'll sound when I read replies out loud."
 msgstr "Hallo, so klinge ich, wenn ich Antworten vorlese."
 
-#: src/pages/shell/sidebar.tsx:748
+#: src/pages/shell/sidebar.tsx:757
 msgid "Hide bots"
 msgstr "Bots ausblenden"
 
@@ -2269,7 +2274,7 @@ msgstr "Bots ausblenden"
 msgid "Hide key"
 msgstr ""
 
-#: src/pages/Auth.tsx:186
+#: src/pages/Auth.tsx:183
 msgid "Hide password"
 msgstr "Passwort verbergen"
 
@@ -2308,7 +2313,7 @@ msgstr "Wie sich dieser Bot verhalten soll"
 msgid "How to check"
 msgstr "So wird geprüft"
 
-#: src/pages/shell/side-panel.tsx:529
+#: src/pages/shell/side-panel.tsx:532
 msgid "I’m done"
 msgstr "Ich bin fertig"
 
@@ -2328,7 +2333,7 @@ msgstr "Importieren"
 msgid "Import OpenAPI JSON"
 msgstr "OpenAPI-JSON importieren"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:85
+#: src/pages/bot-page/KnowledgeTab.tsx:105
 msgid "Inherit default"
 msgstr "Standard übernehmen"
 
@@ -2340,7 +2345,7 @@ msgstr "Eingabe"
 msgid "Inputs"
 msgstr "Eingaben"
 
-#: src/pages/shell/composer.tsx:1022
+#: src/pages/shell/composer.tsx:1016
 msgid "Insert dictation"
 msgstr ""
 
@@ -2369,8 +2374,8 @@ msgstr "Wird installiert…"
 msgid "Instance API key"
 msgstr "Instanz-API-Schlüssel"
 
-#: src/pages/bot-page/RoutineCreateForm.tsx:97
-#: src/pages/bot-page/RoutineDetail.tsx:136
+#: src/pages/bot-page/RoutineCreateForm.tsx:90
+#: src/pages/bot-page/RoutineDetail.tsx:138
 msgid "Instruction"
 msgstr "Anweisung"
 
@@ -2393,7 +2398,7 @@ msgstr ""
 msgid "Integrations"
 msgstr "Integrationen"
 
-#: src/pages/bot-page/RoutineTriggers.tsx:96
+#: src/pages/bot-page/RoutineTriggers.tsx:82
 #: src/pages/RoutineSchedule.tsx:45
 msgid "Interval"
 msgstr "Intervall"
@@ -2406,7 +2411,7 @@ msgstr "Intervallwert"
 msgid "Interval unit"
 msgstr "Intervalleinheit"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:86
+#: src/pages/bot-page/KnowledgeTab.tsx:106
 #: src/pages/MemorySettingsOverlay.tsx:49
 msgid "Isolated"
 msgstr "Isoliert"
@@ -2415,11 +2420,11 @@ msgstr "Isoliert"
 msgid "Its conversation, files, and routines will be permanently deleted. Bots it created stay in your list."
 msgstr "Seine Unterhaltung, Dateien und Routinen werden dauerhaft gelöscht. Von ihm erstellte Bots bleiben in deiner Liste."
 
-#: src/pages/shell/transcript.tsx:666
+#: src/pages/shell/transcript.tsx:672
 msgid "Jump to latest"
 msgstr "Zur neuesten Nachricht springen"
 
-#: src/pages/shell/message-view.tsx:184
+#: src/pages/shell/message-view.tsx:197
 msgid "Jump to replied message"
 msgstr "Zur beantworteten Nachricht springen"
 
@@ -2431,11 +2436,11 @@ msgstr "gerade eben"
 msgid "Keep memories"
 msgstr "Erinnerungen behalten"
 
-#: src/pages/bot-page/RoutineTriggers.tsx:417
+#: src/pages/bot-page/RoutineTriggers.tsx:380
 msgid "key"
 msgstr "Schlüssel"
 
-#: src/pages/bot-page/BotPage.tsx:87
+#: src/pages/bot-page/BotPage.tsx:100
 msgid "Knowledge"
 msgstr "Wissen"
 
@@ -2445,7 +2450,7 @@ msgstr "Wissen"
 msgid "Language"
 msgstr "Sprache"
 
-#: src/pages/bot-page/RoutinesTab.tsx:102
+#: src/pages/bot-page/RoutinesTab.tsx:107
 msgid "Last run failed"
 msgstr "Letzter Lauf fehlgeschlagen"
 
@@ -2477,7 +2482,7 @@ msgstr ""
 msgid "Listening"
 msgstr ""
 
-#: src/pages/shell/transcript.tsx:472
+#: src/pages/shell/transcript.tsx:476
 msgid "Load earlier messages"
 msgstr "Frühere Nachrichten laden"
 
@@ -2518,7 +2523,7 @@ msgstr "Stimmanbieter werden geladen…"
 #: src/pages/IntegrationSetup.tsx:72
 #: src/pages/Onboarding.tsx:378
 #: src/pages/PeerMessagesOverlay.tsx:142
-#: src/pages/shell/transcript.tsx:472
+#: src/pages/shell/transcript.tsx:476
 msgid "Loading…"
 msgstr "Wird geladen…"
 
@@ -2534,7 +2539,7 @@ msgstr "Mit lokalem Zugriff können Bots ohne Rückfrage Befehle ausführen. Ver
 msgid "Local Server Settings"
 msgstr ""
 
-#: src/pages/shell/sidebar.tsx:737
+#: src/pages/shell/sidebar.tsx:746
 msgid "Log out"
 msgstr "Abmelden"
 
@@ -2627,18 +2632,18 @@ msgstr "Mitglieder ({GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})"
 msgid "Members (pick {GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})"
 msgstr "Mitglieder ({GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX} auswählen)"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:23
+#: src/pages/bot-page/KnowledgeTab.tsx:36
 #: src/pages/MemorySettingsOverlay.tsx:159
 #: src/pages/SettingsOverlay.tsx:100
 msgid "Memory"
 msgstr "Erinnerungen"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:76
-#: src/pages/bot-page/KnowledgeTab.tsx:80
+#: src/pages/bot-page/KnowledgeTab.tsx:96
+#: src/pages/bot-page/KnowledgeTab.tsx:100
 msgid "Memory scope"
 msgstr "Erinnerungsbereich"
 
-#: src/pages/shell/composer.tsx:749
+#: src/pages/shell/composer.tsx:740
 msgid "Mentions"
 msgstr "Erwähnungen"
 
@@ -2646,9 +2651,9 @@ msgstr "Erwähnungen"
 msgid "Mentions only"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:1055
-#: src/pages/shell/composer.tsx:1156
-#: src/pages/shell/message-view.tsx:107
+#: src/pages/shell/composer.tsx:1049
+#: src/pages/shell/composer.tsx:1150
+#: src/pages/shell/message-view.tsx:111
 msgid "Message"
 msgstr ""
 
@@ -2657,9 +2662,9 @@ msgstr ""
 msgid "Message"
 msgstr "Nachricht"
 
-#: src/pages/shell/composer.tsx:1055
-#: src/pages/shell/composer.tsx:1152
-#: src/pages/shell/composer.tsx:1156
+#: src/pages/shell/composer.tsx:1049
+#: src/pages/shell/composer.tsx:1146
+#: src/pages/shell/composer.tsx:1150
 msgid "Message {activeName}"
 msgstr "Nachricht an {activeName}"
 
@@ -2667,7 +2672,7 @@ msgstr "Nachricht an {activeName}"
 msgid "Message actions"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:671
+#: src/pages/shell/composer.tsx:662
 msgid "Message composer"
 msgstr "Nachrichteneditor"
 
@@ -2675,20 +2680,20 @@ msgstr "Nachrichteneditor"
 msgid "Message event"
 msgstr ""
 
-#: src/pages/shell/message-view.tsx:335
+#: src/pages/shell/message-view.tsx:379
 msgid "Message from {peer}"
 msgstr "Nachricht von {peer}"
 
-#: src/pages/shell/composer.tsx:1153
+#: src/pages/shell/composer.tsx:1147
 msgid "Message…"
 msgstr "Nachricht…"
 
 #. placeholder {0}: sent.toBotName
-#: src/pages/shell/message-view.tsx:439
+#: src/pages/shell/message-view.tsx:488
 msgid "Messaged {0}"
 msgstr ""
 
-#: src/pages/shell/message-view.tsx:335
+#: src/pages/shell/message-view.tsx:379
 msgid "Messaged {peer}"
 msgstr "Nachricht an {peer} gesendet"
 
@@ -2711,8 +2716,8 @@ msgstr "Minimal"
 msgid "Minimize"
 msgstr "Minimieren"
 
-#: src/pages/shell/sidebar.tsx:199
-#: src/pages/shell/sidebar.tsx:200
+#: src/pages/shell/sidebar.tsx:204
+#: src/pages/shell/sidebar.tsx:205
 msgid "Minimize bots"
 msgstr "Bots minimieren"
 
@@ -2798,10 +2803,10 @@ msgstr ""
 
 #: src/components/AskCard.tsx:334
 #: src/components/teach/SkillDraftCard.tsx:79
-#: src/pages/Auth.tsx:134
-#: src/pages/bot-page/BotHero.tsx:47
-#: src/pages/bot-page/RoutineCreateForm.tsx:81
-#: src/pages/bot-page/RoutineDetail.tsx:109
+#: src/pages/Auth.tsx:131
+#: src/pages/bot-page/BotHero.tsx:49
+#: src/pages/bot-page/RoutineCreateForm.tsx:74
+#: src/pages/bot-page/RoutineDetail.tsx:111
 #: src/pages/GroupPanel.tsx:133
 #: src/pages/GroupPanel.tsx:243
 #: src/pages/shell/bot-panel.tsx:109
@@ -2819,7 +2824,7 @@ msgstr "Bot benennen"
 msgid "Name this group"
 msgstr "Gruppe benennen"
 
-#: src/pages/bot-page/RoutineCreateForm.tsx:87
+#: src/pages/bot-page/RoutineCreateForm.tsx:80
 msgid "Name this routine"
 msgstr "Diese Routine benennen"
 
@@ -2831,7 +2836,7 @@ msgstr "Eingabe erforderlich"
 msgid "Needs takeover"
 msgstr "Übernahme erforderlich"
 
-#: src/pages/shell/side-panel.tsx:402
+#: src/pages/shell/side-panel.tsx:405
 msgid "Needs you"
 msgstr "Braucht dich"
 
@@ -2852,13 +2857,13 @@ msgid "New open-work item"
 msgstr "Neuer offener Arbeitspunkt"
 
 #: src/pages/AccountSettingsOverlay.tsx:468
-#: src/pages/Auth.tsx:295
+#: src/pages/Auth.tsx:297
 msgid "New password"
 msgstr "Neues Passwort"
 
-#: src/pages/bot-page/RoutineCreateForm.tsx:75
-#: src/pages/bot-page/RoutinesTab.tsx:49
-#: src/pages/bot-page/RoutinesTab.tsx:65
+#: src/pages/bot-page/RoutineCreateForm.tsx:68
+#: src/pages/bot-page/RoutinesTab.tsx:54
+#: src/pages/bot-page/RoutinesTab.tsx:70
 msgid "New routine"
 msgstr "Neue Routine"
 
@@ -2879,7 +2884,7 @@ msgstr "Neuer Space"
 msgid "Next"
 msgstr ""
 
-#: src/pages/bot-page/BotActivity.tsx:198
+#: src/pages/bot-page/BotActivity.tsx:199
 msgid "No activity yet"
 msgstr "Noch keine Aktivität"
 
@@ -2915,7 +2920,7 @@ msgstr "Noch keine Chat-Apps verknüpft."
 msgid "No exceptions. Actions run automatically."
 msgstr "Keine Ausnahmen. Aktionen werden automatisch ausgeführt."
 
-#: src/pages/KnowledgeSection.tsx:767
+#: src/pages/KnowledgeSection.tsx:847
 msgid "No files yet"
 msgstr "Noch keine Dateien"
 
@@ -2976,7 +2981,7 @@ msgstr "Keine Anbieter gefunden."
 msgid "No remote MCP servers found"
 msgstr ""
 
-#: src/pages/bot-page/BotActivity.tsx:417
+#: src/pages/bot-page/BotActivity.tsx:427
 msgid "No report"
 msgstr "Kein Bericht"
 
@@ -3035,7 +3040,7 @@ msgstr "Jetzt nicht"
 msgid "Nothing is still running"
 msgstr "Nichts läuft mehr"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:28
+#: src/pages/bot-page/KnowledgeTab.tsx:42
 #: src/pages/KnowledgeSection.tsx:41
 msgid "Nothing remembered yet"
 msgstr "Noch nichts gemerkt"
@@ -3054,10 +3059,10 @@ msgstr ""
 msgid "Notifies you each run"
 msgstr "Benachrichtigt dich bei jedem Lauf"
 
-#: src/pages/bot-page/RoutineCreateForm.tsx:141
-#: src/pages/bot-page/RoutineCreateForm.tsx:143
-#: src/pages/bot-page/RoutineDetail.tsx:176
-#: src/pages/bot-page/RoutineDetail.tsx:180
+#: src/pages/bot-page/RoutineCreateForm.tsx:133
+#: src/pages/bot-page/RoutineCreateForm.tsx:135
+#: src/pages/bot-page/RoutineDetail.tsx:177
+#: src/pages/bot-page/RoutineDetail.tsx:181
 msgid "Notify me"
 msgstr "Benachrichtige mich"
 
@@ -3091,8 +3096,8 @@ msgid "Off for every agent until you pick some in Installed."
 msgstr "Für alle Agenten aus, bis du unter „Installiert“ welche auswählst."
 
 #: src/pages/bot-page/routine-copy.ts:93
-#: src/pages/bot-page/RoutineTriggers.tsx:115
-#: src/pages/bot-page/RoutineTriggers.tsx:222
+#: src/pages/bot-page/RoutineTriggers.tsx:101
+#: src/pages/bot-page/RoutineTriggers.tsx:205
 msgid "On a schedule"
 msgstr "Nach Zeitplan"
 
@@ -3105,7 +3110,7 @@ msgstr "am 1. um {0}"
 msgid "One-time"
 msgstr "Einmalig"
 
-#: src/pages/Shell.tsx:3139
+#: src/pages/Shell.tsx:3128
 msgid "Only empty spaces can be deleted. Delete its bots and groups first."
 msgstr ""
 
@@ -3114,21 +3119,21 @@ msgid "Only the first 50 skills are shown to the agent."
 msgstr "Dem Agenten werden nur die ersten 50 Skills angezeigt."
 
 #: src/pages/ScratchpadSection.tsx:159
-#: src/pages/shell/side-panel.tsx:219
-#: src/pages/shell/side-panel.tsx:224
+#: src/pages/shell/side-panel.tsx:222
+#: src/pages/shell/side-panel.tsx:227
 msgid "Open"
 msgstr "Öffnen"
 
 #. placeholder {0}: group.title
-#: src/pages/shell/sidebar.tsx:376
+#: src/pages/shell/sidebar.tsx:381
 msgid "Open {0}"
 msgstr "{0} öffnen"
 
-#: src/pages/bot-page/BotActivity.tsx:420
+#: src/pages/bot-page/BotActivity.tsx:431
 msgid "Open in chat"
 msgstr "Im Chat öffnen"
 
-#: src/pages/shell/side-panel.tsx:186
+#: src/pages/shell/side-panel.tsx:189
 msgid "Open in full window"
 msgstr "In vollständigem Fenster öffnen"
 
@@ -3145,7 +3150,7 @@ msgstr "Offene Arbeit"
 msgid "OpenAI-compatible server URL"
 msgstr "URL eines OpenAI-kompatiblen Servers"
 
-#: src/pages/shell/message-view.tsx:426
+#: src/pages/shell/message-view.tsx:470
 msgid "Opened its thread."
 msgstr "Thread geöffnet."
 
@@ -3224,22 +3229,22 @@ msgstr "Zurückstellen"
 
 #: src/components/AskCard.tsx:118
 #: src/pages/AccountSettingsOverlay.tsx:448
-#: src/pages/Auth.tsx:166
-#: src/pages/Auth.tsx:175
+#: src/pages/Auth.tsx:163
+#: src/pages/Auth.tsx:172
 msgid "Password"
 msgstr "Passwort"
 
-#: src/pages/Auth.tsx:76
+#: src/pages/Auth.tsx:78
 msgid "Password recovery is not configured for this server"
 msgstr "Die Passwortwiederherstellung ist für diesen Server nicht konfiguriert"
 
 #: src/pages/AccountSettingsOverlay.tsx:493
-#: src/pages/Auth.tsx:285
+#: src/pages/Auth.tsx:287
 msgid "Password updated"
 msgstr "Passwort aktualisiert"
 
 #: src/pages/AccountSettingsOverlay.tsx:418
-#: src/pages/Auth.tsx:261
+#: src/pages/Auth.tsx:263
 msgid "Passwords do not match"
 msgstr "Die Passwörter stimmen nicht überein"
 
@@ -3255,7 +3260,7 @@ msgstr "Füge die OpenAI-kompatible Adresse deines Servers ein. Rakazo ergänzt 
 msgid "Paste your API key"
 msgstr "Füge deinen API-Schlüssel ein"
 
-#: src/pages/bot-page/RoutinesTab.tsx:102
+#: src/pages/bot-page/RoutinesTab.tsx:107
 msgid "Paused"
 msgstr "Pausiert"
 
@@ -3275,7 +3280,7 @@ msgstr "Wiedergabe…"
 msgid "Plugins"
 msgstr "Plugins"
 
-#: src/pages/bot-page/RoutineTriggers.tsx:413
+#: src/pages/bot-page/RoutineTriggers.tsx:377
 msgid "POST to"
 msgstr "POST an"
 
@@ -3331,7 +3336,7 @@ msgstr "Reaktionen"
 msgid "Read replies aloud"
 msgstr "Antworten vorlesen"
 
-#: src/pages/KnowledgeSection.tsx:491
+#: src/pages/KnowledgeSection.tsx:492
 msgid "read-only"
 msgstr "schreibgeschützt"
 
@@ -3420,7 +3425,7 @@ msgstr "Ansicht aktualisieren"
 msgid "Refreshing…"
 msgstr "Wird aktualisiert …"
 
-#: src/pages/shell/side-panel.tsx:519
+#: src/pages/shell/side-panel.tsx:522
 msgid "Release"
 msgstr "Freigeben"
 
@@ -3434,8 +3439,8 @@ msgstr ""
 
 #: src/components/ApprovalRulesSettings.tsx:179
 #: src/pages/AccountSettingsOverlay.tsx:392
-#: src/pages/bot-page/RoutineTriggers.tsx:263
-#: src/pages/bot-page/RoutineTriggers.tsx:324
+#: src/pages/bot-page/RoutineTriggers.tsx:237
+#: src/pages/bot-page/RoutineTriggers.tsx:291
 #: src/pages/PluginsOverlay.tsx:617
 #: src/pages/PluginsOverlay.tsx:1216
 #: src/pages/ScratchpadSection.tsx:165
@@ -3446,12 +3451,12 @@ msgstr "Entfernen"
 
 #. placeholder {0}: artifact.name
 #. placeholder {0}: attachment.file.name
-#: src/pages/shell/composer.tsx:841
-#: src/pages/shell/composer.tsx:851
+#: src/pages/shell/composer.tsx:832
+#: src/pages/shell/composer.tsx:842
 msgid "Remove {0}"
 msgstr "{0} entfernen"
 
-#: src/pages/bot-page/RoutineTriggers.tsx:261
+#: src/pages/bot-page/RoutineTriggers.tsx:235
 msgid "Remove Git event?"
 msgstr "Git-Ereignis entfernen?"
 
@@ -3461,15 +3466,15 @@ msgid "Remove marketplace {0} and its skills?"
 msgstr "Marktplatz {0} und seine Skills entfernen?"
 
 #. placeholder {0}: mention.name
-#: src/pages/shell/composer.tsx:939
+#: src/pages/shell/composer.tsx:930
 msgid "Remove mention {0}"
 msgstr "Erwähnung von {0} entfernen"
 
-#: src/pages/bot-page/RoutineTriggers.tsx:262
+#: src/pages/bot-page/RoutineTriggers.tsx:236
 msgid "Remove message trigger?"
 msgstr "Nachrichten-Trigger entfernen?"
 
-#: src/pages/shell/composer.tsx:873
+#: src/pages/shell/composer.tsx:864
 #: src/pages/shell/message-actions-sheet.tsx:80
 #: src/pages/shell/message-hover-actions.tsx:103
 #: src/pages/shell/message-hover-actions.tsx:104
@@ -3479,15 +3484,15 @@ msgid "Remove preview"
 msgstr "Vorschau entfernen"
 
 #. placeholder {0}: selectedSkill.name
-#: src/pages/shell/composer.tsx:917
+#: src/pages/shell/composer.tsx:908
 msgid "Remove skill {0}"
 msgstr "Skill {0} entfernen"
 
-#: src/pages/bot-page/RoutineTriggers.tsx:259
+#: src/pages/bot-page/RoutineTriggers.tsx:233
 msgid "Remove webhook?"
 msgstr "Webhook entfernen?"
 
-#: src/pages/shell/message-view.tsx:425
+#: src/pages/shell/message-view.tsx:469
 msgid "Removed with chat, computer, and memory."
 msgstr "Zusammen mit Chat, Computer und Erinnerungen entfernt."
 
@@ -3503,7 +3508,7 @@ msgid "Removing…"
 msgstr "Wird entfernt…"
 
 #: src/pages/BotContextMenu.tsx:121
-#: src/pages/Shell.tsx:3228
+#: src/pages/Shell.tsx:3217
 #: src/pages/shell/dialogs.tsx:246
 msgid "Rename section"
 msgstr ""
@@ -3532,7 +3537,7 @@ msgstr "Antworten"
 msgid "Reply in several short messages"
 msgstr "In mehreren kurzen Nachrichten antworten"
 
-#: src/pages/shell/composer.tsx:709
+#: src/pages/shell/composer.tsx:700
 msgid "Replying to {replyName}"
 msgstr "Antwort an {replyName}"
 
@@ -3553,7 +3558,7 @@ msgstr "Computer zurücksetzen"
 msgid "Reset computer?"
 msgstr "Computer zurücksetzen?"
 
-#: src/pages/Auth.tsx:317
+#: src/pages/Auth.tsx:319
 msgid "Reset password"
 msgstr "Passwort zurücksetzen"
 
@@ -3571,8 +3576,9 @@ msgstr "Wird zurückgesetzt …"
 msgid "Restart to update"
 msgstr ""
 
-#: src/pages/shell/sidebar.tsx:602
-#: src/pages/shell/sidebar.tsx:638
+#: src/pages/bot-page/BotPage.tsx:353
+#: src/pages/shell/sidebar.tsx:611
+#: src/pages/shell/sidebar.tsx:647
 msgid "Restore"
 msgstr "Wiederherstellen"
 
@@ -3580,7 +3586,7 @@ msgstr "Wiederherstellen"
 msgid "Restore the last saved workspace. Unsaved work on the computer is lost."
 msgstr "Stellt den zuletzt gespeicherten Arbeitsbereich wieder her. Nicht gespeicherte Arbeit auf dem Computer geht verloren."
 
-#: src/pages/bot-page/page-kit.tsx:50
+#: src/pages/bot-page/page-kit.tsx:54
 msgid "Restore unsaved text"
 msgstr "Ungespeicherten Text wiederherstellen"
 
@@ -3588,8 +3594,8 @@ msgstr "Ungespeicherten Text wiederherstellen"
 msgid "Restoring your workspace"
 msgstr ""
 
-#: src/pages/bot-page/BotActivity.tsx:486
-#: src/pages/bot-page/page-kit.tsx:49
+#: src/pages/bot-page/page-kit.tsx:53
+#: src/pages/bot-page/page-kit.tsx:89
 msgid "Retry"
 msgstr "Erneut versuchen"
 
@@ -3598,7 +3604,7 @@ msgstr "Erneut versuchen"
 msgid "Retry now"
 msgstr "Jetzt erneut versuchen"
 
-#: src/pages/Shell.tsx:2533
+#: src/pages/Shell.tsx:2504
 msgid "Retry screen"
 msgstr "Bildschirm erneut versuchen"
 
@@ -3607,7 +3613,7 @@ msgid "Return to Rakazo"
 msgstr "Zurück zu Rakazo"
 
 #. placeholder {0}: doc.revision
-#: src/pages/KnowledgeSection.tsx:146
+#: src/pages/KnowledgeSection.tsx:144
 msgid "rev {0}"
 msgstr "Rev. {0}"
 
@@ -3627,7 +3633,7 @@ msgstr ""
 msgid "Rotate"
 msgstr ""
 
-#: src/pages/bot-page/RoutineTriggers.tsx:426
+#: src/pages/bot-page/RoutineTriggers.tsx:406
 msgid "Rotate key"
 msgstr "Schlüssel rotieren"
 
@@ -3635,17 +3641,17 @@ msgstr "Schlüssel rotieren"
 msgid "Rotate key?"
 msgstr ""
 
-#: src/pages/bot-page/BotActivity.tsx:308
-#: src/pages/bot-page/RoutineCreateForm.tsx:49
+#: src/pages/bot-page/BotActivity.tsx:312
+#: src/pages/bot-page/RoutineCreateForm.tsx:44
 msgid "Routine"
 msgstr "Routine"
 
 #: src/components/AskCard.tsx:77
-#: src/pages/bot-page/BotActivity.tsx:269
+#: src/pages/bot-page/BotActivity.tsx:273
 msgid "Routine created"
 msgstr "Routine erstellt"
 
-#: src/pages/bot-page/BotActivity.tsx:269
+#: src/pages/bot-page/BotActivity.tsx:273
 msgid "Routine created by {by}"
 msgstr "Routine erstellt von {by}"
 
@@ -3653,11 +3659,11 @@ msgstr "Routine erstellt von {by}"
 msgid "Routine updated"
 msgstr "Routine aktualisiert"
 
-#: src/pages/bot-page/BotPage.tsx:86
+#: src/pages/bot-page/BotPage.tsx:99
 msgid "Routines"
 msgstr "Routinen"
 
-#: src/pages/bot-page/RoutineTriggers.tsx:287
+#: src/pages/bot-page/RoutineTriggers.tsx:259
 msgid "Run at"
 msgstr "Ausführen um"
 
@@ -3666,16 +3672,16 @@ msgid "Run time must be in the future."
 msgstr "Der Ausführungszeitpunkt muss in der Zukunft liegen."
 
 #: src/pages/ActivityList.tsx:152
-#: src/pages/bot-page/BotActivity.tsx:303
+#: src/pages/bot-page/BotActivity.tsx:307
 #: src/pages/shell/routine-run-line.tsx:156
 msgid "Running"
 msgstr "Läuft"
 
-#: src/pages/bot-page/RoutineDetail.tsx:195
+#: src/pages/bot-page/RoutineDetail.tsx:199
 msgid "Running…"
 msgstr "Wird ausgeführt…"
 
-#: src/pages/bot-page/RoutineTriggers.tsx:300
+#: src/pages/bot-page/RoutineTriggers.tsx:272
 msgid "Runs when this bot receives a verified message from this provider."
 msgstr ""
 
@@ -3683,8 +3689,8 @@ msgstr ""
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/ExternalConversationSettings.tsx:255
 #: src/pages/GroupPanel.tsx:279
-#: src/pages/KnowledgeSection.tsx:167
-#: src/pages/KnowledgeSection.tsx:597
+#: src/pages/KnowledgeSection.tsx:234
+#: src/pages/KnowledgeSection.tsx:698
 #: src/pages/ModelSettingsOverlay.tsx:791
 #: src/pages/shell/dialogs.tsx:266
 msgid "Save"
@@ -3692,7 +3698,7 @@ msgstr "Speichern"
 
 #: src/components/AskCard.tsx:44
 #: src/components/teach/SkillDraftCard.tsx:142
-#: src/pages/bot-page/page-kit.tsx:47
+#: src/pages/bot-page/page-kit.tsx:51
 #: src/pages/ExternalConversationSettings.tsx:257
 msgid "Saved"
 msgstr "Gespeichert"
@@ -3716,7 +3722,7 @@ msgstr ""
 
 #: src/components/AskCard.tsx:394
 #: src/components/teach/SkillDraftCard.tsx:142
-#: src/pages/bot-page/page-kit.tsx:46
+#: src/pages/bot-page/page-kit.tsx:50
 #: src/pages/GroupPanel.tsx:279
 #: src/pages/ModelSettingsOverlay.tsx:789
 #: src/pages/shell/dialogs.tsx:266
@@ -3738,7 +3744,7 @@ msgstr "Bildschirm"
 #: src/pages/shell/bot-picker.tsx:55
 #: src/pages/shell/bot-picker.tsx:56
 #: src/pages/shell/command-palette.tsx:102
-#: src/pages/shell/sidebar.tsx:298
+#: src/pages/shell/sidebar.tsx:303
 msgid "Search"
 msgstr "Suchen"
 
@@ -3789,7 +3795,7 @@ msgstr "{0} auswählen"
 msgid "Select a bot"
 msgstr "Bot auswählen"
 
-#: src/pages/shell/composer.tsx:976
+#: src/pages/shell/composer.tsx:967
 msgid "Send"
 msgstr "Senden"
 
@@ -3810,7 +3816,7 @@ msgstr ""
 msgid "Send it"
 msgstr "Senden"
 
-#: src/pages/Auth.tsx:213
+#: src/pages/Auth.tsx:215
 msgid "Send reset link"
 msgstr "Link zum Zurücksetzen senden"
 
@@ -3841,20 +3847,20 @@ msgstr "Servername"
 msgid "Server URL"
 msgstr "Server-URL"
 
-#: src/pages/bot-page/BotPage.tsx:88
+#: src/pages/bot-page/BotPage.tsx:101
 #: src/pages/MessagingSettingsOverlay.tsx:361
 #: src/pages/SettingsOverlay.tsx:110
 #: src/pages/SettingsOverlay.tsx:165
-#: src/pages/shell/sidebar.tsx:701
-#: src/pages/shell/sidebar.tsx:708
+#: src/pages/shell/sidebar.tsx:710
+#: src/pages/shell/sidebar.tsx:717
 msgid "Settings"
 msgstr "Einstellungen"
 
-#: src/pages/shell/composer.tsx:1180
+#: src/pages/shell/composer.tsx:1174
 msgid "Settings: General"
 msgstr "Einstellungen: Allgemein"
 
-#: src/pages/shell/composer.tsx:1182
+#: src/pages/shell/composer.tsx:1176
 msgid "Settings: Usage"
 msgstr "Einstellungen: Nutzung"
 
@@ -3864,11 +3870,11 @@ msgid "Setup help"
 msgstr "Einrichtungshilfe"
 
 #. placeholder {0}: seed + 1
-#: src/pages/bot-page/BotHero.tsx:142
+#: src/pages/bot-page/BotHero.tsx:151
 msgid "Shape {0}"
 msgstr "Form {0}"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:87
+#: src/pages/bot-page/KnowledgeTab.tsx:107
 #: src/pages/MemorySettingsOverlay.tsx:49
 msgid "Shared"
 msgstr "Geteilt"
@@ -3885,13 +3891,13 @@ msgstr "Geteilte Dokumente"
 msgid "Show before / after"
 msgstr "Vorher / Nachher anzeigen"
 
-#: src/pages/shell/sidebar.tsx:748
+#: src/pages/shell/sidebar.tsx:757
 #: src/pages/shell/thread-header.tsx:66
 #: src/pages/shell/thread-header.tsx:67
 msgid "Show bots"
 msgstr "Bots anzeigen"
 
-#: src/pages/bot-page/BotActivity.tsx:238
+#: src/pages/bot-page/BotActivity.tsx:241
 msgid "Show earlier"
 msgstr "Frühere anzeigen"
 
@@ -3899,17 +3905,19 @@ msgstr "Frühere anzeigen"
 msgid "Show key"
 msgstr ""
 
-#: src/pages/shell/message-view.tsx:73
+#: src/pages/KnowledgeSection.tsx:885
+#: src/pages/shell/message-view.tsx:77
 msgid "Show less"
 msgstr ""
 
-#: src/pages/bot-page/BotActivity.tsx:467
+#: src/pages/bot-page/BotActivity.tsx:459
+#: src/pages/KnowledgeSection.tsx:885
 #: src/pages/PluginsOverlay.tsx:873
-#: src/pages/shell/message-view.tsx:73
+#: src/pages/shell/message-view.tsx:77
 msgid "Show more"
 msgstr "Mehr anzeigen"
 
-#: src/pages/Auth.tsx:186
+#: src/pages/Auth.tsx:183
 msgid "Show password"
 msgstr "Passwort anzeigen"
 
@@ -3918,8 +3926,8 @@ msgid "Show the tools a bot used, with their input and output."
 msgstr "Zeigt die von einem Bot verwendeten Tools mit Eingabe und Ausgabe."
 
 #: src/lib/localized-provider-hint.ts:7
-#: src/pages/Auth.tsx:230
-#: src/pages/Auth.tsx:288
+#: src/pages/Auth.tsx:232
+#: src/pages/Auth.tsx:290
 #: src/pages/ModelSettingsOverlay.tsx:730
 #: src/pages/Onboarding.tsx:187
 msgid "Sign in"
@@ -3929,17 +3937,29 @@ msgstr "Anmelden"
 msgid "Sign in to Rakazo"
 msgstr "Bei Rakazo anmelden"
 
-#: src/pages/Auth.tsx:223
+#: src/pages/Auth.tsx:225
 #: src/pages/Welcome.tsx:32
 msgid "Sign up"
 msgstr "Registrieren"
 
 #. placeholder {0}: skill.name
-#: src/pages/shell/composer.tsx:796
+#: src/pages/shell/composer.tsx:787
 msgid "Skill {0}"
 msgstr "Skill {0}"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:40
+#: src/pages/shell/message-view.tsx:294
+msgid "Skill deleted · {name}"
+msgstr ""
+
+#: src/pages/shell/message-view.tsx:291
+msgid "Skill learned · {name}"
+msgstr ""
+
+#: src/pages/shell/message-view.tsx:293
+msgid "Skill updated · {name}"
+msgstr ""
+
+#: src/pages/bot-page/KnowledgeTab.tsx:55
 #: src/pages/CustomizeOverlay.tsx:19
 #: src/pages/SkillsOverlay.tsx:106
 #: src/pages/SkillsOverlay.tsx:256
@@ -3948,7 +3968,7 @@ msgstr "Skills"
 
 #: src/components/AskCard.tsx:768
 #: src/components/integrations/IntegrationSetup.tsx:364
-#: src/pages/shell/side-panel.tsx:526
+#: src/pages/shell/side-panel.tsx:529
 msgid "Skip"
 msgstr "Überspringen"
 
@@ -3961,7 +3981,7 @@ msgid "Skipped"
 msgstr ""
 
 #. placeholder {0}: skipped.join(", ")
-#: src/pages/Shell.tsx:1934
+#: src/pages/Shell.tsx:1899
 msgid "Skipped {0}"
 msgstr "{0} übersprungen"
 
@@ -3996,7 +4016,7 @@ msgstr "Nur sprechen"
 msgid "Speak this reply"
 msgstr "Diese Antwort vorlesen"
 
-#: src/pages/KnowledgeSection.tsx:377
+#: src/pages/KnowledgeSection.tsx:388
 msgid "Specific agents"
 msgstr "Bestimmte Agenten"
 
@@ -4018,10 +4038,10 @@ msgstr "Wird gestartet…"
 msgid "Steps"
 msgstr "Schritte"
 
-#: src/pages/shell/composer.tsx:992
-#: src/pages/shell/composer.tsx:1033
-#: src/pages/shell/side-panel.tsx:418
-#: src/pages/shell/side-panel.tsx:423
+#: src/pages/shell/composer.tsx:986
+#: src/pages/shell/composer.tsx:1027
+#: src/pages/shell/side-panel.tsx:421
+#: src/pages/shell/side-panel.tsx:426
 msgid "Stop"
 msgstr "Stoppen"
 
@@ -4048,7 +4068,7 @@ msgstr "Verschlüsselt gespeichert"
 msgid "Stored securely. Never shown here."
 msgstr "Sicher gespeichert. Hier nie angezeigt."
 
-#: src/pages/shell/message-view.tsx:385
+#: src/pages/shell/message-view.tsx:429
 msgid "subagent"
 msgstr "Subagent"
 
@@ -4085,7 +4105,7 @@ msgstr "System"
 msgid "Teach a task"
 msgstr "Aufgabe anlernen"
 
-#: src/pages/Shell.tsx:2865
+#: src/pages/Shell.tsx:2853
 msgid "Teaching in progress. Stop teaching before sending a new message."
 msgstr "Aufgabe wird angelernt. Beende das Anlernen, bevor du eine neue Nachricht sendest."
 
@@ -4094,7 +4114,7 @@ msgstr "Aufgabe wird angelernt. Beende das Anlernen, bevor du eine neue Nachrich
 msgid "Team"
 msgstr "Team"
 
-#: src/pages/shell/side-panel.tsx:303
+#: src/pages/shell/side-panel.tsx:306
 msgid "Team Computer"
 msgstr "Team-Computer"
 
@@ -4110,7 +4130,7 @@ msgstr "Teams-Nachricht"
 msgid "Test"
 msgstr "Test"
 
-#: src/pages/bot-page/RoutineDetail.tsx:195
+#: src/pages/bot-page/RoutineDetail.tsx:199
 msgid "Test run"
 msgstr "Testlauf"
 
@@ -4134,7 +4154,7 @@ msgstr "Der ausgewählte Erinnerungsanbieter ist in diesem Build nicht verfügba
 msgid "Thinking"
 msgstr "Denkmodus"
 
-#: src/pages/shell/side-panel.tsx:283
+#: src/pages/shell/side-panel.tsx:286
 msgid "This bot runs on this computer, not a Linux desktop. Shell and files use your home folder."
 msgstr "Dieser Bot wird auf diesem Computer und nicht auf einem Linux-Desktop ausgeführt. Shell und Dateien verwenden deinen persönlichen Ordner."
 
@@ -4167,7 +4187,7 @@ msgstr "dieser Mac"
 msgid "This permanently removes every message and stops current work. The chat remains available."
 msgstr "Dies entfernt dauerhaft alle Nachrichten und stoppt die laufende Arbeit. Der Chat bleibt verfügbar."
 
-#: src/pages/Auth.tsx:253
+#: src/pages/Auth.tsx:255
 msgid "This reset link is invalid or expired"
 msgstr "Dieser Link zum Zurücksetzen ist ungültig oder abgelaufen"
 
@@ -4195,7 +4215,7 @@ msgstr ""
 msgid "Time of day"
 msgstr "Uhrzeit"
 
-#: src/pages/bot-page/BotHero.tsx:58
+#: src/pages/bot-page/BotHero.tsx:61
 #: src/pages/shell/bot-panel.tsx:120
 msgid "Title"
 msgstr "Titel"
@@ -4204,10 +4224,10 @@ msgstr "Titel"
 msgid "To:"
 msgstr "An:"
 
-#: src/pages/bot-page/BotActivity.tsx:213
+#: src/pages/bot-page/BotActivity.tsx:216
 #: src/pages/PeerMessagesOverlay.tsx:180
 #: src/pages/shell/routine-run-line.tsx:401
-#: src/pages/shell/transcript.tsx:217
+#: src/pages/shell/transcript.tsx:221
 msgid "Today"
 msgstr "Heute"
 
@@ -4262,7 +4282,7 @@ msgid "Unpin"
 msgstr "Lösen"
 
 #. placeholder {0}: pending.file.name
-#: src/pages/Shell.tsx:2018
+#: src/pages/Shell.tsx:1983
 msgid "Unsupported file type: {0}"
 msgstr "Nicht unterstützter Dateityp: {0}"
 
@@ -4330,8 +4350,8 @@ msgstr "Wird aktualisiert …"
 
 #: src/pages/AccountSettingsOverlay.tsx:226
 #: src/pages/SettingsOverlay.tsx:103
-#: src/pages/shell/sidebar.tsx:713
-#: src/pages/shell/sidebar.tsx:724
+#: src/pages/shell/sidebar.tsx:722
+#: src/pages/shell/sidebar.tsx:733
 msgid "Usage"
 msgstr "Nutzung"
 
@@ -4376,7 +4396,7 @@ msgstr "Stimme"
 msgid "Voice and replies"
 msgstr "Stimme und Antworten"
 
-#: src/pages/bot-page/BotActivity.tsx:304
+#: src/pages/bot-page/BotActivity.tsx:308
 msgid "Waiting"
 msgstr "Wartet"
 
@@ -4395,11 +4415,11 @@ msgstr "Warten auf die Rückkehr der API …"
 msgid "Waiting…"
 msgstr "Warten…"
 
-#: src/pages/bot-page/RoutineTriggers.tsx:150
+#: src/pages/bot-page/RoutineTriggers.tsx:136
 msgid "Webhook"
 msgstr "Webhook"
 
-#: src/pages/bot-page/RoutineTriggers.tsx:93
+#: src/pages/bot-page/RoutineTriggers.tsx:79
 #: src/pages/RoutineSchedule.tsx:39
 #: src/pages/RoutineSchedule.tsx:158
 msgid "Weekdays"
@@ -4413,7 +4433,7 @@ msgstr "Wöchentlich am {weekday} um {time}"
 msgid "What about its memories?"
 msgstr "Was soll mit seinen Erinnerungen geschehen?"
 
-#: src/pages/bot-page/BotHero.tsx:64
+#: src/pages/bot-page/BotHero.tsx:68
 msgid "What it does, in one line"
 msgstr "Was er tut, in einem Satz"
 
@@ -4421,8 +4441,8 @@ msgstr "Was er tut, in einem Satz"
 msgid "What result will you demonstrate?"
 msgstr "Welches Ergebnis wirst du vorführen?"
 
-#: src/pages/bot-page/RoutineCreateForm.tsx:103
-#: src/pages/bot-page/RoutineDetail.tsx:143
+#: src/pages/bot-page/RoutineCreateForm.tsx:96
+#: src/pages/bot-page/RoutineDetail.tsx:145
 msgid "What should this routine do each time it runs?"
 msgstr "Was soll diese Routine bei jedem Lauf tun?"
 
@@ -4441,12 +4461,11 @@ msgid "What to return"
 msgstr "Was zurückgegeben werden soll"
 
 #: src/pages/bot-page/routine-copy.ts:37
-#: src/pages/bot-page/RoutineTriggers.tsx:227
-#: src/pages/bot-page/RoutineTriggers.tsx:366
+#: src/pages/bot-page/RoutineTriggers.tsx:210
 msgid "When a webhook fires"
 msgstr "Wenn ein Webhook ausgelöst wird"
 
-#: src/pages/bot-page/RoutineTriggers.tsx:103
+#: src/pages/bot-page/RoutineTriggers.tsx:89
 msgid "When to run"
 msgstr "Ausführungszeit"
 
@@ -4458,17 +4477,17 @@ msgstr "Einsatzzeitpunkt"
 msgid "Where should bots run?"
 msgstr "Wo sollen Bots ausgeführt werden?"
 
-#: src/pages/Auth.tsx:209
-#: src/pages/Auth.tsx:317
+#: src/pages/Auth.tsx:211
+#: src/pages/Auth.tsx:319
 #: src/pages/SkillsOverlay.tsx:562
 msgid "Working…"
 msgstr "Wird verarbeitet…"
 
-#: src/pages/KnowledgeSection.tsx:715
+#: src/pages/KnowledgeSection.tsx:795
 msgid "Workspace root"
 msgstr "Arbeitsbereich-Stammverzeichnis"
 
-#: src/pages/bot-page/BotActivity.tsx:286
+#: src/pages/bot-page/BotActivity.tsx:290
 msgid "Write its first instructions"
 msgstr "Erste Anweisungen schreiben"
 
@@ -4476,15 +4495,15 @@ msgstr "Erste Anweisungen schreiben"
 msgid "Yearly on {date} at {time}"
 msgstr "Jährlich am {date} um {time}"
 
-#: src/pages/bot-page/BotActivity.tsx:214
+#: src/pages/bot-page/BotActivity.tsx:217
 #: src/pages/PeerMessagesOverlay.tsx:181
 #: src/pages/shell/routine-run-line.tsx:402
-#: src/pages/shell/transcript.tsx:218
+#: src/pages/shell/transcript.tsx:222
 msgid "Yesterday"
 msgstr "Gestern"
 
-#: src/pages/Shell.tsx:1682
-#: src/pages/Shell.tsx:2557
+#: src/pages/Shell.tsx:1647
+#: src/pages/Shell.tsx:2528
 msgid "You"
 msgstr "Du"
 
@@ -4496,15 +4515,15 @@ msgstr "Du kannst diesen Tab schließen, wenn du nicht automatisch weitergeleite
 msgid "You can close this window."
 msgstr "Du kannst dieses Fenster schließen."
 
-#: src/pages/shell/side-panel.tsx:406
+#: src/pages/shell/side-panel.tsx:409
 msgid "You have control"
 msgstr "Du hast die Kontrolle"
 
-#: src/pages/Auth.tsx:157
+#: src/pages/Auth.tsx:154
 msgid "Your email address"
 msgstr "Deine E-Mail-Adresse"
 
-#: src/pages/Auth.tsx:142
+#: src/pages/Auth.tsx:139
 msgid "Your name"
 msgstr "Dein Name"
 

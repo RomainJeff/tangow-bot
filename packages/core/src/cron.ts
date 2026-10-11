@@ -543,7 +543,8 @@ function validTimezoneOrUtc(timezone: string): string {
   return isValidTimezone(timezone) ? timezone : "UTC";
 }
 
-function parseClock(time: string): { hour: number; minute: number } {
+/** "9:00 AM" as a 24-hour clock. */
+export function parseClock(time: string): { hour: number; minute: number } {
   const [rawH, rest] = time.split(":");
   const minute = Number((rest ?? "00").slice(0, 2));
   let hour = Number(rawH);
@@ -552,7 +553,8 @@ function parseClock(time: string): { hour: number; minute: number } {
   return { hour, minute };
 }
 
-function formatClock(hour: number, minute: number): string {
+/** A 24-hour clock as the "9:00 AM" a schedule preset keeps. */
+export function formatClock(hour: number, minute: number): string {
   const period = hour >= 12 ? "PM" : "AM";
   const h12 = hour % 12 === 0 ? 12 : hour % 12;
   return `${h12}:${String(minute).padStart(2, "0")} ${period}`;

@@ -28,6 +28,8 @@ import "../../src/styles.css";
  *   activity=empty|error (what reading the activity answers; by default 39 routine runs
  *   and 3 creations, 30 a page; a routine's page reads only its runs)
  *   fail=1 (every save fails)   refuse=1 (the server refuses a computer change)   theme=dark
+ *   read=loading|error (the page's read of the bot and its routines never answers, or fails
+ *   until "Fail reads" is unchecked; the routines stay unknown until a read answers)
  * Writes go through in-memory commands that answer after 400 ms; reads are
  * answered by a stubbed fetch with fixed data. A refusal carries the server's
  * reason like a real RPC error; fail=1 fails like a dropped connection.
@@ -37,6 +39,7 @@ const NEW = params.get("new") === "1";
 const BUSY = params.get("busy") === "1";
 const ACTIVITY = params.get("activity");
 const REFUSE = params.get("refuse") === "1";
+const READ = params.get("read");
 const SAVE_DELAY = 400;
 
 applyResolvedAppearance(params.get("theme") === "dark" ? "dark" : "light");
@@ -327,11 +330,25 @@ const READS: Record<string, unknown> = {
       visibleBotIds: [BOT.id],
     },
   ],
+  "agentSkills/get": {
+    id: "skill-1",
+    name: "inbox-triage",
+    description: "Sorts a mailbox into decide, reply, wait.",
+    source: "user",
+    readOnly: false,
+    createdAt: "2026-10-01T08:00:00.000Z",
+    updatedAt: "2026-10-05T08:00:00.000Z",
+    content:
+      "---\nname: inbox-triage\ndescription: Sorts a mailbox into decide, reply, wait.\n---\n\nRead every unread email. Put each one under Decide, Reply or Wait, newest first.\n",
+  },
   "scratchpad/list": [],
   "computer/files": [
     { path: "notes", kind: "dir", size: 0 },
     { path: "inbox-report.md", kind: "file", size: 3_200 },
     { path: "q3-forecast.csv", kind: "file", size: 12_400 },
+    { path: "renewals.md", kind: "file", size: 2_050 },
+    { path: "team-notes.md", kind: "file", size: 4_800 },
+    { path: "vendors.csv", kind: "file", size: 9_300 },
   ],
   "bots/list": [],
 };
@@ -385,6 +402,8 @@ function initialDetail(value: string | null): BotDetail | null {
     return { kind: "routine", routineId: params.get("routine") ?? "routine-2" };
   }
   if (value === "routine-new") return { kind: "routine-new" };
+  if (value === "memory") return { kind: "memory", documentId: "memory-1" };
+  if (value === "skill") return { kind: "skill", skillId: "skill-1" };
   if (
     value === "instructions" ||
     value === "description" ||
@@ -406,6 +425,10 @@ function Fixture() {
   const [fail, setFail] = useState(params.get("fail") === "1");
   const failRef = useRef(fail);
   failRef.current = fail;
+  const [routinesRead, setRoutinesRead] = useState(READ === null);
+  const [failReads, setFailReads] = useState(READ === "error");
+  const failReadsRef = useRef(failReads);
+  failReadsRef.current = failReads;
   const webhookKeyRef = useRef("whsec_fixture_0000");
   const tab = params.get("tab");
   const [view, setView] = useState<BotPageView>({
@@ -470,6 +493,13 @@ function Fixture() {
         return webhookKeyRef.current;
       },
       botAction: (_botId, action) => console.info(`bot action: ${action}`),
+      async refresh() {
+        await delay(150);
+        if (READ === "loading") await new Promise(() => undefined);
+        if (failReadsRef.current) throw new Error("The server did not answer.");
+        setRoutinesRead(true);
+      },
+      refreshRoutines: async () => undefined,
       activityEpoch: 0,
       openRun: (row) => console.info(`open run from ${row.sourceMessageId ?? "the end"}`),
       skillsChanged: () => undefined,
@@ -493,6 +523,15 @@ function Fixture() {
           />
           Fail saves
         </label>
+        <label className="ms-4 flex items-center gap-2 text-meta text-muted-foreground">
+          <input
+            type="checkbox"
+            data-testid="fixture-fail-reads"
+            checked={failReads}
+            onChange={(event) => setFailReads(event.target.checked)}
+          />
+          Fail reads
+        </label>
       </main>
       <aside
         data-testid="side-panel"
@@ -506,7 +545,7 @@ function Fixture() {
         <BotPage
           bot={bot}
           userId="user-1"
-          routines={routines}
+          routines={routinesRead ? routines : null}
           memoryProviderConfigured={false}
           view={view}
           onView={setView}

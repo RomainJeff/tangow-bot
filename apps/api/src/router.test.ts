@@ -1,5 +1,9 @@
 import { RPCHandler } from "@orpc/server/fetch";
-import { COMPUTER_SCREEN_UNAVAILABLE, ComputerScreenUnavailableError } from "@rakazo/adapters";
+import {
+  COMPUTER_SCREEN_UNAVAILABLE,
+  ComputerScreenUnavailableError,
+  createSkillLineSweep,
+} from "@rakazo/adapters";
 import type { Actor } from "@rakazo/contracts";
 import { REPLY_QUOTE_MAX_LENGTH } from "@rakazo/contracts";
 import { openScreenCapability } from "@rakazo/core/node/screen-capability";
@@ -947,16 +951,33 @@ describe("thread rewind", () => {
 });
 
 describe("thread stop", () => {
-  it("settles a routine card the user approved but the stopped run never created", async () => {
-    const run = { id: "run-1", spaceId: "workspace-1", threadId: "thread-1", botId: "bot-1" };
+  async function stopFixture() {
+    const run = {
+      id: "run-1",
+      spaceId: "workspace-1",
+      userId: "user-1",
+      threadId: "thread-1",
+      botId: "bot-1",
+      trigger: "user",
+      sourceMessage: null,
+      skillLinesAt: null as Date | null,
+    };
     // A run the user started: no routine woke it.
     const matchesRun = (where: { status: unknown; routineId?: unknown }) =>
       where.routineId === undefined && (where.status !== "cancelled" || runStatus === "cancelled");
     let runStatus = "running";
     const effects = [{ id: "effect-1", status: "approved", result: null as unknown }];
+    const skillWrites: Array<{ runId: string; kind: string; status: string; result: unknown }> = [];
     const card = {
       id: "message-2",
       blocks: [{ kind: "ask", approvalEffectId: "effect-1", status: "answered", answer: "allow" }],
+    };
+    const reply = {
+      id: "message-3",
+      threadId: "thread-1",
+      role: "bot",
+      botId: "bot-1",
+      blocks: [{ kind: "text", text: "On it." }] as Array<Record<string, unknown>>,
     };
     const prisma = {
       $queryRaw: vi.fn().mockResolvedValue([]),
@@ -975,7 +996,12 @@ describe("thread stop", () => {
           runStatus = "cancelled";
           return { count: 1 };
         }),
-        findUnique: vi.fn(async () => ({ status: runStatus, startedAt: null })),
+        updateMany: vi.fn(async ({ data }: { data: { skillLinesAt: Date } }) => {
+          if (run.skillLinesAt) return { count: 0 };
+          run.skillLinesAt = data.skillLinesAt;
+          return { count: 1 };
+        }),
+        findUnique: vi.fn(async () => ({ ...run, status: runStatus, startedAt: null })),
       },
       steeringMessage: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
       computerExecutionLease: {
@@ -987,7 +1013,11 @@ describe("thread stop", () => {
         updateMany: vi.fn().mockResolvedValue({ count: 0 }),
       },
       externalEffect: {
-        findMany: vi.fn(async () => effects.filter((effect) => effect.status === "approved")),
+        findMany: vi.fn(async ({ where }: { where: { status: unknown } }) =>
+          where.status === "completed"
+            ? skillWrites
+            : effects.filter((effect) => effect.status === "approved"),
+        ),
         updateMany: vi.fn(
           async ({ where, data }: { where: { status: string }; data: { result: unknown } }) => {
             if (effects[0]!.status !== where.status) return { count: 0 };
@@ -997,11 +1027,15 @@ describe("thread stop", () => {
         ),
       },
       message: {
-        findMany: vi.fn(async () => [card]),
+        // The run's messages in order: its card, then its last bubble.
+        findMany: vi.fn(async () => [card, reply]),
         findUnique: vi.fn().mockResolvedValue(null),
-        update: vi.fn(async ({ data }: { data: { blocks: typeof card.blocks } }) => {
-          card.blocks = data.blocks;
-        }),
+        update: vi.fn(
+          async ({ where, data }: { where: { id: string }; data: { blocks: never[] } }) => {
+            const target = where.id === reply.id ? reply : card;
+            target.blocks = data.blocks;
+          },
+        ),
       },
       thread: { update: vi.fn().mockResolvedValue({ nextEventSeq: 8 }) },
       event: {
@@ -1031,17 +1065,32 @@ describe("thread stop", () => {
       email: "user@rakazo.test",
       isDeploymentOwner: true,
     } satisfies Actor;
+    const stop = async () =>
+      (
+        await new RPCHandler(createRouter(deps)).handle(
+          new Request("http://127.0.0.1/rpc/threads/stop", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ json: { botId: "bot-1" } }),
+          }),
+          { prefix: "/rpc", context: { actor } },
+        )
+      ).response;
+    return {
+      prisma: prisma as unknown as PrismaClient,
+      card,
+      reply,
+      effects,
+      skillWrites,
+      notify,
+      stop,
+    };
+  }
 
-    const { response } = await new RPCHandler(createRouter(deps)).handle(
-      new Request("http://127.0.0.1/rpc/threads/stop", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ json: { botId: "bot-1" } }),
-      }),
-      { prefix: "/rpc", context: { actor } },
-    );
+  it("settles a routine card the user approved but the stopped run never created", async () => {
+    const { card, effects, notify, stop } = await stopFixture();
 
-    expect(response.status).toBe(200);
+    expect((await stop()).status).toBe(200);
     expect(card.blocks[0]).toEqual({
       kind: "ask",
       approvalEffectId: "effect-1",
@@ -1055,6 +1104,31 @@ describe("thread stop", () => {
       result: { error: "The run ended before this routine was created." },
     });
     expect(notify).toHaveBeenCalledWith("thread-1", 7);
+  });
+
+  it("leaves a stopped run's skill lines to the sweep, which also takes a write that lands after the stop", async () => {
+    const { prisma, reply, skillWrites, notify, stop } = await stopFixture();
+    const save = (name: string) =>
+      skillWrites.push({
+        runId: "run-1",
+        kind: "skill_create",
+        status: "completed",
+        result: { ok: true, name },
+      });
+    const line = (name: string) => ({
+      kind: "skill_source",
+      skillId: `user:${name.toLowerCase()}`,
+      name,
+      change: "learned",
+    });
+    save("Coffee");
+
+    expect((await stop()).status).toBe(200);
+    save("Tea");
+    expect(reply.blocks).toEqual([{ kind: "text", text: "On it." }]);
+
+    await createSkillLineSweep({ prisma, events: { notify } })();
+    expect(reply.blocks).toEqual([{ kind: "text", text: "On it." }, line("Coffee"), line("Tea")]);
   });
 });
 
@@ -1310,6 +1384,18 @@ describe("routine update triggers", () => {
     const body = (await response.json()) as { json: { code: string; message: string } };
     return body.json;
   }
+
+  it("lets a routine's runs save skills again once the owner saves its prompt, not before", async () => {
+    const { routineUpdate, update } = updateDeps({ untrustedPrompt: true });
+
+    expect((await update({ notify: true })).status).toBe(200);
+    expect((await update({ prompt: "Check twice" })).status).toBe(200);
+
+    expect(routineUpdate.mock.calls.map(([{ data }]) => data.untrustedPrompt)).toEqual([
+      undefined,
+      false,
+    ]);
+  });
 
   it("arms a never-run one-shot at a time with an offset, and refuses one without", () =>
     at("2026-10-07T10:00:00.000Z", async () => {

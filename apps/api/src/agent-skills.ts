@@ -9,6 +9,7 @@ import {
   marketplacesRoot,
   removeUserSkill,
   renameUserSkill,
+  type SkillOwnerLock,
   type UserSkillFile,
   userSkillsRoot,
   writeUserSkill,
@@ -136,7 +137,11 @@ export function resolveSkillContent(input: {
   };
 }
 
-export function createAgentSkillsService(prisma: PrismaClient, dataDir: string) {
+export function createAgentSkillsService(
+  prisma: PrismaClient,
+  dataDir: string,
+  lock: SkillOwnerLock,
+) {
   const root = (actor: Actor) => userSkillsRoot(dataDir, actor);
   const files = (actor: Actor) => listUserSkills(root(actor));
   const marketplaceFiles = (actor: Actor) =>
@@ -239,7 +244,7 @@ export function createAgentSkillsService(prisma: PrismaClient, dataDir: string) 
     return toAgentSkill(await owned(actor, userSkillKey(resolved.name)));
   }
 
-  return {
+  const service = {
     list,
 
     async listWithContent(actor: Actor, botId?: string): Promise<AgentSkill[]> {
@@ -288,6 +293,8 @@ export function createAgentSkillsService(prisma: PrismaClient, dataDir: string) 
       }).catch((error: unknown) => {
         if (error instanceof ORPCError) throw error;
         if (isExists(error)) conflictOrRethrow(error);
+        // A filesystem failure is the server's, and its message names a host path.
+        if (error instanceof Error && "syscall" in error) throw error;
         // ponytail: archive/layout failures all read fine as-is; no error taxonomy.
         throw new ORPCError("BAD_REQUEST", {
           message: error instanceof Error ? error.message : "Invalid skill bundle.",
@@ -388,6 +395,20 @@ export function createAgentSkillsService(prisma: PrismaClient, dataDir: string) 
       if (!entry) throw new IsolationError();
       return entry;
     },
+  };
+
+  // Every write runs under the owner's skill lock, which the bots' skill tools take too.
+  const locked =
+    <A extends unknown[], R>(write: (actor: Actor, ...args: A) => Promise<R>) =>
+    (actor: Actor, ...args: A) =>
+      lock.run(actor, () => write(actor, ...args));
+  return {
+    ...service,
+    create: locked(service.create),
+    import: locked(service.import),
+    update: locked(service.update),
+    remove: locked(service.remove),
+    setAccess: locked(service.setAccess),
   };
 }
 

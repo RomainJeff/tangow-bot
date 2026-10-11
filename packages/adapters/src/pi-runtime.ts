@@ -64,6 +64,7 @@ import {
 } from "./pi-session.js";
 import { textContentArg } from "./tool-text.js";
 import type { TraceExporter } from "./trace-export.js";
+import { toolCallBudgetNotice } from "./user-progress.js";
 
 /**
  * Normalize the ask_user v2 `questions` argument into validated AskQuestion[] with stable ids.
@@ -1132,7 +1133,8 @@ function toAgentTool(tool: ConnectorTool, host: ToolHost, exposedName: string): 
           title: raw.title ? String(raw.title) : "",
           instructions: raw.instructions ? String(raw.instructions) : "",
           prompt: raw.prompt ? String(raw.prompt) : "",
-          computer_mode: raw.computer_mode ? String(raw.computer_mode) : "",
+          // Optional enum: an empty string fails Pi's schema check, so leave it out when absent.
+          ...(raw.computer_mode ? { computer_mode: String(raw.computer_mode) } : {}),
         };
       }
       if (tool.name === "create_space") {
@@ -1967,7 +1969,7 @@ interface ToolHost {
 }
 
 function toolCallBudgetExceededMessage(limit: number) {
-  return `I stopped after reaching the limit of ${limit} tool calls in this turn. Send another message to continue.`;
+  return toolCallBudgetNotice(limit);
 }
 
 function toolCallBudgetFor(runId: string): ToolCallBudget {

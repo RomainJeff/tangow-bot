@@ -39,6 +39,8 @@ export class EvalServices extends ComposioEmulator {
   ];
   inbox = INBOX.map((row) => ({ ...row }));
   uncertainWrite = false;
+  /** Tools whose first call fails as a service outage would, and works when retried. */
+  readonly failOnce = new Set<string>();
   private faultUsed = false;
 
   constructor() {
@@ -183,6 +185,9 @@ export class EvalServices extends ComposioEmulator {
       outcome: "rejected",
     };
     this.calls.push(entry);
+    if (this.failOnce.delete(call.tool)) {
+      throw new Error("The service is temporarily unavailable. Try again.");
+    }
     if (call.tool === "GMAIL_LIST_MESSAGES") {
       entry.outcome = "read";
       yield { type: "result", data: { messages: structuredClone(this.inbox) } };

@@ -1,4 +1,5 @@
 import type { MessageBlock } from "@rakazo/contracts";
+import { MessageBlocks } from "@rakazo/contracts";
 import { botColors } from "@rakazo/ui-tokens";
 import { describe, expect, it } from "vitest";
 import { hasRenderableBlock, isHiddenActivityBlock } from "./message-blocks";
@@ -32,6 +33,23 @@ describe("hasRenderableBlock", () => {
     ).toBe(false);
     expect(hasRenderableBlock([steps], false)).toBe(false);
     expect(hasRenderableBlock([], true)).toBe(false);
+  });
+
+  it("draws a message that only carries a skill line, and not one an older build cannot read", () => {
+    const line = [
+      {
+        kind: "skill_source",
+        skillUid: "0123456789abcdef0123456789abcdef",
+        skillId: "user:coffee",
+        name: "Coffee",
+        change: "learned",
+      },
+    ];
+    expect(hasRenderableBlock(MessageBlocks.parse(line), false)).toBe(true);
+    // An older build does not know the kind and drops it while parsing.
+    expect(
+      hasRenderableBlock(MessageBlocks.parse([{ ...line[0], kind: "unknown_kind" }]), false),
+    ).toBe(false);
   });
 
   it("does not count the preview's removal marker as something to draw", () => {

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { ModelConnectInputSchema } from "@rakazo/contracts";
+import { DEFAULT_SKILL_LEARNING } from "@rakazo/core";
 import { loadRootEnv } from "@rakazo/core/node/load-root-env";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import { EVAL_CASES } from "../evals/cases.js";
@@ -148,11 +149,12 @@ async function main() {
         connection,
         createApp: async (composio, messaging) => {
           const sandbox = new EvalSandboxProvider();
+          const trialDataDir = path.join(dataDir, `${scenario.id}-${planned.trial}`);
           const handles = await createApp({
             sandbox,
             databaseUrl,
             realtimeDatabaseUrl: databaseUrl,
-            dataDir: path.join(dataDir, `${scenario.id}-${planned.trial}`),
+            dataDir: trialDataDir,
             sandboxProvider: "fake",
             agentRuntime: "pi",
             wakeupDriver: "memory",
@@ -181,8 +183,9 @@ async function main() {
             mcpStdioAllowedCommands: [],
             updaterUrl: undefined,
             updaterToken: undefined,
+            skillLearning: scenario.skillLearning ? "on" : DEFAULT_SKILL_LEARNING,
           });
-          return { ...handles, harnessIssues: sandbox.harnessIssues };
+          return { ...handles, dataDir: trialDataDir, harnessIssues: sandbox.harnessIssues };
         },
       });
       save();

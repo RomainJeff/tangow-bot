@@ -9,8 +9,10 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  Button,
   type FieldSave,
   type SaveMetaLabels,
+  Skeleton,
   Surface,
   useFieldSave,
 } from "@rakazo/ui-web";
@@ -68,6 +70,49 @@ export function SettingsGroup({ label, children }: { label?: ReactNode; children
         ))}
       </Surface>
     </section>
+  );
+}
+
+/** "Could not load · Retry", in place of what failed to read. */
+export function CouldNotLoad({ onRetry, className }: { onRetry: () => void; className: string }) {
+  const { t } = useLingui();
+  return (
+    <p className={`text-muted-foreground ${className}`}>
+      {t`Could not load`}
+      {" · "}
+      <Button
+        type="button"
+        variant="link"
+        onClick={onRetry}
+        className="h-auto rounded-chip p-0 align-baseline text-meta font-normal text-inherit underline hover:text-foreground"
+      >
+        {t`Retry`}
+      </Button>
+    </p>
+  );
+}
+
+/** Rows that keep the height of what is loading; never a bare spinner. */
+export function LoadingRows() {
+  return (
+    <div aria-busy className="flex flex-col">
+      {[0, 1, 2].map((index) => (
+        <div key={index} className="flex min-h-11 items-center gap-2.5">
+          <Skeleton className="size-4.5 rounded-full" />
+          <Skeleton className="h-3.5 flex-1" />
+          <Skeleton className="h-3.5 w-12" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** What stands in for a read not answered yet: loading rows, or "Could not load · Retry". */
+export function PendingRead({ failed, onRetry }: { failed: boolean; onRetry: () => void }) {
+  return failed ? (
+    <CouldNotLoad onRetry={onRetry} className="py-10 text-center text-meta" />
+  ) : (
+    <LoadingRows />
   );
 }
 

@@ -29,6 +29,9 @@ export function isSkillVisible(input: {
   return availability === "all";
 }
 
+/** Skill versions an earlier build kept under the data dir; account deletion still removes them. */
+export const SKILL_HISTORY_DIR = "skill-history";
+
 /** Marketplace skills (phase 3): `mkt:<marketplace>/<plugin>/<slug>`, all three already lowercase. */
 export function marketplaceSkillKey(marketplace: string, plugin: string, slug: string): string {
   return `mkt:${marketplace}/${plugin}/${slug}`;

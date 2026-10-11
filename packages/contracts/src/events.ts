@@ -1,6 +1,6 @@
 import * as z from "zod";
 import { BotSecretDestination } from "./bot-secrets.js";
-import { Id } from "./ids.js";
+import { Id, SkillUidSchema } from "./ids.js";
 import { LinkPreviewBlock } from "./link-preview.js";
 import { McpTransportSchema } from "./mcp.js";
 
@@ -38,6 +38,14 @@ export const ProductEventType = z.enum([
   "effect.recorded",
   "agent.tool.called",
   "agent.tool.completed",
+  /** A run followed a skill: read it, was forced or cited to it, or opened its files; payload { name, via }. */
+  "agent.skill.used",
+  /**
+   * The end-of-exchange skill nudge: { phase: "decided", mode, signal, toolCount, skill? } before
+   * it runs (or, in shadow mode, instead of it), then { phase: "ended" } once its turn is over;
+   * { phase: "skipped", mode, reason } for a turn the user started that it passed over.
+   */
+  "agent.skill.nudge",
   "effect.reconciled",
   /** A person changed a proposed effect on its approval card; payload { effectId, proposed, approved }. */
   "effect.edited",
@@ -367,6 +375,17 @@ export const MessageBlock = z.discriminatedUnion("kind", [
     /** Mirrors the routine's `notify` setting at the time this card was rendered, so the
         client can default the toggle open/closed without a second lookup. */
     notify: z.boolean().optional(),
+  }),
+  z.object({
+    /** A skill a bot learned, updated or deleted during this exchange, one block per skill.
+        Written by the server from the run's skill writes, never by the model; clients show it
+        as a link under the message, outside its content. `skillId` and `name` are the ones the
+        bot wrote; `skillUid` is only on lines written while skills kept versions. */
+    kind: z.literal("skill_source"),
+    skillUid: SkillUidSchema.optional(),
+    skillId: z.string(),
+    name: z.string(),
+    change: z.enum(["learned", "updated", "deleted"]),
   }),
   LinkPreviewBlock,
 ]);

@@ -1,7 +1,14 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { listUserSkills, marketplacesRoot, userSkillsRoot } from "@rakazo/adapters";
+import {
+  createInMemorySkillLock,
+  listUserSkills,
+  marketplacesRoot,
+  type SkillOwnerLock,
+  skillCreateFromTool,
+  userSkillsRoot,
+} from "@rakazo/adapters";
 import { buildSkillMd } from "@rakazo/core";
 import { IsolationError, type PrismaClient } from "@rakazo/db";
 import { create as tarCreate } from "tar";
@@ -55,7 +62,8 @@ function table(store: Row[]) {
   };
 }
 
-const actor = { spaceId: "ws-1", userId: "user-1" } as never;
+const owner = { spaceId: "ws-1", userId: "user-1" };
+const actor = owner as never;
 
 describe("agent skills service (filesystem)", () => {
   let dataDir: string;
@@ -86,7 +94,89 @@ describe("agent skills service (filesystem)", () => {
     await rm(dataDir, { recursive: true, force: true });
   });
 
-  const service = () => createAgentSkillsService(prisma as unknown as PrismaClient, dataDir);
+  const service = (lock: SkillOwnerLock = createInMemorySkillLock()) =>
+    createAgentSkillsService(prisma as unknown as PrismaClient, dataDir, lock);
+  const userSkills = async (skills: ReturnType<typeof service>) =>
+    (await skills.list(actor))
+      .filter((skill) => skill.source === "user")
+      .map((skill) => [skill.name, skill.description, skill.availability, skill.visibleBotIds]);
+
+  it("waits for the owner's earlier skill write before any write of its own", async () => {
+    const lock = createInMemorySkillLock();
+    const skills = service(lock);
+    const kept = await skills.create(actor, { name: "Kept", description: "K" });
+    const gone = await skills.create(actor, { name: "Gone", description: "G" });
+    let release = () => {};
+    const held = lock.run(
+      owner,
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const imported = buildSkillMd({ name: "Imported", description: "I", body: "Body" });
+    const writes = Promise.all([
+      skills.create(actor, { name: "New", description: "N" }),
+      skills.import(actor, { data: Buffer.from(imported).toString("base64") }),
+      skills.update(actor, { skillId: kept.id, description: "Better" }),
+      skills.setAccess(actor, { skillId: kept.id, availability: "disabled" }),
+      skills.remove(actor, gone.id),
+    ]);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(await userSkills(skills)).toEqual([
+      ["Gone", "G", "all", ["bot-1", "bot-2"]],
+      ["Kept", "K", "all", ["bot-1", "bot-2"]],
+    ]);
+
+    release();
+    await held;
+    await writes;
+    expect(await userSkills(skills)).toEqual([
+      ["Imported", "I", "all", ["bot-1", "bot-2"]],
+      ["Kept", "Better", "disabled", []],
+      ["New", "N", "all", ["bot-1", "bot-2"]],
+    ]);
+  });
+
+  it("renames a skill onto a name a bot is creating only once that create is done", async () => {
+    const lock = createInMemorySkillLock();
+    const skills = service(lock);
+    const old = await skills.create(actor, { name: "Old", description: "O" });
+    await skills.setAccess(actor, {
+      skillId: old.id,
+      availability: "selected",
+      bots: [{ botId: "bot-2", enabled: true }],
+    });
+    let release = () => {};
+    const upsert = prisma.skillSetting.upsert.getMockImplementation();
+    const rowsLanding = new Promise<void>((entered) => {
+      prisma.skillSetting.upsert.mockImplementationOnce(async (args) => {
+        entered();
+        await new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        return upsert?.(args);
+      });
+    });
+
+    const created = skillCreateFromTool(
+      { prisma: prisma as unknown as PrismaClient, dataDir, lock },
+      { ...owner, botId: "bot-1" },
+      [],
+      { name: "Deploy", description: "D", body: "x" },
+    );
+    await rowsLanding;
+    const renamed = skills.update(actor, { skillId: old.id, name: "Deploy" }).catch((e) => e);
+    await Promise.race([renamed, new Promise((resolve) => setTimeout(resolve, 100))]);
+    release();
+
+    expect(await created).toMatchObject({ ok: true });
+    expect(await renamed).toMatchObject({ code: "CONFLICT" });
+    expect(await userSkills(skills)).toEqual([
+      ["Deploy", "D", "selected", ["bot-1"]],
+      ["Old", "O", "selected", ["bot-2"]],
+    ]);
+  });
 
   it("creates, lists, renames (cascading access rows) and removes a skill", async () => {
     const skills = service();

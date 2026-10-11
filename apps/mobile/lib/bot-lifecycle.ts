@@ -31,3 +31,39 @@ export function confirmDeleteBot(bot: { id: string; name: string }, onDeleted: (
     ],
   );
 }
+
+/** Asks before clearing a conversation: it removes every message and stops current work. */
+export function confirmClearConversation(clear: () => void) {
+  Alert.alert(
+    t("Clear conversation?"),
+    t(
+      "This removes every message and stops current work. The bot, computer, memory, and routines are kept.",
+    ),
+    [
+      { text: t("Cancel"), style: "cancel" },
+      { text: t("Clear"), style: "destructive", onPress: clear },
+    ],
+  );
+}
+
+export function clearConversation(botId: string, onCleared?: () => void) {
+  void rpc("threads/clear", { botId })
+    .then(onCleared)
+    .catch((error) =>
+      Alert.alert(
+        t("Could not clear conversation"),
+        error instanceof Error ? error.message : t("Try again."),
+      ),
+    );
+}
+
+export function archiveBot(botId: string, onArchived: () => void) {
+  void rpc("bots/archive", { botId })
+    .then(onArchived)
+    .catch((error) =>
+      Alert.alert(
+        t("Could not archive bot"),
+        error instanceof Error ? error.message : t("Try again."),
+      ),
+    );
+}

@@ -59,3 +59,21 @@ describe("native message action sheet", () => {
     expect(actions.every((action) => action.onPress.mock.calls.length === 1)).toBe(true);
   });
 });
+
+describe("destructive actions", () => {
+  it("marks only the destructive actions in the iOS sheet", () => {
+    Platform.OS = "ios";
+    vi.mocked(ActionSheetIOS.showActionSheetWithOptions).mockClear();
+    presentMessageActionSheet({
+      actions: [
+        { text: "Archive", onPress: vi.fn() },
+        { text: "Delete…", onPress: vi.fn(), destructive: true },
+      ],
+      cancel: "Cancel",
+      more: "More",
+      colorScheme: "dark",
+    });
+    const [options] = vi.mocked(ActionSheetIOS.showActionSheetWithOptions).mock.calls[0]!;
+    expect(options).toMatchObject({ destructiveButtonIndex: [1], cancelButtonIndex: 2 });
+  });
+});

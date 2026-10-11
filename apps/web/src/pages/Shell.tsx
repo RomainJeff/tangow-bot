@@ -25,7 +25,12 @@ import {
   ATTACHMENT_MAX_COUNT,
   normalizeCreateBotProfile,
 } from "@rakazo/contracts";
-import type { ComposerMention, ComposerPageHead, HeldScreenUrl } from "@rakazo/core";
+import type {
+  ComposerMention,
+  ComposerPageHead,
+  HeldScreenUrl,
+  SkillSourceBlock,
+} from "@rakazo/core";
 import {
   attachmentsForThread,
   buildComposerMentionOptions,
@@ -134,6 +139,7 @@ import {
 import type { ScreenLinkHandlers } from "./shell/screen-frame";
 import { ComputerOverlay, SidePanel } from "./shell/side-panel";
 import { BotsSidebar } from "./shell/sidebar";
+import { skillPageView } from "./shell/skill-link";
 import { ThreadHeader } from "./shell/thread-header";
 import { Transcript } from "./shell/transcript";
 
@@ -814,21 +820,17 @@ export function ShellPage() {
     ) {
       snapTranscriptToEndAfterFrame();
     }
+    void botCommandsRef.current.refreshRoutines(id).catch(() => undefined);
     void Promise.all([
-      rpc.routines.list({ botId: id }).catch(() => null),
       rpc.skills.list({ botId: id }).catch(() => null),
       refreshComputerScreen(id).catch(() => null),
-    ]).then(([routines, skills]) => {
+    ]).then(([skills]) => {
       if (
         activeBotId.current !== id ||
         epoch !== historyEpoch.current ||
         request !== threadRefreshEpoch.current
       ) {
         return;
-      }
-      if (routines) {
-        setRoutines(routines);
-        setRoutinesBotId(id);
       }
       if (skills) {
         setTaughtSkills(skills);
@@ -1496,15 +1498,7 @@ export function ShellPage() {
     if (threadTarget.botId) {
       commitComputer(snap.computer ?? null);
       // Don't block parent-scroll on routines metadata; a list failure must not abort the jump.
-      void rpc.routines
-        .list({ botId: threadTarget.botId })
-        .then((routines) => {
-          if (epoch !== historyEpoch.current || jumpId !== jumpGeneration.current) return;
-          if (activeBotId.current !== threadTarget.botId) return;
-          setRoutines(routines);
-          setRoutinesBotId(threadTarget.botId);
-        })
-        .catch(() => undefined);
+      void botCommandsRef.current.refreshRoutines(threadTarget.botId).catch(() => undefined);
     } else {
       commitComputer(null);
       setRoutines([]);
@@ -1544,15 +1538,7 @@ export function ShellPage() {
       // A routine the bot just created may be newer than the list: fetch it once before giving up.
       if (!routine && !routineRefetched.current.has(routineId)) {
         routineRefetched.current.add(routineId);
-        const botId = active.id;
-        void rpc.routines
-          .list({ botId })
-          .then((rows) => {
-            if (activeBotId.current !== botId) return;
-            setRoutines(rows);
-            setRoutinesBotId(botId);
-          })
-          .catch(() => undefined);
+        void botCommandsRef.current.refreshRoutines(active.id).catch(() => undefined);
         return;
       }
       showBotPage({
@@ -2221,6 +2207,12 @@ export function ShellPage() {
     },
     [showBotPage],
   );
+  const openSkill = useCallback(
+    async (skill: SkillSourceBlock) => {
+      showBotPage(await skillPageView(skill, () => rpc.agentSkills.list().catch(() => [])));
+    },
+    [showBotPage],
+  );
   const speakingMessageIdRef = useRef(speakingMessageId);
   speakingMessageIdRef.current = speakingMessageId;
   const speakMessage = useCallback((message: ThreadMessage) => {
@@ -2582,6 +2574,7 @@ export function ShellPage() {
   const botCommands = useBotCommands({
     setBots,
     setRoutines,
+    setRoutinesBotId,
     activeBotId,
     supersedeBotsRefresh: () => {
       if (botsRefreshInFlight.current > 0) void refreshBots().catch(() => undefined);
@@ -2594,6 +2587,8 @@ export function ShellPage() {
     activityEpoch,
     refreshSkills: refreshAgentSkills,
   });
+  const botCommandsRef = useRef(botCommands);
+  botCommandsRef.current = botCommands;
 
   // Below `lg` the panel is full width over the thread instead of reflowing
   // beside it (see `lg:pe-panel` below), so it also covers the header and
@@ -2847,6 +2842,7 @@ export function ShellPage() {
                 onRefresh={refreshActiveThread}
                 onBotChanged={refreshBots}
                 onAddRoutine={addSkillRoutine}
+                onOpenSkill={inGroup ? undefined : openSkill}
                 voiceReady={Boolean(voiceStatus?.ready)}
                 speakingMessageId={speakingMessageId}
                 onSpeak={speakMessage}

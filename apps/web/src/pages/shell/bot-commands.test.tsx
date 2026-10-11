@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 import type { Bot, Routine } from "@rakazo/contracts";
+import type { RoutinePayload } from "@rakazo/core";
 import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => ({
-  bots: { update: vi.fn(), setComputer: vi.fn() },
-  routines: { create: vi.fn(), update: vi.fn(), remove: vi.fn() },
+  bots: { update: vi.fn(), setComputer: vi.fn(), get: vi.fn() },
+  routines: { create: vi.fn(), update: vi.fn(), remove: vi.fn(), list: vi.fn() },
 }));
 vi.mock("../../lib/rpc", () => ({ rpc: api }));
 
@@ -28,7 +29,12 @@ function routine(id: string, name: string, botId = "a"): Routine {
   return { id, botId, name } as Routine;
 }
 
-let view: { bots: Bot[]; routines: Routine[]; commands: BotCommands };
+let view: {
+  bots: Bot[];
+  routines: Routine[];
+  routinesBotId: string | null;
+  commands: BotCommands;
+};
 const supersedeBotsRefresh = vi.fn();
 const activeBotId = { current: "a" as string | undefined };
 const navigate = vi.fn();
@@ -38,9 +44,11 @@ const panelCoversThread = { current: false };
 function Harness() {
   const [bots, setBots] = useState([bot("a", "Ada"), bot("b", "Bea")]);
   const [routines, setRoutines] = useState([routine("r-1", "Morning"), routine("r-2", "Evening")]);
+  const [routinesBotId, setRoutinesBotId] = useState<string | null>(null);
   const commands = useBotCommands({
     setBots,
     setRoutines,
+    setRoutinesBotId,
     activeBotId,
     supersedeBotsRefresh,
     botAction: vi.fn(),
@@ -51,7 +59,7 @@ function Harness() {
     activityEpoch: 0,
     refreshSkills: vi.fn(),
   });
-  view = { bots, routines, commands };
+  view = { bots, routines, routinesBotId, commands };
   return null;
 }
 
@@ -221,4 +229,104 @@ it("creates a routine in the device's timezone and lists it last", async () => {
     ...payload,
   });
   expect(routineNames()).toEqual(["Morning", "Evening", "Weekly"]);
+});
+
+it("reads the open bot and its routines again, in the order the server lists them", async () => {
+  api.bots.get.mockResolvedValueOnce(bot("a", "Ada, renamed elsewhere"));
+  api.routines.list.mockResolvedValueOnce([routine("r-2", "Evening"), routine("r-4", "Night")]);
+
+  await act(() => view.commands.refresh("a"));
+
+  expect(names()).toEqual(["Ada, renamed elsewhere", "Bea"]);
+  expect(routineNames()).toEqual(["Evening", "Night"]);
+  expect(view.routinesBotId).toBe("a");
+});
+
+it("keeps a routine created while a refresh was reading the list", async () => {
+  const list = deferred<Routine[]>();
+  api.bots.get.mockResolvedValueOnce(bot("a", "Ada"));
+  api.routines.list.mockReturnValueOnce(list.promise);
+  api.routines.create.mockResolvedValueOnce(routine("r-3", "Weekly"));
+
+  const refreshing = view.commands.refresh("a");
+  await act(() => view.commands.createRoutine("a", { name: "Weekly" } as RoutinePayload));
+  list.resolve([routine("r-1", "Morning"), routine("r-2", "Evening")]);
+  await act(() => refreshing);
+
+  expect(routineNames()).toEqual(["Morning", "Evening", "Weekly"]);
+});
+
+it("lets only the newest of two refreshes set the routines", async () => {
+  const older = deferred<Routine[]>();
+  api.bots.get.mockResolvedValue(bot("a", "Ada"));
+  api.routines.list
+    .mockReturnValueOnce(older.promise)
+    .mockResolvedValueOnce([routine("r-2", "Evening")]);
+
+  const first = view.commands.refresh("a");
+  await act(() => view.commands.refresh("a"));
+  // Read before Morning was removed and Draft created then removed elsewhere.
+  older.resolve([routine("r-1", "Morning"), routine("r-2", "Evening"), routine("r-9", "Draft")]);
+  await act(() => first);
+
+  expect(routineNames()).toEqual(["Evening"]);
+});
+
+it("keeps what writes sent before a refresh answered while it was reading", async () => {
+  const read = deferred<Bot>();
+  const list = deferred<Routine[]>();
+  const rename = deferred<Bot>();
+  const pause = deferred<Routine>();
+  const removal = deferred<{ ok: true }>();
+  api.bots.get.mockReturnValueOnce(read.promise);
+  api.routines.list.mockReturnValueOnce(list.promise);
+  api.bots.update.mockReturnValueOnce(rename.promise);
+  api.routines.update.mockReturnValueOnce(pause.promise);
+  api.routines.remove.mockReturnValueOnce(removal.promise);
+
+  const writes = [
+    view.commands.updateBot("a", { name: "Ada Lovelace" }),
+    view.commands.updateRoutine("a", "r-2", { active: false }),
+    view.commands.removeRoutine("a", "r-1"),
+  ];
+  const refreshing = view.commands.refresh("a");
+  rename.resolve(bot("a", "Ada Lovelace"));
+  pause.resolve({ ...routine("r-2", "Evening"), active: false });
+  removal.resolve({ ok: true });
+  await act(() => Promise.all(writes));
+  // The server read every row before those writes landed.
+  read.resolve(bot("a", "Ada"));
+  list.resolve([routine("r-1", "Morning"), { ...routine("r-2", "Evening"), active: true }]);
+  await act(() => refreshing);
+
+  expect(names()).toEqual(["Ada Lovelace", "Bea"]);
+  expect(view.routines.map((item) => [item.id, item.active])).toEqual([["r-2", false]]);
+});
+
+it("rejects when a read fails, leaving what is shown", async () => {
+  api.bots.get.mockResolvedValueOnce(bot("a", "Ada"));
+  api.routines.list.mockRejectedValueOnce(new Error("offline"));
+
+  await act(() => expect(view.commands.refresh("a")).rejects.toThrow("offline"));
+
+  expect(routineNames()).toEqual(["Morning", "Evening"]);
+  expect(view.routinesBotId).toBe(null);
+});
+
+it("keeps a routine switched while a run end was reading the routines", async () => {
+  const list = deferred<Routine[]>();
+  api.routines.list.mockReturnValueOnce(list.promise);
+  api.routines.update.mockResolvedValueOnce({ ...routine("r-1", "Morning"), active: false });
+
+  const reading = view.commands.refreshRoutines("a");
+  await act(() => view.commands.updateRoutine("a", "r-1", { active: false }));
+  // The server read the list before the switch landed.
+  list.resolve([{ ...routine("r-1", "Morning"), active: true }, routine("r-2", "Evening")]);
+  await act(() => reading);
+
+  expect(view.routines.map((item) => [item.id, item.active])).toEqual([
+    ["r-1", false],
+    ["r-2", undefined],
+  ]);
+  expect(view.routinesBotId).toBe("a");
 });
