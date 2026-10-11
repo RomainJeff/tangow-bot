@@ -40,9 +40,19 @@ export function recordingSessionLog() {
       findMany: vi.fn(async () => []),
       findUnique: vi.fn(async () => null),
     },
-    /** A run with nothing logged and nothing that woke it, as the executor's opening read sees it. */
+    /**
+     * A run with nothing logged and nothing that woke it, in a thread whose main session is
+     * `session-main`, as the executor's opening reads see it.
+     */
     queryRaw: vi.fn(async () => [
-      { logged: null, carrierType: null, steered: false, routineName: null, spawnPromptId: null },
+      {
+        logged: null,
+        carrierType: null,
+        steered: false,
+        routineName: null,
+        spawnPromptId: null,
+        sessionId: "session-main",
+      },
     ]),
   };
 }

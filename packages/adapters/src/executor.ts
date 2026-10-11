@@ -152,6 +152,7 @@ import {
   InvalidSpaceNameError,
   isTooManyDatabaseConnections,
   type McpServer,
+  openRoutineSessionInTransaction,
   Prisma,
   type PrismaClient,
   parseComputerMode,
@@ -4407,15 +4408,15 @@ export function createRunExecutor(deps: ExecutorDeps) {
             ...(compaction ? { compactionSeq: compaction.seq } : {}),
             historyLoadMs: Number(historyMs.toFixed(1)),
           });
-          for (const [callId, input] of await openRunLog(
+          const opened = await openRunLog(
             deps,
             run,
             runLog,
             { provider: runModelProvider, id: runModelId },
             effort,
-          )) {
-            unansweredCalls.set(callId, input);
-          }
+          );
+          runLog.sessionId = opened.sessionId;
+          for (const [callId, input] of opened.awaitingResult) unansweredCalls.set(callId, input);
           const runtimeEvents = deps.runtime.run(
             {
               botId: bot.id,
@@ -5008,6 +5009,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             outcome: "completed",
             blocks,
             markUnread: completionMarksUnread(run.trigger, text, isRoutineCardRun),
+            result: text,
           });
           if (!completed) return;
           // After the commit, never inside it. Delegated runs report back to the ordering bot
@@ -5067,7 +5069,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
           // Last, and never fatal: the run is already finalized, so a failure here must not reach
           // the catch block below, where a second finalizeRun would match no rows and silently
           // skip the completion notification.
+          // A routine run read no history and its session ends with it: nothing to compact.
           if (
+            run.routineId == null &&
             compacts(thread) &&
             runModelProvider !== "scripted" &&
             !messagingChannelRun &&
@@ -5724,13 +5728,17 @@ type RunLogFacts = {
   spawnPromptId: string | null;
 };
 
+/**
+ * Open a run's log, once: `run.started`, after a routine run's own session and the routine's mark
+ * in its thread. Returns the session the run writes to and the logged calls still awaiting a result.
+ */
 async function openRunLog(
   deps: Pick<ExecutorDeps, "prisma" | "sessionLog">,
-  run: RunTriggerSource,
+  run: RunTriggerSource & { spaceId: string; threadId: string },
   log: RunLog,
   model: { provider: string; id: string },
   effort: SessionEntryOf<"run.started">["payload"]["effort"],
-): Promise<Map<string, string>> {
+): Promise<{ sessionId: SessionId; awaitingResult: Map<string, string> }> {
   return deps.prisma.$transaction(async (tx) => {
     const spawnNonce = run.trigger === "spawn" ? run.clientNonce : null;
     const [facts] = await tx.$queryRaw<[RunLogFacts]>`
@@ -5752,14 +5760,30 @@ async function openRunLog(
       if (type === "tool.call") awaitingResult.set(payload.callId, payload.input ?? "");
       if (type === "tool.result") awaitingResult.delete(payload.callId);
     }
-    if (logged.length === 0) {
-      await deps.sessionLog.append(tx, {
-        ...log,
-        type: "run.started",
-        payload: { trigger: sessionRunTrigger(run, facts), model, effort },
-      });
-    }
-    return awaitingResult;
+    if (logged.length > 0) return { sessionId: log.sessionId, awaitingResult };
+    const trigger = sessionRunTrigger(run, facts);
+    const sessionId =
+      trigger.kind === "routine" || trigger.kind === "webhook"
+        ? await openRoutineSessionInTransaction(
+            tx,
+            { ...run, botId: log.botId },
+            {
+              routineId: trigger.routineId,
+              name: facts.routineName ?? "",
+              trigger: trigger.kind,
+              scheduledAt: run.createdAt.toISOString(),
+              model,
+            },
+            deps.sessionLog,
+          )
+        : log.sessionId;
+    await deps.sessionLog.append(tx, {
+      ...log,
+      sessionId,
+      type: "run.started",
+      payload: { trigger, model, effort },
+    });
+    return { sessionId, awaitingResult };
   });
 }
 

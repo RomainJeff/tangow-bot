@@ -60,6 +60,7 @@ function fixture(overrides: RunOverrides = {}, runId = "run-1") {
     sourceMessageId: overrides.sourceMessageId ?? null,
     routineId: overrides.routineId ?? null,
     leaseFence: 0,
+    createdAt: new Date(),
   };
   const routineCreate = vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
     id: "routine-new",
