@@ -27,7 +27,7 @@ export interface AppEnv {
   dataDir: string;
   /** Opt-in Pi JSONL session recording under DATA_DIR/pi-sessions. Default off. */
   piSessionRecording: boolean;
-  /** SKILL_LEARNING: off (default), shadow or on. */
+  /** SKILL_LEARNING: off, shadow (default) or on. */
   skillLearning: SkillLearningMode;
   sandboxSupervisorUrl: string;
   sandboxSupervisorToken: string | undefined;

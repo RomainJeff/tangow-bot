@@ -1636,8 +1636,8 @@ describe("a skill the bot saves on its own", () => {
     expect(lined(f)).toEqual([["reply", [{ kind: "text", text: "Ordered." }, line]]]);
   });
 
-  it("writes nothing visible for a run that left no message", async () => {
-    const f = fixture();
+  it("writes nothing visible for a run that left no message while learning is off", async () => {
+    const f = fixture({ skillLearning: "off" });
     await f.play([[save]]);
     expect(lined(f)).toEqual([]);
     expect(f.written()).toEqual([]);
@@ -1654,8 +1654,8 @@ describe("a skill the bot saves on its own", () => {
     },
   );
 
-  it("is announced by the bot, as today, until learning is on", async () => {
-    const today = fixture();
+  it("is announced by the bot while learning is off", async () => {
+    const today = fixture({ skillLearning: "off" });
     await today.play([[save]]);
     expect(today.instructions()).toContain(
       "After creating or updating one, mention /Name so the user can open it.",
@@ -1791,7 +1791,7 @@ describe("the skill nudge at the end of an exchange", () => {
   });
 
   it("never runs, nor records anything, while learning is off", async () => {
-    const f = fixture({ nudge: [[keep]] });
+    const f = fixture({ skillLearning: "off", nudge: [[keep]] });
     await f.play([searches, [{ name: "skill_read", args: { name: "Skill-authoring" } }]]);
     expect(f.requests()).toHaveLength(1);
     expect(f.eventsOf("agent.skill.nudge")).toEqual([]);

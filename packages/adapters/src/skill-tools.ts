@@ -68,8 +68,8 @@ type SkillOwner = {
 export type SkillToolDeps = {
   prisma: PrismaClient;
   dataDir: string;
-  /** Off by default: a created skill's result still asks the bot to mention /Name. */
-  learning?: SkillLearningMode;
+  /** Off: a created skill's result still asks the bot to mention /Name. */
+  learning: SkillLearningMode;
   /** Serializes every write to one owner's skills with the API's and other runs'. */
   lock: SkillOwnerLock;
 };
@@ -523,7 +523,7 @@ async function createSkill(
     id: skillKey,
     name,
     description,
-    hint: createdSkillHint(name, Boolean(owner.botId), deps.learning ?? "off"),
+    hint: createdSkillHint(name, Boolean(owner.botId), deps.learning),
   };
 }
 

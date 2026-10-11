@@ -274,7 +274,7 @@ const SKILL_LEARNING_LINES = [
 
 export function formatSkillsCatalogInstruction(
   entries: SkillCatalogEntry[],
-  learning: SkillLearningMode = "off",
+  learning: SkillLearningMode,
 ): string | undefined {
   if (entries.length === 0) return undefined;
   const lines = entries.slice(0, SKILL_CATALOG_MAX_ENTRIES).map(skillCatalogLine).join("\n");

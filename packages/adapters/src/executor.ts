@@ -65,6 +65,7 @@ import {
   connectorKindFromToolName,
   containsSecret,
   createStreamingRedactor,
+  DEFAULT_SKILL_LEARNING,
   endsSentence,
   expandSkillReferencesInPrompt,
   formatSkillRunPrompt,
@@ -677,7 +678,7 @@ export interface ExecutorDeps {
   shutdownSignal?: AbortSignal;
   /** Serializes skill writes with the API's; production passes createPostgresSkillLock. */
   skillLock: SkillOwnerLock;
-  /** SKILL_LEARNING: whether bots keep their methods as skills on their own. Off when omitted. */
+  /** SKILL_LEARNING: whether bots keep their methods as skills on their own. */
   skillLearning?: SkillLearningMode;
 }
 
@@ -1050,7 +1051,7 @@ export function buildSystemInstructions(parts: SystemInstructionParts): string {
 export function createRunExecutor(deps: ExecutorDeps) {
   const web = deps.web ?? createWebProvider();
   // Skills live under DATA_DIR/skills; same default as apps/api env + apps/worker.
-  const learning = deps.skillLearning ?? "off";
+  const learning = deps.skillLearning ?? DEFAULT_SKILL_LEARNING;
   const skillDeps = {
     prisma: deps.prisma,
     dataDir: deps.dataDir ?? "./data",
