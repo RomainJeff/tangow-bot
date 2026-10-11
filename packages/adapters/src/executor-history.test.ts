@@ -432,4 +432,19 @@ describe("the history a run reads from its session log", () => {
     expect(compactions(group)).toEqual([]);
     expect(compactions(scriptedModel)).toEqual([]);
   });
+
+  it("keeps the newest 200 turns when the model's context window is unknown", async () => {
+    const tail = chain(
+      0,
+      Array.from({ length: 250 }, (_, index) => said(`message ${index}`)),
+    );
+
+    const turns = (await fixture({ tail }).history()).filter((turn) => turn.id);
+
+    expect([turns.length, turns[0]?.content, turns.at(-1)?.content]).toEqual([
+      200,
+      "message 50",
+      "message 249",
+    ]);
+  });
 });

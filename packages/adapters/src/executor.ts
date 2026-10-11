@@ -275,13 +275,12 @@ import type { TextEditResult } from "./file-text.js";
 import { applyTextEdit, readLineWindow } from "./file-text.js";
 import { handoffToGroupBot, loadGroupContext } from "./group-handoff.js";
 import {
-  COMPACTION_BATCH_SIZE,
   estimateHistoryMessageTokens,
   estimateHistoryTokens,
   estimateTextTokens,
   estimateToolSchemaTokens,
   formatRecalledMemory,
-  HISTORY_WINDOW_SIZE,
+  HISTORY_COUNT_WINDOW,
   MAX_RECALLED_MEMORIES,
   selectHistoryWindow,
   shouldEnqueueCompaction,
@@ -4365,7 +4364,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             history: uncompactedHistory,
             contextWindow: resolved.contextWindow,
             nonHistoryTokens,
-            messageWindowSize: HISTORY_WINDOW_SIZE + COMPACTION_BATCH_SIZE,
+            messageWindowSize: HISTORY_COUNT_WINDOW,
           });
           historyMs += performance.now() - windowStartedAt;
           const history = window.messages;

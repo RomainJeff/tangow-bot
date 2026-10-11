@@ -27,6 +27,8 @@ export const COMPACTION_BATCH_SIZE = 50;
 /** How many of the latest turns a compaction keeps word for word after its summary. */
 export const HISTORY_WINDOW_SIZE = 50;
 export const MAX_COMPACTED_SUMMARY_CHARS = 20_000;
+/** How many turns a run keeps when its model's context window is unknown. */
+export const HISTORY_COUNT_WINDOW = 200;
 /** How many semantic memories can be injected into one run. */
 export const MAX_RECALLED_MEMORIES = 5;
 
