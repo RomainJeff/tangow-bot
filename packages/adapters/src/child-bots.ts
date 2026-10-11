@@ -155,11 +155,13 @@ async function ensureSpawnRun(
 
   try {
     return await prisma.$transaction(async (tx) => {
-      const prompt = await createThreadMessageInTransaction(tx, {
+      // The prompt shares the run's nonce, which is how the run's log finds what woke it.
+      await createThreadMessageInTransaction(tx, {
         threadId: input.threadId,
         role: "user",
         blocks: [{ kind: "text", text: input.prompt }],
         runId: input.sourceRunId,
+        clientNonce,
       });
       const task = await tx.task.create({
         data: {
@@ -181,7 +183,6 @@ async function ensureSpawnRun(
           status: "queued",
           trigger: "spawn",
           clientNonce,
-          sourceMessageId: prompt.id,
         },
       });
     });

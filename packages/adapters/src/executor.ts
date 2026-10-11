@@ -5736,6 +5736,8 @@ type RunTriggerSource = {
   trigger: string;
   routineId: string | null;
   sourceMessageId: string | null;
+  sessionId: string;
+  clientNonce: string | null;
   createdAt: Date;
 };
 
@@ -5754,10 +5756,11 @@ async function sessionRunTrigger(
         : carrierTrigger(tx, run);
     case "skill":
       return { kind: "direct" };
+    case "spawn":
+      return spawnTrigger(tx, run);
     case "user":
     case "follow_up":
     case "reaction":
-    case "spawn":
     case "messaging":
     case "bot_message":
     case "resume":
@@ -5784,6 +5787,19 @@ async function carrierTrigger(
       select: { id: true },
     }));
   return steered ? { kind: "steering", entryId } : { kind: "message", entryId };
+}
+
+/** A spawned bot's first run is woken by the prompt its spawner wrote, which carries the run's nonce. */
+async function spawnTrigger(
+  tx: Prisma.TransactionClient,
+  run: RunTriggerSource,
+): Promise<SessionRunTrigger> {
+  const [prompt] = run.clientNonce
+    ? await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT id FROM session_entries
+        WHERE "sessionId" = ${run.sessionId} AND payload ->> 'clientNonce' = ${run.clientNonce}`
+    : [];
+  return prompt ? { kind: "message", entryId: prompt.id as EntryId } : { kind: "direct" };
 }
 
 async function routineTrigger(

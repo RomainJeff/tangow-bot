@@ -1638,6 +1638,25 @@ describeJourneys("required product journeys", () => {
     );
     const snap = await rpc<Snap>(app, cookie, "threads/get", { botId: parent.id });
     expect(JSON.stringify(snap.messages)).toMatch(/child_bot|Scout/);
+    const spawnRun = await prisma.run.findFirstOrThrow({
+      where: { botId: scout!.id, trigger: "spawn" },
+    });
+    const woke = await prisma.sessionEntry.findMany({
+      where: { runId: null, session: { thread: { botId: scout!.id } } },
+      orderBy: { seq: "asc" },
+      select: { id: true, type: true, payload: true },
+    });
+    const prompt = woke.find((entry) => entry.type === "user.message");
+    expect(prompt?.payload).toMatchObject({ clientNonce: spawnRun.clientNonce });
+    expect([
+      spawnRun.sourceMessageId,
+      (
+        await prisma.sessionEntry.findFirst({
+          where: { runId: spawnRun.id, type: "run.started" },
+          select: { payload: true },
+        })
+      )?.payload,
+    ]).toMatchObject([null, { trigger: { kind: "message", entryId: prompt?.id } }]);
 
     await sendApproveAndWait(app, cookie, scout!.id, "spawn a bot named Nested");
     const afterNested = await rpc<Bot[]>(app, cookie, "bots/list");

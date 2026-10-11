@@ -113,7 +113,7 @@ describe("spawned bot creation", () => {
       .mockReturnValue({ createBot } as unknown as ReturnType<typeof createRepos>);
     const messageSpy = vi
       .spyOn(db, "createThreadMessageInTransaction")
-      .mockResolvedValue({ id: "message-prompt" } as never);
+      .mockResolvedValue({} as never);
     const runCreate = vi.fn().mockResolvedValue({ id: "child-run" });
     const tx = {
       task: { create: vi.fn().mockResolvedValue({ id: "task-1" }) },
@@ -141,14 +141,9 @@ describe("spawned bot creation", () => {
 
     const data = runCreate.mock.calls[0]?.[0].data;
     expect(data).toMatchObject({ trigger: "spawn" });
-    expect(data).toMatchObject({ sourceMessageId: "message-prompt" });
+    expect(data).not.toHaveProperty("sourceMessageId");
     expect(data).not.toHaveProperty("routineId");
-    const hopDb = {
-      sessionEntry: {
-        findUnique: vi.fn().mockResolvedValue({ type: "user.message", payload: {} }),
-      },
-      routine: { findUnique: vi.fn() },
-    };
+    const hopDb = { sessionEntry: { findUnique: vi.fn() }, routine: { findUnique: vi.fn() } };
     expect(await resolveRunHop(hopDb as never, { ...data, routineId: null })).toBe(0);
     createReposSpy.mockRestore();
     messageSpy.mockRestore();
