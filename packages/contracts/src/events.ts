@@ -189,6 +189,9 @@ export const AskBlock = z.object({
   confirms: z.enum(["created", "updated"]).optional(),
 });
 
+/** The `answerId` of a choice card the person put away without choosing. */
+export const CHOICE_DISMISSED_ANSWER_ID = "_dismissed";
+
 export const ChoiceBlock = z.object({
   kind: z.literal("choice"),
   question: z.string(),
