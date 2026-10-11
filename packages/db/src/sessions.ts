@@ -220,6 +220,28 @@ export async function appendRunBlocksInTransaction(
 }
 
 /**
+ * Rewind the log to just before the user message the thread was cut at: its entry carries the
+ * message's id. A message with no entry predates the log, so everything the log holds came after
+ * it, and a clear cuts that as a rewind past the first entry would.
+ */
+export async function appendRewindInTransaction(
+  tx: Prisma.TransactionClient,
+  input: { sessionId: SessionId; messageId: string; feedBotId: string },
+): Promise<void> {
+  const target = await tx.sessionEntry.findFirst({
+    where: { id: input.messageId, sessionId: input.sessionId },
+    select: { parentId: true },
+  });
+  const { sessionId, feedBotId } = input;
+  await appendSessionEntryInTransaction(
+    tx,
+    target?.parentId
+      ? { type: "rewind", sessionId, parentId: target.parentId as EntryId, payload: {}, feedBotId }
+      : { type: "clear", sessionId, payload: {}, feedBotId },
+  );
+}
+
+/**
  * Record who holds the bot's computer when it changes hands from the holder the log last saw, the
  * bot when it saw none. A release follows only a takeover the log saw granted, so control a
  * teaching session borrowed leaves no trace.

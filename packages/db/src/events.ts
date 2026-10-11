@@ -35,6 +35,7 @@ import {
 } from "./messages.js";
 import {
   appendComputerControlInTransaction,
+  appendRewindInTransaction,
   appendRunBlocksInTransaction,
   appendRunFinishedInTransaction,
   appendSessionEntryInTransaction,
@@ -341,6 +342,7 @@ interface TruncateThreadResult {
   nextMessageSeq: number;
   historyCompactedUpToSeq: number | null;
   historyCompactionGeneration: number;
+  sessionId: string;
   cancelledRunIds: string[];
 }
 
@@ -364,6 +366,7 @@ async function truncateThreadInTransaction(
       nextMessageSeq: true,
       historyCompactedUpToSeq: true,
       historyCompactionGeneration: true,
+      sessionId: true,
     },
   });
   const activeRuns = await tx.run.findMany({
@@ -429,6 +432,12 @@ export async function clearThread(
         historyCompactionGeneration: { increment: 1 },
       },
     });
+    await appendSessionEntryInTransaction(tx, {
+      type: "clear",
+      sessionId: truncated.sessionId as SessionId,
+      payload: {},
+      feedBotId: input.botId,
+    });
     const event = await appendEventInTransaction(tx, {
       ...input,
       type: "thread.cleared",
@@ -492,6 +501,11 @@ export async function rewindThread(
         },
       });
     }
+    await appendRewindInTransaction(tx, {
+      sessionId: truncated.sessionId as SessionId,
+      messageId: input.messageId,
+      feedBotId: input.botId,
+    });
     const event = await appendEventInTransaction(tx, {
       ...input,
       type: "thread.rewound",
