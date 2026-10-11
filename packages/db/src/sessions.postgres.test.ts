@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { SessionEntryDraft } from "@rakazo/adapter-kit";
 import type { SessionEntry } from "@rakazo/contracts";
 import { SessionId } from "@rakazo/contracts";
@@ -9,6 +10,7 @@ import {
   appendComputerControlInTransaction,
   appendRunFinishedInTransaction,
   appendSessionEntryInTransaction,
+  createSessionInTransaction,
 } from "./sessions.js";
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -159,6 +161,34 @@ describePostgres("appendSessionEntryInTransaction under contention (PostgreSQL)"
         select: { nextEntrySeq: true },
       }),
     ).toEqual({ nextEntrySeq: 1 });
+  });
+
+  it("keeps one entry for two concurrent deliveries of one clientNonce to a helper's session", async () => {
+    const parentSessionId = await freshSession();
+    const parent = await prisma.$transaction((tx) =>
+      appendSessionEntryInTransaction(tx, said(parentSessionId, "delegate")),
+    );
+    const sessionId = await prisma.$transaction((tx) =>
+      createSessionInTransaction(tx, {
+        kind: "subagent",
+        id: SessionId.parse(randomUUID()),
+        spaceId: id,
+        parentSessionId,
+        parentEntryId: parent.id,
+      }),
+    );
+    const delivery: SessionEntryDraft = {
+      sessionId,
+      type: "user.message",
+      payload: { blocks: [{ kind: "text", text: "once" }], source: "app", clientNonce: "helper-1" },
+    };
+
+    const [first, second] = await contend(delivery, delivery);
+
+    expect(second).toEqual(first);
+    expect(
+      await prisma.sessionEntry.findMany({ where: { sessionId }, select: { id: true, seq: true } }),
+    ).toEqual([{ id: first.id, seq: 0 }]);
   });
 
   it("closes a run's log once when a cancel waits on a finalize that commits first", async () => {

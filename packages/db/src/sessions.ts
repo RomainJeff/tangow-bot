@@ -121,13 +121,6 @@ export async function appendSessionEntryInTransaction(
       `Entry for session ${draft.sessionId} names no bot to show it under on thread ${threadId}`,
     );
   }
-  const nonce = sessionEntryNonce(draft);
-  if (nonce !== undefined) {
-    const [delivered] = await tx.$queryRaw<SessionEntryRow[]>`
-      SELECT * FROM session_entries
-      WHERE "sessionId" = ${draft.sessionId} AND payload ->> 'clientNonce' = ${nonce}`;
-    if (delivered) return sessionEntryFromRow(delivered);
-  }
   if (draft.type === "rewind") {
     const target = await tx.sessionEntry.findFirst({
       where: { id: draft.parentId, sessionId: draft.sessionId },
@@ -149,6 +142,14 @@ export async function appendSessionEntryInTransaction(
     FOR NO KEY UPDATE`;
   if (!session) {
     throw new SessionAppendError("unknown_session", `Session ${draft.sessionId} does not exist`);
+  }
+  // After the session lock, so a duplicate delivery waits for the first and finds its entry.
+  const nonce = sessionEntryNonce(draft);
+  if (nonce !== undefined) {
+    const [delivered] = await tx.$queryRaw<SessionEntryRow[]>`
+      SELECT * FROM session_entries
+      WHERE "sessionId" = ${draft.sessionId} AND payload ->> 'clientNonce' = ${nonce}`;
+    if (delivered) return sessionEntryFromRow(delivered);
   }
   const seq = session.nextEntrySeq;
   const entry = nextSessionEntry(
