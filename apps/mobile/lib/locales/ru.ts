@@ -871,7 +871,7 @@ export const RU_MESSAGES: Record<string, string> = {
   "Skill updated · {name}": "Навык обновлён · {name}",
   "Skill deleted · {name}": "Навык удалён · {name}",
   "{tokens} tokens": "Токенов: {tokens}",
-  Summarized: "Сводка",
-  Edited: "Изменено",
-  Cleared: "Очищено",
+  "Earlier messages summarized": "Ранние сообщения обобщены",
+  "Message edited": "Сообщение изменено",
+  "Conversation cleared": "Разговор очищен",
 };

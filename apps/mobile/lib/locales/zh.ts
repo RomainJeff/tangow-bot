@@ -853,7 +853,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Skill updated · {name}": "技能已更新 · {name}",
   "Skill deleted · {name}": "技能已删除 · {name}",
   "{tokens} tokens": "{tokens} 个 token",
-  Summarized: "已总结",
-  Edited: "已编辑",
-  Cleared: "已清除",
+  "Earlier messages summarized": "较早的消息已总结",
+  "Message edited": "消息已编辑",
+  "Conversation cleared": "对话已清除",
 };

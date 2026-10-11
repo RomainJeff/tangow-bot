@@ -4204,10 +4204,10 @@ function DividerRow({ reason }: { reason: Extract<ThreadItem, { kind: "divider" 
       {rule}
       <Text style={{ color: tokens.mutedForeground, ...nativeTextStyle("label") }}>
         {reason === "compaction"
-          ? t("Summarized")
+          ? t("Earlier messages summarized")
           : reason === "rewind"
-            ? t("Edited")
-            : t("Cleared")}
+            ? t("Message edited")
+            : t("Conversation cleared")}
       </Text>
       {rule}
     </View>
