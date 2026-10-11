@@ -11,6 +11,7 @@ import {
   appendRunFinishedInTransaction,
   appendSessionEntryInTransaction,
   createSessionInTransaction,
+  openRoutineSessionInTransaction,
 } from "./sessions.js";
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -52,7 +53,7 @@ describePostgres("appendSessionEntryInTransaction under contention (PostgreSQL)"
     return SessionId.parse(thread.sessionId);
   }
 
-  async function startedRun() {
+  async function queuedRun() {
     const sessionId = await freshSession();
     const { id: threadId, botId } = await prisma.thread.findUniqueOrThrow({
       where: { sessionId },
@@ -72,16 +73,93 @@ describePostgres("appendSessionEntryInTransaction under contention (PostgreSQL)"
         trigger: "user",
       },
     });
-    await prisma.$transaction((tx) =>
-      appendSessionEntryInTransaction(tx, {
-        sessionId,
-        botId: botId!,
-        runId: run.id,
-        type: "run.started",
-        payload: { trigger: { kind: "direct" }, model: { provider: "p", id: "m" }, effort: null },
-      }),
-    );
     return { sessionId, threadId, botId: botId!, runId: run.id, taskId: task.id };
+  }
+
+  function runStarted(sessionId: SessionId, botId: string, runId: string): SessionEntryDraft {
+    return {
+      sessionId,
+      botId,
+      runId,
+      type: "run.started",
+      payload: { trigger: { kind: "direct" }, model: { provider: "p", id: "m" }, effort: null },
+    };
+  }
+
+  async function startedRun() {
+    const run = await queuedRun();
+    await prisma.$transaction((tx) =>
+      appendSessionEntryInTransaction(tx, runStarted(run.sessionId, run.botId, run.runId)),
+    );
+    return run;
+  }
+
+  async function startedRoutineRun() {
+    const run = await queuedRun();
+    const routineSessionId = await prisma.$transaction(async (tx) => {
+      const opened = await openRoutineSessionInTransaction(
+        tx,
+        { id: run.runId, spaceId: id, threadId: run.threadId, botId: run.botId },
+        {
+          routineId: "routine-digest",
+          name: "Digest",
+          trigger: "routine",
+          scheduledAt: new Date().toISOString(),
+          model: { provider: "p", id: "m" },
+        },
+      );
+      await appendSessionEntryInTransaction(tx, runStarted(opened, run.botId, run.runId));
+      return opened;
+    });
+    return { ...run, childSessionId: routineSessionId };
+  }
+
+  async function startedHelperRun() {
+    const parent = await startedRun();
+    return prisma.$transaction(async (tx) => {
+      const call = await appendSessionEntryInTransaction(tx, {
+        sessionId: parent.sessionId,
+        botId: parent.botId,
+        runId: parent.runId,
+        type: "tool.call",
+        payload: { callId: "call_helper", name: "run_subagent", input: "{}" },
+      });
+      const childSessionId = await createSessionInTransaction(tx, {
+        kind: "subagent",
+        id: SessionId.parse(randomUUID()),
+        spaceId: id,
+        parentSessionId: parent.sessionId,
+        parentEntryId: call.id,
+      });
+      const task = await tx.task.create({
+        data: {
+          spaceId: id,
+          botId: parent.botId,
+          threadId: parent.threadId,
+          userId: id,
+          prompt: "",
+          status: "running",
+        },
+      });
+      const helper = await tx.run.create({
+        data: {
+          spaceId: id,
+          botId: parent.botId,
+          threadId: parent.threadId,
+          taskId: task.id,
+          userId: id,
+          status: "running",
+          trigger: "subagent",
+          sessionId: childSessionId,
+          parentRunId: parent.runId,
+        },
+      });
+      await appendSessionEntryInTransaction(
+        tx,
+        runStarted(childSessionId, parent.botId, helper.id),
+      );
+      return { ...parent, runId: helper.id, taskId: task.id, childSessionId };
+    });
   }
 
   function said(sessionId: SessionId, text: string): SessionEntryDraft {
@@ -163,7 +241,7 @@ describePostgres("appendSessionEntryInTransaction under contention (PostgreSQL)"
     ).toEqual({ nextEntrySeq: 1 });
   });
 
-  it("keeps one entry for two concurrent deliveries of one clientNonce to a helper's session", async () => {
+  it("keeps one entry, in the thread's session, for two concurrent deliveries of one clientNonce addressed to a helper's session", async () => {
     const parentSessionId = await freshSession();
     const parent = await prisma.$transaction((tx) =>
       appendSessionEntryInTransaction(tx, said(parentSessionId, "delegate")),
@@ -179,6 +257,7 @@ describePostgres("appendSessionEntryInTransaction under contention (PostgreSQL)"
     );
     const delivery: SessionEntryDraft = {
       sessionId,
+      feedBotId: id,
       type: "user.message",
       payload: { blocks: [{ kind: "text", text: "once" }], source: "app", clientNonce: "helper-1" },
     };
@@ -187,8 +266,15 @@ describePostgres("appendSessionEntryInTransaction under contention (PostgreSQL)"
 
     expect(second).toEqual(first);
     expect(
-      await prisma.sessionEntry.findMany({ where: { sessionId }, select: { id: true, seq: true } }),
-    ).toEqual([{ id: first.id, seq: 0 }]);
+      await prisma.sessionEntry.findMany({
+        where: { sessionId: { in: [sessionId, parentSessionId] } },
+        orderBy: { seq: "asc" },
+        select: { id: true, sessionId: true, seq: true },
+      }),
+    ).toEqual([
+      { id: parent.id, sessionId: parentSessionId, seq: 0 },
+      { id: first.id, sessionId: parentSessionId, seq: 1 },
+    ]);
   });
 
   it("closes a run's log once when a cancel waits on a finalize that commits first", async () => {
@@ -263,6 +349,90 @@ describePostgres("appendSessionEntryInTransaction under contention (PostgreSQL)"
 
     expect(probe).toBe("free");
   });
+
+  it.each([
+    ["a routine run", startedRoutineRun],
+    ["a helper run", startedHelperRun],
+  ])(
+    "starts %s's helper behind its thread lock, so a stop landing meanwhile cancels the run without a deadlock",
+    async (_, started) => {
+      const { threadId, botId, runId, taskId, childSessionId } = await started();
+      let locked!: () => void;
+      let release!: () => void;
+      const holding = new Promise<void>((resolve) => {
+        locked = resolve;
+      });
+      const released = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const stop = prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM threads WHERE id = ${threadId} FOR UPDATE`;
+        locked();
+        await released;
+        await cancelRunsInTransaction(tx, [{ id: runId, taskId }], new Date(), id);
+      }, TRANSACTION);
+      await holding;
+      const startHelper = prisma.$transaction(async (tx) => {
+        const call = await appendSessionEntryInTransaction(tx, {
+          sessionId: childSessionId,
+          botId,
+          runId,
+          type: "tool.call",
+          payload: { callId: "call_0", name: "run_subagent", input: "{}" },
+        });
+        const helperSessionId = await createSessionInTransaction(tx, {
+          kind: "subagent",
+          id: SessionId.parse(randomUUID()),
+          spaceId: id,
+          parentSessionId: childSessionId,
+          parentEntryId: call.id,
+        });
+        const task = await tx.task.create({
+          data: { spaceId: id, botId, threadId, userId: id, prompt: "", status: "running" },
+        });
+        await tx.run.create({
+          data: {
+            spaceId: id,
+            botId,
+            threadId,
+            taskId: task.id,
+            userId: id,
+            status: "running",
+            trigger: "subagent",
+            sessionId: helperSessionId,
+            parentRunId: runId,
+          },
+        });
+      }, TRANSACTION);
+      await waitForLockWaiter();
+      const probe = await prisma.$queryRaw`
+      SELECT id FROM sessions WHERE id = ${childSessionId} FOR NO KEY UPDATE NOWAIT`.then(
+        () => "free",
+        (error: unknown) => String(error),
+      );
+      release();
+      const outcomes = await Promise.allSettled([stop, startHelper]);
+
+      expect({
+        probe,
+        outcomes: outcomes.map((outcome) =>
+          outcome.status === "fulfilled" ? "committed" : String(outcome.reason),
+        ),
+      }).toEqual({
+        probe: "free",
+        outcomes: ["committed", "RunHistoryWriteError: Run cannot write thread history"],
+      });
+      expect(
+        (
+          await prisma.sessionEntry.findMany({
+            where: { sessionId: childSessionId },
+            orderBy: { seq: "asc" },
+            select: { type: true },
+          })
+        ).map(({ type }) => type),
+      ).toEqual(["run.started", "run.finished"]);
+    },
+  );
 
   it("keeps a run that finished between a canceller's read and its cancel", async () => {
     const { threadId, runId, taskId } = await startedRun();

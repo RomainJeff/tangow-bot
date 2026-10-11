@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { NewSession, SessionEntryDraft } from "@rakazo/adapter-kit";
+import type { NewSession, SessionEntryDraft, SessionLog } from "@rakazo/adapter-kit";
 import { nextSessionEntry, SessionAppendError, sessionEntryNonce } from "@rakazo/adapter-kit";
 import type {
   EntryId,
@@ -9,7 +9,7 @@ import type {
   SessionEntryOf,
   SessionEntryType,
 } from "@rakazo/contracts";
-import { SessionEntrySchema, SessionId } from "@rakazo/contracts";
+import { isRunTrace, SessionEntrySchema, SessionId } from "@rakazo/contracts";
 import { ACTIVE_RUN_STATUSES, SessionEntryDecodeError, sanitizeJsonValue } from "@rakazo/core";
 import { Prisma } from "./client.js";
 import { RunHistoryWriteError } from "./messages.js";
@@ -71,7 +71,7 @@ export async function createSessionInTransaction(
   session: NewSession,
 ): Promise<SessionId> {
   await tx.conversationSession.createMany({ data: [session], skipDuplicates: true });
-  if (session.kind === "subagent") return session.id;
+  if (session.kind !== "thread") return session.id;
   const main = await tx.conversationSession.findFirstOrThrow({
     where: { threadId: session.threadId, kind: "thread" },
     select: { id: true },
@@ -88,17 +88,60 @@ type ThreadFeed = {
   runId: string | null;
   entries: SessionEntry[];
 };
-/** The threads a transaction locked for its appends, and the feed event of each. */
-type TransactionLog = { threadOf: Map<string, string | null>; feedOf: Map<string, ThreadFeed> };
+type Route = { sessionId: SessionId; threadId: string | null; originSessionId?: SessionId };
+type Lineage = { mainSessionId: SessionId; threadId: string | null; child: boolean };
+/** What a transaction already resolved: each session's lineage, and its feed event per thread. */
+type TransactionLog = { lineageOf: Map<string, Lineage>; feedOf: Map<string, ThreadFeed> };
 const transactionLogs = new WeakMap<Prisma.TransactionClient, TransactionLog>();
 
 function transactionLog(tx: Prisma.TransactionClient): TransactionLog {
   let log = transactionLogs.get(tx);
   if (!log) {
-    log = { threadOf: new Map(), feedOf: new Map() };
+    log = { lineageOf: new Map(), feedOf: new Map() };
     transactionLogs.set(tx, log);
   }
   return log;
+}
+
+/**
+ * The one rule for which session an entry lands in. A child session, a routine's or a helper's at
+ * any depth, keeps its run's trace; whatever else is addressed to it, an ask, an approval, a card
+ * the person must act on, the person's answer, rises to its thread's main session, the top-most
+ * ancestor, with that child as its `originSessionId`. Every append locks that thread before any
+ * session row, in the mode every thread writer uses, so neither a message write nor a stop, which
+ * takes the thread, then the run, then the session, can deadlock with it.
+ */
+async function routeOf(tx: Prisma.TransactionClient, draft: SessionEntryDraft): Promise<Route> {
+  const log = transactionLog(tx);
+  let lineage = log.lineageOf.get(draft.sessionId);
+  if (!lineage) {
+    const [found] = await tx.$queryRaw<
+      Array<{ mainSessionId: string; threadId: string | null; child: boolean }>
+    >`
+      WITH RECURSIVE ancestry AS (
+        SELECT id, "parentSessionId", "threadId", 0 AS depth FROM sessions WHERE id = ${draft.sessionId}
+        UNION ALL
+        SELECT s.id, s."parentSessionId", s."threadId", ancestry.depth + 1
+        FROM sessions s JOIN ancestry ON s.id = ancestry."parentSessionId"),
+      main AS (SELECT id, "threadId", depth FROM ancestry ORDER BY depth DESC LIMIT 1),
+      thread AS (SELECT id FROM threads WHERE id = (SELECT "threadId" FROM main) FOR UPDATE)
+      SELECT main.id AS "mainSessionId", thread.id AS "threadId", main.depth > 0 AS child
+      FROM main LEFT JOIN thread ON true`;
+    lineage = {
+      mainSessionId: (found?.mainSessionId ?? draft.sessionId) as SessionId,
+      threadId: found?.threadId ?? null,
+      child: found?.child ?? false,
+    };
+    log.lineageOf.set(draft.sessionId, lineage);
+  }
+  if (!lineage.child) return { sessionId: draft.sessionId, threadId: lineage.threadId };
+  return isRunTrace(draft)
+    ? { sessionId: draft.sessionId, threadId: null }
+    : {
+        sessionId: lineage.mainSessionId,
+        threadId: lineage.threadId,
+        originSessionId: draft.sessionId,
+      };
 }
 
 function insertFeedEvent(feed: ThreadFeed, at: Prisma.Sql, gate: Prisma.Sql) {
@@ -113,27 +156,23 @@ function insertFeedEvent(feed: ThreadFeed, at: Prisma.Sql, gate: Prisma.Sql) {
 }
 
 /**
- * Append an entry as the session's new head. Appends to a session serialize on its row lock, and a
- * draft whose clientNonce is already in the session returns that entry without taking a seq. The
- * entries a transaction appends to a thread session reach the thread's feed as one
- * `session.entry.appended` event; a subagent session has no thread and no feed.
+ * Append an entry as the new head of the session `routeOf` lands it in. Appends to a session
+ * serialize on its row lock, and a draft whose clientNonce is already in the session returns that
+ * entry without taking a seq. The entries a transaction appends to a thread session reach the
+ * thread's feed as one `session.entry.appended` event; a subagent or routine session has no thread
+ * and no feed.
  */
 export async function appendSessionEntryInTransaction(
   tx: Prisma.TransactionClient,
-  draft: SessionEntryDraft,
+  addressed: SessionEntryDraft,
 ): Promise<SessionEntry> {
   const log = transactionLog(tx);
-  let threadId = log.threadOf.get(draft.sessionId);
-  if (threadId === undefined) {
-    // Thread before session, in the mode every thread writer uses, so a message write that appends
-    // an entry cannot deadlock with this.
-    const [thread] = await tx.$queryRaw<Array<{ id: string }>>`
-      SELECT id FROM threads
-      WHERE id = (SELECT "threadId" FROM sessions WHERE id = ${draft.sessionId})
-      FOR UPDATE`;
-    threadId = thread?.id ?? null;
-    log.threadOf.set(draft.sessionId, threadId);
-  }
+  const { sessionId, threadId, originSessionId } = await routeOf(tx, addressed);
+  const draft = (
+    originSessionId
+      ? { ...addressed, sessionId, payload: { ...addressed.payload, originSessionId } }
+      : { ...addressed, sessionId }
+  ) as SessionEntryDraft;
   const feedBotId = draft.botId ?? draft.feedBotId;
   if (threadId && feedBotId === undefined) {
     throw new SessionAppendError(
@@ -401,16 +440,50 @@ type RunEnding =
   | { status: "cancelled"; by?: string };
 
 /**
- * Close a run's log with how the run ended. A run that never wrote `run.started` has no log to
- * close and a closed one stays closed, so every way a run ends can call this. A cancel closes only
- * a run still active, any other ending only the run whose status already says so. Usage defaults
- * to what the run recorded.
+ * Give a routine run its own session under its thread's main session, point the run at it, and
+ * mark the routine's start in the main session. The run opens its log once, so this runs once.
+ */
+export async function openRoutineSessionInTransaction(
+  tx: Prisma.TransactionClient,
+  run: { id: string; spaceId: string; threadId: string; botId: string },
+  started: Omit<SessionEntryOf<"routine.started">["payload"], "sessionId">,
+  log: Pick<SessionLog<Prisma.TransactionClient>, "createSession" | "append"> = {
+    createSession: createSessionInTransaction,
+    append: appendSessionEntryInTransaction,
+  },
+): Promise<SessionId> {
+  // Thread, then run, then session, as finalize and every canceller take them.
+  const [thread] = await tx.$queryRaw<Array<{ sessionId: string }>>`
+    SELECT "sessionId" FROM threads WHERE id = ${run.threadId} FOR UPDATE`;
+  const parentSessionId = SessionId.parse(thread?.sessionId);
+  const sessionId = await log.createSession(tx, {
+    kind: "routine",
+    id: SessionId.parse(randomUUID()),
+    spaceId: run.spaceId,
+    parentSessionId,
+  });
+  await tx.run.updateMany({ where: { id: run.id }, data: { sessionId } });
+  await log.append(tx, {
+    type: "routine.started",
+    sessionId: parentSessionId,
+    botId: run.botId,
+    runId: run.id,
+    payload: { sessionId, ...started },
+  });
+  return sessionId;
+}
+
+/**
+ * Close a run's log with how the run ended, and a routine run's mark in its thread with its final
+ * words, `result`. A run that never wrote `run.started` has no log to close and a closed one stays
+ * closed, so every way a run ends can call this. A cancel closes only a run still active, any other
+ * ending only the run whose status already says so. Usage defaults to what the run recorded.
  */
 export async function appendRunFinishedInTransaction(
   tx: Prisma.TransactionClient,
   runId: string,
   ending: RunEnding,
-  usage?: RunOutcome["usage"],
+  { usage, result = "" }: { usage?: RunOutcome["usage"]; result?: string } = {},
 ): Promise<void> {
   // Thread, then run, then session, as finalize and every canceller take them, so that the run's
   // status and its log are read after whichever of them committed first.
@@ -425,7 +498,12 @@ export async function appendRunFinishedInTransaction(
   if (!endingNow) return;
   const logged = await tx.sessionEntry.findMany({
     where: { runId, type: { in: ["run.started", "run.finished"] } },
-    select: { type: true, sessionId: true, botId: true },
+    select: {
+      type: true,
+      sessionId: true,
+      botId: true,
+      session: { select: { kind: true, parentSessionId: true } },
+    },
   });
   const started = logged.find((entry) => entry.type === "run.started");
   if (!started?.botId || logged.some((entry) => entry.type === "run.finished")) return;
@@ -435,17 +513,27 @@ export async function appendRunFinishedInTransaction(
         where: { runId },
         _sum: { inputTokens: true, outputTokens: true },
       });
+  const outcome = {
+    ...ending,
+    usage: usage ?? {
+      inputTokens: recorded?._sum.inputTokens ?? 0,
+      outputTokens: recorded?._sum.outputTokens ?? 0,
+    },
+  };
   await appendSessionEntryInTransaction(tx, {
     type: "run.finished",
     sessionId: started.sessionId as SessionId,
     botId: started.botId,
     runId,
-    payload: {
-      ...ending,
-      usage: usage ?? {
-        inputTokens: recorded?._sum.inputTokens ?? 0,
-        outputTokens: recorded?._sum.outputTokens ?? 0,
-      },
-    },
+    payload: outcome,
+  });
+  const { kind, parentSessionId } = started.session;
+  if (kind !== "routine" || !parentSessionId) return;
+  await appendSessionEntryInTransaction(tx, {
+    type: "routine.finished",
+    sessionId: parentSessionId as SessionId,
+    botId: started.botId,
+    runId,
+    payload: { ...outcome, result },
   });
 }

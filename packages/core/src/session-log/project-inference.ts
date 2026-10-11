@@ -12,6 +12,8 @@ import { isInferenceEntry, REPLY_QUOTE_MAX_LENGTH } from "@rakazo/contracts";
 import { blocksToAgentHistoryText } from "../attachments.js";
 import { escapeDirectoryField, escapePromptData, renderBotMessageBlock } from "../bot-messages.js";
 import { messageReaction } from "../message-reactions.js";
+import type { ChildSession } from "./child-sessions.js";
+import { childSessionsOf } from "./child-sessions.js";
 import { foldRuns, toolOutputs } from "./run-fold.js";
 
 export interface InferenceProjectionOptions {
@@ -37,7 +39,10 @@ type ReplyTarget = { role: "user" | "bot"; blocks: MessageBlock[] };
  * ordinary turns; an older compaction among them adds nothing the leading summary lacks. A tool
  * call whose result is missing from the tail, cut by a rewind or still running, is left out so no
  * call replays unanswered. A cancelled run replays only its answered tool calls, so the bot knows
- * what its tools already did; its half-finished words are no history to build on.
+ * what its tools already did; its half-finished words are no history to build on. A routine run
+ * keeps its steps in its own session, so the thread replays only a line where it started and its
+ * final words, or how it ended without any, where it finished. What a routine or a helper raised
+ * to the thread, a question, a choice or a card, opens with a line naming it when the chain does.
  */
 export function projectInferenceTurns(
   entries: readonly SessionEntry[],
@@ -55,16 +60,24 @@ export function projectInferenceTurns(
       entry.type === "run.finished" && entry.payload.status === "cancelled" ? [entry.runId] : [],
     ),
   );
+  const routineNames = new Map(
+    chain.flatMap((entry) =>
+      entry.type === "routine.started" ? [[entry.runId, entry.payload.name] as const] : [],
+    ),
+  );
+  const children = childSessionsOf(chain);
   const targets = replyTargets(chain, segments);
   const targetOf = (entryId: EntryId) =>
     targets.get(entryId) ?? resolvedTarget(options.resolveReplyTarget?.(entryId));
   return segments.flatMap((segment) => {
     let turn: Turn | undefined;
     if (segment.type !== "run.message" || !cancelled.has(segment.runId)) {
-      turn = renderTurn(segment, options, targetOf);
+      turn = renderTurn(segment, options, targetOf, routineNames, children);
     } else {
       const blocks = segment.blocks.filter((block) => block.kind === "steps");
-      if (blocks.length > 0) turn = renderTurn({ ...segment, blocks }, options, targetOf);
+      if (blocks.length > 0) {
+        turn = renderTurn({ ...segment, blocks }, options, targetOf, routineNames, children);
+      }
     }
     return turn ? { id: segment.id, ...turn } : [];
   });
@@ -76,17 +89,22 @@ function renderTurn(
   segment: ReturnType<typeof foldRuns>[number],
   options: InferenceProjectionOptions,
   targetOf: (entryId: EntryId) => ReplyTarget | undefined,
+  routineNames: ReadonlyMap<string, string>,
+  children: ReadonlyMap<string, ChildSession>,
 ): Turn | undefined {
   const { botNames } = options;
   const nameOf = (botId: string) => botNames?.get(botId) ?? botId;
   switch (segment.type) {
-    case "run.message":
+    case "run.message": {
+      const child = segment.originSessionId && children.get(segment.originSessionId);
+      const from = child ? `[from ${child.kind} ${escapeDirectoryField(child.name)}]\n` : "";
       return speakerTurn(
         segment.botId,
-        historyText(segment.blocks, botNames),
+        `${from}${historyText(segment.blocks, botNames)}`,
         options,
         replayParts(segment.blocks, botNames),
       );
+    }
     case "bot.text":
       return speakerTurn(segment.botId, historyText(segment.payload.blocks, botNames), options);
     case "user.message":
@@ -126,6 +144,33 @@ function renderTurn(
     case "run.started": {
       const line = triggerContext(segment.payload.trigger);
       return line ? { role: "user", content: `[context] ${line}` } : undefined;
+    }
+    case "routine.started": {
+      const name = escapeDirectoryField(segment.payload.name);
+      const { scheduledAt } = segment.payload;
+      return {
+        role: "user",
+        content:
+          segment.payload.trigger === "webhook"
+            ? `[context] A webhook started the routine "${name}" at ${scheduledAt}.`
+            : `[context] The routine "${name}" started, scheduled for ${scheduledAt}.`,
+      };
+    }
+    case "routine.finished": {
+      const outcome = segment.payload;
+      if (outcome.result) return speakerTurn(segment.botId, outcome.result, options);
+      const name = routineNames.get(segment.runId);
+      const routine =
+        name === undefined ? "The routine" : `The routine "${escapeDirectoryField(name)}"`;
+      if (outcome.status === "failed") {
+        return {
+          role: "user",
+          content: `[context] ${routine} failed: ${escapeDirectoryField(outcome.error)}`,
+        };
+      }
+      return outcome.status === "cancelled"
+        ? { role: "user", content: `[context] ${routine} was cancelled.` }
+        : undefined;
     }
     case "computer.control":
       return {

@@ -120,7 +120,7 @@ await prisma.$transaction((tx) =>
 );
 await counted("helper entry, own transaction", 1, () =>
   prisma.$transaction((tx) =>
-    log.append(tx, { sessionId: helper, type: "system.note", payload: { text: "helper" } }),
+    log.append(tx, { ...ran("assistant.text", "helper"), sessionId: helper }),
   ),
 );
 await prisma.organization.deleteMany({ where: { id: tag } });

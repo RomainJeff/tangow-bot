@@ -51,7 +51,20 @@ export const RunOutcome = z.discriminatedUnion("status", [
 ]);
 export type RunOutcome = z.infer<typeof RunOutcome>;
 
+/** How a routine run ended, as its thread learns it: the run's outcome and its final words. */
+const RoutineFinishedPayload = RunOutcome.and(
+  z.object({
+    /** The run's final text, empty when it ended without one. */
+    result: z.string(),
+  }),
+);
+
 const JsonObject = z.record(z.string(), z.unknown());
+/**
+ * On an entry addressed to a child session that rose to the thread's main session, the child
+ * session it was addressed to. The store sets it; an entry written to its own session has none.
+ */
+const risen = { originSessionId: SessionId.optional() };
 const BotMessageHop = z.number().int().positive();
 
 const envelope = {
@@ -93,21 +106,24 @@ const SubagentPayload = z.object({
 
 const ComputerControlEntry = entry(
   "computer.control",
-  z.object({ holder: z.enum(["user", "bot"]) }),
+  z.object({ ...risen, holder: z.enum(["user", "bot"]) }),
 );
-const MemoryRevisedEntry = entry("memory.revised", z.object({ facts: z.array(z.string()) }));
-const SkillSavedEntry = entry("skill.saved", z.object({ skillId: Id, name: z.string() }));
+const MemoryRevisedEntry = entry(
+  "memory.revised",
+  z.object({ ...risen, facts: z.array(z.string()) }),
+);
+const SkillSavedEntry = entry("skill.saved", z.object({ ...risen, skillId: Id, name: z.string() }));
 const AttachmentAddedEntry = entry("attachment.added", z.object({ artifactId: Id }));
 const SessionTitleEntry = entry("session.title", z.object({ title: z.string() }));
 const SystemNoteEntry = entry("system.note", z.object({ text: z.string() }));
-const BlocksPayload = z.object({ blocks: z.array(MessageBlock) });
+const BlocksPayload = z.object({ ...risen, blocks: z.array(MessageBlock) });
 
 const EntryShapes = z.discriminatedUnion("type", [
-  entry("user.message", UserMessagePayload),
+  entry("user.message", UserMessagePayload.extend(risen)),
   runEntry("assistant.text", BlocksPayload),
   runEntry("assistant.reasoning", z.object({ text: z.string() })),
-  runEntry("assistant.ask", z.object({ block: AskBlock })),
-  runEntry("assistant.choice", z.object({ block: ChoiceBlock })),
+  runEntry("assistant.ask", z.object({ ...risen, block: AskBlock })),
+  runEntry("assistant.choice", z.object({ ...risen, block: ChoiceBlock })),
   runEntry(
     "tool.call",
     z.object({ callId: z.string().min(1), name: z.string(), input: z.string() }),
@@ -131,6 +147,19 @@ const EntryShapes = z.discriminatedUnion("type", [
   ),
   runEntry("run.finished", RunOutcome),
   runEntry("subagent", SubagentPayload),
+  /** In the thread's main session, when a routine run opens its own session `sessionId`. */
+  runEntry(
+    "routine.started",
+    z.object({
+      sessionId: SessionId,
+      routineId: Id,
+      name: z.string(),
+      trigger: z.enum(["routine", "webhook"]),
+      scheduledAt: IsoDate,
+      model: RunModel,
+    }),
+  ),
+  runEntry("routine.finished", RoutineFinishedPayload),
   /** A bot's words outside any run, such as an onboarding card or a teaching session's draft. */
   z.object({
     ...envelope,
@@ -139,12 +168,16 @@ const EntryShapes = z.discriminatedUnion("type", [
     type: z.literal("bot.text"),
     payload: BlocksPayload,
   }),
-  entry("handoff", z.object({ fromBotId: Id, toBotId: Id, text: z.string(), hop: BotMessageHop })),
+  entry(
+    "handoff",
+    z.object({ ...risen, fromBotId: Id, toBotId: Id, text: z.string(), hop: BotMessageHop }),
+  ),
   z.object({
     ...envelope,
     botId: Id,
     type: z.literal("bot.message.sent"),
     payload: z.object({
+      ...risen,
       to: Peer,
       text: z.string(),
       intent: BotMessageIntent,
@@ -168,10 +201,13 @@ const EntryShapes = z.discriminatedUnion("type", [
   ),
   entry(
     "effect.requested",
-    z.object({ effectId: Id, effectKind: z.string(), proposal: JsonObject }),
+    z.object({ ...risen, effectId: Id, effectKind: z.string(), proposal: JsonObject }),
   ),
-  entry("effect.edited", z.object({ effectId: Id, proposal: JsonObject })),
-  entry("effect.resolved", z.object({ effectId: Id, decision: z.enum(["approved", "denied"]) })),
+  entry("effect.edited", z.object({ ...risen, effectId: Id, proposal: JsonObject })),
+  entry(
+    "effect.resolved",
+    z.object({ ...risen, effectId: Id, decision: z.enum(["approved", "denied"]) }),
+  ),
   ComputerControlEntry,
   MemoryRevisedEntry,
   SkillSavedEntry,
@@ -223,6 +259,13 @@ export const SessionEntrySchema = EntryShapes.superRefine((entry, ctx) => {
       message: "The first entry of a session has no parent",
     });
   }
+  if ("originSessionId" in entry.payload && entry.payload.originSessionId === entry.sessionId) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["payload", "originSessionId"],
+      message: "An entry rises only from another session",
+    });
+  }
   if (entry.type === "compaction" && entry.payload.coveredUpToSeq >= entry.seq) {
     ctx.addIssue({
       code: "custom",
@@ -247,6 +290,8 @@ export const ENTRY_AUDIENCE = {
   "tool.call": { inference: "yes", ui: true },
   "tool.result": { inference: "yes", ui: true },
   subagent: { inference: "yes", ui: true },
+  "routine.started": { inference: "context", ui: true },
+  "routine.finished": { inference: "yes", ui: true },
   "bot.text": { inference: "yes", ui: true },
   handoff: { inference: "yes", ui: true },
   "bot.message.sent": { inference: "yes", ui: true },
@@ -278,6 +323,39 @@ export type UiEntry = SessionEntryOf<
   { [T in SessionEntryType]: Audience[T]["ui"] extends true ? T : never }[SessionEntryType]
 >;
 
+/**
+ * What a run writes about its own work. A child session keeps only these; anything else its run
+ * writes is conversation with the person and lands in the thread's main session.
+ */
+export const RUN_TRACE_TYPES: ReadonlySet<SessionEntryType> = new Set([
+  "run.started",
+  "run.finished",
+  "assistant.text",
+  "assistant.reasoning",
+  "tool.call",
+  "tool.result",
+  "subagent",
+] satisfies SessionEntryType[]);
+
+export const BLOCK_KINDS_NEEDING_THE_PERSON: ReadonlySet<MessageBlock["kind"]> = new Set([
+  "mcp_approval",
+] satisfies MessageBlock["kind"][]);
+
+type EntryBody = {
+  [T in SessionEntryType]: Pick<SessionEntryOf<T>, "type" | "payload">;
+}[SessionEntryType];
+
+/**
+ * Whether a child session keeps the entry: one of its run's trace types, except an
+ * `assistant.text` holding a block that needs the person, which goes to the person whole.
+ */
+export function isRunTrace(entry: EntryBody): boolean {
+  if (entry.type === "assistant.text") {
+    return !entry.payload.blocks.some((block) => BLOCK_KINDS_NEEDING_THE_PERSON.has(block.kind));
+  }
+  return RUN_TRACE_TYPES.has(entry.type);
+}
+
 export function isInferenceEntry(entry: SessionEntry): entry is InferenceEntry {
   return ENTRY_AUDIENCE[entry.type].inference !== "no";
 }
@@ -303,8 +381,21 @@ export type AgentHistoryTurnPart =
     };
 
 const itemBase = { id: EntryId, ts: IsoDate };
+/**
+ * The child session an item's entry rose from, named when the same page holds the routine's start
+ * or the helper's entry.
+ */
+const itemOrigin = {
+  origin: z
+    .object({
+      sessionId: SessionId,
+      kind: z.enum(["routine", "subagent"]).optional(),
+      name: z.string().optional(),
+    })
+    .optional(),
+};
 const noteFields = { id: true, ts: true, type: true, payload: true } as const;
-const noteKind = { kind: z.literal("note") };
+const noteKind = { kind: z.literal("note"), ...itemOrigin };
 
 /** What a thread renders, one item per kind. A run becomes a run item and a message per stretch. */
 export const ThreadItemSchema = z.discriminatedUnion("kind", [
@@ -314,6 +405,7 @@ export const ThreadItemSchema = z.discriminatedUnion("kind", [
       role: z.literal("user"),
       ...itemBase,
       ...UserMessagePayload.shape,
+      ...itemOrigin,
     }),
     z.object({
       kind: z.literal("message"),
@@ -323,6 +415,7 @@ export const ThreadItemSchema = z.discriminatedUnion("kind", [
       /** Absent for a bot's words outside any run. */
       runId: Id.optional(),
       blocks: z.array(MessageBlock),
+      ...itemOrigin,
     }),
   ]),
   z.object({
@@ -339,11 +432,24 @@ export const ThreadItemSchema = z.discriminatedUnion("kind", [
   }),
   z.object({ kind: z.literal("subagent"), ...itemBase, runId: Id, ...SubagentPayload.shape }),
   z.object({
+    kind: z.literal("routine"),
+    ...itemBase,
+    runId: Id,
+    botId: Id,
+    sessionId: SessionId,
+    routineId: Id,
+    name: z.string(),
+    finished: z
+      .object({ status: z.enum(["completed", "failed", "cancelled"]), result: z.string() })
+      .nullable(),
+  }),
+  z.object({
     kind: z.literal("handoff"),
     ...itemBase,
     fromBotId: Id,
     toBotId: Id,
     text: z.string(),
+    ...itemOrigin,
   }),
   z.discriminatedUnion("direction", [
     z.object({
@@ -357,6 +463,7 @@ export const ThreadItemSchema = z.discriminatedUnion("kind", [
       exchangeId: EntryId,
       /** The later `bot.message.received` of the same exchange in this session, if any. */
       answeredBy: EntryId.nullable(),
+      ...itemOrigin,
     }),
     z.object({
       kind: z.literal("botMessage"),
@@ -381,6 +488,7 @@ export const ThreadItemSchema = z.discriminatedUnion("kind", [
     effectKind: z.string(),
     proposal: JsonObject,
     decision: z.enum(["approved", "denied"]).nullable(),
+    ...itemOrigin,
   }),
   z.discriminatedUnion("type", [
     ComputerControlEntry.pick(noteFields).extend(noteKind),

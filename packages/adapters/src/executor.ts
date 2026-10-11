@@ -152,6 +152,7 @@ import {
   InvalidSpaceNameError,
   isTooManyDatabaseConnections,
   type McpServer,
+  openRoutineSessionInTransaction,
   Prisma,
   type PrismaClient,
   parseComputerMode,
@@ -2071,7 +2072,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                         outcome.status === "completed"
                           ? { status: "completed" }
                           : { status: "failed", error: result },
-                        outcome.usage,
+                        { usage: outcome.usage },
                       );
                     }
                     await deps.sessionLog.append(tx, {
@@ -4407,15 +4408,15 @@ export function createRunExecutor(deps: ExecutorDeps) {
             ...(compaction ? { compactionSeq: compaction.seq } : {}),
             historyLoadMs: Number(historyMs.toFixed(1)),
           });
-          for (const [callId, input] of await openRunLog(
+          const opened = await openRunLog(
             deps,
             run,
             runLog,
             { provider: runModelProvider, id: runModelId },
             effort,
-          )) {
-            unansweredCalls.set(callId, input);
-          }
+          );
+          runLog.sessionId = opened.sessionId;
+          for (const [callId, input] of opened.awaitingResult) unansweredCalls.set(callId, input);
           const runtimeEvents = deps.runtime.run(
             {
               botId: bot.id,
@@ -5008,6 +5009,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             outcome: "completed",
             blocks,
             markUnread: completionMarksUnread(run.trigger, text, isRoutineCardRun),
+            result: text,
           });
           if (!completed) return;
           // After the commit, never inside it. Delegated runs report back to the ordering bot
@@ -5717,6 +5719,7 @@ function serialWrites() {
 }
 
 type RunLogFacts = {
+  sessionId: string;
   logged: Array<{ type: string; payload: { callId: string; input?: string } }> | null;
   carrierType: string | null;
   steered: boolean;
@@ -5724,17 +5727,24 @@ type RunLogFacts = {
   spawnPromptId: string | null;
 };
 
-async function openRunLog(
+/**
+ * Open a run's log, once: `run.started`, after a routine run's own session and the routine's mark
+ * in its thread. Returns the session the run writes to and the logged calls still awaiting a result.
+ */
+export async function openRunLog(
   deps: Pick<ExecutorDeps, "prisma" | "sessionLog">,
-  run: RunTriggerSource,
+  run: RunTriggerSource & { spaceId: string; threadId: string },
   log: RunLog,
   model: { provider: string; id: string },
   effort: SessionEntryOf<"run.started">["payload"]["effort"],
-): Promise<Map<string, string>> {
+): Promise<{ sessionId: SessionId; awaitingResult: Map<string, string> }> {
   return deps.prisma.$transaction(async (tx) => {
+    // Its own statement, so the facts below see what an open that held this lock committed.
+    await tx.$queryRaw`SELECT id FROM threads WHERE id = ${run.threadId} FOR UPDATE`;
     const spawnNonce = run.trigger === "spawn" ? run.clientNonce : null;
     const [facts] = await tx.$queryRaw<[RunLogFacts]>`
       SELECT
+        (SELECT "sessionId" FROM runs WHERE id = ${run.id}) AS "sessionId",
         (SELECT json_agg(json_build_object('type', type, 'payload', payload) ORDER BY seq)
           FROM session_entries
           WHERE "runId" = ${run.id} AND type IN ('run.started', 'tool.call', 'tool.result')
@@ -5752,14 +5762,30 @@ async function openRunLog(
       if (type === "tool.call") awaitingResult.set(payload.callId, payload.input ?? "");
       if (type === "tool.result") awaitingResult.delete(payload.callId);
     }
-    if (logged.length === 0) {
-      await deps.sessionLog.append(tx, {
-        ...log,
-        type: "run.started",
-        payload: { trigger: sessionRunTrigger(run, facts), model, effort },
-      });
-    }
-    return awaitingResult;
+    if (logged.length > 0) return { sessionId: facts.sessionId as SessionId, awaitingResult };
+    const trigger = sessionRunTrigger(run, facts);
+    const sessionId =
+      trigger.kind === "routine" || trigger.kind === "webhook"
+        ? await openRoutineSessionInTransaction(
+            tx,
+            { ...run, botId: log.botId },
+            {
+              routineId: trigger.routineId,
+              name: facts.routineName ?? "",
+              trigger: trigger.kind,
+              scheduledAt: run.createdAt.toISOString(),
+              model,
+            },
+            deps.sessionLog,
+          )
+        : log.sessionId;
+    await deps.sessionLog.append(tx, {
+      ...log,
+      sessionId,
+      type: "run.started",
+      payload: { trigger, model, effort },
+    });
+    return { sessionId, awaitingResult };
   });
 }
 

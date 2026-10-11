@@ -92,7 +92,7 @@ export async function appendBotMessageInTransaction(
   const sentId = input.sentId as EntryId;
   const exchangeId = (await exchangeOf(tx, input.sourceMessageId)) ?? sentId;
   const { text, intent, hop } = input;
-  await appendSessionEntryInTransaction(tx, {
+  const sent = await appendSessionEntryInTransaction(tx, {
     id: sentId,
     type: "bot.message.sent",
     sessionId: input.sender.sessionId,
@@ -107,7 +107,7 @@ export async function appendBotMessageInTransaction(
     feedBotId: input.receiver.botId,
     payload: {
       from: input.sender.peer,
-      fromSessionId: input.sender.sessionId,
+      fromSessionId: sent.sessionId,
       fromEntryId: sentId,
       text,
       intent,

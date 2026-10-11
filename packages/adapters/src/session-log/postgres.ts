@@ -52,10 +52,16 @@ export class PostgresSessionLog implements SessionLog<Prisma.TransactionClient> 
   }
 
   async readRun(runId: string): Promise<SessionEntry[]> {
-    const rows = await this.prisma.sessionEntry.findMany({
-      where: { runId },
-      orderBy: { seq: "asc" },
-    });
+    const rows = await this.prisma.$queryRaw<SessionEntryRow[]>`
+      WITH run AS (SELECT * FROM session_entries WHERE "runId" = ${runId})
+      SELECT * FROM run
+      UNION ALL
+      SELECT answer.* FROM run ask
+      JOIN session_entries answer ON answer."sessionId" = ask."sessionId"
+        AND answer.type = 'user.message' AND answer.seq > ask.seq
+        AND answer.payload -> 'replyTo' ->> 'entryId' = ask.id
+      WHERE ask.type IN ('assistant.ask', 'assistant.choice')
+      ORDER BY "createdAt", seq`;
     return rows.map(sessionEntryFromRow);
   }
 

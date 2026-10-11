@@ -36,7 +36,7 @@ interface SessionFile {
  * One `<root>/sessions/<sessionId>.jsonl` per session, and one `<root>/threads/<threadId>` holding
  * the id of the thread's main session, for export, import, fixtures and a single process install.
  * Single process only: appends serialize through an in-memory lock per session and the writer
- * caches each session's head, so one instance owns a root. `readRun` scans every file.
+ * caches each session's head, so one instance owns a root. `readRun` reads every file.
  */
 export class FileSessionLog implements SessionLog<undefined> {
   private readonly sessions = new Map<SessionId, SessionFile>();
@@ -120,13 +120,26 @@ export class FileSessionLog implements SessionLog<undefined> {
       if (isMissing(error)) return [];
       throw error;
     });
+    const entries: SessionEntry[] = [];
     for (const name of names) {
       if (!name.endsWith(".jsonl")) continue;
-      const entries = decodeEntries(await readFile(path.join(dir, name), "utf8"));
-      const run = entries.filter((entry) => entry.runId === runId);
-      if (run.length > 0) return run;
+      entries.push(...decodeEntries(await readFile(path.join(dir, name), "utf8")));
     }
-    return [];
+    const run = entries.filter((entry) => entry.runId === runId);
+    const asks = new Set(
+      run.flatMap((entry) =>
+        entry.type === "assistant.ask" || entry.type === "assistant.choice" ? [entry.id] : [],
+      ),
+    );
+    const answers = entries.filter(
+      (entry) =>
+        entry.type === "user.message" &&
+        entry.payload.replyTo !== undefined &&
+        asks.has(entry.payload.replyTo.entryId),
+    );
+    return [...run, ...answers].sort(
+      (left, right) => left.ts.localeCompare(right.ts) || left.seq - right.seq,
+    );
   }
 
   async readEntry(sessionId: SessionId, entryId: EntryId): Promise<SessionEntry | undefined> {

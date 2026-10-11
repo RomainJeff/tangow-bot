@@ -631,8 +631,9 @@ model Run {
 }
 
 // One conversation log. A thread session belongs to a thread; a subagent session belongs to the
-// parent session and the tool call that launched it, and has no thread. The
-// sessions_kind_shape_check constraint enforces that split, and the partial unique index
+// parent session and the tool call that launched it, and has no thread; a routine session holds
+// one routine run's own entries, belongs to the thread session it reports to, and has no thread.
+// The sessions_kind_shape_check constraint enforces that split, and the partial unique index
 // sessions_threadId_main_key, created in SQL, keeps one thread session per thread. nextEntrySeq is
 // the per-session seq counter, and appends serialize on a lock of this row.
 model ConversationSession {
@@ -661,7 +662,9 @@ model ConversationSession {
 // One entry of a session log, validated by SessionEntrySchema. parentId has no foreign key: the
 // writer takes it from the session's own head or rewind target. The partial unique index
 // session_entries_sessionId_clientNonce_key on ("sessionId", payload->>'clientNonce') is created in
-// SQL: a redelivered message keeps one entry.
+// SQL: a redelivered message keeps one entry. So is the partial index
+// session_entries_originSessionId_idx on payload->>'originSessionId', which finds what a child
+// session raised to its thread.
 model SessionEntry {
   id        String              @id
   sessionId String

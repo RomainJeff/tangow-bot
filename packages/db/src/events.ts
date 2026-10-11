@@ -160,6 +160,8 @@ export type FinalizeRunInput = FinalizeRunBase &
         outcome: "completed";
         blocks: MessageBlock[];
         markUnread?: boolean;
+        /** The run's final words, which a routine run reports to its thread. */
+        result?: string;
       }
     | { outcome: "failed"; error: string }
   );
@@ -1888,6 +1890,7 @@ async function finalizeRunOnce(
       input.outcome === "completed"
         ? { status: "completed" }
         : { status: "failed", error: input.error },
+      { result: input.outcome === "completed" ? input.result : undefined },
     );
     const lastEvent = await appendEventInTransaction(tx, {
       spaceId: input.spaceId,

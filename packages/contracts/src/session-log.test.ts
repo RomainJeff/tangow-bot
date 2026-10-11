@@ -84,6 +84,15 @@ describe("SessionEntrySchema", () => {
       ["payload.coveredUpToSeq: A compaction covers only entries before it"],
     ],
     [
+      "an entry risen from its own session",
+      {
+        ...envelope,
+        type: "effect.resolved",
+        payload: { effectId: "effect_1", decision: "approved", originSessionId: "ses_1" },
+      },
+      ["payload.originSessionId: An entry rises only from another session"],
+    ],
+    [
       "a clear with a payload",
       { ...envelope, parentId: null, type: "clear", payload: { reason: "Fresh start." } },
       ['payload: Unrecognized key: "reason"'],

@@ -2,7 +2,7 @@ import { vi } from "vitest";
 
 export function stubbedDbSessions() {
   return {
-    appendSessionEntryInTransaction: vi.fn(async () => undefined),
+    appendSessionEntryInTransaction: vi.fn(async (_tx: unknown, draft: unknown) => draft),
     appendRunBlocksInTransaction: vi.fn(async () => undefined),
     appendRunFinishedInTransaction: vi.fn(async () => undefined),
     appendRewindInTransaction: vi.fn(async () => undefined),

@@ -86,9 +86,9 @@ describe("PostgresSessionLog", () => {
   });
   afterAll(() => database.close());
 
-  it("puts a thread session's entries on its thread's feed and a subagent's nowhere", async () => {
+  it("puts a thread session's entries on its thread's feed and a subagent's steps nowhere", async () => {
     const { prisma } = database;
-    const { botId, threadId, sessionId } = await seedThread(prisma);
+    const { botId, threadId, sessionId, run } = await seedThread(prisma);
     const entry = await prisma.$transaction((tx) =>
       log.append(tx, {
         sessionId,
@@ -117,8 +117,10 @@ describe("PostgresSessionLog", () => {
       });
       await log.append(tx, {
         sessionId: childId,
-        type: "system.note",
-        payload: { text: "helper" },
+        botId,
+        runId: run.id,
+        type: "assistant.text",
+        payload: { blocks: [{ kind: "text", text: "helper" }] },
       });
     });
 
@@ -290,6 +292,17 @@ describe("sessions migration", () => {
     expect(
       await prisma.message.findMany({ select: { id: true, seq: true, blocks: true } }),
     ).toEqual([{ id: "m1", seq: 0, blocks: [{ kind: "text", text: "hi" }] }]);
+  });
+
+  it("indexes the entries that rose from a child session by the session they came from", async () => {
+    expect(
+      await database.prisma.$queryRaw`
+        SELECT indexdef FROM pg_indexes WHERE indexname = 'session_entries_originSessionId_idx'`,
+    ).toEqual([
+      {
+        indexdef: `CREATE INDEX "session_entries_originSessionId_idx" ON public.session_entries USING btree (((payload ->> 'originSessionId'::text))) WHERE ((payload ->> 'originSessionId'::text) IS NOT NULL)`,
+      },
+    ]);
   });
 
   it("keeps a thread's compaction summary from before the log for the backfill to read", async () => {

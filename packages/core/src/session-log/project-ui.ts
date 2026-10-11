@@ -1,15 +1,26 @@
-import type { SessionEntry, SessionEntryOf, ThreadItem, UiEntry } from "@rakazo/contracts";
+import type {
+  SessionEntry,
+  SessionEntryOf,
+  SessionId,
+  ThreadItem,
+  UiEntry,
+} from "@rakazo/contracts";
 import { isUiEntry } from "@rakazo/contracts";
+import { childSessionsOf, originSessionIdOf } from "./child-sessions.js";
 import { foldRuns } from "./run-fold.js";
 
 type RunItem = Extract<ThreadItem, { kind: "run" }>;
 type EffectItem = Extract<ThreadItem, { kind: "effect" }>;
+type RoutineItem = Extract<ThreadItem, { kind: "routine" }>;
 
 /**
  * What a thread shows, from a page of a session's chain oldest first. A run becomes one `run`
- * item where it started and one `message` item per unbroken stretch of its words. A run whose
+ * item where it started and one `message` item per unbroken stretch of its words; a routine run,
+ * whose words live in its own session, becomes one `routine` item its finish fills in. A run whose
  * start is outside the page gets no `run` item, though its words on the page still show; an
- * effect whose request is outside the page is left out, as is a tool result without its call.
+ * effect whose request is outside the page is left out, as is a tool result without its call. An
+ * item whose entry rose from a child session names it as `origin`, with the routine's or the
+ * helper's name when the page holds its start.
  */
 export function projectThreadItems(entries: readonly SessionEntry[]): ThreadItem[] {
   const visible = entries.filter(isUiEntry);
@@ -21,30 +32,54 @@ export function projectThreadItems(entries: readonly SessionEntry[]): ThreadItem
       entry,
     ]);
   }
+  const children = childSessionsOf(visible);
+  const origin = (sessionId: SessionId | undefined) =>
+    sessionId ? { origin: { sessionId, ...children.get(sessionId) } } : {};
   const runs = new Map<string, RunItem>();
   const effects = new Map<string, EffectItem>();
+  const routines = new Map<string, RoutineItem>();
   const items: ThreadItem[] = [];
   for (const segment of foldRuns(visible)) {
     switch (segment.type) {
       case "run.message": {
-        const { id, ts, botId, runId, blocks } = segment;
-        items.push({ kind: "message", role: "bot", id, ts, botId, runId, blocks });
+        const { id, ts, botId, runId, blocks, originSessionId } = segment;
+        items.push({
+          kind: "message",
+          role: "bot",
+          id,
+          ts,
+          botId,
+          runId,
+          blocks,
+          ...origin(originSessionId),
+        });
         break;
       }
       case "bot.text": {
         const { id, ts, botId, payload } = segment;
-        items.push({ kind: "message", role: "bot", id, ts, botId, blocks: payload.blocks });
+        items.push({
+          kind: "message",
+          role: "bot",
+          id,
+          ts,
+          botId,
+          blocks: payload.blocks,
+          ...origin(payload.originSessionId),
+        });
         break;
       }
-      case "user.message":
+      case "user.message": {
+        const { originSessionId, ...payload } = segment.payload;
         items.push({
           kind: "message",
           role: "user",
           id: segment.id,
           ts: segment.ts,
-          ...segment.payload,
+          ...payload,
+          ...origin(originSessionId),
         });
         break;
+      }
       case "run.started": {
         const run: RunItem = {
           kind: "run",
@@ -78,9 +113,41 @@ export function projectThreadItems(entries: readonly SessionEntry[]): ThreadItem
           ...segment.payload,
         });
         break;
+      case "routine.started": {
+        const { sessionId, routineId, name } = segment.payload;
+        const routine: RoutineItem = {
+          kind: "routine",
+          id: segment.id,
+          ts: segment.ts,
+          runId: segment.runId,
+          botId: segment.botId,
+          sessionId,
+          routineId,
+          name,
+          finished: null,
+        };
+        routines.set(segment.runId, routine);
+        items.push(routine);
+        break;
+      }
+      case "routine.finished": {
+        const routine = routines.get(segment.runId);
+        if (routine) {
+          routine.finished = { status: segment.payload.status, result: segment.payload.result };
+        }
+        break;
+      }
       case "handoff": {
         const { fromBotId, toBotId, text } = segment.payload;
-        items.push({ kind: "handoff", id: segment.id, ts: segment.ts, fromBotId, toBotId, text });
+        items.push({
+          kind: "handoff",
+          id: segment.id,
+          ts: segment.ts,
+          fromBotId,
+          toBotId,
+          text,
+          ...origin(segment.payload.originSessionId),
+        });
         break;
       }
       case "bot.message.sent": {
@@ -97,6 +164,7 @@ export function projectThreadItems(entries: readonly SessionEntry[]): ThreadItem
           intent,
           exchangeId,
           answeredBy: answer?.id ?? null,
+          ...origin(segment.payload.originSessionId),
         });
         break;
       }
@@ -125,6 +193,7 @@ export function projectThreadItems(entries: readonly SessionEntry[]): ThreadItem
           effectKind,
           proposal,
           decision: null,
+          ...origin(segment.payload.originSessionId),
         };
         effects.set(effectId, effect);
         items.push(effect);
@@ -152,7 +221,7 @@ export function projectThreadItems(entries: readonly SessionEntry[]): ThreadItem
       case "session.title":
       case "system.note": {
         const { sessionId, seq, parentId, botId, runId, ...note } = segment;
-        items.push({ kind: "note", ...note });
+        items.push({ kind: "note", ...note, ...origin(originSessionIdOf(segment)) });
         break;
       }
       default:
