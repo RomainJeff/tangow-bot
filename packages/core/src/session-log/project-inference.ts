@@ -12,7 +12,7 @@ import { isInferenceEntry, REPLY_QUOTE_MAX_LENGTH } from "@rakazo/contracts";
 import { blocksToAgentHistoryText } from "../attachments.js";
 import { escapeDirectoryField, escapePromptData, renderBotMessageBlock } from "../bot-messages.js";
 import { messageReaction } from "../message-reactions.js";
-import { foldRuns, toolCallKey } from "./run-fold.js";
+import { foldRuns, toolOutputs } from "./run-fold.js";
 
 export interface InferenceProjectionOptions {
   /** The bot the history is for. Only its own words stay on the assistant side. */
@@ -48,15 +48,11 @@ export function projectInferenceTurns(
       entries.findLastIndex((entry) => entry.type === "compaction"),
     ),
   );
-  const answered = new Set(
-    chain.flatMap((entry) =>
-      entry.type === "tool.result" || entry.type === "subagent" ? [toolCallKey(entry)] : [],
-    ),
-  );
+  const answered = toolOutputs(chain);
   const segments = foldRuns(
     chain
       .filter(isInferenceEntry)
-      .filter((entry) => entry.type !== "tool.call" || answered.has(toolCallKey(entry))),
+      .filter((entry) => entry.type !== "tool.call" || answered.has(entry.id)),
   );
   const cancelled = new Set(
     chain.flatMap((entry) =>

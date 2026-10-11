@@ -368,6 +368,30 @@ describe("projectInferenceTurns", () => {
     ]);
   });
 
+  it("pairs each call of a call id the provider reused with its own result", () => {
+    const chain = linkEntries("reused", [
+      ...readFile("run_1", "a.md", "paused: awaiting approval"),
+      ...readFile("run_1", "b.md", "contents of b"),
+      ...readFile("run_1", "c.md"),
+    ]);
+    expect(projectInferenceTurns(chain, ada).map((turn) => turn.parts)).toEqual([
+      [
+        {
+          type: "toolCalls",
+          calls: [
+            {
+              id: "call_0",
+              name: "read_file",
+              args: { path: "a.md" },
+              output: "paused: awaiting approval",
+            },
+            { id: "call_0", name: "read_file", args: { path: "b.md" }, output: "contents of b" },
+          ],
+        },
+      ],
+    ]);
+  });
+
   it("names a peer bot outside the roster bot, and its handoff by bot id", async () => {
     expect(projectInferenceTurns(await fixtureChain("group"), { selfBotId: "bot_bob" })).toEqual([
       { role: "user", content: "Ada, plan the launch post, then hand it to Bob." },

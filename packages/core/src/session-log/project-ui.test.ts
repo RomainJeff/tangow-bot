@@ -811,6 +811,58 @@ describe("projectThreadItems", () => {
     ]);
   });
 
+  it("shows each call of a call id the provider reused with its own result", () => {
+    const run = { botId: "bot_ada", runId: "run_1" };
+    const call = (path: string) => ({
+      ...run,
+      type: "tool.call",
+      payload: { callId: "call_0", name: "read_file", input: JSON.stringify({ path }) },
+    });
+    const result = (output: string) => ({
+      ...run,
+      type: "tool.result",
+      payload: { callId: "call_0", output, isError: false, artifactIds: [] },
+    });
+    const chain = linkEntries("reused", [
+      call("a.md"),
+      result("paused: awaiting approval"),
+      call("b.md"),
+      result("contents of b"),
+      call("c.md"),
+    ]);
+    const shown = (path: string, output: string) => ({
+      name: "read_file",
+      input: JSON.stringify({ path }),
+      output,
+      id: "call_0",
+    });
+    expect(projectThreadItems(chain)).toEqual([
+      {
+        kind: "message",
+        role: "bot",
+        id: "reused-0",
+        ts: at(0),
+        ...run,
+        blocks: [
+          {
+            kind: "steps",
+            steps: [
+              {
+                label: "Read file",
+                count: 3,
+                calls: [
+                  shown("a.md", "paused: awaiting approval"),
+                  shown("b.md", "contents of b"),
+                  shown("c.md", ""),
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+  });
+
   it("gives a run finished at a timestamp before its start a duration of zero", () => {
     const run = { botId: "bot_ada", runId: "run_1" };
     const trigger = { kind: "webhook", routineId: "rtn_1" };

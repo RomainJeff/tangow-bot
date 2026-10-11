@@ -31,17 +31,13 @@ type RunMessage = {
  * Fold a run's `assistant.*` and `tool.*` entries into one `RunMessage` per stretch, at the
  * position of the stretch's first entry. Each run has its own open stretch, so runs that
  * interleave keep one message each. Any other entry closes every open stretch, a `bot.text` too
- * since it is a message of its own, and a `subagent` entry passes through without closing them. A tool call takes its output from the `tool.result`
- * or `subagent` entry with the same run and `callId`, or an empty output while none exists yet.
+ * since it is a message of its own, and a `subagent` entry passes through without closing them.
+ * A tool call takes its output from `toolOutputs`, or an empty output while it has none yet.
  */
 export function foldRuns(
   entries: readonly SessionEntry[],
 ): (RunMessage | Exclude<SessionEntry, FoldedEntry>)[] {
-  const outputs = new Map<string, string>();
-  for (const entry of entries) {
-    if (entry.type === "tool.result") outputs.set(toolCallKey(entry), entry.payload.output);
-    if (entry.type === "subagent") outputs.set(toolCallKey(entry), entry.payload.result);
-  }
+  const outputs = toolOutputs(entries);
   const segments: (RunMessage | Exclude<SessionEntry, FoldedEntry>)[] = [];
   const open = new Map<string, RunMessage>();
   const stretchOf = (entry: FoldedEntry) => {
@@ -78,7 +74,7 @@ export function foldRuns(
         message.blocks = appendToolCallSegment(message.blocks, name, {
           name,
           input,
-          output: outputs.get(toolCallKey(entry)) ?? "",
+          output: outputs.get(entry.id) ?? "",
           id: callId,
         });
         break;
@@ -92,7 +88,27 @@ export function foldRuns(
   return segments;
 }
 
-/** Providers reuse call ids such as `call_0` from run to run, so a call pairs within its run. */
-export function toolCallKey(entry: SessionEntryOf<"tool.call" | "tool.result" | "subagent">) {
+/**
+ * Each tool call's output by the call's entry id. Providers reuse call ids such as `call_0`, from
+ * run to run and within a run once it resumes, so the n-th call of a run and call id pairs with the
+ * n-th `tool.result` or `subagent` entry of that run and call id.
+ */
+export function toolOutputs(entries: readonly SessionEntry[]): Map<EntryId, string> {
+  const results = new Map<string, string[]>();
+  for (const entry of entries) {
+    if (entry.type !== "tool.result" && entry.type !== "subagent") continue;
+    const output = entry.type === "tool.result" ? entry.payload.output : entry.payload.result;
+    results.set(toolCallKey(entry), [...(results.get(toolCallKey(entry)) ?? []), output]);
+  }
+  const outputs = new Map<EntryId, string>();
+  for (const entry of entries) {
+    if (entry.type !== "tool.call") continue;
+    const output = results.get(toolCallKey(entry))?.shift();
+    if (output !== undefined) outputs.set(entry.id, output);
+  }
+  return outputs;
+}
+
+function toolCallKey(entry: SessionEntryOf<"tool.call" | "tool.result" | "subagent">) {
   return JSON.stringify([entry.runId, entry.payload.callId]);
 }
