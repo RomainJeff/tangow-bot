@@ -10,6 +10,7 @@ export function stubbedDbSessions() {
     appendComputerControlInTransaction: vi.fn(async () => undefined),
     createSessionInTransaction: vi.fn(async (_tx: unknown, session: { id: string }) => session.id),
     historyGeneration: vi.fn(async () => 0),
+    threadOfSession: vi.fn(async (): Promise<string | null> => null),
     sessionEntryFromRow: vi.fn((row: unknown) => row),
   };
 }

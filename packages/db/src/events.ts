@@ -2067,6 +2067,32 @@ export async function eventsAfter(
   });
 }
 
+/**
+ * The `thread.progress` events of each open run since the newest `session.entry.appended` event
+ * of the thread that carried an entry of that run, oldest first: the streamed text a reload
+ * replays under the shimmer.
+ */
+export async function progressSinceLastEntry(
+  prisma: PrismaClient | Prisma.TransactionClient,
+  threadId: string,
+  runIds: readonly string[],
+): Promise<ProductEvent[]> {
+  if (runIds.length === 0) return [];
+  const rows = await prisma.$queryRaw<Parameters<typeof mapProductEvent>[0][]>`
+    SELECT e.id, e."spaceId", e."threadId", e."botId", e.seq, e.type, e.payload, e."runId",
+      e."createdAt"
+    FROM events e
+    WHERE e."threadId" = ${threadId} AND e.type = 'thread.progress'
+      AND e."runId" = ANY(${[...runIds]}::text[])
+      AND e.seq > COALESCE((
+        SELECT max(a.seq) FROM events a
+        WHERE a."threadId" = ${threadId} AND a.type = 'session.entry.appended'
+          AND a.payload -> 'entries' @> jsonb_build_array(jsonb_build_object('runId', e."runId"))
+      ), -1)
+    ORDER BY e.seq`;
+  return rows.map(mapProductEvent);
+}
+
 export async function* followThreadEvents(
   prisma: PrismaClient,
   threadId: string,

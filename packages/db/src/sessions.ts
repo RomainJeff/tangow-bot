@@ -16,6 +16,7 @@ import {
   USER_MESSAGE_CLIENT_NONCE_PREFIX,
 } from "@rakazo/contracts";
 import { ACTIVE_RUN_STATUSES, SessionEntryDecodeError, sanitizeJsonValue } from "@rakazo/core";
+import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
 import { RunHistoryWriteError } from "./messages.js";
 
@@ -283,6 +284,23 @@ export async function appendSessionEntryInTransaction(
     await tx.$queryRaw`WITH ${insertFeedEvent(feed, at, Prisma.empty)} SELECT 1`;
   }
   return entry;
+}
+
+/** The thread a session belongs to through its top-most ancestor, when the session is in the space. */
+export async function threadOfSession(
+  prisma: PrismaClient | Prisma.TransactionClient,
+  sessionId: string,
+  spaceId: string,
+): Promise<string | null> {
+  const [top] = await prisma.$queryRaw<Array<{ threadId: string | null }>>`
+    WITH RECURSIVE ancestry AS (
+      SELECT id, "parentSessionId", "threadId", 0 AS depth
+      FROM sessions WHERE id = ${sessionId} AND "spaceId" = ${spaceId}
+      UNION ALL
+      SELECT s.id, s."parentSessionId", s."threadId", ancestry.depth + 1
+      FROM sessions s JOIN ancestry ON s.id = ancestry."parentSessionId")
+    SELECT "threadId" FROM ancestry ORDER BY depth DESC LIMIT 1`;
+  return top?.threadId ?? null;
 }
 
 type CardStateDraft = SessionEntryDraft extends infer Draft

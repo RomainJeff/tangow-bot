@@ -6,6 +6,7 @@ import { spawnBotApprovalBlock } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import {
   answerRunInputInTransaction,
+  appendEventInTransaction,
   appendLinkPreviewBlock,
   appendRunBlocksInTransaction,
   appendRunFinishedInTransaction,
@@ -19,9 +20,11 @@ import {
   finalizeRun,
   openRoutineSessionInTransaction,
   pauseRunForInput,
+  progressSinceLastEntry,
   removeLinkPreviewBlock,
   resumeAskWithComposerTextInTransaction,
   rewindThread,
+  threadOfSession,
 } from "@rakazo/db";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { messageConnectedAgent } from "../agent-connections.js";
@@ -1339,6 +1342,69 @@ describe("session log writers", () => {
         },
         { type: "assistant.text", payload: { blocks: [{ kind: "text", text: "Done." }] } },
       ]);
+    });
+  });
+  describe("what a thread serves from the log", () => {
+    it("replays an open run's progress since the newest append that carried one of its entries", async () => {
+      const { prisma } = database;
+      const owner = await seedBot(prisma, "Lamarr");
+      const run = await seedRun(prisma, owner.bot.id, owner.threadId);
+      const other = await seedRun(prisma, owner.bot.id, owner.threadId);
+      const progress = (runId: string, text: string) =>
+        prisma.$transaction((tx) =>
+          appendEventInTransaction(tx, {
+            spaceId: SPACE,
+            threadId: owner.threadId,
+            botId: owner.bot.id,
+            type: "thread.progress",
+            runId,
+            payload: { text },
+          }),
+        );
+
+      await progress(run.id, "before its entry");
+      await writerOf(
+        prisma,
+        run,
+      )({
+        type: "assistant.text",
+        payload: { blocks: [{ kind: "text", text: "First part." }] },
+      });
+      await progress(run.id, "after its entry");
+      await writerOf(
+        prisma,
+        other,
+      )({
+        type: "assistant.text",
+        payload: { blocks: [{ kind: "text", text: "Someone else." }] },
+      });
+      await progress(other.id, "the other run");
+      await progress(run.id, "still going");
+
+      const replayed = await progressSinceLastEntry(prisma, owner.threadId, [run.id, other.id]);
+
+      expect(replayed.map(({ type, runId, payload }) => ({ type, runId, payload }))).toEqual([
+        { type: "thread.progress", runId: run.id, payload: { text: "after its entry" } },
+        { type: "thread.progress", runId: other.id, payload: { text: "the other run" } },
+        { type: "thread.progress", runId: run.id, payload: { text: "still going" } },
+      ]);
+    });
+
+    it("finds the thread of a session through its top-most ancestor, only within its space", async () => {
+      const { prisma } = database;
+      const owner = await seedBot(prisma, "Meitner");
+      const digest = await routineRun(prisma, owner, "Digest");
+      const helper = await subagentRun(prisma, { ...digest.run, threadId: owner.threadId });
+
+      expect(
+        await Promise.all([
+          threadOfSession(prisma, owner.sessionId, SPACE),
+          threadOfSession(prisma, digest.routineSessionId, SPACE),
+          threadOfSession(prisma, helper.sessionId, SPACE),
+          threadOfSession(prisma, helper.sessionId, "space_elsewhere"),
+          threadOfSession(prisma, "session_unknown", SPACE),
+        ]),
+      ).toEqual([owner.threadId, owner.threadId, owner.threadId, null, null]);
     });
   });
 });
