@@ -86,9 +86,9 @@ describe("PostgresSessionLog", () => {
   });
   afterAll(() => database.close());
 
-  it("puts a thread session's entries on its thread's feed and a subagent's nowhere", async () => {
+  it("puts a thread session's entries on its thread's feed and a subagent's steps nowhere", async () => {
     const { prisma } = database;
-    const { botId, threadId, sessionId } = await seedThread(prisma);
+    const { botId, threadId, sessionId, run } = await seedThread(prisma);
     const entry = await prisma.$transaction((tx) =>
       log.append(tx, {
         sessionId,
@@ -117,8 +117,10 @@ describe("PostgresSessionLog", () => {
       });
       await log.append(tx, {
         sessionId: childId,
-        type: "system.note",
-        payload: { text: "helper" },
+        botId,
+        runId: run.id,
+        type: "assistant.text",
+        payload: { blocks: [{ kind: "text", text: "helper" }] },
       });
     });
 

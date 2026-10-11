@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { SessionEntryDraft } from "@rakazo/adapter-kit";
-import type { SessionEntry, SessionId } from "@rakazo/contracts";
-import { EntryId, EntrySeq } from "@rakazo/contracts";
+import type { SessionEntry } from "@rakazo/contracts";
+import { EntryId, EntrySeq, SessionId } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
 import {
   appendRunBlocksInTransaction,
@@ -9,6 +9,7 @@ import {
   appendSessionEntryInTransaction,
   cancelRunsInTransaction,
   clearThread,
+  createSessionInTransaction,
   createThreadEvents,
   finalizeRun,
   openRoutineSessionInTransaction,
@@ -39,7 +40,13 @@ async function seedRun(
   prisma: PrismaClient,
   botId: string,
   threadId: string,
-  started: { trigger?: string; routineId?: string; leaseOwner?: string; leaseFence?: number } = {},
+  started: {
+    trigger?: string;
+    routineId?: string;
+    parentRunId?: string;
+    leaseOwner?: string;
+    leaseFence?: number;
+  } = {},
 ) {
   const task = await prisma.task.create({
     data: { spaceId: SPACE, botId, threadId, userId: USER, prompt: "", status: "running" },
@@ -61,6 +68,56 @@ async function seedRun(
 const SCHEDULED_AT = "2026-10-11T07:00:00.000Z";
 const SCRIPTED = { provider: "scripted", id: "scripted" };
 
+/** Appends what the run writes, addressed to the session the run row names. */
+function writerOf(prisma: PrismaClient, run: { id: string; botId: string }) {
+  return async (body: object) => {
+    const { sessionId } = await prisma.run.findUniqueOrThrow({ where: { id: run.id } });
+    return prisma.$transaction((tx) =>
+      appendSessionEntryInTransaction(tx, {
+        ...body,
+        sessionId: sessionId as SessionId,
+        botId: run.botId,
+        runId: run.id,
+      } as SessionEntryDraft),
+    );
+  };
+}
+
+/** A helper of `parent`'s run, in a session under the one that run writes to, its log started. */
+async function subagentRun(
+  prisma: PrismaClient,
+  parent: { id: string; botId: string; threadId: string },
+) {
+  const run = await seedRun(prisma, parent.botId, parent.threadId, {
+    trigger: "subagent",
+    parentRunId: parent.id,
+  });
+  const call = await writerOf(
+    prisma,
+    parent,
+  )({
+    type: "tool.call",
+    payload: { callId: `call_${run.id}`, name: "run_subagent", input: "{}" },
+  });
+  const sessionId = await prisma.$transaction(async (tx) => {
+    const created = await createSessionInTransaction(tx, {
+      kind: "subagent",
+      id: SessionId.parse(randomUUID()),
+      spaceId: SPACE,
+      parentSessionId: call.sessionId,
+      parentEntryId: call.id,
+    });
+    await tx.run.update({ where: { id: run.id }, data: { sessionId: created } });
+    return created;
+  });
+  const write = writerOf(prisma, run);
+  await write({
+    type: "run.started",
+    payload: { trigger: { kind: "subagent", entryId: call.id }, model: SCRIPTED, effort: null },
+  });
+  return { run, sessionId, write };
+}
+
 /** A run of the routine `name` in the bot's thread, with its own session open and its log started. */
 async function routineRun(
   prisma: PrismaClient,
@@ -78,19 +135,7 @@ async function routineRun(
       model: SCRIPTED,
     }),
   );
-  const write = async (body: object) => {
-    const { sessionId: addressed } = await prisma.run.findUniqueOrThrow({
-      where: { id: run.id },
-    });
-    await prisma.$transaction((tx) =>
-      appendSessionEntryInTransaction(tx, {
-        ...body,
-        sessionId: addressed as SessionId,
-        botId: bot.id,
-        runId: run.id,
-      } as SessionEntryDraft),
-    );
-  };
+  const write = writerOf(prisma, run);
   await write({
     type: "run.started",
     payload: {
@@ -530,6 +575,51 @@ describe("session log writers", () => {
       "assistant.choice",
       "user.message",
     ]);
+  });
+
+  it("raises a helper's question and its approval request to the thread's session and keeps its steps", async () => {
+    const { prisma } = database;
+    const noether = await seedBot(prisma, "Noether");
+    const parent = await seedRun(prisma, noether.bot.id, noether.threadId);
+    const helper = await subagentRun(prisma, parent);
+
+    await prisma.$transaction((tx) =>
+      appendRunBlocksInTransaction(
+        tx,
+        { id: EntryId.parse(randomUUID()), runId: helper.run.id, botId: noether.bot.id },
+        [{ kind: "ask", text: "Which file?" }],
+      ),
+    );
+    await helper.write({
+      type: "effect.requested",
+      payload: { effectId: "effect_helper", effectKind: "spawn_bot", proposal: { name: "Scout" } },
+    });
+
+    expect(await types(helper.sessionId)).toEqual(["run.started"]);
+    expect(await types(noether.sessionId)).toEqual([
+      "tool.call",
+      "assistant.ask",
+      "effect.requested",
+    ]);
+  });
+
+  it("raises a question from a helper a routine started past the routine, to the thread's session", async () => {
+    const { prisma } = database;
+    const meitner = await seedBot(prisma, "Meitner");
+    const routine = await routineRun(prisma, meitner, "Veille presse");
+    const helper = await subagentRun(prisma, routine.run);
+
+    await prisma.$transaction((tx) =>
+      appendRunBlocksInTransaction(
+        tx,
+        { id: EntryId.parse(randomUUID()), runId: helper.run.id, botId: meitner.bot.id },
+        [{ kind: "ask", text: "Which outlets?" }],
+      ),
+    );
+
+    expect(await types(helper.sessionId)).toEqual(["run.started"]);
+    expect(await types(routine.routineSessionId)).toEqual(["run.started", "tool.call"]);
+    expect(await types(meitner.sessionId)).toEqual(["routine.started", "assistant.ask"]);
   });
 
   it("opens a webhook routine run's own session once, and a resumed run reopens that one", async () => {

@@ -334,7 +334,7 @@ export function runSessionLogConformance<Tx>(makeLog: () => Promise<SessionLogHa
     });
 
     it("keeps the chains of a session and its subagent apart when both append at once", async () => {
-      const { sessionId: parentId, session } = await created();
+      const { sessionId: parentId, session, runId } = await created();
       const launch = await append(said(parentId, "delegate"));
       const childId = SessionId.parse(`child-${launch.id}`);
       await harness.transaction((tx) =>
@@ -349,7 +349,7 @@ export function runSessionLogConformance<Tx>(makeLog: () => Promise<SessionLogHa
       await Promise.all(
         Array.from({ length: 10 }, (_, index) => [
           append(said(parentId, `parent ${index}`)),
-          append(said(childId, `child ${index}`)),
+          append(replied(childId, runId, `child ${index}`)),
         ]).flat(),
       );
 

@@ -89,51 +89,55 @@ type ThreadFeed = {
   entries: SessionEntry[];
 };
 type Route = { sessionId: SessionId; threadId: string | null };
-/** The routes a transaction resolved, by addressed session and whether the entry is trace. */
-type TransactionLog = { routeOf: Map<string, Route>; feedOf: Map<string, ThreadFeed> };
+/** Where a session sits: its thread's main session, that thread, and whether it is a child. */
+type Lineage = { mainSessionId: SessionId; threadId: string | null; child: boolean };
+/** The lineages a transaction resolved, by session, and the feed event it writes, by thread. */
+type TransactionLog = { lineageOf: Map<string, Lineage>; feedOf: Map<string, ThreadFeed> };
 const transactionLogs = new WeakMap<Prisma.TransactionClient, TransactionLog>();
 
 function transactionLog(tx: Prisma.TransactionClient): TransactionLog {
   let log = transactionLogs.get(tx);
   if (!log) {
-    log = { routeOf: new Map(), feedOf: new Map() };
+    log = { lineageOf: new Map(), feedOf: new Map() };
     transactionLogs.set(tx, log);
   }
   return log;
 }
 
 /**
- * The one rule for which session an entry lands in: a routine session keeps its run's trace, and
- * whatever else is addressed to it, an ask, an approval, the person's answer, goes to the thread
- * session the routine reports to. It locks a thread before any session row, in the mode every
- * thread writer uses: the landing session's, or a routine session's parent's even for its trace.
- * So a message write that appends an entry cannot deadlock with this, nor can a stop, which takes
- * the thread, then the run, then the session.
+ * The one rule for which session an entry lands in. A child session, a routine's or a helper's at
+ * any depth, keeps its run's trace; whatever else is addressed to it, an ask, an approval, the
+ * person's answer, rises to its thread's main session, the top-most ancestor. Every append locks
+ * that thread before any session row, in the mode every thread writer uses, so neither a message
+ * write nor a stop, which takes the thread, then the run, then the session, can deadlock with it.
  */
 async function routeOf(tx: Prisma.TransactionClient, draft: SessionEntryDraft): Promise<Route> {
   const log = transactionLog(tx);
-  const forwards = !RUN_TRACE_TYPES.has(draft.type);
-  const key = `${draft.sessionId}:${forwards}`;
-  const cached = log.routeOf.get(key);
-  if (cached) return cached;
-  const [found] = await tx.$queryRaw<Array<{ sessionId: string; threadId: string | null }>>`
-    WITH addressed AS (
-      SELECT s.id, s.kind = 'routine' AS routine, s."parentSessionId",
-        CASE WHEN s.kind = 'routine' THEN parent."threadId" ELSE s."threadId" END AS "threadId"
-      FROM sessions s LEFT JOIN sessions parent ON parent.id = s."parentSessionId"
-      WHERE s.id = ${draft.sessionId}),
-    thread AS (
-      SELECT id FROM threads WHERE id = (SELECT "threadId" FROM addressed) FOR UPDATE)
-    SELECT
-      CASE WHEN routine AND ${forwards} THEN "parentSessionId" ELSE addressed.id END AS "sessionId",
-      CASE WHEN routine AND NOT ${forwards} THEN NULL ELSE thread.id END AS "threadId"
-    FROM addressed LEFT JOIN thread ON true`;
-  const route = {
-    sessionId: (found?.sessionId ?? draft.sessionId) as SessionId,
-    threadId: found?.threadId ?? null,
-  };
-  log.routeOf.set(key, route);
-  return route;
+  let lineage = log.lineageOf.get(draft.sessionId);
+  if (!lineage) {
+    const [found] = await tx.$queryRaw<
+      Array<{ mainSessionId: string; threadId: string | null; child: boolean }>
+    >`
+      WITH RECURSIVE ancestry AS (
+        SELECT id, "parentSessionId", "threadId", 0 AS depth FROM sessions WHERE id = ${draft.sessionId}
+        UNION ALL
+        SELECT s.id, s."parentSessionId", s."threadId", ancestry.depth + 1
+        FROM sessions s JOIN ancestry ON s.id = ancestry."parentSessionId"),
+      main AS (SELECT id, "threadId", depth FROM ancestry ORDER BY depth DESC LIMIT 1),
+      thread AS (SELECT id FROM threads WHERE id = (SELECT "threadId" FROM main) FOR UPDATE)
+      SELECT main.id AS "mainSessionId", thread.id AS "threadId", main.depth > 0 AS child
+      FROM main LEFT JOIN thread ON true`;
+    lineage = {
+      mainSessionId: (found?.mainSessionId ?? draft.sessionId) as SessionId,
+      threadId: found?.threadId ?? null,
+      child: found?.child ?? false,
+    };
+    log.lineageOf.set(draft.sessionId, lineage);
+  }
+  if (!lineage.child) return { sessionId: draft.sessionId, threadId: lineage.threadId };
+  return RUN_TRACE_TYPES.has(draft.type)
+    ? { sessionId: draft.sessionId, threadId: null }
+    : { sessionId: lineage.mainSessionId, threadId: lineage.threadId };
 }
 
 function insertFeedEvent(feed: ThreadFeed, at: Prisma.Sql, gate: Prisma.Sql) {
