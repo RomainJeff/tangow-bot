@@ -182,7 +182,7 @@ describe("projectThreadView on a streamed reply", () => {
         item: {
           kind: "subagent",
           status: "running",
-          id: "str-04",
+          id: "subagent:str-04",
           ts: at(4),
           runId: "run_str_1",
           callId: "call_scout",
@@ -340,6 +340,28 @@ describe("projectThreadView cards", () => {
         answerId: "week",
       },
     ]);
+  });
+
+  it("connects only the onboarding card whose connector and app the answer names", () => {
+    const card = (provider: string) => ({
+      kind: "app_connect",
+      connectorId: "composio",
+      provider,
+      name: provider,
+      description: "",
+      logo: null,
+      status: "pending",
+    });
+    const chain = linkEntries("con", [
+      { botId: "bot_ada", type: "bot.text", payload: { blocks: [card("gmail"), card("slack")] } },
+      { type: "card.answered", payload: { target: "con-0", answerId: "composio:slack" } },
+    ]);
+    const statuses = projectThreadView(chain).rows.flatMap((row) =>
+      row.item.kind === "message"
+        ? row.item.blocks.map((block) => block.kind === "app_connect" && block.status)
+        : [],
+    );
+    expect(statuses).toEqual(["pending", "connected"]);
   });
 
   it("keeps a taught skill's newest draft revision", () => {

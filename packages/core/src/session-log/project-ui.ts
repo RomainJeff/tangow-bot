@@ -7,7 +7,12 @@ import type {
   ThreadItem,
   UiEntry,
 } from "@rakazo/contracts";
-import { ASK_DISMISSED_ANSWER, CHOICE_DISMISSED_ANSWER_ID, isUiEntry } from "@rakazo/contracts";
+import {
+  ASK_DISMISSED_ANSWER,
+  appConnectAnswerId,
+  CHOICE_DISMISSED_ANSWER_ID,
+  isUiEntry,
+} from "@rakazo/contracts";
 import { childSessionsOf, originSessionIdOf } from "./child-sessions.js";
 import { foldRuns, toolOutputs } from "./run-fold.js";
 
@@ -131,7 +136,7 @@ export function projectThread(entries: readonly SessionEntry[]): ProjectedThread
             const helper: SubagentItem = {
               kind: "subagent",
               status: "running",
-              id: entry.id,
+              id: `subagent:${entry.id}` as EntryId,
               ts: entry.ts,
               runId: entry.runId,
               callId: entry.payload.callId,
@@ -390,7 +395,7 @@ export function projectThread(entries: readonly SessionEntry[]): ProjectedThread
         for (const slot of connects) {
           const connect = cardOf(slot);
           if (connect?.kind !== "app_connect") continue;
-          if (connects.length === 1 || connect.connectorId === answerId) {
+          if (appConnectAnswerId(connect) === answerId) {
             setCard(slot, { ...connect, status: "connected" });
           }
         }
