@@ -105,9 +105,10 @@ function transactionLog(tx: Prisma.TransactionClient): TransactionLog {
 /**
  * The one rule for which session an entry lands in: a routine session keeps its run's trace, and
  * whatever else is addressed to it, an ask, an approval, the person's answer, goes to the thread
- * session the routine reports to. It locks the landing session's thread, if it has one, before
- * any session row, in the mode every thread writer uses, so a message write that appends an entry
- * cannot deadlock with this.
+ * session the routine reports to. It locks a thread before any session row, in the mode every
+ * thread writer uses: the landing session's, or a routine session's parent's even for its trace.
+ * So a message write that appends an entry cannot deadlock with this, nor can a stop, which takes
+ * the thread, then the run, then the session.
  */
 async function routeOf(tx: Prisma.TransactionClient, draft: SessionEntryDraft): Promise<Route> {
   const log = transactionLog(tx);
@@ -115,15 +116,18 @@ async function routeOf(tx: Prisma.TransactionClient, draft: SessionEntryDraft): 
   const key = `${draft.sessionId}:${forwards}`;
   const cached = log.routeOf.get(key);
   if (cached) return cached;
-  const [found] = await tx.$queryRaw<Array<{ sessionId: string | null; threadId: string | null }>>`
-    WITH target AS (
-      SELECT CASE WHEN kind = 'routine' AND ${forwards} THEN "parentSessionId" ELSE id END AS id
-      FROM sessions WHERE id = ${draft.sessionId}),
+  const [found] = await tx.$queryRaw<Array<{ sessionId: string; threadId: string | null }>>`
+    WITH addressed AS (
+      SELECT s.id, s.kind = 'routine' AS routine, s."parentSessionId",
+        CASE WHEN s.kind = 'routine' THEN parent."threadId" ELSE s."threadId" END AS "threadId"
+      FROM sessions s LEFT JOIN sessions parent ON parent.id = s."parentSessionId"
+      WHERE s.id = ${draft.sessionId}),
     thread AS (
-      SELECT id FROM threads
-      WHERE id = (SELECT "threadId" FROM sessions WHERE id = (SELECT id FROM target))
-      FOR UPDATE)
-    SELECT (SELECT id FROM target) AS "sessionId", (SELECT id FROM thread) AS "threadId"`;
+      SELECT id FROM threads WHERE id = (SELECT "threadId" FROM addressed) FOR UPDATE)
+    SELECT
+      CASE WHEN routine AND ${forwards} THEN "parentSessionId" ELSE addressed.id END AS "sessionId",
+      CASE WHEN routine AND NOT ${forwards} THEN NULL ELSE thread.id END AS "threadId"
+    FROM addressed LEFT JOIN thread ON true`;
   const route = {
     sessionId: (found?.sessionId ?? draft.sessionId) as SessionId,
     threadId: found?.threadId ?? null,

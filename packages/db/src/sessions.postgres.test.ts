@@ -11,6 +11,7 @@ import {
   appendRunFinishedInTransaction,
   appendSessionEntryInTransaction,
   createSessionInTransaction,
+  openRoutineSessionInTransaction,
 } from "./sessions.js";
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -52,7 +53,7 @@ describePostgres("appendSessionEntryInTransaction under contention (PostgreSQL)"
     return SessionId.parse(thread.sessionId);
   }
 
-  async function startedRun() {
+  async function queuedRun() {
     const sessionId = await freshSession();
     const { id: threadId, botId } = await prisma.thread.findUniqueOrThrow({
       where: { sessionId },
@@ -72,16 +73,45 @@ describePostgres("appendSessionEntryInTransaction under contention (PostgreSQL)"
         trigger: "user",
       },
     });
-    await prisma.$transaction((tx) =>
-      appendSessionEntryInTransaction(tx, {
-        sessionId,
-        botId: botId!,
-        runId: run.id,
-        type: "run.started",
-        payload: { trigger: { kind: "direct" }, model: { provider: "p", id: "m" }, effort: null },
-      }),
-    );
     return { sessionId, threadId, botId: botId!, runId: run.id, taskId: task.id };
+  }
+
+  function runStarted(sessionId: SessionId, botId: string, runId: string): SessionEntryDraft {
+    return {
+      sessionId,
+      botId,
+      runId,
+      type: "run.started",
+      payload: { trigger: { kind: "direct" }, model: { provider: "p", id: "m" }, effort: null },
+    };
+  }
+
+  async function startedRun() {
+    const run = await queuedRun();
+    await prisma.$transaction((tx) =>
+      appendSessionEntryInTransaction(tx, runStarted(run.sessionId, run.botId, run.runId)),
+    );
+    return run;
+  }
+
+  async function startedRoutineRun() {
+    const run = await queuedRun();
+    const routineSessionId = await prisma.$transaction(async (tx) => {
+      const opened = await openRoutineSessionInTransaction(
+        tx,
+        { id: run.runId, spaceId: id, threadId: run.threadId, botId: run.botId },
+        {
+          routineId: "routine-digest",
+          name: "Digest",
+          trigger: "routine",
+          scheduledAt: new Date().toISOString(),
+          model: { provider: "p", id: "m" },
+        },
+      );
+      await appendSessionEntryInTransaction(tx, runStarted(opened, run.botId, run.runId));
+      return opened;
+    });
+    return { ...run, routineSessionId };
   }
 
   function said(sessionId: SessionId, text: string): SessionEntryDraft {
@@ -262,6 +292,84 @@ describePostgres("appendSessionEntryInTransaction under contention (PostgreSQL)"
     await Promise.all([holder, cancel]);
 
     expect(probe).toBe("free");
+  });
+
+  it("starts a routine run's helper behind its thread lock, so a stop landing meanwhile cancels the run without a deadlock", async () => {
+    const { threadId, botId, runId, taskId, routineSessionId } = await startedRoutineRun();
+    let locked!: () => void;
+    let release!: () => void;
+    const holding = new Promise<void>((resolve) => {
+      locked = resolve;
+    });
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const stop = prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM threads WHERE id = ${threadId} FOR UPDATE`;
+      locked();
+      await released;
+      await cancelRunsInTransaction(tx, [{ id: runId, taskId }], new Date(), id);
+    }, TRANSACTION);
+    await holding;
+    const startHelper = prisma.$transaction(async (tx) => {
+      const call = await appendSessionEntryInTransaction(tx, {
+        sessionId: routineSessionId,
+        botId,
+        runId,
+        type: "tool.call",
+        payload: { callId: "call_0", name: "run_subagent", input: "{}" },
+      });
+      const helperSessionId = await createSessionInTransaction(tx, {
+        kind: "subagent",
+        id: SessionId.parse(randomUUID()),
+        spaceId: id,
+        parentSessionId: routineSessionId,
+        parentEntryId: call.id,
+      });
+      const task = await tx.task.create({
+        data: { spaceId: id, botId, threadId, userId: id, prompt: "", status: "running" },
+      });
+      await tx.run.create({
+        data: {
+          spaceId: id,
+          botId,
+          threadId,
+          taskId: task.id,
+          userId: id,
+          status: "running",
+          trigger: "subagent",
+          sessionId: helperSessionId,
+          parentRunId: runId,
+        },
+      });
+    }, TRANSACTION);
+    await waitForLockWaiter();
+    const probe = await prisma.$queryRaw`
+      SELECT id FROM sessions WHERE id = ${routineSessionId} FOR NO KEY UPDATE NOWAIT`.then(
+      () => "free",
+      (error: unknown) => String(error),
+    );
+    release();
+    const outcomes = await Promise.allSettled([stop, startHelper]);
+
+    expect({
+      probe,
+      outcomes: outcomes.map((outcome) =>
+        outcome.status === "fulfilled" ? "committed" : String(outcome.reason),
+      ),
+    }).toEqual({
+      probe: "free",
+      outcomes: ["committed", "RunHistoryWriteError: Run cannot write thread history"],
+    });
+    expect(
+      (
+        await prisma.sessionEntry.findMany({
+          where: { sessionId: routineSessionId },
+          orderBy: { seq: "asc" },
+          select: { type: true },
+        })
+      ).map(({ type }) => type),
+    ).toEqual(["run.started", "run.finished"]);
   });
 
   it("keeps a run that finished between a canceller's read and its cancel", async () => {
