@@ -27,7 +27,6 @@ import {
   MAX_MOBILE_AUTH_RESPONSE_BYTES,
   MAX_MOBILE_RPC_RESPONSE_BYTES,
   mergeMobileSnapshot,
-  mobileSnapshotOf,
   passwordResetCapabilities,
   requestPasswordReset,
   resetApiBase,
@@ -41,7 +40,6 @@ import {
   signOut,
   signUp,
   subscribeThread,
-  withOlderPage,
 } from "./api.js";
 import { resumeLiveNotifications } from "./live-notifications.js";
 import { serverMessage } from "./server-error.js";
@@ -1664,7 +1662,7 @@ describe("mobile thread refresh targeting", () => {
       threadId: "thread-a",
       entries: [],
       olderCursor: null,
-      progress: new Map(),
+      layer: new Map(),
       run: null,
     });
     await refresh;
@@ -1674,63 +1672,6 @@ describe("mobile thread refresh targeting", () => {
 });
 
 describe("mobile thread event reduction", () => {
-  it("merges the entries an event carries, each once, and stops reading message events", () => {
-    const question = logEntry(0, "user.message", {
-      blocks: [{ kind: "text", text: "Hi" }],
-      source: "app",
-    });
-    const started = runEntry(1, "run.started", {
-      trigger: { kind: "message", entryId: question.id },
-      model: { provider: "scripted", id: "scripted" },
-      effort: null,
-    });
-    const reply = runEntry(2, "assistant.text", { blocks: [{ kind: "text", text: "Hello" }] });
-    const appended = event("session.entry.appended", {
-      seq: 7,
-      payload: { entries: [started, reply] },
-    });
-
-    const once = applyMobileThreadEvent(snapshot([question]), appended);
-    const replayed = applyMobileThreadEvent(once, { ...appended, seq: 8 });
-
-    expect(once?.entries.map((entry) => entry.id)).toEqual(["entry-0", "entry-1", "entry-2"]);
-    expect(once?.cursor).toBe(7);
-    expect(replayed?.entries.map((entry) => entry.id)).toEqual(["entry-0", "entry-1", "entry-2"]);
-    const legacy = event("thread.message.created", {
-      payload: { messageId: "m1", role: "bot", blocks: [{ kind: "text", text: "Hello" }] },
-    });
-    expect(applyMobileThreadEvent(once, legacy)).toBe(once);
-  });
-
-  it("holds streamed text until the run's next entry lands", () => {
-    const streaming = applyMobileThreadEvent(
-      snapshot(),
-      event("thread.progress", { runId: "run-1", seq: 4, payload: { delta: "Hel" } }),
-    );
-    const settled = applyMobileThreadEvent(
-      streaming,
-      event("session.entry.appended", {
-        runId: "run-1",
-        seq: 5,
-        payload: {
-          entries: [runEntry(0, "assistant.text", { blocks: [{ kind: "text", text: "Hello" }] })],
-        },
-      }),
-    );
-
-    expect([...(streaming?.progress.keys() ?? [])]).toEqual(["run-1"]);
-    expect([...(settled?.progress.keys() ?? [])]).toEqual([]);
-  });
-
-  it("seeds the streamed text from the progress a snapshot replays", () => {
-    const seeded = mobileSnapshotOf({
-      ...snapshot(),
-      progress: [event("thread.progress", { runId: "run-1", seq: 2, payload: { delta: "Hel" } })],
-    });
-
-    expect([...seeded.progress.keys()]).toEqual(["run-1"]);
-  });
-
   it("starts a run as the bot thread's only run and adds it beside a group's others", () => {
     const bot = applyMobileThreadEvent(
       { ...snapshot(), run: { id: "run-old", status: "completed" }, activeRuns: [] },
@@ -1802,8 +1743,8 @@ describe("mobile thread event reduction", () => {
     const runA = { id: "run-a", status: "running" };
     const runB = { id: "run-b", status: "running" };
     const streaming = [
-      event("thread.progress", { runId: "run-a", payload: { delta: "A" } }),
-      event("thread.progress", { runId: "run-b", payload: { delta: "B" } }),
+      event("thread.progress", { runId: "run-a", seq: 4, payload: { delta: "A" } }),
+      event("thread.progress", { runId: "run-b", seq: 5, payload: { delta: "B" } }),
     ].reduce<MobileSnapshot | null>(applyMobileThreadEvent, {
       ...snapshot(),
       run: runA,
@@ -1815,7 +1756,7 @@ describe("mobile thread event reduction", () => {
       event("run.cancelled", { seq: 10, runId: runA.id }),
     );
 
-    expect([...(next?.progress.keys() ?? [])]).toEqual(["run-b"]);
+    expect([...(next?.layer.keys() ?? [])]).toEqual(["run-b"]);
     expect(next?.run).toEqual(runB);
     expect(next?.activeRuns).toEqual([runB]);
     expect(next?.cursor).toBe(10);
@@ -1836,15 +1777,12 @@ describe("mobile thread event reduction", () => {
   it("leaves the snapshot unchanged for unrelated events", () => {
     const initial = snapshot();
     expect(applyMobileThreadEvent(initial, event("bot.updated"))).toBe(initial);
+    expect(applyMobileThreadEvent(initial, event("thread.message.created"))).toBe(initial);
     expect(applyMobileThreadEvent(null, event("thread.progress"))).toBeNull();
   });
 });
 
 describe("mobile thread history", () => {
-  const oldest = logEntry(0, "user.message", {
-    blocks: [{ kind: "text", text: "1" }],
-    source: "app",
-  });
   const middle = logEntry(1, "user.message", {
     blocks: [{ kind: "text", text: "2" }],
     source: "app",
@@ -1854,45 +1792,9 @@ describe("mobile thread history", () => {
     source: "app",
   });
 
-  it("keeps loaded older entries and the cursor past them across a refresh", () => {
-    const loaded = { ...snapshot([oldest, middle]), olderCursor: null };
-    const refreshed = { ...snapshot([middle, newest]), olderCursor: middle.id };
-
-    const kept = mergeMobileSnapshot(loaded, refreshed, true);
-    const replaced = mergeMobileSnapshot(loaded, refreshed);
-
-    expect(kept.entries.map((entry) => entry.id)).toEqual(["entry-0", "entry-1", "entry-2"]);
-    expect(kept.olderCursor).toBeNull();
-    expect(replaced.entries.map((entry) => entry.id)).toEqual(["entry-1", "entry-2"]);
-    expect(replaced.olderCursor).toBe("entry-1");
-  });
-
-  it("drops a jump window the refreshed page does not connect to", () => {
-    const said = (seq: number) =>
-      logEntry(seq, "user.message", { blocks: [{ kind: "text", text: `${seq}` }], source: "app" });
-    const jumped = { ...snapshot([said(10), said(11)]), olderCursor: said(10).id };
-    const refreshed = { ...snapshot([said(20), said(21)]), olderCursor: said(20).id };
-
-    const next = mergeMobileSnapshot(jumped, refreshed, true);
-
-    expect(next.entries.map((entry) => entry.id)).toEqual(["entry-20", "entry-21"]);
-    expect(next.olderCursor).toBe("entry-20");
-  });
-
   it("keeps the previous snapshot when a refresh brings nothing new", () => {
     const held = snapshot([middle, newest]);
     expect(mergeMobileSnapshot(held, snapshot([middle, newest]))).toBe(held);
-  });
-
-  it("loads an older page above the held entries, the boundary entry once", () => {
-    const next = withOlderPage(snapshot([middle, newest]), {
-      threadId: "thread-1",
-      entries: [oldest, middle],
-      olderCursor: null,
-    });
-
-    expect(next?.entries.map((entry) => entry.id)).toEqual(["entry-0", "entry-1", "entry-2"]);
-    expect(next?.olderCursor).toBeNull();
   });
 
   it("keeps each unchanged row, or else its unchanged item, as the object drawn before", () => {
@@ -1935,7 +1837,7 @@ function snapshot(entries: SessionEntry[] = []): MobileSnapshot {
     cursor: 3,
     entries,
     olderCursor: null,
-    progress: new Map(),
+    layer: new Map(),
     run: null,
     computer: {
       state: "running",
@@ -1963,14 +1865,6 @@ function logEntry<T extends SessionEntryType>(
     payload,
     ...extra,
   } as SessionEntry;
-}
-
-function runEntry<T extends SessionEntryType>(
-  seq: number,
-  type: T,
-  payload: SessionEntryOf<T>["payload"],
-): SessionEntry {
-  return logEntry(seq, type, payload, { botId: "bot-1", runId: "run-1" });
 }
 
 function event(type: ProductEvent["type"], fields: Partial<ProductEvent> = {}): ProductEvent {

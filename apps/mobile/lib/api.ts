@@ -18,16 +18,16 @@ import type { ProgressLayer, ThreadRow } from "@rakazo/core";
 import {
   aiConsentTarget,
   aiDataUsesForProcedure,
-  appendedEntries,
+  applyEntryEvent,
   cancelResponseBody,
   ensureAiDataConsent,
   isRunTerminalEvent,
-  joinsHeld,
-  mergeEntries,
   readBoundedJsonResponse,
   reduceProgressLayer,
   runFailureError,
   signupRequiresEmailVerification,
+  withOlderEntries,
+  withRefreshedEntries,
 } from "@rakazo/core";
 import * as SecureStore from "expo-secure-store";
 import type { AccessCredentials } from "./access";
@@ -842,7 +842,7 @@ export type MobileSnapshot = {
   entries: SessionEntry[];
   olderCursor: EntryId | null;
   /** The open runs' streamed text since each one's last entry. */
-  progress: ProgressLayer;
+  layer: ProgressLayer;
   run: MobileRun | null;
   activeRuns?: MobileRun[];
   members?: MobileGroup["members"];
@@ -856,19 +856,7 @@ export type MobileSnapshot = {
 };
 
 /** `threads.get` as the server sends it, the progress still as the events to replay. */
-export type MobileThreadResponse = Omit<MobileSnapshot, "progress"> & { progress: ProductEvent[] };
-
-const NO_PROGRESS: ProgressLayer = new Map();
-
-export function mobileSnapshotOf(response: MobileThreadResponse): MobileSnapshot {
-  return {
-    ...response,
-    progress: response.progress.reduce(
-      (layer, event) => reduceProgressLayer(layer, event),
-      NO_PROGRESS,
-    ),
-  };
-}
+export type MobileThreadResponse = Omit<MobileSnapshot, "layer"> & { progress: ProductEvent[] };
 
 export function shouldApplyMobileThreadRefresh(input: {
   requestEpoch: number;
@@ -898,15 +886,11 @@ export function mergeMobileSnapshot(
   preserveLoadedHistory = false,
 ): MobileSnapshot {
   if (!prev || prev.threadId !== next.threadId) return next;
-  const keepHistory = preserveLoadedHistory && joinsHeld(next.entries, prev.entries);
+  const refreshed = withRefreshedEntries(prev, next, preserveLoadedHistory);
   const merged: MobileSnapshot = {
-    ...next,
-    entries: keepEntries(
-      prev.entries,
-      keepHistory ? mergeEntries(prev.entries, next.entries) : next.entries,
-    ),
-    olderCursor: keepHistory ? prev.olderCursor : next.olderCursor,
-    progress: prev.progress,
+    ...refreshed,
+    entries: keepEntries(prev.entries, refreshed.entries),
+    layer: prev.layer,
   };
   const shared: Record<string, unknown> = {};
   let unchanged = Object.keys(prev).length === Object.keys(merged).length;
@@ -931,11 +915,7 @@ export function withOlderPage(
   page: ThreadMessagePage,
 ): MobileSnapshot | null {
   if (!prev || prev.threadId !== page.threadId) return prev;
-  return {
-    ...prev,
-    entries: mergeEntries(prev.entries, page.entries),
-    olderCursor: page.olderCursor,
-  };
+  return withOlderEntries(prev, page);
 }
 
 /**
@@ -1082,17 +1062,13 @@ export function applyMobileThreadEvent(
   event: ProductEvent,
 ): MobileSnapshot | null {
   if (!prev) return prev;
-  const appended = appendedEntries(event);
-  const progress = reduceProgressLayer(prev.progress, event);
+  if (event.type === "session.entry.appended" || event.type === "thread.progress") {
+    return applyEntryEvent(prev, event);
+  }
+  const layer = reduceProgressLayer(prev.layer, event);
   const runs = runsAfter(prev, event);
-  if (appended.length === 0 && progress === prev.progress && !runs) return prev;
-  return {
-    ...prev,
-    ...runs,
-    cursor: event.seq,
-    entries: appended.length > 0 ? mergeEntries(prev.entries, appended) : prev.entries,
-    progress,
-  };
+  if (layer === prev.layer && !runs) return prev;
+  return { ...prev, ...runs, cursor: event.seq, layer };
 }
 
 type MobileRuns = Pick<MobileSnapshot, "run" | "activeRuns" | "computer">;

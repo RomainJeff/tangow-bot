@@ -3,13 +3,17 @@ import type { ProductEvent, SessionEntry } from "@rakazo/contracts";
 import { SessionEntrySchema } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
 import { linkEntries } from "./fixtures/read-fixture.js";
-import type { ProgressLayer } from "./project-thread-view.js";
+import type { ProgressLayer, ThreadEntries } from "./project-thread-view.js";
 import {
   appendedEntries,
+  applyEntryEvent,
   mergeEntries,
   projectThreadView,
   reduceProgressLayer,
+  threadEntriesOf,
   visibleEntries,
+  withOlderEntries,
+  withRefreshedEntries,
 } from "./project-thread-view.js";
 
 const streamed = readFileSync(new URL("./fixtures/streamed-reply.jsonl", import.meta.url), "utf8")
@@ -730,3 +734,90 @@ describe("the entry feed", () => {
     );
   });
 });
+
+describe("the entries a client holds", () => {
+  const said = linkEntries(
+    "held",
+    ["Zero", "One", "Two", "Three"].map((words) => ({
+      type: "user.message",
+      payload: { blocks: text(words), source: "app" },
+    })),
+  );
+  const held = (entries: SessionEntry[], olderCursor: string | null): ThreadEntries => ({
+    entries,
+    olderCursor: olderCursor as ThreadEntries["olderCursor"],
+    cursor: 3,
+    layer: new Map(),
+  });
+  const ids = (state: ThreadEntries) => state.entries.map((entry) => entry.id);
+  const at = (seq: number, type: string, payload: Record<string, unknown>, runId?: string) => ({
+    ...event(type, payload, runId),
+    seq,
+  });
+
+  it("merges an appended entry by seq and ignores the same event replayed", () => {
+    const appended = at(5, "session.entry.appended", { entries: [said[1]] });
+    const next = applyEntryEvent(held([said[0]!, said[2]!], null), appended);
+    expect(ids(next)).toEqual(["held-0", "held-1", "held-2"]);
+    expect(next.cursor).toBe(5);
+    expect(applyEntryEvent(next, appended)).toBe(next);
+  });
+
+  it("streams a run's text, ignores a delta replayed and clears it when the entry lands", () => {
+    const delta = at(4, "thread.progress", { delta: "Hel" }, "run_1");
+    const streaming = applyEntryEvent(applyEntryEvent(held([], null), delta), delta);
+    expect(streaming.layer.get("run_1")?.blocks).toEqual([{ kind: "progress", text: "Hel" }]);
+    const reply = { ...said[0]!, botId: "bot_ada", runId: "run_1" };
+    const settled = applyEntryEvent(
+      streaming,
+      at(5, "session.entry.appended", { entries: [reply] }, "run_1"),
+    );
+    expect([...settled.layer.keys()]).toEqual([]);
+  });
+
+  it("seeds the layer from the progress a snapshot replays", () => {
+    const seeded = threadEntriesOf({
+      threadId: "thread_1",
+      progress: [at(2, "thread.progress", { delta: "Hel" }, "run_1")],
+    });
+    expect(seeded.threadId).toBe("thread_1");
+    expect([...seeded.layer.keys()]).toEqual(["run_1"]);
+  });
+
+  it("merges an older page before the held entries and moves the history cursor", () => {
+    const page = { entries: [said[0]!, said[1]!, said[2]!], olderCursor: null };
+    const next = withOlderEntries(held([said[2]!, said[3]!], "held-2"), page);
+    expect(ids(next)).toEqual(["held-0", "held-1", "held-2", "held-3"]);
+    expect(next.olderCursor).toBeNull();
+    const cleared = held([], null);
+    expect(withOlderEntries(cleared, page)).toBe(cleared);
+  });
+
+  it("keeps loaded history older than a refreshed page and the older cursor", () => {
+    const stale = { ...said[2]!, payload: { blocks: text("Stale two"), source: "app" } };
+    const previous = held([said[0]!, said[1]!, stale as SessionEntry], null);
+    const recent = held([said[2]!, said[3]!], "held-2");
+
+    const kept = withRefreshedEntries(previous, recent, true);
+    expect(kept.entries).toEqual([said[0], said[1], said[2], said[3]]);
+    expect(kept.olderCursor).toBeNull();
+    expect(withRefreshedEntries(previous, recent, false)).toBe(recent);
+  });
+
+  it("drops a jump window the refreshed page does not connect to", () => {
+    const jumped = held([said[0]!, said[1]!].map(detached(10)), "held-10");
+    const recent = held([said[2]!, said[3]!].map(detached(20)), "held-20");
+    expect(withRefreshedEntries(jumped, recent, true)).toBe(recent);
+  });
+});
+
+/** The entry moved `by` seqs up its chain, its parent outside any page held. */
+function detached(by: number) {
+  return (entry: SessionEntry): SessionEntry =>
+    SessionEntrySchema.parse({
+      ...entry,
+      id: `held-${entry.seq + by}`,
+      seq: entry.seq + by,
+      parentId: `held-${entry.seq + by - 1}`,
+    });
+}

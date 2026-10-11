@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import type { ComputerStatus, ProductEvent, SessionEntry, ThreadSnapshot } from "@rakazo/contracts";
 import { SessionEntrySchema } from "@rakazo/contracts";
-import { projectThreadView } from "@rakazo/core";
+import { projectThreadView, threadEntriesOf } from "@rakazo/core";
 import { describe, expect, it } from "vitest";
 import type { ThreadState } from "./thread-events.js";
 import {
@@ -14,12 +14,10 @@ import {
   computerPanelNeedsMaintenance,
   computerTakeoverBlocked,
   isThreadStateEvent,
-  prependThreadMessagePage,
   reconcileRefreshedThread,
   reduceComputerStatus,
   reduceThreadState,
   threadRunError,
-  threadStateOf,
   userHoldsComputerControl,
 } from "./thread-events.js";
 
@@ -54,67 +52,6 @@ describe("thread event reduction", () => {
     expect(applyThreadSendReceipt(group, receipt)).toBe(group);
     expect(applyThreadSendReceipt({ ...state(), run: completed }, receipt)?.run).toBe(completed);
     expect(applyThreadSendReceipt(state(), receipt, new Set([receipt.runId]))?.run).toBeNull();
-  });
-
-  it("merges an appended entry by seq and ignores the same event replayed", () => {
-    const initial = state([said(1, "One"), said(3, "Three")]);
-    const appended = event({
-      type: "session.entry.appended",
-      seq: 5,
-      payload: { entries: [said(2, "Two")] },
-    });
-
-    const next = reduceThreadState(initial, appended);
-
-    expect(next?.entries.map(textOf)).toEqual(["One", "Two", "Three"]);
-    expect(next?.cursor).toBe(5);
-    expect(reduceThreadState(next, appended)).toBe(next);
-  });
-
-  it("merges an older page before the held entries and moves the history cursor", () => {
-    const initial = state([said(2, "Two"), said(3, "Three")], "e-2");
-
-    const next = prependThreadMessagePage(initial, {
-      threadId: "thread-1",
-      entries: [said(0, "Zero"), said(1, "One"), said(2, "Two")],
-      olderCursor: null,
-    });
-
-    expect(next?.entries.map(textOf)).toEqual(["Zero", "One", "Two", "Three"]);
-    expect(next?.olderCursor).toBeNull();
-  });
-
-  it("ignores a stale older page once the history has no older cursor", () => {
-    const cleared = state([], null);
-    const next = prependThreadMessagePage(cleared, {
-      threadId: "thread-1",
-      entries: [said(0, "Old")],
-      olderCursor: null,
-    });
-    expect(next).toBe(cleared);
-  });
-
-  it("keeps loaded history older than a refreshed page and the older cursor", () => {
-    const previous = state([said(0, "Zero"), said(1, "One"), said(2, "Stale two")], null);
-    const recent = wire([said(2, "Two"), said(3, "Three")], "e-2");
-
-    const kept = reconcileRefreshedThread(previous, recent, null, true).snapshot;
-    const replaced = reconcileRefreshedThread(previous, recent, null, false).snapshot;
-
-    expect(kept.entries.map(textOf)).toEqual(["Zero", "One", "Two", "Three"]);
-    expect(kept.olderCursor).toBeNull();
-    expect(replaced.entries.map(textOf)).toEqual(["Two", "Three"]);
-    expect(replaced.olderCursor).toBe("e-2");
-  });
-
-  it("drops a jump window the refreshed page does not connect to", () => {
-    const jumped = state([said(10, "Ten"), said(11, "Eleven")], "e-10");
-    const recent = wire([said(20, "Twenty"), said(21, "Twenty-one")], "e-20");
-
-    const refreshed = reconcileRefreshedThread(jumped, recent, null, true).snapshot;
-
-    expect(refreshed.entries.map(textOf)).toEqual(["Twenty", "Twenty-one"]);
-    expect(refreshed.olderCursor).toBe("e-20");
   });
 
   it("ignores a stale thread refresh that is behind the live cursor", () => {
@@ -764,14 +701,14 @@ describe("a streamed reply fed through the reducer", () => {
   }
 
   it("shows each step's words once, the same from a snapshot taken mid-run", () => {
-    let live: ThreadState | null = { ...threadStateOf(wire()), cursor: 0 };
+    let live: ThreadState | null = { ...threadEntriesOf(wire()), cursor: 0 };
     let reloaded: ThreadState | null = null;
     for (const [next, expected] of script) {
       live = reduceThreadState(live, next);
       // The server's snapshot mid-run: the entries so far and the open run's newer deltas.
       reloaded =
         next.seq === 9
-          ? threadStateOf({
+          ? threadEntriesOf({
               ...wire(fixture.slice(0, 6)),
               cursor: 9,
               progress: [script[7]![0], script[8]![0]],
@@ -984,7 +921,7 @@ function wire(entries: SessionEntry[] = [], olderCursor: string | null = null): 
 }
 
 function state(entries: SessionEntry[] = [], olderCursor: string | null = null): ThreadState {
-  return threadStateOf(wire(entries, olderCursor));
+  return threadEntriesOf(wire(entries, olderCursor));
 }
 
 function threadRun(id: string, botId = "bot-1"): NonNullable<ThreadSnapshot["run"]> {

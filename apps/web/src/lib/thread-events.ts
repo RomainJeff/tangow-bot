@@ -8,28 +8,18 @@ import type {
 } from "@rakazo/contracts";
 import type { ProgressLayer } from "@rakazo/core";
 import {
-  appendedEntries,
+  applyEntryEvent,
   isActive,
   isRunTerminalEvent,
-  joinsHeld,
-  mergeEntries,
   reduceProgressLayer,
   runFailureError,
+  threadEntriesOf,
+  withOlderEntries,
+  withRefreshedEntries,
 } from "@rakazo/core";
 
 /** What the client holds of a thread: the wire snapshot, its progress events folded into a layer. */
 export type ThreadState = Omit<ThreadSnapshot, "progress"> & { layer: ProgressLayer };
-
-export function threadStateOf(snapshot: ThreadSnapshot): ThreadState {
-  const { progress, ...state } = snapshot;
-  return {
-    ...state,
-    layer: progress.reduce<ProgressLayer>(
-      (layer, event) => reduceProgressLayer(layer, event),
-      new Map(),
-    ),
-  };
-}
 
 const runTriggers = new Set<Run["trigger"]>([
   "user",
@@ -195,18 +185,8 @@ export function reconcileRefreshedThread(
     };
   }
 
-  let snapshot = threadStateOf(snap);
-  if (sameThread && prev && preserveLoadedHistory && joinsHeld(snapshot.entries, prev.entries)) {
-    const firstSeq = snapshot.entries[0]?.seq ?? Number.NEGATIVE_INFINITY;
-    snapshot = {
-      ...snapshot,
-      entries: mergeEntries(
-        prev.entries.filter((entry) => entry.seq < firstSeq),
-        snapshot.entries,
-      ),
-      olderCursor: prev.olderCursor,
-    };
-  }
+  let snapshot: ThreadState = threadEntriesOf(snap);
+  if (sameThread && prev) snapshot = withRefreshedEntries(prev, snapshot, preserveLoadedHistory);
   const computer = snap.computer ?? null;
 
   const localWaiting =
@@ -245,12 +225,8 @@ export function prependThreadMessagePage(
   prev: ThreadState | null,
   page: ThreadMessagePage,
 ): ThreadState | null {
-  if (!prev || prev.threadId !== page.threadId || prev.olderCursor == null) return prev;
-  return {
-    ...prev,
-    entries: mergeEntries(prev.entries, page.entries),
-    olderCursor: page.olderCursor,
-  };
+  if (!prev || prev.threadId !== page.threadId) return prev;
+  return withOlderEntries(prev, page);
 }
 
 export function isThreadStateEvent(event: ProductEvent): boolean {
@@ -269,15 +245,7 @@ export function reduceThreadState(
 ): ThreadState | null {
   if (!prev) return prev;
   if (event.type === "session.entry.appended" || event.type === "thread.progress") {
-    // The layer appends deltas, so an event the held state already covers must not apply twice.
-    if (event.seq <= prev.cursor) return prev;
-    const appended = appendedEntries(event);
-    return {
-      ...prev,
-      cursor: event.seq,
-      entries: appended.length > 0 ? mergeEntries(prev.entries, appended) : prev.entries,
-      layer: reduceProgressLayer(prev.layer, event),
-    };
+    return applyEntryEvent(prev, event);
   }
   if (event.type === "run.started") {
     if (!event.runId) {

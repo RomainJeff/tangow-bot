@@ -131,14 +131,81 @@ export function mergeEntries(
   return byId([...held, ...incoming]);
 }
 
+/** What a client holds of a thread's log, web and mobile alike. */
+export type ThreadEntries = {
+  /** The tail and the older pages loaded since, any order. */
+  entries: SessionEntry[];
+  olderCursor: EntryId | null;
+  /** The seq of the newest event applied. */
+  cursor?: number;
+  layer: ProgressLayer;
+};
+
+/** A snapshot as held: the progress events it replays folded into the layer. */
+export function threadEntriesOf<S extends { progress: readonly ProductEvent[] }>(
+  snapshot: S,
+): Omit<S, "progress"> & { layer: ProgressLayer } {
+  const { progress, ...held } = snapshot;
+  return { ...held, layer: progress.reduce<ProgressLayer>(reduceProgressLayer, new Map()) };
+}
+
+/**
+ * The state after a `session.entry.appended` or `thread.progress` event. The layer appends deltas,
+ * so an event the cursor already covers changes nothing.
+ */
+export function applyEntryEvent<S extends ThreadEntries>(state: S, event: ProductEvent): S {
+  if (state.cursor !== undefined && event.seq <= state.cursor) return state;
+  const appended = appendedEntries(event);
+  return {
+    ...state,
+    cursor: event.seq,
+    entries: appended.length > 0 ? mergeEntries(state.entries, appended) : state.entries,
+    layer: reduceProgressLayer(state.layer, event),
+  };
+}
+
+/**
+ * `next`, a refresh of the thread `prev` holds. With `preserveHistory` it keeps the held entries
+ * older than its page and the cursor past them, when its page joins them.
+ */
+export function withRefreshedEntries<S extends ThreadEntries>(
+  prev: ThreadEntries,
+  next: S,
+  preserveHistory: boolean,
+): S {
+  if (!preserveHistory || !joinsHeld(next.entries, prev.entries)) return next;
+  const firstSeq = next.entries[0]?.seq ?? Number.NEGATIVE_INFINITY;
+  return {
+    ...next,
+    entries: mergeEntries(
+      prev.entries.filter((entry) => entry.seq < firstSeq),
+      next.entries,
+    ),
+    olderCursor: prev.olderCursor,
+  };
+}
+
 /**
  * Whether a page, oldest first, joins the entries held: it starts the chain or its oldest entry
  * follows one held. A page that does not, such as the newest page refreshed under a jump window,
  * would leave a silent gap if merged.
  */
-export function joinsHeld(page: readonly SessionEntry[], held: readonly SessionEntry[]): boolean {
+function joinsHeld(page: readonly SessionEntry[], held: readonly SessionEntry[]): boolean {
   const oldest = page[0];
   return !oldest || oldest.parentId === null || held.some((entry) => entry.id === oldest.parentId);
+}
+
+/** An older page merged before the held entries; once nothing older is left, a stale page adds nothing. */
+export function withOlderEntries<S extends ThreadEntries>(
+  prev: S,
+  page: { entries: readonly SessionEntry[]; olderCursor: EntryId | null },
+): S {
+  if (prev.olderCursor === null) return prev;
+  return {
+    ...prev,
+    entries: mergeEntries(prev.entries, page.entries),
+    olderCursor: page.olderCursor,
+  };
 }
 
 function byId(entries: readonly SessionEntry[]): SessionEntry[] {

@@ -47,6 +47,7 @@ import {
   runThreadSubscription,
   searchHitThreadTarget,
   speechFromBlocks,
+  threadEntriesOf,
 } from "@rakazo/core";
 import type { GroupAvatarMember } from "@rakazo/ui-web";
 import {
@@ -107,7 +108,6 @@ import {
   reduceComputerStatus,
   reduceThreadState,
   threadRunError,
-  threadStateOf,
   userHoldsComputerControl,
 } from "../lib/thread-events";
 import type { CardAnswerTarget, MessageItem } from "../lib/thread-items";
@@ -953,7 +953,7 @@ export function ShellPage() {
         }
         if (!groupId && bootstrap.thread) {
           bootstrappedThread.current = bootstrap.thread;
-          commitSnapshot(threadStateOf(bootstrap.thread));
+          commitSnapshot(threadEntriesOf(bootstrap.thread));
           commitComputer(bootstrap.thread.computer ?? null);
           setRoutines(bootstrap.routines);
           setRoutinesBotId(bootstrap.thread.botId ?? null);
@@ -1458,8 +1458,8 @@ export function ShellPage() {
     if (targetInPage) initiallyScrolledThread.current = page.threadId;
     commitSnapshot(
       targetInPage
-        ? { ...threadStateOf(snap), entries: page.entries, olderCursor: page.olderCursor }
-        : threadStateOf(snap),
+        ? { ...threadEntriesOf(snap), entries: page.entries, olderCursor: page.olderCursor }
+        : threadEntriesOf(snap),
     );
     if (threadTarget.botId) {
       commitComputer(snap.computer ?? null);

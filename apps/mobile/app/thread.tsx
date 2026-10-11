@@ -48,6 +48,7 @@ import {
   slashSkillOptions as slashSkills,
   type ThreadRow,
   type ThreadView,
+  threadEntriesOf,
   threadTimeMarkerLabel,
   truncateSlashDescription,
 } from "@rakazo/core";
@@ -162,7 +163,6 @@ import {
   type MobileThreadResponse,
   mergeMobileSnapshot,
   messagingProviderLabel,
-  mobileSnapshotOf,
   rpc,
   selectedSpaceId,
   selectSpace,
@@ -595,12 +595,12 @@ function Thread() {
   const view = useMemo((): ThreadView => {
     const projected = projectThreadView(snap?.entries ?? [], {
       rendersNothing: (item) => drawsNothing(item, showSteps),
-      progress: snap?.progress,
+      progress: snap?.layer,
     });
     const rows = keepUnchangedRows(drawnRows.current, projected.rows);
     drawnRows.current = new Map(rows.map((row) => [row.item.id, row]));
     return { ...projected, rows };
-  }, [snap?.entries, snap?.progress, showSteps]);
+  }, [snap?.entries, snap?.layer, showSteps]);
   const rows = view.rows;
   const waiting = view.waiting;
   const waitingRef = useRef(waiting);
@@ -1013,7 +1013,7 @@ function Thread() {
     const targetBotId = botId;
     const targetGroupId = groupId;
     const epoch = historyEpoch.current;
-    const next = mobileSnapshotOf(
+    const next = threadEntriesOf(
       await rpc<MobileThreadResponse>(
         "threads/get",
         targetGroupId ? { groupId: targetGroupId } : { botId: targetBotId! },
@@ -1048,7 +1048,7 @@ function Thread() {
         around: { entryId: target.messageId },
       }),
     ]);
-    const snap = mobileSnapshotOf(response);
+    const snap = threadEntriesOf(response);
     // The epoch check drops a jump that raced a conversation clear (or a bot switch); the
     // generation check drops an older same-thread jump that finished after a newer one.
     if (epoch !== historyEpoch.current || jumpId !== jumpGeneration.current) return;
