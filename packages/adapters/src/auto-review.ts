@@ -1,6 +1,6 @@
 import type { AgentModelOAuthCredential, AgentRuntime } from "@rakazo/adapter-kit";
-import type { ActionApprovalRule } from "@rakazo/core";
-import { type AutoReviewJudgeDecision, escapePromptData, redactSecrets } from "@rakazo/core";
+import type { ActionApprovalRule, AutoReviewJudgeDecision } from "@rakazo/core";
+import { escapePromptData, redactSecrets } from "@rakazo/core";
 import { formatCurrentTimeInstruction } from "./current-time.js";
 import { resolveDeploymentModel } from "./deployment-model.js";
 import { LOCAL_PROVIDER_ID } from "./pi-local-provider.js";
