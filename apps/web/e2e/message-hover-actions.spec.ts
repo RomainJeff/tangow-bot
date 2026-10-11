@@ -140,6 +140,10 @@ test("message hover shows a floating action pill; reply links to parent", async 
   const userBubble = parentRow.getByTestId("message-user-bubble");
   const userActions = parentRow.getByTestId("message-user-actions");
   await expect(userActions).toHaveCSS("opacity", "0");
+  // The reply lands right under the bubble, where the icons float: let it settle before pointing.
+  await expect(transcript.getByText(`done. i handled: ${parentText}`)).toBeVisible({
+    timeout: 20_000,
+  });
   // The bot's reply can land and shift the row out from under the pointer, so hover again.
   await expect(async () => {
     await parentRow.hover();
