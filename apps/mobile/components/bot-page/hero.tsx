@@ -119,11 +119,23 @@ function HeroText({
   );
 }
 
-/** The page's destinations in one round pill; the selected one sits on the surface. */
-export function BotTabs({ value, onChange }: { value: BotTab; onChange: (tab: BotTab) => void }) {
+/**
+ * The page's destinations in one round pill; the selected one sits on the surface.
+ * `routineFailed` puts a dot on Activity while a routine's last run failed.
+ */
+export function BotTabs({
+  value,
+  onChange,
+  routineFailed = false,
+}: {
+  value: BotTab;
+  onChange: (tab: BotTab) => void;
+  routineFailed?: boolean;
+}) {
   const styles = useThemedStyles(createHeroStyles);
   const { t } = useI18n();
   const labels: Record<BotTab, string> = {
+    activity: t("Activity"),
     routines: t("Routines"),
     knowledge: t("Knowledge"),
     settings: t("Settings"),
@@ -132,10 +144,12 @@ export function BotTabs({ value, onChange }: { value: BotTab; onChange: (tab: Bo
     <View style={styles.tabs} accessibilityRole="tablist">
       {BOT_TABS.map((tab) => {
         const selected = tab === value;
+        const dot = tab === "activity" && routineFailed;
         return (
           <Pressable
             key={tab}
             accessibilityRole="tab"
+            accessibilityLabel={dot ? t("Activity, last run failed") : undefined}
             accessibilityState={{ selected }}
             onPress={() => onChange(tab)}
             style={[styles.tab, selected && styles.tabOn]}
@@ -148,6 +162,7 @@ export function BotTabs({ value, onChange }: { value: BotTab; onChange: (tab: Bo
             >
               {labels[tab]}
             </Text>
+            {dot ? <View style={styles.tabDot} /> : null}
           </Pressable>
         );
       })}
@@ -186,9 +201,12 @@ function createHeroStyles() {
       minHeight: 34,
       paddingHorizontal: 6,
       borderRadius: radii.pill,
+      flexDirection: "row",
+      gap: 4,
       alignItems: "center",
       justifyContent: "center",
     },
+    tabDot: { width: 6, height: 6, borderRadius: radii.pill, backgroundColor: tokens.destructive },
     tabOn: {
       backgroundColor: tokens.surface,
       boxShadow: shadowsForAppearance(resolveMobileAppearance()).row,
