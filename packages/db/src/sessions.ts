@@ -1,7 +1,7 @@
 import type { NewSession, SessionEntryDraft } from "@rakazo/adapter-kit";
 import { nextSessionEntry, SessionAppendError, sessionEntryNonce } from "@rakazo/adapter-kit";
 import type { SessionEntry } from "@rakazo/contracts";
-import { SessionEntrySchema } from "@rakazo/contracts";
+import { SessionEntrySchema, SessionId } from "@rakazo/contracts";
 import { SessionEntryDecodeError, sanitizeJsonValue } from "@rakazo/core";
 import type { Prisma } from "./client.js";
 import { appendEventInTransaction } from "./events.js";
@@ -42,8 +42,14 @@ export function sessionEntryFromRow(row: SessionEntryRow): SessionEntry {
 export async function createSessionInTransaction(
   tx: Prisma.TransactionClient,
   session: NewSession,
-): Promise<void> {
+): Promise<SessionId> {
   await tx.conversationSession.createMany({ data: [session], skipDuplicates: true });
+  if (session.kind === "subagent") return session.id;
+  const main = await tx.conversationSession.findFirstOrThrow({
+    where: { threadId: session.threadId, kind: "thread" },
+    select: { id: true },
+  });
+  return SessionId.parse(main.id);
 }
 
 /**

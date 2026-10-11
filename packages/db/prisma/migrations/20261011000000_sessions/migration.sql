@@ -65,6 +65,7 @@ ALTER TABLE "runs" ALTER COLUMN "sessionId" SET NOT NULL;
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "sessions_threadId_idx" ON "sessions"("threadId");
 CREATE INDEX IF NOT EXISTS "sessions_parentSessionId_idx" ON "sessions"("parentSessionId");
+CREATE UNIQUE INDEX IF NOT EXISTS "sessions_threadId_main_key" ON "sessions"("threadId") WHERE "kind" = 'thread';
 CREATE UNIQUE INDEX IF NOT EXISTS "session_entries_sessionId_seq_key" ON "session_entries"("sessionId", "seq");
 CREATE INDEX IF NOT EXISTS "session_entries_sessionId_type_seq_idx" ON "session_entries"("sessionId", "type", "seq");
 CREATE INDEX IF NOT EXISTS "session_entries_runId_seq_idx" ON "session_entries"("runId", "seq");

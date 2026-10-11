@@ -1,8 +1,19 @@
-import { appendFile, mkdir, open, readdir, readFile, truncate } from "node:fs/promises";
+import {
+  appendFile,
+  link,
+  mkdir,
+  open,
+  readdir,
+  readFile,
+  rm,
+  truncate,
+  writeFile,
+} from "node:fs/promises";
 import path from "node:path";
 import type { NewSession, SessionEntryDraft, SessionHead, SessionLog } from "@rakazo/adapter-kit";
 import { nextSessionEntry, SessionAppendError, sessionEntryNonce } from "@rakazo/adapter-kit";
-import type { EntryId, SessionEntry, SessionId } from "@rakazo/contracts";
+import type { EntryId, SessionEntry } from "@rakazo/contracts";
+import { SessionId } from "@rakazo/contracts";
 import type { TailSource } from "@rakazo/core";
 import { decodeEntries, readTailFromEnd } from "@rakazo/core";
 
@@ -26,10 +37,12 @@ export class FileSessionLog implements SessionLog<undefined> {
 
   constructor(private readonly root: string) {}
 
-  async createSession(_tx: undefined, session: NewSession): Promise<void> {
-    const file = this.fileOf(session.id);
+  async createSession(_tx: undefined, session: NewSession): Promise<SessionId> {
+    const id = session.kind === "thread" ? await this.claimThread(session) : session.id;
+    const file = this.fileOf(id);
     await mkdir(path.dirname(file), { recursive: true });
     await appendFile(file, "");
+    return id;
   }
 
   append(_tx: undefined, draft: SessionEntryDraft): Promise<SessionEntry> {
@@ -144,6 +157,26 @@ export class FileSessionLog implements SessionLog<undefined> {
     return session;
   }
 
+  /**
+   * The thread's main session: the id in `<root>/threads/<threadId>`, written by the first claim.
+   * A claim links a complete file into place, so a crash cannot leave a partial one.
+   */
+  private async claimThread(session: { id: SessionId; threadId: string }): Promise<SessionId> {
+    const claim = path.join(this.root, "threads", safeName("Thread", session.threadId));
+    const draft = `${claim}.${crypto.randomUUID()}`;
+    await mkdir(path.dirname(claim), { recursive: true });
+    await writeFile(draft, safeName("Session", session.id));
+    try {
+      await link(draft, claim);
+      return session.id;
+    } catch (error) {
+      if (errorCode(error) !== "EEXIST") throw error;
+      return SessionId.parse(await readFile(claim, "utf8"));
+    } finally {
+      await rm(draft, { force: true });
+    }
+  }
+
   private locked<T>(sessionId: SessionId, work: () => Promise<T>): Promise<T> {
     const result = (this.locks.get(sessionId) ?? Promise.resolve()).then(work);
     this.locks.set(
@@ -157,10 +190,7 @@ export class FileSessionLog implements SessionLog<undefined> {
   }
 
   private fileOf(sessionId: string): string {
-    if (!FILE_SAFE_ID.test(sessionId)) {
-      throw new Error(`Session id ${JSON.stringify(sessionId)} is not a safe file name`);
-    }
-    return path.join(this.root, "sessions", `${sessionId}.jsonl`);
+    return path.join(this.root, "sessions", `${safeName("Session", sessionId)}.jsonl`);
   }
 }
 
@@ -190,6 +220,17 @@ async function openTail(file: string): Promise<TailSource> {
   };
 }
 
+function safeName(kind: "Session" | "Thread", id: string): string {
+  if (!FILE_SAFE_ID.test(id)) {
+    throw new Error(`${kind} id ${JSON.stringify(id)} is not a safe file name`);
+  }
+  return id;
+}
+
+function errorCode(error: unknown): unknown {
+  return error instanceof Error && "code" in error ? error.code : undefined;
+}
+
 function isMissing(error: unknown): boolean {
-  return error instanceof Error && "code" in error && error.code === "ENOENT";
+  return errorCode(error) === "ENOENT";
 }

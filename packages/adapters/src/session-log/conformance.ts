@@ -109,6 +109,20 @@ export function runSessionLogConformance<Tx>(makeLog: () => Promise<SessionLogHa
       });
     });
 
+    it("keeps one main session per thread", async () => {
+      const { sessionId, session } = await created();
+      const other = SessionId.parse(`other-${sessionId}`);
+
+      const resolved = await harness.transaction((tx) =>
+        harness.log.createSession(tx, { ...session, id: other }),
+      );
+
+      expect(resolved).toBe(sessionId);
+      await expect(append(said(other, "lost"))).rejects.toMatchObject({
+        reason: "unknown_session",
+      });
+    });
+
     it("leaves rewound entries off the tail and keeps them for their run", async () => {
       const { sessionId, runId } = await created();
       const [question, ...answers] = await appendAll([

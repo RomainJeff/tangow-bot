@@ -299,8 +299,11 @@ export interface RealtimeFanout {
  * transaction, so an append commits together with the caller's other writes.
  */
 export interface SessionLog<Tx> {
-  /** Create the session, or leave it as it is when it exists. */
-  createSession(tx: Tx, session: NewSession): Promise<void>;
+  /**
+   * Create the session, or leave it as it is when it exists. Resolves to the id to append to, which
+   * for a thread that already has its main session is that session's id.
+   */
+  createSession(tx: Tx, session: NewSession): Promise<SessionId>;
   /** Append as the new head. A draft whose clientNonce is already in the session returns that entry. */
   append(tx: Tx, draft: SessionEntryDraft): Promise<SessionEntry>;
   /** The chain from the last compaction, or from the chain's first entry, to the head. */

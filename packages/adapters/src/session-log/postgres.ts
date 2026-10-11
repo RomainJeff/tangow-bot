@@ -13,7 +13,7 @@ const HEAD = Prisma.sql`ORDER BY e.seq DESC LIMIT 1`;
 export class PostgresSessionLog implements SessionLog<Prisma.TransactionClient> {
   constructor(private readonly prisma: PrismaClient) {}
 
-  createSession(tx: Prisma.TransactionClient, session: NewSession): Promise<void> {
+  createSession(tx: Prisma.TransactionClient, session: NewSession): Promise<SessionId> {
     return createSessionInTransaction(tx, session);
   }
 
