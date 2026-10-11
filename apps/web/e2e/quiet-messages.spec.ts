@@ -176,8 +176,6 @@ test("the thread reads as names, prose and asides", async ({ page }, testInfo) =
     ).toBeLessThanOrEqual(2);
   };
 
-  // A message a bot received from a peer is an aside between messages, not a
-  // reply from "Bot".
   const chip = transcript.getByTestId("peer-receipt-chip");
   await expect(chip).toBeVisible();
   await expect(chip).toHaveAccessibleName(/Message from Research/);

@@ -34,7 +34,6 @@ const peerStep = (seq: number) =>
 const peerAsk = (seq: number) =>
   entry(seq, "assistant.ask", { block: { kind: "ask", text: "Which market?" } }, peer);
 
-/** A thread whose main session is `session-main`, where `run-peer` is a sub-bot's hidden run. */
 function threadDb() {
   return {
     run: {

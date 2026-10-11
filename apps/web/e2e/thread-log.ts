@@ -5,7 +5,6 @@ import type { Page, Route } from "./test";
 
 type ThreadTarget = { botId: string } | { groupId: string };
 
-/** The newest page of a thread's log, as `threads.messages` serves it. */
 export async function threadEntries(
   page: Page,
   target: ThreadTarget & { includePeerRuns?: boolean },
@@ -13,7 +12,6 @@ export async function threadEntries(
   return (await rpc<{ entries: SessionEntry[] }>(page, "threads/messages", target)).entries;
 }
 
-/** Every block the entries show: the words, the cards and the receipts. */
 export function blocksOf(entries: readonly SessionEntry[]): MessageBlock[] {
   return entries.flatMap((entry): MessageBlock[] => {
     switch (entry.type) {
@@ -30,7 +28,6 @@ export function blocksOf(entries: readonly SessionEntry[]): MessageBlock[] {
   });
 }
 
-/** The entry that settled a card: a reply naming it, or a `card.answered` targeting it. */
 export function answerOf(entries: readonly SessionEntry[], cardId: string) {
   return entries.find(
     (entry) =>
@@ -39,7 +36,6 @@ export function answerOf(entries: readonly SessionEntry[], cardId: string) {
   );
 }
 
-/** An entry to show, without the chain fields the thread it lands in decides. */
 export type EntryDraft = {
   id: string;
   ts: string;
@@ -49,13 +45,8 @@ export type EntryDraft = {
   runId?: string;
 };
 
-/** Both hydrate RPCs carry the thread; one handler avoids racing globs. */
 const HYDRATE_RPC = /\/rpc\/(bootstrap|threads\/get)(?:\?|$)/;
 
-/**
- * Serve `drafts` as the whole thread from both hydrate RPCs, with `snapshot` fields merged in,
- * then reload. They chain after the real head, so an entry the server appends later still follows.
- */
 export async function showThread(
   page: Page,
   drafts: readonly EntryDraft[],

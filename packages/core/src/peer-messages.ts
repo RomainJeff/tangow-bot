@@ -28,7 +28,6 @@ export function stripPeerAddressPrefix(text: string): string {
   return text.replace(/^\s*\[to [^\]]+?\]\s*/, "");
 }
 
-/** A bot peer by its id, a connected agent by its messaging address. */
 function peerId(peer: Peer): string {
   return peer.kind === "bot" ? peer.botId : peer.address;
 }
@@ -47,7 +46,6 @@ function peerMessageOf(entry: SessionEntry): PeerMessage | undefined {
   };
 }
 
-/** One conversation per peer, from the bot messages sent and received, most recently active first. */
 export function peerConversations(entries: readonly SessionEntry[]): PeerConversation[] {
   const byPeer = new Map<string, PeerConversation>();
   for (const entry of entries) {

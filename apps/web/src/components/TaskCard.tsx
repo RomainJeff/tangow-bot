@@ -26,7 +26,6 @@ export function TaskCardSurface({
 }: {
   title: string;
   state: TaskCardState;
-  /** The status word under the title; a finished task shows none. */
   statusLabel: string;
   meta?: string;
   body?: string;
@@ -86,12 +85,6 @@ export function TaskCardSurface({
   );
 }
 
-/**
- * A delegated task (a subagent): once it has a session of its own, the whole
- * card is one target and opens it. A finished task shows no status word;
- * running, failed and cancelled show their symbol and word under the title
- * (spec 9, A8).
- */
 export function TaskCard({
   title,
   state,

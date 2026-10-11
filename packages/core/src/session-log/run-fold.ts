@@ -28,22 +28,12 @@ type RunMessage = {
   runId: string;
   botId: string;
   blocks: MessageBlock[];
-  /** The entries the stretch shows, in order. */
   entries: FoldedEntry[];
-  /** The index in `blocks` of each `assistant.ask` and `assistant.choice` entry's block. */
   cards: Map<EntryId, number>;
   /** The child session the stretch rose from: a run writes to one session, so all of it did. */
   originSessionId?: SessionId;
 };
 
-/**
- * Fold a run's `assistant.*` and `tool.*` entries into one `RunMessage` per stretch, at the
- * position of the stretch's first entry. Each run has its own open stretch, so runs that
- * interleave keep one message each. Any other entry closes every open stretch, a `bot.text` too
- * since it is a message of its own, while a `subagent` entry and the entries about an earlier card
- * or message pass through without closing them. A tool call takes its output from `outputs`, or an
- * empty output while it has none yet.
- */
 export function foldRuns(
   entries: readonly SessionEntry[],
   outputs: ReadonlyMap<EntryId, string> = toolOutputs(entries),

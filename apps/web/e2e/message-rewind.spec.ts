@@ -28,7 +28,6 @@ test("edit and resend rewinds the thread to the edited message", async ({ page }
   await expect(firstRow).toBeVisible({ timeout: 20_000 });
 
   await composer.fill(secondText);
-  // The first row shows from its entry before the send settles; Send is disabled until it does.
   await expect(page.getByRole("button", { name: "Send", exact: true })).toBeEnabled();
   await composer.press("Enter");
   const secondRow = transcript.locator("[data-message-id]").filter({ hasText: secondText }).first();

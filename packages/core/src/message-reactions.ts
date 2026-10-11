@@ -20,18 +20,12 @@ export function messageReaction(
 
 export type ItemReactions = readonly (readonly [MessageReaction, number])[];
 
-/**
- * Emoji-only replies folded out of a thread's items onto the item they reply to, found through
- * `rowOf`, counted in the order each emoji first appeared. A reply whose parent is not among the
- * items, or is itself a reaction, stays a reply bubble so it can still be opened.
- */
 export function foldItemReactions(
   items: readonly ThreadItem[],
   rowOf: ReadonlyMap<string, EntryId>,
 ): {
   items: ThreadItem[];
   reactions: Map<EntryId, ItemReactions>;
-  /** Each folded reply's item id, mapped to the item it now sits under. */
   parentOf: Map<EntryId, EntryId>;
 } {
   const byId = new Map(items.map((item) => [item.id, item]));

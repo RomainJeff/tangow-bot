@@ -347,8 +347,6 @@ test("reply preview jumps to parent outside the loaded page", async ({ page }) =
   await expect(replyRow).toBeVisible({ timeout: 20_000 });
   await expect(replyRow.getByTestId("reply-parent-preview")).toContainText(/Got it\./);
 
-  // Simulate a paginated snapshot where the parent is older than the loaded page: the page starts
-  // after it, and the cursor names the oldest entry kept.
   type LogPage = { entries?: Array<{ id: string; seq: number }>; olderCursor?: string | null };
   const startAfterParent = (snapshot: LogPage | null | undefined) => {
     const parent = snapshot?.entries?.find((entry) => entry.id === parentId);

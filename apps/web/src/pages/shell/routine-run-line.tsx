@@ -79,15 +79,6 @@ function sameLocalDay(left: string | undefined, right: string | undefined): bool
   return new Date(left).toDateString() === new Date(right).toDateString();
 }
 
-/**
- * A routine run as a log line, not a card: status icon, name, time, status
- * word, then fixed receipt/disclosure slots so the columns line up down a run
- * of routines. Opening it shows the routine's final words under an `outline`
- * rail and, centred like every exchange between bots, the message it then
- * sent; the words open the routine's session. A line with neither opens the
- * session at once. A failed run opens on its words, only for the routine's
- * latest run.
- */
 export function RoutineRunLine({
   run,
   handoff,
@@ -97,7 +88,6 @@ export function RoutineRunLine({
 }: {
   run: RoutineLineRun;
   handoff?: RoutineHandoff;
-  /** Opens the routine's session. */
   onOpen: () => void;
   /** A line inside an open group: smaller icon, the time in the name slot. */
   nested?: boolean;
@@ -110,8 +100,6 @@ export function RoutineRunLine({
   const failed = state === "failed";
   const expands = Boolean(digest || handoff);
   const [manualExpanded, setManualExpanded] = useState<boolean | null>(null);
-  // Only a routine's latest run opens on its own (failed): older ones stay
-  // folded so a thread of past failures is not a wall of reports.
   const expanded = expands && (manualExpanded ?? Boolean(digest && run.latest && failed));
   const locale = i18n.locale || "en";
   const time = routineTime(item.ts, locale, withDay);

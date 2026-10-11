@@ -111,7 +111,6 @@ export function previewMessageText(message: { blocks: readonly MessageBlock[] })
   return t`Message`;
 }
 
-/** The line a skill a bot learned, updated or deleted draws, opening the skill unless it is gone. */
 export function skillLine(
   skill: SkillSourceBlock,
   live: boolean,
@@ -172,7 +171,6 @@ export const MessageView = memo(function MessageView({
   /** Show the avatar for this message: the last message of a group
    * (`isLastOfGroup`). Always false in a mono thread. */
   showAvatar: boolean;
-  /** Set while the thread waits on this message's card: answering settles it. */
   onAnswer?: (text: string, edits?: SpawnBotCardEdits) => Promise<void>;
   onOpenBot: (botId: string) => void;
   onOpenPeerMessages: (peer: { peerBotId: string; peerBotName: string }) => void;

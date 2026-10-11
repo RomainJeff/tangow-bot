@@ -249,11 +249,6 @@ async function seedFixture(app: App, prisma: PrismaClient) {
 
 type FixtureThread = { id: string; spaceId: string; userId: string; sessionId: string };
 
-/**
- * A question and the finished run that answered it, written to the thread's log the way the
- * server writes them: the person's message, then the run's start, its words and its finish, with
- * an ask the person answered by replying when `ask` is given.
- */
 async function seedExchange(
   prisma: PrismaClient,
   thread: FixtureThread,
@@ -313,8 +308,6 @@ async function seedExchange(
       effort: null,
     },
   });
-  // A message the run publishes keeps its row until the message table goes, and its entries take
-  // the row's id, so a reply to it names both.
   const publish = async (blocks: MessageBlock[]) => {
     const message = await createThreadMessage(prisma, {
       threadId: thread.id,

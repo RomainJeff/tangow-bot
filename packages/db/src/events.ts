@@ -2068,12 +2068,7 @@ export async function eventsAfter(
   });
 }
 
-/**
- * The `thread.progress` events of each open run since the newest `session.entry.appended` event
- * of the thread that carried an entry of that run, oldest first: the streamed text a reload
- * replays under the shimmer. A feed event's `runId` is only its first entry's, so the payload is
- * matched too.
- */
+/** A feed event's `runId` is only its first entry's, so the payload is matched too. */
 export async function progressSinceLastEntry(
   prisma: PrismaClient | Prisma.TransactionClient,
   threadId: string,

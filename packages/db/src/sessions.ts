@@ -282,7 +282,6 @@ export async function appendSessionEntryInTransaction(
   return entry;
 }
 
-/** The thread a session belongs to through its top-most ancestor, when the session is in the space. */
 export async function threadOfSession(
   prisma: PrismaClient | Prisma.TransactionClient,
   sessionId: string,
@@ -306,8 +305,8 @@ type CardStateDraft = SessionEntryDraft extends infer Draft
   : never;
 
 /**
- * Append a card's later state to the session that holds its `payload.target`. A card older than
- * the log has no entry, so nothing is appended and the message row alone keeps its state.
+ * A card older than the log has no entry, so nothing is appended and the message row alone keeps
+ * its state.
  */
 export async function appendCardStateInTransaction(
   tx: Prisma.TransactionClient,
@@ -369,9 +368,7 @@ const RUN_BLOCK_ENTRY: {
 };
 
 /**
- * Append the entries of a message a run published, one per block, to the run's own session. The
- * first entry takes the message's id, so whatever points at the message points at the entry. A
- * message the bot sent the person through `message_user` marks its text `toPerson`.
+ * The first entry takes the message's id, so whatever points at the message points at the entry.
  */
 export async function appendRunBlocksInTransaction(
   tx: Prisma.TransactionClient,

@@ -102,7 +102,6 @@ export const Transcript = memo(function Transcript({
   onAnswer: (target: CardAnswerTarget, text: string, edits?: SpawnBotCardEdits) => Promise<void>;
   onReply: (message: MessageItem) => void;
   onEdit: (message: MessageItem) => void;
-  /** The message being edited: it and every row after it go once the edit is sent. */
   rewindFromItemId: string | null;
   onReact: (message: MessageItem, reaction: MessageReaction) => Promise<void>;
   onJumpToMessage: (messageId: string) => void;
@@ -112,7 +111,6 @@ export const Transcript = memo(function Transcript({
   onRefresh: () => Promise<void>;
   onBotChanged: () => Promise<void>;
   onAddRoutine: (name: string, prompt: string) => void;
-  /** Opens a skill in its bot's page, from the line that names it. */
   onOpenSkill?: (skill: SkillSourceBlock) => void;
   voiceReady: boolean;
   speakingMessageId: string | null;
@@ -132,8 +130,6 @@ export const Transcript = memo(function Transcript({
     () => rows.flatMap((row) => (row.item.kind === "message" ? [row.item] : [])),
     [rows],
   );
-  // A row arrives with a beat only when it is genuinely new activity, not when a thread's history
-  // first loads and not when "Load earlier messages" prepends older rows.
   const idsAtMount = useRef<ReadonlySet<string> | null>(null);
   if (idsAtMount.current === null) {
     idsAtMount.current = new Set(rows.map((row) => row.item.id));
@@ -440,7 +436,6 @@ export const Transcript = memo(function Transcript({
           const { item } = row;
           const chrome = rowChrome(item, showSteps);
           const message = item.kind === "message" ? item : null;
-          // Only a message row carries actions: the hover pill, the press sheet, reactions.
           const acts = message !== null && chrome === "row";
           const rewound = rewindFromIndex >= 0 && index >= rewindFromIndex;
           const previous = rows[index - 1];
@@ -500,7 +495,6 @@ export const Transcript = memo(function Transcript({
                         : undefined
                     }
                   >
-                    {/* The pill is for a bot's message: your own gets Edit and Copy under it. */}
                     {acts && message.role !== "user" ? (
                       <MessageHoverActions
                         message={message}

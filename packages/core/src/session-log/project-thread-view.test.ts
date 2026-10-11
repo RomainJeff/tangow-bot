@@ -810,7 +810,6 @@ describe("the entries a client holds", () => {
   });
 });
 
-/** The entry moved `by` seqs up its chain, its parent outside any page held. */
 function detached(by: number) {
   return (entry: SessionEntry): SessionEntry =>
     SessionEntrySchema.parse({
