@@ -14,9 +14,7 @@ export function CollaborationMarker({
   /** The bots the exchange involved, sender first. */
   bots: StackedAvatarItem[];
   label: ReactNode;
-  /** Absent for a peer the app cannot open, such as another owner's agent. */
   onClick?: () => void;
-  /** A message still waiting on its answer. */
   muted?: boolean;
 }) {
   return (
@@ -30,8 +28,6 @@ export function CollaborationMarker({
           onClick && "duration-(--duration-hover) ease-quiet hover:opacity-60",
           muted && "opacity-60",
         )}
-        // Unlabelled on purpose: the group's own name says who the exchange
-        // was with, so the stack is decoration.
         avatars={<StackedAvatars items={bots} size={17} />}
       >
         {/* A sibling stretched under the label, not a wrapper: the label may hold its own link. */}

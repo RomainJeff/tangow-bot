@@ -273,7 +273,6 @@ const EntryShapes = z.discriminatedUnion("type", [
       artifactId: Id.optional(),
     }),
   ),
-  /** `target` is the `link.preview` entry the person removed. */
   entry("link.preview.removed", z.object(target)),
   /** One revision of a taught skill's draft card; the newest revision of a card wins. */
   entry("skill.draft", SkillDraftBlock.omit({ kind: true }).extend(target)),

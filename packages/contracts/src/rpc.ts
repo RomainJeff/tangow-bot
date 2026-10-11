@@ -316,7 +316,6 @@ export const appContract = {
         threadTarget.safeExtend({
           before: EntryId.optional(),
           includePeerRuns: z.boolean().optional(),
-          /** The chain around this entry, for a jump to it. */
           around: z.object({ entryId: EntryId }).optional(),
         }),
       )
@@ -885,7 +884,6 @@ export const appContract = {
     entries: oc.input(z.object({ runId: Id })).output(sessionEntriesOutput),
   },
   sessions: {
-    /** A child session's chain, for its read-only thread view. */
     entries: oc.input(z.object({ sessionId: SessionId })).output(sessionEntriesOutput),
   },
   voice: {

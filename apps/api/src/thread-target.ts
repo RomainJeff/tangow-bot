@@ -431,10 +431,6 @@ export async function resolveThreadTarget(
 
 const SESSION_ENTRIES_LIMIT = 1000;
 
-/**
- * A child session's chain, for its read-only view: only a session of the actor's space whose
- * top-most ancestor is a thread the actor can open.
- */
 export async function readSessionEntries(
   deps: { prisma: PrismaClient; sessionLog: Pick<SessionLog<unknown>, "readPage"> },
   actor: Actor,
@@ -467,8 +463,8 @@ export async function threadHead(prisma: PrismaClient, target: ThreadTarget) {
 }
 
 /**
- * The thread as `threads.get` serves it. The tail page is read after the cursor, so an entry
- * appended in between is either in the page or after the cursor; clients merge entries by id.
+ * The tail page is read after the cursor, so an entry appended in between is either in the page
+ * or after the cursor; clients merge entries by id.
  */
 export async function threadSnapshot(
   deps: { prisma: PrismaClient; sessionLog: Pick<SessionLog<unknown>, "readPage" | "readAround"> },

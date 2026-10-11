@@ -17,7 +17,6 @@ export function visibleMessageBlocks(
   );
 }
 
-/** What a message draws: its visible blocks, a `steps` block the setting shows where it is. */
 export function messagePresentationSegments(
   blocks: readonly MessageBlock[],
   showSteps = false,

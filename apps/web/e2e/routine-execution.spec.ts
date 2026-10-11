@@ -189,7 +189,6 @@ test("routine test-run completes and survives reload", async ({ page }, testInfo
   await page.reload();
   await expect(page.getByText(/routine-run-now-ok/i).first()).toBeVisible();
   await openRoutines(page);
-  // Scoped to the panel: the run's line in the thread carries the routine's name too.
   await expect(panel.getByRole("button", { name: /Daily verification/ })).toContainText(
     "Weekdays at 9:00 AM",
   );

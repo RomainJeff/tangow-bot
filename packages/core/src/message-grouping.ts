@@ -5,12 +5,6 @@ import { showsTimeMarker } from "./thread-time-markers.js";
  * (Slack-style): the avatar, name, and time show once and later rows just carry content. */
 export const MESSAGE_GROUP_WINDOW_MS = 5 * 60 * 1000;
 
-/**
- * The shape `computeMessageGroups` needs from a message.
- * `createdAt` is optional here, unlike on `ThreadMessage`, because mobile's `MobileMessage`
- * only has one once a streaming delta finishes: a message without it never continues a group
- * and is never continued into (see `continuesGroup`).
- */
 export type GroupableMessage = Pick<ThreadMessage, "role" | "blocks" | "replyToMessageId"> & {
   botId?: ThreadMessage["botId"];
   createdAt?: ThreadMessage["createdAt"];
@@ -42,11 +36,6 @@ export type NarrationSegment<T> =
   | { kind: "content"; blocks: T[] }
   | { kind: "steps"; block: Extract<MessageBlock, { kind: "steps" }> };
 
-/**
- * What a message draws, in the order the bot produced it: each run of content is one segment and
- * each `steps` block stays where it is. `content` gives what a block draws, or `undefined` to leave
- * it out.
- */
 export function narrationSegments<T>(
   blocks: readonly MessageBlock[],
   content: (block: MessageBlock) => T | undefined,
@@ -90,12 +79,6 @@ function withinGroupWindow(
   return Number.isFinite(deltaMs) && deltaMs >= 0 && deltaMs <= windowMs;
 }
 
-/**
- * Whether `message` continues `previous`'s group under the full rule R: bot continuity (two
- * consecutive narration messages of the same bot) or user continuity (two consecutive text-only
- * user messages), within the window, with no time marker between and no reply. A message without
- * `createdAt`, on either side, never continues and is never continued into.
- */
 function continuesGroup(
   previous: GroupableMessage | undefined,
   message: GroupableMessage,
@@ -118,14 +101,6 @@ function continuesGroup(
   return withinGroupWindow(previous.createdAt, message.createdAt, windowMs);
 }
 
-/**
- * The single source of truth for rule R (see `docs/design-system.md` § Grouping): for every
- * input message, whether it opens and/or closes a visible group. Both web and mobile call this
- * once on the canonical chronological message list and index the result by message id — no
- * renderer recomputes grouping from its own (possibly reversed) index. Asides (handoffs, peer
- * receipts, `meta`) are non-narration messages, so they form a group of one and the group they
- * interrupt reopens after them.
- */
 export function computeMessageGroups(
   messages: readonly GroupableMessage[],
   windowMs: number = MESSAGE_GROUP_WINDOW_MS,
@@ -139,7 +114,6 @@ export function computeMessageGroups(
   }));
 }
 
-/** Rule R over a thread's items, in order. An item that is not a message is a group of one. */
 export function computeItemGroups(
   items: readonly ThreadItem[],
 ): { isFirstOfGroup: boolean; isLastOfGroup: boolean }[] {

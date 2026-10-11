@@ -51,8 +51,6 @@ test("resolves a pending ask from the main composer", async ({ page }, testInfo)
     timeout: 30_000,
   });
 
-  // The card resolves. Its own reply text is NOT echoed onto the card (design D2 — the words live
-  // in the bubble above), so a bare `card.answered` settles it rather than a reply naming it.
   await expect
     .poll(
       async () => {

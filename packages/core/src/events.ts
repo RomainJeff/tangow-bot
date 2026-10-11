@@ -28,7 +28,6 @@ export function runFailureError(event: {
     : message;
 }
 
-/** The live blocks after one `thread.progress` payload: its delta or text as the trailing progress block. */
 export function reduceLiveMessageBlocks(
   blocks: readonly MessageBlock[],
   payload: Record<string, unknown> | undefined,

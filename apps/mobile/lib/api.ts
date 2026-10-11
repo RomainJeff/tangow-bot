@@ -782,7 +782,6 @@ export type MobileModel = ModelCatalogEntry;
 
 export type MobileModelCredential = ModelCredential;
 
-/** A message as the thread draws it: what the person said, or one stretch of a bot's words. */
 export type MobileMessage = Extract<ThreadItem, { kind: "message" }>;
 
 export type MobileGroup = Pick<
@@ -838,10 +837,8 @@ export type MobileSnapshot = {
   groupName?: string;
   threadId: string;
   cursor?: number;
-  /** The entries held for the thread, any order: the tail, and the older pages loaded since. */
   entries: SessionEntry[];
   olderCursor: EntryId | null;
-  /** The open runs' streamed text since each one's last entry. */
   layer: ProgressLayer;
   run: MobileRun | null;
   activeRuns?: MobileRun[];
@@ -855,7 +852,6 @@ export type MobileSnapshot = {
   };
 };
 
-/** `threads.get` as the server sends it, the progress still as the events to replay. */
 export type MobileThreadResponse = Omit<MobileSnapshot, "layer"> & { progress: ProductEvent[] };
 
 export function shouldApplyMobileThreadRefresh(input: {
@@ -873,13 +869,6 @@ export function shouldApplyMobileThreadRefresh(input: {
   );
 }
 
-/**
- * A refreshed snapshot over the one held. With `preserveLoadedHistory` the older pages already
- * loaded stay, and so does the cursor to page further back. The streamed text stays the live
- * feed's, which is newer than any replay. The previous snapshot comes back itself when nothing
- * changed, and each unchanged field keeps its object, so a poll that brings nothing new re-renders
- * nothing.
- */
 export function mergeMobileSnapshot(
   prev: MobileSnapshot | null,
   next: MobileSnapshot,
@@ -902,14 +891,12 @@ export function mergeMobileSnapshot(
   return unchanged ? prev : (shared as MobileSnapshot);
 }
 
-/** `held` itself when `next` holds the same entries in the same order: an entry never changes. */
 function keepEntries(held: SessionEntry[], next: SessionEntry[]): SessionEntry[] {
   return held.length === next.length && held.every((entry, index) => entry.id === next[index]?.id)
     ? held
     : next;
 }
 
-/** An older page loaded above what the thread holds. */
 export function withOlderPage(
   prev: MobileSnapshot | null,
   page: ThreadMessagePage,
@@ -918,10 +905,6 @@ export function withOlderPage(
   return withOlderEntries(prev, page);
 }
 
-/**
- * The rows with each row, or else each item, the previous projection drew unchanged kept as the
- * same object, so a memoized row skips its render when an event changed another part of the thread.
- */
 export function keepUnchangedRows(
   previous: ReadonlyMap<string, ThreadRow>,
   rows: readonly ThreadRow[],
@@ -1052,11 +1035,6 @@ export async function subscribeThread(
   }
 }
 
-/**
- * The thread after one live event, the same rule as web: the entries it carries merge into the
- * held ones, the streamed-text layer moves, and run events move the runs. Nothing else is read
- * from the feed; the thread itself is a projection of the entries.
- */
 export function applyMobileThreadEvent(
   prev: MobileSnapshot | null,
   event: ProductEvent,
@@ -1073,7 +1051,6 @@ export function applyMobileThreadEvent(
 
 type MobileRuns = Pick<MobileSnapshot, "run" | "activeRuns" | "computer">;
 
-/** The thread's runs after a run event, or null for an event that says nothing about them. */
 function runsAfter(prev: MobileSnapshot, event: ProductEvent): MobileRuns | null {
   const held = prev.activeRuns ?? (prev.run ? [prev.run] : []);
   if (event.type === "run.started" && event.runId) {
@@ -1081,7 +1058,6 @@ function runsAfter(prev: MobileSnapshot, event: ProductEvent): MobileRuns | null
     const run: MobileRun = { ...known, id: event.runId, botId: event.botId, status: "running" };
     const others = held.filter((candidate) => candidate.id !== run.id);
     return {
-      // In a group, a failed member run keeps its error on screen while another member starts.
       run: prev.groupId && prev.run?.status === "failed" && prev.run.id !== run.id ? prev.run : run,
       activeRuns: prev.groupId ? [...others, run] : [run],
     };
@@ -1090,8 +1066,6 @@ function runsAfter(prev: MobileSnapshot, event: ProductEvent): MobileRuns | null
     const runId = event.runId;
     const waiting = (run: MobileRun): MobileRun =>
       run.id === runId ? { ...run, status: "waiting_takeover" } : run;
-    // A peer's run is left out of the snapshot while it works: its first wait is how the thread
-    // learns it needs the person.
     const inserted: MobileRun | null =
       prev.run?.id === runId || held.some((candidate) => candidate.id === runId)
         ? null
@@ -1115,7 +1089,6 @@ function runsAfter(prev: MobileSnapshot, event: ProductEvent): MobileRuns | null
     const endedRun =
       primaryEnded ?? prev.activeRuns?.find((candidate) => candidate.id === event.runId) ?? null;
     return {
-      // A failed run stays in run so the thread can say why it stopped, a group member's too.
       run:
         endedRun && failure
           ? { ...endedRun, status: "failed", error: failure }

@@ -18,11 +18,6 @@ function intentWord(intent: BotMessageIntent): string {
   }
 }
 
-/**
- * What a bot-to-bot card says, split around the peer's name so the name can be a link, and the
- * thread that link opens: the sender's at the linked entry for a received message, the peer's for
- * a sent one, none for another owner's agent.
- */
 export function botMessageCard(item: BotMessageItem) {
   const template = item.direction === "sent" ? t("Messaged {peer}") : t("Message from {peer}");
   const [before = "", after = ""] = template.split("{peer}");

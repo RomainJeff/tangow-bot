@@ -37,13 +37,11 @@ type PeerBot = (
   botId: string,
 ) => { color: string; name?: string; shapeSeed?: number | null; status?: string } | undefined;
 
-/** Everything a row needs from the thread around it; a read-only view leaves the answer out. */
 export type RowContext = {
   artifactTarget: ArtifactTarget;
   inGroup: boolean;
   viewerUserId?: string;
   waiting: WaitingCard | null;
-  /** The thread's runs at work: only these read "Running" while their finish is not held. */
   activeRunIds: ReadonlySet<string>;
   onAnswer?: (target: CardAnswerTarget, text: string, edits?: SpawnBotCardEdits) => Promise<void>;
   memberName?: (botId: string | undefined) => string | undefined;
@@ -56,26 +54,17 @@ export type RowContext = {
   onBotChanged: () => Promise<void>;
   onAddRoutine: (name: string, prompt: string) => void;
   onOpenSkill?: (skill: SkillSourceBlock) => void;
-  /** The message item that shows an entry, for a reply's preview. */
   messageOfEntry: (entryId: string) => MessageItem | undefined;
 };
 
 const SHOWN_NOTES = new Set<ItemOf<"note">["type"]>(["skill.learnt", "system.note"]);
 
-/**
- * An item this surface draws nothing for: a message with nothing left to draw, or a note whose
- * fact already shows elsewhere (the computer panel, the header, the attachment itself, memory).
- */
 export function drawsNothing(item: ThreadItem, showSteps: boolean): boolean {
   if (item.kind === "message") return !hasRenderableBlock(item.blocks, showSteps);
   if (item.kind === "note") return !SHOWN_NOTES.has(item.type);
   return false;
 }
 
-/**
- * An aside is a line between messages: a handoff, a bot exchange, a divider, a note, or a message
- * made only of such blocks. It gets no row chrome: no actions, no clock, no reactions.
- */
 export function rowChrome(item: ThreadItem, showSteps: boolean): "row" | "aside" {
   if (item.kind === "message") {
     const blocks = item.blocks.filter((block) => !isHiddenActivityBlock(block, showSteps));
@@ -106,7 +95,6 @@ export function RowMarker({ marker }: { marker: NonNullable<ThreadRow["marker"]>
   );
 }
 
-/** One row's content, by kind, without the transcript's hover and press chrome. */
 export function ThreadRowBody({
   row,
   context,
@@ -124,7 +112,6 @@ export function ThreadRowBody({
 }) {
   const { item } = row;
   const body = itemBody(item, row, context, { chrome, showAuthor, showAvatar, arrivesLive });
-  // A received bot message names the peer's entry, not a child session of this thread.
   const origin =
     "origin" in item && item.origin && !("entryId" in item.origin) ? item.origin : null;
   if (!origin) return body;
@@ -245,7 +232,6 @@ function MessageRowView({
   );
 }
 
-/** Lines a block up with the bot's bubbles, past the avatar column in a group. */
 function BotSide({ inGroup, children }: { inGroup: boolean; children: ReactNode }) {
   return (
     <MessageRow
@@ -260,10 +246,6 @@ function BotSide({ inGroup, children }: { inGroup: boolean; children: ReactNode 
   );
 }
 
-/**
- * A run's model and state: its outcome once its finish is held, else whether it waits on a card or
- * is at work. A run that is neither (its finish outside the page, or a crash) shows no state.
- */
 function RunCard({ item, live }: { item: ItemOf<"run">; live?: "waiting" | "running" }) {
   const { t } = useLingui();
   const [open, setOpen] = useState(false);
@@ -454,7 +436,6 @@ function BotMessageMarker({ item, context }: { item: ItemOf<"botMessage">; conte
   );
 }
 
-/** The same messages as the card's name, with the peer as a node so it can be a link. */
 function ExchangeLabel({ sent, peer }: { sent: boolean; peer: ReactNode }) {
   return sent ? <Trans>Messaged {peer}</Trans> : <Trans>Message from {peer}</Trans>;
 }

@@ -3,21 +3,12 @@ import type { ThreadItem } from "@rakazo/contracts";
 type RoutineItem = Extract<ThreadItem, { kind: "routine" }>;
 type SentItem = Extract<ThreadItem, { kind: "botMessage"; direction: "sent" }>;
 
-/** One routine run as its line shows it: the run, the bot message it sent right after, if any. */
 export type RoutineLineRun = { item: RoutineItem; sentTo?: SentItem; latest: boolean };
 
-/** How a routine item renders once quiet runs of one routine fold: alone, or as the fold's line. */
 export type RoutineLineRole =
   | { kind: "run"; run: RoutineLineRun }
   | { kind: "group"; runs: RoutineLineRun[] };
 
-/**
- * Folds routine runs over a thread's items: the role of each routine item, and `hidden` for a
- * folded run and for the bot message a run sent right after, from its own routine session.
- * Consecutive quiet runs (completed or cancelled) of one routine fold into one line, except the
- * newest, which keeps its own line. Anything else, including a failed or running run of the same
- * routine, ends the sequence and is never folded across, so the thread is never reordered.
- */
 export function foldRoutineItems(
   items: readonly ThreadItem[],
 ): ReadonlyMap<string, RoutineLineRole | { kind: "hidden" }> {

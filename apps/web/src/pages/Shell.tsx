@@ -519,7 +519,6 @@ export function ShellPage() {
   const jumpGeneration = useRef(0);
   const initiallyScrolledThread = useRef<string | null>(null);
   const messageScroll = useRef<HTMLDivElement>(null);
-  // The thread a jump pinned to a page around its entry, so the first scroll does not leave it.
   const pinnedAroundRef = useRef<{ botId?: string; groupId?: string } | null>(null);
   const manuallyUnread = useRef(new Set<string>());
   const readVisibleGroups = useRef(new Set<string>());
@@ -3417,17 +3416,12 @@ export function ShellPage() {
   );
 }
 
-/**
- * A run still at work: queued or going, unless the entries show it waiting on a card, which the
- * run events no longer say.
- */
 function isWorking(run: Pick<Run, "id" | "status"> | null | undefined, view: ThreadView): boolean {
   return Boolean(
     run && ["running", "queued", "leased"].includes(run.status) && run.id !== view.waiting?.runId,
   );
 }
 
-/** The id a reply or a reaction to a message names: the published message its row starts with. */
 function messageIdOf(view: ThreadView, message: MessageItem): string | undefined {
   return view.rows.find((row) => row.item.id === message.id)?.messageId;
 }

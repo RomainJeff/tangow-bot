@@ -470,7 +470,6 @@ describe("a streamed reply fed through the reducer", () => {
     waiting: null,
   });
 
-  /** One event, then the reducer fields it moves and what each row of the thread shows. */
   const script: [ProductEvent, ReturnType<typeof state>][] = [
     [appendedAt(1, "str-00"), { cursor: 1, ...idle, rows: [asked] }],
     [
@@ -649,7 +648,6 @@ describe("a streamed reply fed through the reducer", () => {
     ],
   ];
 
-  /** What each row shows: its kind, then the words or the state it carries. */
   function shown(thread: ThreadState | null): string[] {
     const view = projectThreadView(thread?.entries ?? [], { progress: thread?.layer });
     return view.rows.map(({ item }) => {
@@ -694,7 +692,6 @@ describe("a streamed reply fed through the reducer", () => {
     let reloaded: ThreadState | null = null;
     for (const [next, expected] of script) {
       live = reduceThreadState(live, next);
-      // The server's snapshot mid-run: the entries so far and the open run's newer deltas.
       reloaded =
         next.seq === 9
           ? threadEntriesOf({

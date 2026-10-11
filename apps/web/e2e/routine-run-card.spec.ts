@@ -58,8 +58,6 @@ test("renders a routine run card in a sub-bot's own thread", async ({ page }, te
   await expect(card).toContainText(/Running|Completed/i);
   await expect(card).toContainText("Completed", { timeout: 60_000 });
 
-  // A finished run stays folded; opening it shows the routine's digest as sanitised markdown
-  // with no live image loads, and the digest opens the routine run's own session, read-only.
   const toggle = card.getByRole("button", { name: /^Status check,/ });
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
   await toggle.click();

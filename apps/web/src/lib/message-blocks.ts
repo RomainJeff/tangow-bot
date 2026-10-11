@@ -7,11 +7,6 @@ export function isHiddenActivityBlock(block: MessageBlock, showSteps: boolean): 
   return isToolActivityBlock(block) && !(showSteps && block.kind === "steps");
 }
 
-/**
- * Kinds the thread has no renderer for: a legacy `reasoning` line, the `connect` block of a flow
- * that moved into settings, and the `subagent` and `routine_run` cards the thread now draws from
- * their own items. Listing them keeps a message made only of those from painting an empty row.
- */
 const UNRENDERED_BLOCK_KINDS = new Set<MessageBlock["kind"]>([
   "connect",
   "reasoning",

@@ -237,7 +237,6 @@ type PendingAttachment = PickedAttachment & { threadKey: string };
 type ReplyTarget = { message: MobileMessage; messageId: EntryId };
 type RunItem = Extract<ThreadItem, { kind: "run" }>;
 type NoteItem = Extract<ThreadItem, { kind: "note" }>;
-/** The card an answer goes to: the run that asked, and the entry holding the question. */
 type CardTarget = { runId: string; entryId: string };
 type AskAction = NonNullable<Extract<MessageBlock, { kind: "ask" }>["actions"]>[number];
 
@@ -250,10 +249,6 @@ type AskAction = NonNullable<Extract<MessageBlock, { kind: "ask" }>["actions"]>[
  */
 type MessageChrome = "row" | "aside";
 
-/** 7g: a bot row whose blocks are only ever one of these is a card, not
- * narration — a decision, an ask, a channel note, a bot card or a bare
- * attachment. Swipe-to-reply is a *narration* bubble's
- * gesture only; these keep today's plain long-press wrapper. */
 const CARD_ONLY_BLOCK_KINDS = new Set<string>([
   "ask",
   "channel_message",
@@ -326,7 +321,6 @@ function formatAttachmentSkip(item: { name: string; reason: string }): string {
   return `${name} (${item.reason})`;
 }
 
-/** An item the thread draws nothing for, left out before groups, reactions and markers. */
 function drawsNothing(item: ThreadItem, showSteps: boolean): boolean {
   switch (item.kind) {
     case "message":
@@ -340,12 +334,10 @@ function drawsNothing(item: ThreadItem, showSteps: boolean): boolean {
   }
 }
 
-/** The open run's streamed text, which the run's next entry replaces. */
 function isLiveMessage(item: ThreadItem): item is Extract<MobileMessage, { role: "bot" }> {
   return item.kind === "message" && item.role === "bot" && item.live === true;
 }
 
-/** A note between rows rather than something said: consecutive ones stack with no gap. */
 function isAsideItem(item: ThreadItem, showSteps: boolean): boolean {
   switch (item.kind) {
     case "message":
@@ -588,9 +580,6 @@ function Thread() {
     [t],
   );
   const showSteps = useDisplayAgentSteps();
-  // The thread as the person sees it, projected from the held entries the way web projects them:
-  // groups, reactions, routine folds and time markers come with the rows, in chronological order,
-  // and both the live inverted list and the pinned page read them.
   const drawnRows = useRef<ReadonlyMap<string, ThreadRow>>(new Map());
   const view = useMemo((): ThreadView => {
     const projected = projectThreadView(snap?.entries ?? [], {
@@ -678,7 +667,6 @@ function Thread() {
       ),
     [snap?.activeRuns, snap?.run],
   );
-  // The runs a working line speaks for: a run the thread waits on for an answer is not working.
   const workingRuns = useMemo(
     () => busyRuns.filter((run) => run.id !== waiting?.runId),
     [busyRuns, waiting?.runId],
@@ -1642,7 +1630,6 @@ function Thread() {
     }
   }
 
-  /** Answers a card: the run that asked, and the entry that holds the question. */
   const answerCard = useCallback(
     async (card: CardTarget, answer: string, edits?: SpawnBotEdits) => {
       const targetBotId = botId;
@@ -1668,7 +1655,6 @@ function Thread() {
     },
     [botId, groupId],
   );
-  // A ref, so a new projection does not hand every bubble a new handler.
   const answerMessage = useCallback(
     async (message: MobileMessage, answer: string, edits?: SpawnBotEdits) => {
       const card = waitingRef.current;
@@ -2031,9 +2017,6 @@ function Thread() {
     };
   }
 
-  /** Rule R's gap (design contract § Grouping): 0 between two consecutive
-   * asides and between two routine lines, 3 within a group, 14 otherwise
-   * (opening a new group, or the very first rendered row). */
   function gapBeforeRow(row: ThreadRow, previous: ThreadRow | undefined): number {
     if (previous && isAsideItem(row.item, showSteps) && isAsideItem(previous.item, showSteps)) {
       return 0;
@@ -2042,7 +2025,6 @@ function Thread() {
     return row.firstOfGroup ? GROUP_GAP : WITHIN_GROUP_GAP;
   }
 
-  /** The message a reply names, when the thread holds it. */
   function repliedMessage(entryId: EntryId): MobileMessage | undefined {
     const rowId = view.rowOf.get(entryId);
     const item = rowId === undefined ? undefined : rows[rowIndex.get(rowId) ?? -1]?.item;
@@ -2054,9 +2036,6 @@ function Thread() {
     const marker = row.marker
       ? threadTimeMarkerLabel(row.marker.at, { ...labelOptions, withTime: row.marker.withTime })
       : "";
-    // MA-1: never for a row present at thread open, "Load earlier", or the
-    // jump/pinned page: `options.enableJump` is only ever passed by the
-    // pinned ScrollView's own call site.
     const isNew = Boolean(!options?.enableJump && newMessageIds.has(item.id));
     const rewound = rewindIndex >= 0 && (rowIndex.get(item.id) ?? -1) >= rewindIndex;
     return (
@@ -2076,7 +2055,6 @@ function Thread() {
               : undefined
           }
           style={{
-            // A day marker between two routine lines still needs its air above.
             marginTop: Math.max(marker ? GROUP_GAP : 0, gapBeforeRow(row, options?.previous)),
           }}
         >
@@ -2133,9 +2111,6 @@ function Thread() {
     const actionProps = messageActionProps(message, row.messageId);
     const messageReactions = row.reactions;
     const drawnBlocks = visibleMessageBlocks(message.blocks, showSteps);
-    // An aside is a note between messages and carries no author; a bot's
-    // question or approval is a normal row, its FramedBlock card just the
-    // row's body. Aside is decided by the blocks alone.
     const chrome: MessageChrome = isAsideOnlyMessage(drawnBlocks) ? "aside" : "row";
     const authorBotId = message.role === "bot" ? message.botId : botId;
     const author = messageBot(authorBotId);
@@ -2143,8 +2118,6 @@ function Thread() {
       ? (snap?.activeRuns?.find((run) => run.botId === authorBotId)?.status ??
         (snap?.run?.botId === authorBotId ? snap?.run?.status : currentBotStatus))
       : undefined;
-    // 7g: swipe-to-reply is a bot *narration* bubble's gesture only — a
-    // decision card, an ask or an attachment keep their existing behaviour untouched.
     const isNarrationBotBubble =
       chrome === "row" &&
       message.role === "bot" &&
@@ -2153,8 +2126,6 @@ function Thread() {
     const replyTo = message.role === "user" ? message.replyTo : undefined;
     const replyPreviewNode =
       chrome === "row" && replyTo ? repliedMessage(replyTo.entryId) : undefined;
-    // The preview card sits under the bubble, or takes its place when the message is only the
-    // link. A message that is itself a card (ask, ...) never carries one.
     const previewCard = chrome === "row" ? linkPreviewCardOf(message) : undefined;
     const cardReplacesBubbleView = previewCard
       ? cardReplacesBubble(drawnBlocks, previewCard)
@@ -3424,7 +3395,6 @@ const MessageBubble = memo(function MessageBubble({
   onOpenBot: (botId: string, name: string) => void;
   onPreviewMarkdown: (target: MarkdownArtifactPreviewTarget) => void;
   actionProps: MessageActionProps;
-  /** Arrived while the thread was open: its skill lines play their entrance. */
   isNew: boolean;
   /** The link its card shows: a line that is only this link is left out of the text drawn. */
   previewedUrl?: string;
@@ -3809,11 +3779,6 @@ const MessageBubble = memo(function MessageBubble({
   );
 });
 
-/**
- * A card waiting on the person's call, or showing the call they made: an approval, a question with
- * fixed options, a routine card. A message's ask with actions and an approval's effect row both
- * draw it.
- */
 function ApprovalCard({
   block,
   cardId,
@@ -3824,7 +3789,6 @@ function ApprovalCard({
   onAnswer,
 }: {
   block: Extract<MessageBlock, { kind: "ask" }>;
-  /** The item the card is drawn in, which keys its edit sheet. */
   cardId: string;
   cardBotId: string;
   canAnswer: boolean;
@@ -3836,12 +3800,7 @@ function ApprovalCard({
   const { t } = useI18n();
   const router = useRouter();
   const approval = isApprovalAskBlock(block);
-  // A routine card, proposed by the bot or confirming one set up, shows what it creates
-  // instead of the plain-text detail.
   const routineCard = approval ? block.routine : undefined;
-  // The row above already names the bot; the card only repeats itself for a
-  // consequential approval, name-less. A question with fixed options or a
-  // routine card opens with no header.
   const header = approval && !routineCard ? { who: t("Needs your call") } : undefined;
   const created = block.created;
   const routineSettled = (): ReactNode => {
@@ -3928,14 +3887,8 @@ function ApprovalCard({
 
 const NO_ACTIONS: MessageActionProps = { onLongPress: () => {} };
 
-/** A session a row opens in its sheet: the helper's or the routine's own story. */
 type OpenedSession = { title: string; load: () => Promise<SessionEntry[]>; runId?: string };
 
-/**
- * Every row that is not a message: a run, a helper, a routine, the bots messaging each other, a
- * divider, an approval, a note. The thread and a session's sheet draw the same rows; the sheet
- * passes `readOnly`, which leaves out what would leave it.
- */
 const ItemRow = memo(function ItemRow({
   row,
   botId,
@@ -3951,7 +3904,6 @@ const ItemRow = memo(function ItemRow({
   readOnly = false,
 }: {
   row: ThreadRow;
-  /** The bot a row with no author of its own is about: the thread's bot. */
   botId: string;
   groupId?: string;
   botName?: string;
@@ -3959,7 +3911,6 @@ const ItemRow = memo(function ItemRow({
   members?: MobileSnapshot["members"];
   isNew: boolean;
   canAnswer: boolean;
-  /** A run row's run with no finish held: waiting on a card, or at work in the snapshot. */
   liveRun?: "waiting" | "running";
   viewerUserId?: string;
   onAnswer?: (card: CardTarget, answer: string, edits?: SpawnBotEdits) => Promise<void>;
@@ -4074,15 +4025,10 @@ const ItemRow = memo(function ItemRow({
         const card = botMessageCard(item);
         const peerThread = readOnly ? null : card.peerThread;
         const pair = sent ? [ownBotId, peerBotId] : [peerBotId, ownBotId];
-        // 7f: a brand-new marker's two bloubs glance at each other once — the
-        // first item (rendered on the left by `StackedAvatars`) looks right,
-        // toward the second, which looks left, toward it.
         const pairItems = pair.map((id, index) => ({
           ...avatarOf(id),
           ...(isNew ? { glance: index === 0 ? ("right" as const) : ("left" as const) } : {}),
         }));
-        // Compact receipt only: peer bodies stay out of the human thread; the full
-        // view-only exchange opens on its own screen.
         return (
           <Interstitial
             accessibilityLabel={card.label}
@@ -4147,11 +4093,6 @@ const ItemRow = memo(function ItemRow({
   );
 });
 
-/**
- * A run as one quiet line: its model and how it went, opening to its duration and tokens. With no
- * finish held it reads as waiting on a card or at work, and with neither (its finish outside the
- * page, or a crash) it shows no state.
- */
 function RunRow({ item, live }: { item: RunItem; live?: "waiting" | "running" }) {
   const tokens = mobileTokens();
   const { t } = useI18n();
@@ -4233,7 +4174,6 @@ function RunRow({ item, live }: { item: RunItem; live?: "waiting" | "running" })
   );
 }
 
-/** Where the history was summarized, edited back or cleared: a hairline and a word. */
 function DividerRow({ reason }: { reason: Extract<ThreadItem, { kind: "divider" }>["reason"] }) {
   const tokens = mobileTokens();
   const { t } = useI18n();
@@ -4255,7 +4195,6 @@ function DividerRow({ reason }: { reason: Extract<ThreadItem, { kind: "divider" 
   );
 }
 
-/** A note between messages: a channel's own words, or a skill the bot learned or changed. */
 function NoteRow({ item, isNew }: { item: NoteItem; isNew: boolean }) {
   const router = useRouter();
   if (item.type === "system.note") {
@@ -4270,10 +4209,6 @@ function NoteRow({ item, isNew }: { item: NoteItem; isNew: boolean }) {
   return null;
 }
 
-/**
- * A child session read whole in a sheet, through the same rows as the thread and with nothing to
- * act on: a helper's own work, or a routine run's story with the person's answers.
- */
 function SessionSheet({
   session,
   botId,
@@ -4358,7 +4293,6 @@ function SessionSheet({
   );
 }
 
-/** The skill lines under a bot's message: what it learned or updated opens the skill, a deleted one only shows. */
 function useSkillLines(message: MobileMessage, isNew: boolean): BotBubbleMeta[] {
   useI18n();
   const router = useRouter();
@@ -4368,7 +4302,6 @@ function useSkillLines(message: MobileMessage, isNew: boolean): BotBubbleMeta[] 
   return skillLines.map((line) => skillLineMeta(line, skillsLive, router));
 }
 
-/** One skill line: what it learned or updated opens the skill, a deleted one only shows. */
 function skillLineMeta(
   line: { skillId: string; name: string; change: "learned" | "updated" | "deleted" },
   live: boolean,
@@ -4627,14 +4560,12 @@ interface RoutineHandoff {
   receipt: ReactNode;
   avatars: ReactNode;
   label: string;
-  /** Absent in a sheet that reads a session, which opens nothing else. */
   onPress?: () => void;
 }
 
 /** How long a page sheet takes to slide away before the next screen can push. */
 const SHEET_DISMISS_MS = 350;
 
-/** What a tap inside a sheet opens, once the sheet has closed. */
 function afterSheet(close: () => void, open: () => void): () => void {
   return () => {
     close();
@@ -4672,14 +4603,6 @@ function sameLocalDay(left: string | undefined, right: string | undefined): bool
   return new Date(left).toDateString() === new Date(right).toDateString();
 }
 
-/**
- * A routine run as a log line, not a card: status symbol, name, time, status
- * word, then fixed receipt and disclosure slots so the columns line up down a
- * run of routines. Opening it shows the report under a hairline rail and,
- * centred as every exchange between bots is, the message it then sent; the
- * report opens the run's whole story in a sheet. A line with nothing to show
- * opens that story at once. A failed latest run opens on its report.
- */
 function RoutineRunLine({
   run,
   handoff,
@@ -4690,7 +4613,6 @@ function RoutineRunLine({
   run: RoutineLineRun;
   handoff?: RoutineHandoff;
   onOpen: (run: RoutineLineRun) => void;
-  /** A line inside an open group: smaller symbol, the time in place of the name. */
   nested?: boolean;
   withDay?: boolean;
 }) {
@@ -4703,8 +4625,6 @@ function RoutineRunLine({
   const failed = state === "failed";
   const expands = Boolean(report || handoff);
   const [manualExpanded, setManualExpanded] = useState<boolean | null>(null);
-  // Only a routine's latest failed run opens on its own: older ones stay
-  // folded so a thread of past failures is not a wall of reports.
   const expanded = expands && (manualExpanded ?? Boolean(report && run.latest && failed));
   const fromTap = useRef(false);
   // At accessibility text sizes the time and status move under the name.
@@ -5054,7 +4974,6 @@ function TaskCard({
   /** Markdown result, shown as a preview and whole in the sheet. */
   body?: string;
   streaming?: boolean;
-  /** Opens the task's own session in place of the sheet with its brief and result. */
   onOpen?: () => void;
 }) {
   const tokens = mobileTokens();
@@ -5208,7 +5127,6 @@ function ReplyQuote({
   );
 }
 
-/** What a reply shows of the message it answers: the excerpt it quoted, or that message's text. */
 function replyQuote(message: MobileMessage, replyPreview: MobileMessage | undefined): string {
   const replyTo = message.role === "user" ? message.replyTo : undefined;
   if (!replyTo) return "";

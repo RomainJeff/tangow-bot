@@ -906,7 +906,6 @@ describe("a routine the bot proposes on its own", () => {
     const writtenCard = (f: ReturnType<typeof fixture>) =>
       (f.messageUpdate.mock.calls[0] as unknown as [{ data: { blocks: Row[] } }] | undefined)?.[0]
         .data.blocks[1];
-    /** The card's entry lives in the thread's session; what came of it is logged there. */
     const logged = (f: ReturnType<typeof fixture>) => {
       f.log.sessionEntry.findUnique.mockImplementation((async ({ where }: { where: Row }) =>
         where.id === "m2" ? { sessionId: "session-main" } : null) as never);

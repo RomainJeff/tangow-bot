@@ -158,7 +158,6 @@ describe("no consumer of a message's blocks repeats a preview's title (CA 12, CA
     expect(speechFromBlocks(blocks())).not.toContain("wire the money");
     expect(completionNotificationBody("", blocks())).toBe(`read ${LINK}`);
 
-    // What the user sees of a delegated run.
     const message = {
       id: "m1",
       threadId: "t1",

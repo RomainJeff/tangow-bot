@@ -20,7 +20,6 @@ type Phase = "listening" | "thinking" | "speaking";
 type AskAction = NonNullable<AskBlock["actions"]>[number];
 type PendingAsk = { block: AskBlock; target: CardAnswerTarget };
 
-/** What a call reads of the thread: its messages, whether a run works, the ask it waits on. */
 export type CallThread = {
   messages: readonly MessageItem[];
   running: boolean;

@@ -12,10 +12,6 @@ import { drawsNothing, RowMarker, rowChrome, ThreadRowBody } from "./thread-row"
 
 type Read = { entries: SessionEntry[] | null; failed: boolean };
 
-/**
- * A child session read whole, the helper's or the routine run's, as the thread draws it and with
- * nothing to act on. A routine or helper it names opens in its place.
- */
 export function SessionView({
   target,
   context,
@@ -53,7 +49,6 @@ export function SessionView({
     () =>
       read.entries
         ? projectThreadView(read.entries, {
-            // A run's entries carry its own routine.started, which would draw the run inside itself.
             rendersNothing: (item) =>
               drawsNothing(item, showSteps) ||
               (item.kind === "routine" && current.kind === "run" && item.runId === current.runId),

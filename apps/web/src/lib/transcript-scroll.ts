@@ -16,11 +16,6 @@ export function transcriptMovedDown(previousScrollTop: number | null, scrollTop:
   return previousScrollTop !== null && scrollTop >= previousScrollTop;
 }
 
-/**
- * B9: the rows that arrived after a `Transcript` mounted, which play the arrival beat. A row is
- * new when its id was absent at mount and it sits after the last row that was there: the first
- * load, a reopened thread and a "Load earlier messages" page all land at or before that row.
- */
 export function arrivedAfterMount(
   idsAtMount: ReadonlySet<string>,
   ids: readonly string[],

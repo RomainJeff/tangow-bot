@@ -18,7 +18,6 @@ import {
   withRefreshedEntries,
 } from "@rakazo/core";
 
-/** What the client holds of a thread: the wire snapshot, its progress events folded into a layer. */
 export type ThreadState = Omit<ThreadSnapshot, "progress"> & { layer: ProgressLayer };
 
 const runTriggers = new Set<Run["trigger"]>([
@@ -145,8 +144,7 @@ export function clearActiveThreadRuns(thread: ThreadState): ThreadState {
  * A refresh that started earlier can still return running+busyBotName after the client
  * already applied waiting_takeover. Cursor comparisons only apply within the same thread.
  * Stop clears run/busy optimistically in the shell because it has no terminal event; an
- * older-cursor refresh must keep that cleared local state (see Shell stopRun). A refresh
- * that keeps loaded history keeps the held entries older than its page and the older cursor.
+ * older-cursor refresh must keep that cleared local state (see Shell stopRun).
  */
 export function reconcileRefreshedThread(
   prev: ThreadState | null,
@@ -220,7 +218,6 @@ export function clearBusyWhileWaitingTakeover(
     : computer;
 }
 
-/** An older page merged before the held entries; a page for another thread changes nothing. */
 export function prependThreadMessagePage(
   prev: ThreadState | null,
   page: ThreadMessagePage,
@@ -281,8 +278,6 @@ export function reduceThreadState(
     const knownInActive = Boolean(
       runId && prev.activeRuns?.some((candidate) => candidate.id === runId),
     );
-    // Peer bot_message runs are omitted from snapshots while busy; the takeover request is
-    // how an open thread learns they need takeover UI.
     const needsInsert = Boolean(runId) && !knownInRun && !knownInActive;
     const runChanged = Boolean(knownInRun && prev.run && prev.run.status !== status);
     const activeRunChanged = Boolean(

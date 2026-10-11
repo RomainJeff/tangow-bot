@@ -23,17 +23,13 @@ type MessageItem = Extract<ThreadItem, { kind: "message" }>;
 type SubagentItem = Extract<ThreadItem, { kind: "subagent" }>;
 type DividerItem = Extract<ThreadItem, { kind: "divider" }>;
 
-/** Where a card that later entries settle sits: a block of a message, or an approval's card. */
 type CardSlot = { item: MessageItem; index: number } | { item: EffectItem };
 
-/** The card the thread waits on: an ask, a choice or an approval with no answer, in a run still open. */
 export type WaitingCard = { itemId: EntryId; entryId: EntryId; runId: string };
 
 export type ProjectedThread = {
   items: ThreadItem[];
-  /** The id of the item that shows each entry. */
   shownBy: Map<EntryId, EntryId>;
-  /** The id message actions name for an item, by item id: the published message it starts with. */
   messageIds: Map<EntryId, EntryId>;
   waiting: WaitingCard | null;
 };
@@ -46,26 +42,10 @@ const MESSAGE_ENTRY_TYPES = new Set<SessionEntry["type"]>([
   "assistant.choice",
 ]);
 
-/**
- * What a thread shows, from a page of a session's chain oldest first. See `projectThread`.
- */
 export function projectThreadItems(entries: readonly SessionEntry[]): ThreadItem[] {
   return projectThread(entries).items;
 }
 
-/**
- * What a thread shows, from a page of a session's chain oldest first. A run becomes one `run`
- * item where it started and one `message` item per unbroken stretch of its words, followed by a
- * running `subagent` item for each helper it launched that has not answered while the run is still
- * open; a routine run, whose words live in its own session, becomes one `routine` item its finish
- * fills in. A run whose start is outside the page gets no `run` item, though its words on the page
- * still show; an effect whose request is outside the page is left out, as is a tool result without
- * its call. An item whose entry rose from a child session names it as `origin`, with the
- * routine's or the helper's name when the page holds its start. Entries about an earlier card or
- * message settle that card or add to that message, and a reply that is a card's own answer record
- * shows as the answered card alone. A compaction's divider sits before the first item it did not
- * summarize.
- */
 export function projectThread(entries: readonly SessionEntry[]): ProjectedThread {
   const visible = entries.filter(isUiEntry);
   const received = new Map<string, SessionEntryOf<"bot.message.received">[]>();
@@ -488,7 +468,6 @@ export function projectThread(entries: readonly SessionEntry[]): ProjectedThread
   return { items, shownBy, messageIds, waiting };
 }
 
-/** Puts a finished run's wall-clock duration on the last steps block of its words. */
 function stampDuration(messages: readonly MessageItem[], durationMs: number) {
   for (const message of messages.toReversed()) {
     const index = message.blocks.findLastIndex((block) => block.kind === "steps");
@@ -508,7 +487,6 @@ function setCard(slot: CardSlot, block: MessageBlock) {
   else if (block.kind === "ask") slot.item.card = block;
 }
 
-/** The ask or choice of a message a reply or a settling entry is about: the first still open. */
 function questionAt(slots: readonly CardSlot[] | undefined) {
   const questions = (slots ?? []).filter(
     (slot): slot is Extract<CardSlot, { index: number }> =>

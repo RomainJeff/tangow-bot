@@ -23,13 +23,11 @@ export async function threadSessionId(prisma: ThreadDb, threadId: string): Promi
   return SessionId.parse(sessionId);
 }
 
-/** The entry an older page starts before: the page's oldest, unless the chain starts there. */
 function olderCursor(page: readonly SessionEntry[]): EntryId | null {
   const oldest = page[0];
   return oldest?.parentId ? oldest.id : null;
 }
 
-/** The page without a hidden peer run's work; its receipts, cards and words to the person stay. */
 async function withoutHiddenPeerRuns(
   prisma: ThreadDb,
   entries: readonly SessionEntry[],
@@ -38,10 +36,6 @@ async function withoutHiddenPeerRuns(
   return visibleEntries(entries, { hiddenPeerRunIds: await hiddenPeerRunIds(prisma, runIds) });
 }
 
-/**
- * A page of the thread's chain: before an entry, around one for a jump (the tail when the chain no
- * longer holds it), or the tail.
- */
 export async function loadEntryPage(
   deps: { prisma: ThreadDb; sessionLog: PageLog },
   { threadId, sessionId }: { threadId: string; sessionId: SessionId },
@@ -64,7 +58,6 @@ export async function loadEntryPage(
   };
 }
 
-/** Every message row of the thread, oldest first, for the bot export until the rows go. */
 export async function loadAllMessages(
   prisma: PrismaClient,
   threadId: string,
@@ -93,19 +86,12 @@ export async function isPeerRun(
   if (!runId) return false;
   let peerRun = cache.get(runId);
   if (!peerRun) {
-    // A top-level bot relaying delegated work is not a hidden peer run (CA5/CA6), so its live
-    // thread events forward too.
     peerRun = hiddenPeerRunIds(prisma, [runId]).then((ids) => ids.has(runId));
     cache.set(runId, peerRun);
   }
   return peerRun;
 }
 
-/**
- * What an open thread receives of a feed event: the entries an append carries, without a hidden
- * peer run's work, or nothing when none is left; any other event of a hidden peer run only when it
- * must still reach the thread.
- */
 export async function forwardedThreadEvent(
   prisma: ThreadDb,
   event: ProductEvent,
@@ -125,11 +111,6 @@ export async function forwardedThreadEvent(
   return visible.length > 0 ? { ...event, payload: { ...event.payload, entries: visible } } : null;
 }
 
-/**
- * A hidden peer run's events that still reach an open thread. The start drives the working
- * indicator and the terminals clear it again; without the pair an open chat sits inert for the
- * whole run and only catches up on reload. Its words, asks and receipts arrive as entries.
- */
 const FORWARDED_PEER_RUN_EVENTS: ReadonlySet<string> = new Set([
   "run.started",
   "run.completed",

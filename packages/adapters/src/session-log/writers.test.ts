@@ -1064,7 +1064,6 @@ describe("session log writers", () => {
   describe("a card's later state", () => {
     let fence = 0;
 
-    /** A run of `owner` paused on `blocks`, through the writer the executor calls. */
     async function paused(
       owner: Awaited<ReturnType<typeof seedBot>>,
       blocks: MessageBlock[],

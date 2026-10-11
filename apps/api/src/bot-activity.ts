@@ -133,7 +133,6 @@ export async function listBotActivity(
 
 type RunLogDeps = { prisma: PrismaClient; sessionLog: Pick<SessionLog<unknown>, "readRun"> };
 
-/** A run's entries from every session it wrote to, read only from the caller's own runs. */
 export async function readRunEntries(
   deps: RunLogDeps,
   actor: Actor,
@@ -147,7 +146,6 @@ export async function readRunEntries(
   return deps.sessionLog.readRun(run.id);
 }
 
-/** What a run said, from its entries; `messageId` names the entry its first words start at. */
 export async function readRunRecap(
   deps: RunLogDeps,
   actor: Actor,
