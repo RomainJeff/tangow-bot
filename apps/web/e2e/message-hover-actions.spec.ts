@@ -347,25 +347,18 @@ test("reply preview jumps to parent outside the loaded page", async ({ page }) =
   await expect(replyRow).toBeVisible({ timeout: 20_000 });
   await expect(replyRow.getByTestId("reply-parent-preview")).toContainText(/Got it\./);
 
-  // Simulate a paginated snapshot where the parent is older than the loaded page.
-  // Bootstrap and threads/get both hydrate the transcript on reload.
-  const stripParent = (body: {
-    json?: {
-      messages?: Array<{ id: string }>;
-      olderCursor?: number | null;
-      thread?: { messages?: Array<{ id: string }>; olderCursor?: number | null };
-    };
-  }) => {
-    if (body.json?.messages) {
-      body.json.messages = body.json.messages.filter((message) => message.id !== parentId);
-      body.json.olderCursor = body.json.olderCursor ?? 1;
-    }
-    if (body.json?.thread?.messages) {
-      body.json.thread.messages = body.json.thread.messages.filter(
-        (message) => message.id !== parentId,
-      );
-      body.json.thread.olderCursor = body.json.thread.olderCursor ?? 1;
-    }
+  // Simulate a paginated snapshot where the parent is older than the loaded page: the page starts
+  // after it, and the cursor names the oldest entry kept.
+  type LogPage = { entries?: Array<{ id: string; seq: number }>; olderCursor?: string | null };
+  const startAfterParent = (snapshot: LogPage | null | undefined) => {
+    const parent = snapshot?.entries?.find((entry) => entry.id === parentId);
+    if (!snapshot?.entries || !parent) return;
+    snapshot.entries = snapshot.entries.filter((entry) => entry.seq > parent.seq);
+    snapshot.olderCursor = snapshot.entries[0]?.id ?? null;
+  };
+  const stripParent = (body: { json?: LogPage & { thread?: LogPage | null } }) => {
+    startAfterParent(body.json);
+    startAfterParent(body.json?.thread);
   };
 
   // One handler for both hydrate RPCs avoids overlapping globs racing on reload

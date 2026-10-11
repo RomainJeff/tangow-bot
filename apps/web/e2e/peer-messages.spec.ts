@@ -1,5 +1,6 @@
 import { activeBotId, captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
 import { expect, test } from "./test";
+import { threadEntries } from "./thread-log";
 
 test("shows peer chips in transcript and opens view-only peer chat", async ({ page }, testInfo) => {
   const stamp = Date.now();
@@ -29,17 +30,12 @@ test("shows peer chips in transcript and opens view-only peer chat", async ({ pa
   await expect
     .poll(
       async () => {
-        const history = await rpc<{
-          messages: Array<{ blocks: Array<{ kind: string; text?: string }> }>;
-        }>(page, "threads/messages", { botId: chiefId, includePeerRuns: true });
-        const peerTexts = history.messages.flatMap((message) =>
-          message.blocks
-            .filter(
-              (block) => block.kind === "bot_message_sent" || block.kind === "bot_message_received",
-            )
-            .map((block) => block.text ?? ""),
+        const entries = await threadEntries(page, { botId: chiefId, includePeerRuns: true });
+        return entries.some(
+          (entry) =>
+            (entry.type === "bot.message.sent" || entry.type === "bot.message.received") &&
+            entry.payload.text.includes("peer-exchange-alpha"),
         );
-        return peerTexts.some((text) => text.includes("peer-exchange-alpha"));
       },
       { timeout: 60_000 },
     )
