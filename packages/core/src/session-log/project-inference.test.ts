@@ -123,6 +123,82 @@ describe("projectInferenceTurns", () => {
     ]);
   });
 
+  it("says which routine or helper a risen question, choice or card came from when the chain names it", () => {
+    const chain = linkEntries("org", [
+      {
+        botId: "bot_ada",
+        runId: "run_veille",
+        type: "routine.started",
+        payload: {
+          sessionId: "ses_veille",
+          routineId: "rtn_veille",
+          name: "Veille presse",
+          trigger: "routine",
+          scheduledAt: "2026-10-10T07:00:00.000Z",
+          model: { provider: "emulator", id: "emulator-1" },
+        },
+      },
+      {
+        botId: "bot_ada",
+        runId: "run_veille",
+        type: "assistant.ask",
+        payload: { originSessionId: "ses_veille", block: { kind: "ask", text: "Which outlets?" } },
+      },
+      { type: "user.message", payload: { blocks: text("Le Monde"), source: "app" } },
+      {
+        botId: "bot_ada",
+        runId: "run_scout",
+        type: "assistant.choice",
+        payload: {
+          originSessionId: "ses_scout",
+          block: {
+            kind: "choice",
+            question: "Create Scout?",
+            options: [
+              { id: "yes", letter: "A", label: "Yes" },
+              { id: "no", letter: "B", label: "No" },
+            ],
+          },
+        },
+      },
+      {
+        botId: "bot_ada",
+        runId: "run_main",
+        type: "subagent",
+        payload: {
+          callId: "call_scout",
+          sessionId: "ses_scout",
+          name: "scout",
+          model: { provider: "emulator", id: "emulator-1" },
+          task: "Find a press bot",
+          status: "completed",
+          result: "Asked about Scout.",
+          usage: { inputTokens: 10, outputTokens: 2 },
+        },
+      },
+      { type: "user.message", payload: { blocks: text("A"), source: "app" } },
+      {
+        botId: "bot_ada",
+        runId: "run_gone",
+        type: "assistant.ask",
+        payload: { originSessionId: "ses_gone", block: { kind: "ask", text: "Still there?" } },
+      },
+    ]);
+
+    expect(turnsOf(chain, ada)).toEqual([
+      {
+        role: "user",
+        content:
+          '[context] The routine "Veille presse" started, scheduled for 2026-10-10T07:00:00.000Z.',
+      },
+      { role: "assistant", content: "[from routine Veille presse]\nWhich outlets?" },
+      { role: "user", content: "Le Monde" },
+      { role: "assistant", content: "[from subagent scout]\nCreate Scout?\nA. Yes\nB. No" },
+      { role: "user", content: "A" },
+      { role: "assistant", content: "Still there?" },
+    ]);
+  });
+
   it("replays a routine as the line where it started and its final words, or how it ended by name, where it finished", () => {
     const routine = (runId: string, name: string, trigger: "routine" | "webhook") => ({
       botId: "bot_ada",

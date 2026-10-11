@@ -4,8 +4,10 @@ import type {
   SessionEntry,
   SessionEntryOf,
   SessionEntryType,
+  SessionId,
 } from "@rakazo/contracts";
 import { appendToolCallSegment } from "../events.js";
+import { originSessionIdOf } from "./child-sessions.js";
 
 const FOLDED_TYPES = [
   "assistant.text",
@@ -25,6 +27,8 @@ type RunMessage = {
   runId: string;
   botId: string;
   blocks: MessageBlock[];
+  /** The child session the stretch rose from: a run writes to one session, so all of it did. */
+  originSessionId?: SessionId;
 };
 
 /**
@@ -43,6 +47,7 @@ export function foldRuns(
   const stretchOf = (entry: FoldedEntry) => {
     const stretch = open.get(entry.runId);
     if (stretch) return stretch;
+    const originSessionId = originSessionIdOf(entry);
     const message: RunMessage = {
       type: "run.message",
       id: entry.id,
@@ -50,6 +55,7 @@ export function foldRuns(
       runId: entry.runId,
       botId: entry.botId,
       blocks: [],
+      ...(originSessionId ? { originSessionId } : {}),
     };
     open.set(entry.runId, message);
     segments.push(message);

@@ -382,8 +382,21 @@ export type AgentHistoryTurnPart =
     };
 
 const itemBase = { id: EntryId, ts: IsoDate };
+/**
+ * The child session an item's entry rose from, named when the same page holds the routine's start
+ * or the helper's entry.
+ */
+const itemOrigin = {
+  origin: z
+    .object({
+      sessionId: SessionId,
+      kind: z.enum(["routine", "subagent"]).optional(),
+      name: z.string().optional(),
+    })
+    .optional(),
+};
 const noteFields = { id: true, ts: true, type: true, payload: true } as const;
-const noteKind = { kind: z.literal("note") };
+const noteKind = { kind: z.literal("note"), ...itemOrigin };
 
 /** What a thread renders, one item per kind. A run becomes a run item and a message per stretch. */
 export const ThreadItemSchema = z.discriminatedUnion("kind", [
@@ -393,6 +406,7 @@ export const ThreadItemSchema = z.discriminatedUnion("kind", [
       role: z.literal("user"),
       ...itemBase,
       ...UserMessagePayload.shape,
+      ...itemOrigin,
     }),
     z.object({
       kind: z.literal("message"),
@@ -402,6 +416,7 @@ export const ThreadItemSchema = z.discriminatedUnion("kind", [
       /** Absent for a bot's words outside any run. */
       runId: Id.optional(),
       blocks: z.array(MessageBlock),
+      ...itemOrigin,
     }),
   ]),
   z.object({
@@ -435,6 +450,7 @@ export const ThreadItemSchema = z.discriminatedUnion("kind", [
     fromBotId: Id,
     toBotId: Id,
     text: z.string(),
+    ...itemOrigin,
   }),
   z.discriminatedUnion("direction", [
     z.object({
@@ -448,6 +464,7 @@ export const ThreadItemSchema = z.discriminatedUnion("kind", [
       exchangeId: EntryId,
       /** The later `bot.message.received` of the same exchange in this session, if any. */
       answeredBy: EntryId.nullable(),
+      ...itemOrigin,
     }),
     z.object({
       kind: z.literal("botMessage"),
@@ -472,6 +489,7 @@ export const ThreadItemSchema = z.discriminatedUnion("kind", [
     effectKind: z.string(),
     proposal: JsonObject,
     decision: z.enum(["approved", "denied"]).nullable(),
+    ...itemOrigin,
   }),
   z.discriminatedUnion("type", [
     ComputerControlEntry.pick(noteFields).extend(noteKind),

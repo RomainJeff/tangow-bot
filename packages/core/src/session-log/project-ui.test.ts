@@ -445,6 +445,171 @@ describe("projectThreadItems", () => {
     ]);
   });
 
+  it("names the routine or the helper a risen entry came from when the page holds its start", () => {
+    const approval = {
+      kind: "mcp_approval",
+      name: "Press",
+      serverId: "mcp_press",
+      transport: "streamable_http",
+      endpoint: null,
+      needsOAuth: true,
+    };
+    const veille = { originSessionId: "ses_veille" };
+    const chain = linkEntries("org", [
+      {
+        botId: "bot_ada",
+        runId: "run_veille",
+        type: "routine.started",
+        payload: {
+          sessionId: "ses_veille",
+          routineId: "rtn_veille",
+          name: "Veille presse",
+          trigger: "routine",
+          scheduledAt: at(0),
+          model,
+        },
+      },
+      {
+        botId: "bot_ada",
+        runId: "run_veille",
+        type: "assistant.ask",
+        payload: { ...veille, block: { kind: "ask", text: "Which outlets?" } },
+      },
+      {
+        type: "user.message",
+        payload: {
+          ...veille,
+          blocks: text("Le Monde"),
+          replyTo: { entryId: "org-1" },
+          source: "app",
+        },
+      },
+      {
+        botId: "bot_ada",
+        runId: "run_veille",
+        type: "assistant.text",
+        payload: { ...veille, blocks: [approval] },
+      },
+      { type: "user.message", payload: { blocks: text("Thanks."), source: "app" } },
+      {
+        botId: "bot_ada",
+        runId: "run_scout",
+        type: "effect.requested",
+        payload: {
+          originSessionId: "ses_scout",
+          effectId: "effect_1",
+          effectKind: "spawn_bot",
+          proposal: { name: "Scout" },
+        },
+      },
+      {
+        botId: "bot_ada",
+        runId: "run_main",
+        type: "subagent",
+        payload: {
+          callId: "call_scout",
+          sessionId: "ses_scout",
+          name: "scout",
+          model,
+          task: "Find a press bot",
+          status: "completed",
+          result: "Asked for Scout.",
+          usage: { inputTokens: 10, outputTokens: 2 },
+        },
+      },
+      {
+        botId: "bot_ada",
+        type: "skill.saved",
+        payload: { originSessionId: "ses_gone", skillId: "skill_1", name: "Digest" },
+      },
+    ]);
+    const fromVeille = { sessionId: "ses_veille", kind: "routine", name: "Veille presse" };
+
+    expect(projectThreadItems(chain)).toEqual([
+      {
+        kind: "routine",
+        id: "org-0",
+        ts: at(0),
+        runId: "run_veille",
+        botId: "bot_ada",
+        sessionId: "ses_veille",
+        routineId: "rtn_veille",
+        name: "Veille presse",
+        finished: null,
+      },
+      {
+        kind: "message",
+        role: "bot",
+        id: "org-1",
+        ts: at(1),
+        botId: "bot_ada",
+        runId: "run_veille",
+        blocks: [{ kind: "ask", text: "Which outlets?" }],
+        origin: fromVeille,
+      },
+      {
+        kind: "message",
+        role: "user",
+        id: "org-2",
+        ts: at(2),
+        blocks: text("Le Monde"),
+        replyTo: { entryId: "org-1" },
+        source: "app",
+        origin: fromVeille,
+      },
+      {
+        kind: "message",
+        role: "bot",
+        id: "org-3",
+        ts: at(3),
+        botId: "bot_ada",
+        runId: "run_veille",
+        blocks: [approval],
+        origin: fromVeille,
+      },
+      {
+        kind: "message",
+        role: "user",
+        id: "org-4",
+        ts: at(4),
+        blocks: text("Thanks."),
+        source: "app",
+      },
+      {
+        kind: "effect",
+        id: "org-5",
+        ts: at(5),
+        effectId: "effect_1",
+        effectKind: "spawn_bot",
+        proposal: { name: "Scout" },
+        decision: null,
+        origin: { sessionId: "ses_scout", kind: "subagent", name: "scout" },
+      },
+      {
+        kind: "subagent",
+        id: "org-6",
+        ts: at(6),
+        runId: "run_main",
+        callId: "call_scout",
+        sessionId: "ses_scout",
+        name: "scout",
+        model,
+        task: "Find a press bot",
+        status: "completed",
+        result: "Asked for Scout.",
+        usage: { inputTokens: 10, outputTokens: 2 },
+      },
+      {
+        kind: "note",
+        id: "org-7",
+        ts: at(7),
+        type: "skill.saved",
+        payload: { originSessionId: "ses_gone", skillId: "skill_1", name: "Digest" },
+        origin: { sessionId: "ses_gone" },
+      },
+    ]);
+  });
+
   it("gives a subagent its own item that points at the child session", async () => {
     expect(projectThreadItems(await fixtureChain("subagent"))).toEqual([
       {
