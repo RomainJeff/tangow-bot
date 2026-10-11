@@ -2,6 +2,13 @@ import { useLingui } from "@lingui/react/macro";
 import type { ThinkingLevel } from "@rakazo/contracts";
 import { BOT_DESCRIPTION_MAX_LENGTH, BOT_INSTRUCTIONS_MAX_LENGTH } from "@rakazo/contracts";
 import {
+  botModelKey,
+  catalogLabel,
+  connectedModelOptions,
+  parseModelOptionKey,
+  thinkingChoices,
+} from "@rakazo/core";
+import {
   NativeSelect,
   NativeSelectOption,
   SaveMeta,
@@ -10,16 +17,7 @@ import {
   TextSettingField,
 } from "@rakazo/ui-web";
 import { type FocusEvent, useId, useRef } from "react";
-import {
-  botModelKey,
-  catalogLabel,
-  connectedModelOptions,
-  parseModelOptionKey,
-  thinkingChoices,
-  thinkingLevelLabel,
-  useModelCatalog,
-  useVoices,
-} from "./model-options";
+import { thinkingLevelLabel, useModelCatalog, useVoices } from "./model-options";
 import { type BotPageContext, SettingsGroup, useBotField, useSaveLabels } from "./page-kit";
 
 /** Instructions or Description, edited at full height in the wide panel. */

@@ -33,6 +33,8 @@ export interface AnswerOrder {
   read(key: string, request: number): boolean;
   /** The record was removed: no answer to a call started before may bring it back. */
   close(key: string): void;
+  /** Forgets every record, as at sign-out. */
+  reset(): void;
 }
 
 /** `answered`: the newest request number issued when a write on the record last answered. */
@@ -82,6 +84,9 @@ export function createAnswerOrder(): AnswerOrder {
     },
     close(key) {
       claimsOf(key).newest = Number.POSITIVE_INFINITY;
+    },
+    reset() {
+      records.clear();
     },
   };
 }

@@ -1,4 +1,5 @@
 import * as SecureStore from "expo-secure-store";
+import { resetBotPage } from "./bot-page-state";
 import { stopLiveNotifications } from "./live-notifications";
 
 const SESSION_KEY = "rakazo.session_token";
@@ -20,6 +21,7 @@ export async function saveSessionToken(token: string) {
 
 /** Clears the session. Returns false only when SecureStore could neither delete nor overwrite. */
 export async function clearSessionToken(): Promise<boolean> {
+  resetBotPage();
   await stopLiveNotifications(true).catch(() => undefined);
   try {
     await SecureStore.deleteItemAsync(SESSION_KEY);

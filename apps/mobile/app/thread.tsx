@@ -169,7 +169,13 @@ import {
 import { mobileTokens, resolveMobileAppearance } from "../lib/appearance";
 import { type MobileArtifactTarget, openMobileArtifact } from "../lib/artifact-open";
 import { presentAttachSheet } from "../lib/attach-sheet";
-import { confirmDeleteBot } from "../lib/bot-lifecycle";
+import {
+  archiveBot,
+  clearConversation,
+  confirmClearConversation,
+  confirmDeleteBot,
+} from "../lib/bot-lifecycle";
+import { noteBotRunEnded } from "../lib/bot-page-state";
 import { CHAT_MOTION, useChatReducedMotion } from "../lib/chat-motion";
 import { cancelFocusPrompt, focusPromptThreadActive } from "../lib/focus-prompt";
 import { commitHaptic, selectionHaptic, sendHaptic, successHaptic } from "../lib/haptics";
@@ -786,16 +792,16 @@ function Thread() {
   useLayoutEffect(() => {
     navigation.setOptions({
       title: displayName || t("Thread"),
-      // Bot actions (chat settings, open computer, clear, archive, delete) now
-      // live on a long press; a short press still opens chat settings.
+      // Bot actions (bot settings, open computer, clear, archive, delete) live
+      // on a long press; a short press opens the bot's page.
       headerTitle: () => (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={!inGroup && botId ? t("Chat settings") : displayName || t("Thread")}
+          accessibilityLabel={displayName || t("Thread")}
           disabled={inGroup || !botId}
           onPress={() => {
             if (!botId || inGroup) return;
-            router.push({ pathname: "/bot-settings", params: { botId } });
+            router.push({ pathname: "/bot", params: { botId } });
           }}
           onLongPress={!inGroup && botId ? () => showBotActionsRef.current() : undefined}
           style={{
@@ -894,30 +900,26 @@ function Thread() {
     router.replace("/");
   }
 
-  function clearConversation() {
+  function clearThread() {
     if (!botId) return;
     setError(null);
-    void rpc("threads/clear", { botId })
-      .then(() => {
-        expandedHistoryThread.current = null;
-        pinnedAroundRef.current = null;
-        historyEpoch.current += 1;
-        setSnap((current) =>
-          current ? { ...current, messages: [], olderCursor: null, run: null } : current,
-        );
-      })
-      .catch((err: unknown) =>
-        setError(err instanceof Error ? err.message : t("Could not clear conversation")),
+    clearConversation(botId, () => {
+      expandedHistoryThread.current = null;
+      pinnedAroundRef.current = null;
+      historyEpoch.current += 1;
+      setSnap((current) =>
+        current ? { ...current, messages: [], olderCursor: null, run: null } : current,
       );
+    });
   }
 
   const botActions = [
     {
-      text: t("Chat settings"),
+      text: t("Bot settings"),
       onPress: () =>
         router.push({
-          pathname: "/bot-settings",
-          params: { botId: botId ?? "" },
+          pathname: "/bot",
+          params: { botId: botId ?? "", tab: "settings" },
         }),
     },
     {
@@ -931,33 +933,13 @@ function Thread() {
     {
       text: t("Clear conversation"),
       destructive: true,
-      onPress: () =>
-        Alert.alert(
-          t("Clear conversation?"),
-          t(
-            "This removes every message and stops current work. The bot, computer, memory, and routines are kept.",
-          ),
-          [
-            { text: t("Cancel"), style: "cancel" },
-            {
-              text: t("Clear"),
-              style: "destructive",
-              onPress: clearConversation,
-            },
-          ],
-        ),
+      onPress: () => confirmClearConversation(clearThread),
     },
     {
       text: t("Archive"),
-      onPress: () =>
-        void rpc("bots/archive", { botId })
-          .then(leaveBot)
-          .catch((error) =>
-            Alert.alert(
-              t("Could not archive bot"),
-              error instanceof Error ? error.message : t("Try again."),
-            ),
-          ),
+      onPress: () => {
+        if (botId) archiveBot(botId, leaveBot);
+      },
     },
     {
       text: t("Delete…"),
@@ -1218,6 +1200,7 @@ function Thread() {
                 markReadIfVisible();
               }
               if (isRunTerminalEvent(event)) {
+                if (botId) noteBotRunEnded(botId);
                 void refreshMentionBots();
                 if (!jumpScrollTarget.current && !expandedHistoryThread.current) {
                   void refresh().catch(() => undefined);
@@ -1389,7 +1372,7 @@ function Thread() {
       if (inGroup && groupId) {
         router.push({ pathname: "/group-settings", params: { groupId } });
       } else if (botId) {
-        router.push({ pathname: "/bot-settings", params: { botId } });
+        router.push({ pathname: "/bot", params: { botId, tab: "settings" } });
       }
       return;
     }
@@ -3738,12 +3721,8 @@ const MessageBubble = memo(function MessageBubble({
           accessibilityRole="link"
           onPress={() =>
             router.push({
-              pathname: "/routine",
-              params: {
-                botId: cardBotId,
-                botName: memberName(members, cardBotId) ?? botName ?? "",
-                routineId: created.id,
-              },
+              pathname: "/bot-routine",
+              params: { botId: cardBotId, routineId: created.id },
             })
           }
           style={{ flexDirection: "row", alignItems: "center", gap: 4, flexShrink: 1 }}

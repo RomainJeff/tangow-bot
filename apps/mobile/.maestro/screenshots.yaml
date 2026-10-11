@@ -146,21 +146,19 @@ tags:
 - tapOn: "Reply"
 - assertVisible: "Replying to"
 - tapOn: "Cancel reply"
-# Bot actions now live on a long press of the header title (its accessible
-# name is "Chat settings"; a short press opens the chat settings screen).
-- longPressOn: "Chat settings"
+# Bot actions live on a long press of the header title (its accessible name
+# is the bot's name; a short press opens the bot's page).
+- longPressOn: "Researcher"
 - assertVisible: "Clear conversation"
 - takeScreenshot: "16-bot-actions"
 - back
 
-- openLink: "rakazo:///bot-settings?botId=${RAKAZO_SCREENSHOT_BOT_ID}"
+- openLink: "rakazo:///bot?botId=${RAKAZO_SCREENSHOT_BOT_ID}&tab=settings"
 - extendedWaitUntil:
-    visible: "Researcher"
+    visible: "Instructions"
     timeout: 10000
-- assertVisible: "Advanced"
-- tapOn: "Advanced"
+- assertVisible: "Voice and replies"
 - assertVisible: "Model"
-# Label includes the resolved space model, e.g. "Space default (OpenAI: …)".
 - assertVisible: "Space default.*"
 - takeScreenshot: "17-bot-settings"
 
@@ -187,7 +185,7 @@ tags:
     timeout: 10000
 - takeScreenshot: "20-group-settings"
 
-- openLink: "rakazo:///routine?botId=${RAKAZO_SCREENSHOT_BOT_ID}&botName=Researcher&routineId=${RAKAZO_SCREENSHOT_ROUTINE_ID}"
+- openLink: "rakazo:///bot-routine?botId=${RAKAZO_SCREENSHOT_BOT_ID}&routineId=${RAKAZO_SCREENSHOT_ROUTINE_ID}"
 - extendedWaitUntil:
     visible: "Weekly fixture review"
     timeout: 10000

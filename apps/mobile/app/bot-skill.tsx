@@ -1,4 +1,5 @@
 import type { AgentSkill } from "@rakazo/contracts";
+import { parseSkillMd } from "@rakazo/core";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { Alert, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput } from "react-native";
@@ -13,33 +14,38 @@ import { serverMessage } from "../lib/server-error";
 import { skillDirty, skillText } from "../lib/skill-draft";
 import { nativeTextStyle } from "../lib/typography";
 
-const loadSkill = (skillId: string) => rpc<AgentSkill>("agentSkills/get", { skillId });
-
 /**
  * One skill's SKILL.md, edited like a memory document with Cancel and Save.
  * The id changes when the name does, so the one a save returns is the one kept.
  */
 export default function BotSkillScreen() {
-  const { skillId: linked = "" } = useLocalSearchParams<{ botId: string; skillId: string }>();
+  const { skillId: linked = "" } = useLocalSearchParams<{ skillId: string }>();
   const [skillId, setSkillId] = useState(linked);
   const styles = useThemedStyles(createSkillStyles);
   const tokens = useMobileTokens();
   const colorScheme = useResolvedAppearance();
   const { t } = useI18n();
   const router = useRouter();
-  const { read, setRead, retry } = useFocusedRead(() => loadSkill(skillId), [skillId]);
+  const { read, write, retry } = useFocusedRead(
+    () => rpc<AgentSkill>("agentSkills/get", { skillId }),
+    [skillId],
+  );
   const [draft, setDraft] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
 
   const skill = read.kind === "ready" ? read.value : null;
   const content = skill?.content ?? null;
   const editing = draft !== null;
   const dirty = skillDirty(content, draft);
+  const parsed = dirty && draft?.trim() ? parseSkillMd(draft) : null;
+  const draftError = parsed && "error" in parsed ? parsed.error : null;
+  const saveDisabled = busy || !dirty || Boolean(draftError) || !draft?.trim();
 
   const stopEditing = () => {
     Keyboard.dismiss();
     setDraft(null);
+    setFailed(null);
   };
   const cancel = () => {
     if (!dirty) {
@@ -48,24 +54,21 @@ export default function BotSkillScreen() {
     }
     Alert.alert(t("Discard changes?"), undefined, [
       { text: t("Keep editing"), style: "cancel" },
-      {
-        text: t("Discard"),
-        style: "destructive",
-        onPress: stopEditing,
-      },
+      { text: t("Discard"), style: "destructive", onPress: stopEditing },
     ]);
   };
   const save = async () => {
-    if (busy || !dirty) return;
+    if (saveDisabled) return;
     setBusy(true);
-    setFailed(false);
+    setFailed(null);
+    const settle = write();
     try {
-      const saved = await rpc<AgentSkill>("agentSkills/update", { skillId, content: draft ?? "" });
+      const saved = await rpc<AgentSkill>("agentSkills/update", { skillId, content: draft });
       setSkillId(saved.id);
-      setRead({ kind: "ready", value: await loadSkill(saved.id) });
+      settle(() => ({ kind: "ready", value: saved }));
       stopEditing();
-    } catch {
-      setFailed(true);
+    } catch (error) {
+      setFailed(serverMessage(error) || t("Could not save skill"));
     } finally {
       setBusy(false);
     }
@@ -131,7 +134,7 @@ export default function BotSkillScreen() {
                   type: "button",
                   label: busy ? t("Saving…") : t("Save"),
                   variant: "done",
-                  disabled: busy || !dirty,
+                  disabled: saveDisabled,
                   onPress: () => void save(),
                 },
               ]
@@ -140,10 +143,10 @@ export default function BotSkillScreen() {
             ? () => (
                 <Pressable
                   accessibilityRole="button"
-                  disabled={busy || !dirty}
+                  disabled={saveDisabled}
                   hitSlop={8}
                   onPress={() => void save()}
-                  style={busy || !dirty ? styles.headerDisabled : undefined}
+                  style={saveDisabled ? styles.headerDisabled : undefined}
                 >
                   <Text style={styles.headerSaveLabel}>{busy ? t("Saving…") : t("Save")}</Text>
                 </Pressable>
@@ -161,7 +164,7 @@ export default function BotSkillScreen() {
           keyboardDismissMode="on-drag"
           automaticallyAdjustKeyboardInsets
         >
-          {failed ? <Text style={styles.error}>{t("Could not save")}</Text> : null}
+          {failed ? <Text style={styles.error}>{failed}</Text> : null}
           <TextInput
             accessibilityLabel={skill.name}
             value={skillText(content, draft)}
@@ -174,6 +177,11 @@ export default function BotSkillScreen() {
             placeholderTextColor={tokens.mutedForeground}
             style={styles.field}
           />
+          {draftError ? (
+            <Text style={styles.error} accessibilityRole="alert">
+              {draftError}
+            </Text>
+          ) : null}
         </ScrollView>
       ) : null}
     </>
@@ -184,7 +192,7 @@ function createSkillStyles() {
   const tokens = mobileTokens();
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: tokens.background },
-    content: { paddingHorizontal: 16, paddingBottom: 48, gap: 28 },
+    content: { paddingHorizontal: 16, paddingBottom: 48, gap: 12 },
     headerCancel: { paddingEnd: 20, paddingVertical: 8, justifyContent: "center" },
     headerCancelLabel: { color: native.label, ...nativeTextStyle("body", { size: 17 }) },
     headerSaveLabel: {

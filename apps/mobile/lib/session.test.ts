@@ -1,5 +1,7 @@
+import { saveKey } from "@rakazo/core";
 import * as SecureStore from "expo-secure-store";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { botSaves } from "./bot-page-state.js";
 import {
   clearSessionToken,
   loadSessionToken,
@@ -32,6 +34,13 @@ describe("mobile session storage", () => {
 
     expect(SecureStore.setItemAsync).toHaveBeenCalledWith("rakazo.session_token", "secret-token");
     expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith("rakazo.session_token");
+  });
+
+  it("forgets unsaved bot drafts when the session is cleared", async () => {
+    const key = saveKey({ userId: "user-1", spaceId: "space-1" }, "bot-1", "instructions");
+    botSaves.setDraft(key, "Half-written", "");
+    await clearSessionToken();
+    expect(botSaves.draft(key)).toBeUndefined();
   });
 
   it("overwrites the token when SecureStore delete fails", async () => {

@@ -363,6 +363,24 @@ describe("mobile API authentication", () => {
     vi.mocked(SecureStore.getItemAsync).mockResolvedValue("session-token");
     vi.stubGlobal(
       "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          jsonResponse(
+            { json: { code: "BAD_REQUEST", status: 400, message: "Name is required" } },
+            { status: 400 },
+          ),
+        ),
+    );
+    await expect(
+      rpc("bots/update", { botId: "bot-1", name: "" }).catch(serverMessage),
+    ).resolves.toBe("Name is required");
+  });
+
+  it("reports the reason the server gives for something that does not exist", async () => {
+    vi.mocked(SecureStore.getItemAsync).mockResolvedValue("session-token");
+    vi.stubGlobal(
+      "fetch",
       vi.fn().mockResolvedValueOnce(
         jsonResponse(
           {
@@ -395,7 +413,7 @@ describe("mobile API authentication", () => {
       ),
     );
     await expect(
-      rpc("routines/remove", { routineId: "routine-1" }).catch(serverMessage),
+      rpc("bots/update", { botId: "bot-1", name: "Scout" }).catch(serverMessage),
     ).resolves.toBe("");
   });
 

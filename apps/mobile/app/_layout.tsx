@@ -156,7 +156,6 @@ export default function Layout() {
                 <Stack.Screen name="voice" options={{ title: t("Voice") }} />
                 <Stack.Screen name="integrations" options={{ title: t("Integrations") }} />
                 <Stack.Screen name="skills" options={{ title: t("Skills") }} />
-                <Stack.Screen name="bot-skill" />
                 <Stack.Screen
                   name="new"
                   options={{
@@ -185,10 +184,39 @@ export default function Layout() {
                 />
                 <Stack.Screen name="group-thread" options={{ title: t("Group") }} />
                 <Stack.Screen name="group-settings" options={{ title: t("Group settings") }} />
-                <Stack.Screen name="bot-settings" options={{ title: t("Chat settings") }} />
+                <Stack.Screen
+                  name="bot"
+                  options={{
+                    title: "",
+                    headerBackTitle: t("Chat"),
+                    headerBackButtonDisplayMode: "default",
+                  }}
+                />
+                <Stack.Screen
+                  name="bot-text"
+                  options={{ presentation: "fullScreenModal", gestureEnabled: false }}
+                />
+                <Stack.Screen name="bot-routine" />
+                <Stack.Screen name="bot-routine-new" options={{ title: t("New routine") }} />
+                <Stack.Screen name="bot-model" options={{ title: t("Model") }} />
+                <Stack.Screen name="bot-voice" options={{ title: t("Voice and replies") }} />
+                <Stack.Screen name="bot-choice" options={{ title: "" }} />
+                <Stack.Screen
+                  name="bot-appearance"
+                  options={{
+                    title: t("Appearance"),
+                    presentation: "formSheet",
+                    sheetAllowedDetents: "fitToContents",
+                    sheetGrabberVisible: true,
+                    headerShown: false,
+                  }}
+                />
+                <Stack.Screen name="bot-memory" options={{ presentation: "modal" }} />
+                <Stack.Screen name="bot-skill" />
+                <Stack.Screen name="bot-files" options={{ title: t("Files") }} />
+                <Stack.Screen name="bot-file" options={{ title: t("Files") }} />
                 <Stack.Screen name="thread" options={{ title: t("Thread") }} />
                 <Stack.Screen name="peer-messages" options={{ title: t("Bot chat") }} />
-                <Stack.Screen name="routine" options={{ title: t("Routine") }} />
                 <Stack.Screen name="computer" options={{ title: t("Computer") }} />
               </Stack>
               <ComputerUpdateProgress />
