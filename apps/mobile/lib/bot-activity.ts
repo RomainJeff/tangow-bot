@@ -26,9 +26,14 @@ export function failureReason(kind: RunFailureKind | null): string | null {
   return null;
 }
 
+type RunRow = Pick<
+  RunActivityRow,
+  "botId" | "botName" | "groupId" | "groupName" | "sourceMessageId"
+>;
+
 /** Where a run opens: its bot's thread or its group, at `sourceMessageId` when there is one. */
-export function runDestination(
-  row: Pick<RunActivityRow, "botId" | "botName" | "groupId" | "groupName" | "sourceMessageId">,
+function runDestination(
+  row: RunRow,
 ):
   | { pathname: "/thread"; params: { botId: string; name: string; messageId?: string } }
   | { pathname: "/group-thread"; params: { groupId: string; name: string; messageId?: string } } {
@@ -39,4 +44,24 @@ export function runDestination(
         params: { groupId: row.groupId, name: row.groupName ?? "", ...at },
       }
     : { pathname: "/thread", params: { botId: row.botId, name: row.botName, ...at } };
+}
+
+/**
+ * How a screen above the chats opens a run: back down to its chat when that is the nearest chat
+ * of its kind in `routes`, otherwise on top. Going back to another bot's or group's chat would
+ * turn that screen into this one.
+ */
+export function runOpening(
+  routes: readonly { name: string; params?: object }[],
+  row: RunRow,
+): { via: "dismissTo" | "push"; to: ReturnType<typeof runDestination> } {
+  const to = runDestination(row);
+  const below: { botId?: unknown; groupId?: unknown } | undefined = routes.findLast(
+    (route) => `/${route.name}` === to.pathname,
+  )?.params;
+  const same =
+    to.pathname === "/thread"
+      ? below?.botId === to.params.botId
+      : below?.groupId === to.params.groupId;
+  return { via: same ? "dismissTo" : "push", to };
 }

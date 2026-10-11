@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { runDestination } from "./bot-activity";
+import { runOpening } from "./bot-activity";
 
 const row = {
   botId: "bot-1",
@@ -10,16 +10,42 @@ const row = {
 };
 
 describe("opening a run from the bot's activity", () => {
-  it("opens the bot's thread at the message the run left", () => {
-    expect(runDestination(row)).toEqual({
-      pathname: "/thread",
-      params: { botId: "bot-1", name: "Scout", messageId: "message-1" },
+  it("goes back to the bot's thread below, at the message the run left", () => {
+    const routes = [
+      { name: "index" },
+      { name: "thread", params: { botId: "bot-1", name: "Scout" } },
+      { name: "bot", params: { botId: "bot-1" } },
+      { name: "bot-routine", params: { botId: "bot-1", routineId: "routine-1" } },
+    ];
+    expect(runOpening(routes, row)).toEqual({
+      via: "dismissTo",
+      to: {
+        pathname: "/thread",
+        params: { botId: "bot-1", name: "Scout", messageId: "message-1" },
+      },
     });
   });
 
-  it("opens a group run in its group, at the latest messages when none is known", () => {
+  it("opens a group run on top, at the latest messages, when its group is not below", () => {
+    const routes = [
+      { name: "index" },
+      { name: "thread", params: { botId: "bot-1", name: "Scout" } },
+      { name: "bot", params: { botId: "bot-1" } },
+    ];
     expect(
-      runDestination({ ...row, groupId: "group-1", groupName: "Ops", sourceMessageId: null }),
-    ).toEqual({ pathname: "/group-thread", params: { groupId: "group-1", name: "Ops" } });
+      runOpening(routes, { ...row, groupId: "group-1", groupName: "Ops", sourceMessageId: null }),
+    ).toEqual({
+      via: "push",
+      to: { pathname: "/group-thread", params: { groupId: "group-1", name: "Ops" } },
+    });
+  });
+
+  it("opens on top rather than turn another bot's thread below into this one", () => {
+    const routes = [
+      { name: "index" },
+      { name: "thread", params: { botId: "bot-2", name: "Echo" } },
+      { name: "bot-routine", params: { botId: "bot-1", routineId: "routine-1" } },
+    ];
+    expect(runOpening(routes, row).via).toBe("push");
   });
 });

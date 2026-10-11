@@ -1,5 +1,5 @@
 import { routineFailing } from "@rakazo/core";
-import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { Stack, useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useCallback, useRef, useState, useSyncExternalStore } from "react";
 import { Alert, Keyboard, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { ActivityTab } from "../components/bot-page/activity-tab";
@@ -10,7 +10,7 @@ import { RoutinesTab, useRoutines } from "../components/bot-page/routines-tab";
 import { SettingsTab } from "../components/bot-page/settings-tab";
 import { NativeSymbol } from "../components/native-symbol";
 import { rpc } from "../lib/api";
-import { runDestination } from "../lib/bot-activity";
+import { runOpening } from "../lib/bot-activity";
 import { archiveBot, confirmClearConversation, confirmDeleteBot } from "../lib/bot-lifecycle";
 import { readBotPage, readViewer, useBotPageContext } from "../lib/bot-page";
 import { botRunEpoch, subscribeBotRunEnds } from "../lib/bot-page-state";
@@ -27,6 +27,7 @@ export default function BotPageScreen() {
   const { botId = "", tab } = useLocalSearchParams<{ botId: string; tab?: string }>();
   const { t } = useI18n();
   const router = useRouter();
+  const navigation = useNavigation();
   const tokens = useMobileTokens();
   const colorScheme = useResolvedAppearance();
   const page = useBotPageContext(botId);
@@ -139,7 +140,12 @@ export default function BotPageScreen() {
                   epoch={epoch}
                   // An archived bot's chat cannot be opened, nor its routines or instructions.
                   onOpenRun={
-                    page.readOnly ? undefined : (row) => router.dismissTo(runDestination(row))
+                    page.readOnly
+                      ? undefined
+                      : (row) => {
+                          const { via, to } = runOpening(navigation.getState()?.routes ?? [], row);
+                          router[via](to);
+                        }
                   }
                   onOpenRoutine={
                     page.readOnly
