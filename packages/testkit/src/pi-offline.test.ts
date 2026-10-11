@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type { AgentRunRequest, AgentRuntimeEvent, ConnectorTool } from "@rakazo/adapter-kit";
 import { PiAgentRuntime } from "@rakazo/adapters";
+import { SessionEntrySchema } from "@rakazo/contracts";
+import { projectInferenceTurns } from "@rakazo/core";
 import { afterEach, describe, expect, it } from "vitest";
 import { type ModelEmulatorRequest, startModelEmulator } from "./model-emulator.js";
 
@@ -135,6 +137,79 @@ describe("real Pi against an offline model HTTP endpoint", () => {
     ]);
     expect(await readFile(path.join(dir, "notes.txt"), "utf8")).toBe("hello\n");
     expect(events.at(-1)).toEqual({ type: "done", text: "Saved notes.txt." });
+  });
+
+  it("sends the run's source once as the prompt and its claimed steering once, by the entry ids history turns carry", async () => {
+    const entry = (seq: number, body: object) =>
+      SessionEntrySchema.parse({
+        id: `entry-${seq}`,
+        sessionId: "ses_dedup",
+        seq,
+        parentId: seq === 0 ? null : `entry-${seq - 1}`,
+        ts: new Date(Date.UTC(2026, 9, 11, 9, 0, seq)).toISOString(),
+        ...body,
+      });
+    const said = (seq: number, text: string) =>
+      entry(seq, {
+        type: "user.message",
+        payload: { blocks: [{ kind: "text", text }], source: "app" },
+      });
+    const history = projectInferenceTurns(
+      [
+        said(0, "What changed?"),
+        entry(1, {
+          botId: "fixture-bot",
+          runId: "run-before",
+          type: "assistant.text",
+          payload: { blocks: [{ kind: "text", text: "Two files." }] },
+        }),
+        said(2, "Summarize them."),
+        said(3, "Also the tests."),
+      ],
+      { selfBotId: "fixture-bot" },
+    );
+    const prompt = "Current date and time: Sunday.\n\nSummarize them.";
+    const textOf = (content: unknown) =>
+      typeof content === "string"
+        ? content
+        : (content as Array<{ text?: string }>).map((part) => part.text ?? "").join("");
+    const server = await startModelEmulator({
+      steps: [
+        {
+          expect(request) {
+            expect(
+              request.messages
+                .filter((message) => message.role !== "system")
+                .map((message) => ({ role: message.role, text: textOf(message.content) })),
+            ).toEqual([
+              { role: "user", text: "What changed?" },
+              { role: "assistant", text: "Two files." },
+              { role: "user", text: `${prompt}\n\nAdditional user context:\nAlso the tests.` },
+            ]);
+          },
+          response: { type: "text", text: "Two files changed, tests included." },
+        },
+      ],
+    });
+    cleanups.push(() => server.close());
+    let claims = 0;
+
+    await collect(
+      new PiAgentRuntime().run(
+        runRequest(server.model, {
+          prompt,
+          history,
+          tools: [],
+          sourceMessageId: "entry-2",
+          claimSteering: async () =>
+            claims++ === 0
+              ? [{ id: "steering-1", messageId: "entry-3", text: "Also the tests." }]
+              : [],
+        }),
+      ),
+    );
+
+    server.assertComplete();
   });
 
   it("returns tool failure to the model and continues without claiming a successful write", async () => {

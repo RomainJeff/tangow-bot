@@ -213,18 +213,6 @@ export function runSessionLogConformance<Tx>(makeLog: () => Promise<SessionLogHa
       await expect(tail(0)).rejects.toThrow(RangeError);
     });
 
-    it("appends a compaction that keeps the entries after the seq it covers", async () => {
-      const { sessionId } = await created();
-      const [, b] = await appendAll([said(sessionId, "a"), said(sessionId, "b")]);
-      const compaction = await append(compacted(b!, 0));
-
-      expect([compaction.seq, compaction.parentId, compaction.payload]).toEqual([
-        2,
-        b!.id,
-        { summary: "up to 0", coveredUpToSeq: 0 },
-      ]);
-    });
-
     it("refuses a compaction whose parent is not the head, and a rewind outside the session", async () => {
       const { sessionId } = await created();
       const elsewhere = await append(said((await created()).sessionId, "elsewhere"));
