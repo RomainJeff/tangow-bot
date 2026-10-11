@@ -55,7 +55,11 @@ import type { SessionEntries } from "./bot-activity.js";
 import { readCappedRun } from "./bot-activity.js";
 import { resolveBusyBotName, toComputerStatus } from "./computer-status.js";
 import { withSerializableRetry } from "./serializable-retry.js";
-import { loadEntryPage, threadSessionId } from "./thread-message-pages.js";
+import {
+  loadEntryPage,
+  threadSessionId,
+  withoutHiddenPeerRuns,
+} from "./thread-message-pages.js";
 
 export type ThreadTarget =
   | {
@@ -469,7 +473,7 @@ export async function threadHead(prisma: PrismaClient, target: ThreadTarget) {
 /**
  * The cursor, the tail page and the progress to replay are read under the thread's share lock,
  * which every append takes for update, so no entry lands between them and the replayed progress
- * never repeats text the page already holds.
+ * never repeats text the page already holds. Hidden peer runs are filtered out after commit.
  */
 export async function threadSnapshot(
   deps: {
@@ -554,7 +558,7 @@ export async function threadSnapshot(
         const page = await loadEntryPage(
           { prisma: tx, sessionLog: deps.sessionLog },
           { threadId: target.threadId, sessionId },
-          {},
+          { includePeerRuns: true },
         );
         return { last, run: currentRun, progress, page };
       }),
@@ -564,7 +568,7 @@ export async function threadSnapshot(
       botId: target.botId,
       threadId: target.threadId,
       cursor: core.last?.seq ?? -1,
-      entries: page.entries,
+      entries: await withoutHiddenPeerRuns(deps.prisma, page.entries),
       olderCursor: page.olderCursor,
       progress: core.progress,
       run: core.run ? mapRun(core.run) : null,
@@ -615,7 +619,7 @@ export async function threadSnapshot(
     const page = await loadEntryPage(
       { prisma: tx, sessionLog: deps.sessionLog },
       { threadId: target.threadId, sessionId },
-      {},
+      { includePeerRuns: true },
     );
     return {
       last,
@@ -633,7 +637,7 @@ export async function threadSnapshot(
     members: target.members,
     threadId: target.threadId,
     cursor: core.last?.seq ?? -1,
-    entries: page.entries,
+    entries: await withoutHiddenPeerRuns(deps.prisma, page.entries),
     olderCursor: page.olderCursor,
     progress: core.progress,
     // Match the live reducer: a failed latest terminal stays in run even while siblings are

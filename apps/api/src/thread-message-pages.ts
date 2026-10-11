@@ -28,7 +28,7 @@ function olderCursor(page: readonly SessionEntry[]): EntryId | null {
   return oldest?.parentId ? oldest.id : null;
 }
 
-async function withoutHiddenPeerRuns(
+export async function withoutHiddenPeerRuns(
   prisma: ThreadDb,
   entries: readonly SessionEntry[],
 ): Promise<SessionEntry[]> {
