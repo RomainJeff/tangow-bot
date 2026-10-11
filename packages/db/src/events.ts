@@ -176,6 +176,8 @@ export interface PauseRunForInput {
   offeredActions?: Array<{ id: string; label: string }>;
   /** The effect an approval card asks about; its proposal is already redacted. */
   effect?: { id: string; kind: string; proposal: Record<string, unknown> };
+  /** The logged tool call the run pauses on, which gets its one result here, naming the pause. */
+  pausedCall?: { sessionId: string; botId: string; runId: string; callId: string; output: string };
 }
 
 const CHOICE_ASK_CHECKPOINT_KIND = "choice_ask_v1";
@@ -1555,6 +1557,15 @@ export async function pauseRunForInput(
         { id: message.id, runId: input.runId, botId: input.botId },
         input.blocks,
       );
+    }
+    if (input.pausedCall) {
+      const { sessionId, callId, output, ...log } = input.pausedCall;
+      await appendSessionEntryInTransaction(tx, {
+        ...log,
+        sessionId: sessionId as SessionId,
+        type: "tool.result",
+        payload: { callId, output, isError: false, artifactIds: [] },
+      });
     }
     await appendEventInTransaction(tx, {
       spaceId: input.spaceId,

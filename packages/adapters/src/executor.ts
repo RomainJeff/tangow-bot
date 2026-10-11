@@ -1925,7 +1925,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           if (detail) detail.output = describeToolPayload(result);
         };
         const runLog: RunLog = { sessionId: run.sessionId as SessionId, runId, botId: bot.id };
-        const resumedCalls = new Set<string>();
+        const unansweredCalls = new Map<string, string>();
         const logEntry = (draft: SessionEntryDraft) =>
           deps.prisma.$transaction((tx) => deps.sessionLog.append(tx, draft));
         const announcesTools = deps.runtime.describe().capabilities.streaming;
@@ -1948,15 +1948,23 @@ export function createRunExecutor(deps: ExecutorDeps) {
             type: "tool.call",
             payload: { callId, name, input: redactSecrets(describeToolPayload(args), runSecrets) },
           }) satisfies ToolLogEntry;
+        /**
+         * A call the log holds without a result is one the worker was running when it stopped. The
+         * runtime replays it under its id with the same input, and that replay keeps its entry; a
+         * reused id with other input is a new call.
+         */
         const runLoggedTool = async (
+          log: RunLog,
           write: (entry: ToolLogEntry) => Promise<unknown>,
           name: string,
           args: Record<string, unknown>,
           executionId: string,
           trace?: ToolCallTrace,
         ) => {
-          if (!resumedCalls.delete(executionId)) await write(toolCall(executionId, name, args));
-          const result = await applyTool(name, args, executionId, trace);
+          const call = toolCall(executionId, name, args);
+          if (unansweredCalls.get(executionId) !== call.payload.input) await write(call);
+          unansweredCalls.delete(executionId);
+          const result = await applyTool(name, args, executionId, log, trace);
           recordToolOutput(executionId, result);
           if (!isToolPauseResult(result)) {
             await write({
@@ -2035,7 +2043,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             inOrder(() => logEntry({ ...helper.log, ...entry }));
           return {
             executeTool: (name, args, executionId, _route, trace) =>
-              runLoggedTool(writeHelperEntry, name, args, executionId, trace),
+              runLoggedTool(helper.log, writeHelperEntry, name, args, executionId, trace),
             text: (text) =>
               inOrder(() =>
                 logEntry({
@@ -2206,6 +2214,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           name: string,
           args: Record<string, unknown>,
           executionId: string,
+          callLog: RunLog,
           trace?: ToolCallTrace,
         ) => {
           context.signal.throwIfAborted();
@@ -2709,6 +2718,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   redactConnectorPayload(applied!.effect.request, runSecrets),
                 ),
               },
+              pausedCall: pausedCall(callLog, executionId, "approval"),
             });
             // pauseRunForInput returning false after a successful renew means the run row no
             // longer matches this worker. Exiting via pauseForApproval() would leave the run
@@ -3857,6 +3867,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   status: "pending",
                 },
               ],
+              pausedCall: pausedCall(callLog, executionId, "answer"),
             });
             if (!paused) {
               throw new Error("Could not pause this run for protected input; try sending again.");
@@ -4400,14 +4411,14 @@ export function createRunExecutor(deps: ExecutorDeps) {
             historyMessagesAvailable,
             historyWindowMode,
           });
-          for (const callId of await openRunLog(
+          for (const [callId, input] of await openRunLog(
             deps,
             run,
             runLog,
             { provider: runModelProvider, id: runModelId },
             effort,
           )) {
-            resumedCalls.add(callId);
+            unansweredCalls.set(callId, input);
           }
           const runtimeEvents = deps.runtime.run(
             {
@@ -4444,7 +4455,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 ? undefined
                 : async (name, args, executionId, _route, trace) => {
                     await afterToolAnnounced(executionId);
-                    return runLoggedTool(writeRunEntry, name, args, executionId, trace);
+                    return runLoggedTool(runLog, writeRunEntry, name, args, executionId, trace);
                   },
               startSubagent: scripted ? undefined : startSubagent,
               resolveModel: scripted
@@ -4773,6 +4784,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 const startedAt = Date.now();
                 try {
                   const result = await runLoggedTool(
+                    runLog,
                     writeRunEntry,
                     event.name,
                     event.args,
@@ -5653,6 +5665,10 @@ type ToolLogEntry =
   | { type: "tool.call"; payload: SessionEntryOf<"tool.call">["payload"] }
   | { type: "tool.result"; payload: SessionEntryOf<"tool.result">["payload"] };
 
+function pausedCall(log: RunLog, callId: string, awaiting: "approval" | "answer") {
+  return { ...log, callId, output: `paused: awaiting ${awaiting}` };
+}
+
 function effectProposal(request: unknown): Record<string, unknown> {
   return request && typeof request === "object" && !Array.isArray(request)
     ? (request as Record<string, unknown>)
@@ -5693,18 +5709,18 @@ async function openRunLog(
   log: RunLog,
   model: { provider: string; id: string },
   effort: SessionEntryOf<"run.started">["payload"]["effort"],
-): Promise<Set<string>> {
+): Promise<Map<string, string>> {
   return deps.prisma.$transaction(async (tx) => {
     const written = await tx.sessionEntry.findMany({
       where: { runId: run.id, type: { in: ["run.started", "tool.call", "tool.result"] } },
       orderBy: { seq: "asc" },
       select: { type: true, payload: true },
     });
-    const awaitingResult = new Set<string>();
+    const awaitingResult = new Map<string, string>();
     for (const { type, payload } of written) {
       if (type === "run.started") continue;
-      const { callId } = payload as { callId: string };
-      if (type === "tool.call") awaitingResult.add(callId);
+      const { callId, input } = payload as { callId: string; input?: string };
+      if (type === "tool.call") awaitingResult.set(callId, input ?? "");
       else awaitingResult.delete(callId);
     }
     if (written.length === 0) {

@@ -170,48 +170,116 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
     );
   }, 30_000);
 
-  it("logs an edited approval between the paused call and the approved call's result", async () => {
-    const spawn = (id: string, instructions: string) =>
+  it("gives every call one result when the run pauses for an answer, then an approval", async () => {
+    const secret = {
+      label: "API key",
+      purpose: "api_key",
+      credential: {
+        name: "example_api",
+        origin: "https://api.example.test",
+        auth: { type: "bearer" },
+      },
+    };
+    const spawn = (instructions: string) =>
       ({
         type: "tool",
-        id,
+        id: "journey-spawn",
         name: "spawn_bot",
         arguments: { name: "Scout", instructions, computer_mode: "team" },
       }) as const;
     await journey(
       [
-        { expect() {}, response: spawn("journey-spawn", "You are Scout.") },
-        { expect() {}, response: spawn("journey-approved", EDITED_INSTRUCTIONS) },
-        { expect() {}, response: { type: "text", text: "Created Scout." } },
+        {
+          expect() {},
+          response: { type: "tool", id: "journey-ask", name: "request_secret", arguments: secret },
+        },
+        {
+          expect() {},
+          response: { type: "tool", id: "journey-ask", name: "request_secret", arguments: secret },
+        },
+        { expect() {}, response: spawn("You are Scout.") },
+        { expect() {}, response: spawn(EDITED_INSTRUCTIONS) },
+        { expect() {}, response: { type: "text", text: "Saved the key and created Scout." } },
       ],
-      async (fixture) => {
-        const entries = await approveEdited(fixture, "Create a bot named Scout.");
-        expect(entries.map((entry) => [entry.type, payloadOf(entry).callId])).toEqual([
-          ["run.started", undefined],
-          ["tool.call", "journey-spawn"],
-          ["effect.requested", undefined],
-          ["effect.edited", undefined],
-          ["effect.resolved", undefined],
-          ["tool.call", "journey-approved"],
-          ["assistant.text", undefined],
-          ["tool.result", "journey-approved"],
-          ["assistant.text", undefined],
-          ["run.finished", undefined],
+      async ({ app, cookie, bot, prisma, send, log }) => {
+        const sent = await send("Save my API key, then create Scout.");
+        const answerCard = async (answer: string, edits?: Record<string, string>) => {
+          await sent.settled("waiting_input");
+          const card = await prisma.message.findFirstOrThrow({
+            where: { runId: sent.runId, role: "bot" },
+            orderBy: { seq: "desc" },
+          });
+          await rpc(app, cookie, "threads/answer", {
+            botId: bot.id,
+            runId: sent.runId,
+            messageId: card.id,
+            answer,
+            ...(edits ? { edits } : {}),
+          });
+        };
+        await answerCard("journey-secret-value");
+        await answerCard("allow", { instructions: EDITED_INSTRUCTIONS });
+        await sent.settled("completed");
+
+        const entries = await log.readRun(sent.runId);
+        expect(
+          entries.map((entry) => [entry.type, payloadOf(entry).callId, payloadOf(entry).output]),
+        ).toEqual([
+          ["run.started", undefined, undefined],
+          ["tool.call", "journey-ask", undefined],
+          ["assistant.ask", undefined, undefined],
+          ["tool.result", "journey-ask", "paused: awaiting answer"],
+          ["tool.call", "journey-ask", undefined],
+          ["tool.result", "journey-ask", expect.any(String)],
+          ["tool.call", "journey-spawn", undefined],
+          ["effect.requested", undefined, undefined],
+          ["tool.result", "journey-spawn", "paused: awaiting approval"],
+          ["effect.edited", undefined, undefined],
+          ["effect.resolved", undefined, undefined],
+          ["tool.call", "journey-spawn", undefined],
+          ["assistant.text", undefined, undefined],
+          ["tool.result", "journey-spawn", expect.any(String)],
+          ["assistant.text", undefined, undefined],
+          ["run.finished", undefined, undefined],
         ]);
+        const spawnCalls = entries.filter(
+          (entry) => entry.type === "tool.call" && payloadOf(entry).name === "spawn_bot",
+        );
+        expect(
+          spawnCalls.map((entry) => String(payloadOf(entry).input).includes("venues")),
+        ).toEqual([false, true]);
+        const [requested, edited, resolved] = entries.filter((entry) =>
+          entry.type.startsWith("effect."),
+        );
+        expect([
+          payloadOf(requested).proposal,
+          payloadOf(edited).proposal,
+          payloadOf(resolved).decision,
+        ]).toMatchObject([
+          { instructions: "You are Scout." },
+          { instructions: EDITED_INSTRUCTIONS },
+          "approved",
+        ]);
+        expect(JSON.stringify(entries)).not.toContain("journey-secret-value");
       },
     );
   }, 30_000);
 
-  it("logs one call for a request the scripted runtime replays under the same id", async () => {
+  it("gives a call the scripted runtime replays under its id a result of its own", async () => {
     await journey(
       [],
       async (fixture) => {
         const entries = await approveEdited(fixture, "spawn a bot named Scout to research venues");
-        const calls = entries.filter((entry) => entry.type === "tool.call");
-        expect(calls.map((entry) => payloadOf(entry).name)).toEqual(["spawn_bot"]);
+        const tools = entries.filter((entry) => entry.type.startsWith("tool."));
+        const callId = payloadOf(tools[0]).callId;
         expect(
-          entries.filter((entry) => payloadOf(entry).callId === payloadOf(calls[0]).callId),
-        ).toHaveLength(2);
+          tools.map((entry) => [entry.type, payloadOf(entry).callId, payloadOf(entry).output]),
+        ).toEqual([
+          ["tool.call", callId, undefined],
+          ["tool.result", callId, "paused: awaiting approval"],
+          ["tool.call", callId, undefined],
+          ["tool.result", callId, expect.stringContaining("Scout")],
+        ]);
       },
       "scripted",
     );
