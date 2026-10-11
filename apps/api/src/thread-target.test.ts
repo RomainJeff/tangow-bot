@@ -218,7 +218,7 @@ describe("threadSnapshot", () => {
 
     const snapshot = await threadSnapshot({ prisma, sessionLog }, target);
 
-    expect(sessionLog.readPage).toHaveBeenCalledWith("session-1", { limit: 100 });
+    expect(sessionLog.readPage).toHaveBeenCalledWith("session-1", { limit: 400 });
     expect({
       cursor: snapshot.cursor,
       entries: snapshot.entries,

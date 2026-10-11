@@ -13,7 +13,7 @@ import { hiddenPeerRunIds, type Prisma, type PrismaClient } from "@rakazo/db";
 type ThreadDb = PrismaClient | Prisma.TransactionClient;
 type PageLog = Pick<SessionLog<unknown>, "readPage" | "readAround">;
 
-const THREAD_PAGE_SIZE = 100;
+const THREAD_PAGE_SIZE = 400;
 
 export async function threadSessionId(prisma: ThreadDb, threadId: string): Promise<SessionId> {
   const { sessionId } = await prisma.thread.findUniqueOrThrow({
