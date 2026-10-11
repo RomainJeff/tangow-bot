@@ -8,7 +8,7 @@ function said(id: string, seq: number): SessionEntry {
     id,
     sessionId: "session-1",
     seq,
-    parentId: null,
+    parentId: seq === 0 ? null : "parent",
     ts: "2026-10-11T08:00:00.000Z",
     type: "user.message",
     payload: { blocks: [{ kind: "text", text: id }], source: "app" },

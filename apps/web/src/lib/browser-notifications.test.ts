@@ -16,7 +16,7 @@ function appended(type: "assistant.text" | "user.message", text: string) {
     id: "entry-1",
     sessionId: "session-1",
     seq: 3,
-    parentId: null,
+    parentId: "parent",
     ts: "2026-10-11T08:00:00.000Z",
     ...(type === "assistant.text"
       ? { botId: "bot-1", runId: "run-1", type, payload: { blocks: [{ kind: "text", text }] } }

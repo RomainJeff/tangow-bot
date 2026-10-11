@@ -270,10 +270,11 @@ export function reduceThreadState(
   if (event.type === "session.entry.appended" || event.type === "thread.progress") {
     // The layer appends deltas, so an event the held state already covers must not apply twice.
     if (event.seq <= prev.cursor) return prev;
+    const appended = appendedEntries(event);
     return {
       ...prev,
       cursor: event.seq,
-      entries: mergeEntries(prev.entries, appendedEntries(event)),
+      entries: appended.length > 0 ? mergeEntries(prev.entries, appended) : prev.entries,
       layer: reduceProgressLayer(prev.layer, event),
     };
   }

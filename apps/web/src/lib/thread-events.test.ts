@@ -1,5 +1,7 @@
+import { readFileSync } from "node:fs";
 import type { ComputerStatus, ProductEvent, SessionEntry, ThreadSnapshot } from "@rakazo/contracts";
 import { SessionEntrySchema } from "@rakazo/contracts";
+import { projectThreadView } from "@rakazo/core";
 import { describe, expect, it } from "vitest";
 import type { ThreadState } from "./thread-events.js";
 import {
@@ -494,6 +496,290 @@ describe("thread event reduction", () => {
   });
 });
 
+describe("a streamed reply fed through the reducer", () => {
+  const fixture = readFileSync(
+    new URL(
+      "../../../../packages/core/src/session-log/fixtures/streamed-reply.jsonl",
+      import.meta.url,
+    ),
+    "utf8",
+  )
+    .trim()
+    .split("\n")
+    .map((line) => SessionEntrySchema.parse(JSON.parse(line)));
+  const entry = (id: string) => fixture.find((candidate) => candidate.id === id)!;
+  const appendedAt = (seq: number, ...ids: string[]) =>
+    event({
+      id: `appended-${seq}`,
+      seq,
+      type: "session.entry.appended",
+      runId: undefined,
+      payload: { entries: ids.map(entry) },
+    });
+  const delta = (seq: number, runId: string, text: string) =>
+    event({ id: `progress-${seq}`, seq, type: "thread.progress", runId, payload: { delta: text } });
+  const runEvent = (seq: number, type: ProductEvent["type"], runId: string) =>
+    event({ id: `${type}-${seq}`, seq, type, runId, payload: { trigger: "user" } });
+
+  const asked = "user: Find three competitors and summarize Acme's site";
+  const steps = "steps Web search, Run subagent";
+  const answered = `bot: ${steps} | Acme, Globex, Initech | ask Compare prices too? (answered)`;
+  const scout = "subagent scout completed";
+  const summary = "bot: Summary of https://acme.example";
+  const firstRun = [asked, "run completed", answered, scout, "user: Yes", summary];
+  const idle = { run: null, streaming: [], waiting: null };
+  const working = (runId: string, streaming: string[] = []) => ({
+    run: `${runId} running`,
+    streaming,
+    waiting: null,
+  });
+
+  /** One event, then the reducer fields it moves and what each row of the thread shows. */
+  const script: [ProductEvent, ReturnType<typeof state>][] = [
+    [appendedAt(1, "str-00"), { cursor: 1, ...idle, rows: [asked] }],
+    [
+      runEvent(2, "run.started", "run_str_1"),
+      { cursor: 2, ...working("run_str_1"), rows: [asked] },
+    ],
+    [appendedAt(3, "str-01"), { cursor: 3, ...working("run_str_1"), rows: [asked, "run running"] }],
+    [
+      appendedAt(4, "str-02"),
+      {
+        cursor: 4,
+        ...working("run_str_1"),
+        rows: [asked, "run running", "bot: steps Web search"],
+      },
+    ],
+    [
+      appendedAt(5, "str-03"),
+      {
+        cursor: 5,
+        ...working("run_str_1"),
+        rows: [asked, "run running", "bot: steps Web search"],
+      },
+    ],
+    [
+      appendedAt(6, "str-04"),
+      {
+        cursor: 6,
+        ...working("run_str_1"),
+        rows: [asked, "run running", `bot: ${steps}`, "subagent scout running"],
+      },
+    ],
+    [
+      appendedAt(7, "str-05"),
+      { cursor: 7, ...working("run_str_1"), rows: [asked, "run running", `bot: ${steps}`, scout] },
+    ],
+    [
+      delta(8, "run_str_1", "Acme, "),
+      {
+        cursor: 8,
+        ...working("run_str_1", ["run_str_1"]),
+        rows: [asked, "run running", `bot: ${steps}`, scout, "bot live: Acme, "],
+      },
+    ],
+    [
+      delta(9, "run_str_1", "Globex, Initech"),
+      {
+        cursor: 9,
+        ...working("run_str_1", ["run_str_1"]),
+        rows: [asked, "run running", `bot: ${steps}`, scout, "bot live: Acme, Globex, Initech"],
+      },
+    ],
+    [
+      appendedAt(10, "str-06"),
+      {
+        cursor: 10,
+        ...working("run_str_1"),
+        rows: [asked, "run running", `bot: ${steps} | Acme, Globex, Initech`, scout],
+      },
+    ],
+    [
+      appendedAt(11, "str-07"),
+      {
+        cursor: 11,
+        ...working("run_str_1"),
+        waiting: "str-07",
+        rows: [
+          asked,
+          "run running",
+          `bot: ${steps} | Acme, Globex, Initech | ask Compare prices too?`,
+          scout,
+        ],
+      },
+    ],
+    [
+      appendedAt(12, "str-08"),
+      {
+        cursor: 12,
+        ...working("run_str_1"),
+        rows: [asked, "run running", answered, scout, "user: Yes"],
+      },
+    ],
+    [
+      delta(13, "run_str_1", "Summary of "),
+      {
+        cursor: 13,
+        ...working("run_str_1", ["run_str_1"]),
+        rows: [asked, "run running", answered, scout, "user: Yes", "bot live: Summary of "],
+      },
+    ],
+    [
+      appendedAt(14, "str-09"),
+      {
+        cursor: 14,
+        ...working("run_str_1"),
+        rows: [asked, "run running", answered, scout, "user: Yes", summary],
+      },
+    ],
+    [appendedAt(15, "str-10"), { cursor: 15, ...working("run_str_1"), rows: firstRun }],
+    [runEvent(16, "run.completed", "run_str_1"), { cursor: 16, ...idle, rows: firstRun }],
+    [
+      appendedAt(17, "str-11"),
+      {
+        cursor: 17,
+        ...idle,
+        rows: [...firstRun.slice(0, -1), `${summary} | link_preview`],
+      },
+    ],
+    [appendedAt(18, "str-12"), { cursor: 18, ...idle, rows: firstRun }],
+    [
+      appendedAt(19, "str-13"),
+      { cursor: 19, ...idle, rows: [...firstRun, "user: And for Initech?"] },
+    ],
+    [
+      runEvent(20, "run.started", "run_str_2"),
+      { cursor: 20, ...working("run_str_2"), rows: [...firstRun, "user: And for Initech?"] },
+    ],
+    [
+      appendedAt(21, "str-14"),
+      {
+        cursor: 21,
+        ...working("run_str_2"),
+        rows: [...firstRun, "user: And for Initech?", "run running"],
+      },
+    ],
+    [
+      delta(22, "run_str_2", "Initech sells"),
+      {
+        cursor: 22,
+        ...working("run_str_2", ["run_str_2"]),
+        rows: [...firstRun, "user: And for Initech?", "run running", "bot live: Initech sells"],
+      },
+    ],
+    [
+      delta(23, "run_str_2", " printers."),
+      {
+        cursor: 23,
+        ...working("run_str_2", ["run_str_2"]),
+        rows: [
+          ...firstRun,
+          "user: And for Initech?",
+          "run running",
+          "bot live: Initech sells printers.",
+        ],
+      },
+    ],
+    [
+      appendedAt(24, "str-15", "str-16"),
+      {
+        cursor: 24,
+        ...working("run_str_2"),
+        rows: [
+          ...firstRun,
+          "user: And for Initech?",
+          "run completed",
+          "bot: Initech sells printers.",
+        ],
+      },
+    ],
+    [
+      runEvent(25, "run.completed", "run_str_2"),
+      {
+        cursor: 25,
+        ...idle,
+        rows: [
+          ...firstRun,
+          "user: And for Initech?",
+          "run completed",
+          "bot: Initech sells printers.",
+        ],
+      },
+    ],
+    [appendedAt(26, "str-17"), { cursor: 26, ...idle, rows: [...firstRun, "divider rewind"] }],
+    [
+      appendedAt(27, "str-18"),
+      { cursor: 27, ...idle, rows: [...firstRun, "divider rewind", "user: And for Globex?"] },
+    ],
+  ];
+
+  /** What each row shows: its kind, then the words or the state it carries. */
+  function shown(thread: ThreadState | null): string[] {
+    const view = projectThreadView(thread?.entries ?? [], { progress: thread?.layer });
+    return view.rows.map(({ item }) => {
+      switch (item.kind) {
+        case "message":
+          return `${item.role}${item.role === "bot" && item.live ? " live" : ""}: ${item.blocks
+            .map((block) =>
+              block.kind === "text" || block.kind === "progress"
+                ? block.text
+                : block.kind === "ask"
+                  ? `ask ${block.text}${block.status === "answered" ? " (answered)" : ""}`
+                  : block.kind === "steps"
+                    ? `steps ${block.steps.map((step) => step.label).join(", ")}`
+                    : block.kind,
+            )
+            .join(" | ")}`;
+        case "run":
+          return `run ${item.finished?.outcome.status ?? "running"}`;
+        case "subagent":
+          return `subagent ${item.name} ${item.status}`;
+        case "divider":
+          return `divider ${item.reason}`;
+        default:
+          return item.kind;
+      }
+    });
+  }
+
+  function state(thread: ThreadState | null) {
+    const view = projectThreadView(thread?.entries ?? [], { progress: thread?.layer });
+    return {
+      cursor: thread?.cursor,
+      run: thread?.run ? `${thread.run.id} ${thread.run.status}` : null,
+      streaming: [...(thread?.layer.keys() ?? [])],
+      waiting: view.waiting ? String(view.waiting.entryId) : null,
+      rows: shown(thread),
+    };
+  }
+
+  it("shows each step's words once, the same from a snapshot taken mid-run", () => {
+    let live: ThreadState | null = { ...threadStateOf(wire()), cursor: 0 };
+    let reloaded: ThreadState | null = null;
+    for (const [next, expected] of script) {
+      live = reduceThreadState(live, next);
+      // The server's snapshot mid-run: the entries so far and the open run's newer deltas.
+      reloaded =
+        next.seq === 9
+          ? threadStateOf({
+              ...wire(fixture.slice(0, 6)),
+              cursor: 9,
+              progress: [script[7]![0], script[8]![0]],
+              run: live?.run ?? null,
+              activeRuns: live?.activeRuns,
+            })
+          : reloaded && reduceThreadState(reloaded, next);
+
+      expect(state(live)).toEqual(expected);
+      if (reloaded) expect(state(reloaded)).toEqual(expected);
+      const words = shown(live).join("\n");
+      for (const reply of ["Acme, Globex, Initech", "Summary of", "Initech sells printers."]) {
+        expect(words.split(reply).length).toBeLessThanOrEqual(2);
+      }
+    }
+  });
+});
+
 describe("computer event reduction", () => {
   it("applies valid lifecycle states without accepting unknown states", () => {
     const initial = computer();
@@ -661,7 +947,7 @@ function said(seq: number, text: string): SessionEntry {
     id: `e-${seq}`,
     sessionId: "session-1",
     seq,
-    parentId: null,
+    parentId: seq === 0 ? null : "parent",
     ts: "2026-08-16T00:00:00.000Z",
     type: "user.message",
     payload: { blocks: [{ kind: "text", text }], source: "app" },
