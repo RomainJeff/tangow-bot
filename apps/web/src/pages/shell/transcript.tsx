@@ -158,7 +158,11 @@ export const Transcript = memo(function Transcript({
       onOpenBot,
       onOpenPeerMessages,
       onOpenSession: setSessionTarget,
-      onJumpToMessage,
+      // A jump the person asked for leaves the end, so the next streamed row must not pull back.
+      onJumpToMessage: (messageId) => {
+        following.current = false;
+        onJumpToMessage(messageId);
+      },
       onRefresh,
       onBotChanged,
       onAddRoutine,
