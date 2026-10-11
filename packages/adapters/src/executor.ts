@@ -18,6 +18,7 @@ import type {
   NotificationProvider,
   SandboxProvider,
   SemanticMemoryProvider,
+  SessionLog,
   ToolCallTrace,
   WebProvider,
 } from "@rakazo/adapter-kit";
@@ -635,6 +636,7 @@ function runtimeFallbackModel(runtime: AgentRuntime) {
 export interface ExecutorDeps {
   prisma: PrismaClient;
   events: ThreadEvents;
+  sessionLog: SessionLog<Prisma.TransactionClient>;
   runtime: AgentRuntime;
   sandbox: SandboxProvider;
   memory: MemoryStore;
