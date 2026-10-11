@@ -3,24 +3,32 @@ import type {
   ProductEvent,
   Run,
   RunStatus,
-  ThreadMessage,
   ThreadMessagePage,
   ThreadSnapshot,
 } from "@rakazo/contracts";
+import type { ProgressLayer } from "@rakazo/core";
 import {
-  applyThreadRewind,
+  appendedEntries,
   isActive,
   isRunTerminalEvent,
-  mergeMessageUpdate,
-  mergeThreadHistory,
-  prependThreadHistoryPage,
-  progressMessageId,
-  reduceLiveMessageBlocks,
+  mergeEntries,
+  reduceProgressLayer,
   runFailureError,
-  subagentBlockFromPayload,
-  takeLiveMessage,
-  upsertMessageById,
 } from "@rakazo/core";
+
+/** What the client holds of a thread: the wire snapshot, its progress events folded into a layer. */
+export type ThreadState = Omit<ThreadSnapshot, "progress"> & { layer: ProgressLayer };
+
+export function threadStateOf(snapshot: ThreadSnapshot): ThreadState {
+  const { progress, ...state } = snapshot;
+  return {
+    ...state,
+    layer: progress.reduce<ProgressLayer>(
+      (layer, event) => reduceProgressLayer(layer, event),
+      new Map(),
+    ),
+  };
+}
 
 const runTriggers = new Set<Run["trigger"]>([
   "user",
@@ -68,9 +76,9 @@ const computerStates: ReadonlySet<unknown> = new Set<ComputerStatus["state"]>([
 ]);
 
 export function activeThreadRuns(
-  snapshot: ThreadSnapshot | null,
-): NonNullable<ThreadSnapshot["activeRuns"]> {
-  return snapshot?.activeRuns ?? (snapshot?.run ? [snapshot.run] : []);
+  thread: Pick<ThreadState, "activeRuns" | "run"> | null,
+): NonNullable<ThreadState["activeRuns"]> {
+  return thread?.activeRuns ?? (thread?.run ? [thread.run] : []);
 }
 
 /**
@@ -82,26 +90,26 @@ export function activeThreadRuns(
  * next durable event or refresh still supplies the authoritative status.
  */
 export function applyThreadSendReceipt(
-  snapshot: ThreadSnapshot | null,
+  thread: ThreadState | null,
   receipt: { botId: string; runId: string; taskId: string; createdAt?: string },
   terminalRunIds: ReadonlySet<string> = new Set(),
-): ThreadSnapshot | null {
+): ThreadState | null {
   if (
-    !snapshot ||
-    snapshot.groupId ||
-    snapshot.botId !== receipt.botId ||
-    snapshot.run?.id === receipt.runId ||
+    !thread ||
+    thread.groupId ||
+    thread.botId !== receipt.botId ||
+    thread.run?.id === receipt.runId ||
     terminalRunIds.has(receipt.runId)
   ) {
-    return snapshot;
+    return thread;
   }
-  const currentRuns = activeThreadRuns(snapshot);
-  if (currentRuns.some((run) => isActive(run.status as RunStatus))) return snapshot;
+  const currentRuns = activeThreadRuns(thread);
+  if (currentRuns.some((run) => isActive(run.status as RunStatus))) return thread;
   const createdAt = receipt.createdAt ?? new Date().toISOString();
   const run: Run = {
     id: receipt.runId,
     botId: receipt.botId,
-    threadId: snapshot.threadId,
+    threadId: thread.threadId,
     taskId: receipt.taskId,
     status: "queued",
     trigger: "user",
@@ -113,45 +121,31 @@ export function applyThreadSendReceipt(
     completedAt: null,
     createdAt,
   };
-  return { ...snapshot, run, activeRuns: [run] };
+  return { ...thread, run, activeRuns: [run] };
 }
 
 /** Reason the newest run stopped, until the reader dismisses that run's failure. */
 export function threadRunError(
-  snapshot: ThreadSnapshot | null,
+  thread: Pick<ThreadState, "run"> | null,
   dismissedRunIds?: ReadonlySet<string>,
 ): string | null {
-  const run = snapshot?.run;
+  const run = thread?.run;
   if (run?.status !== "failed" || dismissedRunIds?.has(run.id)) return null;
   return run.error ?? null;
 }
 
-export function clearActiveThreadRuns(snapshot: ThreadSnapshot): ThreadSnapshot {
-  const runIds = new Set(activeThreadRuns(snapshot).map((run) => run.id));
-  const computer = snapshot.computer?.busyBotName
-    ? { ...snapshot.computer, busyBotName: null }
-    : snapshot.computer;
+export function clearActiveThreadRuns(thread: ThreadState): ThreadState {
+  const runIds = new Set(activeThreadRuns(thread).map((run) => run.id));
+  const computer = thread.computer?.busyBotName
+    ? { ...thread.computer, busyBotName: null }
+    : thread.computer;
   return {
-    ...snapshot,
+    ...thread,
     run: null,
     activeRuns: [],
-    messages: snapshot.messages.filter(
-      (message) =>
-        !message.runId || !runIds.has(message.runId) || !message.id.startsWith("progress:"),
-    ),
+    layer: new Map([...thread.layer].filter(([runId]) => !runIds.has(runId))),
     computer,
   };
-}
-
-export function mergeThreadSnapshot(
-  prev: ThreadSnapshot | null,
-  next: ThreadSnapshot,
-  preserveLoadedHistory = false,
-): ThreadSnapshot {
-  // A threads.get started before SSE caught up must not wipe newer live state
-  // (e.g. ask cards applied after send's post-refresh request was already in flight).
-  if (prev && prev.threadId === next.threadId && prev.cursor > next.cursor) return prev;
-  return mergeThreadHistory(prev, next, preserveLoadedHistory);
 }
 
 /**
@@ -160,29 +154,23 @@ export function mergeThreadSnapshot(
  * A refresh that started earlier can still return running+busyBotName after the client
  * already applied waiting_takeover. Cursor comparisons only apply within the same thread.
  * Stop clears run/busy optimistically in the shell because it has no terminal event; an
- * older-cursor refresh must keep that cleared local state (see Shell stopRun).
+ * older-cursor refresh must keep that cleared local state (see Shell stopRun). A refresh
+ * that keeps loaded history keeps the held entries older than its page and the older cursor.
  */
 export function reconcileRefreshedThread(
-  prev: ThreadSnapshot | null,
+  prev: ThreadState | null,
   snap: ThreadSnapshot,
   prevComputer: ComputerStatus | null,
   preserveLoadedHistory = false,
-): { snapshot: ThreadSnapshot; computer: ComputerStatus | null } {
+): { snapshot: ThreadState; computer: ComputerStatus | null } {
   const sameThread = Boolean(prev && prev.threadId === snap.threadId);
 
   if (sameThread && prev && snap.cursor < prev.cursor) {
     // A subscription can advance the cursor with progress before the send-triggered refresh
     // returns the new run record. Hydrate that matching run without rolling the transcript back.
-    // Optimistic stop removes the matching progress message, so an older refresh cannot revive it.
+    // Optimistic stop drops the run's progress, so an older refresh cannot revive it.
     const refreshedRun = snap.run;
-    const hasMatchingLiveProgress = Boolean(
-      refreshedRun &&
-        prev.messages.some(
-          (message) =>
-            message.runId === refreshedRun.id && message.id === `progress:${refreshedRun.id}`,
-        ),
-    );
-    if (!prev.run && refreshedRun && hasMatchingLiveProgress) {
+    if (!prev.run && refreshedRun && prev.layer.has(refreshedRun.id)) {
       return {
         snapshot: {
           ...prev,
@@ -206,7 +194,18 @@ export function reconcileRefreshedThread(
     };
   }
 
-  let snapshot = mergeThreadSnapshot(prev, snap, preserveLoadedHistory);
+  let snapshot = threadStateOf(snap);
+  if (sameThread && prev && preserveLoadedHistory) {
+    const firstSeq = snapshot.entries[0]?.seq ?? Number.NEGATIVE_INFINITY;
+    snapshot = {
+      ...snapshot,
+      entries: mergeEntries(
+        prev.entries.filter((entry) => entry.seq < firstSeq),
+        snapshot.entries,
+      ),
+      olderCursor: prev.olderCursor,
+    };
+  }
   const computer = snap.computer ?? null;
 
   const localWaiting =
@@ -240,53 +239,42 @@ export function clearBusyWhileWaitingTakeover(
     : computer;
 }
 
+/** An older page merged before the held entries; a page for another thread changes nothing. */
 export function prependThreadMessagePage(
-  prev: ThreadSnapshot | null,
+  prev: ThreadState | null,
   page: ThreadMessagePage,
-): ThreadSnapshot | null {
-  return prependThreadHistoryPage(prev, page);
+): ThreadState | null {
+  if (!prev || prev.threadId !== page.threadId || prev.olderCursor == null) return prev;
+  return {
+    ...prev,
+    entries: mergeEntries(prev.entries, page.entries),
+    olderCursor: page.olderCursor,
+  };
 }
 
-export function isThreadSnapshotEvent(event: ProductEvent): boolean {
+export function isThreadStateEvent(event: ProductEvent): boolean {
   return (
-    event.type === "thread.cleared" ||
-    event.type === "thread.rewound" ||
+    event.type === "session.entry.appended" ||
     event.type === "thread.progress" ||
-    event.type === "thread.subagent" ||
-    event.type === "agent.tool.called" ||
-    event.type === "agent.tool.completed" ||
-    event.type === "thread.message.created" ||
-    event.type === "thread.message.updated" ||
     event.type === "run.started" ||
-    event.type === "run.waiting_input" ||
     event.type === "computer.takeover.requested" ||
     isRunTerminalEvent(event)
   );
 }
 
-export function reduceThreadSnapshot(
-  prev: ThreadSnapshot | null,
+export function reduceThreadState(
+  prev: ThreadState | null,
   event: ProductEvent,
-): ThreadSnapshot | null {
+): ThreadState | null {
   if (!prev) return prev;
-  if (event.type === "thread.cleared") {
+  if (event.type === "session.entry.appended" || event.type === "thread.progress") {
+    // The layer appends deltas, so an event the held state already covers must not apply twice.
+    if (event.seq <= prev.cursor) return prev;
     return {
       ...prev,
       cursor: event.seq,
-      messages: [],
-      olderCursor: null,
-      run: null,
-      activeRuns: [],
-    };
-  }
-  if (event.type === "thread.rewound") {
-    // olderCursor is kept: the history before the cut is still there and still pageable.
-    return {
-      ...prev,
-      cursor: event.seq,
-      messages: applyThreadRewind(prev.messages, event),
-      run: null,
-      activeRuns: [],
+      entries: mergeEntries(prev.entries, appendedEntries(event)),
+      layer: reduceProgressLayer(prev.layer, event),
     };
   }
   if (event.type === "run.started") {
@@ -316,15 +304,15 @@ export function reduceThreadSnapshot(
       activeRuns,
     };
   }
-  if (event.type === "run.waiting_input" || event.type === "computer.takeover.requested") {
-    const status = event.type === "run.waiting_input" ? "waiting_input" : "waiting_takeover";
+  if (event.type === "computer.takeover.requested") {
+    const status = "waiting_takeover";
     const runId = event.runId;
     const knownInRun = Boolean(runId && prev.run?.id === runId);
     const knownInActive = Boolean(
       runId && prev.activeRuns?.some((candidate) => candidate.id === runId),
     );
-    // Peer bot_message runs are omitted from snapshots while busy; the first wait
-    // event is how an open thread learns they need ask/takeover UI.
+    // Peer bot_message runs are omitted from snapshots while busy; the takeover request is
+    // how an open thread learns they need takeover UI.
     const needsInsert = Boolean(runId) && !knownInRun && !knownInActive;
     const runChanged = Boolean(knownInRun && prev.run && prev.run.status !== status);
     const activeRunChanged = Boolean(
@@ -332,20 +320,7 @@ export function reduceThreadSnapshot(
         prev.activeRuns?.some((candidate) => candidate.id === runId && candidate.status !== status),
     );
     const members = updateMemberStatus(prev.members, event.botId, status);
-    // Ask pauses delete progress events server-side; drop the live bubble so a missed
-    // message.created cannot leave "working…" stuck next to waiting_input.
-    const liveId = progressMessageId(event);
-    const messages =
-      event.type === "run.waiting_input" && prev.messages.some((message) => message.id === liveId)
-        ? prev.messages.filter((message) => message.id !== liveId)
-        : prev.messages;
-    if (
-      !runChanged &&
-      !activeRunChanged &&
-      !needsInsert &&
-      members === prev.members &&
-      messages === prev.messages
-    ) {
+    if (!runChanged && !activeRunChanged && !needsInsert && members === prev.members) {
       return prev;
     }
     if (needsInsert && runId) {
@@ -373,7 +348,6 @@ export function reduceThreadSnapshot(
         ...prev,
         cursor: event.seq,
         members,
-        messages,
         run: promoteWaiting ? waitingRun : prev.run,
         activeRuns,
       };
@@ -382,7 +356,6 @@ export function reduceThreadSnapshot(
       ...prev,
       cursor: event.seq,
       members,
-      messages,
       run: runChanged && prev.run ? { ...prev.run, status } : prev.run,
       activeRuns: activeRunChanged
         ? prev.activeRuns?.map((candidate) =>
@@ -403,7 +376,7 @@ export function reduceThreadSnapshot(
     return {
       ...prev,
       cursor: event.seq,
-      messages: prev.messages.filter((message) => message.id !== progressMessageId(event)),
+      layer: reduceProgressLayer(prev.layer, event),
       members: updateMemberStatus(prev.members, event.botId, nextMemberRun?.status ?? "idle"),
       // A failed run stays in run (activeRuns already excludes it) so the transcript can say
       // why it stopped, matching what threads.get returns on the next load.
@@ -416,116 +389,14 @@ export function reduceThreadSnapshot(
       activeRuns,
     };
   }
-  if (event.type === "thread.progress") {
-    const liveId = progressMessageId(event);
-    const { previous, remaining } = takeLiveMessage(prev.messages, liveId);
-    const blocks = reduceLiveMessageBlocks(previous?.blocks ?? [], {
-      type: "progress",
-      payload: event.payload,
-    });
-    const streaming: ThreadMessage = {
-      id: liveId,
-      threadId: event.threadId,
-      seq: event.seq,
-      role: "bot",
-      blocks,
-      botId: event.botId,
-      runId: event.runId,
-      createdAt: event.createdAt,
-    };
-    return { ...prev, cursor: event.seq, messages: [...remaining, streaming] };
-  }
-  if (event.type === "agent.tool.called") {
-    const liveId = progressMessageId(event);
-    const { previous, remaining } = takeLiveMessage(prev.messages, liveId);
-    const blocks = reduceLiveMessageBlocks(previous?.blocks ?? [], {
-      type: "tool",
-      name: String(event.payload.name ?? ""),
-    });
-    const next: ThreadMessage = {
-      id: liveId,
-      threadId: event.threadId,
-      seq: event.seq,
-      role: "bot",
-      blocks,
-      botId: event.botId,
-      runId: event.runId,
-      createdAt: event.createdAt,
-    };
-    return { ...prev, cursor: event.seq, messages: [...remaining, next] };
-  }
-  if (event.type === "agent.tool.completed") {
-    return { ...prev, cursor: event.seq };
-  }
-  if (event.type === "thread.subagent") {
-    const block = subagentBlockFromPayload(event.payload);
-    const next: ThreadMessage = {
-      id: `subagent:${block.agentId}`,
-      threadId: event.threadId,
-      seq: event.seq,
-      role: "bot",
-      blocks: [block],
-      botId: event.botId,
-      runId: event.runId,
-      createdAt: event.createdAt,
-    };
-    const without: ThreadMessage[] = [];
-    const kept: ThreadMessage[] = [];
-    for (const message of prev.messages) {
-      if (message.id === next.id) continue;
-      if (message.id.startsWith("progress:")) {
-        if (message.runId) kept.push(message);
-      } else {
-        without.push(message);
-      }
-    }
-    return { ...prev, cursor: event.seq, messages: [...without, next, ...kept] };
-  }
-
-  if (event.type === "thread.message.created" || event.type === "thread.message.updated") {
-    const role = (event.payload.role as ThreadMessage["role"]) ?? "bot";
-    const blocks = (event.payload.blocks as ThreadMessage["blocks"]) ?? [];
-    const next: ThreadMessage = {
-      id: String(event.payload.messageId ?? event.id),
-      threadId: event.threadId,
-      seq: event.seq,
-      role,
-      blocks,
-      botId: event.botId,
-      runId: event.runId,
-      replyToMessageId:
-        typeof event.payload.replyToMessageId === "string"
-          ? event.payload.replyToMessageId
-          : undefined,
-      replyQuote:
-        typeof event.payload.replyQuote === "string" ? event.payload.replyQuote : undefined,
-      createdAt: event.createdAt,
-    };
-    const replacedSubagentIds = new Set(
-      blocks.filter((block) => block.kind === "subagent").map((block) => block.agentId),
-    );
-    const merged =
-      event.type === "thread.message.updated"
-        ? mergeMessageUpdate(
-            prev.messages.find((message) => message.id === next.id),
-            next,
-          )
-        : next;
-    // An update to a message this page never loaded stays out of the thread.
-    if (!merged) return { ...prev, cursor: event.seq };
-    const liveId = progressMessageId(event);
-    const { remaining } = takeLiveMessage(prev.messages, liveId);
-    const without = remaining.filter((message) => !replacedSubagent(message, replacedSubagentIds));
-    return { ...prev, cursor: event.seq, messages: upsertMessageById(without, merged) };
-  }
   return prev;
 }
 
 function updateMemberStatus(
-  members: ThreadSnapshot["members"],
+  members: ThreadState["members"],
   botId: string,
   status: string,
-): ThreadSnapshot["members"] {
+): ThreadState["members"] {
   const member = members?.find((candidate) => candidate.botId === botId);
   if (!member || member.status === status) return members;
   return members?.map((candidate) =>
@@ -649,9 +520,4 @@ export function isComputerStatusEvent(event: ProductEvent): boolean {
 
 function isComputerState(value: unknown): value is ComputerStatus["state"] {
   return computerStates.has(value);
-}
-
-function replacedSubagent(message: ThreadMessage, agentIds: ReadonlySet<string>) {
-  if (agentIds.size === 0) return false;
-  return message.blocks.some((block) => block.kind === "subagent" && agentIds.has(block.agentId));
 }
