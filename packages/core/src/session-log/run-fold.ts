@@ -18,7 +18,15 @@ const FOLDED_TYPES = [
   "tool.result",
 ] as const;
 type FoldedEntry = SessionEntryOf<(typeof FOLDED_TYPES)[number]>;
-const STRETCH_TYPES = new Set<SessionEntryType>([...FOLDED_TYPES, "subagent"]);
+/** Entries about an earlier card or message: they show nothing of their own between the words. */
+const ANNOTATION_TYPES = [
+  "card.answered",
+  "link.preview",
+  "link.preview.removed",
+  "skill.draft",
+  "effect.applied",
+] as const;
+const STRETCH_TYPES = new Set<SessionEntryType>([...FOLDED_TYPES, ...ANNOTATION_TYPES, "subagent"]);
 
 type RunMessage = {
   type: "run.message";
@@ -27,6 +35,10 @@ type RunMessage = {
   runId: string;
   botId: string;
   blocks: MessageBlock[];
+  /** The entries the stretch shows, in order. */
+  entries: FoldedEntry[];
+  /** The index in `blocks` of each `assistant.ask` and `assistant.choice` entry's block. */
+  cards: Map<EntryId, number>;
   /** The child session the stretch rose from: a run writes to one session, so all of it did. */
   originSessionId?: SessionId;
 };
@@ -35,18 +47,22 @@ type RunMessage = {
  * Fold a run's `assistant.*` and `tool.*` entries into one `RunMessage` per stretch, at the
  * position of the stretch's first entry. Each run has its own open stretch, so runs that
  * interleave keep one message each. Any other entry closes every open stretch, a `bot.text` too
- * since it is a message of its own, and a `subagent` entry passes through without closing them.
- * A tool call takes its output from `toolOutputs`, or an empty output while it has none yet.
+ * since it is a message of its own, while a `subagent` entry and the entries about an earlier card
+ * or message pass through without closing them. A tool call takes its output from `outputs`, or an
+ * empty output while it has none yet.
  */
 export function foldRuns(
   entries: readonly SessionEntry[],
+  outputs: ReadonlyMap<EntryId, string> = toolOutputs(entries),
 ): (RunMessage | Exclude<SessionEntry, FoldedEntry>)[] {
-  const outputs = toolOutputs(entries);
   const segments: (RunMessage | Exclude<SessionEntry, FoldedEntry>)[] = [];
   const open = new Map<string, RunMessage>();
   const stretchOf = (entry: FoldedEntry) => {
     const stretch = open.get(entry.runId);
-    if (stretch) return stretch;
+    if (stretch) {
+      stretch.entries.push(entry);
+      return stretch;
+    }
     const originSessionId = originSessionIdOf(entry);
     const message: RunMessage = {
       type: "run.message",
@@ -55,6 +71,8 @@ export function foldRuns(
       runId: entry.runId,
       botId: entry.botId,
       blocks: [],
+      entries: [entry],
+      cards: new Map(),
       ...(originSessionId ? { originSessionId } : {}),
     };
     open.set(entry.runId, message);
@@ -71,9 +89,12 @@ export function foldRuns(
         stretchOf(entry).blocks.push({ kind: "reasoning", text: entry.payload.text });
         break;
       case "assistant.ask":
-      case "assistant.choice":
-        stretchOf(entry).blocks.push(entry.payload.block);
+      case "assistant.choice": {
+        const message = stretchOf(entry);
+        message.cards.set(entry.id, message.blocks.length);
+        message.blocks.push(entry.payload.block);
         break;
+      }
       case "tool.call": {
         const message = stretchOf(entry);
         const { callId, name, input } = entry.payload;
@@ -86,6 +107,7 @@ export function foldRuns(
         break;
       }
       case "tool.result":
+        open.get(entry.runId)?.entries.push(entry);
         break;
       default:
         segments.push(entry);
