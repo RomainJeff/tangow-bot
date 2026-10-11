@@ -21,8 +21,10 @@ export function messagePresentationSegments(
   blocks: readonly MessageBlock[],
   showSteps = false,
 ): NarrationSegment<MessageBlock>[] {
-  return narrationSegments(visibleMessageBlocks(blocks, showSteps), (block) =>
-    block.kind === "app_connect" ? undefined : block,
+  return narrationSegments(
+    blocks.filter((block) => block.kind === "steps" || !isToolActivityBlock(block)),
+    (block) => (block.kind === "app_connect" ? undefined : block),
+    showSteps,
   );
 }
 

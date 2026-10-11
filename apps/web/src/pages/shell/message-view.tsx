@@ -198,7 +198,9 @@ export const MessageView = memo(function MessageView({
   const botId = botIdOf(message);
   const isLive = message.role === "bot" && message.live === true;
   const showSteps = useDisplayAgentSteps();
-  const visibleBlocks = message.blocks.filter((block) => !isHiddenActivityBlock(block, showSteps));
+  const narrationBlocks = message.blocks.filter(
+    (block) => block.kind === "steps" || !isHiddenActivityBlock(block, showSteps),
+  );
   // Nothing this version can draw (a `connect` or legacy `reasoning` block):
   // stay silent rather than paint an avatar and a name around an empty row.
   const drawsSomething = hasRenderableBlock(message.blocks, showSteps);
@@ -299,15 +301,19 @@ export const MessageView = memo(function MessageView({
   const skillLines = skills.map((skill) => skillLine(skill, skillLinesLive, onOpenSkill));
   if (!drawsSomething) return null;
   if (isNarration) {
-    const parts = narrationSegments(visibleBlocks, (block) => {
-      const text =
-        block.kind === "progress"
-          ? block.text
-          : block.kind === "text" && !linkOnly
-            ? bubbleText(block.text)
-            : undefined;
-      return text === undefined ? undefined : { text, streaming: block.kind === "progress" };
-    });
+    const parts = narrationSegments(
+      narrationBlocks,
+      (block) => {
+        const text =
+          block.kind === "progress"
+            ? block.text
+            : block.kind === "text" && !linkOnly
+              ? bubbleText(block.text)
+              : undefined;
+        return text === undefined ? undefined : { text, streaming: block.kind === "progress" };
+      },
+      showSteps,
+    );
     const lastBubble = parts.findLastIndex((part) => part.kind === "content");
     return botRow(
       <>

@@ -75,7 +75,7 @@ describe("mobile message presentation", () => {
     expect(messagePresentationSegments([mixed])).toEqual([{ kind: "content", blocks: [mixed] }]);
   });
 
-  it("keeps only response content around tool activity", () => {
+  it("keeps each turn of words apart around hidden tool activity", () => {
     const tool: Extract<MessageBlock, { kind: "steps" }> = {
       kind: "steps",
       steps: [{ label: "Read file", count: 1 }],
@@ -88,13 +88,8 @@ describe("mobile message presentation", () => {
         { kind: "text", text: "Done." },
       ]),
     ).toEqual([
-      {
-        kind: "content",
-        blocks: [
-          { kind: "text", text: "Checking." },
-          { kind: "text", text: "Done." },
-        ],
-      },
+      { kind: "content", blocks: [{ kind: "text", text: "Checking." }] },
+      { kind: "content", blocks: [{ kind: "text", text: "Done." }] },
     ]);
 
     expect(

@@ -36,21 +36,30 @@ export type NarrationSegment<T> =
   | { kind: "content"; blocks: T[] }
   | { kind: "steps"; block: Extract<MessageBlock, { kind: "steps" }> };
 
+/**
+ * A steps block ends the words before it even when hidden: a run's stretch holds every turn of
+ * its words, and each turn reads as its own bubble.
+ */
 export function narrationSegments<T>(
   blocks: readonly MessageBlock[],
   content: (block: MessageBlock) => T | undefined,
+  showSteps = true,
 ): NarrationSegment<T>[] {
   const segments: NarrationSegment<T>[] = [];
+  let open: T[] | undefined;
   for (const block of blocks) {
     if (block.kind === "steps") {
-      segments.push({ kind: "steps", block });
+      open = undefined;
+      if (showSteps) segments.push({ kind: "steps", block });
       continue;
     }
     const drawn = content(block);
     if (drawn === undefined) continue;
-    const last = segments.at(-1);
-    if (last?.kind === "content") last.blocks.push(drawn);
-    else segments.push({ kind: "content", blocks: [drawn] });
+    if (open) open.push(drawn);
+    else {
+      open = [drawn];
+      segments.push({ kind: "content", blocks: open });
+    }
   }
   return segments;
 }
