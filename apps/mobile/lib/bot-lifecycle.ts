@@ -46,6 +46,17 @@ export function confirmClearConversation(clear: () => void) {
   );
 }
 
+export function clearConversation(botId: string, onCleared?: () => void) {
+  void rpc("threads/clear", { botId })
+    .then(onCleared)
+    .catch((error) =>
+      Alert.alert(
+        t("Could not clear conversation"),
+        error instanceof Error ? error.message : t("Try again."),
+      ),
+    );
+}
+
 export function archiveBot(botId: string, onArchived: () => void) {
   void rpc("bots/archive", { botId })
     .then(onArchived)
