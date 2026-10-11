@@ -123,7 +123,7 @@ describe("projectInferenceTurns", () => {
     ]);
   });
 
-  it("replays a routine as the line where it started and its final words, or how it ended, where it finished", () => {
+  it("replays a routine as the line where it started and its final words, or how it ended by name, where it finished", () => {
     const routine = (runId: string, name: string, trigger: "routine" | "webhook") => ({
       botId: "bot_ada",
       runId,
@@ -139,6 +139,12 @@ describe("projectInferenceTurns", () => {
     });
     const usage = { inputTokens: 400, outputTokens: 20 };
     const chain = linkEntries("routine", [
+      {
+        botId: "bot_ada",
+        runId: "run_compacted",
+        type: "routine.finished",
+        payload: { status: "cancelled", usage, result: "" },
+      },
       routine("run_brief", "Morning brief", "routine"),
       routine("run_deploy", "Deploy hook", "webhook"),
       { type: "user.message", payload: { blocks: text("Anything new?"), source: "app" } },
@@ -163,6 +169,7 @@ describe("projectInferenceTurns", () => {
       },
     ]);
     expect(turnsOf(chain, ada)).toEqual([
+      { role: "user", content: "[context] The routine was cancelled." },
       {
         role: "user",
         content:
@@ -175,13 +182,13 @@ describe("projectInferenceTurns", () => {
       },
       { role: "user", content: "Anything new?" },
       { role: "assistant", content: "Two meetings today." },
-      { role: "user", content: "[context] The routine failed: build timed out" },
+      { role: "user", content: '[context] The routine "Deploy hook" failed: build timed out' },
       {
         role: "user",
         content:
           '[context] The routine "Tidy inbox" started, scheduled for 2026-10-10T07:00:00.000Z.',
       },
-      { role: "user", content: "[context] The routine was cancelled." },
+      { role: "user", content: '[context] The routine "Tidy inbox" was cancelled.' },
     ]);
   });
 

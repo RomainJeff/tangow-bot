@@ -57,16 +57,23 @@ export function projectInferenceTurns(
       entry.type === "run.finished" && entry.payload.status === "cancelled" ? [entry.runId] : [],
     ),
   );
+  const routineNames = new Map(
+    chain.flatMap((entry) =>
+      entry.type === "routine.started" ? [[entry.runId, entry.payload.name] as const] : [],
+    ),
+  );
   const targets = replyTargets(chain, segments);
   const targetOf = (entryId: EntryId) =>
     targets.get(entryId) ?? resolvedTarget(options.resolveReplyTarget?.(entryId));
   return segments.flatMap((segment) => {
     let turn: Turn | undefined;
     if (segment.type !== "run.message" || !cancelled.has(segment.runId)) {
-      turn = renderTurn(segment, options, targetOf);
+      turn = renderTurn(segment, options, targetOf, routineNames);
     } else {
       const blocks = segment.blocks.filter((block) => block.kind === "steps");
-      if (blocks.length > 0) turn = renderTurn({ ...segment, blocks }, options, targetOf);
+      if (blocks.length > 0) {
+        turn = renderTurn({ ...segment, blocks }, options, targetOf, routineNames);
+      }
     }
     return turn ? { id: segment.id, ...turn } : [];
   });
@@ -78,6 +85,7 @@ function renderTurn(
   segment: ReturnType<typeof foldRuns>[number],
   options: InferenceProjectionOptions,
   targetOf: (entryId: EntryId) => ReplyTarget | undefined,
+  routineNames: ReadonlyMap<string, string>,
 ): Turn | undefined {
   const { botNames } = options;
   const nameOf = (botId: string) => botNames?.get(botId) ?? botId;
@@ -143,14 +151,17 @@ function renderTurn(
     case "routine.finished": {
       const outcome = segment.payload;
       if (outcome.result) return speakerTurn(segment.botId, outcome.result, options);
+      const name = routineNames.get(segment.runId);
+      const routine =
+        name === undefined ? "The routine" : `The routine "${escapeDirectoryField(name)}"`;
       if (outcome.status === "failed") {
         return {
           role: "user",
-          content: `[context] The routine failed: ${escapeDirectoryField(outcome.error)}`,
+          content: `[context] ${routine} failed: ${escapeDirectoryField(outcome.error)}`,
         };
       }
       return outcome.status === "cancelled"
-        ? { role: "user", content: "[context] The routine was cancelled." }
+        ? { role: "user", content: `[context] ${routine} was cancelled.` }
         : undefined;
     }
     case "computer.control":
