@@ -490,7 +490,10 @@ describeJourneys("required product journeys", () => {
     expect(
       await prisma.event.findMany({ where: { threadId: thread.id }, orderBy: { seq: "asc" } }),
     ).toMatchObject([
-      { type: "session.entry.appended", payload: { entry: { type: "clear", parentId: null } } },
+      {
+        type: "session.entry.appended",
+        payload: { entries: [{ type: "clear", parentId: null }] },
+      },
       { type: "thread.cleared" },
     ]);
     // The deleted messages all count as compacted, so compaction cannot summarize them and
@@ -545,7 +548,10 @@ describeJourneys("required product journeys", () => {
     expect(
       await prisma.event.findMany({ where: { threadId: thread.id }, orderBy: { seq: "asc" } }),
     ).toMatchObject([
-      { type: "session.entry.appended", payload: { entry: { type: "clear", parentId: null } } },
+      {
+        type: "session.entry.appended",
+        payload: { entries: [{ type: "clear", parentId: null }] },
+      },
       { type: "thread.cleared" },
     ]);
 

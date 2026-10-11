@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { NewSession, SessionEntryDraft } from "@rakazo/adapter-kit";
 import { nextSessionEntry, SessionAppendError, sessionEntryNonce } from "@rakazo/adapter-kit";
 import type {
@@ -10,9 +11,8 @@ import type {
 } from "@rakazo/contracts";
 import { SessionEntrySchema, SessionId } from "@rakazo/contracts";
 import { SessionEntryDecodeError, sanitizeJsonValue } from "@rakazo/core";
-import type { Prisma } from "./client.js";
-import { appendEventInTransaction } from "./events.js";
-import { assertRunCanWriteHistory } from "./messages.js";
+import { Prisma } from "./client.js";
+import { RunHistoryWriteError } from "./messages.js";
 
 /** A `session_entries` row, as Prisma and `$queryRaw` both return it. */
 export interface SessionEntryRow {
@@ -59,30 +59,48 @@ export async function createSessionInTransaction(
   return SessionId.parse(main.id);
 }
 
+/** The threads a transaction locked for its appends, and the feed event that carries them. */
+type TransactionLog = { threadOf: Map<string, string | null>; eventOf: Map<string, string> };
+const transactionLogs = new WeakMap<Prisma.TransactionClient, TransactionLog>();
+
+function transactionLog(tx: Prisma.TransactionClient): TransactionLog {
+  let log = transactionLogs.get(tx);
+  if (!log) {
+    log = { threadOf: new Map(), eventOf: new Map() };
+    transactionLogs.set(tx, log);
+  }
+  return log;
+}
+
 /**
  * Append an entry as the session's new head. Appends to a session serialize on its row lock, and a
- * draft whose clientNonce is already in the session returns that entry without taking a seq. An
- * entry of a thread session also lands on the thread's events feed as `session.entry.appended`; a
- * subagent session has no thread and no feed.
+ * draft whose clientNonce is already in the session returns that entry without taking a seq. The
+ * entries a transaction appends to a thread session reach the thread's feed as one
+ * `session.entry.appended` event; a subagent session has no thread and no feed.
  */
 export async function appendSessionEntryInTransaction(
   tx: Prisma.TransactionClient,
   draft: SessionEntryDraft,
 ): Promise<SessionEntry> {
-  // Thread before session, in the mode every thread writer uses, so a message write that appends an
-  // entry cannot deadlock with this. The session row takes NO KEY so that the foreign key checks of
-  // child session and run inserts do not wait on it.
-  const [thread] = await tx.$queryRaw<Array<{ id: string }>>`
-    SELECT id FROM threads
-    WHERE id = (SELECT "threadId" FROM sessions WHERE id = ${draft.sessionId})
-    FOR UPDATE`;
-  const [session] = await tx.$queryRaw<Array<{ nextEntrySeq: number; spaceId: string }>>`
-    SELECT "nextEntrySeq", "spaceId" FROM sessions WHERE id = ${draft.sessionId}
-    FOR NO KEY UPDATE`;
-  if (!session) {
-    throw new SessionAppendError("unknown_session", `Session ${draft.sessionId} does not exist`);
+  const log = transactionLog(tx);
+  let threadId = log.threadOf.get(draft.sessionId);
+  if (threadId === undefined) {
+    // Thread before session, in the mode every thread writer uses, so a message write that appends
+    // an entry cannot deadlock with this.
+    const [thread] = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM threads
+      WHERE id = (SELECT "threadId" FROM sessions WHERE id = ${draft.sessionId})
+      FOR UPDATE`;
+    threadId = thread?.id ?? null;
+    log.threadOf.set(draft.sessionId, threadId);
   }
-  await assertRunCanWriteHistory(tx, draft.runId);
+  const feedBotId = draft.botId ?? draft.feedBotId;
+  if (threadId && feedBotId === undefined) {
+    throw new SessionAppendError(
+      "no_feed_bot",
+      `Entry for session ${draft.sessionId} names no bot to show it under on thread ${threadId}`,
+    );
+  }
   const nonce = sessionEntryNonce(draft);
   if (nonce !== undefined) {
     const [delivered] = await tx.$queryRaw<SessionEntryRow[]>`
@@ -90,11 +108,6 @@ export async function appendSessionEntryInTransaction(
       WHERE "sessionId" = ${draft.sessionId} AND payload ->> 'clientNonce' = ${nonce}`;
     if (delivered) return sessionEntryFromRow(delivered);
   }
-  const head = await tx.sessionEntry.findFirst({
-    where: { sessionId: draft.sessionId },
-    orderBy: { seq: "desc" },
-    select: { id: true, seq: true },
-  });
   if (draft.type === "rewind") {
     const target = await tx.sessionEntry.findFirst({
       where: { id: draft.parentId, sessionId: draft.sessionId },
@@ -107,43 +120,57 @@ export async function appendSessionEntryInTransaction(
       );
     }
   }
-  const entry = nextSessionEntry(sanitizeJsonValue(draft), session.nextEntrySeq, head);
-  if (thread) {
-    const botId = entry.botId ?? draft.feedBotId;
-    if (botId === undefined) {
-      throw new SessionAppendError(
-        "no_feed_bot",
-        `Entry for session ${draft.sessionId} names no bot to show it under on thread ${thread.id}`,
-      );
-    }
-    await appendEventInTransaction(tx, {
-      spaceId: session.spaceId,
-      threadId: thread.id,
-      botId,
-      type: "session.entry.appended",
-      payload: { entry },
-      runId: entry.runId,
-    });
+  // The session row takes NO KEY so that the foreign key checks of child session and run inserts
+  // do not wait on it.
+  const [session] = await tx.$queryRaw<
+    Array<{ nextEntrySeq: number; headEntryId: string | null; spaceId: string }>
+  >`
+    SELECT "nextEntrySeq", "headEntryId", "spaceId" FROM sessions WHERE id = ${draft.sessionId}
+    FOR NO KEY UPDATE`;
+  if (!session) {
+    throw new SessionAppendError("unknown_session", `Session ${draft.sessionId} does not exist`);
   }
-  await tx.sessionEntry.create({
-    data: {
-      id: entry.id,
-      sessionId: entry.sessionId,
-      seq: entry.seq,
-      parentId: entry.parentId,
-      type: entry.type,
-      payload: entry.payload as Prisma.InputJsonValue,
-      botId: entry.botId,
-      runId: entry.runId,
-      createdAt: new Date(entry.ts),
-    },
-    select: { id: true },
-  });
-  await tx.conversationSession.update({
-    where: { id: entry.sessionId },
-    data: { nextEntrySeq: { increment: 1 } },
-    select: { id: true },
-  });
+  const seq = session.nextEntrySeq;
+  const entry = nextSessionEntry(
+    sanitizeJsonValue(draft),
+    seq,
+    session.headEntryId === null ? null : { id: session.headEntryId, seq: seq - 1 },
+  );
+  const runId = entry.runId ?? null;
+  const at = Prisma.sql`${entry.ts}::timestamptz AT TIME ZONE 'UTC'`;
+  const eventId = threadId ? log.eventOf.get(threadId) : undefined;
+  const newEventId = threadId && !eventId ? randomUUID() : undefined;
+  const feed = eventId
+    ? Prisma.sql`, appended AS (
+        UPDATE events SET payload = jsonb_set(payload, '{entries}', (payload -> 'entries') || ${JSON.stringify(entry)}::jsonb)
+        FROM e WHERE events.id = ${eventId})`
+    : newEventId
+      ? Prisma.sql`, t AS (
+          UPDATE threads SET "nextEventSeq" = "nextEventSeq" + 1 FROM e WHERE threads.id = ${threadId}
+          RETURNING threads."nextEventSeq" - 1 AS seq),
+        appended AS (
+          INSERT INTO events (id, "spaceId", "threadId", "botId", seq, type, payload, "runId", "createdAt")
+          SELECT ${newEventId}, ${session.spaceId}, ${threadId}, ${feedBotId}, t.seq,
+            'session.entry.appended', ${JSON.stringify({ entries: [entry] })}::jsonb, ${runId}, ${at}
+          FROM t)`
+      : Prisma.empty;
+  // The run check reads a snapshot taken after the session lock, so it sees a cancel that
+  // committed while this append waited.
+  const written = await tx.$queryRaw<unknown[]>`
+    WITH e AS (
+      INSERT INTO session_entries (id, "sessionId", seq, "parentId", type, payload, "botId", "runId", "createdAt")
+      SELECT ${entry.id}, ${entry.sessionId}, ${seq}, ${entry.parentId}, ${entry.type},
+        ${JSON.stringify(entry.payload)}::jsonb, ${entry.botId ?? null}, ${runId}, ${at}
+      WHERE ${runId}::text IS NULL
+        OR EXISTS (SELECT 1 FROM runs WHERE id = ${runId} AND status <> 'cancelled')
+      RETURNING id),
+    s AS (
+      UPDATE sessions SET "nextEntrySeq" = ${seq + 1}, "headEntryId" = ${entry.id}
+      FROM e WHERE sessions.id = ${entry.sessionId})
+    ${feed}
+    SELECT 1 FROM e`;
+  if (written.length === 0) throw new RunHistoryWriteError();
+  if (threadId && newEventId) log.eventOf.set(threadId, newEventId);
   return entry;
 }
 
