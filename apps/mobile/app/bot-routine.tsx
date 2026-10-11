@@ -14,8 +14,10 @@ import {
   type TextStyle,
   View,
 } from "react-native";
+import { ActivityTab, useOpenRun } from "../components/bot-page/activity-tab";
 import {
   Group,
+  GroupAction,
   InkSwitch,
   LoadFailed,
   LoadingRows,
@@ -25,6 +27,7 @@ import {
 } from "../components/bot-page/kit";
 import { useRoutines } from "../components/bot-page/routines-tab";
 import { WhenToRun } from "../components/bot-page/when-to-run";
+import { rpc } from "../lib/api";
 import { mobileTokens } from "../lib/appearance";
 import {
   type BotPageContext,
@@ -115,7 +118,7 @@ export default function BotRoutineScreen() {
         options={{ title: "", headerBackTitle: fromBotPage ? t("Routines") : undefined }}
       />
       {page && routine ? (
-        <RoutineDetail page={page} routine={routine} onDelete={remove} />
+        <RoutineDetail page={page} routine={routine} epoch={epoch} onDelete={remove} />
       ) : read === "ready" && routines && !routine ? (
         <QuietLine>{t("This routine no longer exists")}</QuietLine>
       ) : read === "failed" || botFailed ? (
@@ -140,16 +143,22 @@ export default function BotRoutineScreen() {
 function RoutineDetail({
   page,
   routine,
+  epoch,
   onDelete,
 }: {
   page: BotPageContext;
   routine: Routine;
+  epoch: number;
   onDelete: () => Promise<void>;
 }) {
   const styles = useThemedStyles(createRoutineStyles);
   const { t } = useI18n();
+  const openRun = useOpenRun();
   const { bot } = page;
   const [deleting, setDeleting] = useState(false);
+  const [running, setRunning] = useState(false);
+  // Runs are read again when one ends; a test run should show as soon as it starts.
+  const [testRuns, setTestRuns] = useState(0);
   const readOnly = page.readOnly || deleting;
 
   const update = (patch: RoutinePatch) => updateRoutine(bot.id, routine.id, patch);
@@ -178,6 +187,18 @@ function RoutineDetail({
       return null;
     } catch (error) {
       return serverMessage(error) || t("Could not save");
+    }
+  };
+
+  const testRun = async () => {
+    setRunning(true);
+    try {
+      await rpc("routines/testRun", { routineId: routine.id });
+      setTestRuns((count) => count + 1);
+    } catch (error) {
+      Alert.alert(t("Could not run routine"), serverMessage(error) || t("Try again."));
+    } finally {
+      setRunning(false);
     }
   };
 
@@ -284,6 +305,28 @@ function RoutineDetail({
           }
         />
       </Group>
+
+      <View style={styles.activity}>
+        <Group
+          label={t("Activity")}
+          trailing={
+            page.readOnly ? null : (
+              <GroupAction
+                label={running ? t("Running…") : t("Test run")}
+                disabled={running || deleting}
+                onPress={() => void testRun()}
+              />
+            )
+          }
+        />
+        <ActivityTab
+          botId={bot.id}
+          routineId={routine.id}
+          epoch={epoch + testRuns}
+          // An archived bot's chat cannot be opened.
+          onOpenRun={page.readOnly ? undefined : openRun}
+        />
+      </View>
 
       {page.readOnly ? null : (
         <Group>
@@ -405,6 +448,7 @@ function createRoutineStyles() {
     },
     statusLine: { gap: 3 },
     status: { color: tokens.mutedForeground, ...nativeTextStyle("meta", { size: 14 }) },
+    activity: { gap: 8 },
     promptBox: { paddingHorizontal: 16, paddingVertical: 14, gap: 6 },
     prompt: {
       minHeight: 72,
