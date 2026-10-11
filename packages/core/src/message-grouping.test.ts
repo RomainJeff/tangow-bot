@@ -95,15 +95,13 @@ describe("isUserNarrationMessage", () => {
 });
 
 describe("computeMessageGroups", () => {
-  const noneTransparent = () => false;
-
   it("3-message bot burst: first opens, middle is neither, last closes", () => {
     const messages = [
       makeMessage({ createdAt: localIso(2026, 9, 2, 12, 0) }),
       makeMessage({ createdAt: localIso(2026, 9, 2, 12, 1) }),
       makeMessage({ createdAt: localIso(2026, 9, 2, 12, 3) }),
     ];
-    expect(computeMessageGroups(messages, { isTransparent: noneTransparent })).toEqual([
+    expect(computeMessageGroups(messages)).toEqual([
       { isFirstOfGroup: true, isLastOfGroup: false },
       { isFirstOfGroup: false, isLastOfGroup: false },
       { isFirstOfGroup: false, isLastOfGroup: true },
@@ -126,7 +124,7 @@ describe("computeMessageGroups", () => {
       }),
       makeMessage({ createdAt: localIso(2026, 9, 2, 12, 3) }),
     ];
-    expect(computeMessageGroups(messages, { isTransparent: noneTransparent })).toEqual([
+    expect(computeMessageGroups(messages)).toEqual([
       { isFirstOfGroup: true, isLastOfGroup: false },
       { isFirstOfGroup: false, isLastOfGroup: false },
       { isFirstOfGroup: false, isLastOfGroup: true },
@@ -148,7 +146,7 @@ describe("computeMessageGroups", () => {
         createdAt: localIso(2026, 9, 2, 12, 2),
       }),
     ];
-    expect(computeMessageGroups(messages, { isTransparent: noneTransparent })).toEqual([
+    expect(computeMessageGroups(messages)).toEqual([
       { isFirstOfGroup: true, isLastOfGroup: false },
       { isFirstOfGroup: false, isLastOfGroup: true },
     ]);
@@ -175,7 +173,7 @@ describe("computeMessageGroups", () => {
         createdAt: localIso(2026, 9, 2, 12, 2),
       }),
     ];
-    expect(computeMessageGroups(messages, { isTransparent: noneTransparent })).toEqual([
+    expect(computeMessageGroups(messages)).toEqual([
       { isFirstOfGroup: true, isLastOfGroup: true },
       { isFirstOfGroup: true, isLastOfGroup: true },
       { isFirstOfGroup: true, isLastOfGroup: true },
@@ -197,7 +195,7 @@ describe("computeMessageGroups", () => {
         createdAt: localIso(2026, 9, 2, 12, 10),
       }),
     ];
-    expect(computeMessageGroups(messages, { isTransparent: noneTransparent })).toEqual([
+    expect(computeMessageGroups(messages)).toEqual([
       { isFirstOfGroup: true, isLastOfGroup: true },
       { isFirstOfGroup: true, isLastOfGroup: true },
     ]);
@@ -218,7 +216,7 @@ describe("computeMessageGroups", () => {
         createdAt: localIso(2026, 9, 3, 0, 10),
       }),
     ];
-    expect(computeMessageGroups(messages, { isTransparent: noneTransparent })).toEqual([
+    expect(computeMessageGroups(messages)).toEqual([
       { isFirstOfGroup: true, isLastOfGroup: true },
       { isFirstOfGroup: true, isLastOfGroup: true },
     ]);
@@ -240,7 +238,7 @@ describe("computeMessageGroups", () => {
         replyToMessageId: "msg-parent",
       }),
     ];
-    expect(computeMessageGroups(messages, { isTransparent: noneTransparent })).toEqual([
+    expect(computeMessageGroups(messages)).toEqual([
       { isFirstOfGroup: true, isLastOfGroup: true },
       { isFirstOfGroup: true, isLastOfGroup: true },
     ]);
@@ -257,26 +255,10 @@ describe("computeMessageGroups", () => {
       }),
       makeMessage({ createdAt: localIso(2026, 9, 2, 12, 2) }),
     ];
-    expect(computeMessageGroups(messages, { isTransparent: noneTransparent })).toEqual([
+    expect(computeMessageGroups(messages)).toEqual([
       { isFirstOfGroup: true, isLastOfGroup: true },
       { isFirstOfGroup: true, isLastOfGroup: true },
       { isFirstOfGroup: true, isLastOfGroup: true },
-    ]);
-  });
-
-  it("a transparent message (renders nothing) does not break the group", () => {
-    const transparent = makeMessage({ createdAt: localIso(2026, 9, 2, 12, 1), id: "hidden-1" });
-    const messages = [
-      makeMessage({ createdAt: localIso(2026, 9, 2, 12, 0) }),
-      transparent,
-      makeMessage({ createdAt: localIso(2026, 9, 2, 12, 2) }),
-    ];
-    expect(
-      computeMessageGroups(messages, { isTransparent: (message) => message.id === "hidden-1" }),
-    ).toEqual([
-      { isFirstOfGroup: true, isLastOfGroup: false },
-      { isFirstOfGroup: false, isLastOfGroup: false },
-      { isFirstOfGroup: false, isLastOfGroup: true },
     ]);
   });
 
@@ -286,7 +268,7 @@ describe("computeMessageGroups", () => {
       { ...makeMessage(), createdAt: undefined as unknown as string },
       makeMessage({ createdAt: localIso(2026, 9, 2, 12, 2) }),
     ];
-    expect(computeMessageGroups(messages, { isTransparent: noneTransparent })).toEqual([
+    expect(computeMessageGroups(messages)).toEqual([
       { isFirstOfGroup: true, isLastOfGroup: true },
       { isFirstOfGroup: true, isLastOfGroup: true },
       { isFirstOfGroup: true, isLastOfGroup: true },

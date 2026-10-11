@@ -63,7 +63,7 @@ export function PeerMessagesOverlay({
       createdAt: peerMessage.createdAt,
       blocks: [{ kind: "text" as const, text: peerMessage.text }],
     }));
-    return computeMessageGroups(groupable, { isTransparent: () => false });
+    return computeMessageGroups(groupable);
   }, [conversation, botId, peerBotId]);
 
   // Oldest-first order stays, but the view opens on the latest exchange.

@@ -120,7 +120,7 @@ export default function PeerMessages() {
       blocks: [{ kind: "text", text: message.text }],
       createdAt: message.createdAt,
     }));
-    return computeMessageGroups(groupable, { isTransparent: () => false });
+    return computeMessageGroups(groupable);
   }, [peerMessages, botId]);
 
   return (

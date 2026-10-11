@@ -94,80 +94,38 @@ function continuesGroup(
  * The single source of truth for rule R (see `docs/design-system.md` § Grouping): for every
  * input message, whether it opens and/or closes a visible group. Both web and mobile call this
  * once on the canonical chronological message list and index the result by message id — no
- * renderer recomputes grouping from its own (possibly reversed) index.
- *
- * `options.isTransparent` marks messages that render nothing at all (a legacy block this
- * version draws nothing for): they always get `{ isFirstOfGroup: false, isLastOfGroup: false }`
- * and are skipped when looking for the previous/next visible message, so they can never break a
- * group. Asides (handoffs, peer receipts, `meta`) are NOT transparent — they are non-narration
- * messages, so they naturally form a group of one (`isNarrationMessage` / `isUserNarrationMessage`
- * are both false for them) and the group they interrupt reopens after them.
+ * renderer recomputes grouping from its own (possibly reversed) index. Asides (handoffs, peer
+ * receipts, `meta`) are non-narration messages, so they form a group of one and the group they
+ * interrupt reopens after them.
  */
-export function computeMessageGroups<M extends GroupableMessage>(
-  messages: readonly M[],
-  options: { isTransparent: (message: M) => boolean; windowMs?: number },
+export function computeMessageGroups(
+  messages: readonly GroupableMessage[],
+  windowMs: number = MESSAGE_GROUP_WINDOW_MS,
 ): { isFirstOfGroup: boolean; isLastOfGroup: boolean }[] {
-  const windowMs = options.windowMs ?? MESSAGE_GROUP_WINDOW_MS;
-  const results: { isFirstOfGroup: boolean; isLastOfGroup: boolean }[] = messages.map(() => ({
-    isFirstOfGroup: false,
-    isLastOfGroup: false,
+  const continues = messages.map((message, index) =>
+    continuesGroup(messages[index - 1], message, windowMs),
+  );
+  return messages.map((_, index) => ({
+    isFirstOfGroup: !continues[index],
+    isLastOfGroup: !continues[index + 1],
   }));
-
-  // Visible (non-transparent) indices in order, and whether each one continues the previous
-  // visible message's group — tracked so the second pass can look ahead without recomputing.
-  const visibleIndices: number[] = [];
-  const continuesPrevious: boolean[] = new Array(messages.length).fill(false);
-  let lastVisible: M | undefined;
-
-  messages.forEach((message, index) => {
-    if (options.isTransparent(message)) return;
-    const continues = continuesGroup(lastVisible, message, windowMs);
-    continuesPrevious[index] = continues;
-    results[index]!.isFirstOfGroup = !continues;
-    visibleIndices.push(index);
-    lastVisible = message;
-  });
-
-  visibleIndices.forEach((index, position) => {
-    const nextIndex = visibleIndices[position + 1];
-    results[index]!.isLastOfGroup = nextIndex === undefined ? true : !continuesPrevious[nextIndex];
-  });
-
-  return results;
 }
 
-/**
- * Rule R over a thread's items, in order: whether each opens and closes a visible group. Narration
- * of the same bot, or text from the person, continues a group within `windowMs` when no time
- * marker falls between; a reply always opens one, and an item that is not a message is a group of
- * one.
- */
+/** Rule R over a thread's items, in order. An item that is not a message is a group of one. */
 export function computeItemGroups(
   items: readonly ThreadItem[],
-  windowMs: number = MESSAGE_GROUP_WINDOW_MS,
-): { firstOfGroup: boolean; lastOfGroup: boolean }[] {
-  const continues = items.map((item, index) =>
-    continuesItemGroup(items[index - 1], item, windowMs),
+): { isFirstOfGroup: boolean; isLastOfGroup: boolean }[] {
+  return computeMessageGroups(
+    items.map((item): GroupableMessage => {
+      if (item.kind !== "message") return { role: "bot", blocks: [], createdAt: item.ts };
+      return item.role === "user"
+        ? {
+            role: "user",
+            blocks: item.blocks,
+            createdAt: item.ts,
+            replyToMessageId: item.replyTo?.entryId,
+          }
+        : { role: "bot", blocks: item.blocks, createdAt: item.ts, botId: item.botId };
+    }),
   );
-  return items.map((_, index) => ({
-    firstOfGroup: !continues[index],
-    lastOfGroup: !continues[index + 1],
-  }));
-}
-
-function continuesItemGroup(
-  previous: ThreadItem | undefined,
-  item: ThreadItem,
-  windowMs: number,
-): boolean {
-  if (previous?.kind !== "message" || item.kind !== "message") return false;
-  if (item.role === "user" && item.replyTo) return false;
-  const botNarration =
-    item.role === "bot" &&
-    previous.role === "bot" &&
-    item.botId === previous.botId &&
-    isNarrationMessage(previous) &&
-    isNarrationMessage(item);
-  const userNarration = isUserNarrationMessage(previous) && isUserNarrationMessage(item);
-  return (botNarration || userNarration) && withinGroupWindow(previous.ts, item.ts, windowMs);
 }

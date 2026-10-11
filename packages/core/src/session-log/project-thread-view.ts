@@ -86,8 +86,8 @@ export function projectThreadView(
     const messageId = projected.messageIds.get(item.id);
     rows.push({
       item,
-      firstOfGroup: groups[index]?.firstOfGroup ?? true,
-      lastOfGroup: groups[index]?.lastOfGroup ?? true,
+      firstOfGroup: groups[index]?.isFirstOfGroup ?? true,
+      lastOfGroup: groups[index]?.isLastOfGroup ?? true,
       reactions: reactions.get(item.id) ?? [],
       ...(role ? { routine: role } : {}),
       ...(shows ? { marker: { at, withTime: !routine } } : {}),
