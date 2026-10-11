@@ -1,5 +1,6 @@
-import { captureScreenshot, completeOnboarding, signup } from "./helpers";
+import { activeBotId, captureScreenshot, completeOnboarding, signup } from "./helpers";
 import { expect, type Locator, type Page, type Route, test } from "./test";
+import { threadEntries } from "./thread-log";
 
 /** Submit from the Send control so an in-flight prior send cannot swallow Enter. */
 async function sendComposerMessage(page: Page, composer: Locator, text: string) {
@@ -165,11 +166,7 @@ test("message hover shows a floating action pill; reply links to parent", async 
   await expect(userActions.getByRole("button", { name: "Reply" })).toHaveCount(0);
   await expect(userActions.getByRole("button", { name: "React" })).toHaveCount(0);
 
-  // The run card lands right under the bubble, where these icons float: hover the row again first.
-  await expect(async () => {
-    await parentRow.hover();
-    await userActions.getByRole("button", { name: "Copy" }).click({ timeout: 2_000 });
-  }).toPass();
+  await userActions.getByRole("button", { name: "Copy" }).click();
   await expect
     .poll(async () => page.evaluate(() => navigator.clipboard.readText()))
     .toBe(parentText);
@@ -398,6 +395,103 @@ test("reply preview jumps to parent outside the loaded page", async ({ page }) =
   await offlinePreview.click();
   await expect(page.locator(`[data-message-id="${parentId}"]`)).toBeVisible({ timeout: 20_000 });
   await expect(page.locator(`[data-message-id="${parentId}"]`)).toContainText(/Got it\./);
+});
+
+test("a send after a search jump lands on the latest messages", async ({ page }) => {
+  const stamp = Date.now();
+  await signup(page, `jump-send-${stamp}@rakazo.test`, "password12", "Jump Send");
+  await completeOnboarding(page);
+  await page.setViewportSize({ width: 1280, height: 600 });
+  const botId = activeBotId(page);
+  const composer = page.getByRole("combobox", { name: /^Message/ });
+  const transcript = page.getByTestId("transcript");
+  const long = (word: string, lines: number) =>
+    Array.from({ length: lines }, (_, line) => `${word}-${stamp} line ${line + 1}`).join("\n");
+
+  const answered = async (marker: string) => {
+    let id: string | undefined;
+    await expect
+      .poll(
+        async () => {
+          const entries = await threadEntries(page, { botId });
+          const sent = entries.find(
+            (entry) =>
+              entry.type === "user.message" && JSON.stringify(entry.payload).includes(marker),
+          );
+          id = sent?.id;
+          return entries.some(
+            (entry) => entry.type === "run.finished" && entry.seq > (sent?.seq ?? Infinity),
+          );
+        },
+        { timeout: 60_000 },
+      )
+      .toBe(true);
+    return id!;
+  };
+
+  await sendComposerMessage(page, composer, long("first", 30));
+  const firstId = await answered(`first-${stamp} line 1`);
+  await sendComposerMessage(page, composer, long("second", 80));
+  await answered(`second-${stamp} line 1`);
+  const entries = await threadEntries(page, { botId });
+  const secondSeq = entries.find(
+    (entry) =>
+      entry.type === "user.message" && JSON.stringify(entry.payload).includes(`second-${stamp}`),
+  )!.seq;
+
+  // A long thread: the latest page starts at the second message, and the jump's window ends
+  // before the entry the second message hangs from, so the two pages do not join.
+  type LogPage = { entries?: Array<{ id: string; seq: number }>; olderCursor?: string | null };
+  const keep = (snapshot: LogPage | null | undefined, kept: (seq: number) => boolean) => {
+    if (!snapshot?.entries) return;
+    snapshot.entries = snapshot.entries.filter((entry) => kept(entry.seq));
+    snapshot.olderCursor = snapshot.entries[0]?.id ?? null;
+  };
+  const reshape = async (route: Route) => {
+    try {
+      const around = route.request().postDataJSON()?.json?.around !== undefined;
+      const response = await route.fetch();
+      const body = (await response.json()) as { json?: LogPage & { thread?: LogPage | null } };
+      const kept = around
+        ? (seq: number) => seq < secondSeq - 1
+        : (seq: number) => seq >= secondSeq;
+      keep(body.json, kept);
+      keep(body.json?.thread, kept);
+      await route.fulfill({
+        status: response.status(),
+        headers: response.headers(),
+        body: JSON.stringify(body),
+      });
+    } catch (error) {
+      if (/already handled|Target closed|Request context disposed/i.test(String(error))) return;
+      throw error;
+    }
+  };
+  await page.route(/\/rpc\/(bootstrap|threads\/get|threads\/messages)(?:\?|$)/, reshape);
+
+  await page.goto(`/app/${botId}?m=${firstId}`);
+  const firstRow = transcript.locator(`[data-message-id="${firstId}"]`);
+  await expect(firstRow).toBeVisible({ timeout: 20_000 });
+  await expect(transcript.getByText(`second-${stamp} line 1`, { exact: false })).toHaveCount(0);
+
+  await sendComposerMessage(
+    page,
+    page.getByRole("combobox", { name: /^Message/ }),
+    `third-${stamp}`,
+  );
+  const thirdRow = transcript
+    .getByTestId("message-user-bubble")
+    .filter({ hasText: `third-${stamp}` });
+  await expect(thirdRow).toBeInViewport({ timeout: 20_000 });
+  await expect(firstRow).toHaveCount(0);
+  await answered(`third-${stamp}`);
+  await expect
+    .poll(() =>
+      transcript.evaluate(
+        (element) => element.scrollHeight - element.scrollTop - element.clientHeight,
+      ),
+    )
+    .toBeLessThan(2);
 });
 
 /** Simulates a touch hold: a real `pointerdown`/`pointerup` pair (pointerType

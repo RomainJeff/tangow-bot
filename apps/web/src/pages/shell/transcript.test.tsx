@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 
+import type { SessionEntry } from "@rakazo/contracts";
 import { SessionEntrySchema } from "@rakazo/contracts";
 import { projectThreadView } from "@rakazo/core";
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { act, createRef } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -21,6 +22,7 @@ const api = vi.hoisted(() => ({ sessionEntries: vi.fn() }));
 vi.mock("../../lib/rpc", () => ({ rpc: { sessions: { entries: api.sessionEntries } } }));
 
 import streamedReply from "../../../../../packages/core/src/session-log/fixtures/streamed-reply.jsonl?raw";
+import { drawsNothing } from "./thread-row";
 import { Transcript } from "./transcript";
 
 const fixture = streamedReply
@@ -74,18 +76,24 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-async function renderThread(lastEntry: number, activeRunIds: ReadonlySet<string> = new Set()) {
+async function renderThread(
+  entries: number | readonly SessionEntry[],
+  props: Partial<ComponentProps<typeof Transcript>> = {},
+) {
+  const shown = typeof entries === "number" ? fixture.slice(0, entries + 1) : entries;
   await act(async () => {
     root.render(
       <Transcript
         scrollRef={createRef<HTMLDivElement>()}
         artifactTarget={{ botId: "bot_ada" }}
         inGroup={false}
-        view={projectThreadView(fixture.slice(0, lastEntry + 1))}
+        view={projectThreadView(shown, {
+          rendersNothing: (item) => drawsNothing(item, false),
+        })}
         olderCursor={null}
         loadingOlder={false}
         running={false}
-        activeRunIds={activeRunIds}
+        queuedRunIds={new Set()}
         workingBots={[]}
         onLoadOlder={() => undefined}
         onOpenBot={() => undefined}
@@ -103,6 +111,7 @@ async function renderThread(lastEntry: number, activeRunIds: ReadonlySet<string>
         voiceReady={false}
         speakingMessageId={null}
         onSpeak={() => undefined}
+        {...props}
       />,
     );
   });
@@ -112,10 +121,14 @@ const text = (selector: string) =>
   [...document.querySelectorAll(selector)].map((element) => element.textContent);
 
 describe("the transcript", () => {
-  it("draws a run card per run, the helper's card and a rewind divider from the rows", async () => {
+  it("draws a reply as its bubble with nothing for the run, the helper's card and a rewind divider", async () => {
     await renderThread(17);
 
-    expect(text('[data-testid="run-card"]')).toEqual(["emulator-1 · Completed"]);
+    expect(
+      [...document.querySelectorAll("[data-message-id]")].map((row) =>
+        row.getAttribute("data-message-id"),
+      ),
+    ).toEqual(["str-00", "str-02", "str-05", "str-08", "str-09", "str-17"]);
     expect(text('[data-testid="task-card"] span[dir="auto"]')).toEqual(["scout"]);
     expect(text('[data-testid="thread-divider"]')).toEqual(["Message edited"]);
     expect(text('[data-testid="message-user-bubble"]')).toEqual([
@@ -124,15 +137,93 @@ describe("the transcript", () => {
     ]);
   });
 
-  it("says an open run is running only while the thread lists it, and needs input on a card", async () => {
-    await renderThread(6, new Set(["run_str_1"]));
-    expect(text('[data-testid="run-card"]')).toEqual(["emulator-1 · Running"]);
-
+  it("says a run needs input above the card it waits on, and nothing while it runs", async () => {
     await renderThread(6);
-    expect(text('[data-testid="run-card"]')).toEqual(["emulator-1"]);
+    expect(text('[data-testid="run-waiting"]')).toEqual([]);
 
-    await renderThread(7, new Set(["run_str_1"]));
-    expect(text('[data-testid="run-card"]')).toEqual(["emulator-1 · Needs input"]);
+    await renderThread(7);
+    expect(text('[data-testid="run-waiting"]')).toEqual(["Needs input"]);
+    expect(
+      document
+        .querySelector('[data-testid="run-waiting"]')
+        ?.closest('[data-slot="message-row"]')
+        ?.nextElementSibling?.getAttribute("data-message-id"),
+    ).toBe("str-02");
+  });
+
+  it("draws nothing for an effect that carries no card", async () => {
+    await renderThread([
+      ...fixture.slice(0, 1),
+      ...[
+        {
+          id: "fx-01",
+          seq: 1,
+          type: "effect.requested",
+          payload: { effectId: "eff_1", effectKind: "send_email", proposal: {} },
+        },
+        {
+          id: "fx-02",
+          seq: 2,
+          type: "effect.resolved",
+          payload: { effectId: "eff_1", decision: "approved" },
+        },
+      ].map((entry) =>
+        SessionEntrySchema.parse({
+          ...entry,
+          sessionId: "ses_streamed",
+          parentId: entry.seq === 1 ? "str-00" : "fx-01",
+          ts: "2026-10-10T09:00:01.000Z",
+          botId: "bot_ada",
+        }),
+      ),
+    ]);
+
+    expect(
+      [...document.querySelectorAll("[data-message-id]")].map((row) => row.textContent),
+    ).toEqual(["Find three competitors and summarize Acme's site"]);
+  });
+
+  it("gives an approval card the hover pill a bot message has, replying to the card itself", async () => {
+    const onReply = vi.fn();
+    await renderThread(
+      [
+        ...fixture.slice(0, 2),
+        SessionEntrySchema.parse({
+          id: "fx-02",
+          sessionId: "ses_streamed",
+          seq: 2,
+          parentId: "str-01",
+          ts: "2026-10-10T09:00:02.000Z",
+          botId: "bot_ada",
+          runId: "run_str_1",
+          type: "effect.requested",
+          payload: {
+            effectId: "eff_1",
+            effectKind: "send_email",
+            proposal: {},
+            card: { kind: "ask", text: "Send the summary to Acme?" },
+          },
+        }),
+      ],
+      { onReply },
+    );
+
+    const row = document.querySelector('[data-message-id="fx-02"]');
+    expect(row?.querySelector('[data-testid="message-bubble-frame"]')).not.toBeNull();
+    const pill = row?.querySelector('[data-testid="message-hover-rail"]');
+    expect(
+      [...(pill?.querySelectorAll("button") ?? [])].map((button) =>
+        button.getAttribute("aria-label"),
+      ),
+    ).toEqual(["Reply", "React", "Copy"]);
+    expect(
+      pill?.querySelector('[data-testid="message-hover-time"]')?.getAttribute("datetime"),
+    ).toBe("2026-10-10T09:00:02.000Z");
+
+    await act(async () => pill?.querySelector<HTMLButtonElement>('[aria-label="Reply"]')?.click());
+    expect(onReply.mock.calls.map(([message]) => [message.id, message.blocks])).toEqual([
+      ["fx-02", [{ kind: "ask", text: "Send the summary to Acme?" }]],
+    ]);
   });
 
   it("opens a finished helper's own session, read-only", async () => {

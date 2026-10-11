@@ -1,6 +1,6 @@
 import { i18n } from "@lingui/core";
 import { useLingui } from "@lingui/react/macro";
-import type { MessageReaction } from "@rakazo/contracts";
+import type { MessageReaction, ThreadItem } from "@rakazo/contracts";
 import type { SkillSourceBlock, ThreadView } from "@rakazo/core";
 import { isToolActivityBlock, latestActivityLabel } from "@rakazo/core";
 import type { GroupAvatarMember } from "@rakazo/ui-web";
@@ -38,7 +38,7 @@ import { MessageActionsSheet } from "./message-actions-sheet";
 import { MessageHoverActions, UserMessageActions } from "./message-hover-actions";
 import { SessionView } from "./session-view";
 import type { RowContext } from "./thread-row";
-import { RowMarker, rowChrome, ThreadRowBody } from "./thread-row";
+import { RowMarker, rowChrome, ThreadRowBody, WaitingLine } from "./thread-row";
 
 /** B1: hold this long on a touch bubble to open its action sheet. */
 const LONG_PRESS_MS = 450;
@@ -51,6 +51,21 @@ const LONG_PRESS_BUBBLE_SELECTOR = '[data-slot="message-row-bubble"],[data-slot=
 const LONG_PRESS_EXCLUDED_SELECTOR =
   'button,[role="button"],[role="menuitem"],input,textarea,[contenteditable="true"],select';
 
+/** An approval card takes the actions of the bot message it was on main, keyed by its own entry. */
+function actionTarget(item: ThreadItem): MessageItem | null {
+  if (item.kind === "message") return item;
+  if (item.kind !== "effect" || !item.card || !item.botId) return null;
+  return {
+    kind: "message",
+    role: "bot",
+    id: item.id,
+    ts: item.ts,
+    botId: item.botId,
+    ...(item.runId ? { runId: item.runId } : {}),
+    blocks: [item.card],
+  };
+}
+
 export const Transcript = memo(function Transcript({
   scrollRef,
   artifactTarget,
@@ -60,7 +75,7 @@ export const Transcript = memo(function Transcript({
   loadingOlder,
   viewerUserId,
   running,
-  activeRunIds,
+  queuedRunIds,
   workingBots,
   workingStartedAt,
   onLoadOlder,
@@ -93,7 +108,7 @@ export const Transcript = memo(function Transcript({
   loadingOlder: boolean;
   viewerUserId?: string;
   running: boolean;
-  activeRunIds: ReadonlySet<string>;
+  queuedRunIds: ReadonlySet<string>;
   workingBots: GroupAvatarMember[];
   /** Epoch ms the earliest working run started; undefined ticks from mount. */
   workingStartedAt?: number;
@@ -151,7 +166,7 @@ export const Transcript = memo(function Transcript({
       inGroup,
       viewerUserId,
       waiting,
-      activeRunIds,
+      queuedRunIds,
       onAnswer,
       memberName,
       peerBot,
@@ -177,7 +192,7 @@ export const Transcript = memo(function Transcript({
     inGroup,
     viewerUserId,
     waiting,
-    activeRunIds,
+    queuedRunIds,
     onAnswer,
     memberName,
     peerBot,
@@ -439,7 +454,7 @@ export const Transcript = memo(function Transcript({
         {rows.map((row, index) => {
           const { item } = row;
           const chrome = rowChrome(item, showSteps);
-          const message = item.kind === "message" ? item : null;
+          const message = actionTarget(item);
           const acts = message !== null && chrome === "row";
           const rewound = rewindFromIndex >= 0 && index >= rewindFromIndex;
           const previous = rows[index - 1];
@@ -460,6 +475,7 @@ export const Transcript = memo(function Transcript({
           return (
             <Fragment key={item.id}>
               {row.marker ? <RowMarker marker={row.marker} /> : null}
+              {waiting?.itemId === item.id ? <WaitingLine inGroup={inGroup} /> : null}
               <div
                 data-message-id={item.id}
                 data-rewound={rewound ? "true" : undefined}

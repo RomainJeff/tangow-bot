@@ -37,6 +37,51 @@ function groupedThread(botId: string): EntryDraft[] {
   ];
 }
 
+/** Two replies, each from its own run of the same bot, the shape every run reply takes. */
+function runRepliesThread(botId: string): EntryDraft[] {
+  const at = (minute: number) => `2026-09-17T09:${String(minute).padStart(2, "0")}:00.000Z`;
+  const run = (id: string, minute: number, text: string): EntryDraft[] => [
+    {
+      id: `${id}-start`,
+      ts: at(minute),
+      type: "run.started",
+      botId,
+      runId: id,
+      payload: {
+        trigger: { kind: "message", entryId: "rr-user" },
+        model: { provider: "e2e", id: "grouping-model" },
+        effort: null,
+      },
+    },
+    {
+      id: `${id}-reply`,
+      ts: at(minute),
+      type: "assistant.text",
+      botId,
+      runId: id,
+      payload: { blocks: [{ kind: "text", text }] },
+    },
+    {
+      id: `${id}-end`,
+      ts: at(minute),
+      type: "run.finished",
+      botId,
+      runId: id,
+      payload: { status: "completed", usage: { inputTokens: 900, outputTokens: 40 } },
+    },
+  ];
+  return [
+    {
+      id: "rr-user",
+      ts: at(23),
+      type: "user.message",
+      payload: { blocks: [{ kind: "text", text: "Check both feeds." }], source: "app" },
+    },
+    ...run("rr-1", 24, "The first feed is up to date."),
+    ...run("rr-2", 27, "The second feed is late by a day."),
+  ];
+}
+
 async function setAppearance(page: Page, theme: "light" | "dark") {
   await page.getByTestId("user-menu-trigger").click();
   await page.getByRole("button", { name: "Settings", exact: true }).click();
@@ -114,4 +159,46 @@ test("a bot's stacked consecutive messages in a group thread share one header", 
   await setAppearance(page, "dark");
   await page.mouse.move(0, 0);
   await captureScreenshot(page, testInfo, "message-grouping-dark");
+});
+
+test("two replies from two runs of the same bot group like two messages, nothing between", async ({
+  page,
+}) => {
+  const stamp = Date.now();
+  await signup(page, `run-grouping-${stamp}@rakazo.test`, "password12", "Run Grouping");
+  await completeOnboarding(page);
+  await page.goto("/app");
+  await page.waitForURL(/\/app\/[^/]+$/);
+  const chiefId = activeBotId(page);
+  const group = await rpc<{ id: string }>(page, "groups/create", {
+    name: "Solo group",
+    botIds: [chiefId],
+  });
+  await page.goto(`/app/g/${group.id}`);
+  await page.waitForURL(/\/app\/g\/[^/]+$/);
+
+  await showThread(page, runRepliesThread(chiefId));
+
+  const transcript = page.getByTestId("transcript");
+  const first = transcript.locator('[data-message-id="rr-1-reply"]');
+  const second = transcript.locator('[data-message-id="rr-2-reply"]');
+  await expect(second).toBeVisible({ timeout: 20_000 });
+
+  await expect(
+    transcript
+      .locator("[data-message-id]")
+      .evaluateAll((rows) => rows.map((row) => row.getAttribute("data-message-id"))),
+  ).resolves.toEqual(["rr-user", "rr-1-reply", "rr-2-reply"]);
+  await expect(
+    first.evaluate((row) => row.nextElementSibling?.getAttribute("data-message-id")),
+  ).resolves.toBe("rr-2-reply");
+
+  await expect(first.locator('[data-slot="message-row-author"]')).toHaveText("Chief");
+  await expect(second.locator('[data-slot="message-row-author"]')).toHaveCount(0);
+  await expect(
+    first.locator('[data-slot="message-row-avatar"] .rakazo-organic-avatar'),
+  ).toHaveCount(0);
+  await expect(
+    second.locator('[data-slot="message-row-avatar"] .rakazo-organic-avatar'),
+  ).toHaveCount(1);
 });

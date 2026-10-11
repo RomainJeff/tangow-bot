@@ -65,6 +65,8 @@ test("framed blocks capture a pending approval and an answered question as norma
   await expect(approvalMessage.locator('[data-slot="message-row"]')).toBeVisible();
   await expect(approvalMessage.locator('[data-slot="message-row-author"]')).toHaveCount(0);
   await expect(approvalMessage.locator('[data-slot="message-row-avatar"]')).toHaveCount(0);
+  await expect(approvalMessage.getByTestId("message-bubble-frame")).toBeVisible();
+  await expect(approvalMessage.getByTestId("message-hover-time")).toHaveCount(1);
   await expect(approvalMessage.locator(".ms-10.max-w-block")).toHaveCount(0);
   await captureScreenshot(page, testInfo, "quiet-blocks-approval-light");
 

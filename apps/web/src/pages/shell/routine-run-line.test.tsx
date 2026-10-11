@@ -76,6 +76,40 @@ describe("RoutineRunLine", () => {
     expect(html).toContain('aria-label="Report, Surveillance Accor · Opens in full"');
   });
 
+  it("opens a subscribed routine's latest run on its words and rings the bell", () => {
+    const subscribed = (latest: boolean) => {
+      const line = run("r1", { status: "completed", result: "All green" }, latest);
+      return { ...line, item: { ...line.item, notify: true as const } };
+    };
+    const latest = renderToStaticMarkup(<RoutineRunLine run={subscribed(true)} onOpen={open} />);
+    const older = renderToStaticMarkup(<RoutineRunLine run={subscribed(false)} onOpen={open} />);
+    const quiet = renderToStaticMarkup(
+      <RoutineRunLine
+        run={run("r1", { status: "completed", result: "All green" })}
+        onOpen={open}
+      />,
+    );
+
+    expect(latest).toContain('aria-expanded="true"');
+    expect(latest).toContain("All green");
+    expect(latest).toContain('role="img" aria-label="Notifications on"');
+    expect(latest).toContain('aria-label="Surveillance Accor, Completed, ');
+    expect(older).toContain('aria-expanded="false"');
+    expect(older).toContain('aria-label="Notifications on"');
+    expect(quiet).toContain('aria-expanded="false"');
+    expect(quiet).not.toContain("Notifications on");
+  });
+
+  it("says a run still in the queue is queued, without the shimmer", () => {
+    const html = renderToStaticMarkup(
+      <RoutineRunLine run={run("r1", null)} onOpen={open} queued />,
+    );
+
+    expect(html).toContain(">Queued<");
+    expect(html).not.toContain("rk-shimmer");
+    expect(html).toContain("lucide-clock");
+  });
+
   it("shimmers the status word while the run is going", () => {
     const html = renderToStaticMarkup(<RoutineRunLine run={run("r1", null)} onOpen={open} />);
 

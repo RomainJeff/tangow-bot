@@ -1152,7 +1152,11 @@ export function ShellPage() {
         const words = botWordsOf(event);
         if (words.length > 0) {
           if (
-            words.some((entry) => entry.payload.blocks.some((block) => block.kind === "child_bot"))
+            words.some(
+              (entry) =>
+                (entry.type === "assistant.text" || entry.type === "bot.text") &&
+                entry.payload.blocks.some((block) => block.kind === "child_bot"),
+            )
           ) {
             void refreshBots().catch(() => undefined);
           }
@@ -1584,8 +1588,8 @@ export function ShellPage() {
   const workingRuns = currentRuns.filter((run) => isWorking(run, view));
   const transcriptRunning = workingRuns.length > 0;
   const composerRunning = currentRuns.some((run) => isActive(run.status));
-  const activeRunIds = useMemo(
-    () => new Set(currentRuns.flatMap((run) => (isActive(run.status) ? [run.id] : []))),
+  const queuedRunIds = useMemo(
+    () => new Set(currentRuns.flatMap((run) => (run.status === "queued" ? [run.id] : []))),
     [currentRuns],
   );
   const runError = threadRunError(activeSnapshot, dismissedRunErrorIds);
@@ -2087,6 +2091,13 @@ export function ShellPage() {
         if (botTarget && activeBotId.current === botTarget) setAttachmentNotice(null);
         // The message is in the log and on the feed: the next one can go while the thread refreshes.
         setSending(false);
+        // A send leaves a search jump's window for the latest page, where the message and its reply land.
+        if (expandedHistoryThread.current !== null || pinnedAroundRef.current !== null) {
+          expandedHistoryThread.current = null;
+          pinnedAroundRef.current = null;
+          const element = messageScroll.current;
+          if (element) element.scrollTop = element.scrollHeight;
+        }
         if (groupTarget) await refreshGroupThreadRef.current(groupTarget);
         else if (botTarget) await refreshThreadRef.current(botTarget);
       } catch (error) {
@@ -2862,7 +2873,7 @@ export function ShellPage() {
                 loadingOlder={loadingOlder}
                 viewerUserId={userId}
                 running={transcriptRunning}
-                activeRunIds={activeRunIds}
+                queuedRunIds={queuedRunIds}
                 workingBots={workingBots}
                 workingStartedAt={workingStartedAt}
                 onLoadOlder={loadOlder}

@@ -6,16 +6,13 @@ import { isAsideOnlyMessage, threadTimeMarkerLabel } from "@rakazo/core";
 import type { StackedAvatarItem } from "@rakazo/ui-web";
 import {
   BotAvatar,
-  formatShortDuration,
   Interstitial,
   MessageMeta,
   MessageRow,
-  ReasoningDisclosure,
   Separator,
   StackedAvatars,
 } from "@rakazo/ui-web";
 import type { ReactNode } from "react";
-import { useState } from "react";
 import type { SpawnBotCardEdits } from "../../components/AskCard";
 import { AskCard } from "../../components/AskCard";
 import { CollaborationMarker } from "../../components/ai/CollaborationMarker";
@@ -42,7 +39,7 @@ export type RowContext = {
   inGroup: boolean;
   viewerUserId?: string;
   waiting: WaitingCard | null;
-  activeRunIds: ReadonlySet<string>;
+  queuedRunIds: ReadonlySet<string>;
   onAnswer?: (target: CardAnswerTarget, text: string, edits?: SpawnBotCardEdits) => Promise<void>;
   memberName?: (botId: string | undefined) => string | undefined;
   peerBot: PeerBot;
@@ -60,6 +57,8 @@ export type RowContext = {
 const SHOWN_NOTES = new Set<ItemOf<"note">["type"]>(["skill.learnt", "system.note"]);
 
 export function drawsNothing(item: ThreadItem, showSteps: boolean): boolean {
+  if (item.kind === "run") return true;
+  if (item.kind === "effect") return !item.card;
   if (item.kind === "message") return !hasRenderableBlock(item.blocks, showSteps);
   if (item.kind === "note") return !SHOWN_NOTES.has(item.type);
   return false;
@@ -138,20 +137,7 @@ function itemBody(
     case "message":
       return <MessageRowView item={item} context={context} {...frame} />;
     case "run":
-      return (
-        <BotSide inGroup={context.inGroup}>
-          <RunCard
-            item={item}
-            live={
-              context.waiting?.runId === item.runId
-                ? "waiting"
-                : context.activeRunIds.has(item.runId)
-                  ? "running"
-                  : undefined
-            }
-          />
-        </BotSide>
-      );
+      return null;
     case "subagent":
       return (
         <BotSide inGroup={context.inGroup}>
@@ -246,55 +232,13 @@ function BotSide({ inGroup, children }: { inGroup: boolean; children: ReactNode 
   );
 }
 
-function RunCard({ item, live }: { item: ItemOf<"run">; live?: "waiting" | "running" }) {
-  const { t } = useLingui();
-  const [open, setOpen] = useState(false);
-  const status = item.finished?.outcome.status ?? live;
-  const statusLabel =
-    status === "waiting"
-      ? t`Needs input`
-      : status === "running"
-        ? t`Running`
-        : status === "completed"
-          ? t`Completed`
-          : status === "failed"
-            ? t`Failed`
-            : status === "cancelled"
-              ? t`Cancelled`
-              : undefined;
-  const trigger =
-    item.trigger.kind === "routine"
-      ? item.trigger.name
-      : item.trigger.kind === "webhook"
-        ? t`Webhook`
-        : item.trigger.kind === "retry"
-          ? t`Retry`
-          : undefined;
-  const summary = [trigger, item.model.id, statusLabel].filter(Boolean).join(" · ");
-  if (!item.finished) {
-    return (
-      <p data-testid="run-card" className="text-reasoning text-muted-foreground" dir="auto">
-        {summary}
-      </p>
-    );
-  }
-  const { usage } = item.finished.outcome;
-  const input = usage.inputTokens.toLocaleString(i18n.locale || "en");
-  const output = usage.outputTokens.toLocaleString(i18n.locale || "en");
+export function WaitingLine({ inGroup }: { inGroup: boolean }) {
   return (
-    <ReasoningDisclosure
-      summary={<span dir="auto">{summary}</span>}
-      open={open}
-      onToggle={() => setOpen(!open)}
-      toggleProps={{ "data-testid": "run-card" }}
-    >
-      <span key="usage" className="font-mono tabular-nums">
-        {t`${input} tokens in · ${output} out`}
-      </span>
-      <span key="duration" className="font-mono tabular-nums">
-        {formatShortDuration(item.finished.durationMs)}
-      </span>
-    </ReasoningDisclosure>
+    <BotSide inGroup={inGroup}>
+      <p data-testid="run-waiting" className="text-reasoning text-muted-foreground">
+        <Trans>Needs input</Trans>
+      </p>
+    </BotSide>
   );
 }
 
@@ -354,6 +298,7 @@ function RoutineRow({
       run={role.run}
       handoff={handoffFor(role.run)}
       onOpen={() => openRun(role.run)}
+      queued={context.queuedRunIds.has(role.run.item.runId)}
     />
   );
 }
@@ -458,17 +403,8 @@ function DividerLine({ reason }: { reason: ItemOf<"divider">["reason"] }) {
 }
 
 function EffectCard({ item, context }: { item: ItemOf<"effect">; context: RowContext }) {
-  const { t } = useLingui();
   const { waiting, onAnswer } = context;
-  if (!item.card) {
-    const decision =
-      item.decision === "approved" ? t`Approved` : item.decision === "denied" ? t`Denied` : null;
-    return (
-      <p className="text-meta text-muted-foreground">
-        {[item.effectKind, decision].filter(Boolean).join(" · ")}
-      </p>
-    );
-  }
+  if (!item.card) return null;
   const runId = item.runId ?? waiting?.runId;
   const answer =
     waiting?.itemId === item.id && onAnswer && runId
