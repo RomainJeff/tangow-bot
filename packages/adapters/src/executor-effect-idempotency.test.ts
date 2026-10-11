@@ -108,6 +108,7 @@ function fixture(runId = "run-1") {
   const log = recordingSessionLog();
   const prisma = {
     sessionEntry: log.sessionEntry,
+    $queryRaw: log.queryRaw,
     $transaction: async (work: (tx: unknown) => unknown) => work(prisma),
     run: {
       findUnique: vi.fn(async () => run),

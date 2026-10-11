@@ -109,6 +109,7 @@ function fixture(overrides: RunOverrides = {}, runId = "run-1") {
   };
   const log = recordingSessionLog();
   const prisma = {
+    $queryRaw: log.queryRaw,
     sessionEntry: {
       ...log.sessionEntry,
       findUnique: vi.fn(async ({ where }: { where: { id: string } }) =>

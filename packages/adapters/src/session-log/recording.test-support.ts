@@ -30,5 +30,9 @@ export function recordingSessionLog() {
       findMany: vi.fn(async () => []),
       findUnique: vi.fn(async () => null),
     },
+    /** A run with nothing logged and nothing that woke it, as the executor's opening read sees it. */
+    queryRaw: vi.fn(async () => [
+      { logged: null, carrierType: null, steered: false, routineName: null, spawnPromptId: null },
+    ]),
   };
 }

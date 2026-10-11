@@ -205,6 +205,7 @@ function fixture({
 
   const prisma = {
     sessionEntry: log.sessionEntry,
+    $queryRaw: log.queryRaw,
     run: {
       findUnique: vi.fn(async () => run),
       findUniqueOrThrow: vi.fn(async () => run),
@@ -336,8 +337,6 @@ function fixture({
     actionApprovalRule: { findMany: vi.fn(async () => []) },
     actionAutoReviewPreference: { findUnique: vi.fn(async () => ({ enabled: false })) },
     externalEffect,
-    // The routine card update takes the thread lock before rewriting the card.
-    $queryRaw: vi.fn(async () => []),
   };
   (prisma as unknown as { $transaction: unknown }).$transaction = vi.fn(
     async (fn: (tx: typeof prisma) => unknown) => fn(prisma),

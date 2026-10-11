@@ -215,7 +215,7 @@ function fixture(
     $transaction: vi.fn(async (ops: Promise<unknown>[] | ((tx: unknown) => Promise<unknown>)) =>
       typeof ops === "function" ? ops(prisma) : Promise.all(ops),
     ),
-    $queryRaw: vi.fn(async () => []),
+    $queryRaw: log.queryRaw,
     run: {
       findUnique: vi.fn(async () => run),
       // The waiting run a proposal checks for, or the notification source of a push.

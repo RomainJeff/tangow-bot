@@ -72,7 +72,7 @@ function fixture({
   const prisma = {
     sessionEntry: log.sessionEntry,
     // The thread lock a card update takes before it reads the message.
-    $queryRaw: vi.fn(async () => []),
+    $queryRaw: log.queryRaw,
     run: {
       findUnique: vi.fn(async () => run),
       findUniqueOrThrow: vi.fn(async () => run),

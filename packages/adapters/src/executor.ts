@@ -5700,6 +5700,14 @@ function serialWrites() {
   };
 }
 
+type RunLogFacts = {
+  logged: Array<{ type: string; payload: { callId: string; input?: string } }> | null;
+  carrierType: string | null;
+  steered: boolean;
+  routineName: string | null;
+  spawnPromptId: string | null;
+};
+
 async function openRunLog(
   deps: Pick<ExecutorDeps, "prisma" | "sessionLog">,
   run: RunTriggerSource,
@@ -5708,23 +5716,31 @@ async function openRunLog(
   effort: SessionEntryOf<"run.started">["payload"]["effort"],
 ): Promise<Map<string, string>> {
   return deps.prisma.$transaction(async (tx) => {
-    const written = await tx.sessionEntry.findMany({
-      where: { runId: run.id, type: { in: ["run.started", "tool.call", "tool.result"] } },
-      orderBy: { seq: "asc" },
-      select: { type: true, payload: true },
-    });
+    const spawnNonce = run.trigger === "spawn" ? run.clientNonce : null;
+    const [facts] = await tx.$queryRaw<[RunLogFacts]>`
+      SELECT
+        (SELECT json_agg(json_build_object('type', type, 'payload', payload) ORDER BY seq)
+          FROM session_entries
+          WHERE "runId" = ${run.id} AND type IN ('run.started', 'tool.call', 'tool.result')
+        ) AS logged,
+        (SELECT type FROM session_entries WHERE id = ${run.sourceMessageId}) AS "carrierType",
+        EXISTS (SELECT 1 FROM steering_messages WHERE "messageId" = ${run.sourceMessageId})
+          AS steered,
+        (SELECT name FROM routines WHERE id = ${run.routineId}) AS "routineName",
+        (SELECT id FROM session_entries
+          WHERE "sessionId" = ${run.sessionId} AND payload ->> 'clientNonce' = ${spawnNonce}
+        ) AS "spawnPromptId"`;
+    const logged = facts.logged ?? [];
     const awaitingResult = new Map<string, string>();
-    for (const { type, payload } of written) {
-      if (type === "run.started") continue;
-      const { callId, input } = payload as { callId: string; input?: string };
-      if (type === "tool.call") awaitingResult.set(callId, input ?? "");
-      else awaitingResult.delete(callId);
+    for (const { type, payload } of logged) {
+      if (type === "tool.call") awaitingResult.set(payload.callId, payload.input ?? "");
+      if (type === "tool.result") awaitingResult.delete(payload.callId);
     }
-    if (written.length === 0) {
+    if (logged.length === 0) {
       await deps.sessionLog.append(tx, {
         ...log,
         type: "run.started",
-        payload: { trigger: await sessionRunTrigger(tx, run), model, effort },
+        payload: { trigger: sessionRunTrigger(run, facts), model, effort },
       });
     }
     return awaitingResult;
@@ -5741,82 +5757,45 @@ type RunTriggerSource = {
   createdAt: Date;
 };
 
-async function sessionRunTrigger(
-  tx: Prisma.TransactionClient,
-  run: RunTriggerSource,
-): Promise<SessionRunTrigger> {
+function sessionRunTrigger(run: RunTriggerSource, facts: RunLogFacts): SessionRunTrigger {
+  const carrier = (): SessionRunTrigger => {
+    if (!run.sourceMessageId) return { kind: "direct" };
+    const entryId = run.sourceMessageId as EntryId;
+    if (facts.carrierType === "handoff") return { kind: "handoff", entryId };
+    if (facts.carrierType === "bot.message.received") return { kind: "bot_message", entryId };
+    return run.trigger === "follow_up" && facts.steered
+      ? { kind: "steering", entryId }
+      : { kind: "message", entryId };
+  };
   const stored = RunTrigger.safeParse(run.trigger);
-  if (!stored.success) return carrierTrigger(tx, run);
+  if (!stored.success) return carrier();
   switch (stored.data) {
     case "routine":
-      return routineTrigger(tx, run);
-    case "webhook":
       return run.routineId
-        ? { kind: "webhook", routineId: run.routineId }
-        : carrierTrigger(tx, run);
+        ? {
+            kind: "routine",
+            routineId: run.routineId,
+            name: facts.routineName ?? "",
+            scheduledAt: run.createdAt.toISOString(),
+          }
+        : { kind: "direct" };
+    case "webhook":
+      return run.routineId ? { kind: "webhook", routineId: run.routineId } : carrier();
     case "skill":
       return { kind: "direct" };
     case "spawn":
-      return spawnTrigger(tx, run);
+      // A spawned bot's first run is woken by the prompt its spawner wrote with the run's nonce.
+      return facts.spawnPromptId
+        ? { kind: "message", entryId: facts.spawnPromptId as EntryId }
+        : { kind: "direct" };
     case "user":
     case "follow_up":
     case "reaction":
     case "messaging":
     case "bot_message":
     case "resume":
-      return carrierTrigger(tx, run);
+      return carrier();
   }
-}
-
-async function carrierTrigger(
-  tx: Prisma.TransactionClient,
-  run: RunTriggerSource,
-): Promise<SessionRunTrigger> {
-  if (!run.sourceMessageId) return { kind: "direct" };
-  const entryId = run.sourceMessageId as EntryId;
-  const carrier = await tx.sessionEntry.findUnique({
-    where: { id: entryId },
-    select: { type: true },
-  });
-  if (carrier?.type === "handoff") return { kind: "handoff", entryId };
-  if (carrier?.type === "bot.message.received") return { kind: "bot_message", entryId };
-  const steered =
-    run.trigger === "follow_up" &&
-    (await tx.steeringMessage.findFirst({
-      where: { messageId: run.sourceMessageId },
-      select: { id: true },
-    }));
-  return steered ? { kind: "steering", entryId } : { kind: "message", entryId };
-}
-
-/** A spawned bot's first run is woken by the prompt its spawner wrote, which carries the run's nonce. */
-async function spawnTrigger(
-  tx: Prisma.TransactionClient,
-  run: RunTriggerSource,
-): Promise<SessionRunTrigger> {
-  const [prompt] = run.clientNonce
-    ? await tx.$queryRaw<Array<{ id: string }>>`
-        SELECT id FROM session_entries
-        WHERE "sessionId" = ${run.sessionId} AND payload ->> 'clientNonce' = ${run.clientNonce}`
-    : [];
-  return prompt ? { kind: "message", entryId: prompt.id as EntryId } : { kind: "direct" };
-}
-
-async function routineTrigger(
-  tx: Prisma.TransactionClient,
-  run: RunTriggerSource,
-): Promise<SessionRunTrigger> {
-  if (!run.routineId) return { kind: "direct" };
-  const routine = await tx.routine.findUnique({
-    where: { id: run.routineId },
-    select: { name: true },
-  });
-  return {
-    kind: "routine",
-    routineId: run.routineId,
-    name: routine?.name ?? "",
-    scheduledAt: run.createdAt.toISOString(),
-  };
 }
 
 function redactBlocks(blocks: MessageBlock[], secrets: string[]): MessageBlock[] {
