@@ -1,4 +1,4 @@
-import type { ThreadMessage } from "@rakazo/contracts";
+import type { ThreadItem, ThreadMessage } from "@rakazo/contracts";
 import { showsTimeMarker } from "./thread-time-markers.js";
 
 /** Consecutive messages from the same bot within this window collapse under one header
@@ -186,4 +186,40 @@ export function computeMessageGroups<M extends GroupableMessage>(
   });
 
   return results;
+}
+
+/**
+ * Rule R over a thread's items, in order: whether each opens and closes a visible group. Narration
+ * of the same bot, or text from the person, continues a group within `windowMs` when no time
+ * marker falls between; a reply always opens one, and an item that is not a message is a group of
+ * one.
+ */
+export function computeItemGroups(
+  items: readonly ThreadItem[],
+  windowMs: number = MESSAGE_GROUP_WINDOW_MS,
+): { firstOfGroup: boolean; lastOfGroup: boolean }[] {
+  const continues = items.map((item, index) =>
+    continuesItemGroup(items[index - 1], item, windowMs),
+  );
+  return items.map((_, index) => ({
+    firstOfGroup: !continues[index],
+    lastOfGroup: !continues[index + 1],
+  }));
+}
+
+function continuesItemGroup(
+  previous: ThreadItem | undefined,
+  item: ThreadItem,
+  windowMs: number,
+): boolean {
+  if (previous?.kind !== "message" || item.kind !== "message") return false;
+  if (item.role === "user" && item.replyTo) return false;
+  const botNarration =
+    item.role === "bot" &&
+    previous.role === "bot" &&
+    item.botId === previous.botId &&
+    isNarrationMessage(previous) &&
+    isNarrationMessage(item);
+  const userNarration = isUserNarrationMessage(previous) && isUserNarrationMessage(item);
+  return (botNarration || userNarration) && withinGroupWindow(previous.ts, item.ts, windowMs);
 }

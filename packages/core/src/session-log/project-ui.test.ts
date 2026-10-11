@@ -75,6 +75,8 @@ describe("projectThreadItems", () => {
         effectKind: "send_email",
         proposal: { to: "ops@example.com", subject: "Lyon weather" },
         decision: "approved",
+        botId: "bot_ada",
+        runId: "run_lin_1",
       },
       {
         kind: "message",
@@ -393,6 +395,18 @@ describe("projectThreadItems", () => {
     ]);
   });
 
+  it("places the compaction divider above the window of turns it kept word for word", async () => {
+    const items = projectThreadItems(await fixtureChain("compacted"));
+    expect(items.map((item) => [item.kind, item.id])).toEqual([
+      ["divider", "cmp-10"],
+      ["message", "cmp-04"],
+      ["run", "cmp-05"],
+      ["message", "cmp-06"],
+      ["run", "cmp-11"],
+      ["message", "cmp-12"],
+    ]);
+  });
+
   it("folds a routine's start and finish into one item at its start, open until it finishes", () => {
     const started = (runId: string, name: string) => ({
       botId: "bot_ada",
@@ -481,6 +495,7 @@ describe("projectThreadItems", () => {
           ...veille,
           blocks: text("Le Monde"),
           replyTo: { entryId: "org-1" },
+          clientNonce: "nonce-le-monde",
           source: "app",
         },
       },
@@ -549,7 +564,7 @@ describe("projectThreadItems", () => {
         ts: at(1),
         botId: "bot_ada",
         runId: "run_veille",
-        blocks: [{ kind: "ask", text: "Which outlets?" }],
+        blocks: [{ kind: "ask", text: "Which outlets?", status: "answered", answer: "Le Monde" }],
         origin: fromVeille,
       },
       {
@@ -559,6 +574,7 @@ describe("projectThreadItems", () => {
         ts: at(2),
         blocks: text("Le Monde"),
         replyTo: { entryId: "org-1" },
+        clientNonce: "nonce-le-monde",
         source: "app",
         origin: fromVeille,
       },
@@ -588,6 +604,8 @@ describe("projectThreadItems", () => {
         effectKind: "spawn_bot",
         proposal: { name: "Scout" },
         decision: null,
+        botId: "bot_ada",
+        runId: "run_scout",
         origin: { sessionId: "ses_scout", kind: "subagent", name: "scout" },
       },
       {
@@ -877,7 +895,7 @@ describe("projectThreadItems", () => {
     ]);
   });
 
-  it("opens on the clear divider and keeps attachments, an ask, a choice and a control note", async () => {
+  it("opens on the clear divider and shows an ask and a choice answered by their answer records", async () => {
     expect(projectThreadItems(await fixtureChain("cleared"))).toEqual([
       { kind: "divider", id: "clr-01", ts: at(1), reason: "clear" },
       {
@@ -925,16 +943,14 @@ describe("projectThreadItems", () => {
         ts: at(4),
         botId: "bot_ada",
         runId: "run_clr_1",
-        blocks: [{ kind: "ask", text: "Which day should it go out?" }],
-      },
-      {
-        kind: "message",
-        role: "user",
-        id: "clr-06",
-        ts: at(6),
-        blocks: text("Tuesday."),
-        replyTo: { entryId: "clr-04" },
-        source: "app",
+        blocks: [
+          {
+            kind: "ask",
+            text: "Which day should it go out?",
+            status: "answered",
+            answer: "Tuesday.",
+          },
+        ],
       },
       {
         kind: "note",
@@ -989,17 +1005,9 @@ describe("projectThreadItems", () => {
               { id: "inbox", letter: "A", label: "Clear my inbox" },
               { id: "week", letter: "B", label: "Plan my week" },
             ],
+            answerId: "Plan my week.",
           },
         ],
-      },
-      {
-        kind: "message",
-        role: "user",
-        id: "clr-12",
-        ts: at(12),
-        blocks: text("Plan my week."),
-        replyTo: { entryId: "clr-11" },
-        source: "app",
       },
     ]);
   });
