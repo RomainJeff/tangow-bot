@@ -594,7 +594,7 @@ describe("projectThreadView rows", () => {
     );
   });
 
-  it("removes a reply's preview by the entry it targets, not by the row", () => {
+  it("gives a row the message its preview entry targets, the row's own for an inline card", () => {
     const preview = {
       kind: "link_preview",
       url: "https://example.com/",
