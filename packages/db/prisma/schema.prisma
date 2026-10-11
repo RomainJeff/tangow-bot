@@ -211,6 +211,7 @@ model Space {
   agentSecrets                AgentSecret[]
   linkPreviewCache            LinkPreviewCache[]
   linkPreviewReads            LinkPreviewRead[]
+  conversationSessions        ConversationSession[]
 
   @@unique([id, organizationId])
   @@index([organizationId, createdAt])
@@ -487,6 +488,10 @@ model Thread {
   historyCompactionSummary    String?    @db.Text
   historyCompactionGeneration Int        @default(0)
   unread                      Boolean    @default(false)
+  // The main session. The database fills it: a uuid default, and the threads_create_main_session
+  // trigger inserts the matching sessions row, so every thread has its log from its first insert.
+  sessionId                   String     @unique @default(dbgenerated("(gen_random_uuid())::text"))
+  sessions                    ConversationSession[]
   messages                    Message[]
   events                      Event[]
   tasks                       Task[]
@@ -602,6 +607,13 @@ model Run {
   usageRecords         UsageRecord[]
   steeringMessages     SteeringMessage[]
   externalMessage      ExternalMessage?
+  // The session the run writes to. When left out, the runs_default_session trigger copies the
+  // thread's main session; a subagent run names its child session.
+  sessionId            String              @default(dbgenerated())
+  session              ConversationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  parentRunId          String?
+  parentRun            Run?                @relation("RunChildren", fields: [parentRunId], references: [id], onDelete: SetNull)
+  childRuns            Run[]               @relation("RunChildren")
 
   @@unique([spaceId, clientNonce])
   @@index([status, leaseExpiresAt])
@@ -613,7 +625,56 @@ model Run {
   @@index([routineId, completedAt])
   @@index([sourceMessageId])
   @@index([threadId, status, createdAt])
+  @@index([sessionId])
+  @@index([parentRunId])
   @@map("runs")
+}
+
+// One conversation log. A thread session belongs to a thread; a subagent session belongs to the
+// parent session and the tool call that launched it, and has no thread. The sessions_kind_shape
+// check enforces that split. nextEntrySeq is the per-session seq counter, and the update that bumps
+// it is the append lock.
+model ConversationSession {
+  id              String                @id
+  spaceId         String
+  space           Space                 @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  kind            String
+  threadId        String?
+  thread          Thread?               @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  parentSessionId String?
+  parentSession   ConversationSession?  @relation("SessionChildren", fields: [parentSessionId], references: [id], onDelete: Cascade)
+  childSessions   ConversationSession[] @relation("SessionChildren")
+  parentEntryId   String?
+  nextEntrySeq    Int                   @default(0)
+  createdAt       DateTime              @default(now())
+  entries         SessionEntry[]
+  runs            Run[]
+
+  @@index([threadId])
+  @@index([parentSessionId])
+  @@map("sessions")
+}
+
+// One entry of a session log, validated by SessionEntrySchema. parentId has no foreign key: the
+// writer takes it from the session's own head or rewind target. The partial unique index
+// session_entries_sessionId_clientNonce_key on ("sessionId", payload->>'clientNonce') is created in
+// SQL: a redelivered message keeps one entry.
+model SessionEntry {
+  id        String              @id
+  sessionId String
+  session   ConversationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  seq       Int
+  parentId  String?
+  type      String
+  payload   Json
+  botId     String?
+  runId     String?
+  createdAt DateTime            @default(now())
+
+  @@unique([sessionId, seq])
+  @@index([sessionId, type, seq])
+  @@index([runId, seq])
+  @@map("session_entries")
 }
 
 model SteeringMessage {
