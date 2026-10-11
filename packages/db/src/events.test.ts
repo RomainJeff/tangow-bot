@@ -2696,7 +2696,6 @@ describe("rewindThread", () => {
       event: { type: "thread.rewound" },
       cancelledRunIds: ["run-1"],
       fromSeq: 4,
-      compactionReset: false,
     });
     expect(tx.message.deleteMany).toHaveBeenCalledWith({
       where: { threadId: "thread-1", seq: { gte: 4 } },

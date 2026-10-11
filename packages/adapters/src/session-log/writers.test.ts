@@ -273,7 +273,7 @@ describe("session log writers", () => {
     ).toEqual([{ type: "clear", parentId: null }]);
   });
 
-  it("says when a rewind cuts a compaction, and names the history generation each rewind and clear ends", async () => {
+  it("names the history generation each rewind and clear ends, a compaction on the chain or not", async () => {
     const { prisma } = database;
     const { bot, threadId, sessionId } = await seedBot(prisma, "Ada");
     const events = createThreadEvents(prisma);
@@ -302,15 +302,17 @@ describe("session log writers", () => {
     const after = await send("After the summary");
     const target = { spaceId: SPACE, threadId, botId: bot.id };
 
-    const keptSummary = await rewindThread(prisma, { ...target, messageId: after.messageId });
-    const cutSummary = await rewindThread(prisma, { ...target, messageId: cut.messageId });
+    const keepsCompaction = await rewindThread(prisma, { ...target, messageId: after.messageId });
+    const cutsCompaction = await rewindThread(prisma, { ...target, messageId: cut.messageId });
     const firstClear = await clearThread(prisma, target);
     const secondClear = await clearThread(prisma, target);
 
-    expect(keptSummary).toMatchObject({ compactionReset: false, historyGeneration: 0 });
-    expect(cutSummary).toMatchObject({ compactionReset: true, historyGeneration: 4 });
-    expect(firstClear.historyGeneration).toBe(5);
-    expect(secondClear.historyGeneration).toBe(6);
+    expect([
+      keepsCompaction?.historyGeneration,
+      cutsCompaction?.historyGeneration,
+      firstClear.historyGeneration,
+      secondClear.historyGeneration,
+    ]).toEqual([0, 4, 5, 6]);
   });
 
   it("closes the log of a run it cancels with who cancelled it", async () => {

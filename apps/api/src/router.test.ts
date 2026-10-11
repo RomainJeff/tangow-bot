@@ -838,9 +838,9 @@ describe("thread rewind", () => {
       cancelledRunIds: ["run-1"],
       historyGeneration: 3,
       fromSeq: 4,
-      compactionReset: false,
     });
     const cancel = vi.fn().mockResolvedValue(undefined);
+    const purgeHistory = vi.fn().mockResolvedValue({ ok: true, value: undefined });
     const prisma = {
       bot: {
         findFirst: vi.fn().mockResolvedValue({
@@ -855,6 +855,7 @@ describe("thread rewind", () => {
       prisma,
       events: { rewindThread },
       jobs: { cancel },
+      memoryProviders: { resolve: vi.fn(async () => ({ provider: { purgeHistory } })) },
       env: {
         defaultProvider: "fake",
         defaultModel: "fake-model",
@@ -870,7 +871,13 @@ describe("thread rewind", () => {
       email: "user@rakazo.test",
       isDeploymentOwner: true,
     } satisfies Actor;
-    return { rewindThread, cancel, actor, handler: new RPCHandler(createRouter(deps)) };
+    return {
+      rewindThread,
+      cancel,
+      purgeHistory,
+      actor,
+      handler: new RPCHandler(createRouter(deps)),
+    };
   }
 
   function rewindRequest(messageId: string) {
@@ -899,6 +906,16 @@ describe("thread rewind", () => {
       messageId: "message-4",
     });
     expect(cancel).toHaveBeenCalledOnce();
+  });
+
+  it("purges the compacted summaries of the history generation the rewind ended", async () => {
+    const { purgeHistory, actor, handler } = rewindDeps("user");
+
+    await handler.handle(rewindRequest("message-4"), { prefix: "/rpc", context: { actor } });
+
+    expect(purgeHistory.mock.calls.map(([request]) => request)).toEqual([
+      { botId: "bot-1", generations: [3] },
+    ]);
   });
 
   it("refuses to rewind to a bot message", async () => {

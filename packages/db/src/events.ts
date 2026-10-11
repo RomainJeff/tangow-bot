@@ -101,11 +101,9 @@ export interface RewindThreadInput extends ClearThreadInput {
 export interface RewindThreadResult {
   event: ProductEvent;
   cancelledRunIds: string[];
-  /** The history generation the rewind ended, whose compacted summaries a reset purges. */
+  /** The history generation the rewind ended, whose compacted summaries the caller purges. */
   historyGeneration: number;
   fromSeq: number;
-  /** Compaction covered the rewound range and was rolled back; derived memory is now stale. */
-  compactionReset: boolean;
 }
 
 export interface FinalizeComputerControlReleaseInput {
@@ -465,16 +463,6 @@ export async function rewindThread(
       // rather than guess a cut point and drop the wrong range.
       fromEventSeq: created?.seq ?? Number.MAX_SAFE_INTEGER,
     });
-    const cut = await tx.sessionEntry.findFirst({
-      where: { id: input.messageId, sessionId: truncated.sessionId },
-      select: { seq: true },
-    });
-    const compactionReset = Boolean(
-      await tx.sessionEntry.findFirst({
-        where: { sessionId: truncated.sessionId, type: "compaction", seq: { gt: cut?.seq ?? -1 } },
-        select: { id: true },
-      }),
-    );
     const generation = await historyGeneration(tx, truncated.sessionId);
     await appendRewindInTransaction(tx, {
       sessionId: truncated.sessionId as SessionId,
@@ -491,7 +479,6 @@ export async function rewindThread(
       cancelledRunIds: truncated.cancelledRunIds,
       historyGeneration: generation,
       fromSeq: target.seq,
-      compactionReset,
     };
   });
   if (!committed) return null;

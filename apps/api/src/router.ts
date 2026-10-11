@@ -369,7 +369,7 @@ function computerContext(actor: Actor, botId: string, operationId: string): Adap
 /**
  * Durable memories remain in their Space-private containers. Truncating history only removes the
  * conversation-derived summaries filed under the generation it ended; a compaction still saving
- * under that generation purges it again once it sees a clear moved the generation on.
+ * under that generation purges it again once it sees a clear or a rewind moved the generation on.
  */
 async function purgeCompactedHistoryMemory(
   deps: RouterDeps,
@@ -1599,16 +1599,13 @@ export function createRouter(deps: RouterDeps) {
           ),
         );
         await sweepOrphanPreviewArtifacts(deps, { spaceId: context.actor.spaceId });
-        // Compaction survived the rewind, so its summary still matches the remaining history.
-        if (rewound.compactionReset) {
-          await purgeCompactedHistoryMemory(
-            deps,
-            context.actor,
-            target,
-            rewound.historyGeneration,
-            "thread-rewind",
-          );
-        }
+        await purgeCompactedHistoryMemory(
+          deps,
+          context.actor,
+          target,
+          rewound.historyGeneration,
+          "thread-rewind",
+        );
         return { ok: true as const };
       }),
       followUp: authed.threads.followUp.handler(async ({ context, input }) => {
