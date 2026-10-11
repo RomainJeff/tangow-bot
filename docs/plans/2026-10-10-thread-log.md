@@ -597,6 +597,7 @@ Decision. A. The head is the entry with the highest seq in its session, so the r
 - Conversation fork from any entry, a new session whose first entry's parent is the chosen entry.
 - Exchange view between bots. One query on `exchangeId` across sessions shows a whole bot to bot conversation, however many bots it crossed. Needs only the `exchangeId` field SL1 defines and an index on it when the view ships.
 - Inference context for `run.started` triggers and `computer.control`, today one context line, tunable through `ENTRY_AUDIENCE` without a schema change.
+- The skill event system as a whole, `agent.skill.used`, `agent.skill.nudge` and the learned lines, revisited once the log is the record, to decide what becomes entries and what stays ephemeral.
 
 ## Appendix E. Entry types and audience
 
@@ -635,9 +636,9 @@ Taken by the operator on 2026-10-11 from the inventory of `main` against the fea
 - Migrations keep their order, main's two (`runs.skillLinesAt`, `routines.untrustedPrompt` and `steering_messages.untrusted`) before the feature branch's, no renaming. `schema.prisma` merges by union.
 - The composition roots, `packages/adapters/src/index.ts`, `fake-thread-db.ts` and the executor tests merge by union.
 - `executor.ts`, the skill tool hunk. Main's `runSkillTool` wins (lock, untrusted refusal, delete). The feature branch's per-call skill entry is removed.
-- The learned skills of main enter the log as `skill.learnt`, one entry per skill and per run, written by `writeSkillLines` in the transaction that sets `skillLinesAt`, payload `{ skillId, name, change: learned | updated | deleted }`. The `skill.saved` type SL3 introduced is renamed to `skill.learnt` at the merge. Existing `skill_source` blocks are converted to `skill.learnt` entries by the SL6 backfill.
+- The learned skills of main enter the log as `skill.learnt`, one entry per skill and per run, written by `writeSkillLines` in the transaction that sets `skillLinesAt`, payload `{ skillId, name, change: learned | updated | deleted }`. The `skill.saved` type SL3 introduced is renamed to `skill.learnt` at the merge. A detached run (routine, subagent) that learns a skill still writes `skill.learnt` to the thread's main session, as it does for approvals, since it is a fact about the bot that concerns the person. Existing `skill_source` blocks are converted to `skill.learnt` entries by the SL6 backfill.
 - The skill nudge's private exchange is rebuilt from the run's entries through `readRun` and the inference projection. `reply-context.ts` stays deleted; nothing reintroduces `messageToAgentHistoryTurn`.
 - `executor-compaction-asides.test.ts` stays deleted; its new main-side case moves to a projection test, a `skill.learnt` entry yields no turn.
-- `agent.skill.used` and `agent.skill.nudge` stay in the `events` feed, out of the log.
+- `agent.skill.used` and `agent.skill.nudge` stay in the `events` feed, out of the log, for now. The whole skill event system (used, nudge, lines) gets a pass of its own later, outside this program.
 - SL6 adds to its backfill the `skill_source` conversion and ports the remaining readers of `messages` before the drop, namely `writeSkillLines`, the nudge exchange, `cutMessages` in the truncate path, `previewFromBlocks` in `thread-listing.ts`. `steering_messages.untrusted` rides the repoint the plan already lists.
 - `TeachComputerOverlay.tsx` has no fix on main; a separate small PR on `main` formats it.
