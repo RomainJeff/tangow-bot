@@ -1182,7 +1182,9 @@ describe("readSessionEntries", () => {
       run: { findFirst: vi.fn(async () => ({ id: "run-helper" })) },
     } as unknown as PrismaClient;
     const sessionLog = {
-      readRun: vi.fn(async (runId: string) => (runId === "run-helper" ? run : [])),
+      readRun: vi.fn(async (runId: string, { limit }: { limit?: number } = {}) =>
+        runId !== "run-helper" ? [] : limit === undefined ? run : run.slice(-limit),
+      ),
     };
     return { deps: { prisma, sessionLog }, sessionLog };
   }

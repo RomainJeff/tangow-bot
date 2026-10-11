@@ -236,6 +236,7 @@ export function runSessionLogConformance<Tx>(makeLog: () => Promise<SessionLogHa
         card,
         done,
       ]);
+      expect(await harness.log.readRun(runId, { limit: 3 })).toEqual([answer, card, done]);
       expect(await harness.log.readTail(childId)).toEqual([started, call, result, done]);
     });
 

@@ -83,22 +83,26 @@ export class PostgresSessionLog implements SessionLog<Prisma.TransactionClient> 
     return rows.map(sessionEntryFromRow);
   }
 
-  async readRun(runId: string): Promise<SessionEntry[]> {
+  async readRun(runId: string, { limit }: { limit?: number } = {}): Promise<SessionEntry[]> {
+    if (limit !== undefined) assertEntryCount("limit", limit);
+    const newest = limit === undefined ? Prisma.empty : Prisma.sql`LIMIT ${limit}`;
     const rows = await this.prisma.$queryRaw<SessionEntryRow[]>`
       WITH run AS (SELECT * FROM session_entries WHERE "runId" = ${runId})
-      SELECT * FROM run
-      UNION ALL
-      SELECT answer.* FROM run ask
-      JOIN session_entries answer ON answer."sessionId" = ask."sessionId"
-        AND answer.type = 'user.message' AND answer.seq > ask.seq
-        AND answer.payload -> 'replyTo' ->> 'entryId' = ask.id
-      WHERE ask.type IN ('assistant.ask', 'assistant.choice')
-      UNION ALL
-      SELECT state.* FROM (SELECT "sessionId", min(seq) AS seq FROM run GROUP BY "sessionId") start
-      JOIN session_entries state ON state."sessionId" = start."sessionId" AND state.seq > start.seq
-      WHERE state.type IN (${Prisma.join(CARD_STATE_TYPES)})
-        AND state.payload ->> 'target' IN (SELECT id FROM run)
-      ORDER BY "createdAt", seq`;
+      SELECT * FROM (
+        SELECT * FROM run
+        UNION ALL
+        SELECT answer.* FROM run ask
+        JOIN session_entries answer ON answer."sessionId" = ask."sessionId"
+          AND answer.type = 'user.message' AND answer.seq > ask.seq
+          AND answer.payload -> 'replyTo' ->> 'entryId' = ask.id
+        WHERE ask.type IN ('assistant.ask', 'assistant.choice')
+        UNION ALL
+        SELECT state.* FROM (SELECT "sessionId", min(seq) AS seq FROM run GROUP BY "sessionId") start
+        JOIN session_entries state ON state."sessionId" = start."sessionId" AND state.seq > start.seq
+        WHERE state.type IN (${Prisma.join(CARD_STATE_TYPES)})
+          AND state.payload ->> 'target' IN (SELECT id FROM run)
+        ORDER BY "createdAt" DESC, seq DESC ${newest}
+      ) entries ORDER BY "createdAt", seq`;
     return rows.map(sessionEntryFromRow);
   }
 

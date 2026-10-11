@@ -130,7 +130,8 @@ export class FileSessionLog implements SessionLog<undefined> {
     return chain.slice(start, start + limit);
   }
 
-  async readRun(runId: string): Promise<SessionEntry[]> {
+  async readRun(runId: string, { limit }: { limit?: number } = {}): Promise<SessionEntry[]> {
+    if (limit !== undefined) assertEntryCount("limit", limit);
     const dir = path.join(this.root, "sessions");
     const names = await readdir(dir).catch((error: unknown) => {
       if (isMissing(error)) return [];
@@ -153,9 +154,10 @@ export class FileSessionLog implements SessionLog<undefined> {
         ? entry.payload.replyTo !== undefined && asks.has(entry.payload.replyTo.entryId)
         : isCardState(entry) && ids.has(entry.payload.target),
     );
-    return [...run, ...joined].sort(
+    const sorted = [...run, ...joined].sort(
       (left, right) => left.ts.localeCompare(right.ts) || left.seq - right.seq,
     );
+    return limit === undefined ? sorted : sorted.slice(-limit);
   }
 
   async readEntry(sessionId: SessionId, entryId: EntryId): Promise<SessionEntry | undefined> {

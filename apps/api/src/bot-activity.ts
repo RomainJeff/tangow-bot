@@ -138,11 +138,11 @@ type RunLogDeps = { prisma: PrismaClient; sessionLog: RunLog };
 
 const RUN_ENTRIES_LIMIT = 1000;
 
-/** A run read whole, cut to its newest entries past the cap. */
+/** A run's newest entries up to the cap, and whether older ones were left out. */
 export async function readCappedRun(sessionLog: RunLog, runId: string): Promise<SessionEntries> {
-  const entries = await sessionLog.readRun(runId);
+  const entries = await sessionLog.readRun(runId, { limit: RUN_ENTRIES_LIMIT + 1 });
   return entries.length > RUN_ENTRIES_LIMIT
-    ? { entries: entries.slice(-RUN_ENTRIES_LIMIT), truncated: true }
+    ? { entries: entries.slice(1), truncated: true }
     : { entries };
 }
 
