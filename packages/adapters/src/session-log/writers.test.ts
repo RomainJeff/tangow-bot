@@ -7,6 +7,7 @@ import {
   rewindThread,
 } from "@rakazo/db";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { messageConnectedAgent } from "../agent-connections.js";
 import { messageBot, returnBotMessageOutcome } from "../bot-messages.js";
 import type { PgliteDatabase } from "./pglite.js";
 import { openPgliteDatabase } from "./pglite.js";
@@ -146,6 +147,67 @@ describe("session log writers", () => {
           intent: "result",
           hop: 2,
           exchangeId,
+        },
+      },
+    ]);
+  });
+
+  it("names a connected agent from another owner as an agent peer on both sides", async () => {
+    const { prisma } = database;
+    const asker = await seedBot(prisma, "Concierge");
+    const helper = await seedBot(prisma, "Partner");
+    const askerRun = await seedRun(prisma, asker.bot.id, asker.threadId);
+    for (const [bot, address] of [
+      [asker.bot, "+15550000001"],
+      [helper.bot, "+15550000002"],
+    ] as const) {
+      await prisma.messagingIdentity.create({
+        data: { provider: "sendblue", address, userId: USER, spaceId: SPACE, botId: bot.id },
+      });
+    }
+    await prisma.agentConnection.create({
+      data: { requesterBotId: asker.bot.id, targetBotId: helper.bot.id, status: "approved" },
+    });
+    const deps = {
+      prisma,
+      events: { notify: vi.fn(async () => undefined) },
+      jobs: { enqueue: vi.fn(async () => undefined) },
+    } as unknown as Parameters<typeof messageConnectedAgent>[0];
+
+    await messageConnectedAgent(deps, askerRun, asker.bot, {
+      address: "+15550000002",
+      message: "Table for two at eight?",
+      deliveryKey: "call-agent",
+    });
+
+    const [sent] = await log.readTail(asker.sessionId);
+    const [received] = await log.readTail(helper.sessionId);
+    expect([sent!, received!].map(shape)).toEqual([
+      {
+        id: sent!.id,
+        type: "bot.message.sent",
+        parentId: null,
+        payload: {
+          to: { kind: "agent", address: "+15550000002", name: "Partner" },
+          text: "Table for two at eight?",
+          intent: "request",
+          hop: 1,
+          exchangeId: sent!.id,
+        },
+      },
+      {
+        id: received!.id,
+        type: "bot.message.received",
+        parentId: null,
+        payload: {
+          from: { kind: "agent", address: "+15550000001", name: "Concierge" },
+          fromSessionId: asker.sessionId,
+          fromEntryId: sent!.id,
+          text: "Table for two at eight?",
+          intent: "request",
+          hop: 1,
+          exchangeId: sent!.id,
+          clientNonce: "agent-message:call-agent",
         },
       },
     ]);

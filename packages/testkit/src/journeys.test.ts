@@ -1538,7 +1538,32 @@ describeJourneys("required product journeys", () => {
     expect(stolen.status).toBeGreaterThanOrEqual(400);
     expect((await rpc<Bot[]>(app, ada, "bots/list")).map((bot) => bot.id)).toContain(gone.id);
 
+    const busy = await rpc<{ runId: string }>(app, ada, "threads/send", {
+      botId: gone.id,
+      text: "keep working until I stop you",
+    });
+    await waitForDatabase(
+      async () =>
+        (await prisma.sessionEntry.count({ where: { runId: busy.runId, type: "run.started" } })) >
+        0,
+    );
     await rpc(app, ada, "bots/archive", { botId: gone.id });
+    expect(
+      (
+        await prisma.sessionEntry.findMany({
+          where: { runId: busy.runId },
+          orderBy: { seq: "asc" },
+        })
+      )
+        .filter((entry) => entry.type.startsWith("run."))
+        .map(({ type, payload }) => [type, payload]),
+    ).toEqual([
+      [
+        "run.started",
+        expect.objectContaining({ trigger: expect.objectContaining({ kind: "message" }) }),
+      ],
+      ["run.finished", { status: "cancelled", usage: { inputTokens: 0, outputTokens: 0 } }],
+    ]);
     expect((await rpc<Bot[]>(app, ada, "bots/list")).map((bot) => bot.id)).not.toContain(gone.id);
     expect((await rpc<Bot[]>(app, ada, "bots/listArchived")).map((bot) => bot.id)).toContain(
       gone.id,
@@ -2006,6 +2031,23 @@ describeJourneys("required product journeys", () => {
         (message.blocks as Array<{ kind?: string }>).some((block) => block.kind === "handoff"),
       ),
     ).toBe(true);
+    const handoff = await prisma.sessionEntry.findFirstOrThrow({
+      where: { session: { threadId: group.threadId }, type: "handoff" },
+    });
+    const handedRun = await prisma.run.findFirstOrThrow({ where: { sourceMessageId: handoff.id } });
+    await waitForDatabase(
+      async () =>
+        (await prisma.sessionEntry.count({ where: { runId: handedRun.id, type: "run.started" } })) >
+        0,
+    );
+    const handedStart = await prisma.sessionEntry.findFirstOrThrow({
+      where: { runId: handedRun.id, type: "run.started" },
+    });
+    expect([handoff.payload, handedRun.botId, handedStart.payload]).toMatchObject([
+      { fromBotId: botA.id, toBotId: botC.id },
+      botC.id,
+      { trigger: { kind: "handoff", entryId: handoff.id } },
+    ]);
 
     const groupAsk = await rpc<{ runId: string }>(app, ada, "threads/send", {
       groupId: group.id,

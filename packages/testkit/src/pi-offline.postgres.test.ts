@@ -398,6 +398,210 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
     );
   }, 30_000);
 
+  it("logs a denied approval as the effect's decision, the paused call keeping its result", async () => {
+    await journey(
+      [
+        {
+          expect() {},
+          response: {
+            type: "tool",
+            id: "journey-spawn",
+            name: "spawn_bot",
+            arguments: { name: "Scout", instructions: "You are Scout.", computer_mode: "team" },
+          },
+        },
+        { expect() {}, response: { type: "text", text: "I will not create Scout." } },
+      ],
+      async ({ app, cookie, bot, prisma, send, log }) => {
+        const sent = await send("Create a bot named Scout.");
+        await sent.settled("waiting_input");
+        const card = await prisma.message.findFirstOrThrow({
+          where: { runId: sent.runId, role: "bot" },
+          orderBy: { seq: "desc" },
+        });
+        await rpc(app, cookie, "threads/answer", {
+          botId: bot.id,
+          runId: sent.runId,
+          messageId: card.id,
+          answer: "deny",
+        });
+        await sent.settled("completed");
+
+        const entries = await log.readRun(sent.runId);
+        expect(
+          entries.map((entry) => [
+            entry.type,
+            payloadOf(entry).output ?? payloadOf(entry).decision ?? payloadOf(entry).status,
+          ]),
+        ).toEqual([
+          ["run.started", undefined],
+          ["tool.call", undefined],
+          ["effect.requested", undefined],
+          ["tool.result", "paused: awaiting approval"],
+          ["effect.resolved", "denied"],
+          ["assistant.text", undefined],
+          ["run.finished", "completed"],
+        ]);
+      },
+    );
+  }, 30_000);
+
+  it("closes a helper as cancelled by whoever stopped its parent", async () => {
+    let helperOpened!: () => void;
+    const helperHolding = new Promise<void>((resolve) => {
+      helperOpened = resolve;
+    });
+    await journey(
+      [
+        { expect() {}, response: DELEGATE },
+        { expect() {}, response: { type: "hold", onOpen: () => helperOpened() } },
+      ],
+      async ({ app, cookie, bot, prisma, send, log, userId }) => {
+        const sent = await send("Have a helper check it.");
+        await helperHolding;
+        const helper = await prisma.run.findFirstOrThrow({ where: { parentRunId: sent.runId } });
+        await rpc(app, cookie, "threads/stop", { botId: bot.id });
+        await sent.settled("cancelled");
+
+        const ended = async (runId: string) =>
+          (await log.readRun(runId)).map((entry) => [entry.type, payloadOf(entry).status]);
+        expect(await ended(helper.id)).toEqual([
+          ["run.started", undefined],
+          ["run.finished", "cancelled"],
+        ]);
+        expect(await ended(sent.runId)).toEqual([
+          ["run.started", undefined],
+          ["tool.call", undefined],
+          ["run.finished", "cancelled"],
+        ]);
+        expect(
+          (await log.readRun(helper.id)).map((entry) => payloadOf(entry).by).filter(Boolean),
+        ).toEqual([userId]);
+        expect(
+          await prisma.run.findUniqueOrThrow({
+            where: { id: helper.id },
+            select: { status: true },
+          }),
+        ).toEqual({ status: "cancelled" });
+      },
+    );
+  }, 30_000);
+
+  it("starts the run a message sent during the last turn wakes as a steering run", async () => {
+    let finalAsked!: () => void;
+    let answerFinal!: () => void;
+    const asked = new Promise<void>((resolve) => {
+      finalAsked = resolve;
+    });
+    const answered = new Promise<void>((resolve) => {
+      answerFinal = resolve;
+    });
+    await journey(
+      [
+        {
+          expect() {},
+          response: {
+            type: "tool",
+            id: "journey-note",
+            name: "write_file",
+            arguments: { path: "notes/plan.txt", content: "plan" },
+          },
+        },
+        {
+          async expect() {
+            finalAsked();
+            await answered;
+          },
+          response: { type: "text", text: "Wrote the plan." },
+        },
+        { expect() {}, response: { type: "text", text: "Added the budget." } },
+      ],
+      async ({ prisma, send, log }) => {
+        const first = await send("Write the plan.");
+        await asked;
+        const steered = await send("Also add the budget.");
+        answerFinal();
+        await first.settled("completed");
+        const continuation = await prisma.run.findFirstOrThrow({
+          where: {
+            threadId: (await prisma.run.findUniqueOrThrow({ where: { id: first.runId } })).threadId,
+            trigger: "follow_up",
+          },
+        });
+        await expect
+          .poll(
+            async () =>
+              (await prisma.run.findUniqueOrThrow({ where: { id: continuation.id } })).status,
+            { timeout: 15_000, interval: 100 },
+          )
+          .toBe("completed");
+
+        const chain = await log.readTail(first.sessionId);
+        const steering = chain.find(
+          (entry) => entry.type === "user.message" && entry.id !== chain[0]?.id,
+        );
+        expect(
+          chain.map((entry) =>
+            entry.type === "user.message" ? `user:${entry.id === steering?.id}` : entry.type,
+          ),
+        ).toEqual([
+          "user:false",
+          "run.started",
+          "tool.call",
+          "tool.result",
+          "user:true",
+          "assistant.text",
+          "run.finished",
+          "run.started",
+          "assistant.text",
+          "run.finished",
+        ]);
+        expect(payloadOf(chain.findLast((entry) => entry.type === "run.started")).trigger).toEqual({
+          kind: "steering",
+          entryId: steering?.id,
+        });
+        expect(steered.runId).toBe(first.runId);
+      },
+    );
+  }, 30_000);
+
+  it("logs a skill the bot saves with a tool as skill.saved in its run", async () => {
+    await journey(
+      [
+        {
+          expect() {},
+          response: {
+            type: "tool",
+            id: "journey-skill",
+            name: "skill_create",
+            arguments: {
+              name: "weekly-digest",
+              description: "Send the weekly digest.",
+              body: "Collect the week's notes and send them.",
+            },
+          },
+        },
+        { expect() {}, response: { type: "text", text: "Saved the skill." } },
+      ],
+      async ({ send, log }) => {
+        const sent = await send("Save a skill for the weekly digest.");
+        await sent.settled("completed");
+
+        const entries = await log.readRun(sent.runId);
+        expect(
+          entries.map((entry) => [entry.type, payloadOf(entry).callId ?? payloadOf(entry).name]),
+        ).toEqual([
+          ["run.started", undefined],
+          ["tool.call", "journey-skill"],
+          ["skill.saved", "weekly-digest"],
+          ["tool.result", "journey-skill"],
+          ["assistant.text", undefined],
+          ["run.finished", undefined],
+        ]);
+      },
+    );
+  }, 30_000);
+
   it("gives a call the scripted runtime replays under its id a result of its own", async () => {
     await journey(
       [],
