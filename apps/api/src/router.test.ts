@@ -992,11 +992,12 @@ describe("thread stop", () => {
         findMany: vi.fn(async ({ where }: { where: { status: unknown; routineId?: unknown } }) =>
           matchesRun(where) ? [run] : [],
         ),
-        updateMany: vi.fn(async () => {
-          runStatus = "cancelled";
-          return { count: 1 };
-        }),
-        updateMany: vi.fn(async ({ data }: { data: { skillLinesAt: Date } }) => {
+        // The stop cancels the run; the line sweep claims its lines.
+        updateMany: vi.fn(async ({ data }: { data: { skillLinesAt?: Date } }) => {
+          if (!data.skillLinesAt) {
+            runStatus = "cancelled";
+            return { count: 1 };
+          }
           if (run.skillLinesAt) return { count: 0 };
           run.skillLinesAt = data.skillLinesAt;
           return { count: 1 };
