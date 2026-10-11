@@ -227,10 +227,7 @@ export function appendedEntries(event: ProductEvent): SessionEntry[] {
 export function reduceProgressLayer(layer: ProgressLayer, event: ProductEvent): ProgressLayer {
   if (event.type === "thread.progress") {
     if (!event.runId) return layer;
-    const blocks = reduceLiveMessageBlocks(layer.get(event.runId)?.blocks ?? [], {
-      type: "progress",
-      payload: event.payload,
-    });
+    const blocks = reduceLiveMessageBlocks(layer.get(event.runId)?.blocks ?? [], event.payload);
     return new Map(layer).set(event.runId, { botId: event.botId, ts: event.createdAt, blocks });
   }
   const ended =
@@ -257,7 +254,7 @@ export function applyProgressLayer(
           {
             kind: "message",
             role: "bot",
-            id: progressMessageId({ runId }) as EntryId,
+            id: progressMessageId(runId) as EntryId,
             ts: run.ts,
             botId: run.botId,
             runId,

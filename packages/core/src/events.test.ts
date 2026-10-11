@@ -1,4 +1,3 @@
-import type { MessageBlock } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
 import {
   appendTextSegment,
@@ -39,74 +38,8 @@ describe("isRunTerminalEvent", () => {
 
 describe("reduceLiveMessageBlocks", () => {
   it("preserves structured live activity markers", () => {
-    expect(
-      reduceLiveMessageBlocks([], {
-        type: "progress",
-        payload: { text: "Using browser", activity: true },
-      }),
-    ).toEqual([{ kind: "progress", text: "Using browser", activity: true }]);
-  });
-
-  it("replaces punctuated activity text with its tool step", () => {
-    const activity = reduceLiveMessageBlocks([], {
-      type: "progress",
-      payload: { text: "Running: echo done.", activity: true },
-    });
-
-    expect(reduceLiveMessageBlocks(activity, { type: "tool", name: "shell" })).toEqual([
-      { kind: "steps", steps: [{ label: "Shell", count: 1 }] },
-    ]);
-  });
-  it("collapses repeated tool calls into one step with a count", () => {
-    const blocks = [
-      "SLACK_FETCH_CONVERSATION_HISTORY",
-      "SLACK_FETCH_CONVERSATION_HISTORY",
-      "SLACK_FIND_CHANNELS",
-    ].reduce<MessageBlock[]>(
-      (acc, name) => reduceLiveMessageBlocks(acc, { type: "tool", name }),
-      [],
-    );
-    expect(blocks).toEqual([
-      {
-        kind: "steps",
-        steps: [
-          { label: "Slack fetch conversation history", count: 2 },
-          { label: "Slack find channels", count: 1 },
-        ],
-      },
-    ]);
-  });
-
-  it("holds a tool call that lands mid-sentence until the sentence completes", () => {
-    let blocks = reduceLiveMessageBlocks([], {
-      type: "progress",
-      payload: { text: "Let me check Slack ", streaming: true },
-    });
-    blocks = reduceLiveMessageBlocks(blocks, { type: "tool", name: "SLACK_FIND_CHANNELS" });
-    expect(blocks).toEqual([
-      { kind: "progress", text: "Let me check Slack ", pendingToolNames: ["SLACK_FIND_CHANNELS"] },
-    ]);
-    blocks = reduceLiveMessageBlocks(blocks, {
-      type: "progress",
-      payload: { delta: "for a broad search.", streaming: true },
-    });
-    expect(blocks).toEqual([
-      { kind: "text", text: "Let me check Slack for a broad search." },
-      { kind: "steps", steps: [{ label: "Slack find channels", count: 1 }] },
-    ]);
-  });
-
-  it("places a tool before response text when no narration preceded it", () => {
-    const blocks = reduceLiveMessageBlocks(
-      reduceLiveMessageBlocks([], { type: "tool", name: "shell" }),
-      {
-        type: "progress",
-        payload: { text: "The check passed.", streaming: true },
-      },
-    );
-    expect(blocks).toEqual([
-      { kind: "steps", steps: [{ label: "Shell", count: 1 }] },
-      { kind: "progress", text: "The check passed." },
+    expect(reduceLiveMessageBlocks([], { text: "Using browser", activity: true })).toEqual([
+      { kind: "progress", text: "Using browser", activity: true },
     ]);
   });
 });

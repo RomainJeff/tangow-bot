@@ -1,7 +1,7 @@
 import type { MessageBlock } from "@rakazo/contracts";
 
-export function progressMessageId(event: { runId?: string | null; id?: string }): string {
-  return `progress:${event.runId ?? event.id ?? "live"}`;
+export function progressMessageId(runId: string): string {
+  return `progress:${runId}`;
 }
 
 export function isRunTerminalEvent(event: { type: string }): boolean {
@@ -28,47 +28,24 @@ export function runFailureError(event: {
     : message;
 }
 
-export type LiveMessageUpdate =
-  | { type: "progress"; payload: Record<string, unknown> | undefined }
-  | { type: "tool"; name: string };
-
+/** The live blocks after one `thread.progress` payload: its delta or text as the trailing progress block. */
 export function reduceLiveMessageBlocks(
   blocks: readonly MessageBlock[],
-  update: LiveMessageUpdate,
+  payload: Record<string, unknown> | undefined,
 ): MessageBlock[] {
   const tail = blocks.at(-1);
   const segments = tail?.kind === "progress" ? blocks.slice(0, -1) : blocks;
   const priorText = liveMessageText(blocks);
   const flushedLength =
     tail?.kind === "progress" ? priorText.length - tail.text.length : priorText.length;
-  const tailText =
-    update.type === "progress"
-      ? progressMessageText(update.payload, priorText).slice(flushedLength)
-      : tail?.kind === "progress"
-        ? tail.text
-        : "";
-  const pendingToolNames = [
-    ...(tail?.kind === "progress" ? (tail.pendingToolNames ?? []) : []),
-    ...(update.type === "tool" ? [update.name] : []),
-  ];
-  const activity =
-    update.type === "progress"
-      ? update.payload?.activity === true
-      : tail?.kind === "progress" && tail.activity === true;
-
-  if (pendingToolNames.length > 0 && endsSentence(tailText)) {
-    let next = activity ? [...segments] : appendTextSegment(segments, tailText);
-    for (const name of pendingToolNames) next = appendToolCallSegment(next, name);
-    return next;
-  }
+  const tailText = progressMessageText(payload, priorText).slice(flushedLength);
   if (!tailText) return [...segments];
   return [
     ...segments,
     {
       kind: "progress",
       text: tailText,
-      ...(activity ? { activity: true as const } : {}),
-      ...(pendingToolNames.length > 0 ? { pendingToolNames } : {}),
+      ...(payload?.activity === true ? { activity: true as const } : {}),
     },
   ];
 }
