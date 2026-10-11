@@ -394,6 +394,31 @@ describe("session log writers", () => {
     ).toEqual([{ type: "clear", parentId: null }]);
   });
 
+  it("marks the clear an edit of the first message writes as an edit, and leaves a real clear plain", async () => {
+    const { prisma } = database;
+    const { bot, threadId, sessionId } = await seedBot(prisma, "Hopper");
+    const target = { spaceId: SPACE, threadId, botId: bot.id };
+    const first = await createThreadEvents(prisma).sendUserMessage({
+      ...target,
+      userId: USER,
+      blocks: [{ kind: "text", text: "Edit me" }],
+      prompt: "Edit me",
+      trigger: "user",
+      createRun: false,
+    });
+
+    await rewindThread(prisma, { ...target, messageId: first.messageId });
+    const edited = await log.readTail(sessionId);
+    await clearThread(prisma, target);
+
+    expect(edited.map(({ type, payload }) => ({ type, payload }))).toEqual([
+      { type: "clear", payload: { edit: true } },
+    ]);
+    expect((await log.readTail(sessionId)).map(({ type, payload }) => ({ type, payload }))).toEqual(
+      [{ type: "clear", payload: {} }],
+    );
+  });
+
   it("ends the history generation at a clear, and at a rewind only when it cuts a turn a compaction summarized", async () => {
     const { prisma } = database;
     const { bot, threadId, sessionId } = await seedBot(prisma, "Ada");

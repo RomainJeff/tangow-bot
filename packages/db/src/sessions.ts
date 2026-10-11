@@ -434,7 +434,12 @@ export async function appendRewindInTransaction(
     select: { seq: true, parentId: true },
   });
   if (!target?.parentId) {
-    await appendSessionEntryInTransaction(tx, { type: "clear", sessionId, payload: {}, feedBotId });
+    await appendSessionEntryInTransaction(tx, {
+      type: "clear",
+      sessionId,
+      payload: { edit: true },
+      feedBotId,
+    });
     return;
   }
   const cutOff = await newestCompactionAfter(tx, sessionId, target.seq);
