@@ -147,13 +147,13 @@ tags:
 - assertVisible: "Replying to"
 - tapOn: "Cancel reply"
 # Bot actions live on a long press of the header title (its accessible name
-# is "Bot settings"; a short press opens the bot's page).
-- longPressOn: "Bot settings"
+# is the bot's name; a short press opens the bot's page).
+- longPressOn: "Researcher"
 - assertVisible: "Clear conversation"
 - takeScreenshot: "16-bot-actions"
 - back
 
-- openLink: "rakazo:///bot?botId=${RAKAZO_SCREENSHOT_BOT_ID}"
+- openLink: "rakazo:///bot?botId=${RAKAZO_SCREENSHOT_BOT_ID}&tab=settings"
 - extendedWaitUntil:
     visible: "Instructions"
     timeout: 10000
@@ -185,7 +185,7 @@ tags:
     timeout: 10000
 - takeScreenshot: "20-group-settings"
 
-- openLink: "rakazo:///routine?botId=${RAKAZO_SCREENSHOT_BOT_ID}&botName=Researcher&routineId=${RAKAZO_SCREENSHOT_ROUTINE_ID}"
+- openLink: "rakazo:///bot-routine?botId=${RAKAZO_SCREENSHOT_BOT_ID}&routineId=${RAKAZO_SCREENSHOT_ROUTINE_ID}"
 - extendedWaitUntil:
     visible: "Weekly fixture review"
     timeout: 10000

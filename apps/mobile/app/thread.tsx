@@ -169,7 +169,12 @@ import {
 import { mobileTokens, resolveMobileAppearance } from "../lib/appearance";
 import { type MobileArtifactTarget, openMobileArtifact } from "../lib/artifact-open";
 import { presentAttachSheet } from "../lib/attach-sheet";
-import { archiveBot, confirmClearConversation, confirmDeleteBot } from "../lib/bot-lifecycle";
+import {
+  archiveBot,
+  clearConversation,
+  confirmClearConversation,
+  confirmDeleteBot,
+} from "../lib/bot-lifecycle";
 import { noteBotRunEnded } from "../lib/bot-page-state";
 import { CHAT_MOTION, useChatReducedMotion } from "../lib/chat-motion";
 import { cancelFocusPrompt, focusPromptThreadActive } from "../lib/focus-prompt";
@@ -792,7 +797,7 @@ function Thread() {
       headerTitle: () => (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={!inGroup && botId ? t("Bot settings") : displayName || t("Thread")}
+          accessibilityLabel={displayName || t("Thread")}
           disabled={inGroup || !botId}
           onPress={() => {
             if (!botId || inGroup) return;
@@ -895,21 +900,17 @@ function Thread() {
     router.replace("/");
   }
 
-  function clearConversation() {
+  function clearThread() {
     if (!botId) return;
     setError(null);
-    void rpc("threads/clear", { botId })
-      .then(() => {
-        expandedHistoryThread.current = null;
-        pinnedAroundRef.current = null;
-        historyEpoch.current += 1;
-        setSnap((current) =>
-          current ? { ...current, messages: [], olderCursor: null, run: null } : current,
-        );
-      })
-      .catch((err: unknown) =>
-        setError(err instanceof Error ? err.message : t("Could not clear conversation")),
+    clearConversation(botId, () => {
+      expandedHistoryThread.current = null;
+      pinnedAroundRef.current = null;
+      historyEpoch.current += 1;
+      setSnap((current) =>
+        current ? { ...current, messages: [], olderCursor: null, run: null } : current,
       );
+    });
   }
 
   const botActions = [
@@ -932,7 +933,7 @@ function Thread() {
     {
       text: t("Clear conversation"),
       destructive: true,
-      onPress: () => confirmClearConversation(clearConversation),
+      onPress: () => confirmClearConversation(clearThread),
     },
     {
       text: t("Archive"),

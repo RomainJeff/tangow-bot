@@ -1,7 +1,7 @@
 import { routineFailing } from "@rakazo/core";
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useRef, useState, useSyncExternalStore } from "react";
-import { Alert, Keyboard, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Keyboard, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { ActivityTab, useOpenRun } from "../components/bot-page/activity-tab";
 import { BotHero, BotTabs } from "../components/bot-page/hero";
 import { LoadFailed } from "../components/bot-page/kit";
@@ -9,8 +9,12 @@ import { KnowledgeTab } from "../components/bot-page/knowledge-tab";
 import { RoutinesTab, useRoutines } from "../components/bot-page/routines-tab";
 import { SettingsTab } from "../components/bot-page/settings-tab";
 import { NativeSymbol } from "../components/native-symbol";
-import { rpc } from "../lib/api";
-import { archiveBot, confirmClearConversation, confirmDeleteBot } from "../lib/bot-lifecycle";
+import {
+  archiveBot,
+  clearConversation,
+  confirmClearConversation,
+  confirmDeleteBot,
+} from "../lib/bot-lifecycle";
 import { readBotPage, readViewer, useBotPageContext } from "../lib/bot-page";
 import { botRunEpoch, subscribeBotRunEnds } from "../lib/bot-page-state";
 import type { BotTab } from "../lib/bot-tab";
@@ -61,8 +65,8 @@ export default function BotPageScreen() {
     );
   }, [botId, epoch]);
   useFocusEffect(refresh);
-  const { routines } = useRoutines(botId, epoch);
-  const routineFailed = routines?.some(routineFailing) ?? false;
+  const routineList = useRoutines(botId, epoch);
+  const routineFailed = routineList.routines?.some(routineFailing) ?? false;
 
   const leave = () => {
     router.dismissAll();
@@ -75,15 +79,7 @@ export default function BotPageScreen() {
         {
           text: t("Clear conversation"),
           destructive: true,
-          onPress: () =>
-            confirmClearConversation(() => {
-              void rpc("threads/clear", { botId }).catch((error: unknown) =>
-                Alert.alert(
-                  t("Could not clear conversation"),
-                  error instanceof Error ? error.message : t("Try again."),
-                ),
-              );
-            }),
+          onPress: () => confirmClearConversation(() => clearConversation(botId)),
         },
         { text: t("Archive"), onPress: () => archiveBot(botId, leave) },
         {
@@ -161,7 +157,7 @@ export default function BotPageScreen() {
               ) : view === "routines" ? (
                 <RoutinesTab
                   page={page}
-                  epoch={epoch}
+                  list={routineList}
                   onOpen={(routine) =>
                     router.push({
                       pathname: "/bot-routine",

@@ -35,23 +35,22 @@ export function useRoutines(botId: string, epoch: number) {
 }
 
 /**
- * The bot's routines: one row each, its switch apart from the row that opens it.
- * `epoch` changes when a run ends: a run may have changed a routine or how it last went.
+ * The bot's routines: one row each, its switch apart from the row that opens it. `list` is the
+ * page's read, which also tells the tab bar whether a routine failed.
  * Where triggers cannot be edited, a new routine could never get one, so none is offered.
  */
 export function RoutinesTab({
   page,
-  epoch,
+  list: { routines, read, retry },
   onOpen,
   onCreate,
 }: {
   page: BotPageContext;
-  epoch: number;
+  list: ReturnType<typeof useRoutines>;
   onOpen: (routine: Routine) => void;
   onCreate: () => void;
 }) {
   const { t } = useI18n();
-  const { routines, read, retry } = useRoutines(page.bot.id, epoch);
   if (!routines) {
     if (read === "failed") return <LoadFailed onRetry={retry} />;
     return (

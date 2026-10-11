@@ -24,6 +24,7 @@ import { mobileTokens } from "../../lib/appearance";
 import { dateLocaleForUi, useI18n } from "../../lib/i18n";
 import { useMobileTokens, useResolvedAppearance, useThemedStyles } from "../../lib/native";
 import { claimSaveAnnouncement } from "../../lib/save-announce";
+import type { ReadState } from "../../lib/shared-read";
 import { nativeTextStyle } from "../../lib/typography";
 import { NativeSymbol } from "../native-symbol";
 
@@ -339,14 +340,12 @@ export function QuietLine({ children }: { children: string }) {
   );
 }
 
-type Read<T> = { kind: "loading" } | { kind: "failed" } | { kind: "ready"; value: T };
-
 /**
  * Reads `load` whenever the screen comes back into view and whenever `deps` change; only the
  * latest read or write lands, and a failed refresh keeps what was shown.
  */
 export function useFocusedRead<T>(load: () => Promise<T>, deps: unknown[]) {
-  const [read, setRead] = useState<Read<T>>({ kind: "loading" });
+  const [read, setRead] = useState<ReadState<T>>({ kind: "loading" });
   const latest = useRef(0);
   const reload = useCallback(() => {
     const request = ++latest.current;
@@ -374,7 +373,7 @@ export function useFocusedRead<T>(load: () => Promise<T>, deps: unknown[]) {
    */
   const write = () => {
     const begun = latest.current;
-    return (next: (current: Read<T>) => Read<T>) => {
+    return (next: (current: ReadState<T>) => ReadState<T>) => {
       if (latest.current === begun) latest.current += 1;
       setRead(next);
     };

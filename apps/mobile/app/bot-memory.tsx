@@ -10,6 +10,7 @@ import { mobileTokens } from "../lib/appearance";
 import { useBotPageContext } from "../lib/bot-page";
 import { useI18n } from "../lib/i18n";
 import { useMobileTokens, useThemedStyles } from "../lib/native";
+import { serverMessage } from "../lib/server-error";
 import { nativeTextStyle } from "../lib/typography";
 
 type Read = { kind: "loading" } | { kind: "failed" } | { kind: "ready"; doc: MemoryDocument };
@@ -38,7 +39,7 @@ export default function BotMemoryScreen() {
   const [read, setRead] = useState<Read>({ kind: "loading" });
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const mounted = useRef(true);
   useEffect(
@@ -75,14 +76,14 @@ export default function BotMemoryScreen() {
   const save = async () => {
     if (!doc || busy) return;
     setBusy(true);
-    setFailed(false);
+    setFailed(null);
     try {
       await rpc<MemoryDocument>("memory/update", { documentId: doc.id, content: draft });
       // Only this sheet may close: a back after it is gone would pop the bot page.
       if (mounted.current) router.back();
-    } catch {
+    } catch (error) {
       if (!mounted.current) return;
-      setFailed(true);
+      setFailed(serverMessage(error) || t("Could not save"));
       setBusy(false);
     }
   };
@@ -144,7 +145,7 @@ export default function BotMemoryScreen() {
         />
       ) : doc ? (
         <View style={[styles.screen, { paddingBottom: keyboardInset }]}>
-          {failed ? <Text style={styles.error}>{t("Could not save")}</Text> : null}
+          {failed ? <Text style={styles.error}>{failed}</Text> : null}
           <TextInput
             accessibilityLabel={doc.path}
             value={draft}

@@ -10,7 +10,7 @@ export type ModelCatalog = {
   me: Pick<Me, "defaultProvider" | "defaultModel"> | null;
 };
 
-export function modelOptionKey(provider: string, modelId: string): string {
+function modelOptionKey(provider: string, modelId: string): string {
   return `${provider}::${modelId}`;
 }
 

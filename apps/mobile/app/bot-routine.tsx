@@ -1,7 +1,7 @@
 import type { Routine } from "@rakazo/contracts";
 import { draftFromRoutine, type RoutineDraft, triggerSave } from "@rakazo/core";
 import { radii } from "@rakazo/ui-tokens";
-import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
   Alert,
@@ -62,7 +62,6 @@ export default function BotRoutineScreen() {
   const styles = useThemedStyles(createRoutineStyles);
   const { t } = useI18n();
   const router = useRouter();
-  const navigation = useNavigation();
   const page = useBotPageContext(botId);
   const epoch = useSyncExternalStore(
     subscribeBotRunEnds,
@@ -109,14 +108,9 @@ export default function BotRoutineScreen() {
     if (mounted.current) router.back();
   };
 
-  const state = navigation.getState();
-  const fromBotPage = state?.routes[state.index - 1]?.name === "bot";
-
   return (
     <>
-      <Stack.Screen
-        options={{ title: "", headerBackTitle: fromBotPage ? t("Routines") : undefined }}
-      />
+      <Stack.Screen options={{ title: "" }} />
       {page && routine ? (
         <RoutineDetail page={page} routine={routine} epoch={epoch} onDelete={remove} />
       ) : read === "ready" && routines && !routine ? (
