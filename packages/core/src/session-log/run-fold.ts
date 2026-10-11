@@ -90,21 +90,28 @@ export function foldRuns(
 
 /**
  * Each tool call's output by the call's entry id. Providers reuse call ids such as `call_0`, from
- * run to run and within a run once it resumes, so the n-th call of a run and call id pairs with the
- * n-th `tool.result` or `subagent` entry of that run and call id.
+ * run to run and within a run once it resumes, so a `tool.result` or `subagent` entry answers the
+ * latest earlier call of its run and call id that has no answer yet. A call a crash cut stays
+ * unanswered under the replay that follows it, and a result whose call a compaction cut answers
+ * nothing.
  */
 export function toolOutputs(entries: readonly SessionEntry[]): Map<EntryId, string> {
-  const results = new Map<string, string[]>();
-  for (const entry of entries) {
-    if (entry.type !== "tool.result" && entry.type !== "subagent") continue;
-    const output = entry.type === "tool.result" ? entry.payload.output : entry.payload.result;
-    results.set(toolCallKey(entry), [...(results.get(toolCallKey(entry)) ?? []), output]);
-  }
+  const unanswered = new Map<string, EntryId[]>();
   const outputs = new Map<EntryId, string>();
   for (const entry of entries) {
-    if (entry.type !== "tool.call") continue;
-    const output = results.get(toolCallKey(entry))?.shift();
-    if (output !== undefined) outputs.set(entry.id, output);
+    if (entry.type !== "tool.call" && entry.type !== "tool.result" && entry.type !== "subagent") {
+      continue;
+    }
+    const key = toolCallKey(entry);
+    const calls = unanswered.get(key) ?? [];
+    unanswered.set(key, calls);
+    if (entry.type === "tool.call") {
+      calls.push(entry.id);
+      continue;
+    }
+    const call = calls.pop();
+    if (call === undefined) continue;
+    outputs.set(call, entry.type === "tool.result" ? entry.payload.output : entry.payload.result);
   }
   return outputs;
 }

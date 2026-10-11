@@ -811,7 +811,7 @@ describe("projectThreadItems", () => {
     ]);
   });
 
-  it("shows each call of a call id the provider reused with its own result", () => {
+  describe("a call id the provider reused", () => {
     const run = { botId: "bot_ada", runId: "run_1" };
     const call = (path: string) => ({
       ...run,
@@ -823,44 +823,58 @@ describe("projectThreadItems", () => {
       type: "tool.result",
       payload: { callId: "call_0", output, isError: false, artifactIds: [] },
     });
-    const chain = linkEntries("reused", [
-      call("a.md"),
-      result("paused: awaiting approval"),
-      call("b.md"),
-      result("contents of b"),
-      call("c.md"),
-    ]);
     const shown = (path: string, output: string) => ({
       name: "read_file",
       input: JSON.stringify({ path }),
       output,
       id: "call_0",
     });
-    expect(projectThreadItems(chain)).toEqual([
-      {
-        kind: "message",
-        role: "bot",
-        id: "reused-0",
-        ts: at(0),
-        ...run,
-        blocks: [
-          {
-            kind: "steps",
-            steps: [
-              {
-                label: "Read file",
-                count: 3,
-                calls: [
-                  shown("a.md", "paused: awaiting approval"),
-                  shown("b.md", "contents of b"),
-                  shown("c.md", ""),
-                ],
-              },
-            ],
-          },
-        ],
-      },
-    ]);
+    const readFiles = (id: string, calls: ReturnType<typeof shown>[]) => ({
+      kind: "message",
+      role: "bot",
+      id,
+      ts: at(Number(id.split("-")[1])),
+      ...run,
+      blocks: [{ kind: "steps", steps: [{ label: "Read file", count: calls.length, calls }] }],
+    });
+
+    it("shows each call with its own result", () => {
+      const chain = linkEntries("reused", [
+        call("a.md"),
+        result("paused: awaiting approval"),
+        call("b.md"),
+        result("contents of b"),
+        call("c.md"),
+      ]);
+      expect(projectThreadItems(chain)).toEqual([
+        readFiles("reused-0", [
+          shown("a.md", "paused: awaiting approval"),
+          shown("b.md", "contents of b"),
+          shown("c.md", ""),
+        ]),
+      ]);
+    });
+
+    it("gives the result to the call the resumed run replayed, leaving the cut call open", () => {
+      const chain = linkEntries("crash", [call("a.md"), call("b.md"), result("contents of b")]);
+      expect(projectThreadItems(chain)).toEqual([
+        readFiles("crash-0", [shown("a.md", ""), shown("b.md", "contents of b")]),
+      ]);
+    });
+
+    it("drops a result whose call the compaction cut, so later calls keep their own", () => {
+      const chain = linkEntries("cut", [
+        call("a.md"),
+        { type: "compaction", payload: { summary: "Reading notes.", coveredUpToSeq: 0 } },
+        result("alpha"),
+        call("b.md"),
+        result("beta"),
+      ]).slice(1);
+      expect(projectThreadItems(chain)).toEqual([
+        { kind: "divider", id: "cut-1", ts: at(1), reason: "compaction" },
+        readFiles("cut-3", [shown("b.md", "beta")]),
+      ]);
+    });
   });
 
   it("gives a run finished at a timestamp before its start a duration of zero", () => {

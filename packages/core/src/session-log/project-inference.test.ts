@@ -392,6 +392,49 @@ describe("projectInferenceTurns", () => {
     ]);
   });
 
+  it("pairs a result with the call the resumed run replayed, not the call the crash cut", () => {
+    const chain = linkEntries("crash", [
+      ...readFile("run_1", "a.md"),
+      ...readFile("run_1", "b.md", "contents of b"),
+    ]);
+    expect(projectInferenceTurns(chain, ada).map((turn) => turn.parts)).toEqual([
+      [
+        {
+          type: "toolCalls",
+          calls: [
+            { id: "call_0", name: "read_file", args: { path: "b.md" }, output: "contents of b" },
+          ],
+        },
+      ],
+    ]);
+  });
+
+  it("drops a result whose call the compaction cut, so later calls keep their own", () => {
+    const chain = linkEntries("cut", [
+      ...readFile("run_1", "a.md"),
+      { type: "compaction", payload: { summary: "Reading notes.", coveredUpToSeq: 0 } },
+      {
+        botId: "bot_ada",
+        runId: "run_1",
+        type: "tool.result",
+        payload: { callId: "call_0", output: "alpha", isError: false, artifactIds: [] },
+      },
+      ...readFile("run_1", "b.md", "beta"),
+    ]);
+    expect(projectInferenceTurns(chain, ada).slice(1)).toEqual([
+      {
+        role: "assistant",
+        content: '(already ran Read file, input: {"path":"b.md"}, result: beta)',
+        parts: [
+          {
+            type: "toolCalls",
+            calls: [{ id: "call_0", name: "read_file", args: { path: "b.md" }, output: "beta" }],
+          },
+        ],
+      },
+    ]);
+  });
+
   it("names a peer bot outside the roster bot, and its handoff by bot id", async () => {
     expect(projectInferenceTurns(await fixtureChain("group"), { selfBotId: "bot_bob" })).toEqual([
       { role: "user", content: "Ada, plan the launch post, then hand it to Bob." },
