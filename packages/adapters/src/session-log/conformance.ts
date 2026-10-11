@@ -199,6 +199,39 @@ export function runSessionLogConformance<Tx>(makeLog: () => Promise<SessionLogHa
       ]);
     });
 
+    it("reads back to what the newest compaction covers past an older compaction in its kept window", async () => {
+      const { sessionId } = await created();
+      const [, , c] = await appendAll(["a", "b", "c"].map((text) => said(sessionId, text)));
+      await append(compacted(c!, 0));
+      const d = await append(said(sessionId, "d"));
+      await append(compacted(d, 1));
+      await append(said(sessionId, "e"));
+
+      expect((await harness.log.readTail(sessionId)).map(textOf)).toEqual([
+        "up to 1",
+        "c",
+        "up to 0",
+        "d",
+        "e",
+      ]);
+    });
+
+    it("reads a compaction written again on top of a rewind into its kept window, then the turns it kept", async () => {
+      const { sessionId } = await created();
+      const [, , c, d] = await appendAll(["a", "b", "c", "d"].map((text) => said(sessionId, text)));
+      await append(compacted(d!, 1));
+      const rewind = await append({ sessionId, type: "rewind", parentId: c!.id, payload: {} });
+      await append(compacted(rewind, 1));
+      await append(said(sessionId, "d edited"));
+
+      expect((await harness.log.readTail(sessionId)).map(textOf)).toEqual([
+        "up to 1",
+        "c",
+        "rewind",
+        "d edited",
+      ]);
+    });
+
     it("keeps only the newest maxEntries of the tail, the compaction among them when reached", async () => {
       const { sessionId } = await created();
       const [, , c] = await appendAll(["a", "b", "c"].map((text) => said(sessionId, text)));
