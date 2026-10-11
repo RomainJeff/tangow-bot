@@ -10,7 +10,9 @@ function motionThread(botId: string): EntryDraft[] {
       ts: "2026-09-17T09:24:00.000Z",
       type: "bot.text",
       botId,
-      payload: { blocks: [{ kind: "text", text: "Tuesday afternoon is the only slot that works." }] },
+      payload: {
+        blocks: [{ kind: "text", text: "Tuesday afternoon is the only slot that works." }],
+      },
     },
   ];
 }

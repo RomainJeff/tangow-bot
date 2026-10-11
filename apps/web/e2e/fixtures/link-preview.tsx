@@ -3,12 +3,12 @@ import { I18nProvider } from "@lingui/react";
 import type { MessageBlock } from "@rakazo/contracts";
 import { ComposerLinkPreview, ComposerShell } from "@rakazo/ui-web";
 import { createRoot } from "react-dom/client";
+import type { MessageItem } from "../../src/lib/thread-items";
 import { placeHoverPill } from "../../src/pages/shell/hover-pill-placement";
 import {
   MessageHoverActions,
   UserMessageActions,
 } from "../../src/pages/shell/message-hover-actions";
-import type { MessageItem } from "../../src/lib/thread-items";
 import { MessageView } from "../../src/pages/shell/message-view";
 import "../../src/styles.css";
 
