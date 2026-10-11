@@ -1181,7 +1181,9 @@ describe("readSessionEntries", () => {
       },
       run: { findFirst: vi.fn(async () => ({ id: "run-helper" })) },
     } as unknown as PrismaClient;
-    const sessionLog = { readRun: vi.fn(async (_runId: string) => run) };
+    const sessionLog = {
+      readRun: vi.fn(async (runId: string) => (runId === "run-helper" ? run : [])),
+    };
     return { deps: { prisma, sessionLog }, sessionLog };
   }
 
@@ -1195,7 +1197,6 @@ describe("readSessionEntries", () => {
     const read = await readSessionEntries(opened.deps, actor, helper);
 
     expect(read).toEqual({ entries: joined });
-    expect(opened.sessionLog.readRun).toHaveBeenCalledWith("run-helper");
     await expect(readSessionEntries(foreignThread.deps, actor, helper)).rejects.toThrow(
       IsolationError,
     );
