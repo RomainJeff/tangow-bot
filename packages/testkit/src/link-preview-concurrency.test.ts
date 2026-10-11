@@ -5,8 +5,12 @@ import {
   type PrismaClient,
   removeLinkPreviewBlock,
 } from "@rakazo/db";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createFakeThreadDb } from "./fake-thread-db.js";
+
+vi.mock("../../db/src/sessions.js", async () =>
+  (await import("@rakazo/db/sessions.test-support")).stubbedDbSessions(),
+);
 
 const scope = { spaceId: "space-1", threadId: "thread-1", messageId: "m1" };
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));

@@ -41,6 +41,7 @@ import {
   PiAgentRuntime,
   PipedreamConnector,
   PostgresRealtimeFanout,
+  PostgresSessionLog,
   pipedreamConfigFromEnv,
   reconcileComputerUpdates,
   resolveDeploymentModel,
@@ -191,6 +192,7 @@ async function main() {
       });
   const executor = createRunExecutor({
     prisma,
+    sessionLog: new PostgresSessionLog(prisma),
     runtime,
     sandbox,
     memory,

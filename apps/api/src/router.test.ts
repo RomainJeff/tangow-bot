@@ -9,6 +9,10 @@ import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
 import { describe, expect, it, vi } from "vitest";
 import { createRouter, type RouterDeps } from "./router.js";
 
+vi.mock("../../../packages/db/src/sessions.js", async () =>
+  (await import("@rakazo/db/sessions.test-support")).stubbedDbSessions(),
+);
+
 describe("account preferences", () => {
   function preferencesDeps(avatarStyle: string) {
     const update = vi.fn().mockResolvedValue({});
@@ -891,6 +895,7 @@ describe("thread rewind", () => {
       spaceId: "workspace-1",
       threadId: "thread-1",
       botId: "bot-1",
+      userId: "user-1",
       messageId: "message-4",
     });
     expect(cancel).toHaveBeenCalledOnce();
@@ -946,9 +951,9 @@ describe("thread stop", () => {
         findMany: vi.fn(async ({ where }: { where: { status: unknown; routineId?: unknown } }) =>
           matchesRun(where) ? [run] : [],
         ),
-        updateManyAndReturn: vi.fn(async () => {
+        updateMany: vi.fn(async () => {
           runStatus = "cancelled";
-          return [{ id: run.id }];
+          return { count: 1 };
         }),
         findUnique: vi.fn(async () => ({ status: runStatus, startedAt: null })),
       },

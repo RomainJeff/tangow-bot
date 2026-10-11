@@ -31,7 +31,7 @@ import {
   type TeachComputerInput,
   teachingControlLeaseExpiresAt,
 } from "@rakazo/adapters";
-import type { Actor, MessageBlock, TaughtSkill } from "@rakazo/contracts";
+import type { Actor, MessageBlock, SessionId, TaughtSkill } from "@rakazo/contracts";
 import {
   ACTIVE_RUN_STATUSES,
   buildPlaybookFromRecording,
@@ -42,9 +42,11 @@ import {
 } from "@rakazo/core";
 import {
   appendEventInTransaction,
+  appendSessionEntryInTransaction,
   type createRepos,
   expireComputerExecutionLeases,
   IsolationError,
+  logCancelledRunsInTransaction,
   type PrismaClient,
   type ThreadEvents,
 } from "@rakazo/db";
@@ -113,16 +115,24 @@ export async function assertTeachingSendAllowed(
 
 async function cancelActiveRuns(
   deps: TaughtSkillsDeps,
-  _actor: Actor,
+  actor: Actor,
   botId: string,
 ): Promise<void> {
-  const activeRuns = await deps.prisma.run.findMany({
-    where: { botId, status: { in: [...ACTIVE_RUN_STATUSES] } },
-    select: { id: true },
-  });
-  await deps.prisma.run.updateMany({
-    where: { botId, status: { in: [...ACTIVE_RUN_STATUSES] } },
-    data: { status: "cancelled", completedAt: new Date() },
+  const activeRuns = await deps.prisma.$transaction(async (tx) => {
+    const runs = await tx.run.findMany({
+      where: { botId, status: { in: [...ACTIVE_RUN_STATUSES] } },
+      select: { id: true },
+    });
+    await logCancelledRunsInTransaction(
+      tx,
+      runs.map((run) => run.id),
+      actor.userId,
+    );
+    await tx.run.updateMany({
+      where: { id: { in: runs.map((run) => run.id) }, status: { in: [...ACTIVE_RUN_STATUSES] } },
+      data: { status: "cancelled", completedAt: new Date() },
+    });
+    return runs;
   });
   await expireComputerExecutionLeases(deps.prisma, { botId });
   await deps.prisma.computer.updateMany({
@@ -494,16 +504,27 @@ export function createTaughtSkillsService(deps: TaughtSkillsDeps) {
       if (skill.status !== "draft" && skill.status !== "saved") {
         throw new ORPCError("BAD_REQUEST", { message: "Finish recording before saving" });
       }
-      const row = await deps.prisma.taughtSkill.update({
-        where: { id: skill.id },
-        data: {
-          status: "saved",
-          name: name ?? (skill.name || skill.goal.slice(0, 80)),
-        },
-      });
-      const bot = await deps.prisma.bot.findUnique({
-        where: { id: row.botId },
-        include: { thread: true },
+      const { row, bot } = await deps.prisma.$transaction(async (tx) => {
+        const row = await tx.taughtSkill.update({
+          where: { id: skill.id },
+          data: {
+            status: "saved",
+            name: name ?? (skill.name || skill.goal.slice(0, 80)),
+          },
+        });
+        const bot = await tx.bot.findUnique({
+          where: { id: row.botId },
+          include: { thread: true },
+        });
+        if (bot?.thread) {
+          await appendSessionEntryInTransaction(tx, {
+            type: "skill.saved",
+            sessionId: bot.thread.sessionId as SessionId,
+            botId: bot.id,
+            payload: { skillId: row.id, name: row.name },
+          });
+        }
+        return { row, bot };
       });
       await updateSkillDraftMessage(deps, actor, row, {
         name: row.name,

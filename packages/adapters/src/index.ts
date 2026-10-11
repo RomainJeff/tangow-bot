@@ -100,6 +100,7 @@ export * from "./scripted-voice.js";
 export * from "./secrets.js";
 export * from "./sendblue-emulator.js";
 export { SerenityMemoryProvider } from "./serenity-memory-provider.js";
+export { PostgresSessionLog } from "./session-log/postgres.js";
 export * from "./skill-store.js";
 export * from "./skill-tools.js";
 export * from "./smtp-email.js";

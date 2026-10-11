@@ -1,5 +1,5 @@
 import { runContinueJob } from "@rakazo/adapter-kit";
-import type { BotMessageIntent, MessageBlock } from "@rakazo/contracts";
+import type { BotMessageIntent, EntryId, MessageBlock, Peer, SessionId } from "@rakazo/contracts";
 import {
   BOT_MESSAGE_MAX_HOPS,
   BOT_MESSAGE_MAX_LENGTH,
@@ -11,10 +11,11 @@ import {
   repliesToOwnRequest,
   resolveBotAddress,
 } from "@rakazo/core";
+import type { Prisma, PrismaClient } from "@rakazo/db";
 import {
   appendEventInTransaction,
+  appendSessionEntryInTransaction,
   createThreadMessageInTransaction,
-  type PrismaClient,
   withTransactionRetry,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
@@ -33,7 +34,7 @@ type RunHopSource = {
  * null) cannot prove where it started, so it counts as the end of the chain.
  */
 export async function resolveRunHop(
-  db: Pick<PrismaClient, "message" | "routine">,
+  db: Pick<PrismaClient, "sessionEntry" | "routine">,
   run: RunHopSource,
 ): Promise<number> {
   // Only a scheduled routine run always has a routine: a webhook run may never have had one.
@@ -42,7 +43,10 @@ export async function resolveRunHop(
   }
   const [source, routine] = await Promise.all([
     run.sourceMessageId
-      ? db.message.findUnique({ where: { id: run.sourceMessageId }, select: { blocks: true } })
+      ? db.sessionEntry.findUnique({
+          where: { id: run.sourceMessageId },
+          select: { type: true, payload: true },
+        })
       : null,
     run.routineId
       ? db.routine.findUnique({ where: { id: run.routineId }, select: { inheritedHop: true } })
@@ -50,15 +54,68 @@ export async function resolveRunHop(
   ]);
   // The run row is read once, so a routine deleted during its own run still has an id here.
   if (run.routineId && !routine) return BOT_MESSAGE_MAX_HOPS;
-  const blocks = Array.isArray(source?.blocks) ? (source.blocks as MessageBlock[]) : [];
-  const handoff = blocks.find(
-    (block): block is Extract<MessageBlock, { kind: "handoff" }> => block.kind === "handoff",
-  );
-  return Math.max(
-    botMessageContext(blocks)?.hop ?? 0,
-    handoff?.hop ?? 0,
-    routine?.inheritedHop ?? 0,
-  );
+  const sourceHop =
+    source?.type === "bot.message.received" || source?.type === "handoff"
+      ? ((source.payload as { hop?: number }).hop ?? 0)
+      : 0;
+  return Math.max(sourceHop, routine?.inheritedHop ?? 0);
+}
+
+async function exchangeOf(
+  tx: Prisma.TransactionClient,
+  sourceMessageId: string | null | undefined,
+): Promise<EntryId | undefined> {
+  if (!sourceMessageId) return undefined;
+  const woke = await tx.sessionEntry.findUnique({
+    where: { id: sourceMessageId },
+    select: { type: true, payload: true },
+  });
+  return woke?.type === "bot.message.received"
+    ? ((woke.payload as { exchangeId: string }).exchangeId as EntryId)
+    : undefined;
+}
+
+export async function appendBotMessageInTransaction(
+  tx: Prisma.TransactionClient,
+  input: {
+    sender: { sessionId: SessionId; botId: string; runId?: string; peer: Peer };
+    receiver: { sessionId: SessionId; botId: string; peer: Peer };
+    sentId: string;
+    receivedId: string;
+    sourceMessageId: string | null | undefined;
+    text: string;
+    intent: BotMessageIntent;
+    hop: number;
+    deliveryKey?: string;
+  },
+): Promise<void> {
+  const sentId = input.sentId as EntryId;
+  const exchangeId = (await exchangeOf(tx, input.sourceMessageId)) ?? sentId;
+  const { text, intent, hop } = input;
+  await appendSessionEntryInTransaction(tx, {
+    id: sentId,
+    type: "bot.message.sent",
+    sessionId: input.sender.sessionId,
+    botId: input.sender.botId,
+    ...(input.sender.runId ? { runId: input.sender.runId } : {}),
+    payload: { to: input.receiver.peer, text, intent, hop, exchangeId },
+  });
+  await appendSessionEntryInTransaction(tx, {
+    id: input.receivedId as EntryId,
+    type: "bot.message.received",
+    sessionId: input.receiver.sessionId,
+    feedBotId: input.receiver.botId,
+    payload: {
+      from: input.sender.peer,
+      fromSessionId: input.sender.sessionId,
+      fromEntryId: sentId,
+      text,
+      intent,
+      hop,
+      exchangeId,
+      ...(input.deliveryKey ? { clientNonce: input.deliveryKey } : {}),
+    },
+  });
 }
 
 export async function loadBotMessageContext(
@@ -118,7 +175,12 @@ export async function messageBot(
 
   const candidates = await deps.prisma.bot.findMany({
     where: { spaceId: run.spaceId, userId: run.userId, archivedAt: null },
-    select: { id: true, name: true, title: true, thread: { select: { id: true } } },
+    select: {
+      id: true,
+      name: true,
+      title: true,
+      thread: { select: { id: true, sessionId: true } },
+    },
   });
   const target = resolveBotAddress(candidates, {
     botId: input.bot_id,
@@ -144,6 +206,7 @@ export async function messageBot(
   }
 
   const targetThreadId = target.thread.id;
+  const targetSessionId = target.thread.sessionId;
 
   // A tool call can be re-executed after a lease expiry, so a delivery has to be
   // replayable: without this the recipient is messaged twice and woken twice.
@@ -207,7 +270,7 @@ export async function messageBot(
             userId: run.userId,
             status: options?.allowTerminalSource ? { in: ["completed", "failed"] } : "running",
           },
-          select: { id: true },
+          select: { id: true, sessionId: true, status: true },
         });
         if (!senderStillRunning)
           return { ok: false as const, error: "source run is no longer active" };
@@ -255,6 +318,27 @@ export async function messageBot(
               : undefined,
           clientNonce: deliveryKey,
           markUnread: true,
+          source: "bot",
+        });
+        await appendBotMessageInTransaction(tx, {
+          sender: {
+            sessionId: senderStillRunning.sessionId as SessionId,
+            botId: run.botId,
+            runId: senderStillRunning.status === "running" ? run.id : undefined,
+            peer: { kind: "bot", botId: sender.id, name: sender.name },
+          },
+          receiver: {
+            sessionId: targetSessionId as SessionId,
+            botId: target.id,
+            peer: { kind: "bot", botId: target.id, name: target.name },
+          },
+          sentId: outbound.id,
+          receivedId: inbound.id,
+          sourceMessageId: run.sourceMessageId,
+          text: message,
+          intent,
+          hop,
+          deliveryKey,
         });
         const task = await tx.task.create({
           data: {

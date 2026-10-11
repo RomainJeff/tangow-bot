@@ -37,6 +37,10 @@ export const SessionRunTrigger = z.discriminatedUnion("kind", [
   }),
   z.object({ kind: z.literal("handoff"), entryId: EntryId }),
   z.object({ kind: z.literal("bot_message"), entryId: EntryId }),
+  /** Started by the app with its task alone, such as a taught skill's test: no entry woke it. */
+  z.object({ kind: z.literal("direct") }),
+  /** A helper's run in its own session, woken by the parent's `tool.call` in the parent session. */
+  z.object({ kind: z.literal("subagent"), entryId: EntryId }),
 ]);
 export type SessionRunTrigger = z.infer<typeof SessionRunTrigger>;
 
@@ -96,10 +100,11 @@ const SkillSavedEntry = entry("skill.saved", z.object({ skillId: Id, name: z.str
 const AttachmentAddedEntry = entry("attachment.added", z.object({ artifactId: Id }));
 const SessionTitleEntry = entry("session.title", z.object({ title: z.string() }));
 const SystemNoteEntry = entry("system.note", z.object({ text: z.string() }));
+const BlocksPayload = z.object({ blocks: z.array(MessageBlock) });
 
 const EntryShapes = z.discriminatedUnion("type", [
   entry("user.message", UserMessagePayload),
-  runEntry("assistant.text", z.object({ blocks: z.array(MessageBlock) })),
+  runEntry("assistant.text", BlocksPayload),
   runEntry("assistant.reasoning", z.object({ text: z.string() })),
   runEntry("assistant.ask", z.object({ block: AskBlock })),
   runEntry("assistant.choice", z.object({ block: ChoiceBlock })),
@@ -126,6 +131,14 @@ const EntryShapes = z.discriminatedUnion("type", [
   ),
   runEntry("run.finished", RunOutcome),
   runEntry("subagent", SubagentPayload),
+  /** A bot's words outside any run, such as an onboarding card or a teaching session's draft. */
+  z.object({
+    ...envelope,
+    botId: Id,
+    runId: z.never().optional(),
+    type: z.literal("bot.text"),
+    payload: BlocksPayload,
+  }),
   entry("handoff", z.object({ fromBotId: Id, toBotId: Id, text: z.string(), hop: BotMessageHop })),
   z.object({
     ...envelope,
@@ -230,6 +243,7 @@ export const ENTRY_AUDIENCE = {
   "tool.call": { inference: "yes", ui: true },
   "tool.result": { inference: "yes", ui: true },
   subagent: { inference: "yes", ui: true },
+  "bot.text": { inference: "yes", ui: true },
   handoff: { inference: "yes", ui: true },
   "bot.message.sent": { inference: "yes", ui: true },
   "bot.message.received": { inference: "yes", ui: true },
@@ -300,7 +314,8 @@ export const ThreadItemSchema = z.discriminatedUnion("kind", [
       role: z.literal("bot"),
       ...itemBase,
       botId: Id,
-      runId: Id,
+      /** Absent for a bot's words outside any run. */
+      runId: Id.optional(),
       blocks: z.array(MessageBlock),
     }),
   ]),

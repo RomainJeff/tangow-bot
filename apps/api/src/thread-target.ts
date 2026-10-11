@@ -39,6 +39,7 @@ import {
   expireComputerExecutionLeases,
   IsolationError,
   lockOwnedGroup,
+  logCancelledRunsInTransaction,
   type Prisma,
   type PrismaClient,
   resumeAskWithComposerTextInTransaction,
@@ -477,6 +478,7 @@ export async function threadSnapshot(
             where: {
               botId: target.botId,
               threadId: target.threadId,
+              parentRunId: null,
               // A busy peer run drives the working indicator; a failed one stays hidden, since
               // that failure belongs to the bot that ordered the work and would otherwise bury a
               // user-visible failure in the composer error strip.
@@ -503,6 +505,7 @@ export async function threadSnapshot(
                 where: {
                   botId: target.botId,
                   threadId: target.threadId,
+                  parentRunId: null,
                   // Peer bot_message failures must not bury a user-visible failure.
                   trigger: { not: "bot_message" },
                   status: { in: ["failed", "completed", "cancelled"] },
@@ -561,6 +564,7 @@ export async function threadSnapshot(
       tx.run.findMany({
         where: {
           threadId: target.threadId,
+          parentRunId: null,
           status: { in: [...ACTIVE_RUN_STATUSES] },
         },
         orderBy: { createdAt: "desc" },
@@ -570,6 +574,7 @@ export async function threadSnapshot(
       tx.run.findMany({
         where: {
           threadId: target.threadId,
+          parentRunId: null,
           trigger: { not: "bot_message" },
           status: { in: ["failed", "completed", "cancelled"] },
         },
@@ -787,6 +792,7 @@ export async function sendThreadMessage(
           where: {
             threadId: target.threadId,
             botId: target.botId,
+            parentRunId: null,
             status: { in: [...ACTIVE_RUN_STATUSES] },
           },
           select: { id: true, taskId: true, status: true },
@@ -977,6 +983,9 @@ export async function sendThreadMessage(
       const blocks = buildUserMessageBlocks(input.text, attachmentBlocks, {
         linkPreview: input.linkPreview,
       });
+      // Each targeted bot gets a run in turn, so the first run is always the first target's.
+      const eventBotId = targetBotIds[0];
+      if (!eventBotId) throw new IsolationError("Group send did not resolve a target");
       const message = await createThreadMessageInTransaction(tx, {
         threadId: target.threadId,
         role: "user",
@@ -984,11 +993,13 @@ export async function sendThreadMessage(
         replyToMessageId: input.replyToMessageId,
         replyQuote,
         clientNonce: input.clientNonce,
+        feedBotId: eventBotId,
       });
       const activeRuns = await tx.run.findMany({
         where: {
           threadId: target.threadId,
           botId: { in: targetBotIds },
+          parentRunId: null,
           status: { in: [...ACTIVE_RUN_STATUSES] },
         },
         select: { id: true, taskId: true, botId: true, status: true },
@@ -1071,8 +1082,6 @@ export async function sendThreadMessage(
         createdRuns.push(run);
       }
       const firstRun = runs[0];
-      const eventBotId = firstRun?.botId ?? targetBotIds[0];
-      if (!eventBotId) throw new IsolationError("Group send did not resolve a target");
       if (firstRun) {
         await tx.message.update({ where: { id: message.id }, data: { runId: firstRun.id } });
         if (createdRuns.length) {
@@ -1170,6 +1179,7 @@ export async function reactToThreadMessage(
       blocks,
       replyToMessageId: parent.id,
       clientNonce: input.clientNonce,
+      feedBotId: botId,
     });
     if (target.kind === "group") await touchGroupUpdatedAt(tx, target.groupId);
     const event = await appendEventInTransaction(tx, {
@@ -1194,15 +1204,16 @@ export async function stopThreadRuns(
 ) {
   const { runIds, computers, leases } = await deps.prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM threads WHERE id = ${target.threadId} FOR UPDATE`;
-    const cancelled = await tx.run.updateManyAndReturn({
-      where: {
-        threadId: target.threadId,
-        status: { in: [...ACTIVE_RUN_STATUSES] },
-      },
-      data: { status: "cancelled", completedAt: new Date() },
+    const active = await tx.run.findMany({
+      where: { threadId: target.threadId, status: { in: [...ACTIVE_RUN_STATUSES] } },
       select: { id: true },
     });
-    const ids = cancelled.map((run) => run.id);
+    const ids = active.map((run) => run.id);
+    await logCancelledRunsInTransaction(tx, ids, actor.userId);
+    await tx.run.updateMany({
+      where: { id: { in: ids } },
+      data: { status: "cancelled", completedAt: new Date() },
+    });
     await tx.steeringMessage.deleteMany({
       where: {
         botId: { in: target.kind === "bot" ? [target.botId] : target.memberBotIds },

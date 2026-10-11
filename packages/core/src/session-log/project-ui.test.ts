@@ -747,7 +747,134 @@ describe("projectThreadItems", () => {
           },
         ],
       },
+      {
+        kind: "message",
+        role: "bot",
+        id: "clr-11",
+        ts: at(11),
+        botId: "bot_ada",
+        blocks: [
+          {
+            kind: "choice",
+            question: "What should I work on next?",
+            options: [
+              { id: "inbox", letter: "A", label: "Clear my inbox" },
+              { id: "week", letter: "B", label: "Plan my week" },
+            ],
+          },
+        ],
+      },
+      {
+        kind: "message",
+        role: "user",
+        id: "clr-12",
+        ts: at(12),
+        blocks: text("Plan my week."),
+        replyTo: { entryId: "clr-11" },
+        source: "app",
+      },
     ]);
+  });
+
+  it("shows a bot's words outside a run as their own message, splitting a run's stretch", () => {
+    const run = { botId: "bot_ada", runId: "run_1" };
+    const chain = linkEntries("aside", [
+      { ...run, type: "assistant.text", payload: { blocks: text("Recording your steps.") } },
+      { botId: "bot_ada", type: "bot.text", payload: { blocks: text("Draft skill saved.") } },
+      { ...run, type: "assistant.text", payload: { blocks: text("Back to the export.") } },
+    ]);
+    expect(projectThreadItems(chain)).toEqual([
+      {
+        kind: "message",
+        role: "bot",
+        id: "aside-0",
+        ts: at(0),
+        ...run,
+        blocks: text("Recording your steps."),
+      },
+      {
+        kind: "message",
+        role: "bot",
+        id: "aside-1",
+        ts: at(1),
+        botId: "bot_ada",
+        blocks: text("Draft skill saved."),
+      },
+      {
+        kind: "message",
+        role: "bot",
+        id: "aside-2",
+        ts: at(2),
+        ...run,
+        blocks: text("Back to the export."),
+      },
+    ]);
+  });
+
+  describe("a call id the provider reused", () => {
+    const run = { botId: "bot_ada", runId: "run_1" };
+    const call = (path: string) => ({
+      ...run,
+      type: "tool.call",
+      payload: { callId: "call_0", name: "read_file", input: JSON.stringify({ path }) },
+    });
+    const result = (output: string) => ({
+      ...run,
+      type: "tool.result",
+      payload: { callId: "call_0", output, isError: false, artifactIds: [] },
+    });
+    const shown = (path: string, output: string) => ({
+      name: "read_file",
+      input: JSON.stringify({ path }),
+      output,
+      id: "call_0",
+    });
+    const readFiles = (id: string, calls: ReturnType<typeof shown>[]) => ({
+      kind: "message",
+      role: "bot",
+      id,
+      ts: at(Number(id.split("-")[1])),
+      ...run,
+      blocks: [{ kind: "steps", steps: [{ label: "Read file", count: calls.length, calls }] }],
+    });
+
+    it("shows each call with its own result", () => {
+      const chain = linkEntries("reused", [
+        call("a.md"),
+        result("paused: awaiting approval"),
+        call("b.md"),
+        result("contents of b"),
+        call("c.md"),
+      ]);
+      expect(projectThreadItems(chain)).toEqual([
+        readFiles("reused-0", [
+          shown("a.md", "paused: awaiting approval"),
+          shown("b.md", "contents of b"),
+          shown("c.md", ""),
+        ]),
+      ]);
+    });
+
+    it("gives the result to the call the resumed run replayed, leaving the cut call open", () => {
+      const chain = linkEntries("crash", [call("a.md"), call("b.md"), result("contents of b")]);
+      expect(projectThreadItems(chain)).toEqual([
+        readFiles("crash-0", [shown("a.md", ""), shown("b.md", "contents of b")]),
+      ]);
+    });
+
+    it("drops a result whose call the compaction cut, so later calls keep their own", () => {
+      const chain = linkEntries("cut", [
+        call("a.md"),
+        { type: "compaction", payload: { summary: "Reading notes.", coveredUpToSeq: 0 } },
+        result("alpha"),
+        call("b.md"),
+        result("beta"),
+      ]).slice(1);
+      expect(projectThreadItems(chain)).toEqual([
+        { kind: "divider", id: "cut-1", ts: at(1), reason: "compaction" },
+        readFiles("cut-3", [shown("b.md", "beta")]),
+      ]);
+    });
   });
 
   it("gives a run finished at a timestamp before its start a duration of zero", () => {

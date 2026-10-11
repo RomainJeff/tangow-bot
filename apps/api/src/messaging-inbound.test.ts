@@ -7,6 +7,10 @@ import {
 } from "./messaging-inbound.js";
 import { inboundDeliveryClientNonce, messagingWakeIdempotencyKey } from "./webhook-inbound.js";
 
+vi.mock("../../../packages/db/src/sessions.js", async () =>
+  (await import("@rakazo/db/sessions.test-support")).stubbedDbSessions(),
+);
+
 const signupPolicy = { signupsEnabled: undefined, signupAllowlist: undefined };
 
 function createDeps(

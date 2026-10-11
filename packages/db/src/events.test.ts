@@ -1,5 +1,6 @@
 import type { RealtimeFanout } from "@rakazo/adapter-kit";
 import { ProductEventSchema } from "@rakazo/contracts";
+import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
 import { approvalEffectKey } from "@rakazo/core/node/approval-effect-key";
 import { describe, expect, it, vi } from "vitest";
 import type { PrismaClient } from "./client.js";
@@ -23,6 +24,10 @@ import {
   startInboundRoutineRuns,
 } from "./events.js";
 import { RunHistoryWriteError } from "./messages.js";
+
+vi.mock("./sessions.js", async () =>
+  (await import("./sessions.test-support.js")).stubbedDbSessions(),
+);
 
 class TestFanout implements RealtimeFanout {
   subscriber: ((payload: string) => void) | undefined;
@@ -93,6 +98,7 @@ describe("finalizeRun", () => {
         findUnique: vi.fn(async () => ({ status: "running" })),
         findUniqueOrThrow: vi.fn(async () => ({ sourceMessage: null })),
         findFirst: vi.fn(async () => null),
+        findMany: vi.fn(async () => []),
         updateMany: vi.fn(async () => ({ count: 1 })),
       },
       attempt: { updateMany: vi.fn(async () => ({ count: 1 })) },
@@ -177,13 +183,8 @@ describe("finalizeComputerControlRelease", () => {
     const fanout = new TestFanout();
     const publish = vi.spyOn(fanout, "publish");
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([{ id: "thread-1", sessionId: "session-1" }]),
       computer: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
-      bot: {
-        findFirst: vi.fn().mockResolvedValue({
-          computerId: "computer-1",
-          thread: { id: "thread-1" },
-        }),
-      },
       run: {
         findUnique: vi.fn().mockResolvedValue({ status: "waiting_takeover" }),
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
@@ -257,13 +258,8 @@ describe("finalizeComputerControlRelease", () => {
 
   it("stamps a takeover checkpoint on a steered running run without clearing its lease", async () => {
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([{ id: "thread-1", sessionId: "session-1" }]),
       computer: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
-      bot: {
-        findFirst: vi.fn().mockResolvedValue({
-          computerId: "computer-1",
-          thread: { id: "thread-1" },
-        }),
-      },
       run: {
         findUnique: vi.fn().mockResolvedValue({ status: "running" }),
         updateMany: vi.fn().mockResolvedValueOnce({ count: 0 }).mockResolvedValueOnce({ count: 1 }),
@@ -324,8 +320,8 @@ describe("finalizeComputerControlRelease", () => {
 
   it("clears the lease even if its controlling bot was deleted", async () => {
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
       computer: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
-      bot: { findFirst: vi.fn().mockResolvedValue(null) },
     };
     const prisma = {
       message: { findUnique: vi.fn().mockResolvedValue(null) },
@@ -2516,6 +2512,7 @@ describe("clearThread", () => {
     const fanout = new TestFanout();
     const publish = vi.spyOn(fanout, "publish");
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
       thread: {
         update: vi
           .fn()
@@ -2577,6 +2574,7 @@ describe("clearThread", () => {
   it("scopes group clear lease cleanup to cancelled run ids", async () => {
     const fanout = new TestFanout();
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
       thread: {
         update: vi
           .fn()
@@ -2653,6 +2651,7 @@ describe("rewindThread", () => {
     historyCompactedUpToSeq?: number | null;
   }) {
     return {
+      $queryRaw: vi.fn().mockResolvedValue([]),
       thread: {
         update: vi
           .fn()
@@ -2723,7 +2722,7 @@ describe("rewindThread", () => {
     });
     expect(tx.run.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: { in: ["run-1"] } },
+        where: { id: { in: ["run-1"] }, status: { in: [...ACTIVE_RUN_STATUSES] } },
         data: expect.objectContaining({ status: "cancelled" }),
       }),
     );

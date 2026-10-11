@@ -53,6 +53,7 @@ import {
   PiOAuthLogins,
   PipedreamConnector,
   PostgresRealtimeFanout,
+  PostgresSessionLog,
   pipedreamConfigFromEnv,
   piSessionsRoot,
   pushTokenPath,
@@ -363,6 +364,7 @@ export async function createApp(
   const shutdown = new AbortController();
   const executor = createRunExecutor({
     prisma,
+    sessionLog: new PostgresSessionLog(prisma),
     runtime,
     sandbox,
     memory,

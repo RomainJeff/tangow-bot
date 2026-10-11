@@ -31,7 +31,8 @@ export type SessionAppendRefusal =
   | "unknown_session"
   | "missing_parent"
   | "stale_compaction"
-  | "no_feed_bot";
+  | "no_feed_bot"
+  | "run_finished";
 
 export class SessionAppendError extends Error {
   constructor(

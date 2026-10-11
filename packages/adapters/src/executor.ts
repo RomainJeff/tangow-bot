@@ -18,6 +18,10 @@ import type {
   NotificationProvider,
   SandboxProvider,
   SemanticMemoryProvider,
+  SessionEntryDraft,
+  SessionLog,
+  SubagentCall,
+  SubagentLog,
   ToolCallTrace,
   WebProvider,
 } from "@rakazo/adapter-kit";
@@ -28,7 +32,7 @@ import {
   routineWakeupJob,
   runContinueJob,
 } from "@rakazo/adapter-kit";
-import type { MessageBlock, RunStatus } from "@rakazo/contracts";
+import type { MessageBlock, RunStatus, SessionEntryOf, SessionRunTrigger } from "@rakazo/contracts";
 import {
   ATTACHMENT_MAX_BYTES,
   BOT_DESCRIPTION_MAX_LENGTH,
@@ -36,8 +40,11 @@ import {
   BOT_TITLE_MAX_LENGTH,
   BotSecretName,
   BotSecretSubmission,
+  EntryId,
   isAttachmentImageMimeType,
   OPENAI_COMPATIBLE_PROVIDER_ID,
+  RunTrigger,
+  SessionId,
 } from "@rakazo/contracts";
 import type {
   CreatedRoutine,
@@ -128,6 +135,8 @@ import {
 import {
   activeBotNames,
   appendEventInTransaction,
+  appendRunBlocksInTransaction,
+  appendRunFinishedInTransaction,
   createSpaceForMember,
   createThreadMessageInTransaction,
   effectiveMemoryScope,
@@ -140,6 +149,7 @@ import {
   Prisma,
   type PrismaClient,
   parseComputerMode,
+  RunHistoryWriteError,
   SpaceLimitError,
   type ThreadEvents,
 } from "@rakazo/db";
@@ -251,7 +261,7 @@ import {
 } from "./computer-support.js";
 import { observationToolResult, parseComputerActions } from "./computer-tools.js";
 import { checkpointRunComputerWorkspace } from "./computer-workspace.js";
-import { sanitizeConnectorError } from "./connector-safety.js";
+import { redactConnectorPayload, sanitizeConnectorError } from "./connector-safety.js";
 import { formatCurrentTimeInstruction } from "./current-time.js";
 import type { DecisionProviderResolver } from "./decision-provider-factory.js";
 import { resolveDeploymentModel } from "./deployment-model.js";
@@ -390,6 +400,7 @@ import {
   userProgressClientNonce,
 } from "./user-progress.js";
 import { createWebProvider } from "./web-provider-factory.js";
+import { withAbort } from "./web-ssrf.js";
 import { webFetchFromTool, webSearchFromTool } from "./web-tools.js";
 
 const modelCredentialLocks = new Map<string, Promise<void>>();
@@ -635,6 +646,7 @@ function runtimeFallbackModel(runtime: AgentRuntime) {
 export interface ExecutorDeps {
   prisma: PrismaClient;
   events: ThreadEvents;
+  sessionLog: SessionLog<Prisma.TransactionClient>;
   runtime: AgentRuntime;
   sandbox: SandboxProvider;
   memory: MemoryStore;
@@ -1912,6 +1924,193 @@ export function createRunExecutor(deps: ExecutorDeps) {
           const detail = toolDetails.get(executionId);
           if (detail) detail.output = describeToolPayload(result);
         };
+        const runLog: RunLog = { sessionId: run.sessionId as SessionId, runId, botId: bot.id };
+        const unansweredCalls = new Map<string, string>();
+        const logEntry = (draft: SessionEntryDraft) =>
+          deps.prisma.$transaction((tx) => deps.sessionLog.append(tx, draft));
+        const announcesTools = deps.runtime.describe().capabilities.streaming;
+        const toolAnnouncements = new Map<string, ReturnType<typeof deferred>>();
+        const toolAnnounced = (executionId: string) => {
+          let handled = toolAnnouncements.get(executionId);
+          if (!handled) {
+            handled = deferred();
+            toolAnnouncements.set(executionId, handled);
+          }
+          return handled;
+        };
+        const afterToolAnnounced = async (executionId: string) => {
+          if (!announcesTools) return;
+          await withAbort(toolAnnounced(executionId).promise, context.signal);
+          toolAnnouncements.delete(executionId);
+        };
+        const toolCall = (callId: string, name: string, args: Record<string, unknown>) =>
+          ({
+            type: "tool.call",
+            payload: { callId, name, input: redactSecrets(describeToolPayload(args), runSecrets) },
+          }) satisfies ToolLogEntry;
+        /**
+         * A call the log holds without a result is one the worker was running when it stopped. The
+         * runtime replays it under its id with the same input, and that replay keeps its entry; a
+         * reused id with other input is a new call.
+         */
+        const runLoggedTool = async (
+          log: RunLog,
+          write: (entry: ToolLogEntry) => Promise<unknown>,
+          name: string,
+          args: Record<string, unknown>,
+          executionId: string,
+          trace?: ToolCallTrace,
+        ) => {
+          const call = toolCall(executionId, name, args);
+          if (unansweredCalls.get(executionId) !== call.payload.input) await write(call);
+          unansweredCalls.delete(executionId);
+          const result = await applyTool(name, args, executionId, log, trace);
+          recordToolOutput(executionId, result);
+          if (!isToolPauseResult(result)) {
+            await write({
+              type: "tool.result",
+              payload: {
+                callId: executionId,
+                output: redactSecrets(describeToolPayload(result), runSecrets),
+                isError: isFailedToolResult(result),
+                artifactIds: toolArtifactIds(result),
+              },
+            });
+          }
+          return result;
+        };
+        const writeRunEntry = (entry: ToolLogEntry) => logEntry({ ...runLog, ...entry });
+        const effort = thinkingLevel ?? resolved.thinkingLevel ?? null;
+        const startSubagent = async (call: SubagentCall): Promise<SubagentLog> => {
+          await afterToolAnnounced(call.callId);
+          const callEntryId = EntryId.parse(randomUUID());
+          const helper = await deps.prisma.$transaction(async (tx) => {
+            await deps.sessionLog.append(tx, {
+              ...runLog,
+              id: callEntryId,
+              ...toolCall(call.callId, "run_subagent", call.args),
+            });
+            const sessionId = await deps.sessionLog.createSession(tx, {
+              kind: "subagent",
+              id: SessionId.parse(randomUUID()),
+              spaceId: run.spaceId,
+              parentSessionId: runLog.sessionId,
+              parentEntryId: callEntryId,
+            });
+            const task = await tx.task.create({
+              data: {
+                spaceId: run.spaceId,
+                botId: bot.id,
+                threadId: thread.id,
+                userId: run.userId,
+                prompt: call.task,
+                status: "running",
+              },
+              select: { id: true },
+            });
+            const helperRun = await tx.run.create({
+              data: {
+                spaceId: run.spaceId,
+                botId: bot.id,
+                threadId: thread.id,
+                taskId: task.id,
+                userId: run.userId,
+                status: "running",
+                trigger: "subagent",
+                sessionId,
+                parentRunId: runId,
+                modelProvider: call.model.provider,
+                modelId: call.model.id,
+                startedAt: new Date(),
+              },
+              select: { id: true },
+            });
+            await deps.sessionLog.append(tx, {
+              type: "run.started",
+              sessionId,
+              botId: bot.id,
+              runId: helperRun.id,
+              payload: {
+                trigger: { kind: "subagent", entryId: callEntryId },
+                model: call.model,
+                effort,
+              },
+            });
+            return { log: { sessionId, runId: helperRun.id, botId: bot.id }, taskId: task.id };
+          });
+          const inOrder = serialWrites();
+          const writeHelperEntry = (entry: ToolLogEntry) =>
+            inOrder(() => logEntry({ ...helper.log, ...entry }));
+          return {
+            executeTool: (name, args, executionId, _route, trace) =>
+              runLoggedTool(helper.log, writeHelperEntry, name, args, executionId, trace),
+            text: (text) =>
+              inOrder(() =>
+                logEntry({
+                  ...helper.log,
+                  type: "assistant.text",
+                  payload: { blocks: [{ kind: "text", text: redactSecrets(text, runSecrets) }] },
+                }),
+              ).then(() => undefined),
+            finish: (outcome) =>
+              inOrder(async () => {
+                const result = redactSecrets(outcome.result, runSecrets);
+                try {
+                  await deps.prisma.$transaction(async (tx) => {
+                    // The parent's thread, then the helper's run and session, the order stop takes.
+                    await tx.$queryRaw`SELECT id FROM threads WHERE id = ${thread.id} FOR UPDATE`;
+                    const closed = await tx.run.updateMany({
+                      where: { id: helper.log.runId, status: "running" },
+                      data: { status: outcome.status, completedAt: new Date() },
+                    });
+                    if (closed.count === 1) {
+                      await tx.task.update({
+                        where: { id: helper.taskId },
+                        data: { status: outcome.status },
+                        select: { id: true },
+                      });
+                      await appendRunFinishedInTransaction(
+                        tx,
+                        helper.log.runId,
+                        outcome.status === "completed"
+                          ? { status: "completed" }
+                          : { status: "failed", error: result },
+                        outcome.usage,
+                      );
+                    }
+                    await deps.sessionLog.append(tx, {
+                      ...runLog,
+                      type: "subagent",
+                      payload: {
+                        callId: call.callId,
+                        sessionId: helper.log.sessionId,
+                        name: call.name,
+                        model: call.model,
+                        task: redactSecrets(call.task, runSecrets),
+                        status: outcome.status,
+                        result,
+                        usage: outcome.usage,
+                      },
+                    });
+                  });
+                } catch (error) {
+                  if (!(error instanceof RunHistoryWriteError)) throw error;
+                }
+              }),
+            abandon: (result) =>
+              inOrder(() =>
+                writeRunEntry({
+                  type: "tool.result",
+                  payload: {
+                    callId: call.callId,
+                    output: redactSecrets(result, runSecrets),
+                    isError: true,
+                    artifactIds: [],
+                  },
+                }),
+              ).then(() => undefined),
+          };
+        };
         let pendingProgress = "";
         let lastProgressAt = 0;
         let hasStreamedText = false;
@@ -2029,6 +2228,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           name: string,
           args: Record<string, unknown>,
           executionId: string,
+          callLog: RunLog,
           trace?: ToolCallTrace,
         ) => {
           context.signal.throwIfAborted();
@@ -2525,6 +2725,14 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   runUserId: run.userId,
                 }),
               ],
+              effect: {
+                id: applied!.effect.id,
+                kind: applied!.effect.kind,
+                proposal: effectProposal(
+                  redactConnectorPayload(applied!.effect.request, runSecrets),
+                ),
+              },
+              pausedCall: pausedCall(callLog, executionId, "approval"),
             });
             // pauseRunForInput returning false after a successful renew means the run row no
             // longer matches this worker. Exiting via pauseForApproval() would leave the run
@@ -3240,28 +3448,33 @@ export function createRunExecutor(deps: ExecutorDeps) {
               : undefined;
             if (files && "error" in files) return finish(files);
             const skillOwner = { spaceId: run.spaceId, userId: run.userId, botId: run.botId };
-            if (name === "skill_create") {
-              return finish(
-                await skillCreateFromTool(skillDeps, skillOwner, {
-                  files,
-                  name: args.name ? String(args.name) : undefined,
-                  description: args.description ? String(args.description) : undefined,
-                  body: args.body ? String(args.body) : undefined,
-                  content: args.content ? String(args.content) : undefined,
-                }),
-              );
+            const saved =
+              name === "skill_create"
+                ? await skillCreateFromTool(skillDeps, skillOwner, {
+                    files,
+                    name: args.name ? String(args.name) : undefined,
+                    description: args.description ? String(args.description) : undefined,
+                    body: args.body ? String(args.body) : undefined,
+                    content: args.content ? String(args.content) : undefined,
+                  })
+                : await skillUpdateFromTool(skillDeps, skillOwner, {
+                    files,
+                    name: args.name ? String(args.name) : undefined,
+                    skillId: args.skillId ? String(args.skillId) : undefined,
+                    newName: args.newName ? String(args.newName) : undefined,
+                    description:
+                      args.description !== undefined ? String(args.description) : undefined,
+                    body: args.body !== undefined ? String(args.body) : undefined,
+                    content: args.content ? String(args.content) : undefined,
+                  });
+            if ("ok" in saved) {
+              await logEntry({
+                ...runLog,
+                type: "skill.saved",
+                payload: { skillId: String(saved.id), name: String(saved.name) },
+              });
             }
-            return finish(
-              await skillUpdateFromTool(skillDeps, skillOwner, {
-                files,
-                name: args.name ? String(args.name) : undefined,
-                skillId: args.skillId ? String(args.skillId) : undefined,
-                newName: args.newName ? String(args.newName) : undefined,
-                description: args.description !== undefined ? String(args.description) : undefined,
-                body: args.body !== undefined ? String(args.body) : undefined,
-                content: args.content ? String(args.content) : undefined,
-              }),
-            );
+            return finish(saved);
           }
           if (name === "skill_delete") {
             return finish(
@@ -3348,7 +3561,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
                     needsOAuth: oauthLikely,
                   },
                 ];
-                const committed = await persistMessageInTransaction(tx, run, "bot", blocks);
+                const committed = await persistMessageInTransaction(
+                  tx,
+                  deps.sessionLog,
+                  run,
+                  "bot",
+                  blocks,
+                );
                 return { server, eventSeq: committed.eventSeq };
               });
               serverRow = created.server;
@@ -3662,6 +3881,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   status: "pending",
                 },
               ],
+              pausedCall: pausedCall(callLog, executionId, "answer"),
             });
             if (!paused) {
               throw new Error("Could not pause this run for protected input; try sending again.");
@@ -4205,6 +4425,15 @@ export function createRunExecutor(deps: ExecutorDeps) {
             historyMessagesAvailable,
             historyWindowMode,
           });
+          for (const [callId, input] of await openRunLog(
+            deps,
+            run,
+            runLog,
+            { provider: runModelProvider, id: runModelId },
+            effort,
+          )) {
+            unansweredCalls.set(callId, input);
+          }
           const runtimeEvents = deps.runtime.run(
             {
               botId: bot.id,
@@ -4239,10 +4468,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
               executeTool: scripted
                 ? undefined
                 : async (name, args, executionId, _route, trace) => {
-                    const result = await applyTool(name, args, executionId, trace);
-                    recordToolOutput(executionId, result);
-                    return result;
+                    await afterToolAnnounced(executionId);
+                    return runLoggedTool(runLog, writeRunEntry, name, args, executionId, trace);
                   },
+              startSubagent: scripted ? undefined : startSubagent,
               resolveModel: scripted
                 ? undefined
                 : (provider, modelId) =>
@@ -4506,6 +4735,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               if (event.name !== "message_user") {
                 await publishMidTurnNarration();
               }
+              toolAnnounced(event.executionId).resolve();
               await deps.events.append({
                 spaceId: run.spaceId,
                 threadId: thread.id,
@@ -4567,8 +4797,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
               if (scripted) {
                 const startedAt = Date.now();
                 try {
-                  const result = await applyTool(event.name, event.args, event.executionId);
-                  recordToolOutput(event.executionId, result);
+                  const result = await runLoggedTool(
+                    runLog,
+                    writeRunEntry,
+                    event.name,
+                    event.args,
+                    event.executionId,
+                  );
                   await appendToolCompletionAudit(
                     deps,
                     {
@@ -5438,6 +5673,143 @@ function safeStringifyToolPayload(value: unknown): string {
   }
 }
 
+type RunLog = { sessionId: SessionId; runId: string; botId: string };
+
+type ToolLogEntry =
+  | { type: "tool.call"; payload: SessionEntryOf<"tool.call">["payload"] }
+  | { type: "tool.result"; payload: SessionEntryOf<"tool.result">["payload"] };
+
+function pausedCall(log: RunLog, callId: string, awaiting: "approval" | "answer") {
+  return { ...log, callId, output: `paused: awaiting ${awaiting}` };
+}
+
+function effectProposal(request: unknown): Record<string, unknown> {
+  return request && typeof request === "object" && !Array.isArray(request)
+    ? (request as Record<string, unknown>)
+    : { request };
+}
+
+function toolArtifactIds(result: unknown): string[] {
+  const artifactId = (result as { artifactId?: unknown } | null)?.artifactId;
+  return typeof artifactId === "string" ? [artifactId] : [];
+}
+
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((settle) => {
+    resolve = settle;
+  });
+  return { promise, resolve };
+}
+
+/** Each write starts once the one before it settled; a failed write fails only itself. */
+function serialWrites() {
+  let tail: Promise<unknown> = Promise.resolve();
+  return <T>(write: () => Promise<T>): Promise<T> => {
+    const next = tail.then(write);
+    tail = next.catch(() => undefined);
+    return next;
+  };
+}
+
+type RunLogFacts = {
+  logged: Array<{ type: string; payload: { callId: string; input?: string } }> | null;
+  carrierType: string | null;
+  steered: boolean;
+  routineName: string | null;
+  spawnPromptId: string | null;
+};
+
+async function openRunLog(
+  deps: Pick<ExecutorDeps, "prisma" | "sessionLog">,
+  run: RunTriggerSource,
+  log: RunLog,
+  model: { provider: string; id: string },
+  effort: SessionEntryOf<"run.started">["payload"]["effort"],
+): Promise<Map<string, string>> {
+  return deps.prisma.$transaction(async (tx) => {
+    const spawnNonce = run.trigger === "spawn" ? run.clientNonce : null;
+    const [facts] = await tx.$queryRaw<[RunLogFacts]>`
+      SELECT
+        (SELECT json_agg(json_build_object('type', type, 'payload', payload) ORDER BY seq)
+          FROM session_entries
+          WHERE "runId" = ${run.id} AND type IN ('run.started', 'tool.call', 'tool.result')
+        ) AS logged,
+        (SELECT type FROM session_entries WHERE id = ${run.sourceMessageId}) AS "carrierType",
+        EXISTS (SELECT 1 FROM steering_messages WHERE "messageId" = ${run.sourceMessageId})
+          AS steered,
+        (SELECT name FROM routines WHERE id = ${run.routineId}) AS "routineName",
+        (SELECT id FROM session_entries
+          WHERE "sessionId" = ${run.sessionId} AND payload ->> 'clientNonce' = ${spawnNonce}
+        ) AS "spawnPromptId"`;
+    const logged = facts.logged ?? [];
+    const awaitingResult = new Map<string, string>();
+    for (const { type, payload } of logged) {
+      if (type === "tool.call") awaitingResult.set(payload.callId, payload.input ?? "");
+      if (type === "tool.result") awaitingResult.delete(payload.callId);
+    }
+    if (logged.length === 0) {
+      await deps.sessionLog.append(tx, {
+        ...log,
+        type: "run.started",
+        payload: { trigger: sessionRunTrigger(run, facts), model, effort },
+      });
+    }
+    return awaitingResult;
+  });
+}
+
+type RunTriggerSource = {
+  id: string;
+  trigger: string;
+  routineId: string | null;
+  sourceMessageId: string | null;
+  sessionId: string;
+  clientNonce: string | null;
+  createdAt: Date;
+};
+
+function sessionRunTrigger(run: RunTriggerSource, facts: RunLogFacts): SessionRunTrigger {
+  const carrier = (): SessionRunTrigger => {
+    if (!run.sourceMessageId) return { kind: "direct" };
+    const entryId = run.sourceMessageId as EntryId;
+    if (facts.carrierType === "handoff") return { kind: "handoff", entryId };
+    if (facts.carrierType === "bot.message.received") return { kind: "bot_message", entryId };
+    return run.trigger === "follow_up" && facts.steered
+      ? { kind: "steering", entryId }
+      : { kind: "message", entryId };
+  };
+  const stored = RunTrigger.safeParse(run.trigger);
+  if (!stored.success) return carrier();
+  switch (stored.data) {
+    case "routine":
+      return run.routineId
+        ? {
+            kind: "routine",
+            routineId: run.routineId,
+            name: facts.routineName ?? "",
+            scheduledAt: run.createdAt.toISOString(),
+          }
+        : { kind: "direct" };
+    case "webhook":
+      return run.routineId ? { kind: "webhook", routineId: run.routineId } : carrier();
+    case "skill":
+      return { kind: "direct" };
+    case "spawn":
+      // A spawned bot's first run is woken by the prompt its spawner wrote with the run's nonce.
+      return facts.spawnPromptId
+        ? { kind: "message", entryId: facts.spawnPromptId as EntryId }
+        : { kind: "direct" };
+    case "user":
+    case "follow_up":
+    case "reaction":
+    case "messaging":
+    case "bot_message":
+    case "resume":
+      return carrier();
+  }
+}
+
 function redactBlocks(blocks: MessageBlock[], secrets: string[]): MessageBlock[] {
   return blocks.map((block) => {
     if (block.kind === "text") {
@@ -5486,7 +5858,7 @@ async function publishMessage(
   clientNonce?: string,
 ) {
   const committed = await deps.prisma.$transaction((tx) =>
-    persistMessageInTransaction(tx, run, role, blocks, markUnread, clientNonce),
+    persistMessageInTransaction(tx, deps.sessionLog, run, role, blocks, markUnread, clientNonce),
   );
   await deps.events.notify(run.threadId, committed.eventSeq).catch((error) => {
     getLogger().error("thread message realtime notification", error);
@@ -5496,6 +5868,7 @@ async function publishMessage(
 
 async function persistMessageInTransaction(
   tx: Prisma.TransactionClient,
+  sessionLog: ExecutorDeps["sessionLog"],
   run: { id: string; spaceId: string; threadId: string; botId: string },
   role: "user" | "bot" | "system",
   blocks: MessageBlock[],
@@ -5511,6 +5884,14 @@ async function persistMessageInTransaction(
     markUnread,
     clientNonce,
   });
+  if (role === "bot") {
+    await appendRunBlocksInTransaction(
+      tx,
+      { id: message.id, runId: run.id, botId: run.botId },
+      blocks,
+      (client, draft) => sessionLog.append(client, draft),
+    );
+  }
   const event = await appendEventInTransaction(tx, {
     spaceId: run.spaceId,
     threadId: run.threadId,

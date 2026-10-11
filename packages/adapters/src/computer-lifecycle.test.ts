@@ -26,6 +26,10 @@ import { checkpointComputerWorkspace } from "./computer-workspace.js";
 import { FakeSandboxProvider } from "./fake-sandbox.js";
 import { LocalAgentHomeStore } from "./home.js";
 
+vi.mock("../../db/src/sessions.js", async () =>
+  (await import("@rakazo/db/sessions.test-support")).stubbedDbSessions(),
+);
+
 const context = {
   operationId: "test",
   traceId: "test",
@@ -1546,6 +1550,7 @@ describe("computer execution leases", () => {
     };
     const create = vi.fn().mockRejectedValue(Object.assign(new Error("unique"), { code: "P2002" }));
     const client = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
       thread: {
         update: vi
           .fn()

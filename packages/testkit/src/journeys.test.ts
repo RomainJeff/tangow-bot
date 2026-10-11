@@ -10,9 +10,12 @@ import {
   ManagedSandboxEmulator,
   toComputerRef,
 } from "@rakazo/adapters";
+import type { SessionId } from "@rakazo/contracts";
 import { ACTIVE_RUN_STATUSES, ONCE_ROUTINE_CRON } from "@rakazo/core";
 import {
   appendEvent,
+  appendRunFinishedInTransaction,
+  appendSessionEntryInTransaction,
   createThreadEvents,
   createThreadMessage,
   RunHistoryWriteError,
@@ -487,7 +490,13 @@ describeJourneys("required product journeys", () => {
     expect(snap.messages).toEqual([]);
     expect(snap.run).toBeNull();
     expect(await prisma.message.count({ where: { threadId: thread.id } })).toBe(0);
-    expect(await prisma.event.findMany({ where: { threadId: thread.id } })).toMatchObject([
+    expect(
+      await prisma.event.findMany({ where: { threadId: thread.id }, orderBy: { seq: "asc" } }),
+    ).toMatchObject([
+      {
+        type: "session.entry.appended",
+        payload: { entries: [{ type: "clear", parentId: null }] },
+      },
       { type: "thread.cleared" },
     ]);
     // The deleted messages all count as compacted, so compaction cannot summarize them and
@@ -539,7 +548,13 @@ describeJourneys("required product journeys", () => {
       }),
     ).rejects.toThrow(RunHistoryWriteError);
     expect(await prisma.message.count({ where: { threadId: thread.id } })).toBe(0);
-    expect(await prisma.event.findMany({ where: { threadId: thread.id } })).toMatchObject([
+    expect(
+      await prisma.event.findMany({ where: { threadId: thread.id }, orderBy: { seq: "asc" } }),
+    ).toMatchObject([
+      {
+        type: "session.entry.appended",
+        payload: { entries: [{ type: "clear", parentId: null }] },
+      },
       { type: "thread.cleared" },
     ]);
 
@@ -665,6 +680,35 @@ describeJourneys("required product journeys", () => {
         where: { botId: bot.id, type: "computer.takeover.released" },
       }),
     ).toBe(releaseEvents);
+  });
+
+  it("4f: a takeover and its release reach the log with the change of holder, or not at all", async () => {
+    const cookie = await signup(app, `takeover-log-j-${stamp}@rakazo.test`, "Takeover Log");
+    const bot = await rpc<Bot>(app, cookie, "bots/create", {
+      name: "Chief",
+      title: "",
+      description: "",
+      instructions: "",
+      notifyOnFinish: true,
+    });
+    await rpc(app, cookie, "computer/boot", { botId: bot.id });
+    const holder = async () =>
+      (await rpc<{ controlHolder: string }>(app, cookie, "computer/status", { botId: bot.id }))
+        .controlHolder;
+    await withEntryFault(prisma, "computer.control", async () => {
+      await expect(rpc(app, cookie, "computer/takeover", { botId: bot.id })).rejects.toThrow();
+    });
+    expect(await holder()).not.toBe("user");
+
+    await rpc(app, cookie, "computer/takeover", { botId: bot.id });
+    await rpc(app, cookie, "computer/release", { botId: bot.id });
+
+    const control = await prisma.sessionEntry.findMany({
+      where: { session: { thread: { botId: bot.id } }, type: "computer.control" },
+      orderBy: { seq: "asc" },
+      select: { payload: true },
+    });
+    expect(control.map(({ payload }) => payload)).toEqual([{ holder: "user" }, { holder: "bot" }]);
   });
 
   it("4d: skipping takeover resumes without treating login as done", async () => {
@@ -1305,7 +1349,7 @@ describeJourneys("required product journeys", () => {
       prisma.event.findMany({ where: { threadId: thread.id }, orderBy: { seq: "asc" } }),
       prisma.message.findMany({ where: { threadId: thread.id }, orderBy: { seq: "asc" } }),
     ]);
-    expect(events.map((row) => row.seq)).toEqual(Array.from({ length: 40 }, (_, i) => i));
+    expect(events.map((row) => row.seq)).toEqual(Array.from({ length: 80 }, (_, i) => i));
     expect(messages.map((row) => row.seq)).toEqual(Array.from({ length: 40 }, (_, i) => i));
   });
 
@@ -1494,7 +1538,32 @@ describeJourneys("required product journeys", () => {
     expect(stolen.status).toBeGreaterThanOrEqual(400);
     expect((await rpc<Bot[]>(app, ada, "bots/list")).map((bot) => bot.id)).toContain(gone.id);
 
+    const busy = await rpc<{ runId: string }>(app, ada, "threads/send", {
+      botId: gone.id,
+      text: "keep working until I stop you",
+    });
+    await waitForDatabase(
+      async () =>
+        (await prisma.sessionEntry.count({ where: { runId: busy.runId, type: "run.started" } })) >
+        0,
+    );
     await rpc(app, ada, "bots/archive", { botId: gone.id });
+    expect(
+      (
+        await prisma.sessionEntry.findMany({
+          where: { runId: busy.runId },
+          orderBy: { seq: "asc" },
+        })
+      )
+        .filter((entry) => entry.type.startsWith("run."))
+        .map(({ type, payload }) => [type, payload]),
+    ).toEqual([
+      [
+        "run.started",
+        expect.objectContaining({ trigger: expect.objectContaining({ kind: "message" }) }),
+      ],
+      ["run.finished", { status: "cancelled", usage: { inputTokens: 0, outputTokens: 0 } }],
+    ]);
     expect((await rpc<Bot[]>(app, ada, "bots/list")).map((bot) => bot.id)).not.toContain(gone.id);
     expect((await rpc<Bot[]>(app, ada, "bots/listArchived")).map((bot) => bot.id)).toContain(
       gone.id,
@@ -1594,6 +1663,25 @@ describeJourneys("required product journeys", () => {
     );
     const snap = await rpc<Snap>(app, cookie, "threads/get", { botId: parent.id });
     expect(JSON.stringify(snap.messages)).toMatch(/child_bot|Scout/);
+    const spawnRun = await prisma.run.findFirstOrThrow({
+      where: { botId: scout!.id, trigger: "spawn" },
+    });
+    const woke = await prisma.sessionEntry.findMany({
+      where: { runId: null, session: { thread: { botId: scout!.id } } },
+      orderBy: { seq: "asc" },
+      select: { id: true, type: true, payload: true },
+    });
+    const prompt = woke.find((entry) => entry.type === "user.message");
+    expect(prompt?.payload).toMatchObject({ clientNonce: spawnRun.clientNonce });
+    expect([
+      spawnRun.sourceMessageId,
+      (
+        await prisma.sessionEntry.findFirst({
+          where: { runId: spawnRun.id, type: "run.started" },
+          select: { payload: true },
+        })
+      )?.payload,
+    ]).toMatchObject([null, { trigger: { kind: "message", entryId: prompt?.id } }]);
 
     await sendApproveAndWait(app, cookie, scout!.id, "spawn a bot named Nested");
     const afterNested = await rpc<Bot[]>(app, cookie, "bots/list");
@@ -1769,6 +1857,36 @@ describeJourneys("required product journeys", () => {
     expect(file.content).not.toContain("nonce-dup");
   });
 
+  it("16b: onboarding posts the bot's words outside any run to its log", async () => {
+    const cookie = await signup(app, `onboard-j-${stamp}@rakazo.test`, "Onboard Ada");
+    const bot = await rpc<Bot>(app, cookie, "bots/create", {
+      name: "Greeter",
+      title: "",
+      description: "",
+      instructions: "",
+      notifyOnFinish: true,
+    });
+    await rpc(app, cookie, "onboarding/promptFocus", { botId: bot.id });
+    await rpc(app, cookie, "onboarding/choose", { botId: bot.id, optionId: "research" });
+
+    const thread = await prisma.thread.findFirstOrThrow({ where: { botId: bot.id } });
+    const said = await prisma.message.findMany({
+      where: { threadId: thread.id, role: "bot" },
+      orderBy: { seq: "asc" },
+      select: { id: true },
+    });
+    const entries = await prisma.sessionEntry.findMany({
+      where: { sessionId: thread.sessionId },
+      orderBy: { seq: "asc" },
+    });
+    expect(entries.map(({ id, type, botId, runId }) => [id, type, botId, runId])).toEqual(
+      said.map(({ id }) => [id, "bot.text", bot.id, null]),
+    );
+    expect(entries[0]?.payload).toMatchObject({
+      blocks: [{ kind: "choice", question: "What do you want me on first?" }],
+    });
+  });
+
   it("16: routine test-run and plugin connect/revoke", async () => {
     const ada = await signup(app, `plug-j-${stamp}@rakazo.test`, "Plug Ada");
     const bob = await signup(app, `plug-bob-j-${stamp}@rakazo.test`, "Plug Bob");
@@ -1866,6 +1984,11 @@ describeJourneys("required product journeys", () => {
       "groups/create",
       { name: "Research squad", botIds: [botA.id, botB.id, botC.id, botD.id] },
     );
+    // Members created together tie on createdAt; make BotA the group's first member for sure.
+    await prisma.chatGroupMember.updateMany({
+      where: { groupId: group.id, botId: botA.id },
+      data: { createdAt: new Date(Date.now() - 60_000) },
+    });
     const listed = await rpc<Array<{ id: string }>>(app, ada, "groups/list");
     expect(listed.some((row) => row.id === group.id)).toBe(true);
     expect((await rpc<Bot[]>(app, ada, "bots/list")).map((b) => b.id)).toEqual(
@@ -1908,6 +2031,23 @@ describeJourneys("required product journeys", () => {
         (message.blocks as Array<{ kind?: string }>).some((block) => block.kind === "handoff"),
       ),
     ).toBe(true);
+    const handoff = await prisma.sessionEntry.findFirstOrThrow({
+      where: { session: { threadId: group.threadId }, type: "handoff" },
+    });
+    const handedRun = await prisma.run.findFirstOrThrow({ where: { sourceMessageId: handoff.id } });
+    await waitForDatabase(
+      async () =>
+        (await prisma.sessionEntry.count({ where: { runId: handedRun.id, type: "run.started" } })) >
+        0,
+    );
+    const handedStart = await prisma.sessionEntry.findFirstOrThrow({
+      where: { runId: handedRun.id, type: "run.started" },
+    });
+    expect([handoff.payload, handedRun.botId, handedStart.payload]).toMatchObject([
+      { fromBotId: botA.id, toBotId: botC.id },
+      botC.id,
+      { trigger: { kind: "handoff", entryId: handoff.id } },
+    ]);
 
     const groupAsk = await rpc<{ runId: string }>(app, ada, "threads/send", {
       groupId: group.id,
@@ -1917,6 +2057,28 @@ describeJourneys("required product journeys", () => {
       const run = await prisma.run.findUnique({ where: { id: groupAsk.runId } });
       return run?.status === "waiting_input";
     });
+    const askedMessage = await prisma.message.findFirstOrThrow({
+      where: { threadId: group.threadId, role: "user" },
+      orderBy: { seq: "desc" },
+    });
+    const feed = await prisma.event.findMany({
+      where: {
+        threadId: group.threadId,
+        type: { in: ["thread.message.created", "session.entry.appended"] },
+      },
+      orderBy: { seq: "asc" },
+    });
+    const carries = (payload: unknown) =>
+      (payload as { messageId?: string }).messageId === askedMessage.id ||
+      ((payload as { entries?: Array<{ id: string }> }).entries ?? []).some(
+        (entry) => entry.id === askedMessage.id,
+      );
+    expect(
+      feed.filter((event) => carries(event.payload)).map((event) => [event.type, event.botId]),
+    ).toEqual([
+      ["session.entry.appended", botD.id],
+      ["thread.message.created", botD.id],
+    ]);
     const groupsWithActiveMember = await rpc<
       Array<{ id: string; members: Array<{ botId: string; status?: string }> }>
     >(app, ada, "groups/list");
@@ -2269,11 +2431,15 @@ describeJourneys("required product journeys", () => {
     });
     await rpc(app, cookie, "computer/boot", { botId: bot.id });
     await rpc(app, cookie, "computer/takeover", { botId: bot.id });
-    void rpc(app, cookie, "threads/send", {
+    const busy = await rpc<{ runId: string }>(app, cookie, "threads/send", {
       botId: bot.id,
       text: "keep working until I stop you",
     });
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await waitForDatabase(
+      async () =>
+        (await prisma.sessionEntry.count({ where: { runId: busy.runId, type: "run.started" } })) >
+        0,
+    );
     const skill = await rpc<{
       id: string;
       status: string;
@@ -2321,11 +2487,43 @@ describeJourneys("required product journeys", () => {
       name: "Export weekly CRM list",
       playbook: stopped.playbook,
     });
+    await withEntryFault(prisma, "skill.saved", async () => {
+      await expect(
+        rpc(app, cookie, "skills/save", { skillId: skill.id, name: "Export weekly CRM list" }),
+      ).rejects.toThrow();
+    });
+    expect(
+      (await rpc<{ status: string }>(app, cookie, "skills/get", { skillId: skill.id })).status,
+    ).toBe("draft");
     const saved = await rpc<{ status: string; name: string }>(app, cookie, "skills/save", {
       skillId: skill.id,
       name: "Export weekly CRM list",
     });
     expect(saved.status).toBe("saved");
+    const teacher = await rpc<Me>(app, cookie, "me");
+    const teachingLog = await prisma.sessionEntry.findMany({
+      where: {
+        session: { thread: { botId: bot.id } },
+        type: { in: ["run.finished", "bot.text", "skill.saved"] },
+      },
+      orderBy: { seq: "asc" },
+      select: { type: true, runId: true, payload: true },
+    });
+    expect(
+      teachingLog.map(({ type, runId, payload }) => {
+        const fields = payload as {
+          status?: string;
+          by?: string;
+          blocks?: Array<{ kind: string }>;
+          name?: string;
+        };
+        return [type, runId, fields.status ?? fields.blocks?.[0]?.kind ?? fields.name, fields.by];
+      }),
+    ).toEqual([
+      ["run.finished", busy.runId, "cancelled", teacher.userId],
+      ["bot.text", null, "skill_draft", undefined],
+      ["skill.saved", null, "Export weekly CRM list", undefined],
+    ]);
     const listed = await rpc<Array<{ id: string; name: string }>>(app, cookie, "skills/list", {
       botId: bot.id,
     });
@@ -2373,6 +2571,93 @@ describeJourneys("required product journeys", () => {
       if (previousTtl === undefined) delete process.env.TEACH_RECORDING_TTL_MS;
       else process.env.TEACH_RECORDING_TTL_MS = previousTtl;
     }
+  });
+
+  it("18b: teaching leaves a run that finished while it started completed, with one run.finished", async () => {
+    const cookie = await signup(app, `teach-race-j-${stamp}@rakazo.test`, "Teach Race Ada");
+    const bot = await rpc<Bot>(app, cookie, "bots/create", {
+      name: "Racer",
+      title: "",
+      description: "",
+      instructions: "",
+      notifyOnFinish: true,
+    });
+    await rpc(app, cookie, "computer/boot", { botId: bot.id });
+    const thread = await prisma.thread.findFirstOrThrow({ where: { botId: bot.id } });
+    const task = await prisma.task.create({
+      data: {
+        spaceId: thread.spaceId,
+        botId: bot.id,
+        threadId: thread.id,
+        userId: thread.userId,
+        prompt: "Finish now",
+        status: "running",
+      },
+    });
+    const run = await prisma.run.create({
+      data: {
+        spaceId: thread.spaceId,
+        botId: bot.id,
+        threadId: thread.id,
+        taskId: task.id,
+        userId: thread.userId,
+        status: "running",
+        trigger: "user",
+      },
+    });
+    await prisma.$transaction((tx) =>
+      appendSessionEntryInTransaction(tx, {
+        sessionId: thread.sessionId as SessionId,
+        botId: bot.id,
+        runId: run.id,
+        type: "run.started",
+        payload: { trigger: { kind: "direct" }, model: { provider: "p", id: "m" }, effort: null },
+      }),
+    );
+    let finalizing!: () => void;
+    let release!: () => void;
+    const holding = new Promise<void>((resolve) => {
+      finalizing = resolve;
+    });
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const finalize = prisma.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`SELECT id FROM threads WHERE id = ${thread.id} FOR UPDATE`;
+        await tx.run.update({ where: { id: run.id }, data: { status: "completed" } });
+        await appendRunFinishedInTransaction(tx, run.id, { status: "completed" });
+        finalizing();
+        await released;
+      },
+      { timeout: 20_000 },
+    );
+    await holding;
+    const started = rpc(app, cookie, "skills/start", { botId: bot.id, goal: "Race demo" });
+    await waitForDatabase(async () => {
+      const [row] = await prisma.$queryRaw<Array<{ waiting: number }>>`
+        SELECT count(*)::int AS waiting FROM pg_stat_activity
+        WHERE datname = current_database() AND wait_event_type = 'Lock'`;
+      return row!.waiting > 0;
+    });
+    release();
+    await finalize;
+    await started;
+
+    expect(
+      await prisma.run.findUniqueOrThrow({ where: { id: run.id }, select: { status: true } }),
+    ).toEqual({ status: "completed" });
+    const logged = await prisma.sessionEntry.findMany({
+      where: { runId: run.id },
+      orderBy: { seq: "asc" },
+      select: { type: true, payload: true },
+    });
+    expect(
+      logged.map(({ type, payload }) => [type, (payload as { status?: string }).status]),
+    ).toEqual([
+      ["run.started", undefined],
+      ["run.finished", "completed"],
+    ]);
   });
 
   it("19: destination writes pause for approval before side effects", async () => {
@@ -2829,6 +3114,29 @@ async function waitFor(app: App, cookie: string, botId: string, pred: (snap: Sna
     await new Promise((r) => setTimeout(r, 100));
   }
   throw new Error(`timeout waiting for thread: ${JSON.stringify(last)}`);
+}
+
+/** Makes every insert of one session entry type fail while `work` runs, at the database. */
+async function withEntryFault(
+  prisma: Awaited<ReturnType<typeof createApp>>["prisma"],
+  type: string,
+  work: () => Promise<void>,
+) {
+  await prisma.$executeRawUnsafe(`
+    CREATE FUNCTION journey_entry_fault() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN
+      IF NEW.type = '${type}' THEN RAISE EXCEPTION 'injected ${type} failure'; END IF;
+      RETURN NEW;
+    END $$`);
+  await prisma.$executeRawUnsafe(
+    "CREATE TRIGGER journey_entry_fault BEFORE INSERT ON session_entries FOR EACH ROW EXECUTE FUNCTION journey_entry_fault()",
+  );
+  try {
+    await work();
+  } finally {
+    await prisma.$executeRawUnsafe("DROP TRIGGER journey_entry_fault ON session_entries");
+    await prisma.$executeRawUnsafe("DROP FUNCTION journey_entry_fault()");
+  }
 }
 
 async function waitForDatabase(pred: () => Promise<boolean>) {

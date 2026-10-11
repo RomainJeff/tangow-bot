@@ -1,11 +1,18 @@
+import { randomUUID } from "node:crypto";
 import type { NewSession, SessionEntryDraft } from "@rakazo/adapter-kit";
 import { nextSessionEntry, SessionAppendError, sessionEntryNonce } from "@rakazo/adapter-kit";
-import type { SessionEntry } from "@rakazo/contracts";
+import type {
+  EntryId,
+  MessageBlock,
+  RunOutcome,
+  SessionEntry,
+  SessionEntryOf,
+  SessionEntryType,
+} from "@rakazo/contracts";
 import { SessionEntrySchema, SessionId } from "@rakazo/contracts";
-import { SessionEntryDecodeError, sanitizeJsonValue } from "@rakazo/core";
-import type { Prisma } from "./client.js";
-import { appendEventInTransaction } from "./events.js";
-import { assertRunCanWriteHistory } from "./messages.js";
+import { ACTIVE_RUN_STATUSES, SessionEntryDecodeError, sanitizeJsonValue } from "@rakazo/core";
+import { Prisma } from "./client.js";
+import { RunHistoryWriteError } from "./messages.js";
 
 /** A `session_entries` row, as Prisma and `$queryRaw` both return it. */
 export interface SessionEntryRow {
@@ -52,42 +59,68 @@ export async function createSessionInTransaction(
   return SessionId.parse(main.id);
 }
 
+/** The `session.entry.appended` event that carries a transaction's entries to one thread. */
+type ThreadFeed = {
+  eventId: string;
+  spaceId: string;
+  threadId: string;
+  botId: string;
+  runId: string | null;
+  entries: SessionEntry[];
+};
+/** The threads a transaction locked for its appends, and the feed event of each. */
+type TransactionLog = { threadOf: Map<string, string | null>; feedOf: Map<string, ThreadFeed> };
+const transactionLogs = new WeakMap<Prisma.TransactionClient, TransactionLog>();
+
+function transactionLog(tx: Prisma.TransactionClient): TransactionLog {
+  let log = transactionLogs.get(tx);
+  if (!log) {
+    log = { threadOf: new Map(), feedOf: new Map() };
+    transactionLogs.set(tx, log);
+  }
+  return log;
+}
+
+function insertFeedEvent(feed: ThreadFeed, at: Prisma.Sql, gate: Prisma.Sql) {
+  return Prisma.sql`t AS (
+      UPDATE threads SET "nextEventSeq" = "nextEventSeq" + 1 ${gate} WHERE threads.id = ${feed.threadId}
+      RETURNING threads."nextEventSeq" - 1 AS seq),
+    inserted AS (
+      INSERT INTO events (id, "spaceId", "threadId", "botId", seq, type, payload, "runId", "createdAt")
+      SELECT ${feed.eventId}, ${feed.spaceId}, ${feed.threadId}, ${feed.botId}, t.seq,
+        'session.entry.appended', ${JSON.stringify({ entries: feed.entries })}::jsonb, ${feed.runId}, ${at}
+      FROM t)`;
+}
+
 /**
  * Append an entry as the session's new head. Appends to a session serialize on its row lock, and a
- * draft whose clientNonce is already in the session returns that entry without taking a seq. An
- * entry of a thread session also lands on the thread's events feed as `session.entry.appended`; a
- * subagent session has no thread and no feed.
+ * draft whose clientNonce is already in the session returns that entry without taking a seq. The
+ * entries a transaction appends to a thread session reach the thread's feed as one
+ * `session.entry.appended` event; a subagent session has no thread and no feed.
  */
 export async function appendSessionEntryInTransaction(
   tx: Prisma.TransactionClient,
   draft: SessionEntryDraft,
 ): Promise<SessionEntry> {
-  // Thread before session, in the mode every thread writer uses, so a message write that appends an
-  // entry cannot deadlock with this. The session row takes NO KEY so that the foreign key checks of
-  // child session and run inserts do not wait on it.
-  const [thread] = await tx.$queryRaw<Array<{ id: string }>>`
-    SELECT id FROM threads
-    WHERE id = (SELECT "threadId" FROM sessions WHERE id = ${draft.sessionId})
-    FOR UPDATE`;
-  const [session] = await tx.$queryRaw<Array<{ nextEntrySeq: number; spaceId: string }>>`
-    SELECT "nextEntrySeq", "spaceId" FROM sessions WHERE id = ${draft.sessionId}
-    FOR NO KEY UPDATE`;
-  if (!session) {
-    throw new SessionAppendError("unknown_session", `Session ${draft.sessionId} does not exist`);
+  const log = transactionLog(tx);
+  let threadId = log.threadOf.get(draft.sessionId);
+  if (threadId === undefined) {
+    // Thread before session, in the mode every thread writer uses, so a message write that appends
+    // an entry cannot deadlock with this.
+    const [thread] = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM threads
+      WHERE id = (SELECT "threadId" FROM sessions WHERE id = ${draft.sessionId})
+      FOR UPDATE`;
+    threadId = thread?.id ?? null;
+    log.threadOf.set(draft.sessionId, threadId);
   }
-  await assertRunCanWriteHistory(tx, draft.runId);
-  const nonce = sessionEntryNonce(draft);
-  if (nonce !== undefined) {
-    const [delivered] = await tx.$queryRaw<SessionEntryRow[]>`
-      SELECT * FROM session_entries
-      WHERE "sessionId" = ${draft.sessionId} AND payload ->> 'clientNonce' = ${nonce}`;
-    if (delivered) return sessionEntryFromRow(delivered);
+  const feedBotId = draft.botId ?? draft.feedBotId;
+  if (threadId && feedBotId === undefined) {
+    throw new SessionAppendError(
+      "no_feed_bot",
+      `Entry for session ${draft.sessionId} names no bot to show it under on thread ${threadId}`,
+    );
   }
-  const head = await tx.sessionEntry.findFirst({
-    where: { sessionId: draft.sessionId },
-    orderBy: { seq: "desc" },
-    select: { id: true, seq: true },
-  });
   if (draft.type === "rewind") {
     const target = await tx.sessionEntry.findFirst({
       where: { id: draft.parentId, sessionId: draft.sessionId },
@@ -100,42 +133,261 @@ export async function appendSessionEntryInTransaction(
       );
     }
   }
-  const entry = nextSessionEntry(sanitizeJsonValue(draft), session.nextEntrySeq, head);
-  if (thread) {
-    const botId = entry.botId ?? draft.feedBotId;
-    if (botId === undefined) {
-      throw new SessionAppendError(
-        "no_feed_bot",
-        `Entry for session ${draft.sessionId} names no bot to show it under on thread ${thread.id}`,
-      );
-    }
-    await appendEventInTransaction(tx, {
-      spaceId: session.spaceId,
-      threadId: thread.id,
-      botId,
-      type: "session.entry.appended",
-      payload: { entry },
-      runId: entry.runId,
-    });
+  // The session row takes NO KEY so that the foreign key checks of child session and run inserts
+  // do not wait on it.
+  const [session] = await tx.$queryRaw<
+    Array<{ nextEntrySeq: number; headEntryId: string | null; spaceId: string }>
+  >`
+    SELECT "nextEntrySeq", "headEntryId", "spaceId" FROM sessions WHERE id = ${draft.sessionId}
+    FOR NO KEY UPDATE`;
+  if (!session) {
+    throw new SessionAppendError("unknown_session", `Session ${draft.sessionId} does not exist`);
   }
-  await tx.sessionEntry.create({
-    data: {
-      id: entry.id,
-      sessionId: entry.sessionId,
-      seq: entry.seq,
-      parentId: entry.parentId,
-      type: entry.type,
-      payload: entry.payload as Prisma.InputJsonValue,
-      botId: entry.botId,
-      runId: entry.runId,
-      createdAt: new Date(entry.ts),
-    },
-    select: { id: true },
-  });
-  await tx.conversationSession.update({
-    where: { id: entry.sessionId },
-    data: { nextEntrySeq: { increment: 1 } },
-    select: { id: true },
-  });
+  // After the session lock, so a duplicate delivery waits for the first and finds its entry.
+  const nonce = sessionEntryNonce(draft);
+  if (nonce !== undefined) {
+    const [delivered] = await tx.$queryRaw<SessionEntryRow[]>`
+      SELECT * FROM session_entries
+      WHERE "sessionId" = ${draft.sessionId} AND payload ->> 'clientNonce' = ${nonce}`;
+    if (delivered) return sessionEntryFromRow(delivered);
+  }
+  const seq = session.nextEntrySeq;
+  const entry = nextSessionEntry(
+    sanitizeJsonValue(draft),
+    seq,
+    session.headEntryId === null ? null : { id: session.headEntryId, seq: seq - 1 },
+  );
+  const runId = entry.runId ?? null;
+  const at = Prisma.sql`${entry.ts}::timestamptz AT TIME ZONE 'UTC'`;
+  const feed = threadId ? log.feedOf.get(threadId) : undefined;
+  const newFeed: ThreadFeed | undefined =
+    threadId && feedBotId && !feed
+      ? {
+          eventId: randomUUID(),
+          spaceId: session.spaceId,
+          threadId,
+          botId: feedBotId,
+          runId,
+          entries: [entry],
+        }
+      : undefined;
+  const feedSql = feed
+    ? Prisma.sql`, appended AS (
+        UPDATE events SET payload = jsonb_set(payload, '{entries}', (payload -> 'entries') || ${JSON.stringify(entry)}::jsonb)
+        FROM e WHERE events.id = ${feed.eventId}
+        RETURNING events.id)`
+    : newFeed
+      ? Prisma.sql`, ${insertFeedEvent(newFeed, at, Prisma.sql`FROM e`)}`
+      : Prisma.empty;
+  // A run writes nothing once cancelled, and nothing of its own once it finished in this session.
+  // The checks read a snapshot taken after the session lock, so they see a cancel or a finish that
+  // committed while this append waited.
+  const runScoped = /^(run|assistant|tool)\./.test(entry.type);
+  const written = await tx.$queryRaw<Array<{ fed: boolean }>>`
+    WITH e AS (
+      INSERT INTO session_entries (id, "sessionId", seq, "parentId", type, payload, "botId", "runId", "createdAt")
+      SELECT ${entry.id}, ${entry.sessionId}, ${seq}, ${entry.parentId}, ${entry.type},
+        ${JSON.stringify(entry.payload)}::jsonb, ${entry.botId ?? null}, ${runId}, ${at}
+      WHERE (${runId}::text IS NULL
+          OR EXISTS (SELECT 1 FROM runs WHERE id = ${runId} AND status <> 'cancelled'))
+        AND NOT (${runScoped} AND EXISTS (
+          SELECT 1 FROM session_entries
+          WHERE "sessionId" = ${entry.sessionId} AND "runId" = ${runId} AND type = 'run.finished'))
+      RETURNING id),
+    s AS (
+      UPDATE sessions SET "nextEntrySeq" = ${seq + 1}, "headEntryId" = ${entry.id}
+      FROM e WHERE sessions.id = ${entry.sessionId})
+    ${feedSql}
+    SELECT ${feed ? Prisma.sql`EXISTS (SELECT 1 FROM appended)` : Prisma.sql`true`} AS fed FROM e`;
+  if (written.length === 0) {
+    const [run] = await tx.$queryRaw<Array<{ status: string }>>`
+      SELECT status FROM runs WHERE id = ${runId}`;
+    if (!run || run.status === "cancelled") throw new RunHistoryWriteError();
+    throw new SessionAppendError(
+      "run_finished",
+      `Run ${runId} already finished in session ${entry.sessionId}`,
+    );
+  }
+  if (newFeed) log.feedOf.set(newFeed.threadId, newFeed);
+  if (!feed) return entry;
+  feed.entries.push(entry);
+  if (!written[0]?.fed) {
+    // A truncate in this transaction deleted the event, so a new one carries its entries.
+    feed.eventId = randomUUID();
+    await tx.$queryRaw`WITH ${insertFeedEvent(feed, at, Prisma.empty)} SELECT 1`;
+  }
   return entry;
+}
+
+type EntryBody<T extends SessionEntryType> = T extends unknown
+  ? { type: T; payload: SessionEntryOf<T>["payload"] }
+  : never;
+type RunBlockBody = EntryBody<
+  "assistant.text" | "assistant.reasoning" | "assistant.ask" | "assistant.choice"
+>;
+type BlockOf<K extends MessageBlock["kind"]> = Extract<MessageBlock, { kind: K }>;
+
+const asText = (block: MessageBlock): RunBlockBody => ({
+  type: "assistant.text",
+  payload: { blocks: [block] },
+});
+
+const RUN_BLOCK_ENTRY: {
+  [K in MessageBlock["kind"]]: ((block: BlockOf<K>) => RunBlockBody) | null;
+} = {
+  text: asText,
+  card: asText,
+  app_connect: asText,
+  connect: asText,
+  computer: asText,
+  meta: asText,
+  chart: asText,
+  child_bot: asText,
+  skill_draft: asText,
+  mcp_approval: asText,
+  image: asText,
+  file: asText,
+  channel_message: asText,
+  link_preview: asText,
+  reasoning: (block) => ({ type: "assistant.reasoning", payload: { text: block.text } }),
+  ask: (block) => ({ type: "assistant.ask", payload: { block } }),
+  choice: (block) => ({ type: "assistant.choice", payload: { block } }),
+  progress: null,
+  steps: null,
+  subagent: null,
+  handoff: null,
+  bot_message_sent: null,
+  bot_message_received: null,
+  routine_run: null,
+};
+
+/**
+ * Append the entries of a message a run published, one per block, to the run's own session. The
+ * first entry takes the message's id, so whatever points at the message points at the entry.
+ */
+export async function appendRunBlocksInTransaction(
+  tx: Prisma.TransactionClient,
+  message: { id: string; runId: string; botId: string },
+  blocks: readonly MessageBlock[],
+  append: typeof appendSessionEntryInTransaction = appendSessionEntryInTransaction,
+): Promise<void> {
+  const bodies = blocks.flatMap((block) => {
+    const toEntry = RUN_BLOCK_ENTRY[block.kind] as ((block: MessageBlock) => RunBlockBody) | null;
+    return toEntry ? [toEntry(block)] : [];
+  });
+  if (bodies.length === 0) return;
+  const run = await tx.run.findUniqueOrThrow({
+    where: { id: message.runId },
+    select: { sessionId: true },
+  });
+  for (const [index, body] of bodies.entries()) {
+    await append(tx, {
+      ...body,
+      ...(index === 0 ? { id: message.id as EntryId } : {}),
+      sessionId: run.sessionId as SessionId,
+      botId: message.botId,
+      runId: message.runId,
+    } as SessionEntryDraft);
+  }
+}
+
+/**
+ * Rewind the log to just before the user message the thread was cut at: its entry carries the
+ * message's id. A message with no entry predates the log, so everything the log holds came after
+ * it, and a clear cuts that as a rewind past the first entry would.
+ */
+export async function appendRewindInTransaction(
+  tx: Prisma.TransactionClient,
+  input: { sessionId: SessionId; messageId: string; feedBotId: string },
+): Promise<void> {
+  const target = await tx.sessionEntry.findFirst({
+    where: { id: input.messageId, sessionId: input.sessionId },
+    select: { parentId: true },
+  });
+  const { sessionId, feedBotId } = input;
+  await appendSessionEntryInTransaction(
+    tx,
+    target?.parentId
+      ? { type: "rewind", sessionId, parentId: target.parentId as EntryId, payload: {}, feedBotId }
+      : { type: "clear", sessionId, payload: {}, feedBotId },
+  );
+}
+
+/**
+ * Record who holds the bot's computer when it changes hands from the holder the log last saw, the
+ * bot when it saw none. A release follows only a takeover the log saw granted, so control a
+ * teaching session borrowed leaves no trace.
+ */
+export async function appendComputerControlInTransaction(
+  tx: Prisma.TransactionClient,
+  input: { sessionId: SessionId; botId: string; holder: "user" | "bot" },
+): Promise<void> {
+  const last = await tx.sessionEntry.findFirst({
+    where: { sessionId: input.sessionId, type: "computer.control" },
+    orderBy: { seq: "desc" },
+    select: { payload: true },
+  });
+  const lastHolder = (last?.payload as { holder?: string } | undefined)?.holder ?? "bot";
+  if (lastHolder === input.holder) return;
+  await appendSessionEntryInTransaction(tx, {
+    type: "computer.control",
+    sessionId: input.sessionId,
+    botId: input.botId,
+    payload: { holder: input.holder },
+  });
+}
+
+type RunEnding =
+  | { status: "completed" }
+  | { status: "failed"; error: string }
+  | { status: "cancelled"; by?: string };
+
+/**
+ * Close a run's log with how the run ended. A run that never wrote `run.started` has no log to
+ * close and a closed one stays closed, so every way a run ends can call this. A cancel closes only
+ * a run still active, any other ending only the run whose status already says so. Usage defaults
+ * to what the run recorded.
+ */
+export async function appendRunFinishedInTransaction(
+  tx: Prisma.TransactionClient,
+  runId: string,
+  ending: RunEnding,
+  usage?: RunOutcome["usage"],
+): Promise<void> {
+  // Thread, then run, then session, as finalize and every canceller take them, so that the run's
+  // status and its log are read after whichever of them committed first.
+  await tx.$queryRaw`
+    SELECT id FROM threads WHERE id = (SELECT "threadId" FROM runs WHERE id = ${runId}) FOR UPDATE`;
+  const [run] = await tx.$queryRaw<Array<{ status: string }>>`
+    SELECT status FROM runs WHERE id = ${runId} FOR NO KEY UPDATE`;
+  const endingNow =
+    ending.status === "cancelled"
+      ? ACTIVE_RUN_STATUSES.some((status) => status === run?.status)
+      : run?.status === ending.status;
+  if (!endingNow) return;
+  const logged = await tx.sessionEntry.findMany({
+    where: { runId, type: { in: ["run.started", "run.finished"] } },
+    select: { type: true, sessionId: true, botId: true },
+  });
+  const started = logged.find((entry) => entry.type === "run.started");
+  if (!started?.botId || logged.some((entry) => entry.type === "run.finished")) return;
+  const recorded = usage
+    ? undefined
+    : await tx.usageRecord.aggregate({
+        where: { runId },
+        _sum: { inputTokens: true, outputTokens: true },
+      });
+  await appendSessionEntryInTransaction(tx, {
+    type: "run.finished",
+    sessionId: started.sessionId as SessionId,
+    botId: started.botId,
+    runId,
+    payload: {
+      ...ending,
+      usage: usage ?? {
+        inputTokens: recorded?._sum.inputTokens ?? 0,
+        outputTokens: recorded?._sum.outputTokens ?? 0,
+      },
+    },
+  });
 }

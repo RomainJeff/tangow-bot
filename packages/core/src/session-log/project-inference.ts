@@ -12,7 +12,7 @@ import { isInferenceEntry, REPLY_QUOTE_MAX_LENGTH } from "@rakazo/contracts";
 import { blocksToAgentHistoryText } from "../attachments.js";
 import { escapeDirectoryField, escapePromptData, renderBotMessageBlock } from "../bot-messages.js";
 import { messageReaction } from "../message-reactions.js";
-import { foldRuns, toolCallKey } from "./run-fold.js";
+import { foldRuns, toolOutputs } from "./run-fold.js";
 
 export interface InferenceProjectionOptions {
   /** The bot the history is for. Only its own words stay on the assistant side. */
@@ -48,15 +48,11 @@ export function projectInferenceTurns(
       entries.findLastIndex((entry) => entry.type === "compaction"),
     ),
   );
-  const answered = new Set(
-    chain.flatMap((entry) =>
-      entry.type === "tool.result" || entry.type === "subagent" ? [toolCallKey(entry)] : [],
-    ),
-  );
+  const answered = toolOutputs(chain);
   const segments = foldRuns(
     chain
       .filter(isInferenceEntry)
-      .filter((entry) => entry.type !== "tool.call" || answered.has(toolCallKey(entry))),
+      .filter((entry) => entry.type !== "tool.call" || answered.has(entry.id)),
   );
   const cancelled = new Set(
     chain.flatMap((entry) =>
@@ -90,6 +86,8 @@ function renderTurn(
         options,
         replayParts(segment.blocks, botNames),
       );
+    case "bot.text":
+      return speakerTurn(segment.botId, historyText(segment.payload.blocks, botNames), options);
     case "user.message":
       return {
         role: "user",
@@ -185,13 +183,16 @@ function triggerContext(trigger: SessionRunTrigger): string | undefined {
     case "steering":
     case "handoff":
     case "bot_message":
+    case "direct":
+    case "subagent":
       return undefined;
   }
 }
 
 /**
- * What a user message can reply to: an earlier user message, or a bot's run by any of its entries,
- * so a reply to the run's message or an answer to its question quotes the whole run.
+ * What a user message can reply to: an earlier user message, a bot's words outside a run, or a
+ * bot's run by any of its entries, so a reply to the run's message or an answer to its question
+ * quotes the whole run.
  */
 function replyTargets(
   chain: readonly SessionEntry[],
@@ -204,8 +205,9 @@ function replyTargets(
   }
   const targets = new Map<string, ReplyTarget>();
   for (const entry of chain) {
-    if (entry.type === "user.message") {
-      targets.set(entry.id, { role: "user", blocks: entry.payload.blocks });
+    if (entry.type === "user.message" || entry.type === "bot.text") {
+      const role = entry.type === "user.message" ? "user" : "bot";
+      targets.set(entry.id, { role, blocks: entry.payload.blocks });
       continue;
     }
     const blocks = entry.runId === undefined ? undefined : runs.get(entry.runId);

@@ -1,6 +1,6 @@
 import type { JobPublisher } from "@rakazo/adapter-kit";
 import { messagingDeliverJob, runContinueJob } from "@rakazo/adapter-kit";
-import type { MessageBlock } from "@rakazo/contracts";
+import type { MessageBlock, SessionId } from "@rakazo/contracts";
 import {
   botMessageHopExhausted,
   buildBotMessageWakePrompt,
@@ -11,7 +11,7 @@ import {
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
 import { appendEventInTransaction, createThreadMessageInTransaction } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
-import { resolveRunHop } from "./bot-messages.js";
+import { appendBotMessageInTransaction, resolveRunHop } from "./bot-messages.js";
 
 export interface AgentConnectionDeps {
   prisma: PrismaClient;
@@ -250,12 +250,18 @@ export async function messageConnectedAgent(
 
   const target = await deps.prisma.bot.findUnique({
     where: { id: targetIdentity.botId },
-    select: { id: true, name: true, archivedAt: true, thread: { select: { id: true } } },
+    select: {
+      id: true,
+      name: true,
+      archivedAt: true,
+      thread: { select: { id: true, sessionId: true } },
+    },
   });
   if (!target || target.archivedAt || !target.thread) {
     return { ok: false, error: "that agent is not available" };
   }
   const targetThreadId = target.thread.id;
+  const targetSessionId = target.thread.sessionId;
   const deliveryKey = input.deliveryKey ? `agent-message:${input.deliveryKey}` : undefined;
   const wakePrompt = buildBotMessageWakePrompt({ from: sender, text: message });
 
@@ -271,7 +277,7 @@ export async function messageConnectedAgent(
       }
       const senderStillRunning = await tx.run.findFirst({
         where: { id: run.id, status: "running" },
-        select: { id: true },
+        select: { id: true, sessionId: true },
       });
       if (!senderStillRunning)
         return { ok: false as const, error: "source run is no longer active" };
@@ -303,6 +309,7 @@ export async function messageConnectedAgent(
         role: "user",
         blocks: [inboundBlock],
         clientNonce: deliveryKey,
+        source: "bot",
       });
       const outbound = await createThreadMessageInTransaction(tx, {
         threadId: run.threadId,
@@ -310,6 +317,26 @@ export async function messageConnectedAgent(
         blocks: [outboundBlock],
         botId: run.botId,
         runId: run.id,
+      });
+      await appendBotMessageInTransaction(tx, {
+        sender: {
+          sessionId: senderStillRunning.sessionId as SessionId,
+          botId: run.botId,
+          runId: run.id,
+          peer: { kind: "agent", address: senderIdentity.address, name: sender.name },
+        },
+        receiver: {
+          sessionId: targetSessionId as SessionId,
+          botId: target.id,
+          peer: { kind: "agent", address, name: target.name },
+        },
+        sentId: outbound.id,
+        receivedId: inbound.id,
+        sourceMessageId: run.sourceMessageId,
+        text: message,
+        intent: "request",
+        hop,
+        deliveryKey,
       });
       const task = await tx.task.create({
         data: {

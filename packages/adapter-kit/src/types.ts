@@ -438,6 +438,32 @@ export interface AgentRunRequest {
   onToolCompleted?: (completion: AgentToolCompletion) => Promise<void> | void;
   /** Atomically claim durable user steering at the runtime's next safe turn boundary. */
   claimSteering?: (seenIds: string[]) => Promise<AgentSteeringMessage[]>;
+  /** Open the log of one `run_subagent` call: the helper runs in a session of its own. */
+  startSubagent?: (call: SubagentCall) => Promise<SubagentLog>;
+}
+
+export interface SubagentCall {
+  callId: string;
+  name: string;
+  task: string;
+  args: Record<string, unknown>;
+  model: { provider: string; id: string };
+}
+
+/** Where a helper writes what it does. Writes land in the order they are made. */
+export interface SubagentLog {
+  /** Run one of the helper's tool calls, writing the call and its result to the helper's log. */
+  executeTool: NonNullable<AgentRunRequest["executeTool"]>;
+  /** Write a finished block of the helper's own text. */
+  text(text: string): Promise<void>;
+  /** Close the helper's run and leave its one trace, the `result` it returned, in the parent's log. */
+  finish(outcome: {
+    status: "completed" | "failed";
+    result: string;
+    usage: { inputTokens: number; outputTokens: number };
+  }): Promise<void>;
+  /** Answer the parent's call with `result` as an error when `finish` cannot close the log. */
+  abandon(result: string): Promise<void>;
 }
 
 /**

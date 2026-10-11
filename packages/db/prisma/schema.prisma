@@ -647,6 +647,8 @@ model ConversationSession {
   childSessions   ConversationSession[] @relation("SessionChildren")
   parentEntryId   String?
   nextEntrySeq    Int                   @default(0)
+  /// The entry with the highest seq, kept by the writer so an append reads its parent from this row.
+  headEntryId     String?
   createdAt       DateTime              @default(now())
   entries         SessionEntry[]
   runs            Run[]

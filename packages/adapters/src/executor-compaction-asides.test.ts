@@ -4,6 +4,7 @@ import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
 import { describe, expect, it, vi } from "vitest";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
 import { createRunExecutor } from "./executor.js";
+import { recordingSessionLog } from "./session-log/recording.test-support.js";
 
 vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ComputerLifecycleModule>()),
@@ -27,7 +28,11 @@ function fixture(options: {
     trigger: "user",
     leaseFence: 0,
   };
+  const log = recordingSessionLog();
   const prisma = {
+    sessionEntry: log.sessionEntry,
+    $queryRaw: log.queryRaw,
+    $transaction: async (work: (tx: unknown) => unknown) => work(prisma),
     run: {
       findUnique: vi.fn(async () => run),
       findUniqueOrThrow: vi.fn(async () => run),
@@ -100,6 +105,7 @@ function fixture(options: {
     yield { type: "done" as const, text: "Done" };
   });
   const executor = createRunExecutor({
+    sessionLog: log.sessionLog,
     prisma,
     runtime: { describe: () => ({ capabilities: { scripted: false } }), run: runtimeRun },
     sandbox: { describe: () => ({ capabilities: { graphical: false } }) },

@@ -1,4 +1,5 @@
 import type { RealtimeFanout } from "@rakazo/adapter-kit";
+import type { EntryId, SessionId } from "@rakazo/contracts";
 import {
   ASK_DISMISSED_ANSWER,
   type AskQuestion,
@@ -32,6 +33,13 @@ import {
   createThreadMessageInTransaction,
   RunHistoryWriteError,
 } from "./messages.js";
+import {
+  appendComputerControlInTransaction,
+  appendRewindInTransaction,
+  appendRunBlocksInTransaction,
+  appendRunFinishedInTransaction,
+  appendSessionEntryInTransaction,
+} from "./sessions.js";
 import { withTransactionRetry } from "./transaction-retry.js";
 
 const EVENT_BATCH_SIZE = 200;
@@ -73,6 +81,8 @@ export interface ClearThreadInput {
   /** Event author and the bot-scoped target for one-to-one chats. */
   botId: string;
   groupId?: string;
+  /** Who cleared, recorded on the runs this cancels. */
+  userId?: string;
 }
 
 export interface ClearThreadResult {
@@ -164,6 +174,10 @@ export interface PauseRunForInput {
    * (not in message blocks) so clients still see redacted labels.
    */
   offeredActions?: Array<{ id: string; label: string }>;
+  /** The effect an approval card asks about; its proposal is already redacted. */
+  effect?: { id: string; kind: string; proposal: Record<string, unknown> };
+  /** The logged tool call the run pauses on, which gets its one result here, naming the pause. */
+  pausedCall?: { sessionId: string; botId: string; runId: string; callId: string; output: string };
 }
 
 const CHOICE_ASK_CHECKPOINT_KIND = "choice_ask_v1";
@@ -258,6 +272,7 @@ export interface SendUserMessageResult {
  * one whose reply never reaches the conversation.
  */
 export const conversationRunFilter = {
+  parentRunId: null,
   NOT: {
     routineId: { not: null },
     OR: [{ trigger: "webhook" }, { trigger: "routine", bot: { parentBotId: { not: null } } }],
@@ -329,6 +344,7 @@ interface TruncateThreadResult {
   nextMessageSeq: number;
   historyCompactedUpToSeq: number | null;
   historyCompactionGeneration: number;
+  sessionId: string;
   cancelledRunIds: string[];
 }
 
@@ -352,6 +368,7 @@ async function truncateThreadInTransaction(
       nextMessageSeq: true,
       historyCompactedUpToSeq: true,
       historyCompactionGeneration: true,
+      sessionId: true,
     },
   });
   const activeRuns = await tx.run.findMany({
@@ -365,7 +382,7 @@ async function truncateThreadInTransaction(
   });
   const now = new Date();
   const runIds = activeRuns.map((run) => run.id);
-  await cancelRunsInTransaction(tx, activeRuns, now);
+  await cancelRunsInTransaction(tx, activeRuns, now, input.userId);
   // Expire as tombstones so a still-open provider screen claim cannot reset fencing to 1.
   await expireComputerExecutionLeases(tx, { runId: { in: runIds } });
   await tx.computer.updateMany({
@@ -416,6 +433,12 @@ export async function clearThread(
         historyCompactionSummary: null,
         historyCompactionGeneration: { increment: 1 },
       },
+    });
+    await appendSessionEntryInTransaction(tx, {
+      type: "clear",
+      sessionId: truncated.sessionId as SessionId,
+      payload: {},
+      feedBotId: input.botId,
     });
     const event = await appendEventInTransaction(tx, {
       ...input,
@@ -480,6 +503,11 @@ export async function rewindThread(
         },
       });
     }
+    await appendRewindInTransaction(tx, {
+      sessionId: truncated.sessionId as SessionId,
+      messageId: input.messageId,
+      feedBotId: input.botId,
+    });
     const event = await appendEventInTransaction(tx, {
       ...input,
       type: "thread.rewound",
@@ -541,6 +569,8 @@ export async function sendUserMessage(
         role: "user",
         blocks: input.blocks,
         clientNonce: input.clientNonce,
+        source: input.trigger === "messaging" || input.trigger === "webhook" ? "channel" : "app",
+        feedBotId: input.botId,
       });
       const createRun = input.createRun !== false;
       const busy =
@@ -852,9 +882,25 @@ export async function answerRunInputInTransaction(
         threadId: input.threadId,
         status: "waiting_input",
       },
-      select: { botId: true, userId: true, checkpoint: true },
+      select: { botId: true, userId: true, checkpoint: true, sessionId: true },
     });
     if (!run) return null;
+    const runLog = {
+      sessionId: run.sessionId as SessionId,
+      botId: run.botId,
+      runId: input.runId,
+    };
+    const answerEntry = (text: string) =>
+      appendSessionEntryInTransaction(tx, {
+        type: "user.message",
+        sessionId: runLog.sessionId,
+        feedBotId: run.botId,
+        payload: {
+          blocks: [{ kind: "text", text }],
+          replyTo: { entryId: input.messageId as EntryId },
+          source: "app",
+        },
+      });
     const message = await tx.message.findFirst({
       where: {
         id: input.messageId,
@@ -970,6 +1016,7 @@ export async function answerRunInputInTransaction(
           : block,
       );
       await tx.message.update({ where: { id: message.id }, data: { blocks: answeredBlocks } });
+      await answerEntry(lines.join("\n"));
       const updated = await appendEventInTransaction(tx, {
         spaceId: input.spaceId,
         threadId: input.threadId,
@@ -1142,6 +1189,26 @@ export async function answerRunInputInTransaction(
       index === pending.index ? answeredAsk : block,
     );
     await tx.message.update({ where: { id: message.id }, data: { blocks } });
+    if (approvalEffect) {
+      const effectId = approvalEffect.id;
+      if (spawnBotEdit) {
+        await appendSessionEntryInTransaction(tx, {
+          ...runLog,
+          type: "effect.edited",
+          payload: { effectId, proposal: spawnBotEdit.approved },
+        });
+      }
+      await appendSessionEntryInTransaction(tx, {
+        ...runLog,
+        type: "effect.resolved",
+        payload: {
+          effectId,
+          decision: input.answer === "allow" || input.answer === "always" ? "approved" : "denied",
+        },
+      });
+    } else if (!secretAsk) {
+      await answerEntry(selectedChoice?.label ?? (freeTextAnswer || input.answer));
+    }
     if (spawnBotEdit) {
       // Before the message.updated event, so one notify covers both. The audit keeps what the model
       // proposed next to what the person approved.
@@ -1349,7 +1416,7 @@ export async function dismissProposalWithTextInTransaction(
   await tx.$queryRaw`SELECT id FROM threads WHERE id = ${input.threadId} FOR UPDATE`;
   const run = await tx.run.findFirst({
     where: { id: input.runId, spaceId: input.spaceId, threadId: input.threadId },
-    select: { botId: true, userId: true, status: true },
+    select: { botId: true, userId: true, status: true, sessionId: true },
   });
   if (!run || run.userId !== input.userId) return { outcome: "keep" };
   const waiting = run.status === "waiting_input";
@@ -1394,6 +1461,13 @@ export async function dismissProposalWithTextInTransaction(
   });
   // Under the thread lock both rows move together; anything else rolls the effect back too.
   if (queued.count !== 1) throw new Error("The run changed while its card was put away");
+  await appendSessionEntryInTransaction(tx, {
+    type: "effect.resolved",
+    sessionId: run.sessionId as SessionId,
+    botId: run.botId,
+    runId: input.runId,
+    payload: { effectId: effect.id, decision: "denied" },
+  });
 
   const blocks = (message.blocks as Prisma.InputJsonValue[]).map((block, index) =>
     index === pending.index
@@ -1460,6 +1534,39 @@ export async function pauseRunForInput(
       botId: input.botId,
       runId: input.runId,
     });
+    if (input.effect) {
+      const { sessionId } = await tx.run.findUniqueOrThrow({
+        where: { id: input.runId },
+        select: { sessionId: true },
+      });
+      await appendSessionEntryInTransaction(tx, {
+        id: message.id as EntryId,
+        type: "effect.requested",
+        sessionId: sessionId as SessionId,
+        botId: input.botId,
+        runId: input.runId,
+        payload: {
+          effectId: input.effect.id,
+          effectKind: input.effect.kind,
+          proposal: input.effect.proposal,
+        },
+      });
+    } else {
+      await appendRunBlocksInTransaction(
+        tx,
+        { id: message.id, runId: input.runId, botId: input.botId },
+        input.blocks,
+      );
+    }
+    if (input.pausedCall) {
+      const { sessionId, callId, output, ...log } = input.pausedCall;
+      await appendSessionEntryInTransaction(tx, {
+        ...log,
+        sessionId: sessionId as SessionId,
+        type: "tool.result",
+        payload: { callId, output, isError: false, artifactIds: [] },
+      });
+    }
     await appendEventInTransaction(tx, {
       spaceId: input.spaceId,
       threadId: input.threadId,
@@ -1594,6 +1701,11 @@ export async function finalizeComputerControlRelease(
   realtime?: RealtimeFanout,
 ): Promise<FinalizeComputerControlReleaseResult | false> {
   const committed = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    // The bot's thread before the computer and the run, the order a stop and a grant take.
+    const [thread] = await tx.$queryRaw<Array<{ id: string; sessionId: string }>>`
+      SELECT threads.id, threads."sessionId" FROM threads JOIN bots ON bots.id = threads."botId"
+      WHERE bots.id = ${input.botId} AND bots."spaceId" = ${input.spaceId}
+      FOR UPDATE OF threads`;
     const cleared = await tx.computer.updateMany({
       where: {
         id: input.computerId,
@@ -1644,14 +1756,15 @@ export async function finalizeComputerControlRelease(
         : { count: 0 };
     const runId = resumed.count === 1 || stamped.count === 1 ? input.runId : null;
 
-    const bot = await tx.bot.findFirst({
-      where: { id: input.botId, spaceId: input.spaceId },
-      select: { thread: { select: { id: true } } },
+    if (!thread) return { threadId: null, seq: null, runId };
+    await appendComputerControlInTransaction(tx, {
+      sessionId: thread.sessionId as SessionId,
+      botId: input.botId,
+      holder: "bot",
     });
-    if (!bot?.thread) return { threadId: null, seq: null, runId };
     const event = await appendEventInTransaction(tx, {
       spaceId: input.spaceId,
-      threadId: bot.thread.id,
+      threadId: thread.id,
       botId: input.botId,
       runId: runId ?? undefined,
       type: "computer.takeover.released",
@@ -1785,6 +1898,11 @@ async function finalizeRunOnce(
           runId: input.runId,
           markUnread: input.markUnread,
         });
+        await appendRunBlocksInTransaction(
+          tx,
+          { id: message.id, runId: input.runId, botId: input.botId },
+          completedBlocks,
+        );
         await appendEventInTransaction(tx, {
           spaceId: input.spaceId,
           threadId: input.threadId,
@@ -1795,6 +1913,18 @@ async function finalizeRunOnce(
         });
       }
     }
+    const strandedHelpers = await tx.run.findMany({
+      where: { parentRunId: input.runId, status: { in: [...ACTIVE_RUN_STATUSES] } },
+      select: { id: true, taskId: true },
+    });
+    await cancelRunsInTransaction(tx, strandedHelpers, now);
+    await appendRunFinishedInTransaction(
+      tx,
+      input.runId,
+      input.outcome === "completed"
+        ? { status: "completed" }
+        : { status: "failed", error: input.error },
+    );
     const lastEvent = await appendEventInTransaction(tx, {
       spaceId: input.spaceId,
       threadId: input.threadId,

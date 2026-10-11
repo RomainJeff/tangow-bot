@@ -1,0 +1,13 @@
+import { vi } from "vitest";
+
+export function stubbedDbSessions() {
+  return {
+    appendSessionEntryInTransaction: vi.fn(async () => undefined),
+    appendRunBlocksInTransaction: vi.fn(async () => undefined),
+    appendRunFinishedInTransaction: vi.fn(async () => undefined),
+    appendRewindInTransaction: vi.fn(async () => undefined),
+    appendComputerControlInTransaction: vi.fn(async () => undefined),
+    createSessionInTransaction: vi.fn(async (_tx: unknown, session: { id: string }) => session.id),
+    sessionEntryFromRow: vi.fn((row: unknown) => row),
+  };
+}

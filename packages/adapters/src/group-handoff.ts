@@ -1,8 +1,10 @@
 import { runContinueJob } from "@rakazo/adapter-kit";
+import type { EntryId, SessionId } from "@rakazo/contracts";
 import { MessageBlock } from "@rakazo/contracts";
 import { botMessageHopExhausted, nextBotMessageHop, renderGroupMembersContext } from "@rakazo/core";
 import {
   appendEventInTransaction,
+  appendSessionEntryInTransaction,
   createThreadMessageInTransaction,
   IsolationError,
   lockOwnedGroup,
@@ -59,6 +61,7 @@ export async function handoffToGroupBot(
         },
         select: {
           id: true,
+          sessionId: true,
           sourceMessageId: true,
           routineId: true,
           trigger: true,
@@ -142,6 +145,14 @@ export async function handoffToGroupBot(
       botId: run.botId,
       runId: run.id,
       clientNonce: deliveryKey,
+    });
+    await appendSessionEntryInTransaction(tx, {
+      id: message.id as EntryId,
+      type: "handoff",
+      sessionId: activeSource.sessionId as SessionId,
+      botId: run.botId,
+      runId: run.id,
+      payload: { fromBotId: run.botId, toBotId: targetId, text: input.message, hop },
     });
     const task = await tx.task.create({
       data: {

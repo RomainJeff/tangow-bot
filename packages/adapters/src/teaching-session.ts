@@ -6,7 +6,7 @@ import type {
   SandboxProvider,
 } from "@rakazo/adapter-kit";
 import { computerControlExpireJobKey, skillTeachingExpireJobKey } from "@rakazo/adapter-kit";
-import type { Actor, MessageBlock, TaughtSkill } from "@rakazo/contracts";
+import type { Actor, EntryId, MessageBlock, SessionId, TaughtSkill } from "@rakazo/contracts";
 import {
   buildPlaybookFromRecording,
   computerInputForDomKey,
@@ -16,6 +16,7 @@ import {
 } from "@rakazo/core";
 import {
   appendEventInTransaction,
+  appendSessionEntryInTransaction,
   createThreadMessageInTransaction,
   IsolationError,
   type Prisma,
@@ -387,10 +388,10 @@ async function emitSkillDraftMessages(
   deps: TeachingSessionDeps,
   actor: Actor,
   skill: TaughtSkillRow,
-  bot: { id: string; thread: { id: string } | null },
+  bot: { id: string; thread: { id: string; sessionId: string } | null },
 ): Promise<void> {
   if (skill.status !== "draft" || !bot.thread) return;
-  const threadId = bot.thread.id;
+  const { id: threadId, sessionId } = bot.thread;
   const published = await deps.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     await tx.$executeRaw`SELECT id FROM taught_skills WHERE id = ${skill.id} FOR UPDATE`;
     let created = await findSkillDraftMessage(tx, threadId, skill.id);
@@ -400,6 +401,13 @@ async function emitSkillDraftMessages(
         threadId,
         role: "bot",
         blocks,
+      });
+      await appendSessionEntryInTransaction(tx, {
+        id: message.id as EntryId,
+        type: "bot.text",
+        sessionId: sessionId as SessionId,
+        botId: bot.id,
+        payload: { blocks },
       });
       created = { id: message.id, blocks };
     }

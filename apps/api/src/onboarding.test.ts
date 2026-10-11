@@ -10,6 +10,7 @@ vi.mock("@rakazo/db", async (original) => ({
     return { id: "posted" };
   }),
   appendEventInTransaction: vi.fn(async () => ({ seq: 1 })),
+  appendSessionEntryInTransaction: vi.fn(async () => undefined),
 }));
 function fixture(catalog: unknown[]) {
   posted.length = 0;

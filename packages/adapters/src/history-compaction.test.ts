@@ -9,7 +9,9 @@ import type {
 } from "@rakazo/adapter-kit";
 import { historyCompactJob } from "@rakazo/adapter-kit";
 import type { MessageBlock } from "@rakazo/contracts";
+import type * as Db from "@rakazo/db";
 import type { PrismaClient } from "@rakazo/db";
+import { appendSessionEntryInTransaction } from "@rakazo/db";
 import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -28,6 +30,11 @@ import {
   selectHistoryWindow,
   shouldEnqueueCompaction,
 } from "./history-compaction.js";
+
+vi.mock("@rakazo/db", async (original) => ({
+  ...(await original<typeof Db>()),
+  appendSessionEntryInTransaction: vi.fn(async () => undefined),
+}));
 
 describe("shouldEnqueueCompaction", () => {
   it("is false when nothing has aged out of the window yet", () => {
@@ -441,6 +448,7 @@ function compactionHarness(
     groupId: options.groupId ?? null,
     spaceId: "workspace-1",
     userId: "user-1",
+    sessionId: "session-1",
     nextEventSeq: 0,
     nextMessageSeq: options.nextMessageSeq ?? messages.length,
     historyCompactedUpToSeq: options.historyCompactedUpToSeq ?? (null as number | null),
@@ -573,6 +581,7 @@ function compactionHarness(
     content: request.content,
   }));
   const memory = { read: memoryRead, commit: memoryCommit } as unknown as MemoryStore;
+  Object.assign(prisma, { $transaction: async (work: (tx: unknown) => unknown) => work(prisma) });
   const deps = {
     prisma: prisma as unknown as PrismaClient,
     runtime: runtime as unknown as AgentRuntime,
@@ -1403,7 +1412,8 @@ describe("compactHistory", () => {
 
     expect(harness.jobs.enqueue).not.toHaveBeenCalled();
   });
-  it("appends the batch's new durable facts to the bot's memory under a dated heading", async () => {
+  it("appends the batch's new durable facts to the bot's memory and logs them", async () => {
+    vi.mocked(appendSessionEntryInTransaction).mockClear();
     const harness = compactionHarness({
       deploymentModelKey: "openrouter-key",
       memoryDocuments: [{ path: "MEMORY.md", content: "- Ships on Fridays", revision: 3 }],
@@ -1431,6 +1441,16 @@ describe("compactHistory", () => {
         sourceThreadId: "thread-1",
       },
       expect.objectContaining({ spaceId: "workspace-1", userId: "user-1", botId: "bot-1" }),
+    );
+    expect(vi.mocked(appendSessionEntryInTransaction).mock.calls.map(([, draft]) => draft)).toEqual(
+      [
+        {
+          type: "memory.revised",
+          sessionId: "session-1",
+          botId: "bot-1",
+          payload: { facts: ["Call the user Rom", "The repo is rakazo-bot"] },
+        },
+      ],
     );
   });
 

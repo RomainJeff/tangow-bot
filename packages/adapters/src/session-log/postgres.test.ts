@@ -1,3 +1,4 @@
+import type { SessionEntryDraft } from "@rakazo/adapter-kit";
 import { SessionId } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
 import { RunHistoryWriteError } from "@rakazo/db";
@@ -123,8 +124,36 @@ describe("PostgresSessionLog", () => {
 
     const events = await prisma.event.findMany({ where: { threadId }, orderBy: { seq: "asc" } });
     expect(events.map(({ type, botId, payload }) => ({ type, botId, payload }))).toEqual([
-      { type: "session.entry.appended", botId, payload: { entry } },
-      { type: "session.entry.appended", botId: "bot_author", payload: { entry: authored } },
+      { type: "session.entry.appended", botId, payload: { entries: [entry] } },
+      { type: "session.entry.appended", botId: "bot_author", payload: { entries: [authored] } },
+    ]);
+  });
+
+  it("puts every entry a transaction appends to a thread on one feed event", async () => {
+    const { prisma } = database;
+    const { botId, threadId, sessionId, run } = await seedThread(prisma);
+    const appended = await prisma.$transaction(async (tx) => [
+      await log.append(tx, {
+        sessionId,
+        botId,
+        runId: run.id,
+        type: "assistant.text",
+        payload: { blocks: [{ kind: "text", text: "one" }] },
+      }),
+      await log.append(tx, {
+        sessionId,
+        botId,
+        runId: run.id,
+        type: "assistant.text",
+        payload: { blocks: [{ kind: "text", text: "two" }] },
+      }),
+    ]);
+
+    const events = await prisma.event.findMany({ where: { threadId } });
+    expect(
+      events.map(({ type, botId, runId, payload }) => ({ type, botId, runId, payload })),
+    ).toEqual([
+      { type: "session.entry.appended", botId, runId: run.id, payload: { entries: appended } },
     ]);
   });
 
@@ -142,6 +171,44 @@ describe("PostgresSessionLog", () => {
       ),
     ).rejects.toMatchObject({ reason: "no_feed_bot" });
     expect(await log.readTail(sessionId)).toEqual([]);
+  });
+
+  it("refuses a run's own entries after its run.finished, but not its subagent entry", async () => {
+    const { prisma } = database;
+    const { botId, sessionId, run } = await seedThread(prisma);
+    const ofRun = { sessionId, botId, runId: run.id };
+    const append = (draft: SessionEntryDraft) => prisma.$transaction((tx) => log.append(tx, draft));
+    await append({
+      ...ofRun,
+      type: "run.finished",
+      payload: { status: "completed", usage: { inputTokens: 1, outputTokens: 1 } },
+    });
+
+    await expect(
+      append({
+        ...ofRun,
+        type: "assistant.text",
+        payload: { blocks: [{ kind: "text", text: "late" }] },
+      }),
+    ).rejects.toMatchObject({ reason: "run_finished" });
+    await append({
+      ...ofRun,
+      type: "subagent",
+      payload: {
+        callId: "call_helper",
+        sessionId: SessionId.parse("ses_helper_after"),
+        name: "checker",
+        model: { provider: "emulator", id: "emulator-1" },
+        task: "Check it.",
+        status: "completed",
+        result: "checked",
+        usage: { inputTokens: 1, outputTokens: 1 },
+      },
+    });
+    expect((await log.readTail(sessionId)).map((entry) => entry.type)).toEqual([
+      "run.finished",
+      "subagent",
+    ]);
   });
 
   it("refuses an entry from a cancelled run", async () => {
@@ -191,6 +258,17 @@ describe("sessions migration", () => {
       await applyMigration(pglite, MIGRATION);
       await pglite.exec(`DELETE FROM sessions WHERE "threadId" = 't2'`);
       await applyMigration(pglite, MIGRATION);
+      await pglite.exec(`
+        INSERT INTO session_entries (id, "sessionId", seq, "parentId", type, payload)
+        SELECT 'e' || n, "sessionId", n, CASE WHEN n = 0 THEN NULL ELSE 'e' || (n - 1) END,
+          'system.note', '{"text":"before the head pointer"}'
+        FROM threads, generate_series(0, 1) AS n WHERE threads.id = 't1';
+        UPDATE sessions SET "nextEntrySeq" = 2 WHERE "threadId" = 't1';
+      `);
+      for (const name of names.slice(names.indexOf(MIGRATION) + 1)) {
+        await applyMigration(pglite, name);
+        await applyMigration(pglite, name);
+      }
     });
   });
   afterAll(() => database.close());
@@ -210,6 +288,21 @@ describe("sessions migration", () => {
     expect(
       await prisma.message.findMany({ select: { id: true, seq: true, blocks: true } }),
     ).toEqual([{ id: "m1", seq: 0, blocks: [{ kind: "text", text: "hi" }] }]);
+  });
+
+  it("points a session that already has entries at its newest one, so the next append chains on", async () => {
+    const { prisma } = database;
+    const { sessionId } = await prisma.thread.findUniqueOrThrow({ where: { id: "t1" } });
+    const next = await prisma.$transaction((tx) =>
+      new PostgresSessionLog(prisma).append(tx, {
+        sessionId: SessionId.parse(sessionId),
+        feedBotId: "b1",
+        type: "system.note",
+        payload: { text: "after" },
+      }),
+    );
+
+    expect([next.seq, next.parentId]).toEqual([2, "e1"]);
   });
 
   it("creates a new thread's main session and files a new run under it", async () => {

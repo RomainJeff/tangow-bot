@@ -16,6 +16,7 @@ import {
   createRepos,
   createThreadMessageInTransaction,
   expireComputerExecutionLeases,
+  logCancelledRunsInTransaction,
   withTransactionRetry,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
@@ -154,11 +155,13 @@ async function ensureSpawnRun(
 
   try {
     return await prisma.$transaction(async (tx) => {
+      // The prompt shares the run's nonce, which is how the run's log finds what woke it.
       await createThreadMessageInTransaction(tx, {
         threadId: input.threadId,
         role: "user",
         blocks: [{ kind: "text", text: input.prompt }],
         runId: input.sourceRunId,
+        clientNonce,
       });
       const task = await tx.task.create({
         data: {
@@ -281,8 +284,9 @@ export async function archiveBot(
   const runIds = activeRuns.map((run) => run.id);
   const now = new Date();
   await deps.prisma.$transaction(async (tx) => {
+    await logCancelledRunsInTransaction(tx, runIds);
     await tx.run.updateMany({
-      where: { id: { in: runIds } },
+      where: { id: { in: runIds }, status: { in: [...ACTIVE_RUN_STATUSES] } },
       data: { status: "cancelled", completedAt: now },
     });
     await tx.task.updateMany({

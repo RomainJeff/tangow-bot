@@ -31,6 +31,11 @@ export function projectThreadItems(entries: readonly SessionEntry[]): ThreadItem
         items.push({ kind: "message", role: "bot", id, ts, botId, runId, blocks });
         break;
       }
+      case "bot.text": {
+        const { id, ts, botId, payload } = segment;
+        items.push({ kind: "message", role: "bot", id, ts, botId, blocks: payload.blocks });
+        break;
+      }
       case "user.message":
         items.push({
           kind: "message",

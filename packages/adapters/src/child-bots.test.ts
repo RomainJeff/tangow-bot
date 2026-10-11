@@ -5,6 +5,7 @@ import type {
   JobPublisher,
   SandboxProvider,
 } from "@rakazo/adapter-kit";
+import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
 import type { createRepos, PrismaClient, ThreadEvents } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
 import { resolveRunHop } from "./bot-messages.js";
@@ -15,6 +16,10 @@ import {
   destroyBot,
   spawnBot,
 } from "./child-bots.js";
+
+vi.mock("../../db/src/sessions.js", async () =>
+  (await import("@rakazo/db/sessions.test-support")).stubbedDbSessions(),
+);
 
 const context = {
   operationId: "test",
@@ -139,7 +144,7 @@ describe("spawned bot creation", () => {
     expect(data).toMatchObject({ trigger: "spawn" });
     expect(data).not.toHaveProperty("sourceMessageId");
     expect(data).not.toHaveProperty("routineId");
-    const hopDb = { message: { findUnique: vi.fn() }, routine: { findUnique: vi.fn() } };
+    const hopDb = { sessionEntry: { findUnique: vi.fn() }, routine: { findUnique: vi.fn() } };
     expect(await resolveRunHop(hopDb as never, { ...data, routineId: null })).toBe(0);
     createReposSpy.mockRestore();
     messageSpy.mockRestore();
@@ -467,7 +472,7 @@ describe("destroyBot", () => {
       }),
     );
     expect(cancelRuns).toHaveBeenCalledWith({
-      where: { id: { in: ["group-run"] } },
+      where: { id: { in: ["group-run"] }, status: { in: [...ACTIVE_RUN_STATUSES] } },
       data: {
         status: "cancelled",
         completedAt: expect.any(Date),
@@ -640,7 +645,6 @@ describe("archiveBot", () => {
       where: { id: "bot-1" },
       data: { archivedAt: expect.any(Date), pinned: false },
     });
-    expect(groupCleanup.$queryRaw).not.toHaveBeenCalled();
     expect(groupCleanup.chatGroup.deleteMany).not.toHaveBeenCalled();
     expect(groupCleanup.chatGroupMember.deleteMany).not.toHaveBeenCalled();
     expect(cancel).toHaveBeenCalledWith("run:run-1");

@@ -13,6 +13,10 @@ import {
   threadSnapshot,
 } from "./thread-target.js";
 
+vi.mock("../../../packages/db/src/sessions.js", async () =>
+  (await import("@rakazo/db/sessions.test-support")).stubbedDbSessions(),
+);
+
 describe("threadHead", () => {
   it("returns the durable cursor without loading a snapshot", async () => {
     const findFirst = vi.fn().mockResolvedValue({ seq: 12 });
@@ -566,6 +570,7 @@ describe("threadSnapshot", () => {
       expect.objectContaining({
         where: {
           threadId: "thread-1",
+          parentRunId: null,
           trigger: { not: "bot_message" },
           status: { in: ["failed", "completed", "cancelled"] },
         },
@@ -577,6 +582,7 @@ describe("threadSnapshot", () => {
       expect.objectContaining({
         where: {
           threadId: "thread-1",
+          parentRunId: null,
           status: { in: ["queued", "leased", "running", "waiting_input", "waiting_takeover"] },
         },
       }),
@@ -2409,10 +2415,11 @@ describe("stopThreadRuns", () => {
     const transaction = {
       $queryRaw: vi.fn(),
       run: {
-        updateManyAndReturn: vi.fn().mockResolvedValue([
+        findMany: vi.fn().mockResolvedValue([
           { id: "run-a", botId: "bot-a" },
           { id: "run-b", botId: "bot-b" },
         ]),
+        updateMany: vi.fn().mockResolvedValue({ count: 2 }),
       },
       steeringMessage: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
       computer: {
@@ -2569,7 +2576,8 @@ describe("stopThreadRuns", () => {
     const transaction = {
       $queryRaw: vi.fn(),
       run: {
-        updateManyAndReturn: vi.fn().mockResolvedValue([{ id: "run-a", botId: "bot-a" }]),
+        findMany: vi.fn().mockResolvedValue([{ id: "run-a", botId: "bot-a" }]),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
       steeringMessage: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
       computer: {

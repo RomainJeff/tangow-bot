@@ -1,5 +1,7 @@
-import type { MessageBlock } from "@rakazo/contracts";
+import type { SessionEntryDraft } from "@rakazo/adapter-kit";
+import type { EntryId, MessageBlock, SessionEntryOf, SessionId } from "@rakazo/contracts";
 import type { Prisma, PrismaClient } from "./client.js";
+import { appendSessionEntryInTransaction } from "./sessions.js";
 
 /** Group turns use channel inputs and their own outputs, never private thread history. */
 export function loadRunHistoryMessages(
@@ -50,6 +52,13 @@ export interface CreateThreadMessageInput {
   runId?: string;
   clientNonce?: string;
   markUnread?: boolean;
+  /**
+   * Where a person's message came from; a channel post is told by its block. A delivery from
+   * another bot is `bot`: its writer appends the received entry instead of a user message.
+   */
+  source?: SessionEntryOf<"user.message">["payload"]["source"] | "bot";
+  /** The bot whose feed shows the entry, for a thread with no bot of its own. */
+  feedBotId?: string;
 }
 
 export async function createThreadMessage(prisma: PrismaClient, input: CreateThreadMessageInput) {
@@ -68,10 +77,10 @@ export async function createThreadMessageInTransaction(
       nextMessageSeq: { increment: 1 },
       unread: (input.markUnread ?? input.role === "bot") ? true : undefined,
     },
-    select: { nextMessageSeq: true },
+    select: { nextMessageSeq: true, sessionId: true, botId: true },
   });
   await assertRunCanWriteHistory(tx, input.runId);
-  return tx.message.create({
+  const message = await tx.message.create({
     data: {
       threadId: input.threadId,
       seq: thread.nextMessageSeq - 1,
@@ -84,6 +93,44 @@ export async function createThreadMessageInTransaction(
       clientNonce: input.clientNonce,
     },
   });
+  const entry = threadMessageEntry(input, message.id as EntryId);
+  if (entry) {
+    await appendSessionEntryInTransaction(tx, {
+      ...entry,
+      sessionId: thread.sessionId as SessionId,
+      feedBotId: input.feedBotId ?? thread.botId ?? undefined,
+    } as SessionEntryDraft);
+  }
+  return message;
+}
+
+function threadMessageEntry(input: CreateThreadMessageInput, id: EntryId) {
+  if (input.role === "system") {
+    const text = input.blocks
+      .flatMap((block) => ("text" in block && typeof block.text === "string" ? [block.text] : []))
+      .join("\n");
+    return { id, type: "system.note", payload: { text } } as const;
+  }
+  if (input.role !== "user" || input.source === "bot") return undefined;
+  return {
+    id,
+    type: "user.message",
+    payload: {
+      blocks: input.blocks,
+      ...(input.replyToMessageId
+        ? {
+            replyTo: {
+              entryId: input.replyToMessageId as EntryId,
+              ...(input.replyQuote ? { quote: input.replyQuote } : {}),
+            },
+          }
+        : {}),
+      ...(input.clientNonce ? { clientNonce: input.clientNonce } : {}),
+      source:
+        input.source ??
+        (input.blocks.some((block) => block.kind === "channel_message") ? "channel" : "app"),
+    },
+  } as const;
 }
 
 /**
