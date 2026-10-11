@@ -517,6 +517,8 @@ export function ShellPage() {
   } | null>(null);
   const autoBooted = useRef<string | null>(null);
   const routineRefetched = useRef(new Set<string>());
+  // The `?m=` jump already started: a re-render before the link is stripped (new routines) must not repeat it.
+  const linkJump = useRef<string | null>(null);
   const bootstrappedThread = useRef<ThreadSnapshot | null>(null);
   const expandedHistoryThread = useRef<string | null>(null);
   const historyEpoch = useRef(0);
@@ -1506,7 +1508,10 @@ export function ShellPage() {
   useEffect(() => {
     const messageId = searchParams.get("m");
     const routineId = searchParams.get("routine");
+    if (!messageId) linkJump.current = null;
     if (inGroup && groupId && messageId) {
+      if (linkJump.current === messageId) return;
+      linkJump.current = messageId;
       void jumpToMessage({ groupId, messageId }).finally(() => {
         // Keep expandedHistoryThread; only strip the jump URL so refresh does not remount.
         const next = new URLSearchParams(searchParams);
@@ -1532,7 +1537,8 @@ export function ShellPage() {
       next.delete("routine");
       setSearchParams(next, { replace: true });
     }
-    if (messageId) {
+    if (messageId && linkJump.current !== messageId) {
+      linkJump.current = messageId;
       void jumpToMessage({ botId: active.id, messageId }).finally(() => {
         const next = new URLSearchParams(searchParams);
         next.delete("m");
