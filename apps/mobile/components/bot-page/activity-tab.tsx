@@ -9,7 +9,7 @@ import {
   threadTimeMarkerLabel,
 } from "@rakazo/core";
 import { radii } from "@rakazo/ui-tokens";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useNavigation, useRouter } from "expo-router";
 import type { ComponentProps } from "react";
 import {
   createContext,
@@ -26,7 +26,7 @@ import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import { rpc } from "../../lib/api";
 import { mobileTokens } from "../../lib/appearance";
 import type { StateWord } from "../../lib/bot-activity";
-import { failureReason, stateWord } from "../../lib/bot-activity";
+import { failureReason, runOpening, stateWord } from "../../lib/bot-activity";
 import { dateLocaleForUi, useI18n } from "../../lib/i18n";
 import { useMobileTokens, useResolvedAppearance, useThemedStyles } from "../../lib/native";
 import { nativeTextStyle } from "../../lib/typography";
@@ -686,4 +686,14 @@ function createActivityStyles() {
       ...nativeTextStyle("label", { size: 15, weight: 500 }),
     },
   });
+}
+
+/** Opens a run's chat from a screen above the chats (see `runOpening`). */
+export function useOpenRun(): (row: RunActivityRow) => void {
+  const navigation = useNavigation();
+  const router = useRouter();
+  return (row) => {
+    const { via, to } = runOpening(navigation.getState()?.routes ?? [], row);
+    router[via](to);
+  };
 }

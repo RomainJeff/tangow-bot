@@ -14,7 +14,7 @@ import {
   type TextStyle,
   View,
 } from "react-native";
-import { ActivityTab } from "../components/bot-page/activity-tab";
+import { ActivityTab, useOpenRun } from "../components/bot-page/activity-tab";
 import {
   Group,
   GroupAction,
@@ -29,7 +29,6 @@ import { useRoutines } from "../components/bot-page/routines-tab";
 import { WhenToRun } from "../components/bot-page/when-to-run";
 import { rpc } from "../lib/api";
 import { mobileTokens } from "../lib/appearance";
-import { runOpening } from "../lib/bot-activity";
 import {
   type BotPageContext,
   type FieldSave,
@@ -154,8 +153,7 @@ function RoutineDetail({
 }) {
   const styles = useThemedStyles(createRoutineStyles);
   const { t } = useI18n();
-  const router = useRouter();
-  const navigation = useNavigation();
+  const openRun = useOpenRun();
   const { bot } = page;
   const [deleting, setDeleting] = useState(false);
   const [running, setRunning] = useState(false);
@@ -326,14 +324,7 @@ function RoutineDetail({
           routineId={routine.id}
           epoch={epoch + testRuns}
           // An archived bot's chat cannot be opened.
-          onOpenRun={
-            page.readOnly
-              ? undefined
-              : (row) => {
-                  const { via, to } = runOpening(navigation.getState()?.routes ?? [], row);
-                  router[via](to);
-                }
-          }
+          onOpenRun={page.readOnly ? undefined : openRun}
         />
       </View>
 

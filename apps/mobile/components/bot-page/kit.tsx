@@ -91,7 +91,7 @@ export function GroupAction({
       hitSlop={10}
       onPress={onPress}
     >
-      <Text style={styles.groupAction}>{label}</Text>
+      <Text style={[styles.groupAction, disabled && styles.dimmed]}>{label}</Text>
     </Pressable>
   );
 }

@@ -48,4 +48,19 @@ describe("opening a run from the bot's activity", () => {
     ];
     expect(runOpening(routes, row).via).toBe("push");
   });
+
+  it("goes back to the group below when the run is that group's", () => {
+    const routes = [
+      { name: "index" },
+      { name: "group-thread", params: { groupId: "group-1", name: "Ops" } },
+      { name: "bot", params: { botId: "bot-1" } },
+    ];
+    expect(runOpening(routes, { ...row, groupId: "group-1", groupName: "Ops" })).toEqual({
+      via: "dismissTo",
+      to: {
+        pathname: "/group-thread",
+        params: { groupId: "group-1", name: "Ops", messageId: "message-1" },
+      },
+    });
+  });
 });
