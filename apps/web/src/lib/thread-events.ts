@@ -11,6 +11,7 @@ import {
   appendedEntries,
   isActive,
   isRunTerminalEvent,
+  joinsHeld,
   mergeEntries,
   reduceProgressLayer,
   runFailureError,
@@ -195,7 +196,7 @@ export function reconcileRefreshedThread(
   }
 
   let snapshot = threadStateOf(snap);
-  if (sameThread && prev && preserveLoadedHistory) {
+  if (sameThread && prev && preserveLoadedHistory && joinsHeld(snapshot.entries, prev.entries)) {
     const firstSeq = snapshot.entries[0]?.seq ?? Number.NEGATIVE_INFINITY;
     snapshot = {
       ...snapshot,

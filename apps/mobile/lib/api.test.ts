@@ -1867,6 +1867,18 @@ describe("mobile thread history", () => {
     expect(replaced.olderCursor).toBe("entry-1");
   });
 
+  it("drops a jump window the refreshed page does not connect to", () => {
+    const said = (seq: number) =>
+      logEntry(seq, "user.message", { blocks: [{ kind: "text", text: `${seq}` }], source: "app" });
+    const jumped = { ...snapshot([said(10), said(11)]), olderCursor: said(10).id };
+    const refreshed = { ...snapshot([said(20), said(21)]), olderCursor: said(20).id };
+
+    const next = mergeMobileSnapshot(jumped, refreshed, true);
+
+    expect(next.entries.map((entry) => entry.id)).toEqual(["entry-20", "entry-21"]);
+    expect(next.olderCursor).toBe("entry-20");
+  });
+
   it("keeps the previous snapshot when a refresh brings nothing new", () => {
     const held = snapshot([middle, newest]);
     expect(mergeMobileSnapshot(held, snapshot([middle, newest]))).toBe(held);

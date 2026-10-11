@@ -107,6 +107,16 @@ describe("thread event reduction", () => {
     expect(replaced.olderCursor).toBe("e-2");
   });
 
+  it("drops a jump window the refreshed page does not connect to", () => {
+    const jumped = state([said(10, "Ten"), said(11, "Eleven")], "e-10");
+    const recent = wire([said(20, "Twenty"), said(21, "Twenty-one")], "e-20");
+
+    const refreshed = reconcileRefreshedThread(jumped, recent, null, true).snapshot;
+
+    expect(refreshed.entries.map(textOf)).toEqual(["Twenty", "Twenty-one"]);
+    expect(refreshed.olderCursor).toBe("e-20");
+  });
+
   it("ignores a stale thread refresh that is behind the live cursor", () => {
     const live: ThreadState = { ...state([said(11, "Which city?")]), cursor: 12 };
     const stale = { ...wire([said(1, "older")]), cursor: 8 };
@@ -947,7 +957,7 @@ function said(seq: number, text: string): SessionEntry {
     id: `e-${seq}`,
     sessionId: "session-1",
     seq,
-    parentId: seq === 0 ? null : "parent",
+    parentId: seq === 0 ? null : `e-${seq - 1}`,
     ts: "2026-08-16T00:00:00.000Z",
     type: "user.message",
     payload: { blocks: [{ kind: "text", text }], source: "app" },

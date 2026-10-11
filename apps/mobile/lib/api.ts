@@ -22,6 +22,7 @@ import {
   cancelResponseBody,
   ensureAiDataConsent,
   isRunTerminalEvent,
+  joinsHeld,
   mergeEntries,
   readBoundedJsonResponse,
   reduceProgressLayer,
@@ -897,13 +898,14 @@ export function mergeMobileSnapshot(
   preserveLoadedHistory = false,
 ): MobileSnapshot {
   if (!prev || prev.threadId !== next.threadId) return next;
+  const keepHistory = preserveLoadedHistory && joinsHeld(next.entries, prev.entries);
   const merged: MobileSnapshot = {
     ...next,
     entries: keepEntries(
       prev.entries,
-      preserveLoadedHistory ? mergeEntries(prev.entries, next.entries) : next.entries,
+      keepHistory ? mergeEntries(prev.entries, next.entries) : next.entries,
     ),
-    olderCursor: preserveLoadedHistory ? prev.olderCursor : next.olderCursor,
+    olderCursor: keepHistory ? prev.olderCursor : next.olderCursor,
     progress: prev.progress,
   };
   const shared: Record<string, unknown> = {};
