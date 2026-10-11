@@ -7,6 +7,7 @@ import {
   screenLeaseIdForRun,
   toComputerRef,
 } from "@rakazo/adapters";
+import type { SessionEntries } from "@rakazo/contracts";
 import {
   type Actor,
   GROUP_MEMBER_MIN,
@@ -51,15 +52,10 @@ import {
   resolveGroupSendAttachments,
   resolveSendAttachments,
 } from "./artifacts.js";
-import type { SessionEntries } from "./bot-activity.js";
 import { readCappedRun } from "./bot-activity.js";
 import { resolveBusyBotName, toComputerStatus } from "./computer-status.js";
 import { withSerializableRetry } from "./serializable-retry.js";
-import {
-  loadEntryPage,
-  threadSessionId,
-  withoutHiddenPeerRuns,
-} from "./thread-message-pages.js";
+import { loadEntryPage, threadSessionId, withoutHiddenPeerRuns } from "./thread-message-pages.js";
 
 export type ThreadTarget =
   | {

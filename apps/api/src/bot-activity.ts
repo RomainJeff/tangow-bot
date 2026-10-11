@@ -6,7 +6,7 @@ import type {
   BotActivityOutput,
   RunRecap,
   RunsCursor,
-  SessionEntry,
+  SessionEntries,
 } from "@rakazo/contracts";
 import { RUNS_PAGE_DEFAULT } from "@rakazo/contracts";
 import { ACTIVE_RUN_STATUSES, projectThreadItems, runRecap } from "@rakazo/core";
@@ -130,8 +130,6 @@ export async function listBotActivity(
         : null,
   };
 }
-
-export type SessionEntries = { entries: SessionEntry[]; truncated?: true };
 
 type RunLog = Pick<SessionLog<unknown>, "readRun">;
 type RunLogDeps = { prisma: PrismaClient; sessionLog: RunLog };
