@@ -523,13 +523,17 @@ export function ShellPage() {
   const jumpGeneration = useRef(0);
   const initiallyScrolledThread = useRef<string | null>(null);
   const messageScroll = useRef<HTMLDivElement>(null);
+  const followingEnd = useRef(true);
   const pinnedAroundRef = useRef<{ botId?: string; groupId?: string } | null>(null);
   function leaveJumpWindow({ snapToEnd = false } = {}) {
     const inWindow = expandedHistoryThread.current !== null || pinnedAroundRef.current !== null;
     expandedHistoryThread.current = null;
     pinnedAroundRef.current = null;
     const element = messageScroll.current;
-    if (snapToEnd && inWindow && element) element.scrollTop = element.scrollHeight;
+    if (snapToEnd && inWindow && element) {
+      followingEnd.current = true;
+      element.scrollTop = element.scrollHeight;
+    }
   }
   const manuallyUnread = useRef(new Set<string>());
   const readVisibleGroups = useRef(new Set<string>());
@@ -790,8 +794,10 @@ export function ShellPage() {
     setRoutines([]);
     setRoutinesBotId(null);
     // Keep the search-jump viewport; expandedHistoryThread merge still accepts live messages.
+    // A jump the person made, even while this read was in flight, ends following the end.
     if (
       stickToEnd &&
+      followingEnd.current &&
       (!scrollElement || transcriptIsNearEnd(scrollElement)) &&
       expandedHistoryThread.current !== snap.threadId
     ) {
@@ -826,8 +832,10 @@ export function ShellPage() {
     commitSnapshot(reconciled.snapshot);
     commitComputer(reconciled.computer);
     cacheComputerFor(id, { computer: reconciled.computer });
+    // A jump the person made, even while this read was in flight, ends following the end.
     if (
       stickToEnd &&
+      followingEnd.current &&
       (!scrollElement || transcriptIsNearEnd(scrollElement)) &&
       expandedHistoryThread.current !== snap.threadId
     ) {
@@ -2864,6 +2872,7 @@ export function ShellPage() {
               <Transcript
                 key={activeSnapshot?.threadId}
                 scrollRef={messageScroll}
+                followingRef={followingEnd}
                 artifactTarget={transcriptArtifactTarget}
                 inGroup={inGroup}
                 view={view}

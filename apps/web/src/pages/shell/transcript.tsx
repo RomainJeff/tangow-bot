@@ -68,6 +68,7 @@ function actionTarget(item: ThreadItem): MessageItem | null {
 
 export const Transcript = memo(function Transcript({
   scrollRef,
+  followingRef,
   artifactTarget,
   inGroup,
   view,
@@ -98,6 +99,8 @@ export const Transcript = memo(function Transcript({
   onSpeak,
 }: {
   scrollRef: RefObject<HTMLDivElement | null>;
+  /** Whether the view follows the end; Shell reads it before snapping after a refresh. */
+  followingRef: RefObject<boolean>;
   artifactTarget: ArtifactTarget;
   /** True in a multi-bot (group) thread: messages group by author with a
    * shared name/avatar. False in a single-bot (mono) thread: no message ever
@@ -134,7 +137,12 @@ export const Transcript = memo(function Transcript({
   const { t } = useLingui();
   const showSteps = useDisplayAgentSteps();
   const [atEnd, setAtEnd] = useState(true);
-  const following = useRef(true);
+  const following = followingRef;
+  const mounted = useRef(false);
+  if (!mounted.current) {
+    mounted.current = true;
+    following.current = true;
+  }
   const autoScrolling = useRef(false);
   const lastScrollTop = useRef<number | null>(null);
   const autoScrollTimer = useRef<number | undefined>(undefined);

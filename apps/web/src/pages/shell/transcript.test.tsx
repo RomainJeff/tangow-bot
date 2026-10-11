@@ -85,6 +85,7 @@ async function renderThread(
     root.render(
       <Transcript
         scrollRef={createRef<HTMLDivElement>()}
+        followingRef={{ current: true }}
         artifactTarget={{ botId: "bot_ada" }}
         inGroup={false}
         view={projectThreadView(shown, {
