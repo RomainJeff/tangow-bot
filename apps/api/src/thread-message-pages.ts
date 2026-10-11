@@ -125,40 +125,22 @@ export async function forwardedThreadEvent(
   return visible.length > 0 ? { ...event, payload: { ...event.payload, entries: visible } } : null;
 }
 
-/** Peer-run SSE events that must still reach an open thread (starts, terminals, waits, receipts, asks, text). */
-export function shouldForwardPeerThreadEvent(event: {
-  type: string;
-  payload: { blocks?: unknown };
-}): boolean {
-  if (
-    // The start drives the working indicator, and the terminals below clear it again. Without
-    // the pair an open chat sits inert for the whole run and only catches up on reload.
-    event.type === "run.started" ||
-    event.type === "run.completed" ||
-    event.type === "run.failed" ||
-    event.type === "run.cancelled" ||
-    event.type === "run.waiting_input" ||
-    event.type === "computer.takeover.requested"
-  ) {
-    return true;
-  }
-  if (event.type !== "thread.message.created" && event.type !== "thread.message.updated") {
-    return false;
-  }
-  const blocks = event.payload.blocks;
-  return (
-    Array.isArray(blocks) &&
-    blocks.some(
-      (block) =>
-        !!block &&
-        typeof block === "object" &&
-        "kind" in block &&
-        (block.kind === "bot_message_received" ||
-          block.kind === "bot_message_sent" ||
-          block.kind === "ask" ||
-          block.kind === "text"),
-    )
-  );
+/**
+ * A hidden peer run's events that still reach an open thread. The start drives the working
+ * indicator and the terminals clear it again; without the pair an open chat sits inert for the
+ * whole run and only catches up on reload. Its words, asks and receipts arrive as entries.
+ */
+const FORWARDED_PEER_RUN_EVENTS: ReadonlySet<string> = new Set([
+  "run.started",
+  "run.completed",
+  "run.failed",
+  "run.cancelled",
+  "run.waiting_input",
+  "computer.takeover.requested",
+]);
+
+export function shouldForwardPeerThreadEvent(event: { type: string }): boolean {
+  return FORWARDED_PEER_RUN_EVENTS.has(event.type);
 }
 
 function toThreadMessage(row: {

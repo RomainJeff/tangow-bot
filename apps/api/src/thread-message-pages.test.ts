@@ -223,45 +223,27 @@ describe("thread feed forwarding", () => {
     await expect(isPeerRun(prisma, "run-answer", new Map())).resolves.toBe(true);
   });
 
-  it("forwards peer waiting, ask, and text events on an open thread", () => {
-    expect(shouldForwardPeerThreadEvent({ type: "run.waiting_input", payload: {} })).toBe(true);
-    expect(shouldForwardPeerThreadEvent({ type: "computer.takeover.requested", payload: {} })).toBe(
-      true,
-    );
-    expect(
-      shouldForwardPeerThreadEvent({
-        type: "thread.message.created",
-        payload: { blocks: [{ kind: "ask", text: "Pick one" }] },
-      }),
-    ).toBe(true);
-    expect(
-      shouldForwardPeerThreadEvent({
-        type: "thread.message.created",
-        payload: { blocks: [{ kind: "text", text: "peer body" }] },
-      }),
-    ).toBe(true);
-    expect(
-      shouldForwardPeerThreadEvent({
-        type: "thread.progress",
-        payload: {},
-      }),
-    ).toBe(false);
-  });
+  it("forwards a peer run's start, terminals, waits and takeover requests, nothing else", () => {
+    const forwarded = [
+      "run.started",
+      "run.completed",
+      "run.failed",
+      "run.cancelled",
+      "run.waiting_input",
+      "computer.takeover.requested",
+      "thread.progress",
+      "thread.message.created",
+      "effect.edited",
+    ].filter((type) => shouldForwardPeerThreadEvent({ type }));
 
-  it("CA21 keeps the audit of an edited effect out of a peer run's stream", () => {
-    expect(
-      shouldForwardPeerThreadEvent({
-        type: "effect.edited",
-        payload: { effectId: "effect-1", proposed: {}, approved: {} },
-      }),
-    ).toBe(false);
-  });
-
-  it("forwards a peer run's start and terminals so the working indicator lives and clears", () => {
-    expect(shouldForwardPeerThreadEvent({ type: "run.started", payload: {} })).toBe(true);
-    for (const type of ["run.completed", "run.failed", "run.cancelled"]) {
-      expect(shouldForwardPeerThreadEvent({ type, payload: {} })).toBe(true);
-    }
+    expect(forwarded).toEqual([
+      "run.started",
+      "run.completed",
+      "run.failed",
+      "run.cancelled",
+      "run.waiting_input",
+      "computer.takeover.requested",
+    ]);
   });
 });
 
