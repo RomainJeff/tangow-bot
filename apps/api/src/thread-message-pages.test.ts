@@ -59,14 +59,14 @@ const ids = (entries: readonly SessionEntry[]) => entries.map((held) => held.id)
 
 describe("thread entry pages", () => {
   it("pages the chain back from an entry, the cursor on the oldest until the chain starts", async () => {
-    const chain = Array.from({ length: 150 }, (_, seq) => said(seq, `m${seq}`));
+    const chain = Array.from({ length: 450 }, (_, seq) => said(seq, `m${seq}`));
     const deps = { prisma: threadDb(), sessionLog: pagedLog(chain) };
 
     const tail = await loadEntryPage(deps, thread, {});
     const older = await loadEntryPage(deps, thread, { before: tail.olderCursor! });
 
     expect([tail.entries.length, tail.entries[0]?.id, tail.olderCursor]).toEqual([
-      100,
+      400,
       "entry-50",
       "entry-50",
     ]);
@@ -100,7 +100,7 @@ describe("thread entry pages", () => {
       before: EntryId.parse("entry-2"),
     });
 
-    expect(held.sessionLog.readAround).toHaveBeenCalledWith(SESSION, "entry-1", 100);
+    expect(held.sessionLog.readAround).toHaveBeenCalledWith(SESSION, "entry-1", 400, held.prisma);
     expect(ids(jump.entries)).toEqual(["entry-0", "entry-1"]);
     expect(ids(fallback.entries)).toEqual(["entry-0", "entry-1", "entry-2"]);
   });

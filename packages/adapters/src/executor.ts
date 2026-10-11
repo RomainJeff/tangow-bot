@@ -5923,6 +5923,7 @@ type RunLogFacts = {
   carrierType: string | null;
   steered: boolean;
   routineName: string | null;
+  routineNotify: boolean | null;
   spawnPromptId: string | null;
 };
 
@@ -5952,6 +5953,7 @@ export async function openRunLog(
         EXISTS (SELECT 1 FROM steering_messages WHERE "messageId" = ${run.sourceMessageId})
           AS steered,
         (SELECT name FROM routines WHERE id = ${run.routineId}) AS "routineName",
+        (SELECT notify FROM routines WHERE id = ${run.routineId}) AS "routineNotify",
         (SELECT id FROM session_entries
           WHERE "sessionId" = ${run.sessionId} AND payload ->> 'clientNonce' = ${spawnNonce}
         ) AS "spawnPromptId"`;
@@ -5974,6 +5976,7 @@ export async function openRunLog(
               trigger: trigger.kind,
               scheduledAt: run.createdAt.toISOString(),
               model,
+              ...(facts.routineNotify ? { notify: true as const } : {}),
             },
             deps.sessionLog,
           )

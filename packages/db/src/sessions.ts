@@ -324,6 +324,22 @@ export async function appendCardStateInTransaction(
   } as SessionEntryDraft);
 }
 
+/**
+ * The card a waiting run is parked on: the newest question it put to the person, which the thread
+ * keys the card by. Undefined for a card older than the log.
+ */
+export async function pendingAskEntryId(
+  tx: Prisma.TransactionClient,
+  runId: string,
+): Promise<EntryId | undefined> {
+  const ask = await tx.sessionEntry.findFirst({
+    where: { runId, type: { in: ["assistant.ask", "effect.requested"] } },
+    orderBy: { seq: "desc" },
+    select: { id: true },
+  });
+  return ask?.id as EntryId | undefined;
+}
+
 type EntryBody<T extends SessionEntryType> = T extends unknown
   ? { type: T; payload: SessionEntryOf<T>["payload"] }
   : never;
@@ -418,7 +434,12 @@ export async function appendRewindInTransaction(
     select: { seq: true, parentId: true },
   });
   if (!target?.parentId) {
-    await appendSessionEntryInTransaction(tx, { type: "clear", sessionId, payload: {}, feedBotId });
+    await appendSessionEntryInTransaction(tx, {
+      type: "clear",
+      sessionId,
+      payload: { edit: true },
+      feedBotId,
+    });
     return;
   }
   const cutOff = await newestCompactionAfter(tx, sessionId, target.seq);

@@ -42,6 +42,7 @@ import {
   appendRunFinishedInTransaction,
   appendSessionEntryInTransaction,
   historyGeneration,
+  pendingAskEntryId,
 } from "./sessions.js";
 import { withTransactionRetry } from "./transaction-retry.js";
 
@@ -881,6 +882,22 @@ export async function answerRunInputInTransaction(
       botId: run.botId,
       runId: input.runId,
     };
+    // The card is the run's own pausing message, the latest bot message of a waiting run, and the
+    // client names it by the entry of its question.
+    const [message, askEntryId] = await Promise.all([
+      tx.message.findFirst({
+        where: { threadId: input.threadId, runId: input.runId, role: "bot" },
+        orderBy: { seq: "desc" },
+      }),
+      pendingAskEntryId(tx, input.runId),
+    ]);
+    // Tolerant lookup, and the rewrites below map over the stored array by index: a block this
+    // build does not recognise neither hides the pending ask nor gets dropped from the message.
+    const known = parseKnownMessageBlocks(message?.blocks);
+    const pending = known.find(({ block }) => block.kind === "ask" && block.status !== "answered");
+    if (!message || pending?.block.kind !== "ask") return null;
+    const askId = (askEntryId ?? message.id) as EntryId;
+    if (input.messageId !== askId) return null;
     const answerEntry = (text: string) =>
       appendSessionEntryInTransaction(tx, {
         type: "user.message",
@@ -888,23 +905,10 @@ export async function answerRunInputInTransaction(
         feedBotId: run.botId,
         payload: {
           blocks: [{ kind: "text", text }],
-          replyTo: { entryId: input.messageId as EntryId },
-          source: "app",
+          replyTo: { entryId: askId },
+          source: "card",
         },
       });
-    const message = await tx.message.findFirst({
-      where: {
-        id: input.messageId,
-        threadId: input.threadId,
-        runId: input.runId,
-        role: "bot",
-      },
-    });
-    // Tolerant lookup, and the rewrites below map over the stored array by index: a block this
-    // build does not recognise neither hides the pending ask nor gets dropped from the message.
-    const known = parseKnownMessageBlocks(message?.blocks);
-    const pending = known.find(({ block }) => block.kind === "ask" && block.status !== "answered");
-    if (!message || pending?.block.kind !== "ask") return null;
     const pendingAsk = pending.block;
     const storedBlocks = message.blocks as Prisma.InputJsonValue[];
 
@@ -1007,7 +1011,7 @@ export async function answerRunInputInTransaction(
       await appendCardStateInTransaction(tx, {
         type: "card.answered",
         feedBotId: run.botId,
-        payload: { target: message.id as EntryId, answers: storedAnswers },
+        payload: { target: askId, answers: storedAnswers },
       });
       await answerEntry(lines.join("\n"));
       const updated = await appendEventInTransaction(tx, {
@@ -1204,7 +1208,7 @@ export async function answerRunInputInTransaction(
       await appendCardStateInTransaction(tx, {
         type: "card.answered",
         feedBotId: run.botId,
-        payload: { target: message.id as EntryId, answer: answeredAsk.answer },
+        payload: { target: askId, answer: answeredAsk.answer },
       });
       if (!secretAsk) await answerEntry(selectedChoice?.label ?? (freeTextAnswer || input.answer));
     }
@@ -1311,10 +1315,13 @@ export async function resumeAskWithComposerTextInTransaction(
 
   // The card is always the run's own pausing message (pauseRunForInput writes the ask blocks
   // directly onto it), so the latest bot message for this run is the one to inspect.
-  const message = await tx.message.findFirst({
-    where: { threadId: input.threadId, runId: input.runId, role: "bot" },
-    orderBy: { seq: "desc" },
-  });
+  const [message, askEntryId] = await Promise.all([
+    tx.message.findFirst({
+      where: { threadId: input.threadId, runId: input.runId, role: "bot" },
+      orderBy: { seq: "desc" },
+    }),
+    pendingAskEntryId(tx, input.runId),
+  ]);
   // Tolerant lookup: a block this build does not recognise (older/newer writer) must not hide a
   // pending ask the client is already rendering as pending — that mismatch is what makes the
   // caller throw CONFLICT on a card the user can see.
@@ -1362,7 +1369,7 @@ export async function resumeAskWithComposerTextInTransaction(
   await appendCardStateInTransaction(tx, {
     type: "card.answered",
     feedBotId: run.botId,
-    payload: { target: message.id as EntryId },
+    payload: { target: (askEntryId ?? message.id) as EntryId },
   });
   const updated = await appendEventInTransaction(tx, {
     spaceId: input.spaceId,

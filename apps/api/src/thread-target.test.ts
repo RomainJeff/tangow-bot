@@ -159,7 +159,7 @@ describe("reaction messages", () => {
 });
 
 describe("threadSnapshot", () => {
-  it("serves the chain's tail and replays the open run's progress since its last entry", async () => {
+  it("serves the chain's tail and the open run's progress since its last entry from one commit", async () => {
     const run = {
       id: "run-1",
       botId: "bot-1",
@@ -196,8 +196,14 @@ describe("threadSnapshot", () => {
       event: { findFirst: vi.fn().mockResolvedValue({ seq: 5 }) },
       run: { findFirst: botRunFindFirst([run]) },
     };
+    let committed = false;
     const prisma = {
-      $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
+      $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => {
+        const result = await callback(tx);
+        committed = true;
+        return result;
+      }),
+      run: { findMany: vi.fn(async () => []) },
     } as unknown as PrismaClient;
     const target = {
       kind: "bot",
@@ -214,11 +220,24 @@ describe("threadSnapshot", () => {
       type: "user.message",
       payload: { blocks: [{ kind: "text", text: "Find the invoice" }], source: "app" },
     });
-    const sessionLog = tailOf([question]);
+    const landedAfterCommit = SessionEntrySchema.parse({
+      id: "entry-8",
+      sessionId: "session-1",
+      seq: 8,
+      parentId: "entry-7",
+      ts: "2026-08-23T00:00:03.000Z",
+      botId: "bot-1",
+      runId: "run-1",
+      type: "assistant.text",
+      payload: { blocks: [{ kind: "text", text: "Looking it up" }] },
+    });
+    const sessionLog = {
+      readPage: vi.fn(async () => (committed ? [question, landedAfterCommit] : [question])),
+      readAround: vi.fn(async () => []),
+    };
 
     const snapshot = await threadSnapshot({ prisma, sessionLog }, target);
 
-    expect(sessionLog.readPage).toHaveBeenCalledWith("session-1", { limit: 100 });
     expect({
       cursor: snapshot.cursor,
       entries: snapshot.entries,
@@ -1126,19 +1145,32 @@ describe("readSessionEntries", () => {
     email: "user@rakazo.test",
     isDeploymentOwner: false,
   } satisfies Actor;
-  const helperStep = SessionEntrySchema.parse({
-    id: "entry-helper-0",
-    sessionId: "session-helper",
-    seq: 0,
-    parentId: null,
-    ts: "2026-10-11T09:00:00.000Z",
+  const at = (second: number) => new Date(Date.UTC(2026, 9, 11, 9, 0, second)).toISOString();
+  const helperStep = (seq: number) =>
+    SessionEntrySchema.parse({
+      id: `entry-helper-${seq}`,
+      sessionId: "session-helper",
+      seq,
+      parentId: seq === 0 ? null : `entry-helper-${seq - 1}`,
+      ts: at(seq % 60),
+      botId: "bot-1",
+      runId: "run-helper",
+      type: "tool.call",
+      payload: { callId: `call-${seq}`, name: "search", input: "{}" },
+    });
+  const raisedAsk = SessionEntrySchema.parse({
+    id: "entry-ask",
+    sessionId: "session-main",
+    seq: 40,
+    parentId: "entry-39",
+    ts: at(1),
     botId: "bot-1",
     runId: "run-helper",
-    type: "tool.call",
-    payload: { callId: "call-0", name: "search", input: "{}" },
+    type: "assistant.ask",
+    payload: { block: { kind: "ask", text: "Which market?" }, originSessionId: "session-helper" },
   });
 
-  function reader(threadId: string | null, ownBot: boolean) {
+  function reader(threadId: string | null, ownBot: boolean, run: SessionEntry[]) {
     vi.mocked(threadOfSession).mockResolvedValueOnce(threadId);
     const prisma = {
       thread: { findUnique: vi.fn(async () => ({ botId: "bot-1", groupId: null })) },
@@ -1147,30 +1179,46 @@ describe("readSessionEntries", () => {
           ownBot ? { id: "bot-1", thread: { id: "thread-1" }, computer: null } : null,
         ),
       },
+      run: { findFirst: vi.fn(async () => ({ id: "run-helper" })) },
     } as unknown as PrismaClient;
-    const sessionLog = { readPage: vi.fn(async () => [helperStep]) };
+    const sessionLog = {
+      readRun: vi.fn(async (runId: string) => (runId === "run-helper" ? run : [])),
+    };
     return { deps: { prisma, sessionLog }, sessionLog };
   }
 
-  it("reads a child session of a thread the actor can open, and refuses any other", async () => {
+  it("reads a child session as its run, joined with what rose to the thread, and refuses any other", async () => {
     const helper = SessionId.parse("session-helper");
-    const opened = reader("thread-1", true);
-    const foreignThread = reader("thread-1", false);
-    const outsideSpace = reader(null, true);
+    const joined = [helperStep(0), raisedAsk, helperStep(2)];
+    const opened = reader("thread-1", true, joined);
+    const foreignThread = reader("thread-1", false, joined);
+    const outsideSpace = reader(null, true, joined);
 
     const read = await readSessionEntries(opened.deps, actor, helper);
 
-    expect(read).toEqual({ entries: [helperStep] });
-    expect(opened.sessionLog.readPage).toHaveBeenCalledWith(helper, { limit: 1000 });
-    expect(vi.mocked(threadOfSession)).toHaveBeenCalledWith(opened.deps.prisma, helper, "space-1");
+    expect(read).toEqual({ entries: joined });
     await expect(readSessionEntries(foreignThread.deps, actor, helper)).rejects.toThrow(
       IsolationError,
     );
     await expect(readSessionEntries(outsideSpace.deps, actor, helper)).rejects.toThrow(
       IsolationError,
     );
-    expect(foreignThread.sessionLog.readPage).not.toHaveBeenCalled();
-    expect(outsideSpace.sessionLog.readPage).not.toHaveBeenCalled();
+    expect(foreignThread.sessionLog.readRun).not.toHaveBeenCalled();
+    expect(outsideSpace.sessionLog.readRun).not.toHaveBeenCalled();
+  });
+
+  it("keeps the newest thousand entries of a longer session and says it cut the oldest", async () => {
+    const long = Array.from({ length: 1001 }, (_, seq) => helperStep(seq));
+    const { deps } = reader("thread-1", true, long);
+
+    const read = await readSessionEntries(deps, actor, SessionId.parse("session-helper"));
+
+    expect([read.entries.length, read.entries[0]?.id, read.entries.at(-1)?.id]).toEqual([
+      1000,
+      "entry-helper-1",
+      "entry-helper-1000",
+    ]);
+    expect(read.truncated).toBe(true);
   });
 });
 
