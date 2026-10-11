@@ -51,6 +51,8 @@ import {
   resolveGroupSendAttachments,
   resolveSendAttachments,
 } from "./artifacts.js";
+import type { SessionEntries } from "./bot-activity.js";
+import { readCappedRun } from "./bot-activity.js";
 import { resolveBusyBotName, toComputerStatus } from "./computer-status.js";
 import { withSerializableRetry } from "./serializable-retry.js";
 import { loadEntryPage, threadSessionId } from "./thread-message-pages.js";
@@ -429,13 +431,12 @@ export async function resolveThreadTarget(
   throw new IsolationError();
 }
 
-const SESSION_ENTRIES_LIMIT = 1000;
-
+/** A child session reads as its run: its trace joined with what rose to the thread. */
 export async function readSessionEntries(
-  deps: { prisma: PrismaClient; sessionLog: Pick<SessionLog<unknown>, "readPage"> },
+  deps: { prisma: PrismaClient; sessionLog: Pick<SessionLog<unknown>, "readRun"> },
   actor: Actor,
   sessionId: SessionId,
-) {
+): Promise<SessionEntries> {
   const threadId = await threadOfSession(deps.prisma, sessionId, actor.spaceId);
   const thread = threadId
     ? await deps.prisma.thread.findUnique({
@@ -448,9 +449,12 @@ export async function readSessionEntries(
     botId: thread.botId ?? undefined,
     groupId: thread.groupId ?? undefined,
   });
-  return {
-    entries: await deps.sessionLog.readPage(sessionId, { limit: SESSION_ENTRIES_LIMIT }),
-  };
+  const run = await deps.prisma.run.findFirst({
+    where: { sessionId, session: { kind: { not: "thread" } } },
+    select: { id: true },
+  });
+  if (!run) throw new IsolationError();
+  return readCappedRun(deps.sessionLog, run.id);
 }
 
 export async function threadHead(prisma: PrismaClient, target: ThreadTarget) {

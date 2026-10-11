@@ -131,19 +131,36 @@ export async function listBotActivity(
   };
 }
 
-type RunLogDeps = { prisma: PrismaClient; sessionLog: Pick<SessionLog<unknown>, "readRun"> };
+export type SessionEntries = { entries: SessionEntry[]; truncated?: true };
+
+type RunLog = Pick<SessionLog<unknown>, "readRun">;
+type RunLogDeps = { prisma: PrismaClient; sessionLog: RunLog };
+
+const RUN_ENTRIES_LIMIT = 1000;
+
+/** A run read whole, cut to its newest entries past the cap. */
+export async function readCappedRun(sessionLog: RunLog, runId: string): Promise<SessionEntries> {
+  const entries = await sessionLog.readRun(runId);
+  return entries.length > RUN_ENTRIES_LIMIT
+    ? { entries: entries.slice(-RUN_ENTRIES_LIMIT), truncated: true }
+    : { entries };
+}
+
+async function ownRunId(prisma: PrismaClient, actor: Actor, runId: string): Promise<string> {
+  const run = await prisma.run.findFirst({
+    where: { id: runId, spaceId: actor.spaceId, userId: actor.userId },
+    select: { id: true },
+  });
+  if (!run) throw new IsolationError();
+  return run.id;
+}
 
 export async function readRunEntries(
   deps: RunLogDeps,
   actor: Actor,
   runId: string,
-): Promise<SessionEntry[]> {
-  const run = await deps.prisma.run.findFirst({
-    where: { id: runId, spaceId: actor.spaceId, userId: actor.userId },
-    select: { id: true },
-  });
-  if (!run) throw new IsolationError();
-  return deps.sessionLog.readRun(run.id);
+): Promise<SessionEntries> {
+  return readCappedRun(deps.sessionLog, await ownRunId(deps.prisma, actor, runId));
 }
 
 export async function readRunRecap(
@@ -151,7 +168,9 @@ export async function readRunRecap(
   actor: Actor,
   runId: string,
 ): Promise<RunRecap> {
-  const items = projectThreadItems(await readRunEntries(deps, actor, runId));
+  const items = projectThreadItems(
+    await deps.sessionLog.readRun(await ownRunId(deps.prisma, actor, runId)),
+  );
   return runRecap(
     items.flatMap((item) =>
       item.kind === "message" && item.role === "bot" ? [{ id: item.id, blocks: item.blocks }] : [],

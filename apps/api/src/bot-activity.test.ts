@@ -92,7 +92,8 @@ function setup({
     sessionLog,
     activity: (input: BotActivityInput) => call<BotActivityOutput>("bots/activity", input),
     recap: (runId: string) => call<RunRecap>("runs/recap", { runId }),
-    entries: (runId: string) => call<{ entries: SessionEntry[] }>("runs/entries", { runId }),
+    entries: (runId: string) =>
+      call<{ entries: SessionEntry[]; truncated?: true }>("runs/entries", { runId }),
     sessionEntries: (sessionId: string) =>
       call<{ entries: SessionEntry[] }>("sessions/entries", { sessionId }),
   };
@@ -298,6 +299,21 @@ describe("runs.entries", () => {
       "entry-4",
     ]);
     expect(status).toBe(404);
+  });
+
+  it("keeps a long run's newest entries and says it cut the oldest", async () => {
+    const long = Array.from({ length: 1001 }, (_, seq) =>
+      runEntry(seq, "assistant.text", { blocks: [{ kind: "text", text: `step ${seq}` }] }),
+    );
+    const { entries } = setup({ run: { id: "run-1" }, entries: long });
+
+    const { body } = await entries("run-1");
+
+    expect([body.json.entries.length, body.json.entries[0]?.id, body.json.truncated]).toEqual([
+      1000,
+      "entry-1",
+      true,
+    ]);
   });
 });
 

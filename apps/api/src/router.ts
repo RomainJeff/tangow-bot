@@ -4716,9 +4716,9 @@ export function createRouter(deps: RouterDeps) {
       recap: authed.runs.recap.handler(({ context, input }) =>
         readRunRecap(deps, context.actor, input.runId),
       ),
-      entries: authed.runs.entries.handler(async ({ context, input }) => ({
-        entries: await readRunEntries(deps, context.actor, input.runId),
-      })),
+      entries: authed.runs.entries.handler(({ context, input }) =>
+        readRunEntries(deps, context.actor, input.runId),
+      ),
     },
     sessions: {
       entries: authed.sessions.entries.handler(({ context, input }) =>
