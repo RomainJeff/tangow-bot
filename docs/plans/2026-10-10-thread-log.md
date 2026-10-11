@@ -410,61 +410,70 @@ Each live lane runs in its own isolated worktree (`isolation: "worktree"`) at th
 
 ## Serve the UI from the log (SL5)
 
-**Depends on.** SL4b.
+**Depends on.** SL4b. The section was rewritten with the operator on 2026-10-11 after the main sync, around one rule. The thread is a pure projection of the log, see Decisions already taken.
 
 **Files.**
 
-- [ ] Edit `apps/api/src/router.ts`.
-- [ ] Edit `packages/contracts/src/events.ts`, `packages/contracts/src/domain.ts` and `packages/contracts/src/rpc.ts`.
-- [ ] Edit `apps/web/src/lib/thread-events.ts`, `apps/web/src/pages/Shell.tsx` and the thread components under `apps/web/src/components/`.
-- [ ] Edit `apps/mobile/app/thread.tsx`, `apps/mobile/lib/api.ts` and the thread components under `apps/mobile/components/`.
-- [ ] Edit `apps/web/e2e/` specs that exercise thread history, rewind, clear, approvals and the Activity tab.
-- [ ] Edit `apps/web/src/lib/thread-events.test.ts`.
+- [ ] Edit `packages/contracts/src/session-log.ts`, `packages/contracts/src/domain.ts`, `packages/contracts/src/rpc.ts` and `packages/contracts/src/events.ts`.
+- [ ] Edit `packages/adapter-kit/src/interfaces.ts`, `packages/adapters/src/session-log/postgres.ts`, `packages/adapters/src/session-log/file.ts` and `packages/adapters/src/session-log/conformance.ts`.
+- [ ] Edit `packages/core/src/session-log/project-ui.ts` and `packages/core/src/session-log/run-fold.ts`, create `packages/core/src/session-log/project-thread-view.ts`, and port `packages/core/src/message-grouping.ts`, `packages/core/src/routine-groups.ts`, `packages/core/src/message-reactions.ts` and `packages/core/src/message-visibility.ts` onto `ThreadItem`.
+- [ ] Edit `packages/db/src/events.ts`, `packages/db/src/link-preview.ts`, `packages/adapters/src/executor.ts`, `apps/api/src/onboarding.ts` and `apps/api/src/taught-skills.ts`, the eleven sites that rewrite `Message.blocks` in place.
+- [ ] Edit `apps/api/src/router.ts`, `apps/api/src/thread-target.ts`, `apps/api/src/thread-message-pages.ts` and `apps/api/src/bot-activity.ts`.
+- [ ] Edit `apps/web/src/lib/thread-events.ts`, `apps/web/src/pages/Shell.tsx`, `apps/web/src/pages/shell/transcript.tsx`, `apps/web/src/pages/shell/message-view.tsx`, `apps/web/src/pages/shell/PeerMessagesOverlay.tsx` and `apps/web/src/pages/bot-page/BotActivity.tsx`.
+- [ ] Edit `apps/mobile/app/thread.tsx`, `apps/mobile/lib/api.ts` and `apps/mobile/components/bot-page/activity-tab.tsx`.
+- [ ] Edit the `apps/web/e2e/` specs that mock `threads/get` or exercise history, rewind, clear, approvals, the Activity tab, skill lines and tool activity, eighteen specs, each listed in the PR.
+- [ ] Edit `packages/core/src/session-log/project-ui.test.ts` and `apps/web/src/lib/thread-events.test.ts`, create `packages/core/src/session-log/project-thread-view.test.ts` and the fixture `packages/core/src/session-log/fixtures/streamed-reply.jsonl`.
 
 **Build.**
 
-- [ ] `ThreadSnapshotSchema` and `ThreadMessagePageSchema` in `domain.ts` carry `items: ThreadItem[]` in place of `messages`. `threads.get` and `threads.messages` in `router.ts` read through `sessionLog.readPage` and `projectThreadItems`. The page size stays 100. `olderCursor` becomes the seq of the oldest entry in the page.
-- [ ] `sessions.entries({ sessionId })` and `runs.entries({ runId })` join the RPC and return raw entries for the detail views. This slice ships the RPCs and the subagent card's click, which opens the child session as a read-only thread view. The full run detail screen is a later feature, Appendix D.
-- [ ] `session.entry.appended` joins `ProductEventSchema`. `thread.message.created`, `thread.message.updated` and `thread.subagent` are no longer emitted.
-- [ ] `reduceThreadSnapshot` folds `session.entry.appended` into the snapshot through `projectThreadItems` applied to the run's entries received so far, so a bot message grows block by block and the run card updates in place. A steering message mid-run splits the bot message into two items, as the projection does. Progress events keep driving the shimmer.
-- [ ] Web renders each `ThreadItem.kind` with one component. `message` keeps today's bubble. `run` is a compact card with trigger, model and status that expands to usage and duration. `subagent` is a card with name, model, status and result that opens the child session. `handoff` is a line naming both bots. `botMessage` is a card with direction, peer, intent and a link to the linked entry in the peer's thread, muted when unanswered. `divider` is a hairline with a label for compaction and rewind. `effect` is the approval card already in the app. `note` is a centered line. Copy stays minimal per the repo rule and the PR quotes it.
-- [ ] Mobile renders the same union with native list rows, through the shared core projection.
-- [ ] The bot page's Activity tab reads `run` items from the same projection instead of its own recap query.
-- [ ] Rewind and clear in the UI call the existing endpoints, which now append entries. The reducer handles `rewind` and `clear` entries by replacing the snapshot with a fresh `threads.get`.
+- [ ] Four entry types join `SessionEntrySchema` and `ENTRY_AUDIENCE`, UI yes, inference no, each with a `target` entry id in its payload because `parentId` always points at the session head. `card.answered` carries `{ target, answerId?, dismissed? }` and records a choice chosen, an onboarding or ask card dismissed, a composer resume and a secret ask answer, the paths that leave no reply entry. `link.preview` carries `{ target, block, artifactId }` and `link.preview.removed` carries `{ target }`, the target being the preview entry. `skill.draft` carries `{ target, skillId, name, goal, playbook, status }`, one entry per revision, the projection keeps the last. `effect.resolved` gains `dismissed?: true` next to `decision`, and `effect.applied` carries `{ target, routineId?, failed? }` for what came of an approved routine card. An `app_connect` card that connects writes `card.answered` with the connector as `answerId`.
+- [ ] The eleven rewrite sites append their entry in the same transaction and keep writing `Message.blocks` until SL6 drops the table. The UI stops reading `thread.message.created`, `thread.message.updated`, `thread.subagent`, `thread.cleared`, `thread.rewound`, `agent.tool.called` and `run.waiting_input`. Their emitters stay until SL6 removes them.
+- [ ] `ThreadSnapshotSchema` and `ThreadMessagePageSchema` carry `entries: SessionEntry[]` in place of `messages`, with `olderCursor` an entry id or null. `threads.get` reads the tail through `readPage`, `threads.messages({ before })` pages the chain by entry id, and a new port method `readAround(sessionId, entryId, limit)` serves `threads.messages({ around })` for search jumps and Activity jumps, with its conformance case. The page size stays 100. `run`, `activeRuns`, `members` and `computer` keep reading their own tables.
+- [ ] Peer visibility is computed once on the server. `visibleEntries(entries, { hiddenPeerRunIds, includePeerRuns })` in core keeps a hidden peer run's receipts, its asks and the user messages carrying the `user-message:` nonce, `threadSnapshot` and `loadMessagePage` apply it to pages, and `shouldForwardPeerThreadEvent` applies it to the entries inside `session.entry.appended` instead of dropping the event.
+- [ ] `projectThreadView(entries, options)` in core is the one chain. `projectThreadItems`, then reactions from emoji-only `user.message` entries that reply, then groups within five minutes of the same bot with no reply, then the routine fold, then time markers. `foldRuns` lets the four annotation types and `subagent` through without closing a stretch. An ask or choice block renders answered when a `user.message` replies to it or a `card.answered` targets it. A message item carries the previews that target it minus the removed ones, and the latest `skill.draft` that targets it. The compaction divider is placed before the first item whose seq exceeds `coveredUpToSeq`. A `rewind` entry cuts every item after its parent and leaves a divider, a `clear` entry cuts everything before it.
+- [ ] The web and mobile reducers follow one rule. On `session.entry.appended`, merge the entries by seq into the held entries, then project. No refetch on rewind or clear.
+- [ ] Live state comes from entries plus one ephemeral layer. A run is open while `run.started` has no `run.finished`, a step shows from its `tool.call` entry and settles on `tool.result`, a helper is open while its `run_subagent` `tool.call` has neither a `subagent` entry nor a `tool.result`, and a thread waits for input while its last `assistant.ask` or `assistant.choice` has neither a reply nor a `card.answered`. `thread.progress` stays an event and renders as a layer under the shimmer holding the deltas since the open run's last entry; every entry of that run resets the layer, and a delta older than the run's last `assistant.text` is dropped.
+- [ ] Web renders each `ThreadItem.kind` with one component. `message` keeps today's bubble. `run` is a compact card with trigger, model and status that expands to usage and duration. `subagent` is a card with name, model, status and result that opens the child session. `routine` is a card with the routine's name and state that opens the routine session. `handoff` is a line naming both bots. `botMessage` is a card with direction, peer, intent and a link to the linked entry in the peer's thread, muted when unanswered. `divider` is a hairline with a label for compaction, rewind and clear. `effect` is the approval card already in the app. `note` is a centered line. An item with an `origin` names the routine or helper it rose from and links to that session. Copy stays minimal per the repo rule and the PR quotes it.
+- [ ] `sessions.entries({ sessionId })` and `runs.entries({ runId })` join the RPC. The subagent card, the routine card and an origin label open the child session as a read-only thread view built on the same projection. The full run detail screen stays a later feature, Appendix D.
+- [ ] Mobile renders the same union with native rows through the same core chain and the same reducer rule. `card`, `choice`, `chart`, `mcp_approval`, `skill_draft` and `computer` keep today's text fallback.
+- [ ] `runs.recap` projects `readRun(runId)` instead of reading `Message`, and Activity jumps pass the entry id to `threads.messages({ around })`. The Activity list keeps reading `Run` rows.
+- [ ] Rewind and clear in the UI call the existing endpoints, which append the entries, and the client mints a fresh nonce after a rewind.
 
 **You see.**
 
-- [ ] The thread renders as on trunk for plain messages, shows a run card above each bot reply, a subagent card where a helper ran, and the network tab shows `session.entry.appended` events instead of message updates.
+- [ ] The thread renders as on trunk for plain messages, shows a run card above each bot reply, a subagent card where a helper ran, a routine card where a routine ran, an answered ask stays answered after a reload, and the network tab shows `session.entry.appended` events instead of message updates.
 
 **Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] `thread-events.test.ts` gains a case feeding the entries of one run with a subagent in order and asserting the literal snapshot after each event. Run `pnpm --filter @rakazo/web test`.
-- [ ] The web e2e specs for history paging, rewind, clear, approvals and the Activity tab are updated and pass. Run `pnpm test:e2e:affected`.
+- [ ] `project-thread-view.test.ts` feeds `streamed-reply.jsonl`, nineteen entries covering a run with a tool call, a helper, an ask answered by a reply, a preview added then removed and a rewind, and asserts the literal items at three cuts, mid-run, after the helper and after the rewind. Run `pnpm --filter @rakazo/core test`.
+- [ ] `thread-events.test.ts` gains a case feeding the same entries through `session.entry.appended` in order with progress deltas interleaved, one delta arriving after its `assistant.text`, and asserts the literal snapshot after each event. Run `pnpm --filter @rakazo/web test`.
+- [ ] The conformance suite gains `readAround` on both backends. Run `pnpm --filter @rakazo/adapters test`.
+- [ ] The web e2e specs listed in Files are updated and pass. Run `pnpm test:e2e:affected`.
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `sonnet` at the PR head, per the boot recipe.
 
 - [ ] Lane 1. Regression lane against trunk. Open a seeded 300 message thread at trunk and at head. Save `thread-trunk.png` and `thread-head.png`. Pass when both render the same last twenty messages and head adds one run card per bot reply.
-- [ ] Lane 2. Scroll up to load older pages three times. Save `paging.png`. Pass when 300 messages are present with no duplicate and no gap.
-- [ ] Lane 3. Watch a reply stream with a tool call. Save `stream-steps.png`. Pass when the run card appears first, the step appears before the text, and the final items match a reload.
-- [ ] Lane 4. Run a task that spawns a subagent, click its card. Save `subagent-card.png` and `subagent-session.png`. Pass when the card shows name, model and result, and the click opens the child session with the helper's own tool calls.
-- [ ] Lane 5. Rewind from the UI, then clear. Save `ui-rewind-clear.png`. Pass when the cut items vanish, a divider marks the rewind, and a reload agrees.
-- [ ] Lane 6. Same thread open in two browser tabs while one sends. Save `two-tabs.png`. Pass when both show the reply and the run card.
-- [ ] Lane 7. Phone width 390 by 844 on the same thread. Save `phone.png`. Pass when the run and subagent cards fit the width with no horizontal scroll.
-- [ ] Lane 8. Native iOS through `pnpm test:mobile-screenshots`. Save `ios.png`. Pass when the thread screen renders the seeded messages and a run card.
-- [ ] Lane 9. Trigger an approval, edit it, approve it, fire a routine, and have bot A message bot B. Save `effect-routine-botmsg.png`. Pass when the effect card shows the edit, the routine's run card names the routine, A's thread shows the sent card linking to B's thread, and B's thread shows the received card and its run.
+- [ ] Lane 2. Scroll up to load older pages three times, then search for a word in the oldest page and jump. Save `paging.png`. Pass when 300 messages are present with no duplicate and no gap and the jump lands on the match.
+- [ ] Lane 3. Watch a reply stream with a tool call. Save `stream-steps.png`. Pass when the text streams under the shimmer, the step appears from its entry before the text, no text shows twice, and the final items match a reload.
+- [ ] Lane 4. Run a task that spawns a subagent, click its card. Save `subagent-card.png` and `subagent-session.png`. Pass when the card shows running during the run, then name, model and result, and the click opens the child session with the helper's own tool calls.
+- [ ] Lane 5. Rewind from the UI, then clear. Save `ui-rewind-clear.png`. Pass when the cut items vanish without a refetch, a divider marks the rewind, and a reload agrees.
+- [ ] Lane 6. Same thread open in two browser tabs while one sends. Save `two-tabs.png`. Pass when both show the reply, the run card and the same step order.
+- [ ] Lane 7. Answer an ask by reply, dismiss a second ask, choose an onboarding option on a fresh bot, paste a link and remove its preview, edit a taught skill's draft. Save `card-states.png`. Pass when every card shows its state after a reload and the log holds one `card.answered`, one `link.preview`, one `link.preview.removed` and one `skill.draft` per action.
+- [ ] Lane 8. Phone width 390 by 844 on lane 3's thread, then native iOS through `pnpm test:mobile-screenshots`. Save `phone.png` and `ios.png`. Pass when the cards fit the width with no horizontal scroll and the iOS thread renders the seeded messages, a run card and an answered ask.
+- [ ] Lane 9. Trigger an approval, edit it, approve it, fire a routine, have bot A message bot B, and open a group with a hidden peer run. Save `effect-routine-botmsg.png`. Pass when the effect card shows the edit, the routine card names the routine and opens its session, A's thread shows the sent card linking to B's thread, B's thread shows the received card and its run, and the hidden peer run shows only its receipts.
 - [ ] Lane 10. Run `pnpm test:e2e:affected` at head. Save `e2e-affected.png`. Pass when the run exits zero.
 
 **Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] Metric. `threads.get` response time on a 2 000 message thread, at trunk and at head, over fifty requests.
-- [ ] Probe. A script calling the RPC in a loop, interleaved trunk then head five times.
-- [ ] Baseline. Record the trunk median first.
-- [ ] Rule. Fail when the head median exceeds the trunk median by more than 10 percent.
+- [ ] Metric. `threads.get` response time on a 2 000 message thread, at trunk and at head, over fifty requests, and `projectThreadView` wall time on one 100 entry page in the browser.
+- [ ] Probe. A script calling the RPC in a loop, interleaved trunk then head five times, and a `performance.now()` pair around the projection in the reducer, read from the console.
+- [ ] Baseline. Record the trunk median first. The projection has no trunk baseline, record head's median as the first.
+- [ ] Rule. Fail when the head median exceeds the trunk median by more than 10 percent, or when the projection median exceeds 5 ms.
 
 **Review gate.** The operator reviews before merge.
 
-- [ ] Copy lane 1, 3, 4, 5 and 7 screenshots into `docs/screenshots/session-log/sl5-review-<slug>.png`.
-- [ ] Record a 30 to 60 second video of a streamed reply with a subagent, a click into the child session, a rewind and a clear on a lane VM. Save it as `docs/screenshots/session-log/sl5-review.mp4`.
+- [ ] Copy lane 1, 3, 4, 5, 7 and 8 screenshots into `docs/screenshots/session-log/sl5-review-<slug>.png`.
+- [ ] Record a 30 to 60 second video of a streamed reply with a subagent, a click into the child session, an ask answered, a rewind and a clear on a lane VM. Save it as `docs/screenshots/session-log/sl5-review.mp4`.
 - [ ] Post the screenshots and the video in chat. Stop at merge-ready. Wait for the operator's click.
 
 **Merge.**
@@ -490,10 +499,11 @@ Each live lane runs in its own isolated worktree (`isolation: "worktree"`) at th
 
 **Build.**
 
-- [ ] `backfillThread(prisma, threadId)` converts `Message` rows in seq order into a linear chain in the thread's main session. A user row becomes `user.message`. A bot row becomes `run.started` with a `message` trigger, its steps as `tool.call` and `tool.result` pairs, a `subagent` block as a `subagent` entry with no `sessionId`, a `bot_message_sent` or `bot_message_received` block as the matching `bot.message.*` entry with the cross link resolved through the message id map when the peer thread is backfilled, its text as `assistant.text`, and `run.finished`. A thread with `historyCompactionSummary` gets a `compaction` entry whose `coveredUpToSeq` is the summarized seq, read before the columns are dropped. Idempotent, it skips a session whose entries already exist.
+- [ ] `backfillThread(prisma, threadId)` converts `Message` rows in seq order into a linear chain in the thread's main session. A user row becomes `user.message`. A bot row becomes `run.started` with a `message` trigger, its steps as `tool.call` and `tool.result` pairs, a `subagent` block as a `subagent` entry with no `sessionId`, a `bot_message_sent` or `bot_message_received` block as the matching `bot.message.*` entry with the cross link resolved through the message id map when the peer thread is backfilled, its text as `assistant.text`, and `run.finished`. A thread with `historyCompactionSummary` gets a `compaction` entry whose `coveredUpToSeq` is the summarized seq, read before the columns are dropped. A `link_preview` block becomes a `link.preview` entry targeting its message, an answered ask or choice block with no replying message becomes a `card.answered`, a `skill_draft` block becomes a `skill.draft`, and a `skill_source` block becomes `skill.learnt`. Idempotent, it skips a session whose entries already exist.
 - [ ] The script runs the backfill for every thread before the drop migration, in batches, and logs progress per thread.
 - [ ] Export streams a thread's main session and every child session as JSONL files through `encodeEntries`, one file per session. Import reads them through `decodeEntries` and appends to new sessions, rewriting the `subagent` entries' `sessionId` to the imported child.
 - [ ] `PiJsonlSessionRecorder` and `PI_SESSION_RECORDING` are deleted. The log is the record.
+- [ ] The emitters of `thread.message.created`, `thread.message.updated`, `thread.subagent`, `thread.cleared`, `thread.rewound`, `agent.tool.called` and `run.waiting_input` are deleted once a grep shows no reader left, together with the `Message.blocks` rewrites at the eleven SL5 sites and the remaining `messages` readers, `writeSkillLines`, `cutMessages`, `previewFromBlocks`, `loadAllMessages` and `settleRoutineCard`.
 - [ ] CHANGELOG under `## [Unreleased]`, dated for the feature PR's merge day, Added. "**A bot's conversation is now a complete, replayable history.** Each reply shows the run behind it, a helper the bot spawned opens in its own view, rewind and clear keep what came before, a long thread opens and resumes from its last summary on web, desktop and mobile, and a thread can be exported to or imported from JSONL files."
 
 **You see.**
@@ -619,6 +629,10 @@ Decision. A. The head is the entry with the highest seq in its session, so the r
 | `run.started` | Executor | context | yes, run card |
 | `run.finished` | Executor, `finalizeRun` | no | yes, run card |
 | `effect.requested`, `effect.edited`, `effect.resolved` | Executor, approvals | no | yes |
+| `effect.applied` | Executor, what came of an approved routine card, `target` the card | no | yes |
+| `card.answered` | API and executor, a choice chosen, a card dismissed, a composer resume, a secret ask, a connector connected, `target` the card | no | yes |
+| `link.preview`, `link.preview.removed` | API, `target` the message then the preview | no | yes |
+| `skill.draft` | API, one per revision, `target` the card | no | yes |
 | `computer.control` | Executor, takeover grant and release | context | yes |
 | `memory.revised` | Compaction job | no | yes |
 | `skill.learnt` | `writeSkillLines`, one per skill and per run | no | yes |
