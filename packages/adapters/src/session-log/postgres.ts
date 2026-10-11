@@ -1,5 +1,5 @@
 import type { NewSession, SessionEntryDraft, SessionLog } from "@rakazo/adapter-kit";
-import { SessionReadError } from "@rakazo/adapter-kit";
+import { assertEntryCount, SessionReadError } from "@rakazo/adapter-kit";
 import type { SessionEntry, SessionId } from "@rakazo/contracts";
 import { EntryId } from "@rakazo/contracts";
 import { compactionFirst } from "@rakazo/core";
@@ -27,17 +27,21 @@ export class PostgresSessionLog implements SessionLog<Prisma.TransactionClient> 
     return appendSessionEntryInTransaction(tx, draft);
   }
 
-  async readTail(sessionId: SessionId): Promise<SessionEntry[]> {
-    return compactionFirst(await this.walk(sessionId, HEAD, { stopAt: COVERED_UP_TO }));
+  async readTail(
+    sessionId: SessionId,
+    { maxEntries }: { maxEntries?: number } = {},
+  ): Promise<SessionEntry[]> {
+    if (maxEntries !== undefined) assertEntryCount("maxEntries", maxEntries);
+    return compactionFirst(
+      await this.walk(sessionId, HEAD, { stopAt: COVERED_UP_TO, limit: maxEntries }),
+    );
   }
 
   readPage(
     sessionId: SessionId,
     { before, limit }: { before?: EntryId; limit: number },
   ): Promise<SessionEntry[]> {
-    if (!Number.isInteger(limit) || limit <= 0) {
-      throw new RangeError(`limit must be a positive integer, got ${limit}`);
-    }
+    assertEntryCount("limit", limit);
     const start =
       before === undefined
         ? HEAD

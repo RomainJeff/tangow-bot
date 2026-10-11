@@ -23,7 +23,12 @@ export function recordingSessionLog() {
         drafts.push(draft);
         return draft;
       }),
-      readTail: vi.fn(async (_sessionId: SessionId): Promise<SessionEntry[]> => []),
+      readTail: vi.fn(
+        async (
+          _sessionId: SessionId,
+          _options?: { maxEntries?: number },
+        ): Promise<SessionEntry[]> => [],
+      ),
       readPage: vi.fn(async (_sessionId: SessionId, _page: unknown): Promise<SessionEntry[]> => []),
       readRun: vi.fn(async () => []),
       readEntry: vi.fn(

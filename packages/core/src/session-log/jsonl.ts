@@ -61,9 +61,9 @@ export function compactionFirst(tail: SessionEntry[]): SessionEntry[] {
 /**
  * Read a session's tail from the end of its JSONL file: from the last line, follow `parentId`
  * backwards, skipping lines a rewind left off the chain, and stop at an entry with no parent or,
- * once a `compaction` entry was met, at the last entry its summary covers. Reads `chunkSize` bytes
- * at a time, so a long session costs about the bytes since that entry. Returns the tail in the
- * `compactionFirst` order.
+ * once a `compaction` entry was met, at the last entry its summary covers, or after `maxEntries`.
+ * Reads `chunkSize` bytes at a time, so a long session costs about the bytes since that entry.
+ * Returns the tail in the `compactionFirst` order.
  *
  * A final line without its newline follows the `decodeEntries` rule. Any other line read that is
  * not JSON and a chain entry that fails validation throw `SessionEntryDecodeError` with the line,
@@ -72,6 +72,7 @@ export function compactionFirst(tail: SessionEntry[]): SessionEntry[] {
 export async function readTailFromEnd(
   open: () => Promise<TailSource>,
   chunkSize: number,
+  maxEntries = Number.POSITIVE_INFINITY,
 ): Promise<SessionEntry[]> {
   if (!Number.isInteger(chunkSize) || chunkSize <= 0) {
     throw new RangeError(`chunkSize must be a positive integer, got ${chunkSize}`);
@@ -108,7 +109,7 @@ export async function readTailFromEnd(
       }
       wanted = entry.parentId;
       wantedBy = location;
-      return wanted === null;
+      return wanted === null || chain.length === maxEntries;
     };
     let pieces: Uint8Array[] = [];
     let end = source.size;

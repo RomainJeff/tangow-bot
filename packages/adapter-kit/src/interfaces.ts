@@ -308,9 +308,10 @@ export interface SessionLog<Tx> {
   append(tx: Tx, draft: SessionEntryDraft): Promise<SessionEntry>;
   /**
    * What the next run reads: the chain's newest compaction, then the chain entries after the last
-   * seq it covers, oldest first. Without a compaction, the whole chain.
+   * seq it covers, oldest first. Without a compaction, the whole chain. `maxEntries` keeps only
+   * the newest that many entries of the walk back from the head.
    */
-  readTail(sessionId: SessionId): Promise<SessionEntry[]>;
+  readTail(sessionId: SessionId, options?: { maxEntries?: number }): Promise<SessionEntry[]>;
   /** The newest `limit` chain entries before `before`, or ending at the head when it is left out. */
   readPage(
     sessionId: SessionId,

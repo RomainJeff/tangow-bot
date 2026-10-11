@@ -58,6 +58,13 @@ export class SessionReadError extends Error {
   }
 }
 
+/** Guards the entry counts a read takes, `readPage`'s `limit` and `readTail`'s `maxEntries`. */
+export function assertEntryCount(name: string, count: number): void {
+  if (!Number.isInteger(count) || count <= 0) {
+    throw new RangeError(`${name} must be a positive integer, got ${count}`);
+  }
+}
+
 /** The redelivery key of the entry types that carry one. */
 export function sessionEntryNonce(entry: SessionEntryDraft | SessionEntry): string | undefined {
   return entry.type === "user.message" || entry.type === "bot.message.received"

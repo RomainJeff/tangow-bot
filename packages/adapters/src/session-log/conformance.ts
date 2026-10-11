@@ -199,6 +199,20 @@ export function runSessionLogConformance<Tx>(makeLog: () => Promise<SessionLogHa
       ]);
     });
 
+    it("keeps only the newest maxEntries of the tail, the compaction among them when reached", async () => {
+      const { sessionId } = await created();
+      const [, , c] = await appendAll(["a", "b", "c"].map((text) => said(sessionId, text)));
+      await append(compacted(c!, 0));
+      await append(said(sessionId, "d"));
+      const tail = async (maxEntries: number) =>
+        (await harness.log.readTail(sessionId, { maxEntries })).map(textOf);
+
+      expect(await tail(1)).toEqual(["d"]);
+      expect(await tail(3)).toEqual(["up to 0", "c", "d"]);
+      expect(await tail(10)).toEqual(["up to 0", "b", "c", "d"]);
+      await expect(tail(0)).rejects.toThrow(RangeError);
+    });
+
     it("appends a compaction that keeps the entries after the seq it covers", async () => {
       const { sessionId } = await created();
       const [, b] = await appendAll([said(sessionId, "a"), said(sessionId, "b")]);
@@ -285,6 +299,7 @@ export function runSessionLogConformance<Tx>(makeLog: () => Promise<SessionLogHa
       };
       await expect(harness.log.readTail(sessionId)).rejects.toMatchObject(refusal);
       await expect(harness.log.readPage(sessionId, { limit: 10 })).rejects.toMatchObject(refusal);
+      expect((await harness.log.readTail(sessionId, { maxEntries: 1 })).map(textOf)).toEqual(["c"]);
     });
 
     it("gives concurrent transactions on one session distinct seqs on one chain", async () => {

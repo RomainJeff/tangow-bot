@@ -1374,6 +1374,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const sessionId = run.sessionId as SessionId;
         const historyStartedAt = performance.now();
         let historyMs = 0;
+        const threadLoad = deps.prisma.thread.findUniqueOrThrow({ where: { id: run.threadId } });
+        const compacts = (owner: { botId: string | null }) =>
+          Boolean(owner.botId) && deps.runtime.describe().capabilities.compaction;
         const [
           bot,
           thread,
@@ -1393,11 +1396,20 @@ export function createRunExecutor(deps: ExecutorDeps) {
             where: { id: run.botId },
             include: { computer: true },
           }),
-          deps.prisma.thread.findUniqueOrThrow({ where: { id: run.threadId } }),
-          readRunHistory(deps.sessionLog, run, channelId).then((entries) => {
-            historyMs = performance.now() - historyStartedAt;
-            return entries;
-          }),
+          threadLoad,
+          threadLoad
+            .then((loaded) =>
+              readRunHistory(
+                deps.sessionLog,
+                run,
+                channelId,
+                compacts(loaded) ? undefined : UNCOMPACTED_HISTORY_LIMIT,
+              ),
+            )
+            .then((entries) => {
+              historyMs = performance.now() - historyStartedAt;
+              return entries;
+            }),
           run.trigger === "bot_message"
             ? loadBotMessageContext(deps.prisma, run.sourceMessageId)
             : Promise.resolve(undefined),
@@ -5054,7 +5066,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
           // Last, and never fatal: the run is already finalized, so a failure here must not reach
           // the catch block below, where a second finalizeRun would match no rows and silently
           // skip the completion notification.
-          if (!messagingChannelRun && shouldEnqueueCompaction(uncompactedHistory)) {
+          if (
+            compacts(thread) &&
+            runModelProvider !== "scripted" &&
+            !messagingChannelRun &&
+            shouldEnqueueCompaction(uncompactedHistory)
+          ) {
             await deps.jobs
               .enqueue(historyCompactJob(thread.id))
               .catch((error) => getLogger().error("history.compact enqueue failed", error));
@@ -5377,20 +5394,25 @@ export function filterPageBrowserTools<T extends { name: string }>(
   return tools.filter((tool) => !PAGE_BROWSER_TOOL_NAMES.has(tool.name));
 }
 
-const CHANNEL_HISTORY_LIMIT = 200;
+/**
+ * The newest entries a run reads where no compaction bounds its history: a channel's posts, or a
+ * thread that never compacts.
+ */
+const UNCOMPACTED_HISTORY_LIMIT = 200;
 const CHANNEL_HISTORY_PAGE = 500;
 
 async function readRunHistory(
   log: SessionLog<Prisma.TransactionClient>,
   run: { id: string; sessionId: string; routineId: string | null },
   channelId: string | undefined,
+  maxEntries: number | undefined,
 ): Promise<SessionEntry[]> {
   if (run.routineId != null) return [];
   const sessionId = run.sessionId as SessionId;
-  if (!channelId) return log.readTail(sessionId);
+  if (!channelId) return log.readTail(sessionId, { maxEntries });
   const kept: SessionEntry[] = [];
   let before: EntryId | undefined;
-  while (kept.length < CHANNEL_HISTORY_LIMIT) {
+  while (kept.length < UNCOMPACTED_HISTORY_LIMIT) {
     const page = await log.readPage(sessionId, { before, limit: CHANNEL_HISTORY_PAGE });
     kept.unshift(
       ...page.filter(
@@ -5405,7 +5427,7 @@ async function readRunHistory(
     if (page.length < CHANNEL_HISTORY_PAGE) break;
     before = page[0]!.id;
   }
-  return kept.slice(-CHANNEL_HISTORY_LIMIT);
+  return kept.slice(-UNCOMPACTED_HISTORY_LIMIT);
 }
 
 async function readEntriesOffChain(

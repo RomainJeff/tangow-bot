@@ -60,6 +60,9 @@ function fixture(
     clearSeq?: number;
     run?: Record<string, unknown>;
     source?: { role: string; blocks: unknown[] };
+    groupMembers?: Array<{ id: string; name: string }>;
+    compaction?: boolean;
+    model?: { provider: string; id: string };
   } = {},
 ) {
   const run = {
@@ -115,7 +118,20 @@ function fixture(
       updateMany: vi.fn(async () => ({ count: 1 })),
     },
     thread: {
-      findUniqueOrThrow: vi.fn(async () => ({ id: run.threadId, groupId: null })),
+      findUniqueOrThrow: vi.fn(async () =>
+        options.groupMembers
+          ? { id: run.threadId, botId: null, groupId: "group-1" }
+          : { id: run.threadId, botId: BOT, groupId: null },
+      ),
+    },
+    chatGroup: {
+      findUnique: vi.fn(async () => ({
+        name: "Launch",
+        description: "",
+        members: (options.groupMembers ?? []).map((member) => ({
+          bot: { ...member, title: "", description: "" },
+        })),
+      })),
     },
     message: {
       findUnique: vi.fn(async () => options.source ?? null),
@@ -130,8 +146,8 @@ function fixture(
     userModelCredential: { findFirst: vi.fn(async () => null) },
     deploymentSettings: {
       findUnique: vi.fn(async () => ({
-        defaultModelProvider: "scripted",
-        defaultModelId: "scripted",
+        defaultModelProvider: options.model?.provider ?? "scripted",
+        defaultModelId: options.model?.id ?? "scripted",
       })),
     },
     taughtSkill: { findMany: vi.fn(async () => []) },
@@ -157,10 +173,16 @@ function fixture(
   const runtimeRun = vi.fn(async function* (_request: AgentRunRequest) {
     yield { type: "done" as const, text: "Done" };
   });
+  const jobs = { enqueue: vi.fn(async (_job: unknown) => undefined) };
   const executor = createRunExecutor({
     sessionLog: log.sessionLog,
     prisma,
-    runtime: { describe: () => ({ capabilities: { scripted: false } }), run: runtimeRun },
+    runtime: {
+      describe: () => ({
+        capabilities: { scripted: false, compaction: options.compaction ?? false },
+      }),
+      run: runtimeRun,
+    },
     sandbox: { describe: () => ({ capabilities: { graphical: false } }) },
     memory: { read: async () => ({ documents: [] }) },
     memoryProviders: {
@@ -189,12 +211,13 @@ function fixture(
       pauseRunForInput: vi.fn(async () => true),
       finalizeRun: vi.fn(async () => ({ continuationRunId: null })),
     },
-    jobs: { enqueue: vi.fn(async () => undefined) },
+    jobs,
     secrets: [],
   } as unknown as Parameters<typeof createRunExecutor>[0]);
   return {
     log,
     recall,
+    jobs,
     async history() {
       await executor.continueRun(RUN, "worker-1");
       const [request] = runtimeRun.mock.calls[0]!;
@@ -369,5 +392,44 @@ describe("the history a run reads from its session log", () => {
     ]);
     expect(f.log.sessionLog.readTail).not.toHaveBeenCalled();
     expect(f.recall).not.toHaveBeenCalled();
+  });
+
+  it("reads at most 200 entries of a thread that can never compact, and the whole tail of one that can", async () => {
+    const group = fixture({ groupMembers: [{ id: BOT, name: "Assistant" }], compaction: true });
+    const own = fixture({ compaction: true });
+    const scriptedRuntime = fixture();
+
+    await Promise.all([group.history(), own.history(), scriptedRuntime.history()]);
+
+    expect(group.log.sessionLog.readTail.mock.calls).toEqual([["session-1", { maxEntries: 200 }]]);
+    expect(own.log.sessionLog.readTail.mock.calls).toEqual([
+      ["session-1", { maxEntries: undefined }],
+    ]);
+    expect(scriptedRuntime.log.sessionLog.readTail.mock.calls).toEqual([
+      ["session-1", { maxEntries: 200 }],
+    ]);
+  });
+
+  it("enqueues a compaction only for a bot's own thread with a real summarizer model", async () => {
+    const tail = chain(0, [said("x".repeat(100_000))]);
+    const model = { provider: "openai", id: "model-without-a-catalog-window" };
+    const own = fixture({ tail, compaction: true, model });
+    const group = fixture({
+      tail,
+      compaction: true,
+      model,
+      groupMembers: [{ id: BOT, name: "Assistant" }],
+    });
+    const scriptedModel = fixture({ tail, compaction: true });
+
+    await Promise.all([own.history(), group.history(), scriptedModel.history()]);
+
+    const compactions = (f: ReturnType<typeof fixture>) =>
+      f.jobs.enqueue.mock.calls
+        .map(([job]) => job as { name: string; payload: unknown })
+        .filter((job) => job.name === "history.compact");
+    expect(compactions(own)).toMatchObject([{ payload: { threadId: "thread-1" } }]);
+    expect(compactions(group)).toEqual([]);
+    expect(compactions(scriptedModel)).toEqual([]);
   });
 });
