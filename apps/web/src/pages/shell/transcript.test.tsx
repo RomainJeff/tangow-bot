@@ -183,6 +183,49 @@ describe("the transcript", () => {
     ).toEqual(["Find three competitors and summarize Acme's site"]);
   });
 
+  it("gives an approval card the hover pill a bot message has, replying to the card itself", async () => {
+    const onReply = vi.fn();
+    await renderThread(
+      [
+        ...fixture.slice(0, 2),
+        SessionEntrySchema.parse({
+          id: "fx-02",
+          sessionId: "ses_streamed",
+          seq: 2,
+          parentId: "str-01",
+          ts: "2026-10-10T09:00:02.000Z",
+          botId: "bot_ada",
+          runId: "run_str_1",
+          type: "effect.requested",
+          payload: {
+            effectId: "eff_1",
+            effectKind: "send_email",
+            proposal: {},
+            card: { kind: "ask", text: "Send the summary to Acme?" },
+          },
+        }),
+      ],
+      { onReply },
+    );
+
+    const row = document.querySelector('[data-message-id="fx-02"]');
+    expect(row?.querySelector('[data-testid="message-bubble-frame"]')).not.toBeNull();
+    const pill = row?.querySelector('[data-testid="message-hover-rail"]');
+    expect(
+      [...(pill?.querySelectorAll("button") ?? [])].map((button) =>
+        button.getAttribute("aria-label"),
+      ),
+    ).toEqual(["Reply", "React", "Copy"]);
+    expect(
+      pill?.querySelector('[data-testid="message-hover-time"]')?.getAttribute("datetime"),
+    ).toBe("2026-10-10T09:00:02.000Z");
+
+    await act(async () => pill?.querySelector<HTMLButtonElement>('[aria-label="Reply"]')?.click());
+    expect(onReply.mock.calls.map(([message]) => [message.id, message.blocks])).toEqual([
+      ["fx-02", [{ kind: "ask", text: "Send the summary to Acme?" }]],
+    ]);
+  });
+
   it("opens a finished helper's own session, read-only", async () => {
     await renderThread(9);
 

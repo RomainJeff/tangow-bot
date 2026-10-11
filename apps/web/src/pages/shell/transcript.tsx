@@ -1,6 +1,6 @@
 import { i18n } from "@lingui/core";
 import { useLingui } from "@lingui/react/macro";
-import type { MessageReaction } from "@rakazo/contracts";
+import type { MessageReaction, ThreadItem } from "@rakazo/contracts";
 import type { SkillSourceBlock, ThreadView } from "@rakazo/core";
 import { isToolActivityBlock, latestActivityLabel } from "@rakazo/core";
 import type { GroupAvatarMember } from "@rakazo/ui-web";
@@ -50,6 +50,21 @@ const LONG_PRESS_MOVE_TOLERANCE_PX = 10;
 const LONG_PRESS_BUBBLE_SELECTOR = '[data-slot="message-row-bubble"],[data-slot="user-bubble"]';
 const LONG_PRESS_EXCLUDED_SELECTOR =
   'button,[role="button"],[role="menuitem"],input,textarea,[contenteditable="true"],select';
+
+/** An approval card takes the actions of the bot message it was on main, keyed by its own entry. */
+function actionTarget(item: ThreadItem): MessageItem | null {
+  if (item.kind === "message") return item;
+  if (item.kind !== "effect" || !item.card || !item.botId) return null;
+  return {
+    kind: "message",
+    role: "bot",
+    id: item.id,
+    ts: item.ts,
+    botId: item.botId,
+    ...(item.runId ? { runId: item.runId } : {}),
+    blocks: [item.card],
+  };
+}
 
 export const Transcript = memo(function Transcript({
   scrollRef,
@@ -439,7 +454,7 @@ export const Transcript = memo(function Transcript({
         {rows.map((row, index) => {
           const { item } = row;
           const chrome = rowChrome(item, showSteps);
-          const message = item.kind === "message" ? item : null;
+          const message = actionTarget(item);
           const acts = message !== null && chrome === "row";
           const rewound = rewindFromIndex >= 0 && index >= rewindFromIndex;
           const previous = rows[index - 1];
