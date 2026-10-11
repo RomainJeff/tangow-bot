@@ -7,6 +7,7 @@ import { ActivityTab } from "../components/bot-page/activity-tab";
 import { BotHero, BotTabs } from "../components/bot-page/hero";
 import { LoadFailed, useFocusedRead } from "../components/bot-page/kit";
 import { KnowledgeTab } from "../components/bot-page/knowledge-tab";
+import { RoutinesTab } from "../components/bot-page/routines-tab";
 import { SettingsTab } from "../components/bot-page/settings-tab";
 import { NativeSymbol } from "../components/native-symbol";
 import { rpc } from "../lib/api";
@@ -20,8 +21,8 @@ import { presentMessageActionSheet } from "../lib/message-action-sheet";
 import { useMobileTokens, useResolvedAppearance } from "../lib/native";
 
 /**
- * The bot's page, pushed from its thread: who it is at the top, then Activity, Knowledge and
- * Settings. Every field saves itself. Opened as its settings (`tab`), it lands on Settings.
+ * The bot's page, pushed from its thread: who it is at the top, then Activity, Routines, Knowledge
+ * and Settings. Every field saves itself. Opened as its settings (`tab`), it lands on Settings.
  */
 export default function BotPageScreen() {
   const { botId = "", tab } = useLocalSearchParams<{ botId: string; tab?: string }>();
@@ -158,6 +159,17 @@ export default function BotPageScreen() {
                             pathname: "/bot-text",
                             params: { botId: page.bot.id, field: "instructions" },
                           })
+                  }
+                />
+              ) : view === "routines" ? (
+                <RoutinesTab
+                  page={page}
+                  epoch={epoch}
+                  onOpen={(routine) =>
+                    router.push({
+                      pathname: "/routine",
+                      params: { botId, botName: page.bot.name, routineId: routine.id },
+                    })
                   }
                 />
               ) : view === "knowledge" ? (

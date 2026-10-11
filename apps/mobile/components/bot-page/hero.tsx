@@ -136,6 +136,7 @@ export function BotTabs({
   const { t } = useI18n();
   const labels: Record<BotTab, string> = {
     activity: t("Activity"),
+    routines: t("Routines"),
     knowledge: t("Knowledge"),
     settings: t("Settings"),
   };
