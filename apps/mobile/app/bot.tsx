@@ -65,8 +65,8 @@ export default function BotPageScreen() {
     );
   }, [botId, epoch]);
   useFocusEffect(refresh);
-  const { routines } = useRoutines(botId, epoch);
-  const routineFailed = routines?.some(routineFailing) ?? false;
+  const routineList = useRoutines(botId, epoch);
+  const routineFailed = routineList.routines?.some(routineFailing) ?? false;
 
   const leave = () => {
     router.dismissAll();
@@ -157,7 +157,7 @@ export default function BotPageScreen() {
               ) : view === "routines" ? (
                 <RoutinesTab
                   page={page}
-                  epoch={epoch}
+                  list={routineList}
                   onOpen={(routine) =>
                     router.push({
                       pathname: "/bot-routine",
