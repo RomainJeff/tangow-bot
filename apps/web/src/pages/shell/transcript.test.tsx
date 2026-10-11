@@ -128,7 +128,7 @@ describe("the transcript", () => {
       [...document.querySelectorAll("[data-message-id]")].map((row) =>
         row.getAttribute("data-message-id"),
       ),
-    ).toEqual(["str-00", "str-02", "str-05", "str-08", "str-09", "str-17"]);
+    ).toEqual(["str-00", "str-05", "str-06", "str-08", "str-09", "str-17"]);
     expect(text('[data-testid="task-card"] span[dir="auto"]')).toEqual(["scout"]);
     expect(text('[data-testid="thread-divider"]')).toEqual(["Message edited"]);
     expect(text('[data-testid="message-user-bubble"]')).toEqual([
@@ -148,7 +148,7 @@ describe("the transcript", () => {
         .querySelector('[data-testid="run-waiting"]')
         ?.closest('[data-slot="message-row"]')
         ?.nextElementSibling?.getAttribute("data-message-id"),
-    ).toBe("str-02");
+    ).toBe("str-06");
   });
 
   it("draws nothing for an effect that carries no card", async () => {

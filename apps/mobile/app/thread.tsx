@@ -2068,6 +2068,17 @@ function Thread() {
               bots={mentionBots}
               members={snap?.members}
             />
+            {item.id === waiting?.itemId ? (
+              <Text
+                style={{
+                  marginBottom: 4,
+                  color: tokens.mutedForeground,
+                  ...nativeTextStyle("label"),
+                }}
+              >
+                {t("Needs input")}
+              </Text>
+            ) : null}
             {item.kind === "message" ? (
               renderMessage(row, item, isNew, options?.enableJump)
             ) : (
@@ -2085,17 +2096,6 @@ function Thread() {
                 onAnswer={answerCard}
               />
             )}
-            {item.id === waiting?.itemId ? (
-              <Text
-                style={{
-                  marginTop: 4,
-                  color: tokens.mutedForeground,
-                  ...nativeTextStyle("label"),
-                }}
-              >
-                {t("Needs input")}
-              </Text>
-            ) : null}
           </View>
         </View>
       </ThreadRowContext.Provider>
