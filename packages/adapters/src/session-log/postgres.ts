@@ -40,6 +40,7 @@ export class PostgresSessionLog implements SessionLog<Prisma.TransactionClient> 
   readPage(
     sessionId: SessionId,
     { before, limit }: { before?: EntryId; limit: number },
+    tx: Prisma.TransactionClient = this.prisma,
   ): Promise<SessionEntry[]> {
     assertEntryCount("limit", limit);
     const start =
@@ -48,13 +49,18 @@ export class PostgresSessionLog implements SessionLog<Prisma.TransactionClient> 
         : Prisma.sql`AND e.id = (
             SELECT "parentId" FROM session_entries WHERE id = ${before} AND "sessionId" = ${sessionId}
           )`;
-    return this.walk(sessionId, start, { stopAt: Prisma.sql`-1`, limit });
+    return this.walk(sessionId, start, { stopAt: Prisma.sql`-1`, limit }, tx);
   }
 
-  async readAround(sessionId: SessionId, entryId: EntryId, limit: number): Promise<SessionEntry[]> {
+  async readAround(
+    sessionId: SessionId,
+    entryId: EntryId,
+    limit: number,
+    tx: Prisma.TransactionClient = this.prisma,
+  ): Promise<SessionEntry[]> {
     assertEntryCount("limit", limit);
     const older = Math.floor(limit / 2);
-    const rows = await this.prisma.$queryRaw<SessionEntryRow[]>`
+    const rows = await tx.$queryRaw<SessionEntryRow[]>`
       WITH RECURSIVE chain AS (
         (SELECT e.id, e.seq, e."parentId", 0 AS depth,
             CASE WHEN e.id = ${entryId} THEN 0 END AS "targetDepth"
@@ -110,9 +116,10 @@ export class PostgresSessionLog implements SessionLog<Prisma.TransactionClient> 
     sessionId: SessionId,
     start: Prisma.Sql,
     { stopAt, limit }: { stopAt: Prisma.Sql; limit?: number },
+    tx: Prisma.TransactionClient = this.prisma,
   ): Promise<SessionEntry[]> {
     const underLimit = limit === undefined ? Prisma.empty : Prisma.sql`AND chain.depth < ${limit}`;
-    const rows = await this.prisma.$queryRaw<Array<SessionEntryRow & { missingParent: boolean }>>`
+    const rows = await tx.$queryRaw<Array<SessionEntryRow & { missingParent: boolean }>>`
       WITH RECURSIVE chain AS (
         (SELECT e.*, 1 AS depth, ${stopAt} AS "stopAt"
           FROM session_entries e WHERE e."sessionId" = ${sessionId} ${start})

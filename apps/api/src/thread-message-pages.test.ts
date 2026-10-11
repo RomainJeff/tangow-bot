@@ -100,7 +100,7 @@ describe("thread entry pages", () => {
       before: EntryId.parse("entry-2"),
     });
 
-    expect(held.sessionLog.readAround).toHaveBeenCalledWith(SESSION, "entry-1", 400);
+    expect(held.sessionLog.readAround).toHaveBeenCalledWith(SESSION, "entry-1", 400, held.prisma);
     expect(ids(jump.entries)).toEqual(["entry-0", "entry-1"]);
     expect(ids(fallback.entries)).toEqual(["entry-0", "entry-1", "entry-2"]);
   });

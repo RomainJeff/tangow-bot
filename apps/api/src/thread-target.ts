@@ -467,15 +467,17 @@ export async function threadHead(prisma: PrismaClient, target: ThreadTarget) {
 }
 
 /**
- * The tail page is read after the cursor, so an entry appended in between is either in the page
- * or after the cursor; clients merge entries by id.
+ * The cursor, the tail page and the progress to replay are read under the thread's share lock,
+ * which every append takes for update, so no entry lands between them and the replayed progress
+ * never repeats text the page already holds.
  */
 export async function threadSnapshot(
-  deps: { prisma: PrismaClient; sessionLog: Pick<SessionLog<unknown>, "readPage" | "readAround"> },
+  deps: {
+    prisma: PrismaClient;
+    sessionLog: Pick<SessionLog<Prisma.TransactionClient>, "readPage" | "readAround">;
+  },
   target: ThreadTarget,
 ): Promise<ThreadSnapshot> {
-  // Lock the thread row so the event cursor, the runs and the progress to replay are read from one
-  // consistent commit.
   if (target.kind === "bot") {
     const [busyBotName, core] = await Promise.all([
       resolveBusyBotName(deps.prisma, {
@@ -549,14 +551,15 @@ export async function threadSnapshot(
             ? [currentRun.id]
             : [],
         );
-        return { sessionId, last, run: currentRun, progress };
+        const page = await loadEntryPage(
+          { prisma: tx, sessionLog: deps.sessionLog },
+          { threadId: target.threadId, sessionId },
+          {},
+        );
+        return { last, run: currentRun, progress, page };
       }),
     ]);
-    const page = await loadEntryPage(
-      deps,
-      { threadId: target.threadId, sessionId: core.sessionId },
-      {},
-    );
+    const { page } = core;
     return {
       botId: target.botId,
       threadId: target.threadId,
@@ -609,19 +612,20 @@ export async function threadSnapshot(
       target.threadId,
       activeRuns.filter((run) => !isPeerRunRow(run)).map((run) => run.id),
     );
+    const page = await loadEntryPage(
+      { prisma: tx, sessionLog: deps.sessionLog },
+      { threadId: target.threadId, sessionId },
+      {},
+    );
     return {
-      sessionId,
       last,
       activeRuns,
       terminalRun: pickLatestTerminalRun(recentTerminals),
       progress,
+      page,
     };
   });
-  const page = await loadEntryPage(
-    deps,
-    { threadId: target.threadId, sessionId: core.sessionId },
-    {},
-  );
+  const { page } = core;
   const primaryActiveRun = pickPrimaryActiveRun(core.activeRuns);
   return {
     groupId: target.groupId,

@@ -159,7 +159,7 @@ describe("reaction messages", () => {
 });
 
 describe("threadSnapshot", () => {
-  it("serves the chain's tail and replays the open run's progress since its last entry", async () => {
+  it("serves the chain's tail and the open run's progress since its last entry from one commit", async () => {
     const run = {
       id: "run-1",
       botId: "bot-1",
@@ -196,8 +196,14 @@ describe("threadSnapshot", () => {
       event: { findFirst: vi.fn().mockResolvedValue({ seq: 5 }) },
       run: { findFirst: botRunFindFirst([run]) },
     };
+    let committed = false;
     const prisma = {
-      $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
+      $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => {
+        const result = await callback(tx);
+        committed = true;
+        return result;
+      }),
+      run: { findMany: vi.fn(async () => []) },
     } as unknown as PrismaClient;
     const target = {
       kind: "bot",
@@ -214,11 +220,24 @@ describe("threadSnapshot", () => {
       type: "user.message",
       payload: { blocks: [{ kind: "text", text: "Find the invoice" }], source: "app" },
     });
-    const sessionLog = tailOf([question]);
+    const landedAfterCommit = SessionEntrySchema.parse({
+      id: "entry-8",
+      sessionId: "session-1",
+      seq: 8,
+      parentId: "entry-7",
+      ts: "2026-08-23T00:00:03.000Z",
+      botId: "bot-1",
+      runId: "run-1",
+      type: "assistant.text",
+      payload: { blocks: [{ kind: "text", text: "Looking it up" }] },
+    });
+    const sessionLog = {
+      readPage: vi.fn(async () => (committed ? [question, landedAfterCommit] : [question])),
+      readAround: vi.fn(async () => []),
+    };
 
     const snapshot = await threadSnapshot({ prisma, sessionLog }, target);
 
-    expect(sessionLog.readPage).toHaveBeenCalledWith("session-1", { limit: 400 });
     expect({
       cursor: snapshot.cursor,
       entries: snapshot.entries,

@@ -426,6 +426,24 @@ export function runSessionLogConformance<Tx>(makeLog: () => Promise<SessionLogHa
       await expect(around(e0!, 0)).rejects.toThrow(RangeError);
     });
 
+    it("reads a page and around an entry inside the transaction it is given", async () => {
+      const { sessionId } = await created();
+      const kept = await append(said(sessionId, "kept"));
+
+      const read = await harness.transaction(async (tx) => {
+        await harness.log.append(tx, { ...said(sessionId, "same transaction"), feedBotId: BOT });
+        return [
+          (await harness.log.readPage(sessionId, { limit: 10 }, tx)).map(textOf),
+          (await harness.log.readAround(sessionId, kept.id, 10, tx)).map(textOf),
+        ];
+      });
+
+      expect(read).toEqual([
+        ["kept", "same transaction"],
+        ["kept", "same transaction"],
+      ]);
+    });
+
     it("keeps one entry for a redelivered clientNonce", async () => {
       const { sessionId } = await created();
       const received = (text: string): SessionEntryDraft => ({
