@@ -1,13 +1,12 @@
-import type { Routine } from "@rakazo/contracts";
 import { routineFailing } from "@rakazo/core";
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useRef, useState, useSyncExternalStore } from "react";
 import { Alert, Keyboard, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { ActivityTab } from "../components/bot-page/activity-tab";
 import { BotHero, BotTabs } from "../components/bot-page/hero";
-import { LoadFailed, useFocusedRead } from "../components/bot-page/kit";
+import { LoadFailed } from "../components/bot-page/kit";
 import { KnowledgeTab } from "../components/bot-page/knowledge-tab";
-import { RoutinesTab } from "../components/bot-page/routines-tab";
+import { RoutinesTab, useRoutines } from "../components/bot-page/routines-tab";
 import { SettingsTab } from "../components/bot-page/settings-tab";
 import { NativeSymbol } from "../components/native-symbol";
 import { rpc } from "../lib/api";
@@ -62,8 +61,8 @@ export default function BotPageScreen() {
     );
   }, [botId, epoch]);
   useFocusEffect(refresh);
-  const routines = useFocusedRead(() => rpc<Routine[]>("routines/list", { botId }), [botId, epoch]);
-  const routineFailed = routines.read.kind === "ready" && routines.read.value.some(routineFailing);
+  const { routines } = useRoutines(botId, epoch);
+  const routineFailed = routines?.some(routineFailing) ?? false;
 
   const leave = () => {
     router.dismissAll();
@@ -147,8 +146,8 @@ export default function BotPageScreen() {
                       ? undefined
                       : (routineId) =>
                           router.push({
-                            pathname: "/routine",
-                            params: { botId: page.bot.id, botName: page.bot.name, routineId },
+                            pathname: "/bot-routine",
+                            params: { botId: page.bot.id, routineId },
                           })
                   }
                   onWriteInstructions={
