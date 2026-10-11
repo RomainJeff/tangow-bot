@@ -57,7 +57,7 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
   - [ ] SL4b after SL4.
   - [ ] SL5 after SL4b.
   - [ ] SL6 after SL5.
-- [ ] Hold the file boundaries. SL1 touches only `packages/contracts/` and `packages/core/`. SL2 touches only `packages/db/`, `packages/adapter-kit/` and `packages/adapters/src/session-log/`. SL3, SL4 and SL4b touch `packages/adapters/`, `apps/api/src/`, `apps/worker/src/`. SL5 touches `apps/api/src/`, `apps/web/src/`, `apps/mobile/`. SL6 touches `packages/db/`, `scripts/`, `CHANGELOG.md`, and deletes.
+- [ ] Hold the file boundaries. SL1 touches only `packages/contracts/` and `packages/core/`. SL2 touches only `packages/db/`, `packages/adapter-kit/` and `packages/adapters/src/session-log/`. SL3, SL4 and SL4b touch `packages/adapters/`, `apps/api/src/`, `apps/worker/src/`. SL5 touches `apps/api/src/`, `apps/web/src/`, `apps/mobile/`, and the contract, core, port and writer files its Files block names for the four annotation types, `readAround` and the projection chain. SL6 touches `packages/db/`, `scripts/`, `CHANGELOG.md`, and deletes.
 - [ ] Hold the review gate. SL5 changes an interaction. It waits for the operator's review in chat with screenshots and a video before merge.
 
 ### PR mechanics, for every PR
