@@ -151,6 +151,7 @@ function fixture(
     task: {
       findUniqueOrThrow: vi.fn(async () => ({ id: run.taskId, prompt: "What did Ava decide?" })),
     },
+    routine: { findUnique: vi.fn(async () => null) },
     connection: { findMany: vi.fn(async () => []) },
     spaceModelPreference: { findFirst: vi.fn(async () => null) },
     userModelCredential: { findFirst: vi.fn(async () => null) },
