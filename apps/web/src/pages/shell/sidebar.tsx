@@ -153,7 +153,7 @@ export function BotsSidebar({
   inGroup: boolean;
   active: Bot | undefined;
   activeGroup: Group | undefined;
-  activeSnapshot: ThreadSnapshot | null;
+  activeSnapshot: Pick<ThreadSnapshot, "groupId" | "groupName" | "members"> | null;
   initials: string;
   userImage: string | null;
   archivedBots: Bot[];

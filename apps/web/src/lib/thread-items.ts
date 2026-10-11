@@ -1,4 +1,5 @@
-import type { SessionId, ThreadItem } from "@rakazo/contracts";
+import type { ProductEvent, SessionEntryOf, SessionId, ThreadItem } from "@rakazo/contracts";
+import { appendedEntries } from "@rakazo/core";
 
 export type ItemOf<K extends ThreadItem["kind"]> = Extract<ThreadItem, { kind: K }>;
 export type MessageItem = ItemOf<"message">;
@@ -13,6 +14,14 @@ export type SessionViewTarget =
 
 export function botIdOf(item: MessageItem): string | undefined {
   return item.role === "bot" ? item.botId : undefined;
+}
+
+/** The bot's words an event appended: its `assistant.text` and `bot.text` entries. */
+export function botWordsOf(event: ProductEvent): SessionEntryOf<"assistant.text" | "bot.text">[] {
+  return appendedEntries(event).filter(
+    (entry): entry is SessionEntryOf<"assistant.text" | "bot.text"> =>
+      entry.type === "assistant.text" || entry.type === "bot.text",
+  );
 }
 
 export function isLiveItem(item: ThreadItem): boolean {
