@@ -1,16 +1,21 @@
 import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
-import type { Prisma } from "./client.js";
+import { Prisma } from "./client.js";
 import { appendRunFinishedInTransaction } from "./sessions.js";
 
 /**
  * Close the logs of runs about to be cancelled. It goes before the status flips: the log takes no
- * entry for a cancelled run.
+ * entry for a cancelled run. The runs' threads lock first, in id order, so two cancels that share
+ * threads cannot deadlock.
  */
 export async function logCancelledRunsInTransaction(
   tx: Prisma.TransactionClient,
   runIds: readonly string[],
   by?: string,
 ): Promise<void> {
+  if (runIds.length === 0) return;
+  await tx.$queryRaw`
+    SELECT id FROM threads WHERE id IN (SELECT "threadId" FROM runs WHERE id IN (${Prisma.join(runIds)}))
+    ORDER BY id FOR UPDATE`;
   for (const runId of runIds) {
     await appendRunFinishedInTransaction(tx, runId, { status: "cancelled", by });
   }

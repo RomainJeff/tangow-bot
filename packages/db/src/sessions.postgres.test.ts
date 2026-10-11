@@ -230,6 +230,40 @@ describePostgres("appendSessionEntryInTransaction under contention (PostgreSQL)"
     ]);
   });
 
+  it("locks the threads of the runs it cancels in id order", async () => {
+    const [low, high] = [await startedRun(), await startedRun()].sort((a, b) =>
+      a.threadId < b.threadId ? -1 : 1,
+    );
+    let locked!: () => void;
+    let release!: () => void;
+    const holding = new Promise<void>((resolve) => {
+      locked = resolve;
+    });
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const holder = prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM threads WHERE id = ${low!.threadId} FOR UPDATE`;
+      locked();
+      await released;
+    }, TRANSACTION);
+    await holding;
+    const cancel = prisma.$transaction(
+      (tx) => logCancelledRunsInTransaction(tx, [high!.runId, low!.runId], id),
+      TRANSACTION,
+    );
+    await waitForLockWaiter();
+    const probe = await prisma.$queryRaw`
+      SELECT id FROM threads WHERE id = ${high!.threadId} FOR UPDATE NOWAIT`.then(
+      () => "free",
+      (error: unknown) => String(error),
+    );
+    release();
+    await Promise.all([holder, cancel]);
+
+    expect(probe).toBe("free");
+  });
+
   it("keeps a run that finished between a canceller's read and its cancel", async () => {
     const { threadId, runId, taskId } = await startedRun();
     const read = [{ id: runId, taskId }];
