@@ -16,6 +16,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - A bot can no longer rename a skill, on web, desktop and iPhone; only you rename it, from its settings.
 
+#### Fixed
+
+- A bot asked to create another bot now shows the approval card even when it leaves the new bot's computer mode unset, instead of failing with a validation error and never offering the card.
+
 ### 2026-10-10
 
 #### Added
