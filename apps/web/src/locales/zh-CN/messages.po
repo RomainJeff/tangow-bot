@@ -38,12 +38,12 @@ msgid "{0, plural, one {# run} other {# runs}}"
 msgstr ""
 
 #. placeholder {0}: file.name
-#: src/pages/Shell.tsx:1908
+#: src/pages/Shell.tsx:1910
 msgid "{0} (max {ATTACHMENT_MAX_COUNT} attachments)"
 msgstr "{0}（最多 {ATTACHMENT_MAX_COUNT} 个附件）"
 
 #. placeholder {0}: file.name
-#: src/pages/Shell.tsx:1912
+#: src/pages/Shell.tsx:1914
 msgid "{0} (over 10 MiB)"
 msgstr "{0}（超过 10 MiB）"
 
@@ -135,7 +135,7 @@ msgid "{days}d ago"
 msgstr "{days} 天前"
 
 #: src/pages/shell/message-view.tsx:363
-#: src/pages/shell/thread-row.tsx:370
+#: src/pages/shell/thread-row.tsx:372
 msgid "{from} handed the thread to {to}"
 msgstr ""
 
@@ -143,7 +143,7 @@ msgstr ""
 msgid "{hours}h ago"
 msgstr "{hours} 小时前"
 
-#: src/pages/shell/thread-row.tsx:289
+#: src/pages/shell/thread-row.tsx:291
 msgid "{input} tokens in · {output} out"
 msgstr ""
 
@@ -260,12 +260,12 @@ msgstr "操作确认"
 #. placeholder {0}: sectionMenu.section.name
 #: src/pages/bot-page/BotPage.tsx:343
 #: src/pages/BotContextMenu.tsx:86
-#: src/pages/Shell.tsx:3233
+#: src/pages/Shell.tsx:3235
 #: src/pages/shell/sidebar.tsx:410
 msgid "Actions for {0}"
 msgstr "{0} 的操作"
 
-#: src/pages/Shell.tsx:3107
+#: src/pages/Shell.tsx:3109
 msgid "Actions for space"
 msgstr ""
 
@@ -574,7 +574,7 @@ msgstr "请在聊天中批准，或说“不”以取消。"
 msgid "Approve this server to let your agent use its tools."
 msgstr "批准此服务器后，Agent 才能使用它的工具。"
 
-#: src/pages/shell/thread-row.tsx:428
+#: src/pages/shell/thread-row.tsx:465
 msgid "Approved"
 msgstr ""
 
@@ -736,13 +736,13 @@ msgstr "正在启动 {0} 的电脑"
 #: src/pages/shell/message-view.tsx:351
 #: src/pages/shell/message-view.tsx:352
 #: src/pages/shell/message-view.tsx:443
-#: src/pages/shell/thread-row.tsx:361
-#: src/pages/shell/thread-row.tsx:362
+#: src/pages/shell/thread-row.tsx:363
+#: src/pages/shell/thread-row.tsx:364
 msgid "bot"
 msgstr "Bot"
 
 #: src/pages/IntegrationSetup.tsx:51
-#: src/pages/Shell.tsx:1674
+#: src/pages/Shell.tsx:1673
 #: src/pages/shell/message-view.tsx:241
 msgid "Bot"
 msgstr "Bot"
@@ -760,7 +760,7 @@ msgstr "Bot 屏幕"
 msgid "Bot screen preview"
 msgstr "Bot 屏幕预览"
 
-#: src/pages/Shell.tsx:3044
+#: src/pages/Shell.tsx:3046
 #: src/pages/shell/composer.tsx:1173
 #: src/pages/shell/thread-header.tsx:154
 #: src/pages/shell/thread-header.tsx:155
@@ -839,7 +839,7 @@ msgstr "取消回复"
 #: src/pages/ActivityList.tsx:162
 #: src/pages/bot-page/BotActivity.tsx:306
 #: src/pages/shell/routine-run-line.tsx:125
-#: src/pages/shell/thread-row.tsx:261
+#: src/pages/shell/thread-row.tsx:263
 msgid "Cancelled"
 msgstr "已取消"
 
@@ -994,7 +994,7 @@ msgstr "关闭消息设置"
 msgid "Close model settings"
 msgstr "关闭模型设置"
 
-#: src/pages/Shell.tsx:2695
+#: src/pages/Shell.tsx:2697
 msgid "Close navigation"
 msgstr "关闭导航"
 
@@ -1048,7 +1048,7 @@ msgstr "完成"
 
 #: src/pages/shell/routine-run-line.tsx:122
 #: src/pages/shell/routine-run-line.tsx:250
-#: src/pages/shell/thread-row.tsx:258
+#: src/pages/shell/thread-row.tsx:260
 msgid "Completed"
 msgstr ""
 
@@ -1212,7 +1212,7 @@ msgstr ""
 msgid "Continue with email"
 msgstr "使用邮箱继续"
 
-#: src/pages/shell/thread-row.tsx:413
+#: src/pages/shell/thread-row.tsx:450
 msgid "Conversation cleared"
 msgstr ""
 
@@ -1304,13 +1304,13 @@ msgstr "无法连接此提供方"
 msgid "Could not connect this voice provider"
 msgstr "无法连接此语音提供方"
 
-#: src/pages/Shell.tsx:862
-#: src/pages/Shell.tsx:2529
+#: src/pages/Shell.tsx:864
+#: src/pages/Shell.tsx:2531
 msgid "Could not connect to the computer screen"
 msgstr "无法连接到电脑屏幕"
 
 #: src/pages/Auth.tsx:101
-#: src/pages/Shell.tsx:2503
+#: src/pages/Shell.tsx:2505
 msgid "Could not continue"
 msgstr "无法继续"
 
@@ -1611,7 +1611,7 @@ msgstr ""
 msgid "Could not submit this answer"
 msgstr "无法提交此回答"
 
-#: src/pages/Shell.tsx:2356
+#: src/pages/Shell.tsx:2358
 msgid "Could not take control"
 msgstr "无法接管"
 
@@ -1632,7 +1632,7 @@ msgstr "无法更新电脑"
 msgid "Could not update plugin"
 msgstr "无法更新插件"
 
-#: src/pages/Shell.tsx:1894
+#: src/pages/Shell.tsx:1896
 msgid "Could not update reaction"
 msgstr "无法更新反应"
 
@@ -1689,7 +1689,7 @@ msgstr "创建 Bot？"
 msgid "Create group"
 msgstr "创建群组"
 
-#: src/pages/Shell.tsx:2844
+#: src/pages/Shell.tsx:2846
 #: src/pages/shell/bot-picker.tsx:74
 msgid "Create new Bot"
 msgstr "新建 Bot"
@@ -1837,7 +1837,7 @@ msgstr "同时删除记忆"
 msgid "Delete routine"
 msgstr "删除例行任务"
 
-#: src/pages/Shell.tsx:3121
+#: src/pages/Shell.tsx:3123
 msgid "Delete space"
 msgstr ""
 
@@ -1852,7 +1852,7 @@ msgid "Deleting…"
 msgstr "正在删除…"
 
 #: src/components/AskCard.tsx:51
-#: src/pages/shell/thread-row.tsx:428
+#: src/pages/shell/thread-row.tsx:465
 msgid "Denied"
 msgstr "已拒绝"
 
@@ -2000,7 +2000,7 @@ msgstr "复制"
 msgid "Earlier message"
 msgstr "更早的消息"
 
-#: src/pages/shell/thread-row.tsx:410
+#: src/pages/shell/thread-row.tsx:447
 msgid "Earlier messages summarized"
 msgstr ""
 
@@ -2017,7 +2017,7 @@ msgstr "编辑并重新发送"
 msgid "Edit first"
 msgstr "先编辑"
 
-#: src/pages/Shell.tsx:3044
+#: src/pages/Shell.tsx:3046
 msgid "Edit Profile"
 msgstr "编辑资料"
 
@@ -2130,7 +2130,7 @@ msgstr "极高"
 #: src/pages/bot-page/BotActivity.tsx:305
 #: src/pages/bot-page/routine-copy.ts:63
 #: src/pages/shell/routine-run-line.tsx:124
-#: src/pages/shell/thread-row.tsx:260
+#: src/pages/shell/thread-row.tsx:262
 msgid "Failed"
 msgstr "失败"
 
@@ -2138,14 +2138,14 @@ msgstr "失败"
 msgid "Failed {when}"
 msgstr "{when}失败"
 
-#: src/pages/Shell.tsx:2096
 #: src/pages/Shell.tsx:2098
 #: src/pages/Shell.tsx:2100
+#: src/pages/Shell.tsx:2102
 msgid "Failed to send message"
 msgstr "发送消息失败"
 
-#: src/pages/Shell.tsx:2156
-#: src/pages/Shell.tsx:2175
+#: src/pages/Shell.tsx:2158
+#: src/pages/Shell.tsx:2177
 msgid "Failed to stop"
 msgstr "停止失败"
 
@@ -2210,6 +2210,10 @@ msgstr "免费"
 #: src/pages/WindowChrome.tsx:33
 msgid "Fullscreen"
 msgstr "全屏"
+
+#: src/pages/shell/thread-row.tsx:398
+msgid "FYI"
+msgstr "供参考"
 
 #: src/pages/SettingsOverlay.tsx:98
 #: src/pages/SettingsOverlay.tsx:110
@@ -2697,7 +2701,7 @@ msgstr ""
 msgid "Message composer"
 msgstr "消息输入框"
 
-#: src/pages/shell/thread-row.tsx:412
+#: src/pages/shell/thread-row.tsx:449
 msgid "Message edited"
 msgstr ""
 
@@ -2706,7 +2710,8 @@ msgid "Message event"
 msgstr ""
 
 #: src/pages/shell/message-view.tsx:375
-#: src/pages/shell/thread-row.tsx:391
+#: src/pages/shell/thread-row.tsx:400
+#: src/pages/shell/thread-row.tsx:440
 msgid "Message from {peer}"
 msgstr "来自 {peer} 的消息"
 
@@ -2715,8 +2720,9 @@ msgid "Message…"
 msgstr "消息…"
 
 #: src/pages/shell/message-view.tsx:375
-#: src/pages/shell/thread-row.tsx:338
-#: src/pages/shell/thread-row.tsx:391
+#: src/pages/shell/thread-row.tsx:340
+#: src/pages/shell/thread-row.tsx:400
+#: src/pages/shell/thread-row.tsx:440
 msgid "Messaged {peer}"
 msgstr "已发给 {peer}"
 
@@ -3128,7 +3134,7 @@ msgstr "每月 1 日 {0}"
 msgid "One-time"
 msgstr "一次性"
 
-#: src/pages/Shell.tsx:3159
+#: src/pages/Shell.tsx:3161
 msgid "Only empty spaces can be deleted. Delete its bots and groups first."
 msgstr ""
 
@@ -3335,6 +3341,10 @@ msgstr "提供方"
 msgid "Providers"
 msgstr "提供方"
 
+#: src/pages/shell/thread-row.tsx:396
+msgid "Question"
+msgstr "问题"
+
 #: src/pages/ActivityList.tsx:148
 msgid "Queued"
 msgstr "排队中"
@@ -3525,7 +3535,7 @@ msgid "Removing…"
 msgstr "正在移除…"
 
 #: src/pages/BotContextMenu.tsx:121
-#: src/pages/Shell.tsx:3248
+#: src/pages/Shell.tsx:3250
 #: src/pages/shell/dialogs.tsx:246
 msgid "Rename section"
 msgstr ""
@@ -3562,6 +3572,10 @@ msgstr "正在回复 {replyName}"
 #: src/pages/shell/routine-run-line.tsx:189
 msgid "Report, {0} · Opens in full"
 msgstr ""
+
+#: src/pages/shell/thread-row.tsx:394
+msgid "Request"
+msgstr "请求"
 
 #: src/components/ComputerMaintenanceActions.tsx:105
 msgid "Reset"
@@ -3611,9 +3625,13 @@ msgstr "恢复未保存的文本"
 msgid "Restoring your workspace"
 msgstr ""
 
+#: src/pages/shell/thread-row.tsx:395
+msgid "Result"
+msgstr "结果"
+
 #: src/pages/bot-page/page-kit.tsx:53
 #: src/pages/bot-page/page-kit.tsx:89
-#: src/pages/shell/thread-row.tsx:268
+#: src/pages/shell/thread-row.tsx:270
 msgid "Retry"
 msgstr "重试"
 
@@ -3623,7 +3641,7 @@ msgstr "重试"
 msgid "Retry now"
 msgstr "立即重试"
 
-#: src/pages/Shell.tsx:2536
+#: src/pages/Shell.tsx:2538
 msgid "Retry screen"
 msgstr "重试屏幕"
 
@@ -3662,7 +3680,7 @@ msgstr ""
 
 #: src/pages/bot-page/BotActivity.tsx:312
 #: src/pages/bot-page/RoutineCreateForm.tsx:44
-#: src/pages/shell/thread-row.tsx:491
+#: src/pages/shell/thread-row.tsx:528
 msgid "Routine"
 msgstr "例行任务"
 
@@ -3694,7 +3712,7 @@ msgstr "运行时间必须是将来的时间。"
 #: src/pages/ActivityList.tsx:152
 #: src/pages/bot-page/BotActivity.tsx:307
 #: src/pages/shell/routine-run-line.tsx:120
-#: src/pages/shell/thread-row.tsx:256
+#: src/pages/shell/thread-row.tsx:258
 msgid "Running"
 msgstr "运行中"
 
@@ -4002,7 +4020,7 @@ msgid "Skipped"
 msgstr ""
 
 #. placeholder {0}: skipped.join(", ")
-#: src/pages/Shell.tsx:1928
+#: src/pages/Shell.tsx:1930
 msgid "Skipped {0}"
 msgstr "已跳过 {0}"
 
@@ -4055,6 +4073,10 @@ msgstr "正在开始"
 msgid "Starting…"
 msgstr "正在开始…"
 
+#: src/pages/shell/thread-row.tsx:397
+msgid "Status"
+msgstr "状态"
+
 #: src/components/teach/SkillDraftCard.tsx:100
 msgid "Steps"
 msgstr "步骤"
@@ -4089,8 +4111,8 @@ msgstr "已加密存储"
 msgid "Stored securely. Never shown here."
 msgstr "已安全存储。不会显示在这里。"
 
-#: src/pages/shell/thread-row.tsx:306
-#: src/pages/shell/thread-row.tsx:491
+#: src/pages/shell/thread-row.tsx:308
+#: src/pages/shell/thread-row.tsx:528
 msgid "subagent"
 msgstr "子 Agent"
 
@@ -4127,7 +4149,7 @@ msgstr "系统"
 msgid "Teach a task"
 msgstr "示范任务"
 
-#: src/pages/Shell.tsx:2884
+#: src/pages/Shell.tsx:2886
 msgid "Teaching in progress. Stop teaching before sending a new message."
 msgstr "正在示范，发送新消息前请先停止示范。"
 
@@ -4304,7 +4326,7 @@ msgid "Unpin"
 msgstr "取消置顶"
 
 #. placeholder {0}: pending.file.name
-#: src/pages/Shell.tsx:2015
+#: src/pages/Shell.tsx:2017
 msgid "Unsupported file type: {0}"
 msgstr "不支持的文件类型：{0}"
 
@@ -4438,7 +4460,7 @@ msgid "Waiting…"
 msgstr "等待中…"
 
 #: src/pages/bot-page/RoutineTriggers.tsx:136
-#: src/pages/shell/thread-row.tsx:266
+#: src/pages/shell/thread-row.tsx:268
 msgid "Webhook"
 msgstr "Webhook"
 
@@ -4525,8 +4547,8 @@ msgstr "每年{date} {time}"
 msgid "Yesterday"
 msgstr "昨天"
 
-#: src/pages/Shell.tsx:1673
-#: src/pages/Shell.tsx:2560
+#: src/pages/Shell.tsx:1672
+#: src/pages/Shell.tsx:2562
 msgid "You"
 msgstr "你"
 

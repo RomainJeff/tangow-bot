@@ -180,6 +180,7 @@ import {
   confirmClearConversation,
   confirmDeleteBot,
 } from "../lib/bot-lifecycle";
+import { botMessageCard } from "../lib/bot-message-card";
 import { noteBotRunEnded } from "../lib/bot-page-state";
 import { CHAT_MOTION, useChatReducedMotion } from "../lib/chat-motion";
 import { cancelFocusPrompt, focusPromptThreadActive } from "../lib/focus-prompt";
@@ -216,6 +217,7 @@ import {
 } from "../lib/pick-attachments";
 import { reactionPopKey, useReactionPops } from "../lib/reaction-pop";
 import { threadRefreshDelayMs } from "../lib/refresh";
+import { isViewedRunLine } from "../lib/session-sheet";
 import { closeSheet, openSheet } from "../lib/sheet";
 import type { SpawnBotEdits } from "../lib/spawn-bot-edit";
 import { openSpawnBotEdit, syncSpawnBotEdit } from "../lib/spawn-bot-edit";
@@ -3923,7 +3925,7 @@ function ApprovalCard({
 const NO_ACTIONS: MessageActionProps = { onLongPress: () => {} };
 
 /** A session a row opens in its sheet: the helper's or the routine's own story. */
-type OpenedSession = { title: string; load: () => Promise<SessionEntry[]> };
+type OpenedSession = { title: string; load: () => Promise<SessionEntry[]>; runId?: string };
 
 /**
  * Every row that is not a message: a run, a helper, a routine, the bots messaging each other, a
@@ -4042,6 +4044,7 @@ const ItemRow = memo(function ItemRow({
         const openRun = (run: RoutineLineRun) =>
           setSession({
             title: run.item.name,
+            runId: run.item.runId,
             load: () =>
               rpc<{ entries: SessionEntry[] }>("runs/entries", { runId: run.item.runId }).then(
                 (result) => result.entries,
@@ -4064,9 +4067,8 @@ const ItemRow = memo(function ItemRow({
         const sent = item.direction === "sent";
         const ownBotId = sent ? item.botId : botId;
         const peerBotId = item.peer.kind === "bot" ? item.peer.botId : undefined;
-        const label = sent
-          ? t("Messaged {peer}", { peer: item.peer.name })
-          : t("Message from {peer}", { peer: item.peer.name });
+        const card = botMessageCard(item);
+        const peerThread = readOnly ? null : card.peerThread;
         const pair = sent ? [ownBotId, peerBotId] : [peerBotId, ownBotId];
         // 7f: a brand-new marker's two bloubs glance at each other once — the
         // first item (rendered on the left by `StackedAvatars`) looks right,
@@ -4079,16 +4081,25 @@ const ItemRow = memo(function ItemRow({
         // view-only exchange opens on its own screen.
         return (
           <Interstitial
-            accessibilityLabel={label}
+            accessibilityLabel={card.label}
             avatars={<StackedAvatars items={pairItems} size={sizes.interstitial} still />}
             hitSlop={{ top: 5, bottom: 5, left: 8, right: 8 }}
+            style={card.muted ? { opacity: 0.6 } : undefined}
             onPress={
               openPeerMessages && peerBotId
                 ? () => openPeerMessages(ownBotId, peerBotId, item.peer.name)
                 : undefined
             }
           >
-            {label}
+            {card.before}
+            {peerThread ? (
+              <Text accessibilityRole="link" onPress={() => router.push(peerThread)}>
+                {card.peer}
+              </Text>
+            ) : (
+              card.peer
+            )}
+            {card.after}
           </Interstitial>
         );
       }
@@ -4291,10 +4302,12 @@ function SessionSheet({
   const rows = useMemo(
     () =>
       Array.isArray(entries)
-        ? projectThreadView(entries, { rendersNothing: (item) => drawsNothing(item, showSteps) })
-            .rows
+        ? projectThreadView(entries, {
+            rendersNothing: (item) =>
+              drawsNothing(item, showSteps) || isViewedRunLine(item, session.runId),
+          }).rows
         : [],
-    [entries, showSteps],
+    [entries, showSteps, session.runId],
   );
   return (
     <PreviewSheet title={session.title} onClose={onClose}>

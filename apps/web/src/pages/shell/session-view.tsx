@@ -53,10 +53,13 @@ export function SessionView({
     () =>
       read.entries
         ? projectThreadView(read.entries, {
-            rendersNothing: (item) => drawsNothing(item, showSteps),
+            // A run's entries carry its own routine.started, which would draw the run inside itself.
+            rendersNothing: (item) =>
+              drawsNothing(item, showSteps) ||
+              (item.kind === "routine" && current.kind === "run" && item.runId === current.runId),
           })
         : null,
-    [read.entries, showSteps],
+    [read.entries, showSteps, current],
   );
   const rowContext = useMemo<RowContext>(() => {
     const items = new Map(view?.rows.map((row) => [row.item.id, row.item]));
