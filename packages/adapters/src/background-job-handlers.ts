@@ -111,6 +111,7 @@ export function createBackgroundJobHandlers(deps: {
           ...(deps.executor.resolveModel ? { resolveModel: deps.executor.resolveModel } : {}),
         },
         payload.threadId,
+        payload.historyBudget,
       );
     },
   };

@@ -22,26 +22,11 @@ import type {
   MemoryProviderResolver,
 } from "./memory-provider-factory.js";
 
-/** How many turns past the last compaction start the next one. */
-export const COMPACTION_BATCH_SIZE = 50;
-/** How many of the latest turns a compaction keeps word for word after its summary. */
-export const HISTORY_WINDOW_SIZE = 50;
 export const MAX_COMPACTED_SUMMARY_CHARS = 20_000;
 /** How many turns a run keeps when its model's context window is unknown. */
 export const HISTORY_COUNT_WINDOW = 200;
 /** How many semantic memories can be injected into one run. */
 export const MAX_RECALLED_MEMORIES = 5;
-
-/**
- * Compact once the turns after the last compaction reach a batch, or fill the recent-token budget
- * first, as a thread of pasted logs does long before it reaches the count.
- */
-export function shouldEnqueueCompaction(turns: readonly SizedHistoryMessage[]): boolean {
-  return (
-    turns.length >= COMPACTION_BATCH_SIZE ||
-    estimateHistoryTokens(turns) > DEFAULT_COMPACTION_SETTINGS.keepRecentTokens
-  );
-}
 
 /**
  * Fallback cost of everything that shares the context window with the conversation: the bot's
@@ -50,6 +35,42 @@ export function shouldEnqueueCompaction(turns: readonly SizedHistoryMessage[]): 
  * yet.
  */
 export const NON_HISTORY_TOKEN_ESTIMATE = 12_000;
+
+/**
+ * The tokens a run's history may fill: the model's context window less the reply reserve and the
+ * rest of the request, never under pi's recent-token floor. Undefined when the window is unknown.
+ */
+export function historyBudgetTokens(
+  contextWindow: number | undefined,
+  nonHistoryTokens = NON_HISTORY_TOKEN_ESTIMATE,
+): number | undefined {
+  if (!contextWindow || contextWindow <= 0) return undefined;
+  return Math.max(
+    DEFAULT_COMPACTION_SETTINGS.keepRecentTokens,
+    contextWindow - DEFAULT_COMPACTION_SETTINGS.reserveTokens - nonHistoryTokens,
+  );
+}
+
+/**
+ * Compact once the turns after what the last compaction covers pass half the history budget, so
+ * they never crowd the window. Without a known window, past pi's recent-token budget.
+ */
+export function shouldEnqueueCompaction(
+  turns: readonly SizedHistoryMessage[],
+  historyBudget: number | undefined,
+): boolean {
+  return (
+    estimateHistoryTokens(turns) >
+    (historyBudget === undefined ? DEFAULT_COMPACTION_SETTINGS.keepRecentTokens : historyBudget / 2)
+  );
+}
+
+/** What a compaction keeps word for word: a quarter of the history budget, half the trigger. */
+function keptWindowTokens(historyBudget: number | undefined): number {
+  return historyBudget === undefined
+    ? DEFAULT_COMPACTION_SETTINGS.keepRecentTokens / 2
+    : historyBudget / 4;
+}
 
 /**
  * pi's estimator takes a pi `AgentMessage`; Rakazo history rows are `{ role, content }` with the
@@ -114,16 +135,10 @@ export function selectHistoryWindow<T extends SizedHistoryMessage & { role: stri
   nonHistoryTokens?: number;
 }): HistoryWindow<T> {
   const { history } = options;
-  const contextWindow = options.contextWindow ?? 0;
-  if (contextWindow <= 0)
+  const budget = historyBudgetTokens(options.contextWindow, options.nonHistoryTokens);
+  if (budget === undefined) {
     return { messages: history.slice(-options.messageWindowSize), mode: "count" };
-
-  const budget = Math.max(
-    DEFAULT_COMPACTION_SETTINGS.keepRecentTokens,
-    contextWindow -
-      DEFAULT_COMPACTION_SETTINGS.reserveTokens -
-      (options.nonHistoryTokens ?? NON_HISTORY_TOKEN_ESTIMATE),
-  );
+  }
   let used = 0;
   let start = history.length;
   for (let index = history.length - 1; index >= 0; index -= 1) {
@@ -455,18 +470,19 @@ export interface CompactHistoryDeps {
   }) => Promise<AgentRunRequest["model"]>;
 }
 
-const RECENT_TURNS_HEADING = "\n\n## Latest messages, word for word\n\n";
-
 type Exchange = {
-  fromSeq: number;
+  entries: SessionEntry[];
   turns: AgentHistoryTurn[];
+  tokens: number;
   transcript: string;
   channel: boolean;
 };
 
+/** The entries split at each user message, an older compaction among them left out. */
 function exchangesOf(entries: readonly SessionEntry[], selfBotId: string): Exchange[] {
   const groups: SessionEntry[][] = [];
   for (const entry of entries) {
+    if (entry.type === "compaction") continue;
     const last = groups.at(-1);
     if (last && entry.type !== "user.message") last.push(entry);
     else groups.push([entry]);
@@ -474,8 +490,9 @@ function exchangesOf(entries: readonly SessionEntry[], selfBotId: string): Excha
   return groups.map((group) => {
     const turns = projectInferenceTurns(group, { selfBotId });
     return {
-      fromSeq: group[0]!.seq,
+      entries: group,
       turns,
+      tokens: estimateHistoryTokens(turns),
       transcript: turns
         .map((turn) => `${turn.role === "assistant" ? "bot" : "user"}: ${turn.content}`)
         .join("\n\n")
@@ -489,6 +506,18 @@ function exchangesOf(entries: readonly SessionEntry[], selfBotId: string): Excha
       ),
     };
   });
+}
+
+/** How many of the newest exchanges fit in `maxTokens`, and always the newest one. */
+function keptCount(exchanges: readonly Exchange[], maxTokens: number): number {
+  let kept = 0;
+  let tokens = 0;
+  for (const exchange of exchanges.toReversed()) {
+    tokens += exchange.tokens;
+    if (kept > 0 && tokens > maxTokens) break;
+    kept += 1;
+  }
+  return kept;
 }
 
 function chunksOf(exchanges: readonly Exchange[]): Exchange[][] {
@@ -514,24 +543,11 @@ const transcriptOf = (exchanges: readonly Exchange[]) =>
     .filter(Boolean)
     .join("\n\n");
 
-function latestExchanges(exchanges: readonly Exchange[]): Exchange[] {
-  let start = exchanges.length;
-  let turns = 0;
-  let tokens = 0;
-  for (let index = exchanges.length - 1; index >= 0; index -= 1) {
-    turns += exchanges[index]!.turns.length;
-    tokens += estimateHistoryTokens(exchanges[index]!.turns);
-    if (turns > HISTORY_WINDOW_SIZE || tokens > DEFAULT_COMPACTION_SETTINGS.keepRecentTokens) break;
-    start = index;
-  }
-  return exchanges.slice(start);
-}
-
 async function summarize(
   deps: CompactHistoryDeps,
   thread: CompactionThread,
   model: AgentRunRequest["model"],
-  chunk: { fromSeq: number; transcript: string },
+  chunk: readonly Exchange[],
   previousSummary: string | null,
 ): Promise<string> {
   // Same shape as pi-agent-core's `generateSummaryWithRequest`: conversation, then the previous
@@ -539,7 +555,7 @@ async function summarize(
   // tags they sit in are escaped out of their own content.
   const prompt = [
     formatCurrentTimeInstruction(),
-    `<conversation>\n${escapePromptData(chunk.transcript)}\n</conversation>`,
+    `<conversation>\n${escapePromptData(transcriptOf(chunk))}\n</conversation>`,
     previousSummary
       ? `<previous-summary>\n${escapePromptData(previousSummary)}\n</previous-summary>`
       : null,
@@ -553,7 +569,7 @@ async function summarize(
     {
       botId: thread.botId,
       threadId: thread.id,
-      runId: `compact:${thread.id}:${chunk.fromSeq}`,
+      runId: `compact:${thread.id}:${chunk[0]!.entries[0]!.seq}`,
       prompt,
       instructions: [
         SUMMARIZATION_SYSTEM_PROMPT,
@@ -598,13 +614,17 @@ async function summarize(
 }
 
 /**
- * Fold the turns after the session's last compaction into a new `compaction` entry at the head.
- * Every exchange is summarized once, in chunks the summarizer can hold, on top of the previous
- * summary, and the latest turns follow the summary word for word so the next run keeps the thread
- * of the conversation. A turn appended while the summarizer runs is summarized on one retry; a
- * rewind or a clear meanwhile drops the work, and the next run enqueues it again.
+ * Append a `compaction` entry at the head that summarizes the exchanges after what the last
+ * compaction covered, on top of its summary, all but the newest within a quarter of the run's
+ * `historyBudget` tokens. Those stay on the tail as real turns. Each exchange is summarized once,
+ * in chunks the summarizer can hold. A turn appended while the summarizer runs stays after the
+ * window; a rewind or a clear meanwhile drops the work, and the next run enqueues it again.
  */
-export async function compactHistory(deps: CompactHistoryDeps, threadId: string): Promise<void> {
+export async function compactHistory(
+  deps: CompactHistoryDeps,
+  threadId: string,
+  historyBudget?: number,
+): Promise<void> {
   const thread = await deps.prisma.thread.findUniqueOrThrow({ where: { id: threadId } });
   // A thread without an owning bot (a group, a team chat) has no memory to write to.
   if (!thread.botId) return;
@@ -619,8 +639,13 @@ export async function compactHistory(deps: CompactHistoryDeps, threadId: string)
   let tail = await deps.sessionLog.readTail(sessionId);
   const [first] = tail;
   const previous = first?.type === "compaction" ? first : undefined;
-  const covered = previous ? 1 : 0;
-  if (chunksOf(exchangesOf(tail.slice(covered), thread.botId)).length === 0) return;
+  const uncompacted = previous ? tail.slice(1) : tail;
+  const exchanges = exchangesOf(uncompacted, thread.botId);
+  const kept = keptCount(exchanges, keptWindowTokens(historyBudget));
+  const summarized = chunksOf(exchanges.slice(0, exchanges.length - kept));
+  if (summarized.length === 0) return;
+  const keptFrom = uncompacted.indexOf(exchanges.at(-kept)!.entries[0]!);
+  const coveredUpToSeq = EntrySeq.parse(uncompacted[keptFrom - 1]!.seq);
 
   // Match normal run model selection when the executor provides its resolver, including the
   // thread owner's encrypted credential. Direct callers retain the deployment fallback below.
@@ -657,24 +682,18 @@ export async function compactHistory(deps: CompactHistoryDeps, threadId: string)
   }
 
   const generation = await historyGeneration(deps.prisma, sessionId);
-  let summary = previous?.payload.summary.split(RECENT_TURNS_HEADING)[0] ?? null;
-  const summarized: Exchange[][] = [];
-  let summarizedEntries = 0;
+  let summary = await summarize(
+    deps,
+    botThread,
+    model,
+    summarized[0]!,
+    previous?.payload.summary ?? null,
+  );
+  for (const chunk of summarized.slice(1)) {
+    summary = await summarize(deps, botThread, model, chunk, summary);
+  }
   let compaction: SessionEntry | undefined;
   for (let attempt = 0; !compaction; attempt += 1) {
-    const uncompacted = tail.slice(covered);
-    for (const chunk of chunksOf(exchangesOf(uncompacted.slice(summarizedEntries), thread.botId))) {
-      summary = await summarize(
-        deps,
-        botThread,
-        model,
-        { fromSeq: chunk[0]!.fromSeq, transcript: transcriptOf(chunk) },
-        summary,
-      );
-      summarized.push(chunk);
-    }
-    summarizedEntries = uncompacted.length;
-    const latest = transcriptOf(latestExchanges(exchangesOf(uncompacted, thread.botId)));
     const head = tail.at(-1)!;
     try {
       compaction = await deps.prisma.$transaction((tx) =>
@@ -683,10 +702,7 @@ export async function compactHistory(deps: CompactHistoryDeps, threadId: string)
           sessionId,
           parentId: head.id,
           feedBotId: botThread.botId,
-          payload: {
-            summary: [summary, latest].filter(Boolean).join(RECENT_TURNS_HEADING),
-            coveredUpToSeq: EntrySeq.parse(head.seq),
-          },
+          payload: { summary, coveredUpToSeq },
         }),
       );
     } catch (error) {
@@ -717,7 +733,7 @@ export async function compactHistory(deps: CompactHistoryDeps, threadId: string)
     botId: thread.botId,
     signal: new AbortController().signal,
   };
-  if (semanticMemory && summary) {
+  if (semanticMemory) {
     try {
       const result = await semanticMemory.provider.save(
         {
@@ -762,7 +778,7 @@ export async function compactHistory(deps: CompactHistoryDeps, threadId: string)
     try {
       await learnDurableFacts(deps, botThread, {
         transcript: transcriptOf(chunk),
-        fromSeq: chunk[0]!.fromSeq,
+        fromSeq: chunk[0]!.entries[0]!.seq,
         model,
         context: memoryContext,
       });

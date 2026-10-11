@@ -281,6 +281,7 @@ import {
   estimateToolSchemaTokens,
   formatRecalledMemory,
   HISTORY_COUNT_WINDOW,
+  historyBudgetTokens,
   MAX_RECALLED_MEMORIES,
   selectHistoryWindow,
   shouldEnqueueCompaction,
@@ -4359,6 +4360,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           // resolved model's context window and on what the rest of the run costs: the rendered
           // instructions already carry memory, scratchpad and the peer directory, so a bot with a
           // large durable memory or many connector tools keeps fewer messages than a bare one.
+          const historyBudget = historyBudgetTokens(resolved.contextWindow, nonHistoryTokens);
           const windowStartedAt = performance.now();
           const window = selectHistoryWindow({
             history: uncompactedHistory,
@@ -5069,10 +5071,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
             compacts(thread) &&
             runModelProvider !== "scripted" &&
             !messagingChannelRun &&
-            shouldEnqueueCompaction(uncompactedHistory)
+            shouldEnqueueCompaction(uncompactedHistory, historyBudget)
           ) {
             await deps.jobs
-              .enqueue(historyCompactJob(thread.id))
+              .enqueue(historyCompactJob(thread.id, historyBudget))
               .catch((error) => getLogger().error("history.compact enqueue failed", error));
           }
         } catch (error) {

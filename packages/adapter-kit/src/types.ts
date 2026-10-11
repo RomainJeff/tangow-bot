@@ -575,7 +575,8 @@ export interface BackgroundJobPayloads {
   "computer.update": { updateId: string };
   "computer.control-expire": { computerId: string; leaseId: string };
   "skill.teaching-expire": { skillId: string };
-  "history.compact": { threadId: string };
+  /** `historyBudget` is the tokens the enqueuing run's history could fill, unset when unknown. */
+  "history.compact": { threadId: string; historyBudget?: number };
   "messaging.deliver": { runId?: string };
   /** Identifiers only: the link, its eligibility and the run status are re-read from the database. */
   "link.preview": { messageId: string } | { runId: string };
