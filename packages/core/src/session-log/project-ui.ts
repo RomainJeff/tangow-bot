@@ -31,6 +31,8 @@ export type ProjectedThread = {
   items: ThreadItem[];
   shownBy: Map<EntryId, EntryId>;
   messageIds: Map<EntryId, EntryId>;
+  /** The entry each item's link preview targets, the id the preview is removed by. */
+  previewHosts: Map<EntryId, EntryId>;
   waiting: WaitingCard | null;
 };
 
@@ -74,7 +76,8 @@ export function projectThread(entries: readonly SessionEntry[]): ProjectedThread
   const messageIds = new Map<EntryId, EntryId>();
   const cards = new Map<string, CardSlot[]>();
   const runCards: { id: EntryId; runId: string; seq: number }[] = [];
-  const previews = new Map<string, { item: MessageItem; block: MessageBlock }>();
+  const previews = new Map<string, { item: MessageItem; block: MessageBlock; host: EntryId }>();
+  const previewHosts = new Map<EntryId, EntryId>();
   const compactions = new Map<DividerItem, number>();
 
   const push = (item: ThreadItem, ...shown: EntryId[]) => {
@@ -405,7 +408,8 @@ export function projectThread(entries: readonly SessionEntry[]): ProjectedThread
         if (item?.kind !== "message") break;
         const block: MessageBlock = segment.payload.block;
         item.blocks.push(block);
-        previews.set(segment.id, { item, block });
+        previews.set(segment.id, { item, block, host: segment.payload.target });
+        previewHosts.set(item.id, segment.payload.target);
         shownBy.set(segment.id, item.id);
         break;
       }
@@ -414,6 +418,8 @@ export function projectThread(entries: readonly SessionEntry[]): ProjectedThread
         if (!preview) break;
         const index = preview.item.blocks.indexOf(preview.block);
         if (index !== -1) preview.item.blocks.splice(index, 1);
+        if (previewHosts.get(preview.item.id) === preview.host)
+          previewHosts.delete(preview.item.id);
         shownBy.set(segment.id, preview.item.id);
         break;
       }
@@ -465,7 +471,7 @@ export function projectThread(entries: readonly SessionEntry[]): ProjectedThread
   const last = open.at(-1);
   const itemId = last && shownBy.get(last.id);
   const waiting = last && itemId ? { itemId, entryId: last.id, runId: last.runId } : null;
-  return { items, shownBy, messageIds, waiting };
+  return { items, shownBy, messageIds, previewHosts, waiting };
 }
 
 function stampDuration(messages: readonly MessageItem[], durationMs: number) {

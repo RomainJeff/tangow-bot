@@ -20,6 +20,7 @@ const iconClass =
 
 export function MessageHoverActions({
   message,
+  previewMessageId,
   onReply,
   onReact,
   voiceReady,
@@ -28,6 +29,7 @@ export function MessageHoverActions({
   time,
 }: {
   message: MessageItem;
+  previewMessageId?: string;
   /** The message's time, shown ahead of the actions. */
   time?: ReactNode;
   onReply: (message: MessageItem) => void;
@@ -99,12 +101,12 @@ export function MessageHoverActions({
         >
           <Copy size={14} strokeWidth={1.7} />
         </button>
-        {canRemoveLinkPreview(message) ? (
+        {previewMessageId && canRemoveLinkPreview(message) ? (
           <button
             type="button"
             aria-label={t`Remove preview`}
             title={t`Remove preview`}
-            onClick={() => removeLinkPreview(message)}
+            onClick={() => removeLinkPreview(previewMessageId)}
             className={iconClass}
           >
             <Link2Off size={14} strokeWidth={1.7} />
@@ -137,9 +139,11 @@ export function MessageHoverActions({
  */
 export function UserMessageActions({
   message,
+  previewMessageId,
   onEdit,
 }: {
   message: MessageItem;
+  previewMessageId?: string;
   onEdit: (message: MessageItem) => void;
 }) {
   const { t } = useLingui();
@@ -168,12 +172,12 @@ export function UserMessageActions({
       >
         <Copy size={14} strokeWidth={1.7} />
       </button>
-      {canRemoveLinkPreview(message) ? (
+      {previewMessageId && canRemoveLinkPreview(message) ? (
         <button
           type="button"
           aria-label={t`Remove preview`}
           title={t`Remove preview`}
-          onClick={() => removeLinkPreview(message)}
+          onClick={() => removeLinkPreview(previewMessageId)}
           className={iconClass}
         >
           <Link2Off size={14} strokeWidth={1.7} />

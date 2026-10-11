@@ -48,9 +48,10 @@ export function canRemoveLinkPreview(message: MessageItem): boolean {
 }
 
 /**
- * Asks the server to drop the card. The thread's own update event removes it from every open
- * surface, so nothing is shown here, and a failure leaves the card where it was.
+ * Asks the server to drop the card, by the message its preview entry targets (a row folds a run's
+ * entries, so its own id is not that message's). The thread's own update event removes it from
+ * every open surface, so nothing is shown here, and a failure leaves the card where it was.
  */
-export function removeLinkPreview(message: MessageItem): void {
-  void rpc.messages.removeLinkPreview({ messageId: message.id }).catch(() => undefined);
+export function removeLinkPreview(messageId: string): void {
+  void rpc.messages.removeLinkPreview({ messageId }).catch(() => undefined);
 }

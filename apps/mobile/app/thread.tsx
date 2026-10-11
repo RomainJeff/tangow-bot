@@ -1841,10 +1841,12 @@ function Thread() {
   }
 
   async function removeLinkPreview(message: MobileMessage) {
+    const messageId = view.rows.find((row) => row.item.id === message.id)?.previewMessageId;
+    if (!messageId) return;
     const targetBotId = botId;
     const targetGroupId = groupId;
     try {
-      await rpc("messages/removeLinkPreview", { messageId: message.id });
+      await rpc("messages/removeLinkPreview", { messageId });
     } catch (err) {
       if (!isCurrentTarget(targetBotId, targetGroupId)) return;
       setError(err instanceof Error ? err.message : t("Try again."));

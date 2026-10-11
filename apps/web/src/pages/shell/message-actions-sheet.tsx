@@ -30,6 +30,7 @@ interface ActionRow {
  */
 export function MessageActionsSheet({
   message,
+  previewMessageId,
   open,
   onOpenChange,
   onReply,
@@ -40,6 +41,7 @@ export function MessageActionsSheet({
   onSpeak,
 }: {
   message: MessageItem | null;
+  previewMessageId?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onReply: (message: MessageItem) => void;
@@ -74,13 +76,13 @@ export function MessageActionsSheet({
           icon: <Copy size={18} strokeWidth={1.7} aria-hidden="true" />,
           onSelect: () => copyMessageToClipboard(message),
         },
-        ...(canRemoveLinkPreview(message)
+        ...(previewMessageId && canRemoveLinkPreview(message)
           ? [
               {
                 key: "remove-preview",
                 label: t`Remove preview`,
                 icon: <Link2Off size={18} strokeWidth={1.7} aria-hidden="true" />,
-                onSelect: () => removeLinkPreview(message),
+                onSelect: () => removeLinkPreview(previewMessageId),
               },
             ]
           : []),

@@ -25,6 +25,7 @@ export type ThreadRow = {
   routine?: RoutineLineRole;
   marker?: { at: string; withTime: boolean };
   messageId?: EntryId;
+  previewMessageId?: EntryId;
 };
 
 export type ThreadView = {
@@ -71,6 +72,7 @@ export function projectThreadView(
         ? new Date(previous.ts).toDateString() !== new Date(at).toDateString()
         : showsTimeMarker(previous?.ts, at);
     const messageId = projected.messageIds.get(item.id);
+    const previewMessageId = projected.previewHosts.get(item.id);
     rows.push({
       item,
       firstOfGroup: groups[index]?.isFirstOfGroup ?? true,
@@ -79,6 +81,7 @@ export function projectThreadView(
       ...(role ? { routine: role } : {}),
       ...(shows ? { marker: { at, withTime: !routine } } : {}),
       ...(messageId ? { messageId } : {}),
+      ...(previewMessageId ? { previewMessageId } : {}),
     });
     previous = { ts: item.ts, routine };
   }
@@ -95,8 +98,16 @@ function onChain(entries: readonly SessionEntry[]): SessionEntry[] {
   let kept: SessionEntry[] = [];
   for (const entry of byId(entries)) {
     if (entry.type === "rewind") {
+      // A parent the server held back (a hidden peer run's entry) still has the cut turn as a child.
       const parent = kept.find((candidate) => candidate.id === entry.parentId);
-      kept = parent ? kept.filter((candidate) => candidate.seq <= parent.seq) : [];
+      const cut = parent
+        ? undefined
+        : kept.find((candidate) => candidate.parentId === entry.parentId);
+      kept = parent
+        ? kept.filter((candidate) => candidate.seq <= parent.seq)
+        : cut
+          ? kept.filter((candidate) => candidate.seq < cut.seq)
+          : [];
     } else if (entry.type === "clear") {
       kept = [];
     }

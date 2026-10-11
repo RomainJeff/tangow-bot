@@ -220,12 +220,15 @@ describe("projectThreadView on a streamed reply", () => {
       answeredWork,
       scout,
       yes,
-      summary({
-        kind: "link_preview",
-        url: "https://acme.example",
-        format: "compact",
-        title: "Acme",
-      }),
+      {
+        ...summary({
+          kind: "link_preview",
+          url: "https://acme.example",
+          format: "compact",
+          title: "Acme",
+        }),
+        previewMessageId: "str-09",
+      },
     ]);
     expect(view.waiting).toBeNull();
     expect(["str-07", "str-10", "str-11"].map((id) => [id, view.rowOf.get(id)])).toEqual([
@@ -261,6 +264,24 @@ describe("projectThreadView on a streamed reply", () => {
     ]);
     expect(view.rowOf.get("str-12")).toBe("str-09");
     expect(view.rowOf.has("str-15")).toBe(false);
+  });
+});
+
+describe("projectThreadView rewind", () => {
+  it("cuts at the turn after a parent the server held back, keeping what came before", () => {
+    const [one, , two, rewind, edited] = linkEntries("hid", [
+      { type: "user.message", payload: { blocks: text("One"), source: "app" } },
+      {
+        ...ada,
+        type: "run.finished",
+        payload: { status: "completed", usage: { inputTokens: 1, outputTokens: 1 } },
+      },
+      { type: "user.message", payload: { blocks: text("Two"), source: "app" } },
+      { type: "rewind", parentId: "hid-1", payload: {} },
+      { type: "user.message", payload: { blocks: text("Two edited"), source: "app" } },
+    ]);
+    const rows = projectThreadView([one!, two!, rewind!, edited!]).rows;
+    expect(rows.map((row) => row.item.id)).toEqual(["hid-0", "hid-3", "hid-4"]);
   });
 });
 
@@ -571,6 +592,34 @@ describe("projectThreadView rows", () => {
         [true, true],
       ],
     );
+  });
+
+  it("removes a reply's preview by the entry it targets, not by the row", () => {
+    const preview = {
+      kind: "link_preview",
+      url: "https://example.com/",
+      format: "compact",
+      title: "Example",
+    };
+    const bodies = [
+      { ...ada, type: "assistant.text", payload: { blocks: text("Let me look.") } },
+      { ...ada, type: "tool.call", payload: { callId: "c1", name: "web_fetch", input: "{}" } },
+      {
+        ...ada,
+        type: "tool.result",
+        payload: { callId: "c1", output: "ok", isError: false, artifactIds: [] },
+      },
+      { ...ada, type: "assistant.text", payload: { blocks: text("See https://example.com/") } },
+      { type: "link.preview", payload: { target: "pv-3", block: preview } },
+    ];
+    const reply = (entries: SessionEntry[]) =>
+      projectThreadView(entries).rows.find((row) => row.item.id === "pv-0");
+    expect(reply(linkEntries("pv", bodies))).toMatchObject({
+      messageId: "pv-0",
+      previewMessageId: "pv-3",
+    });
+    const removal = { type: "link.preview.removed", payload: { target: "pv-4" } };
+    expect(reply(linkEntries("pv", [...bodies, removal]))?.previewMessageId).toBeUndefined();
   });
 
   it("folds quiet runs of one routine into a line and absorbs the message the newest sent", () => {

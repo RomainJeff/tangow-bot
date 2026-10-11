@@ -498,6 +498,7 @@ export const Transcript = memo(function Transcript({
                     {acts && message.role !== "user" ? (
                       <MessageHoverActions
                         message={message}
+                        previewMessageId={row.previewMessageId}
                         // No row carries a permanent clock: the time rides in the pill, next
                         // to the bubble or card. Cards have no clock of their own.
                         time={
@@ -542,7 +543,11 @@ export const Transcript = memo(function Transcript({
                   </div>
                 ) : null}
                 {acts && message.role === "user" ? (
-                  <UserMessageActions message={message} onEdit={onEdit} />
+                  <UserMessageActions
+                    message={message}
+                    previewMessageId={row.previewMessageId}
+                    onEdit={onEdit}
+                  />
                 ) : null}
               </div>
             </Fragment>
@@ -575,6 +580,7 @@ export const Transcript = memo(function Transcript({
       </button>
       <MessageActionsSheet
         message={sheetMessage}
+        previewMessageId={rows.find((row) => row.item.id === sheetMessage?.id)?.previewMessageId}
         open={sheetOpen}
         onOpenChange={setSheetOpen}
         onReply={onReply}

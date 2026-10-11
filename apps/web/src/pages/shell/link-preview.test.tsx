@@ -324,6 +324,7 @@ describe("Remove preview action", () => {
     voiceReady: false,
     speaking: false,
     onSpeak: () => undefined,
+    previewMessageId: "m1",
   };
   const removeButton = () =>
     container.querySelector<HTMLButtonElement>('button[aria-label="Remove preview"]');
@@ -369,6 +370,7 @@ describe("Remove preview action", () => {
       root.render(
         <UserMessageActions
           message={message("user", [text(`hi ${URL_A}`), card()])}
+          previewMessageId="m1"
           onEdit={() => undefined}
         />,
       ),
@@ -390,6 +392,7 @@ describe("Remove preview action", () => {
       root.render(
         <UserMessageActions
           message={message("user", [text(`hi ${URL_A}`), card()])}
+          previewMessageId="m1"
           onEdit={() => undefined}
         />,
       ),
