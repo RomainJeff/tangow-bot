@@ -6,6 +6,7 @@ import type {
   SessionEntryType,
   SessionId,
 } from "@rakazo/contracts";
+import { CARD_STATE_TYPES } from "@rakazo/contracts";
 import { appendToolCallSegment } from "../events.js";
 import { originSessionIdOf } from "./child-sessions.js";
 
@@ -18,15 +19,7 @@ const FOLDED_TYPES = [
   "tool.result",
 ] as const;
 type FoldedEntry = SessionEntryOf<(typeof FOLDED_TYPES)[number]>;
-/** Entries about an earlier card or message: they show nothing of their own between the words. */
-const ANNOTATION_TYPES = [
-  "card.answered",
-  "link.preview",
-  "link.preview.removed",
-  "skill.draft",
-  "effect.applied",
-] as const;
-const STRETCH_TYPES = new Set<SessionEntryType>([...FOLDED_TYPES, ...ANNOTATION_TYPES, "subagent"]);
+const STRETCH_TYPES = new Set<SessionEntryType>([...FOLDED_TYPES, ...CARD_STATE_TYPES, "subagent"]);
 
 type RunMessage = {
   type: "run.message";

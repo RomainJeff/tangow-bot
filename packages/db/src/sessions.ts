@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { NewSession, SessionEntryDraft, SessionLog } from "@rakazo/adapter-kit";
 import { nextSessionEntry, SessionAppendError, sessionEntryNonce } from "@rakazo/adapter-kit";
 import type {
+  CARD_STATE_TYPES,
   EntryId,
   MessageBlock,
   RunOutcome,
@@ -304,14 +305,7 @@ export async function threadOfSession(
 }
 
 type CardStateDraft = SessionEntryDraft extends infer Draft
-  ? Draft extends {
-      type:
-        | "card.answered"
-        | "effect.applied"
-        | "link.preview"
-        | "link.preview.removed"
-        | "skill.draft";
-    }
+  ? Draft extends { type: (typeof CARD_STATE_TYPES)[number] }
     ? Omit<Draft, "sessionId">
     : never
   : never;

@@ -411,6 +411,18 @@ export const RUN_TRACE_TYPES: ReadonlySet<SessionEntryType> = new Set([
   "subagent",
 ] satisfies SessionEntryType[]);
 
+/**
+ * What settles or annotates an earlier card or message, appended to the session that holds it.
+ * It shows nothing of its own.
+ */
+export const CARD_STATE_TYPES = [
+  "card.answered",
+  "effect.applied",
+  "link.preview",
+  "link.preview.removed",
+  "skill.draft",
+] as const satisfies readonly SessionEntryType[];
+
 export const BLOCK_KINDS_NEEDING_THE_PERSON: ReadonlySet<MessageBlock["kind"]> = new Set([
   "mcp_approval",
 ] satisfies MessageBlock["kind"][]);

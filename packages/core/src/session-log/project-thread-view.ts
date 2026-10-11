@@ -6,7 +6,7 @@ import type {
   SessionEntryType,
   ThreadItem,
 } from "@rakazo/contracts";
-import { SessionEntrySchema } from "@rakazo/contracts";
+import { CARD_STATE_TYPES, SessionEntrySchema } from "@rakazo/contracts";
 import { isRunTerminalEvent, progressMessageId, reduceLiveMessageBlocks } from "../events.js";
 import { computeItemGroups } from "../message-grouping.js";
 import type { ItemReactions } from "../message-reactions.js";
@@ -279,11 +279,7 @@ const PEER_RUN_KEPT_TYPES = new Set<SessionEntryType>([
   "effect.requested",
   "effect.edited",
   "effect.resolved",
-  "effect.applied",
-  "card.answered",
-  "link.preview",
-  "link.preview.removed",
-  "skill.draft",
+  ...CARD_STATE_TYPES,
   "bot.message.sent",
   "bot.message.received",
 ]);
