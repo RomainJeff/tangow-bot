@@ -641,7 +641,7 @@ Decision. A. The head is the entry with the highest seq in its session, so the r
 | `system.note` | API, channel joins | no | yes |
 | `bot.text` | Onboarding, teaching session, bot words outside a run | yes, assistant side | yes, bot message with no run item |
 | `compaction` | Compaction job | yes, and reader stop | yes, divider |
-| `rewind`, `clear` | API | no | yes, divider |
+| `rewind`, `clear` | API, `clear` carries `edit` when the person edits the first message | no | yes, divider, the edit label for an edit clear |
 | `harness.session` | Harness runtime, none exists yet, unwritten by this program | no | no |
 
 Kept out of the log, on purpose. `thread.progress`, `thread.meta`, `computer.status`, the three takeover negotiation events, `routine.created`, `routine.updated`, `bot.*`, `group.created`, `group.updated`, `skill.teaching.*`, `skill.draft.created`, `agent.skill.used`, `agent.skill.nudge`, `effect.recorded`, `effect.reconciled`, `usage.recorded`, `run.checkpointed`. Ephemeral, derivable, or facts about the bot and the group rather than the conversation.
