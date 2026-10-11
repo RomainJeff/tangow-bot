@@ -25,7 +25,7 @@ export interface RoutineHandoff {
 }
 
 /** Past this many runs, a group opens in a dialog instead of listing in place (A8c). */
-export const GROUP_DIALOG_MAX = 8;
+const GROUP_DIALOG_MAX = 8;
 
 /** The run's state as one icon: the shape tells it apart without colour, the
  * colour only confirms. Completed and failed are filled; the rest are not. */
@@ -74,7 +74,7 @@ function routineRange(first: string | undefined, last: string | undefined, local
   return `${day(start)} – ${day(end)}`;
 }
 
-export function sameLocalDay(left: string | undefined, right: string | undefined): boolean {
+function sameLocalDay(left: string | undefined, right: string | undefined): boolean {
   if (!left || !right) return true;
   return new Date(left).toDateString() === new Date(right).toDateString();
 }
