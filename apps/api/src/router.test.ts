@@ -832,12 +832,12 @@ describe("computer screen url", () => {
 });
 
 describe("thread rewind", () => {
-  function rewindDeps(role: string | null) {
+  function rewindDeps(role: string | null, endedGeneration: { historyGeneration?: number } = {}) {
     const rewindThread = vi.fn().mockResolvedValue({
       event: { seq: 20 },
       cancelledRunIds: ["run-1"],
-      historyGeneration: 3,
       fromSeq: 4,
+      ...endedGeneration,
     });
     const cancel = vi.fn().mockResolvedValue(undefined);
     const purgeHistory = vi.fn().mockResolvedValue({ ok: true, value: undefined });
@@ -908,13 +908,16 @@ describe("thread rewind", () => {
     expect(cancel).toHaveBeenCalledOnce();
   });
 
-  it("purges the compacted summaries of the history generation the rewind ended", async () => {
-    const { purgeHistory, actor, handler } = rewindDeps("user");
+  it("purges the compacted summaries of a history generation only when the rewind ended it", async () => {
+    const purged = async (endedGeneration: { historyGeneration?: number }) => {
+      const { purgeHistory, actor, handler } = rewindDeps("user", endedGeneration);
+      await handler.handle(rewindRequest("message-4"), { prefix: "/rpc", context: { actor } });
+      return purgeHistory.mock.calls.map(([request]) => request);
+    };
 
-    await handler.handle(rewindRequest("message-4"), { prefix: "/rpc", context: { actor } });
-
-    expect(purgeHistory.mock.calls.map(([request]) => request)).toEqual([
-      { botId: "bot-1", generations: [3] },
+    expect([await purged({ historyGeneration: 3 }), await purged({})]).toEqual([
+      [{ botId: "bot-1", generations: [3] }],
+      [],
     ]);
   });
 

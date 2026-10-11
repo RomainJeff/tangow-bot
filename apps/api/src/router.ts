@@ -1599,13 +1599,15 @@ export function createRouter(deps: RouterDeps) {
           ),
         );
         await sweepOrphanPreviewArtifacts(deps, { spaceId: context.actor.spaceId });
-        await purgeCompactedHistoryMemory(
-          deps,
-          context.actor,
-          target,
-          rewound.historyGeneration,
-          "thread-rewind",
-        );
+        if (rewound.historyGeneration !== undefined) {
+          await purgeCompactedHistoryMemory(
+            deps,
+            context.actor,
+            target,
+            rewound.historyGeneration,
+            "thread-rewind",
+          );
+        }
         return { ok: true as const };
       }),
       followUp: authed.threads.followUp.handler(async ({ context, input }) => {

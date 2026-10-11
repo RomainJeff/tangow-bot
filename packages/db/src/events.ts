@@ -101,8 +101,11 @@ export interface RewindThreadInput extends ClearThreadInput {
 export interface RewindThreadResult {
   event: ProductEvent;
   cancelledRunIds: string[];
-  /** The history generation the rewind ended, whose compacted summaries the caller purges. */
-  historyGeneration: number;
+  /**
+   * The history generation the rewind ended, whose compacted summaries the caller purges; absent
+   * when it cut no summarized turn.
+   */
+  historyGeneration?: number;
   fromSeq: number;
 }
 
@@ -469,6 +472,7 @@ export async function rewindThread(
       messageId: input.messageId,
       feedBotId: input.botId,
     });
+    const ended = (await historyGeneration(tx, truncated.sessionId)) !== generation;
     const event = await appendEventInTransaction(tx, {
       ...input,
       type: "thread.rewound",
@@ -477,7 +481,7 @@ export async function rewindThread(
     return {
       event,
       cancelledRunIds: truncated.cancelledRunIds,
-      historyGeneration: generation,
+      ...(ended ? { historyGeneration: generation } : {}),
       fromSeq: target.seq,
     };
   });

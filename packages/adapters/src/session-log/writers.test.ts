@@ -273,46 +273,69 @@ describe("session log writers", () => {
     ).toEqual([{ type: "clear", parentId: null }]);
   });
 
-  it("names the history generation each rewind and clear ends, a compaction on the chain or not", async () => {
+  it("ends the history generation at a clear, and at a rewind only when it cuts a turn a compaction summarized", async () => {
     const { prisma } = database;
     const { bot, threadId, sessionId } = await seedBot(prisma, "Ada");
     const events = createThreadEvents(prisma);
-    const send = (text: string) =>
-      events.sendUserMessage({
-        spaceId: SPACE,
-        threadId,
-        botId: bot.id,
-        userId: USER,
-        blocks: [{ kind: "text", text }],
-        prompt: text,
-        trigger: "user",
-        createRun: false,
-      });
-    await send("Keep this");
-    const cut = await send("Edit this");
-    await prisma.$transaction((tx) =>
-      appendSessionEntryInTransaction(tx, {
-        type: "compaction",
-        sessionId,
-        parentId: EntryId.parse(cut.messageId),
-        feedBotId: bot.id,
-        payload: { summary: "Kept and edited.", coveredUpToSeq: EntrySeq.parse(1) },
-      }),
-    );
-    const after = await send("After the summary");
+    const send = async (text: string) =>
+      (
+        await events.sendUserMessage({
+          spaceId: SPACE,
+          threadId,
+          botId: bot.id,
+          userId: USER,
+          blocks: [{ kind: "text", text }],
+          prompt: text,
+          trigger: "user",
+          createRun: false,
+        })
+      ).messageId;
+    const compact = (head: string, summary: string, coveredUpToSeq: number) =>
+      prisma.$transaction((tx) =>
+        appendSessionEntryInTransaction(tx, {
+          type: "compaction",
+          sessionId,
+          parentId: EntryId.parse(head),
+          feedBotId: bot.id,
+          payload: { summary, coveredUpToSeq: EntrySeq.parse(coveredUpToSeq) },
+        }),
+      );
+    await send("a");
+    await compact(await send("b"), "C1", 0);
+    const c = await send("c");
+    await send("d");
+    const e = await send("e");
+    await compact(e, "C2", 3);
+    await send("f");
     const target = { spaceId: SPACE, threadId, botId: bot.id };
 
-    const keepsCompaction = await rewindThread(prisma, { ...target, messageId: after.messageId });
-    const cutsCompaction = await rewindThread(prisma, { ...target, messageId: cut.messageId });
+    const keepsSummarized = await rewindThread(prisma, { ...target, messageId: e });
+    const keptTail = await log.readTail(sessionId);
+    const cutsSummarized = await rewindThread(prisma, { ...target, messageId: c });
+    const cutTail = await log.readTail(sessionId);
     const firstClear = await clearThread(prisma, target);
     const secondClear = await clearThread(prisma, target);
 
+    const shown = (tail: readonly SessionEntry[]) =>
+      tail.map((entry) =>
+        entry.type === "compaction"
+          ? entry.payload.summary
+          : entry.type === "user.message"
+            ? entry.payload.blocks
+                .map((block) => (block.kind === "text" ? block.text : ""))
+                .join("")
+            : entry.type,
+      );
+    expect([shown(keptTail), shown(cutTail)]).toEqual([
+      ["C2", "d", "rewind"],
+      ["C1", "b", "rewind"],
+    ]);
     expect([
-      keepsCompaction?.historyGeneration,
-      cutsCompaction?.historyGeneration,
+      keepsSummarized?.historyGeneration,
+      cutsSummarized?.historyGeneration,
       firstClear.historyGeneration,
       secondClear.historyGeneration,
-    ]).toEqual([0, 4, 5, 6]);
+    ]).toEqual([undefined, 0, 10, 11]);
   });
 
   it("closes the log of a run it cancels with who cancelled it", async () => {

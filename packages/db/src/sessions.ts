@@ -48,15 +48,18 @@ export function sessionEntryFromRow(row: SessionEntryRow): SessionEntry {
 
 /**
  * The epoch semantic memory files a session's compacted summaries under: the seq of its newest
- * clear or rewind, 0 before any. Either can cut what a summary describes, so it leaves the
- * summaries filed before it unrecalled, and a summary saved while it landed fails the re-check.
+ * clear or rewind that cut a summarized turn, 0 before any. Either leaves the summaries filed
+ * before it unrecalled, and a summary saved while it landed fails the re-check.
  */
 export async function historyGeneration(
   prisma: Pick<Prisma.TransactionClient, "sessionEntry">,
   sessionId: string,
 ): Promise<number> {
   const cut = await prisma.sessionEntry.findFirst({
-    where: { sessionId, type: { in: ["clear", "rewind"] } },
+    where: {
+      sessionId,
+      OR: [{ type: "clear" }, { type: "rewind", payload: { path: ["cutsSummary"], equals: true } }],
+    },
     orderBy: { seq: "desc" },
     select: { seq: true },
   });
@@ -313,7 +316,8 @@ export async function appendRunBlocksInTransaction(
  * message's id. A message with no entry predates the log, so everything the log holds came after
  * it, and a clear cuts that as a rewind past the first entry would. A compaction the rewind cuts
  * off whose summary ends before the message still describes turns that remain, so it is written
- * again on top of the rewind and the next read starts from it.
+ * again on top of the rewind and the next read starts from it; one whose summary reaches the
+ * message describes turns that are gone, and the rewind says so.
  */
 export async function appendRewindInTransaction(
   tx: Prisma.TransactionClient,
@@ -329,14 +333,15 @@ export async function appendRewindInTransaction(
     return;
   }
   const cutOff = await newestCompactionAfter(tx, sessionId, target.seq);
+  const cutsSummary = cutOff !== undefined && cutOff.payload.coveredUpToSeq >= target.seq;
   const rewind = await appendSessionEntryInTransaction(tx, {
     type: "rewind",
     sessionId,
     parentId: target.parentId as EntryId,
-    payload: {},
+    payload: cutsSummary ? { cutsSummary } : {},
     feedBotId,
   });
-  if (cutOff && cutOff.payload.coveredUpToSeq < target.seq) {
+  if (cutOff && !cutsSummary) {
     await appendSessionEntryInTransaction(tx, {
       type: "compaction",
       sessionId,

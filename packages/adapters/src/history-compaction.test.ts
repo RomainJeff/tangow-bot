@@ -837,12 +837,14 @@ describe("compactHistory", () => {
     );
   });
 
-  it("purges its own save when a rewind lands while saving", async () => {
+  it("purges its own save when a rewind that cuts what it summarized lands while saving", async () => {
     const seeded = await seedThread();
     const [first] = await append(seeded, exchanges(seeded, 2));
     const h = harness(seeded);
     h.saveMemory.mockImplementationOnce(async () => {
-      await append(seeded, [{ type: "rewind", parentId: first!.id, payload: {} }]);
+      await append(seeded, [
+        { type: "rewind", parentId: first!.id, payload: { cutsSummary: true } },
+      ]);
       return { ok: true, value: undefined };
     });
 

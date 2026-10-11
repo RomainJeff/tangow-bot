@@ -193,7 +193,11 @@ const EntryShapes = z.discriminatedUnion("type", [
     ...envelope,
     parentId: EntryId,
     type: z.literal("rewind"),
-    payload: z.object({ reason: z.string().optional() }),
+    payload: z.object({
+      reason: z.string().optional(),
+      /** It cut a turn a compaction on the chain had summarized, so it starts a history generation. */
+      cutsSummary: z.literal(true).optional(),
+    }),
   }),
   z.object({
     ...envelope,
