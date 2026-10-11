@@ -58,13 +58,22 @@ test("renders a routine run card in a sub-bot's own thread", async ({ page }, te
   await expect(card).toContainText(/Running|Completed/i);
   await expect(card).toContainText("Completed", { timeout: 60_000 });
 
+  // The "Subscribed" pill is gone (CA-R3, CA-R1); a bell with an accessible name replaces it.
+  await expect(card).not.toContainText("Subscribed");
+  await expect(card.getByRole("img", { name: /Notifications on/i })).toBeVisible();
+
+  // notify:true defaults the line open (A5) — the disclosure starts expanded, rendering
+  // the routine's digest as sanitised markdown (CA-R4) with no live image loads (CA-R5).
   const toggle = card.getByRole("button", { name: /^Status check,/ });
-  await expect(toggle).toHaveAttribute("aria-expanded", "false");
-  await toggle.click();
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
   await expect(card.locator("strong")).toBeVisible();
   await expect(card.locator("img")).toHaveCount(0);
   await captureScreenshot(page, testInfo, "routine-run-card");
+
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
 
   await card.getByRole("button", { name: "Report, Status check · Opens in full" }).click();
   const session = page.getByTestId("session-view");

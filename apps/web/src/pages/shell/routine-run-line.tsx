@@ -6,12 +6,20 @@ import type { RoutineLineRun } from "@rakazo/core";
 import { threadTimeMarkerLabel } from "@rakazo/core";
 import type { StackedAvatarItem } from "@rakazo/ui-web";
 import { ClippedPreview, Dialog, DialogContent, DialogTitle, Shimmer } from "@rakazo/ui-web";
-import { ChevronRight, CircleCheck, CircleDashed, CircleX, StopCircle } from "lucide-react";
+import {
+  Bell,
+  ChevronRight,
+  CircleCheck,
+  CircleDashed,
+  CircleX,
+  Clock,
+  StopCircle,
+} from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 import { useState } from "react";
 import { CollaborationMarker } from "../../components/ai/CollaborationMarker";
 
-type RoutineState = "running" | "completed" | "failed" | "cancelled";
+type RoutineState = "queued" | "running" | "completed" | "failed" | "cancelled";
 
 /** The bot a run then messaged, drawn by the run: a receipt at rest, the
  * centred `CollaborationMarker` when the line is open. */
@@ -30,14 +38,15 @@ const GROUP_DIALOG_MAX = 8;
 /** The run's state as one icon: the shape tells it apart without colour, the
  * colour only confirms. Completed and failed are filled; the rest are not. */
 const ROUTINE_STATE_ICON: Record<RoutineState, ComponentType<{ className?: string }>> = {
+  queued: Clock,
   running: CircleDashed,
   completed: CircleCheck,
   failed: CircleX,
   cancelled: StopCircle,
 };
 
-function routineState(run: RoutineLineRun): RoutineState {
-  return run.item.finished?.status ?? "running";
+function routineState(run: RoutineLineRun, queued = false): RoutineState {
+  return run.item.finished?.status ?? (queued ? "queued" : "running");
 }
 
 /** The symbol carries the colour; the word is muted unless the run failed. */
@@ -83,39 +92,55 @@ export function RoutineRunLine({
   run,
   handoff,
   onOpen,
+  queued = false,
   nested = false,
   withDay = false,
 }: {
   run: RoutineLineRun;
   handoff?: RoutineHandoff;
   onOpen: () => void;
+  /** Its run waits in the queue, not started yet. */
+  queued?: boolean;
   /** A line inside an open group: smaller icon, the time in the name slot. */
   nested?: boolean;
   withDay?: boolean;
 }) {
   const { t } = useLingui();
   const { item } = run;
-  const state = routineState(run);
+  const state = routineState(run, queued);
   const digest = item.finished?.result.trim() || undefined;
   const failed = state === "failed";
+  const subscribed = item.notify === true;
   const expands = Boolean(digest || handoff);
   const [manualExpanded, setManualExpanded] = useState<boolean | null>(null);
-  const expanded = expands && (manualExpanded ?? Boolean(digest && run.latest && failed));
+  // Only a routine's latest run opens on its own: older ones stay folded so past reports are no wall.
+  const expanded =
+    expands && (manualExpanded ?? Boolean(digest && run.latest && (subscribed || failed)));
   const locale = i18n.locale || "en";
   const time = routineTime(item.ts, locale, withDay);
   const statusLabel =
-    state === "running"
-      ? t`Running`
-      : state === "completed"
-        ? t`Completed`
-        : failed
-          ? t`Failed`
-          : t`Cancelled`;
+    state === "queued"
+      ? t`Queued`
+      : state === "running"
+        ? t`Running`
+        : state === "completed"
+          ? t`Completed`
+          : failed
+            ? t`Failed`
+            : t`Cancelled`;
   const Icon = ROUTINE_STATE_ICON[state];
   const colorClass = stateColorClass(state);
   const wordClass = stateWordClass(state);
   const filled = state === "completed" || state === "failed";
-  const accessibleLabel = [item.name, statusLabel, time, handoff?.label].filter(Boolean).join(", ");
+  const accessibleLabel = [
+    item.name,
+    statusLabel,
+    time,
+    subscribed ? t`Notifications on` : null,
+    handoff?.label,
+  ]
+    .filter(Boolean)
+    .join(", ");
 
   return (
     <div data-testid="routine-run-line">
@@ -151,6 +176,15 @@ export function RoutineRunLine({
           )}
           <span className="flex w-3.5 shrink-0 items-center justify-center">
             {handoff && !expanded ? handoff.receipt : null}
+          </span>
+          <span className="flex w-3.5 shrink-0 items-center justify-center">
+            {subscribed ? (
+              <Bell
+                role="img"
+                aria-label={t`Notifications on`}
+                className="size-3.5 text-muted-foreground"
+              />
+            ) : null}
           </span>
           <span className="flex w-3.5 shrink-0 items-center justify-center">
             <RoutineDisclosure expanded={expanded} />
@@ -283,6 +317,7 @@ export function RoutineGroupLine({
         <span className="shrink-0 text-time tabular-nums text-muted-foreground">{range}</span>
         <span className="shrink-0 text-label font-medium text-muted-foreground">{statusLabel}</span>
         <span className="flex w-3.5 shrink-0 items-center justify-center">{receipt}</span>
+        <span className="w-3.5 shrink-0" />
         <span className="flex w-3.5 shrink-0 items-center justify-center">
           <RoutineDisclosure expanded={open && !inDialog} />
         </span>

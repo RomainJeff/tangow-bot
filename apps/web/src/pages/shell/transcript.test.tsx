@@ -93,6 +93,7 @@ async function renderThread(
         olderCursor={null}
         loadingOlder={false}
         running={false}
+        queuedRunIds={new Set()}
         workingBots={[]}
         onLoadOlder={() => undefined}
         onOpenBot={() => undefined}
