@@ -426,6 +426,14 @@ export const CARD_STATE_TYPES = [
   "skill.draft",
 ] as const satisfies readonly SessionEntryType[];
 
+const CARD_STATES: ReadonlySet<SessionEntryType> = new Set(CARD_STATE_TYPES);
+
+export function isCardState(
+  entry: SessionEntry,
+): entry is SessionEntryOf<(typeof CARD_STATE_TYPES)[number]> {
+  return CARD_STATES.has(entry.type);
+}
+
 export const BLOCK_KINDS_NEEDING_THE_PERSON: ReadonlySet<MessageBlock["kind"]> = new Set([
   "mcp_approval",
 ] satisfies MessageBlock["kind"][]);

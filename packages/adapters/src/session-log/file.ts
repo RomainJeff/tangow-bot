@@ -19,7 +19,7 @@ import {
   sessionEntryNonce,
 } from "@rakazo/adapter-kit";
 import type { EntryId, SessionEntry } from "@rakazo/contracts";
-import { CARD_STATE_TYPES, SessionId } from "@rakazo/contracts";
+import { isCardState, SessionId } from "@rakazo/contracts";
 import type { TailSource } from "@rakazo/core";
 import { decodeEntries, readTailFromEnd, SessionEntryMissingParentError } from "@rakazo/core";
 
@@ -282,12 +282,4 @@ function errorCode(error: unknown): unknown {
 
 function isMissing(error: unknown): boolean {
   return errorCode(error) === "ENOENT";
-}
-
-const CARD_STATES: ReadonlySet<string> = new Set(CARD_STATE_TYPES);
-
-function isCardState(
-  entry: SessionEntry,
-): entry is Extract<SessionEntry, { type: (typeof CARD_STATE_TYPES)[number] }> {
-  return CARD_STATES.has(entry.type);
 }
