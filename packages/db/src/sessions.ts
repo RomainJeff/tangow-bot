@@ -1,6 +1,13 @@
 import type { NewSession, SessionEntryDraft } from "@rakazo/adapter-kit";
 import { nextSessionEntry, SessionAppendError, sessionEntryNonce } from "@rakazo/adapter-kit";
-import type { SessionEntry } from "@rakazo/contracts";
+import type {
+  EntryId,
+  MessageBlock,
+  RunOutcome,
+  SessionEntry,
+  SessionEntryOf,
+  SessionEntryType,
+} from "@rakazo/contracts";
 import { SessionEntrySchema, SessionId } from "@rakazo/contracts";
 import { SessionEntryDecodeError, sanitizeJsonValue } from "@rakazo/core";
 import type { Prisma } from "./client.js";
@@ -138,4 +145,119 @@ export async function appendSessionEntryInTransaction(
     select: { id: true },
   });
   return entry;
+}
+
+type EntryBody<T extends SessionEntryType> = T extends unknown
+  ? { type: T; payload: SessionEntryOf<T>["payload"] }
+  : never;
+type RunBlockBody = EntryBody<
+  "assistant.text" | "assistant.reasoning" | "assistant.ask" | "assistant.choice"
+>;
+type BlockOf<K extends MessageBlock["kind"]> = Extract<MessageBlock, { kind: K }>;
+
+const asText = (block: MessageBlock): RunBlockBody => ({
+  type: "assistant.text",
+  payload: { blocks: [block] },
+});
+
+const RUN_BLOCK_ENTRY: {
+  [K in MessageBlock["kind"]]: ((block: BlockOf<K>) => RunBlockBody) | null;
+} = {
+  text: asText,
+  card: asText,
+  app_connect: asText,
+  connect: asText,
+  computer: asText,
+  meta: asText,
+  chart: asText,
+  child_bot: asText,
+  skill_draft: asText,
+  mcp_approval: asText,
+  image: asText,
+  file: asText,
+  channel_message: asText,
+  link_preview: asText,
+  reasoning: (block) => ({ type: "assistant.reasoning", payload: { text: block.text } }),
+  ask: (block) => ({ type: "assistant.ask", payload: { block } }),
+  choice: (block) => ({ type: "assistant.choice", payload: { block } }),
+  progress: null,
+  steps: null,
+  subagent: null,
+  handoff: null,
+  bot_message_sent: null,
+  bot_message_received: null,
+  routine_run: null,
+};
+
+/**
+ * Append the entries of a message a run published, one per block, to the run's own session. The
+ * first entry takes the message's id, so whatever points at the message points at the entry.
+ */
+export async function appendRunBlocksInTransaction(
+  tx: Prisma.TransactionClient,
+  message: { id: string; runId: string; botId: string },
+  blocks: readonly MessageBlock[],
+  append: typeof appendSessionEntryInTransaction = appendSessionEntryInTransaction,
+): Promise<void> {
+  const bodies = blocks.flatMap((block) => {
+    const toEntry = RUN_BLOCK_ENTRY[block.kind] as ((block: MessageBlock) => RunBlockBody) | null;
+    return toEntry ? [toEntry(block)] : [];
+  });
+  if (bodies.length === 0) return;
+  const run = await tx.run.findUniqueOrThrow({
+    where: { id: message.runId },
+    select: { sessionId: true },
+  });
+  for (const [index, body] of bodies.entries()) {
+    await append(tx, {
+      ...body,
+      ...(index === 0 ? { id: message.id as EntryId } : {}),
+      sessionId: run.sessionId as SessionId,
+      botId: message.botId,
+      runId: message.runId,
+    } as SessionEntryDraft);
+  }
+}
+
+type RunEnding =
+  | { status: "completed" }
+  | { status: "failed"; error: string }
+  | { status: "cancelled"; by?: string };
+
+/**
+ * Close a run's log with how the run ended. A run that never wrote `run.started` has no log to
+ * close and a closed one stays closed, so every way a run ends can call this. Usage defaults to
+ * what the run recorded.
+ */
+export async function appendRunFinishedInTransaction(
+  tx: Prisma.TransactionClient,
+  runId: string,
+  ending: RunEnding,
+  usage?: RunOutcome["usage"],
+): Promise<void> {
+  const logged = await tx.sessionEntry.findMany({
+    where: { runId, type: { in: ["run.started", "run.finished"] } },
+    select: { type: true, sessionId: true, botId: true },
+  });
+  const started = logged.find((entry) => entry.type === "run.started");
+  if (!started?.botId || logged.some((entry) => entry.type === "run.finished")) return;
+  const recorded = usage
+    ? undefined
+    : await tx.usageRecord.aggregate({
+        where: { runId },
+        _sum: { inputTokens: true, outputTokens: true },
+      });
+  await appendSessionEntryInTransaction(tx, {
+    type: "run.finished",
+    sessionId: started.sessionId as SessionId,
+    botId: started.botId,
+    runId,
+    payload: {
+      ...ending,
+      usage: usage ?? {
+        inputTokens: recorded?._sum.inputTokens ?? 0,
+        outputTokens: recorded?._sum.outputTokens ?? 0,
+      },
+    },
+  });
 }

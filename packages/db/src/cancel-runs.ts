@@ -1,13 +1,30 @@
 import type { Prisma } from "./client.js";
+import { appendRunFinishedInTransaction } from "./sessions.js";
+
+/**
+ * Close the logs of runs about to be cancelled. It goes before the status flips: the log takes no
+ * entry for a cancelled run.
+ */
+export async function logCancelledRunsInTransaction(
+  tx: Prisma.TransactionClient,
+  runIds: readonly string[],
+  by?: string,
+): Promise<void> {
+  for (const runId of runIds) {
+    await appendRunFinishedInTransaction(tx, runId, { status: "cancelled", by });
+  }
+}
 
 /** The caller selects authorized runs and owns the surrounding transaction and cleanup. */
 export async function cancelRunsInTransaction(
-  tx: Pick<Prisma.TransactionClient, "run" | "attempt" | "task">,
+  tx: Prisma.TransactionClient,
   runs: ReadonlyArray<{ id: string; taskId: string }>,
   cancelledAt: Date,
+  by?: string,
 ): Promise<void> {
   if (runs.length === 0) return;
   const runIds = runs.map((run) => run.id);
+  await logCancelledRunsInTransaction(tx, runIds, by);
   await tx.run.updateMany({
     where: { id: { in: runIds } },
     data: {

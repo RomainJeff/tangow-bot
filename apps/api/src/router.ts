@@ -1547,6 +1547,7 @@ export function createRouter(deps: RouterDeps) {
           spaceId: context.actor.spaceId,
           threadId: target.threadId,
           botId: contextBotId,
+          userId: context.actor.userId,
           ...(target.kind === "group" ? { groupId: target.groupId } : {}),
         });
         await Promise.all(
@@ -1579,6 +1580,7 @@ export function createRouter(deps: RouterDeps) {
           spaceId: context.actor.spaceId,
           threadId: target.threadId,
           botId: contextBotId,
+          userId: context.actor.userId,
           messageId: input.messageId,
           ...(target.kind === "group" ? { groupId: target.groupId } : {}),
         });

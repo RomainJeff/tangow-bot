@@ -32,6 +32,10 @@ import {
   createThreadMessageInTransaction,
   RunHistoryWriteError,
 } from "./messages.js";
+import {
+  appendRunBlocksInTransaction,
+  appendRunFinishedInTransaction,
+} from "./sessions.js";
 import { withTransactionRetry } from "./transaction-retry.js";
 
 const EVENT_BATCH_SIZE = 200;
@@ -73,6 +77,8 @@ export interface ClearThreadInput {
   /** Event author and the bot-scoped target for one-to-one chats. */
   botId: string;
   groupId?: string;
+  /** Who cleared, recorded on the runs this cancels. */
+  userId?: string;
 }
 
 export interface ClearThreadResult {
@@ -365,7 +371,7 @@ async function truncateThreadInTransaction(
   });
   const now = new Date();
   const runIds = activeRuns.map((run) => run.id);
-  await cancelRunsInTransaction(tx, activeRuns, now);
+  await cancelRunsInTransaction(tx, activeRuns, now, input.userId);
   // Expire as tombstones so a still-open provider screen claim cannot reset fencing to 1.
   await expireComputerExecutionLeases(tx, { runId: { in: runIds } });
   await tx.computer.updateMany({
@@ -1787,6 +1793,11 @@ async function finalizeRunOnce(
           runId: input.runId,
           markUnread: input.markUnread,
         });
+        await appendRunBlocksInTransaction(
+          tx,
+          { id: message.id, runId: input.runId, botId: input.botId },
+          completedBlocks,
+        );
         await appendEventInTransaction(tx, {
           spaceId: input.spaceId,
           threadId: input.threadId,
@@ -1797,6 +1808,13 @@ async function finalizeRunOnce(
         });
       }
     }
+    await appendRunFinishedInTransaction(
+      tx,
+      input.runId,
+      input.outcome === "completed"
+        ? { status: "completed" }
+        : { status: "failed", error: input.error },
+    );
     const lastEvent = await appendEventInTransaction(tx, {
       spaceId: input.spaceId,
       threadId: input.threadId,

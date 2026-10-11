@@ -37,6 +37,8 @@ export const SessionRunTrigger = z.discriminatedUnion("kind", [
   }),
   z.object({ kind: z.literal("handoff"), entryId: EntryId }),
   z.object({ kind: z.literal("bot_message"), entryId: EntryId }),
+  /** Started by the app with its task alone, such as a taught skill's test: no entry woke it. */
+  z.object({ kind: z.literal("direct") }),
 ]);
 export type SessionRunTrigger = z.infer<typeof SessionRunTrigger>;
 

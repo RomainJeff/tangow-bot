@@ -18,6 +18,7 @@ import type {
   NotificationProvider,
   SandboxProvider,
   SemanticMemoryProvider,
+  SessionEntryDraft,
   SessionLog,
   ToolCallTrace,
   WebProvider,
@@ -29,7 +30,7 @@ import {
   routineWakeupJob,
   runContinueJob,
 } from "@rakazo/adapter-kit";
-import type { MessageBlock, RunStatus } from "@rakazo/contracts";
+import type { MessageBlock, RunStatus, SessionEntryOf, SessionRunTrigger } from "@rakazo/contracts";
 import {
   ATTACHMENT_MAX_BYTES,
   BOT_DESCRIPTION_MAX_LENGTH,
@@ -37,8 +38,11 @@ import {
   BOT_TITLE_MAX_LENGTH,
   BotSecretName,
   BotSecretSubmission,
+  EntryId,
   isAttachmentImageMimeType,
   OPENAI_COMPATIBLE_PROVIDER_ID,
+  RunTrigger,
+  SessionId,
 } from "@rakazo/contracts";
 import type {
   CreatedRoutine,
@@ -129,6 +133,7 @@ import {
 import {
   activeBotNames,
   appendEventInTransaction,
+  appendRunBlocksInTransaction,
   createSpaceForMember,
   createThreadMessageInTransaction,
   effectiveMemoryScope,
@@ -391,6 +396,7 @@ import {
   userProgressClientNonce,
 } from "./user-progress.js";
 import { createWebProvider } from "./web-provider-factory.js";
+import { withAbort } from "./web-ssrf.js";
 import { webFetchFromTool, webSearchFromTool } from "./web-tools.js";
 
 const modelCredentialLocks = new Map<string, Promise<void>>();
@@ -1914,6 +1920,55 @@ export function createRunExecutor(deps: ExecutorDeps) {
           const detail = toolDetails.get(executionId);
           if (detail) detail.output = describeToolPayload(result);
         };
+        const runLog: RunLog = { sessionId: run.sessionId as SessionId, runId, botId: bot.id };
+        const resumedCalls = new Set<string>();
+        const logEntry = (draft: SessionEntryDraft) =>
+          deps.prisma.$transaction((tx) => deps.sessionLog.append(tx, draft));
+        const announcesTools = deps.runtime.describe().capabilities.streaming;
+        const toolAnnouncements = new Map<string, ReturnType<typeof deferred>>();
+        const toolAnnounced = (executionId: string) => {
+          let handled = toolAnnouncements.get(executionId);
+          if (!handled) {
+            handled = deferred();
+            toolAnnouncements.set(executionId, handled);
+          }
+          return handled;
+        };
+        const afterToolAnnounced = async (executionId: string) => {
+          if (!announcesTools) return;
+          await withAbort(toolAnnounced(executionId).promise, context.signal);
+          toolAnnouncements.delete(executionId);
+        };
+        const toolCall = (callId: string, name: string, args: Record<string, unknown>) =>
+          ({
+            type: "tool.call",
+            payload: { callId, name, input: redactSecrets(describeToolPayload(args), runSecrets) },
+          }) satisfies ToolLogEntry;
+        const runLoggedTool = async (
+          write: (entry: ToolLogEntry) => Promise<unknown>,
+          name: string,
+          args: Record<string, unknown>,
+          executionId: string,
+          trace?: ToolCallTrace,
+        ) => {
+          if (!resumedCalls.delete(executionId)) await write(toolCall(executionId, name, args));
+          const result = await applyTool(name, args, executionId, trace);
+          recordToolOutput(executionId, result);
+          if (!isToolPauseResult(result)) {
+            await write({
+              type: "tool.result",
+              payload: {
+                callId: executionId,
+                output: redactSecrets(describeToolPayload(result), runSecrets),
+                isError: isFailedToolResult(result),
+                artifactIds: toolArtifactIds(result),
+              },
+            });
+          }
+          return result;
+        };
+        const writeRunEntry = (entry: ToolLogEntry) => logEntry({ ...runLog, ...entry });
+        const effort = thinkingLevel ?? resolved.thinkingLevel ?? null;
         let pendingProgress = "";
         let lastProgressAt = 0;
         let hasStreamedText = false;
@@ -3350,7 +3405,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
                     needsOAuth: oauthLikely,
                   },
                 ];
-                const committed = await persistMessageInTransaction(tx, run, "bot", blocks);
+                const committed = await persistMessageInTransaction(
+                  tx,
+                  deps.sessionLog,
+                  run,
+                  "bot",
+                  blocks,
+                );
                 return { server, eventSeq: committed.eventSeq };
               });
               serverRow = created.server;
@@ -4207,6 +4268,15 @@ export function createRunExecutor(deps: ExecutorDeps) {
             historyMessagesAvailable,
             historyWindowMode,
           });
+          for (const callId of await openRunLog(
+            deps,
+            run,
+            runLog,
+            { provider: runModelProvider, id: runModelId },
+            effort,
+          )) {
+            resumedCalls.add(callId);
+          }
           const runtimeEvents = deps.runtime.run(
             {
               botId: bot.id,
@@ -4241,9 +4311,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
               executeTool: scripted
                 ? undefined
                 : async (name, args, executionId, _route, trace) => {
-                    const result = await applyTool(name, args, executionId, trace);
-                    recordToolOutput(executionId, result);
-                    return result;
+                    await afterToolAnnounced(executionId);
+                    return runLoggedTool(writeRunEntry, name, args, executionId, trace);
                   },
               resolveModel: scripted
                 ? undefined
@@ -4508,6 +4577,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               if (event.name !== "message_user") {
                 await publishMidTurnNarration();
               }
+              toolAnnounced(event.executionId).resolve();
               await deps.events.append({
                 spaceId: run.spaceId,
                 threadId: thread.id,
@@ -4569,8 +4639,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
               if (scripted) {
                 const startedAt = Date.now();
                 try {
-                  const result = await applyTool(event.name, event.args, event.executionId);
-                  recordToolOutput(event.executionId, result);
+                  const result = await runLoggedTool(
+                    writeRunEntry,
+                    event.name,
+                    event.args,
+                    event.executionId,
+                  );
                   await appendToolCompletionAudit(
                     deps,
                     {
@@ -5440,6 +5514,128 @@ function safeStringifyToolPayload(value: unknown): string {
   }
 }
 
+type RunLog = { sessionId: SessionId; runId: string; botId: string };
+
+type ToolLogEntry =
+  | { type: "tool.call"; payload: SessionEntryOf<"tool.call">["payload"] }
+  | { type: "tool.result"; payload: SessionEntryOf<"tool.result">["payload"] };
+
+function toolArtifactIds(result: unknown): string[] {
+  const artifactId = (result as { artifactId?: unknown } | null)?.artifactId;
+  return typeof artifactId === "string" ? [artifactId] : [];
+}
+
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((settle) => {
+    resolve = settle;
+  });
+  return { promise, resolve };
+}
+
+async function openRunLog(
+  deps: Pick<ExecutorDeps, "prisma" | "sessionLog">,
+  run: RunTriggerSource,
+  log: RunLog,
+  model: { provider: string; id: string },
+  effort: SessionEntryOf<"run.started">["payload"]["effort"],
+): Promise<Set<string>> {
+  return deps.prisma.$transaction(async (tx) => {
+    const written = await tx.sessionEntry.findMany({
+      where: { runId: run.id, type: { in: ["run.started", "tool.call", "tool.result"] } },
+      orderBy: { seq: "asc" },
+      select: { type: true, payload: true },
+    });
+    const awaitingResult = new Set<string>();
+    for (const { type, payload } of written) {
+      if (type === "run.started") continue;
+      const { callId } = payload as { callId: string };
+      if (type === "tool.call") awaitingResult.add(callId);
+      else awaitingResult.delete(callId);
+    }
+    if (written.length === 0) {
+      await deps.sessionLog.append(tx, {
+        ...log,
+        type: "run.started",
+        payload: { trigger: await sessionRunTrigger(tx, run), model, effort },
+      });
+    }
+    return awaitingResult;
+  });
+}
+
+type RunTriggerSource = {
+  id: string;
+  trigger: string;
+  routineId: string | null;
+  sourceMessageId: string | null;
+  createdAt: Date;
+};
+
+async function sessionRunTrigger(
+  tx: Prisma.TransactionClient,
+  run: RunTriggerSource,
+): Promise<SessionRunTrigger> {
+  const stored = RunTrigger.safeParse(run.trigger);
+  if (!stored.success) return carrierTrigger(tx, run);
+  switch (stored.data) {
+    case "routine":
+      return routineTrigger(tx, run);
+    case "webhook":
+      return run.routineId
+        ? { kind: "webhook", routineId: run.routineId }
+        : carrierTrigger(tx, run);
+    case "skill":
+      return { kind: "direct" };
+    case "user":
+    case "follow_up":
+    case "reaction":
+    case "spawn":
+    case "messaging":
+    case "bot_message":
+    case "resume":
+      return carrierTrigger(tx, run);
+  }
+}
+
+async function carrierTrigger(
+  tx: Prisma.TransactionClient,
+  run: RunTriggerSource,
+): Promise<SessionRunTrigger> {
+  if (!run.sourceMessageId) return { kind: "direct" };
+  const entryId = run.sourceMessageId as EntryId;
+  const carrier = await tx.sessionEntry.findUnique({
+    where: { id: entryId },
+    select: { type: true },
+  });
+  if (carrier?.type === "handoff") return { kind: "handoff", entryId };
+  if (carrier?.type === "bot.message.received") return { kind: "bot_message", entryId };
+  const steered =
+    run.trigger === "follow_up" &&
+    (await tx.steeringMessage.findFirst({
+      where: { messageId: run.sourceMessageId },
+      select: { id: true },
+    }));
+  return steered ? { kind: "steering", entryId } : { kind: "message", entryId };
+}
+
+async function routineTrigger(
+  tx: Prisma.TransactionClient,
+  run: RunTriggerSource,
+): Promise<SessionRunTrigger> {
+  if (!run.routineId) return { kind: "direct" };
+  const routine = await tx.routine.findUnique({
+    where: { id: run.routineId },
+    select: { name: true },
+  });
+  return {
+    kind: "routine",
+    routineId: run.routineId,
+    name: routine?.name ?? "",
+    scheduledAt: run.createdAt.toISOString(),
+  };
+}
+
 function redactBlocks(blocks: MessageBlock[], secrets: string[]): MessageBlock[] {
   return blocks.map((block) => {
     if (block.kind === "text") {
@@ -5488,7 +5684,7 @@ async function publishMessage(
   clientNonce?: string,
 ) {
   const committed = await deps.prisma.$transaction((tx) =>
-    persistMessageInTransaction(tx, run, role, blocks, markUnread, clientNonce),
+    persistMessageInTransaction(tx, deps.sessionLog, run, role, blocks, markUnread, clientNonce),
   );
   await deps.events.notify(run.threadId, committed.eventSeq).catch((error) => {
     getLogger().error("thread message realtime notification", error);
@@ -5498,6 +5694,7 @@ async function publishMessage(
 
 async function persistMessageInTransaction(
   tx: Prisma.TransactionClient,
+  sessionLog: ExecutorDeps["sessionLog"],
   run: { id: string; spaceId: string; threadId: string; botId: string },
   role: "user" | "bot" | "system",
   blocks: MessageBlock[],
@@ -5513,6 +5710,14 @@ async function persistMessageInTransaction(
     markUnread,
     clientNonce,
   });
+  if (role === "bot") {
+    await appendRunBlocksInTransaction(
+      tx,
+      { id: message.id, runId: run.id, botId: run.botId },
+      blocks,
+      (client, draft) => sessionLog.append(client, draft),
+    );
+  }
   const event = await appendEventInTransaction(tx, {
     spaceId: run.spaceId,
     threadId: run.threadId,

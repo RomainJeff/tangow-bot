@@ -39,6 +39,7 @@ import {
   expireComputerExecutionLeases,
   IsolationError,
   lockOwnedGroup,
+  logCancelledRunsInTransaction,
   type Prisma,
   type PrismaClient,
   resumeAskWithComposerTextInTransaction,
@@ -1196,15 +1197,16 @@ export async function stopThreadRuns(
 ) {
   const { runIds, computers, leases } = await deps.prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM threads WHERE id = ${target.threadId} FOR UPDATE`;
-    const cancelled = await tx.run.updateManyAndReturn({
-      where: {
-        threadId: target.threadId,
-        status: { in: [...ACTIVE_RUN_STATUSES] },
-      },
-      data: { status: "cancelled", completedAt: new Date() },
+    const active = await tx.run.findMany({
+      where: { threadId: target.threadId, status: { in: [...ACTIVE_RUN_STATUSES] } },
       select: { id: true },
     });
-    const ids = cancelled.map((run) => run.id);
+    const ids = active.map((run) => run.id);
+    await logCancelledRunsInTransaction(tx, ids, actor.userId);
+    await tx.run.updateMany({
+      where: { id: { in: ids } },
+      data: { status: "cancelled", completedAt: new Date() },
+    });
     await tx.steeringMessage.deleteMany({
       where: {
         botId: { in: target.kind === "bot" ? [target.botId] : target.memberBotIds },

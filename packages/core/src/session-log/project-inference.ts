@@ -185,6 +185,7 @@ function triggerContext(trigger: SessionRunTrigger): string | undefined {
     case "steering":
     case "handoff":
     case "bot_message":
+    case "direct":
       return undefined;
   }
 }

@@ -16,6 +16,7 @@ import {
   createRepos,
   createThreadMessageInTransaction,
   expireComputerExecutionLeases,
+  logCancelledRunsInTransaction,
   withTransactionRetry,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
@@ -154,7 +155,7 @@ async function ensureSpawnRun(
 
   try {
     return await prisma.$transaction(async (tx) => {
-      await createThreadMessageInTransaction(tx, {
+      const prompt = await createThreadMessageInTransaction(tx, {
         threadId: input.threadId,
         role: "user",
         blocks: [{ kind: "text", text: input.prompt }],
@@ -180,6 +181,7 @@ async function ensureSpawnRun(
           status: "queued",
           trigger: "spawn",
           clientNonce,
+          sourceMessageId: prompt.id,
         },
       });
     });
@@ -281,6 +283,7 @@ export async function archiveBot(
   const runIds = activeRuns.map((run) => run.id);
   const now = new Date();
   await deps.prisma.$transaction(async (tx) => {
+    await logCancelledRunsInTransaction(tx, runIds);
     await tx.run.updateMany({
       where: { id: { in: runIds } },
       data: { status: "cancelled", completedAt: now },

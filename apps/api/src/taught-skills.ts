@@ -45,6 +45,7 @@ import {
   type createRepos,
   expireComputerExecutionLeases,
   IsolationError,
+  logCancelledRunsInTransaction,
   type PrismaClient,
   type ThreadEvents,
 } from "@rakazo/db";
@@ -113,16 +114,24 @@ export async function assertTeachingSendAllowed(
 
 async function cancelActiveRuns(
   deps: TaughtSkillsDeps,
-  _actor: Actor,
+  actor: Actor,
   botId: string,
 ): Promise<void> {
-  const activeRuns = await deps.prisma.run.findMany({
-    where: { botId, status: { in: [...ACTIVE_RUN_STATUSES] } },
-    select: { id: true },
-  });
-  await deps.prisma.run.updateMany({
-    where: { botId, status: { in: [...ACTIVE_RUN_STATUSES] } },
-    data: { status: "cancelled", completedAt: new Date() },
+  const activeRuns = await deps.prisma.$transaction(async (tx) => {
+    const runs = await tx.run.findMany({
+      where: { botId, status: { in: [...ACTIVE_RUN_STATUSES] } },
+      select: { id: true },
+    });
+    await logCancelledRunsInTransaction(
+      tx,
+      runs.map((run) => run.id),
+      actor.userId,
+    );
+    await tx.run.updateMany({
+      where: { id: { in: runs.map((run) => run.id) } },
+      data: { status: "cancelled", completedAt: new Date() },
+    });
+    return runs;
   });
   await expireComputerExecutionLeases(deps.prisma, { botId });
   await deps.prisma.computer.updateMany({
