@@ -1,3 +1,4 @@
+import type { SessionEntryDraft } from "@rakazo/adapter-kit";
 import { SessionId } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
 import { RunHistoryWriteError } from "@rakazo/db";
@@ -170,6 +171,44 @@ describe("PostgresSessionLog", () => {
       ),
     ).rejects.toMatchObject({ reason: "no_feed_bot" });
     expect(await log.readTail(sessionId)).toEqual([]);
+  });
+
+  it("refuses a run's own entries after its run.finished, but not its subagent entry", async () => {
+    const { prisma } = database;
+    const { botId, sessionId, run } = await seedThread(prisma);
+    const ofRun = { sessionId, botId, runId: run.id };
+    const append = (draft: SessionEntryDraft) => prisma.$transaction((tx) => log.append(tx, draft));
+    await append({
+      ...ofRun,
+      type: "run.finished",
+      payload: { status: "completed", usage: { inputTokens: 1, outputTokens: 1 } },
+    });
+
+    await expect(
+      append({
+        ...ofRun,
+        type: "assistant.text",
+        payload: { blocks: [{ kind: "text", text: "late" }] },
+      }),
+    ).rejects.toMatchObject({ reason: "run_finished" });
+    await append({
+      ...ofRun,
+      type: "subagent",
+      payload: {
+        callId: "call_helper",
+        sessionId: SessionId.parse("ses_helper_after"),
+        name: "checker",
+        model: { provider: "emulator", id: "emulator-1" },
+        task: "Check it.",
+        status: "completed",
+        result: "checked",
+        usage: { inputTokens: 1, outputTokens: 1 },
+      },
+    });
+    expect((await log.readTail(sessionId)).map((entry) => entry.type)).toEqual([
+      "run.finished",
+      "subagent",
+    ]);
   });
 
   it("refuses an entry from a cancelled run", async () => {

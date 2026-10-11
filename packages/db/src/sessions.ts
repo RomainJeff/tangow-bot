@@ -154,22 +154,35 @@ export async function appendSessionEntryInTransaction(
             'session.entry.appended', ${JSON.stringify({ entries: [entry] })}::jsonb, ${runId}, ${at}
           FROM t)`
       : Prisma.empty;
-  // The run check reads a snapshot taken after the session lock, so it sees a cancel that
+  // A run writes nothing once cancelled, and nothing of its own once it finished in this session.
+  // The checks read a snapshot taken after the session lock, so they see a cancel or a finish that
   // committed while this append waited.
+  const runScoped = /^(run|assistant|tool)\./.test(entry.type);
   const written = await tx.$queryRaw<unknown[]>`
     WITH e AS (
       INSERT INTO session_entries (id, "sessionId", seq, "parentId", type, payload, "botId", "runId", "createdAt")
       SELECT ${entry.id}, ${entry.sessionId}, ${seq}, ${entry.parentId}, ${entry.type},
         ${JSON.stringify(entry.payload)}::jsonb, ${entry.botId ?? null}, ${runId}, ${at}
-      WHERE ${runId}::text IS NULL
-        OR EXISTS (SELECT 1 FROM runs WHERE id = ${runId} AND status <> 'cancelled')
+      WHERE (${runId}::text IS NULL
+          OR EXISTS (SELECT 1 FROM runs WHERE id = ${runId} AND status <> 'cancelled'))
+        AND NOT (${runScoped} AND EXISTS (
+          SELECT 1 FROM session_entries
+          WHERE "sessionId" = ${entry.sessionId} AND "runId" = ${runId} AND type = 'run.finished'))
       RETURNING id),
     s AS (
       UPDATE sessions SET "nextEntrySeq" = ${seq + 1}, "headEntryId" = ${entry.id}
       FROM e WHERE sessions.id = ${entry.sessionId})
     ${feed}
     SELECT 1 FROM e`;
-  if (written.length === 0) throw new RunHistoryWriteError();
+  if (written.length === 0) {
+    const [run] = await tx.$queryRaw<Array<{ status: string }>>`
+      SELECT status FROM runs WHERE id = ${runId}`;
+    if (!run || run.status === "cancelled") throw new RunHistoryWriteError();
+    throw new SessionAppendError(
+      "run_finished",
+      `Run ${runId} already finished in session ${entry.sessionId}`,
+    );
+  }
   if (threadId && newEventId) log.eventOf.set(threadId, newEventId);
   return entry;
 }
