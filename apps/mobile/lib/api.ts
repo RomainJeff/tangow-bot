@@ -875,11 +875,21 @@ export function mergeMobileSnapshot(
   preserveLoadedHistory = false,
 ): MobileSnapshot {
   if (!prev || prev.threadId !== next.threadId) return next;
-  const refreshed = withRefreshedEntries(prev, next, preserveLoadedHistory);
+  // A refresh older than the events already applied keeps what they brought; a newer one carries
+  // the open run's streamed text up to its cursor, so its layer replaces the held one.
+  const behind = prev.cursor !== undefined && (next.cursor ?? 0) < prev.cursor;
+  const refreshed = behind
+    ? {
+        ...next,
+        entries: prev.entries,
+        olderCursor: prev.olderCursor,
+        cursor: prev.cursor,
+        layer: prev.layer,
+      }
+    : withRefreshedEntries(prev, next, preserveLoadedHistory);
   const merged: MobileSnapshot = {
     ...refreshed,
     entries: keepEntries(prev.entries, refreshed.entries),
-    layer: prev.layer,
   };
   const shared: Record<string, unknown> = {};
   let unchanged = Object.keys(prev).length === Object.keys(merged).length;
@@ -921,6 +931,9 @@ export function keepUnchangedRows(
 function sameJson(a: unknown, b: unknown): boolean {
   if (Object.is(a, b)) return true;
   if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) return false;
+  if (a instanceof Map || b instanceof Map) {
+    return a instanceof Map && b instanceof Map && sameJson([...a], [...b]);
+  }
   if (Array.isArray(a) !== Array.isArray(b)) return false;
   if (Array.isArray(a)) {
     const other = b as unknown[];

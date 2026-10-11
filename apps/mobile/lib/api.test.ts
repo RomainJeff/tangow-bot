@@ -1792,6 +1792,23 @@ describe("mobile thread history", () => {
     source: "app",
   });
 
+  it("takes a newer refresh's streamed text and keeps what events brought past an older one", () => {
+    const streaming: MobileSnapshot = {
+      ...snapshot([middle]),
+      layer: new Map([
+        ["run-1", { botId: "bot-1", ts: "t", blocks: [{ kind: "progress", text: "3" }] }],
+      ]),
+    };
+    const caughtUp = mergeMobileSnapshot(streaming, { ...snapshot([middle, newest]), cursor: 4 });
+    expect(caughtUp.entries).toEqual([middle, newest]);
+    expect(caughtUp.layer.size).toBe(0);
+
+    const stale = mergeMobileSnapshot(streaming, { ...snapshot([]), cursor: 2 });
+    expect(stale.entries).toBe(streaming.entries);
+    expect(stale.layer).toBe(streaming.layer);
+    expect(stale.cursor).toBe(3);
+  });
+
   it("keeps the previous snapshot when a refresh brings nothing new", () => {
     const held = snapshot([middle, newest]);
     expect(mergeMobileSnapshot(held, snapshot([middle, newest]))).toBe(held);
