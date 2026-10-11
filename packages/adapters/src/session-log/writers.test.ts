@@ -1105,7 +1105,8 @@ describe("session log writers", () => {
           : {}),
       });
       const message = await prisma.message.findFirstOrThrow({ where: { runId: run.id } });
-      return { run, messageId: message.id };
+      const ask = (await log.readRun(run.id)).find((entry) => entry.type === "assistant.ask");
+      return { run, messageId: message.id, askId: ask?.id };
     }
 
     const newest = async (sessionId: SessionId) => {
@@ -1213,18 +1214,21 @@ describe("session log writers", () => {
 
       async function answer(blocks: MessageBlock[], value: string) {
         const owner = await seedBot(database.prisma, `Answerer ${randomUUID()}`);
-        const { run, messageId } = await paused(owner, blocks);
-        await database.prisma.$transaction((tx) =>
-          answerRunInputInTransaction(tx, {
-            spaceId: SPACE,
-            threadId: owner.threadId,
-            runId: run.id,
-            messageId,
-            answeredByUserId: USER,
-            answer: value,
-          }),
-        );
-        return { entries: await answered(owner), target: messageId };
+        const { run, messageId, askId } = await paused(owner, blocks);
+        const answerBy = (id: string) =>
+          database.prisma.$transaction((tx) =>
+            answerRunInputInTransaction(tx, {
+              spaceId: SPACE,
+              threadId: owner.threadId,
+              runId: run.id,
+              messageId: id,
+              answeredByUserId: USER,
+              answer: value,
+            }),
+          );
+        const byMessage = askId === messageId ? null : await answerBy(messageId);
+        await answerBy(askId!);
+        return { entries: await answered(owner), target: askId, byMessage };
       }
 
       const city = {
@@ -1281,11 +1285,37 @@ describe("session log writers", () => {
           ]);
         },
       );
+
+      it("answers a question asked after the message's text by the question's entry", async () => {
+        const { entries, target, byMessage } = await answer(
+          [
+            { kind: "text", text: "Both cities have a free week." },
+            { kind: "ask", text: "Which city?" },
+          ],
+          "Lyon",
+        );
+
+        expect(byMessage).toBeNull();
+        expect(entries).toEqual([
+          { type: "card.answered", payload: { target, answer: "Lyon" } },
+          {
+            type: "user.message",
+            payload: {
+              blocks: [{ kind: "text", text: "Lyon" }],
+              replyTo: { entryId: target },
+              source: "card",
+            },
+          },
+        ]);
+      });
     });
 
-    it("logs an ask the composer answered as answered", async () => {
+    it("logs an ask the composer answered as answered, on the question's entry", async () => {
       const owner = await seedBot(database.prisma, "Hamilton");
-      const { run, messageId } = await paused(owner, [{ kind: "ask", text: "Which city?" }]);
+      const { run, askId } = await paused(owner, [
+        { kind: "text", text: "Both cities have a free week." },
+        { kind: "ask", text: "Which city?" },
+      ]);
 
       await database.prisma.$transaction((tx) =>
         resumeAskWithComposerTextInTransaction(tx, {
@@ -1299,7 +1329,7 @@ describe("session log writers", () => {
       expect(await newest(owner.sessionId)).toEqual({
         type: "card.answered",
         sessionId: owner.sessionId,
-        payload: { target: messageId },
+        payload: { target: askId },
       });
     });
 
