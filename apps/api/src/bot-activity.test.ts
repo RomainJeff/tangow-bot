@@ -69,7 +69,11 @@ function setup({
     routine: { findMany: vi.fn(async (_args: unknown) => routines) },
     $queryRaw: vi.fn(async () => []),
   };
-  const sessionLog = { readRun: vi.fn(async (_runId: string) => entries) };
+  const sessionLog = {
+    readRun: vi.fn(async (_runId: string, { limit }: { limit?: number } = {}) =>
+      limit === undefined ? entries : entries.slice(-limit),
+    ),
+  };
   const handler = new RPCHandler(
     createRouter({
       prisma: prisma as unknown as PrismaClient,

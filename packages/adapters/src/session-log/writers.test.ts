@@ -1291,23 +1291,23 @@ describe("session log writers", () => {
           .filter((entry) => entry.type === "card.answered" || entry.type === "user.message")
           .map(({ type, payload }) => ({ type, payload }));
 
+      const answerBy = (threadId: string, runId: string, messageId: string, value: string) =>
+        database.prisma.$transaction((tx) =>
+          answerRunInputInTransaction(tx, {
+            spaceId: SPACE,
+            threadId,
+            runId,
+            messageId,
+            answeredByUserId: USER,
+            answer: value,
+          }),
+        );
+
       async function answer(blocks: MessageBlock[], value: string) {
         const owner = await seedBot(database.prisma, `Answerer ${randomUUID()}`);
-        const { run, messageId, askId } = await paused(owner, blocks);
-        const answerBy = (id: string) =>
-          database.prisma.$transaction((tx) =>
-            answerRunInputInTransaction(tx, {
-              spaceId: SPACE,
-              threadId: owner.threadId,
-              runId: run.id,
-              messageId: id,
-              answeredByUserId: USER,
-              answer: value,
-            }),
-          );
-        const byMessage = askId === messageId ? null : await answerBy(messageId);
-        await answerBy(askId!);
-        return { entries: await answered(owner), target: askId, byMessage };
+        const { run, askId } = await paused(owner, blocks);
+        await answerBy(owner.threadId, run.id, askId!, value);
+        return { entries: await answered(owner), target: askId };
       }
 
       const city = {
@@ -1366,22 +1366,23 @@ describe("session log writers", () => {
       );
 
       it("answers a question asked after the message's text by the question's entry", async () => {
-        const { entries, target, byMessage } = await answer(
-          [
-            { kind: "text", text: "Both cities have a free week." },
-            { kind: "ask", text: "Which city?" },
-          ],
-          "Lyon",
-        );
+        const owner = await seedBot(database.prisma, `Answerer ${randomUUID()}`);
+        const { run, messageId, askId } = await paused(owner, [
+          { kind: "text", text: "Both cities have a free week." },
+          { kind: "ask", text: "Which city?" },
+        ]);
+
+        const byMessage = await answerBy(owner.threadId, run.id, messageId, "Lyon");
+        await answerBy(owner.threadId, run.id, askId!, "Lyon");
 
         expect(byMessage).toBeNull();
-        expect(entries).toEqual([
-          { type: "card.answered", payload: { target, answer: "Lyon" } },
+        expect(await answered(owner)).toEqual([
+          { type: "card.answered", payload: { target: askId, answer: "Lyon" } },
           {
             type: "user.message",
             payload: {
               blocks: [{ kind: "text", text: "Lyon" }],
-              replyTo: { entryId: target },
+              replyTo: { entryId: askId },
               source: "card",
             },
           },

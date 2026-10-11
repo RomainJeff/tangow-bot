@@ -19,7 +19,7 @@ import {
   sessionEntryNonce,
 } from "@rakazo/adapter-kit";
 import type { EntryId, SessionEntry } from "@rakazo/contracts";
-import { CARD_STATE_TYPES, SessionId } from "@rakazo/contracts";
+import { isCardState, SessionId } from "@rakazo/contracts";
 import type { TailSource } from "@rakazo/core";
 import { decodeEntries, readTailFromEnd, SessionEntryMissingParentError } from "@rakazo/core";
 
@@ -130,7 +130,8 @@ export class FileSessionLog implements SessionLog<undefined> {
     return chain.slice(start, start + limit);
   }
 
-  async readRun(runId: string): Promise<SessionEntry[]> {
+  async readRun(runId: string, { limit }: { limit?: number } = {}): Promise<SessionEntry[]> {
+    if (limit !== undefined) assertEntryCount("limit", limit);
     const dir = path.join(this.root, "sessions");
     const names = await readdir(dir).catch((error: unknown) => {
       if (isMissing(error)) return [];
@@ -153,9 +154,10 @@ export class FileSessionLog implements SessionLog<undefined> {
         ? entry.payload.replyTo !== undefined && asks.has(entry.payload.replyTo.entryId)
         : isCardState(entry) && ids.has(entry.payload.target),
     );
-    return [...run, ...joined].sort(
+    const sorted = [...run, ...joined].sort(
       (left, right) => left.ts.localeCompare(right.ts) || left.seq - right.seq,
     );
+    return limit === undefined ? sorted : sorted.slice(-limit);
   }
 
   async readEntry(sessionId: SessionId, entryId: EntryId): Promise<SessionEntry | undefined> {
@@ -280,12 +282,4 @@ function errorCode(error: unknown): unknown {
 
 function isMissing(error: unknown): boolean {
   return errorCode(error) === "ENOENT";
-}
-
-const CARD_STATES: ReadonlySet<string> = new Set(CARD_STATE_TYPES);
-
-function isCardState(
-  entry: SessionEntry,
-): entry is Extract<SessionEntry, { type: (typeof CARD_STATE_TYPES)[number] }> {
-  return CARD_STATES.has(entry.type);
 }

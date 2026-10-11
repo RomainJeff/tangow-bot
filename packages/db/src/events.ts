@@ -853,6 +853,28 @@ async function planSpawnBotEdit(
 }
 
 /**
+ * The waiting run's card: its own pausing message (the latest bot message of the run), its
+ * pending ask, and the entry the client names it by. Tolerant lookup, and callers rewrite the
+ * stored array by index, so a block this build does not recognise neither hides the pending ask
+ * nor gets dropped from the message.
+ */
+async function pendingAskCard(
+  tx: Prisma.TransactionClient,
+  { threadId, runId }: { threadId: string; runId: string },
+) {
+  const message = await tx.message.findFirst({
+    where: { threadId, runId, role: "bot" },
+    orderBy: { seq: "desc" },
+  });
+  const pending = parseKnownMessageBlocks(message?.blocks).find(
+    ({ block }) => block.kind === "ask" && block.status !== "answered",
+  );
+  if (!message || pending?.block.kind !== "ask") return null;
+  const askEntryId = ((await pendingAskEntryId(tx, runId)) ?? message.id) as EntryId;
+  return { message, pending: { index: pending.index, block: pending.block }, askEntryId };
+}
+
+/**
  * Answer the pending ask of a waiting_input run inside an existing transaction. Called by
  * answerRunInput, and exported so a caller that already holds a transaction can reuse it.
  * Returns null when nothing was awaiting an answer; throws InvalidAnswerError when the run is
@@ -882,21 +904,9 @@ export async function answerRunInputInTransaction(
       botId: run.botId,
       runId: input.runId,
     };
-    // The card is the run's own pausing message, the latest bot message of a waiting run, and the
-    // client names it by the entry of its question.
-    const [message, askEntryId] = await Promise.all([
-      tx.message.findFirst({
-        where: { threadId: input.threadId, runId: input.runId, role: "bot" },
-        orderBy: { seq: "desc" },
-      }),
-      pendingAskEntryId(tx, input.runId),
-    ]);
-    // Tolerant lookup, and the rewrites below map over the stored array by index: a block this
-    // build does not recognise neither hides the pending ask nor gets dropped from the message.
-    const known = parseKnownMessageBlocks(message?.blocks);
-    const pending = known.find(({ block }) => block.kind === "ask" && block.status !== "answered");
-    if (!message || pending?.block.kind !== "ask") return null;
-    const askId = (askEntryId ?? message.id) as EntryId;
+    const card = await pendingAskCard(tx, input);
+    if (!card) return null;
+    const { message, pending, askEntryId: askId } = card;
     if (input.messageId !== askId) return null;
     const answerEntry = (text: string) =>
       appendSessionEntryInTransaction(tx, {
@@ -1313,21 +1323,9 @@ export async function resumeAskWithComposerTextInTransaction(
   });
   if (!run) return { resolvable: false };
 
-  // The card is always the run's own pausing message (pauseRunForInput writes the ask blocks
-  // directly onto it), so the latest bot message for this run is the one to inspect.
-  const [message, askEntryId] = await Promise.all([
-    tx.message.findFirst({
-      where: { threadId: input.threadId, runId: input.runId, role: "bot" },
-      orderBy: { seq: "desc" },
-    }),
-    pendingAskEntryId(tx, input.runId),
-  ]);
-  // Tolerant lookup: a block this build does not recognise (older/newer writer) must not hide a
-  // pending ask the client is already rendering as pending — that mismatch is what makes the
-  // caller throw CONFLICT on a card the user can see.
-  const known = parseKnownMessageBlocks(message?.blocks);
-  const pending = known.find(({ block }) => block.kind === "ask" && block.status !== "answered");
-  if (!message || pending?.block.kind !== "ask") return { resolvable: false };
+  const card = await pendingAskCard(tx, input);
+  if (!card) return { resolvable: false };
+  const { message, pending, askEntryId } = card;
   const pendingAsk = pending.block;
 
   // Approval and secret asks stay blocked in PR 1 — classification reuses the same audited
@@ -1369,7 +1367,7 @@ export async function resumeAskWithComposerTextInTransaction(
   await appendCardStateInTransaction(tx, {
     type: "card.answered",
     feedBotId: run.botId,
-    payload: { target: (askEntryId ?? message.id) as EntryId },
+    payload: { target: askEntryId },
   });
   const updated = await appendEventInTransaction(tx, {
     spaceId: input.spaceId,

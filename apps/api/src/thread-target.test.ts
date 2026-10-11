@@ -719,6 +719,38 @@ describe("threadSnapshot", () => {
     expect(snapshot.progress).toEqual([]);
   });
 
+  it("leaves a hidden peer run's steps out of the snapshot's page", async () => {
+    const step = (seq: number, type: string, payload: object, envelope: object = {}) =>
+      SessionEntrySchema.parse({
+        id: `entry-${seq}`,
+        sessionId: "session-1",
+        seq,
+        parentId: seq === 0 ? null : `entry-${seq - 1}`,
+        ts: new Date(Date.UTC(2026, 9, 11, 9, 0, seq)).toISOString(),
+        type,
+        payload,
+        ...envelope,
+      });
+    const peer = { botId: "bot-scout", runId: "run-peer" };
+    const page = [
+      step(0, "user.message", { blocks: [{ kind: "text", text: "Ask Scout" }], source: "app" }),
+      step(1, "tool.call", { callId: "call-1", name: "search", input: "{}" }, peer),
+      step(2, "assistant.ask", { block: { kind: "ask", text: "Which market?" } }, peer),
+    ];
+    const prisma = {
+      ...groupPrisma(groupRunFindMany({})),
+      run: {
+        findMany: vi.fn(async () => [
+          { id: "run-peer", bot: { parentBotId: "bot-chief" }, sourceMessage: null },
+        ]),
+      },
+    } as unknown as PrismaClient;
+
+    const snapshot = await threadSnapshot({ sessionLog: tailOf(page), prisma }, groupTarget());
+
+    expect(snapshot.entries.map((entry) => entry.id)).toEqual(["entry-0", "entry-2"]);
+  });
+
   it("includes waiting peer bot_message runs in group activeRuns", async () => {
     const peerWaiting = {
       id: "run-peer-waiting",
@@ -1182,7 +1214,9 @@ describe("readSessionEntries", () => {
       run: { findFirst: vi.fn(async () => ({ id: "run-helper" })) },
     } as unknown as PrismaClient;
     const sessionLog = {
-      readRun: vi.fn(async (runId: string) => (runId === "run-helper" ? run : [])),
+      readRun: vi.fn(async (runId: string, { limit }: { limit?: number } = {}) =>
+        runId !== "run-helper" ? [] : limit === undefined ? run : run.slice(-limit),
+      ),
     };
     return { deps: { prisma, sessionLog }, sessionLog };
   }

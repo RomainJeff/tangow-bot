@@ -128,11 +128,12 @@ const structuredMentionTarget = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("connector"), id: Id }),
 ]);
 
-const sessionEntriesOutput = z.object({
+export const SessionEntriesSchema = z.object({
   entries: z.array(SessionEntrySchema),
   /** The read stopped at its cap, so the oldest entries are missing. */
   truncated: z.literal(true).optional(),
 });
+export type SessionEntries = z.infer<typeof SessionEntriesSchema>;
 
 const threadSendInput = threadTarget
   .safeExtend({
@@ -885,10 +886,10 @@ export const appContract = {
     list: oc.input(z.object({ filter: z.enum(["active", "recent"]) })).output(RunsListOutputSchema),
     recap: oc.input(z.object({ runId: Id })).output(RunRecapSchema),
     /** A run's entries from every session it wrote to, joined with the person's answers. */
-    entries: oc.input(z.object({ runId: Id })).output(sessionEntriesOutput),
+    entries: oc.input(z.object({ runId: Id })).output(SessionEntriesSchema),
   },
   sessions: {
-    entries: oc.input(z.object({ sessionId: SessionId })).output(sessionEntriesOutput),
+    entries: oc.input(z.object({ sessionId: SessionId })).output(SessionEntriesSchema),
   },
   voice: {
     catalog: oc.output(z.array(VoiceCatalogEntrySchema)),

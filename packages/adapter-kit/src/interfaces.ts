@@ -335,8 +335,9 @@ export interface SessionLog<Tx> {
    * A run's entries from every session it wrote to, with the person's answers to its asks and
    * choices and the later state of its cards, by `ts` then `seq`, whether or not a rewind left them
    * on the chain. A child session's run reads whole: its trace and what it raised to the thread.
+   * With `limit`, only the newest `limit` of them, in the same order.
    */
-  readRun(runId: string): Promise<SessionEntry[]>;
+  readRun(runId: string, options?: { limit?: number }): Promise<SessionEntry[]>;
   /** One entry of the session, on the chain or not. */
   readEntry(sessionId: SessionId, entryId: EntryId): Promise<SessionEntry | undefined>;
 }
