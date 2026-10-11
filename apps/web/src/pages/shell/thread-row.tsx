@@ -122,7 +122,9 @@ export function ThreadRowBody({
 }) {
   const { item } = row;
   const body = itemBody(item, row, context, { chrome, showAuthor, showAvatar, arrivesLive });
-  const origin = "origin" in item && item.origin && "kind" in item.origin ? item.origin : null;
+  // A received bot message names the peer's entry, not a child session of this thread.
+  const origin =
+    "origin" in item && item.origin && !("entryId" in item.origin) ? item.origin : null;
   if (!origin) return body;
   return (
     <>
