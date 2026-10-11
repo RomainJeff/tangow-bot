@@ -218,7 +218,7 @@ export function projectThread(entries: readonly SessionEntry[]): ProjectedThread
         );
         break;
       case "routine.started": {
-        const { sessionId, routineId, name } = segment.payload;
+        const { sessionId, routineId, name, notify } = segment.payload;
         const routine: RoutineItem = {
           kind: "routine",
           id: segment.id,
@@ -228,6 +228,7 @@ export function projectThread(entries: readonly SessionEntry[]): ProjectedThread
           sessionId,
           routineId,
           name,
+          ...(notify ? { notify } : {}),
           finished: null,
         };
         routines.set(segment.runId, routine);

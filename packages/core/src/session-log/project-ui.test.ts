@@ -410,7 +410,7 @@ describe("projectThreadItems", () => {
   });
 
   it("folds a routine's start and finish into one item at its start, open until it finishes", () => {
-    const started = (runId: string, name: string) => ({
+    const started = (runId: string, name: string, notify?: true) => ({
       botId: "bot_ada",
       runId,
       type: "routine.started",
@@ -421,6 +421,7 @@ describe("projectThreadItems", () => {
         trigger: "routine",
         scheduledAt: at(0),
         model,
+        ...(notify ? { notify } : {}),
       },
     });
     const finished = (runId: string, payload: object) => ({
@@ -432,7 +433,7 @@ describe("projectThreadItems", () => {
     const chain = linkEntries("rtn", [
       finished("run_before_page", { status: "completed", result: "Older." }),
       started("run_brief", "Morning brief"),
-      started("run_digest", "Digest"),
+      started("run_digest", "Digest", true),
       finished("run_brief", { status: "completed", result: "Two meetings today." }),
     ]);
     expect(projectThreadItems(chain)).toEqual([
@@ -456,6 +457,7 @@ describe("projectThreadItems", () => {
         sessionId: "ses_run_digest",
         routineId: "rtn_run_digest",
         name: "Digest",
+        notify: true,
         finished: null,
       },
     ]);
