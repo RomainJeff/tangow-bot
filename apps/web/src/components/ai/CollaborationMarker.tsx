@@ -7,18 +7,23 @@ export function CollaborationMarker({
   bots,
   label,
   onClick,
+  muted = false,
 }: {
   ariaLabel: string;
   /** The bots the exchange involved, sender first. */
   bots: StackedAvatarItem[];
   label: string;
-  onClick: () => void;
+  /** Absent for a peer the app cannot open, such as another owner's agent. */
+  onClick?: () => void;
+  /** A message still waiting on its answer. */
+  muted?: boolean;
 }) {
   return (
     <div className="flex flex-col">
       <Interstitial
         data-testid="peer-receipt-chip"
         aria-label={ariaLabel}
+        className={muted ? "opacity-60" : undefined}
         // Unlabelled on purpose: the button's own name says who the exchange
         // was with, so the stack is decoration.
         avatars={<StackedAvatars items={bots} size={17} />}

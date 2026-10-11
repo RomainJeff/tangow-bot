@@ -1,5 +1,5 @@
-import type { MessageBlock } from "@rakazo/contracts";
-import type { RoutineGroupRun } from "@rakazo/core";
+import type { EntryId, SessionId } from "@rakazo/contracts";
+import type { RoutineLineRun } from "@rakazo/core";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
@@ -18,75 +18,66 @@ vi.mock("@lingui/react/macro", () => ({
   Trans: ({ children }: { children?: unknown }) => children,
 }));
 
-import { GROUP_DIALOG_MAX, RoutineGroupLine, RoutineRunLine } from "./routine-run-line";
+import { RoutineGroupLine, RoutineRunLine } from "./routine-run-line";
 
-type RoutineRunBlock = Extract<MessageBlock, { kind: "routine_run" }>;
+type Finished = NonNullable<RoutineLineRun["item"]["finished"]>;
 
-function run(overrides: Partial<RoutineRunBlock> & { routineName: string }): RoutineRunBlock {
-  return { kind: "routine_run", state: "completed", ...overrides } as RoutineRunBlock;
+function run(
+  id: string,
+  finished: Finished | null = { status: "completed", result: "" },
+  latest = true,
+): RoutineLineRun {
+  return {
+    item: {
+      kind: "routine",
+      id: id as EntryId,
+      ts: "2026-09-27T10:00:00.000Z",
+      runId: `run-${id}`,
+      botId: "bot-1",
+      sessionId: `session-${id}` as SessionId,
+      routineId: "routine-1",
+      name: "Surveillance Accor",
+      finished,
+    },
+    latest,
+  };
 }
 
-function item(overrides: Partial<RoutineGroupRun> & { run: RoutineRunBlock }): RoutineGroupRun {
-  return { messageId: "m1", createdAt: "2026-09-27T10:00:00.000Z", ...overrides };
-}
+const open = () => undefined;
 
 describe("RoutineRunLine", () => {
-  it("is not a button when it carries neither a report nor a handoff (edge case)", () => {
-    const html = renderToStaticMarkup(
-      <RoutineRunLine item={item({ run: run({ routineName: "Surveillance Accor" }) })} />,
-    );
+  it("opens the routine's session at once when it has no words to show", () => {
+    const html = renderToStaticMarkup(<RoutineRunLine run={run("r1")} onOpen={open} />);
 
-    expect(html).not.toContain("<button");
     expect(html).toContain("Surveillance Accor");
     expect(html).toContain("Completed");
+    expect(html).toContain('aria-haspopup="dialog"');
+    expect(html).not.toContain("aria-expanded");
   });
 
   it("shows the failed word in the destructive colour and stays closed when it is not the latest run", () => {
     const html = renderToStaticMarkup(
-      <RoutineRunLine
-        item={item({
-          run: run({ routineName: "Surveillance Accor", state: "failed", digest: "boom" }),
-          latest: false,
-        })}
-      />,
+      <RoutineRunLine run={run("r1", { status: "failed", result: "boom" }, false)} onOpen={open} />,
     );
 
     expect(html).toContain("Failed");
     expect(html).toContain("text-destructive");
     expect(html).toContain('aria-expanded="false"');
+    expect(html).not.toContain("boom");
   });
 
-  it("auto-opens the routine's latest run when it failed or is subscribed (A5)", () => {
+  it("opens the routine's latest failed run on its words, which open the session", () => {
     const html = renderToStaticMarkup(
-      <RoutineRunLine
-        item={item({
-          run: run({ routineName: "Surveillance Accor", state: "failed", digest: "boom" }),
-          latest: true,
-        })}
-      />,
+      <RoutineRunLine run={run("r1", { status: "failed", result: "boom" })} onOpen={open} />,
     );
 
     expect(html).toContain('aria-expanded="true"');
-    expect(html).toContain("border-outline");
     expect(html).toContain("boom");
-  });
-
-  it("shows a bell with an accessible name when subscribed", () => {
-    const html = renderToStaticMarkup(
-      <RoutineRunLine
-        item={item({ run: run({ routineName: "Surveillance Accor", notify: true }) })}
-      />,
-    );
-
-    expect(html).toContain('aria-label="Notifications on"');
+    expect(html).toContain('aria-label="Report, Surveillance Accor · Opens in full"');
   });
 
   it("shimmers the status word while the run is going", () => {
-    const html = renderToStaticMarkup(
-      <RoutineRunLine
-        item={item({ run: run({ routineName: "Surveillance Accor", state: "running" }) })}
-      />,
-    );
+    const html = renderToStaticMarkup(<RoutineRunLine run={run("r1", null)} onOpen={open} />);
 
     expect(html).toContain("rk-shimmer");
     expect(html).toContain("Running");
@@ -97,13 +88,10 @@ describe("RoutineGroupLine", () => {
   const handoffFor = () => undefined;
 
   it("names the routine and how many runs it holds, closed by default", () => {
-    const runs = [
-      item({ messageId: "r1", run: run({ routineName: "Surveillance Accor" }) }),
-      item({ messageId: "r2", run: run({ routineName: "Surveillance Accor" }) }),
-      item({ messageId: "r3", run: run({ routineName: "Surveillance Accor" }) }),
-      item({ messageId: "r4", run: run({ routineName: "Surveillance Accor" }) }),
-    ];
-    const html = renderToStaticMarkup(<RoutineGroupLine runs={runs} handoffFor={handoffFor} />);
+    const runs = ["r1", "r2", "r3", "r4"].map((id) => run(id));
+    const html = renderToStaticMarkup(
+      <RoutineGroupLine runs={runs} handoffFor={handoffFor} onOpenRun={open} />,
+    );
 
     expect(html).toContain("Surveillance Accor");
     expect(html).toContain("4 runs");
@@ -113,31 +101,15 @@ describe("RoutineGroupLine", () => {
   });
 
   it("says how many were cancelled instead of Completed when any run was", () => {
-    const runs = [
-      item({
-        messageId: "r1",
-        run: run({ routineName: "Surveillance Accor", state: "cancelled" }),
-      }),
-      item({ messageId: "r2", run: run({ routineName: "Surveillance Accor" }) }),
-    ];
-    const html = renderToStaticMarkup(<RoutineGroupLine runs={runs} handoffFor={handoffFor} />);
+    const runs = [run("r1", { status: "cancelled", result: "" }), run("r2")];
+    const html = renderToStaticMarkup(
+      <RoutineGroupLine runs={runs} handoffFor={handoffFor} onOpenRun={open} />,
+    );
 
     expect(html).toContain("1 cancelled");
     expect(html).not.toContain(">Completed<");
     // The icon says cancelled too, not a green check beside "1 cancelled".
     expect(html).not.toContain("text-success");
     expect(html).toContain("lucide-circle-stop");
-  });
-
-  it("caps the inline list at GROUP_DIALOG_MAX runs (A8c)", () => {
-    expect(GROUP_DIALOG_MAX).toBe(8);
-    const runs = Array.from({ length: 9 }, (_, i) =>
-      item({ messageId: `r${i}`, run: run({ routineName: "Surveillance Accor" }) }),
-    );
-    const html = renderToStaticMarkup(<RoutineGroupLine runs={runs} handoffFor={handoffFor} />);
-    // Closed by default either way; the dialog-vs-inline choice only shows once
-    // opened, which needs a click a static render can't simulate — this only
-    // pins the threshold constant used to decide it.
-    expect(html).toContain("9 runs");
   });
 });

@@ -1,6 +1,7 @@
 import type { ProductEvent } from "@rakazo/contracts";
 import { notificationBody } from "@rakazo/core";
 import { i18n } from "./i18n";
+import { botWordsOf } from "./thread-items";
 
 export type BrowserNotificationPermission = "default" | "denied" | "granted";
 
@@ -47,13 +48,11 @@ export type BrowserNotificationContext = {
 };
 
 export function shouldNotifyBrowser(
-  event: Pick<ProductEvent, "id" | "type" | "threadId" | "seq" | "payload">,
+  event: ProductEvent,
   context: BrowserNotificationContext,
 ): boolean {
   const notifiable =
-    (event.type === "thread.message.created" && event.payload.role === "bot") ||
-    event.type === "run.failed" ||
-    event.type === "run.cancelled";
+    botWordsOf(event).length > 0 || event.type === "run.failed" || event.type === "run.cancelled";
   return (
     context.streamReady &&
     notifiable &&
@@ -66,22 +65,15 @@ export function shouldNotifyBrowser(
 }
 
 export function browserNotificationMessage(
-  event: Pick<ProductEvent, "type" | "payload">,
+  event: ProductEvent,
   botName: string,
 ): { title: string; body: string } {
   const name = botName.trim() || i18n._({ id: "Bot", message: "Bot" });
-  if (event.type === "thread.message.created") {
-    const blocks = Array.isArray(event.payload.blocks) ? event.payload.blocks : [];
-    const body = blocks
-      .map((block) =>
-        block &&
-        typeof block === "object" &&
-        block.kind !== "reasoning" &&
-        "text" in block &&
-        typeof block.text === "string"
-          ? block.text
-          : "",
-      )
+  const words = botWordsOf(event);
+  if (words.length > 0) {
+    const body = words
+      .flatMap((entry) => entry.payload.blocks)
+      .map((block) => (block.kind === "text" ? block.text : ""))
       .filter(Boolean)
       .join("\n");
     return {
@@ -108,7 +100,7 @@ export function browserNotificationMessage(
 }
 
 export function deliverBrowserNotification(
-  event: Pick<ProductEvent, "id" | "type" | "threadId" | "payload">,
+  event: ProductEvent,
   botName: string,
   context: {
     enabled: boolean;

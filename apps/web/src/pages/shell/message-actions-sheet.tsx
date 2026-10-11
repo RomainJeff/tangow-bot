@@ -1,9 +1,10 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import type { MessageReaction, ThreadMessage } from "@rakazo/contracts";
+import type { MessageReaction } from "@rakazo/contracts";
 import { canReactToThreadMessage, MESSAGE_REACTIONS } from "@rakazo/contracts";
 import { ActionSheet } from "@rakazo/ui-web";
 import { Copy, Link2Off, Pencil, Reply, Square, Volume2 } from "lucide-react";
 import type { ReactNode } from "react";
+import type { MessageItem } from "../../lib/thread-items";
 import {
   canEditAndResendMessage,
   canRemoveLinkPreview,
@@ -38,15 +39,15 @@ export function MessageActionsSheet({
   speaking,
   onSpeak,
 }: {
-  message: ThreadMessage | null;
+  message: MessageItem | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onReply: (message: ThreadMessage) => void;
-  onEdit: (message: ThreadMessage) => void;
-  onReact: (message: ThreadMessage, reaction: MessageReaction) => Promise<void>;
+  onReply: (message: MessageItem) => void;
+  onEdit: (message: MessageItem) => void;
+  onReact: (message: MessageItem, reaction: MessageReaction) => Promise<void>;
   voiceReady: boolean;
   speaking: boolean;
-  onSpeak: (message: ThreadMessage) => void;
+  onSpeak: (message: MessageItem) => void;
 }) {
   const { t } = useLingui();
 

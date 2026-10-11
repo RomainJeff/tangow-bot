@@ -1,4 +1,4 @@
-import type { ThreadSnapshot } from "@rakazo/contracts";
+import type { MessageBlock } from "@rakazo/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
@@ -22,14 +22,7 @@ vi.mock("../lib/desktop", () => ({ desktopBridge: () => null }));
 
 import { CallView } from "./CallView";
 
-type AskBlock = Extract<ThreadSnapshot["messages"][number]["blocks"][number], { kind: "ask" }>;
-
-function snapshotWith(block: AskBlock): ThreadSnapshot {
-  return {
-    run: { id: "run-1", status: "waiting_input" },
-    messages: [{ id: "msg-1", runId: "run-1", role: "bot", blocks: [block] }],
-  } as unknown as ThreadSnapshot;
-}
+type AskBlock = Extract<MessageBlock, { kind: "ask" }>;
 
 function renderCall(block: AskBlock): string {
   return renderToStaticMarkup(
@@ -38,7 +31,11 @@ function renderCall(block: AskBlock): string {
       botName="Claudius"
       botColor="#000000"
       transcribe={false}
-      snapshot={snapshotWith(block)}
+      thread={{
+        messages: [],
+        running: false,
+        ask: { block, target: { runId: "run-1", messageId: "msg-1" } },
+      }}
       onSend={async () => {}}
       onFollowUp={async () => {}}
       onAnswer={async () => {}}
