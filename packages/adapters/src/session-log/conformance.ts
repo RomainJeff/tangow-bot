@@ -209,9 +209,11 @@ export function runSessionLogConformance<Tx>(makeLog: () => Promise<SessionLogHa
       });
       const first = await append(received("Q3 revenue was 1.2M."));
       const again = await append(received("redelivered"));
+      const next = await append(said(sessionId, "next"));
 
       expect(again).toEqual(first);
-      expect(await harness.log.readTail(sessionId)).toEqual([first]);
+      expect([next.seq, next.parentId]).toEqual([1, first.id]);
+      expect(await harness.log.readTail(sessionId)).toEqual([first, next]);
     });
 
     it("gives concurrent transactions on one session distinct seqs on one chain", async () => {

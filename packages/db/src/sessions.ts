@@ -47,16 +47,29 @@ export async function createSessionInTransaction(
 }
 
 /**
- * Append an entry as the session's new head. The seq bump on the session row is the append lock.
- * An entry of a thread session also lands on the thread's events feed as `session.entry.appended`;
- * a subagent session has no thread and no feed. Of two concurrent deliveries of one clientNonce,
- * the later fails on the session_entries_sessionId_clientNonce_key index, and its retry returns
- * the first entry.
+ * Append an entry as the session's new head. Appends to a session serialize on its row lock, and a
+ * draft whose clientNonce is already in the session returns that entry without taking a seq. An
+ * entry of a thread session also lands on the thread's events feed as `session.entry.appended`; a
+ * subagent session has no thread and no feed.
  */
 export async function appendSessionEntryInTransaction(
   tx: Prisma.TransactionClient,
   draft: SessionEntryDraft,
 ): Promise<SessionEntry> {
+  // Thread before session, in the mode every thread writer locks in, so a message write that
+  // appends an entry cannot deadlock with this. NO KEY on the session row leaves the foreign key
+  // checks of child session and run inserts unblocked.
+  const [thread] = await tx.$queryRaw<Array<{ id: string }>>`
+    SELECT id FROM threads
+    WHERE id = (SELECT "threadId" FROM sessions WHERE id = ${draft.sessionId})
+    FOR UPDATE`;
+  const [session] = await tx.$queryRaw<Array<{ nextEntrySeq: number; spaceId: string }>>`
+    SELECT "nextEntrySeq", "spaceId" FROM sessions WHERE id = ${draft.sessionId}
+    FOR NO KEY UPDATE`;
+  if (!session) {
+    throw new SessionAppendError("unknown_session", `Session ${draft.sessionId} does not exist`);
+  }
+  await assertRunCanWriteHistory(tx, draft.runId);
   const nonce = sessionEntryNonce(draft);
   if (nonce !== undefined) {
     const [delivered] = await tx.$queryRaw<SessionEntryRow[]>`
@@ -64,19 +77,6 @@ export async function appendSessionEntryInTransaction(
       WHERE "sessionId" = ${draft.sessionId} AND payload ->> 'clientNonce' = ${nonce}`;
     if (delivered) return sessionEntryFromRow(delivered);
   }
-  // Thread before session, the order every thread writer locks in: message and event seq bumps
-  // lock the thread row first, so a message write that appends an entry cannot deadlock with this.
-  const [thread] = await tx.$queryRaw<Array<{ id: string }>>`
-    SELECT id FROM threads
-    WHERE id = (SELECT "threadId" FROM sessions WHERE id = ${draft.sessionId})
-    FOR NO KEY UPDATE`;
-  const [session] = await tx.$queryRaw<Array<{ seq: number; spaceId: string }>>`
-    UPDATE sessions SET "nextEntrySeq" = "nextEntrySeq" + 1 WHERE id = ${draft.sessionId}
-    RETURNING "nextEntrySeq" - 1 AS seq, "spaceId"`;
-  if (!session) {
-    throw new SessionAppendError("unknown_session", `Session ${draft.sessionId} does not exist`);
-  }
-  await assertRunCanWriteHistory(tx, draft.runId);
   const head = await tx.sessionEntry.findFirst({
     where: { sessionId: draft.sessionId },
     orderBy: { seq: "desc" },
@@ -94,7 +94,7 @@ export async function appendSessionEntryInTransaction(
       );
     }
   }
-  const entry = nextSessionEntry(sanitizeJsonValue(draft), session.seq, head);
+  const entry = nextSessionEntry(sanitizeJsonValue(draft), session.nextEntrySeq, head);
   if (thread) {
     const botId = entry.botId ?? draft.feedBotId;
     if (botId === undefined) {
@@ -124,6 +124,11 @@ export async function appendSessionEntryInTransaction(
       runId: entry.runId,
       createdAt: new Date(entry.ts),
     },
+    select: { id: true },
+  });
+  await tx.conversationSession.update({
+    where: { id: entry.sessionId },
+    data: { nextEntrySeq: { increment: 1 } },
     select: { id: true },
   });
   return entry;

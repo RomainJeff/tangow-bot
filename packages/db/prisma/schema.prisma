@@ -633,7 +633,7 @@ model Run {
 // One conversation log. A thread session belongs to a thread; a subagent session belongs to the
 // parent session and the tool call that launched it, and has no thread. The
 // sessions_kind_shape_check constraint enforces that split. nextEntrySeq is the per-session seq
-// counter, and the update that bumps it is the append lock.
+// counter, and appends serialize on a lock of this row.
 model ConversationSession {
   id              String                @id
   spaceId         String
