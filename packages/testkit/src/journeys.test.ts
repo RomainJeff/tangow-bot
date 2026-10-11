@@ -682,6 +682,35 @@ describeJourneys("required product journeys", () => {
     ).toBe(releaseEvents);
   });
 
+  it("4f: a takeover and its release reach the log with the change of holder, or not at all", async () => {
+    const cookie = await signup(app, `takeover-log-j-${stamp}@rakazo.test`, "Takeover Log");
+    const bot = await rpc<Bot>(app, cookie, "bots/create", {
+      name: "Chief",
+      title: "",
+      description: "",
+      instructions: "",
+      notifyOnFinish: true,
+    });
+    await rpc(app, cookie, "computer/boot", { botId: bot.id });
+    const holder = async () =>
+      (await rpc<{ controlHolder: string }>(app, cookie, "computer/status", { botId: bot.id }))
+        .controlHolder;
+    await withEntryFault(prisma, "computer.control", async () => {
+      await expect(rpc(app, cookie, "computer/takeover", { botId: bot.id })).rejects.toThrow();
+    });
+    expect(await holder()).not.toBe("user");
+
+    await rpc(app, cookie, "computer/takeover", { botId: bot.id });
+    await rpc(app, cookie, "computer/release", { botId: bot.id });
+
+    const control = await prisma.sessionEntry.findMany({
+      where: { session: { thread: { botId: bot.id } }, type: "computer.control" },
+      orderBy: { seq: "asc" },
+      select: { payload: true },
+    });
+    expect(control.map(({ payload }) => payload)).toEqual([{ holder: "user" }, { holder: "bot" }]);
+  });
+
   it("4d: skipping takeover resumes without treating login as done", async () => {
     const cookie = await signup(app, `takeover-skip-j-${stamp}@rakazo.test`, "Skip Takeover");
     const bot = await rpc<Bot>(app, cookie, "bots/create", {
@@ -2397,6 +2426,14 @@ describeJourneys("required product journeys", () => {
       name: "Export weekly CRM list",
       playbook: stopped.playbook,
     });
+    await withEntryFault(prisma, "skill.saved", async () => {
+      await expect(
+        rpc(app, cookie, "skills/save", { skillId: skill.id, name: "Export weekly CRM list" }),
+      ).rejects.toThrow();
+    });
+    expect(
+      (await rpc<{ status: string }>(app, cookie, "skills/get", { skillId: skill.id })).status,
+    ).toBe("draft");
     const saved = await rpc<{ status: string; name: string }>(app, cookie, "skills/save", {
       skillId: skill.id,
       name: "Export weekly CRM list",
@@ -3016,6 +3053,29 @@ async function waitFor(app: App, cookie: string, botId: string, pred: (snap: Sna
     await new Promise((r) => setTimeout(r, 100));
   }
   throw new Error(`timeout waiting for thread: ${JSON.stringify(last)}`);
+}
+
+/** Makes every insert of one session entry type fail while `work` runs, at the database. */
+async function withEntryFault(
+  prisma: Awaited<ReturnType<typeof createApp>>["prisma"],
+  type: string,
+  work: () => Promise<void>,
+) {
+  await prisma.$executeRawUnsafe(`
+    CREATE FUNCTION journey_entry_fault() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN
+      IF NEW.type = '${type}' THEN RAISE EXCEPTION 'injected ${type} failure'; END IF;
+      RETURN NEW;
+    END $$`);
+  await prisma.$executeRawUnsafe(
+    "CREATE TRIGGER journey_entry_fault BEFORE INSERT ON session_entries FOR EACH ROW EXECUTE FUNCTION journey_entry_fault()",
+  );
+  try {
+    await work();
+  } finally {
+    await prisma.$executeRawUnsafe("DROP TRIGGER journey_entry_fault ON session_entries");
+    await prisma.$executeRawUnsafe("DROP FUNCTION journey_entry_fault()");
+  }
 }
 
 async function waitForDatabase(pred: () => Promise<boolean>) {

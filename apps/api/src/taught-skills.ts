@@ -504,16 +504,27 @@ export function createTaughtSkillsService(deps: TaughtSkillsDeps) {
       if (skill.status !== "draft" && skill.status !== "saved") {
         throw new ORPCError("BAD_REQUEST", { message: "Finish recording before saving" });
       }
-      const row = await deps.prisma.taughtSkill.update({
-        where: { id: skill.id },
-        data: {
-          status: "saved",
-          name: name ?? (skill.name || skill.goal.slice(0, 80)),
-        },
-      });
-      const bot = await deps.prisma.bot.findUnique({
-        where: { id: row.botId },
-        include: { thread: true },
+      const { row, bot } = await deps.prisma.$transaction(async (tx) => {
+        const row = await tx.taughtSkill.update({
+          where: { id: skill.id },
+          data: {
+            status: "saved",
+            name: name ?? (skill.name || skill.goal.slice(0, 80)),
+          },
+        });
+        const bot = await tx.bot.findUnique({
+          where: { id: row.botId },
+          include: { thread: true },
+        });
+        if (bot?.thread) {
+          await appendSessionEntryInTransaction(tx, {
+            type: "skill.saved",
+            sessionId: bot.thread.sessionId as SessionId,
+            botId: bot.id,
+            payload: { skillId: row.id, name: row.name },
+          });
+        }
+        return { row, bot };
       });
       await updateSkillDraftMessage(deps, actor, row, {
         name: row.name,
@@ -521,15 +532,6 @@ export function createTaughtSkillsService(deps: TaughtSkillsDeps) {
         status: "saved",
       });
       if (bot?.thread) {
-        const sessionId = bot.thread.sessionId as SessionId;
-        await deps.prisma.$transaction((tx) =>
-          appendSessionEntryInTransaction(tx, {
-            type: "skill.saved",
-            sessionId,
-            botId: bot.id,
-            payload: { skillId: row.id, name: row.name },
-          }),
-        );
         await deps.events.append({
           spaceId: actor.spaceId,
           threadId: bot.thread.id,

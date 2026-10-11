@@ -2051,23 +2051,46 @@ export function createRouter(deps: RouterDeps) {
 
         const leaseId = randomUUID();
         const expiresAt = new Date(Date.now() + takeoverLeaseMs());
-        const granted = await deps.prisma.computer.updateMany({
-          where: {
-            id: bot.computer.id,
-            state: "running",
-            maintenanceId: null,
-            controlHolder: { not: "user" },
-            controlLeaseId: null,
-          },
-          data: {
-            controlHolder: "user",
-            controlLeaseId: leaseId,
-            controlLeaseExpiresAt: expiresAt,
-            controlBotId: bot.id,
-            controlRunId: waitingForTakeover ? executionLease?.runId : null,
-            state: "running",
-          },
-        });
+        const thread = bot.thread;
+        // A change of holder and its computer.control entry commit together, the thread locked
+        // first as every thread writer does.
+        const changeControl = (
+          holder: "user" | "bot",
+          change: (tx: Prisma.TransactionClient) => Promise<{ count: number }>,
+        ) =>
+          deps.prisma.$transaction(async (tx) => {
+            if (thread)
+              await tx.$queryRaw`SELECT id FROM threads WHERE id = ${thread.id} FOR UPDATE`;
+            const changed = await change(tx);
+            if (changed.count === 1 && thread) {
+              await appendComputerControlInTransaction(tx, {
+                sessionId: thread.sessionId as SessionId,
+                botId: bot.id,
+                holder,
+              });
+            }
+            return changed;
+          });
+        const computerId = bot.computer.id;
+        const granted = await changeControl("user", (tx) =>
+          tx.computer.updateMany({
+            where: {
+              id: computerId,
+              state: "running",
+              maintenanceId: null,
+              controlHolder: { not: "user" },
+              controlLeaseId: null,
+            },
+            data: {
+              controlHolder: "user",
+              controlLeaseId: leaseId,
+              controlLeaseExpiresAt: expiresAt,
+              controlBotId: bot.id,
+              controlRunId: waitingForTakeover ? executionLease?.runId : null,
+              state: "running",
+            },
+          }),
+        );
         if (granted.count !== 1) {
           const current = await deps.prisma.computer.findUniqueOrThrow({
             where: { id: bot.computer.id },
@@ -2095,25 +2118,23 @@ export function createRouter(deps: RouterDeps) {
           };
         }
         try {
-          await scheduleComputerControlExpiry(deps.jobs, bot.computer.id, leaseId, expiresAt);
+          await scheduleComputerControlExpiry(deps.jobs, computerId, leaseId, expiresAt);
         } catch (error) {
-          await deps.prisma.computer.updateMany({
-            where: { id: bot.computer.id, controlLeaseId: leaseId },
-            data: {
-              controlHolder: "none",
-              controlLeaseId: null,
-              controlLeaseExpiresAt: null,
-              controlBotId: null,
-              controlRunId: null,
-            },
-          });
+          await changeControl("bot", (tx) =>
+            tx.computer.updateMany({
+              where: { id: computerId, controlLeaseId: leaseId },
+              data: {
+                controlHolder: "none",
+                controlLeaseId: null,
+                controlLeaseExpiresAt: null,
+                controlBotId: null,
+                controlRunId: null,
+              },
+            }),
+          );
           throw error;
         }
         if (bot.thread) {
-          const sessionId = bot.thread.sessionId as SessionId;
-          await deps.prisma.$transaction((tx) =>
-            appendComputerControlInTransaction(tx, { sessionId, botId: bot.id, holder: "user" }),
-          );
           await deps.events.append({
             spaceId: context.actor.spaceId,
             threadId: bot.thread.id,
