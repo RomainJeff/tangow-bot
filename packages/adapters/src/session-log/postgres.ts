@@ -53,8 +53,7 @@ export class PostgresSessionLog implements SessionLog<Prisma.TransactionClient> 
 
   /**
    * Walk parent links from the entry `start` selects while `proceed` holds for the entry reached.
-   * Each step is a primary key lookup, and a parent always has a lower seq, so the walk ends. A
-   * parent the walk looks for and does not find throws `SessionReadError`.
+   * Each step is a primary key lookup, and a parent always has a lower seq, so the walk ends.
    */
   private async walk(
     sessionId: SessionId,

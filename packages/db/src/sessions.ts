@@ -62,9 +62,9 @@ export async function appendSessionEntryInTransaction(
   tx: Prisma.TransactionClient,
   draft: SessionEntryDraft,
 ): Promise<SessionEntry> {
-  // Thread before session, in the mode every thread writer locks in, so a message write that
-  // appends an entry cannot deadlock with this. NO KEY on the session row leaves the foreign key
-  // checks of child session and run inserts unblocked.
+  // Thread before session, in the mode every thread writer uses, so a message write that appends an
+  // entry cannot deadlock with this. The session row takes NO KEY so that the foreign key checks of
+  // child session and run inserts do not wait on it.
   const [thread] = await tx.$queryRaw<Array<{ id: string }>>`
     SELECT id FROM threads
     WHERE id = (SELECT "threadId" FROM sessions WHERE id = ${draft.sessionId})

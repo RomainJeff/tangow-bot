@@ -32,9 +32,10 @@ interface SessionFile {
 }
 
 /**
- * One `<root>/sessions/<sessionId>.jsonl` per session, for export, import, fixtures and a single
- * process install. Single process only: appends serialize through an in-memory lock per session and
- * the writer caches each session's head, so one instance owns a root. `readRun` scans every file.
+ * One `<root>/sessions/<sessionId>.jsonl` per session, and one `<root>/threads/<threadId>` holding
+ * the id of the thread's main session, for export, import, fixtures and a single process install.
+ * Single process only: appends serialize through an in-memory lock per session and the writer
+ * caches each session's head, so one instance owns a root. `readRun` scans every file.
  */
 export class FileSessionLog implements SessionLog<undefined> {
   private readonly sessions = new Map<SessionId, SessionFile>();
@@ -169,8 +170,7 @@ export class FileSessionLog implements SessionLog<undefined> {
   }
 
   /**
-   * The thread's main session: the id in `<root>/threads/<threadId>`, written by the first claim.
-   * A claim links a complete file into place, so a crash cannot leave a partial one.
+   * The first claim wins, and it links a complete file into place, so a crash leaves no partial one.
    */
   private async claimThread(session: { id: SessionId; threadId: string }): Promise<SessionId> {
     const claim = path.join(this.root, "threads", safeName("Thread", session.threadId));

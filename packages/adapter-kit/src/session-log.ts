@@ -43,7 +43,6 @@ export class SessionAppendError extends Error {
   }
 }
 
-/** A read found the chain broken: an entry's parent is not in the session. */
 export class SessionReadError extends Error {
   readonly reason = "missing_parent";
 
