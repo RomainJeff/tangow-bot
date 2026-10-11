@@ -1,49 +1,88 @@
-import type { ThreadMessage } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
-import { peerConversations, peerMessagesFrom, stripPeerAddressPrefix } from "./peer-messages.js";
+import { peerConversations, stripPeerAddressPrefix } from "./peer-messages.js";
+import { linkEntries } from "./session-log/fixtures/read-fixture.js";
 
-function message(id: string, createdAt: string, blocks: ThreadMessage["blocks"]): ThreadMessage {
-  return { id, threadId: "t_1", seq: 1, role: "bot", blocks, createdAt };
-}
-
-const sentToAnalyst = message("m_1", "2026-08-25T10:00:00.000Z", [
-  { kind: "bot_message_sent", toBotId: "b_2", toBotName: "Analyst", text: "chart q3" },
+const at = (second: number) => `2026-10-10T09:00:0${second}.000Z`;
+const analyst = { kind: "bot", botId: "bot_analyst", name: "Analyst" };
+const exchange = { hop: 1, exchangeId: "peer-1" };
+const chain = linkEntries("peer", [
+  {
+    type: "user.message",
+    payload: { blocks: [{ kind: "text", text: "hello" }], source: "app" },
+  },
+  {
+    botId: "bot_ada",
+    type: "bot.message.sent",
+    payload: { to: analyst, text: "chart q3", intent: "request", ...exchange },
+  },
+  {
+    type: "bot.message.received",
+    payload: {
+      from: { ...analyst, name: "Analyst 2" },
+      fromSessionId: "ses_analyst",
+      fromEntryId: "an-4",
+      text: "done",
+      intent: "result",
+      ...exchange,
+    },
+  },
+  {
+    botId: "bot_ada",
+    type: "bot.message.sent",
+    payload: {
+      to: { kind: "agent", address: "scout@example.test", name: "Scout" },
+      text: "look into it",
+      intent: "request",
+      hop: 1,
+      exchangeId: "peer-3",
+    },
+  },
 ]);
-const replyFromAnalyst = message("m_2", "2026-08-25T10:01:00.000Z", [
-  { kind: "bot_message_received", fromBotId: "b_2", fromBotName: "Analyst", text: "done" },
-]);
-const plainText = message("m_3", "2026-08-25T10:02:00.000Z", [{ kind: "text", text: "hello" }]);
 
-describe("peer conversations", () => {
-  const messages = [sentToAnalyst, replyFromAnalyst, plainText];
-
-  it("reads both directions out of the thread", () => {
-    expect(peerMessagesFrom(messages)).toEqual([
-      expect.objectContaining({ direction: "sent", peerBotName: "Analyst", text: "chart q3" }),
-      expect.objectContaining({ direction: "received", peerBotName: "Analyst", text: "done" }),
+describe("peerConversations", () => {
+  it("gathers each peer's exchange, newest name and activity first", () => {
+    expect(peerConversations(chain)).toEqual([
+      {
+        peerBotId: "scout@example.test",
+        peerBotName: "Scout",
+        messages: [
+          {
+            messageId: "peer-3",
+            direction: "sent",
+            peerBotId: "scout@example.test",
+            peerBotName: "Scout",
+            text: "look into it",
+            createdAt: at(3),
+          },
+        ],
+        lastText: "look into it",
+        lastAt: at(3),
+      },
+      {
+        peerBotId: "bot_analyst",
+        peerBotName: "Analyst 2",
+        messages: [
+          {
+            messageId: "peer-1",
+            direction: "sent",
+            peerBotId: "bot_analyst",
+            peerBotName: "Analyst",
+            text: "chart q3",
+            createdAt: at(1),
+          },
+          {
+            messageId: "peer-2",
+            direction: "received",
+            peerBotId: "bot_analyst",
+            peerBotName: "Analyst 2",
+            text: "done",
+            createdAt: at(2),
+          },
+        ],
+        lastText: "done",
+        lastAt: at(2),
+      },
     ]);
-  });
-
-  it("groups an exchange with one peer into a single conversation", () => {
-    const conversations = peerConversations(messages);
-    expect(conversations).toHaveLength(1);
-    expect(conversations[0]?.peerBotName).toBe("Analyst");
-    expect(conversations[0]?.messages).toHaveLength(2);
-    expect(conversations[0]?.lastText).toBe("done");
-  });
-
-  it("orders conversations by most recent activity", () => {
-    const older = message("m_0", "2026-08-24T09:00:00.000Z", [
-      { kind: "bot_message_sent", toBotId: "b_3", toBotName: "Scout", text: "look into it" },
-    ]);
-    expect(peerConversations([older, ...messages]).map((c) => c.peerBotName)).toEqual([
-      "Analyst",
-      "Scout",
-    ]);
-  });
-
-  it("finds nothing in a thread with no peer traffic", () => {
-    expect(peerConversations([plainText])).toEqual([]);
   });
 });
 

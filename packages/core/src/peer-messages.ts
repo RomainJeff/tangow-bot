@@ -1,4 +1,4 @@
-import type { MessageBlock, ThreadMessage } from "@rakazo/contracts";
+import type { Peer, SessionEntry } from "@rakazo/contracts";
 
 export interface PeerMessage {
   messageId: string;
@@ -17,41 +17,6 @@ export interface PeerConversation {
   lastAt: string;
 }
 
-type PeerBlock = Extract<MessageBlock, { kind: "bot_message_sent" | "bot_message_received" }>;
-
-export function isPeerBlock(block: MessageBlock): block is PeerBlock {
-  return block.kind === "bot_message_sent" || block.kind === "bot_message_received";
-}
-
-export function peerMessagesFrom(messages: readonly ThreadMessage[]): PeerMessage[] {
-  const collected: PeerMessage[] = [];
-  for (const message of messages) {
-    for (const block of message.blocks) {
-      if (!isPeerBlock(block)) continue;
-      collected.push(
-        block.kind === "bot_message_sent"
-          ? {
-              messageId: message.id,
-              direction: "sent",
-              peerBotId: block.toBotId,
-              peerBotName: block.toBotName,
-              text: block.text,
-              createdAt: message.createdAt,
-            }
-          : {
-              messageId: message.id,
-              direction: "received",
-              peerBotId: block.fromBotId,
-              peerBotName: block.fromBotName,
-              text: block.text,
-              createdAt: message.createdAt,
-            },
-      );
-    }
-  }
-  return collected;
-}
-
 /**
  * Strips a single leading `[to <name>] ` peer-address prefix for display in the peer-messages
  * exchange (spec `[to X]` bullet). This is a pure display cleanup, tolerant of surrounding
@@ -63,10 +28,31 @@ export function stripPeerAddressPrefix(text: string): string {
   return text.replace(/^\s*\[to [^\]]+?\]\s*/, "");
 }
 
-/** One conversation per peer, most recently active first. */
-export function peerConversations(messages: readonly ThreadMessage[]): PeerConversation[] {
+/** A bot peer by its id, a connected agent by its messaging address. */
+function peerId(peer: Peer): string {
+  return peer.kind === "bot" ? peer.botId : peer.address;
+}
+
+function peerMessageOf(entry: SessionEntry): PeerMessage | undefined {
+  if (entry.type !== "bot.message.sent" && entry.type !== "bot.message.received") return undefined;
+  const sent = entry.type === "bot.message.sent";
+  const peer = sent ? entry.payload.to : entry.payload.from;
+  return {
+    messageId: entry.id,
+    direction: sent ? "sent" : "received",
+    peerBotId: peerId(peer),
+    peerBotName: peer.name,
+    text: entry.payload.text,
+    createdAt: entry.ts,
+  };
+}
+
+/** One conversation per peer, from the bot messages sent and received, most recently active first. */
+export function peerConversations(entries: readonly SessionEntry[]): PeerConversation[] {
   const byPeer = new Map<string, PeerConversation>();
-  for (const peerMessage of peerMessagesFrom(messages)) {
+  for (const entry of entries) {
+    const peerMessage = peerMessageOf(entry);
+    if (!peerMessage) continue;
     const existing = byPeer.get(peerMessage.peerBotId);
     if (existing) {
       existing.messages.push(peerMessage);
