@@ -126,6 +126,10 @@ export class FileSessionLog implements SessionLog<undefined> {
     return [];
   }
 
+  async readEntry(sessionId: SessionId, entryId: EntryId): Promise<SessionEntry | undefined> {
+    return (await this.readAll(sessionId)).find((entry) => entry.id === entryId);
+  }
+
   private async readAll(sessionId: SessionId): Promise<SessionEntry[]> {
     try {
       return decodeEntries(await readFile(this.fileOf(sessionId), "utf8"));

@@ -51,6 +51,11 @@ export class PostgresSessionLog implements SessionLog<Prisma.TransactionClient> 
     return rows.map(sessionEntryFromRow);
   }
 
+  async readEntry(sessionId: SessionId, entryId: EntryId): Promise<SessionEntry | undefined> {
+    const row = await this.prisma.sessionEntry.findFirst({ where: { id: entryId, sessionId } });
+    return row ? sessionEntryFromRow(row) : undefined;
+  }
+
   /**
    * Walk parent links from the entry `start` selects while `proceed` holds for the entry reached.
    * Each step is a primary key lookup, and a parent always has a lower seq, so the walk ends.

@@ -149,6 +149,21 @@ export function runSessionLogConformance<Tx>(makeLog: () => Promise<SessionLogHa
       expect(await harness.log.readRun(runId)).toEqual(answers);
     });
 
+    it("reads one entry of its session whether the chain still holds it or not", async () => {
+      const { sessionId, runId } = await created();
+      const [question, answer] = await appendAll([
+        said(sessionId, "question"),
+        replied(sessionId, runId, "answer"),
+      ]);
+      await append({ sessionId, type: "rewind", parentId: question!.id, payload: {} });
+      await append(compacted(sessionId, 2));
+      const elsewhere = await append(said((await created()).sessionId, "elsewhere"));
+
+      expect(await harness.log.readEntry(sessionId, answer!.id)).toEqual(answer);
+      expect(await harness.log.readEntry(sessionId, question!.id)).toEqual(question);
+      expect(await harness.log.readEntry(sessionId, elsewhere.id)).toBeUndefined();
+    });
+
     it("starts a new chain at a clear", async () => {
       const { sessionId } = await created();
       await appendAll([said(sessionId, "old"), said(sessionId, "older")]);

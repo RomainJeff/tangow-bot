@@ -315,6 +315,8 @@ export interface SessionLog<Tx> {
   ): Promise<SessionEntry[]>;
   /** A run's entries in seq order, whether or not a rewind left them on the chain. */
   readRun(runId: string): Promise<SessionEntry[]>;
+  /** One entry of the session, on the chain or not. */
+  readEntry(sessionId: SessionId, entryId: EntryId): Promise<SessionEntry | undefined>;
 }
 
 export interface NotificationProvider {
