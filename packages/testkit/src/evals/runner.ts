@@ -1,6 +1,13 @@
 import { randomUUID } from "node:crypto";
+import { readdir, readFile } from "node:fs/promises";
+import path from "node:path";
 import { type AgentRuntime, type JobPublisher, runJobKey } from "@rakazo/adapter-kit";
-import { MessagingTeamChatEmulator } from "@rakazo/adapters";
+import {
+  MessagingTeamChatEmulator,
+  skillDirName,
+  skillLinesByRun,
+  userSkillsRoot,
+} from "@rakazo/adapters";
 import type { ModelConnectInput, RunStatus } from "@rakazo/contracts";
 import { ACTIVE_RUN_STATUSES, isTerminal } from "@rakazo/core";
 import type { createDb } from "@rakazo/db";
@@ -15,6 +22,8 @@ export type EvalApp = {
   prisma: ReturnType<typeof createDb>["prisma"];
   jobs: JobPublisher;
   runtime: AgentRuntime;
+  /** Where the trial's app keeps its files, skills included. */
+  dataDir: string;
   harnessIssues?: readonly string[];
   connector?: { records: readonly unknown[] };
   stop: () => Promise<void>;
@@ -66,6 +75,8 @@ export async function runTrial(
   let messagingLinked = false;
   let messagingAddress = "";
   let messagingOriginThreadId: string | null = null;
+  const skillCalls: Evidence["skillCalls"] = [];
+  const skillNudges: Evidence["skillNudges"] = [];
   const secrets = [options.connection.apiKey ?? "", options.connection.baseUrl ?? ""];
   let phase: FailureCategory = "harness";
   const seenTools = new Map<string, { name: string }>();
@@ -152,6 +163,7 @@ export async function runTrial(
         });
     };
     await setupActor();
+    for (const skill of scenario.skills ?? []) await rpc(app, cookie, "agentSkills/create", skill);
     if (scenario.taughtSkill) {
       // Human-authored fixture setup via the same API as the teaching UI; no model work is prefilled.
       await rpc(app, cookie, "computer/boot", { botId });
@@ -344,6 +356,19 @@ export async function runTrial(
       if ("slack" in step && terminal.status === "completed") {
         await waitForMessagingDelivery(prisma, runId, deadline);
       }
+      // The skill nudge runs after the run completes; the next step must see what it saved.
+      for (const signal of await waitForSkillNudge(prisma, runId, deadline)) {
+        skillNudges.push({ step: stepIndex + 1, signal });
+      }
+      const completions = await prisma.event.findMany({
+        where: { runId, type: "agent.tool.completed" },
+        orderBy: { seq: "asc" },
+        select: { payload: true },
+      });
+      for (const { payload } of completions) {
+        const { name, outcome } = payload as { name?: string; outcome?: string };
+        if (name?.startsWith("skill_")) skillCalls.push({ tool: name, outcome: String(outcome) });
+      }
       const snap = await rpc<{
         messages: Array<{
           role: string;
@@ -397,6 +422,38 @@ export async function runTrial(
       select: { status: true, request: true, result: true },
     });
     await captureTools();
+    const skillsWritten: Evidence["skillsWritten"] = [];
+    const listed = await rpc<Array<{ id: string; source: string }>>(
+      app,
+      cookie,
+      "agentSkills/list",
+    );
+    const botRuns = await handles.prisma.run.findMany({ where: { botId }, select: { id: true } });
+    const botWrites = [
+      ...(
+        await skillLinesByRun(
+          handles.prisma,
+          botRuns.map((run) => run.id),
+        )
+      ).values(),
+    ].flat();
+    for (const listedSkill of listed.filter((entry) => entry.source === "user")) {
+      const byBot = botWrites.filter(
+        (line) => line.skillId === listedSkill.id && line.change !== "deleted",
+      );
+      if (byBot.length === 0) continue;
+      const current = await rpc<{ name: string; content: string }>(app, cookie, "agentSkills/get", {
+        skillId: listedSkill.id,
+      });
+      skillsWritten.push({
+        name: current.name,
+        change: byBot.some((line) => line.change === "learned") ? "learned" : "updated",
+        content: current.content,
+        files: await skillFiles(
+          path.join(userSkillsRoot(handles.dataDir, actors.at(-1)!), skillDirName(current.name)),
+        ),
+      });
+    }
     const evidence: Evidence = {
       text: lastText,
       files,
@@ -415,6 +472,9 @@ export async function runTrial(
         originThreadId: messagingOriginThreadId,
         outbound: structuredClone(messaging.sent),
       },
+      skillsWritten,
+      skillCalls,
+      skillNudges,
     };
     phase = "harness";
     result.criteria = scenario.grade(evidence);
@@ -533,6 +593,40 @@ async function waitForMessagingDelivery(
       ? true
       : undefined;
   }, deadline);
+}
+
+/** A nudge marked as running is waited for until its turn ends; returns the signals it ran on. */
+async function waitForSkillNudge(
+  prisma: EvalApp["prisma"],
+  runId: string,
+  deadline: number,
+): Promise<string[]> {
+  return poll(async () => {
+    const phases = (
+      await prisma.event.findMany({
+        where: { runId, type: "agent.skill.nudge" },
+        select: { payload: true },
+      })
+    ).map(({ payload }) => payload as { phase?: string; mode?: string; signal?: string });
+    const ran = phases.flatMap((p) =>
+      p.phase === "decided" && p.mode === "on" ? [String(p.signal)] : [],
+    );
+    return ran.length === 0 || phases.some((p) => p.phase === "ended") ? ran : undefined;
+  }, deadline);
+}
+
+/** Every file of a skill folder, scripts/ and references/ included, by path inside it. */
+async function skillFiles(dir: string): Promise<Array<{ path: string; content: string }>> {
+  const entries = await readdir(dir, { recursive: true, withFileTypes: true });
+  const files = await Promise.all(
+    entries
+      .filter((entry) => entry.isFile())
+      .map(async (entry) => {
+        const full = path.join(entry.parentPath, entry.name);
+        return { path: path.relative(dir, full), content: await readFile(full, "utf8") };
+      }),
+  );
+  return files.sort((a, b) => a.path.localeCompare(b.path));
 }
 
 function actorScopes(actors: readonly EvalActor[]) {

@@ -1,5 +1,7 @@
 import { resolveDeploymentModel, resolveSandboxProvider } from "@rakazo/adapters";
+import type { SkillLearningMode } from "@rakazo/core";
 import {
+  parseSkillLearningMode,
   resolveAuthSecret,
   resolveEncryptionKey,
   resolveScreenProxySecret,
@@ -25,6 +27,8 @@ export interface AppEnv {
   dataDir: string;
   /** Opt-in Pi JSONL session recording under DATA_DIR/pi-sessions. Default off. */
   piSessionRecording: boolean;
+  /** SKILL_LEARNING: off (default), shadow or on. */
+  skillLearning: SkillLearningMode;
   sandboxSupervisorUrl: string;
   sandboxSupervisorToken: string | undefined;
   screenProxySecret: string;
@@ -108,6 +112,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     encryptionKey: resolveEncryptionKey(source),
     dataDir: source.DATA_DIR ?? "./data",
     piSessionRecording: source.PI_SESSION_RECORDING === "true",
+    skillLearning: parseSkillLearningMode(source.SKILL_LEARNING),
     sandboxSupervisorUrl: source.SANDBOX_SUPERVISOR_URL ?? "http://127.0.0.1:7091",
     sandboxSupervisorToken:
       sandboxProvider === "docker" ? resolveSupervisorToken(source) : undefined,

@@ -128,6 +128,19 @@ describe("cardReplacesBubble", () => {
     ).toBe(true);
   });
 
+  it("still takes the bubble's place when the reply also carries skill lines", () => {
+    const skill = unchecked({
+      kind: "skill_source",
+      skillUid: "0123456789abcdef0123456789abcdef",
+      skillId: "user:coffee",
+      name: "Coffee",
+      change: "learned",
+    });
+    expect(cardReplacesBubble([text("https://www.example.com/post"), compact, skill], card)).toBe(
+      true,
+    );
+  });
+
   it("keeps the bubble when a word is added or other content is attached", () => {
     expect(cardReplacesBubble([text("look https://www.example.com/post"), compact], card)).toBe(
       false,

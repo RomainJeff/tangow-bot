@@ -23,6 +23,12 @@ describe("loadEnv", () => {
     expect(loadEnv({ ...base, PI_SESSION_RECORDING: "true" }).piSessionRecording).toBe(true);
   });
 
+  it("keeps bots from learning skills on their own unless SKILL_LEARNING says otherwise", () => {
+    expect(loadEnv(base).skillLearning).toBe("off");
+    expect(loadEnv({ ...base, SKILL_LEARNING: "shadow" }).skillLearning).toBe("shadow");
+    expect(loadEnv({ ...base, SKILL_LEARNING: "on" }).skillLearning).toBe("on");
+  });
+
   it("keeps explicit emulator settings for pnpm test", () => {
     const env = loadEnv({
       ...base,

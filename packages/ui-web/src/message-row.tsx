@@ -3,9 +3,12 @@ import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import { cn } from "./lib/utils.js";
 
 export interface MessageRowMeta {
-  /** The proof line, already translated ("Sent to #ops", "2 sources"). */
+  /** The proof line, already translated ("Sent to #ops", "2 sources"). One line, truncated. */
   label: ReactNode;
+  /** Leading icon, 14px, in the line's muted colour. Decorative: the label is the name. */
+  icon?: ReactNode;
   onClick?: () => void;
+  className?: string;
 }
 
 export interface MessageRowProps extends Omit<ComponentPropsWithoutRef<"div">, "children"> {
@@ -79,8 +82,63 @@ export function MessageRow({
 export interface MessageBubbleProps extends ComponentPropsWithoutRef<"div"> {
   /** A multi-bot thread: the bubble caps at 88% of the content column instead of 82%. */
   inGroup?: boolean;
-  /** The proof line, drawn inside the bubble under its content. */
-  meta?: MessageRowMeta;
+  /** The proof lines, drawn inside the bubble under its content, one under the other. */
+  meta?: MessageRowMeta | MessageRowMeta[];
+}
+
+/**
+ * Proof lines stacked left, outside any bubble's content so a bot's own text can never pass
+ * for one. A line with an `onClick` is a link named by its label, as on iPhone.
+ */
+export function MessageMeta({
+  lines,
+  className,
+}: {
+  lines: MessageRowMeta | MessageRowMeta[];
+  className?: string;
+}) {
+  const list = Array.isArray(lines) ? lines : [lines];
+  if (list.length === 0) return null;
+  return (
+    <div className={cn("flex flex-col items-start gap-1.5", className)}>
+      {list.map((line, i) => {
+        const content = (
+          <>
+            {line.icon}
+            <span className="min-w-0 truncate">{line.label}</span>
+          </>
+        );
+        return line.onClick ? (
+          // biome-ignore lint/a11y/useSemanticElements: it opens a panel, not an address; it reads as the link it is on iPhone
+          <button
+            key={i}
+            type="button"
+            role="link"
+            data-slot="message-row-meta"
+            onClick={line.onClick}
+            className={cn(
+              "flex max-w-full items-center gap-1 text-meta text-muted-foreground duration-(--duration-hover) ease-quiet hover:text-foreground",
+              line.className,
+            )}
+          >
+            {content}
+            <ChevronRight aria-hidden="true" className="size-3 shrink-0" />
+          </button>
+        ) : (
+          <div
+            key={i}
+            data-slot="message-row-meta"
+            className={cn(
+              "flex max-w-full items-center gap-1 text-meta text-muted-foreground",
+              line.className,
+            )}
+          >
+            {content}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 /**
@@ -106,17 +164,7 @@ export function MessageBubble({
       {...props}
     >
       {children}
-      {meta ? (
-        <button
-          type="button"
-          data-slot="message-row-meta"
-          onClick={meta.onClick}
-          className="mt-1.5 flex items-center gap-1 text-meta text-muted-foreground duration-(--duration-hover) ease-quiet hover:text-foreground"
-        >
-          {meta.label}
-          <ChevronRight aria-hidden="true" className="size-3" />
-        </button>
-      ) : null}
+      {meta ? <MessageMeta lines={meta} className="mt-1.5" /> : null}
     </div>
   );
 }

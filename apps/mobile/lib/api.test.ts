@@ -377,6 +377,24 @@ describe("mobile API authentication", () => {
     ).resolves.toBe("Name is required");
   });
 
+  it("reports the reason the server gives for something that does not exist", async () => {
+    vi.mocked(SecureStore.getItemAsync).mockResolvedValue("session-token");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce(
+        jsonResponse(
+          {
+            json: { code: "NOT_FOUND", status: 404, message: "Routine not found" },
+          },
+          { status: 404 },
+        ),
+      ),
+    );
+    await expect(
+      rpc("routines/remove", { routineId: "routine-1" }).catch(serverMessage),
+    ).resolves.toBe("Routine not found");
+  });
+
   it("gives no reason for a server crash, whose message is not written for the person", async () => {
     vi.mocked(SecureStore.getItemAsync).mockResolvedValue("session-token");
     vi.stubGlobal(
