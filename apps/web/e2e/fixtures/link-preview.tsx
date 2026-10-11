@@ -104,6 +104,7 @@ function Row({ message: row }: { message: MessageItem }) {
           {row.role !== "user" ? (
             <MessageHoverActions
               message={row}
+              previewMessageId={row.id}
               onReply={() => undefined}
               onReact={async () => undefined}
               voiceReady={false}
@@ -127,7 +128,9 @@ function Row({ message: row }: { message: MessageItem }) {
           />
         </div>
       </div>
-      {row.role === "user" ? <UserMessageActions message={row} onEdit={() => undefined} /> : null}
+      {row.role === "user" ? (
+        <UserMessageActions message={row} previewMessageId={row.id} onEdit={() => undefined} />
+      ) : null}
     </div>
   );
 }

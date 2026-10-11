@@ -6,7 +6,7 @@ import type {
   SessionEntryType,
   ThreadItem,
 } from "@rakazo/contracts";
-import { CARD_STATE_TYPES, SessionEntrySchema } from "@rakazo/contracts";
+import { CARD_STATE_TYPES, isLinkPreviewCard, SessionEntrySchema } from "@rakazo/contracts";
 import { isRunTerminalEvent, progressMessageId, reduceLiveMessageBlocks } from "../events.js";
 import { computeItemGroups } from "../message-grouping.js";
 import type { ItemReactions } from "../message-reactions.js";
@@ -72,7 +72,8 @@ export function projectThreadView(
         ? new Date(previous.ts).toDateString() !== new Date(at).toDateString()
         : showsTimeMarker(previous?.ts, at);
     const messageId = projected.messageIds.get(item.id);
-    const previewMessageId = projected.previewHosts.get(item.id);
+    const previewMessageId =
+      projected.previewHosts.get(item.id) ?? inlinePreviewHost(item, messageId);
     rows.push({
       item,
       firstOfGroup: groups[index]?.isFirstOfGroup ?? true,
@@ -92,6 +93,14 @@ export function projectThreadView(
     if (shown.has(rowId)) rowOf.set(entryId, rowId);
   }
   return { rows, waiting: projected.waiting, rowOf };
+}
+
+/** A card stored in the message's own blocks, not added by a `link.preview` entry. */
+function inlinePreviewHost(item: ThreadItem, messageId: EntryId | undefined) {
+  const inline =
+    item.kind === "message" &&
+    item.blocks.some((block) => block.kind === "link_preview" && isLinkPreviewCard(block));
+  return inline ? messageId : undefined;
 }
 
 function onChain(entries: readonly SessionEntry[]): SessionEntry[] {

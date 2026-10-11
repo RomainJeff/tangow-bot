@@ -620,6 +620,11 @@ describe("projectThreadView rows", () => {
     });
     const removal = { type: "link.preview.removed", payload: { target: "pv-4" } };
     expect(reply(linkEntries("pv", [...bodies, removal]))?.previewMessageId).toBeUndefined();
+
+    const inline = linkEntries("in", [
+      { botId: "bot_ada", type: "bot.text", payload: { blocks: [...text("Look"), preview] } },
+    ]);
+    expect(projectThreadView(inline).rows[0]?.previewMessageId).toBe("in-0");
   });
 
   it("folds quiet runs of one routine into a line and absorbs the message the newest sent", () => {
