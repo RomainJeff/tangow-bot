@@ -469,13 +469,13 @@ private fun latestReply(session: ApiSession, run: RunRecord): String? {
     val type = entry.optString("type")
     if (type == "handoff") return null
     if (type != "assistant.text" && type != "bot.text") continue
-    val blocks = entry.optJSONObject("payload")?.optJSONArray("blocks") ?: return ""
+    val blocks = entry.optJSONObject("payload")?.optJSONArray("blocks") ?: continue
     val text = mutableListOf<String>()
     for (blockIndex in 0 until blocks.length()) {
       val block = blocks.optJSONObject(blockIndex) ?: continue
       block.optString("text").takeIf(String::isNotBlank)?.let(text::add)
     }
-    return text.joinToString("\n")
+    if (text.isNotEmpty()) return text.joinToString("\n")
   }
   return ""
 }
