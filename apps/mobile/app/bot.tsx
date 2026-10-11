@@ -1,13 +1,17 @@
+import type { Routine } from "@rakazo/contracts";
+import { routineFailing } from "@rakazo/core";
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useRef, useState, useSyncExternalStore } from "react";
 import { Alert, Keyboard, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { ActivityTab } from "../components/bot-page/activity-tab";
 import { BotHero, BotTabs } from "../components/bot-page/hero";
-import { LoadFailed } from "../components/bot-page/kit";
+import { LoadFailed, useFocusedRead } from "../components/bot-page/kit";
 import { KnowledgeTab } from "../components/bot-page/knowledge-tab";
 import { RoutinesTab } from "../components/bot-page/routines-tab";
 import { SettingsTab } from "../components/bot-page/settings-tab";
 import { NativeSymbol } from "../components/native-symbol";
 import { rpc } from "../lib/api";
+import { runDestination } from "../lib/bot-activity";
 import { archiveBot, confirmClearConversation, confirmDeleteBot } from "../lib/bot-lifecycle";
 import { readBotPage, readViewer, useBotPageContext } from "../lib/bot-page";
 import { botRunEpoch, subscribeBotRunEnds } from "../lib/bot-page-state";
@@ -16,16 +20,19 @@ import { useI18n } from "../lib/i18n";
 import { presentMessageActionSheet } from "../lib/message-action-sheet";
 import { useMobileTokens, useResolvedAppearance } from "../lib/native";
 
-/** The bot's page, pushed from its thread: who it is at the top, then Routines, Knowledge and Settings. Every field saves itself. */
+/**
+ * The bot's page, pushed from its thread: who it is at the top, then Activity, Routines, Knowledge
+ * and Settings. Every field saves itself. Opened as its settings (`tab`), it lands on Settings.
+ */
 export default function BotPageScreen() {
-  const { botId = "" } = useLocalSearchParams<{ botId: string }>();
+  const { botId = "", tab } = useLocalSearchParams<{ botId: string; tab?: string }>();
   const { t } = useI18n();
   const router = useRouter();
   const tokens = useMobileTokens();
   const colorScheme = useResolvedAppearance();
   const page = useBotPageContext(botId);
   const [readFailed, setReadFailed] = useState(false);
-  const [view, setView] = useState<BotTab>("settings");
+  const [view, setView] = useState<BotTab>(tab === "settings" ? "settings" : "activity");
   const scroll = useRef<ScrollView>(null);
   /** Open work's add field is the page's last row: bring it above the keyboard it opens. */
   const revealEnd = useCallback(() => {
@@ -55,6 +62,8 @@ export default function BotPageScreen() {
     );
   }, [botId, epoch]);
   useFocusEffect(refresh);
+  const routines = useFocusedRead(() => rpc<Routine[]>("routines/list", { botId }), [botId, epoch]);
+  const routineFailed = routines.read.kind === "ready" && routines.read.value.some(routineFailing);
 
   const leave = () => {
     router.dismissAll();
@@ -124,8 +133,35 @@ export default function BotPageScreen() {
               }
             />
             <View style={styles.body}>
-              <BotTabs value={view} onChange={setView} />
-              {view === "routines" ? (
+              <BotTabs value={view} onChange={setView} routineFailed={routineFailed} />
+              {view === "activity" ? (
+                <ActivityTab
+                  botId={page.bot.id}
+                  epoch={epoch}
+                  // An archived bot's chat cannot be opened, nor its routines or instructions.
+                  onOpenRun={
+                    page.readOnly ? undefined : (row) => router.dismissTo(runDestination(row))
+                  }
+                  onOpenRoutine={
+                    page.readOnly
+                      ? undefined
+                      : (routineId) =>
+                          router.push({
+                            pathname: "/routine",
+                            params: { botId: page.bot.id, botName: page.bot.name, routineId },
+                          })
+                  }
+                  onWriteInstructions={
+                    page.readOnly || page.bot.instructions
+                      ? undefined
+                      : () =>
+                          router.push({
+                            pathname: "/bot-text",
+                            params: { botId: page.bot.id, field: "instructions" },
+                          })
+                  }
+                />
+              ) : view === "routines" ? (
                 <RoutinesTab
                   page={page}
                   epoch={epoch}

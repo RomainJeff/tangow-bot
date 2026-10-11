@@ -914,7 +914,7 @@ function Thread() {
       onPress: () =>
         router.push({
           pathname: "/bot",
-          params: { botId: botId ?? "" },
+          params: { botId: botId ?? "", tab: "settings" },
         }),
     },
     {
@@ -1367,7 +1367,7 @@ function Thread() {
       if (inGroup && groupId) {
         router.push({ pathname: "/group-settings", params: { groupId } });
       } else if (botId) {
-        router.push({ pathname: "/bot", params: { botId } });
+        router.push({ pathname: "/bot", params: { botId, tab: "settings" } });
       }
       return;
     }
