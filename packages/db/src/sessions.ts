@@ -9,7 +9,12 @@ import type {
   SessionEntryOf,
   SessionEntryType,
 } from "@rakazo/contracts";
-import { isRunTrace, SessionEntrySchema, SessionId } from "@rakazo/contracts";
+import {
+  isRunTrace,
+  SessionEntrySchema,
+  SessionId,
+  USER_MESSAGE_CLIENT_NONCE_PREFIX,
+} from "@rakazo/contracts";
 import { ACTIVE_RUN_STATUSES, SessionEntryDecodeError, sanitizeJsonValue } from "@rakazo/core";
 import { Prisma } from "./client.js";
 import { RunHistoryWriteError } from "./messages.js";
@@ -280,6 +285,39 @@ export async function appendSessionEntryInTransaction(
   return entry;
 }
 
+type CardStateDraft = SessionEntryDraft extends infer Draft
+  ? Draft extends {
+      type:
+        | "card.answered"
+        | "effect.applied"
+        | "link.preview"
+        | "link.preview.removed"
+        | "skill.draft";
+    }
+    ? Omit<Draft, "sessionId">
+    : never
+  : never;
+
+/**
+ * Append a card's later state to the session that holds its `payload.target`. A card older than
+ * the log has no entry, so nothing is appended and the message row alone keeps its state.
+ */
+export async function appendCardStateInTransaction(
+  tx: Prisma.TransactionClient,
+  draft: CardStateDraft,
+  append: typeof appendSessionEntryInTransaction = appendSessionEntryInTransaction,
+): Promise<SessionEntry | undefined> {
+  const target = await tx.sessionEntry.findUnique({
+    where: { id: draft.payload.target },
+    select: { sessionId: true },
+  });
+  if (!target) return undefined;
+  return append(tx, {
+    ...draft,
+    sessionId: target.sessionId as SessionId,
+  } as SessionEntryDraft);
+}
+
 type EntryBody<T extends SessionEntryType> = T extends unknown
   ? { type: T; payload: SessionEntryOf<T>["payload"] }
   : never;
@@ -325,17 +363,24 @@ const RUN_BLOCK_ENTRY: {
 
 /**
  * Append the entries of a message a run published, one per block, to the run's own session. The
- * first entry takes the message's id, so whatever points at the message points at the entry.
+ * first entry takes the message's id, so whatever points at the message points at the entry. A
+ * message the bot sent the person through `message_user` marks its text `toPerson`; its nonce
+ * stays on the message row, since the entries' nonce index is unique across every type.
  */
 export async function appendRunBlocksInTransaction(
   tx: Prisma.TransactionClient,
-  message: { id: string; runId: string; botId: string },
+  message: { id: string; runId: string; botId: string; clientNonce?: string },
   blocks: readonly MessageBlock[],
   append: typeof appendSessionEntryInTransaction = appendSessionEntryInTransaction,
 ): Promise<void> {
-  const bodies = blocks.flatMap((block) => {
+  const toPerson = message.clientNonce?.startsWith(USER_MESSAGE_CLIENT_NONCE_PREFIX) ?? false;
+  const bodies = blocks.flatMap((block): RunBlockBody[] => {
     const toEntry = RUN_BLOCK_ENTRY[block.kind] as ((block: MessageBlock) => RunBlockBody) | null;
-    return toEntry ? [toEntry(block)] : [];
+    const body = toEntry?.(block);
+    if (!body) return [];
+    return toPerson && body.type === "assistant.text"
+      ? [{ ...body, payload: { ...body.payload, toPerson: true } }]
+      : [body];
   });
   if (bodies.length === 0) return;
   const run = await tx.run.findUniqueOrThrow({

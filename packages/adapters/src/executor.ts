@@ -146,6 +146,7 @@ import {
 } from "@rakazo/core/node/approval-effect-key";
 import {
   activeBotNames,
+  appendCardStateInTransaction,
   appendEventInTransaction,
   appendRunBlocksInTransaction,
   appendRunFinishedInTransaction,
@@ -3494,19 +3495,14 @@ export function createRunExecutor(deps: ExecutorDeps) {
             if (!applied) return;
             if (!("ok" in result)) {
               if (approvedReplayConsumed) {
-                await settleRoutineCard(deps, cardTarget, applied.effect.id, (card) => ({
-                  ...card,
-                  failed: true,
-                }));
+                await settleRoutineCard(deps, cardTarget, applied.effect.id, { failed: true });
               }
               return;
             }
             const { routineId: id, name, schedule, prompt, notify } = result;
             const routine = { id, name, schedule, prompt, notify };
             if (approvedReplayConsumed) {
-              await settleRoutineCard(deps, cardTarget, applied.effect.id, (card) =>
-                settleRoutineAsk(card, routine, change),
-              );
+              await settleRoutineCard(deps, cardTarget, applied.effect.id, { routine, change });
             } else {
               await confirmRoutine(applied.effect.id, routine, change);
             }
@@ -6122,7 +6118,7 @@ async function persistMessageInTransaction(
   if (role === "bot") {
     await appendRunBlocksInTransaction(
       tx,
-      { id: message.id, runId: run.id, botId: run.botId },
+      { id: message.id, runId: run.id, botId: run.botId, clientNonce },
       blocks,
       (client, draft) => sessionLog.append(client, draft),
     );
@@ -6296,7 +6292,7 @@ async function finalizeRoutineRunCard(
  * call keeps its real outcome.
  */
 export async function settleCancelledRunCards(
-  deps: Pick<ExecutorDeps, "prisma" | "events">,
+  deps: Pick<ExecutorDeps, "prisma" | "events" | "sessionLog">,
   runIds: readonly string[],
 ): Promise<void> {
   if (runIds.length === 0) return;
@@ -6579,7 +6575,7 @@ const ROUTINE_NOT_CREATED_RESULT = {
  * only this run ever replays that approval, so the card would otherwise wait forever.
  */
 async function failStrandedRoutineCards(
-  deps: Pick<ExecutorDeps, "prisma" | "events">,
+  deps: Pick<ExecutorDeps, "prisma" | "events" | "sessionLog">,
   target: { spaceId: string; threadId: string; botId: string; runId: string },
 ): Promise<void> {
   const stranded = await deps.prisma.externalEffect.findMany({
@@ -6588,21 +6584,29 @@ async function failStrandedRoutineCards(
   });
   for (const { id } of stranded) {
     if (await completeExternalEffect(deps.prisma, id, "approved", ROUTINE_NOT_CREATED_RESULT)) {
-      await settleRoutineCard(deps, target, id, (card) => ({ ...card, failed: true }));
+      await settleRoutineCard(deps, target, id, { failed: true });
     }
   }
 }
+
+type RoutineCardOutcome =
+  | { routine: CreatedRoutine; change: "created" | "updated"; failed?: never }
+  | { failed: true };
 
 /**
  * Freezes an approved routine card on what came of it: the routine it links to, or the failure.
  * Logged, never thrown: the creation already happened and the model has its result.
  */
 async function settleRoutineCard(
-  deps: Pick<ExecutorDeps, "prisma" | "events">,
+  deps: Pick<ExecutorDeps, "prisma" | "events" | "sessionLog">,
   target: { spaceId: string; threadId: string; botId: string; runId: string },
   effectId: string,
-  settle: (card: AskBlock) => AskBlock,
+  outcome: RoutineCardOutcome,
 ): Promise<void> {
+  const settle = (card: AskBlock): AskBlock =>
+    outcome.failed
+      ? { ...card, failed: true }
+      : settleRoutineAsk(card, outcome.routine, outcome.change);
   const committed = await deps.prisma
     .$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM threads WHERE id = ${target.threadId} FOR UPDATE`;
@@ -6628,6 +6632,20 @@ async function settleRoutineCard(
         isCard(block) ? (settle(block as AskBlock) as Prisma.InputJsonValue) : block,
       );
       await tx.message.update({ where: { id: message.id }, data: { blocks } });
+      await appendCardStateInTransaction(
+        tx,
+        {
+          type: "effect.applied",
+          feedBotId: target.botId,
+          payload: {
+            target: EntryId.parse(message.id),
+            ...(outcome.failed
+              ? { failed: true }
+              : { routineId: outcome.routine.id, change: outcome.change }),
+          },
+        },
+        (client, draft) => deps.sessionLog.append(client, draft),
+      );
       const event = await appendEventInTransaction(tx, {
         spaceId: target.spaceId,
         threadId: target.threadId,

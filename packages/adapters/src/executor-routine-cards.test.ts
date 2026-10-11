@@ -478,6 +478,7 @@ function fixture(
     (pauseRunForInput.mock.calls[0]?.[0] as { blocks: unknown[] } | undefined)?.blocks[0];
   return {
     run,
+    log,
     effects,
     externalEffect,
     messages,
@@ -905,6 +906,12 @@ describe("a routine the bot proposes on its own", () => {
     const writtenCard = (f: ReturnType<typeof fixture>) =>
       (f.messageUpdate.mock.calls[0] as unknown as [{ data: { blocks: Row[] } }] | undefined)?.[0]
         .data.blocks[1];
+    /** The card's entry lives in the thread's session; what came of it is logged there. */
+    const logged = (f: ReturnType<typeof fixture>) => {
+      f.log.sessionEntry.findUnique.mockImplementation((async ({ where }: { where: Row }) =>
+        where.id === "m2" ? { sessionId: "session-main" } : null) as never);
+      return () => f.log.drafts.filter((draft) => draft.type === "effect.applied");
+    };
 
     it("creates exactly the routine shown, past every guard, and links the card to it", async () => {
       const f = fixture({
@@ -912,6 +919,7 @@ describe("a routine the bot proposes on its own", () => {
         effects: [proposalEffect({}), approved(offers)],
         otherRunWaiting: true,
       });
+      const applied = logged(f);
       await f.play([[propose({ name: "Something else", prompt: "Rewritten" })]]);
       expect(f.routineCreate).toHaveBeenCalledWith({
         data: expect.objectContaining({
@@ -926,6 +934,14 @@ describe("a routine the bot proposes on its own", () => {
         created: { kind: "routine", id: "routine-new", label: "Weekly offers" },
       });
       expect(f.posted()).toEqual([]);
+      expect(applied()).toEqual([
+        {
+          type: "effect.applied",
+          sessionId: "session-main",
+          feedBotId: "bot-1",
+          payload: { target: "m2", routineId: "routine-new", change: "created" },
+        },
+      ]);
     });
 
     it("creates the one-shot routine at the time its card showed", async () => {
@@ -951,9 +967,18 @@ describe("a routine the bot proposes on its own", () => {
 
     it("marks the card Couldn't create when the run ends before creating it", async () => {
       const f = fixture({ messages: [card], effects: [approved(offers)] });
+      const applied = logged(f);
       await f.play([], "worker-1", "failed");
       expect(f.routineCreate).not.toHaveBeenCalled();
       expect(writtenCard(f)).toMatchObject({ status: "answered", failed: true });
+      expect(applied()).toEqual([
+        {
+          type: "effect.applied",
+          sessionId: "session-main",
+          feedBotId: "bot-1",
+          payload: { target: "m2", failed: true },
+        },
+      ]);
       expect(f.effects[0]).toMatchObject({
         status: "completed",
         result: { error: "The run ended before this routine was created." },

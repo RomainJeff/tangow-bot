@@ -35,6 +35,7 @@ import {
   RunHistoryWriteError,
 } from "./messages.js";
 import {
+  appendCardStateInTransaction,
   appendComputerControlInTransaction,
   appendRewindInTransaction,
   appendRunBlocksInTransaction,
@@ -1185,7 +1186,7 @@ export async function answerRunInputInTransaction(
         await appendSessionEntryInTransaction(tx, {
           ...runLog,
           type: "effect.edited",
-          payload: { effectId, proposal: spawnBotEdit.approved },
+          payload: { effectId, proposal: spawnBotEdit.approved, card: answeredAsk },
         });
       }
       await appendSessionEntryInTransaction(tx, {
@@ -1194,9 +1195,16 @@ export async function answerRunInputInTransaction(
         payload: {
           effectId,
           decision: input.answer === "allow" || input.answer === "always" ? "approved" : "denied",
+          answerId: input.answer,
         },
       });
-    } else if (!secretAsk) {
+    } else if (secretAsk) {
+      await appendCardStateInTransaction(tx, {
+        type: "card.answered",
+        feedBotId: run.botId,
+        payload: { target: message.id as EntryId },
+      });
+    } else {
       await answerEntry(selectedChoice?.label ?? (freeTextAnswer || input.answer));
     }
     if (spawnBotEdit) {
@@ -1350,6 +1358,11 @@ export async function resumeAskWithComposerTextInTransaction(
     index === pending.index ? { ...pendingAsk, status: "answered" as const } : block,
   );
   await tx.message.update({ where: { id: message.id }, data: { blocks } });
+  await appendCardStateInTransaction(tx, {
+    type: "card.answered",
+    feedBotId: run.botId,
+    payload: { target: message.id as EntryId },
+  });
   const updated = await appendEventInTransaction(tx, {
     spaceId: input.spaceId,
     threadId: input.threadId,
@@ -1456,7 +1469,7 @@ export async function dismissProposalWithTextInTransaction(
     sessionId: run.sessionId as SessionId,
     botId: run.botId,
     runId: input.runId,
-    payload: { effectId: effect.id, decision: "denied" },
+    payload: { effectId: effect.id, decision: "denied", dismissed: true },
   });
 
   const blocks = (message.blocks as Prisma.InputJsonValue[]).map((block, index) =>
@@ -1539,6 +1552,7 @@ export async function pauseRunForInput(
           effectId: input.effect.id,
           effectKind: input.effect.kind,
           proposal: input.effect.proposal,
+          card: input.blocks.find((block) => block.kind === "ask"),
         },
       });
     } else {

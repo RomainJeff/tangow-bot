@@ -1,7 +1,9 @@
 import type { ConnectorRegistry } from "@rakazo/adapters";
-import type { Actor, EntryId, MessageBlock, SessionId } from "@rakazo/contracts";
+import type { Actor, MessageBlock, SessionEntryOf, SessionId } from "@rakazo/contracts";
+import { appConnectAnswerId, CHOICE_DISMISSED_ANSWER_ID, EntryId } from "@rakazo/contracts";
 import { featuredConnectorProvidersMatch } from "@rakazo/core";
 import {
+  appendCardStateInTransaction,
   appendEventInTransaction,
   appendSessionEntryInTransaction,
   createThreadMessageInTransaction,
@@ -93,7 +95,7 @@ async function postInTransaction(
     blocks,
   });
   await appendSessionEntryInTransaction(tx, {
-    id: message.id as EntryId,
+    id: EntryId.parse(message.id),
     type: "bot.text",
     sessionId: target.sessionId as SessionId,
     botId: target.botId,
@@ -121,15 +123,19 @@ async function post(
   return committed.message.id;
 }
 
+type CardAnswer = Omit<SessionEntryOf<"card.answered">["payload"], "target">;
+type AppConnectBlock = Extract<MessageBlock, { kind: "app_connect" }>;
+
 /**
- * Rewrites one message's blocks under the thread lock, from the blocks as stored right now: a
- * link preview card or its removal marker written since the caller last looked is kept.
+ * Marks one message's matching app cards connected under the thread lock, from the blocks as
+ * stored right now: a link preview card or its removal marker written since the caller last
+ * looked is kept.
  */
-async function updateBlocks(
+async function connectCards(
   deps: OnboardingDeps,
   target: BotThreadTarget,
   messageId: string,
-  rewrite: (blocks: MessageBlock[]) => MessageBlock[],
+  matches: (block: MessageBlock) => block is AppConnectBlock,
 ): Promise<void> {
   const event = await deps.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     await tx.$executeRaw`SELECT id FROM threads WHERE id = ${target.threadId} FOR UPDATE`;
@@ -138,8 +144,15 @@ async function updateBlocks(
       select: { blocks: true },
     });
     if (!message || !Array.isArray(message.blocks)) return null;
-    const blocks = rewrite(message.blocks as MessageBlock[]);
+    const stored = message.blocks as MessageBlock[];
+    const blocks = stored.map((block) =>
+      matches(block) ? { ...block, status: "connected" as const } : block,
+    );
     await tx.message.update({ where: { id: messageId }, data: { blocks } });
+    for (const card of stored.filter(matches)) {
+      if (card.status === "connected") continue;
+      await answerCardInTransaction(tx, target, messageId, { answerId: appConnectAnswerId(card) });
+    }
     return appendEventInTransaction(tx, {
       spaceId: target.spaceId,
       threadId: target.threadId,
@@ -151,8 +164,18 @@ async function updateBlocks(
   if (event) await deps.events.notify(target.threadId, event.seq);
 }
 
-/** Sentinel answerId for a focus card the user dismissed without choosing. */
-export const FOCUS_DISMISSED_ANSWER_ID = "_dismissed";
+function answerCardInTransaction(
+  tx: Prisma.TransactionClient,
+  target: BotThreadTarget,
+  messageId: string,
+  answer: CardAnswer,
+) {
+  return appendCardStateInTransaction(tx, {
+    type: "card.answered",
+    botId: target.botId,
+    payload: { target: EntryId.parse(messageId), ...answer },
+  });
+}
 
 export async function startOnboarding(
   deps: OnboardingDeps,
@@ -236,10 +259,11 @@ export async function dismissFocus(
     if (!pending) return null;
     const blocks = (pending.blocks as MessageBlock[]).map((block) =>
       block.kind === "choice" && !block.answerId
-        ? { ...block, answerId: FOCUS_DISMISSED_ANSWER_ID }
+        ? { ...block, answerId: CHOICE_DISMISSED_ANSWER_ID }
         : block,
     );
     await tx.message.update({ where: { id: pending.id }, data: { blocks } });
+    await answerCardInTransaction(tx, target, pending.id, { dismissed: true });
     const event = await appendEventInTransaction(tx, {
       spaceId: target.spaceId,
       threadId: target.threadId,
@@ -283,6 +307,7 @@ export async function chooseFocus(
       block.kind === "choice" ? { ...block, answerId: option.id } : block,
     );
     await tx.message.update({ where: { id: pending.id }, data: { blocks } });
+    await answerCardInTransaction(tx, target, pending.id, { answerId: option.id });
     const event = await appendEventInTransaction(tx, {
       spaceId: target.spaceId,
       threadId: target.threadId,
@@ -383,27 +408,14 @@ export async function markAppConnected(
     orderBy: { createdAt: "asc" },
     take: 100,
   });
+  const matches = (block: MessageBlock): block is AppConnectBlock =>
+    block.kind === "app_connect" &&
+    (block.connectorId ?? "composio") === connectorId &&
+    featuredConnectorProvidersMatch(block.provider, provider);
   for (const message of messages) {
     const blocks = message.blocks as MessageBlock[];
-    if (
-      !blocks.some(
-        (block) =>
-          block.kind === "app_connect" &&
-          (block.connectorId ?? "composio") === connectorId &&
-          featuredConnectorProvidersMatch(block.provider, provider) &&
-          block.status !== "connected",
-      )
-    )
-      continue;
-    await updateBlocks(deps, target, message.id, (current) =>
-      current.map((block) =>
-        block.kind === "app_connect" &&
-        (block.connectorId ?? "composio") === connectorId &&
-        featuredConnectorProvidersMatch(block.provider, provider)
-          ? { ...block, status: "connected" as const }
-          : block,
-      ),
-    );
+    if (!blocks.some((block) => matches(block) && block.status !== "connected")) continue;
+    await connectCards(deps, target, message.id, matches);
   }
 }
 
