@@ -337,17 +337,4 @@ describe("toHistory", () => {
       timestamp: expect.any(Number),
     });
   });
-
-  it("leaves system messages out of the history", () => {
-    expect(
-      toHistory(
-        [
-          { id: "m1", role: "system", content: "internal note" },
-          { id: "m2", role: "user", content: "hello" },
-        ],
-        "next prompt",
-        runModel,
-      ),
-    ).toEqual([{ role: "user", content: "hello", timestamp: expect.any(Number) }]);
-  });
 });

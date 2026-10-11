@@ -6,8 +6,9 @@ import type {
   MemoryStore,
   MessagingSurface,
   SandboxProvider,
+  SessionLog,
 } from "@rakazo/adapter-kit";
-import type { PrismaClient, ThreadEvents } from "@rakazo/db";
+import type { Prisma, PrismaClient, ThreadEvents } from "@rakazo/db";
 import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
 import { describe, expect, it, vi } from "vitest";
 import { createBackgroundJobHandlers } from "./background-job-handlers.js";
@@ -39,6 +40,7 @@ describe("createBackgroundJobHandlers", () => {
         continueRun: vi.fn(async () => undefined),
       } as unknown as ReturnType<typeof createRunExecutor>,
       prisma: {} as unknown as PrismaClient,
+      sessionLog: {} as unknown as SessionLog<Prisma.TransactionClient>,
       sandbox: {} as unknown as SandboxProvider,
       home: {} as unknown as AgentHomeStore,
       jobs,
@@ -68,8 +70,9 @@ describe("createBackgroundJobHandlers", () => {
     installLogger(createLogger({ service: "rakazo-worker", level: "off", sinks: [] }));
   });
 
-  it("compacts the requested thread with the runtime, job publisher, and model key it was given", async () => {
+  it("compacts the requested thread with the session log, runtime, and model key it was given", async () => {
     const prisma = {} as unknown as PrismaClient;
+    const sessionLog = {} as unknown as SessionLog<Prisma.TransactionClient>;
     const runtime = {} as unknown as AgentRuntime;
     const jobs = {} as unknown as JobPublisher;
     const secretStore = {} as unknown as EncryptedSecretStore;
@@ -79,6 +82,7 @@ describe("createBackgroundJobHandlers", () => {
     const handlers = createBackgroundJobHandlers({
       executor: { resolveModel } as unknown as ReturnType<typeof createRunExecutor>,
       prisma,
+      sessionLog,
       sandbox: {} as unknown as SandboxProvider,
       home: {} as unknown as AgentHomeStore,
       jobs,
@@ -96,8 +100,8 @@ describe("createBackgroundJobHandlers", () => {
     expect(compactHistory).toHaveBeenCalledWith(
       {
         prisma,
+        sessionLog,
         runtime,
-        jobs,
         memory,
         memoryProviders,
         deploymentModelKey: "openrouter-key",
@@ -167,6 +171,7 @@ describe("createBackgroundJobHandlers", () => {
       createBackgroundJobHandlers({
         executor: {} as unknown as ReturnType<typeof createRunExecutor>,
         prisma,
+        sessionLog: {} as unknown as SessionLog<Prisma.TransactionClient>,
         sandbox: {} as unknown as SandboxProvider,
         home: {} as unknown as AgentHomeStore,
         jobs: {} as unknown as JobPublisher,

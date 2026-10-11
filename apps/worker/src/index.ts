@@ -190,9 +190,10 @@ async function main() {
         only: ISOLATED_JOB_NAMES,
         noHandleSignals: true,
       });
+  const sessionLog = new PostgresSessionLog(prisma);
   const executor = createRunExecutor({
     prisma,
-    sessionLog: new PostgresSessionLog(prisma),
+    sessionLog,
     runtime,
     sandbox,
     memory,
@@ -227,6 +228,7 @@ async function main() {
   const jobHandlers = createBackgroundJobHandlers({
     executor,
     prisma,
+    sessionLog,
     sandbox,
     home,
     jobs,

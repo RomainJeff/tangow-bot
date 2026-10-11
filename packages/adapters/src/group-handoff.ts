@@ -239,18 +239,3 @@ export async function loadGroupContext(
     memberNames: new Map(members.map((bot) => [bot.id, bot.name])),
   };
 }
-
-/**
- * The group's id → name roster on its own, for callers that name authors without rendering
- * the roster context: background compaction has no running bot to describe the group to.
- */
-export async function loadGroupMemberNames(
-  prisma: PrismaClient,
-  groupId: string,
-): Promise<Map<string, string>> {
-  const members = await prisma.chatGroupMember.findMany({
-    where: { groupId, bot: { archivedAt: null } },
-    select: { bot: { select: { id: true, name: true } } },
-  });
-  return new Map(members.map((member) => [member.bot.id, member.bot.name]));
-}

@@ -7,9 +7,10 @@ import type {
   MemoryStore,
   MessagingSurface,
   SandboxProvider,
+  SessionLog,
 } from "@rakazo/adapter-kit";
 import { messagingDeliverJob } from "@rakazo/adapter-kit";
-import type { PrismaClient, ThreadEvents } from "@rakazo/db";
+import type { Prisma, PrismaClient, ThreadEvents } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 import { expireComputerControl } from "./computer-control.js";
 import { scheduleComputerSleep, sleepComputerIfIdle } from "./computer-idle.js";
@@ -25,6 +26,7 @@ import { expireTaughtSkillTeaching } from "./teaching-session.js";
 export function createBackgroundJobHandlers(deps: {
   executor: ReturnType<typeof createRunExecutor>;
   prisma: PrismaClient;
+  sessionLog: SessionLog<Prisma.TransactionClient>;
   sandbox: SandboxProvider;
   home: AgentHomeStore;
   jobs: JobPublisher;
@@ -101,8 +103,8 @@ export function createBackgroundJobHandlers(deps: {
       await compactHistory(
         {
           prisma: deps.prisma,
+          sessionLog: deps.sessionLog,
           runtime: deps.runtime,
-          jobs: deps.jobs,
           memory: deps.memory,
           memoryProviders: deps.memoryProviders,
           deploymentModelKey: deps.deploymentModelKey,

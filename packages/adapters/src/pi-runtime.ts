@@ -919,76 +919,74 @@ export function toHistory(
     usedToolCallIds.add(unique);
     return unique;
   };
-  return prior
-    .filter((m) => m.role === "user" || m.role === "assistant")
-    .flatMap((m, index): AgentMessage[] => {
-      const timestamp = Date.now();
-      const assistant = (
-        content: AssistantMessage["content"],
-        stopReason: AssistantMessage["stopReason"],
-      ): AssistantMessage => ({
-        role: "assistant",
-        content,
-        api: model.api,
-        provider: model.provider,
-        model: REPLAYED_HISTORY_MODEL,
-        usage: noUsage(),
-        stopReason,
-        timestamp,
-      });
-      if (m.role === "assistant" && index > 0 && m.parts) {
-        const messages: AgentMessage[] = [];
-        let text: AssistantMessage["content"] = [];
-        for (const part of m.parts) {
-          if (part.type === "text") {
-            text.push({
-              type: "text",
-              text: sealAssistantTurnMarkers(stripFakeToolCalls(part.text)),
-            });
-            continue;
-          }
-          const calls = part.calls.map((call) => ({ ...call, id: uniqueToolCallId(call.id) }));
-          const toolCalls: ToolCall[] = calls.map((call) => ({
-            type: "toolCall",
-            id: call.id,
-            name: call.name,
-            arguments: call.args,
-          }));
-          messages.push(assistant([...text, ...toolCalls], "toolUse"));
-          text = [];
-          // Every call gets its result, also when none was recorded (the run stopped or failed
-          // mid-tool): a call without a result is refused by most providers.
-          for (const call of calls) {
-            messages.push({
-              role: "toolResult",
-              toolCallId: call.id,
-              toolName: call.name,
-              content: [{ type: "text", text: call.output || NO_TOOL_OUTPUT }],
-              isError: false,
-              timestamp,
-            });
-          }
-        }
-        if (text.length > 0) messages.push(assistant(text, "stop"));
-        return messages;
-      }
-      const content = sealAssistantTurnMarkers(
-        m.role === "assistant" ? stripFakeToolCalls(m.content) : m.content,
-      );
-      if (m.role === "assistant" && index > 0) {
-        return [assistant([{ type: "text", text: content }], "stop")];
-      }
-      return [
-        {
-          role: "user",
-          content:
-            m.role === "assistant"
-              ? `${ASSISTANT_TURN_OPEN}\n${content}\n${ASSISTANT_TURN_CLOSE}`
-              : content,
-          timestamp,
-        },
-      ];
+  return prior.flatMap((m, index): AgentMessage[] => {
+    const timestamp = Date.now();
+    const assistant = (
+      content: AssistantMessage["content"],
+      stopReason: AssistantMessage["stopReason"],
+    ): AssistantMessage => ({
+      role: "assistant",
+      content,
+      api: model.api,
+      provider: model.provider,
+      model: REPLAYED_HISTORY_MODEL,
+      usage: noUsage(),
+      stopReason,
+      timestamp,
     });
+    if (m.role === "assistant" && index > 0 && m.parts) {
+      const messages: AgentMessage[] = [];
+      let text: AssistantMessage["content"] = [];
+      for (const part of m.parts) {
+        if (part.type === "text") {
+          text.push({
+            type: "text",
+            text: sealAssistantTurnMarkers(stripFakeToolCalls(part.text)),
+          });
+          continue;
+        }
+        const calls = part.calls.map((call) => ({ ...call, id: uniqueToolCallId(call.id) }));
+        const toolCalls: ToolCall[] = calls.map((call) => ({
+          type: "toolCall",
+          id: call.id,
+          name: call.name,
+          arguments: call.args,
+        }));
+        messages.push(assistant([...text, ...toolCalls], "toolUse"));
+        text = [];
+        // Every call gets its result, also when none was recorded (the run stopped or failed
+        // mid-tool): a call without a result is refused by most providers.
+        for (const call of calls) {
+          messages.push({
+            role: "toolResult",
+            toolCallId: call.id,
+            toolName: call.name,
+            content: [{ type: "text", text: call.output || NO_TOOL_OUTPUT }],
+            isError: false,
+            timestamp,
+          });
+        }
+      }
+      if (text.length > 0) messages.push(assistant(text, "stop"));
+      return messages;
+    }
+    const content = sealAssistantTurnMarkers(
+      m.role === "assistant" ? stripFakeToolCalls(m.content) : m.content,
+    );
+    if (m.role === "assistant" && index > 0) {
+      return [assistant([{ type: "text", text: content }], "stop")];
+    }
+    return [
+      {
+        role: "user",
+        content:
+          m.role === "assistant"
+            ? `${ASSISTANT_TURN_OPEN}\n${content}\n${ASSISTANT_TURN_CLOSE}`
+            : content,
+        timestamp,
+      },
+    ];
+  });
 }
 
 function withoutSteeringMessages(

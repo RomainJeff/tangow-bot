@@ -46,6 +46,22 @@ export function sessionEntryFromRow(row: SessionEntryRow): SessionEntry {
   throw new SessionEntryDecodeError(`Invalid session entry ${row.id}: ${issues}`);
 }
 
+/**
+ * The epoch semantic memory files a session's compacted summaries under: the seq of its newest
+ * clear, 0 before any, so a clear leaves the summaries of what it cleared unrecalled.
+ */
+export async function historyGeneration(
+  prisma: Pick<Prisma.TransactionClient, "sessionEntry">,
+  sessionId: string,
+): Promise<number> {
+  const clear = await prisma.sessionEntry.findFirst({
+    where: { sessionId, type: "clear" },
+    orderBy: { seq: "desc" },
+    select: { seq: true },
+  });
+  return clear?.seq ?? 0;
+}
+
 export async function createSessionInTransaction(
   tx: Prisma.TransactionClient,
   session: NewSession,

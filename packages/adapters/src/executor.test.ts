@@ -25,12 +25,12 @@ import {
   runNotificationsEnabled,
   selectBuiltinToolsForRun,
   settleSteeringAttachmentLoads,
-  threadContextForRun,
   toolCompletionAuditPayload,
   toolCompletionFromResult,
   unreadConversationCount,
 } from "./executor.js";
 import { serializeModelSecret } from "./pi-oauth.js";
+import { recordingSessionLog } from "./session-log/recording.test-support.js";
 import { userSkillsRoot, writeUserSkill } from "./skill-store.js";
 
 describe("tool completion audit", () => {
@@ -582,24 +582,7 @@ describe("run notification preference", () => {
 });
 
 describe("createRunExecutor", () => {
-  it("excludes private summaries and memory tools from group messaging runs", () => {
-    const messages = [{ role: "user", content: "Group request" }];
-    expect(
-      threadContextForRun(
-        false,
-        {
-          messages,
-          summary: "Private test detail",
-          historyCompactedUpToSeq: 12,
-        },
-        true,
-      ),
-    ).toEqual({
-      messages,
-      summary: null,
-      historyCompactedUpToSeq: null,
-      includeSemanticRecall: false,
-    });
+  it("excludes memory tools from group messaging runs", () => {
     const tools = selectBuiltinToolsForRun({
       graphicalToolsAllowed: false,
       groupId: null,
@@ -612,25 +595,6 @@ describe("createRunExecutor", () => {
     expect(tools).not.toContain("save_memory");
     expect(tools.some((tool) => tool.startsWith("scratchpad_"))).toBe(false);
     expect(tools).toContain("web_fetch");
-  });
-
-  it("isolates routine runs from every thread-history source", () => {
-    const threadContext = {
-      messages: [{ role: "user", content: "Create this routine" }],
-      summary: "The user just configured this routine.",
-      historyCompactedUpToSeq: 4,
-    };
-
-    expect(threadContextForRun(true, threadContext, false)).toEqual({
-      messages: [],
-      summary: null,
-      historyCompactedUpToSeq: null,
-      includeSemanticRecall: false,
-    });
-    expect(threadContextForRun(false, threadContext, false)).toEqual({
-      ...threadContext,
-      includeSemanticRecall: true,
-    });
   });
 
   it("deactivates one-shot routines after wake without scheduling another wakeup", async () => {
@@ -1329,15 +1293,8 @@ description: Prepare standup notes
         updateMany: vi.fn(async () => ({ count: 1 })),
       },
       thread: {
-        findUniqueOrThrow: vi.fn(async () => ({
-          id: "thread-1",
-          groupId: null,
-          historyCompactionSummary: null,
-          historyCompactedUpToSeq: null,
-          historyCompactionGeneration: 0,
-        })),
+        findUniqueOrThrow: vi.fn(async () => ({ id: "thread-1", groupId: null })),
       },
-      message: { findMany: vi.fn(async () => []) },
       task: { findUniqueOrThrow: vi.fn(async () => ({ id: "task-1", prompt: "hello" })) },
       connection: { findMany: vi.fn(async () => []) },
       spaceModelPreference: { findFirst: vi.fn(async () => null) },
@@ -1351,6 +1308,7 @@ description: Prepare standup notes
     } as unknown as PrismaClient;
     const executor = createRunExecutor({
       prisma,
+      sessionLog: recordingSessionLog().sessionLog,
       runtime: {
         describe: () => ({ capabilities: { scripted: false } }),
         run: runtimeRun,

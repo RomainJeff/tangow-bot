@@ -32,7 +32,13 @@ import {
   routineWakeupJob,
   runContinueJob,
 } from "@rakazo/adapter-kit";
-import type { MessageBlock, RunStatus, SessionEntryOf, SessionRunTrigger } from "@rakazo/contracts";
+import type {
+  MessageBlock,
+  RunStatus,
+  SessionEntry,
+  SessionEntryOf,
+  SessionRunTrigger,
+} from "@rakazo/contracts";
 import {
   ATTACHMENT_MAX_BYTES,
   BOT_DESCRIPTION_MAX_LENGTH,
@@ -100,6 +106,7 @@ import {
   parseCardQuestion,
   parseProposed,
   planActionGate,
+  projectInferenceTurns,
   promptInvokesSkill,
   proposalKey,
   proposalPlaceError,
@@ -120,7 +127,6 @@ import {
   toolRequiresExplicitApproval,
   UNKNOWN_MODEL_MESSAGE,
   unattendedTriggerToolRequiresApproval,
-  userTurnBlocksForRun,
   validateBotNameText,
   validateSpawnBotArgs,
   withProposalKey,
@@ -142,9 +148,9 @@ import {
   effectiveMemoryScope,
   findDefaultModelCredential,
   findModelCredential,
+  historyGeneration,
   InvalidSpaceNameError,
   isTooManyDatabaseConnections,
-  loadRunHistoryMessages,
   type McpServer,
   Prisma,
   type PrismaClient,
@@ -268,20 +274,15 @@ import { resolveDeploymentModel } from "./deployment-model.js";
 import type { TextEditResult } from "./file-text.js";
 import { applyTextEdit, readLineWindow } from "./file-text.js";
 import { handoffToGroupBot, loadGroupContext } from "./group-handoff.js";
-import type { HistoryWindowMode } from "./history-compaction.js";
 import {
   COMPACTION_BATCH_SIZE,
   estimateHistoryMessageTokens,
   estimateHistoryTokens,
   estimateTextTokens,
   estimateToolSchemaTokens,
-  formatCompactedSummary,
   formatRecalledMemory,
   HISTORY_WINDOW_SIZE,
-  historyWindowSize,
-  LEGACY_HISTORY_WINDOW_SIZE,
   MAX_RECALLED_MEMORIES,
-  selectCompactedHistory,
   selectHistoryWindow,
   shouldEnqueueCompaction,
 } from "./history-compaction.js";
@@ -328,7 +329,7 @@ import {
   searchChartCatalog,
 } from "./plot-tool.js";
 import type { RemoteTransportDependencies } from "./remote-mcp.js";
-import { loadReplyContext, messageToAgentHistoryTurn } from "./reply-context.js";
+import { loadReplyContext } from "./reply-context.js";
 import {
   commitConsumedRunSecret,
   normalizeSecretAskPurpose,
@@ -1370,10 +1371,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
             : undefined;
         const channelId = messagingChannelId(sourceBlocks);
         const messagingChannelRun = isMessagingChannelRun(run.trigger, sourceBlocks);
+        const sessionId = run.sessionId as SessionId;
+        const historyStartedAt = performance.now();
+        let historyMs = 0;
         const [
           bot,
           thread,
-          messages,
+          historyEntries,
           peerMessage,
           task,
           storedConnections,
@@ -1390,7 +1394,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
             include: { computer: true },
           }),
           deps.prisma.thread.findUniqueOrThrow({ where: { id: run.threadId } }),
-          loadRunHistoryMessages(deps.prisma, run, LEGACY_HISTORY_WINDOW_SIZE, channelId),
+          readRunHistory(deps.sessionLog, run, channelId).then((entries) => {
+            historyMs = performance.now() - historyStartedAt;
+            return entries;
+          }),
           run.trigger === "bot_message"
             ? loadBotMessageContext(deps.prisma, run.sourceMessageId)
             : Promise.resolve(undefined),
@@ -1546,54 +1553,44 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const group = thread.groupId
           ? await loadGroupContext(deps.prisma, thread.groupId, { id: bot.id, name: bot.name })
           : undefined;
-        const threadContext = threadContextForRun(
-          run.routineId != null,
-          {
-            messages: [...messages].reverse().map((m) => ({
-              id: m.id,
-              seq: m.seq,
-              ...messageToAgentHistoryTurn(m, bot.id, group?.memberNames),
-            })),
-            summary: thread.historyCompactionSummary,
-            historyCompactedUpToSeq: thread.historyCompactedUpToSeq,
-          },
-          messagingChannelRun,
-        );
-        const compactedHistory = selectCompactedHistory({
-          messages: threadContext.messages,
-          summary: threadContext.summary,
-          historyCompactedUpToSeq: threadContext.historyCompactedUpToSeq,
-        });
-        // `system` rows are thread asides, never conversation, and this is the one place
-        // that drops them. It has to happen after the selection above: those rows hold a
-        // seq of their own, and removing them earlier punches a hole in the run of
-        // sequence numbers the compaction summary is only trusted against.
-        let history = compactedHistory.history
-          .filter(({ role }) => role !== "system")
-          .map(({ id, role, content, parts }) => ({
-            id,
-            role,
-            content,
-            ...(parts ? { parts } : {}),
-          }));
-        // What the window could have chosen from, counted after the system rows are dropped so it
-        // is comparable with the count kept below. Measured against the pre-filter length it
-        // reported a permanent phantom loss of one message per system row.
-        const historyMessagesAvailable = history.length;
-        // "not-sized" rather than null when a local summary already narrowed history and no window
-        // sizing ran: null read the same as "sized and kept everything".
-        let historyWindowMode: HistoryWindowMode | "not-sized" = "not-sized";
-        const turnBlocks = userTurnBlocksForRun(
-          run.trigger,
-          runId,
-          messages.map((message) => ({
-            id: message.id,
-            role: message.role,
-            runId: message.runId,
-            blocks: message.blocks as MessageBlock[],
-          })),
+        const projectStartedAt = performance.now();
+        const [first] = historyEntries;
+        const compaction = first?.type === "compaction" ? first : undefined;
+        const outside = await readEntriesOffChain(
+          deps.sessionLog,
+          sessionId,
+          historyEntries,
           run.sourceMessageId,
         );
+        const turns = projectInferenceTurns(historyEntries, {
+          selfBotId: bot.id,
+          botNames: group?.memberNames,
+          resolveReplyTarget: (entryId) => outside.get(entryId),
+        });
+        const summaryTurn = compaction ? turns[0] : undefined;
+        const uncompactedHistory = compaction ? turns.slice(1) : turns;
+        historyMs += performance.now() - projectStartedAt;
+        const includeSemanticRecall = run.routineId == null && !messagingChannelRun;
+        const recallRequest = async (query: string) => {
+          const generation = compaction
+            ? await historyGeneration(deps.prisma, sessionId)
+            : undefined;
+          return {
+            query,
+            scope: memoryScope!,
+            botId: bot.id,
+            ...(generation === undefined ? {} : { historyGeneration: generation }),
+            limit: MAX_RECALLED_MEMORIES,
+          };
+        };
+        const sourceEntry = run.sourceMessageId
+          ? (historyEntries.find((entry) => entry.id === run.sourceMessageId) ??
+            outside.get(run.sourceMessageId))
+          : undefined;
+        const turnBlocks =
+          run.trigger === "user" && sourceEntry?.type === "user.message"
+            ? sourceEntry.payload.blocks
+            : undefined;
         const allowSilentPeerMessage = botMessageAllowsSilence(
           peerMessage?.intent,
           peerMessage?.repliesToRequest,
@@ -1609,19 +1606,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
         // Durable memories live outside the thread, so recall does not wait for a compaction.
         // Same request shape as the recall_memory tool, which never carried that gate.
         const recallPromise =
-          threadContext.includeSemanticRecall && semanticMemory && memoryScope
-            ? semanticMemory.recall(
-                {
-                  query: task.prompt,
-                  scope: memoryScope,
-                  botId: bot.id,
-                  ...(thread.historyCompactedUpToSeq == null
-                    ? {}
-                    : { historyGeneration: thread.historyCompactionGeneration }),
-                  limit: MAX_RECALLED_MEMORIES,
-                },
-                context,
-              )
+          includeSemanticRecall && semanticMemory && memoryScope
+            ? recallRequest(task.prompt).then((request) => semanticMemory.recall(request, context))
             : Promise.resolve(null);
         const [discovered, currentTurnImages, memoryContext, scratchpadContext, recalled] =
           await Promise.all([
@@ -1640,10 +1626,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
           ]);
         const semanticMemoryEnabled = Boolean(semanticMemory) && !messagingChannelRun;
         let recalledMemory = "";
-        let recallSucceeded = false;
         if (recalled) {
           if (recalled.ok && recalled.value.length > 0) {
-            recallSucceeded = true;
             recalledMemory = formatRecalledMemory(recalled.value);
           } else if (!recalled.ok) {
             getLogger().error("semantic memory recall failed", recalled.error);
@@ -3602,18 +3586,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             });
           }
           if (name === "recall_memory") {
-            return semanticMemory!.recall(
-              {
-                query: String(args.query ?? ""),
-                scope: memoryScope!,
-                botId: bot.id,
-                ...(thread.historyCompactedUpToSeq == null
-                  ? {}
-                  : { historyGeneration: thread.historyCompactionGeneration }),
-                limit: MAX_RECALLED_MEMORIES,
-              },
-              context,
-            );
+            return semanticMemory!.recall(await recallRequest(String(args.query ?? "")), context);
           }
           if (name === "save_memory") {
             return finish(
@@ -4285,13 +4258,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
           .filter(Boolean)
           .join("\n\n");
         const historicalContext: AgentRunRequest["history"] = [];
-        if (compactedHistory.usedLocalSummary && compactedHistory.summary) {
+        if (summaryTurn) {
           historicalContext.push({
-            role: "user",
-            content: redactSecrets(
-              formatCompactedSummary(compactedHistory.summary, thread.historyCompactedUpToSeq!),
-              runSecrets,
-            ),
+            ...summaryTurn,
+            content: redactSecrets(summaryTurn.content, runSecrets),
           });
         }
         if (recalledMemory) {
@@ -4378,20 +4348,15 @@ export function createRunExecutor(deps: ExecutorDeps) {
           // resolved model's context window and on what the rest of the run costs: the rendered
           // instructions already carry memory, scratchpad and the peer directory, so a bot with a
           // large durable memory or many connector tools keeps fewer messages than a bare one.
-          if (!compactedHistory.usedLocalSummary) {
-            const window = selectHistoryWindow({
-              history,
-              contextWindow: resolved.contextWindow,
-              nonHistoryTokens,
-              messageWindowSize: historyWindowSize({
-                semanticMemoryEnabled: semanticMemoryEnabled && !thread.historyCompactionSummary,
-                compacted: thread.historyCompactedUpToSeq != null,
-                recallSucceeded,
-              }),
-            });
-            history = window.messages;
-            historyWindowMode = window.mode;
-          }
+          const windowStartedAt = performance.now();
+          const window = selectHistoryWindow({
+            history: uncompactedHistory,
+            contextWindow: resolved.contextWindow,
+            nonHistoryTokens,
+            messageWindowSize: HISTORY_WINDOW_SIZE + COMPACTION_BATCH_SIZE,
+          });
+          historyMs += performance.now() - windowStartedAt;
+          const history = window.messages;
           const runtimeHistory = [...historicalContext, ...history];
           // Split by role so a change in how past turns are rehydrated is visible here.
           const historyTokensByRole = runtimeHistory.reduce<Record<string, number>>(
@@ -4422,8 +4387,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
             historyTokens: estimateHistoryTokens(runtimeHistory),
             historyTokensByRole,
             historyMessagesKept: history.length,
-            historyMessagesAvailable,
-            historyWindowMode,
+            historyMessagesAvailable: uncompactedHistory.length,
+            historyWindowMode: window.mode,
+            source: "session_log",
+            historyEntriesRead: historyEntries.length,
+            ...(compaction ? { compactionSeq: compaction.seq } : {}),
+            historyLoadMs: Number(historyMs.toFixed(1)),
           });
           for (const [callId, input] of await openRunLog(
             deps,
@@ -5085,29 +5054,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
           // Last, and never fatal: the run is already finalized, so a failure here must not reach
           // the catch block below, where a second finalizeRun would match no rows and silently
           // skip the completion notification.
-          try {
-            const updatedThread = await deps.prisma.thread.findUniqueOrThrow({
-              where: { id: thread.id },
-              select: {
-                nextMessageSeq: true,
-                historyCompactedUpToSeq: true,
-              },
-            });
-            if (
-              shouldEnqueueCompaction(
-                updatedThread.nextMessageSeq,
-                updatedThread.historyCompactedUpToSeq,
-                HISTORY_WINDOW_SIZE,
-                COMPACTION_BATCH_SIZE,
-                // This run's own messages are not in here, so a thread crossing the token
-                // threshold during this run is enqueued at the end of the next one.
-                estimateHistoryTokens(compactedHistory.history),
-              )
-            ) {
-              await deps.jobs.enqueue(historyCompactJob(thread.id));
-            }
-          } catch (error) {
-            getLogger().error("history.compact enqueue failed", error);
+          if (!messagingChannelRun && shouldEnqueueCompaction(uncompactedHistory)) {
+            await deps.jobs
+              .enqueue(historyCompactJob(thread.id))
+              .catch((error) => getLogger().error("history.compact enqueue failed", error));
           }
         } catch (error) {
           if (!terminalCheckpointComplete) {
@@ -5427,25 +5377,56 @@ export function filterPageBrowserTools<T extends { name: string }>(
   return tools.filter((tool) => !PAGE_BROWSER_TOOL_NAMES.has(tool.name));
 }
 
-export function threadContextForRun<T>(
-  routineRun: boolean,
-  context: {
-    messages: T[];
-    summary: string | null;
-    historyCompactedUpToSeq: number | null;
-  },
-  messagingChannelRun: boolean,
-) {
-  return routineRun
-    ? {
-        messages: [] as T[],
-        summary: null,
-        historyCompactedUpToSeq: null,
-        includeSemanticRecall: false,
-      }
-    : messagingChannelRun
-      ? { ...context, summary: null, historyCompactedUpToSeq: null, includeSemanticRecall: false }
-      : { ...context, includeSemanticRecall: true };
+const CHANNEL_HISTORY_LIMIT = 200;
+const CHANNEL_HISTORY_PAGE = 500;
+
+async function readRunHistory(
+  log: SessionLog<Prisma.TransactionClient>,
+  run: { id: string; sessionId: string; routineId: string | null },
+  channelId: string | undefined,
+): Promise<SessionEntry[]> {
+  if (run.routineId != null) return [];
+  const sessionId = run.sessionId as SessionId;
+  if (!channelId) return log.readTail(sessionId);
+  const kept: SessionEntry[] = [];
+  let before: EntryId | undefined;
+  while (kept.length < CHANNEL_HISTORY_LIMIT) {
+    const page = await log.readPage(sessionId, { before, limit: CHANNEL_HISTORY_PAGE });
+    kept.unshift(
+      ...page.filter(
+        (entry) =>
+          entry.runId === run.id ||
+          (entry.type === "user.message" &&
+            entry.payload.blocks.some(
+              (block) => block.kind === "channel_message" && block.channelId === channelId,
+            )),
+      ),
+    );
+    if (page.length < CHANNEL_HISTORY_PAGE) break;
+    before = page[0]!.id;
+  }
+  return kept.slice(-CHANNEL_HISTORY_LIMIT);
+}
+
+async function readEntriesOffChain(
+  log: SessionLog<Prisma.TransactionClient>,
+  sessionId: SessionId,
+  entries: readonly SessionEntry[],
+  sourceMessageId: string | null,
+): Promise<Map<string, SessionEntry>> {
+  const held = new Set<string>(entries.map((entry) => entry.id));
+  const wanted = new Set<string>(
+    entries.flatMap((entry) =>
+      entry.type === "user.message" && entry.payload.replyTo ? [entry.payload.replyTo.entryId] : [],
+    ),
+  );
+  if (sourceMessageId) wanted.add(sourceMessageId);
+  const read = await Promise.all(
+    [...wanted]
+      .filter((id) => !held.has(id))
+      .map((id) => log.readEntry(sessionId, EntryId.parse(id))),
+  );
+  return new Map(read.flatMap((entry) => (entry ? [[entry.id, entry] as const] : [])));
 }
 
 export function completionMessageSegments(
