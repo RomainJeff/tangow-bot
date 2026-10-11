@@ -286,7 +286,7 @@ export async function archiveBot(
   await deps.prisma.$transaction(async (tx) => {
     await logCancelledRunsInTransaction(tx, runIds);
     await tx.run.updateMany({
-      where: { id: { in: runIds } },
+      where: { id: { in: runIds }, status: { in: [...ACTIVE_RUN_STATUSES] } },
       data: { status: "cancelled", completedAt: now },
     });
     await tx.task.updateMany({

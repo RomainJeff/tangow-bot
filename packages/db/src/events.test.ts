@@ -1,5 +1,6 @@
 import type { RealtimeFanout } from "@rakazo/adapter-kit";
 import { ProductEventSchema } from "@rakazo/contracts";
+import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
 import { approvalEffectKey } from "@rakazo/core/node/approval-effect-key";
 import { describe, expect, it, vi } from "vitest";
 import type { PrismaClient } from "./client.js";
@@ -2718,7 +2719,7 @@ describe("rewindThread", () => {
     });
     expect(tx.run.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: { in: ["run-1"] } },
+        where: { id: { in: ["run-1"] }, status: { in: [...ACTIVE_RUN_STATUSES] } },
         data: expect.objectContaining({ status: "cancelled" }),
       }),
     );

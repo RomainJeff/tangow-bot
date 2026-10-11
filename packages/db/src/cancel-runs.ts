@@ -1,3 +1,4 @@
+import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
 import type { Prisma } from "./client.js";
 import { appendRunFinishedInTransaction } from "./sessions.js";
 
@@ -26,7 +27,7 @@ export async function cancelRunsInTransaction(
   const runIds = runs.map((run) => run.id);
   await logCancelledRunsInTransaction(tx, runIds, by);
   await tx.run.updateMany({
-    where: { id: { in: runIds } },
+    where: { id: { in: runIds }, status: { in: [...ACTIVE_RUN_STATUSES] } },
     data: {
       status: "cancelled",
       completedAt: cancelledAt,

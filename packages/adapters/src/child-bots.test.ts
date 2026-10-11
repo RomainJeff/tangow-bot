@@ -5,6 +5,7 @@ import type {
   JobPublisher,
   SandboxProvider,
 } from "@rakazo/adapter-kit";
+import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
 import type { createRepos, PrismaClient, ThreadEvents } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
 import { resolveRunHop } from "./bot-messages.js";
@@ -471,7 +472,7 @@ describe("destroyBot", () => {
       }),
     );
     expect(cancelRuns).toHaveBeenCalledWith({
-      where: { id: { in: ["group-run"] } },
+      where: { id: { in: ["group-run"] }, status: { in: [...ACTIVE_RUN_STATUSES] } },
       data: {
         status: "cancelled",
         completedAt: expect.any(Date),

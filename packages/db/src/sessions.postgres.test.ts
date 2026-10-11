@@ -2,7 +2,7 @@ import type { SessionEntryDraft } from "@rakazo/adapter-kit";
 import type { SessionEntry } from "@rakazo/contracts";
 import { SessionId } from "@rakazo/contracts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { logCancelledRunsInTransaction } from "./cancel-runs.js";
+import { cancelRunsInTransaction, logCancelledRunsInTransaction } from "./cancel-runs.js";
 import { createDb, type PrismaClient } from "./client.js";
 import { clearThread, finalizeComputerControlRelease } from "./events.js";
 import {
@@ -194,6 +194,34 @@ describePostgres("appendSessionEntryInTransaction under contention (PostgreSQL)"
     });
     expect(
       logged.map(({ type, payload }) => [type, (payload as { status?: string }).status]),
+    ).toEqual([
+      ["run.started", undefined],
+      ["run.finished", "completed"],
+    ]);
+  });
+
+  it("keeps a run that finished between a canceller's read and its cancel", async () => {
+    const { threadId, runId, taskId } = await startedRun();
+    const read = [{ id: runId, taskId }];
+    await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM threads WHERE id = ${threadId} FOR UPDATE`;
+      await tx.run.update({ where: { id: runId }, data: { status: "completed" } });
+      await appendRunFinishedInTransaction(tx, runId, { status: "completed" });
+    });
+
+    await prisma.$transaction((tx) => cancelRunsInTransaction(tx, read, new Date(), id));
+
+    expect(
+      await prisma.run.findUniqueOrThrow({ where: { id: runId }, select: { status: true } }),
+    ).toEqual({ status: "completed" });
+    expect(
+      (
+        await prisma.sessionEntry.findMany({
+          where: { runId },
+          orderBy: { seq: "asc" },
+          select: { type: true, payload: true },
+        })
+      ).map(({ type, payload }) => [type, (payload as { status?: string }).status]),
     ).toEqual([
       ["run.started", undefined],
       ["run.finished", "completed"],
