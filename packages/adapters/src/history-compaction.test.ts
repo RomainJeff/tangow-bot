@@ -11,6 +11,7 @@ import type {
 import type { EntryId, SessionEntry, SessionId } from "@rakazo/contracts";
 import { EntrySeq } from "@rakazo/contracts";
 import { projectInferenceTurns } from "@rakazo/core";
+import { createThreadEvents, rewindThread } from "@rakazo/db";
 import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { CompactHistoryDeps } from "./history-compaction.js";
@@ -743,6 +744,56 @@ describe("compactHistory", () => {
 
     expect(h.runtime.run).not.toHaveBeenCalled();
     expect(h.memoryProviders.resolve).not.toHaveBeenCalled();
+  });
+
+  it("reads from the compaction a rewind into its kept window cut off, and summarizes nothing of it again", async () => {
+    const seeded = await seedThread();
+    const events = createThreadEvents(database.prisma);
+    const questions: string[] = [];
+    for (const index of [0, 1, 2]) {
+      const sent = await events.sendUserMessage({
+        spaceId: SPACE,
+        threadId: seeded.threadId,
+        botId: seeded.botId,
+        userId: USER,
+        blocks: [{ kind: "text", text: `question ${index}` }],
+        prompt: `question ${index}`,
+        trigger: "user",
+        createRun: false,
+      });
+      questions.push(sent.messageId);
+      await append(seeded, [replied(seeded, `answer ${index}`)]);
+    }
+    const [head] = (await log.readTail(seeded.sessionId)).slice(-1);
+    await append(seeded, [
+      {
+        type: "compaction",
+        parentId: head!.id,
+        payload: { summary: "Answered question 0.", coveredUpToSeq: EntrySeq.parse(1) },
+      },
+    ]);
+    const shown = (entries: readonly SessionEntry[]) =>
+      entries.map((entry) =>
+        entry.type === "compaction"
+          ? entry.payload.summary
+          : entry.type === "user.message" || entry.type === "assistant.text"
+            ? entry.payload.blocks
+                .map((block) => (block.kind === "text" ? block.text : ""))
+                .join("")
+            : entry.type,
+      );
+
+    await rewindThread(database.prisma, {
+      spaceId: SPACE,
+      threadId: seeded.threadId,
+      botId: seeded.botId,
+      messageId: questions[2]!,
+    });
+    const rewound = await log.readTail(seeded.sessionId);
+    await harness(seeded).compact();
+
+    expect(shown(rewound)).toEqual(["Answered question 0.", "question 1", "answer 1", "rewind"]);
+    expect(await log.readTail(seeded.sessionId)).toEqual(rewound);
   });
 
   it("files the summary privately under the session's history generation, even for a shared bot", async () => {
