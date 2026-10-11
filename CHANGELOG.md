@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Changed
 
+- Bots are now instructed to send useful progress and outcomes as visible chat messages on web, desktop and iPhone, stay silent for unchanged scheduled checks, and show drafts before sending messages on your behalf.
 - A bot can no longer rename a skill, on web, desktop and iPhone; only you rename it, from its settings.
 
 #### Fixed
