@@ -791,6 +791,53 @@ describe("session log writers", () => {
     ]);
   });
 
+  it("marks the start of a routine the person subscribed to as one to notify", async () => {
+    const { prisma } = database;
+    const { bot, threadId, sessionId } = await seedBot(prisma, "Lamarr");
+    const routine = await prisma.routine.create({
+      data: {
+        spaceId: SPACE,
+        botId: bot.id,
+        userId: USER,
+        threadId,
+        name: "Release watch",
+        prompt: "Tell me when it ships.",
+        crons: [],
+        webhookEnabled: true,
+        notify: true,
+      },
+    });
+    const run = await seedRun(prisma, bot.id, threadId, {
+      trigger: "webhook",
+      routineId: routine.id,
+    });
+
+    const opened = await openRunLog(
+      { prisma, sessionLog: log },
+      run,
+      { sessionId, runId: run.id, botId: bot.id },
+      SCRIPTED,
+      null,
+    );
+
+    expect((await log.readTail(sessionId)).map(({ type, payload }) => ({ type, payload }))).toEqual(
+      [
+        {
+          type: "routine.started",
+          payload: {
+            sessionId: opened.sessionId,
+            routineId: routine.id,
+            name: "Release watch",
+            trigger: "webhook",
+            scheduledAt: run.createdAt.toISOString(),
+            model: SCRIPTED,
+            notify: true,
+          },
+        },
+      ],
+    );
+  });
+
   it("reports a routine run that fails through finalizeRun as failed in the thread's session", async () => {
     const { prisma } = database;
     const lovelace = await seedBot(prisma, "Lovelace");
