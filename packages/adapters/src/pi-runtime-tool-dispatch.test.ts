@@ -259,6 +259,7 @@ vi.mock("./pi-openai-compatible-provider.js", () => ({
   registerOpenAiCompatibleRuntime: (models: unknown) => models,
 }));
 
+import { builtinAgentTools } from "./builtin-tools.js";
 import { decideWithin } from "./decision.js";
 import { FakeDecisionProvider } from "./fake-decision.js";
 import { maxToolCallsPerTurn, PiAgentRuntime } from "./pi-runtime.js";
@@ -1434,6 +1435,46 @@ describe("Pi connector tool dispatch", () => {
     expect(executeTool).toHaveBeenCalledWith(
       "edit_file",
       { path: "notes/a.md", old_text: "draft", new_text: "final", replace_all: true },
+      "call-1",
+    );
+  });
+
+  it("leaves an omitted spawn_bot computer_mode absent instead of sending an empty enum value", async () => {
+    const spawnBotTool = builtinAgentTools.find((tool) => tool.name === "spawn_bot");
+    if (!spawnBotTool) throw new Error("spawn_bot tool missing");
+    fakeAgentState.invoke = {
+      name: "spawn_bot",
+      args: { name: "Scout", instructions: "You are Scout." },
+    };
+    const executeTool = vi.fn(async () => ({ ok: true }));
+    const runtime = new PiAgentRuntime();
+
+    for await (const _event of runtime.run(
+      {
+        botId: "b",
+        threadId: "t",
+        runId: "r",
+        prompt: "spawn a scout",
+        instructions: "Use spawn_bot.",
+        history: [],
+        tools: [spawnBotTool],
+        model: { provider: "test", id: "dispatch-test-model" },
+        executeTool,
+      },
+      {
+        operationId: "3",
+        traceId: "3",
+        spaceId: "w",
+        userId: "u",
+        signal: new AbortController().signal,
+      },
+    )) {
+      // Exhaust the runtime event stream so tool execution completes.
+    }
+
+    expect(executeTool).toHaveBeenCalledWith(
+      "spawn_bot",
+      { name: "Scout", title: "", instructions: "You are Scout.", prompt: "" },
       "call-1",
     );
   });
