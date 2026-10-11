@@ -1,14 +1,15 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import type { SessionEntry } from "@rakazo/contracts";
-import { projectThreadView } from "@rakazo/core";
+import { drawsNothing, projectThreadView } from "@rakazo/core";
 import { Button, Dialog, DialogClose, DialogContent, DialogTitle } from "@rakazo/ui-web";
 import { X } from "lucide-react";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useDisplayAgentSteps } from "../../lib/agent-steps-pref";
+import { hasRenderableBlock } from "../../lib/message-blocks";
 import { rpc } from "../../lib/rpc";
 import type { SessionViewTarget } from "../../lib/thread-items";
 import type { RowContext } from "./thread-row";
-import { drawsNothing, RowMarker, rowChrome, ThreadRowBody } from "./thread-row";
+import { RowMarker, rowChrome, ThreadRowBody } from "./thread-row";
 
 type Read = { entries: SessionEntry[] | null; failed: boolean };
 
@@ -50,7 +51,7 @@ export function SessionView({
       read.entries
         ? projectThreadView(read.entries, {
             rendersNothing: (item) =>
-              drawsNothing(item, showSteps) ||
+              drawsNothing(item, (blocks) => hasRenderableBlock(blocks, showSteps)) ||
               (item.kind === "routine" && current.kind === "run" && item.runId === current.runId),
           })
         : null,

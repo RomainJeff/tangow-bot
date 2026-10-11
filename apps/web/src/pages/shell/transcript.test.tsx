@@ -2,7 +2,7 @@
 
 import type { SessionEntry } from "@rakazo/contracts";
 import { SessionEntrySchema } from "@rakazo/contracts";
-import { projectThreadView } from "@rakazo/core";
+import { drawsNothing, projectThreadView } from "@rakazo/core";
 import type { ComponentProps, ReactNode } from "react";
 import { act, createRef } from "react";
 import { createRoot } from "react-dom/client";
@@ -22,7 +22,7 @@ const api = vi.hoisted(() => ({ sessionEntries: vi.fn() }));
 vi.mock("../../lib/rpc", () => ({ rpc: { sessions: { entries: api.sessionEntries } } }));
 
 import streamedReply from "../../../../../packages/core/src/session-log/fixtures/streamed-reply.jsonl?raw";
-import { drawsNothing } from "./thread-row";
+import { hasRenderableBlock } from "../../lib/message-blocks";
 import { Transcript } from "./transcript";
 
 const fixture = streamedReply
@@ -88,7 +88,8 @@ async function renderThread(
         artifactTarget={{ botId: "bot_ada" }}
         inGroup={false}
         view={projectThreadView(shown, {
-          rendersNothing: (item) => drawsNothing(item, false),
+          rendersNothing: (item) =>
+            drawsNothing(item, (blocks) => hasRenderableBlock(blocks, false)),
         })}
         olderCursor={null}
         loadingOlder={false}

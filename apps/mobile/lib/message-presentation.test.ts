@@ -1,9 +1,8 @@
 import type { MessageBlock } from "@rakazo/contracts";
 import { SessionEntrySchema } from "@rakazo/contracts";
-import { projectThreadView } from "@rakazo/core";
+import { drawsNothing, projectThreadView } from "@rakazo/core";
 import { describe, expect, it } from "vitest";
 import {
-  drawsNothing,
   hasVisibleMessagePresentation,
   messagePresentationSegments,
   skillLineRoute,
@@ -192,7 +191,8 @@ describe("skill lines", () => {
       }),
     );
     const rows = projectThreadView(entries, {
-      rendersNothing: (item) => drawsNothing(item, false),
+      rendersNothing: (item) =>
+        drawsNothing(item, (blocks) => hasVisibleMessagePresentation(blocks)),
     }).rows;
     expect(rows.map((row) => [row.item.kind, row.item.id, row.marker !== undefined])).toEqual([
       ["message", "e_0", true],

@@ -29,6 +29,7 @@ import {
   buildComposerMentionOptions,
   type ComposerMention,
   canEditSpawnBotCard,
+  drawsNothing,
   isApprovalAskBlock,
   isAsideOnlyMessage,
   isRunTerminalEvent,
@@ -200,7 +201,7 @@ import {
 } from "../lib/live-notifications";
 import { messageArrivalStaggerMs, useMessageArrivals } from "../lib/message-arrivals";
 import {
-  drawsNothing,
+  hasVisibleMessagePresentation,
   messagePresentationSegments,
   skillLineRoute,
   skillLineSegment,
@@ -568,7 +569,8 @@ function Thread() {
   const drawnRows = useRef<ReadonlyMap<string, ThreadRow>>(new Map());
   const view = useMemo((): ThreadView => {
     const projected = projectThreadView(snap?.entries ?? [], {
-      rendersNothing: (item) => drawsNothing(item, showSteps),
+      rendersNothing: (item) =>
+        drawsNothing(item, (blocks) => hasVisibleMessagePresentation(blocks, showSteps)),
       progress: snap?.layer,
     });
     const rows = keepUnchangedRows(drawnRows.current, projected.rows);
@@ -3949,7 +3951,6 @@ const ItemRow = memo(function ItemRow({
   const body = (() => {
     switch (item.kind) {
       case "message":
-      case "run":
         return null;
       case "subagent": {
         const title = item.name || t("subagent");
@@ -4215,7 +4216,8 @@ function SessionSheet({
       Array.isArray(entries)
         ? projectThreadView(entries, {
             rendersNothing: (item) =>
-              drawsNothing(item, showSteps) || isViewedRunLine(item, session.runId),
+              drawsNothing(item, (blocks) => hasVisibleMessagePresentation(blocks, showSteps)) ||
+              isViewedRunLine(item, session.runId),
           }).rows
         : [],
     [entries, showSteps, session.runId],

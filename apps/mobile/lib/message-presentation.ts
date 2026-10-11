@@ -1,4 +1,4 @@
-import type { MessageBlock, ThreadItem } from "@rakazo/contracts";
+import type { MessageBlock } from "@rakazo/contracts";
 import type { NarrationSegment, SkillSourceBlock } from "@rakazo/core";
 import { isToolActivityBlock, narrationSegments } from "@rakazo/core";
 
@@ -33,22 +33,6 @@ export function hasVisibleMessagePresentation(
   showSteps = false,
 ): boolean {
   return visibleMessageBlocks(blocks, showSteps).length > 0;
-}
-
-/** A run draws nothing: its reply is its bubbles, its tool activity their steps. */
-export function drawsNothing(item: ThreadItem, showSteps: boolean): boolean {
-  switch (item.kind) {
-    case "message":
-      return !hasVisibleMessagePresentation(item.blocks, showSteps);
-    case "run":
-      return true;
-    case "effect":
-      return !item.card;
-    case "note":
-      return item.type !== "system.note" && item.type !== "skill.learnt";
-    default:
-      return false;
-  }
 }
 
 /**

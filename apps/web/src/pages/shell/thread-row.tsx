@@ -18,7 +18,7 @@ import { AskCard } from "../../components/AskCard";
 import { CollaborationMarker } from "../../components/ai/CollaborationMarker";
 import { TaskCard } from "../../components/TaskCard";
 import type { ArtifactTarget } from "../../lib/artifact-open";
-import { hasRenderableBlock, isHiddenActivityBlock } from "../../lib/message-blocks";
+import { isHiddenActivityBlock } from "../../lib/message-blocks";
 import type {
   CardAnswerTarget,
   ItemOf,
@@ -53,16 +53,6 @@ export type RowContext = {
   onOpenSkill?: (skill: SkillSourceBlock) => void;
   messageOfEntry: (entryId: string) => MessageItem | undefined;
 };
-
-const SHOWN_NOTES = new Set<ItemOf<"note">["type"]>(["skill.learnt", "system.note"]);
-
-export function drawsNothing(item: ThreadItem, showSteps: boolean): boolean {
-  if (item.kind === "run") return true;
-  if (item.kind === "effect") return !item.card;
-  if (item.kind === "message") return !hasRenderableBlock(item.blocks, showSteps);
-  if (item.kind === "note") return !SHOWN_NOTES.has(item.type);
-  return false;
-}
 
 export function rowChrome(item: ThreadItem, showSteps: boolean): "row" | "aside" {
   if (item.kind === "message") {
@@ -136,8 +126,6 @@ function itemBody(
   switch (item.kind) {
     case "message":
       return <MessageRowView item={item} context={context} {...frame} />;
-    case "run":
-      return null;
     case "subagent":
       return (
         <BotSide inGroup={context.inGroup}>

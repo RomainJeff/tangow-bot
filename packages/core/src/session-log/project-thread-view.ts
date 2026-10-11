@@ -44,6 +44,27 @@ export type ThreadViewOptions = {
   progress?: ProgressLayer;
 };
 
+const SHOWN_NOTES: ReadonlySet<string> = new Set(["skill.learnt", "system.note"]);
+
+/** A run draws nothing: its reply is its bubbles, its tool activity their steps. */
+export function drawsNothing(
+  item: ThreadItem,
+  drawsBlocks: (blocks: readonly MessageBlock[]) => boolean,
+): boolean {
+  switch (item.kind) {
+    case "message":
+      return !drawsBlocks(item.blocks);
+    case "run":
+      return true;
+    case "effect":
+      return !item.card;
+    case "note":
+      return !SHOWN_NOTES.has(item.type);
+    default:
+      return false;
+  }
+}
+
 export function projectThreadView(
   entries: readonly SessionEntry[],
   options: ThreadViewOptions = {},

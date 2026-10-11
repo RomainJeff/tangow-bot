@@ -37,6 +37,7 @@ import {
   appendedEntries,
   attachmentsForThread,
   buildComposerMentionOptions,
+  drawsNothing,
   groupBotsForSidebar,
   inferAttachmentMimeType,
   isActive,
@@ -87,6 +88,7 @@ import {
 import { cachedScreenUrl, loadComputerScreen } from "../lib/computer-screen";
 import { dictation } from "../lib/dictation";
 import { scheduleFocusPrompt } from "../lib/focus-prompt";
+import { hasRenderableBlock } from "../lib/message-blocks";
 import { copyableMessageText } from "../lib/message-text";
 import { revokePendingAttachmentPreviews } from "../lib/pending-attachments";
 import { markAfterPaint, markOnce } from "../lib/performance";
@@ -149,7 +151,6 @@ import { ComputerOverlay, SidePanel } from "./shell/side-panel";
 import { BotsSidebar } from "./shell/sidebar";
 import { skillPageView } from "./shell/skill-link";
 import { ThreadHeader } from "./shell/thread-header";
-import { drawsNothing } from "./shell/thread-row";
 import { Transcript } from "./shell/transcript";
 
 const BotContextMenu = lazy(() =>
@@ -1549,7 +1550,8 @@ export function ShellPage() {
   const view = useMemo(
     () =>
       projectThreadView(activeEntries ?? [], {
-        rendersNothing: (item) => drawsNothing(item, showSteps),
+        rendersNothing: (item) =>
+          drawsNothing(item, (blocks) => hasRenderableBlock(blocks, showSteps)),
         progress: activeLayer,
       }),
     [activeEntries, activeLayer, showSteps],
