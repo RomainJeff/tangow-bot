@@ -10,12 +10,7 @@ import type {
   SessionEntryOf,
   SessionEntryType,
 } from "@rakazo/contracts";
-import {
-  isRunTrace,
-  SessionEntrySchema,
-  SessionId,
-  USER_MESSAGE_CLIENT_NONCE_PREFIX,
-} from "@rakazo/contracts";
+import { isRunTrace, SessionEntrySchema, SessionId } from "@rakazo/contracts";
 import { ACTIVE_RUN_STATUSES, SessionEntryDecodeError, sanitizeJsonValue } from "@rakazo/core";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
@@ -376,21 +371,19 @@ const RUN_BLOCK_ENTRY: {
 /**
  * Append the entries of a message a run published, one per block, to the run's own session. The
  * first entry takes the message's id, so whatever points at the message points at the entry. A
- * message the bot sent the person through `message_user` marks its text `toPerson`; its nonce
- * stays on the message row, since the entries' nonce index is unique across every type.
+ * message the bot sent the person through `message_user` marks its text `toPerson`.
  */
 export async function appendRunBlocksInTransaction(
   tx: Prisma.TransactionClient,
-  message: { id: string; runId: string; botId: string; clientNonce?: string },
+  message: { id: string; runId: string; botId: string; toPerson?: true },
   blocks: readonly MessageBlock[],
   append: typeof appendSessionEntryInTransaction = appendSessionEntryInTransaction,
 ): Promise<void> {
-  const toPerson = message.clientNonce?.startsWith(USER_MESSAGE_CLIENT_NONCE_PREFIX) ?? false;
   const bodies = blocks.flatMap((block): RunBlockBody[] => {
     const toEntry = RUN_BLOCK_ENTRY[block.kind] as ((block: MessageBlock) => RunBlockBody) | null;
     const body = toEntry?.(block);
     if (!body) return [];
-    return toPerson && body.type === "assistant.text"
+    return message.toPerson && body.type === "assistant.text"
       ? [{ ...body, payload: { ...body.payload, toPerson: true } }]
       : [body];
   });

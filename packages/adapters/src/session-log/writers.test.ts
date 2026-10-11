@@ -1415,16 +1415,16 @@ describe("session log writers", () => {
       const { prisma } = database;
       const owner = await seedBot(prisma, "Hypatia");
       const run = await seedRun(prisma, owner.bot.id, owner.threadId);
-      const said = (text: string, clientNonce?: string) =>
+      const said = (text: string, toPerson?: true) =>
         prisma.$transaction((tx) =>
           appendRunBlocksInTransaction(
             tx,
-            { id: randomUUID(), runId: run.id, botId: owner.bot.id, clientNonce },
+            { id: randomUUID(), runId: run.id, botId: owner.bot.id, toPerson },
             [{ kind: "text", text }],
           ),
         );
 
-      await said("Halfway there.", `user-message:${run.id}:0`);
+      await said("Halfway there.", true);
       await said("Done.");
 
       expect(

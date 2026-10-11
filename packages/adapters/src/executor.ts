@@ -4172,6 +4172,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               // user-message: (not user-progress:) so a delegated run surfaces this to the
               // user while its narration stays hidden.
               userMessageClientNonce(run.id, midTurnProgressCount++),
+              true,
             );
             midTurnUserTexts.push(text);
             publishedMidTurnUserMessage = true;
@@ -6087,9 +6088,19 @@ async function publishMessage(
   blocks: MessageBlock[],
   markUnread?: boolean,
   clientNonce?: string,
+  toPerson?: true,
 ) {
   const committed = await deps.prisma.$transaction((tx) =>
-    persistMessageInTransaction(tx, deps.sessionLog, run, role, blocks, markUnread, clientNonce),
+    persistMessageInTransaction(
+      tx,
+      deps.sessionLog,
+      run,
+      role,
+      blocks,
+      markUnread,
+      clientNonce,
+      toPerson,
+    ),
   );
   await deps.events.notify(run.threadId, committed.eventSeq).catch((error) => {
     getLogger().error("thread message realtime notification", error);
@@ -6105,6 +6116,7 @@ async function persistMessageInTransaction(
   blocks: MessageBlock[],
   markUnread?: boolean,
   clientNonce?: string,
+  toPerson?: true,
 ) {
   const message = await createThreadMessageInTransaction(tx, {
     threadId: run.threadId,
@@ -6118,7 +6130,7 @@ async function persistMessageInTransaction(
   if (role === "bot") {
     await appendRunBlocksInTransaction(
       tx,
-      { id: message.id, runId: run.id, botId: run.botId, clientNonce },
+      { id: message.id, runId: run.id, botId: run.botId, toPerson },
       blocks,
       (client, draft) => sessionLog.append(client, draft),
     );
