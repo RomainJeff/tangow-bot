@@ -435,9 +435,13 @@ export function projectThread(entries: readonly SessionEntry[]): ProjectedThread
         break;
       }
       case "rewind":
-      case "clear":
-        push({ kind: "divider", id: segment.id, ts: segment.ts, reason: segment.type }, segment.id);
+        push({ kind: "divider", id: segment.id, ts: segment.ts, reason: "rewind" }, segment.id);
         break;
+      case "clear": {
+        const reason = segment.payload.edit ? "rewind" : "clear";
+        push({ kind: "divider", id: segment.id, ts: segment.ts, reason }, segment.id);
+        break;
+      }
       case "computer.control":
       case "memory.revised":
       case "skill.learnt":

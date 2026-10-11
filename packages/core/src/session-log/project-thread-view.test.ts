@@ -301,6 +301,24 @@ describe("projectThreadView rewind", () => {
   });
 });
 
+describe("projectThreadView clear", () => {
+  it("marks a clear written for an edited first message as an edit, a plain clear as a clear", () => {
+    const [first, edit, edited, clear] = linkEntries("edt", [
+      { type: "user.message", payload: { blocks: text("Hi"), source: "app" } },
+      { type: "clear", parentId: null, payload: { edit: true } },
+      { type: "user.message", payload: { blocks: text("Hello"), source: "app" } },
+      { type: "clear", parentId: null, payload: {} },
+    ]);
+    expect(projectThreadView([first!, edit!, edited!]).rows.map((row) => row.item)).toEqual([
+      { kind: "divider", id: "edt-1", ts: at(1), reason: "rewind" },
+      expect.objectContaining({ id: "edt-2" }),
+    ]);
+    expect(projectThreadView([first!, edit!, edited!, clear!]).rows.map((row) => row.item)).toEqual(
+      [{ kind: "divider", id: "edt-3", ts: at(3), reason: "clear" }],
+    );
+  });
+});
+
 describe("projectThreadView cards", () => {
   const run = { botId: "bot_ada", runId: "run_1" };
   const started = {
