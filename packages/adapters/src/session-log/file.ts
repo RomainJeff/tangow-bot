@@ -19,7 +19,7 @@ import {
   sessionEntryNonce,
 } from "@rakazo/adapter-kit";
 import type { EntryId, SessionEntry } from "@rakazo/contracts";
-import { SessionId } from "@rakazo/contracts";
+import { CARD_STATE_TYPES, SessionId } from "@rakazo/contracts";
 import type { TailSource } from "@rakazo/core";
 import { decodeEntries, readTailFromEnd, SessionEntryMissingParentError } from "@rakazo/core";
 
@@ -142,18 +142,18 @@ export class FileSessionLog implements SessionLog<undefined> {
       entries.push(...decodeEntries(await readFile(path.join(dir, name), "utf8")));
     }
     const run = entries.filter((entry) => entry.runId === runId);
+    const ids = new Set(run.map((entry) => entry.id));
     const asks = new Set(
       run.flatMap((entry) =>
         entry.type === "assistant.ask" || entry.type === "assistant.choice" ? [entry.id] : [],
       ),
     );
-    const answers = entries.filter(
-      (entry) =>
-        entry.type === "user.message" &&
-        entry.payload.replyTo !== undefined &&
-        asks.has(entry.payload.replyTo.entryId),
+    const joined = entries.filter((entry) =>
+      entry.type === "user.message"
+        ? entry.payload.replyTo !== undefined && asks.has(entry.payload.replyTo.entryId)
+        : isCardState(entry) && ids.has(entry.payload.target),
     );
-    return [...run, ...answers].sort(
+    return [...run, ...joined].sort(
       (left, right) => left.ts.localeCompare(right.ts) || left.seq - right.seq,
     );
   }
@@ -280,4 +280,12 @@ function errorCode(error: unknown): unknown {
 
 function isMissing(error: unknown): boolean {
   return errorCode(error) === "ENOENT";
+}
+
+const CARD_STATES: ReadonlySet<string> = new Set(CARD_STATE_TYPES);
+
+function isCardState(
+  entry: SessionEntry,
+): entry is Extract<SessionEntry, { type: (typeof CARD_STATE_TYPES)[number] }> {
+  return CARD_STATES.has(entry.type);
 }

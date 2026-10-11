@@ -239,6 +239,46 @@ export function runSessionLogConformance<Tx>(makeLog: () => Promise<SessionLogHa
       expect(await harness.log.readTail(childId)).toEqual([started, call, result, done]);
     });
 
+    it("reads the later state of a run's cards with the run, by time, and no other card's", async () => {
+      const { sessionId, runId } = await created();
+      const at = (second: number) => new Date(Date.UTC(2026, 9, 11, 9, 0, second)).toISOString();
+      const ofRun = { sessionId, botId: BOT, runId };
+      const askId = EntryId.parse(crypto.randomUUID());
+      const approvalId = EntryId.parse(crypto.randomUUID());
+      const [ask, answered, approval, , applied] = await appendAll([
+        {
+          ...ofRun,
+          id: askId,
+          ts: at(0),
+          type: "assistant.ask",
+          payload: { block: { kind: "ask", text: "Your API key?", input: "secret" } },
+        },
+        { sessionId, ts: at(1), type: "card.answered", payload: { target: askId, answer: "" } },
+        {
+          ...ofRun,
+          id: approvalId,
+          ts: at(2),
+          type: "effect.requested",
+          payload: { effectId: "effect_1", effectKind: "routine", proposal: { name: "Digest" } },
+        },
+        { ...said(sessionId, "unrelated"), ts: at(3) },
+        {
+          sessionId,
+          ts: at(4),
+          type: "effect.applied",
+          payload: { target: approvalId, routineId: "routine_1", change: "created" },
+        },
+      ]);
+      await append({
+        sessionId,
+        ts: at(5),
+        type: "card.answered",
+        payload: { target: EntryId.parse(crypto.randomUUID()), dismissed: true },
+      });
+
+      expect(await harness.log.readRun(runId)).toEqual([ask, answered, approval, applied]);
+    });
+
     it("reads one entry of its session whether the chain still holds it or not", async () => {
       const { sessionId, runId } = await created();
       const [question, answer] = await appendAll([

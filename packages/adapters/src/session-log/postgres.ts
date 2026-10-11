@@ -1,7 +1,7 @@
 import type { NewSession, SessionEntryDraft, SessionLog } from "@rakazo/adapter-kit";
 import { assertEntryCount, SessionReadError } from "@rakazo/adapter-kit";
 import type { SessionEntry, SessionId } from "@rakazo/contracts";
-import { EntryId } from "@rakazo/contracts";
+import { CARD_STATE_TYPES, EntryId } from "@rakazo/contracts";
 import { compactionFirst } from "@rakazo/core";
 import type { PrismaClient, SessionEntryRow } from "@rakazo/db";
 import {
@@ -87,6 +87,11 @@ export class PostgresSessionLog implements SessionLog<Prisma.TransactionClient> 
         AND answer.type = 'user.message' AND answer.seq > ask.seq
         AND answer.payload -> 'replyTo' ->> 'entryId' = ask.id
       WHERE ask.type IN ('assistant.ask', 'assistant.choice')
+      UNION ALL
+      SELECT state.* FROM run card
+      JOIN session_entries state ON state."sessionId" = card."sessionId"
+        AND state.type IN (${Prisma.join(CARD_STATE_TYPES)}) AND state.seq > card.seq
+        AND state.payload ->> 'target' = card.id
       ORDER BY "createdAt", seq`;
     return rows.map(sessionEntryFromRow);
   }

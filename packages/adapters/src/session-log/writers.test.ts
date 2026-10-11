@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { SessionEntryDraft } from "@rakazo/adapter-kit";
 import type { MessageBlock, SessionEntry } from "@rakazo/contracts";
 import { EntryId, EntrySeq, SessionId } from "@rakazo/contracts";
-import { spawnBotApprovalBlock } from "@rakazo/core";
+import { projectThreadItems, spawnBotApprovalBlock } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import {
   answerRunInputInTransaction,
@@ -1276,6 +1276,13 @@ describe("session log writers", () => {
       expect(JSON.stringify(await log.readTail(owner.sessionId))).not.toContain(
         "placeholder-secret",
       );
+      expect(
+        projectThreadItems(await log.readRun(run.id)).flatMap((item) =>
+          item.kind === "message" ? item.blocks : [],
+        ),
+      ).toEqual([
+        { kind: "ask", text: "Your API key?", input: "secret", status: "answered", answer: "" },
+      ]);
     });
 
     describe("an answer given inside the card", () => {
