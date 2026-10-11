@@ -326,14 +326,17 @@ describe("skill prompt helpers", () => {
   });
 
   it("builds catalog instructions for auto-use", () => {
-    const line = formatSkillsCatalogInstruction([
-      {
-        name: "Daily standup",
-        description: "Prepare standup notes",
-        source: "user",
-        readOnly: false,
-      },
-    ]);
+    const line = formatSkillsCatalogInstruction(
+      [
+        {
+          name: "Daily standup",
+          description: "Prepare standup notes",
+          source: "user",
+          readOnly: false,
+        },
+      ],
+      "off",
+    );
     expect(line).toContain("- Daily standup: Prepare standup notes");
     expect(line).toContain("skill_read");
     expect(line).toContain("Prefer matching skills");
@@ -344,8 +347,7 @@ describe("skill prompt helpers", () => {
     const entries = [
       { name: "Daily standup", description: "Prep", source: "user" as const, readOnly: false },
     ];
-    const off = formatSkillsCatalogInstruction(entries)!;
-    expect(off).toBe(formatSkillsCatalogInstruction(entries, "off"));
+    const off = formatSkillsCatalogInstruction(entries, "off")!;
     expect(off).toContain(
       "After creating or updating one, mention /Name so the user can open it.\nOnly skill_update / skill_delete user-created skills (not builtin or plugin).",
     );
@@ -377,7 +379,7 @@ describe("skill prompt helpers", () => {
       source: "user" as const,
       readOnly: false,
     }));
-    const catalog = formatSkillsCatalogInstruction(entries)!;
+    const catalog = formatSkillsCatalogInstruction(entries, "off")!;
     expect(catalog).toContain("- Skill 49: Does 49");
     expect(catalog).not.toContain("- Skill 50:");
     expect(catalog).toContain("3 more skills are available but not listed");

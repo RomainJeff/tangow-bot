@@ -145,7 +145,7 @@ describe("skill tools", () => {
   beforeEach(async () => {
     prisma = makePrisma();
     dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-skill-tools-"));
-    deps = { prisma: prisma as never, dataDir, lock: createInMemorySkillLock() };
+    deps = { prisma: prisma as never, dataDir, learning: "off", lock: createInMemorySkillLock() };
   });
 
   afterEach(async () => {
@@ -262,7 +262,7 @@ describe("skill tools", () => {
     const records = await listAgentSkillRecords(deps, owner);
     expect(records.map((row) => row.name)).toContain("Daily standup");
     expect(records.map((row) => row.name)).not.toContain("Other workspace skill");
-    const catalog = formatSkillsCatalogInstruction(records);
+    const catalog = formatSkillsCatalogInstruction(records, "off");
     expect(catalog).toContain("- Daily standup: Prepare standup notes");
     expect(catalog).toContain("skill_read");
   });
@@ -302,8 +302,8 @@ describe("skill tools", () => {
       source: "builtin",
       readOnly: true,
     });
-    expect(formatSkillsCatalogInstruction(records)).toContain("- Interrogate:");
-    expect(formatSkillsCatalogInstruction(records)).toContain("Review only");
+    expect(formatSkillsCatalogInstruction(records, "off")).toContain("- Interrogate:");
+    expect(formatSkillsCatalogInstruction(records, "off")).toContain("Review only");
 
     const read = await skillReadFromTool(deps, owner, { name: "interrogate" });
     expect(read).toMatchObject({ name: "Interrogate", source: "builtin", readOnly: true });
@@ -851,7 +851,7 @@ describe("skill drafts", () => {
     beforeEach(async () => {
       prisma = makePrisma();
       dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-skill-drafts-"));
-      deps = { prisma: prisma as never, dataDir, lock: createInMemorySkillLock() };
+      deps = { prisma: prisma as never, dataDir, learning: "off", lock: createInMemorySkillLock() };
     });
     afterEach(async () => {
       await rm(dataDir, { recursive: true, force: true });

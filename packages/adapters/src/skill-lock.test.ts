@@ -277,6 +277,7 @@ describe("skill owner lock", () => {
     const deps = {
       prisma: pooledPrisma(4, 10_000) as unknown as PrismaClient,
       dataDir,
+      learning: "off" as const,
       lock: createPostgresSkillLock(advisoryServer().pool()),
     };
     const owners = Array.from({ length: 6 }, (_, i) => ({
