@@ -1,8 +1,9 @@
 import type { ConnectorRegistry } from "@rakazo/adapters";
-import type { Actor, MessageBlock } from "@rakazo/contracts";
+import type { Actor, EntryId, MessageBlock, SessionId } from "@rakazo/contracts";
 import { featuredConnectorProvidersMatch } from "@rakazo/core";
 import {
   appendEventInTransaction,
+  appendSessionEntryInTransaction,
   createThreadMessageInTransaction,
   IsolationError,
   type Prisma,
@@ -79,26 +80,43 @@ async function requireBotThread(deps: OnboardingDeps, actor: Actor, botId: strin
   return { bot, thread: bot.thread };
 }
 
+type BotThreadTarget = { spaceId: string; botId: string; threadId: string; sessionId: string };
+
+async function postInTransaction(
+  tx: Prisma.TransactionClient,
+  target: BotThreadTarget,
+  blocks: MessageBlock[],
+) {
+  const message = await createThreadMessageInTransaction(tx, {
+    threadId: target.threadId,
+    role: "bot",
+    blocks,
+  });
+  await appendSessionEntryInTransaction(tx, {
+    id: message.id as EntryId,
+    type: "bot.text",
+    sessionId: target.sessionId as SessionId,
+    botId: target.botId,
+    payload: { blocks },
+  });
+  const event = await appendEventInTransaction(tx, {
+    spaceId: target.spaceId,
+    threadId: target.threadId,
+    botId: target.botId,
+    type: "thread.message.created",
+    payload: { messageId: message.id, role: "bot", blocks },
+  });
+  return { message, event };
+}
+
 async function post(
   deps: OnboardingDeps,
-  target: { spaceId: string; botId: string; threadId: string },
+  target: BotThreadTarget,
   blocks: MessageBlock[],
 ): Promise<string> {
-  const committed = await deps.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    const message = await createThreadMessageInTransaction(tx, {
-      threadId: target.threadId,
-      role: "bot",
-      blocks,
-    });
-    const event = await appendEventInTransaction(tx, {
-      spaceId: target.spaceId,
-      threadId: target.threadId,
-      botId: target.botId,
-      type: "thread.message.created",
-      payload: { messageId: message.id, role: "bot", blocks },
-    });
-    return { message, event };
-  });
+  const committed = await deps.prisma.$transaction((tx: Prisma.TransactionClient) =>
+    postInTransaction(tx, target, blocks),
+  );
   await deps.events.notify(target.threadId, committed.event.seq);
   return committed.message.id;
 }
@@ -109,7 +127,7 @@ async function post(
  */
 async function updateBlocks(
   deps: OnboardingDeps,
-  target: { spaceId: string; botId: string; threadId: string },
+  target: BotThreadTarget,
   messageId: string,
   rewrite: (blocks: MessageBlock[]) => MessageBlock[],
 ): Promise<void> {
@@ -163,7 +181,12 @@ export async function promptFocus(
   botId: string,
 ): Promise<void> {
   const { bot, thread } = await requireBotThread(deps, actor, botId);
-  const target = { spaceId: actor.spaceId, botId: bot.id, threadId: thread.id };
+  const target = {
+    spaceId: actor.spaceId,
+    botId: bot.id,
+    threadId: thread.id,
+    sessionId: thread.sessionId,
+  };
   const blocks: MessageBlock[] = [
     {
       kind: "choice",
@@ -183,19 +206,7 @@ export async function promptFocus(
     });
     if (recent.some((message) => message.role === "user")) return null;
     if (recent.some((message) => messageHasChoice(message.blocks as MessageBlock[]))) return null;
-    const message = await createThreadMessageInTransaction(tx, {
-      threadId: target.threadId,
-      role: "bot",
-      blocks,
-    });
-    const event = await appendEventInTransaction(tx, {
-      spaceId: target.spaceId,
-      threadId: target.threadId,
-      botId: target.botId,
-      type: "thread.message.created",
-      payload: { messageId: message.id, role: "bot", blocks },
-    });
-    return { message, event };
+    return postInTransaction(tx, target, blocks);
   });
   if (!committed) return;
   await deps.events.notify(target.threadId, committed.event.seq);
@@ -207,7 +218,12 @@ export async function dismissFocus(
   botId: string,
 ): Promise<void> {
   const { bot, thread } = await requireBotThread(deps, actor, botId);
-  const target = { spaceId: actor.spaceId, botId: bot.id, threadId: thread.id };
+  const target = {
+    spaceId: actor.spaceId,
+    botId: bot.id,
+    threadId: thread.id,
+    sessionId: thread.sessionId,
+  };
   const claimed = await deps.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     await tx.$executeRaw`SELECT id FROM threads WHERE id = ${thread.id} FOR UPDATE`;
     const recent = await tx.message.findMany({
@@ -246,7 +262,12 @@ export async function chooseFocus(
   const option = FOCUS_OPTIONS.find((entry) => entry.id === optionId);
   if (!option) throw new IsolationError();
   const { bot, thread } = await requireBotThread(deps, actor, botId);
-  const target = { spaceId: actor.spaceId, botId: bot.id, threadId: thread.id };
+  const target = {
+    spaceId: actor.spaceId,
+    botId: bot.id,
+    threadId: thread.id,
+    sessionId: thread.sessionId,
+  };
 
   const claimed = await deps.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     await tx.$executeRaw`SELECT id FROM threads WHERE id = ${thread.id} FOR UPDATE`;
@@ -350,7 +371,12 @@ export async function markAppConnected(
   connectorId = "composio",
 ): Promise<void> {
   const { bot, thread } = await requireBotThread(deps, actor, botId);
-  const target = { spaceId: actor.spaceId, botId: bot.id, threadId: thread.id };
+  const target = {
+    spaceId: actor.spaceId,
+    botId: bot.id,
+    threadId: thread.id,
+    sessionId: thread.sessionId,
+  };
   const messages = await deps.prisma.message.findMany({
     where: { threadId: thread.id },
     select: { id: true, blocks: true },

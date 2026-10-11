@@ -1784,6 +1784,36 @@ describeJourneys("required product journeys", () => {
     expect(file.content).not.toContain("nonce-dup");
   });
 
+  it("16b: onboarding posts the bot's words outside any run to its log", async () => {
+    const cookie = await signup(app, `onboard-j-${stamp}@rakazo.test`, "Onboard Ada");
+    const bot = await rpc<Bot>(app, cookie, "bots/create", {
+      name: "Greeter",
+      title: "",
+      description: "",
+      instructions: "",
+      notifyOnFinish: true,
+    });
+    await rpc(app, cookie, "onboarding/promptFocus", { botId: bot.id });
+    await rpc(app, cookie, "onboarding/choose", { botId: bot.id, optionId: "research" });
+
+    const thread = await prisma.thread.findFirstOrThrow({ where: { botId: bot.id } });
+    const said = await prisma.message.findMany({
+      where: { threadId: thread.id, role: "bot" },
+      orderBy: { seq: "asc" },
+      select: { id: true },
+    });
+    const entries = await prisma.sessionEntry.findMany({
+      where: { sessionId: thread.sessionId },
+      orderBy: { seq: "asc" },
+    });
+    expect(entries.map(({ id, type, botId, runId }) => [id, type, botId, runId])).toEqual(
+      said.map(({ id }) => [id, "bot.text", bot.id, null]),
+    );
+    expect(entries[0]?.payload).toMatchObject({
+      blocks: [{ kind: "choice", question: "What do you want me on first?" }],
+    });
+  });
+
   it("16: routine test-run and plugin connect/revoke", async () => {
     const ada = await signup(app, `plug-j-${stamp}@rakazo.test`, "Plug Ada");
     const bob = await signup(app, `plug-bob-j-${stamp}@rakazo.test`, "Plug Bob");
@@ -2311,11 +2341,15 @@ describeJourneys("required product journeys", () => {
     });
     await rpc(app, cookie, "computer/boot", { botId: bot.id });
     await rpc(app, cookie, "computer/takeover", { botId: bot.id });
-    void rpc(app, cookie, "threads/send", {
+    const busy = await rpc<{ runId: string }>(app, cookie, "threads/send", {
       botId: bot.id,
       text: "keep working until I stop you",
     });
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await waitForDatabase(
+      async () =>
+        (await prisma.sessionEntry.count({ where: { runId: busy.runId, type: "run.started" } })) >
+        0,
+    );
     const skill = await rpc<{
       id: string;
       status: string;
@@ -2368,6 +2402,30 @@ describeJourneys("required product journeys", () => {
       name: "Export weekly CRM list",
     });
     expect(saved.status).toBe("saved");
+    const teacher = await rpc<Me>(app, cookie, "me");
+    const teachingLog = await prisma.sessionEntry.findMany({
+      where: {
+        session: { thread: { botId: bot.id } },
+        type: { in: ["run.finished", "bot.text", "skill.saved"] },
+      },
+      orderBy: { seq: "asc" },
+      select: { type: true, runId: true, payload: true },
+    });
+    expect(
+      teachingLog.map(({ type, runId, payload }) => {
+        const fields = payload as {
+          status?: string;
+          by?: string;
+          blocks?: Array<{ kind: string }>;
+          name?: string;
+        };
+        return [type, runId, fields.status ?? fields.blocks?.[0]?.kind ?? fields.name, fields.by];
+      }),
+    ).toEqual([
+      ["run.finished", busy.runId, "cancelled", teacher.userId],
+      ["bot.text", null, "skill_draft", undefined],
+      ["skill.saved", null, "Export weekly CRM list", undefined],
+    ]);
     const listed = await rpc<Array<{ id: string; name: string }>>(app, cookie, "skills/list", {
       botId: bot.id,
     });
