@@ -134,6 +134,8 @@ test("logout protects bot deep links and sign-in restores the session", async ({
   const message = "Fake composer regression check.";
   await composer.fill(message);
   await captureScreenshot(page, testInfo, "40-restored-auth-session");
+  // The first message shows from its entry before the send settles; Send is disabled until it does.
+  await expect(page.getByRole("button", { name: "Send", exact: true })).toBeEnabled();
   await composer.press("Enter");
   await expect(composer).toHaveValue("");
   // Scope to the transcript: the sidebar activity row can echo the same text.
