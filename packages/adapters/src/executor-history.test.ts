@@ -468,21 +468,24 @@ describe("the history a run reads from its session log", () => {
   });
 
   it("compacts past half the history budget of the run's model, and hands that budget to the job", async () => {
-    const small = { provider: "openai", id: "gpt-4" };
-    const ofTokens = (tokens: number) => chain(0, [said("x".repeat(tokens * 4))]);
-    const over = fixture({ tail: ofTokens(12_000), compaction: true, model: small });
-    const under = fixture({ tail: ofTokens(8_000), compaction: true, model: small });
+    const budgets = async (id: string, tokens: number) => {
+      const f = fixture({
+        tail: chain(0, [said("x".repeat(tokens * 4))]),
+        compaction: true,
+        model: { provider: "openai", id },
+      });
+      await f.history();
+      return f.jobs.enqueue.mock.calls
+        .map(([job]) => job as { name: string; payload: { historyBudget?: number } })
+        .filter((job) => job.name === "history.compact")
+        .map((job) => job.payload.historyBudget);
+    };
 
-    await Promise.all([over.history(), under.history()]);
+    const [gpt4o] = await budgets("gpt-4o", 60_000);
+    const [gpt41] = await budgets("gpt-4.1", 600_000);
 
-    const compactions = (f: ReturnType<typeof fixture>) =>
-      f.jobs.enqueue.mock.calls
-        .map(([job]) => job as { name: string; payload: unknown })
-        .filter((job) => job.name === "history.compact");
-    expect(compactions(over)).toMatchObject([
-      { payload: { threadId: "thread-1", historyBudget: 20_000 } },
-    ]);
-    expect(compactions(under)).toEqual([]);
+    expect(await budgets("gpt-4o", 40_000)).toEqual([]);
+    expect(gpt41! - gpt4o!).toBe(1_047_576 - 128_000);
   });
 });
 
