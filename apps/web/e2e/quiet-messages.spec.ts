@@ -1,133 +1,108 @@
 import { activeBotId, captureScreenshot, completeOnboarding, signup } from "./helpers";
-import { expect, type Locator, type Page, type Route, test } from "./test";
-
-type Message = Record<string, unknown>;
+import { expect, type Locator, type Page, test } from "./test";
+import { type EntryDraft, showThread } from "./thread-log";
 
 /** A thread that shows the whole message grammar at once, with stable content. */
-function quietThread(botId: string): Message[] {
+function quietThread(botId: string): EntryDraft[] {
   const at = (minute: number) => `2026-09-17T09:${String(minute).padStart(2, "0")}:00.000Z`;
+  const run = (id: string, minute: number): EntryDraft => ({
+    id: `${id}-start`,
+    ts: at(minute),
+    type: "run.started",
+    botId,
+    runId: id,
+    payload: {
+      trigger: { kind: "message", entryId: "quiet-user" },
+      model: { provider: "e2e", id: "quiet-model" },
+      effort: null,
+    },
+  });
+  const finished = (id: string, minute: number, status: "completed" | "cancelled"): EntryDraft => ({
+    id: `${id}-end`,
+    ts: at(minute),
+    type: "run.finished",
+    botId,
+    runId: id,
+    payload: { status, usage: { inputTokens: 1200, outputTokens: 80 } },
+  });
   return [
     {
       id: "quiet-user",
-      threadId: "quiet-thread",
-      seq: 1,
-      role: "user",
-      createdAt: at(24),
-      blocks: [{ kind: "text", text: "Pull the Q3 numbers.\nBoth regions." }],
+      ts: at(24),
+      type: "user.message",
+      payload: {
+        blocks: [{ kind: "text", text: "Pull the Q3 numbers.\nBoth regions." }],
+        source: "app",
+      },
     },
     {
-      // The server stores an inbound peer receipt with role "user" (it is the
-      // recipient's prompt, but still peer activity — see bot-messages.ts) and no
-      // botId; it must still render as a centered aside, not a reply from "Bot".
       id: "quiet-peer",
-      replyToMessageId: "quiet-user",
-      threadId: "quiet-thread",
-      seq: 2,
-      role: "user",
-      createdAt: at(24),
-      blocks: [
-        {
-          kind: "bot_message_received",
-          fromBotId: "quiet-research",
-          fromBotName: "Research",
-          text: "here are the Q3 numbers",
-        },
-      ],
+      ts: at(24),
+      type: "bot.message.received",
+      payload: {
+        from: { kind: "bot", botId: "quiet-research", name: "Research" },
+        fromSessionId: "quiet-research-session",
+        fromEntryId: "quiet-research-sent",
+        text: "here are the Q3 numbers",
+        intent: "result",
+        hop: 1,
+        exchangeId: "quiet-research-sent",
+      },
     },
     {
       id: "quiet-handoff",
-      threadId: "quiet-thread",
-      seq: 3,
-      role: "bot",
-      botId,
-      createdAt: at(25),
-      blocks: [
-        {
-          kind: "handoff",
-          fromBotId: botId,
-          toBotId: "quiet-research",
-          text: "the Q3 sheet",
-        },
-      ],
+      ts: at(25),
+      type: "handoff",
+      payload: { fromBotId: botId, toBotId: "quiet-research", text: "the Q3 sheet", hop: 1 },
     },
+    run("quiet-run", 25),
     {
       id: "quiet-reply",
-      threadId: "quiet-thread",
-      seq: 4,
-      role: "bot",
+      ts: at(26),
+      type: "assistant.text",
       botId,
-      createdAt: at(26),
-      blocks: [
-        {
-          kind: "steps",
-          durationMs: 124_000,
-          steps: [
-            { label: "Searched the drive", count: 1 },
-            { label: "Read the Q3 sheet", count: 1 },
-          ],
-        },
-        {
-          kind: "text",
-          text: [
-            "Revenue is up in both regions.",
-            "",
-            "| Region | Revenue |",
-            "| --- | ---: |",
-            "| EU | 1,240 |",
-            "| US | 2,310 |",
-          ].join("\n"),
-        },
-      ],
+      runId: "quiet-run",
+      payload: {
+        blocks: [
+          {
+            kind: "steps",
+            durationMs: 124_000,
+            steps: [
+              { label: "Searched the drive", count: 1 },
+              { label: "Read the Q3 sheet", count: 1 },
+            ],
+          },
+          {
+            kind: "text",
+            text: [
+              "Revenue is up in both regions.",
+              "",
+              "| Region | Revenue |",
+              "| --- | ---: |",
+              "| EU | 1,240 |",
+              "| US | 2,310 |",
+            ].join("\n"),
+          },
+        ],
+      },
     },
+    finished("quiet-run", 26, "completed"),
+    run("quiet-stopped", 27),
     {
       id: "quiet-note",
-      threadId: "quiet-thread",
-      seq: 5,
-      role: "bot",
+      ts: at(27),
+      type: "assistant.text",
       botId,
-      createdAt: at(27),
-      blocks: [
-        { kind: "text", text: "I stopped there." },
-        { kind: "meta", text: "Run stopped by you" },
-      ],
+      runId: "quiet-stopped",
+      payload: {
+        blocks: [
+          { kind: "text", text: "I stopped there." },
+          { kind: "meta", text: "Run stopped by you" },
+        ],
+      },
     },
+    finished("quiet-stopped", 27, "cancelled"),
   ];
-}
-
-/** Both hydrate RPCs carry the transcript; one handler avoids racing globs. */
-const HYDRATE_RPC = /\/rpc\/(bootstrap|threads\/get)(?:\?|$)/;
-
-async function showQuietThread(page: Page, botId: string) {
-  const messages = quietThread(botId);
-  await page.route(HYDRATE_RPC, async (route: Route) => {
-    try {
-      const response = await route.fetch();
-      const body = (await response.json()) as {
-        json?: {
-          messages?: Message[];
-          olderCursor?: number | null;
-          thread?: { messages?: Message[]; olderCursor?: number | null };
-        };
-      };
-      if (body.json?.messages) {
-        body.json.messages = messages;
-        body.json.olderCursor = null;
-      }
-      if (body.json?.thread?.messages) {
-        body.json.thread.messages = messages;
-        body.json.thread.olderCursor = null;
-      }
-      await route.fulfill({
-        status: response.status(),
-        headers: response.headers(),
-        body: JSON.stringify(body),
-      });
-    } catch (error) {
-      if (/already handled|Target closed|Request context disposed/i.test(String(error))) return;
-      throw error;
-    }
-  });
-  await page.reload({ waitUntil: "domcontentloaded" });
 }
 
 async function setAppearance(page: Page, theme: "light" | "dark") {
@@ -157,7 +132,7 @@ test("the thread reads as names, prose and asides", async ({ page }, testInfo) =
   await settings.getByTestId("display-agent-steps").click();
   await settings.getByRole("button", { name: "Close user settings" }).click();
 
-  await showQuietThread(page, botId);
+  await showThread(page, quietThread(botId));
 
   const transcript = page.getByTestId("transcript");
   const reply = transcript.locator('[data-message-id="quiet-reply"]');
@@ -202,7 +177,7 @@ test("the thread reads as names, prose and asides", async ({ page }, testInfo) =
   };
 
   // A message a bot received from a peer is an aside between messages, not a
-  // reply from "Bot" — even though the server stores it with role "user".
+  // reply from "Bot".
   const chip = transcript.getByTestId("peer-receipt-chip");
   await expect(chip).toBeVisible();
   await expect(chip).toHaveAccessibleName(/Message from Research/);

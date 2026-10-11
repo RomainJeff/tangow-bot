@@ -1,19 +1,16 @@
 import { activeBotId, captureScreenshot, completeOnboarding, signup } from "./helpers";
-import { expect, type Page, type Route, test } from "./test";
-
-type Message = Record<string, unknown>;
+import { expect, type Page, test } from "./test";
+import { type EntryDraft, showThread } from "./thread-log";
 
 /** One settled reply, stable enough for a hover capture. */
-function motionThread(botId: string): Message[] {
+function motionThread(botId: string): EntryDraft[] {
   return [
     {
       id: "motion-reply",
-      threadId: "motion-thread",
-      seq: 1,
-      role: "bot",
+      ts: "2026-09-17T09:24:00.000Z",
+      type: "bot.text",
       botId,
-      createdAt: "2026-09-17T09:24:00.000Z",
-      blocks: [{ kind: "text", text: "Tuesday afternoon is the only slot that works." }],
+      payload: { blocks: [{ kind: "text", text: "Tuesday afternoon is the only slot that works." }] },
     },
   ];
 }
@@ -38,44 +35,9 @@ function runningRun(botId: string) {
   };
 }
 
-/** Both hydrate RPCs carry the transcript; one handler avoids racing globs. */
-const HYDRATE_RPC = /\/rpc\/(bootstrap|threads\/get)(?:\?|$)/;
-
 async function showMotionThread(page: Page, botId: string) {
-  const messages = motionThread(botId);
   const run = runningRun(botId);
-  await page.route(HYDRATE_RPC, async (route: Route) => {
-    try {
-      const response = await route.fetch();
-      const body = (await response.json()) as {
-        json?: {
-          messages?: Message[];
-          olderCursor?: number | null;
-          run?: unknown;
-          thread?: { messages?: Message[]; olderCursor?: number | null; run?: unknown };
-        };
-      };
-      if (body.json?.messages) {
-        body.json.messages = messages;
-        body.json.olderCursor = null;
-        body.json.run = run;
-      }
-      if (body.json?.thread?.messages) {
-        body.json.thread.messages = messages;
-        body.json.thread.olderCursor = null;
-        body.json.thread.run = run;
-      }
-      await route.fulfill({
-        status: response.status(),
-        headers: response.headers(),
-        body: JSON.stringify(body),
-      });
-    } catch (error) {
-      if (/already handled|Target closed|Request context disposed/i.test(String(error))) return;
-      throw error;
-    }
-  });
-  await page.reload({ waitUntil: "domcontentloaded" });
+  await showThread(page, motionThread(botId), { run, activeRuns: [run] });
 }
 
 async function setAppearance(page: Page, theme: "light" | "dark") {
