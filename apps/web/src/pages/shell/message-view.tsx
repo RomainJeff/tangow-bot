@@ -6,6 +6,7 @@ import type { SkillSourceBlock } from "@rakazo/core";
 import {
   isLinkOnlyMessage,
   isNarrationMessage,
+  narrationSegments,
   previewSiteLabel,
   sanitizePreviewTitle,
   skillSourcesOf,
@@ -300,35 +301,22 @@ export const MessageView = memo(function MessageView({
   const skillLines = skills.map((skill) => skillLine(skill, skillLinesLive, onOpenSkill));
   if (!drawsSomething) return null;
   if (isNarration) {
-    // Each run of prose is one bubble and a steps block stays where it is, as the bot produced them.
-    const parts: (
-      | { prose: { text: string; streaming: boolean }[] }
-      | { steps: Extract<MessageBlock, { kind: "steps" }> }
-    )[] = [];
-    for (const block of visibleBlocks) {
-      if (block.kind === "steps") {
-        parts.push({ steps: block });
-        continue;
-      }
+    const parts = narrationSegments(visibleBlocks, (block) => {
       const text =
         block.kind === "progress"
           ? block.text
           : block.kind === "text" && !linkOnly
             ? bubbleText(block.text)
             : undefined;
-      if (text === undefined) continue;
-      const entry = { text, streaming: block.kind === "progress" };
-      const last = parts.at(-1);
-      if (last && "prose" in last) last.prose.push(entry);
-      else parts.push({ prose: [entry] });
-    }
-    const lastBubble = parts.findLastIndex((part) => "prose" in part);
+      return text === undefined ? undefined : { text, streaming: block.kind === "progress" };
+    });
+    const lastBubble = parts.findLastIndex((part) => part.kind === "content");
     return botRow(
       <>
         {messageContext}
         {parts.map((part, i) =>
-          "steps" in part ? (
-            <AgentSteps key={i} block={part.steps} live={isLive} />
+          part.kind === "steps" ? (
+            <AgentSteps key={i} block={part.block} live={isLive} />
           ) : (
             <MessageBubble
               key={i}
@@ -338,7 +326,7 @@ export const MessageView = memo(function MessageView({
               dir="auto"
               meta={i === lastBubble && skillLines.length > 0 ? skillLines : undefined}
             >
-              {part.prose.map((entry, j) => (
+              {part.blocks.map((entry, j) => (
                 <div key={j}>
                   <ChatMarkdown streaming={entry.streaming}>{entry.text}</ChatMarkdown>
                 </div>

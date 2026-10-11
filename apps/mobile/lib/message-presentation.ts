@@ -1,6 +1,6 @@
 import type { MessageBlock } from "@rakazo/contracts";
-import type { SkillSourceBlock } from "@rakazo/core";
-import { isToolActivityBlock } from "@rakazo/core";
+import type { NarrationSegment, SkillSourceBlock } from "@rakazo/core";
+import { isToolActivityBlock, narrationSegments } from "@rakazo/core";
 
 /**
  * The blocks the thread is about to draw: tool activity is hidden, except the
@@ -17,30 +17,14 @@ export function visibleMessageBlocks(
   );
 }
 
-export type MessagePresentationSegment =
-  | { kind: "content"; blocks: MessageBlock[] }
-  | { kind: "steps"; block: Extract<MessageBlock, { kind: "steps" }> };
-
-/**
- * What a message draws, in the order the bot produced it: each run of content is one segment, and
- * a `steps` block the setting shows stays where it is. Mirrors web's narration bubbles.
- */
+/** What a message draws: its visible blocks, a `steps` block the setting shows where it is. */
 export function messagePresentationSegments(
   blocks: readonly MessageBlock[],
   showSteps = false,
-): MessagePresentationSegment[] {
-  const segments: MessagePresentationSegment[] = [];
-  for (const block of blocks) {
-    if (showSteps && block.kind === "steps") {
-      segments.push({ kind: "steps", block });
-      continue;
-    }
-    if (block.kind === "app_connect" || isToolActivityBlock(block)) continue;
-    const last = segments.at(-1);
-    if (last?.kind === "content") last.blocks.push(block);
-    else segments.push({ kind: "content", blocks: [block] });
-  }
-  return segments;
+): NarrationSegment<MessageBlock>[] {
+  return narrationSegments(visibleMessageBlocks(blocks, showSteps), (block) =>
+    block.kind === "app_connect" ? undefined : block,
+  );
 }
 
 export function hasVisibleMessagePresentation(

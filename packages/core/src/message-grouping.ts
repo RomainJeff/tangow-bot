@@ -1,4 +1,4 @@
-import type { ThreadItem, ThreadMessage } from "@rakazo/contracts";
+import type { MessageBlock, ThreadItem, ThreadMessage } from "@rakazo/contracts";
 import { showsTimeMarker } from "./thread-time-markers.js";
 
 /** Consecutive messages from the same bot within this window collapse under one header
@@ -36,6 +36,34 @@ export function isNarrationMessage(message: Pick<ThreadMessage, "role" | "blocks
         block.kind === "skill_source",
     )
   );
+}
+
+export type NarrationSegment<T> =
+  | { kind: "content"; blocks: T[] }
+  | { kind: "steps"; block: Extract<MessageBlock, { kind: "steps" }> };
+
+/**
+ * What a message draws, in the order the bot produced it: each run of content is one segment and
+ * each `steps` block stays where it is. `content` gives what a block draws, or `undefined` to leave
+ * it out.
+ */
+export function narrationSegments<T>(
+  blocks: readonly MessageBlock[],
+  content: (block: MessageBlock) => T | undefined,
+): NarrationSegment<T>[] {
+  const segments: NarrationSegment<T>[] = [];
+  for (const block of blocks) {
+    if (block.kind === "steps") {
+      segments.push({ kind: "steps", block });
+      continue;
+    }
+    const drawn = content(block);
+    if (drawn === undefined) continue;
+    const last = segments.at(-1);
+    if (last?.kind === "content") last.blocks.push(drawn);
+    else segments.push({ kind: "content", blocks: [drawn] });
+  }
+  return segments;
 }
 
 /**
