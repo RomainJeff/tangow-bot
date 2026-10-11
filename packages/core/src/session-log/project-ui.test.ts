@@ -50,6 +50,7 @@ describe("projectThreadItems", () => {
           { kind: "text", text: "Let me check." },
           {
             kind: "steps",
+            durationMs: 9000,
             steps: [
               {
                 label: "Get weather",
@@ -367,6 +368,7 @@ describe("projectThreadItems", () => {
         blocks: [
           {
             kind: "steps",
+            durationMs: 6000,
             steps: [
               {
                 label: "Fetch news",
@@ -672,6 +674,7 @@ describe("projectThreadItems", () => {
         blocks: [
           {
             kind: "steps",
+            durationMs: 4000,
             steps: [
               {
                 label: "Run subagent",
@@ -820,6 +823,7 @@ describe("projectThreadItems", () => {
         blocks: [
           {
             kind: "steps",
+            durationMs: 5000,
             steps: [
               {
                 label: "Message bot",
@@ -1147,6 +1151,7 @@ describe("projectThreadItems", () => {
         blocks: [
           {
             kind: "steps",
+            durationMs: 2000,
             steps: [
               {
                 label: "Run subagent",
@@ -1155,6 +1160,62 @@ describe("projectThreadItems", () => {
               },
             ],
           },
+        ],
+      },
+    ]);
+  });
+
+  it("stamps the run's duration on the last steps block of its words once it finishes", () => {
+    const run = { botId: "bot_ada", runId: "run_1" };
+    const trigger = { kind: "webhook", routineId: "rtn_1" };
+    const usage = { inputTokens: 300, outputTokens: 5 };
+    const call = (callId: string) => ({
+      ...run,
+      type: "tool.call",
+      payload: { callId, name: "read_file", input: "{}" },
+    });
+    const result = (callId: string) => ({
+      ...run,
+      type: "tool.result",
+      payload: { callId, output: "ok", isError: false, artifactIds: [] },
+    });
+    const chain = linkEntries("timed", [
+      { ...run, type: "run.started", payload: { trigger, model, effort: null } },
+      call("call_a"),
+      result("call_a"),
+      { ...run, type: "assistant.text", payload: { blocks: text("Reading more.") } },
+      call("call_b"),
+      result("call_b"),
+      { ...run, type: "assistant.text", payload: { blocks: text("Done.") } },
+      { ...run, type: "run.finished", payload: { status: "completed", usage } },
+    ]);
+    const read = (id: string) => ({
+      label: "Read file",
+      count: 1,
+      calls: [{ name: "read_file", input: "{}", output: "ok", id }],
+    });
+    expect(projectThreadItems(chain)).toEqual([
+      {
+        kind: "run",
+        id: "timed-0",
+        ts: at(0),
+        ...run,
+        trigger,
+        model,
+        effort: null,
+        finished: { outcome: { status: "completed", usage }, durationMs: 7000 },
+      },
+      {
+        kind: "message",
+        role: "bot",
+        id: "timed-1",
+        ts: at(1),
+        ...run,
+        blocks: [
+          { kind: "steps", steps: [read("call_a")] },
+          { kind: "text", text: "Reading more." },
+          { kind: "steps", steps: [read("call_b")], durationMs: 7000 },
+          { kind: "text", text: "Done." },
         ],
       },
     ]);

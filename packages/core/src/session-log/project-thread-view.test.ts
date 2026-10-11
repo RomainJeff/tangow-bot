@@ -107,7 +107,7 @@ const answeredWork = {
     ts: at(2),
     ...ada,
     blocks: [
-      { kind: "steps", steps: [search, scoutCall("Globex, Initech")] },
+      { kind: "steps", steps: [search, scoutCall("Globex, Initech")], durationMs: 9000 },
       { kind: "text", text: "Acme, Globex, Initech" },
       { kind: "ask", text: "Compare prices too?", status: "answered", answer: "Yes" },
     ],

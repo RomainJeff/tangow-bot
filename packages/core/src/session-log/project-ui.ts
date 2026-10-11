@@ -86,6 +86,7 @@ export function projectThread(entries: readonly SessionEntry[]): ProjectedThread
     visible.flatMap((entry) => (entry.type === "run.finished" ? [entry.runId] : [])),
   );
   const runs = new Map<string, RunItem>();
+  const runMessages = new Map<string, MessageItem[]>();
   const effects = new Map<string, EffectItem>();
   const routines = new Map<string, RoutineItem>();
   const items: ThreadItem[] = [];
@@ -127,6 +128,7 @@ export function projectThread(entries: readonly SessionEntry[]): ProjectedThread
           ...origin(originSessionId),
         };
         push(message, ...segment.entries.map((entry) => entry.id));
+        runMessages.set(runId, [...(runMessages.get(runId) ?? []), message]);
         const first = segment.entries.find((entry) => MESSAGE_ENTRY_TYPES.has(entry.type));
         if (first) messageIds.set(id, first.id);
         for (const [entryId, index] of segment.cards)
@@ -215,11 +217,10 @@ export function projectThread(entries: readonly SessionEntry[]): ProjectedThread
         finishedAt.set(segment.runId, segment.seq);
         const run = runs.get(segment.runId);
         if (run) {
-          run.finished = {
-            outcome: segment.payload,
-            durationMs: Math.max(0, Date.parse(segment.ts) - Date.parse(run.ts)),
-          };
+          const durationMs = Math.max(0, Date.parse(segment.ts) - Date.parse(run.ts));
+          run.finished = { outcome: segment.payload, durationMs };
           shownBy.set(segment.id, run.id);
+          stampDuration(runMessages.get(segment.runId) ?? [], durationMs);
         }
         break;
       }
@@ -486,6 +487,17 @@ export function projectThread(entries: readonly SessionEntry[]): ProjectedThread
   const itemId = last && shownBy.get(last.id);
   const waiting = last && itemId ? { itemId, entryId: last.id, runId: last.runId } : null;
   return { items, shownBy, messageIds, waiting };
+}
+
+/** Puts a finished run's wall-clock duration on the last steps block of its words. */
+function stampDuration(messages: readonly MessageItem[], durationMs: number) {
+  for (const message of messages.toReversed()) {
+    const index = message.blocks.findLastIndex((block) => block.kind === "steps");
+    const block = message.blocks[index];
+    if (block?.kind !== "steps") continue;
+    message.blocks[index] = { ...block, durationMs };
+    return;
+  }
 }
 
 function cardOf(slot: CardSlot): MessageBlock | undefined {
