@@ -218,6 +218,7 @@ import {
 } from "../lib/pick-attachments";
 import { reactionPopKey, useReactionPops } from "../lib/reaction-pop";
 import { threadRefreshDelayMs } from "../lib/refresh";
+import { isViewedRunLine } from "../lib/session-sheet";
 import { closeSheet, openSheet } from "../lib/sheet";
 import type { SpawnBotEdits } from "../lib/spawn-bot-edit";
 import { openSpawnBotEdit, syncSpawnBotEdit } from "../lib/spawn-bot-edit";
@@ -3910,7 +3911,7 @@ function ApprovalCard({
 const NO_ACTIONS: MessageActionProps = { onLongPress: () => {} };
 
 /** A session a row opens in its sheet: the helper's or the routine's own story. */
-type OpenedSession = { title: string; load: () => Promise<SessionEntry[]> };
+type OpenedSession = { title: string; load: () => Promise<SessionEntry[]>; runId?: string };
 
 /**
  * Every row that is not a message: a run, a helper, a routine, the bots messaging each other, a
@@ -4026,6 +4027,7 @@ const ItemRow = memo(function ItemRow({
         const openRun = (run: RoutineLineRun) =>
           setSession({
             title: run.item.name,
+            runId: run.item.runId,
             load: () =>
               rpc<{ entries: SessionEntry[] }>("runs/entries", { runId: run.item.runId }).then(
                 (result) => result.entries,
@@ -4274,10 +4276,12 @@ function SessionSheet({
   const rows = useMemo(
     () =>
       Array.isArray(entries)
-        ? projectThreadView(entries, { rendersNothing: (item) => drawsNothing(item, showSteps) })
-            .rows
+        ? projectThreadView(entries, {
+            rendersNothing: (item) =>
+              drawsNothing(item, showSteps) || isViewedRunLine(item, session.runId),
+          }).rows
         : [],
-    [entries, showSteps],
+    [entries, showSteps, session.runId],
   );
   return (
     <PreviewSheet title={session.title} onClose={onClose}>
