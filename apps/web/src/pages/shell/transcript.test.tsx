@@ -146,8 +146,8 @@ describe("the transcript", () => {
     expect(
       document
         .querySelector('[data-testid="run-waiting"]')
-        ?.closest("[data-message-id]")
-        ?.getAttribute("data-message-id"),
+        ?.closest('[data-slot="message-row"]')
+        ?.nextElementSibling?.getAttribute("data-message-id"),
     ).toBe("str-02");
   });
 

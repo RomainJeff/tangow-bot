@@ -38,7 +38,7 @@ import { MessageActionsSheet } from "./message-actions-sheet";
 import { MessageHoverActions, UserMessageActions } from "./message-hover-actions";
 import { SessionView } from "./session-view";
 import type { RowContext } from "./thread-row";
-import { RowMarker, rowChrome, ThreadRowBody } from "./thread-row";
+import { RowMarker, rowChrome, ThreadRowBody, WaitingLine } from "./thread-row";
 
 /** B1: hold this long on a touch bubble to open its action sheet. */
 const LONG_PRESS_MS = 450;
@@ -475,6 +475,7 @@ export const Transcript = memo(function Transcript({
           return (
             <Fragment key={item.id}>
               {row.marker ? <RowMarker marker={row.marker} /> : null}
+              {waiting?.itemId === item.id ? <WaitingLine inGroup={inGroup} /> : null}
               <div
                 data-message-id={item.id}
                 data-rewound={rewound ? "true" : undefined}

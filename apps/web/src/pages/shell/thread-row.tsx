@@ -113,12 +113,10 @@ export function ThreadRowBody({
   const body = itemBody(item, row, context, { chrome, showAuthor, showAvatar, arrivesLive });
   const origin =
     "origin" in item && item.origin && !("entryId" in item.origin) ? item.origin : null;
-  const waiting = context.waiting?.itemId === item.id;
-  if (!origin && !waiting) return body;
+  if (!origin) return body;
   return (
     <>
-      {origin ? <OriginLabel origin={origin} onOpenSession={context.onOpenSession} /> : null}
-      {waiting ? <WaitingLine inGroup={context.inGroup} /> : null}
+      <OriginLabel origin={origin} onOpenSession={context.onOpenSession} />
       {body}
     </>
   );
@@ -234,7 +232,7 @@ function BotSide({ inGroup, children }: { inGroup: boolean; children: ReactNode 
   );
 }
 
-function WaitingLine({ inGroup }: { inGroup: boolean }) {
+export function WaitingLine({ inGroup }: { inGroup: boolean }) {
   return (
     <BotSide inGroup={inGroup}>
       <p data-testid="run-waiting" className="text-reasoning text-muted-foreground">
