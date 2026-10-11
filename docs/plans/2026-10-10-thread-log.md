@@ -200,7 +200,7 @@ Each live lane runs in its own isolated worktree (`isolation: "worktree"`) at th
 - [ ] Metric. Trunk lacks the feature. The diff-added work is `readTail` on a 200 000 entry session with a compaction every 500 entries. Measure median wall time over five runs on real Postgres 16.
 - [ ] Probe. The script from Appendix A ported to `PostgresSessionLog`, run at head against the compose Postgres.
 - [ ] Baseline. The pglite figure from Appendix A, 3.5 ms, recorded as the reference.
-- [ ] Rule. Absolute budget. Fail when the median exceeds 15 ms, or when the worst case without a compaction entry exceeds 500 ms.
+- [ ] Rule. Absolute budget. Fail when the median exceeds 15 ms, or when the chain walk without a compaction entry, counted as in Appendix A figure D, exceeds 500 ms. Returning the 198 000 full rows of that worst case is not budgeted, compaction bounds what `readTail` returns by design.
 
 **Review gate.** None. SL2 is not review-gated.
 
