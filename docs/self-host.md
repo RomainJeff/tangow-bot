@@ -273,9 +273,9 @@ Optional messaging platforms (iMessage, Slack, WhatsApp, Telegram, Feishu/Lark) 
 `SKILL_LEARNING` decides whether bots keep and improve their methods as skills on their own. The
 API and worker read it at start.
 
-- `off` (default): nothing changes. A bot saves a skill when it judges a task worth repeating, and
-  mentions `/Name` after creating or updating one.
-- `shadow`: a bot keeps or improves the skill it followed and no longer mentions it, since the
+- `off`: a bot saves a skill when it judges a task worth repeating, and mentions `/Name` after
+  creating or updating one.
+- `shadow` (default): a bot keeps or improves the skill it followed and no longer mentions it, since the
   line under its message shows the change. At the end of each conversation turn the user started,
   the worker also decides whether that turn earns the private follow-up described under `on`, and
   records the decision without running it.
@@ -284,11 +284,13 @@ API and worker read it at start.
   search, create and update skills. It posts nothing; a skill it saves gets its line under the
   reply.
 
+Unset or empty means `shadow`; a value that is not one of the three means `off`.
+
 `shadow` and `on` both stop the bot's announcement, so a client that does not show the skill line
-shows nothing when a skill changes. Leave the setting `off` until every client in use shows the
-line: the web app always does; the desktop app and the iPhone app do from the release that added
-the line, so rebuild the desktop app and update the iPhone app first. Then run `shadow` for a week,
-then `on`. To switch, set `SKILL_LEARNING=shadow` (or `on`) in `.env` and recreate the `api` and
+shows nothing when a skill changes. The web app always shows it; the desktop app and the iPhone app
+do from the release that added the line. If some clients in use are older, set `SKILL_LEARNING=off`
+until the desktop app is rebuilt and the iPhone app updated. Once the `agent.skill_nudge` decisions
+below look right, move to `on`. To switch, set `SKILL_LEARNING` in `.env` and recreate the `api` and
 `worker` services with the `docker compose ... up -d` command you deploy with.
 
 In `shadow` and `on`, each decision is logged by the worker as `agent.skill_nudge`, with `decision`

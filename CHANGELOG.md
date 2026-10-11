@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Changed
 
 - A bot can no longer rename a skill, on web, desktop and iPhone; only you rename it, from its settings.
+- Bots now keep and improve the skill they followed by default and no longer announce it in their reply, the line under their message showing the change instead; a server admin who wants the announcement back sets `SKILL_LEARNING=off` (see [Learned skills](docs/self-host.md#learned-skills)).
 
 #### Fixed
 
