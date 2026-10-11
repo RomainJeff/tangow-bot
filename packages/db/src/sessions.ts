@@ -88,7 +88,7 @@ type ThreadFeed = {
   runId: string | null;
   entries: SessionEntry[];
 };
-type Route = { sessionId: SessionId; threadId: string | null };
+type Route = { sessionId: SessionId; threadId: string | null; originSessionId?: SessionId };
 /** Where a session sits: its thread's main session, that thread, and whether it is a child. */
 type Lineage = { mainSessionId: SessionId; threadId: string | null; child: boolean };
 /** The lineages a transaction resolved, by session, and the feed event it writes, by thread. */
@@ -108,9 +108,9 @@ function transactionLog(tx: Prisma.TransactionClient): TransactionLog {
  * The one rule for which session an entry lands in. A child session, a routine's or a helper's at
  * any depth, keeps its run's trace; whatever else is addressed to it, an ask, an approval, a card
  * the person must act on, the person's answer, rises to its thread's main session, the top-most
- * ancestor. Every append locks
- * that thread before any session row, in the mode every thread writer uses, so neither a message
- * write nor a stop, which takes the thread, then the run, then the session, can deadlock with it.
+ * ancestor, with that child as its `originSessionId`. Every append locks that thread before any
+ * session row, in the mode every thread writer uses, so neither a message write nor a stop, which
+ * takes the thread, then the run, then the session, can deadlock with it.
  */
 async function routeOf(tx: Prisma.TransactionClient, draft: SessionEntryDraft): Promise<Route> {
   const log = transactionLog(tx);
@@ -138,7 +138,11 @@ async function routeOf(tx: Prisma.TransactionClient, draft: SessionEntryDraft): 
   if (!lineage.child) return { sessionId: draft.sessionId, threadId: lineage.threadId };
   return isRunTrace(draft)
     ? { sessionId: draft.sessionId, threadId: null }
-    : { sessionId: lineage.mainSessionId, threadId: lineage.threadId };
+    : {
+        sessionId: lineage.mainSessionId,
+        threadId: lineage.threadId,
+        originSessionId: draft.sessionId,
+      };
 }
 
 function insertFeedEvent(feed: ThreadFeed, at: Prisma.Sql, gate: Prisma.Sql) {
@@ -164,8 +168,12 @@ export async function appendSessionEntryInTransaction(
   addressed: SessionEntryDraft,
 ): Promise<SessionEntry> {
   const log = transactionLog(tx);
-  const { sessionId, threadId } = await routeOf(tx, addressed);
-  const draft = { ...addressed, sessionId };
+  const { sessionId, threadId, originSessionId } = await routeOf(tx, addressed);
+  const draft = (
+    originSessionId
+      ? { ...addressed, sessionId, payload: { ...addressed.payload, originSessionId } }
+      : { ...addressed, sessionId }
+  ) as SessionEntryDraft;
   const feedBotId = draft.botId ?? draft.feedBotId;
   if (threadId && feedBotId === undefined) {
     throw new SessionAppendError(

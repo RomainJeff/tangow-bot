@@ -42,6 +42,21 @@ describe("SessionEntrySchema", () => {
     expect(issues(entry)).toEqual([]);
   });
 
+  it("keeps the child session a question rose from", () => {
+    const risen = {
+      ...envelope,
+      botId: "bot_ada",
+      runId: "run_1",
+      type: "assistant.ask",
+      payload: { block: { kind: "ask", text: "Which?" }, originSessionId: "ses_routine" },
+    };
+
+    expect(SessionEntrySchema.parse(risen).payload).toEqual({
+      block: { kind: "ask", text: "Which?" },
+      originSessionId: "ses_routine",
+    });
+  });
+
   it.each([
     [
       "a rewind with no parent",
@@ -82,6 +97,15 @@ describe("SessionEntrySchema", () => {
       "a compaction that covers itself",
       { ...envelope, type: "compaction", payload: { summary: "Earlier.", coveredUpToSeq: 3 } },
       ["payload.coveredUpToSeq: A compaction covers only entries before it"],
+    ],
+    [
+      "an entry risen from its own session",
+      {
+        ...envelope,
+        type: "effect.resolved",
+        payload: { effectId: "effect_1", decision: "approved", originSessionId: "ses_1" },
+      },
+      ["payload.originSessionId: An entry rises only from another session"],
     ],
     [
       "a clear with a payload",

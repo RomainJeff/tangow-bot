@@ -167,6 +167,11 @@ describe("session log writers", () => {
   });
   afterAll(() => database.close());
   const types = async (id: SessionId) => (await log.readTail(id)).map((entry) => entry.type);
+  const origins = async (id: SessionId) =>
+    (await log.readTail(id)).map(({ type, payload }) => [
+      type,
+      (payload as { originSessionId?: string }).originSessionId,
+    ]);
 
   it("links a request and its result between two bots as one exchange, delivered once", async () => {
     const { prisma } = database;
@@ -514,12 +519,21 @@ describe("session log writers", () => {
       {
         type: "effect.requested",
         runId: digest.run.id,
-        payload: { effectId: "effect_1", effectKind: "spawn_bot", proposal: { name: "Scout" } },
+        payload: {
+          effectId: "effect_1",
+          effectKind: "spawn_bot",
+          proposal: { name: "Scout" },
+          originSessionId: digest.routineSessionId,
+        },
       },
       {
         type: "effect.resolved",
         runId: digest.run.id,
-        payload: { effectId: "effect_1", decision: "approved" },
+        payload: {
+          effectId: "effect_1",
+          decision: "approved",
+          originSessionId: digest.routineSessionId,
+        },
       },
       {
         type: "routine.finished",
@@ -569,11 +583,11 @@ describe("session log writers", () => {
     );
 
     expect(await types(routineSessionId)).toEqual(["run.started"]);
-    expect(await types(grace.sessionId)).toEqual([
-      "routine.started",
-      "assistant.ask",
-      "assistant.choice",
-      "user.message",
+    expect(await origins(grace.sessionId)).toEqual([
+      ["routine.started", undefined],
+      ["assistant.ask", routineSessionId],
+      ["assistant.choice", routineSessionId],
+      ["user.message", routineSessionId],
     ]);
   });
 
@@ -619,24 +633,28 @@ describe("session log writers", () => {
     const noether = await seedBot(prisma, "Noether");
     const parent = await seedRun(prisma, noether.bot.id, noether.threadId);
     const helper = await subagentRun(prisma, parent);
+    const ask = (runId: string, text: string) =>
+      prisma.$transaction((tx) =>
+        appendRunBlocksInTransaction(
+          tx,
+          { id: EntryId.parse(randomUUID()), runId, botId: noether.bot.id },
+          [{ kind: "ask", text }],
+        ),
+      );
 
-    await prisma.$transaction((tx) =>
-      appendRunBlocksInTransaction(
-        tx,
-        { id: EntryId.parse(randomUUID()), runId: helper.run.id, botId: noether.bot.id },
-        [{ kind: "ask", text: "Which file?" }],
-      ),
-    );
+    await ask(helper.run.id, "Which file?");
     await helper.write({
       type: "effect.requested",
       payload: { effectId: "effect_helper", effectKind: "spawn_bot", proposal: { name: "Scout" } },
     });
+    await ask(parent.id, "Anything else?");
 
     expect(await types(helper.sessionId)).toEqual(["run.started"]);
-    expect(await types(noether.sessionId)).toEqual([
-      "tool.call",
-      "assistant.ask",
-      "effect.requested",
+    expect(await origins(noether.sessionId)).toEqual([
+      ["tool.call", undefined],
+      ["assistant.ask", helper.sessionId],
+      ["effect.requested", helper.sessionId],
+      ["assistant.ask", undefined],
     ]);
   });
 
@@ -656,7 +674,10 @@ describe("session log writers", () => {
 
     expect(await types(helper.sessionId)).toEqual(["run.started"]);
     expect(await types(routine.routineSessionId)).toEqual(["run.started", "tool.call"]);
-    expect(await types(meitner.sessionId)).toEqual(["routine.started", "assistant.ask"]);
+    expect(await origins(meitner.sessionId)).toEqual([
+      ["routine.started", undefined],
+      ["assistant.ask", helper.sessionId],
+    ]);
   });
 
   it("opens a webhook routine run's own session once, and a resumed run reopens that one", async () => {

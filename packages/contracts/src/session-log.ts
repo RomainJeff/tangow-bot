@@ -60,6 +60,11 @@ const RoutineFinishedPayload = RunOutcome.and(
 );
 
 const JsonObject = z.record(z.string(), z.unknown());
+/**
+ * On an entry addressed to a child session that rose to the thread's main session, the child
+ * session it was addressed to. The store sets it; an entry written to its own session has none.
+ */
+const risen = { originSessionId: SessionId.optional() };
 const BotMessageHop = z.number().int().positive();
 
 const envelope = {
@@ -101,21 +106,24 @@ const SubagentPayload = z.object({
 
 const ComputerControlEntry = entry(
   "computer.control",
-  z.object({ holder: z.enum(["user", "bot"]) }),
+  z.object({ ...risen, holder: z.enum(["user", "bot"]) }),
 );
-const MemoryRevisedEntry = entry("memory.revised", z.object({ facts: z.array(z.string()) }));
-const SkillSavedEntry = entry("skill.saved", z.object({ skillId: Id, name: z.string() }));
+const MemoryRevisedEntry = entry(
+  "memory.revised",
+  z.object({ ...risen, facts: z.array(z.string()) }),
+);
+const SkillSavedEntry = entry("skill.saved", z.object({ ...risen, skillId: Id, name: z.string() }));
 const AttachmentAddedEntry = entry("attachment.added", z.object({ artifactId: Id }));
 const SessionTitleEntry = entry("session.title", z.object({ title: z.string() }));
 const SystemNoteEntry = entry("system.note", z.object({ text: z.string() }));
-const BlocksPayload = z.object({ blocks: z.array(MessageBlock) });
+const BlocksPayload = z.object({ ...risen, blocks: z.array(MessageBlock) });
 
 const EntryShapes = z.discriminatedUnion("type", [
-  entry("user.message", UserMessagePayload),
+  entry("user.message", UserMessagePayload.extend(risen)),
   runEntry("assistant.text", BlocksPayload),
   runEntry("assistant.reasoning", z.object({ text: z.string() })),
-  runEntry("assistant.ask", z.object({ block: AskBlock })),
-  runEntry("assistant.choice", z.object({ block: ChoiceBlock })),
+  runEntry("assistant.ask", z.object({ ...risen, block: AskBlock })),
+  runEntry("assistant.choice", z.object({ ...risen, block: ChoiceBlock })),
   runEntry(
     "tool.call",
     z.object({ callId: z.string().min(1), name: z.string(), input: z.string() }),
@@ -160,12 +168,16 @@ const EntryShapes = z.discriminatedUnion("type", [
     type: z.literal("bot.text"),
     payload: BlocksPayload,
   }),
-  entry("handoff", z.object({ fromBotId: Id, toBotId: Id, text: z.string(), hop: BotMessageHop })),
+  entry(
+    "handoff",
+    z.object({ ...risen, fromBotId: Id, toBotId: Id, text: z.string(), hop: BotMessageHop }),
+  ),
   z.object({
     ...envelope,
     botId: Id,
     type: z.literal("bot.message.sent"),
     payload: z.object({
+      ...risen,
       to: Peer,
       text: z.string(),
       intent: BotMessageIntent,
@@ -189,10 +201,13 @@ const EntryShapes = z.discriminatedUnion("type", [
   ),
   entry(
     "effect.requested",
-    z.object({ effectId: Id, effectKind: z.string(), proposal: JsonObject }),
+    z.object({ ...risen, effectId: Id, effectKind: z.string(), proposal: JsonObject }),
   ),
-  entry("effect.edited", z.object({ effectId: Id, proposal: JsonObject })),
-  entry("effect.resolved", z.object({ effectId: Id, decision: z.enum(["approved", "denied"]) })),
+  entry("effect.edited", z.object({ ...risen, effectId: Id, proposal: JsonObject })),
+  entry(
+    "effect.resolved",
+    z.object({ ...risen, effectId: Id, decision: z.enum(["approved", "denied"]) }),
+  ),
   ComputerControlEntry,
   MemoryRevisedEntry,
   SkillSavedEntry,
@@ -242,6 +257,13 @@ export const SessionEntrySchema = EntryShapes.superRefine((entry, ctx) => {
       code: "custom",
       path: ["parentId"],
       message: "The first entry of a session has no parent",
+    });
+  }
+  if ("originSessionId" in entry.payload && entry.payload.originSessionId === entry.sessionId) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["payload", "originSessionId"],
+      message: "An entry rises only from another session",
     });
   }
   if (entry.type === "compaction" && entry.payload.coveredUpToSeq >= entry.seq) {

@@ -294,6 +294,17 @@ describe("sessions migration", () => {
     ).toEqual([{ id: "m1", seq: 0, blocks: [{ kind: "text", text: "hi" }] }]);
   });
 
+  it("indexes the entries that rose from a child session by the session they came from", async () => {
+    expect(
+      await database.prisma.$queryRaw`
+        SELECT indexdef FROM pg_indexes WHERE indexname = 'session_entries_originSessionId_idx'`,
+    ).toEqual([
+      {
+        indexdef: `CREATE INDEX "session_entries_originSessionId_idx" ON public.session_entries USING btree (((payload ->> 'originSessionId'::text))) WHERE ((payload ->> 'originSessionId'::text) IS NOT NULL)`,
+      },
+    ]);
+  });
+
   it("keeps a thread's compaction summary from before the log for the backfill to read", async () => {
     expect(
       await database.prisma.thread.findUniqueOrThrow({
