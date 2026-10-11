@@ -67,6 +67,7 @@ function setup({
       findFirst: vi.fn(async (_args: unknown) => run),
     },
     routine: { findMany: vi.fn(async (_args: unknown) => routines) },
+    $queryRaw: vi.fn(async () => []),
   };
   const sessionLog = { readRun: vi.fn(async (_runId: string) => entries) };
   const handler = new RPCHandler(
@@ -92,6 +93,8 @@ function setup({
     activity: (input: BotActivityInput) => call<BotActivityOutput>("bots/activity", input),
     recap: (runId: string) => call<RunRecap>("runs/recap", { runId }),
     entries: (runId: string) => call<{ entries: SessionEntry[] }>("runs/entries", { runId }),
+    sessionEntries: (sessionId: string) =>
+      call<{ entries: SessionEntry[] }>("sessions/entries", { sessionId }),
   };
 }
 
@@ -106,7 +109,7 @@ describe("bots.activity", () => {
   it("refuses a bot outside the caller's own bots and reads none of its activity", async () => {
     const { prisma, activity } = setup({ bot: null, finished: [runRow("r", at(5))] });
     const { status } = await activity({ botId: "bot-of-someone-else" });
-    expect(status).toBe(500);
+    expect(status).toBe(404);
     expect(prisma.bot.findFirst.mock.calls[0]).toEqual([
       {
         where: {
@@ -262,7 +265,7 @@ describe("runs.recap", () => {
   it("refuses a run outside the caller's space and user, and reads none of its entries", async () => {
     const { prisma, sessionLog, recap } = setup({ run: null, entries: ranDigest });
     const { status } = await recap("run-of-someone-else");
-    expect(status).toBe(500);
+    expect(status).toBe(404);
     expect(prisma.run.findFirst.mock.calls[0]?.[0]).toMatchObject({
       where: { id: "run-of-someone-else", spaceId: "space-1", userId: "user-1" },
     });
@@ -294,6 +297,17 @@ describe("runs.entries", () => {
       "entry-3",
       "entry-4",
     ]);
-    expect(status).toBe(500);
+    expect(status).toBe(404);
+  });
+});
+
+describe("sessions.entries", () => {
+  it("answers a session outside the caller's space as not found", async () => {
+    const { sessionLog, sessionEntries } = setup({ entries: ranDigest });
+
+    const { status } = await sessionEntries("session-of-someone-else");
+
+    expect(status).toBe(404);
+    expect(sessionLog.readRun).not.toHaveBeenCalled();
   });
 });

@@ -554,7 +554,18 @@ function mapSpaceLifecycleError(error: unknown): unknown {
 }
 
 export function createRouter(deps: RouterDeps) {
-  const os = implement(appContract).$context<{ actor: Actor | null; signal?: AbortSignal }>();
+  const os = implement(appContract)
+    .$context<{ actor: Actor | null; signal?: AbortSignal }>()
+    .use(async ({ next }) => {
+      try {
+        return await next();
+      } catch (error) {
+        if (error instanceof IsolationError) {
+          throw new ORPCError("NOT_FOUND", { message: error.message, cause: error });
+        }
+        throw error;
+      }
+    });
   const repos = createRepos(deps.prisma);
   const onboardingDeps = { prisma: deps.prisma, events: deps.events, connectors: deps.connectors };
   const mcpOAuth = deps.mcpOAuth ?? new McpOAuthBroker(deps.prisma, deps.secrets);
