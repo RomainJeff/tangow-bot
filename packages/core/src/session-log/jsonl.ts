@@ -1,10 +1,19 @@
-import type { SessionEntry } from "@rakazo/contracts";
+import type { EntryId, SessionEntry } from "@rakazo/contracts";
 import { SessionEntrySchema } from "@rakazo/contracts";
 
 export class SessionEntryDecodeError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "SessionEntryDecodeError";
+  }
+}
+
+export class SessionEntryMissingParentError extends SessionEntryDecodeError {
+  constructor(
+    readonly parentId: EntryId,
+    location: string,
+  ) {
+    super(`Invalid session entry at ${location}: its parent ${parentId} is missing from the file`);
   }
 }
 
@@ -47,8 +56,8 @@ export function decodeEntries(text: string): SessionEntry[] {
  * the bytes since its last compaction. Returns the chain oldest first.
  *
  * A final line without its newline follows the `decodeEntries` rule. Any other line read that is
- * not JSON, a chain entry that fails validation, and a parent missing from the file throw
- * `SessionEntryDecodeError` with the line.
+ * not JSON and a chain entry that fails validation throw `SessionEntryDecodeError` with the line,
+ * and a parent missing from the file throws its `SessionEntryMissingParentError` subclass.
  */
 export async function readTailFromEnd(
   open: () => Promise<TailSource>,
@@ -61,7 +70,7 @@ export async function readTailFromEnd(
   try {
     const decoder = new TextDecoder();
     const chain: SessionEntry[] = [];
-    let wanted: string | null | undefined;
+    let wanted: EntryId | null | undefined;
     let wantedBy = "";
     let linesFromEnd = 0;
     let afterLastNewline = true;
@@ -103,10 +112,8 @@ export async function readTailFromEnd(
       }
       pieces.push(chunk.subarray(0, lineEnd));
     }
-    if (visit(concat(pieces.toReversed())) || wanted === undefined) return chain.reverse();
-    throw new SessionEntryDecodeError(
-      `Invalid session entry at ${wantedBy}: its parent ${wanted} is missing from the file`,
-    );
+    if (visit(concat(pieces.toReversed())) || !wanted) return chain.reverse();
+    throw new SessionEntryMissingParentError(wanted, wantedBy);
   } finally {
     await source.close();
   }
