@@ -550,13 +550,15 @@ Each live lane runs in its own isolated worktree (`isolation: "worktree"`) at th
 
 **Files.**
 
-- [ ] Create `docs/architecture.md`.
-- [ ] Edit `README.md`, the docs list, one line linking the new page.
+- [ ] Create `docs/architecture-sessionlog.md`, the session log in depth.
+- [ ] Create `ARCHITECTURE.md` at the repository root, the short map of how the product's features work, the session log first, each feature in a few lines with a link to its detailed page.
+- [ ] Edit `README.md`, one line in the docs list linking `ARCHITECTURE.md`.
 - [ ] Edit `docs/plans/2026-10-10-thread-log.md`, Appendix D, one line pointing at the page as the living reference once the program closes.
 
 **Build.**
 
-- [ ] The page opens with what a reader needs in one screen. Rakazo is one product on web, Electron and Expo, the backend owns orchestration, a conversation is an append-only log of typed entries, the inference context and the thread a person sees are two projections of the same entries, and nothing a hosted vendor requires sits in the core. Four or five short paragraphs, no diagram the reader must decode first.
+- [ ] `ARCHITECTURE.md` fits on one screen. One paragraph on the product's shape (one product on web, Electron and Expo, the backend owns orchestration, no hosted vendor required in the core), then one short block per feature that starts with the session log, three to five lines each, what it is and where its rule lives, ending with the link to the detailed page. Other features get a block only when a detailed page exists for them today; the list grows as pages land.
+- [ ] `docs/architecture-sessionlog.md` opens with what a reader needs in one screen. Rakazo is one product on web, Electron and Expo, the backend owns orchestration, a conversation is an append-only log of typed entries, the inference context and the thread a person sees are two projections of the same entries, and nothing a hosted vendor requires sits in the core. Four or five short paragraphs, no diagram the reader must decode first.
 - [ ] Each later section goes one level deeper and starts with the one sentence a reader can stop at. The message system, with the entry envelope, one entry per block, the tree through `parentId`, the session head, rewind and clear as entries. The entry types and who reads each, a table from `ENTRY_AUDIENCE` with the admission rule, a durable fact of the conversation or nothing. Sessions and child sessions, thread, routine and subagent, what rises to the main session and why, `originSessionId`, the joined read of a child. The two projections, inference turns and `ThreadItem`, the stretch fold, pairing of calls and results, the pure UI rule and its three exceptions. Compaction, the tail read through `coveredUpToSeq`, the token budget. Bots talking to bots, handoff and `bot.message.*`. The feed, `events` as the ephemeral channel and `session.entry.appended`. Storage, Postgres as the store, JSONL at the edges, the file backend and the conformance suite. Each section links the file that holds the rule it describes.
 - [ ] The principles behind the shape close the page. A field earns a column only when a query needs it, an entry is admitted only when a person expects to see it again, state changes are entries that name a target and never rewrites, frontends express intent and render state, every provider sits behind a port with an offline conformance test.
 - [ ] Every claim is checked against the code at the branch head. A rule the code does not yet hold (the `messages` table still present before SL6) is stated as the state after SL6, with one sentence saying so.
@@ -564,7 +566,7 @@ Each live lane runs in its own isolated worktree (`isolation: "worktree"`) at th
 
 **You see.**
 
-- [ ] `docs/architecture.md` renders on GitHub with its headings as a table of contents, each section readable on its own, and every relative link resolves.
+- [ ] `ARCHITECTURE.md` and `docs/architecture-sessionlog.md` render on GitHub with their headings as a table of contents, each section readable on its own, the root page links the detailed one, the README links the root page, and every relative link resolves.
 
 **Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
@@ -581,8 +583,8 @@ Each live lane runs in its own isolated worktree (`isolation: "worktree"`) at th
 - [ ] Lane 6. A fact lane on compaction against `history-compaction.ts` and the tail read. Save `facts-compaction.md`. Pass when no claim is stale.
 - [ ] Lane 7. A fact lane on bots talking to bots against `bot-messages.ts` and `group-handoff.ts`. Save `facts-bots.md`. Pass when no claim is stale.
 - [ ] Lane 8. A fact lane on the feed and storage against `sessions.ts`, the postgres and file backends and the conformance suite. Save `facts-storage.md`. Pass when no claim is stale.
-- [ ] Lane 9. A render lane. Open the page on GitHub at the PR head, at desktop and at phone width. Save `render.png` and `render-phone.png`. Pass when headings, tables and links render and nothing overflows.
-- [ ] Lane 10. A link lane. Click every relative link in the page at the head. Save `links.md`. Pass when every link resolves.
+- [ ] Lane 9. A render lane. Open both pages on GitHub at the PR head, at desktop and at phone width. Save `render.png` and `render-phone.png`. Pass when headings, tables and links render and nothing overflows.
+- [ ] Lane 10. A link lane. Click every relative link in both pages and the README line at the head. Save `links.md`. Pass when every link resolves.
 
 **Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
@@ -661,7 +663,7 @@ Decision. A. The head is the entry with the highest seq in its session, so the r
 - `apps/web/e2e/README.md` before editing any spec.
 - SL1 and SL4 get `.claude/skills/how/SKILL.md` on the executor history path and `.claude/skills/interrogate/SKILL.md` on the entry contract before code. The trail per `.claude/skills/show-me-your-work/SKILL.md` stays local per owner and is returned in each report.
 
-**Last slice, SL7, documentation.** `docs/architecture.md` explains the session log with progressive disclosure, the message system, the entry types and their audience, sessions and child sessions, compaction, the principles behind the shape. Its section is above, pulled ahead of SL6 on 2026-10-12.
+**Last slice, SL7, documentation.** `docs/architecture-sessionlog.md` explains the session log with progressive disclosure, the message system, the entry types and their audience, sessions and child sessions, compaction, the principles behind the shape. Its section is above, pulled ahead of SL6 on 2026-10-12.
 
 **Planned after the program, not in it.** Each one needs only what the program already lays down.
 
