@@ -552,9 +552,11 @@ GIT_SHA=$(git rev-parse HEAD) docker compose --env-file .env -f infra/compose/do
 ```
 
 `up --wait` does not report success until the new API is healthy and the worker and web containers
-are running. The API's start command runs `scripts/backfill-session-log.ts`, which applies the
-migrations, before it serves, so migration failure keeps health red. A failed CLI recreate does not auto-roll back; recover with the previous
-`RAKAZO_IMAGE_TAG` (or rebuild `local`) and `up -d --wait --pull never`.
+are running. Compose stops the old API and worker, then the one-shot `migrate` service applies the
+migrations (`scripts/backfill-session-log.ts`) before the new ones start, so a migration failure
+keeps them stopped. On a large database the move to the session log takes minutes. A failed CLI
+recreate does not auto-roll back; recover with the previous `RAKAZO_IMAGE_TAG` (or rebuild `local`)
+and `up -d --wait --pull never --no-deps api worker web`.
 
 The updater sidecar has its own image and tag so an update never recreates the process performing
 it. Move it deliberately by setting `RAKAZO_UPDATER_IMAGE_TAG` to the full `sha-<commit>` tag, then
@@ -562,22 +564,56 @@ running `docker compose … pull updater && docker compose … up -d --wait --pu
 Sidecar `/apply` and `/rollback` recover a failed recreate by redeploying the previously cached
 image when possible; if that also fails, they report a possible mixed-version runtime.
 
-Source checkouts (not Compose) still upgrade the old way: pull, rebuild with
-`GIT_SHA=$(git rev-parse HEAD)`, run `pnpm exec tsx scripts/backfill-session-log.ts`, then restart
-API and worker. Product contracts stay compatible across cloud and self-hosted.
+Source checkouts (not Compose) stop the API and worker, pull, rebuild with
+`GIT_SHA=$(git rev-parse HEAD)`, run `pnpm exec tsx scripts/backfill-session-log.ts`, then start
+the API and worker again. Product contracts stay compatible across cloud and self-hosted.
 
 ### Session log migration
 
 Migration `20261012000000_drop_messages` drops the `messages` table: every conversation now lives in
-the session log. It refuses to run while a thread still holds messages the log does not, so
-`scripts/backfill-session-log.ts` (the Compose API's start command) applies the migrations, and when
-that one refuses, writes each such thread into its session, logging every thread and the total
-time, then applies it again. Running it again changes nothing. A bare `prisma migrate deploy`
-stops at that migration and names the script.
+the session log. It locks the table and refuses while any message is missing from the log, so
+`scripts/backfill-session-log.ts`, which the Compose `migrate` service runs, applies the migrations,
+and when that one refuses, writes the missing messages into their threads' sessions, logging every
+thread and the total time, then applies it again. Running it again changes nothing. A bare
+`prisma migrate deploy` stops at that migration and names the script. On a large database it takes
+minutes; the updater waits up to an hour for it.
 
-Take a backup first: the old rows are gone once the migration applies. Stop the worker for the
-upgrade so no run writes to a thread while it is backfilled. A thread whose session already holds
-entries keeps them and is not backfilled again.
+Take a backup first (see [Backup](#backup)): the old rows are gone once the migration applies.
+Compose stops the old API and worker before `migrate` starts; a source checkout stops them by hand,
+so no message is written while the threads move.
+
+A thread whose log already holds entries takes the messages written after its last entry at the
+end of its log. Messages older than its entries, which a database that ran an earlier build of the
+session log can hold, stop the script, naming the thread. Rebuild such a thread from its messages,
+or every such thread with `--all`, after a fresh `pg_dump`:
+
+```bash
+pnpm exec tsx scripts/backfill-session-log.ts --rebuild-from-messages <thread-id>
+pnpm exec tsx scripts/backfill-session-log.ts --rebuild-from-messages --all
+```
+
+A rebuild deletes the thread's sessions and every entry in them, then writes the whole conversation
+again from its messages: everything that was said stays, and the run traces written since the
+session log began (tool calls, helpers' sessions, card answers) are dropped. Under Compose, run it
+through the service: `docker compose … run --rm migrate pnpm exec tsx scripts/backfill-session-log.ts
+--rebuild-from-messages <thread-id>`.
+
+A thread that cannot be converted also stops the script, which names it and the error. Read its
+messages with `psql`:
+
+```sql
+SELECT seq, role, jsonb_pretty(blocks) FROM messages WHERE "threadId" = '<thread-id>' ORDER BY seq;
+```
+
+`--skip <thread-id>[,<thread-id>…]` backfills the other threads around it, but the migration still
+waits for every message. To keep a thread's messages outside the database and let the migration
+apply, export them, then delete them:
+
+```bash
+psql "$DATABASE_URL" -At -c "SELECT row_to_json(m) FROM messages m
+  WHERE m.\"threadId\" = '<thread-id>' ORDER BY m.seq" > messages-<thread-id>.jsonl
+psql "$DATABASE_URL" -c "DELETE FROM messages WHERE \"threadId\" = '<thread-id>'"
+```
 
 A thread can also be kept as files, one JSONL file per session, and imported into another thread
 that has none yet:
@@ -705,7 +741,8 @@ pin and attempts to redeploy the cached previous image. A failed fork build also
 pre-update branch and commit (including when checkout succeeded but merge did not) so a later
 manual `--build` cannot deploy the rejected or unintended revision. Database migrations are not
 reversed. The sidecar never recreates itself, never touches Postgres or Caddy, and never runs
-migrations — that ordering belongs to the API start command.
+migrations itself — that ordering belongs to the `migrate` service, which a recreate waits on for up
+to an hour and a recovery or a rollback skips.
 
 Only `https://` and `ssh://` git remotes are accepted. Merges are fast-forward only. A dirty or
 untracked source tree fails closed before anything runs (the application Dockerfile uses `COPY . .`).

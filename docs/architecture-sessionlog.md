@@ -24,7 +24,7 @@ The head of a session is its entry with the highest `seq`, and in Postgres the s
 - A `compaction` names the head its summary was built on, and the append fails with `stale_compaction` when the head has moved.
 - A `clear` has no parent and starts a new chain, like the first entry of a session.
 
-Chain reads follow `parentId` back from the head, so what a rewind cut stays in the table but leaves the chain. When a rewind cuts a compaction whose summary still holds, `appendRewindInTransaction` in [`sessions.ts`](../packages/db/src/sessions.ts) writes that compaction again on top of the rewind.
+Chain reads follow `parentId` back from the head, so what a rewind cut stays in the table but leaves the chain. Readers that do not walk it, such as search and a link preview's target, test `ENTRY_ON_CHAIN`, and a bot's export reads the chain a page at a time. When a rewind cuts a compaction whose summary still holds, `appendRewindInTransaction` in [`sessions.ts`](../packages/db/src/sessions.ts) writes that compaction again on top of the rewind.
 
 ## Each entry type has an audience
 
@@ -140,15 +140,15 @@ The port is `SessionLog<Tx>` in [`interfaces.ts`](../packages/adapter-kit/src/in
 
 [`conformance.ts`](../packages/adapters/src/session-log/conformance.ts) runs the same cases on both backends offline, Postgres on in-memory PGlite.
 
-Export and import use the same line format. `exportThreadSessions` in [`session-files.ts`](../packages/db/src/session-files.ts) writes a thread's main session and every session under it, one file each, and `importThreadSessions` reads them into a thread whose session is empty, with new ids for every entry, session and run. [`session-log-export.ts`](../scripts/session-log-export.ts) and [`session-log-import.ts`](../scripts/session-log-import.ts) run them.
+Export and import use the same line format. `exportThreadSessions` in [`session-files.ts`](../packages/db/src/session-files.ts) writes a thread's main session and every session under it, one file each, and `importThreadSessions` reads them into a thread whose session is empty, with new ids for every entry, session and run, a row for each run, and a refusal for any file the main session does not reach. [`session-log-export.ts`](../scripts/session-log-export.ts) and [`session-log-import.ts`](../scripts/session-log-import.ts) run them.
 
 Once a harness runtime exists, its sessions, such as those of the Claude Code CLI or OpenCode, stay in the harness's own store, and the log records only a `harness.session` entry with the id.
 
 ## Threads from before the log were backfilled
 
-`backfillThread` in [`backfill-session-log.ts`](../packages/db/src/backfill-session-log.ts) wrote a thread's `messages` rows, in order, as one chain in its main session. A person's message became a `user.message`, a bot's message the entries of its run between `run.started` and `run.finished`, its steps `tool.call` and `tool.result` pairs, a helper card a `subagent` entry with no session, and a routine card a `routine.started` and a `routine.finished` around a routine session. A preview, an answer, a draft and a skill line became their card states, and a compaction summary a `compaction`. Each message's id stayed on its first entry, so `Run.sourceMessageId`, `SteeringMessage.messageId`, `ExternalMessage.threadMessageId` and `Artifact.previewMessageId` name entries. A session that held entries was left as it was.
+`backfillThread` in [`backfill-session-log.ts`](../packages/db/src/backfill-session-log.ts) wrote a thread's `messages` rows, in order, as one chain in its main session. A person's message became a `user.message`, a bot's message the entries of its run between `run.started` and `run.finished`, its steps `tool.call` and `tool.result` pairs, a helper card a `subagent` entry with no session, and a routine card a `routine.started` and a `routine.finished` around a routine session whose run kept its trace there and raised the rest, as a live routine does. A preview, an answer, a draft and a skill line became their card states, and a compaction summary a `compaction`. A delivery from another bot links the `bot.message.sent` it came from when the sender's thread was already in the log, and no entry otherwise. Each message's id stayed on one of its entries, the first that shows it, so `Run.sourceMessageId`, `SteeringMessage.messageId`, `ExternalMessage.threadMessageId` and `Artifact.previewMessageId` name entries. A session that already held entries took the messages newer than its head at its end and refused older ones, which `--rebuild-from-messages` rebuilt from the messages in a fresh session.
 
-Migration `20261012000000_drop_messages` drops the table and refuses while a thread holds messages and no entries. [`backfill-session-log.ts`](../scripts/backfill-session-log.ts), the API's start command in Compose, runs the migrations, backfills every such thread when that one refuses, and runs them again.
+Migration `20261012000000_drop_messages` locks the table and refuses while any message has no entry of its own id. [`backfill-session-log.ts`](../scripts/backfill-session-log.ts), which the one-shot `migrate` service in every Compose file runs before the API and the worker, runs the migrations, backfills the messages when that one refuses, and runs them again.
 
 ## Principles behind the shape
 
