@@ -56,6 +56,7 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
   - [ ] SL4 after SL3.
   - [ ] SL4b after SL4.
   - [ ] SL5 after SL4b.
+  - [ ] SL7 after SL5 reaches merge-ready, documentation only.
   - [ ] SL6 after SL5.
 - [ ] Hold the file boundaries. SL1 touches only `packages/contracts/` and `packages/core/`. SL2 touches only `packages/db/`, `packages/adapter-kit/` and `packages/adapters/src/session-log/`. SL3, SL4 and SL4b touch `packages/adapters/`, `apps/api/src/`, `apps/worker/src/`. SL5 touches `apps/api/src/`, `apps/web/src/`, `apps/mobile/`, and the contract, core, port and writer files its Files block names for the four annotation types, `readAround` and the projection chain. SL6 touches `packages/db/`, `scripts/`, `CHANGELOG.md`, and deletes.
 - [ ] Hold the review gate. SL5 changes an interaction. It waits for the operator's review in chat with screenshots and a video before merge.
@@ -543,6 +544,65 @@ Each live lane runs in its own isolated worktree (`isolation: "worktree"`) at th
 - [ ] Rebased onto the current feature branch after the verdict, patch-id unchanged.
 - [ ] The root merges SL6 into `feature/session-log`, marks the feature PR ready for review, and the operator lands it after bot review.
 
+## Document the architecture (SL7)
+
+**Depends on.** SL5 at merge-ready. Written for the state the feature PR ships, so SL6 keeps it true when it lands. The operator asked for it on 2026-10-12, ahead of SL6.
+
+**Files.**
+
+- [ ] Create `docs/architecture.md`.
+- [ ] Edit `README.md`, the docs list, one line linking the new page.
+- [ ] Edit `docs/plans/2026-10-10-thread-log.md`, Appendix D, one line pointing at the page as the living reference once the program closes.
+
+**Build.**
+
+- [ ] The page opens with what a reader needs in one screen. Rakazo is one product on web, Electron and Expo, the backend owns orchestration, a conversation is an append-only log of typed entries, the inference context and the thread a person sees are two projections of the same entries, and nothing a hosted vendor requires sits in the core. Four or five short paragraphs, no diagram the reader must decode first.
+- [ ] Each later section goes one level deeper and starts with the one sentence a reader can stop at. The message system, with the entry envelope, one entry per block, the tree through `parentId`, the session head, rewind and clear as entries. The entry types and who reads each, a table from `ENTRY_AUDIENCE` with the admission rule, a durable fact of the conversation or nothing. Sessions and child sessions, thread, routine and subagent, what rises to the main session and why, `originSessionId`, the joined read of a child. The two projections, inference turns and `ThreadItem`, the stretch fold, pairing of calls and results, the pure UI rule and its three exceptions. Compaction, the tail read through `coveredUpToSeq`, the token budget. Bots talking to bots, handoff and `bot.message.*`. The feed, `events` as the ephemeral channel and `session.entry.appended`. Storage, Postgres as the store, JSONL at the edges, the file backend and the conformance suite. Each section links the file that holds the rule it describes.
+- [ ] The principles behind the shape close the page. A field earns a column only when a query needs it, an entry is admitted only when a person expects to see it again, state changes are entries that name a target and never rewrites, frontends express intent and render state, every provider sits behind a port with an offline conformance test.
+- [ ] Every claim is checked against the code at the branch head. A rule the code does not yet hold (the `messages` table still present before SL6) is stated as the state after SL6, with one sentence saying so.
+- [ ] Copy is plain. No marketing tone, no explainer that repeats a heading, no dashes in prose, under 2 500 words.
+
+**You see.**
+
+- [ ] `docs/architecture.md` renders on GitHub with its headings as a table of contents, each section readable on its own, and every relative link resolves.
+
+**Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [ ] Run `pnpm lint` and `pnpm check` at head, which cover the markdown and the README. Both exit zero.
+- [ ] A script lists every relative link and file path quoted in the page and checks each exists at the head. Zero missing.
+
+**Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `sonnet` at the PR head, each a reader or a fact lane on one section.
+
+- [ ] Lane 1. A reader lane. Read the page cold, then answer ten questions the root sets from the plan's Decisions (where does an ask from a routine live, what stops a tail read, when does a thread compact, what reaches the model from a `subagent` entry, what is on the wire for the thread). Save `reader-answers.md`. Pass when every answer matches the code.
+- [ ] Lane 2. A fact lane on the message system section. Open every file it links at the head and confirm each rule is there. Save `facts-messages.md`. Pass when no claim is stale.
+- [ ] Lane 3. A fact lane on the entry types table against `ENTRY_AUDIENCE`. Save `facts-types.md`. Pass when every row matches the registry.
+- [ ] Lane 4. A fact lane on sessions and child sessions against `routeOf` and `readRun`. Save `facts-sessions.md`. Pass when no claim is stale.
+- [ ] Lane 5. A fact lane on the two projections against `project-inference.ts` and `project-thread-view.ts`. Save `facts-projections.md`. Pass when no claim is stale.
+- [ ] Lane 6. A fact lane on compaction against `history-compaction.ts` and the tail read. Save `facts-compaction.md`. Pass when no claim is stale.
+- [ ] Lane 7. A fact lane on bots talking to bots against `bot-messages.ts` and `group-handoff.ts`. Save `facts-bots.md`. Pass when no claim is stale.
+- [ ] Lane 8. A fact lane on the feed and storage against `sessions.ts`, the postgres and file backends and the conformance suite. Save `facts-storage.md`. Pass when no claim is stale.
+- [ ] Lane 9. A render lane. Open the page on GitHub at the PR head, at desktop and at phone width. Save `render.png` and `render-phone.png`. Pass when headings, tables and links render and nothing overflows.
+- [ ] Lane 10. A link lane. Click every relative link in the page at the head. Save `links.md`. Pass when every link resolves.
+
+**Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [ ] Metric. Not applicable, a documentation page adds no runtime path. State this in the PR.
+- [ ] Probe. None.
+- [ ] Baseline. None.
+- [ ] Rule. None.
+
+**Review gate.** The operator reads the page before merge.
+
+- [ ] Copy lane 9's screenshots into `docs/screenshots/session-log/sl7-review-render.png` and `sl7-review-render-phone.png`. No video, a page has no interaction to record, say so in the PR.
+- [ ] Post the page and the screenshots in chat. Stop at merge-ready. Wait for the operator's click.
+
+**Merge.**
+
+- [ ] Root's clean verdict at the exact head SHA.
+- [ ] Bugbot triage done.
+- [ ] Rebased onto the current feature branch after the verdict, patch-id unchanged.
+- [ ] The root merges SL7 into `feature/session-log` after the operator's review.
+
 ## Close the program
 
 - [ ] Every box above is checked with its evidence.
@@ -600,7 +660,7 @@ Decision. A. The head is the entry with the highest seq in its session, so the r
 - `apps/web/e2e/README.md` before editing any spec.
 - SL1 and SL4 get `.claude/skills/how/SKILL.md` on the executor history path and `.claude/skills/interrogate/SKILL.md` on the entry contract before code. The trail per `.claude/skills/show-me-your-work/SKILL.md` stays local per owner and is returned in each report.
 
-**Last slice, SL7, documentation.** `docs/architecture.md` explains the session log with progressive disclosure, the message system, the entry types and their audience, sessions and child sessions, compaction, the principles behind the shape. Its section is written with the operator once SL6 is in, like SL5.
+**Last slice, SL7, documentation.** `docs/architecture.md` explains the session log with progressive disclosure, the message system, the entry types and their audience, sessions and child sessions, compaction, the principles behind the shape. Its section is above, pulled ahead of SL6 on 2026-10-12.
 
 **Planned after the program, not in it.** Each one needs only what the program already lays down.
 
