@@ -652,6 +652,7 @@ Decision. A. The head is the entry with the highest seq in its session, so the r
 
 ## Appendix D. Links, reading list and what comes after
 
+- [`docs/architecture-sessionlog.md`](../architecture-sessionlog.md) is the living reference for the session log once the program closes, and this plan stays the record of how it was built.
 - `docs/plans/2026-09-19-multi-harness.md`, section 2.5, for why harness sessions stay outside the log.
 - `docs/plans/2026-09-19-harness-quality.md` for the compaction and history window history. The 200 row cap it lists as open closes in SL4.
 - `docs/plans/2026-10-06-adaptive-effort.md` for the `EffortChoice` that `run.started` records.
