@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Changed
 
 - Routines and helpers no longer post into your conversation while they work, on web, desktop and mobile: a routine's report reaches you through its card and a helper's result through the reply of the bot that started it.
+- Upgrading a self-hosted server moves its existing conversations into the new history before the API starts, so it stays offline for a time that grows with the number of messages: the Compose files run this in a new `migrate` service, and a server still on its previous Compose file has the API do it at start (see [Session log migration](docs/self-host.md#session-log-migration)).
 
 ### 2026-10-11
 

@@ -534,6 +534,9 @@ production snapshot's custom-format `rakazo.dump` or `appdata.tgz`.
 
 ## Upgrade
 
+Take a backup before upgrading (see [Backup](#backup)): an upgrade can move data to a shape the
+previous release cannot read, as the [session log migration](#session-log-migration) does.
+
 A Compose deployment on a published release tag upgrades by moving that tag:
 
 ```bash
@@ -554,65 +557,91 @@ GIT_SHA=$(git rev-parse HEAD) docker compose --env-file .env -f infra/compose/do
 `up --wait` does not report success until the new API is healthy and the worker and web containers
 are running. Compose stops the old API and worker, then the one-shot `migrate` service applies the
 migrations (`scripts/backfill-session-log.ts`) before the new ones start, so a migration failure
-keeps them stopped. On a large database the move to the session log takes minutes. A failed CLI
-recreate does not auto-roll back; recover with the previous `RAKAZO_IMAGE_TAG` (or rebuild `local`)
-and `up -d --wait --pull never --no-deps api worker web`.
+keeps them stopped. A failed CLI recreate does not auto-roll back; recover with the previous
+`RAKAZO_IMAGE_TAG` (or rebuild `local`) and `up -d --wait --pull never --no-deps api worker web`.
 
 The updater sidecar has its own image and tag so an update never recreates the process performing
 it. Move it deliberately by setting `RAKAZO_UPDATER_IMAGE_TAG` to the full `sha-<commit>` tag, then
 running `docker compose … pull updater && docker compose … up -d --wait --pull never updater`.
 Sidecar `/apply` and `/rollback` recover a failed recreate by redeploying the previously cached
-image when possible; if that also fails, they report a possible mixed-version runtime.
+image when possible; if that also fails, they report a possible mixed-version runtime. Both stop a
+`migrate` still running first, and neither restores a release that cannot read the database.
 
-Source checkouts (not Compose) stop the API and worker, pull, rebuild with
-`GIT_SHA=$(git rev-parse HEAD)`, run `pnpm exec tsx scripts/backfill-session-log.ts`, then start
-the API and worker again. Product contracts stay compatible across cloud and self-hosted.
+A source checkout (not Compose) upgrades with its API and worker stopped:
+
+```bash
+./scripts/backup.sh
+git pull
+pnpm install --frozen-lockfile
+pnpm exec tsx scripts/backfill-session-log.ts
+```
+
+then starts them again. Product contracts stay compatible across cloud and self-hosted.
 
 ### Session log migration
 
-Migration `20261012000000_drop_messages` drops the `messages` table: every conversation now lives in
-the session log. It locks the table and refuses while any message is missing from the log, so
-`scripts/backfill-session-log.ts`, which the Compose `migrate` service runs, applies the migrations,
-and when that one refuses, writes the missing messages into their threads' sessions, logging every
-thread and the total time, then applies it again. Running it again changes nothing. A bare
-`prisma migrate deploy` stops at that migration and names the script. On a large database it takes
-minutes; the updater waits up to an hour for it.
+This release moves every conversation into the session log and drops the `messages` table.
+`scripts/backfill-session-log.ts`, which the Compose `migrate` service runs before the API and the
+worker start, applies the migrations, then moves each thread's messages into its sessions and drops
+the table, logging every thread and the total time. It runs as one transaction: when a thread cannot
+be moved, nothing is written, the table stays, and the script exits naming every such thread. Once
+it has succeeded, running it again changes nothing. On a large database it takes minutes; the
+updater, the installer and the desktop app wait up to an hour.
 
-Take a backup first (see [Backup](#backup)): the old rows are gone once the migration applies.
-Compose stops the old API and worker before `migrate` starts; a source checkout stops them by hand,
-so no message is written while the threads move.
+The API does the same when it starts, so a deployment still on its previous Compose file, which has
+no `migrate` service, upgrades too, and its API exits with the same message when a thread cannot be
+moved. The current Compose file is recommended, since there the worker always waits for the move.
+Migration `20261012000000_drop_messages` drops the table only once every message is in the log, so
+a bare `prisma migrate deploy` never fails on it and leaves the move to the script or the API.
 
-A thread whose log already holds entries takes the messages written after its last entry at the
-end of its log. Messages older than its entries, which a database that ran an earlier build of the
-session log can hold, stop the script, naming the thread. Rebuild such a thread from its messages,
-or every such thread with `--all`, after a fresh `pg_dump`:
+A thread whose log already holds entries takes the messages written after its newest entry at the
+end of its log; one written at the same instant counts as newer. Messages older than its entries,
+which a database that ran an earlier build of the session log can hold, refuse the thread. Both
+times come from the clocks of the processes that wrote them, so a worker and an API whose clocks
+disagreed can make a thread refuse too. Rebuild such a thread from its messages, or with `--all` every
+thread that still has messages to move:
 
 ```bash
-pnpm exec tsx scripts/backfill-session-log.ts --rebuild-from-messages <thread-id>
+pnpm exec tsx scripts/backfill-session-log.ts --rebuild-from-messages <thread-id>[,<thread-id>…]
 pnpm exec tsx scripts/backfill-session-log.ts --rebuild-from-messages --all
 ```
 
-A rebuild deletes the thread's sessions and every entry in them, then writes the whole conversation
-again from its messages: everything that was said stays, and the run traces written since the
-session log began (tool calls, helpers' sessions, card answers) are dropped. Under Compose, run it
-through the service: `docker compose … run --rm migrate pnpm exec tsx scripts/backfill-session-log.ts
---rebuild-from-messages <thread-id>`.
+Under Compose, run it through the service: `docker compose … run --rm migrate pnpm exec tsx
+scripts/backfill-session-log.ts --rebuild-from-messages <thread-id>`, or through `run --rm --no-deps
+api` on the previous Compose file. A rebuild deletes the thread's sessions and every entry in them,
+then writes the whole conversation again from its messages: everything that was said stays, and the
+run traces written since the session log began (tool calls, helpers' sessions, card answers) are
+dropped. A delivery another thread received from it keeps the old session's ids, so following it back
+can open the thread at its latest messages rather than at the message it came from.
 
-A thread that cannot be converted also stops the script, which names it and the error. Read its
-messages with `psql`:
+A thread that cannot be converted stops the move with the error. Read its messages with `psql`:
 
 ```sql
 SELECT seq, role, jsonb_pretty(blocks) FROM messages WHERE "threadId" = '<thread-id>' ORDER BY seq;
 ```
 
-`--skip <thread-id>[,<thread-id>…]` backfills the other threads around it, but the migration still
-waits for every message. To keep a thread's messages outside the database and let the migration
-apply, export them, then delete them:
+To keep that thread's messages outside the database and let the rest move, export them, then
+delete them:
 
 ```bash
 psql "$DATABASE_URL" -At -c "SELECT row_to_json(m) FROM messages m
   WHERE m.\"threadId\" = '<thread-id>' ORDER BY m.seq" > messages-<thread-id>.jsonl
 psql "$DATABASE_URL" -c "DELETE FROM messages WHERE \"threadId\" = '<thread-id>'"
+```
+
+Once the move has succeeded, a release older than it cannot read the database: the updater refuses
+to roll back to one, and after a failed update it leaves the services stopped rather than start one.
+Going back means restoring the backup taken before the upgrade into an empty database, then starting
+the previous tag. On the single-VM layout, with `RAKAZO_IMAGE_TAG` in `.env` set back to that tag:
+
+```bash
+compose="docker compose --env-file .env -f infra/compose/docker-compose.prod.yml"
+$compose stop api worker web
+$compose exec -T postgres sh -c 'dropdb -U "$POSTGRES_USER" --force "$POSTGRES_DB" &&
+  createdb -U "$POSTGRES_USER" "$POSTGRES_DB"'
+$compose exec -T postgres sh -c 'pg_restore --no-owner -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+  < /var/backups/rakazo/<stamp>/rakazo.dump
+$compose up -d --wait --pull never --no-deps api worker web
 ```
 
 A thread can also be kept as files, one JSONL file per session, and imported into another thread
