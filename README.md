@@ -204,6 +204,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for the development workflow and test m
 
 ## Documentation
 
+- [Architecture](./docs/architecture.md)
 - [Self-hosting](./docs/self-host.md)
 - [Self-host secrets](./docs/self-host-secrets.md)
 - [Computer runtime and isolation](./docs/computer-runtime.md)
