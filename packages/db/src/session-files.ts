@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { SessionEntry, SessionRunTrigger } from "@rakazo/contracts";
 import { decodeEntries, encodeEntries } from "@rakazo/core";
 import type { Prisma, PrismaClient } from "./client.js";
 import { sessionEntryFromRow } from "./sessions.js";
@@ -47,11 +48,19 @@ export async function exportThreadSessions(
 /** One exported session's file: the session's id and its JSONL lines. */
 export type SessionFile = { sessionId: string; jsonl: string };
 
+/** The kind of a run a session's `run.started` records, as `Run.trigger` names it. */
+const RUN_TRIGGER: Partial<Record<SessionRunTrigger["kind"], string>> = {
+  routine: "routine",
+  webhook: "webhook",
+  bot_message: "bot_message",
+  subagent: "subagent",
+};
+
 /**
  * Appends exported sessions to a thread whose main session is empty: the session no entry names
  * as its child becomes the thread's main session, and each child a new session under the one that
- * named it. Every entry, session and run gets a new id, and every reference to one follows it, so
- * the import stands apart from the sessions it was exported from.
+ * named it. Every entry, session and run gets a new id, every reference to one follows it, and each
+ * run gets a row, ended, so the import stands apart from the sessions it was exported from.
  */
 export async function importThreadSessions(
   prisma: PrismaClient,
@@ -68,14 +77,16 @@ export async function importThreadSessions(
       if (entry.type === "routine.started") {
         children.set(entry.payload.sessionId, { parent: sessionId, kind: "routine", by: entry.id });
       } else if (entry.type === "subagent" && entry.payload.sessionId) {
-        const call = entries.find(
-          (candidate) =>
-            candidate.type === "tool.call" && candidate.payload.callId === entry.payload.callId,
-        );
+        const call = sessions
+          .find((session) => session.sessionId === entry.payload.sessionId)
+          ?.entries.find((started) => started.type === "run.started");
         children.set(entry.payload.sessionId, {
           parent: sessionId,
           kind: "subagent",
-          by: call?.id ?? entry.id,
+          by:
+            call?.type === "run.started" && call.payload.trigger.kind === "subagent"
+              ? call.payload.trigger.entryId
+              : entry.id,
         });
       }
     }
@@ -89,13 +100,28 @@ export async function importThreadSessions(
     const parent = ordered[index]!.sessionId;
     ordered.push(...sessions.filter(({ sessionId }) => children.get(sessionId)?.parent === parent));
   }
+  const unreached = sessions.filter((session) => !ordered.includes(session));
+  if (unreached.length > 0) {
+    throw new Error(
+      `The main session does not reach the sessions ${unreached.map(({ sessionId }) => sessionId).join(", ")}`,
+    );
+  }
 
   return prisma.$transaction(
     async (tx: Prisma.TransactionClient) => {
       const [thread] = await tx.$queryRaw<
-        Array<{ sessionId: string; spaceId: string; logged: boolean }>
+        Array<{
+          sessionId: string;
+          spaceId: string;
+          userId: string;
+          botId: string | null;
+          logged: boolean;
+        }>
       >`
-        SELECT t."sessionId", t."spaceId",
+        SELECT t."sessionId", t."spaceId", t."userId",
+          COALESCE(t."botId", (
+            SELECT m."botId" FROM chat_group_members m WHERE m."groupId" = t."groupId"
+            ORDER BY m."createdAt" LIMIT 1)) AS "botId",
           EXISTS (SELECT 1 FROM session_entries e WHERE e."sessionId" = t."sessionId") AS logged
         FROM threads t WHERE t.id = ${threadId} FOR UPDATE`;
       if (!thread) throw new Error(`Thread ${threadId} does not exist`);
@@ -159,8 +185,81 @@ export async function importThreadSessions(
         });
         total += rows.length;
       }
+      await createImportedRuns(tx, { ...thread, threadId }, ordered, renamed);
       return { sessions: ordered.length, entries: total };
     },
     { timeout: 120_000, maxWait: 120_000 },
   );
+}
+
+/** A row for every run the imported entries name, ended as its `run.finished` says, else cancelled. */
+async function createImportedRuns(
+  tx: Prisma.TransactionClient,
+  thread: { threadId: string; spaceId: string; userId: string; botId: string | null },
+  sessions: ReadonlyArray<{ sessionId: string; entries: readonly SessionEntry[] }>,
+  renamed: ReadonlyMap<string, string>,
+) {
+  const runs = new Map<
+    string,
+    { sessionId: string; botId?: string; started?: SessionEntry; finished?: SessionEntry }
+  >();
+  for (const { sessionId, entries } of sessions) {
+    for (const entry of entries) {
+      if (!entry.runId) continue;
+      const run = runs.get(entry.runId) ?? { sessionId: renamed.get(sessionId)! };
+      run.botId ??= entry.botId;
+      if (entry.type === "run.started") {
+        run.started = entry;
+        run.sessionId = renamed.get(sessionId)!;
+      }
+      if (entry.type === "run.finished") run.finished = entry;
+      runs.set(entry.runId, run);
+    }
+  }
+  const botIds = [...new Set([...runs.values()].flatMap((run) => run.botId ?? []))];
+  const known = new Set(
+    (await tx.bot.findMany({ where: { id: { in: botIds }, spaceId: thread.spaceId } })).map(
+      (bot) => bot.id,
+    ),
+  );
+  for (const [exportedId, run] of runs) {
+    const botId = run.botId && known.has(run.botId) ? run.botId : thread.botId;
+    if (!botId) throw new Error(`Thread ${thread.threadId} has no bot to own run ${exportedId}`);
+    const started = run.started?.type === "run.started" ? run.started : undefined;
+    const finished = run.finished?.type === "run.finished" ? run.finished : undefined;
+    const trigger = started?.payload.trigger;
+    const source = trigger && "entryId" in trigger ? renamed.get(trigger.entryId) : undefined;
+    const task = await tx.task.create({
+      data: {
+        spaceId: thread.spaceId,
+        botId,
+        threadId: thread.threadId,
+        userId: thread.userId,
+        prompt: "",
+        status: "completed",
+      },
+    });
+    await tx.run.create({
+      data: {
+        id: renamed.get(exportedId)!,
+        spaceId: thread.spaceId,
+        botId,
+        threadId: thread.threadId,
+        taskId: task.id,
+        userId: thread.userId,
+        sessionId: run.sessionId,
+        status: finished?.payload.status ?? "cancelled",
+        trigger: (trigger && RUN_TRIGGER[trigger.kind]) ?? "user",
+        ...(source ? { sourceMessageId: source } : {}),
+        ...(started
+          ? {
+              modelProvider: started.payload.model.provider,
+              modelId: started.payload.model.id,
+              startedAt: new Date(started.ts),
+            }
+          : {}),
+        completedAt: new Date((finished ?? started)?.ts ?? Date.now()),
+      },
+    });
+  }
 }

@@ -54,12 +54,36 @@ async function write(
 }
 
 describe("a thread's sessions as JSONL files", () => {
-  it("exports a thread with its helper, and imports it into another thread that opens the helper", async () => {
+  it("exports a thread with its helper and imports it whole into another thread, runs and all", async () => {
     const { prisma } = database;
     const source = await seedThread(prisma, "Ada");
     const { botId } = source;
     const run = { runId: "run_files", botId };
+    const before = { runId: "run_before", botId };
     await write(prisma, source.sessionId, [
+      {
+        id: "p0",
+        type: "user.message",
+        payload: { blocks: [{ kind: "text", text: "Search first." }], source: "app" },
+      },
+      {
+        id: "p1",
+        type: "run.started",
+        payload: { trigger: { kind: "message", entryId: "p0" }, model: MODEL, effort: null },
+        ...before,
+      },
+      {
+        id: "p2",
+        type: "tool.call",
+        payload: { callId: "call_scout", name: "web_search", input: "{}" },
+        ...before,
+      },
+      {
+        id: "p3",
+        type: "run.finished",
+        payload: { status: "completed", usage: { inputTokens: 1, outputTokens: 1 } },
+        ...before,
+      },
       {
         id: "e0",
         type: "user.message",
@@ -88,6 +112,13 @@ describe("a thread's sessions as JSONL files", () => {
       },
     });
     await write(prisma, child.id, [
+      {
+        id: "c_start",
+        type: "run.started",
+        payload: { trigger: { kind: "subagent", entryId: "e2" }, model: MODEL, effort: null },
+        runId: "run_scout",
+        botId,
+      },
       {
         id: "c0",
         type: "assistant.text",
@@ -118,6 +149,12 @@ describe("a thread's sessions as JSONL files", () => {
         payload: { blocks: [{ kind: "text", text: "Acme is the one." }] },
         ...run,
       },
+      {
+        id: "e5",
+        type: "run.finished",
+        payload: { status: "completed", usage: { inputTokens: 2, outputTokens: 2 } },
+        ...run,
+      },
     ];
     const head = await prisma.sessionEntry.findMany({ where: { sessionId: source.sessionId } });
     await prisma.sessionEntry.createMany({
@@ -131,7 +168,7 @@ describe("a thread's sessions as JSONL files", () => {
     });
     await prisma.conversationSession.update({
       where: { id: source.sessionId },
-      data: { nextEntrySeq: head.length + rest.length, headEntryId: "e4" },
+      data: { nextEntrySeq: head.length + rest.length, headEntryId: "e5" },
     });
 
     const files = new Map<string, string>();
@@ -144,7 +181,7 @@ describe("a thread's sessions as JSONL files", () => {
     const imported = [...files].map(([sessionId, jsonl]) => ({ sessionId, jsonl }));
     await expect(importThreadSessions(prisma, target.threadId, imported)).resolves.toEqual({
       sessions: 2,
-      entries: 6,
+      entries: 12,
     });
 
     const entries = (
@@ -157,11 +194,16 @@ describe("a thread's sessions as JSONL files", () => {
       { seq: 0, type: "user.message" },
       { seq: 1, type: "run.started" },
       { seq: 2, type: "tool.call" },
-      { seq: 3, type: "subagent" },
-      { seq: 4, type: "assistant.text" },
+      { seq: 3, type: "run.finished" },
+      { seq: 4, type: "user.message" },
+      { seq: 5, type: "run.started" },
+      { seq: 6, type: "tool.call" },
+      { seq: 7, type: "subagent" },
+      { seq: 8, type: "assistant.text" },
+      { seq: 9, type: "run.finished" },
     ]);
     expect(entries.map((entry) => entry.id)).not.toContain("e0");
-    const [user, started, call, helper] = entries;
+    const [user, started, call, helper] = entries.slice(4);
     expect(started?.payload).toMatchObject({ trigger: { kind: "message", entryId: user?.id } });
     expect(started?.runId).not.toBe("run_files");
     const helperSession = (helper!.payload as { sessionId: string }).sessionId;
@@ -172,11 +214,83 @@ describe("a thread's sessions as JSONL files", () => {
       parentSessionId: target.sessionId,
       parentEntryId: call?.id,
     });
+    const helperEntries = (
+      await prisma.sessionEntry.findMany({
+        where: { sessionId: helperSession },
+        orderBy: { seq: "asc" },
+      })
+    ).map(sessionEntryFromRow);
+    expect(helperEntries.map((entry) => entry.payload)).toEqual([
+      { trigger: { kind: "subagent", entryId: call?.id }, model: MODEL, effort: null },
+      { blocks: [{ kind: "text", text: "Acme." }] },
+    ]);
     expect(
-      (await prisma.sessionEntry.findMany({ where: { sessionId: helperSession } })).map(
-        (row) => row.payload,
-      ),
-    ).toEqual([{ blocks: [{ kind: "text", text: "Acme." }] }]);
+      await prisma.run.findMany({
+        where: { threadId: target.threadId },
+        orderBy: { startedAt: "asc" },
+        select: {
+          id: true,
+          sessionId: true,
+          status: true,
+          trigger: true,
+          sourceMessageId: true,
+          modelId: true,
+        },
+      }),
+    ).toEqual([
+      {
+        id: helperEntries[0]!.runId,
+        sessionId: helperSession,
+        status: "cancelled",
+        trigger: "subagent",
+        sourceMessageId: call!.id,
+        modelId: "claude",
+      },
+      {
+        id: entries[1]!.runId,
+        sessionId: target.sessionId,
+        status: "completed",
+        trigger: "user",
+        sourceMessageId: entries[0]!.id,
+        modelId: "claude",
+      },
+      {
+        id: started!.runId,
+        sessionId: target.sessionId,
+        status: "completed",
+        trigger: "user",
+        sourceMessageId: user!.id,
+        modelId: "claude",
+      },
+    ]);
+
+    const looped = (sessionId: string, child: string) =>
+      `${JSON.stringify({
+        id: `${sessionId}_0`,
+        sessionId,
+        seq: 0,
+        parentId: null,
+        ts: "2026-10-01T09:00:00.000Z",
+        botId,
+        runId: `${sessionId}_run`,
+        type: "routine.started",
+        payload: {
+          sessionId: child,
+          routineId: "routine_loop",
+          name: "Loop",
+          trigger: "routine",
+          scheduledAt: "2026-10-01T09:00:00.000Z",
+          model: MODEL,
+        },
+      })}\n`;
+    const other = await seedThread(prisma, "Linus");
+    await expect(
+      importThreadSessions(prisma, other.threadId, [
+        ...imported,
+        { sessionId: "loop_a", jsonl: looped("loop_a", "loop_b") },
+        { sessionId: "loop_b", jsonl: looped("loop_b", "loop_a") },
+      ]),
+    ).rejects.toThrow("does not reach the sessions loop_a, loop_b");
 
     await expect(importThreadSessions(prisma, target.threadId, imported)).rejects.toThrow(
       /already holds entries/,
