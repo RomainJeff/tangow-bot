@@ -839,9 +839,10 @@ export async function moveLegacyMessages(
   const started = performance.now();
   const moved = await moveMessagesToLog(prisma, {
     ...(rebuild ? { rebuild } : {}),
+    // Converted inside the round: nothing is kept until the whole round commits.
     log: (result) =>
       log(
-        `thread ${result.threadId} ${result.outcome}: ${result.messages} messages, ${result.entries} entries`,
+        `thread ${result.threadId} converted (${result.outcome}): ${result.messages} messages, ${result.entries} entries`,
       ),
   });
   const seconds = ((performance.now() - started) / 1000).toFixed(1);

@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { MIGRATION_WAIT_TIMEOUT_S } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
 
@@ -25,4 +26,13 @@ describe.each([
       });
     }
   });
+});
+
+// The installer runs from a download with no checkout, so it cannot read the constant itself.
+it("has the installer wait for the migrate service as long as the updater does", () => {
+  const installer = readFileSync(path.join(composeDir, "install-images.sh"), "utf8");
+  const waits = [...installer.matchAll(/--wait-timeout (\d+)/g)].map(([, seconds]) =>
+    Number(seconds),
+  );
+  expect(waits).toEqual([MIGRATION_WAIT_TIMEOUT_S]);
 });
