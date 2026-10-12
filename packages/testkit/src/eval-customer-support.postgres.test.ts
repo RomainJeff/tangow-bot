@@ -61,10 +61,16 @@ describe.skipIf(!databaseAvailable)("offline Slack customer-support eval", () =>
             expect(String(result?.content)).toContain("ZD-1842");
           },
           response: {
-            type: "text",
-            text: "Casey Morgan owns the renewal, now in Negotiation. Urgent ticket ZD-1842 covers the production SSO incident, and engineering is testing a configuration fix.",
+            type: "tool",
+            id: "slack-reply",
+            name: "message_user",
+            arguments: {
+              message:
+                "Casey Morgan owns the renewal, now in Negotiation. Urgent ticket ZD-1842 covers the production SSO incident, and engineering is testing a configuration fix.",
+            },
           },
         },
+        { expect() {}, response: { type: "text", text: "" } },
       ],
     });
     const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-customer-eval-"));
@@ -106,7 +112,7 @@ describe.skipIf(!databaseAvailable)("offline Slack customer-support eval", () =>
         status: "passed",
         category: null,
         cleanupFailed: false,
-        toolCalls: 4,
+        toolCalls: 5,
       });
       expect(result.criteria.every((criterion) => criterion.pass)).toBe(true);
     } finally {

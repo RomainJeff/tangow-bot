@@ -47,14 +47,24 @@ export class ScriptedAgentRuntime implements AgentRuntime {
       // Per-run call index so repeated tools (e.g. message_agent) get distinct
       // executionIds — delivery keys and effect replays key off this value.
       let toolCallSeq = 0;
-      for (const turn of script) {
+      // Text after the run's last tool call, ask or takeover is its reply, which a model sends
+      // with message_user when the run offers it; earlier text is private narration.
+      const sendsReply = request.tools.some((tool) => tool.name === "message_user");
+      const lastInterrupt = script.findLastIndex((turn) =>
+        Boolean(turn.toolCalls?.length || turn.ask || turn.takeover),
+      );
+      for (const [index, turn] of script.entries()) {
         if (signal.aborted || controller.signal.aborted) {
           yield { type: "done", text: "stopped" };
           return;
         }
         if (turn.assistant) {
           yield { type: "progress", text: "working…", activity: true };
-          yield { type: "text", text: turn.assistant };
+          if (sendsReply && index > lastInterrupt) {
+            yield messageUser(request.runId, turn.assistant, toolCallSeq++);
+          } else {
+            yield { type: "text", text: turn.assistant };
+          }
         }
         for (const call of turn.toolCalls ?? []) {
           const executionId = `${request.runId}:${call.name}:${toolCallSeq++}`;
@@ -118,13 +128,23 @@ export class ScriptedAgentRuntime implements AgentRuntime {
           return;
         }
       }
-      yield { type: "text", text: "done." };
+      if (sendsReply) yield messageUser(request.runId, "done.", toolCallSeq++);
+      else yield { type: "text", text: "done." };
       yield { type: "done", text: "done." };
     } finally {
       controller.abort();
       running.delete(request.runId);
     }
   }
+}
+
+function messageUser(runId: string, message: string, seq: number): AgentRuntimeEvent {
+  return {
+    type: "tool",
+    name: "message_user",
+    args: { message },
+    executionId: `${runId}:message_user:${seq}`,
+  };
 }
 
 export function inferScript(

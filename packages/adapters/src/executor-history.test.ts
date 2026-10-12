@@ -381,19 +381,17 @@ describe("the history a run reads from its session log", () => {
     ]);
   });
 
-  it("tells a routine run that only its report reaches the user, and a person's run how to talk with them", async () => {
+  it("tells a routine card run that its final reply is seen, and a person's run that only message_user reaches them", async () => {
     const routine = fixture({
-      run: { trigger: "routine", routineId: "routine-1", createdAt: new Date() },
+      run: { trigger: "webhook", routineId: "routine-1", createdAt: new Date() },
     });
     const { instructions: routineInstructions } = await routine.request();
     const { instructions: userInstructions } = await fixture().request();
 
-    expect(routineInstructions).toContain(
-      "Your final written response is the report the user receives when this routine ends. Do not use message_user.",
-    );
-    expect(routineInstructions).not.toContain("Use message_user to communicate with the user");
-    expect(userInstructions).toContain("Use message_user to communicate with the user");
-    expect(userInstructions).not.toContain("Do not use message_user.");
+    expect(routineInstructions).toContain("Your final reply is what gets seen.");
+    expect(routineInstructions).not.toContain("message_user is the only way to reach the user.");
+    expect(userInstructions).toContain("message_user is the only way to reach the user.");
+    expect(userInstructions).not.toContain("Your final reply is what gets seen.");
   });
 
   it("hands a group member another bot's words as a bot message, and its own as its turns", async () => {

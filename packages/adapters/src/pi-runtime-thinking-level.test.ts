@@ -1,5 +1,4 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import { detachedRunInstructions } from "@rakazo/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const fakeAgentState = vi.hoisted(() => ({
@@ -14,6 +13,7 @@ const fakeAgentState = vi.hoisted(() => ({
   }>,
   sessionIds: [] as Array<string | undefined>,
   systemPrompts: [] as string[],
+  toolNames: [] as string[][],
   subagentArgs: { name: "helper", task: "help" } as Record<string, unknown>,
   lastSubagentResult: undefined as unknown,
   failPrompt: false,
@@ -44,6 +44,7 @@ vi.mock("@earendil-works/pi-agent-core", () => ({
       fakeAgentState.transforms.push(options.transformContext);
       fakeAgentState.sessionIds.push(options.sessionId);
       fakeAgentState.systemPrompts.push(options.initialState.systemPrompt);
+      fakeAgentState.toolNames.push(options.initialState.tools.map((tool) => tool.name));
       fakeAgentState.thinkingLevels.push(options.initialState.thinkingLevel);
       fakeAgentState.models.push(options.initialState.model);
     }
@@ -157,6 +158,7 @@ describe("Pi agent thinking level", () => {
     fakeAgentState.models = [];
     fakeAgentState.sessionIds = [];
     fakeAgentState.systemPrompts = [];
+    fakeAgentState.toolNames = [];
     fakeAgentState.subagentArgs = { name: "helper", task: "help" };
     fakeAgentState.lastSubagentResult = undefined;
     fakeAgentState.failPrompt = false;
@@ -295,16 +297,18 @@ describe("Pi agent thinking level", () => {
     });
   });
 
-  it("tells a helper that only the result it hands back reaches the user, not the chat voice", async () => {
+  it("gives a helper neither the thread's chat voice nor message_user", async () => {
     const chatVoice =
-      "## How you communicate with the user\n\nUse message_user to communicate with the user.";
+      "## How you communicate with the user\n\nmessage_user is the only way to reach the user.";
     const signal = new AbortController().signal;
     await runWithModel("plain-model", "test", signal, null, undefined, undefined, chatVoice);
 
     const [thread, helper] = fakeAgentState.systemPrompts;
     expect(thread).toContain(chatVoice);
-    expect(helper).toContain(detachedRunInstructions("helper"));
     expect(helper).not.toContain(chatVoice);
+    const [, helperTools] = fakeAgentState.toolNames;
+    expect(helperTools).toContain("web_search");
+    expect(helperTools).not.toContain("message_user");
   });
 
   it("keeps reasoning off for the main agent and subagent", async () => {

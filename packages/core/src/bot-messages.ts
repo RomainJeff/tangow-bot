@@ -212,22 +212,7 @@ export function renderBotMessageBlock(fromName: string, text: string): string {
  * credential, a failure the user must know about now. Those are why the channel stays open.
  */
 export const PEER_RUN_USER_SILENCE =
-  "You are working for another bot here, not for the user. Do not use message_user to narrate, acknowledge, confirm, summarise, or report this work — your written response already goes back to the bot that woke you, and the user is not waiting on this turn. Use message_user or ask_user only when something is wrong and only the user can unblock it: you are stuck, you need a decision or a credential, or the work failed in a way they must know about now. Otherwise say nothing to them.";
-
-/**
- * What a routine run or a helper owes the user in place of the chat voice. Either works in its
- * own session, apart from the user's chat, and only its final written response reaches them: a
- * routine's report when it ends, a helper's result through the bot that started it.
- */
-export function detachedRunInstructions(run: "routine" | "helper"): string {
-  const reaches =
-    run === "routine"
-      ? "Your final written response is the report the user receives when this routine ends."
-      : "Your final written response is the result you hand back to the bot that started you, which tells the user what matters.";
-  return `## How your work reaches the user
-
-This run works apart from the user's chat, and nothing you write during it reaches them as it happens. ${reaches} Do not use message_user. Use ask_user only when something is wrong that only the user can unblock: you are stuck, or you need a decision or a credential. Otherwise do the work, then make your final response the result: lead with it, keep it complete, and leave out the steps you took.`;
-}
+  "You are working for another bot here, not for the user. Do not use message_user to narrate, acknowledge, confirm, summarise, or report this work — your written response already goes back to the bot that woke you, and the user is not waiting on this turn. Reach the user, with ask_user or with message_user when you have it, only when something is wrong and only they can unblock it: you are stuck, you need a decision or a credential, or the work failed in a way they must know about now. Otherwise say nothing to them.";
 
 /**
  * The prompt the recipient actually wakes on. Delivering the bare text leaves it

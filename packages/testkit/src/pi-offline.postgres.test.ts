@@ -45,8 +45,14 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
               path: "notes/result.txt",
             });
           },
-          response: { type: "text", text: "Saved notes/result.txt." },
+          response: {
+            type: "tool",
+            id: "product-reply",
+            name: "message_user",
+            arguments: { message: "Saved notes/result.txt." },
+          },
         },
+        { expect() {}, response: { type: "text", text: "" } },
       ],
       async ({ app, cookie, bot, prisma, send }) => {
         const sent = await send("Save hello to notes/result.txt.");
@@ -64,10 +70,13 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
         expect(entries).not.toContain(fixtureKey);
         const tools = await prisma.sessionEntry.findMany({
           where: { botId: bot.id, type: "tool.call" },
+          orderBy: { seq: "asc" },
           select: { payload: true },
         });
-        expect(tools).toHaveLength(1);
-        expect(JSON.stringify(tools[0])).toContain("write_file");
+        expect(tools.map(({ payload }) => (payload as { name: string }).name)).toEqual([
+          "write_file",
+          "message_user",
+        ]);
       },
     );
   }, 30_000);

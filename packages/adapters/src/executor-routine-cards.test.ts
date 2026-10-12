@@ -1713,10 +1713,12 @@ describe("a skill the bot saves on its own", () => {
 });
 
 describe("the skill nudge at the end of an exchange", () => {
-  const searches = Array.from({ length: 15 }, () => ({
-    name: "skill_search",
-    args: { query: "table" },
-  }));
+  // The exchange answers the user, which only message_user does.
+  const reply = { name: "message_user", args: { message: "Done" } };
+  const searches = [
+    ...Array.from({ length: 15 }, () => ({ name: "skill_search", args: { query: "table" } })),
+    reply,
+  ];
   const keep = {
     name: "skill_create",
     args: { name: "Book a table", description: "Book a restaurant table", body: "1. Call." },
@@ -1813,6 +1815,7 @@ describe("the skill nudge at the end of an exchange", () => {
     await f.play([
       [{ name: "skill_read", args: { name: "Coffee" } }],
       [{ name: "skill_read", args: { name: "Espresso" } }],
+      [reply],
     ]);
     expect(f.eventsOf("agent.skill.used")).toEqual([{ name: "Coffee", via: "skill_read" }]);
     expect(f.requests()[1]!.prompt).toContain(
@@ -1860,6 +1863,7 @@ describe("the skill nudge at the end of an exchange", () => {
     await f.play([
       [{ name: "skill_read", args: { name: "Coffee" } }],
       [{ name: "skill_read", args: { name: "Espresso" } }],
+      [reply],
     ]);
     expect(f.eventsOf("agent.skill.used")).toEqual([{ name: "Coffee", via: "skill_read" }]);
     expect(f.requests()).toHaveLength(1);
@@ -1869,7 +1873,7 @@ describe("the skill nudge at the end of an exchange", () => {
 
   it("in shadow mode records why it passed over a turn the user started", async () => {
     const f = fixture({ skillLearning: "shadow" });
-    await f.play([searches.slice(0, 3)]);
+    await f.play([[...searches.slice(0, 3), reply]]);
     expect(f.eventsOf("agent.skill.nudge")).toEqual([
       { phase: "skipped", mode: "shadow", reason: "no_signal" },
     ]);
@@ -1931,7 +1935,7 @@ describe("the skill nudge at the end of an exchange", () => {
         outputTokens: 40,
       },
     ]);
-    expect(f.effects).toEqual([
+    expect(f.effects.filter((effect) => effect.kind === "skill_create")).toEqual([
       expect.objectContaining({
         runId: "run-1",
         kind: "skill_create",

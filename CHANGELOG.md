@@ -15,7 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Changed
 
 - A bot's messages are no longer cut off at 500 characters, on web, desktop and iPhone, so a long answer arrives whole instead of truncated or split into several messages.
-- On web, desktop and iPhone, a bot no longer streams its working text live or posts it as separate messages while it works; you see only what it sends you on purpose, its questions and its final reply.
+- On web, desktop, iPhone and messaging apps, a bot no longer streams its working text live, posts it as separate messages, or posts its closing text on its own; you see only what it sends you on purpose and its questions, and a turn where it sends nothing stays quiet.
 - Routines and helpers no longer post into your conversation while they work, on web, desktop and mobile: a routine's report reaches you through its card and a helper's result through the reply of the bot that started it.
 - Upgrading a self-hosted server moves its existing conversations into the new history before the API starts, so it stays offline for a time that grows with the number of messages: the Compose files run this in a new `migrate` service, and a server still on its previous Compose file has the API do it at start, for up to about 500,000 messages (see [Session log migration](docs/self-host.md#session-log-migration)).
 

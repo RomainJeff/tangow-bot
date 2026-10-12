@@ -31,7 +31,7 @@ import type {
   ToolCallTrace,
 } from "@rakazo/adapter-kit";
 import type { AskQuestion } from "@rakazo/contracts";
-import { detachedRunInstructions, redactSecrets } from "@rakazo/core";
+import { redactSecrets } from "@rakazo/core";
 import { getLogger, redactSensitiveText } from "@rakazo/logging";
 import { isToolPauseResult } from "./approval-effect.js";
 import { builtinAgentTools, DELEGATION_TOOL_NAMES } from "./builtin-tools.js";
@@ -59,7 +59,7 @@ import {
 } from "./pi-runtime-limits.js";
 import { textContentArg } from "./tool-text.js";
 import type { TraceExporter } from "./trace-export.js";
-import { toolCallBudgetNotice } from "./user-progress.js";
+import { TOOL_FINAL_RESPONSE_FALLBACK, toolCallBudgetNotice } from "./user-progress.js";
 
 /**
  * Normalize the ask_user v2 `questions` argument into validated AskQuestion[] with stable ids.
@@ -132,9 +132,7 @@ const MAX_PARALLEL_SUBAGENTS = 4;
 // that provider quirk from making a long task look complete after one step.
 const MAX_SILENT_TOOL_CONTINUATIONS = 3;
 const SILENT_TOOL_CONTINUATION_PROMPT =
-  "Continue the original task from the latest tool result. Do not stop after a tool call; use any remaining tools needed, then give the user the final answer.";
-const TOOL_FINAL_RESPONSE_FALLBACK =
-  "I completed the tool step but could not produce a final response. Please ask me to continue.";
+  "Continue the original task from the latest tool result. Do not stop after a tool call; use any remaining tools needed, then deliver the result.";
 const DEFAULT_COMPUTER_SCREENSHOTS_TO_KEEP = 2;
 // Reasoning-capable models must not start at "off": for OpenRouter, pi-ai maps
 // that to reasoning.effort "none", which 400s on endpoints that mandate
@@ -403,14 +401,25 @@ export class PiAgentRuntime implements AgentRuntime {
           if (event.type === "turn_end") {
             const messageText =
               event.message.role === "assistant" ? assistantText(event.message) : "";
-            const hasToolCalls =
-              event.message.role === "assistant" &&
-              event.message.content.some((part) => part.type === "toolCall");
+            const toolCallNames =
+              event.message.role === "assistant"
+                ? event.message.content.flatMap((part) =>
+                    part.type === "toolCall" ? [part.name] : [],
+                  )
+                : [];
+            const hasToolCalls = toolCallNames.length > 0;
             const hasToolResults = event.toolResults.length > 0;
 
             // Text in a turn that also contains a tool call is narration, not a final
-            // response. Keep the run alive until a later text-only turn answers the user.
-            if (hasToolCalls && hasToolResults && !host.pausePending) {
+            // response. Keep the run alive until a later text-only turn answers the user,
+            // or a turn that only messages the user, which already delivered the answer.
+            if (
+              toolCallNames.length > 0 &&
+              toolCallNames.every((name) => name === "message_user")
+            ) {
+              toolWorkPendingFinal = false;
+              silentToolContinuations = 0;
+            } else if (hasToolCalls && hasToolResults && !host.pausePending) {
               toolWorkPendingFinal = true;
               silentToolContinuations = 0;
             } else if (toolWorkPendingFinal && !hasToolCalls && !hasToolResults) {
@@ -1380,8 +1389,9 @@ async function runSubagent(
   }
   const subagentModel = modelForCompletion(selectedModel.model, requestModel.maxTokens);
 
+  // A helper reports back to the bot that ran it, never to the user.
   const childDefs = (host.request.tools.length ? host.request.tools : builtinAgentTools).filter(
-    (tool) => !DELEGATION_TOOL_NAMES.has(tool.name),
+    (tool) => !DELEGATION_TOOL_NAMES.has(tool.name) && tool.name !== "message_user",
   );
   const nestedHost: ToolHost = {
     ...host,
@@ -1406,16 +1416,13 @@ async function runSubagent(
       pruneComputerScreenshotContext(messages, requestModel.maxImagesPerPrompt),
     initialState: {
       systemPrompt: [
-        [
-          `You are a Rakazo subagent named "${name}".`,
-          "You run inside the parent bot's turn — you are not a separate bot chat.",
-          "Complete the task and return a concise result. Do not spawn bots or further subagents.",
-          extra,
-        ]
-          .filter(Boolean)
-          .join(" "),
-        detachedRunInstructions("helper"),
-      ].join("\n\n"),
+        `You are a Rakazo subagent named "${name}".`,
+        "You run inside the parent bot's turn — you are not a separate bot chat.",
+        "Complete the task and return a concise result. Do not spawn bots or further subagents.",
+        extra,
+      ]
+        .filter(Boolean)
+        .join(" "),
       model: subagentModel,
       thinkingLevel: thinkingLevelFor(subagentModel, requestModel.thinkingLevel),
       tools: toAgentTools(childDefs, nestedHost),
