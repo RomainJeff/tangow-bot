@@ -2035,18 +2035,28 @@ export function createRunExecutor(deps: ExecutorDeps) {
           const call = toolCall(executionId, name, args);
           if (unansweredCalls.get(executionId) !== call.payload.input) await write(call);
           unansweredCalls.delete(executionId);
-          const result = await applyTool(name, args, executionId, log, trace);
-          recordToolOutput(executionId, result);
-          if (!isToolPauseResult(result)) {
-            await write({
+          const answer = (output: unknown, isError: boolean, artifactIds: string[]) =>
+            write({
               type: "tool.result",
               payload: {
                 callId: executionId,
-                output: redactSecrets(describeToolPayload(result), runSecrets),
-                isError: isFailedToolResult(result),
-                artifactIds: toolArtifactIds(result),
+                output: redactSecrets(describeToolPayload(output), runSecrets),
+                isError,
+                artifactIds,
               },
             });
+          const result = await applyTool(name, args, executionId, log, trace).catch(
+            async (error: unknown) => {
+              // An aborted call stays unanswered so a resumed worker replays it.
+              if (!context.signal.aborted) {
+                await answer(error instanceof Error ? error.message : String(error), true, []);
+              }
+              throw error;
+            },
+          );
+          recordToolOutput(executionId, result);
+          if (!isToolPauseResult(result)) {
+            await answer(result, isFailedToolResult(result), toolArtifactIds(result));
           }
           return result;
         };
