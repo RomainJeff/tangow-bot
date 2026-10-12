@@ -143,6 +143,7 @@ import {
   newestVoiceCredentialOrder,
   Prisma,
   parseComputerMode,
+  RESOURCE_NOT_FOUND,
   releaseSpaceDeletionClaim,
   renewSpaceDeletionClaim,
   SPACE_DELETION_CLAIM_TIMEOUT_MS,
@@ -560,8 +561,8 @@ export function createRouter(deps: RouterDeps) {
       try {
         return await next();
       } catch (error) {
-        if (error instanceof IsolationError) {
-          throw new ORPCError("NOT_FOUND", { message: error.message, cause: error });
+        if (error instanceof IsolationError && error.message === RESOURCE_NOT_FOUND) {
+          throw new ORPCError("NOT_FOUND", { message: RESOURCE_NOT_FOUND, cause: error });
         }
         throw error;
       }

@@ -8,6 +8,7 @@ import type {
 } from "@rakazo/contracts";
 import { SessionEntrySchema } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
+import { IsolationError } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
 import type { RouterDeps } from "./router.js";
 import { createRouter } from "./router.js";
@@ -329,5 +330,27 @@ describe("sessions.entries", () => {
 
     expect(status).toBe(404);
     expect(sessionLog.readRun).not.toHaveBeenCalled();
+  });
+});
+
+describe("router errors", () => {
+  it("answers an access denial as not found", async () => {
+    const { recap } = setup({ run: null });
+
+    const { status, body } = await recap("run-of-someone-else");
+
+    expect(status).toBe(404);
+    expect(body.json).toMatchObject({ code: "NOT_FOUND", message: "Resource not found" });
+  });
+
+  it("keeps a server invariant an internal error without its internal text", async () => {
+    const { prisma, recap } = setup();
+    prisma.run.findFirst.mockRejectedValueOnce(new IsolationError("Bot is missing its thread"));
+
+    const { status, body } = await recap("run-1");
+
+    expect(status).toBe(500);
+    expect(body.json).toMatchObject({ code: "INTERNAL_SERVER_ERROR" });
+    expect(JSON.stringify(body)).not.toContain("missing its thread");
   });
 });
