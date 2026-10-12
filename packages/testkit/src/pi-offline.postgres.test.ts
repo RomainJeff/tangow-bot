@@ -113,8 +113,9 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
             const result = request.messages.findLast((message) => message.role === "tool");
             expect(result?.tool_call_id).toBe("journey-delegate");
           },
-          response: { type: "text", text: "Saved and checked." },
+          response: reply("Saved and checked."),
         },
+        DONE,
       ],
       async ({ prisma, send, log }) => {
         const sent = await send("Save hello, then have a helper check it.");
@@ -129,7 +130,9 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
           "tool.result",
           "tool.call",
           "subagent",
+          "tool.call",
           "assistant.text",
+          "tool.result",
           "run.finished",
         ]);
         expect(parent.map((entry) => entry.parentId)).toEqual([
@@ -264,8 +267,9 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
               /^Subagent failed: .*injected subagent entry failure/s,
             );
           },
-          response: { type: "text", text: "The helper failed." },
+          response: reply("The helper failed."),
         },
+        DONE,
       ],
       ({ prisma, send, log }) =>
         withEntryFaults(prisma, 1, async () => {
@@ -279,7 +283,9 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
             "run.started",
             "tool.call",
             "subagent",
+            "tool.call",
             "assistant.text",
+            "tool.result",
             "run.finished",
           ]);
           expect(payloadOf(subagent)).toMatchObject({
@@ -313,8 +319,9 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
             const result = request.messages.findLast((message) => message.role === "tool");
             expect(String(result?.content)).toMatch(failure);
           },
-          response: { type: "text", text: "The helper failed." },
+          response: reply("The helper failed."),
         },
+        DONE,
       ],
       ({ prisma, send, log }) =>
         withEntryFaults(prisma, 2, async () => {
@@ -327,7 +334,9 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
             "run.started",
             "tool.call",
             "tool.result",
+            "tool.call",
             "assistant.text",
+            "tool.result",
             "run.finished",
           ]);
           expect(payloadOf(parent[3])).toMatchObject({
@@ -368,7 +377,8 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
         },
         { expect() {}, response: spawn("You are Scout.") },
         { expect() {}, response: spawn(EDITED_INSTRUCTIONS) },
-        { expect() {}, response: { type: "text", text: "Saved the key and created Scout." } },
+        { expect() {}, response: reply("Saved the key and created Scout.") },
+        DONE,
       ],
       async ({ app, cookie, bot, prisma, send, log }) => {
         const sent = await send("Save my API key, then create Scout.");
@@ -406,7 +416,9 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
           ["tool.call", "journey-spawn", undefined],
           ["assistant.text", undefined, undefined],
           ["tool.result", "journey-spawn", expect.any(String)],
+          ["tool.call", "journey-reply", undefined],
           ["assistant.text", undefined, undefined],
+          ["tool.result", "journey-reply", expect.any(String)],
           ["run.finished", undefined, undefined],
         ]);
         const spawnCalls = entries.filter(
@@ -444,7 +456,8 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
             arguments: { name: "Scout", instructions: "You are Scout.", computer_mode: "team" },
           },
         },
-        { expect() {}, response: { type: "text", text: "I will not create Scout." } },
+        { expect() {}, response: reply("I will not create Scout.") },
+        DONE,
       ],
       async ({ app, cookie, bot, prisma, send, log }) => {
         const sent = await send("Create a bot named Scout.");
@@ -470,7 +483,9 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
           ["effect.requested", undefined],
           ["tool.result", "paused: awaiting approval"],
           ["effect.resolved", "denied"],
+          ["tool.call", undefined],
           ["assistant.text", undefined],
+          ["tool.result", expect.any(String)],
           ["run.finished", "completed"],
         ]);
       },
@@ -538,14 +553,16 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
             arguments: { path: "notes/plan.txt", content: "plan" },
           },
         },
+        { expect() {}, response: reply("Wrote the plan.") },
         {
           async expect() {
             finalAsked();
             await answered;
           },
-          response: { type: "text", text: "Wrote the plan." },
+          response: { type: "text", text: "" },
         },
-        { expect() {}, response: { type: "text", text: "Added the budget." } },
+        { expect() {}, response: reply("Added the budget.") },
+        DONE,
       ],
       async ({ prisma, send, log }) => {
         const first = await send("Write the plan.");
@@ -580,11 +597,15 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
           "run.started",
           "tool.call",
           "tool.result",
-          "user:true",
+          "tool.call",
           "assistant.text",
+          "tool.result",
+          "user:true",
           "run.finished",
           "run.started",
+          "tool.call",
           "assistant.text",
+          "tool.result",
           "run.finished",
         ]);
         expect(payloadOf(chain.findLast((entry) => entry.type === "run.started")).trigger).toEqual({
@@ -612,7 +633,8 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
             },
           },
         },
-        { expect() {}, response: { type: "text", text: "Saved the skill." } },
+        { expect() {}, response: reply("Saved the skill.") },
+        DONE,
       ],
       async ({ send, log }) => {
         const sent = await send("Save a skill for the weekly digest.");
@@ -629,7 +651,9 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
             ["run.started", undefined],
             ["tool.call", "journey-skill"],
             ["tool.result", "journey-skill"],
+            ["tool.call", "journey-reply"],
             ["assistant.text", undefined],
+            ["tool.result", "journey-reply"],
             ["run.finished", undefined],
             ["skill.learnt", "learned"],
           ]);
@@ -653,11 +677,12 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
             response: { type: "tool", id, name: "skill_search", arguments: { query: "table" } },
           }),
         ),
+        { expect() {}, response: reply("Booked the table.") },
         {
           expect(request) {
             exchange = request;
           },
-          response: { type: "text", text: "Booked the table." },
+          response: { type: "text", text: "" },
         },
         {
           expect(request) {
@@ -665,7 +690,7 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
             const nudge = turnsOf(request.messages);
             expect(nudge.calls).toEqual(said.calls);
             expect(nudge.outputs).toEqual(said.outputs);
-            expect(nudge.outputs.map(([id]) => id)).toEqual(calls);
+            expect(nudge.outputs.map(([id]) => id)).toEqual([...calls, "journey-reply"]);
             expect(nudge.texts.slice(0, -1)).toEqual([
               ...said.texts,
               ["assistant", "Booked the table."],
@@ -718,7 +743,8 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
   it("keeps a routine's steps out of the next person's history, which reads its start and its words", async () => {
     await journey(
       [
-        { expect() {}, response: { type: "text", text: "Hello." } },
+        { expect() {}, response: reply("Hello.", "journey-hello") },
+        DONE,
         {
           expect() {},
           response: {
@@ -728,17 +754,23 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
             arguments: { path: "notes/brief.txt", content: "brief" },
           },
         },
-        { expect() {}, response: { type: "text", text: "Saved the brief." } },
+        { expect() {}, response: reply("Saved the brief.", "journey-brief") },
+        DONE,
         {
           expect(request) {
             const history = JSON.stringify(request.messages);
             expect(history).toContain('[context] The routine \\"Morning brief\\" started');
             expect(history).toContain("Saved the brief.");
             expect(history).not.toContain("journey-routine-write");
-            expect(request.messages.some((message) => message.role === "tool")).toBe(false);
+            expect(
+              request.messages.flatMap((message) =>
+                message.role === "tool" ? [message.tool_call_id] : [],
+              ),
+            ).toEqual(["journey-hello"]);
           },
-          response: { type: "text", text: "It is in notes/brief.txt." },
+          response: reply("It is in notes/brief.txt.", "journey-where"),
         },
+        DONE,
       ],
       async ({ app, cookie, bot, prisma, send, log }) => {
         await (await send("Hi.")).settled("completed");
@@ -769,19 +801,25 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
           "run.started",
           "tool.call",
           "tool.result",
+          "tool.call",
           "assistant.text",
+          "tool.result",
           "run.finished",
         ]);
         expect(await types(asked.sessionId)).toEqual([
           "user.message",
           "run.started",
+          "tool.call",
           "assistant.text",
+          "tool.result",
           "run.finished",
           "routine.started",
           "routine.finished",
           "user.message",
           "run.started",
+          "tool.call",
           "assistant.text",
+          "tool.result",
           "run.finished",
         ]);
       },
@@ -835,6 +873,14 @@ const DELEGATE = {
   name: "run_subagent",
   arguments: { name: "checker", task: "Say checked." },
 } as const;
+
+/** What the model tells the person, which only message_user carries. */
+function reply(message: string, id = "journey-reply") {
+  return { type: "tool", id, name: "message_user", arguments: { message } } as const;
+}
+
+/** The model's turn after its message_user call, with nothing left to say. */
+const DONE: ModelEmulatorStep = { expect() {}, response: { type: "text", text: "" } };
 
 /** Fails a helper's first text entry and the first subagent entry, once each, at the database. */
 async function withEntryFaults(
