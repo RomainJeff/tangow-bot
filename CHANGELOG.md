@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-10-12
+
+#### Changed
+
+- A bot's messages are no longer cut off at 500 characters, on web, desktop and iPhone, so a long answer arrives whole instead of truncated or split into several messages.
+- On web, desktop and iPhone, a bot no longer streams its working text live or posts it as separate messages while it works; you see only what it sends you on purpose, its questions and its final reply.
+
 ### 2026-10-11
 
 #### Added

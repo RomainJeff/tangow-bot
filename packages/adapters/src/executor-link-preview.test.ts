@@ -415,6 +415,36 @@ describe("link previews of a run (CA 13, CA 14, CA 70, CA 72)", () => {
     );
   });
 
+  it("shows only message_user and the final reply, never the narration around tools", async () => {
+    const f = fixture({
+      trigger: "user",
+      async *runtimeRun(request) {
+        yield { type: "text", text: "Let me check the logs first. " };
+        yield { type: "tool", name: "message_user", args: {}, executionId: "call-1" };
+        await request.executeTool!("message_user", { message: "Found it." }, "call-1");
+        yield { type: "text", text: "Now writing the summary. " };
+        yield { type: "tool", name: "web_search", args: {}, executionId: "call-2" };
+        yield { type: "text", text: "All fixed." };
+        yield {
+          type: "done",
+          text: "Let me check the logs first. Now writing the summary. All fixed.",
+        };
+      },
+    });
+
+    await f.run();
+
+    const finalBlocks = f.finalizeRun.mock.calls.at(-1)![0].blocks ?? [];
+    const shown = [...f.messages.flatMap((message) => message.blocks), ...finalBlocks]
+      .flatMap((block) => (block.kind === "text" ? [block.text] : []))
+      .join("|");
+    expect(shown).toBe("Found it.|All fixed.");
+    const streamed = (f.appended.mock.calls as unknown as Array<[{ type: string }]>).filter(
+      ([event]) => event.type === "thread.progress",
+    );
+    expect(streamed).toEqual([]);
+  });
+
   it("pushes a finished reply's words without its markdown", async () => {
     const f = fixture({
       trigger: "user",

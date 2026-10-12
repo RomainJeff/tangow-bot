@@ -281,17 +281,13 @@ export const builtinAgentTools: ConnectorTool[] = [
 other tools’ output are not shown to them.
 
 Report useful progress during work and deliver the outcome before
-finishing. Avoid messages that merely narrate internal operations.
-
-HARD LIMIT: each message is cut off silently at 500 characters, so keep it short`,
+finishing. Avoid messages that merely narrate internal operations.`,
     inputSchema: {
       type: "object",
       properties: {
         message: {
           type: "string",
-          maxLength: 500,
-          description:
-            "Short user-visible message in Markdown, not the final answer; longer text is silently truncated.",
+          description: "User-visible message in Markdown.",
         },
       },
       required: ["message"],

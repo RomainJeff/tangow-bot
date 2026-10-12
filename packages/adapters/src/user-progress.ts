@@ -5,26 +5,6 @@ import {
 } from "@rakazo/contracts";
 import { isToolActivityBlock } from "@rakazo/core";
 
-/** Keep mid-turn progress beats short; prefer a few high-signal updates. */
-export const USER_PROGRESS_MESSAGE_MAX_LENGTH = 500;
-
-export function clampUserProgressMessage(text: string): string {
-  const trimmed = text.trim();
-  if (!trimmed) return "";
-  if (trimmed.length <= USER_PROGRESS_MESSAGE_MAX_LENGTH) return trimmed;
-  return `${trimmed.slice(0, USER_PROGRESS_MESSAGE_MAX_LENGTH - 1).trimEnd()}…`;
-}
-
-/**
- * True when the raw text a caller tried to post as a mid-turn progress update
- * would not fit and got cut off by clampUserProgressMessage. Callers should
- * surface this back to the model (it gets no other signal that its message
- * was mangled) rather than reporting a silent success.
- */
-export function isProgressMessageTruncated(text: string): boolean {
-  return text.trim().length > USER_PROGRESS_MESSAGE_MAX_LENGTH;
-}
-
 /**
  * Pull narration text out of the in-progress turn segments so it can be posted
  * as a durable mid-turn message. Tool/step blocks stay for the final publish.
@@ -38,11 +18,6 @@ function midTurnClientNonce(prefix: string, runId: string, index: number): strin
   // Include entropy so a resumed executor turn cannot reuse an earlier nonce
   // (threadId + clientNonce is unique).
   return `${prefix}${runId}:${index}:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 10)}`;
-}
-
-/** Nonce for narration the executor publishes on its own initiative. */
-export function userProgressClientNonce(runId: string, index = 0): string {
-  return midTurnClientNonce(USER_PROGRESS_CLIENT_NONCE_PREFIX, runId, index);
 }
 
 /** Nonce for `message_user` output — text the bot deliberately addressed to the user. */
