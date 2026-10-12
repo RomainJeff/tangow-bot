@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { appendSessionEntryInTransaction } from "@rakazo/db";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createMessagingInboundHandler,
   type MessagingInboundDeps,
@@ -10,6 +11,10 @@ import { inboundDeliveryClientNonce, messagingWakeIdempotencyKey } from "./webho
 vi.mock("../../../packages/db/src/sessions.js", async () =>
   (await import("@rakazo/db/sessions.test-support")).stubbedDbSessions(),
 );
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 const signupPolicy = { signupsEnabled: undefined, signupAllowlist: undefined };
 
@@ -73,14 +78,7 @@ function createDeps(
   };
   const outboundRows: Array<Record<string, unknown>> = [];
   const txMock = {
-    thread: { update: vi.fn(async () => ({ nextMessageSeq: 2 })) },
-    message: {
-      create: vi.fn(async ({ data }: { data: unknown }) => ({
-        id: "note-1",
-        seq: 1,
-        ...(data as object),
-      })),
-    },
+    thread: { findUniqueOrThrow: vi.fn(async () => ({ sessionId: "session-1", botId: "bot-1" })) },
     run: { findUnique: vi.fn(async () => null) },
   };
   const members = overrides.members ?? [];
@@ -813,7 +811,10 @@ describe("createMessagingInboundHandler channel routing", () => {
       ]),
     );
     // in-thread note for the invited owner
-    expect(deps.txMock.message.create).toHaveBeenCalled();
+    expect(appendSessionEntryInTransaction).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ type: "system.note" }),
+    );
     // sender is only invited, not approved: no fan-out yet
     expect(deps.sendUserMessage).not.toHaveBeenCalled();
   });

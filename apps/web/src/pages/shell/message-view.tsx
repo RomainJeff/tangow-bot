@@ -33,7 +33,6 @@ import { AgentSteps } from "../../components/AgentSteps";
 import { ArtifactFileCard } from "../../components/ArtifactFileCard";
 import type { SpawnBotCardEdits } from "../../components/AskCard";
 import { AskCard } from "../../components/AskCard";
-import { CollaborationMarker } from "../../components/ai/CollaborationMarker";
 import { SkillDraftCard } from "../../components/teach/SkillDraftCard";
 import { useDisplayAgentSteps } from "../../lib/agent-steps-pref";
 import type { ArtifactTarget } from "../../lib/artifact-open";
@@ -93,14 +92,7 @@ import {
 
 export function previewMessageText(message: { blocks: readonly MessageBlock[] }): string {
   const text = message.blocks
-    .map((block) =>
-      block.kind === "text" ||
-      block.kind === "channel_message" ||
-      block.kind === "bot_message_sent" ||
-      block.kind === "bot_message_received"
-        ? block.text
-        : "",
-    )
+    .map((block) => (block.kind === "text" || block.kind === "channel_message" ? block.text : ""))
     .filter(Boolean)
     .join(" ")
     .trim();
@@ -140,7 +132,6 @@ export const MessageView = memo(function MessageView({
   showAvatar,
   onAnswer,
   onOpenBot,
-  onOpenPeerMessages,
   speakerName,
   memberName,
   peerBot,
@@ -173,7 +164,6 @@ export const MessageView = memo(function MessageView({
   showAvatar: boolean;
   onAnswer?: (text: string, edits?: SpawnBotCardEdits) => Promise<void>;
   onOpenBot: (botId: string) => void;
-  onOpenPeerMessages: (peer: { peerBotId: string; peerBotName: string }) => void;
   speakerName?: string;
   memberName?: (botId: string | undefined) => string | undefined;
   peerBot: (
@@ -378,23 +368,6 @@ export const MessageView = memo(function MessageView({
               {block.text}
             </Interstitial>
           </div>
-        );
-      }
-      if (block.kind === "bot_message_sent" || block.kind === "bot_message_received") {
-        const sent = block.kind === "bot_message_sent";
-        const peer = sent ? block.toBotName : block.fromBotName;
-        const peerBotId = sent ? block.toBotId : block.fromBotId;
-        const label = sent ? t`Messaged ${peer}` : t`Message from ${peer}`;
-        const self = botId;
-        const pair = sent ? [self, peerBotId] : [peerBotId, self];
-        return (
-          <CollaborationMarker
-            key={i}
-            ariaLabel={label}
-            bots={pair.filter((botId): botId is string => Boolean(botId)).map(avatarOf)}
-            label={label}
-            onClick={() => onOpenPeerMessages({ peerBotId, peerBotName: peer })}
-          />
         );
       }
       if (block.kind === "channel_message") {

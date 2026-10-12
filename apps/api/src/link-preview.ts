@@ -135,23 +135,24 @@ export async function previewLinkForComposer(
 }
 
 /**
- * `messages.removeLinkPreview`: swaps the card for the removal marker under the thread lock,
- * deletes the card image, and tells every open surface. Calling it again changes nothing and
- * emits nothing. A message outside the actor's own threads is the usual isolation error.
+ * `messages.removeLinkPreview`: removes the message's card under the thread lock, deletes the card
+ * image, and tells every open surface. Calling it again changes nothing and emits nothing. A
+ * message outside the actor's own threads is the usual isolation error.
  */
 export async function removeMessageLinkPreview(
   deps: LinkPreviewApiDeps,
   actor: Actor,
   input: { messageId: string },
 ): Promise<void> {
-  const message = await deps.prisma.message.findFirst({
-    where: { id: input.messageId, thread: writableThread(actor) },
-    select: { id: true, threadId: true },
+  const message = await deps.prisma.sessionEntry.findFirst({
+    where: { id: input.messageId, session: { kind: "thread", thread: writableThread(actor) } },
+    select: { id: true, session: { select: { threadId: true } } },
   });
-  if (!message) throw new IsolationError();
+  const threadId = message?.session.threadId;
+  if (!message || !threadId) throw new IsolationError();
   const removed = await removeLinkPreviewBlock(deps.prisma, {
     spaceId: actor.spaceId,
-    threadId: message.threadId,
+    threadId,
     messageId: message.id,
   });
   if (removed.outcome === "gone") throw new IsolationError();
@@ -161,7 +162,7 @@ export async function removeMessageLinkPreview(
     actor,
     removed.artifacts.map((artifact) => artifact.storageKey),
   );
-  await deps.events.notify(message.threadId, removed.seq).catch((error) => {
+  await deps.events.notify(threadId, removed.seq).catch((error) => {
     getLogger().error("link preview removal realtime notification", error);
   });
 }

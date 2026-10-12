@@ -1,5 +1,5 @@
 import * as z from "zod";
-import { ProductEventSchema, ThreadMessageSchema } from "./events.js";
+import { ProductEventSchema } from "./events.js";
 import {
   AVATAR_SHAPE_COUNT,
   Id,
@@ -1293,12 +1293,12 @@ export const AppBootstrapSchema = z.object({
 export type AppBootstrap = z.infer<typeof AppBootstrapSchema>;
 
 export const ExportManifestSchema = z.object({
-  version: z.literal(1),
+  version: z.literal(2),
   exportedAt: z.string(),
   bot: BotSchema.pick({ name: true, title: true, description: true, instructions: true }),
   memory: z.array(z.object({ path: z.string(), content: z.string() })),
   routines: z.array(RoutineSchema.pick({ name: true, prompt: true, crons: true, timezone: true })),
   files: z.array(z.object({ path: z.string(), content: z.string() })),
-  history: z.array(ThreadMessageSchema),
+  history: z.array(ThreadEntrySchema),
 });
 export type ExportManifest = z.infer<typeof ExportManifestSchema>;

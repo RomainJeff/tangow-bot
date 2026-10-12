@@ -80,7 +80,6 @@ function fixture(options: { taskPrompt?: string } = {}) {
         groupId: null,
       })),
     },
-    message: { findMany: vi.fn(async () => []) },
     task: {
       findUniqueOrThrow: vi.fn(async () => ({ id: run.taskId, prompt: taskPrompt })),
     },

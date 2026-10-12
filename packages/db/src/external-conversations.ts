@@ -6,7 +6,7 @@ import {
 } from "@rakazo/contracts";
 import type { PrismaClient } from "./client.js";
 import { IsolationError } from "./scope.js";
-import { previewFromBlocks } from "./thread-listing.js";
+import { sessionPreviews } from "./thread-listing.js";
 
 export function createExternalConversationRepos(prisma: PrismaClient) {
   return {
@@ -36,20 +36,14 @@ export function createExternalConversationRepos(prisma: PrismaClient) {
             take: 100,
             select: { senderId: true, senderName: true },
           },
-          thread: {
-            select: {
-              id: true,
-              unread: true,
-              messages: {
-                orderBy: { seq: "desc" },
-                take: 1,
-                select: { blocks: true },
-              },
-            },
-          },
+          thread: { select: { id: true, unread: true, sessionId: true } },
         },
         orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
       });
+      const previews = await sessionPreviews(
+        prisma,
+        conversations.flatMap((conversation) => conversation.thread?.sessionId ?? []),
+      );
       return conversations.map((conversation) => {
         if (!conversation.thread) {
           throw new IsolationError("External conversation is missing its thread");
@@ -75,7 +69,7 @@ export function createExternalConversationRepos(prisma: PrismaClient) {
             ).values(),
           ],
           threadId: conversation.thread.id,
-          preview: previewFromBlocks(conversation.thread.messages[0]?.blocks),
+          preview: previews.get(conversation.thread.sessionId) ?? "",
           unread: conversation.thread.unread,
           updatedAt: conversation.updatedAt.toISOString(),
         };

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { ComposioEmulator, FakeSandboxProvider } from "@rakazo/adapters";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { sessionCookieHeader } from "./index.js";
+import { latestCard, sessionCookieHeader } from "./index.js";
 import { type ModelEmulatorStep, startModelEmulator } from "./model-emulator.js";
 
 type App = { request: (input: string, init?: RequestInit) => Promise<Response> };
@@ -181,15 +181,8 @@ describe.skipIf(!databaseAvailable)("offline Pi computer approval", () => {
           status: "intended",
           request: approvedArgs,
         });
-        const card = await handles.prisma.message.findFirstOrThrow({
-          where: { runId: sent.runId, role: "bot" },
-          orderBy: { seq: "desc" },
-        });
-        expect(card.blocks).toEqual(
-          expect.arrayContaining([
-            expect.objectContaining({ kind: "ask", approvalEffectId: effects[0]!.id }),
-          ]),
-        );
+        const card = await latestCard(handles.prisma, sent.runId);
+        expect(card.block).toMatchObject({ kind: "ask", approvalEffectId: effects[0]!.id });
         await rpc(handles.app, cookie, "threads/answer", {
           botId: bot.id,
           runId: sent.runId,

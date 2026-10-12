@@ -2,6 +2,7 @@ import { copyFile, lstat, mkdir, readFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import path from "node:path";
 import type { DesktopLocalStackState } from "@rakazo/contracts";
+import { MIGRATION_WAIT_TIMEOUT_S } from "@rakazo/contracts/migrate-wait";
 import {
   classifyDockerFailure,
   composeSupportsWaitTimeout,
@@ -22,7 +23,6 @@ export const STACK_WEB_URL_FILE = ".desktop-web-url";
 export const STACK_TOKEN_FILE = ".desktop-stack-token";
 export const STACK_OUTPUT_LINES = 20;
 export const STACK_HEALTH_TIMEOUT_MS = 120_000;
-export const COMPOSE_WAIT_TIMEOUT_S = 300;
 
 export async function readStackWebUrl(dir: string, fallback: string): Promise<string> {
   const raw = await readPrivateFile(path.join(dir, STACK_WEB_URL_FILE), 128);
@@ -53,7 +53,7 @@ const HEALTH_POLL_INTERVAL_MS = 2_000;
 const COMPOSE_VERSION_TIMEOUT_MS = 15_000;
 const DOCKER_INFO_TIMEOUT_MS = 20_000;
 const PULL_TIMEOUT_MS = 30 * 60_000;
-const UP_TIMEOUT_MS = (COMPOSE_WAIT_TIMEOUT_S + 60) * 1_000;
+const UP_TIMEOUT_MS = (MIGRATION_WAIT_TIMEOUT_S + 60) * 1_000;
 const LOGS_TIMEOUT_MS = 15_000;
 const STOP_TIMEOUT_MS = 90_000;
 const MAX_STACK_TOKEN_BYTES = 1024;
@@ -491,7 +491,7 @@ export class LocalStackController {
 
     this.push({ type: "up-start" });
     const upArgs = composeSupportsWaitTimeout(version.stdout)
-      ? ["up", "-d", "--wait", "--wait-timeout", String(COMPOSE_WAIT_TIMEOUT_S)]
+      ? ["up", "-d", "--wait", "--wait-timeout", String(MIGRATION_WAIT_TIMEOUT_S)]
       : ["up", "-d"];
     await writePrivateFile(path.join(this.deps.stackDir, STACK_WEB_URL_FILE), this.currentWebUrl);
     let up = await this.compose(binary, upArgs, UP_TIMEOUT_MS, signal);

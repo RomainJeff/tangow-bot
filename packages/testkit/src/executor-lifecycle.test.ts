@@ -156,21 +156,20 @@ describeIntegration("run executor lifecycle", () => {
 
     await handles.executor.continueRun(seeded.run.id, "retry-worker");
 
-    const [run, attempt, message] = await Promise.all([
+    const [run, attempt, request] = await Promise.all([
       handles.prisma.run.findUniqueOrThrow({ where: { id: seeded.run.id } }),
       handles.prisma.attempt.findFirstOrThrow({ where: { runId: seeded.run.id } }),
-      handles.prisma.message.findFirstOrThrow({
-        where: { runId: seeded.run.id, role: "bot" },
+      handles.prisma.sessionEntry.findFirstOrThrow({
+        where: { runId: seeded.run.id, type: "effect.requested" },
         orderBy: { seq: "desc" },
       }),
     ]);
     expect(run.status).toBe("waiting_input");
     expect(attempt.status).toBe("waiting_input");
-    expect(message.blocks).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ kind: "ask", approvalEffectId: effect.id, status: "pending" }),
-      ]),
-    );
+    expect(request.payload).toMatchObject({
+      effectId: effect.id,
+      card: { kind: "ask", approvalEffectId: effect.id, status: "pending" },
+    });
     expect(handles.connector.records).toHaveLength(recordsBefore);
   });
 
@@ -203,27 +202,23 @@ describeIntegration("run executor lifecycle", () => {
 
     expect(results.filter((result) => result === false)).toHaveLength(1);
     expect(results.filter(Boolean)).toEqual([{ continuationRunId: null }]);
-    const [run, storedAttempt, task, messages, terminalEvents] = await Promise.all([
+    const [run, storedAttempt, task, entries, terminalEvents] = await Promise.all([
       handles.prisma.run.findUniqueOrThrow({ where: { id: seeded.run.id } }),
       handles.prisma.attempt.findUniqueOrThrow({ where: { id: attempt.id } }),
       handles.prisma.task.findUniqueOrThrow({ where: { id: seeded.task.id } }),
-      handles.prisma.message.findMany({ where: { runId: seeded.run.id } }),
-      handles.prisma.event.findMany({
-        where: {
-          runId: seeded.run.id,
-          type: { in: ["thread.message.created", "run.completed"] },
-        },
+      handles.prisma.sessionEntry.findMany({
+        where: { runId: seeded.run.id, type: { in: ["assistant.text", "run.finished"] } },
         orderBy: { seq: "asc" },
+      }),
+      handles.prisma.event.findMany({
+        where: { runId: seeded.run.id, type: "run.completed" },
       }),
     ]);
     expect(run).toMatchObject({ status: "completed", leaseOwner: null, leaseExpiresAt: null });
     expect(storedAttempt.status).toBe("completed");
     expect(task.status).toBe("completed");
-    expect(messages).toHaveLength(1);
-    expect(terminalEvents.map((event) => event.type)).toEqual([
-      "thread.message.created",
-      "run.completed",
-    ]);
+    expect(entries.map((entry) => entry.type)).toEqual(["assistant.text"]);
+    expect(terminalEvents).toHaveLength(1);
   });
 
   it("rolls back every terminal write when the atomic commit fails", async () => {
@@ -263,7 +258,7 @@ describeIntegration("run executor lifecycle", () => {
     await expect(
       handles.prisma.task.findUniqueOrThrow({ where: { id: seeded.task.id } }),
     ).resolves.toMatchObject({ status: "queued" });
-    expect(await handles.prisma.message.count({ where: { runId: seeded.run.id } })).toBe(0);
+    expect(await handles.prisma.sessionEntry.count({ where: { runId: seeded.run.id } })).toBe(0);
     expect(await handles.prisma.event.count({ where: { runId: seeded.run.id } })).toBe(0);
   });
 
@@ -326,8 +321,8 @@ describeIntegration("run executor lifecycle", () => {
         expect.objectContaining({ runId: continuationRunId, claimedAt: null }),
       ]),
     );
-    const userMessages = await handles.prisma.message.findMany({
-      where: { threadId: seeded.thread.id, role: "user" },
+    const userMessages = await handles.prisma.sessionEntry.findMany({
+      where: { sessionId: seeded.thread.sessionId, type: "user.message" },
       orderBy: { seq: "asc" },
     });
     expect(userMessages).toHaveLength(2);
@@ -465,7 +460,9 @@ describeIntegration("run executor lifecycle", () => {
       await handles.prisma.steeringMessage.count({ where: { botId: seeded.bot.id, runId: null } }),
     ).toBe(0);
     expect(
-      await handles.prisma.message.count({ where: { threadId: seeded.thread.id, role: "user" } }),
+      await handles.prisma.sessionEntry.count({
+        where: { sessionId: seeded.thread.sessionId, type: "user.message" },
+      }),
     ).toBe(fresh ? 2 : 1);
     if (outcome === "completed") {
       expect(await handles.prisma.steeringMessage.count({ where: { botId: seeded.bot.id } })).toBe(
@@ -516,13 +513,16 @@ describeIntegration("run executor lifecycle", () => {
 
     expect(await handles.prisma.run.count({ where: { threadId: seeded.thread.id } })).toBe(1);
     expect(
-      await handles.prisma.message.count({
-        where: { threadId: seeded.thread.id, clientNonce: steeringInput.clientNonce },
+      await handles.prisma.sessionEntry.count({
+        where: {
+          sessionId: seeded.thread.sessionId,
+          payload: { path: ["clientNonce"], equals: steeringInput.clientNonce },
+        },
       }),
     ).toBe(1);
     await expect(
       handles.prisma.steeringMessage.findFirstOrThrow({
-        where: { botId: seeded.bot.id, message: { threadId: seeded.thread.id } },
+        where: { botId: seeded.bot.id, message: { sessionId: seeded.thread.sessionId } },
       }),
     ).resolves.toMatchObject({ runId: seeded.run.id, claimedAt: null });
   });
@@ -542,13 +542,16 @@ describeIntegration("run executor lifecycle", () => {
 
     expect(await handles.prisma.run.count({ where: { threadId: seeded.thread.id } })).toBe(1);
     expect(
-      await handles.prisma.message.count({
-        where: { threadId: seeded.thread.id, clientNonce: steeringInput.clientNonce },
+      await handles.prisma.sessionEntry.count({
+        where: {
+          sessionId: seeded.thread.sessionId,
+          payload: { path: ["clientNonce"], equals: steeringInput.clientNonce },
+        },
       }),
     ).toBe(1);
     await expect(
       handles.prisma.steeringMessage.findFirstOrThrow({
-        where: { botId: seeded.bot.id, message: { threadId: seeded.thread.id } },
+        where: { botId: seeded.bot.id, message: { sessionId: seeded.thread.sessionId } },
       }),
     ).resolves.toMatchObject({ runId: seeded.run.id });
   });
@@ -618,7 +621,7 @@ describeIntegration("run executor lifecycle", () => {
     expect(await handles.prisma.run.count({ where: { threadId: thread.id } })).toBe(1);
     await expect(
       handles.prisma.steeringMessage.findFirstOrThrow({
-        where: { botId: member.botId, message: { threadId: thread.id } },
+        where: { botId: member.botId, message: { sessionId: thread.sessionId } },
       }),
     ).resolves.toMatchObject({ runId: activeRun.id, claimedAt: null });
 
@@ -689,12 +692,10 @@ describeIntegration("run executor lifecycle", () => {
       clientNonce: `private-channel-${stamp}`,
     });
     expect(privateSend.runId).toBe(seeded.run.id);
-    const privateMessage = await handles.prisma.message.findUniqueOrThrow({
+    const privateMessage = await handles.prisma.sessionEntry.findFirstOrThrow({
       where: {
-        threadId_clientNonce: {
-          threadId: seeded.thread.id,
-          clientNonce: `private-channel-${stamp}`,
-        },
+        sessionId: seeded.thread.sessionId,
+        payload: { path: ["clientNonce"], equals: `private-channel-${stamp}` },
       },
     });
     const publicSend = await events.sendUserMessage({

@@ -103,7 +103,8 @@ const UserMessagePayload = z.object({
 
 const SubagentPayload = z.object({
   callId: z.string().min(1),
-  sessionId: SessionId,
+  /** The helper's own session, absent for a helper from before the log, whose steps were not kept. */
+  sessionId: SessionId.optional(),
   name: z.string(),
   model: RunModel,
   task: z.string(),
@@ -138,12 +139,24 @@ const target = { target: EntryId };
 const card = AskBlock.optional();
 
 const EntryShapes = z.discriminatedUnion("type", [
-  entry("user.message", UserMessagePayload.extend(risen)),
+  entry(
+    "user.message",
+    UserMessagePayload.extend({
+      ...risen,
+      /** The bots a group send addressed, in order: a replay of the send lists their runs so. */
+      targets: z.array(z.string().min(1)).optional(),
+    }),
+  ),
   runEntry(
     "assistant.text",
     BlocksPayload.extend({
-      /** Words the bot addressed to the person through `message_user`, kept even in a hidden peer run. */
+      /**
+       * Words the bot addressed to the person through `message_user`, or a block they must act
+       * on: kept even in a hidden peer run.
+       */
       toPerson: z.literal(true).optional(),
+      /** Sent before the run's final reply: narration or `message_user` words. */
+      midTurn: z.literal(true).optional(),
     }),
   ),
   runEntry("assistant.reasoning", z.object({ text: z.string() })),
@@ -217,8 +230,8 @@ const EntryShapes = z.discriminatedUnion("type", [
     "bot.message.received",
     z.object({
       from: Peer,
-      fromSessionId: SessionId,
-      fromEntryId: EntryId,
+      fromSessionId: SessionId.optional(),
+      fromEntryId: EntryId.optional(),
       text: z.string(),
       intent: BotMessageIntent,
       hop: BotMessageHop,
@@ -464,9 +477,23 @@ export function isCardState<E extends ThreadEntry>(
   return CARD_STATES.has(entry.type);
 }
 
-export const BLOCK_KINDS_NEEDING_THE_PERSON: ReadonlySet<MessageBlock["kind"]> = new Set([
+/**
+ * The blocks of an `assistant.text` the person must act on: a card to approve, an app or a server
+ * to connect, a draft to save, a screen to take over. Whatever run writes one, it reaches them. A
+ * question or a choice has an entry of its own.
+ */
+const BLOCK_KINDS_NEEDING_THE_PERSON: ReadonlySet<MessageBlock["kind"]> = new Set([
+  "card",
+  "app_connect",
+  "connect",
   "mcp_approval",
+  "skill_draft",
+  "computer",
 ] satisfies MessageBlock["kind"][]);
+
+export function needsThePerson(blocks: readonly MessageBlock[]): boolean {
+  return blocks.some((block) => BLOCK_KINDS_NEEDING_THE_PERSON.has(block.kind));
+}
 
 type EntryBody = {
   [T in SessionEntryType]: Pick<SessionEntryOf<T>, "type" | "payload">;
@@ -477,9 +504,7 @@ type EntryBody = {
  * `assistant.text` holding a block that needs the person, which goes to the person whole.
  */
 export function isRunTrace(entry: EntryBody): boolean {
-  if (entry.type === "assistant.text") {
-    return !entry.payload.blocks.some((block) => BLOCK_KINDS_NEEDING_THE_PERSON.has(block.kind));
-  }
+  if (entry.type === "assistant.text") return !needsThePerson(entry.payload.blocks);
   return RUN_TRACE_TYPES.has(entry.type);
 }
 
@@ -617,7 +642,7 @@ export const ThreadItemSchema = z.discriminatedUnion("kind", [
       text: z.string(),
       intent: BotMessageIntent,
       exchangeId: EntryId,
-      origin: z.object({ sessionId: SessionId, entryId: EntryId }),
+      origin: z.object({ sessionId: SessionId, entryId: EntryId }).optional(),
     }),
   ]),
   z.object({

@@ -2,10 +2,10 @@ import type { SessionEntryDraft } from "@rakazo/adapter-kit";
 import { SessionId } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
 import { RunHistoryWriteError } from "@rakazo/db";
+import type { PgliteDatabase } from "@rakazo/db/pglite.test-support";
+import { applyMigration, migrationNames, openPgliteDatabase } from "@rakazo/db/pglite.test-support";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { runSessionLogConformance } from "./conformance.js";
-import type { PgliteDatabase } from "./pglite.js";
-import { applyMigration, migrationNames, openPgliteDatabase } from "./pglite.js";
 import { PostgresSessionLog } from "./postgres.js";
 
 const SPACE = "space_log";
@@ -265,6 +265,8 @@ describe("PostgresSessionLog", () => {
 
 describe("sessions migration", () => {
   const MIGRATION = "20261011000000_sessions";
+  /** The backfill reads the messages until this drops them; its own test covers it. */
+  const DROP = "20261012000000_drop_messages";
   let database: PgliteDatabase;
 
   beforeAll(async () => {
@@ -299,7 +301,7 @@ describe("sessions migration", () => {
         FROM threads, generate_series(0, 1) AS n WHERE threads.id = 't1';
         UPDATE sessions SET "nextEntrySeq" = 2 WHERE "threadId" = 't1';
       `);
-      for (const name of names.slice(names.indexOf(MIGRATION) + 1)) {
+      for (const name of names.slice(names.indexOf(MIGRATION) + 1, names.indexOf(DROP))) {
         await applyMigration(pglite, name);
         await applyMigration(pglite, name);
       }
@@ -319,9 +321,9 @@ describe("sessions migration", () => {
     expect(runs.map(({ id, sessionId }) => ({ id, sessionId }))).toEqual([
       { id: "r1", sessionId: threads[0]!.sessionId },
     ]);
-    expect(
-      await prisma.message.findMany({ select: { id: true, seq: true, blocks: true } }),
-    ).toEqual([{ id: "m1", seq: 0, blocks: [{ kind: "text", text: "hi" }] }]);
+    expect(await prisma.$queryRaw`SELECT id, seq, blocks FROM messages`).toEqual([
+      { id: "m1", seq: 0, blocks: [{ kind: "text", text: "hi" }] },
+    ]);
   });
 
   it("indexes the entries that rose from a child session by the session they came from", async () => {
@@ -337,11 +339,9 @@ describe("sessions migration", () => {
 
   it("keeps a thread's compaction summary from before the log for the backfill to read", async () => {
     expect(
-      await database.prisma.thread.findUniqueOrThrow({
-        where: { id: "t1" },
-        select: { historyCompactedUpToSeq: true, historyCompactionSummary: true },
-      }),
-    ).toEqual({ historyCompactedUpToSeq: 0, historyCompactionSummary: "Said hi." });
+      await database.prisma.$queryRaw`
+        SELECT "historyCompactedUpToSeq", "historyCompactionSummary" FROM threads WHERE id = 't1'`,
+    ).toEqual([{ historyCompactedUpToSeq: 0, historyCompactionSummary: "Said hi." }]);
   });
 
   it("points a session that already has entries at its newest one, so the next append chains on", async () => {

@@ -234,9 +234,7 @@ describe("contracts", () => {
     expect(appContract.agentSecrets.put).toBeTruthy();
     expect(appContract.agentSecrets.remove).toBeTruthy();
     expect(appContract.notifications.registerPush).toBeTruthy();
-    expect(ProductEventType.options).toContain("thread.message.created");
-    expect(ProductEventType.options).toContain("thread.cleared");
-    expect(ProductEventType.options).toContain("thread.subagent");
+    expect(ProductEventType.options).toContain("session.entry.appended");
     expect(ProductEventType.options).toContain("bot.spawned");
   });
 

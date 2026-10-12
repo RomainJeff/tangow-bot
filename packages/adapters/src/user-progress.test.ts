@@ -6,10 +6,8 @@ import {
   endsWithToolCallBudgetNotice,
   extractNarrationText,
   finalBlocksAfterMidTurnProgress,
-  isUserProgressClientNonce,
   repeatsSentUserText,
   toolCallBudgetNotice,
-  userMessageClientNonce,
 } from "./user-progress.js";
 
 describe("extractNarrationText", () => {
@@ -92,19 +90,6 @@ describe("botMessageOutcomeFromMidTurn", () => {
 
   it("returns null when nothing was posted", () => {
     expect(botMessageOutcomeFromMidTurn("  ", [])).toBeNull();
-  });
-});
-
-describe("isUserProgressClientNonce", () => {
-  it("counts message_user output and narration from earlier runs as mid-turn", () => {
-    const userMessage = userMessageClientNonce("run-1", 1);
-    expect(userMessage.startsWith("user-message:run-1:1:")).toBe(true);
-    expect(userMessageClientNonce("run-1", 1)).not.toBe(userMessage);
-    // Transcript rebuilders (executor resume, job reconciler) want both kinds.
-    expect(isUserProgressClientNonce(userMessage)).toBe(true);
-    expect(isUserProgressClientNonce("user-progress:run-1:0:x")).toBe(true);
-    expect(isUserProgressClientNonce(null)).toBe(false);
-    expect(isUserProgressClientNonce("other")).toBe(false);
   });
 });
 

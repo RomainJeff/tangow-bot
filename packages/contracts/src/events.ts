@@ -5,21 +5,14 @@ import { LinkPreviewBlock } from "./link-preview.js";
 import { McpTransportSchema } from "./mcp.js";
 
 export const ProductEventType = z.enum([
-  "thread.message.created",
-  "thread.cleared",
-  /** History truncated at payload.fromSeq so the user can resend an edited message. */
-  "thread.rewound",
-  "thread.message.updated",
   "thread.progress",
   "thread.artifact",
   "thread.ask",
   "thread.choice",
   "thread.meta",
   "thread.computer",
-  "thread.subagent",
   "run.started",
   "run.checkpointed",
-  "run.waiting_input",
   "run.completed",
   "run.failed",
   "run.cancelled",
@@ -36,7 +29,6 @@ export const ProductEventType = z.enum([
   "skill.draft.created",
   "skill.saved",
   "effect.recorded",
-  "agent.tool.called",
   "agent.tool.completed",
   /** A run followed a skill: read it, was forced or cited to it, or opened its files; payload { name, via }. */
   "agent.skill.used",
@@ -291,15 +283,6 @@ export const MessageBlock = z.discriminatedUnion("kind", [
     durationMs: z.number().int().nonnegative().optional(),
   }),
   z.object({
-    kind: z.literal("subagent"),
-    agentId: z.string(),
-    name: z.string(),
-    task: z.string(),
-    status: z.enum(["running", "completed", "failed"]),
-    progress: z.string().optional(),
-    result: z.string().optional(),
-  }),
-  z.object({
     kind: z.literal("child_bot"),
     botId: z.string(),
     name: z.string(),
@@ -352,26 +335,6 @@ export const MessageBlock = z.discriminatedUnion("kind", [
     hop: z.number().int().nonnegative().optional(),
   }),
   z.object({
-    /** Shown in the sending bot's own chat, so the user can see what it sent. */
-    kind: z.literal("bot_message_sent"),
-    toBotId: Id,
-    toBotName: z.string(),
-    text: z.string(),
-    intent: BotMessageIntent.optional(),
-  }),
-  z.object({
-    /** Delivered into the receiving bot's own chat as the prompt that woke it. */
-    kind: z.literal("bot_message_received"),
-    fromBotId: Id,
-    fromBotName: z.string(),
-    text: z.string(),
-    intent: BotMessageIntent.optional(),
-    /** Sender-thread echo this delivery answers, when applicable. */
-    returnToMessageId: Id.optional(),
-    /** Links in a bot-started chain; absent when a person started it. */
-    hop: z.number().int().nonnegative().optional(),
-  }),
-  z.object({
     /** A sub-bot's routine run, traced in its own thread instead of a free closing text.
         Driven by the run lifecycle (queued/running/completed/failed/cancelled), not by
         model-authored narration; `headline`/`digest` are untrusted content, rendered as
@@ -417,15 +380,6 @@ export const ProductEventSchema = z.object({
   payload: z.record(z.string(), z.unknown()),
 });
 export type ProductEvent = z.infer<typeof ProductEventSchema>;
-
-/** clientNonce prefix for mid-turn narration messages the executor publishes on its own
- * initiative. Single source of truth (adapters user-progress imports this). */
-export const USER_PROGRESS_CLIENT_NONCE_PREFIX = "user-progress:";
-
-/** clientNonce prefix for `message_user` output: text the bot deliberately addressed to the
- * user. Distinct from narration because a delegated (peer) run only surfaces this one.
- * Single source of truth (adapters user-progress + core message-visibility import this). */
-export const USER_MESSAGE_CLIENT_NONCE_PREFIX = "user-message:";
 
 /**
  * A block whose `kind` this build does not know must not take the whole conversation down

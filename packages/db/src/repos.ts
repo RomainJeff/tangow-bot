@@ -6,17 +6,12 @@ import {
   type MessageBlock,
   type SpaceBot,
 } from "@rakazo/contracts";
-import { userVisibleMessages } from "@rakazo/core";
 import type { PrismaClient } from "./client.js";
 import { type ComputerMode, ensureComputerRecord, parseComputerMode } from "./computers.js";
 import { createThreadMessageInTransaction } from "./messages.js";
-import { hiddenPeerRunIds } from "./peer-runs.js";
 import { BotSectionNameConflictError, IsolationError } from "./scope.js";
 import { lockSpaceForContentCreation } from "./spaces.js";
-import { activeRunSelection, previewFromBlocks } from "./thread-listing.js";
-
-/** Newest messages loaded for sidebar preview; enough to skip a short peer-run tail. */
-const SIDEBAR_PREVIEW_MESSAGE_WINDOW = 16;
+import { activeRunSelection, sessionPreviews } from "./thread-listing.js";
 
 function isUniqueViolation(error: unknown): boolean {
   return Boolean(error && typeof error === "object" && "code" in error && error.code === "P2002");
@@ -141,20 +136,15 @@ export function createRepos(prisma: PrismaClient) {
         pinned: true,
         sectionId: true,
         updatedAt: true,
-        thread: {
-          select: {
-            unread: true,
-            messages: {
-              orderBy: { seq: "desc" },
-              take: 1,
-              select: { blocks: true },
-            },
-          },
-        },
+        thread: { select: { unread: true, sessionId: true } },
         runs: activeRunSelection,
       },
       orderBy: [{ pinned: "desc" }, { position: "asc" }, { createdAt: "asc" }],
     });
+    const previews = await sessionPreviews(
+      prisma,
+      bots.flatMap((bot) => bot.thread?.sessionId ?? []),
+    );
     return bots.map((bot) => {
       if (!bot.thread) throw new IsolationError("Bot is missing its thread");
       return {
@@ -168,7 +158,7 @@ export function createRepos(prisma: PrismaClient) {
         pinned: bot.pinned,
         sectionId: bot.sectionId,
         unread: bot.thread.unread,
-        preview: previewFromBlocks(bot.thread.messages[0]?.blocks),
+        preview: previews.get(bot.thread.sessionId) ?? "",
         status: bot.runs[0]?.status ?? "idle",
         updatedAt: bot.updatedAt.toISOString(),
       };
@@ -293,63 +283,22 @@ export function createRepos(prisma: PrismaClient) {
           archivedAt: options.archived ? { not: null } : null,
         },
         include: {
-          thread: {
-            include: {
-              messages: { orderBy: { seq: "desc" }, take: SIDEBAR_PREVIEW_MESSAGE_WINDOW },
-            },
-          },
+          thread: true,
           runs: activeRunSelection,
           computer: { select: { scope: true } },
         },
         orderBy: [{ pinned: "desc" }, { position: "asc" }, { createdAt: "asc" }],
       });
-      const candidateRunIds = [
-        ...new Set(
-          bots.flatMap((bot) =>
-            (bot.thread?.messages ?? []).flatMap((message) =>
-              message.runId ? [message.runId] : [],
-            ),
-          ),
+      const previews = await sessionPreviews(
+        prisma,
+        bots.flatMap((bot) => bot.thread?.sessionId ?? []),
+      );
+      return bots.map((bot) =>
+        mapBot(
+          bot,
+          (bot.thread && previews.get(bot.thread.sessionId)) ?? "",
+          bot.runs[0]?.status ?? "idle",
         ),
-      ];
-      const peerRunIds = await hiddenPeerRunIds(prisma, candidateRunIds);
-      // Cache negative results too; ordinary runs were already checked in the batch above.
-      const checkedRunIds = new Set(candidateRunIds);
-      return Promise.all(
-        bots.map(async (bot) => {
-          let messages = bot.thread?.messages ?? [];
-          let preview = "";
-          for (let attempt = 0; attempt < 5; attempt++) {
-            const windowRunIds = [
-              ...new Set(messages.flatMap((message) => (message.runId ? [message.runId] : []))),
-            ].filter((runId) => !checkedRunIds.has(runId));
-            if (windowRunIds.length > 0) {
-              for (const runId of await hiddenPeerRunIds(prisma, windowRunIds)) {
-                peerRunIds.add(runId);
-              }
-              for (const runId of windowRunIds) checkedRunIds.add(runId);
-            }
-            const visible = userVisibleMessages(
-              messages.map((message) => ({
-                ...message,
-                blocks: message.blocks as MessageBlock[],
-                runId: message.runId ?? undefined,
-              })),
-              { knownPeerRunIds: peerRunIds, includeDelegatedReplyText: false },
-            );
-            preview = previewFromBlocks(visible[0]?.blocks);
-            if (preview || messages.length === 0 || !bot.thread || attempt === 4) break;
-            const oldest = messages[messages.length - 1];
-            if (!oldest) break;
-            messages = await prisma.message.findMany({
-              where: { threadId: bot.thread.id, seq: { lt: oldest.seq } },
-              orderBy: { seq: "desc" },
-              take: SIDEBAR_PREVIEW_MESSAGE_WINDOW,
-            });
-            if (messages.length === 0) break;
-          }
-          return mapBot(bot, preview, bot.runs[0]?.status ?? "idle");
-        }),
       );
     },
 
@@ -384,11 +333,7 @@ export function createRepos(prisma: PrismaClient) {
         modelProvider?: string | null;
         modelId?: string | null;
         thinkingLevel?: string | null;
-        initialMessage?: {
-          role: "user" | "bot" | "system";
-          blocks: MessageBlock[];
-          runId?: string;
-        };
+        initialMessage?: { role: "user" | "system"; blocks: MessageBlock[] };
       },
     ): Promise<Bot> {
       let color = input.color;

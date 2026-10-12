@@ -9,15 +9,9 @@ import type { SessionId } from "@rakazo/contracts";
 import type { SkillSourceBlock } from "@rakazo/core";
 import { asSkillAvailability, runStartedByUser, userSkillKey } from "@rakazo/core";
 import type { Prisma, PrismaClient, ThreadEvents } from "@rakazo/db";
-import {
-  appendEventInTransaction,
-  createThreadMessageInTransaction,
-  messageUpdatedPayload,
-} from "@rakazo/db";
+import { threadEventSeq } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 
-/** The clientNonce of a message that carries a run's lines alone. */
-const LINE_ONLY_NONCE_PREFIX = "skill-source:";
 const FINISHED = ["completed", "failed", "cancelled"];
 type SkillChange = SkillSourceBlock["change"];
 /** Each skill write, folded onto what the run already did to that skill. */
@@ -36,10 +30,7 @@ export type SkillLineDeps = {
   prisma: PrismaClient;
   events: Pick<ThreadEvents, "notify">;
   sessionLog: Pick<SessionLog<Prisma.TransactionClient>, "append">;
-  /**
-   * Whether a run that left no message gets one carrying its lines alone. Clients that predate
-   * the line draw such a message as an empty row, so it stays off until they are gone.
-   */
+  /** Whether a run that said nothing still gets its lines, standing alone in a conversation. */
   lineOnlyMessages?: boolean;
 };
 
@@ -110,11 +101,11 @@ async function reachingOtherBots(
 }
 
 /**
- * Puts the line of each skill a finished run changed under the run's last message, the reply or an
- * earlier bubble alike. With `lineOnlyMessages`, a run with no message gets a message of its own,
- * which marks nothing unread: in its conversation when the user started the run, else in the
- * bot's own conversation and only for a skill other bots read. Without it the change shows
- * nowhere. A cancelled run writes its lines too.
+ * Logs the line of each skill a finished run changed after what the run said. With
+ * `lineOnlyMessages`, a run that said nothing gets its lines on their own, which marks nothing
+ * unread: in its conversation when the user started the run, else in the bot's own conversation
+ * and only for a skill other bots read. Without it the change shows nowhere. A cancelled run
+ * writes its lines too.
  */
 export async function writeSkillLines(deps: SkillLineDeps, runId: string): Promise<void> {
   const run = await deps.prisma.run.findUnique({
@@ -129,14 +120,14 @@ export async function writeSkillLines(deps: SkillLineDeps, runId: string): Promi
       trigger: true,
       status: true,
       skillLinesAt: true,
-      sourceMessage: { select: { role: true } },
+      sourceMessage: { select: { type: true } },
     },
   });
   if (!run || !FINISHED.includes(run.status) || run.skillLinesAt) return;
   const all = (await skillLinesByRun(deps.prisma, [run.id])).get(run.id) ?? [];
   const startedByUser = runStartedByUser({
     trigger: run.trigger,
-    sourceRole: run.sourceMessage?.role,
+    sourceRole: run.sourceMessage && (run.sourceMessage.type === "user.message" ? "user" : "bot"),
   });
   const lineOnlyThread = !deps.lineOnlyMessages
     ? undefined
@@ -170,63 +161,23 @@ export async function writeSkillLines(deps: SkillLineDeps, runId: string): Promi
       data: { skillLinesAt: new Date() },
     });
     if (claimed.count === 0 || all.length === 0) return null;
-    const target = (
-      await tx.message.findMany({
-        where: { threadId: run.threadId, runId: run.id, role: "bot" },
-        orderBy: { seq: "asc" },
-        select: {
-          id: true,
-          threadId: true,
-          role: true,
-          blocks: true,
-          botId: true,
-          replyToMessageId: true,
-          replyQuote: true,
-        },
-      })
-    ).at(-1);
-    if (target) {
-      if (!Array.isArray(target.blocks)) return null;
-      const blocks = [
-        ...(target.blocks as Prisma.InputJsonValue[]),
-        ...(all as Prisma.InputJsonValue[]),
-      ];
-      await tx.message.update({ where: { id: target.id }, data: { blocks } });
+    const said = await tx.sessionEntry.findFirst({
+      where: { runId: run.id, type: "assistant.text" },
+      select: { id: true },
+    });
+    if (said) {
       await logLines(tx, run.sessionId, all);
-      // No run id: the run may be cancelled, and a run id makes clients drop its live progress.
-      const event = await appendEventInTransaction(tx, {
-        spaceId: run.spaceId,
-        threadId: target.threadId,
-        botId: target.botId ?? run.botId,
-        type: "thread.message.updated",
-        payload: messageUpdatedPayload(target, blocks),
-      });
-      return { threadId: target.threadId, seq: event.seq };
+      return { threadId: run.threadId, seq: await threadEventSeq(tx, run.threadId) };
     }
     if (!lineOnlyThread) return null;
-    const blocks = startedByUser ? all : await reachingOtherBots(tx, run, all);
-    if (blocks.length === 0) return null;
+    const lines = startedByUser ? all : await reachingOtherBots(tx, run, all);
+    if (lines.length === 0) return null;
     await logLines(
       tx,
       lineOnlyThread.id === run.threadId ? run.sessionId : lineOnlyThread.sessionId,
-      blocks,
+      lines,
     );
-    const message = await createThreadMessageInTransaction(tx, {
-      threadId: lineOnlyThread.id,
-      role: "bot",
-      blocks,
-      botId: run.botId,
-      clientNonce: `${LINE_ONLY_NONCE_PREFIX}${run.id}`,
-      markUnread: false,
-    });
-    const event = await appendEventInTransaction(tx, {
-      spaceId: run.spaceId,
-      threadId: lineOnlyThread.id,
-      botId: run.botId,
-      type: "thread.message.created",
-      payload: { messageId: message.id, role: "bot", blocks },
-    });
-    return { threadId: lineOnlyThread.id, seq: event.seq };
+    return { threadId: lineOnlyThread.id, seq: await threadEventSeq(tx, lineOnlyThread.id) };
   });
   if (written) {
     await deps.events.notify(written.threadId, written.seq).catch((error) => {

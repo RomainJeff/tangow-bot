@@ -1,8 +1,4 @@
-import {
-  BOT_DESCRIPTION_MAX_LENGTH,
-  type BotMessageIntent,
-  type MessageBlock,
-} from "@rakazo/contracts";
+import { BOT_DESCRIPTION_MAX_LENGTH, type BotMessageIntent } from "@rakazo/contracts";
 
 export const BOT_MESSAGE_MAX_LENGTH = 8_000;
 
@@ -39,26 +35,11 @@ export function botMessageHopExhausted(hop: number): boolean {
   return hop > BOT_MESSAGE_MAX_HOPS;
 }
 
-export type BotMessageContext = Extract<MessageBlock, { kind: "bot_message_received" }>;
-
-export function botMessageContext(blocks: readonly MessageBlock[]): BotMessageContext | undefined {
-  return blocks.find((block): block is BotMessageContext => block.kind === "bot_message_received");
-}
-
 export function botMessageAllowsSilence(
   intent: BotMessageIntent | undefined,
   repliesToRequest = false,
 ): boolean {
   return intent === "fyi" && !repliesToRequest;
-}
-
-/** True when these blocks are a delivery this bot sent to ask a peer for something. */
-export function repliesToOwnRequest(replyToBlocks: readonly MessageBlock[]): boolean {
-  return replyToBlocks.some(
-    (block) =>
-      block.kind === "bot_message_sent" &&
-      (block.intent === undefined || block.intent === "request" || block.intent === "question"),
-  );
 }
 
 /**
@@ -71,7 +52,7 @@ export function repliesToOwnRequest(replyToBlocks: readonly MessageBlock[]): boo
  * No when a peer solicited this bot (`request`, `question`) or merely informed it (`fyi`). There
  * the wake prompt says the final response is returned to the sender automatically, so the turn is
  * one half of a conversation the user never started, and showing it is noise. The bot can still
- * address them deliberately with message_user / ask_user, which `isUserDirectedMessage` keeps.
+ * address them deliberately with message_user / ask_user, which the thread keeps.
  * A missing intent defaults to a solicitation, matching the wake prompt's own default.
  */
 export function botMessageRelaysToUser(
@@ -80,19 +61,6 @@ export function botMessageRelaysToUser(
   if (!peerMessage) return false;
   if (peerMessage.intent === "result" || peerMessage.intent === "status") return true;
   return peerMessage.repliesToRequest === true;
-}
-
-/** `botMessageRelaysToUser` for callers holding the run's source message rather than its context. */
-export function botMessageRunRelaysToUser(source: {
-  blocks: readonly MessageBlock[];
-  replyToBlocks?: readonly MessageBlock[];
-}): boolean {
-  const context = botMessageContext(source.blocks);
-  if (!context) return false;
-  return botMessageRelaysToUser({
-    intent: context.intent,
-    repliesToRequest: repliesToOwnRequest(source.replyToBlocks ?? []),
-  });
 }
 
 /** Resolve a target by id first, then by exact name, then case-insensitively. */
@@ -245,6 +213,21 @@ export function renderBotMessageBlock(fromName: string, text: string): string {
  */
 export const PEER_RUN_USER_SILENCE =
   "You are working for another bot here, not for the user. Do not use message_user to narrate, acknowledge, confirm, summarise, or report this work — your written response already goes back to the bot that woke you, and the user is not waiting on this turn. Use message_user or ask_user only when something is wrong and only the user can unblock it: you are stuck, you need a decision or a credential, or the work failed in a way they must know about now. Otherwise say nothing to them.";
+
+/**
+ * What a routine run or a helper owes the user in place of the chat voice. Either works in its
+ * own session, apart from the user's chat, and only its final written response reaches them: a
+ * routine's report when it ends, a helper's result through the bot that started it.
+ */
+export function detachedRunInstructions(run: "routine" | "helper"): string {
+  const reaches =
+    run === "routine"
+      ? "Your final written response is the report the user receives when this routine ends."
+      : "Your final written response is the result you hand back to the bot that started you, which tells the user what matters.";
+  return `## How your work reaches the user
+
+This run works apart from the user's chat, and nothing you write during it reaches them as it happens. ${reaches} Do not use message_user. Use ask_user only when something is wrong that only the user can unblock: you are stuck, or you need a decision or a credential. Otherwise do the work, then make your final response the result: lead with it, keep it complete, and leave out the steps you took.`;
+}
 
 /**
  * The prompt the recipient actually wakes on. Delivering the bare text leaves it

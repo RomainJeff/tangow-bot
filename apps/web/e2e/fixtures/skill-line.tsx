@@ -76,7 +76,6 @@ function Thread() {
             showAuthor={false}
             showAvatar={false}
             onOpenBot={() => undefined}
-            onOpenPeerMessages={() => undefined}
             peerBot={() => undefined}
             onRefresh={async () => undefined}
             onBotChanged={async () => undefined}

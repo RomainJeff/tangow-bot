@@ -4,7 +4,6 @@ import type {
   ProductEvent,
   SessionEntry,
   ThreadEntry,
-  ThreadMessage,
   ThreadMessagePage,
 } from "@rakazo/contracts";
 import { SessionId, toThreadEntry } from "@rakazo/contracts";
@@ -66,24 +65,20 @@ export async function loadEntryPage(
   };
 }
 
-export async function loadAllMessages(
-  prisma: PrismaClient,
-  threadId: string,
+/** The session's chain oldest first, what every rewind and clear left, read a page at a time. */
+export async function loadChain(
+  log: Pick<PageLog, "readPage">,
+  sessionId: SessionId,
   pageSize: number,
-): Promise<ThreadMessage[]> {
-  const messages: ThreadMessage[] = [];
-  let after = -1;
-  while (true) {
-    const rows = await prisma.message.findMany({
-      where: { threadId, seq: { gt: after } },
-      orderBy: { seq: "asc" },
-      take: pageSize,
-    });
-    messages.push(...rows.map(toThreadMessage));
-    const last = rows.at(-1);
-    if (!last || rows.length < pageSize) return messages;
-    after = last.seq;
-  }
+): Promise<ThreadEntry[]> {
+  const pages: SessionEntry[][] = [];
+  let before: EntryId | null = null;
+  do {
+    const page = await log.readPage(sessionId, { before: before ?? undefined, limit: pageSize });
+    pages.unshift(page);
+    before = olderCursor(page);
+  } while (before);
+  return pages.flat().map(toThreadEntry);
 }
 
 export async function isPeerRun(
@@ -124,38 +119,9 @@ const FORWARDED_PEER_RUN_EVENTS: ReadonlySet<string> = new Set([
   "run.completed",
   "run.failed",
   "run.cancelled",
-  "run.waiting_input",
   "computer.takeover.requested",
 ]);
 
 export function shouldForwardPeerThreadEvent(event: { type: string }): boolean {
   return FORWARDED_PEER_RUN_EVENTS.has(event.type);
-}
-
-function toThreadMessage(row: {
-  id: string;
-  threadId: string;
-  seq: number;
-  role: string;
-  blocks: Prisma.JsonValue;
-  botId: string | null;
-  replyToMessageId: string | null;
-  replyQuote: string | null;
-  runId: string | null;
-  clientNonce: string | null;
-  createdAt: Date;
-}): ThreadMessage {
-  return {
-    id: row.id,
-    threadId: row.threadId,
-    seq: row.seq,
-    role: row.role as ThreadMessage["role"],
-    blocks: row.blocks as ThreadMessage["blocks"],
-    botId: row.botId ?? undefined,
-    replyToMessageId: row.replyToMessageId ?? undefined,
-    replyQuote: row.replyQuote ?? undefined,
-    runId: row.runId ?? undefined,
-    clientNonce: row.clientNonce ?? undefined,
-    createdAt: row.createdAt.toISOString(),
-  };
 }

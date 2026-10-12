@@ -31,7 +31,7 @@ describe("isRunTerminalEvent", () => {
     expect(isRunTerminalEvent({ type: "run.completed" })).toBe(true);
     expect(isRunTerminalEvent({ type: "run.failed" })).toBe(true);
     expect(isRunTerminalEvent({ type: "run.cancelled" })).toBe(true);
-    expect(isRunTerminalEvent({ type: "run.waiting_input" })).toBe(false);
+    expect(isRunTerminalEvent({ type: "run.started" })).toBe(false);
   });
 });
 

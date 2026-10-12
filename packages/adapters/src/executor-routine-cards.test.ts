@@ -90,18 +90,6 @@ const routine = {
   args: { name: "Stretch", prompt: "Remind me to stretch", every: 1, unit: "hours" },
 };
 
-const userText = (id: string, seq: number, text: string) => ({
-  id,
-  threadId: "thread-1",
-  seq,
-  role: "user",
-  runId: null,
-  botId: null,
-  blocks: [{ kind: "text", text }],
-  replyToMessageId: null,
-  replyQuote: null,
-  replyTo: null,
-});
 let dataDir: string;
 
 beforeEach(async () => {
@@ -144,7 +132,6 @@ function fixture(
   options: {
     trigger?: string;
     requireToolApproval?: boolean;
-    messages?: Row[];
     effects?: Effect[];
     groupId?: string;
     /** Routines stored in this space, any bot's; `threadGroupId` is the group of their thread. */
@@ -238,13 +225,8 @@ function fixture(
       },
     ),
   };
-  const messages = [...(options.messages ?? [])].sort(
-    (left, right) => Number(right.seq) - Number(left.seq),
-  );
   const skillSetting = table([]);
   const botSkill = table([]);
-  const messageUpdate = vi.fn(async () => undefined);
-  const messageCreate = vi.fn(async ({ data }: { data: Row }) => ({ id: "message-new", ...data }));
   const usageRecords: Row[] = [];
   const entries = options.entries ?? [];
   log.sessionLog.readRun.mockImplementation(async (runId) =>
@@ -295,10 +277,13 @@ function fixture(
       findUniqueOrThrow: vi.fn(async () => ({
         id: "thread-1",
         groupId: options.groupId ?? null,
+        sessionId: "session-main",
+        botId: "bot-1",
+        nextEventSeq: 2,
       })),
       findFirst: vi.fn(async () => ({ groupId: options.groupId ?? null })),
       count: vi.fn(async () => 0),
-      update: vi.fn(async () => ({ nextEventSeq: 2, nextMessageSeq: 2 })),
+      update: vi.fn(async () => ({ sessionId: "session-main", botId: "bot-1", nextEventSeq: 2 })),
     },
     event: {
       create: vi.fn(async ({ data }: { data: Row }) => ({ ...data, threadId: "thread-1" })),
@@ -311,19 +296,6 @@ function fixture(
     },
     chatGroup: {
       findUnique: vi.fn(async () => ({ name: "Trip", description: "", members: [] })),
-    },
-    message: {
-      update: messageUpdate,
-      create: messageCreate,
-      findMany: vi.fn(async () => messages),
-      findFirst: vi.fn(
-        async ({ where }: { where: { id: string } }) =>
-          messages.find((message) => message.id === where.id) ?? null,
-      ),
-      findUnique: vi.fn(
-        async ({ where }: { where: { id: string } }) =>
-          messages.find((message) => message.id === where.id) ?? null,
-      ),
     },
     routine: {
       create: routineCreate,
@@ -470,10 +442,6 @@ function fixture(
     skillLearning: options.skillLearning,
   } as unknown as Parameters<typeof createRunExecutor>[0]);
 
-  const postedCards = () =>
-    messageCreate.mock.calls
-      .map(([{ data }]) => data)
-      .filter((data) => (data.blocks as Row[]).some((block) => block.kind === "ask"));
   const askBlock = () =>
     (pauseRunForInput.mock.calls[0]?.[0] as { blocks: unknown[] } | undefined)?.blocks[0];
   return {
@@ -481,7 +449,6 @@ function fixture(
     log,
     effects,
     externalEffect,
-    messages,
     results,
     routineCreate,
     routineUpdate,
@@ -494,12 +461,27 @@ function fixture(
     skills: () =>
       listUserSkills(userSkillsRoot(dataDir, run as { spaceId: string; userId: string })),
     askBlock,
-    messageUpdate,
     /** The cards the run posted outside a pause, in order. */
-    posted: () => postedCards().map((data) => data.blocks),
-    /** Every bot message the run wrote outside a pause, cards or not, in order. */
-    written: () => messageCreate.mock.calls.map(([{ data }]) => data.blocks),
-    nonces: () => messageCreate.mock.calls.map(([{ data }]) => data.clientNonce),
+    posted: () =>
+      log.drafts.flatMap((draft) =>
+        draft.type === "assistant.ask" ? [[(draft.payload as { block: Row }).block]] : [],
+      ),
+    /** The skill lines the run logged, with the session each went to. */
+    learnt: () =>
+      log.drafts.flatMap((draft) =>
+        draft.type === "skill.learnt" ? [{ sessionId: draft.sessionId, ...draft.payload }] : [],
+      ),
+    /** The card states the run logged, by the card they settle. */
+    applied: () => log.drafts.filter((draft) => draft.type === "effect.applied"),
+    /** Makes the effect's card an entry of the thread's session the run can settle. */
+    showCard(cardId: string, effectId: string) {
+      log.sessionEntry.findFirst.mockImplementation((async ({ where }: { where: Row }) =>
+        (where.payload as { equals?: unknown } | undefined)?.equals === effectId
+          ? { id: cardId }
+          : null) as never);
+      log.sessionEntry.findUnique.mockImplementation((async ({ where }: { where: Row }) =>
+        where.id === cardId ? { sessionId: "session-main" } : null) as never);
+    },
     send,
     instructions: () =>
       (runtimeRun.mock.calls[0]?.[0] as AgentRunRequest | undefined)?.instructions,
@@ -576,7 +558,7 @@ describe("a routine the bot proposes on its own", () => {
   });
 
   it("shows a Create routine card with the resolved schedule, creates nothing and sends no push", async () => {
-    const f = fixture({ messages: [userText("m1", 1, "Any new offers this week?")] });
+    const f = fixture();
     await f.play([[propose()]]);
     expect(f.askBlock()).toEqual({
       ...proposalCard,
@@ -876,23 +858,6 @@ describe("a routine the bot proposes on its own", () => {
   });
 
   describe("once the user tapped Create routine", () => {
-    const card = {
-      id: "m2",
-      threadId: "thread-1",
-      seq: 2,
-      role: "bot",
-      runId: "run-1",
-      botId: "bot-1",
-      blocks: [
-        { kind: "text", text: "You ask every Monday." },
-        {
-          ...proposalCard,
-          approvalEffectId: "effect-approved",
-          status: "answered",
-          answer: "allow",
-        },
-      ],
-    };
     const approved = (request: Record<string, unknown>): Effect => ({
       id: "effect-approved",
       runId: "run-1",
@@ -903,18 +868,13 @@ describe("a routine the bot proposes on its own", () => {
       createdAt: new Date(),
       answeredAt: new Date(),
     });
-    const writtenCard = (f: ReturnType<typeof fixture>) =>
-      (f.messageUpdate.mock.calls[0] as unknown as [{ data: { blocks: Row[] } }] | undefined)?.[0]
-        .data.blocks[1];
     const logged = (f: ReturnType<typeof fixture>) => {
-      f.log.sessionEntry.findUnique.mockImplementation((async ({ where }: { where: Row }) =>
-        where.id === "m2" ? { sessionId: "session-main" } : null) as never);
-      return () => f.log.drafts.filter((draft) => draft.type === "effect.applied");
+      f.showCard("m2", "effect-approved");
+      return f.applied;
     };
 
     it("creates exactly the routine shown, past every guard, and links the card to it", async () => {
       const f = fixture({
-        messages: [card],
         effects: [proposalEffect({}), approved(offers)],
         otherRunWaiting: true,
       });
@@ -927,10 +887,6 @@ describe("a routine the bot proposes on its own", () => {
           crons: ["0 9 * * 1"],
           timezone: "Europe/Paris",
         }),
-      });
-      expect(writtenCard(f)).toMatchObject({
-        status: "answered",
-        created: { kind: "routine", id: "routine-new", label: "Weekly offers" },
       });
       expect(f.posted()).toEqual([]);
       expect(applied()).toEqual([
@@ -947,7 +903,6 @@ describe("a routine the bot proposes on its own", () => {
       const asked = propose({ delayMinutes: 90 }, oneShot).args;
       const runAt = new Date(Date.now() + 60 * 60_000).toISOString();
       const f = fixture({
-        messages: [card],
         effects: [
           {
             ...approved({ ...oneShot, runAt, proposalKey: "weekly offers" }),
@@ -955,21 +910,23 @@ describe("a routine the bot proposes on its own", () => {
           },
         ],
       });
+      const applied = logged(f);
       await f.play([[propose({ delayMinutes: 90 }, oneShot)]]);
       expect(f.routineCreate).toHaveBeenCalledWith({
         data: expect.objectContaining({ nextRunAt: new Date(runAt) }),
       });
-      expect(writtenCard(f)).toMatchObject({
-        created: { kind: "routine", id: "routine-new", label: "Weekly offers" },
-      });
+      expect(applied()).toEqual([
+        expect.objectContaining({
+          payload: { target: "m2", routineId: "routine-new", change: "created" },
+        }),
+      ]);
     });
 
     it("marks the card Couldn't create when the run ends before creating it", async () => {
-      const f = fixture({ messages: [card], effects: [approved(offers)] });
+      const f = fixture({ effects: [approved(offers)] });
       const applied = logged(f);
       await f.play([], "worker-1", "failed");
       expect(f.routineCreate).not.toHaveBeenCalled();
-      expect(writtenCard(f)).toMatchObject({ status: "answered", failed: true });
       expect(applied()).toEqual([
         {
           type: "effect.applied",
@@ -1001,11 +958,14 @@ describe("a routine the bot proposes on its own", () => {
 
     it("marks the card Couldn't create when the time passed before the tap", async () => {
       const past = { ...oneShot, runAt: "2020-01-01T09:00:00Z" };
-      const f = fixture({ messages: [card], effects: [approved(past)] });
+      const f = fixture({ effects: [approved(past)] });
+      const applied = logged(f);
       await f.play([[propose({}, past)]]);
       expect(f.routineCreate).not.toHaveBeenCalled();
       expect(f.results).toEqual([{ error: "One-shot schedules must run in the future." }]);
-      expect(writtenCard(f)).toMatchObject({ status: "answered", failed: true });
+      expect(applied()).toEqual([
+        expect.objectContaining({ payload: { target: "m2", failed: true } }),
+      ]);
     });
   });
 });
@@ -1021,7 +981,7 @@ describe("what the bot is told about proposing", () => {
   });
 
   it("creates a routine asked for plainly in a clean conversation, with no card, while proposals are offered", async () => {
-    const f = fixture({ messages: [userText("m1", 1, "Every hour, remind me to stretch")] });
+    const f = fixture();
     await f.play([[routine]]);
     expect(f.instructions()).toContain(BOT_OFFER_PROPOSALS);
     expect(f.routineCreate).toHaveBeenCalledOnce();
@@ -1172,29 +1132,16 @@ describe("a routine the user asks for", () => {
     const card = f.askBlock() as Row;
     expect(card).toMatchObject({ kind: "ask", approvalEffectId: "effect-1" });
     expect(f.routineCreate).not.toHaveBeenCalled();
-    f.messages.push({
-      id: "m-card",
-      threadId: "thread-1",
-      seq: 2,
-      role: "bot",
-      runId: "run-1",
-      botId: "bot-1",
-      blocks: [{ ...card, status: "answered", answer: "allow" }],
-    });
+    f.showCard("m-card", "effect-1");
     f.effects[0]!.status = "approved";
     await f.play([[routine]]);
     expect(f.routineCreate).toHaveBeenCalledOnce();
     expect(f.posted()).toEqual([]);
-    expect(
-      (f.messageUpdate.mock.calls[0] as unknown as [{ data: { blocks: Row[] } }])[0].data.blocks[0],
-    ).toMatchObject({
-      approvalEffectId: "effect-1",
-      answer: "allow",
-      text: "Every hour UTC",
-      routine: confirmation.routine,
-      created: { kind: "routine", id: "routine-new", label: "Stretch" },
-      confirms: "created",
-    });
+    expect(f.applied()).toEqual([
+      expect.objectContaining({
+        payload: { target: "m-card", routineId: "routine-new", change: "created" },
+      }),
+    ]);
   });
 });
 
@@ -1401,26 +1348,15 @@ describe("a routine the user asks to change", () => {
     await f.play([[change({ notify: true })]]);
     const card = f.askBlock() as Row;
     expect(card).toMatchObject({ kind: "ask", approvalEffectId: "effect-1" });
-    f.messages.push({
-      id: "m-card",
-      threadId: "thread-1",
-      seq: 2,
-      role: "bot",
-      runId: "run-1",
-      botId: "bot-1",
-      blocks: [{ ...card, status: "answered", answer: "allow" }],
-    });
+    f.showCard("m-card", "effect-1");
     f.effects[0]!.status = "approved";
     await f.play([[change({ notify: true })]]);
     expect(f.posted()).toEqual([]);
-    expect(
-      (f.messageUpdate.mock.calls[0] as unknown as [{ data: { blocks: Row[] } }])[0].data.blocks[0],
-    ).toMatchObject({
-      answer: "allow",
-      text: "Every hour UTC",
-      created: { kind: "routine", id: "routine-1", label: "Stretch" },
-      confirms: "updated",
-    });
+    expect(f.applied()).toEqual([
+      expect.objectContaining({
+        payload: { target: "m-card", routineId: "routine-1", change: "updated" },
+      }),
+    ]);
   });
 
   it("names the trigger of a routine a webhook wakes on its card", async () => {
@@ -1625,58 +1561,45 @@ describe("a skill the bot saves on its own", () => {
     name: "skill_create",
     args: { name: "Coffee", description: "Order coffee", body: "Pay." },
   };
-  const reply = {
-    id: "reply",
-    threadId: "thread-1",
-    seq: 3,
-    role: "bot",
-    runId: "run-1",
-    botId: "bot-1",
-    blocks: [{ kind: "text", text: "Ordered." }],
-  };
   const line = {
-    kind: "skill_source",
+    sessionId: "session-1",
     skillId: "user:coffee",
     name: "Coffee",
     change: "learned",
   };
-  const lined = (f: ReturnType<typeof fixture>) =>
-    f.messageUpdate.mock.calls.flatMap((call) => {
-      const { where, data } = (call as unknown as [{ where: Row; data: { blocks?: Row[] } }])[0];
-      return data.blocks?.some((block) => block.kind === "skill_source")
-        ? [[where.id, data.blocks]]
-        : [];
-    });
+  /** The run said something to the user, which its line goes under. */
+  const replied = (f: ReturnType<typeof fixture>) =>
+    f.log.sessionEntry.findFirst.mockImplementation((async ({ where }: { where: Row }) =>
+      where.type === "assistant.text" ? { id: "reply" } : null) as never);
 
   it("leaves the line the server writes under the run's reply once the run ends", async () => {
-    const f = fixture({ messages: [reply] });
+    const f = fixture({ skillLearning: "off" });
+    replied(f);
     await f.play([[save]]);
     expect(f.results).toEqual([expect.objectContaining({ ok: true, name: "Coffee" })]);
-    expect(lined(f)).toEqual([["reply", [{ kind: "text", text: "Ordered." }, line]]]);
-    expect(f.written()).toEqual([]);
+    expect(f.learnt()).toEqual([line]);
   });
 
   it("leaves the line under the reply of a run that failed after saving", async () => {
-    const f = fixture({ messages: [reply], fails: "The model is unreachable." });
+    const f = fixture({ skillLearning: "off", fails: "The model is unreachable." });
+    replied(f);
     await f.play([[save]], "worker-1", "failed");
-    expect(lined(f)).toEqual([["reply", [{ kind: "text", text: "Ordered." }, line]]]);
+    expect(f.learnt()).toEqual([line]);
   });
 
   it("writes nothing visible for a run that left no message while learning is off", async () => {
     const f = fixture({ skillLearning: "off" });
     await f.play([[save]]);
-    expect(lined(f)).toEqual([]);
-    expect(f.written()).toEqual([]);
+    expect(f.learnt()).toEqual([]);
     expect(f.run.skillLinesAt).toBeInstanceOf(Date);
   });
 
   it.each(["shadow", "on"] as const)(
-    "posts the line alone for a run that left no message once learning is %s",
+    "logs the line alone for a run that left no message once learning is %s",
     async (skillLearning) => {
       const f = fixture({ skillLearning });
       await f.play([[save]]);
-      expect(f.written()).toEqual([[line]]);
-      expect(f.nonces()).toEqual(["skill-source:run-1"]);
+      expect(f.learnt()).toEqual([line]);
     },
   );
 
@@ -1810,7 +1733,7 @@ describe("the skill nudge at the end of an exchange", () => {
     );
   };
   const line = (name: string) => ({
-    kind: "skill_source",
+    sessionId: "session-1",
     skillId: `user:${name.toLowerCase()}`,
     name,
     change: "learned",
@@ -1858,8 +1781,8 @@ describe("the skill nudge at the end of an exchange", () => {
       expect.objectContaining({ ok: true, name: "Book a table" }),
       { error: "Only skill_read, skill_search, skill_create and skill_update work here." },
     ]);
-    expect(f.written()).toEqual([[line("Book a table")]]);
-    expect(JSON.stringify(f.written())).not.toContain("I kept the booking method.");
+    expect(f.learnt()).toEqual([line("Book a table")]);
+    expect(JSON.stringify(f.log.drafts)).not.toContain("I kept the booking method.");
     expect(f.eventsOf("agent.skill.nudge")).toEqual([
       { phase: "decided", mode: "on", signal: "tools", toolCount: 15 },
       { phase: "ended" },
@@ -2027,7 +1950,7 @@ describe("the skill nudge at the end of an exchange", () => {
     });
     expect(f.requests()).toHaveLength(1);
     expect(f.nudgeResults).toEqual([]);
-    expect(f.written()).toEqual([]);
+    expect(f.learnt()).toEqual([]);
     expect(await f.skills()).toEqual([]);
   });
 

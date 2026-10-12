@@ -6,10 +6,10 @@ import { createTaughtSkillsService } from "./taught-skills.js";
 const logged = vi.hoisted(() => [] as unknown[]);
 vi.mock("@rakazo/db", async (original) => ({
   ...(await original<typeof db>()),
-  appendEventInTransaction: vi.fn(async () => ({ seq: 1 })),
   appendCardStateInTransaction: vi.fn(async (_tx, draft) => {
     logged.push(draft);
   }),
+  threadEventSeq: vi.fn(async () => 1),
 }));
 
 const playbook = {
@@ -49,9 +49,12 @@ it("logs each revision of a taught skill's draft card against the card", async (
   };
   const tx = {
     $queryRaw: vi.fn(async () => []),
-    message: {
-      findFirst: vi.fn(async () => ({ blocks: [draft] })),
-      update: vi.fn(async () => undefined),
+    sessionEntry: {
+      findFirst: vi
+        .fn()
+        // The draft card, then no revision logged against it yet.
+        .mockResolvedValueOnce({ id: "card-1", payload: { blocks: [draft] } })
+        .mockResolvedValueOnce(null),
     },
   };
   const deps = {
@@ -60,8 +63,12 @@ it("logs each revision of a taught skill's draft card against the card", async (
         findFirst: vi.fn(async () => skill),
         update: vi.fn(async ({ data }: { data: object }) => ({ ...skill, ...data })),
       },
-      bot: { findUnique: vi.fn(async () => ({ id: "bot-1", thread: { id: "thread-1" } })) },
-      message: { findMany: vi.fn(async () => [{ id: "card-1", blocks: [draft] }]) },
+      bot: {
+        findUnique: vi.fn(async () => ({
+          id: "bot-1",
+          thread: { id: "thread-1", sessionId: "session-1" },
+        })),
+      },
       $transaction: vi.fn(async (work: (client: typeof tx) => unknown) => work(tx)),
     },
     events: { notify: vi.fn(async () => undefined) },

@@ -2,10 +2,11 @@ import type { ArtifactStore } from "@rakazo/adapter-kit";
 import type { PrismaClient } from "@rakazo/db";
 
 /**
- * An in-memory stand-in for the slice of Prisma the link preview code touches, with the one
- * property the concurrency tests need from Postgres: a transaction that runs `SELECT ... FOR
- * UPDATE` on a thread, or updates it, holds that thread until it ends, and a second one waits.
- * Offline and deterministic. A transaction that throws is rolled back.
+ * An in-memory stand-in for the slice of Prisma the link preview cache and read budget, and the
+ * skill nudge, touch, with the one property their tests need from Postgres: a transaction that runs
+ * `SELECT ... FOR UPDATE` on a thread, or updates it, holds that thread until it ends, and a second
+ * one waits. Offline and deterministic. A transaction that throws is rolled back. Tests of what a
+ * thread's messages hold use `openThreadDb`, a real Postgres.
  */
 type Row = Record<string, unknown> & { id: string };
 
@@ -52,17 +53,12 @@ export interface FakeThreadDb {
   artifacts: ArtifactStore & { keys(): string[] };
   tables: {
     threads: Map<string, Row>;
-    messages: Map<string, Row>;
     events: Map<string, Row>;
     runs: Map<string, Row>;
     artifact: Map<string, Row>;
     linkPreviewCache: Map<string, Row>;
     linkPreviewRead: Map<string, Row>;
-    chatGroupMembers: Map<string, Row>;
-    externalMessages: Map<string, Row>;
     externalEffects: Map<string, Row>;
-    skillSettings: Map<string, Row>;
-    botSkills: Map<string, Row>;
   };
   seedThread(input: {
     id: string;
@@ -70,18 +66,6 @@ export interface FakeThreadDb {
     userId?: string;
     botId?: string | null;
     groupId?: string | null;
-  }): void;
-  seedMessage(input: {
-    id: string;
-    threadId: string;
-    role?: string;
-    blocks: unknown[];
-    runId?: string;
-    clientNonce?: string | null;
-    botId?: string | null;
-    replyToMessageId?: string | null;
-    replyQuote?: string | null;
-    createdAt?: Date;
   }): void;
   seedRun(input: {
     id: string;
@@ -92,31 +76,22 @@ export interface FakeThreadDb {
     updatedAt?: Date;
     createdAt?: Date;
   }): void;
-  /** Called after every message read, to let another transaction run in between. */
-  onMessageRead(hook: (() => Promise<void>) | undefined): void;
-  blocksOf(messageId: string): unknown[] | undefined;
   eventsOfType(type: string): Row[];
 }
 
 export function createFakeThreadDb(): FakeThreadDb {
   const tables = {
     threads: new Map<string, Row>(),
-    messages: new Map<string, Row>(),
     events: new Map<string, Row>(),
     runs: new Map<string, Row>(),
     artifact: new Map<string, Row>(),
     linkPreviewCache: new Map<string, Row>(),
     linkPreviewRead: new Map<string, Row>(),
-    chatGroupMembers: new Map<string, Row>(),
-    externalMessages: new Map<string, Row>(),
     externalEffects: new Map<string, Row>(),
-    skillSettings: new Map<string, Row>(),
-    botSkills: new Map<string, Row>(),
   };
   let counter = 0;
   const nextId = (prefix: string) => `${prefix}-${++counter}`;
   const locks = new Map<string, Promise<void>>();
-  const hooks: { afterMessageRead?: () => Promise<void> } = {};
 
   const store = new Map<string, Uint8Array>();
   const artifacts: FakeThreadDb["artifacts"] = {
@@ -171,13 +146,6 @@ export function createFakeThreadDb(): FakeThreadDb {
       await onLock(threadId);
       held.add(threadId);
     };
-    const withRelations = (message: Row) => ({
-      ...message,
-      thread: tables.threads.get(message.threadId as string),
-      externalTranscriptFor:
-        [...tables.externalMessages.values()].find((row) => row.threadMessageId === message.id) ??
-        null,
-    });
     return {
       $queryRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => {
         if (strings.join("?").includes("FOR UPDATE")) await lockThread(values[0] as string);
@@ -197,61 +165,10 @@ export function createFakeThreadDb(): FakeThreadDb {
           await lockThread(args.where.id);
           const row = tables.threads.get(args.where.id);
           if (!row) throw new Error("thread missing");
-          for (const field of ["nextEventSeq", "nextMessageSeq"]) {
-            const inc = (args.data[field] as { increment?: number } | undefined)?.increment;
-            if (inc !== undefined) row[field] = (row[field] as number) + inc;
-          }
+          const inc = (args.data.nextEventSeq as { increment?: number } | undefined)?.increment;
+          if (inc !== undefined) row.nextEventSeq = (row.nextEventSeq as number) + inc;
           if (args.data.unread !== undefined) row.unread = args.data.unread;
           return row;
-        },
-      },
-      message: {
-        async findUnique(args: { where: { id: string } }) {
-          const row = tables.messages.get(args.where.id);
-          const read = row ? structuredClone(withRelations(row)) : null;
-          await hooks.afterMessageRead?.();
-          return read;
-        },
-        async findFirst(args: { where: Record<string, unknown> }) {
-          const row = [...tables.messages.values()].find((m) => matches(m, args.where));
-          const read = row ? structuredClone(withRelations(row)) : null;
-          await hooks.afterMessageRead?.();
-          return read;
-        },
-        async findMany(args: { where: Record<string, unknown> }) {
-          return [...tables.messages.values()]
-            .filter((m) => matches(m, args.where))
-            .sort((a, b) => (a.seq as number) - (b.seq as number))
-            .map(withRelations);
-        },
-        async update(args: { where: { id: string }; data: Record<string, unknown> }) {
-          const row = tables.messages.get(args.where.id);
-          if (!row) throw new Error("message missing");
-          Object.assign(row, args.data);
-          return row;
-        },
-        async create(args: { data: Record<string, unknown> }) {
-          const row = {
-            id: nextId("message"),
-            runId: null,
-            clientNonce: null,
-            replyToMessageId: null,
-            replyQuote: null,
-            ...args.data,
-          } as Row;
-          tables.messages.set(row.id, row);
-          return row;
-        },
-        async deleteMany(args: { where: Record<string, unknown> }) {
-          for (const [id, row] of tables.messages) {
-            if (matches(row, args.where)) {
-              tables.messages.delete(id);
-              // The foreign key: an artifact pointing at a deleted message loses the link.
-              for (const artifact of tables.artifact.values()) {
-                if (artifact.previewMessageId === id) artifact.previewMessageId = null;
-              }
-            }
-          }
         },
       },
       run: {
@@ -295,17 +212,6 @@ export function createFakeThreadDb(): FakeThreadDb {
           return { count: 1 };
         },
       },
-      sessionEntry: {
-        async findUnique() {
-          return null;
-        },
-      },
-      // What clearing or rewinding a thread also touches, with nothing to keep here.
-      attempt: { updateMany: async () => ({ count: 0 }) },
-      computer: { updateMany: async () => ({ count: 0 }) },
-      computerExecutionLease: { updateMany: async () => ({ count: 0 }) },
-      bot: { update: async () => ({}) },
-      chatGroup: { update: async () => ({}) },
       event: {
         async create(args: { data: Record<string, unknown> }) {
           const row = { id: nextId("event"), createdAt: new Date(), ...args.data } as Row;
@@ -328,17 +234,12 @@ export function createFakeThreadDb(): FakeThreadDb {
       },
       artifact: table(tables.artifact, {
         async create(args: { data: Record<string, unknown> }) {
-          const message = args.data.previewMessageId as string | undefined;
-          if (message && !tables.messages.has(message)) throw new Error("foreign key");
           const row = { id: nextId("artifact"), createdAt: new Date(), ...args.data } as Row;
           tables.artifact.set(row.id, row);
           return row;
         },
       }),
-      chatGroupMember: table(tables.chatGroupMembers),
       externalEffect: table(tables.externalEffects),
-      skillSetting: table(tables.skillSettings),
-      botSkill: table(tables.botSkills),
       linkPreviewRead: table(tables.linkPreviewRead, {
         async create(args: { data: Record<string, unknown> }) {
           const row = { id: nextId("read"), ...args.data } as Row;
@@ -434,34 +335,7 @@ export function createFakeThreadDb(): FakeThreadDb {
         botId: botId === undefined ? "bot-1" : botId,
         groupId,
         nextEventSeq: 0,
-        nextMessageSeq: 0,
         unread: false,
-      });
-    },
-    seedMessage({
-      id,
-      threadId,
-      role = "user",
-      blocks,
-      runId,
-      clientNonce = null,
-      botId = null,
-      replyToMessageId = null,
-      replyQuote = null,
-      createdAt,
-    }) {
-      tables.messages.set(id, {
-        id,
-        threadId,
-        seq: tables.messages.size,
-        role,
-        blocks,
-        runId: runId ?? null,
-        clientNonce,
-        botId,
-        replyToMessageId,
-        replyQuote,
-        createdAt,
       });
     },
     seedRun({
@@ -487,10 +361,6 @@ export function createFakeThreadDb(): FakeThreadDb {
         createdAt,
       });
     },
-    onMessageRead(hook) {
-      hooks.afterMessageRead = hook;
-    },
-    blocksOf: (messageId) => tables.messages.get(messageId)?.blocks as unknown[] | undefined,
     eventsOfType: (type) => [...tables.events.values()].filter((event) => event.type === type),
   };
 }

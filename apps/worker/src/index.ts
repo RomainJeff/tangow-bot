@@ -47,7 +47,6 @@ import {
   pipedreamConfigFromEnv,
   reconcileComputerUpdates,
   resolveDeploymentModel,
-  resolvePiSessionRoot,
   resolveSandboxProvider,
   ScriptedAgentRuntime,
   SpaceDecisionProviderResolver,
@@ -96,7 +95,6 @@ async function main() {
     process.env.AGENT_RUNTIME === "scripted"
       ? new ScriptedAgentRuntime()
       : new PiAgentRuntime({
-          sessionRoot: resolvePiSessionRoot(dataDir),
           ...(traceExport.exporter
             ? { traceExporter: traceExport.exporter, serviceName: SERVICE_NAMES.worker }
             : {}),

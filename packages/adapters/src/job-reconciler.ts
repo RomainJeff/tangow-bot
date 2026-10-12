@@ -6,11 +6,11 @@ import {
 } from "@rakazo/adapter-kit";
 import type { MessageBlock } from "@rakazo/contracts";
 import type { Pool, PrismaClient, ThreadEvents } from "@rakazo/db";
+import { runMessages } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 import type { PoolClient } from "pg";
 import { returnBotMessageOutcome } from "./bot-messages.js";
 import { scheduleComputerControlExpiry } from "./computer-control.js";
-import { isUserProgressClientNonce } from "./user-progress.js";
 
 const DEFAULT_INTERVAL_MS = 30_000;
 const DEFAULT_BATCH_SIZE = 100;
@@ -370,33 +370,20 @@ export function createJobReconciler(
 
 /** Prefer the full bot transcript for a run so interim progress is not mistaken for the sole result. */
 export async function botRunOutcomeText(
-  prisma: {
-    message: {
-      findMany: (args: {
-        where: { runId: string; role: "bot" };
-        orderBy: { seq: "asc" };
-        select: { blocks: true; clientNonce: true };
-      }) => Promise<Array<{ blocks: unknown; clientNonce: string | null }>>;
-    };
-  },
+  prisma: Pick<PrismaClient, "sessionEntry">,
   runId: string,
 ): Promise<{ text: string; progressOnly: boolean }> {
-  const messages = await prisma.message.findMany({
-    where: { runId, role: "bot" },
-    orderBy: { seq: "asc" },
-    select: { blocks: true, clientNonce: true },
-  });
   const progressParts: string[] = [];
   const finalParts: string[] = [];
-  for (const message of messages) {
+  for (const message of await runMessages(prisma, runId)) {
     const text = messageText(message.blocks);
     if (!text) continue;
-    if (isUserProgressClientNonce(message.clientNonce)) progressParts.push(text);
+    if (message.midTurn) progressParts.push(text);
     else finalParts.push(text);
   }
-  // Prefer the latest non-progress reply when present so earlier untagged mid-run
-  // publishes (for example pre-takeover narration) do not contaminate the result.
-  // Progress-only turns still join progress beats as status.
+  // Prefer the latest reply sent at the end so earlier untagged mid-run publishes (for example
+  // pre-takeover narration) do not contaminate the result. Progress-only turns still join
+  // progress beats as status.
   if (finalParts.length > 0) {
     return { text: finalParts[finalParts.length - 1]!, progressOnly: false };
   }

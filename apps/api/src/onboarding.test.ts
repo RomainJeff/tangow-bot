@@ -9,27 +9,38 @@ vi.mock("@rakazo/db", async (original) => ({
   appendCardStateInTransaction: vi.fn(async (_tx, draft) => {
     logged.push(draft);
   }),
-  createThreadMessageInTransaction: vi.fn(async (_tx, input) => {
+  createBotMessageInTransaction: vi.fn(async (_tx, input) => {
     posted.push(input);
-    return { id: "posted" };
+    return "posted";
   }),
-  appendEventInTransaction: vi.fn(async () => ({ seq: 1 })),
-  appendSessionEntryInTransaction: vi.fn(async () => undefined),
+  threadEventSeq: vi.fn(async () => 1),
 }));
+
+/** The bot's cards in its thread's session, and the answers logged against them. */
 function fixture(catalog: unknown[]) {
   posted.length = 0;
   logged.length = 0;
-  const tx = {
-    $executeRaw: vi.fn(),
-    message: {
-      findMany: vi.fn(async () => [{ id: "choice", blocks: [{ kind: "choice", answerId: null }] }]),
-      findFirst: vi.fn(),
-      update: vi.fn(),
-    },
+  const log = {
+    cards: [
+      { id: "choice", payload: { blocks: [{ kind: "choice", question: "Focus?", options: [] }] } },
+    ],
+    answers: [] as Array<{ payload: unknown }>,
   };
+  const sessionEntry = {
+    findMany: vi.fn(async ({ where }: { where: { type: string } }) =>
+      where.type === "card.answered" ? log.answers : log.cards,
+    ),
+  };
+  const tx = { $executeRaw: vi.fn(), sessionEntry };
   const deps = {
     prisma: {
-      bot: { findFirst: vi.fn(async () => ({ id: "bot", thread: { id: "thread" } })) },
+      bot: {
+        findFirst: vi.fn(async () => ({
+          id: "bot",
+          thread: { id: "thread", sessionId: "session" },
+        })),
+      },
+      sessionEntry,
       $transaction: vi.fn(async (fn: (tx: unknown) => unknown) => fn(tx)),
     },
     events: { notify: vi.fn() },
@@ -41,8 +52,9 @@ function fixture(catalog: unknown[]) {
     email: "user@rakazo.test",
     isDeploymentOwner: true,
   };
-  return { deps, actor, tx };
+  return { deps, actor, tx, log };
 }
+
 describe("onboarding connection suggestions", () => {
   it("does not invent authorization cards when no connector has an app catalog", async () => {
     const { deps, actor } = fixture([]);
@@ -78,22 +90,20 @@ it("logs a focus card put away without a choice as dismissed", async () => {
   ]);
 });
 
+const slackCards = ["composio", "pipedream"].map((connectorId) => ({
+  kind: "app_connect",
+  connectorId,
+  provider: "slack",
+  name: "Slack",
+  description: "Search, read, and send messages.",
+  logo: null,
+  status: "pending",
+}));
+
 it("marks only the authorized connector when provider slugs collide", async () => {
-  const { deps, actor, tx } = fixture([]);
-  const blocks = ["composio", "pipedream"].map((connectorId) => ({
-    kind: "app_connect",
-    connectorId,
-    provider: "slack",
-    name: "Slack",
-    status: "pending",
-  }));
-  deps.prisma.message = { findMany: vi.fn(async () => [{ id: "cards", blocks }]) } as never;
-  tx.message.findFirst = vi.fn(async () => ({ blocks }));
+  const { deps, actor, log } = fixture([]);
+  log.cards = [{ id: "cards", payload: { blocks: slackCards } }] as never;
   await markAppConnected(deps, actor, "bot", "slack", "pipedream");
-  expect(tx.message.update).toHaveBeenCalledWith({
-    where: { id: "cards" },
-    data: { blocks: [blocks[0], { ...blocks[1], status: "connected" }] },
-  });
   expect(logged).toEqual([
     {
       type: "card.answered",
@@ -101,27 +111,20 @@ it("marks only the authorized connector when provider slugs collide", async () =
       payload: { target: "cards", answerId: "pipedream:slack" },
     },
   ]);
+  expect(deps.events.notify).toHaveBeenCalledWith("thread", 1);
 });
 
-it("rewrites the blocks as stored under the thread lock, keeping a preview marker written meanwhile", async () => {
-  const { deps, actor, tx } = fixture([]);
-  const card = {
-    kind: "app_connect",
-    connectorId: "composio",
-    provider: "slack",
-    name: "Slack",
-    status: "pending",
-  };
-  const marker = { kind: "link_preview", removed: true };
-  // The scan saw the card alone; by the time the write holds the lock, the marker is there too.
-  deps.prisma.message = { findMany: vi.fn(async () => [{ id: "cards", blocks: [card] }]) } as never;
-  tx.message.findFirst = vi.fn(async () => ({ blocks: [card, marker] }));
+it("connects an app once, as the answers logged under the thread lock say", async () => {
+  const { deps, actor, tx, log } = fixture([]);
+  log.cards = [{ id: "cards", payload: { blocks: slackCards } }] as never;
+  // The scan saw the card unanswered; by the time the write holds the lock, a tap answered it.
+  tx.$executeRaw.mockImplementation(async () => {
+    log.answers = [{ payload: { target: "cards", answerId: "composio:slack" } }];
+  });
 
   await markAppConnected(deps, actor, "bot", "slack");
 
   expect(tx.$executeRaw).toHaveBeenCalled();
-  expect(tx.message.update).toHaveBeenCalledWith({
-    where: { id: "cards" },
-    data: { blocks: [{ ...card, status: "connected" }, marker] },
-  });
+  expect(logged).toEqual([]);
+  expect(deps.events.notify).not.toHaveBeenCalled();
 });

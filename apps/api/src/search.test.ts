@@ -34,6 +34,24 @@ function fixture(count: number) {
   return { prisma, artifacts, groupArtifacts };
 }
 
+/** A person's message as the search query returns it. */
+function said(id: string, seq: number, blocks: unknown[]) {
+  return {
+    id,
+    sessionId: "session-1",
+    seq,
+    parentId: seq === 0 ? null : `entry-${seq - 1}`,
+    type: "user.message",
+    payload: { blocks, source: "app" },
+    entryBotId: null,
+    runId: null,
+    createdAt: new Date("2026-10-12T09:00:00.000Z"),
+    threadId: "thread-1",
+    botId: "bot-1",
+    botName: "Bot",
+  };
+}
+
 describe("artifact search batching", () => {
   it.each([1, 25])("uses one lookup per destination for %i matching artifacts", async (count) => {
     const { prisma } = fixture(count);
@@ -47,7 +65,7 @@ describe("artifact search batching", () => {
     for (const query of [direct, group]) {
       expect(query.values).toContain(actor.spaceId);
       expect(query.values).toContain(actor.userId);
-      expect(query.text).toContain('ORDER BY m."createdAt" DESC');
+      expect(query.text).toContain("ORDER BY e.seq DESC");
     }
   });
 
@@ -55,10 +73,10 @@ describe("artifact search batching", () => {
     const { prisma } = fixture(3);
     prisma.$queryRaw
       .mockResolvedValueOnce([
-        { artifactId: "artifact-2", id: "message-2", seq: 8 },
-        { artifactId: "artifact-0", id: "message-0", seq: 6 },
+        { artifactId: "artifact-2", ...said("message-2", 8, []) },
+        { artifactId: "artifact-0", ...said("message-0", 6, []) },
       ])
-      .mockResolvedValueOnce([{ artifactId: "group-artifact-1", id: "group-message", seq: 3 }]);
+      .mockResolvedValueOnce([{ artifactId: "group-artifact-1", ...said("group-message", 3, []) }]);
     const hits = await querySpaceSearch(prisma as unknown as PrismaClient, actor, "report");
     expect(hits.map(({ artifactId, messageId, seq }) => ({ artifactId, messageId, seq }))).toEqual([
       { artifactId: "artifact-0", messageId: "message-0", seq: 6 },
@@ -90,9 +108,9 @@ describe("link previews in search (CA 44, CA 46)", () => {
     const sql = prisma.$queryRaw.mock.calls.slice(0, 2).map(([strings]) => [...strings].join("?"));
     expect(sql).toHaveLength(2);
     for (const text of sql) {
-      expect(text).toContain("jsonb_path_query_array(m.blocks");
+      expect(text).toContain("jsonb_path_query_array(e.payload -> 'blocks'");
       expect(text).toContain("link_preview");
-      expect(text).not.toContain("m.blocks::text");
+      expect(text).not.toContain("e.payload::text");
     }
   });
 
@@ -102,30 +120,16 @@ describe("link previews in search (CA 44, CA 46)", () => {
     // No artifact matched, so the first query is the direct message search.
     prisma.$queryRaw
       .mockResolvedValueOnce([
-        {
-          id: "message-1",
-          threadId: "thread-1",
-          seq: 3,
-          botId: "bot-1",
-          botName: "Bot",
-          blocks: [
-            { kind: "text", text: "see https://example.test/a" },
-            {
-              kind: "link_preview",
-              url: "https://example.test/a",
-              format: "compact",
-              title: sentinel,
-            },
-          ],
-        },
-        {
-          id: "message-2",
-          threadId: "thread-1",
-          seq: 4,
-          botId: "bot-1",
-          botName: "Bot",
-          blocks: [{ kind: "text", text: `I wrote ${sentinel} myself` }],
-        },
+        said("message-1", 3, [
+          { kind: "text", text: "see https://example.test/a" },
+          {
+            kind: "link_preview",
+            url: "https://example.test/a",
+            format: "compact",
+            title: sentinel,
+          },
+        ]),
+        said("message-2", 4, [{ kind: "text", text: `I wrote ${sentinel} myself` }]),
       ])
       .mockResolvedValueOnce([]);
 

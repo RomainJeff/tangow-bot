@@ -2,12 +2,7 @@ import type { ProductEvent, SessionEntry } from "@rakazo/contracts";
 import { EntryId, SessionEntrySchema, SessionId } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
-import {
-  forwardedThreadEvent,
-  isPeerRun,
-  loadAllMessages,
-  loadEntryPage,
-} from "./thread-message-pages.js";
+import { forwardedThreadEvent, isPeerRun, loadEntryPage } from "./thread-message-pages.js";
 
 const SESSION = SessionId.parse("session-main");
 const thread = { threadId: "thread-1", sessionId: SESSION };
@@ -38,7 +33,7 @@ function threadDb() {
     run: {
       findMany: vi.fn(async ({ where }: { where: { id: { in: string[] } } }) =>
         where.id.in.includes("run-peer")
-          ? [{ id: "run-peer", bot: { parentBotId: "bot-chief" }, sourceMessage: null }]
+          ? [{ id: "run-peer", bot: { parentBotId: "bot-chief" }, sourceMessageId: null }]
           : [],
       ),
     },
@@ -150,7 +145,6 @@ describe("thread feed forwarding", () => {
 
     const forwarded = await Promise.all([
       forwardedThreadEvent(prisma, event("run.started", "run-peer"), peerRuns),
-      forwardedThreadEvent(prisma, event("run.waiting_input", "run-peer"), peerRuns),
       forwardedThreadEvent(prisma, event("run.completed", "run-peer"), peerRuns),
       forwardedThreadEvent(prisma, event("thread.progress", "run-peer"), peerRuns),
       forwardedThreadEvent(prisma, event("effect.edited", "run-peer"), peerRuns),
@@ -159,7 +153,6 @@ describe("thread feed forwarding", () => {
 
     expect(forwarded.map((kept) => kept && `${kept.type}:${kept.runId}`)).toEqual([
       "run.started:run-peer",
-      "run.waiting_input:run-peer",
       "run.completed:run-peer",
       null,
       null,
@@ -169,7 +162,7 @@ describe("thread feed forwarding", () => {
 
   it("caches peer-run classification for live events", async () => {
     const findMany = vi.fn(async () => [
-      { id: "run-peer", bot: { parentBotId: "claudius-1" }, sourceMessage: null },
+      { id: "run-peer", bot: { parentBotId: "claudius-1" }, sourceMessageId: null },
     ]);
     const prisma = { run: { findMany } } as unknown as PrismaClient;
     const cache = new Map<string, Promise<boolean>>();
@@ -179,82 +172,48 @@ describe("thread feed forwarding", () => {
     expect(findMany).toHaveBeenCalledTimes(1);
   });
 
+  /** A top-level bot's run woken by a peer's message, and the row its context reads. */
+  function wokenBy(intent: string, text: string) {
+    const findMany = vi.fn(async () => [
+      { id: "run-woken", bot: { parentBotId: null }, sourceMessageId: "entry-received" },
+    ]);
+    const $queryRaw = vi.fn(async () => [
+      {
+        id: "entry-received",
+        sessionId: "session-main",
+        seq: 4,
+        parentId: "entry-3",
+        type: "bot.message.received",
+        payload: {
+          from: { kind: "bot", botId: "warren", name: "Warren" },
+          fromSessionId: "session-warren",
+          fromEntryId: "entry-sent",
+          text,
+          intent,
+          hop: 1,
+          exchangeId: "entry-sent",
+        },
+        botId: "bot-chief",
+        runId: null,
+        createdAt: new Date("2026-10-11T09:00:00.000Z"),
+        requestId: null,
+        requestRunId: null,
+      },
+    ]);
+    return { run: { findMany }, $queryRaw } as unknown as PrismaClient;
+  }
+
   it("does not treat a top-level bot's relay of delegated work as a peer run (CA5/CA6)", async () => {
     // background-work-visibility: a top-level bot (no parent) has no orchestrator above it, so
     // the run where it carries a peer's `result` back IS its user-facing relay.
-    const findMany = vi.fn(async () => [
-      {
-        id: "run-relay",
-        bot: { parentBotId: null },
-        sourceMessage: {
-          blocks: [
-            {
-              kind: "bot_message_received",
-              fromBotId: "warren",
-              fromBotName: "Warren",
-              text: "Done.",
-              intent: "result",
-            },
-          ],
-          replyTo: null,
-        },
-      },
-    ]);
-    const prisma = { run: { findMany } } as unknown as PrismaClient;
-
-    await expect(isPeerRun(prisma, "run-relay", new Map())).resolves.toBe(false);
+    const prisma = wokenBy("result", "Done.");
+    await expect(isPeerRun(prisma, "run-woken", new Map())).resolves.toBe(false);
   });
 
   it("hides a top-level bot's run answering a peer's own request", async () => {
     // The turn's output is returned to the peer that asked; it is not addressed to the user, so
     // it stays out of their thread and out of the live event stream.
-    const findMany = vi.fn(async () => [
-      {
-        id: "run-answer",
-        bot: { parentBotId: null },
-        sourceMessage: {
-          blocks: [
-            {
-              kind: "bot_message_received",
-              fromBotId: "warren",
-              fromBotName: "Warren",
-              text: "Peux-tu me donner le contexte ?",
-              intent: "request",
-            },
-          ],
-          replyTo: null,
-        },
-      },
-    ]);
-    const prisma = { run: { findMany } } as unknown as PrismaClient;
-
-    await expect(isPeerRun(prisma, "run-answer", new Map())).resolves.toBe(true);
+    const prisma = wokenBy("request", "Peux-tu me donner le contexte ?");
+    await expect(isPeerRun(prisma, "run-woken", new Map())).resolves.toBe(true);
   });
-});
-
-it("collects the message rows into chronological export order, a page at a time", async () => {
-  const row = (seq: number) => ({
-    id: `message-${seq}`,
-    threadId: "thread-1",
-    seq,
-    role: "bot",
-    blocks: [],
-    botId: null,
-    replyToMessageId: null,
-    replyQuote: null,
-    runId: null,
-    clientNonce: null,
-    createdAt: new Date("2026-08-16T00:00:00.000Z"),
-  });
-  const findMany = vi
-    .fn()
-    .mockResolvedValueOnce([row(0), row(1)])
-    .mockResolvedValueOnce([row(2), row(3)])
-    .mockResolvedValueOnce([row(4)]);
-  const prisma = { message: { findMany } } as unknown as PrismaClient;
-
-  const messages = await loadAllMessages(prisma, "thread-1", 2);
-
-  expect(messages.map((message) => message.seq)).toEqual([0, 1, 2, 3, 4]);
-  expect(findMany.mock.calls.map(([query]) => query.where.seq.gt)).toEqual([-1, 1, 3]);
 });

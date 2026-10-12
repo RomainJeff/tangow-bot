@@ -2,17 +2,6 @@ import type { SessionEntryDraft } from "@rakazo/adapter-kit";
 import type { EntryId, SessionEntry, SessionId } from "@rakazo/contracts";
 import { vi } from "vitest";
 
-export function hopEntryOf(blocks: unknown) {
-  const carrier = (Array.isArray(blocks) ? blocks : []).find(
-    (block: { kind?: string }) => block.kind === "bot_message_received" || block.kind === "handoff",
-  ) as { kind: string; hop?: number } | undefined;
-  if (!carrier) return null;
-  return {
-    type: carrier.kind === "handoff" ? "handoff" : "bot.message.received",
-    payload: { hop: carrier.hop, exchangeId: "exchange-1" },
-  };
-}
-
 export function recordingSessionLog() {
   const drafts: SessionEntryDraft[] = [];
   return {
@@ -39,20 +28,25 @@ export function recordingSessionLog() {
     sessionEntry: {
       findMany: vi.fn(async () => []),
       findUnique: vi.fn(async () => null),
+      findFirst: vi.fn(async () => null),
     },
     /**
      * A run with nothing logged and nothing that woke it, in a thread whose main session is
-     * `session-main`, as the executor's opening reads see it.
+     * `session-main`, as the executor's opening reads see it. No bot's delivery woke it.
      */
-    queryRaw: vi.fn(async () => [
-      {
-        logged: null,
-        carrierType: null,
-        steered: false,
-        routineName: null,
-        spawnPromptId: null,
-        sessionId: "session-main",
-      },
-    ]),
+    queryRaw: vi.fn(async (sql: TemplateStringsArray) =>
+      sql.join("?").includes("'bot.message.received'")
+        ? []
+        : [
+            {
+              logged: null,
+              carrierType: null,
+              steered: false,
+              routineName: null,
+              spawnPromptId: null,
+              sessionId: "session-main",
+            },
+          ],
+    ),
   };
 }

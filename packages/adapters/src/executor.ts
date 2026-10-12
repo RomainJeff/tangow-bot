@@ -73,11 +73,11 @@ import {
   BOT_OFFER_DEDICATED_BOT,
   BOT_OFFER_PROPOSALS,
   botMessageAllowsSilence,
-  botMessageContext,
   botMessageRelaysToUser,
   connectorKindFromToolName,
   containsSecret,
   DEFAULT_SKILL_LEARNING,
+  detachedRunInstructions,
   endsSentence,
   expandSkillReferencesInPrompt,
   formatSkillRunPrompt,
@@ -122,7 +122,6 @@ import {
   runStartedByUser,
   SHAPES,
   sandboxCommandTimeoutMs,
-  settleRoutineAsk,
   skillsReferencedInPrompt,
   skillWriteRefusal,
   spawnBotToolArgs,
@@ -146,17 +145,18 @@ import {
 import {
   activeBotNames,
   appendCardStateInTransaction,
-  appendEventInTransaction,
-  appendRunBlocksInTransaction,
   appendRunFinishedInTransaction,
+  blocksOf,
+  type CreateBotMessageInput,
+  createBotMessageInTransaction,
   createSpaceForMember,
-  createThreadMessageInTransaction,
   effectiveMemoryScope,
   findDefaultModelCredential,
   findModelCredential,
   historyGeneration,
   InvalidSpaceNameError,
   isTooManyDatabaseConnections,
+  loadBotMessageContext,
   type McpServer,
   openRoutineSessionInTransaction,
   Prisma,
@@ -165,6 +165,7 @@ import {
   RunHistoryWriteError,
   SpaceLimitError,
   type ThreadEvents,
+  threadEventSeq,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 import { parse as parseShellCommand } from "shell-quote";
@@ -216,12 +217,7 @@ import {
   resolveAutoReviewChecker,
   runAutoReviewJudge,
 } from "./auto-review.js";
-import {
-  loadBotMessageContext,
-  messageBot,
-  resolveRunHop,
-  returnBotMessageOutcome,
-} from "./bot-messages.js";
+import { messageBot, resolveRunHop, returnBotMessageOutcome } from "./bot-messages.js";
 import {
   findBotSecret,
   forgetBotSecret,
@@ -408,9 +404,7 @@ import {
   endsWithToolCallBudgetNotice,
   extractNarrationText,
   finalBlocksAfterMidTurnProgress,
-  isUserProgressClientNonce,
   repeatsSentUserText,
-  userMessageClientNonce,
 } from "./user-progress.js";
 import { createWebProvider } from "./web-provider-factory.js";
 import { withAbort } from "./web-ssrf.js";
@@ -980,6 +974,8 @@ export type SystemInstructionParts = {
   userTurn?: boolean;
   /** A user turn in the bot's direct conversation: the bot may propose a routine. */
   offerProposals?: boolean;
+  /** A routine run, apart from the user's chat: it reports when it ends instead of talking. */
+  detached?: boolean;
 };
 
 export const CHAT_VOICE_INSTRUCTIONS = `## How you communicate with the user
@@ -1045,7 +1041,7 @@ export function buildSystemInstructions(parts: SystemInstructionParts): string {
     'For charts and data visualization, use the render_plot tool: it renders bar, line, scatter, histogram, heatmap, faceted and many more chart types from a JSON spec and attaches the PNG to the chat. Call render_plot with {"help": true} before your first chart to read the full guide.',
     "When the user asks you to add or connect an MCP server (and gives you its details), use add_mcp_server. If it uses browser sign-in, an approval card appears in the chat — tell the user to click Authorize on it.",
     "Never print API keys, access tokens, or secret values. Prefer tools over claiming you already did the work.",
-    CHAT_VOICE_INSTRUCTIONS,
+    parts.detached ? detachedRunInstructions("routine") : CHAT_VOICE_INSTRUCTIONS,
     // Last in the stable part: it flips between user turns and automatic wakes of the same thread.
     parts.userTurn ? BOT_OFFER_DEDICATED_BOT : undefined,
     parts.offerProposals ? BOT_OFFER_PROPOSALS : undefined,
@@ -1434,16 +1430,17 @@ export function createRunExecutor(deps: ExecutorDeps) {
         // A follow_up's source message tells whether the user or another bot started it.
         const sourceMessage =
           (run.trigger === "messaging" || run.trigger === "follow_up") && run.sourceMessageId
-            ? await deps.prisma.message.findUnique({
+            ? await deps.prisma.sessionEntry.findUnique({
                 where: { id: run.sourceMessageId },
-                select: { role: true, blocks: true },
+                select: { type: true, payload: true },
               })
             : null;
-        const sourceRole = sourceMessage?.role;
-        const sourceBlocks =
-          run.trigger === "messaging"
-            ? (sourceMessage?.blocks as MessageBlock[] | undefined)
-            : undefined;
+        const sourceRole = sourceMessage
+          ? sourceMessage.type === "user.message"
+            ? "user"
+            : "bot"
+          : undefined;
+        const sourceBlocks = run.trigger === "messaging" ? blocksOf(sourceMessage) : undefined;
         const channelId = messagingChannelId(sourceBlocks);
         const messagingChannelRun = isMessagingChannelRun(run.trigger, sourceBlocks);
         const sessionId = run.sessionId as SessionId;
@@ -1589,24 +1586,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
         // (background-work-visibility CA1/CA2); a top-level bot's scheduled routine (the
         // orchestrator's own brief) is unaffected and keeps behaving as a normal reply.
         const isRoutineCardRun = showsRoutineRunCard(run, bot.parentBotId != null);
-        const routineCardStartedAt = current.startedAt ?? new Date();
-        let routineForCard: { id: string; name: string; notify: boolean } | null = null;
-        let routineRunCardMessageId: string | null = null;
-        if (isRoutineCardRun && run.routineId) {
-          routineForCard = await deps.prisma.routine.findUnique({
-            where: { id: run.routineId },
-            select: { id: true, name: true, notify: true },
-          });
-          if (routineForCard) {
-            const card = await publishRoutineRunCard(
-              deps,
-              { id: runId, spaceId: run.spaceId, threadId: thread.id, botId: bot.id },
-              routineForCard,
-              routineCardStartedAt,
-            );
-            routineRunCardMessageId = card?.id ?? null;
-          }
-        }
+        const routineForCard =
+          isRoutineCardRun && run.routineId
+            ? await deps.prisma.routine.findUnique({
+                where: { id: run.routineId },
+                select: { notify: true },
+              })
+            : null;
         // A routine's runs may save skills only while its prompt is the user's (skillWriteRefusal).
         const trustedRoutine =
           run.trigger === "routine" && run.routineId
@@ -1619,11 +1605,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
             : false;
         // Set once the run reads a message someone other than the user sent into it.
         let steeredByOthers = false;
-        // One place to flip the card to its terminal state, whichever way the run ends.
-        // `routineForCard` is only set for a routine card run, so this is a no-op elsewhere.
-        // Non-terminal pauses (ask -> waiting_input, takeover -> waiting_takeover) and lease
-        // loss deliberately leave the card on "running": the run is not over, and the retry
-        // reuses this very card via its stable clientNonce.
         const settleStrandedCards = () =>
           failStrandedRoutineCards(deps, {
             spaceId: run.spaceId,
@@ -1631,19 +1612,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
             botId: bot.id,
             runId,
           }).catch((error) => getLogger().error("stranded routine cards", error));
-        const settleRoutineRunCard = async (state: "completed" | "failed", digest: string) => {
-          if (!routineForCard || !routineRunCardMessageId) return;
-          await finalizeRoutineRunCard(
-            deps,
-            { spaceId: run.spaceId, threadId: thread.id, botId: bot.id, id: runId },
-            routineRunCardMessageId,
-            routineForCard,
-            state,
-            digest,
-            { startedAt: routineCardStartedAt.toISOString(), endedAt: new Date().toISOString() },
-          );
-        };
-
         const discoveredPromise = deps.connector
           ? deps.connector.discoverTools(context)
           : Promise.resolve([]);
@@ -1758,7 +1726,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
             error: MISSING_MODEL_MESSAGE,
           });
           if (!failed) return;
-          await settleRoutineRunCard("failed", MISSING_MODEL_MESSAGE);
           await settleStrandedCards();
           if (failed.continuationRunId) {
             await deps.jobs
@@ -1956,21 +1923,22 @@ export function createRunExecutor(deps: ExecutorDeps) {
         // never for a missing value, which goes back to browser_run.
         let browserActUnlocked = false;
         // Durable chat messages posted mid-turn (message_user / promoted narration).
-        // Rehydrate from this run's prior progress rows so a resume after ask/takeover
+        // Rehydrate from this run's prior mid-turn entries so a resume after ask/takeover
         // still knows progress was already published (skip hollow finals; status outcome).
         let publishedMidTurnUserMessage = false;
         const midTurnUserTexts: string[] = [];
-        let midTurnProgressCount = 0;
         {
-          const priorProgress = await deps.prisma.message.findMany({
-            where: { runId: run.id, role: "bot" },
+          const priorProgress = await deps.prisma.sessionEntry.findMany({
+            where: {
+              runId: run.id,
+              type: "assistant.text",
+              payload: { path: ["midTurn"], equals: true },
+            },
             orderBy: { seq: "asc" },
-            select: { blocks: true, clientNonce: true },
+            select: { payload: true },
           });
-          for (const message of priorProgress) {
-            if (!isUserProgressClientNonce(message.clientNonce)) continue;
-            const blocks = Array.isArray(message.blocks) ? (message.blocks as MessageBlock[]) : [];
-            const text = blocks
+          for (const entry of priorProgress) {
+            const text = blocksOf(entry)
               .filter(
                 (block): block is Extract<MessageBlock, { kind: "text" }> => block.kind === "text",
               )
@@ -1980,7 +1948,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
             if (!text) continue;
             midTurnUserTexts.push(text);
             publishedMidTurnUserMessage = true;
-            midTurnProgressCount += 1;
           }
         }
         // Tool calls that land mid-sentence wait here until the narration catches up to a
@@ -2301,17 +2268,18 @@ export function createRunExecutor(deps: ExecutorDeps) {
           change: "created" | "updated",
         ) => {
           try {
+            const posted = await deps.prisma.sessionEntry.findFirst({
+              where: {
+                runId,
+                type: "assistant.ask",
+                payload: { path: ["block", "approvalEffectId"], equals: effectId },
+              },
+              select: { id: true },
+            });
+            if (posted) return;
             dropMidTurnNarration();
-            await publishMessage(
-              deps,
-              run,
-              "bot",
-              [routineConfirmationBlock(effectId, routine, change)],
-              undefined,
-              `routine-confirmation:${effectId}`,
-            );
+            await publishMessage(deps, run, [routineConfirmationBlock(effectId, routine, change)]);
           } catch (error) {
-            if ((error as { code?: string }).code === "P2002") return;
             getLogger().error("routine confirmation card", error);
           }
         };
@@ -3150,7 +3118,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               if (args.attach !== false && chartFits) {
                 // Live inline chart: the client re-renders the validated spec
                 // and the PNG stays on disk as the exportable copy.
-                await publishMessage(deps, run, "bot", [
+                await publishMessage(deps, run, [
                   {
                     kind: "chart",
                     name: chartName,
@@ -3172,7 +3140,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                     operationId: executionId,
                   },
                 );
-                await publishMessage(deps, run, "bot", [result.block]);
+                await publishMessage(deps, run, [result.block]);
                 attached = true;
               }
               return finish({ ok: true, path: outPath, attached });
@@ -3217,7 +3185,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   operationId: executionId,
                 },
               );
-              await publishMessage(deps, run, "bot", [attached.block]);
+              await publishMessage(deps, run, [attached.block]);
               return finish({ ok: true, artifactId: attached.artifactId, path: filePath });
             } catch (error) {
               return finish({
@@ -3618,7 +3586,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   tx,
                   deps.sessionLog,
                   run,
-                  "bot",
                   blocks,
                 );
                 return { server, eventSeq: committed.eventSeq };
@@ -3968,7 +3935,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 spaceId: bot.spaceId,
                 userId: run.userId,
               },
-              runId,
               spawnKey: applied?.effect.id ?? executionId,
               name: spawnArgs.name,
               title: spawnArgs.title || undefined,
@@ -3981,7 +3947,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             if ("error" in spawned) return finish(spawned);
             if (!(await persistEffectResult(spawned))) return uncertainEffectResult(name);
             try {
-              await publishMessage(deps, run, "bot", [
+              await publishMessage(deps, run, [
                 {
                   kind: "child_bot",
                   botId: spawned.botId,
@@ -4106,17 +4072,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
               });
             }
             dropMidTurnNarration();
-            await publishMessage(
-              deps,
-              run,
-              "bot",
-              [{ kind: "text", text }],
-              undefined,
-              // user-message: (not user-progress:) so a delegated run surfaces this to the
-              // user while its narration stays hidden.
-              userMessageClientNonce(run.id, midTurnProgressCount++),
-              true,
-            );
+            // toPerson, so a delegated run surfaces this to the user while its narration stays
+            // hidden.
+            await publishMessage(deps, run, [{ kind: "text", text }], {
+              midTurn: true,
+              toPerson: true,
+            });
             midTurnUserTexts.push(text);
             publishedMidTurnUserMessage = true;
             return finish({ ok: true });
@@ -4206,7 +4167,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             if ("error" in archived) return finish(archived);
             if (!(await persistEffectResult(archived))) return uncertainEffectResult(name);
             try {
-              await publishMessage(deps, run, "bot", [
+              await publishMessage(deps, run, [
                 {
                   kind: "child_bot",
                   botId: archived.botId,
@@ -4389,6 +4350,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             botDirectory,
             userTurn: isUserOpenedTrigger(run.trigger),
             offerProposals: isUserOpenedTrigger(run.trigger) && !thread.groupId,
+            detached: runsDetached(run),
           });
           const instructionTokens = estimateTextTokens(instructions);
           const toolSchemaTokens = estimateToolSchemaTokens(tools);
@@ -4685,7 +4647,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               if (!(await renewRunLease(deps, runId, workerId, fence))) return;
               const safeReason = redactSecrets(event.reason, runSecrets);
               dropMidTurnNarration();
-              await publishMessage(deps, run, "bot", [
+              await publishMessage(deps, run, [
                 { kind: "computer", state: "Needs you", text: safeReason },
               ]);
               await workspaceCheckpoint.flush();
@@ -4716,14 +4678,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
             } else if (event.type === "tool") {
               dropMidTurnNarration();
               toolAnnounced(event.executionId).resolve();
-              await deps.events.append({
-                spaceId: run.spaceId,
-                threadId: thread.id,
-                botId: bot.id,
-                type: "agent.tool.called",
-                runId,
-                payload: { name: event.name, executionId: event.executionId },
-              });
               const toolDetail: ToolCallDetail = {
                 name: event.name,
                 input: describeToolPayload(event.args),
@@ -4740,7 +4694,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 flushPendingTools();
                 if (!(await renewRunLease(deps, runId, workerId, fence))) return;
                 if (messageSegments.length > 0) {
-                  await publishMessage(deps, run, "bot", redactBlocks(messageSegments, runSecrets));
+                  await publishMessage(deps, run, redactBlocks(messageSegments, runSecrets));
                 }
                 await workspaceCheckpoint.flush();
                 terminalCheckpointComplete = true;
@@ -4824,45 +4778,15 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 }
               }
             } else if (event.type === "subagent") {
-              const safeTask = redactSecrets(event.task, runSecrets);
-              const safeProgress = event.progress
-                ? redactSecrets(event.progress, runSecrets)
-                : undefined;
-              const safeResult = event.result ? redactSecrets(event.result, runSecrets) : undefined;
-              await deps.events.append({
-                spaceId: run.spaceId,
-                threadId: thread.id,
-                botId: bot.id,
-                type: "thread.subagent",
-                runId,
-                payload: {
-                  agentId: event.agentId,
-                  name: event.name,
-                  task: safeTask,
-                  status: event.status,
-                  progress: safeProgress,
-                  result: safeResult,
-                },
-              });
+              // The helper's card comes from its run_subagent call and its subagent entry.
               if (event.status === "completed" || event.status === "failed") {
                 publishedTerminalSubagent ||= !subagentMarksUnread(run.trigger, event.status);
-                await publishMessage(
-                  deps,
-                  run,
-                  "bot",
-                  [
-                    {
-                      kind: "subagent",
-                      agentId: event.agentId,
-                      name: event.name,
-                      task: safeTask,
-                      status: event.status,
-                      progress: safeProgress,
-                      result: safeResult,
-                    },
-                  ],
-                  subagentMarksUnread(run.trigger, event.status),
-                );
+                if (subagentMarksUnread(run.trigger, event.status)) {
+                  await deps.prisma.thread.update({
+                    where: { id: thread.id },
+                    data: { unread: true },
+                  });
+                }
               }
             } else if (event.type === "usage") {
               await recordRunUsage(deps, { ...run, botId: bot.id, runId }, event);
@@ -5001,7 +4925,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
               .enqueue(linkPreviewJob({ runId }))
               .catch((error) => getLogger().error("link.preview enqueue", error));
           }
-          await settleRoutineRunCard("completed", text);
           await settleStrandedCards();
           if (completed.continuationRunId) {
             await deps.jobs
@@ -5153,7 +5076,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
             error: message,
           });
           if (!failed) return;
-          await settleRoutineRunCard("failed", message);
           if (savedSkill) await writeRunSkillLines(runId);
           await settleStrandedCards();
           if (failed.continuationRunId) {
@@ -5875,6 +5797,11 @@ export async function openRunLog(
   });
 }
 
+/** A routine's run, scheduled or woken by a webhook, works in its own session. */
+function runsDetached(run: { trigger: string; routineId: string | null }): boolean {
+  return run.routineId !== null && (run.trigger === "routine" || run.trigger === "webhook");
+}
+
 type RunTriggerSource = {
   id: string;
   trigger: string;
@@ -5931,18 +5858,6 @@ function redactBlocks(blocks: MessageBlock[], secrets: string[]): MessageBlock[]
     if (block.kind === "text") {
       return { kind: "text" as const, text: redactSecrets(block.text, secrets) };
     }
-    if (block.kind === "bot_message_sent" || block.kind === "bot_message_received") {
-      return { ...block, text: redactSecrets(block.text, secrets) };
-    }
-    if (block.kind === "routine_run") {
-      return {
-        ...block,
-        ...(block.headline !== undefined
-          ? { headline: redactSecrets(block.headline, secrets) }
-          : {}),
-        ...(block.digest !== undefined ? { digest: redactSecrets(block.digest, secrets) } : {}),
-      };
-    }
     if (block.kind === "steps") {
       return {
         ...block,
@@ -5965,227 +5880,46 @@ function redactBlocks(blocks: MessageBlock[], secrets: string[]): MessageBlock[]
   });
 }
 
+type BotMessageOptions = Pick<CreateBotMessageInput, "markUnread" | "midTurn" | "toPerson">;
+
 async function publishMessage(
   deps: ExecutorDeps,
   run: { id: string; spaceId: string; threadId: string; botId: string },
-  role: "user" | "bot" | "system",
   blocks: MessageBlock[],
-  markUnread?: boolean,
-  clientNonce?: string,
-  toPerson?: true,
+  options: BotMessageOptions = {},
 ) {
   const committed = await deps.prisma.$transaction((tx) =>
-    persistMessageInTransaction(
-      tx,
-      deps.sessionLog,
-      run,
-      role,
-      blocks,
-      markUnread,
-      clientNonce,
-      toPerson,
-    ),
+    persistMessageInTransaction(tx, deps.sessionLog, run, blocks, options),
   );
   await deps.events.notify(run.threadId, committed.eventSeq).catch((error) => {
     getLogger().error("thread message realtime notification", error);
   });
-  return committed.message;
 }
 
 async function persistMessageInTransaction(
   tx: Prisma.TransactionClient,
   sessionLog: ExecutorDeps["sessionLog"],
-  run: { id: string; spaceId: string; threadId: string; botId: string },
-  role: "user" | "bot" | "system",
+  run: { id: string; threadId: string; botId: string },
   blocks: MessageBlock[],
-  markUnread?: boolean,
-  clientNonce?: string,
-  toPerson?: true,
+  options: BotMessageOptions = {},
 ) {
-  const message = await createThreadMessageInTransaction(tx, {
-    threadId: run.threadId,
-    role,
-    blocks,
-    botId: run.botId,
-    runId: run.id,
-    markUnread,
-    clientNonce,
-  });
-  if (role === "bot") {
-    await appendRunBlocksInTransaction(
-      tx,
-      { id: message.id, runId: run.id, botId: run.botId, toPerson },
-      blocks,
-      (client, draft) => sessionLog.append(client, draft),
-    );
-  }
-  const event = await appendEventInTransaction(tx, {
-    spaceId: run.spaceId,
-    threadId: run.threadId,
-    botId: run.botId,
-    type: "thread.message.created",
-    runId: run.id,
-    payload: { messageId: message.id, role, blocks },
-  });
-  return { message, eventSeq: event.seq };
-}
-
-const ROUTINE_RUN_CARD_NONCE_PREFIX = "routine-run-card:";
-const ROUTINE_RUN_HEADLINE_MAX_CHARS = 120;
-
-/**
- * A deterministic one-line summary: the first non-empty line of the digest, trimmed and
- * capped. Never a model call — the card is driven by run lifecycle events, not narration, so
- * this cannot become a second place for model-authored (or injected) text to steer the UI.
- */
-export function routineRunHeadline(digest: string): string | undefined {
-  for (const rawLine of digest.split("\n")) {
-    const line = rawLine.trim();
-    if (!line) continue;
-    return line.length > ROUTINE_RUN_HEADLINE_MAX_CHARS
-      ? `${line.slice(0, ROUTINE_RUN_HEADLINE_MAX_CHARS).trimEnd()}…`
-      : line;
-  }
-  return undefined;
-}
-
-type RoutineRunBlock = Extract<MessageBlock, { kind: "routine_run" }>;
-
-function routineRunCardBlock(
-  routine: { id: string; name: string; notify: boolean },
-  state: RoutineRunBlock["state"],
-  timing: { startedAt?: string; endedAt?: string },
-  digest?: string,
-): RoutineRunBlock {
-  return {
-    kind: "routine_run",
-    routineId: routine.id,
-    routineName: routine.name,
-    state,
-    notify: routine.notify,
-    ...(timing.startedAt ? { startedAt: timing.startedAt } : {}),
-    ...(timing.endedAt ? { endedAt: timing.endedAt } : {}),
-    ...(digest !== undefined ? { digest, headline: routineRunHeadline(digest) } : {}),
-  };
-}
-
-/**
- * Publishes the "running" routine-run card into the bot's thread when a routine card run
- * starts, replacing the free-text closing narration with a lifecycle-driven trace (spec
- * background-work-visibility CA1/CA2). Idempotent on the run id via a stable clientNonce, so a
- * worker crash + retry cannot duplicate the card (spec edge case: reprise après crash).
- */
-async function publishRoutineRunCard(
-  deps: ExecutorDeps,
-  run: { id: string; spaceId: string; threadId: string; botId: string },
-  routine: { id: string; name: string; notify: boolean },
-  startedAt: Date,
-): Promise<{ id: string } | null> {
-  const clientNonce = `${ROUTINE_RUN_CARD_NONCE_PREFIX}${run.id}`;
-  const existing = await deps.prisma.message.findUnique({
-    where: { threadId_clientNonce: { threadId: run.threadId, clientNonce } },
-    select: { id: true },
-  });
-  if (existing) return existing;
-  const block = routineRunCardBlock(routine, "running", { startedAt: startedAt.toISOString() });
-  try {
-    const message = await publishMessage(deps, run, "bot", [block], false, clientNonce);
-    return { id: message.id };
-  } catch (error) {
-    // A concurrent publish (crash/retry race) may already have won the unique nonce.
-    const raced = await deps.prisma.message
-      .findUnique({
-        where: { threadId_clientNonce: { threadId: run.threadId, clientNonce } },
-        select: { id: true },
-      })
-      .catch(() => null);
-    if (raced) return raced;
-    getLogger().error("routine run card publish", error);
-    return null;
-  }
-}
-
-/**
- * Mutates the routine-run card in place (background-work-visibility CA2/CA12), the same "load
- * the message, replace the block, append thread.message.updated" mechanism used for `ask`
- * answers. `next` returns the replacement block, or null to leave the card (and the thread)
- * untouched.
- */
-export async function updateRoutineRunCard(
-  deps: Pick<ExecutorDeps, "prisma" | "events">,
-  // `runId` is deliberately optional: a cancelled run may not write thread history, so the
-  // card's own closing event is appended unattributed rather than rejected.
-  target: { spaceId: string; threadId: string; botId: string; runId?: string },
-  cardMessageId: string,
-  next: (block: RoutineRunBlock) => RoutineRunBlock | null,
-): Promise<void> {
-  const committed = await deps.prisma
-    .$transaction(async (tx) => {
-      // The thread lock first, then the read: a preview card or its removal marker written by
-      // someone else in between must survive this rewrite of the blocks.
-      await tx.$queryRaw`SELECT id FROM threads WHERE id = ${target.threadId} FOR UPDATE`;
-      const message = await tx.message.findUnique({ where: { id: cardMessageId } });
-      if (!message) return null;
-      let changed = false;
-      const blocks = (message.blocks as MessageBlock[]).map((existingBlock) => {
-        if (existingBlock.kind !== "routine_run") return existingBlock;
-        const replacement = next(existingBlock);
-        if (!replacement) return existingBlock;
-        changed = true;
-        return replacement;
-      });
-      if (!changed) return null;
-      await tx.message.update({ where: { id: cardMessageId }, data: { blocks } });
-      const event = await appendEventInTransaction(tx, {
-        spaceId: target.spaceId,
-        threadId: target.threadId,
-        botId: target.botId,
-        type: "thread.message.updated",
-        ...(target.runId ? { runId: target.runId } : {}),
-        payload: { messageId: cardMessageId, role: "bot", blocks },
-      });
-      return event.seq;
-    })
-    .catch((error) => {
-      getLogger().error("routine run card update", error);
-      return null;
-    });
-  if (committed === null) return;
-  await deps.events.notify(target.threadId, committed).catch((error) => {
-    getLogger().error("routine run card realtime notification", error);
-  });
-}
-
-/**
- * Flips the card to its terminal state. `digest` is untrusted content already redacted by the
- * caller; it is stored as plain text and escaped at render time, never interpreted as
- * HTML/markdown (M1) and never used to fetch a remote resource (M2).
- */
-async function finalizeRoutineRunCard(
-  deps: ExecutorDeps,
-  run: { spaceId: string; threadId: string; botId: string; id: string },
-  cardMessageId: string,
-  routine: { id: string; name: string; notify: boolean },
-  state: "completed" | "failed",
-  digest: string,
-  timing: { startedAt?: string; endedAt: string },
-): Promise<void> {
-  await updateRoutineRunCard(deps, { ...run, runId: run.id }, cardMessageId, () =>
-    routineRunCardBlock(routine, state, timing, digest),
+  await createBotMessageInTransaction(
+    tx,
+    { threadId: run.threadId, botId: run.botId, runId: run.id, blocks, ...options },
+    (client, draft) => sessionLog.append(client, draft),
   );
+  return { eventSeq: await threadEventSeq(tx, run.threadId) };
 }
 
 /**
- * Settles the cards of runs that were just cancelled: a routine-run card stops on "cancelled", and
- * a routine card the user approved but the run never created reads as failed. The executor never
- * does this itself: when it notices the cancellation it simply returns, so without this the card
- * would stay on "running" or "Creating…" forever. Cancellation is also the only terminal status
- * written outside the executor, which is why this is called from the API's thread stop — the
- * other cancel paths (clear, rewind, archive) drop the thread or the card with it.
+ * Settles the cards of runs that were just cancelled: a routine card the user approved but the run
+ * never created reads as failed. The executor never does this itself: when it notices the
+ * cancellation it simply returns, so without this the card would stay on "Creating…" forever.
+ * Cancellation is also the only terminal status written outside the executor, which is why this
+ * is called from the API's thread stop.
  *
- * Idempotent: only a card still in `running` or an effect still `approved` is touched, and the
- * run must actually be cancelled, so a run that completed between the caller's snapshot and this
- * call keeps its real outcome.
+ * Idempotent: only an effect still `approved` is touched, and the run must actually be cancelled,
+ * so a run that completed between the caller's snapshot and this call keeps its real outcome.
  */
 export async function settleCancelledRunCards(
   deps: Pick<ExecutorDeps, "prisma" | "events" | "sessionLog">,
@@ -6196,22 +5930,8 @@ export async function settleCancelledRunCards(
     where: { id: { in: [...runIds] }, status: "cancelled" },
     select: { id: true, spaceId: true, threadId: true, botId: true },
   });
-  const endedAt = new Date().toISOString();
   for (const { id, ...target } of cancelled) {
     await failStrandedRoutineCards(deps, { ...target, runId: id });
-    const card = await deps.prisma.message.findUnique({
-      where: {
-        threadId_clientNonce: {
-          threadId: target.threadId,
-          clientNonce: `${ROUTINE_RUN_CARD_NONCE_PREFIX}${id}`,
-        },
-      },
-      select: { id: true },
-    });
-    if (!card) continue;
-    await updateRoutineRunCard(deps, target, card.id, (block) =>
-      block.state === "running" ? { ...block, state: "cancelled", endedAt } : null,
-    );
   }
 }
 
@@ -6309,15 +6029,12 @@ async function personWokeRun(
 ): Promise<boolean> {
   if (isUserOpenedTrigger(run.trigger)) return true;
   if (run.trigger !== "follow_up" || !run.sourceMessageId) return false;
-  const source = await prisma.message.findUnique({
+  const source = await prisma.sessionEntry.findUnique({
     where: { id: run.sourceMessageId },
-    select: { role: true, blocks: true },
+    select: { type: true },
   });
-  const blocks = Array.isArray(source?.blocks) ? (source.blocks as MessageBlock[]) : [];
-  return source?.role === "user" && !botMessageContext(blocks);
+  return source?.type === "user.message";
 }
-
-type AskBlock = Extract<MessageBlock, { kind: "ask" }>;
 
 /**
  * The cards of the day the caps read. Corrections do not count, so the day holds more cards than
@@ -6490,7 +6207,7 @@ type RoutineCardOutcome =
   | { failed: true };
 
 /**
- * Freezes an approved routine card on what came of it: the routine it links to, or the failure.
+ * Records what came of an approved routine card: the routine it links to, or the failure.
  * Logged, never thrown: the creation already happened and the model has its result.
  */
 async function settleRoutineCard(
@@ -6499,42 +6216,25 @@ async function settleRoutineCard(
   effectId: string,
   outcome: RoutineCardOutcome,
 ): Promise<void> {
-  const settle = (card: AskBlock): AskBlock =>
-    outcome.failed
-      ? { ...card, failed: true }
-      : settleRoutineAsk(card, outcome.routine, outcome.change);
   const committed = await deps.prisma
     .$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM threads WHERE id = ${target.threadId} FOR UPDATE`;
-      const run = await tx.run.findUnique({
-        where: { id: target.runId },
-        select: { status: true },
+      const card = await tx.sessionEntry.findFirst({
+        where: {
+          runId: target.runId,
+          type: "effect.requested",
+          payload: { path: ["effectId"], equals: effectId },
+        },
+        select: { id: true },
       });
-      const messages = await tx.message.findMany({
-        where: { threadId: target.threadId, runId: target.runId, role: "bot" },
-        orderBy: { seq: "desc" },
-        select: { id: true, blocks: true },
-      });
-      const isCard = (block: unknown) =>
-        Boolean(block) &&
-        typeof block === "object" &&
-        (block as { kind?: unknown }).kind === "ask" &&
-        (block as { approvalEffectId?: unknown }).approvalEffectId === effectId;
-      const message = messages.find(
-        (row) => Array.isArray(row.blocks) && (row.blocks as unknown[]).some(isCard),
-      );
-      if (!message) return null;
-      const blocks = (message.blocks as Prisma.InputJsonValue[]).map((block) =>
-        isCard(block) ? (settle(block as AskBlock) as Prisma.InputJsonValue) : block,
-      );
-      await tx.message.update({ where: { id: message.id }, data: { blocks } });
+      if (!card) return null;
       await appendCardStateInTransaction(
         tx,
         {
           type: "effect.applied",
           feedBotId: target.botId,
           payload: {
-            target: EntryId.parse(message.id),
+            target: EntryId.parse(card.id),
             ...(outcome.failed
               ? { failed: true }
               : { routineId: outcome.routine.id, change: outcome.change }),
@@ -6542,16 +6242,7 @@ async function settleRoutineCard(
         },
         (client, draft) => deps.sessionLog.append(client, draft),
       );
-      const event = await appendEventInTransaction(tx, {
-        spaceId: target.spaceId,
-        threadId: target.threadId,
-        botId: target.botId,
-        type: "thread.message.updated",
-        // A cancelled run may not write thread history: its card still settles, unattributed.
-        ...(run?.status === "cancelled" ? {} : { runId: target.runId }),
-        payload: { messageId: message.id, role: "bot", blocks },
-      });
-      return event.seq;
+      return threadEventSeq(tx, target.threadId);
     })
     .catch((error) => {
       getLogger().error("routine card update", error);

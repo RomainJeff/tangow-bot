@@ -1,4 +1,5 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import { detachedRunInstructions } from "@rakazo/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const fakeAgentState = vi.hoisted(() => ({
@@ -12,6 +13,7 @@ const fakeAgentState = vi.hoisted(() => ({
     maxTokens?: number;
   }>,
   sessionIds: [] as Array<string | undefined>,
+  systemPrompts: [] as string[],
   subagentArgs: { name: "helper", task: "help" } as Record<string, unknown>,
   lastSubagentResult: undefined as unknown,
   failPrompt: false,
@@ -32,6 +34,7 @@ vi.mock("@earendil-works/pi-agent-core", () => ({
       sessionId?: string;
       transformContext: (messages: AgentMessage[]) => Promise<AgentMessage[]>;
       initialState: {
+        systemPrompt: string;
         thinkingLevel: string;
         tools: FakeAgentTool[];
         model: (typeof fakeAgentState.models)[number];
@@ -40,6 +43,7 @@ vi.mock("@earendil-works/pi-agent-core", () => ({
       this.tools = options.initialState.tools;
       fakeAgentState.transforms.push(options.transformContext);
       fakeAgentState.sessionIds.push(options.sessionId);
+      fakeAgentState.systemPrompts.push(options.initialState.systemPrompt);
       fakeAgentState.thinkingLevels.push(options.initialState.thinkingLevel);
       fakeAgentState.models.push(options.initialState.model);
     }
@@ -117,6 +121,7 @@ async function runWithModel(
     thinkingLevel?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null;
   }>,
   maxImagesPerPrompt?: number,
+  instructions = "",
 ) {
   const runtime = new PiAgentRuntime();
   for await (const _event of runtime.run(
@@ -125,7 +130,7 @@ async function runWithModel(
       threadId: "t",
       runId: "r",
       prompt: "hello",
-      instructions: "",
+      instructions,
       history: [],
       tools: [],
       model: { provider, id: modelId, thinkingLevel, maxImagesPerPrompt },
@@ -151,6 +156,7 @@ describe("Pi agent thinking level", () => {
     fakeAgentState.transforms = [];
     fakeAgentState.models = [];
     fakeAgentState.sessionIds = [];
+    fakeAgentState.systemPrompts = [];
     fakeAgentState.subagentArgs = { name: "helper", task: "help" };
     fakeAgentState.lastSubagentResult = undefined;
     fakeAgentState.failPrompt = false;
@@ -287,6 +293,18 @@ describe("Pi agent thinking level", () => {
     expect(fakeAgentState.lastSubagentResult).toMatchObject({
       details: { result: "Subagent failed: Connect that model provider first" },
     });
+  });
+
+  it("tells a helper that only the result it hands back reaches the user, not the chat voice", async () => {
+    const chatVoice =
+      "## How you communicate with the user\n\nUse message_user to communicate with the user.";
+    const signal = new AbortController().signal;
+    await runWithModel("plain-model", "test", signal, null, undefined, undefined, chatVoice);
+
+    const [thread, helper] = fakeAgentState.systemPrompts;
+    expect(thread).toContain(chatVoice);
+    expect(helper).toContain(detachedRunInstructions("helper"));
+    expect(helper).not.toContain(chatVoice);
   });
 
   it("keeps reasoning off for the main agent and subagent", async () => {

@@ -78,7 +78,6 @@ describe("a bot's narration", () => {
             showAuthor={false}
             showAvatar={false}
             onOpenBot={() => undefined}
-            onOpenPeerMessages={() => undefined}
             peerBot={() => undefined}
             onRefresh={async () => undefined}
             onBotChanged={async () => undefined}

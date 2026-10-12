@@ -11,11 +11,29 @@ import type {
   SessionEntryType,
   ThreadEntry,
 } from "@rakazo/contracts";
-import { isRunTrace, SessionEntrySchema, SessionId, toThreadEntry } from "@rakazo/contracts";
+import {
+  isRunTrace,
+  needsThePerson,
+  parseKnownMessageBlocks,
+  SessionEntrySchema,
+  SessionId,
+  toThreadEntry,
+} from "@rakazo/contracts";
 import { ACTIVE_RUN_STATUSES, SessionEntryDecodeError, sanitizeJsonValue } from "@rakazo/core";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
-import { RunHistoryWriteError } from "./messages.js";
+
+/**
+ * SQL that holds when the entry `e` is still on its session's chain: after the session's last
+ * clear, and outside every stretch a rewind cut, from just after the rewind's parent to the rewind.
+ */
+export const ENTRY_ON_CHAIN = Prisma.sql`e.seq > COALESCE((
+    SELECT max(c.seq) FROM session_entries c WHERE c."sessionId" = e."sessionId" AND c.type = 'clear'
+  ), -1)
+  AND NOT EXISTS (
+    SELECT 1 FROM session_entries r JOIN session_entries p ON p.id = r."parentId"
+    WHERE r."sessionId" = e."sessionId" AND r.type = 'rewind' AND e.seq > p.seq AND e.seq < r.seq
+  )`;
 
 /** A `session_entries` row, as Prisma and `$queryRaw` both return it. */
 export interface SessionEntryRow {
@@ -95,6 +113,28 @@ type Route = { sessionId: SessionId; threadId: string | null; originSessionId?: 
 type Lineage = { mainSessionId: SessionId; threadId: string | null; child: boolean };
 /** What a transaction already resolved: each session's lineage, and its feed event per thread. */
 type TransactionLog = { lineageOf: Map<string, Lineage>; feedOf: Map<string, ThreadFeed> };
+export class RunHistoryWriteError extends Error {
+  constructor() {
+    super("Run cannot write thread history");
+    this.name = "RunHistoryWriteError";
+  }
+}
+
+export async function assertRunCanWriteHistory(
+  tx: Prisma.TransactionClient,
+  runId?: string,
+): Promise<{ status: string; startedAt: Date | null } | undefined> {
+  if (!runId) return;
+  const run = await tx.run.findUnique({
+    where: { id: runId },
+    select: { status: true, startedAt: true },
+  });
+  if (!run || run.status === "cancelled") {
+    throw new RunHistoryWriteError();
+  }
+  return run;
+}
+
 const transactionLogs = new WeakMap<Prisma.TransactionClient, TransactionLog>();
 
 function transactionLog(tx: Prisma.TransactionClient): TransactionLog {
@@ -327,25 +367,125 @@ export async function appendCardStateInTransaction(
 }
 
 /**
- * The card a waiting run is parked on: the newest question it put to the person, which the thread
- * keys the card by. Undefined for a card older than the log.
+ * Whether the person answered a question or an approval this run put to them. A routine
+ * confirmation the server settles is no answer.
  */
-export async function pendingAskEntryId(
+export async function personAnsweredRun(
+  prisma: PrismaClient | Prisma.TransactionClient,
+  runId: string,
+): Promise<boolean> {
+  const [row] = await prisma.$queryRaw<Array<{ answered: boolean }>>`
+    SELECT EXISTS (
+      SELECT 1 FROM session_entries ask
+      JOIN session_entries answer ON answer."sessionId" = ask."sessionId"
+        AND answer.type = 'card.answered' AND answer.payload ->> 'target' = ask.id
+      WHERE ask."runId" = ${runId} AND ask.type = 'assistant.ask'
+        AND (answer.payload -> 'answer' IS NOT NULL OR ask.payload -> 'block' -> 'confirms' IS NULL)
+    ) OR EXISTS (
+      SELECT 1 FROM session_entries WHERE "runId" = ${runId} AND type = 'effect.resolved'
+    ) AS answered`;
+  return row?.answered === true;
+}
+
+/**
+ * The newest question a run put to the person, as its card: the one a waiting run is parked on.
+ * An approval's card is its request's.
+ */
+export async function latestRunAsk(
   tx: Prisma.TransactionClient,
   runId: string,
-): Promise<EntryId | undefined> {
-  const ask = await tx.sessionEntry.findFirst({
+): Promise<{ entryId: EntryId; block: BlockOf<"ask"> } | undefined> {
+  const row = await tx.sessionEntry.findFirst({
     where: { runId, type: { in: ["assistant.ask", "effect.requested"] } },
     orderBy: { seq: "desc" },
-    select: { id: true },
   });
-  return ask?.id as EntryId | undefined;
+  const entry = row && sessionEntryFromRow(row);
+  const block =
+    entry?.type === "assistant.ask"
+      ? entry.payload.block
+      : entry?.type === "effect.requested"
+        ? entry.payload.card
+        : undefined;
+  return entry && block ? { entryId: entry.id, block } : undefined;
+}
+
+/** The blocks of a person's message entry, none for any other entry. */
+export function blocksOf(entry: { payload: Prisma.JsonValue } | null | undefined): MessageBlock[] {
+  const payload = entry?.payload;
+  const blocks =
+    payload && typeof payload === "object" && !Array.isArray(payload) ? payload.blocks : undefined;
+  return parseKnownMessageBlocks(blocks).map(({ block }) => block);
+}
+
+/** One message a run sent: the text blocks it appended together, so their seqs follow each other. */
+export type RunMessage = {
+  id: EntryId;
+  blocks: MessageBlock[];
+  midTurn: boolean;
+  toPerson: boolean;
+};
+
+/** A run's words in the thread's main session, as the messages it sent them in. */
+export async function runMessages(
+  prisma: Pick<PrismaClient, "sessionEntry"> | Prisma.TransactionClient,
+  runId: string,
+): Promise<RunMessage[]> {
+  const said = await prisma.sessionEntry.findMany({
+    where: { runId, type: "assistant.text", session: { kind: "thread" } },
+    orderBy: { seq: "asc" },
+    select: { id: true, seq: true, payload: true },
+  });
+  const messages: Array<RunMessage & { seq: number }> = [];
+  for (const entry of said) {
+    const { midTurn = false, toPerson = false } = entry.payload as {
+      midTurn?: boolean;
+      toPerson?: boolean;
+    };
+    const last = messages.at(-1);
+    if (last?.seq === entry.seq - 1 && last.midTurn === midTurn && last.toPerson === toPerson) {
+      last.seq = entry.seq;
+      last.blocks.push(...blocksOf(entry));
+    } else {
+      messages.push({
+        id: entry.id as EntryId,
+        seq: entry.seq,
+        blocks: blocksOf(entry),
+        midTurn,
+        toPerson,
+      });
+    }
+  }
+  return messages.map(({ seq, ...message }) => message);
+}
+
+/** The seq of the thread's newest feed event, which a realtime notify names. */
+export async function threadEventSeq(
+  prisma: Pick<PrismaClient, "thread"> | Prisma.TransactionClient,
+  threadId: string,
+): Promise<number> {
+  const { nextEventSeq } = await prisma.thread.findUniqueOrThrow({
+    where: { id: threadId },
+    select: { nextEventSeq: true },
+  });
+  return nextEventSeq - 1;
+}
+
+/** The entry of a thread's main session that carries this clientNonce. */
+export async function threadEntryByNonce(
+  prisma: PrismaClient | Prisma.TransactionClient,
+  threadId: string,
+  clientNonce: string,
+): Promise<SessionEntry | undefined> {
+  const [row] = await prisma.$queryRaw<SessionEntryRow[]>`
+    SELECT e.* FROM session_entries e JOIN threads t ON t."sessionId" = e."sessionId"
+    WHERE t.id = ${threadId} AND e.payload ->> 'clientNonce' = ${clientNonce}`;
+  return row && sessionEntryFromRow(row);
 }
 
 type EntryBody<T extends SessionEntryType> = T extends unknown
   ? { type: T; payload: SessionEntryOf<T>["payload"] }
   : never;
-type RunBlockBody = EntryBody<
+export type RunBlockBody = EntryBody<
   "assistant.text" | "assistant.reasoning" | "assistant.ask" | "assistant.choice"
 >;
 type BlockOf<K extends MessageBlock["kind"]> = Extract<MessageBlock, { kind: K }>;
@@ -377,32 +517,47 @@ const RUN_BLOCK_ENTRY: {
   choice: (block) => ({ type: "assistant.choice", payload: { block } }),
   progress: null,
   steps: null,
-  subagent: null,
   handoff: null,
-  bot_message_sent: null,
-  bot_message_received: null,
   routine_run: null,
   skill_source: null,
 };
 
 /**
- * The first entry takes the message's id, so whatever points at the message points at the entry.
+ * The entries a run's message blocks make, in order. Text the bot addressed to the person, and any
+ * block they must act on, is marked `toPerson`, so it reaches them from a routine, a helper or a
+ * hidden peer run.
  */
-export async function appendRunBlocksInTransaction(
-  tx: Prisma.TransactionClient,
-  message: { id: string; runId: string; botId: string; toPerson?: true },
+export function runBlockBodies(
+  message: { toPerson?: true; midTurn?: true },
   blocks: readonly MessageBlock[],
-  append: typeof appendSessionEntryInTransaction = appendSessionEntryInTransaction,
-): Promise<void> {
-  const bodies = blocks.flatMap((block): RunBlockBody[] => {
+): RunBlockBody[] {
+  return blocks.flatMap((block): RunBlockBody[] => {
     const toEntry = RUN_BLOCK_ENTRY[block.kind] as ((block: MessageBlock) => RunBlockBody) | null;
     const body = toEntry?.(block);
-    if (!body) return [];
-    return message.toPerson && body.type === "assistant.text"
-      ? [{ ...body, payload: { ...body.payload, toPerson: true } }]
-      : [body];
+    if (body?.type !== "assistant.text") return body ? [body] : [];
+    const toPerson = message.toPerson || needsThePerson(body.payload.blocks);
+    return [
+      {
+        ...body,
+        payload: {
+          ...body.payload,
+          ...(toPerson ? { toPerson: true as const } : {}),
+          ...(message.midTurn ? { midTurn: true as const } : {}),
+        },
+      },
+    ];
   });
-  if (bodies.length === 0) return;
+}
+
+/** The first entry takes the message's id, so whatever points at the message points at the entry. */
+export async function appendRunBlocksInTransaction(
+  tx: Prisma.TransactionClient,
+  message: { id: string; runId: string; botId: string; toPerson?: true; midTurn?: true },
+  blocks: readonly MessageBlock[],
+  append: typeof appendSessionEntryInTransaction = appendSessionEntryInTransaction,
+): Promise<boolean> {
+  const bodies = runBlockBodies(message, blocks);
+  if (bodies.length === 0) return false;
   const run = await tx.run.findUniqueOrThrow({
     where: { id: message.runId },
     select: { sessionId: true },
@@ -416,6 +571,7 @@ export async function appendRunBlocksInTransaction(
       runId: message.runId,
     } as SessionEntryDraft);
   }
+  return true;
 }
 
 /**

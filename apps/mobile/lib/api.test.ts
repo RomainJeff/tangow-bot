@@ -1581,8 +1581,8 @@ describe("mobile thread subscription", () => {
         );
         controller.enqueue(
           encoder.encode(
-            'data: {"json":{"type":"thread.message.created",\n' +
-              'data: "seq":5,"payload":{"messageId":"m1"}}}\n\n',
+            'data: {"json":{"type":"session.entry.appended",\n' +
+              'data: "seq":5,"payload":{"entries":[]}}}\n\n',
           ),
         );
         controller.close();
@@ -1608,7 +1608,7 @@ describe("mobile thread subscription", () => {
     );
     expect(onEvent).toHaveBeenNthCalledWith(
       2,
-      expect.objectContaining({ type: "thread.message.created", seq: 5 }),
+      expect.objectContaining({ type: "session.entry.appended", seq: 5 }),
     );
   });
 
@@ -1777,7 +1777,6 @@ describe("mobile thread event reduction", () => {
   it("leaves the snapshot unchanged for unrelated events", () => {
     const initial = snapshot();
     expect(applyMobileThreadEvent(initial, event("bot.updated"))).toBe(initial);
-    expect(applyMobileThreadEvent(initial, event("thread.message.created"))).toBe(initial);
     expect(applyMobileThreadEvent(null, event("thread.progress"))).toBeNull();
   });
 });

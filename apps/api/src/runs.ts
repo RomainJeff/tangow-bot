@@ -1,11 +1,6 @@
-import { type Actor, MessageBlock, type Routine, type RunActivityRow } from "@rakazo/contracts";
-import {
-  ACTIVE_RUN_STATUSES,
-  botMessageContext,
-  classifyRunFailure,
-  isTerminal,
-} from "@rakazo/core";
-import { Prisma, type PrismaClient } from "@rakazo/db";
+import type { Actor, Routine, RunActivityRow, SessionEntry } from "@rakazo/contracts";
+import { ACTIVE_RUN_STATUSES, classifyRunFailure, isTerminal } from "@rakazo/core";
+import { Prisma, type PrismaClient, sessionEntryFromRow } from "@rakazo/db";
 
 const RECENT_LIMIT = 20;
 export const TERMINAL_STATUSES = ["completed", "failed", "cancelled"] as const;
@@ -17,14 +12,13 @@ function promptSnippet(prompt: string, max = 120): string {
 }
 
 export function activityPromptSnippet(
-  input: { trigger: string; prompt: string; sourceBlocks?: unknown },
+  input: { trigger: string; prompt: string; source?: SessionEntry | null },
   max = 120,
 ): string {
   if (input.trigger !== "bot_message") return promptSnippet(input.prompt, max);
-  const parsed = MessageBlock.array().safeParse(input.sourceBlocks);
-  const message = parsed.success ? botMessageContext(parsed.data) : undefined;
+  const message = input.source?.type === "bot.message.received" ? input.source.payload : undefined;
   if (!message) return "Message from another agent";
-  const name = message.fromBotName.trim() || "Another agent";
+  const name = message.from.name.trim() || "Another agent";
   const label =
     message.intent === "result" || message.intent === "status" || message.intent === "fyi"
       ? `Update from ${name}`
@@ -43,7 +37,7 @@ export const RUN_INCLUDE = {
   bot: { select: { name: true, archivedAt: true, notifyOnFinish: true } },
   task: { select: { prompt: true } },
   routine: { select: { name: true } },
-  sourceMessage: { select: { blocks: true } },
+  sourceMessage: true,
   thread: {
     select: {
       groupId: true,
@@ -69,7 +63,7 @@ export function mapRun(row: RunRow): RunActivityRow {
     promptSnippet: activityPromptSnippet({
       trigger: row.trigger,
       prompt: row.task.prompt,
-      sourceBlocks: row.sourceMessage?.blocks,
+      source: row.sourceMessage && sessionEntryFromRow(row.sourceMessage),
     }),
     createdAt: row.createdAt.toISOString(),
     updatedAt: (isTerminal(status) && row.completedAt

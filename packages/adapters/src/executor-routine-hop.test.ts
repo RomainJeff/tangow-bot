@@ -145,21 +145,6 @@ function fixture(overrides: RunOverrides = {}, runId = "run-1") {
       updateMany: vi.fn(async () => ({ count: 1 })),
     },
     thread: { findUniqueOrThrow: vi.fn(async () => ({ id: run.threadId, groupId: null })) },
-    message: {
-      findMany: vi.fn(async () => []),
-      findFirst: vi.fn(async () => null),
-      findUnique: vi.fn(async () => ({
-        blocks: [
-          {
-            kind: "bot_message_received",
-            fromBotId: "bot-2",
-            fromBotName: "B",
-            text: "hi",
-            hop: overrides.messageHop ?? 1,
-          },
-        ],
-      })),
-    },
     routine: {
       create: routineCreate,
       findUnique: vi.fn(async () => ({ inheritedHop: overrides.routineHop ?? null })),

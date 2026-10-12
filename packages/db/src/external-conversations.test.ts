@@ -25,15 +25,25 @@ describe("createExternalConversationRepos", () => {
         automatedSenderPolicies: {},
         updatedAt: new Date("2026-09-01T00:00:00.000Z"),
         messages: [{ senderId: "B1", senderName: "Pager" }],
-        thread: {
-          id: "thread-1",
-          unread: true,
-          messages: [{ blocks: [{ kind: "text", text: "Latest" }] }],
-        },
+        thread: { id: "thread-1", unread: true, sessionId: "session-1" },
+      },
+    ]);
+    const $queryRaw = vi.fn().mockResolvedValue([
+      {
+        id: "entry-1",
+        sessionId: "session-1",
+        seq: 0,
+        parentId: null,
+        type: "bot.text",
+        payload: { blocks: [{ kind: "text", text: "Latest" }] },
+        botId: "bot-1",
+        runId: null,
+        createdAt: new Date("2026-09-01T00:00:00.000Z"),
       },
     ]);
     const repos = createExternalConversationRepos({
       externalConversation: { findMany },
+      $queryRaw,
     } as never);
 
     await expect(repos.listForSpaces(actor, ["space-1"])).resolves.toEqual([

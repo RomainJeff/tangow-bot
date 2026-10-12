@@ -3329,14 +3329,7 @@ function previewMessageText(message: MobileMessage): string {
           `${messagingProviderLabel(block.provider, block.transport)} · ${block.fromLabel}: ${block.text}`,
         ];
       }
-      if (
-        (block.kind === "text" ||
-          block.kind === "bot_message_sent" ||
-          block.kind === "bot_message_received") &&
-        block.text
-      ) {
-        return [block.text];
-      }
+      if (block.kind === "text" && block.text) return [block.text];
       return [];
     })
     .join(" ")
@@ -3956,17 +3949,17 @@ const ItemRow = memo(function ItemRow({
         if (item.status === "running") {
           return <TaskCard title={title} state="running" meta={item.task} streaming />;
         }
+        const { sessionId } = item;
         return (
           <TaskCard
             title={title}
             state={item.status === "failed" ? "failed" : "done"}
             meta={item.model.id}
             body={item.result}
-            onOpen={() =>
-              setSession({
-                title,
-                load: () => sessionEntries(item.sessionId),
-              })
+            onOpen={
+              sessionId
+                ? () => setSession({ title, load: () => sessionEntries(sessionId) })
+                : undefined
             }
           />
         );

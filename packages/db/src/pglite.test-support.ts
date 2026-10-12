@@ -1,10 +1,10 @@
 import { readdir, readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { PGLiteSocketServer } from "@electric-sql/pglite-socket";
-import type { PrismaClient } from "@rakazo/db";
-import { createDb } from "@rakazo/db";
+import type { PrismaClient } from "./client.js";
+import { createDb } from "./client.js";
 
-const MIGRATIONS = new URL("../../../db/prisma/migrations/", import.meta.url);
+const MIGRATIONS = new URL("../prisma/migrations/", import.meta.url);
 const CONNECTIONS = 4;
 
 /**

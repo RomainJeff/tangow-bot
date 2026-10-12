@@ -120,7 +120,6 @@ function Row({ message: row }: { message: MessageItem }) {
             showAuthor={false}
             showAvatar={false}
             onOpenBot={() => undefined}
-            onOpenPeerMessages={() => undefined}
             peerBot={() => undefined}
             onRefresh={async () => undefined}
             onBotChanged={async () => undefined}

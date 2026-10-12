@@ -263,6 +263,19 @@ function replyTargets(
   return targets;
 }
 
+/**
+ * The quote a person's reply carries in its own turn's prompt, from the entries it replies to:
+ * the replied-to entry and the rest of its run.
+ */
+export function replyContextOf(
+  message: ThreadEntryOf<"user.message">,
+  replied: readonly SessionEntry[],
+  botNames?: ReadonlyMap<string, string>,
+): string | undefined {
+  const targets = replyTargets(replied, foldRuns(replied.filter(isInferenceEntry)));
+  return replyContext(message, (entryId) => targets.get(entryId), botNames);
+}
+
 function resolvedTarget(entry: SessionEntry | undefined): ReplyTarget | undefined {
   return entry && replyTargets([entry], foldRuns([entry].filter(isInferenceEntry))).get(entry.id);
 }

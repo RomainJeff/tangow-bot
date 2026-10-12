@@ -43,6 +43,10 @@ function ok(output = "") {
   return { ok: true, exitCode: 0, output };
 }
 
+function waitTimeout(args: readonly string[] | undefined) {
+  return args?.[args.indexOf("--wait-timeout") + 1];
+}
+
 function failed(output: string) {
   return { ok: false, exitCode: 1, output };
 }
@@ -233,13 +237,21 @@ describe("updater orchestration", () => {
     });
     const record = (await response.json()) as ServerUpdateRun;
     expect(record).toMatchObject({ ok: false, restart: "not-required" });
-    expect(record.steps.map((step) => step.id)).toEqual(["pull", "recreate", "recover"]);
+    expect(record.steps.map((step) => step.id)).toEqual([
+      "pull",
+      "recreate",
+      "stop-migrate",
+      "recover",
+    ]);
     expect(record.restartAdvice).toMatch(/restored the previously running v1\.0\.0 image/);
     const composeUp = calls.filter(({ args }) => args.includes("up"));
     expect(composeUp).toHaveLength(2);
     expect(composeUp[0]?.args).toEqual(expect.arrayContaining(["--wait", "--pull", "never"]));
     expect(composeUp[0]?.args).toContain("--no-build");
     expect(composeUp[1]?.args).toContain("--no-build");
+    expect(waitTimeout(composeUp[0]?.args)).toBe("3600");
+    expect(composeUp[0]?.args).not.toContain("--no-deps");
+    expect(composeUp[1]?.args).toContain("--no-deps");
     expect(composeUp[0]?.env?.RAKAZO_IMAGE_TAG).toBe(`sha-${targetCommit}`);
     expect(composeUp[1]?.env?.RAKAZO_IMAGE_TAG).toBe("v1.0.0");
     expect(await readFile(path.join(fixture.deployDir, ".env"), "utf8")).toContain(
@@ -252,6 +264,28 @@ describe("updater orchestration", () => {
       running: false,
       lastRun: { ok: false, fromTag: "v1.0.0", toTag: `sha-${targetCommit}` },
     });
+  });
+
+  it("leaves the services down rather than restore an image older than the moved conversations", async () => {
+    const fixture = await deployment();
+    const ups: string[][] = [];
+    const run: UpdaterCommandRunner = async (command, args) => {
+      if (command === "git") return ok(`${targetCommit}\trefs/tags/v1.1.0\n`);
+      if (args.includes("--entrypoint")) return failed("the image has no session log");
+      if (args.includes("exec")) return ok("t\n");
+      if (!args.includes("up")) return ok();
+      ups.push(args);
+      return failed("api did not become healthy");
+    };
+    const response = await request(createUpdaterApp(fixture.config, { run }), "/apply", {
+      repoUrl: "https://github.com/elie222/rakazo",
+      branch: "main",
+    });
+    const record = (await response.json()) as ServerUpdateRun;
+    expect(record).toMatchObject({ ok: false, restart: "manual" });
+    expect(record.steps.map((step) => step.id)).toEqual(["pull", "recreate", "stop-migrate"]);
+    expect(record.restartAdvice).toMatch(/v1\.0\.0 cannot read this database/);
+    expect(ups).toHaveLength(1);
   });
 
   it("resets a fork checkout when recreate fails after the fast-forward", async () => {
@@ -288,6 +322,7 @@ describe("updater orchestration", () => {
       "checkout",
       "merge",
       "recreate",
+      "stop-migrate",
       "restore-checkout",
       "recover",
     ]);
@@ -339,8 +374,27 @@ describe("updater orchestration", () => {
     expect(record.ok).toBe(true);
     expect(calls.some((args) => args.includes("pull"))).toBe(false);
     expect(calls.find((args) => args.includes("up"))).toEqual(
-      expect.arrayContaining(["--pull", "never"]),
+      expect.arrayContaining(["--pull", "never", "--no-deps"]),
     );
+    const stopsMigrate = calls.findIndex((args) => args.includes("rm") && args.includes("migrate"));
+    expect(stopsMigrate).toBeGreaterThan(-1);
+    expect(stopsMigrate).toBeLessThan(calls.findIndex((args) => args.includes("up")));
+  });
+
+  it("refuses a rollback to an image older than the moved conversations", async () => {
+    const fixture = await deployment();
+    const calls: string[][] = [];
+    const run: UpdaterCommandRunner = async (_command, args) => {
+      calls.push(args);
+      if (args.includes("--entrypoint")) return failed("the image has no session log");
+      return args.includes("exec") ? ok("t\n") : ok();
+    };
+    const response = await request(createUpdaterApp(fixture.config, { run }), "/rollback");
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: expect.stringMatching(/v0\.9\.0 cannot read this database/),
+    });
+    expect(calls.some((args) => args.includes("up"))).toBe(false);
   });
 
   it("preserves the environment owner and surrounding values with mode 0600", async () => {

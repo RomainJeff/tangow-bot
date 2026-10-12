@@ -1,12 +1,10 @@
 import type { RealtimeFanout } from "@rakazo/adapter-kit";
-import type { AskAnswers, EntryId, SessionId } from "@rakazo/contracts";
+import type { AskAnswers, SessionId } from "@rakazo/contracts";
 import {
-  ASK_DISMISSED_ANSWER,
   type AskQuestion,
   type BotSecretDestination,
   type MessageBlock,
   type ProductEvent,
-  parseKnownMessageBlocks,
 } from "@rakazo/contracts";
 import {
   ACTIVE_RUN_STATUSES,
@@ -27,22 +25,23 @@ import { approvalEffectKey } from "@rakazo/core/node/approval-effect-key";
 import { getLogger } from "@rakazo/logging";
 import { activeBotNames } from "./bot-names.js";
 import { cancelRunsInTransaction } from "./cancel-runs.js";
-import type { Prisma, PrismaClient } from "./client.js";
+import type { Prisma, PrismaClient, Run } from "./client.js";
 import { expireComputerExecutionLeases } from "./computers.js";
-import {
-  assertRunCanWriteHistory,
-  createThreadMessageInTransaction,
-  RunHistoryWriteError,
-} from "./messages.js";
+import { createBotMessageInTransaction, createThreadMessageInTransaction } from "./messages.js";
 import {
   appendCardStateInTransaction,
   appendComputerControlInTransaction,
   appendRewindInTransaction,
-  appendRunBlocksInTransaction,
   appendRunFinishedInTransaction,
   appendSessionEntryInTransaction,
+  assertRunCanWriteHistory,
+  blocksOf,
+  ENTRY_ON_CHAIN,
   historyGeneration,
-  pendingAskEntryId,
+  latestRunAsk,
+  RunHistoryWriteError,
+  threadEntryByNonce,
+  threadEventSeq,
 } from "./sessions.js";
 import { withTransactionRetry } from "./transaction-retry.js";
 
@@ -90,7 +89,6 @@ export interface ClearThreadInput {
 }
 
 export interface ClearThreadResult {
-  event: ProductEvent;
   cancelledRunIds: string[];
   /** The history generation the clear ended, whose compacted summaries the caller purges. */
   historyGeneration: number;
@@ -102,14 +100,12 @@ export interface RewindThreadInput extends ClearThreadInput {
 }
 
 export interface RewindThreadResult {
-  event: ProductEvent;
   cancelledRunIds: string[];
   /**
    * The history generation the rewind ended, whose compacted summaries the caller purges; absent
    * when it cut no summarized turn.
    */
   historyGeneration?: number;
-  fromSeq: number;
 }
 
 export interface FinalizeComputerControlReleaseInput {
@@ -261,7 +257,6 @@ export interface SendUserMessageInput {
   /** Webhook runs only: false lets the run follow the normal approval rules. Defaults to true. */
   requireToolApproval?: boolean;
   clientNonce?: string;
-  linkMessageToRun?: boolean;
   /** When false, persist the user message without starting a run (team-chat transcript). */
   createRun?: boolean;
   /** When true, start a new run even if the bot is already busy (team-chat delivery). */
@@ -344,10 +339,10 @@ export function createThreadEvents(
 }
 
 interface TruncateThreadInput extends ClearThreadInput {
-  /** Messages with seq >= fromSeq are deleted. */
+  /** The runs that wrote entries of the main session from this seq on are cut with them. */
   fromSeq: number;
-  /** Events with seq >= fromEventSeq are deleted. */
-  fromEventSeq: number;
+  /** Events with seq >= fromEventSeq are deleted; null keeps them all. */
+  fromEventSeq: number | null;
   /** Runs started at or after this instant belong to the part of the conversation that goes. */
   fromCreatedAt: Date;
 }
@@ -359,8 +354,8 @@ interface TruncateThreadResult {
 
 /**
  * Shared by clearThread (cut at zero) and rewindThread (cut at a message): stop the thread's
- * work, release its computer, and drop history at or after the cut. Compaction bookkeeping and
- * the trailing event differ per caller and stay out of here.
+ * work, release its computer, and drop the feed at or after the cut. The entry that cuts the
+ * chain differs per caller and stays out of here.
  */
 async function truncateThreadInTransaction(
   tx: Prisma.TransactionClient,
@@ -397,28 +392,28 @@ async function truncateThreadInTransaction(
       executionLeaseExpiresAt: null,
     },
   });
-  const cutMessages = await tx.message.findMany({
-    where: { threadId: input.threadId, seq: { gte: input.fromSeq }, runId: { not: null } },
+  const cutRuns = await tx.sessionEntry.findMany({
+    where: { sessionId: thread.sessionId, seq: { gte: input.fromSeq }, runId: { not: null } },
     select: { runId: true },
+    distinct: ["runId"],
   });
-  // Their skill lines belonged under the messages that go: none is written after this.
+  // Their skill lines belonged under the replies the cut leaves behind: none is written after this.
   await tx.run.updateMany({
     where: {
       threadId: input.threadId,
       skillLinesAt: null,
       OR: [
-        { id: { in: [...runIds, ...cutMessages.flatMap((m) => (m.runId ? [m.runId] : []))] } },
+        { id: { in: [...runIds, ...cutRuns.flatMap((entry) => entry.runId ?? [])] } },
         { createdAt: { gte: input.fromCreatedAt } },
       ],
     },
     data: { skillLinesAt: now },
   });
-  await tx.message.deleteMany({
-    where: { threadId: input.threadId, seq: { gte: input.fromSeq } },
-  });
-  await tx.event.deleteMany({
-    where: { threadId: input.threadId, seq: { gte: input.fromEventSeq } },
-  });
+  if (input.fromEventSeq !== null) {
+    await tx.event.deleteMany({
+      where: { threadId: input.threadId, seq: { gte: input.fromEventSeq } },
+    });
+  }
   if (input.groupId) {
     await tx.chatGroup.update({ where: { id: input.groupId }, data: { updatedAt: now } });
   } else {
@@ -449,20 +444,21 @@ export async function clearThread(
       payload: {},
       feedBotId: input.botId,
     });
-    const event = await appendEventInTransaction(tx, {
-      ...input,
-      type: "thread.cleared",
-      payload: {},
-    });
-    return { event, cancelledRunIds: truncated.cancelledRunIds, historyGeneration: generation };
+    return {
+      cancelledRunIds: truncated.cancelledRunIds,
+      historyGeneration: generation,
+      eventSeq: await threadEventSeq(tx, input.threadId),
+    };
   });
-  await notifyRealtime(realtime, committed.event.threadId, committed.event.seq);
-  return { ...committed, event: mapProductEvent(committed.event) };
+  const { eventSeq, ...cleared } = committed;
+  await notifyRealtime(realtime, input.threadId, eventSeq);
+  return cleared;
 }
 
 /**
- * Drops the target user message and everything after it, so the caller can resend an edited
- * version. Returns null when the target is gone or is not a user message.
+ * Cuts the chain back to before the target user message and everything after it, so the caller
+ * can resend an edited version. Returns null when the target is not a person's message still on
+ * the thread's chain: a rewind into what an earlier rewind or a clear cut would fork the log.
  */
 export async function rewindThread(
   prisma: PrismaClient,
@@ -470,26 +466,22 @@ export async function rewindThread(
   realtime?: RealtimeFanout,
 ): Promise<RewindThreadResult | null> {
   const committed = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    const target = await tx.message.findFirst({
-      where: { id: input.messageId, threadId: input.threadId, role: "user" },
-      select: { seq: true, createdAt: true },
-    });
+    const [target] = await tx.$queryRaw<Array<{ seq: number; createdAt: Date }>>`
+      SELECT e.seq, e."createdAt" FROM session_entries e
+      JOIN sessions s ON s.id = e."sessionId" AND s."threadId" = ${input.threadId} AND s.kind = 'thread'
+      WHERE e.id = ${input.messageId} AND e.type = 'user.message' AND ${ENTRY_ON_CHAIN}`;
     if (!target) return null;
-    const created = await tx.event.findFirst({
-      where: {
-        threadId: input.threadId,
-        type: "thread.message.created",
-        payload: { path: ["messageId"], equals: input.messageId },
-      },
-      orderBy: { seq: "asc" },
-      select: { seq: true },
-    });
+    const [created] = await tx.$queryRaw<Array<{ seq: number }>>`
+      SELECT seq FROM events
+      WHERE "threadId" = ${input.threadId} AND type = 'session.entry.appended'
+        AND payload -> 'entries' @> ${JSON.stringify([{ id: input.messageId }])}::jsonb
+      ORDER BY seq LIMIT 1`;
     const truncated = await truncateThreadInTransaction(tx, {
       ...input,
       fromSeq: target.seq,
-      // No creation event (only possible if history was already pruned): keep every event
-      // rather than guess a cut point and drop the wrong range.
-      fromEventSeq: created?.seq ?? Number.MAX_SAFE_INTEGER,
+      // No event carried it (a message older than the feed): keep every event rather than guess
+      // a cut point and drop the wrong range.
+      fromEventSeq: created?.seq ?? null,
       fromCreatedAt: target.createdAt,
     });
     const generation = await historyGeneration(tx, truncated.sessionId);
@@ -499,21 +491,16 @@ export async function rewindThread(
       feedBotId: input.botId,
     });
     const ended = (await historyGeneration(tx, truncated.sessionId)) !== generation;
-    const event = await appendEventInTransaction(tx, {
-      ...input,
-      type: "thread.rewound",
-      payload: { fromSeq: target.seq },
-    });
     return {
-      event,
       cancelledRunIds: truncated.cancelledRunIds,
       ...(ended ? { historyGeneration: generation } : {}),
-      fromSeq: target.seq,
+      eventSeq: await threadEventSeq(tx, input.threadId),
     };
   });
   if (!committed) return null;
-  await notifyRealtime(realtime, committed.event.threadId, committed.event.seq);
-  return { ...committed, event: mapProductEvent(committed.event) };
+  const { eventSeq, ...rewound } = committed;
+  await notifyRealtime(realtime, input.threadId, eventSeq);
+  return rewound;
 }
 
 export async function sendUserMessage(
@@ -523,25 +510,15 @@ export async function sendUserMessage(
 ): Promise<SendUserMessageResult> {
   const replay = async (): Promise<SendUserMessageResult | null> => {
     if (!input.clientNonce) return null;
-    const message = await prisma.message.findUnique({
-      where: {
-        threadId_clientNonce: {
-          threadId: input.threadId,
-          clientNonce: input.clientNonce,
-        },
-      },
-      include: { sourceRuns: { orderBy: { createdAt: "asc" }, take: 1 } },
-    });
+    const message = await threadEntryByNonce(prisma, input.threadId, input.clientNonce);
     if (!message) return null;
-    const created = message.sourceRuns[0];
-    const run =
-      created ??
-      (message.runId ? await prisma.run.findUnique({ where: { id: message.runId } }) : null);
+    const { created, steered, answered } = await runsOfMessage(prisma, message);
+    const [first] = created;
     return {
       messageId: message.id,
       seq: message.seq,
-      taskId: created?.taskId ?? null,
-      runId: run?.id ?? null,
+      taskId: first?.taskId ?? null,
+      runId: (first ?? steered[0] ?? answered[0])?.id ?? null,
     };
   };
   const existing = await replay();
@@ -604,9 +581,6 @@ export async function sendUserMessage(
             sourceMessageId: message.id,
           },
         });
-        if (input.linkMessageToRun) {
-          await tx.message.update({ where: { id: message.id }, data: { runId: run.id } });
-        }
       } else if (createRun && busy) {
         await tx.steeringMessage.create({
           data: {
@@ -617,17 +591,8 @@ export async function sendUserMessage(
             untrusted: !runStartedByUser({ trigger: input.trigger, sourceRole: "user" }),
           },
         });
-        await tx.message.update({ where: { id: message.id }, data: { runId: busy.id } });
       }
-      const event = await appendEventInTransaction(tx, {
-        spaceId: input.spaceId,
-        threadId: input.threadId,
-        botId: input.botId,
-        type: "thread.message.created",
-        runId: run?.id ?? busy?.id,
-        payload: { messageId: message.id, role: "user", blocks: input.blocks },
-      });
-      return { message, task, run, busy, event };
+      return { message, task, run, busy, eventSeq: await threadEventSeq(tx, input.threadId) };
     });
   const committed = await commit().catch(async (error) => {
     const winner = await replay();
@@ -635,7 +600,7 @@ export async function sendUserMessage(
     throw error;
   });
   if ("replay" in committed) return committed.replay;
-  await notifyRealtime(realtime, input.threadId, committed.event.seq).catch((error) => {
+  await notifyRealtime(realtime, input.threadId, committed.eventSeq).catch((error) => {
     // The event is durable; subscribers recover it from their persisted cursor.
     getLogger().error("user message realtime notification", error);
   });
@@ -645,6 +610,51 @@ export async function sendUserMessage(
     taskId: committed.task?.id ?? null,
     runId: committed.run?.id ?? committed.busy?.id ?? null,
   };
+}
+
+/** At most this many card answers follow one message: one per bot of a group. */
+const ANSWERS_AFTER_MESSAGE = 50;
+
+/**
+ * The runs a person's message started, in the order it started them, the ones it steered, and the
+ * ones whose question it answered from the composer: the answers its send logged right after it.
+ */
+export async function runsOfMessage(
+  prisma: PrismaClient | Prisma.TransactionClient,
+  message: { id: string; sessionId: string; seq: number },
+): Promise<{ created: Run[]; steered: Run[]; answered: Run[] }> {
+  const [created, steering, after] = await Promise.all([
+    prisma.run.findMany({
+      where: { sourceMessageId: message.id },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    }),
+    prisma.steeringMessage.findMany({
+      where: { messageId: message.id, runId: { not: null } },
+      orderBy: { createdAt: "asc" },
+      select: { run: true },
+    }),
+    prisma.sessionEntry.findMany({
+      where: { sessionId: message.sessionId, seq: { gt: message.seq } },
+      orderBy: { seq: "asc" },
+      take: ANSWERS_AFTER_MESSAGE,
+      select: { id: true, parentId: true, type: true, payload: true },
+    }),
+  ]);
+  const cards: string[] = [];
+  let parentId = message.id;
+  for (const entry of after) {
+    if (entry.type !== "card.answered" || entry.parentId !== parentId) break;
+    cards.push((entry.payload as { target: string }).target);
+    parentId = entry.id;
+  }
+  const asked = cards.length
+    ? await prisma.sessionEntry.findMany({ where: { id: { in: cards } }, select: { runId: true } })
+    : [];
+  const answeredRunIds = asked.flatMap((card) => card.runId ?? []);
+  const answered = answeredRunIds.length
+    ? await prisma.run.findMany({ where: { id: { in: answeredRunIds } } })
+    : [];
+  return { created, steered: steering.flatMap((row) => row.run ?? []), answered };
 }
 
 /**
@@ -743,27 +753,35 @@ export async function claimSteering(
         leaseOwner: input.leaseOwner,
         leaseFence: input.leaseFence,
       },
-      select: { id: true, trigger: true, sourceMessage: { select: { blocks: true } } },
+      select: {
+        id: true,
+        trigger: true,
+        sourceMessage: { select: { payload: true } },
+        thread: { select: { sessionId: true } },
+      },
     });
     if (!run) return [];
     const channelId =
-      run.trigger === "messaging"
-        ? messagingChannelId(run.sourceMessage?.blocks as MessageBlock[] | undefined)
-        : undefined;
+      run.trigger === "messaging" ? messagingChannelId(blocksOf(run.sourceMessage)) : undefined;
     const steering = await tx.steeringMessage.findMany({
       where: {
         botId: input.botId,
         id: input.seenIds.length ? { notIn: input.seenIds } : undefined,
         OR: [{ runId: null }, { runId: input.runId }],
         message: {
-          threadId: input.threadId,
+          sessionId: run.thread.sessionId,
           // Private follow-ups remain unclaimed for the existing private continuation.
           ...(channelId
-            ? { blocks: { array_contains: [{ kind: "channel_message", channelId }] } }
+            ? {
+                payload: {
+                  path: ["blocks"],
+                  array_contains: [{ kind: "channel_message", channelId }],
+                },
+              }
             : {}),
         },
       },
-      include: { message: { select: { blocks: true, seq: true } } },
+      include: { message: { select: { payload: true } } },
       orderBy: [{ message: { seq: "asc" } }, { id: "asc" }],
     });
     if (steering.length === 0) return [];
@@ -771,13 +789,16 @@ export async function claimSteering(
       where: { id: { in: steering.map((item) => item.id) }, claimedAt: null },
       data: { runId: input.runId, claimedAt: new Date() },
     });
-    return steering.map((item) => ({
-      id: item.id,
-      messageId: item.messageId,
-      text: blocksToAgentHistoryText(item.message.blocks as MessageBlock[]),
-      blocks: item.message.blocks as MessageBlock[],
-      untrusted: item.untrusted,
-    }));
+    return steering.map((item) => {
+      const blocks = blocksOf(item.message);
+      return {
+        id: item.id,
+        messageId: item.messageId,
+        text: blocksToAgentHistoryText(blocks),
+        blocks,
+        untrusted: item.untrusted,
+      };
+    });
   });
 }
 
@@ -853,28 +874,6 @@ async function planSpawnBotEdit(
 }
 
 /**
- * The waiting run's card: its own pausing message (the latest bot message of the run), its
- * pending ask, and the entry the client names it by. Tolerant lookup, and callers rewrite the
- * stored array by index, so a block this build does not recognise neither hides the pending ask
- * nor gets dropped from the message.
- */
-async function pendingAskCard(
-  tx: Prisma.TransactionClient,
-  { threadId, runId }: { threadId: string; runId: string },
-) {
-  const message = await tx.message.findFirst({
-    where: { threadId, runId, role: "bot" },
-    orderBy: { seq: "desc" },
-  });
-  const pending = parseKnownMessageBlocks(message?.blocks).find(
-    ({ block }) => block.kind === "ask" && block.status !== "answered",
-  );
-  if (!message || pending?.block.kind !== "ask") return null;
-  const askEntryId = ((await pendingAskEntryId(tx, runId)) ?? message.id) as EntryId;
-  return { message, pending: { index: pending.index, block: pending.block }, askEntryId };
-}
-
-/**
  * Answer the pending ask of a waiting_input run inside an existing transaction. Called by
  * answerRunInput, and exported so a caller that already holds a transaction can reuse it.
  * Returns null when nothing was awaiting an answer; throws InvalidAnswerError when the run is
@@ -904,10 +903,9 @@ export async function answerRunInputInTransaction(
       botId: run.botId,
       runId: input.runId,
     };
-    const card = await pendingAskCard(tx, input);
-    if (!card) return null;
-    const { message, pending, askEntryId: askId } = card;
-    if (input.messageId !== askId) return null;
+    const card = await latestRunAsk(tx, input.runId);
+    if (!card || input.messageId !== card.entryId) return null;
+    const { entryId: askId, block: pendingAsk } = card;
     const answerEntry = (text: string) =>
       appendSessionEntryInTransaction(tx, {
         type: "user.message",
@@ -919,9 +917,6 @@ export async function answerRunInputInTransaction(
           source: "card",
         },
       });
-    const pendingAsk = pending.block;
-    const storedBlocks = message.blocks as Prisma.InputJsonValue[];
-
     // Edits only make sense on a Create bot approval, answered "allow" by the run's owner. Checked
     // before any other branch and before any name is read, so the refusal reveals nothing.
     if (input.edits) {
@@ -1012,27 +1007,13 @@ export async function answerRunInputInTransaction(
         },
       });
       if (task.count !== 1) throw new Error("Run task was not available to answer");
-      const answeredBlocks = storedBlocks.map((block, index) =>
-        index === pending.index
-          ? { ...pendingAsk, status: "answered" as const, answers: storedAnswers }
-          : block,
-      );
-      await tx.message.update({ where: { id: message.id }, data: { blocks: answeredBlocks } });
       await appendCardStateInTransaction(tx, {
         type: "card.answered",
         feedBotId: run.botId,
         payload: { target: askId, answers: storedAnswers },
       });
       await answerEntry(lines.join("\n"));
-      const updated = await appendEventInTransaction(tx, {
-        spaceId: input.spaceId,
-        threadId: input.threadId,
-        botId: run.botId,
-        type: "thread.message.updated",
-        runId: input.runId,
-        payload: { messageId: message.id, role: "bot", blocks: answeredBlocks },
-      });
-      return { threadId: updated.threadId, seq: updated.seq };
+      return { threadId: input.threadId, seq: await threadEventSeq(tx, input.threadId) };
     }
 
     const approvalAsk = isApprovalAskBlock(pendingAsk);
@@ -1192,10 +1173,6 @@ export async function answerRunInputInTransaction(
       status: "answered" as const,
       answer: secretAsk ? "" : freeTextAnswer || input.answer,
     };
-    const blocks = storedBlocks.map((block, index) =>
-      index === pending.index ? answeredAsk : block,
-    );
-    await tx.message.update({ where: { id: message.id }, data: { blocks } });
     if (approvalEffect) {
       const effectId = approvalEffect.id;
       if (spawnBotEdit) {
@@ -1223,8 +1200,7 @@ export async function answerRunInputInTransaction(
       if (!secretAsk) await answerEntry(selectedChoice?.label ?? (freeTextAnswer || input.answer));
     }
     if (spawnBotEdit) {
-      // Before the message.updated event, so one notify covers both. The audit keeps what the model
-      // proposed next to what the person approved.
+      // The audit keeps what the model proposed next to what the person approved.
       await appendEventInTransaction(tx, {
         spaceId: input.spaceId,
         threadId: input.threadId,
@@ -1238,15 +1214,7 @@ export async function answerRunInputInTransaction(
         },
       });
     }
-    const updated = await appendEventInTransaction(tx, {
-      spaceId: input.spaceId,
-      threadId: input.threadId,
-      botId: run.botId,
-      type: "thread.message.updated",
-      runId: input.runId,
-      payload: { messageId: message.id, role: "bot", blocks },
-    });
-    return { threadId: updated.threadId, seq: updated.seq };
+    return { threadId: input.threadId, seq: await threadEventSeq(tx, input.threadId) };
   }
 }
 
@@ -1262,13 +1230,7 @@ export interface ResumeAskWithComposerTextInput {
 export type ResumeAskWithComposerTextResult =
   | {
       resolvable: true;
-      threadId: string;
       runId: string;
-      botId: string;
-      messageId: string;
-      /** The stored blocks with the ask marked answered — unrecognised entries passed through. */
-      blocks: Prisma.InputJsonValue[];
-      eventSeq: number;
     }
   | { resolvable: false };
 
@@ -1323,10 +1285,9 @@ export async function resumeAskWithComposerTextInTransaction(
   });
   if (!run) return { resolvable: false };
 
-  const card = await pendingAskCard(tx, input);
+  const card = await latestRunAsk(tx, input.runId);
   if (!card) return { resolvable: false };
-  const { message, pending, askEntryId } = card;
-  const pendingAsk = pending.block;
+  const { entryId: askEntryId, block: pendingAsk } = card;
 
   // Approval and secret asks stay blocked in PR 1 — classification reuses the same audited
   // helpers `answerRunInputInTransaction` already relies on (packages/core/action-approval.ts).
@@ -1354,39 +1315,15 @@ export async function resumeAskWithComposerTextInTransaction(
   });
   if (task.count !== 1) throw new Error("Run task was not available to answer");
 
-  // Mark answered without echoing the reply onto the card: the user's words already live in
-  // their own message bubble right below, so storing `answer`/`answers` here would duplicate them
-  // (design D2). Absent `answer` makes the card render a plain resolved "Answered" state, and
-  // absent `answers` keeps the multi-question card from fabricating a per-question breakdown.
-  // Map over the stored array, not the parsed copy: every other block is written back exactly as
-  // it came out of the database, unrecognised ones included.
-  const blocks = (message.blocks as Prisma.InputJsonValue[]).map((block, index) =>
-    index === pending.index ? { ...pendingAsk, status: "answered" as const } : block,
-  );
-  await tx.message.update({ where: { id: message.id }, data: { blocks } });
+  // Answered without echoing the reply onto the card: the user's words already live in their own
+  // message bubble right below, so an `answer` here would duplicate them (design D2), and the card
+  // renders a plain resolved "Answered" state.
   await appendCardStateInTransaction(tx, {
     type: "card.answered",
     feedBotId: run.botId,
     payload: { target: askEntryId },
   });
-  const updated = await appendEventInTransaction(tx, {
-    spaceId: input.spaceId,
-    threadId: input.threadId,
-    botId: run.botId,
-    type: "thread.message.updated",
-    runId: input.runId,
-    payload: { messageId: message.id, role: "bot", blocks },
-  });
-
-  return {
-    resolvable: true,
-    threadId: updated.threadId,
-    runId: input.runId,
-    botId: run.botId,
-    messageId: message.id,
-    blocks,
-    eventSeq: updated.seq,
-  };
+  return { resolvable: true, runId: input.runId };
 }
 
 export interface DismissProposalWithTextInput {
@@ -1429,19 +1366,10 @@ export async function dismissProposalWithTextInTransaction(
   });
   if (!run || run.userId !== input.userId) return { outcome: "keep" };
   const waiting = run.status === "waiting_input";
-  const message = await tx.message.findFirst({
-    where: { threadId: input.threadId, runId: input.runId, role: "bot" },
-    orderBy: { seq: "desc" },
-  });
-  const asks = parseKnownMessageBlocks(message?.blocks).filter(({ block }) => block.kind === "ask");
   // A tap that came first answered the card: the reply steers its run only if it was a proposal.
-  const pending = waiting
-    ? asks.find(({ block }) => block.kind === "ask" && block.status !== "answered")
-    : asks.at(-1);
-  if (!message || pending?.block.kind !== "ask" || !isApprovalAskBlock(pending.block)) {
-    return { outcome: "keep" };
-  }
-  const pendingAsk = pending.block;
+  const card = await latestRunAsk(tx, input.runId);
+  if (!card || !isApprovalAskBlock(card.block)) return { outcome: "keep" };
+  const pendingAsk = card.block;
   const effect = await tx.externalEffect.findFirst({
     where: { id: pendingAsk.approvalEffectId, spaceId: input.spaceId, runId: input.runId },
     select: { id: true, kind: true, status: true },
@@ -1476,21 +1404,6 @@ export async function dismissProposalWithTextInTransaction(
     botId: run.botId,
     runId: input.runId,
     payload: { effectId: effect.id, decision: "denied", dismissed: true },
-  });
-
-  const blocks = (message.blocks as Prisma.InputJsonValue[]).map((block, index) =>
-    index === pending.index
-      ? { ...pendingAsk, status: "answered" as const, answer: ASK_DISMISSED_ANSWER }
-      : block,
-  );
-  await tx.message.update({ where: { id: message.id }, data: { blocks } });
-  await appendEventInTransaction(tx, {
-    spaceId: input.spaceId,
-    threadId: input.threadId,
-    botId: run.botId,
-    type: "thread.message.updated",
-    runId: input.runId,
-    payload: { messageId: message.id, role: "bot", blocks },
   });
   return { outcome: "dismissed", status: "queued" };
 }
@@ -1536,20 +1449,13 @@ export async function pauseRunForInput(
     });
     if (attempt.count !== 1) throw new Error("Active run attempt was not available to pause");
 
-    const message = await createThreadMessageInTransaction(tx, {
-      threadId: input.threadId,
-      role: "bot",
-      blocks: input.blocks,
-      botId: input.botId,
-      runId: input.runId,
-    });
     if (input.effect) {
       const { sessionId } = await tx.run.findUniqueOrThrow({
         where: { id: input.runId },
         select: { sessionId: true },
       });
+      await tx.thread.update({ where: { id: input.threadId }, data: { unread: true } });
       await appendSessionEntryInTransaction(tx, {
-        id: message.id as EntryId,
         type: "effect.requested",
         sessionId: sessionId as SessionId,
         botId: input.botId,
@@ -1562,11 +1468,12 @@ export async function pauseRunForInput(
         },
       });
     } else {
-      await appendRunBlocksInTransaction(
-        tx,
-        { id: message.id, runId: input.runId, botId: input.botId },
-        input.blocks,
-      );
+      await createBotMessageInTransaction(tx, {
+        threadId: input.threadId,
+        botId: input.botId,
+        runId: input.runId,
+        blocks: input.blocks,
+      });
     }
     if (input.pausedCall) {
       const { sessionId, callId, output, ...log } = input.pausedCall;
@@ -1577,24 +1484,8 @@ export async function pauseRunForInput(
         payload: { callId, output, isError: false, artifactIds: [] },
       });
     }
-    await appendEventInTransaction(tx, {
-      spaceId: input.spaceId,
-      threadId: input.threadId,
-      botId: input.botId,
-      type: "thread.message.created",
-      runId: input.runId,
-      payload: { messageId: message.id, role: "bot", blocks: input.blocks },
-    });
-    const waitingEvent = await appendEventInTransaction(tx, {
-      spaceId: input.spaceId,
-      threadId: input.threadId,
-      botId: input.botId,
-      type: "run.waiting_input",
-      runId: input.runId,
-      payload: {},
-    });
     await tx.event.deleteMany({ where: { runId: input.runId, type: "thread.progress" } });
-    return { threadId: waitingEvent.threadId, seq: waitingEvent.seq };
+    return { threadId: input.threadId, seq: await threadEventSeq(tx, input.threadId) };
   });
 
   if (!committed) return false;
@@ -1900,26 +1791,12 @@ async function finalizeRunOnce(
     if (input.outcome === "completed") {
       const completedBlocks = completedRunBlocks(input.blocks, writableRun?.startedAt ?? null, now);
       if (completedBlocks.length > 0) {
-        const message = await createThreadMessageInTransaction(tx, {
+        await createBotMessageInTransaction(tx, {
           threadId: input.threadId,
-          role: "bot",
+          botId: input.botId,
+          runId: input.runId,
           blocks: completedBlocks,
-          botId: input.botId,
-          runId: input.runId,
           markUnread: input.markUnread,
-        });
-        await appendRunBlocksInTransaction(
-          tx,
-          { id: message.id, runId: input.runId, botId: input.botId },
-          completedBlocks,
-        );
-        await appendEventInTransaction(tx, {
-          spaceId: input.spaceId,
-          threadId: input.threadId,
-          botId: input.botId,
-          type: "thread.message.created",
-          runId: input.runId,
-          payload: { messageId: message.id, role: "bot", blocks: completedBlocks },
         });
       }
     }
@@ -1991,9 +1868,9 @@ async function createSteeringContinuation(
     where: {
       botId: input.botId,
       runId: null,
-      message: { threadId: input.threadId },
+      message: { session: { threadId: input.threadId, kind: "thread" } },
     },
-    include: { message: { select: { id: true, blocks: true, seq: true } } },
+    include: { message: { select: { id: true } } },
     orderBy: [{ message: { seq: "asc" } }, { id: "asc" }],
   });
   if (pending.length === 0) return null;

@@ -13,8 +13,8 @@ import {
 } from "@rakazo/adapters";
 import type { EntryId, MessageBlock, SessionEntry, SessionId } from "@rakazo/contracts";
 import {
-  appendRunBlocksInTransaction,
   appendSessionEntryInTransaction,
+  createBotMessageInTransaction,
   createThreadMessage,
   type PrismaClient,
 } from "@rakazo/db";
@@ -308,31 +308,23 @@ async function seedExchange(
       effort: null,
     },
   });
-  const publish = async (blocks: MessageBlock[]) => {
-    const message = await createThreadMessage(prisma, {
-      threadId: thread.id,
-      role: "bot",
-      botId: exchange.botId,
-      runId: run.id,
-      blocks,
-    });
-    await prisma.$transaction((tx) =>
-      appendRunBlocksInTransaction(
-        tx,
-        { ...message, runId: run.id, botId: exchange.botId },
+  const publish = (blocks: MessageBlock[]) =>
+    prisma.$transaction((tx) =>
+      createBotMessageInTransaction(tx, {
+        threadId: thread.id,
+        botId: exchange.botId,
+        runId: run.id,
         blocks,
-      ),
+      }),
     );
-    return message;
-  };
   if (exchange.ask) {
-    const ask = await publish([{ kind: "ask", text: exchange.ask.text }]);
+    const askId = await publish([{ kind: "ask", text: exchange.ask.text }]);
     await createThreadMessage(prisma, {
       threadId: thread.id,
       role: "user",
       feedBotId: exchange.botId,
       blocks: [{ kind: "text", text: exchange.ask.answer }],
-      replyToMessageId: ask.id,
+      replyToMessageId: askId,
       replyQuote: exchange.ask.text,
     });
   }

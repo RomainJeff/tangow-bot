@@ -39,6 +39,15 @@ function fakePrisma(
   } as unknown as PrismaClient;
 }
 
+/** What a run said in its thread, one entry per message, the narration marked mid-turn. */
+function said(messages: Array<{ blocks: unknown[]; midTurn?: boolean }>) {
+  return messages.map(({ blocks, midTurn }, index) => ({
+    id: `entry-${index}`,
+    seq: index * 2,
+    payload: { blocks, ...(midTurn ? { midTurn } : {}) },
+  }));
+}
+
 describe("createJobReconciler", () => {
   it("continues the main scans when an auxiliary reconciler fails", async () => {
     const prisma = fakePrisma();
@@ -384,10 +393,8 @@ describe("createJobReconciler", () => {
       routine: { findMany: vi.fn(async () => []) },
       computer: { findMany: vi.fn(async () => []) },
       messagingOutbound: { findFirst: vi.fn(async () => null) },
-      message: {
-        findMany: vi.fn(async () => [
-          { blocks: [{ kind: "text", text: "Finished." }], clientNonce: null },
-        ]),
+      sessionEntry: {
+        findMany: vi.fn(async () => said([{ blocks: [{ kind: "text", text: "Finished." }] }])),
       },
     } as unknown as PrismaClient;
     const { jobs } = publisher();
@@ -449,17 +456,17 @@ describe("createJobReconciler", () => {
       routine: { findMany: vi.fn(async () => []) },
       computer: { findMany: vi.fn(async () => []) },
       messagingOutbound: { findFirst: vi.fn(async () => null) },
-      message: {
-        findMany: vi.fn(async () => [
-          {
-            blocks: [{ kind: "text", text: "Opening the calendar app…" }],
-            clientNonce: null,
-          },
-          {
-            blocks: [{ kind: "text", text: "Tuesday afternoon works." }],
-            clientNonce: null,
-          },
-        ]),
+      sessionEntry: {
+        findMany: vi.fn(async () =>
+          said([
+            {
+              blocks: [{ kind: "text", text: "Opening the calendar app…" }],
+            },
+            {
+              blocks: [{ kind: "text", text: "Tuesday afternoon works." }],
+            },
+          ]),
+        ),
       },
     } as unknown as PrismaClient;
     const { jobs } = publisher();
@@ -500,17 +507,18 @@ describe("createJobReconciler", () => {
       routine: { findMany: vi.fn(async () => []) },
       computer: { findMany: vi.fn(async () => []) },
       messagingOutbound: { findFirst: vi.fn(async () => null) },
-      message: {
-        findMany: vi.fn(async () => [
-          {
-            blocks: [{ kind: "text", text: "Checking calendars…" }],
-            clientNonce: "user-progress:run-mixed:0",
-          },
-          {
-            blocks: [{ kind: "text", text: "Tuesday afternoon works." }],
-            clientNonce: null,
-          },
-        ]),
+      sessionEntry: {
+        findMany: vi.fn(async () =>
+          said([
+            {
+              blocks: [{ kind: "text", text: "Checking calendars…" }],
+              midTurn: true,
+            },
+            {
+              blocks: [{ kind: "text", text: "Tuesday afternoon works." }],
+            },
+          ]),
+        ),
       },
     } as unknown as PrismaClient;
     const { jobs } = publisher();
@@ -551,13 +559,15 @@ describe("createJobReconciler", () => {
       routine: { findMany: vi.fn(async () => []) },
       computer: { findMany: vi.fn(async () => []) },
       messagingOutbound: { findFirst: vi.fn(async () => null) },
-      message: {
-        findMany: vi.fn(async () => [
-          {
-            blocks: [{ kind: "text", text: "Checking calendars…" }],
-            clientNonce: "user-progress:run-progress:0",
-          },
-        ]),
+      sessionEntry: {
+        findMany: vi.fn(async () =>
+          said([
+            {
+              blocks: [{ kind: "text", text: "Checking calendars…" }],
+              midTurn: true,
+            },
+          ]),
+        ),
       },
     } as unknown as PrismaClient;
     const { jobs } = publisher();

@@ -1,7 +1,7 @@
 import type { AdapterContext, MessagingSurface } from "@rakazo/adapter-kit";
-import { routineConfirmationBlock, settleRoutineAsk } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
-import { describe, expect, it, vi } from "vitest";
+import { appendSessionEntryInTransaction } from "@rakazo/db";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   applyMessagingOutboundStatus,
   deliverMessagingOutbound,
@@ -13,6 +13,17 @@ import {
 vi.mock("../../db/src/sessions.js", async () =>
   (await import("@rakazo/db/sessions.test-support")).stubbedDbSessions(),
 );
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
+type Said = { id: string; blocks: unknown[] };
+
+/** What the run said in its thread, one entry per message. */
+function saidEntries(said: Said[]) {
+  return said.map(({ id, blocks }, index) => ({ id, seq: index * 2, payload: { blocks } }));
+}
 
 const context: AdapterContext = {
   operationId: "op-1",
@@ -37,7 +48,7 @@ const messagingRun = {
   id: "run-1",
   botId: "bot-1",
   trigger: "messaging",
-  sourceMessage: { blocks: [{ kind: "text", text: "hi" }] },
+  sourceMessage: { payload: { blocks: [{ kind: "text", text: "hi" }] } },
 };
 
 function createFakeSurface(sendError?: Error) {
@@ -68,7 +79,7 @@ function createFakeSurface(sendError?: Error) {
 function createDeps(overrides: {
   run?: unknown;
   identity?: Record<string, unknown> | null;
-  messages?: unknown[];
+  said?: Said[];
   outboundRows?: unknown[];
   existingOutbox?: unknown;
   sendError?: Error;
@@ -84,12 +95,13 @@ function createDeps(overrides: {
       findUnique: vi.fn(async () => overrides.run ?? messagingRun),
       updateMany: vi.fn(async () => ({ count: 1 })),
     },
-    message: {
-      findMany: vi.fn(
-        async () =>
-          overrides.messages ?? [
+    sessionEntry: {
+      findMany: vi.fn(async () =>
+        saidEntries(
+          overrides.said ?? [
             { id: "m-1", blocks: [{ kind: "text", text: "Hello from your bot" }] },
           ],
+        ),
       ),
     },
     messagingIdentity: {
@@ -220,7 +232,7 @@ describe("deliverMessagingOutbound", () => {
   it("resolves the DM thread once and caches it when the identity has none", async () => {
     const deps = createDeps({
       identity: { dmThreadId: null },
-      messages: [
+      said: [
         { id: "m-1", blocks: [{ kind: "text", text: "first" }] },
         { id: "m-2", blocks: [{ kind: "text", text: "second" }] },
       ],
@@ -585,7 +597,8 @@ function createChannelDeps(
     sourceHop?: number;
     transport?: string;
     peerBotName?: string | null;
-    messages?: unknown[];
+    /** The person answered a question or approval the run put to them. */
+    answered?: boolean;
   } = {},
 ) {
   const text = overrides.text ?? "found it";
@@ -594,18 +607,20 @@ function createChannelDeps(
     botId: "bot-1",
     trigger: "messaging",
     sourceMessage: {
-      blocks: [
-        {
-          kind: "channel_message",
-          provider: "sendblue",
-          ...(overrides.transport ? { transport: overrides.transport } : {}),
-          channelId: "ch-1",
-          fromAddress: "+15551111111",
-          fromLabel: "Alice",
-          text: "group hi",
-          hop: overrides.sourceHop ?? 0,
-        },
-      ],
+      payload: {
+        blocks: [
+          {
+            kind: "channel_message",
+            provider: "sendblue",
+            ...(overrides.transport ? { transport: overrides.transport } : {}),
+            channelId: "ch-1",
+            fromAddress: "+15551111111",
+            fromLabel: "Alice",
+            text: "group hi",
+            hop: overrides.sourceHop ?? 0,
+          },
+        ],
+      },
     },
   };
   const posterIdentity = {
@@ -629,40 +644,23 @@ function createChannelDeps(
     outboundSinceInbound: 0,
   };
   const rows: Array<Record<string, unknown>> = [];
-  const contextMessages: Array<Record<string, unknown>> = [];
   const { messaging, sendToThread } = createFakeSurface();
   const sendUserMessage = vi.fn(async () => ({ messageId: "msg-wake", runId: "run-wake", seq: 4 }));
   const notify = vi.fn(async () => undefined);
   const enqueue = vi.fn(async () => undefined);
   const peerBotName = overrides.peerBotName === undefined ? "Helper" : overrides.peerBotName;
-  const txMock = {
-    thread: { update: vi.fn(async () => ({ nextMessageSeq: 5, nextEventSeq: 10 })) },
-    message: {
-      create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
-        const message = { id: `ctx-${contextMessages.length + 1}`, seq: 4, ...data };
-        contextMessages.push(message);
-        return message;
-      }),
-    },
-    run: { findUnique: vi.fn(async () => null) },
-    event: {
-      create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
-        id: "evt-1",
-        ...data,
-      })),
-    },
-  };
   const prisma = {
     run: {
       findUnique: vi.fn(async () => channelRun),
       updateMany: vi.fn(async () => ({ count: 1 })),
     },
-    message: {
-      findMany: vi.fn(
-        async () => overrides.messages ?? [{ id: "m-1", blocks: [{ kind: "text", text }] }],
-      ),
-      findUnique: vi.fn(async () => null),
+    sessionEntry: {
+      findMany: vi.fn(async () => saidEntries([{ id: "m-1", blocks: [{ kind: "text", text }] }])),
     },
+    // No peer holds the post yet; whether the person answered the run.
+    $queryRaw: vi.fn(async (sql: TemplateStringsArray) =>
+      sql.join("?").includes("card.answered") ? [{ answered: overrides.answered ?? false }] : [],
+    ),
     messagingIdentity: {
       findUnique: vi.fn(async ({ where }: { where: { botId?: string; id?: string } }) => {
         if (where.botId === "bot-1" || where.id === "mi-1") return posterIdentity;
@@ -736,9 +734,18 @@ function createChannelDeps(
             : null,
       ),
     },
-    thread: { findFirst: vi.fn(async () => ({ id: "thread-2" })) },
-    $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(txMock)),
+    thread: {
+      findFirst: vi.fn(async () => ({ id: "thread-2" })),
+      findUniqueOrThrow: vi.fn(async () => ({
+        sessionId: "session-2",
+        botId: "bot-2",
+        nextEventSeq: 10,
+      })),
+    },
   };
+  (prisma as { $transaction?: unknown }).$transaction = vi.fn(
+    async (fn: (tx: unknown) => Promise<unknown>) => fn(prisma),
+  );
   return {
     prisma: prisma as unknown as PrismaClient & typeof prisma,
     messaging,
@@ -749,85 +756,24 @@ function createChannelDeps(
     notify,
     enqueue,
     rows,
-    contextMessages,
-    txMock,
+    /** The posts peers received as context, as the user messages written to their threads. */
+    contextMessages: () =>
+      vi
+        .mocked(appendSessionEntryInTransaction)
+        .mock.calls.map(([, draft]) => draft)
+        .filter((draft) => draft.type === "user.message"),
   };
 }
 
 describe("deliverMessagingOutbound channel runs", () => {
   it("keeps privately answered runs out of the group and peer fan-out on retries", async () => {
-    const deps = createChannelDeps({
-      messages: [
-        {
-          id: "ask-1",
-          blocks: [{ kind: "ask", text: "Details?", status: "answered", answer: "Private detail" }],
-        },
-        { id: "reply-1", blocks: [{ kind: "text", text: "Reply containing private detail" }] },
-      ],
-    });
+    const deps = createChannelDeps({ answered: true });
     await deliverMessagingOutbound(deps, { runId: "run-1" }, context);
     await deliverMessagingOutbound(deps, { runId: "run-1" }, context);
     expect(deps.rows).toEqual([]);
     expect(deps.sendToThread).not.toHaveBeenCalled();
-    expect(deps.contextMessages).toEqual([]);
+    expect(deps.contextMessages()).toEqual([]);
     expect(deps.sendUserMessage).not.toHaveBeenCalled();
-  });
-
-  it("publishes a run's reply beside the routine card it settled, not beside one the user answered", async () => {
-    const routine = {
-      id: "routine-1",
-      name: "Stretch",
-      schedule: "Every hour UTC",
-      prompt: "Remind me to stretch",
-      notify: false,
-    };
-    const answeredAsk = {
-      kind: "ask" as const,
-      approvalEffectId: "effect-1",
-      text: "Review before schedule_create",
-      status: "answered" as const,
-      answer: "allow",
-      actions: [
-        { id: "allow", label: "Allow once" },
-        { id: "deny", label: "Deny" },
-      ],
-    };
-    const reply = { id: "reply-1", blocks: [{ kind: "text", text: "Done, every hour." }] };
-    const settled = createChannelDeps({
-      messages: [
-        { id: "card-1", blocks: [routineConfirmationBlock("effect-1", routine, "created")] },
-        reply,
-      ],
-    });
-    const answered = createChannelDeps({
-      messages: [
-        { id: "card-1", blocks: [settleRoutineAsk(answeredAsk, routine, "updated")] },
-        reply,
-      ],
-    });
-
-    await deliverMessagingOutbound(settled, { runId: "run-1" }, context);
-    await deliverMessagingOutbound(answered, { runId: "run-1" }, context);
-
-    expect(settled.sendToThread.mock.calls).toEqual([
-      [{ threadId: "sendblue:grp-1", body: "Alice's agent: Done, every hour." }, context],
-    ]);
-    expect(answered.sendToThread.mock.calls).toEqual([]);
-    expect(answered.rows).toEqual([]);
-  });
-
-  it("can still publish a group reply alongside an unanswered ask", async () => {
-    const deps = createChannelDeps({
-      messages: [
-        { id: "ask-1", blocks: [{ kind: "ask", text: "Details?", status: "pending" }] },
-        { id: "reply-1", blocks: [{ kind: "text", text: "Public update" }] },
-      ],
-    });
-    await deliverMessagingOutbound(deps, { runId: "run-1" }, context);
-    expect(deps.sendToThread).toHaveBeenCalledWith(
-      { threadId: "sendblue:grp-1", body: "Alice's agent: Public update" },
-      context,
-    );
   });
 
   it("posts the bot reply to the group with owner attribution and fans it out to peers", async () => {
@@ -847,22 +793,24 @@ describe("deliverMessagingOutbound channel runs", () => {
       }),
     ]);
     // peer context: appended without a run, carrying the next hop
-    expect(deps.contextMessages).toEqual([
+    expect(deps.contextMessages()).toEqual([
       expect.objectContaining({
-        threadId: "thread-2",
-        role: "user",
-        clientNonce: "messaging-peer:m-1:bot-2",
-        blocks: [
-          {
-            kind: "channel_message",
-            provider: "sendblue",
-            channelId: "ch-1",
-            fromAddress: "+15551111111",
-            fromLabel: "Alice's agent",
-            text: "found it",
-            hop: 1,
-          },
-        ],
+        sessionId: "session-2",
+        payload: {
+          blocks: [
+            {
+              kind: "channel_message",
+              provider: "sendblue",
+              channelId: "ch-1",
+              fromAddress: "+15551111111",
+              fromLabel: "Alice's agent",
+              text: "found it",
+              hop: 1,
+            },
+          ],
+          clientNonce: "messaging-peer:m-1:bot-2",
+          source: "channel",
+        },
       }),
     ]);
     expect(deps.sendUserMessage).not.toHaveBeenCalled();
@@ -873,18 +821,20 @@ describe("deliverMessagingOutbound channel runs", () => {
     const deps = createChannelDeps({ transport: "SMS" });
     await deliverMessagingOutbound(deps, { runId: "run-1" }, context);
 
-    expect(deps.contextMessages).toEqual([
+    expect(deps.contextMessages()).toEqual([
       expect.objectContaining({
-        clientNonce: "messaging-peer:m-1:bot-2",
-        blocks: [
-          expect.objectContaining({
-            kind: "channel_message",
-            provider: "sendblue",
-            transport: "SMS",
-            text: "found it",
-            hop: 1,
-          }),
-        ],
+        payload: expect.objectContaining({
+          clientNonce: "messaging-peer:m-1:bot-2",
+          blocks: [
+            expect.objectContaining({
+              kind: "channel_message",
+              provider: "sendblue",
+              transport: "SMS",
+              text: "found it",
+              hop: 1,
+            }),
+          ],
+        }),
       }),
     ]);
   });
@@ -922,7 +872,7 @@ describe("deliverMessagingOutbound channel runs", () => {
     expect(deps.enqueue).toHaveBeenCalledWith(
       expect.objectContaining({ name: "run.continue", payload: { runId: "run-wake" } }),
     );
-    expect(deps.contextMessages).toHaveLength(0);
+    expect(deps.contextMessages()).toHaveLength(0);
   });
 
   it("wakes an @-mentioned peer even when the casing differs", async () => {
@@ -941,8 +891,10 @@ describe("deliverMessagingOutbound channel runs", () => {
     expect(deps.sendUserMessage).not.toHaveBeenCalled();
     expect(deps.enqueue).not.toHaveBeenCalled();
     // still delivered as context, with the clamped hop recorded
-    expect(deps.contextMessages[0]).toEqual(
-      expect.objectContaining({ clientNonce: "messaging-peer:m-1:bot-2" }),
+    expect(deps.contextMessages()[0]).toEqual(
+      expect.objectContaining({
+        payload: expect.objectContaining({ clientNonce: "messaging-peer:m-1:bot-2" }),
+      }),
     );
   });
 });

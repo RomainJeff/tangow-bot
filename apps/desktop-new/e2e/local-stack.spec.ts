@@ -215,7 +215,7 @@ test("This computer installs and starts the stack, then opens the app", async ()
     `${stackDir} | ${IMAGE_TAG} | compose version --short`,
     `${stackDir} | ${IMAGE_TAG} | info --format {{.ServerVersion}}`,
     `${stackDir} | ${IMAGE_TAG} | ${compose} pull`,
-    `${stackDir} | ${IMAGE_TAG} | ${compose} up -d --wait --wait-timeout 300`,
+    `${stackDir} | ${IMAGE_TAG} | ${compose} up -d --wait --wait-timeout 3600`,
   ]);
 });
 
@@ -300,7 +300,7 @@ test("unpublished images show the docker output and a Retry button", async () =>
   await expect(setup.locator("#stack-output")).toContainText("manifest unknown");
   await expect(setup.getByRole("button", { name: "Retry" })).toBeEnabled();
   await expect(setup.locator("#stack-docker-help")).toBeHidden();
-  expect((await readLog()).some((line) => line.endsWith(" up -d --wait --wait-timeout 300"))).toBe(
+  expect((await readLog()).some((line) => line.endsWith(" up -d --wait --wait-timeout 3600"))).toBe(
     false,
   );
 });

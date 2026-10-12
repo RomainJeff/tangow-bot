@@ -36,7 +36,9 @@ export function botMessageCard(item: BotMessageItem) {
             params: {
               botId: item.peer.botId,
               name: peer,
-              ...(item.direction === "received" ? { messageId: item.origin.entryId } : {}),
+              ...(item.direction === "received" && item.origin
+                ? { messageId: item.origin.entryId }
+                : {}),
             },
           }
         : null,

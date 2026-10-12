@@ -11,7 +11,7 @@ import type { Prisma, PrismaClient } from "./client.js";
 import { expireComputerExecutionLeases } from "./computers.js";
 import { IsolationError } from "./scope.js";
 import { lockSpaceForContentCreation } from "./spaces.js";
-import { activeRunSelection, activeRunStatuses, previewFromBlocks } from "./thread-listing.js";
+import { activeRunSelection, activeRunStatuses, sessionPreviews } from "./thread-listing.js";
 
 type GroupRecord = {
   id: string;
@@ -24,11 +24,7 @@ type GroupRecord = {
   archivedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
-  thread: {
-    id: string;
-    unread: boolean;
-    messages: Array<{ blocks: unknown }>;
-  } | null;
+  thread: { id: string; unread: boolean; sessionId: string } | null;
   members: Array<{
     bot: {
       id: string;
@@ -44,10 +40,7 @@ type SpaceGroupRecord = Pick<
   GroupRecord,
   "id" | "spaceId" | "name" | "pinned" | "sectionId" | "updatedAt" | "members"
 > & {
-  thread: {
-    unread: boolean;
-    messages: Array<{ blocks: unknown }>;
-  } | null;
+  thread: { unread: boolean; sessionId: string } | null;
 };
 
 function mapGroupMembers(members: GroupRecord["members"]): GroupMember[] {
@@ -60,9 +53,8 @@ function mapGroupMembers(members: GroupRecord["members"]): GroupMember[] {
   }));
 }
 
-function mapGroup(group: GroupRecord): Group {
+function mapGroup(group: GroupRecord, preview: string): Group {
   if (!group.thread) throw new IsolationError("Group is missing its thread");
-  const preview = previewFromBlocks(group.thread.messages[0]?.blocks);
   return {
     id: group.id,
     spaceId: group.spaceId,
@@ -80,7 +72,7 @@ function mapGroup(group: GroupRecord): Group {
   };
 }
 
-function mapSpaceGroup(group: SpaceGroupRecord): SpaceGroup {
+function mapSpaceGroup(group: SpaceGroupRecord, preview: string): SpaceGroup {
   if (!group.thread) throw new IsolationError("Group is missing its thread");
   return {
     id: group.id,
@@ -89,7 +81,7 @@ function mapSpaceGroup(group: SpaceGroupRecord): SpaceGroup {
     pinned: group.pinned,
     sectionId: group.sectionId,
     members: mapGroupMembers(group.members),
-    preview: previewFromBlocks(group.thread.messages[0]?.blocks),
+    preview,
     unread: group.thread.unread,
     updatedAt: group.updatedAt.toISOString(),
   };
@@ -129,11 +121,7 @@ async function assertOwnedBots(
 }
 
 const groupInclude = {
-  thread: {
-    include: {
-      messages: { orderBy: { seq: "desc" as const }, take: 1 },
-    },
-  },
+  thread: { select: { id: true, unread: true, sessionId: true } },
   members: {
     where: { bot: { archivedAt: null } },
     include: {
@@ -170,7 +158,23 @@ const groupTargetInclude = {
   },
 } as const;
 
+/** The previews of the groups' threads, by thread session. */
+async function groupPreviews(
+  prisma: PrismaClient,
+  groups: ReadonlyArray<{ thread: { sessionId: string } | null }>,
+): Promise<Map<string, string>> {
+  return sessionPreviews(
+    prisma,
+    groups.flatMap((group) => group.thread?.sessionId ?? []),
+  );
+}
+
 export function createGroupRepos(prisma: PrismaClient) {
+  async function presentGroup(group: GroupRecord): Promise<Group> {
+    const previews = await groupPreviews(prisma, [group]);
+    return mapGroup(group, (group.thread && previews.get(group.thread.sessionId)) ?? "");
+  }
+
   async function listSpaceGroupsForSpaces(actor: Actor, spaceIds: string[]): Promise<SpaceGroup[]> {
     if (spaceIds.length === 0) return [];
     const groups = await prisma.chatGroup.findMany({
@@ -186,23 +190,16 @@ export function createGroupRepos(prisma: PrismaClient) {
         pinned: true,
         sectionId: true,
         updatedAt: true,
-        thread: {
-          select: {
-            unread: true,
-            messages: {
-              orderBy: { seq: "desc" },
-              take: 1,
-              select: { blocks: true },
-            },
-          },
-        },
+        thread: { select: { unread: true, sessionId: true } },
         members: groupInclude.members,
       },
       orderBy: [{ pinned: "desc" }, { updatedAt: "desc" }],
     });
-    return groups
-      .filter((group) => hasMinimumActiveMembers(group.members))
-      .map((group) => mapSpaceGroup(group));
+    const listed = groups.filter((group) => hasMinimumActiveMembers(group.members));
+    const previews = await groupPreviews(prisma, listed);
+    return listed.map((group) =>
+      mapSpaceGroup(group, (group.thread && previews.get(group.thread.sessionId)) ?? ""),
+    );
   }
 
   return {
@@ -216,9 +213,11 @@ export function createGroupRepos(prisma: PrismaClient) {
         include: groupInclude,
         orderBy: [{ pinned: "desc" }, { updatedAt: "desc" }],
       });
-      return groups
-        .filter((group) => hasMinimumActiveMembers(group.members))
-        .map((group) => mapGroup(group as GroupRecord));
+      const listed = groups.filter((group) => hasMinimumActiveMembers(group.members));
+      const previews = await groupPreviews(prisma, listed);
+      return listed.map((group) =>
+        mapGroup(group, (group.thread && previews.get(group.thread.sessionId)) ?? ""),
+      );
     },
 
     listSpaceGroupsForSpaces,
@@ -284,7 +283,7 @@ export function createGroupRepos(prisma: PrismaClient) {
           include: groupInclude,
         });
       });
-      return mapGroup(created as GroupRecord);
+      return mapGroup(created, "");
     },
 
     async updateGroup(
@@ -374,7 +373,7 @@ export function createGroupRepos(prisma: PrismaClient) {
       });
       if (!updated.group.thread) throw new IsolationError();
       return {
-        group: mapGroup(updated.group as GroupRecord),
+        group: await presentGroup(updated.group),
         cancelledRunIds: updated.cancelledRunIds,
       };
     },
@@ -480,7 +479,7 @@ export function createGroupRepos(prisma: PrismaClient) {
       });
     },
 
-    mapGroup,
+    mapGroup: presentGroup,
   };
 }
 

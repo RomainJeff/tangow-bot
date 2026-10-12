@@ -6,7 +6,7 @@ import { ComposioEmulator, PostgresSessionLog } from "@rakazo/adapters";
 import type { SessionEntry, SessionId } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
 import type { createApp } from "../../../apps/api/src/app.ts";
-import { sessionCookieHeader } from "./index.js";
+import { latestCard, sessionCookieHeader } from "./index.js";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.js";
 import { startModelEmulator } from "./model-emulator.js";
 
@@ -56,17 +56,14 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
           path: "notes/result.txt",
         });
         expect(file.content).toBe("hello");
-        const thread = await rpc<{ messages: Array<{ role: string; blocks: unknown[] }> }>(
-          app,
-          cookie,
-          "threads/get",
-          { botId: bot.id },
-        );
-        const messages = JSON.stringify(thread.messages);
-        expect(messages).toContain("Saved notes/result.txt.");
-        expect(messages).not.toContain(fixtureKey);
-        const tools = await prisma.event.findMany({
-          where: { botId: bot.id, type: "agent.tool.called" },
+        const thread = await rpc<{ entries: unknown[] }>(app, cookie, "threads/get", {
+          botId: bot.id,
+        });
+        const entries = JSON.stringify(thread.entries);
+        expect(entries).toContain("Saved notes/result.txt.");
+        expect(entries).not.toContain(fixtureKey);
+        const tools = await prisma.sessionEntry.findMany({
+          where: { botId: bot.id, type: "tool.call" },
           select: { payload: true },
         });
         expect(tools).toHaveLength(1);
@@ -368,10 +365,7 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
         const sent = await send("Save my API key, then create Scout.");
         const answerCard = async (answer: string, edits?: Record<string, string>) => {
           await sent.settled("waiting_input");
-          const card = await prisma.message.findFirstOrThrow({
-            where: { runId: sent.runId, role: "bot" },
-            orderBy: { seq: "desc" },
-          });
+          const card = await latestCard(prisma, sent.runId);
           await rpc(app, cookie, "threads/answer", {
             botId: bot.id,
             runId: sent.runId,
@@ -392,6 +386,7 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
           ["tool.call", "journey-ask", undefined],
           ["assistant.ask", undefined, undefined],
           ["tool.result", "journey-ask", "paused: awaiting answer"],
+          ["card.answered", undefined, undefined],
           ["tool.call", "journey-ask", undefined],
           ["tool.result", "journey-ask", expect.any(String)],
           ["tool.call", "journey-spawn", undefined],
@@ -445,10 +440,7 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
       async ({ app, cookie, bot, prisma, send, log }) => {
         const sent = await send("Create a bot named Scout.");
         await sent.settled("waiting_input");
-        const card = await prisma.message.findFirstOrThrow({
-          where: { runId: sent.runId, role: "bot" },
-          orderBy: { seq: "desc" },
-        });
+        const card = await latestCard(prisma, sent.runId);
         await rpc(app, cookie, "threads/answer", {
           botId: bot.id,
           runId: sent.runId,
@@ -878,10 +870,7 @@ async function approveEdited(
 ): Promise<SessionEntry[]> {
   const sent = await send(text);
   await sent.settled("waiting_input");
-  const card = await prisma.message.findFirstOrThrow({
-    where: { runId: sent.runId, role: "bot" },
-    orderBy: { seq: "desc" },
-  });
+  const card = await latestCard(prisma, sent.runId);
   await rpc(app, cookie, "threads/answer", {
     botId: bot.id,
     runId: sent.runId,

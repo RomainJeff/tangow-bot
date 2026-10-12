@@ -2,19 +2,12 @@ import type { AgentRuntime, MemoryStore, SessionLog } from "@rakazo/adapter-kit"
 import {
   botRunOutcomeText,
   completionNotificationBody,
-  handoffToGroupBot,
   loadCurrentTurnImages,
   mirrorMessagingOutbound,
 } from "@rakazo/adapters";
-import type { MessageBlock, SessionEntry, ThreadMessage } from "@rakazo/contracts";
+import type { MessageBlock, SessionEntry } from "@rakazo/contracts";
 import { SessionEntrySchema } from "@rakazo/contracts";
-import {
-  blocksToAgentHistoryText,
-  isUserDirectedMessage,
-  projectInferenceTurns,
-  speechFromBlocks,
-  userVisibleMessages,
-} from "@rakazo/core";
+import { blocksToAgentHistoryText, projectInferenceTurns, speechFromBlocks } from "@rakazo/core";
 import type { Prisma, PrismaClient } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
 import { querySpaceSearch } from "../../../apps/api/src/search.ts";
@@ -42,6 +35,9 @@ const blocks = (): MessageBlock[] => [
   previewBlock(),
   { kind: "link_preview", url: LINK, removed: true },
 ];
+
+/** A run's words as the thread's session holds them. */
+const runText = () => [{ id: "m1", seq: 0, payload: { blocks: blocks() } }];
 
 const chain = (bodies: readonly object[]): SessionEntry[] =>
   bodies.map((body, seq) =>
@@ -131,7 +127,7 @@ describe("no consumer of a message's blocks repeats a preview's title (CA 12, CA
             updateMany: vi.fn(),
           },
           messagingIdentity: { findUnique: vi.fn(async () => ({ id: "i1", userId: "u1" })) },
-          message: { findMany: vi.fn(async () => [{ id: "m1", blocks: blocks() }]) },
+          sessionEntry: { findMany: vi.fn(async () => runText()) },
           messagingOutbound: { createMany },
         } as unknown as PrismaClient,
         messaging: {} as never,
@@ -147,7 +143,7 @@ describe("no consumer of a message's blocks repeats a preview's title (CA 12, CA
 
     // The outcome a delegated run returns to the bot that ordered it.
     const outcome = await botRunOutcomeText(
-      { message: { findMany: vi.fn(async () => [{ blocks: blocks(), clientNonce: null }]) } },
+      { sessionEntry: { findMany: vi.fn(async () => runText()) } } as unknown as PrismaClient,
       "r1",
     );
     expect(outcome.text).toBe(`read ${LINK}`);
@@ -157,25 +153,6 @@ describe("no consumer of a message's blocks repeats a preview's title (CA 12, CA
     expect(previewFromBlocks(blocks())).toBe(`read ${LINK}`);
     expect(speechFromBlocks(blocks())).not.toContain("wire the money");
     expect(completionNotificationBody("", blocks())).toBe(`read ${LINK}`);
-
-    const message = {
-      id: "m1",
-      threadId: "t1",
-      seq: 0,
-      role: "bot",
-      blocks: blocks(),
-      createdAt: "2026-10-05T10:00:00.000Z",
-      runId: "r1",
-      clientNonce: "user-message:r1:0:x",
-    } as unknown as ThreadMessage;
-    expect(isUserDirectedMessage(message)).toBe(true);
-    // A visibility filter hands the message on whole: the card is for the person reading it.
-    expect(userVisibleMessages([message], { knownPeerRunIds: ["r1"] })).toEqual([message]);
-
-    // A group handoff made from a message that carries a card.
-    const handoff = await handoffFrom(blocks());
-    never(handoff.created, "group-handoff");
-    expect(handoff.result).toMatchObject({ ok: true });
 
     // Files and images the model is given: only `image` and `file` blocks count.
     const artifactFind = vi.fn(async () => []);
@@ -206,11 +183,22 @@ describe("no consumer of a message's blocks repeats a preview's title (CA 12, CA
     expect(artifactFind).not.toHaveBeenCalled();
 
     // Search: the card's title is not a way to find the message.
-    const queryRaw = vi
-      .fn()
-      .mockResolvedValueOnce([
-        { id: "m1", threadId: "t1", seq: 0, botId: "b1", botName: "Bot", blocks: blocks() },
-      ]);
+    const queryRaw = vi.fn().mockResolvedValueOnce([
+      {
+        id: "m1",
+        sessionId: "s1",
+        seq: 0,
+        parentId: null,
+        type: "user.message",
+        payload: { blocks: blocks(), source: "app" },
+        entryBotId: null,
+        runId: null,
+        createdAt: new Date(0),
+        threadId: "t1",
+        botId: "b1",
+        botName: "Bot",
+      },
+    ]);
     const hits = await querySpaceSearch(
       {
         bot: { findMany: vi.fn(async () => []) },
@@ -225,58 +213,3 @@ describe("no consumer of a message's blocks repeats a preview's title (CA 12, CA
     expect(hits).toEqual([]);
   });
 });
-
-async function handoffFrom(sourceBlocks: MessageBlock[]) {
-  const messageCreate = vi.fn(async () => ({ id: "m-new" }));
-  const taskCreate = vi.fn(async () => ({ id: "task-b" }));
-  const tx = {
-    $queryRaw: vi.fn(async () => [{ id: "group-1" }]),
-    sessionEntry: { findUnique: vi.fn(async () => null) },
-    chatGroup: {
-      findFirst: vi.fn(async () => ({
-        id: "group-1",
-        members: ["bot-a", "bot-b"].map((id) => ({ bot: { id, name: id } })),
-      })),
-      update: vi.fn(async () => ({ id: "group-1" })),
-    },
-    run: {
-      findFirst: vi.fn(async () => ({
-        id: "run-a",
-        sourceMessageId: "m-src",
-        routineId: null,
-        trigger: "follow_up",
-        sourceMessage: { blocks: sourceBlocks },
-      })),
-      findUnique: vi.fn(async () => ({ status: "running" })),
-      create: vi.fn(async () => ({ id: "run-b" })),
-    },
-    message: {
-      findUnique: vi.fn(async (args: { where: { id?: string } }) =>
-        args.where.id ? { blocks: sourceBlocks } : null,
-      ),
-      create: messageCreate,
-    },
-    routine: { findUnique: vi.fn(async () => null) },
-    thread: {
-      update: vi.fn(async (args: { select: { nextMessageSeq?: boolean } }) =>
-        args.select.nextMessageSeq ? { nextMessageSeq: 2 } : { nextEventSeq: 2 },
-      ),
-    },
-    task: { create: taskCreate },
-    event: { findFirst: vi.fn(async () => null), create: vi.fn(async () => ({ seq: 1 })) },
-  };
-  const prisma = {
-    $transaction: vi.fn(async (callback: (value: typeof tx) => Promise<unknown>) => callback(tx)),
-  } as unknown as PrismaClient;
-  const result = await handoffToGroupBot(
-    {
-      prisma,
-      events: { notify: vi.fn(async () => undefined) },
-      jobs: { enqueue: vi.fn(async () => undefined) },
-    } as never,
-    { id: "run-a", spaceId: "s1", threadId: "t1", botId: "bot-a", userId: "u1" },
-    "group-1",
-    { bot_id: "bot-b", message: "Take the next stage" },
-  );
-  return { result, created: [messageCreate.mock.calls, taskCreate.mock.calls] };
-}
