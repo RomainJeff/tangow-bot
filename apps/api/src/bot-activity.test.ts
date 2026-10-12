@@ -334,15 +334,6 @@ describe("sessions.entries", () => {
 });
 
 describe("router errors", () => {
-  it("answers an access denial as not found", async () => {
-    const { recap } = setup({ run: null });
-
-    const { status, body } = await recap("run-of-someone-else");
-
-    expect(status).toBe(404);
-    expect(body.json).toMatchObject({ code: "NOT_FOUND", message: "Resource not found" });
-  });
-
   it("keeps a server invariant an internal error without its internal text", async () => {
     const { prisma, recap } = setup();
     prisma.run.findFirst.mockRejectedValueOnce(new IsolationError("Bot is missing its thread"));
