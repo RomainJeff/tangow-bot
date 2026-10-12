@@ -3,44 +3,14 @@ import { isToolActivityBlock } from "@rakazo/core";
 import { describe, expect, it } from "vitest";
 import {
   botMessageOutcomeFromMidTurn,
-  clampUserProgressMessage,
   endsWithToolCallBudgetNotice,
   extractNarrationText,
   finalBlocksAfterMidTurnProgress,
-  isProgressMessageTruncated,
   isUserProgressClientNonce,
   repeatsSentUserText,
   toolCallBudgetNotice,
-  USER_PROGRESS_MESSAGE_MAX_LENGTH,
   userMessageClientNonce,
-  userProgressClientNonce,
 } from "./user-progress.js";
-
-describe("clampUserProgressMessage", () => {
-  it("trims and rejects empty text", () => {
-    expect(clampUserProgressMessage("  hello  ")).toBe("hello");
-    expect(clampUserProgressMessage("   ")).toBe("");
-  });
-
-  it("clamps long progress beats", () => {
-    const clamped = clampUserProgressMessage("x".repeat(USER_PROGRESS_MESSAGE_MAX_LENGTH + 40));
-    expect(clamped).toHaveLength(USER_PROGRESS_MESSAGE_MAX_LENGTH);
-    expect(clamped.endsWith("…")).toBe(true);
-  });
-});
-
-describe("isProgressMessageTruncated", () => {
-  it("is false for text that fits", () => {
-    expect(isProgressMessageTruncated("short update")).toBe(false);
-    expect(isProgressMessageTruncated("x".repeat(USER_PROGRESS_MESSAGE_MAX_LENGTH))).toBe(false);
-  });
-
-  it("is true for text that would be cut off by clampUserProgressMessage", () => {
-    const long = "x".repeat(USER_PROGRESS_MESSAGE_MAX_LENGTH + 1);
-    expect(isProgressMessageTruncated(long)).toBe(true);
-    expect(clampUserProgressMessage(long).endsWith("…")).toBe(true);
-  });
-});
 
 describe("extractNarrationText", () => {
   it("pulls text blocks and current text while keeping tool activity", () => {
@@ -125,26 +95,16 @@ describe("botMessageOutcomeFromMidTurn", () => {
   });
 });
 
-describe("userProgressClientNonce", () => {
-  it("tags mid-turn progress messages for reconciler detection", () => {
-    const nonce = userProgressClientNonce("run-1", 0);
-    expect(nonce.startsWith("user-progress:run-1:0:")).toBe(true);
-    expect(isUserProgressClientNonce(nonce)).toBe(true);
-    expect(userProgressClientNonce("run-1", 0)).not.toBe(nonce);
-    expect(isUserProgressClientNonce(null)).toBe(false);
-    expect(isUserProgressClientNonce("other")).toBe(false);
-  });
-
-  it("gives message_user its own prefix while both count as mid-turn", () => {
-    const progress = userProgressClientNonce("run-1", 0);
+describe("isUserProgressClientNonce", () => {
+  it("counts message_user output and narration from earlier runs as mid-turn", () => {
     const userMessage = userMessageClientNonce("run-1", 1);
-
-    expect(userMessage.startsWith("user-message:")).toBe(true);
-    expect(userMessage.startsWith("user-progress:")).toBe(false);
-    expect(progress.startsWith("user-message:")).toBe(false);
+    expect(userMessage.startsWith("user-message:run-1:1:")).toBe(true);
+    expect(userMessageClientNonce("run-1", 1)).not.toBe(userMessage);
     // Transcript rebuilders (executor resume, job reconciler) want both kinds.
     expect(isUserProgressClientNonce(userMessage)).toBe(true);
-    expect(isUserProgressClientNonce(progress)).toBe(true);
+    expect(isUserProgressClientNonce("user-progress:run-1:0:x")).toBe(true);
+    expect(isUserProgressClientNonce(null)).toBe(false);
+    expect(isUserProgressClientNonce("other")).toBe(false);
   });
 });
 

@@ -77,7 +77,6 @@ import {
   botMessageRelaysToUser,
   connectorKindFromToolName,
   containsSecret,
-  createStreamingRedactor,
   DEFAULT_SKILL_LEARNING,
   endsSentence,
   expandSkillReferencesInPrompt,
@@ -406,15 +405,12 @@ import { textContentArg } from "./tool-text.js";
 import {
   botMessageOutcomeFromMidTurn,
   buildSteeringMessageText,
-  clampUserProgressMessage,
   endsWithToolCallBudgetNotice,
   extractNarrationText,
   finalBlocksAfterMidTurnProgress,
-  isProgressMessageTruncated,
   isUserProgressClientNonce,
   repeatsSentUserText,
   userMessageClientNonce,
-  userProgressClientNonce,
 } from "./user-progress.js";
 import { createWebProvider } from "./web-provider-factory.js";
 import { withAbort } from "./web-ssrf.js";
@@ -988,7 +984,7 @@ export type SystemInstructionParts = {
 
 export const CHAT_VOICE_INSTRUCTIONS = `## How you communicate with the user
 
-Use message_user to communicate with the user: answers, useful updates, questions, and the final outcome. Only messages sent through message_user are visible; ordinary assistant text, reasoning, and other tool output are not. Keep each message under 500 characters, splitting longer answers into short messages when needed.
+Use message_user to communicate with the user: answers, useful updates, questions, and the final outcome. Only messages sent through message_user are visible; ordinary assistant text, reasoning, and other tool output are not.
 
 1. Reply right away. If the task is quick, give the answer directly. Otherwise send one sentence saying what you're doing ("Checking your calendar."), then work.
 2. Lead with the answer: the yes/no, the number, the recommendation. No restating the question, no "Here's the summary", no closing pleasantries.
@@ -2197,65 +2193,22 @@ export function createRunExecutor(deps: ExecutorDeps) {
               ).then(() => undefined),
           };
         };
-        let pendingProgress = "";
-        let lastProgressAt = 0;
-        let hasStreamedText = false;
         let toolCallStreak: ToolCallStreak = { key: undefined, count: 0 };
         let lastComputerFrameId: string | undefined;
         let terminalCheckpointComplete = false;
         let approvalPausePending = false;
         let handedOff = false;
-        let progressRedactor = createStreamingRedactor(runSecrets);
         const scripted = deps.runtime.describe().capabilities.scripted;
         const script = scripted ? inferScript(task.prompt, takeoverResume?.checkpoint) : undefined;
-        const flushProgress = async () => {
-          if (scripted || !pendingProgress) return;
-          // A routine card run shows only its run card; never stream live text into the
-          // thread. Drop the buffered progress instead of emitting a thread.progress delta.
-          if (isRoutineCardRun) {
-            pendingProgress = "";
-            return;
-          }
-          await deps.events.append({
-            spaceId: run.spaceId,
-            threadId: thread.id,
-            botId: bot.id,
-            type: "thread.progress",
-            runId,
-            // The first flush replaces the "working…" placeholder outright — a delta here
-            // would otherwise get appended straight onto it with no separator.
-            payload: hasStreamedText
-              ? { delta: pendingProgress, streaming: true }
-              : { text: pendingProgress, streaming: true },
-          });
-          hasStreamedText = true;
-          pendingProgress = "";
-          lastProgressAt = Date.now();
-        };
-        const publishMidTurnNarration = async () => {
+        // Text the model writes outside message_user is never shown: drop what accumulated
+        // before a tool call so it cannot reach the final reply either.
+        let droppedNarration = false;
+        const dropMidTurnNarration = () => {
           const extracted = extractNarrationText(messageSegments, currentTextSegment);
-          const narration = clampUserProgressMessage(redactSecrets(extracted.text, runSecrets));
           messageSegments = extracted.remaining;
           currentTextSegment = "";
-          if (!narration) return;
+          if (extracted.text.trim()) droppedNarration = true;
           assembled = "";
-          hasStreamedText = false;
-          pendingProgress = "";
-          // A routine card run's only user-facing artifact is its run card. Drop the
-          // mid-turn narration instead of posting it as a separate bubble in the thread —
-          // the text has already been lifted out of the segments above, so the card digest
-          // stays the clean final report.
-          if (isRoutineCardRun) return;
-          await publishMessage(
-            deps,
-            run,
-            "bot",
-            [{ kind: "text", text: narration }],
-            undefined,
-            userProgressClientNonce(run.id, midTurnProgressCount++),
-          );
-          midTurnUserTexts.push(narration);
-          publishedMidTurnUserMessage = true;
         };
         const formatObservation = (
           observation: Awaited<ReturnType<SandboxProvider["observe"]>>,
@@ -2348,7 +2301,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           change: "created" | "updated",
         ) => {
           try {
-            await publishMidTurnNarration();
+            dropMidTurnNarration();
             await publishMessage(
               deps,
               run,
@@ -3756,9 +3709,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 registerRedactions: (values) => {
                   const additions = values.filter((value) => !runSecrets.includes(value));
                   if (additions.length === 0) return;
-                  pendingProgress += progressRedactor.finish();
                   runSecrets.push(...additions);
-                  progressRedactor = createStreamingRedactor(runSecrets);
                 },
               });
               return finish(result);
@@ -3827,9 +3778,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
             if (storedSecret) {
               const plaintext = deps.secretStore.load(storedSecret.ciphertext, storedSecret.id);
               runSecrets.push(plaintext);
-              // Keep the tail the old redactor still holds; a fresh instance drops it.
-              pendingProgress += progressRedactor.finish();
-              progressRedactor = createStreamingRedactor(runSecrets);
               const connectionId = args.connectionId ? String(args.connectionId) : undefined;
               const purpose = String(args.purpose ?? "otp");
               if (applied && !claimedEffect) {
@@ -4147,8 +4095,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             });
           }
           if (name === "message_user") {
-            const rawMessage = redactSecrets(String(args.message ?? ""), runSecrets);
-            const text = clampUserProgressMessage(rawMessage);
+            const text = redactSecrets(String(args.message ?? ""), runSecrets).trim();
             if (!text) return finish({ error: "message is required" });
             if (repeatsSentUserText(text, midTurnUserTexts)) {
               // The user already read this exact message; posting it again is the
@@ -4158,9 +4105,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   "You already sent this exact message with message_user; it was not posted again. Do not repeat yourself. If message_user covered everything, end the turn with an empty response.",
               });
             }
-            const truncated = isProgressMessageTruncated(rawMessage);
-            await flushProgress();
-            await publishMidTurnNarration();
+            dropMidTurnNarration();
             await publishMessage(
               deps,
               run,
@@ -4174,15 +4119,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             );
             midTurnUserTexts.push(text);
             publishedMidTurnUserMessage = true;
-            return finish(
-              truncated
-                ? {
-                    ok: true,
-                    truncated: true,
-                    note: "This progress update was cut off at 500 characters and the user only saw the truncated version above — it did NOT deliver your full content. message_user is for short interim beats only, never the final answer. Put your complete answer in your normal final reply instead of relying on this truncated update.",
-                  }
-                : { ok: true },
-            );
+            return finish({ ok: true });
           }
           if (name === "message_bot") {
             const sent = await messageBot(
@@ -4674,32 +4611,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
               currentTextSegment += event.text;
               toolCallStreak = { key: undefined, count: 0 };
               tryFlushPendingTools();
-              pendingProgress += progressRedactor.push(event.text);
-              const now = Date.now();
-              if (!scripted && pendingProgress && now - lastProgressAt >= 250) {
-                await flushProgress();
-              }
             } else if (event.type === "progress") {
               toolCallStreak = { key: undefined, count: 0 };
-              if (isRoutineCardRun) {
-                // A routine card run streams nothing into the thread — its run card is the
-                // only surface. Drop batched text and skip the activity line.
-                pendingProgress = "";
-              } else {
-                // Flush batched text deltas first so an activity line cannot land
-                // ahead of text the model streamed before the tool call.
-                if (pendingProgress) {
-                  await deps.events.append({
-                    spaceId: run.spaceId,
-                    threadId: thread.id,
-                    botId: bot.id,
-                    type: "thread.progress",
-                    runId,
-                    payload: { delta: pendingProgress, streaming: true },
-                  });
-                  pendingProgress = "";
-                  lastProgressAt = Date.now();
-                }
+              // A routine card run's only surface is its run card: skip the activity line.
+              if (!isRoutineCardRun) {
                 await deps.events.append({
                   spaceId: run.spaceId,
                   threadId: thread.id,
@@ -4769,27 +4684,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             } else if (event.type === "takeover") {
               if (!(await renewRunLease(deps, runId, workerId, fence))) return;
               const safeReason = redactSecrets(event.reason, runSecrets);
-              // Publish pending narration as tagged mid-turn progress so reconciliation
-              // does not treat pre-takeover text as the delegated final result.
-              await publishMidTurnNarration();
-              if (assembled.trim()) {
-                const narration = clampUserProgressMessage(redactSecrets(assembled, runSecrets));
-                if (narration) {
-                  await publishMessage(
-                    deps,
-                    run,
-                    "bot",
-                    [{ kind: "text", text: narration }],
-                    undefined,
-                    userProgressClientNonce(run.id, midTurnProgressCount++),
-                  );
-                  midTurnUserTexts.push(narration);
-                  publishedMidTurnUserMessage = true;
-                }
-                assembled = "";
-                hasStreamedText = false;
-                pendingProgress = "";
-              }
+              dropMidTurnNarration();
               await publishMessage(deps, run, "bot", [
                 { kind: "computer", state: "Needs you", text: safeReason },
               ]);
@@ -4819,14 +4714,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               });
               return;
             } else if (event.type === "tool") {
-              // Preserve event ordering when the throttle still holds recent narration: the
-              // client must see that text before the tool call it describes.
-              await flushProgress();
-              // Promote streamed narration into a durable, replyable chat message before
-              // tools continue, so long turns do not look stalled and stay replyable.
-              if (event.name !== "message_user") {
-                await publishMidTurnNarration();
-              }
+              dropMidTurnNarration();
               toolAnnounced(event.executionId).resolve();
               await deps.events.append({
                 spaceId: run.spaceId,
@@ -4980,10 +4868,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
               await recordRunUsage(deps, { ...run, botId: bot.id, runId }, event);
             } else if (event.type === "done") {
               if (!assembled && event.text) {
-                if (publishedMidTurnUserMessage) {
-                  // Mid-turn progress already published the streamed narration.
-                  // Post-tool finals are streamed into assembled; do not restore
-                  // cumulative done.text (clamp/redaction make substring stripping brittle).
+                if (publishedMidTurnUserMessage || droppedNarration) {
+                  // done.text is cumulative: restoring it would bring back the narration
+                  // already dropped. Post-tool finals are streamed into assembled.
                 } else {
                   assembled = event.text;
                   currentTextSegment += event.text;
@@ -4994,9 +4881,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
 
           if (approvalPausePending || !leaseValid) return;
           approvedEffectReplays.assertDrained();
-          pendingProgress += progressRedactor.finish();
-          await flushProgress();
-
           for (const turn of script ?? []) {
             for (const file of turn.files ?? []) {
               workspaceCheckpoint.markDirty();
