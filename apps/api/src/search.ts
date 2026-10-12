@@ -27,6 +27,23 @@ async function shownRows<R extends EntryColumns>(prisma: PrismaClient, rows: R[]
   return rows.filter((row) => shown.has(row.id));
 }
 
+/**
+ * Up to SEARCH_LIMIT matching rows the thread shows, read a page at a time, so the matches of a
+ * hidden peer run never take a result slot.
+ */
+async function shownMatches<R extends EntryColumns>(
+  prisma: PrismaClient,
+  page: (offset: number) => Promise<R[]>,
+): Promise<R[]> {
+  const shown: R[] = [];
+  for (let offset = 0; shown.length < SEARCH_LIMIT; offset += SEARCH_LIMIT) {
+    const rows = await page(offset);
+    shown.push(...(await shownRows(prisma, rows)));
+    if (rows.length < SEARCH_LIMIT) break;
+  }
+  return shown.slice(0, SEARCH_LIMIT);
+}
+
 function blocksOfRow(row: EntryColumns): MessageBlock[] {
   return (row.payload as { blocks: MessageBlock[] }).blocks;
 }
@@ -42,12 +59,12 @@ async function findArtifactMessages(
   const candidates = Prisma.join(
     artifacts.map(({ id, targetId }) => Prisma.sql`(${id}, ${targetId})`),
   );
-  const rows = await prisma.$queryRaw<Array<{ artifactId: string; id: string; seq: number }>>(
+  const rows = await prisma.$queryRaw<Array<EntryColumns & { artifactId: string }>>(
     Prisma.sql`
-      SELECT candidate."artifactId", message.id, message.seq
+      SELECT candidate."artifactId", message.*
       FROM (VALUES ${candidates}) AS candidate("artifactId", "targetId")
       CROSS JOIN LATERAL (
-        SELECT e.id, e.seq
+        SELECT ${ENTRY_COLUMNS}
         FROM session_entries e
         INNER JOIN sessions s ON s.id = e."sessionId" AND s.kind = 'thread'
         INNER JOIN threads t ON t.id = s."threadId"
@@ -58,11 +75,17 @@ async function findArtifactMessages(
           AND (e.payload -> 'blocks')::text ILIKE ('%' || candidate."artifactId" || '%')
           AND ${ENTRY_ON_CHAIN}
         ORDER BY e.seq DESC
-        LIMIT 1
+        LIMIT ${SEARCH_LIMIT}
       ) message
+      ORDER BY candidate."artifactId", message.seq DESC
     `,
   );
-  return new Map(rows.map(({ artifactId, id, seq }) => [artifactId, { id, seq }]));
+  // Each file's newest message the thread shows: one a hidden peer run wrote does not count.
+  const newest = new Map<string, { id: string; seq: number }>();
+  for (const { artifactId, id, seq } of await shownRows(prisma, rows)) {
+    if (!newest.has(artifactId)) newest.set(artifactId, { id, seq });
+  }
+  return newest;
 }
 
 export async function querySpaceSearch(
@@ -253,9 +276,11 @@ export async function querySpaceSearch(
 
   // Preview cards are cut out of the JSON before the match: a page title must not take a result slot.
   const pattern = `%${query}%`;
-  const messageRows = await prisma.$queryRaw<
-    Array<EntryColumns & { threadId: string; botId: string; botName: string }>
-  >`
+  const messageRows = await shownMatches(
+    prisma,
+    (offset) => prisma.$queryRaw<
+      Array<EntryColumns & { threadId: string; botId: string; botName: string }>
+    >`
     SELECT ${ENTRY_COLUMNS}, t.id AS "threadId", b.id AS "botId", b.name AS "botName"
     FROM session_entries e
     INNER JOIN sessions s ON s.id = e."sessionId" AND s.kind = 'thread'
@@ -267,11 +292,12 @@ export async function querySpaceSearch(
       AND e.type IN ${MESSAGE_ENTRY_TYPES}
       AND jsonb_path_query_array(e.payload -> 'blocks', '$[*] ? (!exists(@.kind) || @.kind != "link_preview")')::text ILIKE ${pattern}
       AND ${ENTRY_ON_CHAIN}
-    ORDER BY e."createdAt" DESC
-    LIMIT ${SEARCH_LIMIT}
-  `;
+    ORDER BY e."createdAt" DESC, e.id
+    LIMIT ${SEARCH_LIMIT} OFFSET ${offset}
+  `,
+  );
 
-  for (const row of await shownRows(prisma, messageRows)) {
+  for (const row of messageRows) {
     pushMessageHits(blocksOfRow(row), {
       botId: row.botId,
       botName: row.botName,
@@ -282,9 +308,11 @@ export async function querySpaceSearch(
     });
   }
 
-  const groupMessageRows = await prisma.$queryRaw<
-    Array<EntryColumns & { threadId: string; groupId: string; groupName: string }>
-  >`
+  const groupMessageRows = await shownMatches(
+    prisma,
+    (offset) => prisma.$queryRaw<
+      Array<EntryColumns & { threadId: string; groupId: string; groupName: string }>
+    >`
     SELECT ${ENTRY_COLUMNS}, t.id AS "threadId", g.id AS "groupId", g.name AS "groupName"
     FROM session_entries e
     INNER JOIN sessions s ON s.id = e."sessionId" AND s.kind = 'thread'
@@ -295,11 +323,12 @@ export async function querySpaceSearch(
       AND e.type IN ${MESSAGE_ENTRY_TYPES}
       AND jsonb_path_query_array(e.payload -> 'blocks', '$[*] ? (!exists(@.kind) || @.kind != "link_preview")')::text ILIKE ${pattern}
       AND ${ENTRY_ON_CHAIN}
-    ORDER BY e."createdAt" DESC
-    LIMIT ${SEARCH_LIMIT}
-  `;
+    ORDER BY e."createdAt" DESC, e.id
+    LIMIT ${SEARCH_LIMIT} OFFSET ${offset}
+  `,
+  );
 
-  for (const row of await shownRows(prisma, groupMessageRows)) {
+  for (const row of groupMessageRows) {
     pushMessageHits(blocksOfRow(row), {
       groupId: row.groupId,
       groupName: row.groupName,

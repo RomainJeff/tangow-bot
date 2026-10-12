@@ -157,4 +157,61 @@ describe("what a rewind or a clear cut, and what a hidden peer run said", () => 
 
     expect(await found("Lantern")).toEqual(["own-said"]);
   });
+
+  it("finds what the thread shows past more hidden matches than one page of results", async () => {
+    await db.seedThread({ id: "quarry", botId: "bot-8" });
+    await db.seedRun({
+      id: "run-quarry-own",
+      threadId: "quarry",
+      messages: [{ id: "quarry-own", blocks: said("Quarry note, kept.") }],
+    });
+    await db.seedRun({
+      id: "run-quarry-peer",
+      threadId: "quarry",
+      trigger: "bot_message",
+      messages: Array.from({ length: 30 }, (_, index) => ({
+        id: `quarry-peer-${index}`,
+        blocks: said(`Quarry note ${index}.`),
+      })),
+    });
+
+    expect(await found("Quarry note")).toEqual(["quarry-own"]);
+  });
+
+  it("points a file at the newest message the thread shows, past a hidden peer run's", async () => {
+    await db.seedThread({ id: "beacon", botId: "bot-9" });
+    await db.prisma.artifact.create({
+      data: {
+        id: "beacon-file",
+        spaceId: actor.spaceId,
+        userId: actor.userId,
+        botId: "bot-9",
+        name: "beacon-log.pdf",
+        mimeType: "application/pdf",
+        size: 1,
+        hash: "h",
+        storageKey: "k",
+      },
+    });
+    const log: MessageBlock = {
+      kind: "file",
+      artifactId: "beacon-file",
+      name: "beacon-log.pdf",
+      mimeType: "application/pdf",
+      size: 1,
+    };
+    await db.seedRun({
+      id: "run-beacon-own",
+      threadId: "beacon",
+      messages: [{ id: "beacon-own", blocks: [log] }],
+    });
+    await db.seedRun({
+      id: "run-beacon-peer",
+      threadId: "beacon",
+      trigger: "bot_message",
+      messages: [{ id: "beacon-peer", blocks: [log] }],
+    });
+
+    expect(await found("beacon-log", "file")).toEqual(["beacon-own"]);
+  });
 });

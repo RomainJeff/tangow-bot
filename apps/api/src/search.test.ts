@@ -73,10 +73,10 @@ describe("artifact search batching", () => {
     const { prisma } = fixture(3);
     prisma.$queryRaw
       .mockResolvedValueOnce([
-        { artifactId: "artifact-2", id: "message-2", seq: 8 },
-        { artifactId: "artifact-0", id: "message-0", seq: 6 },
+        { artifactId: "artifact-2", ...said("message-2", 8, []) },
+        { artifactId: "artifact-0", ...said("message-0", 6, []) },
       ])
-      .mockResolvedValueOnce([{ artifactId: "group-artifact-1", id: "group-message", seq: 3 }]);
+      .mockResolvedValueOnce([{ artifactId: "group-artifact-1", ...said("group-message", 3, []) }]);
     const hits = await querySpaceSearch(prisma as unknown as PrismaClient, actor, "report");
     expect(hits.map(({ artifactId, messageId, seq }) => ({ artifactId, messageId, seq }))).toEqual([
       { artifactId: "artifact-0", messageId: "message-0", seq: 6 },
