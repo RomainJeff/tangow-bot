@@ -19,6 +19,10 @@ import type {
   NotificationProvider,
   SandboxProvider,
   SemanticMemoryProvider,
+  SessionEntryDraft,
+  SessionLog,
+  SubagentCall,
+  SubagentLog,
   ToolCallTrace,
   WebProvider,
 } from "@rakazo/adapter-kit";
@@ -29,7 +33,13 @@ import {
   routineWakeupJob,
   runContinueJob,
 } from "@rakazo/adapter-kit";
-import type { MessageBlock, RunStatus } from "@rakazo/contracts";
+import type {
+  MessageBlock,
+  RunStatus,
+  SessionEntry,
+  SessionEntryOf,
+  SessionRunTrigger,
+} from "@rakazo/contracts";
 import {
   ATTACHMENT_MAX_BYTES,
   BOT_DESCRIPTION_MAX_LENGTH,
@@ -37,8 +47,11 @@ import {
   BOT_TITLE_MAX_LENGTH,
   BotSecretName,
   BotSecretSubmission,
+  EntryId,
   isAttachmentImageMimeType,
   OPENAI_COMPATIBLE_PROVIDER_ID,
+  RunTrigger,
+  SessionId,
 } from "@rakazo/contracts";
 import type {
   CreatedRoutine,
@@ -60,7 +73,6 @@ import {
   BOT_OFFER_DEDICATED_BOT,
   BOT_OFFER_PROPOSALS,
   botMessageAllowsSilence,
-  botMessageContext,
   botMessageRelaysToUser,
   connectorKindFromToolName,
   containsSecret,
@@ -95,6 +107,7 @@ import {
   parseCardQuestion,
   parseProposed,
   planActionGate,
+  projectInferenceTurns,
   promptInvokesSkill,
   proposalKey,
   proposalPlaceError,
@@ -108,7 +121,6 @@ import {
   runStartedByUser,
   SHAPES,
   sandboxCommandTimeoutMs,
-  settleRoutineAsk,
   skillsReferencedInPrompt,
   skillWriteRefusal,
   spawnBotToolArgs,
@@ -118,7 +130,6 @@ import {
   toolRequiresExplicitApproval,
   UNKNOWN_MODEL_MESSAGE,
   unattendedTriggerToolRequiresApproval,
-  userTurnBlocksForRun,
   validateBotNameText,
   validateSpawnBotArgs,
   withProposalKey,
@@ -132,21 +143,28 @@ import {
 } from "@rakazo/core/node/approval-effect-key";
 import {
   activeBotNames,
-  appendEventInTransaction,
+  appendCardStateInTransaction,
+  appendRunFinishedInTransaction,
+  blocksOf,
+  type CreateBotMessageInput,
+  createBotMessageInTransaction,
   createSpaceForMember,
-  createThreadMessageInTransaction,
   effectiveMemoryScope,
   findDefaultModelCredential,
   findModelCredential,
+  historyGeneration,
   InvalidSpaceNameError,
   isTooManyDatabaseConnections,
-  loadRunHistoryMessages,
+  loadBotMessageContext,
   type McpServer,
+  openRoutineSessionInTransaction,
   Prisma,
   type PrismaClient,
   parseComputerMode,
+  RunHistoryWriteError,
   SpaceLimitError,
   type ThreadEvents,
+  threadEventSeq,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 import { parse as parseShellCommand } from "shell-quote";
@@ -198,12 +216,7 @@ import {
   resolveAutoReviewChecker,
   runAutoReviewJudge,
 } from "./auto-review.js";
-import {
-  loadBotMessageContext,
-  messageBot,
-  resolveRunHop,
-  returnBotMessageOutcome,
-} from "./bot-messages.js";
+import { messageBot, resolveRunHop, returnBotMessageOutcome } from "./bot-messages.js";
 import {
   findBotSecret,
   forgetBotSecret,
@@ -256,27 +269,22 @@ import {
 } from "./computer-support.js";
 import { observationToolResult, parseComputerActions } from "./computer-tools.js";
 import { checkpointRunComputerWorkspace } from "./computer-workspace.js";
-import { sanitizeConnectorError } from "./connector-safety.js";
+import { redactConnectorPayload, sanitizeConnectorError } from "./connector-safety.js";
 import { formatCurrentTimeInstruction } from "./current-time.js";
 import type { DecisionProviderResolver } from "./decision-provider-factory.js";
 import { resolveDeploymentModel } from "./deployment-model.js";
 import type { TextEditResult } from "./file-text.js";
 import { applyTextEdit, readLineWindow } from "./file-text.js";
 import { handoffToGroupBot, loadGroupContext } from "./group-handoff.js";
-import type { HistoryWindowMode } from "./history-compaction.js";
 import {
-  COMPACTION_BATCH_SIZE,
   estimateHistoryMessageTokens,
   estimateHistoryTokens,
   estimateTextTokens,
   estimateToolSchemaTokens,
-  formatCompactedSummary,
   formatRecalledMemory,
-  HISTORY_WINDOW_SIZE,
-  historyWindowSize,
-  LEGACY_HISTORY_WINDOW_SIZE,
+  HISTORY_COUNT_WINDOW,
+  historyBudgetTokens,
   MAX_RECALLED_MEMORIES,
-  selectCompactedHistory,
   selectHistoryWindow,
   shouldEnqueueCompaction,
 } from "./history-compaction.js";
@@ -323,7 +331,7 @@ import {
   searchChartCatalog,
 } from "./plot-tool.js";
 import type { RemoteTransportDependencies } from "./remote-mcp.js";
-import { loadReplyContext, messageToAgentHistoryTurn } from "./reply-context.js";
+import { loadReplyContext } from "./reply-context.js";
 import {
   commitConsumedRunSecret,
   normalizeSecretAskPurpose,
@@ -395,12 +403,11 @@ import {
   endsWithToolCallBudgetNotice,
   extractNarrationText,
   finalBlocksAfterMidTurnProgress,
-  isUserProgressClientNonce,
   repeatsSentUserText,
   trailingRuntimeNotice,
-  userMessageClientNonce,
 } from "./user-progress.js";
 import { createWebProvider } from "./web-provider-factory.js";
+import { withAbort } from "./web-ssrf.js";
 import { webFetchFromTool, webSearchFromTool } from "./web-tools.js";
 
 const modelCredentialLocks = new Map<string, Promise<void>>();
@@ -647,6 +654,7 @@ function runtimeFallbackModel(runtime: AgentRuntime) {
 export interface ExecutorDeps {
   prisma: PrismaClient;
   events: ThreadEvents;
+  sessionLog: SessionLog<Prisma.TransactionClient>;
   runtime: AgentRuntime;
   sandbox: SandboxProvider;
   memory: MemoryStore;
@@ -1074,6 +1082,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
       {
         prisma: deps.prisma,
         events: deps.events,
+        sessionLog: deps.sessionLog,
         lineOnlyMessages: learning !== "off",
       },
       runId,
@@ -1433,22 +1442,29 @@ export function createRunExecutor(deps: ExecutorDeps) {
         // A follow_up's source message tells whether the user or another bot started it.
         const sourceMessage =
           (run.trigger === "messaging" || run.trigger === "follow_up") && run.sourceMessageId
-            ? await deps.prisma.message.findUnique({
+            ? await deps.prisma.sessionEntry.findUnique({
                 where: { id: run.sourceMessageId },
-                select: { role: true, blocks: true },
+                select: { type: true, payload: true },
               })
             : null;
-        const sourceRole = sourceMessage?.role;
-        const sourceBlocks =
-          run.trigger === "messaging"
-            ? (sourceMessage?.blocks as MessageBlock[] | undefined)
-            : undefined;
+        const sourceRole = sourceMessage
+          ? sourceMessage.type === "user.message"
+            ? "user"
+            : "bot"
+          : undefined;
+        const sourceBlocks = run.trigger === "messaging" ? blocksOf(sourceMessage) : undefined;
         const channelId = messagingChannelId(sourceBlocks);
         const messagingChannelRun = isMessagingChannelRun(run.trigger, sourceBlocks);
+        const sessionId = run.sessionId as SessionId;
+        const historyStartedAt = performance.now();
+        let historyMs = 0;
+        const threadLoad = deps.prisma.thread.findUniqueOrThrow({ where: { id: run.threadId } });
+        const compacts = (owner: { botId: string | null }) =>
+          Boolean(owner.botId) && deps.runtime.describe().capabilities.compaction;
         const [
           bot,
           thread,
-          messages,
+          historyEntries,
           peerMessage,
           task,
           storedConnections,
@@ -1464,8 +1480,20 @@ export function createRunExecutor(deps: ExecutorDeps) {
             where: { id: run.botId },
             include: { computer: true },
           }),
-          deps.prisma.thread.findUniqueOrThrow({ where: { id: run.threadId } }),
-          loadRunHistoryMessages(deps.prisma, run, LEGACY_HISTORY_WINDOW_SIZE, channelId),
+          threadLoad,
+          threadLoad
+            .then((loaded) =>
+              readRunHistory(
+                deps.sessionLog,
+                run,
+                channelId,
+                compacts(loaded) ? undefined : UNCOMPACTED_HISTORY_LIMIT,
+              ),
+            )
+            .then((entries) => {
+              historyMs = performance.now() - historyStartedAt;
+              return entries;
+            }),
           run.trigger === "bot_message"
             ? loadBotMessageContext(deps.prisma, run.sourceMessageId)
             : Promise.resolve(undefined),
@@ -1570,30 +1598,22 @@ export function createRunExecutor(deps: ExecutorDeps) {
         // (background-work-visibility CA1/CA2); a top-level bot's scheduled routine (the
         // orchestrator's own brief) is unaffected and keeps behaving as a normal reply.
         const isRoutineCardRun = showsRoutineRunCard(run, bot.parentBotId != null);
-        // Only a top-level bot talks to the user through message_user. A sub-bot answers its
-        // parent and a routine card digests the run, so both keep their text as their output.
-        const messageUserExposed = bot.parentBotId == null && !isRoutineCardRun;
+        // Only a top-level bot talks to the user through message_user, outside its routines. A
+        // sub-bot answers its parent, and a routine run, scheduled or woken by a webhook, works in
+        // its own session and reports when it ends, so both keep their text as their output.
+        const routineRun =
+          run.routineId != null && (run.trigger === "routine" || run.trigger === "webhook");
+        const messageUserExposed = bot.parentBotId == null && !routineRun;
         // Text the model writes outside message_user is private scratch, and a turn that never
         // calls it stays silent. A delegated run's text is its result for the ordering bot.
         const freeTextIsPrivate = messageUserExposed && run.trigger !== "bot_message";
-        const routineCardStartedAt = current.startedAt ?? new Date();
-        let routineForCard: { id: string; name: string; notify: boolean } | null = null;
-        let routineRunCardMessageId: string | null = null;
-        if (isRoutineCardRun && run.routineId) {
-          routineForCard = await deps.prisma.routine.findUnique({
-            where: { id: run.routineId },
-            select: { id: true, name: true, notify: true },
-          });
-          if (routineForCard) {
-            const card = await publishRoutineRunCard(
-              deps,
-              { id: runId, spaceId: run.spaceId, threadId: thread.id, botId: bot.id },
-              routineForCard,
-              routineCardStartedAt,
-            );
-            routineRunCardMessageId = card?.id ?? null;
-          }
-        }
+        const routineForCard =
+          isRoutineCardRun && run.routineId
+            ? await deps.prisma.routine.findUnique({
+                where: { id: run.routineId },
+                select: { notify: true },
+              })
+            : null;
         // A routine's runs may save skills only while its prompt is the user's (skillWriteRefusal).
         const trustedRoutine =
           run.trigger === "routine" && run.routineId
@@ -1606,11 +1626,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
             : false;
         // Set once the run reads a message someone other than the user sent into it.
         let steeredByOthers = false;
-        // One place to flip the card to its terminal state, whichever way the run ends.
-        // `routineForCard` is only set for a routine card run, so this is a no-op elsewhere.
-        // Non-terminal pauses (ask -> waiting_input, takeover -> waiting_takeover) and lease
-        // loss deliberately leave the card on "running": the run is not over, and the retry
-        // reuses this very card via its stable clientNonce.
         const settleStrandedCards = () =>
           failStrandedRoutineCards(deps, {
             spaceId: run.spaceId,
@@ -1618,19 +1633,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
             botId: bot.id,
             runId,
           }).catch((error) => getLogger().error("stranded routine cards", error));
-        const settleRoutineRunCard = async (state: "completed" | "failed", digest: string) => {
-          if (!routineForCard || !routineRunCardMessageId) return;
-          await finalizeRoutineRunCard(
-            deps,
-            { spaceId: run.spaceId, threadId: thread.id, botId: bot.id, id: runId },
-            routineRunCardMessageId,
-            routineForCard,
-            state,
-            digest,
-            { startedAt: routineCardStartedAt.toISOString(), endedAt: new Date().toISOString() },
-          );
-        };
-
         const discoveredPromise = deps.connector
           ? deps.connector.discoverTools(context)
           : Promise.resolve([]);
@@ -1639,54 +1641,44 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const group = thread.groupId
           ? await loadGroupContext(deps.prisma, thread.groupId, { id: bot.id, name: bot.name })
           : undefined;
-        const threadContext = threadContextForRun(
-          run.routineId != null,
-          {
-            messages: [...messages].reverse().map((m) => ({
-              id: m.id,
-              seq: m.seq,
-              ...messageToAgentHistoryTurn(m, bot.id, group?.memberNames),
-            })),
-            summary: thread.historyCompactionSummary,
-            historyCompactedUpToSeq: thread.historyCompactedUpToSeq,
-          },
-          messagingChannelRun,
-        );
-        const compactedHistory = selectCompactedHistory({
-          messages: threadContext.messages,
-          summary: threadContext.summary,
-          historyCompactedUpToSeq: threadContext.historyCompactedUpToSeq,
-        });
-        // `system` rows are thread asides, never conversation, and this is the one place
-        // that drops them. It has to happen after the selection above: those rows hold a
-        // seq of their own, and removing them earlier punches a hole in the run of
-        // sequence numbers the compaction summary is only trusted against.
-        let history = compactedHistory.history
-          .filter(({ role }) => role !== "system")
-          .map(({ id, role, content, parts }) => ({
-            id,
-            role,
-            content,
-            ...(parts ? { parts } : {}),
-          }));
-        // What the window could have chosen from, counted after the system rows are dropped so it
-        // is comparable with the count kept below. Measured against the pre-filter length it
-        // reported a permanent phantom loss of one message per system row.
-        const historyMessagesAvailable = history.length;
-        // "not-sized" rather than null when a local summary already narrowed history and no window
-        // sizing ran: null read the same as "sized and kept everything".
-        let historyWindowMode: HistoryWindowMode | "not-sized" = "not-sized";
-        const turnBlocks = userTurnBlocksForRun(
-          run.trigger,
-          runId,
-          messages.map((message) => ({
-            id: message.id,
-            role: message.role,
-            runId: message.runId,
-            blocks: message.blocks as MessageBlock[],
-          })),
+        const projectStartedAt = performance.now();
+        const [first] = historyEntries;
+        const compaction = first?.type === "compaction" ? first : undefined;
+        const outside = await readEntriesOffChain(
+          deps.sessionLog,
+          sessionId,
+          historyEntries,
           run.sourceMessageId,
         );
+        const turns = projectInferenceTurns(historyEntries, {
+          selfBotId: bot.id,
+          botNames: group?.memberNames,
+          resolveReplyTarget: (entryId) => outside.get(entryId),
+        });
+        const summaryTurn = compaction ? turns[0] : undefined;
+        const uncompactedHistory = compaction ? turns.slice(1) : turns;
+        historyMs += performance.now() - projectStartedAt;
+        const includeSemanticRecall = run.routineId == null && !messagingChannelRun;
+        const recallRequest = async (query: string) => {
+          const generation = compaction
+            ? await historyGeneration(deps.prisma, sessionId)
+            : undefined;
+          return {
+            query,
+            scope: memoryScope!,
+            botId: bot.id,
+            ...(generation === undefined ? {} : { historyGeneration: generation }),
+            limit: MAX_RECALLED_MEMORIES,
+          };
+        };
+        const sourceEntry = run.sourceMessageId
+          ? (historyEntries.find((entry) => entry.id === run.sourceMessageId) ??
+            outside.get(run.sourceMessageId))
+          : undefined;
+        const turnBlocks =
+          run.trigger === "user" && sourceEntry?.type === "user.message"
+            ? sourceEntry.payload.blocks
+            : undefined;
         const allowSilentPeerMessage = botMessageAllowsSilence(
           peerMessage?.intent,
           peerMessage?.repliesToRequest,
@@ -1702,19 +1694,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
         // Durable memories live outside the thread, so recall does not wait for a compaction.
         // Same request shape as the recall_memory tool, which never carried that gate.
         const recallPromise =
-          threadContext.includeSemanticRecall && semanticMemory && memoryScope
-            ? semanticMemory.recall(
-                {
-                  query: task.prompt,
-                  scope: memoryScope,
-                  botId: bot.id,
-                  ...(thread.historyCompactedUpToSeq == null
-                    ? {}
-                    : { historyGeneration: thread.historyCompactionGeneration }),
-                  limit: MAX_RECALLED_MEMORIES,
-                },
-                context,
-              )
+          includeSemanticRecall && semanticMemory && memoryScope
+            ? recallRequest(task.prompt).then((request) => semanticMemory.recall(request, context))
             : Promise.resolve(null);
         const [discovered, currentTurnImages, memoryContext, scratchpadContext, recalled] =
           await Promise.all([
@@ -1733,10 +1714,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
           ]);
         const semanticMemoryEnabled = Boolean(semanticMemory) && !messagingChannelRun;
         let recalledMemory = "";
-        let recallSucceeded = false;
         if (recalled) {
           if (recalled.ok && recalled.value.length > 0) {
-            recallSucceeded = true;
             recalledMemory = formatRecalledMemory(recalled.value);
           } else if (!recalled.ok) {
             getLogger().error("semantic memory recall failed", recalled.error);
@@ -1768,7 +1747,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
             error: MISSING_MODEL_MESSAGE,
           });
           if (!failed) return;
-          await settleRoutineRunCard("failed", MISSING_MODEL_MESSAGE);
           await settleStrandedCards();
           if (failed.continuationRunId) {
             await deps.jobs
@@ -1967,21 +1945,22 @@ export function createRunExecutor(deps: ExecutorDeps) {
         // never for a missing value, which goes back to browser_run.
         let browserActUnlocked = false;
         // Durable chat messages posted mid-turn (message_user / promoted narration).
-        // Rehydrate from this run's prior progress rows so a resume after ask/takeover
+        // Rehydrate from this run's prior mid-turn entries so a resume after ask/takeover
         // still knows progress was already published (skip hollow finals; status outcome).
         let publishedMidTurnUserMessage = false;
         const midTurnUserTexts: string[] = [];
-        let midTurnProgressCount = 0;
         {
-          const priorProgress = await deps.prisma.message.findMany({
-            where: { runId: run.id, role: "bot" },
+          const priorProgress = await deps.prisma.sessionEntry.findMany({
+            where: {
+              runId: run.id,
+              type: "assistant.text",
+              payload: { path: ["midTurn"], equals: true },
+            },
             orderBy: { seq: "asc" },
-            select: { blocks: true, clientNonce: true },
+            select: { payload: true },
           });
-          for (const message of priorProgress) {
-            if (!isUserProgressClientNonce(message.clientNonce)) continue;
-            const blocks = Array.isArray(message.blocks) ? (message.blocks as MessageBlock[]) : [];
-            const text = blocks
+          for (const entry of priorProgress) {
+            const text = blocksOf(entry)
               .filter(
                 (block): block is Extract<MessageBlock, { kind: "text" }> => block.kind === "text",
               )
@@ -1991,7 +1970,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
             if (!text) continue;
             midTurnUserTexts.push(text);
             publishedMidTurnUserMessage = true;
-            midTurnProgressCount += 1;
           }
         }
         // Tool calls that land mid-sentence wait here until the narration catches up to a
@@ -2016,6 +1994,203 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const recordToolOutput = (executionId: string, result: unknown) => {
           const detail = toolDetails.get(executionId);
           if (detail) detail.output = describeToolPayload(result);
+        };
+        const runLog: RunLog = { sessionId: run.sessionId as SessionId, runId, botId: bot.id };
+        const unansweredCalls = new Map<string, string>();
+        const logEntry = (draft: SessionEntryDraft) =>
+          deps.prisma.$transaction((tx) => deps.sessionLog.append(tx, draft));
+        const announcesTools = deps.runtime.describe().capabilities.streaming;
+        const toolAnnouncements = new Map<string, ReturnType<typeof deferred>>();
+        const toolAnnounced = (executionId: string) => {
+          let handled = toolAnnouncements.get(executionId);
+          if (!handled) {
+            handled = deferred();
+            toolAnnouncements.set(executionId, handled);
+          }
+          return handled;
+        };
+        const afterToolAnnounced = async (executionId: string) => {
+          if (!announcesTools) return;
+          await withAbort(toolAnnounced(executionId).promise, context.signal);
+          toolAnnouncements.delete(executionId);
+        };
+        const toolCall = (callId: string, name: string, args: Record<string, unknown>) =>
+          ({
+            type: "tool.call",
+            payload: { callId, name, input: redactSecrets(describeToolPayload(args), runSecrets) },
+          }) satisfies ToolLogEntry;
+        /**
+         * A call the log holds without a result is one the worker was running when it stopped. The
+         * runtime replays it under its id with the same input, and that replay keeps its entry; a
+         * reused id with other input is a new call.
+         */
+        const runLoggedTool = async (
+          log: RunLog,
+          write: (entry: ToolLogEntry) => Promise<unknown>,
+          name: string,
+          args: Record<string, unknown>,
+          executionId: string,
+          trace?: ToolCallTrace,
+        ) => {
+          const call = toolCall(executionId, name, args);
+          if (unansweredCalls.get(executionId) !== call.payload.input) await write(call);
+          unansweredCalls.delete(executionId);
+          const answer = (output: unknown, isError: boolean, artifactIds: string[]) =>
+            write({
+              type: "tool.result",
+              payload: {
+                callId: executionId,
+                output: redactSecrets(describeToolPayload(output), runSecrets),
+                isError,
+                artifactIds,
+              },
+            });
+          const result = await applyTool(name, args, executionId, log, trace).catch(
+            async (error: unknown) => {
+              // An aborted call stays unanswered so a resumed worker replays it.
+              if (!context.signal.aborted) {
+                await answer(error instanceof Error ? error.message : String(error), true, []);
+              }
+              throw error;
+            },
+          );
+          recordToolOutput(executionId, result);
+          if (!isToolPauseResult(result)) {
+            await answer(result, isFailedToolResult(result), toolArtifactIds(result));
+          }
+          return result;
+        };
+        const writeRunEntry = (entry: ToolLogEntry) => logEntry({ ...runLog, ...entry });
+        const effort = thinkingLevel ?? resolved.thinkingLevel ?? null;
+        const startSubagent = async (call: SubagentCall): Promise<SubagentLog> => {
+          await afterToolAnnounced(call.callId);
+          const callEntryId = EntryId.parse(randomUUID());
+          const helper = await deps.prisma.$transaction(async (tx) => {
+            await deps.sessionLog.append(tx, {
+              ...runLog,
+              id: callEntryId,
+              ...toolCall(call.callId, "run_subagent", call.args),
+            });
+            const sessionId = await deps.sessionLog.createSession(tx, {
+              kind: "subagent",
+              id: SessionId.parse(randomUUID()),
+              spaceId: run.spaceId,
+              parentSessionId: runLog.sessionId,
+              parentEntryId: callEntryId,
+            });
+            const task = await tx.task.create({
+              data: {
+                spaceId: run.spaceId,
+                botId: bot.id,
+                threadId: thread.id,
+                userId: run.userId,
+                prompt: call.task,
+                status: "running",
+              },
+              select: { id: true },
+            });
+            const helperRun = await tx.run.create({
+              data: {
+                spaceId: run.spaceId,
+                botId: bot.id,
+                threadId: thread.id,
+                taskId: task.id,
+                userId: run.userId,
+                status: "running",
+                trigger: "subagent",
+                sessionId,
+                parentRunId: runId,
+                modelProvider: call.model.provider,
+                modelId: call.model.id,
+                startedAt: new Date(),
+              },
+              select: { id: true },
+            });
+            await deps.sessionLog.append(tx, {
+              type: "run.started",
+              sessionId,
+              botId: bot.id,
+              runId: helperRun.id,
+              payload: {
+                trigger: { kind: "subagent", entryId: callEntryId },
+                model: call.model,
+                effort,
+              },
+            });
+            return { log: { sessionId, runId: helperRun.id, botId: bot.id }, taskId: task.id };
+          });
+          const inOrder = serialWrites();
+          const writeHelperEntry = (entry: ToolLogEntry) =>
+            inOrder(() => logEntry({ ...helper.log, ...entry }));
+          return {
+            executeTool: (name, args, executionId, _route, trace) =>
+              runLoggedTool(helper.log, writeHelperEntry, name, args, executionId, trace),
+            text: (text) =>
+              inOrder(() =>
+                logEntry({
+                  ...helper.log,
+                  type: "assistant.text",
+                  payload: { blocks: [{ kind: "text", text: redactSecrets(text, runSecrets) }] },
+                }),
+              ).then(() => undefined),
+            finish: (outcome) =>
+              inOrder(async () => {
+                const result = redactSecrets(outcome.result, runSecrets);
+                try {
+                  await deps.prisma.$transaction(async (tx) => {
+                    // The parent's thread, then the helper's run and session, the order stop takes.
+                    await tx.$queryRaw`SELECT id FROM threads WHERE id = ${thread.id} FOR UPDATE`;
+                    const closed = await tx.run.updateMany({
+                      where: { id: helper.log.runId, status: "running" },
+                      data: { status: outcome.status, completedAt: new Date() },
+                    });
+                    if (closed.count === 1) {
+                      await tx.task.update({
+                        where: { id: helper.taskId },
+                        data: { status: outcome.status },
+                        select: { id: true },
+                      });
+                      await appendRunFinishedInTransaction(
+                        tx,
+                        helper.log.runId,
+                        outcome.status === "completed"
+                          ? { status: "completed" }
+                          : { status: "failed", error: result },
+                        { usage: outcome.usage },
+                      );
+                    }
+                    await deps.sessionLog.append(tx, {
+                      ...runLog,
+                      type: "subagent",
+                      payload: {
+                        callId: call.callId,
+                        sessionId: helper.log.sessionId,
+                        name: call.name,
+                        model: call.model,
+                        task: redactSecrets(call.task, runSecrets),
+                        status: outcome.status,
+                        result,
+                        usage: outcome.usage,
+                      },
+                    });
+                  });
+                } catch (error) {
+                  if (!(error instanceof RunHistoryWriteError)) throw error;
+                }
+              }),
+            abandon: (result) =>
+              inOrder(() =>
+                writeRunEntry({
+                  type: "tool.result",
+                  payload: {
+                    callId: call.callId,
+                    output: redactSecrets(result, runSecrets),
+                    isError: true,
+                    artifactIds: [],
+                  },
+                }),
+              ).then(() => undefined),
+          };
         };
         let toolCallStreak: ToolCallStreak = { key: undefined, count: 0 };
         let lastComputerFrameId: string | undefined;
@@ -2125,17 +2300,18 @@ export function createRunExecutor(deps: ExecutorDeps) {
           change: "created" | "updated",
         ) => {
           try {
+            const posted = await deps.prisma.sessionEntry.findFirst({
+              where: {
+                runId,
+                type: "assistant.ask",
+                payload: { path: ["block", "approvalEffectId"], equals: effectId },
+              },
+              select: { id: true },
+            });
+            if (posted) return;
             dropMidTurnNarration();
-            await publishMessage(
-              deps,
-              run,
-              "bot",
-              [routineConfirmationBlock(effectId, routine, change)],
-              undefined,
-              `routine-confirmation:${effectId}`,
-            );
+            await publishMessage(deps, run, [routineConfirmationBlock(effectId, routine, change)]);
           } catch (error) {
-            if ((error as { code?: string }).code === "P2002") return;
             getLogger().error("routine confirmation card", error);
           }
         };
@@ -2153,6 +2329,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           name: string,
           args: Record<string, unknown>,
           executionId: string,
+          callLog: RunLog,
           trace?: ToolCallTrace,
         ) => {
           context.signal.throwIfAborted();
@@ -2663,6 +2840,14 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   runUserId: run.userId,
                 }),
               ],
+              effect: {
+                id: applied!.effect.id,
+                kind: applied!.effect.kind,
+                proposal: effectProposal(
+                  redactConnectorPayload(applied!.effect.request, runSecrets),
+                ),
+              },
+              pausedCall: pausedCall(callLog, executionId, "approval"),
             });
             // pauseRunForInput returning false after a successful renew means the run row no
             // longer matches this worker. Exiting via pauseForApproval() would leave the run
@@ -2965,7 +3150,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               if (args.attach !== false && chartFits) {
                 // Live inline chart: the client re-renders the validated spec
                 // and the PNG stays on disk as the exportable copy.
-                await publishMessage(deps, run, "bot", [
+                await publishMessage(deps, run, [
                   {
                     kind: "chart",
                     name: chartName,
@@ -2987,7 +3172,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                     operationId: executionId,
                   },
                 );
-                await publishMessage(deps, run, "bot", [result.block]);
+                await publishMessage(deps, run, [result.block]);
                 attached = true;
               }
               return finish({ ok: true, path: outPath, attached });
@@ -3032,7 +3217,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   operationId: executionId,
                 },
               );
-              await publishMessage(deps, run, "bot", [attached.block]);
+              await publishMessage(deps, run, [attached.block]);
               return finish({ ok: true, artifactId: attached.artifactId, path: filePath });
             } catch (error) {
               return finish({
@@ -3261,19 +3446,14 @@ export function createRunExecutor(deps: ExecutorDeps) {
             if (!applied) return;
             if (!("ok" in result)) {
               if (approvedReplayConsumed) {
-                await settleRoutineCard(deps, cardTarget, applied.effect.id, (card) => ({
-                  ...card,
-                  failed: true,
-                }));
+                await settleRoutineCard(deps, cardTarget, applied.effect.id, { failed: true });
               }
               return;
             }
             const { routineId: id, name, schedule, prompt, notify } = result;
             const routine = { id, name, schedule, prompt, notify };
             if (approvedReplayConsumed) {
-              await settleRoutineCard(deps, cardTarget, applied.effect.id, (card) =>
-                settleRoutineAsk(card, routine, change),
-              );
+              await settleRoutineCard(deps, cardTarget, applied.effect.id, { routine, change });
             } else {
               await confirmRoutine(applied.effect.id, routine, change);
             }
@@ -3434,7 +3614,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
                     needsOAuth: oauthLikely,
                   },
                 ];
-                const committed = await persistMessageInTransaction(tx, run, "bot", blocks);
+                const committed = await persistMessageInTransaction(
+                  tx,
+                  deps.sessionLog,
+                  run,
+                  blocks,
+                );
                 return { server, eventSeq: committed.eventSeq };
               });
               serverRow = created.server;
@@ -3469,18 +3654,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             });
           }
           if (name === "recall_memory") {
-            return semanticMemory!.recall(
-              {
-                query: String(args.query ?? ""),
-                scope: memoryScope!,
-                botId: bot.id,
-                ...(thread.historyCompactedUpToSeq == null
-                  ? {}
-                  : { historyGeneration: thread.historyCompactionGeneration }),
-                limit: MAX_RECALLED_MEMORIES,
-              },
-              context,
-            );
+            return semanticMemory!.recall(await recallRequest(String(args.query ?? "")), context);
           }
           if (name === "save_memory") {
             return finish(
@@ -3743,6 +3917,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   status: "pending",
                 },
               ],
+              pausedCall: pausedCall(callLog, executionId, "answer"),
             });
             if (!paused) {
               throw new Error("Could not pause this run for protected input; try sending again.");
@@ -3792,7 +3967,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 spaceId: bot.spaceId,
                 userId: run.userId,
               },
-              runId,
               spawnKey: applied?.effect.id ?? executionId,
               name: spawnArgs.name,
               title: spawnArgs.title || undefined,
@@ -3805,7 +3979,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             if ("error" in spawned) return finish(spawned);
             if (!(await persistEffectResult(spawned))) return uncertainEffectResult(name);
             try {
-              await publishMessage(deps, run, "bot", [
+              await publishMessage(deps, run, [
                 {
                   kind: "child_bot",
                   botId: spawned.botId,
@@ -3930,16 +4104,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
               });
             }
             dropMidTurnNarration();
-            await publishMessage(
-              deps,
-              run,
-              "bot",
-              [{ kind: "text", text }],
-              undefined,
-              // user-message: (not user-progress:) so a delegated run surfaces this to the
-              // user while its narration stays hidden.
-              userMessageClientNonce(run.id, midTurnProgressCount++),
-            );
+            // toPerson, so a delegated run surfaces this to the user while its narration stays
+            // hidden.
+            await publishMessage(deps, run, [{ kind: "text", text }], {
+              midTurn: true,
+              toPerson: true,
+            });
             midTurnUserTexts.push(text);
             publishedMidTurnUserMessage = true;
             return finish({ ok: true });
@@ -4029,7 +4199,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             if ("error" in archived) return finish(archived);
             if (!(await persistEffectResult(archived))) return uncertainEffectResult(name);
             try {
-              await publishMessage(deps, run, "bot", [
+              await publishMessage(deps, run, [
                 {
                   kind: "child_bot",
                   botId: archived.botId,
@@ -4138,13 +4308,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
           .filter(Boolean)
           .join("\n\n");
         const historicalContext: AgentRunRequest["history"] = [];
-        if (compactedHistory.usedLocalSummary && compactedHistory.summary) {
+        if (summaryTurn) {
           historicalContext.push({
-            role: "user",
-            content: redactSecrets(
-              formatCompactedSummary(compactedHistory.summary, thread.historyCompactedUpToSeq!),
-              runSecrets,
-            ),
+            ...summaryTurn,
+            content: redactSecrets(summaryTurn.content, runSecrets),
           });
         }
         if (recalledMemory) {
@@ -4232,20 +4399,16 @@ export function createRunExecutor(deps: ExecutorDeps) {
           // resolved model's context window and on what the rest of the run costs: the rendered
           // instructions already carry memory, scratchpad and the peer directory, so a bot with a
           // large durable memory or many connector tools keeps fewer messages than a bare one.
-          if (!compactedHistory.usedLocalSummary) {
-            const window = selectHistoryWindow({
-              history,
-              contextWindow: resolved.contextWindow,
-              nonHistoryTokens,
-              messageWindowSize: historyWindowSize({
-                semanticMemoryEnabled: semanticMemoryEnabled && !thread.historyCompactionSummary,
-                compacted: thread.historyCompactedUpToSeq != null,
-                recallSucceeded,
-              }),
-            });
-            history = window.messages;
-            historyWindowMode = window.mode;
-          }
+          const historyBudget = historyBudgetTokens(resolved.contextWindow, nonHistoryTokens);
+          const windowStartedAt = performance.now();
+          const window = selectHistoryWindow({
+            history: uncompactedHistory,
+            contextWindow: resolved.contextWindow,
+            nonHistoryTokens,
+            messageWindowSize: HISTORY_COUNT_WINDOW,
+          });
+          historyMs += performance.now() - windowStartedAt;
+          const history = window.messages;
           const runtimeHistory = [...historicalContext, ...history];
           // Split by role so a change in how past turns are rehydrated is visible here.
           const historyTokensByRole = runtimeHistory.reduce<Record<string, number>>(
@@ -4276,9 +4439,22 @@ export function createRunExecutor(deps: ExecutorDeps) {
             historyTokens: estimateHistoryTokens(runtimeHistory),
             historyTokensByRole,
             historyMessagesKept: history.length,
-            historyMessagesAvailable,
-            historyWindowMode,
+            historyMessagesAvailable: uncompactedHistory.length,
+            historyWindowMode: window.mode,
+            source: "session_log",
+            historyEntriesRead: historyEntries.length,
+            ...(compaction ? { compactionSeq: compaction.seq } : {}),
+            historyLoadMs: Number(historyMs.toFixed(1)),
           });
+          const opened = await openRunLog(
+            deps,
+            run,
+            runLog,
+            { provider: runModelProvider, id: runModelId },
+            effort,
+          );
+          runLog.sessionId = opened.sessionId;
+          for (const [callId, input] of opened.awaitingResult) unansweredCalls.set(callId, input);
           const runtimeModel: AgentRunRequest["model"] = {
             provider: runModelProvider,
             id: runModelId,
@@ -4314,10 +4490,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
               executeTool: scripted
                 ? undefined
                 : async (name, args, executionId, _route, trace) => {
-                    const result = await applyTool(name, args, executionId, trace);
-                    recordToolOutput(executionId, result);
-                    return result;
+                    await afterToolAnnounced(executionId);
+                    return runLoggedTool(runLog, writeRunEntry, name, args, executionId, trace);
                   },
+              startSubagent: scripted ? undefined : startSubagent,
               resolveModel: scripted
                 ? undefined
                 : (provider, modelId) =>
@@ -4503,7 +4679,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               if (!(await renewRunLease(deps, runId, workerId, fence))) return;
               const safeReason = redactSecrets(event.reason, runSecrets);
               dropMidTurnNarration();
-              await publishMessage(deps, run, "bot", [
+              await publishMessage(deps, run, [
                 { kind: "computer", state: "Needs you", text: safeReason },
               ]);
               await workspaceCheckpoint.flush();
@@ -4533,14 +4709,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               return;
             } else if (event.type === "tool") {
               dropMidTurnNarration();
-              await deps.events.append({
-                spaceId: run.spaceId,
-                threadId: thread.id,
-                botId: bot.id,
-                type: "agent.tool.called",
-                runId,
-                payload: { name: event.name, executionId: event.executionId },
-              });
+              toolAnnounced(event.executionId).resolve();
               const toolDetail: ToolCallDetail = {
                 name: event.name,
                 input: describeToolPayload(event.args),
@@ -4557,7 +4726,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 flushPendingTools();
                 if (!(await renewRunLease(deps, runId, workerId, fence))) return;
                 if (messageSegments.length > 0) {
-                  await publishMessage(deps, run, "bot", redactBlocks(messageSegments, runSecrets));
+                  await publishMessage(deps, run, redactBlocks(messageSegments, runSecrets));
                 }
                 await workspaceCheckpoint.flush();
                 terminalCheckpointComplete = true;
@@ -4594,8 +4763,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
               if (scripted) {
                 const startedAt = Date.now();
                 try {
-                  const result = await applyTool(event.name, event.args, event.executionId);
-                  recordToolOutput(event.executionId, result);
+                  const result = await runLoggedTool(
+                    runLog,
+                    writeRunEntry,
+                    event.name,
+                    event.args,
+                    event.executionId,
+                  );
                   await appendToolCompletionAudit(
                     deps,
                     {
@@ -4636,45 +4810,15 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 }
               }
             } else if (event.type === "subagent") {
-              const safeTask = redactSecrets(event.task, runSecrets);
-              const safeProgress = event.progress
-                ? redactSecrets(event.progress, runSecrets)
-                : undefined;
-              const safeResult = event.result ? redactSecrets(event.result, runSecrets) : undefined;
-              await deps.events.append({
-                spaceId: run.spaceId,
-                threadId: thread.id,
-                botId: bot.id,
-                type: "thread.subagent",
-                runId,
-                payload: {
-                  agentId: event.agentId,
-                  name: event.name,
-                  task: safeTask,
-                  status: event.status,
-                  progress: safeProgress,
-                  result: safeResult,
-                },
-              });
+              // The helper's card comes from its run_subagent call and its subagent entry.
               if (event.status === "completed" || event.status === "failed") {
                 publishedTerminalSubagent ||= !subagentMarksUnread(run.trigger, event.status);
-                await publishMessage(
-                  deps,
-                  run,
-                  "bot",
-                  [
-                    {
-                      kind: "subagent",
-                      agentId: event.agentId,
-                      name: event.name,
-                      task: safeTask,
-                      status: event.status,
-                      progress: safeProgress,
-                      result: safeResult,
-                    },
-                  ],
-                  subagentMarksUnread(run.trigger, event.status),
-                );
+                if (subagentMarksUnread(run.trigger, event.status)) {
+                  await deps.prisma.thread.update({
+                    where: { id: thread.id },
+                    data: { unread: true },
+                  });
+                }
               }
             } else if (event.type === "usage") {
               await recordRunUsage(deps, { ...run, botId: bot.id, runId }, event);
@@ -4820,6 +4964,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             outcome: "completed",
             blocks,
             markUnread: completionMarksUnread(run.trigger, text, isRoutineCardRun),
+            result: text,
           });
           if (!completed) return;
           if (savedSkill) await writeRunSkillLines(runId);
@@ -4830,7 +4975,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
               .enqueue(linkPreviewJob({ runId }))
               .catch((error) => getLogger().error("link.preview enqueue", error));
           }
-          await settleRoutineRunCard("completed", text);
           await settleStrandedCards();
           if (completed.continuationRunId) {
             await deps.jobs
@@ -4880,57 +5024,20 @@ export function createRunExecutor(deps: ExecutorDeps) {
           // Last, and never fatal: the run is already finalized, so a failure here must not reach
           // the catch block below, where a second finalizeRun would match no rows and silently
           // skip the completion notification.
-          try {
-            const updatedThread = await deps.prisma.thread.findUniqueOrThrow({
-              where: { id: thread.id },
-              select: {
-                nextMessageSeq: true,
-                historyCompactedUpToSeq: true,
-              },
-            });
-            if (
-              shouldEnqueueCompaction(
-                updatedThread.nextMessageSeq,
-                updatedThread.historyCompactedUpToSeq,
-                HISTORY_WINDOW_SIZE,
-                COMPACTION_BATCH_SIZE,
-                // This run's own messages are not in here, so a thread crossing the token
-                // threshold during this run is enqueued at the end of the next one.
-                estimateHistoryTokens(compactedHistory.history),
-              )
-            ) {
-              await deps.jobs.enqueue(historyCompactJob(thread.id));
-            }
-          } catch (error) {
-            getLogger().error("history.compact enqueue failed", error);
+          if (
+            compacts(thread) &&
+            runModelProvider !== "scripted" &&
+            !messagingChannelRun &&
+            shouldEnqueueCompaction(uncompactedHistory, historyBudget)
+          ) {
+            await deps.jobs
+              .enqueue(historyCompactJob(thread.id, historyBudget))
+              .catch((error) => getLogger().error("history.compact enqueue failed", error));
           }
           if (skillNudge?.nudge && skillNudge.mode === "on") {
             const { signal } = skillNudge;
             skillNudgeTurn = async () => {
-              // The bot's messages and the user's, claimed as steering while the exchange ran.
-              const exchange = await deps.prisma.message.findMany({
-                where: {
-                  threadId: thread.id,
-                  hiddenFromThread: false,
-                  OR: [
-                    { runId, role: "bot" },
-                    {
-                      role: "user",
-                      steeringMessages: { some: { runId, claimedAt: { not: null } } },
-                    },
-                  ],
-                },
-                orderBy: { seq: "asc" },
-                select: {
-                  id: true,
-                  threadId: true,
-                  role: true,
-                  botId: true,
-                  blocks: true,
-                  replyToMessageId: true,
-                  replyQuote: true,
-                },
-              });
+              const exchange = await readExchange(deps, runId, sessionId);
               const target = { spaceId: run.spaceId, threadId: thread.id, botId: bot.id, runId };
               await runSkillNudgeTurn(deps, {
                 run: { id: runId, spaceId: run.spaceId, threadId: thread.id, botId: bot.id },
@@ -4945,10 +5052,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
                       (message) => !run.sourceMessageId || message.id !== run.sourceMessageId,
                     ),
                     { role: "user", content: prompt },
-                    ...exchange.map((message) => ({
-                      id: message.id,
-                      ...messageToAgentHistoryTurn(message, bot.id, group?.memberNames),
-                    })),
+                    ...projectInferenceTurns(exchange, {
+                      selfBotId: bot.id,
+                      botNames: group?.memberNames,
+                    }),
                   ],
                   model: runtimeModel,
                   secrets: runSecrets,
@@ -5019,7 +5126,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
             error: message,
           });
           if (!failed) return;
-          await settleRoutineRunCard("failed", message);
           if (savedSkill) await writeRunSkillLines(runId);
           await settleStrandedCards();
           if (failed.continuationRunId) {
@@ -5320,25 +5426,90 @@ export function filterPageBrowserTools<T extends { name: string }>(
   return tools.filter((tool) => !PAGE_BROWSER_TOOL_NAMES.has(tool.name));
 }
 
-export function threadContextForRun<T>(
-  routineRun: boolean,
-  context: {
-    messages: T[];
-    summary: string | null;
-    historyCompactedUpToSeq: number | null;
-  },
-  messagingChannelRun: boolean,
-) {
-  return routineRun
-    ? {
-        messages: [] as T[],
-        summary: null,
-        historyCompactedUpToSeq: null,
-        includeSemanticRecall: false,
-      }
-    : messagingChannelRun
-      ? { ...context, summary: null, historyCompactedUpToSeq: null, includeSemanticRecall: false }
-      : { ...context, includeSemanticRecall: true };
+/**
+ * The newest entries a run reads where no compaction bounds its history: a channel's posts, or a
+ * thread that never compacts.
+ */
+const UNCOMPACTED_HISTORY_LIMIT = 200;
+const CHANNEL_HISTORY_PAGE = 500;
+
+async function readRunHistory(
+  log: SessionLog<Prisma.TransactionClient>,
+  run: { id: string; sessionId: string; routineId: string | null },
+  channelId: string | undefined,
+  maxEntries: number | undefined,
+): Promise<SessionEntry[]> {
+  if (run.routineId != null) return [];
+  const sessionId = run.sessionId as SessionId;
+  if (!channelId) return log.readTail(sessionId, { maxEntries });
+  const kept: SessionEntry[] = [];
+  let before: EntryId | undefined;
+  while (kept.length < UNCOMPACTED_HISTORY_LIMIT) {
+    const page = await log.readPage(sessionId, { before, limit: CHANNEL_HISTORY_PAGE });
+    kept.unshift(
+      ...page.filter(
+        (entry) =>
+          entry.runId === run.id ||
+          (entry.type === "user.message" &&
+            entry.payload.blocks.some(
+              (block) => block.kind === "channel_message" && block.channelId === channelId,
+            )),
+      ),
+    );
+    if (page.length < CHANNEL_HISTORY_PAGE) break;
+    before = page[0]!.id;
+  }
+  return kept.slice(-UNCOMPACTED_HISTORY_LIMIT);
+}
+
+/**
+ * The person's messages a run claimed as steering carry no run id, so the claim names them, and
+ * one that answers the run's question is in `readRun` too. `run.started` adds nothing: the run's
+ * prompt already says why it ran.
+ */
+async function readExchange(
+  deps: Pick<ExecutorDeps, "prisma" | "sessionLog">,
+  runId: string,
+  sessionId: SessionId,
+): Promise<SessionEntry[]> {
+  const [written, claimed] = await Promise.all([
+    deps.sessionLog.readRun(runId),
+    deps.prisma.steeringMessage.findMany({
+      where: { runId, claimedAt: { not: null } },
+      select: { messageId: true },
+    }),
+  ]);
+  const steering = await Promise.all(
+    claimed.map(({ messageId }) => deps.sessionLog.readEntry(sessionId, EntryId.parse(messageId))),
+  );
+  const exchange = new Map<string, SessionEntry>();
+  for (const entry of [...written, ...steering]) {
+    if (entry && entry.type !== "run.started") exchange.set(entry.id, entry);
+  }
+  return [...exchange.values()].sort(
+    (left, right) => left.ts.localeCompare(right.ts) || left.seq - right.seq,
+  );
+}
+
+async function readEntriesOffChain(
+  log: SessionLog<Prisma.TransactionClient>,
+  sessionId: SessionId,
+  entries: readonly SessionEntry[],
+  sourceMessageId: string | null,
+): Promise<Map<string, SessionEntry>> {
+  const held = new Set<string>(entries.map((entry) => entry.id));
+  const wanted = new Set<string>(
+    entries.flatMap((entry) =>
+      entry.type === "user.message" && entry.payload.replyTo ? [entry.payload.replyTo.entryId] : [],
+    ),
+  );
+  if (sourceMessageId) wanted.add(sourceMessageId);
+  const read = await Promise.all(
+    [...wanted]
+      .filter((id) => !held.has(id))
+      .map((id) => log.readEntry(sessionId, EntryId.parse(id))),
+  );
+  return new Map(read.flatMap((entry) => (entry ? [[entry.id, entry] as const] : [])));
 }
 
 export function completionMessageSegments(
@@ -5566,22 +5737,174 @@ function safeStringifyToolPayload(value: unknown): string {
   }
 }
 
+type RunLog = { sessionId: SessionId; runId: string; botId: string };
+
+type ToolLogEntry =
+  | { type: "tool.call"; payload: SessionEntryOf<"tool.call">["payload"] }
+  | { type: "tool.result"; payload: SessionEntryOf<"tool.result">["payload"] };
+
+function pausedCall(log: RunLog, callId: string, awaiting: "approval" | "answer") {
+  return { ...log, callId, output: `paused: awaiting ${awaiting}` };
+}
+
+function effectProposal(request: unknown): Record<string, unknown> {
+  return request && typeof request === "object" && !Array.isArray(request)
+    ? (request as Record<string, unknown>)
+    : { request };
+}
+
+function toolArtifactIds(result: unknown): string[] {
+  const artifactId = (result as { artifactId?: unknown } | null)?.artifactId;
+  return typeof artifactId === "string" ? [artifactId] : [];
+}
+
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((settle) => {
+    resolve = settle;
+  });
+  return { promise, resolve };
+}
+
+/** Each write starts once the one before it settled; a failed write fails only itself. */
+function serialWrites() {
+  let tail: Promise<unknown> = Promise.resolve();
+  return <T>(write: () => Promise<T>): Promise<T> => {
+    const next = tail.then(write);
+    tail = next.catch(() => undefined);
+    return next;
+  };
+}
+
+type RunLogFacts = {
+  sessionId: string;
+  logged: Array<{ type: string; payload: { callId: string; input?: string } }> | null;
+  carrierType: string | null;
+  steered: boolean;
+  routineName: string | null;
+  routineNotify: boolean | null;
+  spawnPromptId: string | null;
+};
+
+/**
+ * Open a run's log, once: `run.started`, after a routine run's own session and the routine's mark
+ * in its thread. Returns the session the run writes to and the logged calls still awaiting a result.
+ */
+export async function openRunLog(
+  deps: Pick<ExecutorDeps, "prisma" | "sessionLog">,
+  run: RunTriggerSource & { spaceId: string; threadId: string },
+  log: RunLog,
+  model: { provider: string; id: string },
+  effort: SessionEntryOf<"run.started">["payload"]["effort"],
+): Promise<{ sessionId: SessionId; awaitingResult: Map<string, string> }> {
+  return deps.prisma.$transaction(async (tx) => {
+    // Its own statement, so the facts below see what an open that held this lock committed.
+    await tx.$queryRaw`SELECT id FROM threads WHERE id = ${run.threadId} FOR UPDATE`;
+    const spawnNonce = run.trigger === "spawn" ? run.clientNonce : null;
+    const [facts] = await tx.$queryRaw<[RunLogFacts]>`
+      SELECT
+        (SELECT "sessionId" FROM runs WHERE id = ${run.id}) AS "sessionId",
+        (SELECT json_agg(json_build_object('type', type, 'payload', payload) ORDER BY seq)
+          FROM session_entries
+          WHERE "runId" = ${run.id} AND type IN ('run.started', 'tool.call', 'tool.result')
+        ) AS logged,
+        (SELECT type FROM session_entries WHERE id = ${run.sourceMessageId}) AS "carrierType",
+        EXISTS (SELECT 1 FROM steering_messages WHERE "messageId" = ${run.sourceMessageId})
+          AS steered,
+        (SELECT name FROM routines WHERE id = ${run.routineId}) AS "routineName",
+        (SELECT notify FROM routines WHERE id = ${run.routineId}) AS "routineNotify",
+        (SELECT id FROM session_entries
+          WHERE "sessionId" = ${run.sessionId} AND payload ->> 'clientNonce' = ${spawnNonce}
+        ) AS "spawnPromptId"`;
+    const logged = facts.logged ?? [];
+    const awaitingResult = new Map<string, string>();
+    for (const { type, payload } of logged) {
+      if (type === "tool.call") awaitingResult.set(payload.callId, payload.input ?? "");
+      if (type === "tool.result") awaitingResult.delete(payload.callId);
+    }
+    if (logged.length > 0) return { sessionId: facts.sessionId as SessionId, awaitingResult };
+    const trigger = sessionRunTrigger(run, facts);
+    const sessionId =
+      trigger.kind === "routine" || trigger.kind === "webhook"
+        ? await openRoutineSessionInTransaction(
+            tx,
+            { ...run, botId: log.botId },
+            {
+              routineId: trigger.routineId,
+              name: facts.routineName ?? "",
+              trigger: trigger.kind,
+              scheduledAt: run.createdAt.toISOString(),
+              model,
+              ...(facts.routineNotify ? { notify: true as const } : {}),
+            },
+            deps.sessionLog,
+          )
+        : log.sessionId;
+    await deps.sessionLog.append(tx, {
+      ...log,
+      sessionId,
+      type: "run.started",
+      payload: { trigger, model, effort },
+    });
+    return { sessionId, awaitingResult };
+  });
+}
+
+type RunTriggerSource = {
+  id: string;
+  trigger: string;
+  routineId: string | null;
+  sourceMessageId: string | null;
+  sessionId: string;
+  clientNonce: string | null;
+  createdAt: Date;
+};
+
+function sessionRunTrigger(run: RunTriggerSource, facts: RunLogFacts): SessionRunTrigger {
+  const carrier = (): SessionRunTrigger => {
+    if (!run.sourceMessageId) return { kind: "direct" };
+    const entryId = run.sourceMessageId as EntryId;
+    if (facts.carrierType === "handoff") return { kind: "handoff", entryId };
+    if (facts.carrierType === "bot.message.received") return { kind: "bot_message", entryId };
+    return run.trigger === "follow_up" && facts.steered
+      ? { kind: "steering", entryId }
+      : { kind: "message", entryId };
+  };
+  const stored = RunTrigger.safeParse(run.trigger);
+  if (!stored.success) return carrier();
+  switch (stored.data) {
+    case "routine":
+      return run.routineId
+        ? {
+            kind: "routine",
+            routineId: run.routineId,
+            name: facts.routineName ?? "",
+            scheduledAt: run.createdAt.toISOString(),
+          }
+        : { kind: "direct" };
+    case "webhook":
+      return run.routineId ? { kind: "webhook", routineId: run.routineId } : carrier();
+    case "skill":
+      return { kind: "direct" };
+    case "spawn":
+      // A spawned bot's first run is woken by the prompt its spawner wrote with the run's nonce.
+      return facts.spawnPromptId
+        ? { kind: "message", entryId: facts.spawnPromptId as EntryId }
+        : { kind: "direct" };
+    case "user":
+    case "follow_up":
+    case "reaction":
+    case "messaging":
+    case "bot_message":
+    case "resume":
+      return carrier();
+  }
+}
+
 function redactBlocks(blocks: MessageBlock[], secrets: string[]): MessageBlock[] {
   return blocks.map((block) => {
     if (block.kind === "text") {
       return { kind: "text" as const, text: redactSecrets(block.text, secrets) };
-    }
-    if (block.kind === "bot_message_sent" || block.kind === "bot_message_received") {
-      return { ...block, text: redactSecrets(block.text, secrets) };
-    }
-    if (block.kind === "routine_run") {
-      return {
-        ...block,
-        ...(block.headline !== undefined
-          ? { headline: redactSecrets(block.headline, secrets) }
-          : {}),
-        ...(block.digest !== undefined ? { digest: redactSecrets(block.digest, secrets) } : {}),
-      };
     }
     if (block.kind === "steps") {
       return {
@@ -5605,210 +5928,49 @@ function redactBlocks(blocks: MessageBlock[], secrets: string[]): MessageBlock[]
   });
 }
 
+type BotMessageOptions = Pick<CreateBotMessageInput, "markUnread" | "midTurn" | "toPerson">;
+
 async function publishMessage(
   deps: ExecutorDeps,
   run: { id: string; spaceId: string; threadId: string; botId: string },
-  role: "user" | "bot" | "system",
   blocks: MessageBlock[],
-  markUnread?: boolean,
-  clientNonce?: string,
+  options: BotMessageOptions = {},
 ) {
   const committed = await deps.prisma.$transaction((tx) =>
-    persistMessageInTransaction(tx, run, role, blocks, markUnread, clientNonce),
+    persistMessageInTransaction(tx, deps.sessionLog, run, blocks, options),
   );
   await deps.events.notify(run.threadId, committed.eventSeq).catch((error) => {
     getLogger().error("thread message realtime notification", error);
   });
-  return committed.message;
 }
 
 async function persistMessageInTransaction(
   tx: Prisma.TransactionClient,
-  run: { id: string; spaceId: string; threadId: string; botId: string },
-  role: "user" | "bot" | "system",
+  sessionLog: ExecutorDeps["sessionLog"],
+  run: { id: string; threadId: string; botId: string },
   blocks: MessageBlock[],
-  markUnread?: boolean,
-  clientNonce?: string,
+  options: BotMessageOptions = {},
 ) {
-  const message = await createThreadMessageInTransaction(tx, {
-    threadId: run.threadId,
-    role,
-    blocks,
-    botId: run.botId,
-    runId: run.id,
-    markUnread,
-    clientNonce,
-  });
-  const event = await appendEventInTransaction(tx, {
-    spaceId: run.spaceId,
-    threadId: run.threadId,
-    botId: run.botId,
-    type: "thread.message.created",
-    runId: run.id,
-    payload: { messageId: message.id, role, blocks },
-  });
-  return { message, eventSeq: event.seq };
-}
-
-const ROUTINE_RUN_CARD_NONCE_PREFIX = "routine-run-card:";
-const ROUTINE_RUN_HEADLINE_MAX_CHARS = 120;
-
-/**
- * A deterministic one-line summary: the first non-empty line of the digest, trimmed and
- * capped. Never a model call — the card is driven by run lifecycle events, not narration, so
- * this cannot become a second place for model-authored (or injected) text to steer the UI.
- */
-export function routineRunHeadline(digest: string): string | undefined {
-  for (const rawLine of digest.split("\n")) {
-    const line = rawLine.trim();
-    if (!line) continue;
-    return line.length > ROUTINE_RUN_HEADLINE_MAX_CHARS
-      ? `${line.slice(0, ROUTINE_RUN_HEADLINE_MAX_CHARS).trimEnd()}…`
-      : line;
-  }
-  return undefined;
-}
-
-type RoutineRunBlock = Extract<MessageBlock, { kind: "routine_run" }>;
-
-function routineRunCardBlock(
-  routine: { id: string; name: string; notify: boolean },
-  state: RoutineRunBlock["state"],
-  timing: { startedAt?: string; endedAt?: string },
-  digest?: string,
-): RoutineRunBlock {
-  return {
-    kind: "routine_run",
-    routineId: routine.id,
-    routineName: routine.name,
-    state,
-    notify: routine.notify,
-    ...(timing.startedAt ? { startedAt: timing.startedAt } : {}),
-    ...(timing.endedAt ? { endedAt: timing.endedAt } : {}),
-    ...(digest !== undefined ? { digest, headline: routineRunHeadline(digest) } : {}),
-  };
-}
-
-/**
- * Publishes the "running" routine-run card into the bot's thread when a routine card run
- * starts, replacing the free-text closing narration with a lifecycle-driven trace (spec
- * background-work-visibility CA1/CA2). Idempotent on the run id via a stable clientNonce, so a
- * worker crash + retry cannot duplicate the card (spec edge case: reprise après crash).
- */
-async function publishRoutineRunCard(
-  deps: ExecutorDeps,
-  run: { id: string; spaceId: string; threadId: string; botId: string },
-  routine: { id: string; name: string; notify: boolean },
-  startedAt: Date,
-): Promise<{ id: string } | null> {
-  const clientNonce = `${ROUTINE_RUN_CARD_NONCE_PREFIX}${run.id}`;
-  const existing = await deps.prisma.message.findUnique({
-    where: { threadId_clientNonce: { threadId: run.threadId, clientNonce } },
-    select: { id: true },
-  });
-  if (existing) return existing;
-  const block = routineRunCardBlock(routine, "running", { startedAt: startedAt.toISOString() });
-  try {
-    const message = await publishMessage(deps, run, "bot", [block], false, clientNonce);
-    return { id: message.id };
-  } catch (error) {
-    // A concurrent publish (crash/retry race) may already have won the unique nonce.
-    const raced = await deps.prisma.message
-      .findUnique({
-        where: { threadId_clientNonce: { threadId: run.threadId, clientNonce } },
-        select: { id: true },
-      })
-      .catch(() => null);
-    if (raced) return raced;
-    getLogger().error("routine run card publish", error);
-    return null;
-  }
-}
-
-/**
- * Mutates the routine-run card in place (background-work-visibility CA2/CA12), the same "load
- * the message, replace the block, append thread.message.updated" mechanism used for `ask`
- * answers. `next` returns the replacement block, or null to leave the card (and the thread)
- * untouched.
- */
-export async function updateRoutineRunCard(
-  deps: Pick<ExecutorDeps, "prisma" | "events">,
-  // `runId` is deliberately optional: a cancelled run may not write thread history, so the
-  // card's own closing event is appended unattributed rather than rejected.
-  target: { spaceId: string; threadId: string; botId: string; runId?: string },
-  cardMessageId: string,
-  next: (block: RoutineRunBlock) => RoutineRunBlock | null,
-): Promise<void> {
-  const committed = await deps.prisma
-    .$transaction(async (tx) => {
-      // The thread lock first, then the read: a preview card or its removal marker written by
-      // someone else in between must survive this rewrite of the blocks.
-      await tx.$queryRaw`SELECT id FROM threads WHERE id = ${target.threadId} FOR UPDATE`;
-      const message = await tx.message.findUnique({ where: { id: cardMessageId } });
-      if (!message) return null;
-      let changed = false;
-      const blocks = (message.blocks as MessageBlock[]).map((existingBlock) => {
-        if (existingBlock.kind !== "routine_run") return existingBlock;
-        const replacement = next(existingBlock);
-        if (!replacement) return existingBlock;
-        changed = true;
-        return replacement;
-      });
-      if (!changed) return null;
-      await tx.message.update({ where: { id: cardMessageId }, data: { blocks } });
-      const event = await appendEventInTransaction(tx, {
-        spaceId: target.spaceId,
-        threadId: target.threadId,
-        botId: target.botId,
-        type: "thread.message.updated",
-        ...(target.runId ? { runId: target.runId } : {}),
-        payload: { messageId: cardMessageId, role: "bot", blocks },
-      });
-      return event.seq;
-    })
-    .catch((error) => {
-      getLogger().error("routine run card update", error);
-      return null;
-    });
-  if (committed === null) return;
-  await deps.events.notify(target.threadId, committed).catch((error) => {
-    getLogger().error("routine run card realtime notification", error);
-  });
-}
-
-/**
- * Flips the card to its terminal state. `digest` is untrusted content already redacted by the
- * caller; it is stored as plain text and escaped at render time, never interpreted as
- * HTML/markdown (M1) and never used to fetch a remote resource (M2).
- */
-async function finalizeRoutineRunCard(
-  deps: ExecutorDeps,
-  run: { spaceId: string; threadId: string; botId: string; id: string },
-  cardMessageId: string,
-  routine: { id: string; name: string; notify: boolean },
-  state: "completed" | "failed",
-  digest: string,
-  timing: { startedAt?: string; endedAt: string },
-): Promise<void> {
-  await updateRoutineRunCard(deps, { ...run, runId: run.id }, cardMessageId, () =>
-    routineRunCardBlock(routine, state, timing, digest),
+  await createBotMessageInTransaction(
+    tx,
+    { threadId: run.threadId, botId: run.botId, runId: run.id, blocks, ...options },
+    (client, draft) => sessionLog.append(client, draft),
   );
+  return { eventSeq: await threadEventSeq(tx, run.threadId) };
 }
 
 /**
- * Settles the cards of runs that were just cancelled: a routine-run card stops on "cancelled", and
- * a routine card the user approved but the run never created reads as failed. The executor never
- * does this itself: when it notices the cancellation it simply returns, so without this the card
- * would stay on "running" or "Creating…" forever. Cancellation is also the only terminal status
- * written outside the executor, which is why this is called from the API's thread stop — the
- * other cancel paths (clear, rewind, archive) drop the thread or the card with it.
+ * Settles the cards of runs that were just cancelled: a routine card the user approved but the run
+ * never created reads as failed. The executor never does this itself: when it notices the
+ * cancellation it simply returns, so without this the card would stay on "Creating…" forever.
+ * Cancellation is also the only terminal status written outside the executor, which is why this
+ * is called from the API's thread stop.
  *
- * Idempotent: only a card still in `running` or an effect still `approved` is touched, and the
- * run must actually be cancelled, so a run that completed between the caller's snapshot and this
- * call keeps its real outcome.
+ * Idempotent: only an effect still `approved` is touched, and the run must actually be cancelled,
+ * so a run that completed between the caller's snapshot and this call keeps its real outcome.
  */
 export async function settleCancelledRunCards(
-  deps: Pick<ExecutorDeps, "prisma" | "events">,
+  deps: Pick<ExecutorDeps, "prisma" | "events" | "sessionLog">,
   runIds: readonly string[],
 ): Promise<void> {
   if (runIds.length === 0) return;
@@ -5816,22 +5978,8 @@ export async function settleCancelledRunCards(
     where: { id: { in: [...runIds] }, status: "cancelled" },
     select: { id: true, spaceId: true, threadId: true, botId: true },
   });
-  const endedAt = new Date().toISOString();
   for (const { id, ...target } of cancelled) {
     await failStrandedRoutineCards(deps, { ...target, runId: id });
-    const card = await deps.prisma.message.findUnique({
-      where: {
-        threadId_clientNonce: {
-          threadId: target.threadId,
-          clientNonce: `${ROUTINE_RUN_CARD_NONCE_PREFIX}${id}`,
-        },
-      },
-      select: { id: true },
-    });
-    if (!card) continue;
-    await updateRoutineRunCard(deps, target, card.id, (block) =>
-      block.state === "running" ? { ...block, state: "cancelled", endedAt } : null,
-    );
   }
 }
 
@@ -5929,15 +6077,12 @@ async function personWokeRun(
 ): Promise<boolean> {
   if (isUserOpenedTrigger(run.trigger)) return true;
   if (run.trigger !== "follow_up" || !run.sourceMessageId) return false;
-  const source = await prisma.message.findUnique({
+  const source = await prisma.sessionEntry.findUnique({
     where: { id: run.sourceMessageId },
-    select: { role: true, blocks: true },
+    select: { type: true },
   });
-  const blocks = Array.isArray(source?.blocks) ? (source.blocks as MessageBlock[]) : [];
-  return source?.role === "user" && !botMessageContext(blocks);
+  return source?.type === "user.message";
 }
-
-type AskBlock = Extract<MessageBlock, { kind: "ask" }>;
 
 /**
  * The cards of the day the caps read. Corrections do not count, so the day holds more cards than
@@ -6091,7 +6236,7 @@ const ROUTINE_NOT_CREATED_RESULT = {
  * only this run ever replays that approval, so the card would otherwise wait forever.
  */
 async function failStrandedRoutineCards(
-  deps: Pick<ExecutorDeps, "prisma" | "events">,
+  deps: Pick<ExecutorDeps, "prisma" | "events" | "sessionLog">,
   target: { spaceId: string; threadId: string; botId: string; runId: string },
 ): Promise<void> {
   const stranded = await deps.prisma.externalEffect.findMany({
@@ -6100,56 +6245,52 @@ async function failStrandedRoutineCards(
   });
   for (const { id } of stranded) {
     if (await completeExternalEffect(deps.prisma, id, "approved", ROUTINE_NOT_CREATED_RESULT)) {
-      await settleRoutineCard(deps, target, id, (card) => ({ ...card, failed: true }));
+      await settleRoutineCard(deps, target, id, { failed: true });
     }
   }
 }
 
+type RoutineCardOutcome =
+  | { routine: CreatedRoutine; change: "created" | "updated"; failed?: never }
+  | { failed: true };
+
 /**
- * Freezes an approved routine card on what came of it: the routine it links to, or the failure.
+ * Records what came of an approved routine card: the routine it links to, or the failure.
  * Logged, never thrown: the creation already happened and the model has its result.
  */
 async function settleRoutineCard(
-  deps: Pick<ExecutorDeps, "prisma" | "events">,
+  deps: Pick<ExecutorDeps, "prisma" | "events" | "sessionLog">,
   target: { spaceId: string; threadId: string; botId: string; runId: string },
   effectId: string,
-  settle: (card: AskBlock) => AskBlock,
+  outcome: RoutineCardOutcome,
 ): Promise<void> {
   const committed = await deps.prisma
     .$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM threads WHERE id = ${target.threadId} FOR UPDATE`;
-      const run = await tx.run.findUnique({
-        where: { id: target.runId },
-        select: { status: true },
+      const card = await tx.sessionEntry.findFirst({
+        where: {
+          runId: target.runId,
+          type: "effect.requested",
+          payload: { path: ["effectId"], equals: effectId },
+        },
+        select: { id: true },
       });
-      const messages = await tx.message.findMany({
-        where: { threadId: target.threadId, runId: target.runId, role: "bot" },
-        orderBy: { seq: "desc" },
-        select: { id: true, blocks: true },
-      });
-      const isCard = (block: unknown) =>
-        Boolean(block) &&
-        typeof block === "object" &&
-        (block as { kind?: unknown }).kind === "ask" &&
-        (block as { approvalEffectId?: unknown }).approvalEffectId === effectId;
-      const message = messages.find(
-        (row) => Array.isArray(row.blocks) && (row.blocks as unknown[]).some(isCard),
+      if (!card) return null;
+      await appendCardStateInTransaction(
+        tx,
+        {
+          type: "effect.applied",
+          feedBotId: target.botId,
+          payload: {
+            target: EntryId.parse(card.id),
+            ...(outcome.failed
+              ? { failed: true }
+              : { routineId: outcome.routine.id, change: outcome.change }),
+          },
+        },
+        (client, draft) => deps.sessionLog.append(client, draft),
       );
-      if (!message) return null;
-      const blocks = (message.blocks as Prisma.InputJsonValue[]).map((block) =>
-        isCard(block) ? (settle(block as AskBlock) as Prisma.InputJsonValue) : block,
-      );
-      await tx.message.update({ where: { id: message.id }, data: { blocks } });
-      const event = await appendEventInTransaction(tx, {
-        spaceId: target.spaceId,
-        threadId: target.threadId,
-        botId: target.botId,
-        type: "thread.message.updated",
-        // A cancelled run may not write thread history: its card still settles, unattributed.
-        ...(run?.status === "cancelled" ? {} : { runId: target.runId }),
-        payload: { messageId: message.id, role: "bot", blocks },
-      });
-      return event.seq;
+      return threadEventSeq(tx, target.threadId);
     })
     .catch((error) => {
       getLogger().error("routine card update", error);

@@ -1,6 +1,7 @@
+import { randomUUID } from "node:crypto";
 import type { JobPublisher } from "@rakazo/adapter-kit";
 import { messagingDeliverJob, runContinueJob } from "@rakazo/adapter-kit";
-import type { MessageBlock } from "@rakazo/contracts";
+import type { SessionId } from "@rakazo/contracts";
 import {
   botMessageHopExhausted,
   buildBotMessageWakePrompt,
@@ -9,9 +10,9 @@ import {
   sanitizeMessagingLabel,
 } from "@rakazo/core";
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
-import { appendEventInTransaction, createThreadMessageInTransaction } from "@rakazo/db";
+import { threadEntryByNonce, threadEventSeq } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
-import { resolveRunHop } from "./bot-messages.js";
+import { appendBotMessageInTransaction, resolveRunHop } from "./bot-messages.js";
 
 export interface AgentConnectionDeps {
   prisma: PrismaClient;
@@ -250,134 +251,98 @@ export async function messageConnectedAgent(
 
   const target = await deps.prisma.bot.findUnique({
     where: { id: targetIdentity.botId },
-    select: { id: true, name: true, archivedAt: true, thread: { select: { id: true } } },
+    select: {
+      id: true,
+      name: true,
+      archivedAt: true,
+      thread: { select: { id: true, sessionId: true } },
+    },
   });
   if (!target || target.archivedAt || !target.thread) {
     return { ok: false, error: "that agent is not available" };
   }
   const targetThreadId = target.thread.id;
+  const targetSessionId = target.thread.sessionId;
   const deliveryKey = input.deliveryKey ? `agent-message:${input.deliveryKey}` : undefined;
   const wakePrompt = buildBotMessageWakePrompt({ from: sender, text: message });
 
-  let committed!: Awaited<ReturnType<typeof deliverTx>>;
-  const deliverTx = () =>
-    deps.prisma.$transaction(async (tx) => {
-      if (deliveryKey) {
-        const already = await tx.message.findUnique({
-          where: { threadId_clientNonce: { threadId: targetThreadId, clientNonce: deliveryKey } },
-          select: { id: true },
-        });
-        if (already) return { replayed: true as const };
-      }
-      const senderStillRunning = await tx.run.findFirst({
-        where: { id: run.id, status: "running" },
-        select: { id: true },
-      });
-      if (!senderStillRunning)
-        return { ok: false as const, error: "source run is no longer active" };
-      // Lock the connection row for the rest of the transaction: a revoke's
-      // update blocks behind this lock, so delivery never commits after a
-      // committed revocation (pattern: teaching-session.ts skill lock).
-      const locked = await tx.$queryRaw<Array<{ status: string }>>`
-        SELECT status FROM agent_connections WHERE id = ${connection.id} FOR UPDATE
-      `;
-      if (locked[0]?.status !== "approved") {
-        return { ok: false as const, error: "connection is no longer approved" };
-      }
-
-      const inboundBlock: MessageBlock = {
-        kind: "bot_message_received",
-        fromBotId: sender.id,
-        fromBotName: sender.name,
-        text: message,
-        hop,
-      };
-      const outboundBlock: MessageBlock = {
-        kind: "bot_message_sent",
-        toBotId: target.id,
-        toBotName: target.name,
-        text: message,
-      };
-      const inbound = await createThreadMessageInTransaction(tx, {
-        threadId: targetThreadId,
-        role: "user",
-        blocks: [inboundBlock],
-        clientNonce: deliveryKey,
-      });
-      const outbound = await createThreadMessageInTransaction(tx, {
-        threadId: run.threadId,
-        role: "bot",
-        blocks: [outboundBlock],
-        botId: run.botId,
-        runId: run.id,
-      });
-      const task = await tx.task.create({
-        data: {
-          spaceId: targetIdentity.spaceId,
-          botId: target.id,
-          threadId: targetThreadId,
-          userId: targetIdentity.userId,
-          prompt: wakePrompt,
-          status: "queued",
-        },
-      });
-      const nextRun = await tx.run.create({
-        data: {
-          spaceId: targetIdentity.spaceId,
-          botId: target.id,
-          threadId: targetThreadId,
-          taskId: task.id,
-          userId: targetIdentity.userId,
-          status: "queued",
-          trigger: "bot_message",
-          sourceMessageId: inbound.id,
-        },
-        select: { id: true },
-      });
-      await tx.message.update({ where: { id: inbound.id }, data: { runId: nextRun.id } });
-      const inboundEvent = await appendEventInTransaction(tx, {
-        spaceId: targetIdentity.spaceId,
-        threadId: targetThreadId,
-        botId: target.id,
-        type: "thread.message.created",
-        runId: nextRun.id,
-        payload: { messageId: inbound.id, role: "user", blocks: [inboundBlock] },
-      });
-      const outboundEvent = await appendEventInTransaction(tx, {
-        spaceId: run.spaceId,
-        threadId: run.threadId,
-        botId: run.botId,
-        type: "thread.message.created",
-        runId: run.id,
-        payload: { messageId: outbound.id, role: "bot", blocks: [outboundBlock] },
-      });
-      return {
-        runId: nextRun.id,
-        targetEventSeq: inboundEvent.seq,
-        senderEventSeq: outboundEvent.seq,
-      };
-    });
-  try {
-    committed = await deliverTx();
-  } catch (error) {
-    // Two concurrent retries can both miss the in-transaction lookup; the
-    // loser hits the unique key. Treat that as a successful replay.
-    if (deliveryKey && isUniqueConstraintError(error)) {
-      const winner = await deps.prisma.message.findUnique({
-        where: { threadId_clientNonce: { threadId: targetThreadId, clientNonce: deliveryKey } },
-        select: { id: true },
-      });
-      if (winner) {
-        return {
-          ok: true,
-          botId: target.id,
-          name: target.name,
-          note: `Already sent to ${target.name} in this turn; it was not sent again.`,
-        };
-      }
+  const committed = await deps.prisma.$transaction(async (tx) => {
+    for (const threadId of [run.threadId, targetThreadId].sort()) {
+      await tx.$queryRaw`SELECT id FROM threads WHERE id = ${threadId} FOR UPDATE`;
     }
-    throw error;
-  }
+    // Under both thread locks, so a concurrent retry waits and then finds this delivery.
+    if (deliveryKey && (await threadEntryByNonce(tx, targetThreadId, deliveryKey))) {
+      return { replayed: true as const };
+    }
+    const senderStillRunning = await tx.run.findFirst({
+      where: { id: run.id, status: "running" },
+      select: { id: true, sessionId: true },
+    });
+    if (!senderStillRunning) return { ok: false as const, error: "source run is no longer active" };
+    // Lock the connection row for the rest of the transaction: a revoke's
+    // update blocks behind this lock, so delivery never commits after a
+    // committed revocation (pattern: teaching-session.ts skill lock).
+    const locked = await tx.$queryRaw<Array<{ status: string }>>`
+      SELECT status FROM agent_connections WHERE id = ${connection.id} FOR UPDATE
+    `;
+    if (locked[0]?.status !== "approved") {
+      return { ok: false as const, error: "connection is no longer approved" };
+    }
+
+    await tx.thread.updateMany({
+      where: { id: { in: [run.threadId, targetThreadId] } },
+      data: { unread: true },
+    });
+    const receivedId = randomUUID();
+    await appendBotMessageInTransaction(tx, {
+      sender: {
+        sessionId: senderStillRunning.sessionId as SessionId,
+        botId: run.botId,
+        runId: run.id,
+        peer: { kind: "agent", address: senderIdentity.address, name: sender.name },
+      },
+      receiver: {
+        sessionId: targetSessionId as SessionId,
+        botId: target.id,
+        peer: { kind: "agent", address, name: target.name },
+      },
+      sentId: randomUUID(),
+      receivedId,
+      sourceMessageId: run.sourceMessageId,
+      text: message,
+      intent: "request",
+      hop,
+      deliveryKey,
+    });
+    const task = await tx.task.create({
+      data: {
+        spaceId: targetIdentity.spaceId,
+        botId: target.id,
+        threadId: targetThreadId,
+        userId: targetIdentity.userId,
+        prompt: wakePrompt,
+        status: "queued",
+      },
+    });
+    const nextRun = await tx.run.create({
+      data: {
+        spaceId: targetIdentity.spaceId,
+        botId: target.id,
+        threadId: targetThreadId,
+        taskId: task.id,
+        userId: targetIdentity.userId,
+        status: "queued",
+        trigger: "bot_message",
+        sourceMessageId: receivedId,
+      },
+      select: { id: true },
+    });
+    return {
+      runId: nextRun.id,
+      targetEventSeq: await threadEventSeq(tx, targetThreadId),
+      senderEventSeq: await threadEventSeq(tx, run.threadId),
+    };
+  });
 
   if ("replayed" in committed) {
     return {

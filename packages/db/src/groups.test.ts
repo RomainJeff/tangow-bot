@@ -3,6 +3,10 @@ import type { PrismaClient } from "./client.js";
 import { createGroupRepos } from "./groups.js";
 import { IsolationError } from "./scope.js";
 
+vi.mock("./sessions.js", async () =>
+  (await import("./sessions.test-support.js")).stubbedDbSessions(),
+);
+
 describe("listSpaceGroupsForSpaces", () => {
   it("loads and maps compact cross-space group fields", async () => {
     const findMany = vi.fn(async (_query: { where: unknown; select: Record<string, unknown> }) => [
@@ -13,10 +17,7 @@ describe("listSpaceGroupsForSpaces", () => {
         pinned: true,
         sectionId: null,
         updatedAt: new Date("2026-08-20T00:00:00.000Z"),
-        thread: {
-          unread: true,
-          messages: [{ blocks: [{ kind: "text", text: "Escalation pending" }] }],
-        },
+        thread: { id: "thread-1", unread: true, sessionId: "session-1" },
         members: [
           { bot: { id: "bot-1", name: "Triage", color: "#111", runs: [] } },
           {
@@ -30,7 +31,23 @@ describe("listSpaceGroupsForSpaces", () => {
         ],
       },
     ]);
-    const repos = createGroupRepos({ chatGroup: { findMany } } as unknown as PrismaClient);
+    const $queryRaw = vi.fn().mockResolvedValue([
+      {
+        id: "entry-1",
+        sessionId: "session-1",
+        seq: 0,
+        parentId: null,
+        type: "user.message",
+        payload: { blocks: [{ kind: "text", text: "Escalation pending" }], source: "app" },
+        botId: null,
+        runId: null,
+        createdAt: new Date("2026-08-20T00:00:00.000Z"),
+      },
+    ]);
+    const repos = createGroupRepos({
+      chatGroup: { findMany },
+      $queryRaw,
+    } as unknown as PrismaClient);
     const actor = {
       spaceId: "workspace-1",
       userId: "user-1",

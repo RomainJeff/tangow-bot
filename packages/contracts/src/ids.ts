@@ -74,5 +74,16 @@ export type EffectStatus = z.infer<typeof EffectStatus>;
 export const MemoryScope = z.enum(["bot", "user"]);
 export type MemoryScope = z.infer<typeof MemoryScope>;
 
+export const ThinkingLevelSchema = z.enum([
+  "off",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+]);
+export type ThinkingLevel = z.infer<typeof ThinkingLevelSchema>;
+
 export const SandboxKind = z.enum(["docker", "e2b", "daytona", "box", "desktop", "fake"]);
 export type SandboxKind = z.infer<typeof SandboxKind>;

@@ -1,8 +1,4 @@
-import {
-  BOT_DESCRIPTION_MAX_LENGTH,
-  type BotMessageIntent,
-  type MessageBlock,
-} from "@rakazo/contracts";
+import { BOT_DESCRIPTION_MAX_LENGTH, type BotMessageIntent } from "@rakazo/contracts";
 
 export const BOT_MESSAGE_MAX_LENGTH = 8_000;
 
@@ -39,26 +35,11 @@ export function botMessageHopExhausted(hop: number): boolean {
   return hop > BOT_MESSAGE_MAX_HOPS;
 }
 
-export type BotMessageContext = Extract<MessageBlock, { kind: "bot_message_received" }>;
-
-export function botMessageContext(blocks: readonly MessageBlock[]): BotMessageContext | undefined {
-  return blocks.find((block): block is BotMessageContext => block.kind === "bot_message_received");
-}
-
 export function botMessageAllowsSilence(
   intent: BotMessageIntent | undefined,
   repliesToRequest = false,
 ): boolean {
   return intent === "fyi" && !repliesToRequest;
-}
-
-/** True when these blocks are a delivery this bot sent to ask a peer for something. */
-export function repliesToOwnRequest(replyToBlocks: readonly MessageBlock[]): boolean {
-  return replyToBlocks.some(
-    (block) =>
-      block.kind === "bot_message_sent" &&
-      (block.intent === undefined || block.intent === "request" || block.intent === "question"),
-  );
 }
 
 /**
@@ -71,7 +52,7 @@ export function repliesToOwnRequest(replyToBlocks: readonly MessageBlock[]): boo
  * No when a peer solicited this bot (`request`, `question`) or merely informed it (`fyi`). There
  * the wake prompt says the final response is returned to the sender automatically, so the turn is
  * one half of a conversation the user never started, and showing it is noise. The bot can still
- * address them deliberately with message_user / ask_user, which `isUserDirectedMessage` keeps.
+ * address them deliberately with message_user / ask_user, which the thread keeps.
  * A missing intent defaults to a solicitation, matching the wake prompt's own default.
  */
 export function botMessageRelaysToUser(
@@ -80,19 +61,6 @@ export function botMessageRelaysToUser(
   if (!peerMessage) return false;
   if (peerMessage.intent === "result" || peerMessage.intent === "status") return true;
   return peerMessage.repliesToRequest === true;
-}
-
-/** `botMessageRelaysToUser` for callers holding the run's source message rather than its context. */
-export function botMessageRunRelaysToUser(source: {
-  blocks: readonly MessageBlock[];
-  replyToBlocks?: readonly MessageBlock[];
-}): boolean {
-  const context = botMessageContext(source.blocks);
-  if (!context) return false;
-  return botMessageRelaysToUser({
-    intent: context.intent,
-    repliesToRequest: repliesToOwnRequest(source.replyToBlocks ?? []),
-  });
 }
 
 /** Resolve a target by id first, then by exact name, then case-insensitively. */
@@ -213,7 +181,7 @@ export function renderGroupMembersContext(
 
 export const BOT_MESSAGE_WAKE_CUE = "[bot]";
 
-function escapePromptData(value: string): string {
+export function escapePromptData(value: string): string {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
 

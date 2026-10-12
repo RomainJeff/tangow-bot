@@ -1,3 +1,4 @@
+import type { SessionLog } from "@rakazo/adapter-kit";
 import type {
   Actor,
   BotActivityInput,
@@ -5,9 +6,10 @@ import type {
   BotActivityOutput,
   RunRecap,
   RunsCursor,
+  SessionEntries,
 } from "@rakazo/contracts";
 import { RUNS_PAGE_DEFAULT } from "@rakazo/contracts";
-import { ACTIVE_RUN_STATUSES, runRecap } from "@rakazo/core";
+import { ACTIVE_RUN_STATUSES, projectThreadItems, runRecap } from "@rakazo/core";
 import type { Prisma, PrismaClient } from "@rakazo/db";
 import { IsolationError } from "@rakazo/db";
 import { mapRun, RUN_INCLUDE, TERMINAL_STATUSES } from "./runs.js";
@@ -129,21 +131,47 @@ export async function listBotActivity(
   };
 }
 
-/** What a run left in its thread, read only from the caller's own runs. */
+type RunLog = Pick<SessionLog<unknown>, "readRun">;
+type RunLogDeps = { prisma: PrismaClient; sessionLog: RunLog };
+
+const RUN_ENTRIES_LIMIT = 1000;
+
+/** A run's newest entries up to the cap, and whether older ones were left out. */
+export async function readCappedRun(sessionLog: RunLog, runId: string): Promise<SessionEntries> {
+  const entries = await sessionLog.readRun(runId, { limit: RUN_ENTRIES_LIMIT + 1 });
+  return entries.length > RUN_ENTRIES_LIMIT
+    ? { entries: entries.slice(1), truncated: true }
+    : { entries };
+}
+
+async function ownRunId(prisma: PrismaClient, actor: Actor, runId: string): Promise<string> {
+  const run = await prisma.run.findFirst({
+    where: { id: runId, spaceId: actor.spaceId, userId: actor.userId },
+    select: { id: true },
+  });
+  if (!run) throw new IsolationError();
+  return run.id;
+}
+
+export async function readRunEntries(
+  deps: RunLogDeps,
+  actor: Actor,
+  runId: string,
+): Promise<SessionEntries> {
+  return readCappedRun(deps.sessionLog, await ownRunId(deps.prisma, actor, runId));
+}
+
 export async function readRunRecap(
-  prisma: PrismaClient,
+  deps: RunLogDeps,
   actor: Actor,
   runId: string,
 ): Promise<RunRecap> {
-  const run = await prisma.run.findFirst({
-    where: { id: runId, spaceId: actor.spaceId, userId: actor.userId },
-    select: { id: true, threadId: true },
-  });
-  if (!run) throw new IsolationError();
-  const messages = await prisma.message.findMany({
-    where: { threadId: run.threadId, runId: run.id, role: "bot" },
-    orderBy: { seq: "asc" },
-    select: { id: true, blocks: true },
-  });
-  return runRecap(messages);
+  const items = projectThreadItems(
+    await deps.sessionLog.readRun(await ownRunId(deps.prisma, actor, runId)),
+  );
+  return runRecap(
+    items.flatMap((item) =>
+      item.kind === "message" && item.role === "bot" ? [{ id: item.id, blocks: item.blocks }] : [],
+    ),
+  );
 }

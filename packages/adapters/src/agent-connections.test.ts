@@ -1,10 +1,26 @@
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
-import { describe, expect, it, vi } from "vitest";
+import { appendSessionEntryInTransaction } from "@rakazo/db";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   connectAgent,
   messageConnectedAgent,
   respondAgentConnection,
 } from "./agent-connections.js";
+
+vi.mock("../../db/src/sessions.js", async () =>
+  (await import("@rakazo/db/sessions.test-support")).stubbedDbSessions(),
+);
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
+/** The deliveries written into the receiving agents' threads. */
+const deliveries = () =>
+  vi
+    .mocked(appendSessionEntryInTransaction)
+    .mock.calls.map(([, draft]) => draft)
+    .filter((draft) => draft.type === "bot.message.received");
 
 const requesterIdentity = {
   id: "mi-1",
@@ -42,21 +58,12 @@ function createDeps(
 ) {
   const outboundRows: Array<Record<string, unknown>> = [];
   const txCalls = {
-    messageCreate: [] as unknown[],
     runCreate: [] as unknown[],
     taskCreate: [] as unknown[],
   };
   const txMock = {
-    message: {
-      findUnique: vi.fn(async () => null),
-      create: vi.fn(async ({ data }: { data: unknown }) => {
-        txCalls.messageCreate.push(data);
-        return { id: `msg-${txCalls.messageCreate.length}`, ...(data as object) };
-      }),
-      update: vi.fn(async () => ({})),
-    },
     run: {
-      findFirst: vi.fn(async () => ({ id: "run-1" })),
+      findFirst: vi.fn(async () => ({ id: "run-1", sessionId: "session-1" })),
       create: vi.fn(async ({ data }: { data: unknown }) => {
         txCalls.runCreate.push(data);
         return { id: "run-wake", ...(data as object) };
@@ -72,10 +79,14 @@ function createDeps(
     event: {
       create: vi.fn(async ({ data }: { data: object }) => ({ id: "evt-1", seq: 8, ...data })),
     },
-    thread: { update: vi.fn(async () => ({ nextMessageSeq: 4, nextEventSeq: 9 })) },
+    thread: {
+      updateMany: vi.fn(async () => ({ count: 2 })),
+      findUniqueOrThrow: vi.fn(async () => ({ nextEventSeq: 9 })),
+    },
     bot: { findFirst: vi.fn(async () => ({ id: "bot-2" })) },
-    // What a `SELECT ... FOR UPDATE` on the connection row would see.
-    $queryRaw: vi.fn(async () => {
+    // No earlier delivery with this key; what a `SELECT ... FOR UPDATE` on the connection row sees.
+    $queryRaw: vi.fn(async (sql: TemplateStringsArray) => {
+      if (sql.join("?").includes("clientNonce")) return [];
       if (overrides.connectionRevokedInsideTx || overrides.connectionRevokedAfterReadInsideTx) {
         return [{ status: "revoked" }];
       }
@@ -121,7 +132,7 @@ function createDeps(
               spaceId: "ws-2",
               userId: "user-2",
               archivedAt: null,
-              thread: { id: "thread-2" },
+              thread: { id: "thread-2", sessionId: "session-2" },
             }
           : { id: "bot-1", name: "Assistant", spaceId: "ws-1", userId: "user-1" },
       ),
@@ -160,10 +171,10 @@ function createDeps(
         return { count: before - outboundRows.length };
       }),
     },
-    message: {
+    sessionEntry: {
       findUnique: vi.fn(async () =>
         overrides.sourceHop != null
-          ? { blocks: [{ kind: "bot_message_received", hop: overrides.sourceHop }] }
+          ? { type: "bot.message.received", payload: { hop: overrides.sourceHop } }
           : null,
       ),
     },
@@ -327,17 +338,15 @@ describe("messageConnectedAgent", () => {
     });
 
     expect(result).toEqual(expect.objectContaining({ ok: true, botId: "bot-2" }));
-    const inbound = deps.txCalls.messageCreate[0] as Record<string, unknown>;
-    expect(inbound.threadId).toBe("thread-2");
-    expect(inbound.role).toBe("user");
-    expect(inbound.blocks).toEqual([
-      {
-        kind: "bot_message_received",
-        fromBotId: "bot-1",
-        fromBotName: "Assistant",
-        text: "results are in",
-        hop: 1,
-      },
+    expect(deliveries()).toEqual([
+      expect.objectContaining({
+        sessionId: "session-2",
+        payload: expect.objectContaining({
+          from: { kind: "agent", address: "+15551111111", name: "Assistant" },
+          text: "results are in",
+          hop: 1,
+        }),
+      }),
     ]);
     const wake = deps.txCalls.runCreate[0] as Record<string, unknown>;
     expect(wake).toEqual(
@@ -367,10 +376,9 @@ describe("messageConnectedAgent", () => {
     });
     expect(first).toEqual(expect.objectContaining({ ok: true }));
     expect(second).toEqual(expect.objectContaining({ ok: true }));
-    const inboundNonces = deps.txCalls.messageCreate
-      .map((row) => row as { clientNonce?: string; role?: string })
-      .filter((row) => row.clientNonce)
-      .map((row) => row.clientNonce);
+    const inboundNonces = deliveries().map(
+      (draft) => (draft.payload as { clientNonce?: string }).clientNonce,
+    );
     expect(inboundNonces).toEqual([
       "agent-message:run-1:message_agent:0",
       "agent-message:run-1:message_agent:1",
@@ -386,7 +394,7 @@ describe("messageConnectedAgent", () => {
     expect(result).toEqual(
       expect.objectContaining({ ok: false, error: expect.stringMatching(/reached/i) }),
     );
-    expect(deps.txCalls.messageCreate).toHaveLength(0);
+    expect(deliveries()).toHaveLength(0);
   });
 
   it("refuses when the hop budget is exhausted", async () => {
@@ -467,7 +475,7 @@ describe("agent connection status races", () => {
     expect(result).toEqual(
       expect.objectContaining({ ok: false, error: expect.stringMatching(/approved/i) }),
     );
-    expect(deps.txCalls.messageCreate).toHaveLength(0);
+    expect(deliveries()).toHaveLength(0);
     expect(deps.txCalls.taskCreate).toHaveLength(0);
     expect(deps.txCalls.runCreate).toHaveLength(0);
     expect(deps.enqueue).not.toHaveBeenCalled();
@@ -522,7 +530,7 @@ describe("agent connection enumeration and sender gating", () => {
     );
 
     expect(result).toEqual(expect.objectContaining({ ok: false }));
-    expect(deps.txCalls.messageCreate).toHaveLength(0);
+    expect(deliveries()).toHaveLength(0);
   });
 });
 
@@ -542,7 +550,7 @@ describe("messageConnectedAgent revocation locking", () => {
     expect(result).toEqual(
       expect.objectContaining({ ok: false, error: expect.stringMatching(/approved/i) }),
     );
-    expect(deps.txCalls.messageCreate).toHaveLength(0);
+    expect(deliveries()).toHaveLength(0);
     expect(deps.txCalls.taskCreate).toHaveLength(0);
     expect(deps.txCalls.runCreate).toHaveLength(0);
     expect(deps.enqueue).not.toHaveBeenCalled();

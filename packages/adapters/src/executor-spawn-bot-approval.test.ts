@@ -11,6 +11,11 @@ import type * as ChildBotsModule from "./child-bots.js";
 import { spawnBot } from "./child-bots.js";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
 import { createRunExecutor } from "./executor.js";
+import { recordingSessionLog } from "./session-log/recording.test-support.js";
+
+vi.mock("../../db/src/sessions.js", async () =>
+  (await import("@rakazo/db/sessions.test-support")).stubbedDbSessions(),
+);
 
 vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ComputerLifecycleModule>()),
@@ -106,7 +111,8 @@ function fixture({
   rules = [] as ActionApprovalRule[],
   autoReview = false,
   secrets = [SECRET],
-  sourceMessage = undefined as { role: string; blocks: unknown[] } | undefined,
+  /** The entry that woke the run. */
+  source = undefined as { type: string; payload: Record<string, unknown> } | undefined,
 } = {}) {
   const { effects } = world;
   const results: unknown[] = [];
@@ -121,7 +127,7 @@ function fixture({
     trigger,
     requireToolApproval,
     leaseFence: 0,
-    sourceMessageId: sourceMessage ? "source-1" : null,
+    sourceMessageId: source ? "source-1" : null,
   };
   world.runs.push(run);
   const externalEffect = {
@@ -187,7 +193,12 @@ function fixture({
     description: "Test assistant",
     ...data,
   }));
+  const log = recordingSessionLog();
   const prisma = {
+    sessionEntry: { ...log.sessionEntry, findUnique: vi.fn(async () => source ?? null) },
+    $queryRaw: log.queryRaw,
+    $transaction: async (work: (tx: unknown) => unknown) => work(prisma),
+    steeringMessage: { findFirst: vi.fn(async () => null) },
     run: {
       findUnique: vi.fn(async () => run),
       findUniqueOrThrow: vi.fn(async () => run),
@@ -215,11 +226,6 @@ function fixture({
       updateMany: vi.fn(async () => ({ count: 1 })),
     },
     thread: { findUniqueOrThrow: vi.fn(async () => ({ id: run.threadId, groupId: null })) },
-    message: {
-      findMany: vi.fn(async () => []),
-      findUnique: vi.fn(async () => (sourceMessage ? { id: "source-1", ...sourceMessage } : null)),
-      findFirst: vi.fn(async () => null),
-    },
     task: { findUniqueOrThrow: vi.fn(async () => ({ id: run.taskId, prompt: "Create a bot" })) },
     connection: { findMany: vi.fn(async () => []) },
     spaceModelPreference: { findFirst: vi.fn(async () => null) },
@@ -268,6 +274,7 @@ function fixture({
     yield { type: "done" as const, text: "Done" };
   });
   const executor = createRunExecutor({
+    sessionLog: log.sessionLog,
     prisma,
     runtime: { describe: () => ({ capabilities: { scripted: false } }), run: runtimeRun },
     connector: {
@@ -763,7 +770,10 @@ describe("spawn_bot approval in the executor", () => {
       const f = fixture({
         world: withCancelledCard(1),
         trigger: "follow_up",
-        sourceMessage: { role: "user", blocks: [{ kind: "text", text: "Create it as Autre" }] },
+        source: {
+          type: "user.message",
+          payload: { blocks: [{ kind: "text", text: "Create it as Autre" }], source: "app" },
+        },
       });
       f.setCalls([{ args: { ...veille, name: "Autre" }, executionId: "call-1" }]);
       await f.run_();
@@ -774,9 +784,9 @@ describe("spawn_bot approval in the executor", () => {
       const f = fixture({
         world: withCancelledCard(1),
         trigger: "follow_up",
-        sourceMessage: {
-          role: "bot",
-          blocks: [{ kind: "handoff", fromBotId: "bot-2", toBotId: "bot-1", text: "Go", hop: 1 }],
+        source: {
+          type: "handoff",
+          payload: { fromBotId: "bot-2", toBotId: "bot-1", text: "Go", hop: 1 },
         },
       });
       f.setCalls([{ args: { ...veille, name: "Autre" }, executionId: "call-1" }]);
@@ -807,9 +817,27 @@ describe("spawn_bot approval in the executor", () => {
           findUnique: async () => ({ status: "queued", startedAt: null }),
           updateMany: async () => ({ count: 1 }),
         },
-        message: {
-          findFirst: async () => ({ id: "message-1", blocks: [f.card()] }),
-          update: async () => ({}),
+        // The card the run is parked on: the request of the effect it asks about.
+        sessionEntry: {
+          findFirst: async () => {
+            const card = f.card() as { approvalEffectId: string };
+            return {
+              id: "message-1",
+              sessionId: "session-1",
+              seq: 3,
+              parentId: "entry-2",
+              type: "effect.requested",
+              payload: {
+                effectId: card.approvalEffectId,
+                effectKind: "spawn_bot",
+                proposal: {},
+                card,
+              },
+              botId: "bot-1",
+              runId: "run-1",
+              createdAt: new Date("2026-10-01T09:00:00.000Z"),
+            };
+          },
         },
         externalEffect: {
           findFirst: async ({ where }: { where: Where }) =>
@@ -839,7 +867,10 @@ describe("spawn_bot approval in the executor", () => {
         },
         bot: { findMany: async () => f.world.bots.map((name) => ({ name })) },
         task: { updateMany: async () => ({ count: 1 }) },
-        thread: { update: async () => ({ nextEventSeq: 10 + events.length }) },
+        thread: {
+          update: async () => ({ nextEventSeq: 10 + events.length }),
+          findUniqueOrThrow: async () => ({ nextEventSeq: 10 + events.length }),
+        },
         event: {
           create: async ({ data }: { data: { type: string; payload: unknown; seq: number } }) => {
             events.push({ type: data.type, payload: data.payload });
@@ -875,10 +906,7 @@ describe("spawn_bot approval in the executor", () => {
         instructions: "Watch our competitors daily.",
       });
       await expect(answered).resolves.toBe(true);
-      expect(events.map((event) => event.type)).toEqual([
-        "effect.edited",
-        "thread.message.updated",
-      ]);
+      expect(events.map((event) => event.type)).toEqual(["effect.edited"]);
       expect(events[0]!.payload).toEqual({
         effectId: f.effects[0]!.id,
         proposed: veille,
@@ -936,7 +964,7 @@ describe("spawn_bot approval in the executor", () => {
       await f.run_();
       const { answered, events } = answerCard(f, undefined);
       await answered;
-      expect(events.map((event) => event.type)).toEqual(["thread.message.updated"]);
+      expect(events).toEqual([]);
 
       f.setCalls([{ args: veille, executionId: "call-2" }]);
       await f.run_();

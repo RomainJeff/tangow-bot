@@ -1,3 +1,5 @@
+import type { EntryId, SessionEntry, SessionId } from "@rakazo/contracts";
+import type { NewSession, SessionEntryDraft } from "./session-log.js";
 import type {
   AdapterContext,
   AdapterDescriptor,
@@ -289,6 +291,55 @@ export interface RealtimeFanout {
   publish(topic: string, payload: string): Promise<void>;
   subscribe(topic: string, onMessage: (payload: string) => void): Promise<() => Promise<void>>;
   close(): Promise<void>;
+}
+
+/**
+ * The append-only log of a conversation, one per session. Appends to a session serialize, and
+ * reads return entries validated by `SessionEntrySchema`, oldest first. `Tx` is the backend's
+ * transaction, so an append commits together with the caller's other writes.
+ */
+export interface SessionLog<Tx> {
+  /**
+   * Create the session, or leave it as it is when it exists. Resolves to the id to append to, which
+   * for a thread that already has its main session is that session's id.
+   */
+  createSession(tx: Tx, session: NewSession): Promise<SessionId>;
+  /** Append as the new head. A draft whose clientNonce is already in the session returns that entry. */
+  append(tx: Tx, draft: SessionEntryDraft): Promise<SessionEntry>;
+  /**
+   * What the next run reads: the chain's newest compaction, then the chain entries after the last
+   * seq it covers, oldest first. Without a compaction, the whole chain. `maxEntries` keeps only
+   * the newest that many entries of the walk back from the head.
+   */
+  readTail(sessionId: SessionId, options?: { maxEntries?: number }): Promise<SessionEntry[]>;
+  /**
+   * The newest `limit` chain entries before `before`, or ending at the head when it is left out.
+   * Inside `tx` when given, so the page agrees with what the caller read under the same locks.
+   */
+  readPage(
+    sessionId: SessionId,
+    page: { before?: EntryId; limit: number },
+    tx?: Tx,
+  ): Promise<SessionEntry[]>;
+  /**
+   * The chain entries around `entryId`, oldest first: up to `floor(limit / 2)` older ones, the
+   * entry, then newer ones up to `limit` in all. Empty when the entry is not on the chain.
+   */
+  readAround(
+    sessionId: SessionId,
+    entryId: EntryId,
+    limit: number,
+    tx?: Tx,
+  ): Promise<SessionEntry[]>;
+  /**
+   * A run's entries from every session it wrote to, with the person's answers to its asks and
+   * choices and the later state of its cards, by `ts` then `seq`, whether or not a rewind left them
+   * on the chain. A child session's run reads whole: its trace and what it raised to the thread.
+   * With `limit`, only the newest `limit` of them, in the same order.
+   */
+  readRun(runId: string, options?: { limit?: number }): Promise<SessionEntry[]>;
+  /** One entry of the session, on the chain or not. */
+  readEntry(sessionId: SessionId, entryId: EntryId): Promise<SessionEntry | undefined>;
 }
 
 export interface NotificationProvider {

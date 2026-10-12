@@ -124,12 +124,7 @@ describeLive("live release-watch eval (GPT 5.6 Luna + GitHub emulator)", () => {
       data: { nextRunAt: dueAt, active: true },
     });
     composio.executions.length = 0;
-    const priorToolEvent = await handles.prisma.event.findFirst({
-      where: { botId: bot.id, type: "agent.tool.called" },
-      orderBy: { seq: "desc" },
-      select: { seq: true },
-    });
-    const routineToolSeqFloor = priorToolEvent?.seq ?? -1;
+    const routineCallsSince = new Date();
     await handles.jobs.enqueue({
       name: "routine.wakeup",
       payload: { routineId: routine.id, scheduledFor: dueAt.toISOString() },
@@ -137,19 +132,16 @@ describeLive("live release-watch eval (GPT 5.6 Luna + GitHub emulator)", () => {
 
     const snap = await waitFor(handles.app, cookie, bot.id, 180_000, { requireSeenRun: true });
     const routineRunId = snap.run?.id;
-    const toolEvents = await handles.prisma.event.findMany({
+    const calls = await handles.prisma.sessionEntry.findMany({
       where: {
         botId: bot.id,
-        type: "agent.tool.called",
-        seq: { gt: routineToolSeqFloor },
+        type: "tool.call",
+        createdAt: { gte: routineCallsSince },
         ...(routineRunId ? { runId: routineRunId } : {}),
       },
-      orderBy: { seq: "asc" },
+      orderBy: [{ createdAt: "asc" }, { seq: "asc" }],
     });
-    const calledFromEvents = toolEvents.map((event) => {
-      const payload = event.payload as { name?: string };
-      return String(payload.name ?? "");
-    });
+    const calledFromEvents = calls.map((call) => (call.payload as { name: string }).name);
     const routineExecutions = composio.executions.filter(
       (row) => row.botId === bot.id && (routineRunId ? row.runId === routineRunId : true),
     );

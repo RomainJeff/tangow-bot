@@ -5,21 +5,14 @@ import { LinkPreviewBlock } from "./link-preview.js";
 import { McpTransportSchema } from "./mcp.js";
 
 export const ProductEventType = z.enum([
-  "thread.message.created",
-  "thread.cleared",
-  /** History truncated at payload.fromSeq so the user can resend an edited message. */
-  "thread.rewound",
-  "thread.message.updated",
   "thread.progress",
   "thread.artifact",
   "thread.ask",
   "thread.choice",
   "thread.meta",
   "thread.computer",
-  "thread.subagent",
   "run.started",
   "run.checkpointed",
-  "run.waiting_input",
   "run.completed",
   "run.failed",
   "run.cancelled",
@@ -36,7 +29,6 @@ export const ProductEventType = z.enum([
   "skill.draft.created",
   "skill.saved",
   "effect.recorded",
-  "agent.tool.called",
   "agent.tool.completed",
   /** A run followed a skill: read it, was forced or cited to it, or opened its files; payload { name, via }. */
   "agent.skill.used",
@@ -57,8 +49,11 @@ export const ProductEventType = z.enum([
   "group.created",
   "group.updated",
   "group.handoff",
+  "session.entry.appended",
 ]);
 export type ProductEventType = z.infer<typeof ProductEventType>;
+
+export const SkillChange = z.enum(["learned", "updated", "deleted"]);
 
 export const MessageRole = z.enum(["user", "bot", "system"]);
 export const BotMessageIntent = z.enum(["request", "result", "question", "status", "fyi"]);
@@ -134,71 +129,102 @@ export const ASK_DISMISSED_ANSWER = "dismissed";
 export const ProposalKind = z.enum(["routine"]);
 export type ProposalKind = z.infer<typeof ProposalKind>;
 
+export const AskBlock = z.object({
+  kind: z.literal("ask"),
+  text: z.string(),
+  approvalEffectId: Id.optional(),
+  detail: z.string().optional(),
+  input: z.enum(["text", "secret"]).optional(),
+  /** Why the secret is needed; drives field label on the masked card. */
+  purpose: SecretAskPurpose.optional(),
+  credential: BotSecretDestination.optional(),
+  status: z.enum(["pending", "answered"]).optional(),
+  answer: z.string().optional(),
+  actions: z
+    .array(
+      z.object({
+        id: z.string(),
+        label: z.string(),
+        outcome: AskActionOutcome.optional(),
+      }),
+    )
+    .optional(),
+  /** ask_user v2: when present, the card renders a multi-question stepper. */
+  questions: z.array(AskQuestion).optional(),
+  /** Structured answers once submitted; drives the frozen summary. */
+  answers: AskAnswers.optional(),
+  /** A spawn_bot approval card: the normalized fields, so a client can offer to edit them. */
+  spawnBot: z
+    .object({
+      name: z.string(),
+      title: z.string(),
+      instructions: z.string(),
+      prompt: z.string(),
+      computerMode: z.enum(["", "team", "dedicated"]),
+      /** The run's owner, the only person the server lets edit the card. */
+      ownerUserId: z.string().optional(),
+    })
+    .optional(),
+  proposal: ProposalKind.optional(),
+  /** A routine card: what it sets up, the schedule as the server resolved it. */
+  routine: z
+    .object({ name: z.string(), schedule: z.string(), prompt: z.string(), notify: z.boolean() })
+    .optional(),
+  /** Written once the routine exists: the card links to it. */
+  created: z.object({ kind: ProposalKind, id: z.string(), label: z.string() }).optional(),
+  /** The proposal was approved but could not be created. */
+  failed: z.literal(true).optional(),
+  /**
+   * What became of the routine the card is about. A confirmation the server settled has no
+   * `answer`, so nothing the user typed in the app is in it.
+   */
+  confirms: z.enum(["created", "updated"]).optional(),
+});
+
+export const CHOICE_DISMISSED_ANSWER_ID = "_dismissed";
+
+/**
+ * The `answerId` of an `app_connect` card once its app is connected. One message holds several
+ * cards, and one app can sit under two connectors, so it names both.
+ */
+export function appConnectAnswerId(card: { connectorId?: string; provider: string }): string {
+  return `${card.connectorId ?? "composio"}:${card.provider}`;
+}
+
+export const ChoiceBlock = z.object({
+  kind: z.literal("choice"),
+  question: z.string(),
+  subtitle: z.string().optional(),
+  options: z.array(z.object({ id: z.string(), letter: z.string(), label: z.string() })),
+  /** Set once the user picks an option; renders the picker as answered. */
+  answerId: z.string().optional(),
+});
+
+export const SkillDraftBlock = z.object({
+  kind: z.literal("skill_draft"),
+  skillId: Id,
+  name: z.string(),
+  goal: z.string(),
+  playbook: z.object({
+    whenToUse: z.string(),
+    inputs: z.array(z.string()),
+    steps: z.array(z.string()),
+    howToCheck: z.string(),
+    whatToReturn: z.string(),
+    approvalBoundaries: z.string(),
+    failureHandling: z.string(),
+  }),
+  status: z.enum(["draft", "saved"]),
+});
+
 export const MessageBlock = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("text"), text: z.string() }),
   z.object({
     kind: z.literal("card"),
     lines: z.array(z.object({ k: z.string(), v: z.string() })),
   }),
-  z.object({
-    kind: z.literal("ask"),
-    text: z.string(),
-    approvalEffectId: Id.optional(),
-    detail: z.string().optional(),
-    input: z.enum(["text", "secret"]).optional(),
-    /** Why the secret is needed; drives field label on the masked card. */
-    purpose: SecretAskPurpose.optional(),
-    credential: BotSecretDestination.optional(),
-    status: z.enum(["pending", "answered"]).optional(),
-    answer: z.string().optional(),
-    actions: z
-      .array(
-        z.object({
-          id: z.string(),
-          label: z.string(),
-          outcome: AskActionOutcome.optional(),
-        }),
-      )
-      .optional(),
-    /** ask_user v2: when present, the card renders a multi-question stepper. */
-    questions: z.array(AskQuestion).optional(),
-    /** Structured answers once submitted; drives the frozen summary. */
-    answers: AskAnswers.optional(),
-    /** A spawn_bot approval card: the normalized fields, so a client can offer to edit them. */
-    spawnBot: z
-      .object({
-        name: z.string(),
-        title: z.string(),
-        instructions: z.string(),
-        prompt: z.string(),
-        computerMode: z.enum(["", "team", "dedicated"]),
-        /** The run's owner, the only person the server lets edit the card. */
-        ownerUserId: z.string().optional(),
-      })
-      .optional(),
-    proposal: ProposalKind.optional(),
-    /** A routine card: what it sets up, the schedule as the server resolved it. */
-    routine: z
-      .object({ name: z.string(), schedule: z.string(), prompt: z.string(), notify: z.boolean() })
-      .optional(),
-    /** Written once the routine exists: the card links to it. */
-    created: z.object({ kind: ProposalKind, id: z.string(), label: z.string() }).optional(),
-    /** The proposal was approved but could not be created. */
-    failed: z.literal(true).optional(),
-    /**
-     * What became of the routine the card is about. A confirmation the server settled has no
-     * `answer`, so nothing the user typed in the app is in it.
-     */
-    confirms: z.enum(["created", "updated"]).optional(),
-  }),
-  z.object({
-    kind: z.literal("choice"),
-    question: z.string(),
-    subtitle: z.string().optional(),
-    options: z.array(z.object({ id: z.string(), letter: z.string(), label: z.string() })),
-    /** Set once the user picks an option; renders the picker as answered. */
-    answerId: z.string().optional(),
-  }),
+  AskBlock,
+  ChoiceBlock,
   z.object({
     /** Inline app authorization card (Composio-backed): logo, name, one-line
         description, and an Authorize button that flips to connected. */
@@ -257,37 +283,13 @@ export const MessageBlock = z.discriminatedUnion("kind", [
     durationMs: z.number().int().nonnegative().optional(),
   }),
   z.object({
-    kind: z.literal("subagent"),
-    agentId: z.string(),
-    name: z.string(),
-    task: z.string(),
-    status: z.enum(["running", "completed", "failed"]),
-    progress: z.string().optional(),
-    result: z.string().optional(),
-  }),
-  z.object({
     kind: z.literal("child_bot"),
     botId: z.string(),
     name: z.string(),
     title: z.string().optional(),
     status: z.enum(["created", "archived", "deleted"]),
   }),
-  z.object({
-    kind: z.literal("skill_draft"),
-    skillId: Id,
-    name: z.string(),
-    goal: z.string(),
-    playbook: z.object({
-      whenToUse: z.string(),
-      inputs: z.array(z.string()),
-      steps: z.array(z.string()),
-      howToCheck: z.string(),
-      whatToReturn: z.string(),
-      approvalBoundaries: z.string(),
-      failureHandling: z.string(),
-    }),
-    status: z.enum(["draft", "saved"]),
-  }),
+  SkillDraftBlock,
   ChartBlock,
   z.object({
     /** Approval card for an agent-created MCP server. The user completes the
@@ -333,26 +335,6 @@ export const MessageBlock = z.discriminatedUnion("kind", [
     hop: z.number().int().nonnegative().optional(),
   }),
   z.object({
-    /** Shown in the sending bot's own chat, so the user can see what it sent. */
-    kind: z.literal("bot_message_sent"),
-    toBotId: Id,
-    toBotName: z.string(),
-    text: z.string(),
-    intent: BotMessageIntent.optional(),
-  }),
-  z.object({
-    /** Delivered into the receiving bot's own chat as the prompt that woke it. */
-    kind: z.literal("bot_message_received"),
-    fromBotId: Id,
-    fromBotName: z.string(),
-    text: z.string(),
-    intent: BotMessageIntent.optional(),
-    /** Sender-thread echo this delivery answers, when applicable. */
-    returnToMessageId: Id.optional(),
-    /** Links in a bot-started chain; absent when a person started it. */
-    hop: z.number().int().nonnegative().optional(),
-  }),
-  z.object({
     /** A sub-bot's routine run, traced in its own thread instead of a free closing text.
         Driven by the run lifecycle (queued/running/completed/failed/cancelled), not by
         model-authored narration; `headline`/`digest` are untrusted content, rendered as
@@ -380,7 +362,7 @@ export const MessageBlock = z.discriminatedUnion("kind", [
     skillUid: SkillUidSchema.optional(),
     skillId: z.string(),
     name: z.string(),
-    change: z.enum(["learned", "updated", "deleted"]),
+    change: SkillChange,
   }),
   LinkPreviewBlock,
 ]);
@@ -398,15 +380,6 @@ export const ProductEventSchema = z.object({
   payload: z.record(z.string(), z.unknown()),
 });
 export type ProductEvent = z.infer<typeof ProductEventSchema>;
-
-/** clientNonce prefix for mid-turn narration messages the executor publishes on its own
- * initiative. Single source of truth (adapters user-progress imports this). */
-export const USER_PROGRESS_CLIENT_NONCE_PREFIX = "user-progress:";
-
-/** clientNonce prefix for `message_user` output: text the bot deliberately addressed to the
- * user. Distinct from narration because a delegated (peer) run only surfaces this one.
- * Single source of truth (adapters user-progress + core message-visibility import this). */
-export const USER_MESSAGE_CLIENT_NONCE_PREFIX = "user-message:";
 
 /**
  * A block whose `kind` this build does not know must not take the whole conversation down

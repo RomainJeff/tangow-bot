@@ -77,6 +77,19 @@ services:
     volumes:
       - ../../data:/data
 
+  # Applies the migrations before the API and the worker start, writing the session log from the
+  # legacy messages first when an upgrade needs it. On a large database that takes minutes.
+  migrate:
+    image: rakazo/app:local
+    pull_policy: never
+    command: ["pnpm", "exec", "tsx", "scripts/backfill-session-log.ts"]
+    restart: "no"
+    environment:
+      <<: *app-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   api:
     # One image for api, worker and web: same context, same Dockerfile, only the
     # command differs. Naming it here builds it once instead of leaving Compose to
@@ -87,7 +100,7 @@ services:
     build:
       context: ../..
       dockerfile: infra/compose/Dockerfile
-    command: ["bash", "-lc", "pnpm --filter @rakazo/db exec prisma migrate deploy && pnpm --filter @rakazo/api start"]
+    command: ["pnpm", "--filter", "@rakazo/api", "start"]
     env_file:
       - ../../.env
     environment:
@@ -101,6 +114,8 @@ services:
       postgres:
         condition: service_healthy
       data-init:
+        condition: service_completed_successfully
+      migrate:
         condition: service_completed_successfully
 
   worker:
@@ -119,6 +134,8 @@ services:
       postgres:
         condition: service_healthy
       data-init:
+        condition: service_completed_successfully
+      migrate:
         condition: service_completed_successfully
 
   web:

@@ -8,6 +8,7 @@ import type {
   JobPublisher,
   MemoryStore,
   SandboxProvider,
+  SessionLog,
 } from "@rakazo/adapter-kit";
 import {
   computerControlExpireJobKey,
@@ -78,7 +79,6 @@ import {
   scriptedCatalogEntry,
   serializeModelSecret,
   settleCancelledRunCards,
-  sweepOrphanPreviewArtifacts,
   takeoverLeaseMs,
   toComputerRef,
   touchRunningComputer,
@@ -91,6 +91,7 @@ import {
   appContract,
   IntegrationProviderIdSchema,
   OPENAI_COMPATIBLE_PROVIDER_ID,
+  SessionId,
 } from "@rakazo/contracts";
 import {
   ACTIVE_RUN_STATUSES,
@@ -105,7 +106,7 @@ import {
 } from "@rakazo/core";
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
 import {
-  appendEventInTransaction,
+  appendComputerControlInTransaction,
   BotSectionNameConflictError,
   CannotDeleteDefaultSpaceError,
   CannotDeleteLastSpaceError,
@@ -134,6 +135,7 @@ import {
   newestVoiceCredentialOrder,
   Prisma,
   parseComputerMode,
+  RESOURCE_NOT_FOUND,
   releaseSpaceDeletionClaim,
   renewSpaceDeletionClaim,
   SPACE_DELETION_CLAIM_TIMEOUT_MS,
@@ -143,6 +145,7 @@ import {
   SpaceNotFoundError,
   selectSpaceModelPreference,
   selectSpaceVoicePreference,
+  threadEventSeq,
   touchGroupUpdatedAt,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
@@ -155,7 +158,7 @@ import {
   getOwnedArtifact,
   getSpaceArtifact,
 } from "./artifacts.js";
-import { listBotActivity, readRunRecap } from "./bot-activity.js";
+import { listBotActivity, readRunEntries, readRunRecap } from "./bot-activity.js";
 import { botProfileLabelsChanged, commitBotUpdate } from "./bot-update.js";
 import {
   executionBlocksUserTakeover,
@@ -201,14 +204,16 @@ import {
 } from "./server-update.js";
 import { assertTeachingSendAllowed, createTaughtSkillsService } from "./taught-skills.js";
 import {
-  isPeerRun,
-  loadAllMessages,
-  loadMessagePage,
-  shouldForwardPeerThreadEvent,
+  forwardedThreadEvent,
+  loadChain,
+  loadEntryPage,
+  threadSessionId,
+  withoutHiddenPeerRuns,
 } from "./thread-message-pages.js";
 import {
   enqueueLinkPreview,
   reactToThreadMessage,
+  readSessionEntries,
   resolveThreadTarget,
   sendThreadMessage,
   setThreadUnreadState,
@@ -231,8 +236,7 @@ import {
 import { loadWebhookSecret, WEBHOOK_SECRET_KIND } from "./webhook-inbound.js";
 
 const MAX_COMPUTER_TEXT_FILE_BYTES = 2 * 1024 * 1024;
-const THREAD_MESSAGE_PAGE_SIZE = 100;
-const EXPORT_MESSAGE_PAGE_SIZE = 500;
+const EXPORT_ENTRY_PAGE_SIZE = 500;
 
 async function reconcilePendingConnections(
   prisma: PrismaClient,
@@ -360,15 +364,15 @@ function computerContext(actor: Actor, botId: string, operationId: string): Adap
 }
 
 /**
- * Durable memories remain in their Space-private containers. Truncating history only removes
- * conversation-derived summaries from the previous generation; including the new generation also
- * covers a compaction job that began just after the truncation committed.
+ * Durable memories remain in their Space-private containers. Truncating history only removes the
+ * conversation-derived summaries filed under the generation it ended; a compaction still saving
+ * under that generation purges it again once it sees a clear or a rewind moved the generation on.
  */
 async function purgeCompactedHistoryMemory(
   deps: RouterDeps,
   actor: Actor,
   target: ThreadTarget,
-  historyCompactionGeneration: number,
+  generation: number,
   reason: string,
 ): Promise<void> {
   if (target.kind !== "bot") return;
@@ -383,7 +387,7 @@ async function purgeCompactedHistoryMemory(
     const purged = await configuredMemory.provider.purgeHistory(
       {
         botId: target.botId,
-        generations: [Math.max(0, historyCompactionGeneration - 1), historyCompactionGeneration],
+        generations: [generation],
       },
       computerContext(actor, target.botId, `${reason}:${target.threadId}`),
     );
@@ -485,6 +489,7 @@ function mcpAssignmentDto(row: {
 export interface RouterDeps {
   prisma: PrismaClient;
   events: ThreadEvents;
+  sessionLog: SessionLog<Prisma.TransactionClient>;
   auth: Auth;
   jobs: JobPublisher;
   sandbox: SandboxProvider;
@@ -544,7 +549,18 @@ function mapSpaceLifecycleError(error: unknown): unknown {
 }
 
 export function createRouter(deps: RouterDeps) {
-  const os = implement(appContract).$context<{ actor: Actor | null; signal?: AbortSignal }>();
+  const os = implement(appContract)
+    .$context<{ actor: Actor | null; signal?: AbortSignal }>()
+    .use(async ({ next }) => {
+      try {
+        return await next();
+      } catch (error) {
+        if (error instanceof IsolationError && error.message === RESOURCE_NOT_FOUND) {
+          throw new ORPCError("NOT_FOUND", { message: RESOURCE_NOT_FOUND, cause: error });
+        }
+        throw error;
+      }
+    });
   const repos = createRepos(deps.prisma);
   const onboardingDeps = { prisma: deps.prisma, events: deps.events, connectors: deps.connectors };
   const mcpOAuth = deps.mcpOAuth ?? new McpOAuthBroker(deps.prisma, deps.secrets);
@@ -1349,20 +1365,9 @@ export function createRouter(deps: RouterDeps) {
       listArchived: authed.groups.listArchived.handler(async ({ context }) =>
         groupRepos.listGroups(context.actor, { archived: true }),
       ),
-      get: authed.groups.get.handler(async ({ context, input }) => {
-        const group = await groupRepos.getGroup(context.actor, input.groupId);
-        return {
-          ...groupRepos.mapGroup(group),
-          messages: (
-            await loadMessagePage(
-              deps.prisma,
-              group.thread!.id,
-              undefined,
-              THREAD_MESSAGE_PAGE_SIZE,
-            )
-          ).messages,
-        };
-      }),
+      get: authed.groups.get.handler(async ({ context, input }) =>
+        groupRepos.mapGroup(await groupRepos.getGroup(context.actor, input.groupId)),
+      ),
       duplicate: authed.groups.duplicate.handler(async ({ context, input }) => {
         const source = await groupRepos.getGroup(context.actor, input.groupId);
         try {
@@ -1484,28 +1489,19 @@ export function createRouter(deps: RouterDeps) {
       }),
       messages: authed.threads.messages.handler(async ({ context, input }) => {
         const target = await resolveThreadTarget(deps.prisma, context.actor, input);
-        return loadMessagePage(
-          deps.prisma,
-          target.threadId,
-          input.before,
-          THREAD_MESSAGE_PAGE_SIZE,
-          input.around,
-          input.includePeerRuns,
-          input.includePeerReceipts,
-        );
+        const sessionId = await threadSessionId(deps.prisma, target.threadId);
+        return loadEntryPage(deps, { threadId: target.threadId, sessionId }, input);
       }),
       subscribe: authed.threads.subscribe.handler(async function* ({ context, input }) {
         const target = await resolveThreadTarget(deps.prisma, context.actor, input);
-        const peerRunCache = new Map<string, Promise<boolean>>();
+        const peerRuns = new Map<string, Promise<boolean>>();
         for await (const event of deps.events.follow(
           target.threadId,
           input.cursor,
           context.signal,
         )) {
-          if (await isPeerRun(deps.prisma, event.runId, peerRunCache)) {
-            if (!shouldForwardPeerThreadEvent(event)) continue;
-          }
-          yield event;
+          const forwarded = await forwardedThreadEvent(deps.prisma, event, peerRuns);
+          if (forwarded) yield forwarded;
         }
       }),
       send: authed.threads.send.handler(async ({ context, input }) => {
@@ -1520,7 +1516,7 @@ export function createRouter(deps: RouterDeps) {
       }),
       react: authed.threads.react.handler(async ({ context, input }) => {
         const target = await resolveThreadTarget(deps.prisma, context.actor, input);
-        const result = await reactToThreadMessage(deps, context.actor, target, input);
+        const result = await reactToThreadMessage(deps, target, input);
         if (result.eventSeq != null) {
           await deps.events.notify(target.threadId, result.eventSeq).catch((error) => {
             getLogger().error("thread reaction realtime notification", error);
@@ -1549,10 +1545,11 @@ export function createRouter(deps: RouterDeps) {
         const target = await resolveThreadTarget(deps.prisma, context.actor, input);
         const contextBotId = target.kind === "bot" ? target.botId : target.memberBotIds[0];
         if (!contextBotId) throw new IsolationError();
-        const { cancelledRunIds, historyCompactionGeneration } = await deps.events.clearThread({
+        const { cancelledRunIds, historyGeneration } = await deps.events.clearThread({
           spaceId: context.actor.spaceId,
           threadId: target.threadId,
           botId: contextBotId,
+          userId: context.actor.userId,
           ...(target.kind === "group" ? { groupId: target.groupId } : {}),
         });
         await Promise.all(
@@ -1562,29 +1559,28 @@ export function createRouter(deps: RouterDeps) {
           deps,
           context.actor,
           target,
-          historyCompactionGeneration,
+          historyGeneration,
           "thread-clear",
         );
-        // The cleared messages took their preview cards with them: drop the card images.
-        await sweepOrphanPreviewArtifacts(deps, { spaceId: context.actor.spaceId });
         return { ok: true as const };
       }),
       rewind: authed.threads.rewind.handler(async ({ context, input }) => {
         const target = await resolveThreadTarget(deps.prisma, context.actor, input);
         const contextBotId = target.kind === "bot" ? target.botId : target.memberBotIds[0];
         if (!contextBotId) throw new IsolationError();
-        const message = await deps.prisma.message.findFirst({
-          where: { id: input.messageId, threadId: target.threadId },
-          select: { role: true },
+        const message = await deps.prisma.sessionEntry.findFirst({
+          where: { id: input.messageId, session: { threadId: target.threadId, kind: "thread" } },
+          select: { type: true },
         });
         if (!message) throw new ORPCError("NOT_FOUND", { message: "Message not found" });
-        if (message.role !== "user") {
+        if (message.type !== "user.message") {
           throw new ORPCError("BAD_REQUEST", { message: "Only your own messages can be edited" });
         }
         const rewound = await deps.events.rewindThread({
           spaceId: context.actor.spaceId,
           threadId: target.threadId,
           botId: contextBotId,
+          userId: context.actor.userId,
           messageId: input.messageId,
           ...(target.kind === "group" ? { groupId: target.groupId } : {}),
         });
@@ -1594,14 +1590,12 @@ export function createRouter(deps: RouterDeps) {
             deps.jobs.cancel(runJobKey(runId)).catch(() => undefined),
           ),
         );
-        await sweepOrphanPreviewArtifacts(deps, { spaceId: context.actor.spaceId });
-        // Compaction survived the rewind, so its summary still matches the remaining history.
-        if (rewound.compactionReset) {
+        if (rewound.historyGeneration !== undefined) {
           await purgeCompactedHistoryMemory(
             deps,
             context.actor,
             target,
-            rewound.historyCompactionGeneration,
+            rewound.historyGeneration,
             "thread-rewind",
           );
         }
@@ -1645,6 +1639,7 @@ export function createRouter(deps: RouterDeps) {
             threadId: target.threadId,
             role: "user",
             blocks,
+            feedBotId: botId,
           });
           const active = await tx.run.findFirst({
             where: {
@@ -1680,7 +1675,6 @@ export function createRouter(deps: RouterDeps) {
               },
               select: { id: true },
             });
-            await tx.message.update({ where: { id: message.id }, data: { runId: run.id } });
           } else {
             await tx.steeringMessage.create({
               data: {
@@ -1690,18 +1684,13 @@ export function createRouter(deps: RouterDeps) {
                 runId: active.id,
               },
             });
-            await tx.message.update({ where: { id: message.id }, data: { runId: active.id } });
           }
-          const event = await appendEventInTransaction(tx, {
-            spaceId: context.actor.spaceId,
-            threadId: target.threadId,
-            botId,
-            type: "thread.message.created",
-            runId: run?.id ?? active?.id,
-            payload: { messageId: message.id, role: "user", blocks },
-          });
           await touchGroupUpdatedAt(tx, target.groupId);
-          return { runId: run?.id, eventSeq: event.seq, messageId: message.id };
+          return {
+            runId: run?.id,
+            eventSeq: await threadEventSeq(tx, target.threadId),
+            messageId: message.id,
+          };
         });
         await deps.events.notify(target.threadId, committed.eventSeq).catch((error) => {
           getLogger().error("group follow-up realtime notification", error);
@@ -2046,23 +2035,46 @@ export function createRouter(deps: RouterDeps) {
 
         const leaseId = randomUUID();
         const expiresAt = new Date(Date.now() + takeoverLeaseMs());
-        const granted = await deps.prisma.computer.updateMany({
-          where: {
-            id: bot.computer.id,
-            state: "running",
-            maintenanceId: null,
-            controlHolder: { not: "user" },
-            controlLeaseId: null,
-          },
-          data: {
-            controlHolder: "user",
-            controlLeaseId: leaseId,
-            controlLeaseExpiresAt: expiresAt,
-            controlBotId: bot.id,
-            controlRunId: waitingForTakeover ? executionLease?.runId : null,
-            state: "running",
-          },
-        });
+        const thread = bot.thread;
+        // A change of holder and its computer.control entry commit together, the thread locked
+        // first as every thread writer does.
+        const changeControl = (
+          holder: "user" | "bot",
+          change: (tx: Prisma.TransactionClient) => Promise<{ count: number }>,
+        ) =>
+          deps.prisma.$transaction(async (tx) => {
+            if (thread)
+              await tx.$queryRaw`SELECT id FROM threads WHERE id = ${thread.id} FOR UPDATE`;
+            const changed = await change(tx);
+            if (changed.count === 1 && thread) {
+              await appendComputerControlInTransaction(tx, {
+                sessionId: thread.sessionId as SessionId,
+                botId: bot.id,
+                holder,
+              });
+            }
+            return changed;
+          });
+        const computerId = bot.computer.id;
+        const granted = await changeControl("user", (tx) =>
+          tx.computer.updateMany({
+            where: {
+              id: computerId,
+              state: "running",
+              maintenanceId: null,
+              controlHolder: { not: "user" },
+              controlLeaseId: null,
+            },
+            data: {
+              controlHolder: "user",
+              controlLeaseId: leaseId,
+              controlLeaseExpiresAt: expiresAt,
+              controlBotId: bot.id,
+              controlRunId: waitingForTakeover ? executionLease?.runId : null,
+              state: "running",
+            },
+          }),
+        );
         if (granted.count !== 1) {
           const current = await deps.prisma.computer.findUniqueOrThrow({
             where: { id: bot.computer.id },
@@ -2090,18 +2102,20 @@ export function createRouter(deps: RouterDeps) {
           };
         }
         try {
-          await scheduleComputerControlExpiry(deps.jobs, bot.computer.id, leaseId, expiresAt);
+          await scheduleComputerControlExpiry(deps.jobs, computerId, leaseId, expiresAt);
         } catch (error) {
-          await deps.prisma.computer.updateMany({
-            where: { id: bot.computer.id, controlLeaseId: leaseId },
-            data: {
-              controlHolder: "none",
-              controlLeaseId: null,
-              controlLeaseExpiresAt: null,
-              controlBotId: null,
-              controlRunId: null,
-            },
-          });
+          await changeControl("bot", (tx) =>
+            tx.computer.updateMany({
+              where: { id: computerId, controlLeaseId: leaseId },
+              data: {
+                controlHolder: "none",
+                controlLeaseId: null,
+                controlLeaseExpiresAt: null,
+                controlBotId: null,
+                controlRunId: null,
+              },
+            }),
+          );
           throw error;
         }
         if (bot.thread) {
@@ -4627,10 +4641,14 @@ export function createRouter(deps: RouterDeps) {
             }
             return exported;
           })(),
-          loadAllMessages(deps.prisma, bot.thread.id, EXPORT_MESSAGE_PAGE_SIZE),
+          loadChain(
+            deps.sessionLog,
+            SessionId.parse(bot.thread.sessionId),
+            EXPORT_ENTRY_PAGE_SIZE,
+          ).then((chain) => withoutHiddenPeerRuns(deps.prisma, chain)),
         ]);
         return {
-          version: 1 as const,
+          version: 2 as const,
           exportedAt: new Date().toISOString(),
           bot: {
             name: bot.name,
@@ -4686,7 +4704,15 @@ export function createRouter(deps: RouterDeps) {
         runs: await listSpaceRuns(deps.prisma, context.actor, input.filter),
       })),
       recap: authed.runs.recap.handler(({ context, input }) =>
-        readRunRecap(deps.prisma, context.actor, input.runId),
+        readRunRecap(deps, context.actor, input.runId),
+      ),
+      entries: authed.runs.entries.handler(({ context, input }) =>
+        readRunEntries(deps, context.actor, input.runId),
+      ),
+    },
+    sessions: {
+      entries: authed.sessions.entries.handler(({ context, input }) =>
+        readSessionEntries(deps, context.actor, input.sessionId),
       ),
     },
     voice: {

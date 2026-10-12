@@ -1,10 +1,10 @@
 import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { MIGRATION_WAIT_TIMEOUT_S } from "@rakazo/contracts/migrate-wait";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { RunDocker, RunDockerResult } from "./docker-cli.js";
 import {
-  COMPOSE_WAIT_TIMEOUT_S,
   ensureStackEnv,
   ensureStackToken,
   initialStackState,
@@ -396,7 +396,7 @@ describe("LocalStackController", () => {
       ["compose", "version", "--short"],
       ["info", "--format", "{{.ServerVersion}}"],
       [...compose, "pull"],
-      [...compose, "up", "-d", "--wait", "--wait-timeout", String(COMPOSE_WAIT_TIMEOUT_S)],
+      [...compose, "up", "-d", "--wait", "--wait-timeout", String(MIGRATION_WAIT_TIMEOUT_S)],
     ]);
     for (const call of calls) {
       expect(call.binary).toBe("/usr/bin/docker");

@@ -55,11 +55,10 @@ import {
   PiOAuthLogins,
   PipedreamConnector,
   PostgresRealtimeFanout,
+  PostgresSessionLog,
   pipedreamConfigFromEnv,
-  piSessionsRoot,
   pushTokenPath,
   reconcileComputerUpdates,
-  removePiUserSessions,
   removeUserSkillDirs,
   ScriptedAgentRuntime,
   SmtpEmailProvider,
@@ -312,7 +311,6 @@ export async function createApp(
     env.agentRuntime === "scripted"
       ? new ScriptedAgentRuntime()
       : new PiAgentRuntime({
-          sessionRoot: env.piSessionRecording ? piSessionsRoot(env.dataDir) : undefined,
           ...(traceExport.exporter
             ? { traceExporter: traceExport.exporter, serviceName: SERVICE_NAMES.api }
             : {}),
@@ -357,7 +355,6 @@ export async function createApp(
           ),
         ),
       );
-      await removePiUserSessions(env.dataDir, userId);
       await rm(pushTokenPath(env.dataDir, userId), { force: true }).catch(() => undefined);
       await removeUserSkillDirs(env.dataDir, userId);
     },
@@ -369,8 +366,10 @@ export async function createApp(
     applicationName: "rakazo-api-skill-lock",
   });
   const skillLock = createPostgresSkillLock(skillLockPool);
+  const sessionLog = new PostgresSessionLog(prisma);
   const executor = createRunExecutor({
     prisma,
+    sessionLog,
     skillLock,
     runtime,
     sandbox,
@@ -409,6 +408,7 @@ export async function createApp(
   const jobHandlers = createBackgroundJobHandlers({
     executor,
     prisma,
+    sessionLog,
     sandbox,
     home,
     jobs,
@@ -434,6 +434,7 @@ export async function createApp(
         sweepSkillLines: createSkillLineSweep({
           prisma,
           events,
+          sessionLog,
           lineOnlyMessages: env.skillLearning !== "off",
         }),
       })
@@ -444,6 +445,7 @@ export async function createApp(
     prisma,
     skillLock,
     events,
+    sessionLog,
     auth,
     jobs,
     sandbox,

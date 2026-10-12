@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import type * as AutoReviewModule from "./auto-review.js";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
 import { createRunExecutor } from "./executor.js";
+import { recordingSessionLog } from "./session-log/recording.test-support.js";
 
 vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ComputerLifecycleModule>()),
@@ -104,7 +105,11 @@ function fixture(runId = "run-1") {
       },
     ),
   };
+  const log = recordingSessionLog();
   const prisma = {
+    sessionEntry: log.sessionEntry,
+    $queryRaw: log.queryRaw,
+    $transaction: async (work: (tx: unknown) => unknown) => work(prisma),
     run: {
       findUnique: vi.fn(async () => run),
       findUniqueOrThrow: vi.fn(async () => run),
@@ -130,7 +135,6 @@ function fixture(runId = "run-1") {
       updateMany: vi.fn(async () => ({ count: 1 })),
     },
     thread: { findUniqueOrThrow: vi.fn(async () => ({ id: run.threadId, groupId: null })) },
-    message: { findMany: vi.fn(async () => []) },
     task: {
       findUniqueOrThrow: vi.fn(async () => ({ id: run.taskId, prompt: "Update shared state" })),
     },
@@ -193,6 +197,7 @@ function fixture(runId = "run-1") {
     yield { type: "done" as const, text: "Done" };
   });
   const executor = createRunExecutor({
+    sessionLog: log.sessionLog,
     prisma,
     runtime: { describe: () => ({ capabilities: { scripted: false } }), run: runtimeRun },
     connector: {

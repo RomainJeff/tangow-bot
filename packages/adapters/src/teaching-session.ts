@@ -16,7 +16,7 @@ import {
 } from "@rakazo/core";
 import {
   appendEventInTransaction,
-  createThreadMessageInTransaction,
+  createBotMessageInTransaction,
   IsolationError,
   type Prisma,
   type PrismaClient,
@@ -339,29 +339,6 @@ function skillDraftBlocks(skill: TaughtSkillRow): MessageBlock[] {
   ];
 }
 
-async function findSkillDraftMessage(
-  prisma: { message: { findMany: PrismaClient["message"]["findMany"] } },
-  threadId: string,
-  skillId: string,
-): Promise<{ id: string; blocks: MessageBlock[] } | null> {
-  const messages = await prisma.message.findMany({
-    where: { threadId, role: "bot" },
-    orderBy: { seq: "desc" },
-    take: 100,
-    select: { id: true, blocks: true },
-  });
-  for (const message of messages) {
-    const blocks = message.blocks as MessageBlock[];
-    if (
-      Array.isArray(blocks) &&
-      blocks.some((block) => block.kind === "skill_draft" && block.skillId === skillId)
-    ) {
-      return { id: message.id, blocks };
-    }
-  }
-  return null;
-}
-
 async function hasSkillDraftCreatedEvent(
   prisma: { event: { findMany: PrismaClient["event"]["findMany"] } },
   threadId: string,
@@ -387,30 +364,28 @@ async function emitSkillDraftMessages(
   deps: TeachingSessionDeps,
   actor: Actor,
   skill: TaughtSkillRow,
-  bot: { id: string; thread: { id: string } | null },
+  bot: { id: string; thread: { id: string; sessionId: string } | null },
 ): Promise<void> {
   if (skill.status !== "draft" || !bot.thread) return;
-  const threadId = bot.thread.id;
+  const { id: threadId, sessionId } = bot.thread;
   const published = await deps.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     await tx.$executeRaw`SELECT id FROM taught_skills WHERE id = ${skill.id} FOR UPDATE`;
-    let created = await findSkillDraftMessage(tx, threadId, skill.id);
-    if (!created) {
-      const blocks = skillDraftBlocks(skill);
-      const message = await createThreadMessageInTransaction(tx, {
+    const card = await tx.sessionEntry.findFirst({
+      where: {
+        sessionId,
+        type: "bot.text",
+        payload: { path: ["blocks"], array_contains: [{ kind: "skill_draft", skillId: skill.id }] },
+      },
+      select: { id: true },
+    });
+    if (!card) {
+      await createBotMessageInTransaction(tx, {
         threadId,
-        role: "bot",
-        blocks,
+        botId: bot.id,
+        blocks: skillDraftBlocks(skill),
       });
-      created = { id: message.id, blocks };
     }
     if (await hasSkillDraftCreatedEvent(tx, threadId, skill.id)) return null;
-    await appendEventInTransaction(tx, {
-      spaceId: actor.spaceId,
-      threadId,
-      botId: bot.id,
-      type: "thread.message.created",
-      payload: { messageId: created.id, role: "bot", blocks: created.blocks },
-    });
     const draftEvent = await appendEventInTransaction(tx, {
       spaceId: actor.spaceId,
       threadId,

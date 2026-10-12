@@ -7,12 +7,11 @@ export function isHiddenActivityBlock(block: MessageBlock, showSteps: boolean): 
   return isToolActivityBlock(block) && !(showSteps && block.kind === "steps");
 }
 
-/**
- * Kinds the thread has no renderer for: a legacy `reasoning` line and the
- * `connect` block of a flow that moved into settings. Listing them keeps a
- * message made only of those from painting an empty row.
- */
-const UNRENDERED_BLOCK_KINDS = new Set<MessageBlock["kind"]>(["connect", "reasoning"]);
+const UNRENDERED_BLOCK_KINDS = new Set<MessageBlock["kind"]>([
+  "connect",
+  "reasoning",
+  "routine_run",
+]);
 
 /**
  * Is there anything left to draw once hidden and undrawable blocks are out? A `link_preview`

@@ -37,12 +37,9 @@ const PREVIEW_HOST_EXCLUDED_KINDS: ReadonlySet<string> = new Set([
   "ask",
   "computer",
   "handoff",
-  "bot_message_sent",
-  "bot_message_received",
   "channel_message",
   "meta",
   "routine_run",
-  "subagent",
   "child_bot",
   "mcp_approval",
 ]);

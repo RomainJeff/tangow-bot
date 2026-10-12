@@ -1,182 +1,7 @@
-import type { MessageBlock, ThreadMessage } from "@rakazo/contracts";
+import type { MessageBlock } from "@rakazo/contracts";
 
-export function projectMessages(
-  events: Array<{
-    seq: number;
-    type: string;
-    payload: unknown;
-    runId?: string | null;
-    createdAt: Date | string;
-    id: string;
-    threadId: string;
-    botId?: string | null;
-  }>,
-): ThreadMessage[] {
-  const messages: ThreadMessage[] = [];
-  type LiveProjection = {
-    blocks: MessageBlock[];
-    meta: {
-      id: string;
-      threadId: string;
-      seq: number;
-      botId?: string;
-      runId?: string;
-      createdAt: string;
-    };
-  };
-  const liveById = new Map<string, LiveProjection>();
-  const liveSubagents = new Map<string, ThreadMessage>();
-  const durableSubagents = new Set<string>();
-  const liveProjection = (event: (typeof events)[number], createdAt: string): LiveProjection => {
-    const id = progressMessageId(event);
-    const existing = liveById.get(id);
-    if (existing) return existing;
-    const projection: LiveProjection = {
-      blocks: [],
-      meta: {
-        id,
-        threadId: event.threadId,
-        seq: event.seq,
-        botId: event.botId ?? undefined,
-        runId: event.runId ?? undefined,
-        createdAt,
-      },
-    };
-    liveById.set(id, projection);
-    return projection;
-  };
-  const clearLive = (event: (typeof events)[number]) => {
-    if (event.runId) liveById.delete(progressMessageId(event));
-    else liveById.clear();
-  };
-  for (const event of events) {
-    const payload = asRecord(event.payload);
-    const createdAt =
-      typeof event.createdAt === "string" ? event.createdAt : event.createdAt.toISOString();
-    if (event.type === "thread.message.created") {
-      clearLive(event);
-      const role = (payload.role as ThreadMessage["role"]) ?? "bot";
-      const blocks = (payload.blocks as MessageBlock[]) ?? [];
-      for (const block of blocks) {
-        if (block.kind === "subagent") {
-          durableSubagents.add(block.agentId);
-          liveSubagents.delete(block.agentId);
-        }
-      }
-      messages.push({
-        id: (payload.messageId as string) ?? event.id,
-        threadId: event.threadId,
-        seq: event.seq,
-        role,
-        blocks,
-        botId: event.botId ?? undefined,
-        runId: event.runId ?? undefined,
-        createdAt,
-      });
-      continue;
-    }
-    if (event.type === "thread.progress") {
-      const live = liveProjection(event, createdAt);
-      live.blocks = reduceLiveMessageBlocks(live.blocks, { type: "progress", payload });
-      live.meta = {
-        ...live.meta,
-        seq: event.seq,
-        botId: event.botId ?? undefined,
-        createdAt,
-      };
-      continue;
-    }
-    if (event.type === "agent.tool.called") {
-      const live = liveProjection(event, createdAt);
-      live.blocks = reduceLiveMessageBlocks(live.blocks, {
-        type: "tool",
-        name: String(payload.name ?? ""),
-      });
-      live.meta = {
-        ...live.meta,
-        seq: event.seq,
-        botId: event.botId ?? undefined,
-        createdAt,
-      };
-      continue;
-    }
-    if (event.type === "thread.cleared") {
-      messages.length = 0;
-      liveById.clear();
-      liveSubagents.clear();
-      durableSubagents.clear();
-      continue;
-    }
-    if (event.type === "thread.rewound") {
-      // Rewind deletes the events it truncates, so nothing durable is left to filter here; only
-      // the live projections of the runs it cancelled have to go. Message rows are filtered by
-      // applyThreadRewind, which works on message seq rather than the event seq used above.
-      liveById.clear();
-      liveSubagents.clear();
-      durableSubagents.clear();
-      continue;
-    }
-    if (event.type === "thread.subagent") {
-      const block = subagentBlockFromPayload(payload);
-      if (durableSubagents.has(block.agentId)) continue;
-      liveSubagents.set(block.agentId, {
-        id: `subagent:${block.agentId}`,
-        threadId: event.threadId,
-        seq: event.seq,
-        role: "bot",
-        blocks: [block],
-        botId: event.botId ?? undefined,
-        runId: event.runId ?? undefined,
-        createdAt,
-      });
-      continue;
-    }
-    if (
-      event.type === "run.completed" ||
-      event.type === "run.failed" ||
-      event.type === "run.cancelled"
-    ) {
-      clearLive(event);
-    }
-  }
-  for (const live of liveSubagents.values()) messages.push(live);
-  for (const live of liveById.values()) {
-    if (live.blocks.length > 0) {
-      messages.push({
-        id: live.meta.id,
-        threadId: live.meta.threadId,
-        seq: live.meta.seq,
-        role: "bot",
-        blocks: live.blocks,
-        botId: live.meta.botId,
-        runId: live.meta.runId,
-        createdAt: live.meta.createdAt,
-      });
-    }
-  }
-  return messages;
-}
-
-/**
- * Applies a thread.rewound event to a message list: the target user message and everything after
- * it are gone, and so are the live projections of the runs the rewind cancelled.
- */
-export function applyThreadRewind<T extends { id: string; seq?: number }>(
-  messages: T[],
-  event: { payload?: Record<string, unknown> },
-): T[] {
-  const fromSeq = event.payload?.fromSeq;
-  if (typeof fromSeq !== "number") return messages;
-  return messages.filter(
-    (message) =>
-      (message.seq ?? 0) < fromSeq &&
-      !message.id.startsWith("progress:") &&
-      !message.id.startsWith("subagent:"),
-  );
-}
-
-export function progressMessageId(event: { runId?: string | null; id?: string }): string {
-  return `progress:${event.runId ?? event.id ?? "live"}`;
+export function progressMessageId(runId: string): string {
+  return `progress:${runId}`;
 }
 
 export function isRunTerminalEvent(event: { type: string }): boolean {
@@ -203,47 +28,23 @@ export function runFailureError(event: {
     : message;
 }
 
-export type LiveMessageUpdate =
-  | { type: "progress"; payload: Record<string, unknown> | undefined }
-  | { type: "tool"; name: string };
-
 export function reduceLiveMessageBlocks(
   blocks: readonly MessageBlock[],
-  update: LiveMessageUpdate,
+  payload: Record<string, unknown> | undefined,
 ): MessageBlock[] {
   const tail = blocks.at(-1);
   const segments = tail?.kind === "progress" ? blocks.slice(0, -1) : blocks;
   const priorText = liveMessageText(blocks);
   const flushedLength =
     tail?.kind === "progress" ? priorText.length - tail.text.length : priorText.length;
-  const tailText =
-    update.type === "progress"
-      ? progressMessageText(update.payload, priorText).slice(flushedLength)
-      : tail?.kind === "progress"
-        ? tail.text
-        : "";
-  const pendingToolNames = [
-    ...(tail?.kind === "progress" ? (tail.pendingToolNames ?? []) : []),
-    ...(update.type === "tool" ? [update.name] : []),
-  ];
-  const activity =
-    update.type === "progress"
-      ? update.payload?.activity === true
-      : tail?.kind === "progress" && tail.activity === true;
-
-  if (pendingToolNames.length > 0 && endsSentence(tailText)) {
-    let next = activity ? [...segments] : appendTextSegment(segments, tailText);
-    for (const name of pendingToolNames) next = appendToolCallSegment(next, name);
-    return next;
-  }
+  const tailText = progressMessageText(payload, priorText).slice(flushedLength);
   if (!tailText) return [...segments];
   return [
     ...segments,
     {
       kind: "progress",
       text: tailText,
-      ...(activity ? { activity: true as const } : {}),
-      ...(pendingToolNames.length > 0 ? { pendingToolNames } : {}),
+      ...(payload?.activity === true ? { activity: true as const } : {}),
     },
   ];
 }
@@ -335,21 +136,6 @@ export function progressMessageText(
   return typeof payload?.delta === "string"
     ? previousText + payload.delta
     : String(payload?.text ?? "");
-}
-
-export function subagentBlockFromPayload(
-  payload: Record<string, unknown>,
-): Extract<MessageBlock, { kind: "subagent" }> {
-  const status = payload.status;
-  return {
-    kind: "subagent",
-    agentId: String(payload.agentId ?? ""),
-    name: String(payload.name ?? "subagent"),
-    task: String(payload.task ?? ""),
-    status: status === "completed" || status === "failed" ? status : "running",
-    progress: payload.progress ? String(payload.progress) : undefined,
-    result: payload.result ? String(payload.result) : undefined,
-  };
 }
 
 export function redactSecrets(value: string, secrets: string[]): string {
@@ -446,10 +232,4 @@ export function sanitizeJsonValue<T>(value: T): T {
     return out as T;
   }
   return value;
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
 }

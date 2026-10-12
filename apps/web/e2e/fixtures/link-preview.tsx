@@ -1,8 +1,9 @@
 import { setupI18n } from "@lingui/core";
 import { I18nProvider } from "@lingui/react";
-import type { MessageBlock, ThreadMessage } from "@rakazo/contracts";
+import type { MessageBlock } from "@rakazo/contracts";
 import { ComposerLinkPreview, ComposerShell } from "@rakazo/ui-web";
 import { createRoot } from "react-dom/client";
+import type { MessageItem } from "../../src/lib/thread-items";
 import { placeHoverPill } from "../../src/pages/shell/hover-pill-placement";
 import {
   MessageHoverActions,
@@ -14,19 +15,17 @@ import "../../src/styles.css";
 const i18n = setupI18n({ locale: "en", messages: { en: {} } });
 const IMAGE = { artifactId: "art-1", width: 1200, height: 628 };
 
-function message(id: string, role: "user" | "bot", blocks: unknown[]): ThreadMessage {
+function message(id: string, role: "user" | "bot", blocks: unknown[]): MessageItem {
   return {
+    kind: "message",
     id,
-    threadId: "thread-1",
-    seq: 1,
-    role,
+    ts: "2026-10-05T10:00:00.000Z",
     blocks: blocks as MessageBlock[],
-    createdAt: "2026-10-05T10:00:00.000Z",
-    ...(role === "bot" ? { botId: "bot-1" } : {}),
-  } as ThreadMessage;
+    ...(role === "bot" ? { role, botId: "bot-1" } : { role, source: "app" }),
+  } as MessageItem;
 }
 
-const MESSAGES: ThreadMessage[] = [
+const MESSAGES: MessageItem[] = [
   message("large", "bot", [
     { kind: "text", text: "Here is the study: https://example.com/study" },
     {
@@ -90,7 +89,7 @@ const MESSAGES: ThreadMessage[] = [
   ]),
 ];
 
-function Row({ message: row }: { message: ThreadMessage }) {
+function Row({ message: row }: { message: MessageItem }) {
   return (
     <div
       data-message-id={row.id}
@@ -105,6 +104,7 @@ function Row({ message: row }: { message: ThreadMessage }) {
           {row.role !== "user" ? (
             <MessageHoverActions
               message={row}
+              previewMessageId={row.id}
               onReply={() => undefined}
               onReact={async () => undefined}
               voiceReady={false}
@@ -115,14 +115,11 @@ function Row({ message: row }: { message: ThreadMessage }) {
           <MessageView
             artifactTarget={{ botId: "bot-1" }}
             chrome="row"
-            canAnswer={false}
             message={row}
             inGroup={false}
             showAuthor={false}
             showAvatar={false}
-            onAnswer={async () => undefined}
             onOpenBot={() => undefined}
-            onOpenPeerMessages={() => undefined}
             peerBot={() => undefined}
             onRefresh={async () => undefined}
             onBotChanged={async () => undefined}
@@ -130,7 +127,9 @@ function Row({ message: row }: { message: ThreadMessage }) {
           />
         </div>
       </div>
-      {row.role === "user" ? <UserMessageActions message={row} onEdit={() => undefined} /> : null}
+      {row.role === "user" ? (
+        <UserMessageActions message={row} previewMessageId={row.id} onEdit={() => undefined} />
+      ) : null}
     </div>
   );
 }

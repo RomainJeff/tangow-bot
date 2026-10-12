@@ -1,10 +1,6 @@
 import { createHash } from "node:crypto";
 import type { ArtifactStore, BackgroundJobPayloads } from "@rakazo/adapter-kit";
-import {
-  LinkPreviewBlock,
-  type LinkPreviewCard,
-  USER_MESSAGE_CLIENT_NONCE_PREFIX,
-} from "@rakazo/contracts";
+import { LinkPreviewBlock, type LinkPreviewCard } from "@rakazo/contracts";
 import {
   firstEligibleLink,
   hasSecretParam,
@@ -13,8 +9,10 @@ import {
 } from "@rakazo/core";
 import {
   appendLinkPreviewBlock,
+  blocksOf,
   deleteLinkPreviewArtifactRows,
   type PrismaClient,
+  runMessages,
   type ThreadEvents,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
@@ -108,23 +106,24 @@ async function previewHumanMessage(
   messageId: string,
   budget: JobBudget,
 ): Promise<void> {
-  const message = await deps.prisma.message.findUnique({
+  const message = await deps.prisma.sessionEntry.findUnique({
     where: { id: messageId },
     select: {
       id: true,
-      role: true,
-      blocks: true,
-      thread: {
-        select: { id: true, spaceId: true, userId: true, botId: true, groupId: true },
-      },
+      type: true,
+      payload: true,
+      session: { select: { thread: { select: threadScope } } },
       externalTranscriptFor: { select: { id: true } },
     },
   });
+  const thread = message?.session.thread;
   // A message an external channel brought in is not one the person sent from the app.
-  if (message?.role !== "user" || message.externalTranscriptFor) return;
-  const link = linkPreviewCandidate(message);
-  if (link) await attachPreview(deps, message.thread, message.id, link, budget);
+  if (message?.type !== "user.message" || message.externalTranscriptFor || !thread) return;
+  const link = linkPreviewCandidate({ role: "user", blocks: blocksOf(message) });
+  if (link) await attachPreview(deps, thread, message.id, link, budget);
 }
+
+const threadScope = { id: true, spaceId: true, userId: true, botId: true, groupId: true } as const;
 
 async function previewRunMessages(
   deps: LinkPreviewJobDeps,
@@ -133,29 +132,15 @@ async function previewRunMessages(
 ): Promise<void> {
   const run = await deps.prisma.run.findUnique({
     where: { id: runId },
-    select: {
-      status: true,
-      trigger: true,
-      thread: {
-        select: { id: true, spaceId: true, userId: true, botId: true, groupId: true },
-      },
-    },
+    select: { status: true, trigger: true, thread: { select: threadScope } },
   });
   // Only a run that ended well, and only one a person is reading (never bot to bot).
   if (run?.status !== "completed" || run.trigger === "bot_message") return;
-  const messages = await deps.prisma.message.findMany({
-    where: { runId, threadId: run.thread.id, role: "bot" },
-    orderBy: { seq: "asc" },
-    select: { id: true, role: true, blocks: true, clientNonce: true },
-  });
-  for (const message of messages) {
+  // The final reply and message_user posts are addressed to the person; narration never is.
+  for (const message of await runMessages(deps.prisma, runId)) {
     if (budget.signal.aborted) return;
-    // The final reply has no nonce; message_user posts carry theirs. Narration never does.
-    const addressed =
-      message.clientNonce === null ||
-      message.clientNonce.startsWith(USER_MESSAGE_CLIENT_NONCE_PREFIX);
-    if (!addressed) continue;
-    const link = linkPreviewCandidate(message);
+    if (message.midTurn && !message.toPerson) continue;
+    const link = linkPreviewCandidate({ role: "bot", blocks: message.blocks });
     if (link) await attachPreview(deps, run.thread, message.id, link, budget);
   }
 }

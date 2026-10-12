@@ -1,4 +1,5 @@
-import { type MessageBlock, type MessageReaction, MessageReactionSchema } from "@rakazo/contracts";
+import type { EntryId, MessageBlock, MessageReaction, ThreadItem } from "@rakazo/contracts";
+import { MessageReactionSchema } from "@rakazo/contracts";
 
 type ReactionMessage = {
   id: string;
@@ -17,22 +18,40 @@ export function messageReaction(
   return block?.kind === "text" ? (MessageReactionSchema.safeParse(block.text).data ?? null) : null;
 }
 
-export function projectMessageReactions<Message extends ReactionMessage>(
-  messages: readonly Message[],
-) {
-  const parents = new Map(messages.map((message) => [message.id, message]));
-  const reactions = new Map<string, Map<MessageReaction, number>>();
-  const visibleMessages = messages.filter((message) => {
-    const emoji = messageReaction(message);
-    const parentId = message.replyToMessageId;
-    const parent = parentId ? parents.get(parentId) : undefined;
-    // Keep an ordinary reply bubble when the parent is outside the loaded page, so it can be opened.
-    if (!emoji || !parentId || !parent || messageReaction(parent) || parentId === message.id)
-      return true;
-    const counts = reactions.get(parentId) ?? new Map<MessageReaction, number>();
-    counts.set(emoji, (counts.get(emoji) ?? 0) + 1);
-    reactions.set(parentId, counts);
+export type ItemReactions = readonly (readonly [MessageReaction, number])[];
+
+export function foldItemReactions(
+  items: readonly ThreadItem[],
+  rowOf: ReadonlyMap<string, EntryId>,
+): {
+  items: ThreadItem[];
+  reactions: Map<EntryId, ItemReactions>;
+  parentOf: Map<EntryId, EntryId>;
+} {
+  const byId = new Map(items.map((item) => [item.id, item]));
+  const counts = new Map<EntryId, Map<MessageReaction, number>>();
+  const parentOf = new Map<EntryId, EntryId>();
+  const kept = items.filter((item) => {
+    const emoji = itemReaction(item);
+    const target = item.kind === "message" && item.role === "user" ? item.replyTo : undefined;
+    const parentId = target && rowOf.get(target.entryId);
+    const parent = parentId === undefined ? undefined : byId.get(parentId);
+    if (!emoji || !parent || parent === item || itemReaction(parent)) return true;
+    const emojis = counts.get(parent.id) ?? new Map<MessageReaction, number>();
+    emojis.set(emoji, (emojis.get(emoji) ?? 0) + 1);
+    counts.set(parent.id, emojis);
+    parentOf.set(item.id, parent.id);
     return false;
   });
-  return { visibleMessages, reactions };
+  const reactions = new Map([...counts].map(([id, emojis]) => [id, [...emojis]] as const));
+  return { items: kept, reactions, parentOf };
+}
+
+function itemReaction(item: ThreadItem): MessageReaction | null {
+  if (item.kind !== "message" || item.role !== "user") return null;
+  return messageReaction({
+    role: "user",
+    blocks: item.blocks,
+    replyToMessageId: item.replyTo?.entryId,
+  });
 }

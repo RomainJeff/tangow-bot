@@ -1,6 +1,6 @@
 import type { MessageBlock } from "@rakazo/contracts";
-import type { SkillSourceBlock } from "@rakazo/core";
-import { isToolActivityBlock } from "@rakazo/core";
+import type { NarrationSegment, SkillSourceBlock } from "@rakazo/core";
+import { isToolActivityBlock, narrationSegments } from "@rakazo/core";
 
 /**
  * The blocks the thread is about to draw: tool activity is hidden, except the
@@ -17,18 +17,15 @@ export function visibleMessageBlocks(
   );
 }
 
-export type MessagePresentationSegment = {
-  kind: "content";
-  blocks: MessageBlock[];
-};
-
 export function messagePresentationSegments(
   blocks: readonly MessageBlock[],
-): MessagePresentationSegment[] {
-  const content = blocks.filter(
-    (block) => block.kind !== "app_connect" && !isToolActivityBlock(block),
+  showSteps = false,
+): NarrationSegment<MessageBlock>[] {
+  return narrationSegments(
+    blocks.filter((block) => block.kind === "steps" || !isToolActivityBlock(block)),
+    (block) => (block.kind === "app_connect" ? undefined : block),
+    showSteps,
   );
-  return content.length > 0 ? [{ kind: "content", blocks: content }] : [];
 }
 
 export function hasVisibleMessagePresentation(
@@ -36,14 +33,6 @@ export function hasVisibleMessagePresentation(
   showSteps = false,
 ): boolean {
   return visibleMessageBlocks(blocks, showSteps).length > 0;
-}
-
-export function stepsBlocks(
-  blocks: readonly MessageBlock[],
-): Extract<MessageBlock, { kind: "steps" }>[] {
-  return blocks.filter(
-    (block): block is Extract<MessageBlock, { kind: "steps" }> => block.kind === "steps",
-  );
 }
 
 /**

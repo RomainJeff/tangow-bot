@@ -6,7 +6,6 @@ import {
   isAttachmentImageMimeType,
   type MessageBlock,
 } from "@rakazo/contracts";
-import { renderBotMessageBlock } from "./bot-messages.js";
 import { humanizeToolName } from "./events.js";
 
 export class AttachmentValidationError extends Error {
@@ -157,13 +156,6 @@ export function blocksToAgentHistoryText(
       if (block.kind === "file") {
         return `[file: ${block.name} (${block.mimeType}, ${block.size} bytes)]`;
       }
-      // Keep attribution on peer messages: without it a later turn cannot tell
-      // which lines came from another bot rather than the user. Same block the
-      // sender's wake prompt carries, so the peer reads identically either way.
-      if (block.kind === "bot_message_received") {
-        return renderBotMessageBlock(block.fromBotName, block.text);
-      }
-      if (block.kind === "bot_message_sent") return `[to ${block.toBotName}] ${block.text}`;
       if (block.kind === "handoff") {
         const from = botNames?.get(block.fromBotId) ?? block.fromBotId;
         const to = botNames?.get(block.toBotId) ?? block.toBotId;
@@ -234,23 +226,4 @@ export function attachmentsForBot<T extends { botId: string }>(
 ): T[] {
   if (!botId) return [];
   return attachments.filter((attachment) => attachment.botId === botId);
-}
-
-export function userTurnBlocksForRun(
-  trigger: string,
-  runId: string,
-  messages: Array<{
-    id?: string;
-    role: string;
-    runId?: string | null;
-    blocks: MessageBlock[];
-  }>,
-  sourceMessageId?: string | null,
-): MessageBlock[] | undefined {
-  if (trigger !== "user") return undefined;
-  return messages.find(
-    (message) =>
-      message.role === "user" &&
-      (sourceMessageId ? message.id === sourceMessageId : message.runId === runId),
-  )?.blocks;
 }

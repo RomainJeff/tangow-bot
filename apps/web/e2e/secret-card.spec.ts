@@ -1,5 +1,6 @@
 import { activeBotId, captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
 import { expect, test } from "./test";
+import { answerOf, threadEntries } from "./thread-log";
 
 test("renders masked secret card and saves without putting the value in chat", async ({
   page,
@@ -82,32 +83,16 @@ test("renders masked secret card and saves without putting the value in chat", a
   await expect
     .poll(
       async () => {
-        const history = await rpc<{
-          messages: Array<{
-            blocks: Array<{
-              kind: string;
-              status?: string;
-              answer?: string;
-              input?: string;
-              text?: string;
-              detail?: string;
-            }>;
-          }>;
-        }>(page, "threads/messages", { botId });
-        const answered = history.messages
-          .flatMap((message) => message.blocks)
-          .find(
-            (block) =>
-              block.kind === "ask" && block.input === "secret" && block.status === "answered",
-          );
-        if (!answered) return null;
-        const serialized = JSON.stringify(history);
-        if (serialized.includes(secretValue)) return "leaked";
-        return answered.answer ?? "";
+        const entries = await threadEntries(page, { botId });
+        if (JSON.stringify(entries).includes(secretValue)) return "leaked";
+        const ask = entries.find(
+          (entry) => entry.type === "assistant.ask" && entry.payload.block.input === "secret",
+        );
+        return ask ? (answerOf(entries, ask.id)?.type ?? null) : null;
       },
       { timeout: 30_000 },
     )
-    .toBe("");
+    .toBe("card.answered");
 
   // Check again after the worker resumes, then reload to verify the durable Saved state.
   await expect

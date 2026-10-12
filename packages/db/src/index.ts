@@ -1,4 +1,6 @@
+export * from "./backfill-session-log.js";
 export * from "./bootstrap-user.js";
+export * from "./bot-message-context.js";
 export * from "./bot-names.js";
 export * from "./cancel-runs.js";
 export * from "./client.js";
@@ -15,6 +17,7 @@ export * from "./model-credentials.js";
 export * from "./peer-runs.js";
 export * from "./repos.js";
 export * from "./scope.js";
+export * from "./sessions.js";
 export * from "./spaces.js";
 export * from "./transaction-retry.js";
 export * from "./voice-credentials.js";

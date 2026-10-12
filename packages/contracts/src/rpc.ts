@@ -31,7 +31,6 @@ import {
   DeploymentSettingsSchema,
   ExportManifestSchema,
   ExternalConversationPolicySchema,
-  GroupDetailSchema,
   GroupSchema,
   ImportAgentSkillInput,
   IntegrationCatalogResultSchema,
@@ -100,6 +99,7 @@ import {
   RunsListOutputSchema,
 } from "./runs.js";
 import { SearchQueryOutputSchema } from "./search.js";
+import { EntryId, SessionEntrySchema, SessionId } from "./session-log.js";
 
 const botId = z.object({ botId: Id });
 const groupId = z.object({ groupId: Id });
@@ -127,6 +127,13 @@ const structuredMentionTarget = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("routine"), id: Id }),
   z.object({ kind: z.literal("connector"), id: Id }),
 ]);
+
+export const SessionEntriesSchema = z.object({
+  entries: z.array(SessionEntrySchema),
+  /** The read stopped at its cap, so the oldest entries are missing. */
+  truncated: z.literal(true).optional(),
+});
+export type SessionEntries = z.infer<typeof SessionEntriesSchema>;
 
 const threadSendInput = threadTarget
   .safeExtend({
@@ -285,7 +292,7 @@ export const appContract = {
     create: oc.input(CreateGroupInput).output(GroupSchema),
     list: oc.output(z.array(GroupSchema)),
     listArchived: oc.output(z.array(GroupSchema)),
-    get: oc.input(groupId).output(GroupDetailSchema),
+    get: oc.input(groupId).output(GroupSchema),
     duplicate: oc.input(groupId).output(GroupSchema),
     update: oc.input(UpdateGroupInput).output(GroupSchema),
     archive: oc.input(groupId).output(z.object({ ok: z.literal(true) })),
@@ -312,15 +319,9 @@ export const appContract = {
     messages: oc
       .input(
         threadTarget.safeExtend({
-          before: z.number().int().nonnegative().optional(),
+          before: EntryId.optional(),
           includePeerRuns: z.boolean().optional(),
-          includePeerReceipts: z.boolean().optional(),
-          around: z
-            .object({
-              messageId: Id.optional(),
-              seq: z.number().int().nonnegative().optional(),
-            })
-            .optional(),
+          around: z.object({ entryId: EntryId }).optional(),
         }),
       )
       .output(ThreadMessagePageSchema),
@@ -884,6 +885,11 @@ export const appContract = {
   runs: {
     list: oc.input(z.object({ filter: z.enum(["active", "recent"]) })).output(RunsListOutputSchema),
     recap: oc.input(z.object({ runId: Id })).output(RunRecapSchema),
+    /** A run's entries from every session it wrote to, joined with the person's answers. */
+    entries: oc.input(z.object({ runId: Id })).output(SessionEntriesSchema),
+  },
+  sessions: {
+    entries: oc.input(z.object({ sessionId: SessionId })).output(SessionEntriesSchema),
   },
   voice: {
     catalog: oc.output(z.array(VoiceCatalogEntrySchema)),

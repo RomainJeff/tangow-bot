@@ -65,10 +65,7 @@ services:
 
   api:
     image: ${TOPOLOGY_APP_IMAGE:-rakazo/app:topology}
-    command:
-      - bash
-      - -lc
-      - pnpm --filter @rakazo/db exec prisma migrate deploy && pnpm --filter @rakazo/api start
+    command: ["pnpm", "--filter", "@rakazo/api", "start"]
     environment: &app-environment
       NODE_ENV: production
       DATABASE_URL: postgres://rakazo:topology-only-password@postgres:5432/rakazo
@@ -102,6 +99,8 @@ services:
         condition: service_completed_successfully
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       supervisor:
         condition: service_healthy
     healthcheck:
@@ -135,6 +134,19 @@ services:
       timeout: 5s
       retries: 30
 
+  # Applies the migrations before the API and the worker start, writing the session log from the
+  # legacy messages first when an upgrade needs it.
+  migrate:
+    image: ${TOPOLOGY_APP_IMAGE:-rakazo/app:topology}
+    command: ["pnpm", "exec", "tsx", "scripts/backfill-session-log.ts"]
+    restart: "no"
+    environment: *app-environment
+    depends_on:
+      app-image:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+
   worker:
     image: ${TOPOLOGY_APP_IMAGE:-rakazo/app:topology}
     command: ["pnpm", "--filter", "@rakazo/worker", "start"]
@@ -142,6 +154,8 @@ services:
     volumes:
       - appdata:/data
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       api:
         condition: service_healthy
 

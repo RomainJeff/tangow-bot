@@ -32,6 +32,7 @@ import {
   teachingControlLeaseExpiresAt,
 } from "@rakazo/adapters";
 import type { Actor, MessageBlock, TaughtSkill } from "@rakazo/contracts";
+import { EntryId } from "@rakazo/contracts";
 import {
   ACTIVE_RUN_STATUSES,
   buildPlaybookFromRecording,
@@ -41,12 +42,15 @@ import {
   teachRecordingTtlMs,
 } from "@rakazo/core";
 import {
-  appendEventInTransaction,
+  appendCardStateInTransaction,
+  blocksOf,
   type createRepos,
   expireComputerExecutionLeases,
   IsolationError,
+  logCancelledRunsInTransaction,
   type PrismaClient,
   type ThreadEvents,
+  threadEventSeq,
 } from "@rakazo/db";
 
 type TaughtSkillRow = {
@@ -113,16 +117,24 @@ export async function assertTeachingSendAllowed(
 
 async function cancelActiveRuns(
   deps: TaughtSkillsDeps,
-  _actor: Actor,
+  actor: Actor,
   botId: string,
 ): Promise<void> {
-  const activeRuns = await deps.prisma.run.findMany({
-    where: { botId, status: { in: [...ACTIVE_RUN_STATUSES] } },
-    select: { id: true },
-  });
-  await deps.prisma.run.updateMany({
-    where: { botId, status: { in: [...ACTIVE_RUN_STATUSES] } },
-    data: { status: "cancelled", completedAt: new Date() },
+  const activeRuns = await deps.prisma.$transaction(async (tx) => {
+    const runs = await tx.run.findMany({
+      where: { botId, status: { in: [...ACTIVE_RUN_STATUSES] } },
+      select: { id: true },
+    });
+    await logCancelledRunsInTransaction(
+      tx,
+      runs.map((run) => run.id),
+      actor.userId,
+    );
+    await tx.run.updateMany({
+      where: { id: { in: runs.map((run) => run.id) }, status: { in: [...ACTIVE_RUN_STATUSES] } },
+      data: { status: "cancelled", completedAt: new Date() },
+    });
+    return runs;
   });
   await expireComputerExecutionLeases(deps.prisma, { botId });
   await deps.prisma.computer.updateMany({
@@ -236,7 +248,6 @@ async function grantTakeover(
 
 async function updateSkillDraftMessage(
   deps: TaughtSkillsDeps,
-  actor: Actor,
   skill: TaughtSkillRow,
   input: {
     name?: string;
@@ -250,59 +261,49 @@ async function updateSkillDraftMessage(
   });
   if (!bot?.thread) return;
 
-  const messages = await deps.prisma.message.findMany({
-    where: { threadId: bot.thread.id, role: "bot" },
-    orderBy: { seq: "desc" },
-    take: 100,
-  });
-
-  for (const message of messages) {
-    const parsed = message.blocks as MessageBlock[];
-    if (!Array.isArray(parsed)) continue;
-    const isDraft = (
-      block: MessageBlock,
-    ): block is Extract<MessageBlock, { kind: "skill_draft" }> =>
-      block.kind === "skill_draft" && block.skillId === skill.id;
-    if (!parsed.some(isDraft)) continue;
-    const playbook = input.playbook ?? parsePlaybook(skill.playbook);
-    // The thread lock, then the blocks as stored now: a link preview card or its removal
-    // marker written since the scan above is kept, not overwritten.
-    const written = await deps.prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT id FROM threads WHERE id = ${bot.thread!.id} FOR UPDATE`;
-      const current = await tx.message.findFirst({
-        where: { id: message.id, threadId: bot.thread!.id },
-        select: { blocks: true },
-      });
-      if (!current || !Array.isArray(current.blocks)) return null;
-      const nextBlocks = (current.blocks as MessageBlock[]).map((block) =>
-        isDraft(block)
-          ? {
-              kind: "skill_draft" as const,
-              skillId: skill.id,
-              name: input.name ?? block.name,
-              goal: skill.goal,
-              playbook,
-              status: input.status ?? block.status,
-            }
-          : block,
-      );
-      await tx.message.update({
-        where: { id: message.id },
-        data: { blocks: nextBlocks as never },
-      });
-      const event = await appendEventInTransaction(tx, {
-        spaceId: actor.spaceId,
-        threadId: bot.thread!.id,
-        botId: bot.id,
-        type: "thread.message.updated",
-        payload: { messageId: message.id, role: "bot", blocks: nextBlocks },
-      });
-      return event.seq;
+  const threadId = bot.thread.id;
+  const sessionId = bot.thread.sessionId;
+  const playbook = input.playbook ?? parsePlaybook(skill.playbook);
+  const written = await deps.prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM threads WHERE id = ${threadId} FOR UPDATE`;
+    const card = await tx.sessionEntry.findFirst({
+      where: {
+        sessionId,
+        type: "bot.text",
+        payload: { path: ["blocks"], array_contains: [{ kind: "skill_draft", skillId: skill.id }] },
+      },
+      orderBy: { seq: "desc" },
+      select: { id: true, payload: true },
     });
-    if (written !== null) {
-      await deps.events.notify(bot.thread.id, written).catch(() => undefined);
-    }
-    return;
+    if (!card) return null;
+    const revised = await tx.sessionEntry.findFirst({
+      where: { sessionId, type: "skill.draft", payload: { path: ["target"], equals: card.id } },
+      orderBy: { seq: "desc" },
+      select: { payload: true },
+    });
+    const before =
+      (revised?.payload as { name: string; status: "draft" | "saved" } | undefined) ??
+      blocksOf(card).find(
+        (block): block is Extract<MessageBlock, { kind: "skill_draft" }> =>
+          block.kind === "skill_draft" && block.skillId === skill.id,
+      );
+    if (!before) return null;
+    await appendCardStateInTransaction(tx, {
+      type: "skill.draft",
+      botId: bot.id,
+      payload: {
+        target: EntryId.parse(card.id),
+        skillId: skill.id,
+        name: input.name ?? before.name,
+        goal: skill.goal,
+        playbook,
+        status: input.status ?? before.status,
+      },
+    });
+    return threadEventSeq(tx, threadId);
+  });
+  if (written !== null) {
+    await deps.events.notify(threadId, written).catch(() => undefined);
   }
 }
 
@@ -481,7 +482,7 @@ export function createTaughtSkillsService(deps: TaughtSkillsDeps) {
           status: skill.status === "saved" ? "saved" : "draft",
         },
       });
-      await updateSkillDraftMessage(deps, actor, row, {
+      await updateSkillDraftMessage(deps, row, {
         name: row.name,
         playbook: parsePlaybook(row.playbook),
         status: row.status === "saved" ? "saved" : "draft",
@@ -505,7 +506,7 @@ export function createTaughtSkillsService(deps: TaughtSkillsDeps) {
         where: { id: row.botId },
         include: { thread: true },
       });
-      await updateSkillDraftMessage(deps, actor, row, {
+      await updateSkillDraftMessage(deps, row, {
         name: row.name,
         playbook: parsePlaybook(row.playbook),
         status: "saved",

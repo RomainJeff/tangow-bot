@@ -1,7 +1,6 @@
 import { activeBotId, captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
-import { expect, type Page, type Route, test } from "./test";
-
-type Message = Record<string, unknown>;
+import { expect, type Page, test } from "./test";
+import { at, type EntryDraft, runFinished, runStarted, showThread } from "./thread-log";
 
 /**
  * A user message followed by three consecutive prose messages from the same
@@ -13,81 +12,54 @@ type Message = Record<string, unknown>;
  * grouping *spacing* (3px within a group, 14px between groups) still applies
  * in a mono thread, but that has no header to assert on.
  */
-function groupedThread(botId: string): Message[] {
-  const at = (minute: number) => `2026-09-17T09:${String(minute).padStart(2, "0")}:00.000Z`;
+function groupedThread(botId: string): EntryDraft[] {
+  const words = (id: string, minute: number, text: string): EntryDraft => ({
+    id,
+    ts: at(minute),
+    type: "bot.text",
+    botId,
+    payload: { blocks: [{ kind: "text", text }] },
+  });
   return [
     {
       id: "mg-user",
-      threadId: "mg-thread",
-      seq: 1,
-      role: "user",
-      createdAt: at(23),
-      blocks: [{ kind: "text", text: "Where does the RAS note come from?" }],
+      ts: at(23),
+      type: "user.message",
+      payload: {
+        blocks: [{ kind: "text", text: "Where does the RAS note come from?" }],
+        source: "app",
+      },
     },
-    {
-      id: "g1",
-      threadId: "mg-thread",
-      seq: 2,
-      role: "bot",
-      botId,
-      createdAt: at(24),
-      blocks: [{ kind: "text", text: "Looking at where that RAS note comes from." }],
-    },
-    {
-      id: "g2",
-      threadId: "mg-thread",
-      seq: 3,
-      role: "bot",
-      botId,
-      createdAt: at(25),
-      blocks: [{ kind: "text", text: "It is the evening routine: personal plus family over 48h." }],
-    },
-    {
-      id: "g3",
-      threadId: "mg-thread",
-      seq: 4,
-      role: "bot",
-      botId,
-      createdAt: at(26),
-      blocks: [{ kind: "text", text: "It comes from the daily-conflict-watch routine." }],
-    },
+    words("g1", 24, "Looking at where that RAS note comes from."),
+    words("g2", 25, "It is the evening routine: personal plus family over 48h."),
+    words("g3", 26, "It comes from the daily-conflict-watch routine."),
   ];
 }
 
-/** Both hydrate RPCs carry the transcript; one handler avoids racing globs. */
-const HYDRATE_RPC = /\/rpc\/(bootstrap|threads\/get)(?:\?|$)/;
-
-async function showGroupedThread(page: Page, botId: string) {
-  const messages = groupedThread(botId);
-  await page.route(HYDRATE_RPC, async (route: Route) => {
-    try {
-      const response = await route.fetch();
-      const body = (await response.json()) as {
-        json?: {
-          messages?: Message[];
-          olderCursor?: number | null;
-          thread?: { messages?: Message[]; olderCursor?: number | null };
-        };
-      };
-      if (body.json?.messages) {
-        body.json.messages = messages;
-        body.json.olderCursor = null;
-      }
-      if (body.json?.thread?.messages) {
-        body.json.thread.messages = messages;
-        body.json.thread.olderCursor = null;
-      }
-      await route.fulfill({
-        status: response.status(),
-        headers: response.headers(),
-        body: JSON.stringify(body),
-      });
-    } catch (error) {
-      if (/already handled|Target closed|Request context disposed/i.test(String(error))) return;
-      throw error;
-    }
-  });
-  await page.reload({ waitUntil: "domcontentloaded" });
+/** Two replies, each from its own run of the same bot, the shape every run reply takes. */
+function runRepliesThread(botId: string): EntryDraft[] {
+  const run = (id: string, minute: number, text: string): EntryDraft[] => [
+    runStarted(botId, id, minute, "rr-user"),
+    {
+      id: `${id}-reply`,
+      ts: at(minute),
+      type: "assistant.text",
+      botId,
+      runId: id,
+      payload: { blocks: [{ kind: "text", text }] },
+    },
+    runFinished(botId, id, minute),
+  ];
+  return [
+    {
+      id: "rr-user",
+      ts: at(23),
+      type: "user.message",
+      payload: { blocks: [{ kind: "text", text: "Check both feeds." }], source: "app" },
+    },
+    ...run("rr-1", 24, "The first feed is up to date."),
+    ...run("rr-2", 27, "The second feed is late by a day."),
+  ];
 }
 
 async function setAppearance(page: Page, theme: "light" | "dark") {
@@ -121,7 +93,7 @@ test("a bot's stacked consecutive messages in a group thread share one header", 
   await page.goto(`/app/g/${group.id}`);
   await page.waitForURL(/\/app\/g\/[^/]+$/);
 
-  await showGroupedThread(page, chiefId);
+  await showThread(page, groupedThread(chiefId));
 
   const transcript = page.getByTestId("transcript");
   const g1 = transcript.locator('[data-message-id="g1"]');
@@ -167,4 +139,46 @@ test("a bot's stacked consecutive messages in a group thread share one header", 
   await setAppearance(page, "dark");
   await page.mouse.move(0, 0);
   await captureScreenshot(page, testInfo, "message-grouping-dark");
+});
+
+test("two replies from two runs of the same bot group like two messages, nothing between", async ({
+  page,
+}) => {
+  const stamp = Date.now();
+  await signup(page, `run-grouping-${stamp}@rakazo.test`, "password12", "Run Grouping");
+  await completeOnboarding(page);
+  await page.goto("/app");
+  await page.waitForURL(/\/app\/[^/]+$/);
+  const chiefId = activeBotId(page);
+  const group = await rpc<{ id: string }>(page, "groups/create", {
+    name: "Solo group",
+    botIds: [chiefId],
+  });
+  await page.goto(`/app/g/${group.id}`);
+  await page.waitForURL(/\/app\/g\/[^/]+$/);
+
+  await showThread(page, runRepliesThread(chiefId));
+
+  const transcript = page.getByTestId("transcript");
+  const first = transcript.locator('[data-message-id="rr-1-reply"]');
+  const second = transcript.locator('[data-message-id="rr-2-reply"]');
+  await expect(second).toBeVisible({ timeout: 20_000 });
+
+  await expect(
+    transcript
+      .locator("[data-message-id]")
+      .evaluateAll((rows) => rows.map((row) => row.getAttribute("data-message-id"))),
+  ).resolves.toEqual(["rr-user", "rr-1-reply", "rr-2-reply"]);
+  await expect(
+    first.evaluate((row) => row.nextElementSibling?.getAttribute("data-message-id")),
+  ).resolves.toBe("rr-2-reply");
+
+  await expect(first.locator('[data-slot="message-row-author"]')).toHaveText("Chief");
+  await expect(second.locator('[data-slot="message-row-author"]')).toHaveCount(0);
+  await expect(
+    first.locator('[data-slot="message-row-avatar"] .rakazo-organic-avatar'),
+  ).toHaveCount(0);
+  await expect(
+    second.locator('[data-slot="message-row-avatar"] .rakazo-organic-avatar'),
+  ).toHaveCount(1);
 });

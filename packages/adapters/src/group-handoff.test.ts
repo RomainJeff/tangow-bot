@@ -1,6 +1,28 @@
 import type { PrismaClient } from "@rakazo/db";
-import { describe, expect, it, vi } from "vitest";
+import { appendSessionEntryInTransaction } from "@rakazo/db";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { handoffToGroupBot } from "./group-handoff.js";
+
+vi.mock("../../db/src/sessions.js", async () =>
+  (await import("@rakazo/db/sessions.test-support")).stubbedDbSessions(),
+);
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
+/** The entry that woke the handing-off run. */
+type Source = { type: string; payload: Record<string, unknown> } | null;
+const handoffFrom = (fromBotId: string, hop: number): Source => ({
+  type: "handoff",
+  payload: { fromBotId, toBotId: "bot-a", text: "Stage", hop },
+});
+/** The handoff entries the run wrote. */
+const handoffs = () =>
+  vi
+    .mocked(appendSessionEntryInTransaction)
+    .mock.calls.map(([, draft]) => draft)
+    .filter((draft) => draft.type === "handoff");
 
 const run = {
   id: "run-a",
@@ -11,14 +33,17 @@ const run = {
 };
 
 function harness(
-  sourceBlocks: unknown,
+  source: Source,
   existing?: { sourceRuns: { id: string; botId: string }[] },
   runRow: { routineId?: string | null; trigger?: string; inheritedHop?: number | null } = {},
 ) {
   const runCreate = vi.fn(async () => ({ id: "run-b" }));
-  const messageCreate = vi.fn(async () => ({ id: "message-1" }));
   const tx = {
     $queryRaw: vi.fn(async () => [{ id: "group-1" }]),
+    sessionEntry: {
+      findUnique: vi.fn(async () => source),
+      findFirst: vi.fn(async () => existing ?? null),
+    },
     chatGroup: {
       findFirst: vi.fn(async () => ({
         id: "group-1",
@@ -31,27 +56,17 @@ function harness(
     run: {
       findFirst: vi.fn(async () => ({
         id: run.id,
-        sourceMessageId: "message-source",
+        sessionId: "session-1",
+        sourceMessageId: source ? "message-source" : null,
         routineId: runRow.routineId ?? null,
         trigger: runRow.trigger ?? "follow_up",
-        sourceMessage: { blocks: sourceBlocks },
+        sourceMessage: source,
       })),
       findUnique: vi.fn(async () => ({ status: "running" })),
       create: runCreate,
     },
-    message: {
-      findUnique: vi.fn(
-        async (args: { where: { id?: string } }) =>
-          (args.where.id ? { blocks: sourceBlocks } : existing) ?? null,
-      ),
-      create: messageCreate,
-    },
     routine: { findUnique: vi.fn(async () => ({ inheritedHop: runRow.inheritedHop ?? null })) },
-    thread: {
-      update: vi.fn(async (args: { select: { nextMessageSeq?: boolean } }) =>
-        args.select.nextMessageSeq ? { nextMessageSeq: 2 } : { nextEventSeq: 2 },
-      ),
-    },
+    thread: { update: vi.fn(async () => ({ nextEventSeq: 2 })) },
     task: { create: vi.fn(async () => ({ id: "task-b" })) },
     event: {
       findFirst: vi.fn(async () => ({ seq: 1 })),
@@ -67,14 +82,13 @@ function harness(
       events: { notify: vi.fn(async () => undefined) },
       jobs: { enqueue: vi.fn(async () => undefined) },
     },
-    messageCreate,
     runCreate,
   };
 }
 
 describe("group handoff ownership", () => {
   it("marks a new ownership transfer as a follow-up with a chain hop", async () => {
-    const { deps, messageCreate, runCreate } = harness([{ kind: "text", text: "user request" }]);
+    const { deps, runCreate } = harness({ type: "user.message", payload: {} });
 
     await expect(
       handoffToGroupBot(deps as never, run, "group-1", {
@@ -83,29 +97,27 @@ describe("group handoff ownership", () => {
       }),
     ).resolves.toMatchObject({ ok: true, botId: "bot-b" });
 
-    expect(messageCreate).toHaveBeenCalledWith(
+    expect(handoffs()).toEqual([
       expect.objectContaining({
-        data: expect.objectContaining({
-          blocks: [
-            expect.objectContaining({
-              kind: "handoff",
-              fromBotId: "bot-a",
-              toBotId: "bot-b",
-              hop: 1,
-            }),
-          ],
-        }),
+        sessionId: "session-1",
+        runId: "run-a",
+        payload: {
+          fromBotId: "bot-a",
+          toBotId: "bot-b",
+          text: "Do the distinct next stage",
+          hop: 1,
+        },
       }),
-    );
+    ]);
     expect(runCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ trigger: "follow_up" }) }),
+      expect.objectContaining({
+        data: expect.objectContaining({ trigger: "follow_up", sourceMessageId: "entry-new" }),
+      }),
     );
   });
 
   it("refuses to bounce a handed-off stage straight back to its sender", async () => {
-    const { deps, runCreate } = harness([
-      { kind: "handoff", fromBotId: "bot-b", toBotId: "bot-a", text: "Investigate", hop: 1 },
-    ]);
+    const { deps, runCreate } = harness(handoffFrom("bot-b", 1));
 
     await expect(
       handoffToGroupBot(deps as never, run, "group-1", {
@@ -120,9 +132,7 @@ describe("group handoff ownership", () => {
   });
 
   it("caps longer multi-agent handoff chains", async () => {
-    const { deps, runCreate } = harness([
-      { kind: "handoff", fromBotId: "bot-b", toBotId: "bot-a", text: "Stage six", hop: 6 },
-    ]);
+    const { deps, runCreate } = harness(handoffFrom("bot-b", 6));
 
     await expect(
       handoffToGroupBot(deps as never, run, "group-1", {
@@ -137,22 +147,18 @@ describe("group handoff ownership", () => {
   });
 
   it("carries a handoff from a run at hop 5 to hop 6, not back to 1", async () => {
-    const { deps, messageCreate } = harness([
-      { kind: "bot_message_received", fromBotId: "bot-c", fromBotName: "C", text: "x", hop: 5 },
-    ]);
+    const { deps } = harness({ type: "bot.message.received", payload: { hop: 5 } });
 
     await expect(
       handoffToGroupBot(deps as never, run, "group-1", { bot_id: "bot-b", message: "Next stage" }),
     ).resolves.toMatchObject({ ok: true });
-    expect(messageCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ blocks: [expect.objectContaining({ hop: 6 })] }),
-      }),
-    );
+    expect(handoffs()).toEqual([
+      expect.objectContaining({ payload: expect.objectContaining({ hop: 6 }) }),
+    ]);
   });
 
   it("carries a handoff from a routine run that inherited hop 5 to hop 6", async () => {
-    const { deps, messageCreate } = harness([], undefined, {
+    const { deps } = harness(null, undefined, {
       routineId: "routine-1",
       trigger: "routine",
       inheritedHop: 5,
@@ -161,15 +167,13 @@ describe("group handoff ownership", () => {
     await expect(
       handoffToGroupBot(deps as never, run, "group-1", { bot_id: "bot-b", message: "Next stage" }),
     ).resolves.toMatchObject({ ok: true });
-    expect(messageCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ blocks: [expect.objectContaining({ hop: 6 })] }),
-      }),
-    );
+    expect(handoffs()).toEqual([
+      expect.objectContaining({ payload: expect.objectContaining({ hop: 6 }) }),
+    ]);
   });
 
   it("refuses a handoff from a routine run whose routine was deleted", async () => {
-    const { deps, runCreate } = harness([], undefined, { trigger: "routine" });
+    const { deps, runCreate } = harness(null, undefined, { trigger: "routine" });
 
     await expect(
       handoffToGroupBot(deps as never, run, "group-1", { bot_id: "bot-b", message: "Next stage" }),
@@ -178,7 +182,7 @@ describe("group handoff ownership", () => {
   });
 
   it("reuses the recorded transfer when a source run is retried", async () => {
-    const { deps, messageCreate, runCreate } = harness([], {
+    const { deps, runCreate } = harness(null, {
       sourceRuns: [{ id: "run-b", botId: "bot-b" }],
     });
 
@@ -188,19 +192,7 @@ describe("group handoff ownership", () => {
         message: "A duplicate stage",
       }),
     ).resolves.toMatchObject({ ok: true, botId: "bot-b", runId: "run-b" });
-    expect(messageCreate).not.toHaveBeenCalled();
-    expect(runCreate).not.toHaveBeenCalled();
-  });
-
-  it("rejects malformed source ancestry instead of restarting its hop count", async () => {
-    const { deps, runCreate } = harness({ kind: "not-an-array" });
-
-    await expect(
-      handoffToGroupBot(deps as never, run, "group-1", {
-        bot_id: "bot-b",
-        message: "Continue",
-      }),
-    ).resolves.toEqual({ error: "cannot verify the group handoff chain" });
+    expect(handoffs()).toEqual([]);
     expect(runCreate).not.toHaveBeenCalled();
   });
 });

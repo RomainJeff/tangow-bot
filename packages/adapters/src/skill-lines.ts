@@ -1,22 +1,17 @@
 /**
  * The "Skill learned · <name>" line: written by the server from the run's recorded skill writes,
- * never from the bot's text. A run gets its lines once, recorded on the run, whatever the number
- * of calls or attempts, so a resume, a replay or the sweep changes nothing, and neither does a
- * conversation the user emptied since.
+ * never from the bot's text, with a `skill.learnt` entry per line in the session log. A run gets
+ * its lines once, recorded on the run, whatever the number of calls or attempts, so a resume, a
+ * replay or the sweep changes nothing, and neither does a conversation the user emptied since.
  */
-import type { MessageBlock } from "@rakazo/contracts";
+import type { SessionLog } from "@rakazo/adapter-kit";
+import type { SessionId } from "@rakazo/contracts";
 import type { SkillSourceBlock } from "@rakazo/core";
 import { asSkillAvailability, runStartedByUser, userSkillKey } from "@rakazo/core";
 import type { Prisma, PrismaClient, ThreadEvents } from "@rakazo/db";
-import {
-  appendEventInTransaction,
-  createThreadMessageInTransaction,
-  messageUpdatedPayload,
-} from "@rakazo/db";
+import { threadEventSeq } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 
-/** The clientNonce of a message that carries a run's lines alone. */
-const LINE_ONLY_NONCE_PREFIX = "skill-source:";
 const FINISHED = ["completed", "failed", "cancelled"];
 type SkillChange = SkillSourceBlock["change"];
 /** Each skill write, folded onto what the run already did to that skill. */
@@ -34,10 +29,8 @@ const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 export type SkillLineDeps = {
   prisma: PrismaClient;
   events: Pick<ThreadEvents, "notify">;
-  /**
-   * Whether a run that left no message gets one carrying its lines alone. Clients that predate
-   * the line draw such a message as an empty row, so it stays off until they are gone.
-   */
+  sessionLog: Pick<SessionLog<Prisma.TransactionClient>, "append">;
+  /** Whether a run that said nothing still gets its lines, standing alone in a conversation. */
   lineOnlyMessages?: boolean;
 };
 
@@ -108,11 +101,11 @@ async function reachingOtherBots(
 }
 
 /**
- * Puts the line of each skill a finished run changed under the run's last message, the reply or an
- * earlier bubble alike. With `lineOnlyMessages`, a run with no message gets a message of its own,
- * which marks nothing unread: in its conversation when the user started the run, else in the
- * bot's own conversation and only for a skill other bots read. Without it the change shows
- * nowhere. A cancelled run writes its lines too.
+ * Logs the line of each skill a finished run changed after what the run said. With
+ * `lineOnlyMessages`, a run that said nothing gets its lines on their own, which marks nothing
+ * unread: in its conversation when the user started the run, else in the bot's own conversation
+ * and only for a skill other bots read. Without it the change shows nowhere. A cancelled run
+ * writes its lines too.
  */
 export async function writeSkillLines(deps: SkillLineDeps, runId: string): Promise<void> {
   const run = await deps.prisma.run.findUnique({
@@ -123,30 +116,44 @@ export async function writeSkillLines(deps: SkillLineDeps, runId: string): Promi
       userId: true,
       botId: true,
       threadId: true,
+      sessionId: true,
       trigger: true,
       status: true,
       skillLinesAt: true,
-      sourceMessage: { select: { role: true } },
+      sourceMessage: { select: { type: true } },
     },
   });
   if (!run || !FINISHED.includes(run.status) || run.skillLinesAt) return;
   const all = (await skillLinesByRun(deps.prisma, [run.id])).get(run.id) ?? [];
   const startedByUser = runStartedByUser({
     trigger: run.trigger,
-    sourceRole: run.sourceMessage?.role,
+    sourceRole: run.sourceMessage && (run.sourceMessage.type === "user.message" ? "user" : "bot"),
   });
-  const lineOnlyThreadId = !deps.lineOnlyMessages
+  const lineOnlyThread = !deps.lineOnlyMessages
     ? undefined
     : startedByUser
-      ? run.threadId
-      : (
-          await deps.prisma.thread.findUnique({
-            where: { botId: run.botId },
-            select: { id: true },
-          })
-        )?.id;
+      ? { id: run.threadId, sessionId: run.sessionId }
+      : await deps.prisma.thread.findUnique({
+          where: { botId: run.botId },
+          select: { id: true, sessionId: true },
+        });
+  const logLines = async (
+    tx: Prisma.TransactionClient,
+    sessionId: string,
+    lines: SkillSourceBlock[],
+  ) => {
+    for (const line of lines) {
+      await deps.sessionLog.append(tx, {
+        type: "skill.learnt",
+        sessionId: sessionId as SessionId,
+        botId: run.botId,
+        runId: run.id,
+        payload: { skillId: line.skillId, name: line.name, change: line.change },
+      });
+    }
+  };
   const written = await deps.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    for (const threadId of new Set([run.threadId, lineOnlyThreadId])) {
+    for (const threadId of new Set([run.threadId, lineOnlyThread?.id])) {
       if (threadId) await tx.$queryRaw`SELECT id FROM threads WHERE id = ${threadId} FOR UPDATE`;
     }
     const claimed = await tx.run.updateMany({
@@ -154,57 +161,23 @@ export async function writeSkillLines(deps: SkillLineDeps, runId: string): Promi
       data: { skillLinesAt: new Date() },
     });
     if (claimed.count === 0 || all.length === 0) return null;
-    const target = (
-      await tx.message.findMany({
-        where: { threadId: run.threadId, runId: run.id, role: "bot", hiddenFromThread: false },
-        orderBy: { seq: "asc" },
-        select: {
-          id: true,
-          threadId: true,
-          role: true,
-          blocks: true,
-          botId: true,
-          replyToMessageId: true,
-          replyQuote: true,
-        },
-      })
-    ).at(-1);
-    if (target) {
-      if (!Array.isArray(target.blocks)) return null;
-      const blocks = [
-        ...(target.blocks as Prisma.InputJsonValue[]),
-        ...(all as Prisma.InputJsonValue[]),
-      ];
-      await tx.message.update({ where: { id: target.id }, data: { blocks } });
-      // No run id: the run may be cancelled, and a run id makes clients drop its live progress.
-      const event = await appendEventInTransaction(tx, {
-        spaceId: run.spaceId,
-        threadId: target.threadId,
-        botId: target.botId ?? run.botId,
-        type: "thread.message.updated",
-        payload: messageUpdatedPayload(target, blocks),
-      });
-      return { threadId: target.threadId, seq: event.seq };
+    const said = await tx.sessionEntry.findFirst({
+      where: { runId: run.id, type: "assistant.text" },
+      select: { id: true },
+    });
+    if (said) {
+      await logLines(tx, run.sessionId, all);
+      return { threadId: run.threadId, seq: await threadEventSeq(tx, run.threadId) };
     }
-    if (!lineOnlyThreadId) return null;
-    const blocks: MessageBlock[] = startedByUser ? all : await reachingOtherBots(tx, run, all);
-    if (blocks.length === 0) return null;
-    const message = await createThreadMessageInTransaction(tx, {
-      threadId: lineOnlyThreadId,
-      role: "bot",
-      blocks,
-      botId: run.botId,
-      clientNonce: `${LINE_ONLY_NONCE_PREFIX}${run.id}`,
-      markUnread: false,
-    });
-    const event = await appendEventInTransaction(tx, {
-      spaceId: run.spaceId,
-      threadId: lineOnlyThreadId,
-      botId: run.botId,
-      type: "thread.message.created",
-      payload: { messageId: message.id, role: "bot", blocks },
-    });
-    return { threadId: lineOnlyThreadId, seq: event.seq };
+    if (!lineOnlyThread) return null;
+    const lines = startedByUser ? all : await reachingOtherBots(tx, run, all);
+    if (lines.length === 0) return null;
+    await logLines(
+      tx,
+      lineOnlyThread.id === run.threadId ? run.sessionId : lineOnlyThread.sessionId,
+      lines,
+    );
+    return { threadId: lineOnlyThread.id, seq: await threadEventSeq(tx, lineOnlyThread.id) };
   });
   if (written) {
     await deps.events.notify(written.threadId, written.seq).catch((error) => {

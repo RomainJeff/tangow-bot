@@ -1,17 +1,7 @@
 import type { Routine } from "@rakazo/contracts";
 import { activeBotId, captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
-import { expect, type Page, test } from "./test";
-
-type ThreadBlock = { kind: string; botId?: string; state?: string };
-
-async function threadBlocks(page: Page, botId: string): Promise<ThreadBlock[]> {
-  const history = await rpc<{ messages: Array<{ blocks: ThreadBlock[] }> }>(
-    page,
-    "threads/messages",
-    { botId },
-  );
-  return history.messages.flatMap((message) => message.blocks);
-}
+import { expect, test } from "./test";
+import { blocksOf, threadEntries } from "./thread-log";
 
 // A scheduled routine only renders as a run card for a sub-bot (parentBotId set, see
 // packages/adapters/src/executor.ts `showsRoutineRunCard`); a top-level bot's scheduled routine
@@ -35,10 +25,10 @@ test("renders a routine run card in a sub-bot's own thread", async ({ page }, te
   await expect
     .poll(
       async () => {
-        const block = (await threadBlocks(page, orchestratorId)).find(
+        const block = blocksOf(await threadEntries(page, { botId: orchestratorId })).find(
           (candidate) => candidate.kind === "child_bot",
         );
-        subBotId = block?.botId;
+        subBotId = block?.kind === "child_bot" ? block.botId : undefined;
         return subBotId;
       },
       { timeout: 60_000 },
@@ -74,7 +64,7 @@ test("renders a routine run card in a sub-bot's own thread", async ({ page }, te
 
   // notify:true defaults the line open (A5) — the disclosure starts expanded, rendering
   // the routine's digest as sanitised markdown (CA-R4) with no live image loads (CA-R5).
-  const toggle = card.getByRole("button", { name: /Status check/ });
+  const toggle = card.getByRole("button", { name: /^Status check,/ });
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
   await expect(card.locator("strong")).toBeVisible();
   await expect(card.locator("img")).toHaveCount(0);
@@ -82,16 +72,14 @@ test("renders a routine run card in a sub-bot's own thread", async ({ page }, te
 
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
 
-  await expect
-    .poll(
-      async () =>
-        (await threadBlocks(page, subBotId!)).some(
-          (block) => block.kind === "routine_run" && block.state === "completed",
-        ),
-      { timeout: 30_000 },
-    )
-    .toBe(true);
+  await card.getByRole("button", { name: "Report, Status check · Opens in full" }).click();
+  const session = page.getByTestId("session-view");
+  await expect(session.getByRole("heading", { name: "Status check" })).toBeVisible();
+  await expect(session.getByRole("textbox")).toHaveCount(0);
+  await captureScreenshot(page, testInfo, "routine-session-view");
 });
 
 // An inbound wake reports through a run card on every bot: the routine's instructions and the
@@ -132,14 +120,10 @@ test("renders a webhook-woken routine as a run card, not a user message", async 
   await expect(page.getByText("deploy.finished")).toHaveCount(0);
   await captureScreenshot(page, testInfo, "webhook-routine-run-card");
 
-  const history = await rpc<{ messages: Array<{ role: string; blocks: unknown[] }> }>(
-    page,
-    "threads/messages",
-    { botId },
-  );
+  const entries = await threadEntries(page, { botId });
   expect(
-    history.messages.some(
-      (message) => message.role === "user" && JSON.stringify(message.blocks).includes("deploy."),
+    entries.some(
+      (entry) => entry.type === "user.message" && JSON.stringify(entry.payload).includes("deploy."),
     ),
   ).toBe(false);
 });

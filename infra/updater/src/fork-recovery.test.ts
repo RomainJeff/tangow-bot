@@ -51,13 +51,16 @@ const moveCheckout = (commit, branch, revision) => {
   fs.writeFileSync(fixture.composeFile, fixture[revision + "Compose"]);
   fs.writeFileSync(fixture.serviceEnv, "REVISION=" + revision + "\n");
 };
-if (command === "docker") {
+if (command === "docker" && args[0] === "run") {
+  // The check that the previous image knows the session log; here it always does.
+  log();
+} else if (command === "docker") {
   call.compose = fs.readFileSync(args[args.indexOf("--file") + 1], "utf8");
   call.serviceEnv = fs.readFileSync(fixture.serviceEnv, "utf8");
   call.envFile = fs.readFileSync(args[args.indexOf("--env-file") + 1], "utf8");
   call.imageTag = process.env.RAKAZO_IMAGE_TAG;
   log();
-  if (!args.includes("up")) fail("Unexpected Docker command");
+  if (!args.includes("up") && !args.includes("rm")) fail("Unexpected Docker command");
   if (args.includes("--build") && fixture.failures.length > 0) fail("new API unhealthy");
   if (args.includes("--no-build") && hasFailure("recover")) fail("cached image unavailable");
 } else if (command === "git") {
@@ -92,6 +95,10 @@ if (command === "docker") {
   fail("Unexpected executable");
 }
 `;
+
+function composeUps(calls: Invocation[]) {
+  return calls.filter((call) => call.command === "docker" && call.args.includes("up"));
+}
 
 async function deployment(options: { failures: Failure[]; branch?: string; composePath?: string }) {
   const deployDir = await mkdtemp(path.join(os.tmpdir(), "rakazo-fork-recovery-"));
@@ -168,7 +175,7 @@ describe.skipIf(process.platform === "win32")("fork recovery through fake execut
     const fixture = await deployment({ ...options, failures: ["recreate"] });
     expect(fixture.response.status).toBe(200);
     expect(fixture.record).toMatchObject({ ok: false, restart: "not-required" });
-    const docker = fixture.calls.filter((call) => call.command === "docker");
+    const docker = composeUps(fixture.calls);
     expect(docker).toHaveLength(2);
     expect(docker[0]).toMatchObject({
       commit: targetCommit,
@@ -188,10 +195,16 @@ describe.skipIf(process.platform === "win32")("fork recovery through fake execut
       "checkout",
       "merge",
       "recreate",
+      "stop-migrate",
       "restore-checkout",
       "recover",
       "restore-remote",
     ]);
+    // The migration stops while the checkout still has the Compose file that declares it.
+    expect(fixture.calls.find((call) => call.args.includes("rm"))).toMatchObject({
+      commit: targetCommit,
+      compose: expect.stringContaining("command: new"),
+    });
     expect(docker[1]?.args).toEqual(
       expect.arrayContaining([
         "-p",
@@ -219,7 +232,7 @@ describe.skipIf(process.platform === "win32")("fork recovery through fake execut
       error: "Build the new images and recreate the services failed.",
     });
     expect(fixture.record.restartAdvice).toMatch(/skipped.*checkout could not be restored/);
-    expect(fixture.calls.filter((call) => call.command === "docker")).toHaveLength(1);
+    expect(composeUps(fixture.calls)).toHaveLength(1);
     expect(fixture.record.steps.filter((step) => step.id === "restore-checkout")).toEqual([
       expect.objectContaining({ ok: false }),
     ]);
@@ -236,7 +249,7 @@ describe.skipIf(process.platform === "win32")("fork recovery through fake execut
       error: "Build the new images and recreate the services failed.",
     });
     expect(fixture.record.steps.find((step) => step.id === "recover")).toMatchObject({ ok: false });
-    expect(fixture.calls.filter((call) => call.command === "docker")[1]).toMatchObject({
+    expect(composeUps(fixture.calls)[1]).toMatchObject({
       commit: currentCommit,
       serviceEnv: "REVISION=old\n",
       imageTag: oldTag,
@@ -288,7 +301,7 @@ describe.skipIf(process.platform === "win32")("fork recovery through fake execut
     expect(
       fixture.record.steps.some((step) => step.id.startsWith("restore") || step.id === "recover"),
     ).toBe(false);
-    expect(fixture.calls.filter((call) => call.command === "docker")).toHaveLength(1);
+    expect(composeUps(fixture.calls)).toHaveLength(1);
     expect(fixture.state).toEqual({ commit: targetCommit, branch: "main", remote: nextRemote });
     expect(await readFile(fixture.config.envFile, "utf8")).toContain(
       `RAKAZO_IMAGE_TAG=local-${targetCommit}\n`,

@@ -109,13 +109,13 @@ describeMessaging("messaging surface journeys", () => {
     expect(outbound).toHaveLength(1);
     expect(outbound[0].providerHandle).toBeTruthy();
 
-    const userMessage = await prisma.message.findFirst({
+    const userMessage = await prisma.sessionEntry.findFirst({
       where: {
-        threadId: (await prisma.thread.findFirst({ where: { botId: identity.botId } })).id,
-        role: "user",
+        session: { thread: { botId: identity.botId }, kind: "thread" },
+        type: "user.message",
       },
     });
-    expect(userMessage.clientNonce).toBe(`messaging:sendblue:${dmHandle}`);
+    expect(userMessage.payload.clientNonce).toBe(`messaging:sendblue:${dmHandle}`);
   });
 
   it("replays the same handle without a duplicate message or send", async () => {
@@ -133,8 +133,8 @@ describeMessaging("messaging surface journeys", () => {
 
     const identity = await findIdentity(sender);
     const thread = await prisma.thread.findFirst({ where: { botId: identity.botId } });
-    const userMessages = await prisma.message.findMany({
-      where: { threadId: thread.id, role: "user" },
+    const userMessages = await prisma.sessionEntry.findMany({
+      where: { sessionId: thread.sessionId, type: "user.message" },
     });
     expect(userMessages).toHaveLength(1);
     const outbound = await prisma.messagingOutbound.findMany({

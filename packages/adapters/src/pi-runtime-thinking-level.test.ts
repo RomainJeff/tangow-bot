@@ -12,6 +12,8 @@ const fakeAgentState = vi.hoisted(() => ({
     maxTokens?: number;
   }>,
   sessionIds: [] as Array<string | undefined>,
+  systemPrompts: [] as string[],
+  toolNames: [] as string[][],
   subagentArgs: { name: "helper", task: "help" } as Record<string, unknown>,
   lastSubagentResult: undefined as unknown,
   failPrompt: false,
@@ -32,6 +34,7 @@ vi.mock("@earendil-works/pi-agent-core", () => ({
       sessionId?: string;
       transformContext: (messages: AgentMessage[]) => Promise<AgentMessage[]>;
       initialState: {
+        systemPrompt: string;
         thinkingLevel: string;
         tools: FakeAgentTool[];
         model: (typeof fakeAgentState.models)[number];
@@ -40,6 +43,8 @@ vi.mock("@earendil-works/pi-agent-core", () => ({
       this.tools = options.initialState.tools;
       fakeAgentState.transforms.push(options.transformContext);
       fakeAgentState.sessionIds.push(options.sessionId);
+      fakeAgentState.systemPrompts.push(options.initialState.systemPrompt);
+      fakeAgentState.toolNames.push(options.initialState.tools.map((tool) => tool.name));
       fakeAgentState.thinkingLevels.push(options.initialState.thinkingLevel);
       fakeAgentState.models.push(options.initialState.model);
     }
@@ -117,6 +122,7 @@ async function runWithModel(
     thinkingLevel?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null;
   }>,
   maxImagesPerPrompt?: number,
+  instructions = "",
 ) {
   const runtime = new PiAgentRuntime();
   for await (const _event of runtime.run(
@@ -125,7 +131,7 @@ async function runWithModel(
       threadId: "t",
       runId: "r",
       prompt: "hello",
-      instructions: "",
+      instructions,
       history: [],
       tools: [],
       model: { provider, id: modelId, thinkingLevel, maxImagesPerPrompt },
@@ -151,6 +157,8 @@ describe("Pi agent thinking level", () => {
     fakeAgentState.transforms = [];
     fakeAgentState.models = [];
     fakeAgentState.sessionIds = [];
+    fakeAgentState.systemPrompts = [];
+    fakeAgentState.toolNames = [];
     fakeAgentState.subagentArgs = { name: "helper", task: "help" };
     fakeAgentState.lastSubagentResult = undefined;
     fakeAgentState.failPrompt = false;
@@ -287,6 +295,20 @@ describe("Pi agent thinking level", () => {
     expect(fakeAgentState.lastSubagentResult).toMatchObject({
       details: { result: "Subagent failed: Connect that model provider first" },
     });
+  });
+
+  it("gives a helper neither the thread's chat voice nor message_user", async () => {
+    const chatVoice =
+      "## How you communicate with the user\n\nmessage_user is the only way to reach the user.";
+    const signal = new AbortController().signal;
+    await runWithModel("plain-model", "test", signal, null, undefined, undefined, chatVoice);
+
+    const [thread, helper] = fakeAgentState.systemPrompts;
+    expect(thread).toContain(chatVoice);
+    expect(helper).not.toContain(chatVoice);
+    const [, helperTools] = fakeAgentState.toolNames;
+    expect(helperTools).toContain("web_search");
+    expect(helperTools).not.toContain("message_user");
   });
 
   it("keeps reasoning off for the main agent and subagent", async () => {

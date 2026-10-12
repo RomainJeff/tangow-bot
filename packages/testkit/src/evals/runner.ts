@@ -8,9 +8,10 @@ import {
   skillLinesByRun,
   userSkillsRoot,
 } from "@rakazo/adapters";
-import type { ModelConnectInput, RunStatus } from "@rakazo/contracts";
-import { ACTIVE_RUN_STATUSES, isTerminal } from "@rakazo/core";
+import type { ModelConnectInput, RunStatus, ThreadSnapshot } from "@rakazo/contracts";
+import { ACTIVE_RUN_STATUSES, isTerminal, projectThreadItems } from "@rakazo/core";
 import type { createDb } from "@rakazo/db";
+import { runMessages } from "@rakazo/db";
 import { sessionCookieHeader } from "../index.js";
 import type { EvalCase, Evidence } from "./cases.js";
 import { emptyTrial, type FailureCategory, redact, type TrialResult } from "./report.js";
@@ -82,25 +83,29 @@ export async function runTrial(
   const seenTools = new Map<string, { name: string }>();
   let clearedToolCount = 0;
   const seenUsage = new Map<string, { inputTokens: number; outputTokens: number }>();
-  const countCurrentTools = () =>
-    handles!.prisma.event.count({
-      where: { spaceId: { in: actors.map((actor) => actor.spaceId) }, type: "agent.tool.called" },
-    });
-  // Clearing conversation history deletes its events and usage rows. Preserve
-  // observed records by id so multi-turn totals and budgets never reset or double count.
+  // The bots' own tool calls; a helper's run in its own session is not one of them.
+  const toolCalls = () => ({
+    type: "tool.call",
+    session: {
+      spaceId: { in: actors.map((actor) => actor.spaceId) },
+      kind: { not: "subagent" },
+    },
+  });
+  const countCurrentTools = () => handles!.prisma.sessionEntry.count({ where: toolCalls() });
+  // Clearing conversation history deletes its usage rows. Preserve observed records by id so
+  // multi-turn totals and budgets never reset or double count.
   const captureTools = async () => {
     if (!handles) return seenTools.size;
-    const events = await handles.prisma.event.findMany({
+    const calls = await handles.prisma.sessionEntry.findMany({
       where: {
-        spaceId: { in: actors.map((actor) => actor.spaceId) },
-        type: "agent.tool.called",
+        ...toolCalls(),
         ...(seenTools.size ? { id: { notIn: [...seenTools.keys()] } } : {}),
       },
       select: { id: true, payload: true },
     });
-    for (const event of events)
-      seenTools.set(event.id, {
-        name: redact(String((event.payload as { name?: string }).name ?? "unknown"), secrets),
+    for (const call of calls)
+      seenTools.set(call.id, {
+        name: redact(String((call.payload as { name?: string }).name ?? "unknown"), secrets),
       });
     return seenTools.size;
   };
@@ -218,8 +223,8 @@ export async function runTrial(
         if (step.ifWaiting && !approvalPending) continue;
         const waiting = runIds.at(-1);
         const card = waiting
-          ? await prisma.message.findFirst({
-              where: { runId: waiting, role: "bot" },
+          ? await prisma.sessionEntry.findFirst({
+              where: { runId: waiting, type: { in: ["assistant.ask", "effect.requested"] } },
               orderBy: { seq: "desc" },
               select: { id: true },
             })
@@ -260,7 +265,10 @@ export async function runTrial(
                   botId,
                   sourceMessage: {
                     is: {
-                      clientNonce: `messaging:${inbound.provider}:${inbound.handle}`,
+                      payload: {
+                        path: ["clientNonce"],
+                        equals: `messaging:${inbound.provider}:${inbound.handle}`,
+                      },
                     },
                   },
                 },
@@ -327,16 +335,17 @@ export async function runTrial(
           throw new EvalFailure("agent", "Agent requested assistance; no coaching supplied");
         return run && isTerminal(run.status as RunStatus) ? run : undefined;
       }, deadline);
-      const events = await prisma.event.findMany({
-        where: { runId, type: "agent.tool.called" },
+      const calls = await prisma.sessionEntry.findMany({
+        where: { runId, type: "tool.call" },
         orderBy: { seq: "asc" },
+        select: { payload: true },
       });
       result.toolCalls = seenToolCount;
       result.trace.push({
         step: stepIndex + 1,
         status: terminal.status,
-        tools: events.map((e) =>
-          redact(String((e.payload as { name?: string }).name ?? "unknown"), secrets),
+        tools: calls.map((call) =>
+          redact(String((call.payload as { name?: string }).name ?? "unknown"), secrets),
         ),
       });
       if (
@@ -369,34 +378,28 @@ export async function runTrial(
         const { name, outcome } = payload as { name?: string; outcome?: string };
         if (name?.startsWith("skill_")) skillCalls.push({ tool: name, outcome: String(outcome) });
       }
-      const snap = await rpc<{
-        messages: Array<{
-          role: string;
-          blocks: Array<{ kind: string; text?: string; approvalEffectId?: string }>;
-        }>;
-      }>(app, cookie, "threads/get", { botId });
-      approvalPending =
-        terminal.status === "waiting_input" &&
-        snap.messages.some((m) =>
-          m.blocks.some((b) => b.kind === "ask" && typeof b.approvalEffectId === "string"),
-        );
+      const snap = await rpc<ThreadSnapshot>(app, cookie, "threads/get", { botId });
+      const items = projectThreadItems(snap.entries);
+      const botBlocks = items.flatMap((item) =>
+        item.kind === "message" && item.role === "bot" ? item.blocks : [],
+      );
+      const approvalIds = [
+        ...botBlocks,
+        ...items.flatMap((item) => (item.kind === "effect" && item.card ? [item.card] : [])),
+      ].flatMap((block) =>
+        block.kind === "ask" && typeof block.approvalEffectId === "string"
+          ? [block.approvalEffectId]
+          : [],
+      );
+      approvalPending = terminal.status === "waiting_input" && approvalIds.length > 0;
       pendingApproval = approvalPending
         ? await prisma.externalEffect.findFirst({
-            where: {
-              runId,
-              status: "intended",
-              id: {
-                in: snap.messages.flatMap((m) =>
-                  m.blocks.flatMap((b) => (b.approvalEffectId ? [b.approvalEffectId] : [])),
-                ),
-              },
-            },
+            where: { runId, status: "intended", id: { in: approvalIds } },
             select: { kind: true, request: true },
           })
         : null;
-      lastText = snap.messages
-        .filter((m) => m.role === "bot")
-        .flatMap((m) => m.blocks.filter((b) => b.kind === "text").map((b) => b.text ?? ""))
+      lastText = botBlocks
+        .flatMap((block) => (block.kind === "text" ? [block.text] : []))
         .join("\n");
     }
     const files: Evidence["files"] = {};
@@ -579,10 +582,7 @@ async function waitForMessagingDelivery(
       )?.messagingMirroredAt ?? undefined,
     deadline,
   );
-  const messages = await prisma.message.findMany({
-    where: { runId, role: "bot" },
-    select: { id: true },
-  });
+  const messages = await runMessages(prisma, runId);
   await poll(async () => {
     const outbound = await prisma.messagingOutbound.findMany({
       where: { sourceMessageId: { in: messages.map((message) => message.id) } },

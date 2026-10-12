@@ -8,10 +8,14 @@ import type { Actor } from "@rakazo/contracts";
 import { REPLY_QUOTE_MAX_LENGTH } from "@rakazo/contracts";
 import { openScreenCapability } from "@rakazo/core/node/screen-capability";
 import type { PrismaClient } from "@rakazo/db";
-import { InvalidAnswerError } from "@rakazo/db";
+import { appendCardStateInTransaction, InvalidAnswerError } from "@rakazo/db";
 import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
 import { describe, expect, it, vi } from "vitest";
 import { createRouter, type RouterDeps } from "./router.js";
+
+vi.mock("../../../packages/db/src/sessions.js", async () =>
+  (await import("@rakazo/db/sessions.test-support")).stubbedDbSessions(),
+);
 
 describe("account preferences", () => {
   function preferencesDeps(avatarStyle: string) {
@@ -832,15 +836,15 @@ describe("computer screen url", () => {
 });
 
 describe("thread rewind", () => {
-  function rewindDeps(role: string | null) {
+  function rewindDeps(type: string | null, endedGeneration: { historyGeneration?: number } = {}) {
     const rewindThread = vi.fn().mockResolvedValue({
       event: { seq: 20 },
       cancelledRunIds: ["run-1"],
-      historyCompactionGeneration: 3,
       fromSeq: 4,
-      compactionReset: false,
+      ...endedGeneration,
     });
     const cancel = vi.fn().mockResolvedValue(undefined);
+    const purgeHistory = vi.fn().mockResolvedValue({ ok: true, value: undefined });
     const prisma = {
       bot: {
         findFirst: vi.fn().mockResolvedValue({
@@ -849,12 +853,13 @@ describe("thread rewind", () => {
           computer: null,
         }),
       },
-      message: { findFirst: vi.fn().mockResolvedValue(role ? { role } : null) },
+      sessionEntry: { findFirst: vi.fn().mockResolvedValue(type ? { type } : null) },
     } as unknown as PrismaClient;
     const deps = {
       prisma,
       events: { rewindThread },
       jobs: { cancel },
+      memoryProviders: { resolve: vi.fn(async () => ({ provider: { purgeHistory } })) },
       env: {
         defaultProvider: "fake",
         defaultModel: "fake-model",
@@ -870,7 +875,13 @@ describe("thread rewind", () => {
       email: "user@rakazo.test",
       isDeploymentOwner: true,
     } satisfies Actor;
-    return { rewindThread, cancel, actor, handler: new RPCHandler(createRouter(deps)) };
+    return {
+      rewindThread,
+      cancel,
+      purgeHistory,
+      actor,
+      handler: new RPCHandler(createRouter(deps)),
+    };
   }
 
   function rewindRequest(messageId: string) {
@@ -882,7 +893,7 @@ describe("thread rewind", () => {
   }
 
   it("truncates the thread and cancels the run jobs it stopped", async () => {
-    const { rewindThread, cancel, actor, handler } = rewindDeps("user");
+    const { rewindThread, cancel, actor, handler } = rewindDeps("user.message");
 
     const { response } = await handler.handle(rewindRequest("message-4"), {
       prefix: "/rpc",
@@ -895,13 +906,27 @@ describe("thread rewind", () => {
       spaceId: "workspace-1",
       threadId: "thread-1",
       botId: "bot-1",
+      userId: "user-1",
       messageId: "message-4",
     });
     expect(cancel).toHaveBeenCalledOnce();
   });
 
+  it("purges the compacted summaries of a history generation only when the rewind ended it", async () => {
+    const purged = async (endedGeneration: { historyGeneration?: number }) => {
+      const { purgeHistory, actor, handler } = rewindDeps("user.message", endedGeneration);
+      await handler.handle(rewindRequest("message-4"), { prefix: "/rpc", context: { actor } });
+      return purgeHistory.mock.calls.map(([request]) => request);
+    };
+
+    expect([await purged({ historyGeneration: 3 }), await purged({})]).toEqual([
+      [{ botId: "bot-1", generations: [3] }],
+      [],
+    ]);
+  });
+
   it("refuses to rewind to a bot message", async () => {
-    const { rewindThread, actor, handler } = rewindDeps("bot");
+    const { rewindThread, actor, handler } = rewindDeps("assistant.text");
 
     const { response } = await handler.handle(rewindRequest("message-5"), {
       prefix: "/rpc",
@@ -932,6 +957,7 @@ describe("thread stop", () => {
       spaceId: "workspace-1",
       userId: "user-1",
       threadId: "thread-1",
+      sessionId: "session-1",
       botId: "bot-1",
       trigger: "user",
       sourceMessage: null,
@@ -943,17 +969,7 @@ describe("thread stop", () => {
     let runStatus = "running";
     const effects = [{ id: "effect-1", status: "approved", result: null as unknown }];
     const skillWrites: Array<{ runId: string; kind: string; status: string; result: unknown }> = [];
-    const card = {
-      id: "message-2",
-      blocks: [{ kind: "ask", approvalEffectId: "effect-1", status: "answered", answer: "allow" }],
-    };
-    const reply = {
-      id: "message-3",
-      threadId: "thread-1",
-      role: "bot",
-      botId: "bot-1",
-      blocks: [{ kind: "text", text: "On it." }] as Array<Record<string, unknown>>,
-    };
+    const sessionLog = { append: vi.fn() };
     const prisma = {
       $queryRaw: vi.fn().mockResolvedValue([]),
       bot: {
@@ -967,11 +983,12 @@ describe("thread stop", () => {
         findMany: vi.fn(async ({ where }: { where: { status: unknown; routineId?: unknown } }) =>
           matchesRun(where) ? [run] : [],
         ),
-        updateManyAndReturn: vi.fn(async () => {
-          runStatus = "cancelled";
-          return [{ id: run.id }];
-        }),
-        updateMany: vi.fn(async ({ data }: { data: { skillLinesAt: Date } }) => {
+        // The stop cancels the run; the line sweep claims its lines.
+        updateMany: vi.fn(async ({ data }: { data: { skillLinesAt?: Date } }) => {
+          if (!data.skillLinesAt) {
+            runStatus = "cancelled";
+            return { count: 1 };
+          }
           if (run.skillLinesAt) return { count: 0 };
           run.skillLinesAt = data.skillLinesAt;
           return { count: 1 };
@@ -1001,22 +1018,14 @@ describe("thread stop", () => {
           },
         ),
       },
-      message: {
-        // The run's messages in order: its card, then its last bubble.
-        findMany: vi.fn(async () => [card, reply]),
-        findUnique: vi.fn().mockResolvedValue(null),
-        update: vi.fn(
-          async ({ where, data }: { where: { id: string }; data: { blocks: never[] } }) => {
-            const target = where.id === reply.id ? reply : card;
-            target.blocks = data.blocks;
-          },
+      // The run's routine card, and the words it said before the stop.
+      sessionEntry: {
+        findFirst: vi.fn(async ({ where }: { where: { type: string } }) =>
+          where.type === "effect.requested" ? { id: "card-entry" } : { id: "reply-entry" },
         ),
       },
-      thread: { update: vi.fn().mockResolvedValue({ nextEventSeq: 8 }) },
-      event: {
-        create: vi.fn(async ({ data }: { data: { seq: number } }) => data),
-        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
-      },
+      thread: { findUniqueOrThrow: vi.fn().mockResolvedValue({ nextEventSeq: 8 }) },
+      event: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     };
     (prisma as unknown as { $transaction: unknown }).$transaction = vi.fn(
       async (fn: (tx: typeof prisma) => unknown) => fn(prisma),
@@ -1025,6 +1034,7 @@ describe("thread stop", () => {
     const deps = {
       prisma,
       events: { notify },
+      sessionLog,
       env: {
         defaultProvider: "fake",
         defaultModel: "fake-model",
@@ -1053,8 +1063,7 @@ describe("thread stop", () => {
       ).response;
     return {
       prisma: prisma as unknown as PrismaClient,
-      card,
-      reply,
+      sessionLog,
       effects,
       skillWrites,
       notify,
@@ -1063,16 +1072,18 @@ describe("thread stop", () => {
   }
 
   it("settles a routine card the user approved but the stopped run never created", async () => {
-    const { card, effects, notify, stop } = await stopFixture();
+    const { effects, notify, stop } = await stopFixture();
 
     expect((await stop()).status).toBe(200);
-    expect(card.blocks[0]).toEqual({
-      kind: "ask",
-      approvalEffectId: "effect-1",
-      status: "answered",
-      answer: "allow",
-      failed: true,
-    });
+    expect(appendCardStateInTransaction).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        type: "effect.applied",
+        feedBotId: "bot-1",
+        payload: { target: "card-entry", failed: true },
+      },
+      expect.any(Function),
+    );
     expect(effects[0]).toEqual({
       id: "effect-1",
       status: "completed",
@@ -1082,7 +1093,7 @@ describe("thread stop", () => {
   });
 
   it("leaves a stopped run's skill lines to the sweep, which also takes a write that lands after the stop", async () => {
-    const { prisma, reply, skillWrites, notify, stop } = await stopFixture();
+    const { prisma, sessionLog, skillWrites, notify, stop } = await stopFixture();
     const save = (name: string) =>
       skillWrites.push({
         runId: "run-1",
@@ -1091,19 +1102,23 @@ describe("thread stop", () => {
         result: { ok: true, name },
       });
     const line = (name: string) => ({
-      kind: "skill_source",
       skillId: `user:${name.toLowerCase()}`,
       name,
       change: "learned",
     });
+    const learnt = () =>
+      sessionLog.append.mock.calls
+        .map(([, draft]) => draft as { type: string; payload: unknown })
+        .filter((draft) => draft.type === "skill.learnt")
+        .map((draft) => draft.payload);
     save("Coffee");
 
     expect((await stop()).status).toBe(200);
     save("Tea");
-    expect(reply.blocks).toEqual([{ kind: "text", text: "On it." }]);
+    expect(learnt()).toEqual([]);
 
-    await createSkillLineSweep({ prisma, events: { notify } })();
-    expect(reply.blocks).toEqual([{ kind: "text", text: "On it." }, line("Coffee"), line("Tea")]);
+    await createSkillLineSweep({ prisma, events: { notify }, sessionLog })();
+    expect(learnt()).toEqual([line("Coffee"), line("Tea")]);
   });
 });
 

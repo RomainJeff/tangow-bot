@@ -43,10 +43,10 @@ import {
   PiAgentRuntime,
   PipedreamConnector,
   PostgresRealtimeFanout,
+  PostgresSessionLog,
   pipedreamConfigFromEnv,
   reconcileComputerUpdates,
   resolveDeploymentModel,
-  resolvePiSessionRoot,
   resolveSandboxProvider,
   ScriptedAgentRuntime,
   SpaceDecisionProviderResolver,
@@ -95,7 +95,6 @@ async function main() {
     process.env.AGENT_RUNTIME === "scripted"
       ? new ScriptedAgentRuntime()
       : new PiAgentRuntime({
-          sessionRoot: resolvePiSessionRoot(dataDir),
           ...(traceExport.exporter
             ? { traceExporter: traceExport.exporter, serviceName: SERVICE_NAMES.worker }
             : {}),
@@ -199,8 +198,10 @@ async function main() {
   });
   const skillLock = createPostgresSkillLock(skillLockPool);
   const skillLearning = parseSkillLearningMode(process.env.SKILL_LEARNING);
+  const sessionLog = new PostgresSessionLog(prisma);
   const executor = createRunExecutor({
     prisma,
+    sessionLog,
     skillLock,
     runtime,
     sandbox,
@@ -237,6 +238,7 @@ async function main() {
   const jobHandlers = createBackgroundJobHandlers({
     executor,
     prisma,
+    sessionLog,
     sandbox,
     home,
     jobs,
@@ -286,6 +288,7 @@ async function main() {
     sweepSkillLines: createSkillLineSweep({
       prisma,
       events,
+      sessionLog,
       lineOnlyMessages: skillLearning !== "off",
     }),
   });

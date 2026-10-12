@@ -6,7 +6,6 @@ import {
   decodeAttachmentBase64,
   inferAttachmentMimeType,
   promptTextForAttachments,
-  userTurnBlocksForRun,
   validateAttachmentMimeType,
 } from "./attachments.js";
 
@@ -53,36 +52,6 @@ describe("attachment helpers", () => {
     expect(inferAttachmentMimeType("notes.markdown", "text/plain")).toBe("text/markdown");
     expect(inferAttachmentMimeType("notes.md", "application/pdf")).toBe("application/pdf");
     expect(inferAttachmentMimeType("archive.zip", "")).toBeNull();
-  });
-
-  it("scopes current-turn images to user-triggered runs", () => {
-    const messages = [
-      {
-        id: "message-old",
-        role: "user",
-        runId: "run-old",
-        blocks: [
-          {
-            kind: "image" as const,
-            artifactId: "art_1",
-            mimeType: "image/png",
-            name: "old.png",
-          },
-        ],
-      },
-      {
-        id: "message-new",
-        role: "user",
-        runId: "run-new",
-        blocks: [{ kind: "text" as const, text: "routine time" }],
-      },
-    ];
-    expect(userTurnBlocksForRun("routine", "run-new", messages)).toBeUndefined();
-    expect(userTurnBlocksForRun("user", "run-old", messages)).toEqual(messages[0]?.blocks);
-    expect(userTurnBlocksForRun("user", "run-new", messages)).toEqual(messages[1]?.blocks);
-    expect(userTurnBlocksForRun("user", "run-fanout", messages, "message-old")).toEqual(
-      messages[0]?.blocks,
-    );
   });
 
   it("selects pending attachments only for their originating bot", () => {
@@ -195,20 +164,5 @@ describe("tool traces in history", () => {
     // Turn 2 asks about the rollback step: the answer is already in the history.
     expect(turnOne).toContain("runbook.md");
     expect(turnOne).toContain("Rollback: run the revert job, then page the on-call.");
-  });
-});
-
-describe("peer message history", () => {
-  it("keeps attribution so a later turn knows a bot spoke, not the user", () => {
-    expect(
-      blocksToAgentHistoryText([
-        { kind: "bot_message_received", fromBotId: "b_1", fromBotName: "Researcher", text: "hi" },
-      ]),
-    ).toBe('<bot_message from="Researcher">\nhi\n</bot_message>');
-    expect(
-      blocksToAgentHistoryText([
-        { kind: "bot_message_sent", toBotId: "b_2", toBotName: "Analyst", text: "chart it" },
-      ]),
-    ).toBe("[to Analyst] chart it");
   });
 });

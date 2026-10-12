@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type { ThreadSnapshot } from "@rakazo/contracts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { sessionCookieHeader } from "./index.js";
+import { sessionCookieHeader, threadMessages } from "./index.js";
 
 type App = { request: (input: string, init?: RequestInit) => Promise<Response> };
 
@@ -65,7 +65,7 @@ describeAttachments("chat attachments", () => {
 
     await sendAndWait(app, cookie, bot.id, { text: "see this", artifactIds: [image.id] });
     let snapshot = await rpc<ThreadSnapshot>(app, cookie, "threads/get", { botId: bot.id });
-    const imageMessage = snapshot.messages.find((message) =>
+    const imageMessage = threadMessages(snapshot).find((message) =>
       message.blocks.some((block) => block.kind === "image"),
     );
     expect(imageMessage?.blocks).toEqual(
@@ -77,7 +77,7 @@ describeAttachments("chat attachments", () => {
 
     await sendAndWait(app, cookie, bot.id, { artifactIds: [file.id] });
     snapshot = await rpc<ThreadSnapshot>(app, cookie, "threads/get", { botId: bot.id });
-    const fileMessage = snapshot.messages.find((message) =>
+    const fileMessage = threadMessages(snapshot).find((message) =>
       message.blocks.some((block) => block.kind === "file"),
     );
     expect(fileMessage?.blocks).toEqual(
@@ -122,7 +122,7 @@ describeAttachments("chat attachments", () => {
       text: "write notes/result.txt and attach it to the thread",
     });
     const snapshot = await rpc<ThreadSnapshot>(app, cookie, "threads/get", { botId: bot.id });
-    const fileMessage = snapshot.messages.find((message) =>
+    const fileMessage = threadMessages(snapshot).find((message) =>
       message.blocks.some((block) => block.kind === "file"),
     );
     const fileBlock = fileMessage?.blocks.find((block) => block.kind === "file");

@@ -211,6 +211,7 @@ model Space {
   agentSecrets                AgentSecret[]
   linkPreviewCache            LinkPreviewCache[]
   linkPreviewReads            LinkPreviewRead[]
+  conversationSessions        ConversationSession[]
 
   @@unique([id, organizationId])
   @@index([organizationId, createdAt])
@@ -482,12 +483,11 @@ model Thread {
   userId                      String
   createdAt                   DateTime   @default(now())
   nextEventSeq                Int        @default(0)
-  nextMessageSeq              Int        @default(0)
-  historyCompactedUpToSeq     Int?
-  historyCompactionSummary    String?    @db.Text
-  historyCompactionGeneration Int        @default(0)
   unread                      Boolean    @default(false)
-  messages                    Message[]
+  // The main session. The database fills it: a uuid default, and the threads_create_main_session
+  // trigger inserts the matching sessions row, so every thread has its log from its first insert.
+  sessionId                   String     @unique @default(dbgenerated("(gen_random_uuid())::text"))
+  sessions                    ConversationSession[]
   events                      Event[]
   tasks                       Task[]
   runs                        Run[]
@@ -495,33 +495,6 @@ model Thread {
 
   @@index([spaceId])
   @@map("threads")
-}
-
-model Message {
-  id               String    @id @default(cuid())
-  threadId         String
-  thread           Thread    @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  seq              Int
-  role             String
-  blocks           Json
-  botId            String?
-  replyToMessageId String?
-  replyQuote       String?
-  replyTo          Message?  @relation("MessageReplies", fields: [replyToMessageId], references: [id], onDelete: SetNull)
-  replies          Message[] @relation("MessageReplies")
-  runId            String?
-  clientNonce      String?
-  sourceRuns            Run[]             @relation("RunSourceMessage")
-  externalTranscriptFor  ExternalMessage?
-  steeringMessages SteeringMessage[]
-  previewArtifacts Artifact[]        @relation("LinkPreviewArtifact")
-  createdAt        DateTime  @default(now())
-
-  @@unique([threadId, seq])
-  @@unique([threadId, clientNonce])
-  @@index([threadId, seq])
-  @@index([replyToMessageId])
-  @@map("messages")
 }
 
 model Event {
@@ -585,7 +558,7 @@ model Run {
   checkpoint           String?
   clientNonce          String?
   sourceMessageId      String?
-  sourceMessage        Message?         @relation("RunSourceMessage", fields: [sourceMessageId], references: [id], onDelete: SetNull)
+  sourceMessage        SessionEntry?    @relation("RunSourceMessage", fields: [sourceMessageId], references: [id], onDelete: SetNull)
   routineId            String?
   routine              Routine?         @relation(fields: [routineId], references: [id], onDelete: SetNull)
   // Inbound webhook runs only: false when the woken routine opted out of approving each action.
@@ -605,6 +578,13 @@ model Run {
   usageRecords         UsageRecord[]
   steeringMessages     SteeringMessage[]
   externalMessage      ExternalMessage?
+  // The session the run writes to. When left out, the runs_default_session trigger copies the
+  // thread's main session; a subagent run names its child session.
+  sessionId            String              @default(dbgenerated())
+  session              ConversationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  parentRunId          String?
+  parentRun            Run?                @relation("RunChildren", fields: [parentRunId], references: [id], onDelete: SetNull)
+  childRuns            Run[]               @relation("RunChildren")
 
   @@unique([spaceId, clientNonce])
   @@index([status, leaseExpiresAt])
@@ -616,13 +596,72 @@ model Run {
   @@index([routineId, completedAt])
   @@index([sourceMessageId])
   @@index([threadId, status, createdAt])
+  @@index([sessionId])
+  @@index([parentRunId])
   @@map("runs")
+}
+
+// One conversation log. A thread session belongs to a thread; a subagent session belongs to the
+// parent session and the tool call that launched it, and has no thread; a routine session holds
+// one routine run's own entries, belongs to the thread session it reports to, and has no thread.
+// The sessions_kind_shape_check constraint enforces that split, and the partial unique index
+// sessions_threadId_main_key, created in SQL, keeps one thread session per thread. nextEntrySeq is
+// the per-session seq counter, and appends serialize on a lock of this row.
+model ConversationSession {
+  id              String                @id
+  spaceId         String
+  space           Space                 @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  kind            String
+  threadId        String?
+  thread          Thread?               @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  parentSessionId String?
+  parentSession   ConversationSession?  @relation("SessionChildren", fields: [parentSessionId], references: [id], onDelete: Cascade)
+  childSessions   ConversationSession[] @relation("SessionChildren")
+  parentEntryId   String?
+  nextEntrySeq    Int                   @default(0)
+  /// The entry with the highest seq, kept by the writer so an append reads its parent from this row.
+  headEntryId     String?
+  createdAt       DateTime              @default(now())
+  entries         SessionEntry[]
+  runs            Run[]
+
+  @@index([threadId])
+  @@index([parentSessionId])
+  @@map("sessions")
+}
+
+// One entry of a session log, validated by SessionEntrySchema. parentId has no foreign key: the
+// writer takes it from the session's own head or rewind target. The partial unique index
+// session_entries_sessionId_clientNonce_key on ("sessionId", payload->>'clientNonce') is created in
+// SQL: a redelivered message keeps one entry. So is the partial index
+// session_entries_originSessionId_idx on payload->>'originSessionId', which finds what a child
+// session raised to its thread.
+model SessionEntry {
+  id        String              @id
+  sessionId String
+  session   ConversationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  seq       Int
+  parentId  String?
+  type      String
+  payload   Json
+  botId     String?
+  runId     String?
+  createdAt DateTime            @default(now())
+  sourceRuns            Run[]             @relation("RunSourceMessage")
+  steeringMessages      SteeringMessage[]
+  externalTranscriptFor ExternalMessage?
+  previewArtifacts      Artifact[]        @relation("LinkPreviewArtifact")
+
+  @@unique([sessionId, seq])
+  @@index([sessionId, type, seq])
+  @@index([runId, seq])
+  @@map("session_entries")
 }
 
 model SteeringMessage {
   id        String   @id @default(cuid())
   messageId String
-  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  message   SessionEntry @relation(fields: [messageId], references: [id], onDelete: Cascade)
   botId     String
   bot       Bot      @relation(fields: [botId], references: [id], onDelete: Cascade)
   userId    String
@@ -965,10 +1004,11 @@ model Artifact {
   storageKey String
   createdAt  DateTime   @default(now())
   /// The image of a link preview card, never a user file: kept out of file lists, search and
-  /// attachments. Removed with its message (`previewMessageId` goes null, a sweep deletes it).
+  /// attachments. Removed with the entry it previews (`previewMessageId` goes null, a sweep
+  /// deletes it), or when the person removes the preview.
   isLinkPreview    Boolean  @default(false)
   previewMessageId String?
-  previewMessage   Message? @relation("LinkPreviewArtifact", fields: [previewMessageId], references: [id], onDelete: SetNull)
+  previewMessage   SessionEntry? @relation("LinkPreviewArtifact", fields: [previewMessageId], references: [id], onDelete: SetNull)
 
   @@index([spaceId, botId])
   @@index([groupId])
@@ -1375,7 +1415,7 @@ model ExternalMessage {
   runId                  String?               @unique
   run                    Run?                  @relation(fields: [runId], references: [id], onDelete: SetNull)
   threadMessageId        String?               @unique
-  threadMessage          Message?              @relation(fields: [threadMessageId], references: [id], onDelete: SetNull)
+  threadMessage          SessionEntry?         @relation(fields: [threadMessageId], references: [id], onDelete: SetNull)
   attempts               Int                   @default(0)
   nextAttemptAt          DateTime?
   lastError              String?

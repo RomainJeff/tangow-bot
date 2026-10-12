@@ -1,55 +1,32 @@
-import type { MessageBlock } from "@rakazo/contracts";
+import { randomUUID } from "node:crypto";
+import type { SessionEntryDraft } from "@rakazo/adapter-kit";
+import type { MessageBlock, SessionEntry, SessionEntryOf } from "@rakazo/contracts";
+import { EntryId, SessionId } from "@rakazo/contracts";
 import type { Prisma, PrismaClient } from "./client.js";
-
-/** Group turns use channel inputs and their own outputs, never private thread history. */
-export function loadRunHistoryMessages(
-  prisma: PrismaClient,
-  run: { id: string; threadId: string },
-  limit: number,
-  channelId?: string,
-) {
-  return prisma.message.findMany({
-    where: {
-      threadId: run.threadId,
-      ...(channelId
-        ? {
-            OR: [
-              {
-                role: "user",
-                blocks: { array_contains: [{ kind: "channel_message", channelId }] },
-              },
-              { role: "bot", runId: run.id },
-            ],
-          }
-        : {}),
-    },
-    orderBy: { seq: "desc" },
-    take: limit,
-    select: {
-      id: true,
-      threadId: true,
-      seq: true,
-      role: true,
-      runId: true,
-      botId: true,
-      blocks: true,
-      replyToMessageId: true,
-      replyQuote: true,
-      replyTo: { select: { id: true, threadId: true, role: true, blocks: true } },
-    },
-  });
-}
+import { appendRunBlocksInTransaction, appendSessionEntryInTransaction } from "./sessions.js";
 
 export interface CreateThreadMessageInput {
   threadId: string;
-  role: "user" | "bot" | "system";
+  role: "user" | "system";
   blocks: MessageBlock[];
-  botId?: string;
   replyToMessageId?: string;
   replyQuote?: string;
-  runId?: string;
   clientNonce?: string;
   markUnread?: boolean;
+  /** Where a person's message came from; a channel post is told by its block. */
+  source?: SessionEntryOf<"user.message">["payload"]["source"];
+  /** The bot whose feed shows the entry, for a thread with no bot of its own. */
+  feedBotId?: string;
+  /** The bots a group send addresses, in the order it dispatches them. */
+  targets?: string[];
+}
+
+/** A person's message whose clientNonce the thread already holds: the first delivery stands. */
+export class DuplicateMessageError extends Error {
+  constructor(readonly entry: SessionEntry) {
+    super(`Message ${entry.id} already carries this clientNonce`);
+    this.name = "DuplicateMessageError";
+  }
 }
 
 export async function createThreadMessage(prisma: PrismaClient, input: CreateThreadMessageInput) {
@@ -58,76 +35,103 @@ export async function createThreadMessage(prisma: PrismaClient, input: CreateThr
   );
 }
 
+/** A person's message, or a system note, as the newest entry of the thread's main session. */
 export async function createThreadMessageInTransaction(
   tx: Prisma.TransactionClient,
   input: CreateThreadMessageInput,
-) {
-  const thread = await tx.thread.update({
-    where: { id: input.threadId },
-    data: {
-      nextMessageSeq: { increment: 1 },
-      unread: (input.markUnread ?? input.role === "bot") ? true : undefined,
+): Promise<SessionEntry> {
+  const thread = await markThread(tx, input.threadId, input.markUnread ?? false);
+  const id = EntryId.parse(randomUUID());
+  const entry = await appendSessionEntryInTransaction(tx, {
+    ...threadMessageEntry(input),
+    id,
+    sessionId: thread.sessionId,
+    feedBotId: input.feedBotId ?? thread.botId ?? undefined,
+  } as SessionEntryDraft);
+  if (entry.id !== id) throw new DuplicateMessageError(entry);
+  return entry;
+}
+
+function threadMessageEntry(input: CreateThreadMessageInput) {
+  if (input.role === "system") {
+    const text = input.blocks
+      .flatMap((block) => ("text" in block && typeof block.text === "string" ? [block.text] : []))
+      .join("\n");
+    return { type: "system.note", payload: { text } } as const;
+  }
+  return {
+    type: "user.message",
+    payload: {
+      blocks: input.blocks,
+      ...(input.replyToMessageId
+        ? {
+            replyTo: {
+              entryId: input.replyToMessageId as EntryId,
+              ...(input.replyQuote ? { quote: input.replyQuote } : {}),
+            },
+          }
+        : {}),
+      ...(input.clientNonce ? { clientNonce: input.clientNonce } : {}),
+      ...(input.targets ? { targets: input.targets } : {}),
+      source:
+        input.source ??
+        (input.blocks.some((block) => block.kind === "channel_message") ? "channel" : "app"),
     },
-    select: { nextMessageSeq: true },
-  });
-  await assertRunCanWriteHistory(tx, input.runId);
-  return tx.message.create({
-    data: {
-      threadId: input.threadId,
-      seq: thread.nextMessageSeq - 1,
-      role: input.role,
-      blocks: input.blocks as Prisma.InputJsonValue,
-      botId: input.botId,
-      replyToMessageId: input.replyToMessageId,
-      replyQuote: input.replyQuote,
-      runId: input.runId,
-      clientNonce: input.clientNonce,
-    },
-  });
+  } as const;
+}
+
+export interface CreateBotMessageInput {
+  threadId: string;
+  botId: string;
+  blocks: MessageBlock[];
+  /** The run that wrote the words; without one they are the bot's words outside any run. */
+  runId?: string;
+  toPerson?: true;
+  midTurn?: true;
+  markUnread?: boolean;
 }
 
 /**
- * The payload of a `thread.message.updated` event that rewrites a stored message's blocks. It
- * names the message and carries the identity fields `thread.message.created` carries, so a client
- * that rebuilds the message from the event alone still shows its reply quote. Clients merge it
- * into the message they already hold: author, run and ordering come from there.
+ * A bot's words in a thread: a run's blocks as its entries, or a `bot.text` outside any run. The
+ * thread turns unread unless the caller says otherwise. Returns the first entry's id, none when no
+ * block makes an entry.
  */
-export function messageUpdatedPayload(
-  message: {
-    id: string;
-    role: string;
-    replyToMessageId?: string | null;
-    replyQuote?: string | null;
-  },
-  blocks: unknown[],
-): Record<string, unknown> {
-  return {
-    messageId: message.id,
-    role: message.role,
-    blocks,
-    ...(message.replyToMessageId ? { replyToMessageId: message.replyToMessageId } : {}),
-    ...(message.replyQuote ? { replyQuote: message.replyQuote } : {}),
-  };
-}
-
-export class RunHistoryWriteError extends Error {
-  constructor() {
-    super("Run cannot write thread history");
-    this.name = "RunHistoryWriteError";
-  }
-}
-
-export async function assertRunCanWriteHistory(
+export async function createBotMessageInTransaction(
   tx: Prisma.TransactionClient,
-  runId?: string,
-): Promise<{ status: string; startedAt: Date | null } | undefined> {
-  if (!runId) return;
-  const run = await tx.run.findUnique({
-    where: { id: runId },
-    select: { status: true, startedAt: true },
-  });
-  if (!run || run.status === "cancelled") {
-    throw new RunHistoryWriteError();
+  input: CreateBotMessageInput,
+  append: typeof appendSessionEntryInTransaction = appendSessionEntryInTransaction,
+): Promise<EntryId | undefined> {
+  const thread = await markThread(tx, input.threadId, input.markUnread ?? true);
+  const id = EntryId.parse(randomUUID());
+  if (input.runId) {
+    const written = await appendRunBlocksInTransaction(
+      tx,
+      {
+        id,
+        runId: input.runId,
+        botId: input.botId,
+        toPerson: input.toPerson,
+        midTurn: input.midTurn,
+      },
+      input.blocks,
+      append,
+    );
+    return written ? id : undefined;
   }
-  return run;
+  await append(tx, {
+    id,
+    type: "bot.text",
+    sessionId: thread.sessionId,
+    botId: input.botId,
+    payload: { blocks: input.blocks },
+  });
+  return id;
+}
+
+async function markThread(tx: Prisma.TransactionClient, threadId: string, unread: boolean) {
+  const select = { sessionId: true, botId: true } as const;
+  const thread = unread
+    ? await tx.thread.update({ where: { id: threadId }, data: { unread: true }, select })
+    : await tx.thread.findUniqueOrThrow({ where: { id: threadId }, select });
+  return { sessionId: SessionId.parse(thread.sessionId), botId: thread.botId };
 }

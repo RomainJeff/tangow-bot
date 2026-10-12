@@ -38,9 +38,10 @@ test("spaces stay invisible by default and chat creation requires approval", asy
     timeout: 15_000,
   });
 
+  // By its header: the Personal group's preview shows the message that asked for the space.
   const supportSpace = sidebar
     .locator('[data-sidebar-group^="space:"]')
-    .filter({ hasText: "Customer support" });
+    .filter({ has: page.getByRole("button", { name: "Open Customer support" }) });
   const supportSpaceGroup = await supportSpace.getAttribute("data-sidebar-group");
   const supportSpaceId = supportSpaceGroup?.split(":")[1];
   expect(supportSpaceId).toBeTruthy();

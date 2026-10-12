@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type * as AutoReviewModule from "./auto-review.js";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
 import { createRunExecutor } from "./executor.js";
+import { recordingSessionLog } from "./session-log/recording.test-support.js";
 
 vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ComputerLifecycleModule>()),
@@ -59,6 +60,7 @@ function fixture(overrides: RunOverrides = {}, runId = "run-1") {
     sourceMessageId: overrides.sourceMessageId ?? null,
     routineId: overrides.routineId ?? null,
     leaseFence: 0,
+    createdAt: new Date(),
   };
   const routineCreate = vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
     id: "routine-new",
@@ -106,7 +108,18 @@ function fixture(overrides: RunOverrides = {}, runId = "run-1") {
       },
     ),
   };
+  const log = recordingSessionLog();
   const prisma = {
+    $queryRaw: log.queryRaw,
+    sessionEntry: {
+      ...log.sessionEntry,
+      findUnique: vi.fn(async ({ where }: { where: { id: string } }) =>
+        where.id === run.sourceMessageId
+          ? { type: "bot.message.received", payload: { hop: overrides.messageHop ?? 1 } }
+          : null,
+      ),
+    },
+    $transaction: async (work: (tx: unknown) => unknown) => work(prisma),
     run: {
       findUnique: vi.fn(async () => run),
       findUniqueOrThrow: vi.fn(async () => run),
@@ -132,21 +145,6 @@ function fixture(overrides: RunOverrides = {}, runId = "run-1") {
       updateMany: vi.fn(async () => ({ count: 1 })),
     },
     thread: { findUniqueOrThrow: vi.fn(async () => ({ id: run.threadId, groupId: null })) },
-    message: {
-      findMany: vi.fn(async () => []),
-      findFirst: vi.fn(async () => null),
-      findUnique: vi.fn(async () => ({
-        blocks: [
-          {
-            kind: "bot_message_received",
-            fromBotId: "bot-2",
-            fromBotName: "B",
-            text: "hi",
-            hop: overrides.messageHop ?? 1,
-          },
-        ],
-      })),
-    },
     routine: {
       create: routineCreate,
       findUnique: vi.fn(async () => ({ inheritedHop: overrides.routineHop ?? null })),
@@ -187,6 +185,7 @@ function fixture(overrides: RunOverrides = {}, runId = "run-1") {
     yield { type: "done" as const, text: "Done" };
   });
   const executor = createRunExecutor({
+    sessionLog: log.sessionLog,
     prisma,
     runtime: { describe: () => ({ capabilities: { scripted: false } }), run: runtimeRun },
     connector: {

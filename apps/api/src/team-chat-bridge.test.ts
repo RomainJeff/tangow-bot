@@ -1656,11 +1656,14 @@ describe("team chat bridge", () => {
         }),
       },
       run: { findMany: vi.fn(async () => []), findFirst: vi.fn(async () => null) },
-      message: {
-        findUnique: vi.fn(async () => null),
-        findFirst: vi.fn(async () => ({
-          blocks: [{ kind: "text", text: "The launch plan is ready." }],
-        })),
+      sessionEntry: {
+        findMany: vi.fn(async () => [
+          {
+            id: "entry-reply",
+            seq: 3,
+            payload: { blocks: [{ kind: "text", text: "The launch plan is ready." }] },
+          },
+        ]),
       },
     } as unknown as PrismaClient;
 

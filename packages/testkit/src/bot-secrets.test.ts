@@ -7,6 +7,7 @@ import { ScriptedAgentRuntime } from "@rakazo/adapters";
 import { answerRunInput } from "@rakazo/db";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { createApp } from "../../../apps/api/src/app.ts";
+import { latestCard } from "./index.js";
 
 const hasDb = process.env.VERIFY_DATABASE === "1" && Boolean(process.env.DATABASE_URL);
 const describeIntegration = hasDb ? describe : describe.skip;
@@ -92,15 +93,8 @@ describeIntegration("reusable credential lifecycle", () => {
         await handles.executor.continueRun(seeded.run.id, "test-worker");
         const approve = async (runId: string, interruptBeforeCard = false) => {
           if (!requireApproval) return;
-          const message = await handles.prisma.message.findFirstOrThrow({
-            where: { runId, role: "bot" },
-            orderBy: { createdAt: "desc" },
-          });
-          expect(message.blocks).toEqual(
-            expect.arrayContaining([
-              expect.objectContaining({ approvalEffectId: expect.any(String) }),
-            ]),
-          );
+          const message = await latestCard(handles.prisma, runId);
+          expect(message.block).toMatchObject({ approvalEffectId: expect.any(String) });
           if (interruptBeforeCard) {
             // Reproduce a worker stopping after releasing the approved effect to intended,
             // before the protected card transaction commits. No background job is enqueued.
@@ -145,15 +139,8 @@ describeIntegration("reusable credential lifecycle", () => {
         };
         await approve(seeded.run.id);
         const answer = async (runId: string, value: string) => {
-          const message = await handles.prisma.message.findFirstOrThrow({
-            where: { runId, role: "bot" },
-            orderBy: { createdAt: "desc" },
-          });
-          expect(message.blocks).toEqual(
-            expect.arrayContaining([
-              expect.objectContaining({ input: "secret", credential: destination }),
-            ]),
-          );
+          const message = await latestCard(handles.prisma, runId);
+          expect(message.block).toMatchObject({ input: "secret", credential: destination });
           await rpc(seeded.cookie, "threads/answer", {
             botId: seeded.bot.id,
             runId,
@@ -173,20 +160,13 @@ describeIntegration("reusable credential lifecycle", () => {
           await handles.prisma.run.findUniqueOrThrow({ where: { id: seeded.run.id } }),
         ).toMatchObject({ status: "waiting_input", error: null });
         // An invalid value rolls back the run transition and leaves the card pending.
-        const pending = await handles.prisma.message.findFirstOrThrow({
-          where: { runId: seeded.run.id, role: "bot" },
-          orderBy: { seq: "desc" },
+        const pending = await latestCard(handles.prisma, seeded.run.id);
+        expect(pending.block).toMatchObject({
+          kind: "ask",
+          input: "secret",
+          status: "pending",
+          credential: destination,
         });
-        expect(pending.blocks).toEqual(
-          expect.arrayContaining([
-            expect.objectContaining({
-              kind: "ask",
-              input: "secret",
-              status: "pending",
-              credential: destination,
-            }),
-          ]),
-        );
         for (const invalid of ["x".repeat(16_385), "key\r\nX-Evil: injected", "key "]) {
           await expect(
             rpc(seeded.cookie, "threads/answer", {
@@ -303,7 +283,9 @@ describeIntegration("reusable credential lifecycle", () => {
         expect(await handles.prisma.botSecret.count({ where: { botId: seeded.bot.id } })).toBe(0);
         expect(fetch).toHaveBeenCalledTimes(count);
         const [messages, events, effects, tasks] = await Promise.all([
-          handles.prisma.message.findMany({ where: { threadId: seeded.thread.id } }),
+          handles.prisma.sessionEntry.findMany({
+            where: { session: { threadId: seeded.thread.id } },
+          }),
           handles.prisma.event.findMany({ where: { threadId: seeded.thread.id } }),
           handles.prisma.externalEffect.findMany({ where: { spaceId: seeded.me.spaceId } }),
           handles.prisma.task.findMany({ where: { botId: seeded.bot.id } }),
@@ -378,7 +360,7 @@ describeIntegration("reusable credential lifecycle", () => {
       const { secret } = await bot.read();
       const stranger = await signup(`webhook-stranger-${stamp}@rakazo.test`, "Webhook stranger");
 
-      await expect(bot.read(stranger)).rejects.toThrow("bots/webhookSecret failed (500)");
+      await expect(bot.read(stranger)).rejects.toThrow("bots/webhookSecret failed (404)");
       expect(await bot.read()).toEqual({ secret });
       expect(await bot.stored()).toBe(1);
     });

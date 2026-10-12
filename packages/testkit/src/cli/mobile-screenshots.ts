@@ -4,13 +4,20 @@ import { createServer, type Server } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { serve } from "@hono/node-server";
+import type { SessionEntryDraft } from "@rakazo/adapter-kit";
 import {
   ComposioEmulator,
   EmailEmulator,
   PipedreamConnector,
   ThirdPartyConnectorEmulator,
 } from "@rakazo/adapters";
-import { createThreadMessage, type PrismaClient } from "@rakazo/db";
+import type { EntryId, MessageBlock, SessionEntry, SessionId } from "@rakazo/contracts";
+import {
+  appendSessionEntryInTransaction,
+  createBotMessageInTransaction,
+  createThreadMessage,
+  type PrismaClient,
+} from "@rakazo/db";
 import { sessionCookieHeader } from "../index.js";
 import { runProcess } from "./process.js";
 
@@ -225,45 +232,55 @@ async function seedFixture(app: App, prisma: PrismaClient) {
 
   const botThread = await prisma.thread.findUniqueOrThrow({ where: { botId: researcher.id } });
   const groupThread = await prisma.thread.findUniqueOrThrow({ where: { groupId: group.id } });
-  const question = await createThreadMessage(prisma, {
-    threadId: botThread.id,
-    role: "user",
-    blocks: [{ kind: "text", text: "Summarize the fixture launch checklist." }],
-  });
-  await createThreadMessage(prisma, {
-    threadId: botThread.id,
-    role: "bot",
+  await seedExchange(prisma, botThread, {
     botId: researcher.id,
-    blocks: [{ kind: "text", text: "The fixture workspace is ready." }],
+    question: "Summarize the fixture launch checklist.",
+    ask: { text: "Which checklist should I use?", answer: "The launch checklist." },
+    reply: "The fixture workspace is ready.",
   });
-  await createThreadMessage(prisma, {
-    threadId: groupThread.id,
-    role: "user",
-    blocks: [{ kind: "text", text: "Coordinate the fixture launch plan." }],
-  });
-  await createThreadMessage(prisma, {
-    threadId: groupThread.id,
-    role: "bot",
+  await seedExchange(prisma, groupThread, {
     botId: writer.id,
-    blocks: [{ kind: "text", text: "The fixture launch plan is ready." }],
+    question: "Coordinate the fixture launch plan.",
+    reply: "The fixture launch plan is ready.",
   });
 
+  return { botId: researcher.id, groupId: group.id, routineId: routine.id };
+}
+
+type FixtureThread = { id: string; spaceId: string; userId: string; sessionId: string };
+
+async function seedExchange(
+  prisma: PrismaClient,
+  thread: FixtureThread,
+  exchange: {
+    botId: string;
+    question: string;
+    ask?: { text: string; answer: string };
+    reply: string;
+  },
+) {
+  const question = await createThreadMessage(prisma, {
+    threadId: thread.id,
+    role: "user",
+    feedBotId: exchange.botId,
+    blocks: [{ kind: "text", text: exchange.question }],
+  });
   const task = await prisma.task.create({
     data: {
-      spaceId: botThread.spaceId,
-      userId: botThread.userId,
-      botId: researcher.id,
-      threadId: botThread.id,
-      prompt: "Prepare the fixture workspace",
+      spaceId: thread.spaceId,
+      userId: thread.userId,
+      botId: exchange.botId,
+      threadId: thread.id,
+      prompt: exchange.question,
       status: "completed",
     },
   });
-  await prisma.run.create({
+  const run = await prisma.run.create({
     data: {
-      spaceId: botThread.spaceId,
-      userId: botThread.userId,
-      botId: researcher.id,
-      threadId: botThread.id,
+      spaceId: thread.spaceId,
+      userId: thread.userId,
+      botId: exchange.botId,
+      threadId: thread.id,
       taskId: task.id,
       status: "completed",
       trigger: "user",
@@ -274,8 +291,48 @@ async function seedFixture(app: App, prisma: PrismaClient) {
       completedAt: new Date(),
     },
   });
-
-  return { botId: researcher.id, groupId: group.id, routineId: routine.id };
+  const append = (entry: Pick<SessionEntry, "type" | "payload">) =>
+    prisma.$transaction((tx) =>
+      appendSessionEntryInTransaction(tx, {
+        ...entry,
+        sessionId: thread.sessionId as SessionId,
+        botId: exchange.botId,
+        runId: run.id,
+      } as SessionEntryDraft),
+    );
+  await append({
+    type: "run.started",
+    payload: {
+      trigger: { kind: "message", entryId: question.id as EntryId },
+      model: { provider: "scripted", id: "scripted" },
+      effort: null,
+    },
+  });
+  const publish = (blocks: MessageBlock[]) =>
+    prisma.$transaction((tx) =>
+      createBotMessageInTransaction(tx, {
+        threadId: thread.id,
+        botId: exchange.botId,
+        runId: run.id,
+        blocks,
+      }),
+    );
+  if (exchange.ask) {
+    const askId = await publish([{ kind: "ask", text: exchange.ask.text }]);
+    await createThreadMessage(prisma, {
+      threadId: thread.id,
+      role: "user",
+      feedBotId: exchange.botId,
+      blocks: [{ kind: "text", text: exchange.ask.answer }],
+      replyToMessageId: askId,
+      replyQuote: exchange.ask.text,
+    });
+  }
+  await publish([{ kind: "text", text: exchange.reply }]);
+  await append({
+    type: "run.finished",
+    payload: { status: "completed", usage: { inputTokens: 1840, outputTokens: 212 } },
+  });
 }
 
 async function signup(app: App) {

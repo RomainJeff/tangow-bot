@@ -11,10 +11,12 @@ import {
   purgeLinkPreviewState,
   removeLinkPreviewBlock,
   reserveLinkPreviewRead,
+  rewindThread,
   storeLinkPreviewCache,
 } from "@rakazo/db";
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createFakeThreadDb } from "./fake-thread-db.js";
+import { openThreadDb, type ThreadDb } from "./thread-db.js";
 
 const NOW = new Date("2026-10-05T12:00:00.000Z");
 const at = (ms: number) => new Date(NOW.getTime() + ms);
@@ -355,238 +357,243 @@ describe("read budget (CA 22, CA 55)", () => {
   });
 });
 
-describe("the live update keeps the message's identity (QA F1)", () => {
-  const scope = { spaceId: "space-1", threadId: "thread-1", messageId: "m2" };
-  const url = "https://example.test/a";
+describe("a message's preview in the log", () => {
+  let db: ThreadDb;
+  beforeAll(async () => {
+    db = await openThreadDb();
+  }, 60_000);
+  beforeEach(() => db.reset());
+  afterAll(() => db.close());
 
-  function groupThread() {
-    const db = createFakeThreadDb();
-    db.seedThread({ id: "thread-1" });
-    db.tables.threads.get("thread-1")!.botId = null;
-    db.tables.threads.get("thread-1")!.groupId = "group-1";
-    db.tables.chatGroupMembers.set("gm1", {
-      id: "gm1",
-      groupId: "group-1",
-      botId: "bot-a",
-      createdAt: new Date(0),
-    });
-    db.seedMessage({
-      id: "m2",
-      threadId: "thread-1",
-      role: "bot",
-      botId: "bot-b",
-      runId: "run-1",
-      replyToMessageId: "m1",
-      replyQuote: "the quoted words",
-      blocks: [{ kind: "text", text: url }],
-    });
-    return db;
-  }
-
-  it("attributes a card on a group bot's reply to that bot and carries the reply quote", async () => {
-    const db = groupThread();
-
-    await appendLinkPreviewBlock(db.prisma, {
-      ...scope,
-      block: { kind: "link_preview", url, format: "compact", title: "A page" },
-    });
-
-    const [event] = db.eventsOfType("thread.message.updated");
-    expect(event?.botId).toBe("bot-b");
-    expect(event?.runId).toBeUndefined();
-    expect(event?.payload).toMatchObject({
-      messageId: "m2",
-      role: "bot",
-      replyToMessageId: "m1",
-      replyQuote: "the quoted words",
-    });
-  });
-
-  it("does the same when the card is removed", async () => {
-    const db = groupThread();
-
-    await removeLinkPreviewBlock(db.prisma, scope);
-
-    const [event] = db.eventsOfType("thread.message.updated");
-    expect(event?.botId).toBe("bot-b");
-    expect(event?.payload).toMatchObject({
-      replyToMessageId: "m1",
-      replyQuote: "the quoted words",
-    });
-  });
-
-  it("falls back to the thread's bot for a message that names none, and omits absent reply fields", async () => {
-    const db = createFakeThreadDb();
-    db.seedThread({ id: "thread-1" });
-    db.seedMessage({ id: "m2", threadId: "thread-1", blocks: [{ kind: "text", text: url }] });
-
-    await appendLinkPreviewBlock(db.prisma, {
-      ...scope,
-      block: { kind: "link_preview", url, format: "compact", title: "A page" },
-    });
-
-    const [event] = db.eventsOfType("thread.message.updated");
-    expect(event?.botId).toBe("bot-1");
-    expect(Object.keys(event?.payload as object).sort()).toEqual(["blocks", "messageId", "role"]);
-  });
-});
-
-describe("removal and card images (CA 16, CA 44)", () => {
   const scope = { spaceId: "space-1", threadId: "thread-1", messageId: "m1" };
+  const url = "https://example.test/a";
+  const text = { kind: "text" as const, text: url };
+  /** The bot and run the thread's feed showed the newest entry under. */
+  const lastFeed = async () => {
+    const event = await db.prisma.event.findFirstOrThrow({
+      where: { threadId: "thread-1", type: "session.entry.appended" },
+      orderBy: { seq: "desc" },
+    });
+    return { botId: event.botId, runId: event.runId };
+  };
 
-  function withCard() {
-    const db = createFakeThreadDb();
-    db.seedThread({ id: "thread-1" });
-    db.seedMessage({
-      id: "m1",
-      threadId: "thread-1",
-      blocks: [
-        { kind: "text", text: "https://example.test/a" },
-        {
+  describe("reaches the feed under the message's own bot (QA F1)", () => {
+    it("shows a card on a group bot's reply, and its removal, under that bot and no run", async () => {
+      await db.seedThread({
+        id: "thread-1",
+        group: { id: "group-1", memberBotIds: ["bot-a", "bot-b"] },
+      });
+      await db.seedRun({
+        id: "run-1",
+        threadId: "thread-1",
+        botId: "bot-b",
+        messages: [{ id: "m1", blocks: [text] }],
+      });
+
+      await appendLinkPreviewBlock(db.prisma, {
+        ...scope,
+        block: { kind: "link_preview", url, format: "compact", title: "A page" },
+      });
+      expect(await lastFeed()).toEqual({ botId: "bot-b", runId: null });
+
+      await removeLinkPreviewBlock(db.prisma, scope);
+      expect(await lastFeed()).toEqual({ botId: "bot-b", runId: null });
+    });
+
+    it("falls back to the thread's bot for a message that names none", async () => {
+      await db.seedThread({ id: "thread-1" });
+      await db.seedMessage({ id: "m1", threadId: "thread-1", blocks: [text] });
+
+      await appendLinkPreviewBlock(db.prisma, {
+        ...scope,
+        block: { kind: "link_preview", url, format: "compact", title: "A page" },
+      });
+
+      expect(await lastFeed()).toEqual({ botId: "bot-1", runId: null });
+    });
+  });
+
+  it("adds one card to a message, and none to a message of another thread", async () => {
+    const card = { kind: "link_preview" as const, url, format: "compact" as const, title: "A" };
+    await db.seedThread({ id: "thread-1" });
+    await db.seedThread({ id: "thread-2", botId: "bot-2" });
+    await db.seedMessage({ id: "m1", threadId: "thread-1", blocks: [text] });
+    await db.seedMessage({ id: "m2", threadId: "thread-2", blocks: [text] });
+
+    const outcomes = [
+      await appendLinkPreviewBlock(db.prisma, { ...scope, block: card }),
+      await appendLinkPreviewBlock(db.prisma, { ...scope, block: card }),
+      await appendLinkPreviewBlock(db.prisma, { ...scope, messageId: "m2", block: card }),
+      await removeLinkPreviewBlock(db.prisma, { ...scope, messageId: "m2" }),
+    ];
+
+    expect(outcomes.map((result) => result.outcome)).toEqual([
+      "appended",
+      "present",
+      "gone",
+      "gone",
+    ]);
+    expect(await db.previewOf("m2")).toEqual({ removed: false });
+  });
+
+  it("adds no card to a message a rewind cut before the preview arrived", async () => {
+    await db.seedThread({ id: "thread-1" });
+    await db.seedMessage({ id: "m1", threadId: "thread-1", blocks: [text] });
+    await rewindThread(db.prisma, { ...scope, botId: "bot-1" });
+
+    const appended = await appendLinkPreviewBlock(db.prisma, {
+      ...scope,
+      block: { kind: "link_preview", url, format: "compact", title: "A page" },
+    });
+
+    expect(appended).toEqual({ outcome: "gone" });
+    expect(await db.previewOf("m1")).toEqual({ removed: false });
+  });
+
+  describe("removal and card images (CA 16, CA 44)", () => {
+    async function previewArtifact(id: string, storageKey: string, createdAt = NOW) {
+      await db.prisma.artifact.create({
+        data: {
+          id,
+          isLinkPreview: true,
+          previewMessageId: "m1",
+          storageKey,
+          spaceId: "space-1",
+          userId: "user-1",
+          botId: "bot-1",
+          name: "link-preview.webp",
+          mimeType: "image/webp",
+          size: 3,
+          hash: "h",
+          createdAt,
+        },
+      });
+    }
+
+    async function withCard() {
+      await db.seedThread({ id: "thread-1" });
+      await db.seedMessage({ id: "m1", threadId: "thread-1", blocks: [text] });
+      await previewArtifact("a1", "blob-1");
+      await appendLinkPreviewBlock(db.prisma, {
+        ...scope,
+        block: {
           kind: "link_preview",
-          url: "https://example.test/a",
+          url,
           format: "photo",
           image: { artifactId: "a1", width: 1, height: 1 },
         },
-        { kind: "from_the_future" },
-      ],
-    });
-    db.tables.artifact.set("a1", {
-      id: "a1",
-      isLinkPreview: true,
-      previewMessageId: "m1",
-      storageKey: "blob-1",
-      spaceId: "space-1",
-      userId: "user-1",
-      botId: "bot-1",
-      createdAt: NOW,
-    });
-    return db;
-  }
+      });
+    }
 
-  it("swaps the card for the marker in place, deletes the image row and returns its bytes", async () => {
-    const db = withCard();
+    it("removes the card, deletes the image row and returns its bytes", async () => {
+      await withCard();
 
-    const removed = await removeLinkPreviewBlock(db.prisma, scope);
+      const removed = await removeLinkPreviewBlock(db.prisma, scope);
 
-    expect(removed).toMatchObject({
-      outcome: "removed",
-      artifacts: [{ id: "a1", storageKey: "blob-1" }],
-    });
-    expect(db.blocksOf("m1")).toEqual([
-      { kind: "text", text: "https://example.test/a" },
-      { kind: "link_preview", removed: true },
-      { kind: "from_the_future" },
-    ]);
-    expect(db.tables.artifact.size).toBe(0);
-    expect(db.eventsOfType("thread.message.updated")).toHaveLength(1);
-  });
-
-  it("is idempotent: the second call changes nothing and emits nothing", async () => {
-    const db = withCard();
-    await removeLinkPreviewBlock(db.prisma, scope);
-    const before = structuredClone(db.blocksOf("m1"));
-
-    await expect(removeLinkPreviewBlock(db.prisma, scope)).resolves.toEqual({
-      outcome: "unchanged",
+      expect(removed).toMatchObject({
+        outcome: "removed",
+        artifacts: [{ id: "a1", storageKey: "blob-1" }],
+      });
+      expect(await db.previewOf("m1")).toEqual({ removed: true });
+      expect(await db.prisma.artifact.count()).toBe(0);
     });
 
-    expect(db.blocksOf("m1")).toEqual(before);
-    expect(db.eventsOfType("thread.message.updated")).toHaveLength(1);
-  });
+    it("is idempotent: the second call writes nothing", async () => {
+      await withCard();
+      await removeLinkPreviewBlock(db.prisma, scope);
 
-  it("puts a marker on a message that has no card yet, so a read in flight cannot add one", async () => {
-    const db = createFakeThreadDb();
-    db.seedThread({ id: "thread-1" });
-    db.seedMessage({ id: "m1", threadId: "thread-1", blocks: [{ kind: "text", text: "x" }] });
+      await expect(removeLinkPreviewBlock(db.prisma, scope)).resolves.toEqual({
+        outcome: "unchanged",
+      });
 
-    await removeLinkPreviewBlock(db.prisma, scope);
-
-    expect(db.blocksOf("m1")).toEqual([
-      { kind: "text", text: "x" },
-      { kind: "link_preview", removed: true },
-    ]);
-  });
-
-  it("finds the card images left behind when a message disappears, and sweeps rows and bytes", async () => {
-    const db = withCard();
-    const { id: stored } = await db.artifacts.put(
-      { name: "p", mimeType: "image/webp", bytes: new Uint8Array(3) },
-      {
-        operationId: "t",
-        traceId: "t",
-        spaceId: "space-1",
-        userId: "user-1",
-        signal: new AbortController().signal,
-      },
-    );
-    db.tables.artifact.get("a1")!.storageKey = stored;
-    // A file a person attached must never be swept.
-    db.tables.artifact.set("file", {
-      id: "file",
-      isLinkPreview: false,
-      previewMessageId: null,
-      storageKey: "keep",
-      spaceId: "space-1",
-      userId: "user-1",
-      botId: "bot-1",
-      createdAt: NOW,
+      expect(await db.prisma.sessionEntry.count({ where: { type: "link.preview.removed" } })).toBe(
+        1,
+      );
     });
-    expect(await findOrphanPreviewArtifacts(db.prisma, { now: NOW })).toEqual([]);
 
-    // Thread cleared or rewound: the message goes, the foreign key nulls the artifact's message.
-    await db.prisma.message.deleteMany({ where: { threadId: "thread-1" } });
-    expect(
-      (await findOrphanPreviewArtifacts(db.prisma, { now: NOW })).map((row) => row.id),
-    ).toEqual(["a1"]);
-    expect(await findOrphanPreviewArtifacts(db.prisma, { spaceId: "space-2", now: NOW })).toEqual(
-      [],
-    );
+    it("marks a message that has no card yet, so a read in flight cannot add one", async () => {
+      await db.seedThread({ id: "thread-1" });
+      await db.seedMessage({ id: "m1", threadId: "thread-1", blocks: [text] });
 
-    await expect(
-      sweepOrphanPreviewArtifacts({ prisma: db.prisma, artifacts: db.artifacts }, { now: NOW }),
-    ).resolves.toBe(1);
-    expect([...db.tables.artifact.keys()]).toEqual(["file"]);
-    expect(db.artifacts.keys()).toEqual([]);
-  });
+      await removeLinkPreviewBlock(db.prisma, scope);
 
-  it("sweeps an image whose message never got its card, after a grace hour", async () => {
-    const db = createFakeThreadDb();
-    db.seedThread({ id: "thread-1" });
-    db.seedMessage({ id: "m1", threadId: "thread-1", blocks: [{ kind: "text", text: "x" }] });
-    db.tables.artifact.set("lost", {
-      id: "lost",
-      isLinkPreview: true,
-      previewMessageId: "m1",
-      storageKey: "blob",
-      spaceId: "space-1",
-      userId: "user-1",
-      botId: "bot-1",
-      createdAt: NOW,
+      expect(await db.previewOf("m1")).toEqual({ removed: true });
+      await expect(
+        appendLinkPreviewBlock(db.prisma, {
+          ...scope,
+          block: { kind: "link_preview", url, format: "compact", title: "A page" },
+        }),
+      ).resolves.toEqual({ outcome: "present" });
     });
-    // The artifact's message is read through the relation in Postgres; the fake needs it spelled.
-    const prisma = {
-      artifact: {
-        findMany: async (args: { where: Record<string, unknown> }) => {
-          const rows = await db.prisma.artifact.findMany(args as never);
-          return (rows as Array<Record<string, unknown>>).map((row) => ({
-            ...row,
-            previewMessage: { blocks: db.blocksOf(row.previewMessageId as string) },
-          }));
+
+    it("finds the card images left behind when a thread goes, and sweeps rows and bytes", async () => {
+      await withCard();
+      const { id: stored } = await db.artifacts.put(
+        { name: "p", mimeType: "image/webp", bytes: new Uint8Array(3) },
+        {
+          operationId: "t",
+          traceId: "t",
+          spaceId: "space-1",
+          userId: "user-1",
+          signal: new AbortController().signal,
         },
-      },
-    };
+      );
+      await db.prisma.artifact.update({ where: { id: "a1" }, data: { storageKey: stored } });
+      // A file a person attached must never be swept.
+      await db.prisma.artifact.create({
+        data: {
+          id: "file",
+          isLinkPreview: false,
+          storageKey: "keep",
+          spaceId: "space-1",
+          userId: "user-1",
+          botId: "bot-1",
+          name: "notes.txt",
+          mimeType: "text/plain",
+          size: 1,
+          hash: "h",
+        },
+      });
+      expect(await findOrphanPreviewArtifacts(db.prisma, { now: NOW })).toEqual([]);
 
-    expect(await findOrphanPreviewArtifacts(prisma as never, { now: at(30 * 60_000) })).toEqual([]);
-    expect(
-      (await findOrphanPreviewArtifacts(prisma as never, { now: at(61 * 60_000) })).map(
-        (row) => row.id,
-      ),
-    ).toEqual(["lost"]);
-    // Once the card is there, it is no orphan.
-    db.tables.messages.get("m1")!.blocks = [
-      { kind: "link_preview", image: { artifactId: "lost" } },
-    ];
-    expect(await findOrphanPreviewArtifacts(prisma as never, { now: at(61 * 60_000) })).toEqual([]);
+      // The thread is deleted: its entries go, the foreign key nulls the artifact's message.
+      await db.prisma.thread.delete({ where: { id: "thread-1" } });
+      expect(
+        (await findOrphanPreviewArtifacts(db.prisma, { now: NOW })).map((row) => row.id),
+      ).toEqual(["a1"]);
+      expect(await findOrphanPreviewArtifacts(db.prisma, { spaceId: "space-2", now: NOW })).toEqual(
+        [],
+      );
+
+      await expect(
+        sweepOrphanPreviewArtifacts({ prisma: db.prisma, artifacts: db.artifacts }, { now: NOW }),
+      ).resolves.toBe(1);
+      expect((await db.prisma.artifact.findMany()).map((row) => row.id)).toEqual(["file"]);
+      expect(db.artifacts.keys()).toEqual([]);
+    });
+
+    it("sweeps an image whose message never got its card, after a grace hour", async () => {
+      await db.seedThread({ id: "thread-1" });
+      await db.seedMessage({ id: "m1", threadId: "thread-1", blocks: [text] });
+      await previewArtifact("lost", "blob");
+
+      expect(await findOrphanPreviewArtifacts(db.prisma, { now: at(30 * 60_000) })).toEqual([]);
+      expect(
+        (await findOrphanPreviewArtifacts(db.prisma, { now: at(61 * 60_000) })).map(
+          (row) => row.id,
+        ),
+      ).toEqual(["lost"]);
+      // Once the card is there, it is no orphan.
+      await appendLinkPreviewBlock(db.prisma, {
+        ...scope,
+        block: {
+          kind: "link_preview",
+          url,
+          format: "photo",
+          image: { artifactId: "lost", width: 1, height: 1 },
+        },
+      });
+      expect(await findOrphanPreviewArtifacts(db.prisma, { now: at(61 * 60_000) })).toEqual([]);
+    });
   });
 });

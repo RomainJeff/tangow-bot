@@ -309,6 +309,9 @@ else
 fi
 # `--wait` without `--wait-timeout` can hang on one-shot services (Compose < 2.7)
 # or never return if a healthcheck stays red (Compose < 2.17). Prefer both flags.
+# A rerun upgrades, and the migrate service can take minutes on a large database:
+# wait as long as the updater does (MIGRATION_WAIT_TIMEOUT_S in @rakazo/contracts, which
+# infra/updater/src/compose-migrate.test.ts holds this copy to).
 compose_up_help=$(docker compose up --help 2>/dev/null || true)
 up_pull_args=()
 if [[ "$pull_never" == true ]]; then
@@ -321,7 +324,7 @@ fi
 # bash 3.2 + set -u: "${arr[@]}" aborts when arr is empty.
 if grep -q -- '--wait-timeout' <<<"$compose_up_help"; then
   echo "Waiting for healthy services."
-  docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d ${up_pull_args[@]+"${up_pull_args[@]}"} --wait --wait-timeout 300
+  docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d ${up_pull_args[@]+"${up_pull_args[@]}"} --wait --wait-timeout 3600
 else
   docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d ${up_pull_args[@]+"${up_pull_args[@]}"}
 fi

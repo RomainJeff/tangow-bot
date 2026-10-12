@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  initialMaxSeq,
-  isNewArrivalSeq,
+  arrivedAfterMount,
   transcriptCanSnapAfterFrame,
   transcriptIsNearEnd,
   transcriptMovedDown,
@@ -41,32 +40,12 @@ describe("transcriptMovedDown", () => {
   });
 });
 
-describe("initialMaxSeq / isNewArrivalSeq (B9)", () => {
-  it("reads the highest seq of the messages present at mount", () => {
-    expect(initialMaxSeq([{ seq: 3 }, { seq: 7 }, { seq: 5 }])).toBe(7);
-    expect(initialMaxSeq([])).toBe(0);
-    expect(initialMaxSeq([{ seq: null }, { seq: undefined }])).toBe(0);
-  });
+describe("arrivedAfterMount (B9)", () => {
+  it("counts only rows that came after the last row present at mount", () => {
+    const atMount = new Set(["b", "c"]);
 
-  it("only a seq beyond the line captured at mount is a new arrival", () => {
-    expect(isNewArrivalSeq(8, 7)).toBe(true);
-    expect(isNewArrivalSeq(7, 7)).toBe(false);
-    expect(isNewArrivalSeq(3, 7)).toBe(false);
-    expect(isNewArrivalSeq(undefined, 0)).toBe(false);
-  });
-
-  it("reopening an already-loaded thread replays no entrance: a fresh mount's own full history never crosses its own line", () => {
-    // Shell's single, atomic snapshot commit means a `Transcript` remounted
-    // for a thread the person already saw (leaving and coming back) mounts
-    // with every one of those messages already in `messages` — never a
-    // partial page that a later commit tops up. So the line this mount
-    // captures sits at or above every one of them.
-    const history = [{ seq: 1 }, { seq: 2 }, { seq: 3 }];
-    const maxSeqAtMount = initialMaxSeq(history);
-    for (const message of history) {
-      expect(isNewArrivalSeq(message.seq, maxSeqAtMount)).toBe(false);
-    }
-    // A message that actually arrives live after that mount does cross it.
-    expect(isNewArrivalSeq(4, maxSeqAtMount)).toBe(true);
+    expect([...arrivedAfterMount(atMount, ["b", "c"])]).toEqual([]);
+    expect([...arrivedAfterMount(atMount, ["a", "b", "c", "d", "e"])]).toEqual(["d", "e"]);
+    expect([...arrivedAfterMount(new Set(), ["a"])]).toEqual(["a"]);
   });
 });

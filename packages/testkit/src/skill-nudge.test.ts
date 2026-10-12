@@ -8,7 +8,6 @@ import {
   decideSkillNudge,
   runSkillNudgeTurn,
   skillCreateFromTool,
-  writeSkillLines,
 } from "@rakazo/adapters";
 import { skillNudgePrompt } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
@@ -234,17 +233,9 @@ describe("whether an exchange earns the skill nudge", () => {
 });
 
 describe("the skill nudge's private turn", () => {
-  it("offers skill tools only, publishes none of its words, and its skill gets the line under the reply", async () => {
+  it("offers skill tools only, publishes none of its words, and records its skill write on the run", async () => {
     const { dataDir, db, record, wrote } = await setup();
     db.tables.runs.get("run-1")!.status = "completed";
-    db.seedMessage({
-      id: "reply",
-      threadId: "thread-1",
-      role: "bot",
-      runId: "run-1",
-      botId: "bot-1",
-      blocks: [{ kind: "text", text: "Your table is booked." }],
-    });
     const requests: AgentRunRequest[] = [];
     const answers: unknown[] = [];
     const runtime = {
@@ -319,10 +310,6 @@ describe("the skill nudge's private turn", () => {
         },
       },
     );
-    await writeSkillLines(
-      { prisma: db.prisma, events: { notify: async () => undefined } },
-      "run-1",
-    );
 
     const request = requests[0]!;
     expect(requests).toHaveLength(1);
@@ -346,11 +333,13 @@ describe("the skill nudge's private turn", () => {
       { error: "Pass name, description and body, or content: no folder here." },
       expect.objectContaining({ ok: true, name: "Book a table" }),
     ]);
-    expect([...db.tables.messages.values()].map((message) => message.blocks)).toEqual([
-      [
-        { kind: "text", text: "Your table is booked." },
-        expect.objectContaining({ kind: "skill_source", name: "Book a table", change: "learned" }),
-      ],
+    // The run's skill line comes from this write, under the reply it already sent.
+    expect([...db.tables.externalEffects.values()]).toEqual([
+      expect.objectContaining({
+        runId: "run-1",
+        kind: "skill_create",
+        result: expect.objectContaining({ ok: true, name: "Book a table" }),
+      }),
     ]);
     expect(db.eventsOfType("agent.skill.nudge").map((event) => event.payload)).toEqual([
       { phase: "ended" },

@@ -28,6 +28,7 @@ test("edit and resend rewinds the thread to the edited message", async ({ page }
   await expect(firstRow).toBeVisible({ timeout: 20_000 });
 
   await composer.fill(secondText);
+  await expect(page.getByRole("button", { name: "Send", exact: true })).toBeEnabled();
   await composer.press("Enter");
   const secondRow = transcript.locator("[data-message-id]").filter({ hasText: secondText }).first();
   await expect(secondRow).toBeVisible({ timeout: 20_000 });
@@ -62,4 +63,5 @@ test("edit and resend rewinds the thread to the edited message", async ({ page }
   await expect(transcript.locator("[data-message-id]").filter({ hasText: firstText })).toHaveCount(
     0,
   );
+  await expect(transcript.getByTestId("thread-divider")).toHaveText("Message edited");
 });

@@ -4,7 +4,6 @@ import {
   completionMessageSegments,
   completionNotificationBody,
   notifiesUserOnRunEnd,
-  routineRunHeadline,
   showsRoutineRunCard,
   subagentMarksUnread,
 } from "./executor.js";
@@ -134,37 +133,6 @@ describe("showsRoutineRunCard", () => {
     expect(showsRoutineRunCard({ trigger: "routine", routineId: "routine-1" }, false)).toBe(false);
     expect(showsRoutineRunCard({ trigger: "webhook", routineId: null }, false)).toBe(false);
     expect(showsRoutineRunCard({ trigger: "user", routineId: null }, true)).toBe(false);
-  });
-});
-
-describe("routineRunHeadline", () => {
-  it("takes the first non-empty line of the digest", () => {
-    expect(routineRunHeadline("Inbox is clear.\n\nChecked 12 threads.")).toBe("Inbox is clear.");
-  });
-
-  it("skips leading blank lines", () => {
-    expect(routineRunHeadline("\n\n  Two invoices need approval.\nDetails below.")).toBe(
-      "Two invoices need approval.",
-    );
-  });
-
-  it("returns undefined for a fully empty digest", () => {
-    expect(routineRunHeadline("")).toBeUndefined();
-    expect(routineRunHeadline("\n\n   \n")).toBeUndefined();
-  });
-
-  it("truncates a long line to ~120 chars with an ellipsis", () => {
-    const line = "x".repeat(200);
-    const headline = routineRunHeadline(line);
-    expect(headline?.endsWith("…")).toBe(true);
-    expect(headline?.length).toBe(121);
-  });
-
-  it("is a pure, deterministic slice — never a model call", () => {
-    // Same input always yields the same headline; no randomness, no async, no LLM round trip.
-    expect(routineRunHeadline("Same digest every time.")).toBe(
-      routineRunHeadline("Same digest every time."),
-    );
   });
 });
 

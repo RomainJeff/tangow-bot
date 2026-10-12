@@ -298,7 +298,9 @@ async function waitForRun(page: Page, botId: string, runId: string) {
       async () => {
         const snapshot = await threadSnapshot(page, botId);
         if (snapshot.run?.id === runId) return false;
-        return snapshot.messages.some((message) => message.runId === runId);
+        return snapshot.entries.some(
+          (entry) => entry.type === "run.finished" && entry.runId === runId,
+        );
       },
       {
         timeout: realSandboxTimeout(90_000, 20_000),
@@ -319,7 +321,7 @@ async function waitForIdle(page: Page, botId: string) {
 function threadSnapshot(page: Page, botId: string) {
   return rpc<{
     run: { id: string; status: string } | null;
-    messages: Array<{ runId?: string | null }>;
+    entries: Array<{ type: string; runId?: string }>;
   }>(page, "threads/get", { botId });
 }
 
