@@ -5,8 +5,9 @@ import type {
   InferenceEntry,
   MessageBlock,
   SessionEntry,
-  SessionEntryOf,
   SessionRunTrigger,
+  ThreadEntry,
+  ThreadEntryOf,
 } from "@rakazo/contracts";
 import { isInferenceEntry, REPLY_QUOTE_MAX_LENGTH } from "@rakazo/contracts";
 import { blocksToAgentHistoryText } from "../attachments.js";
@@ -184,7 +185,7 @@ function renderTurn(
       // Its result already replays as the output of the tool call that launched it.
       return undefined;
     default:
-      segment satisfies Exclude<SessionEntry, InferenceEntry>;
+      segment satisfies Exclude<ThreadEntry, InferenceEntry>;
       return undefined;
   }
 }
@@ -267,7 +268,7 @@ function resolvedTarget(entry: SessionEntry | undefined): ReplyTarget | undefine
 }
 
 function replyContext(
-  entry: SessionEntryOf<"user.message">,
+  entry: ThreadEntryOf<"user.message">,
   targetOf: (entryId: EntryId) => ReplyTarget | undefined,
   botNames: ReadonlyMap<string, string> | undefined,
 ): string | undefined {

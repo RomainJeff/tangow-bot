@@ -2,12 +2,12 @@ import type {
   EntryId,
   MessageBlock,
   ProductEvent,
-  SessionEntry,
-  SessionEntryOf,
   SessionEntryType,
+  ThreadEntry,
+  ThreadEntryOf,
   ThreadItem,
 } from "@rakazo/contracts";
-import { CARD_STATE_TYPES, isLinkPreviewCard, SessionEntrySchema } from "@rakazo/contracts";
+import { CARD_STATE_TYPES, isLinkPreviewCard, ThreadEntrySchema } from "@rakazo/contracts";
 import { isRunTerminalEvent, progressMessageId, reduceLiveMessageBlocks } from "../events.js";
 import { computeItemGroups } from "../message-grouping.js";
 import type { ItemReactions } from "../message-reactions.js";
@@ -67,7 +67,7 @@ export function drawsNothing(
 }
 
 export function projectThreadView(
-  entries: readonly SessionEntry[],
+  entries: readonly ThreadEntry[],
   options: ThreadViewOptions = {},
 ): ThreadView {
   const projected = projectThread(onChain(entries));
@@ -125,8 +125,8 @@ function inlinePreviewHost(item: ThreadItem, messageId: EntryId | undefined) {
   return inline ? messageId : undefined;
 }
 
-function onChain(entries: readonly SessionEntry[]): SessionEntry[] {
-  let kept: SessionEntry[] = [];
+function onChain(entries: readonly ThreadEntry[]): ThreadEntry[] {
+  let kept: ThreadEntry[] = [];
   for (const entry of byId(entries)) {
     if (entry.type === "rewind") {
       // A parent the server held back (a hidden peer run's entry) is found through its held child,
@@ -146,14 +146,14 @@ function onChain(entries: readonly SessionEntry[]): SessionEntry[] {
 }
 
 export function mergeEntries(
-  held: readonly SessionEntry[],
-  incoming: readonly SessionEntry[],
-): SessionEntry[] {
+  held: readonly ThreadEntry[],
+  incoming: readonly ThreadEntry[],
+): ThreadEntry[] {
   return byId([...held, ...incoming]);
 }
 
 export type ThreadEntries = {
-  entries: SessionEntry[];
+  entries: ThreadEntry[];
   olderCursor: EntryId | null;
   cursor?: number;
   layer: ProgressLayer;
@@ -194,14 +194,14 @@ export function withRefreshedEntries<S extends ThreadEntries>(
   };
 }
 
-function joinsHeld(page: readonly SessionEntry[], held: readonly SessionEntry[]): boolean {
+function joinsHeld(page: readonly ThreadEntry[], held: readonly ThreadEntry[]): boolean {
   const oldest = page[0];
   return !oldest || oldest.parentId === null || held.some((entry) => entry.id === oldest.parentId);
 }
 
 export function withOlderEntries<S extends ThreadEntries>(
   prev: S,
-  page: { entries: readonly SessionEntry[]; olderCursor: EntryId | null },
+  page: { entries: readonly ThreadEntry[]; olderCursor: EntryId | null },
 ): S {
   if (prev.olderCursor === null) return prev;
   return {
@@ -211,20 +211,19 @@ export function withOlderEntries<S extends ThreadEntries>(
   };
 }
 
-function byId(entries: readonly SessionEntry[]): SessionEntry[] {
+function byId(entries: readonly ThreadEntry[]): ThreadEntry[] {
   return [...new Map(entries.map((entry) => [entry.id, entry])).values()].sort(
     (a, b) => a.seq - b.seq,
   );
 }
 
-const SessionEntries = SessionEntrySchema.array();
-const appendedOf = new WeakMap<ProductEvent, readonly SessionEntry[]>();
+const appendedOf = new WeakMap<ProductEvent, readonly ThreadEntry[]>();
 
-export function appendedEntries(event: ProductEvent): readonly SessionEntry[] {
+export function appendedEntries(event: ProductEvent): readonly ThreadEntry[] {
   if (event.type !== "session.entry.appended") return [];
   let entries = appendedOf.get(event);
   if (!entries) {
-    entries = SessionEntries.safeParse(event.payload.entries).data ?? [];
+    entries = ThreadEntrySchema.array().safeParse(event.payload.entries).data ?? [];
     appendedOf.set(event, entries);
   }
   return entries;
@@ -237,7 +236,7 @@ const BOT_WORDS_TYPES = [
   "assistant.choice",
   "effect.requested",
 ] as const;
-type BotWords = SessionEntryOf<(typeof BOT_WORDS_TYPES)[number]>;
+type BotWords = ThreadEntryOf<(typeof BOT_WORDS_TYPES)[number]>;
 const BOT_WORDS: ReadonlySet<string> = new Set(BOT_WORDS_TYPES);
 
 /** What a bot said to the person in this event: a reply, a question, or a card to act on. */
@@ -318,9 +317,9 @@ const PEER_RUN_KEPT_TYPES = new Set<SessionEntryType>([
 ]);
 
 export function visibleEntries(
-  entries: readonly SessionEntry[],
+  entries: readonly ThreadEntry[],
   options: { hiddenPeerRunIds: ReadonlySet<string> },
-): SessionEntry[] {
+): ThreadEntry[] {
   return entries.filter(
     (entry) =>
       !entry.runId ||

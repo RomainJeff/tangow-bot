@@ -3,17 +3,18 @@ import type {
   EntryId,
   ProductEvent,
   SessionEntry,
+  ThreadEntry,
   ThreadMessage,
   ThreadMessagePage,
 } from "@rakazo/contracts";
-import { SessionId } from "@rakazo/contracts";
+import { SessionId, toThreadEntry } from "@rakazo/contracts";
 import { appendedEntries, visibleEntries } from "@rakazo/core";
 import { hiddenPeerRunIds, type Prisma, type PrismaClient } from "@rakazo/db";
 
 type ThreadDb = PrismaClient | Prisma.TransactionClient;
 type PageLog = Pick<SessionLog<Prisma.TransactionClient>, "readPage" | "readAround">;
 
-const THREAD_PAGE_SIZE = 400;
+const THREAD_PAGE_SIZE = 200;
 
 export async function threadSessionId(prisma: ThreadDb, threadId: string): Promise<SessionId> {
   const { sessionId } = await prisma.thread.findUniqueOrThrow({
@@ -30,8 +31,8 @@ function olderCursor(page: readonly SessionEntry[]): EntryId | null {
 
 export async function withoutHiddenPeerRuns(
   prisma: ThreadDb,
-  entries: readonly SessionEntry[],
-): Promise<SessionEntry[]> {
+  entries: readonly ThreadEntry[],
+): Promise<ThreadEntry[]> {
   const runIds = [...new Set(entries.flatMap((entry) => (entry.runId ? [entry.runId] : [])))];
   return visibleEntries(entries, { hiddenPeerRunIds: await hiddenPeerRunIds(prisma, runIds) });
 }
@@ -57,9 +58,10 @@ export async function loadEntryPage(
           { before: query.around ? undefined : query.before, limit: THREAD_PAGE_SIZE },
           deps.prisma,
         );
+  const entries = page.map(toThreadEntry);
   return {
     threadId,
-    entries: query.includePeerRuns ? page : await withoutHiddenPeerRuns(deps.prisma, page),
+    entries: query.includePeerRuns ? entries : await withoutHiddenPeerRuns(deps.prisma, entries),
     olderCursor: olderCursor(page),
   };
 }

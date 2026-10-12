@@ -11,7 +11,7 @@ import {
   ThinkingLevelSchema,
 } from "./ids.js";
 import { McpHeadersSchema, McpRemoteEndpointSchema, McpTransportSchema } from "./mcp.js";
-import { EntryId, SessionEntrySchema } from "./session-log.js";
+import { EntryId, ThreadEntrySchema } from "./session-log.js";
 
 export const ComputerModeSchema = z.enum(["team", "dedicated"]);
 export type ComputerMode = z.infer<typeof ComputerModeSchema>;
@@ -930,7 +930,7 @@ export type Run = z.infer<typeof RunSchema>;
 /** A page of the thread's chain, oldest first; `olderCursor` is the entry to page back from. */
 export const ThreadMessagePageSchema = z.object({
   threadId: Id,
-  entries: z.array(SessionEntrySchema),
+  entries: z.array(ThreadEntrySchema),
   olderCursor: EntryId.nullable(),
 });
 export type ThreadMessagePage = z.infer<typeof ThreadMessagePageSchema>;
@@ -938,7 +938,7 @@ export type ThreadMessagePage = z.infer<typeof ThreadMessagePageSchema>;
 export const ThreadSnapshotSchema = z.object({
   threadId: Id,
   cursor: z.number().int().min(-1),
-  entries: z.array(SessionEntrySchema),
+  entries: z.array(ThreadEntrySchema),
   olderCursor: EntryId.nullable(),
   /** The open runs' `thread.progress` events newer than each run's last entry, to replay. */
   progress: z.array(ProductEventSchema),

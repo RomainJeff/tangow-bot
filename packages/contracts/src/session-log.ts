@@ -316,7 +316,14 @@ const EntryShapes = z.discriminatedUnion("type", [
   entry("harness.session", z.object({ harness: z.string(), sessionId: z.string() })),
 ]);
 
-export const SessionEntrySchema = EntryShapes.superRefine((entry, ctx) => {
+type WithoutSession<T> = T extends unknown ? Omit<T, "sessionId"> : never;
+type ShapesWithoutSession<T extends readonly z.ZodObject[]> = {
+  -readonly [K in keyof T]: T[K] extends z.ZodObject<infer S, infer C>
+    ? z.ZodObject<Omit<S, "sessionId">, C>
+    : never;
+};
+
+function checkChain(entry: WithoutSession<z.infer<typeof EntryShapes>>, ctx: z.RefinementCtx) {
   if (entry.parentId === null && entry.type !== "clear" && entry.seq !== 0) {
     ctx.addIssue({
       code: "custom",
@@ -331,13 +338,6 @@ export const SessionEntrySchema = EntryShapes.superRefine((entry, ctx) => {
       message: "The first entry of a session has no parent",
     });
   }
-  if ("originSessionId" in entry.payload && entry.payload.originSessionId === entry.sessionId) {
-    ctx.addIssue({
-      code: "custom",
-      path: ["payload", "originSessionId"],
-      message: "An entry rises only from another session",
-    });
-  }
   if (entry.type === "compaction" && entry.payload.coveredUpToSeq >= entry.seq) {
     ctx.addIssue({
       code: "custom",
@@ -345,7 +345,37 @@ export const SessionEntrySchema = EntryShapes.superRefine((entry, ctx) => {
       message: "A compaction covers only entries before it",
     });
   }
+}
+
+export const SessionEntrySchema = EntryShapes.superRefine((entry, ctx) => {
+  checkChain(entry, ctx);
+  if ("originSessionId" in entry.payload && entry.payload.originSessionId === entry.sessionId) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["payload", "originSessionId"],
+      message: "An entry rises only from another session",
+    });
+  }
 });
+
+/**
+ * An entry as a thread page or its feed carries it: every entry there belongs to the thread's
+ * session, so it leaves `sessionId` out.
+ */
+export const ThreadEntrySchema = z
+  .discriminatedUnion(
+    "type",
+    EntryShapes.options.map((shape) => shape.omit({ sessionId: true })) as ShapesWithoutSession<
+      typeof EntryShapes.options
+    >,
+  )
+  .superRefine(checkChain);
+export type ThreadEntry = z.infer<typeof ThreadEntrySchema>;
+export type ThreadEntryOf<T extends SessionEntryType> = Extract<ThreadEntry, { type: T }>;
+
+export function toThreadEntry({ sessionId, ...entry }: SessionEntry): ThreadEntry {
+  return entry;
+}
 export type SessionEntry = z.infer<typeof SessionEntrySchema>;
 export type SessionEntryType = SessionEntry["type"];
 export type SessionEntryOf<T extends SessionEntryType> = Extract<SessionEntry, { type: T }>;
@@ -391,12 +421,12 @@ export const ENTRY_AUDIENCE = {
 } as const satisfies Record<SessionEntryType, EntryAudience>;
 
 type Audience = typeof ENTRY_AUDIENCE;
-export type InferenceEntry = SessionEntryOf<
+export type InferenceEntry = ThreadEntryOf<
   {
     [T in SessionEntryType]: Audience[T]["inference"] extends "no" ? never : T;
   }[SessionEntryType]
 >;
-export type UiEntry = SessionEntryOf<
+export type UiEntry = ThreadEntryOf<
   { [T in SessionEntryType]: Audience[T]["ui"] extends true ? T : never }[SessionEntryType]
 >;
 
@@ -428,9 +458,9 @@ export const CARD_STATE_TYPES = [
 
 const CARD_STATES: ReadonlySet<SessionEntryType> = new Set(CARD_STATE_TYPES);
 
-export function isCardState(
-  entry: SessionEntry,
-): entry is SessionEntryOf<(typeof CARD_STATE_TYPES)[number]> {
+export function isCardState<E extends ThreadEntry>(
+  entry: E,
+): entry is Extract<E, ThreadEntryOf<(typeof CARD_STATE_TYPES)[number]>> {
   return CARD_STATES.has(entry.type);
 }
 
@@ -453,11 +483,13 @@ export function isRunTrace(entry: EntryBody): boolean {
   return RUN_TRACE_TYPES.has(entry.type);
 }
 
-export function isInferenceEntry(entry: SessionEntry): entry is InferenceEntry {
+export function isInferenceEntry<E extends ThreadEntry>(
+  entry: E,
+): entry is Extract<E, InferenceEntry> {
   return ENTRY_AUDIENCE[entry.type].inference !== "no";
 }
 
-export function isUiEntry(entry: SessionEntry): entry is UiEntry {
+export function isUiEntry<E extends ThreadEntry>(entry: E): entry is Extract<E, UiEntry> {
   return ENTRY_AUDIENCE[entry.type].ui;
 }
 

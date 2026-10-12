@@ -1,4 +1,4 @@
-import type { EntryId, SessionEntry, ThreadMessagePage } from "@rakazo/contracts";
+import type { EntryId, ThreadEntry, ThreadMessagePage } from "@rakazo/contracts";
 import { mergeEntries } from "@rakazo/core";
 
 const PEER_HISTORY_PAGE_TIMEOUT_MS = 15_000;
@@ -17,10 +17,10 @@ export async function loadPeerHistory({
   loadPage: (before: EntryId | undefined, signal: AbortSignal) => Promise<PeerHistoryPage>;
   pageTimeoutMs?: number;
   totalTimeoutMs?: number;
-}): Promise<SessionEntry[]> {
+}): Promise<ThreadEntry[]> {
   const deadline = AbortSignal.timeout(totalTimeoutMs);
   let before: EntryId | undefined;
-  const pages: (readonly SessionEntry[])[] = [];
+  const pages: (readonly ThreadEntry[])[] = [];
   do {
     const page = await loadPage(
       before,

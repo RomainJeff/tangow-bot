@@ -59,17 +59,21 @@ const ids = (entries: readonly SessionEntry[]) => entries.map((held) => held.id)
 
 describe("thread entry pages", () => {
   it("pages the chain back from an entry, the cursor on the oldest until the chain starts", async () => {
-    const chain = Array.from({ length: 450 }, (_, seq) => said(seq, `m${seq}`));
+    const chain = Array.from({ length: 250 }, (_, seq) => said(seq, `m${seq}`));
     const deps = { prisma: threadDb(), sessionLog: pagedLog(chain) };
 
     const tail = await loadEntryPage(deps, thread, {});
     const older = await loadEntryPage(deps, thread, { before: tail.olderCursor! });
 
-    expect([tail.entries.length, tail.entries[0]?.id, tail.olderCursor]).toEqual([
-      400,
-      "entry-50",
-      "entry-50",
-    ]);
+    expect([tail.entries.length, tail.olderCursor]).toEqual([200, "entry-50"]);
+    expect(tail.entries[0]).toEqual({
+      id: "entry-50",
+      seq: 50,
+      parentId: "entry-49",
+      ts: "2026-10-11T09:00:50.000Z",
+      type: "user.message",
+      payload: { blocks: [{ kind: "text", text: "m50" }], source: "app" },
+    });
     expect([older.entries.length, older.entries[0]?.id, older.olderCursor]).toEqual([
       50,
       "entry-0",
@@ -100,7 +104,7 @@ describe("thread entry pages", () => {
       before: EntryId.parse("entry-2"),
     });
 
-    expect(held.sessionLog.readAround).toHaveBeenCalledWith(SESSION, "entry-1", 400, held.prisma);
+    expect(held.sessionLog.readAround).toHaveBeenCalledWith(SESSION, "entry-1", 200, held.prisma);
     expect(ids(jump.entries)).toEqual(["entry-0", "entry-1"]);
     expect(ids(fallback.entries)).toEqual(["entry-0", "entry-1", "entry-2"]);
   });

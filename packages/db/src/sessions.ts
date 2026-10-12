@@ -9,8 +9,9 @@ import type {
   SessionEntry,
   SessionEntryOf,
   SessionEntryType,
+  ThreadEntry,
 } from "@rakazo/contracts";
-import { isRunTrace, SessionEntrySchema, SessionId } from "@rakazo/contracts";
+import { isRunTrace, SessionEntrySchema, SessionId, toThreadEntry } from "@rakazo/contracts";
 import { ACTIVE_RUN_STATUSES, SessionEntryDecodeError, sanitizeJsonValue } from "@rakazo/core";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
@@ -88,7 +89,7 @@ type ThreadFeed = {
   threadId: string;
   botId: string;
   runId: string | null;
-  entries: SessionEntry[];
+  entries: ThreadEntry[];
 };
 type Route = { sessionId: SessionId; threadId: string | null; originSessionId?: SessionId };
 type Lineage = { mainSessionId: SessionId; threadId: string | null; child: boolean };
@@ -221,6 +222,7 @@ export async function appendSessionEntryInTransaction(
   const runId = entry.runId ?? null;
   const at = Prisma.sql`${entry.ts}::timestamptz AT TIME ZONE 'UTC'`;
   const feed = threadId ? log.feedOf.get(threadId) : undefined;
+  const fed = toThreadEntry(entry);
   const newFeed: ThreadFeed | undefined =
     threadId && feedBotId && !feed
       ? {
@@ -229,12 +231,12 @@ export async function appendSessionEntryInTransaction(
           threadId,
           botId: feedBotId,
           runId,
-          entries: [entry],
+          entries: [fed],
         }
       : undefined;
   const feedSql = feed
     ? Prisma.sql`, appended AS (
-        UPDATE events SET payload = jsonb_set(payload, '{entries}', (payload -> 'entries') || ${JSON.stringify(entry)}::jsonb)
+        UPDATE events SET payload = jsonb_set(payload, '{entries}', (payload -> 'entries') || ${JSON.stringify(fed)}::jsonb)
         FROM e WHERE events.id = ${feed.eventId}
         RETURNING events.id)`
     : newFeed
@@ -273,7 +275,7 @@ export async function appendSessionEntryInTransaction(
   }
   if (newFeed) log.feedOf.set(newFeed.threadId, newFeed);
   if (!feed) return entry;
-  feed.entries.push(entry);
+  feed.entries.push(fed);
   if (!written[0]?.fed) {
     // A truncate in this transaction deleted the event, so a new one carries its entries.
     feed.eventId = randomUUID();

@@ -1,9 +1,9 @@
 import type {
   EntryId,
   MessageBlock,
-  SessionEntry,
-  SessionEntryOf,
   SessionId,
+  ThreadEntry,
+  ThreadEntryOf,
   ThreadItem,
   UiEntry,
 } from "@rakazo/contracts";
@@ -37,20 +37,20 @@ export type ProjectedThread = {
 };
 
 const BOT_TEXT_CARD_KINDS = new Set<MessageBlock["kind"]>(["choice", "app_connect", "skill_draft"]);
-const MESSAGE_ENTRY_TYPES = new Set<SessionEntry["type"]>([
+const MESSAGE_ENTRY_TYPES = new Set<ThreadEntry["type"]>([
   "assistant.text",
   "assistant.reasoning",
   "assistant.ask",
   "assistant.choice",
 ]);
 
-export function projectThreadItems(entries: readonly SessionEntry[]): ThreadItem[] {
+export function projectThreadItems(entries: readonly ThreadEntry[]): ThreadItem[] {
   return projectThread(entries).items;
 }
 
-export function projectThread(entries: readonly SessionEntry[]): ProjectedThread {
+export function projectThread(entries: readonly ThreadEntry[]): ProjectedThread {
   const visible = entries.filter(isUiEntry);
-  const received = new Map<string, SessionEntryOf<"bot.message.received">[]>();
+  const received = new Map<string, ThreadEntryOf<"bot.message.received">[]>();
   for (const entry of visible) {
     if (entry.type !== "bot.message.received") continue;
     received.set(entry.payload.exchangeId, [
@@ -85,7 +85,7 @@ export function projectThread(entries: readonly SessionEntry[]): ProjectedThread
     itemById.set(item.id, item);
     for (const id of shown) shownBy.set(id, item.id);
   };
-  const showWith = (entry: SessionEntry, target: string | undefined) => {
+  const showWith = (entry: ThreadEntry, target: string | undefined) => {
     const itemId = target === undefined ? undefined : shownBy.get(target as EntryId);
     if (itemId !== undefined) shownBy.set(entry.id, itemId);
   };
@@ -443,12 +443,15 @@ export function projectThread(entries: readonly SessionEntry[]): ProjectedThread
       case "attachment.added":
       case "session.title":
       case "system.note": {
-        const { sessionId, seq, parentId, botId, runId, ...note } = segment;
+        // A session read projects stored entries, which still carry their sessionId.
+        const { sessionId, seq, parentId, botId, runId, ...note } = segment as typeof segment & {
+          sessionId?: SessionId;
+        };
         push({ kind: "note", ...note, ...origin(originSessionIdOf(segment)) }, segment.id);
         break;
       }
       default:
-        segment satisfies Exclude<SessionEntry, UiEntry>;
+        segment satisfies Exclude<ThreadEntry, UiEntry>;
     }
   }
 
@@ -473,7 +476,7 @@ export function projectThread(entries: readonly SessionEntry[]): ProjectedThread
   return { items, shownBy, messageIds, previewHosts, waiting };
 }
 
-function subagentItem(entry: SessionEntryOf<"subagent">): SubagentItem {
+function subagentItem(entry: ThreadEntryOf<"subagent">): SubagentItem {
   return { kind: "subagent", id: entry.id, ts: entry.ts, runId: entry.runId, ...entry.payload };
 }
 

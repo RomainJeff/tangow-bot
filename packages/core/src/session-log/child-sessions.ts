@@ -1,8 +1,8 @@
-import type { SessionEntry, SessionId, ThreadItem } from "@rakazo/contracts";
+import type { SessionId, ThreadEntry, ThreadItem } from "@rakazo/contracts";
 
 export type ChildSession = { kind: "routine" | "subagent"; name: string };
 
-export function childSessionsOf(entries: readonly SessionEntry[]): Map<string, ChildSession> {
+export function childSessionsOf(entries: readonly ThreadEntry[]): Map<string, ChildSession> {
   const children = new Map<string, ChildSession>();
   for (const entry of entries) {
     if (entry.type === "routine.started" || entry.type === "subagent") {
@@ -13,7 +13,7 @@ export function childSessionsOf(entries: readonly SessionEntry[]): Map<string, C
   return children;
 }
 
-export function originSessionIdOf(entry: SessionEntry): SessionId | undefined {
+export function originSessionIdOf(entry: ThreadEntry): SessionId | undefined {
   return "originSessionId" in entry.payload ? entry.payload.originSessionId : undefined;
 }
 
