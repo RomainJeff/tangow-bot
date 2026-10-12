@@ -183,24 +183,22 @@ describe("no consumer of a message's blocks repeats a preview's title (CA 12, CA
     expect(artifactFind).not.toHaveBeenCalled();
 
     // Search: the card's title is not a way to find the message.
-    const queryRaw = vi
-      .fn()
-      .mockResolvedValueOnce([
-        {
-          id: "m1",
-          sessionId: "s1",
-          seq: 0,
-          parentId: null,
-          type: "user.message",
-          payload: { blocks: blocks(), source: "app" },
-          entryBotId: null,
-          runId: null,
-          createdAt: new Date(0),
-          threadId: "t1",
-          botId: "b1",
-          botName: "Bot",
-        },
-      ]);
+    const queryRaw = vi.fn().mockResolvedValueOnce([
+      {
+        id: "m1",
+        sessionId: "s1",
+        seq: 0,
+        parentId: null,
+        type: "user.message",
+        payload: { blocks: blocks(), source: "app" },
+        entryBotId: null,
+        runId: null,
+        createdAt: new Date(0),
+        threadId: "t1",
+        botId: "b1",
+        botName: "Bot",
+      },
+    ]);
     const hits = await querySpaceSearch(
       {
         bot: { findMany: vi.fn(async () => []) },
