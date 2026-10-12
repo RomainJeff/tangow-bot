@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { SessionEntryDraft } from "@rakazo/adapter-kit";
 import type { MessageBlock, SessionEntry } from "@rakazo/contracts";
 import { EntryId, EntrySeq, SessionId } from "@rakazo/contracts";
-import { projectThreadItems, spawnBotApprovalBlock } from "@rakazo/core";
+import { projectThreadItems, spawnBotApprovalBlock, visibleEntries } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import {
   answerRunInputInTransaction,
@@ -666,6 +666,64 @@ describe("session log writers", () => {
       { type: "assistant.text", blocks: [approval] },
       { type: "assistant.text", blocks: asked },
     ]);
+  });
+
+  it("marks an app to connect a routine run shows for the person, in the thread's session", async () => {
+    const { prisma } = database;
+    const ada = await seedBot(prisma, "Ada");
+    const { run, routineSessionId } = await routineRun(prisma, ada, "Inbox sweep");
+    const connect = {
+      kind: "app_connect",
+      provider: "gmail",
+      name: "Gmail",
+      description: "Read your inbox",
+      logo: null,
+      status: "pending",
+    } as const;
+
+    await prisma.$transaction((tx) =>
+      appendRunBlocksInTransaction(
+        tx,
+        { id: EntryId.parse(randomUUID()), runId: run.id, botId: ada.bot.id },
+        [{ kind: "text", text: "Sweeping." }, connect],
+      ),
+    );
+
+    const written = async (sessionId: SessionId) =>
+      (await log.readTail(sessionId)).map(({ type, payload }) => ({ type, payload }));
+    expect(await written(routineSessionId)).toEqual([
+      expect.objectContaining({ type: "run.started" }),
+      { type: "assistant.text", payload: { blocks: [{ kind: "text", text: "Sweeping." }] } },
+    ]);
+    expect(await written(ada.sessionId)).toEqual([
+      expect.objectContaining({ type: "routine.started" }),
+      {
+        type: "assistant.text",
+        payload: { blocks: [connect], toPerson: true, originSessionId: routineSessionId },
+      },
+    ]);
+  });
+
+  it("shows the card of a peer run the thread hides", async () => {
+    const { prisma } = database;
+    const ida = await seedBot(prisma, "Ida");
+    const run = await seedRun(prisma, ida.bot.id, ida.threadId, { trigger: "bot_message" });
+    const card: MessageBlock = { kind: "card", lines: [{ k: "Invoice", v: "Due Friday" }] };
+
+    await prisma.$transaction((tx) =>
+      appendRunBlocksInTransaction(
+        tx,
+        { id: EntryId.parse(randomUUID()), runId: run.id, botId: ida.bot.id },
+        [{ kind: "text", text: "Checked with the ledger bot." }, card],
+      ),
+    );
+
+    const shown = visibleEntries(await log.readTail(ida.sessionId), {
+      hiddenPeerRunIds: new Set([run.id]),
+    });
+    expect(
+      projectThreadItems(shown).flatMap((item) => (item.kind === "message" ? item.blocks : [])),
+    ).toEqual([card]);
   });
 
   it("raises a helper's question and its approval request to the thread's session and keeps its steps", async () => {

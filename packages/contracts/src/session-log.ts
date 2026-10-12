@@ -142,7 +142,10 @@ const EntryShapes = z.discriminatedUnion("type", [
   runEntry(
     "assistant.text",
     BlocksPayload.extend({
-      /** Words the bot addressed to the person through `message_user`, kept even in a hidden peer run. */
+      /**
+       * Words the bot addressed to the person through `message_user`, or a block they must act
+       * on: kept even in a hidden peer run.
+       */
       toPerson: z.literal(true).optional(),
     }),
   ),
@@ -464,9 +467,24 @@ export function isCardState<E extends ThreadEntry>(
   return CARD_STATES.has(entry.type);
 }
 
-export const BLOCK_KINDS_NEEDING_THE_PERSON: ReadonlySet<MessageBlock["kind"]> = new Set([
+/**
+ * The blocks the person must act on: a question to answer, a card to approve, an app or a server
+ * to connect, a draft to save, a screen to take over. Whatever run writes one, it reaches them.
+ */
+const BLOCK_KINDS_NEEDING_THE_PERSON: ReadonlySet<MessageBlock["kind"]> = new Set([
+  "ask",
+  "choice",
+  "card",
+  "app_connect",
+  "connect",
   "mcp_approval",
+  "skill_draft",
+  "computer",
 ] satisfies MessageBlock["kind"][]);
+
+export function needsThePerson(blocks: readonly MessageBlock[]): boolean {
+  return blocks.some((block) => BLOCK_KINDS_NEEDING_THE_PERSON.has(block.kind));
+}
 
 type EntryBody = {
   [T in SessionEntryType]: Pick<SessionEntryOf<T>, "type" | "payload">;
@@ -477,9 +495,7 @@ type EntryBody = {
  * `assistant.text` holding a block that needs the person, which goes to the person whole.
  */
 export function isRunTrace(entry: EntryBody): boolean {
-  if (entry.type === "assistant.text") {
-    return !entry.payload.blocks.some((block) => BLOCK_KINDS_NEEDING_THE_PERSON.has(block.kind));
-  }
+  if (entry.type === "assistant.text") return !needsThePerson(entry.payload.blocks);
   return RUN_TRACE_TYPES.has(entry.type);
 }
 

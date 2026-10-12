@@ -11,7 +11,13 @@ import type {
   SessionEntryType,
   ThreadEntry,
 } from "@rakazo/contracts";
-import { isRunTrace, SessionEntrySchema, SessionId, toThreadEntry } from "@rakazo/contracts";
+import {
+  isRunTrace,
+  needsThePerson,
+  SessionEntrySchema,
+  SessionId,
+  toThreadEntry,
+} from "@rakazo/contracts";
 import { ACTIVE_RUN_STATUSES, SessionEntryDecodeError, sanitizeJsonValue } from "@rakazo/core";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
@@ -387,6 +393,8 @@ const RUN_BLOCK_ENTRY: {
 
 /**
  * The first entry takes the message's id, so whatever points at the message points at the entry.
+ * Text the bot addressed to the person, and any block they must act on, is marked `toPerson`, so
+ * it reaches them from a routine, a helper or a hidden peer run.
  */
 export async function appendRunBlocksInTransaction(
   tx: Prisma.TransactionClient,
@@ -398,7 +406,8 @@ export async function appendRunBlocksInTransaction(
     const toEntry = RUN_BLOCK_ENTRY[block.kind] as ((block: MessageBlock) => RunBlockBody) | null;
     const body = toEntry?.(block);
     if (!body) return [];
-    return message.toPerson && body.type === "assistant.text"
+    return body.type === "assistant.text" &&
+      (message.toPerson || needsThePerson(body.payload.blocks))
       ? [{ ...body, payload: { ...body.payload, toPerson: true } }]
       : [body];
   });
