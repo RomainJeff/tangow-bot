@@ -244,7 +244,7 @@ export function renderBotMessageBlock(fromName: string, text: string): string {
  * credential, a failure the user must know about now. Those are why the channel stays open.
  */
 export const PEER_RUN_USER_SILENCE =
-  "You are working for another bot here, not for the user. Do not use message_user to narrate, acknowledge, confirm, summarise, or report this work — your written response already goes back to the bot that woke you, and the user is not waiting on this turn. Use message_user or ask_user only when something is wrong and only the user can unblock it: you are stuck, you need a decision or a credential, or the work failed in a way they must know about now. Otherwise say nothing to them.";
+  "You are working for another bot here, not for the user. Do not use message_user to narrate, acknowledge, confirm, summarise, or report this work — your written response already goes back to the bot that woke you, and the user is not waiting on this turn. Reach the user, with ask_user or with message_user when you have it, only when something is wrong and only they can unblock it: you are stuck, you need a decision or a credential, or the work failed in a way they must know about now. Otherwise say nothing to them.";
 
 /**
  * The prompt the recipient actually wakes on. Delivering the bare text leaves it

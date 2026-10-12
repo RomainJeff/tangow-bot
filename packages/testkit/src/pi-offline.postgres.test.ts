@@ -42,8 +42,14 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
               path: "notes/result.txt",
             });
           },
-          response: { type: "text", text: "Saved notes/result.txt." },
+          response: {
+            type: "tool",
+            id: "product-reply",
+            name: "message_user",
+            arguments: { message: "Saved notes/result.txt." },
+          },
         },
+        { expect() {}, response: { type: "text", text: "" } },
       ],
     });
     const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-offline-product-"));
@@ -129,8 +135,10 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
         where: { botId: bot.id, type: "agent.tool.called" },
         select: { payload: true },
       });
-      expect(tools).toHaveLength(1);
-      expect(JSON.stringify(tools[0])).toContain("write_file");
+      expect(tools.map(({ payload }) => (payload as { name: string }).name)).toEqual([
+        "write_file",
+        "message_user",
+      ]);
     } finally {
       try {
         await stop?.();

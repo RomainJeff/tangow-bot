@@ -277,11 +277,12 @@ export const builtinAgentTools: ConnectorTool[] = [
   },
   {
     name: "message_user",
-    description: `Deliver a visible message to the user (supports markdown). Ordinary assistant text and
-other tools’ output are not shown to them.
+    description: `Send a message the user sees (supports markdown). This is the only way to reach them:
+your ordinary text, final reply included, and other tools’ output stay private, and a turn
+without message_user is silent.
 
-Report useful progress during work and deliver the outcome before
-finishing. Avoid messages that merely narrate internal operations.`,
+Report useful progress during work and send the outcome before finishing. Avoid messages
+that merely narrate internal operations.`,
     inputSchema: {
       type: "object",
       properties: {
