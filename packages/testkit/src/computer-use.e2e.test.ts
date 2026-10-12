@@ -148,23 +148,11 @@ describeLive("real model and sandbox computer journey", () => {
     });
     expect(confirmed.content).toBe("visual-e2e-ok");
 
-    const toolEvents = await handles.prisma.event.findMany({
-      where: { runId: sent.runId },
-      select: { type: true, payload: true },
+    const calls = await handles.prisma.sessionEntry.findMany({
+      where: { runId: sent.runId, type: "tool.call" },
+      select: { payload: true },
     });
-    const used = new Set(
-      toolEvents.flatMap((event) => {
-        if (
-          event.type !== "agent.tool.called" ||
-          !event.payload ||
-          typeof event.payload !== "object"
-        ) {
-          return [];
-        }
-        const name = "name" in event.payload ? event.payload.name : undefined;
-        return typeof name === "string" ? [name] : [];
-      }),
-    );
+    const used = new Set(calls.map((call) => (call.payload as { name: string }).name));
     for (const required of [
       "open_path",
       "computer_observe",
