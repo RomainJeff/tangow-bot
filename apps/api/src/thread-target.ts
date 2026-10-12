@@ -277,42 +277,32 @@ async function replayExistingSend(
   const message = await threadEntryByNonce(deps.prisma, threadId, clientNonce);
   if (!message) return null;
   const { created, steered, answered } = await runsOfMessage(deps.prisma, message);
-  const runs = [...created, ...steered, ...answered];
+  // In the order the send dispatched its targets, which the message records, as the send answered.
+  const targets = message.type === "user.message" ? (message.payload.targets ?? []) : [];
+  const order = (botId: string) => {
+    const index = targets.indexOf(botId);
+    return index === -1 ? targets.length : index;
+  };
+  const runs = [...created, ...steered, ...answered].toSorted(
+    (a, b) => order(a.botId) - order(b.botId),
+  );
   if (runs.length === 0) return null;
-  // The message's feed event names the send's first target, whose run the send answered with.
-  const [feed] = await deps.prisma.$queryRaw<Array<{ botId: string }>>`
-    SELECT "botId" FROM events
-    WHERE "threadId" = ${threadId} AND type = 'session.entry.appended'
-      AND payload -> 'entries' @> ${JSON.stringify([{ id: message.id }])}::jsonb
-    ORDER BY seq LIMIT 1`;
   await enqueueRunsNeedingContinue(deps.jobs, runs);
   await deps.events.notify(threadId, await threadEventSeq(deps.prisma, threadId)).catch((error) => {
     // Subscribers catch up from the durable event cursor after a missed realtime wake.
     getLogger().error("thread send realtime notification", error);
   });
-  return sendResult(
-    message,
-    runs,
-    runs.find((run) => run.botId === feed?.botId),
-  );
+  return sendResult(message, runs);
 }
 
-/**
- * What a send and every replay of it answer: the first target's run, then the others by id, as
- * the log keeps no order between a send's runs.
- */
-function sendResult(
-  message: { seq: number },
-  runs: ReadonlyArray<{ id: string; taskId: string }>,
-  first = runs[0],
-) {
+function sendResult(message: { seq: number }, runs: ReadonlyArray<{ id: string; taskId: string }>) {
+  const first = runs[0];
   if (!first) throw new IsolationError("Send did not create a run");
-  const others = runs.flatMap((run) => (run.id === first.id ? [] : [run.id])).toSorted();
   return {
     taskId: first.taskId,
     runId: first.id,
     seq: message.seq,
-    runIds: [first.id, ...others],
+    runIds: runs.map((run) => run.id),
   };
 }
 
@@ -928,6 +918,7 @@ export async function sendThreadMessage(
         replyQuote,
         clientNonce: input.clientNonce,
         feedBotId: eventBotId,
+        targets: targetBotIds,
       });
       const activeRuns = await tx.run.findMany({
         where: {

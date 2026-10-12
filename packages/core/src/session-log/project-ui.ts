@@ -157,7 +157,7 @@ export function projectThread(entries: readonly ThreadEntry[]): ProjectedThread 
         break;
       }
       case "user.message": {
-        const { originSessionId, ...payload } = segment.payload;
+        const { originSessionId, targets: _targets, ...payload } = segment.payload;
         const card = payload.replyTo ? questionAt(cards.get(payload.replyTo.entryId)) : undefined;
         if (card) {
           const block = cardOf(card);

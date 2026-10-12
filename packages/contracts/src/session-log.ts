@@ -139,7 +139,14 @@ const target = { target: EntryId };
 const card = AskBlock.optional();
 
 const EntryShapes = z.discriminatedUnion("type", [
-  entry("user.message", UserMessagePayload.extend(risen)),
+  entry(
+    "user.message",
+    UserMessagePayload.extend({
+      ...risen,
+      /** The bots a group send addressed, in order: a replay of the send lists their runs so. */
+      targets: z.array(z.string().min(1)).optional(),
+    }),
+  ),
   runEntry(
     "assistant.text",
     BlocksPayload.extend({

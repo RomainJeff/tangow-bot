@@ -17,6 +17,8 @@ export interface CreateThreadMessageInput {
   source?: SessionEntryOf<"user.message">["payload"]["source"];
   /** The bot whose feed shows the entry, for a thread with no bot of its own. */
   feedBotId?: string;
+  /** The bots a group send addresses, in the order it dispatches them. */
+  targets?: string[];
 }
 
 /** A person's message whose clientNonce the thread already holds: the first delivery stands. */
@@ -70,6 +72,7 @@ function threadMessageEntry(input: CreateThreadMessageInput) {
           }
         : {}),
       ...(input.clientNonce ? { clientNonce: input.clientNonce } : {}),
+      ...(input.targets ? { targets: input.targets } : {}),
       source:
         input.source ??
         (input.blocks.some((block) => block.kind === "channel_message") ? "channel" : "app"),

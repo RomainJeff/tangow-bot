@@ -241,6 +241,65 @@ describeWithDatabase("structured @ mention targets", () => {
     expect(runs.map((run) => run.botId).sort()).toEqual([botB.id].sort());
   });
 
+  it("answers a group send and its replay with the runs in the order it addressed the bots", async () => {
+    const cookie = await signup(app, `mention-order-${stamp}@rakazo.test`, "Order Owner");
+    const bots = [];
+    for (const name of ["OrderA", "OrderB", "OrderC"]) {
+      bots.push(
+        await rpc<{ id: string }>(app, cookie, "bots/create", {
+          name,
+          title: "",
+          description: "",
+          instructions: "",
+          notifyOnFinish: true,
+        }),
+      );
+    }
+    const [botA, botB, botC] = bots as [(typeof bots)[0], (typeof bots)[0], (typeof bots)[0]];
+    const group = await rpc<{ id: string; threadId: string }>(app, cookie, "groups/create", {
+      name: "Order",
+      botIds: bots.map((bot) => bot.id),
+    });
+    // The first and last targets are already working: the send steers those older runs and
+    // starts one for the middle target, so neither creation time nor id gives the order.
+    const thread = await prisma.thread.findUniqueOrThrow({ where: { id: group.threadId } });
+    const owner = { spaceId: thread.spaceId, userId: thread.userId, threadId: thread.id };
+    const working = new Map<string, string>();
+    for (const bot of [botA, botC]) {
+      const task = await prisma.task.create({
+        data: { ...owner, botId: bot.id, prompt: "earlier work", status: "running" },
+      });
+      const run = await prisma.run.create({
+        data: { ...owner, botId: bot.id, taskId: task.id, status: "running", trigger: "user" },
+      });
+      working.set(bot.id, run.id);
+    }
+    const input = {
+      groupId: group.id,
+      text: "@OrderA @OrderB @OrderC split this",
+      mentions: bots.map((bot) => ({ kind: "bot", id: bot.id })),
+      clientNonce: `mention-order-${stamp}`,
+    };
+
+    const sent = await rpc<{ runId: string; runIds: string[] }>(app, cookie, "threads/send", input);
+    const botOf = new Map(
+      (await prisma.run.findMany({ where: { id: { in: sent.runIds } } })).map((run) => [
+        run.id,
+        run.botId,
+      ]),
+    );
+    expect(sent.runIds.map((id) => botOf.get(id))).toEqual([botA.id, botB.id, botC.id]);
+    expect([sent.runIds[0], sent.runIds[2]]).toEqual([working.get(botA.id), working.get(botC.id)]);
+    expect(sent.runId).toBe(sent.runIds[0]);
+    const replayed = await rpc<{ runId: string; runIds: string[] }>(
+      app,
+      cookie,
+      "threads/send",
+      input,
+    );
+    expect(replayed).toMatchObject({ runId: sent.runId, runIds: sent.runIds });
+  });
+
   it("rejects another user's routine, connection, and group mentions", async () => {
     const ada = await signup(app, `mention-auth-ada-${stamp}@rakazo.test`, "Ada Auth");
     const bob = await signup(app, `mention-auth-bob-${stamp}@rakazo.test`, "Bob Auth");
