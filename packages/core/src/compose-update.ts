@@ -361,9 +361,10 @@ export const COMPOSE_MANUAL_UPGRADE_COMMANDS = COMPOSE_PULL_UPGRADE_COMMANDS;
 
 /** Exact host commands from docs/self-host.md for source / `pnpm dev` installs. */
 export const SOURCE_MANUAL_UPGRADE_COMMANDS = [
+  "# Stop the API and worker processes",
   "git pull",
-  "pnpm --filter @rakazo/db migrate",
-  "# Restart the API and worker processes",
+  "pnpm exec tsx scripts/backfill-session-log.ts",
+  "# Start the API and worker processes",
 ] as const;
 
 /**
@@ -437,9 +438,21 @@ export function composePullArgv(
   return { command: "docker", args: [...composeBase(target), "pull", ...services] };
 }
 
+/**
+ * How long a recreate waits for its services. They start after the one-shot `migrate` service,
+ * which on a large database spends minutes moving its conversations into the session log, and
+ * Compose counts that wait against the timeout.
+ */
+export const MIGRATION_WAIT_TIMEOUT_S = 3600;
+const RESTORE_WAIT_TIMEOUT_S = 300;
+
+/**
+ * `restore` brings back a previous image without its dependencies: a release older than the
+ * `migrate` service has nothing to run there, and an older schema is never migrated back to.
+ */
 export function composeUpArgv(
   target: ComposeTarget,
-  options: { build?: boolean; services?: readonly string[] } = {},
+  options: { build?: boolean; services?: readonly string[]; restore?: boolean } = {},
 ): ComposeInvocation {
   const args = [
     ...composeBase(target),
@@ -447,10 +460,11 @@ export function composeUpArgv(
     "--detach",
     "--wait",
     "--wait-timeout",
-    "300",
+    String(options.restore ? RESTORE_WAIT_TIMEOUT_S : MIGRATION_WAIT_TIMEOUT_S),
     "--pull",
     "never",
   ];
+  if (options.restore) args.push("--no-deps");
   args.push(options.build === true ? "--build" : "--no-build");
   args.push(...(options.services ?? targetServices(target)));
   return { command: "docker", args };
@@ -573,11 +587,11 @@ export interface ComposeUpdatePlanInput {
 /**
  * Ordered work for one Compose update.
  *
- * Migrations are absent on purpose. The `api` service migrates (`scripts/backfill-session-log.ts`)
- * as the first thing in its own start command, so a recreate already orders them correctly:
- * Compose stops the old container, the new one migrates with the new code, then serves. Running
- * migrations from here would instead apply the new schema while the old process is still
- * answering requests, which is the window this ordering exists to close.
+ * Migrations are absent on purpose. The `api` and `worker` services wait on the one-shot `migrate`
+ * service, so a recreate already orders them correctly: Compose stops the old containers, the new
+ * image migrates, then they start. Running migrations from here would instead apply the new schema
+ * while the old processes are still answering requests, which is the window this ordering exists
+ * to close.
  */
 export function composeUpdatePlan(input: ComposeUpdatePlanInput): ComposeUpdateStep[] {
   const steps: ComposeUpdateStep[] = [];

@@ -24,7 +24,7 @@ const compose = parse(readFileSync(composeFile, "utf8")) as {
   services: Record<string, ComposeService>;
 };
 
-const appServices = ["api", "worker", "web", "supervisor"] as const;
+const appServices = ["migrate", "api", "worker", "web", "supervisor"] as const;
 /**
  * The images compose file is the no-checkout happy path. It must stay pull-only and self-contained
  * so operators can drop it next to a .env outside any git worktree. Local Docker computers run via
@@ -36,6 +36,7 @@ describe("the images compose file", () => {
       "api",
       "computer",
       "data-init",
+      "migrate",
       "postgres",
       "supervisor",
       "web",

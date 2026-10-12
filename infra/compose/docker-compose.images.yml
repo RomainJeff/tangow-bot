@@ -99,13 +99,32 @@ services:
       timeout: 5s
       retries: 20
 
+  # Applies the migrations before the API and the worker start, writing the session log from the
+  # legacy messages first when an upgrade needs it. On a large database that takes minutes.
+  migrate:
+    image: ${RAKAZO_IMAGE:-ghcr.io/elie222/rakazo/app}:${RAKAZO_IMAGE_TAG:-edge}
+    restart: "no"
+    command: ["pnpm", "exec", "tsx", "scripts/backfill-session-log.ts"]
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 256
+    mem_limit: 1536m
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://${POSTGRES_USER:-rakazo}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-rakazo}
+    networks:
+      - data
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   api:
     image: ${RAKAZO_IMAGE:-ghcr.io/elie222/rakazo/app}:${RAKAZO_IMAGE_TAG:-edge}
     restart: unless-stopped
-    command:
-      - bash
-      - -lc
-      - pnpm exec tsx scripts/backfill-session-log.ts && pnpm --filter @rakazo/api start
+    command: ["pnpm", "--filter", "@rakazo/api", "start"]
     init: true
     security_opt:
       - no-new-privileges:true
@@ -149,6 +168,8 @@ services:
         condition: service_completed_successfully
       supervisor:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test:
         - CMD
@@ -201,6 +222,8 @@ services:
         condition: service_completed_successfully
       supervisor:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       api:
         condition: service_healthy
 

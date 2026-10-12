@@ -43,6 +43,10 @@ function ok(output = "") {
   return { ok: true, exitCode: 0, output };
 }
 
+function waitTimeout(args: readonly string[] | undefined) {
+  return args?.[args.indexOf("--wait-timeout") + 1];
+}
+
 function failed(output: string) {
   return { ok: false, exitCode: 1, output };
 }
@@ -240,6 +244,9 @@ describe("updater orchestration", () => {
     expect(composeUp[0]?.args).toEqual(expect.arrayContaining(["--wait", "--pull", "never"]));
     expect(composeUp[0]?.args).toContain("--no-build");
     expect(composeUp[1]?.args).toContain("--no-build");
+    expect(waitTimeout(composeUp[0]?.args)).toBe("3600");
+    expect(composeUp[0]?.args).not.toContain("--no-deps");
+    expect(composeUp[1]?.args).toContain("--no-deps");
     expect(composeUp[0]?.env?.RAKAZO_IMAGE_TAG).toBe(`sha-${targetCommit}`);
     expect(composeUp[1]?.env?.RAKAZO_IMAGE_TAG).toBe("v1.0.0");
     expect(await readFile(path.join(fixture.deployDir, ".env"), "utf8")).toContain(
@@ -339,7 +346,7 @@ describe("updater orchestration", () => {
     expect(record.ok).toBe(true);
     expect(calls.some((args) => args.includes("pull"))).toBe(false);
     expect(calls.find((args) => args.includes("up"))).toEqual(
-      expect.arrayContaining(["--pull", "never"]),
+      expect.arrayContaining(["--pull", "never", "--no-deps"]),
     );
   });
 

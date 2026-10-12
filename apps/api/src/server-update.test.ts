@@ -41,7 +41,9 @@ describe("server update install kind", () => {
     expect(status.installKind).toBe("source");
     expect(status.supported).toBe(false);
     expect(status.manualCommands.some((line) => line.includes("git pull"))).toBe(true);
-    expect(status.manualCommands.some((line) => line.includes("migrate"))).toBe(true);
+    expect(
+      status.manualCommands.some((line) => line.includes("scripts/backfill-session-log.ts")),
+    ).toBe(true);
   });
 
   it("detects compose-without-sidecar when the updater URL is set but unreachable", async () => {

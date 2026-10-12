@@ -21,6 +21,7 @@ import {
   IMAGE_TAG_ENV,
   imageRef,
   isGitCommit,
+  MIGRATION_WAIT_TIMEOUT_S,
   normalizeUpdateBranch,
   PREVIOUS_IMAGE_TAG_ENV,
   parseGitNameOnly,
@@ -51,7 +52,7 @@ const STEP_TIMEOUT_MS: Record<string, number> = {
   checkout: 60_000,
   merge: 60_000,
   pull: 600_000,
-  recreate: 1_800_000,
+  recreate: (MIGRATION_WAIT_TIMEOUT_S + 300) * 1000,
   recover: 1_800_000,
 };
 const DEFAULT_TIMEOUT_MS = 120_000;
@@ -547,9 +548,8 @@ export function createUpdaterApp(
     if ("error" in decision) throw new UpdateRefused(decision.error);
     const checkout = await readCheckout();
     // Never re-pull a rollback tag: registry tags can move. Reuse the exact image cached when it ran.
-    const steps = composeUpdatePlan({ strategy: "pull", target: composeTarget }).filter(
-      (step) => step.id !== "pull",
-    );
+    const up = composeUpArgv(composeTarget, { restore: true });
+    const steps = [{ id: "recreate", label: "Recreate the services", ...up }];
     return rememberRun(
       await execute({
         request: { repoUrl: "", branch: "" },
@@ -679,7 +679,7 @@ export function createUpdaterApp(
             () => false,
           );
           if (step.id === "recreate") {
-            const previous = composeUpArgv(composeTarget);
+            const previous = composeUpArgv(composeTarget, { restore: true });
             const recovered =
               checkoutRestored &&
               (await runStep(
