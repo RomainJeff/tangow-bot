@@ -197,10 +197,11 @@ describe("a peer's message to a bot", () => {
 });
 
 describe("a thread list's preview", () => {
-  it("shows the newest words, skipping a hidden peer run's but keeping its question, and keeps a relay's", async () => {
+  it("shows the newest words, skipping a hidden peer run's but keeping what it tells the person, and keeps a relay's", async () => {
     const { prisma } = database;
     const relay = await seedThread(prisma);
     const hidden = await seedThread(prisma);
+    const told = await seedThread(prisma);
     const peer = "bot_peer";
     const received = (id: string, intent: string): Row => ({
       id,
@@ -241,6 +242,20 @@ describe("a thread list's preview", () => {
       asked("d2", "run_peer", hidden.botId, {}),
       text("d3", "run_peer", hidden.botId, "Working on the peer's request."),
     ]);
+    await write(prisma, told.sessionId, [
+      said("t_person", "Hello"),
+      received("t0", "request"),
+      started("t1", "run_told", told.botId),
+      {
+        ...text("t2", "run_told", told.botId, "I need your calendar to go on."),
+        payload: {
+          blocks: [{ kind: "text", text: "I need your calendar to go on." }],
+          toPerson: true,
+        },
+      },
+      text("t3", "run_told", told.botId, "Working on the peer's request."),
+    ]);
+    await seedRun(prisma, told, { id: "run_told", trigger: "bot_message", sourceMessageId: "t0" });
     await seedRun(prisma, relay, {
       id: "run_relay",
       trigger: "bot_message",
@@ -252,11 +267,16 @@ describe("a thread list's preview", () => {
       sourceMessageId: "d0",
     });
 
-    const previews = await sessionPreviews(prisma, [relay.sessionId, hidden.sessionId]);
-
-    expect([previews.get(relay.sessionId), previews.get(hidden.sessionId)]).toEqual([
-      "The venues are booked.",
-      "Which city?",
+    const previews = await sessionPreviews(prisma, [
+      relay.sessionId,
+      hidden.sessionId,
+      told.sessionId,
     ]);
+
+    expect([
+      previews.get(relay.sessionId),
+      previews.get(hidden.sessionId),
+      previews.get(told.sessionId),
+    ]).toEqual(["The venues are booked.", "Which city?", "I need your calendar to go on."]);
   });
 });

@@ -287,9 +287,14 @@ async function replayExistingSend(
   return sendResult(message, runs);
 }
 
-/** The send's runs in id order, so a replay of the send answers with the same runs alike. */
-function sendResult(message: { seq: number }, runs: Array<{ id: string; taskId: string }>) {
-  const ordered = runs.toSorted((a, b) => a.id.localeCompare(b.id));
+/** The send's runs oldest first, so a replay of the send answers with its first run first too. */
+function sendResult(
+  message: { seq: number },
+  runs: Array<{ id: string; taskId: string; createdAt: Date }>,
+) {
+  const ordered = runs.toSorted(
+    (a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id),
+  );
   const first = ordered[0];
   if (!first) throw new IsolationError("Send did not create a run");
   return {
@@ -769,7 +774,7 @@ export async function sendThreadMessage(
             parentRunId: null,
             status: { in: [...ACTIVE_RUN_STATUSES] },
           },
-          select: { id: true, taskId: true, status: true },
+          select: { id: true, taskId: true, status: true, createdAt: true },
         });
         // A run parked on an ask_user card resolves with this text instead of blocking (spec
         // ask-answer-via-composer, PR 1). Approval/secret asks and any other unresolvable state
@@ -799,7 +804,7 @@ export async function sendThreadMessage(
           });
           return {
             message,
-            runs: [{ id: waitingRun.id, taskId: waitingRun.taskId, status: dismissal.status }],
+            runs: [{ ...waitingRun, status: dismissal.status }],
             eventSeq: await threadEventSeq(tx, target.threadId),
           };
         }
@@ -817,7 +822,7 @@ export async function sendThreadMessage(
           }
           return {
             message,
-            runs: [{ id: resolution.runId, taskId: waitingRun.taskId, status: "queued" }],
+            runs: [{ ...waitingRun, id: resolution.runId, status: "queued" }],
             eventSeq: await threadEventSeq(tx, target.threadId),
           };
         }
@@ -901,7 +906,6 @@ export async function sendThreadMessage(
       const blocks = buildUserMessageBlocks(input.text, attachmentBlocks, {
         linkPreview: input.linkPreview,
       });
-      // Each targeted bot gets a run in turn, so the first run is always the first target's.
       const eventBotId = targetBotIds[0];
       if (!eventBotId) throw new IsolationError("Group send did not resolve a target");
       const message = await createThreadMessageInTransaction(tx, {
@@ -920,7 +924,7 @@ export async function sendThreadMessage(
           parentRunId: null,
           status: { in: [...ACTIVE_RUN_STATUSES] },
         },
-        select: { id: true, taskId: true, botId: true, status: true },
+        select: { id: true, taskId: true, botId: true, status: true, createdAt: true },
       });
       const activeRunsByBotId = new Map<string, typeof activeRuns>();
       for (const run of activeRuns) {
@@ -935,7 +939,13 @@ export async function sendThreadMessage(
       // or anything else non-steerable) still aborts the whole send via CONFLICT, same net
       // effect as the old blanket throw since a transaction throw rolls back every bot's work.
       const conversationRunIds = await findConversationRunIds(tx, activeRuns);
-      const runs: Array<{ id: string; taskId: string; botId: string; status: string }> = [];
+      const runs: Array<{
+        id: string;
+        taskId: string;
+        botId: string;
+        status: string;
+        createdAt: Date;
+      }> = [];
       const createdRuns: typeof runs = [];
       for (const botId of targetBotIds) {
         const botRuns = activeRunsByBotId.get(botId) ?? [];
@@ -958,6 +968,7 @@ export async function sendThreadMessage(
             taskId: soleActiveRun.taskId,
             botId,
             status: "queued",
+            createdAt: soleActiveRun.createdAt,
           });
           continue;
         }

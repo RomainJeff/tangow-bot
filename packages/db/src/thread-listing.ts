@@ -1,5 +1,5 @@
 import type { SessionEntry, SessionEntryType } from "@rakazo/contracts";
-import { ACTIVE_RUN_STATUSES, plainText } from "@rakazo/core";
+import { ACTIVE_RUN_STATUSES, plainText, visibleEntries } from "@rakazo/core";
 import type { Prisma, PrismaClient } from "./client.js";
 import { hiddenPeerRunIds } from "./peer-runs.js";
 import type { SessionEntryRow } from "./sessions.js";
@@ -77,8 +77,8 @@ export function entryPreview(entry: SessionEntry): string {
 }
 
 /**
- * Each session's preview: the newest entry on its chain that says something. Of a peer run the
- * thread hides, only a question to the person counts.
+ * Each session's preview: the newest entry on its chain that says something and that the thread
+ * shows, so a peer run it hides counts only for what it puts to the person.
  */
 export async function sessionPreviews(
   prisma: PrismaClient | Prisma.TransactionClient,
@@ -100,10 +100,12 @@ export async function sessionPreviews(
   const entries = rows.map(sessionEntryFromRow);
   const runIds = [...new Set(entries.flatMap((entry) => entry.runId ?? []))];
   const hidden = await hiddenPeerRunIds(prisma, runIds);
+  const shown = new Set(
+    visibleEntries(entries, { hiddenPeerRunIds: hidden }).map((entry) => entry.id),
+  );
   const previews = new Map<string, string>();
   for (const entry of entries) {
-    if (previews.has(entry.sessionId)) continue;
-    if (entry.runId && hidden.has(entry.runId) && entry.type !== "assistant.ask") continue;
+    if (previews.has(entry.sessionId) || !shown.has(entry.id)) continue;
     const preview = entryPreview(entry);
     if (preview) previews.set(entry.sessionId, preview);
   }

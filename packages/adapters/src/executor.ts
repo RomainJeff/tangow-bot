@@ -6323,7 +6323,11 @@ async function settleRoutineCard(
     .$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM threads WHERE id = ${target.threadId} FOR UPDATE`;
       const card = await tx.sessionEntry.findFirst({
-        where: { type: "effect.requested", payload: { path: ["effectId"], equals: effectId } },
+        where: {
+          runId: target.runId,
+          type: "effect.requested",
+          payload: { path: ["effectId"], equals: effectId },
+        },
         select: { id: true },
       });
       if (!card) return null;

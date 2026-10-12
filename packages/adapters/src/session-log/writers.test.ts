@@ -710,7 +710,14 @@ describe("session log writers", () => {
     const { prisma } = database;
     const ida = await seedBot(prisma, "Ida");
     const run = await seedRun(prisma, ida.bot.id, ida.threadId, { trigger: "bot_message" });
-    const card: MessageBlock = { kind: "card", lines: [{ k: "Invoice", v: "Due Friday" }] };
+    const card: MessageBlock = {
+      kind: "app_connect",
+      provider: "quickbooks",
+      name: "QuickBooks",
+      description: "Read your invoices",
+      logo: null,
+      status: "pending",
+    };
 
     await prisma.$transaction((tx) =>
       appendRunBlocksInTransaction(

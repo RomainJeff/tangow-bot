@@ -471,12 +471,11 @@ export function isCardState<E extends ThreadEntry>(
 }
 
 /**
- * The blocks the person must act on: a question to answer, a card to approve, an app or a server
- * to connect, a draft to save, a screen to take over. Whatever run writes one, it reaches them.
+ * The blocks of an `assistant.text` the person must act on: a card to approve, an app or a server
+ * to connect, a draft to save, a screen to take over. Whatever run writes one, it reaches them. A
+ * question or a choice has an entry of its own.
  */
 const BLOCK_KINDS_NEEDING_THE_PERSON: ReadonlySet<MessageBlock["kind"]> = new Set([
-  "ask",
-  "choice",
   "card",
   "app_connect",
   "connect",

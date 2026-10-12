@@ -1,4 +1,5 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import { detachedRunInstructions } from "@rakazo/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const fakeAgentState = vi.hoisted(() => ({
@@ -120,6 +121,7 @@ async function runWithModel(
     thinkingLevel?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null;
   }>,
   maxImagesPerPrompt?: number,
+  instructions = "",
 ) {
   const runtime = new PiAgentRuntime();
   for await (const _event of runtime.run(
@@ -128,7 +130,7 @@ async function runWithModel(
       threadId: "t",
       runId: "r",
       prompt: "hello",
-      instructions: "",
+      instructions,
       history: [],
       tools: [],
       model: { provider, id: modelId, thinkingLevel, maxImagesPerPrompt },
@@ -293,14 +295,16 @@ describe("Pi agent thinking level", () => {
     });
   });
 
-  it("tells a helper that only the result it hands back reaches the user", async () => {
-    await runWithModel("plain-model");
+  it("tells a helper that only the result it hands back reaches the user, not the chat voice", async () => {
+    const chatVoice =
+      "## How you communicate with the user\n\nUse message_user to communicate with the user.";
+    const signal = new AbortController().signal;
+    await runWithModel("plain-model", "test", signal, null, undefined, undefined, chatVoice);
 
-    const [, helper] = fakeAgentState.systemPrompts;
-    expect(helper).toContain(
-      "Your final written response is the result you hand back to the bot that started you, which tells the user what matters. Do not use message_user.",
-    );
-    expect(helper).not.toContain("Use message_user to communicate with the user");
+    const [thread, helper] = fakeAgentState.systemPrompts;
+    expect(thread).toContain(chatVoice);
+    expect(helper).toContain(detachedRunInstructions("helper"));
+    expect(helper).not.toContain(chatVoice);
   });
 
   it("keeps reasoning off for the main agent and subagent", async () => {

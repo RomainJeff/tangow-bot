@@ -1751,8 +1751,20 @@ describe("sendThreadMessage", () => {
       },
       run: {
         findMany: vi.fn().mockResolvedValue([
-          { id: "run-a-waiting", taskId: "task-a", botId: "bot-a", status: "waiting_input" },
-          { id: "run-b-queued", taskId: "task-b", botId: "bot-b", status: "queued" },
+          {
+            id: "run-a-waiting",
+            taskId: "task-a",
+            botId: "bot-a",
+            status: "waiting_input",
+            createdAt: new Date("2026-10-12T09:00:02.000Z"),
+          },
+          {
+            id: "run-b-queued",
+            taskId: "task-b",
+            botId: "bot-b",
+            status: "queued",
+            createdAt: new Date("2026-10-12T09:00:01.000Z"),
+          },
         ]),
         findFirst: vi.fn().mockResolvedValue({ botId: "bot-a" }),
         findUnique: vi.fn().mockResolvedValue({ status: "queued", startedAt: new Date() }),
@@ -1799,7 +1811,10 @@ describe("sendThreadMessage", () => {
     );
 
     // bot-a's ask resolves in place; bot-b, already queued, is steered — no CONFLICT anywhere.
-    expect(result).toMatchObject({ runIds: ["run-a-waiting", "run-b-queued"] });
+    expect(result).toMatchObject({
+      runId: "run-b-queued",
+      runIds: ["run-b-queued", "run-a-waiting"],
+    });
     expect(tx.run.updateMany).toHaveBeenCalledWith({
       where: {
         id: "run-a-waiting",
@@ -1839,8 +1854,20 @@ describe("sendThreadMessage", () => {
       },
       run: {
         findMany: vi.fn().mockResolvedValue([
-          { id: "run-a-waiting", taskId: "task-a", botId: "bot-a", status: "waiting_input" },
-          { id: "run-b-queued", taskId: "task-b", botId: "bot-b", status: "queued" },
+          {
+            id: "run-a-waiting",
+            taskId: "task-a",
+            botId: "bot-a",
+            status: "waiting_input",
+            createdAt: new Date("2026-10-12T09:00:02.000Z"),
+          },
+          {
+            id: "run-b-queued",
+            taskId: "task-b",
+            botId: "bot-b",
+            status: "queued",
+            createdAt: new Date("2026-10-12T09:00:01.000Z"),
+          },
         ]),
         findFirst: vi.fn().mockResolvedValue({ botId: "bot-a" }),
         updateMany: vi.fn(),
