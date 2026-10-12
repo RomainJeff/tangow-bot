@@ -1,6 +1,6 @@
-# Architecture
+# Session log architecture
 
-Rakazo is one product on the web, the Electron desktop app and the Expo mobile app, and Electron hosts the web app. The frontends express intent and render state, and the backend, the API and the worker, owns orchestration, validation, retries and provider translation, as [AGENTS.md](../AGENTS.md) requires.
+Rakazo is one product on the web, the Electron desktop app and the Expo mobile app. The frontends express intent and render state, and the backend owns orchestration, as [AGENTS.md](../AGENTS.md) requires. The [architecture map](../ARCHITECTURE.md) lists the other features.
 
 A conversation is an append-only log of typed entries. A person's message, each finished block of a bot's reply, each tool call and each tool result is one entry, one row in Postgres. An entry is never edited, and a rewind or a clear appends instead of deleting.
 
@@ -8,23 +8,23 @@ Two projections read the same entries, one for the turns the model reads and one
 
 No hosted vendor is required to run the core product, since models, sandboxes, memory and integrations sit behind optional provider-neutral ports.
 
-This page describes the shape after SL6, the last slice of the [session log plan](plans/2026-10-10-thread-log.md) to land, which backfills older threads and removes the legacy `messages` rows and events that writers still fill until then.
+This page describes the shape after SL6, the last slice of the [session log plan](plans/2026-10-10-thread-log.md) to land, which backfills older threads and removes the legacy `messages` table and the message events that writers still fill until then.
 
 ## Messages are entries on a chain
 
-Each entry is one fact, appended as the new head of its session, and its `parentId` links it to the head before it.
+Each entry is one fact, appended as the new head of its session, and its `parentId` names the head before it, apart from three exceptions.
 
 Every entry has the envelope of `SessionEntrySchema` in [`session-log.ts`](../packages/contracts/src/session-log.ts): `id`, `sessionId`, `seq`, `parentId`, `ts`, a `botId` and a `runId` where the type has them, then `type` and a `payload` that the type shapes.
 
 A run writes one entry per finished block of its reply and per tool call or result, and the thread folds them back into its messages.
 
-The head of a session is its entry with the highest `seq`, and the session row keeps `headEntryId` and `nextEntrySeq`. Every backend appends through `nextSessionEntry` in [`adapter-kit/src/session-log.ts`](../packages/adapter-kit/src/session-log.ts), which makes the head the parent, with three exceptions:
+The head of a session is its entry with the highest `seq`, and in Postgres the session row keeps `headEntryId` and `nextEntrySeq`. Every backend appends through `nextSessionEntry` in [`adapter-kit/src/session-log.ts`](../packages/adapter-kit/src/session-log.ts), which makes the head the parent, with three exceptions:
 
 - A `rewind` names the entry the conversation goes back to, the one before the cut message.
 - A `compaction` names the head its summary was built on, and the append fails with `stale_compaction` when the head has moved.
 - A `clear` has no parent and starts a new chain, like the first entry of a session.
 
-Chain reads follow `parentId` back from the head, so what a rewind cut stays in the table but leaves the chain. A rewind of the first message writes a `clear` instead. When a rewind cuts a compaction whose summary still holds, `appendRewindInTransaction` in [`sessions.ts`](../packages/db/src/sessions.ts) writes that compaction again on top of the rewind.
+Chain reads follow `parentId` back from the head, so what a rewind cut stays in the table but leaves the chain. When a rewind cuts a compaction whose summary still holds, `appendRewindInTransaction` in [`sessions.ts`](../packages/db/src/sessions.ts) writes that compaction again on top of the rewind.
 
 ## Each entry type has an audience
 
@@ -56,11 +56,11 @@ In the Model column, `context` means one short line in the model's history. A Th
 | `rewind`, `clear` | no | yes | A cut of the chain |
 | `harness.session` | no | no | A harness's session id |
 
-Nothing writes `attachment.added`, `session.title` or `harness.session` yet. Streamed text deltas (`thread.progress`), computer status, the takeover negotiation, per-call usage records and changes to a bot or a group stay out of the log, in the `events` table or their own tables.
+Nothing writes `attachment.added`, `session.title` or `harness.session` yet. Streamed text deltas (`thread.progress`), computer status, the takeover negotiation, per-call usage records and a bot's or a group's settings and members stay out of the log, in the `events` table or their own tables.
 
 ## Child sessions keep their own trace
 
-A thread owns one main session, a routine run or a helper runs in a child session that keeps its trace, and what the person must answer or act on rises to the main session.
+A thread owns one main session. A routine run or a helper runs in a child session that keeps its run's trace, and every other entry it writes rises to the main session.
 
 A session's `kind` is `thread`, `subagent` or `routine`. A thread points at its main session through `threads.sessionId`. A child session points at its parent session, and a subagent session also at `parentEntryId`, the `tool.call` that launched it. Neither child kind has a thread.
 
@@ -80,7 +80,7 @@ Both fold entries with `foldRuns` in [`run-fold.ts`](../packages/core/src/sessio
 
 **Inference.** [`project-inference.ts`](../packages/core/src/session-log/project-inference.ts) keeps the types whose audience is `yes` or `context`. It drops a tool call with no answer, and a cancelled run replays only its answered calls. Only the leading compaction becomes a turn. A `subagent` entry adds no turn, because its `result` replays as the output of the `run_subagent` call. `routine.started` is a context line. `routine.finished` replays the final words as words of the bot that ran it, or a context line when the routine failed or was cancelled without any.
 
-**Thread.** [`project-thread-view.ts`](../packages/core/src/session-log/project-thread-view.ts) is the one function web and mobile call. It cuts what a rewind or clear removed, projects items with [`project-ui.ts`](../packages/core/src/session-log/project-ui.ts), adds the live layer, then folds reactions, groups, routine runs and time markers. A `ThreadItem` is a `message`, `run`, `subagent`, `routine`, `handoff`, `botMessage`, `divider`, `effect` or `note`. A `run` item draws nothing, since its reply is its bubbles and its steps.
+**Thread.** `projectThreadView` in [`project-thread-view.ts`](../packages/core/src/session-log/project-thread-view.ts) is the one projection web and mobile call. It cuts what a rewind or clear removed, projects items with [`project-ui.ts`](../packages/core/src/session-log/project-ui.ts), adds the live layer, then folds reactions, groups, routine runs and time markers. A `ThreadItem` is a `message`, `run`, `subagent`, `routine`, `handoff`, `botMessage`, `divider`, `effect` or `note`. A `run` item draws nothing, since its reply is its bubbles and its steps.
 
 Clients receive entries, never items. A card's later state is a new entry that names the card, by `target` for the card-state types or by `effectId` for an approval, because `parentId` stays the link to the head. No entry changes after it is written, so a client only merges new entries, and a reload and a second tab agree. Everything the thread shows is an entry, with three exceptions that stay outside the log on purpose:
 
@@ -92,7 +92,7 @@ Clients receive entries, never items. A card's later state is a new entry that n
 
 A run's history read, `readTail`, walks `parentId` back from the head, and the newest compaction on the chain stops it at the last `seq` its summary covers, `coveredUpToSeq`.
 
-A thread's run reads that tail, while a routine run reads no history. The tail is the compaction, the kept window after `coveredUpToSeq`, and everything since, with the compaction first so the summary comes before the older entries it kept. Before the first compaction, the tail is the whole chain. A walk also stops at an entry with no parent. Thread pages walk past compactions. Here the compaction at 53 covers up to 40.
+A thread's run reads that tail. A routine run reads no history, and a run that answers a channel post reads that channel's recent entries. The tail is the compaction, the kept window after `coveredUpToSeq`, and everything since, with the compaction first so the summary comes before the older entries it kept. Before the first compaction, the tail is the whole chain. A walk also stops at an entry with no parent. Thread pages walk past compactions. Here the compaction at 53 covers up to 40.
 
 ```text
 seq    0 ... 40     41 ... 52     53           54 ... 60
@@ -108,12 +108,12 @@ The job appends on the head it read. If the session moved on, the append fails, 
 
 Three entry types carry what bots say to each other. For the model, another bot's words are a `<bot_message>` user turn, and a bot's own words stay on its assistant side.
 
-- `handoff` records a group bot that passes the turn, in the group thread's session. `handoffToGroupBot` in [`group-handoff.ts`](../packages/adapters/src/group-handoff.ts) writes it, and the next bot's `run.started` names it as its `handoff` trigger.
-- `bot.message.sent` lands in the sender's session and `bot.message.received` in the receiver's. `appendBotMessageInTransaction` in [`bot-messages.ts`](../packages/adapters/src/bot-messages.ts) writes both in one transaction, for `message_bot`, the automatic return of a result and connected agents. The receiver's run names the received entry as its `bot_message` trigger.
+- `handoff` records a group bot that passes the turn, in the group thread's session. `handoffToGroupBot` in [`group-handoff.ts`](../packages/adapters/src/group-handoff.ts) writes it.
+- `bot.message.sent` lands in the sender's session and `bot.message.received` in the receiver's. `appendBotMessageInTransaction` in [`bot-messages.ts`](../packages/adapters/src/bot-messages.ts) writes both in one transaction, for `message_bot`, the automatic return of a result and connected agents.
 
 A `bot.message.*` entry carries an `exchangeId`, the id of the first `bot.message.sent` of its exchange. A chain stops at six bot-started deliveries, counted in `hop`, apart from the automatic return of a result.
 
-A `bot_message` run is a hidden peer run when a peer asked or told its bot something, with intent `request`, `question` or `fyi`, or when its bot is a sub-bot. Of such a run, the server keeps only the asks, choices, approval cards, card states, bot messages and `message_user` words, through `visibleEntries` in [`project-thread-view.ts`](../packages/core/src/session-log/project-thread-view.ts).
+A `bot_message` run is a hidden peer run when a peer asked or told its bot something, with intent `request`, `question` or `fyi`, unless it answers its bot's own request, or when its bot is a sub-bot. Of such a run, the server keeps only the asks, choices, approval cards, card states, bot messages and `message_user` words, through `visibleEntries` in [`project-thread-view.ts`](../packages/core/src/session-log/project-thread-view.ts).
 
 ## The feed carries appended entries
 
@@ -127,9 +127,9 @@ Web, in [`thread-events.ts`](../apps/web/src/lib/thread-events.ts), and mobile, 
 
 ## Postgres stores the log
 
-Postgres holds the log in the `sessions` and `session_entries` tables, and JSONL is the line format at the edges.
+Postgres holds the log in the `sessions` and `session_entries` tables, and JSONL is the line format of the file backend and the test fixtures.
 
-In [`schema.prisma`](../packages/db/prisma/schema.prisma), `sessions` owns identity, parentage and the head. `session_entries` keeps the envelope as columns and everything else in the `payload` jsonb. A field earns a column only when a query filters, sorts, joins or locks on it, and `clientNonce` and `originSessionId` are queried through expression indexes on the payload instead.
+In [`schema.prisma`](../packages/db/prisma/schema.prisma), `sessions` owns identity, parentage and the head. `session_entries` keeps the envelope as columns and everything else in the `payload` jsonb. A field earns a column only when a query filters, sorts, joins or locks on it, and `clientNonce` and `originSessionId` stay in the payload under expression indexes instead.
 
 Every append locks the thread, then the session row, so appends to a session serialize without a deadlock.
 
@@ -140,7 +140,7 @@ The port is `SessionLog<Tx>` in [`interfaces.ts`](../packages/adapter-kit/src/in
 
 [`conformance.ts`](../packages/adapters/src/session-log/conformance.ts) runs the same cases on both backends offline, Postgres on in-memory PGlite.
 
-Harness sessions, such as those of the Claude Code CLI or OpenCode, stay in the harness's own store. The log would record only a `harness.session` entry with the id.
+Harness sessions, such as those of the Claude Code CLI or OpenCode, stay in the harness's own store. Once a harness runtime exists, the log records only a `harness.session` entry with the id.
 
 ## Principles behind the shape
 
