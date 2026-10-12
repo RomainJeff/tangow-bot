@@ -190,10 +190,6 @@ function isLowSurrogate(code: number): boolean {
   return code >= LOW_SURROGATE_START && code <= LOW_SURROGATE_END;
 }
 
-function endsWithHighSurrogate(value: string): boolean {
-  return value.length > 0 && isHighSurrogate(value.charCodeAt(value.length - 1));
-}
-
 /**
  * Replace unpaired UTF-16 surrogates so the string is safe for JSON (Postgres rejects them).
  */
@@ -236,62 +232,4 @@ export function sanitizeJsonValue<T>(value: T): T {
     return out as T;
   }
   return value;
-}
-
-export function createStreamingRedactor(secrets: string[]) {
-  const values = [...new Set(secrets.filter(Boolean))].sort((a, b) => b.length - a.length);
-  const maxLength = values[0]?.length ?? 0;
-  let buffer = "";
-
-  const drain = (final: boolean) => {
-    let output: string;
-    if (values.length === 0) {
-      output = buffer;
-      buffer = "";
-    } else {
-      const safeStartLimit = final ? buffer.length : Math.max(0, buffer.length - maxLength + 1);
-      let offset = 0;
-      output = "";
-      while (offset < safeStartLimit) {
-        const secret = values.find((value) => buffer.startsWith(value, offset));
-        if (secret) {
-          output += "[redacted]";
-          offset += secret.length;
-          continue;
-        }
-        const code = buffer.charCodeAt(offset);
-        if (isHighSurrogate(code)) {
-          const hasNext = offset + 1 < buffer.length;
-          const next = hasNext ? buffer.charCodeAt(offset + 1) : -1;
-          if (hasNext && isLowSurrogate(next)) {
-            // Keep the pair together; hold both if the low unit is outside this drain window.
-            if (!final && offset + 1 >= safeStartLimit) break;
-            output += buffer[offset]! + buffer[offset + 1]!;
-            offset += 2;
-            continue;
-          }
-          if (!final && !hasNext) break; // trailing high surrogate — wait for the next chunk
-        }
-        output += buffer[offset];
-        offset += 1;
-      }
-      buffer = buffer.slice(offset);
-    }
-    // No-secret path emits the whole buffer; hold a trailing high until the next chunk.
-    if (!final && endsWithHighSurrogate(output)) {
-      buffer = output.slice(-1) + buffer;
-      output = output.slice(0, -1);
-    }
-    return sanitizeUtf16ForJson(output);
-  };
-
-  return {
-    push(chunk: string) {
-      buffer += chunk;
-      return drain(false);
-    },
-    finish() {
-      return drain(true);
-    },
-  };
 }

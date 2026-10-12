@@ -195,7 +195,15 @@ function fixture({
       updateMany: vi.fn(async () => ({ count: 1 })),
     },
     thread: {
-      findUniqueOrThrow: vi.fn(async () => ({ id: run.threadId, groupId })),
+      // The thread row as the run's opening reads and a message it publishes see it.
+      findUniqueOrThrow: vi.fn(async () => ({
+        id: run.threadId,
+        groupId,
+        sessionId: "session-main",
+        botId: run.botId,
+        nextEventSeq: 1,
+      })),
+      update: vi.fn(async () => ({ sessionId: "session-main", botId: run.botId })),
       findFirst: vi.fn(async () => ({ groupId })),
       count: vi.fn(async () => 0),
     },
@@ -263,6 +271,8 @@ function fixture({
     enqueue,
     /** Events appended to the thread (progress, tool calls, ...). */
     appended: append,
+    /** Entries the run wrote to the log, in order. */
+    drafts: log.drafts,
     /** Push notifications sent to the user. */
     pushes: send,
     finalizeRun,
@@ -302,6 +312,39 @@ describe("link previews of a run (CA 13, CA 14, CA 70, CA 72)", () => {
     expect(f.finalizeRun.mock.invocationCallOrder[0]!).toBeLessThan(
       f.enqueue.mock.invocationCallOrder.at(-1)!,
     );
+  });
+
+  it("shows only message_user and the final reply, never the narration around tools", async () => {
+    const f = fixture({
+      trigger: "user",
+      async *runtimeRun(request) {
+        yield { type: "text", text: "Let me check the logs first. " };
+        yield { type: "tool", name: "message_user", args: {}, executionId: "call-1" };
+        await request.executeTool!("message_user", { message: "Found it." }, "call-1");
+        yield { type: "text", text: "Now writing the summary. " };
+        yield { type: "tool", name: "web_search", args: {}, executionId: "call-2" };
+        yield { type: "text", text: "All fixed." };
+        yield {
+          type: "done",
+          text: "Let me check the logs first. Now writing the summary. All fixed.",
+        };
+      },
+    });
+
+    await f.run();
+
+    const finalBlocks = f.finalizeRun.mock.calls.at(-1)![0].blocks ?? [];
+    const logged = f.drafts.flatMap(
+      (draft) => (draft.payload as { blocks?: MessageBlock[] }).blocks ?? [],
+    );
+    const shown = [...logged, ...finalBlocks]
+      .flatMap((block) => (block.kind === "text" ? [block.text] : []))
+      .join("|");
+    expect(shown).toBe("Found it.|All fixed.");
+    const streamed = (f.appended.mock.calls as unknown as Array<[{ type: string }]>).filter(
+      ([event]) => event.type === "thread.progress",
+    );
+    expect(streamed).toEqual([]);
   });
 
   it("pushes a finished reply's words without its markdown", async () => {

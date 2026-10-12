@@ -3,41 +3,12 @@ import { isToolActivityBlock } from "@rakazo/core";
 import { describe, expect, it } from "vitest";
 import {
   botMessageOutcomeFromMidTurn,
-  clampUserProgressMessage,
   endsWithToolCallBudgetNotice,
   extractNarrationText,
   finalBlocksAfterMidTurnProgress,
-  isProgressMessageTruncated,
   repeatsSentUserText,
   toolCallBudgetNotice,
-  USER_PROGRESS_MESSAGE_MAX_LENGTH,
 } from "./user-progress.js";
-
-describe("clampUserProgressMessage", () => {
-  it("trims and rejects empty text", () => {
-    expect(clampUserProgressMessage("  hello  ")).toBe("hello");
-    expect(clampUserProgressMessage("   ")).toBe("");
-  });
-
-  it("clamps long progress beats", () => {
-    const clamped = clampUserProgressMessage("x".repeat(USER_PROGRESS_MESSAGE_MAX_LENGTH + 40));
-    expect(clamped).toHaveLength(USER_PROGRESS_MESSAGE_MAX_LENGTH);
-    expect(clamped.endsWith("…")).toBe(true);
-  });
-});
-
-describe("isProgressMessageTruncated", () => {
-  it("is false for text that fits", () => {
-    expect(isProgressMessageTruncated("short update")).toBe(false);
-    expect(isProgressMessageTruncated("x".repeat(USER_PROGRESS_MESSAGE_MAX_LENGTH))).toBe(false);
-  });
-
-  it("is true for text that would be cut off by clampUserProgressMessage", () => {
-    const long = "x".repeat(USER_PROGRESS_MESSAGE_MAX_LENGTH + 1);
-    expect(isProgressMessageTruncated(long)).toBe(true);
-    expect(clampUserProgressMessage(long).endsWith("…")).toBe(true);
-  });
-});
 
 describe("extractNarrationText", () => {
   it("pulls text blocks and current text while keeping tool activity", () => {
