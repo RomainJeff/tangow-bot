@@ -1,6 +1,6 @@
 # Session log architecture
 
-Rakazo is one product on the web, the Electron desktop app and the Expo mobile app. The frontends express intent and render state, and the backend owns orchestration, as [AGENTS.md](../AGENTS.md) requires. The [architecture map](../ARCHITECTURE.md) lists the other features.
+Rakazo is one product on the web, the Electron desktop app and the Expo mobile app. The frontends express intent and render state, and the backend owns orchestration, as [AGENTS.md](../AGENTS.md) requires. The [architecture map](../ARCHITECTURE.md) links the other features' pages.
 
 A conversation is an append-only log of typed entries. A person's message, each finished block of a bot's reply, each tool call and each tool result is one entry, one row in Postgres. An entry is never edited, and a rewind or a clear appends instead of deleting.
 
@@ -80,7 +80,7 @@ Both fold entries with `foldRuns` in [`run-fold.ts`](../packages/core/src/sessio
 
 **Inference.** [`project-inference.ts`](../packages/core/src/session-log/project-inference.ts) keeps the types whose audience is `yes` or `context`. It drops a tool call with no answer, and a cancelled run replays only its answered calls. Only the leading compaction becomes a turn. A `subagent` entry adds no turn, because its `result` replays as the output of the `run_subagent` call. `routine.started` is a context line. `routine.finished` replays the final words as words of the bot that ran it, or a context line when the routine failed or was cancelled without any.
 
-**Thread.** `projectThreadView` in [`project-thread-view.ts`](../packages/core/src/session-log/project-thread-view.ts) is the one projection web and mobile call. It cuts what a rewind or clear removed, projects items with [`project-ui.ts`](../packages/core/src/session-log/project-ui.ts), adds the live layer, then folds reactions, groups, routine runs and time markers. A `ThreadItem` is a `message`, `run`, `subagent`, `routine`, `handoff`, `botMessage`, `divider`, `effect` or `note`. A `run` item draws nothing, since its reply is its bubbles and its steps.
+**Thread.** `projectThreadView` in [`project-thread-view.ts`](../packages/core/src/session-log/project-thread-view.ts) is the one projection web and mobile call. It cuts what a rewind or clear removed, projects items with [`project-ui.ts`](../packages/core/src/session-log/project-ui.ts), adds the live layer, then folds reactions, groups, routine runs and time markers. A `ThreadItem` is a `message`, `run`, `subagent`, `routine`, `handoff`, `botMessage`, `divider`, `effect` or `note`. A `run` item draws nothing.
 
 Clients receive entries, never items. A card's later state is a new entry that names the card, by `target` for the card-state types or by `effectId` for an approval, because `parentId` stays the link to the head. No entry changes after it is written, so a client only merges new entries, and a reload and a second tab agree. Everything the thread shows is an entry, with three exceptions that stay outside the log on purpose:
 
@@ -113,7 +113,7 @@ Three entry types carry what bots say to each other. For the model, another bot'
 
 A `bot.message.*` entry carries an `exchangeId`, the id of the first `bot.message.sent` of its exchange. A chain stops at six bot-started deliveries, counted in `hop`, apart from the automatic return of a result.
 
-A `bot_message` run is a hidden peer run when a peer asked or told its bot something, with intent `request`, `question` or `fyi`, unless it answers its bot's own request, or when its bot is a sub-bot. Of such a run, the server keeps only the asks, choices, approval cards, card states, bot messages and `message_user` words, through `visibleEntries` in [`project-thread-view.ts`](../packages/core/src/session-log/project-thread-view.ts).
+A `bot_message` run is a hidden peer run in two cases. A peer asked or told its bot something, with intent `request`, `question` or `fyi`, and the run does not answer a request or question its bot sent. Or its bot is a sub-bot. Of such a run, the server keeps only the asks, choices, approval cards, card states, bot messages and `message_user` words, through `visibleEntries` in [`project-thread-view.ts`](../packages/core/src/session-log/project-thread-view.ts).
 
 ## The feed carries appended entries
 
@@ -140,7 +140,7 @@ The port is `SessionLog<Tx>` in [`interfaces.ts`](../packages/adapter-kit/src/in
 
 [`conformance.ts`](../packages/adapters/src/session-log/conformance.ts) runs the same cases on both backends offline, Postgres on in-memory PGlite.
 
-Harness sessions, such as those of the Claude Code CLI or OpenCode, stay in the harness's own store. Once a harness runtime exists, the log records only a `harness.session` entry with the id.
+Once a harness runtime exists, its sessions, such as those of the Claude Code CLI or OpenCode, stay in the harness's own store, and the log records only a `harness.session` entry with the id.
 
 ## Principles behind the shape
 

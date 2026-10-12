@@ -9,15 +9,15 @@ Read more in [Session log architecture](./docs/architecture-sessionlog.md).
 
 ## Computer runtime
 
-A bot works on a computer kept apart from the agent runtime, which runs in the API and worker process and reaches the computer through its tools. `SandboxProvider` in [`interfaces.ts`](./packages/adapter-kit/src/interfaces.ts) is the provider boundary, with Docker, E2B, Daytona and Box backends in [`packages/adapters/src/`](./packages/adapters/src/).
+A bot works on a computer kept apart from the agent runtime, which runs in the API and worker process and reaches the computer through its tools. `SandboxProvider` in [`interfaces.ts`](./packages/adapter-kit/src/interfaces.ts) is the provider boundary, and [`sandbox-factory.ts`](./packages/adapters/src/sandbox-factory.ts) picks a backend such as Docker, E2B, Daytona or Box from `SANDBOX_PROVIDER`.
 Read more in [Computer runtime](./docs/computer-runtime.md).
 
 ## Reusable credentials
 
-A bot asks for an API key through a protected card. The backend encrypts it in the `bot_secrets` table and injects it into the requests the bot makes, so the model never reads the value. The store and the request path live in [`bot-secrets.ts`](./packages/adapters/src/bot-secrets.ts).
+A bot asks for an API key through a protected card. The backend encrypts it in the `bot_secrets` table and injects it into the HTTPS requests the bot makes with `secret_request`, so the model never reads the value. The store and the request path live in [`bot-secrets.ts`](./packages/adapters/src/bot-secrets.ts).
 Read more in [Reusable API credentials](./docs/bot-secrets.md).
 
 ## UI system
 
-A screen composes semantic tokens and primitives and never defines a color, a size or a duration by hand. The tokens come from one source, [`packages/ui-tokens/src/index.ts`](./packages/ui-tokens/src/index.ts), the web primitives live in [`packages/ui-web`](./packages/ui-web/), and mobile reads the same tokens through [`appearance.ts`](./apps/mobile/lib/appearance.ts).
+A screen composes semantic tokens and primitives and never defines a color, a size or a duration by hand. The tokens come from one source, [`packages/ui-tokens/src/index.ts`](./packages/ui-tokens/src/index.ts), the web primitives live in [`packages/ui-web`](./packages/ui-web/), and mobile reads the same tokens, its colors through [`appearance.ts`](./apps/mobile/lib/appearance.ts).
 Read more in [Design system](./docs/design-system.md).
