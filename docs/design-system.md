@@ -511,7 +511,7 @@ is a `div` until `onClick` makes it a `button` that fades on hover.
 A marker cuts the bubble group around it; consecutive markers stack with no
 gap. A handoff reads as a centred line between two 28 × 1 hairlines.
 
-Used by: `bot_message_sent`, `bot_message_received` and `handoff` events.
+Used by: `bot.message.sent`, `bot.message.received` and `handoff` entries.
 
 ### StackedAvatars
 

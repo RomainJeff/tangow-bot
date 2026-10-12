@@ -8,7 +8,7 @@ Two projections read the same entries, one for the turns the model reads and one
 
 No hosted vendor is required to run the core product, since models, sandboxes, memory and integrations sit behind optional provider-neutral ports.
 
-This page describes the shape after SL6, the last slice of the [session log plan](plans/2026-10-10-thread-log.md) to land, which backfills older threads and removes the legacy `messages` table and the message events that writers still fill until then.
+This page describes the shape the [session log plan](plans/2026-10-10-thread-log.md) left. Threads from before it were backfilled into their sessions, and the `messages` table and the message events are gone.
 
 ## Messages are entries on a chain
 
@@ -136,11 +136,19 @@ Every append locks the thread, then the session row, so appends to a session ser
 The port is `SessionLog<Tx>` in [`interfaces.ts`](../packages/adapter-kit/src/interfaces.ts), with `createSession`, `append`, `readTail`, `readPage`, `readAround`, `readRun` and `readEntry`. It has two backends:
 
 - `PostgresSessionLog` in [`postgres.ts`](../packages/adapters/src/session-log/postgres.ts), which the API and the worker use.
-- `FileSessionLog` in [`file.ts`](../packages/adapters/src/session-log/file.ts), one JSONL file per session through [`jsonl.ts`](../packages/core/src/session-log/jsonl.ts). It is meant for export, import and a single process install, and today only its tests use it.
+- `FileSessionLog` in [`file.ts`](../packages/adapters/src/session-log/file.ts), one JSONL file per session through [`jsonl.ts`](../packages/core/src/session-log/jsonl.ts). It is meant for a single process install, and today only its tests use it.
 
 [`conformance.ts`](../packages/adapters/src/session-log/conformance.ts) runs the same cases on both backends offline, Postgres on in-memory PGlite.
 
+Export and import use the same line format. `exportThreadSessions` in [`session-files.ts`](../packages/db/src/session-files.ts) writes a thread's main session and every session under it, one file each, and `importThreadSessions` reads them into a thread whose session is empty, with new ids for every entry, session and run. [`session-log-export.ts`](../scripts/session-log-export.ts) and [`session-log-import.ts`](../scripts/session-log-import.ts) run them.
+
 Once a harness runtime exists, its sessions, such as those of the Claude Code CLI or OpenCode, stay in the harness's own store, and the log records only a `harness.session` entry with the id.
+
+## Threads from before the log were backfilled
+
+`backfillThread` in [`backfill-session-log.ts`](../packages/db/src/backfill-session-log.ts) wrote a thread's `messages` rows, in order, as one chain in its main session. A person's message became a `user.message`, a bot's message the entries of its run between `run.started` and `run.finished`, its steps `tool.call` and `tool.result` pairs, a helper card a `subagent` entry with no session, and a routine card a `routine.started` and a `routine.finished` around a routine session. A preview, an answer, a draft and a skill line became their card states, and a compaction summary a `compaction`. Each message's id stayed on its first entry, so `Run.sourceMessageId`, `SteeringMessage.messageId`, `ExternalMessage.threadMessageId` and `Artifact.previewMessageId` name entries. A session that held entries was left as it was.
+
+Migration `20261012000000_drop_messages` drops the table and refuses while a thread holds messages and no entries. [`backfill-session-log.ts`](../scripts/backfill-session-log.ts), the API's start command in Compose, runs the migrations, backfills every such thread when that one refuses, and runs them again.
 
 ## Principles behind the shape
 

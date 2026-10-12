@@ -552,8 +552,8 @@ GIT_SHA=$(git rev-parse HEAD) docker compose --env-file .env -f infra/compose/do
 ```
 
 `up --wait` does not report success until the new API is healthy and the worker and web containers
-are running. The API's start command runs `prisma migrate deploy` before it serves, so migration
-failure keeps health red. A failed CLI recreate does not auto-roll back; recover with the previous
+are running. The API's start command runs `scripts/backfill-session-log.ts`, which applies the
+migrations, before it serves, so migration failure keeps health red. A failed CLI recreate does not auto-roll back; recover with the previous
 `RAKAZO_IMAGE_TAG` (or rebuild `local`) and `up -d --wait --pull never`.
 
 The updater sidecar has its own image and tag so an update never recreates the process performing
@@ -563,8 +563,29 @@ Sidecar `/apply` and `/rollback` recover a failed recreate by redeploying the pr
 image when possible; if that also fails, they report a possible mixed-version runtime.
 
 Source checkouts (not Compose) still upgrade the old way: pull, rebuild with
-`GIT_SHA=$(git rev-parse HEAD)`, run `pnpm --filter @rakazo/db migrate`, then restart API and worker.
-Product contracts stay compatible across cloud and self-hosted.
+`GIT_SHA=$(git rev-parse HEAD)`, run `pnpm exec tsx scripts/backfill-session-log.ts`, then restart
+API and worker. Product contracts stay compatible across cloud and self-hosted.
+
+### Session log migration
+
+Migration `20261012000000_drop_messages` drops the `messages` table: every conversation now lives in
+the session log. It refuses to run while a thread still holds messages the log does not, so
+`scripts/backfill-session-log.ts` (the Compose API's start command) applies the migrations, and when
+that one refuses, writes each such thread into its session, logging every thread and the total
+time, then applies it again. Running it again changes nothing. A bare `prisma migrate deploy`
+stops at that migration and names the script.
+
+Take a backup first: the old rows are gone once the migration applies. Stop the worker for the
+upgrade so no run writes to a thread while it is backfilled. A thread whose session already holds
+entries keeps them and is not backfilled again.
+
+A thread can also be kept as files, one JSONL file per session, and imported into another thread
+that has none yet:
+
+```bash
+pnpm exec tsx scripts/session-log-export.ts <thread-id> <directory>
+pnpm exec tsx scripts/session-log-import.ts <directory> <thread-id>
+```
 
 ### Space privacy-boundary migration
 

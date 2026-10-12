@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-10-12
+
+#### Added
+
+- **A bot's conversation is now a complete, replayable history.** Each reply shows the run behind it, a helper the bot spawned opens in its own view, rewind and clear keep what came before, a long thread opens and resumes from its last summary on web, desktop and mobile, and a thread can be exported to or imported from JSONL files (see [Session log migration](docs/self-host.md#session-log-migration)).
+
+#### Changed
+
+- Routines and helper bots no longer post into your conversation while they work, on web, desktop and iPhone: a routine's report reaches you through its card and a helper's result through the reply of the bot that started it.
+- A conversation still opens on, and scrolls back by, about a hundred messages at a time on web, desktop and iPhone.
+
 ### 2026-10-11
 
 #### Added
