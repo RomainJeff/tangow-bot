@@ -1,10 +1,14 @@
 FROM node:22-bookworm@sha256:0557ac14e0d45d02ed563067b82856ca5e7aa3437fa28d98d4350ea9c3d9494a
+# Corepack keeps the pnpm that package.json pins where every user reads it, fetched at build:
+# USER node would otherwise fetch it at start, and the migrate service's network has no egress.
+ENV COREPACK_HOME=/usr/local/share/corepack
 RUN corepack enable
 WORKDIR /app
 # Manifests before sources: the install layer is the expensive one, and copying the
 # whole tree first meant any source edit rebuilt it from scratch. Every workspace
 # package.json has to be here or --frozen-lockfile rejects the truncated workspace.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+RUN corepack install && chmod -R a+rX "$COREPACK_HOME"
 COPY patches patches
 COPY apps/api/package.json apps/api/
 COPY apps/desktop/package.json apps/desktop/

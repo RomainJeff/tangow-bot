@@ -1,3 +1,4 @@
+import { MIGRATION_WAIT_TIMEOUT_S } from "@rakazo/contracts";
 import {
   DEFAULT_UPDATE_REMOTE,
   isOfficialRepoUrl,
@@ -362,7 +363,9 @@ export const COMPOSE_MANUAL_UPGRADE_COMMANDS = COMPOSE_PULL_UPGRADE_COMMANDS;
 /** Exact host commands from docs/self-host.md for source / `pnpm dev` installs. */
 export const SOURCE_MANUAL_UPGRADE_COMMANDS = [
   "# Stop the API and worker processes",
+  "./scripts/backup.sh",
   "git pull",
+  "pnpm install --frozen-lockfile",
   "pnpm exec tsx scripts/backfill-session-log.ts",
   "# Start the API and worker processes",
 ] as const;
@@ -438,12 +441,6 @@ export function composePullArgv(
   return { command: "docker", args: [...composeBase(target), "pull", ...services] };
 }
 
-/**
- * How long a recreate waits for its services. They start after the one-shot `migrate` service,
- * which on a large database spends minutes moving its conversations into the session log, and
- * Compose counts that wait against the timeout.
- */
-export const MIGRATION_WAIT_TIMEOUT_S = 3600;
 const RESTORE_WAIT_TIMEOUT_S = 300;
 
 /**
@@ -468,6 +465,58 @@ export function composeUpArgv(
   args.push(options.build === true ? "--build" : "--no-build");
   args.push(...(options.services ?? targetServices(target)));
   return { command: "docker", args };
+}
+
+/** The one-shot service that migrates the database before the API and the worker start. */
+export const MIGRATE_SERVICE = "migrate";
+/** The migration that drops the legacy messages table: a release without it predates the log. */
+export const MESSAGES_DROP_MIGRATION = "20261012000000_drop_messages";
+
+/** Stops and removes the migrate service, so a migration still running ends before a restore. */
+export function composeStopMigrateArgv(target: ComposeTarget): ComposeInvocation {
+  return {
+    command: "docker",
+    args: [...composeBase(target), "rm", "--stop", "--force", MIGRATE_SERVICE],
+  };
+}
+
+/** Prints `t` once the database has dropped the legacy messages table, `f` while it has it. */
+export function composeMessagesDroppedArgv(target: ComposeTarget): ComposeInvocation {
+  return {
+    command: "docker",
+    args: [
+      ...composeBase(target),
+      "exec",
+      "-T",
+      "postgres",
+      "sh",
+      "-c",
+      `psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc "SELECT to_regclass('public.messages') IS NULL"`,
+    ],
+  };
+}
+
+/**
+ * Succeeds when the local image carries the migration that drops the messages, so it runs on the
+ * log. An image the host does not have fails, like one that predates the log.
+ */
+export function imageKnowsSessionLogArgv(image: string): ComposeInvocation {
+  return {
+    command: "docker",
+    args: [
+      "run",
+      "--rm",
+      "--pull",
+      "never",
+      "--network",
+      "none",
+      "--entrypoint",
+      "test",
+      image,
+      "-d",
+      `/app/packages/db/prisma/migrations/${MESSAGES_DROP_MIGRATION}`,
+    ],
+  };
 }
 
 export function composePsArgv(target: ComposeTarget): ComposeInvocation {

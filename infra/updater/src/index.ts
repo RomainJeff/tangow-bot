@@ -4,11 +4,13 @@ import { access, lstat, open, readFile, rename, unlink } from "node:fs/promises"
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { serve } from "@hono/node-server";
-import type { ServerUpdateRun } from "@rakazo/contracts";
+import { MIGRATION_WAIT_TIMEOUT_S, type ServerUpdateRun } from "@rakazo/contracts";
 import {
   type ComposeUpdateStep,
   chooseUpdateStrategy,
   commitImageTag,
+  composeMessagesDroppedArgv,
+  composeStopMigrateArgv,
   composeUpArgv,
   composeUpdatePlan,
   DEFAULT_UPDATE_REMOTE,
@@ -19,9 +21,9 @@ import {
   gitWorktreeContentDiffArgv,
   hasValidBearerToken,
   IMAGE_TAG_ENV,
+  imageKnowsSessionLogArgv,
   imageRef,
   isGitCommit,
-  MIGRATION_WAIT_TIMEOUT_S,
   normalizeUpdateBranch,
   PREVIOUS_IMAGE_TAG_ENV,
   parseGitNameOnly,
@@ -536,8 +538,8 @@ export function createUpdaterApp(
         steps,
         restartAdvice:
           decision.strategy === "pull"
-            ? `The updater deployed ${releaseTag ?? targetTag} from its full source-commit image tag and recreated the API, worker, and web containers. Migrations ran inside the new API container before it became healthy.`
-            : "The updater built the fork and recreated the API, worker, and web containers. Migrations ran inside the new API container before it started serving.",
+            ? `The updater deployed ${releaseTag ?? targetTag} from its full source-commit image tag and recreated the API, worker, and web containers. Migrations ran before the new API started.`
+            : "The updater built the fork and recreated the API, worker, and web containers. Migrations ran before the new API started.",
       }),
     );
   }
@@ -547,6 +549,13 @@ export function createUpdaterApp(
     const decision = rollbackTarget(tags);
     if ("error" in decision) throw new UpdateRefused(decision.error);
     const checkout = await readCheckout();
+    // A migration a failed update left running would carry on under the restored image.
+    await docker(composeStopMigrateArgv(composeTarget));
+    if (await crossesMessagesDrop(decision.tag)) {
+      throw new UpdateRefused(
+        `${decision.tag} cannot read this database: its conversations have moved to the session log. Restore the backup taken before the update instead; see "Session log migration" in docs/self-host.md.`,
+      );
+    }
     // Never re-pull a rollback tag: registry tags can move. Reuse the exact image cached when it ran.
     const up = composeUpArgv(composeTarget, { restore: true });
     const steps = [{ id: "recreate", label: "Recreate the services", ...up }];
@@ -565,6 +574,24 @@ export function createUpdaterApp(
         restartAdvice: `Rolled back to ${decision.tag}. Database migrations are not reversed: if the newer version added a migration, roll forward again or restore a database backup.`,
       }),
     );
+  }
+
+  function docker(invocation: { command: string; args: string[] }) {
+    return run(invocation.command, invocation.args, {
+      cwd: config.deployDir,
+      timeoutMs: DEFAULT_TIMEOUT_MS,
+      env: { COMPOSE_PROJECT_NAME: config.projectName },
+    });
+  }
+
+  /**
+   * True when `tag`'s image predates the session log while the database has dropped the messages
+   * table that image reads. Not knowing counts as crossing: that image would show no history.
+   */
+  async function crossesMessagesDrop(tag: string) {
+    if ((await docker(imageKnowsSessionLogArgv(imageRef(config.image, tag)))).ok) return false;
+    const dropped = await docker(composeMessagesDroppedArgv(composeTarget));
+    return !(dropped.ok && dropped.output.split("\n", 1)[0] === "f");
   }
 
   function rememberRun(record: ServerUpdateRun): ServerUpdateRun {
@@ -671,6 +698,20 @@ export function createUpdaterApp(
       for (const step of composeSteps) {
         if (!(await runStep(record, step, composeEnv))) {
           const primaryError = record.error ?? `${step.label} failed.`;
+          // A migration still running would carry on under the restored image, so it ends first,
+          // while the checkout still has the Compose file that declares it.
+          if (step.id === "recreate") {
+            await runStep(
+              record,
+              {
+                id: "stop-migrate",
+                label: "Stop the migration",
+                ...composeStopMigrateArgv(composeTarget),
+              },
+              undefined,
+              false,
+            );
+          }
           // The failed revision may have changed Compose or files it references. The old image
           // must be recreated from the old checkout, using the same configured Compose target.
           const checkoutRestored = await restoreCheckout();
@@ -680,8 +721,10 @@ export function createUpdaterApp(
           );
           if (step.id === "recreate") {
             const previous = composeUpArgv(composeTarget, { restore: true });
+            const crosses = checkoutRestored && (await crossesMessagesDrop(input.fromTag));
             const recovered =
               checkoutRestored &&
+              !crosses &&
               (await runStep(
                 record,
                 {
@@ -696,7 +739,9 @@ export function createUpdaterApp(
             record.restart = recovered ? "not-required" : "manual";
             record.restartAdvice = recovered
               ? `${primaryError} The updater restored the previously running ${input.fromTag} image${envRestored ? " and its environment pin" : ", but could not restore the environment pin"}. Read the failed step output before retrying.`
-              : `${primaryError} Automatic recovery to ${input.fromTag} ${checkoutRestored ? "also failed" : "was skipped because the previous checkout could not be restored"}${envRestored ? "" : ", and the environment pin could not be restored"}. The runtime may contain a mix of versions; use the recorded commands to recover it manually.`;
+              : crosses
+                ? `${primaryError} ${input.fromTag} cannot read this database: its conversations have moved to the session log, so the updater did not restore it. Retry the update, or restore the backup taken before it; see "Session log migration" in docs/self-host.md.`
+                : `${primaryError} Automatic recovery to ${input.fromTag} ${checkoutRestored ? "also failed" : "was skipped because the previous checkout could not be restored"}${envRestored ? "" : ", and the environment pin could not be restored"}. The runtime may contain a mix of versions; use the recorded commands to recover it manually.`;
           } else {
             record.restartAdvice = `${primaryError} No service was recreated${envRestored ? ", and the prior environment pin was restored" : ", but the prior environment pin could not be restored"}. Read the failed step output before retrying.`;
           }

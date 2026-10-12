@@ -1,10 +1,14 @@
 FROM node:22-bookworm
 
+# Corepack keeps the pnpm that package.json pins where every user reads it, fetched at build:
+# USER node would otherwise fetch it at start, and the migrate service's network has no egress.
+ENV COREPACK_HOME=/usr/local/share/corepack
 RUN corepack enable
 WORKDIR /app
 # Normalize modes: a restrictive host umask (e.g. 077 on hardened hosts) would otherwise
 # leave the copied tree unreadable to USER node at runtime.
 COPY --chmod=755 . .
+RUN corepack install && chmod -R a+rX "$COREPACK_HOME"
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @rakazo/db generate
 RUN RAKAZO_ALLOW_DEV_SECRETS=1 pnpm --filter @rakazo/web build
