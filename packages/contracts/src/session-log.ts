@@ -1,7 +1,15 @@
 import * as z from "zod";
-import { ThinkingLevelSchema } from "./domain.js";
-import { AskBlock, BotMessageIntent, ChoiceBlock, MessageBlock, SkillChange } from "./events.js";
-import { Id, IsoDate } from "./ids.js";
+import {
+  AskAnswers,
+  AskBlock,
+  BotMessageIntent,
+  ChoiceBlock,
+  MessageBlock,
+  SkillChange,
+  SkillDraftBlock,
+} from "./events.js";
+import { Id, IsoDate, ThinkingLevelSchema } from "./ids.js";
+import { isLinkPreviewCard, LinkPreviewBlock } from "./link-preview.js";
 
 export const EntryId = Id.brand<"EntryId">();
 export type EntryId = z.infer<typeof EntryId>;
@@ -89,7 +97,8 @@ const UserMessagePayload = z.object({
   blocks: z.array(MessageBlock),
   replyTo: z.object({ entryId: EntryId, quote: z.string().optional() }).optional(),
   clientNonce: z.string().optional(),
-  source: z.enum(["app", "steering", "channel", "routine"]),
+  /** `card`: the reply an answer given inside a card records, which the card shows in its place. */
+  source: z.enum(["app", "steering", "channel", "routine", "card"]),
 });
 
 const SubagentPayload = z.object({
@@ -120,10 +129,23 @@ const AttachmentAddedEntry = entry("attachment.added", z.object({ artifactId: Id
 const SessionTitleEntry = entry("session.title", z.object({ title: z.string() }));
 const SystemNoteEntry = entry("system.note", z.object({ text: z.string() }));
 const BlocksPayload = z.object({ ...risen, blocks: z.array(MessageBlock) });
+/**
+ * The entry a card's later state is about. `parentId` stays the chain link and names the head, so a
+ * state change points at its card here, the way `replyTo` and a trigger's `entryId` do.
+ */
+const target = { target: EntryId };
+/** The approval card as the person sees it, absent on entries written before it was kept. */
+const card = AskBlock.optional();
 
 const EntryShapes = z.discriminatedUnion("type", [
   entry("user.message", UserMessagePayload.extend(risen)),
-  runEntry("assistant.text", BlocksPayload),
+  runEntry(
+    "assistant.text",
+    BlocksPayload.extend({
+      /** Words the bot addressed to the person through `message_user`, kept even in a hidden peer run. */
+      toPerson: z.literal(true).optional(),
+    }),
+  ),
   runEntry("assistant.reasoning", z.object({ text: z.string() })),
   runEntry("assistant.ask", z.object({ ...risen, block: AskBlock })),
   runEntry("assistant.choice", z.object({ ...risen, block: ChoiceBlock })),
@@ -160,6 +182,8 @@ const EntryShapes = z.discriminatedUnion("type", [
       trigger: z.enum(["routine", "webhook"]),
       scheduledAt: IsoDate,
       model: RunModel,
+      /** The person asked to hear when this routine finishes. */
+      notify: z.literal(true).optional(),
     }),
   ),
   runEntry("routine.finished", RoutineFinishedPayload),
@@ -204,13 +228,57 @@ const EntryShapes = z.discriminatedUnion("type", [
   ),
   entry(
     "effect.requested",
-    z.object({ ...risen, effectId: Id, effectKind: z.string(), proposal: JsonObject }),
+    z.object({ ...risen, effectId: Id, effectKind: z.string(), proposal: JsonObject, card }),
   ),
-  entry("effect.edited", z.object({ ...risen, effectId: Id, proposal: JsonObject })),
+  entry("effect.edited", z.object({ ...risen, effectId: Id, proposal: JsonObject, card })),
   entry(
     "effect.resolved",
-    z.object({ ...risen, effectId: Id, decision: z.enum(["approved", "denied"]) }),
+    z.object({
+      ...risen,
+      effectId: Id,
+      decision: z.enum(["approved", "denied"]),
+      /** The action the person tapped, which tells allowing once from always. */
+      answerId: z.string().optional(),
+      /** Denied because the person answered something else instead of tapping the card. */
+      dismissed: z.literal(true).optional(),
+    }),
   ),
+  /** What came of an approved card that creates a routine: the routine, or a failure. */
+  entry(
+    "effect.applied",
+    z.object({
+      ...target,
+      routineId: Id.optional(),
+      change: z.enum(["created", "updated"]).optional(),
+      failed: z.literal(true).optional(),
+    }),
+  ),
+  /**
+   * A card settled: a choice chosen (`answerId`), a card dismissed, an ask the composer resumed (no
+   * answer), an ask answered inside the card (`answer`, `""` for a secret, or a multi-question
+   * card's `answers`), a connector connected (`answerId` the connector).
+   */
+  entry(
+    "card.answered",
+    z.object({
+      ...target,
+      answerId: z.string().optional(),
+      answer: z.string().optional(),
+      answers: AskAnswers.optional(),
+      dismissed: z.literal(true).optional(),
+    }),
+  ),
+  entry(
+    "link.preview",
+    z.object({
+      ...target,
+      block: LinkPreviewBlock.refine(isLinkPreviewCard, "A preview entry holds a card"),
+      artifactId: Id.optional(),
+    }),
+  ),
+  entry("link.preview.removed", z.object(target)),
+  /** One revision of a taught skill's draft card; the newest revision of a card wins. */
+  entry("skill.draft", SkillDraftBlock.omit({ kind: true }).extend(target)),
   ComputerControlEntry,
   MemoryRevisedEntry,
   SkillLearntEntry,
@@ -242,12 +310,20 @@ const EntryShapes = z.discriminatedUnion("type", [
     ...envelope,
     parentId: z.null(),
     type: z.literal("clear"),
-    payload: z.strictObject({}),
+    /** `edit`: the person edited the session's first message, so nothing stood before it. */
+    payload: z.strictObject({ edit: z.literal(true).optional() }),
   }),
   entry("harness.session", z.object({ harness: z.string(), sessionId: z.string() })),
 ]);
 
-export const SessionEntrySchema = EntryShapes.superRefine((entry, ctx) => {
+type WithoutSession<T> = T extends unknown ? Omit<T, "sessionId"> : never;
+type ShapesWithoutSession<T extends readonly z.ZodObject[]> = {
+  -readonly [K in keyof T]: T[K] extends z.ZodObject<infer S, infer C>
+    ? z.ZodObject<Omit<S, "sessionId">, C>
+    : never;
+};
+
+function checkChain(entry: WithoutSession<z.infer<typeof EntryShapes>>, ctx: z.RefinementCtx) {
   if (entry.parentId === null && entry.type !== "clear" && entry.seq !== 0) {
     ctx.addIssue({
       code: "custom",
@@ -262,13 +338,6 @@ export const SessionEntrySchema = EntryShapes.superRefine((entry, ctx) => {
       message: "The first entry of a session has no parent",
     });
   }
-  if ("originSessionId" in entry.payload && entry.payload.originSessionId === entry.sessionId) {
-    ctx.addIssue({
-      code: "custom",
-      path: ["payload", "originSessionId"],
-      message: "An entry rises only from another session",
-    });
-  }
   if (entry.type === "compaction" && entry.payload.coveredUpToSeq >= entry.seq) {
     ctx.addIssue({
       code: "custom",
@@ -276,7 +345,37 @@ export const SessionEntrySchema = EntryShapes.superRefine((entry, ctx) => {
       message: "A compaction covers only entries before it",
     });
   }
+}
+
+export const SessionEntrySchema = EntryShapes.superRefine((entry, ctx) => {
+  checkChain(entry, ctx);
+  if ("originSessionId" in entry.payload && entry.payload.originSessionId === entry.sessionId) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["payload", "originSessionId"],
+      message: "An entry rises only from another session",
+    });
+  }
 });
+
+/**
+ * An entry as a thread page or its feed carries it: every entry there belongs to the thread's
+ * session, so it leaves `sessionId` out.
+ */
+export const ThreadEntrySchema = z
+  .discriminatedUnion(
+    "type",
+    EntryShapes.options.map((shape) => shape.omit({ sessionId: true })) as ShapesWithoutSession<
+      typeof EntryShapes.options
+    >,
+  )
+  .superRefine(checkChain);
+export type ThreadEntry = z.infer<typeof ThreadEntrySchema>;
+export type ThreadEntryOf<T extends SessionEntryType> = Extract<ThreadEntry, { type: T }>;
+
+export function toThreadEntry({ sessionId, ...entry }: SessionEntry): ThreadEntry {
+  return entry;
+}
 export type SessionEntry = z.infer<typeof SessionEntrySchema>;
 export type SessionEntryType = SessionEntry["type"];
 export type SessionEntryOf<T extends SessionEntryType> = Extract<SessionEntry, { type: T }>;
@@ -304,6 +403,11 @@ export const ENTRY_AUDIENCE = {
   "effect.requested": { inference: "no", ui: true },
   "effect.edited": { inference: "no", ui: true },
   "effect.resolved": { inference: "no", ui: true },
+  "effect.applied": { inference: "no", ui: true },
+  "card.answered": { inference: "no", ui: true },
+  "link.preview": { inference: "no", ui: true },
+  "link.preview.removed": { inference: "no", ui: true },
+  "skill.draft": { inference: "no", ui: true },
   "computer.control": { inference: "context", ui: true },
   "memory.revised": { inference: "no", ui: true },
   "skill.learnt": { inference: "no", ui: true },
@@ -317,12 +421,12 @@ export const ENTRY_AUDIENCE = {
 } as const satisfies Record<SessionEntryType, EntryAudience>;
 
 type Audience = typeof ENTRY_AUDIENCE;
-export type InferenceEntry = SessionEntryOf<
+export type InferenceEntry = ThreadEntryOf<
   {
     [T in SessionEntryType]: Audience[T]["inference"] extends "no" ? never : T;
   }[SessionEntryType]
 >;
-export type UiEntry = SessionEntryOf<
+export type UiEntry = ThreadEntryOf<
   { [T in SessionEntryType]: Audience[T]["ui"] extends true ? T : never }[SessionEntryType]
 >;
 
@@ -339,6 +443,26 @@ export const RUN_TRACE_TYPES: ReadonlySet<SessionEntryType> = new Set([
   "tool.result",
   "subagent",
 ] satisfies SessionEntryType[]);
+
+/**
+ * What settles or annotates an earlier card or message, appended to the session that holds it.
+ * It shows nothing of its own.
+ */
+export const CARD_STATE_TYPES = [
+  "card.answered",
+  "effect.applied",
+  "link.preview",
+  "link.preview.removed",
+  "skill.draft",
+] as const satisfies readonly SessionEntryType[];
+
+const CARD_STATES: ReadonlySet<SessionEntryType> = new Set(CARD_STATE_TYPES);
+
+export function isCardState<E extends ThreadEntry>(
+  entry: E,
+): entry is Extract<E, ThreadEntryOf<(typeof CARD_STATE_TYPES)[number]>> {
+  return CARD_STATES.has(entry.type);
+}
 
 export const BLOCK_KINDS_NEEDING_THE_PERSON: ReadonlySet<MessageBlock["kind"]> = new Set([
   "mcp_approval",
@@ -359,11 +483,13 @@ export function isRunTrace(entry: EntryBody): boolean {
   return RUN_TRACE_TYPES.has(entry.type);
 }
 
-export function isInferenceEntry(entry: SessionEntry): entry is InferenceEntry {
+export function isInferenceEntry<E extends ThreadEntry>(
+  entry: E,
+): entry is Extract<E, InferenceEntry> {
   return ENTRY_AUDIENCE[entry.type].inference !== "no";
 }
 
-export function isUiEntry(entry: SessionEntry): entry is UiEntry {
+export function isUiEntry<E extends ThreadEntry>(entry: E): entry is Extract<E, UiEntry> {
   return ENTRY_AUDIENCE[entry.type].ui;
 }
 
@@ -418,6 +544,8 @@ export const ThreadItemSchema = z.discriminatedUnion("kind", [
       /** Absent for a bot's words outside any run. */
       runId: Id.optional(),
       blocks: z.array(MessageBlock),
+      /** It holds the open run's streamed text, which its next entry replaces. */
+      live: z.literal(true).optional(),
       ...itemOrigin,
     }),
   ]),
@@ -433,7 +561,19 @@ export const ThreadItemSchema = z.discriminatedUnion("kind", [
       .object({ outcome: RunOutcome, durationMs: z.number().int().nonnegative() })
       .nullable(),
   }),
-  z.object({ kind: z.literal("subagent"), ...itemBase, runId: Id, ...SubagentPayload.shape }),
+  z.discriminatedUnion("status", [
+    z.object({ kind: z.literal("subagent"), ...itemBase, runId: Id, ...SubagentPayload.shape }),
+    /** A helper still at work: its `run_subagent` call has no answer yet. */
+    z.object({
+      kind: z.literal("subagent"),
+      status: z.literal("running"),
+      ...itemBase,
+      runId: Id,
+      callId: z.string().min(1),
+      name: z.string(),
+      task: z.string(),
+    }),
+  ]),
   z.object({
     kind: z.literal("routine"),
     ...itemBase,
@@ -442,6 +582,7 @@ export const ThreadItemSchema = z.discriminatedUnion("kind", [
     sessionId: SessionId,
     routineId: Id,
     name: z.string(),
+    notify: z.literal(true).optional(),
     finished: z
       .object({ status: z.enum(["completed", "failed", "cancelled"]), result: z.string() })
       .nullable(),
@@ -491,6 +632,10 @@ export const ThreadItemSchema = z.discriminatedUnion("kind", [
     effectKind: z.string(),
     proposal: JsonObject,
     decision: z.enum(["approved", "denied"]).nullable(),
+    botId: Id.optional(),
+    runId: Id.optional(),
+    /** The approval card with its answer and what came of it applied. */
+    card,
     ...itemOrigin,
   }),
   z.discriminatedUnion("type", [

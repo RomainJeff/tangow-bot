@@ -1,5 +1,4 @@
 import { useLingui } from "@lingui/react/macro";
-import type { ThreadMessage, ThreadSnapshot } from "@rakazo/contracts";
 import { isApprovalAskBlock, isSecretAskBlock, narrateTool, speechFromBlocks } from "@rakazo/core";
 import { BotAvatar, Button, useElapsed } from "@rakazo/ui-web";
 import { Mic, MicOff, Square } from "lucide-react";
@@ -7,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { approvalActionLabel } from "../lib/approval-labels";
 import { desktopBridge } from "../lib/desktop";
 import { dictation } from "../lib/dictation";
+import type { CardAnswerTarget, MessageItem } from "../lib/thread-items";
 import { speaker } from "../lib/tts";
 import {
   type AskBlock,
@@ -18,7 +18,13 @@ import {
 
 type Phase = "listening" | "thinking" | "speaking";
 type AskAction = NonNullable<AskBlock["actions"]>[number];
-type PendingAsk = { message: ThreadMessage; block: AskBlock };
+type PendingAsk = { block: AskBlock; target: CardAnswerTarget };
+
+export type CallThread = {
+  messages: readonly MessageItem[];
+  running: boolean;
+  ask: PendingAsk | null;
+};
 
 const BAR_DELAYS_MS = [0, 90, 180, 270, 360];
 
@@ -29,7 +35,7 @@ export function CallView({
   botShapeSeed,
   botIdentity,
   transcribe,
-  snapshot,
+  thread,
   onSend,
   onFollowUp,
   onAnswer,
@@ -41,10 +47,10 @@ export function CallView({
   botShapeSeed?: number | null;
   botIdentity?: string;
   transcribe: boolean;
-  snapshot: ThreadSnapshot | null;
+  thread: CallThread | null;
   onSend: (text: string) => Promise<void>;
   onFollowUp: (text: string) => Promise<void>;
-  onAnswer: (message: ThreadMessage, text: string) => Promise<void>;
+  onAnswer: (target: CardAnswerTarget, text: string) => Promise<void>;
   onClose: () => void;
 }) {
   const { t } = useLingui();
@@ -58,8 +64,8 @@ export function CallView({
   const spokenMessage = useRef<string | null>(null);
   const narrated = useRef(new Set<string>());
   const closing = useRef(false);
-  const snapshotRef = useRef(snapshot);
-  snapshotRef.current = snapshot;
+  const threadRef = useRef(thread);
+  threadRef.current = thread;
   const rootRef = useRef<HTMLDivElement>(null);
   const askPromptRef = useRef(t`Say yes or no, or answer in a sentence.`);
   askPromptRef.current = t`Say yes or no, or answer in a sentence.`;
@@ -112,7 +118,7 @@ export function CallView({
       setHeard("");
       return;
     }
-    if (pendingSecretAsk(snapshotRef.current)) {
+    if (pendingSecretAsk(threadRef.current)) {
       dictation.stop("cancel");
       setCallPhase("listening");
       setHeard("");
@@ -142,14 +148,14 @@ export function CallView({
       return;
     }
     dictation.stop("submit");
-    const current = snapshotRef.current;
+    const current = threadRef.current;
     if (pendingSecretAsk(current)) {
       setHeard("");
       setCaption("");
       setError(t`Hang up, then enter the code on screen.`);
       return;
     }
-    const pendingAsk = currentAsk(current);
+    const pendingAsk = current?.ask;
     if (pendingAsk && !canAnswerAskByVoice(pendingAsk.block)) {
       // A multi-question ask needs a structured answer the server can parse;
       // routing a spoken sentence into it always fails, so it is left for
@@ -169,8 +175,8 @@ export function CallView({
           void speaker.speak(screenApprovalPromptRef.current, { botId });
           return;
         }
-        await onAnswer(pendingAsk.message, answer);
-      } else if (current?.run && ["running", "queued", "leased"].includes(current.run.status)) {
+        await onAnswer(pendingAsk.target, answer);
+      } else if (current?.running) {
         await onFollowUp(text);
       } else {
         await onSend(text);
@@ -181,14 +187,14 @@ export function CallView({
     }
   }
 
-  async function chooseAskAction(message: ThreadMessage, action: AskAction) {
-    const block = currentAsk(snapshotRef.current)?.block;
+  async function chooseAskAction(target: CardAnswerTarget, action: AskAction) {
+    const block = threadRef.current?.ask?.block;
     if (block && !callAskActions(block).some((offered) => offered.id === action.id)) return;
     dictation.stop("cancel");
     setHeard(action.label);
     setCallPhase("thinking");
     try {
-      await onAnswer(message, action.id);
+      await onAnswer(target, action.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : t`Could not send that`);
       void listen();
@@ -211,7 +217,7 @@ export function CallView({
     });
     const unsubDictation = dictation.subscribe((state) => {
       if (state.status === "listening") {
-        setHeard(pendingSecretAsk(snapshotRef.current) ? "" : state.transcript);
+        setHeard(pendingSecretAsk(threadRef.current) ? "" : state.transcript);
       }
       if (state.error) setError(state.error);
     });
@@ -248,7 +254,7 @@ export function CallView({
 
   useEffect(() => {
     if (closing.current || phaseRef.current === "listening") return;
-    const messages = snapshot?.messages ?? [];
+    const messages = thread?.messages ?? [];
     const lastBot = [...messages].reverse().find((message) => message.role === "bot");
     if (lastBot && lastBot.id !== spokenMessage.current) {
       const text = speechFromBlocks(lastBot.blocks);
@@ -274,26 +280,22 @@ export function CallView({
         );
         return;
       }
-      const runActive =
-        snapshot?.run && ["running", "queued", "leased"].includes(snapshot.run.status);
-      if (!runActive) {
+      if (!thread?.running) {
         spokenMessage.current = lastBot.id;
         void listen();
         return;
       }
     }
-    if (snapshot?.run && ["running", "queued", "leased"].includes(snapshot.run.status)) {
+    if (thread?.running) {
       const phrases: string[] = [];
       let lastKey = "";
       for (const message of messages) {
         for (const block of message.blocks) {
-          if (block.kind !== "progress" && block.kind !== "subagent") continue;
-          const key = `${message.id}:${block.kind}:${block.kind === "subagent" ? block.status : block.text}`;
+          if (block.kind !== "progress") continue;
+          const key = `${message.id}:${block.kind}:${block.text}`;
           if (narrated.current.has(key)) continue;
           const phrase =
-            block.kind === "subagent"
-              ? narrateTool("run_subagent")
-              : (narrateTool(block.text.split(/\s+/)[0] ?? "") ?? speakableProgress(block.text));
+            narrateTool(block.text.split(/\s+/)[0] ?? "") ?? speakableProgress(block.text);
           if (!phrase) continue;
           narrated.current.add(key);
           phrases.push(phrase);
@@ -304,19 +306,19 @@ export function CallView({
         void speaker.speak(phrases.join(". "), { botId, messageId: `narrate:${lastKey}` });
       }
     }
-  }, [snapshot, botId]);
+  }, [thread, botId]);
 
   useEffect(() => {
-    const pendingAsk = currentAsk(snapshot);
+    const pendingAsk = thread?.ask;
     if (!pendingAsk) return;
     if (isSecretAskBlock(pendingAsk.block) || !canAnswerAskByVoice(pendingAsk.block)) {
       dictation.stop("cancel");
       setHeard("");
     }
-  }, [snapshot]);
+  }, [thread]);
 
-  const pendingAsk = currentAsk(snapshot);
-  const askMessage = pendingAsk?.message;
+  const pendingAsk = thread?.ask;
+  const askTarget = pendingAsk?.target;
   const askBlock = pendingAsk?.block;
   const isApproval = Boolean(askBlock && isApprovalAskBlock(askBlock));
   const voiceAnswerable = !askBlock || canAnswerAskByVoice(askBlock);
@@ -375,7 +377,7 @@ export function CallView({
 
         {error ? <p className="text-center text-meta text-destructive">{error}</p> : null}
 
-        {askMessage && askBlock ? (
+        {askTarget && askBlock ? (
           <div className="flex flex-wrap justify-center gap-2">
             {voiceAnswerable ? (
               askActions.map((action) => (
@@ -385,7 +387,7 @@ export function CallView({
                   variant="quickReply"
                   size="quickReply"
                   consequential={isApproval && action.id !== "deny"}
-                  onClick={() => void chooseAskAction(askMessage, action)}
+                  onClick={() => void chooseAskAction(askTarget, action)}
                 >
                   {isApproval ? approvalActionLabel(action) : action.label}
                 </Button>
@@ -427,33 +429,9 @@ export function CallView({
   );
 }
 
-function pendingSecretAsk(snapshot: ThreadSnapshot | null): boolean {
-  const pending = currentAsk(snapshot);
+function pendingSecretAsk(thread: CallThread | null): boolean {
+  const pending = thread?.ask;
   return Boolean(pending && isSecretAskBlock(pending.block));
-}
-
-function currentAsk(snapshot: ThreadSnapshot | null): PendingAsk | null {
-  const askId = latestAskId(snapshot);
-  const message = snapshot?.messages.find((candidate) => candidate.id === askId);
-  if (!message) return null;
-  const block = message.blocks.find(
-    (candidate): candidate is AskBlock =>
-      candidate.kind === "ask" && candidate.status !== "answered",
-  );
-  if (!block) return null;
-  return { message, block };
-}
-
-function latestAskId(snapshot: ThreadSnapshot | null): string | null {
-  if (snapshot?.run?.status !== "waiting_input") return null;
-  for (let index = snapshot.messages.length - 1; index >= 0; index -= 1) {
-    const message = snapshot.messages[index];
-    if (message?.runId !== snapshot.run.id) continue;
-    if (message.blocks.some((block) => block.kind === "ask" && block.status !== "answered")) {
-      return message.id;
-    }
-  }
-  return null;
 }
 
 function speakableProgress(text: string): string | null {

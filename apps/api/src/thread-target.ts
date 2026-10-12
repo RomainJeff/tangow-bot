@@ -1,16 +1,13 @@
 import { ORPCError } from "@orpc/server";
-import {
-  type JobPublisher,
-  linkPreviewJob,
-  runContinueJob,
-  type SandboxProvider,
-} from "@rakazo/adapter-kit";
+import type { JobPublisher, SandboxProvider, SessionLog } from "@rakazo/adapter-kit";
+import { linkPreviewJob, runContinueJob } from "@rakazo/adapter-kit";
 import {
   cancelComputerRunWork,
   releaseBotScreen,
   screenLeaseIdForRun,
   toComputerRef,
 } from "@rakazo/adapters";
+import type { SessionEntries } from "@rakazo/contracts";
 import {
   type Actor,
   GROUP_MEMBER_MIN,
@@ -19,13 +16,13 @@ import {
   type MessageReaction,
   REPLY_QUOTE_MAX_LENGTH,
   type RunStatus,
+  type SessionId,
   type ThreadSnapshot,
 } from "@rakazo/contracts";
 import {
   ACTIVE_RUN_STATUSES,
   blocksToAgentHistoryText,
   isActive,
-  projectMessages,
   resolveGroupTargetBotIds,
   runFailureError,
 } from "@rakazo/core";
@@ -42,8 +39,10 @@ import {
   logCancelledRunsInTransaction,
   type Prisma,
   type PrismaClient,
+  progressSinceLastEntry,
   resumeAskWithComposerTextInTransaction,
   type ThreadEvents,
+  threadOfSession,
   touchGroupUpdatedAt,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
@@ -53,9 +52,10 @@ import {
   resolveGroupSendAttachments,
   resolveSendAttachments,
 } from "./artifacts.js";
+import { readCappedRun } from "./bot-activity.js";
 import { resolveBusyBotName, toComputerStatus } from "./computer-status.js";
 import { withSerializableRetry } from "./serializable-retry.js";
-import { loadMessagePage } from "./thread-message-pages.js";
+import { loadEntryPage, threadSessionId, withoutHiddenPeerRuns } from "./thread-message-pages.js";
 
 export type ThreadTarget =
   | {
@@ -171,7 +171,6 @@ function quoteAppearsInBlocks(quote: string, blocks: MessageBlock[]): boolean {
   );
 }
 
-const THREAD_MESSAGE_PAGE_SIZE = 100;
 const RUNS_NEEDING_CONTINUE = new Set(["queued", "waiting_takeover"]);
 
 const STEERABLE_RUN_STATUSES = new Set(["queued", "leased", "running", "waiting_takeover"]);
@@ -432,6 +431,34 @@ export async function resolveThreadTarget(
   throw new IsolationError();
 }
 
+/** A child session reads as its run: its trace joined with what rose to the thread. */
+export async function readSessionEntries(
+  deps: { prisma: PrismaClient; sessionLog: Pick<SessionLog<unknown>, "readRun"> },
+  actor: Actor,
+  sessionId: SessionId,
+): Promise<SessionEntries> {
+  const [threadId, run] = await Promise.all([
+    threadOfSession(deps.prisma, sessionId, actor.spaceId),
+    deps.prisma.run.findFirst({
+      where: { sessionId, session: { kind: { not: "thread" } } },
+      select: { id: true },
+    }),
+  ]);
+  const thread = threadId
+    ? await deps.prisma.thread.findUnique({
+        where: { id: threadId },
+        select: { botId: true, groupId: true },
+      })
+    : null;
+  if (!thread) throw new IsolationError();
+  await resolveThreadTarget(deps.prisma, actor, {
+    botId: thread.botId ?? undefined,
+    groupId: thread.groupId ?? undefined,
+  });
+  if (!run) throw new IsolationError();
+  return readCappedRun(deps.sessionLog, run.id);
+}
+
 export async function threadHead(prisma: PrismaClient, target: ThreadTarget) {
   const latest = await prisma.event.findFirst({
     where: { threadId: target.threadId },
@@ -441,14 +468,18 @@ export async function threadHead(prisma: PrismaClient, target: ThreadTarget) {
   return { threadId: target.threadId, cursor: latest?.seq ?? -1 };
 }
 
+/**
+ * The cursor, the tail page and the progress to replay are read under the thread's share lock,
+ * which every append takes for update, so no entry lands between them and the replayed progress
+ * never repeats text the page already holds. Hidden peer runs are filtered out after commit.
+ */
 export async function threadSnapshot(
-  deps: { prisma: PrismaClient },
+  deps: {
+    prisma: PrismaClient;
+    sessionLog: Pick<SessionLog<Prisma.TransactionClient>, "readPage" | "readAround">;
+  },
   target: ThreadTarget,
 ): Promise<ThreadSnapshot> {
-  // Lock the thread row so messages, the event cursor, active runs, and live
-  // progress are read from one consistent commit. A torn Promise.all can
-  // otherwise advance the client cursor past thread.message.created while the
-  // ask message page still omits it — leaving waiting_input with no AskCard.
   if (target.kind === "bot") {
     const [busyBotName, core] = await Promise.all([
       resolveBusyBotName(deps.prisma, {
@@ -458,8 +489,8 @@ export async function threadSnapshot(
       }),
       deps.prisma.$transaction(async (tx) => {
         await tx.$queryRaw`SELECT id FROM threads WHERE id = ${target.threadId} FOR SHARE`;
-        const [messagePage, last, waitingRun, busyOrFailed] = await Promise.all([
-          loadMessagePage(tx, target.threadId, undefined, THREAD_MESSAGE_PAGE_SIZE),
+        const [sessionId, last, waitingRun, busyOrFailed] = await Promise.all([
+          threadSessionId(tx, target.threadId),
           tx.event.findFirst({
             where: { threadId: target.threadId },
             orderBy: { seq: "desc" },
@@ -515,33 +546,29 @@ export async function threadSnapshot(
               })
             : null;
         const currentRun = run?.status === "failed" && newestTerminal?.id !== run.id ? null : run;
-        const liveEvents =
+        const progress = await progressSinceLastEntry(
+          tx,
+          target.threadId,
           currentRun && isActive(currentRun.status as RunStatus) && !isPeerRunRow(currentRun)
-            ? await tx.event.findMany({
-                where: {
-                  threadId: target.threadId,
-                  runId: currentRun.id,
-                  type: {
-                    in: [
-                      "thread.progress",
-                      "thread.subagent",
-                      "agent.tool.called",
-                      "agent.tool.completed",
-                    ],
-                  },
-                },
-                orderBy: { seq: "asc" },
-              })
-            : [];
-        return { messagePage, last, run: currentRun, liveEvents };
+            ? [currentRun.id]
+            : [],
+        );
+        const page = await loadEntryPage(
+          { prisma: tx, sessionLog: deps.sessionLog },
+          { threadId: target.threadId, sessionId },
+          { includePeerRuns: true },
+        );
+        return { last, run: currentRun, progress, page };
       }),
     ]);
+    const { page } = core;
     return {
       botId: target.botId,
       threadId: target.threadId,
       cursor: core.last?.seq ?? -1,
-      messages: messagesWithLiveEvents(core.messagePage.messages, core.liveEvents),
-      olderCursor: core.messagePage.olderCursor,
+      entries: await withoutHiddenPeerRuns(deps.prisma, page.entries),
+      olderCursor: page.olderCursor,
+      progress: core.progress,
       run: core.run ? mapRun(core.run) : null,
       computer: toComputerStatus(
         target.botId,
@@ -554,8 +581,8 @@ export async function threadSnapshot(
 
   const core = await deps.prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM threads WHERE id = ${target.threadId} FOR SHARE`;
-    const [messagePage, last, activeRuns, recentTerminals] = await Promise.all([
-      loadMessagePage(tx, target.threadId, undefined, THREAD_MESSAGE_PAGE_SIZE),
+    const [sessionId, last, activeRuns, recentTerminals] = await Promise.all([
+      threadSessionId(tx, target.threadId),
       tx.event.findFirst({
         where: { threadId: target.threadId },
         orderBy: { seq: "desc" },
@@ -582,33 +609,25 @@ export async function threadSnapshot(
         take: 50,
       }),
     ]);
-    const liveRunIds = activeRuns.filter((run) => !isPeerRunRow(run)).map((run) => run.id);
-    const liveEvents =
-      liveRunIds.length > 0
-        ? await tx.event.findMany({
-            where: {
-              threadId: target.threadId,
-              runId: { in: liveRunIds },
-              type: {
-                in: [
-                  "thread.progress",
-                  "thread.subagent",
-                  "agent.tool.called",
-                  "agent.tool.completed",
-                ],
-              },
-            },
-            orderBy: { seq: "asc" },
-          })
-        : [];
+    const progress = await progressSinceLastEntry(
+      tx,
+      target.threadId,
+      activeRuns.filter((run) => !isPeerRunRow(run)).map((run) => run.id),
+    );
+    const page = await loadEntryPage(
+      { prisma: tx, sessionLog: deps.sessionLog },
+      { threadId: target.threadId, sessionId },
+      { includePeerRuns: true },
+    );
     return {
-      messagePage,
       last,
       activeRuns,
       terminalRun: pickLatestTerminalRun(recentTerminals),
-      liveEvents,
+      progress,
+      page,
     };
   });
+  const { page } = core;
   const primaryActiveRun = pickPrimaryActiveRun(core.activeRuns);
   return {
     groupId: target.groupId,
@@ -616,8 +635,9 @@ export async function threadSnapshot(
     members: target.members,
     threadId: target.threadId,
     cursor: core.last?.seq ?? -1,
-    messages: messagesWithLiveEvents(core.messagePage.messages, core.liveEvents),
-    olderCursor: core.messagePage.olderCursor,
+    entries: await withoutHiddenPeerRuns(deps.prisma, page.entries),
+    olderCursor: page.olderCursor,
+    progress: core.progress,
     // Match the live reducer: a failed latest terminal stays in run even while siblings are
     // still active or start late. A newer completed/cancelled terminal clears it.
     run:
@@ -659,24 +679,6 @@ function pickLatestTerminalRun<T extends { id: string; createdAt: Date; complete
     }
     return run.id > best.id ? run : best;
   });
-}
-
-function messagesWithLiveEvents(
-  persisted: ThreadSnapshot["messages"],
-  liveEvents: Parameters<typeof projectMessages>[0],
-) {
-  const live = projectMessages(liveEvents).filter((message) => {
-    if (message.blocks.some((block) => block.kind === "progress" || block.kind === "steps")) {
-      return true;
-    }
-    if (!message.id.startsWith("subagent:")) return false;
-    return !persisted.some((row) =>
-      row.blocks.some(
-        (block) => block.kind === "subagent" && message.id === `subagent:${block.agentId}`,
-      ),
-    );
-  });
-  return [...persisted, ...live];
 }
 
 function mapRun(run: {

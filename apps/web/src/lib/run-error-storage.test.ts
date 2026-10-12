@@ -24,7 +24,8 @@ function failedSnapshot(id: string): ThreadSnapshot {
     botId: "bot-1",
     threadId: "thread-1",
     cursor: 1,
-    messages: [],
+    entries: [],
+    progress: [],
     olderCursor: null,
     run: {
       id,

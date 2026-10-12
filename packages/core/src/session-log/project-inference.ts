@@ -5,8 +5,9 @@ import type {
   InferenceEntry,
   MessageBlock,
   SessionEntry,
-  SessionEntryOf,
   SessionRunTrigger,
+  ThreadEntry,
+  ThreadEntryOf,
 } from "@rakazo/contracts";
 import { isInferenceEntry, REPLY_QUOTE_MAX_LENGTH } from "@rakazo/contracts";
 import { blocksToAgentHistoryText } from "../attachments.js";
@@ -14,7 +15,7 @@ import { escapeDirectoryField, escapePromptData, renderBotMessageBlock } from ".
 import { messageReaction } from "../message-reactions.js";
 import type { ChildSession } from "./child-sessions.js";
 import { childSessionsOf } from "./child-sessions.js";
-import { foldRuns, toolOutputs } from "./run-fold.js";
+import { foldRuns, toolAnswers } from "./run-fold.js";
 
 export interface InferenceProjectionOptions {
   /** The bot the history is for. Only its own words stay on the assistant side. */
@@ -49,11 +50,11 @@ export function projectInferenceTurns(
   options: InferenceProjectionOptions,
 ): AgentHistoryTurn[] {
   const chain = entries.filter((entry, index) => entry.type !== "compaction" || index === 0);
-  const answered = toolOutputs(chain);
+  const answered = toolAnswers(chain);
   const segments = foldRuns(
     chain
       .filter(isInferenceEntry)
-      .filter((entry) => entry.type !== "tool.call" || answered.has(entry.id)),
+      .filter((entry) => entry.type !== "tool.call" || answered.answerOf.has(entry.id)),
   );
   const cancelled = new Set(
     chain.flatMap((entry) =>
@@ -184,7 +185,7 @@ function renderTurn(
       // Its result already replays as the output of the tool call that launched it.
       return undefined;
     default:
-      segment satisfies Exclude<SessionEntry, InferenceEntry>;
+      segment satisfies Exclude<ThreadEntry, InferenceEntry>;
       return undefined;
   }
 }
@@ -267,7 +268,7 @@ function resolvedTarget(entry: SessionEntry | undefined): ReplyTarget | undefine
 }
 
 function replyContext(
-  entry: SessionEntryOf<"user.message">,
+  entry: ThreadEntryOf<"user.message">,
   targetOf: (entryId: EntryId) => ReplyTarget | undefined,
   botNames: ReadonlyMap<string, string> | undefined,
 ): string | undefined {

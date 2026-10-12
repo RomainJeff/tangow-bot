@@ -1,8 +1,11 @@
 import type { Actor } from "@rakazo/contracts";
 import type { PrismaClient } from "./client.js";
 
+/** What a scoped lookup throws when the caller may not see the resource; any other message marks a server invariant. */
+export const RESOURCE_NOT_FOUND = "Resource not found";
+
 export class IsolationError extends Error {
-  constructor(message = "Resource not found") {
+  constructor(message = RESOURCE_NOT_FOUND) {
     super(message);
     this.name = "IsolationError";
   }

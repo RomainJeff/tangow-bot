@@ -1,7 +1,7 @@
 import { i18n } from "@lingui/core";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { ChatMarkdown } from "@rakazo/chat-ui/web";
-import type { ThreadMessage } from "@rakazo/contracts";
+import type { ThreadEntry } from "@rakazo/contracts";
 import {
   computeMessageGroups,
   peerConversations,
@@ -42,14 +42,14 @@ export function PeerMessagesOverlay({
   onClose: () => void;
 }) {
   const { t } = useLingui();
-  const [messages, setMessages] = useState<readonly ThreadMessage[]>([]);
+  const [entries, setEntries] = useState<readonly ThreadEntry[]>([]);
   const [historyReady, setHistoryReady] = useState(false);
   const [historyFailed, setHistoryFailed] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const conversation = useMemo(() => {
     if (!historyReady) return null;
-    return peerConversations(messages).find((entry) => entry.peerBotId === peerBotId) ?? null;
-  }, [historyReady, messages, peerBotId]);
+    return peerConversations(entries).find((entry) => entry.peerBotId === peerBotId) ?? null;
+  }, [historyReady, entries, peerBotId]);
   const peerBotName = conversation?.peerBotName ?? initialPeerBotName;
   const transcriptRef = useRef<HTMLDivElement>(null);
   // Same grammar as the main thread's multi-bot grouping (rule R): consecutive
@@ -63,7 +63,7 @@ export function PeerMessagesOverlay({
       createdAt: peerMessage.createdAt,
       blocks: [{ kind: "text" as const, text: peerMessage.text }],
     }));
-    return computeMessageGroups(groupable, { isTransparent: () => false });
+    return computeMessageGroups(groupable);
   }, [conversation, botId, peerBotId]);
 
   // Oldest-first order stays, but the view opens on the latest exchange.
@@ -77,7 +77,7 @@ export function PeerMessagesOverlay({
     const abort = new AbortController();
     setHistoryReady(false);
     setHistoryFailed(false);
-    setMessages([]);
+    setEntries([]);
     void loadPeerHistory({
       signal: abort.signal,
       loadPage: (before, signal) =>
@@ -85,7 +85,7 @@ export function PeerMessagesOverlay({
     })
       .then((loaded) => {
         if (abort.signal.aborted) return;
-        setMessages(loaded);
+        setEntries(loaded);
         setHistoryReady(true);
       })
       .catch(() => {

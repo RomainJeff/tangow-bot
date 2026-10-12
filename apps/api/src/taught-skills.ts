@@ -32,6 +32,7 @@ import {
   teachingControlLeaseExpiresAt,
 } from "@rakazo/adapters";
 import type { Actor, MessageBlock, TaughtSkill } from "@rakazo/contracts";
+import { EntryId } from "@rakazo/contracts";
 import {
   ACTIVE_RUN_STATUSES,
   buildPlaybookFromRecording,
@@ -41,6 +42,7 @@ import {
   teachRecordingTtlMs,
 } from "@rakazo/core";
 import {
+  appendCardStateInTransaction,
   appendEventInTransaction,
   type createRepos,
   expireComputerExecutionLeases,
@@ -283,21 +285,27 @@ async function updateSkillDraftMessage(
         select: { blocks: true },
       });
       if (!current || !Array.isArray(current.blocks)) return null;
-      const nextBlocks = (current.blocks as MessageBlock[]).map((block) =>
-        isDraft(block)
-          ? {
-              kind: "skill_draft" as const,
-              skillId: skill.id,
-              name: input.name ?? block.name,
-              goal: skill.goal,
-              playbook,
-              status: input.status ?? block.status,
-            }
-          : block,
+      const stored = current.blocks as MessageBlock[];
+      const before = stored.find(isDraft);
+      if (!before) return null;
+      const revision = {
+        skillId: skill.id,
+        name: input.name ?? before.name,
+        goal: skill.goal,
+        playbook,
+        status: input.status ?? before.status,
+      };
+      const nextBlocks = stored.map((block) =>
+        isDraft(block) ? { kind: "skill_draft" as const, ...revision } : block,
       );
       await tx.message.update({
         where: { id: message.id },
         data: { blocks: nextBlocks as never },
+      });
+      await appendCardStateInTransaction(tx, {
+        type: "skill.draft",
+        botId: bot.id,
+        payload: { ...revision, target: EntryId.parse(message.id) },
       });
       const event = await appendEventInTransaction(tx, {
         spaceId: actor.spaceId,

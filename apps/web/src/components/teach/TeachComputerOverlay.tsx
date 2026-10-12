@@ -226,10 +226,7 @@ export function TeachComputerOverlayControl({
             />
           }
         >
-          <span
-            aria-hidden
-            className="h-2 w-2 shrink-0 rounded-full border border-foreground"
-          />
+          <span aria-hidden className="h-2 w-2 shrink-0 rounded-full border border-foreground" />
           <Trans>Teach a task</Trans>
         </PopoverTrigger>
         <PopoverContent

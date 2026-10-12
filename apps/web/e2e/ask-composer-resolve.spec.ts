@@ -1,5 +1,6 @@
 import { activeBotId, captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
 import { expect, test } from "./test";
+import { answerOf, threadEntries } from "./thread-log";
 
 // A run parked on an ask_user card can be answered from the main composer instead of the card
 // (feature ask-answer-via-composer, PR 1). Typing a reply must resolve the ask and resume the
@@ -50,22 +51,16 @@ test("resolves a pending ask from the main composer", async ({ page }, testInfo)
     timeout: 30_000,
   });
 
-  // The card resolves. Its own reply text is NOT echoed onto the card (design D2 — the words live
-  // in the bubble above), so the block is answered without an `answer` payload.
   await expect
     .poll(
       async () => {
-        const history = await rpc<{
-          messages: Array<{ blocks: Array<{ kind: string; status?: string; answer?: string }> }>;
-        }>(page, "threads/messages", { botId });
-        const answered = history.messages
-          .flatMap((message) => message.blocks)
-          .find((block) => block.kind === "ask" && block.status === "answered");
-        return answered ? { found: true, answer: answered.answer ?? null } : null;
+        const entries = await threadEntries(page, { botId });
+        const ask = entries.find((entry) => entry.type === "assistant.ask");
+        return ask ? (answerOf(entries, ask.id)?.type ?? null) : null;
       },
       { timeout: 30_000 },
     )
-    .toEqual({ found: true, answer: null });
+    .toBe("card.answered");
 
   // The card no longer repeats the reply: exactly one instance of the prose (the bubble).
   await expect(page.getByText("Go with the northern one.", { exact: true })).toHaveCount(1);

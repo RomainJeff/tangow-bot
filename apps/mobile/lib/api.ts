@@ -2,32 +2,32 @@ import type {
   Bot,
   BotSection,
   ComputerMode,
+  EntryId,
   Group,
   Me,
-  MessageBlock,
   ModelCatalogEntry,
   ModelCredential,
+  ProductEvent,
   Space,
   SpaceNavigation,
+  ThreadEntry,
+  ThreadItem,
+  ThreadMessagePage,
 } from "@rakazo/contracts";
-import type { ThreadHistory } from "@rakazo/core";
+import type { ProgressLayer, ThreadRow } from "@rakazo/core";
 import {
   aiConsentTarget,
   aiDataUsesForProcedure,
-  applyThreadRewind,
+  applyEntryEvent,
   cancelResponseBody,
   ensureAiDataConsent,
   isRunTerminalEvent,
-  mergeMessageUpdate,
-  mergeThreadHistory,
-  prependThreadHistoryPage,
-  progressMessageId,
   readBoundedJsonResponse,
-  reduceLiveMessageBlocks,
+  reduceProgressLayer,
   runFailureError,
   signupRequiresEmailVerification,
-  takeLiveMessage,
-  upsertMessageById,
+  withOlderEntries,
+  withRefreshedEntries,
 } from "@rakazo/core";
 import * as SecureStore from "expo-secure-store";
 import type { AccessCredentials } from "./access";
@@ -782,18 +782,7 @@ export type MobileModel = ModelCatalogEntry;
 
 export type MobileModelCredential = ModelCredential;
 
-export type MobileMessage = {
-  id: string;
-  threadId?: string;
-  seq?: number;
-  runId?: string;
-  role: "user" | "bot" | "system";
-  botId?: string;
-  replyToMessageId?: string;
-  replyQuote?: string;
-  createdAt?: string;
-  blocks: MessageBlock[];
-};
+export type MobileMessage = Extract<ThreadItem, { kind: "message" }>;
 
 export type MobileGroup = Pick<
   Group,
@@ -848,8 +837,9 @@ export type MobileSnapshot = {
   groupName?: string;
   threadId: string;
   cursor?: number;
-  messages: MobileMessage[];
-  olderCursor: number | null;
+  entries: ThreadEntry[];
+  olderCursor: EntryId | null;
+  layer: ProgressLayer;
   run: MobileRun | null;
   activeRuns?: MobileRun[];
   members?: MobileGroup["members"];
@@ -861,6 +851,8 @@ export type MobileSnapshot = {
     busyBotName: string | null;
   };
 };
+
+export type MobileThreadResponse = Omit<MobileSnapshot, "layer"> & { progress: ProductEvent[] };
 
 export function shouldApplyMobileThreadRefresh(input: {
   requestEpoch: number;
@@ -877,43 +869,71 @@ export function shouldApplyMobileThreadRefresh(input: {
   );
 }
 
-export type MobileMessagePage = ThreadHistory<MobileMessage>;
-
-/**
- * Merges a refreshed snapshot, keeping the previous object for every message
- * and field the refresh did not change — and the previous snapshot itself
- * when nothing changed — so a poll that brings nothing new re-renders nothing.
- */
 export function mergeMobileSnapshot(
   prev: MobileSnapshot | null,
   next: MobileSnapshot,
   preserveLoadedHistory = false,
 ): MobileSnapshot {
-  const merged = mergeThreadHistory(prev, next, preserveLoadedHistory);
-  if (!prev || prev.threadId !== merged.threadId) return merged;
-  const previousById = new Map(prev.messages.map((message) => [message.id, message]));
-  const messages = merged.messages.map((message) => {
-    const previous = previousById.get(message.id);
-    return previous && sameJson(previous, message) ? previous : message;
-  });
-  const sameMessages =
-    messages.length === prev.messages.length &&
-    messages.every((message, index) => message === prev.messages[index]);
+  if (!prev || prev.threadId !== next.threadId) return next;
+  // A refresh older than the events already applied keeps what they brought; a newer one carries
+  // the open run's streamed text up to its cursor, so its layer replaces the held one.
+  const behind = prev.cursor !== undefined && (next.cursor ?? 0) < prev.cursor;
+  const refreshed = behind
+    ? {
+        ...next,
+        entries: prev.entries,
+        olderCursor: prev.olderCursor,
+        cursor: prev.cursor,
+        layer: prev.layer,
+      }
+    : withRefreshedEntries(prev, next, preserveLoadedHistory);
+  const merged: MobileSnapshot = {
+    ...refreshed,
+    entries: keepEntries(prev.entries, refreshed.entries),
+  };
   const shared: Record<string, unknown> = {};
-  let unchanged = sameMessages && Object.keys(prev).length === Object.keys(merged).length;
+  let unchanged = Object.keys(prev).length === Object.keys(merged).length;
   for (const [key, value] of Object.entries(merged)) {
     const previous = (prev as Record<string, unknown>)[key];
-    const kept = key === "messages" ? (sameMessages ? prev.messages : messages) : value;
-    shared[key] = key !== "messages" && sameJson(previous, kept) ? previous : kept;
+    shared[key] = sameJson(previous, value) ? previous : value;
     if (shared[key] !== previous) unchanged = false;
   }
   return unchanged ? prev : (shared as MobileSnapshot);
+}
+
+function keepEntries(held: ThreadEntry[], next: ThreadEntry[]): ThreadEntry[] {
+  return held.length === next.length && held.every((entry, index) => entry.id === next[index]?.id)
+    ? held
+    : next;
+}
+
+export function withOlderPage(
+  prev: MobileSnapshot | null,
+  page: ThreadMessagePage,
+): MobileSnapshot | null {
+  if (!prev || prev.threadId !== page.threadId) return prev;
+  return withOlderEntries(prev, page);
+}
+
+export function keepUnchangedRows(
+  previous: ReadonlyMap<string, ThreadRow>,
+  rows: readonly ThreadRow[],
+): ThreadRow[] {
+  return rows.map((row) => {
+    const kept = previous.get(row.item.id);
+    if (!kept) return row;
+    if (sameJson(kept, row)) return kept;
+    return sameJson(kept.item, row.item) ? { ...row, item: kept.item } : row;
+  });
 }
 
 /** Deep equality for JSON-shaped values (what the API returns). */
 function sameJson(a: unknown, b: unknown): boolean {
   if (Object.is(a, b)) return true;
   if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) return false;
+  if (a instanceof Map || b instanceof Map) {
+    return a instanceof Map && b instanceof Map && sameJson([...a], [...b]);
+  }
   if (Array.isArray(a) !== Array.isArray(b)) return false;
   if (Array.isArray(a)) {
     const other = b as unknown[];
@@ -926,13 +946,6 @@ function sameJson(a: unknown, b: unknown): boolean {
     keys.length === Object.keys(right).length &&
     keys.every((key) => Object.hasOwn(right, key) && sameJson(left[key], right[key]))
   );
-}
-
-export function prependMobileMessagePage(
-  prev: MobileSnapshot | null,
-  page: MobileMessagePage,
-): MobileSnapshot | null {
-  return prependThreadHistoryPage(prev, page);
 }
 
 const MESSAGING_PROVIDER_LABELS: Record<string, string> = {
@@ -950,7 +963,7 @@ export function messagingProviderLabel(provider: string, transport?: string): st
   return MESSAGING_PROVIDER_LABELS[provider] ?? provider;
 }
 
-export function copyableMobileMessageText(message: MobileMessage): string {
+export function copyableMobileMessageText(message: Pick<MobileMessage, "blocks">): string {
   return message.blocks
     .map((block) => {
       if (block.kind === "channel_message") {
@@ -965,17 +978,11 @@ export function copyableMobileMessageText(message: MobileMessage): string {
     .trim();
 }
 
-export function blockText(message: MobileMessage) {
+export function blockText(message: Pick<MobileMessage, "blocks">) {
   return message.blocks
     .map((block) => {
       if (block.kind === "channel_message") {
         return `${messagingProviderLabel(block.provider, block.transport)} · ${block.fromLabel}: ${block.text}`;
-      }
-      if (block.kind === "subagent") {
-        return `${block.name ?? "subagent"}: ${block.result || block.progress || block.task || ""}`;
-      }
-      if (block.kind === "routine_run") {
-        return `${block.routineName}: ${block.state}${block.headline ? ` — ${block.headline}` : ""}`;
       }
       if (block.kind === "child_bot") {
         return `${block.status === "archived" ? "Archived" : block.status === "deleted" ? "Deleted" : "Bot"} ${block.name ?? ""}`;
@@ -997,20 +1004,10 @@ export function blockText(message: MobileMessage) {
     .join("\n");
 }
 
-type ThreadEvent = {
-  id?: string;
-  botId?: string;
-  type: string;
-  seq?: number;
-  runId?: string;
-  createdAt?: string;
-  payload?: Record<string, unknown>;
-};
-
 export async function subscribeThread(
   target: { botId: string } | { groupId: string },
   cursor: number,
-  onEvent: (event: ThreadEvent) => void,
+  onEvent: (event: ProductEvent) => void,
   signal: AbortSignal,
 ) {
   const res = await fetch(`${currentApiBase()}/rpc/threads/subscribe`, {
@@ -1042,7 +1039,7 @@ export async function subscribeThread(
         .join("");
       if (!data || data === "[DONE]") continue;
       try {
-        const parsed = JSON.parse(data) as { json?: ThreadEvent; error?: { message?: string } };
+        const parsed = JSON.parse(data) as { json?: ProductEvent; error?: { message?: string } };
         if (parsed.json?.type) onEvent(parsed.json);
       } catch {
         // ignore keepalives and partial frames
@@ -1053,98 +1050,58 @@ export async function subscribeThread(
 
 export function applyMobileThreadEvent(
   prev: MobileSnapshot | null,
-  event: ThreadEvent,
+  event: ProductEvent,
 ): MobileSnapshot | null {
   if (!prev) return prev;
-  if (event.type === "thread.cleared") {
+  if (event.type === "session.entry.appended" || event.type === "thread.progress") {
+    return applyEntryEvent(prev, event);
+  }
+  const layer = reduceProgressLayer(prev.layer, event);
+  const runs = runsAfter(prev, event);
+  if (layer === prev.layer && !runs) return prev;
+  return { ...prev, ...runs, cursor: event.seq, layer };
+}
+
+type MobileRuns = Pick<MobileSnapshot, "run" | "activeRuns" | "computer">;
+
+function runsAfter(prev: MobileSnapshot, event: ProductEvent): MobileRuns | null {
+  const held = prev.activeRuns ?? (prev.run ? [prev.run] : []);
+  if (event.type === "run.started" && event.runId) {
+    const known = held.find((candidate) => candidate.id === event.runId);
+    const run: MobileRun = { ...known, id: event.runId, botId: event.botId, status: "running" };
+    const others = held.filter((candidate) => candidate.id !== run.id);
     return {
-      ...prev,
-      cursor: event.seq,
-      messages: [],
-      olderCursor: null,
-      run: null,
-      activeRuns: [],
+      run: prev.groupId && prev.run?.status === "failed" && prev.run.id !== run.id ? prev.run : run,
+      activeRuns: prev.groupId ? [...others, run] : [run],
     };
   }
-  if (event.type === "thread.rewound") {
-    // olderCursor is kept: the history before the cut is still there and still pageable.
-    return {
-      ...prev,
-      cursor: event.seq ?? prev.cursor,
-      messages: applyThreadRewind(prev.messages, event),
-      run: null,
-      activeRuns: [],
-    };
-  }
-  if (event.type === "run.waiting_input" || event.type === "computer.takeover.requested") {
-    const status = event.type === "run.waiting_input" ? "waiting_input" : "waiting_takeover";
-    const progressId = progressMessageId(event);
-    // Waiting pauses drop live progress server-side; clear a leftover bubble so
-    // the waiting footer is not hidden behind a stale "Working…" row.
-    const messages = prev.messages.filter((message) => message.id !== progressId);
-    const progressCleared = messages.length !== prev.messages.length;
+  if (event.type === "computer.takeover.requested" && event.runId) {
     const runId = event.runId;
-    const knownInRun = Boolean(runId && prev.run?.id === runId);
-    const knownInActive = Boolean(
-      runId && prev.activeRuns?.some((candidate) => candidate.id === runId),
-    );
-    // Peer bot_message runs are omitted from snapshots while busy; the first wait
-    // event is how an open thread learns they need ask/takeover UI.
-    const needsInsert = Boolean(runId) && !knownInRun && !knownInActive;
-    const runChanged = Boolean(knownInRun && prev.run && prev.run.status !== status);
-    const activeRunChanged = Boolean(
-      knownInActive &&
-        prev.activeRuns?.some((candidate) => candidate.id === runId && candidate.status !== status),
-    );
-    const computer =
-      event.type === "computer.takeover.requested" && prev.computer?.busyBotName
+    const waiting = (run: MobileRun): MobileRun =>
+      run.id === runId ? { ...run, status: "waiting_takeover" } : run;
+    const inserted: MobileRun | null =
+      prev.run?.id === runId || held.some((candidate) => candidate.id === runId)
+        ? null
+        : { id: runId, botId: event.botId, status: "waiting_takeover" };
+    const promote =
+      inserted &&
+      (!prev.run ||
+        (prev.run.status !== "waiting_input" && prev.run.status !== "waiting_takeover"));
+    return {
+      run: promote ? inserted : prev.run && waiting(prev.run),
+      activeRuns: inserted ? [...held, inserted] : prev.activeRuns?.map(waiting),
+      computer: prev.computer?.busyBotName
         ? { ...prev.computer, busyBotName: null }
-        : prev.computer;
-    const computerChanged = computer !== prev.computer;
-    const cursor = event.seq ?? prev.cursor;
-    if (!runChanged && !activeRunChanged && !progressCleared && !needsInsert && !computerChanged) {
-      return cursor === prev.cursor ? prev : { ...prev, cursor };
-    }
-    if (needsInsert && runId) {
-      const waitingRun = {
-        id: runId,
-        status,
-        ...(event.botId ? { botId: event.botId } : {}),
-      };
-      const baseActive = prev.activeRuns ?? (prev.run ? [prev.run] : []);
-      const activeRuns = [...baseActive.filter((candidate) => candidate.id !== runId), waitingRun];
-      const promoteWaiting =
-        !prev.run ||
-        (prev.run.status !== "waiting_input" && prev.run.status !== "waiting_takeover");
-      return {
-        ...prev,
-        cursor,
-        messages,
-        computer,
-        run: promoteWaiting ? waitingRun : prev.run,
-        activeRuns,
-      };
-    }
-    const run = runChanged && prev.run ? { ...prev.run, status } : prev.run;
-    const activeRuns = activeRunChanged
-      ? prev.activeRuns?.map((candidate) =>
-          candidate.id === runId ? { ...candidate, status } : candidate,
-        )
-      : prev.activeRuns;
-    return { ...prev, cursor, run, activeRuns, messages, computer };
+        : prev.computer,
+    };
   }
   if (isRunTerminalEvent(event)) {
     const activeRuns = prev.activeRuns?.filter((candidate) => candidate.id !== event.runId);
     const failure = runFailureError(event);
     const primaryEnded = prev.run?.id === event.runId ? prev.run : null;
-    // A group member run can fail while another is displayed; see reduceThreadSnapshot.
     const endedRun =
       primaryEnded ?? prev.activeRuns?.find((candidate) => candidate.id === event.runId) ?? null;
     return {
-      ...prev,
-      cursor: event.seq ?? prev.cursor,
-      messages: prev.messages.filter((message) => message.id !== progressMessageId(event)),
-      // A failed run stays in run so the thread can say why it stopped (see reduceThreadSnapshot).
       run:
         endedRun && failure
           ? { ...endedRun, status: "failed", error: failure }
@@ -1154,117 +1111,7 @@ export function applyMobileThreadEvent(
       activeRuns,
     };
   }
-  if (event.type === "thread.progress") {
-    const progressId = progressMessageId(event);
-    const { previous, remaining } = takeLiveMessage(prev.messages, progressId);
-    const streaming: MobileMessage = {
-      id: progressId,
-      role: "bot",
-      createdAt: event.createdAt ?? new Date().toISOString(),
-      blocks: reduceLiveMessageBlocks((previous?.blocks ?? []) as MessageBlock[], {
-        type: "progress",
-        payload: event.payload,
-      }),
-      ...(event.botId ? { botId: event.botId } : {}),
-      ...(event.runId ? { runId: event.runId } : {}),
-    };
-    return {
-      ...prev,
-      cursor: event.seq ?? prev.cursor,
-      messages: [...remaining, streaming],
-    };
-  }
-  if (event.type === "agent.tool.called") {
-    const progressId = progressMessageId(event);
-    const { previous, remaining } = takeLiveMessage(prev.messages, progressId);
-    const streaming: MobileMessage = {
-      id: progressId,
-      role: "bot",
-      createdAt: event.createdAt ?? new Date().toISOString(),
-      blocks: reduceLiveMessageBlocks((previous?.blocks ?? []) as MessageBlock[], {
-        type: "tool",
-        name: String(event.payload?.name ?? ""),
-      }),
-      ...(event.botId ? { botId: event.botId } : {}),
-      ...(event.runId ? { runId: event.runId } : {}),
-    };
-    return {
-      ...prev,
-      cursor: event.seq ?? prev.cursor,
-      messages: [...remaining, streaming],
-    };
-  }
-  if (event.type === "agent.tool.completed") {
-    return { ...prev, cursor: event.seq ?? prev.cursor };
-  }
-  if (event.type === "thread.subagent") {
-    const agentId = String(event.payload?.agentId ?? event.id ?? "live");
-    const status = event.payload?.status;
-    const streaming: MobileMessage = {
-      id: `subagent:${agentId}`,
-      role: "bot",
-      createdAt: event.createdAt ?? new Date().toISOString(),
-      ...(event.botId ? { botId: event.botId } : {}),
-      ...(event.runId ? { runId: event.runId } : {}),
-      blocks: [
-        {
-          kind: "subagent",
-          agentId,
-          name: String(event.payload?.name ?? "subagent"),
-          task: String(event.payload?.task ?? ""),
-          status: status === "completed" || status === "failed" ? status : "running",
-          progress: event.payload?.progress ? String(event.payload.progress) : undefined,
-          result: event.payload?.result ? String(event.payload.result) : undefined,
-        },
-      ],
-    };
-    return {
-      ...prev,
-      cursor: event.seq ?? prev.cursor,
-      messages: [...prev.messages.filter((message) => message.id !== streaming.id), streaming],
-    };
-  }
-  if (event.type === "thread.message.created" || event.type === "thread.message.updated") {
-    const { remaining } = takeLiveMessage(prev.messages, progressMessageId(event));
-    const next: MobileMessage = {
-      id: String(event.payload?.messageId ?? event.id ?? `msg:${event.seq ?? 0}`),
-      runId: event.runId ? String(event.runId) : undefined,
-      role: (event.payload?.role as MobileMessage["role"]) ?? "bot",
-      createdAt: event.createdAt ?? new Date().toISOString(),
-      blocks: (event.payload?.blocks as MobileMessage["blocks"]) ?? [],
-      botId: event.botId ?? (event.payload?.botId ? String(event.payload.botId) : undefined),
-      replyToMessageId: event.payload?.replyToMessageId
-        ? String(event.payload.replyToMessageId)
-        : undefined,
-      replyQuote: event.payload?.replyQuote ? String(event.payload.replyQuote) : undefined,
-    };
-    const merged =
-      event.type === "thread.message.updated"
-        ? mergeMessageUpdate(
-            prev.messages.find((message) => message.id === next.id),
-            next,
-          )
-        : next;
-    // An update to a message this screen never loaded stays out of the thread.
-    if (!merged) return { ...prev, cursor: event.seq ?? prev.cursor };
-    return {
-      ...prev,
-      cursor: event.seq ?? prev.cursor,
-      messages: upsertMessageById(
-        remaining.filter(
-          (message) =>
-            !(
-              message.id.startsWith("subagent:") &&
-              next.blocks.some(
-                (block) => block.kind === "subagent" && message.id === `subagent:${block.agentId}`,
-              )
-            ),
-        ),
-        merged,
-      ),
-    };
-  }
-  return prev;
+  return null;
 }
 
 export {

@@ -2,8 +2,12 @@ import { randomUUID } from "node:crypto";
 import type { SessionEntryDraft } from "@rakazo/adapter-kit";
 import type { MessageBlock, SessionEntry } from "@rakazo/contracts";
 import { EntryId, EntrySeq, SessionId } from "@rakazo/contracts";
+import { projectThreadItems, spawnBotApprovalBlock } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import {
+  answerRunInputInTransaction,
+  appendEventInTransaction,
+  appendLinkPreviewBlock,
   appendRunBlocksInTransaction,
   appendRunFinishedInTransaction,
   appendSessionEntryInTransaction,
@@ -12,9 +16,15 @@ import {
   createSessionInTransaction,
   createThreadEvents,
   createThreadMessage,
+  dismissProposalWithTextInTransaction,
   finalizeRun,
   openRoutineSessionInTransaction,
+  pauseRunForInput,
+  progressSinceLastEntry,
+  removeLinkPreviewBlock,
+  resumeAskWithComposerTextInTransaction,
   rewindThread,
+  threadOfSession,
 } from "@rakazo/db";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { messageConnectedAgent } from "../agent-connections.js";
@@ -382,6 +392,31 @@ describe("session log writers", () => {
     expect(
       (await log.readTail(sessionId)).map(({ type, parentId }) => ({ type, parentId })),
     ).toEqual([{ type: "clear", parentId: null }]);
+  });
+
+  it("marks the clear an edit of the first message writes as an edit, and leaves a real clear plain", async () => {
+    const { prisma } = database;
+    const { bot, threadId, sessionId } = await seedBot(prisma, "Hopper");
+    const target = { spaceId: SPACE, threadId, botId: bot.id };
+    const first = await createThreadEvents(prisma).sendUserMessage({
+      ...target,
+      userId: USER,
+      blocks: [{ kind: "text", text: "Edit me" }],
+      prompt: "Edit me",
+      trigger: "user",
+      createRun: false,
+    });
+
+    await rewindThread(prisma, { ...target, messageId: first.messageId });
+    const edited = await log.readTail(sessionId);
+    await clearThread(prisma, target);
+
+    expect(edited.map(({ type, payload }) => ({ type, payload }))).toEqual([
+      { type: "clear", payload: { edit: true } },
+    ]);
+    expect((await log.readTail(sessionId)).map(({ type, payload }) => ({ type, payload }))).toEqual(
+      [{ type: "clear", payload: {} }],
+    );
   });
 
   it("ends the history generation at a clear, and at a rewind only when it cuts a turn a compaction summarized", async () => {
@@ -756,6 +791,53 @@ describe("session log writers", () => {
     ]);
   });
 
+  it("marks the start of a routine the person subscribed to as one to notify", async () => {
+    const { prisma } = database;
+    const { bot, threadId, sessionId } = await seedBot(prisma, "Lamarr");
+    const routine = await prisma.routine.create({
+      data: {
+        spaceId: SPACE,
+        botId: bot.id,
+        userId: USER,
+        threadId,
+        name: "Release watch",
+        prompt: "Tell me when it ships.",
+        crons: [],
+        webhookEnabled: true,
+        notify: true,
+      },
+    });
+    const run = await seedRun(prisma, bot.id, threadId, {
+      trigger: "webhook",
+      routineId: routine.id,
+    });
+
+    const opened = await openRunLog(
+      { prisma, sessionLog: log },
+      run,
+      { sessionId, runId: run.id, botId: bot.id },
+      SCRIPTED,
+      null,
+    );
+
+    expect((await log.readTail(sessionId)).map(({ type, payload }) => ({ type, payload }))).toEqual(
+      [
+        {
+          type: "routine.started",
+          payload: {
+            sessionId: opened.sessionId,
+            routineId: routine.id,
+            name: "Release watch",
+            trigger: "webhook",
+            scheduledAt: run.createdAt.toISOString(),
+            model: SCRIPTED,
+            notify: true,
+          },
+        },
+      ],
+    );
+  });
+
   it("reports a routine run that fails through finalizeRun as failed in the thread's session", async () => {
     const { prisma } = database;
     const lovelace = await seedBot(prisma, "Lovelace");
@@ -1049,6 +1131,506 @@ describe("session log writers", () => {
         ).toBe("cancelled");
         await nothingCameBack();
       });
+    });
+  });
+  describe("a card's later state", () => {
+    let fence = 0;
+
+    async function paused(
+      owner: Awaited<ReturnType<typeof seedBot>>,
+      blocks: MessageBlock[],
+      effect?: { id: string; kind: string; request: Record<string, unknown> },
+    ) {
+      const { prisma } = database;
+      fence += 1;
+      const run = await seedRun(prisma, owner.bot.id, owner.threadId, {
+        leaseOwner: "worker",
+        leaseFence: fence,
+      });
+      const attempt = await prisma.attempt.create({
+        data: { runId: run.id, fence, status: "running" },
+      });
+      if (effect) {
+        await prisma.externalEffect.create({
+          data: {
+            id: effect.id,
+            spaceId: SPACE,
+            runId: run.id,
+            kind: effect.kind,
+            idempotencyKey: `${run.id}:${effect.kind}`,
+            status: "intended",
+            request: effect.request as never,
+          },
+        });
+      }
+      await pauseRunForInput(prisma, {
+        spaceId: SPACE,
+        threadId: owner.threadId,
+        botId: owner.bot.id,
+        runId: run.id,
+        attemptId: attempt.id,
+        leaseOwner: "worker",
+        leaseFence: fence,
+        blocks,
+        ...(effect
+          ? { effect: { id: effect.id, kind: effect.kind, proposal: effect.request } }
+          : {}),
+      });
+      const message = await prisma.message.findFirstOrThrow({ where: { runId: run.id } });
+      const ask = (await log.readRun(run.id)).find((entry) => entry.type === "assistant.ask");
+      return { run, messageId: message.id, askId: ask?.id };
+    }
+
+    const newest = async (sessionId: SessionId) => {
+      const entry = (await log.readTail(sessionId)).at(-1)!;
+      return { type: entry.type, sessionId: entry.sessionId, payload: entry.payload };
+    };
+
+    it("keeps an approval card on its request, the edited card on the edit, and the tapped answer", async () => {
+      const owner = await seedBot(database.prisma, "Lovelace");
+      const request = { name: "Scout", instructions: "Watch the market." };
+      const effectId = `effect_${randomUUID()}`;
+      const card = spawnBotApprovalBlock(effectId, request, USER);
+      const { run, messageId } = await paused(owner, [card], {
+        id: effectId,
+        kind: "spawn_bot",
+        request,
+      });
+
+      await database.prisma.$transaction((tx) =>
+        answerRunInputInTransaction(tx, {
+          spaceId: SPACE,
+          threadId: owner.threadId,
+          runId: run.id,
+          messageId,
+          answeredByUserId: USER,
+          answer: "allow",
+          edits: { name: "Ranger" },
+        }),
+      );
+
+      const effects = (await log.readTail(owner.sessionId)).filter((entry) =>
+        entry.type.startsWith("effect."),
+      );
+      expect(
+        effects.map(({ type, sessionId, payload }) => {
+          const { card, answerId } = payload as {
+            card?: Extract<MessageBlock, { kind: "ask" }>;
+            answerId?: string;
+          };
+          return {
+            type,
+            sessionId,
+            card: card && { text: card.text, status: card.status, answer: card.answer },
+            answerId,
+          };
+        }),
+      ).toEqual([
+        {
+          type: "effect.requested",
+          sessionId: owner.sessionId,
+          card: { text: "Create bot “Scout”?", status: "pending", answer: undefined },
+          answerId: undefined,
+        },
+        {
+          type: "effect.edited",
+          sessionId: owner.sessionId,
+          card: { text: "Create bot “Ranger”?", status: "answered", answer: "allow" },
+          answerId: undefined,
+        },
+        {
+          type: "effect.resolved",
+          sessionId: owner.sessionId,
+          card: undefined,
+          answerId: "allow",
+        },
+      ]);
+    });
+
+    it("logs a secret answer as answered, without the secret", async () => {
+      const owner = await seedBot(database.prisma, "Babbage");
+      const { run, messageId } = await paused(owner, [
+        { kind: "ask", text: "Your API key?", input: "secret" },
+      ]);
+
+      await database.prisma.$transaction((tx) =>
+        answerRunInputInTransaction(
+          tx,
+          {
+            spaceId: SPACE,
+            threadId: owner.threadId,
+            runId: run.id,
+            messageId,
+            answeredByUserId: USER,
+            answer: "placeholder-secret",
+          },
+          { store: async () => undefined },
+        ),
+      );
+
+      expect(await newest(owner.sessionId)).toEqual({
+        type: "card.answered",
+        sessionId: owner.sessionId,
+        payload: { target: messageId, answer: "" },
+      });
+      expect(JSON.stringify(await log.readTail(owner.sessionId))).not.toContain(
+        "placeholder-secret",
+      );
+      expect(
+        projectThreadItems(await log.readRun(run.id)).flatMap((item) =>
+          item.kind === "message" ? item.blocks : [],
+        ),
+      ).toEqual([
+        { kind: "ask", text: "Your API key?", input: "secret", status: "answered", answer: "" },
+      ]);
+    });
+
+    describe("an answer given inside the card", () => {
+      const answered = async (owner: Awaited<ReturnType<typeof seedBot>>) =>
+        (await log.readTail(owner.sessionId))
+          .filter((entry) => entry.type === "card.answered" || entry.type === "user.message")
+          .map(({ type, payload }) => ({ type, payload }));
+
+      const answerBy = (threadId: string, runId: string, messageId: string, value: string) =>
+        database.prisma.$transaction((tx) =>
+          answerRunInputInTransaction(tx, {
+            spaceId: SPACE,
+            threadId,
+            runId,
+            messageId,
+            answeredByUserId: USER,
+            answer: value,
+          }),
+        );
+
+      async function answer(blocks: MessageBlock[], value: string) {
+        const owner = await seedBot(database.prisma, `Answerer ${randomUUID()}`);
+        const { run, askId } = await paused(owner, blocks);
+        await answerBy(owner.threadId, run.id, askId!, value);
+        return { entries: await answered(owner), target: askId };
+      }
+
+      const city = {
+        id: "city",
+        question: "Which city should I start with?",
+        options: [
+          { id: "paris", label: "Paris" },
+          { id: "lyon", label: "Lyon" },
+        ],
+      };
+      it.each<[string, MessageBlock, string, Record<string, unknown>, string]>([
+        [
+          "a typed answer to an ask",
+          { kind: "ask", text: "Which city?" },
+          "Lyon",
+          { answer: "Lyon" },
+          "Lyon",
+        ],
+        [
+          "a tapped action of an ask by its id",
+          {
+            kind: "ask",
+            text: "Which city?",
+            actions: [
+              { id: "paris", label: "Paris" },
+              { id: "lyon", label: "Lyon" },
+            ],
+          },
+          "paris",
+          { answer: "paris" },
+          "Paris",
+        ],
+        [
+          "a multi-question card's structured answers",
+          { kind: "ask", text: "A few questions", questions: [city] },
+          JSON.stringify({ city: { selected: ["paris"] } }),
+          { answers: { city: { selected: ["paris"] } } },
+          "1. Which city should I start with? — Paris",
+        ],
+      ])(
+        "logs %s, then the reply that carries it to the bot",
+        async (_, block, value, logged, reply) => {
+          const { entries, target } = await answer([block], value);
+          expect(entries).toEqual([
+            { type: "card.answered", payload: { target, ...logged } },
+            {
+              type: "user.message",
+              payload: {
+                blocks: [{ kind: "text", text: reply }],
+                replyTo: { entryId: target },
+                source: "card",
+              },
+            },
+          ]);
+        },
+      );
+
+      it("answers a question asked after the message's text by the question's entry", async () => {
+        const owner = await seedBot(database.prisma, `Answerer ${randomUUID()}`);
+        const { run, messageId, askId } = await paused(owner, [
+          { kind: "text", text: "Both cities have a free week." },
+          { kind: "ask", text: "Which city?" },
+        ]);
+
+        const byMessage = await answerBy(owner.threadId, run.id, messageId, "Lyon");
+        await answerBy(owner.threadId, run.id, askId!, "Lyon");
+
+        expect(byMessage).toBeNull();
+        expect(await answered(owner)).toEqual([
+          { type: "card.answered", payload: { target: askId, answer: "Lyon" } },
+          {
+            type: "user.message",
+            payload: {
+              blocks: [{ kind: "text", text: "Lyon" }],
+              replyTo: { entryId: askId },
+              source: "card",
+            },
+          },
+        ]);
+      });
+    });
+
+    it("logs an ask the composer answered as answered, on the question's entry", async () => {
+      const owner = await seedBot(database.prisma, "Hamilton");
+      const { run, askId } = await paused(owner, [
+        { kind: "text", text: "Both cities have a free week." },
+        { kind: "ask", text: "Which city?" },
+      ]);
+
+      await database.prisma.$transaction((tx) =>
+        resumeAskWithComposerTextInTransaction(tx, {
+          spaceId: SPACE,
+          threadId: owner.threadId,
+          runId: run.id,
+          text: "Lyon",
+        }),
+      );
+
+      expect(await newest(owner.sessionId)).toEqual({
+        type: "card.answered",
+        sessionId: owner.sessionId,
+        payload: { target: askId },
+      });
+    });
+
+    it("logs a proposal put away by a typed reply as denied and dismissed", async () => {
+      const owner = await seedBot(database.prisma, "Noether");
+      const effectId = `effect_${randomUUID()}`;
+      const { run } = await paused(
+        owner,
+        [
+          {
+            kind: "ask",
+            text: "Every Monday at 9",
+            approvalEffectId: effectId,
+            actions: [
+              { id: "allow", label: "Create routine" },
+              { id: "deny", label: "Not now" },
+            ],
+          },
+        ],
+        { id: effectId, kind: "routine_proposal", request: { name: "Digest" } },
+      );
+
+      await database.prisma.$transaction((tx) =>
+        dismissProposalWithTextInTransaction(tx, {
+          spaceId: SPACE,
+          threadId: owner.threadId,
+          runId: run.id,
+          userId: USER,
+        }),
+      );
+
+      expect(await newest(owner.sessionId)).toEqual({
+        type: "effect.resolved",
+        sessionId: owner.sessionId,
+        payload: { effectId, decision: "denied", dismissed: true },
+      });
+    });
+
+    it("logs a preview added to a message and its removal, and nothing for a message older than the log", async () => {
+      const { prisma } = database;
+      const owner = await seedBot(prisma, "Turing");
+      const run = await seedRun(prisma, owner.bot.id, owner.threadId);
+      const text: MessageBlock = { kind: "text", text: "See https://example.com" };
+      const message = await createThreadMessage(prisma, {
+        threadId: owner.threadId,
+        role: "bot",
+        blocks: [text],
+        botId: owner.bot.id,
+        runId: run.id,
+      });
+      await prisma.$transaction((tx) =>
+        appendRunBlocksInTransaction(tx, { id: message.id, runId: run.id, botId: owner.bot.id }, [
+          text,
+        ]),
+      );
+      const older = await createThreadMessage(prisma, {
+        threadId: owner.threadId,
+        role: "bot",
+        blocks: [{ kind: "text", text: "Before the log" }],
+        botId: owner.bot.id,
+      });
+      const block = {
+        kind: "link_preview",
+        url: "https://example.com/",
+        format: "compact",
+        title: "Example",
+      } as const;
+      const where = { spaceId: SPACE, threadId: owner.threadId };
+
+      await appendLinkPreviewBlock(prisma, { ...where, messageId: message.id, block });
+      const preview = (await log.readTail(owner.sessionId)).at(-1)!;
+      await removeLinkPreviewBlock(prisma, { ...where, messageId: message.id });
+      const removed = await newest(owner.sessionId);
+      await appendLinkPreviewBlock(prisma, { ...where, messageId: older.id, block });
+      await removeLinkPreviewBlock(prisma, { ...where, messageId: older.id });
+
+      expect([
+        { type: preview.type, sessionId: preview.sessionId, payload: preview.payload },
+        removed,
+      ]).toEqual([
+        {
+          type: "link.preview",
+          sessionId: owner.sessionId,
+          payload: { target: message.id, block },
+        },
+        {
+          type: "link.preview.removed",
+          sessionId: owner.sessionId,
+          payload: { target: preview.id },
+        },
+      ]);
+      expect(await newest(owner.sessionId)).toEqual(removed);
+    });
+
+    it("marks the text of a message the bot sent the person mid-run, and no other", async () => {
+      const { prisma } = database;
+      const owner = await seedBot(prisma, "Hypatia");
+      const run = await seedRun(prisma, owner.bot.id, owner.threadId);
+      const said = (text: string, toPerson?: true) =>
+        prisma.$transaction((tx) =>
+          appendRunBlocksInTransaction(
+            tx,
+            { id: randomUUID(), runId: run.id, botId: owner.bot.id, toPerson },
+            [{ kind: "text", text }],
+          ),
+        );
+
+      await said("Halfway there.", true);
+      await said("Done.");
+
+      expect(
+        (await log.readTail(owner.sessionId)).map(({ type, payload }) => ({ type, payload })),
+      ).toEqual([
+        {
+          type: "assistant.text",
+          payload: { blocks: [{ kind: "text", text: "Halfway there." }], toPerson: true },
+        },
+        { type: "assistant.text", payload: { blocks: [{ kind: "text", text: "Done." }] } },
+      ]);
+    });
+  });
+  describe("what a thread serves from the log", () => {
+    it("replays an open run's progress since the newest append that carried one of its entries", async () => {
+      const { prisma } = database;
+      const owner = await seedBot(prisma, "Lamarr");
+      const run = await seedRun(prisma, owner.bot.id, owner.threadId);
+      const other = await seedRun(prisma, owner.bot.id, owner.threadId);
+      const progress = (runId: string, text: string) =>
+        prisma.$transaction((tx) =>
+          appendEventInTransaction(tx, {
+            spaceId: SPACE,
+            threadId: owner.threadId,
+            botId: owner.bot.id,
+            type: "thread.progress",
+            runId,
+            payload: { text },
+          }),
+        );
+
+      await progress(run.id, "before its entry");
+      await writerOf(
+        prisma,
+        run,
+      )({
+        type: "assistant.text",
+        payload: { blocks: [{ kind: "text", text: "First part." }] },
+      });
+      await progress(run.id, "after its entry");
+      await writerOf(
+        prisma,
+        other,
+      )({
+        type: "assistant.text",
+        payload: { blocks: [{ kind: "text", text: "Someone else." }] },
+      });
+      await progress(other.id, "the other run");
+      await progress(run.id, "still going");
+
+      const replayed = await progressSinceLastEntry(prisma, owner.threadId, [run.id, other.id]);
+
+      expect(replayed.map(({ type, runId, payload }) => ({ type, runId, payload }))).toEqual([
+        { type: "thread.progress", runId: run.id, payload: { text: "after its entry" } },
+        { type: "thread.progress", runId: other.id, payload: { text: "the other run" } },
+        { type: "thread.progress", runId: run.id, payload: { text: "still going" } },
+      ]);
+    });
+
+    it("replays a run's progress since its entry rode in a feed event another run's entry led", async () => {
+      const { prisma } = database;
+      const owner = await seedBot(prisma, "Noether");
+      const lead = await seedRun(prisma, owner.bot.id, owner.threadId);
+      const run = await seedRun(prisma, owner.bot.id, owner.threadId);
+      const progress = (text: string) =>
+        prisma.$transaction((tx) =>
+          appendEventInTransaction(tx, {
+            spaceId: SPACE,
+            threadId: owner.threadId,
+            botId: owner.bot.id,
+            type: "thread.progress",
+            runId: run.id,
+            payload: { text },
+          }),
+        );
+      const said = (by: { id: string }, text: string) =>
+        ({
+          type: "assistant.text",
+          payload: { blocks: [{ kind: "text", text }] },
+          sessionId: owner.sessionId,
+          botId: owner.bot.id,
+          runId: by.id,
+        }) as SessionEntryDraft;
+
+      await progress("before its entry");
+      await prisma.$transaction(async (tx) => {
+        await appendSessionEntryInTransaction(tx, said(lead, "Leading."));
+        await appendSessionEntryInTransaction(tx, said(run, "Following."));
+      });
+      await progress("after its entry");
+
+      const replayed = await progressSinceLastEntry(prisma, owner.threadId, [run.id, run.id]);
+
+      expect(replayed.map(({ runId, payload }) => ({ runId, payload }))).toEqual([
+        { runId: run.id, payload: { text: "after its entry" } },
+      ]);
+    });
+
+    it("finds the thread of a session through its top-most ancestor, only within its space", async () => {
+      const { prisma } = database;
+      const owner = await seedBot(prisma, "Meitner");
+      const digest = await routineRun(prisma, owner, "Digest");
+      const helper = await subagentRun(prisma, { ...digest.run, threadId: owner.threadId });
+
+      expect(
+        await Promise.all([
+          threadOfSession(prisma, owner.sessionId, SPACE),
+          threadOfSession(prisma, digest.routineSessionId, SPACE),
+          threadOfSession(prisma, helper.sessionId, SPACE),
+          threadOfSession(prisma, helper.sessionId, "space_elsewhere"),
+          threadOfSession(prisma, "session_unknown", SPACE),
+        ]),
+      ).toEqual([owner.threadId, owner.threadId, owner.threadId, null, null]);
     });
   });
 });

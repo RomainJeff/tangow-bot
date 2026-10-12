@@ -1,27 +1,27 @@
-import { setupI18n } from "@lingui/core";
+import { i18n } from "@lingui/core";
 import { I18nProvider } from "@lingui/react";
-import type { MessageBlock, ThreadMessage } from "@rakazo/contracts";
+import type { MessageBlock } from "@rakazo/contracts";
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
+import type { MessageItem } from "../../src/lib/thread-items";
 import { MessageView } from "../../src/pages/shell/message-view";
 import { skillPageView } from "../../src/pages/shell/skill-link";
 import "../../src/styles.css";
 
-const i18n = setupI18n({ locale: "en", messages: { en: {} } });
+i18n.loadAndActivate({ locale: "en", messages: {} });
 /** A line written while skills had uids still carries one; it opens by its id. */
 const uid = (digit: string) => digit.repeat(32);
 const CATALOG = [{ id: "user:rooms" }, { id: "user:invoices" }, { id: "user:long" }];
 
-function message(id: string, blocks: unknown[]): ThreadMessage {
+function message(id: string, blocks: unknown[]): MessageItem {
   return {
+    kind: "message",
     id,
-    threadId: "thread-1",
-    seq: 1,
+    ts: "2026-10-10T10:00:00.000Z",
     role: "bot",
     botId: "bot-1",
     blocks: blocks as MessageBlock[],
-    createdAt: "2026-10-10T10:00:00.000Z",
-  } as ThreadMessage;
+  } as MessageItem;
 }
 
 const line = (change: string, skillId: string, name: string, skillUid: string) => ({
@@ -71,12 +71,10 @@ function Thread() {
           <MessageView
             artifactTarget={{ botId: "bot-1" }}
             chrome="row"
-            canAnswer={false}
             message={row}
             inGroup={row.id === "group"}
             showAuthor={false}
             showAvatar={false}
-            onAnswer={async () => undefined}
             onOpenBot={() => undefined}
             onOpenPeerMessages={() => undefined}
             peerBot={() => undefined}

@@ -1,10 +1,14 @@
 import type * as db from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
-import { chooseFocus, markAppConnected } from "./onboarding.js";
+import { chooseFocus, dismissFocus, markAppConnected } from "./onboarding.js";
 
 const posted = vi.hoisted(() => [] as Array<{ blocks: unknown[] }>);
+const logged = vi.hoisted(() => [] as unknown[]);
 vi.mock("@rakazo/db", async (original) => ({
   ...(await original<typeof db>()),
+  appendCardStateInTransaction: vi.fn(async (_tx, draft) => {
+    logged.push(draft);
+  }),
   createThreadMessageInTransaction: vi.fn(async (_tx, input) => {
     posted.push(input);
     return { id: "posted" };
@@ -14,6 +18,7 @@ vi.mock("@rakazo/db", async (original) => ({
 }));
 function fixture(catalog: unknown[]) {
   posted.length = 0;
+  logged.length = 0;
   const tx = {
     $executeRaw: vi.fn(),
     message: {
@@ -59,7 +64,18 @@ describe("onboarding connection suggestions", () => {
     ).toEqual([
       expect.objectContaining({ connectorId: "pipedream", provider: "slack", name: "Slack" }),
     ]);
+    expect(logged).toEqual([
+      { type: "card.answered", botId: "bot", payload: { target: "choice", answerId: "day" } },
+    ]);
   });
+});
+
+it("logs a focus card put away without a choice as dismissed", async () => {
+  const { deps, actor } = fixture([]);
+  await dismissFocus(deps, actor, "bot");
+  expect(logged).toEqual([
+    { type: "card.answered", botId: "bot", payload: { target: "choice", dismissed: true } },
+  ]);
 });
 
 it("marks only the authorized connector when provider slugs collide", async () => {
@@ -78,6 +94,13 @@ it("marks only the authorized connector when provider slugs collide", async () =
     where: { id: "cards" },
     data: { blocks: [blocks[0], { ...blocks[1], status: "connected" }] },
   });
+  expect(logged).toEqual([
+    {
+      type: "card.answered",
+      botId: "bot",
+      payload: { target: "cards", answerId: "pipedream:slack" },
+    },
+  ]);
 });
 
 it("rewrites the blocks as stored under the thread lock, keeping a preview marker written meanwhile", async () => {

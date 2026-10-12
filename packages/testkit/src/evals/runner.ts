@@ -8,8 +8,8 @@ import {
   skillLinesByRun,
   userSkillsRoot,
 } from "@rakazo/adapters";
-import type { ModelConnectInput, RunStatus } from "@rakazo/contracts";
-import { ACTIVE_RUN_STATUSES, isTerminal } from "@rakazo/core";
+import type { ModelConnectInput, RunStatus, ThreadSnapshot } from "@rakazo/contracts";
+import { ACTIVE_RUN_STATUSES, isTerminal, projectThreadItems } from "@rakazo/core";
 import type { createDb } from "@rakazo/db";
 import { sessionCookieHeader } from "../index.js";
 import type { EvalCase, Evidence } from "./cases.js";
@@ -369,34 +369,28 @@ export async function runTrial(
         const { name, outcome } = payload as { name?: string; outcome?: string };
         if (name?.startsWith("skill_")) skillCalls.push({ tool: name, outcome: String(outcome) });
       }
-      const snap = await rpc<{
-        messages: Array<{
-          role: string;
-          blocks: Array<{ kind: string; text?: string; approvalEffectId?: string }>;
-        }>;
-      }>(app, cookie, "threads/get", { botId });
-      approvalPending =
-        terminal.status === "waiting_input" &&
-        snap.messages.some((m) =>
-          m.blocks.some((b) => b.kind === "ask" && typeof b.approvalEffectId === "string"),
-        );
+      const snap = await rpc<ThreadSnapshot>(app, cookie, "threads/get", { botId });
+      const items = projectThreadItems(snap.entries);
+      const botBlocks = items.flatMap((item) =>
+        item.kind === "message" && item.role === "bot" ? item.blocks : [],
+      );
+      const approvalIds = [
+        ...botBlocks,
+        ...items.flatMap((item) => (item.kind === "effect" && item.card ? [item.card] : [])),
+      ].flatMap((block) =>
+        block.kind === "ask" && typeof block.approvalEffectId === "string"
+          ? [block.approvalEffectId]
+          : [],
+      );
+      approvalPending = terminal.status === "waiting_input" && approvalIds.length > 0;
       pendingApproval = approvalPending
         ? await prisma.externalEffect.findFirst({
-            where: {
-              runId,
-              status: "intended",
-              id: {
-                in: snap.messages.flatMap((m) =>
-                  m.blocks.flatMap((b) => (b.approvalEffectId ? [b.approvalEffectId] : [])),
-                ),
-              },
-            },
+            where: { runId, status: "intended", id: { in: approvalIds } },
             select: { kind: true, request: true },
           })
         : null;
-      lastText = snap.messages
-        .filter((m) => m.role === "bot")
-        .flatMap((m) => m.blocks.filter((b) => b.kind === "text").map((b) => b.text ?? ""))
+      lastText = botBlocks
+        .flatMap((block) => (block.kind === "text" ? [block.text] : []))
         .join("\n");
     }
     const files: Evidence["files"] = {};

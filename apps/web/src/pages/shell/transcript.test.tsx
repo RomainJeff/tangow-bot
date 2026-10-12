@@ -1,0 +1,325 @@
+// @vitest-environment jsdom
+
+import type { SessionEntry } from "@rakazo/contracts";
+import { SessionEntrySchema } from "@rakazo/contracts";
+import { drawsNothing, projectThreadView } from "@rakazo/core";
+import type { ComponentProps, ReactNode } from "react";
+import { act, createRef } from "react";
+import { createRoot } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+// vitest doesn't run the lingui macro transform: same passthrough as the other web tests.
+function identityTag(strings: TemplateStringsArray, ...values: unknown[]): string {
+  return strings.reduce((acc, part, index) => `${acc}${part}${values[index] ?? ""}`, "");
+}
+vi.mock("@lingui/core/macro", () => ({ t: identityTag }));
+vi.mock("@lingui/react/macro", () => ({
+  useLingui: () => ({ t: identityTag }),
+  Trans: ({ children }: { children?: ReactNode }) => children,
+}));
+
+const api = vi.hoisted(() => ({ sessionEntries: vi.fn() }));
+vi.mock("../../lib/rpc", () => ({ rpc: { sessions: { entries: api.sessionEntries } } }));
+
+import streamedReply from "../../../../../packages/core/src/session-log/fixtures/streamed-reply.jsonl?raw";
+import { hasRenderableBlock } from "../../lib/message-blocks";
+import { Transcript } from "./transcript";
+
+const fixture = streamedReply
+  .trim()
+  .split("\n")
+  .map((line) => SessionEntrySchema.parse(JSON.parse(line)));
+
+const helperSession = [
+  {
+    id: "scout-00",
+    sessionId: "ses_scout",
+    seq: 0,
+    parentId: null,
+    ts: "2026-10-10T09:00:04.000Z",
+    type: "user.message",
+    payload: { blocks: [{ kind: "text", text: "List competitors" }], source: "app" },
+  },
+  {
+    id: "scout-01",
+    sessionId: "ses_scout",
+    seq: 1,
+    parentId: "scout-00",
+    ts: "2026-10-10T09:00:04.500Z",
+    botId: "bot_ada",
+    runId: "run_scout",
+    type: "assistant.text",
+    payload: { blocks: [{ kind: "text", text: "Globex and Initech" }] },
+  },
+].map((entry) => SessionEntrySchema.parse(entry));
+
+let container: HTMLDivElement;
+let root: ReturnType<typeof createRoot>;
+
+beforeEach(() => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.stubGlobal("matchMedia", () => ({
+    matches: false,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+  }));
+  api.sessionEntries.mockReset().mockResolvedValue({ entries: helperSession });
+  Element.prototype.scrollTo = () => undefined;
+  container = document.createElement("div");
+  document.body.append(container);
+  root = createRoot(container);
+});
+
+afterEach(() => {
+  act(() => root.unmount());
+  container.remove();
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+  vi.useRealTimers();
+});
+
+async function renderThread(
+  entries: number | readonly SessionEntry[],
+  props: Partial<ComponentProps<typeof Transcript>> = {},
+) {
+  const shown = typeof entries === "number" ? fixture.slice(0, entries + 1) : entries;
+  await act(async () => {
+    root.render(
+      <Transcript
+        scrollRef={createRef<HTMLDivElement>()}
+        followingRef={{ current: true }}
+        artifactTarget={{ botId: "bot_ada" }}
+        inGroup={false}
+        view={projectThreadView(shown, {
+          rendersNothing: (item) =>
+            drawsNothing(item, (blocks) => hasRenderableBlock(blocks, false)),
+        })}
+        olderCursor={null}
+        loadingOlder={false}
+        running={false}
+        queuedRunIds={new Set()}
+        workingBots={[]}
+        onLoadOlder={() => undefined}
+        onOpenBot={() => undefined}
+        onAnswer={async () => undefined}
+        onReply={() => undefined}
+        onEdit={() => undefined}
+        rewindFromItemId={null}
+        onReact={async () => undefined}
+        onJumpToMessage={() => undefined}
+        onOpenPeerMessages={() => undefined}
+        peerBot={() => undefined}
+        onRefresh={async () => undefined}
+        onBotChanged={async () => undefined}
+        onAddRoutine={() => undefined}
+        voiceReady={false}
+        speakingMessageId={null}
+        onSpeak={() => undefined}
+        {...props}
+      />,
+    );
+  });
+}
+
+const text = (selector: string) =>
+  [...document.querySelectorAll(selector)].map((element) => element.textContent);
+
+describe("the transcript", () => {
+  it("draws a reply as its bubble with nothing for the run, the helper's card and a rewind divider", async () => {
+    await renderThread(17);
+
+    expect(
+      [...document.querySelectorAll("[data-message-id]")].map((row) =>
+        row.getAttribute("data-message-id"),
+      ),
+    ).toEqual(["str-00", "str-05", "str-06", "str-08", "str-09", "str-17"]);
+    expect(text('[data-testid="task-card"] span[dir="auto"]')).toEqual(["scout"]);
+    expect(text('[data-testid="thread-divider"]')).toEqual(["Message edited"]);
+    expect(text('[data-testid="message-user-bubble"]')).toEqual([
+      "Find three competitors and summarize Acme's site",
+      "Yes",
+    ]);
+  });
+
+  it("says a run needs input above the card it waits on, and nothing while it runs", async () => {
+    await renderThread(6);
+    expect(text('[data-testid="run-waiting"]')).toEqual([]);
+
+    await renderThread(7);
+    expect(text('[data-testid="run-waiting"]')).toEqual(["Needs input"]);
+    expect(
+      document
+        .querySelector('[data-testid="run-waiting"]')
+        ?.closest('[data-slot="message-row"]')
+        ?.nextElementSibling?.getAttribute("data-message-id"),
+    ).toBe("str-06");
+  });
+
+  it("holds a jump to a reply's parent against the next row, then follows a scroll back down", async () => {
+    const following = { current: true };
+    const scrollRef = createRef<HTMLDivElement>();
+    const snaps = vi.fn();
+    Element.prototype.scrollTo = snaps;
+    await renderThread(9, { scrollRef, followingRef: following });
+    const preview = document.querySelector<HTMLElement>('[data-testid="reply-parent-preview"]');
+    await act(async () => preview?.click());
+    expect(following.current).toBe(false);
+
+    // The smooth scroll has not moved yet when a row lands: the browser reports a step down near the end.
+    const element = scrollRef.current!;
+    Object.defineProperty(element, "scrollHeight", { configurable: true, value: 1000 });
+    Object.defineProperty(element, "clientHeight", { configurable: true, value: 400 });
+    for (const top of [590, 595]) {
+      Object.defineProperty(element, "scrollTop", { configurable: true, value: top });
+      await act(async () => element.dispatchEvent(new Event("scroll")));
+    }
+    snaps.mockClear();
+    await renderThread(11, { scrollRef, followingRef: following });
+
+    expect(following.current).toBe(false);
+    expect(snaps).not.toHaveBeenCalled();
+
+    // Once the hold has passed, scrolling down to the end follows again.
+    const settled = performance.now() + 1501;
+    vi.spyOn(performance, "now").mockReturnValue(settled);
+    for (const top of [596, 600]) {
+      Object.defineProperty(element, "scrollTop", { configurable: true, value: top });
+      await act(async () => element.dispatchEvent(new Event("scroll")));
+    }
+    expect(following.current).toBe(true);
+  });
+
+  it("follows the end again when a jump lands on a row already on the last screen", async () => {
+    vi.useFakeTimers();
+    const following = { current: true };
+    const scrollRef = createRef<HTMLDivElement>();
+    const snaps = vi.fn();
+    Element.prototype.scrollTo = snaps;
+    await renderThread(9, { scrollRef, followingRef: following });
+    const element = scrollRef.current!;
+    Object.defineProperty(element, "scrollHeight", { configurable: true, value: 1000 });
+    Object.defineProperty(element, "clientHeight", { configurable: true, value: 400 });
+    Object.defineProperty(element, "scrollTop", { configurable: true, value: 600 });
+
+    const preview = document.querySelector<HTMLElement>('[data-testid="reply-parent-preview"]');
+    await act(async () => preview?.click());
+    expect(following.current).toBe(false);
+    await act(async () => vi.advanceTimersByTime(1500));
+    snaps.mockClear();
+    await renderThread(11, { scrollRef, followingRef: following });
+
+    expect(following.current).toBe(true);
+    expect(snaps).toHaveBeenCalled();
+  });
+
+  it("offers the jump to latest when rows land below a jump during its hold", async () => {
+    vi.useFakeTimers();
+    const following = { current: true };
+    const scrollRef = createRef<HTMLDivElement>();
+    await renderThread(9, { scrollRef, followingRef: following });
+    const element = scrollRef.current!;
+    Object.defineProperty(element, "clientHeight", { configurable: true, value: 400 });
+    Object.defineProperty(element, "scrollTop", { configurable: true, value: 600 });
+    const preview = document.querySelector<HTMLElement>('[data-testid="reply-parent-preview"]');
+    await act(async () => preview?.click());
+
+    await renderThread(11, { scrollRef, followingRef: following });
+    Object.defineProperty(element, "scrollHeight", { configurable: true, value: 1400 });
+    await act(async () => vi.advanceTimersByTime(1500));
+
+    expect(following.current).toBe(false);
+    expect(
+      document.querySelector('[aria-label="Jump to latest"]')?.getAttribute("aria-hidden"),
+    ).toBe("false");
+  });
+
+  it("draws nothing for an effect that carries no card", async () => {
+    await renderThread([
+      ...fixture.slice(0, 1),
+      ...[
+        {
+          id: "fx-01",
+          seq: 1,
+          type: "effect.requested",
+          payload: { effectId: "eff_1", effectKind: "send_email", proposal: {} },
+        },
+        {
+          id: "fx-02",
+          seq: 2,
+          type: "effect.resolved",
+          payload: { effectId: "eff_1", decision: "approved" },
+        },
+      ].map((entry) =>
+        SessionEntrySchema.parse({
+          ...entry,
+          sessionId: "ses_streamed",
+          parentId: entry.seq === 1 ? "str-00" : "fx-01",
+          ts: "2026-10-10T09:00:01.000Z",
+          botId: "bot_ada",
+        }),
+      ),
+    ]);
+
+    expect(
+      [...document.querySelectorAll("[data-message-id]")].map((row) => row.textContent),
+    ).toEqual(["Find three competitors and summarize Acme's site"]);
+  });
+
+  it("gives an approval card the hover pill a bot message has, replying to the card itself", async () => {
+    const onReply = vi.fn();
+    await renderThread(
+      [
+        ...fixture.slice(0, 2),
+        SessionEntrySchema.parse({
+          id: "fx-02",
+          sessionId: "ses_streamed",
+          seq: 2,
+          parentId: "str-01",
+          ts: "2026-10-10T09:00:02.000Z",
+          botId: "bot_ada",
+          runId: "run_str_1",
+          type: "effect.requested",
+          payload: {
+            effectId: "eff_1",
+            effectKind: "send_email",
+            proposal: {},
+            card: { kind: "ask", text: "Send the summary to Acme?" },
+          },
+        }),
+      ],
+      { onReply },
+    );
+
+    const row = document.querySelector('[data-message-id="fx-02"]');
+    expect(row?.querySelector('[data-testid="message-bubble-frame"]')).not.toBeNull();
+    const pill = row?.querySelector('[data-testid="message-hover-rail"]');
+    expect(
+      [...(pill?.querySelectorAll("button") ?? [])].map((button) =>
+        button.getAttribute("aria-label"),
+      ),
+    ).toEqual(["Reply", "React", "Copy"]);
+    expect(
+      pill?.querySelector('[data-testid="message-hover-time"]')?.getAttribute("datetime"),
+    ).toBe("2026-10-10T09:00:02.000Z");
+
+    await act(async () => pill?.querySelector<HTMLButtonElement>('[aria-label="Reply"]')?.click());
+    expect(onReply.mock.calls.map(([message]) => [message.id, message.blocks])).toEqual([
+      ["fx-02", [{ kind: "ask", text: "Send the summary to Acme?" }]],
+    ]);
+  });
+
+  it("opens a finished helper's own session, read-only", async () => {
+    await renderThread(9);
+
+    const card = document.querySelector<HTMLButtonElement>('[data-testid="task-card"] button');
+    await act(async () => card?.click());
+
+    expect(api.sessionEntries).toHaveBeenCalledWith(
+      { sessionId: "ses_scout" },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    const session = document.querySelector('[data-testid="session-view"]');
+    expect(session?.textContent).toContain("Globex and Initech");
+    expect(session?.querySelector('[data-testid="message-hover-rail"]')).toBeNull();
+  });
+});

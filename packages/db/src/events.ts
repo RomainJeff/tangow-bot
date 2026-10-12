@@ -1,5 +1,5 @@
 import type { RealtimeFanout } from "@rakazo/adapter-kit";
-import type { EntryId, SessionId } from "@rakazo/contracts";
+import type { AskAnswers, EntryId, SessionId } from "@rakazo/contracts";
 import {
   ASK_DISMISSED_ANSWER,
   type AskQuestion,
@@ -35,12 +35,14 @@ import {
   RunHistoryWriteError,
 } from "./messages.js";
 import {
+  appendCardStateInTransaction,
   appendComputerControlInTransaction,
   appendRewindInTransaction,
   appendRunBlocksInTransaction,
   appendRunFinishedInTransaction,
   appendSessionEntryInTransaction,
   historyGeneration,
+  pendingAskEntryId,
 } from "./sessions.js";
 import { withTransactionRetry } from "./transaction-retry.js";
 
@@ -851,6 +853,28 @@ async function planSpawnBotEdit(
 }
 
 /**
+ * The waiting run's card: its own pausing message (the latest bot message of the run), its
+ * pending ask, and the entry the client names it by. Tolerant lookup, and callers rewrite the
+ * stored array by index, so a block this build does not recognise neither hides the pending ask
+ * nor gets dropped from the message.
+ */
+async function pendingAskCard(
+  tx: Prisma.TransactionClient,
+  { threadId, runId }: { threadId: string; runId: string },
+) {
+  const message = await tx.message.findFirst({
+    where: { threadId, runId, role: "bot" },
+    orderBy: { seq: "desc" },
+  });
+  const pending = parseKnownMessageBlocks(message?.blocks).find(
+    ({ block }) => block.kind === "ask" && block.status !== "answered",
+  );
+  if (!message || pending?.block.kind !== "ask") return null;
+  const askEntryId = ((await pendingAskEntryId(tx, runId)) ?? message.id) as EntryId;
+  return { message, pending: { index: pending.index, block: pending.block }, askEntryId };
+}
+
+/**
  * Answer the pending ask of a waiting_input run inside an existing transaction. Called by
  * answerRunInput, and exported so a caller that already holds a transaction can reuse it.
  * Returns null when nothing was awaiting an answer; throws InvalidAnswerError when the run is
@@ -880,6 +904,10 @@ export async function answerRunInputInTransaction(
       botId: run.botId,
       runId: input.runId,
     };
+    const card = await pendingAskCard(tx, input);
+    if (!card) return null;
+    const { message, pending, askEntryId: askId } = card;
+    if (input.messageId !== askId) return null;
     const answerEntry = (text: string) =>
       appendSessionEntryInTransaction(tx, {
         type: "user.message",
@@ -887,23 +915,10 @@ export async function answerRunInputInTransaction(
         feedBotId: run.botId,
         payload: {
           blocks: [{ kind: "text", text }],
-          replyTo: { entryId: input.messageId as EntryId },
-          source: "app",
+          replyTo: { entryId: askId },
+          source: "card",
         },
       });
-    const message = await tx.message.findFirst({
-      where: {
-        id: input.messageId,
-        threadId: input.threadId,
-        runId: input.runId,
-        role: "bot",
-      },
-    });
-    // Tolerant lookup, and the rewrites below map over the stored array by index: a block this
-    // build does not recognise neither hides the pending ask nor gets dropped from the message.
-    const known = parseKnownMessageBlocks(message?.blocks);
-    const pending = known.find(({ block }) => block.kind === "ask" && block.status !== "answered");
-    if (!message || pending?.block.kind !== "ask") return null;
     const pendingAsk = pending.block;
     const storedBlocks = message.blocks as Prisma.InputJsonValue[];
 
@@ -942,10 +957,7 @@ export async function answerRunInputInTransaction(
         { selected?: unknown; other?: unknown; skipped?: unknown } | undefined
       >;
       const lines: string[] = [];
-      const storedAnswers: Record<
-        string,
-        { selected?: string[]; other?: string; skipped?: boolean }
-      > = {};
+      const storedAnswers: AskAnswers = {};
       for (let index = 0; index < questions.length; index += 1) {
         const question = questions[index]!;
         const entry = submitted[question.id] ?? {};
@@ -1006,6 +1018,11 @@ export async function answerRunInputInTransaction(
           : block,
       );
       await tx.message.update({ where: { id: message.id }, data: { blocks: answeredBlocks } });
+      await appendCardStateInTransaction(tx, {
+        type: "card.answered",
+        feedBotId: run.botId,
+        payload: { target: askId, answers: storedAnswers },
+      });
       await answerEntry(lines.join("\n"));
       const updated = await appendEventInTransaction(tx, {
         spaceId: input.spaceId,
@@ -1185,7 +1202,7 @@ export async function answerRunInputInTransaction(
         await appendSessionEntryInTransaction(tx, {
           ...runLog,
           type: "effect.edited",
-          payload: { effectId, proposal: spawnBotEdit.approved },
+          payload: { effectId, proposal: spawnBotEdit.approved, card: answeredAsk },
         });
       }
       await appendSessionEntryInTransaction(tx, {
@@ -1194,10 +1211,16 @@ export async function answerRunInputInTransaction(
         payload: {
           effectId,
           decision: input.answer === "allow" || input.answer === "always" ? "approved" : "denied",
+          answerId: input.answer,
         },
       });
-    } else if (!secretAsk) {
-      await answerEntry(selectedChoice?.label ?? (freeTextAnswer || input.answer));
+    } else {
+      await appendCardStateInTransaction(tx, {
+        type: "card.answered",
+        feedBotId: run.botId,
+        payload: { target: askId, answer: answeredAsk.answer },
+      });
+      if (!secretAsk) await answerEntry(selectedChoice?.label ?? (freeTextAnswer || input.answer));
     }
     if (spawnBotEdit) {
       // Before the message.updated event, so one notify covers both. The audit keeps what the model
@@ -1300,18 +1323,9 @@ export async function resumeAskWithComposerTextInTransaction(
   });
   if (!run) return { resolvable: false };
 
-  // The card is always the run's own pausing message (pauseRunForInput writes the ask blocks
-  // directly onto it), so the latest bot message for this run is the one to inspect.
-  const message = await tx.message.findFirst({
-    where: { threadId: input.threadId, runId: input.runId, role: "bot" },
-    orderBy: { seq: "desc" },
-  });
-  // Tolerant lookup: a block this build does not recognise (older/newer writer) must not hide a
-  // pending ask the client is already rendering as pending — that mismatch is what makes the
-  // caller throw CONFLICT on a card the user can see.
-  const known = parseKnownMessageBlocks(message?.blocks);
-  const pending = known.find(({ block }) => block.kind === "ask" && block.status !== "answered");
-  if (!message || pending?.block.kind !== "ask") return { resolvable: false };
+  const card = await pendingAskCard(tx, input);
+  if (!card) return { resolvable: false };
+  const { message, pending, askEntryId } = card;
   const pendingAsk = pending.block;
 
   // Approval and secret asks stay blocked in PR 1 — classification reuses the same audited
@@ -1350,6 +1364,11 @@ export async function resumeAskWithComposerTextInTransaction(
     index === pending.index ? { ...pendingAsk, status: "answered" as const } : block,
   );
   await tx.message.update({ where: { id: message.id }, data: { blocks } });
+  await appendCardStateInTransaction(tx, {
+    type: "card.answered",
+    feedBotId: run.botId,
+    payload: { target: askEntryId },
+  });
   const updated = await appendEventInTransaction(tx, {
     spaceId: input.spaceId,
     threadId: input.threadId,
@@ -1456,7 +1475,7 @@ export async function dismissProposalWithTextInTransaction(
     sessionId: run.sessionId as SessionId,
     botId: run.botId,
     runId: input.runId,
-    payload: { effectId: effect.id, decision: "denied" },
+    payload: { effectId: effect.id, decision: "denied", dismissed: true },
   });
 
   const blocks = (message.blocks as Prisma.InputJsonValue[]).map((block, index) =>
@@ -1539,6 +1558,7 @@ export async function pauseRunForInput(
           effectId: input.effect.id,
           effectKind: input.effect.kind,
           proposal: input.effect.proposal,
+          card: input.blocks.find((block) => block.kind === "ask"),
         },
       });
     } else {
@@ -2051,6 +2071,30 @@ export async function eventsAfter(
     orderBy: { seq: "asc" },
     ...(limit ? { take: limit } : {}),
   });
+}
+
+/** A feed event's `runId` is only its first entry's, so the payload is matched too. */
+export async function progressSinceLastEntry(
+  prisma: PrismaClient | Prisma.TransactionClient,
+  threadId: string,
+  runIds: readonly string[],
+): Promise<ProductEvent[]> {
+  if (runIds.length === 0) return [];
+  const rows = await prisma.$queryRaw<Parameters<typeof mapProductEvent>[0][]>`
+    WITH cutoff AS (
+      SELECT r.id AS "runId", COALESCE((
+        SELECT max(a.seq) FROM events a
+        WHERE a."threadId" = ${threadId} AND a.type = 'session.entry.appended'
+          AND (a."runId" = r.id
+            OR a.payload -> 'entries' @> jsonb_build_array(jsonb_build_object('runId', r.id)))
+      ), -1) AS seq
+      FROM (SELECT DISTINCT unnest(${[...runIds]}::text[]) AS id) r)
+    SELECT e.id, e."spaceId", e."threadId", e."botId", e.seq, e.type, e.payload, e."runId",
+      e."createdAt"
+    FROM events e JOIN cutoff c ON c."runId" = e."runId"
+    WHERE e."threadId" = ${threadId} AND e.type = 'thread.progress' AND e.seq > c.seq
+    ORDER BY e.seq`;
+  return rows.map(mapProductEvent);
 }
 
 export async function* followThreadEvents(

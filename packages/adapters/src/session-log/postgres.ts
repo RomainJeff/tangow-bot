@@ -1,7 +1,7 @@
 import type { NewSession, SessionEntryDraft, SessionLog } from "@rakazo/adapter-kit";
 import { assertEntryCount, SessionReadError } from "@rakazo/adapter-kit";
 import type { SessionEntry, SessionId } from "@rakazo/contracts";
-import { EntryId } from "@rakazo/contracts";
+import { CARD_STATE_TYPES, EntryId } from "@rakazo/contracts";
 import { compactionFirst } from "@rakazo/core";
 import type { PrismaClient, SessionEntryRow } from "@rakazo/db";
 import {
@@ -40,6 +40,7 @@ export class PostgresSessionLog implements SessionLog<Prisma.TransactionClient> 
   readPage(
     sessionId: SessionId,
     { before, limit }: { before?: EntryId; limit: number },
+    tx: Prisma.TransactionClient = this.prisma,
   ): Promise<SessionEntry[]> {
     assertEntryCount("limit", limit);
     const start =
@@ -48,20 +49,60 @@ export class PostgresSessionLog implements SessionLog<Prisma.TransactionClient> 
         : Prisma.sql`AND e.id = (
             SELECT "parentId" FROM session_entries WHERE id = ${before} AND "sessionId" = ${sessionId}
           )`;
-    return this.walk(sessionId, start, { stopAt: Prisma.sql`-1`, limit });
+    return this.walk(sessionId, start, { stopAt: Prisma.sql`-1`, limit }, tx);
   }
 
-  async readRun(runId: string): Promise<SessionEntry[]> {
+  async readAround(
+    sessionId: SessionId,
+    entryId: EntryId,
+    limit: number,
+    tx: Prisma.TransactionClient = this.prisma,
+  ): Promise<SessionEntry[]> {
+    assertEntryCount("limit", limit);
+    const older = Math.floor(limit / 2);
+    const rows = await tx.$queryRaw<SessionEntryRow[]>`
+      WITH RECURSIVE chain AS (
+        (SELECT e.id, e.seq, e."parentId", 0 AS depth,
+            CASE WHEN e.id = ${entryId} THEN 0 END AS "targetDepth"
+          FROM session_entries e WHERE e."sessionId" = ${sessionId} ${HEAD})
+        UNION ALL
+        SELECT e.id, e.seq, e."parentId", chain.depth + 1,
+          COALESCE(chain."targetDepth", CASE WHEN e.id = ${entryId} THEN chain.depth + 1 END)
+        FROM session_entries e
+        JOIN chain ON e.id = chain."parentId" AND e."sessionId" = ${sessionId} AND e.seq < chain.seq
+        WHERE chain."targetDepth" IS NULL OR chain.depth < chain."targetDepth" + ${older}
+      ),
+      bounds AS (
+        SELECT max("targetDepth") AS target, max(depth) AS oldest FROM chain
+      )
+      SELECT e.* FROM chain
+      JOIN bounds ON bounds.target IS NOT NULL
+      JOIN session_entries e ON e.id = chain.id AND e."sessionId" = ${sessionId}
+      WHERE chain.depth >= bounds.target - (${limit - 1} - (bounds.oldest - bounds.target))
+      ORDER BY e.seq`;
+    return rows.map(sessionEntryFromRow);
+  }
+
+  async readRun(runId: string, { limit }: { limit?: number } = {}): Promise<SessionEntry[]> {
+    if (limit !== undefined) assertEntryCount("limit", limit);
+    const newest = limit === undefined ? Prisma.empty : Prisma.sql`LIMIT ${limit}`;
     const rows = await this.prisma.$queryRaw<SessionEntryRow[]>`
       WITH run AS (SELECT * FROM session_entries WHERE "runId" = ${runId})
-      SELECT * FROM run
-      UNION ALL
-      SELECT answer.* FROM run ask
-      JOIN session_entries answer ON answer."sessionId" = ask."sessionId"
-        AND answer.type = 'user.message' AND answer.seq > ask.seq
-        AND answer.payload -> 'replyTo' ->> 'entryId' = ask.id
-      WHERE ask.type IN ('assistant.ask', 'assistant.choice')
-      ORDER BY "createdAt", seq`;
+      SELECT * FROM (
+        SELECT * FROM run
+        UNION ALL
+        SELECT answer.* FROM run ask
+        JOIN session_entries answer ON answer."sessionId" = ask."sessionId"
+          AND answer.type = 'user.message' AND answer.seq > ask.seq
+          AND answer.payload -> 'replyTo' ->> 'entryId' = ask.id
+        WHERE ask.type IN ('assistant.ask', 'assistant.choice')
+        UNION ALL
+        SELECT state.* FROM (SELECT "sessionId", min(seq) AS seq FROM run GROUP BY "sessionId") start
+        JOIN session_entries state ON state."sessionId" = start."sessionId" AND state.seq > start.seq
+        WHERE state.type IN (${Prisma.join(CARD_STATE_TYPES)})
+          AND state.payload ->> 'target' IN (SELECT id FROM run)
+        ORDER BY "createdAt" DESC, seq DESC ${newest}
+      ) entries ORDER BY "createdAt", seq`;
     return rows.map(sessionEntryFromRow);
   }
 
@@ -79,9 +120,10 @@ export class PostgresSessionLog implements SessionLog<Prisma.TransactionClient> 
     sessionId: SessionId,
     start: Prisma.Sql,
     { stopAt, limit }: { stopAt: Prisma.Sql; limit?: number },
+    tx: Prisma.TransactionClient = this.prisma,
   ): Promise<SessionEntry[]> {
     const underLimit = limit === undefined ? Prisma.empty : Prisma.sql`AND chain.depth < ${limit}`;
-    const rows = await this.prisma.$queryRaw<Array<SessionEntryRow & { missingParent: boolean }>>`
+    const rows = await tx.$queryRaw<Array<SessionEntryRow & { missingParent: boolean }>>`
       WITH RECURSIVE chain AS (
         (SELECT e.*, 1 AS depth, ${stopAt} AS "stopAt"
           FROM session_entries e WHERE e."sessionId" = ${sessionId} ${start})

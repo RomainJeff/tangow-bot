@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import type { MessageBlock, ThreadMessage } from "@rakazo/contracts";
+import type { MessageBlock } from "@rakazo/contracts";
 import type { ReactNode } from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
@@ -28,21 +28,21 @@ vi.mock("../../lib/rpc", () => ({
 }));
 
 import { copyableMessageText } from "../../lib/message-text";
+import type { MessageItem } from "../../lib/thread-items";
 import { MessageHoverActions, UserMessageActions } from "./message-hover-actions";
 import { MessageView } from "./message-view";
 
 const URL_A = "https://example.com/article";
 
-function message(role: "user" | "bot", blocks: unknown[]): ThreadMessage {
+function message(role: "user" | "bot", blocks: unknown[]): MessageItem {
   return {
+    kind: "message",
     id: "m1",
-    threadId: "t1",
-    seq: 1,
+    ts: "2026-10-05T10:00:00.000Z",
     role,
     blocks: blocks as MessageBlock[],
-    createdAt: "2026-10-05T10:00:00.000Z",
-    ...(role === "bot" ? { botId: "bot1" } : {}),
-  } as ThreadMessage;
+    ...(role === "bot" ? { botId: "bot1" } : { source: "app" }),
+  } as MessageItem;
 }
 
 const text = (value: string) => ({ kind: "text", text: value });
@@ -74,18 +74,16 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-async function renderMessage(msg: ThreadMessage, extra: { replyToMessageId?: string } = {}) {
+async function renderMessage(msg: MessageItem, extra: { replyToMessageId?: string } = {}) {
   await act(async () => {
     root.render(
       <MessageView
         artifactTarget={{ botId: "bot1" }}
         chrome="row"
-        canAnswer={false}
         message={msg}
         inGroup={false}
         showAuthor={false}
         showAvatar={false}
-        onAnswer={async () => undefined}
         onOpenBot={() => undefined}
         onOpenPeerMessages={() => undefined}
         peerBot={() => undefined}
@@ -326,6 +324,7 @@ describe("Remove preview action", () => {
     voiceReady: false,
     speaking: false,
     onSpeak: () => undefined,
+    previewMessageId: "m1",
   };
   const removeButton = () =>
     container.querySelector<HTMLButtonElement>('button[aria-label="Remove preview"]');
@@ -371,6 +370,7 @@ describe("Remove preview action", () => {
       root.render(
         <UserMessageActions
           message={message("user", [text(`hi ${URL_A}`), card()])}
+          previewMessageId="m1"
           onEdit={() => undefined}
         />,
       ),
@@ -392,6 +392,7 @@ describe("Remove preview action", () => {
       root.render(
         <UserMessageActions
           message={message("user", [text(`hi ${URL_A}`), card()])}
+          previewMessageId="m1"
           onEdit={() => undefined}
         />,
       ),

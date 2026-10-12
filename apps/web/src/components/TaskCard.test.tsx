@@ -17,7 +17,13 @@ import { TaskCard } from "./TaskCard";
 describe("TaskCard", () => {
   it("shows no status word for a finished task", () => {
     const html = renderToStaticMarkup(
-      <TaskCard title="Status check" state="done" meta="Check the calendar" body="**ok**" />,
+      <TaskCard
+        title="Status check"
+        state="done"
+        meta="Check the calendar"
+        body="**ok**"
+        onOpen={() => undefined}
+      />,
     );
 
     expect(html).toContain("Status check");
@@ -25,8 +31,7 @@ describe("TaskCard", () => {
     expect(html).not.toContain("Running");
     expect(html).not.toContain("Failed");
     expect(html).not.toContain("Cancelled");
-    // Whole card opens the brief and the result whole.
-    expect(html).toContain("<button");
+    expect(html).toContain('aria-haspopup="dialog"');
   });
 
   it("shows the running word, shimmered, under the title", () => {
@@ -53,9 +58,12 @@ describe("TaskCard", () => {
     expect(html).toContain("Cancelled");
   });
 
-  it("is not interactive when it carries neither a brief nor a result", () => {
-    const html = renderToStaticMarkup(<TaskCard title="Status check" state="done" />);
+  it("is not interactive while it has no session to open", () => {
+    const html = renderToStaticMarkup(
+      <TaskCard title="Status check" state="running" meta="Check the calendar" body="Working" />,
+    );
 
+    expect(html).toContain("Check the calendar");
     expect(html).not.toContain("<button");
   });
 
@@ -76,6 +84,7 @@ describe("TaskCard", () => {
         state="failed"
         meta="Check the calendar"
         body="See [the doc](https://example.com)"
+        onOpen={() => undefined}
       />,
     );
 

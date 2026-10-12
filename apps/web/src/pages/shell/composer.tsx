@@ -1,7 +1,7 @@
 import { i18n } from "@lingui/core";
 import { t } from "@lingui/core/macro";
 import { useLingui } from "@lingui/react/macro";
-import type { AgentSkillCatalogEntry, LinkPreviewDraft, ThreadMessage } from "@rakazo/contracts";
+import type { AgentSkillCatalogEntry, LinkPreviewDraft } from "@rakazo/contracts";
 import { ATTACHMENT_ALLOWED_MIME_TYPES } from "@rakazo/contracts";
 import type { ComposerMention, ComposerPageHead, SlashActionId } from "@rakazo/core";
 import {
@@ -41,6 +41,7 @@ import {
 import { desktopBridge, readPageHeadOnDesktop } from "../../lib/desktop.js";
 import { dictation, webSpeechAvailable } from "../../lib/dictation.js";
 import { isFileDrag, isFilePaste } from "../../lib/pending-attachments";
+import type { MessageItem } from "../../lib/thread-items";
 import type { PendingAttachment } from "./layout";
 import { FALLBACK_BOT_COLOR } from "./layout";
 import { previewMessageText } from "./message-view";
@@ -114,10 +115,10 @@ export const Composer = memo(function Composer({
    * engine used when Web Speech isn't available (Electron, most non-Chrome
    * browsers). */
   dictationTranscribe?: boolean;
-  replyTarget?: ThreadMessage | null;
+  replyTarget?: MessageItem | null;
   replyTargetName?: string;
   onClearReply?: () => void;
-  rewindTarget?: ThreadMessage | null;
+  rewindTarget?: MessageItem | null;
   rewindDraft?: { key: string; text: string; linkPreviewRemoved?: boolean } | null;
   rewindRemovedCount?: number;
   rewindArtifacts?: { id: string; name: string }[];
@@ -217,7 +218,7 @@ export const Composer = memo(function Composer({
   // state only distinguishes an empty field from one that can send.
   const composerState: ComposerState = isDictating ? "dictating" : canSend ? "typing" : "idle";
   const rewindTime = rewindTarget
-    ? new Date(rewindTarget.createdAt).toLocaleTimeString(i18n.locale || "en", {
+    ? new Date(rewindTarget.ts).toLocaleTimeString(i18n.locale || "en", {
         hour: "numeric",
         minute: "2-digit",
       })

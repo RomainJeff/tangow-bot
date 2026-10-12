@@ -1,11 +1,13 @@
 import type { SandboxProvider } from "@rakazo/adapter-kit";
-import type { Actor } from "@rakazo/contracts";
+import type { Actor, SessionEntry } from "@rakazo/contracts";
+import { SessionEntrySchema, SessionId } from "@rakazo/contracts";
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
-import { conversationRunFilter } from "@rakazo/db";
+import { conversationRunFilter, IsolationError, threadOfSession } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
 import {
   cancelSupersededQueuedRuns,
   reactToThreadMessage,
+  readSessionEntries,
   sendThreadMessage,
   stopThreadRuns,
   type ThreadTarget,
@@ -157,7 +159,7 @@ describe("reaction messages", () => {
 });
 
 describe("threadSnapshot", () => {
-  it("reloads tool-only live messages for an active run", async () => {
+  it("serves the chain's tail and the open run's progress since its last entry from one commit", async () => {
     const run = {
       id: "run-1",
       botId: "bot-1",
@@ -172,29 +174,36 @@ describe("threadSnapshot", () => {
       completedAt: null,
       createdAt: new Date("2026-08-23T00:00:00.000Z"),
     };
-    const findManyEvents = vi.fn().mockResolvedValue([
-      {
-        id: "event-1",
-        threadId: "thread-1",
-        botId: "bot-1",
-        seq: 4,
-        type: "agent.tool.called",
-        runId: "run-1",
-        payload: { name: "SLACK_FIND_CHANNELS" },
-        createdAt: new Date("2026-08-23T00:00:00.000Z"),
-      },
-    ]);
+    const at = new Date("2026-08-23T00:00:02.000Z");
     const tx = {
-      $queryRaw: vi.fn().mockResolvedValue([{ id: "thread-1" }]),
-      message: { findMany: vi.fn().mockResolvedValue([]) },
-      event: {
-        findFirst: vi.fn().mockResolvedValue({ seq: 4 }),
-        findMany: findManyEvents,
-      },
+      $queryRaw: vi
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          {
+            id: "event-5",
+            spaceId: "space-1",
+            threadId: "thread-1",
+            botId: "bot-1",
+            seq: 5,
+            type: "thread.progress",
+            payload: { text: "Looking it up" },
+            runId: "run-1",
+            createdAt: at,
+          },
+        ]),
+      thread: { findUniqueOrThrow: vi.fn().mockResolvedValue({ sessionId: "session-1" }) },
+      event: { findFirst: vi.fn().mockResolvedValue({ seq: 5 }) },
       run: { findFirst: botRunFindFirst([run]) },
     };
+    let committed = false;
     const prisma = {
-      $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
+      $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => {
+        const result = await callback(tx);
+        committed = true;
+        return result;
+      }),
+      run: { findMany: vi.fn(async () => []) },
     } as unknown as PrismaClient;
     const target = {
       kind: "bot",
@@ -202,31 +211,65 @@ describe("threadSnapshot", () => {
       threadId: "thread-1",
       bot: { computer: null },
     } as ThreadTarget;
+    const question = SessionEntrySchema.parse({
+      id: "entry-7",
+      sessionId: "session-1",
+      seq: 7,
+      parentId: "entry-6",
+      ts: "2026-08-23T00:00:00.000Z",
+      type: "user.message",
+      payload: { blocks: [{ kind: "text", text: "Find the invoice" }], source: "app" },
+    });
+    const landedAfterCommit = SessionEntrySchema.parse({
+      id: "entry-8",
+      sessionId: "session-1",
+      seq: 8,
+      parentId: "entry-7",
+      ts: "2026-08-23T00:00:03.000Z",
+      botId: "bot-1",
+      runId: "run-1",
+      type: "assistant.text",
+      payload: { blocks: [{ kind: "text", text: "Looking it up" }] },
+    });
+    const sessionLog = {
+      readPage: vi.fn(async () => (committed ? [question, landedAfterCommit] : [question])),
+      readAround: vi.fn(async () => []),
+    };
 
-    const snapshot = await threadSnapshot({ prisma }, target);
+    const snapshot = await threadSnapshot({ prisma, sessionLog }, target);
 
-    expect(tx.$queryRaw).toHaveBeenCalledOnce();
-    expect(findManyEvents).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          type: {
-            in: ["thread.progress", "thread.subagent", "agent.tool.called", "agent.tool.completed"],
-          },
-        }),
-      }),
-    );
-    expect(snapshot.messages).toEqual([
-      expect.objectContaining({
-        id: "progress:run-1",
-        botId: "bot-1",
-        blocks: [
-          {
-            kind: "steps",
-            steps: [{ label: "Slack find channels", count: 1 }],
-          },
-        ],
-      }),
-    ]);
+    expect({
+      cursor: snapshot.cursor,
+      entries: snapshot.entries,
+      olderCursor: snapshot.olderCursor,
+      progress: snapshot.progress,
+    }).toEqual({
+      cursor: 5,
+      entries: [
+        {
+          id: "entry-7",
+          seq: 7,
+          parentId: "entry-6",
+          ts: "2026-08-23T00:00:00.000Z",
+          type: "user.message",
+          payload: { blocks: [{ kind: "text", text: "Find the invoice" }], source: "app" },
+        },
+      ],
+      olderCursor: "entry-7",
+      progress: [
+        {
+          id: "event-5",
+          spaceId: "space-1",
+          threadId: "thread-1",
+          botId: "bot-1",
+          seq: 5,
+          type: "thread.progress",
+          runId: "run-1",
+          createdAt: "2026-08-23T00:00:02.000Z",
+          payload: { text: "Looking it up" },
+        },
+      ],
+    });
   });
 
   it("returns the latest failed run so the client can show its error", async () => {
@@ -244,14 +287,12 @@ describe("threadSnapshot", () => {
       completedAt: new Date("2026-08-23T00:00:01.000Z"),
       createdAt: new Date("2026-08-23T00:00:00.000Z"),
     };
-    const findManyEvents = vi.fn();
     const findFirstRun = botRunFindFirst([run]);
     const tx = {
-      $queryRaw: vi.fn().mockResolvedValue([{ id: "thread-1" }]),
-      message: { findMany: vi.fn().mockResolvedValue([]) },
+      $queryRaw: vi.fn().mockResolvedValue([]),
+      thread: { findUniqueOrThrow: vi.fn().mockResolvedValue({ sessionId: "session-1" }) },
       event: {
         findFirst: vi.fn().mockResolvedValue(null),
-        findMany: findManyEvents,
       },
       run: { findFirst: findFirstRun },
     };
@@ -265,7 +306,7 @@ describe("threadSnapshot", () => {
       bot: { computer: null },
     } as ThreadTarget;
 
-    const snapshot = await threadSnapshot({ prisma }, target);
+    const snapshot = await threadSnapshot({ prisma, sessionLog: tailOf([]) }, target);
 
     expect(findFirstRun).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -299,7 +340,6 @@ describe("threadSnapshot", () => {
         error: "Provider is not configured: openrouter",
       }),
     );
-    expect(findManyEvents).not.toHaveBeenCalled();
   });
 
   it("prefers a waiting peer ask over a concurrent user run", async () => {
@@ -333,11 +373,12 @@ describe("threadSnapshot", () => {
     };
     const snapshot = await threadSnapshot(
       {
+        sessionLog: tailOf([]),
         prisma: {
           $transaction: vi.fn(async (callback: (client: unknown) => unknown) =>
             callback({
-              $queryRaw: vi.fn().mockResolvedValue([{ id: "thread-1" }]),
-              message: { findMany: vi.fn().mockResolvedValue([]) },
+              $queryRaw: vi.fn().mockResolvedValue([]),
+              thread: { findUniqueOrThrow: vi.fn().mockResolvedValue({ sessionId: "session-1" }) },
               event: {
                 findFirst: vi.fn().mockResolvedValue(null),
                 findMany: vi.fn().mockResolvedValue([]),
@@ -391,8 +432,8 @@ describe("threadSnapshot", () => {
     };
     const findFirstRun = botRunFindFirst([failed, completed]);
     const tx = {
-      $queryRaw: vi.fn().mockResolvedValue([{ id: "thread-1" }]),
-      message: { findMany: vi.fn().mockResolvedValue([]) },
+      $queryRaw: vi.fn().mockResolvedValue([]),
+      thread: { findUniqueOrThrow: vi.fn().mockResolvedValue({ sessionId: "session-1" }) },
       event: {
         findFirst: vi.fn().mockResolvedValue(null),
         findMany: vi.fn(),
@@ -409,7 +450,7 @@ describe("threadSnapshot", () => {
       bot: { computer: null },
     } as ThreadTarget;
 
-    const snapshot = await threadSnapshot({ prisma }, target);
+    const snapshot = await threadSnapshot({ prisma, sessionLog: tailOf([]) }, target);
 
     expect(findFirstRun).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -438,13 +479,11 @@ describe("threadSnapshot", () => {
       completedAt: null,
       createdAt: new Date("2026-08-23T00:00:05.000Z"),
     };
-    const findManyEvents = vi.fn();
     const tx = {
-      $queryRaw: vi.fn().mockResolvedValue([{ id: "thread-1" }]),
-      message: { findMany: vi.fn().mockResolvedValue([]) },
+      $queryRaw: vi.fn().mockResolvedValue([peerProgress("run-peer-running")]),
+      thread: { findUniqueOrThrow: vi.fn().mockResolvedValue({ sessionId: "session-1" }) },
       event: {
         findFirst: vi.fn().mockResolvedValue(null),
-        findMany: findManyEvents,
       },
       run: { findFirst: botRunFindFirst([peerRunning]) },
     };
@@ -458,14 +497,14 @@ describe("threadSnapshot", () => {
       bot: { computer: null },
     } as ThreadTarget;
 
-    const snapshot = await threadSnapshot({ prisma }, target);
+    const snapshot = await threadSnapshot({ prisma, sessionLog: tailOf([]) }, target);
 
     // The bot really is working, so the chat must say so...
     expect(snapshot.run).toEqual(
       expect.objectContaining({ id: "run-peer-running", status: "running" }),
     );
     // ...without replaying what it is doing for the other bot.
-    expect(findManyEvents).not.toHaveBeenCalled();
+    expect(snapshot.progress).toEqual([]);
   });
 
   it("hides a failed peer run from the bot thread", async () => {
@@ -484,8 +523,8 @@ describe("threadSnapshot", () => {
       createdAt: new Date("2026-08-23T00:00:01.000Z"),
     };
     const tx = {
-      $queryRaw: vi.fn().mockResolvedValue([{ id: "thread-1" }]),
-      message: { findMany: vi.fn().mockResolvedValue([]) },
+      $queryRaw: vi.fn().mockResolvedValue([]),
+      thread: { findUniqueOrThrow: vi.fn().mockResolvedValue({ sessionId: "session-1" }) },
       event: {
         findFirst: vi.fn().mockResolvedValue(null),
         findMany: vi.fn(),
@@ -502,20 +541,18 @@ describe("threadSnapshot", () => {
       bot: { computer: null },
     } as ThreadTarget;
 
-    const snapshot = await threadSnapshot({ prisma }, target);
+    const snapshot = await threadSnapshot({ prisma, sessionLog: tailOf([]) }, target);
 
     expect(snapshot.run).toBeNull();
   });
 
   it("does not return a cancelled or completed run", async () => {
-    const findManyEvents = vi.fn();
     const findFirstRun = botRunFindFirst([]);
     const tx = {
-      $queryRaw: vi.fn().mockResolvedValue([{ id: "thread-1" }]),
-      message: { findMany: vi.fn().mockResolvedValue([]) },
+      $queryRaw: vi.fn().mockResolvedValue([]),
+      thread: { findUniqueOrThrow: vi.fn().mockResolvedValue({ sessionId: "session-1" }) },
       event: {
         findFirst: vi.fn().mockResolvedValue(null),
-        findMany: findManyEvents,
       },
       run: { findFirst: findFirstRun },
     };
@@ -529,7 +566,7 @@ describe("threadSnapshot", () => {
       bot: { computer: null },
     } as ThreadTarget;
 
-    const snapshot = await threadSnapshot({ prisma }, target);
+    const snapshot = await threadSnapshot({ prisma, sessionLog: tailOf([]) }, target);
 
     expect(findFirstRun).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -546,7 +583,6 @@ describe("threadSnapshot", () => {
       }),
     );
     expect(snapshot.run).toBeNull();
-    expect(findManyEvents).not.toHaveBeenCalled();
   });
   it("returns a group's latest failed run so a refresh keeps its error", async () => {
     const run = {
@@ -564,7 +600,10 @@ describe("threadSnapshot", () => {
       createdAt: new Date("2026-08-23T00:00:00.000Z"),
     };
     const findManyRuns = groupRunFindMany({ terminals: [run] });
-    const snapshot = await threadSnapshot({ prisma: groupPrisma(findManyRuns) }, groupTarget());
+    const snapshot = await threadSnapshot(
+      { sessionLog: tailOf([]), prisma: groupPrisma(findManyRuns) },
+      groupTarget(),
+    );
 
     expect(findManyRuns).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -626,7 +665,10 @@ describe("threadSnapshot", () => {
       active: [peerActive],
       terminals: [peerFailed],
     });
-    const snapshot = await threadSnapshot({ prisma: groupPrisma(findManyRuns) }, groupTarget());
+    const snapshot = await threadSnapshot(
+      { sessionLog: tailOf([]), prisma: groupPrisma(findManyRuns) },
+      groupTarget(),
+    );
 
     // The chat must look busy while a peer waits on this bot...
     expect(snapshot.activeRuns).toEqual([
@@ -667,13 +709,11 @@ describe("threadSnapshot", () => {
       createdAt: new Date("2026-08-23T00:00:05.000Z"),
     };
     const peerRunning = { ...peerAsking, id: "run-peer-running", status: "running" };
-    const findManyEvents = vi.fn().mockResolvedValue([]);
+    const queryRaw = vi.fn().mockResolvedValue([peerProgress("run-peer-running")]);
     const snapshot = await threadSnapshot(
       {
-        prisma: groupPrisma(
-          groupRunFindMany({ active: [peerAsking, peerRunning] }),
-          findManyEvents,
-        ),
+        sessionLog: tailOf([]),
+        prisma: groupPrisma(groupRunFindMany({ active: [peerAsking, peerRunning] }), queryRaw),
       },
       groupTarget(),
     );
@@ -685,7 +725,39 @@ describe("threadSnapshot", () => {
       "run-peer-running",
     ]);
     // ...but no peer narration may be streamed into the transcript.
-    expect(findManyEvents).not.toHaveBeenCalled();
+    expect(snapshot.progress).toEqual([]);
+  });
+
+  it("leaves a hidden peer run's steps out of the snapshot's page", async () => {
+    const step = (seq: number, type: string, payload: object, envelope: object = {}) =>
+      SessionEntrySchema.parse({
+        id: `entry-${seq}`,
+        sessionId: "session-1",
+        seq,
+        parentId: seq === 0 ? null : `entry-${seq - 1}`,
+        ts: new Date(Date.UTC(2026, 9, 11, 9, 0, seq)).toISOString(),
+        type,
+        payload,
+        ...envelope,
+      });
+    const peer = { botId: "bot-scout", runId: "run-peer" };
+    const page = [
+      step(0, "user.message", { blocks: [{ kind: "text", text: "Ask Scout" }], source: "app" }),
+      step(1, "tool.call", { callId: "call-1", name: "search", input: "{}" }, peer),
+      step(2, "assistant.ask", { block: { kind: "ask", text: "Which market?" } }, peer),
+    ];
+    const prisma = {
+      ...groupPrisma(groupRunFindMany({})),
+      run: {
+        findMany: vi.fn(async () => [
+          { id: "run-peer", bot: { parentBotId: "bot-chief" }, sourceMessage: null },
+        ]),
+      },
+    } as unknown as PrismaClient;
+
+    const snapshot = await threadSnapshot({ sessionLog: tailOf(page), prisma }, groupTarget());
+
+    expect(snapshot.entries.map((entry) => entry.id)).toEqual(["entry-0", "entry-2"]);
   });
 
   it("includes waiting peer bot_message runs in group activeRuns", async () => {
@@ -704,7 +776,10 @@ describe("threadSnapshot", () => {
       createdAt: new Date("2026-08-23T00:00:05.000Z"),
     };
     const findManyRuns = groupRunFindMany({ active: [peerWaiting] });
-    const snapshot = await threadSnapshot({ prisma: groupPrisma(findManyRuns) }, groupTarget());
+    const snapshot = await threadSnapshot(
+      { sessionLog: tailOf([]), prisma: groupPrisma(findManyRuns) },
+      groupTarget(),
+    );
 
     expect(snapshot.activeRuns).toEqual([
       expect.objectContaining({ id: "run-peer-waiting", status: "waiting_input" }),
@@ -743,7 +818,10 @@ describe("threadSnapshot", () => {
       createdAt: new Date("2026-08-23T00:00:05.000Z"),
     };
     const findManyRuns = groupRunFindMany({ active: [newerBusy, olderWaiting] });
-    const snapshot = await threadSnapshot({ prisma: groupPrisma(findManyRuns) }, groupTarget());
+    const snapshot = await threadSnapshot(
+      { sessionLog: tailOf([]), prisma: groupPrisma(findManyRuns) },
+      groupTarget(),
+    );
 
     expect(snapshot.run).toEqual(expect.objectContaining({ id: "run-older-waiting" }));
     // activeRuns is unaffected by which one is chosen as primary.
@@ -783,7 +861,10 @@ describe("threadSnapshot", () => {
       createdAt: new Date("2026-08-23T00:00:02.000Z"),
     };
     const snapshot = await threadSnapshot(
-      { prisma: groupPrisma(groupRunFindMany({ terminals: [completed, failed] })) },
+      {
+        sessionLog: tailOf([]),
+        prisma: groupPrisma(groupRunFindMany({ terminals: [completed, failed] })),
+      },
       groupTarget(),
     );
 
@@ -821,7 +902,10 @@ describe("threadSnapshot", () => {
       createdAt: new Date("2026-08-23T00:00:03.000Z"),
     };
     const snapshot = await threadSnapshot(
-      { prisma: groupPrisma(groupRunFindMany({ terminals: [cancelled, failed] })) },
+      {
+        sessionLog: tailOf([]),
+        prisma: groupPrisma(groupRunFindMany({ terminals: [cancelled, failed] })),
+      },
       groupTarget(),
     );
 
@@ -858,7 +942,10 @@ describe("threadSnapshot", () => {
       createdAt: new Date("2026-08-23T00:00:02.000Z"),
     };
     const snapshot = await threadSnapshot(
-      { prisma: groupPrisma(groupRunFindMany({ terminals: [failed, completed] })) },
+      {
+        sessionLog: tailOf([]),
+        prisma: groupPrisma(groupRunFindMany({ terminals: [failed, completed] })),
+      },
       groupTarget(),
     );
 
@@ -882,7 +969,7 @@ describe("threadSnapshot", () => {
       createdAt: new Date("2026-08-23T00:00:00.000Z"),
     };
     const snapshot = await threadSnapshot(
-      { prisma: groupPrisma(groupRunFindMany({ terminals: [run] })) },
+      { sessionLog: tailOf([]), prisma: groupPrisma(groupRunFindMany({ terminals: [run] })) },
       groupTarget(),
     );
 
@@ -925,7 +1012,10 @@ describe("threadSnapshot", () => {
       createdAt: new Date("2026-08-23T00:00:01.000Z"),
     };
     const snapshot = await threadSnapshot(
-      { prisma: groupPrisma(groupRunFindMany({ active: [active], terminals: [failed] })) },
+      {
+        sessionLog: tailOf([]),
+        prisma: groupPrisma(groupRunFindMany({ active: [active], terminals: [failed] })),
+      },
       groupTarget(),
     );
 
@@ -968,6 +1058,7 @@ describe("threadSnapshot", () => {
     };
     const snapshot = await threadSnapshot(
       {
+        sessionLog: tailOf([]),
         prisma: groupPrisma(groupRunFindMany({ active: [lateActive], terminals: [failed] })),
       },
       groupTarget(),
@@ -1041,20 +1132,41 @@ function groupRunFindMany(input: { active?: unknown[]; terminals?: unknown[] }) 
 
 function groupPrisma(
   findManyRuns: ReturnType<typeof groupRunFindMany>,
-  findManyEvents = vi.fn().mockResolvedValue([]),
+  queryRaw = vi.fn().mockResolvedValue([]),
 ) {
   const tx = {
-    $queryRaw: vi.fn().mockResolvedValue([{ id: "thread-1" }]),
-    message: { findMany: vi.fn().mockResolvedValue([]) },
+    $queryRaw: queryRaw,
+    thread: { findUniqueOrThrow: vi.fn().mockResolvedValue({ sessionId: "session-1" }) },
     event: {
       findFirst: vi.fn().mockResolvedValue(null),
-      findMany: findManyEvents,
     },
     run: { findMany: findManyRuns },
   };
   return {
     $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
   } as unknown as PrismaClient;
+}
+
+/** A progress row the replay query would return if it were asked about this run. */
+function peerProgress(runId: string) {
+  return {
+    id: `event-${runId}`,
+    spaceId: "space-1",
+    threadId: "thread-1",
+    botId: "bot-1",
+    seq: 6,
+    type: "thread.progress",
+    payload: { text: "Working for the other bot" },
+    runId,
+    createdAt: new Date("2026-08-23T00:00:06.000Z"),
+  };
+}
+
+function tailOf(entries: SessionEntry[]) {
+  return {
+    readPage: vi.fn(async (_sessionId: string, _page: { limit: number }) => entries),
+    readAround: vi.fn(async () => []),
+  };
 }
 
 function groupTarget() {
@@ -1066,6 +1178,92 @@ function groupTarget() {
     threadId: "thread-1",
   } as unknown as ThreadTarget;
 }
+
+describe("readSessionEntries", () => {
+  const actor = {
+    userId: "user-1",
+    spaceId: "space-1",
+    email: "user@rakazo.test",
+    isDeploymentOwner: false,
+  } satisfies Actor;
+  const at = (second: number) => new Date(Date.UTC(2026, 9, 11, 9, 0, second)).toISOString();
+  const helperStep = (seq: number) =>
+    SessionEntrySchema.parse({
+      id: `entry-helper-${seq}`,
+      sessionId: "session-helper",
+      seq,
+      parentId: seq === 0 ? null : `entry-helper-${seq - 1}`,
+      ts: at(seq % 60),
+      botId: "bot-1",
+      runId: "run-helper",
+      type: "tool.call",
+      payload: { callId: `call-${seq}`, name: "search", input: "{}" },
+    });
+  const raisedAsk = SessionEntrySchema.parse({
+    id: "entry-ask",
+    sessionId: "session-main",
+    seq: 40,
+    parentId: "entry-39",
+    ts: at(1),
+    botId: "bot-1",
+    runId: "run-helper",
+    type: "assistant.ask",
+    payload: { block: { kind: "ask", text: "Which market?" }, originSessionId: "session-helper" },
+  });
+
+  function reader(threadId: string | null, ownBot: boolean, run: SessionEntry[]) {
+    vi.mocked(threadOfSession).mockResolvedValueOnce(threadId);
+    const prisma = {
+      thread: { findUnique: vi.fn(async () => ({ botId: "bot-1", groupId: null })) },
+      bot: {
+        findFirst: vi.fn(async () =>
+          ownBot ? { id: "bot-1", thread: { id: "thread-1" }, computer: null } : null,
+        ),
+      },
+      run: { findFirst: vi.fn(async () => ({ id: "run-helper" })) },
+    } as unknown as PrismaClient;
+    const sessionLog = {
+      readRun: vi.fn(async (runId: string, { limit }: { limit?: number } = {}) =>
+        runId !== "run-helper" ? [] : limit === undefined ? run : run.slice(-limit),
+      ),
+    };
+    return { deps: { prisma, sessionLog }, sessionLog };
+  }
+
+  it("reads a child session as its run, joined with what rose to the thread, and refuses any other", async () => {
+    const helper = SessionId.parse("session-helper");
+    const joined = [helperStep(0), raisedAsk, helperStep(2)];
+    const opened = reader("thread-1", true, joined);
+    const foreignThread = reader("thread-1", false, joined);
+    const outsideSpace = reader(null, true, joined);
+
+    const read = await readSessionEntries(opened.deps, actor, helper);
+
+    expect(read).toEqual({ entries: joined });
+    await expect(readSessionEntries(foreignThread.deps, actor, helper)).rejects.toThrow(
+      IsolationError,
+    );
+    await expect(readSessionEntries(outsideSpace.deps, actor, helper)).rejects.toThrow(
+      IsolationError,
+    );
+    expect(foreignThread.sessionLog.readRun).not.toHaveBeenCalled();
+    expect(outsideSpace.sessionLog.readRun).not.toHaveBeenCalled();
+  });
+
+  it("keeps the newest thousand entries of a longer session and says it cut the oldest", async () => {
+    const long = Array.from({ length: 1001 }, (_, seq) => helperStep(seq));
+    const { deps } = reader("thread-1", true, long);
+
+    const read = await readSessionEntries(deps, actor, SessionId.parse("session-helper"));
+
+    expect([read.entries.length, read.entries[0]?.id, read.entries.at(-1)?.id]).toEqual([
+      1000,
+      "entry-helper-1",
+      "entry-helper-1000",
+    ]);
+    expect(read.truncated).toBe(true);
+  });
+});
 
 describe("sendThreadMessage", () => {
   it("rejects a new bot message while a run is waiting on an approval ask", async () => {

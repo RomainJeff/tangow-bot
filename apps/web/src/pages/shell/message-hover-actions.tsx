@@ -1,10 +1,12 @@
 import { useLingui } from "@lingui/react/macro";
-import type { MessageReaction, ThreadMessage } from "@rakazo/contracts";
+import type { MessageReaction } from "@rakazo/contracts";
 import { canReactToThreadMessage, MESSAGE_REACTIONS } from "@rakazo/contracts";
 import { HoverPill, Popover, PopoverContent, PopoverTrigger } from "@rakazo/ui-web";
 import { Copy, Link2Off, Pencil, Reply, Smile, Square, Volume2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useState } from "react";
+import type { MessageItem } from "../../lib/thread-items";
+import { isLiveItem } from "../../lib/thread-items";
 import {
   canEditAndResendMessage,
   canRemoveLinkPreview,
@@ -18,6 +20,7 @@ const iconClass =
 
 export function MessageHoverActions({
   message,
+  previewMessageId,
   onReply,
   onReact,
   voiceReady,
@@ -25,11 +28,12 @@ export function MessageHoverActions({
   onSpeak,
   time,
 }: {
-  message: ThreadMessage;
+  message: MessageItem;
+  previewMessageId?: string;
   /** The message's time, shown ahead of the actions. */
   time?: ReactNode;
-  onReply: (message: ThreadMessage) => void;
-  onReact: (message: ThreadMessage, reaction: MessageReaction) => Promise<void>;
+  onReply: (message: MessageItem) => void;
+  onReact: (message: MessageItem, reaction: MessageReaction) => Promise<void>;
   voiceReady: boolean;
   speaking: boolean;
   onSpeak: () => void;
@@ -38,7 +42,7 @@ export function MessageHoverActions({
   const [reactionsOpen, setReactionsOpen] = useState(false);
 
   // Streaming progress bubbles keep hover free for selection / stop clicks.
-  if (message.id.startsWith("progress:")) return null;
+  if (isLiveItem(message)) return null;
 
   const canSpeak = canSpeakMessage(message, voiceReady);
   // The reaction popover moves focus into a portal outside the row, which
@@ -97,12 +101,12 @@ export function MessageHoverActions({
         >
           <Copy size={14} strokeWidth={1.7} />
         </button>
-        {canRemoveLinkPreview(message) ? (
+        {previewMessageId && canRemoveLinkPreview(message) ? (
           <button
             type="button"
             aria-label={t`Remove preview`}
             title={t`Remove preview`}
-            onClick={() => removeLinkPreview(message)}
+            onClick={() => removeLinkPreview(previewMessageId)}
             className={iconClass}
           >
             <Link2Off size={14} strokeWidth={1.7} />
@@ -135,13 +139,15 @@ export function MessageHoverActions({
  */
 export function UserMessageActions({
   message,
+  previewMessageId,
   onEdit,
 }: {
-  message: ThreadMessage;
-  onEdit: (message: ThreadMessage) => void;
+  message: MessageItem;
+  previewMessageId?: string;
+  onEdit: (message: MessageItem) => void;
 }) {
   const { t } = useLingui();
-  if (message.id.startsWith("progress:")) return null;
+  if (isLiveItem(message)) return null;
   return (
     <div
       data-testid="message-user-actions"
@@ -166,12 +172,12 @@ export function UserMessageActions({
       >
         <Copy size={14} strokeWidth={1.7} />
       </button>
-      {canRemoveLinkPreview(message) ? (
+      {previewMessageId && canRemoveLinkPreview(message) ? (
         <button
           type="button"
           aria-label={t`Remove preview`}
           title={t`Remove preview`}
-          onClick={() => removeLinkPreview(message)}
+          onClick={() => removeLinkPreview(previewMessageId)}
           className={iconClass}
         >
           <Link2Off size={14} strokeWidth={1.7} />

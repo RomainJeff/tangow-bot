@@ -110,8 +110,9 @@ describe("Android mobile platform contract", () => {
     expect(thread).toContain("selectSpace(requestedSpaceId)");
     expect(thread).toContain("routeMatchesSelectedSpace) return <Thread />");
     expect(service).toContain('if (run.groupId != null) put("groupId", run.groupId)');
-    expect(service).toContain('if (message.optString("runId") != run.runId) continue');
-    expect(service).toContain('if (block.optString("kind") == "handoff") return null');
+    expect(service).toContain('val entries = root.optJSONArray("entries")');
+    expect(service).toContain('if (entry.optString("runId") != run.runId) continue');
+    expect(service).toContain('if (type == "handoff") return null');
     expect(service).toContain("run?.threadId?.hashCode() ?: 0");
   });
 

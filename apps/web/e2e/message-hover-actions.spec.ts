@@ -1,5 +1,6 @@
-import { captureScreenshot, completeOnboarding, signup } from "./helpers";
-import { expect, type Locator, type Page, type Route, test } from "./test";
+import { activeBotId, captureScreenshot, completeOnboarding, signup } from "./helpers";
+import { expect, type Locator, type Page, test } from "./test";
+import { reshapeThreadPages, threadEntries } from "./thread-log";
 
 /** Submit from the Send control so an in-flight prior send cannot swallow Enter. */
 async function sendComposerMessage(page: Page, composer: Locator, text: string) {
@@ -139,6 +140,10 @@ test("message hover shows a floating action pill; reply links to parent", async 
   const userBubble = parentRow.getByTestId("message-user-bubble");
   const userActions = parentRow.getByTestId("message-user-actions");
   await expect(userActions).toHaveCSS("opacity", "0");
+  // The reply lands right under the bubble, where the icons float: let it settle before pointing.
+  await expect(transcript.getByText(`done. i handled: ${parentText}`)).toBeVisible({
+    timeout: 20_000,
+  });
   // The bot's reply can land and shift the row out from under the pointer, so hover again.
   await expect(async () => {
     await parentRow.hover();
@@ -347,47 +352,12 @@ test("reply preview jumps to parent outside the loaded page", async ({ page }) =
   await expect(replyRow).toBeVisible({ timeout: 20_000 });
   await expect(replyRow.getByTestId("reply-parent-preview")).toContainText(/Got it\./);
 
-  // Simulate a paginated snapshot where the parent is older than the loaded page.
-  // Bootstrap and threads/get both hydrate the transcript on reload.
-  const stripParent = (body: {
-    json?: {
-      messages?: Array<{ id: string }>;
-      olderCursor?: number | null;
-      thread?: { messages?: Array<{ id: string }>; olderCursor?: number | null };
-    };
-  }) => {
-    if (body.json?.messages) {
-      body.json.messages = body.json.messages.filter((message) => message.id !== parentId);
-      body.json.olderCursor = body.json.olderCursor ?? 1;
-    }
-    if (body.json?.thread?.messages) {
-      body.json.thread.messages = body.json.thread.messages.filter(
-        (message) => message.id !== parentId,
-      );
-      body.json.thread.olderCursor = body.json.thread.olderCursor ?? 1;
-    }
-  };
-
-  // One handler for both hydrate RPCs avoids overlapping globs racing on reload
-  // (Playwright "Route is already handled" when fulfill runs twice).
-  const hydrateRpc = /\/rpc\/(bootstrap|threads\/get)(?:\?|$)/;
-  const stripHydrate = async (route: Route) => {
-    try {
-      const response = await route.fetch();
-      const body = (await response.json()) as Parameters<typeof stripParent>[0];
-      stripParent(body);
-      await route.fulfill({
-        status: response.status(),
-        headers: response.headers(),
-        body: JSON.stringify(body),
-      });
-    } catch (error) {
-      // Reload can cancel an in-flight intercepted request after fetch returns.
-      if (/already handled|Target closed|Request context disposed/i.test(String(error))) return;
-      throw error;
-    }
-  };
-  await page.route(hydrateRpc, stripHydrate);
+  const unroute = await reshapeThreadPages(page, (thread) => {
+    const parent = thread.entries.find((entry) => entry.id === parentId);
+    if (!parent) return;
+    thread.entries = thread.entries.filter((entry) => entry.seq > parent.seq);
+    thread.olderCursor = thread.entries[0]?.id ?? null;
+  });
 
   await page.reload({ waitUntil: "domcontentloaded" });
   await expect(page.getByRole("combobox", { name: /^Message/ })).toBeVisible({ timeout: 20_000 });
@@ -399,10 +369,91 @@ test("reply preview jumps to parent outside the loaded page", async ({ page }) =
   await expect(offlinePreview).toBeVisible();
   await expect(offlinePreview).toHaveText("Earlier message");
 
-  await page.unroute(hydrateRpc, stripHydrate);
+  await unroute();
   await offlinePreview.click();
   await expect(page.locator(`[data-message-id="${parentId}"]`)).toBeVisible({ timeout: 20_000 });
   await expect(page.locator(`[data-message-id="${parentId}"]`)).toContainText(/Got it\./);
+});
+
+test("a send after a search jump lands on the latest messages", async ({ page }) => {
+  const stamp = Date.now();
+  await signup(page, `jump-send-${stamp}@rakazo.test`, "password12", "Jump Send");
+  await completeOnboarding(page);
+  await page.setViewportSize({ width: 1280, height: 600 });
+  const botId = activeBotId(page);
+  const composer = page.getByRole("combobox", { name: /^Message/ });
+  const transcript = page.getByTestId("transcript");
+  const long = (word: string, lines: number) =>
+    Array.from({ length: lines }, (_, line) => `${word}-${stamp} line ${line + 1}`).join("\n");
+
+  const answered = async (marker: string) => {
+    let id: string | undefined;
+    await expect
+      .poll(
+        async () => {
+          const entries = await threadEntries(page, { botId });
+          const sent = entries.find(
+            (entry) =>
+              entry.type === "user.message" && JSON.stringify(entry.payload).includes(marker),
+          );
+          id = sent?.id;
+          return entries.some(
+            (entry) => entry.type === "run.finished" && entry.seq > (sent?.seq ?? Infinity),
+          );
+        },
+        { timeout: 60_000 },
+      )
+      .toBe(true);
+    return id!;
+  };
+
+  await sendComposerMessage(page, composer, long("first", 30));
+  const firstId = await answered(`first-${stamp} line 1`);
+  await sendComposerMessage(page, composer, long("second", 80));
+  await answered(`second-${stamp} line 1`);
+  const entries = await threadEntries(page, { botId });
+  const secondSeq = entries.find(
+    (entry) =>
+      entry.type === "user.message" && JSON.stringify(entry.payload).includes(`second-${stamp}`),
+  )!.seq;
+
+  // A long thread: the latest page starts at the second message, and the jump's window ends
+  // before the entry the second message hangs from, so the two pages do not join.
+  await reshapeThreadPages(
+    page,
+    (thread, request) => {
+      const around = request.postDataJSON()?.json?.around !== undefined;
+      thread.entries = thread.entries.filter((entry) =>
+        around ? entry.seq < secondSeq - 1 : entry.seq >= secondSeq,
+      );
+      thread.olderCursor = thread.entries[0]?.id ?? null;
+    },
+    /\/rpc\/(bootstrap|threads\/get|threads\/messages)(?:\?|$)/,
+  );
+
+  await page.goto(`/app/${botId}?m=${firstId}`);
+  const firstRow = transcript.locator(`[data-message-id="${firstId}"]`);
+  await expect(firstRow).toBeVisible({ timeout: 20_000 });
+  await expect(transcript.getByText(`second-${stamp} line 1`, { exact: false })).toHaveCount(0);
+
+  await sendComposerMessage(
+    page,
+    page.getByRole("combobox", { name: /^Message/ }),
+    `third-${stamp}`,
+  );
+  const thirdRow = transcript
+    .getByTestId("message-user-bubble")
+    .filter({ hasText: `third-${stamp}` });
+  await expect(thirdRow).toBeInViewport({ timeout: 20_000 });
+  await expect(firstRow).toHaveCount(0);
+  await answered(`third-${stamp}`);
+  await expect
+    .poll(() =>
+      transcript.evaluate(
+        (element) => element.scrollHeight - element.scrollTop - element.clientHeight,
+      ),
+    )
+    .toBeLessThan(2);
 });
 
 /** Simulates a touch hold: a real `pointerdown`/`pointerup` pair (pointerType

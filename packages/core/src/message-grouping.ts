@@ -1,16 +1,10 @@
-import type { ThreadMessage } from "@rakazo/contracts";
+import type { MessageBlock, ThreadItem, ThreadMessage } from "@rakazo/contracts";
 import { showsTimeMarker } from "./thread-time-markers.js";
 
 /** Consecutive messages from the same bot within this window collapse under one header
  * (Slack-style): the avatar, name, and time show once and later rows just carry content. */
 export const MESSAGE_GROUP_WINDOW_MS = 5 * 60 * 1000;
 
-/**
- * The shape `computeMessageGroups` (and `computeGroupContinuations`) needs from a message.
- * `createdAt` is optional here, unlike on `ThreadMessage`, because mobile's `MobileMessage`
- * only has one once a streaming delta finishes: a message without it never continues a group
- * and is never continued into (see `continuesGroup`).
- */
 export type GroupableMessage = Pick<ThreadMessage, "role" | "blocks" | "replyToMessageId"> & {
   botId?: ThreadMessage["botId"];
   createdAt?: ThreadMessage["createdAt"];
@@ -38,6 +32,38 @@ export function isNarrationMessage(message: Pick<ThreadMessage, "role" | "blocks
   );
 }
 
+export type NarrationSegment<T> =
+  | { kind: "content"; blocks: T[] }
+  | { kind: "steps"; block: Extract<MessageBlock, { kind: "steps" }> };
+
+/**
+ * A steps block ends the words before it even when hidden: a run's stretch holds every turn of
+ * its words, and each turn reads as its own bubble.
+ */
+export function narrationSegments<T>(
+  blocks: readonly MessageBlock[],
+  content: (block: MessageBlock) => T | undefined,
+  showSteps = true,
+): NarrationSegment<T>[] {
+  const segments: NarrationSegment<T>[] = [];
+  let open: T[] | undefined;
+  for (const block of blocks) {
+    if (block.kind === "steps") {
+      open = undefined;
+      if (showSteps) segments.push({ kind: "steps", block });
+      continue;
+    }
+    const drawn = content(block);
+    if (drawn === undefined) continue;
+    if (open) open.push(drawn);
+    else {
+      open = [drawn];
+      segments.push({ kind: "content", blocks: open });
+    }
+  }
+  return segments;
+}
+
 /**
  * Whether a message is pure user narration: text only, no attachment/image/file block.
  * Mentions live inline in the text, so they never affect this. The user-side counterpart of
@@ -62,38 +88,6 @@ function withinGroupWindow(
   return Number.isFinite(deltaMs) && deltaMs >= 0 && deltaMs <= windowMs;
 }
 
-/**
- * Whether `message` continues `previous`'s group, so the UI suppresses the repeated
- * avatar/name/time header. A group breaks on any of:
- * - no previous message;
- * - either message isn't from a bot;
- * - a different bot (or no bot id) sent `message`;
- * - `message` replies to a parent message (a reply always starts a new group);
- * - either message is not pure narration (a rich card on either side breaks the group);
- * - a time marker would show between them (day change or >= 4h gap);
- * - the gap between them is negative, non-finite, or exceeds `windowMs`.
- */
-export function continuesMessageGroup(
-  previous:
-    | Pick<ThreadMessage, "role" | "botId" | "createdAt" | "blocks" | "replyToMessageId">
-    | undefined,
-  message: Pick<ThreadMessage, "role" | "botId" | "createdAt" | "blocks" | "replyToMessageId">,
-  windowMs: number = MESSAGE_GROUP_WINDOW_MS,
-): boolean {
-  if (previous == null) return false;
-  if (message.role !== "bot" || previous.role !== "bot") return false;
-  if (!message.botId || message.botId !== previous.botId) return false;
-  if (message.replyToMessageId != null) return false;
-  if (!isNarrationMessage(previous) || !isNarrationMessage(message)) return false;
-  return withinGroupWindow(previous.createdAt, message.createdAt, windowMs);
-}
-
-/**
- * Whether `message` continues `previous`'s group under the full rule R: bot continuity
- * (`continuesMessageGroup`'s semantics) or user continuity (two consecutive text-only user
- * messages, same window/time-marker/reply conditions). A message without `createdAt`, on
- * either side, never continues and is never continued into.
- */
 function continuesGroup(
   previous: GroupableMessage | undefined,
   message: GroupableMessage,
@@ -116,74 +110,33 @@ function continuesGroup(
   return withinGroupWindow(previous.createdAt, message.createdAt, windowMs);
 }
 
-/**
- * Projects `continuesMessageGroup` over a whole transcript. `options.isTransparent` is injected
- * by the caller (rather than inferred here) so this stays pure and offline-testable: a
- * transparent message (an aside, or a message that renders nothing) always gets its own `false`
- * flag and is skipped when tracking the last row, so it never breaks a group between the
- * narration messages around it.
- */
-export function computeGroupContinuations(
-  messages: ThreadMessage[],
-  options: { isTransparent: (message: ThreadMessage) => boolean; windowMs?: number },
-): boolean[] {
-  const continuations: boolean[] = [];
-  let lastRow: ThreadMessage | undefined;
-
-  for (const message of messages) {
-    if (options.isTransparent(message)) {
-      continuations.push(false);
-      continue;
-    }
-    continuations.push(continuesMessageGroup(lastRow, message, options.windowMs));
-    lastRow = message;
-  }
-
-  return continuations;
+export function computeMessageGroups(
+  messages: readonly GroupableMessage[],
+  windowMs: number = MESSAGE_GROUP_WINDOW_MS,
+): { isFirstOfGroup: boolean; isLastOfGroup: boolean }[] {
+  const continues = messages.map((message, index) =>
+    continuesGroup(messages[index - 1], message, windowMs),
+  );
+  return messages.map((_, index) => ({
+    isFirstOfGroup: !continues[index],
+    isLastOfGroup: !continues[index + 1],
+  }));
 }
 
-/**
- * The single source of truth for rule R (see `docs/design-system.md` § Grouping): for every
- * input message, whether it opens and/or closes a visible group. Both web and mobile call this
- * once on the canonical chronological message list and index the result by message id — no
- * renderer recomputes grouping from its own (possibly reversed) index.
- *
- * `options.isTransparent` marks messages that render nothing at all (a legacy block this
- * version draws nothing for): they always get `{ isFirstOfGroup: false, isLastOfGroup: false }`
- * and are skipped when looking for the previous/next visible message, so they can never break a
- * group. Asides (handoffs, peer receipts, `meta`) are NOT transparent — they are non-narration
- * messages, so they naturally form a group of one (`isNarrationMessage` / `isUserNarrationMessage`
- * are both false for them) and the group they interrupt reopens after them.
- */
-export function computeMessageGroups<M extends GroupableMessage>(
-  messages: readonly M[],
-  options: { isTransparent: (message: M) => boolean; windowMs?: number },
+export function computeItemGroups(
+  items: readonly ThreadItem[],
 ): { isFirstOfGroup: boolean; isLastOfGroup: boolean }[] {
-  const windowMs = options.windowMs ?? MESSAGE_GROUP_WINDOW_MS;
-  const results: { isFirstOfGroup: boolean; isLastOfGroup: boolean }[] = messages.map(() => ({
-    isFirstOfGroup: false,
-    isLastOfGroup: false,
-  }));
-
-  // Visible (non-transparent) indices in order, and whether each one continues the previous
-  // visible message's group — tracked so the second pass can look ahead without recomputing.
-  const visibleIndices: number[] = [];
-  const continuesPrevious: boolean[] = new Array(messages.length).fill(false);
-  let lastVisible: M | undefined;
-
-  messages.forEach((message, index) => {
-    if (options.isTransparent(message)) return;
-    const continues = continuesGroup(lastVisible, message, windowMs);
-    continuesPrevious[index] = continues;
-    results[index]!.isFirstOfGroup = !continues;
-    visibleIndices.push(index);
-    lastVisible = message;
-  });
-
-  visibleIndices.forEach((index, position) => {
-    const nextIndex = visibleIndices[position + 1];
-    results[index]!.isLastOfGroup = nextIndex === undefined ? true : !continuesPrevious[nextIndex];
-  });
-
-  return results;
+  return computeMessageGroups(
+    items.map((item): GroupableMessage => {
+      if (item.kind !== "message") return { role: "bot", blocks: [], createdAt: item.ts };
+      return item.role === "user"
+        ? {
+            role: "user",
+            blocks: item.blocks,
+            createdAt: item.ts,
+            replyToMessageId: item.replyTo?.entryId,
+          }
+        : { role: "bot", blocks: item.blocks, createdAt: item.ts, botId: item.botId };
+    }),
+  );
 }

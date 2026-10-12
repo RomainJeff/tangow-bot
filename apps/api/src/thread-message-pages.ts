@@ -1,81 +1,69 @@
-import type { MessageBlock, ThreadMessage, ThreadMessagePage } from "@rakazo/contracts";
-import { isPeerReceiptBlocks, isUserDirectedMessage } from "@rakazo/core";
+import type { SessionLog } from "@rakazo/adapter-kit";
+import type {
+  EntryId,
+  ProductEvent,
+  SessionEntry,
+  ThreadEntry,
+  ThreadMessage,
+  ThreadMessagePage,
+} from "@rakazo/contracts";
+import { SessionId, toThreadEntry } from "@rakazo/contracts";
+import { appendedEntries, visibleEntries } from "@rakazo/core";
 import { hiddenPeerRunIds, type Prisma, type PrismaClient } from "@rakazo/db";
 
-type MessageDb = PrismaClient | Prisma.TransactionClient;
+type ThreadDb = PrismaClient | Prisma.TransactionClient;
+type PageLog = Pick<SessionLog<Prisma.TransactionClient>, "readPage" | "readAround">;
 
-export async function loadMessagePage(
-  prisma: MessageDb,
-  threadId: string,
-  before: number | undefined,
-  pageSize: number,
-  around?: { messageId?: string; seq?: number },
-  includePeerRuns = false,
-  includePeerReceipts = false,
+const THREAD_PAGE_SIZE = 200;
+
+export async function threadSessionId(prisma: ThreadDb, threadId: string): Promise<SessionId> {
+  const { sessionId } = await prisma.thread.findUniqueOrThrow({
+    where: { id: threadId },
+    select: { sessionId: true },
+  });
+  return SessionId.parse(sessionId);
+}
+
+function olderCursor(page: readonly SessionEntry[]): EntryId | null {
+  const oldest = page[0];
+  return oldest?.parentId ? oldest.id : null;
+}
+
+export async function withoutHiddenPeerRuns(
+  prisma: ThreadDb,
+  entries: readonly ThreadEntry[],
+): Promise<ThreadEntry[]> {
+  const runIds = [...new Set(entries.flatMap((entry) => (entry.runId ? [entry.runId] : [])))];
+  return visibleEntries(entries, { hiddenPeerRunIds: await hiddenPeerRunIds(prisma, runIds) });
+}
+
+export async function loadEntryPage(
+  deps: { prisma: ThreadDb; sessionLog: PageLog },
+  { threadId, sessionId }: { threadId: string; sessionId: SessionId },
+  query: { before?: EntryId; around?: { entryId: EntryId }; includePeerRuns?: boolean },
 ): Promise<ThreadMessagePage> {
-  if (around) {
-    let targetSeq = around.seq;
-    if (targetSeq === undefined && around.messageId) {
-      const row = await prisma.message.findFirst({
-        where: { id: around.messageId, threadId },
-        select: { seq: true },
-      });
-      targetSeq = row?.seq;
-    }
-    if (targetSeq !== undefined) {
-      const half = Math.floor(pageSize / 2);
-      const minSeq = Math.max(0, targetSeq - half);
-      const maxSeq = targetSeq + half;
-      const rows = await prisma.message.findMany({
-        where: { threadId, seq: { gte: minSeq, lte: maxSeq } },
-        orderBy: { seq: "asc" },
-        take: pageSize,
-      });
-      const first = rows[0];
-      const hasOlder = first
-        ? (await prisma.message.count({ where: { threadId, seq: { lt: first.seq } } })) > 0
-        : false;
-      // Peer text/activity stays out of the normal transcript (including the
-      // around target). Receipts remain via withoutPeerRunMessages; full peer
-      // history belongs in the bot-messages overlay (includePeerRuns).
-      const messages = includePeerRuns ? rows : await withoutPeerRunMessages(prisma, rows);
-      return {
-        threadId,
-        messages: messages.map(toThreadMessage),
-        olderCursor: hasOlder ? (first?.seq ?? null) : null,
-      };
-    }
-  }
-
-  let cursor = before;
-  while (true) {
-    const rows = await prisma.message.findMany({
-      where: {
-        threadId,
-        ...(cursor === undefined ? {} : { seq: { lt: cursor } }),
-      },
-      orderBy: { seq: "desc" },
-      take: pageSize + 1,
-    });
-    const hasOlder = rows.length > pageSize;
-    const pageRows = rows.slice(0, pageSize).reverse();
-    const visibleRows = includePeerRuns ? pageRows : await withoutPeerRunMessages(prisma, pageRows);
-    // Web hides receipts client-side, so its receipt-only pages keep scanning.
-    // Mobile explicitly retains them and must receive each page for pagination.
-    const hasSubstantive = visibleRows.some(
-      (row) => !isPeerReceiptBlocks(row.blocks as MessageBlock[]),
-    );
-    if (hasSubstantive || includePeerReceipts || !hasOlder || includePeerRuns) {
-      return {
-        threadId,
-        messages: visibleRows.map(toThreadMessage),
-        olderCursor: hasOlder ? (pageRows[0]?.seq ?? null) : null,
-      };
-    }
-    // TODO: only rescan when a raw page is entirely peer output. Consider a run relation if
-    // long peer-only histories make this path hot.
-    cursor = pageRows[0]?.seq;
-  }
+  const around = query.around
+    ? await deps.sessionLog.readAround(
+        sessionId,
+        query.around.entryId,
+        THREAD_PAGE_SIZE,
+        deps.prisma,
+      )
+    : [];
+  const page =
+    around.length > 0
+      ? around
+      : await deps.sessionLog.readPage(
+          sessionId,
+          { before: query.around ? undefined : query.before, limit: THREAD_PAGE_SIZE },
+          deps.prisma,
+        );
+  const entries = page.map(toThreadEntry);
+  return {
+    threadId,
+    entries: query.includePeerRuns ? entries : await withoutHiddenPeerRuns(deps.prisma, entries),
+    olderCursor: olderCursor(page),
+  };
 }
 
 export async function loadAllMessages(
@@ -83,88 +71,65 @@ export async function loadAllMessages(
   threadId: string,
   pageSize: number,
 ): Promise<ThreadMessage[]> {
-  const pages: ThreadMessage[][] = [];
-  let before: number | undefined;
-  do {
-    const page = await loadMessagePage(prisma, threadId, before, pageSize, undefined, true);
-    pages.push(page.messages);
-    before = page.olderCursor ?? undefined;
-  } while (before !== undefined);
-  return pages.reverse().flat();
-}
-
-async function withoutPeerRunMessages<
-  T extends { runId: string | null; clientNonce: string | null; blocks: Prisma.JsonValue },
->(prisma: MessageDb, rows: T[]): Promise<T[]> {
-  const runIds = [...new Set(rows.flatMap((row) => (row.runId ? [row.runId] : [])))];
-  if (runIds.length === 0) return rows;
-  const peerRunIds = await hiddenPeerRunIds(prisma, runIds);
-  return rows.filter((row) => {
-    if (!row.runId || !peerRunIds.has(row.runId)) return true;
-    const blocks = row.blocks as MessageBlock[];
-    // Keep compact sent/received receipts; clients render them as chips.
-    if (
-      blocks.some(
-        (block) => block.kind === "bot_message_sent" || block.kind === "bot_message_received",
-      )
-    ) {
-      return true;
-    }
-    // Keep what a delegated bot addressed to the user (message_user / ask_user); drop the rest.
-    return isUserDirectedMessage({ clientNonce: row.clientNonce, blocks });
-  });
+  const messages: ThreadMessage[] = [];
+  let after = -1;
+  while (true) {
+    const rows = await prisma.message.findMany({
+      where: { threadId, seq: { gt: after } },
+      orderBy: { seq: "asc" },
+      take: pageSize,
+    });
+    messages.push(...rows.map(toThreadMessage));
+    const last = rows.at(-1);
+    if (!last || rows.length < pageSize) return messages;
+    after = last.seq;
+  }
 }
 
 export async function isPeerRun(
-  prisma: MessageDb,
+  prisma: ThreadDb,
   runId: string | undefined,
   cache: Map<string, Promise<boolean>>,
 ): Promise<boolean> {
   if (!runId) return false;
   let peerRun = cache.get(runId);
   if (!peerRun) {
-    // Same rule as withoutPeerRunMessages: a top-level bot relaying delegated work is not a
-    // hidden peer run (CA5/CA6), so its live thread events forward too.
     peerRun = hiddenPeerRunIds(prisma, [runId]).then((ids) => ids.has(runId));
     cache.set(runId, peerRun);
   }
   return peerRun;
 }
 
-/** Peer-run SSE events that must still reach an open thread (starts, terminals, waits, receipts, asks, text). */
-export function shouldForwardPeerThreadEvent(event: {
-  type: string;
-  payload: { blocks?: unknown };
-}): boolean {
-  if (
-    // The start drives the working indicator, and the terminals below clear it again. Without
-    // the pair an open chat sits inert for the whole run and only catches up on reload.
-    event.type === "run.started" ||
-    event.type === "run.completed" ||
-    event.type === "run.failed" ||
-    event.type === "run.cancelled" ||
-    event.type === "run.waiting_input" ||
-    event.type === "computer.takeover.requested"
-  ) {
-    return true;
+export async function forwardedThreadEvent(
+  prisma: ThreadDb,
+  event: ProductEvent,
+  peerRuns: Map<string, Promise<boolean>>,
+): Promise<ProductEvent | null> {
+  if (event.type !== "session.entry.appended") {
+    const hidden = await isPeerRun(prisma, event.runId, peerRuns);
+    return hidden && !shouldForwardPeerThreadEvent(event) ? null : event;
   }
-  if (event.type !== "thread.message.created" && event.type !== "thread.message.updated") {
-    return false;
+  const entries = appendedEntries(event);
+  const hiddenPeerRunIds = new Set<string>();
+  for (const runId of new Set(entries.flatMap((entry) => (entry.runId ? [entry.runId] : [])))) {
+    if (await isPeerRun(prisma, runId, peerRuns)) hiddenPeerRunIds.add(runId);
   }
-  const blocks = event.payload.blocks;
-  return (
-    Array.isArray(blocks) &&
-    blocks.some(
-      (block) =>
-        !!block &&
-        typeof block === "object" &&
-        "kind" in block &&
-        (block.kind === "bot_message_received" ||
-          block.kind === "bot_message_sent" ||
-          block.kind === "ask" ||
-          block.kind === "text"),
-    )
-  );
+  if (hiddenPeerRunIds.size === 0) return event;
+  const visible = visibleEntries(entries, { hiddenPeerRunIds });
+  return visible.length > 0 ? { ...event, payload: { ...event.payload, entries: visible } } : null;
+}
+
+const FORWARDED_PEER_RUN_EVENTS: ReadonlySet<string> = new Set([
+  "run.started",
+  "run.completed",
+  "run.failed",
+  "run.cancelled",
+  "run.waiting_input",
+  "computer.takeover.requested",
+]);
+
+export function shouldForwardPeerThreadEvent(event: { type: string }): boolean {
+  return FORWARDED_PEER_RUN_EVENTS.has(event.type);
 }
 
 function toThreadMessage(row: {

@@ -236,7 +236,48 @@ export function runSessionLogConformance<Tx>(makeLog: () => Promise<SessionLogHa
         card,
         done,
       ]);
+      expect(await harness.log.readRun(runId, { limit: 3 })).toEqual([answer, card, done]);
       expect(await harness.log.readTail(childId)).toEqual([started, call, result, done]);
+    });
+
+    it("reads the later state of a run's cards with the run, by time, and no other card's", async () => {
+      const { sessionId, runId } = await created();
+      const at = (second: number) => new Date(Date.UTC(2026, 9, 11, 9, 0, second)).toISOString();
+      const ofRun = { sessionId, botId: BOT, runId };
+      const askId = EntryId.parse(crypto.randomUUID());
+      const approvalId = EntryId.parse(crypto.randomUUID());
+      const [ask, answered, approval, , applied] = await appendAll([
+        {
+          ...ofRun,
+          id: askId,
+          ts: at(0),
+          type: "assistant.ask",
+          payload: { block: { kind: "ask", text: "Your API key?", input: "secret" } },
+        },
+        { sessionId, ts: at(1), type: "card.answered", payload: { target: askId, answer: "" } },
+        {
+          ...ofRun,
+          id: approvalId,
+          ts: at(2),
+          type: "effect.requested",
+          payload: { effectId: "effect_1", effectKind: "routine", proposal: { name: "Digest" } },
+        },
+        { ...said(sessionId, "unrelated"), ts: at(3) },
+        {
+          sessionId,
+          ts: at(4),
+          type: "effect.applied",
+          payload: { target: approvalId, routineId: "routine_1", change: "created" },
+        },
+      ]);
+      await append({
+        sessionId,
+        ts: at(5),
+        type: "card.answered",
+        payload: { target: EntryId.parse(crypto.randomUUID()), dismissed: true },
+      });
+
+      expect(await harness.log.readRun(runId)).toEqual([ask, answered, approval, applied]);
     });
 
     it("reads one entry of its session whether the chain still holds it or not", async () => {
@@ -365,6 +406,43 @@ export function runSessionLogConformance<Tx>(makeLog: () => Promise<SessionLogHa
       expect(await page(e4, 2)).toEqual(["e2", "up to 2"]);
       expect(await page(e2, 5)).toEqual(["e0", "e1"]);
       expect(await page(e0, 2)).toEqual([]);
+    });
+
+    it("reads the chain around an entry, and nothing for an entry a rewind left off it", async () => {
+      const { sessionId } = await created();
+      const [e0, e1, , e3, , e5] = await appendAll(
+        ["e0", "e1", "e2", "e3", "e4", "e5"].map((text) => said(sessionId, text)),
+      );
+      const rewind = await append({ sessionId, type: "rewind", parentId: e3!.id, payload: {} });
+      await append(said(sessionId, "e4 edited"));
+      const around = async (entry: SessionEntry, limit: number) =>
+        (await harness.log.readAround(sessionId, entry.id, limit)).map(textOf);
+
+      expect(await around(e3!, 4)).toEqual(["e1", "e2", "e3", "rewind"]);
+      expect(await around(e1!, 5)).toEqual(["e0", "e1", "e2", "e3", "rewind"]);
+      expect(await around(e0!, 3)).toEqual(["e0", "e1", "e2"]);
+      expect(await around(rewind, 4)).toEqual(["e2", "e3", "rewind", "e4 edited"]);
+      expect(await around(rewind, 7)).toEqual(["e1", "e2", "e3", "rewind", "e4 edited"]);
+      expect(await around(e5!, 4)).toEqual([]);
+      await expect(around(e0!, 0)).rejects.toThrow(RangeError);
+    });
+
+    it("reads a page and around an entry inside the transaction it is given", async () => {
+      const { sessionId } = await created();
+      const kept = await append(said(sessionId, "kept"));
+
+      const read = await harness.transaction(async (tx) => {
+        await harness.log.append(tx, { ...said(sessionId, "same transaction"), feedBotId: BOT });
+        return [
+          (await harness.log.readPage(sessionId, { limit: 10 }, tx)).map(textOf),
+          (await harness.log.readAround(sessionId, kept.id, 10, tx)).map(textOf),
+        ];
+      });
+
+      expect(read).toEqual([
+        ["kept", "same transaction"],
+        ["kept", "same transaction"],
+      ]);
     });
 
     it("keeps one entry for a redelivered clientNonce", async () => {

@@ -189,6 +189,16 @@ export const AskBlock = z.object({
   confirms: z.enum(["created", "updated"]).optional(),
 });
 
+export const CHOICE_DISMISSED_ANSWER_ID = "_dismissed";
+
+/**
+ * The `answerId` of an `app_connect` card once its app is connected. One message holds several
+ * cards, and one app can sit under two connectors, so it names both.
+ */
+export function appConnectAnswerId(card: { connectorId?: string; provider: string }): string {
+  return `${card.connectorId ?? "composio"}:${card.provider}`;
+}
+
 export const ChoiceBlock = z.object({
   kind: z.literal("choice"),
   question: z.string(),
@@ -196,6 +206,23 @@ export const ChoiceBlock = z.object({
   options: z.array(z.object({ id: z.string(), letter: z.string(), label: z.string() })),
   /** Set once the user picks an option; renders the picker as answered. */
   answerId: z.string().optional(),
+});
+
+export const SkillDraftBlock = z.object({
+  kind: z.literal("skill_draft"),
+  skillId: Id,
+  name: z.string(),
+  goal: z.string(),
+  playbook: z.object({
+    whenToUse: z.string(),
+    inputs: z.array(z.string()),
+    steps: z.array(z.string()),
+    howToCheck: z.string(),
+    whatToReturn: z.string(),
+    approvalBoundaries: z.string(),
+    failureHandling: z.string(),
+  }),
+  status: z.enum(["draft", "saved"]),
 });
 
 export const MessageBlock = z.discriminatedUnion("kind", [
@@ -279,22 +306,7 @@ export const MessageBlock = z.discriminatedUnion("kind", [
     title: z.string().optional(),
     status: z.enum(["created", "archived", "deleted"]),
   }),
-  z.object({
-    kind: z.literal("skill_draft"),
-    skillId: Id,
-    name: z.string(),
-    goal: z.string(),
-    playbook: z.object({
-      whenToUse: z.string(),
-      inputs: z.array(z.string()),
-      steps: z.array(z.string()),
-      howToCheck: z.string(),
-      whatToReturn: z.string(),
-      approvalBoundaries: z.string(),
-      failureHandling: z.string(),
-    }),
-    status: z.enum(["draft", "saved"]),
-  }),
+  SkillDraftBlock,
   ChartBlock,
   z.object({
     /** Approval card for an agent-created MCP server. The user completes the

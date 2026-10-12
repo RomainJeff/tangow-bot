@@ -1,5 +1,6 @@
 import { activeBotId, captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
 import { expect, test } from "./test";
+import { threadEntries } from "./thread-log";
 
 test("shows peer chips in transcript and opens view-only peer chat", async ({ page }, testInfo) => {
   const stamp = Date.now();
@@ -29,17 +30,12 @@ test("shows peer chips in transcript and opens view-only peer chat", async ({ pa
   await expect
     .poll(
       async () => {
-        const history = await rpc<{
-          messages: Array<{ blocks: Array<{ kind: string; text?: string }> }>;
-        }>(page, "threads/messages", { botId: chiefId, includePeerRuns: true });
-        const peerTexts = history.messages.flatMap((message) =>
-          message.blocks
-            .filter(
-              (block) => block.kind === "bot_message_sent" || block.kind === "bot_message_received",
-            )
-            .map((block) => block.text ?? ""),
+        const entries = await threadEntries(page, { botId: chiefId, includePeerRuns: true });
+        return entries.some(
+          (entry) =>
+            (entry.type === "bot.message.sent" || entry.type === "bot.message.received") &&
+            entry.payload.text.includes("peer-exchange-alpha"),
         );
-        return peerTexts.some((text) => text.includes("peer-exchange-alpha"));
       },
       { timeout: 60_000 },
     )
@@ -94,9 +90,12 @@ test("shows peer chips in transcript and opens view-only peer chat", async ({ pa
   await assertChipCentered();
   await captureScreenshot(page, testInfo, "peer-chip-mobile");
 
-  await chip.focus();
-  await expect(chip).toBeFocused();
-  await chip.press("Enter");
+  const openChip = chip.getByRole("button", {
+    name: /Messaged Researcher|Message from Researcher/,
+  });
+  await openChip.focus();
+  await expect(openChip).toBeFocused();
+  await openChip.press("Enter");
   const view = page.getByTestId("peer-conversation-view");
   await expect(view).toBeVisible();
   await expect(view.getByRole("heading", { name: /Chief · Researcher/ })).toBeVisible();

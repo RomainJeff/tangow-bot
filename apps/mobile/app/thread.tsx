@@ -10,8 +10,12 @@ import type {
   AgentSkillCatalogEntry,
   Connection,
   ConnectionCatalogItem,
+  EntryId,
   MessageBlock,
   Routine,
+  SessionEntry,
+  ThreadItem,
+  ThreadMessagePage,
 } from "@rakazo/contracts";
 import {
   canReactToThreadMessage,
@@ -20,34 +24,37 @@ import {
 } from "@rakazo/contracts";
 import {
   abortableDelay,
+  appendedEntries,
   attachmentsForThread,
+  botWordsOf,
   buildComposerMentionOptions,
   type ComposerMention,
   canEditSpawnBotCard,
-  computeMessageGroups,
-  foldRoutineRuns,
+  drawsNothing,
   isApprovalAskBlock,
   isAsideOnlyMessage,
   isRunTerminalEvent,
   isSecretAskBlock,
   latestActivityLabel,
-  latestAnswerableAskMessageId,
   mentionChipKey,
-  projectMessageReactions,
-  type RoutineGroupRun,
-  type RoutineRowRole,
+  projectThreadView,
+  queuedRunIdsOf,
+  type RoutineLineRole,
+  type RoutineLineRun,
   resolveComposerSendPlan,
   routineCardSettlement,
+  routineLine,
   SLASH_ACTIONS,
   type SlashActionId,
   selectedAskActionLabel,
   serializeComposerPrompt,
-  showsTimeMarker,
   skillSourcesOf,
   slashSkillOptions as slashSkills,
+  type ThreadRow,
+  type ThreadView,
+  threadEntriesOf,
   threadTimeMarkerLabel,
   truncateSlashDescription,
-  userVisibleMessages,
 } from "@rakazo/core";
 import { botAccentOn, motion, radii, sizes } from "@rakazo/ui-tokens";
 import * as Clipboard from "expo-clipboard";
@@ -149,22 +156,23 @@ import {
   blockText,
   copyableMobileMessageText,
   currentApiBase,
+  keepUnchangedRows,
   loadSessionToken,
   type MobileBot,
   type MobileGroup,
   type MobileMe,
   type MobileMessage,
-  type MobileMessagePage,
   type MobileSnapshot,
   type MobileSpaceNavigation,
+  type MobileThreadResponse,
   mergeMobileSnapshot,
   messagingProviderLabel,
-  prependMobileMessagePage,
   rpc,
   selectedSpaceId,
   selectSpace,
   shouldApplyMobileThreadRefresh,
   subscribeThread,
+  withOlderPage,
 } from "../lib/api";
 import { mobileTokens, resolveMobileAppearance } from "../lib/appearance";
 import { type MobileArtifactTarget, openMobileArtifact } from "../lib/artifact-open";
@@ -175,6 +183,7 @@ import {
   confirmClearConversation,
   confirmDeleteBot,
 } from "../lib/bot-lifecycle";
+import { botMessageCard } from "../lib/bot-message-card";
 import { noteBotRunEnded } from "../lib/bot-page-state";
 import { CHAT_MOTION, useChatReducedMotion } from "../lib/chat-motion";
 import { cancelFocusPrompt, focusPromptThreadActive } from "../lib/focus-prompt";
@@ -199,7 +208,6 @@ import {
   messagePresentationSegments,
   skillLineRoute,
   skillLineSegment,
-  stepsBlocks,
   visibleMessageBlocks,
 } from "../lib/message-presentation";
 import { native, useMobileTokens, useResolvedAppearance } from "../lib/native";
@@ -211,6 +219,7 @@ import {
 } from "../lib/pick-attachments";
 import { reactionPopKey, useReactionPops } from "../lib/reaction-pop";
 import { threadRefreshDelayMs } from "../lib/refresh";
+import { isViewedRunLine, originSession } from "../lib/session-sheet";
 import { closeSheet, openSheet } from "../lib/sheet";
 import type { SpawnBotEdits } from "../lib/spawn-bot-edit";
 import { openSpawnBotEdit, syncSpawnBotEdit } from "../lib/spawn-bot-edit";
@@ -227,6 +236,9 @@ import { useComposerLinkPreview } from "../lib/use-composer-link-preview";
 import { speakText } from "../lib/voice";
 
 type PendingAttachment = PickedAttachment & { threadKey: string };
+type ReplyTarget = { message: MobileMessage; messageId: EntryId };
+type NoteItem = Extract<ThreadItem, { kind: "note" }>;
+type CardTarget = { runId: string; entryId: string };
 type AskAction = NonNullable<Extract<MessageBlock, { kind: "ask" }>["actions"]>[number];
 
 /**
@@ -238,19 +250,10 @@ type AskAction = NonNullable<Extract<MessageBlock, { kind: "ask" }>["actions"]>[
  */
 type MessageChrome = "row" | "aside";
 
-/** 7g: a bot row whose blocks are only ever one of these is a card, not
- * narration — a decision, an ask, a routine/subagent trace, a peer-message
- * marker or a bare attachment. Swipe-to-reply is a *narration* bubble's
- * gesture only; these keep today's plain long-press wrapper. */
 const CARD_ONLY_BLOCK_KINDS = new Set<string>([
   "ask",
-  "handoff",
-  "bot_message_sent",
-  "bot_message_received",
   "channel_message",
   "meta",
-  "routine_run",
-  "subagent",
   "child_bot",
   "image",
   "file",
@@ -317,6 +320,23 @@ function formatAttachmentSkip(item: { name: string; reason: string }): string {
     });
   }
   return `${name} (${item.reason})`;
+}
+
+function isLiveMessage(item: ThreadItem): item is Extract<MobileMessage, { role: "bot" }> {
+  return item.kind === "message" && item.role === "bot" && item.live === true;
+}
+
+function isAsideItem(item: ThreadItem, showSteps: boolean): boolean {
+  switch (item.kind) {
+    case "message":
+      return isAsideOnlyMessage(visibleMessageBlocks(item.blocks, showSteps));
+    case "handoff":
+    case "botMessage":
+    case "note":
+      return true;
+    default:
+      return false;
+  }
 }
 
 function isWorkingStatus(status: string | undefined): boolean {
@@ -426,7 +446,7 @@ function Thread() {
     messageId?: string;
   }>();
   const inGroup = Boolean(groupId);
-  const scroll = useRef<FlatList<MobileMessage>>(null);
+  const scroll = useRef<FlatList<ThreadRow>>(null);
   const pinnedScroll = useRef<ScrollView>(null);
   const scrollBehavior = useRef(new ThreadScrollBehavior());
   const userDragging = useRef(false);
@@ -438,9 +458,6 @@ function Thread() {
     botId?: string;
     groupId?: string;
     messageId: string;
-    threadId: string;
-    messages: readonly MobileMessage[];
-    olderCursor: number | null;
   } | null>(null);
   const jumpScrollTarget = useRef<string | null>(null);
   const activeBotId = useRef(botId);
@@ -497,7 +514,7 @@ function Thread() {
   const [attachSheetOpen, setAttachSheetOpen] = useState(false);
   const attachBubbleRef = useRef<View>(null);
   const textInputRef = useRef<TextInput>(null);
-  const [replyTarget, setReplyTarget] = useState<MobileMessage | null>(null);
+  const [replyTarget, setReplyTarget] = useState<ReplyTarget | null>(null);
   const [rewindTarget, setRewindTarget] = useState<MobileMessage | null>(null);
   // ponytail: artifact ids ride along invisibly — mobile has no attachment chips to restore into.
   const [rewindArtifactIds, setRewindArtifactIds] = useState<string[]>([]);
@@ -529,11 +546,11 @@ function Thread() {
   // thread on its own, and it keeps the same place as the latest message would
   // for everything else the thread does.
   const [anchorIndex, setAnchorIndex] = useState<number | null>(null);
-  const liveMessagesRef = useRef<readonly MobileMessage[]>([]);
+  const liveRowsRef = useRef<readonly ThreadRow[]>([]);
   const holdRow = useCallback((rowId: string | null) => {
     holdingRowUntil.current = Date.now() + 900;
-    const rows = liveMessagesRef.current;
-    const index = rowId ? rows.findIndex((row) => row.id === rowId) : -1;
+    const rows = liveRowsRef.current;
+    const index = rowId ? rows.findIndex((row) => row.item.id === rowId) : -1;
     if (index < 0) return;
     setAnchorIndex(Math.min(index + 1, rows.length - 1));
   }, []);
@@ -547,34 +564,25 @@ function Thread() {
     [t],
   );
   const showSteps = useDisplayAgentSteps();
-  const reactionView = useMemo(
-    () =>
-      projectMessageReactions(
-        userVisibleMessages(snap?.messages ?? [], { includePeerReceipts: true }).filter((message) =>
-          hasVisibleMessagePresentation(message.blocks, showSteps),
-        ),
-      ),
-    [snap?.messages, showSteps],
-  );
-  const visibleMessages = reactionView.visibleMessages;
-  // Rule R (design contract § Grouping), computed once over the canonical
-  // chronological list and indexed by id — the live inverted `FlatList` and
-  // the pinned-jump chronological `ScrollView` below both read this same map,
-  // so a reversed index can never move a name or an avatar (CA-7a). Every
-  // message here already has visible presentation (`hasVisibleMessagePresentation`
-  // above), so nothing left in the list is transparent.
-  const messageGroups = useMemo(
-    () => computeMessageGroups(visibleMessages, { isTransparent: () => false }),
-    [visibleMessages],
-  );
-  const messageGroupsById = useMemo(
-    () => new Map(visibleMessages.map((message, index) => [message.id, messageGroups[index]!])),
-    [visibleMessages, messageGroups],
-  );
-  const latestMessageId = visibleMessages.at(-1)?.id ?? null;
-  const rewindRemovedCount = rewindTarget
-    ? visibleMessages.filter((message) => (message.seq ?? 0) > (rewindTarget.seq ?? 0)).length
-    : 0;
+  const drawnRows = useRef<ReadonlyMap<string, ThreadRow>>(new Map());
+  const view = useMemo((): ThreadView => {
+    const projected = projectThreadView(snap?.entries ?? [], {
+      rendersNothing: (item) =>
+        drawsNothing(item, (blocks) => hasVisibleMessagePresentation(blocks, showSteps)),
+      progress: snap?.layer,
+    });
+    const rows = keepUnchangedRows(drawnRows.current, projected.rows);
+    drawnRows.current = new Map(rows.map((row) => [row.item.id, row]));
+    return { ...projected, rows };
+  }, [snap?.entries, snap?.layer, showSteps]);
+  const rows = view.rows;
+  const waiting = view.waiting;
+  const waitingRef = useRef(waiting);
+  waitingRef.current = waiting;
+  const latestMessageId = rows.at(-1)?.item.id ?? null;
+  const rowIndex = useMemo(() => new Map(rows.map((row, index) => [row.item.id, index])), [rows]);
+  const rewindIndex = rewindTarget ? (rowIndex.get(rewindTarget.id) ?? -1) : -1;
+  const rewindRemovedCount = rewindIndex >= 0 ? rows.length - rewindIndex - 1 : 0;
   const activePendingAttachments = attachmentsForThread(pendingAttachments, threadKey);
   const composerMentionTargets = useMemo(
     () =>
@@ -630,14 +638,25 @@ function Thread() {
   const linkPreview = useComposerLinkPreview(draft, notificationThreadId);
   const [attachmentsRowWidth, setAttachmentsRowWidth] = useState<number | undefined>();
   const currentBotStatus = snap ? snap.run?.status : currentBot?.status;
-  const hasLiveProgress = visibleMessages.some((message) => message.id.startsWith("progress:"));
+  const liveItems = useMemo(
+    () => rows.flatMap((row) => (isLiveMessage(row.item) ? [row.item] : [])),
+    [rows],
+  );
+  const hasLiveProgress = liveItems.length > 0;
   // One bot only: an activity line names one bot's tool, so it would mislabel a group.
-  const activityLabel = latestActivityLabel(snap?.messages ?? []);
-  // The runs a working line speaks for, and the source of its clock.
-  const workingRuns = useMemo(() => {
-    const runs = snap?.activeRuns ?? (snap?.run ? [snap.run] : []);
-    return runs.filter((run) => isWorkingStatus(run.status));
-  }, [snap?.activeRuns, snap?.run]);
+  const activityLabel = latestActivityLabel(liveItems);
+  const busyRuns = useMemo(
+    () =>
+      (snap?.activeRuns ?? (snap?.run ? [snap.run] : [])).filter((run) =>
+        isWorkingStatus(run.status),
+      ),
+    [snap?.activeRuns, snap?.run],
+  );
+  const workingRuns = useMemo(
+    () => busyRuns.filter((run) => run.id !== waiting?.runId),
+    [busyRuns, waiting?.runId],
+  );
+  const queuedRunIds = useMemo(() => queuedRunIdsOf(busyRuns), [busyRuns]);
   const workingGroupBots = useMemo(() => {
     if (!inGroup) return [];
     const seen = new Set<string>();
@@ -649,7 +668,8 @@ function Thread() {
       return [{ ...member, status: run.status }];
     });
   }, [inGroup, snap?.members, workingRuns]);
-  const working = inGroup ? workingGroupBots.length > 0 : isWorkingStatus(currentBotStatus);
+  const botWorking = isWorkingStatus(currentBotStatus) && snap?.run?.id !== waiting?.runId;
+  const working = inGroup ? workingGroupBots.length > 0 : botWorking;
 
   useEffect(() => {
     void rpc<AgentSkillCatalogEntry[]>("agentSkills/list")
@@ -907,9 +927,6 @@ function Thread() {
       expandedHistoryThread.current = null;
       pinnedAroundRef.current = null;
       historyEpoch.current += 1;
-      setSnap((current) =>
-        current ? { ...current, messages: [], olderCursor: null, run: null } : current,
-      );
     });
   }
 
@@ -973,9 +990,11 @@ function Thread() {
     const targetBotId = botId;
     const targetGroupId = groupId;
     const epoch = historyEpoch.current;
-    const next = await rpc<MobileSnapshot>(
-      "threads/get",
-      targetGroupId ? { groupId: targetGroupId } : { botId: targetBotId! },
+    const next = threadEntriesOf(
+      await rpc<MobileThreadResponse>(
+        "threads/get",
+        targetGroupId ? { groupId: targetGroupId } : { botId: targetBotId! },
+      ),
     );
     if (
       !shouldApplyMobileThreadRefresh({
@@ -999,35 +1018,28 @@ function Thread() {
     const epoch = historyEpoch.current;
     jumpGeneration.current += 1;
     const jumpId = jumpGeneration.current;
-    const [snap, page] = await Promise.all([
-      rpc<MobileSnapshot>("threads/get", threadTarget),
-      rpc<MobileMessagePage>("threads/messages", {
+    const [response, page] = await Promise.all([
+      rpc<MobileThreadResponse>("threads/get", threadTarget),
+      rpc<ThreadMessagePage>("threads/messages", {
         ...threadTarget,
-        around: { messageId: target.messageId },
+        around: { entryId: target.messageId },
       }),
     ]);
+    const snap = threadEntriesOf(response);
     // The epoch check drops a jump that raced a conversation clear (or a bot switch); the
     // generation check drops an older same-thread jump that finished after a newer one.
     if (epoch !== historyEpoch.current || jumpId !== jumpGeneration.current) return;
     if (target.groupId && activeGroupId.current !== target.groupId) return;
     if (target.botId && activeBotId.current !== target.botId) return;
-    const targetInPage = page.messages.some((message) => message.id === target.messageId);
+    const targetInPage = page.entries.some((entry) => entry.id === target.messageId);
     expandedHistoryThread.current = targetInPage ? page.threadId : null;
     pinnedAroundRef.current = targetInPage
-      ? {
-          ...threadTarget,
-          messageId: target.messageId,
-          threadId: page.threadId,
-          messages: [...page.messages],
-          olderCursor: page.olderCursor,
-        }
+      ? { ...threadTarget, messageId: target.messageId }
       : null;
     jumpScrollTarget.current = targetInPage ? target.messageId : null;
-    setSnap({
-      ...snap,
-      messages: targetInPage ? [...page.messages] : snap.messages,
-      olderCursor: targetInPage ? page.olderCursor : snap.olderCursor,
-    });
+    setSnap(
+      targetInPage ? { ...snap, entries: page.entries, olderCursor: page.olderCursor } : snap,
+    );
   }
 
   async function loadOlderMessages() {
@@ -1036,17 +1048,16 @@ function Thread() {
     setLoadingOlder(true);
     const epoch = historyEpoch.current;
     try {
-      const page = await rpc<MobileMessagePage>("threads/messages", {
+      const page = await rpc<ThreadMessagePage>("threads/messages", {
         ...(groupId ? { groupId } : { botId: botId! }),
         before: snap.olderCursor,
-        includePeerReceipts: true,
       });
       if (epoch !== historyEpoch.current) {
         loadingOlderContent.current = false;
         return;
       }
       expandedHistoryThread.current = page.threadId;
-      setSnap((prev) => prependMobileMessagePage(prev, page));
+      setSnap((prev) => withOlderPage(prev, page));
     } catch (err) {
       loadingOlderContent.current = false;
       setError(err instanceof Error ? err.message : t("Could not load earlier messages"));
@@ -1151,12 +1162,13 @@ function Thread() {
     void (async () => {
       // Pending search jumps load the around-page separately; avoid replacing it with latest.
       const next = messageId
-        ? await rpc<MobileSnapshot>("threads/get", groupId ? { groupId } : { botId: botId! }).catch(
-            (err: Error) => {
-              setError(err.message);
-              return null;
-            },
-          )
+        ? await rpc<MobileThreadResponse>(
+            "threads/get",
+            groupId ? { groupId } : { botId: botId! },
+          ).catch((err: Error) => {
+            setError(err.message);
+            return null;
+          })
         : await refresh().catch((err: Error) => {
             setError(err.message);
             return null;
@@ -1170,32 +1182,19 @@ function Thread() {
             groupId ? { groupId } : { botId: botId! },
             cursor,
             (event) => {
-              cursor = Math.max(cursor, event.seq ?? -1);
+              cursor = Math.max(cursor, event.seq);
               retryMs = 250;
-              if (
-                event.type === "thread.progress" ||
-                event.type === "agent.tool.called" ||
-                event.type === "agent.tool.completed" ||
-                event.type === "thread.message.created" ||
-                event.type === "thread.message.updated" ||
-                event.type === "thread.subagent" ||
-                event.type === "thread.cleared" ||
-                event.type === "thread.rewound" ||
-                event.type === "run.waiting_input" ||
-                event.type === "computer.takeover.requested" ||
-                isRunTerminalEvent(event)
-              ) {
-                if (event.type === "thread.cleared") {
-                  expandedHistoryThread.current = null;
-                  pinnedAroundRef.current = null;
-                  historyEpoch.current += 1;
-                }
-                setSnap((prev) => applyMobileThreadEvent(prev, event));
+              const appended = appendedEntries(event);
+              if (appended.some((entry) => entry.type === "clear")) {
+                expandedHistoryThread.current = null;
+                pinnedAroundRef.current = null;
+                historyEpoch.current += 1;
               }
+              setSnap((prev) => applyMobileThreadEvent(prev, event));
               if (event.type === "bot.updated") {
                 void refreshMentionBots();
               }
-              if (event.type === "thread.message.created" && event.payload?.role === "bot") {
+              if (botWordsOf(event).length > 0) {
                 readVisibleTarget.current = null;
                 markReadIfVisible();
               }
@@ -1334,11 +1333,13 @@ function Thread() {
   }, []);
   const recentWriting = useCallback(
     () =>
-      (snap?.messages ?? [])
-        .filter((message) => message.role === "user")
+      rows
+        .flatMap((row) =>
+          row.item.kind === "message" && row.item.role === "user" ? [row.item] : [],
+        )
         .slice(-8)
         .map((message) => blockText(message)),
-    [snap?.messages],
+    [rows],
   );
   const dictation = useComposerDictation({
     draft,
@@ -1518,7 +1519,9 @@ function Thread() {
               text: trimmed || undefined,
               mentions: plan.mentionPayload.length ? plan.mentionPayload : undefined,
               artifactIds: artifactIds.length ? artifactIds : undefined,
-              replyToMessageId: reroutedToGroup ? undefined : composerSnapshot.replyTarget?.id,
+              replyToMessageId: reroutedToGroup
+                ? undefined
+                : composerSnapshot.replyTarget?.messageId,
               linkPreview: withoutLinkPreview ? (false as const) : undefined,
             }
           : {
@@ -1527,7 +1530,7 @@ function Thread() {
               text: trimmed || undefined,
               mentions: plan.mentionPayload.length ? plan.mentionPayload : undefined,
               artifactIds: artifactIds.length ? artifactIds : undefined,
-              replyToMessageId: composerSnapshot.replyTarget?.id,
+              replyToMessageId: composerSnapshot.replyTarget?.messageId,
               linkPreview: withoutLinkPreview ? (false as const) : undefined,
             },
       );
@@ -1612,16 +1615,16 @@ function Thread() {
     }
   }
 
-  const answerMessage = useCallback(
-    async (message: MobileMessage, answer: string, edits?: SpawnBotEdits) => {
+  const answerCard = useCallback(
+    async (card: CardTarget, answer: string, edits?: SpawnBotEdits) => {
       const targetBotId = botId;
       const targetGroupId = groupId;
-      if ((!targetBotId && !targetGroupId) || !message.runId) return;
+      if (!targetBotId && !targetGroupId) return;
       try {
         await rpc("threads/answer", {
           ...(targetGroupId ? { groupId: targetGroupId } : { botId: targetBotId! }),
-          runId: message.runId,
-          messageId: message.id,
+          runId: card.runId,
+          messageId: card.entryId,
           answer,
           ...(edits ? { edits } : {}),
         });
@@ -1637,6 +1640,14 @@ function Thread() {
     },
     [botId, groupId],
   );
+  const answerMessage = useCallback(
+    async (message: MobileMessage, answer: string, edits?: SpawnBotEdits) => {
+      const card = waitingRef.current;
+      if (card?.itemId !== message.id) return;
+      await answerCard({ runId: card.runId, entryId: card.entryId }, answer, edits);
+    },
+    [answerCard],
+  );
 
   const openBot = useCallback(
     (id: string, botName: string) =>
@@ -1649,9 +1660,11 @@ function Thread() {
 
   const speak = useCallback(
     (message: MobileMessage) =>
-      void speakMessage(message.botId ?? botId ?? snap?.members?.[0]?.botId ?? "", message).catch(
-        (err) =>
-          Alert.alert(t("Could not speak"), err instanceof Error ? err.message : t("Try again.")),
+      void speakMessage(
+        (message.role === "bot" ? message.botId : botId) ?? snap?.members?.[0]?.botId ?? "",
+        message,
+      ).catch((err) =>
+        Alert.alert(t("Could not speak"), err instanceof Error ? err.message : t("Try again.")),
       ),
     [botId, snap?.members],
   );
@@ -1699,7 +1712,7 @@ function Thread() {
     );
   }
 
-  const answerableAskMessageId = latestAnswerableAskMessageId(snap);
+  const answerableAskMessageId = waiting?.itemId ?? null;
   // The edit sheet lives only while its card can still be answered.
   useEffect(() => syncSpawnBotEdit(answerableAskMessageId), [answerableAskMessageId]);
   // Only the run's owner may edit a Create bot card; until this loads, nobody gets Edit.
@@ -1710,16 +1723,12 @@ function Thread() {
       .catch(() => undefined);
   }, []);
   const listExtraData = useMemo(
-    () => ({ answerableAskMessageId, viewerUserId }),
-    [answerableAskMessageId, viewerUserId],
+    () => ({ answerableAskMessageId, viewerUserId, queuedRunIds }),
+    [answerableAskMessageId, viewerUserId, queuedRunIds],
   );
   const runError = snap?.run?.status === "failed" ? (snap.run.error ?? null) : null;
-  const liveMessages = useMemo(() => [...visibleMessages].reverse(), [visibleMessages]);
-  liveMessagesRef.current = liveMessages;
-  const messagesById = useMemo(
-    () => new Map((snap?.messages ?? []).map((message) => [message.id, message])),
-    [snap?.messages],
-  );
+  const liveRows = useMemo(() => [...rows].reverse(), [rows]);
+  liveRowsRef.current = liveRows;
   const pinnedTarget = pinnedAroundRef.current;
   const showPinnedPage = Boolean(
     jumpScrollTarget.current ||
@@ -1736,59 +1745,37 @@ function Thread() {
   // loaded snapshot's thread, not the route: the screen mounts (or switches
   // bot) before that thread's messages load, and seeding then would make
   // every message already there play its entrance.
-  // Routine runs as log lines: a run keeps the message it then sent, and a
-  // bot's consecutive runs with nothing between them share one line.
-  const routineRoles = useMemo(() => foldRoutineRuns(visibleMessages), [visibleMessages]);
-  // The time markers down the rendered rows. Routine lines carry their own
-  // time, so between two of them a marker only says the day, when it changes.
-  const { timeMarkers, previousRows } = useMemo(() => {
-    const markers = new Map<string, string>();
-    // The row drawn before each one: a folded run or a run's handoff is skipped.
-    const before = new Map<string, MobileMessage>();
-    let previousRow: MobileMessage | undefined;
-    const labelOptions = {
-      locale: dateLocaleForUi(),
-      today: t("Today"),
-      yesterday: t("Yesterday"),
-    };
-    let previous: { createdAt?: string; routine: boolean } | undefined;
-    for (const message of visibleMessages) {
-      const role = routineRoles.get(message.id);
-      if (role?.kind === "hidden") continue;
-      const routine = role?.kind === "run" || role?.kind === "group";
-      const at = role?.kind === "group" ? role.runs[0]?.createdAt : message.createdAt;
-      if (at) {
-        const shows =
-          routine && previous?.routine
-            ? new Date(previous.createdAt ?? at).toDateString() !== new Date(at).toDateString()
-            : showsTimeMarker(previous?.createdAt, at);
-        if (shows) {
-          markers.set(
-            message.id,
-            threadTimeMarkerLabel(at, { ...labelOptions, withTime: !routine }),
-          );
-        }
-      }
-      previous = { createdAt: message.createdAt ?? previous?.createdAt, routine };
-      if (previousRow) before.set(message.id, previousRow);
-      previousRow = message;
-    }
-    return { timeMarkers: markers, previousRows: before };
-  }, [visibleMessages, routineRoles, t]);
-  const newMessageIds = useMessageArrivals(snap?.threadId, visibleMessages, {
+  const arrivals = useMemo(
+    () =>
+      rows.map(({ item }) => ({
+        id: item.id,
+        createdAt: item.ts,
+        ...(item.kind === "message" && item.role === "bot" && item.runId
+          ? { runId: item.runId }
+          : {}),
+      })),
+    [rows],
+  );
+  const newMessageIds = useMessageArrivals(snap?.threadId, arrivals, {
     seed: loadingOlderContent.current || showPinnedPage,
   });
   const arrivalStaggerMs = useMemo(
+    () => messageArrivalStaggerMs(arrivals.filter((arrival) => newMessageIds.has(arrival.id))),
+    [arrivals, newMessageIds],
+  );
+  const reactions = useMemo(
     () =>
-      messageArrivalStaggerMs(
-        visibleMessages
-          .filter((message) => newMessageIds.has(message.id) && message.createdAt)
-          .map((message) => ({ id: message.id, createdAt: message.createdAt! })),
+      new Map(
+        rows.flatMap((row) =>
+          row.reactions.length > 0 ? [[row.item.id, new Map(row.reactions)] as const] : [],
+        ),
       ),
-    [visibleMessages, newMessageIds],
+    [rows],
   );
   // 7d: a reaction pill pops on appearing or its count rising, never on mount alone.
-  const poppedReactionKeys = useReactionPops(threadKey, reactionView.reactions);
+  const poppedReactionKeys = useReactionPops(threadKey, reactions);
+  const labelOptions = { locale: dateLocaleForUi(), today: t("Today"), yesterday: t("Yesterday") };
+  const jumpRowId = jumpScrollTarget.current ? view.rowOf.get(jumpScrollTarget.current) : undefined;
 
   function performScroll(action: ThreadScrollAction) {
     if (!action || showPinnedPage) return;
@@ -1818,14 +1805,14 @@ function Thread() {
     );
   }
 
-  async function reactToMessage(message: MobileMessage, reaction: MessageReaction) {
+  async function reactToMessage(messageId: EntryId, reaction: MessageReaction) {
     const targetBotId = botId;
     const targetGroupId = groupId;
     if (!targetBotId && !targetGroupId) return;
     try {
       await rpc("threads/react", {
         ...(targetGroupId ? { groupId: targetGroupId } : { botId: targetBotId! }),
-        messageId: message.id,
+        messageId,
         reaction,
         clientNonce: newClientNonce(),
       });
@@ -1839,26 +1826,35 @@ function Thread() {
   }
 
   async function removeLinkPreview(message: MobileMessage) {
+    const messageId = view.rows.find((row) => row.item.id === message.id)?.previewMessageId;
+    if (!messageId) return;
     const targetBotId = botId;
     const targetGroupId = groupId;
     try {
-      await rpc("messages/removeLinkPreview", { messageId: message.id });
+      await rpc("messages/removeLinkPreview", { messageId });
     } catch (err) {
       if (!isCurrentTarget(targetBotId, targetGroupId)) return;
       setError(err instanceof Error ? err.message : t("Try again."));
     }
   }
 
-  function messageActionGroups(message: MobileMessage): MessageSheetAction[][] {
+  function messageActionGroups(
+    message: MobileMessage,
+    messageId: EntryId | undefined,
+  ): MessageSheetAction[][] {
     const text = copyableMobileMessageText(message);
     return [
       [
-        {
-          name: "reply",
-          text: t("Reply"),
-          icon: { ios: "arrowshape.turn.up.left", android: "arrow-undo-outline" },
-          onPress: () => setReplyTarget(message),
-        },
+        ...(messageId
+          ? [
+              {
+                name: "reply",
+                text: t("Reply"),
+                icon: { ios: "arrowshape.turn.up.left", android: "arrow-undo-outline" } as const,
+                onPress: () => setReplyTarget({ message, messageId }),
+              },
+            ]
+          : []),
         ...(message.role === "user"
           ? [
               {
@@ -1906,12 +1902,18 @@ function Thread() {
   }
 
   /** The same actions for assistive tech, which has no long press. */
-  function messageActions(message: MobileMessage) {
-    const [primary = [], rest = []] = messageActionGroups(message);
+  function messageActions(message: MobileMessage, messageId: EntryId | undefined) {
+    const [primary = [], rest = []] = messageActionGroups(message, messageId);
     return [
       primary[0],
-      ...(canReactToThreadMessage(message)
-        ? [{ name: "react", text: t("React"), onPress: () => showMessageActions(message) }]
+      ...(messageId && canReactToThreadMessage(message)
+        ? [
+            {
+              name: "react",
+              text: t("React"),
+              onPress: () => showMessageActions(message, messageId),
+            },
+          ]
         : []),
       ...primary.slice(1),
       ...rest,
@@ -1920,14 +1922,18 @@ function Thread() {
             {
               name: "select",
               text: t("Select text"),
-              onPress: () => showMessageActions(message, "text"),
+              onPress: () => showMessageActions(message, messageId, "text"),
             },
           ]
         : []),
     ].filter((action) => action !== undefined);
   }
 
-  function showMessageActions(message: MobileMessage, mode: "actions" | "text" = "actions") {
+  function showMessageActions(
+    message: MobileMessage,
+    messageId: EntryId | undefined,
+    mode: "actions" | "text" = "actions",
+  ) {
     if (mode === "actions") selectionHaptic();
     const owner = `thread:${threadKey}`;
     messageSheetOwner.current = owner;
@@ -1937,14 +1943,14 @@ function Thread() {
         <MessageActionsSheet
           initialMode={mode}
           reactions={
-            canReactToThreadMessage(message)
+            messageId && canReactToThreadMessage(message)
               ? MESSAGE_REACTIONS.map((emoji) => ({
                   emoji,
-                  onPress: () => void reactToMessage(message, emoji),
+                  onPress: () => void reactToMessage(messageId, emoji),
                 }))
               : []
           }
-          groups={messageActionGroups(message)}
+          groups={messageActionGroups(message, messageId)}
           text={copyableMobileMessageText(message)}
           close={close}
         />
@@ -1959,26 +1965,30 @@ function Thread() {
   const latestActions = useRef({ messageActions, showMessageActions });
   latestActions.current = { messageActions, showMessageActions };
   const actionPropsCache = useMemo(
-    () => new WeakMap<MobileMessage, MessageActionProps>(),
+    () =>
+      new WeakMap<MobileMessage, { messageId: EntryId | undefined; props: MessageActionProps }>(),
     [locale],
   );
-  function messageActionProps(message: MobileMessage): MessageActionProps {
+  function messageActionProps(
+    message: MobileMessage,
+    messageId: EntryId | undefined,
+  ): MessageActionProps {
     const cached = actionPropsCache.get(message);
-    if (cached) return cached;
+    if (cached && cached.messageId === messageId) return cached.props;
     const props: MessageActionProps = {
-      onLongPress: () => latestActions.current.showMessageActions(message),
-      accessibilityActions: messageActions(message).map((action) => ({
+      onLongPress: () => latestActions.current.showMessageActions(message, messageId),
+      accessibilityActions: messageActions(message, messageId).map((action) => ({
         name: action.name,
         label: action.text,
       })),
       onAccessibilityAction: (event) => {
         latestActions.current
-          .messageActions(message)
+          .messageActions(message, messageId)
           .find((action) => action.name === event.nativeEvent.actionName)
           ?.onPress();
       },
     };
-    actionPropsCache.set(message, props);
+    actionPropsCache.set(message, { messageId, props });
     return props;
   }
 
@@ -1994,84 +2004,141 @@ function Thread() {
     };
   }
 
-  /** Rule R's gap (design contract § Grouping): 0 between two consecutive
-   * asides, 3 within a group, 14 otherwise (opening a new group, or the very
-   * first rendered row). */
-  function gapBeforeRow(
-    message: MobileMessage,
-    chrome: MessageChrome,
-    previousMessage: MobileMessage | undefined,
-  ): number {
-    if (
-      chrome === "aside" &&
-      previousMessage &&
-      isAsideOnlyMessage(visibleMessageBlocks(previousMessage.blocks, showSteps))
-    ) {
+  function gapBeforeRow(row: ThreadRow, previous: ThreadRow | undefined): number {
+    if (previous && isAsideItem(row.item, showSteps) && isAsideItem(previous.item, showSteps)) {
       return 0;
     }
-    // Routine lines stack like a log, with no gap between them.
-    const routineLine = (candidate: MobileMessage | undefined) =>
-      Boolean(candidate && routineRoles.has(candidate.id));
-    if (routineLine(message) && routineLine(previousMessage)) return 0;
-    return messageGroupsById.get(message.id)?.isFirstOfGroup === false
-      ? WITHIN_GROUP_GAP
-      : GROUP_GAP;
+    if (row.item.kind === "routine" && previous?.item.kind === "routine") return 0;
+    return row.firstOfGroup ? GROUP_GAP : WITHIN_GROUP_GAP;
   }
 
-  function renderMessageRow(
+  function repliedMessage(entryId: EntryId): MobileMessage | undefined {
+    const rowId = view.rowOf.get(entryId);
+    const item = rowId === undefined ? undefined : rows[rowIndex.get(rowId) ?? -1]?.item;
+    return item?.kind === "message" ? item : undefined;
+  }
+
+  function renderRow(row: ThreadRow, options?: { enableJump?: boolean; previous?: ThreadRow }) {
+    const { item } = row;
+    const marker = row.marker
+      ? threadTimeMarkerLabel(row.marker.at, { ...labelOptions, withTime: row.marker.withTime })
+      : "";
+    const isNew = Boolean(!options?.enableJump && newMessageIds.has(item.id));
+    const rewound = rewindIndex >= 0 && (rowIndex.get(item.id) ?? -1) >= rewindIndex;
+    const origin = originSession(item);
+    return (
+      <ThreadRowContext.Provider key={item.id} value={item.id}>
+        <View
+          onLayout={
+            options?.enableJump
+              ? (event) => {
+                  if (jumpRowId !== item.id) return;
+                  const y = Math.max(0, event.nativeEvent.layout.y - 24);
+                  requestAnimationFrame(() => {
+                    if (!jumpScrollTarget.current) return;
+                    pinnedScroll.current?.scrollTo({ y, animated: true });
+                    jumpScrollTarget.current = null;
+                  });
+                }
+              : undefined
+          }
+          style={{
+            marginTop: Math.max(marker ? GROUP_GAP : 0, gapBeforeRow(row, options?.previous)),
+          }}
+        >
+          {marker ? (
+            <Text
+              style={{
+                alignSelf: "center",
+                marginBottom: GROUP_GAP,
+                color: tokens.mutedForeground,
+                ...nativeTextStyle("label"),
+              }}
+            >
+              {marker}
+            </Text>
+          ) : null}
+          <View style={{ opacity: rewound ? 0.4 : 1 }}>
+            {origin ? (
+              <OriginLabel
+                origin={origin}
+                alignEnd={item.kind === "message" && item.role === "user"}
+                botId={botId ?? snap?.members?.[0]?.botId ?? ""}
+                groupId={groupId}
+                bots={mentionBots}
+                members={snap?.members}
+              />
+            ) : null}
+            {item.id === waiting?.itemId ? (
+              <Text
+                style={{
+                  marginBottom: 4,
+                  color: tokens.mutedForeground,
+                  ...nativeTextStyle("label"),
+                }}
+              >
+                {t("Needs input")}
+              </Text>
+            ) : null}
+            {item.kind === "message" ? (
+              renderMessage(row, item, isNew, options?.enableJump)
+            ) : (
+              <ItemRow
+                row={row}
+                botId={botId ?? snap?.members?.[0]?.botId ?? ""}
+                groupId={groupId}
+                botName={displayName}
+                bots={mentionBots}
+                members={snap?.members}
+                isNew={isNew}
+                canAnswer={item.id === answerableAskMessageId}
+                queued={item.kind === "routine" && queuedRunIds.has(item.runId)}
+                viewerUserId={viewerUserId}
+                onAnswer={answerCard}
+              />
+            )}
+          </View>
+        </View>
+      </ThreadRowContext.Provider>
+    );
+  }
+
+  function renderMessage(
+    row: ThreadRow,
     message: MobileMessage,
-    options?: { enableJump?: boolean; previousMessage?: MobileMessage },
+    isNew: boolean,
+    enableJump: boolean | undefined,
   ) {
-    const routineRole = routineRoles.get(message.id);
-    // Drawn by another line: a folded routine run, or the message a run sent.
-    if (routineRole?.kind === "hidden") return null;
-    const actionProps = messageActionProps(message);
-    const timeMarker = timeMarkers.get(message.id) ?? "";
-    const messageReactions = reactionView.reactions.get(message.id);
+    const actionProps = messageActionProps(message, row.messageId);
+    const messageReactions = row.reactions;
     const drawnBlocks = visibleMessageBlocks(message.blocks, showSteps);
-    // An aside is a note between messages and carries no author; a bot's
-    // question or approval is a normal row, its FramedBlock card just the
-    // row's body. Aside is decided by the blocks alone (a peer receipt is
-    // stored with role "user" but is still an aside).
     const chrome: MessageChrome = isAsideOnlyMessage(drawnBlocks) ? "aside" : "row";
-    const authorBotId = message.botId ?? botId;
+    const authorBotId = message.role === "bot" ? message.botId : botId;
     const author = messageBot(authorBotId);
-    const authorStatus = message.id.startsWith("progress:")
+    const authorStatus = isLiveMessage(message)
       ? (snap?.activeRuns?.find((run) => run.botId === authorBotId)?.status ??
         (snap?.run?.botId === authorBotId ? snap?.run?.status : currentBotStatus))
       : undefined;
-    const group = messageGroupsById.get(message.id);
-    // MA-1: never for a message present at thread open, "Load earlier", or
-    // the jump/pinned page — `options.enableJump` is only ever passed by the
-    // pinned ScrollView's own call site, so excluding it here is exactly
-    // "never in the jump view".
-    const isNew = Boolean(!options?.enableJump && newMessageIds.has(message.id));
-    // 7g: swipe-to-reply is a bot *narration* bubble's gesture only — a
-    // decision card, an ask, a routine/subagent card, a peer-message marker
-    // or an attachment keep their existing behaviour untouched.
     const isNarrationBotBubble =
       chrome === "row" &&
       message.role === "bot" &&
       drawnBlocks.length > 0 &&
       !drawnBlocks.some((block) => CARD_ONLY_BLOCK_KINDS.has(block.kind));
+    const replyTo = message.role === "user" ? message.replyTo : undefined;
     const replyPreviewNode =
-      chrome === "row" && message.replyToMessageId
-        ? messagesById.get(message.replyToMessageId)
-        : undefined;
-    // The preview card sits under the bubble, or takes its place when the message is only the
-    // link. A message that is itself a card (ask, routine run, ...) never carries one.
+      chrome === "row" && replyTo ? repliedMessage(replyTo.entryId) : undefined;
     const previewCard = chrome === "row" ? linkPreviewCardOf(message) : undefined;
     const cardReplacesBubbleView = previewCard
       ? cardReplacesBubble(drawnBlocks, previewCard)
       : false;
+    const replyToRow = () => {
+      if (row.messageId) setReplyTarget({ message, messageId: row.messageId });
+    };
     const bubble = (
       <MessageBubble
         botId={botId ?? snap?.members?.[0]?.botId ?? ""}
         groupId={groupId}
         message={message}
-        botName={displayName}
-        bots={mentionBots}
-        members={snap?.members}
         replyPreview={replyPreviewNode}
         canAnswer={message.id === answerableAskMessageId}
         viewerUserId={viewerUserId}
@@ -2080,7 +2147,6 @@ function Thread() {
         onPreviewMarkdown={setMarkdownPreview}
         actionProps={actionProps}
         isNew={isNew}
-        routineRole={routineRole}
         // The card shows the link, so the bubble does not repeat the line that is only that link.
         previewedUrl={previewCard && !cardReplacesBubbleView ? previewCard.url : undefined}
       />
@@ -2120,153 +2186,99 @@ function Thread() {
         content
       );
     return (
-      <ThreadRowContext.Provider key={message.id} value={message.id}>
-        <View
-          key={message.id}
-          onLayout={
-            options?.enableJump
-              ? (event) => {
-                  if (jumpScrollTarget.current !== message.id) return;
-                  const y = Math.max(0, event.nativeEvent.layout.y - 24);
-                  requestAnimationFrame(() => {
-                    if (jumpScrollTarget.current !== message.id) return;
-                    pinnedScroll.current?.scrollTo({ y, animated: true });
-                    jumpScrollTarget.current = null;
-                  });
-                }
-              : undefined
-          }
-          style={{
-            // A day marker between two routine lines still needs its air above.
-            marginTop: Math.max(
-              timeMarker ? GROUP_GAP : 0,
-              gapBeforeRow(
-                message,
-                chrome,
-                routineRoles.size ? previousRows.get(message.id) : options?.previousMessage,
-              ),
-            ),
-          }}
-        >
-          {timeMarker ? (
-            <Text
-              style={{
-                alignSelf: "center",
-                marginBottom: GROUP_GAP,
-                color: tokens.mutedForeground,
-                ...nativeTextStyle("label"),
-              }}
-            >
-              {timeMarker}
-            </Text>
-          ) : null}
-          <View
-            style={{
-              opacity: rewindTarget && (message.seq ?? 0) >= (rewindTarget.seq ?? 0) ? 0.4 : 1,
-            }}
+      <>
+        {chrome === "row" && message.role === "bot" ? (
+          <MessageRow
+            avatar={
+              <BotAvatar
+                color={author.color}
+                identity={authorBotId}
+                shapeSeed={author.shapeSeed}
+                size={sizes.message}
+                status={authorStatus}
+                still
+              />
+            }
+            author={author.name}
+            showAuthor={inGroup && row.firstOfGroup}
+            showAvatar={inGroup && row.lastOfGroup}
+            mono={!inGroup}
           >
-            {chrome === "row" && message.role === "bot" ? (
-              <MessageRow
-                avatar={
-                  <BotAvatar
-                    color={author.color}
-                    identity={authorBotId}
-                    shapeSeed={author.shapeSeed}
-                    size={sizes.message}
-                    status={authorStatus}
-                    still
-                  />
-                }
-                author={author.name}
-                showAuthor={inGroup && (group?.isFirstOfGroup ?? true)}
-                showAvatar={inGroup && (group?.isLastOfGroup ?? true)}
-                mono={!inGroup}
-              >
-                {withPreview(
-                  isNarrationBotBubble ? (
-                    <AnimatedMessageBubble
-                      variant="bot"
-                      isNew={isNew}
-                      enterDelayMs={arrivalStaggerMs.get(message.id) ?? 0}
-                      // A table scrolls sideways inside the bubble; a rightward drag
-                      // there must move the table, not start a reply.
-                      enableSwipeReply={
-                        !options?.enableJump &&
-                        !message.blocks.some(
-                          (block) => block.kind === "text" && hasMarkdownTable(block.text),
-                        )
-                      }
-                      onLongPress={actionProps.onLongPress!}
-                      onSwipeReply={() => setReplyTarget(message)}
-                      accessibilityActions={actionProps.accessibilityActions}
-                      onAccessibilityAction={actionProps.onAccessibilityAction}
-                    >
-                      {bubble}
-                    </AnimatedMessageBubble>
-                  ) : (
-                    <MessageArrival
-                      isNew={isNew}
-                      enterDelayMs={arrivalStaggerMs.get(message.id) ?? 0}
-                    >
-                      <Pressable accessible={false} onLongPress={actionProps.onLongPress}>
-                        {bubble}
-                      </Pressable>
-                    </MessageArrival>
-                  ),
-                )}
-              </MessageRow>
-            ) : chrome === "row" && message.role === "user" ? (
-              withPreview(
+            {withPreview(
+              isNarrationBotBubble ? (
                 <AnimatedMessageBubble
-                  variant="user"
+                  variant="bot"
                   isNew={isNew}
-                  onLongPress={actionProps.onLongPress!}
+                  enterDelayMs={arrivalStaggerMs.get(message.id) ?? 0}
+                  // A table scrolls sideways inside the bubble; a rightward drag
+                  // there must move the table, not start a reply.
+                  enableSwipeReply={
+                    !enableJump &&
+                    Boolean(row.messageId) &&
+                    !message.blocks.some(
+                      (block) => block.kind === "text" && hasMarkdownTable(block.text),
+                    )
+                  }
+                  onLongPress={actionProps.onLongPress}
+                  onSwipeReply={replyToRow}
                   accessibilityActions={actionProps.accessibilityActions}
                   onAccessibilityAction={actionProps.onAccessibilityAction}
                 >
                   {bubble}
-                </AnimatedMessageBubble>,
-              )
-            ) : chrome === "row" ? (
-              withPreview(
-                <Pressable accessible={false} onLongPress={actionProps.onLongPress}>
-                  {bubble}
-                </Pressable>,
-              )
-            ) : (
-              <View>{bubble}</View>
+                </AnimatedMessageBubble>
+              ) : (
+                <MessageArrival isNew={isNew} enterDelayMs={arrivalStaggerMs.get(message.id) ?? 0}>
+                  <Pressable accessible={false} onLongPress={actionProps.onLongPress}>
+                    {bubble}
+                  </Pressable>
+                </MessageArrival>
+              ),
             )}
-            {messageReactions ? (
-              <View
-                style={{
-                  flexDirection: "row",
-                  flexWrap: "wrap",
-                  gap: 4,
-                  marginTop: 6,
-                  marginStart:
-                    chrome === "row" && message.role === "bot" && inGroup ? FRAMED_INDENT : 0,
-                  justifyContent: message.role === "user" ? "flex-end" : "flex-start",
-                }}
-              >
-                {[...messageReactions].map(([emoji, count]) => (
-                  <ReactionPill
-                    key={emoji}
-                    emoji={emoji}
-                    count={count}
-                    pop={poppedReactionKeys.has(reactionPopKey(message.id, emoji))}
-                  />
-                ))}
-              </View>
-            ) : null}
+          </MessageRow>
+        ) : chrome === "row" ? (
+          withPreview(
+            <AnimatedMessageBubble
+              variant="user"
+              isNew={isNew}
+              onLongPress={actionProps.onLongPress}
+              accessibilityActions={actionProps.accessibilityActions}
+              onAccessibilityAction={actionProps.onAccessibilityAction}
+            >
+              {bubble}
+            </AnimatedMessageBubble>,
+          )
+        ) : (
+          <View>{bubble}</View>
+        )}
+        {messageReactions.length > 0 ? (
+          <View
+            style={{
+              flexDirection: "row",
+              flexWrap: "wrap",
+              gap: 4,
+              marginTop: 6,
+              marginStart:
+                chrome === "row" && message.role === "bot" && inGroup ? FRAMED_INDENT : 0,
+              justifyContent: message.role === "user" ? "flex-end" : "flex-start",
+            }}
+          >
+            {messageReactions.map(([emoji, count]) => (
+              <ReactionPill
+                key={emoji}
+                emoji={emoji}
+                count={count}
+                pop={poppedReactionKeys.has(reactionPopKey(message.id, emoji))}
+              />
+            ))}
           </View>
-        </View>
-      </ThreadRowContext.Provider>
+        ) : null}
+      </>
     );
   }
 
   const workingBotsForLine = inGroup
     ? workingGroupBots
-    : currentBot && isWorkingStatus(currentBotStatus) && !hasLiveProgress
+    : currentBot && botWorking && !hasLiveProgress
       ? [
           {
             botId: currentBot.id,
@@ -2403,11 +2415,8 @@ function Thread() {
                 keyboardShouldPersistTaps="handled"
               >
                 {loadEarlierControl}
-                {visibleMessages.map((message, index) =>
-                  renderMessageRow(message, {
-                    enableJump: true,
-                    previousMessage: visibleMessages[index - 1],
-                  }),
+                {rows.map((row, index) =>
+                  renderRow(row, { enableJump: true, previous: rows[index - 1] }),
                 )}
                 {workingFooter}
               </ScrollView>
@@ -2415,9 +2424,9 @@ function Thread() {
               <FlatList
                 key={threadKey}
                 ref={scroll}
-                data={liveMessages}
+                data={liveRows}
                 inverted
-                keyExtractor={(message) => message.id}
+                keyExtractor={(row) => row.item.id}
                 extraData={listExtraData}
                 style={{ flex: 1, marginTop: 8 }}
                 maintainVisibleContentPosition={keptPosition}
@@ -2458,9 +2467,7 @@ function Thread() {
                 }}
                 ListFooterComponent={loadEarlierControl}
                 ListHeaderComponent={workingFooter}
-                renderItem={({ item, index }) =>
-                  renderMessageRow(item, { previousMessage: liveMessages[index + 1] })
-                }
+                renderItem={({ item, index }) => renderRow(item, { previous: liveRows[index + 1] })}
               />
             )}
             {!showPinnedPage && threadScrollState.detached ? (
@@ -2548,7 +2555,7 @@ function Thread() {
                     {t("Replying to")}
                   </Text>
                   <Text style={{ color: tokens.foreground, fontSize: 13 }} numberOfLines={1}>
-                    {previewMessageText(replyTarget)}
+                    {previewMessageText(replyTarget.message)}
                   </Text>
                 </View>
                 <Pressable
@@ -3367,11 +3374,8 @@ type MessageActionProps = Pick<TextProps, "accessibilityActions" | "onAccessibil
 
 const MessageBubble = memo(function MessageBubble({
   botId,
-  botName,
-  bots,
   groupId,
   message,
-  members,
   replyPreview,
   canAnswer,
   viewerUserId,
@@ -3380,15 +3384,11 @@ const MessageBubble = memo(function MessageBubble({
   onPreviewMarkdown,
   actionProps,
   isNew,
-  routineRole,
   previewedUrl,
 }: {
   botId: string;
-  botName?: string;
-  bots: MobileBot[];
   groupId?: string;
   message: MobileMessage;
-  members?: MobileSnapshot["members"];
   replyPreview?: MobileMessage;
   canAnswer: boolean;
   viewerUserId?: string;
@@ -3396,20 +3396,15 @@ const MessageBubble = memo(function MessageBubble({
   onOpenBot: (botId: string, name: string) => void;
   onPreviewMarkdown: (target: MarkdownArtifactPreviewTarget) => void;
   actionProps: MessageActionProps;
-  /** 7f: a new "Messaged / Message from" marker makes its two bloubs glance
-   * at each other once. Never for one already on screen at thread open. */
   isNew: boolean;
-  /** How a routine run renders once runs are folded (a line, a group). */
-  routineRole?: RoutineRowRole;
   /** The link its card shows: a line that is only this link is left out of the text drawn. */
   previewedUrl?: string;
 }) {
   const tokens = mobileTokens();
   const { t } = useI18n();
-  const router = useRouter();
   const showSteps = useDisplayAgentSteps();
   const artifactTarget: MobileArtifactTarget = groupId ? { groupId } : { botId };
-  const cardBotId = message.botId ?? botId;
+  const cardBotId = message.role === "bot" ? message.botId : botId;
   // Mono-bot grammar (design contract §3b): the narration bubble caps at 82%
   // of the thread instead of 88% of the content column.
   const mono = !groupId;
@@ -3484,74 +3479,8 @@ const MessageBubble = memo(function MessageBubble({
       </View>
     );
   }
-  const botColorOf = (id: string | undefined) =>
-    bots.find((bot) => bot.id === id)?.color ??
-    members?.find((member) => member.botId === id)?.color ??
-    tokens.mutedForeground;
-  const avatarOf = (id: string | undefined) => ({
-    color: botColorOf(id),
-    identity: id,
-    shapeSeed: members?.find((member) => member.botId === id)?.shapeSeed,
-  });
   // An aside is a note between messages, not something a bot said: like the
   // web transcript it carries no author, no bubble and no message actions.
-  const handoff = message.blocks.find((block) => block.kind === "handoff");
-  if (handoff) {
-    const from = memberName(members, handoff.fromBotId) ?? t("bot");
-    const to = memberName(members, handoff.toBotId) ?? t("bot");
-    const label = t("{from} messaged {to}", { from, to });
-    return withSkillLines(
-      <HandoffDivider>{handoff.text ? `${label} · ${handoff.text}` : label}</HandoffDivider>,
-    );
-  }
-  const openPeerMessages = (peerBotId: string | undefined, peer: string | undefined) =>
-    router.push({
-      pathname: "/peer-messages",
-      params: {
-        botId: cardBotId,
-        botName: memberName(members, cardBotId) ?? botName ?? "",
-        botColor: botColorOf(cardBotId),
-        botShapeSeed: avatarOf(cardBotId).shapeSeed?.toString() ?? "",
-        peerBotId,
-        peerBotName: peer ?? "",
-        peerColor: botColorOf(peerBotId),
-        peerShapeSeed: avatarOf(peerBotId).shapeSeed?.toString() ?? "",
-      },
-    });
-  const peerMessage = message.blocks.find(
-    (
-      block,
-    ): block is Extract<MessageBlock, { kind: "bot_message_sent" | "bot_message_received" }> =>
-      block.kind === "bot_message_sent" || block.kind === "bot_message_received",
-  );
-  if (peerMessage) {
-    const sent = peerMessage.kind === "bot_message_sent";
-    const peer = sent ? peerMessage.toBotName : peerMessage.fromBotName;
-    const peerBotId = sent ? peerMessage.toBotId : peerMessage.fromBotId;
-    const label = sent
-      ? t("Messaged {peer}", { peer: peer ?? t("Bot") })
-      : t("Message from {peer}", { peer: peer ?? t("Bot") });
-    const pair = sent ? [cardBotId, peerBotId] : [peerBotId, cardBotId];
-    // 7f: a brand-new marker's two bloubs glance at each other once — the
-    // first item (rendered on the left by `StackedAvatars`) looks right,
-    // toward the second, which looks left, toward it.
-    const pairItems = pair.map((id, index) => ({
-      ...avatarOf(id),
-      ...(isNew ? { glance: index === 0 ? ("right" as const) : ("left" as const) } : {}),
-    }));
-    // Compact receipt only: peer bodies stay out of the human thread; the full
-    // view-only exchange opens on its own screen.
-    return withSkillLines(
-      <Interstitial
-        accessibilityLabel={label}
-        avatars={<StackedAvatars items={pairItems} size={sizes.interstitial} still />}
-        hitSlop={{ top: 5, bottom: 5, left: 8, right: 8 }}
-        onPress={() => openPeerMessages(peerBotId, peer)}
-      >
-        {label}
-      </Interstitial>,
-    );
-  }
   const channelMessage = message.blocks.find(
     (block): block is Extract<MessageBlock, { kind: "channel_message" }> =>
       block.kind === "channel_message",
@@ -3571,59 +3500,10 @@ const MessageBubble = memo(function MessageBubble({
   if (metaNote) {
     return withSkillLines(<Interstitial avatars={null}>{metaNote.text}</Interstitial>);
   }
-  const routineRun = message.blocks.find(
-    (block): block is Extract<MessageBlock, { kind: "routine_run" }> =>
-      block.kind === "routine_run",
-  );
-  if (routineRun) {
-    const handoffFor = (item: RoutineGroupRun): RoutineHandoff | undefined => {
-      const sent = item.sentTo;
-      if (!sent) return undefined;
-      return {
-        receipt: <BotAvatar {...avatarOf(sent.toBotId)} size={sizes.receipt} still />,
-        avatars: (
-          <StackedAvatars
-            items={[avatarOf(cardBotId), avatarOf(sent.toBotId)]}
-            size={sizes.interstitial}
-            still
-          />
-        ),
-        label: t("Messaged {peer}", { peer: sent.toBotName ?? t("Bot") }),
-        onPress: () => openPeerMessages(sent.toBotId, sent.toBotName),
-      };
-    };
-    if (routineRole?.kind === "group") {
-      return withSkillLines(
-        <RoutineGroup runs={routineRole.runs} handoffFor={handoffFor} actionProps={actionProps} />,
-      );
-    }
-    const item =
-      routineRole?.kind === "run"
-        ? routineRole.run
-        : { messageId: message.id, createdAt: message.createdAt, run: routineRun, latest: true };
-    return withSkillLines(
-      <RoutineRunLine item={item} handoff={handoffFor(item)} actionProps={actionProps} />,
-    );
-  }
   const special = message.blocks.find(
-    (block) => block.kind === "subagent" || block.kind === "child_bot",
+    (block): block is Extract<MessageBlock, { kind: "child_bot" }> => block.kind === "child_bot",
   );
-  if (special?.kind === "subagent") {
-    const running = special.status === "running";
-    const failed = special.status === "failed";
-    const body = special.result || special.progress;
-    return withSkillLines(
-      <TaskCard
-        title={special.name || t("subagent")}
-        state={running ? "running" : failed ? "failed" : "done"}
-        meta={special.task}
-        body={body}
-        streaming={running}
-        actionProps={actionProps}
-      />,
-    );
-  }
-  if (special?.kind === "child_bot") {
+  if (special) {
     const removed = special.status === "deleted" || special.status === "archived";
     return withSkillLines(
       <Pressable
@@ -3691,100 +3571,21 @@ const MessageBubble = memo(function MessageBubble({
     );
   }
   const askBlock = message.blocks.find(
-    (block) => block.kind === "ask" && Boolean(block.actions?.length),
+    (block): block is Extract<MessageBlock, { kind: "ask" }> =>
+      block.kind === "ask" && Boolean(block.actions?.length),
   );
-  if (askBlock?.kind === "ask" && askBlock.actions?.length) {
-    const approval = isApprovalAskBlock(askBlock);
-    // A routine card, proposed by the bot or confirming one set up, shows what it creates
-    // instead of the plain-text detail.
-    const routineCard = approval ? askBlock.routine : undefined;
-    // The row above already names the bot; the card only repeats itself for a
-    // consequential approval, name-less. A question with fixed options or a
-    // routine card opens with no header.
-    const header = approval && !routineCard ? { who: t("Needs your call") } : undefined;
-    const created = askBlock.created;
-    const routineSettled = (): ReactNode => {
-      if (!created) {
-        switch (routineCardSettlement(askBlock)) {
-          case "failed":
-            return t("Couldn't create");
-          case "not_now":
-            return t("Not now");
-          case "creating":
-            return t("Creating…");
-          default:
-            return t("Answered");
-        }
-      }
-      return (
-        <Pressable
-          accessibilityRole="link"
-          onPress={() =>
-            router.push({
-              pathname: "/bot-routine",
-              params: { botId: cardBotId, routineId: created.id },
-            })
-          }
-          style={{ flexDirection: "row", alignItems: "center", gap: 4, flexShrink: 1 }}
-        >
-          <Text style={{ color: tokens.mutedForeground, ...nativeTextStyle("meta") }}>
-            {askBlock.confirms === "updated" ? t("Routine updated") : t("Routine created")} ·{" "}
-            <Text style={{ color: tokens.foreground, fontWeight: "600" }}>{created.label}</Text>
-          </Text>
-          <NativeSymbol
-            ios="chevron.right"
-            android="chevron-forward"
-            size={11}
-            color={tokens.mutedForeground}
-          />
-        </Pressable>
-      );
-    };
-    const answeredLine =
-      askBlock.status === "answered"
-        ? routineCard
-          ? routineSettled()
-          : formatApprovalAnswer(askBlock.answer, askBlock.actions, approval)
-        : !canAnswer
-          ? t("No longer active")
-          : undefined;
+  if (askBlock) {
     return (
       <View style={{ gap: 8, width: "100%" }}>
-        <FramedBlock
-          header={header ? { ...header, dot: answeredLine === undefined } : undefined}
-          question={<Text {...actionProps}>{askBlock.text}</Text>}
-          consequence={routineCard ? undefined : askBlock.detail}
-          answered={answeredLine}
-          actions={
-            answeredLine === undefined ? (
-              <AskActions
-                actions={askBlock.actions}
-                approval={approval}
-                consequential={!routineCard}
-                allowFreeText={!approval}
-                accessibilityActions={actionProps.accessibilityActions}
-                onAccessibilityAction={actionProps.onAccessibilityAction}
-                onAnswer={(answer) => onAnswer(message, answer)}
-                onEdit={
-                  askBlock.spawnBot &&
-                  canAnswer &&
-                  canEditSpawnBotCard(askBlock.spawnBot, viewerUserId)
-                    ? () =>
-                        openSpawnBotEdit(router, {
-                          messageId: message.id,
-                          spawnBot: askBlock.spawnBot!,
-                          submit: (edits) => onAnswer(message, "allow", edits),
-                        })
-                    : undefined
-                }
-              />
-            ) : undefined
-          }
-        >
-          {routineCard && answeredLine === undefined ? (
-            <RoutineCardPreview routine={routineCard} />
-          ) : null}
-        </FramedBlock>
+        <ApprovalCard
+          block={askBlock}
+          cardId={message.id}
+          cardBotId={cardBotId}
+          canAnswer={canAnswer}
+          viewerUserId={viewerUserId}
+          actionProps={actionProps}
+          onAnswer={(answer, edits) => onAnswer(message, answer, edits)}
+        />
         {appConnectBlocks.map((block, index) => (
           <AppConnectCard
             key={`${block.provider}-${index}`}
@@ -3828,7 +3629,7 @@ const MessageBubble = memo(function MessageBubble({
           ...(message.role === "user" ? { backgroundColor: tokens.chatUser } : null),
         }}
       >
-        {replyPreview || (message.replyToMessageId && message.replyQuote) ? (
+        {replyQuote(message, replyPreview) ? (
           <Text
             style={{
               color: message.role === "user" ? tokens.chatUserForeground : tokens.mutedForeground,
@@ -3836,11 +3637,7 @@ const MessageBubble = memo(function MessageBubble({
             }}
             numberOfLines={2}
           >
-            {message.replyQuote
-              ? `“${message.replyQuote}”`
-              : replyPreview
-                ? previewMessageText(replyPreview)
-                : ""}
+            {replyQuote(message, replyPreview)}
           </Text>
         ) : null}
         {caption ? (
@@ -3945,28 +3742,30 @@ const MessageBubble = memo(function MessageBubble({
       </Surface>
     );
   }
-  const segments = messagePresentationSegments(shownBlocks);
-  const steps = showSteps ? stepsBlocks(message.blocks) : [];
-  const live = message.id.startsWith("progress:");
+  const segments = messagePresentationSegments(shownBlocks, showSteps);
+  const live = isLiveMessage(message);
   const firstContent = segments.findIndex((segment) => segment.kind === "content");
   const lastContent = skillLineSegment(
-    segments.map((segment) => blockText({ ...message, blocks: segment.blocks })),
+    segments.map((segment) =>
+      segment.kind === "content" ? blockText({ ...message, blocks: segment.blocks }) : "",
+    ),
   );
   return (
     <View style={{ gap: 8, width: "100%" }}>
-      {steps.map((block, index) => (
-        <AgentSteps key={`${message.id}-steps-${index}`} block={block} live={live} />
-      ))}
-      {segments.map((segment, index) => (
-        <MessageText
-          key={`${message.id}-content-${index}`}
-          message={{ ...message, blocks: segment.blocks }}
-          replyPreview={index === firstContent ? replyPreview : undefined}
-          actionProps={actionProps}
-          mono={mono}
-          meta={index === lastContent ? metaLines : undefined}
-        />
-      ))}
+      {segments.map((segment, index) =>
+        segment.kind === "steps" ? (
+          <AgentSteps key={`${message.id}-steps-${index}`} block={segment.block} live={live} />
+        ) : (
+          <MessageText
+            key={`${message.id}-content-${index}`}
+            message={{ ...message, blocks: segment.blocks }}
+            replyPreview={index === firstContent ? replyPreview : undefined}
+            actionProps={actionProps}
+            mono={mono}
+            meta={index === lastContent ? metaLines : undefined}
+          />
+        ),
+      )}
       {appConnectBlocks.map((block, index) => (
         <AppConnectCard
           key={`${block.provider}-${index}`}
@@ -3981,58 +3780,530 @@ const MessageBubble = memo(function MessageBubble({
   );
 });
 
-/** The skill lines under a bot's message: what it learned or updated opens the skill, a deleted one only shows. */
-function useSkillLines(message: MobileMessage, isNew: boolean): BotBubbleMeta[] {
+function ApprovalCard({
+  block,
+  cardId,
+  cardBotId,
+  canAnswer,
+  viewerUserId,
+  actionProps,
+  onAnswer,
+}: {
+  block: Extract<MessageBlock, { kind: "ask" }>;
+  cardId: string;
+  cardBotId: string;
+  canAnswer: boolean;
+  viewerUserId?: string;
+  actionProps: MessageActionProps;
+  onAnswer: (answer: string, edits?: SpawnBotEdits) => Promise<void>;
+}) {
+  const tokens = mobileTokens();
   const { t } = useI18n();
+  const router = useRouter();
+  const approval = isApprovalAskBlock(block);
+  const routineCard = approval ? block.routine : undefined;
+  const header = approval && !routineCard ? { who: t("Needs your call") } : undefined;
+  const created = block.created;
+  const routineSettled = (): ReactNode => {
+    if (!created) {
+      switch (routineCardSettlement(block)) {
+        case "failed":
+          return t("Couldn't create");
+        case "not_now":
+          return t("Not now");
+        case "creating":
+          return t("Creating…");
+        default:
+          return t("Answered");
+      }
+    }
+    return (
+      <Pressable
+        accessibilityRole="link"
+        onPress={() =>
+          router.push({
+            pathname: "/bot-routine",
+            params: { botId: cardBotId, routineId: created.id },
+          })
+        }
+        style={{ flexDirection: "row", alignItems: "center", gap: 4, flexShrink: 1 }}
+      >
+        <Text style={{ color: tokens.mutedForeground, ...nativeTextStyle("meta") }}>
+          {block.confirms === "updated" ? t("Routine updated") : t("Routine created")} ·{" "}
+          <Text style={{ color: tokens.foreground, fontWeight: "600" }}>{created.label}</Text>
+        </Text>
+        <NativeSymbol
+          ios="chevron.right"
+          android="chevron-forward"
+          size={11}
+          color={tokens.mutedForeground}
+        />
+      </Pressable>
+    );
+  };
+  const answeredLine =
+    block.status === "answered"
+      ? routineCard
+        ? routineSettled()
+        : formatApprovalAnswer(block.answer, block.actions, approval)
+      : !canAnswer
+        ? t("No longer active")
+        : undefined;
+  return (
+    <FramedBlock
+      header={header ? { ...header, dot: answeredLine === undefined } : undefined}
+      question={<Text {...actionProps}>{block.text}</Text>}
+      consequence={routineCard ? undefined : block.detail}
+      answered={answeredLine}
+      actions={
+        answeredLine === undefined ? (
+          <AskActions
+            actions={block.actions ?? []}
+            approval={approval}
+            consequential={!routineCard}
+            allowFreeText={!approval}
+            accessibilityActions={actionProps.accessibilityActions}
+            onAccessibilityAction={actionProps.onAccessibilityAction}
+            onAnswer={(answer) => onAnswer(answer)}
+            onEdit={
+              block.spawnBot && canAnswer && canEditSpawnBotCard(block.spawnBot, viewerUserId)
+                ? () =>
+                    openSpawnBotEdit(router, {
+                      messageId: cardId,
+                      spawnBot: block.spawnBot!,
+                      submit: (edits) => onAnswer("allow", edits),
+                    })
+                : undefined
+            }
+          />
+        ) : undefined
+      }
+    >
+      {routineCard && answeredLine === undefined ? (
+        <RoutineCardPreview routine={routineCard} />
+      ) : null}
+    </FramedBlock>
+  );
+}
+
+const NO_ACTIONS: MessageActionProps = { onLongPress: () => {} };
+
+type OpenedSession = { title: string; load: () => Promise<SessionEntry[]>; runId?: string };
+
+const ItemRow = memo(function ItemRow({
+  row,
+  botId,
+  groupId,
+  botName,
+  bots,
+  members,
+  isNew,
+  canAnswer,
+  queued = false,
+  viewerUserId,
+  onAnswer,
+  readOnly = false,
+}: {
+  row: ThreadRow;
+  botId: string;
+  groupId?: string;
+  botName?: string;
+  bots: MobileBot[];
+  members?: MobileSnapshot["members"];
+  isNew: boolean;
+  canAnswer: boolean;
+  queued?: boolean;
+  viewerUserId?: string;
+  onAnswer?: (card: CardTarget, answer: string, edits?: SpawnBotEdits) => Promise<void>;
+  readOnly?: boolean;
+}) {
+  const tokens = mobileTokens();
+  const { t } = useI18n();
+  const router = useRouter();
+  const [session, setSession] = useState<OpenedSession | null>(null);
+  const { item } = row;
+  const botColorOf = (id: string | undefined) =>
+    bots.find((bot) => bot.id === id)?.color ??
+    members?.find((member) => member.botId === id)?.color ??
+    tokens.mutedForeground;
+  const avatarOf = (id: string | undefined) => ({
+    color: botColorOf(id),
+    identity: id,
+    shapeSeed: members?.find((member) => member.botId === id)?.shapeSeed,
+  });
+  const openPeerMessages = readOnly
+    ? undefined
+    : (ownBotId: string, peerBotId: string, peer: string) =>
+        router.push({
+          pathname: "/peer-messages",
+          params: {
+            botId: ownBotId,
+            botName: memberName(members, ownBotId) ?? botName ?? "",
+            botColor: botColorOf(ownBotId),
+            botShapeSeed: avatarOf(ownBotId).shapeSeed?.toString() ?? "",
+            peerBotId,
+            peerBotName: peer,
+            peerColor: botColorOf(peerBotId),
+            peerShapeSeed: avatarOf(peerBotId).shapeSeed?.toString() ?? "",
+          },
+        });
+  const body = (() => {
+    switch (item.kind) {
+      case "message":
+        return null;
+      case "subagent": {
+        const title = item.name || t("subagent");
+        if (item.status === "running") {
+          return <TaskCard title={title} state="running" meta={item.task} streaming />;
+        }
+        return (
+          <TaskCard
+            title={title}
+            state={item.status === "failed" ? "failed" : "done"}
+            meta={item.model.id}
+            body={item.result}
+            onOpen={() =>
+              setSession({
+                title,
+                load: () => sessionEntries(item.sessionId),
+              })
+            }
+          />
+        );
+      }
+      case "routine": {
+        const handoffFor = (run: RoutineLineRun): RoutineHandoff | undefined => {
+          const sent = run.sentTo;
+          if (!sent) return undefined;
+          const peerBotId = sent.peer.kind === "bot" ? sent.peer.botId : undefined;
+          return {
+            receipt: <BotAvatar {...avatarOf(peerBotId)} size={sizes.receipt} still />,
+            avatars: (
+              <StackedAvatars
+                items={[avatarOf(sent.botId), avatarOf(peerBotId)]}
+                size={sizes.interstitial}
+                still
+              />
+            ),
+            label: t("Messaged {peer}", { peer: sent.peer.name }),
+            onPress:
+              openPeerMessages && peerBotId
+                ? () => openPeerMessages(sent.botId, peerBotId, sent.peer.name)
+                : undefined,
+          };
+        };
+        const openRun = (run: RoutineLineRun) =>
+          setSession({
+            title: run.item.name,
+            runId: run.item.runId,
+            load: () =>
+              rpc<{ entries: SessionEntry[] }>("runs/entries", { runId: run.item.runId }).then(
+                (result) => result.entries,
+              ),
+          });
+        const role: RoutineLineRole = row.routine ?? { kind: "run", run: { item, latest: true } };
+        return role.kind === "group" ? (
+          <RoutineGroup runs={role.runs} handoffFor={handoffFor} onOpen={openRun} />
+        ) : (
+          <RoutineRunLine
+            run={role.run}
+            queued={queued}
+            handoff={handoffFor(role.run)}
+            onOpen={openRun}
+          />
+        );
+      }
+      case "handoff": {
+        const from = memberName(members, item.fromBotId) ?? t("bot");
+        const to = memberName(members, item.toBotId) ?? t("bot");
+        const label = t("{from} messaged {to}", { from, to });
+        return <HandoffDivider>{item.text ? `${label} · ${item.text}` : label}</HandoffDivider>;
+      }
+      case "botMessage": {
+        const sent = item.direction === "sent";
+        const ownBotId = sent ? item.botId : botId;
+        const peerBotId = item.peer.kind === "bot" ? item.peer.botId : undefined;
+        const card = botMessageCard(item);
+        const peerThread = readOnly ? null : card.peerThread;
+        const pair = sent ? [ownBotId, peerBotId] : [peerBotId, ownBotId];
+        const pairItems = pair.map((id, index) => ({
+          ...avatarOf(id),
+          ...(isNew ? { glance: index === 0 ? ("right" as const) : ("left" as const) } : {}),
+        }));
+        return (
+          <Interstitial
+            accessibilityLabel={card.label}
+            avatars={<StackedAvatars items={pairItems} size={sizes.interstitial} still />}
+            hitSlop={{ top: 5, bottom: 5, left: 8, right: 8 }}
+            style={card.muted ? { opacity: 0.6 } : undefined}
+            onPress={
+              openPeerMessages && peerBotId
+                ? () => openPeerMessages(ownBotId, peerBotId, item.peer.name)
+                : undefined
+            }
+          >
+            {card.before}
+            {peerThread ? (
+              <Text accessibilityRole="link" onPress={() => router.push(peerThread)}>
+                {card.peer}
+              </Text>
+            ) : (
+              card.peer
+            )}
+            {card.after}
+          </Interstitial>
+        );
+      }
+      case "divider":
+        return <DividerRow reason={item.reason} />;
+      case "effect": {
+        const { card, runId } = item;
+        if (!card) return null;
+        return (
+          <ApprovalCard
+            block={card}
+            cardId={item.id}
+            cardBotId={item.botId ?? botId}
+            canAnswer={!readOnly && canAnswer && Boolean(runId)}
+            viewerUserId={viewerUserId}
+            actionProps={NO_ACTIONS}
+            onAnswer={async (answer, edits) => {
+              if (runId) await onAnswer?.({ runId, entryId: item.id }, answer, edits);
+            }}
+          />
+        );
+      }
+      case "note":
+        return <NoteRow item={item} isNew={isNew} />;
+    }
+  })();
+  return (
+    <>
+      {body}
+      {session ? (
+        <SessionSheet
+          session={session}
+          botId={botId}
+          groupId={groupId}
+          bots={bots}
+          members={members}
+          onClose={() => setSession(null)}
+        />
+      ) : null}
+    </>
+  );
+});
+
+function DividerRow({ reason }: { reason: Extract<ThreadItem, { kind: "divider" }>["reason"] }) {
+  const tokens = mobileTokens();
+  const { t } = useI18n();
+  const rule = (
+    <View style={{ flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: tokens.border }} />
+  );
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+      {rule}
+      <Text style={{ color: tokens.mutedForeground, ...nativeTextStyle("label") }}>
+        {reason === "compaction"
+          ? t("Earlier messages summarized")
+          : reason === "rewind"
+            ? t("Message edited")
+            : t("Conversation cleared")}
+      </Text>
+      {rule}
+    </View>
+  );
+}
+
+function NoteRow({ item, isNew }: { item: NoteItem; isNew: boolean }) {
+  const router = useRouter();
+  if (item.type === "system.note") {
+    return <Interstitial avatars={null}>{item.payload.text}</Interstitial>;
+  }
+  if (item.type === "skill.learnt") {
+    const { skillId, name, change } = item.payload;
+    return (
+      <BubbleMeta lines={[skillLineMeta({ skillId, name, change }, isNew, router)]} standalone />
+    );
+  }
+  return null;
+}
+
+function OriginLabel({
+  origin,
+  alignEnd,
+  botId,
+  groupId,
+  bots,
+  members,
+}: {
+  origin: { sessionId: string; title: string };
+  alignEnd: boolean;
+  botId: string;
+  groupId?: string;
+  bots: MobileBot[];
+  members?: MobileSnapshot["members"];
+}) {
+  const tokens = mobileTokens();
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Text
+        accessibilityRole="button"
+        onPress={() => setOpen(true)}
+        suppressHighlighting
+        style={{
+          alignSelf: alignEnd ? "flex-end" : "flex-start",
+          marginBottom: 4,
+          color: tokens.mutedForeground,
+          ...nativeTextStyle("label"),
+        }}
+      >
+        {origin.title}
+      </Text>
+      {open ? (
+        <SessionSheet
+          session={{ title: origin.title, load: () => sessionEntries(origin.sessionId) }}
+          botId={botId}
+          groupId={groupId}
+          bots={bots}
+          members={members}
+          onClose={() => setOpen(false)}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function sessionEntries(sessionId: string): Promise<SessionEntry[]> {
+  return rpc<{ entries: SessionEntry[] }>("sessions/entries", { sessionId }).then(
+    (result) => result.entries,
+  );
+}
+
+function SessionSheet({
+  session,
+  botId,
+  groupId,
+  bots,
+  members,
+  onClose,
+}: {
+  session: OpenedSession;
+  botId: string;
+  groupId?: string;
+  bots: MobileBot[];
+  members?: MobileSnapshot["members"];
+  onClose: () => void;
+}) {
+  const tokens = mobileTokens();
+  const { t } = useI18n();
+  const showSteps = useDisplayAgentSteps();
+  const [entries, setEntries] = useState<SessionEntry[] | "failed" | null>(null);
+  useEffect(() => {
+    let open = true;
+    session.load().then(
+      (loaded) => open && setEntries(loaded),
+      () => open && setEntries("failed"),
+    );
+    return () => {
+      open = false;
+    };
+  }, [session]);
+  const rows = useMemo(
+    () =>
+      Array.isArray(entries)
+        ? projectThreadView(entries, {
+            rendersNothing: (item) =>
+              drawsNothing(item, (blocks) => hasVisibleMessagePresentation(blocks, showSteps)) ||
+              isViewedRunLine(item, session.runId),
+          }).rows
+        : [],
+    [entries, showSteps, session.runId],
+  );
+  return (
+    <PreviewSheet title={session.title} onClose={onClose}>
+      <View style={{ paddingTop: 16 }}>
+        {entries === null ? <ActivityIndicator color={tokens.mutedForeground} /> : null}
+        {entries === "failed" ? (
+          <Text style={{ color: tokens.destructive, ...nativeTextStyle("meta") }}>
+            {t("Could not load this chat")}
+          </Text>
+        ) : null}
+        {rows.map((row, index) => (
+          <View
+            key={row.item.id}
+            style={{ marginTop: index === 0 ? 0 : row.firstOfGroup ? GROUP_GAP : WITHIN_GROUP_GAP }}
+          >
+            {row.item.kind === "message" ? (
+              <MessageBubble
+                botId={botId}
+                groupId={groupId}
+                message={row.item}
+                canAnswer={false}
+                onAnswer={async () => {}}
+                onOpenBot={() => {}}
+                onPreviewMarkdown={() => {}}
+                actionProps={NO_ACTIONS}
+                isNew={false}
+              />
+            ) : (
+              <ItemRow
+                row={row}
+                botId={botId}
+                groupId={groupId}
+                bots={bots}
+                members={members}
+                isNew={false}
+                canAnswer={false}
+                readOnly
+              />
+            )}
+          </View>
+        ))}
+      </View>
+    </PreviewSheet>
+  );
+}
+
+function useSkillLines(message: MobileMessage, isNew: boolean): BotBubbleMeta[] {
+  useI18n();
   const router = useRouter();
   const skillLines = skillSourcesOf(message.blocks);
   const skillsAtMount = useRef(skillLines.length);
   const skillsLive = isNew || skillLines.length > skillsAtMount.current;
-  return skillLines.map(
-    (line): BotBubbleMeta => ({
-      id: `${line.skillId}:${line.change}`,
-      label:
-        line.change === "learned"
-          ? t("Skill learned · {name}", { name: line.name })
-          : line.change === "updated"
-            ? t("Skill updated · {name}", { name: line.name })
-            : t("Skill deleted · {name}", { name: line.name }),
-      icon: { ios: "book", android: "book-outline" },
-      onPress:
-        line.change === "deleted"
-          ? undefined
-          : () =>
-              void skillLineRoute(line, () =>
-                rpc<AgentSkillCatalogEntry[]>("agentSkills/list").catch(() => []),
-              ).then((route) => router.push(route)),
-      live: skillsLive,
-    }),
-  );
+  return skillLines.map((line) => skillLineMeta(line, skillsLive, router));
+}
+
+function skillLineMeta(
+  line: { skillId: string; name: string; change: "learned" | "updated" | "deleted" },
+  live: boolean,
+  router: ReturnType<typeof useRouter>,
+): BotBubbleMeta {
+  return {
+    id: `${line.skillId}:${line.change}`,
+    label:
+      line.change === "learned"
+        ? t("Skill learned · {name}", { name: line.name })
+        : line.change === "updated"
+          ? t("Skill updated · {name}", { name: line.name })
+          : t("Skill deleted · {name}", { name: line.name }),
+    icon: { ios: "book", android: "book-outline" },
+    onPress:
+      line.change === "deleted"
+        ? undefined
+        : () =>
+            void skillLineRoute(line, () =>
+              rpc<AgentSkillCatalogEntry[]>("agentSkills/list").catch(() => []),
+            ).then((route) => router.push(route)),
+    live,
+  };
 }
 
 /** The skill lines of a message whose link card took its bubble's place, standing alone under the card. */
 function CardSkillLines({ message, isNew }: { message: MobileMessage; isNew: boolean }) {
   const lines = useSkillLines(message, isNew);
   return lines.length > 0 ? <BubbleMeta lines={lines} standalone /> : null;
-}
-
-/** Native routine-run card: a sub-bot's routine traced by its run lifecycle
-    (queued/running/completed/failed/cancelled) instead of a free closing
-    text. Mirrors the web `RoutineRunCard`'s semantics; visual template is the
-    `subagent` card above. Collapsed by default, expanded when the routine's
-    `notify` toggle is on (spec CA2/CA13). The digest is untrusted content
-    (a sub-bot's routine can summarize scanned mail or web pages): it is
-    rendered as sanitized markdown via `ChatMarkdown`, with remote images
-    blocked (`allowImages={false}`) so no remote resource is ever loaded from
-    it (threat model S1, spec CA-R5/CA-R12). The card's chrome never carries
-    the bot's color (spec CA-R10): a subscribed routine is only ever
-    distinguished by being expanded by default and by a monochrome bell. */
-/** A headline that only restates the routine's name ("📭 Check inbox" for
- * `check-inbox-midi`) adds nothing under it. */
-function headlineRepeatsName(headline: string, name: string): boolean {
-  const letters = (text: string) => text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
-  const short = letters(headline);
-  return short.length > 0 && letters(name).includes(short);
 }
 
 type TaskCardState = "running" | "done" | "failed" | "cancelled";
@@ -4262,20 +4533,16 @@ interface RoutineHandoff {
   receipt: ReactNode;
   avatars: ReactNode;
   label: string;
-  onPress: () => void;
+  onPress?: () => void;
 }
 
 /** How long a page sheet takes to slide away before the next screen can push. */
 const SHEET_DISMISS_MS = 350;
 
-/** A handoff tapped inside a sheet: the sheet closes, then the bots' exchange opens. */
-function handoffFromSheet(handoff: RoutineHandoff, close: () => void): RoutineHandoff {
-  return {
-    ...handoff,
-    onPress: () => {
-      close();
-      setTimeout(handoff.onPress, SHEET_DISMISS_MS);
-    },
+function afterSheet(close: () => void, open: () => void): () => void {
+  return () => {
+    close();
+    setTimeout(open, SHEET_DISMISS_MS);
   };
 }
 
@@ -4309,71 +4576,47 @@ function sameLocalDay(left: string | undefined, right: string | undefined): bool
   return new Date(left).toDateString() === new Date(right).toDateString();
 }
 
-/**
- * A routine run as a log line, not a card: status symbol, name, time, status
- * word, then fixed receipt, bell and disclosure slots so the columns line up
- * down a run of routines. Opening it shows the report under a hairline rail
- * (cut long reports open whole in a sheet) and, centred as every exchange
- * between bots is, the message it then sent. A failed run and a subscribed
- * one open on their report.
- */
 function RoutineRunLine({
-  item,
+  run,
+  queued = false,
   handoff,
-  actionProps,
+  onOpen,
   nested = false,
   withDay = false,
 }: {
-  item: RoutineGroupRun;
+  run: RoutineLineRun;
+  queued?: boolean;
   handoff?: RoutineHandoff;
-  actionProps: MessageActionProps;
-  /** A line inside an open group: smaller symbol, no own long press. */
+  onOpen: (run: RoutineLineRun) => void;
   nested?: boolean;
   withDay?: boolean;
 }) {
   const tokens = mobileTokens();
   const colorScheme = useResolvedAppearance();
   const { t } = useI18n();
-  const block = item.run;
-  const headline =
-    block.headline && !headlineRepeatsName(block.headline, block.routineName)
-      ? block.headline
-      : undefined;
-  // The headline is the digest's first line; alone, it is the whole report.
-  const digest = block.digest?.trim() || headline;
-  const subscribed = Boolean(block.notify);
-  const failed = block.state === "failed";
-  const opens = Boolean(digest || handoff);
+  const { item } = run;
+  const { state, report, subscribed, opensOnItsOwn } = routineLine(run, queued);
+  const failed = state === "failed";
+  const expands = Boolean(report || handoff);
   const [manualExpanded, setManualExpanded] = useState<boolean | null>(null);
-  const [reportOpen, setReportOpen] = useState(false);
-  // Only a routine's latest run opens on its own (failed, or subscribed):
-  // older ones stay folded so a thread of past failures is not a wall of reports.
-  const expanded =
-    opens && (manualExpanded ?? Boolean(digest && item.latest && (subscribed || failed)));
+  const expanded = expands && (manualExpanded ?? opensOnItsOwn);
   const fromTap = useRef(false);
   // At accessibility text sizes the time and status move under the name.
   const stacked = PixelRatio.getFontScale() > 1.35;
   const symbolColor =
-    block.state === "completed"
-      ? tokens.success
-      : failed
-        ? tokens.destructive
-        : tokens.mutedForeground;
-  const statusLabel =
-    block.state === "queued"
-      ? t("Queued")
-      : block.state === "running"
-        ? t("Running")
-        : block.state === "completed"
-          ? t("Completed")
-          : failed
-            ? t("Failed")
-            : t("Cancelled");
+    state === "completed" ? tokens.success : failed ? tokens.destructive : tokens.mutedForeground;
+  const statusLabel = {
+    queued: t("Queued"),
+    running: t("Running"),
+    completed: t("Completed"),
+    failed: t("Failed"),
+    cancelled: t("Cancelled"),
+  }[state];
   const statusStyle = {
     color: failed ? tokens.destructive : tokens.mutedForeground,
     ...nativeTextStyle("label", { weight: 500 }),
   };
-  const time = routineTime(item.createdAt, withDay);
+  const time = routineTime(item.ts, withDay);
   const trailing = (
     <>
       {time && !nested ? (
@@ -4387,16 +4630,16 @@ function RoutineRunLine({
           {time}
         </Text>
       ) : null}
-      {block.state === "running" ? (
+      {state === "running" ? (
         <ShimmerText style={statusStyle}>{statusLabel}</ShimmerText>
       ) : (
         <Text style={statusStyle}>{statusLabel}</Text>
       )}
     </>
   );
-  const symbol = ROUTINE_STATE_SYMBOL[block.state];
+  const symbol = ROUTINE_STATE_SYMBOL[state];
   const accessibilityLabel = [
-    block.routineName,
+    item.name,
     statusLabel,
     time,
     subscribed ? t("Notifications on") : null,
@@ -4407,19 +4650,18 @@ function RoutineRunLine({
   return (
     <View>
       <Pressable
-        {...(nested ? {} : actionProps)}
         accessible
-        accessibilityRole={opens ? "button" : undefined}
+        accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}
-        accessibilityState={opens ? { expanded } : undefined}
-        onPress={
-          opens
-            ? () => {
-                fromTap.current = true;
-                setManualExpanded(!expanded);
-              }
-            : undefined
-        }
+        accessibilityState={expands ? { expanded } : undefined}
+        onPress={() => {
+          if (!expands) {
+            onOpen(run);
+            return;
+          }
+          fromTap.current = true;
+          setManualExpanded(!expanded);
+        }}
         // A thumb scrolling the thread past the line does not press it.
         unstable_pressDelay={130}
         style={({ pressed }) => ({
@@ -4430,7 +4672,7 @@ function RoutineRunLine({
           marginHorizontal: -8,
           paddingHorizontal: 8,
           borderRadius: radii.row,
-          backgroundColor: pressed && opens ? tokens.secondary : "transparent",
+          backgroundColor: pressed ? tokens.secondary : "transparent",
         })}
       >
         <NativeSymbol
@@ -4445,7 +4687,7 @@ function RoutineRunLine({
           <Text
             style={{ color: tokens.foreground, ...nativeTextStyle("rowName", { weight: 500 }) }}
           >
-            {nested && time ? time : block.routineName}
+            {nested && time ? time : item.name}
           </Text>
           {stacked ? <View style={{ flexDirection: "row", gap: 8 }}>{trailing}</View> : null}
         </View>
@@ -4465,7 +4707,7 @@ function RoutineRunLine({
           ) : null}
         </View>
         <View style={{ width: 14, alignItems: "center" }}>
-          {opens ? <Disclosure open={expanded} /> : null}
+          {expands ? <Disclosure open={expanded} /> : null}
         </View>
       </Pressable>
       <Expandable open={expanded} fromTap={fromTap}>
@@ -4479,22 +4721,30 @@ function RoutineRunLine({
             gap: 10,
           }}
         >
-          {digest ? (
-            <ClippedPreview
-              maxHeight={REPORT_PREVIEW_HEIGHT}
-              fadeColor={tokens.background}
-              onOpen={() => setReportOpen(true)}
-              accessibilityLabel={t("Report, {name}", { name: block.routineName })}
+          {report ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t("Report, {name}", { name: item.name })}
+              accessibilityHint={t("Opens in full")}
+              onPress={() => onOpen(run)}
+              unstable_pressDelay={130}
             >
-              <ChatMarkdown
-                allowImages={false}
-                palette={tokens}
-                colorScheme={colorScheme}
-                bleed={18}
+              <ClippedPreview
+                maxHeight={REPORT_PREVIEW_HEIGHT}
+                fadeColor={tokens.background}
+                onOpen={() => onOpen(run)}
+                accessibilityLabel={t("Report, {name}", { name: item.name })}
               >
-                {truncateMarkdownForRender(digest)}
-              </ChatMarkdown>
-            </ClippedPreview>
+                <ChatMarkdown
+                  allowImages={false}
+                  palette={tokens}
+                  colorScheme={colorScheme}
+                  bleed={18}
+                >
+                  {truncateMarkdownForRender(report)}
+                </ChatMarkdown>
+              </ClippedPreview>
+            </Pressable>
           ) : null}
           {handoff ? (
             <Interstitial
@@ -4507,24 +4757,6 @@ function RoutineRunLine({
           ) : null}
         </View>
       </Expandable>
-      {reportOpen && digest ? (
-        <PreviewSheet title={block.routineName} onClose={() => setReportOpen(false)}>
-          <View style={{ paddingTop: 16, gap: 16 }}>
-            <ChatMarkdown allowImages={false} palette={tokens} colorScheme={colorScheme}>
-              {truncateMarkdownForRender(digest)}
-            </ChatMarkdown>
-            {handoff ? (
-              <Interstitial
-                accessibilityLabel={handoff.label}
-                avatars={handoff.avatars}
-                onPress={handoffFromSheet(handoff, () => setReportOpen(false)).onPress}
-              >
-                {handoff.label}
-              </Interstitial>
-            ) : null}
-          </View>
-        </PreviewSheet>
-      ) : null}
     </View>
   );
 }
@@ -4564,11 +4796,11 @@ function Disclosure({ open }: { open: boolean }) {
 function RoutineGroup({
   runs,
   handoffFor,
-  actionProps,
+  onOpen,
 }: {
-  runs: RoutineGroupRun[];
-  handoffFor: (run: RoutineGroupRun) => RoutineHandoff | undefined;
-  actionProps: MessageActionProps;
+  runs: RoutineLineRun[];
+  handoffFor: (run: RoutineLineRun) => RoutineHandoff | undefined;
+  onOpen: (run: RoutineLineRun) => void;
 }) {
   const tokens = mobileTokens();
   const { t } = useI18n();
@@ -4576,23 +4808,26 @@ function RoutineGroup({
   const fromTap = useRef(false);
   const first = runs[0]!;
   const last = runs.at(-1)!;
-  const spansDays = !sameLocalDay(first.createdAt, last.createdAt);
-  const range = routineRange(first.createdAt, last.createdAt);
-  const cancelled = runs.filter((item) => item.run.state === "cancelled").length;
+  const spansDays = !sameLocalDay(first.item.ts, last.item.ts);
+  const range = routineRange(first.item.ts, last.item.ts);
+  const cancelled = runs.filter((run) => run.item.finished?.status === "cancelled").length;
   const statusLabel = cancelled ? t("{count} cancelled", { count: cancelled }) : t("Completed");
   const countLabel = t("{count} runs", { count: runs.length });
   const handoffs = runs.map(handoffFor);
-  const receipts = new Set(runs.map((item) => item.sentTo?.toBotId).filter(Boolean));
-  const receipt = receipts.size === 1 ? handoffs.find(Boolean)?.receipt : null;
+  const receipts = new Set(
+    runs.map(({ sentTo }) => (sentTo?.peer.kind === "bot" ? sentTo.peer.botId : undefined)),
+  );
+  const receipt =
+    receipts.size === 1 && !receipts.has(undefined) ? handoffs.find(Boolean)?.receipt : null;
   const inSheet = runs.length > GROUP_INLINE_MAX;
   const lines = (
     <View style={{ marginStart: 28 }}>
-      {runs.map((item, index) => (
+      {runs.map((run, index) => (
         <RoutineRunLine
-          key={item.messageId}
-          item={item}
+          key={run.item.id}
+          run={run}
           handoff={handoffs[index]}
-          actionProps={actionProps}
+          onOpen={onOpen}
           nested
           withDay={spansDays}
         />
@@ -4602,9 +4837,8 @@ function RoutineGroup({
   return (
     <View>
       <Pressable
-        {...actionProps}
         accessibilityRole="button"
-        accessibilityLabel={[first.run.routineName, countLabel, range, statusLabel].join(", ")}
+        accessibilityLabel={[first.item.name, countLabel, range, statusLabel].join(", ")}
         accessibilityState={{ expanded: open }}
         onPress={() => {
           fromTap.current = true;
@@ -4636,7 +4870,7 @@ function RoutineGroup({
             ...nativeTextStyle("rowName", { weight: 500 }),
           }}
         >
-          {`${first.run.routineName} `}
+          {`${first.item.name} `}
           <Text style={{ color: tokens.mutedForeground }}>{countLabel}</Text>
         </Text>
         <Text
@@ -4654,7 +4888,6 @@ function RoutineGroup({
           {statusLabel}
         </Text>
         <View style={{ width: sizes.receipt, alignItems: "center" }}>{receipt}</View>
-        <View style={{ width: 14 }} />
         <View style={{ width: 14, alignItems: "center" }}>
           <Disclosure open={open && !inSheet} />
         </View>
@@ -4663,14 +4896,15 @@ function RoutineGroup({
         {lines}
       </Expandable>
       {open && inSheet ? (
-        <PreviewSheet title={first.run.routineName} onClose={() => setOpen(false)}>
+        <PreviewSheet title={first.item.name} onClose={() => setOpen(false)}>
           <View style={{ paddingTop: 8 }}>
-            {runs.map((item, index) => {
-              const dayStarts =
-                index === 0 || !sameLocalDay(runs[index - 1]!.createdAt, item.createdAt);
+            {runs.map((run, index) => {
+              const dayStarts = index === 0 || !sameLocalDay(runs[index - 1]!.item.ts, run.item.ts);
+              const handoff = handoffs[index];
+              const close = () => setOpen(false);
               return (
-                <View key={item.messageId}>
-                  {dayStarts && item.createdAt ? (
+                <View key={run.item.id}>
+                  {dayStarts ? (
                     <Text
                       style={{
                         marginTop: index === 0 ? 8 : 16,
@@ -4679,7 +4913,7 @@ function RoutineGroup({
                         ...nativeTextStyle("label", { weight: 500 }),
                       }}
                     >
-                      {threadTimeMarkerLabel(item.createdAt, {
+                      {threadTimeMarkerLabel(run.item.ts, {
                         locale: dateLocaleForUi(),
                         today: t("Today"),
                         yesterday: t("Yesterday"),
@@ -4688,13 +4922,13 @@ function RoutineGroup({
                     </Text>
                   ) : null}
                   <RoutineRunLine
-                    item={item}
+                    run={run}
                     handoff={
-                      handoffs[index]
-                        ? handoffFromSheet(handoffs[index]!, () => setOpen(false))
-                        : undefined
+                      handoff?.onPress
+                        ? { ...handoff, onPress: afterSheet(close, handoff.onPress) }
+                        : handoff
                     }
-                    actionProps={actionProps}
+                    onOpen={(opened) => afterSheet(close, () => onOpen(opened))()}
                     nested
                   />
                 </View>
@@ -4721,7 +4955,7 @@ function TaskCard({
   meta,
   body,
   streaming = false,
-  actionProps,
+  onOpen,
 }: {
   title: string;
   state: TaskCardState;
@@ -4729,7 +4963,7 @@ function TaskCard({
   /** Markdown result, shown as a preview and whole in the sheet. */
   body?: string;
   streaming?: boolean;
-  actionProps?: MessageActionProps;
+  onOpen?: () => void;
 }) {
   const tokens = mobileTokens();
   const colorScheme = useResolvedAppearance();
@@ -4745,7 +4979,7 @@ function TaskCard({
       : state === "failed"
         ? ROUTINE_STATE_SYMBOL.failed
         : ROUTINE_STATE_SYMBOL.cancelled;
-  const open = body || meta ? () => setSheetOpen(true) : undefined;
+  const open = onOpen ?? (body || meta ? () => setSheetOpen(true) : undefined);
   const header = (full: boolean) => (
     <View style={{ gap: 4 }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
@@ -4799,7 +5033,6 @@ function TaskCard({
   return (
     <>
       <Pressable
-        {...actionProps}
         accessibilityRole={open ? "button" : undefined}
         accessibilityLabel={[title, meta].filter(Boolean).join(", ")}
         accessibilityHint={open ? t("Opens in full") : undefined}
@@ -4867,7 +5100,8 @@ function ReplyQuote({
   replyPreview?: MobileMessage;
 }) {
   const tokens = mobileTokens();
-  if (!replyPreview && !(message.replyToMessageId && message.replyQuote)) return null;
+  const quote = replyQuote(message, replyPreview);
+  if (!quote) return null;
   return (
     <Text
       numberOfLines={2}
@@ -4877,13 +5111,16 @@ function ReplyQuote({
         ...nativeTextStyle("meta"),
       }}
     >
-      {message.replyQuote
-        ? `“${message.replyQuote}”`
-        : replyPreview
-          ? previewMessageText(replyPreview)
-          : ""}
+      {quote}
     </Text>
   );
+}
+
+function replyQuote(message: MobileMessage, replyPreview: MobileMessage | undefined): string {
+  const replyTo = message.role === "user" ? message.replyTo : undefined;
+  if (!replyTo) return "";
+  if (replyTo.quote) return `“${replyTo.quote}”`;
+  return replyPreview ? previewMessageText(replyPreview) : "";
 }
 
 /**
@@ -4942,7 +5179,7 @@ function MessageText({
         <ChatMarkdown
           palette={tokens}
           colorScheme={colorScheme}
-          streaming={message.id.startsWith("progress:")}
+          streaming={isLiveMessage(message)}
           inBubble
         >
           {contentText}

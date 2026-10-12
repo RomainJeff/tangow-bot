@@ -2,15 +2,18 @@ import { randomUUID } from "node:crypto";
 import type { NewSession, SessionEntryDraft, SessionLog } from "@rakazo/adapter-kit";
 import { nextSessionEntry, SessionAppendError, sessionEntryNonce } from "@rakazo/adapter-kit";
 import type {
+  CARD_STATE_TYPES,
   EntryId,
   MessageBlock,
   RunOutcome,
   SessionEntry,
   SessionEntryOf,
   SessionEntryType,
+  ThreadEntry,
 } from "@rakazo/contracts";
-import { isRunTrace, SessionEntrySchema, SessionId } from "@rakazo/contracts";
+import { isRunTrace, SessionEntrySchema, SessionId, toThreadEntry } from "@rakazo/contracts";
 import { ACTIVE_RUN_STATUSES, SessionEntryDecodeError, sanitizeJsonValue } from "@rakazo/core";
+import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
 import { RunHistoryWriteError } from "./messages.js";
 
@@ -86,7 +89,7 @@ type ThreadFeed = {
   threadId: string;
   botId: string;
   runId: string | null;
-  entries: SessionEntry[];
+  entries: ThreadEntry[];
 };
 type Route = { sessionId: SessionId; threadId: string | null; originSessionId?: SessionId };
 type Lineage = { mainSessionId: SessionId; threadId: string | null; child: boolean };
@@ -219,6 +222,7 @@ export async function appendSessionEntryInTransaction(
   const runId = entry.runId ?? null;
   const at = Prisma.sql`${entry.ts}::timestamptz AT TIME ZONE 'UTC'`;
   const feed = threadId ? log.feedOf.get(threadId) : undefined;
+  const fed = toThreadEntry(entry);
   const newFeed: ThreadFeed | undefined =
     threadId && feedBotId && !feed
       ? {
@@ -227,12 +231,12 @@ export async function appendSessionEntryInTransaction(
           threadId,
           botId: feedBotId,
           runId,
-          entries: [entry],
+          entries: [fed],
         }
       : undefined;
   const feedSql = feed
     ? Prisma.sql`, appended AS (
-        UPDATE events SET payload = jsonb_set(payload, '{entries}', (payload -> 'entries') || ${JSON.stringify(entry)}::jsonb)
+        UPDATE events SET payload = jsonb_set(payload, '{entries}', (payload -> 'entries') || ${JSON.stringify(fed)}::jsonb)
         FROM e WHERE events.id = ${feed.eventId}
         RETURNING events.id)`
     : newFeed
@@ -271,13 +275,71 @@ export async function appendSessionEntryInTransaction(
   }
   if (newFeed) log.feedOf.set(newFeed.threadId, newFeed);
   if (!feed) return entry;
-  feed.entries.push(entry);
+  feed.entries.push(fed);
   if (!written[0]?.fed) {
     // A truncate in this transaction deleted the event, so a new one carries its entries.
     feed.eventId = randomUUID();
     await tx.$queryRaw`WITH ${insertFeedEvent(feed, at, Prisma.empty)} SELECT 1`;
   }
   return entry;
+}
+
+export async function threadOfSession(
+  prisma: PrismaClient | Prisma.TransactionClient,
+  sessionId: string,
+  spaceId: string,
+): Promise<string | null> {
+  const [top] = await prisma.$queryRaw<Array<{ threadId: string | null }>>`
+    WITH RECURSIVE ancestry AS (
+      SELECT id, "parentSessionId", "threadId", 0 AS depth
+      FROM sessions WHERE id = ${sessionId} AND "spaceId" = ${spaceId}
+      UNION ALL
+      SELECT s.id, s."parentSessionId", s."threadId", ancestry.depth + 1
+      FROM sessions s JOIN ancestry ON s.id = ancestry."parentSessionId")
+    SELECT "threadId" FROM ancestry ORDER BY depth DESC LIMIT 1`;
+  return top?.threadId ?? null;
+}
+
+type CardStateDraft = SessionEntryDraft extends infer Draft
+  ? Draft extends { type: (typeof CARD_STATE_TYPES)[number] }
+    ? Omit<Draft, "sessionId">
+    : never
+  : never;
+
+/**
+ * A card older than the log has no entry, so nothing is appended and the message row alone keeps
+ * its state.
+ */
+export async function appendCardStateInTransaction(
+  tx: Prisma.TransactionClient,
+  draft: CardStateDraft,
+  append: typeof appendSessionEntryInTransaction = appendSessionEntryInTransaction,
+): Promise<SessionEntry | undefined> {
+  const target = await tx.sessionEntry.findUnique({
+    where: { id: draft.payload.target },
+    select: { sessionId: true },
+  });
+  if (!target) return undefined;
+  return append(tx, {
+    ...draft,
+    sessionId: target.sessionId as SessionId,
+  } as SessionEntryDraft);
+}
+
+/**
+ * The card a waiting run is parked on: the newest question it put to the person, which the thread
+ * keys the card by. Undefined for a card older than the log.
+ */
+export async function pendingAskEntryId(
+  tx: Prisma.TransactionClient,
+  runId: string,
+): Promise<EntryId | undefined> {
+  const ask = await tx.sessionEntry.findFirst({
+    where: { runId, type: { in: ["assistant.ask", "effect.requested"] } },
+    orderBy: { seq: "desc" },
+    select: { id: true },
+  });
+  return ask?.id as EntryId | undefined;
 }
 
 type EntryBody<T extends SessionEntryType> = T extends unknown
@@ -324,18 +386,21 @@ const RUN_BLOCK_ENTRY: {
 };
 
 /**
- * Append the entries of a message a run published, one per block, to the run's own session. The
- * first entry takes the message's id, so whatever points at the message points at the entry.
+ * The first entry takes the message's id, so whatever points at the message points at the entry.
  */
 export async function appendRunBlocksInTransaction(
   tx: Prisma.TransactionClient,
-  message: { id: string; runId: string; botId: string },
+  message: { id: string; runId: string; botId: string; toPerson?: true },
   blocks: readonly MessageBlock[],
   append: typeof appendSessionEntryInTransaction = appendSessionEntryInTransaction,
 ): Promise<void> {
-  const bodies = blocks.flatMap((block) => {
+  const bodies = blocks.flatMap((block): RunBlockBody[] => {
     const toEntry = RUN_BLOCK_ENTRY[block.kind] as ((block: MessageBlock) => RunBlockBody) | null;
-    return toEntry ? [toEntry(block)] : [];
+    const body = toEntry?.(block);
+    if (!body) return [];
+    return message.toPerson && body.type === "assistant.text"
+      ? [{ ...body, payload: { ...body.payload, toPerson: true } }]
+      : [body];
   });
   if (bodies.length === 0) return;
   const run = await tx.run.findUniqueOrThrow({
@@ -371,7 +436,12 @@ export async function appendRewindInTransaction(
     select: { seq: true, parentId: true },
   });
   if (!target?.parentId) {
-    await appendSessionEntryInTransaction(tx, { type: "clear", sessionId, payload: {}, feedBotId });
+    await appendSessionEntryInTransaction(tx, {
+      type: "clear",
+      sessionId,
+      payload: { edit: true },
+      feedBotId,
+    });
     return;
   }
   const cutOff = await newestCompactionAfter(tx, sessionId, target.seq);

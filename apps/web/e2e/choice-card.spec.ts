@@ -1,5 +1,6 @@
 import { activeBotId, captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
 import { expect, test } from "./test";
+import { threadEntries } from "./thread-log";
 
 test("renders tappable choice buttons and submits the offered action id", async ({
   page,
@@ -72,7 +73,9 @@ test("renders tappable choice buttons and submits the offered action id", async 
   await captureScreenshot(page, testInfo, "choice-card-narrow");
 
   await page.setViewportSize({ width: 1280, height: 720 });
+  const answered = page.waitForRequest((request) => request.url().includes("/rpc/threads/answer"));
   await seoul.click();
+  expect((await answered).postDataJSON().json.answer).toBe("choice-2");
 
   await expect(page.getByText("Answered: Seoul", { exact: true })).toBeVisible({
     timeout: 30_000,
@@ -82,30 +85,23 @@ test("renders tappable choice buttons and submits the offered action id", async 
   await expect
     .poll(
       async () => {
-        const history = await rpc<{
-          messages: Array<{
-            blocks: Array<{
-              kind: string;
-              status?: string;
-              answer?: string;
-              actions?: Array<{ id: string; label: string }>;
-            }>;
-          }>;
-        }>(page, "threads/messages", { botId });
-        const answered = history.messages
-          .flatMap((message) => message.blocks)
-          .find(
-            (block) =>
-              block.kind === "ask" &&
-              block.status === "answered" &&
-              Array.isArray(block.actions) &&
-              block.actions.some((action) => action.id === "choice-2"),
-          );
-        return answered?.answer ?? null;
+        const entries = await threadEntries(page, { botId });
+        const ask = entries.find((entry) => entry.type === "assistant.ask");
+        if (!ask) return null;
+        const reply = entries.find(
+          (entry) => entry.type === "user.message" && entry.payload.replyTo?.entryId === ask.id,
+        );
+        const answered = entries.find(
+          (entry) => entry.type === "card.answered" && entry.payload.target === ask.id,
+        );
+        return {
+          reply: reply?.type === "user.message" ? reply.payload.blocks : null,
+          answer: answered?.type === "card.answered" ? answered.payload.answer : null,
+        };
       },
       { timeout: 30_000 },
     )
-    .toBe("choice-2");
+    .toEqual({ reply: [{ kind: "text", text: "Seoul" }], answer: "choice-2" });
 
   await captureScreenshot(page, testInfo, "choice-card-answered");
 });

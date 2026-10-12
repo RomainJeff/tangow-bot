@@ -1,8 +1,10 @@
 import { createHash } from "node:crypto";
 import type { LinkPreviewCard } from "@rakazo/contracts";
+import { EntryId } from "@rakazo/contracts";
 import type { Prisma, PrismaClient } from "./client.js";
 import { appendEventInTransaction } from "./events.js";
 import { messageUpdatedPayload } from "./messages.js";
+import { appendCardStateInTransaction } from "./sessions.js";
 
 export const LINK_PREVIEW_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 export const LINK_PREVIEW_CACHE_MAX_ENTRIES = 500;
@@ -341,6 +343,15 @@ export async function appendLinkPreviewBlock(
     if (!botId) return { outcome: "gone" } as const;
     const blocks = [...stored, input.block as unknown as Prisma.InputJsonValue];
     await tx.message.update({ where: { id: message.id }, data: { blocks } });
+    await appendCardStateInTransaction(tx, {
+      type: "link.preview",
+      feedBotId: botId,
+      payload: {
+        target: EntryId.parse(message.id),
+        block: input.block,
+        ...(input.block.image ? { artifactId: input.block.image.artifactId } : {}),
+      },
+    });
     const event = await appendEventInTransaction(tx, {
       spaceId: input.spaceId,
       threadId: input.threadId,
@@ -396,6 +407,21 @@ export async function removeLinkPreviewBlock(
     });
     if (firstPreview < 0) blocks.push(marker);
     await tx.message.update({ where: { id: message.id }, data: { blocks } });
+    const [preview] = hasCard
+      ? await tx.$queryRaw<Array<{ id: string }>>`
+          SELECT p.id FROM session_entries m
+          JOIN session_entries p ON p."sessionId" = m."sessionId" AND p.type = 'link.preview'
+            AND p.payload ->> 'target' = m.id
+          WHERE m.id = ${message.id}
+          ORDER BY p.seq DESC LIMIT 1`
+      : [];
+    if (preview) {
+      await appendCardStateInTransaction(tx, {
+        type: "link.preview.removed",
+        feedBotId: botId,
+        payload: { target: EntryId.parse(preview.id) },
+      });
+    }
     const event = await appendEventInTransaction(tx, {
       spaceId: input.spaceId,
       threadId: input.threadId,

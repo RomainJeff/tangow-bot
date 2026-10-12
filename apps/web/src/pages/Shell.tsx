@@ -12,17 +12,18 @@ import type {
   MessageReaction,
   ProductEvent,
   Routine,
+  Run,
   SearchHit,
   Space,
   SpaceMemoryConfig,
   TaughtSkill,
-  ThreadMessage,
   ThreadSnapshot,
   VoiceStatus,
 } from "@rakazo/contracts";
 import {
   ATTACHMENT_MAX_BYTES,
   ATTACHMENT_MAX_COUNT,
+  EntryId,
   normalizeCreateBotProfile,
 } from "@rakazo/contracts";
 import type {
@@ -30,21 +31,27 @@ import type {
   ComposerPageHead,
   HeldScreenUrl,
   SkillSourceBlock,
+  ThreadView,
 } from "@rakazo/core";
 import {
+  appendedEntries,
   attachmentsForThread,
+  blocksOfBotWords,
+  botWordsOf,
   buildComposerMentionOptions,
+  drawsNothing,
   groupBotsForSidebar,
   inferAttachmentMimeType,
   isActive,
   isRunTerminalEvent,
-  latestAnswerableAskMessageId,
+  projectThreadView,
+  queuedRunIdsOf,
   reorderBotTo,
   resolveComposerSendPlan,
   runThreadSubscription,
   searchHitThreadTarget,
   speechFromBlocks,
-  userVisibleMessages,
+  threadEntriesOf,
 } from "@rakazo/core";
 import type { GroupAvatarMember } from "@rakazo/ui-web";
 import {
@@ -71,6 +78,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import type { SpawnBotCardEdits } from "../components/AskCard";
 import { ComputerUpdateProgress } from "../components/ComputerUpdateProgress";
 import { readActivityMode, writeActivityMode } from "../lib/activity-mode";
+import { useDisplayAgentSteps } from "../lib/agent-steps-pref";
 import type { ArtifactTarget } from "../lib/artifact-open";
 import { authClient } from "../lib/auth";
 import { takeInitialBootstrap } from "../lib/bootstrap";
@@ -83,11 +91,13 @@ import {
 import { cachedScreenUrl, loadComputerScreen } from "../lib/computer-screen";
 import { dictation } from "../lib/dictation";
 import { scheduleFocusPrompt } from "../lib/focus-prompt";
+import { hasRenderableBlock } from "../lib/message-blocks";
 import { copyableMessageText } from "../lib/message-text";
 import { revokePendingAttachmentPreviews } from "../lib/pending-attachments";
 import { markAfterPaint, markOnce } from "../lib/performance";
 import { rpc, selectedSpaceId, selectSpace } from "../lib/rpc";
 import { readSeenRunErrorIds, rememberSeenRunErrorId } from "../lib/run-error-storage";
+import type { ThreadState } from "../lib/thread-events";
 import {
   activeThreadRuns,
   applyThreadSendReceipt,
@@ -97,18 +107,21 @@ import {
   computerPanelAutoUsesBoot,
   computerTakeoverBlocked,
   isComputerStatusEvent,
-  isThreadSnapshotEvent,
+  isThreadStateEvent,
   prependThreadMessagePage,
   reconcileRefreshedThread,
   reduceComputerStatus,
-  reduceThreadSnapshot,
+  reduceThreadState,
   threadRunError,
   userHoldsComputerControl,
 } from "../lib/thread-events";
+import type { CardAnswerTarget, MessageItem } from "../lib/thread-items";
+import { botIdOf } from "../lib/thread-items";
 import { transcriptCanSnapAfterFrame, transcriptIsNearEnd } from "../lib/transcript-scroll";
 import { speaker } from "../lib/tts";
 import { useMediaQuery } from "../lib/use-media-query";
 import type { ContextMenuPosition } from "./BotContextMenu";
+import type { CallThread } from "./CallView";
 import { memberName } from "./GroupPanel";
 import { HostComputerPrompt } from "./HostComputerPrompt";
 import type { SettingsSection } from "./SettingsOverlay";
@@ -166,7 +179,7 @@ const McpServersOverlay = lazy(() =>
 const CallView = lazy(() => import("./CallView").then((module) => ({ default: module.CallView })));
 
 type PendingBrowserNotification = {
-  event: Pick<ProductEvent, "id" | "type" | "threadId" | "botId" | "payload">;
+  event: ProductEvent;
   botId: string;
   botName: string;
   groupNotification: boolean;
@@ -246,11 +259,11 @@ export function ShellPage() {
   const [query, setQuery] = useState("");
   const [searchHits, setSearchHits] = useState<SearchHit[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
-  const [snapshot, setSnapshot] = useState<ThreadSnapshot | null>(null);
-  const snapshotRef = useRef<ThreadSnapshot | null>(null);
+  const [snapshot, setSnapshot] = useState<ThreadState | null>(null);
+  const snapshotRef = useRef<ThreadState | null>(null);
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
-  const [replyTarget, setReplyTarget] = useState<ThreadMessage | null>(null);
-  const [rewindTarget, setRewindTarget] = useState<ThreadMessage | null>(null);
+  const [replyTarget, setReplyTarget] = useState<MessageItem | null>(null);
+  const [rewindTarget, setRewindTarget] = useState<MessageItem | null>(null);
   const [rewindArtifacts, setRewindArtifacts] = useState<{ id: string; name: string }[]>([]);
   // `key` re-seeds the composer draft: once when rewind starts, again when a failed send
   // has to hand the typed text back.
@@ -336,7 +349,7 @@ export function ShellPage() {
     }
   }
 
-  function commitSnapshot(next: ThreadSnapshot | null) {
+  function commitSnapshot(next: ThreadState | null) {
     snapshotRef.current = next;
     setSnapshot(next);
   }
@@ -346,7 +359,7 @@ export function ShellPage() {
     setComputer(next);
   }
 
-  function updateSnapshot(update: (prev: ThreadSnapshot | null) => ThreadSnapshot | null) {
+  function updateSnapshot(update: (prev: ThreadState | null) => ThreadState | null) {
     commitSnapshot(update(snapshotRef.current));
   }
   const [customizeOpen, setCustomizeOpen] = useState(false);
@@ -504,20 +517,26 @@ export function ShellPage() {
   } | null>(null);
   const autoBooted = useRef<string | null>(null);
   const routineRefetched = useRef(new Set<string>());
+  // The `?m=` jump already started: a re-render before the link is stripped (new routines) must not repeat it.
+  const linkJump = useRef<string | null>(null);
   const bootstrappedThread = useRef<ThreadSnapshot | null>(null);
   const expandedHistoryThread = useRef<string | null>(null);
   const historyEpoch = useRef(0);
   const jumpGeneration = useRef(0);
   const initiallyScrolledThread = useRef<string | null>(null);
   const messageScroll = useRef<HTMLDivElement>(null);
-  const pinnedAroundRef = useRef<{
-    botId?: string;
-    groupId?: string;
-    messageId: string;
-    threadId: string;
-    messages: ThreadMessage[];
-    olderCursor: number | null;
-  } | null>(null);
+  const followingEnd = useRef(true);
+  const pinnedAroundRef = useRef<{ botId?: string; groupId?: string } | null>(null);
+  function leaveJumpWindow({ snapToEnd = false } = {}) {
+    const inWindow = expandedHistoryThread.current !== null || pinnedAroundRef.current !== null;
+    expandedHistoryThread.current = null;
+    pinnedAroundRef.current = null;
+    const element = messageScroll.current;
+    if (snapToEnd && inWindow && element) {
+      followingEnd.current = true;
+      element.scrollTop = element.scrollHeight;
+    }
+  }
   const manuallyUnread = useRef(new Set<string>());
   const readVisibleGroups = useRef(new Set<string>());
   const notifiedBrowserEvents = useRef(new Set<string>());
@@ -637,7 +656,7 @@ export function ShellPage() {
   }, [deliverBrowserNotification]);
   const notifyBrowserForEvent = useCallback(
     (
-      event: Pick<ProductEvent, "id" | "type" | "threadId" | "seq" | "botId" | "payload">,
+      event: ProductEvent,
       subscribedThreadId: string | undefined,
       initialCursor: number,
       streamReady: boolean,
@@ -777,8 +796,10 @@ export function ShellPage() {
     setRoutines([]);
     setRoutinesBotId(null);
     // Keep the search-jump viewport; expandedHistoryThread merge still accepts live messages.
+    // A jump the person made, even while this read was in flight, ends following the end.
     if (
       stickToEnd &&
+      followingEnd.current &&
       (!scrollElement || transcriptIsNearEnd(scrollElement)) &&
       expandedHistoryThread.current !== snap.threadId
     ) {
@@ -813,8 +834,10 @@ export function ShellPage() {
     commitSnapshot(reconciled.snapshot);
     commitComputer(reconciled.computer);
     cacheComputerFor(id, { computer: reconciled.computer });
+    // A jump the person made, even while this read was in flight, ends following the end.
     if (
       stickToEnd &&
+      followingEnd.current &&
       (!scrollElement || transcriptIsNearEnd(scrollElement)) &&
       expandedHistoryThread.current !== snap.threadId
     ) {
@@ -950,7 +973,7 @@ export function ShellPage() {
         }
         if (!groupId && bootstrap.thread) {
           bootstrappedThread.current = bootstrap.thread;
-          commitSnapshot(bootstrap.thread);
+          commitSnapshot(threadEntriesOf(bootstrap.thread));
           commitComputer(bootstrap.thread.computer ?? null);
           setRoutines(bootstrap.routines);
           setRoutinesBotId(bootstrap.thread.botId ?? null);
@@ -1052,33 +1075,6 @@ export function ShellPage() {
   }, [callOpen]);
 
   useEffect(() => {
-    if (!active || !snapshot || snapshot.botId !== active.id) return;
-    const lastBot = [...snapshot.messages].reverse().find((message) => message.role === "bot");
-    if (autoSpokenBotId.current !== active.id) {
-      autoSpokenBotId.current = active.id;
-      autoSpoken.current = lastBot?.id ?? null;
-      return;
-    }
-    if (callOpen || !active.autoSpeak) {
-      autoSpoken.current = lastBot?.id ?? null;
-      return;
-    }
-    if (snapshot.run && ["running", "queued", "leased"].includes(snapshot.run.status)) return;
-    if (!lastBot || lastBot.id === autoSpoken.current) return;
-    const text = speechFromBlocks(lastBot.blocks);
-    if (!text) return;
-    autoSpoken.current = lastBot.id;
-    void speaker.speak(text, { botId: active.id, messageId: lastBot.id });
-  }, [
-    snapshot?.messages,
-    snapshot?.run?.status,
-    snapshot?.botId,
-    active?.autoSpeak,
-    active?.id,
-    callOpen,
-  ]);
-
-  useEffect(() => {
     if (!active) return;
     // Opening a bot clears the manual unread flag so it can auto-read again.
     manuallyUnread.current.delete(active.id);
@@ -1155,9 +1151,10 @@ export function ShellPage() {
           currentBot?.notifyOnFinish ?? false,
           false,
         );
-        if (event.type === "thread.cleared") {
-          expandedHistoryThread.current = null;
-          pinnedAroundRef.current = null;
+        const appended = appendedEntries(event);
+        const cut = appended.some((entry) => entry.type === "clear" || entry.type === "rewind");
+        if (appended.some((entry) => entry.type === "clear")) {
+          leaveJumpWindow();
           historyEpoch.current += 1;
         }
         if (isRunTerminalEvent(event)) setActivityEpoch((epoch) => epoch + 1);
@@ -1168,24 +1165,22 @@ export function ShellPage() {
           event.type === "bot.deleted" ||
           event.type === "run.started" ||
           isRunTerminalEvent(event) ||
-          event.type === "thread.cleared" ||
-          event.type === "thread.rewound"
+          cut
         ) {
           void refreshBots().catch(() => undefined);
         }
-        if (event.type === "thread.message.created") {
-          const blocks = (event.payload.blocks as Array<{ kind?: string }>) ?? [];
-          if (blocks.some((block) => block.kind === "child_bot")) {
+        const words = botWordsOf(event);
+        if (words.length > 0) {
+          if (
+            words.some((entry) =>
+              blocksOfBotWords(entry).some((block) => block.kind === "child_bot"),
+            )
+          ) {
             void refreshBots().catch(() => undefined);
           }
-          if (event.payload.role === "bot") markBotReadIfVisible(active.id);
+          markBotReadIfVisible(active.id);
         }
-        if (
-          isRunTerminalEvent(event) ||
-          event.type === "run.waiting_input" ||
-          event.type === "skill.teaching.stopped"
-        ) {
-          // waiting_input: reconcile ask cards if a stale post-send refresh raced SSE.
+        if (isRunTerminalEvent(event) || event.type === "skill.teaching.stopped") {
           void refreshThread(active.id).catch(() => undefined);
         } else if (isComputerStatusEvent(event)) {
           void refreshComputerStatus(active.id).catch(() => undefined);
@@ -1228,10 +1223,7 @@ export function ShellPage() {
     window.addEventListener("focus", markVisibleGroupRead);
     document.addEventListener("visibilitychange", markVisibleGroupRead);
     const pendingJump = searchParamsRef.current.get("m");
-    if (!pendingJump) {
-      pinnedAroundRef.current = null;
-      expandedHistoryThread.current = null;
-    }
+    if (!pendingJump) leaveJumpWindow();
     historyEpoch.current += 1;
     const abort = new AbortController();
     void runThreadSubscription({
@@ -1257,15 +1249,14 @@ export function ShellPage() {
           true,
           true,
         );
-        if (event.type === "thread.message.created" && event.payload.role === "bot") {
+        if (botWordsOf(event).length > 0) {
           readVisibleGroups.current.delete(groupId);
           markVisibleGroupRead();
         }
         if (event.type === "run.started" || isRunTerminalEvent(event)) {
           void refreshBots().catch(() => undefined);
         }
-        if (isRunTerminalEvent(event) || event.type === "run.waiting_input") {
-          // waiting_input: reconcile ask cards if a stale post-send refresh raced SSE.
+        if (isRunTerminalEvent(event)) {
           void refreshGroupThread(groupId).catch(() => undefined);
         }
       },
@@ -1468,7 +1459,10 @@ export function ShellPage() {
     const jumpId = jumpGeneration.current;
     const [snap, page] = await Promise.all([
       rpc.threads.get(threadTarget),
-      rpc.threads.messages({ ...threadTarget, around: { messageId: target.messageId } }),
+      rpc.threads.messages({
+        ...threadTarget,
+        around: { entryId: EntryId.parse(target.messageId) },
+      }),
     ]);
     // The epoch check drops a jump that raced a conversation clear (or a bot switch): applying
     // the fetched page would pin deleted messages that every later refresh keeps restoring.
@@ -1476,25 +1470,15 @@ export function ShellPage() {
     if (epoch !== historyEpoch.current || jumpId !== jumpGeneration.current) return;
     if (target.groupId && activeGroupId.current !== target.groupId) return;
     if (target.botId && activeBotId.current !== target.botId) return;
-    const targetInPage = userVisibleMessages(page.messages, { includePeerReceipts: true }).some(
-      (message) => message.id === target.messageId,
-    );
+    const targetInPage = page.entries.some((entry) => entry.id === target.messageId);
     expandedHistoryThread.current = targetInPage ? page.threadId : null;
-    pinnedAroundRef.current = targetInPage
-      ? {
-          ...threadTarget,
-          messageId: target.messageId,
-          threadId: page.threadId,
-          messages: page.messages,
-          olderCursor: page.olderCursor,
-        }
-      : null;
+    pinnedAroundRef.current = targetInPage ? threadTarget : null;
     if (targetInPage) initiallyScrolledThread.current = page.threadId;
-    commitSnapshot({
-      ...snap,
-      messages: targetInPage ? page.messages : snap.messages,
-      olderCursor: targetInPage ? page.olderCursor : snap.olderCursor,
-    });
+    commitSnapshot(
+      targetInPage
+        ? { ...threadEntriesOf(snap), entries: page.entries, olderCursor: page.olderCursor }
+        : threadEntriesOf(snap),
+    );
     if (threadTarget.botId) {
       commitComputer(snap.computer ?? null);
       // Don't block parent-scroll on routines metadata; a list failure must not abort the jump.
@@ -1514,8 +1498,9 @@ export function ShellPage() {
         }
         return;
       }
+      const rowId = viewRef.current.rowOf.get(target.messageId) ?? target.messageId;
       document
-        .querySelector(`[data-message-id="${target.messageId}"]`)
+        .querySelector(`[data-message-id="${CSS.escape(rowId)}"]`)
         ?.scrollIntoView({ behavior: "smooth", block: "center" });
     });
   }
@@ -1523,7 +1508,10 @@ export function ShellPage() {
   useEffect(() => {
     const messageId = searchParams.get("m");
     const routineId = searchParams.get("routine");
+    if (!messageId) linkJump.current = null;
     if (inGroup && groupId && messageId) {
+      if (linkJump.current === messageId) return;
+      linkJump.current = messageId;
       void jumpToMessage({ groupId, messageId }).finally(() => {
         // Keep expandedHistoryThread; only strip the jump URL so refresh does not remount.
         const next = new URLSearchParams(searchParams);
@@ -1549,7 +1537,8 @@ export function ShellPage() {
       next.delete("routine");
       setSearchParams(next, { replace: true });
     }
-    if (messageId) {
+    if (messageId && linkJump.current !== messageId) {
+      linkJump.current = messageId;
       void jumpToMessage({ botId: active.id, messageId }).finally(() => {
         const next = new URLSearchParams(searchParams);
         next.delete("m");
@@ -1573,42 +1562,102 @@ export function ShellPage() {
     : snapshot?.botId === active?.id
       ? snapshot
       : null;
-  const activeReplyTarget =
-    replyTarget && activeSnapshot?.messages.some((message) => message.id === replyTarget.id)
-      ? replyTarget
-      : null;
-  const activeRewindTarget =
-    rewindTarget && activeSnapshot?.messages.some((message) => message.id === rewindTarget.id)
-      ? rewindTarget
-      : null;
-  const rewindFromSeq = activeRewindTarget?.seq ?? null;
-  const currentRuns = activeThreadRuns(activeSnapshot);
-  const answerableAskMessageId = latestAnswerableAskMessageId(activeSnapshot);
-  const workingRuns = currentRuns.filter((run) =>
-    ["running", "queued", "leased"].includes(run.status),
+  const showSteps = useDisplayAgentSteps();
+  const activeEntries = activeSnapshot?.entries;
+  const activeLayer = activeSnapshot?.layer;
+  const view = useMemo(
+    () =>
+      projectThreadView(activeEntries ?? [], {
+        rendersNothing: (item) =>
+          drawsNothing(item, (blocks) => hasRenderableBlock(blocks, showSteps)),
+        progress: activeLayer,
+      }),
+    [activeEntries, activeLayer, showSteps],
   );
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  useEffect(() => {
+    if (!active || !snapshot || snapshot.botId !== active.id) return;
+    const lastBot = view.rows.findLast(
+      (row): row is typeof row & { item: MessageItem } =>
+        row.item.kind === "message" && row.item.role === "bot",
+    )?.item;
+    if (autoSpokenBotId.current !== active.id) {
+      autoSpokenBotId.current = active.id;
+      autoSpoken.current = lastBot?.id ?? null;
+      return;
+    }
+    if (callOpen || !active.autoSpeak) {
+      autoSpoken.current = lastBot?.id ?? null;
+      return;
+    }
+    if (isWorking(snapshot.run, view)) return;
+    if (!lastBot || lastBot.id === autoSpoken.current) return;
+    const text = speechFromBlocks(lastBot.blocks);
+    if (!text) return;
+    autoSpoken.current = lastBot.id;
+    void speaker.speak(text, { botId: active.id, messageId: lastBot.id });
+  }, [view, snapshot?.run, snapshot?.botId, active?.autoSpeak, active?.id, callOpen]);
+  const rowIndexOf = useMemo(
+    () => new Map(view.rows.map((row, index) => [row.item.id as string, index])),
+    [view.rows],
+  );
+  const activeReplyTarget = replyTarget && rowIndexOf.has(replyTarget.id) ? replyTarget : null;
+  const activeRewindTarget = rewindTarget && rowIndexOf.has(rewindTarget.id) ? rewindTarget : null;
+  const currentRuns = useMemo(() => activeThreadRuns(activeSnapshot), [activeSnapshot]);
+  const workingRuns = currentRuns.filter((run) => isWorking(run, view));
   const transcriptRunning = workingRuns.length > 0;
   const composerRunning = currentRuns.some((run) => isActive(run.status));
+  const queuedRunIds = useMemo(() => queuedRunIdsOf(currentRuns), [currentRuns]);
   const runError = threadRunError(activeSnapshot, dismissedRunErrorIds);
   const displayedRunError = !sendError ? runError : null;
   const displayedRunErrorId = displayedRunError ? (activeSnapshot?.run?.id ?? null) : null;
   const handleRunErrorPresented = useCallback((runId: string) => {
     rememberSeenRunErrorId(runId);
   }, []);
-  const transcriptMessages = useMemo(
-    () => userVisibleMessages(activeSnapshot?.messages ?? [], { includePeerReceipts: true }),
-    [activeSnapshot?.messages],
+  const messageItems = useMemo(
+    () => view.rows.flatMap((row) => (row.item.kind === "message" ? [row.item] : [])),
+    [view.rows],
   );
   // Dictation's language guess (`dictationLangFor`): the person's own recent
   // writing here, read lazily only when dictation actually starts.
   const recentWriting = useCallback(
     () =>
-      transcriptMessages
+      messageItems
         .filter((message) => message.role === "user")
         .slice(-8)
         .map((message) => copyableMessageText(message)),
-    [transcriptMessages],
+    [messageItems],
   );
+  const callThread = useMemo<CallThread>(() => {
+    const waiting = view.waiting;
+    const item = waiting
+      ? view.rows.find((row) => row.item.id === waiting.itemId)?.item
+      : undefined;
+    const block =
+      item?.kind === "message"
+        ? item.blocks.find(
+            (candidate): candidate is Extract<typeof candidate, { kind: "ask" }> =>
+              candidate.kind === "ask" && candidate.status !== "answered",
+          )
+        : item?.kind === "effect"
+          ? item.card
+          : undefined;
+    return {
+      messages: messageItems,
+      running: isWorking(activeSnapshot?.run, view),
+      ask:
+        waiting && block
+          ? {
+              block,
+              target:
+                item?.kind === "effect"
+                  ? { runId: item.runId ?? waiting.runId, messageId: item.id }
+                  : { runId: waiting.runId, messageId: waiting.entryId },
+            }
+          : null,
+    };
+  }, [view, messageItems, activeSnapshot?.run]);
   const transcriptArtifactTarget = useMemo<ArtifactTarget>(
     () => (inGroup ? { groupId: groupId ?? "" } : { botId: active?.id ?? "" }),
     [active?.id, groupId, inGroup],
@@ -1647,16 +1696,17 @@ export function ShellPage() {
       ? t`You`
       : (resolveTranscriptMemberName(activeReplyTarget.botId) ?? active?.name ?? t`Bot`)
     : undefined;
+  const rewindIndex = activeRewindTarget ? (rowIndexOf.get(activeRewindTarget.id) ?? -1) : -1;
   const rewindRemovedCount =
-    rewindFromSeq === null
+    rewindIndex < 0
       ? 0
-      : transcriptMessages.filter((message) => (message.seq ?? 0) > rewindFromSeq).length;
+      : view.rows.slice(rewindIndex + 1).filter((row) => row.item.kind === "message").length;
   const cancelRewind = useCallback(() => {
     setRewindTarget(null);
     setRewindArtifacts([]);
     setRewindDraft(null);
   }, []);
-  const startRewind = useCallback((message: ThreadMessage) => {
+  const startRewind = useCallback((message: MessageItem) => {
     setReplyTarget(null);
     setRewindTarget(message);
     setRewindArtifacts(
@@ -1807,10 +1857,14 @@ export function ShellPage() {
     initiallyScrolledThread.current = snapshot.threadId;
   }, [active, groupId, inGroup, snapshot?.botId, snapshot?.groupId, snapshot?.threadId]);
 
-  const openBot = useCallback((id: string) => navigate(`/app/${id}`), [navigate]);
+  const openBot = useCallback(
+    (id: string, messageId?: string) => navigate(threadJumpLocation({ botId: id, messageId })),
+    [navigate],
+  );
   const loadOlder = useCallback(() => loadOlderMessagesRef.current(), []);
   const jumpToReplyMessage = useCallback((messageId: string) => {
-    const existing = document.querySelector(`[data-message-id="${CSS.escape(messageId)}"]`);
+    const rowId = viewRef.current.rowOf.get(messageId) ?? messageId;
+    const existing = document.querySelector(`[data-message-id="${CSS.escape(rowId)}"]`);
     if (existing) {
       // Cancel any in-flight around-fetch so it cannot overwrite this scroll.
       jumpGeneration.current += 1;
@@ -1825,15 +1879,15 @@ export function ShellPage() {
     const botId = activeBotId.current;
     if (botId) void jumpToMessageRef.current({ botId, messageId });
   }, []);
-  const answerMessage = useCallback(
-    async (message: ThreadMessage, text: string, edits?: SpawnBotCardEdits) => {
+  const answerCard = useCallback(
+    async (target: CardAnswerTarget, text: string, edits?: SpawnBotCardEdits) => {
       const botId = activeBotId.current;
       const groupId = activeGroupId.current;
       if (!botId && !groupId) return;
       await rpc.threads.answer({
         ...(groupId ? { groupId } : { botId: botId! }),
-        runId: message.runId ?? "",
-        messageId: message.id,
+        runId: target.runId,
+        messageId: target.messageId,
         answer: text,
         ...(edits ? { edits } : {}),
       });
@@ -1846,14 +1900,15 @@ export function ShellPage() {
     [],
   );
   const reactToMessage = useCallback(
-    async (message: ThreadMessage, reaction: MessageReaction) => {
+    async (message: MessageItem, reaction: MessageReaction) => {
       const botId = activeBotId.current;
       const groupId = activeGroupId.current;
-      if (!botId && !groupId) return;
+      const messageId = messageIdOf(viewRef.current, message);
+      if ((!botId && !groupId) || !messageId) return;
       try {
         await rpc.threads.react({
           ...(groupId ? { groupId } : { botId: botId! }),
-          messageId: message.id,
+          messageId,
           reaction,
           clientNonce: newClientNonce(),
         });
@@ -1917,6 +1972,9 @@ export function ShellPage() {
       const originThreadKey = initialGroupTarget ?? initialBotTarget;
       const attachments = attachmentsForThread(pendingAttachments, originThreadKey);
       const rewindMessageId = activeRewindTarget?.id;
+      const replyToMessageId = activeReplyTarget
+        ? messageIdOf(viewRef.current, activeReplyTarget)
+        : undefined;
       const restoredArtifactIds = rewindMessageId ? rewindArtifacts.map((item) => item.id) : [];
       const plan = resolveComposerSendPlan({
         text,
@@ -2006,7 +2064,7 @@ export function ShellPage() {
             text: trimmed || undefined,
             mentions: plan.mentionPayload.length ? plan.mentionPayload : undefined,
             artifactIds: artifactIds.length ? artifactIds : undefined,
-            replyToMessageId: reroutedToGroup ? undefined : activeReplyTarget?.id,
+            replyToMessageId: reroutedToGroup ? undefined : replyToMessageId,
             linkPreview: options.linkPreview,
           });
         } else if (botTarget) {
@@ -2016,7 +2074,7 @@ export function ShellPage() {
             text: trimmed || undefined,
             mentions: plan.mentionPayload.length ? plan.mentionPayload : undefined,
             artifactIds: artifactIds.length ? artifactIds : undefined,
-            replyToMessageId: activeReplyTarget?.id,
+            replyToMessageId,
             linkPreview: options.linkPreview,
           });
           if (activeBotId.current === botTarget) {
@@ -2048,6 +2106,10 @@ export function ShellPage() {
         }
         if (groupTarget && activeGroupId.current === groupTarget) setAttachmentNotice(null);
         if (botTarget && activeBotId.current === botTarget) setAttachmentNotice(null);
+        // The message is in the log and on the feed: the next one can go while the thread refreshes.
+        setSending(false);
+        // A send leaves a search jump's window for the latest page, where the message and its reply land.
+        leaveJumpWindow({ snapToEnd: true });
         if (groupTarget) await refreshGroupThreadRef.current(groupTarget);
         else if (botTarget) await refreshThreadRef.current(botTarget);
       } catch (error) {
@@ -2072,7 +2134,7 @@ export function ShellPage() {
       }
     },
     [
-      activeReplyTarget?.id,
+      activeReplyTarget,
       activeRewindTarget?.id,
       cancelRewind,
       flushPendingBrowserNotifications,
@@ -2215,13 +2277,13 @@ export function ShellPage() {
   );
   const speakingMessageIdRef = useRef(speakingMessageId);
   speakingMessageIdRef.current = speakingMessageId;
-  const speakMessage = useCallback((message: ThreadMessage) => {
+  const speakMessage = useCallback((message: MessageItem) => {
     if (speakingMessageIdRef.current === message.id) {
       speaker.stop();
       return;
     }
     const text = speechFromBlocks(message.blocks);
-    const id = message.botId ?? activeBotId.current;
+    const id = botIdOf(message) ?? activeBotId.current;
     if (text && id) void speaker.speak(text, { botId: id, messageId: message.id });
   }, []);
 
@@ -2754,10 +2816,10 @@ export function ShellPage() {
                 botShapeSeed={active.shapeSeed}
                 botIdentity={active.id}
                 transcribe={Boolean(voiceStatus?.transcribe)}
-                snapshot={activeSnapshot}
+                thread={activeSnapshot ? callThread : null}
                 onSend={sendMessage}
                 onFollowUp={followUpMessage}
-                onAnswer={answerMessage}
+                onAnswer={answerCard}
                 onClose={() => setCallOpen(false)}
               />
             </div>
@@ -2816,22 +2878,23 @@ export function ShellPage() {
               <Transcript
                 key={activeSnapshot?.threadId}
                 scrollRef={messageScroll}
+                followingRef={followingEnd}
                 artifactTarget={transcriptArtifactTarget}
                 inGroup={inGroup}
-                messages={transcriptMessages}
+                view={view}
                 olderCursor={activeSnapshot?.olderCursor ?? null}
                 loadingOlder={loadingOlder}
-                answerableAskMessageId={answerableAskMessageId}
                 viewerUserId={userId}
                 running={transcriptRunning}
+                queuedRunIds={queuedRunIds}
                 workingBots={workingBots}
                 workingStartedAt={workingStartedAt}
                 onLoadOlder={loadOlder}
                 onOpenBot={openBot}
-                onAnswer={answerMessage}
+                onAnswer={answerCard}
                 onReply={setReplyTarget}
                 onEdit={startRewind}
-                rewindFromSeq={rewindFromSeq}
+                rewindFromItemId={activeRewindTarget?.id ?? null}
                 onReact={reactToMessage}
                 onJumpToMessage={jumpToReplyMessage}
                 onOpenPeerMessages={(peer) => {
@@ -3263,12 +3326,9 @@ export function ShellPage() {
                 (clearTarget.kind === "bot" && active?.id === clearTarget.chat.id) ||
                 (clearTarget.kind === "group" && activeGroup?.id === clearTarget.chat.id)
               ) {
-                expandedHistoryThread.current = null;
-                pinnedAroundRef.current = null;
+                leaveJumpWindow();
                 historyEpoch.current += 1;
-                updateSnapshot((current) =>
-                  current ? { ...current, messages: [], olderCursor: null, run: null } : current,
-                );
+                updateSnapshot((current) => (current ? { ...current, run: null } : current));
               }
               setClearTarget(null);
               await refreshBots();
@@ -3381,15 +3441,25 @@ export function ShellPage() {
   );
 }
 
+function isWorking(run: Pick<Run, "id" | "status"> | null | undefined, view: ThreadView): boolean {
+  return Boolean(
+    run && ["running", "queued", "leased"].includes(run.status) && run.id !== view.waiting?.runId,
+  );
+}
+
+function messageIdOf(view: ThreadView, message: MessageItem): string | undefined {
+  return view.rows.find((row) => row.item.id === message.id)?.messageId;
+}
+
 function applyThreadEvent(
   event: ProductEvent,
-  commitSnapshot: (next: ThreadSnapshot | null) => void,
+  commitSnapshot: (next: ThreadState | null) => void,
   commitComputer: (next: ComputerStatus | null) => void,
-  snapshotRef: MutableRefObject<ThreadSnapshot | null>,
+  snapshotRef: MutableRefObject<ThreadState | null>,
   computerRef: MutableRefObject<ComputerStatus | null>,
 ) {
-  if (isThreadSnapshotEvent(event)) {
-    const next = reduceThreadSnapshot(snapshotRef.current, event);
+  if (isThreadStateEvent(event)) {
+    const next = reduceThreadState(snapshotRef.current, event);
     commitSnapshot(next);
   }
   if (isComputerStatusEvent(event)) {

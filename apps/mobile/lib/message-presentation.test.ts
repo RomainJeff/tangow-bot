@@ -1,11 +1,12 @@
 import type { MessageBlock } from "@rakazo/contracts";
+import { SessionEntrySchema } from "@rakazo/contracts";
+import { drawsNothing, projectThreadView } from "@rakazo/core";
 import { describe, expect, it } from "vitest";
 import {
   hasVisibleMessagePresentation,
   messagePresentationSegments,
   skillLineRoute,
   skillLineSegment,
-  stepsBlocks,
   visibleMessageBlocks,
 } from "./message-presentation";
 
@@ -52,7 +53,6 @@ describe("mobile message presentation", () => {
 
     expect(hasVisibleMessagePresentation(steps)).toBe(false);
     expect(hasVisibleMessagePresentation(steps, true)).toBe(true);
-    expect(stepsBlocks(steps)).toEqual(steps);
     expect(
       hasVisibleMessagePresentation(
         [{ kind: "progress", text: "Using browser", activity: true }],
@@ -77,7 +77,7 @@ describe("mobile message presentation", () => {
     expect(messagePresentationSegments([mixed])).toEqual([{ kind: "content", blocks: [mixed] }]);
   });
 
-  it("keeps only response content around tool activity", () => {
+  it("keeps each turn of words apart around hidden tool activity", () => {
     const tool: Extract<MessageBlock, { kind: "steps" }> = {
       kind: "steps",
       steps: [{ label: "Read file", count: 1 }],
@@ -90,13 +90,8 @@ describe("mobile message presentation", () => {
         { kind: "text", text: "Done." },
       ]),
     ).toEqual([
-      {
-        kind: "content",
-        blocks: [
-          { kind: "text", text: "Checking." },
-          { kind: "text", text: "Done." },
-        ],
-      },
+      { kind: "content", blocks: [{ kind: "text", text: "Checking." }] },
+      { kind: "content", blocks: [{ kind: "text", text: "Done." }] },
     ]);
 
     expect(
@@ -105,6 +100,24 @@ describe("mobile message presentation", () => {
         { kind: "text", text: "Done." },
       ]),
     ).toEqual([{ kind: "content", blocks: [{ kind: "text", text: "Done." }] }]);
+  });
+
+  it("keeps shown steps where the bot produced them, between its words", () => {
+    const tool: Extract<MessageBlock, { kind: "steps" }> = {
+      kind: "steps",
+      steps: [{ label: "Read file", count: 1 }],
+    };
+
+    expect(
+      messagePresentationSegments(
+        [{ kind: "text", text: "Checking." }, tool, { kind: "text", text: "Done." }],
+        true,
+      ),
+    ).toEqual([
+      { kind: "content", blocks: [{ kind: "text", text: "Checking." }] },
+      { kind: "steps", block: tool },
+      { kind: "content", blocks: [{ kind: "text", text: "Done." }] },
+    ]);
   });
 });
 
@@ -123,10 +136,7 @@ describe("skill lines", () => {
     expect(hasVisibleMessagePresentation([line("learned")])).toBe(true);
     const blocks = [{ kind: "text", text: "Done." }, line("updated")] as MessageBlock[];
     expect(visibleMessageBlocks(blocks)).toEqual(blocks);
-    expect(messagePresentationSegments(blocks)[0]?.blocks.map((block) => block.kind)).toEqual([
-      "text",
-      "skill_source",
-    ]);
+    expect(messagePresentationSegments(blocks)).toEqual([{ kind: "content", blocks }]);
   });
 
   it("opens the skill by its id, also from a line stored with a uid, or Skills when it is gone", async () => {
@@ -145,5 +155,48 @@ describe("skill lines", () => {
     expect(skillLineSegment(["Reading.", "Done.", ""])).toBe(1);
     expect(skillLineSegment([""])).toBe(-1);
     expect(skillLineSegment([])).toBe(-1);
+  });
+
+  it("draws a finished run as its bubbles alone, with no run line between them", () => {
+    const entries = [
+      { type: "user.message", payload: { blocks: [{ kind: "text", text: "Hi" }], source: "app" } },
+      {
+        runId: "run_1",
+        type: "run.started",
+        payload: {
+          trigger: { kind: "direct" },
+          model: { provider: "local", id: "emulator-1" },
+          effort: null,
+        },
+      },
+      {
+        runId: "run_1",
+        type: "assistant.text",
+        payload: { blocks: [{ kind: "text", text: "Hello" }] },
+      },
+      {
+        runId: "run_1",
+        type: "run.finished",
+        payload: { status: "completed", usage: { inputTokens: 1, outputTokens: 1 } },
+      },
+    ].map((entry, seq) =>
+      SessionEntrySchema.parse({
+        id: `e_${seq}`,
+        seq,
+        parentId: seq === 0 ? null : `e_${seq - 1}`,
+        ts: `2026-10-10T09:00:0${seq}.000Z`,
+        sessionId: "ses_main",
+        botId: "bot_ada",
+        ...entry,
+      }),
+    );
+    const rows = projectThreadView(entries, {
+      rendersNothing: (item) =>
+        drawsNothing(item, (blocks) => hasVisibleMessagePresentation(blocks)),
+    }).rows;
+    expect(rows.map((row) => [row.item.kind, row.item.id, row.marker !== undefined])).toEqual([
+      ["message", "e_0", true],
+      ["message", "e_2", false],
+    ]);
   });
 });

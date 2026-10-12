@@ -1,8 +1,8 @@
-import type { ThreadMessage } from "@rakazo/contracts";
+import type { MessageBlock } from "@rakazo/contracts";
 import { messageProviderLabel } from "./messaging";
 
 /** Plain message text for clipboard copy — text/ask/progress only, no chrome. */
-export function copyableMessageText(message: ThreadMessage): string {
+export function copyableMessageText(message: { blocks: readonly MessageBlock[] }): string {
   return message.blocks
     .map((block) => {
       if (block.kind === "channel_message") {

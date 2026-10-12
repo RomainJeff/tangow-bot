@@ -1,3 +1,5 @@
+import type { ProductEvent } from "@rakazo/contracts";
+import { SessionEntrySchema } from "@rakazo/contracts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   type BrowserNotificationApi,
@@ -9,28 +11,66 @@ import {
 } from "./browser-notifications.js";
 import { i18n } from "./i18n.js";
 
-function event(
-  overrides: Partial<{
-    type:
-      | "thread.message.created"
-      | "run.completed"
-      | "run.failed"
-      | "run.cancelled"
-      | "run.started";
-    threadId: string;
-    id: string;
-    runId: string;
-    seq: number;
-    payload: Record<string, unknown>;
-  }> = {},
-) {
+function appended(type: "assistant.text" | "user.message", text: string) {
+  return entryPayload(
+    type === "assistant.text"
+      ? { type, payload: { blocks: [{ kind: "text", text }] } }
+      : { type, payload: { blocks: [{ kind: "text", text }], source: "app" } },
+  );
+}
+
+function entryPayload(entry: { type: string; payload: unknown }) {
+  const bot = entry.type === "user.message" ? {} : { botId: "bot-1", runId: "run-1" };
   return {
-    type: "thread.message.created" as const,
+    entries: [
+      SessionEntrySchema.parse({
+        id: "entry-1",
+        sessionId: "session-1",
+        seq: 3,
+        parentId: "parent",
+        ts: "2026-10-11T08:00:00.000Z",
+        ...bot,
+        ...entry,
+      }),
+    ],
+  };
+}
+
+const ask = entryPayload({
+  type: "assistant.ask",
+  payload: { block: { kind: "ask", text: "Which region first?" } },
+});
+const choice = entryPayload({
+  type: "assistant.choice",
+  payload: {
+    block: {
+      kind: "choice",
+      question: "Pick a city",
+      options: [{ id: "berlin", letter: "A", label: "Berlin" }],
+    },
+  },
+});
+const approval = entryPayload({
+  type: "effect.requested",
+  payload: {
+    effectId: "effect-1",
+    effectKind: "connector",
+    proposal: {},
+    card: { kind: "ask", text: "Write this note to the CRM?" },
+  },
+});
+
+function event(overrides: Partial<ProductEvent> = {}): ProductEvent {
+  return {
+    type: "session.entry.appended",
     id: "event-1",
+    spaceId: "space-1",
     threadId: "thread-1",
+    botId: "bot-1",
     runId: "run-1",
     seq: 8,
-    payload: { role: "bot", blocks: [{ kind: "text", text: "The pool is balanced." }] },
+    createdAt: "2026-10-11T08:00:00.000Z",
+    payload: appended("assistant.text", "The pool is balanced."),
     ...overrides,
   };
 }
@@ -66,9 +106,9 @@ describe("browser notifications", () => {
     expect(shouldNotifyBrowser(event({ type: "run.started" }), context())).toBe(false);
     expect(shouldNotifyBrowser(event({ type: "run.failed" }), context())).toBe(true);
     expect(shouldNotifyBrowser(event({ type: "run.cancelled" }), context())).toBe(true);
-    expect(shouldNotifyBrowser(event({ payload: { role: "user", blocks: [] } }), context())).toBe(
-      false,
-    );
+    expect(
+      shouldNotifyBrowser(event({ payload: appended("user.message", "Thanks") }), context()),
+    ).toBe(false);
     expect(shouldNotifyBrowser(event({ type: "run.completed" }), context())).toBe(false);
     expect(shouldNotifyBrowser(event({ threadId: "other-thread" }), context())).toBe(false);
     expect(shouldNotifyBrowser(event({ seq: 7 }), context())).toBe(false);
@@ -88,10 +128,25 @@ describe("browser notifications", () => {
     );
   });
 
+  it("notifies when the bot asks, offers a choice or needs an approval, with its question", () => {
+    expect(
+      [ask, choice, approval].map((payload) => shouldNotifyBrowser(event({ payload }), context())),
+    ).toEqual([true, true, true]);
+    expect(
+      [ask, choice, approval].map((payload) =>
+        browserNotificationMessage(event({ payload }), "Chief"),
+      ),
+    ).toEqual([
+      { title: "Chief", body: "Which region first?" },
+      { title: "Chief", body: "Pick a city" },
+      { title: "Chief", body: "Write this note to the CRM?" },
+    ]);
+  });
+
   it("shows the bot message's words without its markdown, cut for a notification", () => {
     const text = `**Done**: see [the report](https://example.test/r)\n- one\n- two ${"word ".repeat(60)}`;
     const { body } = browserNotificationMessage(
-      event({ payload: { role: "bot", blocks: [{ kind: "text", text }] } }),
+      event({ payload: appended("assistant.text", text) }),
       "Chief",
     );
     expect(body).toBe(`Done: see the report one two ${"word ".repeat(30).trim()}…`);

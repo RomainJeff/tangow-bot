@@ -31,7 +31,7 @@ export function ThreadHeader({
   inGroup: boolean;
   active: Bot | undefined;
   activeGroup: Group | undefined;
-  activeSnapshot: ThreadSnapshot | null;
+  activeSnapshot: Pick<ThreadSnapshot, "groupId" | "groupName" | "members"> | null;
   panel: Panel;
   setPanel: Dispatch<SetStateAction<Panel>>;
   onOpenBotPage: (view: BotPageView) => void;

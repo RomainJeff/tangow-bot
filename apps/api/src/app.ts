@@ -449,6 +449,7 @@ export async function createApp(
     prisma,
     skillLock,
     events,
+    sessionLog,
     auth,
     jobs,
     sandbox,

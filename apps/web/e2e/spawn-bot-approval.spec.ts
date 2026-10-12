@@ -1,5 +1,6 @@
-import { activeBotId, captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
+import { activeBotId, captureScreenshot, completeOnboarding, signup } from "./helpers";
 import { expect, test } from "./test";
+import { blocksOf, threadEntries } from "./thread-log";
 
 test("a bot asks before creating a bot, and Cancel creates nothing", async ({ page }, testInfo) => {
   const stamp = Date.now();
@@ -35,13 +36,8 @@ test("a bot asks before creating a bot, and Cancel creates nothing", async ({ pa
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(page.getByText("Cancelled", { exact: true })).toBeVisible();
 
-  const history = await rpc<{ messages: Array<{ blocks: Array<{ kind: string }> }> }>(
-    page,
-    "threads/messages",
-    { botId },
-  );
   expect(
-    history.messages.flatMap((message) => message.blocks).some((b) => b.kind === "child_bot"),
+    blocksOf(await threadEntries(page, { botId })).some((block) => block.kind === "child_bot"),
   ).toBe(false);
 });
 
@@ -84,14 +80,10 @@ test("Edit changes the name before Create bot, and the bot is created with it", 
   await expect(page.getByText("Created", { exact: true })).toBeVisible();
 
   await expect
-    .poll(async () => {
-      const history = await rpc<{
-        messages: Array<{ blocks: Array<{ kind: string; name?: string }> }>;
-      }>(page, "threads/messages", { botId });
-      return history.messages
-        .flatMap((message) => message.blocks)
-        .filter((block) => block.kind === "child_bot")
-        .map((block) => block.name);
-    })
+    .poll(async () =>
+      blocksOf(await threadEntries(page, { botId })).flatMap((block) =>
+        block.kind === "child_bot" ? [block.name] : [],
+      ),
+    )
     .toContain("Veille EU");
 });

@@ -11,8 +11,6 @@ import { SessionEntrySchema } from "@rakazo/contracts";
 import {
   blocksToAgentHistoryText,
   isUserDirectedMessage,
-  peerConversations,
-  peerMessagesFrom,
   projectInferenceTurns,
   speechFromBlocks,
   userVisibleMessages,
@@ -160,7 +158,6 @@ describe("no consumer of a message's blocks repeats a preview's title (CA 12, CA
     expect(speechFromBlocks(blocks())).not.toContain("wire the money");
     expect(completionNotificationBody("", blocks())).toBe(`read ${LINK}`);
 
-    // Peer conversations and what the user sees of a delegated run.
     const message = {
       id: "m1",
       threadId: "t1",
@@ -171,8 +168,6 @@ describe("no consumer of a message's blocks repeats a preview's title (CA 12, CA
       runId: "r1",
       clientNonce: "user-message:r1:0:x",
     } as unknown as ThreadMessage;
-    never(peerMessagesFrom([message]), "peer messages");
-    never(peerConversations([message]), "peer conversations");
     expect(isUserDirectedMessage(message)).toBe(true);
     // A visibility filter hands the message on whole: the card is for the person reading it.
     expect(userVisibleMessages([message], { knownPeerRunIds: ["r1"] })).toEqual([message]);

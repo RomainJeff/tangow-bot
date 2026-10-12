@@ -1,5 +1,5 @@
 import * as z from "zod";
-import { ThreadMessageSchema } from "./events.js";
+import { ProductEventSchema, ThreadMessageSchema } from "./events.js";
 import {
   AVATAR_SHAPE_COUNT,
   Id,
@@ -8,8 +8,10 @@ import {
   RunFailureKind,
   RunStatus,
   SandboxKind,
+  ThinkingLevelSchema,
 } from "./ids.js";
 import { McpHeadersSchema, McpRemoteEndpointSchema, McpTransportSchema } from "./mcp.js";
+import { EntryId, ThreadEntrySchema } from "./session-log.js";
 
 export const ComputerModeSchema = z.enum(["team", "dedicated"]);
 export type ComputerMode = z.infer<typeof ComputerModeSchema>;
@@ -26,17 +28,6 @@ export const ShapeSeedSchema = z
   .int()
   .min(0)
   .max(AVATAR_SHAPE_COUNT - 1);
-
-export const ThinkingLevelSchema = z.enum([
-  "off",
-  "minimal",
-  "low",
-  "medium",
-  "high",
-  "xhigh",
-  "max",
-]);
-export type ThinkingLevel = z.infer<typeof ThinkingLevelSchema>;
 
 export const AGENT_SECRET_NAME_PATTERN = /^[A-Z_][A-Z0-9_]{0,63}$/;
 
@@ -153,11 +144,6 @@ export const UpdateGroupInput = z.object({
   sectionId: Id.nullable().optional(),
 });
 export type UpdateGroupInput = z.infer<typeof UpdateGroupInput>;
-
-export const GroupDetailSchema = GroupSchema.extend({
-  messages: z.array(ThreadMessageSchema).optional(),
-});
-export type GroupDetail = z.infer<typeof GroupDetailSchema>;
 
 export const BotSectionSchema = z.object({
   id: Id,
@@ -941,18 +927,21 @@ export const RunSchema = z.object({
 });
 export type Run = z.infer<typeof RunSchema>;
 
+/** A page of the thread's chain, oldest first; `olderCursor` is the entry to page back from. */
 export const ThreadMessagePageSchema = z.object({
   threadId: Id,
-  messages: z.array(ThreadMessageSchema),
-  olderCursor: z.number().int().nonnegative().nullable(),
+  entries: z.array(ThreadEntrySchema),
+  olderCursor: EntryId.nullable(),
 });
 export type ThreadMessagePage = z.infer<typeof ThreadMessagePageSchema>;
 
 export const ThreadSnapshotSchema = z.object({
   threadId: Id,
   cursor: z.number().int().min(-1),
-  messages: z.array(ThreadMessageSchema),
-  olderCursor: z.number().int().nonnegative().nullable(),
+  entries: z.array(ThreadEntrySchema),
+  olderCursor: EntryId.nullable(),
+  /** The open runs' `thread.progress` events newer than each run's last entry, to replay. */
+  progress: z.array(ProductEventSchema),
   botId: Id.optional(),
   groupId: Id.optional(),
   groupName: z.string().optional(),

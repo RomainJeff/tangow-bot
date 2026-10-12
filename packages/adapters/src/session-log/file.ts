@@ -19,7 +19,7 @@ import {
   sessionEntryNonce,
 } from "@rakazo/adapter-kit";
 import type { EntryId, SessionEntry } from "@rakazo/contracts";
-import { SessionId } from "@rakazo/contracts";
+import { isCardState, SessionId } from "@rakazo/contracts";
 import type { TailSource } from "@rakazo/core";
 import { decodeEntries, readTailFromEnd, SessionEntryMissingParentError } from "@rakazo/core";
 
@@ -114,7 +114,24 @@ export class FileSessionLog implements SessionLog<undefined> {
     return page.reverse();
   }
 
-  async readRun(runId: string): Promise<SessionEntry[]> {
+  async readAround(sessionId: SessionId, entryId: EntryId, limit: number): Promise<SessionEntry[]> {
+    assertEntryCount("limit", limit);
+    const entries = await this.readAll(sessionId);
+    const byId = new Map<string, SessionEntry>(entries.map((entry) => [entry.id, entry]));
+    const chain: SessionEntry[] = [];
+    for (let cursor = entries.at(-1); cursor; ) {
+      chain.push(cursor);
+      cursor = cursor.parentId ? byId.get(cursor.parentId) : undefined;
+    }
+    chain.reverse();
+    const at = chain.findIndex((entry) => entry.id === entryId);
+    if (at === -1) return [];
+    const start = Math.max(0, at - Math.floor(limit / 2));
+    return chain.slice(start, start + limit);
+  }
+
+  async readRun(runId: string, { limit }: { limit?: number } = {}): Promise<SessionEntry[]> {
+    if (limit !== undefined) assertEntryCount("limit", limit);
     const dir = path.join(this.root, "sessions");
     const names = await readdir(dir).catch((error: unknown) => {
       if (isMissing(error)) return [];
@@ -126,20 +143,21 @@ export class FileSessionLog implements SessionLog<undefined> {
       entries.push(...decodeEntries(await readFile(path.join(dir, name), "utf8")));
     }
     const run = entries.filter((entry) => entry.runId === runId);
+    const ids = new Set(run.map((entry) => entry.id));
     const asks = new Set(
       run.flatMap((entry) =>
         entry.type === "assistant.ask" || entry.type === "assistant.choice" ? [entry.id] : [],
       ),
     );
-    const answers = entries.filter(
-      (entry) =>
-        entry.type === "user.message" &&
-        entry.payload.replyTo !== undefined &&
-        asks.has(entry.payload.replyTo.entryId),
+    const joined = entries.filter((entry) =>
+      entry.type === "user.message"
+        ? entry.payload.replyTo !== undefined && asks.has(entry.payload.replyTo.entryId)
+        : isCardState(entry) && ids.has(entry.payload.target),
     );
-    return [...run, ...answers].sort(
+    const sorted = [...run, ...joined].sort(
       (left, right) => left.ts.localeCompare(right.ts) || left.seq - right.seq,
     );
+    return limit === undefined ? sorted : sorted.slice(-limit);
   }
 
   async readEntry(sessionId: SessionId, entryId: EntryId): Promise<SessionEntry | undefined> {

@@ -1,5 +1,6 @@
 import type { GroupAvatarMember, StackedAvatarItem } from "@rakazo/ui-web";
-import { GroupAvatar, Interstitial, StackedAvatars, WorkingLine } from "@rakazo/ui-web";
+import { cn, GroupAvatar, Interstitial, StackedAvatars, WorkingLine } from "@rakazo/ui-web";
+import type { ReactNode } from "react";
 
 /** Lightweight peer event shown without exposing the exchanged message body. */
 export function CollaborationMarker({
@@ -7,23 +8,37 @@ export function CollaborationMarker({
   bots,
   label,
   onClick,
+  muted = false,
 }: {
   ariaLabel: string;
   /** The bots the exchange involved, sender first. */
   bots: StackedAvatarItem[];
-  label: string;
-  onClick: () => void;
+  label: ReactNode;
+  onClick?: () => void;
+  muted?: boolean;
 }) {
   return (
     <div className="flex flex-col">
       <Interstitial
         data-testid="peer-receipt-chip"
+        role="group"
         aria-label={ariaLabel}
-        // Unlabelled on purpose: the button's own name says who the exchange
-        // was with, so the stack is decoration.
+        className={cn(
+          "relative",
+          onClick && "duration-(--duration-hover) ease-quiet hover:opacity-60",
+          muted && "opacity-60",
+        )}
         avatars={<StackedAvatars items={bots} size={17} />}
-        onClick={onClick}
       >
+        {/* A sibling stretched under the label, not a wrapper: the label may hold its own link. */}
+        {onClick ? (
+          <button
+            type="button"
+            aria-label={ariaLabel}
+            onClick={onClick}
+            className="absolute inset-0"
+          />
+        ) : null}
         <span dir="auto">{label}</span>
       </Interstitial>
     </div>
