@@ -71,6 +71,9 @@ function fixture(
     /** A real backend to read the session from; the run's writes still go to the recording log. */
     reads?: SessionLog<unknown>;
     sourceEntry?: SessionEntry;
+    /** A tool the model calls, which the runtime runs the way Pi does: a throw becomes its error. */
+    call?: { name: string; args: Record<string, unknown> };
+    sandbox?: Record<string, unknown>;
   } = {},
 ) {
   const run = {
@@ -181,7 +184,10 @@ function fixture(
     ok: true as const,
     value: remembered,
   }));
-  const runtimeRun = vi.fn(async function* (_request: AgentRunRequest) {
+  const runtimeRun = vi.fn(async function* (request: AgentRunRequest) {
+    if (options.call) {
+      await request.executeTool!(options.call.name, options.call.args, "call-1").catch(() => {});
+    }
     yield { type: "done" as const, text: "Done" };
   });
   const jobs = { enqueue: vi.fn(async (_job: unknown) => undefined) };
@@ -202,7 +208,7 @@ function fixture(
       }),
       run: runtimeRun,
     },
-    sandbox: { describe: () => ({ capabilities: { graphical: false } }) },
+    sandbox: { describe: () => ({ capabilities: { graphical: false } }), ...options.sandbox },
     memory: { read: async () => ({ documents: [] }) },
     memoryProviders: {
       resolve: async () => ({
@@ -343,6 +349,58 @@ describe("the history a run reads from its session log", () => {
         ],
       },
     ]);
+  });
+
+  it("replays a tool that threw as a call answered with its error", async () => {
+    const failing = fixture({
+      call: { name: "list_files", args: { path: "." } },
+      sandbox: {
+        listFiles: async () => {
+          throw new Error("Path escapes the computer workspace");
+        },
+      },
+    });
+    await failing.request();
+    const logged = failing.log.drafts.filter(
+      (draft) => draft.type === "tool.call" || draft.type === "tool.result",
+    );
+    const tail = chain(0, [
+      said("What is here?"),
+      started,
+      ...logged.map((draft) => ({ ...draft, ...ownRun })),
+    ]);
+
+    expect(logged.map(({ type, payload }) => ({ type, payload }))).toEqual([
+      {
+        type: "tool.call",
+        payload: { callId: "call-1", name: "list_files", input: '{\n  "path": "."\n}' },
+      },
+      {
+        type: "tool.result",
+        payload: {
+          callId: "call-1",
+          output: "Path escapes the computer workspace",
+          isError: true,
+          artifactIds: [],
+        },
+      },
+    ]);
+    expect((await fixture({ tail }).history()).at(-1)).toMatchObject({
+      role: "assistant",
+      parts: [
+        {
+          type: "toolCalls",
+          calls: [
+            {
+              id: "call-1",
+              name: "list_files",
+              args: { path: "." },
+              output: "Path escapes the computer workspace",
+            },
+          ],
+        },
+      ],
+    });
   });
 
   it("quotes a reply whose target the compaction covered", async () => {
