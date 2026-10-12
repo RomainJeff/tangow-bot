@@ -1598,9 +1598,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
         // (background-work-visibility CA1/CA2); a top-level bot's scheduled routine (the
         // orchestrator's own brief) is unaffected and keeps behaving as a normal reply.
         const isRoutineCardRun = showsRoutineRunCard(run, bot.parentBotId != null);
-        // Only a top-level bot talks to the user through message_user. A sub-bot answers its
-        // parent and a routine card digests the run, so both keep their text as their output.
-        const messageUserExposed = bot.parentBotId == null && !isRoutineCardRun;
+        // Only a top-level bot talks to the user through message_user, outside its routines. A
+        // sub-bot answers its parent, and a routine run, scheduled or woken by a webhook, works in
+        // its own session and reports when it ends, so both keep their text as their output.
+        const routineRun =
+          run.routineId != null && (run.trigger === "routine" || run.trigger === "webhook");
+        const messageUserExposed = bot.parentBotId == null && !routineRun;
         // Text the model writes outside message_user is private scratch, and a turn that never
         // calls it stays silent. A delegated run's text is its result for the ordering bot.
         const freeTextIsPrivate = messageUserExposed && run.trigger !== "bot_message";

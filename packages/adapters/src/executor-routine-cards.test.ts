@@ -1713,12 +1713,13 @@ describe("a skill the bot saves on its own", () => {
 });
 
 describe("the skill nudge at the end of an exchange", () => {
+  const longTask = Array.from({ length: 15 }, () => ({
+    name: "skill_search",
+    args: { query: "table" },
+  }));
   // The exchange answers the user, which only message_user does.
   const reply = { name: "message_user", args: { message: "Done" } };
-  const searches = [
-    ...Array.from({ length: 15 }, () => ({ name: "skill_search", args: { query: "table" } })),
-    reply,
-  ];
+  const searches = [...longTask, reply];
   const keep = {
     name: "skill_create",
     args: { name: "Book a table", description: "Book a restaurant table", body: "1. Call." },
@@ -1960,7 +1961,7 @@ describe("the skill nudge at the end of an exchange", () => {
 
   it("does not run for a routine, even a long one", async () => {
     const f = fixture({ skillLearning: "on", trigger: "routine", nudge: [[keep]] });
-    await f.play([searches]);
+    await f.play([longTask]);
     expect(f.requests()).toHaveLength(1);
     expect(f.eventsOf("agent.skill.nudge")).toEqual([]);
   });

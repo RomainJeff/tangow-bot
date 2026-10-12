@@ -741,12 +741,15 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
   }, 30_000);
 
   it("keeps a routine's steps out of the next person's history, which reads its start and its words", async () => {
+    let routineTools: string[] = [];
     await journey(
       [
         { expect() {}, response: reply("Hello.", "journey-hello") },
         DONE,
         {
-          expect() {},
+          expect(request) {
+            routineTools = (request.tools ?? []).map((tool) => tool.function.name);
+          },
           response: {
             type: "tool",
             id: "journey-routine-write",
@@ -754,8 +757,7 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
             arguments: { path: "notes/brief.txt", content: "brief" },
           },
         },
-        { expect() {}, response: reply("Saved the brief.", "journey-brief") },
-        DONE,
+        { expect() {}, response: { type: "text", text: "Saved the brief." } },
         {
           expect(request) {
             const history = JSON.stringify(request.messages);
@@ -797,15 +799,21 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
         });
         const types = async (sessionId: string) =>
           (await log.readTail(sessionId as SessionId)).map((entry) => entry.type);
-        expect(await types(routineSessionId)).toEqual([
+        expect(routineTools).toContain("write_file");
+        expect(routineTools).not.toContain("message_user");
+        const routineEntries = await log.readTail(routineSessionId as SessionId);
+        expect(routineEntries.map((entry) => entry.type)).toEqual([
           "run.started",
           "tool.call",
           "tool.result",
-          "tool.call",
           "assistant.text",
-          "tool.result",
           "run.finished",
         ]);
+        expect(
+          routineEntries.flatMap((entry) =>
+            entry.type === "tool.call" ? [payloadOf(entry).name] : [],
+          ),
+        ).toEqual(["write_file"]);
         expect(await types(asked.sessionId)).toEqual([
           "user.message",
           "run.started",

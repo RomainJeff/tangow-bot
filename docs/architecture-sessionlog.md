@@ -56,6 +56,8 @@ In the Model column, `context` means one short line in the model's history. A Th
 | `rewind`, `clear` | no | yes | A cut of the chain |
 | `harness.session` | no | no | A harness's session id |
 
+In a top-level bot's own conversation, its closing free text is not logged, since only what it sends with `message_user` reaches the person. A routine run, a helper, a sub-bot and a delegated run have their final reply as their output, and it is logged.
+
 Nothing writes `attachment.added`, `session.title` or `harness.session` yet. Streamed text deltas (`thread.progress`), computer status, the takeover negotiation, per-call usage records and a bot's or a group's settings and members stay out of the log, in the `events` table or their own tables.
 
 ## Child sessions keep their own trace

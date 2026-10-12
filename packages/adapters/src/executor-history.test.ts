@@ -381,17 +381,24 @@ describe("the history a run reads from its session log", () => {
     ]);
   });
 
-  it("tells a routine card run that its final reply is seen, and a person's run that only message_user reaches them", async () => {
-    const routine = fixture({
-      run: { trigger: "webhook", routineId: "routine-1", createdAt: new Date() },
-    });
-    const { instructions: routineInstructions } = await routine.request();
-    const { instructions: userInstructions } = await fixture().request();
+  it("gives a routine run its final reply as its voice, without message_user, and a person's run message_user", async () => {
+    const offered = async (run?: Record<string, unknown>) => {
+      const { instructions, tools } = await fixture(run ? { run } : {}).request();
+      return { instructions, tools: tools.map((tool) => tool.name) };
+    };
+    const routines = [
+      await offered({ trigger: "routine", routineId: "routine-1", createdAt: new Date() }),
+      await offered({ trigger: "webhook", routineId: "routine-1", createdAt: new Date() }),
+    ];
+    const person = await offered();
 
-    expect(routineInstructions).toContain("Your final reply is what gets seen.");
-    expect(routineInstructions).not.toContain("message_user is the only way to reach the user.");
-    expect(userInstructions).toContain("message_user is the only way to reach the user.");
-    expect(userInstructions).not.toContain("Your final reply is what gets seen.");
+    for (const routine of routines) {
+      expect(routine.instructions).toContain("Your final reply is what gets seen.");
+      expect(routine.instructions).not.toContain("message_user is the only way");
+      expect(routine.tools).not.toContain("message_user");
+    }
+    expect(person.instructions).toContain("message_user is the only way to reach the user.");
+    expect(person.tools).toContain("message_user");
   });
 
   it("hands a group member another bot's words as a bot message, and its own as its turns", async () => {
