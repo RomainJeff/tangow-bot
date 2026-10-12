@@ -1,4 +1,5 @@
 export * from "./bootstrap-user.js";
+export * from "./bot-message-context.js";
 export * from "./bot-names.js";
 export * from "./cancel-runs.js";
 export * from "./client.js";

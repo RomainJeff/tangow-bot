@@ -479,7 +479,7 @@ describePostgres("appendSessionEntryInTransaction under contention (PostgreSQL)"
           entry.type === "run.finished" ? `${entry.type} ${entry.payload.status}` : entry.type,
         ),
       ]),
-    ).toEqual([["session.entry.appended", "run.finished cancelled", "clear"], ["thread.cleared"]]);
+    ).toEqual([["session.entry.appended", "run.finished cancelled", "clear"]]);
   });
 
   it("releases a computer behind its bot's thread lock, holding nothing a stop needs first", async () => {

@@ -13,9 +13,10 @@ import {
   appendSessionEntryInTransaction,
   cancelRunsInTransaction,
   clearThread,
+  createBotMessageInTransaction,
   createSessionInTransaction,
   createThreadEvents,
-  createThreadMessage,
+  createThreadMessageInTransaction,
   dismissProposalWithTextInTransaction,
   finalizeRun,
   openRoutineSessionInTransaction,
@@ -24,15 +25,16 @@ import {
   removeLinkPreviewBlock,
   resumeAskWithComposerTextInTransaction,
   rewindThread,
+  runsOfMessage,
   threadOfSession,
 } from "@rakazo/db";
+import type { PgliteDatabase } from "@rakazo/db/pglite.test-support";
+import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { messageConnectedAgent } from "../agent-connections.js";
 import { messageBot, returnBotMessageOutcome } from "../bot-messages.js";
 import { openRunLog } from "../executor.js";
 import { createSkillLineSweep, writeSkillLines } from "../skill-lines.js";
-import type { PgliteDatabase } from "./pglite.js";
-import { openPgliteDatabase } from "./pglite.js";
 import { PostgresSessionLog } from "./postgres.js";
 
 const SPACE = "space_writers";
@@ -1022,13 +1024,14 @@ describe("session log writers", () => {
         },
       });
     const replied = (run: { id: string; botId: string; threadId: string }, value: string) =>
-      createThreadMessage(database.prisma, {
-        threadId: run.threadId,
-        role: "bot",
-        botId: run.botId,
-        runId: run.id,
-        blocks: text(value),
-      });
+      database.prisma.$transaction((tx) =>
+        createBotMessageInTransaction(tx, {
+          threadId: run.threadId,
+          botId: run.botId,
+          runId: run.id,
+          blocks: text(value),
+        }),
+      );
     const ended = (runId: string, status = "completed") =>
       database.prisma.run.update({ where: { id: runId }, data: { status } });
 
@@ -1036,7 +1039,7 @@ describe("session log writers", () => {
       const { prisma } = database;
       const { bot, threadId, sessionId } = await seedBot(prisma, "Ines");
       const run = await seedRun(prisma, bot.id, threadId);
-      const reply = await replied(run, "Done.");
+      await replied(run, "Done.");
       await wrote(run.id, "skill_create", "Coffee");
       await wrote(run.id, "skill_create", "Tea");
       await wrote(run.id, "skill_update", "Coffee");
@@ -1048,11 +1051,6 @@ describe("session log writers", () => {
       expect(await learnt(sessionId)).toEqual([
         { runId: run.id, skillId: "user:coffee", name: "Coffee", change: "learned" },
         { runId: run.id, skillId: "user:tea", name: "Tea", change: "learned" },
-      ]);
-      expect((await prisma.message.findUniqueOrThrow({ where: { id: reply.id } })).blocks).toEqual([
-        ...text("Done."),
-        { kind: "skill_source", skillId: "user:coffee", name: "Coffee", change: "learned" },
-        { kind: "skill_source", skillId: "user:tea", name: "Tea", change: "learned" },
       ]);
     });
 
@@ -1150,10 +1148,6 @@ describe("session log writers", () => {
         const thread = { spaceId: SPACE, threadId: seeded.threadId, botId: seeded.bot.id };
         const nothingCameBack = async () => {
           await createSkillLineSweep(lineDeps(), { now: later })();
-          const blocks = (
-            await prisma.message.findMany({ where: { threadId: seeded.threadId } })
-          ).flatMap((message) => message.blocks as Array<{ kind: string }>);
-          expect(blocks.filter((block) => block.kind === "skill_source")).toEqual([]);
           expect(await learnt(seeded.sessionId)).toEqual([]);
         };
         return { run, thread, ask, nothingCameBack };
@@ -1234,9 +1228,13 @@ describe("session log writers", () => {
           ? { effect: { id: effect.id, kind: effect.kind, proposal: effect.request } }
           : {}),
       });
-      const message = await prisma.message.findFirstOrThrow({ where: { runId: run.id } });
-      const ask = (await log.readRun(run.id)).find((entry) => entry.type === "assistant.ask");
-      return { run, messageId: message.id, askId: ask?.id };
+      const written = await log.readRun(run.id);
+      // The card's message is the first entry its blocks wrote.
+      const message = written.find((entry) =>
+        ["assistant.text", "assistant.ask", "effect.requested"].includes(entry.type),
+      );
+      const ask = written.find((entry) => entry.type === "assistant.ask");
+      return { run, messageId: message!.id, askId: ask?.id };
     }
 
     const newest = async (sessionId: SessionId) => {
@@ -1455,20 +1453,31 @@ describe("session log writers", () => {
         { kind: "ask", text: "Which city?" },
       ]);
 
-      await database.prisma.$transaction((tx) =>
-        resumeAskWithComposerTextInTransaction(tx, {
+      const reply = await database.prisma.$transaction(async (tx) => {
+        const said = await createThreadMessageInTransaction(tx, {
+          threadId: owner.threadId,
+          role: "user",
+          blocks: [{ kind: "text", text: "Lyon" }],
+          clientNonce: "composer-lyon",
+        });
+        await resumeAskWithComposerTextInTransaction(tx, {
           spaceId: SPACE,
           threadId: owner.threadId,
           runId: run.id,
           text: "Lyon",
-        }),
-      );
+        });
+        return said;
+      });
 
       expect(await newest(owner.sessionId)).toEqual({
         type: "card.answered",
         sessionId: owner.sessionId,
         payload: { target: askId },
       });
+      // A resent message finds the run its answer resumed.
+      expect(
+        (await runsOfMessage(database.prisma, reply)).answered.map((answered) => answered.id),
+      ).toEqual([run.id]);
     });
 
     it("logs a proposal put away by a typed reply as denied and dismissed", async () => {
@@ -1506,29 +1515,18 @@ describe("session log writers", () => {
       });
     });
 
-    it("logs a preview added to a message and its removal, and nothing for a message older than the log", async () => {
+    it("logs a preview added to a message and its removal, and nothing for a message the thread does not hold", async () => {
       const { prisma } = database;
       const owner = await seedBot(prisma, "Turing");
       const run = await seedRun(prisma, owner.bot.id, owner.threadId);
       const text: MessageBlock = { kind: "text", text: "See https://example.com" };
-      const message = await createThreadMessage(prisma, {
-        threadId: owner.threadId,
-        role: "bot",
-        blocks: [text],
-        botId: owner.bot.id,
-        runId: run.id,
-      });
+      const message = { id: randomUUID() };
       await prisma.$transaction((tx) =>
         appendRunBlocksInTransaction(tx, { id: message.id, runId: run.id, botId: owner.bot.id }, [
           text,
         ]),
       );
-      const older = await createThreadMessage(prisma, {
-        threadId: owner.threadId,
-        role: "bot",
-        blocks: [{ kind: "text", text: "Before the log" }],
-        botId: owner.bot.id,
-      });
+      const older = { id: randomUUID() };
       const block = {
         kind: "link_preview",
         url: "https://example.com/",

@@ -1,8 +1,4 @@
-import {
-  type MessageBlock,
-  USER_MESSAGE_CLIENT_NONCE_PREFIX,
-  USER_PROGRESS_CLIENT_NONCE_PREFIX,
-} from "@rakazo/contracts";
+import type { MessageBlock } from "@rakazo/contracts";
 import { isToolActivityBlock } from "@rakazo/core";
 
 /** Keep mid-turn progress beats short; prefer a few high-signal updates. */
@@ -29,38 +25,6 @@ export function isProgressMessageTruncated(text: string): boolean {
  * Pull narration text out of the in-progress turn segments so it can be posted
  * as a durable mid-turn message. Tool/step blocks stay for the final publish.
  */
-
-/** clientNonce prefixes for mid-turn messages (reconciler uses these).
- * Canonical definitions live in @rakazo/contracts; re-exported for existing importers. */
-export { USER_MESSAGE_CLIENT_NONCE_PREFIX, USER_PROGRESS_CLIENT_NONCE_PREFIX };
-
-function midTurnClientNonce(prefix: string, runId: string, index: number): string {
-  // Include entropy so a resumed executor turn cannot reuse an earlier nonce
-  // (threadId + clientNonce is unique).
-  return `${prefix}${runId}:${index}:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 10)}`;
-}
-
-/** Nonce for narration the executor publishes on its own initiative. */
-export function userProgressClientNonce(runId: string, index = 0): string {
-  return midTurnClientNonce(USER_PROGRESS_CLIENT_NONCE_PREFIX, runId, index);
-}
-
-/** Nonce for `message_user` output — text the bot deliberately addressed to the user. */
-export function userMessageClientNonce(runId: string, index = 0): string {
-  return midTurnClientNonce(USER_MESSAGE_CLIENT_NONCE_PREFIX, runId, index);
-}
-
-/**
- * True for either mid-turn kind (narration or `message_user`). Callers that rebuild the
- * mid-turn transcript (executor resume, job reconciler) want both; the peer-visibility gate
- * does not — it uses `isUserDirectedMessage` in @rakazo/core instead.
- */
-export function isUserProgressClientNonce(clientNonce: string | null | undefined): boolean {
-  return Boolean(
-    clientNonce?.startsWith(USER_PROGRESS_CLIENT_NONCE_PREFIX) ||
-      clientNonce?.startsWith(USER_MESSAGE_CLIENT_NONCE_PREFIX),
-  );
-}
 
 /**
  * Steering = a user message that arrived while the bot was already working. The reply must

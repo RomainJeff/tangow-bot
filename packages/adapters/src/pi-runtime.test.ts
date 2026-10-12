@@ -1,7 +1,7 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { Api, Message, Model } from "@earendil-works/pi-ai";
 import { transformMessages } from "@earendil-works/pi-ai/api/transform-messages";
-import { blocksToAgentHistoryText } from "@rakazo/core";
+import { renderBotMessageBlock } from "@rakazo/core";
 import { describe, expect, it } from "vitest";
 import { describeToolActivity, stripFakeToolCalls, toHistory } from "./pi-runtime.js";
 
@@ -135,9 +135,7 @@ describe("stripFakeToolCalls", () => {
 
 describe("toHistory", () => {
   it("does not let a peer's request read as a decision the bot made", () => {
-    const peerText = blocksToAgentHistoryText([
-      { kind: "bot_message_received", fromBotId: "b_1", fromBotName: "Researcher", text: "do X" },
-    ]);
+    const peerText = renderBotMessageBlock("Researcher", "do X");
     const [opening, peerTurn, ownTurn] = toHistory(
       [
         { id: "m0", role: "user", content: "start" },

@@ -5,9 +5,10 @@ export type ChildSession = { kind: "routine" | "subagent"; name: string };
 export function childSessionsOf(entries: readonly ThreadEntry[]): Map<string, ChildSession> {
   const children = new Map<string, ChildSession>();
   for (const entry of entries) {
-    if (entry.type === "routine.started" || entry.type === "subagent") {
-      const kind = entry.type === "subagent" ? "subagent" : "routine";
-      children.set(entry.payload.sessionId, { kind, name: entry.payload.name });
+    if (entry.type === "routine.started") {
+      children.set(entry.payload.sessionId, { kind: "routine", name: entry.payload.name });
+    } else if (entry.type === "subagent" && entry.payload.sessionId) {
+      children.set(entry.payload.sessionId, { kind: "subagent", name: entry.payload.name });
     }
   }
   return children;

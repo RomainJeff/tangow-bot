@@ -9,7 +9,6 @@ import {
   botMessageAllowsSilence,
   botMessageHopExhausted,
   botMessageRelaysToUser,
-  botMessageRunRelaysToUser,
   buildBotMessageWakePrompt,
   clampBotMessage,
   formatBotRosterLines,
@@ -435,51 +434,29 @@ describe("inbound wake prompt", () => {
   });
 });
 
-describe("botMessageRunRelaysToUser", () => {
-  const received = (intent?: "request" | "question" | "result" | "status" | "fyi") => [
-    {
-      kind: "bot_message_received" as const,
-      fromBotId: "peer",
-      fromBotName: "Peer",
-      text: "…",
-      intent,
-    },
-  ];
-  const sent = (intent?: "request" | "question" | "result" | "status" | "fyi") => [
-    { kind: "bot_message_sent" as const, toBotId: "peer", toBotName: "Peer", text: "…", intent },
-  ];
-
+describe("botMessageRelaysToUser", () => {
   it("relays what a peer reports about work this bot delegated", () => {
-    expect(botMessageRunRelaysToUser({ blocks: received("result") })).toBe(true);
-    expect(botMessageRunRelaysToUser({ blocks: received("status") })).toBe(true);
+    expect(botMessageRelaysToUser({ intent: "result" })).toBe(true);
+    expect(botMessageRelaysToUser({ intent: "status" })).toBe(true);
   });
 
   it("relays any answer to a request or question this bot sent, whatever intent comes back", () => {
     // The peer may answer a `request` with a bare `fyi`; what makes it a relay is that this
     // bot asked, so the user is waiting on the answer.
-    expect(
-      botMessageRunRelaysToUser({ blocks: received("fyi"), replyToBlocks: sent("request") }),
-    ).toBe(true);
-    expect(botMessageRunRelaysToUser({ blocks: received(), replyToBlocks: sent("question") })).toBe(
-      true,
-    );
+    expect(botMessageRelaysToUser({ intent: "fyi", repliesToRequest: true })).toBe(true);
+    expect(botMessageRelaysToUser({ repliesToRequest: true })).toBe(true);
   });
 
   it("keeps a peer's own solicitation out of this bot's conversation with the user", () => {
     // The turn's output is returned to the peer automatically, so it is half a conversation
     // the user never started. A missing intent is a solicitation too, like the wake prompt.
-    expect(botMessageRunRelaysToUser({ blocks: received("request") })).toBe(false);
-    expect(botMessageRunRelaysToUser({ blocks: received("question") })).toBe(false);
-    expect(botMessageRunRelaysToUser({ blocks: received("fyi") })).toBe(false);
-    expect(botMessageRunRelaysToUser({ blocks: received() })).toBe(false);
-    // A peer's reply to this bot's own `result` is not an answer this bot was waiting for.
-    expect(
-      botMessageRunRelaysToUser({ blocks: received("fyi"), replyToBlocks: sent("result") }),
-    ).toBe(false);
+    expect(botMessageRelaysToUser({ intent: "request" })).toBe(false);
+    expect(botMessageRelaysToUser({ intent: "question" })).toBe(false);
+    expect(botMessageRelaysToUser({ intent: "fyi" })).toBe(false);
+    expect(botMessageRelaysToUser({})).toBe(false);
   });
 
   it("treats a run with no peer delivery as nothing to relay", () => {
-    expect(botMessageRunRelaysToUser({ blocks: [{ kind: "text", text: "hello" }] })).toBe(false);
     expect(botMessageRelaysToUser(undefined)).toBe(false);
   });
 });

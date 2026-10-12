@@ -1,21 +1,21 @@
+import { randomUUID } from "node:crypto";
 import { runContinueJob } from "@rakazo/adapter-kit";
-import type { BotMessageIntent, EntryId, MessageBlock, Peer, SessionId } from "@rakazo/contracts";
+import type { BotMessageIntent, EntryId, Peer, SessionId } from "@rakazo/contracts";
 import {
   BOT_MESSAGE_MAX_HOPS,
   BOT_MESSAGE_MAX_LENGTH,
-  botMessageContext,
   botMessageHopExhausted,
   buildBotMessageWakePrompt,
   clampBotMessage,
   nextBotMessageHop,
-  repliesToOwnRequest,
   resolveBotAddress,
 } from "@rakazo/core";
 import type { Prisma, PrismaClient } from "@rakazo/db";
 import {
-  appendEventInTransaction,
   appendSessionEntryInTransaction,
-  createThreadMessageInTransaction,
+  loadBotMessageContext,
+  threadEntryByNonce,
+  threadEventSeq,
   withTransactionRetry,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
@@ -118,26 +118,6 @@ export async function appendBotMessageInTransaction(
   });
 }
 
-export async function loadBotMessageContext(
-  prisma: PrismaClient,
-  sourceMessageId: string | null | undefined,
-) {
-  if (!sourceMessageId) return undefined;
-  const source = await prisma.message.findUnique({
-    where: { id: sourceMessageId },
-    select: { blocks: true, replyTo: { select: { blocks: true } } },
-  });
-  const context = botMessageContext(
-    Array.isArray(source?.blocks) ? (source.blocks as MessageBlock[]) : [],
-  );
-  if (!context) return undefined;
-  const replyBlocks = Array.isArray(source?.replyTo?.blocks)
-    ? (source.replyTo.blocks as MessageBlock[])
-    : [];
-  const repliesToRequest = repliesToOwnRequest(replyBlocks);
-  return { ...context, repliesToRequest };
-}
-
 export async function messageBot(
   deps: Pick<ExecutorDeps, "prisma" | "events" | "jobs">,
   run: {
@@ -222,184 +202,103 @@ export async function messageBot(
     }) as const;
 
   const wakePrompt = buildBotMessageWakePrompt({ from: sender, text: message, intent });
-  const outboundBlock: MessageBlock = {
-    kind: "bot_message_sent",
-    toBotId: target.id,
-    toBotName: target.name,
-    text: message,
-    intent,
-  };
 
-  let committed:
-    | {
-        ok: true;
-        runId: string;
-        targetEventSeq: number;
-        senderEventSeq: number;
+  const committed = await withTransactionRetry(() =>
+    deps.prisma.$transaction(async (tx) => {
+      for (const threadId of [run.threadId, targetThreadId].sort()) {
+        await tx.$queryRaw`SELECT id FROM threads WHERE id = ${threadId} FOR UPDATE`;
       }
-    | {
-        ok: false;
-        error: string;
+      // Under both thread locks, so a concurrent retry waits and then finds this delivery.
+      if (deliveryKey && (await threadEntryByNonce(tx, targetThreadId, deliveryKey))) {
+        return { ok: true as const, replayed: true as const };
       }
-    | {
-        ok: true;
-        replayed: true;
-      };
-  try {
-    committed = await withTransactionRetry(() =>
-      deps.prisma.$transaction(async (tx) => {
-        for (const threadId of [run.threadId, targetThreadId].sort()) {
-          await tx.$queryRaw`SELECT id FROM threads WHERE id = ${threadId} FOR UPDATE`;
-        }
-        // Claim the delivery key inside the transaction so a concurrent retry
-        // either sees the winner or loses on the unique (threadId, clientNonce).
-        if (deliveryKey) {
-          const already = await tx.message.findUnique({
-            where: { threadId_clientNonce: { threadId: targetThreadId, clientNonce: deliveryKey } },
-            select: { id: true },
-          });
-          if (already) return { ok: true as const, replayed: true as const };
-        }
 
-        const senderStillRunning = await tx.run.findFirst({
-          where: {
-            id: run.id,
-            spaceId: run.spaceId,
-            threadId: run.threadId,
-            botId: run.botId,
-            userId: run.userId,
-            status: options?.allowTerminalSource ? { in: ["completed", "failed"] } : "running",
-          },
-          select: { id: true, sessionId: true, status: true },
-        });
-        if (!senderStillRunning)
-          return { ok: false as const, error: "source run is no longer active" };
-
-        // Re-read the target inside the transaction: it can be archived between
-        // resolving it above and committing here.
-        const stillAddressable = await tx.bot.findFirst({
-          where: {
-            id: target.id,
-            spaceId: run.spaceId,
-            userId: run.userId,
-            archivedAt: null,
-          },
-          select: { id: true },
-        });
-        if (!stillAddressable)
-          return { ok: false as const, error: `${target.name} is no longer available` };
-
-        // Echo into the sender's chat in the same transaction so a failed notify
-        // cannot leave one side delivered and the other blank.
-        const outbound = await createThreadMessageInTransaction(tx, {
-          threadId: run.threadId,
-          role: "bot",
-          blocks: [outboundBlock],
-          botId: run.botId,
-          runId: run.id,
-        });
-        const inboundBlock: MessageBlock = {
-          kind: "bot_message_received",
-          fromBotId: sender.id,
-          fromBotName: sender.name,
-          text: message,
-          hop,
-          intent,
-          returnToMessageId: outbound.id,
-        };
-        // This is the recipient's prompt, but it is still unread peer activity.
-        const inbound = await createThreadMessageInTransaction(tx, {
-          threadId: targetThreadId,
-          role: "user",
-          blocks: [inboundBlock],
-          replyToMessageId:
-            sourceContext?.fromBotId === target.id && intent !== "fyi"
-              ? sourceContext.returnToMessageId
-              : undefined,
-          clientNonce: deliveryKey,
-          markUnread: true,
-          source: "bot",
-        });
-        await appendBotMessageInTransaction(tx, {
-          sender: {
-            sessionId: senderStillRunning.sessionId as SessionId,
-            botId: run.botId,
-            runId: senderStillRunning.status === "running" ? run.id : undefined,
-            peer: { kind: "bot", botId: sender.id, name: sender.name },
-          },
-          receiver: {
-            sessionId: targetSessionId as SessionId,
-            botId: target.id,
-            peer: { kind: "bot", botId: target.id, name: target.name },
-          },
-          sentId: outbound.id,
-          receivedId: inbound.id,
-          sourceMessageId: run.sourceMessageId,
-          text: message,
-          intent,
-          hop,
-          deliveryKey,
-        });
-        const task = await tx.task.create({
-          data: {
-            spaceId: run.spaceId,
-            botId: target.id,
-            threadId: targetThreadId,
-            userId: run.userId,
-            prompt: wakePrompt,
-            status: "queued",
-          },
-        });
-        const nextRun = await tx.run.create({
-          data: {
-            spaceId: run.spaceId,
-            botId: target.id,
-            threadId: targetThreadId,
-            taskId: task.id,
-            userId: run.userId,
-            status: "queued",
-            trigger: "bot_message",
-            sourceMessageId: inbound.id,
-          },
-          select: { id: true },
-        });
-        await tx.message.update({ where: { id: inbound.id }, data: { runId: nextRun.id } });
-        const inboundEvent = await appendEventInTransaction(tx, {
-          spaceId: run.spaceId,
-          threadId: targetThreadId,
-          botId: target.id,
-          type: "thread.message.created",
-          runId: nextRun.id,
-          payload: { messageId: inbound.id, role: "user", blocks: [inboundBlock] },
-        });
-        const outboundEvent = await appendEventInTransaction(tx, {
+      const senderStillRunning = await tx.run.findFirst({
+        where: {
+          id: run.id,
           spaceId: run.spaceId,
           threadId: run.threadId,
           botId: run.botId,
-          type: "thread.message.created",
-          runId: run.id,
-          payload: { messageId: outbound.id, role: "bot", blocks: [outboundBlock] },
-        });
-        return {
-          ok: true as const,
-          runId: nextRun.id,
-          targetEventSeq: inboundEvent.seq,
-          senderEventSeq: outboundEvent.seq,
-        };
-      }),
-    );
-  } catch (error) {
-    // Two concurrent retries can both miss the in-transaction lookup; the
-    // loser hits the unique key. Treat that as a successful replay.
-    if (deliveryKey && isUniqueConstraintError(error)) {
-      const winner = await deps.prisma.message.findUnique({
-        where: { threadId_clientNonce: { threadId: targetThreadId, clientNonce: deliveryKey } },
+          userId: run.userId,
+          status: options?.allowTerminalSource ? { in: ["completed", "failed"] } : "running",
+        },
+        select: { id: true, sessionId: true, status: true },
+      });
+      if (!senderStillRunning)
+        return { ok: false as const, error: "source run is no longer active" };
+
+      // Re-read the target inside the transaction: it can be archived between
+      // resolving it above and committing here.
+      const stillAddressable = await tx.bot.findFirst({
+        where: {
+          id: target.id,
+          spaceId: run.spaceId,
+          userId: run.userId,
+          archivedAt: null,
+        },
         select: { id: true },
       });
-      if (winner) return replayed();
-    }
-    throw error;
-  }
+      if (!stillAddressable)
+        return { ok: false as const, error: `${target.name} is no longer available` };
+
+      // Both sides in one transaction so a failed notify cannot leave one delivered and the other
+      // blank. The delivery is the recipient's prompt, but it is still unread peer activity.
+      await tx.thread.updateMany({
+        where: { id: { in: [run.threadId, targetThreadId] } },
+        data: { unread: true },
+      });
+      const receivedId = randomUUID();
+      await appendBotMessageInTransaction(tx, {
+        sender: {
+          sessionId: senderStillRunning.sessionId as SessionId,
+          botId: run.botId,
+          runId: senderStillRunning.status === "running" ? run.id : undefined,
+          peer: { kind: "bot", botId: sender.id, name: sender.name },
+        },
+        receiver: {
+          sessionId: targetSessionId as SessionId,
+          botId: target.id,
+          peer: { kind: "bot", botId: target.id, name: target.name },
+        },
+        sentId: randomUUID(),
+        receivedId,
+        sourceMessageId: run.sourceMessageId,
+        text: message,
+        intent,
+        hop,
+        deliveryKey,
+      });
+      const task = await tx.task.create({
+        data: {
+          spaceId: run.spaceId,
+          botId: target.id,
+          threadId: targetThreadId,
+          userId: run.userId,
+          prompt: wakePrompt,
+          status: "queued",
+        },
+      });
+      const nextRun = await tx.run.create({
+        data: {
+          spaceId: run.spaceId,
+          botId: target.id,
+          threadId: targetThreadId,
+          taskId: task.id,
+          userId: run.userId,
+          status: "queued",
+          trigger: "bot_message",
+          sourceMessageId: receivedId,
+        },
+        select: { id: true },
+      });
+      return {
+        ok: true as const,
+        runId: nextRun.id,
+        targetEventSeq: await threadEventSeq(tx, targetThreadId),
+        senderEventSeq: await threadEventSeq(tx, run.threadId),
+      };
+    }),
+  );
   if ("replayed" in committed) return replayed();
   if (!committed.ok) return committed;
 
@@ -448,20 +347,19 @@ export async function returnBotMessageOutcome(
     await markBotOutcomeReturned(deps.prisma, run.id);
     return true;
   }
-  const sent = await deps.prisma.message.findMany({
-    where: { threadId: run.threadId, runId: run.id },
-    select: { blocks: true },
-  });
   // Only an explicit result counts as a terminal outcome. Interim message_bot
   // status updates must not suppress the automatic final return.
-  const alreadyReturned = sent.some((message) =>
-    (Array.isArray(message.blocks) ? (message.blocks as MessageBlock[]) : []).some(
-      (block) =>
-        block.kind === "bot_message_sent" &&
-        block.toBotId === source.fromBotId &&
-        block.intent === "result",
-    ),
-  );
+  const alreadyReturned = await deps.prisma.sessionEntry.findFirst({
+    where: {
+      runId: run.id,
+      type: "bot.message.sent",
+      AND: [
+        { payload: { path: ["intent"], equals: "result" } },
+        { payload: { path: ["to", "botId"], equals: source.fromBotId } },
+      ],
+    },
+    select: { id: true },
+  });
   if (alreadyReturned) {
     await markBotOutcomeReturned(deps.prisma, run.id);
     return true;
@@ -492,8 +390,4 @@ async function markBotOutcomeReturned(prisma: PrismaClient, runId: string) {
     },
     data: { botOutcomeReturnedAt: new Date() },
   });
-}
-
-function isUniqueConstraintError(error: unknown) {
-  return Boolean(error && typeof error === "object" && "code" in error && error.code === "P2002");
 }

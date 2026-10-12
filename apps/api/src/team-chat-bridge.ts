@@ -8,6 +8,7 @@ import { runContinueJob } from "@rakazo/adapter-kit";
 import { AutomatedSenderPoliciesSchema, type MessageBlock } from "@rakazo/contracts";
 import { BOT_MESSAGE_MAX_HOPS } from "@rakazo/core";
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
+import { loadBotMessageContext, runMessages } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 import type { TeamChatEngagementJudge } from "./team-chat-judge.js";
 import {
@@ -698,15 +699,10 @@ export class TeamChatBridge {
         await this.markTeamChatMirrored(run.id);
         continue;
       }
-      const response =
+      const blocks =
         run.status === "completed"
-          ? await this.deps.prisma.message.findFirst({
-              where: { runId: run.id, role: "bot" },
-              orderBy: { seq: "desc" },
-              select: { blocks: true },
-            })
-          : null;
-      const blocks = Array.isArray(response?.blocks) ? (response.blocks as MessageBlock[]) : [];
+          ? ((await runMessages(this.deps.prisma, run.id)).at(-1)?.blocks ?? [])
+          : [];
       const content =
         run.status === "failed"
           ? `${target.name} could not complete the delegated request. Open Rakazo for details.`
@@ -727,11 +723,8 @@ export class TeamChatBridge {
     let currentSourceMessageId: string | null = sourceMessageId;
     const visitedRunIds = new Set<string>();
     for (let depth = 0; currentSourceMessageId && depth <= BOT_MESSAGE_MAX_HOPS; depth += 1) {
-      const source = await this.deps.prisma.message.findUnique({
-        where: { id: currentSourceMessageId },
-        select: { replyTo: { select: { runId: true } } },
-      });
-      const parentRunId = source?.replyTo?.runId;
+      const parentRunId = (await loadBotMessageContext(this.deps.prisma, currentSourceMessageId))
+        ?.requestRunId;
       if (!parentRunId || visitedRunIds.has(parentRunId)) return null;
       visitedRunIds.add(parentRunId);
       const external = await this.deps.prisma.externalMessage.findUnique({
@@ -1047,7 +1040,6 @@ export class TeamChatBridge {
       prompt,
       trigger: "messaging",
       clientNonce: `teamchat:${this.deps.providerId}:${message.providerEventId}`,
-      linkMessageToRun: true,
       allowParallelRun: true,
     });
     // Routine wake may have committed during sendUserMessage. Cancel the
@@ -1112,12 +1104,7 @@ export class TeamChatBridge {
     externalConversation: { conversationId: string };
   }): Promise<void> {
     if (!message.runId) throw new Error("Completed team chat message has no run");
-    const response = await this.deps.prisma.message.findFirst({
-      where: { runId: message.runId, role: "bot" },
-      orderBy: { seq: "desc" },
-      select: { blocks: true },
-    });
-    const blocks = Array.isArray(response?.blocks) ? (response.blocks as MessageBlock[]) : [];
+    const blocks = (await runMessages(this.deps.prisma, message.runId)).at(-1)?.blocks ?? [];
     const content = teamChatResponseText(blocks, this.target?.name, message.kind === "ambient");
     if (!content) {
       await this.markDelivered(message.id, "silent");

@@ -2,8 +2,14 @@ import type { SandboxProvider } from "@rakazo/adapter-kit";
 import type { Actor, SessionEntry } from "@rakazo/contracts";
 import { SessionEntrySchema, SessionId } from "@rakazo/contracts";
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
-import { conversationRunFilter, IsolationError, threadOfSession } from "@rakazo/db";
-import { describe, expect, it, vi } from "vitest";
+import {
+  appendCardStateInTransaction,
+  appendSessionEntryInTransaction,
+  conversationRunFilter,
+  IsolationError,
+  threadOfSession,
+} from "@rakazo/db";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   cancelSupersededQueuedRuns,
   reactToThreadMessage,
@@ -18,6 +24,47 @@ import {
 vi.mock("../../../packages/db/src/sessions.js", async () =>
   (await import("@rakazo/db/sessions.test-support")).stubbedDbSessions(),
 );
+
+beforeEach(() => {
+  vi.resetAllMocks();
+});
+
+/** The thread row: its main session, its bot and the cursor of its feed. */
+const THREAD = { sessionId: "session-1", botId: "bot-1", nextEventSeq: 2 };
+
+/** The card a waiting run is parked on, as the entry `latestRunAsk` reads. */
+function askEntry(id: string, block: Record<string, unknown>) {
+  const approval = typeof block.approvalEffectId === "string";
+  return {
+    id,
+    sessionId: "session-1",
+    seq: 3,
+    parentId: "entry-2",
+    type: approval ? "effect.requested" : "assistant.ask",
+    payload: approval
+      ? { effectId: block.approvalEffectId, effectKind: "approval", proposal: {}, card: block }
+      : { block },
+    botId: "bot-1",
+    runId: "run-1",
+    createdAt: new Date("2026-10-01T09:00:00.000Z"),
+  };
+}
+
+/** A message of the thread's session a reply quotes, written outside any run. */
+function parentEntry(id: string, ...blocks: Array<Record<string, unknown>>) {
+  return { id, sessionId: "session-1", runId: null, payload: { blocks } };
+}
+
+/** The person's messages the send wrote, as their entries. */
+function sentMessages() {
+  return vi
+    .mocked(appendSessionEntryInTransaction)
+    .mock.calls.map(([, draft]) => draft)
+    .filter(
+      (draft): draft is Extract<typeof draft, { type: "user.message" }> =>
+        draft.type === "user.message",
+    );
+}
 
 describe("threadHead", () => {
   it("returns the durable cursor without loading a snapshot", async () => {
@@ -54,7 +101,10 @@ describe("queued run supersession", () => {
     expect(tx.run.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          OR: [{ trigger: "user", sourceMessage: { role: "user" } }, { trigger: "reaction" }],
+          OR: [
+            { trigger: "user", sourceMessage: { type: "user.message" } },
+            { trigger: "reaction" },
+          ],
         }),
       }),
     );
@@ -70,42 +120,26 @@ describe("queued run supersession", () => {
 
 describe("reaction messages", () => {
   it("appends repeated reactions as quiet replies and deduplicates retries", async () => {
-    const messages = new Map<string, { id: string }>();
-    let messageSeq = 0;
-    let eventSeq = 0;
+    // The thread's session as the reactions fill it, by clientNonce.
+    const byNonce = new Map<string, Record<string, unknown>>();
+    vi.mocked(appendSessionEntryInTransaction).mockImplementation(async (_tx, draft) => {
+      const entry = { ...draft, seq: byNonce.size + 1 };
+      byNonce.set((draft.payload as { clientNonce: string }).clientNonce, entry);
+      return entry as never;
+    });
     const tx = {
-      $queryRaw: vi.fn().mockResolvedValue([]),
-      message: {
-        findFirst: vi.fn().mockResolvedValue({ id: "parent" }),
-        findUnique: vi.fn(
-          async ({ where }: { where: { threadId_clientNonce: { clientNonce: string } } }) =>
-            messages.get(where.threadId_clientNonce.clientNonce) ?? null,
-        ),
-        create: vi.fn(async ({ data }: { data: { clientNonce: string } }) => {
-          const message = { id: `reaction-${messages.size}`, ...data };
-          messages.set(data.clientNonce, message);
-          return message;
-        }),
-      },
-      thread: {
-        update: vi.fn(async ({ data }: { data: { nextMessageSeq?: unknown } }) =>
-          data.nextMessageSeq ? { nextMessageSeq: ++messageSeq } : { nextEventSeq: ++eventSeq },
-        ),
-      },
-      event: {
-        create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
-          id: `event-${eventSeq}`,
-          createdAt: new Date(),
-          ...data,
-        })),
-      },
+      $queryRaw: vi.fn(async (sql: TemplateStringsArray, ...values: unknown[]) => {
+        const entry = sql.join("?").includes("clientNonce") && byNonce.get(String(values.at(-1)));
+        return entry ? [{ ...entry, parentId: "parent", createdAt: new Date() }] : [];
+      }),
+      sessionEntry: { findFirst: vi.fn().mockResolvedValue({ id: "parent" }) },
+      thread: { findUniqueOrThrow: vi.fn().mockResolvedValue(THREAD) },
       task: { create: vi.fn() },
       run: { create: vi.fn() },
     };
     const prisma = {
       $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
     } as unknown as PrismaClient;
-    const actor = { spaceId: "space-1", userId: "user-1" } as Actor;
     const target = { kind: "bot", botId: "bot-1", threadId: "thread-1" } as ThreadTarget;
     for (const [clientNonce, reaction] of [
       ["first", "❤️"],
@@ -113,48 +147,37 @@ describe("reaction messages", () => {
       ["third", "❤️"],
       ["third", "❤️"],
     ] as const) {
-      await reactToThreadMessage({ prisma }, actor, target, {
+      await reactToThreadMessage({ prisma }, target, {
         messageId: "parent",
         reaction,
         clientNonce,
       });
     }
-    expect(tx.message.create).toHaveBeenCalledTimes(3);
-    expect(tx.event.create).toHaveBeenCalledTimes(3);
-    expect(tx.message.create).toHaveBeenLastCalledWith({
-      data: expect.objectContaining({
-        role: "user",
+    expect(sentMessages()).toHaveLength(3);
+    expect(sentMessages().at(-1)).toMatchObject({
+      sessionId: "session-1",
+      payload: {
         blocks: [{ kind: "text", text: "❤️" }],
-        replyToMessageId: "parent",
+        replyTo: { entryId: "parent" },
         clientNonce: "third",
-      }),
-    });
-    expect(tx.event.create).toHaveBeenLastCalledWith({
-      data: expect.objectContaining({
-        type: "thread.message.created",
-        payload: {
-          messageId: "reaction-2",
-          role: "user",
-          blocks: [{ kind: "text", text: "❤️" }],
-          replyToMessageId: "parent",
-        },
-      }),
+        source: "app",
+      },
     });
     expect(tx.task.create).not.toHaveBeenCalled();
     expect(tx.run.create).not.toHaveBeenCalled();
-    expect(tx.message.findFirst).toHaveBeenCalledWith({
-      where: { id: "parent", threadId: "thread-1" },
+    expect(tx.sessionEntry.findFirst).toHaveBeenCalledWith({
+      where: { id: "parent", session: { threadId: "thread-1", kind: "thread" } },
       select: { id: true },
     });
-    tx.message.findFirst.mockResolvedValueOnce(null);
+    tx.sessionEntry.findFirst.mockResolvedValueOnce(null);
     await expect(
-      reactToThreadMessage({ prisma }, actor, target, {
+      reactToThreadMessage({ prisma }, target, {
         messageId: "elsewhere",
         reaction: "❤️",
         clientNonce: "fourth",
       }),
     ).rejects.toThrow();
-    expect(tx.message.create).toHaveBeenCalledTimes(3);
+    expect(sentMessages()).toHaveLength(3);
   });
 });
 
@@ -1269,37 +1292,20 @@ describe("sendThreadMessage", () => {
   it("rejects a new bot message while a run is waiting on an approval ask", async () => {
     const tx = {
       $queryRaw: vi.fn().mockResolvedValue([]),
-      thread: {
-        update: vi.fn().mockResolvedValue({ nextMessageSeq: 2 }),
-      },
-      message: {
-        create: vi.fn().mockResolvedValue({
-          id: "msg-1",
-          threadId: "thread-1",
-          seq: 1,
-          role: "user",
-          blocks: [{ kind: "text", text: "hi" }],
-          botId: null,
-          replyToMessageId: null,
-          runId: null,
-          createdAt: new Date(),
-        }),
-        update: vi.fn(),
-        findFirst: vi.fn().mockResolvedValue({
-          id: "ask-msg-1",
-          blocks: [
-            {
-              kind: "ask",
-              approvalEffectId: "effect-1",
-              text: "Allow this?",
-              status: "pending",
-              actions: [
-                { id: "allow", label: "Allow" },
-                { id: "deny", label: "Deny" },
-              ],
-            },
-          ],
-        }),
+      thread: { findUniqueOrThrow: vi.fn().mockResolvedValue(THREAD) },
+      sessionEntry: {
+        findFirst: vi.fn().mockResolvedValue(
+          askEntry("ask-msg-1", {
+            kind: "ask",
+            approvalEffectId: "effect-1",
+            text: "Allow this?",
+            status: "pending",
+            actions: [
+              { id: "allow", label: "Allow" },
+              { id: "deny", label: "Deny" },
+            ],
+          }),
+        ),
       },
       run: {
         findMany: vi
@@ -1308,11 +1314,10 @@ describe("sendThreadMessage", () => {
         findFirst: vi.fn().mockResolvedValue({ botId: "bot-1" }),
       },
       steeringMessage: { create: vi.fn() },
-      event: { create: vi.fn() },
       task: { create: vi.fn(), updateMany: vi.fn() },
     };
     const prisma = {
-      message: { findUnique: vi.fn().mockResolvedValue(null) },
+      $queryRaw: vi.fn().mockResolvedValue([]),
       $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
     } as unknown as PrismaClient;
     const actor = { spaceId: "workspace-1", userId: "user-1" } as Actor;
@@ -1346,11 +1351,7 @@ describe("sendThreadMessage", () => {
 
   it("never steers a message into a run that only reports through a routine card", async () => {
     const tx = {
-      thread: { update: vi.fn().mockResolvedValue({ nextMessageSeq: 2, nextEventSeq: 2 }) },
-      message: {
-        create: vi.fn().mockResolvedValue({ id: "msg-1", threadId: "thread-1", seq: 1 }),
-        update: vi.fn(),
-      },
+      thread: { findUniqueOrThrow: vi.fn().mockResolvedValue(THREAD) },
       run: {
         findMany: vi
           .fn()
@@ -1364,14 +1365,13 @@ describe("sendThreadMessage", () => {
         create: vi.fn().mockResolvedValue({ id: "run-1", taskId: "task-1", status: "queued" }),
       },
       steeringMessage: { create: vi.fn() },
-      event: { create: vi.fn().mockResolvedValue({ seq: 1 }) },
       task: {
         create: vi.fn().mockResolvedValue({ id: "task-1" }),
         updateMany: vi.fn(),
       },
     };
     const prisma = {
-      message: { findUnique: vi.fn().mockResolvedValue(null) },
+      $queryRaw: vi.fn().mockResolvedValue([]),
       $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
     } as unknown as PrismaClient;
     const target = {
@@ -1405,22 +1405,17 @@ describe("sendThreadMessage", () => {
   describe("link previews", () => {
     function sendHarness(enqueue = vi.fn(async () => undefined)) {
       const tx = {
-        thread: { update: vi.fn().mockResolvedValue({ nextMessageSeq: 2, nextEventSeq: 2 }) },
-        message: {
-          create: vi.fn().mockResolvedValue({ id: "msg-1", threadId: "thread-1", seq: 1 }),
-          update: vi.fn(),
-        },
+        thread: { findUniqueOrThrow: vi.fn().mockResolvedValue(THREAD) },
         run: {
           findMany: vi.fn().mockResolvedValue([]),
           findUnique: vi.fn().mockResolvedValue({ status: "queued" }),
           create: vi.fn().mockResolvedValue({ id: "run-1", taskId: "task-1", status: "queued" }),
         },
         steeringMessage: { create: vi.fn() },
-        event: { create: vi.fn().mockResolvedValue({ seq: 1 }) },
         task: { create: vi.fn().mockResolvedValue({ id: "task-1" }), updateMany: vi.fn() },
       };
       const prisma = {
-        message: { findUnique: vi.fn().mockResolvedValue(null) },
+        $queryRaw: vi.fn().mockResolvedValue([]),
         $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
       } as unknown as PrismaClient;
       const target = {
@@ -1440,32 +1435,32 @@ describe("sendThreadMessage", () => {
           target,
           { text: "see https://example.test/a", clientNonce: "nonce-1", ...input },
         );
-      return { tx, enqueue, send };
+      return { enqueue, send };
     }
 
     it("queues the preview after the commit, with the message id only", async () => {
-      const { tx, enqueue, send } = sendHarness();
+      const { enqueue, send } = sendHarness();
 
       await send({});
 
       const jobs = enqueue.mock.calls.map(([job]) => job as { name: string; payload: unknown });
       expect(jobs.at(-1)).toMatchObject({
         name: "link.preview",
-        payload: { messageId: "msg-1" },
+        payload: { messageId: sentMessages()[0]!.id },
         maxAttempts: 1,
       });
       expect(JSON.stringify(jobs.at(-1))).not.toContain("example.test");
-      expect(tx.message.create.mock.calls[0]![0].data.blocks).toEqual([
+      expect(sentMessages()[0]!.payload.blocks).toEqual([
         { kind: "text", text: "see https://example.test/a" },
       ]);
     });
 
     it("writes the removal marker at creation and queues nothing for linkPreview: false", async () => {
-      const { tx, enqueue, send } = sendHarness();
+      const { enqueue, send } = sendHarness();
 
       await send({ linkPreview: false });
 
-      expect(tx.message.create.mock.calls[0]![0].data.blocks).toEqual([
+      expect(sentMessages()[0]!.payload.blocks).toEqual([
         { kind: "text", text: "see https://example.test/a" },
         { kind: "link_preview", removed: true },
       ]);
@@ -1487,34 +1482,17 @@ describe("sendThreadMessage", () => {
   it("rejects a new bot message while a run is waiting on a secret ask", async () => {
     const tx = {
       $queryRaw: vi.fn().mockResolvedValue([]),
-      thread: {
-        update: vi.fn().mockResolvedValue({ nextMessageSeq: 2 }),
-      },
-      message: {
-        create: vi.fn().mockResolvedValue({
-          id: "msg-1",
-          threadId: "thread-1",
-          seq: 1,
-          role: "user",
-          blocks: [{ kind: "text", text: "my password is hunter2" }],
-          botId: null,
-          replyToMessageId: null,
-          runId: null,
-          createdAt: new Date(),
-        }),
-        update: vi.fn(),
-        findFirst: vi.fn().mockResolvedValue({
-          id: "ask-msg-1",
-          blocks: [
-            {
-              kind: "ask",
-              text: "Enter your one-time code",
-              input: "secret",
-              purpose: "otp",
-              status: "pending",
-            },
-          ],
-        }),
+      thread: { findUniqueOrThrow: vi.fn().mockResolvedValue(THREAD) },
+      sessionEntry: {
+        findFirst: vi.fn().mockResolvedValue(
+          askEntry("ask-msg-1", {
+            kind: "ask",
+            text: "Enter your one-time code",
+            input: "secret",
+            purpose: "otp",
+            status: "pending",
+          }),
+        ),
       },
       run: {
         findMany: vi
@@ -1523,11 +1501,10 @@ describe("sendThreadMessage", () => {
         findFirst: vi.fn().mockResolvedValue({ botId: "bot-1" }),
       },
       steeringMessage: { create: vi.fn() },
-      event: { create: vi.fn() },
       task: { create: vi.fn(), updateMany: vi.fn() },
     };
     const prisma = {
-      message: { findUnique: vi.fn().mockResolvedValue(null) },
+      $queryRaw: vi.fn().mockResolvedValue([]),
       $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
     } as unknown as PrismaClient;
     const actor = { spaceId: "workspace-1", userId: "user-1" } as Actor;
@@ -1561,30 +1538,16 @@ describe("sendThreadMessage", () => {
   it("resolves a pending ask_user with the composer text instead of refusing the message", async () => {
     const tx = {
       $queryRaw: vi.fn().mockResolvedValue([]),
-      thread: {
-        update: vi
-          .fn()
-          .mockResolvedValueOnce({ nextMessageSeq: 2 })
-          .mockResolvedValueOnce({ nextEventSeq: 3 })
-          .mockResolvedValueOnce({ nextEventSeq: 4 }),
-      },
-      message: {
-        create: vi.fn().mockResolvedValue({
-          id: "msg-1",
-          threadId: "thread-1",
-          seq: 1,
-          role: "user",
-          blocks: [{ kind: "text", text: "Lisbon, flexible dates" }],
-          botId: null,
-          replyToMessageId: null,
-          runId: null,
-          createdAt: new Date(),
-        }),
-        update: vi.fn().mockResolvedValue({ id: "msg-1" }),
-        findFirst: vi.fn().mockResolvedValue({
-          id: "ask-msg-1",
-          blocks: [{ kind: "ask", text: "Which city?", status: "pending", input: "text" }],
-        }),
+      thread: { findUniqueOrThrow: vi.fn().mockResolvedValue(THREAD) },
+      sessionEntry: {
+        findFirst: vi.fn().mockResolvedValue(
+          askEntry("ask-msg-1", {
+            kind: "ask",
+            text: "Which city?",
+            status: "pending",
+            input: "text",
+          }),
+        ),
       },
       run: {
         findMany: vi
@@ -1596,12 +1559,9 @@ describe("sendThreadMessage", () => {
       },
       task: { updateMany: vi.fn().mockResolvedValue({ count: 1 }), create: vi.fn() },
       steeringMessage: { create: vi.fn() },
-      event: {
-        create: vi.fn().mockResolvedValueOnce({ seq: 2 }).mockResolvedValueOnce({ seq: 3 }),
-      },
     };
     const prisma = {
-      message: { findUnique: vi.fn().mockResolvedValue(null) },
+      $queryRaw: vi.fn().mockResolvedValue([]),
       $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
     } as unknown as PrismaClient;
     const actor = { spaceId: "workspace-1", userId: "user-1" } as Actor;
@@ -1645,9 +1605,10 @@ describe("sendThreadMessage", () => {
     });
     expect(tx.steeringMessage.create).not.toHaveBeenCalled();
     expect(tx.run.findMany).toHaveBeenCalled();
-    expect(tx.message.update).toHaveBeenCalledWith({
-      where: { id: "msg-1" },
-      data: { runId: "run-waiting" },
+    expect(appendCardStateInTransaction).toHaveBeenCalledWith(tx, {
+      type: "card.answered",
+      feedBotId: "bot-1",
+      payload: { target: "ask-msg-1" },
     });
     expect(enqueue).toHaveBeenCalledWith(expect.objectContaining({ name: "run.continue" }));
   });
@@ -1655,26 +1616,16 @@ describe("sendThreadMessage", () => {
   it("rejects the send when the bot has another active run beside the pending ask_user", async () => {
     const tx = {
       $queryRaw: vi.fn().mockResolvedValue([]),
-      thread: {
-        update: vi.fn().mockResolvedValue({ nextMessageSeq: 2 }),
-      },
-      message: {
-        create: vi.fn().mockResolvedValue({
-          id: "msg-1",
-          threadId: "thread-1",
-          seq: 1,
-          role: "user",
-          blocks: [{ kind: "text", text: "Lisbon, flexible dates" }],
-          botId: null,
-          replyToMessageId: null,
-          runId: null,
-          createdAt: new Date(),
-        }),
-        update: vi.fn(),
-        findFirst: vi.fn().mockResolvedValue({
-          id: "ask-msg-1",
-          blocks: [{ kind: "ask", text: "Which city?", status: "pending", input: "text" }],
-        }),
+      thread: { findUniqueOrThrow: vi.fn().mockResolvedValue(THREAD) },
+      sessionEntry: {
+        findFirst: vi.fn().mockResolvedValue(
+          askEntry("ask-msg-1", {
+            kind: "ask",
+            text: "Which city?",
+            status: "pending",
+            input: "text",
+          }),
+        ),
       },
       run: {
         findMany: vi.fn().mockResolvedValue([
@@ -1686,11 +1637,10 @@ describe("sendThreadMessage", () => {
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
       steeringMessage: { create: vi.fn() },
-      event: { create: vi.fn() },
       task: { create: vi.fn(), updateMany: vi.fn() },
     };
     const prisma = {
-      message: { findUnique: vi.fn().mockResolvedValue(null) },
+      $queryRaw: vi.fn().mockResolvedValue([]),
       $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
     } as unknown as PrismaClient;
     const actor = { spaceId: "workspace-1", userId: "user-1" } as Actor;
@@ -1722,40 +1672,22 @@ describe("sendThreadMessage", () => {
     expect(tx.steeringMessage.create).not.toHaveBeenCalled();
   });
 
-  it("carries the reply quote on the event that resolves a pending ask_user", async () => {
-    let messageSeq = 0;
-    let eventSeq = 0;
+  it("carries the reply quote on the message that resolves a pending ask_user", async () => {
     const tx = {
       $queryRaw: vi.fn().mockResolvedValue([]),
-      thread: {
-        update: vi.fn(async ({ data }: { data: { nextMessageSeq?: unknown } }) =>
-          data.nextMessageSeq ? { nextMessageSeq: ++messageSeq } : { nextEventSeq: ++eventSeq },
-        ),
-      },
-      message: {
-        create: vi.fn().mockResolvedValue({
-          id: "msg-1",
-          threadId: "thread-1",
-          seq: 1,
-          role: "user",
-          blocks: [{ kind: "text", text: "Lisbon" }],
-          botId: null,
-          replyToMessageId: "ask-msg-1",
-          replyQuote: "Which city?",
-          runId: null,
-          createdAt: new Date(),
-        }),
-        update: vi.fn().mockResolvedValue({ id: "msg-1" }),
+      thread: { findUniqueOrThrow: vi.fn().mockResolvedValue(THREAD) },
+      sessionEntry: {
         findFirst: vi
           .fn()
-          .mockResolvedValueOnce({
-            id: "ask-msg-1",
-            blocks: [{ kind: "text", text: "Which city?" }],
-          })
-          .mockResolvedValue({
-            id: "ask-msg-1",
-            blocks: [{ kind: "ask", text: "Which city?", status: "pending", input: "text" }],
-          }),
+          .mockResolvedValueOnce(parentEntry("ask-msg-1", { kind: "text", text: "Which city?" }))
+          .mockResolvedValue(
+            askEntry("ask-msg-1", {
+              kind: "ask",
+              text: "Which city?",
+              status: "pending",
+              input: "text",
+            }),
+          ),
       },
       run: {
         findMany: vi
@@ -1767,15 +1699,9 @@ describe("sendThreadMessage", () => {
       },
       task: { updateMany: vi.fn().mockResolvedValue({ count: 1 }), create: vi.fn() },
       steeringMessage: { create: vi.fn() },
-      event: {
-        create: vi.fn(async ({ data }: { data: { seq: number } }) => ({
-          ...data,
-          id: `event-${data.seq}`,
-        })),
-      },
     };
     const prisma = {
-      message: { findUnique: vi.fn().mockResolvedValue(null) },
+      $queryRaw: vi.fn().mockResolvedValue([]),
       $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
     } as unknown as PrismaClient;
     const actor = { spaceId: "workspace-1", userId: "user-1" } as Actor;
@@ -1804,44 +1730,24 @@ describe("sendThreadMessage", () => {
       ),
     ).resolves.toMatchObject({ runId: "run-waiting" });
 
-    expect(tx.event.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        type: "thread.message.created",
-        payload: expect.objectContaining({
-          messageId: "msg-1",
-          replyToMessageId: "ask-msg-1",
-          replyQuote: "Which city?",
-        }),
-      }),
+    expect(sentMessages()[0]!.payload.replyTo).toEqual({
+      entryId: "ask-msg-1",
+      quote: "Which city?",
     });
   });
 
   it("resolves one bot's pending ask_user and steers another without a global throw", async () => {
     const tx = {
-      thread: {
-        update: vi
-          .fn()
-          .mockResolvedValueOnce({ nextMessageSeq: 2 })
-          .mockResolvedValueOnce({ nextEventSeq: 3 })
-          .mockResolvedValueOnce({ nextEventSeq: 4 }),
-      },
-      message: {
-        create: vi.fn().mockResolvedValue({
-          id: "msg-1",
-          threadId: "thread-1",
-          seq: 1,
-          role: "user",
-          blocks: [{ kind: "text", text: "@everyone Kyoto works, keep going" }],
-          botId: null,
-          replyToMessageId: null,
-          runId: null,
-          createdAt: new Date(),
-        }),
-        update: vi.fn().mockResolvedValue({ id: "msg-1" }),
-        findFirst: vi.fn().mockResolvedValue({
-          id: "ask-msg-a",
-          blocks: [{ kind: "ask", text: "Which city?", status: "pending", input: "text" }],
-        }),
+      thread: { findUniqueOrThrow: vi.fn().mockResolvedValue(THREAD) },
+      sessionEntry: {
+        findFirst: vi.fn().mockResolvedValue(
+          askEntry("ask-msg-a", {
+            kind: "ask",
+            text: "Which city?",
+            status: "pending",
+            input: "text",
+          }),
+        ),
       },
       run: {
         findMany: vi.fn().mockResolvedValue([
@@ -1854,9 +1760,6 @@ describe("sendThreadMessage", () => {
         create: vi.fn(),
       },
       task: { updateMany: vi.fn().mockResolvedValue({ count: 1 }), create: vi.fn() },
-      event: {
-        create: vi.fn().mockResolvedValueOnce({ seq: 2 }).mockResolvedValueOnce({ seq: 3 }),
-      },
       steeringMessage: { create: vi.fn() },
       chatGroup: {
         findFirst: vi.fn().mockResolvedValue({
@@ -1871,7 +1774,7 @@ describe("sendThreadMessage", () => {
       $queryRaw: vi.fn().mockResolvedValue([{ id: "group-1" }]),
     };
     const prisma = {
-      message: { findUnique: vi.fn().mockResolvedValue(null) },
+      $queryRaw: vi.fn().mockResolvedValue([]),
       $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
     } as unknown as PrismaClient;
     const actor = { spaceId: "workspace-1", userId: "user-1" } as Actor;
@@ -1907,43 +1810,32 @@ describe("sendThreadMessage", () => {
       data: { status: "queued", checkpoint: null },
     });
     expect(tx.steeringMessage.create).toHaveBeenCalledWith({
-      data: { messageId: "msg-1", botId: "bot-b", userId: "user-1", runId: "run-b-queued" },
+      data: {
+        messageId: sentMessages()[0]!.id,
+        botId: "bot-b",
+        userId: "user-1",
+        runId: "run-b-queued",
+      },
     });
     // Never a steering row for the resolved ask (threat model T6).
     expect(tx.steeringMessage.create).not.toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ botId: "bot-a" }) }),
     );
     expect(tx.run.create).not.toHaveBeenCalled();
-    expect(tx.event.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          type: "thread.message.created",
-          payload: expect.objectContaining({ runIds: ["run-a-waiting", "run-b-queued"] }),
-        }),
-      }),
-    );
   });
 
   it("throws CONFLICT for the whole group send when a targeted bot has a secret ask pending", async () => {
     const tx = {
-      thread: { update: vi.fn().mockResolvedValueOnce({ nextMessageSeq: 2 }) },
-      message: {
-        create: vi.fn().mockResolvedValue({
-          id: "msg-1",
-          threadId: "thread-1",
-          seq: 1,
-          role: "user",
-          blocks: [{ kind: "text", text: "@everyone here's the code" }],
-          botId: null,
-          replyToMessageId: null,
-          runId: null,
-          createdAt: new Date(),
-        }),
-        update: vi.fn(),
-        findFirst: vi.fn().mockResolvedValue({
-          id: "ask-msg-a",
-          blocks: [{ kind: "ask", text: "Enter your code", input: "secret", status: "pending" }],
-        }),
+      thread: { findUniqueOrThrow: vi.fn().mockResolvedValue(THREAD) },
+      sessionEntry: {
+        findFirst: vi.fn().mockResolvedValue(
+          askEntry("ask-msg-a", {
+            kind: "ask",
+            text: "Enter your code",
+            input: "secret",
+            status: "pending",
+          }),
+        ),
       },
       run: {
         findMany: vi.fn().mockResolvedValue([
@@ -1955,7 +1847,6 @@ describe("sendThreadMessage", () => {
         create: vi.fn(),
       },
       task: { create: vi.fn(), updateMany: vi.fn() },
-      event: { create: vi.fn() },
       steeringMessage: { create: vi.fn() },
       chatGroup: {
         findFirst: vi.fn().mockResolvedValue({
@@ -1970,7 +1861,7 @@ describe("sendThreadMessage", () => {
       $queryRaw: vi.fn().mockResolvedValue([{ id: "group-1" }]),
     };
     const prisma = {
-      message: { findUnique: vi.fn().mockResolvedValue(null) },
+      $queryRaw: vi.fn().mockResolvedValue([]),
       $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
     } as unknown as PrismaClient;
     const actor = { spaceId: "workspace-1", userId: "user-1" } as Actor;
@@ -2003,26 +1894,7 @@ describe("sendThreadMessage", () => {
 
   it("steers a waiting-takeover run instead of refusing the message", async () => {
     const tx = {
-      thread: {
-        update: vi
-          .fn()
-          .mockResolvedValueOnce({ nextMessageSeq: 2 })
-          .mockResolvedValueOnce({ nextEventSeq: 3 }),
-      },
-      message: {
-        create: vi.fn().mockResolvedValue({
-          id: "msg-1",
-          threadId: "thread-1",
-          seq: 1,
-          role: "user",
-          blocks: [{ kind: "text", text: "skip that" }],
-          botId: null,
-          replyToMessageId: null,
-          runId: null,
-          createdAt: new Date(),
-        }),
-        update: vi.fn(),
-      },
+      thread: { findUniqueOrThrow: vi.fn().mockResolvedValue(THREAD) },
       run: {
         findMany: vi
           .fn()
@@ -2033,11 +1905,10 @@ describe("sendThreadMessage", () => {
         }),
       },
       steeringMessage: { create: vi.fn() },
-      event: { create: vi.fn().mockResolvedValue({ seq: 2 }) },
       task: { create: vi.fn() },
     };
     const prisma = {
-      message: { findUnique: vi.fn().mockResolvedValue(null) },
+      $queryRaw: vi.fn().mockResolvedValue([]),
       $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
     } as unknown as PrismaClient;
     const actor = { spaceId: "workspace-1", userId: "user-1" } as Actor;
@@ -2066,12 +1937,11 @@ describe("sendThreadMessage", () => {
     ).resolves.toMatchObject({
       runId: "run-waiting",
       taskId: "task-1",
-      seq: 1,
       runIds: ["run-waiting"],
     });
     expect(tx.steeringMessage.create).toHaveBeenCalledWith({
       data: {
-        messageId: "msg-1",
+        messageId: sentMessages()[0]!.id,
         botId: "bot-1",
         userId: "user-1",
         runId: "run-waiting",
@@ -2082,7 +1952,7 @@ describe("sendThreadMessage", () => {
   });
   it("rejects a quote excerpt without a reply target", async () => {
     const prisma = {
-      message: { findUnique: vi.fn().mockResolvedValue(null) },
+      $queryRaw: vi.fn().mockResolvedValue([]),
       $transaction: vi.fn(),
     } as unknown as PrismaClient;
     const actor = { spaceId: "workspace-1", userId: "user-1" } as Actor;
@@ -2104,32 +1974,15 @@ describe("sendThreadMessage", () => {
   });
 
   it("persists the quote excerpt alongside the reply target", async () => {
-    let messageSeq = 0;
-    let eventSeq = 0;
     const tx = {
-      thread: {
-        update: vi.fn(async ({ data }: { data: { nextMessageSeq?: unknown } }) =>
-          data.nextMessageSeq ? { nextMessageSeq: ++messageSeq } : { nextEventSeq: ++eventSeq },
+      thread: { findUniqueOrThrow: vi.fn().mockResolvedValue(THREAD) },
+      sessionEntry: {
+        findFirst: vi.fn().mockResolvedValue(
+          parentEntry("parent", {
+            kind: "text",
+            text: "the parent says just this span inside it",
+          }),
         ),
-      },
-      message: {
-        findFirst: vi.fn().mockResolvedValue({
-          id: "parent",
-          blocks: [{ kind: "text", text: "the parent says just this span inside it" }],
-        }),
-        update: vi.fn(),
-        create: vi.fn().mockResolvedValue({
-          id: "msg-1",
-          threadId: "thread-1",
-          seq: 1,
-          role: "user",
-          blocks: [{ kind: "text", text: "why this?" }],
-          botId: null,
-          replyToMessageId: "parent",
-          replyQuote: "just this span",
-          runId: null,
-          createdAt: new Date(),
-        }),
       },
       run: {
         findMany: vi.fn().mockResolvedValue([]),
@@ -2137,13 +1990,10 @@ describe("sendThreadMessage", () => {
         create: vi.fn().mockResolvedValue({ id: "run-1", taskId: "task-1", status: "queued" }),
       },
       task: { create: vi.fn().mockResolvedValue({ id: "task-1" }) },
-      event: {
-        create: vi.fn().mockResolvedValue({ id: "event-1", seq: 1, createdAt: new Date() }),
-      },
       steeringMessage: { create: vi.fn() },
     };
     const prisma = {
-      message: { findUnique: vi.fn().mockResolvedValue(null) },
+      $queryRaw: vi.fn().mockResolvedValue([]),
       $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
     } as unknown as PrismaClient;
     const actor = { spaceId: "workspace-1", userId: "user-1" } as Actor;
@@ -2166,50 +2016,26 @@ describe("sendThreadMessage", () => {
     );
 
     expect(result).toMatchObject({ runId: "run-1", taskId: "task-1" });
-    expect(tx.message.findFirst).toHaveBeenCalledWith({
-      where: { id: "parent", threadId: "thread-1" },
-      select: { id: true, blocks: true },
+    expect(tx.sessionEntry.findFirst).toHaveBeenCalledWith({
+      where: { id: "parent", session: { threadId: "thread-1", kind: "thread" } },
+      select: { sessionId: true, runId: true, payload: true },
     });
-    expect(tx.message.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        replyToMessageId: "parent",
-        replyQuote: "just this span",
-      }),
-    });
-    expect(tx.event.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        payload: expect.objectContaining({ replyQuote: "just this span" }),
-      }),
+    expect(sentMessages()[0]!.payload.replyTo).toEqual({
+      entryId: "parent",
+      quote: "just this span",
     });
   });
 
   it("drops a quote excerpt that doesn't match the parent's text", async () => {
-    let messageSeq = 0;
-    let eventSeq = 0;
     const tx = {
-      thread: {
-        update: vi.fn(async ({ data }: { data: { nextMessageSeq?: unknown } }) =>
-          data.nextMessageSeq ? { nextMessageSeq: ++messageSeq } : { nextEventSeq: ++eventSeq },
+      thread: { findUniqueOrThrow: vi.fn().mockResolvedValue(THREAD) },
+      sessionEntry: {
+        findFirst: vi.fn().mockResolvedValue(
+          parentEntry("parent", {
+            kind: "text",
+            text: "the parent says something else entirely",
+          }),
         ),
-      },
-      message: {
-        findFirst: vi.fn().mockResolvedValue({
-          id: "parent",
-          blocks: [{ kind: "text", text: "the parent says something else entirely" }],
-        }),
-        update: vi.fn(),
-        create: vi.fn().mockResolvedValue({
-          id: "msg-1",
-          threadId: "thread-1",
-          seq: 1,
-          role: "user",
-          blocks: [{ kind: "text", text: "why this?" }],
-          botId: null,
-          replyToMessageId: "parent",
-          replyQuote: null,
-          runId: null,
-          createdAt: new Date(),
-        }),
       },
       run: {
         findMany: vi.fn().mockResolvedValue([]),
@@ -2217,13 +2043,10 @@ describe("sendThreadMessage", () => {
         create: vi.fn().mockResolvedValue({ id: "run-1", taskId: "task-1", status: "queued" }),
       },
       task: { create: vi.fn().mockResolvedValue({ id: "task-1" }) },
-      event: {
-        create: vi.fn().mockResolvedValue({ id: "event-1", seq: 1, createdAt: new Date() }),
-      },
       steeringMessage: { create: vi.fn() },
     };
     const prisma = {
-      message: { findUnique: vi.fn().mockResolvedValue(null) },
+      $queryRaw: vi.fn().mockResolvedValue([]),
       $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
     } as unknown as PrismaClient;
     const actor = { spaceId: "workspace-1", userId: "user-1" } as Actor;
@@ -2247,47 +2070,17 @@ describe("sendThreadMessage", () => {
 
     // The send still lands as a plain reply — the fabricated excerpt is dropped.
     expect(result).toMatchObject({ runId: "run-1", taskId: "task-1" });
-    expect(tx.message.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        replyToMessageId: "parent",
-        replyQuote: undefined,
-      }),
-    });
-    expect(tx.event.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        payload: expect.not.objectContaining({ replyQuote: expect.anything() }),
-      }),
-    });
+    expect(sentMessages()[0]!.payload.replyTo).toEqual({ entryId: "parent" });
   });
 
   it("accepts a quote excerpt that matches formatted parent text", async () => {
-    let messageSeq = 0;
-    let eventSeq = 0;
     const tx = {
-      thread: {
-        update: vi.fn(async ({ data }: { data: { nextMessageSeq?: unknown } }) =>
-          data.nextMessageSeq ? { nextMessageSeq: ++messageSeq } : { nextEventSeq: ++eventSeq },
-        ),
-      },
-      message: {
-        findFirst: vi.fn().mockResolvedValue({
-          id: "parent",
+      thread: { findUniqueOrThrow: vi.fn().mockResolvedValue(THREAD) },
+      sessionEntry: {
+        findFirst: vi.fn().mockResolvedValue(
           // Rendered as "42% growth", stored with markdown source.
-          blocks: [{ kind: "text", text: "we saw **42%** growth last week" }],
-        }),
-        update: vi.fn(),
-        create: vi.fn().mockResolvedValue({
-          id: "msg-1",
-          threadId: "thread-1",
-          seq: 1,
-          role: "user",
-          blocks: [{ kind: "text", text: "why this?" }],
-          botId: null,
-          replyToMessageId: "parent",
-          replyQuote: "42% growth",
-          runId: null,
-          createdAt: new Date(),
-        }),
+          parentEntry("parent", { kind: "text", text: "we saw **42%** growth last week" }),
+        ),
       },
       run: {
         findMany: vi.fn().mockResolvedValue([]),
@@ -2295,13 +2088,10 @@ describe("sendThreadMessage", () => {
         create: vi.fn().mockResolvedValue({ id: "run-1", taskId: "task-1", status: "queued" }),
       },
       task: { create: vi.fn().mockResolvedValue({ id: "task-1" }) },
-      event: {
-        create: vi.fn().mockResolvedValue({ id: "event-1", seq: 1, createdAt: new Date() }),
-      },
       steeringMessage: { create: vi.fn() },
     };
     const prisma = {
-      message: { findUnique: vi.fn().mockResolvedValue(null) },
+      $queryRaw: vi.fn().mockResolvedValue([]),
       $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
     } as unknown as PrismaClient;
     const actor = { spaceId: "workspace-1", userId: "user-1" } as Actor;
@@ -2324,9 +2114,7 @@ describe("sendThreadMessage", () => {
     );
 
     expect(result).toMatchObject({ runId: "run-1", taskId: "task-1" });
-    expect(tx.message.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ replyQuote: "42% growth" }),
-    });
+    expect(sentMessages()[0]!.payload.replyTo).toEqual({ entryId: "parent", quote: "42% growth" });
   });
 
   it.each([
@@ -2352,37 +2140,15 @@ describe("sendThreadMessage", () => {
       "Review the diff\nRun the tests",
     ],
   ])("accepts a quote excerpt spanning rendered %s", async (_name, parentText, replyQuote) => {
-    let messageSeq = 0;
-    let eventSeq = 0;
     const tx = {
-      thread: {
-        update: vi.fn(async ({ data }: { data: { nextMessageSeq?: unknown } }) =>
-          data.nextMessageSeq ? { nextMessageSeq: ++messageSeq } : { nextEventSeq: ++eventSeq },
+      thread: { findUniqueOrThrow: vi.fn().mockResolvedValue(THREAD) },
+      sessionEntry: {
+        findFirst: vi.fn().mockResolvedValue(
+          parentEntry("parent", {
+            kind: "text",
+            text: parentText,
+          }),
         ),
-      },
-      message: {
-        findFirst: vi.fn().mockResolvedValue({
-          id: "parent",
-          blocks: [
-            {
-              kind: "text",
-              text: parentText,
-            },
-          ],
-        }),
-        update: vi.fn(),
-        create: vi.fn().mockResolvedValue({
-          id: "msg-1",
-          threadId: "thread-1",
-          seq: 1,
-          role: "user",
-          blocks: [{ kind: "text", text: "why this?" }],
-          botId: null,
-          replyToMessageId: "parent",
-          replyQuote,
-          runId: null,
-          createdAt: new Date(),
-        }),
       },
       run: {
         findMany: vi.fn().mockResolvedValue([]),
@@ -2390,13 +2156,10 @@ describe("sendThreadMessage", () => {
         create: vi.fn().mockResolvedValue({ id: "run-1", taskId: "task-1", status: "queued" }),
       },
       task: { create: vi.fn().mockResolvedValue({ id: "task-1" }) },
-      event: {
-        create: vi.fn().mockResolvedValue({ id: "event-1", seq: 1, createdAt: new Date() }),
-      },
       steeringMessage: { create: vi.fn() },
     };
     const prisma = {
-      message: { findUnique: vi.fn().mockResolvedValue(null) },
+      $queryRaw: vi.fn().mockResolvedValue([]),
       $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
     } as unknown as PrismaClient;
     const actor = { spaceId: "workspace-1", userId: "user-1" } as Actor;
@@ -2419,43 +2182,19 @@ describe("sendThreadMessage", () => {
     );
 
     expect(result).toMatchObject({ runId: "run-1", taskId: "task-1" });
-    expect(tx.message.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ replyQuote }),
-    });
+    expect(sentMessages()[0]!.payload.replyTo).toEqual({ entryId: "parent", quote: replyQuote });
   });
 
   it("drops a quote excerpt that only matches after stripping punctuation", async () => {
-    let messageSeq = 0;
-    let eventSeq = 0;
     const tx = {
-      thread: {
-        update: vi.fn(async ({ data }: { data: { nextMessageSeq?: unknown } }) =>
-          data.nextMessageSeq ? { nextMessageSeq: ++messageSeq } : { nextEventSeq: ++eventSeq },
+      thread: { findUniqueOrThrow: vi.fn().mockResolvedValue(THREAD) },
+      sessionEntry: {
+        findFirst: vi.fn().mockResolvedValue(
+          parentEntry("parent", {
+            kind: "text",
+            text: "C++ is fast and key:value pairs; version 1.2 and 2. items\n    2. restart()\n```text\n1. alpha\n2. beta\n```\n~~~text\n1. gamma\n2. delta\n~~~\n```text\n> ```\n1. epsilon\n2. zeta\n```\n> ```text\n> > ```\n> 1. eta\n> 2. theta\n> ```\n# 1. heading\n# 2. another heading\n\n    > 1. literal\n    > 2. another literal",
+          }),
         ),
-      },
-      message: {
-        findFirst: vi.fn().mockResolvedValue({
-          id: "parent",
-          blocks: [
-            {
-              kind: "text",
-              text: "C++ is fast and key:value pairs; version 1.2 and 2. items\n    2. restart()\n```text\n1. alpha\n2. beta\n```\n~~~text\n1. gamma\n2. delta\n~~~\n```text\n> ```\n1. epsilon\n2. zeta\n```\n> ```text\n> > ```\n> 1. eta\n> 2. theta\n> ```\n# 1. heading\n# 2. another heading\n\n    > 1. literal\n    > 2. another literal",
-            },
-          ],
-        }),
-        update: vi.fn(),
-        create: vi.fn().mockResolvedValue({
-          id: "msg-1",
-          threadId: "thread-1",
-          seq: 1,
-          role: "user",
-          blocks: [{ kind: "text", text: "why this?" }],
-          botId: null,
-          replyToMessageId: "parent",
-          replyQuote: null,
-          runId: null,
-          createdAt: new Date(),
-        }),
       },
       run: {
         findMany: vi.fn().mockResolvedValue([]),
@@ -2463,13 +2202,10 @@ describe("sendThreadMessage", () => {
         create: vi.fn().mockResolvedValue({ id: "run-1", taskId: "task-1", status: "queued" }),
       },
       task: { create: vi.fn().mockResolvedValue({ id: "task-1" }) },
-      event: {
-        create: vi.fn().mockResolvedValue({ id: "event-1", seq: 1, createdAt: new Date() }),
-      },
       steeringMessage: { create: vi.fn() },
     };
     const prisma = {
-      message: { findUnique: vi.fn().mockResolvedValue(null) },
+      $queryRaw: vi.fn().mockResolvedValue([]),
       $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
     } as unknown as PrismaClient;
     const actor = { spaceId: "workspace-1", userId: "user-1" } as Actor;
@@ -2502,38 +2238,22 @@ describe("sendThreadMessage", () => {
       );
     }
 
-    for (const call of tx.message.create.mock.calls) {
-      expect(call[0].data.replyQuote).toBeUndefined();
+    expect(sentMessages()).toHaveLength(13);
+    for (const message of sentMessages()) {
+      expect(message.payload.replyTo).toEqual({ entryId: "parent" });
     }
   });
 
   it("persists the quote excerpt on a group send", async () => {
-    let messageSeq = 0;
-    let eventSeq = 0;
     const tx = {
-      thread: {
-        update: vi.fn(async ({ data }: { data: { nextMessageSeq?: unknown } }) =>
-          data.nextMessageSeq ? { nextMessageSeq: ++messageSeq } : { nextEventSeq: ++eventSeq },
+      thread: { findUniqueOrThrow: vi.fn().mockResolvedValue(THREAD) },
+      sessionEntry: {
+        findFirst: vi.fn().mockResolvedValue(
+          parentEntry("parent", {
+            kind: "text",
+            text: "the parent says just this span inside it",
+          }),
         ),
-      },
-      message: {
-        findFirst: vi.fn().mockResolvedValue({
-          id: "parent",
-          blocks: [{ kind: "text", text: "the parent says just this span inside it" }],
-        }),
-        update: vi.fn(),
-        create: vi.fn().mockResolvedValue({
-          id: "msg-1",
-          threadId: "thread-1",
-          seq: 1,
-          role: "user",
-          blocks: [{ kind: "text", text: "why this?" }],
-          botId: null,
-          replyToMessageId: "parent",
-          replyQuote: "just this span",
-          runId: null,
-          createdAt: new Date(),
-        }),
       },
       run: {
         findMany: vi.fn().mockResolvedValue([]),
@@ -2543,9 +2263,6 @@ describe("sendThreadMessage", () => {
           .mockResolvedValue({ id: "run-1", taskId: "task-1", botId: "bot-a", status: "queued" }),
       },
       task: { create: vi.fn().mockResolvedValue({ id: "task-1" }) },
-      event: {
-        create: vi.fn().mockResolvedValue({ id: "event-1", seq: 1, createdAt: new Date() }),
-      },
       steeringMessage: { create: vi.fn() },
       chatGroup: {
         findFirst: vi.fn().mockResolvedValue({
@@ -2560,7 +2277,7 @@ describe("sendThreadMessage", () => {
       $queryRaw: vi.fn().mockResolvedValue([{ id: "group-1" }]),
     };
     const prisma = {
-      message: { findUnique: vi.fn().mockResolvedValue(null) },
+      $queryRaw: vi.fn().mockResolvedValue([]),
       $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
     } as unknown as PrismaClient;
     const actor = { spaceId: "workspace-1", userId: "user-1" } as Actor;
@@ -2590,16 +2307,9 @@ describe("sendThreadMessage", () => {
     );
 
     expect(result).toMatchObject({ runId: "run-1", taskId: "task-1" });
-    expect(tx.message.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        replyToMessageId: "parent",
-        replyQuote: "just this span",
-      }),
-    });
-    expect(tx.event.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        payload: expect.objectContaining({ replyQuote: "just this span" }),
-      }),
+    expect(sentMessages()[0]!.payload.replyTo).toEqual({
+      entryId: "parent",
+      quote: "just this span",
     });
   });
 });
@@ -2891,23 +2601,9 @@ describe("sendThreadMessage while a proposal card waits", () => {
   function proposalTx(options: { kind?: string; runStatus?: string } = {}) {
     return {
       $queryRaw: vi.fn().mockResolvedValue([]),
-      thread: {
-        update: vi.fn().mockResolvedValue({ nextMessageSeq: 2, nextEventSeq: 3 }),
-      },
-      message: {
-        create: vi.fn().mockResolvedValue({
-          id: "msg-1",
-          threadId: "thread-1",
-          seq: 1,
-          role: "user",
-          blocks: [{ kind: "text", text: "Plutôt le mardi" }],
-          botId: null,
-          replyToMessageId: null,
-          runId: null,
-          createdAt: new Date(),
-        }),
-        update: vi.fn().mockResolvedValue({ id: "msg-1" }),
-        findFirst: vi.fn().mockResolvedValue({ id: "card-msg", blocks: [card] }),
+      thread: { findUniqueOrThrow: vi.fn().mockResolvedValue(THREAD) },
+      sessionEntry: {
+        findFirst: vi.fn().mockResolvedValue(askEntry("card-msg", card)),
       },
       run: {
         findMany: vi
@@ -2930,7 +2626,6 @@ describe("sendThreadMessage while a proposal card waits", () => {
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
       steeringMessage: { create: vi.fn() },
-      event: { create: vi.fn().mockResolvedValue({ seq: 2, threadId: "thread-1" }) },
       task: { create: vi.fn(), updateMany: vi.fn() },
     };
   }
@@ -2938,7 +2633,7 @@ describe("sendThreadMessage while a proposal card waits", () => {
     sendThreadMessage(
       {
         prisma: {
-          message: { findUnique: vi.fn().mockResolvedValue(null) },
+          $queryRaw: vi.fn().mockResolvedValue([]),
           $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
         } as unknown as PrismaClient,
         events: { notify: vi.fn().mockResolvedValue(undefined) } as never,
@@ -2964,12 +2659,21 @@ describe("sendThreadMessage while a proposal card waits", () => {
       expect.objectContaining({ data: expect.objectContaining({ status: "denied" }) }),
     );
     expect(tx.steeringMessage.create).toHaveBeenCalledWith({
-      data: { messageId: "msg-1", botId: "bot-1", userId: "user-1", runId: "run-waiting" },
+      data: {
+        messageId: sentMessages()[0]!.id,
+        botId: "bot-1",
+        userId: "user-1",
+        runId: "run-waiting",
+      },
     });
-    expect(tx.message.update).toHaveBeenCalledWith({
-      where: { id: "msg-1" },
-      data: { runId: "run-waiting" },
-    });
+    expect(appendSessionEntryInTransaction).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({
+        type: "effect.resolved",
+        runId: "run-waiting",
+        payload: { effectId: "effect-1", decision: "denied", dismissed: true },
+      }),
+    );
     expect(tx.task.updateMany).not.toHaveBeenCalled();
   });
 
@@ -2978,7 +2682,12 @@ describe("sendThreadMessage while a proposal card waits", () => {
     await expect(send(tx)).resolves.toMatchObject({ runIds: ["run-waiting"] });
     expect(tx.externalEffect.updateMany).not.toHaveBeenCalled();
     expect(tx.steeringMessage.create).toHaveBeenCalledWith({
-      data: { messageId: "msg-1", botId: "bot-1", userId: "user-1", runId: "run-waiting" },
+      data: {
+        messageId: sentMessages()[0]!.id,
+        botId: "bot-1",
+        userId: "user-1",
+        runId: "run-waiting",
+      },
     });
   });
 

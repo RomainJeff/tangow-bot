@@ -1,6 +1,6 @@
 import { RPCHandler } from "@orpc/server/fetch";
 import type { Actor } from "@rakazo/contracts";
-import { IsolationError, type PrismaClient } from "@rakazo/db";
+import { appendCardStateInTransaction, IsolationError, type PrismaClient } from "@rakazo/db";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createInFlightGuard,
@@ -9,6 +9,10 @@ import {
   removeMessageLinkPreview,
 } from "./link-preview.js";
 import { createRouter, type RouterDeps } from "./router.js";
+
+vi.mock("../../../packages/db/src/sessions.js", async () =>
+  (await import("@rakazo/db/sessions.test-support")).stubbedDbSessions(),
+);
 
 const actor = { spaceId: "space-1", userId: "user-1" } as Actor;
 const URL_TO_PREVIEW = "https://example.test/page?x=1";
@@ -488,36 +492,35 @@ describe("links.preview: cancellation and deadline", () => {
 });
 
 describe("messages.removeLinkPreview (CA 16, CA 19, CA 54)", () => {
-  const card = {
-    kind: "link_preview",
-    url: "https://example.test/a",
-    format: "photo",
-    image: { artifactId: "a1", width: 1, height: 1 },
-  };
-
+  /** The person's message, its preview entries, and the removals already written. */
   function removal(
-    blocks: unknown[],
-    message: object | null = { id: "message-1", threadId: "thread-1" },
+    previews: Array<{ id: string }>,
+    removals: Array<{ payload: { target: string } }> = [],
+    message: object | null = { id: "message-1", session: { threadId: "thread-1" } },
   ) {
+    vi.mocked(appendCardStateInTransaction).mockClear();
     const tx = {
       $queryRaw: vi.fn(async () => []),
-      message: {
-        findFirst: vi.fn(async () => ({ id: "message-1", role: "user", blocks })),
-        update: vi.fn(),
+      sessionEntry: {
+        findFirst: vi.fn(async () => ({
+          id: "message-1",
+          sessionId: "session-1",
+          botId: null,
+          payload: { blocks: [{ kind: "text", text: "see https://example.test/a" }] },
+        })),
+        findMany: vi.fn().mockResolvedValueOnce(previews).mockResolvedValueOnce(removals),
       },
       thread: {
         findUnique: vi.fn(async () => ({ botId: "bot-1", groupId: null })),
-        update: vi.fn(async () => ({ nextEventSeq: 5 })),
+        findUniqueOrThrow: vi.fn(async () => ({ nextEventSeq: 5 })),
       },
-      event: { create: vi.fn(async () => ({ seq: 4 })) },
-      run: { findUnique: vi.fn() },
       artifact: {
         findMany: vi.fn(async () => [{ id: "a1", storageKey: "blob-1" }]),
         deleteMany: vi.fn(),
       },
     };
     const prisma = {
-      message: { findFirst: vi.fn(async () => message) },
+      sessionEntry: { findFirst: vi.fn(async () => message) },
       $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
     };
     const artifacts = { remove: vi.fn(async () => undefined) };
@@ -531,41 +534,40 @@ describe("messages.removeLinkPreview (CA 16, CA 19, CA 54)", () => {
   }
 
   it("refuses a message outside the actor's own threads with the isolation error", async () => {
-    const { deps, prisma, tx, artifacts, notify } = removal([card], null);
+    const { deps, prisma, artifacts, notify } = removal([{ id: "preview-1" }], [], null);
 
     await expect(
       removeMessageLinkPreview(deps, actor, { messageId: "message-x" }),
     ).rejects.toBeInstanceOf(IsolationError);
 
-    expect(prisma.message.findFirst).toHaveBeenCalledWith({
+    expect(prisma.sessionEntry.findFirst).toHaveBeenCalledWith({
       where: {
         id: "message-x",
-        thread: {
-          spaceId: "space-1",
-          userId: "user-1",
-          OR: [{ bot: { archivedAt: null } }, { group: { archivedAt: null } }],
+        session: {
+          kind: "thread",
+          thread: {
+            spaceId: "space-1",
+            userId: "user-1",
+            OR: [{ bot: { archivedAt: null } }, { group: { archivedAt: null } }],
+          },
         },
       },
-      select: { id: true, threadId: true },
+      select: { id: true, session: { select: { threadId: true } } },
     });
-    expect(tx.message.update).not.toHaveBeenCalled();
+    expect(appendCardStateInTransaction).not.toHaveBeenCalled();
     expect(artifacts.remove).not.toHaveBeenCalled();
     expect(notify).not.toHaveBeenCalled();
   });
 
-  it("writes the marker, deletes the image row and bytes, and tells every surface", async () => {
-    const { deps, tx, artifacts, notify } = removal([{ kind: "text", text: "x" }, card]);
+  it("writes the removal, deletes the image row and bytes, and tells every surface", async () => {
+    const { deps, tx, artifacts, notify } = removal([{ id: "preview-1" }]);
 
     await removeMessageLinkPreview(deps, actor, { messageId: "message-1" });
 
-    expect(tx.message.update).toHaveBeenCalledWith({
-      where: { id: "message-1" },
-      data: {
-        blocks: [
-          { kind: "text", text: "x" },
-          { kind: "link_preview", removed: true },
-        ],
-      },
+    expect(appendCardStateInTransaction).toHaveBeenCalledWith(tx, {
+      type: "link.preview.removed",
+      feedBotId: "bot-1",
+      payload: { target: "preview-1" },
     });
     expect(tx.artifact.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ["a1"] } } });
     expect(artifacts.remove).toHaveBeenCalledWith(
@@ -576,17 +578,16 @@ describe("messages.removeLinkPreview (CA 16, CA 19, CA 54)", () => {
   });
 
   it("is idempotent: a second call writes nothing, deletes nothing and emits nothing", async () => {
-    const { deps, tx, artifacts, notify } = removal([
-      { kind: "text", text: "x" },
-      { kind: "link_preview", removed: true },
-    ]);
+    const { deps, artifacts, notify } = removal(
+      [{ id: "preview-1" }],
+      [{ payload: { target: "preview-1" } }],
+    );
 
     await expect(
       removeMessageLinkPreview(deps, actor, { messageId: "message-1" }),
     ).resolves.toBeUndefined();
 
-    expect(tx.message.update).not.toHaveBeenCalled();
-    expect(tx.event.create).not.toHaveBeenCalled();
+    expect(appendCardStateInTransaction).not.toHaveBeenCalled();
     expect(artifacts.remove).not.toHaveBeenCalled();
     expect(notify).not.toHaveBeenCalled();
   });

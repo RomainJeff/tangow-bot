@@ -202,11 +202,6 @@ export function speechFromBlocks(blocks: MessageBlock[]): string {
         return block.text;
       if (block.kind === "ask") return block.text;
       if (block.kind === "computer") return block.text;
-      if (block.kind === "subagent") {
-        if (block.status === "running") return `${block.name} is working on ${block.task}`;
-        if (block.status === "failed") return `${block.name} failed`;
-        return block.result || `${block.name} finished`;
-      }
       if (block.kind === "card") {
         return block.lines.map((line) => `${line.k}: ${line.v}`).join(". ");
       }

@@ -73,7 +73,6 @@ describe("spawned bot creation", () => {
           spaceId: "workspace-1",
           userId: "user-1",
         },
-        runId: "run-retry",
         spawnKey: "tool-call-1",
         name: " Scout ",
         title: "Ignored on a retry",
@@ -133,7 +132,6 @@ describe("spawned bot creation", () => {
       {
         spawnedBy: { id: "parent-1", name: "Chief", spaceId: "workspace-1", userId: "user-1" },
         // The parent run may sit at any hop; nothing about it is copied onto the child's run.
-        runId: "run-at-hop-5",
         spawnKey: "tool-call-3",
         name: "Scout",
         prompt: "Start scouting",
@@ -173,7 +171,6 @@ describe("spawned bot creation", () => {
           spaceId: "workspace-1",
           userId: "user-1",
         },
-        runId: "run-1",
         spawnKey: "tool-call-2",
         name: "Painter",
         computerMode: "dedicated",

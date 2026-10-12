@@ -8,12 +8,9 @@ import {
   extractNarrationText,
   finalBlocksAfterMidTurnProgress,
   isProgressMessageTruncated,
-  isUserProgressClientNonce,
   repeatsSentUserText,
   toolCallBudgetNotice,
   USER_PROGRESS_MESSAGE_MAX_LENGTH,
-  userMessageClientNonce,
-  userProgressClientNonce,
 } from "./user-progress.js";
 
 describe("clampUserProgressMessage", () => {
@@ -122,29 +119,6 @@ describe("botMessageOutcomeFromMidTurn", () => {
 
   it("returns null when nothing was posted", () => {
     expect(botMessageOutcomeFromMidTurn("  ", [])).toBeNull();
-  });
-});
-
-describe("userProgressClientNonce", () => {
-  it("tags mid-turn progress messages for reconciler detection", () => {
-    const nonce = userProgressClientNonce("run-1", 0);
-    expect(nonce.startsWith("user-progress:run-1:0:")).toBe(true);
-    expect(isUserProgressClientNonce(nonce)).toBe(true);
-    expect(userProgressClientNonce("run-1", 0)).not.toBe(nonce);
-    expect(isUserProgressClientNonce(null)).toBe(false);
-    expect(isUserProgressClientNonce("other")).toBe(false);
-  });
-
-  it("gives message_user its own prefix while both count as mid-turn", () => {
-    const progress = userProgressClientNonce("run-1", 0);
-    const userMessage = userMessageClientNonce("run-1", 1);
-
-    expect(userMessage.startsWith("user-message:")).toBe(true);
-    expect(userMessage.startsWith("user-progress:")).toBe(false);
-    expect(progress.startsWith("user-message:")).toBe(false);
-    // Transcript rebuilders (executor resume, job reconciler) want both kinds.
-    expect(isUserProgressClientNonce(userMessage)).toBe(true);
-    expect(isUserProgressClientNonce(progress)).toBe(true);
   });
 });
 

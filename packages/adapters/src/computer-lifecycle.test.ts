@@ -1552,10 +1552,8 @@ describe("computer execution leases", () => {
     const client = {
       $queryRaw: vi.fn().mockResolvedValue([]),
       thread: {
-        update: vi
-          .fn()
-          .mockResolvedValueOnce({ sessionId: "session-1" })
-          .mockResolvedValue({ nextEventSeq: 1 }),
+        update: vi.fn().mockResolvedValue({ sessionId: "session-1" }),
+        findUniqueOrThrow: vi.fn().mockResolvedValue({ nextEventSeq: 1 }),
       },
       run: {
         findMany: vi.fn().mockResolvedValue([{ id: "run-1", taskId: "task-1" }]),
@@ -1581,21 +1579,8 @@ describe("computer execution leases", () => {
         findUniqueOrThrow: vi.fn().mockResolvedValue({ scope: "team", state: "running" }),
         updateMany: vi.fn(),
       },
-      message: { findMany: vi.fn().mockResolvedValue([]), deleteMany: vi.fn() },
-      event: {
-        deleteMany: vi.fn(),
-        create: vi.fn().mockResolvedValue({
-          id: "event-1",
-          spaceId: "workspace-1",
-          threadId: "thread-1",
-          botId: "bot-1",
-          seq: 0,
-          type: "thread.cleared",
-          payload: {},
-          runId: null,
-          createdAt: new Date(),
-        }),
-      },
+      sessionEntry: { findMany: vi.fn().mockResolvedValue([]) },
+      event: { deleteMany: vi.fn() },
       bot: { update: vi.fn() },
     };
     const prisma = {

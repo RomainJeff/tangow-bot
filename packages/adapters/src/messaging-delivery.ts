@@ -8,7 +8,14 @@ import { messagingDeliverJob, runContinueJob } from "@rakazo/adapter-kit";
 import type { MessageBlock } from "@rakazo/contracts";
 import { botMessageHopExhausted, nextBotMessageHop } from "@rakazo/core";
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
-import { appendEventInTransaction, createThreadMessageInTransaction } from "@rakazo/db";
+import {
+  blocksOf,
+  createThreadMessage,
+  personAnsweredRun,
+  runMessages,
+  threadEntryByNonce,
+  threadEventSeq,
+} from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 
 /**
@@ -70,13 +77,12 @@ export async function mirrorMessagingOutbound(
 async function mirrorRun(deps: MessagingDeliveryDeps, runId: string): Promise<void> {
   const run = await deps.prisma.run.findUnique({
     where: { id: runId },
-    include: { sourceMessage: true },
+    include: { sourceMessage: { select: { payload: true } } },
   });
   if (!run) return;
 
   if (run.trigger === "messaging") {
-    const sourceBlocks = (run.sourceMessage?.blocks ?? []) as MessageBlock[];
-    const channelBlock = sourceBlocks.find(
+    const channelBlock = blocksOf(run.sourceMessage).find(
       (block): block is Extract<MessageBlock, { kind: "channel_message" }> =>
         block.kind === "channel_message",
     );
@@ -98,11 +104,7 @@ async function mirrorRun(deps: MessagingDeliveryDeps, runId: string): Promise<vo
   // bot_message runs can carry the bot's user-facing reply after a delegate wake.
   // extractText only keeps kind:"text", so inter-bot chatter blocks never leak out.
 
-  const messages = await deps.prisma.message.findMany({
-    where: { runId: run.id, role: "bot" },
-    orderBy: { seq: "asc" },
-  });
-  const rows = messages
+  const rows = (await runMessages(deps.prisma, run.id))
     .map((message) => ({
       idempotencyKey: `msg:${message.id}`,
       kind: "dm",
@@ -142,26 +144,10 @@ async function mirrorChannelRun(
   const firstName = owner?.name.trim().split(/\s+/)[0] || "Owner";
   const fromLabel = `${firstName}'s agent`;
 
-  const replies = await deps.prisma.message.findMany({
-    select: { id: true, blocks: true },
-    where: { runId: run.id, role: "bot" },
-    orderBy: { seq: "asc" },
-  });
-  // Ask answers are entered privately in the app. Check the same snapshot as
-  // the replies so a resumed run cannot publish an answer-influenced response.
-  // A routine confirmation is settled by the server, not answered by anyone.
-  if (
-    replies.some((message) =>
-      (message.blocks as MessageBlock[]).some(
-        (block) =>
-          block.kind === "ask" &&
-          block.status === "answered" &&
-          (block.answer !== undefined || !block.confirms),
-      ),
-    )
-  )
-    return;
-  const messages = replies
+  // Ask answers are entered privately in the app, so a run the person answered ended on an
+  // answer-influenced response that stays out of the group.
+  if (await personAnsweredRun(deps.prisma, run.id)) return;
+  const messages = (await runMessages(deps.prisma, run.id))
     .map((message) => ({ message, text: extractText(message.blocks) }))
     .filter((entry) => entry.text);
   if (messages.length === 0) return;
@@ -233,26 +219,15 @@ async function mirrorChannelRun(
         continue;
       }
       // Context only: the peer sees the post in history without a wake.
-      const existing = await deps.prisma.message.findUnique({
-        where: { threadId_clientNonce: { threadId: peerThread.id, clientNonce } },
+      if (await threadEntryByNonce(deps.prisma, peerThread.id, clientNonce)) continue;
+      await createThreadMessage(deps.prisma, {
+        threadId: peerThread.id,
+        role: "user",
+        blocks: [block],
+        clientNonce,
       });
-      if (existing) continue;
-      const event = await deps.prisma.$transaction(async (tx) => {
-        const created = await createThreadMessageInTransaction(tx, {
-          threadId: peerThread.id,
-          role: "user",
-          blocks: [block],
-          clientNonce,
-        });
-        return appendEventInTransaction(tx, {
-          spaceId: peerIdentity.spaceId,
-          threadId: peerThread.id,
-          botId: peerIdentity.botId,
-          type: "thread.message.created",
-          payload: { messageId: created.id, role: "user", blocks: [block] },
-        });
-      });
-      await deps.events.notify(peerThread.id, event.seq).catch(() => undefined);
+      const seq = await threadEventSeq(deps.prisma, peerThread.id);
+      await deps.events.notify(peerThread.id, seq).catch(() => undefined);
     }
   }
 }

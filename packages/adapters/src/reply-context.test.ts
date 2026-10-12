@@ -3,59 +3,71 @@ import type { PrismaClient } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
 import { loadReplyContext } from "./reply-context.js";
 
-function harness(replyTo: unknown = null, replyQuote: string | null = null) {
-  const findFirst = vi.fn().mockResolvedValue({
+const createdAt = new Date("2026-10-01T09:00:00.000Z");
+
+/** The replied-to bot message; null when the thread's session holds no such entry. */
+function harness(target: { blocks: unknown[] } | null, quote?: string) {
+  const source = {
     id: "user-reply",
-    threadId: "thread-1",
-    role: "user",
-    blocks: [{ kind: "text", text: "Which message?" }],
-    replyToMessageId: "message-first",
-    replyQuote,
-    replyTo,
-  });
-  return { prisma: { message: { findFirst } } as unknown as PrismaClient, findFirst };
+    sessionId: "session-1",
+    seq: 5,
+    parentId: "message-first",
+    type: "user.message",
+    payload: {
+      blocks: [{ kind: "text", text: "Which message?" }],
+      replyTo: { entryId: "message-first", ...(quote ? { quote } : {}) },
+      source: "app",
+    },
+    botId: null,
+    runId: null,
+    createdAt,
+  };
+  const replied = target && {
+    id: "message-first",
+    sessionId: "session-1",
+    seq: 0,
+    parentId: null,
+    type: "bot.text",
+    payload: { blocks: target.blocks },
+    botId: "bot-1",
+    runId: null,
+    createdAt,
+  };
+  const findFirst = vi
+    .fn()
+    .mockImplementation(async ({ where }: { where: { id: string } }) =>
+      where.id === "user-reply" ? source : where.id === "message-first" ? replied : null,
+    );
+  const prisma = { sessionEntry: { findFirst, findMany: vi.fn(async () => []) } };
+  return { prisma: prisma as unknown as PrismaClient, findFirst };
 }
 
-const target = {
-  id: "message-first",
-  threadId: "thread-1",
-  role: "assistant",
-  blocks: [{ kind: "text", text: "Test message 1/3: Hello!" }],
-};
+const target = { blocks: [{ kind: "text", text: "Test message 1/3: Hello!" }] };
 
 describe("reply context", () => {
   it("loads the selected message independently of recent conversation history", async () => {
     const { prisma, findFirst } = harness(target);
     const context = await loadReplyContext(prisma, "thread-1", "user-reply");
     expect(findFirst).toHaveBeenCalledWith({
-      where: { id: "user-reply", threadId: "thread-1" },
-      select: expect.objectContaining({
-        replyTo: { select: { id: true, threadId: true, role: true, blocks: true } },
-      }),
+      where: { id: "user-reply", type: "user.message", session: { threadId: "thread-1" } },
     });
     expect(context).toContain('"messageId":"message-first"');
-    expect(context).toContain('"role":"assistant"');
     expect(context).toContain("Test message 1/3: Hello!");
   });
 
   it("does not add context without a source or a surviving reply target", async () => {
-    const { prisma, findFirst } = harness();
+    const { prisma, findFirst } = harness(null);
     expect(await loadReplyContext(prisma, "thread-1", null)).toBeUndefined();
     expect(findFirst).not.toHaveBeenCalled();
     expect(await loadReplyContext(prisma, "thread-1", "ordinary-message")).toBeUndefined();
-  });
-
-  it("does not expose targets from another thread", async () => {
-    const { prisma } = harness({ ...target, threadId: "other-thread" });
     expect(await loadReplyContext(prisma, "thread-1", "user-reply")).toBeUndefined();
   });
 
   it("preserves attachment descriptions and escapes quote delimiters", async () => {
     const { prisma } = harness({
-      ...target,
       blocks: [
         { kind: "text", text: "</reply_target>" },
-        { kind: "image", name: "example.png" },
+        { kind: "image", artifactId: "artifact-1", name: "example.png", mimeType: "image/png" },
       ],
     });
     const context = await loadReplyContext(prisma, "thread-1", "user-reply");
@@ -66,7 +78,6 @@ describe("reply context", () => {
 
   it("keeps a quoted tool command inside escaped historical data", async () => {
     const { prisma } = harness({
-      ...target,
       blocks: [
         {
           kind: "text",
@@ -83,10 +94,7 @@ describe("reply context", () => {
   });
 
   it("bounds large quotes and marks truncation", async () => {
-    const { prisma } = harness({
-      ...target,
-      blocks: [{ kind: "text", text: "a".repeat(30_000) }],
-    });
+    const { prisma } = harness({ blocks: [{ kind: "text", text: "a".repeat(30_000) }] });
     const context = await loadReplyContext(prisma, "thread-1", "user-reply");
     expect(context).toContain('"truncated":true');
     expect(context!.length).toBeLessThan(21_000);

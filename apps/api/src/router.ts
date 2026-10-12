@@ -79,7 +79,6 @@ import {
   scriptedCatalogEntry,
   serializeModelSecret,
   settleCancelledRunCards,
-  sweepOrphanPreviewArtifacts,
   takeoverLeaseMs,
   toComputerRef,
   touchRunningComputer,
@@ -114,7 +113,6 @@ import {
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
 import {
   appendComputerControlInTransaction,
-  appendEventInTransaction,
   BotSectionNameConflictError,
   CannotDeleteDefaultSpaceError,
   CannotDeleteLastSpaceError,
@@ -153,6 +151,7 @@ import {
   SpaceNotFoundError,
   selectSpaceModelPreference,
   selectSpaceVoicePreference,
+  threadEventSeq,
   touchGroupUpdatedAt,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
@@ -212,7 +211,7 @@ import {
 import { assertTeachingSendAllowed, createTaughtSkillsService } from "./taught-skills.js";
 import {
   forwardedThreadEvent,
-  loadAllMessages,
+  loadAllEntries,
   loadEntryPage,
   threadSessionId,
 } from "./thread-message-pages.js";
@@ -242,7 +241,7 @@ import {
 import { loadWebhookSecret, WEBHOOK_SECRET_KIND } from "./webhook-inbound.js";
 
 const MAX_COMPUTER_TEXT_FILE_BYTES = 2 * 1024 * 1024;
-const EXPORT_MESSAGE_PAGE_SIZE = 500;
+const EXPORT_ENTRY_PAGE_SIZE = 500;
 
 async function reconcilePendingConnections(
   prisma: PrismaClient,
@@ -1522,7 +1521,7 @@ export function createRouter(deps: RouterDeps) {
       }),
       react: authed.threads.react.handler(async ({ context, input }) => {
         const target = await resolveThreadTarget(deps.prisma, context.actor, input);
-        const result = await reactToThreadMessage(deps, context.actor, target, input);
+        const result = await reactToThreadMessage(deps, target, input);
         if (result.eventSeq != null) {
           await deps.events.notify(target.threadId, result.eventSeq).catch((error) => {
             getLogger().error("thread reaction realtime notification", error);
@@ -1568,20 +1567,18 @@ export function createRouter(deps: RouterDeps) {
           historyGeneration,
           "thread-clear",
         );
-        // The cleared messages took their preview cards with them: drop the card images.
-        await sweepOrphanPreviewArtifacts(deps, { spaceId: context.actor.spaceId });
         return { ok: true as const };
       }),
       rewind: authed.threads.rewind.handler(async ({ context, input }) => {
         const target = await resolveThreadTarget(deps.prisma, context.actor, input);
         const contextBotId = target.kind === "bot" ? target.botId : target.memberBotIds[0];
         if (!contextBotId) throw new IsolationError();
-        const message = await deps.prisma.message.findFirst({
-          where: { id: input.messageId, threadId: target.threadId },
-          select: { role: true },
+        const message = await deps.prisma.sessionEntry.findFirst({
+          where: { id: input.messageId, session: { threadId: target.threadId, kind: "thread" } },
+          select: { type: true },
         });
         if (!message) throw new ORPCError("NOT_FOUND", { message: "Message not found" });
-        if (message.role !== "user") {
+        if (message.type !== "user.message") {
           throw new ORPCError("BAD_REQUEST", { message: "Only your own messages can be edited" });
         }
         const rewound = await deps.events.rewindThread({
@@ -1598,7 +1595,6 @@ export function createRouter(deps: RouterDeps) {
             deps.jobs.cancel(runJobKey(runId)).catch(() => undefined),
           ),
         );
-        await sweepOrphanPreviewArtifacts(deps, { spaceId: context.actor.spaceId });
         if (rewound.historyGeneration !== undefined) {
           await purgeCompactedHistoryMemory(
             deps,
@@ -1684,7 +1680,6 @@ export function createRouter(deps: RouterDeps) {
               },
               select: { id: true },
             });
-            await tx.message.update({ where: { id: message.id }, data: { runId: run.id } });
           } else {
             await tx.steeringMessage.create({
               data: {
@@ -1694,18 +1689,13 @@ export function createRouter(deps: RouterDeps) {
                 runId: active.id,
               },
             });
-            await tx.message.update({ where: { id: message.id }, data: { runId: active.id } });
           }
-          const event = await appendEventInTransaction(tx, {
-            spaceId: context.actor.spaceId,
-            threadId: target.threadId,
-            botId,
-            type: "thread.message.created",
-            runId: run?.id ?? active?.id,
-            payload: { messageId: message.id, role: "user", blocks },
-          });
           await touchGroupUpdatedAt(tx, target.groupId);
-          return { runId: run?.id, eventSeq: event.seq, messageId: message.id };
+          return {
+            runId: run?.id,
+            eventSeq: await threadEventSeq(tx, target.threadId),
+            messageId: message.id,
+          };
         });
         await deps.events.notify(target.threadId, committed.eventSeq).catch((error) => {
           getLogger().error("group follow-up realtime notification", error);
@@ -4656,7 +4646,7 @@ export function createRouter(deps: RouterDeps) {
             }
             return exported;
           })(),
-          loadAllMessages(deps.prisma, bot.thread.id, EXPORT_MESSAGE_PAGE_SIZE),
+          loadAllEntries(deps.prisma, bot.thread.sessionId, EXPORT_ENTRY_PAGE_SIZE),
         ]);
         return {
           version: 1 as const,

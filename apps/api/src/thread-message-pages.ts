@@ -4,12 +4,11 @@ import type {
   ProductEvent,
   SessionEntry,
   ThreadEntry,
-  ThreadMessage,
   ThreadMessagePage,
 } from "@rakazo/contracts";
 import { SessionId, toThreadEntry } from "@rakazo/contracts";
 import { appendedEntries, visibleEntries } from "@rakazo/core";
-import { hiddenPeerRunIds, type Prisma, type PrismaClient } from "@rakazo/db";
+import { hiddenPeerRunIds, type Prisma, type PrismaClient, sessionEntryFromRow } from "@rakazo/db";
 
 type ThreadDb = PrismaClient | Prisma.TransactionClient;
 type PageLog = Pick<SessionLog<Prisma.TransactionClient>, "readPage" | "readAround">;
@@ -66,22 +65,23 @@ export async function loadEntryPage(
   };
 }
 
-export async function loadAllMessages(
+/** Every entry of a session in seq order, the chain and what a rewind or clear cut alike. */
+export async function loadAllEntries(
   prisma: PrismaClient,
-  threadId: string,
+  sessionId: string,
   pageSize: number,
-): Promise<ThreadMessage[]> {
-  const messages: ThreadMessage[] = [];
+): Promise<ThreadEntry[]> {
+  const entries: ThreadEntry[] = [];
   let after = -1;
   while (true) {
-    const rows = await prisma.message.findMany({
-      where: { threadId, seq: { gt: after } },
+    const rows = await prisma.sessionEntry.findMany({
+      where: { sessionId, seq: { gt: after } },
       orderBy: { seq: "asc" },
       take: pageSize,
     });
-    messages.push(...rows.map(toThreadMessage));
+    entries.push(...rows.map((row) => toThreadEntry(sessionEntryFromRow(row))));
     const last = rows.at(-1);
-    if (!last || rows.length < pageSize) return messages;
+    if (!last || rows.length < pageSize) return entries;
     after = last.seq;
   }
 }
@@ -124,38 +124,9 @@ const FORWARDED_PEER_RUN_EVENTS: ReadonlySet<string> = new Set([
   "run.completed",
   "run.failed",
   "run.cancelled",
-  "run.waiting_input",
   "computer.takeover.requested",
 ]);
 
 export function shouldForwardPeerThreadEvent(event: { type: string }): boolean {
   return FORWARDED_PEER_RUN_EVENTS.has(event.type);
-}
-
-function toThreadMessage(row: {
-  id: string;
-  threadId: string;
-  seq: number;
-  role: string;
-  blocks: Prisma.JsonValue;
-  botId: string | null;
-  replyToMessageId: string | null;
-  replyQuote: string | null;
-  runId: string | null;
-  clientNonce: string | null;
-  createdAt: Date;
-}): ThreadMessage {
-  return {
-    id: row.id,
-    threadId: row.threadId,
-    seq: row.seq,
-    role: row.role as ThreadMessage["role"],
-    blocks: row.blocks as ThreadMessage["blocks"],
-    botId: row.botId ?? undefined,
-    replyToMessageId: row.replyToMessageId ?? undefined,
-    replyQuote: row.replyQuote ?? undefined,
-    runId: row.runId ?? undefined,
-    clientNonce: row.clientNonce ?? undefined,
-    createdAt: row.createdAt.toISOString(),
-  };
 }

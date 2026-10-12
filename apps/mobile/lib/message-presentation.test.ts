@@ -32,13 +32,13 @@ describe("mobile message presentation", () => {
           { label: "Message bot", count: 1 },
         ],
       },
-      { kind: "bot_message_sent", toBotId: "b", toBotName: "Research", text: "Go" },
+      { kind: "text", text: "Go" },
     ] as MessageBlock[];
 
     expect(messagePresentationSegments(blocks)).toEqual([
       {
         kind: "content",
-        blocks: [{ kind: "bot_message_sent", toBotId: "b", toBotName: "Research", text: "Go" }],
+        blocks: [{ kind: "text", text: "Go" }],
       },
     ]);
     expect(

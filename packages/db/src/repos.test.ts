@@ -29,7 +29,7 @@ const baseBot = {
   memoryScope: null as string | null,
   createdAt: new Date("2026-08-19T00:00:00.000Z"),
   updatedAt: new Date("2026-08-19T00:00:00.000Z"),
-  thread: { id: "thread-1", unread: false, messages: [] },
+  thread: { id: "thread-1", unread: false, sessionId: "session-1" },
   runs: [],
   computer: null,
 };
@@ -39,9 +39,7 @@ function reposFor(memoryScope: string | null) {
     bot: {
       findMany: vi.fn(async () => [{ ...baseBot, memoryScope }]),
     },
-    run: {
-      findMany: vi.fn(async () => []),
-    },
+    $queryRaw: vi.fn(async () => []),
   };
   return createRepos(prisma as unknown as PrismaClient);
 }
@@ -58,305 +56,6 @@ describe("createRepos.listBots", () => {
       expect.objectContaining({ memoryScope: "shared" }),
     ]);
   });
-
-  it("classifies initial preview runs once across bots, including non-peer results", async () => {
-    const prisma = {
-      bot: {
-        findMany: vi.fn(async () =>
-          ["one", "two"].map((id) => ({
-            ...baseBot,
-            id,
-            thread: {
-              ...baseBot.thread,
-              id: `thread-${id}`,
-              messages: [{ runId: `run-${id}`, blocks: [{ kind: "text", text: `Answer ${id}` }] }],
-            },
-          })),
-        ),
-      },
-      run: { findMany: vi.fn(async () => []) },
-    };
-
-    const bots = await createRepos(prisma as unknown as PrismaClient).listBots(actor);
-
-    expect(bots.map((bot) => bot.preview)).toEqual(["Answer one", "Answer two"]);
-    expect(prisma.run.findMany).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({
-        where: { id: { in: ["run-one", "run-two"] }, trigger: "bot_message" },
-      }),
-    );
-  });
-
-  it("classifies unseen runs in older pages and retains negative results between pages", async () => {
-    const prisma = {
-      bot: {
-        findMany: vi.fn(async () => [
-          {
-            ...baseBot,
-            thread: {
-              ...baseBot.thread,
-              messages: [
-                { seq: 30, runId: "peer-new", blocks: [{ kind: "text", text: "Hidden" }] },
-              ],
-            },
-          },
-        ]),
-      },
-      run: {
-        findMany: vi
-          .fn()
-          .mockResolvedValueOnce([
-            { id: "peer-new", bot: { parentBotId: "claudius-1" }, sourceMessage: null },
-          ])
-          .mockResolvedValueOnce([
-            { id: "peer-old", bot: { parentBotId: "claudius-1" }, sourceMessage: null },
-          ]),
-      },
-      message: {
-        findMany: vi
-          .fn()
-          .mockResolvedValueOnce([
-            { seq: 20, runId: "peer-old", blocks: [{ kind: "text", text: "Also hidden" }] },
-            { seq: 19, runId: "user-old", blocks: [] },
-          ])
-          .mockResolvedValueOnce([
-            { seq: 10, runId: "peer-old", blocks: [{ kind: "text", text: "Still hidden" }] },
-            { seq: 9, runId: "user-old", blocks: [{ kind: "text", text: "Visible answer" }] },
-          ]),
-      },
-    };
-
-    const bots = await createRepos(prisma as unknown as PrismaClient).listBots(actor);
-
-    expect(bots[0]?.preview).toBe("Visible answer");
-    expect(prisma.run.findMany).toHaveBeenCalledTimes(2);
-    expect(prisma.run.findMany).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        where: { id: { in: ["peer-old", "user-old"] }, trigger: "bot_message" },
-      }),
-    );
-    expect(prisma.message.findMany).toHaveBeenCalledTimes(2);
-  });
-
-  it("keeps bot-to-bot run output out of sidebar previews", async () => {
-    const findMany = vi.fn(async () => [
-      {
-        ...baseBot,
-        thread: {
-          ...baseBot.thread,
-          messages: [
-            {
-              runId: "run-peer",
-              blocks: [{ kind: "text", text: "Echoed peer reply" }],
-            },
-            {
-              runId: "run-peer",
-              blocks: [
-                {
-                  kind: "bot_message_received",
-                  fromBotId: "bot-2",
-                  fromBotName: "Coder",
-                  text: "Peer result",
-                },
-              ],
-            },
-            { runId: "run-user", blocks: [{ kind: "text", text: "Visible answer" }] },
-          ],
-        },
-      },
-    ]);
-    const prisma = {
-      bot: {
-        findMany,
-      },
-      run: {
-        findMany: vi.fn(async () => [
-          { id: "run-peer", bot: { parentBotId: "claudius-1" }, sourceMessage: null },
-        ]),
-      },
-    };
-
-    await expect(createRepos(prisma as unknown as PrismaClient).listBots(actor)).resolves.toEqual([
-      expect.objectContaining({ preview: "Visible answer" }),
-    ]);
-    expect(findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        include: expect.objectContaining({
-          thread: {
-            include: {
-              messages: { orderBy: { seq: "desc" }, take: 16 },
-            },
-          },
-        }),
-      }),
-    );
-  });
-
-  it("keeps a top-level bot's relay of delegated work in the sidebar preview (CA5/CA6)", async () => {
-    // background-work-visibility: a top-level bot carrying back a peer's `result` is relaying to
-    // the user, not running hidden delegated work, so it is not reported as a peer run.
-    const findMany = vi.fn(async () => [
-      {
-        ...baseBot,
-        thread: {
-          ...baseBot.thread,
-          messages: [
-            {
-              runId: "run-relay",
-              blocks: [{ kind: "text", text: "Point marché de Warren : rien à signaler." }],
-            },
-          ],
-        },
-      },
-    ]);
-    const runFindMany = vi.fn(async () => [
-      {
-        id: "run-relay",
-        bot: { parentBotId: null },
-        sourceMessage: {
-          blocks: [
-            {
-              kind: "bot_message_received",
-              fromBotId: "warren",
-              fromBotName: "Warren",
-              text: "Rien à signaler.",
-              intent: "result",
-            },
-          ],
-          replyTo: null,
-        },
-      },
-    ]);
-    const prisma = {
-      bot: { findMany },
-      run: { findMany: runFindMany },
-    };
-
-    await expect(createRepos(prisma as unknown as PrismaClient).listBots(actor)).resolves.toEqual([
-      expect.objectContaining({ preview: "Point marché de Warren : rien à signaler." }),
-    ]);
-    expect(runFindMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: { in: ["run-relay"] }, trigger: "bot_message" } }),
-    );
-  });
-
-  it("skips a peer-run preview tail when the receipt is outside the window", async () => {
-    const prisma = {
-      bot: {
-        findMany: vi.fn(async () => [
-          {
-            ...baseBot,
-            thread: {
-              ...baseBot.thread,
-              messages: [
-                {
-                  runId: "run-peer",
-                  blocks: [{ kind: "text", text: "Echoed peer reply" }],
-                },
-                { runId: "run-user", blocks: [{ kind: "text", text: "Visible answer" }] },
-              ],
-            },
-          },
-        ]),
-      },
-      run: {
-        findMany: vi.fn(async () => [
-          { id: "run-peer", bot: { parentBotId: "claudius-1" }, sourceMessage: null },
-        ]),
-      },
-      message: {
-        findMany: vi.fn(async () => []),
-      },
-    };
-
-    await expect(createRepos(prisma as unknown as PrismaClient).listBots(actor)).resolves.toEqual([
-      expect.objectContaining({ preview: "Visible answer" }),
-    ]);
-  });
-
-  it("scans older messages when the newest window is only peer output", async () => {
-    const messageFindMany = vi.fn(async () => [
-      { seq: 1, runId: "run-user", blocks: [{ kind: "text", text: "Older visible answer" }] },
-    ]);
-    const prisma = {
-      bot: {
-        findMany: vi.fn(async () => [
-          {
-            ...baseBot,
-            thread: {
-              ...baseBot.thread,
-              messages: [
-                {
-                  seq: 20,
-                  runId: "run-peer",
-                  blocks: [{ kind: "text", text: "Echoed peer reply" }],
-                },
-              ],
-            },
-          },
-        ]),
-      },
-      run: {
-        findMany: vi.fn(async () => [
-          { id: "run-peer", bot: { parentBotId: "claudius-1" }, sourceMessage: null },
-        ]),
-      },
-      message: {
-        findMany: messageFindMany,
-      },
-    };
-
-    await expect(createRepos(prisma as unknown as PrismaClient).listBots(actor)).resolves.toEqual([
-      expect.objectContaining({ preview: "Older visible answer" }),
-    ]);
-    expect(messageFindMany).toHaveBeenCalledWith({
-      where: { threadId: "thread-1", seq: { lt: 20 } },
-      orderBy: { seq: "desc" },
-      take: 16,
-    });
-  });
-
-  it("uses a visible message from the fourth older window for preview", async () => {
-    const peerWindows = [
-      [{ seq: 80, runId: "run-peer", blocks: [{ kind: "text", text: "peer 80" }] }],
-      [{ seq: 60, runId: "run-peer", blocks: [{ kind: "text", text: "peer 60" }] }],
-      [{ seq: 40, runId: "run-peer", blocks: [{ kind: "text", text: "peer 40" }] }],
-      [{ seq: 20, runId: "run-peer", blocks: [{ kind: "text", text: "peer 20" }] }],
-      [{ seq: 1, runId: "run-user", blocks: [{ kind: "text", text: "Fourth-window answer" }] }],
-    ];
-    let windowIndex = 0;
-    const messageFindMany = vi.fn(async () => {
-      windowIndex += 1;
-      return peerWindows[windowIndex] ?? [];
-    });
-    const prisma = {
-      bot: {
-        findMany: vi.fn(async () => [
-          {
-            ...baseBot,
-            thread: {
-              ...baseBot.thread,
-              messages: peerWindows[0],
-            },
-          },
-        ]),
-      },
-      run: {
-        findMany: vi.fn(async () => [
-          { id: "run-peer", bot: { parentBotId: "claudius-1" }, sourceMessage: null },
-        ]),
-      },
-      message: {
-        findMany: messageFindMany,
-      },
-    };
-
-    await expect(createRepos(prisma as unknown as PrismaClient).listBots(actor)).resolves.toEqual([
-      expect.objectContaining({ preview: "Fourth-window answer" }),
-    ]);
-    expect(messageFindMany).toHaveBeenCalledTimes(4);
-  });
 });
 
 describe("createRepos.listSpaceBotsForSpaces", () => {
@@ -372,14 +71,24 @@ describe("createRepos.listSpaceBotsForSpaces", () => {
         pinned: true,
         sectionId: null,
         updatedAt: new Date("2026-08-20T00:00:00.000Z"),
-        thread: {
-          unread: true,
-          messages: [{ blocks: [{ kind: "text", text: "Waiting for a reply" }] }],
-        },
+        thread: { unread: true, sessionId: "session-2" },
         runs: [{ status: "running" }],
       },
     ]);
-    const repos = createRepos({ bot: { findMany } } as unknown as PrismaClient);
+    const $queryRaw = vi.fn(async () => [
+      {
+        id: "entry-1",
+        sessionId: "session-2",
+        seq: 0,
+        parentId: null,
+        type: "bot.text",
+        payload: { blocks: [{ kind: "text", text: "Waiting for a reply" }] },
+        botId: "bot-2",
+        runId: null,
+        createdAt: new Date("2026-08-20T00:00:00.000Z"),
+      },
+    ]);
+    const repos = createRepos({ bot: { findMany }, $queryRaw } as unknown as PrismaClient);
 
     await expect(repos.listSpaceBotsForSpaces(actor, ["ws-2"])).resolves.toEqual([
       {

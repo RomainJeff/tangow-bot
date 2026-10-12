@@ -47,7 +47,7 @@ describe("artifact search batching", () => {
     for (const query of [direct, group]) {
       expect(query.values).toContain(actor.spaceId);
       expect(query.values).toContain(actor.userId);
-      expect(query.text).toContain('ORDER BY m."createdAt" DESC');
+      expect(query.text).toContain("ORDER BY e.seq DESC");
     }
   });
 
@@ -90,9 +90,9 @@ describe("link previews in search (CA 44, CA 46)", () => {
     const sql = prisma.$queryRaw.mock.calls.slice(0, 2).map(([strings]) => [...strings].join("?"));
     expect(sql).toHaveLength(2);
     for (const text of sql) {
-      expect(text).toContain("jsonb_path_query_array(m.blocks");
+      expect(text).toContain("jsonb_path_query_array(e.payload -> 'blocks'");
       expect(text).toContain("link_preview");
-      expect(text).not.toContain("m.blocks::text");
+      expect(text).not.toContain("e.payload::text");
     }
   });
 

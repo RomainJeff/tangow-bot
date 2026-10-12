@@ -43,13 +43,14 @@ import {
 } from "@rakazo/core";
 import {
   appendCardStateInTransaction,
-  appendEventInTransaction,
+  blocksOf,
   type createRepos,
   expireComputerExecutionLeases,
   IsolationError,
   logCancelledRunsInTransaction,
   type PrismaClient,
   type ThreadEvents,
+  threadEventSeq,
 } from "@rakazo/db";
 
 type TaughtSkillRow = {
@@ -247,7 +248,6 @@ async function grantTakeover(
 
 async function updateSkillDraftMessage(
   deps: TaughtSkillsDeps,
-  actor: Actor,
   skill: TaughtSkillRow,
   input: {
     name?: string;
@@ -261,65 +261,49 @@ async function updateSkillDraftMessage(
   });
   if (!bot?.thread) return;
 
-  const messages = await deps.prisma.message.findMany({
-    where: { threadId: bot.thread.id, role: "bot" },
-    orderBy: { seq: "desc" },
-    take: 100,
-  });
-
-  for (const message of messages) {
-    const parsed = message.blocks as MessageBlock[];
-    if (!Array.isArray(parsed)) continue;
-    const isDraft = (
-      block: MessageBlock,
-    ): block is Extract<MessageBlock, { kind: "skill_draft" }> =>
-      block.kind === "skill_draft" && block.skillId === skill.id;
-    if (!parsed.some(isDraft)) continue;
-    const playbook = input.playbook ?? parsePlaybook(skill.playbook);
-    // The thread lock, then the blocks as stored now: a link preview card or its removal
-    // marker written since the scan above is kept, not overwritten.
-    const written = await deps.prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT id FROM threads WHERE id = ${bot.thread!.id} FOR UPDATE`;
-      const current = await tx.message.findFirst({
-        where: { id: message.id, threadId: bot.thread!.id },
-        select: { blocks: true },
-      });
-      if (!current || !Array.isArray(current.blocks)) return null;
-      const stored = current.blocks as MessageBlock[];
-      const before = stored.find(isDraft);
-      if (!before) return null;
-      const revision = {
+  const threadId = bot.thread.id;
+  const sessionId = bot.thread.sessionId;
+  const playbook = input.playbook ?? parsePlaybook(skill.playbook);
+  const written = await deps.prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM threads WHERE id = ${threadId} FOR UPDATE`;
+    const card = await tx.sessionEntry.findFirst({
+      where: {
+        sessionId,
+        type: "bot.text",
+        payload: { path: ["blocks"], array_contains: [{ kind: "skill_draft", skillId: skill.id }] },
+      },
+      orderBy: { seq: "desc" },
+      select: { id: true, payload: true },
+    });
+    if (!card) return null;
+    const revised = await tx.sessionEntry.findFirst({
+      where: { sessionId, type: "skill.draft", payload: { path: ["target"], equals: card.id } },
+      orderBy: { seq: "desc" },
+      select: { payload: true },
+    });
+    const before =
+      (revised?.payload as { name: string; status: "draft" | "saved" } | undefined) ??
+      blocksOf(card).find(
+        (block): block is Extract<MessageBlock, { kind: "skill_draft" }> =>
+          block.kind === "skill_draft" && block.skillId === skill.id,
+      );
+    if (!before) return null;
+    await appendCardStateInTransaction(tx, {
+      type: "skill.draft",
+      botId: bot.id,
+      payload: {
+        target: EntryId.parse(card.id),
         skillId: skill.id,
         name: input.name ?? before.name,
         goal: skill.goal,
         playbook,
         status: input.status ?? before.status,
-      };
-      const nextBlocks = stored.map((block) =>
-        isDraft(block) ? { kind: "skill_draft" as const, ...revision } : block,
-      );
-      await tx.message.update({
-        where: { id: message.id },
-        data: { blocks: nextBlocks as never },
-      });
-      await appendCardStateInTransaction(tx, {
-        type: "skill.draft",
-        botId: bot.id,
-        payload: { ...revision, target: EntryId.parse(message.id) },
-      });
-      const event = await appendEventInTransaction(tx, {
-        spaceId: actor.spaceId,
-        threadId: bot.thread!.id,
-        botId: bot.id,
-        type: "thread.message.updated",
-        payload: { messageId: message.id, role: "bot", blocks: nextBlocks },
-      });
-      return event.seq;
+      },
     });
-    if (written !== null) {
-      await deps.events.notify(bot.thread.id, written).catch(() => undefined);
-    }
-    return;
+    return threadEventSeq(tx, threadId);
+  });
+  if (written !== null) {
+    await deps.events.notify(threadId, written).catch(() => undefined);
   }
 }
 
@@ -498,7 +482,7 @@ export function createTaughtSkillsService(deps: TaughtSkillsDeps) {
           status: skill.status === "saved" ? "saved" : "draft",
         },
       });
-      await updateSkillDraftMessage(deps, actor, row, {
+      await updateSkillDraftMessage(deps, row, {
         name: row.name,
         playbook: parsePlaybook(row.playbook),
         status: row.status === "saved" ? "saved" : "draft",
@@ -522,7 +506,7 @@ export function createTaughtSkillsService(deps: TaughtSkillsDeps) {
         where: { id: row.botId },
         include: { thread: true },
       });
-      await updateSkillDraftMessage(deps, actor, row, {
+      await updateSkillDraftMessage(deps, row, {
         name: row.name,
         playbook: parsePlaybook(row.playbook),
         status: "saved",

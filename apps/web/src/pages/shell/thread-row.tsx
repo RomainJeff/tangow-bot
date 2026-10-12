@@ -193,7 +193,6 @@ function MessageRowView({
           : undefined
       }
       onOpenBot={context.onOpenBot}
-      onOpenPeerMessages={context.onOpenPeerMessages}
       speakerName={
         chrome !== "row" || item.role !== "bot" ? undefined : context.memberName?.(item.botId)
       }
@@ -247,13 +246,14 @@ function SubagentCard({
   if (item.status === "running") {
     return <TaskCard title={title} state="running" meta={item.task} streaming />;
   }
+  const { sessionId } = item;
   return (
     <TaskCard
       title={title}
       state={item.status === "failed" ? "failed" : "done"}
       meta={[item.model.id, item.task].filter(Boolean).join(" · ")}
       body={item.result}
-      onOpen={() => onOpenSession({ kind: "session", sessionId: item.sessionId, title })}
+      onOpen={sessionId ? () => onOpenSession({ kind: "session", sessionId, title }) : undefined}
     />
   );
 }

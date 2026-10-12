@@ -13,9 +13,15 @@ import {
   expect,
   type Page,
 } from "@playwright/test";
+import { type MessageBlock, SessionId } from "@rakazo/contracts";
 import { abortableDelay } from "@rakazo/core";
 import { loadRootEnv } from "@rakazo/core/node/load-root-env";
-import { createThreadMessage, type PrismaClient } from "@rakazo/db";
+import {
+  appendSessionEntryInTransaction,
+  createBotMessageInTransaction,
+  createThreadMessage,
+  type PrismaClient,
+} from "@rakazo/db";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import type { createApp } from "../../../../apps/api/src/app.ts";
 import {
@@ -294,17 +300,20 @@ async function prepareAuthenticatedProfile(benchmark: BenchmarkContext, profile:
 async function seedBenchmarkThread(prisma: PrismaClient) {
   const bot = await prisma.bot.findFirst({
     where: { name: "Chief" },
-    select: { thread: { select: { id: true } } },
+    select: { id: true, thread: { select: { id: true, sessionId: true } } },
   });
-  const threadId = bot?.thread?.id;
-  if (!threadId) throw new Error("Benchmark onboarding did not create a thread");
-  await prisma.$transaction([
-    prisma.message.deleteMany({ where: { threadId } }),
-    prisma.thread.update({
-      where: { id: threadId },
-      data: { nextMessageSeq: 0, unread: false },
-    }),
-  ]);
+  const thread = bot?.thread;
+  if (!bot || !thread) throw new Error("Benchmark onboarding did not create a thread");
+  const threadId = thread.id;
+  await prisma.$transaction(async (tx) => {
+    await appendSessionEntryInTransaction(tx, {
+      type: "clear",
+      sessionId: SessionId.parse(thread.sessionId),
+      payload: {},
+      feedBotId: bot.id,
+    });
+    await tx.thread.update({ where: { id: threadId }, data: { unread: false } });
+  });
   for (let index = 0; index < 100; index += 1) {
     const role = index % 2 === 0 ? "user" : "bot";
     const text =
@@ -319,7 +328,13 @@ async function seedBenchmarkThread(prisma: PrismaClient) {
             "",
             "`pnpm check && pnpm test`",
           ].join("\n");
-    await createThreadMessage(prisma, { threadId, role, blocks: [{ kind: "text", text }] });
+    const blocks: MessageBlock[] = [{ kind: "text", text }];
+    if (role === "user") await createThreadMessage(prisma, { threadId, role, blocks });
+    else {
+      await prisma.$transaction((tx) =>
+        createBotMessageInTransaction(tx, { threadId, botId: bot.id, blocks, markUnread: false }),
+      );
+    }
   }
 }
 

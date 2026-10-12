@@ -483,16 +483,11 @@ model Thread {
   userId                      String
   createdAt                   DateTime   @default(now())
   nextEventSeq                Int        @default(0)
-  nextMessageSeq              Int        @default(0)
-  historyCompactedUpToSeq     Int?
-  historyCompactionSummary    String?    @db.Text
-  historyCompactionGeneration Int        @default(0)
   unread                      Boolean    @default(false)
   // The main session. The database fills it: a uuid default, and the threads_create_main_session
   // trigger inserts the matching sessions row, so every thread has its log from its first insert.
   sessionId                   String     @unique @default(dbgenerated("(gen_random_uuid())::text"))
   sessions                    ConversationSession[]
-  messages                    Message[]
   events                      Event[]
   tasks                       Task[]
   runs                        Run[]
@@ -500,33 +495,6 @@ model Thread {
 
   @@index([spaceId])
   @@map("threads")
-}
-
-model Message {
-  id               String    @id @default(cuid())
-  threadId         String
-  thread           Thread    @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  seq              Int
-  role             String
-  blocks           Json
-  botId            String?
-  replyToMessageId String?
-  replyQuote       String?
-  replyTo          Message?  @relation("MessageReplies", fields: [replyToMessageId], references: [id], onDelete: SetNull)
-  replies          Message[] @relation("MessageReplies")
-  runId            String?
-  clientNonce      String?
-  sourceRuns            Run[]             @relation("RunSourceMessage")
-  externalTranscriptFor  ExternalMessage?
-  steeringMessages SteeringMessage[]
-  previewArtifacts Artifact[]        @relation("LinkPreviewArtifact")
-  createdAt        DateTime  @default(now())
-
-  @@unique([threadId, seq])
-  @@unique([threadId, clientNonce])
-  @@index([threadId, seq])
-  @@index([replyToMessageId])
-  @@map("messages")
 }
 
 model Event {
@@ -590,7 +558,7 @@ model Run {
   checkpoint           String?
   clientNonce          String?
   sourceMessageId      String?
-  sourceMessage        Message?         @relation("RunSourceMessage", fields: [sourceMessageId], references: [id], onDelete: SetNull)
+  sourceMessage        SessionEntry?    @relation("RunSourceMessage", fields: [sourceMessageId], references: [id], onDelete: SetNull)
   routineId            String?
   routine              Routine?         @relation(fields: [routineId], references: [id], onDelete: SetNull)
   // Inbound webhook runs only: false when the woken routine opted out of approving each action.
@@ -679,6 +647,10 @@ model SessionEntry {
   botId     String?
   runId     String?
   createdAt DateTime            @default(now())
+  sourceRuns            Run[]             @relation("RunSourceMessage")
+  steeringMessages      SteeringMessage[]
+  externalTranscriptFor ExternalMessage?
+  previewArtifacts      Artifact[]        @relation("LinkPreviewArtifact")
 
   @@unique([sessionId, seq])
   @@index([sessionId, type, seq])
@@ -689,7 +661,7 @@ model SessionEntry {
 model SteeringMessage {
   id        String   @id @default(cuid())
   messageId String
-  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  message   SessionEntry @relation(fields: [messageId], references: [id], onDelete: Cascade)
   botId     String
   bot       Bot      @relation(fields: [botId], references: [id], onDelete: Cascade)
   userId    String
@@ -1032,10 +1004,11 @@ model Artifact {
   storageKey String
   createdAt  DateTime   @default(now())
   /// The image of a link preview card, never a user file: kept out of file lists, search and
-  /// attachments. Removed with its message (`previewMessageId` goes null, a sweep deletes it).
+  /// attachments. Removed with the entry it previews (`previewMessageId` goes null, a sweep
+  /// deletes it), or when the person removes the preview.
   isLinkPreview    Boolean  @default(false)
   previewMessageId String?
-  previewMessage   Message? @relation("LinkPreviewArtifact", fields: [previewMessageId], references: [id], onDelete: SetNull)
+  previewMessage   SessionEntry? @relation("LinkPreviewArtifact", fields: [previewMessageId], references: [id], onDelete: SetNull)
 
   @@index([spaceId, botId])
   @@index([groupId])
@@ -1442,7 +1415,7 @@ model ExternalMessage {
   runId                  String?               @unique
   run                    Run?                  @relation(fields: [runId], references: [id], onDelete: SetNull)
   threadMessageId        String?               @unique
-  threadMessage          Message?              @relation(fields: [threadMessageId], references: [id], onDelete: SetNull)
+  threadMessage          SessionEntry?         @relation(fields: [threadMessageId], references: [id], onDelete: SetNull)
   attempts               Int                   @default(0)
   nextAttemptAt          DateTime?
   lastError              String?

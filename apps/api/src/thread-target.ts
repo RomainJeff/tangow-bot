@@ -27,7 +27,7 @@ import {
   runFailureError,
 } from "@rakazo/core";
 import {
-  appendEventInTransaction,
+  blocksOf,
   conversationRunFilter,
   createGroupRepos,
   createRepos,
@@ -41,7 +41,10 @@ import {
   type PrismaClient,
   progressSinceLastEntry,
   resumeAskWithComposerTextInTransaction,
+  runsOfMessage,
   type ThreadEvents,
+  threadEntryByNonce,
+  threadEventSeq,
   threadOfSession,
   touchGroupUpdatedAt,
 } from "@rakazo/db";
@@ -160,6 +163,26 @@ function isPeerRunRow(run: { trigger: string }): boolean {
   return run.trigger === "bot_message";
 }
 
+/** The blocks of the message a reply targets in the thread: a person's, or a bot's whole run. */
+async function repliedBlocks(
+  tx: Prisma.TransactionClient,
+  threadId: string,
+  entryId: string,
+): Promise<MessageBlock[] | null> {
+  const target = await tx.sessionEntry.findFirst({
+    where: { id: entryId, session: { threadId, kind: "thread" } },
+    select: { sessionId: true, runId: true, payload: true },
+  });
+  if (!target) return null;
+  if (!target.runId) return blocksOf(target);
+  const run = await tx.sessionEntry.findMany({
+    where: { sessionId: target.sessionId, runId: target.runId, type: "assistant.text" },
+    orderBy: { seq: "asc" },
+    select: { payload: true },
+  });
+  return run.flatMap(blocksOf);
+}
+
 function quoteAppearsInBlocks(quote: string, blocks: MessageBlock[]): boolean {
   const excerpt = flattenForQuoteMatch(quote);
   if (!excerpt) return false;
@@ -245,77 +268,35 @@ async function enqueueRunsNeedingContinue(
   );
 }
 
-async function findSendReceipt(prisma: PrismaClient, threadId: string, clientNonce: string) {
-  return prisma.message.findUnique({
-    where: { threadId_clientNonce: { threadId, clientNonce } },
-    include: { sourceRuns: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] } },
-  });
-}
-
 async function replayExistingSend(
   deps: { prisma: PrismaClient; events: ThreadEvents; jobs: JobPublisher },
   threadId: string,
   clientNonce: string | undefined,
 ) {
   if (!clientNonce) return null;
-  const message = await findSendReceipt(deps.prisma, threadId, clientNonce);
+  const message = await threadEntryByNonce(deps.prisma, threadId, clientNonce);
   if (!message) return null;
-  const receiptEvent = await deps.prisma.event.findFirst({
-    where: {
-      threadId,
-      type: "thread.message.created",
-      payload: { path: ["messageId"], equals: message.id },
-    },
-    orderBy: { seq: "desc" },
-    select: { payload: true },
-  });
-  const receiptRunIds = sendEventRunIds(receiptEvent?.payload);
-  const receiptRuns = receiptRunIds.length
-    ? await deps.prisma.run.findMany({ where: { id: { in: receiptRunIds } } })
-    : [];
-  const receiptRunById = new Map(receiptRuns.map((run) => [run.id, run]));
-  const orderedReceiptRuns = receiptRunIds.flatMap((id) => {
-    const run = receiptRunById.get(id);
-    return run ? [run] : [];
-  });
-  const linkedRun =
-    message.sourceRuns[0] ??
-    (message.runId ? await deps.prisma.run.findUnique({ where: { id: message.runId } }) : null);
-  if (!linkedRun && orderedReceiptRuns.length === 0) return null;
-  const runs = orderedReceiptRuns.length
-    ? orderedReceiptRuns
-    : message.sourceRuns.length
-      ? message.sourceRuns
-      : [linkedRun!];
+  const { created, steered, answered } = await runsOfMessage(deps.prisma, message);
+  const runs = [...created, ...steered, ...answered];
+  if (runs.length === 0) return null;
   await enqueueRunsNeedingContinue(deps.jobs, runs);
-  const latestEvent = await deps.prisma.event.findFirst({
-    where: { threadId },
-    orderBy: { seq: "desc" },
-    select: { seq: true },
+  await deps.events.notify(threadId, await threadEventSeq(deps.prisma, threadId)).catch((error) => {
+    // Subscribers catch up from the durable event cursor after a missed realtime wake.
+    getLogger().error("thread send realtime notification", error);
   });
-  if (latestEvent) {
-    await deps.events.notify(threadId, latestEvent.seq).catch((error) => {
-      // Subscribers catch up from the durable event cursor after a missed realtime wake.
-      getLogger().error("thread send realtime notification", error);
-    });
-  }
   return sendResult(message, runs);
 }
 
-function sendEventRunIds(payload: Prisma.JsonValue | undefined): string[] {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return [];
-  const runIds = (payload as { runIds?: unknown }).runIds;
-  return Array.isArray(runIds) ? runIds.filter((id): id is string => typeof id === "string") : [];
-}
-
+/** The send's runs in id order, so a replay of the send answers with the same runs alike. */
 function sendResult(message: { seq: number }, runs: Array<{ id: string; taskId: string }>) {
-  const first = runs[0];
+  const ordered = runs.toSorted((a, b) => a.id.localeCompare(b.id));
+  const first = ordered[0];
   if (!first) throw new IsolationError("Send did not create a run");
   return {
     taskId: first.taskId,
     runId: first.id,
     seq: message.seq,
-    runIds: runs.map((run) => run.id),
+    runIds: ordered.map((run) => run.id),
   };
 }
 
@@ -345,7 +326,7 @@ export async function cancelSupersededQueuedRuns(
       threadId: input.threadId,
       botId: { in: input.botIds },
       status: "queued",
-      OR: [{ trigger: "user", sourceMessage: { role: "user" } }, { trigger: "reaction" }],
+      OR: [{ trigger: "user", sourceMessage: { type: "user.message" } }, { trigger: "reaction" }],
       id: { notIn: input.keepRunIds },
     },
     select: { id: true, taskId: true },
@@ -748,20 +729,11 @@ export async function sendThreadMessage(
   const commit = () =>
     deps.prisma.$transaction(async (tx) => {
       if (input.replyToMessageId) {
-        const reply = await tx.message.findFirst({
-          where: { id: input.replyToMessageId, threadId: target.threadId },
-          select: { id: true, blocks: true },
-        });
+        const reply = await repliedBlocks(tx, target.threadId, input.replyToMessageId);
         if (!reply) throw new IsolationError();
         // Client-supplied excerpts are untrusted: drop a mismatch instead of
         // failing the send — the reply still lands, just without the quote.
-        if (
-          replyQuote &&
-          !quoteAppearsInBlocks(
-            replyQuote,
-            Array.isArray(reply.blocks) ? (reply.blocks as MessageBlock[]) : [],
-          )
-        ) {
+        if (replyQuote && !quoteAppearsInBlocks(replyQuote, reply)) {
           replyQuote = undefined;
         }
       }
@@ -825,25 +797,10 @@ export async function sendThreadMessage(
               runId: waitingRun.id,
             },
           });
-          await tx.message.update({ where: { id: message.id }, data: { runId: waitingRun.id } });
-          const event = await appendEventInTransaction(tx, {
-            spaceId: actor.spaceId,
-            threadId: target.threadId,
-            botId: target.botId,
-            type: "thread.message.created",
-            runId: waitingRun.id,
-            payload: {
-              messageId: message.id,
-              role: "user",
-              blocks,
-              replyToMessageId: input.replyToMessageId,
-              replyQuote,
-            },
-          });
           return {
             message,
             runs: [{ id: waitingRun.id, taskId: waitingRun.taskId, status: dismissal.status }],
-            eventSeq: event.seq,
+            eventSeq: await threadEventSeq(tx, target.threadId),
           };
         }
         if (waitingRun) {
@@ -858,28 +815,10 @@ export async function sendThreadMessage(
               message: "Answer the pending ask first.",
             });
           }
-          await tx.message.update({
-            where: { id: message.id },
-            data: { runId: resolution.runId },
-          });
-          const event = await appendEventInTransaction(tx, {
-            spaceId: actor.spaceId,
-            threadId: target.threadId,
-            botId: target.botId,
-            type: "thread.message.created",
-            runId: resolution.runId,
-            payload: {
-              messageId: message.id,
-              role: "user",
-              blocks,
-              replyToMessageId: input.replyToMessageId,
-              replyQuote,
-            },
-          });
           return {
             message,
             runs: [{ id: resolution.runId, taskId: waitingRun.taskId, status: "queued" }],
-            eventSeq: event.seq,
+            eventSeq: await threadEventSeq(tx, target.threadId),
           };
         }
         if (activeRuns.some((run) => !STEERABLE_RUN_STATUSES.has(run.status))) {
@@ -898,22 +837,11 @@ export async function sendThreadMessage(
               runId: active.id,
             },
           });
-          await tx.message.update({ where: { id: message.id }, data: { runId: active.id } });
-          const event = await appendEventInTransaction(tx, {
-            spaceId: actor.spaceId,
-            threadId: target.threadId,
-            botId: target.botId,
-            type: "thread.message.created",
-            runId: active.id,
-            payload: {
-              messageId: message.id,
-              role: "user",
-              blocks,
-              replyToMessageId: input.replyToMessageId,
-              replyQuote,
-            },
-          });
-          return { message, runs: [active], eventSeq: event.seq };
+          return {
+            message,
+            runs: [active],
+            eventSeq: await threadEventSeq(tx, target.threadId),
+          };
         }
         const task = await tx.task.create({
           data: {
@@ -938,28 +866,16 @@ export async function sendThreadMessage(
             sourceMessageId: message.id,
           },
         });
-        await tx.message.update({ where: { id: message.id }, data: { runId: run.id } });
         await cancelSupersededQueuedRuns(tx, {
           threadId: target.threadId,
           botIds: [target.botId],
           keepRunIds: [run.id],
         });
-        const event = await appendEventInTransaction(tx, {
-          spaceId: actor.spaceId,
-          threadId: target.threadId,
-          botId: target.botId,
-          type: "thread.message.created",
-          runId: run.id,
-          payload: {
-            messageId: message.id,
-            role: "user",
-            blocks,
-            runIds: [run.id],
-            replyToMessageId: input.replyToMessageId,
-            replyQuote,
-          },
-        });
-        return { message, runs: [run], eventSeq: event.seq };
+        return {
+          message,
+          runs: [run],
+          eventSeq: await threadEventSeq(tx, target.threadId),
+        };
       }
 
       const members = await lockAndLoadGroupMembers(tx, actor, target);
@@ -1083,34 +999,15 @@ export async function sendThreadMessage(
         runs.push(run);
         createdRuns.push(run);
       }
-      const firstRun = runs[0];
-      if (firstRun) {
-        await tx.message.update({ where: { id: message.id }, data: { runId: firstRun.id } });
-        if (createdRuns.length) {
-          await cancelSupersededQueuedRuns(tx, {
-            threadId: target.threadId,
-            botIds: createdRuns.map((run) => run.botId),
-            keepRunIds: createdRuns.map((run) => run.id),
-          });
-        }
+      if (createdRuns.length) {
+        await cancelSupersededQueuedRuns(tx, {
+          threadId: target.threadId,
+          botIds: createdRuns.map((run) => run.botId),
+          keepRunIds: createdRuns.map((run) => run.id),
+        });
       }
       await touchGroupUpdatedAt(tx, target.groupId);
-      const event = await appendEventInTransaction(tx, {
-        spaceId: actor.spaceId,
-        threadId: target.threadId,
-        botId: eventBotId,
-        type: "thread.message.created",
-        runId: firstRun?.id ?? activeRuns[0]?.id,
-        payload: {
-          messageId: message.id,
-          role: "user",
-          blocks,
-          runIds: runs.map((run) => run.id),
-          replyToMessageId: input.replyToMessageId,
-          replyQuote,
-        },
-      });
-      return { message, runs, eventSeq: event.seq };
+      return { message, runs, eventSeq: await threadEventSeq(tx, target.threadId) };
     });
 
   const committed = await withSerializableRetry(commit).catch(async (error) => {
@@ -1150,7 +1047,6 @@ export async function enqueueLinkPreview(
  */
 export async function reactToThreadMessage(
   deps: { prisma: PrismaClient },
-  actor: Actor,
   target: ThreadTarget,
   input: {
     messageId: string;
@@ -1160,18 +1056,12 @@ export async function reactToThreadMessage(
 ) {
   return deps.prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM threads WHERE id = ${target.threadId} FOR UPDATE`;
-    const parent = await tx.message.findFirst({
-      where: { id: input.messageId, threadId: target.threadId },
+    const parent = await tx.sessionEntry.findFirst({
+      where: { id: input.messageId, session: { threadId: target.threadId, kind: "thread" } },
       select: { id: true },
     });
     if (!parent) throw new IsolationError();
-    const existing = await tx.message.findUnique({
-      where: {
-        threadId_clientNonce: { threadId: target.threadId, clientNonce: input.clientNonce },
-      },
-      select: { id: true },
-    });
-    if (existing) return { eventSeq: null };
+    if (await threadEntryByNonce(tx, target.threadId, input.clientNonce)) return { eventSeq: null };
     const botId = target.kind === "bot" ? target.botId : target.memberBotIds[0];
     if (!botId) throw new IsolationError();
     const blocks: MessageBlock[] = [{ kind: "text", text: input.reaction }];
@@ -1184,14 +1074,7 @@ export async function reactToThreadMessage(
       feedBotId: botId,
     });
     if (target.kind === "group") await touchGroupUpdatedAt(tx, target.groupId);
-    const event = await appendEventInTransaction(tx, {
-      spaceId: actor.spaceId,
-      threadId: target.threadId,
-      botId,
-      type: "thread.message.created",
-      payload: { messageId: message.id, role: "user", blocks, replyToMessageId: parent.id },
-    });
-    return { eventSeq: event.seq };
+    return { eventSeq: await threadEventSeq(tx, target.threadId), messageId: message.id };
   });
 }
 
@@ -1219,7 +1102,7 @@ export async function stopThreadRuns(
     await tx.steeringMessage.deleteMany({
       where: {
         botId: { in: target.kind === "bot" ? [target.botId] : target.memberBotIds },
-        message: { threadId: target.threadId },
+        message: { session: { threadId: target.threadId, kind: "thread" } },
       },
     });
     // Snapshot teardown coordinates before commit. Once cancellation becomes

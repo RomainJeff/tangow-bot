@@ -2,9 +2,10 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { ComposioEmulator } from "@rakazo/adapters";
+import type { ThreadSnapshot } from "@rakazo/contracts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { createApp } from "../../../apps/api/src/app.ts";
-import { sessionCookieHeader } from "./index.js";
+import { sessionCookieHeader, threadMessages } from "./index.js";
 
 type App = { request: (input: string, init?: RequestInit) => Promise<Response> };
 type AppHandles = Awaited<ReturnType<typeof createApp>>;
@@ -155,18 +156,14 @@ describeWithDatabase("structured @ mention targets", () => {
       groupId: group.id,
       text: messageText,
     });
-    const groupSnap = await rpc<{
-      messages: Array<{ blocks: Array<{ kind: string; text?: string }> }>;
-    }>(app, cookie, "threads/get", { groupId: group.id });
-    const botSnap = await rpc<{
-      messages: Array<{ blocks: Array<{ kind: string; text?: string }> }>;
-    }>(app, cookie, "threads/get", { botId: botA.id });
-    const groupHasMessage = groupSnap.messages.some((message) =>
-      message.blocks.some((block) => block.kind === "text" && block.text?.includes(messageText)),
-    );
-    const botHasMessage = botSnap.messages.some((message) =>
-      message.blocks.some((block) => block.kind === "text" && block.text?.includes(messageText)),
-    );
+    const groupSnap = await rpc<ThreadSnapshot>(app, cookie, "threads/get", { groupId: group.id });
+    const botSnap = await rpc<ThreadSnapshot>(app, cookie, "threads/get", { botId: botA.id });
+    const says = (snapshot: ThreadSnapshot) =>
+      threadMessages(snapshot).some((message) =>
+        message.blocks.some((block) => block.kind === "text" && block.text.includes(messageText)),
+      );
+    const groupHasMessage = says(groupSnap);
+    const botHasMessage = says(botSnap);
     expect(groupHasMessage).toBe(true);
     expect(botHasMessage).toBe(false);
   });

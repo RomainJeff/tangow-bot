@@ -2,14 +2,14 @@ import type { AgentRunRequest, SemanticMemoryRecallRequest, SessionLog } from "@
 import type { MessageBlock, SessionEntry, SessionId } from "@rakazo/contracts";
 import { EntryId, EntrySeq, SessionEntrySchema } from "@rakazo/contracts";
 import { createThreadEvents } from "@rakazo/db";
+import type { PgliteDatabase } from "@rakazo/db/pglite.test-support";
+import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
 import type { LogEvent } from "@rakazo/logging";
 import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
 import { createRunExecutor } from "./executor.js";
 import { formatRecalledMemory } from "./history-compaction.js";
-import type { PgliteDatabase } from "./session-log/pglite.js";
-import { openPgliteDatabase } from "./session-log/pglite.js";
 import { PostgresSessionLog } from "./session-log/postgres.js";
 import { recordingSessionLog } from "./session-log/recording.test-support.js";
 
@@ -63,7 +63,8 @@ function fixture(
     page?: SessionEntry[];
     clearSeq?: number;
     run?: Record<string, unknown>;
-    source?: { role: string; blocks: unknown[] };
+    /** The entry that woke the run, as its type and payload. */
+    source?: { type: string; payload: Record<string, unknown> };
     groupMembers?: Array<{ id: string; name: string }>;
     compaction?: boolean;
     model?: { provider: string; id: string };
@@ -96,6 +97,7 @@ function fixture(
   const prisma = {
     sessionEntry: {
       ...log.sessionEntry,
+      findUnique: vi.fn(async () => options.source ?? null),
       findFirst: vi.fn(async () =>
         options.clearSeq === undefined ? null : { seq: options.clearSeq },
       ),
@@ -142,11 +144,6 @@ function fixture(
           bot: { ...member, title: "", description: "" },
         })),
       })),
-    },
-    message: {
-      findUnique: vi.fn(async () => options.source ?? null),
-      findFirst: vi.fn(async () => null),
-      findMany: vi.fn(async () => []),
     },
     task: {
       findUniqueOrThrow: vi.fn(async () => ({ id: run.taskId, prompt: "What did Ava decide?" })),
@@ -615,7 +612,7 @@ describe("a channel run's history, read from the database", () => {
         trigger: "messaging",
         sourceMessageId: source.messageId,
       },
-      source: { role: "user", blocks: [latest] },
+      source: { type: "user.message", payload: { blocks: [latest] } },
     }).history();
 
     expect(history.map(({ role, content }) => ({ role, content }))).toEqual([

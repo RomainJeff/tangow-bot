@@ -12,6 +12,8 @@ import type { EntryId, SessionEntry, SessionId } from "@rakazo/contracts";
 import { EntrySeq } from "@rakazo/contracts";
 import { projectInferenceTurns } from "@rakazo/core";
 import { createThreadEvents, rewindThread } from "@rakazo/db";
+import type { PgliteDatabase } from "@rakazo/db/pglite.test-support";
+import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
 import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { CompactHistoryDeps } from "./history-compaction.js";
@@ -28,8 +30,6 @@ import {
   selectHistoryWindow,
   shouldEnqueueCompaction,
 } from "./history-compaction.js";
-import type { PgliteDatabase } from "./session-log/pglite.js";
-import { openPgliteDatabase } from "./session-log/pglite.js";
 import { PostgresSessionLog } from "./session-log/postgres.js";
 
 describe("shouldEnqueueCompaction", () => {

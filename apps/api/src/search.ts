@@ -5,6 +5,8 @@ import { Prisma, type PrismaClient } from "@rakazo/db";
 const SEARCH_LIMIT = 25;
 /** Cap name matches so content hits (messages/files/links/routines) keep most of the budget. */
 const CONVERSATION_HIT_LIMIT = 5;
+/** The entries of a thread's main session that hold what someone said, as message blocks. */
+const MESSAGE_ENTRY_TYPES = Prisma.sql`('user.message', 'assistant.text', 'bot.text')`;
 
 async function findArtifactMessages(
   prisma: PrismaClient,
@@ -22,14 +24,16 @@ async function findArtifactMessages(
       SELECT candidate."artifactId", message.id, message.seq
       FROM (VALUES ${candidates}) AS candidate("artifactId", "targetId")
       CROSS JOIN LATERAL (
-        SELECT m.id, m.seq
-        FROM messages m
-        INNER JOIN threads t ON t.id = m."threadId"
+        SELECT e.id, e.seq
+        FROM session_entries e
+        INNER JOIN sessions s ON s.id = e."sessionId" AND s.kind = 'thread'
+        INNER JOIN threads t ON t.id = s."threadId"
         WHERE t."spaceId" = ${actor.spaceId}
           AND t."userId" = ${actor.userId}
           AND ${targetColumn} = candidate."targetId"
-          AND m.blocks::text ILIKE ('%' || candidate."artifactId" || '%')
-        ORDER BY m."createdAt" DESC
+          AND e.type IN ${MESSAGE_ENTRY_TYPES}
+          AND (e.payload -> 'blocks')::text ILIKE ('%' || candidate."artifactId" || '%')
+        ORDER BY e.seq DESC
         LIMIT 1
       ) message
     `,
@@ -235,15 +239,18 @@ export async function querySpaceSearch(
       botName: string;
     }>
   >`
-    SELECT m.id, m."threadId", m.seq, m.blocks, b.id AS "botId", b.name AS "botName"
-    FROM messages m
-    INNER JOIN threads t ON t.id = m."threadId"
+    SELECT e.id, t.id AS "threadId", e.seq, e.payload -> 'blocks' AS blocks,
+      b.id AS "botId", b.name AS "botName"
+    FROM session_entries e
+    INNER JOIN sessions s ON s.id = e."sessionId" AND s.kind = 'thread'
+    INNER JOIN threads t ON t.id = s."threadId"
     INNER JOIN bots b ON b.id = t."botId"
     WHERE t."spaceId" = ${actor.spaceId}
       AND t."userId" = ${actor.userId}
       AND b."archivedAt" IS NULL
-      AND jsonb_path_query_array(m.blocks, '$[*] ? (!exists(@.kind) || @.kind != "link_preview")')::text ILIKE ${pattern}
-    ORDER BY m."createdAt" DESC
+      AND e.type IN ${MESSAGE_ENTRY_TYPES}
+      AND jsonb_path_query_array(e.payload -> 'blocks', '$[*] ? (!exists(@.kind) || @.kind != "link_preview")')::text ILIKE ${pattern}
+    ORDER BY e."createdAt" DESC
     LIMIT ${SEARCH_LIMIT}
   `;
 
@@ -268,15 +275,17 @@ export async function querySpaceSearch(
       groupName: string;
     }>
   >`
-    SELECT m.id, m."threadId", m.seq, m.blocks, g.id AS "groupId", g.name AS "groupName"
-    FROM messages m
-    INNER JOIN threads t ON t.id = m."threadId"
+    SELECT e.id, t.id AS "threadId", e.seq, e.payload -> 'blocks' AS blocks,
+      g.id AS "groupId", g.name AS "groupName"
+    FROM session_entries e
+    INNER JOIN sessions s ON s.id = e."sessionId" AND s.kind = 'thread'
+    INNER JOIN threads t ON t.id = s."threadId"
     INNER JOIN chat_groups g ON g.id = t."groupId"
     WHERE t."spaceId" = ${actor.spaceId}
       AND t."userId" = ${actor.userId}
-      AND t."groupId" IS NOT NULL
-      AND jsonb_path_query_array(m.blocks, '$[*] ? (!exists(@.kind) || @.kind != "link_preview")')::text ILIKE ${pattern}
-    ORDER BY m."createdAt" DESC
+      AND e.type IN ${MESSAGE_ENTRY_TYPES}
+      AND jsonb_path_query_array(e.payload -> 'blocks', '$[*] ? (!exists(@.kind) || @.kind != "link_preview")')::text ILIKE ${pattern}
+    ORDER BY e."createdAt" DESC
     LIMIT ${SEARCH_LIMIT}
   `;
 

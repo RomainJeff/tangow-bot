@@ -5,9 +5,11 @@ import {
   resolveLinkPreviewWithDeviceHead,
   runLinkPreviewJob,
 } from "@rakazo/adapters";
+import type { MessageBlock } from "@rakazo/contracts";
 import { createLogger, installLogger } from "@rakazo/logging";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createFakeThreadDb } from "./fake-thread-db.js";
+import { openThreadDb, type ThreadDb } from "./thread-db.js";
 
 // A 1 x 1 PNG: real bytes for the server to fetch and re-encode.
 const PNG = Buffer.from(
@@ -25,10 +27,13 @@ const refusal = () => new Response("no", { status: 403 });
 
 afterEach(() => installLogger(createLogger({ service: "rakazo-worker", level: "off", sinks: [] })));
 
-/** news.test refuses the server; its images (img.test) are open. */
-function site(route?: (url: string) => Response | Promise<Response>) {
-  const db = createFakeThreadDb();
-  db.seedThread({ id: "thread-1" });
+/** news.test refuses the server; its images (img.test) are open. Its cache is a fake's, or the store's. */
+function site(
+  route?: (url: string) => Response | Promise<Response>,
+  thread?: Pick<ThreadDb, "prisma" | "artifacts">,
+) {
+  const fake = createFakeThreadDb();
+  const store = thread ?? fake;
   const requests: string[] = [];
   const fetchMock = vi.fn<typeof fetch>(async (input) => {
     const url = String(input);
@@ -39,16 +44,16 @@ function site(route?: (url: string) => Response | Promise<Response>) {
     return refusal();
   });
   const deps: LinkPreviewServiceDeps & LinkPreviewJobDeps = {
-    prisma: db.prisma,
-    artifacts: db.artifacts,
+    prisma: store.prisma,
+    artifacts: store.artifacts,
     events: { notify: vi.fn(async () => undefined) },
     readDeps: {
       fetchResource: createLinkPreviewFetcherForTests({ fetch: fetchMock }),
       resolveHostname: publicResolver,
     },
   };
-  const cacheRows = () => [...db.tables.linkPreviewCache.values()];
-  return { db, deps, requests, cacheRows };
+  const cacheRows = () => [...fake.tables.linkPreviewCache.values()];
+  return { db: fake, deps, requests, cacheRows };
 }
 
 describe("the server tells the device it may read (CA 81, CA 54)", () => {
@@ -321,29 +326,31 @@ describe("the server takes a device's page head (CA 84)", () => {
 });
 
 describe("the device's card serves its reader's own messages and threads, and no one else (CA 85)", () => {
-  const text = (value: string) => ({ kind: "text", text: value });
-  const card = (blocks: unknown[] | undefined) =>
-    blocks?.find((block) => (block as { kind?: string }).kind === "link_preview") as
-      | Record<string, unknown>
-      | undefined;
+  let db: ThreadDb;
+  beforeAll(async () => {
+    db = await openThreadDb();
+  }, 60_000);
+  beforeEach(() => db.reset());
+  afterAll(() => db.close());
 
-  async function withDeviceCard(spaceId = "space-1") {
-    const ctx = site();
-    if (spaceId !== "space-1") {
-      ctx.db.seedThread({ id: "thread-2", spaceId });
-    }
+  const text = (value: string): MessageBlock => ({ kind: "text", text: value });
+  const card = async (messageId: string) => (await db.previewOf(messageId)).card;
+
+  async function withDeviceCard() {
+    await db.seedThread({ id: "thread-1" });
+    const ctx = site(undefined, db);
     await resolveLinkPreviewWithDeviceHead(ctx.deps, scope, ARTICLE, HEAD);
     ctx.requests.length = 0;
     return ctx;
   }
 
   it("gives the message that is sent the full card, with no new request", async () => {
-    const { db, deps, requests } = await withDeviceCard();
-    db.seedMessage({ id: "m1", threadId: "thread-1", blocks: [text(`look ${ARTICLE}`)] });
+    const { deps, requests } = await withDeviceCard();
+    await db.seedMessage({ id: "m1", threadId: "thread-1", blocks: [text(`look ${ARTICLE}`)] });
 
     await runLinkPreviewJob(deps, { messageId: "m1" });
 
-    expect(card(db.blocksOf("m1"))).toMatchObject({
+    expect(await card("m1")).toMatchObject({
       url: ARTICLE,
       format: "compact",
       title: "Le vrai titre",
@@ -353,52 +360,46 @@ describe("the device's card serves its reader's own messages and threads, and no
   });
 
   it("gives a bot that sends the same link within the day the full card too", async () => {
-    const { db, deps, requests } = await withDeviceCard();
-    db.seedRun({ id: "run-1", threadId: "thread-1" });
-    db.seedMessage({
-      id: "final",
+    const { deps, requests } = await withDeviceCard();
+    await db.seedRun({
+      id: "run-1",
       threadId: "thread-1",
-      role: "bot",
-      runId: "run-1",
-      blocks: [text(`Source: ${ARTICLE}`)],
+      messages: [{ id: "final", blocks: [text(`Source: ${ARTICLE}`)] }],
     });
 
     await runLinkPreviewJob(deps, { runId: "run-1" });
 
-    expect(card(db.blocksOf("final"))).toMatchObject({ title: "Le vrai titre" });
+    expect(await card("final")).toMatchObject({ title: "Le vrai titre" });
     expect(requests).toEqual([]);
   });
 
   it("does not give it to another member of the space, whose message keeps the server's fallback", async () => {
-    const { db, deps, requests } = await withDeviceCard();
-    db.seedThread({ id: "thread-3", spaceId: "space-1", userId: "user-2", botId: "bot-1" });
-    db.seedMessage({ id: "m3", threadId: "thread-3", blocks: [text(`look ${ARTICLE}`)] });
-    db.seedRun({ id: "run-3", threadId: "thread-3" });
-    db.seedMessage({
-      id: "final-3",
+    const { deps, requests } = await withDeviceCard();
+    await db.seedThread({ id: "thread-3", userId: "user-2", botId: "bot-3" });
+    await db.seedMessage({ id: "m3", threadId: "thread-3", blocks: [text(`look ${ARTICLE}`)] });
+    await db.seedRun({
+      id: "run-3",
       threadId: "thread-3",
-      role: "bot",
-      runId: "run-3",
-      blocks: [text(`Source: ${ARTICLE}`)],
+      messages: [{ id: "final-3", blocks: [text(`Source: ${ARTICLE}`)] }],
     });
 
     await runLinkPreviewJob(deps, { messageId: "m3" });
     await runLinkPreviewJob(deps, { runId: "run-3" });
 
     // The space's cached refusal answers: the fallback card, no new request, no device title.
-    expect(card(db.blocksOf("m3"))).toMatchObject({ title: "Le vrai titre du jour" });
-    expect(card(db.blocksOf("final-3"))).toMatchObject({ title: "Le vrai titre du jour" });
+    expect(await card("m3")).toMatchObject({ title: "Le vrai titre du jour" });
+    expect(await card("final-3")).toMatchObject({ title: "Le vrai titre du jour" });
     expect(requests).toEqual([]);
   });
 
   it("does not give it to another space, which reads (and is refused) for itself", async () => {
-    const { db, deps, requests } = await withDeviceCard();
-    db.seedThread({ id: "thread-2", spaceId: "space-2", userId: "user-2", botId: "bot-2" });
-    db.seedMessage({ id: "m2", threadId: "thread-2", blocks: [text(`look ${ARTICLE}`)] });
+    const { deps, requests } = await withDeviceCard();
+    await db.seedThread({ id: "thread-2", spaceId: "space-2", userId: "user-2", botId: "bot-2" });
+    await db.seedMessage({ id: "m2", threadId: "thread-2", blocks: [text(`look ${ARTICLE}`)] });
 
     await runLinkPreviewJob(deps, { messageId: "m2" });
 
-    expect(card(db.blocksOf("m2"))).toMatchObject({ title: "Le vrai titre du jour" });
+    expect(await card("m2")).toMatchObject({ title: "Le vrai titre du jour" });
     expect(requests).toContain(ARTICLE);
     expect(requests).not.toContain(IMAGE);
   });

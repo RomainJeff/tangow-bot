@@ -24,7 +24,6 @@ import { releaseBotScreen } from "./computer-lifecycle.js";
 import { toComputerRef } from "./computer-support.js";
 import { checkpointAndRecordComputerWorkspace } from "./computer-workspace.js";
 import { resolveAgentHomePath } from "./home.js";
-import { removePiBotSessions } from "./pi-session.js";
 
 export function confirmSpawnedBotName(confirmName: string, botName: string) {
   if (confirmName !== botName) {
@@ -48,7 +47,6 @@ export async function spawnBot(
       spaceId: string;
       userId: string;
     };
-    runId: string;
     spawnKey: string;
     name: string;
     title?: string;
@@ -81,7 +79,6 @@ export async function spawnBot(
       initialMessage: {
         role: "system",
         blocks: [{ kind: "meta", text: `Created by ${input.spawnedBy.name}` }],
-        runId: input.runId,
       },
     });
   } catch (error) {
@@ -112,7 +109,6 @@ export async function spawnBot(
       userId: input.spawnedBy.userId,
       botId: created.id,
       threadId: created.threadId,
-      sourceRunId: input.runId,
       spawnKey: input.spawnKey,
       prompt,
     });
@@ -138,7 +134,6 @@ async function ensureSpawnRun(
     userId: string;
     botId: string;
     threadId: string;
-    sourceRunId: string;
     spawnKey: string;
     prompt: string;
   },
@@ -160,7 +155,6 @@ async function ensureSpawnRun(
         threadId: input.threadId,
         role: "user",
         blocks: [{ kind: "text", text: input.prompt }],
-        runId: input.sourceRunId,
         clientNonce,
       });
       const task = await tx.task.create({
@@ -367,8 +361,6 @@ export async function destroyBot(
   if (dedicated?.providerRef) {
     await deps.sandbox.destroy(toComputerRef(dedicated), context).catch(() => undefined);
   }
-  // Keep the bot deletion transaction from committing if raw transcript cleanup fails.
-  await removePiBotSessions(deps.dataDir, bot.userId, bot.id);
   const deletion = await withTransactionRetry(() =>
     deps.prisma.$transaction(async (tx) => {
       const locked = await tx.$queryRaw<Array<{ id: string; webhookSecretId: string | null }>>`

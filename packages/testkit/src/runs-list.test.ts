@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type { BotActivityOutput, Routine, RunActivityRow, RunRecap } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
+import { createBotMessageInTransaction } from "@rakazo/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { sessionCookieHeader } from "./index.js";
 
@@ -546,19 +547,15 @@ async function seedBotMessage(
   run: { id: string; threadId: string },
   text: string,
 ) {
-  const last = await prisma.message.findFirst({
-    where: { threadId: run.threadId },
-    orderBy: { seq: "desc" },
-  });
-  return prisma.message.create({
-    data: {
+  const { botId } = await prisma.run.findUniqueOrThrow({ where: { id: run.id } });
+  return prisma.$transaction((tx) =>
+    createBotMessageInTransaction(tx, {
       threadId: run.threadId,
-      seq: (last?.seq ?? 0) + 1,
-      role: "bot",
-      blocks: [{ kind: "text", text }],
+      botId,
       runId: run.id,
-    },
-  });
+      blocks: [{ kind: "text", text }],
+    }),
+  );
 }
 
 async function createBot(app: App, cookie: string, name: string) {

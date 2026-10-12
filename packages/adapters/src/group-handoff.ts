@@ -1,11 +1,9 @@
 import { runContinueJob } from "@rakazo/adapter-kit";
-import type { EntryId, SessionId } from "@rakazo/contracts";
-import { MessageBlock } from "@rakazo/contracts";
+import type { SessionId } from "@rakazo/contracts";
 import { botMessageHopExhausted, nextBotMessageHop, renderGroupMembersContext } from "@rakazo/core";
 import {
   appendEventInTransaction,
   appendSessionEntryInTransaction,
-  createThreadMessageInTransaction,
   IsolationError,
   lockOwnedGroup,
   type PrismaClient,
@@ -30,7 +28,6 @@ export async function handoffToGroupBot(
   groupId: string,
   input: { bot_id?: string; confirm_name?: string; message: string },
 ) {
-  const deliveryKey = `group-handoff:${run.id}`;
   const committed = await deps.prisma.$transaction(async (tx) => {
     try {
       await lockOwnedGroup(tx, run, groupId);
@@ -65,7 +62,7 @@ export async function handoffToGroupBot(
           sourceMessageId: true,
           routineId: true,
           trigger: true,
-          sourceMessage: { select: { blocks: true } },
+          sourceMessage: { select: { type: true, payload: true } },
         },
       }),
     ]);
@@ -74,8 +71,9 @@ export async function handoffToGroupBot(
       return { error: "source bot is no longer a group member" } as const;
     }
 
-    const existing = await tx.message.findUnique({
-      where: { threadId_clientNonce: { threadId: run.threadId, clientNonce: deliveryKey } },
+    // A run hands off once: a retry finds the handoff it already wrote.
+    const existing = await tx.sessionEntry.findFirst({
+      where: { runId: run.id, type: "handoff" },
       select: {
         sourceRuns: {
           orderBy: { createdAt: "asc" },
@@ -106,18 +104,10 @@ export async function handoffToGroupBot(
       return { error: "handoff target is not a group member" } as const;
     }
 
-    let sourceBlocks: MessageBlock[] = [];
-    if (activeSource.sourceMessage) {
-      const parsedSource = MessageBlock.array().safeParse(activeSource.sourceMessage.blocks);
-      if (!parsedSource.success) {
-        return { error: "cannot verify the group handoff chain" } as const;
-      }
-      sourceBlocks = parsedSource.data;
-    }
-    const sourceHandoff = sourceBlocks.find(
-      (block): block is Extract<MessageBlock, { kind: "handoff" }> => block.kind === "handoff",
-    );
-    if (sourceHandoff?.fromBotId === targetId) {
+    const source = activeSource.sourceMessage;
+    const handedBy =
+      source?.type === "handoff" ? (source.payload as { fromBotId?: string }).fromBotId : undefined;
+    if (handedBy === targetId) {
       return {
         error:
           "do not hand this stage back to its sender; post the result in the shared thread instead",
@@ -131,23 +121,8 @@ export async function handoffToGroupBot(
       } as const;
     }
 
-    const handoffBlock: MessageBlock = {
-      kind: "handoff",
-      fromBotId: run.botId,
-      toBotId: targetId,
-      text: input.message,
-      hop,
-    };
-    const message = await createThreadMessageInTransaction(tx, {
-      threadId: run.threadId,
-      role: "bot",
-      blocks: [handoffBlock],
-      botId: run.botId,
-      runId: run.id,
-      clientNonce: deliveryKey,
-    });
-    await appendSessionEntryInTransaction(tx, {
-      id: message.id as EntryId,
+    await tx.thread.update({ where: { id: run.threadId }, data: { unread: true } });
+    const handoff = await appendSessionEntryInTransaction(tx, {
       type: "handoff",
       sessionId: activeSource.sessionId as SessionId,
       botId: run.botId,
@@ -173,7 +148,7 @@ export async function handoffToGroupBot(
         userId: run.userId,
         status: "queued",
         trigger: "follow_up",
-        sourceMessageId: message.id,
+        sourceMessageId: handoff.id,
       },
     });
     const event = await appendEventInTransaction(tx, {
@@ -183,7 +158,7 @@ export async function handoffToGroupBot(
       type: "group.handoff",
       runId: run.id,
       payload: {
-        messageId: message.id,
+        messageId: handoff.id,
         fromBotId: run.botId,
         toBotId: targetId,
         text: input.message,

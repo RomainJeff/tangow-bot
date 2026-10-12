@@ -103,7 +103,8 @@ const UserMessagePayload = z.object({
 
 const SubagentPayload = z.object({
   callId: z.string().min(1),
-  sessionId: SessionId,
+  /** The helper's own session, absent for a helper from before the log, whose steps were not kept. */
+  sessionId: SessionId.optional(),
   name: z.string(),
   model: RunModel,
   task: z.string(),
@@ -147,6 +148,8 @@ const EntryShapes = z.discriminatedUnion("type", [
        * on: kept even in a hidden peer run.
        */
       toPerson: z.literal(true).optional(),
+      /** Sent before the run's final reply: narration or `message_user` words. */
+      midTurn: z.literal(true).optional(),
     }),
   ),
   runEntry("assistant.reasoning", z.object({ text: z.string() })),

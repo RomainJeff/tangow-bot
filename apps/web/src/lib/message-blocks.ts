@@ -10,7 +10,6 @@ export function isHiddenActivityBlock(block: MessageBlock, showSteps: boolean): 
 const UNRENDERED_BLOCK_KINDS = new Set<MessageBlock["kind"]>([
   "connect",
   "reasoning",
-  "subagent",
   "routine_run",
 ]);
 

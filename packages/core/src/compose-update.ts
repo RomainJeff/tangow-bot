@@ -573,11 +573,11 @@ export interface ComposeUpdatePlanInput {
 /**
  * Ordered work for one Compose update.
  *
- * Migrations are absent on purpose. The `api` service runs `prisma migrate deploy` as the first
- * thing in its own start command, so a recreate already orders them correctly: Compose stops the
- * old container, the new one migrates with the new code, then serves. Running migrations from here
- * would instead apply the new schema while the old process is still answering requests, which is
- * the window this ordering exists to close.
+ * Migrations are absent on purpose. The `api` service migrates (`scripts/backfill-session-log.ts`)
+ * as the first thing in its own start command, so a recreate already orders them correctly:
+ * Compose stops the old container, the new one migrates with the new code, then serves. Running
+ * migrations from here would instead apply the new schema while the old process is still
+ * answering requests, which is the window this ordering exists to close.
  */
 export function composeUpdatePlan(input: ComposeUpdatePlanInput): ComposeUpdateStep[] {
   const steps: ComposeUpdateStep[] = [];

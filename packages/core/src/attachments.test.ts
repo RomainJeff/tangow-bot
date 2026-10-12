@@ -166,18 +166,3 @@ describe("tool traces in history", () => {
     expect(turnOne).toContain("Rollback: run the revert job, then page the on-call.");
   });
 });
-
-describe("peer message history", () => {
-  it("keeps attribution so a later turn knows a bot spoke, not the user", () => {
-    expect(
-      blocksToAgentHistoryText([
-        { kind: "bot_message_received", fromBotId: "b_1", fromBotName: "Researcher", text: "hi" },
-      ]),
-    ).toBe('<bot_message from="Researcher">\nhi\n</bot_message>');
-    expect(
-      blocksToAgentHistoryText([
-        { kind: "bot_message_sent", toBotId: "b_2", toBotName: "Analyst", text: "chart it" },
-      ]),
-    ).toBe("[to Analyst] chart it");
-  });
-});

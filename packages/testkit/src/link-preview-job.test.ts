@@ -3,10 +3,11 @@ import {
   type LinkPreviewReadResult,
   runLinkPreviewJob,
 } from "@rakazo/adapters";
+import type { MessageBlock } from "@rakazo/contracts";
 import { removeLinkPreviewBlock } from "@rakazo/db";
 import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { createFakeThreadDb } from "./fake-thread-db.js";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { openThreadDb, type ThreadDb } from "./thread-db.js";
 
 const PAGE = "https://example.test/articles/one?id=7";
 const png = new Uint8Array([1, 2, 3, 4]);
@@ -18,22 +19,29 @@ const okLarge: LinkPreviewReadResult = {
   image: { bytes: Buffer.from(png), width: 1200, height: 630 },
 };
 
-function setup(
-  options: { read?: LinkPreviewJobDeps["read"]; group?: boolean; spaceId?: string } = {},
+let db: ThreadDb;
+beforeAll(async () => {
+  db = await openThreadDb();
+}, 60_000);
+beforeEach(() => db.reset());
+afterAll(() => db.close());
+
+async function setup(
+  options: {
+    read?: LinkPreviewJobDeps["read"];
+    group?: boolean;
+    spaceId?: string;
+    threadId?: string;
+    botId?: string;
+  } = {},
 ) {
-  const db = createFakeThreadDb();
-  db.seedThread({ id: "thread-1", spaceId: options.spaceId });
-  if (options.group) {
-    const thread = db.tables.threads.get("thread-1")!;
-    thread.botId = null;
-    thread.groupId = "group-1";
-    db.tables.chatGroupMembers.set("m1", {
-      id: "m1",
-      groupId: "group-1",
-      botId: "bot-first",
-      createdAt: new Date(0),
-    });
-  }
+  const { threadId = "thread-1", spaceId, botId } = options;
+  await db.seedThread({
+    id: threadId,
+    spaceId,
+    botId,
+    ...(options.group ? { group: { id: "group-1", memberBotIds: ["bot-first", "bot-b"] } } : {}),
+  });
   const read = vi.fn(options.read ?? (async () => okCompact));
   const notify = vi.fn(async () => undefined);
   const deps: LinkPreviewJobDeps = {
@@ -42,60 +50,47 @@ function setup(
     events: { notify },
     read,
   };
-  return { db, read, notify, deps };
+  return { read, notify, deps };
 }
 
-const text = (value: string) => ({ kind: "text", text: value });
-const card = (blocks: unknown[] | undefined) =>
-  blocks?.find((block) => (block as { kind?: string }).kind === "link_preview") as
-    | Record<string, unknown>
-    | undefined;
+const text = (value: string): MessageBlock => ({ kind: "text", text: value });
+const said = (id: string, blocks: MessageBlock[], threadId = "thread-1") =>
+  db.seedMessage({ id, threadId, blocks });
+const card = async (messageId: string) => (await db.previewOf(messageId)).card;
+const previewArtifacts = () => db.prisma.artifact.findMany({ where: { isLinkPreview: true } });
 
 afterEach(() => installLogger(createLogger({ service: "rakazo-worker", level: "off", sinks: [] })));
 
 describe("link.preview job for a message a person sent", () => {
-  it("appends the card to the stored blocks and emits one thread.message.updated", async () => {
-    const { db, read, notify, deps } = setup();
-    db.seedMessage({ id: "m1", threadId: "thread-1", blocks: [text(`look ${PAGE} ok`)] });
+  it("logs the card against the message and tells the thread once", async () => {
+    const { read, notify, deps } = await setup();
+    await said("m1", [text(`look ${PAGE} ok`)]);
 
     await runLinkPreviewJob(deps, { messageId: "m1" });
 
     expect(read).toHaveBeenCalledTimes(1);
-    const blocks = db.blocksOf("m1")!;
-    expect(blocks).toHaveLength(2);
-    expect(card(blocks)).toEqual({
+    expect(await card("m1")).toEqual({
       kind: "link_preview",
       url: PAGE,
       format: "compact",
       title: "A page",
     });
-    expect(card(blocks)).not.toHaveProperty("site");
-    const [event] = db.eventsOfType("thread.message.updated");
-    expect(event?.payload).toEqual({ messageId: "m1", role: "user", blocks });
-    expect(event?.botId).toBe("bot-1");
-    expect(notify).toHaveBeenCalledWith("thread-1", event?.seq);
-  });
-
-  it("keeps blocks this build does not know when it writes the card", async () => {
-    const { db, deps } = setup();
-    const unknown = { kind: "from_the_future", payload: { n: 1 } };
-    db.seedMessage({ id: "m1", threadId: "thread-1", blocks: [text(PAGE), unknown] });
-
-    await runLinkPreviewJob(deps, { messageId: "m1" });
-
-    expect(db.blocksOf("m1")).toContainEqual(unknown);
-    expect(card(db.blocksOf("m1"))).toBeDefined();
+    const preview = await db.prisma.sessionEntry.findFirstOrThrow({
+      where: { type: "link.preview" },
+    });
+    expect(preview.botId).toBeNull();
+    expect(notify).toHaveBeenCalledTimes(1);
+    expect(notify).toHaveBeenCalledWith("thread-1", expect.any(Number));
   });
 
   it("copies the cached image into an artifact owned like the thread's attachments", async () => {
-    const { db, deps } = setup({ read: async () => okLarge });
-    db.seedMessage({ id: "m1", threadId: "thread-1", blocks: [text(PAGE)] });
+    const { deps } = await setup({ read: async () => okLarge });
+    await said("m1", [text(PAGE)]);
 
     await runLinkPreviewJob(deps, { messageId: "m1" });
 
-    const [artifact] = [...db.tables.artifact.values()];
+    const [artifact] = await previewArtifacts();
     expect(artifact).toMatchObject({
-      isLinkPreview: true,
       previewMessageId: "m1",
       spaceId: "space-1",
       userId: "user-1",
@@ -103,12 +98,12 @@ describe("link.preview job for a message a person sent", () => {
       groupId: null,
       mimeType: "image/webp",
     });
-    expect(card(db.blocksOf("m1"))).toMatchObject({
+    expect(await card("m1")).toMatchObject({
       format: "large",
       image: { artifactId: artifact?.id, width: 1200, height: 630 },
     });
     // The cache keeps its own bytes: deleting the artifact must never empty the cache.
-    const [cached] = [...db.tables.linkPreviewCache.values()];
+    const [cached] = await db.prisma.linkPreviewCache.findMany();
     expect(cached?.imageKey).toBeDefined();
     expect(cached?.imageKey).not.toBe(artifact?.storageKey);
     expect(db.artifacts.keys()).toContain(cached?.imageKey);
@@ -116,168 +111,103 @@ describe("link.preview job for a message a person sent", () => {
   });
 
   it("writes the icon marker on the card image of a site icon, and not on a page image", async () => {
-    const icon = setup({
+    const icon = await setup({
       read: async () => ({
         ...okCompact,
         image: okLarge.ok ? okLarge.image : undefined,
         imageFit: "contain",
       }),
     });
-    icon.db.seedMessage({ id: "m1", threadId: "thread-1", blocks: [text(PAGE)] });
+    await said("m1", [text(PAGE)]);
     await runLinkPreviewJob(icon.deps, { messageId: "m1" });
-    expect(card(icon.db.blocksOf("m1"))).toMatchObject({
-      format: "compact",
-      image: { fit: "contain" },
-    });
+    expect(await card("m1")).toMatchObject({ format: "compact", image: { fit: "contain" } });
 
-    const page = setup({ read: async () => okLarge });
-    page.db.seedMessage({ id: "m1", threadId: "thread-1", blocks: [text(PAGE)] });
-    await runLinkPreviewJob(page.deps, { messageId: "m1" });
-    expect(card(page.db.blocksOf("m1"))?.image).not.toHaveProperty("fit");
+    const page = await setup({
+      read: async () => okLarge,
+      threadId: "thread-2",
+      botId: "bot-2",
+      spaceId: "space-2",
+    });
+    await said("m2", [text(PAGE)], "thread-2");
+    await runLinkPreviewJob(page.deps, { messageId: "m2" });
+    expect((await card("m2"))?.image).not.toHaveProperty("fit");
   });
 
   it("owns the image of a group thread by the group and its first member", async () => {
-    const { db, deps } = setup({ read: async () => okLarge, group: true });
-    db.seedMessage({ id: "m1", threadId: "thread-1", blocks: [text(PAGE)] });
+    const { deps } = await setup({ read: async () => okLarge, group: true });
+    await said("m1", [text(PAGE)]);
 
     await runLinkPreviewJob(deps, { messageId: "m1" });
 
-    const [artifact] = [...db.tables.artifact.values()];
+    const [artifact] = await previewArtifacts();
     expect(artifact).toMatchObject({ groupId: "group-1", botId: "bot-first", userId: "user-1" });
-    expect(db.eventsOfType("thread.message.updated")[0]?.botId).toBe("bot-first");
+    expect(await card("m1")).toBeDefined();
   });
 
   describe("skips (CA 28, CA 57)", () => {
-    const cases: Array<[string, () => (db: ReturnType<typeof createFakeThreadDb>) => void]> = [
+    const cases: Array<[string, () => Promise<void>]> = [
+      ["a message with no link", () => said("m1", [text("hello")])],
+      ["a link in a code fence", () => said("m1", [text(`\`\`\`\n${PAGE}\n\`\`\``)])],
       [
-        "a message with no link",
-        () => (db) => db.seedMessage({ id: "m1", threadId: "thread-1", blocks: [text("hello")] }),
-      ],
-      [
-        "a link in a code fence",
-        () => (db) =>
-          db.seedMessage({
-            id: "m1",
-            threadId: "thread-1",
-            blocks: [text(`\`\`\`\n${PAGE}\n\`\`\``)],
-          }),
-      ],
-      [
-        "a message that already has a card",
-        () => (db) =>
-          db.seedMessage({
-            id: "m1",
-            threadId: "thread-1",
-            blocks: [
-              text(PAGE),
-              { kind: "link_preview", url: PAGE, format: "compact", title: "x" },
-            ],
-          }),
-      ],
-      [
-        "a message that carries the removal marker",
-        () => (db) =>
-          db.seedMessage({
-            id: "m1",
-            threadId: "thread-1",
-            blocks: [text(PAGE), { kind: "link_preview", removed: true }],
-          }),
+        "a message sent with the preview turned off",
+        () => said("m1", [text(PAGE), { kind: "link_preview", removed: true }]),
       ],
       [
         "a link that names a secret in its query",
-        () => (db) =>
-          db.seedMessage({
-            id: "m1",
-            threadId: "thread-1",
-            blocks: [text("https://example.test/page?token=abc")],
-          }),
+        () => said("m1", [text("https://example.test/page?token=abc")]),
       ],
       [
         "a message an external channel brought in",
-        () => (db) => {
-          db.seedMessage({ id: "m1", threadId: "thread-1", blocks: [text(PAGE)] });
-          db.tables.externalMessages.set("e1", { id: "e1", threadMessageId: "m1" });
-        },
+        () =>
+          db.seedMessage({ id: "m1", threadId: "thread-1", blocks: [text(PAGE)], external: true }),
       ],
       [
         "a message with a pending ask",
-        () => (db) =>
-          db.seedMessage({
-            id: "m1",
-            threadId: "thread-1",
-            blocks: [text(PAGE), { kind: "ask", text: "Allow?", status: "pending" }],
-          }),
+        () => said("m1", [text(PAGE), { kind: "ask", text: "Allow?", status: "pending" }]),
       ],
       [
         "an answered ask: the same rule as the screens",
-        () => (db) =>
-          db.seedMessage({
-            id: "m1",
-            threadId: "thread-1",
-            blocks: [text(PAGE), { kind: "ask", text: "Allow?", status: "answered" }],
-          }),
+        () => said("m1", [text(PAGE), { kind: "ask", text: "Allow?", status: "answered" }]),
       ],
       [
         "a routine run card",
-        () => (db) =>
-          db.seedMessage({
-            id: "m1",
-            threadId: "thread-1",
-            blocks: [text(PAGE), { kind: "routine_run", routineName: "r", state: "running" }],
-          }),
+        () => said("m1", [text(PAGE), { kind: "routine_run", routineName: "r", state: "running" }]),
       ],
       [
         "a handoff",
-        () => (db) =>
-          db.seedMessage({
-            id: "m1",
-            threadId: "thread-1",
-            blocks: [{ kind: "handoff", fromBotId: "a", toBotId: "b", text: PAGE }, text(PAGE)],
-          }),
-      ],
-      [
-        "a message between bots",
-        () => (db) =>
-          db.seedMessage({
-            id: "m1",
-            threadId: "thread-1",
-            blocks: [
-              { kind: "bot_message_received", fromBotId: "a", fromBotName: "A", text: PAGE },
-              text(PAGE),
-            ],
-          }),
+        () =>
+          said("m1", [{ kind: "handoff", fromBotId: "a", toBotId: "b", text: PAGE }, text(PAGE)]),
       ],
       [
         "a message that is not the person's",
-        () => (db) =>
-          db.seedMessage({ id: "m1", threadId: "thread-1", role: "bot", blocks: [text(PAGE)] }),
+        () =>
+          db.seedMessage({
+            id: "m1",
+            threadId: "thread-1",
+            blocks: [text(PAGE)],
+            from: { botId: "bot-1" },
+          }),
       ],
     ];
 
     it.each(cases)("reads nothing and writes nothing for %s", async (_name, seed) => {
-      const { db, read, notify, deps } = setup();
-      seed()(db);
-      const before = structuredClone(db.blocksOf("m1"));
+      const { read, notify, deps } = await setup();
+      await seed();
 
       await runLinkPreviewJob(deps, { messageId: "m1" });
 
       expect(read).not.toHaveBeenCalled();
-      expect(db.blocksOf("m1")).toEqual(before);
-      expect(db.eventsOfType("thread.message.updated")).toEqual([]);
-      expect(db.tables.linkPreviewCache.size).toBe(0);
-      expect(db.tables.linkPreviewRead.size).toBe(0);
+      expect(await db.prisma.sessionEntry.count({ where: { type: "link.preview" } })).toBe(0);
+      expect(await db.prisma.linkPreviewCache.count()).toBe(0);
+      expect(await db.prisma.linkPreviewRead.count()).toBe(0);
       expect(notify).not.toHaveBeenCalled();
     });
 
     it("logs nothing at all for a secret link (no read, no cache, no log)", async () => {
-      const { db, deps } = setup();
+      const { deps } = await setup();
       const sink = createTestSink();
       installLogger(createLogger({ service: "rakazo-worker", sinks: [sink] }));
-      db.seedMessage({
-        id: "m1",
-        threadId: "thread-1",
-        blocks: [text("https://example.test/p?magic=SECRET")],
-      });
+      await said("m1", [text("https://example.test/p?magic=SECRET")]);
 
       await runLinkPreviewJob(deps, { messageId: "m1" });
 
@@ -285,7 +215,7 @@ describe("link.preview job for a message a person sent", () => {
     });
 
     it("does nothing for a message that is gone", async () => {
-      const { read, deps } = setup();
+      const { read, deps } = await setup();
       await expect(runLinkPreviewJob(deps, { messageId: "missing" })).resolves.toBeUndefined();
       expect(read).not.toHaveBeenCalled();
     });
@@ -293,71 +223,68 @@ describe("link.preview job for a message a person sent", () => {
 
   describe("cache (CA 21, CA 22)", () => {
     it("reads a link once for two messages of the same space", async () => {
-      const { db, read, deps } = setup();
-      db.seedMessage({ id: "m1", threadId: "thread-1", blocks: [text(PAGE)] });
-      db.seedMessage({ id: "m2", threadId: "thread-1", blocks: [text(`#2 ${PAGE}#frag`)] });
+      const { read, deps } = await setup();
+      await said("m1", [text(PAGE)]);
+      await said("m2", [text(`#2 ${PAGE}#frag`)]);
 
       await runLinkPreviewJob(deps, { messageId: "m1" });
       await runLinkPreviewJob(deps, { messageId: "m2" });
 
       expect(read).toHaveBeenCalledTimes(1);
-      expect(card(db.blocksOf("m2"))).toMatchObject({ title: "A page" });
+      expect(await card("m2")).toMatchObject({ title: "A page" });
     });
 
     it("does not store the URL, only its hash, and never shares it between spaces", async () => {
-      const first = setup();
-      first.db.seedMessage({ id: "m1", threadId: "thread-1", blocks: [text(PAGE)] });
+      const first = await setup();
+      await said("m1", [text(PAGE)]);
       await runLinkPreviewJob(first.deps, { messageId: "m1" });
-      const [row] = [...first.db.tables.linkPreviewCache.values()];
+      const [row] = await db.prisma.linkPreviewCache.findMany();
       expect(JSON.stringify(row)).not.toContain("example.test");
       expect(row?.keyHash).toMatch(/^[0-9a-f]{64}$/);
 
-      const second = setup({ spaceId: "space-2" });
-      second.db.seedMessage({ id: "m1", threadId: "thread-1", blocks: [text(PAGE)] });
-      await runLinkPreviewJob(second.deps, { messageId: "m1" });
-      const [other] = [...second.db.tables.linkPreviewCache.values()];
+      const second = await setup({ spaceId: "space-2", threadId: "thread-2", botId: "bot-2" });
+      await said("m2", [text(PAGE)], "thread-2");
+      await runLinkPreviewJob(second.deps, { messageId: "m2" });
+      const [other] = await db.prisma.linkPreviewCache.findMany({ where: { spaceId: "space-2" } });
       expect(other?.keyHash).not.toBe(row?.keyHash);
+      expect(second.read).toHaveBeenCalledTimes(1);
     });
 
     it("caches a definitive failure and shows no card", async () => {
-      const { db, read, deps } = setup({
+      const { read, deps } = await setup({
         read: async () => ({ ok: false, reason: "no_title", transient: false }),
       });
-      db.seedMessage({ id: "m1", threadId: "thread-1", blocks: [text(PAGE)] });
-      db.seedMessage({ id: "m2", threadId: "thread-1", blocks: [text(PAGE)] });
+      await said("m1", [text(PAGE)]);
+      await said("m2", [text(PAGE)]);
 
       await runLinkPreviewJob(deps, { messageId: "m1" });
       await runLinkPreviewJob(deps, { messageId: "m2" });
 
       expect(read).toHaveBeenCalledTimes(1);
-      expect([...db.tables.linkPreviewCache.values()][0]?.status).toBe("failed");
-      expect(card(db.blocksOf("m1"))).toBeUndefined();
-      expect(card(db.blocksOf("m2"))).toBeUndefined();
+      expect((await db.prisma.linkPreviewCache.findFirst())?.status).toBe("failed");
+      expect(await card("m1")).toBeUndefined();
+      expect(await card("m2")).toBeUndefined();
     });
 
     it("never caches a transient failure and never retries inside one job", async () => {
-      const { db, read, deps } = setup({
+      const { read, deps } = await setup({
         read: async () => ({ ok: false, reason: "timeout", transient: true }),
       });
-      db.seedMessage({ id: "m1", threadId: "thread-1", blocks: [text(PAGE)] });
+      await said("m1", [text(PAGE)]);
 
       await runLinkPreviewJob(deps, { messageId: "m1" });
       expect(read).toHaveBeenCalledTimes(1);
-      expect(db.tables.linkPreviewCache.size).toBe(0);
+      expect(await db.prisma.linkPreviewCache.count()).toBe(0);
 
-      db.seedMessage({ id: "m2", threadId: "thread-1", blocks: [text(PAGE)] });
+      await said("m2", [text(PAGE)]);
       await runLinkPreviewJob(deps, { messageId: "m2" });
       expect(read).toHaveBeenCalledTimes(2);
     });
 
     it("stops at 30 real reads a minute per space, without a negative cache", async () => {
-      const { db, read, deps } = setup();
+      const { read, deps } = await setup();
       for (let index = 0; index < 31; index += 1) {
-        db.seedMessage({
-          id: `m${index}`,
-          threadId: "thread-1",
-          blocks: [text(`https://example.test/page-${index}`)],
-        });
+        await said(`m${index}`, [text(`https://example.test/page-${index}`)]);
       }
 
       for (let index = 0; index < 31; index += 1) {
@@ -365,54 +292,50 @@ describe("link.preview job for a message a person sent", () => {
       }
 
       expect(read).toHaveBeenCalledTimes(30);
-      expect(card(db.blocksOf("m29"))).toBeDefined();
-      expect(card(db.blocksOf("m30"))).toBeUndefined();
+      expect(await card("m29")).toBeDefined();
+      expect(await card("m30")).toBeUndefined();
       // The refused link left nothing behind: it is tried again once the minute is over.
-      expect(db.tables.linkPreviewCache.size).toBe(30);
-      expect(db.tables.linkPreviewRead.size).toBe(30);
+      expect(await db.prisma.linkPreviewCache.count()).toBe(30);
+      expect(await db.prisma.linkPreviewRead.count()).toBe(30);
     });
 
     it("counts reads per space: another space still has its 30", async () => {
-      const busy = setup();
-      for (let index = 0; index < 30; index += 1) {
-        busy.db.tables.linkPreviewRead.set(`r${index}`, {
-          id: `r${index}`,
-          spaceId: "space-1",
-          source: "job",
-          createdAt: new Date(),
-        });
-      }
-      busy.db.seedMessage({ id: "m1", threadId: "thread-1", blocks: [text(PAGE)] });
+      const busy = await setup();
+      await db.prisma.linkPreviewRead.createMany({
+        data: Array.from({ length: 30 }, () => ({ spaceId: "space-1", source: "job" })),
+      });
+      await said("m1", [text(PAGE)]);
       await runLinkPreviewJob(busy.deps, { messageId: "m1" });
       expect(busy.read).not.toHaveBeenCalled();
 
-      const other = setup({ spaceId: "space-2" });
-      other.db.seedMessage({ id: "m1", threadId: "thread-1", blocks: [text(PAGE)] });
-      await runLinkPreviewJob(other.deps, { messageId: "m1" });
+      const other = await setup({ spaceId: "space-2", threadId: "thread-2", botId: "bot-2" });
+      await said("m2", [text(PAGE)], "thread-2");
+      await runLinkPreviewJob(other.deps, { messageId: "m2" });
       expect(other.read).toHaveBeenCalledTimes(1);
     });
   });
 
   describe("concurrency (CA 17, CA 40)", () => {
-    it("writes nothing when the thread was cleared while the page was read", async () => {
-      const { db, notify, deps } = setup({
+    it("writes nothing when the thread was deleted while the page was read", async () => {
+      const { notify, deps } = await setup({
         read: async () => {
-          db.tables.messages.clear();
+          await db.prisma.thread.delete({ where: { id: "thread-1" } });
           return okLarge;
         },
       });
-      db.seedMessage({ id: "m1", threadId: "thread-1", blocks: [text(PAGE)] });
+      await said("m1", [text(PAGE)]);
 
       await runLinkPreviewJob(deps, { messageId: "m1" });
 
-      expect(db.eventsOfType("thread.message.updated")).toEqual([]);
+      expect(await db.prisma.sessionEntry.count({ where: { type: "link.preview" } })).toBe(0);
       expect(notify).not.toHaveBeenCalled();
-      // The card image made for it was deleted again, row and bytes.
-      expect(db.tables.artifact.size).toBe(0);
+      // No card image was left behind for it, row or bytes: only the cache's own copy.
+      expect(await previewArtifacts()).toEqual([]);
+      expect(db.artifacts.keys()).toHaveLength(1);
     });
 
     it("drops the card when the preview was removed while the page was read", async () => {
-      const { db, deps } = setup({
+      const { deps } = await setup({
         read: async () => {
           await removeLinkPreviewBlock(db.prisma, {
             spaceId: "space-1",
@@ -422,13 +345,12 @@ describe("link.preview job for a message a person sent", () => {
           return okLarge;
         },
       });
-      db.seedMessage({ id: "m1", threadId: "thread-1", blocks: [text(PAGE)] });
+      await said("m1", [text(PAGE)]);
 
       await runLinkPreviewJob(deps, { messageId: "m1" });
 
-      expect(db.blocksOf("m1")).toEqual([text(PAGE), { kind: "link_preview", removed: true }]);
-      expect(db.eventsOfType("thread.message.updated")).toHaveLength(1);
-      expect(db.tables.artifact.size).toBe(0);
+      expect(await db.previewOf("m1")).toEqual({ removed: true });
+      expect(await previewArtifacts()).toEqual([]);
       // Only the cache's own copy of the image is left.
       expect(db.artifacts.keys()).toHaveLength(1);
     });
@@ -438,40 +360,36 @@ describe("link.preview job for a message a person sent", () => {
       const gate = new Promise<void>((resolve) => {
         release = resolve;
       });
-      const { db, deps } = setup({
+      const { deps } = await setup({
         read: async () => {
           await gate;
           return okCompact;
         },
       });
-      db.seedMessage({ id: "m1", threadId: "thread-1", blocks: [text(PAGE)] });
+      await said("m1", [text(PAGE)]);
 
       const job = runLinkPreviewJob(deps, { messageId: "m1" });
       // A write that needs the thread lock (what finalizeRun and threads.send do) goes through.
-      await db.prisma.$transaction(async (tx) => {
-        await (
-          tx as unknown as {
-            $queryRaw: (s: TemplateStringsArray, ...v: unknown[]) => Promise<unknown>;
-          }
-        ).$queryRaw`SELECT id FROM threads WHERE id = ${"thread-1"} FOR UPDATE`;
-      });
+      await db.prisma.$transaction(
+        (tx) => tx.$queryRaw`SELECT id FROM threads WHERE id = ${"thread-1"} FOR UPDATE`,
+      );
       release();
       await job;
 
-      expect(card(db.blocksOf("m1"))).toBeDefined();
+      expect(await card("m1")).toBeDefined();
     });
   });
 
   describe("never throws", () => {
     it("survives a reader that throws", async () => {
-      const { db, deps } = setup({
+      const { deps } = await setup({
         read: async () => {
           throw new Error("boom https://example.test/secret?token=1");
         },
       });
       const sink = createTestSink();
       installLogger(createLogger({ service: "rakazo-worker", sinks: [sink] }));
-      db.seedMessage({ id: "m1", threadId: "thread-1", blocks: [text(PAGE)] });
+      await said("m1", [text(PAGE)]);
 
       await expect(runLinkPreviewJob(deps, { messageId: "m1" })).resolves.toBeUndefined();
 
@@ -479,11 +397,11 @@ describe("link.preview job for a message a person sent", () => {
     });
 
     it("survives a database that fails", async () => {
-      const { deps } = setup();
+      const { deps } = await setup();
       const broken = {
         ...deps,
         prisma: {
-          message: {
+          sessionEntry: {
             findUnique: async () => {
               throw new Error("database down");
             },
@@ -494,7 +412,7 @@ describe("link.preview job for a message a person sent", () => {
     });
 
     it("gives up after its own deadline", async () => {
-      const { db, deps } = setup({
+      const { deps } = await setup({
         read: async (_url, readDeps) => {
           await new Promise<void>((resolve) =>
             readDeps.signal?.addEventListener("abort", () => resolve()),
@@ -502,11 +420,11 @@ describe("link.preview job for a message a person sent", () => {
           return { ok: false, reason: "aborted", transient: true };
         },
       });
-      db.seedMessage({ id: "m1", threadId: "thread-1", blocks: [text(PAGE)] });
+      await said("m1", [text(PAGE)]);
 
       await runLinkPreviewJob({ ...deps, timeoutMs: 30 }, { messageId: "m1" });
 
-      expect(card(db.blocksOf("m1"))).toBeUndefined();
+      expect(await card("m1")).toBeUndefined();
     });
   });
 });
@@ -514,62 +432,47 @@ describe("link.preview job for a message a person sent", () => {
 describe("link.preview job for a bot's run (CA 13, CA 70, CA 71)", () => {
   const LINK = "https://a.test/x";
 
-  function run(options: {
+  async function run(options: {
     status?: string;
     trigger?: string;
-    messages?: Array<{ id: string; nonce?: string | null; blocks: unknown[] }>;
+    messages?: Array<{ id: string; blocks: MessageBlock[]; midTurn?: true; toPerson?: true }>;
   }) {
-    const ctx = setup();
-    ctx.db.seedRun({
+    const ctx = await setup();
+    await db.seedRun({
       id: "run-1",
       threadId: "thread-1",
       status: options.status,
       trigger: options.trigger,
+      messages: options.messages ?? [{ id: "final", blocks: [text(`Source: ${LINK}`)] }],
     });
-    for (const message of options.messages ?? [
-      { id: "final", nonce: null, blocks: [text(`Source: ${LINK}`)] },
-    ]) {
-      ctx.db.seedMessage({
-        id: message.id,
-        threadId: "thread-1",
-        role: "bot",
-        runId: "run-1",
-        clientNonce: message.nonce ?? null,
-        blocks: message.blocks,
-      });
-    }
     return ctx;
   }
 
   it("previews the final reply and the message_user posts, whether or not the bot opened the link (CA 70)", async () => {
-    const { db, read, deps } = run({
+    const { read, deps } = await run({
       messages: [
-        {
-          id: "progress",
-          nonce: "user-progress:run-1:0:x",
-          blocks: [text(`working on ${LINK}`)],
-        },
-        { id: "said", nonce: "user-message:run-1:0:x", blocks: [text(`here: ${LINK}`)] },
-        { id: "final", nonce: null, blocks: [text(`Source: ${LINK}`)] },
+        { id: "progress", midTurn: true, blocks: [text(`working on ${LINK}`)] },
+        { id: "said", midTurn: true, toPerson: true, blocks: [text(`here: ${LINK}`)] },
+        { id: "final", blocks: [text(`Source: ${LINK}`)] },
       ],
     });
 
     await runLinkPreviewJob(deps, { runId: "run-1" });
 
-    expect(card(db.blocksOf("said"))).toMatchObject({ url: LINK });
-    expect(card(db.blocksOf("final"))).toMatchObject({ url: LINK });
+    expect(await card("said")).toMatchObject({ url: LINK });
+    expect(await card("final")).toMatchObject({ url: LINK });
     // Narration is never previewed.
-    expect(card(db.blocksOf("progress"))).toBeUndefined();
+    expect(await card("progress")).toBeUndefined();
     // Same link twice: one page read.
     expect(read).toHaveBeenCalledTimes(1);
   });
 
   it("previews a link from a run that used no tool at all", async () => {
-    const { db, deps } = run({
+    const { deps } = await run({
       messages: [{ id: "final", blocks: [text("https://never-opened.test/page")] }],
     });
     await runLinkPreviewJob(deps, { runId: "run-1" });
-    expect(card(db.blocksOf("final"))).toMatchObject({ url: "https://never-opened.test/page" });
+    expect(await card("final")).toMatchObject({ url: "https://never-opened.test/page" });
   });
 
   it.each([
@@ -578,24 +481,10 @@ describe("link.preview job for a bot's run (CA 13, CA 70, CA 71)", () => {
     ["a run still going", { status: "running" }],
     ["a bot-to-bot run", { trigger: "bot_message" }],
   ])("shows no card for %s", async (_name, options) => {
-    const { db, read, deps } = run(options);
+    const { read, deps } = await run(options);
     await runLinkPreviewJob(deps, { runId: "run-1" });
     expect(read).not.toHaveBeenCalled();
-    expect(card(db.blocksOf("final"))).toBeUndefined();
-  });
-
-  it("skips a final message that holds a pending ask or a routine card", async () => {
-    for (const block of [
-      { kind: "ask", text: "ok?", status: "pending" },
-      { kind: "routine_run", routineName: "r", state: "completed" },
-    ]) {
-      const { db, read, deps } = run({
-        messages: [{ id: "final", blocks: [text(LINK), block] }],
-      });
-      await runLinkPreviewJob(deps, { runId: "run-1" });
-      expect(read).not.toHaveBeenCalled();
-      expect(card(db.blocksOf("final"))).toBeUndefined();
-    }
+    expect(await card("final")).toBeUndefined();
   });
 
   it.each([
@@ -604,16 +493,16 @@ describe("link.preview job for a bot's run (CA 13, CA 70, CA 71)", () => {
     "https://example.com/sso",
     "https://example.com/a/sign-in",
   ])("reads nothing for a link to a sign-in page: %s (CA 71)", async (link) => {
-    const { db, read, deps } = run({ messages: [{ id: "final", blocks: [text(link)] }] });
+    const { read, deps } = await run({ messages: [{ id: "final", blocks: [text(link)] }] });
     await runLinkPreviewJob(deps, { runId: "run-1" });
     expect(read).not.toHaveBeenCalled();
-    expect(card(db.blocksOf("final"))).toBeUndefined();
+    expect(await card("final")).toBeUndefined();
   });
 
   it("still previews a page whose path only contains a sign-in word", async () => {
     const link = "https://example.com/blog/login-tips";
-    const { db, deps } = run({ messages: [{ id: "final", blocks: [text(link)] }] });
+    const { deps } = await run({ messages: [{ id: "final", blocks: [text(link)] }] });
     await runLinkPreviewJob(deps, { runId: "run-1" });
-    expect(card(db.blocksOf("final"))).toMatchObject({ url: link });
+    expect(await card("final")).toMatchObject({ url: link });
   });
 });

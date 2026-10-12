@@ -15,29 +15,9 @@ vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
 
 /**
  * When a bot run ends, the executor queues one `link.preview` job for it. This harness is modelled
- * on routine-run-card.test.ts (prisma/message/event plumbing) and executor-effect-idempotency.test.ts
- * (the approval and effect lookups every `applyTool` call walks through).
+ * on executor-effect-idempotency.test.ts (the approval and effect lookups every `applyTool` call
+ * walks through).
  */
-type StoredMessage = {
-  id: string;
-  threadId: string;
-  seq: number;
-  role: string;
-  blocks: MessageBlock[];
-  botId: string | null;
-  runId: string | null;
-  clientNonce: string | null;
-};
-
-type ThreadMessage = {
-  id: string;
-  seq: number;
-  role: string;
-  runId: string | null;
-  blocks: MessageBlock[];
-  replyToMessageId?: string | null;
-};
-
 type StoredEffect = {
   id: string;
   runId?: string;
@@ -62,8 +42,6 @@ function fixture({
   secrets = [] as string[],
   checkpoint = null as string | null,
   status = "queued",
-  priorMessages = [] as Array<{ blocks: MessageBlock[]; clientNonce: string | null }>,
-  threadMessages = [] as ThreadMessage[],
   steering = [] as Array<{ id: string; messageId: string; text: string; blocks: MessageBlock[] }>,
   web,
   runtimeRun,
@@ -80,21 +58,11 @@ function fixture({
   secrets?: string[];
   checkpoint?: string | null;
   status?: string;
-  priorMessages?: Array<{ blocks: MessageBlock[]; clientNonce: string | null }>;
-  /** The thread history window, newest first (what the executor loads for a user turn). */
-  threadMessages?: ThreadMessage[];
   /** User messages waiting to be steered into the run: handed out by the first claim. */
   steering?: Array<{ id: string; messageId: string; text: string; blocks: MessageBlock[] }>;
   web?: FakeWebProvider;
   runtimeRun: (request: AgentRunRequest) => AsyncGenerator<AgentRuntimeEvent>;
 }) {
-  const messages: StoredMessage[] = [];
-  let messageSeq = 0;
-  let nextMessageSeq = 0;
-  let nextEventSeq = 0;
-  // Whether anything written during the run marked the thread unread (a bot message does by default).
-  let threadUnread = false;
-
   const run = {
     id: "run-1",
     botId: "bot-1",
@@ -184,23 +152,6 @@ function fixture({
     ),
   };
 
-  const bubbleQueries: unknown[] = [];
-  const messageCreate = vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
-    messageSeq += 1;
-    const message: StoredMessage = {
-      id: `message-${messageSeq}`,
-      threadId: data.threadId as string,
-      seq: nextMessageSeq,
-      role: data.role as string,
-      blocks: data.blocks as MessageBlock[],
-      botId: (data.botId as string) ?? null,
-      runId: (data.runId as string) ?? null,
-      clientNonce: (data.clientNonce as string) ?? null,
-    };
-    messages.push(message);
-    return message;
-  });
-
   const log = recordingSessionLog();
 
   const prisma = {
@@ -247,66 +198,6 @@ function fixture({
       findUniqueOrThrow: vi.fn(async () => ({ id: run.threadId, groupId })),
       findFirst: vi.fn(async () => ({ groupId })),
       count: vi.fn(async () => 0),
-      update: vi.fn(
-        async ({
-          data,
-        }: {
-          data: { nextMessageSeq?: unknown; nextEventSeq?: unknown; unread?: boolean };
-        }) => {
-          if (data.unread) threadUnread = true;
-          if (data.nextMessageSeq !== undefined) nextMessageSeq += 1;
-          if (data.nextEventSeq !== undefined) nextEventSeq += 1;
-          return { nextMessageSeq, nextEventSeq };
-        },
-      ),
-    },
-    message: {
-      findFirst: vi.fn(async () => null),
-      findMany: vi.fn(
-        async ({
-          where,
-        }: {
-          where?: { runId?: string; clientNonce?: { startsWith: string } };
-        } = {}) => {
-          // The end-of-run lookup of delivered bubbles: this run's bot messages by nonce prefix,
-          // earlier attempts' (priorMessages) and this attempt's alike.
-          if (where?.runId && where.clientNonce) {
-            bubbleQueries.push({ where });
-            return [
-              ...priorMessages,
-              ...messages.filter((message) => message.runId === where.runId),
-            ].filter(
-              (message) => message.clientNonce?.startsWith(where.clientNonce!.startsWith) ?? false,
-            );
-          }
-          return where?.runId ? priorMessages : threadMessages;
-        },
-      ),
-      findUnique: vi.fn(
-        async ({
-          where,
-        }: {
-          where: { id?: string; threadId_clientNonce?: { clientNonce: string } };
-        }) => {
-          if (where.id) return messages.find((message) => message.id === where.id) ?? null;
-          if (where.threadId_clientNonce) {
-            return (
-              messages.find(
-                (message) => message.clientNonce === where.threadId_clientNonce!.clientNonce,
-              ) ?? null
-            );
-          }
-          return null;
-        },
-      ),
-      create: messageCreate,
-      update: vi.fn(
-        async ({ where, data }: { where: { id: string }; data: { blocks: MessageBlock[] } }) => {
-          const message = messages.find((candidate) => candidate.id === where.id);
-          if (message) message.blocks = data.blocks;
-          return message;
-        },
-      ),
     },
     chatGroup: {
       findUnique: vi.fn(async () => ({
@@ -370,19 +261,13 @@ function fixture({
   return {
     runRow: run,
     enqueue,
-    /** The lookups of delivered message_user bubbles at the end of a run. */
-    bubbleQueries,
     /** Events appended to the thread (progress, tool calls, ...). */
     appended: append,
     /** Push notifications sent to the user. */
     pushes: send,
-    messages,
-    /** True once a message written during the run marked the thread unread. */
-    threadUnread: () => threadUnread,
     finalizeRun,
     pauseRunForInput,
     pauseRunForTakeover,
-    messageCreate,
     async run() {
       await executor.continueRun(run.id, "worker-1");
     },

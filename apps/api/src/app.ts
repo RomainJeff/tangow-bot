@@ -57,10 +57,8 @@ import {
   PostgresRealtimeFanout,
   PostgresSessionLog,
   pipedreamConfigFromEnv,
-  piSessionsRoot,
   pushTokenPath,
   reconcileComputerUpdates,
-  removePiUserSessions,
   removeUserSkillDirs,
   ScriptedAgentRuntime,
   SmtpEmailProvider,
@@ -313,7 +311,6 @@ export async function createApp(
     env.agentRuntime === "scripted"
       ? new ScriptedAgentRuntime()
       : new PiAgentRuntime({
-          sessionRoot: env.piSessionRecording ? piSessionsRoot(env.dataDir) : undefined,
           ...(traceExport.exporter
             ? { traceExporter: traceExport.exporter, serviceName: SERVICE_NAMES.api }
             : {}),
@@ -358,7 +355,6 @@ export async function createApp(
           ),
         ),
       );
-      await removePiUserSessions(env.dataDir, userId);
       await rm(pushTokenPath(env.dataDir, userId), { force: true }).catch(() => undefined);
       await removeUserSkillDirs(env.dataDir, userId);
     },

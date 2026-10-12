@@ -2,9 +2,7 @@ import { createHash } from "node:crypto";
 import type { LinkPreviewCard } from "@rakazo/contracts";
 import { EntryId } from "@rakazo/contracts";
 import type { Prisma, PrismaClient } from "./client.js";
-import { appendEventInTransaction } from "./events.js";
-import { messageUpdatedPayload } from "./messages.js";
-import { appendCardStateInTransaction } from "./sessions.js";
+import { appendCardStateInTransaction, blocksOf, threadEventSeq } from "./sessions.js";
 
 export const LINK_PREVIEW_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 export const LINK_PREVIEW_CACHE_MAX_ENTRIES = 500;
@@ -268,16 +266,12 @@ export async function purgeLinkPreviewState(
   });
 }
 
-// ---- Writing the block ------------------------------------------------------------------
+// ---- Writing the preview ----------------------------------------------------------------
 
 function isPreviewBlock(block: unknown): boolean {
   return Boolean(
     block && typeof block === "object" && (block as { kind?: unknown }).kind === "link_preview",
   );
-}
-
-function isRemovalMarker(block: unknown): boolean {
-  return isPreviewBlock(block) && (block as { removed?: unknown }).removed === true;
 }
 
 /**
@@ -303,8 +297,48 @@ async function eventBotIdForThread(
   return member?.botId ?? null;
 }
 
-async function lockThread(tx: Prisma.TransactionClient, threadId: string): Promise<void> {
-  await tx.$queryRaw`SELECT id FROM threads WHERE id = ${threadId} FOR UPDATE`;
+/**
+ * The message a preview goes under, read under the thread lock, with what it holds of a preview: an
+ * opt-out marker it was sent with, its preview entries, and whether one was removed.
+ */
+async function previewTarget(
+  tx: Prisma.TransactionClient,
+  input: { threadId: string; messageId: string },
+) {
+  await tx.$queryRaw`SELECT id FROM threads WHERE id = ${input.threadId} FOR UPDATE`;
+  const message = await tx.sessionEntry.findFirst({
+    where: { id: input.messageId, session: { threadId: input.threadId, kind: "thread" } },
+    select: { id: true, sessionId: true, botId: true, payload: true },
+  });
+  if (!message) return null;
+  const previews = await tx.sessionEntry.findMany({
+    where: {
+      sessionId: message.sessionId,
+      type: "link.preview",
+      payload: { path: ["target"], equals: message.id },
+    },
+    orderBy: { seq: "asc" },
+    select: { id: true },
+  });
+  const removals = await tx.sessionEntry.findMany({
+    where: {
+      sessionId: message.sessionId,
+      type: "link.preview.removed",
+      OR: [message.id, ...previews.map((preview) => preview.id)].map((target) => ({
+        payload: { path: ["target"], equals: target },
+      })),
+    },
+    select: { payload: true },
+  });
+  const removed = new Set(
+    removals.map((removal) => (removal.payload as { target: string }).target),
+  );
+  return {
+    message,
+    botId: message.botId ?? (await eventBotIdForThread(tx, input.threadId)),
+    marked: previews.length > 0 || removed.size > 0 || blocksOf(message).some(isPreviewBlock),
+    shown: previews.findLast((preview) => !removed.has(preview.id)),
+  };
 }
 
 export type AppendLinkPreviewResult =
@@ -312,54 +346,28 @@ export type AppendLinkPreviewResult =
   | { outcome: "gone" | "present" };
 
 /**
- * Attaches a preview card to a message: the one short transaction that holds the thread lock.
- * The message is read again under the lock; if it is gone (thread cleared or rewound), or
- * already carries a card or the removal marker, nothing is written. The card is appended to
- * the raw stored array, so blocks this build does not know survive. The event is attributed to
- * the message's own bot and carries no run id: a run id would make clients drop that run's live
- * progress message.
+ * Attaches a preview card to a message: the one short transaction that holds the thread lock. If
+ * the message is not the thread's, or already has a preview, a removed one or the opt-out marker,
+ * nothing is written. The entry reaches the thread's feed under the message's own bot.
  */
 export async function appendLinkPreviewBlock(
   prisma: Pick<PrismaClient, "$transaction">,
   input: { spaceId: string; threadId: string; messageId: string; block: LinkPreviewCard },
 ): Promise<AppendLinkPreviewResult> {
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    await lockThread(tx, input.threadId);
-    const message = await tx.message.findFirst({
-      where: { id: input.messageId, threadId: input.threadId },
-      select: {
-        id: true,
-        role: true,
-        blocks: true,
-        botId: true,
-        replyToMessageId: true,
-        replyQuote: true,
-      },
-    });
-    if (!message || !Array.isArray(message.blocks)) return { outcome: "gone" } as const;
-    const stored = message.blocks as Prisma.InputJsonValue[];
-    if (stored.some(isPreviewBlock)) return { outcome: "present" } as const;
-    const botId = message.botId ?? (await eventBotIdForThread(tx, input.threadId));
-    if (!botId) return { outcome: "gone" } as const;
-    const blocks = [...stored, input.block as unknown as Prisma.InputJsonValue];
-    await tx.message.update({ where: { id: message.id }, data: { blocks } });
+    const target = await previewTarget(tx, input);
+    if (!target?.botId) return { outcome: "gone" } as const;
+    if (target.marked) return { outcome: "present" } as const;
     await appendCardStateInTransaction(tx, {
       type: "link.preview",
-      feedBotId: botId,
+      feedBotId: target.botId,
       payload: {
-        target: EntryId.parse(message.id),
+        target: EntryId.parse(target.message.id),
         block: input.block,
         ...(input.block.image ? { artifactId: input.block.image.artifactId } : {}),
       },
     });
-    const event = await appendEventInTransaction(tx, {
-      spaceId: input.spaceId,
-      threadId: input.threadId,
-      botId,
-      type: "thread.message.updated",
-      payload: messageUpdatedPayload(message, blocks),
-    });
-    return { outcome: "appended", seq: event.seq } as const;
+    return { outcome: "appended", seq: await threadEventSeq(tx, input.threadId) } as const;
   });
 }
 
@@ -369,74 +377,35 @@ export type RemoveLinkPreviewResult =
   | { outcome: "gone" };
 
 /**
- * Replaces the card by the removal marker (or adds the marker when the message has no card yet,
- * so a read still in flight cannot add one) and deletes the card's image artifact rows. A
- * second call finds the marker and writes nothing: no event, no change. The caller deletes the
- * returned artifacts' bytes after the commit.
+ * Removes the message's preview, or marks it as having none when no card arrived yet, so a read
+ * still in flight cannot add one, and deletes the card's image artifact rows. A second call finds
+ * the removal and writes nothing. The caller deletes the returned artifacts' bytes afterwards.
  */
 export async function removeLinkPreviewBlock(
   prisma: Pick<PrismaClient, "$transaction">,
   input: { spaceId: string; threadId: string; messageId: string },
 ): Promise<RemoveLinkPreviewResult> {
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    await lockThread(tx, input.threadId);
-    const message = await tx.message.findFirst({
-      where: { id: input.messageId, threadId: input.threadId },
-      select: {
-        id: true,
-        role: true,
-        blocks: true,
-        botId: true,
-        replyToMessageId: true,
-        replyQuote: true,
-      },
-    });
-    if (!message || !Array.isArray(message.blocks)) return { outcome: "gone" } as const;
-    const stored = message.blocks as Prisma.InputJsonValue[];
-    const previews = stored.filter(isPreviewBlock);
-    const hasCard = previews.some((block) => !isRemovalMarker(block));
-    if (previews.length > 0 && !hasCard) return { outcome: "unchanged" } as const;
-    const botId = message.botId ?? (await eventBotIdForThread(tx, input.threadId));
-    if (!botId) return { outcome: "gone" } as const;
-    const marker = { kind: "link_preview", removed: true } as const;
-    const firstPreview = stored.findIndex(isPreviewBlock);
-    const blocks: Prisma.InputJsonValue[] = [];
-    stored.forEach((block, index) => {
-      if (!isPreviewBlock(block)) blocks.push(block);
-      else if (index === firstPreview) blocks.push(marker);
-    });
-    if (firstPreview < 0) blocks.push(marker);
-    await tx.message.update({ where: { id: message.id }, data: { blocks } });
-    const [preview] = hasCard
-      ? await tx.$queryRaw<Array<{ id: string }>>`
-          SELECT p.id FROM session_entries m
-          JOIN session_entries p ON p."sessionId" = m."sessionId" AND p.type = 'link.preview'
-            AND p.payload ->> 'target' = m.id
-          WHERE m.id = ${message.id}
-          ORDER BY p.seq DESC LIMIT 1`
-      : [];
-    if (preview) {
-      await appendCardStateInTransaction(tx, {
-        type: "link.preview.removed",
-        feedBotId: botId,
-        payload: { target: EntryId.parse(preview.id) },
-      });
-    }
-    const event = await appendEventInTransaction(tx, {
-      spaceId: input.spaceId,
-      threadId: input.threadId,
-      botId,
-      type: "thread.message.updated",
-      payload: messageUpdatedPayload(message, blocks),
+    const target = await previewTarget(tx, input);
+    if (!target?.botId) return { outcome: "gone" } as const;
+    if (target.marked && !target.shown) return { outcome: "unchanged" } as const;
+    await appendCardStateInTransaction(tx, {
+      type: "link.preview.removed",
+      feedBotId: target.botId,
+      payload: { target: EntryId.parse(target.shown?.id ?? target.message.id) },
     });
     const artifacts = await tx.artifact.findMany({
-      where: { isLinkPreview: true, previewMessageId: message.id },
+      where: { isLinkPreview: true, previewMessageId: target.message.id },
       select: { id: true, storageKey: true },
     });
     if (artifacts.length) {
       await tx.artifact.deleteMany({ where: { id: { in: artifacts.map((row) => row.id) } } });
     }
-    return { outcome: "removed", seq: event.seq, artifacts } as const;
+    return {
+      outcome: "removed",
+      seq: await threadEventSeq(tx, input.threadId),
+      artifacts,
+    } as const;
   });
 }
 
@@ -449,12 +418,12 @@ export interface OrphanPreviewArtifact {
 }
 
 /**
- * Preview artifacts that no message shows any more: their message was deleted (thread cleared or
- * rewound, bot deleted: the foreign key nulled `previewMessageId`), or it never received the
- * card. The caller deletes the bytes, then the rows with `deleteLinkPreviewArtifactRows`.
+ * Preview artifacts that no message shows any more: their message's session went (thread or bot
+ * deleted: the foreign key nulled `previewMessageId`), or no preview entry ever named them. The
+ * caller deletes the bytes, then the rows with `deleteLinkPreviewArtifactRows`.
  */
 export async function findOrphanPreviewArtifacts(
-  prisma: Pick<PrismaClient, "artifact">,
+  prisma: Pick<PrismaClient, "artifact" | "sessionEntry">,
   options: { spaceId?: string; now?: Date } = {},
 ): Promise<OrphanPreviewArtifact[]> {
   const now = options.now ?? new Date();
@@ -472,20 +441,23 @@ export async function findOrphanPreviewArtifacts(
       createdAt: { lt: new Date(now.getTime() - UNATTACHED_ARTIFACT_GRACE_MS) },
       ...scope,
     },
-    select: { ...select, previewMessage: { select: { blocks: true } } },
+    select,
     orderBy: { createdAt: "asc" },
     take: SWEEP_BATCH,
   });
-  const lost = unattached.filter(
-    (row) => !JSON.stringify(row.previewMessage?.blocks ?? null).includes(row.id),
+  const shown = unattached.length
+    ? await prisma.sessionEntry.findMany({
+        where: {
+          type: "link.preview",
+          OR: unattached.map((row) => ({ payload: { path: ["artifactId"], equals: row.id } })),
+        },
+        select: { payload: true },
+      })
+    : [];
+  const shownIds = new Set(
+    shown.map((entry) => (entry.payload as { artifactId?: string }).artifactId),
   );
-  return [...detached, ...lost].map(({ id, storageKey, spaceId, userId, botId }) => ({
-    id,
-    storageKey,
-    spaceId,
-    userId,
-    botId,
-  }));
+  return [...detached, ...unattached.filter((row) => !shownIds.has(row.id))];
 }
 
 export async function deleteLinkPreviewArtifactRows(
