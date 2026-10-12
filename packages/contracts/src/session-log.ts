@@ -223,8 +223,8 @@ const EntryShapes = z.discriminatedUnion("type", [
     "bot.message.received",
     z.object({
       from: Peer,
-      fromSessionId: SessionId,
-      fromEntryId: EntryId,
+      fromSessionId: SessionId.optional(),
+      fromEntryId: EntryId.optional(),
       text: z.string(),
       intent: BotMessageIntent,
       hop: BotMessageHop,
@@ -636,7 +636,7 @@ export const ThreadItemSchema = z.discriminatedUnion("kind", [
       text: z.string(),
       intent: BotMessageIntent,
       exchangeId: EntryId,
-      origin: z.object({ sessionId: SessionId, entryId: EntryId }),
+      origin: z.object({ sessionId: SessionId, entryId: EntryId }).optional(),
     }),
   ]),
   z.object({

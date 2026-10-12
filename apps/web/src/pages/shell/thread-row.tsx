@@ -337,7 +337,7 @@ function BotMessageMarker({ item, context }: { item: ItemOf<"botMessage">; conte
     fyi: t`FYI`,
   }[item.intent];
   const label = sent ? t`Messaged ${peer}` : t`Message from ${peer}`;
-  const messageId = item.direction === "received" ? item.origin.entryId : undefined;
+  const messageId = item.direction === "received" ? item.origin?.entryId : undefined;
   const jump = peerBotId ? threadJumpLocation({ botId: peerBotId, messageId }) : null;
   const peerLink =
     jump && peerBotId ? (

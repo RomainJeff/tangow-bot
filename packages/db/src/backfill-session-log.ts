@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type { EntryId, MessageBlock, SessionRunTrigger } from "@rakazo/contracts";
-import { BotMessageIntent, isLinkPreviewCard, parseKnownMessageBlocks } from "@rakazo/contracts";
+import {
+  BotMessageIntent,
+  isLinkPreviewCard,
+  isRunTrace,
+  parseKnownMessageBlocks,
+} from "@rakazo/contracts";
 import * as z from "zod";
 import type { Prisma, PrismaClient } from "./client.js";
 import type { SessionEntryRow } from "./sessions.js";
@@ -17,6 +22,7 @@ type LegacyMessage = {
   replyQuote: string | null;
   clientNonce: string | null;
   createdAt: Date;
+  covered: boolean;
 };
 
 type LegacyRun = {
@@ -116,18 +122,32 @@ type Draft = {
   createdAt: Date;
 };
 
+/**
+ * The entries a backfill appends to one session, after the `head` it already holds. A routine's
+ * chain keeps its run's trace and hands everything else to `main`, as the live writer does.
+ */
 class Chain {
   readonly rows: SessionEntryRow[] = [];
-  private head: string | null = null;
 
-  constructor(readonly sessionId: string) {}
+  constructor(
+    readonly sessionId: string,
+    private head: string | null = null,
+    private readonly firstSeq = 0,
+    private readonly main?: Chain,
+  ) {}
 
   append(draft: Draft): string {
+    if (this.main && !isRunTrace(draft as unknown as Parameters<typeof isRunTrace>[0])) {
+      return this.main.append({
+        ...draft,
+        payload: { ...draft.payload, originSessionId: this.sessionId },
+      });
+    }
     const id = draft.id ?? randomUUID();
     const row: SessionEntryRow = {
       id,
       sessionId: this.sessionId,
-      seq: this.rows.length,
+      seq: this.nextSeq,
       parentId: this.head,
       type: draft.type,
       payload: draft.payload,
@@ -141,25 +161,42 @@ class Chain {
     return id;
   }
 
-  get lastSeq(): number {
-    return this.rows.length - 1;
+  get nextSeq(): number {
+    return this.firstSeq + this.rows.length;
   }
 }
 
 export type BackfillThreadResult =
-  | { threadId: string; outcome: "backfilled"; messages: number; entries: number }
+  | {
+      threadId: string;
+      outcome: "backfilled" | "appended" | "rebuilt";
+      messages: number;
+      entries: number;
+    }
   | { threadId: string; outcome: "skipped" };
 
+/** Messages older than the log a thread already holds: only a rebuild from them can place them. */
+export class BackfillRefused extends Error {
+  constructor(readonly threadId: string) {
+    super(
+      `Thread ${threadId} holds messages older than its session log's entries, which a backfill cannot place among them. Rebuild it from its messages with --rebuild-from-messages ${threadId}: that keeps the whole conversation and drops the run traces written since the log began.`,
+    );
+  }
+}
+
 /**
- * Writes a thread's messages, in seq order, as a linear chain of its main session. A session that
- * already holds entries is left as it is, so a second run inserts nothing.
+ * Writes the thread's messages that no entry holds yet, in seq order, as a linear chain of its main
+ * session after the entries it already has, each message's id on one of its entries. Messages
+ * older than those entries refuse, unless `rebuild` first replaces the thread's sessions with an
+ * empty one. A thread whose messages are all held is left as it is, so a second run inserts nothing.
  */
 export async function backfillThread(
   prisma: PrismaClient,
   threadId: string,
+  { rebuild = false }: { rebuild?: boolean } = {},
 ): Promise<BackfillThreadResult> {
   return prisma.$transaction(
-    async (tx: Prisma.TransactionClient) => backfillThreadInTransaction(tx, threadId),
+    async (tx: Prisma.TransactionClient) => backfillThreadInTransaction(tx, threadId, rebuild),
     { timeout: TRANSACTION_TIMEOUT_MS, maxWait: TRANSACTION_TIMEOUT_MS },
   );
 }
@@ -167,42 +204,58 @@ export async function backfillThread(
 async function backfillThreadInTransaction(
   tx: Prisma.TransactionClient,
   threadId: string,
+  rebuild: boolean,
 ): Promise<BackfillThreadResult> {
-  const [thread] = await tx.$queryRaw<
+  const [locked] = await tx.$queryRaw<
     Array<{
       sessionId: string;
       spaceId: string;
       botId: string | null;
       summary: string | null;
       summarizedSeq: number | null;
-      logged: boolean;
     }>
   >`
     SELECT t."sessionId", t."spaceId", t."botId",
-      t."historyCompactionSummary" AS summary, t."historyCompactedUpToSeq" AS "summarizedSeq",
-      EXISTS (SELECT 1 FROM session_entries e WHERE e."sessionId" = t."sessionId") AS logged
+      t."historyCompactionSummary" AS summary, t."historyCompactedUpToSeq" AS "summarizedSeq"
     FROM threads t WHERE t.id = ${threadId} FOR UPDATE`;
-  if (!thread || thread.logged) return { threadId, outcome: "skipped" };
+  if (!locked) return { threadId, outcome: "skipped" };
+  const thread = rebuild
+    ? { ...locked, sessionId: await replaceSessions(tx, threadId, locked.sessionId) }
+    : locked;
   const messages = await tx.$queryRaw<LegacyMessage[]>`
-    SELECT id, seq, role, blocks, "botId", "runId", "replyToMessageId", "replyQuote",
-      "clientNonce", "createdAt"
-    FROM messages WHERE "threadId" = ${threadId} ORDER BY seq`;
-  if (messages.length === 0) return { threadId, outcome: "skipped" };
+    SELECT m.id, m.seq, m.role, m.blocks, m."botId", m."runId", m."replyToMessageId",
+      m."replyQuote", m."clientNonce", m."createdAt",
+      EXISTS (SELECT 1 FROM session_entries e WHERE e.id = m.id) AS covered
+    FROM messages m WHERE m."threadId" = ${threadId} ORDER BY m.seq`;
+  const uncovered = messages.filter((message) => !message.covered);
+  if (uncovered.length === 0) return { threadId, outcome: "skipped" };
+  const [head] = await tx.$queryRaw<
+    Array<{ nextEntrySeq: number; id: string | null; createdAt: Date | null }>
+  >`
+    SELECT s."nextEntrySeq", h.id, h."createdAt" FROM sessions s
+    LEFT JOIN LATERAL (
+      SELECT e.id, e."createdAt" FROM session_entries e WHERE e."sessionId" = s.id
+      ORDER BY e.seq DESC LIMIT 1) h ON true
+    WHERE s.id = ${thread.sessionId}`;
+  const headAt = head?.createdAt;
+  if (headAt && uncovered.some((message) => message.createdAt < headAt)) {
+    throw new BackfillRefused(threadId);
+  }
 
-  const parsed = messages.map((message) => ({ message, blocks: blocksOf(message.blocks) }));
-  const runs = await legacyRuns(tx, [
-    ...new Set(messages.flatMap((message) => message.runId ?? [])),
-  ]);
-  const received = parsed.flatMap(({ blocks }) =>
+  const parsed = uncovered.map((message) => ({ message, blocks: blocksOf(message.blocks) }));
+  const runIds = [...new Set(uncovered.flatMap((message) => message.runId ?? []))];
+  const runs = await legacyRuns(tx, runIds);
+  const deliveries = parsed.flatMap(({ blocks }) =>
     blocks.flatMap((block) => (block.kind === "bot_message_received" ? [block] : [])),
   );
-  const senderSessions = await senderSessionsOf(tx, received);
+  const sentEntries = await sentEntriesOf(tx, deliveries);
+  const prior = head?.id ? await priorState(tx, thread.sessionId, runIds) : undefined;
 
-  const main = new Chain(thread.sessionId);
+  const main = new Chain(thread.sessionId, head?.id ?? null, head?.nextEntrySeq ?? 0);
   const routineOf = new Map<string, { chain: Chain; trigger: RoutineTrigger }>();
-  const startedRuns = new Set<string>();
+  const startedRuns = new Set(prior?.startedRuns);
   const lastMessageOfRun = new Map<string, number>();
-  messages.forEach((message, index) => {
+  parsed.forEach(({ message }, index) => {
     if (message.runId) lastMessageOfRun.set(message.runId, index);
   });
   for (const { message, blocks } of parsed) {
@@ -215,7 +268,7 @@ async function backfillThreadInTransaction(
     const routineId = card?.routineId ?? run.routineId;
     if (!card || !routineId) continue;
     routineOf.set(run.id, {
-      chain: new Chain(randomUUID()),
+      chain: new Chain(randomUUID(), null, 0, main),
       trigger:
         run.trigger === "webhook"
           ? { kind: "webhook", routineId }
@@ -231,7 +284,7 @@ async function backfillThreadInTransaction(
   const messageIds = new Set(messages.map((message) => message.id));
   const exchangeOf = new Map<string, string>();
   const lastMainSeqOf = new Map<number, number>();
-  let lastPersonEntry: string | undefined;
+  let lastPersonEntry = prior?.lastPersonEntry;
 
   for (const [index, { message, blocks }] of parsed.entries()) {
     let unclaimedId: string | undefined = message.id;
@@ -247,7 +300,7 @@ async function backfillThreadInTransaction(
     const createdAt = message.createdAt;
     const later: Draft[] = [];
 
-    if (run && botId && !startedRuns.has(run.id) && blocks.some((block) => opensRun(block))) {
+    if (run && botId && !startedRuns.has(run.id) && opensRun(blocks)) {
       startedRuns.add(run.id);
       chain.append({
         type: "run.started",
@@ -276,10 +329,12 @@ async function backfillThreadInTransaction(
       );
       if (delivery) {
         const entryId = id();
+        const sent = delivery.returnToMessageId
+          ? sentEntries.get(delivery.returnToMessageId)
+          : undefined;
         const exchangeId =
-          (message.replyToMessageId && exchangeOf.get(message.replyToMessageId)) ||
-          delivery.returnToMessageId ||
-          entryId;
+          sent?.exchangeId ??
+          ((message.replyToMessageId && exchangeOf.get(message.replyToMessageId)) || entryId);
         exchangeOf.set(message.id, exchangeId);
         chain.append({
           id: entryId,
@@ -287,11 +342,7 @@ async function backfillThreadInTransaction(
           createdAt,
           payload: {
             from: { kind: "bot", botId: delivery.fromBotId, name: delivery.fromBotName },
-            fromSessionId:
-              senderSessions.get(delivery.returnToMessageId ?? "") ??
-              senderSessions.get(delivery.fromBotId) ??
-              thread.sessionId,
-            fromEntryId: delivery.returnToMessageId ?? entryId,
+            ...(sent ? { fromSessionId: sent.sessionId, fromEntryId: sent.id } : {}),
             text: delivery.text,
             intent: delivery.intent ?? "request",
             hop: Math.max(1, delivery.hop ?? 1),
@@ -465,11 +516,9 @@ async function backfillThreadInTransaction(
             }
             break;
           }
-          case "skill_source":
-            later.push(learnt(block, botId, run.id, createdAt));
-            break;
           case "bot_message_received":
           case "progress":
+          case "skill_source":
             break;
           case "link_preview":
             if (!isLinkPreviewCard(block)) pending.push(block);
@@ -481,48 +530,60 @@ async function backfillThreadInTransaction(
       flush();
       later.push(...previewsOf(blocks, message.id, createdAt));
     }
+    if (message.role === "bot" && botId) {
+      for (const block of blocks) {
+        if (block.kind === "skill_source") later.push(learnt(block, botId, run?.id, createdAt));
+      }
+    }
 
-    if (message.role === "bot" && unclaimedId !== undefined && botId) {
+    const outcome =
+      run && botId && lastMessageOfRun.get(run.id) === index && startedRuns.has(run.id)
+        ? runOutcome(run)
+        : undefined;
+    if (unclaimedId !== undefined) {
       const shown = blocks
         .filter(isMessageBlock)
-        .filter(
-          (block) =>
-            block.kind !== "skill_source" && block.kind !== "steps" && !isPreviewCard(block),
-        );
-      const entryId = main.append({
-        id: id(),
-        type: "bot.text",
-        botId,
-        createdAt,
-        payload: { blocks: shown },
-      });
-      for (const block of shown) {
-        if (block.kind !== "skill_draft") continue;
-        const { kind: _kind, ...draft } = block;
-        later.push({ type: "skill.draft", createdAt, payload: { target: entryId, ...draft } });
-      }
-      if (!run) {
-        for (const block of blocks) {
-          if (block.kind === "skill_source") later.push(learnt(block, botId, null, createdAt));
+        .filter((block) => !NOT_SHOWN_ALONE.has(block.kind) && !isPreviewCard(block));
+      const standalone = outcome || later.some((draft) => draft.type === "skill.learnt");
+      if (!botId) {
+        chain.append({
+          id: id(),
+          type: "system.note",
+          createdAt,
+          payload: { text: textOf(blocks) },
+        });
+      } else if (shown.length > 0 || blocks.some(isPreviewCard) || !standalone) {
+        const entryId = chain.append({
+          id: id(),
+          type: "bot.text",
+          botId,
+          createdAt,
+          payload: { blocks: shown },
+        });
+        for (const block of shown) {
+          if (block.kind !== "skill_draft") continue;
+          const { kind: _kind, ...draft } = block;
+          later.push({ type: "skill.draft", createdAt, payload: { target: entryId, ...draft } });
         }
+        if (!run) later.push(...previewsOf(blocks, entryId, createdAt));
       }
-      later.push(...previewsOf(blocks, entryId, createdAt));
     }
 
-    for (const draft of later) chain.append(draft);
-    if (run && lastMessageOfRun.get(run.id) === index && startedRuns.has(run.id)) {
-      const outcome = runOutcome(run);
-      if (outcome && botId) {
-        chain.append({
-          type: "run.finished",
-          botId,
-          runId: run.id,
-          createdAt: run.completedAt ?? createdAt,
-          payload: outcome,
-        });
-      }
+    for (const draft of later) {
+      const claims = draft.type === "skill.learnt" && unclaimedId !== undefined;
+      chain.append(claims ? { ...draft, id: id() } : draft);
     }
-    lastMainSeqOf.set(message.seq, main.lastSeq);
+    if (run && botId && outcome) {
+      chain.append({
+        ...(unclaimedId !== undefined ? { id: id() } : {}),
+        type: "run.finished",
+        botId,
+        runId: run.id,
+        createdAt: run.completedAt ?? createdAt,
+        payload: outcome,
+      });
+    }
+    lastMainSeqOf.set(message.seq, main.nextSeq - 1);
   }
 
   if (thread.summary && thread.summarizedSeq !== null) {
@@ -532,7 +593,7 @@ async function backfillThreadInTransaction(
     if (covered !== undefined) {
       main.append({
         type: "compaction",
-        createdAt: messages.at(-1)!.createdAt,
+        createdAt: uncovered.at(-1)!.createdAt,
         payload: { summary: thread.summary, coveredUpToSeq: covered },
       });
     }
@@ -559,17 +620,57 @@ async function backfillThreadInTransaction(
         })),
       });
     }
+    const last = chain.rows.at(-1);
+    if (!last) continue;
     await tx.conversationSession.update({
       where: { id: chain.sessionId },
-      data: { nextEntrySeq: chain.rows.length, headEntryId: chain.rows.at(-1)?.id ?? null },
+      data: { nextEntrySeq: chain.nextSeq, headEntryId: last.id },
     });
   }
   return {
     threadId,
-    outcome: "backfilled",
-    messages: messages.length,
+    outcome: rebuild ? "rebuilt" : head?.id ? "appended" : "backfilled",
+    messages: uncovered.length,
     entries: chains.reduce((sum, chain) => sum + chain.rows.length, 0),
   };
+}
+
+/**
+ * Empties the thread's main session and renames it, so the thread starts a new log: every session
+ * under it goes, entries and all, and the runs that wrote to any of them move to it.
+ */
+async function replaceSessions(
+  tx: Prisma.TransactionClient,
+  threadId: string,
+  mainSessionId: string,
+): Promise<string> {
+  const tree = await tx.$queryRaw<Array<{ id: string }>>`
+    WITH RECURSIVE tree AS (
+      SELECT id FROM sessions WHERE id = ${mainSessionId}
+      UNION ALL
+      SELECT s.id FROM sessions s JOIN tree ON s."parentSessionId" = tree.id)
+    SELECT id FROM tree`;
+  const ids = tree.map((row) => row.id);
+  await tx.$executeRaw`UPDATE runs SET "sessionId" = ${mainSessionId} WHERE "sessionId" = ANY(${ids}::text[])`;
+  await tx.$executeRaw`DELETE FROM session_entries WHERE "sessionId" = ANY(${ids}::text[])`;
+  await tx.$executeRaw`DELETE FROM sessions WHERE "parentSessionId" = ${mainSessionId}`;
+  const sessionId = randomUUID();
+  await tx.$executeRaw`
+    UPDATE sessions SET id = ${sessionId}, "nextEntrySeq" = 0, "headEntryId" = NULL
+    WHERE id = ${mainSessionId}`;
+  await tx.thread.update({ where: { id: threadId }, data: { sessionId } });
+  return sessionId;
+}
+
+/** Where a session the backfill appends to stands: the runs it started, the person's last word. */
+async function priorState(tx: Prisma.TransactionClient, sessionId: string, runIds: string[]) {
+  const started = await tx.$queryRaw<Array<{ runId: string }>>`
+    SELECT DISTINCT "runId" FROM session_entries
+    WHERE type = 'run.started' AND "runId" = ANY(${runIds}::text[])`;
+  const [person] = await tx.$queryRaw<Array<{ id: string }>>`
+    SELECT id FROM session_entries WHERE "sessionId" = ${sessionId} AND type = 'user.message'
+    ORDER BY seq DESC LIMIT 1`;
+  return { startedRuns: started.map((row) => row.runId), lastPersonEntry: person?.id };
 }
 
 function isMessageBlock(block: Block): block is MessageBlock {
@@ -584,7 +685,15 @@ function isPreviewCard(block: Block): boolean {
   return block.kind === "link_preview" && isLinkPreviewCard(block);
 }
 
-function opensRun(block: Block): boolean {
+/** Kinds a bot message held that show nothing in its place once the log keeps them apart. */
+const NOT_SHOWN_ALONE = new Set<Block["kind"]>(["skill_source", "steps", "progress"]);
+
+/** A message opens its run with an entry of the run, or, showing nothing, with its start alone. */
+function opensRun(blocks: readonly Block[]): boolean {
+  return blocks.every((block) => block.kind === "progress") || blocks.some(makesRunEntry);
+}
+
+function makesRunEntry(block: Block): boolean {
   return block.kind !== "progress" && block.kind !== "routine_run" && block.kind !== "skill_source";
 }
 
@@ -615,7 +724,7 @@ function previewsOf(blocks: readonly Block[], target: string, createdAt: Date): 
 function learnt(
   block: Extract<MessageBlock, { kind: "skill_source" }>,
   botId: string,
-  runId: string | null,
+  runId: string | undefined,
   createdAt: Date,
 ): Draft {
   return {
@@ -725,22 +834,37 @@ async function legacyRuns(
   );
 }
 
-async function senderSessionsOf(
+/**
+ * The `bot.message.sent` entry each delivery came from, by the sender's message id: the first one
+ * of the same run and text at or after the entry that holds that id, once the sender's thread is in
+ * the log. A delivery whose sender is not there yet keeps no link rather than a wrong one.
+ */
+async function sentEntriesOf(
   tx: Prisma.TransactionClient,
   deliveries: ReadonlyArray<z.infer<typeof LegacyBotMessageReceived>>,
-): Promise<Map<string, string>> {
-  if (deliveries.length === 0) return new Map();
-  const echoes = deliveries.flatMap((delivery) => delivery.returnToMessageId ?? []);
-  const bots = deliveries.map((delivery) => delivery.fromBotId);
-  const rows = await tx.$queryRaw<Array<{ key: string; sessionId: string }>>`
-    SELECT m.id AS key, t."sessionId" FROM messages m JOIN threads t ON t.id = m."threadId"
-    WHERE m.id = ANY(${echoes}::text[])
-    UNION ALL
-    SELECT t."botId" AS key, t."sessionId" FROM threads t WHERE t."botId" = ANY(${bots}::text[])`;
-  return new Map(rows.map((row) => [row.key, row.sessionId]));
+): Promise<Map<string, { id: string; sessionId: string; exchangeId: string }>> {
+  const linked = deliveries.flatMap((delivery) =>
+    delivery.returnToMessageId ? [{ id: delivery.returnToMessageId, text: delivery.text }] : [],
+  );
+  if (linked.length === 0) return new Map();
+  const rows = await tx.$queryRaw<
+    Array<{ messageId: string; id: string; sessionId: string; exchangeId: string }>
+  >`
+    SELECT d.message_id AS "messageId", sent.id, sent."sessionId", sent."exchangeId"
+    FROM unnest(${linked.map((link) => link.id)}::text[], ${linked.map((link) => link.text)}::text[])
+      AS d(message_id, text)
+    JOIN session_entries held ON held.id = d.message_id
+    JOIN LATERAL (
+      SELECT e.id, e."sessionId", e.payload ->> 'exchangeId' AS "exchangeId"
+      FROM session_entries e
+      WHERE e."sessionId" = held."sessionId" AND e.seq >= held.seq
+        AND e."runId" = held."runId" AND e.type = 'bot.message.sent'
+        AND e.payload ->> 'text' = d.text
+      ORDER BY e.seq LIMIT 1) sent ON true`;
+  return new Map(rows.map(({ messageId, ...sent }) => [messageId, sent]));
 }
 
-/** The threads whose messages the log does not hold yet, by id, a batch at a time after `after`. */
+/** The threads with a message no entry holds, by id, a batch at a time after `after`. */
 export async function threadsToBackfill(
   prisma: PrismaClient,
   limit: number,
@@ -749,8 +873,10 @@ export async function threadsToBackfill(
   const rows = await prisma.$queryRaw<Array<{ id: string }>>`
     SELECT t.id FROM threads t
     WHERE t.id > ${after}
-      AND EXISTS (SELECT 1 FROM messages m WHERE m."threadId" = t.id)
-      AND NOT EXISTS (SELECT 1 FROM session_entries e WHERE e."sessionId" = t."sessionId")
+      AND EXISTS (
+        SELECT 1 FROM messages m
+        WHERE m."threadId" = t.id
+          AND NOT EXISTS (SELECT 1 FROM session_entries e WHERE e.id = m.id))
     ORDER BY t.id LIMIT ${limit}`;
   return rows.map((row) => row.id);
 }

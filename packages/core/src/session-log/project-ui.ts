@@ -286,7 +286,9 @@ export function projectThread(entries: readonly ThreadEntry[]): ProjectedThread 
             text,
             intent,
             exchangeId,
-            origin: { sessionId: fromSessionId, entryId: fromEntryId },
+            ...(fromSessionId && fromEntryId
+              ? { origin: { sessionId: fromSessionId, entryId: fromEntryId } }
+              : {}),
           },
           segment.id,
         );
