@@ -74,6 +74,8 @@ afterEach(() => {
   act(() => root.unmount());
   container.remove();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 async function renderThread(
@@ -153,7 +155,7 @@ describe("the transcript", () => {
     ).toBe("str-06");
   });
 
-  it("keeps a jump to a reply's parent from being pulled back to the end by the next row", async () => {
+  it("holds a jump to a reply's parent against the next row, then follows a scroll back down", async () => {
     const following = { current: true };
     const scrollRef = createRef<HTMLDivElement>();
     const snaps = vi.fn();
@@ -176,6 +178,59 @@ describe("the transcript", () => {
 
     expect(following.current).toBe(false);
     expect(snaps).not.toHaveBeenCalled();
+
+    // Once the hold has passed, scrolling down to the end follows again.
+    const settled = performance.now() + 1501;
+    vi.spyOn(performance, "now").mockReturnValue(settled);
+    for (const top of [596, 600]) {
+      Object.defineProperty(element, "scrollTop", { configurable: true, value: top });
+      await act(async () => element.dispatchEvent(new Event("scroll")));
+    }
+    expect(following.current).toBe(true);
+  });
+
+  it("follows the end again when a jump lands on a row already on the last screen", async () => {
+    vi.useFakeTimers();
+    const following = { current: true };
+    const scrollRef = createRef<HTMLDivElement>();
+    const snaps = vi.fn();
+    Element.prototype.scrollTo = snaps;
+    await renderThread(9, { scrollRef, followingRef: following });
+    const element = scrollRef.current!;
+    Object.defineProperty(element, "scrollHeight", { configurable: true, value: 1000 });
+    Object.defineProperty(element, "clientHeight", { configurable: true, value: 400 });
+    Object.defineProperty(element, "scrollTop", { configurable: true, value: 600 });
+
+    const preview = document.querySelector<HTMLElement>('[data-testid="reply-parent-preview"]');
+    await act(async () => preview?.click());
+    expect(following.current).toBe(false);
+    await act(async () => vi.advanceTimersByTime(1500));
+    snaps.mockClear();
+    await renderThread(11, { scrollRef, followingRef: following });
+
+    expect(following.current).toBe(true);
+    expect(snaps).toHaveBeenCalled();
+  });
+
+  it("offers the jump to latest when rows land below a jump during its hold", async () => {
+    vi.useFakeTimers();
+    const following = { current: true };
+    const scrollRef = createRef<HTMLDivElement>();
+    await renderThread(9, { scrollRef, followingRef: following });
+    const element = scrollRef.current!;
+    Object.defineProperty(element, "clientHeight", { configurable: true, value: 400 });
+    Object.defineProperty(element, "scrollTop", { configurable: true, value: 600 });
+    const preview = document.querySelector<HTMLElement>('[data-testid="reply-parent-preview"]');
+    await act(async () => preview?.click());
+
+    await renderThread(11, { scrollRef, followingRef: following });
+    Object.defineProperty(element, "scrollHeight", { configurable: true, value: 1400 });
+    await act(async () => vi.advanceTimersByTime(1500));
+
+    expect(following.current).toBe(false);
+    expect(
+      document.querySelector('[aria-label="Jump to latest"]')?.getAttribute("aria-hidden"),
+    ).toBe("false");
   });
 
   it("draws nothing for an effect that carries no card", async () => {

@@ -147,6 +147,7 @@ export const Transcript = memo(function Transcript({
   }
   const autoScrolling = useRef(false);
   const jumpedAt = useRef(Number.NEGATIVE_INFINITY);
+  const jumpSettleTimer = useRef<number | undefined>(undefined);
   const lastScrollTop = useRef<number | null>(null);
   const autoScrollTimer = useRef<number | undefined>(undefined);
   const jumpButtonRef = useRef<HTMLButtonElement>(null);
@@ -189,6 +190,18 @@ export const Transcript = memo(function Transcript({
         following.current = false;
         jumpedAt.current = performance.now();
         onJumpToMessage(messageId);
+        window.clearTimeout(jumpSettleTimer.current);
+        // A jump to a row already on the last screen never scrolls down: follow again once it settles there.
+        jumpSettleTimer.current = window.setTimeout(() => {
+          const element = scrollRef.current;
+          if (!element) return;
+          const nearEnd = transcriptIsNearEnd(element);
+          setAtEnd(nearEnd);
+          const rowId = rowOf.get(messageId) ?? messageId;
+          if (nearEnd && element.querySelector(`[data-message-id="${CSS.escape(rowId)}"]`)) {
+            following.current = true;
+          }
+        }, JUMP_SETTLE_MS);
       },
       onRefresh,
       onBotChanged,
@@ -217,6 +230,7 @@ export const Transcript = memo(function Transcript({
     onOpenSkill,
     messages,
     rowOf,
+    scrollRef,
   ]);
   const workingBotName = workingBots.length === 1 ? workingBots[0]?.name : undefined;
   const workingFallback = `${
@@ -289,6 +303,7 @@ export const Transcript = memo(function Transcript({
   useEffect(
     () => () => {
       window.clearTimeout(autoScrollTimer.current);
+      window.clearTimeout(jumpSettleTimer.current);
     },
     [],
   );
