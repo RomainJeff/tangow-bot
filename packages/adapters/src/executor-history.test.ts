@@ -384,6 +384,21 @@ describe("the history a run reads from its session log", () => {
     ]);
   });
 
+  it("tells a routine run that only its report reaches the user, and a person's run how to talk with them", async () => {
+    const routine = fixture({
+      run: { trigger: "routine", routineId: "routine-1", createdAt: new Date() },
+    });
+    const { instructions: routineInstructions } = await routine.request();
+    const { instructions: userInstructions } = await fixture().request();
+
+    expect(routineInstructions).toContain(
+      "Your final written response is the report the user receives when this routine ends. Do not use message_user.",
+    );
+    expect(routineInstructions).not.toContain("Use message_user to communicate with the user");
+    expect(userInstructions).toContain("Use message_user to communicate with the user");
+    expect(userInstructions).not.toContain("Do not use message_user.");
+  });
+
   it("hands a group member another bot's words as a bot message, and its own as its turns", async () => {
     const peer = { botId: "bot-2", runId: "run-peer" };
     const tail = chain(0, [

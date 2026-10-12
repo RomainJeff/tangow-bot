@@ -31,7 +31,7 @@ import type {
   ToolCallTrace,
 } from "@rakazo/adapter-kit";
 import type { AskQuestion } from "@rakazo/contracts";
-import { redactSecrets } from "@rakazo/core";
+import { detachedRunInstructions, redactSecrets } from "@rakazo/core";
 import { getLogger, redactSensitiveText } from "@rakazo/logging";
 import { isToolPauseResult } from "./approval-effect.js";
 import { builtinAgentTools, DELEGATION_TOOL_NAMES } from "./builtin-tools.js";
@@ -1443,13 +1443,16 @@ async function runSubagent(
       pruneComputerScreenshotContext(messages, requestModel.maxImagesPerPrompt),
     initialState: {
       systemPrompt: [
-        `You are a Rakazo subagent named "${name}".`,
-        "You run inside the parent bot's turn — you are not a separate bot chat.",
-        "Complete the task and return a concise result. Do not spawn bots or further subagents.",
-        extra,
-      ]
-        .filter(Boolean)
-        .join(" "),
+        [
+          `You are a Rakazo subagent named "${name}".`,
+          "You run inside the parent bot's turn — you are not a separate bot chat.",
+          "Complete the task and return a concise result. Do not spawn bots or further subagents.",
+          extra,
+        ]
+          .filter(Boolean)
+          .join(" "),
+        detachedRunInstructions("helper"),
+      ].join("\n\n"),
       model: subagentModel,
       thinkingLevel: thinkingLevelFor(subagentModel, requestModel.thinkingLevel),
       tools: toAgentTools(childDefs, nestedHost),

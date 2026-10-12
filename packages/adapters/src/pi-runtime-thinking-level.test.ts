@@ -12,6 +12,7 @@ const fakeAgentState = vi.hoisted(() => ({
     maxTokens?: number;
   }>,
   sessionIds: [] as Array<string | undefined>,
+  systemPrompts: [] as string[],
   subagentArgs: { name: "helper", task: "help" } as Record<string, unknown>,
   lastSubagentResult: undefined as unknown,
   failPrompt: false,
@@ -32,6 +33,7 @@ vi.mock("@earendil-works/pi-agent-core", () => ({
       sessionId?: string;
       transformContext: (messages: AgentMessage[]) => Promise<AgentMessage[]>;
       initialState: {
+        systemPrompt: string;
         thinkingLevel: string;
         tools: FakeAgentTool[];
         model: (typeof fakeAgentState.models)[number];
@@ -40,6 +42,7 @@ vi.mock("@earendil-works/pi-agent-core", () => ({
       this.tools = options.initialState.tools;
       fakeAgentState.transforms.push(options.transformContext);
       fakeAgentState.sessionIds.push(options.sessionId);
+      fakeAgentState.systemPrompts.push(options.initialState.systemPrompt);
       fakeAgentState.thinkingLevels.push(options.initialState.thinkingLevel);
       fakeAgentState.models.push(options.initialState.model);
     }
@@ -151,6 +154,7 @@ describe("Pi agent thinking level", () => {
     fakeAgentState.transforms = [];
     fakeAgentState.models = [];
     fakeAgentState.sessionIds = [];
+    fakeAgentState.systemPrompts = [];
     fakeAgentState.subagentArgs = { name: "helper", task: "help" };
     fakeAgentState.lastSubagentResult = undefined;
     fakeAgentState.failPrompt = false;
@@ -287,6 +291,16 @@ describe("Pi agent thinking level", () => {
     expect(fakeAgentState.lastSubagentResult).toMatchObject({
       details: { result: "Subagent failed: Connect that model provider first" },
     });
+  });
+
+  it("tells a helper that only the result it hands back reaches the user", async () => {
+    await runWithModel("plain-model");
+
+    const [, helper] = fakeAgentState.systemPrompts;
+    expect(helper).toContain(
+      "Your final written response is the result you hand back to the bot that started you, which tells the user what matters. Do not use message_user.",
+    );
+    expect(helper).not.toContain("Use message_user to communicate with the user");
   });
 
   it("keeps reasoning off for the main agent and subagent", async () => {

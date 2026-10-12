@@ -79,6 +79,7 @@ import {
   containsSecret,
   createStreamingRedactor,
   DEFAULT_SKILL_LEARNING,
+  detachedRunInstructions,
   endsSentence,
   expandSkillReferencesInPrompt,
   formatSkillRunPrompt,
@@ -984,6 +985,8 @@ export type SystemInstructionParts = {
   userTurn?: boolean;
   /** A user turn in the bot's direct conversation: the bot may propose a routine. */
   offerProposals?: boolean;
+  /** A routine run, apart from the user's chat: it reports when it ends instead of talking. */
+  detached?: boolean;
 };
 
 export const CHAT_VOICE_INSTRUCTIONS = `## How you communicate with the user
@@ -1049,7 +1052,7 @@ export function buildSystemInstructions(parts: SystemInstructionParts): string {
     'For charts and data visualization, use the render_plot tool: it renders bar, line, scatter, histogram, heatmap, faceted and many more chart types from a JSON spec and attaches the PNG to the chat. Call render_plot with {"help": true} before your first chart to read the full guide.',
     "When the user asks you to add or connect an MCP server (and gives you its details), use add_mcp_server. If it uses browser sign-in, an approval card appears in the chat — tell the user to click Authorize on it.",
     "Never print API keys, access tokens, or secret values. Prefer tools over claiming you already did the work.",
-    CHAT_VOICE_INSTRUCTIONS,
+    parts.detached ? detachedRunInstructions("routine") : CHAT_VOICE_INSTRUCTIONS,
     // Last in the stable part: it flips between user turns and automatic wakes of the same thread.
     parts.userTurn ? BOT_OFFER_DEDICATED_BOT : undefined,
     parts.offerProposals ? BOT_OFFER_PROPOSALS : undefined,
@@ -4452,6 +4455,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             botDirectory,
             userTurn: isUserOpenedTrigger(run.trigger),
             offerProposals: isUserOpenedTrigger(run.trigger) && !thread.groupId,
+            detached: runsDetached(run),
           });
           const instructionTokens = estimateTextTokens(instructions);
           const toolSchemaTokens = estimateToolSchemaTokens(tools);
@@ -5989,6 +5993,11 @@ export async function openRunLog(
     });
     return { sessionId, awaitingResult };
   });
+}
+
+/** A routine's run, scheduled or woken by a webhook, works in its own session. */
+function runsDetached(run: { trigger: string; routineId: string | null }): boolean {
+  return run.routineId !== null && (run.trigger === "routine" || run.trigger === "webhook");
 }
 
 type RunTriggerSource = {
