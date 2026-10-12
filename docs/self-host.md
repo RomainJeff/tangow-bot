@@ -589,10 +589,21 @@ it has succeeded, running it again changes nothing. On a large database it takes
 updater, the installer and the desktop app wait up to an hour.
 
 The API does the same when it starts, so a deployment still on its previous Compose file, which has
-no `migrate` service, upgrades too, and its API exits with the same message when a thread cannot be
-moved. The current Compose file is recommended, since there the worker always waits for the move.
-Migration `20261012000000_drop_messages` drops the table only once every message is in the log, so
-a bare `prisma migrate deploy` never fails on it and leaves the move to the script or the API.
+no `migrate` service, can upgrade within these limits:
+
+- `docker-compose.prod.yml` and `docker-compose.images.yml` mark the API unhealthy after about 200 s
+  (a check every 10 s, 20 retries), and the worker waits for a healthy API. The move has to fit in
+  that window: about 500,000 messages at the rate measured here (50,000 messages in 18 s), fewer on
+  a slower host. Past it, `up` fails and the worker stays stopped.
+- `docker-compose.yml` starts the worker with the API, and a run the worker logs into a thread
+  before the move reaches it makes that thread refuse. Stop the worker until the API is up.
+- When a thread cannot be moved, the API exits with the same message and Compose restarts it, which
+  repeats the whole move until the override runs.
+
+Past these limits, refresh the Compose file first, or run the move before `up` with
+`docker compose … run --rm --no-deps api pnpm exec tsx scripts/backfill-session-log.ts`. Migration
+`20261012000000_drop_messages` drops the table only once every message is in the log, so a bare
+`prisma migrate deploy` never fails on it and leaves the move to the script or the API.
 
 A thread whose log already holds entries takes the messages written after its newest entry at the
 end of its log; one written at the same instant counts as newer. Messages older than its entries,
