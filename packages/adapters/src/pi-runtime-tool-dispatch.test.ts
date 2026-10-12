@@ -674,6 +674,49 @@ describe("Pi connector tool dispatch", () => {
     });
   });
 
+  it("ends without a follow-up once a tool turn only messaged the user", async () => {
+    fakeAgentState.mode = "silent-continuation";
+    fakeAgentState.invoke = { name: "message_user", args: { message: "Sent." } };
+    const runtime = new PiAgentRuntime();
+    const events: unknown[] = [];
+
+    for await (const event of runtime.run(
+      {
+        botId: "b",
+        threadId: "t",
+        runId: "message-user-final",
+        prompt: "send the update",
+        instructions: "Tell the user with message_user.",
+        history: [],
+        tools: [
+          {
+            name: "message_user",
+            description: "Send a message the user sees",
+            inputSchema: {
+              type: "object",
+              properties: { message: { type: "string" } },
+              required: ["message"],
+            },
+          },
+        ],
+        model: { provider: "test", id: "dispatch-test-model" },
+        executeTool: vi.fn(async () => ({ ok: true })),
+      },
+      {
+        operationId: "message-user-final",
+        traceId: "message-user-final",
+        spaceId: "w",
+        userId: "u",
+        signal: new AbortController().signal,
+      },
+    )) {
+      events.push(event);
+    }
+
+    expect(fakeAgentState.followUpMessages).toEqual([]);
+    expect(JSON.stringify(events)).not.toContain("could not produce a final response");
+  });
+
   it("does not wait for a slow tool completion hook", async () => {
     let resolveAudit!: () => void;
     const audit = new Promise<void>((resolve) => {

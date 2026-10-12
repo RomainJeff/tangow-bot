@@ -397,6 +397,7 @@ import {
   finalBlocksAfterMidTurnProgress,
   isUserProgressClientNonce,
   repeatsSentUserText,
+  trailingRuntimeNotice,
   userMessageClientNonce,
 } from "./user-progress.js";
 import { createWebProvider } from "./web-provider-factory.js";
@@ -965,18 +966,29 @@ export type SystemInstructionParts = {
   userTurn?: boolean;
   /** A user turn in the bot's direct conversation: the bot may propose a routine. */
   offerProposals?: boolean;
+  /** message_user is offered (see selectBuiltinToolsForRun); otherwise the final reply speaks. */
+  messageUserExposed?: boolean;
 };
 
-export const CHAT_VOICE_INSTRUCTIONS = `## How you communicate with the user
+/** How the user hears from a bot: message_user for a top-level bot, the final reply otherwise. */
+export function chatVoiceInstructions(messageUserExposed: boolean): string {
+  const channel = messageUserExposed
+    ? "message_user is the only way to reach the user. Everything else you write, your final reply included, is private scratch space they never see, like your reasoning and tool output. A turn that ends without message_user is a turn where you said nothing. Send answers, useful updates, questions, and the final outcome with message_user, then end the turn without repeating them."
+    : "Your final reply is what gets seen. Text you write before a tool call is discarded, so put everything that matters in your final reply.";
+  const viaMessageUser = messageUserExposed ? " with message_user" : "";
+  const silence = messageUserExposed
+    ? "end the turn without message_user"
+    : "end the turn with no reply";
+  return `## How you communicate with the user
 
-Use message_user to communicate with the user: answers, useful updates, questions, and the final outcome. Only messages sent through message_user are visible; ordinary assistant text, reasoning, and other tool output are not.
+${channel}
 
-1. Reply right away. If the task is quick, give the answer directly. Otherwise send one sentence saying what you're doing ("Checking your calendar."), then work.
+1. Reply right away. If the task is quick, send the answer directly. Otherwise send one sentence saying what you're doing ("Checking your calendar."), then work.
 2. Lead with the answer: the yes/no, the number, the recommendation. No restating the question, no "Here's the summary", no closing pleasantries.
 3. Match the user's length. Short message, short reply. Go longer only when asked or when the task needs it.
 4. Write complete sentences. Brief means fewer ideas, not clipped telegraph-style fragments.
 5. On long tasks, only send updates at useful moments: a result, a blocker, a change of plan. No step-by-step narration.
-6. A task is done only when the result has been sent. "On it" is not delivery.
+6. A task is done only when the result has been sent${viaMessageUser}. "On it" is not delivery.
 7. Decide on your own when the action is reversible and within what was asked. Ask only when a wrong guess has real consequences (deleting, sending, paying, affecting other people) or when only the user knows the answer. When you ask, offer concrete options rather than an open question.
 8. Anything sent on the user's behalf (email, Slack) is shown as a draft first. Send only on an explicit "send it".
 9. Never expose the plumbing: tool names, IDs, APIs, technical steps. Talk about the work, not the machinery.
@@ -985,7 +997,7 @@ Use message_user to communicate with the user: answers, useful updates, question
 
 ## When to stay silent
 
-Silence is a deliberate choice, not a failure to respond.
+Silence is a deliberate choice, not a failure to respond: ${silence}.
 - For thanks or agreement, react with an emoji instead of writing a reply.
 - When a scheduled check finds nothing new, send nothing. No "no updates" messages.
 - Drop stale or duplicate results instead of narrating them.
@@ -993,6 +1005,9 @@ Silence is a deliberate choice, not a failure to respond.
 - Don't acknowledge messages from other agents just to say "got it".
 - Offer a next step only when it follows directly from what the user did, at most once.
 Before sending, ask: does this change what the user knows or can do? If not, don't send it.`;
+}
+
+export const CHAT_VOICE_INSTRUCTIONS = chatVoiceInstructions(true);
 
 /**
  * Providers cache by prefix, so a fragment that moves between turns invalidates every
@@ -1030,7 +1045,7 @@ export function buildSystemInstructions(parts: SystemInstructionParts): string {
     'For charts and data visualization, use the render_plot tool: it renders bar, line, scatter, histogram, heatmap, faceted and many more chart types from a JSON spec and attaches the PNG to the chat. Call render_plot with {"help": true} before your first chart to read the full guide.',
     "When the user asks you to add or connect an MCP server (and gives you its details), use add_mcp_server. If it uses browser sign-in, an approval card appears in the chat — tell the user to click Authorize on it.",
     "Never print API keys, access tokens, or secret values. Prefer tools over claiming you already did the work.",
-    CHAT_VOICE_INSTRUCTIONS,
+    chatVoiceInstructions(parts.messageUserExposed ?? true),
     // Last in the stable part: it flips between user turns and automatic wakes of the same thread.
     parts.userTurn ? BOT_OFFER_DEDICATED_BOT : undefined,
     parts.offerProposals ? BOT_OFFER_PROPOSALS : undefined,
@@ -1555,6 +1570,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
         // (background-work-visibility CA1/CA2); a top-level bot's scheduled routine (the
         // orchestrator's own brief) is unaffected and keeps behaving as a normal reply.
         const isRoutineCardRun = showsRoutineRunCard(run, bot.parentBotId != null);
+        // Only a top-level bot talks to the user through message_user. A sub-bot answers its
+        // parent and a routine card digests the run, so both keep their text as their output.
+        const messageUserExposed = bot.parentBotId == null && !isRoutineCardRun;
+        // Text the model writes outside message_user is private scratch, and a turn that never
+        // calls it stays silent. A delegated run's text is its result for the ordering bot.
+        const freeTextIsPrivate = messageUserExposed && run.trigger !== "bot_message";
         const routineCardStartedAt = current.startedAt ?? new Date();
         let routineForCard: { id: string; name: string; notify: boolean } | null = null;
         let routineRunCardMessageId: string | null = null;
@@ -1874,6 +1895,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             semanticMemoryEnabled,
             messagingChannelRun,
             browserRunAllowed: Boolean(decisionProvider),
+            messageUserExposed,
           }),
           // Cross-owner agent connections only exist for chat-linked bots.
           ...(hasMessagingIdentity ? agentConnectionTools : []),
@@ -4193,6 +4215,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             botDirectory,
             userTurn: isUserOpenedTrigger(run.trigger),
             offerProposals: isUserOpenedTrigger(run.trigger) && !thread.groupId,
+            messageUserExposed,
           });
           const instructionTokens = estimateTextTokens(instructions);
           const toolSchemaTokens = estimateToolSchemaTokens(tools);
@@ -4286,7 +4309,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               model: runtimeModel,
               resumeFromCheckpoint: takeoverResume?.checkpoint,
               script,
-              allowSilentEmpty: allowSilentPeerMessage || messagingChannelRun,
+              allowSilentEmpty: allowSilentPeerMessage || messagingChannelRun || freeTextIsPrivate,
               emptyResponseText,
               executeTool: scripted
                 ? undefined
@@ -4717,6 +4740,16 @@ export function createRunExecutor(deps: ExecutorDeps) {
             // Signal only: the text already streamed to the thread, so a nudge would leave it visible.
             getLogger().warn("agent reply contains a text tool call", { runId, botId: bot.id });
           }
+          if (freeTextIsPrivate) {
+            // Only the runtime's own notice outlives the private final text.
+            const runtimeNotice = trailingRuntimeNotice(
+              assembled ||
+                messageSegments.map((block) => (block.kind === "text" ? block.text : "")).join(""),
+            );
+            messageSegments = messageSegments.filter((block) => block.kind !== "text");
+            if (runtimeNotice) messageSegments.push({ kind: "text", text: runtimeNotice });
+            assembled = runtimeNotice ?? "";
+          }
           if (!assembled) {
             // Mid-turn progress already posted durable chat messages; skip the empty
             // "…" fallback so we do not add a junk final bubble. Delegated bot_message
@@ -4724,7 +4757,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
             // only progress was posted, result when a final reply exists).
             messageSegments = completionMessageSegments(messageSegments, {
               allowSilentEmpty:
-                allowSilentPeerMessage || messagingChannelRun || publishedMidTurnUserMessage,
+                allowSilentPeerMessage ||
+                messagingChannelRun ||
+                publishedMidTurnUserMessage ||
+                freeTextIsPrivate,
               emptyResponseText,
               suppressOutput: handedOff,
               skipEmptyFallback: publishedTerminalSubagent || publishedMidTurnUserMessage,
@@ -4741,9 +4777,14 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 publishedMidTurnUserMessage,
                 midTurnUserTexts,
               );
+          // With private free text, the run's last message_user is what it told the user.
           const text = handedOff
             ? ""
-            : redactSecrets(completionNotificationBody(assembled, rawBlocks), runSecrets);
+            : redactSecrets(
+                completionNotificationBody(assembled, rawBlocks) ||
+                  (freeTextIsPrivate ? (midTurnUserTexts.at(-1) ?? "") : ""),
+                runSecrets,
+              );
           if (containsSecret(text, runSecrets)) {
             throw new Error("refusing to persist a secret in the thread");
           }
@@ -5238,6 +5279,8 @@ export function selectBuiltinToolsForRun(options: {
   messagingChannelRun: boolean;
   /** A decision provider is resolved for this run, so browser_run is offered with the page tools. */
   browserRunAllowed?: boolean;
+  /** A top-level bot's own run, the only kind that reaches the user through message_user. */
+  messageUserExposed?: boolean;
 }) {
   const selected = selectMemoryTools(
     filterBuiltinToolsForRun(
@@ -5254,6 +5297,7 @@ export function selectBuiltinToolsForRun(options: {
   ).filter(
     (tool) =>
       (tool.name !== "browser_run" || Boolean(options.browserRunAllowed)) &&
+      (tool.name !== "message_user" || options.messageUserExposed !== false) &&
       (!options.messagingChannelRun ||
         (!["remember", "save_memory", "recall_memory", "forget_memory"].includes(tool.name) &&
           !tool.name.startsWith("scratchpad_"))),

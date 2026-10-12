@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
 import { createRunExecutor } from "./executor.js";
 import type { FakeWebProvider } from "./fake-web.js";
+import { TOOL_FINAL_RESPONSE_FALLBACK, toolCallBudgetNotice } from "./user-progress.js";
 
 vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ComputerLifecycleModule>()),
@@ -415,7 +416,7 @@ describe("link previews of a run (CA 13, CA 14, CA 70, CA 72)", () => {
     );
   });
 
-  it("shows only message_user and the final reply, never the narration around tools", async () => {
+  it("shows only message_user, never the text around tools or the final reply", async () => {
     const f = fixture({
       trigger: "user",
       async *runtimeRun(request) {
@@ -438,18 +439,64 @@ describe("link previews of a run (CA 13, CA 14, CA 70, CA 72)", () => {
     const shown = [...f.messages.flatMap((message) => message.blocks), ...finalBlocks]
       .flatMap((block) => (block.kind === "text" ? [block.text] : []))
       .join("|");
-    expect(shown).toBe("Found it.|All fixed.");
+    expect(shown).toBe("Found it.");
     const streamed = (f.appended.mock.calls as unknown as Array<[{ type: string }]>).filter(
       ([event]) => event.type === "thread.progress",
     );
     expect(streamed).toEqual([]);
   });
 
-  it("pushes a finished reply's words without its markdown", async () => {
+  it("lets a sub-bot answer with its final reply, without message_user", async () => {
+    let offered: string[] = [];
     const f = fixture({
       trigger: "user",
-      async *runtimeRun() {
-        yield { type: "text", text: "**Done**: see [the report](https://example.test/a)" };
+      parentBotId: "bot-0",
+      async *runtimeRun(request) {
+        offered = request.tools.map((tool) => tool.name);
+        yield { type: "text", text: "Status: green." };
+        yield { type: "done" };
+      },
+    });
+
+    await f.run();
+
+    expect(offered).not.toContain("message_user");
+    const finalBlocks = f.finalizeRun.mock.calls.at(-1)![0].blocks ?? [];
+    expect(finalBlocks).toEqual([{ kind: "text", text: "Status: green." }]);
+  });
+
+  it.each([
+    ["the tool-call limit", toolCallBudgetNotice(40)],
+    ["a stalled tool step", TOOL_FINAL_RESPONSE_FALLBACK],
+  ])(
+    "keeps the runtime's notice for %s when the final reply stays private",
+    async (_name, notice) => {
+      const f = fixture({
+        trigger: "user",
+        async *runtimeRun() {
+          yield { type: "text", text: `Half done.\n\n${notice}` };
+          yield { type: "done" };
+        },
+      });
+
+      await f.run();
+
+      const finalBlocks = f.finalizeRun.mock.calls.at(-1)![0].blocks ?? [];
+      expect(finalBlocks).toEqual([{ kind: "text", text: notice }]);
+    },
+  );
+
+  it("pushes the last message_user's words without its markdown", async () => {
+    const f = fixture({
+      trigger: "user",
+      async *runtimeRun(request) {
+        yield { type: "tool", name: "message_user", args: {}, executionId: "call-1" };
+        await request.executeTool!(
+          "message_user",
+          { message: "**Done**: see [the report](https://example.test/a)" },
+          "call-1",
+        );
+        yield { type: "text", text: "Private closing note." };
         yield { type: "done" };
       },
     });
@@ -463,8 +510,9 @@ describe("link previews of a run (CA 13, CA 14, CA 70, CA 72)", () => {
     const image = "![](https://example.test/a.png)";
     const finished = fixture({
       trigger: "user",
-      async *runtimeRun() {
-        yield { type: "text", text: image };
+      async *runtimeRun(request) {
+        yield { type: "tool", name: "message_user", args: {}, executionId: "call-1" };
+        await request.executeTool!("message_user", { message: image }, "call-1");
         yield { type: "done" };
       },
     });

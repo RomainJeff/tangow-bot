@@ -289,15 +289,12 @@ describe("sub-bot routine run card", () => {
     expect(card?.notify).toBe(true);
   });
 
-  it("does not touch a top-level bot's own routine (no card, ordinary reply)", async () => {
+  it("posts no card for a top-level bot's own routine", async () => {
     const f = fixture({ parentBotId: null });
     await f.run();
     expect(
       f.messages.some((message) => message.blocks.some((block) => block.kind === "routine_run")),
     ).toBe(false);
-    // A top-level bot's routine is its own user-facing brief; finalizeRun still gets the
-    // ordinary blocks (not suppressed).
-    expect(f.finalizeRun).not.toHaveBeenCalledWith(expect.objectContaining({ blocks: [] }));
   });
 });
 
@@ -316,12 +313,11 @@ describe("inbound routine run card", () => {
     ).toBe(false);
   });
 
-  it("keeps a bare delivery with no routine as an ordinary reply", async () => {
+  it("posts no card for a bare delivery with no routine", async () => {
     const f = fixture({ trigger: "webhook", parentBotId: null, routineId: null });
     await f.run();
 
     expect(hasCard(f)).toBe(false);
-    expect(f.finalizeRun).not.toHaveBeenCalledWith(expect.objectContaining({ blocks: [] }));
   });
 });
 

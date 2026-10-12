@@ -76,4 +76,6 @@ test("resolves a pending ask from the main composer", async ({ page }, testInfo)
     }),
   ).toBeVisible({ timeout: 30_000 });
   await captureScreenshot(page, testInfo, "ask-composer-resolved");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await captureScreenshot(page, testInfo, "ask-composer-resolved-mobile");
 });
