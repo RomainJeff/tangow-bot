@@ -36,6 +36,7 @@ import {
   appendSessionEntryInTransaction,
   assertRunCanWriteHistory,
   blocksOf,
+  ENTRY_ON_CHAIN,
   historyGeneration,
   latestRunAsk,
   RunHistoryWriteError,
@@ -340,8 +341,8 @@ export function createThreadEvents(
 interface TruncateThreadInput extends ClearThreadInput {
   /** The runs that wrote entries of the main session from this seq on are cut with them. */
   fromSeq: number;
-  /** Events with seq >= fromEventSeq are deleted. */
-  fromEventSeq: number;
+  /** Events with seq >= fromEventSeq are deleted; null keeps them all. */
+  fromEventSeq: number | null;
   /** Runs started at or after this instant belong to the part of the conversation that goes. */
   fromCreatedAt: Date;
 }
@@ -408,9 +409,11 @@ async function truncateThreadInTransaction(
     },
     data: { skillLinesAt: now },
   });
-  await tx.event.deleteMany({
-    where: { threadId: input.threadId, seq: { gte: input.fromEventSeq } },
-  });
+  if (input.fromEventSeq !== null) {
+    await tx.event.deleteMany({
+      where: { threadId: input.threadId, seq: { gte: input.fromEventSeq } },
+    });
+  }
   if (input.groupId) {
     await tx.chatGroup.update({ where: { id: input.groupId }, data: { updatedAt: now } });
   } else {
@@ -454,8 +457,8 @@ export async function clearThread(
 
 /**
  * Cuts the chain back to before the target user message and everything after it, so the caller
- * can resend an edited version. Returns null when the target is not a person's message of the
- * thread.
+ * can resend an edited version. Returns null when the target is not a person's message still on
+ * the thread's chain: a rewind into what an earlier rewind or a clear cut would fork the log.
  */
 export async function rewindThread(
   prisma: PrismaClient,
@@ -463,14 +466,10 @@ export async function rewindThread(
   realtime?: RealtimeFanout,
 ): Promise<RewindThreadResult | null> {
   const committed = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    const target = await tx.sessionEntry.findFirst({
-      where: {
-        id: input.messageId,
-        type: "user.message",
-        session: { threadId: input.threadId, kind: "thread" },
-      },
-      select: { seq: true, createdAt: true },
-    });
+    const [target] = await tx.$queryRaw<Array<{ seq: number; createdAt: Date }>>`
+      SELECT e.seq, e."createdAt" FROM session_entries e
+      JOIN sessions s ON s.id = e."sessionId" AND s."threadId" = ${input.threadId} AND s.kind = 'thread'
+      WHERE e.id = ${input.messageId} AND e.type = 'user.message' AND ${ENTRY_ON_CHAIN}`;
     if (!target) return null;
     const [created] = await tx.$queryRaw<Array<{ seq: number }>>`
       SELECT seq FROM events
@@ -482,7 +481,7 @@ export async function rewindThread(
       fromSeq: target.seq,
       // No event carried it (a message older than the feed): keep every event rather than guess
       // a cut point and drop the wrong range.
-      fromEventSeq: created?.seq ?? Number.MAX_SAFE_INTEGER,
+      fromEventSeq: created?.seq ?? null,
       fromCreatedAt: target.createdAt,
     });
     const generation = await historyGeneration(tx, truncated.sessionId);

@@ -500,18 +500,19 @@ describe("messages.removeLinkPreview (CA 16, CA 19, CA 54)", () => {
   ) {
     vi.mocked(appendCardStateInTransaction).mockClear();
     const tx = {
-      $queryRaw: vi
-        .fn()
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([
-          {
-            id: "message-1",
-            sessionId: "session-1",
-            botId: null,
-            payload: { blocks: [{ kind: "text", text: "see https://example.test/a" }] },
-          },
-        ])
-        .mockResolvedValue([]),
+      // The message the preview goes under, for the query that reads it; nothing for the others.
+      $queryRaw: vi.fn(async (sql: TemplateStringsArray) =>
+        sql.join("").includes("FROM session_entries e")
+          ? [
+              {
+                id: "message-1",
+                sessionId: "session-1",
+                botId: null,
+                payload: { blocks: [{ kind: "text", text: "see https://example.test/a" }] },
+              },
+            ]
+          : [],
+      ),
       sessionEntry: {
         findMany: vi.fn().mockResolvedValueOnce(previews).mockResolvedValueOnce(removals),
       },

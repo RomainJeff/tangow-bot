@@ -2504,19 +2504,19 @@ describe("clearThread", () => {
 
 describe("rewindThread", () => {
   function rewindTx(overrides: { target?: { seq: number; createdAt: Date } | null }) {
+    const target =
+      overrides.target === undefined ? { seq: 4, createdAt: new Date(0) } : overrides.target;
     return {
-      // The event that carried the target message.
-      $queryRaw: vi.fn().mockResolvedValue([{ seq: 11 }]),
+      $queryRaw: vi
+        .fn()
+        // The target message on the chain, then the event that carried it.
+        .mockResolvedValueOnce(target ? [target] : [])
+        .mockResolvedValue([{ seq: 11 }]),
       thread: {
         update: vi.fn().mockResolvedValue({ sessionId: "session-1" }),
         findUniqueOrThrow: vi.fn().mockResolvedValue({ nextEventSeq: 21 }),
       },
       sessionEntry: {
-        findFirst: vi
-          .fn()
-          .mockResolvedValue(
-            overrides.target === undefined ? { seq: 4, createdAt: new Date(0) } : overrides.target,
-          ),
         findMany: vi.fn().mockResolvedValue([]),
       },
       run: {

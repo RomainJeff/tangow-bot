@@ -208,6 +208,7 @@ import {
   loadChain,
   loadEntryPage,
   threadSessionId,
+  withoutHiddenPeerRuns,
 } from "./thread-message-pages.js";
 import {
   enqueueLinkPreview,
@@ -4640,7 +4641,11 @@ export function createRouter(deps: RouterDeps) {
             }
             return exported;
           })(),
-          loadChain(deps.sessionLog, SessionId.parse(bot.thread.sessionId), EXPORT_ENTRY_PAGE_SIZE),
+          loadChain(
+            deps.sessionLog,
+            SessionId.parse(bot.thread.sessionId),
+            EXPORT_ENTRY_PAGE_SIZE,
+          ).then((chain) => withoutHiddenPeerRuns(deps.prisma, chain)),
         ]);
         return {
           version: 2 as const,

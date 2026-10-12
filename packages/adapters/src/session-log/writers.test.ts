@@ -670,41 +670,49 @@ describe("session log writers", () => {
     ]);
   });
 
-  it("marks an app to connect a routine run shows for the person, in the thread's session", async () => {
-    const { prisma } = database;
-    const ada = await seedBot(prisma, "Ada");
-    const { run, routineSessionId } = await routineRun(prisma, ada, "Inbox sweep");
-    const connect = {
-      kind: "app_connect",
-      provider: "gmail",
-      name: "Gmail",
-      description: "Read your inbox",
-      logo: null,
-      status: "pending",
-    } as const;
-
-    await prisma.$transaction((tx) =>
-      appendRunBlocksInTransaction(
-        tx,
-        { id: EntryId.parse(randomUUID()), runId: run.id, botId: ada.bot.id },
-        [{ kind: "text", text: "Sweeping." }, connect],
-      ),
-    );
-
-    const written = async (sessionId: SessionId) =>
-      (await log.readTail(sessionId)).map(({ type, payload }) => ({ type, payload }));
-    expect(await written(routineSessionId)).toEqual([
-      expect.objectContaining({ type: "run.started" }),
-      { type: "assistant.text", payload: { blocks: [{ kind: "text", text: "Sweeping." }] } },
-    ]);
-    expect(await written(ada.sessionId)).toEqual([
-      expect.objectContaining({ type: "routine.started" }),
+  it.each<[string, MessageBlock]>([
+    [
+      "an app to connect",
       {
-        type: "assistant.text",
-        payload: { blocks: [connect], toPerson: true, originSessionId: routineSessionId },
+        kind: "app_connect",
+        provider: "gmail",
+        name: "Gmail",
+        description: "Read your inbox",
+        logo: null,
+        status: "pending",
       },
-    ]);
-  });
+    ],
+    ["a card", { kind: "card", lines: [{ k: "Invoice", v: "Due Friday" }] }],
+  ])(
+    "marks %s a routine run shows for the person, in the thread's session",
+    async (name, connect) => {
+      const { prisma } = database;
+      const ada = await seedBot(prisma, `Ada (${name})`);
+      const { run, routineSessionId } = await routineRun(prisma, ada, `Inbox sweep ${name}`);
+
+      await prisma.$transaction((tx) =>
+        appendRunBlocksInTransaction(
+          tx,
+          { id: EntryId.parse(randomUUID()), runId: run.id, botId: ada.bot.id },
+          [{ kind: "text", text: "Sweeping." }, connect],
+        ),
+      );
+
+      const written = async (sessionId: SessionId) =>
+        (await log.readTail(sessionId)).map(({ type, payload }) => ({ type, payload }));
+      expect(await written(routineSessionId)).toEqual([
+        expect.objectContaining({ type: "run.started" }),
+        { type: "assistant.text", payload: { blocks: [{ kind: "text", text: "Sweeping." }] } },
+      ]);
+      expect(await written(ada.sessionId)).toEqual([
+        expect.objectContaining({ type: "routine.started" }),
+        {
+          type: "assistant.text",
+          payload: { blocks: [connect], toPerson: true, originSessionId: routineSessionId },
+        },
+      ]);
+    },
+  );
 
   it("shows the card of a peer run the thread hides", async () => {
     const { prisma } = database;

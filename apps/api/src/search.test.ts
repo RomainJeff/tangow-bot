@@ -34,6 +34,24 @@ function fixture(count: number) {
   return { prisma, artifacts, groupArtifacts };
 }
 
+/** A person's message as the search query returns it. */
+function said(id: string, seq: number, blocks: unknown[]) {
+  return {
+    id,
+    sessionId: "session-1",
+    seq,
+    parentId: seq === 0 ? null : `entry-${seq - 1}`,
+    type: "user.message",
+    payload: { blocks, source: "app" },
+    entryBotId: null,
+    runId: null,
+    createdAt: new Date("2026-10-12T09:00:00.000Z"),
+    threadId: "thread-1",
+    botId: "bot-1",
+    botName: "Bot",
+  };
+}
+
 describe("artifact search batching", () => {
   it.each([1, 25])("uses one lookup per destination for %i matching artifacts", async (count) => {
     const { prisma } = fixture(count);
@@ -102,30 +120,16 @@ describe("link previews in search (CA 44, CA 46)", () => {
     // No artifact matched, so the first query is the direct message search.
     prisma.$queryRaw
       .mockResolvedValueOnce([
-        {
-          id: "message-1",
-          threadId: "thread-1",
-          seq: 3,
-          botId: "bot-1",
-          botName: "Bot",
-          blocks: [
-            { kind: "text", text: "see https://example.test/a" },
-            {
-              kind: "link_preview",
-              url: "https://example.test/a",
-              format: "compact",
-              title: sentinel,
-            },
-          ],
-        },
-        {
-          id: "message-2",
-          threadId: "thread-1",
-          seq: 4,
-          botId: "bot-1",
-          botName: "Bot",
-          blocks: [{ kind: "text", text: `I wrote ${sentinel} myself` }],
-        },
+        said("message-1", 3, [
+          { kind: "text", text: "see https://example.test/a" },
+          {
+            kind: "link_preview",
+            url: "https://example.test/a",
+            format: "compact",
+            title: sentinel,
+          },
+        ]),
+        said("message-2", 4, [{ kind: "text", text: `I wrote ${sentinel} myself` }]),
       ])
       .mockResolvedValueOnce([]);
 

@@ -1,12 +1,35 @@
 import type { Actor, MessageBlock, SearchHit } from "@rakazo/contracts";
+import { toThreadEntry } from "@rakazo/contracts";
 import { extractLinksFromText, matchesSearchQuery, snippetAroundMatch } from "@rakazo/core";
-import { ENTRY_ON_CHAIN, Prisma, type PrismaClient } from "@rakazo/db";
+import type { SessionEntryRow } from "@rakazo/db";
+import { ENTRY_ON_CHAIN, Prisma, type PrismaClient, sessionEntryFromRow } from "@rakazo/db";
+import { withoutHiddenPeerRuns } from "./thread-message-pages.js";
 
 const SEARCH_LIMIT = 25;
 /** Cap name matches so content hits (messages/files/links/routines) keep most of the budget. */
 const CONVERSATION_HIT_LIMIT = 5;
 /** The entries of a thread's main session that hold what someone said, as message blocks. */
 const MESSAGE_ENTRY_TYPES = Prisma.sql`('user.message', 'assistant.text', 'bot.text')`;
+
+/** The columns of a searched entry, its own bot named apart from the thread's. */
+const ENTRY_COLUMNS = Prisma.sql`e.id, e."sessionId", e.seq, e."parentId", e.type, e.payload,
+  e."botId" AS "entryBotId", e."runId", e."createdAt"`;
+type EntryColumns = Omit<SessionEntryRow, "botId"> & { entryBotId: string | null };
+
+/** The rows the thread shows, by the rule its own view follows: a hidden peer run stays out. */
+async function shownRows<R extends EntryColumns>(prisma: PrismaClient, rows: R[]): Promise<R[]> {
+  const entries = rows.map(({ entryBotId, ...row }) =>
+    toThreadEntry(sessionEntryFromRow({ ...row, botId: entryBotId })),
+  );
+  const shown = new Set<string>(
+    (await withoutHiddenPeerRuns(prisma, entries)).map((entry) => entry.id),
+  );
+  return rows.filter((row) => shown.has(row.id));
+}
+
+function blocksOfRow(row: EntryColumns): MessageBlock[] {
+  return (row.payload as { blocks: MessageBlock[] }).blocks;
+}
 
 async function findArtifactMessages(
   prisma: PrismaClient,
@@ -231,17 +254,9 @@ export async function querySpaceSearch(
   // Preview cards are cut out of the JSON before the match: a page title must not take a result slot.
   const pattern = `%${query}%`;
   const messageRows = await prisma.$queryRaw<
-    Array<{
-      id: string;
-      threadId: string;
-      seq: number;
-      blocks: Prisma.JsonValue;
-      botId: string;
-      botName: string;
-    }>
+    Array<EntryColumns & { threadId: string; botId: string; botName: string }>
   >`
-    SELECT e.id, t.id AS "threadId", e.seq, e.payload -> 'blocks' AS blocks,
-      b.id AS "botId", b.name AS "botName"
+    SELECT ${ENTRY_COLUMNS}, t.id AS "threadId", b.id AS "botId", b.name AS "botName"
     FROM session_entries e
     INNER JOIN sessions s ON s.id = e."sessionId" AND s.kind = 'thread'
     INNER JOIN threads t ON t.id = s."threadId"
@@ -256,8 +271,8 @@ export async function querySpaceSearch(
     LIMIT ${SEARCH_LIMIT}
   `;
 
-  for (const row of messageRows) {
-    pushMessageHits(row.blocks as MessageBlock[], {
+  for (const row of await shownRows(prisma, messageRows)) {
+    pushMessageHits(blocksOfRow(row), {
       botId: row.botId,
       botName: row.botName,
       messageId: row.id,
@@ -268,17 +283,9 @@ export async function querySpaceSearch(
   }
 
   const groupMessageRows = await prisma.$queryRaw<
-    Array<{
-      id: string;
-      threadId: string;
-      seq: number;
-      blocks: Prisma.JsonValue;
-      groupId: string;
-      groupName: string;
-    }>
+    Array<EntryColumns & { threadId: string; groupId: string; groupName: string }>
   >`
-    SELECT e.id, t.id AS "threadId", e.seq, e.payload -> 'blocks' AS blocks,
-      g.id AS "groupId", g.name AS "groupName"
+    SELECT ${ENTRY_COLUMNS}, t.id AS "threadId", g.id AS "groupId", g.name AS "groupName"
     FROM session_entries e
     INNER JOIN sessions s ON s.id = e."sessionId" AND s.kind = 'thread'
     INNER JOIN threads t ON t.id = s."threadId"
@@ -292,8 +299,8 @@ export async function querySpaceSearch(
     LIMIT ${SEARCH_LIMIT}
   `;
 
-  for (const row of groupMessageRows) {
-    pushMessageHits(row.blocks as MessageBlock[], {
+  for (const row of await shownRows(prisma, groupMessageRows)) {
+    pushMessageHits(blocksOfRow(row), {
       groupId: row.groupId,
       groupName: row.groupName,
       messageId: row.id,
