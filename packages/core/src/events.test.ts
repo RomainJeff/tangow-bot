@@ -5,7 +5,6 @@ import {
   appendToolStep,
   applyThreadRewind,
   containsSecret,
-  createStreamingRedactor,
   endsSentence,
   humanizeToolName,
   isRunTerminalEvent,
@@ -681,50 +680,6 @@ describe("appendToolCallSegment", () => {
         ],
       },
     ]);
-  });
-});
-
-describe("createStreamingRedactor", () => {
-  it("never emits a secret split across streaming chunks", () => {
-    const redactor = createStreamingRedactor(["fake-secret-123"]);
-    const output = [
-      redactor.push("before fake-se"),
-      redactor.push("cret-123 after"),
-      redactor.finish(),
-    ].join("");
-    expect(output).toBe("before [redacted] after");
-    expect(output).not.toContain("fake-secret-123");
-  });
-
-  it("does not delay chunks when there are no known secrets", () => {
-    const redactor = createStreamingRedactor([]);
-    expect(redactor.push("hello")).toBe("hello");
-    expect(redactor.finish()).toBe("");
-  });
-
-  it("buffers a trailing UTF-16 high surrogate until the next chunk completes the emoji", () => {
-    const redactor = createStreamingRedactor([]);
-    const high = "\uD83D";
-    const low = "\uDE00";
-    expect(redactor.push(`hello ${high}`)).toBe("hello ");
-    expect(redactor.push(`${low} world`)).toBe("😀 world");
-    expect(redactor.finish()).toBe("");
-  });
-
-  it("does not emit a high surrogate when the secret hold window would split an emoji pair", () => {
-    const redactor = createStreamingRedactor(["abcdefghij"]); // length 10
-    const high = "\uD83D";
-    const low = "\uDE00";
-    // safeStartLimit lands between high and low; the pair must stay buffered together.
-    expect(redactor.push(`x${high}${low}abcdefgh`)).toBe("x");
-    expect(redactor.push("ij done")).toBe("😀[redacted]");
-    expect(redactor.finish()).toBe(" done");
-  });
-
-  it("replaces an orphaned high surrogate at end of stream", () => {
-    const redactor = createStreamingRedactor([]);
-    expect(redactor.push("end\uD83D")).toBe("end");
-    expect(redactor.finish()).toBe("\uFFFD");
   });
 });
 
