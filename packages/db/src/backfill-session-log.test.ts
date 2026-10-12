@@ -2,8 +2,9 @@ import { readFile } from "node:fs/promises";
 import type { PGlite } from "@electric-sql/pglite";
 import { projectThreadItems } from "@rakazo/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { BackfillRefused, backfillThread } from "./backfill-session-log.js";
+import { BackfillRefused, backfillThread, moveMessagesToLog } from "./backfill-session-log.js";
 import type { PrismaClient } from "./client.js";
+import { rewindThread } from "./events.js";
 import type { PgliteDatabase } from "./pglite.test-support.js";
 import { applyMigration, migrationNames, openPgliteDatabase } from "./pglite.test-support.js";
 import { sessionEntryFromRow } from "./sessions.js";
@@ -16,18 +17,25 @@ const at = (second: number) => new Date(Date.UTC(2026, 9, 1, 9, 0, second));
 let database: PgliteDatabase;
 let pglite: PGlite;
 
-beforeAll(async () => {
+/** A database with the messages table still there, as the previous release left it. */
+async function openLegacyDatabase(): Promise<{ database: PgliteDatabase; pglite: PGlite }> {
   const names = await migrationNames();
-  database = await openPgliteDatabase(async (instance) => {
-    pglite = instance;
-    for (const name of names.filter((name) => name !== DROP)) await applyMigration(instance, name);
+  let instance!: PGlite;
+  const opened = await openPgliteDatabase(async (created) => {
+    instance = created;
+    for (const name of names.filter((name) => name !== DROP)) await applyMigration(created, name);
   });
-  const { prisma } = database;
+  const { prisma } = opened;
   await prisma.user.create({ data: { id: USER, name: "U", email: "u@rakazo.test" } });
   await prisma.organization.create({
     data: { id: "org_backfill", name: "O", slug: "org-backfill", createdAt: new Date() },
   });
   await prisma.space.create({ data: { id: SPACE, organizationId: "org_backfill", name: "S" } });
+  return { database: opened, pglite: instance };
+}
+
+beforeAll(async () => {
+  ({ database, pglite } = await openLegacyDatabase());
 });
 afterAll(() => database.close());
 
@@ -118,16 +126,16 @@ async function readMigration() {
   return readFile(new URL(`../prisma/migrations/${DROP}/migration.sql`, import.meta.url), "utf8");
 }
 
-/** Whether the drop migration would apply now, rolled back either way. */
+/** Whether the drop migration would drop the messages now, rolled back either way. */
 async function dropApplies(): Promise<boolean> {
   const sql = await readMigration();
   await pglite.exec("BEGIN");
   try {
     await pglite.exec(sql);
-    return true;
-  } catch (error) {
-    expect(String(error)).toMatch(/run scripts\/backfill-session-log\.ts/);
-    return false;
+    const { rows } = await pglite.query<{ gone: boolean }>(
+      "SELECT to_regclass('public.messages') IS NULL AS gone",
+    );
+    return rows[0]!.gone;
   } finally {
     await pglite.exec("ROLLBACK");
   }
@@ -674,6 +682,76 @@ describe("a thread whose log already holds entries", () => {
     expect(await dropApplies()).toBe(true);
   });
 
+  it("lets a backfilled message be edited, though no feed event ever carried it", async () => {
+    const { prisma } = database;
+    const thread = await seedThread(prisma, "Hertha");
+    await seedMessages(prisma, thread.threadId, [
+      { id: "h1", seq: 0, role: "user", blocks: [{ kind: "text", text: "First." }] },
+      { id: "h2", seq: 1, role: "user", blocks: [{ kind: "text", text: "Second." }] },
+    ]);
+    await backfillThread(prisma, thread.threadId);
+
+    await expect(
+      rewindThread(prisma, {
+        spaceId: SPACE,
+        threadId: thread.threadId,
+        botId: thread.botId,
+        messageId: "h2",
+      }),
+    ).resolves.toMatchObject({ cancelledRunIds: [] });
+    expect(
+      (await entriesOf(prisma, thread.sessionId)).map(({ id, type }) => ({ id, type })),
+    ).toEqual([
+      { id: "h1", type: "user.message" },
+      { id: "h2", type: "user.message" },
+      { id: expect.any(String), type: "rewind" },
+    ]);
+  });
+
+  it("appends a message written at the very time its log's head was", async () => {
+    const { prisma } = database;
+    const thread = await seedThread(prisma, "Frances");
+    await seedMessages(prisma, thread.threadId, [
+      { id: "tie1", seq: 0, role: "user", blocks: [{ kind: "text", text: "Ready?" }] },
+    ]);
+    await backfillThread(prisma, thread.threadId);
+    await seedMessages(prisma, thread.threadId, [
+      { id: "tie2", seq: 1, role: "user", blocks: [{ kind: "text", text: "Go." }], at: at(0) },
+    ]);
+
+    await expect(backfillThread(prisma, thread.threadId)).resolves.toMatchObject({
+      outcome: "appended",
+      messages: 1,
+    });
+    expect((await entriesOf(prisma, thread.sessionId)).map((entry) => entry.id)).toEqual([
+      "tie1",
+      "tie2",
+    ]);
+  });
+
+  it("leaves a thread with no messages as it is when asked to rebuild it", async () => {
+    const { prisma } = database;
+    const thread = await seedThread(prisma, "Grete");
+    await prisma.sessionEntry.create({
+      data: {
+        id: "g_live",
+        sessionId: thread.sessionId,
+        seq: 0,
+        parentId: null,
+        type: "system.note",
+        payload: { text: "Written by the new release." },
+        createdAt: at(5),
+      },
+    });
+
+    await expect(backfillThread(prisma, thread.threadId, { rebuild: true })).resolves.toMatchObject(
+      { outcome: "skipped" },
+    );
+    expect((await entriesOf(prisma, thread.sessionId)).map((entry) => entry.id)).toEqual([
+      "g_live",
+    ]);
+  });
+
   it("refuses messages older than its log, until the thread is rebuilt from them", async () => {
     const { prisma } = database;
     const thread = await seedThread(prisma, "Erin");
@@ -715,6 +793,28 @@ describe("a thread whose log already holds entries", () => {
         parentEntryId: "o_live",
       },
     });
+    await prisma.sessionEntry.create({
+      data: {
+        id: "o_helper_call",
+        sessionId: helper.id,
+        seq: 0,
+        parentId: null,
+        type: "system.note",
+        payload: { text: "Calling a helper of its own." },
+        createdAt: at(51),
+      },
+    });
+    const nested = await prisma.conversationSession.create({
+      data: {
+        id: "ses_nested_o",
+        spaceId: SPACE,
+        kind: "subagent",
+        parentSessionId: helper.id,
+        parentEntryId: "o_helper_call",
+      },
+    });
+    await seedRun(prisma, thread, "r_nested");
+    await prisma.run.update({ where: { id: "r_nested" }, data: { sessionId: nested.id } });
 
     await expect(backfillThread(prisma, thread.threadId)).rejects.toThrow(BackfillRefused);
     await expect(backfillThread(prisma, thread.threadId)).rejects.toThrow(
@@ -730,12 +830,19 @@ describe("a thread whose log already holds entries", () => {
     expect(sessionId).not.toBe(thread.sessionId);
     expect(
       await prisma.conversationSession.findMany({
-        where: { id: { in: [thread.sessionId, helper.id] } },
+        where: { id: { in: [thread.sessionId, helper.id, nested.id] } },
       }),
     ).toEqual([]);
-    expect(await prisma.run.findUniqueOrThrow({ where: { id: "r_o1" } })).toMatchObject({
-      sessionId,
-    });
+    expect(
+      await prisma.run.findMany({
+        where: { id: { in: ["r_o1", "r_nested"] } },
+        select: { id: true, sessionId: true },
+        orderBy: { id: "asc" },
+      }),
+    ).toEqual([
+      { id: "r_nested", sessionId },
+      { id: "r_o1", sessionId },
+    ]);
     expect((await entriesOf(prisma, sessionId)).map(({ id, type }) => ({ id, type }))).toEqual([
       { id: "o1", type: "user.message" },
       { id: expect.any(String), type: "run.started" },
@@ -747,7 +854,7 @@ describe("a thread whose log already holds entries", () => {
 });
 
 describe("the migration that drops the messages", () => {
-  it("refuses while a thread's messages are not in the log, then drops them and keeps every link", async () => {
+  it("changes nothing while a message is not in the log, and a round then drops them keeping every link", async () => {
     const { prisma } = database;
     const thread = await seedThread(prisma, "Edsger");
     await seedMessages(prisma, thread.threadId, [
@@ -803,15 +910,10 @@ describe("the migration that drops the messages", () => {
         previewMessageId: "d2",
       },
     });
-    const migration = async () => pglite.exec(await readMigration());
-
-    await expect(migration()).rejects.toThrow(/run scripts\/backfill-session-log\.ts/);
+    await pglite.exec(await readMigration());
     expect(await prisma.$queryRaw`SELECT id FROM messages WHERE id = 'd1'`).toEqual([{ id: "d1" }]);
 
-    for (const { id } of await prisma.thread.findMany({ select: { id: true } })) {
-      await backfillThread(prisma, id);
-    }
-    await migration();
+    await expect(moveMessagesToLog(prisma)).resolves.toMatchObject({ threads: 1, messages: 2 });
 
     expect(await prisma.$queryRaw`SELECT to_regclass('public.messages')::text AS messages`).toEqual(
       [{ messages: null }],
@@ -843,5 +945,71 @@ describe("the migration that drops the messages", () => {
       { conname: "runs_sourceMessageId_fkey", target: "session_entries" },
       { conname: "steering_messages_messageId_fkey", target: "session_entries" },
     ]);
+  });
+});
+
+describe("a round", () => {
+  let round: { database: PgliteDatabase; pglite: PGlite };
+  beforeAll(async () => {
+    round = await openLegacyDatabase();
+  });
+  afterAll(() => round.database.close());
+
+  it("writes nothing when a thread refuses, so the next round carries what the previous release changed meanwhile", async () => {
+    const { prisma } = round.database;
+    const text = (value: string) => [{ kind: "text", text: value }];
+    const kept = await seedThread(prisma, "Hedy");
+    await seedMessages(prisma, kept.threadId, [
+      { id: "k1", seq: 0, role: "user", blocks: text("Draft the memo.") },
+    ]);
+    await seedRun(prisma, kept, "r_k", { sourceMessageId: "k1" });
+    await seedMessages(prisma, kept.threadId, [
+      { id: "k2", seq: 1, role: "bot", runId: "r_k", botId: kept.botId, blocks: text("First.") },
+      { id: "k3", seq: 2, role: "user", blocks: text("Scrap that.") },
+    ]);
+    const refused = await seedThread(prisma, "Ida");
+    await seedMessages(prisma, refused.threadId, [
+      { id: "i1", seq: 0, role: "user", blocks: text("Hello") },
+    ]);
+    await prisma.sessionEntry.create({
+      data: {
+        id: "i_live",
+        sessionId: refused.sessionId,
+        seq: 0,
+        parentId: null,
+        type: "system.note",
+        payload: { text: "Joined." },
+        createdAt: at(50),
+      },
+    });
+    await prisma.conversationSession.update({
+      where: { id: refused.sessionId },
+      data: { nextEntrySeq: 1, headEntryId: "i_live" },
+    });
+    await round.pglite.exec(await readMigration());
+
+    await expect(moveMessagesToLog(prisma)).rejects.toMatchObject({
+      refused: [refused.threadId],
+      message: expect.stringContaining("--rebuild-from-messages"),
+    });
+    expect(await prisma.sessionEntry.findMany({ select: { id: true } })).toEqual([
+      { id: "i_live" },
+    ]);
+
+    await prisma.$executeRaw`
+      UPDATE messages SET blocks = ${JSON.stringify(text("Second."))}::jsonb WHERE id = 'k2'`;
+    await prisma.$executeRaw`DELETE FROM messages WHERE id = 'k3'`;
+    await moveMessagesToLog(prisma, { rebuild: new Set([refused.threadId]) });
+
+    const entries = await entriesOf(prisma, kept.sessionId);
+    const items = projectThreadItems(entries.map(({ sessionId: _sessionId, ...entry }) => entry));
+    expect(items.flatMap((item) => (item.kind === "message" ? item.blocks : []))).toEqual([
+      ...text("Draft the memo."),
+      ...text("Second."),
+    ]);
+    expect(entries.map((entry) => entry.id)).not.toContain("k3");
+    expect(await prisma.$queryRaw`SELECT to_regclass('public.messages')::text AS messages`).toEqual(
+      [{ messages: null }],
+    );
   });
 });

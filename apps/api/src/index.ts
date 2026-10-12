@@ -4,6 +4,7 @@ import { loadRootEnv } from "@rakazo/core/node/load-root-env";
 loadRootEnv();
 
 import { serve } from "@hono/node-server";
+import { createDb, moveLegacyMessages, RoundRefused } from "@rakazo/db";
 import { SERVICE_NAMES } from "@rakazo/logging";
 import { createRootLogger } from "@rakazo/logging/axiom";
 import { createApp } from "./app.js";
@@ -13,6 +14,15 @@ const logger = createRootLogger(SERVICE_NAMES.api);
 
 try {
   const env = loadEnv();
+  // A compose file from before the migrate service still upgrades: the API moves the messages
+  // itself before it serves any thread.
+  const legacy = createDb(env.databaseUrl, { poolMax: 1 });
+  try {
+    await moveLegacyMessages(legacy.prisma, { log: (line) => logger.info(line) });
+  } finally {
+    await legacy.prisma.$disconnect();
+    await legacy.pool.end();
+  }
   const { app, stop } = await createApp({ ...env, logger });
   const server = serve({ fetch: app.fetch, port: env.port, hostname: env.apiHost }, () => {
     logger.info("api listening", { "http.host": env.apiHost, "http.port": env.port });
@@ -44,6 +54,7 @@ try {
   process.once("SIGTERM", () => void shutdown());
   process.once("SIGINT", () => void shutdown());
 } catch (error) {
+  if (error instanceof RoundRefused) process.stderr.write(`${error.message}\n`);
   logger.error("api startup failed", error);
   await logger.flush({ timeoutMs: 2_000 });
   process.exit(1);

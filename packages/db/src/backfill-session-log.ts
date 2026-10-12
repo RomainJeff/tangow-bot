@@ -7,7 +7,8 @@ import {
   parseKnownMessageBlocks,
 } from "@rakazo/contracts";
 import * as z from "zod";
-import type { Prisma, PrismaClient } from "./client.js";
+import type { PrismaClient } from "./client.js";
+import { Prisma } from "./client.js";
 import type { SessionEntryRow } from "./sessions.js";
 import { runBlockBodies, sessionEntryFromRow } from "./sessions.js";
 
@@ -22,7 +23,6 @@ type LegacyMessage = {
   replyQuote: string | null;
   clientNonce: string | null;
   createdAt: Date;
-  covered: boolean;
 };
 
 type LegacyRun = {
@@ -84,7 +84,13 @@ const TERMINAL = new Set(["completed", "failed", "cancelled"]);
 const MID_TURN_NONCE = "user-progress:";
 const TO_PERSON_NONCE = "user-message:";
 const INSERT_CHUNK = 1000;
+/** Messages a thread's backfill reads at a time, so a long thread never sits in memory whole. */
+const PAGE = 500;
 const TRANSACTION_TIMEOUT_MS = 120_000;
+/** A round runs as long as the upgrade needs; whatever runs it decides when to give up. */
+const ROUND_TIMEOUT_MS = 24 * 60 * 60 * 1000;
+/** SQL: the message `m` is held by an entry of its own id. */
+const COVERED = Prisma.sql`EXISTS (SELECT 1 FROM session_entries e WHERE e.id = m.id)`;
 
 function isoOr(value: string | undefined, fallback: Date): string {
   const time = value === undefined ? Number.NaN : Date.parse(value);
@@ -123,11 +129,13 @@ type Draft = {
 };
 
 /**
- * The entries a backfill appends to one session, after the `head` it already holds. A routine's
- * chain keeps its run's trace and hands everything else to `main`, as the live writer does.
+ * The entries a backfill appends to one session after the `head` it already holds, written a page
+ * at a time. A routine's chain keeps its run's trace and hands everything else to `main`, as the
+ * live writer does.
  */
 class Chain {
-  readonly rows: SessionEntryRow[] = [];
+  private pending: SessionEntryRow[] = [];
+  private count = 0;
 
   constructor(
     readonly sessionId: string,
@@ -156,13 +164,39 @@ class Chain {
       createdAt: draft.createdAt,
     };
     row.payload = sessionEntryFromRow(row).payload;
-    this.rows.push(row);
+    this.pending.push(row);
+    this.count += 1;
     this.head = id;
     return id;
   }
 
   get nextSeq(): number {
-    return this.firstSeq + this.rows.length;
+    return this.firstSeq + this.count;
+  }
+
+  get written(): number {
+    return this.count;
+  }
+
+  async flush(tx: Prisma.TransactionClient): Promise<void> {
+    for (let start = 0; start < this.pending.length; start += INSERT_CHUNK) {
+      await tx.sessionEntry.createMany({
+        data: this.pending.slice(start, start + INSERT_CHUNK).map((row) => ({
+          ...row,
+          payload: row.payload as Prisma.InputJsonValue,
+        })),
+      });
+    }
+    this.pending = [];
+  }
+
+  async close(tx: Prisma.TransactionClient): Promise<void> {
+    await this.flush(tx);
+    if (this.count === 0) return;
+    await tx.conversationSession.update({
+      where: { id: this.sessionId },
+      data: { nextEntrySeq: this.nextSeq, headEntryId: this.head },
+    });
   }
 }
 
@@ -219,16 +253,19 @@ async function backfillThreadInTransaction(
       t."historyCompactionSummary" AS summary, t."historyCompactedUpToSeq" AS "summarizedSeq"
     FROM threads t WHERE t.id = ${threadId} FOR UPDATE`;
   if (!locked) return { threadId, outcome: "skipped" };
+  const [held] = await tx.$queryRaw<
+    Array<{ messages: number; uncovered: number; oldest: Date | null }>
+  >`
+    SELECT count(*)::int AS messages,
+      count(*) FILTER (WHERE NOT ${COVERED})::int AS uncovered,
+      min(m."createdAt") FILTER (WHERE NOT ${COVERED}) AS oldest
+    FROM messages m WHERE m."threadId" = ${threadId}`;
+  if (!held || (rebuild ? held.messages : held.uncovered) === 0) {
+    return { threadId, outcome: "skipped" };
+  }
   const thread = rebuild
     ? { ...locked, sessionId: await replaceSessions(tx, threadId, locked.sessionId) }
     : locked;
-  const messages = await tx.$queryRaw<LegacyMessage[]>`
-    SELECT m.id, m.seq, m.role, m.blocks, m."botId", m."runId", m."replyToMessageId",
-      m."replyQuote", m."clientNonce", m."createdAt",
-      EXISTS (SELECT 1 FROM session_entries e WHERE e.id = m.id) AS covered
-    FROM messages m WHERE m."threadId" = ${threadId} ORDER BY m.seq`;
-  const uncovered = messages.filter((message) => !message.covered);
-  if (uncovered.length === 0) return { threadId, outcome: "skipped" };
   const [head] = await tx.$queryRaw<
     Array<{ nextEntrySeq: number; id: string | null; createdAt: Date | null }>
   >`
@@ -237,38 +274,433 @@ async function backfillThreadInTransaction(
       SELECT e.id, e."createdAt" FROM session_entries e WHERE e."sessionId" = s.id
       ORDER BY e.seq DESC LIMIT 1) h ON true
     WHERE s.id = ${thread.sessionId}`;
-  const headAt = head?.createdAt;
-  if (headAt && uncovered.some((message) => message.createdAt < headAt)) {
+  if (head?.createdAt && held.oldest && held.oldest < head.createdAt) {
     throw new BackfillRefused(threadId);
   }
 
-  const parsed = uncovered.map((message) => ({ message, blocks: blocksOf(message.blocks) }));
-  const runIds = [...new Set(uncovered.flatMap((message) => message.runId ?? []))];
-  const runs = await legacyRuns(tx, runIds);
-  const deliveries = parsed.flatMap(({ blocks }) =>
-    blocks.flatMap((block) => (block.kind === "bot_message_received" ? [block] : [])),
-  );
-  const sentEntries = await sentEntriesOf(tx, deliveries);
-  const prior = head?.id ? await priorState(tx, thread.sessionId, runIds) : undefined;
-
   const main = new Chain(thread.sessionId, head?.id ?? null, head?.nextEntrySeq ?? 0);
-  const routineOf = new Map<string, { chain: Chain; trigger: RoutineTrigger }>();
-  const startedRuns = new Set(prior?.startedRuns);
-  const lastMessageOfRun = new Map<string, number>();
-  parsed.forEach(({ message }, index) => {
-    if (message.runId) lastMessageOfRun.set(message.runId, index);
-  });
-  for (const { message, blocks } of parsed) {
-    const run = message.runId ? runs.get(message.runId) : undefined;
-    if (!run || routineOf.has(run.id)) continue;
-    const card = blocks.find(
-      (block): block is Extract<MessageBlock, { kind: "routine_run" }> =>
-        block.kind === "routine_run",
+  const runs = new Map<string, LegacyRun>();
+  const runsOf = async (ids: string[]) => {
+    const missing = ids.filter((id) => !runs.has(id));
+    for (const [id, run] of await legacyRuns(tx, missing)) runs.set(id, run);
+  };
+  const routineOf = await routineChains(tx, threadId, thread, main, runsOf, runs);
+  const lastSeqOfRun = new Map(
+    (
+      await tx.$queryRaw<Array<{ runId: string; seq: number }>>`
+        SELECT m."runId", max(m.seq) AS seq FROM messages m
+        WHERE m."threadId" = ${threadId} AND m."runId" IS NOT NULL AND NOT ${COVERED}
+        GROUP BY m."runId"`
+    ).map((row) => [row.runId, row.seq]),
+  );
+  const repliedTo = new Set(
+    (
+      await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT DISTINCT m."replyToMessageId" AS id FROM messages m
+        WHERE m."threadId" = ${threadId} AND m."replyToMessageId" IS NOT NULL`
+    ).map((row) => row.id),
+  );
+  const prior = head?.id ? await priorState(tx, thread.sessionId) : undefined;
+  const startedRuns = new Set<string>();
+  const exchangeOf = new Map<string, string>();
+  let lastPersonEntry = prior?.lastPersonEntry;
+  let summarizedUpTo: number | undefined;
+  let converted = 0;
+  let last: Date | undefined;
+
+  for (let after = -1; ; ) {
+    const page = await tx.$queryRaw<LegacyMessage[]>`
+      SELECT m.id, m.seq, m.role, m.blocks, m."botId", m."runId", m."replyToMessageId",
+        m."replyQuote", m."clientNonce", m."createdAt"
+      FROM messages m
+      WHERE m."threadId" = ${threadId} AND m.seq > ${after} AND NOT ${COVERED}
+      ORDER BY m.seq LIMIT ${PAGE}`;
+    if (page.length === 0) break;
+    after = page.at(-1)!.seq;
+    const parsed = page.map((message) => ({ message, blocks: blocksOf(message.blocks) }));
+    const pageRunIds = [...new Set(page.flatMap((message) => message.runId ?? []))];
+    await runsOf(pageRunIds);
+    for (const runId of await startedAlready(tx, pageRunIds, startedRuns, prior !== undefined)) {
+      startedRuns.add(runId);
+    }
+    const sentEntries = await sentEntriesOf(
+      tx,
+      parsed.flatMap(({ blocks }) =>
+        blocks.flatMap((block) => (block.kind === "bot_message_received" ? [block] : [])),
+      ),
     );
-    const routineId = card?.routineId ?? run.routineId;
-    if (!card || !routineId) continue;
-    routineOf.set(run.id, {
-      chain: new Chain(randomUUID(), null, 0, main),
+
+    for (const { message, blocks } of parsed) {
+      let unclaimedId: string | undefined = message.id;
+      const id = () => {
+        const next = unclaimedId ?? randomUUID();
+        unclaimedId = undefined;
+        return next;
+      };
+      const run = message.runId ? runs.get(message.runId) : undefined;
+      const routine = run && routineOf.get(run.id);
+      const chain = routine?.chain ?? main;
+      const botId = message.botId ?? run?.botId ?? thread.botId;
+      const createdAt = message.createdAt;
+      const later: Draft[] = [];
+
+      if (run && botId && !startedRuns.has(run.id) && opensRun(blocks)) {
+        startedRuns.add(run.id);
+        chain.append({
+          type: "run.started",
+          botId,
+          runId: run.id,
+          createdAt: run.startedAt ?? run.createdAt,
+          payload: {
+            trigger: routine?.trigger ?? triggerOf(run, lastPersonEntry),
+            model: run.model,
+            effort: null,
+          },
+        });
+      }
+
+      if (message.role === "system") {
+        chain.append({
+          id: id(),
+          type: "system.note",
+          createdAt,
+          payload: { text: textOf(blocks) },
+        });
+      } else if (message.role === "user") {
+        const delivery = blocks.find(
+          (block): block is z.infer<typeof LegacyBotMessageReceived> =>
+            block.kind === "bot_message_received",
+        );
+        if (delivery) {
+          const entryId = id();
+          const sent = delivery.returnToMessageId
+            ? sentEntries.get(delivery.returnToMessageId)
+            : undefined;
+          const exchangeId =
+            sent?.exchangeId ??
+            ((message.replyToMessageId && exchangeOf.get(message.replyToMessageId)) || entryId);
+          exchangeOf.set(message.id, exchangeId);
+          chain.append({
+            id: entryId,
+            type: "bot.message.received",
+            createdAt,
+            payload: {
+              from: { kind: "bot", botId: delivery.fromBotId, name: delivery.fromBotName },
+              ...(sent ? { fromSessionId: sent.sessionId, fromEntryId: sent.id } : {}),
+              text: delivery.text,
+              intent: delivery.intent ?? "request",
+              hop: Math.max(1, delivery.hop ?? 1),
+              exchangeId,
+              ...(message.clientNonce ? { clientNonce: message.clientNonce } : {}),
+            },
+          });
+        } else {
+          const shown = blocks.filter(isMessageBlock).filter((block) => !isPreviewCard(block));
+          const entryId = chain.append({
+            id: id(),
+            type: "user.message",
+            createdAt,
+            payload: {
+              blocks: shown,
+              ...(message.replyToMessageId
+                ? {
+                    replyTo: {
+                      entryId: message.replyToMessageId,
+                      ...(message.replyQuote ? { quote: message.replyQuote } : {}),
+                    },
+                  }
+                : {}),
+              ...(message.clientNonce ? { clientNonce: message.clientNonce } : {}),
+              source: shown.some((block) => block.kind === "channel_message") ? "channel" : "app",
+            },
+          });
+          lastPersonEntry = entryId;
+        }
+        later.push(...previewsOf(blocks, message.id, createdAt));
+      } else if (run && botId) {
+        const flags = {
+          ...(message.clientNonce?.startsWith(MID_TURN_NONCE) ? { midTurn: true as const } : {}),
+          ...(message.clientNonce?.startsWith(TO_PERSON_NONCE)
+            ? { midTurn: true as const, toPerson: true as const }
+            : {}),
+        };
+        let pending: MessageBlock[] = [];
+        let toolCall = 0;
+        const flush = () => {
+          for (const body of runBlockBodies(flags, pending)) {
+            const entryId = chain.append({
+              id: id(),
+              ...body,
+              botId,
+              runId: run.id,
+              createdAt,
+            } as Draft);
+            const card = answeredCard(body, entryId, repliedTo.has(message.id));
+            if (card) later.push({ ...card, createdAt });
+          }
+          pending = [];
+        };
+        for (const block of blocks) {
+          switch (block.kind) {
+            case "steps":
+              flush();
+              for (const step of block.steps) {
+                for (let count = 0; count < step.count; count += 1) {
+                  const call = step.calls?.[count];
+                  const callId = call?.id ?? `legacy_${message.id}_${toolCall}`;
+                  toolCall += 1;
+                  chain.append({
+                    id: id(),
+                    type: "tool.call",
+                    botId,
+                    runId: run.id,
+                    createdAt,
+                    payload: {
+                      callId,
+                      name: call?.name ?? legacyToolName(step.label),
+                      input: call?.input ?? "{}",
+                    },
+                  });
+                  chain.append({
+                    type: "tool.result",
+                    botId,
+                    runId: run.id,
+                    createdAt,
+                    payload: {
+                      callId,
+                      output: call?.output ?? "",
+                      isError: false,
+                      artifactIds: [],
+                    },
+                  });
+                }
+              }
+              break;
+            case "subagent":
+              flush();
+              chain.append({
+                id: id(),
+                type: "subagent",
+                botId,
+                runId: run.id,
+                createdAt,
+                payload: {
+                  callId: block.agentId || `legacy_${message.id}_${toolCall}`,
+                  name: block.name,
+                  model: run.model,
+                  task: block.task,
+                  status: block.status === "completed" ? "completed" : "failed",
+                  result: block.result ?? block.progress ?? "",
+                  usage: NO_USAGE,
+                },
+              });
+              break;
+            case "bot_message_sent": {
+              flush();
+              const entryId = id();
+              const woke = run.sourceMessageId ? exchangeOf.get(run.sourceMessageId) : undefined;
+              const exchangeId = woke ?? entryId;
+              exchangeOf.set(message.id, exchangeId);
+              chain.append({
+                id: entryId,
+                type: "bot.message.sent",
+                botId,
+                runId: run.id,
+                createdAt,
+                payload: {
+                  to: { kind: "bot", botId: block.toBotId, name: block.toBotName },
+                  text: block.text,
+                  intent: block.intent ?? "request",
+                  hop: 1,
+                  exchangeId,
+                },
+              });
+              break;
+            }
+            case "handoff":
+              flush();
+              chain.append({
+                id: id(),
+                type: "handoff",
+                botId,
+                runId: run.id,
+                createdAt,
+                payload: {
+                  fromBotId: block.fromBotId,
+                  toBotId: block.toBotId,
+                  text: block.text,
+                  hop: Math.max(1, block.hop ?? 1),
+                },
+              });
+              break;
+            case "routine_run": {
+              flush();
+              if (!routine) break;
+              const { trigger } = routine;
+              main.append({
+                id: id(),
+                type: "routine.started",
+                botId,
+                runId: run.id,
+                createdAt,
+                payload: {
+                  sessionId: routine.chain.sessionId,
+                  routineId: trigger.routineId,
+                  name: block.routineName,
+                  trigger: trigger.kind,
+                  scheduledAt: isoOr(block.startedAt, run.createdAt),
+                  model: run.model,
+                  ...(block.notify ? { notify: true } : {}),
+                },
+              });
+              const outcome = routineOutcome(block, run);
+              if (outcome) {
+                main.append({
+                  type: "routine.finished",
+                  botId,
+                  runId: run.id,
+                  createdAt: new Date(isoOr(block.endedAt, createdAt)),
+                  payload: outcome,
+                });
+              }
+              break;
+            }
+            case "bot_message_received":
+            case "progress":
+            case "skill_source":
+              break;
+            case "link_preview":
+              if (!isLinkPreviewCard(block)) pending.push(block);
+              break;
+            default:
+              pending.push(block);
+          }
+        }
+        flush();
+        later.push(...previewsOf(blocks, message.id, createdAt));
+      }
+      if (message.role === "bot" && botId) {
+        for (const block of blocks) {
+          if (block.kind === "skill_source") later.push(learnt(block, botId, run?.id, createdAt));
+        }
+      }
+
+      const outcome =
+        run && botId && lastSeqOfRun.get(run.id) === message.seq && startedRuns.has(run.id)
+          ? runOutcome(run)
+          : undefined;
+      if (unclaimedId !== undefined) {
+        const shown = blocks
+          .filter(isMessageBlock)
+          .filter((block) => !NOT_SHOWN_ALONE.has(block.kind) && !isPreviewCard(block));
+        const standalone = outcome || later.some((draft) => draft.type === "skill.learnt");
+        if (!botId) {
+          chain.append({
+            id: id(),
+            type: "system.note",
+            createdAt,
+            payload: { text: textOf(blocks) },
+          });
+        } else if (shown.length > 0 || blocks.some(isPreviewCard) || !standalone) {
+          const entryId = chain.append({
+            id: id(),
+            type: "bot.text",
+            botId,
+            createdAt,
+            payload: { blocks: shown },
+          });
+          for (const block of shown) {
+            if (block.kind !== "skill_draft") continue;
+            const { kind: _kind, ...draft } = block;
+            later.push({ type: "skill.draft", createdAt, payload: { target: entryId, ...draft } });
+          }
+          if (!run) later.push(...previewsOf(blocks, entryId, createdAt));
+        }
+      }
+
+      for (const draft of later) {
+        const claims = draft.type === "skill.learnt" && unclaimedId !== undefined;
+        chain.append(claims ? { ...draft, id: id() } : draft);
+      }
+      if (run && botId && outcome) {
+        chain.append({
+          ...(unclaimedId !== undefined ? { id: id() } : {}),
+          type: "run.finished",
+          botId,
+          runId: run.id,
+          createdAt: run.completedAt ?? createdAt,
+          payload: outcome,
+        });
+      }
+      if (
+        thread.summarizedSeq !== null &&
+        message.seq <= thread.summarizedSeq &&
+        main.nextSeq > 0
+      ) {
+        summarizedUpTo = main.nextSeq - 1;
+      }
+      converted += 1;
+      last = createdAt;
+    }
+    await main.flush(tx);
+    for (const { chain } of routineOf.values()) await chain.flush(tx);
+  }
+
+  if (thread.summary && summarizedUpTo !== undefined && last) {
+    main.append({
+      type: "compaction",
+      createdAt: last,
+      payload: { summary: thread.summary, coveredUpToSeq: summarizedUpTo },
+    });
+  }
+  const chains = [main, ...[...routineOf.values()].map(({ chain }) => chain)];
+  for (const chain of chains) await chain.close(tx);
+  return {
+    threadId,
+    outcome: rebuild ? "rebuilt" : head?.id ? "appended" : "backfilled",
+    messages: converted,
+    entries: chains.reduce((sum, chain) => sum + chain.written, 0),
+  };
+}
+
+/**
+ * The routine sessions the thread's routine cards open, each created now, under the thread's
+ * main session, with its run moved to it.
+ */
+async function routineChains(
+  tx: Prisma.TransactionClient,
+  threadId: string,
+  thread: { sessionId: string; spaceId: string },
+  main: Chain,
+  runsOf: (ids: string[]) => Promise<void>,
+  runs: ReadonlyMap<string, LegacyRun>,
+): Promise<Map<string, { chain: Chain; trigger: RoutineTrigger }>> {
+  const cards = await tx.$queryRaw<Array<{ runId: string; card: unknown }>>`
+    SELECT DISTINCT ON (m."runId") m."runId", card
+    FROM messages m, jsonb_array_elements(m.blocks) AS card
+    WHERE m."threadId" = ${threadId} AND m."runId" IS NOT NULL AND NOT ${COVERED}
+      AND card ->> 'kind' = 'routine_run'
+    ORDER BY m."runId", m.seq`;
+  await runsOf(cards.map(({ runId }) => runId));
+  const routineOf = new Map<string, { chain: Chain; trigger: RoutineTrigger }>();
+  for (const { runId, card: raw } of cards) {
+    const run = runs.get(runId);
+    const card = blocksOf([raw])[0];
+    if (!run || card?.kind !== "routine_run") continue;
+    const routineId = card.routineId ?? run.routineId;
+    if (!routineId) continue;
+    const chain = new Chain(randomUUID(), null, 0, main);
+    await tx.conversationSession.create({
+      data: {
+        id: chain.sessionId,
+        spaceId: thread.spaceId,
+        kind: "routine",
+        parentSessionId: thread.sessionId,
+      },
+    });
+    await tx.run.update({ where: { id: runId }, data: { sessionId: chain.sessionId } });
+    routineOf.set(runId, {
+      chain,
       trigger:
         run.trigger === "webhook"
           ? { kind: "webhook", routineId }
@@ -280,359 +712,7 @@ async function backfillThreadInTransaction(
             },
     });
   }
-  const repliedTo = new Set(messages.flatMap((message) => message.replyToMessageId ?? []));
-  const messageIds = new Set(messages.map((message) => message.id));
-  const exchangeOf = new Map<string, string>();
-  const lastMainSeqOf = new Map<number, number>();
-  let lastPersonEntry = prior?.lastPersonEntry;
-
-  for (const [index, { message, blocks }] of parsed.entries()) {
-    let unclaimedId: string | undefined = message.id;
-    const id = () => {
-      const next = unclaimedId ?? randomUUID();
-      unclaimedId = undefined;
-      return next;
-    };
-    const run = message.runId ? runs.get(message.runId) : undefined;
-    const routine = run && routineOf.get(run.id);
-    const chain = routine?.chain ?? main;
-    const botId = message.botId ?? run?.botId ?? thread.botId;
-    const createdAt = message.createdAt;
-    const later: Draft[] = [];
-
-    if (run && botId && !startedRuns.has(run.id) && opensRun(blocks)) {
-      startedRuns.add(run.id);
-      chain.append({
-        type: "run.started",
-        botId,
-        runId: run.id,
-        createdAt: run.startedAt ?? run.createdAt,
-        payload: {
-          trigger: routine?.trigger ?? triggerOf(run, lastPersonEntry, messageIds),
-          model: run.model,
-          effort: null,
-        },
-      });
-    }
-
-    if (message.role === "system") {
-      chain.append({
-        id: id(),
-        type: "system.note",
-        createdAt,
-        payload: { text: textOf(blocks) },
-      });
-    } else if (message.role === "user") {
-      const delivery = blocks.find(
-        (block): block is z.infer<typeof LegacyBotMessageReceived> =>
-          block.kind === "bot_message_received",
-      );
-      if (delivery) {
-        const entryId = id();
-        const sent = delivery.returnToMessageId
-          ? sentEntries.get(delivery.returnToMessageId)
-          : undefined;
-        const exchangeId =
-          sent?.exchangeId ??
-          ((message.replyToMessageId && exchangeOf.get(message.replyToMessageId)) || entryId);
-        exchangeOf.set(message.id, exchangeId);
-        chain.append({
-          id: entryId,
-          type: "bot.message.received",
-          createdAt,
-          payload: {
-            from: { kind: "bot", botId: delivery.fromBotId, name: delivery.fromBotName },
-            ...(sent ? { fromSessionId: sent.sessionId, fromEntryId: sent.id } : {}),
-            text: delivery.text,
-            intent: delivery.intent ?? "request",
-            hop: Math.max(1, delivery.hop ?? 1),
-            exchangeId,
-            ...(message.clientNonce ? { clientNonce: message.clientNonce } : {}),
-          },
-        });
-      } else {
-        const shown = blocks.filter(isMessageBlock).filter((block) => !isPreviewCard(block));
-        const entryId = chain.append({
-          id: id(),
-          type: "user.message",
-          createdAt,
-          payload: {
-            blocks: shown,
-            ...(message.replyToMessageId
-              ? {
-                  replyTo: {
-                    entryId: message.replyToMessageId,
-                    ...(message.replyQuote ? { quote: message.replyQuote } : {}),
-                  },
-                }
-              : {}),
-            ...(message.clientNonce ? { clientNonce: message.clientNonce } : {}),
-            source: shown.some((block) => block.kind === "channel_message") ? "channel" : "app",
-          },
-        });
-        lastPersonEntry = entryId;
-      }
-      later.push(...previewsOf(blocks, message.id, createdAt));
-    } else if (run && botId) {
-      const flags = {
-        ...(message.clientNonce?.startsWith(MID_TURN_NONCE) ? { midTurn: true as const } : {}),
-        ...(message.clientNonce?.startsWith(TO_PERSON_NONCE)
-          ? { midTurn: true as const, toPerson: true as const }
-          : {}),
-      };
-      let pending: MessageBlock[] = [];
-      let toolCall = 0;
-      const flush = () => {
-        for (const body of runBlockBodies(flags, pending)) {
-          const entryId = chain.append({
-            id: id(),
-            ...body,
-            botId,
-            runId: run.id,
-            createdAt,
-          } as Draft);
-          const card = answeredCard(body, entryId, repliedTo.has(message.id));
-          if (card) later.push({ ...card, createdAt });
-        }
-        pending = [];
-      };
-      for (const block of blocks) {
-        switch (block.kind) {
-          case "steps":
-            flush();
-            for (const step of block.steps) {
-              for (let count = 0; count < step.count; count += 1) {
-                const call = step.calls?.[count];
-                const callId = call?.id ?? `legacy_${message.id}_${toolCall}`;
-                toolCall += 1;
-                chain.append({
-                  id: id(),
-                  type: "tool.call",
-                  botId,
-                  runId: run.id,
-                  createdAt,
-                  payload: {
-                    callId,
-                    name: call?.name ?? legacyToolName(step.label),
-                    input: call?.input ?? "{}",
-                  },
-                });
-                chain.append({
-                  type: "tool.result",
-                  botId,
-                  runId: run.id,
-                  createdAt,
-                  payload: { callId, output: call?.output ?? "", isError: false, artifactIds: [] },
-                });
-              }
-            }
-            break;
-          case "subagent":
-            flush();
-            chain.append({
-              id: id(),
-              type: "subagent",
-              botId,
-              runId: run.id,
-              createdAt,
-              payload: {
-                callId: block.agentId || `legacy_${message.id}_${toolCall}`,
-                name: block.name,
-                model: run.model,
-                task: block.task,
-                status: block.status === "completed" ? "completed" : "failed",
-                result: block.result ?? block.progress ?? "",
-                usage: NO_USAGE,
-              },
-            });
-            break;
-          case "bot_message_sent": {
-            flush();
-            const entryId = id();
-            const woke = run.sourceMessageId ? exchangeOf.get(run.sourceMessageId) : undefined;
-            const exchangeId = woke ?? entryId;
-            exchangeOf.set(message.id, exchangeId);
-            chain.append({
-              id: entryId,
-              type: "bot.message.sent",
-              botId,
-              runId: run.id,
-              createdAt,
-              payload: {
-                to: { kind: "bot", botId: block.toBotId, name: block.toBotName },
-                text: block.text,
-                intent: block.intent ?? "request",
-                hop: 1,
-                exchangeId,
-              },
-            });
-            break;
-          }
-          case "handoff":
-            flush();
-            chain.append({
-              id: id(),
-              type: "handoff",
-              botId,
-              runId: run.id,
-              createdAt,
-              payload: {
-                fromBotId: block.fromBotId,
-                toBotId: block.toBotId,
-                text: block.text,
-                hop: Math.max(1, block.hop ?? 1),
-              },
-            });
-            break;
-          case "routine_run": {
-            flush();
-            if (!routine) break;
-            const { trigger } = routine;
-            main.append({
-              id: id(),
-              type: "routine.started",
-              botId,
-              runId: run.id,
-              createdAt,
-              payload: {
-                sessionId: routine.chain.sessionId,
-                routineId: trigger.routineId,
-                name: block.routineName,
-                trigger: trigger.kind,
-                scheduledAt: isoOr(block.startedAt, run.createdAt),
-                model: run.model,
-                ...(block.notify ? { notify: true } : {}),
-              },
-            });
-            const outcome = routineOutcome(block, run);
-            if (outcome) {
-              main.append({
-                type: "routine.finished",
-                botId,
-                runId: run.id,
-                createdAt: new Date(isoOr(block.endedAt, createdAt)),
-                payload: outcome,
-              });
-            }
-            break;
-          }
-          case "bot_message_received":
-          case "progress":
-          case "skill_source":
-            break;
-          case "link_preview":
-            if (!isLinkPreviewCard(block)) pending.push(block);
-            break;
-          default:
-            pending.push(block);
-        }
-      }
-      flush();
-      later.push(...previewsOf(blocks, message.id, createdAt));
-    }
-    if (message.role === "bot" && botId) {
-      for (const block of blocks) {
-        if (block.kind === "skill_source") later.push(learnt(block, botId, run?.id, createdAt));
-      }
-    }
-
-    const outcome =
-      run && botId && lastMessageOfRun.get(run.id) === index && startedRuns.has(run.id)
-        ? runOutcome(run)
-        : undefined;
-    if (unclaimedId !== undefined) {
-      const shown = blocks
-        .filter(isMessageBlock)
-        .filter((block) => !NOT_SHOWN_ALONE.has(block.kind) && !isPreviewCard(block));
-      const standalone = outcome || later.some((draft) => draft.type === "skill.learnt");
-      if (!botId) {
-        chain.append({
-          id: id(),
-          type: "system.note",
-          createdAt,
-          payload: { text: textOf(blocks) },
-        });
-      } else if (shown.length > 0 || blocks.some(isPreviewCard) || !standalone) {
-        const entryId = chain.append({
-          id: id(),
-          type: "bot.text",
-          botId,
-          createdAt,
-          payload: { blocks: shown },
-        });
-        for (const block of shown) {
-          if (block.kind !== "skill_draft") continue;
-          const { kind: _kind, ...draft } = block;
-          later.push({ type: "skill.draft", createdAt, payload: { target: entryId, ...draft } });
-        }
-        if (!run) later.push(...previewsOf(blocks, entryId, createdAt));
-      }
-    }
-
-    for (const draft of later) {
-      const claims = draft.type === "skill.learnt" && unclaimedId !== undefined;
-      chain.append(claims ? { ...draft, id: id() } : draft);
-    }
-    if (run && botId && outcome) {
-      chain.append({
-        ...(unclaimedId !== undefined ? { id: id() } : {}),
-        type: "run.finished",
-        botId,
-        runId: run.id,
-        createdAt: run.completedAt ?? createdAt,
-        payload: outcome,
-      });
-    }
-    lastMainSeqOf.set(message.seq, main.nextSeq - 1);
-  }
-
-  if (thread.summary && thread.summarizedSeq !== null) {
-    const covered = [...lastMainSeqOf]
-      .filter(([seq, entrySeq]) => seq <= thread.summarizedSeq! && entrySeq >= 0)
-      .at(-1)?.[1];
-    if (covered !== undefined) {
-      main.append({
-        type: "compaction",
-        createdAt: uncovered.at(-1)!.createdAt,
-        payload: { summary: thread.summary, coveredUpToSeq: covered },
-      });
-    }
-  }
-
-  for (const [runId, { chain }] of routineOf) {
-    await tx.conversationSession.create({
-      data: {
-        id: chain.sessionId,
-        spaceId: thread.spaceId,
-        kind: "routine",
-        parentSessionId: thread.sessionId,
-      },
-    });
-    await tx.run.update({ where: { id: runId }, data: { sessionId: chain.sessionId } });
-  }
-  const chains = [main, ...[...routineOf.values()].map(({ chain }) => chain)];
-  for (const chain of chains) {
-    for (let start = 0; start < chain.rows.length; start += INSERT_CHUNK) {
-      await tx.sessionEntry.createMany({
-        data: chain.rows.slice(start, start + INSERT_CHUNK).map((row) => ({
-          ...row,
-          payload: row.payload as Prisma.InputJsonValue,
-        })),
-      });
-    }
-    const last = chain.rows.at(-1);
-    if (!last) continue;
-    await tx.conversationSession.update({
-      where: { id: chain.sessionId },
-      data: { nextEntrySeq: chain.nextSeq, headEntryId: last.id },
-    });
-  }
-  return {
-    threadId,
-    outcome: rebuild ? "rebuilt" : head?.id ? "appended" : "backfilled",
-    messages: uncovered.length,
-    entries: chains.reduce((sum, chain) => sum + chain.rows.length, 0),
-  };
+  return routineOf;
 }
 
 /**
@@ -662,15 +742,132 @@ async function replaceSessions(
   return sessionId;
 }
 
-/** Where a session the backfill appends to stands: the runs it started, the person's last word. */
-async function priorState(tx: Prisma.TransactionClient, sessionId: string, runIds: string[]) {
-  const started = await tx.$queryRaw<Array<{ runId: string }>>`
-    SELECT DISTINCT "runId" FROM session_entries
-    WHERE type = 'run.started' AND "runId" = ANY(${runIds}::text[])`;
+/** The person's last word on a session the backfill appends to. */
+async function priorState(tx: Prisma.TransactionClient, sessionId: string) {
   const [person] = await tx.$queryRaw<Array<{ id: string }>>`
     SELECT id FROM session_entries WHERE "sessionId" = ${sessionId} AND type = 'user.message'
     ORDER BY seq DESC LIMIT 1`;
-  return { startedRuns: started.map((row) => row.runId), lastPersonEntry: person?.id };
+  return { lastPersonEntry: person?.id };
+}
+
+/** Of `runIds`, the runs whose start an earlier backfill or the live writer already logged. */
+async function startedAlready(
+  tx: Prisma.TransactionClient,
+  runIds: string[],
+  known: ReadonlySet<string>,
+  logged: boolean,
+): Promise<string[]> {
+  const unknown = runIds.filter((id) => !known.has(id));
+  if (!logged || unknown.length === 0) return [];
+  const rows = await tx.$queryRaw<Array<{ runId: string }>>`
+    SELECT DISTINCT "runId" FROM session_entries
+    WHERE type = 'run.started' AND "runId" = ANY(${unknown}::text[])`;
+  return rows.map((row) => row.runId);
+}
+
+/**
+ * Moves every message the log does not hold into it and drops the messages table, in one
+ * transaction that holds every writer off `messages` until it ends. A thread refused or failed
+ * rolls the whole round back, so nothing it wrote survives to go stale while the previous release
+ * runs again. Each thread runs under a savepoint, so the round reports every such thread at once.
+ */
+export async function moveMessagesToLog(
+  prisma: PrismaClient,
+  {
+    rebuild = new Set<string>(),
+    log = () => {},
+  }: {
+    rebuild?: "all" | ReadonlySet<string>;
+    log?: (result: Exclude<BackfillThreadResult, { outcome: "skipped" }>) => void;
+  } = {},
+): Promise<{ threads: number; messages: number; entries: number }> {
+  return prisma.$transaction(
+    async (tx: Prisma.TransactionClient) => {
+      await tx.$executeRaw`LOCK TABLE messages IN EXCLUSIVE MODE`;
+      const named = rebuild === "all" ? [] : [...rebuild];
+      const threads = await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT t.id FROM threads t
+        WHERE EXISTS (
+          SELECT 1 FROM messages m
+          WHERE m."threadId" = t.id AND (NOT ${COVERED} OR t.id = ANY(${named}::text[])))
+        ORDER BY t.id`;
+      const refused: string[] = [];
+      const failed: Array<{ threadId: string; error: unknown }> = [];
+      const moved = { threads: 0, messages: 0, entries: 0 };
+      for (const { id } of threads) {
+        await tx.$executeRaw`SAVEPOINT backfill_thread`;
+        try {
+          const result = await backfillThreadInTransaction(
+            tx,
+            id,
+            rebuild === "all" || rebuild.has(id),
+          );
+          await tx.$executeRaw`RELEASE SAVEPOINT backfill_thread`;
+          if (result.outcome === "skipped") continue;
+          moved.threads += 1;
+          moved.messages += result.messages;
+          moved.entries += result.entries;
+          log(result);
+        } catch (error) {
+          await tx.$executeRaw`ROLLBACK TO SAVEPOINT backfill_thread`;
+          if (error instanceof BackfillRefused) refused.push(id);
+          else failed.push({ threadId: id, error });
+        }
+      }
+      if (refused.length > 0 || failed.length > 0) throw new RoundRefused(refused, failed);
+      const [dropped] = await tx.$queryRaw<Array<{ dropped: boolean }>>`
+        SELECT drop_messages_when_logged() AS dropped`;
+      if (!dropped?.dropped) throw new Error("Messages are still missing from the session log");
+      return moved;
+    },
+    { timeout: ROUND_TIMEOUT_MS, maxWait: TRANSACTION_TIMEOUT_MS },
+  );
+}
+
+/**
+ * What the migrate service and the API at start both run: while the legacy messages table is
+ * there, one round moves its messages into the log and drops it, logging every thread and the
+ * total time. A refused round throws `RoundRefused`, whose message names the threads and the
+ * override.
+ */
+export async function moveLegacyMessages(
+  prisma: PrismaClient,
+  { rebuild, log }: { rebuild?: "all" | ReadonlySet<string>; log: (line: string) => void },
+): Promise<void> {
+  if (!(await hasLegacyMessages(prisma))) return;
+  log("Moving the conversations into the session log.");
+  const started = performance.now();
+  const moved = await moveMessagesToLog(prisma, {
+    ...(rebuild ? { rebuild } : {}),
+    log: (result) =>
+      log(
+        `thread ${result.threadId} ${result.outcome}: ${result.messages} messages, ${result.entries} entries`,
+      ),
+  });
+  const seconds = ((performance.now() - started) / 1000).toFixed(1);
+  log(`moved ${moved.threads} threads, ${moved.messages} messages, in ${seconds} s`);
+}
+
+/** A round that left the log as it was: the threads it refused and those it failed to convert. */
+export class RoundRefused extends Error {
+  constructor(
+    readonly refused: readonly string[],
+    readonly failed: ReadonlyArray<{ threadId: string; error: unknown }>,
+  ) {
+    super(
+      [
+        refused.length > 0 &&
+          `These threads hold messages older than their session log; rebuild them from their messages with --rebuild-from-messages <thread-id> (or --all): ${refused.join(", ")}`,
+        ...failed.map(
+          ({ threadId, error }) =>
+            `Thread ${threadId} could not be moved to the session log: ${error instanceof Error ? error.message : String(error)}`,
+        ),
+        `Nothing was written and the messages table stays; see "Session log migration" in docs/self-host.md.`,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    );
+  }
 }
 
 function isMessageBlock(block: Block): block is MessageBlock {
@@ -762,15 +959,8 @@ function answeredCard(
   return undefined;
 }
 
-function triggerOf(
-  run: LegacyRun,
-  lastPersonEntry: string | undefined,
-  messageIds: ReadonlySet<string>,
-): SessionRunTrigger {
-  const source =
-    run.sourceMessageId && messageIds.has(run.sourceMessageId)
-      ? run.sourceMessageId
-      : lastPersonEntry;
+function triggerOf(run: LegacyRun, lastPersonEntry: string | undefined): SessionRunTrigger {
+  const source = run.sourceMessageId ?? lastPersonEntry;
   return source ? { kind: "message", entryId: source as EntryId } : { kind: "direct" };
 }
 
@@ -807,7 +997,11 @@ async function legacyRuns(
       }
     >
   >`
-    SELECT r.id, r."botId", r.status, r.trigger, r."routineId", r."sourceMessageId", r.error,
+    SELECT r.id, r."botId", r.status, r.trigger, r."routineId",
+      CASE WHEN EXISTS (
+        SELECT 1 FROM messages s WHERE s.id = r."sourceMessageId" AND s."threadId" = r."threadId"
+      ) THEN r."sourceMessageId" END AS "sourceMessageId",
+      r.error,
       r."createdAt", r."startedAt", r."completedAt", r."modelProvider", r."modelId",
       COALESCE(u."inputTokens", 0)::int AS "inputTokens",
       COALESCE(u."outputTokens", 0)::int AS "outputTokens",
@@ -862,23 +1056,6 @@ async function sentEntriesOf(
         AND e.payload ->> 'text' = d.text
       ORDER BY e.seq LIMIT 1) sent ON true`;
   return new Map(rows.map(({ messageId, ...sent }) => [messageId, sent]));
-}
-
-/** The threads with a message no entry holds, by id, a batch at a time after `after`. */
-export async function threadsToBackfill(
-  prisma: PrismaClient,
-  limit: number,
-  after = "",
-): Promise<string[]> {
-  const rows = await prisma.$queryRaw<Array<{ id: string }>>`
-    SELECT t.id FROM threads t
-    WHERE t.id > ${after}
-      AND EXISTS (
-        SELECT 1 FROM messages m
-        WHERE m."threadId" = t.id
-          AND NOT EXISTS (SELECT 1 FROM session_entries e WHERE e.id = m.id))
-    ORDER BY t.id LIMIT ${limit}`;
-  return rows.map((row) => row.id);
 }
 
 /** Whether the legacy `messages` table is still there to read. */
