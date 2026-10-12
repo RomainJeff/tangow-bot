@@ -8,9 +8,9 @@ import type {
   ModelCatalogEntry,
   ModelCredential,
   ProductEvent,
-  SessionEntry,
   Space,
   SpaceNavigation,
+  ThreadEntry,
   ThreadItem,
   ThreadMessagePage,
 } from "@rakazo/contracts";
@@ -837,7 +837,7 @@ export type MobileSnapshot = {
   groupName?: string;
   threadId: string;
   cursor?: number;
-  entries: SessionEntry[];
+  entries: ThreadEntry[];
   olderCursor: EntryId | null;
   layer: ProgressLayer;
   run: MobileRun | null;
@@ -901,7 +901,7 @@ export function mergeMobileSnapshot(
   return unchanged ? prev : (shared as MobileSnapshot);
 }
 
-function keepEntries(held: SessionEntry[], next: SessionEntry[]): SessionEntry[] {
+function keepEntries(held: ThreadEntry[], next: ThreadEntry[]): ThreadEntry[] {
   return held.length === next.length && held.every((entry, index) => entry.id === next[index]?.id)
     ? held
     : next;

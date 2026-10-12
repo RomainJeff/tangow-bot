@@ -1,5 +1,5 @@
-import type { MessageBlock, SessionEntry, SessionEntryType } from "@rakazo/contracts";
-import { SessionEntrySchema } from "@rakazo/contracts";
+import type { MessageBlock, SessionEntryType, ThreadEntry } from "@rakazo/contracts";
+import { ThreadEntrySchema } from "@rakazo/contracts";
 import { rpc } from "./helpers";
 import type { Page, Request, Route } from "./test";
 
@@ -8,11 +8,11 @@ type ThreadTarget = { botId: string } | { groupId: string };
 export async function threadEntries(
   page: Page,
   target: ThreadTarget & { includePeerRuns?: boolean },
-): Promise<SessionEntry[]> {
-  return (await rpc<{ entries: SessionEntry[] }>(page, "threads/messages", target)).entries;
+): Promise<ThreadEntry[]> {
+  return (await rpc<{ entries: ThreadEntry[] }>(page, "threads/messages", target)).entries;
 }
 
-export function blocksOf(entries: readonly SessionEntry[]): MessageBlock[] {
+export function blocksOf(entries: readonly ThreadEntry[]): MessageBlock[] {
   return entries.flatMap((entry): MessageBlock[] => {
     switch (entry.type) {
       case "user.message":
@@ -28,7 +28,7 @@ export function blocksOf(entries: readonly SessionEntry[]): MessageBlock[] {
   });
 }
 
-export function answerOf(entries: readonly SessionEntry[], cardId: string) {
+export function answerOf(entries: readonly ThreadEntry[], cardId: string) {
   return entries.find(
     (entry) =>
       (entry.type === "user.message" && entry.payload.replyTo?.entryId === cardId) ||
@@ -84,7 +84,7 @@ export function runFinished(
 }
 
 export type ThreadPage = {
-  entries: SessionEntry[];
+  entries: ThreadEntry[];
   olderCursor?: string | null;
   [field: string]: unknown;
 };
@@ -141,17 +141,16 @@ export async function showThread(
   await page.reload({ waitUntil: "domcontentloaded" });
 }
 
-function chained(real: readonly SessionEntry[], drafts: readonly EntryDraft[]): SessionEntry[] {
-  const head = real.reduce<SessionEntry | undefined>(
+function chained(real: readonly ThreadEntry[], drafts: readonly EntryDraft[]): ThreadEntry[] {
+  const head = real.reduce<ThreadEntry | undefined>(
     (latest, entry) => (latest && latest.seq > entry.seq ? latest : entry),
     undefined,
   );
   let parentId: string | null = head?.id ?? null;
   let seq = head ? head.seq + 1 : 0;
   return drafts.map((draft) => {
-    const entry = SessionEntrySchema.parse({
+    const entry = ThreadEntrySchema.parse({
       ...draft,
-      sessionId: head?.sessionId ?? "e2e-session",
       seq,
       parentId,
     });

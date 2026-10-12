@@ -125,9 +125,11 @@ describe("PostgresSessionLog", () => {
     });
 
     const events = await prisma.event.findMany({ where: { threadId }, orderBy: { seq: "asc" } });
+    const { sessionId: _entrySession, ...fedEntry } = entry;
+    const { sessionId: _authoredSession, ...fedAuthored } = authored;
     expect(events.map(({ type, botId, payload }) => ({ type, botId, payload }))).toEqual([
-      { type: "session.entry.appended", botId, payload: { entries: [entry] } },
-      { type: "session.entry.appended", botId: "bot_author", payload: { entries: [authored] } },
+      { type: "session.entry.appended", botId, payload: { entries: [fedEntry] } },
+      { type: "session.entry.appended", botId: "bot_author", payload: { entries: [fedAuthored] } },
     ]);
   });
 
@@ -155,7 +157,35 @@ describe("PostgresSessionLog", () => {
     expect(
       events.map(({ type, botId, runId, payload }) => ({ type, botId, runId, payload })),
     ).toEqual([
-      { type: "session.entry.appended", botId, runId: run.id, payload: { entries: appended } },
+      {
+        type: "session.entry.appended",
+        botId,
+        runId: run.id,
+        payload: {
+          entries: [
+            {
+              id: appended[0]!.id,
+              seq: 0,
+              parentId: null,
+              ts: appended[0]!.ts,
+              botId,
+              runId: run.id,
+              type: "assistant.text",
+              payload: { blocks: [{ kind: "text", text: "one" }] },
+            },
+            {
+              id: appended[1]!.id,
+              seq: 1,
+              parentId: appended[0]!.id,
+              ts: appended[1]!.ts,
+              botId,
+              runId: run.id,
+              type: "assistant.text",
+              payload: { blocks: [{ kind: "text", text: "two" }] },
+            },
+          ],
+        },
+      },
     ]);
   });
 

@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
-import type { ComputerStatus, ProductEvent, SessionEntry, ThreadSnapshot } from "@rakazo/contracts";
-import { SessionEntrySchema } from "@rakazo/contracts";
+import type { ComputerStatus, ProductEvent, ThreadEntry, ThreadSnapshot } from "@rakazo/contracts";
+import { ThreadEntrySchema } from "@rakazo/contracts";
 import { projectThreadView, threadEntriesOf } from "@rakazo/core";
 import { describe, expect, it } from "vitest";
 import type { ThreadState } from "./thread-events.js";
@@ -442,7 +442,7 @@ describe("a streamed reply fed through the reducer", () => {
   )
     .trim()
     .split("\n")
-    .map((line) => SessionEntrySchema.parse(JSON.parse(line)));
+    .map((line) => ThreadEntrySchema.parse(JSON.parse(line)));
   const entry = (id: string) => fixture.find((candidate) => candidate.id === id)!;
   const appendedAt = (seq: number, ...ids: string[]) =>
     event({
@@ -884,10 +884,9 @@ describe("computer event reduction", () => {
   });
 });
 
-function said(seq: number, text: string): SessionEntry {
-  return SessionEntrySchema.parse({
+function said(seq: number, text: string): ThreadEntry {
+  return ThreadEntrySchema.parse({
     id: `e-${seq}`,
-    sessionId: "session-1",
     seq,
     parentId: seq === 0 ? null : `e-${seq - 1}`,
     ts: "2026-08-16T00:00:00.000Z",
@@ -896,13 +895,13 @@ function said(seq: number, text: string): SessionEntry {
   });
 }
 
-function textOf(entry: SessionEntry): string {
+function textOf(entry: ThreadEntry): string {
   return entry.type === "user.message" && entry.payload.blocks[0]?.kind === "text"
     ? entry.payload.blocks[0].text
     : entry.type;
 }
 
-function wire(entries: SessionEntry[] = [], olderCursor: string | null = null): ThreadSnapshot {
+function wire(entries: ThreadEntry[] = [], olderCursor: string | null = null): ThreadSnapshot {
   return {
     botId: "bot-1",
     threadId: "thread-1",
@@ -915,7 +914,7 @@ function wire(entries: SessionEntry[] = [], olderCursor: string | null = null): 
   };
 }
 
-function state(entries: SessionEntry[] = [], olderCursor: string | null = null): ThreadState {
+function state(entries: ThreadEntry[] = [], olderCursor: string | null = null): ThreadState {
   return threadEntriesOf(wire(entries, olderCursor));
 }
 

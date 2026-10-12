@@ -1,10 +1,10 @@
 import type {
   EntryId,
   MessageBlock,
-  SessionEntry,
-  SessionEntryOf,
   SessionEntryType,
   SessionId,
+  ThreadEntry,
+  ThreadEntryOf,
 } from "@rakazo/contracts";
 import { CARD_STATE_TYPES } from "@rakazo/contracts";
 import { appendToolCallSegment } from "../events.js";
@@ -18,8 +18,8 @@ const FOLDED_TYPES = [
   "tool.call",
   "tool.result",
 ] as const;
-type FoldedEntry = SessionEntryOf<(typeof FOLDED_TYPES)[number]>;
-export type ToolAnswer = SessionEntryOf<"tool.result" | "subagent">;
+type FoldedEntry = ThreadEntryOf<(typeof FOLDED_TYPES)[number]>;
+export type ToolAnswer = ThreadEntryOf<"tool.result" | "subagent">;
 export type ToolAnswers = {
   answerOf: ReadonlyMap<EntryId, ToolAnswer>;
   callOf: ReadonlyMap<EntryId, EntryId>;
@@ -48,13 +48,13 @@ type RunMessage = {
  * can sit between what the run said before the call and after it.
  */
 export function foldRuns(
-  entries: readonly SessionEntry[],
+  entries: readonly ThreadEntry[],
   {
     answers = toolAnswers(entries),
     splitAtHelpers = false,
   }: { answers?: ToolAnswers; splitAtHelpers?: boolean } = {},
-): (RunMessage | Exclude<SessionEntry, FoldedEntry>)[] {
-  const segments: (RunMessage | Exclude<SessionEntry, FoldedEntry>)[] = [];
+): (RunMessage | Exclude<ThreadEntry, FoldedEntry>)[] {
+  const segments: (RunMessage | Exclude<ThreadEntry, FoldedEntry>)[] = [];
   const open = new Map<string, RunMessage>();
   const holderOf = new Map<EntryId, RunMessage>();
   const stretchOf = (entry: FoldedEntry) => {
@@ -129,7 +129,7 @@ export function foldRuns(
  * unanswered under the replay that follows it, and a result whose call a compaction cut answers
  * nothing.
  */
-export function toolAnswers(entries: readonly SessionEntry[]): ToolAnswers {
+export function toolAnswers(entries: readonly ThreadEntry[]): ToolAnswers {
   const unanswered = new Map<string, EntryId[]>();
   const answerOf = new Map<EntryId, ToolAnswer>();
   const callOf = new Map<EntryId, EntryId>();
@@ -156,6 +156,6 @@ function outputOf(answer: ToolAnswer): string {
   return answer.type === "tool.result" ? answer.payload.output : answer.payload.result;
 }
 
-function toolCallKey(entry: SessionEntryOf<"tool.call" | "tool.result" | "subagent">) {
+function toolCallKey(entry: ThreadEntryOf<"tool.call" | "tool.result" | "subagent">) {
   return JSON.stringify([entry.runId, entry.payload.callId]);
 }

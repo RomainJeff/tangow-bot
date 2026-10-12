@@ -1,7 +1,7 @@
 import { i18n } from "@lingui/core";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { ChatMarkdown } from "@rakazo/chat-ui/web";
-import type { SessionEntry } from "@rakazo/contracts";
+import type { ThreadEntry } from "@rakazo/contracts";
 import {
   computeMessageGroups,
   peerConversations,
@@ -42,7 +42,7 @@ export function PeerMessagesOverlay({
   onClose: () => void;
 }) {
   const { t } = useLingui();
-  const [entries, setEntries] = useState<readonly SessionEntry[]>([]);
+  const [entries, setEntries] = useState<readonly ThreadEntry[]>([]);
   const [historyReady, setHistoryReady] = useState(false);
   const [historyFailed, setHistoryFailed] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);

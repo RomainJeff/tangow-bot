@@ -3,10 +3,11 @@ import type {
   EntryId,
   ProductEvent,
   SessionEntry,
+  ThreadEntry,
   ThreadMessage,
   ThreadMessagePage,
 } from "@rakazo/contracts";
-import { SessionId } from "@rakazo/contracts";
+import { SessionId, toThreadEntry } from "@rakazo/contracts";
 import { appendedEntries, visibleEntries } from "@rakazo/core";
 import { hiddenPeerRunIds, type Prisma, type PrismaClient } from "@rakazo/db";
 
@@ -30,8 +31,8 @@ function olderCursor(page: readonly SessionEntry[]): EntryId | null {
 
 export async function withoutHiddenPeerRuns(
   prisma: ThreadDb,
-  entries: readonly SessionEntry[],
-): Promise<SessionEntry[]> {
+  entries: readonly ThreadEntry[],
+): Promise<ThreadEntry[]> {
   const runIds = [...new Set(entries.flatMap((entry) => (entry.runId ? [entry.runId] : [])))];
   return visibleEntries(entries, { hiddenPeerRunIds: await hiddenPeerRunIds(prisma, runIds) });
 }
@@ -57,9 +58,10 @@ export async function loadEntryPage(
           { before: query.around ? undefined : query.before, limit: THREAD_PAGE_SIZE },
           deps.prisma,
         );
+  const entries = page.map(toThreadEntry);
   return {
     threadId,
-    entries: query.includePeerRuns ? page : await withoutHiddenPeerRuns(deps.prisma, page),
+    entries: query.includePeerRuns ? entries : await withoutHiddenPeerRuns(deps.prisma, entries),
     olderCursor: olderCursor(page),
   };
 }

@@ -245,7 +245,16 @@ describe("threadSnapshot", () => {
       progress: snapshot.progress,
     }).toEqual({
       cursor: 5,
-      entries: [question],
+      entries: [
+        {
+          id: "entry-7",
+          seq: 7,
+          parentId: "entry-6",
+          ts: "2026-08-23T00:00:00.000Z",
+          type: "user.message",
+          payload: { blocks: [{ kind: "text", text: "Find the invoice" }], source: "app" },
+        },
+      ],
       olderCursor: "entry-7",
       progress: [
         {

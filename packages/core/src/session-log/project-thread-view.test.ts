@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
-import type { ProductEvent, SessionEntry } from "@rakazo/contracts";
-import { SessionEntrySchema } from "@rakazo/contracts";
+import type { ProductEvent, ThreadEntry } from "@rakazo/contracts";
+import { SessionEntrySchema, toThreadEntry } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
 import { linkEntries } from "./fixtures/read-fixture.js";
 import type { ProgressLayer, ThreadEntries } from "./project-thread-view.js";
@@ -707,7 +707,7 @@ describe("projectThreadView rows", () => {
       { ...ada, type: "assistant.text", payload: { blocks: text("See https://example.com/") } },
       { type: "link.preview", payload: { target: "pv-3", block: preview } },
     ];
-    const reply = (entries: SessionEntry[]) =>
+    const reply = (entries: ThreadEntry[]) =>
       projectThreadView(entries).rows.find((row) => row.item.id === "pv-0");
     expect(reply(linkEntries("pv", bodies))).toMatchObject({
       messageId: "pv-0",
@@ -832,7 +832,7 @@ describe("visibleEntries", () => {
   ]);
 
   it("keeps a hidden peer run's words to the person, its cards and their answers", () => {
-    const ids = (entries: SessionEntry[]) => entries.map((entry) => entry.id);
+    const ids = (entries: ThreadEntry[]) => entries.map((entry) => entry.id);
     const hiddenPeerRunIds = new Set(["run_peer"]);
     expect(ids(visibleEntries(chain, { hiddenPeerRunIds }))).toEqual([
       "vis-0",
@@ -844,7 +844,7 @@ describe("visibleEntries", () => {
 });
 
 describe("the entry feed", () => {
-  const chain = linkEntries("feed", [
+  const sessionChain = linkEntries("feed", [
     { type: "user.message", payload: { blocks: text("Hello"), source: "app" } },
     {
       botId: "bot_ada",
@@ -853,6 +853,7 @@ describe("the entry feed", () => {
       payload: { blocks: text("Hello there.") },
     },
   ]);
+  const chain = sessionChain.map(toThreadEntry);
 
   it("clears a run's streamed text when its entry lands, so the text shows once", () => {
     const streaming = streamedProgress("run_1", "Hello there.");
@@ -873,7 +874,7 @@ describe("the entry feed", () => {
   });
 
   it("merges a replayed event and an overlapping page without adding an entry twice", () => {
-    const ids = (entries: SessionEntry[]) => entries.map((entry) => entry.id);
+    const ids = (entries: ThreadEntry[]) => entries.map((entry) => entry.id);
     const merged = mergeEntries([chain[1]!], chain);
     expect(ids(merged)).toEqual(["feed-0", "feed-1"]);
     expect(ids(mergeEntries(merged, [chain[1]!]))).toEqual(["feed-0", "feed-1"]);
@@ -891,7 +892,7 @@ describe("the entries a client holds", () => {
       payload: { blocks: text(words), source: "app" },
     })),
   );
-  const held = (entries: SessionEntry[], olderCursor: string | null): ThreadEntries => ({
+  const held = (entries: ThreadEntry[], olderCursor: string | null): ThreadEntries => ({
     entries,
     olderCursor: olderCursor as ThreadEntries["olderCursor"],
     cursor: 3,
@@ -943,7 +944,7 @@ describe("the entries a client holds", () => {
 
   it("keeps loaded history older than a refreshed page and the older cursor", () => {
     const stale = { ...said[2]!, payload: { blocks: text("Stale two"), source: "app" } };
-    const previous = held([said[0]!, said[1]!, stale as SessionEntry], null);
+    const previous = held([said[0]!, said[1]!, stale as ThreadEntry], null);
     const recent = held([said[2]!, said[3]!], "held-2");
 
     const kept = withRefreshedEntries(previous, recent, true);
@@ -960,7 +961,7 @@ describe("the entries a client holds", () => {
 });
 
 function detached(by: number) {
-  return (entry: SessionEntry): SessionEntry =>
+  return (entry: ThreadEntry): ThreadEntry =>
     SessionEntrySchema.parse({
       ...entry,
       id: `held-${entry.seq + by}`,

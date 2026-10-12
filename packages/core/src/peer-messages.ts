@@ -1,4 +1,4 @@
-import type { Peer, SessionEntry } from "@rakazo/contracts";
+import type { Peer, ThreadEntry } from "@rakazo/contracts";
 
 export interface PeerMessage {
   messageId: string;
@@ -32,7 +32,7 @@ function peerId(peer: Peer): string {
   return peer.kind === "bot" ? peer.botId : peer.address;
 }
 
-function peerMessageOf(entry: SessionEntry): PeerMessage | undefined {
+function peerMessageOf(entry: ThreadEntry): PeerMessage | undefined {
   if (entry.type !== "bot.message.sent" && entry.type !== "bot.message.received") return undefined;
   const sent = entry.type === "bot.message.sent";
   const peer = sent ? entry.payload.to : entry.payload.from;
@@ -46,7 +46,7 @@ function peerMessageOf(entry: SessionEntry): PeerMessage | undefined {
   };
 }
 
-export function peerConversations(entries: readonly SessionEntry[]): PeerConversation[] {
+export function peerConversations(entries: readonly ThreadEntry[]): PeerConversation[] {
   const byPeer = new Map<string, PeerConversation>();
   for (const entry of entries) {
     const peerMessage = peerMessageOf(entry);

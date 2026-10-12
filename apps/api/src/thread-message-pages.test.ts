@@ -65,11 +65,15 @@ describe("thread entry pages", () => {
     const tail = await loadEntryPage(deps, thread, {});
     const older = await loadEntryPage(deps, thread, { before: tail.olderCursor! });
 
-    expect([tail.entries.length, tail.entries[0]?.id, tail.olderCursor]).toEqual([
-      400,
-      "entry-50",
-      "entry-50",
-    ]);
+    expect([tail.entries.length, tail.olderCursor]).toEqual([400, "entry-50"]);
+    expect(tail.entries[0]).toEqual({
+      id: "entry-50",
+      seq: 50,
+      parentId: "entry-49",
+      ts: "2026-10-11T09:00:50.000Z",
+      type: "user.message",
+      payload: { blocks: [{ kind: "text", text: "m50" }], source: "app" },
+    });
     expect([older.entries.length, older.entries[0]?.id, older.olderCursor]).toEqual([
       50,
       "entry-0",

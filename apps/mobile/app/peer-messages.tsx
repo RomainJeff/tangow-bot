@@ -1,5 +1,5 @@
 import { ChatMarkdown } from "@rakazo/chat-ui/native";
-import type { EntryId, MessageBlock, SessionEntry, ThreadMessagePage } from "@rakazo/contracts";
+import type { EntryId, MessageBlock, ThreadEntry, ThreadMessagePage } from "@rakazo/contracts";
 import {
   computeMessageGroups,
   mergeEntries,
@@ -64,7 +64,7 @@ export default function PeerMessages() {
     peerColor?: string;
     peerShapeSeed?: string;
   }>();
-  const [entries, setEntries] = useState<readonly SessionEntry[]>([]);
+  const [entries, setEntries] = useState<readonly ThreadEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -77,7 +77,7 @@ export default function PeerMessages() {
     let cancelled = false;
     void (async () => {
       let before: EntryId | undefined;
-      const pages: SessionEntry[][] = [];
+      const pages: ThreadEntry[][] = [];
       do {
         const page = await rpc<ThreadMessagePage>("threads/messages", {
           botId,
