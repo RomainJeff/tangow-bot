@@ -1,6 +1,6 @@
 import type { Actor, MessageBlock, SearchHit } from "@rakazo/contracts";
 import { extractLinksFromText, matchesSearchQuery, snippetAroundMatch } from "@rakazo/core";
-import { Prisma, type PrismaClient } from "@rakazo/db";
+import { ENTRY_ON_CHAIN, Prisma, type PrismaClient } from "@rakazo/db";
 
 const SEARCH_LIMIT = 25;
 /** Cap name matches so content hits (messages/files/links/routines) keep most of the budget. */
@@ -33,6 +33,7 @@ async function findArtifactMessages(
           AND ${targetColumn} = candidate."targetId"
           AND e.type IN ${MESSAGE_ENTRY_TYPES}
           AND (e.payload -> 'blocks')::text ILIKE ('%' || candidate."artifactId" || '%')
+          AND ${ENTRY_ON_CHAIN}
         ORDER BY e.seq DESC
         LIMIT 1
       ) message
@@ -250,6 +251,7 @@ export async function querySpaceSearch(
       AND b."archivedAt" IS NULL
       AND e.type IN ${MESSAGE_ENTRY_TYPES}
       AND jsonb_path_query_array(e.payload -> 'blocks', '$[*] ? (!exists(@.kind) || @.kind != "link_preview")')::text ILIKE ${pattern}
+      AND ${ENTRY_ON_CHAIN}
     ORDER BY e."createdAt" DESC
     LIMIT ${SEARCH_LIMIT}
   `;
@@ -285,6 +287,7 @@ export async function querySpaceSearch(
       AND t."userId" = ${actor.userId}
       AND e.type IN ${MESSAGE_ENTRY_TYPES}
       AND jsonb_path_query_array(e.payload -> 'blocks', '$[*] ? (!exists(@.kind) || @.kind != "link_preview")')::text ILIKE ${pattern}
+      AND ${ENTRY_ON_CHAIN}
     ORDER BY e."createdAt" DESC
     LIMIT ${SEARCH_LIMIT}
   `;

@@ -8,7 +8,7 @@ import type {
 } from "@rakazo/contracts";
 import { SessionId, toThreadEntry } from "@rakazo/contracts";
 import { appendedEntries, visibleEntries } from "@rakazo/core";
-import { hiddenPeerRunIds, type Prisma, type PrismaClient, sessionEntryFromRow } from "@rakazo/db";
+import { hiddenPeerRunIds, type Prisma, type PrismaClient } from "@rakazo/db";
 
 type ThreadDb = PrismaClient | Prisma.TransactionClient;
 type PageLog = Pick<SessionLog<Prisma.TransactionClient>, "readPage" | "readAround">;
@@ -65,25 +65,20 @@ export async function loadEntryPage(
   };
 }
 
-/** Every entry of a session in seq order, the chain and what a rewind or clear cut alike. */
-export async function loadAllEntries(
-  prisma: PrismaClient,
-  sessionId: string,
+/** The session's chain oldest first, what every rewind and clear left, read a page at a time. */
+export async function loadChain(
+  log: Pick<PageLog, "readPage">,
+  sessionId: SessionId,
   pageSize: number,
 ): Promise<ThreadEntry[]> {
-  const entries: ThreadEntry[] = [];
-  let after = -1;
-  while (true) {
-    const rows = await prisma.sessionEntry.findMany({
-      where: { sessionId, seq: { gt: after } },
-      orderBy: { seq: "asc" },
-      take: pageSize,
-    });
-    entries.push(...rows.map((row) => toThreadEntry(sessionEntryFromRow(row))));
-    const last = rows.at(-1);
-    if (!last || rows.length < pageSize) return entries;
-    after = last.seq;
-  }
+  const pages: SessionEntry[][] = [];
+  let before: EntryId | null = null;
+  do {
+    const page = await log.readPage(sessionId, { before: before ?? undefined, limit: pageSize });
+    pages.unshift(page);
+    before = olderCursor(page);
+  } while (before);
+  return pages.flat().map(toThreadEntry);
 }
 
 export async function isPeerRun(

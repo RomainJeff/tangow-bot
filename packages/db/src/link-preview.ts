@@ -2,7 +2,12 @@ import { createHash } from "node:crypto";
 import type { LinkPreviewCard } from "@rakazo/contracts";
 import { EntryId } from "@rakazo/contracts";
 import type { Prisma, PrismaClient } from "./client.js";
-import { appendCardStateInTransaction, blocksOf, threadEventSeq } from "./sessions.js";
+import {
+  appendCardStateInTransaction,
+  blocksOf,
+  ENTRY_ON_CHAIN,
+  threadEventSeq,
+} from "./sessions.js";
 
 export const LINK_PREVIEW_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 export const LINK_PREVIEW_CACHE_MAX_ENTRIES = 500;
@@ -298,18 +303,21 @@ async function eventBotIdForThread(
 }
 
 /**
- * The message a preview goes under, read under the thread lock, with what it holds of a preview: an
- * opt-out marker it was sent with, its preview entries, and whether one was removed.
+ * The message a preview goes under, read under the thread lock while it is still on the thread's
+ * chain, with what it holds of a preview: an opt-out marker it was sent with, its preview entries,
+ * and whether one was removed.
  */
 async function previewTarget(
   tx: Prisma.TransactionClient,
   input: { threadId: string; messageId: string },
 ) {
   await tx.$queryRaw`SELECT id FROM threads WHERE id = ${input.threadId} FOR UPDATE`;
-  const message = await tx.sessionEntry.findFirst({
-    where: { id: input.messageId, session: { threadId: input.threadId, kind: "thread" } },
-    select: { id: true, sessionId: true, botId: true, payload: true },
-  });
+  const [message] = await tx.$queryRaw<
+    Array<{ id: string; sessionId: string; botId: string | null; payload: Prisma.JsonValue }>
+  >`
+    SELECT e.id, e."sessionId", e."botId", e.payload FROM session_entries e
+    JOIN sessions s ON s.id = e."sessionId" AND s."threadId" = ${input.threadId} AND s.kind = 'thread'
+    WHERE e.id = ${input.messageId} AND ${ENTRY_ON_CHAIN}`;
   if (!message) return null;
   const previews = await tx.sessionEntry.findMany({
     where: {

@@ -500,14 +500,19 @@ describe("messages.removeLinkPreview (CA 16, CA 19, CA 54)", () => {
   ) {
     vi.mocked(appendCardStateInTransaction).mockClear();
     const tx = {
-      $queryRaw: vi.fn(async () => []),
+      $queryRaw: vi
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          {
+            id: "message-1",
+            sessionId: "session-1",
+            botId: null,
+            payload: { blocks: [{ kind: "text", text: "see https://example.test/a" }] },
+          },
+        ])
+        .mockResolvedValue([]),
       sessionEntry: {
-        findFirst: vi.fn(async () => ({
-          id: "message-1",
-          sessionId: "session-1",
-          botId: null,
-          payload: { blocks: [{ kind: "text", text: "see https://example.test/a" }] },
-        })),
         findMany: vi.fn().mockResolvedValueOnce(previews).mockResolvedValueOnce(removals),
       },
       thread: {

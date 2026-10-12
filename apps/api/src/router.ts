@@ -86,18 +86,12 @@ import {
   verifyMcpInstall,
 } from "@rakazo/adapters";
 import type { Auth } from "@rakazo/auth";
-import type {
-  Actor,
-  ComputerStatus,
-  McpServer,
-  Me,
-  SessionId,
-  SpaceNavigation,
-} from "@rakazo/contracts";
+import type { Actor, ComputerStatus, McpServer, Me, SpaceNavigation } from "@rakazo/contracts";
 import {
   appContract,
   IntegrationProviderIdSchema,
   OPENAI_COMPATIBLE_PROVIDER_ID,
+  SessionId,
 } from "@rakazo/contracts";
 import {
   ACTIVE_RUN_STATUSES,
@@ -211,7 +205,7 @@ import {
 import { assertTeachingSendAllowed, createTaughtSkillsService } from "./taught-skills.js";
 import {
   forwardedThreadEvent,
-  loadAllEntries,
+  loadChain,
   loadEntryPage,
   threadSessionId,
 } from "./thread-message-pages.js";
@@ -4646,10 +4640,10 @@ export function createRouter(deps: RouterDeps) {
             }
             return exported;
           })(),
-          loadAllEntries(deps.prisma, bot.thread.sessionId, EXPORT_ENTRY_PAGE_SIZE),
+          loadChain(deps.sessionLog, SessionId.parse(bot.thread.sessionId), EXPORT_ENTRY_PAGE_SIZE),
         ]);
         return {
-          version: 1 as const,
+          version: 2 as const,
           exportedAt: new Date().toISOString(),
           bot: {
             name: bot.name,

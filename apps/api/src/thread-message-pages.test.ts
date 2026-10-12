@@ -2,12 +2,7 @@ import type { ProductEvent, SessionEntry } from "@rakazo/contracts";
 import { EntryId, SessionEntrySchema, SessionId } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
-import {
-  forwardedThreadEvent,
-  isPeerRun,
-  loadAllEntries,
-  loadEntryPage,
-} from "./thread-message-pages.js";
+import { forwardedThreadEvent, isPeerRun, loadEntryPage } from "./thread-message-pages.js";
 
 const SESSION = SessionId.parse("session-main");
 const thread = { threadId: "thread-1", sessionId: SESSION };
@@ -221,29 +216,4 @@ describe("thread feed forwarding", () => {
     const prisma = wokenBy("request", "Peux-tu me donner le contexte ?");
     await expect(isPeerRun(prisma, "run-woken", new Map())).resolves.toBe(true);
   });
-});
-
-it("collects a session's entries into seq order for an export, a page at a time", async () => {
-  const row = (seq: number) => ({
-    id: `entry-${seq}`,
-    sessionId: "session-main",
-    seq,
-    parentId: seq === 0 ? null : `entry-${seq - 1}`,
-    type: "user.message",
-    payload: { blocks: [{ kind: "text", text: `m${seq}` }], source: "app" },
-    botId: null,
-    runId: null,
-    createdAt: new Date("2026-08-16T00:00:00.000Z"),
-  });
-  const findMany = vi
-    .fn()
-    .mockResolvedValueOnce([row(0), row(1)])
-    .mockResolvedValueOnce([row(2), row(3)])
-    .mockResolvedValueOnce([row(4)]);
-  const prisma = { sessionEntry: { findMany } } as unknown as PrismaClient;
-
-  const entries = await loadAllEntries(prisma, "session-main", 2);
-
-  expect(entries.map((held) => held.seq)).toEqual([0, 1, 2, 3, 4]);
-  expect(findMany.mock.calls.map(([query]) => query.where.seq.gt)).toEqual([-1, 1, 3]);
 });

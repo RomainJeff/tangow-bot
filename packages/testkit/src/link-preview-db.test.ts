@@ -11,6 +11,7 @@ import {
   purgeLinkPreviewState,
   removeLinkPreviewBlock,
   reserveLinkPreviewRead,
+  rewindThread,
   storeLinkPreviewCache,
 } from "@rakazo/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -433,6 +434,20 @@ describe("a message's preview in the log", () => {
       "gone",
     ]);
     expect(await db.previewOf("m2")).toEqual({ removed: false });
+  });
+
+  it("adds no card to a message a rewind cut before the preview arrived", async () => {
+    await db.seedThread({ id: "thread-1" });
+    await db.seedMessage({ id: "m1", threadId: "thread-1", blocks: [text] });
+    await rewindThread(db.prisma, { ...scope, botId: "bot-1" });
+
+    const appended = await appendLinkPreviewBlock(db.prisma, {
+      ...scope,
+      block: { kind: "link_preview", url, format: "compact", title: "A page" },
+    });
+
+    expect(appended).toEqual({ outcome: "gone" });
+    expect(await db.previewOf("m1")).toEqual({ removed: false });
   });
 
   describe("removal and card images (CA 16, CA 44)", () => {

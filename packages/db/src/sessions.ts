@@ -23,6 +23,18 @@ import { ACTIVE_RUN_STATUSES, SessionEntryDecodeError, sanitizeJsonValue } from 
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
 
+/**
+ * SQL that holds when the entry `e` is still on its session's chain: after the session's last
+ * clear, and outside every stretch a rewind cut, from just after the rewind's parent to the rewind.
+ */
+export const ENTRY_ON_CHAIN = Prisma.sql`e.seq > COALESCE((
+    SELECT max(c.seq) FROM session_entries c WHERE c."sessionId" = e."sessionId" AND c.type = 'clear'
+  ), -1)
+  AND NOT EXISTS (
+    SELECT 1 FROM session_entries r JOIN session_entries p ON p.id = r."parentId"
+    WHERE r."sessionId" = e."sessionId" AND r.type = 'rewind' AND e.seq > p.seq AND e.seq < r.seq
+  )`;
+
 /** A `session_entries` row, as Prisma and `$queryRaw` both return it. */
 export interface SessionEntryRow {
   id: string;
