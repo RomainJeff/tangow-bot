@@ -14,6 +14,7 @@ import type { SessionId, ThreadEntry } from "@rakazo/contracts";
 import { ACTIVE_RUN_STATUSES, ONCE_ROUTINE_CRON } from "@rakazo/core";
 import {
   appendEvent,
+  appendRunBlocksInTransaction,
   appendRunFinishedInTransaction,
   appendSessionEntryInTransaction,
   createBotMessageInTransaction,
@@ -1459,6 +1460,57 @@ describeJourneys("required product journeys", () => {
     expect(rawJson).toContain("Be useful");
     expect(rawJson).not.toContain(secret);
     expect(rawJson).not.toMatch(/browserProfile|ciphertext|sessionCookie/i);
+  });
+
+  it("9b: export leaves out what a hidden peer run said, as the thread does", async () => {
+    const cookie = await signup(app, `export-peer-j-${stamp}@rakazo.test`, "Export Peer");
+    const bot = await rpc<Bot>(app, cookie, "bots/create", {
+      name: "Chief",
+      title: "",
+      description: "",
+      instructions: "",
+      notifyOnFinish: true,
+    });
+    const thread = await prisma.thread.findFirstOrThrow({ where: { botId: bot.id } });
+    // A peer's delivery that does not relay to the person starts a run the thread hides.
+    for (const [trigger, text] of [
+      ["bot_message", "Peer tally: forty lanterns."],
+      ["user", "Own tally: twelve lanterns."],
+    ] as const) {
+      const task = await prisma.task.create({
+        data: {
+          spaceId: thread.spaceId,
+          botId: bot.id,
+          threadId: thread.id,
+          userId: thread.userId,
+          prompt: "",
+          status: "completed",
+        },
+      });
+      const run = await prisma.run.create({
+        data: {
+          spaceId: thread.spaceId,
+          botId: bot.id,
+          threadId: thread.id,
+          taskId: task.id,
+          userId: thread.userId,
+          status: "completed",
+          trigger,
+        },
+      });
+      await prisma.$transaction((tx) =>
+        appendRunBlocksInTransaction(tx, { id: `${run.id}-said`, runId: run.id, botId: bot.id }, [
+          { kind: "text", text },
+        ]),
+      );
+    }
+
+    const manifest = await rpc<{ history: unknown[] }>(app, cookie, "export/bot", {
+      botId: bot.id,
+    });
+    const history = JSON.stringify(manifest.history);
+    expect(history).toContain("Own tally: twelve lanterns.");
+    expect(history).not.toContain("Peer tally");
   });
 
   it("10: bots can be archived safely and deleted with or without their memories", async () => {
