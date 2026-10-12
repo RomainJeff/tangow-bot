@@ -683,7 +683,7 @@ Decision. A. The head is the entry with the highest seq in its session, so the r
 
 | Type | Written by | Inference | UI |
 | --- | --- | --- | --- |
-| `user.message` | API, steering, routines, channel mirrors | yes | yes |
+| `user.message` | API, steering, routines, channel mirrors, `targets` the bots a group send addressed in order so a replay returns its runs as main did, `source` card for an in-card answer | yes | yes |
 | `assistant.text` | Executor, per finished block, `toPerson` when addressed to the person | yes | yes |
 | `assistant.reasoning` | Executor | no | yes |
 | `assistant.ask`, `assistant.choice` | Executor, on pause for input | yes | yes |
