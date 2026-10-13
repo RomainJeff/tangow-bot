@@ -413,7 +413,8 @@ export class PiAgentRuntime implements AgentRuntime {
                 : [];
             const hasToolCalls = toolCallNames.length > 0;
             const hasToolResults = event.toolResults.length > 0;
-            if (toolCallNames.includes("message_user")) messagedUser = true;
+            // An update sent before more tool work did not deliver what that work found.
+            if (hasToolCalls) messagedUser = toolCallNames.includes("message_user");
             if (
               request.freeTextIsPrivate &&
               !hasToolCalls &&

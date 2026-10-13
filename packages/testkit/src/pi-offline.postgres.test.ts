@@ -150,6 +150,38 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
     );
   }, 30_000);
 
+  it("reminds a model whose plain-text answer follows an update and more tool work", async () => {
+    const answer = "Saved hello to notes/result.txt.";
+    await journey(
+      [
+        { expect() {}, response: reply("On it.", "journey-update") },
+        {
+          expect() {},
+          response: {
+            type: "tool",
+            id: "journey-write",
+            name: "write_file",
+            arguments: { path: "notes/result.txt", content: "hello" },
+          },
+        },
+        { expect() {}, response: { type: "text", text: answer } },
+        { expect() {}, response: reply(answer) },
+        DONE,
+      ],
+      async ({ bot, prisma, send }) => {
+        const sent = await send("Save hello to notes/result.txt.");
+        await sent.settled("completed");
+        const shown = await prisma.sessionEntry.findMany({
+          where: { botId: bot.id, runId: sent.runId, type: "assistant.text" },
+          orderBy: { seq: "asc" },
+          select: { payload: true },
+        });
+        expect(JSON.stringify(shown)).toContain("On it.");
+        expect(JSON.stringify(shown)).toContain(answer);
+      },
+    );
+  }, 30_000);
+
   it("logs a run's tool call and a helper's run in its own session, one chain each", async () => {
     await journey(
       [

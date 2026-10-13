@@ -4486,7 +4486,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
               resumeFromCheckpoint: takeoverResume?.checkpoint,
               script,
               allowSilentEmpty: allowSilentPeerMessage || messagingChannelRun || freeTextIsPrivate,
-              freeTextIsPrivate,
+              // A group channel run is told to finish silently; a reminder would push it to post.
+              freeTextIsPrivate: freeTextIsPrivate && !messagingChannelRun,
               emptyResponseText,
               executeTool: scripted
                 ? undefined
