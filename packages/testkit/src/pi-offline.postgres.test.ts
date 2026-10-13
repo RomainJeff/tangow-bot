@@ -81,6 +81,107 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
     );
   }, 30_000);
 
+  it("reaches the person when the model answers in plain text instead of message_user", async () => {
+    const answer = "Le Monde leads with the supermarket cyberattack.";
+    await journey(
+      [
+        {
+          expect(request) {
+            expect(JSON.stringify(request.messages)).toContain("What is on the front page?");
+          },
+          response: { type: "text", text: answer },
+        },
+        {
+          expect(request) {
+            expect(turnsOf(request.messages).texts.at(-2)).toEqual(["assistant", answer]);
+          },
+          response: reply(answer),
+        },
+        DONE,
+      ],
+      async ({ bot, prisma, send }) => {
+        const sent = await send("What is on the front page?");
+        await sent.settled("completed");
+        const shown = await prisma.sessionEntry.findMany({
+          where: { botId: bot.id, runId: sent.runId, type: "assistant.text" },
+          orderBy: { seq: "asc" },
+          select: { payload: true },
+        });
+        expect(JSON.stringify(shown)).toContain(answer);
+      },
+    );
+  }, 30_000);
+
+  it("keeps a deliberate silence after one reminder", async () => {
+    const text = "Nothing worth sending today.";
+    await journey(
+      [
+        { expect() {}, response: { type: "text", text } },
+        { expect() {}, response: { type: "text", text } },
+      ],
+      async ({ bot, prisma, send }) => {
+        const sent = await send("Anything new?");
+        await sent.settled("completed");
+        const shown = await prisma.sessionEntry.findMany({
+          where: { botId: bot.id, runId: sent.runId, type: "assistant.text" },
+          select: { payload: true },
+        });
+        expect(JSON.stringify(shown)).not.toContain(text);
+      },
+    );
+  }, 30_000);
+
+  it("does not remind a model that already messaged the user", async () => {
+    const answer = "Le Monde leads with the supermarket cyberattack.";
+    await journey(
+      [
+        { expect() {}, response: reply(answer) },
+        { expect() {}, response: { type: "text", text: "Sent." } },
+      ],
+      async ({ bot, prisma, send }) => {
+        const sent = await send("What is on the front page?");
+        await sent.settled("completed");
+        const shown = await prisma.sessionEntry.findMany({
+          where: { botId: bot.id, runId: sent.runId, type: "assistant.text" },
+          select: { payload: true },
+        });
+        expect(JSON.stringify(shown).split(answer)).toHaveLength(2);
+      },
+    );
+  }, 30_000);
+
+  it("reminds a model whose plain-text answer follows an update and more tool work", async () => {
+    const answer = "Saved hello to notes/result.txt.";
+    await journey(
+      [
+        { expect() {}, response: reply("On it.", "journey-update") },
+        {
+          expect() {},
+          response: {
+            type: "tool",
+            id: "journey-write",
+            name: "write_file",
+            arguments: { path: "notes/result.txt", content: "hello" },
+          },
+        },
+        { expect() {}, response: { type: "text", text: answer } },
+        { expect() {}, response: reply(answer) },
+        DONE,
+      ],
+      async ({ bot, prisma, send }) => {
+        const sent = await send("Save hello to notes/result.txt.");
+        await sent.settled("completed");
+        const shown = await prisma.sessionEntry.findMany({
+          where: { botId: bot.id, runId: sent.runId, type: "assistant.text" },
+          orderBy: { seq: "asc" },
+          select: { payload: true },
+        });
+        expect(JSON.stringify(shown)).toContain("On it.");
+        expect(JSON.stringify(shown)).toContain(answer);
+      },
+    );
+  }, 30_000);
+
   it("logs a run's tool call and a helper's run in its own session, one chain each", async () => {
     await journey(
       [
@@ -198,6 +299,7 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
           },
           response: { type: "text", text: "checked" },
         },
+        { expect() {}, response: { type: "text", text: "Checked." } },
         { expect() {}, response: { type: "text", text: "Checked." } },
       ],
       async ({ prisma, send }) => {
@@ -842,6 +944,7 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
     await journey(
       [
         { expect() {}, response: { type: "hold", onOpen: () => opened() } },
+        { expect() {}, response: { type: "text", text: "Going on." } },
         { expect() {}, response: { type: "text", text: "Going on." } },
       ],
       async ({ app, cookie, bot, send, log, userId }) => {

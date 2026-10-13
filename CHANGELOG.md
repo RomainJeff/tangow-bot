@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-10-13
+
+#### Fixed
+
+- A bot's answer, such as a news summary, no longer disappears when the bot writes it without sending it, on web, desktop and iPhone.
+
 ### 2026-10-12
 
 #### Added
