@@ -81,6 +81,37 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
     );
   }, 30_000);
 
+  it("reaches the person when the model answers in plain text instead of message_user", async () => {
+    const answer = "Le Monde leads with the supermarket cyberattack.";
+    await journey(
+      [
+        {
+          expect(request) {
+            expect(JSON.stringify(request.messages)).toContain("What is on the front page?");
+          },
+          response: { type: "text", text: answer },
+        },
+        {
+          expect(request) {
+            expect(turnsOf(request.messages).texts.at(-2)).toEqual(["assistant", answer]);
+          },
+          response: reply(answer),
+        },
+        DONE,
+      ],
+      async ({ bot, prisma, send }) => {
+        const sent = await send("What is on the front page?");
+        await sent.settled("completed");
+        const shown = await prisma.sessionEntry.findMany({
+          where: { botId: bot.id, runId: sent.runId, type: "assistant.text" },
+          orderBy: { seq: "asc" },
+          select: { payload: true },
+        });
+        expect(JSON.stringify(shown)).toContain(answer);
+      },
+    );
+  }, 30_000);
+
   it("logs a run's tool call and a helper's run in its own session, one chain each", async () => {
     await journey(
       [
