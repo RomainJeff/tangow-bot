@@ -87,6 +87,8 @@ describe.skipIf(!databaseAvailable)("offline Pi computer approval", () => {
             expect: resultStep("resumed-action"),
             response: { type: "text", text: "Finished the approval fixture." },
           },
+          // That text never reached the person, so the runtime reminds the model once.
+          { expect() {}, response: { type: "text", text: "Finished the approval fixture." } },
         ],
       });
       const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-computer-approval-"));

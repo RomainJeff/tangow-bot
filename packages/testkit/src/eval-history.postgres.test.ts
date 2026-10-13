@@ -36,6 +36,8 @@ describe.skipIf(!databaseAvailable)("eval history accounting", () => {
             },
             response: { type: "text" as const, text: `Saved ${turn} turn.` },
           },
+          // That text never reached the person, so the runtime reminds the model once.
+          { expect() {}, response: { type: "text" as const, text: `Saved ${turn} turn.` } },
         ]),
       });
       const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-eval-history-"));
