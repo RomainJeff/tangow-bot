@@ -976,10 +976,7 @@ export const Composer = memo(function Composer({
                     className="transition-transform duration-(--duration-hover) ease-quiet motion-safe:group-hover/send:-translate-y-px"
                   />
                 </Button>
-              ) : (
-                // Holds Send's footprint so the field doesn't reflow as a draft starts.
-                <span aria-hidden="true" className="size-composer-icon shrink-0" />
-              )}
+              ) : null}
               {running ? (
                 <Button
                   variant="roundIcon"

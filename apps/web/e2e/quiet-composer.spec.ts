@@ -100,17 +100,19 @@ test("composer capsule: empty, typing, and mention chip in light and dark", asyn
   // Empty — the round-icon buttons show, but Send only mounts once there's a draft.
   await expect(bar.getByRole("button", { name: "Attach file" })).toBeVisible();
   await expect(bar.getByRole("button", { name: "Send" })).toHaveCount(0);
-  const emptyBox = await composer.boundingBox();
-  expect(emptyBox).toBeTruthy();
+  const emptyMicBox = await bar.getByRole("button", { name: "Dictate" }).boundingBox();
+  expect(emptyMicBox).toBeTruthy();
   await captureScreenshot(page, testInfo, "quiet-composer-empty-light");
 
-  // Typing — Send appears, but the field doesn't reflow: an aria-hidden placeholder
-  // holds Send's footprint while it's unmounted, so the row width stays constant.
+  // Typing — Send appears where the mic sat flush right, as on iOS.
   await composer.fill("Ping the team about the launch");
-  await expect(bar.getByRole("button", { name: "Send" })).toBeVisible();
-  const typingBox = await composer.boundingBox();
-  expect(typingBox).toBeTruthy();
-  expect(Math.abs(typingBox!.width - emptyBox!.width)).toBeLessThanOrEqual(1);
+  const send = bar.getByRole("button", { name: "Send" });
+  await send.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
+  const sendBox = await send.boundingBox();
+  expect(sendBox).toBeTruthy();
+  expect(
+    Math.abs(sendBox!.x + sendBox!.width - (emptyMicBox!.x + emptyMicBox!.width)),
+  ).toBeLessThanOrEqual(1);
   await captureScreenshot(page, testInfo, "quiet-composer-typing-light");
   await composer.fill("");
   await expect(bar.getByRole("button", { name: "Send" })).toHaveCount(0);
@@ -141,6 +143,35 @@ test("composer capsule: empty, typing, and mention chip in light and dark", asyn
   expect(darkChipBox!.height).toBeGreaterThanOrEqual(29);
   expect(darkChipBox!.height).toBeLessThanOrEqual(31);
   await captureScreenshot(page, testInfo, "quiet-composer-mention-chip-dark");
+});
+
+test("composer while a bot works: mic sits right beside Stop, light and dark", async ({
+  page,
+}, testInfo) => {
+  await signup(page, `quiet-composer-run-${Date.now()}@rakazo.test`, "password12", "Run");
+  await completeOnboarding(page);
+  await page
+    .locator("[data-sidebar-group]")
+    .getByRole("button", { name: /^Chief/ })
+    .click();
+  const composer = page.getByRole("combobox", { name: "Message Chief" });
+  await composer.fill("keep working until I stop you");
+  await page.keyboard.press("Enter");
+
+  const bar = page.getByTestId("composer-bar");
+  const stop = bar.getByRole("button", { name: "Stop", exact: true });
+  await expect(stop).toBeVisible({ timeout: 30_000 });
+  await expect(bar.getByRole("button", { name: "Send" })).toHaveCount(0);
+  const micBox = await bar.getByRole("button", { name: "Dictate" }).boundingBox();
+  const stopBox = await stop.boundingBox();
+  expect(micBox).toBeTruthy();
+  expect(stopBox).toBeTruthy();
+  expect(stopBox!.x - (micBox!.x + micBox!.width)).toBeLessThanOrEqual(9);
+  await captureScreenshot(page, testInfo, "quiet-composer-working-light");
+
+  await setTheme(page, "dark");
+  await expect(stop).toBeVisible();
+  await captureScreenshot(page, testInfo, "quiet-composer-working-dark");
 });
 
 /** Pastes a tiny fake PNG into the composer, the same way `composer-paste.spec.ts` does. */

@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Fixed
 
 - A bot's answer, such as a news summary, no longer disappears when the bot writes it without sending it, on web, desktop and iPhone.
+- On web and desktop, the composer no longer leaves an empty gap beside the microphone, at rest or next to Stop while a bot works, matching iPhone.
 
 ### 2026-10-12
 
