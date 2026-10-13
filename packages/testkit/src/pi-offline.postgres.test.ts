@@ -112,6 +112,44 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
     );
   }, 30_000);
 
+  it("keeps a deliberate silence after one reminder", async () => {
+    const text = "Nothing worth sending today.";
+    await journey(
+      [
+        { expect() {}, response: { type: "text", text } },
+        { expect() {}, response: { type: "text", text } },
+      ],
+      async ({ bot, prisma, send }) => {
+        const sent = await send("Anything new?");
+        await sent.settled("completed");
+        const shown = await prisma.sessionEntry.findMany({
+          where: { botId: bot.id, runId: sent.runId, type: "assistant.text" },
+          select: { payload: true },
+        });
+        expect(JSON.stringify(shown)).not.toContain(text);
+      },
+    );
+  }, 30_000);
+
+  it("does not remind a model that already messaged the user", async () => {
+    const answer = "Le Monde leads with the supermarket cyberattack.";
+    await journey(
+      [
+        { expect() {}, response: reply(answer) },
+        { expect() {}, response: { type: "text", text: "Sent." } },
+      ],
+      async ({ bot, prisma, send }) => {
+        const sent = await send("What is on the front page?");
+        await sent.settled("completed");
+        const shown = await prisma.sessionEntry.findMany({
+          where: { botId: bot.id, runId: sent.runId, type: "assistant.text" },
+          select: { payload: true },
+        });
+        expect(JSON.stringify(shown).split(answer)).toHaveLength(2);
+      },
+    );
+  }, 30_000);
+
   it("logs a run's tool call and a helper's run in its own session, one chain each", async () => {
     await journey(
       [
@@ -229,6 +267,7 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
           },
           response: { type: "text", text: "checked" },
         },
+        { expect() {}, response: { type: "text", text: "Checked." } },
         { expect() {}, response: { type: "text", text: "Checked." } },
       ],
       async ({ prisma, send }) => {
@@ -873,6 +912,7 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
     await journey(
       [
         { expect() {}, response: { type: "hold", onOpen: () => opened() } },
+        { expect() {}, response: { type: "text", text: "Going on." } },
         { expect() {}, response: { type: "text", text: "Going on." } },
       ],
       async ({ app, cookie, bot, send, log, userId }) => {

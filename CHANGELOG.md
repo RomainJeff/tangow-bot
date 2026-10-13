@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-10-13
+
+#### Fixed
+
+- A bot that writes its answer without sending it is now reminded once to send it, on web, desktop and iPhone, so a reply such as a news summary reaches you instead of the conversation staying silent.
+
 ### 2026-10-12
 
 #### Added

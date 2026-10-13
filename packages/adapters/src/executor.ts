@@ -4486,6 +4486,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               resumeFromCheckpoint: takeoverResume?.checkpoint,
               script,
               allowSilentEmpty: allowSilentPeerMessage || messagingChannelRun || freeTextIsPrivate,
+              freeTextIsPrivate,
               emptyResponseText,
               executeTool: scripted
                 ? undefined

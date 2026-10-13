@@ -133,6 +133,8 @@ const MAX_PARALLEL_SUBAGENTS = 4;
 const MAX_SILENT_TOOL_CONTINUATIONS = 3;
 const SILENT_TOOL_CONTINUATION_PROMPT =
   "Continue the original task from the latest tool result. Do not stop after a tool call; use any remaining tools needed, then deliver the result.";
+const PRIVATE_TEXT_PROMPT =
+  "Nothing you wrote reached the user: only message_user does. If that text was meant for them, send it with message_user now. Otherwise end the turn.";
 const DEFAULT_COMPUTER_SCREENSHOTS_TO_KEEP = 2;
 // Reasoning-capable models must not start at "off": for OpenRouter, pi-ai maps
 // that to reasoning.effort "none", which 400s on endpoints that mandate
@@ -353,6 +355,8 @@ export class PiAgentRuntime implements AgentRuntime {
         let toolActivityShowing = false;
         let silentToolContinuations = 0;
         let toolWorkPendingFinal = false;
+        let messagedUser = false;
+        let privateTextNudged = false;
         agent.subscribe(async (event) => {
           if (event.type === "message_end") {
             traceRecorder?.message(event.message);
@@ -409,6 +413,22 @@ export class PiAgentRuntime implements AgentRuntime {
                 : [];
             const hasToolCalls = toolCallNames.length > 0;
             const hasToolResults = event.toolResults.length > 0;
+            if (toolCallNames.includes("message_user")) messagedUser = true;
+            if (
+              request.freeTextIsPrivate &&
+              !hasToolCalls &&
+              messageText.trim() &&
+              !messagedUser &&
+              !privateTextNudged &&
+              !host.pausePending
+            ) {
+              privateTextNudged = true;
+              agent.followUp({
+                role: "user",
+                content: PRIVATE_TEXT_PROMPT,
+                timestamp: Date.now(),
+              });
+            }
 
             // Text in a turn that also contains a tool call is narration, not a final
             // response. Keep the run alive until a later text-only turn answers the user,
