@@ -55,9 +55,10 @@ const entries = [
     ...entry,
   }),
 );
+let served = entries;
 vi.mock("../../lib/rpc", () => ({
   rpc: {
-    runs: { entries: async () => ({ entries }) },
+    runs: { entries: async () => ({ entries: served }) },
     sessions: { entries: async () => ({ entries }) },
   },
 }));
@@ -82,6 +83,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  served = entries;
   act(() => root.unmount());
   container.remove();
   vi.unstubAllGlobals();
@@ -115,5 +117,17 @@ describe("a session view", () => {
     root = createRoot(container);
     const session = await open({ kind: "session", sessionId: "ses_main" as never, title: "Main" });
     expect(session.querySelectorAll('[data-testid="routine-run-line"]').length).toBe(1);
+  });
+
+  it("shows the report of a run that ended without a closing message, once", async () => {
+    served = entries.filter((entry) => entry.type !== "assistant.text");
+    const card = await open({ kind: "run", runId: "run_digest", title: "Digest" });
+    expect(card.textContent?.split("Three new invoices").length).toBe(2);
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    served = entries;
+    const closed = await open({ kind: "run", runId: "run_digest", title: "Digest" });
+    expect(closed.textContent?.split("Three new invoices").length).toBe(2);
   });
 });

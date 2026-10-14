@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-10-14
+
+#### Fixed
+
+- Opening a routine's report in full shows the report again instead of only the message its bot sent to another bot, on web, desktop and iPhone.
+
 ### 2026-10-13
 
 #### Fixed

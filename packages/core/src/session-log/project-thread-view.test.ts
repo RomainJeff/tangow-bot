@@ -11,6 +11,7 @@ import {
   projectThreadView,
   reduceProgressLayer,
   threadEntriesOf,
+  unshownRunReport,
   visibleEntries,
   withOlderEntries,
   withRefreshedEntries,
@@ -840,6 +841,46 @@ describe("visibleEntries", () => {
       "vis-5",
       "vis-6",
     ]);
+  });
+});
+
+describe("unshownRunReport", () => {
+  const digest = { botId: "bot_ada", runId: "run_digest" };
+  const usage = { inputTokens: 1, outputTokens: 1 };
+  const run = (...middle: object[]) =>
+    linkEntries("rep", [
+      {
+        ...digest,
+        type: "routine.started",
+        payload: {
+          sessionId: "ses_digest",
+          routineId: "rtn_digest",
+          name: "Digest",
+          trigger: "routine",
+          scheduledAt: at(0),
+          model,
+        },
+      },
+      ...middle,
+      {
+        ...digest,
+        type: "routine.finished",
+        payload: { status: "completed", usage, result: " Three new invoices\n" },
+      },
+    ]);
+
+  it("gives the report of a run that ended without a closing message", () => {
+    const progress = { blocks: text("Checking the inbox"), midTurn: true };
+    expect(unshownRunReport(run(), "run_digest")).toBe("Three new invoices");
+    expect(
+      unshownRunReport(run({ ...digest, type: "assistant.text", payload: progress }), "run_digest"),
+    ).toBe("Three new invoices");
+  });
+
+  it("leaves the report to the run's closing message, and to another run's view", () => {
+    const closing = { ...digest, type: "assistant.text", payload: { blocks: text("Three") } };
+    expect(unshownRunReport(run(closing), "run_digest")).toBeUndefined();
+    expect(unshownRunReport(run(), "run_other")).toBeUndefined();
   });
 });
 

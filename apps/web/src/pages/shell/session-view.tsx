@@ -1,6 +1,7 @@
 import { Trans, useLingui } from "@lingui/react/macro";
+import { ChatMarkdown, truncateMarkdownForRender } from "@rakazo/chat-ui/web";
 import type { SessionEntry } from "@rakazo/contracts";
-import { drawsNothing, projectThreadView } from "@rakazo/core";
+import { drawsNothing, projectThreadView, unshownRunReport } from "@rakazo/core";
 import { Button, Dialog, DialogClose, DialogContent, DialogTitle } from "@rakazo/ui-web";
 import { X } from "lucide-react";
 import { Fragment, useEffect, useMemo, useState } from "react";
@@ -57,6 +58,10 @@ export function SessionView({
         : null,
     [read.entries, showSteps, current],
   );
+  const report =
+    read.entries && current.kind === "run"
+      ? unshownRunReport(read.entries, current.runId)
+      : undefined;
   const rowContext = useMemo<RowContext>(() => {
     const items = new Map(view?.rows.map((row) => [row.item.id, row.item]));
     return {
@@ -119,6 +124,11 @@ export function SessionView({
                 </div>
               </Fragment>
             ))}
+            {report ? (
+              <div dir="auto">
+                <ChatMarkdown>{truncateMarkdownForRender(report)}</ChatMarkdown>
+              </div>
+            ) : null}
           </div>
         )}
       </DialogContent>

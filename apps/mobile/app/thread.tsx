@@ -55,6 +55,7 @@ import {
   threadEntriesOf,
   threadTimeMarkerLabel,
   truncateSlashDescription,
+  unshownRunReport,
 } from "@rakazo/core";
 import { botAccentOn, motion, radii, sizes } from "@rakazo/ui-tokens";
 import * as Clipboard from "expo-clipboard";
@@ -4190,6 +4191,7 @@ function SessionSheet({
   onClose: () => void;
 }) {
   const tokens = mobileTokens();
+  const colorScheme = useResolvedAppearance();
   const { t } = useI18n();
   const showSteps = useDisplayAgentSteps();
   const [entries, setEntries] = useState<SessionEntry[] | "failed" | null>(null);
@@ -4214,6 +4216,8 @@ function SessionSheet({
         : [],
     [entries, showSteps, session.runId],
   );
+  const report =
+    Array.isArray(entries) && session.runId ? unshownRunReport(entries, session.runId) : undefined;
   return (
     <PreviewSheet title={session.title} onClose={onClose}>
       <View style={{ paddingTop: 16 }}>
@@ -4254,6 +4258,13 @@ function SessionSheet({
             )}
           </View>
         ))}
+        {report ? (
+          <View style={{ marginTop: rows.length > 0 ? GROUP_GAP : 0 }}>
+            <ChatMarkdown palette={tokens} colorScheme={colorScheme}>
+              {truncateMarkdownForRender(report)}
+            </ChatMarkdown>
+          </View>
+        ) : null}
       </View>
     </PreviewSheet>
   );
