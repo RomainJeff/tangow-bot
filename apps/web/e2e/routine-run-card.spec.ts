@@ -1,5 +1,12 @@
 import type { Routine } from "@rakazo/contracts";
-import { activeBotId, captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
+import {
+  activeBotId,
+  captureScreenshot,
+  completeOnboarding,
+  openBotPage,
+  rpc,
+  signup,
+} from "./helpers";
 import { expect, test } from "./test";
 import { blocksOf, threadEntries } from "./thread-log";
 
@@ -82,6 +89,19 @@ test("renders a routine run card in a sub-bot's own thread", async ({ page }, te
   // A card run keeps its report only on its line, which its own view leaves out: the view shows it.
   await expect(session.locator("strong")).toBeVisible();
   await captureScreenshot(page, testInfo, "routine-session-view");
+  await page.keyboard.press("Escape");
+
+  // The bot's Activity reads the same report, and Open in chat lands on the run's line.
+  const botPage = await openBotPage(page);
+  await botPage.getByRole("tab", { name: "Activity" }).click();
+  const activity = botPage.getByTestId("bot-activity");
+  await activity.getByRole("button", { name: /^Status check, Done/ }).click();
+  const recap = activity.getByTestId("activity-recap");
+  await expect(recap.locator("strong")).toBeVisible();
+  await expect(recap).not.toContainText("No report");
+  await captureScreenshot(page, testInfo, "routine-activity-recap");
+  await recap.getByRole("button", { name: "Open in chat" }).click();
+  await expect(page).toHaveURL(/[?&]m=/);
 });
 
 // An inbound wake reports through a run card on every bot: the routine's instructions and the

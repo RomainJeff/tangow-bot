@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-10-15
+
+#### Fixed
+
+- A routine run in a bot's Activity shows its report instead of "No report", and Open in chat lands on that run in the conversation, on web, desktop and iPhone.
+
 ### 2026-10-14
 
 #### Fixed

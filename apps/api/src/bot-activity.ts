@@ -169,9 +169,17 @@ export async function readRunRecap(
   const items = projectThreadItems(
     await deps.sessionLog.readRun(await ownRunId(deps.prisma, actor, runId)),
   );
-  return runRecap(
+  const recap = runRecap(
     items.flatMap((item) =>
       item.kind === "message" && item.role === "bot" ? [{ id: item.id, blocks: item.blocks }] : [],
     ),
   );
+  // A routine run talks in its own session: the thread shows only its line, and a card run's report
+  // is only on that line.
+  const routine = items.find((item) => item.kind === "routine");
+  if (!routine) return recap;
+  return {
+    text: recap.text ?? (routine.finished?.result.trim() || null),
+    messageId: routine.id,
+  };
 }
