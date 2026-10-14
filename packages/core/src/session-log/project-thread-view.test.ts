@@ -871,10 +871,15 @@ describe("unshownRunReport", () => {
 
   it("gives the report of a run that ended without a closing message", () => {
     const progress = { blocks: text("Checking the inbox"), midTurn: true };
+    const file = {
+      blocks: [{ kind: "file", artifactId: "art_1", mimeType: "text/csv", name: "a.csv", size: 1 }],
+    };
     expect(unshownRunReport(run(), "run_digest")).toBe("Three new invoices");
-    expect(
-      unshownRunReport(run({ ...digest, type: "assistant.text", payload: progress }), "run_digest"),
-    ).toBe("Three new invoices");
+    for (const payload of [progress, file]) {
+      expect(
+        unshownRunReport(run({ ...digest, type: "assistant.text", payload }), "run_digest"),
+      ).toBe("Three new invoices");
+    }
   });
 
   it("leaves the report to the run's closing message, and to another run's view", () => {
