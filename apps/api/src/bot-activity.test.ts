@@ -286,6 +286,32 @@ describe("runs.recap", () => {
       messageId: "entry-1",
     });
   });
+
+  it("opens a routine run at its line in the thread, its report when it wrote no message", async () => {
+    const routineRun = (...middle: SessionEntry[]) => [
+      runEntry(0, "routine.started", {
+        sessionId: "session-routine",
+        routineId: "routine-1",
+        name: "Digest",
+        trigger: "routine",
+        scheduledAt: at(9).toISOString(),
+        model: { provider: "scripted", id: "scripted" },
+      }),
+      ...middle,
+      runEntry(5, "routine.finished", {
+        status: "completed",
+        usage: { inputTokens: 1, outputTokens: 1 },
+        result: "Three new invoices",
+      }),
+    ];
+    const read = async (entries: SessionEntry[]) =>
+      (await setup({ run: { id: "run-1" }, entries }).recap("run-1")).body.json;
+    expect(await read(routineRun())).toEqual({ text: "Three new invoices", messageId: "entry-0" });
+    expect(await read(routineRun(ranDigest[1]!))).toEqual({
+      text: "**2 invoices** are late",
+      messageId: "entry-0",
+    });
+  });
 });
 
 describe("runs.entries", () => {
