@@ -79,6 +79,8 @@ test("renders a routine run card in a sub-bot's own thread", async ({ page }, te
   const session = page.getByTestId("session-view");
   await expect(session.getByRole("heading", { name: "Status check" })).toBeVisible();
   await expect(session.getByRole("textbox")).toHaveCount(0);
+  // A card run keeps its report only on its line, which its own view leaves out: the view shows it.
+  await expect(session.locator("strong")).toBeVisible();
   await captureScreenshot(page, testInfo, "routine-session-view");
 });
 

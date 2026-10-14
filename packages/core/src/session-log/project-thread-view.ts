@@ -66,6 +66,29 @@ export function drawsNothing(
   }
 }
 
+/**
+ * The report a routine run ended on, when the run's own view has no closing message to show it: a
+ * routine card run keeps its final words only on its line, which its own view leaves out. A chart
+ * or a file it posted on the way is not a closing message.
+ */
+export function unshownRunReport(
+  entries: readonly ThreadEntry[],
+  runId: string,
+): string | undefined {
+  let report: string | undefined;
+  for (const entry of entries) {
+    if (entry.runId !== runId) continue;
+    if (
+      entry.type === "assistant.text" &&
+      !entry.payload.midTurn &&
+      entry.payload.blocks.some((block) => block.kind === "text" && block.text.trim())
+    )
+      return undefined;
+    if (entry.type === "routine.finished") report = entry.payload.result.trim() || undefined;
+  }
+  return report;
+}
+
 export function projectThreadView(
   entries: readonly ThreadEntry[],
   options: ThreadViewOptions = {},
