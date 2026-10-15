@@ -19,6 +19,7 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
+  UserAvatar,
 } from "@rakazo/ui-web";
 import {
   Bell,
@@ -102,7 +103,6 @@ export function BotsSidebar({
   menuOpen,
   setMenuOpen,
   userName,
-  setFailedUserImage,
   openSettings,
   setUsage,
   botsSidebarEdgeDragRef,
@@ -170,7 +170,6 @@ export function BotsSidebar({
   menuOpen: boolean;
   setMenuOpen: Dispatch<SetStateAction<boolean>>;
   userName: string;
-  setFailedUserImage: Dispatch<SetStateAction<string | null>>;
   openSettings: (section?: SettingsSection) => void;
   setUsage: Dispatch<
     SetStateAction<{ inputTokens: number; outputTokens: number; runs: number } | null>
@@ -684,18 +683,7 @@ export function BotsSidebar({
               data-testid="user-menu-trigger"
               className="flex min-w-0 items-center gap-2.75 rounded-row px-2.5 py-2.25 hover:bg-sidebar-accent"
             >
-              {userImage ? (
-                <img
-                  src={userImage}
-                  alt=""
-                  className="size-6 shrink-0 rounded-full object-cover"
-                  onError={() => setFailedUserImage(userImage)}
-                />
-              ) : (
-                <span className="grid size-6 shrink-0 place-items-center rounded-full bg-accent text-label font-medium text-muted-foreground">
-                  {initials}
-                </span>
-              )}
+              <UserAvatar initials={initials} image={userImage} className="size-6 text-label" />
               <span className="truncate text-meta text-foreground">{userName}</span>
             </PopoverTrigger>
             {menuOpen ? (

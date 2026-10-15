@@ -86,5 +86,6 @@ export { StopContour, type StopContourProps } from "./stop-contour.js";
 export { Surface, type SurfaceProps, type SurfaceRadius } from "./surface.js";
 export { TextSettingField, type TextSettingFieldProps } from "./text-setting-field.js";
 export { useElapsed } from "./use-elapsed.js";
+export { UserAvatar, type UserAvatarProps } from "./user-avatar.js";
 export { UserBubble, type UserBubbleProps } from "./user-bubble.js";
 export { WorkingLine, type WorkingLineProps } from "./working-line.js";

@@ -50,7 +50,7 @@ colours. An `rgba` in a slot is a bug.
 | `primaryForeground` | `#FBFBF9` | `#0C0C0E` | |
 | `secondary` | `#EDEDEB` [ink 6%] | `#1F1F21` [white 8%] | secondary capsule, Stop |
 | `secondaryForeground` | `#111114` | `#F2F2F0` | |
-| `chatUser` | `#111114` | `#3E3E44` | user bubble: ink in light, tone on tone in dark |
+| `chatUser` | `#111114` | `#3E3E44` | user bubble and avatar: ink in light, tone on tone in dark |
 | `chatUserForeground` | `#FBFBF9` | `#F2F2F0` | |
 | `mentionChip` | `#F1F1EE` | `#222226` | mention chip in the composer |
 | `mentionChipForeground` | `#111114` | `#F2F2F0` | |
@@ -491,6 +491,22 @@ dark fill is the person's alone: a bot never gets it, not even in a
 conversation between bots.
 
 Used by: user messages.
+
+### UserAvatar
+
+The person, wherever they appear without a photo: their initials on
+`bg-chat-user` with `text-chat-user-foreground`, the colour of their own
+bubbles, in a round disc. A photo, when set, fills the disc instead, and the
+initials come back if it fails to load. Props: `initials`, `image?`; size it
+through `className` (`size-6 text-label` in the sidebar, `size-14 text-title`
+in account settings) or `style`. Mobile mirrors it in
+`apps/mobile/components/user-avatar.tsx` with `size` and `fontSize?` props.
+
+Don't: draw initials on `accent` or `muted` — in dark mode those sit a shade
+from the sidebar and the disc disappears.
+
+Used by: the sidebar account menu, account settings, the user half of a
+one-bot `GroupAvatar`, the mobile home header and account screen.
 
 ### Grouping
 

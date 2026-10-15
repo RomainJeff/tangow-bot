@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Fixed
 
+- Your initials, shown when you have no profile photo, now sit on the colour of your own messages instead of a disc that almost vanished in dark mode, on web, desktop and iPhone.
 - A routine run in a bot's Activity shows its report instead of "No report", and Open in chat lands on that run in the conversation, on web, desktop and iPhone.
 
 ### 2026-10-14

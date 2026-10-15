@@ -16,6 +16,7 @@ import {
   StackedAvatars,
   StopContour,
   Surface,
+  UserAvatar,
   UserBubble,
   WorkingLine,
 } from "@rakazo/ui-web";
@@ -160,6 +161,10 @@ function Kitchen() {
           <Shimmer className="text-destructive" data-testid="shimmer-override">
             A utility passed by the caller wins
           </Shimmer>
+        </div>
+        <div className="flex items-center gap-3 self-end">
+          <UserAvatar initials="RJ" className="size-6 text-label" />
+          <UserAvatar initials="RJ" className="size-14 text-title" />
         </div>
       </Section>
 

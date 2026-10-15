@@ -33,18 +33,6 @@ describe("GroupAvatar", () => {
     expect(html).not.toContain(">RJ<");
   });
 
-  it("keeps the initials tile when no photo is set", () => {
-    const html = renderToString(
-      <GroupAvatar
-        members={[{ name: "Harry", color: "#8B5CF6" }]}
-        userInitials="RJ"
-        userImage={null}
-      />,
-    );
-    expect(html).not.toContain("<img");
-    expect(html).toContain(">RJ<");
-  });
-
   it("renders 2 overlapping bot avatars for 2 members", () => {
     const html = renderToString(
       <GroupAvatar

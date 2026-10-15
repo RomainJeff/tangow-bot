@@ -7,7 +7,6 @@ import {
   ActivityIndicator,
   Alert,
   Button,
-  Image,
   Platform,
   Pressable,
   ScrollView,
@@ -21,6 +20,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useAvatarStyle } from "../components/avatar-style";
 import { BotAvatar } from "../components/bot-avatar";
 import { ServerSheet } from "../components/server-sheet";
+import { UserAvatar } from "../components/user-avatar";
 import { setDisplayAgentSteps, useDisplayAgentSteps } from "../lib/agent-steps-pref";
 import type { MobileBot, MobileMe } from "../lib/api";
 import {
@@ -638,11 +638,8 @@ function ProfilePhoto({ initials }: { initials: string }) {
   const { t } = useI18n();
   const styles = useThemedStyles(createAccountStyles);
   const photo = useProfilePhoto();
-  const [failedPhoto, setFailedPhoto] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Tracking the failed source (not a boolean) retries on the next photo.
-  const preview = photo && photo !== failedPhoto ? photo : null;
 
   useEffect(() => {
     void fetchProfileImage()
@@ -655,7 +652,6 @@ function ProfilePhoto({ initials }: { initials: string }) {
     setError(null);
     try {
       await updateProfileImage(image);
-      setFailedPhoto(null);
       setProfilePhoto(image);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t("Could not update your photo"));
@@ -690,18 +686,7 @@ function ProfilePhoto({ initials }: { initials: string }) {
     <View accessibilityLabel={t("Profile photo")} style={styles.photoSection}>
       <Text style={styles.sectionTitle}>{t("Profile photo")}</Text>
       <View style={styles.photoRow}>
-        {preview ? (
-          <Image
-            source={{ uri: preview }}
-            style={styles.photoPreview}
-            resizeMode="cover"
-            onError={() => setFailedPhoto(preview)}
-          />
-        ) : (
-          <View style={[styles.photoPreview, styles.photoFallback]}>
-            <Text style={styles.photoInitials}>{initials}</Text>
-          </View>
-        )}
+        <UserAvatar initials={initials} image={photo} size={56} fontSize={18} />
         {pending ? <ActivityIndicator color={native.secondaryLabel} /> : null}
         <Pressable
           accessibilityRole="button"
@@ -849,21 +834,6 @@ function createAccountStyles() {
       flexDirection: "row",
       alignItems: "center",
       gap: 12,
-    },
-    photoPreview: {
-      width: 56,
-      height: 56,
-      borderRadius: 28,
-    },
-    photoFallback: {
-      backgroundColor: native.fillPressed,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    photoInitials: {
-      color: native.label,
-      fontSize: 18,
-      fontWeight: "600",
     },
     photoAction: {
       minHeight: 40,
