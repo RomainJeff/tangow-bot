@@ -497,9 +497,16 @@ export default function Home() {
   return (
     <View style={[styles.screen, { paddingTop: Math.max(insets.top, 20) }]}>
       <View style={styles.header}>
-        <CircleButton accessibilityLabel={t("Account")} onPress={() => router.push("/account")}>
+        {/* The avatar covers a CircleButton's fill, so it dims on press instead. */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t("Account")}
+          onPress={() => router.push("/account")}
+          hitSlop={4}
+          style={({ pressed }) => pressed && styles.avatarPressed}
+        >
           <UserAvatar initials={initials} image={userImage} size={40} fontSize={15} />
-        </CircleButton>
+        </Pressable>
         <View style={styles.headerActions}>
           <CircleButton
             accessibilityLabel={t("Activity")}
@@ -1037,6 +1044,9 @@ function createHomeStyles() {
     },
     circleAccent: {
       backgroundColor: tokens.primary,
+    },
+    avatarPressed: {
+      opacity: 0.7,
     },
     searchField: {
       marginHorizontal: 16,
