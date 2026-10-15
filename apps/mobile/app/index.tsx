@@ -13,7 +13,6 @@ import {
   Alert,
   AppState,
   FlatList,
-  Image,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -26,6 +25,7 @@ import { BotAvatar } from "../components/bot-avatar";
 import { BotOrganizeSheet } from "../components/bot-organize-sheet";
 import { GroupAvatar } from "../components/group-avatar";
 import { NativeSymbol } from "../components/native-symbol";
+import { UserAvatar } from "../components/user-avatar";
 import {
   activityStatusLabel,
   fetchSpaceActivity,
@@ -99,7 +99,6 @@ export default function Home() {
   const [botSections, setBotSections] = useState<MobileBotSection[]>([]);
   const [spaces, setSpaces] = useState<MobileSpace[]>([]);
   const [me, setMe] = useState<MobileMe | null>(null);
-  const [failedUserImage, setFailedUserImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [hasSession, setHasSession] = useState(false);
@@ -316,9 +315,7 @@ export default function Home() {
     return spaceInboxItems(sidebarSpaces);
   }, [botSections, locale, me, spaces, query, searching, searchHits, visible, visibleGroups]);
   const initials = userInitials(me?.name ?? "");
-  const photo = useProfilePhoto();
-  // Tracking the failed source (not a boolean) retries on the next photo.
-  const userImage = photo !== failedUserImage ? photo : null;
+  const userImage = useProfilePhoto();
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
@@ -500,18 +497,16 @@ export default function Home() {
   return (
     <View style={[styles.screen, { paddingTop: Math.max(insets.top, 20) }]}>
       <View style={styles.header}>
-        <CircleButton accessibilityLabel={t("Account")} onPress={() => router.push("/account")}>
-          {userImage ? (
-            <Image
-              source={{ uri: userImage }}
-              style={styles.profilePhoto}
-              resizeMode="cover"
-              onError={() => setFailedUserImage(userImage)}
-            />
-          ) : (
-            <Text style={styles.profileInitials}>{initials}</Text>
-          )}
-        </CircleButton>
+        {/* The avatar covers a CircleButton's fill, so it dims on press instead. */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t("Account")}
+          onPress={() => router.push("/account")}
+          hitSlop={4}
+          style={({ pressed }) => pressed && styles.avatarPressed}
+        >
+          <UserAvatar initials={initials} image={userImage} size={40} fontSize={15} />
+        </Pressable>
         <View style={styles.headerActions}>
           <CircleButton
             accessibilityLabel={t("Activity")}
@@ -1050,14 +1045,8 @@ function createHomeStyles() {
     circleAccent: {
       backgroundColor: tokens.primary,
     },
-    profilePhoto: {
-      width: 40,
-      height: 40,
-    },
-    profileInitials: {
-      color: native.label,
-      fontSize: 15,
-      fontWeight: "600",
+    avatarPressed: {
+      opacity: 0.7,
     },
     searchField: {
       marginHorizontal: 16,

@@ -1,6 +1,7 @@
-import { type CSSProperties, memo, useState } from "react";
+import { type CSSProperties, memo } from "react";
 import { BotAvatar } from "./bot-avatar.js";
 import { cn } from "./lib/utils.js";
+import { UserAvatar } from "./user-avatar.js";
 
 export interface GroupAvatarMember {
   botId?: string;
@@ -27,9 +28,6 @@ export const GroupAvatar = memo(function GroupAvatar({
   userInitials,
   userImage,
 }: GroupAvatarProps) {
-  // Tracking the failed source (not a boolean) retries on the next photo.
-  const [failedImage, setFailedImage] = useState<string | null>(null);
-  const userPhoto = userImage && userImage !== failedImage ? userImage : null;
   const firstMember = members[0];
   if (!firstMember) {
     return (
@@ -60,7 +58,7 @@ export const GroupAvatar = memo(function GroupAvatar({
     );
   }
 
-  if (members.length === 1 && !userInitials && !userPhoto) {
+  if (members.length === 1 && !userInitials && !userImage) {
     return (
       <BotAvatar
         color={firstMember.color}
@@ -113,26 +111,17 @@ export const GroupAvatar = memo(function GroupAvatar({
         </div>
       ))}
       {withUser ? (
-        <div
-          className="absolute right-0 bottom-0 z-[2] flex items-center justify-center overflow-hidden rounded-full bg-accent font-semibold text-foreground/75"
+        <UserAvatar
+          initials={userInitials ?? ""}
+          image={userImage}
+          className="absolute right-0 bottom-0 z-[2]"
           style={{
             width: miniSize,
             height: miniSize,
             fontSize: Math.max(8, Math.round(miniSize * 0.4)),
             boxShadow: "0 0 0 1.5px var(--accent)",
           }}
-        >
-          {userPhoto ? (
-            <img
-              src={userPhoto}
-              alt=""
-              className="h-full w-full object-cover"
-              onError={() => setFailedImage(userPhoto)}
-            />
-          ) : (
-            userInitials
-          )}
-        </div>
+        />
       ) : null}
       {members.length > 3 ? (
         <div

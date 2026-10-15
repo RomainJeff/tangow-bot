@@ -1,6 +1,15 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import type { AvatarStyle } from "@rakazo/contracts";
-import { BotAvatar, Button, Field, FieldLabel, Input, Switch, Toggle } from "@rakazo/ui-web";
+import {
+  BotAvatar,
+  Button,
+  Field,
+  FieldLabel,
+  Input,
+  Switch,
+  Toggle,
+  UserAvatar,
+} from "@rakazo/ui-web";
 import { ChevronDown } from "lucide-react";
 import {
   type KeyboardEvent as ReactKeyboardEvent,
@@ -348,18 +357,12 @@ function ProfilePhoto({ initials }: { initials: string }) {
         <Trans>Profile photo</Trans>
       </h4>
       <div className="mt-3 flex items-center gap-4">
-        {photo ? (
-          <img
-            src={photo}
-            alt=""
-            className="h-14 w-14 shrink-0 rounded-full object-cover"
-            data-testid="profile-photo-preview"
-          />
-        ) : (
-          <span className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-accent text-[16px] text-foreground/75">
-            {initials}
-          </span>
-        )}
+        <UserAvatar
+          initials={initials}
+          image={photo}
+          className="size-14 text-title"
+          data-testid="profile-photo-preview"
+        />
         <div className="flex flex-wrap items-center gap-2">
           <input
             ref={fileRef}

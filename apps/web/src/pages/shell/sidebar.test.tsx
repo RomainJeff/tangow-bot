@@ -111,7 +111,6 @@ function renderSidebar() {
     menuOpen: false,
     setMenuOpen: vi.fn(),
     userName: "Archive Owner",
-    setFailedUserImage: vi.fn(),
     openSettings: vi.fn(),
     setUsage: vi.fn(),
     botsSidebarEdgeDragRef: { current: null },

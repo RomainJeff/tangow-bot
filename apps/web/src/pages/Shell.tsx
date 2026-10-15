@@ -234,8 +234,6 @@ export function ShellPage() {
   searchParamsRef.current = searchParams;
   const session = authClient.useSession();
   const userId = session.data?.user.id;
-  // Tracking the failed source (not a boolean) retries on the next photo.
-  const [failedUserImage, setFailedUserImage] = useState<string | null>(null);
   const [groups, setGroups] = useState<Group[]>([]);
   const [bots, setBots] = useState<Bot[]>([]);
   const botsRef = useRef(bots);
@@ -2594,8 +2592,7 @@ export function ShellPage() {
     .join("")
     .slice(0, 2)
     .toUpperCase();
-  const sessionUserImage = session.data?.user.image ?? null;
-  const userImage = sessionUserImage !== failedUserImage ? sessionUserImage : null;
+  const userImage = session.data?.user.image ?? null;
 
   // The sidebar menu and the bot page's own menu run the same handlers.
   function runBotAction(botId: string, action: BotAction) {
@@ -2789,7 +2786,6 @@ export function ShellPage() {
         menuOpen={menuOpen}
         setMenuOpen={setMenuOpen}
         userName={userName}
-        setFailedUserImage={setFailedUserImage}
         openSettings={openSettings}
         setUsage={setUsage}
         botsSidebarEdgeDragRef={botsSidebarEdgeDragRef}

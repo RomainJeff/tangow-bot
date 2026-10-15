@@ -8,6 +8,7 @@ const PRIMITIVES = [
   "surface",
   "message-row",
   "user-bubble",
+  "user-avatar",
   "interstitial",
   "stacked-avatars",
   "working-line",

@@ -1,7 +1,8 @@
-import { memo, useState } from "react";
-import { Image, StyleSheet, Text, View, type ViewStyle } from "react-native";
+import { memo } from "react";
+import { StyleSheet, Text, View, type ViewStyle } from "react-native";
 import { native, useThemedStyles } from "../lib/native";
 import { BotAvatar } from "./bot-avatar";
+import { UserAvatar } from "./user-avatar";
 
 export interface GroupAvatarMember {
   botId?: string;
@@ -25,9 +26,6 @@ export const GroupAvatar = memo(function GroupAvatar({
   userImage?: string | null;
 }) {
   const styles = useThemedStyles(createGroupAvatarStyles);
-  // Tracking the failed source (not a boolean) retries on the next photo.
-  const [failedImage, setFailedImage] = useState<string | null>(null);
-  const userPhoto = userImage && userImage !== failedImage ? userImage : null;
   const firstMember = members[0];
   if (!firstMember) {
     return (
@@ -46,7 +44,7 @@ export const GroupAvatar = memo(function GroupAvatar({
     );
   }
 
-  if (members.length === 1 && !userInitials && !userPhoto) {
+  if (members.length === 1 && !userInitials && !userImage) {
     return (
       <BotAvatar
         color={firstMember.color}
@@ -94,40 +92,12 @@ export const GroupAvatar = memo(function GroupAvatar({
         </View>
       ))}
       {withUser ? (
-        <View
-          style={{
-            position: "absolute",
-            right: 0,
-            bottom: 0,
-            zIndex: 2,
-            width: miniSize,
-            height: miniSize,
-            borderRadius: miniSize / 2,
-            backgroundColor: native.fillPressed,
-            alignItems: "center",
-            justifyContent: "center",
-            overflow: "hidden",
-          }}
-        >
-          {userPhoto ? (
-            <Image
-              source={{ uri: userPhoto }}
-              style={{ width: miniSize, height: miniSize }}
-              resizeMode="cover"
-              onError={() => setFailedImage(userPhoto)}
-            />
-          ) : (
-            <Text
-              style={{
-                color: native.label,
-                fontSize: Math.max(8, Math.round(miniSize * 0.4)),
-                fontWeight: "600",
-              }}
-            >
-              {userInitials}
-            </Text>
-          )}
-        </View>
+        <UserAvatar
+          initials={userInitials ?? ""}
+          image={userImage}
+          size={miniSize}
+          style={{ position: "absolute", right: 0, bottom: 0, zIndex: 2 }}
+        />
       ) : null}
       {members.length > 3 ? (
         <View
