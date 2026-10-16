@@ -22,7 +22,7 @@ final class NotificationService: UNNotificationServiceExtension {
     let intent = sender.messageIntent(body: request.content.body)
     let interaction = INInteraction(intent: intent, response: nil)
     interaction.direction = .incoming
-    // The sender's line carries the subtitle now: a device shows none under a message's sender.
+    // iOS hides a communication notification's subtitle, so the sender's name carries it (BotSender).
     let base = request.content.mutableCopy() as! UNMutableNotificationContent
     base.subtitle = ""
     interaction.donate { _ in
