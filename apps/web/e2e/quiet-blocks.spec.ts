@@ -98,11 +98,11 @@ test("framed blocks capture a pending approval and an answered question as norma
   await expect(questionMessage.locator(".ms-10.max-w-block")).toHaveCount(0);
 
   await berlin.click();
-  const answered = page.getByText("Answered: Berlin", { exact: true });
+  const answered = page.getByRole("group", { name: "Your answer: Berlin" });
   await expect(answered).toBeVisible({ timeout: 30_000 });
 
-  // Answered, it is still a normal bot row: only the card settles to the one
-  // answer line.
+  // Answered, it is still a normal bot row: only the card settles to its line
+  // and the answer.
   const answeredMessage = page.locator("[data-message-id]").filter({ has: answered });
   await expect(answeredMessage.locator('[data-slot="message-row"]')).toBeVisible();
   await expect(answeredMessage.locator('[data-slot="message-row-author"]')).toHaveCount(0);
@@ -111,6 +111,8 @@ test("framed blocks capture a pending approval and an answered question as norma
   await captureScreenshot(page, testInfo, "quiet-blocks-answered-light");
 
   await switchTheme(page, "dark");
-  await expect(page.getByText("Answered: Berlin", { exact: true })).toBeVisible();
+  await expect(answered).toBeVisible();
   await captureScreenshot(page, testInfo, "quiet-blocks-answered-dark");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await captureScreenshot(page, testInfo, "quiet-blocks-answered-dark-narrow");
 });

@@ -77,7 +77,7 @@ test("renders tappable choice buttons and submits the offered action id", async 
   await seoul.click();
   expect((await answered).postDataJSON().json.answer).toBe("choice-2");
 
-  await expect(page.getByText("Answered: Seoul", { exact: true })).toBeVisible({
+  await expect(page.getByRole("group", { name: "Your answer: Seoul" })).toBeVisible({
     timeout: 30_000,
   });
   await expect(page.getByRole("button", { name: "Seoul", exact: true })).toHaveCount(0);
@@ -104,4 +104,6 @@ test("renders tappable choice buttons and submits the offered action id", async 
     .toEqual({ reply: [{ kind: "text", text: "Seoul" }], answer: "choice-2" });
 
   await captureScreenshot(page, testInfo, "choice-card-answered");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await captureScreenshot(page, testInfo, "choice-card-answered-narrow");
 });
