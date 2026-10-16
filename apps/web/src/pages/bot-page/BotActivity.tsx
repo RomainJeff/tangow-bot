@@ -388,9 +388,10 @@ function RunLine({ row, openRun }: { row: RunActivityRow; openRun: OpenRun }) {
           body={view.body}
           onRetry={recap.retry}
           onOpenChat={
-            openRun &&
-            (() =>
-              openRun({ botId: row.botId, groupId: row.groupId, sourceMessageId: view.jumpTo }))
+            openRun && view.opensChat
+              ? () =>
+                  openRun({ botId: row.botId, groupId: row.groupId, sourceMessageId: view.jumpTo })
+              : undefined
           }
         />
       ) : null}

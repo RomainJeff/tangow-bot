@@ -9,7 +9,7 @@ import type {
   SessionEntries,
 } from "@rakazo/contracts";
 import { RUNS_PAGE_DEFAULT } from "@rakazo/contracts";
-import { ACTIVE_RUN_STATUSES, projectThreadItems, runRecap } from "@rakazo/core";
+import { ACTIVE_RUN_STATUSES, projectThreadItems, routineRoles, runRecap } from "@rakazo/core";
 import type { Prisma, PrismaClient } from "@rakazo/db";
 import { IsolationError } from "@rakazo/db";
 import { mapRun, RUN_INCLUDE, TERMINAL_STATUSES } from "./runs.js";
@@ -174,12 +174,12 @@ export async function readRunRecap(
       item.kind === "message" && item.role === "bot" ? [{ id: item.id, blocks: item.blocks }] : [],
     ),
   );
-  // A routine run talks in its own session: the thread shows only its line, and a card run's report
-  // is only on that line.
+  // A routine run talks in its own session: the thread shows at most its words or its failure, and
+  // a card run's report is only there. A run the thread draws nothing for has no message to open.
   const routine = items.find((item) => item.kind === "routine");
   if (!routine) return recap;
   return {
     text: recap.text ?? (routine.finished?.result.trim() || null),
-    messageId: routine.id,
+    messageId: routineRoles([routine]).hidden.has(routine.id) ? null : routine.id,
   };
 }

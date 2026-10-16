@@ -371,17 +371,29 @@ describe("recapView", () => {
   it("shows what a run wrote, failed or not, and opens the chat at that message", () => {
     expect(
       recapView(ready("Checked 3 folders."), { failed: true, sourceMessageId: "s-1" }),
-    ).toEqual({ body: { kind: "text", text: "Checked 3 folders." }, jumpTo: "m-1" });
+    ).toEqual({
+      body: { kind: "text", text: "Checked 3 folders." },
+      jumpTo: "m-1",
+      opensChat: true,
+    });
   });
 
   it("says No report only for a run that did not fail", () => {
-    expect(recapView(ready(null, null), { failed: false, sourceMessageId: null })).toEqual({
-      body: { kind: "no_report" },
-      jumpTo: null,
+    expect(recapView(ready(null, null), { failed: false, sourceMessageId: null }).body).toEqual({
+      kind: "no_report",
     });
     expect(recapView(ready(null, null), { failed: true, sourceMessageId: "s-1" })).toEqual({
       body: { kind: "none" },
       jumpTo: "s-1",
+      opensChat: true,
+    });
+  });
+
+  it("offers no way into the chat once read for a run that left nothing there", () => {
+    expect(recapView(ready("Half done", null), { failed: false, sourceMessageId: null })).toEqual({
+      body: { kind: "text", text: "Half done" },
+      jumpTo: null,
+      opensChat: false,
     });
   });
 

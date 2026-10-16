@@ -176,7 +176,7 @@ it("says a failed run's reason once, on its line, and shows only what it wrote b
 
   await act(async () => broken!.click());
   await act(async () => quiet!.click());
-  expect(recapText()).toBe("No reportOpen in chat");
+  expect(recapText()).toBe("No report");
 });
 
 it("keeps Open in chat when the recap cannot be read, opening where the run began", async () => {
@@ -291,7 +291,7 @@ it("reads an open run's recap again once the run ends", async () => {
   await act(async () =>
     container.querySelector<HTMLButtonElement>('[data-testid="activity-run"]')!.click(),
   );
-  expect(recapText()).toBe("No reportOpen in chat");
+  expect(recapText()).toBe("No report");
 
   await render(1);
 
