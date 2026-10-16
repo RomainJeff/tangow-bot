@@ -272,7 +272,6 @@ function openRoutineRun(context: RowContext, item: RoutineItem) {
   context.onOpenSession({ kind: "run", runId: item.runId, title: item.name });
 }
 
-/** A routine run's words: the bot's own message, under the routine's name. */
 function RoutineMessage({
   item,
   text,
@@ -458,7 +457,6 @@ function NoteLine({
   return null;
 }
 
-/** The routine or helper a message came from, above it, or after the bot's name in a group. */
 function OriginLabel({
   title,
   onOpen,

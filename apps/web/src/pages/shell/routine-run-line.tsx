@@ -347,7 +347,6 @@ export function RoutineGroupLine({
   );
 }
 
-/** A routine's failures with nothing shown between them, as one line that opens the newest. */
 export function RoutineFailureLine({
   item,
   count: failures,

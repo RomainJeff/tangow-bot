@@ -612,7 +612,6 @@ export const ThreadItemSchema = z.discriminatedUnion("kind", [
       .object({
         status: z.enum(["completed", "failed", "cancelled"]),
         result: z.string(),
-        /** What a failed run ran into, in words the person can act on; never the raw error. */
         failure: RunFailureKind.optional(),
       })
       .nullable(),

@@ -21,10 +21,6 @@ export function originSessionIdOf(entry: ThreadEntry): SessionId | undefined {
 type ItemOrigin = NonNullable<Extract<ThreadItem, { origin?: unknown }>["origin"]>;
 export type SessionOrigin = Exclude<ItemOrigin, { entryId: unknown }>;
 
-/**
- * The routine or helper session an item rose from. A bot message sent from a routine shows none:
- * its marker already names both bots. A received one's origin is an entry, not a session.
- */
 export function sessionOriginOf(item: ThreadItem): SessionOrigin | null {
   const origin = "origin" in item ? item.origin : undefined;
   if (!origin || "entryId" in origin) return null;

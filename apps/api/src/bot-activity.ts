@@ -174,8 +174,6 @@ export async function readRunRecap(
       item.kind === "message" && item.role === "bot" ? [{ id: item.id, blocks: item.blocks }] : [],
     ),
   );
-  // A routine run talks in its own session: the thread shows at most its words or its failure, and
-  // a card run's report is only there. A run the thread draws nothing for has no message to open.
   const routine = items.find((item) => item.kind === "routine");
   if (!routine) return recap;
   return {

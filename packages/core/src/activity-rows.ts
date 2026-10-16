@@ -240,8 +240,7 @@ export type RecapBody =
 /**
  * What an open run line shows under it, and where "Open in chat" lands. A failed run's reason is
  * already on its line, so a failed run without text shows nothing more. The way into the chat
- * never waits on the read: until the recap names its message, it is where the run began. Once
- * read, a run that left nothing in the thread and began at no message has no way into it.
+ * never waits on the read: until the recap names its message, it is where the run began.
  */
 export function recapView(
   read: RecapRead | null,

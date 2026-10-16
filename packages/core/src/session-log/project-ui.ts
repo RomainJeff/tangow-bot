@@ -245,8 +245,6 @@ export function projectThread(entries: readonly ThreadEntry[]): ProjectedThread 
           };
           shownBy.set(segment.id, routine.id);
           if (payload.status === "completed" && payload.result.trim()) {
-            // Its words are said when the run ends, after whatever was said while it worked.
-            // What the run itself posted on the way, such as a message to another bot, follows them.
             routine.ts = segment.ts;
             const from = items.indexOf(routine);
             items.splice(from, 1);

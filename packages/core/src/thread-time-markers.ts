@@ -9,7 +9,6 @@ export function isSameLocalDay(a: string, b: string): boolean {
   return localDayIndex(new Date(a)) === localDayIndex(new Date(b));
 }
 
-/** When a routine's folded failures began: the time, with the weekday once the line spans days. */
 export function failureSinceLabel(sinceIso: string, newestIso: string, locale: string): string {
   const since = new Date(sinceIso);
   const time = since.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });

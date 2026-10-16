@@ -4365,7 +4365,6 @@ function runSession(item: RoutineItem): OpenedSession {
   };
 }
 
-/** A routine's failures with nothing shown between them, as one line that opens the newest. */
 function RoutineFailureLine({
   item,
   count: failures,
@@ -4392,7 +4391,6 @@ function RoutineFailureLine({
       accessibilityRole="button"
       accessibilityLabel={[item.name, reason ?? t("Failed"), count].filter(Boolean).join(", ")}
       onPress={onOpen}
-      // A thumb scrolling the thread past the line does not press it.
       unstable_pressDelay={130}
       style={({ pressed }) => ({
         minHeight: 44,

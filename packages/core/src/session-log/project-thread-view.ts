@@ -24,7 +24,6 @@ export type ThreadRow = {
   lastOfGroup: boolean;
   reactions: ItemReactions;
   routine?: RoutineRole;
-  /** A failure line right under another, with no marker between: they stack like a log. */
   chained?: true;
   marker?: { at: string; withTime: boolean };
   messageId?: EntryId;
@@ -112,7 +111,6 @@ export function projectThreadView(
     const line = routine?.kind === "failures";
     if (line) for (const id of routine.folded) hostOf.set(id, item.id);
     const lineAbove = line && previous?.line ? previous : undefined;
-    // Failure lines stack like a log: between two of them only a new day is marked.
     const shows = lineAbove
       ? !isSameLocalDay(lineAbove.ts, item.ts)
       : showsTimeMarker(previous?.ts, item.ts);

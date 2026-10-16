@@ -23,10 +23,6 @@ async function captureRoutineMessage(page: Page, testInfo: TestInfo, name: strin
   await page.emulateMedia({ colorScheme: null });
 }
 
-// A scheduled routine only renders in the thread for a sub-bot (parentBotId set, see
-// packages/adapters/src/executor.ts `showsRoutineRunCard`); a top-level bot's scheduled routine
-// stays a normal message. spawn_bot is the only way to create a parented bot, so this spec asks
-// the bot to spawn one, approves its card, then creates and runs a routine on it directly via RPC.
 test("renders a routine run's words as a message in a sub-bot's own thread", async ({
   page,
 }, testInfo) => {
@@ -72,8 +68,6 @@ test("renders a routine run's words as a message in a sub-bot's own thread", asy
   await rpc(page, "routines/testRun", { routineId: routine.id });
 
   await page.goto(`/app/${subBotId}`);
-  // The run's words read as the bot's message under the routine's name, as sanitised
-  // markdown with no live image loads, and leave no run line behind.
   const bubble = page.getByTestId("routine-message");
   await expect(bubble).toBeVisible({ timeout: 60_000 });
   await expect(bubble.locator("strong")).toBeVisible();
@@ -105,8 +99,6 @@ test("renders a routine run's words as a message in a sub-bot's own thread", asy
   await expect(page).toHaveURL(/[?&]m=/);
 });
 
-// An inbound wake reports through a routine message on every bot: the routine's instructions and the
-// payload stay in the run, not in a user bubble on the main thread.
 test("renders a webhook-woken routine as a routine message, not a user message", async ({
   page,
 }, testInfo) => {

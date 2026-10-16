@@ -2,16 +2,12 @@ import type { ThreadItem } from "@rakazo/contracts";
 
 export type RoutineItem = Extract<ThreadItem, { kind: "routine" }>;
 
-/** How a shown routine run reads in its thread: its words as the bot's message, or its failures as one line. */
 export type RoutineRole =
   | { kind: "message"; text: string }
-  /** On the newest failure's row: the routine's failures with nothing shown between them. */
   | {
       kind: "failures";
       count: number;
-      /** When the oldest failure of the line ran. */
       since: string;
-      /** The older failures the line absorbs. */
       folded: readonly string[];
     };
 
