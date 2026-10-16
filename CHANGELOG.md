@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-10-17
+
+#### Changed
+
+- Links in messages and on the desktop setup screen now take the colour of the text around them instead of blue, on web, desktop and iPhone.
+
 ### 2026-10-16
 
 #### Changed

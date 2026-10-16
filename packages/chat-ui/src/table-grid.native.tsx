@@ -11,6 +11,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { linkUnderline } from "./link-underline";
 import { linkHref } from "./markdown";
 import type { TableNode } from "./table-layout";
 import {
@@ -92,7 +93,10 @@ function Inline({
         return (
           <Text
             key={key}
-            style={{ color: palette.link }}
+            style={{
+              textDecorationLine: "underline",
+              textDecorationColor: linkUnderline(palette.foreground),
+            }}
             onPress={onLinkPress ? () => onLinkPress(node.attributes?.href ?? "") : undefined}
           >
             {children}

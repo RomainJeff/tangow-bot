@@ -7,6 +7,7 @@ import Markdown, {
 import { memo, useMemo } from "react";
 import type { TextProps } from "react-native";
 import { Linking, StyleSheet, Text, View } from "react-native";
+import { linkUnderline, USER_LINK_UNDERLINE } from "./link-underline";
 import type { ChatMarkdownProps } from "./markdown";
 import { linkHref, linkifyText, nativeImagePolicy, repairMarkdownTables } from "./markdown";
 import type { GridNode } from "./table-grid.native";
@@ -76,8 +77,8 @@ function markdownStyles(palette: ColorTokens, inBubble: boolean) {
       fontWeight: "700",
     },
     link: {
-      color: palette.link,
       textDecorationLine: "underline",
+      textDecorationColor: linkUnderline(palette.foreground),
       marginBottom: 0,
     },
     code_inline: {
@@ -265,9 +266,12 @@ export const ChatMarkdown = memo(function ChatMarkdown({
  * responder, so pass the bubble's `onLongPress` to keep its actions reachable. */
 export function LinkifiedText({
   children,
+  ink,
   onLongPress,
 }: {
   children: string;
+  /** The bubble's text colour, which the underline is drawn from. */
+  ink: string;
   onLongPress?: TextProps["onLongPress"];
 }) {
   return linkifyText(children).map((segment, i) => {
@@ -276,7 +280,7 @@ export function LinkifiedText({
       <Text
         accessibilityRole="link"
         key={i}
-        style={layout.link}
+        style={[layout.link, { textDecorationColor: linkUnderline(ink, USER_LINK_UNDERLINE) }]}
         onPress={() => openSafeLink(href)}
         onLongPress={onLongPress}
       >
