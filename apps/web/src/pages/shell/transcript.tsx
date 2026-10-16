@@ -78,7 +78,6 @@ export const Transcript = memo(function Transcript({
   loadingOlder,
   viewerUserId,
   running,
-  queuedRunIds,
   workingBots,
   workingStartedAt,
   onLoadOlder,
@@ -113,7 +112,6 @@ export const Transcript = memo(function Transcript({
   loadingOlder: boolean;
   viewerUserId?: string;
   running: boolean;
-  queuedRunIds: ReadonlySet<string>;
   workingBots: GroupAvatarMember[];
   /** Epoch ms the earliest working run started; undefined ticks from mount. */
   workingStartedAt?: number;
@@ -178,7 +176,6 @@ export const Transcript = memo(function Transcript({
       inGroup,
       viewerUserId,
       waiting,
-      queuedRunIds,
       onAnswer,
       memberName,
       peerBot,
@@ -217,7 +214,6 @@ export const Transcript = memo(function Transcript({
     inGroup,
     viewerUserId,
     waiting,
-    queuedRunIds,
     onAnswer,
     memberName,
     peerBot,

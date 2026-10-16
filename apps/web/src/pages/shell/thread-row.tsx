@@ -41,7 +41,6 @@ export type RowContext = {
   inGroup: boolean;
   viewerUserId?: string;
   waiting: WaitingCard | null;
-  queuedRunIds: ReadonlySet<string>;
   onAnswer?: (target: CardAnswerTarget, text: string, edits?: SpawnBotCardEdits) => Promise<void>;
   memberName?: (botId: string | undefined) => string | undefined;
   peerBot: PeerBot;

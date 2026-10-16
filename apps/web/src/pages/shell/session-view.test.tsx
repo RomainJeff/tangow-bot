@@ -93,7 +93,6 @@ async function open(target: SessionViewTarget) {
   const context = {
     artifactTarget: { botId: "bot_ada" },
     inGroup: false,
-    queuedRunIds: new Set(),
     peerBot: () => undefined,
     onOpenBot: () => undefined,
     onOpenPeerMessages: () => undefined,

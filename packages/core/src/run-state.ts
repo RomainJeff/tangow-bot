@@ -41,13 +41,3 @@ export function isTerminal(status: RunStatus): boolean {
 export function nextFence(current: number): number {
   return current + 1;
 }
-
-const NO_QUEUED_RUNS: ReadonlySet<string> = new Set();
-
-/** The runs still waiting in the queue; the same empty set while none is, so a refresh keeps it. */
-export function queuedRunIdsOf(
-  runs: readonly { id: string; status: string }[],
-): ReadonlySet<string> {
-  const queued = runs.flatMap((run) => (run.status === "queued" ? [run.id] : []));
-  return queued.length > 0 ? new Set(queued) : NO_QUEUED_RUNS;
-}
