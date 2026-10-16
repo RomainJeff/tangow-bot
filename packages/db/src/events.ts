@@ -1846,7 +1846,10 @@ async function finalizeRunOnce(
       });
     }
     const continuationRunId = await createSteeringContinuation(tx, input);
-    await tx.bot.update({ where: { id: input.botId }, data: { updatedAt: now } });
+    // A run with nothing to say leaves the bot's row time on its last visible activity.
+    if (input.outcome === "failed" || input.markUnread !== false) {
+      await tx.bot.update({ where: { id: input.botId }, data: { updatedAt: now } });
+    }
     return { threadId: lastEvent.threadId, seq: lastEvent.seq, continuationRunId };
   });
 }
