@@ -1605,8 +1605,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
           run.routineId != null && (run.trigger === "routine" || run.trigger === "webhook");
         const messageUserExposed = bot.parentBotId == null && !routineRun;
         // Text the model writes outside message_user is private scratch, and a turn that never
-        // calls it stays silent. A delegated run's text is its result for the ordering bot.
-        const freeTextIsPrivate = messageUserExposed && run.trigger !== "bot_message";
+        // calls it stays silent. A delegated run's text is its result for the ordering bot, but a
+        // peer's result or status answers nobody: what the user reads of it goes by message_user.
+        const freeTextIsPrivate =
+          messageUserExposed &&
+          (run.trigger !== "bot_message" ||
+            peerMessage?.intent === "result" ||
+            peerMessage?.intent === "status");
         const routineForCard =
           isRoutineCardRun && run.routineId
             ? await deps.prisma.routine.findUnique({
@@ -1679,10 +1684,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
           run.trigger === "user" && sourceEntry?.type === "user.message"
             ? sourceEntry.payload.blocks
             : undefined;
-        const allowSilentPeerMessage = botMessageAllowsSilence(
-          peerMessage?.intent,
-          peerMessage?.repliesToRequest,
-        );
+        // A peer's delivery decides on its own whether the turn may end without a word.
+        const allowSilentEmpty = peerMessage
+          ? botMessageAllowsSilence(peerMessage.intent, peerMessage.repliesToRequest)
+          : freeTextIsPrivate;
         const emptyResponseText = peerMessage
           ? peerMessage.intent === "result" ||
             peerMessage.intent === "status" ||
@@ -4485,7 +4490,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               model: runtimeModel,
               resumeFromCheckpoint: takeoverResume?.checkpoint,
               script,
-              allowSilentEmpty: allowSilentPeerMessage || messagingChannelRun || freeTextIsPrivate,
+              allowSilentEmpty: allowSilentEmpty || messagingChannelRun,
               // A group channel run is told to finish silently; a reminder would push it to post.
               freeTextIsPrivate: freeTextIsPrivate && !messagingChannelRun,
               emptyResponseText,
@@ -4903,10 +4908,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             // only progress was posted, result when a final reply exists).
             messageSegments = completionMessageSegments(messageSegments, {
               allowSilentEmpty:
-                allowSilentPeerMessage ||
-                messagingChannelRun ||
-                publishedMidTurnUserMessage ||
-                freeTextIsPrivate,
+                allowSilentEmpty || messagingChannelRun || publishedMidTurnUserMessage,
               emptyResponseText,
               suppressOutput: handedOff,
               skipEmptyFallback: publishedTerminalSubagent || publishedMidTurnUserMessage,
