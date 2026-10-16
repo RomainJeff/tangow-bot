@@ -12,7 +12,9 @@ const fakeAgentState = vi.hoisted(() => ({
     | "parent-parallel"
     | "ask-pause"
     | "nested-ask-pause"
-    | "subagent-log",
+    | "subagent-log"
+    | "turns",
+  turns: [] as string[][],
   emitFinalAfterFollowUp: true,
   abortCount: 0,
   tools: [] as Array<{
@@ -84,6 +86,23 @@ vi.mock("@earendil-works/pi-agent-core", () => ({
           args,
         });
         fakeAgentState.toolResult = await target.execute("call-1", args);
+        return;
+      }
+
+      if (fakeAgentState.mode === "turns") {
+        for (const [index, names] of fakeAgentState.turns.entries()) {
+          const calls = names.map((name, call) => ({
+            type: "toolCall",
+            id: `turn-${index}-${call}`,
+            name,
+            arguments: {},
+          }));
+          this.emit({
+            type: "turn_end",
+            message: { role: "assistant", content: calls },
+            toolResults: calls.map((call) => ({ toolCallId: call.id, result: { ok: true } })),
+          });
+        }
         return;
       }
 
@@ -345,6 +364,7 @@ describe("Pi connector tool dispatch", () => {
     fakeAgentState.preparedMessages = [];
     fakeAgentState.steeredMessages = [];
     fakeAgentState.followUpMessages = [];
+    fakeAgentState.turns = [];
     fakeAgentState.emitFinalAfterFollowUp = true;
     fakeAgentState.initialMessages = [];
     fakeAgentState.promptInputs = [];
@@ -738,6 +758,64 @@ describe("Pi connector tool dispatch", () => {
 
     expect(fakeAgentState.followUpMessages).toEqual([]);
     expect(JSON.stringify(events)).not.toContain("could not produce a final response");
+  });
+
+  describe("check-in reminder", () => {
+    const steps = (count: number) => Array.from({ length: count }, () => ["web_search"]);
+    const checkIns = async (turns: string[][], freeTextIsPrivate = true) => {
+      fakeAgentState.mode = "turns";
+      fakeAgentState.turns = turns;
+      for await (const _event of new PiAgentRuntime().run(
+        {
+          botId: "b",
+          threadId: "t",
+          runId: "check-in",
+          prompt: "dig into this",
+          instructions: "Report with message_user.",
+          history: [],
+          tools: [],
+          model: { provider: "test", id: "dispatch-test-model" },
+          freeTextIsPrivate,
+        },
+        {
+          operationId: "check-in",
+          traceId: "check-in",
+          spaceId: "w",
+          userId: "u",
+          signal: new AbortController().signal,
+        },
+      )) {
+        // Drain the run.
+      }
+      return fakeAgentState.steeredMessages.map(
+        (message) => (message as { content: string }).content,
+      );
+    };
+
+    it("reminds the model to check in after every 30 tool calls without reaching the user", async () => {
+      const reminder = expect.stringContaining(
+        "you have made 30 tool calls since the user last heard from you",
+      );
+      expect(await checkIns(steps(65))).toEqual([reminder, reminder]);
+    });
+
+    it("counts parallel calls and restarts the count when the model reaches the user", async () => {
+      const turns = [
+        ...steps(20),
+        ["message_user"],
+        ...steps(25),
+        ["ask_user"],
+        ...steps(28),
+        ["web_search", "read_file"],
+      ];
+      expect(await checkIns(turns)).toEqual([
+        expect.stringContaining("you have made 30 tool calls"),
+      ]);
+    });
+
+    it("leaves a run whose text is not private alone", async () => {
+      expect(await checkIns(steps(40), false)).toEqual([]);
+    });
   });
 
   it("does not wait for a slow tool completion hook", async () => {

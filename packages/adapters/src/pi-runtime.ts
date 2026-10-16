@@ -135,6 +135,17 @@ const SILENT_TOOL_CONTINUATION_PROMPT =
   "Continue the original task from the latest tool result. Do not stop after a tool call; use any remaining tools needed, then deliver the result.";
 const PRIVATE_TEXT_PROMPT =
   "Nothing you wrote reached the user: only message_user does. If that text was meant for them, send it with message_user now. Otherwise end the turn.";
+// A long task the user only follows through message_user looks frozen when the model works
+// for many steps without reporting, so it is reminded to check in.
+const CHECK_IN_AFTER_TOOL_CALLS = 30;
+const USER_CONTACT_TOOLS = new Set([
+  "message_user",
+  "ask_user",
+  "request_secret",
+  "request_takeover",
+]);
+const checkInPrompt = (toolCalls: number) =>
+  `Harness note, not from the user: you have made ${toolCalls} tool calls since the user last heard from you. Send them a short progress update with message_user (what you found, what is next), then continue.`;
 const DEFAULT_COMPUTER_SCREENSHOTS_TO_KEEP = 2;
 // Reasoning-capable models must not start at "off": for OpenRouter, pi-ai maps
 // that to reasoning.effort "none", which 400s on endpoints that mandate
@@ -357,6 +368,7 @@ export class PiAgentRuntime implements AgentRuntime {
         let toolWorkPendingFinal = false;
         let messagedUser = false;
         let privateTextNudged = false;
+        let toolCallsSinceContact = 0;
         agent.subscribe(async (event) => {
           if (event.type === "message_end") {
             traceRecorder?.message(event.message);
@@ -415,6 +427,19 @@ export class PiAgentRuntime implements AgentRuntime {
             const hasToolResults = event.toolResults.length > 0;
             // An update sent before more tool work did not deliver what that work found.
             if (hasToolCalls) messagedUser = toolCallNames.includes("message_user");
+            if (request.freeTextIsPrivate) {
+              toolCallsSinceContact = toolCallNames.some((name) => USER_CONTACT_TOOLS.has(name))
+                ? 0
+                : toolCallsSinceContact + toolCallNames.length;
+              if (toolCallsSinceContact >= CHECK_IN_AFTER_TOOL_CALLS && !host.pausePending) {
+                agent.steer({
+                  role: "user",
+                  content: checkInPrompt(toolCallsSinceContact),
+                  timestamp: Date.now(),
+                });
+                toolCallsSinceContact = 0;
+              }
+            }
             if (
               request.freeTextIsPrivate &&
               !hasToolCalls &&
