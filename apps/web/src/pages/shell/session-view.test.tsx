@@ -108,15 +108,16 @@ async function open(target: SessionViewTarget) {
 }
 
 describe("a session view", () => {
-  it("leaves out the line of the routine run it shows, and keeps it elsewhere", async () => {
+  it("leaves out the message of the routine run it shows, and keeps it elsewhere", async () => {
     const run = await open({ kind: "run", runId: "run_digest", title: "Digest" });
-    expect(run.textContent).toContain("Three new invoices");
-    expect(run.querySelectorAll('[data-testid="routine-run-line"]').length).toBe(0);
+    expect(run.textContent?.split("Three new invoices").length).toBe(2);
+    expect(run.querySelectorAll('[data-testid="routine-message"]').length).toBe(0);
 
     act(() => root.unmount());
     root = createRoot(container);
     const session = await open({ kind: "session", sessionId: "ses_main" as never, title: "Main" });
-    expect(session.querySelectorAll('[data-testid="routine-run-line"]').length).toBe(1);
+    const message = session.querySelector('[data-testid="routine-message"]');
+    expect(message?.textContent).toBe("Three new invoices");
   });
 
   it("shows the report of a run that ended without a closing message, once", async () => {

@@ -1,18 +1,15 @@
 import { i18n } from "@lingui/core";
 import { Trans, useLingui } from "@lingui/react/macro";
+import { ChatMarkdown, truncateMarkdownForRender } from "@rakazo/chat-ui/web";
 import type { ThreadItem } from "@rakazo/contracts";
-import type {
-  RoutineLineRun,
-  SessionOrigin,
-  SkillSourceBlock,
-  ThreadRow,
-  WaitingCard,
-} from "@rakazo/core";
+import type { RoutineItem, SkillSourceBlock, ThreadRow, WaitingCard } from "@rakazo/core";
 import { isAsideOnlyMessage, sessionOriginOf, threadTimeMarkerLabel } from "@rakazo/core";
 import type { StackedAvatarItem } from "@rakazo/ui-web";
 import {
   BotAvatar,
+  cn,
   Interstitial,
+  MessageBubble,
   MessageMeta,
   MessageRow,
   Separator,
@@ -33,8 +30,7 @@ import type {
 } from "../../lib/thread-items";
 import { FALLBACK_BOT_COLOR, threadJumpLocation } from "./layout";
 import { MessageView, skillLine } from "./message-view";
-import type { RoutineHandoff } from "./routine-run-line";
-import { RoutineGroupLine, RoutineRunLine } from "./routine-run-line";
+import { RoutineFailureLine } from "./routine-run-line";
 
 type PeerBot = (
   botId: string,
@@ -105,13 +101,20 @@ export function ThreadRowBody({
   showAvatar: boolean;
   arrivesLive: boolean;
 }) {
+  const { t } = useLingui();
   const { item } = row;
   const body = itemBody(item, row, context, { chrome, showAuthor, showAvatar, arrivesLive });
   const origin = sessionOriginOf(item);
   if (!origin) return body;
+  const title = origin.name ?? (origin.kind === "routine" ? t`Routine` : t`subagent`);
   return (
     <>
-      <OriginLabel origin={origin} onOpenSession={context.onOpenSession} />
+      <OriginLabel
+        title={title}
+        onOpen={() =>
+          context.onOpenSession({ kind: "session", sessionId: origin.sessionId, title })
+        }
+      />
       {body}
     </>
   );
@@ -138,9 +141,16 @@ function itemBody(
         </BotSide>
       );
     case "routine":
+      if (row.routine?.kind === "message")
+        return <RoutineMessage item={item} text={row.routine.text} context={context} />;
       return row.routine ? (
         <BotSide inGroup={context.inGroup}>
-          <RoutineRow role={row.routine} context={context} />
+          <RoutineFailureLine
+            item={item}
+            count={row.routine.count}
+            since={row.routine.since}
+            onOpen={() => openRoutineRun(context, item)}
+          />
         </BotSide>
       ) : null;
     case "handoff":
@@ -258,41 +268,47 @@ function SubagentCard({
   );
 }
 
-function RoutineRow({
-  role,
+function openRoutineRun(context: RowContext, item: RoutineItem) {
+  context.onOpenSession({ kind: "run", runId: item.runId, title: item.name });
+}
+
+/** A routine run's words: the bot's own message, under the routine's name. */
+function RoutineMessage({
+  item,
+  text,
   context,
 }: {
-  role: NonNullable<ThreadRow["routine"]>;
+  item: RoutineItem;
+  text: string;
   context: RowContext;
 }) {
   const { t } = useLingui();
-  const avatarOf = avatarLookup(context.peerBot);
-  const handoffFor = (run: RoutineLineRun): RoutineHandoff | undefined => {
-    const sent = run.sentTo;
-    if (!sent) return undefined;
-    const peer = sent.peer.name;
-    const peerBotId = sent.peer.kind === "bot" ? sent.peer.botId : undefined;
-    return {
-      receipt: peerBotId ? <BotAvatar {...avatarOf(peerBotId)} size={14} /> : null,
-      bots: [run.item.botId, peerBotId].filter((id): id is string => Boolean(id)).map(avatarOf),
-      label: t`Messaged ${peer}`,
-      onClick: peerBotId
-        ? () => context.onOpenPeerMessages({ peerBotId, peerBotName: peer })
-        : undefined,
-    };
-  };
-  const openRun = (run: RoutineLineRun) =>
-    context.onOpenSession({ kind: "run", runId: run.item.runId, title: run.item.name });
-  if (role.kind === "group") {
-    return <RoutineGroupLine runs={role.runs} handoffFor={handoffFor} onOpenRun={openRun} />;
-  }
+  const { inGroup } = context;
+  const bot = context.peerBot(item.botId);
+  const origin = (
+    <OriginLabel title={item.name} onOpen={() => openRoutineRun(context, item)} inline={inGroup} />
+  );
   return (
-    <RoutineRunLine
-      run={role.run}
-      handoff={handoffFor(role.run)}
-      onOpen={() => openRun(role.run)}
-      queued={context.queuedRunIds.has(role.run.item.runId)}
-    />
+    <>
+      {inGroup ? null : origin}
+      <MessageRow
+        avatar={<BotAvatar {...avatarLookup(context.peerBot)(item.botId)} size={26} />}
+        author={
+          <>
+            <span dir="auto">{context.memberName?.(item.botId) ?? bot?.name ?? t`Bot`}</span>
+            <span className="text-muted-foreground"> · </span>
+            {origin}
+          </>
+        }
+        hasAvatarColumn={inGroup}
+        showAuthor={inGroup}
+        showAvatar={inGroup}
+      >
+        <MessageBubble data-testid="routine-message" inGroup={inGroup} dir="auto">
+          <ChatMarkdown allowImages={false}>{truncateMarkdownForRender(text)}</ChatMarkdown>
+        </MessageBubble>
+      </MessageRow>
+    </>
   );
 }
 
@@ -442,22 +458,26 @@ function NoteLine({
   return null;
 }
 
+/** The routine or helper a message came from, above it, or after the bot's name in a group. */
 function OriginLabel({
-  origin,
-  onOpenSession,
+  title,
+  onOpen,
+  inline = false,
 }: {
-  origin: SessionOrigin;
-  onOpenSession: (target: SessionViewTarget) => void;
+  title: string;
+  onOpen: () => void;
+  inline?: boolean;
 }) {
-  const { t } = useLingui();
-  const title = origin.name ?? (origin.kind === "routine" ? t`Routine` : t`subagent`);
   return (
     <button
       type="button"
       data-testid="item-origin"
       aria-haspopup="dialog"
-      onClick={() => onOpenSession({ kind: "session", sessionId: origin.sessionId, title })}
-      className="mb-1 ps-3 text-label text-muted-foreground duration-(--duration-hover) ease-quiet hover:text-foreground"
+      onClick={onOpen}
+      className={cn(
+        !inline && "mb-1 ps-3 text-label",
+        "text-muted-foreground duration-(--duration-hover) ease-quiet hover:text-foreground",
+      )}
       dir="auto"
     >
       {title}
