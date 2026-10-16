@@ -35,6 +35,7 @@ function fixture({
   parentBotId = null as string | null,
   routineId = null as string | null,
   routineNotify = false,
+  notifyOnFinish = true,
   crons = ["0 9 * * *"],
   clientNonce = null as string | null,
   groupId = null as string | null,
@@ -51,6 +52,7 @@ function fixture({
   parentBotId?: string | null;
   routineId?: string | null;
   routineNotify?: boolean;
+  notifyOnFinish?: boolean;
   crons?: string[];
   clientNonce?: string | null;
   groupId?: string | null;
@@ -78,6 +80,7 @@ function fixture({
     requireToolApproval,
     leaseFence: 0,
     checkpoint,
+    createdAt: new Date("2026-10-16T07:00:00.000Z"),
   };
 
   const finalizeRun = vi.fn(
@@ -162,7 +165,7 @@ function fixture({
       findUnique: vi.fn(async () => run),
       findUniqueOrThrow: vi.fn(async () => run),
       findFirst: vi.fn(async () => ({
-        bot: { notifyOnFinish: true },
+        bot: { notifyOnFinish },
         thread: { groupId },
       })),
       updateMany: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
@@ -244,7 +247,9 @@ function fixture({
 
   const append = vi.fn(async (_event: { type: string }) => undefined);
   const notify = vi.fn(async () => undefined);
-  const send = vi.fn(async (_message: { kind: string; title: string; body: string }) => undefined);
+  const send = vi.fn(
+    async (_message: { kind: string; title: string; subtitle?: string; body: string }) => undefined,
+  );
   const enqueue = vi.fn(async (_job?: { name: string }) => undefined);
   const executor = createRunExecutor({
     sessionLog: log.sessionLog,
@@ -496,5 +501,55 @@ describe("link previews of a run (CA 13, CA 14, CA 70, CA 72)", () => {
       .map((event) => event.payload);
     expect(payloads).toHaveLength(3);
     expect(JSON.stringify(payloads)).not.toMatch(/https?:|openedUrl|seenUrlHashes|[0-9a-f]{64}/);
+  });
+});
+
+describe("what a routine run pushes (CA11, CA11b)", () => {
+  const speaks = async function* () {
+    yield { type: "text" as const, text: "Two new emails." };
+    yield { type: "done" as const };
+  };
+  const staysSilent = async function* () {
+    yield { type: "tool" as const, name: "web_search", args: {}, executionId: "call-1" };
+    yield { type: "done" as const };
+  };
+  const fails = async function* (): AsyncGenerator<AgentRuntimeEvent> {
+    yield* [];
+    throw new Error("model exploded");
+  };
+  const pushes = async (
+    options: { parentBotId?: string; routineNotify: boolean; notifyOnFinish: boolean },
+    runtimeRun: () => AsyncGenerator<AgentRuntimeEvent>,
+  ) => {
+    const f = fixture({ trigger: "routine", routineId: "routine-1", ...options, runtimeRun });
+    await f.run();
+    return f.pushes.mock.calls.map(([message]) => message);
+  };
+
+  it("titles a run that speaks with its bot, under the routine's name", async () => {
+    expect(await pushes({ routineNotify: false, notifyOnFinish: true }, speaks)).toEqual([
+      expect.objectContaining({ title: "Assistant", subtitle: "Routine", body: "Two new emails." }),
+    ]);
+  });
+
+  it.each([
+    ["a bot's own routine", {}],
+    ["a sub-bot's routine", { parentBotId: "bot-0" }],
+  ])(
+    "with Notify me on, %s pages what it says and its failures past the bot's setting",
+    async (_name, bot) => {
+      const options = { ...bot, routineNotify: true, notifyOnFinish: false };
+      expect(await pushes(options, speaks)).toEqual([
+        expect.objectContaining({ kind: "completion", body: "Two new emails." }),
+      ]);
+      expect(await pushes(options, staysSilent)).toEqual([]);
+      expect(await pushes(options, fails)).toEqual([expect.objectContaining({ kind: "failure" })]);
+    },
+  );
+
+  it("with Notify me off, follows the bot's setting", async () => {
+    const options = { routineNotify: false, notifyOnFinish: false };
+    expect(await pushes(options, speaks)).toEqual([]);
+    expect(await pushes(options, fails)).toEqual([]);
   });
 });

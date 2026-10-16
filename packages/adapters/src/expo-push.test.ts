@@ -118,6 +118,7 @@ describe("expo push", () => {
       {
         kind: "takeover",
         title: "Need you",
+        subtitle: "Morning inbox",
         body: "on screen",
         botId: "bot-1",
         groupId: "group-1",
@@ -132,6 +133,7 @@ describe("expo push", () => {
     const body = JSON.parse(String(init.body)) as {
       to: string;
       title: string;
+      subtitle: string;
       collapseId: string;
       tag: string;
       badge: number;
@@ -139,6 +141,7 @@ describe("expo push", () => {
     };
     expect(body.to).toBe("ExponentPushToken[test]");
     expect(body.title).toBe("Need you");
+    expect(body.subtitle).toBe("Morning inbox");
     expect(body.collapseId).toBe("th-1");
     expect(body.tag).toBe("th-1");
     expect(body.badge).toBe(2);

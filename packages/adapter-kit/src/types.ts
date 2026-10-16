@@ -617,6 +617,8 @@ export interface ArtifactPut {
 export interface NotificationMessage {
   kind: "completion" | "failure" | "help" | "takeover";
   title: string;
+  /** A line under the title, such as the routine a run belongs to. Platforms without one drop it. */
+  subtitle?: string;
   body: string;
   botId: string;
   threadId: string;
