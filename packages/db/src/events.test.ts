@@ -172,6 +172,60 @@ describe("finalizeRun", () => {
     expect(createEvent).toHaveBeenCalledOnce();
     expect(publish).toHaveBeenCalledOnce();
   });
+
+  it("moves the bot's row time only for a run that leaves something to see", async () => {
+    async function finalize(outcome: { markUnread?: boolean; result?: string } | "failed") {
+      const tx = {
+        $queryRaw: vi.fn(async () => []),
+        run: {
+          findUnique: vi.fn(async () => ({ status: "running" })),
+          findUniqueOrThrow: vi.fn(async () => ({ sourceMessage: null })),
+          findFirst: vi.fn(async () => null),
+          findMany: vi.fn(async () => []),
+          updateMany: vi.fn(async () => ({ count: 1 })),
+        },
+        attempt: { updateMany: vi.fn(async () => ({ count: 1 })) },
+        task: { updateMany: vi.fn(async () => ({ count: 1 })) },
+        thread: { update: vi.fn(async () => ({ nextEventSeq: 1 })) },
+        event: {
+          create: vi.fn(async () => ({ threadId: "thread-1", seq: 0 })),
+          deleteMany: vi.fn(async () => ({ count: 0 })),
+        },
+        steeringMessage: {
+          findMany: vi.fn(async () => []),
+          deleteMany: vi.fn(async () => ({ count: 0 })),
+          updateMany: vi.fn(async () => ({ count: 0 })),
+        },
+        bot: { update: vi.fn(async () => ({})) },
+      };
+      await finalizeRun(
+        {
+          $transaction: async (operation: (client: typeof tx) => unknown) => operation(tx),
+        } as unknown as PrismaClient,
+        {
+          spaceId: "space-1",
+          threadId: "thread-1",
+          botId: "bot-1",
+          runId: "run-1",
+          taskId: "task-1",
+          attemptId: "attempt-1",
+          leaseOwner: "worker-1",
+          leaseFence: 1,
+          ...(outcome === "failed"
+            ? { outcome: "failed" as const, error: "failed" }
+            : { outcome: "completed" as const, blocks: [], ...outcome }),
+        },
+      );
+      return tx;
+    }
+
+    expect((await finalize({ markUnread: false, result: "" })).bot.update).not.toHaveBeenCalled();
+    expect(
+      (await finalize({ markUnread: true, result: "Two new emails." })).bot.update,
+    ).toHaveBeenCalledWith({ where: { id: "bot-1" }, data: { updatedAt: expect.any(Date) } });
+    expect((await finalize({})).bot.update).toHaveBeenCalledOnce();
+    expect((await finalize("failed")).bot.update).toHaveBeenCalledOnce();
+  });
 });
 
 describe("followThreadEvents", () => {
