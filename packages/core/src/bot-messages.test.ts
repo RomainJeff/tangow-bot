@@ -406,7 +406,7 @@ describe("inbound wake prompt", () => {
     );
   });
 
-  it("keeps silence available only for an explicit FYI", () => {
+  it("lets a bot stay silent on an FYI that changes nothing", () => {
     const fyiPrompt = buildBotMessageWakePrompt({
       from: { id: "b_1", name: "Researcher" },
       text: "No action needed.",
@@ -427,14 +427,17 @@ describe("inbound wake prompt", () => {
     }
   });
 
-  it("does not silence a relay, whose whole job is to reach the user", () => {
+  it("leaves the user's chat open to a bot relaying a result or status, asked or not", () => {
     for (const intent of ["result", "status"] as const) {
-      const relay = buildBotMessageWakePrompt({
-        from: { id: "b_1", name: "Researcher" },
-        text: "The answer is 42.",
-        intent,
-      });
-      expect(relay).not.toContain("working for another bot here");
+      for (const repliesToRequest of [true, false]) {
+        const relay = buildBotMessageWakePrompt({
+          from: { id: "b_1", name: "Researcher" },
+          text: "The answer is 42.",
+          intent,
+          repliesToRequest,
+        });
+        expect(relay).not.toContain("working for another bot here");
+      }
     }
   });
 

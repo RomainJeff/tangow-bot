@@ -63,8 +63,6 @@ function deps(
     transactionConflictOnce?: boolean;
     /** The run already sent its requester a result. */
     resultSent?: boolean;
-    /** The target's log holds a request to the sender that this delivery answers. */
-    answersRequest?: boolean;
   } = {},
 ) {
   const enqueue = vi.fn().mockResolvedValue(undefined);
@@ -75,22 +73,12 @@ function deps(
     findFirst: vi.fn(async () => (options.resultSent ? { id: "entry-result" } : null)),
   };
   const tx = {
-    $queryRaw: vi.fn(async (sql: TemplateStringsArray, ...values: unknown[]) => {
+    $queryRaw: vi.fn(async (sql: TemplateStringsArray) => {
       const query = sql.join("?");
       if (query.includes("clientNonce")) {
         return options.alreadyDelivered ? [wokeRow({}, { clientNonce: "bot-message:call-1" })] : [];
       }
-      if (query.includes("LATERAL")) {
-        const [receivedId] = values[0] as string[];
-        return [
-          {
-            ...wokeRow({ from: "bot-sender" }),
-            id: receivedId,
-            requestId: options.answersRequest ? "entry-request" : null,
-          },
-        ];
-      }
-      return [{ id: "thread" }];
+      return query.includes("LATERAL") ? [] : [{ id: "thread" }];
     }),
     sessionEntry,
     run: {
@@ -207,24 +195,6 @@ describe("messaging another bot", () => {
       data: { unread: true },
     });
     expect(harness.enqueue).toHaveBeenCalledTimes(1);
-  });
-
-  it("tells the target whether a result answers the request it sent", async () => {
-    const actions = [];
-    for (const answersRequest of [true, false]) {
-      const harness = deps({ answersRequest });
-      await messageBot(harness.deps, run, sender, {
-        bot_id: "bot-target",
-        message: "Nothing to act on this morning.",
-        intent: "result",
-      });
-      const prompt: string = harness.tx.task.create.mock.calls[0]?.[0].data.prompt;
-      actions.push(prompt.split("\n").at(-1)?.split(". ")[0]);
-    }
-    expect(actions).toEqual([
-      "This is a result for work you delegated",
-      "This is a result Researcher sent on its own initiative, not an answer to something you asked",
-    ]);
   });
 
   it("tells the sender to continue independent work", async () => {

@@ -1003,9 +1003,12 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
           { type: "text", text: closing },
         ],
       },
-      async ({ askPeer, woken }) => {
+      async ({ askPeer, woken, wakePrompt }) => {
         await askPeer("Check the inbox.");
         expect(await woken()).toEqual([]);
+        expect(await wakePrompt()).toContain(
+          "This is a result Alfred sent on its own initiative, not an answer to something you asked.",
+        );
       },
     );
   }, 30_000);
@@ -1036,33 +1039,6 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
     );
   }, 30_000);
 
-  it("reminds a bot that relays a peer's unsolicited result in plain text", async () => {
-    const relay = "Accor closed at 41.20 €, up 2.1% today.";
-    await peerJourney(
-      {
-        [PEER_INSTRUCTIONS]: [
-          {
-            type: "tool",
-            id: "peer-result",
-            name: "message_bot",
-            arguments: { bot_id: "{bot}", intent: "result", message: "Accor: 41.20 € (+2.1%)." },
-          },
-          reply("Sent."),
-          { type: "text", text: "" },
-        ],
-        [BOT_INSTRUCTIONS]: [
-          { type: "text", text: relay },
-          reply(relay),
-          { type: "text", text: "" },
-        ],
-      },
-      async ({ askPeer, woken }) => {
-        await askPeer("Watch Accor.");
-        expect(await woken()).toEqual([relay]);
-      },
-    );
-  }, 30_000);
-
   it("still relays the answer to its own request when the bot says nothing", async () => {
     await peerJourney(
       {
@@ -1079,9 +1055,10 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
         ],
         [PEER_INSTRUCTIONS]: [{ type: "text", text: "Two invoices are due Friday." }],
       },
-      async ({ send, woken }) => {
+      async ({ send, woken, wakePrompt }) => {
         await (await send("Ask Alfred to check the inbox.")).settled("completed");
         expect(await woken()).toEqual(["Update from Alfred: Two invoices are due Friday."]);
+        expect(await wakePrompt()).toContain("This is a result for work you delegated.");
       },
     );
   }, 30_000);
@@ -1094,7 +1071,8 @@ const PEER_INSTRUCTIONS = "You are Alfred. Watch the inbox.";
  * The journey with a second bot, Alfred, beside the fixture bot. Their runs interleave, so each
  * model request is answered from the script of the bot whose instructions it carries; `{bot}` and
  * `{peer}` in a tool's arguments become the two bot ids. `woken` waits for the fixture bot's run
- * that a delivery from Alfred started and returns the text that run showed the person.
+ * that a delivery from Alfred started and returns the text that run showed the person;
+ * `wakePrompt` returns the task that delivery queued for it.
  */
 async function peerJourney(
   scripts: Record<string, ModelEmulatorResponse[]>,
@@ -1102,6 +1080,7 @@ async function peerJourney(
     send: JourneyFixture["send"];
     askPeer: (text: string) => Promise<void>;
     woken: () => Promise<string[]>;
+    wakePrompt: () => Promise<string>;
   }) => Promise<void>,
 ) {
   const ids: Record<string, string> = {};
@@ -1164,6 +1143,13 @@ async function peerJourney(
             ? entry.payload.blocks.flatMap((block) => (block.kind === "text" ? [block.text] : []))
             : [],
         );
+      },
+      async wakePrompt() {
+        const { task } = await prisma.run.findFirstOrThrow({
+          where: { botId: bot.id, trigger: "bot_message" },
+          include: { task: true },
+        });
+        return task.prompt;
       },
     });
   });
