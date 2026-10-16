@@ -29,6 +29,11 @@ export type AskForm = {
   encoding: "answers" | "legacy-choice" | "legacy-text";
 };
 
+export type AskResponse =
+  | { kind: "options"; ids: NonEmpty<OptionId>; other: string | null }
+  | { kind: "text"; text: string }
+  | { kind: "skipped" };
+
 export type StoredAnswer =
   | { kind: "answers"; answers: AskAnswers }
   | { kind: "answer"; answer: string }
@@ -61,6 +66,39 @@ export function askFormOf(block: AskCardBlock): AskForm | null {
     required: true,
   };
   return { questions: [question], encoding: options.length ? "legacy-choice" : "legacy-text" };
+}
+
+/** What `threads.answer` carries, and what the block stores once the server accepts it. */
+export function encodeAnswer(
+  form: AskForm,
+  responses: ReadonlyMap<QuestionId, AskResponse>,
+): { wire: string; stored: StoredAnswer } {
+  if (form.encoding === "answers") {
+    const answers: AskAnswers = {};
+    for (const question of form.questions) {
+      const response = responses.get(question.id) ?? { kind: "skipped" };
+      const other =
+        response.kind === "text"
+          ? response.text
+          : response.kind === "options"
+            ? response.other
+            : null;
+      answers[question.id] = {
+        ...(response.kind === "options" ? { selected: [...response.ids] } : {}),
+        ...(other?.trim() ? { other: other.trim() } : {}),
+        ...(response.kind === "skipped" ? { skipped: true } : {}),
+      };
+    }
+    return { wire: JSON.stringify({ answers }), stored: { kind: "answers", answers } };
+  }
+  const response = responses.get(form.questions[0].id);
+  const answer =
+    response?.kind === "options"
+      ? response.ids[0]
+      : response?.kind === "text"
+        ? response.text.trim()
+        : "";
+  return { wire: answer, stored: { kind: "answer", answer } };
 }
 
 export function storedAnswerOf(form: AskForm, block: AskCardBlock): StoredAnswer {
