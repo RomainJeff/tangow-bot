@@ -13,6 +13,7 @@ import {
   CHOICE_DISMISSED_ANSWER_ID,
   isUiEntry,
 } from "@rakazo/contracts";
+import { classifyRunFailure } from "../run-failure.js";
 import { childSessionsOf, originSessionIdOf } from "./child-sessions.js";
 import { foldRuns, toolAnswers } from "./run-fold.js";
 
@@ -232,8 +233,23 @@ export function projectThread(entries: readonly ThreadEntry[]): ProjectedThread 
       case "routine.finished": {
         const routine = routines.get(segment.runId);
         if (routine) {
-          routine.finished = { status: segment.payload.status, result: segment.payload.result };
+          const { payload } = segment;
+          const failure = classifyRunFailure(
+            payload.status,
+            "error" in payload ? payload.error : undefined,
+          );
+          routine.finished = {
+            status: payload.status,
+            result: payload.result,
+            ...(failure ? { failure } : {}),
+          };
           shownBy.set(segment.id, routine.id);
+          if (payload.status === "completed" && payload.result.trim()) {
+            // Its words are said when the run ends, after whatever was said while it worked.
+            routine.ts = segment.ts;
+            items.splice(items.indexOf(routine), 1);
+            items.push(routine);
+          }
         }
         break;
       }

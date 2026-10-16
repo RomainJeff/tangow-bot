@@ -8,7 +8,7 @@ import {
   SkillChange,
   SkillDraftBlock,
 } from "./events.js";
-import { Id, IsoDate, ThinkingLevelSchema } from "./ids.js";
+import { Id, IsoDate, RunFailureKind, ThinkingLevelSchema } from "./ids.js";
 import { isLinkPreviewCard, LinkPreviewBlock } from "./link-preview.js";
 
 export const EntryId = Id.brand<"EntryId">();
@@ -609,7 +609,12 @@ export const ThreadItemSchema = z.discriminatedUnion("kind", [
     name: z.string(),
     notify: z.literal(true).optional(),
     finished: z
-      .object({ status: z.enum(["completed", "failed", "cancelled"]), result: z.string() })
+      .object({
+        status: z.enum(["completed", "failed", "cancelled"]),
+        result: z.string(),
+        /** What a failed run ran into, in words the person can act on; never the raw error. */
+        failure: RunFailureKind.optional(),
+      })
       .nullable(),
   }),
   z.object({

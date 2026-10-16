@@ -409,7 +409,7 @@ describe("projectThreadItems", () => {
     ]);
   });
 
-  it("folds a routine's start and finish into one item at its start, open until it finishes", () => {
+  it("folds a routine's start and finish into one item, at its finish once it has words", () => {
     const started = (runId: string, name: string, notify?: true) => ({
       botId: "bot_ada",
       runId,
@@ -439,17 +439,6 @@ describe("projectThreadItems", () => {
     expect(projectThreadItems(chain)).toEqual([
       {
         kind: "routine",
-        id: "rtn-1",
-        ts: at(1),
-        runId: "run_brief",
-        botId: "bot_ada",
-        sessionId: "ses_run_brief",
-        routineId: "rtn_run_brief",
-        name: "Morning brief",
-        finished: { status: "completed", result: "Two meetings today." },
-      },
-      {
-        kind: "routine",
         id: "rtn-2",
         ts: at(2),
         runId: "run_digest",
@@ -459,6 +448,17 @@ describe("projectThreadItems", () => {
         name: "Digest",
         notify: true,
         finished: null,
+      },
+      {
+        kind: "routine",
+        id: "rtn-1",
+        ts: at(3),
+        runId: "run_brief",
+        botId: "bot_ada",
+        sessionId: "ses_run_brief",
+        routineId: "rtn_run_brief",
+        name: "Morning brief",
+        finished: { status: "completed", result: "Two meetings today." },
       },
     ]);
   });

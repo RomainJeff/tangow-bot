@@ -5,6 +5,18 @@ function localDayIndex(date: Date): number {
   return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
+export function isSameLocalDay(a: string, b: string): boolean {
+  return localDayIndex(new Date(a)) === localDayIndex(new Date(b));
+}
+
+/** When a routine's folded failures began: the time, with the weekday once the line spans days. */
+export function failureSinceLabel(sinceIso: string, newestIso: string, locale: string): string {
+  const since = new Date(sinceIso);
+  const time = since.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
+  if (isSameLocalDay(sinceIso, newestIso)) return time;
+  return `${since.toLocaleDateString(locale, { weekday: "short" })} ${time}`;
+}
+
 /**
  * Whether a transcript row opens a new stretch of conversation: the first
  * loaded message, a new local calendar day, or a return after `gapMs` of
