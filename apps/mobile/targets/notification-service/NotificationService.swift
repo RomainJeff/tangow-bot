@@ -22,8 +22,11 @@ final class NotificationService: UNNotificationServiceExtension {
     let intent = sender.messageIntent(body: request.content.body)
     let interaction = INInteraction(intent: intent, response: nil)
     interaction.direction = .incoming
+    // iOS hides a communication notification's subtitle, so the sender's name carries it (BotSender).
+    let base = request.content.mutableCopy() as! UNMutableNotificationContent
+    base.subtitle = ""
     interaction.donate { _ in
-      let content = (try? request.content.updating(from: intent)) ?? request.content
+      let content = (try? base.updating(from: intent)) ?? request.content
       self.deliver(content)
     }
   }
@@ -64,7 +67,7 @@ struct BotSender {
     else { return nil }
     self.botId = botId
     self.threadId = threadId
-    self.name = content.title
+    self.name = content.subtitle.isEmpty ? content.title : "\(content.title) · \(content.subtitle)"
     self.color = color
     self.shape = avatarShapes[index]
   }
