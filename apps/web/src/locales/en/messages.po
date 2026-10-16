@@ -466,7 +466,7 @@ msgstr "Allow purchase actions without asking"
 msgid "Allow writing"
 msgstr "Allow writing"
 
-#: src/components/AskCard.tsx:49
+#: src/components/AskCard.tsx:46
 msgid "Allowed once"
 msgstr "Allowed once"
 
@@ -482,11 +482,11 @@ msgstr "Always act"
 msgid "Always allow this tool"
 msgstr "Always allow this tool"
 
-#: src/components/AskCard.tsx:50
+#: src/components/AskCard.tsx:47
 msgid "Always allowed"
 msgstr "Always allowed"
 
-#: src/components/AskCard.tsx:465
+#: src/components/ask/QuestionCard.tsx:145
 msgid "Answer"
 msgstr "Answer"
 
@@ -494,8 +494,8 @@ msgstr "Answer"
 msgid "Answer in text"
 msgstr "Answer in text"
 
-#: src/components/AskCard.tsx:46
-#: src/components/AskCard.tsx:66
+#: src/components/AskCard.tsx:43
+#: src/components/AskCard.tsx:63
 msgid "Answered"
 msgstr "Answered"
 
@@ -504,7 +504,7 @@ msgstr "Answered"
 msgid "Answered: {0}"
 msgstr "Answered: {0}"
 
-#: src/components/AskCard.tsx:52
+#: src/components/AskCard.tsx:49
 msgid "Answered: {answer}"
 msgstr "Answered: {answer}"
 
@@ -512,7 +512,7 @@ msgstr "Answered: {answer}"
 msgid "API is back, but the update did not finish. Check the host logs."
 msgstr "API is back, but the update did not finish. Check the host logs."
 
-#: src/components/AskCard.tsx:119
+#: src/components/AskCard.tsx:116
 #: src/components/integrations/IntegrationSetup.tsx:194
 #: src/lib/localized-provider-hint.ts:9
 #: src/pages/ModelSettingsOverlay.tsx:742
@@ -689,7 +689,7 @@ msgstr "Available when {0} is idle"
 msgid "Avatars"
 msgstr "Avatars"
 
-#: src/components/AskCard.tsx:697
+#: src/components/AskCard.tsx:571
 #: src/pages/PluginsOverlay.tsx:554
 msgid "Back"
 msgstr "Back"
@@ -782,8 +782,6 @@ msgstr "Browse MCP servers"
 msgid "Can't reach the server."
 msgstr "Can't reach the server."
 
-#: src/components/AskCard.tsx:439
-#: src/components/AskCard.tsx:486
 #: src/components/ComputerMaintenanceActions.tsx:102
 #: src/components/ComputerUpdateProgress.tsx:233
 #: src/components/teach/TeachComputerOverlay.tsx:271
@@ -822,7 +820,7 @@ msgstr "Cancel new group"
 msgid "Cancel reply"
 msgstr "Cancel reply"
 
-#: src/components/AskCard.tsx:48
+#: src/components/AskCard.tsx:45
 #: src/components/TaskCard.tsx:107
 #: src/pages/ActivityList.tsx:162
 #: src/pages/bot-page/BotActivity.tsx:306
@@ -1010,7 +1008,7 @@ msgstr "Close voice settings"
 msgid "Cloud"
 msgstr "Cloud"
 
-#: src/components/AskCard.tsx:120
+#: src/components/AskCard.tsx:117
 msgid "Code"
 msgstr "Code"
 
@@ -1583,11 +1581,11 @@ msgstr "Could not start OAuth"
 msgid "Could not start teaching"
 msgstr "Could not start teaching"
 
-#: src/components/AskCard.tsx:645
+#: src/components/AskCard.tsx:519
 msgid "Could not submit these answers"
 msgstr "Could not submit these answers"
 
-#: src/components/AskCard.tsx:203
+#: src/components/AskCard.tsx:198
 msgid "Could not submit this answer"
 msgstr "Could not submit this answer"
 
@@ -1624,7 +1622,7 @@ msgstr "Could not update the default memory scope"
 msgid "Could not update your photo"
 msgstr "Could not update your photo"
 
-#: src/components/AskCard.tsx:60
+#: src/components/AskCard.tsx:57
 #: src/pages/bot-page/RoutineTriggers.tsx:333
 msgid "Couldn't create"
 msgstr "Couldn't create"
@@ -1661,7 +1659,7 @@ msgstr "Create account"
 msgid "Create bot"
 msgstr "Create bot"
 
-#: src/components/AskCard.tsx:534
+#: src/components/AskCard.tsx:409
 msgid "Create bot?"
 msgstr "Create bot?"
 
@@ -1695,11 +1693,11 @@ msgstr "Create space"
 msgid "Create your Rakazo"
 msgstr "Create your Rakazo"
 
-#: src/components/AskCard.tsx:47
+#: src/components/AskCard.tsx:44
 msgid "Created"
 msgstr "Created"
 
-#: src/components/AskCard.tsx:64
+#: src/components/AskCard.tsx:61
 #: src/pages/GroupPanel.tsx:170
 #: src/pages/shell/bot-panel.tsx:155
 #: src/pages/shell/dialogs.tsx:91
@@ -1831,7 +1829,7 @@ msgstr "deleted"
 msgid "Deleting…"
 msgstr "Deleting…"
 
-#: src/components/AskCard.tsx:51
+#: src/components/AskCard.tsx:48
 msgid "Denied"
 msgstr "Denied"
 
@@ -1983,7 +1981,7 @@ msgstr "Earlier message"
 msgid "Earlier messages summarized"
 msgstr "Earlier messages summarized"
 
-#: src/components/AskCard.tsx:311
+#: src/components/AskCard.tsx:313
 msgid "Edit"
 msgstr "Edit"
 
@@ -1991,10 +1989,6 @@ msgstr "Edit"
 #: src/pages/shell/message-hover-actions.tsx:160
 msgid "Edit and resend"
 msgstr "Edit and resend"
-
-#: src/components/AskCard.tsx:507
-msgid "Edit first"
-msgstr "Edit first"
 
 #: src/pages/Shell.tsx:3069
 msgid "Edit Profile"
@@ -2382,7 +2376,7 @@ msgstr "Instance API key"
 msgid "Instruction"
 msgstr "Instruction"
 
-#: src/components/AskCard.tsx:348
+#: src/components/AskCard.tsx:350
 #: src/pages/bot-page/SettingDetails.tsx:51
 #: src/pages/bot-page/SettingsTab.tsx:26
 msgid "Instructions"
@@ -2806,7 +2800,7 @@ msgstr "Move to"
 msgid "Mute"
 msgstr "Mute"
 
-#: src/components/AskCard.tsx:330
+#: src/components/AskCard.tsx:332
 #: src/components/teach/SkillDraftCard.tsx:79
 #: src/pages/Auth.tsx:131
 #: src/pages/bot-page/BotHero.tsx:49
@@ -2846,7 +2840,7 @@ msgstr "Needs takeover"
 msgid "Needs you"
 msgstr "Needs you"
 
-#: src/components/AskCard.tsx:224
+#: src/components/AskCard.tsx:227
 msgid "Needs your call"
 msgstr "Needs your call"
 
@@ -2886,7 +2880,7 @@ msgstr "New skill"
 msgid "New space"
 msgstr "New space"
 
-#: src/components/AskCard.tsx:732
+#: src/components/AskCard.tsx:606
 msgid "Next"
 msgstr "Next"
 
@@ -2939,7 +2933,7 @@ msgid "No integrations installed yet."
 msgstr "No integrations installed yet."
 
 #: src/components/ask/AskSettled.tsx:28
-#: src/components/AskCard.tsx:245
+#: src/components/AskCard.tsx:248
 msgid "No longer active"
 msgstr "No longer active"
 
@@ -3036,7 +3030,7 @@ msgstr "Not connected"
 msgid "Not in the plugin catalog"
 msgstr "Not in the plugin catalog"
 
-#: src/components/AskCard.tsx:62
+#: src/components/AskCard.tsx:59
 #: src/lib/approval-labels.ts:18
 #: src/pages/shell/message-cards.tsx:374
 msgid "Not now"
@@ -3056,7 +3050,7 @@ msgstr "Nothing remembered yet"
 msgid "Notifications"
 msgstr "Notifications"
 
-#: src/components/AskCard.tsx:97
+#: src/components/AskCard.tsx:94
 msgid "Notifies you each run"
 msgstr "Notifies you each run"
 
@@ -3196,14 +3190,10 @@ msgstr "Organic"
 msgid "Organization API key"
 msgstr "Organization API key"
 
-#: src/components/AskCard.tsx:416
-#: src/components/AskCard.tsx:781
+#: src/components/ask/QuestionCard.tsx:145
+#: src/components/AskCard.tsx:655
 msgid "Other answer"
 msgstr "Other answer"
-
-#: src/components/AskCard.tsx:459
-msgid "Other answer…"
-msgstr "Other answer…"
 
 #: src/pages/ModelSettingsOverlay.tsx:518
 #: src/pages/Onboarding.tsx:198
@@ -3211,7 +3201,9 @@ msgstr "Other answer…"
 msgid "Other model…"
 msgstr "Other model…"
 
-#: src/components/AskCard.tsx:772
+#: src/components/ask/QuestionCard.tsx:146
+#: src/components/ask/QuestionCard.tsx:158
+#: src/components/AskCard.tsx:646
 msgid "Other…"
 msgstr "Other…"
 
@@ -3224,7 +3216,7 @@ msgstr "Output"
 msgid "Park"
 msgstr "Park"
 
-#: src/components/AskCard.tsx:118
+#: src/components/AskCard.tsx:115
 #: src/pages/AccountSettingsOverlay.tsx:451
 #: src/pages/Auth.tsx:163
 #: src/pages/Auth.tsx:172
@@ -3651,7 +3643,7 @@ msgstr "Rotate key?"
 msgid "Routine"
 msgstr "Routine"
 
-#: src/components/AskCard.tsx:77
+#: src/components/AskCard.tsx:74
 #: src/pages/bot-page/BotActivity.tsx:273
 msgid "Routine created"
 msgstr "Routine created"
@@ -3660,7 +3652,7 @@ msgstr "Routine created"
 msgid "Routine created by {by}"
 msgstr "Routine created by {by}"
 
-#: src/components/AskCard.tsx:77
+#: src/components/AskCard.tsx:74
 msgid "Routine updated"
 msgstr "Routine updated"
 
@@ -3690,7 +3682,7 @@ msgstr "Running…"
 msgid "Runs when this bot receives a verified message from this provider."
 msgstr "Runs when this bot receives a verified message from this provider."
 
-#: src/components/AskCard.tsx:390
+#: src/components/AskCard.tsx:392
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/ExternalConversationSettings.tsx:255
 #: src/pages/GroupPanel.tsx:279
@@ -3701,7 +3693,7 @@ msgstr "Runs when this bot receives a verified message from this provider."
 msgid "Save"
 msgstr "Save"
 
-#: src/components/AskCard.tsx:45
+#: src/components/AskCard.tsx:42
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/bot-page/page-kit.tsx:51
 #: src/pages/ExternalConversationSettings.tsx:257
@@ -3725,7 +3717,7 @@ msgstr "Saving your workspace"
 msgid "Saving..."
 msgstr "Saving..."
 
-#: src/components/AskCard.tsx:390
+#: src/components/AskCard.tsx:392
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/bot-page/page-kit.tsx:50
 #: src/pages/GroupPanel.tsx:279
@@ -3800,6 +3792,8 @@ msgstr "Select {0}"
 msgid "Select a bot"
 msgstr "Select a bot"
 
+#: src/components/ask/QuestionCard.tsx:98
+#: src/components/ask/QuestionCard.tsx:142
 #: src/pages/shell/composer.tsx:968
 msgid "Send"
 msgstr "Send"
@@ -3808,29 +3802,16 @@ msgstr "Send"
 msgid "Send <0>{linkCode}</0> to the line from your chat app within 10 minutes. You'll get a confirmation reply once linked."
 msgstr "Send <0>{linkCode}</0> to the line from your chat app within 10 minutes. You'll get a confirmation reply once linked."
 
-#: src/components/AskCard.tsx:448
-#: src/components/AskCard.tsx:495
-msgid "Send answer"
-msgstr "Send answer"
-
-#: src/components/AskCard.tsx:722
+#: src/components/AskCard.tsx:596
 msgid "Send answers"
 msgstr "Send answers"
-
-#: src/components/AskCard.tsx:516
-msgid "Send it"
-msgstr "Send it"
 
 #: src/pages/Auth.tsx:215
 msgid "Send reset link"
 msgstr "Send reset link"
 
-#: src/components/AskCard.tsx:290
-#: src/components/AskCard.tsx:409
-#: src/components/AskCard.tsx:448
-#: src/components/AskCard.tsx:495
-#: src/components/AskCard.tsx:516
-#: src/components/AskCard.tsx:722
+#: src/components/AskCard.tsx:292
+#: src/components/AskCard.tsx:596
 msgid "Sending…"
 msgstr "Sending…"
 
@@ -3971,7 +3952,8 @@ msgstr "Skill updated · {name}"
 msgid "Skills"
 msgstr "Skills"
 
-#: src/components/AskCard.tsx:711
+#: src/components/ask/QuestionCard.tsx:93
+#: src/components/AskCard.tsx:585
 #: src/components/integrations/IntegrationSetup.tsx:364
 #: src/pages/shell/side-panel.tsx:529
 msgid "Skip"
@@ -4260,13 +4242,12 @@ msgstr "Treg token"
 msgid "Try again"
 msgstr "Try again"
 
-#: src/components/AskCard.tsx:420
-#: src/components/AskCard.tsx:792
+#: src/components/AskCard.tsx:666
 msgid "Type a different answer"
 msgstr "Type a different answer"
 
-#: src/components/AskCard.tsx:469
-#: src/components/AskCard.tsx:792
+#: src/components/ask/QuestionCard.tsx:146
+#: src/components/AskCard.tsx:666
 msgid "Type your answer"
 msgstr "Type your answer"
 

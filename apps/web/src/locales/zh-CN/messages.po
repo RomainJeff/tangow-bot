@@ -466,7 +466,7 @@ msgstr "允许购买操作，无需询问"
 msgid "Allow writing"
 msgstr ""
 
-#: src/components/AskCard.tsx:49
+#: src/components/AskCard.tsx:46
 msgid "Allowed once"
 msgstr "已允许一次"
 
@@ -482,11 +482,11 @@ msgstr ""
 msgid "Always allow this tool"
 msgstr "始终允许此工具"
 
-#: src/components/AskCard.tsx:50
+#: src/components/AskCard.tsx:47
 msgid "Always allowed"
 msgstr "始终允许"
 
-#: src/components/AskCard.tsx:465
+#: src/components/ask/QuestionCard.tsx:145
 msgid "Answer"
 msgstr "回答"
 
@@ -494,8 +494,8 @@ msgstr "回答"
 msgid "Answer in text"
 msgstr ""
 
-#: src/components/AskCard.tsx:46
-#: src/components/AskCard.tsx:66
+#: src/components/AskCard.tsx:43
+#: src/components/AskCard.tsx:63
 msgid "Answered"
 msgstr "已回答"
 
@@ -504,7 +504,7 @@ msgstr "已回答"
 msgid "Answered: {0}"
 msgstr "已回答：{0}"
 
-#: src/components/AskCard.tsx:52
+#: src/components/AskCard.tsx:49
 msgid "Answered: {answer}"
 msgstr "已回答：{answer}"
 
@@ -512,7 +512,7 @@ msgstr "已回答：{answer}"
 msgid "API is back, but the update did not finish. Check the host logs."
 msgstr "API 已恢复，但更新未完成。请查看宿主日志。"
 
-#: src/components/AskCard.tsx:119
+#: src/components/AskCard.tsx:116
 #: src/components/integrations/IntegrationSetup.tsx:194
 #: src/lib/localized-provider-hint.ts:9
 #: src/pages/ModelSettingsOverlay.tsx:742
@@ -689,7 +689,7 @@ msgstr "{0} 空闲时可用"
 msgid "Avatars"
 msgstr "头像"
 
-#: src/components/AskCard.tsx:697
+#: src/components/AskCard.tsx:571
 #: src/pages/PluginsOverlay.tsx:554
 msgid "Back"
 msgstr "返回"
@@ -782,8 +782,6 @@ msgstr ""
 msgid "Can't reach the server."
 msgstr "无法连接服务器。"
 
-#: src/components/AskCard.tsx:439
-#: src/components/AskCard.tsx:486
 #: src/components/ComputerMaintenanceActions.tsx:102
 #: src/components/ComputerUpdateProgress.tsx:233
 #: src/components/teach/TeachComputerOverlay.tsx:271
@@ -822,7 +820,7 @@ msgstr "取消新建群组"
 msgid "Cancel reply"
 msgstr "取消回复"
 
-#: src/components/AskCard.tsx:48
+#: src/components/AskCard.tsx:45
 #: src/components/TaskCard.tsx:107
 #: src/pages/ActivityList.tsx:162
 #: src/pages/bot-page/BotActivity.tsx:306
@@ -1010,7 +1008,7 @@ msgstr "关闭语音设置"
 msgid "Cloud"
 msgstr "云端"
 
-#: src/components/AskCard.tsx:120
+#: src/components/AskCard.tsx:117
 msgid "Code"
 msgstr "代码"
 
@@ -1583,11 +1581,11 @@ msgstr "无法开始 OAuth"
 msgid "Could not start teaching"
 msgstr "无法开始教学"
 
-#: src/components/AskCard.tsx:645
+#: src/components/AskCard.tsx:519
 msgid "Could not submit these answers"
 msgstr ""
 
-#: src/components/AskCard.tsx:203
+#: src/components/AskCard.tsx:198
 msgid "Could not submit this answer"
 msgstr "无法提交此回答"
 
@@ -1624,7 +1622,7 @@ msgstr "无法更新默认记忆范围"
 msgid "Could not update your photo"
 msgstr ""
 
-#: src/components/AskCard.tsx:60
+#: src/components/AskCard.tsx:57
 #: src/pages/bot-page/RoutineTriggers.tsx:333
 msgid "Couldn't create"
 msgstr "无法创建"
@@ -1661,7 +1659,7 @@ msgstr "创建账户"
 msgid "Create bot"
 msgstr "创建 Bot"
 
-#: src/components/AskCard.tsx:534
+#: src/components/AskCard.tsx:409
 msgid "Create bot?"
 msgstr "创建 Bot？"
 
@@ -1695,11 +1693,11 @@ msgstr "创建工作区"
 msgid "Create your Rakazo"
 msgstr "创建你的 Rakazo"
 
-#: src/components/AskCard.tsx:47
+#: src/components/AskCard.tsx:44
 msgid "Created"
 msgstr "已创建"
 
-#: src/components/AskCard.tsx:64
+#: src/components/AskCard.tsx:61
 #: src/pages/GroupPanel.tsx:170
 #: src/pages/shell/bot-panel.tsx:155
 #: src/pages/shell/dialogs.tsx:91
@@ -1831,7 +1829,7 @@ msgstr "已删除"
 msgid "Deleting…"
 msgstr "正在删除…"
 
-#: src/components/AskCard.tsx:51
+#: src/components/AskCard.tsx:48
 msgid "Denied"
 msgstr "已拒绝"
 
@@ -1983,7 +1981,7 @@ msgstr "更早的消息"
 msgid "Earlier messages summarized"
 msgstr ""
 
-#: src/components/AskCard.tsx:311
+#: src/components/AskCard.tsx:313
 msgid "Edit"
 msgstr "编辑"
 
@@ -1991,10 +1989,6 @@ msgstr "编辑"
 #: src/pages/shell/message-hover-actions.tsx:160
 msgid "Edit and resend"
 msgstr "编辑并重新发送"
-
-#: src/components/AskCard.tsx:507
-msgid "Edit first"
-msgstr "先编辑"
 
 #: src/pages/Shell.tsx:3069
 msgid "Edit Profile"
@@ -2382,7 +2376,7 @@ msgstr "实例 API 密钥"
 msgid "Instruction"
 msgstr "指令"
 
-#: src/components/AskCard.tsx:348
+#: src/components/AskCard.tsx:350
 #: src/pages/bot-page/SettingDetails.tsx:51
 #: src/pages/bot-page/SettingsTab.tsx:26
 msgid "Instructions"
@@ -2806,7 +2800,7 @@ msgstr "移动到"
 msgid "Mute"
 msgstr ""
 
-#: src/components/AskCard.tsx:330
+#: src/components/AskCard.tsx:332
 #: src/components/teach/SkillDraftCard.tsx:79
 #: src/pages/Auth.tsx:131
 #: src/pages/bot-page/BotHero.tsx:49
@@ -2846,7 +2840,7 @@ msgstr "需要接管"
 msgid "Needs you"
 msgstr "需要你处理"
 
-#: src/components/AskCard.tsx:224
+#: src/components/AskCard.tsx:227
 msgid "Needs your call"
 msgstr ""
 
@@ -2886,7 +2880,7 @@ msgstr "新建技能"
 msgid "New space"
 msgstr "新建工作区"
 
-#: src/components/AskCard.tsx:732
+#: src/components/AskCard.tsx:606
 msgid "Next"
 msgstr ""
 
@@ -2939,7 +2933,7 @@ msgid "No integrations installed yet."
 msgstr "尚未安装任何集成。"
 
 #: src/components/ask/AskSettled.tsx:28
-#: src/components/AskCard.tsx:245
+#: src/components/AskCard.tsx:248
 msgid "No longer active"
 msgstr "已停用"
 
@@ -3036,7 +3030,7 @@ msgstr "未连接"
 msgid "Not in the plugin catalog"
 msgstr "不在插件目录中"
 
-#: src/components/AskCard.tsx:62
+#: src/components/AskCard.tsx:59
 #: src/lib/approval-labels.ts:18
 #: src/pages/shell/message-cards.tsx:374
 msgid "Not now"
@@ -3056,7 +3050,7 @@ msgstr "暂无记忆"
 msgid "Notifications"
 msgstr ""
 
-#: src/components/AskCard.tsx:97
+#: src/components/AskCard.tsx:94
 msgid "Notifies you each run"
 msgstr "每次运行都会通知你"
 
@@ -3196,13 +3190,9 @@ msgstr "自然"
 msgid "Organization API key"
 msgstr "组织 API 密钥"
 
-#: src/components/AskCard.tsx:416
-#: src/components/AskCard.tsx:781
+#: src/components/ask/QuestionCard.tsx:145
+#: src/components/AskCard.tsx:655
 msgid "Other answer"
-msgstr ""
-
-#: src/components/AskCard.tsx:459
-msgid "Other answer…"
 msgstr ""
 
 #: src/pages/ModelSettingsOverlay.tsx:518
@@ -3211,7 +3201,9 @@ msgstr ""
 msgid "Other model…"
 msgstr "其他模型…"
 
-#: src/components/AskCard.tsx:772
+#: src/components/ask/QuestionCard.tsx:146
+#: src/components/ask/QuestionCard.tsx:158
+#: src/components/AskCard.tsx:646
 msgid "Other…"
 msgstr ""
 
@@ -3224,7 +3216,7 @@ msgstr "输出"
 msgid "Park"
 msgstr "搁置"
 
-#: src/components/AskCard.tsx:118
+#: src/components/AskCard.tsx:115
 #: src/pages/AccountSettingsOverlay.tsx:451
 #: src/pages/Auth.tsx:163
 #: src/pages/Auth.tsx:172
@@ -3651,7 +3643,7 @@ msgstr ""
 msgid "Routine"
 msgstr "例行任务"
 
-#: src/components/AskCard.tsx:77
+#: src/components/AskCard.tsx:74
 #: src/pages/bot-page/BotActivity.tsx:273
 msgid "Routine created"
 msgstr "例行任务已创建"
@@ -3660,7 +3652,7 @@ msgstr "例行任务已创建"
 msgid "Routine created by {by}"
 msgstr "{by} 创建的例行任务"
 
-#: src/components/AskCard.tsx:77
+#: src/components/AskCard.tsx:74
 msgid "Routine updated"
 msgstr "例行任务已更新"
 
@@ -3690,7 +3682,7 @@ msgstr "正在运行…"
 msgid "Runs when this bot receives a verified message from this provider."
 msgstr ""
 
-#: src/components/AskCard.tsx:390
+#: src/components/AskCard.tsx:392
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/ExternalConversationSettings.tsx:255
 #: src/pages/GroupPanel.tsx:279
@@ -3701,7 +3693,7 @@ msgstr ""
 msgid "Save"
 msgstr "保存"
 
-#: src/components/AskCard.tsx:45
+#: src/components/AskCard.tsx:42
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/bot-page/page-kit.tsx:51
 #: src/pages/ExternalConversationSettings.tsx:257
@@ -3725,7 +3717,7 @@ msgstr ""
 msgid "Saving..."
 msgstr ""
 
-#: src/components/AskCard.tsx:390
+#: src/components/AskCard.tsx:392
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/bot-page/page-kit.tsx:50
 #: src/pages/GroupPanel.tsx:279
@@ -3800,6 +3792,8 @@ msgstr "选择 {0}"
 msgid "Select a bot"
 msgstr "选择 Bot"
 
+#: src/components/ask/QuestionCard.tsx:98
+#: src/components/ask/QuestionCard.tsx:142
 #: src/pages/shell/composer.tsx:968
 msgid "Send"
 msgstr "发送"
@@ -3808,29 +3802,16 @@ msgstr "发送"
 msgid "Send <0>{linkCode}</0> to the line from your chat app within 10 minutes. You'll get a confirmation reply once linked."
 msgstr "请在 10 分钟内从聊天应用向该线路发送 <0>{linkCode}</0>。关联成功后你会收到确认回复。"
 
-#: src/components/AskCard.tsx:448
-#: src/components/AskCard.tsx:495
-msgid "Send answer"
-msgstr "发送回答"
-
-#: src/components/AskCard.tsx:722
+#: src/components/AskCard.tsx:596
 msgid "Send answers"
 msgstr ""
-
-#: src/components/AskCard.tsx:516
-msgid "Send it"
-msgstr "发送"
 
 #: src/pages/Auth.tsx:215
 msgid "Send reset link"
 msgstr "发送重置链接"
 
-#: src/components/AskCard.tsx:290
-#: src/components/AskCard.tsx:409
-#: src/components/AskCard.tsx:448
-#: src/components/AskCard.tsx:495
-#: src/components/AskCard.tsx:516
-#: src/components/AskCard.tsx:722
+#: src/components/AskCard.tsx:292
+#: src/components/AskCard.tsx:596
 msgid "Sending…"
 msgstr "正在发送…"
 
@@ -3971,7 +3952,8 @@ msgstr ""
 msgid "Skills"
 msgstr "技能"
 
-#: src/components/AskCard.tsx:711
+#: src/components/ask/QuestionCard.tsx:93
+#: src/components/AskCard.tsx:585
 #: src/components/integrations/IntegrationSetup.tsx:364
 #: src/pages/shell/side-panel.tsx:529
 msgid "Skip"
@@ -4260,13 +4242,12 @@ msgstr "Treg token"
 msgid "Try again"
 msgstr "重试"
 
-#: src/components/AskCard.tsx:420
-#: src/components/AskCard.tsx:792
+#: src/components/AskCard.tsx:666
 msgid "Type a different answer"
 msgstr ""
 
-#: src/components/AskCard.tsx:469
-#: src/components/AskCard.tsx:792
+#: src/components/ask/QuestionCard.tsx:146
+#: src/components/AskCard.tsx:666
 msgid "Type your answer"
 msgstr "输入你的回答"
 
