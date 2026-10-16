@@ -7,7 +7,11 @@ import type { SessionEntry, SessionId } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
 import type { createApp } from "../../../apps/api/src/app.ts";
 import { latestCard, sessionCookieHeader } from "./index.js";
-import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.js";
+import type {
+  ModelEmulatorRequest,
+  ModelEmulatorResponse,
+  ModelEmulatorStep,
+} from "./model-emulator.js";
 import { startModelEmulator } from "./model-emulator.js";
 
 type App = { request: (input: string, init?: RequestInit) => Promise<Response> };
@@ -975,7 +979,196 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
       },
     );
   }, 30_000);
+
+  it("stays silent on a peer's unsolicited result that holds nothing for the person", async () => {
+    const closing = "The inbox check is empty, so there's nothing to send.";
+    await peerJourney(
+      {
+        [PEER_INSTRUCTIONS]: [
+          {
+            type: "tool",
+            id: "peer-result",
+            name: "message_bot",
+            arguments: {
+              bot_id: "{bot}",
+              intent: "result",
+              message: "📬 Check inbox — Rien d'actionable ce matin.",
+            },
+          },
+          reply("Sent."),
+          { type: "text", text: "" },
+        ],
+        [BOT_INSTRUCTIONS]: [
+          { type: "text", text: closing },
+          { type: "text", text: closing },
+        ],
+      },
+      async ({ askPeer, woken }) => {
+        await askPeer("Check the inbox.");
+        expect(await woken()).toEqual([]);
+      },
+    );
+  }, 30_000);
+
+  it("relays a peer's unsolicited result once, without its closing remark", async () => {
+    const relay = "Accor closed at 41.20 €, up 2.1% today.";
+    await peerJourney(
+      {
+        [PEER_INSTRUCTIONS]: [
+          {
+            type: "tool",
+            id: "peer-result",
+            name: "message_bot",
+            arguments: { bot_id: "{bot}", intent: "result", message: "Accor: 41.20 € (+2.1%)." },
+          },
+          reply("Sent."),
+          { type: "text", text: "" },
+        ],
+        [BOT_INSTRUCTIONS]: [
+          reply(relay),
+          { type: "text", text: "The Accor update is already with Romain. Nothing else to send." },
+        ],
+      },
+      async ({ askPeer, woken }) => {
+        await askPeer("Watch Accor.");
+        expect(await woken()).toEqual([relay]);
+      },
+    );
+  }, 30_000);
+
+  it("reminds a bot that relays a peer's unsolicited result in plain text", async () => {
+    const relay = "Accor closed at 41.20 €, up 2.1% today.";
+    await peerJourney(
+      {
+        [PEER_INSTRUCTIONS]: [
+          {
+            type: "tool",
+            id: "peer-result",
+            name: "message_bot",
+            arguments: { bot_id: "{bot}", intent: "result", message: "Accor: 41.20 € (+2.1%)." },
+          },
+          reply("Sent."),
+          { type: "text", text: "" },
+        ],
+        [BOT_INSTRUCTIONS]: [
+          { type: "text", text: relay },
+          reply(relay),
+          { type: "text", text: "" },
+        ],
+      },
+      async ({ askPeer, woken }) => {
+        await askPeer("Watch Accor.");
+        expect(await woken()).toEqual([relay]);
+      },
+    );
+  }, 30_000);
+
+  it("still relays the answer to its own request when the bot says nothing", async () => {
+    await peerJourney(
+      {
+        [BOT_INSTRUCTIONS]: [
+          {
+            type: "tool",
+            id: "bot-request",
+            name: "message_bot",
+            arguments: { bot_id: "{peer}", intent: "request", message: "Check the inbox." },
+          },
+          reply("Asked Alfred."),
+          { type: "text", text: "" },
+          { type: "text", text: "" },
+        ],
+        [PEER_INSTRUCTIONS]: [{ type: "text", text: "Two invoices are due Friday." }],
+      },
+      async ({ send, woken }) => {
+        await (await send("Ask Alfred to check the inbox.")).settled("completed");
+        expect(await woken()).toEqual(["Update from Alfred: Two invoices are due Friday."]);
+      },
+    );
+  }, 30_000);
 });
+
+const BOT_INSTRUCTIONS = "Complete the task.";
+const PEER_INSTRUCTIONS = "You are Alfred. Watch the inbox.";
+
+/**
+ * The journey with a second bot, Alfred, beside the fixture bot. Their runs interleave, so each
+ * model request is answered from the script of the bot whose instructions it carries; `{bot}` and
+ * `{peer}` in a tool's arguments become the two bot ids. `woken` waits for the fixture bot's run
+ * that a delivery from Alfred started and returns the text that run showed the person.
+ */
+async function peerJourney(
+  scripts: Record<string, ModelEmulatorResponse[]>,
+  drive: (fixture: {
+    send: JourneyFixture["send"];
+    askPeer: (text: string) => Promise<void>;
+    woken: () => Promise<string[]>;
+  }) => Promise<void>,
+) {
+  const ids: Record<string, string> = {};
+  const withIds = (response: ModelEmulatorResponse): ModelEmulatorResponse =>
+    response.type === "tool"
+      ? {
+          ...response,
+          arguments: JSON.parse(
+            JSON.stringify(response.arguments).replace(/\{(bot|peer)\}/g, (_, key) => ids[key]!),
+          ),
+        }
+      : response;
+  const steps = Object.values(scripts)
+    .flat()
+    .map(
+      (): ModelEmulatorStep => ({
+        expect() {},
+        response(request) {
+          const system = JSON.stringify(request.messages.find((m) => m.role === "system"));
+          const script = Object.entries(scripts).find(([marker]) => system.includes(marker))?.[1];
+          const next = script?.shift();
+          if (!next) throw new Error("A model request no bot script answers");
+          return withIds(next);
+        },
+      }),
+    );
+  await journey(steps, async ({ app, cookie, bot, prisma, log, send }) => {
+    const peer = await rpc<{ id: string }>(app, cookie, "bots/create", {
+      name: "Alfred",
+      title: "",
+      description: "",
+      instructions: PEER_INSTRUCTIONS,
+      notifyOnFinish: false,
+    });
+    const { modelProvider, modelId } = await prisma.bot.findUniqueOrThrow({
+      where: { id: bot.id },
+    });
+    await rpc(app, cookie, "bots/update", { botId: peer.id, modelProvider, modelId });
+    ids.bot = bot.id;
+    ids.peer = peer.id;
+    const settledRun = async (where: { botId: string; trigger: string }) => {
+      await expect
+        .poll(async () => (await prisma.run.findFirst({ where }))?.status, {
+          timeout: 15_000,
+          interval: 100,
+        })
+        .toBe("completed");
+      return prisma.run.findFirstOrThrow({ where });
+    };
+    await drive({
+      send,
+      async askPeer(text) {
+        await rpc(app, cookie, "threads/send", { botId: peer.id, text });
+        await settledRun({ botId: peer.id, trigger: "user" });
+      },
+      async woken() {
+        const run = await settledRun({ botId: bot.id, trigger: "bot_message" });
+        return (await log.readRun(run.id)).flatMap((entry) =>
+          entry.type === "assistant.text"
+            ? entry.payload.blocks.flatMap((block) => (block.kind === "text" ? [block.text] : []))
+            : [],
+        );
+      },
+    });
+  });
+  expect(Object.values(scripts).flat()).toEqual([]);
+}
 
 const EDITED_INSTRUCTIONS = "You are Scout. Focus on venues.";
 const DELEGATE = {
