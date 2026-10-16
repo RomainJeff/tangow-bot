@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Changed
 
 - On a long task, your bot now checks in with a short progress update instead of working silently until it finishes, on web, desktop and iPhone.
+- A routine that has something to say now posts it as its bot's message under the routine's name, runs with nothing to say or still running no longer leave lines in the conversation, and repeated failures of one routine fold into a single line, on web, desktop and iPhone.
 
 #### Fixed
 

@@ -312,6 +312,37 @@ describe("runs.recap", () => {
       messageId: "entry-0",
     });
   });
+
+  it("opens a failed routine run at its line, and no run the thread draws nothing for", async () => {
+    const started = runEntry(0, "routine.started", {
+      sessionId: "session-routine",
+      routineId: "routine-1",
+      name: "Digest",
+      trigger: "routine",
+      scheduledAt: at(9).toISOString(),
+      model: { provider: "scripted", id: "scripted" },
+    });
+    const ended = (outcome: Record<string, unknown>) => [
+      started,
+      runEntry(1, "routine.finished", {
+        usage: { inputTokens: 1, outputTokens: 1 },
+        result: "",
+        ...outcome,
+      }),
+    ];
+    const target = async (entries: SessionEntry[]) =>
+      (await setup({ run: { id: "run-1" }, entries }).recap("run-1")).body.json.messageId;
+    expect(
+      await Promise.all(
+        [
+          ended({ status: "failed", error: "boom" }),
+          ended({ status: "completed", result: " \n" }),
+          ended({ status: "cancelled", result: "Half done" }),
+          [started],
+        ].map(target),
+      ),
+    ).toEqual(["entry-0", null, null, null]);
+  });
 });
 
 describe("runs.entries", () => {

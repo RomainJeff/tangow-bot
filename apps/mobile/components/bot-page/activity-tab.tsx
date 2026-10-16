@@ -401,7 +401,11 @@ function RunLine({
         <RunRecapBody
           body={view.body}
           onRetry={recap.retry}
-          onOpenChat={onOpenRun && (() => onOpenRun({ ...row, sourceMessageId: view.jumpTo }))}
+          onOpenChat={
+            onOpenRun && view.opensChat
+              ? () => onOpenRun({ ...row, sourceMessageId: view.jumpTo })
+              : undefined
+          }
         />
       ) : null}
     </View>

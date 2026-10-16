@@ -491,11 +491,9 @@ export const Transcript = memo(function Transcript({
           const prevChrome = previous ? rowChrome(previous.item, showSteps) : undefined;
           const arrives = arrived.has(item.id);
           // 14px between groups (the container's own `gap-3.5`) narrows to 3px
-          // within a group, to 0 between two consecutive asides, and to 0
-          // between two consecutive routine lines (they stack like a log) —
-          // unless a day marker sits between them, which keeps its own air.
-          const routineChain = !row.marker && row.routine && previous?.routine;
-          const spacingClass = routineChain
+          // within a group, and to 0 between two consecutive asides or two
+          // chained routine failure lines (they stack like a log).
+          const spacingClass = row.chained
             ? " -mt-3.5"
             : !row.firstOfGroup
               ? " -mt-2.75"

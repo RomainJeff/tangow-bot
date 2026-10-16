@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  failureSinceLabel,
   showsTimeMarker,
   THREAD_TIME_MARKER_GAP_MS,
   threadTimeMarkerLabel,
@@ -74,5 +75,16 @@ describe("threadTimeMarkerLabel", () => {
 
   it("returns an empty label for an unparsable timestamp", () => {
     expect(threadTimeMarkerLabel("not-a-date", { ...labels, now })).toBe("");
+  });
+});
+
+describe("failureSinceLabel", () => {
+  // ICU versions differ on the space before AM.
+  const label = (since: string, newest: string) =>
+    failureSinceLabel(since, newest, "en").replace(/\s/g, " ");
+
+  it("says the time alone when the line stays within a day, and adds the weekday across days", () => {
+    expect(label(localIso(2026, 10, 12, 7), localIso(2026, 10, 12, 9))).toBe("07:00 AM");
+    expect(label(localIso(2026, 10, 12, 7), localIso(2026, 10, 13, 9))).toBe("Mon 07:00 AM");
   });
 });

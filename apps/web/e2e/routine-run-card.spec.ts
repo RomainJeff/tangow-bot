@@ -7,14 +7,25 @@ import {
   rpc,
   signup,
 } from "./helpers";
+import type { Page, TestInfo } from "./test";
 import { expect, test } from "./test";
 import { blocksOf, threadEntries } from "./thread-log";
 
-// A scheduled routine only renders as a run card for a sub-bot (parentBotId set, see
-// packages/adapters/src/executor.ts `showsRoutineRunCard`); a top-level bot's scheduled routine
-// stays a normal message. spawn_bot is the only way to create a parented bot, so this spec asks
-// the bot to spawn one, approves its card, then creates and runs a routine on it directly via RPC.
-test("renders a routine run card in a sub-bot's own thread", async ({ page }, testInfo) => {
+async function captureRoutineMessage(page: Page, testInfo: TestInfo, name: string) {
+  const viewport = page.viewportSize();
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    await captureScreenshot(page, testInfo, `${name}-${colorScheme}`);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await captureScreenshot(page, testInfo, `${name}-phone-${colorScheme}`);
+    if (viewport) await page.setViewportSize(viewport);
+  }
+  await page.emulateMedia({ colorScheme: null });
+}
+
+test("renders a routine run's words as a message in a sub-bot's own thread", async ({
+  page,
+}, testInfo) => {
   const stamp = Date.now();
   await signup(page, `routine-run-card-${stamp}@rakazo.test`, "password12", "Routine Run Card");
   await completeOnboarding(page);
@@ -57,32 +68,16 @@ test("renders a routine run card in a sub-bot's own thread", async ({ page }, te
   await rpc(page, "routines/testRun", { routineId: routine.id });
 
   await page.goto(`/app/${subBotId}`);
-  // A single execution renders as one log line, not a card (spec PR A item 2)
-  // — `RoutineGroupLine` only appears once at least two quiet runs fold.
-  const card = page.getByTestId("routine-run-line");
-  await expect(card).toBeVisible({ timeout: 30_000 });
-  await expect(card).toContainText("Status check");
-  await expect(card).toContainText(/Running|Completed/i);
-  await expect(card).toContainText("Completed", { timeout: 60_000 });
+  const bubble = page.getByTestId("routine-message");
+  await expect(bubble).toBeVisible({ timeout: 60_000 });
+  await expect(bubble.locator("strong")).toBeVisible();
+  await expect(bubble.locator("img")).toHaveCount(0);
+  const name = page.getByTestId("item-origin").filter({ hasText: "Status check" });
+  await expect(name).toBeVisible();
+  await expect(page.getByTestId("routine-run-line")).toHaveCount(0);
+  await captureRoutineMessage(page, testInfo, "routine-message");
 
-  // The "Subscribed" pill is gone (CA-R3, CA-R1); a bell with an accessible name replaces it.
-  await expect(card).not.toContainText("Subscribed");
-  await expect(card.getByRole("img", { name: /Notifications on/i })).toBeVisible();
-
-  // notify:true defaults the line open (A5) — the disclosure starts expanded, rendering
-  // the routine's digest as sanitised markdown (CA-R4) with no live image loads (CA-R5).
-  const toggle = card.getByRole("button", { name: /^Status check,/ });
-  await expect(toggle).toHaveAttribute("aria-expanded", "true");
-  await expect(card.locator("strong")).toBeVisible();
-  await expect(card.locator("img")).toHaveCount(0);
-  await captureScreenshot(page, testInfo, "routine-run-card");
-
-  await toggle.click();
-  await expect(toggle).toHaveAttribute("aria-expanded", "false");
-  await toggle.click();
-  await expect(toggle).toHaveAttribute("aria-expanded", "true");
-
-  await card.getByRole("button", { name: "Report, Status check · Opens in full" }).click();
+  await name.click();
   const session = page.getByTestId("session-view");
   await expect(session.getByRole("heading", { name: "Status check" })).toBeVisible();
   await expect(session.getByRole("textbox")).toHaveCount(0);
@@ -104,9 +99,7 @@ test("renders a routine run card in a sub-bot's own thread", async ({ page }, te
   await expect(page).toHaveURL(/[?&]m=/);
 });
 
-// An inbound wake reports through a run card on every bot: the routine's instructions and the
-// payload stay in the run, not in a user bubble on the main thread.
-test("renders a webhook-woken routine as a run card, not a user message", async ({
+test("renders a webhook-woken routine as a routine message, not a user message", async ({
   page,
 }, testInfo) => {
   const stamp = Date.now();
@@ -134,13 +127,12 @@ test("renders a webhook-woken routine as a run card, not a user message", async 
   });
   expect(delivered.ok()).toBe(true);
 
-  const card = page.getByTestId("routine-run-line");
-  await expect(card).toBeVisible({ timeout: 30_000 });
-  await expect(card).toContainText("Deploy watch");
-  await expect(card).toContainText("Completed", { timeout: 60_000 });
+  await expect(page.getByTestId("routine-message")).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByTestId("item-origin").filter({ hasText: "Deploy watch" })).toBeVisible();
+  await expect(page.getByTestId("routine-run-line")).toHaveCount(0);
   await expect(page.getByText(/Run routine "Deploy watch"/)).toHaveCount(0);
   await expect(page.getByText("deploy.finished")).toHaveCount(0);
-  await captureScreenshot(page, testInfo, "webhook-routine-run-card");
+  await captureScreenshot(page, testInfo, "webhook-routine-message");
 
   const entries = await threadEntries(page, { botId });
   expect(

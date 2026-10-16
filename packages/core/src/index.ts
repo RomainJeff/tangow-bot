@@ -44,6 +44,7 @@ export * from "./response-bytes.js";
 export * from "./routine-draft.js";
 export * from "./routine-failing.js";
 export * from "./routine-groups.js";
+export * from "./routine-roles.js";
 export * from "./run-failure.js";
 export * from "./run-state.js";
 export * from "./sandbox-command.js";

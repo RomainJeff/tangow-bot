@@ -12,9 +12,9 @@ import { isRunTerminalEvent, progressMessageId, reduceLiveMessageBlocks } from "
 import { computeItemGroups } from "../message-grouping.js";
 import type { ItemReactions } from "../message-reactions.js";
 import { foldItemReactions } from "../message-reactions.js";
-import type { RoutineLineRole } from "../routine-groups.js";
-import { foldRoutineItems } from "../routine-groups.js";
-import { showsTimeMarker } from "../thread-time-markers.js";
+import type { RoutineRole } from "../routine-roles.js";
+import { routineRoles } from "../routine-roles.js";
+import { isSameLocalDay, showsTimeMarker } from "../thread-time-markers.js";
 import type { WaitingCard } from "./project-ui.js";
 import { projectThread } from "./project-ui.js";
 
@@ -23,7 +23,8 @@ export type ThreadRow = {
   firstOfGroup: boolean;
   lastOfGroup: boolean;
   reactions: ItemReactions;
-  routine?: RoutineLineRole;
+  routine?: RoutineRole;
+  chained?: true;
   marker?: { at: string; withTime: boolean };
   messageId?: EntryId;
   previewMessageId?: EntryId;
@@ -97,25 +98,22 @@ export function projectThreadView(
   const drawn = applyProgressLayer(projected.items, options.progress ?? new Map()).filter(
     (item) => !options.rendersNothing?.(item),
   );
-  const { items, reactions, parentOf } = foldItemReactions(drawn, projected.shownBy);
+  const folded = foldItemReactions(drawn, projected.shownBy);
+  const { roles, hidden } = routineRoles(folded.items);
+  const items =
+    hidden.size === 0 ? folded.items : folded.items.filter((item) => !hidden.has(item.id));
   const groups = computeItemGroups(items);
-  const roles = foldRoutineItems(items);
-  const hostOf = new Map<string, EntryId>(parentOf);
+  const hostOf = new Map<string, EntryId>(folded.parentOf);
   const rows: ThreadRow[] = [];
-  let previous: { ts: string; routine: boolean } | undefined;
+  let previous: { ts: string; line: boolean } | undefined;
   for (const [index, item] of items.entries()) {
-    const role = roles.get(item.id);
-    if (role?.kind === "hidden") continue;
-    for (const run of role?.kind === "group" ? role.runs : role ? [role.run] : []) {
-      hostOf.set(run.item.id, item.id);
-      if (run.sentTo) hostOf.set(run.sentTo.id, item.id);
-    }
-    const routine = role !== undefined;
-    const at = role?.kind === "group" ? (role.runs[0]?.item.ts ?? item.ts) : item.ts;
-    const shows =
-      routine && previous?.routine
-        ? new Date(previous.ts).toDateString() !== new Date(at).toDateString()
-        : showsTimeMarker(previous?.ts, at);
+    const routine = roles.get(item.id);
+    const line = routine?.kind === "failures";
+    if (line) for (const id of routine.folded) hostOf.set(id, item.id);
+    const lineAbove = line && previous?.line ? previous : undefined;
+    const shows = lineAbove
+      ? !isSameLocalDay(lineAbove.ts, item.ts)
+      : showsTimeMarker(previous?.ts, item.ts);
     const messageId = projected.messageIds.get(item.id);
     const previewMessageId =
       projected.previewHosts.get(item.id) ?? inlinePreviewHost(item, messageId);
@@ -123,13 +121,17 @@ export function projectThreadView(
       item,
       firstOfGroup: groups[index]?.isFirstOfGroup ?? true,
       lastOfGroup: groups[index]?.isLastOfGroup ?? true,
-      reactions: reactions.get(item.id) ?? [],
-      ...(role ? { routine: role } : {}),
-      ...(shows ? { marker: { at, withTime: !routine } } : {}),
+      reactions: folded.reactions.get(item.id) ?? [],
+      ...(routine ? { routine } : {}),
+      ...(shows
+        ? { marker: { at: item.ts, withTime: !line } }
+        : lineAbove
+          ? { chained: true }
+          : {}),
       ...(messageId ? { messageId } : {}),
       ...(previewMessageId ? { previewMessageId } : {}),
     });
-    previous = { ts: item.ts, routine };
+    previous = { ts: item.ts, line };
   }
   const shown = new Set<string>(rows.map((row) => row.item.id));
   const rowOf = new Map<string, EntryId>();

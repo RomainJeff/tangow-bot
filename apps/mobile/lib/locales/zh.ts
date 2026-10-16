@@ -710,6 +710,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Opens the full table": "打开完整表格",
   "{count} runs": "{count} 次运行",
   "{count} cancelled": "已取消 {count} 次",
+  "{count} failures since {time}": "自 {time} 起失败 {count} 次",
   "Opens in full": "打开完整内容",
   "Report, {name}": "报告，{name}",
   "Notifications on": "通知已开启",

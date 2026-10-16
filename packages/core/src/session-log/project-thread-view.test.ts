@@ -723,8 +723,9 @@ describe("projectThreadView rows", () => {
     expect(projectThreadView(inline).rows[0]?.previewMessageId).toBe("in-0");
   });
 
-  it("folds quiet runs of one routine into a line and absorbs the message the newest sent", () => {
-    const routine = (n: number) => [
+  it("replays a routine history as its words, its folded failures and nothing for silent runs", () => {
+    const usage = { inputTokens: 1, outputTokens: 1 };
+    const routine = (n: number, outcome: Record<string, unknown>) => [
       {
         botId: "bot_ada",
         runId: `run_r${n}`,
@@ -742,81 +743,241 @@ describe("projectThreadView rows", () => {
         botId: "bot_ada",
         runId: `run_r${n}`,
         type: "routine.finished",
-        payload: {
-          status: "completed",
-          usage: { inputTokens: 1, outputTokens: 1 },
-          result: "Done",
-        },
+        payload: { usage, result: "", ...outcome },
       },
     ];
     const chain = linkEntries("rtn", [
-      ...routine(1),
-      ...routine(2),
-      ...routine(3),
+      ...routine(1, { status: "completed", result: " \n" }),
+      ...routine(2, { status: "completed", result: "Invoice due Thursday.\n" }),
       {
         botId: "bot_ada",
         type: "bot.message.sent",
         payload: {
-          originSessionId: "ses_r3",
+          originSessionId: "ses_r2",
           to: { kind: "bot", botId: "bot_bea", name: "Bea" },
-          text: "Digest ready",
+          text: "Invoice due",
           intent: "result",
           hop: 1,
-          exchangeId: "rtn-6",
+          exchangeId: "rtn-4",
         },
       },
+      ...routine(3, { status: "failed", error: "429 Too Many Requests" }),
+      ...routine(4, { status: "cancelled" }),
+      ...routine(5, { status: "failed", error: "boom" }),
     ]);
-    const item = (n: number) => ({
+    const item = (entry: number, n: number, finished: Record<string, unknown>) => ({
       kind: "routine",
-      id: `rtn-${(n - 1) * 2}`,
-      ts: at((n - 1) * 2),
+      id: `rtn-${entry}`,
+      ts: at(entry),
       runId: `run_r${n}`,
       botId: "bot_ada",
       sessionId: `ses_r${n}`,
       routineId: "rtn_digest",
       name: "Digest",
-      finished: { status: "completed", result: "Done" },
+      finished,
     });
+    const spoke = {
+      ...item(2, 2, { status: "completed", result: "Invoice due Thursday.\n" }),
+      ts: at(3),
+    };
     const view = projectThreadView(chain);
     expect(view.rows).toEqual([
       {
-        item: item(2),
+        item: spoke,
         ...alone,
-        routine: {
-          kind: "group",
-          runs: [
-            { item: item(1), latest: false },
-            { item: item(2), latest: false },
-          ],
-        },
-        marker: { at: at(0), withTime: false },
+        routine: { kind: "message", text: "Invoice due Thursday." },
+        marker: { at: at(3), withTime: true },
       },
       {
-        item: item(3),
+        item: {
+          kind: "botMessage",
+          direction: "sent",
+          id: "rtn-4",
+          ts: at(4),
+          botId: "bot_ada",
+          peer: { kind: "bot", botId: "bot_bea", name: "Bea" },
+          text: "Invoice due",
+          intent: "result",
+          exchangeId: "rtn-4",
+          answeredBy: null,
+          origin: { sessionId: "ses_r2", kind: "routine", name: "Digest" },
+        },
         ...alone,
-        routine: {
-          kind: "run",
-          run: {
-            item: item(3),
-            latest: true,
-            sentTo: {
-              kind: "botMessage",
-              direction: "sent",
-              id: "rtn-6",
-              ts: at(6),
-              botId: "bot_ada",
-              peer: { kind: "bot", botId: "bot_bea", name: "Bea" },
-              text: "Digest ready",
-              intent: "result",
-              exchangeId: "rtn-6",
-              answeredBy: null,
-              origin: { sessionId: "ses_r3", kind: "routine", name: "Digest" },
-            },
+      },
+      {
+        item: item(9, 5, { status: "failed", result: "", failure: "other" }),
+        ...alone,
+        routine: { kind: "failures", count: 2, since: at(5), folded: ["rtn-5"] },
+      },
+    ]);
+    expect(["rtn-0", "rtn-6", "rtn-7", "rtn-10"].map((id) => view.rowOf.get(id))).toEqual([
+      undefined,
+      "rtn-9",
+      undefined,
+      "rtn-9",
+    ]);
+  });
+
+  it("keeps a routine's words above the message its run sent to another bot", () => {
+    const usage = { inputTokens: 1, outputTokens: 1 };
+    const entries = linkEntries("ord", [
+      {
+        botId: "bot_ada",
+        runId: "run_o",
+        type: "routine.started",
+        payload: {
+          sessionId: "ses_o",
+          routineId: "rtn_digest",
+          name: "Digest",
+          trigger: "routine",
+          scheduledAt: at(0),
+          model,
+        },
+      },
+      { type: "user.message", payload: { blocks: text("Anything new?"), source: "app" } },
+      {
+        botId: "bot_ada",
+        type: "bot.message.sent",
+        payload: {
+          originSessionId: "ses_o",
+          to: { kind: "bot", botId: "bot_bea", name: "Bea" },
+          text: "Invoice due",
+          intent: "result",
+          hop: 1,
+          exchangeId: "ord-2",
+        },
+      },
+      {
+        botId: "bot_ada",
+        runId: "run_o",
+        type: "routine.finished",
+        payload: { usage, status: "completed", result: "Invoice due Thursday." },
+      },
+    ]);
+    expect(
+      projectThreadView(entries).rows.map((row) => [row.item.kind, row.routine?.kind ?? null]),
+    ).toEqual([
+      ["message", null],
+      ["routine", "message"],
+      ["botMessage", null],
+    ]);
+  });
+
+  it("stacks failure lines of different routines, and marks only a new day between them", () => {
+    const failure = (n: number, routineId: string, ts: string) =>
+      [
+        {
+          type: "routine.started",
+          payload: {
+            sessionId: `ses_f${n}`,
+            routineId,
+            name: routineId,
+            trigger: "routine",
+            scheduledAt: ts,
+            model,
           },
+        },
+        {
+          type: "routine.finished",
+          payload: {
+            status: "failed",
+            error: "boom",
+            result: "",
+            usage: { inputTokens: 1, outputTokens: 1 },
+          },
+        },
+      ].map((body) => ({ ...body, botId: "bot_ada", runId: `run_f${n}`, ts }));
+    const chain = linkEntries("fl", [
+      ...failure(1, "rtn_a", "2026-10-10T09:00:00.000Z"),
+      ...failure(2, "rtn_b", "2026-10-10T09:30:00.000Z"),
+      ...failure(3, "rtn_a", "2026-10-11T09:00:00.000Z"),
+    ]);
+    expect(
+      projectThreadView(chain).rows.map(({ item, marker, chained }) => [item.id, marker, chained]),
+    ).toEqual([
+      ["fl-0", { at: "2026-10-10T09:00:00.000Z", withTime: false }, undefined],
+      ["fl-2", undefined, true],
+      ["fl-4", { at: "2026-10-11T09:00:00.000Z", withTime: false }, undefined],
+    ]);
+  });
+
+  it("places a routine's words where its run finished, after what was said while it worked", () => {
+    const chain = linkEntries("rw", [
+      {
+        botId: "bot_ada",
+        runId: "run_r1",
+        type: "routine.started",
+        payload: {
+          sessionId: "ses_r1",
+          routineId: "rtn_digest",
+          name: "Digest",
+          trigger: "routine",
+          scheduledAt: at(0),
+          model,
+        },
+      },
+      { type: "user.message", payload: { blocks: text("Any news?"), source: "app" } },
+      { botId: "bot_ada", type: "bot.text", payload: { blocks: text("Checking.") } },
+      {
+        botId: "bot_ada",
+        runId: "run_r1",
+        type: "routine.finished",
+        payload: {
+          status: "completed",
+          usage: { inputTokens: 1, outputTokens: 1 },
+          result: "Invoice due Thursday.",
         },
       },
     ]);
-    expect(["rtn-0", "rtn-6"].map((id) => view.rowOf.get(id))).toEqual(["rtn-2", "rtn-4"]);
+    expect(projectThreadView(chain).rows.map(({ item }) => [item.id, item.kind, item.ts])).toEqual([
+      ["rw-1", "message", at(1)],
+      ["rw-2", "message", at(2)],
+      ["rw-0", "routine", at(3)],
+    ]);
+  });
+
+  it("starts a group at a routine's words, and again at the bot's next reply", () => {
+    const reply = (words: string) => ({
+      botId: "bot_ada",
+      type: "bot.text",
+      payload: { blocks: text(words) },
+    });
+    const chain = linkEntries("grp", [
+      reply("Morning."),
+      {
+        botId: "bot_ada",
+        runId: "run_r1",
+        type: "routine.started",
+        payload: {
+          sessionId: "ses_r1",
+          routineId: "rtn_digest",
+          name: "Digest",
+          trigger: "routine",
+          scheduledAt: at(0),
+          model,
+        },
+      },
+      reply("Still here."),
+      {
+        botId: "bot_ada",
+        runId: "run_r1",
+        type: "routine.finished",
+        payload: {
+          status: "completed",
+          usage: { inputTokens: 1, outputTokens: 1 },
+          result: "Invoice due Thursday.",
+        },
+      },
+      reply("Anything else?"),
+    ]);
+    expect(
+      projectThreadView(chain).rows.map((row) => [row.item.id, row.firstOfGroup, row.lastOfGroup]),
+    ).toEqual([
+      ["grp-0", true, false],
+      ["grp-2", false, true],
+      ["grp-1", true, true],
+      ["grp-4", true, true],
+    ]);
   });
 });
 

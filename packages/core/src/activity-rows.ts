@@ -245,14 +245,18 @@ export type RecapBody =
 export function recapView(
   read: RecapRead | null,
   run: { failed: boolean; sourceMessageId: string | null },
-): { body: RecapBody; jumpTo: string | null } {
+): { body: RecapBody; jumpTo: string | null; opensChat: boolean } {
   if (!read || read.kind === "loading") {
-    return { body: { kind: "loading" }, jumpTo: run.sourceMessageId };
+    return { body: { kind: "loading" }, jumpTo: run.sourceMessageId, opensChat: true };
   }
-  if (read.kind === "failed") return { body: { kind: "failed" }, jumpTo: run.sourceMessageId };
+  if (read.kind === "failed") {
+    return { body: { kind: "failed" }, jumpTo: run.sourceMessageId, opensChat: true };
+  }
   const { text, messageId } = read.recap;
+  const jumpTo = messageId ?? run.sourceMessageId;
   return {
     body: text ? { kind: "text", text } : run.failed ? { kind: "none" } : { kind: "no_report" },
-    jumpTo: messageId ?? run.sourceMessageId,
+    jumpTo,
+    opensChat: jumpTo !== null,
   };
 }

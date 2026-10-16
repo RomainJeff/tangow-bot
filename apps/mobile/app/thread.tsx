@@ -31,6 +31,7 @@ import {
   type ComposerMention,
   canEditSpawnBotCard,
   drawsNothing,
+  failureSinceLabel,
   isApprovalAskBlock,
   isAsideOnlyMessage,
   isRunTerminalEvent,
@@ -39,7 +40,7 @@ import {
   mentionChipKey,
   projectThreadView,
   queuedRunIdsOf,
-  type RoutineLineRole,
+  type RoutineItem,
   type RoutineLineRun,
   resolveComposerSendPlan,
   routineCardSettlement,
@@ -178,6 +179,7 @@ import {
 import { mobileTokens, resolveMobileAppearance } from "../lib/appearance";
 import { type MobileArtifactTarget, openMobileArtifact } from "../lib/artifact-open";
 import { presentAttachSheet } from "../lib/attach-sheet";
+import { failureReason } from "../lib/bot-activity";
 import {
   archiveBot,
   clearConversation,
@@ -2009,7 +2011,7 @@ function Thread() {
     if (previous && isAsideItem(row.item, showSteps) && isAsideItem(previous.item, showSteps)) {
       return 0;
     }
-    if (row.item.kind === "routine" && previous?.item.kind === "routine") return 0;
+    if (row.chained) return 0;
     return row.firstOfGroup ? GROUP_GAP : WITHIN_GROUP_GAP;
   }
 
@@ -2062,7 +2064,7 @@ function Thread() {
           <View style={{ opacity: rewound ? 0.4 : 1 }}>
             {origin ? (
               <OriginLabel
-                origin={origin}
+                session={{ title: origin.title, load: () => sessionEntries(origin.sessionId) }}
                 alignEnd={item.kind === "message" && item.role === "user"}
                 botId={botId ?? snap?.members?.[0]?.botId ?? ""}
                 groupId={groupId}
@@ -3893,7 +3895,6 @@ const ItemRow = memo(function ItemRow({
   members,
   isNew,
   canAnswer,
-  queued = false,
   viewerUserId,
   onAnswer,
   readOnly = false,
@@ -3912,6 +3913,7 @@ const ItemRow = memo(function ItemRow({
   readOnly?: boolean;
 }) {
   const tokens = mobileTokens();
+  const colorScheme = useResolvedAppearance();
   const { t } = useI18n();
   const router = useRouter();
   const [session, setSession] = useState<OpenedSession | null>(null);
@@ -3966,46 +3968,54 @@ const ItemRow = memo(function ItemRow({
         );
       }
       case "routine": {
-        const handoffFor = (run: RoutineLineRun): RoutineHandoff | undefined => {
-          const sent = run.sentTo;
-          if (!sent) return undefined;
-          const peerBotId = sent.peer.kind === "bot" ? sent.peer.botId : undefined;
-          return {
-            receipt: <BotAvatar {...avatarOf(peerBotId)} size={sizes.receipt} still />,
-            avatars: (
-              <StackedAvatars
-                items={[avatarOf(sent.botId), avatarOf(peerBotId)]}
-                size={sizes.interstitial}
-                still
-              />
-            ),
-            label: t("Messaged {peer}", { peer: sent.peer.name }),
-            onPress:
-              openPeerMessages && peerBotId
-                ? () => openPeerMessages(sent.botId, peerBotId, sent.peer.name)
-                : undefined,
-          };
-        };
-        const openRun = (run: RoutineLineRun) =>
-          setSession({
-            title: run.item.name,
-            runId: run.item.runId,
-            load: () =>
-              rpc<{ entries: SessionEntry[] }>("runs/entries", { runId: run.item.runId }).then(
-                (result) => result.entries,
-              ),
-          });
-        const role: RoutineLineRole = row.routine ?? { kind: "run", run: { item, latest: true } };
-        return role.kind === "group" ? (
-          <RoutineGroup runs={role.runs} handoffFor={handoffFor} onOpen={openRun} />
-        ) : (
-          <RoutineRunLine
-            run={role.run}
-            queued={queued}
-            handoff={handoffFor(role.run)}
-            onOpen={openRun}
+        const role = row.routine;
+        if (role?.kind === "message") {
+          const inGroup = Boolean(groupId);
+          const openRun = () => setSession(runSession(item));
+          return (
+            <>
+              {inGroup ? null : <OriginText title={item.name} alignEnd={false} onPress={openRun} />}
+              <MessageRow
+                avatar={<BotAvatar {...avatarOf(item.botId)} size={sizes.message} still />}
+                author={
+                  <>
+                    {memberName(members, item.botId) ?? botName}
+                    <Text style={{ color: tokens.mutedForeground }}>
+                      {" · "}
+                      <Text accessibilityRole="button" onPress={openRun} suppressHighlighting>
+                        {item.name}
+                      </Text>
+                    </Text>
+                  </>
+                }
+                showAuthor={inGroup && row.firstOfGroup}
+                showAvatar={inGroup && row.lastOfGroup}
+                mono={!inGroup}
+              >
+                <MessageArrival isNew={isNew}>
+                  <BotBubble mono={!inGroup}>
+                    <ChatMarkdown
+                      allowImages={false}
+                      palette={tokens}
+                      colorScheme={colorScheme}
+                      inBubble
+                    >
+                      {truncateMarkdownForRender(role.text)}
+                    </ChatMarkdown>
+                  </BotBubble>
+                </MessageArrival>
+              </MessageRow>
+            </>
+          );
+        }
+        return role ? (
+          <RoutineFailureLine
+            item={item}
+            count={role.count}
+            since={role.since}
+            onOpen={() => setSession(runSession(item))}
           />
-        );
+        ) : null;
       }
       case "handoff": {
         const from = memberName(members, item.fromBotId) ?? t("bot");
@@ -4124,40 +4134,27 @@ function NoteRow({ item, isNew }: { item: NoteItem; isNew: boolean }) {
 }
 
 function OriginLabel({
-  origin,
+  session,
   alignEnd,
   botId,
   groupId,
   bots,
   members,
 }: {
-  origin: { sessionId: string; title: string };
+  session: OpenedSession;
   alignEnd: boolean;
   botId: string;
   groupId?: string;
   bots: MobileBot[];
   members?: MobileSnapshot["members"];
 }) {
-  const tokens = mobileTokens();
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Text
-        accessibilityRole="button"
-        onPress={() => setOpen(true)}
-        suppressHighlighting
-        style={{
-          alignSelf: alignEnd ? "flex-end" : "flex-start",
-          marginBottom: 4,
-          color: tokens.mutedForeground,
-          ...nativeTextStyle("label"),
-        }}
-      >
-        {origin.title}
-      </Text>
+      <OriginText title={session.title} alignEnd={alignEnd} onPress={() => setOpen(true)} />
       {open ? (
         <SessionSheet
-          session={{ title: origin.title, load: () => sessionEntries(origin.sessionId) }}
+          session={session}
           botId={botId}
           groupId={groupId}
           bots={bots}
@@ -4166,6 +4163,33 @@ function OriginLabel({
         />
       ) : null}
     </>
+  );
+}
+
+function OriginText({
+  title,
+  alignEnd,
+  onPress,
+}: {
+  title: string;
+  alignEnd: boolean;
+  onPress: () => void;
+}) {
+  const tokens = mobileTokens();
+  return (
+    <Text
+      accessibilityRole="button"
+      onPress={onPress}
+      suppressHighlighting
+      style={{
+        alignSelf: alignEnd ? "flex-end" : "flex-start",
+        marginBottom: 4,
+        color: tokens.mutedForeground,
+        ...nativeTextStyle("label"),
+      }}
+    >
+      {title}
+    </Text>
   );
 }
 
@@ -4329,6 +4353,93 @@ const REPORT_PREVIEW_HEIGHT = 8 * 23;
 const TASK_PREVIEW_HEIGHT = 5 * 23;
 /** Past this many runs, a group opens in a sheet instead of in place. */
 const GROUP_INLINE_MAX = 8;
+
+function runSession(item: RoutineItem): OpenedSession {
+  return {
+    title: item.name,
+    runId: item.runId,
+    load: () =>
+      rpc<{ entries: SessionEntry[] }>("runs/entries", { runId: item.runId }).then(
+        (result) => result.entries,
+      ),
+  };
+}
+
+function RoutineFailureLine({
+  item,
+  count: failures,
+  since,
+  onOpen,
+}: {
+  item: RoutineItem;
+  count: number;
+  since: string;
+  onOpen: () => void;
+}) {
+  const tokens = mobileTokens();
+  const { t } = useI18n();
+  const reason = failureReason(item.finished?.failure ?? null);
+  const count =
+    failures > 1
+      ? t("{count} failures since {time}", {
+          count: failures,
+          time: failureSinceLabel(since, item.ts, dateLocaleForUi()),
+        })
+      : null;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={[item.name, reason ?? t("Failed"), count].filter(Boolean).join(", ")}
+      onPress={onOpen}
+      unstable_pressDelay={130}
+      style={({ pressed }) => ({
+        minHeight: 44,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 10,
+        marginHorizontal: -8,
+        paddingHorizontal: 8,
+        borderRadius: radii.row,
+        backgroundColor: pressed ? tokens.secondary : "transparent",
+      })}
+    >
+      <NativeSymbol
+        ios={ROUTINE_STATE_SYMBOL.failed.ios}
+        android={ROUTINE_STATE_SYMBOL.failed.android}
+        size={18}
+        color={tokens.destructive}
+      />
+      <Text
+        style={{
+          flex: 1,
+          color: tokens.foreground,
+          ...nativeTextStyle("rowName", { weight: 500 }),
+        }}
+      >
+        {item.name}
+        {reason ? (
+          <Text
+            style={{
+              color: tokens.mutedForeground,
+              ...nativeTextStyle("rowName", { weight: 400 }),
+            }}
+          >{` · ${reason}`}</Text>
+        ) : null}
+      </Text>
+      {count ? (
+        <Text
+          style={{
+            color: tokens.mutedForeground,
+            ...nativeTextStyle("time"),
+            fontVariant: ["tabular-nums"],
+          }}
+        >
+          {count}
+        </Text>
+      ) : null}
+    </Pressable>
+  );
+}
 
 /**
  * A row's content opening under its header (a routine's report, a group's
@@ -4797,7 +4908,7 @@ function Disclosure({ open }: { open: boolean }) {
  * Opening it lists each run as a line of its own; a long group opens in a
  * sheet, by day.
  */
-function RoutineGroup({
+export function RoutineGroup({
   runs,
   handoffFor,
   onOpen,

@@ -3,45 +3,55 @@ import { projectThreadView } from "@rakazo/core";
 import { describe, expect, it } from "vitest";
 import { isViewedRunLine, originSession } from "./session-sheet";
 
-const entries = [
-  {
-    sessionId: "ses_main",
-    type: "routine.started",
-    payload: {
-      sessionId: "ses_digest",
-      routineId: "rtn_digest",
-      name: "Digest",
-      trigger: "routine",
-      scheduledAt: "2026-10-10T09:00:00.000Z",
-      model: { provider: "local", id: "emulator-1" },
-    },
-  },
-  {
-    sessionId: "ses_digest",
-    type: "assistant.text",
-    payload: { blocks: [{ kind: "text", text: "Three new invoices" }] },
-  },
-].map((entry, seq) =>
-  SessionEntrySchema.parse({
-    id: `e_${seq}`,
-    seq,
-    parentId: seq === 0 ? null : `e_${seq - 1}`,
-    ts: `2026-10-10T09:00:0${seq}.000Z`,
-    botId: "bot_ada",
-    runId: "run_digest",
-    ...entry,
-  }),
-);
+const usage = { inputTokens: 1, outputTokens: 1 };
 
-const kinds = (viewedRunId: string | undefined) =>
-  projectThreadView(entries, {
+const runEntries = (outcome: Record<string, unknown>) =>
+  [
+    {
+      sessionId: "ses_main",
+      type: "routine.started",
+      payload: {
+        sessionId: "ses_digest",
+        routineId: "rtn_digest",
+        name: "Digest",
+        trigger: "routine",
+        scheduledAt: "2026-10-10T09:00:00.000Z",
+        model: { provider: "local", id: "emulator-1" },
+      },
+    },
+    {
+      sessionId: "ses_digest",
+      type: "assistant.text",
+      payload: { blocks: [{ kind: "text", text: "Three new invoices" }] },
+    },
+    { sessionId: "ses_main", type: "routine.finished", payload: { usage, ...outcome } },
+  ].map((entry, seq) =>
+    SessionEntrySchema.parse({
+      id: `e_${seq}`,
+      seq,
+      parentId: seq === 0 ? null : `e_${seq - 1}`,
+      ts: `2026-10-10T09:00:0${seq}.000Z`,
+      botId: "bot_ada",
+      runId: "run_digest",
+      ...entry,
+    }),
+  );
+
+const said = { status: "completed", result: "Three new invoices" };
+const failed = { status: "failed", result: "", error: "boom" };
+
+const roles = (outcome: Record<string, unknown>, viewedRunId: string) =>
+  projectThreadView(runEntries(outcome), {
     rendersNothing: (item) => isViewedRunLine(item, viewedRunId),
-  }).rows.map((row) => row.item.kind);
+  }).rows.map((row) => row.routine?.kind ?? row.item.kind);
 
 describe("a session sheet", () => {
-  it("leaves out the line of the routine run it shows, and keeps another run's", () => {
-    expect(kinds("run_digest")).toEqual(["message"]);
-    expect(kinds("run_other")).toEqual(["routine", "message"]);
+  it.each([
+    [said, "message"],
+    [failed, "failures"],
+  ])("leaves out the row of the routine run it shows, and keeps another run's", (outcome, role) => {
+    expect(roles(outcome, "run_digest")).toEqual(["message"]);
+    expect(roles(outcome, "run_other")).toEqual([role, "message"]);
   });
 
   it("names the routine an item rose from and opens that routine's session", () => {
@@ -56,9 +66,8 @@ describe("a session sheet", () => {
       type: "assistant.ask",
       payload: { originSessionId: "ses_digest", block: { kind: "ask", text: "Pay them?" } },
     });
-    const rows = projectThreadView([entries[0]!, risen]).rows;
+    const rows = projectThreadView([runEntries(said)[0]!, risen]).rows;
     expect(rows.map((row) => originSession(row.item))).toEqual([
-      null,
       { sessionId: "ses_digest", title: "Digest" },
     ]);
   });

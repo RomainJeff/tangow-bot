@@ -726,6 +726,7 @@ export const RU_MESSAGES: Record<string, string> = {
   "Opens the full table": "Открывает таблицу целиком",
   "{count} runs": "Запусков: {count}",
   "{count} cancelled": "Отменено: {count}",
+  "{count} failures since {time}": "Сбоев с {time}: {count}",
   "Opens in full": "Открывает целиком",
   "Report, {name}": "Отчёт, {name}",
   "Notifications on": "Уведомления включены",
