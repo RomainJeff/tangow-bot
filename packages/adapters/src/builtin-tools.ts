@@ -602,7 +602,11 @@ that merely narrate internal operations.`,
     inputSchema: {
       type: "object",
       properties: {
-        name: { type: "string", description: "Short label shown in Routines." },
+        name: {
+          type: "string",
+          description:
+            "Short name in plain words, in the user's language, shown above the routine's messages.",
+        },
         prompt: {
           type: "string",
           description:
