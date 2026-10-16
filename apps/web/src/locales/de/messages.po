@@ -32,18 +32,17 @@ msgid "{0, plural, one {# routine} other {# routines}}"
 msgstr "{0, plural, one {# Routine} other {# Routinen}}"
 
 #. placeholder {0}: runs.length
-#: src/pages/bot-page/BotActivity.tsx:525
-#: src/pages/shell/routine-run-line.tsx:260
+#: src/pages/bot-page/BotActivity.tsx:526
 msgid "{0, plural, one {# run} other {# runs}}"
 msgstr ""
 
 #. placeholder {0}: file.name
-#: src/pages/Shell.tsx:1934
+#: src/pages/Shell.tsx:1932
 msgid "{0} (max {ATTACHMENT_MAX_COUNT} attachments)"
 msgstr "{0} (maximal {ATTACHMENT_MAX_COUNT} Anhänge)"
 
 #. placeholder {0}: file.name
-#: src/pages/Shell.tsx:1938
+#: src/pages/Shell.tsx:1936
 msgid "{0} (over 10 MiB)"
 msgstr "{0} (über 10 MiB)"
 
@@ -122,10 +121,6 @@ msgstr ""
 msgid "{botName}’s computer"
 msgstr "Computer von {botName}"
 
-#: src/pages/shell/routine-run-line.tsx:258
-msgid "{cancelledCount, plural, one {# cancelled} other {# cancelled}}"
-msgstr ""
-
 #: src/pages/bot-page/routine-copy.ts:87
 msgid "{count} · next {next}"
 msgstr "{count} · nächste {next}"
@@ -134,12 +129,12 @@ msgstr "{count} · nächste {next}"
 msgid "{days}d ago"
 msgstr "vor {days} T."
 
-#: src/pages/shell/routine-run-line.tsx:368
+#: src/pages/shell/routine-run-line.tsx:26
 msgid "{failures, plural, one {# failure since {since}} other {# failures since {since}}}"
 msgstr ""
 
 #: src/pages/shell/message-view.tsx:365
-#: src/pages/shell/thread-row.tsx:327
+#: src/pages/shell/thread-row.tsx:326
 msgid "{from} handed the thread to {to}"
 msgstr ""
 
@@ -203,7 +198,7 @@ msgstr ""
 msgid "{what} · paused"
 msgstr "{what} · pausiert"
 
-#: src/pages/shell/transcript.tsx:238
+#: src/pages/shell/transcript.tsx:234
 msgid "{workingBotName} is working"
 msgstr "{workingBotName} arbeitet"
 
@@ -260,12 +255,12 @@ msgstr "Aktionsbestätigungen"
 #. placeholder {0}: sectionMenu.section.name
 #: src/pages/bot-page/BotPage.tsx:343
 #: src/pages/BotContextMenu.tsx:86
-#: src/pages/Shell.tsx:3265
+#: src/pages/Shell.tsx:3262
 #: src/pages/shell/sidebar.tsx:410
 msgid "Actions for {0}"
 msgstr "Aktionen für {0}"
 
-#: src/pages/Shell.tsx:3139
+#: src/pages/Shell.tsx:3136
 msgid "Actions for space"
 msgstr ""
 
@@ -732,15 +727,15 @@ msgstr "Computer von {0} wird gestartet"
 #: src/pages/shell/message-view.tsx:353
 #: src/pages/shell/message-view.tsx:354
 #: src/pages/shell/message-view.tsx:428
+#: src/pages/shell/thread-row.tsx:317
 #: src/pages/shell/thread-row.tsx:318
-#: src/pages/shell/thread-row.tsx:319
 msgid "bot"
 msgstr "Bot"
 
 #: src/pages/IntegrationSetup.tsx:51
-#: src/pages/Shell.tsx:1697
+#: src/pages/Shell.tsx:1695
 #: src/pages/shell/message-view.tsx:232
-#: src/pages/shell/thread-row.tsx:298
+#: src/pages/shell/thread-row.tsx:297
 msgid "Bot"
 msgstr "Bot"
 
@@ -757,7 +752,7 @@ msgstr "Bot-Bildschirm"
 msgid "Bot screen preview"
 msgstr "Bot-Bildschirmvorschau"
 
-#: src/pages/Shell.tsx:3076
+#: src/pages/Shell.tsx:3073
 #: src/pages/shell/composer.tsx:1170
 #: src/pages/shell/thread-header.tsx:154
 #: src/pages/shell/thread-header.tsx:155
@@ -772,7 +767,7 @@ msgstr "Zu verknüpfender Bot"
 msgid "Bots act without asking by default. Add an exception only when you want to review a type of action first."
 msgstr "Bots handeln standardmäßig ohne Nachfrage. Füge nur dann eine Ausnahme hinzu, wenn du eine Aktionsart zuerst prüfen möchtest."
 
-#: src/pages/shell/transcript.tsx:239
+#: src/pages/shell/transcript.tsx:235
 msgid "Bots are working"
 msgstr "Bots arbeiten"
 
@@ -836,7 +831,6 @@ msgstr "Antwort abbrechen"
 #: src/components/TaskCard.tsx:107
 #: src/pages/ActivityList.tsx:162
 #: src/pages/bot-page/BotActivity.tsx:306
-#: src/pages/shell/routine-run-line.tsx:116
 msgid "Cancelled"
 msgstr "Abgebrochen"
 
@@ -991,7 +985,7 @@ msgstr "Nachrichteneinstellungen schließen"
 msgid "Close model settings"
 msgstr "Modelleinstellungen schließen"
 
-#: src/pages/Shell.tsx:2725
+#: src/pages/Shell.tsx:2723
 msgid "Close navigation"
 msgstr "Navigation schließen"
 
@@ -1042,11 +1036,6 @@ msgstr "Befehl"
 #: src/pages/ScratchpadSection.tsx:119
 msgid "Complete"
 msgstr "Abschließen"
-
-#: src/pages/shell/routine-run-line.tsx:114
-#: src/pages/shell/routine-run-line.tsx:259
-msgid "Completed"
-msgstr ""
 
 #: src/pages/bot-page/SettingsTab.tsx:109
 #: src/pages/bot-page/SettingsTab.tsx:118
@@ -1208,7 +1197,7 @@ msgstr ""
 msgid "Continue with email"
 msgstr "Mit E-Mail fortfahren"
 
-#: src/pages/shell/thread-row.tsx:404
+#: src/pages/shell/thread-row.tsx:403
 msgid "Conversation cleared"
 msgstr ""
 
@@ -1300,13 +1289,13 @@ msgstr "Anbieter konnte nicht verbunden werden"
 msgid "Could not connect this voice provider"
 msgstr "Stimmanbieter konnte nicht verbunden werden"
 
-#: src/pages/Shell.tsx:884
-#: src/pages/Shell.tsx:2559
+#: src/pages/Shell.tsx:883
+#: src/pages/Shell.tsx:2557
 msgid "Could not connect to the computer screen"
 msgstr "Verbindung zum Computerbildschirm nicht möglich"
 
 #: src/pages/Auth.tsx:101
-#: src/pages/Shell.tsx:2533
+#: src/pages/Shell.tsx:2531
 msgid "Could not continue"
 msgstr "Fortfahren fehlgeschlagen"
 
@@ -1607,7 +1596,7 @@ msgstr ""
 msgid "Could not submit this answer"
 msgstr "Antwort konnte nicht gesendet werden"
 
-#: src/pages/Shell.tsx:2386
+#: src/pages/Shell.tsx:2384
 msgid "Could not take control"
 msgstr "Kontrolle konnte nicht übernommen werden"
 
@@ -1628,7 +1617,7 @@ msgstr "Computer konnte nicht aktualisiert werden"
 msgid "Could not update plugin"
 msgstr "Plugin konnte nicht aktualisiert werden"
 
-#: src/pages/Shell.tsx:1920
+#: src/pages/Shell.tsx:1918
 msgid "Could not update reaction"
 msgstr "Reaktion konnte nicht aktualisiert werden"
 
@@ -1685,7 +1674,7 @@ msgstr "Bot erstellen?"
 msgid "Create group"
 msgstr "Gruppe erstellen"
 
-#: src/pages/Shell.tsx:2874
+#: src/pages/Shell.tsx:2872
 #: src/pages/shell/bot-picker.tsx:74
 msgid "Create new Bot"
 msgstr "Neuen Bot erstellen"
@@ -1833,7 +1822,7 @@ msgstr "Erinnerungen ebenfalls löschen"
 msgid "Delete routine"
 msgstr "Routine löschen"
 
-#: src/pages/Shell.tsx:3153
+#: src/pages/Shell.tsx:3150
 msgid "Delete space"
 msgstr ""
 
@@ -1995,7 +1984,7 @@ msgstr "Duplizieren"
 msgid "Earlier message"
 msgstr "Frühere Nachricht"
 
-#: src/pages/shell/thread-row.tsx:401
+#: src/pages/shell/thread-row.tsx:400
 msgid "Earlier messages summarized"
 msgstr ""
 
@@ -2012,7 +2001,7 @@ msgstr "Bearbeiten und erneut senden"
 msgid "Edit first"
 msgstr "Zuerst bearbeiten"
 
-#: src/pages/Shell.tsx:3076
+#: src/pages/Shell.tsx:3073
 msgid "Edit Profile"
 msgstr "Profil bearbeiten"
 
@@ -2125,8 +2114,7 @@ msgstr "Sehr hoch"
 #: src/pages/ActivityList.tsx:160
 #: src/pages/bot-page/BotActivity.tsx:305
 #: src/pages/bot-page/routine-copy.ts:63
-#: src/pages/shell/routine-run-line.tsx:115
-#: src/pages/shell/routine-run-line.tsx:391
+#: src/pages/shell/routine-run-line.tsx:49
 msgid "Failed"
 msgstr "Fehlgeschlagen"
 
@@ -2134,14 +2122,14 @@ msgstr "Fehlgeschlagen"
 msgid "Failed {when}"
 msgstr "Fehlgeschlagen {when}"
 
+#: src/pages/Shell.tsx:2124
 #: src/pages/Shell.tsx:2126
 #: src/pages/Shell.tsx:2128
-#: src/pages/Shell.tsx:2130
 msgid "Failed to send message"
 msgstr "Nachricht konnte nicht gesendet werden"
 
-#: src/pages/Shell.tsx:2186
-#: src/pages/Shell.tsx:2205
+#: src/pages/Shell.tsx:2184
+#: src/pages/Shell.tsx:2203
 msgid "Failed to stop"
 msgstr "Stoppen fehlgeschlagen"
 
@@ -2207,7 +2195,7 @@ msgstr "Kostenlos"
 msgid "Fullscreen"
 msgstr "Vollbild"
 
-#: src/pages/shell/thread-row.tsx:353
+#: src/pages/shell/thread-row.tsx:352
 msgid "FYI"
 msgstr ""
 
@@ -2440,7 +2428,7 @@ msgstr "Isoliert"
 msgid "Its conversation, files, and routines will be permanently deleted. Bots it created stay in your list."
 msgstr "Seine Unterhaltung, Dateien und Routinen werden dauerhaft gelöscht. Von ihm erstellte Bots bleiben in deiner Liste."
 
-#: src/pages/shell/transcript.tsx:619
+#: src/pages/shell/transcript.tsx:615
 msgid "Jump to latest"
 msgstr "Zur neuesten Nachricht springen"
 
@@ -2502,7 +2490,7 @@ msgstr ""
 msgid "Listening"
 msgstr ""
 
-#: src/pages/shell/transcript.tsx:481
+#: src/pages/shell/transcript.tsx:477
 msgid "Load earlier messages"
 msgstr "Frühere Nachrichten laden"
 
@@ -2544,7 +2532,7 @@ msgstr "Stimmanbieter werden geladen…"
 #: src/pages/Onboarding.tsx:378
 #: src/pages/PeerMessagesOverlay.tsx:142
 #: src/pages/shell/session-view.tsx:108
-#: src/pages/shell/transcript.tsx:481
+#: src/pages/shell/transcript.tsx:477
 msgid "Loading…"
 msgstr "Wird geladen…"
 
@@ -2697,7 +2685,7 @@ msgstr ""
 msgid "Message composer"
 msgstr "Nachrichteneditor"
 
-#: src/pages/shell/thread-row.tsx:403
+#: src/pages/shell/thread-row.tsx:402
 msgid "Message edited"
 msgstr ""
 
@@ -2705,8 +2693,8 @@ msgstr ""
 msgid "Message event"
 msgstr ""
 
-#: src/pages/shell/thread-row.tsx:355
-#: src/pages/shell/thread-row.tsx:394
+#: src/pages/shell/thread-row.tsx:354
+#: src/pages/shell/thread-row.tsx:393
 msgid "Message from {peer}"
 msgstr "Nachricht von {peer}"
 
@@ -2714,8 +2702,8 @@ msgstr "Nachricht von {peer}"
 msgid "Message…"
 msgstr "Nachricht…"
 
-#: src/pages/shell/thread-row.tsx:355
-#: src/pages/shell/thread-row.tsx:394
+#: src/pages/shell/thread-row.tsx:354
+#: src/pages/shell/thread-row.tsx:393
 msgid "Messaged {peer}"
 msgstr "Nachricht an {peer} gesendet"
 
@@ -2851,7 +2839,7 @@ msgid "Name this routine"
 msgstr "Diese Routine benennen"
 
 #: src/pages/ActivityList.tsx:154
-#: src/pages/shell/thread-row.tsx:241
+#: src/pages/shell/thread-row.tsx:240
 msgid "Needs input"
 msgstr "Eingabe erforderlich"
 
@@ -3004,7 +2992,7 @@ msgstr "Keine Anbieter gefunden."
 msgid "No remote MCP servers found"
 msgstr ""
 
-#: src/pages/bot-page/BotActivity.tsx:427
+#: src/pages/bot-page/BotActivity.tsx:428
 msgid "No report"
 msgstr "Kein Bericht"
 
@@ -3073,11 +3061,6 @@ msgstr "Noch nichts gemerkt"
 msgid "Notifications"
 msgstr ""
 
-#: src/pages/shell/routine-run-line.tsx:126
-#: src/pages/shell/routine-run-line.tsx:171
-msgid "Notifications on"
-msgstr ""
-
 #: src/components/AskCard.tsx:97
 msgid "Notifies you each run"
 msgstr "Benachrichtigt dich bei jedem Lauf"
@@ -3133,7 +3116,7 @@ msgstr "am 1. um {0}"
 msgid "One-time"
 msgstr "Einmalig"
 
-#: src/pages/Shell.tsx:3191
+#: src/pages/Shell.tsx:3188
 msgid "Only empty spaces can be deleted. Delete its bots and groups first."
 msgstr ""
 
@@ -3152,7 +3135,7 @@ msgstr "Öffnen"
 msgid "Open {0}"
 msgstr "{0} öffnen"
 
-#: src/pages/bot-page/BotActivity.tsx:431
+#: src/pages/bot-page/BotActivity.tsx:432
 msgid "Open in chat"
 msgstr "Im Chat öffnen"
 
@@ -3340,12 +3323,11 @@ msgstr "Anbieter"
 msgid "Providers"
 msgstr "Anbieter"
 
-#: src/pages/shell/thread-row.tsx:351
+#: src/pages/shell/thread-row.tsx:350
 msgid "Question"
 msgstr ""
 
 #: src/pages/ActivityList.tsx:148
-#: src/pages/shell/routine-run-line.tsx:112
 msgid "Queued"
 msgstr "In Warteschlange"
 
@@ -3535,7 +3517,7 @@ msgid "Removing…"
 msgstr "Wird entfernt…"
 
 #: src/pages/BotContextMenu.tsx:121
-#: src/pages/Shell.tsx:3280
+#: src/pages/Shell.tsx:3277
 #: src/pages/shell/dialogs.tsx:246
 msgid "Rename section"
 msgstr ""
@@ -3568,12 +3550,7 @@ msgstr "In mehreren kurzen Nachrichten antworten"
 msgid "Replying to {replyName}"
 msgstr "Antwort an {replyName}"
 
-#. placeholder {0}: item.name
-#: src/pages/shell/routine-run-line.tsx:198
-msgid "Report, {0} · Opens in full"
-msgstr ""
-
-#: src/pages/shell/thread-row.tsx:349
+#: src/pages/shell/thread-row.tsx:348
 msgid "Request"
 msgstr ""
 
@@ -3625,7 +3602,7 @@ msgstr "Ungespeicherten Text wiederherstellen"
 msgid "Restoring your workspace"
 msgstr ""
 
-#: src/pages/shell/thread-row.tsx:350
+#: src/pages/shell/thread-row.tsx:349
 msgid "Result"
 msgstr ""
 
@@ -3640,7 +3617,7 @@ msgstr "Erneut versuchen"
 msgid "Retry now"
 msgstr "Jetzt erneut versuchen"
 
-#: src/pages/Shell.tsx:2566
+#: src/pages/Shell.tsx:2564
 msgid "Retry screen"
 msgstr "Bildschirm erneut versuchen"
 
@@ -3679,7 +3656,7 @@ msgstr ""
 
 #: src/pages/bot-page/BotActivity.tsx:312
 #: src/pages/bot-page/RoutineCreateForm.tsx:44
-#: src/pages/shell/thread-row.tsx:109
+#: src/pages/shell/thread-row.tsx:108
 msgid "Routine"
 msgstr "Routine"
 
@@ -3711,7 +3688,6 @@ msgstr "Der Ausführungszeitpunkt muss in der Zukunft liegen."
 #: src/components/TaskCard.tsx:107
 #: src/pages/ActivityList.tsx:152
 #: src/pages/bot-page/BotActivity.tsx:307
-#: src/pages/shell/routine-run-line.tsx:113
 msgid "Running"
 msgstr "Läuft"
 
@@ -3948,7 +3924,7 @@ msgstr ""
 msgid "Show less"
 msgstr ""
 
-#: src/pages/bot-page/BotActivity.tsx:459
+#: src/pages/bot-page/BotActivity.tsx:460
 #: src/pages/KnowledgeSection.tsx:885
 #: src/pages/PluginsOverlay.tsx:873
 #: src/pages/shell/message-view.tsx:78
@@ -4019,7 +3995,7 @@ msgid "Skipped"
 msgstr ""
 
 #. placeholder {0}: skipped.join(", ")
-#: src/pages/Shell.tsx:1954
+#: src/pages/Shell.tsx:1952
 msgid "Skipped {0}"
 msgstr "{0} übersprungen"
 
@@ -4072,7 +4048,7 @@ msgstr "Startet"
 msgid "Starting…"
 msgstr "Wird gestartet…"
 
-#: src/pages/shell/thread-row.tsx:352
+#: src/pages/shell/thread-row.tsx:351
 msgid "Status"
 msgstr ""
 
@@ -4110,8 +4086,8 @@ msgstr "Verschlüsselt gespeichert"
 msgid "Stored securely. Never shown here."
 msgstr "Sicher gespeichert. Hier nie angezeigt."
 
-#: src/pages/shell/thread-row.tsx:109
-#: src/pages/shell/thread-row.tsx:255
+#: src/pages/shell/thread-row.tsx:108
+#: src/pages/shell/thread-row.tsx:254
 msgid "subagent"
 msgstr "Subagent"
 
@@ -4148,7 +4124,7 @@ msgstr "System"
 msgid "Teach a task"
 msgstr "Aufgabe anlernen"
 
-#: src/pages/Shell.tsx:2916
+#: src/pages/Shell.tsx:2913
 msgid "Teaching in progress. Stop teaching before sending a new message."
 msgstr "Aufgabe wird angelernt. Beende das Anlernen, bevor du eine neue Nachricht sendest."
 
@@ -4269,8 +4245,7 @@ msgstr "An:"
 
 #: src/pages/bot-page/BotActivity.tsx:216
 #: src/pages/PeerMessagesOverlay.tsx:180
-#: src/pages/shell/routine-run-line.tsx:327
-#: src/pages/shell/thread-row.tsx:81
+#: src/pages/shell/thread-row.tsx:80
 msgid "Today"
 msgstr "Heute"
 
@@ -4325,7 +4300,7 @@ msgid "Unpin"
 msgstr "Lösen"
 
 #. placeholder {0}: pending.file.name
-#: src/pages/Shell.tsx:2041
+#: src/pages/Shell.tsx:2039
 msgid "Unsupported file type: {0}"
 msgstr "Nicht unterstützter Dateityp: {0}"
 
@@ -4540,13 +4515,12 @@ msgstr "Jährlich am {date} um {time}"
 
 #: src/pages/bot-page/BotActivity.tsx:217
 #: src/pages/PeerMessagesOverlay.tsx:181
-#: src/pages/shell/routine-run-line.tsx:328
-#: src/pages/shell/thread-row.tsx:82
+#: src/pages/shell/thread-row.tsx:81
 msgid "Yesterday"
 msgstr "Gestern"
 
-#: src/pages/Shell.tsx:1696
-#: src/pages/Shell.tsx:2590
+#: src/pages/Shell.tsx:1694
+#: src/pages/Shell.tsx:2588
 msgid "You"
 msgstr "Du"
 

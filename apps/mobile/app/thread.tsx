@@ -39,12 +39,9 @@ import {
   latestActivityLabel,
   mentionChipKey,
   projectThreadView,
-  queuedRunIdsOf,
   type RoutineItem,
-  type RoutineLineRun,
   resolveComposerSendPlan,
   routineCardSettlement,
-  routineLine,
   SLASH_ACTIONS,
   type SlashActionId,
   selectedAskActionLabel,
@@ -63,17 +60,7 @@ import * as Clipboard from "expo-clipboard";
 import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useHeaderHeight } from "expo-router/react-navigation";
 import type { ReactNode } from "react";
-import {
-  createContext,
-  memo,
-  useCallback,
-  useContext,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   AccessibilityInfo,
   ActionSheetIOS,
@@ -85,7 +72,6 @@ import {
   Modal,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
-  PixelRatio,
   Platform,
   Pressable,
   ScrollView,
@@ -97,15 +83,12 @@ import {
   type ViewStyle,
 } from "react-native";
 import { KeyboardAvoidingView, useKeyboardState } from "react-native-keyboard-controller";
-import type { SharedValue } from "react-native-reanimated";
 import Animated, {
   Easing,
   FadeIn,
   FadeInDown,
   Keyframe,
   runOnJS,
-  runOnUI,
-  useAnimatedReaction,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
@@ -354,24 +337,6 @@ function isWorkingStatus(status: string | undefined): boolean {
 
 type NotificationRouteState = "loading" | "ready" | "failed";
 
-/**
- * Lets a row that grows in place (a routine report opening) keep its header
- * still. The thread is an inverted list, so a taller row pushes the rows
- * above it up; while it moves, the list keeps the row just above it where it
- * is, natively and in the same frame, so the header stays put and only what
- * is below moves.
- */
-const ThreadGrowthContext = createContext<{
-  /** The row with this message id is about to change height under the person's finger. */
-  hold: (rowId: string | null) => void;
-} | null>(null);
-
-/** The message id of the thread row a component is drawn in. */
-const ThreadRowContext = createContext<string | null>(null);
-
-/** The height of the `Expandable` a component is drawn in, if any. */
-const ExpandableHeightContext = createContext<SharedValue<number> | null>(null);
-
 const KEEP_VISIBLE_POSITION = { minIndexForVisible: 0 };
 
 export default function ThreadRoute() {
@@ -536,32 +501,7 @@ function Thread() {
   // ScrollView, not inverted) is showing instead of it.
   const listOffset = useRef(0);
   const pinnedPageShowing = useRef(false);
-  // Until when a row the person opened is being held in place: the
-  // follow-latest scroll stays out of its way meanwhile.
-  const holdingRowUntil = useRef(0);
-  // A content change that landed during the hold, replayed once it ends.
-  const heldContentChange = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const contentChanged = useRef(() => {});
-  useEffect(() => () => clearTimeout(heldContentChange.current), []);
-  // A row the person opens keeps the row just above it (the next index: the
-  // list is inverted) in place instead of the latest message, so its header
-  // stays put. The anchor stays set afterwards: switching it back moved the
-  // thread on its own, and it keeps the same place as the latest message would
-  // for everything else the thread does.
-  const [anchorIndex, setAnchorIndex] = useState<number | null>(null);
-  const liveRowsRef = useRef<readonly ThreadRow[]>([]);
-  const holdRow = useCallback((rowId: string | null) => {
-    holdingRowUntil.current = Date.now() + 900;
-    const rows = liveRowsRef.current;
-    const index = rowId ? rows.findIndex((row) => row.item.id === rowId) : -1;
-    if (index < 0) return;
-    setAnchorIndex(Math.min(index + 1, rows.length - 1));
-  }, []);
-  const threadGrowth = useMemo(() => ({ hold: holdRow }), [holdRow]);
-  const keptPosition = useMemo(
-    () => (anchorIndex == null ? KEEP_VISIBLE_POSITION : { minIndexForVisible: anchorIndex }),
-    [anchorIndex],
-  );
   const tableActions = useMemo<TableActions>(
     () => ({ open: setTablePreview, label: () => t("Table"), hint: t("Opens the full table") }),
     [t],
@@ -659,7 +599,6 @@ function Thread() {
     () => busyRuns.filter((run) => run.id !== waiting?.runId),
     [busyRuns, waiting?.runId],
   );
-  const queuedRunIds = useMemo(() => queuedRunIdsOf(busyRuns), [busyRuns]);
   const workingGroupBots = useMemo(() => {
     if (!inGroup) return [];
     const seen = new Set<string>();
@@ -1726,12 +1665,11 @@ function Thread() {
       .catch(() => undefined);
   }, []);
   const listExtraData = useMemo(
-    () => ({ answerableAskMessageId, viewerUserId, queuedRunIds }),
-    [answerableAskMessageId, viewerUserId, queuedRunIds],
+    () => ({ answerableAskMessageId, viewerUserId }),
+    [answerableAskMessageId, viewerUserId],
   );
   const runError = snap?.run?.status === "failed" ? (snap.run.error ?? null) : null;
   const liveRows = useMemo(() => [...rows].reverse(), [rows]);
-  liveRowsRef.current = liveRows;
   const pinnedTarget = pinnedAroundRef.current;
   const showPinnedPage = Boolean(
     jumpScrollTarget.current ||
@@ -2030,79 +1968,77 @@ function Thread() {
     const rewound = rewindIndex >= 0 && (rowIndex.get(item.id) ?? -1) >= rewindIndex;
     const origin = originSession(item);
     return (
-      <ThreadRowContext.Provider key={item.id} value={item.id}>
-        <View
-          onLayout={
-            options?.enableJump
-              ? (event) => {
-                  if (jumpRowId !== item.id) return;
-                  const y = Math.max(0, event.nativeEvent.layout.y - 24);
-                  requestAnimationFrame(() => {
-                    if (!jumpScrollTarget.current) return;
-                    pinnedScroll.current?.scrollTo({ y, animated: true });
-                    jumpScrollTarget.current = null;
-                  });
-                }
-              : undefined
-          }
-          style={{
-            marginTop: Math.max(marker ? GROUP_GAP : 0, gapBeforeRow(row, options?.previous)),
-          }}
-        >
-          {marker ? (
+      <View
+        key={item.id}
+        onLayout={
+          options?.enableJump
+            ? (event) => {
+                if (jumpRowId !== item.id) return;
+                const y = Math.max(0, event.nativeEvent.layout.y - 24);
+                requestAnimationFrame(() => {
+                  if (!jumpScrollTarget.current) return;
+                  pinnedScroll.current?.scrollTo({ y, animated: true });
+                  jumpScrollTarget.current = null;
+                });
+              }
+            : undefined
+        }
+        style={{
+          marginTop: Math.max(marker ? GROUP_GAP : 0, gapBeforeRow(row, options?.previous)),
+        }}
+      >
+        {marker ? (
+          <Text
+            style={{
+              alignSelf: "center",
+              marginBottom: GROUP_GAP,
+              color: tokens.mutedForeground,
+              ...nativeTextStyle("label"),
+            }}
+          >
+            {marker}
+          </Text>
+        ) : null}
+        <View style={{ opacity: rewound ? 0.4 : 1 }}>
+          {origin ? (
+            <OriginLabel
+              session={{ title: origin.title, load: () => sessionEntries(origin.sessionId) }}
+              alignEnd={item.kind === "message" && item.role === "user"}
+              botId={botId ?? snap?.members?.[0]?.botId ?? ""}
+              groupId={groupId}
+              bots={mentionBots}
+              members={snap?.members}
+            />
+          ) : null}
+          {item.id === waiting?.itemId ? (
             <Text
               style={{
-                alignSelf: "center",
-                marginBottom: GROUP_GAP,
+                marginBottom: 4,
                 color: tokens.mutedForeground,
                 ...nativeTextStyle("label"),
               }}
             >
-              {marker}
+              {t("Needs input")}
             </Text>
           ) : null}
-          <View style={{ opacity: rewound ? 0.4 : 1 }}>
-            {origin ? (
-              <OriginLabel
-                session={{ title: origin.title, load: () => sessionEntries(origin.sessionId) }}
-                alignEnd={item.kind === "message" && item.role === "user"}
-                botId={botId ?? snap?.members?.[0]?.botId ?? ""}
-                groupId={groupId}
-                bots={mentionBots}
-                members={snap?.members}
-              />
-            ) : null}
-            {item.id === waiting?.itemId ? (
-              <Text
-                style={{
-                  marginBottom: 4,
-                  color: tokens.mutedForeground,
-                  ...nativeTextStyle("label"),
-                }}
-              >
-                {t("Needs input")}
-              </Text>
-            ) : null}
-            {item.kind === "message" ? (
-              renderMessage(row, item, isNew, options?.enableJump)
-            ) : (
-              <ItemRow
-                row={row}
-                botId={botId ?? snap?.members?.[0]?.botId ?? ""}
-                groupId={groupId}
-                botName={displayName}
-                bots={mentionBots}
-                members={snap?.members}
-                isNew={isNew}
-                canAnswer={item.id === answerableAskMessageId}
-                queued={item.kind === "routine" && queuedRunIds.has(item.runId)}
-                viewerUserId={viewerUserId}
-                onAnswer={answerCard}
-              />
-            )}
-          </View>
+          {item.kind === "message" ? (
+            renderMessage(row, item, isNew, options?.enableJump)
+          ) : (
+            <ItemRow
+              row={row}
+              botId={botId ?? snap?.members?.[0]?.botId ?? ""}
+              groupId={groupId}
+              botName={displayName}
+              bots={mentionBots}
+              members={snap?.members}
+              isNew={isNew}
+              canAnswer={item.id === answerableAskMessageId}
+              viewerUserId={viewerUserId}
+              onAnswer={answerCard}
+            />
+          )}
         </View>
-      </ThreadRowContext.Provider>
+      </View>
     );
   }
 
@@ -2391,295 +2327,235 @@ function Thread() {
 
   return (
     <TableActionsProvider value={tableActions}>
-      <ThreadGrowthContext.Provider value={threadGrowth}>
-        <KeyboardAvoidingView
-          behavior="height"
-          keyboardVerticalOffset={headerHeight}
+      <KeyboardAvoidingView
+        behavior="height"
+        keyboardVerticalOffset={headerHeight}
+        style={{
+          flex: 1,
+          backgroundColor: tokens.background,
+          paddingHorizontal: 14,
+        }}
+      >
+        {error ? (
+          <Text style={{ color: tokens.mutedForeground, marginTop: 12 }}>{error}</Text>
+        ) : null}
+        {runError ? (
+          <Text style={{ color: tokens.destructive, marginTop: 12 }}>{runError}</Text>
+        ) : null}
+        <View style={{ flex: 1, position: "relative" }}>
+          {showPinnedPage ? (
+            <ScrollView
+              key={jumpScrollTarget.current ?? pinnedTarget?.messageId ?? threadKey}
+              ref={pinnedScroll}
+              style={{ flex: 1, marginTop: 8 }}
+              maintainVisibleContentPosition={KEEP_VISIBLE_POSITION}
+              keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+              keyboardShouldPersistTaps="handled"
+            >
+              {loadEarlierControl}
+              {rows.map((row, index) =>
+                renderRow(row, { enableJump: true, previous: rows[index - 1] }),
+              )}
+              {workingFooter}
+            </ScrollView>
+          ) : (
+            <FlatList
+              key={threadKey}
+              ref={scroll}
+              data={liveRows}
+              inverted
+              keyExtractor={(row) => row.item.id}
+              extraData={listExtraData}
+              style={{ flex: 1, marginTop: 8 }}
+              maintainVisibleContentPosition={KEEP_VISIBLE_POSITION}
+              scrollEventThrottle={16}
+              // dragging the thread down dismisses the keyboard following the
+              // finger on iOS (Android has no true interactive equivalent, so it
+              // dismisses on the drag instead); a tap that lands on a row's own
+              // control still fires that control instead of just closing the keyboard.
+              keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+              keyboardShouldPersistTaps="handled"
+              onScrollBeginDrag={() => {
+                userDragging.current = true;
+              }}
+              onScroll={(event) => {
+                listOffset.current = event.nativeEvent.contentOffset.y;
+                if (userDragging.current) updateUserScroll(event);
+              }}
+              onScrollEndDrag={(event) => {
+                updateUserScroll(event);
+                userDragging.current = false;
+              }}
+              onMomentumScrollEnd={updateUserScroll}
+              onLayout={() => performScroll(scrollBehavior.current.onLayout())}
+              onContentSizeChange={() => {
+                if (loadingOlderContent.current) {
+                  loadingOlderContent.current = false;
+                  return;
+                }
+                contentChanged.current();
+              }}
+              ListFooterComponent={loadEarlierControl}
+              ListHeaderComponent={workingFooter}
+              renderItem={({ item, index }) => renderRow(item, { previous: liveRows[index + 1] })}
+            />
+          )}
+          {!showPinnedPage && threadScrollState.detached ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={
+                threadScrollState.unread ? t("Jump to latest, new messages") : t("Jump to latest")
+              }
+              onPress={() => {
+                performScroll(scrollBehavior.current.jumpToLatest());
+                setThreadScrollState(scrollBehavior.current.state());
+              }}
+              style={{
+                position: "absolute",
+                left: "50%",
+                marginLeft: -21,
+                bottom: 12,
+                width: 42,
+                height: 42,
+                borderRadius: 21,
+                borderWidth: 1,
+                borderColor: native.fillPressed,
+                backgroundColor: native.fill,
+                boxShadow: shadowsForAppearance(colorScheme).floating,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <NativeSymbol
+                ios="arrow.down"
+                android="arrow-down"
+                size={18}
+                color={tokens.foreground}
+              />
+              {threadScrollState.unread ? (
+                <View
+                  style={{
+                    position: "absolute",
+                    top: 3,
+                    right: 3,
+                    width: 8,
+                    height: 8,
+                    borderRadius: 4,
+                    backgroundColor: tokens.primary,
+                  }}
+                />
+              ) : null}
+            </Pressable>
+          ) : null}
+        </View>
+        <View
           style={{
-            flex: 1,
-            backgroundColor: tokens.background,
-            paddingHorizontal: 14,
+            // Keyboard covers the nav bar / home indicator, so the safe-area
+            // inset would render as dead space between composer and keyboard.
+            // 8 px above the keyboard when it's open, 8 px above the
+            // safe area otherwise (floored so devices without a safe-area inset,
+            // e.g. Android's 3-button nav, still keep a little breathing room).
+            paddingBottom: keyboardVisible ? 8 : Math.max(insets.bottom + 8, 20),
           }}
         >
-          {error ? (
-            <Text style={{ color: tokens.mutedForeground, marginTop: 12 }}>{error}</Text>
-          ) : null}
-          {runError ? (
-            <Text style={{ color: tokens.destructive, marginTop: 12 }}>{runError}</Text>
-          ) : null}
-          <View style={{ flex: 1, position: "relative" }}>
-            {showPinnedPage ? (
-              <ScrollView
-                key={jumpScrollTarget.current ?? pinnedTarget?.messageId ?? threadKey}
-                ref={pinnedScroll}
-                style={{ flex: 1, marginTop: 8 }}
-                maintainVisibleContentPosition={KEEP_VISIBLE_POSITION}
-                keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
-                keyboardShouldPersistTaps="handled"
-              >
-                {loadEarlierControl}
-                {rows.map((row, index) =>
-                  renderRow(row, { enableJump: true, previous: rows[index - 1] }),
-                )}
-                {workingFooter}
-              </ScrollView>
-            ) : (
-              <FlatList
-                key={threadKey}
-                ref={scroll}
-                data={liveRows}
-                inverted
-                keyExtractor={(row) => row.item.id}
-                extraData={listExtraData}
-                style={{ flex: 1, marginTop: 8 }}
-                maintainVisibleContentPosition={keptPosition}
-                scrollEventThrottle={16}
-                // dragging the thread down dismisses the keyboard following the
-                // finger on iOS (Android has no true interactive equivalent, so it
-                // dismisses on the drag instead); a tap that lands on a row's own
-                // control still fires that control instead of just closing the keyboard.
-                keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
-                keyboardShouldPersistTaps="handled"
-                onScrollBeginDrag={() => {
-                  userDragging.current = true;
-                }}
-                onScroll={(event) => {
-                  listOffset.current = event.nativeEvent.contentOffset.y;
-                  if (userDragging.current) updateUserScroll(event);
-                }}
-                onScrollEndDrag={(event) => {
-                  updateUserScroll(event);
-                  userDragging.current = false;
-                }}
-                onMomentumScrollEnd={updateUserScroll}
-                onLayout={() => performScroll(scrollBehavior.current.onLayout())}
-                onContentSizeChange={() => {
-                  if (loadingOlderContent.current) {
-                    loadingOlderContent.current = false;
-                    return;
-                  }
-                  // A row the person just opened is holding its place: replay
-                  // the change once the hold ends, so it isn't lost.
-                  const held = holdingRowUntil.current - Date.now();
-                  clearTimeout(heldContentChange.current);
-                  if (held > 0) {
-                    heldContentChange.current = setTimeout(() => contentChanged.current(), held);
-                    return;
-                  }
-                  contentChanged.current();
-                }}
-                ListFooterComponent={loadEarlierControl}
-                ListHeaderComponent={workingFooter}
-                renderItem={({ item, index }) => renderRow(item, { previous: liveRows[index + 1] })}
-              />
-            )}
-            {!showPinnedPage && threadScrollState.detached ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={
-                  threadScrollState.unread ? t("Jump to latest, new messages") : t("Jump to latest")
-                }
-                onPress={() => {
-                  performScroll(scrollBehavior.current.jumpToLatest());
-                  setThreadScrollState(scrollBehavior.current.state());
-                }}
-                style={{
-                  position: "absolute",
-                  left: "50%",
-                  marginLeft: -21,
-                  bottom: 12,
-                  width: 42,
-                  height: 42,
-                  borderRadius: 21,
-                  borderWidth: 1,
-                  borderColor: native.fillPressed,
-                  backgroundColor: native.fill,
-                  boxShadow: shadowsForAppearance(colorScheme).floating,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <NativeSymbol
-                  ios="arrow.down"
-                  android="arrow-down"
-                  size={18}
-                  color={tokens.foreground}
-                />
-                {threadScrollState.unread ? (
-                  <View
-                    style={{
-                      position: "absolute",
-                      top: 3,
-                      right: 3,
-                      width: 8,
-                      height: 8,
-                      borderRadius: 4,
-                      backgroundColor: tokens.primary,
-                    }}
-                  />
-                ) : null}
-              </Pressable>
-            ) : null}
-          </View>
-          <View
-            style={{
-              // Keyboard covers the nav bar / home indicator, so the safe-area
-              // inset would render as dead space between composer and keyboard.
-              // 8 px above the keyboard when it's open, 8 px above the
-              // safe area otherwise (floored so devices without a safe-area inset,
-              // e.g. Android's 3-button nav, still keep a little breathing room).
-              paddingBottom: keyboardVisible ? 8 : Math.max(insets.bottom + 8, 20),
-            }}
-          >
-            {replyTarget ? (
-              // 7g: rises in on every appearance — the action sheet's "Reply" and
-              // a bubble swipe past the threshold both just set `replyTarget`.
-              <Animated.View
-                entering={
-                  reducedMotion
-                    ? FadeIn.duration(CHAT_MOTION.reducedFadeMs)
-                    : FadeInDown.duration(CHAT_MOTION.replyPreviewMs)
-                }
-                style={{
-                  marginTop: 12,
-                  borderRadius: 14,
-                  borderWidth: 1,
-                  borderColor: tokens.border,
-                  backgroundColor: tokens.card,
-                  paddingHorizontal: 12,
-                  paddingVertical: 10,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 8,
-                }}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: tokens.mutedForeground, fontSize: 12 }}>
-                    {t("Replying to")}
-                  </Text>
-                  <Text style={{ color: tokens.foreground, fontSize: 13 }} numberOfLines={1}>
-                    {previewMessageText(replyTarget.message)}
-                  </Text>
-                </View>
-                <Pressable
-                  accessibilityLabel={t("Cancel reply")}
-                  onPress={() => setReplyTarget(null)}
-                >
-                  <Text style={{ color: tokens.mutedForeground }}>✕</Text>
-                </Pressable>
-              </Animated.View>
-            ) : null}
-            {rewindTarget ? (
-              <View
-                style={{
-                  marginTop: 12,
-                  borderRadius: 14,
-                  borderWidth: 1,
-                  borderColor: tokens.border,
-                  backgroundColor: tokens.sidebar,
-                  paddingHorizontal: 12,
-                  paddingVertical: 10,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 8,
-                }}
-              >
-                <Text
-                  style={{ color: tokens.mutedForeground, fontSize: 12, flex: 1 }}
-                  numberOfLines={2}
-                >
-                  {`Editing message · ${rewindRemovedCount} messages after it will be removed`}
+          {replyTarget ? (
+            // 7g: rises in on every appearance — the action sheet's "Reply" and
+            // a bubble swipe past the threshold both just set `replyTarget`.
+            <Animated.View
+              entering={
+                reducedMotion
+                  ? FadeIn.duration(CHAT_MOTION.reducedFadeMs)
+                  : FadeInDown.duration(CHAT_MOTION.replyPreviewMs)
+              }
+              style={{
+                marginTop: 12,
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: tokens.border,
+                backgroundColor: tokens.card,
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: tokens.mutedForeground, fontSize: 12 }}>
+                  {t("Replying to")}
                 </Text>
-                <Pressable accessibilityLabel="Cancel edit" onPress={cancelRewind}>
-                  <Text style={{ color: tokens.mutedForeground }}>✕</Text>
-                </Pressable>
+                <Text style={{ color: tokens.foreground, fontSize: 13 }} numberOfLines={1}>
+                  {previewMessageText(replyTarget.message)}
+                </Text>
               </View>
-            ) : null}
-            {attachmentNotice ? (
-              <Text style={{ color: tokens.warning, marginTop: 12, fontSize: 13 }}>
-                {attachmentNotice}
+              <Pressable
+                accessibilityLabel={t("Cancel reply")}
+                onPress={() => setReplyTarget(null)}
+              >
+                <Text style={{ color: tokens.mutedForeground }}>✕</Text>
+              </Pressable>
+            </Animated.View>
+          ) : null}
+          {rewindTarget ? (
+            <View
+              style={{
+                marginTop: 12,
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: tokens.border,
+                backgroundColor: tokens.sidebar,
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <Text
+                style={{ color: tokens.mutedForeground, fontSize: 12, flex: 1 }}
+                numberOfLines={2}
+              >
+                {`Editing message · ${rewindRemovedCount} messages after it will be removed`}
               </Text>
-            ) : null}
-            {mentionOptions.length ? (
-              <View
-                testID="mention-picker"
-                style={{
-                  marginTop: 12,
-                  borderRadius: 14,
-                  borderWidth: 1,
-                  borderColor: tokens.border,
-                  backgroundColor: tokens.card,
-                  overflow: "hidden",
-                }}
-              >
-                {mentionOptions.map((mention) => (
-                  <Pressable
-                    key={mentionChipKey(mention)}
-                    accessibilityLabel={t("@{name}", { name: mention.name })}
-                    onPress={() => insertMention(mention)}
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "flex-start",
-                      gap: 10,
-                      paddingHorizontal: 14,
-                      paddingVertical: 10,
-                    }}
-                  >
-                    <MentionOptionIcon mention={mention} />
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={{ color: tokens.foreground, fontSize: 14 }}>
-                        @{mention.name}
-                      </Text>
-                      {mention.subtitle ? (
-                        <Text
-                          numberOfLines={1}
-                          style={{
-                            color: tokens.mutedForeground,
-                            fontSize: 12.5,
-                            marginTop: 2,
-                          }}
-                        >
-                          {mention.subtitle}
-                        </Text>
-                      ) : null}
-                    </View>
-                  </Pressable>
-                ))}
-              </View>
-            ) : null}
-            {slashSkillOptions.length || slashActionOptions.length ? (
-              <View
-                testID="slash-picker"
-                style={{
-                  marginTop: 12,
-                  borderRadius: 14,
-                  borderWidth: 1,
-                  borderColor: tokens.border,
-                  backgroundColor: tokens.card,
-                  overflow: "hidden",
-                }}
-              >
-                {slashSkillOptions.map((skill) => (
-                  <Pressable
-                    key={skill.id}
-                    accessibilityLabel={t("Skill {name}", { name: skill.name })}
-                    onPress={() => insertSkill(skill)}
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "flex-start",
-                      gap: 10,
-                      paddingHorizontal: 14,
-                      paddingVertical: 10,
-                    }}
-                  >
-                    <NativeSymbol
-                      ios="cube"
-                      android="cube-outline"
-                      size={16}
-                      color={tokens.mutedForeground}
-                    />
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={{ color: tokens.foreground, fontSize: 14 }}>{skill.name}</Text>
+              <Pressable accessibilityLabel="Cancel edit" onPress={cancelRewind}>
+                <Text style={{ color: tokens.mutedForeground }}>✕</Text>
+              </Pressable>
+            </View>
+          ) : null}
+          {attachmentNotice ? (
+            <Text style={{ color: tokens.warning, marginTop: 12, fontSize: 13 }}>
+              {attachmentNotice}
+            </Text>
+          ) : null}
+          {mentionOptions.length ? (
+            <View
+              testID="mention-picker"
+              style={{
+                marginTop: 12,
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: tokens.border,
+                backgroundColor: tokens.card,
+                overflow: "hidden",
+              }}
+            >
+              {mentionOptions.map((mention) => (
+                <Pressable
+                  key={mentionChipKey(mention)}
+                  accessibilityLabel={t("@{name}", { name: mention.name })}
+                  onPress={() => insertMention(mention)}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "flex-start",
+                    gap: 10,
+                    paddingHorizontal: 14,
+                    paddingVertical: 10,
+                  }}
+                >
+                  <MentionOptionIcon mention={mention} />
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={{ color: tokens.foreground, fontSize: 14 }}>@{mention.name}</Text>
+                    {mention.subtitle ? (
                       <Text
                         numberOfLines={1}
                         style={{
@@ -2688,436 +2564,476 @@ function Thread() {
                           marginTop: 2,
                         }}
                       >
-                        {truncateSlashDescription(skill.description)}
+                        {mention.subtitle}
                       </Text>
-                    </View>
-                  </Pressable>
-                ))}
-                {slashActionOptions.map((action) => (
-                  <Pressable
-                    key={action.id}
-                    accessibilityLabel={t(action.label)}
-                    onPress={() => runSlashAction(action.id)}
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 10,
-                      paddingHorizontal: 14,
-                      paddingVertical: 10,
-                    }}
-                  >
-                    <NativeSymbol
-                      ios="gearshape"
-                      android="settings-outline"
-                      size={16}
-                      color={tokens.mutedForeground}
-                    />
-                    <Text style={{ color: tokens.foreground, fontSize: 14 }}>
-                      {t(action.label)}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            ) : null}
+                    ) : null}
+                  </View>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+          {slashSkillOptions.length || slashActionOptions.length ? (
             <View
+              testID="slash-picker"
               style={{
-                marginTop: 16,
-                // 12 px side margins — the screen already gives the thread
-                // column 20 px (`paddingHorizontal` above), so this row claims
-                // back 8 of those to land on 12.
-                marginHorizontal: -8,
-                flexDirection: "row",
-                alignItems: "flex-end",
-                gap: 8,
+                marginTop: 12,
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: tokens.border,
+                backgroundColor: tokens.card,
+                overflow: "hidden",
               }}
             >
-              {dictation.dictating ? null : (
-                <ComposerAttachBubble
-                  ref={attachBubbleRef}
-                  open={attachSheetOpen}
-                  focused={composerFocused}
-                  onPress={showAttachMenu}
-                />
-              )}
-              <ComposerShell
-                style={{ flex: 1 }}
-                state={canSend ? "typing" : "idle"}
-                focused={composerFocused}
-                dictating={dictation.dictating}
-                dictationVolume={dictation.volume}
-                attachments={
-                  activePendingAttachments.length || linkPreview.view.status !== "idle" ? (
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      // The link preview takes the row's width, which a horizontal scroll view
-                      // never imposes on its children: measure it once and pass it down.
-                      onLayout={(event) => setAttachmentsRowWidth(event.nativeEvent.layout.width)}
-                    >
-                      <View style={{ flexDirection: "row", gap: 8 }}>
-                        {activePendingAttachments.map((attachment) => (
-                          <ComposerAttachment
-                            key={attachment.id}
-                            name={attachment.name}
-                            previewUri={attachment.previewUri}
-                            disabled={dictation.dictating}
-                            onRemove={() =>
-                              setPendingAttachments((current) =>
-                                current.filter((item) => item.id !== attachment.id),
-                              )
-                            }
-                          />
-                        ))}
-                        {linkPreview.view.status === "idle" ? null : (
-                          <ComposerLinkPreview
-                            width={attachmentsRowWidth}
-                            view={linkPreview.view}
-                            disabled={dictation.dictating}
-                            onRemove={() => linkPreview.controller.remove()}
-                          />
-                        )}
-                      </View>
-                    </ScrollView>
-                  ) : undefined
-                }
-                leading={
-                  selectedSkill || selectedMentions.length > 0 ? (
-                    <View
+              {slashSkillOptions.map((skill) => (
+                <Pressable
+                  key={skill.id}
+                  accessibilityLabel={t("Skill {name}", { name: skill.name })}
+                  onPress={() => insertSkill(skill)}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "flex-start",
+                    gap: 10,
+                    paddingHorizontal: 14,
+                    paddingVertical: 10,
+                  }}
+                >
+                  <NativeSymbol
+                    ios="cube"
+                    android="cube-outline"
+                    size={16}
+                    color={tokens.mutedForeground}
+                  />
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={{ color: tokens.foreground, fontSize: 14 }}>{skill.name}</Text>
+                    <Text
+                      numberOfLines={1}
                       style={{
-                        flexDirection: "row",
-                        flexWrap: "wrap",
-                        alignItems: "center",
-                        gap: 6,
-                        flexShrink: 1,
-                        maxWidth: "60%",
+                        color: tokens.mutedForeground,
+                        fontSize: 12.5,
+                        marginTop: 2,
                       }}
                     >
-                      {selectedSkill ? (
-                        <View
-                          testID="skill-chip"
-                          style={[composerChip, { backgroundColor: tokens.accent }]}
-                        >
-                          <NativeSymbol
-                            ios="cube"
-                            android="cube-outline"
-                            size={14}
-                            color={tokens.mutedForeground}
-                          />
-                          <Text
-                            numberOfLines={1}
-                            style={{
-                              color: tokens.foreground,
-                              flexShrink: 1,
-                              ...nativeTextStyle("capsule"),
-                            }}
-                          >
-                            {selectedSkill.name}
-                          </Text>
-                          <Pressable
-                            accessibilityLabel={t("Remove skill {name}", {
-                              name: selectedSkill.name,
-                            })}
-                            hitSlop={8}
-                            disabled={dictation.dictating}
-                            onPress={() => setSelectedSkill(null)}
-                          >
-                            <NativeSymbol
-                              ios="xmark"
-                              android="close"
-                              size={12}
-                              color={tokens.mutedForeground}
-                            />
-                          </Pressable>
-                        </View>
-                      ) : null}
-                      {selectedMentions.map((mention) => (
-                        <View
-                          key={mentionChipKey(mention)}
-                          testID="mention-chip"
-                          style={[composerChip, { backgroundColor: tokens.mentionChip }]}
-                        >
-                          <MentionChipIcon mention={mention} />
-                          <Text
-                            numberOfLines={1}
-                            style={{
-                              color: tokens.mentionChipForeground,
-                              flexShrink: 1,
-                              ...nativeTextStyle("capsule"),
-                            }}
-                          >
-                            {mention.name}
-                          </Text>
-                          <Pressable
-                            accessibilityLabel={t("Remove mention {name}", {
-                              name: mention.name,
-                            })}
-                            hitSlop={8}
-                            disabled={dictation.dictating}
-                            onPress={() =>
-                              setSelectedMentions((current) =>
-                                current.filter(
-                                  (selected) =>
-                                    mentionChipKey(selected) !== mentionChipKey(mention),
-                                ),
-                              )
-                            }
-                          >
-                            <NativeSymbol
-                              ios="xmark"
-                              android="close"
-                              size={12}
-                              color={tokens.mutedForeground}
-                            />
-                          </Pressable>
-                        </View>
+                      {truncateSlashDescription(skill.description)}
+                    </Text>
+                  </View>
+                </Pressable>
+              ))}
+              {slashActionOptions.map((action) => (
+                <Pressable
+                  key={action.id}
+                  accessibilityLabel={t(action.label)}
+                  onPress={() => runSlashAction(action.id)}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 10,
+                    paddingHorizontal: 14,
+                    paddingVertical: 10,
+                  }}
+                >
+                  <NativeSymbol
+                    ios="gearshape"
+                    android="settings-outline"
+                    size={16}
+                    color={tokens.mutedForeground}
+                  />
+                  <Text style={{ color: tokens.foreground, fontSize: 14 }}>{t(action.label)}</Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+          <View
+            style={{
+              marginTop: 16,
+              // 12 px side margins — the screen already gives the thread
+              // column 20 px (`paddingHorizontal` above), so this row claims
+              // back 8 of those to land on 12.
+              marginHorizontal: -8,
+              flexDirection: "row",
+              alignItems: "flex-end",
+              gap: 8,
+            }}
+          >
+            {dictation.dictating ? null : (
+              <ComposerAttachBubble
+                ref={attachBubbleRef}
+                open={attachSheetOpen}
+                focused={composerFocused}
+                onPress={showAttachMenu}
+              />
+            )}
+            <ComposerShell
+              style={{ flex: 1 }}
+              state={canSend ? "typing" : "idle"}
+              focused={composerFocused}
+              dictating={dictation.dictating}
+              dictationVolume={dictation.volume}
+              attachments={
+                activePendingAttachments.length || linkPreview.view.status !== "idle" ? (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    // The link preview takes the row's width, which a horizontal scroll view
+                    // never imposes on its children: measure it once and pass it down.
+                    onLayout={(event) => setAttachmentsRowWidth(event.nativeEvent.layout.width)}
+                  >
+                    <View style={{ flexDirection: "row", gap: 8 }}>
+                      {activePendingAttachments.map((attachment) => (
+                        <ComposerAttachment
+                          key={attachment.id}
+                          name={attachment.name}
+                          previewUri={attachment.previewUri}
+                          disabled={dictation.dictating}
+                          onRemove={() =>
+                            setPendingAttachments((current) =>
+                              current.filter((item) => item.id !== attachment.id),
+                            )
+                          }
+                        />
                       ))}
+                      {linkPreview.view.status === "idle" ? null : (
+                        <ComposerLinkPreview
+                          width={attachmentsRowWidth}
+                          view={linkPreview.view}
+                          disabled={dictation.dictating}
+                          onRemove={() => linkPreview.controller.remove()}
+                        />
+                      )}
                     </View>
-                  ) : undefined
-                }
-                trailing={
-                  dictation.dictating ? undefined : (
-                    <>
-                      {dictation.available ? (
-                        <ComposerButton
-                          label={t("Dictate")}
-                          haptic="none"
-                          variant="bare"
-                          disabled={sending}
-                          onPress={dictation.start}
-                        >
-                          <NativeSymbol
-                            ios="mic"
-                            android="mic-outline"
-                            size={20}
-                            color={tokens.foreground}
-                          />
-                        </ComposerButton>
-                      ) : null}
-                      {canSend ? (
-                        <ComposerButton
-                          label={t("Send")}
-                          haptic="send"
-                          arrive
-                          disabled={sending}
-                          onPress={() => void send()}
-                        >
-                          <NativeSymbol
-                            ios="arrow.up"
-                            android="arrow-up"
-                            size={16}
-                            color={tokens.primaryForeground}
-                          />
-                        </ComposerButton>
-                      ) : null}
-                      {working ? (
-                        <ComposerButton
-                          label={t("Stop")}
-                          haptic="commit"
-                          disabled={sending}
-                          contour={
-                            <StopContour size={sizes.composerAction + 4} color={stopContourColor} />
-                          }
-                          onPress={() => void stop()}
-                        >
-                          <NativeSymbol
-                            ios="stop.fill"
-                            android="stop"
-                            size={13}
-                            color={tokens.primaryForeground}
-                          />
-                        </ComposerButton>
-                      ) : null}
-                    </>
-                  )
-                }
-                dictationCancel={
-                  dictation.dictating ? (
-                    <ComposerButton
-                      label={t("Cancel dictation")}
-                      haptic="none"
-                      variant="bare"
-                      onPress={dictation.cancel}
-                    >
-                      <NativeSymbol
-                        ios="xmark"
-                        android="close"
-                        size={16}
-                        color={tokens.foreground}
-                      />
-                    </ComposerButton>
-                  ) : undefined
-                }
-                dictationConfirm={
-                  dictation.dictating ? (
-                    <>
-                      {working ? (
-                        <ComposerButton
-                          label={t("Stop")}
-                          haptic="commit"
-                          disabled={sending}
-                          contour={
-                            <StopContour size={sizes.composerAction + 4} color={stopContourColor} />
-                          }
-                          onPress={() => void stop()}
-                        >
-                          <NativeSymbol
-                            ios="stop.fill"
-                            android="stop"
-                            size={13}
-                            color={tokens.primaryForeground}
-                          />
-                        </ComposerButton>
-                      ) : null}
-                      <ComposerButton
-                        label={t("Insert dictation")}
-                        haptic="none"
-                        onPress={insertDictation}
+                  </ScrollView>
+                ) : undefined
+              }
+              leading={
+                selectedSkill || selectedMentions.length > 0 ? (
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      flexWrap: "wrap",
+                      alignItems: "center",
+                      gap: 6,
+                      flexShrink: 1,
+                      maxWidth: "60%",
+                    }}
+                  >
+                    {selectedSkill ? (
+                      <View
+                        testID="skill-chip"
+                        style={[composerChip, { backgroundColor: tokens.accent }]}
                       >
                         <NativeSymbol
-                          ios="checkmark"
-                          android="checkmark"
+                          ios="cube"
+                          android="cube-outline"
+                          size={14}
+                          color={tokens.mutedForeground}
+                        />
+                        <Text
+                          numberOfLines={1}
+                          style={{
+                            color: tokens.foreground,
+                            flexShrink: 1,
+                            ...nativeTextStyle("capsule"),
+                          }}
+                        >
+                          {selectedSkill.name}
+                        </Text>
+                        <Pressable
+                          accessibilityLabel={t("Remove skill {name}", {
+                            name: selectedSkill.name,
+                          })}
+                          hitSlop={8}
+                          disabled={dictation.dictating}
+                          onPress={() => setSelectedSkill(null)}
+                        >
+                          <NativeSymbol
+                            ios="xmark"
+                            android="close"
+                            size={12}
+                            color={tokens.mutedForeground}
+                          />
+                        </Pressable>
+                      </View>
+                    ) : null}
+                    {selectedMentions.map((mention) => (
+                      <View
+                        key={mentionChipKey(mention)}
+                        testID="mention-chip"
+                        style={[composerChip, { backgroundColor: tokens.mentionChip }]}
+                      >
+                        <MentionChipIcon mention={mention} />
+                        <Text
+                          numberOfLines={1}
+                          style={{
+                            color: tokens.mentionChipForeground,
+                            flexShrink: 1,
+                            ...nativeTextStyle("capsule"),
+                          }}
+                        >
+                          {mention.name}
+                        </Text>
+                        <Pressable
+                          accessibilityLabel={t("Remove mention {name}", {
+                            name: mention.name,
+                          })}
+                          hitSlop={8}
+                          disabled={dictation.dictating}
+                          onPress={() =>
+                            setSelectedMentions((current) =>
+                              current.filter(
+                                (selected) => mentionChipKey(selected) !== mentionChipKey(mention),
+                              ),
+                            )
+                          }
+                        >
+                          <NativeSymbol
+                            ios="xmark"
+                            android="close"
+                            size={12}
+                            color={tokens.mutedForeground}
+                          />
+                        </Pressable>
+                      </View>
+                    ))}
+                  </View>
+                ) : undefined
+              }
+              trailing={
+                dictation.dictating ? undefined : (
+                  <>
+                    {dictation.available ? (
+                      <ComposerButton
+                        label={t("Dictate")}
+                        haptic="none"
+                        variant="bare"
+                        disabled={sending}
+                        onPress={dictation.start}
+                      >
+                        <NativeSymbol
+                          ios="mic"
+                          android="mic-outline"
+                          size={20}
+                          color={tokens.foreground}
+                        />
+                      </ComposerButton>
+                    ) : null}
+                    {canSend ? (
+                      <ComposerButton
+                        label={t("Send")}
+                        haptic="send"
+                        arrive
+                        disabled={sending}
+                        onPress={() => void send()}
+                      >
+                        <NativeSymbol
+                          ios="arrow.up"
+                          android="arrow-up"
                           size={16}
                           color={tokens.primaryForeground}
                         />
                       </ComposerButton>
-                    </>
-                  ) : undefined
-                }
-              >
-                {dictation.dictating ? (
-                  <DictationPreview
-                    prefix={dictation.previewPrefix}
-                    finalText={dictation.finalText}
-                    interimText={dictation.interimText}
-                  />
-                ) : (
-                  <TextInput
-                    ref={textInputRef}
-                    value={draft}
-                    onChangeText={updateDraft}
-                    accessibilityLabel={
-                      displayName ? t("Message {name}", { name: displayName }) : t("Message")
+                    ) : null}
+                    {working ? (
+                      <ComposerButton
+                        label={t("Stop")}
+                        haptic="commit"
+                        disabled={sending}
+                        contour={
+                          <StopContour size={sizes.composerAction + 4} color={stopContourColor} />
+                        }
+                        onPress={() => void stop()}
+                      >
+                        <NativeSymbol
+                          ios="stop.fill"
+                          android="stop"
+                          size={13}
+                          color={tokens.primaryForeground}
+                        />
+                      </ComposerButton>
+                    ) : null}
+                  </>
+                )
+              }
+              dictationCancel={
+                dictation.dictating ? (
+                  <ComposerButton
+                    label={t("Cancel dictation")}
+                    haptic="none"
+                    variant="bare"
+                    onPress={dictation.cancel}
+                  >
+                    <NativeSymbol ios="xmark" android="close" size={16} color={tokens.foreground} />
+                  </ComposerButton>
+                ) : undefined
+              }
+              dictationConfirm={
+                dictation.dictating ? (
+                  <>
+                    {working ? (
+                      <ComposerButton
+                        label={t("Stop")}
+                        haptic="commit"
+                        disabled={sending}
+                        contour={
+                          <StopContour size={sizes.composerAction + 4} color={stopContourColor} />
+                        }
+                        onPress={() => void stop()}
+                      >
+                        <NativeSymbol
+                          ios="stop.fill"
+                          android="stop"
+                          size={13}
+                          color={tokens.primaryForeground}
+                        />
+                      </ComposerButton>
+                    ) : null}
+                    <ComposerButton
+                      label={t("Insert dictation")}
+                      haptic="none"
+                      onPress={insertDictation}
+                    >
+                      <NativeSymbol
+                        ios="checkmark"
+                        android="checkmark"
+                        size={16}
+                        color={tokens.primaryForeground}
+                      />
+                    </ComposerButton>
+                  </>
+                ) : undefined
+              }
+            >
+              {dictation.dictating ? (
+                <DictationPreview
+                  prefix={dictation.previewPrefix}
+                  finalText={dictation.finalText}
+                  interimText={dictation.interimText}
+                />
+              ) : (
+                <TextInput
+                  ref={textInputRef}
+                  value={draft}
+                  onChangeText={updateDraft}
+                  accessibilityLabel={
+                    displayName ? t("Message {name}", { name: displayName }) : t("Message")
+                  }
+                  onKeyPress={(event) => {
+                    if (
+                      event.nativeEvent.key === "Backspace" &&
+                      draft.length === 0 &&
+                      (selectedSkill !== null || selectedMentions.length > 0)
+                    ) {
+                      removeLastChip();
                     }
-                    onKeyPress={(event) => {
-                      if (
-                        event.nativeEvent.key === "Backspace" &&
-                        draft.length === 0 &&
-                        (selectedSkill !== null || selectedMentions.length > 0)
-                      ) {
-                        removeLastChip();
-                      }
-                    }}
-                    placeholder={
-                      selectedSkill || selectedMentions.length
-                        ? undefined
-                        : displayName
-                          ? t("Message {name}", { name: displayName })
-                          : t("Message…")
-                    }
-                    placeholderTextColor={tokens.mutedForeground}
-                    selectionColor={tokens.foreground}
-                    cursorColor={tokens.foreground}
-                    keyboardAppearance={colorScheme}
-                    multiline
-                    textAlignVertical="center"
-                    blurOnSubmit={false}
-                    onFocus={() => setComposerFocused(true)}
-                    onBlur={() => setComposerFocused(false)}
-                    style={{
-                      color: tokens.foreground,
-                      // 5 lines max, then the field scrolls internally. iOS's
-                      // multiline box is border-box (Yoga), so its 11 pt of
-                      // vertical padding below counts against this height too —
-                      // without adding it back, only about 4 lines actually fit.
-                      maxHeight: Platform.OS === "ios" ? 5 * 22 + 2 * 11 : 110,
-                      writingDirection: "auto",
-                      ...nativeTextStyle("composer"),
-                      // A multiline iOS field puts all of a line height's extra
-                      // leading above the glyphs, so the text sat low in the
-                      // capsule; the font's own line box centres it. The row is
-                      // `sizes.composerTarget` (44) tall, and one composer line is
-                      // 22, so 11 on each side centres it there.
-                      ...(Platform.OS === "ios"
-                        ? { lineHeight: undefined, paddingVertical: 11 }
-                        : { paddingVertical: 4 }),
-                    }}
-                  />
-                )}
-              </ComposerShell>
-            </View>
+                  }}
+                  placeholder={
+                    selectedSkill || selectedMentions.length
+                      ? undefined
+                      : displayName
+                        ? t("Message {name}", { name: displayName })
+                        : t("Message…")
+                  }
+                  placeholderTextColor={tokens.mutedForeground}
+                  selectionColor={tokens.foreground}
+                  cursorColor={tokens.foreground}
+                  keyboardAppearance={colorScheme}
+                  multiline
+                  textAlignVertical="center"
+                  blurOnSubmit={false}
+                  onFocus={() => setComposerFocused(true)}
+                  onBlur={() => setComposerFocused(false)}
+                  style={{
+                    color: tokens.foreground,
+                    // 5 lines max, then the field scrolls internally. iOS's
+                    // multiline box is border-box (Yoga), so its 11 pt of
+                    // vertical padding below counts against this height too —
+                    // without adding it back, only about 4 lines actually fit.
+                    maxHeight: Platform.OS === "ios" ? 5 * 22 + 2 * 11 : 110,
+                    writingDirection: "auto",
+                    ...nativeTextStyle("composer"),
+                    // A multiline iOS field puts all of a line height's extra
+                    // leading above the glyphs, so the text sat low in the
+                    // capsule; the font's own line box centres it. The row is
+                    // `sizes.composerTarget` (44) tall, and one composer line is
+                    // 22, so 11 on each side centres it there.
+                    ...(Platform.OS === "ios"
+                      ? { lineHeight: undefined, paddingVertical: 11 }
+                      : { paddingVertical: 4 }),
+                  }}
+                />
+              )}
+            </ComposerShell>
           </View>
-          <Modal
-            visible={botActionsOpen}
-            transparent
-            animationType="fade"
-            onRequestClose={() => setBotActionsOpen(false)}
+        </View>
+        <Modal
+          visible={botActionsOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setBotActionsOpen(false)}
+        >
+          <View
+            style={{
+              flex: 1,
+              justifyContent: "center",
+              padding: 24,
+              backgroundColor: tokens.overlay,
+            }}
           >
-            <View
+            <Pressable
+              accessibilityLabel={t("Cancel")}
+              onPress={() => setBotActionsOpen(false)}
               style={{
-                flex: 1,
-                justifyContent: "center",
-                padding: 24,
-                backgroundColor: tokens.overlay,
+                position: "absolute",
+                top: 0,
+                right: 0,
+                bottom: 0,
+                left: 0,
+              }}
+            />
+            <View
+              accessibilityViewIsModal
+              style={{
+                backgroundColor: tokens.popover,
+                borderRadius: 24,
+                paddingVertical: 12,
               }}
             >
-              <Pressable
-                accessibilityLabel={t("Cancel")}
-                onPress={() => setBotActionsOpen(false)}
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  right: 0,
-                  bottom: 0,
-                  left: 0,
-                }}
-              />
-              <View
-                accessibilityViewIsModal
-                style={{
-                  backgroundColor: tokens.popover,
-                  borderRadius: 24,
-                  paddingVertical: 12,
-                }}
-              >
-                {botActions.map((action) => (
-                  <Pressable
-                    key={action.text}
-                    accessibilityRole="button"
-                    onPress={() => {
-                      setBotActionsOpen(false);
-                      action.onPress();
-                    }}
+              {botActions.map((action) => (
+                <Pressable
+                  key={action.text}
+                  accessibilityRole="button"
+                  onPress={() => {
+                    setBotActionsOpen(false);
+                    action.onPress();
+                  }}
+                  style={{
+                    minHeight: 56,
+                    justifyContent: "center",
+                    paddingHorizontal: 24,
+                  }}
+                >
+                  <Text
                     style={{
-                      minHeight: 56,
-                      justifyContent: "center",
-                      paddingHorizontal: 24,
+                      color: action.destructive ? tokens.destructive : tokens.popoverForeground,
+                      fontSize: 16,
                     }}
                   >
-                    <Text
-                      style={{
-                        color: action.destructive ? tokens.destructive : tokens.popoverForeground,
-                        fontSize: 16,
-                      }}
-                    >
-                      {action.text}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
+                    {action.text}
+                  </Text>
+                </Pressable>
+              ))}
             </View>
-          </Modal>
-          {markdownPreview && artifactTarget ? (
-            <MarkdownArtifactPreview
-              threadTarget={artifactTarget}
-              target={markdownPreview}
-              onClose={() => setMarkdownPreview(null)}
-            />
-          ) : null}
-          {tablePreview ? (
-            <TablePreview table={tablePreview} onClose={() => setTablePreview(null)} />
-          ) : null}
-        </KeyboardAvoidingView>
-      </ThreadGrowthContext.Provider>
+          </View>
+        </Modal>
+        {markdownPreview && artifactTarget ? (
+          <MarkdownArtifactPreview
+            threadTarget={artifactTarget}
+            target={markdownPreview}
+            onClose={() => setMarkdownPreview(null)}
+          />
+        ) : null}
+        {tablePreview ? (
+          <TablePreview table={tablePreview} onClose={() => setTablePreview(null)} />
+        ) : null}
+      </KeyboardAvoidingView>
     </TableActionsProvider>
   );
 }
@@ -3907,7 +3823,6 @@ const ItemRow = memo(function ItemRow({
   members?: MobileSnapshot["members"];
   isNew: boolean;
   canAnswer: boolean;
-  queued?: boolean;
   viewerUserId?: string;
   onAnswer?: (card: CardTarget, answer: string, edits?: SpawnBotEdits) => Promise<void>;
   readOnly?: boolean;
@@ -4338,21 +4253,15 @@ type TaskCardState = "running" | "done" | "failed" | "cancelled";
 
 /** The run's state as one symbol: the shape tells it apart without colour, the colour only confirms. */
 const ROUTINE_STATE_SYMBOL = {
-  queued: { ios: "clock", android: "time-outline" },
   running: { ios: "circle.dotted", android: "ellipse-outline" },
-  completed: { ios: "checkmark.circle.fill", android: "checkmark-circle" },
   failed: { ios: "xmark.circle.fill", android: "close-circle" },
   cancelled: { ios: "stop.circle", android: "stop-circle-outline" },
 } as const;
 
 /** How far the last lines of a cut preview fade into its host. */
 const PREVIEW_FADE_HEIGHT = 56;
-/** A cut routine report: eight lines of the 23 pt body. */
-const REPORT_PREVIEW_HEIGHT = 8 * 23;
 /** A cut task result: five lines. */
 const TASK_PREVIEW_HEIGHT = 5 * 23;
-/** Past this many runs, a group opens in a sheet instead of in place. */
-const GROUP_INLINE_MAX = 8;
 
 function runSession(item: RoutineItem): OpenedSession {
   return {
@@ -4438,107 +4347,6 @@ function RoutineFailureLine({
         </Text>
       ) : null}
     </Pressable>
-  );
-}
-
-/**
- * A row's content opening under its header (a routine's report, a group's
- * runs), its height animated on the UI thread. The header stays where the
- * person tapped it: while it moves, the list keeps the row above in place
- * (see `ThreadGrowthContext`). At rest the content takes its own height, so a
- * row opening inside it flows through.
- */
-function Expandable({
-  open,
-  fromTap,
-  children,
-}: {
-  open: boolean;
-  /** Set by the header's tap: only a change the person asked for is animated. */
-  fromTap: { current: boolean };
-  children: ReactNode;
-}) {
-  const growth = useContext(ThreadGrowthContext);
-  const rowId = useContext(ThreadRowContext);
-  const parentHeight = useContext(ExpandableHeightContext);
-  const reducedMotion = useChatReducedMotion();
-  const [mounted, setMounted] = useState(open);
-  // Always a number: the content is laid out on its own (a clipped parent
-  // would squeeze it), and the box follows it.
-  const height = useSharedValue(0);
-  const contentHeight = useRef(0);
-  const animating = useRef(open);
-
-  // A box opening inside this one grows this one by as much, in the same
-  // frame, so nothing below it is cut while it moves.
-  useAnimatedReaction(
-    () => height.value,
-    (current, previous) => {
-      if (previous == null || !parentHeight) return;
-      parentHeight.value = parentHeight.value + (current - previous);
-    },
-  );
-
-  const settle = (closed: boolean) => {
-    fromTap.current = false;
-    animating.current = false;
-    if (closed) {
-      // Measured afresh on the next opening: kept, the same height read as
-      // "nothing changed" and the box stayed shut.
-      contentHeight.current = 0;
-      setMounted(false);
-    }
-  };
-
-  const animateTo = (target: number, closing: boolean) => {
-    const moves = fromTap.current;
-    if (moves) growth?.hold(rowId);
-    animating.current = true;
-    const duration = moves && !reducedMotion ? 240 : 0;
-    runOnUI(() => {
-      "worklet";
-      height.value = withTiming(
-        target,
-        { duration, easing: CHAT_MOTION.botEnterEasing },
-        (finished) => {
-          if (finished) runOnJS(settle)(closing);
-        },
-      );
-    })();
-  };
-
-  useEffect(() => {
-    if (open) {
-      if (!mounted) {
-        animating.current = true;
-        setMounted(true);
-      }
-    } else if (mounted) {
-      animateTo(0, true);
-    }
-  }, [open]);
-
-  const style = useAnimatedStyle(() => ({ height: height.value }));
-  if (!mounted) return null;
-  return (
-    <Animated.View style={[{ overflow: "hidden" }, style]}>
-      <ExpandableHeightContext.Provider value={height}>
-        <View
-          style={{ position: "absolute", top: 0, left: 0, right: 0 }}
-          onLayout={(event) => {
-            const next = event.nativeEvent.layout.height;
-            if (Math.abs(next - contentHeight.current) < 1) return;
-            contentHeight.current = next;
-            if (!open) return;
-            // Opening, or the content settling while it opens: follow it.
-            if (animating.current) animateTo(next, false);
-            else if (Math.abs(height.value - next) >= 1) height.value = next;
-          }}
-        >
-          {children}
-        </View>
-      </ExpandableHeightContext.Provider>
-    </Animated.View>
   );
 }
 
@@ -4640,419 +4448,6 @@ function ClippedPreview({
         </>
       )}
     </Pressable>
-  );
-}
-
-/** The bot a run then messaged, drawn by the run: a receipt at rest, the centred line when open. */
-interface RoutineHandoff {
-  receipt: ReactNode;
-  avatars: ReactNode;
-  label: string;
-  onPress?: () => void;
-}
-
-/** How long a page sheet takes to slide away before the next screen can push. */
-const SHEET_DISMISS_MS = 350;
-
-function afterSheet(close: () => void, open: () => void): () => void {
-  return () => {
-    close();
-    setTimeout(open, SHEET_DISMISS_MS);
-  };
-}
-
-function routineTime(createdAt: string | undefined, withDay: boolean): string {
-  if (!createdAt) return "";
-  const date = new Date(createdAt);
-  if (Number.isNaN(date.getTime())) return "";
-  const locale = dateLocaleForUi();
-  const time = date.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
-  return withDay ? `${date.toLocaleDateString(locale, { weekday: "short" })} ${time}` : time;
-}
-
-/** A group's span: its hours on one day, its days across several ("Mon – Wed", "Sep 22 – 28"). */
-function routineRange(first: string | undefined, last: string | undefined): string {
-  if (!first || !last) return "";
-  if (sameLocalDay(first, last))
-    return `${routineTime(first, false)} – ${routineTime(last, false)}`;
-  const locale = dateLocaleForUi();
-  const start = new Date(first);
-  const end = new Date(last);
-  const overAWeek = end.getTime() - start.getTime() > 6 * 86_400_000;
-  const day = (date: Date) =>
-    overAWeek
-      ? date.toLocaleDateString(locale, { month: "short", day: "numeric" })
-      : date.toLocaleDateString(locale, { weekday: "short" });
-  return `${day(start)} – ${day(end)}`;
-}
-
-function sameLocalDay(left: string | undefined, right: string | undefined): boolean {
-  if (!left || !right) return true;
-  return new Date(left).toDateString() === new Date(right).toDateString();
-}
-
-function RoutineRunLine({
-  run,
-  queued = false,
-  handoff,
-  onOpen,
-  nested = false,
-  withDay = false,
-}: {
-  run: RoutineLineRun;
-  queued?: boolean;
-  handoff?: RoutineHandoff;
-  onOpen: (run: RoutineLineRun) => void;
-  nested?: boolean;
-  withDay?: boolean;
-}) {
-  const tokens = mobileTokens();
-  const colorScheme = useResolvedAppearance();
-  const { t } = useI18n();
-  const { item } = run;
-  const { state, report, subscribed, opensOnItsOwn } = routineLine(run, queued);
-  const failed = state === "failed";
-  const expands = Boolean(report || handoff);
-  const [manualExpanded, setManualExpanded] = useState<boolean | null>(null);
-  const expanded = expands && (manualExpanded ?? opensOnItsOwn);
-  const fromTap = useRef(false);
-  // At accessibility text sizes the time and status move under the name.
-  const stacked = PixelRatio.getFontScale() > 1.35;
-  const symbolColor =
-    state === "completed" ? tokens.success : failed ? tokens.destructive : tokens.mutedForeground;
-  const statusLabel = {
-    queued: t("Queued"),
-    running: t("Running"),
-    completed: t("Completed"),
-    failed: t("Failed"),
-    cancelled: t("Cancelled"),
-  }[state];
-  const statusStyle = {
-    color: failed ? tokens.destructive : tokens.mutedForeground,
-    ...nativeTextStyle("label", { weight: 500 }),
-  };
-  const time = routineTime(item.ts, withDay);
-  const trailing = (
-    <>
-      {time && !nested ? (
-        <Text
-          style={{
-            color: tokens.mutedForeground,
-            ...nativeTextStyle("time"),
-            fontVariant: ["tabular-nums"],
-          }}
-        >
-          {time}
-        </Text>
-      ) : null}
-      {state === "running" ? (
-        <ShimmerText style={statusStyle}>{statusLabel}</ShimmerText>
-      ) : (
-        <Text style={statusStyle}>{statusLabel}</Text>
-      )}
-    </>
-  );
-  const symbol = ROUTINE_STATE_SYMBOL[state];
-  const accessibilityLabel = [
-    item.name,
-    statusLabel,
-    time,
-    subscribed ? t("Notifications on") : null,
-    handoff?.label,
-  ]
-    .filter(Boolean)
-    .join(", ");
-  return (
-    <View>
-      <Pressable
-        accessible
-        accessibilityRole="button"
-        accessibilityLabel={accessibilityLabel}
-        accessibilityState={expands ? { expanded } : undefined}
-        onPress={() => {
-          if (!expands) {
-            onOpen(run);
-            return;
-          }
-          fromTap.current = true;
-          setManualExpanded(!expanded);
-        }}
-        // A thumb scrolling the thread past the line does not press it.
-        unstable_pressDelay={130}
-        style={({ pressed }) => ({
-          minHeight: 44,
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 10,
-          marginHorizontal: -8,
-          paddingHorizontal: 8,
-          borderRadius: radii.row,
-          backgroundColor: pressed ? tokens.secondary : "transparent",
-        })}
-      >
-        <NativeSymbol
-          ios={symbol.ios}
-          android={symbol.android}
-          size={nested ? 14 : 18}
-          color={symbolColor}
-        />
-        <View style={{ flex: 1, gap: 2 }}>
-          {/* The name is never truncated: it wraps before the trailing slots move.
-              Inside a group every line is the same routine, so it says when instead. */}
-          <Text
-            style={{ color: tokens.foreground, ...nativeTextStyle("rowName", { weight: 500 }) }}
-          >
-            {nested && time ? time : item.name}
-          </Text>
-          {stacked ? <View style={{ flexDirection: "row", gap: 8 }}>{trailing}</View> : null}
-        </View>
-        {stacked ? null : trailing}
-        {/* Fixed slots, kept when empty, so the columns line up down a run of routines. */}
-        <View style={{ width: sizes.receipt, alignItems: "center" }}>
-          {handoff && !expanded ? handoff.receipt : null}
-        </View>
-        <View style={{ width: 14, alignItems: "center" }}>
-          {subscribed ? (
-            <NativeSymbol
-              ios="bell"
-              android="notifications-outline"
-              size={14}
-              color={tokens.mutedForeground}
-            />
-          ) : null}
-        </View>
-        <View style={{ width: 14, alignItems: "center" }}>
-          {expands ? <Disclosure open={expanded} /> : null}
-        </View>
-      </Pressable>
-      <Expandable open={expanded} fromTap={fromTap}>
-        <View
-          style={{
-            marginStart: nested ? 6 : 9,
-            paddingStart: nested ? 20 : 18,
-            borderStartWidth: 1,
-            borderStartColor: tokens.outline,
-            marginBottom: 8,
-            gap: 10,
-          }}
-        >
-          {report ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t("Report, {name}", { name: item.name })}
-              accessibilityHint={t("Opens in full")}
-              onPress={() => onOpen(run)}
-              unstable_pressDelay={130}
-            >
-              <ClippedPreview
-                maxHeight={REPORT_PREVIEW_HEIGHT}
-                fadeColor={tokens.background}
-                onOpen={() => onOpen(run)}
-                accessibilityLabel={t("Report, {name}", { name: item.name })}
-              >
-                <ChatMarkdown
-                  allowImages={false}
-                  palette={tokens}
-                  colorScheme={colorScheme}
-                  bleed={18}
-                >
-                  {truncateMarkdownForRender(report)}
-                </ChatMarkdown>
-              </ClippedPreview>
-            </Pressable>
-          ) : null}
-          {handoff ? (
-            <Interstitial
-              accessibilityLabel={handoff.label}
-              avatars={handoff.avatars}
-              onPress={handoff.onPress}
-            >
-              {handoff.label}
-            </Interstitial>
-          ) : null}
-        </View>
-      </Expandable>
-    </View>
-  );
-}
-
-/** iOS's disclosure: a forward chevron that turns down when open. */
-function Disclosure({ open }: { open: boolean }) {
-  const tokens = mobileTokens();
-  const reducedMotion = useChatReducedMotion();
-  const turn = useSharedValue(open ? 1 : 0);
-  useEffect(() => {
-    turn.value = reducedMotion
-      ? open
-        ? 1
-        : 0
-      : withTiming(open ? 1 : 0, { duration: 240, easing: CHAT_MOTION.botEnterEasing });
-  }, [open, reducedMotion, turn]);
-  const style = useAnimatedStyle(() => ({ transform: [{ rotate: `${turn.value * 90}deg` }] }));
-  return (
-    <Animated.View style={style}>
-      <NativeSymbol
-        ios="chevron.forward"
-        android="chevron-forward-outline"
-        size={14}
-        color={tokens.mutedForeground}
-      />
-    </Animated.View>
-  );
-}
-
-/**
- * Several consecutive routine runs of a bot, with no message between them,
- * as one line: how many, over what span, and whether any was cancelled
- * (failed and running runs are never folded, they keep their own line).
- * Opening it lists each run as a line of its own; a long group opens in a
- * sheet, by day.
- */
-export function RoutineGroup({
-  runs,
-  handoffFor,
-  onOpen,
-}: {
-  runs: RoutineLineRun[];
-  handoffFor: (run: RoutineLineRun) => RoutineHandoff | undefined;
-  onOpen: (run: RoutineLineRun) => void;
-}) {
-  const tokens = mobileTokens();
-  const { t } = useI18n();
-  const [open, setOpen] = useState(false);
-  const fromTap = useRef(false);
-  const first = runs[0]!;
-  const last = runs.at(-1)!;
-  const spansDays = !sameLocalDay(first.item.ts, last.item.ts);
-  const range = routineRange(first.item.ts, last.item.ts);
-  const cancelled = runs.filter((run) => run.item.finished?.status === "cancelled").length;
-  const statusLabel = cancelled ? t("{count} cancelled", { count: cancelled }) : t("Completed");
-  const countLabel = t("{count} runs", { count: runs.length });
-  const handoffs = runs.map(handoffFor);
-  const receipts = new Set(
-    runs.map(({ sentTo }) => (sentTo?.peer.kind === "bot" ? sentTo.peer.botId : undefined)),
-  );
-  const receipt =
-    receipts.size === 1 && !receipts.has(undefined) ? handoffs.find(Boolean)?.receipt : null;
-  const inSheet = runs.length > GROUP_INLINE_MAX;
-  const lines = (
-    <View style={{ marginStart: 28 }}>
-      {runs.map((run, index) => (
-        <RoutineRunLine
-          key={run.item.id}
-          run={run}
-          handoff={handoffs[index]}
-          onOpen={onOpen}
-          nested
-          withDay={spansDays}
-        />
-      ))}
-    </View>
-  );
-  return (
-    <View>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={[first.item.name, countLabel, range, statusLabel].join(", ")}
-        accessibilityState={{ expanded: open }}
-        onPress={() => {
-          fromTap.current = true;
-          setOpen(!open);
-        }}
-        unstable_pressDelay={130}
-        style={({ pressed }) => ({
-          minHeight: 44,
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 10,
-          marginHorizontal: -8,
-          paddingHorizontal: 8,
-          borderRadius: radii.row,
-          backgroundColor: pressed ? tokens.secondary : "transparent",
-        })}
-      >
-        <NativeSymbol
-          ios={ROUTINE_STATE_SYMBOL.completed.ios}
-          android={ROUTINE_STATE_SYMBOL.completed.android}
-          size={18}
-          color={tokens.success}
-        />
-        {/* A group is one routine: its name, and how many earlier runs it holds. */}
-        <Text
-          style={{
-            flex: 1,
-            color: tokens.foreground,
-            ...nativeTextStyle("rowName", { weight: 500 }),
-          }}
-        >
-          {`${first.item.name} `}
-          <Text style={{ color: tokens.mutedForeground }}>{countLabel}</Text>
-        </Text>
-        <Text
-          style={{
-            color: tokens.mutedForeground,
-            ...nativeTextStyle("time"),
-            fontVariant: ["tabular-nums"],
-          }}
-        >
-          {range}
-        </Text>
-        <Text
-          style={{ color: tokens.mutedForeground, ...nativeTextStyle("label", { weight: 500 }) }}
-        >
-          {statusLabel}
-        </Text>
-        <View style={{ width: sizes.receipt, alignItems: "center" }}>{receipt}</View>
-        <View style={{ width: 14, alignItems: "center" }}>
-          <Disclosure open={open && !inSheet} />
-        </View>
-      </Pressable>
-      <Expandable open={open && !inSheet} fromTap={fromTap}>
-        {lines}
-      </Expandable>
-      {open && inSheet ? (
-        <PreviewSheet title={first.item.name} onClose={() => setOpen(false)}>
-          <View style={{ paddingTop: 8 }}>
-            {runs.map((run, index) => {
-              const dayStarts = index === 0 || !sameLocalDay(runs[index - 1]!.item.ts, run.item.ts);
-              const handoff = handoffs[index];
-              const close = () => setOpen(false);
-              return (
-                <View key={run.item.id}>
-                  {dayStarts ? (
-                    <Text
-                      style={{
-                        marginTop: index === 0 ? 8 : 16,
-                        marginBottom: 4,
-                        color: tokens.mutedForeground,
-                        ...nativeTextStyle("label", { weight: 500 }),
-                      }}
-                    >
-                      {threadTimeMarkerLabel(run.item.ts, {
-                        locale: dateLocaleForUi(),
-                        today: t("Today"),
-                        yesterday: t("Yesterday"),
-                        withTime: false,
-                      })}
-                    </Text>
-                  ) : null}
-                  <RoutineRunLine
-                    run={run}
-                    handoff={
-                      handoff?.onPress
-                        ? { ...handoff, onPress: afterSheet(close, handoff.onPress) }
-                        : handoff
-                    }
-                    onOpen={(opened) => afterSheet(close, () => onOpen(opened))()}
-                    nested
-                  />
-                </View>
-              );
-            })}
-          </View>
-        </PreviewSheet>
-      ) : null}
-    </View>
   );
 }
 

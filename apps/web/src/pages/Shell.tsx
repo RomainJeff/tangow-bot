@@ -45,7 +45,6 @@ import {
   isActive,
   isRunTerminalEvent,
   projectThreadView,
-  queuedRunIdsOf,
   reorderBotTo,
   resolveComposerSendPlan,
   runThreadSubscription,
@@ -1606,7 +1605,6 @@ export function ShellPage() {
   const workingRuns = currentRuns.filter((run) => isWorking(run, view));
   const transcriptRunning = workingRuns.length > 0;
   const composerRunning = currentRuns.some((run) => isActive(run.status));
-  const queuedRunIds = useMemo(() => queuedRunIdsOf(currentRuns), [currentRuns]);
   const runError = threadRunError(activeSnapshot, dismissedRunErrorIds);
   const displayedRunError = !sendError ? runError : null;
   const displayedRunErrorId = displayedRunError ? (activeSnapshot?.run?.id ?? null) : null;
@@ -2882,7 +2880,6 @@ export function ShellPage() {
                 loadingOlder={loadingOlder}
                 viewerUserId={userId}
                 running={transcriptRunning}
-                queuedRunIds={queuedRunIds}
                 workingBots={workingBots}
                 workingStartedAt={workingStartedAt}
                 onLoadOlder={loadOlder}

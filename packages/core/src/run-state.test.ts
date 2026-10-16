@@ -1,6 +1,6 @@
 import * as fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { assertTransition, canTransition, queuedRunIdsOf } from "./run-state.js";
+import { assertTransition, canTransition } from "./run-state.js";
 
 describe("run state machine", () => {
   it("allows takeover resume onto a lease", () => {
@@ -28,16 +28,5 @@ describe("run state machine", () => {
         },
       ),
     );
-  });
-});
-
-describe("queuedRunIdsOf", () => {
-  it("lists the queued runs, and keeps one empty set while none is queued", () => {
-    const runs = [
-      { id: "run_1", status: "queued" },
-      { id: "run_2", status: "running" },
-    ];
-    expect([...queuedRunIdsOf(runs)]).toEqual(["run_1"]);
-    expect(queuedRunIdsOf([runs[1]!])).toBe(queuedRunIdsOf([]));
   });
 });
