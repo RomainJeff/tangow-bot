@@ -818,6 +818,51 @@ describe("projectThreadView rows", () => {
     ]);
   });
 
+  it("keeps a routine's words above the message its run sent to another bot", () => {
+    const usage = { inputTokens: 1, outputTokens: 1 };
+    const entries = linkEntries("ord", [
+      {
+        botId: "bot_ada",
+        runId: "run_o",
+        type: "routine.started",
+        payload: {
+          sessionId: "ses_o",
+          routineId: "rtn_digest",
+          name: "Digest",
+          trigger: "routine",
+          scheduledAt: at(0),
+          model,
+        },
+      },
+      { type: "user.message", payload: { blocks: text("Anything new?"), source: "app" } },
+      {
+        botId: "bot_ada",
+        type: "bot.message.sent",
+        payload: {
+          originSessionId: "ses_o",
+          to: { kind: "bot", botId: "bot_bea", name: "Bea" },
+          text: "Invoice due",
+          intent: "result",
+          hop: 1,
+          exchangeId: "ord-2",
+        },
+      },
+      {
+        botId: "bot_ada",
+        runId: "run_o",
+        type: "routine.finished",
+        payload: { usage, status: "completed", result: "Invoice due Thursday." },
+      },
+    ]);
+    expect(
+      projectThreadView(entries).rows.map((row) => [row.item.kind, row.routine?.kind ?? null]),
+    ).toEqual([
+      ["message", null],
+      ["routine", "message"],
+      ["botMessage", null],
+    ]);
+  });
+
   it("stacks failure lines of different routines, and marks only a new day between them", () => {
     const failure = (n: number, routineId: string, ts: string) =>
       [
