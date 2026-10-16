@@ -34,8 +34,8 @@ test("resolves a pending ask from the main composer", async ({ page }, testInfo)
     await expect(page.getByPlaceholder(/Message/)).toBeVisible({ timeout: 15_000 });
   }
   await expect(prompt).toBeVisible({ timeout: 15_000 });
-  // The card offers its own affordances, but the composer is a first-class answer channel too.
-  await expect(page.getByRole("button", { name: "Send it" })).toBeVisible();
+  // The card offers its own field, but the composer is a first-class answer channel too.
+  await expect(page.getByRole("textbox", { name: "Answer", exact: true })).toBeVisible();
   await captureScreenshot(page, testInfo, "ask-composer-pending");
 
   // Answer in the main composer, not the card. Prose avoids any scripted-runtime trigger so the
@@ -64,7 +64,7 @@ test("resolves a pending ask from the main composer", async ({ page }, testInfo)
 
   // The card no longer repeats the reply: exactly one instance of the prose (the bubble).
   await expect(page.getByText("Go with the northern one.", { exact: true })).toHaveCount(1);
-  await expect(page.getByRole("button", { name: "Send it" })).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "Answer", exact: true })).toHaveCount(0);
   await expect(page.getByRole("group", { name: /^Your answer/ })).toHaveCount(0);
   await expect(
     page.getByText("on it. i will work this in the background and come back with a result.", {

@@ -43,38 +43,41 @@ test("renders tappable choice buttons and submits the offered action id", async 
   await expect(toronto).toBeVisible();
   await expect(lisbon).toBeVisible();
 
-  // Options render as wrapping quick-reply capsules inside the shared options container;
-  // these short labels share one row at this width.
-  const optionsContainer = page.getByTestId("ask-options").filter({ has: berlin });
-  await expect(optionsContainer).toBeVisible();
+  // Options are full-width tiles in a group named by the question, Other… last, one per row.
+  const options = page.getByRole("group", { name: "Which city should I use?" });
+  await expect(options.getByRole("button")).toHaveText([
+    "Berlin",
+    "Seoul",
+    "Toronto",
+    "Lisbon",
+    "Other…",
+  ]);
   const berlinBox = await berlin.boundingBox();
   const seoulBox = await seoul.boundingBox();
-  const torontoBox = await toronto.boundingBox();
-  expect(berlinBox).toBeTruthy();
-  expect(seoulBox).toBeTruthy();
-  expect(torontoBox).toBeTruthy();
-  expect(Math.abs(berlinBox!.y - seoulBox!.y)).toBeLessThan(2);
-  expect(Math.abs(seoulBox!.y - torontoBox!.y)).toBeLessThan(2);
-  expect(seoulBox!.x).toBeGreaterThan(berlinBox!.x + berlinBox!.width - 2);
+  expect(seoulBox!.y).toBeGreaterThan(berlinBox!.y + berlinBox!.height);
+  expect(Math.abs(berlinBox!.width - seoulBox!.width)).toBeLessThan(1);
+  await page.setViewportSize({ width: 1440, height: 900 });
   await captureScreenshot(page, testInfo, "choice-card");
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(berlin).toBeVisible();
   await expect(lisbon).toBeVisible();
-  // On a phone the capsules wrap rather than overflow the card.
-  const narrowOptions = await optionsContainer.boundingBox();
+  // On a phone the tiles stay inside the card.
+  const narrowOptions = await options.boundingBox();
   const narrowLisbon = await lisbon.boundingBox();
-  expect(narrowOptions).toBeTruthy();
-  expect(narrowLisbon).toBeTruthy();
   expect(narrowLisbon!.x + narrowLisbon!.width).toBeLessThanOrEqual(
     narrowOptions!.x + narrowOptions!.width + 1,
   );
-  await expect(lisbon).toBeEnabled();
   await captureScreenshot(page, testInfo, "choice-card-narrow");
 
-  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.setViewportSize({ width: 1440, height: 900 });
   const answered = page.waitForRequest((request) => request.url().includes("/rpc/threads/answer"));
+  // A tap selects and holds the choice before it is sent.
   await seoul.click();
+  await expect(seoul).toHaveAttribute("aria-pressed", "true");
+  await options.screenshot({
+    path: testInfo.outputPath("choice-card-hold.png"),
+    animations: "disabled",
+  });
   expect((await answered).postDataJSON().json.answer).toBe("choice-2");
 
   await expect(page.getByRole("group", { name: "Your answer: Seoul" })).toBeVisible({

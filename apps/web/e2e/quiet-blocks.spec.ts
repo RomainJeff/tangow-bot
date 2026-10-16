@@ -97,6 +97,17 @@ test("framed blocks capture a pending approval and an answered question as norma
   await expect(questionMessage.getByTestId("message-bubble-frame")).toBeVisible();
   await expect(questionMessage.locator(".ms-10.max-w-block")).toHaveCount(0);
 
+  for (const theme of ["dark", "light"] as const) {
+    await switchTheme(page, theme);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await expect(berlin).toBeVisible();
+    await captureScreenshot(page, testInfo, `quiet-blocks-question-${theme}`);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await questionMessage.scrollIntoViewIfNeeded();
+    await captureScreenshot(page, testInfo, `quiet-blocks-question-${theme}-narrow`);
+    await page.setViewportSize({ width: 1440, height: 900 });
+  }
+
   await berlin.click();
   const answered = page.getByRole("group", { name: "Your answer: Berlin" });
   await expect(answered).toBeVisible({ timeout: 30_000 });
