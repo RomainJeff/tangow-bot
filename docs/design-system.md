@@ -75,6 +75,9 @@ colours. An `rgba` in a slot is a bug.
 | `overlay` | `rgba(20, 20, 22, 0.45)` | `rgba(4, 4, 5, 0.62)` | |
 | `scrollbar` | `#C8C8C4` | `#2A2A2E` | |
 | `scrollbarHover` | `#A8A8A4` | `#414147` | |
+| `optionRing` | `#EAEAEA` [ink 9% on `surface`] | `#3B3B3D` [white 16%] | option tile at rest |
+| `optionRingHover` | `#D9D9D9` [16%] | `#4E4E4F` [24%] | option tile under the pointer, open answer field |
+| `pressed` | `#EDEDEB` (`secondary`) | `#333335` (`outline`) | a control being pressed; 40% under the pointer |
 
 `botColors` is user data and never changes with the skin.
 
@@ -152,7 +155,7 @@ Unframed cards have **no** shadow: `bg-surface` and a `border` hairline.
 | --- | --- | --- |
 | `ease` | `cubic-bezier(0.32, 0.72, 0, 1)` | every transition (`ease-quiet`) |
 | `arrive` | 240 ms, `translateY(6px)` → 0, 0 → 1 opacity | a message, block or capsule arriving (`animate-arrive`) |
-| `press` | 160 ms, `scale(0.96)` capsules (`rk-press`), `scale(0.94)` round controls (`rk-press-round`) | pressing |
+| `press` | 160 ms, `scale(0.96)` capsules (`rk-press`), `scale(0.94)` round controls (`rk-press-round`), `scale(0.985)` option tiles (`rk-press-tile`) | pressing |
 | `hover` | 160 ms | colour and fill on hover (`duration-(--duration-hover)`) |
 | `breathe` | 5.6 s | the idle avatar |
 | `caret` | 1 s step-end | the typing caret |
@@ -170,6 +173,8 @@ touch target in the capsule), `composerAction 36` (the send / stop disc).
 Composer attachments (both devices): `composerAttachmentThumb 64` (the image
 thumbnail / file-tile height), `composerAttachmentTile 200` (max width of a
 file tile before its name truncates), `composerRemove 22` (the × disc).
+Question card: `selectedRing 1.5` (the ring of a chosen option or of an answer
+field being typed in).
 Link preview card: `linkLargeImageRatio` 1.91 (the large format's picture, width over
 height) and `linkCard 360` (its width on web, capped by the column),
 `linkThumb 56` (the compact format's thumbnail), `linkIconInset 8` (the space around
@@ -183,7 +188,8 @@ namespace in `packages/ui-web/src/styles.css` — `--spacing-hover-icon`,
 `--spacing-composer-attachment-thumb`, `--spacing-composer-attachment-tile`,
 `--spacing-composer-remove`, `--spacing-link-card`, `--spacing-link-thumb`,
 `--spacing-link-icon-inset`, `--spacing-link-photo-max` — so `size-composer-icon`, `h-capsule` and
-`w-message` resolve to the token instead of an arbitrary value. The rest are
+`w-message` resolve to the token instead of an arbitrary value. `selectedRing`
+is mapped to `--ring-width-selected`, so `ring-selected` draws it. The rest are
 spent through a `size` prop.
 
 ## Primitives
@@ -195,7 +201,7 @@ barrel, carries `data-slot="<name>"` on its root, merges a `className` through
 the remaining native props of its root element, so a screen can attach a
 `data-testid`, an `id` or an `aria-*` without a wrapper.
 
-The plain classes the primitives apply — `rk-press`, `rk-press-round`, `rk-bar`,
+The plain classes the primitives apply — `rk-press`, `rk-press-round`, `rk-press-tile`, `rk-bar`,
 `rk-dot`, `rk-shimmer` — live in Tailwind's `components` layer, so a utility
 passed through `className` always wins over them.
 
@@ -276,6 +282,30 @@ second shadow inside it.
 
 Used by: approval asks and bot questions (`ask`, `ask_user`, `choice`), each
 rendered as a normal bot row.
+
+### OptionTile
+
+One answer of a question card (`ask_user`, a legacy choice): a full-width
+`<button>` in `rounded-card`, `px-4 py-3.5`, at least 52 px (`min-h-13`), on a
+1 px `optionRing` ring with no fill; under the pointer the ring takes
+`optionRingHover` over `pressed` at 40%, and a press settles to 0.985
+(`rk-press-tile`). The label is `text-question` medium, plain text with
+`dir="auto"`, wrapping. Props: `selected?` (a `ring-selected` `foreground` ring
+and a check, announced with `aria-pressed`), `filled?` (the answer on its way:
+`chatUser` over `--duration-fill`), `trailing?` (replaces the check, such as
+Other…'s pencil). Tiles stack 8 apart (`gap-2`) in a `<fieldset>` named by the
+question.
+
+`OptionField` is a typed answer in the same shape: a `<form>` on an
+`optionRingHover` ring that turns `ring-selected` `foreground` while typing,
+holding an `<input>` (its native props) and a primary `roundIconSm` send.
+Props: `sendLabel`, `canSend`, `onSend`, `filled?` (as on a tile). Digit
+shortcuts never reach it.
+
+A question card once answered or no longer waiting is not a `FramedBlock` but
+`AskSettled`: one muted `text-meta` line (a check, or a stop and "No longer
+active") inset by 14, then the answer in a `UserBubble` named "Your answer: …"
+with no message actions.
 
 ### Surface
 
@@ -794,7 +824,7 @@ props land on the input or textarea.
 - **Nothing loops continuously except the avatar of a bot that is working**, and
   its idle breathing.
 - `prefers-reduced-motion: reduce` stops `animate-arrive`, `rk-press`,
-  `rk-press-round`, `rk-bar`, `rk-dot`, `rk-shimmer`, the avatar morph and body
+  `rk-press-round`, `rk-press-tile`, `rk-bar`, `rk-dot`, `rk-shimmer`, the avatar morph and body
   and the working eye loop, and freezes every `useElapsed` duration. **The idle
   eye blink keeps running** on both avatar variants — it is the one motion the
   contract preserves — and the working glow stays, static.

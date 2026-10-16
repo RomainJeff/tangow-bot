@@ -61,6 +61,8 @@ export {
   type MessageRowProps,
 } from "./message-row.js";
 export { ModelThinkingOptions } from "./model-thinking-options.js";
+export { OptionField, type OptionFieldProps } from "./option-field.js";
+export { OptionTile, type OptionTileProps } from "./option-tile.js";
 export {
   type DataAttributes,
   ReasoningDisclosure,
