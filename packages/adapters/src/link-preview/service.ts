@@ -213,7 +213,7 @@ export async function resolveLinkPreviewDetailed(
       if (device) return { preview: resolvedOf(device), deviceReadable: false, refused };
       return { preview: null, deviceReadable, refused };
     }
-    const entry = await storeResult(deps, scope, keyHash, result, now, undefined);
+    const entry = await storeResult(deps, scope, keyHash, result, now);
     if (device) return { preview: resolvedOf(device), deviceReadable: false, refused };
     return entry ? { preview: resolvedOf(entry), deviceReadable, refused } : NOTHING;
   } catch (error) {
@@ -304,7 +304,7 @@ async function storeResult(
   keyHash: string,
   result: Extract<LinkPreviewReadResult, { ok: true }>,
   now: Date,
-  source: "device" | undefined,
+  source?: "device",
   cache = true,
 ): Promise<Extract<CachedLinkPreview, { status: "ok" }> | null> {
   let image: ResolvedLinkPreview["image"];

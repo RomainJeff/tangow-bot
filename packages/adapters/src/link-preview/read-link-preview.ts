@@ -148,13 +148,13 @@ async function previewFromHead(
     icon = await readImage(head.iconUrl, deps, fail);
     if (!icon && deps.signal?.aborted) return cutShort("aborted");
   }
-  const format =
-    decideLinkPreviewFormat({
-      kind: "html",
-      article: true,
-      title: head.title,
-      image: pageImage,
-    }) ?? "compact";
+  const format = decideLinkPreviewFormat({
+    kind: "html",
+    article: true,
+    title: head.title,
+    image: pageImage,
+  });
+  if (!format) return fail("page", new LinkPreviewError("not_article"));
   const image = pageImage ?? icon;
   return {
     ok: true,
@@ -168,7 +168,8 @@ async function previewFromHead(
 
 /**
  * The preview of a page whose head the sender's device read, for a link the site refuses the
- * server. Like any page, it gets a card only if its head declares an article. The head is untrusted: it goes through the same parser as a fetched page (title
+ * server. Like any page, it gets a card only if its head declares an article. The head is
+ * untrusted: it goes through the same parser as a fetched page (title
  * sanitized, image and icon resolved against the link and a valid `<base>`), and the server
  * fetches and re-encodes the image itself, so nothing remote ever reaches a reader. The device's
  * Content-Type, when it gave one, supplies the charset as it would for a page fetched here. Never

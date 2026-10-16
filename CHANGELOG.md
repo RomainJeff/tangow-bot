@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Changed
 
-- Link preview cards now appear only for articles and photos; links to documents, tools and home pages stay plain links, and so does an article from a site that blocks servers (a paywalled one) unless the sender's app can read it, on web, desktop and iPhone.
+- Link previews now appear only for articles and photos; links to documents, tools and home pages stay plain links.
 
 ### 2026-10-16
 
