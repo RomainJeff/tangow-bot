@@ -1,4 +1,9 @@
-import type { AdapterContext, ConnectorTool, ToolCallTrace } from "@rakazo/adapter-kit";
+import type {
+  AdapterContext,
+  AgentRunRequest,
+  ConnectorTool,
+  ToolCallTrace,
+} from "@rakazo/adapter-kit";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const fakeAgentState = vi.hoisted(() => ({
@@ -97,6 +102,10 @@ vi.mock("@earendil-works/pi-agent-core", () => ({
             name,
             arguments: {},
           }));
+          const invoked = this.tools.find((tool) => tool.name === fakeAgentState.invoke.name);
+          for (const call of calls) {
+            if (call.name === invoked?.name) await invoked.execute(call.id, {});
+          }
           this.emit({
             type: "turn_end",
             message: { role: "assistant", content: calls },
@@ -301,6 +310,7 @@ vi.mock("./pi-openai-compatible-provider.js", () => ({
   registerOpenAiCompatibleRuntime: (models: unknown) => models,
 }));
 
+import { approvalPausedToolResult } from "./approval-effect.js";
 import { builtinAgentTools } from "./builtin-tools.js";
 import { decideWithin } from "./decision.js";
 import { FakeDecisionProvider } from "./fake-decision.js";
@@ -762,7 +772,11 @@ describe("Pi connector tool dispatch", () => {
 
   describe("check-in reminder", () => {
     const steps = (count: number) => Array.from({ length: count }, () => ["web_search"]);
-    const checkIns = async (turns: string[][], freeTextIsPrivate = true) => {
+    const checkIns = async (
+      turns: string[][],
+      freeTextIsPrivate = true,
+      tooling: Pick<AgentRunRequest, "tools" | "executeTool"> = { tools: [] },
+    ) => {
       fakeAgentState.mode = "turns";
       fakeAgentState.turns = turns;
       for await (const _event of new PiAgentRuntime().run(
@@ -773,9 +787,9 @@ describe("Pi connector tool dispatch", () => {
           prompt: "dig into this",
           instructions: "Report with message_user.",
           history: [],
-          tools: [],
           model: { provider: "test", id: "dispatch-test-model" },
           freeTextIsPrivate,
+          ...tooling,
         },
         {
           operationId: "check-in",
@@ -815,6 +829,14 @@ describe("Pi connector tool dispatch", () => {
 
     it("leaves a run whose text is not private alone", async () => {
       expect(await checkIns(steps(40), false)).toEqual([]);
+    });
+
+    it("does not remind a run that pauses on the call crossing the threshold", async () => {
+      const tooling = {
+        tools: [destinationTool],
+        executeTool: async () => approvalPausedToolResult(),
+      };
+      expect(await checkIns([...steps(29), ["destination_write"]], true, tooling)).toEqual([]);
     });
   });
 

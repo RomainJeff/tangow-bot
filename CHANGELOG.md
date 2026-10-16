@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Changed
 
-- On a long task, your bot now sends you a progress update at least every 30 steps instead of working silently until it finishes, on web, desktop and iPhone.
+- On a long task, your bot now checks in with a short progress update instead of working silently until it finishes, on web, desktop and iPhone.
 
 #### Fixed
 
