@@ -1,6 +1,6 @@
 ---
 name: setup-pstack
-description: Configure which models pstack uses per role and at what budget. Detects your available models and writes a model config that overrides the skill defaults. Use for /setup-pstack, "configure pstack models", "pstack budget", or changing pstack's model choices.
+description: Configure which models pstack uses per role and at what budget. Detects your available models, writes a model config that overrides the skill defaults, and writes the poteto-agent and comment-sicko subagents at the matching effort. Use for /setup-pstack, "configure pstack models", "pstack budget", or changing pstack's model choices.
 ---
 
 # Setup pstack
@@ -77,10 +77,28 @@ alwaysApply: true
 
 Cursor default slugs map from the Claude table as `opus` to `claude-opus-5-5-max`, `sonnet` to `grok-4.7-xhigh-fast`, and `fable` to `gpt-5.6-sol-max`.
 
-### 6. Confirm
+### 6. Write the subagent definitions (Claude Code only)
 
-Tell the user the config was written and that it applies to new sessions. Re-running this skill updates it.
+Claude Code's `Agent` tool takes a `model` but no effort, so poteto-mode picks effort through `subagent_type`, and `no-comments` spawns `comment-sicko`. Write those agents from the chosen budget. Skip this step in Cursor.
 
-### 7. Offer a verification skill (optional)
+Write them to the `agents/` directory beside the `skills/` directory pstack is installed in: `<project>/.claude/agents/` for a project install, `~/.claude/agents/` for a user install. Replace `{{POTETO_MODE_SKILL}}` with the path of poteto-mode's `SKILL.md` as a delegate reads it: `.claude/skills/poteto-mode/SKILL.md` for a project install, the absolute path for a user install. Overwrite each file whole so re-runs stay idempotent, and never touch other files in that directory.
+
+Each file is YAML frontmatter, a blank line, then the body read verbatim from `references/`.
+
+| File | `description` | `model` | `effort` max / balanced / economy | Body |
+|---|---|---|---|---|
+| `poteto-agent.md` | General-purpose delegate for poteto-mode playbook steps. Use for code-writing delegates and ad-hoc helpers spawned inside a poteto-mode playbook. Routed workflow skills (how, why, interrogate, reflect, swarm) pick their own subagent_type. | none | none | `poteto-agent-body.md` |
+| `poteto-agent-medium.md` | poteto-mode delegate at `<effort>` effort. Use for feature/refactoring, bug-fix, perf-issue, hillclimb, how/why/reflect/swarm roles. | `feature, refactoring` | `medium` / `low` / `low` | `poteto-agent-body.md` |
+| `poteto-agent-high.md` | poteto-mode delegate at `<effort>` effort. Use for judgment and prose, hardest tasks. | `judgment and prose` | `high` / `high` / `medium` | `poteto-agent-body.md` |
+| `poteto-agent-xhigh.md` | poteto-mode delegate at `<effort>` effort. Use for steps the user explicitly asks to run at maximum effort. | `hardest tasks` | `xhigh` / `xhigh` / `high` | `poteto-agent-body.md` |
+| `comment-sicko.md` | A deranged comment-hater that savors deletion and condemns workaround code. | `judgment and prose` | `high` / `medium` / `low` | `comment-sicko-body.md` |
+
+`name` is the file name without `.md`. A `model` column names the role whose step 5 value the agent uses as its default; the per-call `model` still overrides it. Omit `model` when that value is `inherit`. The tier names stay fixed because poteto-mode routes by them, so in `economy` `poteto-agent-high` runs at medium effort.
+
+### 7. Confirm
+
+Tell the user the config and the agents were written, where, and that they apply to new sessions. Re-running this skill updates both.
+
+### 8. Offer a verification skill (optional)
 
 Check whether the project has a way to drive the real app for proof (a `verify-*` skill, or an existing harness). If not, offer once: "want a project-local verification skill, so agents can drive the app the way a user does and prove changes work? I can generate one with /create-verification-skill." On yes, invoke `/create-verification-skill` (resolves wherever pstack is installed: workspace, user, or plugin). On no, move on without pushing.
