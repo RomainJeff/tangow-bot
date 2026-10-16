@@ -111,7 +111,7 @@ export async function previewLinkForComposer(
         )
       : await resolveLinkPreviewDetailed(service, scope, input.url, deadline);
     ephemeralKey = ephemeralImageKey;
-    // A refusal with no fallback card shows nothing, but still tells the device it may read.
+    // A refusal has no card to show, but still tells the device it may read.
     if (!preview) return deviceReadable ? { format: "compact", deviceReadable: true } : null;
     let thumbnail: string | undefined;
     if (preview.image) {

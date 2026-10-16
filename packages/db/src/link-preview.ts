@@ -45,7 +45,7 @@ export function linkPreviewDeviceKeyHash(
 
 /**
  * Where an entry came from. `restricted`: the site refused the server (401, 402, 403, 451), so the
- * entry is a fallback card or a bare failure, and the sender's device may still read the page.
+ * entry is a bare failure, and the sender's device may still read the page.
  * `device`: the head was read by the sender's device and the server fetched the image; such an
  * entry is stored under that person's own key (`linkPreviewDeviceKeyHash`). Absent means
  * `server`.
@@ -58,6 +58,8 @@ export type CachedLinkPreview =
       format: "large" | "photo" | "compact";
       title?: string;
       image?: { key: string; width: number; height: number; bytes: number; fit?: "contain" };
+      /** The page declared itself an article. Absent for a photo, which needs no declaration. */
+      article?: true;
       source?: LinkPreviewCacheSource;
     }
   | { status: "failed"; source?: LinkPreviewCacheSource };
@@ -71,6 +73,7 @@ type CacheRow = {
   imageHeight: number | null;
   imageBytes: number;
   imageFit: string | null;
+  article: boolean | null;
   source: string;
 };
 
@@ -83,10 +86,13 @@ function toCached(row: CacheRow): CachedLinkPreview | null {
   if (row.status === "failed") return { status: "failed", source };
   if (row.status !== "ok") return null;
   if (row.format !== "large" && row.format !== "photo" && row.format !== "compact") return null;
+  // A page card written before cards were limited to articles never recorded the signal: a miss, so the page is read again.
+  if (row.format !== "photo" && row.article !== true) return null;
   return {
     status: "ok",
     source,
     format: row.format,
+    ...(row.article === true ? { article: true as const } : {}),
     ...(row.title ? { title: row.title } : {}),
     ...(row.imageKey && row.imageWidth && row.imageHeight
       ? {
@@ -139,6 +145,7 @@ export async function storeLinkPreviewCache(
           imageHeight: null,
           imageBytes: 0,
           imageFit: null,
+          article: null,
           source: entry.source ?? "server",
         }
       : {
@@ -150,6 +157,7 @@ export async function storeLinkPreviewCache(
           imageHeight: entry.image?.height ?? null,
           imageBytes: entry.image?.bytes ?? 0,
           imageFit: entry.image?.fit ?? null,
+          article: entry.article ?? null,
           source: entry.source ?? "server",
         };
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {

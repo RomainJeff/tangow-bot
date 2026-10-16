@@ -1050,9 +1050,11 @@ model LinkPreviewCache {
   imageBytes  Int      @default(0)
   /// "contain" when the image is the site's icon (drawn whole); null otherwise.
   imageFit    String?
-  /// "server" (read by the server), "restricted" (the site refused the server: a fallback card or
-  /// a bare failure) or "device" (the head was read by the sender's device and the server fetched
-  /// the image).
+  /// True when the page declared itself an article. Null on a photo, and on a page card written
+  /// before cards were limited to articles (read again as a cache miss).
+  article     Boolean?
+  /// "server" (read by the server), "restricted" (the site refused the server: a bare failure) or
+  /// "device" (the head was read by the sender's device and the server fetched the image).
   source      String   @default("server")
   createdAt   DateTime @default(now())
   expiresAt   DateTime

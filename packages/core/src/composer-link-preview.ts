@@ -79,7 +79,6 @@ export function acceptPreviewThumbnail(value: string | undefined): string | unde
 
 export type ComposerLinkPreviewView =
   | { status: "idle" }
-  | { status: "loading"; url: string }
   | {
       status: "ready";
       url: string;
@@ -187,9 +186,9 @@ export function createComposerLinkPreview(
   };
 
   /**
-   * The server's draft first. When it says the site refused the server and this device can read
-   * pages, the device reads the head and the server is asked again with it; the better card
-   * replaces the fallback. Any failure on the way keeps what is already shown, silently.
+   * The server's draft first: a card only when it holds one. When it says the site refused the
+   * server and this device can read pages, the device reads the head and the server is asked
+   * again with it. Nothing shows while a read runs, and any failure leaves nothing on screen.
    */
   const load = async (url: string, signal: AbortSignal) => {
     let first: LinkPreviewDraft | null = null;
@@ -199,11 +198,8 @@ export function createComposerLinkPreview(
       first = null;
     }
     if (signal.aborted) return;
-    const firstView = readyView(url, first);
     const readPageHead = deps.readPageHead;
-    if (!first?.deviceReadable || !readPageHead) return show(firstView ?? IDLE);
-    // A fallback card shows while the device reads; with none, the loading card stays.
-    if (firstView) show(firstView);
+    if (!first?.deviceReadable || !readPageHead) return show(readyView(url, first) ?? IDLE);
     let upgraded: ComposerLinkPreviewView | undefined;
     try {
       const page = await readPageHead(url, signal);
@@ -214,7 +210,7 @@ export function createComposerLinkPreview(
       upgraded = undefined;
     }
     if (signal.aborted) return;
-    show(upgraded ?? firstView ?? IDLE);
+    show(upgraded ?? IDLE);
   };
 
   const start = (url: string) => {
@@ -222,7 +218,6 @@ export function createComposerLinkPreview(
     abort = controller;
     timer = setTimeout(() => {
       timer = undefined;
-      show({ status: "loading", url });
       void load(url, controller.signal);
     }, debounceMs);
   };

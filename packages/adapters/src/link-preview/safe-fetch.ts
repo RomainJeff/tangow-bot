@@ -232,8 +232,8 @@ async function readResource(
     if (response.status === 429) throw new LinkPreviewError("rate_limited");
     if (response.status === 408 || response.status >= 500)
       throw new LinkPreviewError("server_error");
-    // A site that refuses an unknown reader (paywall, bot wall): the page is not read, but the
-    // caller may still draw a card from the address. Only the page: a refused image is just missing.
+    // A site that refuses an unknown reader (paywall, bot wall): the page is not read; the
+    // caller may let the sender's device read it. Only the page: a refused image is just missing.
     if (mode === "page" && ACCESS_DENIED_STATUSES.has(response.status)) {
       throw new LinkPreviewError("access_denied");
     }

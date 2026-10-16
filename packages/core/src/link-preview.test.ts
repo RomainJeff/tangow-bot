@@ -10,7 +10,6 @@ import {
   normalizePreviewUrl,
   previewSiteInitial,
   previewSiteLabel,
-  previewTitleFromUrl,
   sanitizePreviewTitle,
   textWithoutPreviewedLinkLine,
 } from "./link-preview.js";
@@ -463,67 +462,5 @@ describe("messageHostsLinkPreview", () => {
 
   it("ignores values that are not blocks", () => {
     expect(messageHostsLinkPreview({ role: "bot", blocks: [null, 3, "x", {}] })).toBe(true);
-  });
-});
-
-describe("previewTitleFromUrl (CA 73, 75)", () => {
-  it.each([
-    [
-      "https://www.lemonde.fr/international/article/2026/10/05/a-kiev-une-atmosphere-de-guerre-permanente-l-ennemi-est-en-train-de-detruire-la-ville_6788472_3210.html",
-      "A kiev une atmosphere de guerre permanente l'ennemi est en train de detruire la ville",
-    ],
-    ["https://a.tld/news/some-story-title-12345", "Some story title"],
-    ["https://a.tld/news/some_story_title_123", "Some story title"],
-    ["https://a.tld/news/some-story.php?id=3#x", "Some story"],
-    ["https://a.tld/news/some-story.HTM", "Some story"],
-    ["https://a.tld/news/Un-%C3%A9t%C3%A9-en-Gr%C3%A8ce/", "Un été en Grèce"],
-    ["https://a.tld/news/%E0%A4-bad-escape", "%E0%A4 bad escape"],
-    ["https://a.tld/news/été-en-grèce", "Été en grèce"],
-    ["https://a.tld/a/b//two-words//", "Two words"],
-  ])("%s gives %s", (url, title) => {
-    expect(previewTitleFromUrl(url)).toBe(title);
-  });
-
-  it.each([
-    "https://a.tld/",
-    "https://a.tld",
-    "https://a.tld/politique",
-    "https://a.tld/politique.html",
-    "https://a.tld/article/6788472_3210",
-    "https://a.tld/article/12345",
-    "https://a.tld/2026-10-05",
-    "https://a.tld/a-1",
-    "https://a.tld/12-34-56",
-    "not a url",
-  ])("gives no title for %s", (url) => {
-    expect(previewTitleFromUrl(url)).toBeNull();
-  });
-
-  it("restores French elisions, with the article's own apostrophe and no guessed accent (CA 80)", () => {
-    expect(
-      previewTitleFromUrl(
-        "https://www.lefigaro.fr/actualite-france/j-ai-eu-peur-je-suis-rentre-chez-moi-la-colere-et-l-inquietude-des-eleves-et-leurs-parents-face-aux-violences-devant-les-lycees-20261004",
-      ),
-    ).toBe(
-      "J'ai eu peur je suis rentre chez moi la colere et l'inquietude des eleves et leurs parents face aux violences devant les lycees",
-    );
-    expect(
-      previewTitleFromUrl("https://a.tld/n/qu-il-parte-d-ici-s-en-va-m-ecoute-t-es-c-est-n-hesite"),
-    ).toBe("Qu'il parte d'ici s'en va m'ecoute t'es c'est n'hesite");
-  });
-
-  it("elides only a lone letter or qu before a vowel or h", () => {
-    expect(previewTitleFromUrl("https://a.tld/n/j-mange-l-ours-d-or")).toBe("J mange l'ours d'or");
-    expect(previewTitleFromUrl("https://a.tld/n/le-mur-quai-ou-sa-vie")).toBe(
-      "Le mur quai ou sa vie",
-    );
-    expect(previewTitleFromUrl("https://a.tld/n/jai-lami-dhier-ou")).toBe("Jai lami dhier ou");
-    expect(previewTitleFromUrl("https://a.tld/n/a-b-c-d-e")).toBe("A b c d'e");
-  });
-
-  it("sanitizes what the address decodes to and caps its length", () => {
-    expect(previewTitleFromUrl("https://a.tld/pay%E2%80%AEevil-now")).toBe("Payevil now");
-    const long = `https://a.tld/${"word-".repeat(200)}end`;
-    expect(previewTitleFromUrl(long)?.length).toBeLessThanOrEqual(300);
   });
 });

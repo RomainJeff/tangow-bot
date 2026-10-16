@@ -194,7 +194,7 @@ export async function resolveLinkPreviewDetailed(
       // Host and reason only: the link can carry a token.
       log: (event) => getLogger().info("link preview read failed", event),
     });
-    const refused = result.ok ? result.restricted === true : result.reason === "access_denied";
+    const refused = !result.ok && result.reason === "access_denied";
     const source = refused ? ("restricted" as const) : undefined;
     const device = refused ? await findOwnDeviceRead(deps, scope, normalized, now) : null;
     const deviceReadable =
@@ -213,7 +213,7 @@ export async function resolveLinkPreviewDetailed(
       if (device) return { preview: resolvedOf(device), deviceReadable: false, refused };
       return { preview: null, deviceReadable, refused };
     }
-    const entry = await storeResult(deps, scope, keyHash, result, now, source);
+    const entry = await storeResult(deps, scope, keyHash, result, now, undefined);
     if (device) return { preview: resolvedOf(device), deviceReadable: false, refused };
     return entry ? { preview: resolvedOf(entry), deviceReadable, refused } : NOTHING;
   } catch (error) {
@@ -273,7 +273,7 @@ export async function resolveLinkPreviewWithDeviceHead(
       },
       pageHeadType,
     );
-    // A head that gives nothing leaves the fallback in place, uncached and unchanged.
+    // A head that gives nothing leaves the server's answer in place, uncached and unchanged.
     if (!result.ok) return server;
     const keyHash = linkPreviewDeviceKeyHash(scope.spaceId, scope.userId, normalized);
     // Only a refusal by the site itself lets a device-read card be remembered for this person: while
@@ -304,7 +304,7 @@ async function storeResult(
   keyHash: string,
   result: Extract<LinkPreviewReadResult, { ok: true }>,
   now: Date,
-  source: "restricted" | "device" | undefined,
+  source: "device" | undefined,
   cache = true,
 ): Promise<Extract<CachedLinkPreview, { status: "ok" }> | null> {
   let image: ResolvedLinkPreview["image"];
@@ -330,6 +330,7 @@ async function storeResult(
     format: result.format,
     ...(result.title ? { title: result.title } : {}),
     ...(image ? { image } : {}),
+    ...(result.article ? { article: true as const } : {}),
     ...(source ? { source } : {}),
   };
   if (cache && !(await storeEntry(deps, scope, keyHash, entry, now))) {

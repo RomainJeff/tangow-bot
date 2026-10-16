@@ -5,6 +5,8 @@ import { JSDOM } from "jsdom";
 const CHARSET_SNIFF_BYTES = 4096;
 
 export interface LinkPreviewHead {
+  /** The page declares itself an article in its head (see `declaresArticle`): the only HTML page that gets a card. */
+  article: boolean;
   title?: string;
   imageUrl?: string;
   /** The best site icon the head declares (see `pickIconUrl`), for a page with no usable image. */
@@ -39,6 +41,7 @@ export function parseLinkPreviewHead(
         .find((resolved) => resolved !== undefined);
       const iconUrl = pickIconUrl(doc, base);
       return {
+        article: declaresArticle(doc),
         ...(title ? { title } : {}),
         ...(imageUrl ? { imageUrl } : {}),
         ...(iconUrl ? { iconUrl } : {}),
@@ -47,8 +50,77 @@ export function parseLinkPreviewHead(
       dom.window.close();
     }
   } catch {
-    return {};
+    return { article: false };
   }
+}
+
+const ARTICLE_TYPES: ReadonlySet<string> = new Set([
+  "Article",
+  "NewsArticle",
+  "BlogPosting",
+  "Report",
+  "ScholarlyArticle",
+  "TechArticle",
+  "AnalysisNewsArticle",
+  "OpinionNewsArticle",
+  "ReportageNewsArticle",
+  "LiveBlogPosting",
+]);
+const MAX_JSON_LD_SCRIPTS = 8;
+const MAX_JSON_LD_SCRIPT_CHARS = 64 * 1024;
+const MAX_JSON_LD_TOTAL_CHARS = 256 * 1024;
+
+/** An article says so in its head: `og:type=article`, an `article:published_time`, or a schema.org article type in JSON-LD. */
+function declaresArticle(doc: Document): boolean {
+  return (
+    metaContent(doc, "og:type")?.toLowerCase() === "article" ||
+    metaContent(doc, "article:published_time") !== undefined ||
+    jsonLdDeclaresArticle(doc)
+  );
+}
+
+/**
+ * Reads nothing but `@type` from bounded JSON-LD: at most 8 scripts, 64 KB each, 256 KB in all, the
+ * rest ignored. The page is untrusted, so the walk is flat (the root, the elements of a root array,
+ * one level of `@graph`), a type is only compared with a fixed set, and the parsed value is never
+ * merged into anything.
+ */
+function jsonLdDeclaresArticle(doc: Document): boolean {
+  let scripts = 0;
+  let total = 0;
+  for (const script of doc.querySelectorAll("script")) {
+    if (script.getAttribute("type")?.trim().toLowerCase() !== "application/ld+json") continue;
+    scripts += 1;
+    if (scripts > MAX_JSON_LD_SCRIPTS) return false;
+    const text = script.textContent ?? "";
+    if (text.length > MAX_JSON_LD_SCRIPT_CHARS) continue;
+    total += text.length;
+    if (total > MAX_JSON_LD_TOTAL_CHARS) return false;
+    let root: unknown;
+    try {
+      root = JSON.parse(text);
+    } catch {
+      continue;
+    }
+    for (const node of Array.isArray(root) ? root : [root]) {
+      if (hasArticleType(node)) return true;
+      const graph = isRecord(node) ? node["@graph"] : undefined;
+      if (Array.isArray(graph) && graph.some(hasArticleType)) return true;
+    }
+  }
+  return false;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function hasArticleType(node: unknown): boolean {
+  if (!isRecord(node)) return false;
+  const type = node["@type"];
+  return Array.isArray(type)
+    ? type.some((entry) => typeof entry === "string" && ARTICLE_TYPES.has(entry))
+    : typeof type === "string" && ARTICLE_TYPES.has(type);
 }
 
 function firstClean(candidates: Array<string | undefined>): string | undefined {

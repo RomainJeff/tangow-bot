@@ -11,10 +11,16 @@ import { openThreadDb, type ThreadDb } from "./thread-db.js";
 
 const PAGE = "https://example.test/articles/one?id=7";
 const png = new Uint8Array([1, 2, 3, 4]);
-const okCompact: LinkPreviewReadResult = { ok: true, format: "compact", title: "A page" };
+const okCompact: LinkPreviewReadResult = {
+  ok: true,
+  format: "compact",
+  article: true,
+  title: "A page",
+};
 const okLarge: LinkPreviewReadResult = {
   ok: true,
   format: "large",
+  article: true,
   title: "A big page",
   image: { bytes: Buffer.from(png), width: 1200, height: 630 },
 };

@@ -70,11 +70,21 @@ function composer(
   };
   const read = vi.fn(
     options.read ??
-      (async () => ({ ok: true as const, format: "compact" as const, title: "A page" })),
+      (async () => ({
+        ok: true as const,
+        format: "compact" as const,
+        article: true as const,
+        title: "A page",
+      })),
   );
   const readFromHead = vi.fn(
     options.readFromHead ??
-      (async () => ({ ok: true as const, format: "compact" as const, title: "From the head" })),
+      (async () => ({
+        ok: true as const,
+        format: "compact" as const,
+        article: true as const,
+        title: "From the head",
+      })),
   );
   const deps = {
     prisma: prisma as unknown as PrismaClient,
@@ -89,7 +99,12 @@ function composer(
   return { deps, prisma, tx, artifacts, read, readFromHead };
 }
 
-const fresh = { expiresAt: new Date(Date.now() + 3_600_000), status: "ok", imageBytes: 0 };
+const fresh = {
+  expiresAt: new Date(Date.now() + 3_600_000),
+  status: "ok",
+  article: true,
+  imageBytes: 0,
+};
 
 describe("links.preview: access first (CA 19, CA 54)", () => {
   it("refuses a thread the actor cannot write to, before any cache, quota or network", async () => {
@@ -290,18 +305,7 @@ describe("links.preview: the sender's device may read (spec 22)", () => {
       new AbortController().signal,
     );
 
-  it("flags the fallback card of a site that refused the server", async () => {
-    const { deps } = composer({
-      read: async () => ({ ok: true, format: "compact", title: "Fallback", restricted: true }),
-    });
-    await expect(ask(deps)).resolves.toEqual({
-      format: "compact",
-      title: "Fallback",
-      deviceReadable: true,
-    });
-  });
-
-  it("flags a refusal that left no card, and a failure that may pass, with a draft that shows nothing", async () => {
+  it("flags a refusal, and a failure that may pass, with a draft that shows nothing", async () => {
     for (const [reason, transient] of [
       ["access_denied", false],
       ["rate_limited", true],
@@ -329,7 +333,7 @@ describe("links.preview: the sender's device may read (spec 22)", () => {
   });
 
   it("uses a pageHead only while the server is still refused, and answers with the card it makes", async () => {
-    const restricted = { ...fresh, format: "compact", title: "Fallback", source: "restricted" };
+    const restricted = { ...fresh, status: "failed", source: "restricted" };
     const { deps, read, readFromHead, tx } = composer({ cached: restricted });
 
     const draft = await ask(deps, "<head><title>Caf\u00e9</title></head>");
@@ -349,7 +353,7 @@ describe("links.preview: the sender's device may read (spec 22)", () => {
   });
 
   it("hands the response's Content-Type to the head reader, for its charset", async () => {
-    const restricted = { ...fresh, format: "compact", title: "Fallback", source: "restricted" };
+    const restricted = { ...fresh, status: "failed", source: "restricted" };
     const { deps, readFromHead } = composer({ cached: restricted });
     await ask(deps, "<head></head>", "text/html; charset=iso-8859-1");
     expect(readFromHead.mock.calls[0]?.[3]).toBe("text/html; charset=iso-8859-1");
@@ -362,6 +366,7 @@ describe("links.preview: the sender's device may read (spec 22)", () => {
       readFromHead: async () => ({
         ok: true,
         format: "compact",
+        article: true,
         title: "From the head",
         image: { bytes: Buffer.from(TINY_WEBP), width: 1, height: 1 },
       }),
@@ -419,7 +424,7 @@ describe("links.preview: quotas (CA 38, CA 55)", () => {
       inFlight,
       read: () =>
         new Promise((resolve) => {
-          release.push(() => resolve({ ok: true, format: "compact", title: "T" }));
+          release.push(() => resolve({ ok: true, format: "compact", article: true, title: "T" }));
         }),
     });
     const ask = () =>

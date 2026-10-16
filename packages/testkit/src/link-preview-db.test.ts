@@ -24,6 +24,7 @@ const ok = (extra: Record<string, unknown> = {}) => ({
   status: "ok" as const,
   format: "compact" as const,
   title: "A page",
+  article: true as const,
   ...extra,
 });
 
@@ -58,6 +59,37 @@ describe("cache entries", () => {
     expect(await findCachedLinkPreview(db.prisma, "space-2", key, at(1000))).toBeNull();
   });
 
+  it("reads a page card written before cards were limited to articles as a miss, and a photo as a hit", async () => {
+    const db = createFakeThreadDb();
+    const row = (keyHash: string, format: string, article: boolean | null) => {
+      db.tables.linkPreviewCache.set(keyHash, {
+        id: keyHash,
+        spaceId: "space-1",
+        keyHash,
+        status: "ok",
+        format,
+        title: "Old",
+        imageKey: null,
+        imageWidth: null,
+        imageHeight: null,
+        imageBytes: 0,
+        imageFit: null,
+        article,
+        source: "server",
+        expiresAt: at(1000),
+      });
+    };
+    row("old-page", "compact", null);
+    row("old-large", "large", null);
+    row("old-photo", "photo", null);
+    row("article", "compact", true);
+    const read = (key: string) => findCachedLinkPreview(db.prisma, "space-1", key, NOW);
+    expect(await read("old-page")).toBeNull();
+    expect(await read("old-large")).toBeNull();
+    expect(await read("old-photo")).toMatchObject({ status: "ok", format: "photo" });
+    expect(await read("article")).toMatchObject({ status: "ok", article: true });
+  });
+
   it("keeps a definitive failure as a bare failed entry", async () => {
     const db = createFakeThreadDb();
     await storeLinkPreviewCache(db.prisma, {
@@ -78,7 +110,7 @@ describe("cache entries", () => {
     await storeLinkPreviewCache(db.prisma, {
       spaceId: "space-1",
       keyHash: "plain",
-      entry: { status: "ok", format: "compact", title: "T" },
+      entry: ok({ title: "T" }),
       now: NOW,
     });
     await storeLinkPreviewCache(db.prisma, {
@@ -90,7 +122,7 @@ describe("cache entries", () => {
     await storeLinkPreviewCache(db.prisma, {
       spaceId: "space-1",
       keyHash: "device",
-      entry: { status: "ok", format: "compact", title: "T", source: "device" },
+      entry: ok({ title: "T", source: "device" }),
       now: NOW,
     });
     expect(await read("plain")).toMatchObject({ status: "ok", source: "server" });
@@ -100,7 +132,7 @@ describe("cache entries", () => {
     await storeLinkPreviewCache(db.prisma, {
       spaceId: "space-1",
       keyHash: "refused",
-      entry: { status: "ok", format: "compact", title: "Real", source: "device" },
+      entry: ok({ title: "Real", source: "device" }),
       now: NOW,
     });
     expect(await read("refused")).toMatchObject({ title: "Real", source: "device" });

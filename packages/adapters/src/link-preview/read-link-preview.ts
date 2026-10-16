@@ -1,5 +1,4 @@
 import { LINK_PREVIEW_IMAGE_FIT } from "@rakazo/contracts";
-import { previewTitleFromUrl } from "@rakazo/core";
 import { isTransientReason, LinkPreviewError, type LinkPreviewFailureReason } from "./errors.js";
 import type { LinkPreviewHead } from "./head-parser.js";
 import { parseLinkPreviewHead } from "./head-parser.js";
@@ -20,15 +19,19 @@ const LARGE_MIN_RATIO = 1.3;
 /** The icon is only worth a request when this much of the job's budget is left to read it. */
 export const LINK_PREVIEW_ICON_MIN_BUDGET_MS = 3_000;
 
-/** The card format, decided from what was really downloaded and never from what the page declares. */
+/**
+ * The card format, or null when the link gets no card. Only a photo (a direct image) and an
+ * article get one. The size comes from what was really downloaded, never from what the page declares.
+ */
 export function decideLinkPreviewFormat(input: {
   kind: "html" | "image";
+  article?: boolean;
   title?: string;
   image?: { width: number; height: number };
 }): LinkPreviewFormat | null {
-  const { kind, title, image } = input;
+  const { kind, article, title, image } = input;
   if (kind === "image") return image ? "photo" : null;
-  if (!title) return null;
+  if (!article || !title) return null;
   if (image && image.width >= LARGE_MIN_WIDTH && image.width / image.height >= LARGE_MIN_RATIO) {
     return "large";
   }
@@ -43,8 +46,8 @@ export type LinkPreviewReadResult =
       image?: EncodedPreviewImage;
       /** `contain` when the image is the site's icon, which clients draw whole, never cropped. */
       imageFit?: typeof LINK_PREVIEW_IMAGE_FIT;
-      /** True for the fallback card of a site that refused the server (401, 402, 403, 451). */
-      restricted?: true;
+      /** True for a card read from an HTML page, which only an article gets. */
+      article?: true;
     }
   | { ok: false; reason: LinkPreviewFailureReason; transient: boolean };
 
@@ -94,9 +97,6 @@ export async function readLinkPreview(
         deadlineMs: deps.pageTimeoutMs ?? LINK_PREVIEW_PAGE_TIMEOUT_MS,
       });
     } catch (error) {
-      if (error instanceof LinkPreviewError && error.reason === "access_denied") {
-        return await readRestrictedSiteCard(url, deps, fail, cutShort);
-      }
       return fail("page", error);
     }
 
@@ -124,9 +124,10 @@ export async function readLinkPreview(
 }
 
 /**
- * The card for a parsed page head: the page image if it can be had, else the site icon the head
- * names (never a large card), the format decided from what was really downloaded. Shared by the
- * server's own read and by a head the sender's device read.
+ * The card for a parsed page head, only when the page declares itself an article: the page image
+ * if it can be had, else the site icon the head names (never a large card), the format decided
+ * from what was really downloaded. Shared by the server's own read and by a head the sender's
+ * device read.
  */
 async function previewFromHead(
   head: LinkPreviewHead,
@@ -135,6 +136,8 @@ async function previewFromHead(
   cutShort: (reason: "aborted" | "timeout") => LinkPreviewReadResult,
 ): Promise<LinkPreviewReadResult> {
   if (!head.title) return fail("page", new LinkPreviewError("no_title"));
+  // The page image costs a request: not worth it for a page that gets no card.
+  if (!head.article) return fail("page", new LinkPreviewError("not_article"));
   const pageImage = head.imageUrl ? await readImage(head.imageUrl, deps, fail) : undefined;
   if (head.imageUrl && !pageImage && deps.signal?.aborted) return cutShort("aborted");
   // No usable page image: the site's icon stands in. It never makes a large card, and only the
@@ -145,12 +148,18 @@ async function previewFromHead(
     icon = await readImage(head.iconUrl, deps, fail);
     if (!icon && deps.signal?.aborted) return cutShort("aborted");
   }
-  const format = decideLinkPreviewFormat({ kind: "html", title: head.title, image: pageImage });
-  if (!format) return fail("page", new LinkPreviewError("no_title"));
+  const format =
+    decideLinkPreviewFormat({
+      kind: "html",
+      article: true,
+      title: head.title,
+      image: pageImage,
+    }) ?? "compact";
   const image = pageImage ?? icon;
   return {
     ok: true,
     format,
+    article: true,
     title: head.title,
     ...(image ? { image } : {}),
     ...(icon ? { imageFit: LINK_PREVIEW_IMAGE_FIT } : {}),
@@ -159,7 +168,7 @@ async function previewFromHead(
 
 /**
  * The preview of a page whose head the sender's device read, for a link the site refuses the
- * server. The head is untrusted: it goes through the same parser as a fetched page (title
+ * server. Like any page, it gets a card only if its head declares an article. The head is untrusted: it goes through the same parser as a fetched page (title
  * sanitized, image and icon resolved against the link and a valid `<base>`), and the server
  * fetches and re-encodes the image itself, so nothing remote ever reaches a reader. The device's
  * Content-Type, when it gave one, supplies the charset as it would for a page fetched here. Never
@@ -191,52 +200,6 @@ export async function readLinkPreviewFromHead(
     );
   } catch (error) {
     return fail("page", error);
-  }
-}
-
-/**
- * The card for a page the site refuses to serve (401, 402, 403, 451): a title drawn from the
- * address, never from the refusal page, and the site's icon read from its home page. We do not
- * pass for another reader. An address with no usable title gets no card; a home page that cannot
- * be read gets a card without thumbnail.
- */
-async function readRestrictedSiteCard(
-  url: string,
-  deps: LinkPreviewReadDeps,
-  fail: (stage: "page" | "image", error: unknown) => LinkPreviewReadResult,
-  cutShort: (reason: "aborted" | "timeout") => LinkPreviewReadResult,
-): Promise<LinkPreviewReadResult> {
-  const title = previewTitleFromUrl(url);
-  if (!title) return fail("page", new LinkPreviewError("access_denied"));
-  // The icon costs two requests, the home page then the image: not worth starting without the time.
-  if (!hasBudgetForIcon(deps)) return cutShort("timeout");
-  const iconUrl = await readHomeIconUrl(url, deps, fail);
-  const bare = { ok: true, format: "compact", title, restricted: true } as const;
-  if (!iconUrl) return deps.signal?.aborted ? cutShort("aborted") : bare;
-  if (!hasBudgetForIcon(deps)) return cutShort("timeout");
-  const icon = await readImage(iconUrl, deps, fail);
-  if (!icon) return deps.signal?.aborted ? cutShort("aborted") : bare;
-  return { ...bare, image: icon, imageFit: LINK_PREVIEW_IMAGE_FIT };
-}
-
-/** The icon the site's own home page names, read the same safe way; undefined when it cannot be had. */
-async function readHomeIconUrl(
-  url: string,
-  deps: LinkPreviewReadDeps,
-  fail: (stage: "page" | "image", error: unknown) => unknown,
-): Promise<string | undefined> {
-  try {
-    const home = await (deps.fetchResource ?? fetchLinkPreviewResource)(
-      new URL("/", url).href,
-      "page",
-      { ...fetchOptionsOf(deps), deadlineMs: deps.pageTimeoutMs ?? LINK_PREVIEW_PAGE_TIMEOUT_MS },
-    );
-    if (home.kind !== "html") return undefined;
-    return parseLinkPreviewHead(home.bytes, { contentType: home.contentType, url: home.url })
-      .iconUrl;
-  } catch (error) {
-    fail("page", error);
-    return undefined;
   }
 }
 
