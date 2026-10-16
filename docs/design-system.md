@@ -362,7 +362,8 @@ A delegated task's result on `Surface variant="outlined"`, full column width: a
 on two lines, a `border` hairline, then the result. The whole card is one
 target and opens the brief and result whole in a sheet; a long result fades
 out under the expand badge. A finished task shows no status word; running,
-failed and cancelled show the routine run's symbol and word under the title.
+failed and cancelled show a status symbol (`circle.dotted`, `xmark.circle.fill`
+in `destructive`, `stop.circle`) and word under the title.
 
 Web and desktop share this exactly: `apps/web/src/components/TaskCard.tsx`
 exports `TaskCardSurface` (the visual card alone, `lucide-react`'s `FileText`
@@ -371,33 +372,28 @@ glyph) and `TaskCard` (the whole card as a button that opens a `ui-web`
 
 ### Routine run line
 
-A routine run is a log line, not a card: no box, a 44 pt row with a status
-symbol (`checkmark.circle.fill` success, `xmark.circle.fill` destructive,
-`circle.dotted`, `clock`, `stop.circle` muted), the name (`rowName` 500, never
-truncated), the time (`time`, tabular), the status word (`label` 500, muted, or
-destructive when it failed), then fixed receipt, bell and disclosure slots kept
-when empty so the columns line up. The disclosure is iOS's: `chevron.forward`
-turning down. Opening shows the report under a 1 pt `outline` rail and, centred
-like every exchange between bots, the message the run then sent (the collapsed
-line carries it as the receipt bot's 14 pt avatar). A failed or subscribed run
-opens on its report. Between two routine lines a time marker only says the day,
-when it changes.
+A routine run shows only when it has something to say or failed. A run that
+ended with words is the bot's message: a bot bubble whose markdown never loads
+remote images, with the routine's name above it as the `OriginLabel` that
+opens the run. A silent, queued, running or cancelled run draws nothing.
 
-Earlier runs of the same routine with nothing between them fold into one line
-(the routine's name, how many runs, the span, a cancelled count when there is
-one); the latest run always keeps its own line. A failed or running run is
-never folded, and — like a message from outside the routine — cuts the
-sequence: nothing folds across it, so it never moves out of place. Only a
-routine's latest run opens on its own (failed, or subscribed). An open group
-lists each run; past eight runs it opens in a sheet, by day.
+A failed run is a log line, not a card: no box, a 44 pt row with
+`xmark.circle.fill` in `destructive`, the routine's name (`rowName` 500, never
+truncated) and, muted, the reason in plain words ("No model connected",
+"Computer unavailable", "Model error"). Consecutive failures of one routine
+fold onto the newest, which adds "# failures since <time>" (`time`, tabular,
+with the weekday when the first failed on another day) and opens the newest
+failed run. Hidden runs do not break a fold; anything shown between two
+failures does. Between two failure lines a time marker only says the day, when
+it changes, and they stack with no gap; a message keeps the thread's spacing.
 
-`packages/core/src/routine-groups.ts` is the one `foldRoutineRuns` both mobile
-and web read groups from. Web renders it as `RoutineRunLine` /
-`RoutineGroupLine` in `apps/web/src/pages/shell/routine-run-line.tsx`: the same
-row, the same fold, the `ReasoningDisclosure` idiom (`lucide-react`'s
-`ChevronRight` turning 90°) for the disclosure, a `border-s border-outline`
-rail, the existing `CollaborationMarker` centred for the handoff, and a
-`ui-web` `Dialog` (sectioned by day) once a group passes eight runs.
+`packages/core/src/routine-roles.ts` is the one `routineRoles` both mobile and
+web read from: a `message` or `failures` role per shown run and the runs it
+hides, with the failure kind
+classified by the core, never the raw error. Web renders the message in
+`thread-row.tsx` and the line as `RoutineFailureLine` in
+`apps/web/src/pages/shell/routine-run-line.tsx`, with `lucide-react`'s
+`CircleX`.
 
 ### A skill in the conversation
 
@@ -570,11 +566,11 @@ working and its activity is known.
 Message actions, absent until the row is hovered or focused from the
 keyboard: `bg-surface`, `rounded-full`, `shadow-floating`, `opacity-0
 pointer-events-none` at rest — `group-hover` and a `:focus-visible` inside the
-row reveal it over `--duration-hover` (a click that leaves focus on a button,
-such as unfolding a routine, does not pin it). It is for a bot's message only:
+row reveal it over `--duration-hover` (a click that leaves focus on a button
+does not pin it). It is for a bot's message only:
 your own message gets bare Edit and resend / Copy icons under its bubble on
-hover instead (`UserMessageActions`), and a routine line, which opens on a
-tap, gets none. It sits next to the bubble it acts on, on the side facing the
+hover instead (`UserMessageActions`), and a routine's message or failure line,
+whose name opens its run, gets none. It sits next to the bubble it acts on, on the side facing the
 thread's centre, when the bubble leaves room; otherwise at the row's top
 `end` corner. The row measures this on enter and focus
 (`hover-pill-placement.ts`) and hands it over as `data-pill="beside"` with
