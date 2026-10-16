@@ -41,6 +41,20 @@ describe("bot message silence", () => {
     expect(botMessageAllowsSilence("fyi", true)).toBe(false);
     expect(botMessageAllowsSilence("fyi")).toBe(true);
   });
+
+  it("lets a peer's unsolicited result end silent, never the answer to this bot's request", () => {
+    expect(
+      (["result", "status", "request", "question"] as const).map((intent) => [
+        botMessageAllowsSilence(intent, false),
+        botMessageAllowsSilence(intent, true),
+      ]),
+    ).toEqual([
+      [true, false],
+      [true, false],
+      [false, false],
+      [false, false],
+    ]);
+  });
 });
 
 describe("hop bounding", () => {
@@ -370,18 +384,29 @@ describe("inbound wake prompt", () => {
     expect(prompt).toContain("untrusted peer content");
   });
 
-  it("requires a received result to be surfaced to the user", () => {
+  it("requires the result of work this bot delegated to be surfaced to the user", () => {
     const resultPrompt = buildBotMessageWakePrompt({
       from: { id: "b_1", name: "Researcher" },
       text: "The answer is 42.",
       intent: "result",
+      repliesToRequest: true,
     });
-    expect(resultPrompt).toContain("Relay it to the user now");
-    expect(resultPrompt).toContain("include the actual substance");
-    expect(resultPrompt).not.toContain("staying silent is fine");
+    expect(actionOf(resultPrompt)).toBe("This is a result for work you delegated");
   });
 
-  it("keeps silence available only for an explicit FYI", () => {
+  it("lets a bot stay silent on a result its peer sent unasked when it holds nothing", () => {
+    const resultPrompt = buildBotMessageWakePrompt({
+      from: { id: "b_1", name: "Researcher" },
+      text: "Nothing to act on this morning.",
+      intent: "result",
+      repliesToRequest: false,
+    });
+    expect(actionOf(resultPrompt)).toBe(
+      "This is a result Researcher sent on its own initiative, not an answer to something you asked",
+    );
+  });
+
+  it("lets a bot stay silent on an FYI that changes nothing", () => {
     const fyiPrompt = buildBotMessageWakePrompt({
       from: { id: "b_1", name: "Researcher" },
       text: "No action needed.",
@@ -402,14 +427,17 @@ describe("inbound wake prompt", () => {
     }
   });
 
-  it("does not silence a relay, whose whole job is to reach the user", () => {
+  it("leaves the user's chat open to a bot relaying a result or status, asked or not", () => {
     for (const intent of ["result", "status"] as const) {
-      const relay = buildBotMessageWakePrompt({
-        from: { id: "b_1", name: "Researcher" },
-        text: "The answer is 42.",
-        intent,
-      });
-      expect(relay).not.toContain("working for another bot here");
+      for (const repliesToRequest of [true, false]) {
+        const relay = buildBotMessageWakePrompt({
+          from: { id: "b_1", name: "Researcher" },
+          text: "The answer is 42.",
+          intent,
+          repliesToRequest,
+        });
+        expect(relay).not.toContain("working for another bot here");
+      }
     }
   });
 
@@ -506,3 +534,8 @@ describe("delegation prompt texts", () => {
     expect(BOT_OFFER_DEDICATED_BOT).not.toContain("ask_user as a yes/no");
   });
 });
+
+/** The first sentence of the line telling the woken bot what to do with the message. */
+function actionOf(prompt: string) {
+  return prompt.split("\n").at(-1)?.split(". ")[0];
+}

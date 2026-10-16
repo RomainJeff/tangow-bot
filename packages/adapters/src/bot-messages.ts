@@ -201,8 +201,6 @@ export async function messageBot(
       note: `Already sent to ${target.name} in this turn; it was not sent again.`,
     }) as const;
 
-  const wakePrompt = buildBotMessageWakePrompt({ from: sender, text: message, intent });
-
   const committed = await withTransactionRetry(() =>
     deps.prisma.$transaction(async (tx) => {
       for (const threadId of [run.threadId, targetThreadId].sort()) {
@@ -268,13 +266,20 @@ export async function messageBot(
         hop,
         deliveryKey,
       });
+      // Read back as the woken run reads it: only the recipient's log knows what it asked for.
+      const delivered = await loadBotMessageContext(tx, receivedId);
       const task = await tx.task.create({
         data: {
           spaceId: run.spaceId,
           botId: target.id,
           threadId: targetThreadId,
           userId: run.userId,
-          prompt: wakePrompt,
+          prompt: buildBotMessageWakePrompt({
+            from: sender,
+            text: message,
+            intent,
+            repliesToRequest: delivered?.repliesToRequest,
+          }),
           status: "queued",
         },
       });

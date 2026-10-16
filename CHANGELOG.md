@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-10-16
+
+#### Fixed
+
+- When one of your bots passes another an update it was not asked for, such as a routine's inbox check, the receiving bot no longer posts and notifies you with a line like "nothing to send": it relays what you need once, or stays quiet, on web, desktop and iPhone.
+
 ### 2026-10-15
 
 #### Fixed

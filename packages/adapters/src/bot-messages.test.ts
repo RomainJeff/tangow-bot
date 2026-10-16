@@ -73,13 +73,13 @@ function deps(
     findFirst: vi.fn(async () => (options.resultSent ? { id: "entry-result" } : null)),
   };
   const tx = {
-    $queryRaw: vi.fn(async (sql: TemplateStringsArray) =>
-      sql.join("?").includes("clientNonce")
-        ? options.alreadyDelivered
-          ? [wokeRow({}, { clientNonce: "bot-message:call-1" })]
-          : []
-        : [{ id: "thread" }],
-    ),
+    $queryRaw: vi.fn(async (sql: TemplateStringsArray) => {
+      const query = sql.join("?");
+      if (query.includes("clientNonce")) {
+        return options.alreadyDelivered ? [wokeRow({}, { clientNonce: "bot-message:call-1" })] : [];
+      }
+      return query.includes("LATERAL") ? [] : [{ id: "thread" }];
+    }),
     sessionEntry,
     run: {
       findFirst: vi
