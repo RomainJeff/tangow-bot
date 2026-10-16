@@ -632,7 +632,7 @@ that merely narrate internal operations.`,
         notify: {
           type: "boolean",
           description:
-            "Page the user on every run (e.g. they asked to be told each time). Default false: the run stays a silent, browsable card in this thread.",
+            "Page the user on every run that has something to say, even when this bot's notifications are off (e.g. they asked to be told each time). Default false: the bot's usual notification setting applies.",
         },
         routineId: {
           type: "string",

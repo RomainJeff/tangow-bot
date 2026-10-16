@@ -121,6 +121,7 @@ export class ExpoPushProvider implements NotificationProvider {
         body: JSON.stringify({
           to: token,
           title: message.title,
+          subtitle: message.subtitle,
           body: message.body,
           collapseId: message.threadId,
           tag: message.threadId,

@@ -1612,23 +1612,18 @@ export function createRunExecutor(deps: ExecutorDeps) {
           (run.trigger !== "bot_message" ||
             peerMessage?.intent === "result" ||
             peerMessage?.intent === "status");
-        const routineForCard =
-          isRoutineCardRun && run.routineId
+        // A routine's name heads the push of its run, and its "Notify me" pages every run end
+        // that speaks or fails, even while the bot's own notifications are off.
+        const routine =
+          routineRun && run.routineId
             ? await deps.prisma.routine.findUnique({
                 where: { id: run.routineId },
-                select: { notify: true },
+                select: { name: true, notify: true, untrustedPrompt: true },
               })
             : null;
+        const forceNotify = routine?.notify === true;
         // A routine's runs may save skills only while its prompt is the user's (skillWriteRefusal).
-        const trustedRoutine =
-          run.trigger === "routine" && run.routineId
-            ? (
-                await deps.prisma.routine.findUnique({
-                  where: { id: run.routineId },
-                  select: { untrustedPrompt: true },
-                })
-              )?.untrustedPrompt === false
-            : false;
+        const trustedRoutine = run.trigger === "routine" && routine?.untrustedPrompt === false;
         // Set once the run reads a message someone other than the user sent into it.
         let steeredByOthers = false;
         const settleStrandedCards = () =>
@@ -1775,7 +1770,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             notifiesUserOnRunEnd(run.trigger, {
               isSubBot: bot.parentBotId != null,
               routineCard: isRoutineCardRun,
-              notify: routineForCard?.notify,
+              notify: routine?.notify,
               relaysToUser: botMessageRelaysToUser(peerMessage),
             })
           ) {
@@ -1789,7 +1784,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 botId: bot.id,
                 threadId: thread.id,
               },
-              { forceEnabled: isRoutineCardRun && routineForCard?.notify === true },
+              { forceEnabled: forceNotify },
             );
           }
           return;
@@ -5008,7 +5003,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             notifiesUserOnRunEnd(run.trigger, {
               isSubBot: bot.parentBotId != null,
               routineCard: isRoutineCardRun,
-              notify: routineForCard?.notify,
+              notify: routine?.notify,
               relaysToUser: botMessageRelaysToUser(peerMessage),
             })
           ) {
@@ -5017,12 +5012,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
               run,
               {
                 kind: "completion",
-                title: `${bot.name} finished`,
+                title: routine ? bot.name : `${bot.name} finished`,
+                subtitle: routine?.name,
                 body: text,
                 botId: bot.id,
                 threadId: thread.id,
               },
-              { forceEnabled: isRoutineCardRun && routineForCard?.notify === true },
+              { forceEnabled: forceNotify },
             );
           }
           // Last, and never fatal: the run is already finalized, so a failure here must not reach
@@ -5154,7 +5150,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             notifiesUserOnRunEnd(run.trigger, {
               isSubBot: bot.parentBotId != null,
               routineCard: isRoutineCardRun,
-              notify: routineForCard?.notify,
+              notify: routine?.notify,
               relaysToUser: botMessageRelaysToUser(peerMessage),
             })
           ) {
@@ -5168,7 +5164,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 botId: bot.id,
                 threadId: thread.id,
               },
-              { forceEnabled: isRoutineCardRun && routineForCard?.notify === true },
+              { forceEnabled: forceNotify },
             );
           }
         }
