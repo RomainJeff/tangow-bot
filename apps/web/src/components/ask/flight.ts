@@ -139,7 +139,10 @@ export function fly(
     clone.remove();
     land.style.visibility = "";
     list?.style.removeProperty("overflow-anchor");
+    window.removeEventListener("resize", end);
   };
+  // The flight aims at where the bubble stood when it left; a resize moves it, so it snaps there.
+  window.addEventListener("resize", end);
   fold.finished.then(end, () => {});
   return end;
 }

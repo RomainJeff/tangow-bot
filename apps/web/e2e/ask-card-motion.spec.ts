@@ -273,3 +273,29 @@ test("an answer that fails mid-flight reopens the card on the choice, with no bu
     await page.getByTestId("transcript").evaluate((element) => element.style.overflowAnchor),
   ).toBe("");
 });
+
+test("a resize mid-flight lands the answer where its bubble now stands, without a jump (CA5)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 640 });
+  const seoul = await openCityCard(page, "ask-motion-resize");
+  await page.evaluate(() => {
+    const probe = window as unknown as { resizedAt: number };
+    window.addEventListener("resize", () => {
+      probe.resizedAt = performance.now();
+    });
+  });
+  const flying = page.locator("[data-ask-flight]");
+  const sampled = sampleCommit(page, seoul, 900);
+  await expect(flying).toHaveCount(1);
+  await page.setViewportSize({ width: 1100, height: 640 });
+  const { frames } = await sampled;
+  const resizedAt = await page.evaluate(
+    () => (window as unknown as { resizedAt: number }).resizedAt,
+  );
+  const after = frames.filter((frame) => frame.t > resizedAt + 34);
+
+  expect(after.length).toBeGreaterThan(10);
+  expect(after.filter((frame) => frame.clone)).toEqual([]);
+  expect(after.every((frame) => frame.bubbleVisible)).toBe(true);
+});
