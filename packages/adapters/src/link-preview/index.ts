@@ -15,6 +15,7 @@ export {
   type LinkPreviewResource,
   type LinkPreviewResourceFetcher,
   MAX_HTML_BYTES,
+  MAX_ICON_BYTES,
   MAX_IMAGE_BYTES,
 } from "./safe-fetch.js";
 export * from "./safe-fetch-for-tests.js";

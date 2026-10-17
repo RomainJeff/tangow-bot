@@ -64,6 +64,12 @@ describe("composerLinkPreviewTrigger", () => {
     expect(composerLinkPreviewTrigger("", "https://a.tld/x?Sig=abc", "paste")).toBeUndefined();
   });
 
+  it("takes the first eligible link, past a secret or one-shot link (CA 20)", () => {
+    expect(
+      composerLinkPreviewTrigger("", "https://a.tld/invite/x?token=1 https://b.tld/y ", "type"),
+    ).toBe("https://b.tld/y");
+  });
+
   it("never fires for a link to a sign-in page (CA 71)", () => {
     expect(composerLinkPreviewTrigger("", "https://login.a.tld/ ", "type")).toBeUndefined();
     expect(composerLinkPreviewTrigger("", "https://a.tld/sso", "paste")).toBeUndefined();
@@ -130,7 +136,7 @@ describe("createComposerLinkPreview", () => {
     expect(spy.mock.calls[0]?.[0]).toBe("https://a.tld/page");
   });
 
-  it("reads after a paste, shows loading then the card", async () => {
+  it("reads after a paste and shows nothing until the card is ready", async () => {
     const { controller, spy, views } = setup(async () => ({
       format: "large",
       title: "  A‮ title ",
@@ -139,9 +145,9 @@ describe("createComposerLinkPreview", () => {
     controller.update("https://a.tld/page", "paste");
     expect(controller.getView()).toEqual({ status: "idle" });
     await wait(800);
-    expect(views[0]).toEqual({ status: "loading", url: "https://a.tld/page" });
     await flush();
     expect(spy).toHaveBeenCalledOnce();
+    expect(views.map((view) => view.status)).toEqual(["ready"]);
     expect(controller.getView()).toEqual({
       status: "ready",
       url: "https://a.tld/page",
@@ -196,7 +202,7 @@ describe("createComposerLinkPreview", () => {
     );
     controller.update("https://a.tld/1 ");
     await wait(800);
-    expect(controller.getView().status).toBe("loading");
+    expect(controller.getView()).toEqual({ status: "idle" });
     controller.update("https://b.tld/2 ");
     expect(signals[0]?.aborted).toBe(true);
     resolvers[0]?.({ format: "compact", title: "Stale" });
@@ -243,7 +249,7 @@ describe("createComposerLinkPreview", () => {
     });
   });
 
-  it("keeps a loading read while text is typed before the link, and drops it when the link is edited", async () => {
+  it("keeps a running read while text is typed before the link, and drops it when the link is edited", async () => {
     const signals: AbortSignal[] = [];
     const { controller } = setup(
       (_url, signal) =>
@@ -255,7 +261,7 @@ describe("createComposerLinkPreview", () => {
     await wait(800);
     controller.update("H https://a.tld/1");
     expect(signals[0]?.aborted).toBe(false);
-    expect(controller.getView()).toEqual({ status: "loading", url: "https://a.tld/1" });
+    expect(controller.getView()).toEqual({ status: "idle" });
     controller.update("H https://a.tld/12");
     expect(signals[0]?.aborted).toBe(true);
     expect(controller.getView()).toEqual({ status: "idle" });
@@ -364,7 +370,7 @@ describe("createComposerLinkPreview", () => {
     expect(controller.isRemoved()).toBe(true);
   });
 
-  it("removing a preview that is loading cancels its read", async () => {
+  it("removing a preview whose read is running cancels its read", async () => {
     let signal: AbortSignal | undefined;
     const { controller } = setup((_url, s) => {
       signal = s;
@@ -392,11 +398,7 @@ describe("createComposerLinkPreview: the device reads a page the server was refu
   afterEach(() => vi.useRealTimers());
 
   const URL_ = "https://news.example.com/article-title-here";
-  const fallback: LinkPreviewDraft = {
-    format: "compact",
-    title: "Article title here",
-    deviceReadable: true,
-  };
+  const refused: LinkPreviewDraft = { format: "compact", deviceReadable: true };
   const full: LinkPreviewDraft = { format: "compact", title: "The real title", thumbnail: THUMB };
   const wait = (ms: number) => vi.advanceTimersByTimeAsync(ms);
   const PAGE = {
@@ -411,7 +413,7 @@ describe("createComposerLinkPreview: the device reads a page the server was refu
     withDevice?: boolean;
   }) {
     const read = vi.fn(async (_url: string, _signal: AbortSignal, page?: ComposerPageHead) => {
-      if (page === undefined) return options.first === undefined ? fallback : options.first;
+      if (page === undefined) return options.first === undefined ? refused : options.first;
       if (options.second instanceof Error) throw options.second;
       return options.second === undefined ? full : options.second;
     });
@@ -425,7 +427,7 @@ describe("createComposerLinkPreview: the device reads a page the server was refu
     return { controller, read, readPageHead, views };
   }
 
-  it("shows the fallback, reads the page on the device, asks again with its head and shows the better card", async () => {
+  it("shows nothing while the device reads the page, asks again with its head and shows the card", async () => {
     const { controller, read, readPageHead, views } = setup({});
     controller.update(`${URL_} `);
     await wait(800);
@@ -436,8 +438,6 @@ describe("createComposerLinkPreview: the device reads a page the server was refu
     expect(read).toHaveBeenCalledTimes(2);
     expect(read.mock.calls[1]?.[2]).toEqual(PAGE);
     expect(views.map((view) => (view.status === "ready" ? view.title : view.status))).toEqual([
-      "loading",
-      "Article title here",
       "The real title",
     ]);
     expect(controller.getView()).toMatchObject({ status: "ready", thumbnail: THUMB });
@@ -461,10 +461,10 @@ describe("createComposerLinkPreview: the device reads a page the server was refu
     await wait(0);
     expect(readPageHead).not.toHaveBeenCalled();
     expect(read).toHaveBeenCalledTimes(1);
-    expect(controller.getView()).toMatchObject({ status: "ready", title: "Article title here" });
+    expect(controller.getView()).toEqual({ status: "idle" });
   });
 
-  it("keeps the fallback, silently, when the device cannot read the page", async () => {
+  it("shows nothing, silently, when the device cannot read the page", async () => {
     for (const head of [
       async () => null,
       async () => ({ head: "" }),
@@ -478,22 +478,22 @@ describe("createComposerLinkPreview: the device reads a page the server was refu
       await wait(800);
       await wait(0);
       expect(read).toHaveBeenCalledTimes(1);
-      expect(controller.getView()).toMatchObject({ status: "ready", title: "Article title here" });
-      expect(views.at(-1)).toMatchObject({ status: "ready" });
+      expect(controller.getView()).toEqual({ status: "idle" });
+      expect(views).toEqual([]);
     }
   });
 
-  it("keeps the fallback when the server refuses the head, or answers with nothing", async () => {
+  it("shows nothing when the server refuses the head, or answers with nothing", async () => {
     for (const second of [new Error("503"), null, { format: "compact" as const }]) {
       const { controller } = setup({ second });
       controller.update(`${URL_} `);
       await wait(800);
       await wait(0);
-      expect(controller.getView()).toMatchObject({ status: "ready", title: "Article title here" });
+      expect(controller.getView()).toEqual({ status: "idle" });
     }
   });
 
-  it("keeps loading while the device reads when the server had no card to show, and ends on the device's", async () => {
+  it("shows nothing while the device reads and ends on the device's card", async () => {
     let release: (page: ComposerPageHead) => void = () => undefined;
     const { controller } = setup({
       first: { format: "compact", deviceReadable: true },
@@ -502,7 +502,7 @@ describe("createComposerLinkPreview: the device reads a page the server was refu
     controller.update(`${URL_} `);
     await wait(800);
     await wait(0);
-    expect(controller.getView()).toEqual({ status: "loading", url: URL_ });
+    expect(controller.getView()).toEqual({ status: "idle" });
     release(PAGE);
     await wait(0);
     expect(controller.getView()).toMatchObject({ status: "ready", title: "The real title" });

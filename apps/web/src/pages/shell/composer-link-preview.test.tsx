@@ -142,7 +142,7 @@ describe("Composer link preview", () => {
     expect(previewLink.mock.calls[0]?.[0]).toBe(PAGE);
   });
 
-  it("reads a pasted link after the debounce and shows a loading card, then the card", async () => {
+  it("reads a pasted link after the debounce and shows nothing until the card is ready", async () => {
     let resolve: (draft: LinkPreviewDraft | null) => void = () => {};
     const previewLink = vi.fn<Preview>(() => new Promise((r) => (resolve = r)));
     mount({ previewLink });
@@ -151,8 +151,7 @@ describe("Composer link preview", () => {
     expect(previewLink).not.toHaveBeenCalled();
     await wait(1);
     expect(previewLink).toHaveBeenCalledOnce();
-    expect(card()?.getAttribute("data-state")).toBe("loading");
-    expect(button("Remove preview")).toBeTruthy();
+    expect(card()).toBeNull();
 
     await act(async () => resolve({ format: "large", title: "A page", thumbnail: THUMB }));
     expect(card()?.getAttribute("data-state")).toBe("ready");

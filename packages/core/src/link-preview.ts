@@ -1,5 +1,10 @@
-import { isPreviewableUrl, LINK_PREVIEW_TITLE_MAX_LENGTH } from "@rakazo/contracts";
-import { extractLinksFromText, wwwLinkHref } from "./search.js";
+import type { LinkMentionBlock, MessageBlock } from "@rakazo/contracts";
+import {
+  isAuthenticationDestination,
+  isPreviewableUrl,
+  LINK_PREVIEW_TITLE_MAX_LENGTH,
+} from "@rakazo/contracts";
+import { extractLinkOccurrences, wwwLinkHref } from "./search.js";
 
 /**
  * Words that mark a query parameter as a secret when its name holds one (`access_token`,
@@ -27,9 +32,146 @@ const SECRET_PARAM_WORDS: ReadonlySet<string> = new Set([
 /** Prefixes of presigned cloud storage links (S3, GCS): every such parameter belongs to one. */
 const SECRET_PARAM_PREFIXES = ["x-amz-", "x-goog-"];
 
-/** The one link a message may preview: its first eligible http(s) or bare `www.` link, outside code. */
-export function firstEligibleLink(text: string): string | undefined {
-  return extractLinksFromText(text).find(isPreviewableUrl);
+/**
+ * Whole path segments that mark a one-shot or invitation link (`/invite/…`, `/reset/…`): compared
+ * whole after decoding and lowercasing, so `/blog/how-to-reset-password` is still read.
+ */
+const SECRET_PATH_SEGMENTS: ReadonlySet<string> = new Set([
+  "unsubscribe",
+  "optout",
+  "opt-out",
+  "confirm",
+  "verify",
+  "activate",
+  "reset",
+  "invite",
+  "accept",
+  "magic",
+  "token",
+  "redeem",
+  "claim",
+  "approve",
+  "shared_invite",
+]);
+
+function hasSecretPath(url: string): boolean {
+  return new URL(url).pathname.split("/").some((segment) => {
+    let decoded = segment;
+    try {
+      decoded = decodeURIComponent(segment);
+    } catch {
+      // A malformed escape is compared as written.
+    }
+    return SECRET_PATH_SEGMENTS.has(decoded.toLowerCase());
+  });
+}
+
+/**
+ * The one identity of a link, for the server that reads it, the cache that remembers it and the
+ * renderers that match it to its block: a bare `www.` form as its https link, then
+ * `normalizePreviewUrl` (fragment dropped). Null when it is no http(s) URL.
+ */
+export function linkKey(href: string): string | null {
+  const key = normalizePreviewUrl(wwwLinkHref(href) ?? href);
+  return key && isPreviewableUrl(key) ? key : null;
+}
+
+/**
+ * Whether a link may be read at all: http(s), bounded and without credentials, no secret in its
+ * query or path, not a sign-in page. Every link of a message passes it before any counting.
+ */
+export function isEligibleLink(url: string): boolean {
+  return (
+    isPreviewableUrl(url) &&
+    !hasSecretParam(url) &&
+    !hasSecretPath(url) &&
+    !isAuthenticationDestination(url)
+  );
+}
+
+export const LINK_MENTIONS_PER_MESSAGE = 5;
+
+/** A link a message may show as a mention: its identity and the URL as first written. */
+export interface LinkCandidate {
+  key: string;
+  url: string;
+}
+
+/**
+ * The links of a text that may become mentions: the first five distinct keys in text order among
+ * eligible links outside code. The first one is also the only one that may get a card.
+ */
+export function linkMentionCandidates(text: string): LinkCandidate[] {
+  const candidates = new Map<string, LinkCandidate>();
+  for (const { href } of extractLinkOccurrences(text)) {
+    if (candidates.size === LINK_MENTIONS_PER_MESSAGE) break;
+    const key = linkKey(href);
+    if (key && !candidates.has(key) && isEligibleLink(href)) {
+      candidates.set(key, { key, url: href });
+    }
+  }
+  return [...candidates.values()];
+}
+
+/** A message's mentions, found by any written form of their link (`linkKey`). */
+export interface LinkMentionLookup {
+  find(href: string): LinkMentionBlock | undefined;
+}
+
+/** What a renderer needs to draw a message's mentions: the block of a link and its site icon. */
+export interface LinkMentionResolver<Icon> extends LinkMentionLookup {
+  icon(artifactId: string): Icon;
+}
+
+/**
+ * The mentions the server added to a message, keyed by `linkKey`. Undefined when it has none or
+ * may carry no link preview (`messageHostsLinkPreview`), so its links render as plain links.
+ */
+export function linkMentionsOf(message: {
+  role: string;
+  blocks: readonly MessageBlock[];
+}): LinkMentionLookup | undefined {
+  if (!messageHostsLinkPreview(message)) return undefined;
+  const byKey = new Map<string, LinkMentionBlock>();
+  for (const block of message.blocks) {
+    if (block.kind !== "link_mention") continue;
+    const key = linkKey(block.url);
+    if (key && !byKey.has(key)) byKey.set(key, block);
+  }
+  if (byKey.size === 0) return undefined;
+  return {
+    find(href) {
+      const key = linkKey(href);
+      return key ? byKey.get(key) : undefined;
+    },
+  };
+}
+
+/** A link's identity without its scheme or `www.`, read from a URL or from text that spells one. */
+function spelledLink(value: string): string | undefined {
+  return (linkKey(value) ?? linkKey(`https://${value}`))?.replace(/^https?:\/\/(?:www\.)?/i, "");
+}
+
+/**
+ * The words a mention shows: what the author wrote for the link when it is more than the address
+ * itself (a markdown label), else the label the server resolved, else the host.
+ */
+export function linkMentionLabel({
+  href,
+  authorText,
+  block,
+}: {
+  href: string;
+  authorText?: string;
+  block: Pick<LinkMentionBlock, "title">;
+}): string {
+  // Compared as written: sanitising caps it, so a long bare URL would no longer match itself.
+  const written = authorText?.trim() ?? "";
+  if (written && spelledLink(written) !== spelledLink(href)) {
+    const label = sanitizePreviewTitle(written);
+    if (label) return label;
+  }
+  return (block.title && sanitizePreviewTitle(block.title)) || previewSiteLabel(href);
 }
 
 /** Blocks that make a message a card of its own: no link preview is ever put under it. */
@@ -181,14 +323,14 @@ export function hasSecretParam(url: string): boolean {
 
 // One implementation, in contracts: the desktop main process (which cannot import this package)
 // applies the same rule to the pages its device reads.
-export { isAuthenticationDestination } from "@rakazo/contracts";
+export { isAuthenticationDestination };
 
 /**
  * A page title made safe to render: control, bidirectional, zero-width and tag characters are
  * removed (all of them are format or control characters), whitespace is collapsed, and the
- * result is capped without splitting a surrogate pair.
+ * result is capped at `max` without splitting a surrogate pair.
  */
-export function sanitizePreviewTitle(title: string): string {
+export function sanitizePreviewTitle(title: string, max = LINK_PREVIEW_TITLE_MAX_LENGTH): string {
   // Format characters go first (the BOM counts as whitespace, so it would otherwise leave a gap),
   // then whitespace collapses (tab and newline are controls too), then any other control goes.
   // ZWNJ and ZWJ stay: emoji sequences and several scripts need them to render correctly.
@@ -197,8 +339,8 @@ export function sanitizePreviewTitle(title: string): string {
     .replace(/\s+/gu, " ")
     .replace(/\p{Cc}/gu, "")
     .trim();
-  if (clean.length <= LINK_PREVIEW_TITLE_MAX_LENGTH) return clean;
-  const cut = clean.slice(0, LINK_PREVIEW_TITLE_MAX_LENGTH);
+  if (clean.length <= max) return clean;
+  const cut = clean.slice(0, max);
   const lastUnit = cut.charCodeAt(cut.length - 1);
   return (lastUnit >= 0xd800 && lastUnit <= 0xdbff ? cut.slice(0, -1) : cut).trimEnd();
 }
@@ -208,13 +350,17 @@ const SLUG_ELISION = /(^|\s)(qu|[jldnsmtc]) (?=[aeiouàâäéèêëîïôöùû�
 
 const SLUG_EXTENSION = /\.(?:html?|php)$/i;
 const SLUG_TRAILING_ID = /(?:[-_]\d+)+$/;
+/** A trailing UUID or hexadecimal id of 16 characters or more (`Roadmap-3f9a2c7e81d04b5f`, a Notion page). */
+const SLUG_HEX_ID =
+  /(?:^|[-_])(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{16,})$/i;
 
 /**
- * A card title drawn from the address alone, for a site that refuses to be read: the last
- * non-empty path segment, percent-decoded, without extension (`.html`, `.htm`, `.php`) or trailing
- * numeric id (`_6788472_3210`, `-12345`), dashes and underscores as spaces, French elisions restored
- * (`j ai` gives `j'ai`; accents are never guessed), first letter capitalised.
- * Null unless at least two words with a letter remain, so a bare id or a one-word section gives no card.
+ * A title drawn from the address alone: the last non-empty path segment, percent-decoded, without
+ * extension (`.html`, `.htm`, `.php`), trailing UUID or long hexadecimal id, or trailing numeric id
+ * (`_6788472_3210`, `-12345`), dashes and underscores as spaces, French elisions restored (`j ai`
+ * gives `j'ai`; accents are never guessed), first letter capitalised. Null unless two words with a
+ * letter remain, or one when an id was cut from it (`Roadmap-<id>` is a document's name; a bare
+ * `edit` or `politique` names a section, not a page).
  */
 export function previewTitleFromUrl(url: string): string | null {
   let segment: string | undefined;
@@ -230,10 +376,11 @@ export function previewTitleFromUrl(url: string): string | null {
   } catch {
     // A malformed escape stays as written.
   }
-  const title = sanitizePreviewTitle(
-    decoded.replace(SLUG_EXTENSION, "").replace(SLUG_TRAILING_ID, "").replace(/[-_]+/g, " "),
-  )
+  const named = decoded.replace(SLUG_EXTENSION, "");
+  const withoutId = named.replace(SLUG_HEX_ID, "");
+  const title = sanitizePreviewTitle(withoutId.replace(SLUG_TRAILING_ID, "").replace(/[-_]+/g, " "))
     .replace(SLUG_ELISION, "$1$2'")
     .replace(/^\p{L}/u, (first) => first.toUpperCase());
-  return title.split(" ").filter((word) => /\p{L}/u.test(word)).length >= 2 ? title : null;
+  const words = title.split(" ").filter((word) => /\p{L}/u.test(word)).length;
+  return words >= (withoutId === named ? 2 : 1) ? title : null;
 }

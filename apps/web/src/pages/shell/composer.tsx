@@ -9,7 +9,6 @@ import {
   clampMentionHighlightIndex,
   createComposerLinkPreview,
   mentionChipKey,
-  previewSiteLabel,
   resolveMentionPickerKey,
   SLASH_ACTIONS,
   serializeComposerPrompt,
@@ -847,15 +846,10 @@ export const Composer = memo(function Composer({
               ))}
               {linkPreviewView.status === "idle" ? null : (
                 <ComposerLinkPreview
-                  loading={linkPreviewView.status === "loading"}
-                  site={
-                    linkPreviewView.status === "ready"
-                      ? linkPreviewView.site
-                      : previewSiteLabel(linkPreviewView.url)
-                  }
-                  title={linkPreviewView.status === "ready" ? linkPreviewView.title : undefined}
+                  site={linkPreviewView.site}
+                  title={linkPreviewView.title}
                   image={
-                    linkPreviewView.status === "ready" && linkPreviewView.thumbnail ? (
+                    linkPreviewView.thumbnail ? (
                       <LinkPreviewPicture
                         src={linkPreviewView.thumbnail}
                         fit={linkPreviewView.thumbnailFit}

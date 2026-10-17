@@ -80,10 +80,16 @@
 }
 
 .rk-chat-markdown a {
-  color: var(--link);
+  color: inherit;
   text-decoration: underline;
-  text-decoration-color: color-mix(in srgb, var(--link) 55%, transparent);
-  text-underline-offset: 0.15em;
+  text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
+  text-decoration-thickness: 1px;
+  text-decoration-skip-ink: auto;
+  text-underline-offset: 0.2em;
+}
+
+.rk-chat-markdown a:hover {
+  text-decoration-color: currentColor;
 }
 
 .rk-chat-markdown code {
@@ -298,5 +304,86 @@
 .rk-linkified {
   color: inherit;
   text-decoration: underline;
-  text-underline-offset: 0.15em;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+  text-decoration-thickness: 1px;
+  text-decoration-skip-ink: auto;
+  text-underline-offset: 0.2em;
+}
+
+.rk-linkified:hover {
+  text-decoration-color: currentColor;
+}
+
+/* A link the server resolved: the site's icon, then a readable label. One line box tall and
+   bottom-aligned, so its text keeps the sentence's baseline and the icon sits centred on the line;
+   icon and label never part, and the label ends in an ellipsis rather than widen the bubble. */
+.rk-link-mention {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-link-mention-gap);
+  max-width: min(32ch, 100%);
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+
+.rk-link-mention:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: var(--corner-link-mention);
+}
+
+/* `ring` reaches only about 3:1 on the person's ink bubble. */
+.rk-linkified.rk-link-mention:focus-visible {
+  outline-color: color-mix(in srgb, currentColor 60%, transparent);
+}
+
+.rk-link-mention-icon {
+  position: relative;
+  flex: none;
+  width: var(--size-link-mention-icon);
+  height: var(--size-link-mention-icon);
+  overflow: hidden;
+  border-radius: var(--corner-link-mention);
+  background: var(--link-mention-tile);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground) 10%, transparent);
+}
+
+/* The person's ink bubble: a veil of its text colour instead of the tile. */
+.rk-linkified .rk-link-mention-icon {
+  background: color-mix(in srgb, currentColor 14%, transparent);
+  box-shadow: none;
+}
+
+/* The icon node a renderer passes fills the frame, whatever element it is. */
+.rk-link-mention-icon > * {
+  position: absolute;
+  inset: 0;
+}
+
+/* Not a markdown picture: none of `.rk-chat-markdown img`'s margins or radius. */
+.rk-link-mention-icon img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  border-radius: 0;
+  object-fit: contain;
+}
+
+.rk-link-mention-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-decoration: inherit;
+  unicode-bidi: isolate;
+}
+
+.rk-link-mention-glyph {
+  display: grid;
+  place-items: center;
+  color: var(--muted-foreground);
+}
+
+.rk-linkified .rk-link-mention-glyph {
+  color: inherit;
 }

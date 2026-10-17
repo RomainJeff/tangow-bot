@@ -94,6 +94,11 @@ export async function previewLinkForComposer(
       prisma: deps.prisma,
       artifacts: deps.artifacts,
       ...deps.linkPreview,
+      // The reader skips an optional icon it would not have time to finish.
+      readDeps: {
+        ...deps.linkPreview?.readDeps,
+        deadlineAt: Date.now() + LINK_PREVIEW_COMPOSER_DEADLINE_MS,
+      },
     };
     const deadline = AbortSignal.any([
       signal,
@@ -111,7 +116,7 @@ export async function previewLinkForComposer(
         )
       : await resolveLinkPreviewDetailed(service, scope, input.url, deadline);
     ephemeralKey = ephemeralImageKey;
-    // A refusal with no fallback card shows nothing, but still tells the device it may read.
+    // A refusal has no card to show, but still tells the device it may read.
     if (!preview) return deviceReadable ? { format: "compact", deviceReadable: true } : null;
     let thumbnail: string | undefined;
     if (preview.image) {

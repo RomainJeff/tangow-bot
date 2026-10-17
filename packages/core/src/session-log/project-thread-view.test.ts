@@ -723,6 +723,33 @@ describe("projectThreadView rows", () => {
     expect(projectThreadView(inline).rows[0]?.previewMessageId).toBe("in-0");
   });
 
+  it("adds a mention next to the card, and removing the card keeps the mention", () => {
+    const card = {
+      kind: "link_preview",
+      url: "https://a.test/post",
+      format: "compact",
+      title: "Post",
+    };
+    const mention = { kind: "link_mention", url: "https://b.test/doc", title: "Doc" };
+    const bodies = [
+      {
+        type: "user.message",
+        payload: { blocks: text("https://a.test/post https://b.test/doc"), source: "app" },
+      },
+      { type: "link.preview", payload: { target: "lm-0", block: card } },
+      { type: "link.preview", payload: { target: "lm-0", block: mention } },
+    ];
+    const blocks = (entries: ThreadEntry[]) =>
+      projectThreadView(entries).rows.find((row) => row.item.id === "lm-0")?.item;
+    expect(blocks(linkEntries("lm", bodies))).toMatchObject({
+      blocks: [...text("https://a.test/post https://b.test/doc"), card, mention],
+    });
+    const removal = { type: "link.preview.removed", payload: { target: "lm-1" } };
+    expect(blocks(linkEntries("lm", [...bodies, removal]))).toMatchObject({
+      blocks: [...text("https://a.test/post https://b.test/doc"), mention],
+    });
+  });
+
   it("replays a routine history as its words, its folded failures and nothing for silent runs", () => {
     const usage = { inputTokens: 1, outputTokens: 1 };
     const routine = (n: number, outcome: Record<string, unknown>) => [

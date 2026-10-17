@@ -18,7 +18,9 @@ const PNG = Buffer.from(
 );
 const ARTICLE = "https://news.test/article/le-vrai-titre-du-jour";
 const IMAGE = "https://img.test/og.png";
-const HEAD = `<head><title>Le vrai titre</title><meta property="og:image" content="${IMAGE}"></head>`;
+const ICON = "https://news.test/icon.png";
+const ARTICLE_META = '<meta property="og:type" content="article">';
+const HEAD = `<head>${ARTICLE_META}<title>Le vrai titre</title><meta property="og:image" content="${IMAGE}"></head>`;
 const scope = { spaceId: "space-1", userId: "user-1", source: "composer" as const };
 const publicResolver = async () => [{ address: "8.8.8.8", family: 4 }];
 const html = (body: string) =>
@@ -57,23 +59,17 @@ function site(
 }
 
 describe("the server tells the device it may read (CA 81, CA 54)", () => {
-  it("flags a refusal of the site, with the fallback card, and remembers it as restricted", async () => {
+  it("flags a refusal of the site, with no card, and remembers the refusal", async () => {
     const { deps, cacheRows } = site();
     const answer = await resolveLinkPreviewDetailed(deps, scope, ARTICLE);
-    expect(answer.deviceReadable).toBe(true);
-    expect(answer.preview).toMatchObject({ format: "compact", title: "Le vrai titre du jour" });
-    expect(cacheRows()).toMatchObject([{ status: "ok", source: "restricted" }]);
+    expect(answer).toMatchObject({ preview: null, deviceReadable: true, refused: true });
+    expect(cacheRows()).toMatchObject([{ status: "refused", source: "server" }]);
     // The second ask is served from the cache and says the same.
     const again = await resolveLinkPreviewDetailed(deps, scope, ARTICLE);
     expect(again.deviceReadable).toBe(true);
   });
 
-  it("flags a refusal with no fallback card, and a failure that may pass", async () => {
-    const oneWord = site();
-    const bare = await resolveLinkPreviewDetailed(oneWord.deps, scope, "https://news.test/a");
-    expect(bare).toMatchObject({ preview: null, deviceReadable: true });
-    expect(oneWord.cacheRows()).toMatchObject([{ status: "failed", source: "restricted" }]);
-
+  it("flags a failure that may pass (429, 5xx) without remembering it", async () => {
     for (const status of [429, 503]) {
       const passing = site((url) => (url === ARTICLE ? new Response("x", { status }) : undefined));
       expect(await resolveLinkPreviewDetailed(passing.deps, scope, ARTICLE)).toMatchObject({
@@ -82,6 +78,17 @@ describe("the server tells the device it may read (CA 81, CA 54)", () => {
       });
       expect(passing.cacheRows()).toEqual([]);
     }
+  });
+
+  it("still flags a refusal when the deadline cuts the read of its home page short", async () => {
+    const controller = new AbortController();
+    const { deps } = site((url) => {
+      if (url !== "https://news.test/") return undefined;
+      controller.abort();
+      return refusal();
+    });
+    const answer = await resolveLinkPreviewDetailed(deps, scope, ARTICLE, controller.signal);
+    expect(answer).toMatchObject({ preview: null, deviceReadable: true, refused: true });
   });
 
   it("does not flag a timeout or a network error (no HTTP answer, so no oracle on private names)", async () => {
@@ -153,7 +160,7 @@ describe("the server tells the device it may read (CA 81, CA 54)", () => {
 });
 
 describe("the server takes a device's page head (CA 84)", () => {
-  it("replaces the fallback with the parsed card, fetching the image itself, and caches it as device-read", async () => {
+  it("gives the card the parsed head makes, fetching the image itself, and caches it as device-read", async () => {
     const { deps, requests, cacheRows } = site();
     await resolveLinkPreviewDetailed(deps, scope, ARTICLE);
     requests.length = 0;
@@ -171,9 +178,9 @@ describe("the server takes a device's page head (CA 84)", () => {
     expect(requests).toEqual([IMAGE]);
     // The space keeps the server's refusal; the device's card is a second entry, this person's own.
     expect(cacheRows()).toHaveLength(2);
-    expect(cacheRows().find((row) => row.source === "restricted")).toBeDefined();
+    expect(cacheRows().find((row) => row.status === "refused")).toBeDefined();
     const device = cacheRows().find((row) => row.source === "device");
-    expect(device).toMatchObject({ status: "ok", title: "Le vrai titre" });
+    expect(device).toMatchObject({ status: "page", title: "Le vrai titre" });
     expect(deps.artifacts.keys()).toContain(device?.imageKey as string);
   });
 
@@ -193,6 +200,45 @@ describe("the server takes a device's page head (CA 84)", () => {
     }
   });
 
+  it("stores no icon for a card made while the site fails for now (429)", async () => {
+    // No page image, so the icon is read to stand in for it.
+    const head = `<head>${ARTICLE_META}<title>Le vrai titre</title><link rel="icon" sizes="128x128" href="${ICON}"></head>`;
+    const { deps, requests, cacheRows } = site((url) => {
+      if (url === ARTICLE) return new Response("x", { status: 429 });
+      if (url === ICON) return new Response(PNG, { headers: { "content-type": "image/png" } });
+      return undefined;
+    });
+    const answer = await resolveLinkPreviewWithDeviceHead(deps, scope, ARTICLE, head);
+    expect(answer).toMatchObject({ refused: false, ephemeralImageKey: expect.any(String) });
+    expect(requests).toContain(ICON);
+    expect(cacheRows()).toEqual([]);
+    // The icon stands in for the card's picture (the ephemeral image); its own blob is never kept.
+    expect(deps.artifacts.keys()).toEqual([answer.ephemeralImageKey]);
+  });
+
+  it("keeps a refusal's device card when its icon cannot be stored, leaving no orphan", async () => {
+    // No page image, so the icon is read to stand in for it.
+    const head = `<head>${ARTICLE_META}<title>Le vrai titre</title><link rel="icon" sizes="128x128" href="${ICON}"></head>`;
+    const { deps, cacheRows } = site((url) =>
+      url === ICON ? new Response(PNG, { headers: { "content-type": "image/png" } }) : undefined,
+    );
+    await resolveLinkPreviewDetailed(deps, scope, ARTICLE);
+    let puts = 0;
+    const put = deps.artifacts.put.bind(deps.artifacts);
+    deps.artifacts.put = async (...args) => {
+      puts += 1;
+      if (puts === 2) throw new Error("store full");
+      return put(...args);
+    };
+    const answer = await resolveLinkPreviewWithDeviceHead(deps, scope, ARTICLE, head);
+    expect(answer).toMatchObject({ refused: true, deviceReadable: false });
+    expect(answer.preview).toMatchObject({ title: "Le vrai titre" });
+    const device = cacheRows().find((row) => row.source === "device");
+    expect(device).toMatchObject({ iconKey: null });
+    expect(puts).toBe(2);
+    expect(deps.artifacts.keys()).toEqual([device?.imageKey]);
+  });
+
   it("caches the card for a refusal of the site itself (401, 402, 403, 451)", async () => {
     for (const status of [401, 402, 403, 451]) {
       const { deps, cacheRows } = site((url) =>
@@ -209,7 +255,7 @@ describe("the server takes a device's page head (CA 84)", () => {
 
   it("honors the charset of the response's Content-Type, like a fetched page", async () => {
     const { deps } = site();
-    const head = "<head><title>Caf\u00e9 du jour</title></head>";
+    const head = `<head>${ARTICLE_META}<title>Caf\u00e9 du jour</title></head>`;
     const wrong = await resolveLinkPreviewWithDeviceHead(deps, scope, ARTICLE, head);
     expect(wrong.preview?.title).not.toBe("Café du jour");
     const other = site();
@@ -226,7 +272,9 @@ describe("the server takes a device's page head (CA 84)", () => {
 
   it("ignores it for a site the server can read", async () => {
     const { deps, requests, cacheRows } = site((url) =>
-      url === ARTICLE ? html("<head><title>Titre du serveur</title></head>") : undefined,
+      url === ARTICLE
+        ? html(`<head>${ARTICLE_META}<title>Titre du serveur</title></head>`)
+        : undefined,
     );
     const answer = await resolveLinkPreviewWithDeviceHead(deps, scope, ARTICLE, HEAD);
     expect(answer.preview).toMatchObject({ title: "Titre du serveur" });
@@ -269,24 +317,29 @@ describe("the server takes a device's page head (CA 84)", () => {
       await resolveLinkPreviewDetailed(deps, scope, ARTICLE);
       requests.length = 0;
       const answer = await resolveLinkPreviewWithDeviceHead(deps, scope, ARTICLE, head);
-      expect(answer.preview).toMatchObject({ title: "Le vrai titre du jour" });
+      expect(answer).toMatchObject({ preview: null, deviceReadable: true });
       expect(requests).toEqual([]);
-      expect(cacheRows()).toMatchObject([{ source: "restricted" }]);
+      expect(cacheRows()).toMatchObject([{ status: "refused" }]);
     }
     // A head of exactly 512 KiB is accepted.
     const { deps } = site();
-    const exact = `<head><title>Plein</title></head>${" ".repeat(512 * 1024 - 33)}`;
+    const exact = `<head>${ARTICLE_META}<title>Plein</title></head>${" ".repeat(512 * 1024 - 33 - ARTICLE_META.length)}`;
     expect(exact.length).toBe(512 * 1024);
     const answer = await resolveLinkPreviewWithDeviceHead(deps, scope, ARTICLE, exact);
     expect(answer.preview).toMatchObject({ title: "Plein" });
   });
 
-  it("keeps the fallback when the head has no title, and does not cache the miss", async () => {
+  it.each([
+    ["no title", `<head><meta property="og:type" content="article"></head>`],
+    [
+      "no article signal",
+      `<head><title>Accueil</title><meta property="og:type" content="website"></head>`,
+    ],
+  ])("gives no card for a head with %s, and does not cache the miss", async (_name, head) => {
     const { deps, cacheRows } = site();
-    const answer = await resolveLinkPreviewWithDeviceHead(deps, scope, ARTICLE, "<head></head>");
-    expect(answer.preview).toMatchObject({ title: "Le vrai titre du jour" });
-    expect(answer.deviceReadable).toBe(true);
-    expect(cacheRows()).toMatchObject([{ source: "restricted" }]);
+    const answer = await resolveLinkPreviewWithDeviceHead(deps, scope, ARTICLE, head);
+    expect(answer).toMatchObject({ preview: null, deviceReadable: true });
+    expect(cacheRows()).toMatchObject([{ status: "refused" }]);
   });
 
   it("reads the head the way a fetched page is read: charset, entities, a remote image named by <base>", async () => {
@@ -296,7 +349,7 @@ describe("the server takes a device's page head (CA 84)", () => {
         : undefined,
     );
     const latin1 =
-      '<head><base href="https://cdn.test/assets/"><meta charset="iso-8859-1"><title>Café &amp; cie</title><meta property="og:image" content="pic.png"></head>';
+      '<head><meta property="og:type" content="article"><base href="https://cdn.test/assets/"><meta charset="iso-8859-1"><title>Café &amp; cie</title><meta property="og:image" content="pic.png"></head>';
     const answer = await resolveLinkPreviewWithDeviceHead(deps, scope, ARTICLE, latin1);
     expect(answer.preview).toMatchObject({ title: "Café & cie", image: { width: 1 } });
     expect(requests).toContain("https://cdn.test/assets/pic.png");
@@ -320,8 +373,8 @@ describe("the server takes a device's page head (CA 84)", () => {
     }
     // One read left: the refusal check takes it, the device head finds the budget gone.
     const answer = await resolveLinkPreviewWithDeviceHead(limited.deps, scope, ARTICLE, HEAD);
-    expect(answer.preview).toMatchObject({ title: "Le vrai titre du jour" });
-    expect(limited.cacheRows()).toMatchObject([{ source: "restricted" }]);
+    expect(answer.preview).toBeNull();
+    expect(limited.cacheRows()).toMatchObject([{ status: "refused" }]);
   });
 });
 
@@ -373,7 +426,7 @@ describe("the device's card serves its reader's own messages and threads, and no
     expect(requests).toEqual([]);
   });
 
-  it("does not give it to another member of the space, whose message keeps the server's fallback", async () => {
+  it("does not give it to another member of the space, whose message gets no card", async () => {
     const { deps, requests } = await withDeviceCard();
     await db.seedThread({ id: "thread-3", userId: "user-2", botId: "bot-3" });
     await db.seedMessage({ id: "m3", threadId: "thread-3", blocks: [text(`look ${ARTICLE}`)] });
@@ -386,9 +439,9 @@ describe("the device's card serves its reader's own messages and threads, and no
     await runLinkPreviewJob(deps, { messageId: "m3" });
     await runLinkPreviewJob(deps, { runId: "run-3" });
 
-    // The space's cached refusal answers: the fallback card, no new request, no device title.
-    expect(await card("m3")).toMatchObject({ title: "Le vrai titre du jour" });
-    expect(await card("final-3")).toMatchObject({ title: "Le vrai titre du jour" });
+    // The space's cached refusal answers: no card, no new request, no device title.
+    expect(await card("m3")).toBeUndefined();
+    expect(await card("final-3")).toBeUndefined();
     expect(requests).toEqual([]);
   });
 
@@ -399,7 +452,7 @@ describe("the device's card serves its reader's own messages and threads, and no
 
     await runLinkPreviewJob(deps, { messageId: "m2" });
 
-    expect(await card("m2")).toMatchObject({ title: "Le vrai titre du jour" });
+    expect(await card("m2")).toBeUndefined();
     expect(requests).toContain(ARTICLE);
     expect(requests).not.toContain(IMAGE);
   });

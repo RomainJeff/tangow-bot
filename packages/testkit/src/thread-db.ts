@@ -1,5 +1,5 @@
 import type { ArtifactStore, SessionEntryDraft } from "@rakazo/adapter-kit";
-import type { LinkPreviewCard, MessageBlock } from "@rakazo/contracts";
+import type { LinkMentionBlock, LinkPreviewCard, MessageBlock } from "@rakazo/contracts";
 import { EntryId, SessionId } from "@rakazo/contracts";
 import {
   appendRunBlocksInTransaction,
@@ -47,6 +47,8 @@ export interface ThreadDb {
   }): Promise<void>;
   /** The preview a message shows now, and whether one was ever removed or refused. */
   previewOf(messageId: string): Promise<{ card?: LinkPreviewCard; removed: boolean }>;
+  /** The mentions a message shows, in the order they were written. */
+  mentionsOf(messageId: string): Promise<LinkMentionBlock[]>;
 }
 
 export async function openThreadDb(): Promise<ThreadDb> {
@@ -236,11 +238,9 @@ export async function openThreadDb(): Promise<ThreadDb> {
       });
     },
     async previewOf(messageId) {
-      const previews = await prisma.sessionEntry.findMany({
-        where: { type: "link.preview", payload: { path: ["target"], equals: messageId } },
-        orderBy: { seq: "asc" },
-        select: { id: true, payload: true },
-      });
+      const previews = (await linkEntries(messageId)).filter(
+        (entry) => entry.block.kind === "link_preview",
+      );
       const removals = await prisma.sessionEntry.findMany({
         where: {
           type: "link.preview.removed",
@@ -253,9 +253,26 @@ export async function openThreadDb(): Promise<ThreadDb> {
       const removed = new Set(removals.map((row) => (row.payload as { target: string }).target));
       const shown = previews.findLast((preview) => !removed.has(preview.id));
       return {
-        ...(shown ? { card: (shown.payload as { block: LinkPreviewCard }).block } : {}),
+        ...(shown ? { card: shown.block as LinkPreviewCard } : {}),
         removed: removed.size > 0,
       };
     },
+    async mentionsOf(messageId) {
+      return (await linkEntries(messageId)).flatMap(({ block }) =>
+        block.kind === "link_mention" ? [block] : [],
+      );
+    },
   };
+
+  async function linkEntries(messageId: string) {
+    const entries = await prisma.sessionEntry.findMany({
+      where: { type: "link.preview", payload: { path: ["target"], equals: messageId } },
+      orderBy: { seq: "asc" },
+      select: { id: true, payload: true },
+    });
+    return entries.map((entry) => ({
+      id: entry.id,
+      block: (entry.payload as { block: LinkPreviewCard | LinkMentionBlock }).block,
+    }));
+  }
 }

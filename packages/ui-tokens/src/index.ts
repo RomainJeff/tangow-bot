@@ -27,6 +27,8 @@ export type ColorTokens = {
   chatUserForeground: string;
   mentionChip: string;
   mentionChipForeground: string;
+  /** The tile behind a link mention's fallback glyph in a bot bubble: a shade lighter than `muted`. */
+  linkMentionTile: string;
   muted: string;
   mutedForeground: string;
   accent: string;
@@ -43,7 +45,6 @@ export type ColorTokens = {
   sidebarAccent: string;
   sidebarAccentForeground: string;
   surface: string;
-  link: string;
   success: string;
   warning: string;
   overlay: string;
@@ -74,6 +75,7 @@ export const darkTokens = {
   chatUserForeground: "#F2F2F0",
   mentionChip: "#222226",
   mentionChipForeground: "#F2F2F0",
+  linkMentionTile: "#2E2E30",
   muted: "#1F1F21",
   mutedForeground: "#9A9AA1",
   accent: "#1B1B1C",
@@ -90,7 +92,6 @@ export const darkTokens = {
   sidebarAccent: "#1D1D1F",
   sidebarAccentForeground: "#F2F2F0",
   surface: "#161618",
-  link: "#86B7FF",
   success: "#4ECB71",
   warning: "#E9C46A",
   overlay: "rgba(4, 4, 5, 0.72)",
@@ -117,6 +118,7 @@ export const lightTokens = {
   chatUserForeground: "#FBFBF9",
   mentionChip: "#F1F1EE",
   mentionChipForeground: "#111114",
+  linkMentionTile: "#F3F3F1",
   muted: "#EDEDEB",
   mutedForeground: "#6E6E73",
   accent: "#EFEFEE",
@@ -133,7 +135,6 @@ export const lightTokens = {
   sidebarAccent: "#FFFFFF",
   sidebarAccentForeground: "#111114",
   surface: "#FFFFFF",
-  link: "#2563EB",
   success: "#228B3B",
   warning: "#B7791F",
   overlay: "rgba(20, 20, 22, 0.45)",
@@ -219,6 +220,8 @@ export const radii = {
   draft: 16,
   block: 18,
   bubble: 18,
+  /** A link mention's 16 px site icon or fallback tile. */
+  linkMention: 4,
   composer: 24,
   pill: 9999,
 } as const satisfies Record<string, number>;
@@ -360,6 +363,10 @@ export const sizes = {
   linkIconInset: 8,
   /** Max height of a link preview shown as a photo. */
   linkPhotoMax: 320,
+  /** The site icon of a link mention, inline in a bubble's text (web and iOS). */
+  linkMentionIcon: 16,
+  /** Space between a link mention's icon and its label. */
+  linkMentionGap: 5,
 } as const satisfies Record<string, number>;
 
 /** Width over height of a large link preview's picture: the one ratio, web and iOS. */

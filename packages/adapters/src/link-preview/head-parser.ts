@@ -5,10 +5,18 @@ import { JSDOM } from "jsdom";
 const CHARSET_SNIFF_BYTES = 4096;
 
 export interface LinkPreviewHead {
+  /** The page declares itself an article in its head (see `declaresArticle`): the only HTML page that gets a card. */
+  article: boolean;
   title?: string;
   imageUrl?: string;
-  /** The best site icon the head declares (see `pickIconUrl`), for a page with no usable image. */
+  /** The best site icon the head declares (see `pickIconUrl`). */
   iconUrl?: string;
+  /**
+   * The address the page gives for itself, `<link rel=canonical>` else `og:url`, only ever
+   * compared with the link (a site root for a page with a path means the page read is not the
+   * page asked for). Never fetched.
+   */
+  canonicalUrl?: string;
 }
 
 /** An icon smaller than this (declared `sizes`) is a favicon, too small for a 56 pt thumbnail. */
@@ -17,7 +25,7 @@ const MIN_ICON_SIZE = 64;
 /**
  * Title and image of an HTML head. Nothing runs and nothing loads: JSDOM is used as a parser
  * only (no `runScripts`, no `resources`), so scripts, images, frames, stylesheets and
- * `<meta http-equiv=refresh>` stay inert. `og:url` and `og:site_name` are never read.
+ * `<meta http-equiv=refresh>` stay inert. `og:site_name` is never read.
  * `url` is the final URL of the page, the base for a relative image or icon.
  */
 export function parseLinkPreviewHead(
@@ -35,20 +43,92 @@ export function parseLinkPreviewHead(
       ]);
       const base = baseUrl(doc, options.url);
       const imageUrl = [metaContent(doc, "og:image"), metaContent(doc, "twitter:image")]
-        .map((raw) => resolveImage(raw, base))
+        .map((raw) => resolveHttpUrl(raw, base))
         .find((resolved) => resolved !== undefined);
       const iconUrl = pickIconUrl(doc, base);
+      const canonicalUrl = resolveHttpUrl(canonicalHref(doc) ?? metaContent(doc, "og:url"), base);
       return {
+        article: declaresArticle(doc),
         ...(title ? { title } : {}),
         ...(imageUrl ? { imageUrl } : {}),
         ...(iconUrl ? { iconUrl } : {}),
+        ...(canonicalUrl ? { canonicalUrl } : {}),
       };
     } finally {
       dom.window.close();
     }
   } catch {
-    return {};
+    return { article: false };
   }
+}
+
+const ARTICLE_TYPES: ReadonlySet<string> = new Set([
+  "Article",
+  "NewsArticle",
+  "BlogPosting",
+  "Report",
+  "ScholarlyArticle",
+  "TechArticle",
+  "AnalysisNewsArticle",
+  "OpinionNewsArticle",
+  "ReportageNewsArticle",
+  "LiveBlogPosting",
+]);
+const MAX_JSON_LD_SCRIPTS = 8;
+const MAX_JSON_LD_SCRIPT_CHARS = 64 * 1024;
+const MAX_JSON_LD_TOTAL_CHARS = 256 * 1024;
+
+/** An article says so in its head: `og:type=article`, an `article:published_time`, or a schema.org article type in JSON-LD. */
+function declaresArticle(doc: Document): boolean {
+  return (
+    metaContent(doc, "og:type")?.toLowerCase() === "article" ||
+    metaContent(doc, "article:published_time") !== undefined ||
+    jsonLdDeclaresArticle(doc)
+  );
+}
+
+/**
+ * Reads nothing but `@type` from bounded JSON-LD: at most 8 scripts, 64 KB each, 256 KB in all, the
+ * rest ignored. The page is untrusted, so the walk is flat (the root, the elements of a root array,
+ * one level of `@graph`), a type is only compared with a fixed set, and the parsed value is never
+ * merged into anything.
+ */
+function jsonLdDeclaresArticle(doc: Document): boolean {
+  let scripts = 0;
+  let total = 0;
+  for (const script of doc.querySelectorAll("script")) {
+    if (script.getAttribute("type")?.trim().toLowerCase() !== "application/ld+json") continue;
+    scripts += 1;
+    if (scripts > MAX_JSON_LD_SCRIPTS) return false;
+    const text = script.textContent ?? "";
+    if (text.length > MAX_JSON_LD_SCRIPT_CHARS) continue;
+    total += text.length;
+    if (total > MAX_JSON_LD_TOTAL_CHARS) return false;
+    let root: unknown;
+    try {
+      root = JSON.parse(text);
+    } catch {
+      continue;
+    }
+    for (const node of Array.isArray(root) ? root : [root]) {
+      if (hasArticleType(node)) return true;
+      const graph = isRecord(node) ? node["@graph"] : undefined;
+      if (Array.isArray(graph) && graph.some(hasArticleType)) return true;
+    }
+  }
+  return false;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function hasArticleType(node: unknown): boolean {
+  if (!isRecord(node)) return false;
+  const type = node["@type"];
+  return Array.isArray(type)
+    ? type.some((entry) => typeof entry === "string" && ARTICLE_TYPES.has(entry))
+    : typeof type === "string" && ARTICLE_TYPES.has(type);
 }
 
 function firstClean(candidates: Array<string | undefined>): string | undefined {
@@ -82,6 +162,15 @@ function baseUrl(doc: Document, pageUrl: string): string {
   }
 }
 
+function canonicalHref(doc: Document): string | undefined {
+  for (const link of doc.querySelectorAll("link[href]")) {
+    if ((link.getAttribute("rel") ?? "").toLowerCase().split(/\s+/).includes("canonical")) {
+      return link.getAttribute("href")?.trim() || undefined;
+    }
+  }
+  return undefined;
+}
+
 type IconCandidate = { href: string; size: number; order: number };
 
 /**
@@ -101,7 +190,7 @@ function pickIconUrl(doc: Document, base: string): string | undefined {
     const isTouch =
       rel.includes("apple-touch-icon") || rel.includes("apple-touch-icon-precomposed");
     if (!isTouch && !rel.includes("icon")) continue;
-    const href = resolveImage(link.getAttribute("href")?.trim(), base);
+    const href = resolveHttpUrl(link.getAttribute("href")?.trim(), base);
     if (!href || isVectorOrIco(href, link.getAttribute("type"))) continue;
     const size = declaredSize(link.getAttribute("sizes"));
     if (isTouch) {
@@ -148,7 +237,7 @@ function isRasterIcon(href: string, type: string | null): boolean {
   return ["png", "webp", "jpg", "jpeg"].includes(pathExtension(href));
 }
 
-function resolveImage(raw: string | undefined, base: string): string | undefined {
+function resolveHttpUrl(raw: string | undefined, base: string): string | undefined {
   if (!raw) return undefined;
   try {
     const href = new URL(raw, base).href;

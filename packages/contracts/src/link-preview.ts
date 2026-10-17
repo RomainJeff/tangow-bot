@@ -97,6 +97,29 @@ export type LinkPreviewCard = {
   image?: z.infer<typeof LinkPreviewImage>;
 };
 
+/** The longest label the server writes on a mention: iOS cannot ellipsize a nested text run. */
+export const LINK_MENTION_TITLE_MAX_LENGTH = 80;
+
+/**
+ * One link of a message shown inline, added by the server after the message was sent. `url` is
+ * the link as first written (`linkKey` in core is its identity), `title` the label the server
+ * resolved (absent when only the host is left), `icon` a site icon copied into the thread.
+ * Deliberately no `text` and no remote URL, for the same reason as the card.
+ */
+export const LinkMentionBlock = z.object({
+  kind: z.literal("link_mention"),
+  url: PreviewUrl,
+  title: z.string().min(1).max(LINK_MENTION_TITLE_MAX_LENGTH).optional(),
+  icon: z.object({ artifactId: Id }).optional(),
+});
+export type LinkMentionBlock = z.infer<typeof LinkMentionBlock>;
+
+/**
+ * The block kinds the server attaches for a link: page content, never what anyone wrote. Search,
+ * model history and message grouping leave every one of them out.
+ */
+export const LINK_BLOCK_KINDS: ReadonlySet<string> = new Set(["link_preview", "link_mention"]);
+
 /** True for a preview that has something to show, false for the removal marker. */
 export function isLinkPreviewCard(block: LinkPreviewBlock): block is LinkPreviewCard {
   return !block.removed && block.url !== undefined && block.format !== undefined;
@@ -117,7 +140,7 @@ export const LinkPreviewDraftSchema = z.object({
    * True when the site refused the server (or answered with a passing 429 or 5xx) and the
    * sender's own device may read the page and send its head back as `pageHead`. It says nothing
    * more: a refused address, a missing page or a limit never set it. A draft with no title and
-   * no thumbnail shows nothing; it is how a refusal with no usable fallback carries this flag.
+   * no thumbnail shows nothing; it is how a refusal carries this flag.
    */
   deviceReadable: z.literal(true).optional(),
 });

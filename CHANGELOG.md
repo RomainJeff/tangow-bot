@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-10-17
+
+#### Added
+
+- **Links in messages now show as mentions with their site's icon.** A link to a document, a tool or a page shows the site's icon and a readable name instead of the raw address, up to five per message, on web and desktop; articles keep their preview card.
+
+#### Changed
+
+- Links in messages and on the desktop setup screen now take the colour of the text around them instead of blue, on web, desktop and iPhone.
+- Link previews now appear only for articles and photos.
+
 ### 2026-10-16
 
 #### Changed

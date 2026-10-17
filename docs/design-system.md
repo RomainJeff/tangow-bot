@@ -54,6 +54,7 @@ colours. An `rgba` in a slot is a bug.
 | `chatUserForeground` | `#FBFBF9` | `#F2F2F0` | |
 | `mentionChip` | `#F1F1EE` | `#222226` | mention chip in the composer |
 | `mentionChipForeground` | `#111114` | `#F2F2F0` | |
+| `linkMentionTile` | `#F3F3F1` | `#2E2E30` | the tile behind a link mention's icon in a bot bubble, a shade lighter than `muted` |
 | `muted` | `#EDEDEB` [6%] | `#1F1F21` [8%] | bot bubble, segmented track |
 | `mutedForeground` | `#6E6E73` | `#9A9AA1` | clickable grey: meta, times, section labels, icons |
 | `accent` | `#EFEFEE` [5%] | `#1B1B1C` [6%] | icon-button hover |
@@ -67,7 +68,6 @@ colours. An `rgba` in a slot is a bug.
 | `sidebarForeground` | `#111114` | `#F2F2F0` | |
 | `sidebarAccent` | `#FFFFFF` | `#1D1D1F` [7%] | selected and hovered row |
 | `sidebarAccentForeground` | `#111114` | `#F2F2F0` | |
-| `link` | `#2563EB` | `#86B7FF` | |
 | `destructive` | `#DC2626` | `#EF4444` | |
 | `destructiveForeground` | `#FFFFFF` | `#FFFFFF` | |
 | `success` | `#228B3B` | `#4ECB71` | |
@@ -132,6 +132,7 @@ multiple of 0.25 rem: `gap-3.5` is 14, `gap-5.5` is 22, `gap-7` is 28. Never
 | `draft` | 16 | — | shared draft (wave 2) |
 | `block` | 18 | `rounded-block` | framed blocks |
 | `bubble` | 18 | `rounded-bubble` | every message bubble, bot and user |
+| `linkMention` | 4 | — | a link mention's icon frame (`--corner-link-mention`) |
 | `pill` | 9999 | `rounded-full` | capsules, round buttons, composer, avatars |
 
 ### Elevation
@@ -184,7 +185,8 @@ Link preview card: `linkLargeImageRatio` 1.91 (the large format's picture, width
 height) and `linkCard 360` (its width on web, capped by the column),
 `linkThumb 56` (the compact format's thumbnail), `linkIconInset 8` (the space around
 a site icon inside that thumbnail, web and iOS), `linkPhotoMax 320` (the photo
-format's maximum height).
+format's maximum height). Link mention: `linkMentionIcon 16` (the site icon in the
+text, web and iOS) and `linkMentionGap 5` (between that icon and the label).
 
 The sizes a primitive needs as a class are mapped into Tailwind's spacing
 namespace in `packages/ui-web/src/styles.css` — `--spacing-hover-icon`,
@@ -338,12 +340,15 @@ outlined for a delegated task's result (subagent).
 
 ### LinkPreviewCard
 
-What the page behind a link looks like, kept with the message's attachments: under
+What the article or photo behind a link looks like, kept with the message's attachments: under
 the bubble (or alone, in the bubble's place, when the message is only its link),
 `gap-1` below it and aligned to its edge. Three formats the server picks from what
 it downloaded: `large` (picture at `linkLargeImageRatio`, 1.91:1, from `@rakazo/ui-tokens` on both surfaces, then title and site), `compact`
 (56 px thumbnail when there is a picture, title, site) and `photo` (the picture
 alone in a `rounded-bubble` frame capped at `linkPhotoMax`, the site under it).
+Only an article (a page whose head declares one) or a direct image link gets a card; a
+document, a tool, a home page or a site that refuses the server's read shows as a
+`LinkMention` in the text instead.
 When the page has no usable picture, a compact card takes the site's icon as its
 thumbnail (the server marks the image `fit: "contain"`; an icon is never a `large`
 card): the icon is drawn whole and centered in the same 56 px `bg-secondary` tile,
@@ -378,16 +383,53 @@ or `variant="outlined"` (reserved for a bot's work product).
 
 Used by: the web and desktop thread (`apps/web/src/pages/shell/message-view.tsx`).
 
+### LinkMention
+
+A link the server resolved, in place in the sentence: the site's icon, then a readable
+label, in the bubble's ink with the bubble's link underline. No box and no fill: the icon
+alone says the link goes somewhere. `packages/chat-ui/src/link-mention.web.tsx`, drawn by
+`ChatMarkdown` for a bot and `LinkifiedText` for the person, both given the message's
+resolver (`mentions`, memoized on the message's `link_mention` blocks in `message-view.tsx`,
+so an equal re-projection does not re-parse the markdown). A link turns into a mention only when the message has a `link_mention` block
+for it (`linkMentionsOf`, matched by `linkKey`); every other link renders as before.
+The label is the author's markdown label when it says more than the address, else the
+server's title, else the host (`linkMentionLabel`).
+
+Anatomy: an `<a data-slot="link-mention" target="_blank" rel="noreferrer noopener">`,
+`inline-flex`, exactly one line box tall and bottom-aligned, so its text keeps the
+sentence's baseline and the icon sits centred on the line; `nowrap`, so the icon never ends
+a line alone; at most `min(32ch, 100%)` wide. The icon frame is `linkMentionIcon` (16) at
+`--corner-link-mention` (4) on a `linkMentionTile` tile with a 10% `foreground` hairline, so
+a dark or transparent site icon still reads on the bubble; in the person's bubble the tile
+is a 14% veil of its text colour and no hairline. `linkMentionGap` (5) before the label,
+never underlined and `aria-hidden`. The label is inert text in a `<bdi>` and ends in an
+ellipsis rather than widen the bubble. Name "label, host" (the host alone when it is the
+label), the full URL as `title`, its host in punycode as the browser will open it.
+
+States. The site icon comes from the thread's artifact like a card's picture
+(`LinkMentionIcon`), never a remote URL; the frame shows only its tile while it loads and
+the icon arrives without motion. With no icon, or one that cannot be read, `LinkMentionGlyph`
+draws lucide's link glyph at 62.5% of the frame in `mutedForeground` on the same tile; in
+the person's bubble the glyph takes its text colour. Before the server read the page, or
+when the read failed, the link stays plain. Hover makes the underline solid. Focus is a
+2 px outline at 2 px offset in `ring`; in the person's bubble its text colour at 60%, since
+`ring` reaches only about 3:1 there.
+
+Do: keep the mention a link in the sentence and let its label truncate. Don't: give it a
+pill or a background (it would read as a composer mention chip), an initial in place of
+the glyph, a loading state or a host beside the label.
+
+Used by: the web and desktop thread. iPhone has no native mirror yet; its links stay plain.
+
 ### ComposerLinkPreview
 
 What the first complete link of the draft will look like, in the composer's
 `attachments` row beside `ComposerAttachment` (iOS: the same row, `components/
 composer-link-preview.tsx`). Always the compact card whatever format the server
 picked: `h-composer-attachment-thumb` (64) in `bg-background` at `rounded-card`,
-a `size-link-thumb` thumbnail, the title on one line, the site under it. While the
-page is read, the thumbnail is an empty `bg-secondary` tile and the host is the
-shared `Shimmer` (iOS: `ShimmerText`), the one thing that moves; the card is named
-by that host. The × is the shared
+a `size-link-thumb` thumbnail, the title on one line, the site under it. Nothing
+shows while the page is read: the card appears only once it is ready, so a link
+that is not an article never flashes one. The × is the shared
 `ComposerRemoveButton` (`composerRemove`, `bg-primary`, `border-surface` ring,
 named "Remove preview"; 44 pt target on iOS). The card is not a link and a failed
 or empty read draws nothing and says nothing.
@@ -513,6 +555,10 @@ surface, their hairlines running edge to edge.
 
 One message is one bubble: never split a message by paragraph. Agent steps sit
 above the bubble, unfilled.
+
+A link in a bubble, bot's or person's, is ink: the bubble's text colour, underlined 1 px at
+0.2em, as a 35% veil of that ink in a bot bubble and 45% in the person's, solid on hover
+(web). There is no link colour token.
 
 The native mirror is `apps/mobile/components/bot-bubble.tsx`. It caps its width
 with a number computed from the window: a bubble that fits its content has no

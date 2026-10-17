@@ -4,13 +4,7 @@ import {
   LINK_PREVIEW_THUMBNAIL_MAX_LENGTH,
   LINK_PREVIEW_THUMBNAIL_PREFIX,
 } from "@rakazo/contracts";
-import {
-  firstEligibleLink,
-  hasSecretParam,
-  isAuthenticationDestination,
-  previewSiteLabel,
-  sanitizePreviewTitle,
-} from "./link-preview.js";
+import { linkMentionCandidates, previewSiteLabel, sanitizePreviewTitle } from "./link-preview.js";
 import { extractLinkOccurrences } from "./search.js";
 
 /** How long a complete link must stay the first link before the page is read. */
@@ -44,17 +38,17 @@ export function inferComposerChange(prev: string, next: string): ComposerChange 
 }
 
 /**
- * The link of `next` that is ready to be read, or undefined. The first eligible link must be
- * complete: pasted, or its word followed by a space or a line break. A link still being typed
- * (nothing after it yet) never is, and neither is a link with a secret in its query or one to a sign-in page.
+ * The link of `next` that is ready to be read, or undefined. The first eligible link (the one a
+ * card may go with) must be complete: pasted, or its word followed by a space or a line break. A
+ * link still being typed (nothing after it yet) never is.
  */
 export function composerLinkPreviewTrigger(
   prev: string,
   next: string,
   change: ComposerChange,
 ): string | undefined {
-  const link = firstEligibleLink(next);
-  if (!link || hasSecretParam(link) || isAuthenticationDestination(link)) return undefined;
+  const link = cardCandidate(next);
+  if (!link) return undefined;
   const pasted = change === "paste" ? insertedSpan(prev, next) : undefined;
   for (const { href, start, end } of extractLinkOccurrences(next)) {
     if (href !== link) continue;
@@ -63,6 +57,10 @@ export function composerLinkPreviewTrigger(
     if (/\s/u.test(next.slice(end))) return link;
   }
   return undefined;
+}
+
+function cardCandidate(text: string): string | undefined {
+  return linkMentionCandidates(text)[0]?.url;
 }
 
 /**
@@ -79,7 +77,6 @@ export function acceptPreviewThumbnail(value: string | undefined): string | unde
 
 export type ComposerLinkPreviewView =
   | { status: "idle" }
-  | { status: "loading"; url: string }
   | {
       status: "ready";
       url: string;
@@ -187,9 +184,9 @@ export function createComposerLinkPreview(
   };
 
   /**
-   * The server's draft first. When it says the site refused the server and this device can read
-   * pages, the device reads the head and the server is asked again with it; the better card
-   * replaces the fallback. Any failure on the way keeps what is already shown, silently.
+   * The server's draft first: a card only when it holds one. When it says the site refused the
+   * server and this device can read pages, the device reads the head and the server is asked
+   * again with it. Nothing shows while a read runs, and any failure leaves nothing on screen.
    */
   const load = async (url: string, signal: AbortSignal) => {
     let first: LinkPreviewDraft | null = null;
@@ -199,11 +196,8 @@ export function createComposerLinkPreview(
       first = null;
     }
     if (signal.aborted) return;
-    const firstView = readyView(url, first);
     const readPageHead = deps.readPageHead;
-    if (!first?.deviceReadable || !readPageHead) return show(firstView ?? IDLE);
-    // A fallback card shows while the device reads; with none, the loading card stays.
-    if (firstView) show(firstView);
+    if (!first?.deviceReadable || !readPageHead) return show(readyView(url, first) ?? IDLE);
     let upgraded: ComposerLinkPreviewView | undefined;
     try {
       const page = await readPageHead(url, signal);
@@ -214,7 +208,7 @@ export function createComposerLinkPreview(
       upgraded = undefined;
     }
     if (signal.aborted) return;
-    show(upgraded ?? firstView ?? IDLE);
+    show(upgraded ?? IDLE);
   };
 
   const start = (url: string) => {
@@ -222,7 +216,6 @@ export function createComposerLinkPreview(
     abort = controller;
     timer = setTimeout(() => {
       timer = undefined;
-      show({ status: "loading", url });
       void load(url, controller.signal);
     }, debounceMs);
   };
@@ -241,7 +234,7 @@ export function createComposerLinkPreview(
       if (next.trim() === "") return reset();
       if (removed) return;
       // Only a new link must be complete: typing elsewhere in the draft keeps the current one.
-      if (link && firstEligibleLink(next) === link) return;
+      if (link && cardCandidate(next) === link) return;
       const target = composerLinkPreviewTrigger(prev, next, change);
       if (target === link) return;
       stop();
