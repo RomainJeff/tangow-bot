@@ -2,7 +2,7 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { useAskCard } from "@rakazo/chat-ui/ask-card";
 import { ChatMarkdown } from "@rakazo/chat-ui/web";
 import { ASK_ANSWER_MAX_LENGTH } from "@rakazo/contracts";
-import type { AskCardBlock, AskForm, OptionId, Presenter } from "@rakazo/core";
+import type { AskCardBlock, AskForm, FormOption, OptionId, Presenter } from "@rakazo/core";
 import { motion } from "@rakazo/ui-tokens";
 import { Button, cn, FramedBlock, OptionField, OptionTile, StackLine } from "@rakazo/ui-web";
 import { Pencil } from "lucide-react";
@@ -155,6 +155,10 @@ export function QuestionCard({
 
   const { lines, step, busy, filled } = view;
   const isFilled = (id: OptionId) => filled?.kind === "option" && filled.optionId === id;
+  const optionDetail = ({ description, recommended }: FormOption) => {
+    if (!recommended) return description;
+    return description ? t`Recommended · ${description}` : t`Recommended`;
+  };
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     const target = event.target as HTMLElement;
@@ -289,6 +293,7 @@ export function QuestionCard({
             key={option.id}
             selected={step.selected.includes(option.id)}
             filled={isFilled(option.id)}
+            detail={optionDetail(option)}
             onClick={() => act.tap(option.id)}
           >
             {option.label}

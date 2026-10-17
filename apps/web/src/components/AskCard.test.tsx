@@ -781,6 +781,60 @@ describe("AskCard open question", () => {
     expect(detail?.textContent).toBe("Berlin: rain\nSeoul: sun");
   });
 
+  it("shows what an option does under it and a muted Recommended, choosing nothing (CA19)", async () => {
+    const sent: string[] = [];
+    const ask = (
+      options: NonNullable<NonNullable<AskBlock["questions"]>[number]["options"]>,
+    ): AskBlock => ({
+      kind: "ask",
+      text: "",
+      questions: [{ id: "q1", question: "Which fridge?", options }],
+    });
+    const tiles = () =>
+      [...container.querySelectorAll('[data-slot="option-tile"]')].map((tile) => {
+        const text = (attribute: string) => {
+          const id = tile.getAttribute(attribute);
+          return id ? document.getElementById(id)?.textContent : null;
+        };
+        return [
+          text("aria-labelledby") ?? tile.textContent,
+          text("aria-describedby"),
+          tile.getAttribute("aria-pressed"),
+        ];
+      });
+
+    mount(
+      ask([
+        { id: "q1o1", label: "Freestanding", description: "Fits most kitchens", recommended: true },
+        { id: "q1o2", label: "Built-in", description: "Hides in a cabinet" },
+        { id: "q1o3", label: "American" },
+      ]),
+      async (text) => void sent.push(text),
+    );
+    expect(tiles()).toEqual([
+      ["Freestanding", "Recommended · Fits most kitchens", "false"],
+      ["Built-in", "Hides in a cabinet", "false"],
+      ["American", null, "false"],
+      ["Other…", null, null],
+    ]);
+    expect(document.activeElement).toBe(document.body);
+    press(container.querySelector('[data-slot="question-card"]')!, "Enter");
+    await act(async () => vi.advanceTimersByTime(1000));
+    expect(sent).toEqual([]);
+
+    mount(
+      ask([
+        { id: "q1o1", label: "Yes" },
+        { id: "q1o2", label: "No", recommended: true },
+      ]),
+      async () => {},
+    );
+    expect(tiles().slice(0, 2)).toEqual([
+      ["Yes", null, "false"],
+      ["No", "Recommended", "false"],
+    ]);
+  });
+
   it("shows a label written in markdown literally, without a link (CA16)", () => {
     mount(
       {

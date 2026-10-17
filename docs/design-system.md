@@ -300,7 +300,10 @@ One answer of a question card (`ask_user`, a legacy choice): a full-width
 `dir="auto"`, wrapping. Props: `selected?` (a `ring-selected` `foreground` ring
 and a check, announced with `aria-pressed`), `filled?` (the answer on its way:
 `chatUser` over `--duration-fill`), `trailing?` (replaces the check, such as
-Other…'s pencil). Tiles stack 8 apart (`gap-2`) in a `<fieldset>` named by the
+Other…'s pencil), `detail?` (a muted `text-meta` line under the label, announced
+as the tile's description: what the option does, after a plain "Recommended ·"
+on the one recommended option, which is never preselected, reordered or focused
+first). Tiles stack 8 apart (`gap-2`) in a `<fieldset>` named by the
 question.
 
 `OptionField` is a typed answer in the same shape: a `<form>` on an

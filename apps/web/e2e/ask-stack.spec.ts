@@ -47,6 +47,13 @@ for (const width of [1440, 390]) {
     await expect(card.getByRole("group", { name: "Which fridge do you have now?" })).toBeVisible();
     await expect(lines).toHaveCount(0);
     await expect(card).not.toContainText("1/3");
+    await expect(button("Freestanding, 60 cm")).toHaveAccessibleDescription(
+      "Recommended · Fits most kitchens",
+    );
+    await expect(button("Freestanding, 60 cm")).toHaveAttribute("aria-pressed", "false");
+    await expect(button("Built-in, 54–56 cm")).toHaveAccessibleDescription(
+      "Hides behind a cabinet door",
+    );
     await shoot(page, testInfo, "open");
 
     await button("Built-in, 54–56 cm").click();
