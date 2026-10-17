@@ -2,7 +2,12 @@ import { randomUUID } from "node:crypto";
 import type { SessionEntryDraft } from "@rakazo/adapter-kit";
 import type { FactualRunRecap, MessageBlock, SessionEntry } from "@rakazo/contracts";
 import { EntryId, EntrySeq, SessionId } from "@rakazo/contracts";
-import { projectThreadItems, spawnBotApprovalBlock, visibleEntries } from "@rakazo/core";
+import {
+  projectThreadItems,
+  projectThreadView,
+  spawnBotApprovalBlock,
+  visibleEntries,
+} from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import {
   answerRunInputInTransaction,
@@ -886,6 +891,9 @@ describe("session log writers", () => {
     "foreign",
     "reasoning",
     "unanswered",
+    "reused-unanswered",
+    "reused-answered",
+    "reused-overlapped",
     "rewound",
     "failed",
     "cancelled",
@@ -921,6 +929,22 @@ describe("session log writers", () => {
           type: "tool.call",
           payload: { callId: "pending", name: "list_files", input: "{}" },
         });
+      const repeated = scenario.startsWith("reused-")
+        ? await write({
+            type: "tool.call",
+            payload: { callId: "lookup", name: "list_files", input: '{"path":"other"}' },
+          })
+        : undefined;
+      if (scenario === "reused-overlapped")
+        await write({
+          type: "tool.call",
+          payload: { callId: "lookup", name: "list_files", input: '{"path":"replay"}' },
+        });
+      if (scenario === "reused-answered" || scenario === "reused-overlapped")
+        await write({
+          type: "tool.result",
+          payload: { callId: "lookup", output: "Found other.txt", isError: false, artifactIds: [] },
+        });
       if (scenario === "rewound")
         await prisma.$transaction((tx) =>
           log.append(tx, {
@@ -946,7 +970,9 @@ describe("session log writers", () => {
                       ? [{ entryId: reasoning.id }]
                       : scenario === "unanswered"
                         ? [{ callId: "pending" }]
-                        : [{ callId: "lookup" }, { entryId: result.id }],
+                        : repeated
+                          ? [{ entryId: repeated.id }, { entryId: result.id }, { callId: "lookup" }]
+                          : [{ callId: "lookup" }, { entryId: result.id }],
               },
             };
       const attempt = await prisma.attempt.create({
@@ -973,7 +999,7 @@ describe("session log writers", () => {
       const main = await log.readTail(owner.sessionId);
       const recaps = main.filter((entry) => entry.type === "run.recap");
       const expected =
-        scenario === "available"
+        scenario === "available" || scenario === "reused-answered"
           ? recap
           : {
               state: "missing",
@@ -1005,6 +1031,66 @@ describe("session log writers", () => {
       expect(
         (await prisma.thread.findUniqueOrThrow({ where: { id: owner.threadId } })).unread,
       ).toBe(false);
+    },
+  );
+
+  it.each(["question", "approval"] as const)(
+    "clears an interactive %s waiting target after cancellation and reload",
+    async (kind) => {
+      const { prisma } = database;
+      const owner = await seedBot(prisma, `Cancelled ${kind}`);
+      const lease = { leaseOwner: "worker-1", leaseFence: 1 };
+      const run = await seedRun(prisma, owner.bot.id, owner.threadId, lease);
+      const opened = await openRunLog(
+        { prisma, sessionLog: log },
+        run,
+        { sessionId: owner.sessionId, runId: run.id, botId: owner.bot.id },
+        SCRIPTED,
+        null,
+      );
+      const attempt = await prisma.attempt.create({
+        data: { runId: run.id, fence: 1, status: "running" },
+      });
+      const card: MessageBlock =
+        kind === "question"
+          ? { kind: "ask", text: "Which report?" }
+          : spawnBotApprovalBlock(
+              "effect-cancelled",
+              { name: "Scout", instructions: "Read reports." },
+              USER,
+            );
+      await pauseRunForInput(prisma, {
+        spaceId: SPACE,
+        threadId: owner.threadId,
+        botId: owner.bot.id,
+        runId: run.id,
+        attemptId: attempt.id,
+        ...lease,
+        blocks: [card],
+        ...(kind === "approval"
+          ? { effect: { id: "effect-cancelled", kind: "spawn_bot", proposal: { name: "Scout" } } }
+          : {}),
+      });
+      const before = projectThreadView(await log.readTail(owner.sessionId));
+      expect(before.waiting).toEqual({
+        runId: run.id,
+        entryId: expect.any(String),
+        itemId: expect.any(String),
+      });
+      await prisma.$transaction((tx) => cancelRunsInTransaction(tx, [run], new Date(), USER));
+      const parent = await log.readTail(owner.sessionId);
+      expect(parent.filter((entry) => entry.type === "run.recap")).toEqual([
+        expect.objectContaining({
+          runId: run.id,
+          payload: expect.objectContaining({
+            outcome: expect.objectContaining({ status: "cancelled" }),
+          }),
+        }),
+      ]);
+      expect((await log.readTail(opened.sessionId)).at(-1)).toMatchObject({ type: "run.finished" });
+      const reloaded = projectThreadView(parent);
+      expect(reloaded.rows).toEqual(before.rows);
+      expect(reloaded.waiting).toBeNull();
     },
   );
 

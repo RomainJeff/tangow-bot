@@ -49,6 +49,7 @@ import {
   BotSecretName,
   BotSecretSubmission,
   EntryId,
+  FactualRunRecapFactsSchema,
   isAttachmentImageMimeType,
   OPENAI_COMPATIBLE_PROVIDER_ID,
   parseRunRecap,
@@ -4846,9 +4847,20 @@ export function createRunExecutor(deps: ExecutorDeps) {
               await recordRunUsage(deps, { ...run, botId: bot.id, runId }, event);
             } else if (event.type === "done") {
               if (recapRequested) {
-                runRecap = parseRunRecap(
-                  redactSecrets(event.privateFinalText ?? event.text ?? "", runSecrets),
-                );
+                runRecap = parseRunRecap(event.privateFinalText ?? event.text);
+                if (runRecap.state === "available") {
+                  const facts = FactualRunRecapFactsSchema.safeParse({
+                    ...runRecap.facts,
+                    results: runRecap.facts.results?.map((text) => redactSecrets(text, runSecrets)),
+                    decisions: runRecap.facts.decisions?.map((text) =>
+                      redactSecrets(text, runSecrets),
+                    ),
+                    limits: runRecap.facts.limits?.map((text) => redactSecrets(text, runSecrets)),
+                  });
+                  runRecap = facts.success
+                    ? { state: "available", facts: facts.data }
+                    : { state: "missing", reason: "invalid" };
+                }
               }
               if (!assembled && event.text) {
                 if (publishedMidTurnUserMessage || droppedNarration) {

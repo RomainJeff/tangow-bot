@@ -87,6 +87,7 @@ function fixture(
     call?: { name: string; args: Record<string, unknown> };
     sandbox?: Record<string, unknown>;
     database?: PrismaClient;
+    secrets?: string[];
     runtime?: (request: AgentRunRequest) => AsyncGenerator<AgentRuntimeEvent>;
   } = {},
 ) {
@@ -272,7 +273,7 @@ function fixture(
           finalizeRun: vi.fn(async () => ({ continuationRunId: null })),
         },
     jobs,
-    secrets: [],
+    secrets: options.secrets ?? [],
   } as unknown as Parameters<typeof createRunExecutor>[0]);
   return {
     log,
@@ -827,6 +828,73 @@ describe("interactive executor sessions with durable history", () => {
       ),
     ).toBe(true);
   });
+
+  it.each(['fake"quoted', "fake\nmultiline", "fake\\backslash", "1", "lookup"])(
+    "redacts decoded factual fields before storing a private closing with secret %j",
+    async (secret) => {
+      const { prisma } = database;
+      const thread = await prisma.thread.create({
+        data: { spaceId: "space-1", userId: "user-1", botId: BOT },
+      });
+      const events = createThreadEvents(prisma);
+      const source = async (text: string) => {
+        const sent = await events.sendUserMessage({
+          spaceId: "space-1",
+          threadId: thread.id,
+          botId: BOT,
+          userId: "user-1",
+          blocks: [{ kind: "text", text }],
+          prompt: text,
+          trigger: "user",
+        });
+        return prisma.run.findUniqueOrThrow({ where: { id: sent.runId! } });
+      };
+      const run = await source("Read the report");
+      await fixture({
+        database: prisma,
+        run,
+        secrets: [secret],
+        sandbox: { listFiles: async () => [{ name: "report.txt", kind: "file" }] },
+        runtime: async function* (request) {
+          await request.executeTool!("list_files", { path: "." }, "lookup");
+          yield {
+            type: "done",
+            privateFinalText: JSON.stringify({
+              version: 1,
+              results: [`Result ${secret}`],
+              decisions: [`Decision ${secret}`],
+              limits: [`Limit ${secret}`],
+              references: [{ callId: "lookup" }],
+            }),
+          };
+        },
+      }).request();
+      const log = new PostgresSessionLog(prisma);
+      const parent = await log.readTail(SessionIdSchema.parse(thread.sessionId));
+      expect(
+        parent.filter((entry) => entry.type === "run.recap").map((entry) => entry.payload.recap),
+      ).toEqual([
+        {
+          state: "available",
+          facts: {
+            version: 1,
+            results: ["Result [redacted]"],
+            decisions: ["Decision [redacted]"],
+            limits: ["Limit [redacted]"],
+            references: [{ callId: "lookup" }],
+          },
+        },
+      ]);
+      const next = await source("Continue");
+      const request = await fixture({ database: prisma, run: next, secrets: [secret] }).request();
+      expect(JSON.stringify(request.history)).toContain("report.txt");
+      for (const turn of request.history) {
+        expect(turn.content).not.toContain(`Result ${secret}`);
+        expect(turn.content).not.toContain(`Decision ${secret}`);
+        expect(turn.content).not.toContain(`Limit ${secret}`);
+      }
+    },
+  );
 
   it("reclaims a lost lease after publication without duplicating the message or session", async () => {
     const { prisma } = database;
