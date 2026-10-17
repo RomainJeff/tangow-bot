@@ -215,5 +215,6 @@
   --duration-morph: 260ms;
   --duration-flow: 2600ms;
   --duration-fill: 80ms;
+  --duration-flight: 520ms;
   --motion-ease: cubic-bezier(0.32, 0.72, 0, 1);
 }

@@ -259,7 +259,8 @@ export function resolveAskCardView(
   view: AskCardView,
   waiting: boolean,
 ): AskCardView {
-  if (block.status === "answered") {
+  // While its own answer fills, the card waits for its presenter, so an early event cuts nothing short.
+  if (block.status === "answered" && !(view.kind === "open" && view.busy)) {
     return { kind: "settled", settled: askSettledOf(form, storedAnswerOf(form, block)) };
   }
   if (waiting || view.kind === "settled" || view.busy) return view;

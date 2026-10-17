@@ -603,6 +603,8 @@ describe("AskCard open question", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    // jsdom has no Web Animations, so these run the reduced-motion commit; e2e flies the tile.
+    vi.stubGlobal("matchMedia", () => ({ matches: true }));
     container = document.createElement("div");
     document.body.append(container);
     root = createRoot(container);
