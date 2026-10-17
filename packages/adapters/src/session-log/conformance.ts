@@ -319,6 +319,30 @@ export function runSessionLogConformance<Tx>(makeLog: () => Promise<SessionLogHa
       expect(JSON.stringify(result).includes("fake-credential")).toBe(false);
     });
 
+    it.each([1, 2, 4])("masks retained JSON strings at %i nesting levels before archive matching", async (depth) => {
+      const { sessionId, runId } = await created();
+      const secret = 'fake-line-one"\\\nfake-line-two';
+      let output = JSON.stringify({ receipt: "receipt K731", credential: secret });
+      for (let level = 0; level < depth; level++) output = JSON.stringify({ text: output });
+      await append({ sessionId, runId, botId: BOT, type: "tool.call",
+        payload: { callId: "nested", name: "web_fetch", input: "{}" } });
+      const stored = await append({ sessionId, runId, botId: BOT, type: "tool.result",
+        payload: { callId: "nested", output, isError: false, artifactIds: [] } });
+      const input = { ...searchInput(sessionId, runId, "K731"),
+        redaction: { redact: (text: string) => redactSecrets(text, ["fake-line-one", secret]) } };
+      const found = await harness.log.searchRun(input);
+      expect(found).toMatchObject({ status: "ok", hits: [{ entryId: stored.id }] });
+      if (found.status !== "ok" || !found.hits[0]) throw new Error("Missing receipt");
+      expect(found.hits[0].excerpt).toContain("receipt K731");
+      expect(found.hits[0].excerpt).toContain("[redacted]");
+      expect(found.hits[0].excerpt).not.toContain("fake-line");
+      for (const query of ["fake-line-one", "fake-line-two"]) {
+        expect(await harness.log.searchRun({ ...input, query })).toMatchObject({
+          status: "ok", hits: [], nextCursor: null,
+        });
+      }
+    });
+
     it("reports an incomplete search when a missing parent hides retained text", async () => {
       const { sessionId, runId } = await created();
       await append(replied(sessionId, runId, "receipt retained before break"));

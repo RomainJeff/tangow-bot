@@ -212,11 +212,11 @@ describe("search_runs authorization and archive discovery", () => {
       const old = await runOf(c, "Fetch the receipt");
       await database.prisma.run.update({ where: { id: old.id }, data: { status: "queued" } });
       const web = new FakeWebProvider();
-      const secret = "fake-credential-boundary-do-not-persist";
+      const secret = 'fake-line-one"\\\nfake-line-two';
       web.fetchResult = {
         url: "https://example.test/receipt",
         title: "Receipt",
-        text: `${"x".repeat(3400)} receipt K731 ${"y".repeat(480)} ${secret}`,
+        text: JSON.stringify({ receipt: "receipt K731", credential: secret }),
         truncated: false,
       };
       const fetch = vi.spyOn(web, "fetch");
@@ -281,7 +281,13 @@ describe("search_runs authorization and archive discovery", () => {
               );
               expect(found).toMatchObject({ hits: [{ runId: old.id }] });
               if (found.status !== "ok" || !found.hits[0]) throw new Error("Missing receipt");
-              expect(found.hits[0].excerpt.includes("receipt K731")).toBe(true);
+              expect(found.hits[0].excerpt).toContain("receipt K731");
+              expect(found.hits[0].excerpt).toContain("[redacted]");
+              expect(found.hits[0].excerpt).not.toContain("fake-line");
+              for (const query of ["fake-line-one", "fake-line-two"]) {
+                expect(await request.executeTool("search_runs", { runId: old.id, query }, query))
+                  .toMatchObject({ status: "ok", hits: [], nextCursor: null });
+              }
               await request.executeTool(
                 "message_user",
                 { message: "The retained receipt is K731." },
@@ -314,7 +320,12 @@ describe("search_runs authorization and archive discovery", () => {
       expect(
         result?.type === "tool.result" ? result.payload.output.includes("[redacted]") : false,
       ).toBe(true);
-      expect(JSON.stringify(stored).includes("fake-credential")).toBe(false);
+      if (result?.type !== "tool.result") throw new Error("Missing tool result");
+      expect(JSON.parse(JSON.parse(result.payload.output).text)).toEqual({
+        receipt: "receipt K731",
+        credential: "[redacted]",
+      });
+      expect(JSON.stringify(stored)).not.toContain("fake-line");
       const [head] = await log.readPage(c.sessionId, { limit: 1 });
       await append({
         sessionId: c.sessionId,
