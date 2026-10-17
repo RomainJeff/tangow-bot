@@ -856,14 +856,21 @@ describe("link.preview job for a routine's result (spec 3.5)", () => {
     title,
   });
 
-  async function routineRun(options: { status?: string; result: string }) {
-    const ctx = await setup({ read: async (url) => tool(new URL(url).hostname) });
+  async function routineRun(options: {
+    status?: string;
+    result: string;
+    read?: (url: string) => Promise<LinkPreviewReadResult>;
+    said?: string;
+  }) {
+    const ctx = await setup({
+      read: options.read ?? (async (url) => tool(new URL(url).hostname)),
+    });
     await db.seedRun({
       id: "run-1",
       threadId: "thread-1",
       status: options.status ?? "completed",
       trigger: "routine",
-      messages: [{ id: "final", blocks: [text(options.result)] }],
+      messages: [{ id: "final", blocks: [text(options.said ?? options.result)] }],
       routine: { result: options.result },
     });
     const report = await db.prisma.sessionEntry.findFirst({
@@ -887,6 +894,42 @@ describe("link.preview job for a routine's result (spec 3.5)", () => {
     ]);
     // The run's own words stay in its session, which the thread does not show.
     expect(await db.mentionsOf("final")).toEqual([]);
+  });
+
+  it("reads nothing when the result is blank, though the run's own message has a link", async () => {
+    const { read, deps, reportId } = await routineRun({ result: "  \n ", said: LINKS[0] });
+
+    await runLinkPreviewJob(deps, { runId: "run-1" });
+
+    expect(read).not.toHaveBeenCalled();
+    expect(await db.mentionsOf(reportId!)).toEqual([]);
+  });
+
+  it("writes the same mentions when the job runs twice on the mark", async () => {
+    const { deps, reportId } = await routineRun({ result: `${LINKS[0]} and ${LINKS[1]}` });
+
+    await runLinkPreviewJob(deps, { runId: "run-1" });
+    const once = await db.mentionsOf(reportId!);
+    await runLinkPreviewJob(deps, { runId: "run-1" });
+
+    expect(once.map((block) => block.url)).toEqual([LINKS[0], LINKS[1]]);
+    expect(await db.mentionsOf(reportId!)).toEqual(once);
+  });
+
+  it("keeps a mention's icon as a preview artifact of the mark", async () => {
+    const icon = { bytes: Buffer.from(png), width: 64, height: 64 };
+    const { deps, reportId } = await routineRun({
+      result: LINKS[0],
+      read: async () => ({ ...tool("Doc"), icon }),
+    });
+
+    await runLinkPreviewJob(deps, { runId: "run-1" });
+
+    const [artifact] = await previewArtifacts();
+    expect(artifact).toMatchObject({ isLinkPreview: true, previewMessageId: reportId });
+    expect(await db.mentionsOf(reportId!)).toMatchObject([
+      { url: LINKS[0], icon: { artifactId: artifact?.id } },
+    ]);
   });
 
   it.each([

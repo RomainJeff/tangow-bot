@@ -6,6 +6,7 @@ import {
   type LinkCandidate,
   linkMentionCandidates,
   messageHostsLinkPreview,
+  routineShownText,
 } from "@rakazo/core";
 import {
   appendLinkBlocks,
@@ -175,8 +176,10 @@ async function routineReport(
     where: { runId, type: "routine.finished", session: { kind: "thread" } },
     select: { id: true, payload: true },
   });
-  const { status, result } = (mark?.payload ?? {}) as { status?: string; result?: string };
-  if (!mark || status !== "completed" || !result?.trim()) return [];
+  const result = routineShownText(
+    mark?.payload as { status?: string; result?: string } | undefined,
+  );
+  if (!mark || !result) return [];
   return [{ id: mark.id, text: result, links: linkMentionCandidates(result) }];
 }
 
