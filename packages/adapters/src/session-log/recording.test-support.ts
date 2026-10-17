@@ -19,6 +19,13 @@ export function recordingSessionLog() {
         ): Promise<SessionEntry[]> => [],
       ),
       readPage: vi.fn(async (_sessionId: SessionId, _page: unknown): Promise<SessionEntry[]> => []),
+      searchRun: vi.fn(async () => ({
+        status: "ok" as const,
+        hits: [],
+        nextCursor: null,
+        incomplete: false,
+        limitations: [],
+      })),
       readRun: vi.fn(async (_runId: string): Promise<SessionEntry[]> => []),
       readEntry: vi.fn(
         async (_sessionId: SessionId, _entryId: EntryId): Promise<SessionEntry | undefined> =>

@@ -42,6 +42,24 @@ export type SessionAppendRefusal =
   | "no_feed_bot"
   | "run_finished";
 
+export type RunSearchInput = {
+  scope: {
+    runId: string;
+    botId: string;
+    sessionId: SessionId;
+    /** Caller-derived owner, conversation, launch ancestry and chain revision binding. */
+    authorizationKey: string;
+    /** The authorized main session when this run writes its trace in a child. */
+    raisedSessionId?: SessionId;
+  };
+  query: string;
+  cursor?: string;
+  /** Can lower the fixed response ceiling, including cursor and envelope. */
+  maxBytes?: number;
+  /** Applied to each complete size-bounded field before matching and clipping. */
+  redaction: { redact(text: string): string };
+};
+
 export class SessionAppendError extends Error {
   constructor(
     readonly reason: SessionAppendRefusal,
