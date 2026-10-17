@@ -808,21 +808,29 @@ export async function appendRunFinishedInTransaction(
         : { state: "missing", reason: "interrupted" };
     validated = FactualRunRecapSchema.parse(validated);
     if (validated.state === "available") {
-      const retained = await tx.$queryRaw<Array<{ id: string; type: string; callId: string }>>`
-        SELECT e.id, e.type, e.payload ->> 'callId' AS "callId"
+      const retained = await tx.$queryRaw<
+        Array<{ id: string; type: string; callId: string; seq: number }>
+      >`
+        SELECT e.id, e.type, e.payload ->> 'callId' AS "callId", e.seq
         FROM session_entries e WHERE e."runId" = ${runId}
-          AND e.type IN ('tool.call', 'tool.result') AND ${ENTRY_ON_CHAIN}`;
-      const results = new Set(
-        retained.filter((entry) => entry.type === "tool.result").map((entry) => entry.callId),
-      );
-      const calls = new Set(
-        retained
-          .filter((entry) => entry.type === "tool.call" && results.has(entry.callId))
-          .map((entry) => entry.callId),
-      );
-      const ids = new Set(
-        retained.filter((entry) => calls.has(entry.callId)).map((entry) => entry.id),
-      );
+          AND e.type IN ('tool.call', 'tool.result') AND ${ENTRY_ON_CHAIN}
+        ORDER BY e.seq`;
+      const unanswered = new Map<string, string[]>();
+      const calls = new Set<string>();
+      const ids = new Set<string>();
+      for (const entry of retained) {
+        if (entry.type === "tool.call") {
+          const pending = unanswered.get(entry.callId) ?? [];
+          pending.push(entry.id);
+          unanswered.set(entry.callId, pending);
+        } else {
+          const call = unanswered.get(entry.callId)?.pop();
+          if (call === undefined) continue;
+          calls.add(entry.callId);
+          ids.add(call);
+          ids.add(entry.id);
+        }
+      }
       if (
         validated.facts.references.some((ref) =>
           "entryId" in ref ? !ids.has(ref.entryId) : !calls.has(ref.callId),

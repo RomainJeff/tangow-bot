@@ -44,17 +44,14 @@ export const NON_HISTORY_TOKEN_ESTIMATE = 12_000;
 export function historyBudgetTokens(
   contextWindow: number | undefined,
   nonHistoryTokens = NON_HISTORY_TOKEN_ESTIMATE,
+  policy: "bounded" | "channel" = "bounded",
 ): number | undefined {
   if (contextWindow === undefined || !Number.isFinite(contextWindow) || contextWindow <= 0) {
     return undefined;
   }
-  return Math.max(
-    0,
-    Math.min(
-      HISTORY_TOKEN_CEILING,
-      contextWindow - DEFAULT_COMPACTION_SETTINGS.reserveTokens - nonHistoryTokens,
-    ),
-  );
+  const usable = contextWindow - DEFAULT_COMPACTION_SETTINGS.reserveTokens - nonHistoryTokens;
+  if (policy === "channel") return Math.max(DEFAULT_COMPACTION_SETTINGS.keepRecentTokens, usable);
+  return Math.max(0, Math.min(HISTORY_TOKEN_CEILING, usable));
 }
 
 /**
@@ -138,10 +135,27 @@ export function selectHistoryWindow<T extends SizedHistoryMessage & { role: stri
   messageWindowSize: number;
   /** What the run's non-history context actually costs; `NON_HISTORY_TOKEN_ESTIMATE` when unknown. */
   nonHistoryTokens?: number;
+  policy?: "bounded" | "channel";
+  historicalContextTokens?: number;
+  /** False when the caller separates active context by run identity. */
+  protectToolExchange?: boolean;
 }): HistoryWindow<T> {
   const { history } = options;
-  const capacity = historyBudgetTokens(options.contextWindow, options.nonHistoryTokens);
-  const budget = capacity ?? HISTORY_TOKEN_CEILING;
+  const channel = options.policy === "channel";
+  const capacity = historyBudgetTokens(
+    options.contextWindow,
+    options.nonHistoryTokens,
+    options.policy,
+  );
+  if (channel && capacity === undefined) {
+    return { messages: history.slice(-options.messageWindowSize), mode: "count" };
+  }
+  const budget = channel
+    ? (capacity ?? HISTORY_TOKEN_CEILING)
+    : Math.min(
+        capacity ?? HISTORY_TOKEN_CEILING,
+        Math.max(0, HISTORY_TOKEN_CEILING - (options.historicalContextTokens ?? 0)),
+      );
   const mode = capacity === undefined ? "count" : "tokens";
   const countStart =
     capacity === undefined
@@ -151,13 +165,15 @@ export function selectHistoryWindow<T extends SizedHistoryMessage & { role: stri
   let start = history.length;
   for (let index = history.length - 1; index >= countStart; index -= 1) {
     const tokens = estimateHistoryMessageTokens(history[index]!);
-    if (used + tokens > budget) break;
+    if (used + tokens > budget && (!channel || start < history.length)) break;
     used += tokens;
     start = index;
   }
   const newestUser = history.findLastIndex((message) => message.role === "user");
   const newestExchangeStart = Math.max(0, newestUser);
   if (
+    !channel &&
+    options.protectToolExchange !== false &&
     start > newestExchangeStart &&
     history
       .slice(newestExchangeStart)
@@ -168,7 +184,9 @@ export function selectHistoryWindow<T extends SizedHistoryMessage & { role: stri
   for (let index = start; index < history.length; index += 1) {
     if (history[index]!.role === "user") return { messages: history.slice(index), mode };
   }
-  return { messages: history.slice(start), mode };
+  return channel
+    ? { messages: history.slice(-options.messageWindowSize), mode: "count" }
+    : { messages: history.slice(start), mode };
 }
 
 export function formatRecalledMemory(
@@ -500,8 +518,26 @@ function exchangesOf(entries: readonly SessionEntry[], selfBotId: string): Excha
     if (last && entry.type !== "user.message") last.push(entry);
     else groups.push([entry]);
   }
+  const isChannel = (group: readonly SessionEntry[]) =>
+    group.some(
+      (entry) =>
+        entry.type === "user.message" &&
+        entry.payload.blocks.some((block) => block.kind === "channel_message"),
+    );
+  const safeTurns = new Map(
+    projectInferenceTurns(groups.filter((group) => !isChannel(group)).flat(), {
+      selfBotId,
+      runHistory: {},
+    }).map((turn) => [turn.id, turn]),
+  );
   return groups.map((group) => {
-    const turns = projectInferenceTurns(group, { selfBotId });
+    const channel = isChannel(group);
+    const turns = channel
+      ? projectInferenceTurns(group, { selfBotId })
+      : group.flatMap((entry) => {
+          const turn = safeTurns.get(entry.id);
+          return turn ? [turn] : [];
+        });
     return {
       entries: group,
       tokens: estimateHistoryTokens(turns),
@@ -511,11 +547,7 @@ function exchangesOf(entries: readonly SessionEntry[], selfBotId: string): Excha
         .slice(0, MAX_TRANSCRIPT_CHARS),
       // Channel posts are carried into the owner bot's own thread, so the exchange, not the
       // thread, is what says a conversation was public.
-      channel: group.some(
-        (entry) =>
-          entry.type === "user.message" &&
-          entry.payload.blocks.some((block) => block.kind === "channel_message"),
-      ),
+      channel,
     };
   });
 }

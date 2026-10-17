@@ -92,6 +92,39 @@ describe("selectHistoryWindow", () => {
     ],
   };
 
+  it("counts recalled and compacted history against the candidate ceiling", () => {
+    const history = [user(30_000), assistant(20_000), user(5_000)];
+    const window = selectHistoryWindow({
+      history,
+      contextWindow: undefined,
+      messageWindowSize: 200,
+      historicalContextTokens: 10_000,
+    });
+    expect(window).toEqual({ messages: history.slice(-1), mode: "count" });
+  });
+
+  it("keeps the original channel floor, oversized newest message, and unknown count window", () => {
+    const history = [user(30_000), assistant(30_001)];
+    expect(
+      selectHistoryWindow({
+        history,
+        contextWindow: 20_000,
+        nonHistoryTokens: 12_000,
+        messageWindowSize: 200,
+        policy: "channel",
+      }),
+    ).toEqual({ messages: history, mode: "count" });
+    expect(
+      selectHistoryWindow({
+        history,
+        contextWindow: undefined,
+        messageWindowSize: 200,
+        policy: "channel",
+      }),
+    ).toEqual({ messages: history, mode: "count" });
+    expect(historyBudgetTokens(200_000, 2_000, "channel")).toBe(181_616);
+  });
+
   it("retains exactly 60,000 estimated tokens on a large model", () => {
     const history = Array.from({ length: 8 }, () => [user(9_999), assistant(1)]).flat();
     const window = selectHistoryWindow({ history, contextWindow: 200_000, messageWindowSize: 2 });
@@ -580,6 +613,36 @@ describe("compactHistory", () => {
     ...ranTool(seeded, index),
     replied(seeded, `answer ${index}`),
   ];
+
+  it("summarizes a finished legacy run safely when steering separates its tools from its terminal entry", async () => {
+    const seeded = await seedThread();
+    await append(seeded, [
+      said("Find the report"),
+      ...ranTool(seeded, 0),
+      {
+        ...replied(seeded, "Private scratch"),
+        payload: { blocks: [{ kind: "text", text: "Private scratch" }], toPerson: false },
+      },
+      said("Steering note"),
+      replied(seeded, "Report saved"),
+      {
+        type: "run.finished",
+        botId: seeded.botId,
+        runId: seeded.runId,
+        payload: { status: "completed", usage: { inputTokens: 0, outputTokens: 0 } },
+      },
+      said("Newest request"),
+    ]);
+    const h = harness(seeded);
+    await h.compact({ historyBudget: 0 });
+    const [request] = h.calls("compact");
+    if (!request) throw new Error("Expected compaction request");
+    expect(request.prompt).toContain("Report saved");
+    expect(request.prompt).toContain(seeded.runId);
+    expect(request.prompt).not.toContain("Private scratch");
+    expect(request.prompt).not.toContain("notes-0.md");
+    expect(request.prompt).not.toContain("Newest request");
+  });
 
   it("compacts a 120 entry session into one entry at the head, summarizing all but the newest exchange and never showing the summarizer a UI-only entry", async () => {
     const seeded = await seedThread();

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { ComposioEmulator, PostgresSessionLog } from "@rakazo/adapters";
 import type { SessionEntry, SessionId, ThreadEntry } from "@rakazo/contracts";
-import { SessionId as SessionIdSchema } from "@rakazo/contracts";
+import { EntrySeq, SessionId as SessionIdSchema } from "@rakazo/contracts";
 import { projectThreadItems } from "@rakazo/core";
 import { describe, expect, it } from "vitest";
 import type { createApp } from "../../../apps/api/src/app.ts";
@@ -23,6 +23,139 @@ const fixtureOrigin = "http://127.0.0.1:5173";
 const fixtureKey = "offline-product-fixture-key";
 
 describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
+  it("discovers a fact only in an archived recap after compaction and answers without repeating file tools", async () => {
+    let priorRunId = "";
+    const toolResult = (request: ModelEmulatorRequest) =>
+      JSON.parse(String(request.messages.findLast((message) => message.role === "tool")?.content));
+    await journey(
+      [
+        {
+          expect() {},
+          response: {
+            type: "tool",
+            id: "save",
+            name: "write_file",
+            arguments: { path: "receipt.txt", content: "Receipt Zebra731" },
+          },
+        },
+        {
+          expect(request) {
+            expect(toolResult(request)).toMatchObject({ ok: true });
+          },
+          response: {
+            type: "tool",
+            id: "read",
+            name: "read_file",
+            arguments: { path: "receipt.txt" },
+          },
+        },
+        {
+          expect(request) {
+            expect(toolResult(request)).toMatchObject({ content: "Receipt Zebra731" });
+          },
+          response: {
+            type: "tool",
+            id: "say",
+            name: "message_user",
+            arguments: { message: "Receipt captured." },
+          },
+        },
+        {
+          expect() {},
+          response: {
+            type: "text",
+            text: JSON.stringify({
+              version: 1,
+              results: ["Receipt Zebra731"],
+              references: [{ callId: "read" }],
+            }),
+          },
+        },
+        {
+          expect(request) {
+            expect(JSON.stringify(request.messages)).not.toContain("Zebra731");
+            expect(request.messages.some((message) => message.role === "tool")).toBe(false);
+          },
+          response: {
+            type: "tool",
+            id: "catalog",
+            name: "search_runs",
+            arguments: { query: "Zebra731" },
+          },
+        },
+        {
+          expect(request) {
+            expect(toolResult(request)).toMatchObject({ items: [{ runId: priorRunId }] });
+          },
+          response: () => ({
+            type: "tool",
+            id: "archive",
+            name: "search_runs",
+            arguments: { runId: priorRunId, query: "Zebra731" },
+          }),
+        },
+        {
+          expect(request) {
+            expect(toolResult(request)).toMatchObject({
+              hits: [{ runId: priorRunId, excerpt: expect.stringContaining("Receipt Zebra731") }],
+            });
+          },
+          response: {
+            type: "tool",
+            id: "answer",
+            name: "message_user",
+            arguments: { message: "The captured receipt was Zebra731." },
+          },
+        },
+        {
+          expect() {},
+          response: {
+            type: "text",
+            text: JSON.stringify({
+              version: 1,
+              results: ["Answered from the retained receipt"],
+              references: [],
+            }),
+          },
+        },
+      ],
+      async ({ app, cookie, bot, prisma, log, send }) => {
+        const first = await send("Capture the receipt in its file.");
+        await first.settled("completed");
+        priorRunId = first.runId;
+        for (let index = 0; index < 2; index++) {
+          const head = (await log.readTail(first.sessionId)).at(-1)!;
+          await prisma.$transaction((tx) =>
+            log.append(tx, {
+              type: "compaction",
+              sessionId: first.sessionId,
+              botId: bot.id,
+              parentId: head.id,
+              payload: {
+                summary: "Earlier work finished.",
+                coveredUpToSeq: EntrySeq.parse(head.seq),
+              },
+            }),
+          );
+        }
+        const second = await send("What did the captured receipt say?");
+        await second.settled("completed");
+        const entries = await log.readRun(second.runId);
+        expect(
+          entries.filter((entry) => entry.type === "tool.call").map((entry) => entry.payload.name),
+        ).toEqual(["search_runs", "search_runs", "message_user"]);
+        const thread = await rpc<{ entries: ThreadEntry[] }>(app, cookie, "threads/get", {
+          botId: bot.id,
+        });
+        const messages = projectThreadItems(thread.entries).filter(
+          (item) => item.kind === "message",
+        );
+        expect(JSON.stringify(messages)).toContain("The captured receipt was Zebra731.");
+        expect(JSON.stringify(messages)).not.toContain("Answered from the retained receipt");
+      },
+    );
+  }, 30_000);
+
   it("uses a saved model connection and the real executor to persist a file and completed run", async () => {
     await journey(
       [
@@ -932,7 +1065,8 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
               request.messages.flatMap((message) =>
                 message.role === "tool" ? [message.tool_call_id] : [],
               ),
-            ).toEqual(["journey-hello"]);
+            ).toEqual([]);
+            expect(history).toContain("Hello.");
           },
           response: reply("It is in notes/brief.txt.", "journey-where"),
         },
