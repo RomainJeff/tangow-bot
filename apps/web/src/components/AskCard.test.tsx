@@ -913,6 +913,67 @@ describe("AskCard open question", () => {
         },
       ]);
     });
+
+    const toRecap = async () => {
+      act(() => tile("Built-in")?.click());
+      await act(async () => vi.advanceTimersByTime(550));
+      act(() => tile("Ice maker")?.click());
+      act(() => button("Next")?.click());
+      act(() => button("Skip")?.click());
+    };
+
+    it("says why a Send from the recap failed, with focus back on Send (CA4)", async () => {
+      mount(fridge, async () => {
+        throw new Error("The bot moved on");
+      });
+      await toRecap();
+      act(() => button("Send")?.click());
+      await act(async () => vi.advanceTimersByTime(800));
+      expect({
+        ...shown(),
+        alert: container.querySelector('[role="alert"]')?.textContent ?? null,
+        focus: document.activeElement?.textContent,
+      }).toEqual({
+        lines: [
+          "FormatBuilt-in",
+          "ExtrasIce maker",
+          "Do you already have a separate freezer?Skipped",
+        ],
+        head: null,
+        actions: ["Send"],
+        alert: "The bot moved on",
+        focus: "Send",
+      });
+    });
+
+    it("moves focus from an answered question to the next one's first tile, then to Send (CA12)", async () => {
+      mount(fridge, async () => {});
+      const focused = () => document.activeElement?.textContent ?? null;
+      tile("Built-in")?.focus();
+      act(() => tile("Built-in")?.click());
+      await act(async () => vi.advanceTimersByTime(550));
+      const next = focused();
+      tile("Ice maker")?.focus();
+      act(() => tile("Ice maker")?.click());
+      button("Next")?.focus();
+      act(() => button("Next")?.click());
+      const last = focused();
+      button("Skip")?.focus();
+      act(() => button("Skip")?.click());
+      expect([next, last, focused()]).toEqual(["Ice maker", "Yes", "Send"]);
+    });
+
+    it("leaves focus where it is when it was outside the card", async () => {
+      mount(fridge, async () => {});
+      const composer = document.createElement("textarea");
+      document.body.append(composer);
+      composer.focus();
+      act(() => tile("Built-in")?.click());
+      await act(async () => vi.advanceTimersByTime(550));
+      const focus = document.activeElement === composer;
+      composer.remove();
+      expect({ head: shown().head, focus }).toEqual({ head: "Extras·1 more", focus: true });
+    });
   });
 });
 

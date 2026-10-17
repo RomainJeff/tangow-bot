@@ -33,19 +33,26 @@ export function QuestionCard({
   const { t } = useLingui();
   const questionId = useId();
   const group = useRef<HTMLFieldSetElement>(null);
+  const primaryAction = useRef<HTMLButtonElement>(null);
   const card = useRef<HTMLDivElement>(null);
   const layer = useRef<HTMLDivElement>(null);
   const leaving = useRef<Departure | null>(null);
   const filling = useRef<ReturnType<typeof setTimeout>>(undefined);
   const reopened = useRef(false);
+  /** Set when focus was in the card as it moved on, so it follows to the next question. */
+  const refocus = useRef(false);
   /** A chosen answer fills with the user's colour, then flies into its bubble, or fades with reduced motion. */
   const present: Presenter = (change, apply) => {
     if (change.kind === "reopen") {
       leaving.current = null;
       reopened.current = true;
-      return apply();
+      apply();
+      return;
     }
-    if (change.kind === "advance") return advance(card.current, apply, reducedMotion());
+    if (change.kind === "advance") {
+      refocus.current = Boolean(card.current?.contains(document.activeElement));
+      return advance(card.current, apply, reducedMotion());
+    }
     const { from } = change;
     const leave = () => {
       leaving.current = card.current && !reducedMotion() ? departure(card.current, from) : null;
@@ -65,6 +72,17 @@ export function QuestionCard({
   const [openedHere] = useState(view.kind === "open");
   const error = view.kind === "open" ? view.error : null;
   const settled = view.kind === "settled";
+  const shownStep = view.kind === "open" ? (view.step?.question.id ?? "recap") : null;
+  /** The chosen tile, the field, or the first tile; the recap's Send. */
+  const focusAnswer = () => {
+    const tiles = group.current;
+    const target = tiles
+      ? (tiles.querySelector<HTMLElement>('[aria-pressed="true"]') ??
+        tiles.querySelector<HTMLElement>('[data-slot="option-field"] input') ??
+        tiles.querySelector<HTMLElement>("button"))
+      : primaryAction.current;
+    target?.focus();
+  };
   useEffect(() => () => clearTimeout(filling.current), []);
   useLayoutEffect(() => {
     if (settled && leaving.current && card.current && layer.current) {
@@ -72,11 +90,13 @@ export function QuestionCard({
     }
   }, [settled]);
   useEffect(() => {
-    if (!error) return;
-    group.current
-      ?.querySelector<HTMLElement>('[aria-pressed="true"], [data-slot="option-field"] input')
-      ?.focus();
+    if (error) focusAnswer();
   }, [error]);
+  useLayoutEffect(() => {
+    if (!shownStep || !refocus.current) return;
+    refocus.current = false;
+    focusAnswer();
+  }, [shownStep]);
 
   const shell = (body: ReactNode, onKeyDown?: (event: KeyboardEvent<HTMLDivElement>) => void) => (
     // biome-ignore lint/a11y/noStaticElementInteractions: digit shortcuts only while focus is inside the card
@@ -141,7 +161,13 @@ export function QuestionCard({
           </Button>
         ) : null}
         {view.primary ? (
-          <Button variant="capsule" size="capsule" disabled={busy} onClick={act.confirm}>
+          <Button
+            ref={primaryAction}
+            variant="capsule"
+            size="capsule"
+            disabled={busy}
+            onClick={act.confirm}
+          >
             {view.primary === "next" ? <Trans>Next</Trans> : <Trans>Send</Trans>}
           </Button>
         ) : null}
@@ -166,14 +192,26 @@ export function QuestionCard({
       <ChevronRight aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
     </button>
   ));
+  const alert = view.error ? (
+    <p role="alert" className="text-meta text-destructive">
+      {view.error}
+    </p>
+  ) : null;
+  const arrives = reopened.current ? "animate-in fade-in duration-(--duration-arrive)" : undefined;
 
   if (!step) {
     return shell(
       <FramedBlock
-        className={reopened.current ? "animate-in fade-in duration-(--duration-arrive)" : undefined}
-        question={<div className="flex flex-col pb-0.5">{pile}</div>}
+        className={arrives}
+        question={
+          <div className="flex flex-col pb-0.5">
+            {pile}
+            {alert ? <div className="pt-1 pb-2">{alert}</div> : null}
+          </div>
+        }
         actions={actions}
       />,
+      onKeyDown,
     );
   }
 
@@ -183,7 +221,7 @@ export function QuestionCard({
 
   return shell(
     <FramedBlock
-      className={reopened.current ? "animate-in fade-in duration-(--duration-arrive)" : undefined}
+      className={arrives}
       question={
         <div className="flex flex-col">
           {pile}
@@ -257,11 +295,7 @@ export function QuestionCard({
             <Trans>Other…</Trans>
           </OptionTile>
         )}
-        {view.error ? (
-          <p role="alert" className="text-meta text-destructive">
-            {view.error}
-          </p>
-        ) : null}
+        {alert}
       </fieldset>
     </FramedBlock>,
     onKeyDown,
