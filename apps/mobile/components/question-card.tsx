@@ -512,14 +512,17 @@ function Tile({
           </Text>
         ) : null}
       </View>
-      {trailing ? (
-        <NativeSymbol
-          ios={trailing}
-          android={trailing === "pencil" ? "pencil" : "checkmark"}
-          size={15}
-          color={muted ? tokens.mutedForeground : ink}
-        />
-      ) : null}
+      {/* The check's width stays reserved, as on web, so choosing never rewraps the label. */}
+      <View style={styles.trailingSlot}>
+        {trailing ? (
+          <NativeSymbol
+            ios={trailing}
+            android={trailing === "pencil" ? "pencil" : "checkmark"}
+            size={15}
+            color={muted ? tokens.mutedForeground : ink}
+          />
+        ) : null}
+      </View>
     </Pressable>
   );
 }
@@ -646,6 +649,7 @@ function createStyles() {
     tileText: { flex: 1 },
     tileLabel: nativeTextStyle("question", { weight: 500, leading: 1.3 }),
     tileDetail: nativeTextStyle("meta"),
+    trailingSlot: { width: 15, alignItems: "center" },
     field: { paddingVertical: 8, paddingEnd: 8 },
     input: { flex: 1, fontWeight: "400", paddingVertical: 4 },
     send: {
