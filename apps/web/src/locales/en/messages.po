@@ -125,7 +125,7 @@ msgstr "{botName}’s computer"
 msgid "{count} · next {next}"
 msgstr "{count} · next {next}"
 
-#: src/components/ask/QuestionCard.tsx:240
+#: src/components/ask/QuestionCard.tsx:244
 msgid "{count} more"
 msgstr "{count} more"
 
@@ -490,7 +490,7 @@ msgstr "Always allow this tool"
 msgid "Always allowed"
 msgstr "Always allowed"
 
-#: src/components/ask/QuestionCard.tsx:304
+#: src/components/ask/QuestionCard.tsx:309
 msgid "Answer"
 msgstr "Answer"
 
@@ -2446,7 +2446,7 @@ msgstr "Knowledge"
 msgid "Language"
 msgstr "Language"
 
-#: src/components/ask/QuestionCard.tsx:241
+#: src/components/ask/QuestionCard.tsx:245
 msgid "Last one"
 msgstr "Last one"
 
@@ -2882,8 +2882,8 @@ msgstr "New skill"
 msgid "New space"
 msgstr "New space"
 
-#: src/components/ask/QuestionCard.tsx:201
-#: src/components/ask/QuestionCard.tsx:301
+#: src/components/ask/QuestionCard.tsx:205
+#: src/components/ask/QuestionCard.tsx:306
 msgid "Next"
 msgstr "Next"
 
@@ -3193,7 +3193,7 @@ msgstr "Organic"
 msgid "Organization API key"
 msgstr "Organization API key"
 
-#: src/components/ask/QuestionCard.tsx:304
+#: src/components/ask/QuestionCard.tsx:309
 msgid "Other answer"
 msgstr "Other answer"
 
@@ -3203,8 +3203,8 @@ msgstr "Other answer"
 msgid "Other model…"
 msgstr "Other model…"
 
-#: src/components/ask/QuestionCard.tsx:305
-#: src/components/ask/QuestionCard.tsx:317
+#: src/components/ask/QuestionCard.tsx:310
+#: src/components/ask/QuestionCard.tsx:322
 msgid "Other…"
 msgstr "Other…"
 
@@ -3349,6 +3349,14 @@ msgstr "Recall only"
 #: src/pages/ActivityList.tsx:82
 msgid "Recent"
 msgstr "Recent"
+
+#: src/components/ask/QuestionCard.tsx:160
+msgid "Recommended"
+msgstr "Recommended"
+
+#: src/components/ask/QuestionCard.tsx:160
+msgid "Recommended · {description}"
+msgstr "Recommended · {description}"
 
 #: src/pages/McpServersOverlay.tsx:39
 msgid "Reconnect OAuth"
@@ -3793,8 +3801,8 @@ msgstr "Select {0}"
 msgid "Select a bot"
 msgstr "Select a bot"
 
-#: src/components/ask/QuestionCard.tsx:201
-#: src/components/ask/QuestionCard.tsx:301
+#: src/components/ask/QuestionCard.tsx:205
+#: src/components/ask/QuestionCard.tsx:306
 #: src/pages/shell/composer.tsx:968
 msgid "Send"
 msgstr "Send"
@@ -3948,7 +3956,7 @@ msgstr "Skill updated · {name}"
 msgid "Skills"
 msgstr "Skills"
 
-#: src/components/ask/QuestionCard.tsx:190
+#: src/components/ask/QuestionCard.tsx:194
 #: src/components/integrations/IntegrationSetup.tsx:364
 #: src/pages/shell/side-panel.tsx:529
 msgid "Skip"
@@ -3959,7 +3967,7 @@ msgid "Skip or deploy key"
 msgstr "Skip or deploy key"
 
 #: src/components/ask/AskSettled.tsx:9
-#: src/components/ask/QuestionCard.tsx:213
+#: src/components/ask/QuestionCard.tsx:217
 msgid "Skipped"
 msgstr "Skipped"
 
@@ -4238,7 +4246,7 @@ msgstr "Treg token"
 msgid "Try again"
 msgstr "Try again"
 
-#: src/components/ask/QuestionCard.tsx:305
+#: src/components/ask/QuestionCard.tsx:310
 msgid "Type your answer"
 msgstr "Type your answer"
 

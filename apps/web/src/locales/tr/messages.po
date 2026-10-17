@@ -125,7 +125,7 @@ msgstr "{botName} adlı botun bilgisayarı"
 msgid "{count} · next {next}"
 msgstr "{count} · sonraki {next}"
 
-#: src/components/ask/QuestionCard.tsx:240
+#: src/components/ask/QuestionCard.tsx:244
 msgid "{count} more"
 msgstr ""
 
@@ -490,7 +490,7 @@ msgstr "Bu araca her zaman izin ver"
 msgid "Always allowed"
 msgstr "Her zaman izinli"
 
-#: src/components/ask/QuestionCard.tsx:304
+#: src/components/ask/QuestionCard.tsx:309
 msgid "Answer"
 msgstr "Yanıtla"
 
@@ -2446,7 +2446,7 @@ msgstr "Bilgi"
 msgid "Language"
 msgstr "Dil"
 
-#: src/components/ask/QuestionCard.tsx:241
+#: src/components/ask/QuestionCard.tsx:245
 msgid "Last one"
 msgstr ""
 
@@ -2882,8 +2882,8 @@ msgstr "Yeni beceri"
 msgid "New space"
 msgstr "Yeni alan"
 
-#: src/components/ask/QuestionCard.tsx:201
-#: src/components/ask/QuestionCard.tsx:301
+#: src/components/ask/QuestionCard.tsx:205
+#: src/components/ask/QuestionCard.tsx:306
 msgid "Next"
 msgstr ""
 
@@ -3193,7 +3193,7 @@ msgstr "Organik"
 msgid "Organization API key"
 msgstr "Kuruluş API anahtarı"
 
-#: src/components/ask/QuestionCard.tsx:304
+#: src/components/ask/QuestionCard.tsx:309
 msgid "Other answer"
 msgstr ""
 
@@ -3203,8 +3203,8 @@ msgstr ""
 msgid "Other model…"
 msgstr "Başka model…"
 
-#: src/components/ask/QuestionCard.tsx:305
-#: src/components/ask/QuestionCard.tsx:317
+#: src/components/ask/QuestionCard.tsx:310
+#: src/components/ask/QuestionCard.tsx:322
 msgid "Other…"
 msgstr ""
 
@@ -3349,6 +3349,14 @@ msgstr ""
 #: src/pages/ActivityList.tsx:82
 msgid "Recent"
 msgstr "Son"
+
+#: src/components/ask/QuestionCard.tsx:160
+msgid "Recommended"
+msgstr ""
+
+#: src/components/ask/QuestionCard.tsx:160
+msgid "Recommended · {description}"
+msgstr ""
 
 #: src/pages/McpServersOverlay.tsx:39
 msgid "Reconnect OAuth"
@@ -3793,8 +3801,8 @@ msgstr "{0} öğesini seç"
 msgid "Select a bot"
 msgstr "Bir bot seç"
 
-#: src/components/ask/QuestionCard.tsx:201
-#: src/components/ask/QuestionCard.tsx:301
+#: src/components/ask/QuestionCard.tsx:205
+#: src/components/ask/QuestionCard.tsx:306
 #: src/pages/shell/composer.tsx:968
 msgid "Send"
 msgstr "Gönder"
@@ -3948,7 +3956,7 @@ msgstr ""
 msgid "Skills"
 msgstr "Beceriler"
 
-#: src/components/ask/QuestionCard.tsx:190
+#: src/components/ask/QuestionCard.tsx:194
 #: src/components/integrations/IntegrationSetup.tsx:364
 #: src/pages/shell/side-panel.tsx:529
 msgid "Skip"
@@ -3959,7 +3967,7 @@ msgid "Skip or deploy key"
 msgstr "Atla veya dağıtım anahtarı kullan"
 
 #: src/components/ask/AskSettled.tsx:9
-#: src/components/ask/QuestionCard.tsx:213
+#: src/components/ask/QuestionCard.tsx:217
 msgid "Skipped"
 msgstr ""
 
@@ -4238,7 +4246,7 @@ msgstr "Treg token'ı"
 msgid "Try again"
 msgstr "Tekrar dene"
 
-#: src/components/ask/QuestionCard.tsx:305
+#: src/components/ask/QuestionCard.tsx:310
 msgid "Type your answer"
 msgstr "Yanıtını yaz"
 

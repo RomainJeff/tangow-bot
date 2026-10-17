@@ -125,7 +125,7 @@ msgstr "{botName} 的电脑"
 msgid "{count} · next {next}"
 msgstr "{count} · 下次{next}"
 
-#: src/components/ask/QuestionCard.tsx:240
+#: src/components/ask/QuestionCard.tsx:244
 msgid "{count} more"
 msgstr ""
 
@@ -490,7 +490,7 @@ msgstr "始终允许此工具"
 msgid "Always allowed"
 msgstr "始终允许"
 
-#: src/components/ask/QuestionCard.tsx:304
+#: src/components/ask/QuestionCard.tsx:309
 msgid "Answer"
 msgstr "回答"
 
@@ -2446,7 +2446,7 @@ msgstr "知识"
 msgid "Language"
 msgstr "语言"
 
-#: src/components/ask/QuestionCard.tsx:241
+#: src/components/ask/QuestionCard.tsx:245
 msgid "Last one"
 msgstr ""
 
@@ -2882,8 +2882,8 @@ msgstr "新建技能"
 msgid "New space"
 msgstr "新建工作区"
 
-#: src/components/ask/QuestionCard.tsx:201
-#: src/components/ask/QuestionCard.tsx:301
+#: src/components/ask/QuestionCard.tsx:205
+#: src/components/ask/QuestionCard.tsx:306
 msgid "Next"
 msgstr ""
 
@@ -3193,7 +3193,7 @@ msgstr "自然"
 msgid "Organization API key"
 msgstr "组织 API 密钥"
 
-#: src/components/ask/QuestionCard.tsx:304
+#: src/components/ask/QuestionCard.tsx:309
 msgid "Other answer"
 msgstr ""
 
@@ -3203,8 +3203,8 @@ msgstr ""
 msgid "Other model…"
 msgstr "其他模型…"
 
-#: src/components/ask/QuestionCard.tsx:305
-#: src/components/ask/QuestionCard.tsx:317
+#: src/components/ask/QuestionCard.tsx:310
+#: src/components/ask/QuestionCard.tsx:322
 msgid "Other…"
 msgstr ""
 
@@ -3349,6 +3349,14 @@ msgstr ""
 #: src/pages/ActivityList.tsx:82
 msgid "Recent"
 msgstr "最近"
+
+#: src/components/ask/QuestionCard.tsx:160
+msgid "Recommended"
+msgstr ""
+
+#: src/components/ask/QuestionCard.tsx:160
+msgid "Recommended · {description}"
+msgstr ""
 
 #: src/pages/McpServersOverlay.tsx:39
 msgid "Reconnect OAuth"
@@ -3793,8 +3801,8 @@ msgstr "选择 {0}"
 msgid "Select a bot"
 msgstr "选择 Bot"
 
-#: src/components/ask/QuestionCard.tsx:201
-#: src/components/ask/QuestionCard.tsx:301
+#: src/components/ask/QuestionCard.tsx:205
+#: src/components/ask/QuestionCard.tsx:306
 #: src/pages/shell/composer.tsx:968
 msgid "Send"
 msgstr "发送"
@@ -3948,7 +3956,7 @@ msgstr ""
 msgid "Skills"
 msgstr "技能"
 
-#: src/components/ask/QuestionCard.tsx:190
+#: src/components/ask/QuestionCard.tsx:194
 #: src/components/integrations/IntegrationSetup.tsx:364
 #: src/pages/shell/side-panel.tsx:529
 msgid "Skip"
@@ -3959,7 +3967,7 @@ msgid "Skip or deploy key"
 msgstr "跳过或使用部署密钥"
 
 #: src/components/ask/AskSettled.tsx:9
-#: src/components/ask/QuestionCard.tsx:213
+#: src/components/ask/QuestionCard.tsx:217
 msgid "Skipped"
 msgstr ""
 
@@ -4238,7 +4246,7 @@ msgstr "Treg token"
 msgid "Try again"
 msgstr "重试"
 
-#: src/components/ask/QuestionCard.tsx:305
+#: src/components/ask/QuestionCard.tsx:310
 msgid "Type your answer"
 msgstr "输入你的回答"
 

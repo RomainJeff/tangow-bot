@@ -2,7 +2,7 @@ import type { AgentRuntimeEvent, ConnectorTool } from "@rakazo/adapter-kit";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const fakeAgentState = vi.hoisted(() => ({
-  options: ["Berlin", "Seoul", "Toronto"],
+  options: ["Berlin", "Seoul", "Toronto"] as unknown[],
   tools: [] as Array<{
     name: string;
     execute: (toolCallId: string, params: Record<string, unknown>) => Promise<unknown>;
@@ -114,6 +114,19 @@ describe("Pi choice asks", () => {
     expect(
       events.some((event) => event.type === "text" && event.text.includes("I finished the work.")),
     ).toBe(false);
+  });
+
+  it("refuses an option object on the single-question shape, never showing [object Object]", async () => {
+    fakeAgentState.options = [{ label: "Berlin" }, { label: "Seoul" }];
+    const runtime = new PiAgentRuntime();
+    const events: AgentRuntimeEvent[] = [];
+
+    await expect(async () => {
+      for await (const event of runtime.run(runRequest, runContext)) events.push(event);
+    }).rejects.toThrow(
+      "ask_user's top-level options are plain strings; give an option a description or a recommended mark inside questions[].options",
+    );
+    expect(events.some((event) => event.type === "ask")).toBe(false);
   });
 
   it("rejects an empty choice set before emitting an ask", async () => {

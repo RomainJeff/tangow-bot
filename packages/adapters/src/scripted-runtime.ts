@@ -259,8 +259,17 @@ export function inferScript(
               header: "Format",
               question: "Which fridge do you have now?",
               options: [
-                { id: "q1o1", label: "Freestanding, 60 cm" },
-                { id: "q1o2", label: "Built-in, 54–56 cm" },
+                {
+                  id: "q1o1",
+                  label: "Freestanding, 60 cm",
+                  description: "Fits most kitchens",
+                  recommended: true,
+                },
+                {
+                  id: "q1o2",
+                  label: "Built-in, 54–56 cm",
+                  description: "Hides behind a cabinet door",
+                },
                 { id: "q1o3", label: "American or XXL" },
               ],
             },

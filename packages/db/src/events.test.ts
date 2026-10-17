@@ -1003,7 +1003,7 @@ describe("answerRunInput", () => {
     );
   });
 
-  it("resumes a multi-question ask from one structured submission", async () => {
+  it("resumes a multi-question ask from one structured submission, with labels alone (CA21)", async () => {
     const tx = {
       $queryRaw: vi.fn().mockResolvedValue([{ id: "thread-1" }]),
       sessionEntry: {
@@ -1017,7 +1017,12 @@ describe("answerRunInput", () => {
                 id: "q1",
                 question: "Ta cible ?",
                 options: [
-                  { id: "q1o1", label: "DG PME" },
+                  {
+                    id: "q1o1",
+                    label: "DG PME",
+                    description: "Décide seul du budget",
+                    recommended: true,
+                  },
                   { id: "q1o2", label: "Direction BU" },
                 ],
               },
@@ -1062,14 +1067,12 @@ describe("answerRunInput", () => {
       }),
     ).resolves.toBe(true);
 
-    expect(tx.task.updateMany).toHaveBeenCalledWith({
-      where: { runs: { some: { id: "run-1" } } },
-      data: {
-        prompt: expect.stringContaining(
-          "The user answered your questions:\n1. Ta cible ? — DG PME\n2. Ton horizon ? — Other: 6 mois",
-        ),
-      },
-    });
+    const prompt = tx.task.updateMany.mock.calls[0]![0].data.prompt as string;
+    expect(prompt.split("\n\n")[0]).toBe(
+      "The user answered your questions:\n1. Ta cible ? — DG PME\n2. Ton horizon ? — Other: 6 mois",
+    );
+    expect(prompt).not.toContain("budget");
+    expect(prompt).not.toContain("Recommended");
     expect(tx.run.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: { status: "queued", checkpoint: null } }),
     );
@@ -1905,7 +1908,15 @@ describe("resumeAskWithComposerTextInTransaction", () => {
       text: "",
       status: "pending",
       questions: [
-        { id: "q1", question: "Where do you want to go?", required: true },
+        {
+          id: "q1",
+          question: "Where do you want to go?",
+          required: true,
+          options: [
+            { id: "q1o1", label: "Lisbon", description: "Warm in winter", recommended: true },
+            { id: "q1o2", label: "Oslo" },
+          ],
+        },
         { id: "q2", question: "What's your budget?", required: true },
         { id: "q3", question: "Any dietary constraints?", required: false },
       ],
@@ -1926,6 +1937,7 @@ describe("resumeAskWithComposerTextInTransaction", () => {
     expect(prompt).toContain("Somewhere warm, budget doesn't matter much");
     expect(prompt).toContain("Where do you want to go?");
     expect(prompt).toContain("What's your budget?");
+    expect(prompt).not.toContain("Warm in winter");
   });
 
   it("resolves a partial reply even when required questions in the batch stay uncovered", async () => {
