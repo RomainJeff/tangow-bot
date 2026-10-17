@@ -64,6 +64,26 @@ export type CachedLinkPreview =
     }
   | { status: "failed"; source?: LinkPreviewCacheSource };
 
+/**
+ * What one read learned about a link, so that a card and a mention both derive from it. `Img`
+ * and `Icon` are bytes just read, or store keys once cached. A page's title is absent when the
+ * page names its site rather than itself; `crossSite` means the read ended on another site than
+ * the link's, whose title a mention must never show (a card shows the host). A page image is only
+ * read for an article (`fit: "contain"` when the site's icon stands in for it). `refused`: the
+ * site answered 401, 402, 403 or 451, so only its home page's icon is known.
+ */
+export type LinkFacts<Img, Icon> =
+  | { kind: "photo"; image: Img }
+  | {
+      kind: "page";
+      article: boolean;
+      title?: string;
+      crossSite?: true;
+      image?: Img & { fit?: "contain" };
+      icon?: Icon;
+    }
+  | { kind: "refused"; icon?: Icon };
+
 type CacheRow = {
   status: string;
   format: string | null;

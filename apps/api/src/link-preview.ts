@@ -94,6 +94,11 @@ export async function previewLinkForComposer(
       prisma: deps.prisma,
       artifacts: deps.artifacts,
       ...deps.linkPreview,
+      // The reader skips an optional icon it would not have time to finish.
+      readDeps: {
+        ...deps.linkPreview?.readDeps,
+        deadlineAt: Date.now() + LINK_PREVIEW_COMPOSER_DEADLINE_MS,
+      },
     };
     const deadline = AbortSignal.any([
       signal,

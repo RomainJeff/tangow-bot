@@ -79,6 +79,17 @@ describe("the server tells the device it may read (CA 81, CA 54)", () => {
     }
   });
 
+  it("still flags a refusal when the deadline cuts the read of its home page short", async () => {
+    const controller = new AbortController();
+    const { deps } = site((url) => {
+      if (url !== "https://news.test/") return undefined;
+      controller.abort();
+      return refusal();
+    });
+    const answer = await resolveLinkPreviewDetailed(deps, scope, ARTICLE, controller.signal);
+    expect(answer).toMatchObject({ preview: null, deviceReadable: true, refused: true });
+  });
+
   it("does not flag a timeout or a network error (no HTTP answer, so no oracle on private names)", async () => {
     const timeout = site((url) =>
       url === ARTICLE ? new Promise<Response>(() => undefined) : undefined,

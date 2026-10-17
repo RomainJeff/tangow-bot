@@ -72,7 +72,7 @@ function composer(
     options.read ??
       (async () => ({
         ok: true as const,
-        format: "compact" as const,
+        kind: "page" as const,
         article: true as const,
         title: "A page",
       })),
@@ -81,7 +81,7 @@ function composer(
     options.readFromHead ??
       (async () => ({
         ok: true as const,
-        format: "compact" as const,
+        kind: "page" as const,
         article: true as const,
         title: "From the head",
       })),
@@ -244,7 +244,7 @@ describe("links.preview: what it answers", () => {
     const reasons = [
       "blocked_address",
       "unsafe_url",
-      "no_title",
+      "off_site",
       "http_error",
       "unsupported_type",
       "login_page",
@@ -306,13 +306,13 @@ describe("links.preview: the sender's device may read (spec 22)", () => {
     );
 
   it("flags a refusal, and a failure that may pass, with a draft that shows nothing", async () => {
-    for (const [reason, transient] of [
-      ["access_denied", false],
-      ["rate_limited", true],
-      ["server_error", true],
+    for (const result of [
+      { ok: true, kind: "refused" },
+      { ok: false, reason: "rate_limited", transient: true },
+      { ok: false, reason: "server_error", transient: true },
     ] as const) {
-      const { deps } = composer({ read: async () => ({ ok: false, reason, transient }) });
-      await expect(ask(deps), reason).resolves.toEqual({
+      const { deps } = composer({ read: async () => result });
+      await expect(ask(deps), JSON.stringify(result)).resolves.toEqual({
         format: "compact",
         deviceReadable: true,
       });
@@ -365,7 +365,7 @@ describe("links.preview: the sender's device may read (spec 22)", () => {
       read: async () => ({ ok: false, reason: "server_error", transient: true }),
       readFromHead: async () => ({
         ok: true,
-        format: "compact",
+        kind: "page",
         article: true,
         title: "From the head",
         image: { bytes: Buffer.from(TINY_WEBP), width: 1, height: 1 },
@@ -424,7 +424,7 @@ describe("links.preview: quotas (CA 38, CA 55)", () => {
       inFlight,
       read: () =>
         new Promise((resolve) => {
-          release.push(() => resolve({ ok: true, format: "compact", article: true, title: "T" }));
+          release.push(() => resolve({ ok: true, kind: "page", article: true, title: "T" }));
         }),
     });
     const ask = () =>
@@ -493,6 +493,27 @@ describe("links.preview: cancellation and deadline", () => {
       new AbortController().signal,
     );
     expect(timeout).toHaveBeenCalledWith(10_000);
+  });
+
+  it("tells both readers when those ten seconds end, so an icon never outlasts them", async () => {
+    const { deps, read, readFromHead } = composer({
+      read: async () => ({ ok: true, kind: "refused" }),
+    });
+    const before = Date.now();
+    await previewLinkForComposer(
+      deps,
+      actor,
+      { threadId: "thread-1", url: URL_TO_PREVIEW, pageHead: "<head><title>T</title></head>" },
+      new AbortController().signal,
+    );
+    const after = Date.now();
+    for (const deadlineAt of [
+      read.mock.calls[0]?.[1].deadlineAt,
+      readFromHead.mock.calls[0]?.[2].deadlineAt,
+    ]) {
+      expect(deadlineAt).toBeGreaterThanOrEqual(before + 10_000);
+      expect(deadlineAt).toBeLessThanOrEqual(after + 10_000);
+    }
   });
 });
 

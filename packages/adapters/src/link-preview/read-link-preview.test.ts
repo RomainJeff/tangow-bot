@@ -2,8 +2,10 @@ import sharp from "sharp";
 import { describe, expect, it, vi } from "vitest";
 import { createReadLimiter } from "./limits.js";
 import {
+  cardOf,
   decideLinkPreviewFormat,
   type LinkPreviewReadDeps,
+  type LinkPreviewReadResult,
   readLinkPreview,
   readLinkPreviewFromHead,
 } from "./read-link-preview.js";
@@ -69,16 +71,25 @@ const asArticle = (html: string) => html.replace("<head>", `<head>${ART}`);
 const articleHead = (image: string) =>
   `<head>${ART}<title>Doc title</title><meta property="og:title" content="Story &amp; more"><meta property="og:image" content="${image}"></head><body>x</body>`;
 
+/** What a card caller gets: the card a read makes (null for none), or the read's failure. */
+const cardFrom = (read: LinkPreviewReadResult) => (read.ok ? cardOf(read) : read);
+const readCard = async (url: string, d: LinkPreviewReadDeps) =>
+  cardFrom(await readLinkPreview(url, d));
+const readCardFromHead = async (url: string, head: Uint8Array, d: LinkPreviewReadDeps) =>
+  cardFrom(await readLinkPreviewFromHead(url, head, d));
+
 describe("readLinkPreview: formats", () => {
   it("builds a large card from a downloaded 1200 x 630 image", async () => {
     const big = await png(1200, 630);
     const { deps: d, requests } = deps((url) =>
       url === ARTICLE ? page(articleHead("/og.png")) : imageResponse(big),
     );
-    const result = await readLinkPreview(ARTICLE, d);
-    expect(result).toMatchObject({ ok: true, format: "large", title: "Story & more" });
-    if (!result.ok) throw new Error("unreachable");
-    expect(result.image).toMatchObject({ width: 1200, height: 630 });
+    const result = await readCard(ARTICLE, d);
+    expect(result).toMatchObject({
+      format: "large",
+      title: "Story & more",
+      image: { width: 1200, height: 630 },
+    });
     expect(requests).toEqual([ARTICLE, "https://news.example.test/og.png"]);
   });
 
@@ -91,9 +102,8 @@ describe("readLinkPreview: formats", () => {
           )
         : imageResponse(small),
     );
-    const result = await readLinkPreview(ARTICLE, d);
+    const result = await readCard(ARTICLE, d);
     expect(result).toMatchObject({
-      ok: true,
       format: "compact",
       image: { width: 300, height: 300 },
     });
@@ -110,16 +120,16 @@ describe("readLinkPreview: formats", () => {
       const { deps: d } = deps((url) =>
         url === ARTICLE ? page(articleHead("/og.png")) : failing(),
       );
-      const result = await readLinkPreview(ARTICLE, d);
-      expect(result).toEqual({ ok: true, format: "compact", article: true, title: "Story & more" });
+      const result = await readCard(ARTICLE, d);
+      expect(result).toEqual({ format: "compact", title: "Story & more" });
     }
   });
 
   it("builds a photo card from a direct image link, without title", async () => {
     const photo = await png(800, 600);
     const { deps: d } = deps(() => imageResponse(photo, "image/png"));
-    const result = await readLinkPreview("https://img.example.test/a.png", d);
-    expect(result).toMatchObject({ ok: true, format: "photo", image: { width: 800, height: 600 } });
+    const result = await readCard("https://img.example.test/a.png", d);
+    expect(result).toMatchObject({ format: "photo", image: { width: 800, height: 600 } });
     expect(result).not.toHaveProperty("title");
   });
 
@@ -131,8 +141,8 @@ describe("readLinkPreview: formats", () => {
       if (url === "https://news.example.test/a/b/c") return page(articleHead("../og.png"));
       return imageResponse(image);
     });
-    const result = await readLinkPreview("https://short.example.test/x", d);
-    expect(result).toMatchObject({ ok: true, format: "large" });
+    const result = await readCard("https://short.example.test/x", d);
+    expect(result).toMatchObject({ format: "large" });
     expect(requests.at(-1)).toBe("https://news.example.test/a/og.png");
   });
 
@@ -144,29 +154,23 @@ describe("readLinkPreview: formats", () => {
           )
         : new Response("x", { status: 500 }),
     );
-    await readLinkPreview(ARTICLE, d);
+    await readCard(ARTICLE, d);
     // The page, og.png, then only the first icon candidate: never a second icon.
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
   it("reads no image when the page names none", async () => {
     const { deps: d, fetchMock } = deps(() => page(`<head>${ART}<title>Only title</title></head>`));
-    expect(await readLinkPreview(ARTICLE, d)).toEqual({
-      ok: true,
-      format: "compact",
-      article: true,
-      title: "Only title",
-    });
+    expect(await readCard(ARTICLE, d)).toEqual({ format: "compact", title: "Only title" });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 
 describe("readLinkPreview: failures are classified", () => {
   const run = (route: Route, extra?: LinkPreviewReadDeps, url = ARTICLE) =>
-    readLinkPreview(url, deps(route, extra).deps);
+    readCard(url, deps(route, extra).deps);
 
   it.each([
-    ["a page without title", () => page("<html><body>hi</body></html>"), "no_title"],
     [
       "plain text",
       () => new Response("hi", { headers: { "content-type": "text/plain" } }),
@@ -179,11 +183,6 @@ describe("readLinkPreview: failures are classified", () => {
     ],
     ["a 404", () => new Response("no", { status: 404 }), "http_error"],
     ["a 410", () => new Response("no", { status: 410 }), "http_error"],
-    [
-      "a refusal with a one-word address",
-      () => new Response("no", { status: 403 }),
-      "access_denied",
-    ],
     ["a broken direct image", () => imageResponse(new Uint8Array([9, 9, 9])), "unsupported_type"],
     [
       "an SVG",
@@ -197,6 +196,10 @@ describe("readLinkPreview: failures are classified", () => {
     ["a redirect loop", () => Response.redirect(ARTICLE, 302), "too_many_redirects"],
   ] as const)("%s is definitive (%s)", async (_name, route, reason) => {
     expect(await run(route)).toEqual({ ok: false, reason, transient: false });
+  });
+
+  it("gives a page without title no card", async () => {
+    expect(await run(() => page("<html><body>hi</body></html>"))).toBeNull();
   });
 
   it.each([
@@ -276,11 +279,10 @@ describe("readLinkPreview: failures are classified", () => {
       { ...deps(() => page("<title>x</title>")).deps, resolveHostname: () => undefined as never },
     ];
     for (const d of weird) {
-      const result = await readLinkPreview(ARTICLE, d);
-      expect(result.ok).toBe(false);
+      expect(await readCard(ARTICLE, d)).toMatchObject({ ok: false });
     }
-    expect(await readLinkPreview("", deps(() => page("")).deps)).toMatchObject({ ok: false });
-    expect(await readLinkPreview(undefined as never, deps(() => page("")).deps)).toMatchObject({
+    expect(await readCard("", deps(() => page("")).deps)).toMatchObject({ ok: false });
+    expect(await readCard(undefined as never, deps(() => page("")).deps)).toMatchObject({
       ok: false,
     });
   });
@@ -325,7 +327,7 @@ describe("readLinkPreview: logs", () => {
     const results: unknown[] = [];
     for (const route of routes) {
       results.push(
-        await readLinkPreview(secretUrl, {
+        await readCard(secretUrl, {
           ...deps(route, { pageTimeoutMs: 40 }).deps,
           log: (event) => events.push(event),
         }),
@@ -357,13 +359,11 @@ describe("readLinkPreview: site icon fallback (CA 61-63)", () => {
         ? page(homeHead(`<link rel="apple-touch-icon" sizes="180x180" href="/touch.png">`))
         : imageResponse(icon),
     );
-    const result = await readLinkPreview(ARTICLE, d);
+    const result = await readCard(ARTICLE, d);
     expect(result).toMatchObject({
-      ok: true,
       format: "compact",
       title: "Home",
-      imageFit: "contain",
-      image: { width: 180, height: 180 },
+      image: { width: 180, height: 180, fit: "contain" },
     });
     expect(requests).toEqual([ARTICLE, "https://news.example.test/touch.png"]);
   });
@@ -375,8 +375,8 @@ describe("readLinkPreview: site icon fallback (CA 61-63)", () => {
         ? page(homeHead(`<link rel="apple-touch-icon" href="/touch.png">`))
         : imageResponse(huge),
     );
-    const result = await readLinkPreview(ARTICLE, d);
-    expect(result).toMatchObject({ ok: true, format: "compact", imageFit: "contain" });
+    const result = await readCard(ARTICLE, d);
+    expect(result).toMatchObject({ format: "compact", image: { fit: "contain" } });
   });
 
   it("falls back to the icon when the page image cannot be downloaded", async () => {
@@ -392,8 +392,8 @@ describe("readLinkPreview: site icon fallback (CA 61-63)", () => {
       }
       return url.endsWith("/og.png") ? new Response("gone", { status: 404 }) : imageResponse(icon);
     });
-    const result = await readLinkPreview(ARTICLE, d);
-    expect(result).toMatchObject({ ok: true, format: "compact", imageFit: "contain" });
+    const result = await readCard(ARTICLE, d);
+    expect(result).toMatchObject({ format: "compact", image: { fit: "contain" } });
     expect(requests).toEqual([
       ARTICLE,
       "https://news.example.test/og.png",
@@ -401,7 +401,7 @@ describe("readLinkPreview: site icon fallback (CA 61-63)", () => {
     ]);
   });
 
-  it("keeps a page image over the icon, cropped as before, and does not fetch the icon", async () => {
+  it("keeps a page image over the icon, cropped as before", async () => {
     const small = await png(300, 300);
     const { deps: d, requests } = deps((url) =>
       url === ARTICLE
@@ -413,10 +413,17 @@ describe("readLinkPreview: site icon fallback (CA 61-63)", () => {
           )
         : imageResponse(small),
     );
-    const result = await readLinkPreview(ARTICLE, d);
-    expect(result).toMatchObject({ ok: true, format: "compact" });
-    expect(result).not.toHaveProperty("imageFit");
-    expect(requests).toEqual([ARTICLE, "https://news.example.test/og.png"]);
+    const result = await readCard(ARTICLE, d);
+    expect(result).toEqual({
+      format: "compact",
+      title: "Home",
+      image: expect.objectContaining({ width: 300, height: 300 }),
+    });
+    expect(requests).toEqual([
+      ARTICLE,
+      "https://news.example.test/og.png",
+      "https://news.example.test/touch.png",
+    ]);
   });
 
   it("gives a compact card without thumbnail and asks for no favicon when there is no usable icon", async () => {
@@ -430,8 +437,8 @@ describe("readLinkPreview: site icon fallback (CA 61-63)", () => {
       const { deps: d, requests } = deps((url) =>
         url === ARTICLE ? page(homeHead(links)) : imageResponse(new Uint8Array([1])),
       );
-      const result = await readLinkPreview(ARTICLE, d);
-      expect(result, links).toEqual({ ok: true, format: "compact", article: true, title: "Home" });
+      const result = await readCard(ARTICLE, d);
+      expect(result, links).toEqual({ format: "compact", title: "Home" });
       expect(requests, links).toEqual([ARTICLE]);
     }
   });
@@ -445,12 +452,7 @@ describe("readLinkPreview: site icon fallback (CA 61-63)", () => {
       const { deps: d } = deps((url) =>
         url === ARTICLE ? page(homeHead(`<link rel="apple-touch-icon" href="/t.png">`)) : failing(),
       );
-      expect(await readLinkPreview(ARTICLE, d)).toEqual({
-        ok: true,
-        format: "compact",
-        article: true,
-        title: "Home",
-      });
+      expect(await readCard(ARTICLE, d)).toEqual({ format: "compact", title: "Home" });
     }
   });
 
@@ -460,12 +462,7 @@ describe("readLinkPreview: site icon fallback (CA 61-63)", () => {
         ? page(homeHead(`<link rel="apple-touch-icon" href="http://127.0.0.1/t.png">`))
         : imageResponse(new Uint8Array([1])),
     );
-    expect(await readLinkPreview(ARTICLE, d)).toEqual({
-      ok: true,
-      format: "compact",
-      article: true,
-      title: "Home",
-    });
+    expect(await readCard(ARTICLE, d)).toEqual({ format: "compact", title: "Home" });
     expect(requests).toEqual([ARTICLE]);
   });
 
@@ -478,7 +475,7 @@ describe("readLinkPreview: site icon fallback (CA 61-63)", () => {
         (url) => withIcon(url) ?? imageResponse(new Uint8Array([1])),
         { deadlineAt: Date.now() + 2_000 },
       );
-      expect(await readLinkPreview(ARTICLE, d)).toEqual({
+      expect(await readCard(ARTICLE, d)).toEqual({
         ok: false,
         reason: "timeout",
         transient: true,
@@ -491,7 +488,7 @@ describe("readLinkPreview: site icon fallback (CA 61-63)", () => {
       const { deps: d, requests } = deps((url) => withIcon(url) ?? imageResponse(icon), {
         deadlineAt: Date.now() + 10_000,
       });
-      expect(await readLinkPreview(ARTICLE, d)).toMatchObject({ ok: true, imageFit: "contain" });
+      expect(await readCard(ARTICLE, d)).toMatchObject({ image: { fit: "contain" } });
       expect(requests).toHaveLength(2);
     });
 
@@ -506,10 +503,38 @@ describe("readLinkPreview: site icon fallback (CA 61-63)", () => {
         },
         { signal: controller.signal },
       );
-      expect(await readLinkPreview(ARTICLE, d)).toEqual({
+      expect(await readCard(ARTICLE, d)).toEqual({
         ok: false,
         reason: "aborted",
         transient: true,
+      });
+    });
+
+    it("keeps an article's card without the icon when the deadline cuts only the icon read short", async () => {
+      const big = await png(1200, 630);
+      const controller = new AbortController();
+      const { deps: d } = deps(
+        (url) => {
+          if (url === ARTICLE) {
+            return page(
+              homeHead(
+                `<link rel="apple-touch-icon" href="/t.png">`,
+                '<meta property="og:image" content="/og.png">',
+              ),
+            );
+          }
+          if (url.endsWith("/og.png")) return imageResponse(big);
+          controller.abort();
+          return new Response("late", { status: 500 });
+        },
+        { signal: controller.signal },
+      );
+      expect(await readLinkPreview(ARTICLE, d)).toEqual({
+        ok: true,
+        kind: "page",
+        article: true,
+        title: "Home",
+        image: expect.objectContaining({ width: 1200, height: 630 }),
       });
     });
 
@@ -523,7 +548,7 @@ describe("readLinkPreview: site icon fallback (CA 61-63)", () => {
         },
         { signal: controller.signal },
       );
-      expect(await readLinkPreview(ARTICLE, d)).toMatchObject({ ok: false, transient: true });
+      expect(await readCard(ARTICLE, d)).toMatchObject({ ok: false, transient: true });
     });
   });
 });
@@ -541,11 +566,7 @@ describe("readLinkPreview: pages that are not articles", () => {
     const { deps: d, requests } = deps((url) =>
       url === NOTION ? notionPage() : imageResponse(big),
     );
-    expect(await readLinkPreview(NOTION, d)).toEqual({
-      ok: false,
-      reason: "not_article",
-      transient: false,
-    });
+    expect(await readCard(NOTION, d)).toBeNull();
     expect(requests).toEqual([NOTION]);
   });
 
@@ -555,12 +576,7 @@ describe("readLinkPreview: pages that are not articles", () => {
         `<head><title>Post</title><script type="application/ld+json">{"@graph":[{"@type":"BlogPosting"}]}</script></head>`,
       ),
     );
-    expect(await readLinkPreview(NOTION, d)).toEqual({
-      ok: true,
-      format: "compact",
-      article: true,
-      title: "Post",
-    });
+    expect(await readCard(NOTION, d)).toEqual({ format: "compact", title: "Post" });
   });
 
   it.each([401, 402, 403, 451])(
@@ -573,27 +589,28 @@ describe("readLinkPreview: pages that are not articles", () => {
             headers: { "content-type": "text/html" },
           }),
       );
-      expect(await readLinkPreview(`${ARTICLE}/a-long-readable-slug-title`, d)).toEqual({
-        ok: false,
-        reason: "access_denied",
-        transient: false,
-      });
-      expect(requests).toHaveLength(1);
+      expect(await readCard(`${ARTICLE}/a-long-readable-slug-title`, d)).toBeNull();
+      // The page, then its home page for an icon, refused as well.
+      expect(requests).toEqual([
+        `${ARTICLE}/a-long-readable-slug-title`,
+        "https://news.example.test/",
+      ]);
     },
   );
 
   it("makes no card for a login page or a blocked address", async () => {
     const loginUrl = "https://login.monde.example.test/article/some-long-title-here";
     const login = deps(() => notionPage());
-    expect(await readLinkPreview(loginUrl, login.deps)).toMatchObject({
+    expect(await readCard(loginUrl, login.deps)).toMatchObject({
       ok: false,
       reason: "login_page",
     });
     expect(login.requests).toEqual([]);
     const blocked = deps(() => notionPage());
-    expect(
-      await readLinkPreview("http://127.0.0.1/some-long-title-here", blocked.deps),
-    ).toMatchObject({ ok: false, reason: "blocked_address" });
+    expect(await readCard("http://127.0.0.1/some-long-title-here", blocked.deps)).toMatchObject({
+      ok: false,
+      reason: "blocked_address",
+    });
     expect(blocked.requests).toEqual([]);
   });
 });
@@ -604,8 +621,8 @@ describe("readLinkPreviewFromHead: the head a device read", () => {
   it("parses it like a fetched page and fetches the image itself, for a large card", async () => {
     const big = await png(1200, 630);
     const { deps: d, requests } = deps(() => imageResponse(big));
-    const result = await readLinkPreviewFromHead(ARTICLE, bytes(articleHead("/og.png")), d);
-    expect(result).toMatchObject({ ok: true, format: "large", title: "Story & more" });
+    const result = await readCardFromHead(ARTICLE, bytes(articleHead("/og.png")), d);
+    expect(result).toMatchObject({ format: "large", title: "Story & more" });
     // One request, for the image the head names, resolved against the link: no page request.
     expect(requests).toEqual(["https://news.example.test/og.png"]);
   });
@@ -613,7 +630,7 @@ describe("readLinkPreviewFromHead: the head a device read", () => {
   it("resolves the image against a valid <base href>, and ignores one that is not http(s)", async () => {
     const small = await png(300, 300);
     const based = deps(() => imageResponse(small));
-    await readLinkPreviewFromHead(
+    await readCardFromHead(
       ARTICLE,
       bytes(
         asArticle(
@@ -624,7 +641,7 @@ describe("readLinkPreviewFromHead: the head a device read", () => {
     );
     expect(based.requests).toEqual(["https://cdn.example.test/assets/og.png"]);
     const bad = deps(() => imageResponse(small));
-    await readLinkPreviewFromHead(
+    await readCardFromHead(
       ARTICLE,
       bytes(
         asArticle(
@@ -639,20 +656,20 @@ describe("readLinkPreviewFromHead: the head a device read", () => {
   it("falls back to the icon the head names, drawn whole, and never makes it a large card", async () => {
     const icon = await png(180, 180);
     const { deps: d, requests } = deps(() => imageResponse(icon));
-    const result = await readLinkPreviewFromHead(
+    const result = await readCardFromHead(
       ARTICLE,
       bytes(
         asArticle('<head><title>T</title><link rel="apple-touch-icon" href="/touch.png"></head>'),
       ),
       d,
     );
-    expect(result).toMatchObject({ ok: true, format: "compact", title: "T", imageFit: "contain" });
+    expect(result).toMatchObject({ format: "compact", title: "T", image: { fit: "contain" } });
     expect(requests).toEqual(["https://news.example.test/touch.png"]);
   });
 
   it("decodes the charset the head declares, like the server does", async () => {
     const { deps: d } = deps(() => new Response("no", { status: 404 }));
-    const result = await readLinkPreviewFromHead(
+    const result = await readCardFromHead(
       ARTICLE,
       bytes(
         asArticle('<head><meta charset="iso-8859-1"><title>Caf\u00e9 du jour</title></head>'),
@@ -660,49 +677,44 @@ describe("readLinkPreviewFromHead: the head a device read", () => {
       ),
       d,
     );
-    expect(result).toMatchObject({ ok: true, format: "compact", title: "Café du jour" });
+    expect(result).toMatchObject({ format: "compact", title: "Café du jour" });
   });
 
   it("cleans the title the way a fetched title is cleaned", async () => {
     const { deps: d } = deps(() => new Response("no", { status: 404 }));
-    const result = await readLinkPreviewFromHead(
+    const result = await readCardFromHead(
       ARTICLE,
       bytes(asArticle(`<head><title>  Hello \u202eevil\u200b \n  &amp; world  </title></head>`)),
       d,
     );
-    expect(result).toMatchObject({ ok: true, title: "Hello evil & world" });
+    expect(result).toMatchObject({ title: "Hello evil & world" });
   });
 
   it("gives a compact card without thumbnail when the image cannot be had, and nothing without a title", async () => {
     const { deps: d } = deps(() => new Response("gone", { status: 404 }));
-    expect(await readLinkPreviewFromHead(ARTICLE, bytes(articleHead("/og.png")), d)).toEqual({
-      ok: true,
+    expect(await readCardFromHead(ARTICLE, bytes(articleHead("/og.png")), d)).toEqual({
       format: "compact",
-      article: true,
       title: "Story & more",
     });
-    expect(await readLinkPreviewFromHead(ARTICLE, bytes("<head></head>"), d)).toMatchObject({
-      ok: false,
-      reason: "no_title",
-    });
+    expect(await readCardFromHead(ARTICLE, bytes(asArticle("<head></head>")), d)).toBeNull();
   });
 
   it("gives no card for a head that does not declare an article, and never reads its image", async () => {
     const { deps: d, requests } = deps(() => imageResponse(new Uint8Array([1])));
-    const result = await readLinkPreviewFromHead(
+    const result = await readCardFromHead(
       ARTICLE,
       bytes(
         '<head><title>T</title><meta property="og:type" content="website"><meta property="og:image" content="/og.png"></head>',
       ),
       d,
     );
-    expect(result).toEqual({ ok: false, reason: "not_article", transient: false });
+    expect(result).toBeNull();
     expect(requests).toEqual([]);
   });
 
   it("never asks for a private image address the device-supplied head names", async () => {
     const { deps: d, requests } = deps(() => imageResponse(new Uint8Array([1])));
-    const result = await readLinkPreviewFromHead(
+    const result = await readCardFromHead(
       ARTICLE,
       bytes(
         asArticle(
@@ -711,7 +723,171 @@ describe("readLinkPreviewFromHead: the head a device read", () => {
       ),
       d,
     );
-    expect(result).toMatchObject({ ok: true, format: "compact", title: "T" });
+    expect(result).toMatchObject({ format: "compact", title: "T" });
     expect(requests).toEqual([]);
+  });
+});
+
+describe("readLinkPreview: the facts one read records", () => {
+  const head = (inner: string) => page(`<head>${inner}</head><body>x</body>`);
+  const icon64 = { width: 64, height: 64 };
+
+  it("records the site icon of every page, re-encoded to 64 px, article or not", async () => {
+    const icon = await png(180, 180);
+    const { deps: d, requests } = deps((url) =>
+      url === ARTICLE
+        ? head(`<title>Doc</title><link rel="apple-touch-icon" href="/touch.png">`)
+        : imageResponse(icon),
+    );
+    expect(await readLinkPreview(ARTICLE, d)).toEqual({
+      ok: true,
+      kind: "page",
+      article: false,
+      title: "Doc",
+      icon: expect.objectContaining(icon64),
+    });
+    expect(requests).toEqual([ARTICLE, "https://news.example.test/touch.png"]);
+  });
+
+  it.each([
+    ['<meta property="og:url" content="https://app.notion.test">', "og:url at the site root"],
+    ['<link rel="Canonical" href="/">', "a canonical link to the site root"],
+  ])("drops a title that names the site: %s (%s), for a link with a path", async (canonical) => {
+    const link = "https://app.notion.test/workspace/Roadmap-0123456789abcdef";
+    const { deps: d } = deps(() => head(`${ART}<title>Notion</title>${canonical}`));
+    expect(await readLinkPreview(link, d)).toEqual({ ok: true, kind: "page", article: true });
+  });
+
+  it("keeps the title for the root link itself, and for a canonical address with a path or a query", async () => {
+    const root = deps(() =>
+      head(`<title>Notion</title><meta property="og:url" content="https://app.notion.test/">`),
+    );
+    expect(await readLinkPreview("https://app.notion.test/", root.deps)).toMatchObject({
+      title: "Notion",
+    });
+    for (const canonical of ["https://app.notion.test/doc", "https://app.notion.test/?p=7"]) {
+      const { deps: d } = deps(() =>
+        head(`<title>Doc</title><link rel="canonical" href="${canonical}">`),
+      );
+      expect(await readLinkPreview(`${ARTICLE}/x`, d), canonical).toMatchObject({ title: "Doc" });
+    }
+  });
+
+  it("keeps a shortened link's card, marks it cross-site, and reads the final site's own icon (CA 26)", async () => {
+    const SHORT = "https://t.test/abc";
+    const big = await png(1200, 630);
+    const icon = await png(64, 64);
+    const { deps: d, requests } = deps((url) => {
+      if (url === SHORT) return Response.redirect("https://news.other.test/story", 302);
+      if (url === "https://news.other.test/story") {
+        return page(
+          articleHead("/og.png").replace(
+            "</head>",
+            `<link rel="apple-touch-icon" href="https://static.other.test/i.png"></head>`,
+          ),
+        );
+      }
+      return imageResponse(url.endsWith("/og.png") ? big : icon);
+    });
+    const read = await readLinkPreview(SHORT, d);
+    if (!read.ok) throw new Error(read.reason);
+    expect(cardOf(read)).toMatchObject({ format: "large", title: "Story & more" });
+    expect(read).toMatchObject({ crossSite: true, icon: icon64 });
+    expect(requests).toEqual([
+      SHORT,
+      "https://news.other.test/story",
+      "https://news.other.test/og.png",
+      "https://static.other.test/i.png",
+    ]);
+  });
+
+  it("does not mark a redirect that stays on the link's site as cross-site", async () => {
+    const { deps: d } = deps((url) =>
+      url === "https://www.trusted.test/a"
+        ? Response.redirect("https://trusted.test/a/", 301)
+        : head(`<title>Same site</title>`),
+    );
+    expect(await readLinkPreview("https://www.trusted.test/a", d)).toEqual({
+      ok: true,
+      kind: "page",
+      article: false,
+      title: "Same site",
+    });
+  });
+
+  it("never reads an icon from another site than the page's (CA 25)", async () => {
+    const { deps: d, requests } = deps(() =>
+      head(`<title>T</title><link rel="apple-touch-icon" href="https://cdn.tracker.test/i.png">`),
+    );
+    expect(await readLinkPreview(ARTICLE, d)).toEqual({
+      ok: true,
+      kind: "page",
+      article: false,
+      title: "T",
+    });
+    expect(requests).toEqual([ARTICLE]);
+  });
+
+  describe("a site that refuses the server (401, 402, 403, 451)", () => {
+    const LINK = "https://paywall.example.test/news/some-story";
+
+    it("records the refusal and the icon its home page names", async () => {
+      const icon = await png(180, 180);
+      const { deps: d, requests } = deps((url) => {
+        if (url === LINK) return new Response("no", { status: 403 });
+        if (url === "https://paywall.example.test/") {
+          return head(`<title>Home</title><link rel="apple-touch-icon" href="/touch.png">`);
+        }
+        return imageResponse(icon);
+      });
+      expect(await readLinkPreview(LINK, d)).toEqual({
+        ok: true,
+        kind: "refused",
+        icon: expect.objectContaining(icon64),
+      });
+      expect(requests).toEqual([
+        LINK,
+        "https://paywall.example.test/",
+        "https://paywall.example.test/touch.png",
+      ]);
+    });
+
+    it("records no icon its home page takes from another site, nor one without the time", async () => {
+      const elsewhere = deps((url) => {
+        if (url === LINK) return new Response("no", { status: 451 });
+        return head(`<link rel="apple-touch-icon" href="https://cdn.tracker.test/t.png">`);
+      });
+      expect(await readLinkPreview(LINK, elsewhere.deps)).toEqual({ ok: true, kind: "refused" });
+      expect(elsewhere.requests).toEqual([LINK, "https://paywall.example.test/"]);
+
+      const late = deps(() => new Response("no", { status: 401 }), {
+        deadlineAt: Date.now() + 2_000,
+      });
+      expect(await readLinkPreview(LINK, late.deps)).toEqual({ ok: true, kind: "refused" });
+      expect(late.requests).toEqual([LINK]);
+    });
+
+    it("records the refusal, not a passing failure, when the deadline cuts the home page or icon read short", async () => {
+      for (const cut of [
+        "https://paywall.example.test/",
+        "https://paywall.example.test/touch.png",
+      ]) {
+        const controller = new AbortController();
+        const stages: string[] = [];
+        const { deps: d } = deps(
+          (url) => {
+            if (url === LINK) return new Response("no", { status: 403 });
+            if (url === cut) {
+              controller.abort();
+              return new Response("late", { status: 500 });
+            }
+            return head(`<title>Home</title><link rel="apple-touch-icon" href="/touch.png">`);
+          },
+          { signal: controller.signal, log: (event) => stages.push(event.stage) },
+        );
+        expect(await readLinkPreview(LINK, d), cut).toEqual({ ok: true, kind: "refused" });
+        expect(stages, cut).toEqual(["icon"]);
+      }
+    });
   });
 });
