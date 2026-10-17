@@ -202,3 +202,43 @@ export function sanitizePreviewTitle(title: string): string {
   const lastUnit = cut.charCodeAt(cut.length - 1);
   return (lastUnit >= 0xd800 && lastUnit <= 0xdbff ? cut.slice(0, -1) : cut).trimEnd();
 }
+
+/** A single-letter article or `qu` before a vowel or `h`, which French elides (`j ai` is `j'ai`). */
+const SLUG_ELISION = /(^|\s)(qu|[jldnsmtc]) (?=[aeiouàâäéèêëîïôöùûüœæh])/giu;
+
+const SLUG_EXTENSION = /\.(?:html?|php)$/i;
+const SLUG_TRAILING_ID = /(?:[-_]\d+)+$/;
+/** A trailing UUID or hexadecimal id of 16 characters or more (`Roadmap-3f9a2c7e81d04b5f`, a Notion page). */
+const SLUG_HEX_ID =
+  /(?:^|[-_])(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{16,})$/i;
+
+/**
+ * A title drawn from the address alone: the last non-empty path segment, percent-decoded, without
+ * extension (`.html`, `.htm`, `.php`), trailing UUID or long hexadecimal id, or trailing numeric id
+ * (`_6788472_3210`, `-12345`), dashes and underscores as spaces, French elisions restored (`j ai`
+ * gives `j'ai`; accents are never guessed), first letter capitalised. Null unless two words with a
+ * letter remain, or one when an id was cut from it (`Roadmap-<id>` is a document's name; a bare
+ * `edit` or `politique` names a section, not a page).
+ */
+export function previewTitleFromUrl(url: string): string | null {
+  let segment: string | undefined;
+  try {
+    segment = new URL(url).pathname.split("/").filter(Boolean).at(-1);
+  } catch {
+    return null;
+  }
+  if (!segment) return null;
+  let decoded = segment;
+  try {
+    decoded = decodeURIComponent(segment);
+  } catch {
+    // A malformed escape stays as written.
+  }
+  const named = decoded.replace(SLUG_EXTENSION, "");
+  const withoutId = named.replace(SLUG_HEX_ID, "");
+  const title = sanitizePreviewTitle(withoutId.replace(SLUG_TRAILING_ID, "").replace(/[-_]+/g, " "))
+    .replace(SLUG_ELISION, "$1$2'")
+    .replace(/^\p{L}/u, (first) => first.toUpperCase());
+  const words = title.split(" ").filter((word) => /\p{L}/u.test(word)).length;
+  return words >= (withoutId === named ? 2 : 1) ? title : null;
+}
