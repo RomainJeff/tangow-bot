@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Added
 
-- **Links in messages now show as mentions with their site's icon.** A link to a document, a tool or a page shows the site's icon and a readable name instead of the raw address, up to five per message, on web and desktop; articles keep their preview card.
+- **Links in messages now show as mentions with their site's icon.** A link to a document, a tool or a page shows the site's icon and a readable name instead of the raw address, up to five per message, on web, desktop and iPhone; articles keep their preview card.
 
 #### Changed
 
