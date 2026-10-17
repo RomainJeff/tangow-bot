@@ -77,7 +77,10 @@ export function projectThread(entries: readonly ThreadEntry[]): ProjectedThread 
   const messageIds = new Map<EntryId, EntryId>();
   const cards = new Map<string, CardSlot[]>();
   const runCards: { id: EntryId; runId: string; seq: number }[] = [];
-  const previews = new Map<string, { item: MessageItem; block: MessageBlock; host: EntryId }>();
+  const previews = new Map<
+    string,
+    { itemId: EntryId; blocks: MessageBlock[]; block: MessageBlock; host: EntryId }
+  >();
   const previewHosts = new Map<EntryId, EntryId>();
   const compactions = new Map<DividerItem, number>();
 
@@ -422,22 +425,24 @@ export function projectThread(entries: readonly ThreadEntry[]): ProjectedThread 
       }
       case "link.preview": {
         const item = itemShowing(segment.payload.target);
-        if (item?.kind !== "message") break;
-        const block: MessageBlock = segment.payload.block;
-        item.blocks.push(block);
-        previews.set(segment.id, { item, block, host: segment.payload.target });
-        previewHosts.set(item.id, segment.payload.target);
+        const { block, target } = segment.payload;
+        let blocks: MessageBlock[];
+        if (item?.kind === "message") blocks = item.blocks;
+        else if (item?.kind === "routine") blocks = item.links ??= [];
+        else break;
+        blocks.push(block);
+        previews.set(segment.id, { itemId: item.id, blocks, block, host: target });
+        previewHosts.set(item.id, target);
         shownBy.set(segment.id, item.id);
         break;
       }
       case "link.preview.removed": {
         const preview = previews.get(segment.payload.target);
         if (!preview) break;
-        const index = preview.item.blocks.indexOf(preview.block);
-        if (index !== -1) preview.item.blocks.splice(index, 1);
-        if (previewHosts.get(preview.item.id) === preview.host)
-          previewHosts.delete(preview.item.id);
-        shownBy.set(segment.id, preview.item.id);
+        const index = preview.blocks.indexOf(preview.block);
+        if (index !== -1) preview.blocks.splice(index, 1);
+        if (previewHosts.get(preview.itemId) === preview.host) previewHosts.delete(preview.itemId);
+        shownBy.set(segment.id, preview.itemId);
         break;
       }
       case "compaction": {

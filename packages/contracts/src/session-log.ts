@@ -67,6 +67,12 @@ const RoutineFinishedPayload = RunOutcome.and(
   }),
 );
 
+/** What one `link.preview` entry adds to the item it targets: a card or a mention. */
+const LinkEntryBlock = z.union([
+  LinkPreviewBlock.refine(isLinkPreviewCard, "A preview entry holds a card"),
+  LinkMentionBlock,
+]);
+
 const JsonObject = z.record(z.string(), z.unknown());
 /**
  * On an entry addressed to a child session that rose to the thread's main session, the child
@@ -285,10 +291,7 @@ const EntryShapes = z.discriminatedUnion("type", [
     "link.preview",
     z.object({
       ...target,
-      block: z.union([
-        LinkPreviewBlock.refine(isLinkPreviewCard, "A preview entry holds a card"),
-        LinkMentionBlock,
-      ]),
+      block: LinkEntryBlock,
       /** The one artifact this entry shows: the card's image or the mention's icon. */
       artifactId: Id.optional(),
     }),
@@ -619,6 +622,8 @@ export const ThreadItemSchema = z.discriminatedUnion("kind", [
         failure: RunFailureKind.optional(),
       })
       .nullable(),
+    /** The card and mentions the links of its shown result received. */
+    links: z.array(LinkEntryBlock).optional(),
   }),
   z.object({
     kind: z.literal("handoff"),
