@@ -124,13 +124,6 @@ export function toolCallBudgetNotice(limit: number): string {
 export const TOOL_FINAL_RESPONSE_FALLBACK =
   "I completed the tool step but could not produce a final response. Please ask me to continue.";
 
-/** The runtime's own notice a run's text ends on: the tool-call limit or a stalled tool step. */
-export function trailingRuntimeNotice(text: string): string | undefined {
-  const trimmed = text.trimEnd();
-  if (trimmed.endsWith(TOOL_FINAL_RESPONSE_FALLBACK)) return TOOL_FINAL_RESPONSE_FALLBACK;
-  return trailingToolCallBudgetNotice(trimmed);
-}
-
 function trailingToolCallBudgetNotice(text: string): string | undefined {
   const trimmed = text.trimEnd();
   if (!trimmed.endsWith(BUDGET_NOTICE_TAIL)) return undefined;

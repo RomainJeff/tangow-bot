@@ -407,7 +407,6 @@ import {
   extractNarrationText,
   finalBlocksAfterMidTurnProgress,
   repeatsSentUserText,
-  trailingRuntimeNotice,
 } from "./user-progress.js";
 import { createWebProvider } from "./web-provider-factory.js";
 import { withAbort } from "./web-ssrf.js";
@@ -981,7 +980,7 @@ export type SystemInstructionParts = {
   messageUserExposed?: boolean;
 };
 
-/** How the user hears from a bot: message_user for a top-level bot, the final reply otherwise. */
+/** Human conversation uses message_user; delegated work returns its final reply. */
 export function chatVoiceInstructions(messageUserExposed: boolean): string {
   const channel = messageUserExposed
     ? "message_user is the only way to reach the user. Everything else you write, your final reply included, is private scratch space they never see, like your reasoning and tool output. A turn that ends without message_user is a turn where you said nothing. Send answers, useful updates, questions, and the final outcome with message_user, then end the turn without repeating them."
@@ -1611,12 +1610,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
         // (background-work-visibility CA1/CA2); a top-level bot's scheduled routine (the
         // orchestrator's own brief) is unaffected and keeps behaving as a normal reply.
         const isRoutineCardRun = showsRoutineRunCard(run, bot.parentBotId != null);
-        // Only a top-level bot talks to the user through message_user, outside its routines. A
-        // sub-bot answers its parent, and a routine run, scheduled or woken by a webhook, works in
-        // its own session and reports when it ends, so both keep their text as their output.
         const routineRun =
           run.routineId != null && (run.trigger === "routine" || run.trigger === "webhook");
-        const messageUserExposed = bot.parentBotId == null && !routineRun;
+        const messageUserExposed =
+          !routineRun && (bot.parentBotId == null || isUserOpenedTrigger(run.trigger));
+        const publishRecoveryNotice = messageUserExposed && run.trigger !== "bot_message";
         // Text the model writes outside message_user is private scratch, and a turn that never
         // calls it stays silent. A delegated run's text is its result for the ordering bot, but a
         // peer's result or status answers nobody: what the user reads of it goes by message_user.
@@ -1963,6 +1961,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
         // Rehydrate from this run's prior mid-turn entries so a resume after ask/takeover
         // still knows progress was already published (skip hollow finals; status outcome).
         let publishedMidTurnUserMessage = false;
+        let runtimeNotice: string | undefined;
         let runRecap: FactualRunRecap = { state: "missing", reason: "absent" };
         const midTurnUserTexts: string[] = [];
         {
@@ -4779,7 +4778,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   leaseOwner: workerId,
                   leaseFence: fence,
                   outcome: "completed",
-                  blocks: [{ kind: "text", text: stuckText }],
+                  blocks: publishRecoveryNotice ? [] : [{ kind: "text", text: stuckText }],
+                  ...(publishRecoveryNotice
+                    ? { publicBlocks: [{ kind: "text", text: stuckText }] }
+                    : {}),
                 });
                 if (!stopped) return;
                 if (stopped.continuationRunId) {
@@ -4861,8 +4863,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
             } else if (event.type === "usage") {
               await recordRunUsage(deps, { ...run, botId: bot.id, runId }, event);
             } else if (event.type === "done") {
+              runtimeNotice = event.runtimeNotice;
               if (recapRequested) {
-                runRecap = parseRunRecap(event.privateFinalText ?? event.text);
+                runRecap = parseRunRecap(
+                  event.privateFinalText ?? (runtimeNotice ? undefined : event.text),
+                );
                 if (runRecap.state === "available") {
                   const facts = FactualRunRecapFactsSchema.safeParse({
                     ...runRecap.facts,
@@ -4939,13 +4944,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             getLogger().warn("agent reply contains a text tool call", { runId, botId: bot.id });
           }
           if (freeTextIsPrivate) {
-            // Only the runtime's own notice outlives the private final text.
-            const runtimeNotice = trailingRuntimeNotice(
-              assembled ||
-                messageSegments.map((block) => (block.kind === "text" ? block.text : "")).join(""),
-            );
             messageSegments = messageSegments.filter((block) => block.kind !== "text");
-            if (runtimeNotice) messageSegments.push({ kind: "text", text: runtimeNotice });
             assembled = runtimeNotice ?? "";
           }
           if (!assembled) {
@@ -5014,6 +5013,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
             leaseFence: fence,
             outcome: "completed",
             blocks,
+            ...(publishRecoveryNotice && runtimeNotice
+              ? { publicBlocks: redactBlocks([{ kind: "text", text: runtimeNotice }], runSecrets) }
+              : {}),
             markUnread: completionMarksUnread(run.trigger, text, isRoutineCardRun),
             result: text,
             ...(recapRequested ? { recap: runRecap } : {}),
@@ -5438,7 +5440,7 @@ export function selectBuiltinToolsForRun(options: {
   messagingChannelRun: boolean;
   /** A decision provider is resolved for this run, so browser_run is offered with the page tools. */
   browserRunAllowed?: boolean;
-  /** A top-level bot's own run, the only kind that reaches the user through message_user. */
+  /** The run can address the person through message_user. */
   messageUserExposed?: boolean;
 }) {
   const selected = selectMemoryTools(
