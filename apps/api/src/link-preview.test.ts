@@ -539,7 +539,15 @@ describe("messages.removeLinkPreview (CA 16, CA 19, CA 54)", () => {
           : [],
       ),
       sessionEntry: {
-        findMany: vi.fn().mockResolvedValueOnce(previews).mockResolvedValueOnce(removals),
+        findMany: vi
+          .fn()
+          .mockResolvedValueOnce(
+            previews.map((preview) => ({
+              ...preview,
+              payload: { block: { kind: "link_preview" }, artifactId: "a1" },
+            })),
+          )
+          .mockResolvedValueOnce(removals),
       },
       thread: {
         findUnique: vi.fn(async () => ({ botId: "bot-1", groupId: null })),

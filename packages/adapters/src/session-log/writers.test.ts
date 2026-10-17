@@ -7,7 +7,7 @@ import type { PrismaClient } from "@rakazo/db";
 import {
   answerRunInputInTransaction,
   appendEventInTransaction,
-  appendLinkPreviewBlock,
+  appendLinkBlocks,
   appendRunBlocksInTransaction,
   appendRunFinishedInTransaction,
   appendSessionEntryInTransaction,
@@ -1550,11 +1550,11 @@ describe("session log writers", () => {
       } as const;
       const where = { spaceId: SPACE, threadId: owner.threadId };
 
-      await appendLinkPreviewBlock(prisma, { ...where, messageId: message.id, block });
+      await appendLinkBlocks(prisma, { ...where, messageId: message.id, blocks: [block] });
       const preview = (await log.readTail(owner.sessionId)).at(-1)!;
       await removeLinkPreviewBlock(prisma, { ...where, messageId: message.id });
       const removed = await newest(owner.sessionId);
-      await appendLinkPreviewBlock(prisma, { ...where, messageId: older.id, block });
+      await appendLinkBlocks(prisma, { ...where, messageId: older.id, blocks: [block] });
       await removeLinkPreviewBlock(prisma, { ...where, messageId: older.id });
 
       expect([

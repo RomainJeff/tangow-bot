@@ -3,7 +3,7 @@ import type { ArtifactStore, BackgroundJobPayloads } from "@rakazo/adapter-kit";
 import { LinkPreviewBlock, type LinkPreviewCard } from "@rakazo/contracts";
 import { linkMentionCandidates, messageHostsLinkPreview } from "@rakazo/core";
 import {
-  appendLinkPreviewBlock,
+  appendLinkBlocks,
   blocksOf,
   deleteLinkPreviewArtifactRows,
   type PrismaClient,
@@ -165,11 +165,11 @@ async function attachPreview(
   const parsed = LinkPreviewBlock.safeParse(cardBlock(link, preview, artifact?.id));
   const block = parsed.success ? (parsed.data as LinkPreviewCard) : undefined;
   const appended = block
-    ? await appendLinkPreviewBlock(deps.prisma, {
+    ? await appendLinkBlocks(deps.prisma, {
         spaceId: thread.spaceId,
         threadId: thread.id,
         messageId,
-        block,
+        blocks: [block],
       }).catch(() => undefined)
     : undefined;
   if (appended?.outcome !== "appended") {
