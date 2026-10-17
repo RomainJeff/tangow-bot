@@ -291,9 +291,19 @@ describe("search_runs authorization and archive discovery", () => {
               expect(found.hits[0].excerpt).toContain("[redacted]");
               expect(found.hits[0].excerpt).not.toContain("fake-line");
               for (const query of ["fake-line-one", "fake-line-two"]) {
-                expect(
-                  await request.executeTool("search_runs", { runId: old.id, query }, query),
-                ).toMatchObject({ status: "ok", hits: [], nextCursor: null });
+                let cursor: string | undefined;
+                do {
+                  const page = RunSearchPage.parse(
+                    await request.executeTool(
+                      "search_runs",
+                      { runId: old.id, query, ...(cursor ? { cursor } : {}) },
+                      query,
+                    ),
+                  );
+                  expect(page).toMatchObject({ status: "ok", hits: [] });
+                  if (page.status !== "ok") throw new Error("Archive search unavailable");
+                  cursor = page.nextCursor ?? undefined;
+                } while (cursor);
               }
               await request.executeTool(
                 "message_user",

@@ -1,6 +1,6 @@
 # Interactive run memory
 
-Interactive work keeps tool calls and results in a child session. The parent conversation retains user messages, public `message_user` replies, approval and question context, and an internal factual recap. Web, desktop, and mobile use the same stored conversation and UI projection. A recap creates no message bubble or unread state.
+Interactive work keeps tool calls and results in a child session. The parent conversation retains user messages, public `message_user` replies, approval and question context, and an internal factual recap. Web, desktop, and mobile use the same stored conversation and UI projection. A recap creates no message bubble or unread state. Direct conversations with bots created by another bot use the same `message_user` route. Trusted runtime recovery notices publish when the run completes. Matching model prose stays private.
 
 ## Conversation and execution context
 
