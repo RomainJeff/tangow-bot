@@ -1,4 +1,5 @@
 import { Trans, useLingui } from "@lingui/react/macro";
+import { LinkMentionGlyph } from "@rakazo/chat-ui/web";
 import type { MessageBlock } from "@rakazo/contracts";
 import { abortableDelay } from "@rakazo/core";
 import {
@@ -458,11 +459,14 @@ export function ChartBlockView({
  * Loads an image artifact of the thread as an object URL, once its container nears the viewport.
  * `failed` turns true when the artifact cannot be read, so a caller can draw its fallback.
  */
-function useArtifactImageSrc(target: ArtifactTarget, artifactId: string) {
+function useArtifactImageSrc<Container extends HTMLElement = HTMLDivElement>(
+  target: ArtifactTarget,
+  artifactId: string,
+) {
   const [src, setSrc] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const [visible, setVisible] = useState(false);
-  const container = useRef<HTMLDivElement>(null);
+  const container = useRef<Container>(null);
   const targetBotId = "botId" in target ? target.botId : undefined;
   const targetGroupId = "groupId" in target ? target.groupId : undefined;
 
@@ -544,6 +548,26 @@ export function LinkPreviewImage({
         <ImageIcon className="size-5 text-muted-foreground" strokeWidth={1.7} aria-hidden />
       ) : null}
     </div>
+  );
+}
+
+/**
+ * The site icon of a link mention, read from the thread's artifacts like a card's picture, never
+ * a remote URL. The link glyph stands in when the artifact cannot be read.
+ */
+export function LinkMentionIcon({
+  target,
+  artifactId,
+}: {
+  target: ArtifactTarget;
+  artifactId: string;
+}) {
+  const { container, src, failed } = useArtifactImageSrc<HTMLSpanElement>(target, artifactId);
+  if (failed) return <LinkMentionGlyph />;
+  return (
+    <span ref={container} className="block size-full">
+      {src ? <img src={src} alt="" /> : null}
+    </span>
   );
 }
 

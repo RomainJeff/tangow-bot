@@ -2,10 +2,11 @@ import { t } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { ChatMarkdown, LinkifiedText } from "@rakazo/chat-ui/web";
 import type { MessageBlock } from "@rakazo/contracts";
-import type { SkillSourceBlock } from "@rakazo/core";
+import type { LinkMentionResolver, SkillSourceBlock } from "@rakazo/core";
 import {
   isLinkOnlyMessage,
   isNarrationMessage,
+  linkMentionsOf,
   narrationSegments,
   previewSiteLabel,
   sanitizePreviewTitle,
@@ -27,7 +28,7 @@ import {
 } from "@rakazo/ui-web";
 import { ArrowRight, BookOpen, Check, Clock } from "lucide-react";
 import type { ReactNode } from "react";
-import { memo, useRef, useState } from "react";
+import { memo, useMemo, useRef, useState } from "react";
 import "../../components/ai/beautiful-ui.css";
 import { AgentSteps } from "../../components/AgentSteps";
 import { ArtifactFileCard } from "../../components/ArtifactFileCard";
@@ -46,11 +47,11 @@ import { messageLinkPreview } from "./message-actions";
 const USER_TEXT_FOLD_LINES = 20;
 
 /** A long user message folds after 20 lines behind a fade until "Show more" is clicked. */
-function UserText({ text }: { text: string }) {
+function UserText({ text, mentions }: { text: string; mentions?: LinkMentionResolver<ReactNode> }) {
   const [expanded, setExpanded] = useState(false);
   // ponytail: counts newlines, not wrapped lines; a 20-line max-height hides the rest either way.
   const foldable = text.split("\n").length > USER_TEXT_FOLD_LINES;
-  if (!foldable) return <LinkifiedText text={text} />;
+  if (!foldable) return <LinkifiedText text={text} mentions={mentions} />;
   return (
     <>
       <div
@@ -62,7 +63,7 @@ function UserText({ text }: { text: string }) {
             : "relative max-h-[calc(20*var(--type-body-leading)*var(--type-body-size))] overflow-hidden"
         }
       >
-        <LinkifiedText text={text} />
+        <LinkifiedText text={text} mentions={mentions} />
         {expanded ? null : (
           <div
             aria-hidden
@@ -86,6 +87,7 @@ import {
   ArtifactImage,
   ChartBlockView,
   ChoiceCard,
+  LinkMentionIcon,
   LinkPreviewImage,
   McpApprovalCard,
 } from "./message-cards";
@@ -184,6 +186,16 @@ export const MessageView = memo(function MessageView({
   const skills = skillSourcesOf(message.blocks);
   const skillsAtMount = useRef(skills.length);
   const skillLinesLive = arrivesLive || skills.length > skillsAtMount.current;
+  // One resolver per message version, so the memoized markdown it feeds does not re-render.
+  const mentions = useMemo<LinkMentionResolver<ReactNode> | undefined>(() => {
+    const lookup = linkMentionsOf(message);
+    return (
+      lookup && {
+        ...lookup,
+        icon: (artifactId) => <LinkMentionIcon target={artifactTarget} artifactId={artifactId} />,
+      }
+    );
+  }, [message, artifactTarget]);
   const isNarration = isNarrationMessage(message);
   const botId = botIdOf(message);
   const isLive = message.role === "bot" && message.live === true;
@@ -322,7 +334,9 @@ export const MessageView = memo(function MessageView({
             >
               {part.blocks.map((entry, j) => (
                 <div key={j}>
-                  <ChatMarkdown streaming={entry.streaming}>{entry.text}</ChatMarkdown>
+                  <ChatMarkdown streaming={entry.streaming} mentions={mentions}>
+                    {entry.text}
+                  </ChatMarkdown>
                 </div>
               ))}
             </MessageBubble>
@@ -521,7 +535,7 @@ export const MessageView = memo(function MessageView({
               className="wrap-anywhere"
               dir="auto"
             >
-              <UserText text={shown} />
+              <UserText text={shown} mentions={mentions} />
             </UserBubble>
           );
         }
@@ -533,7 +547,7 @@ export const MessageView = memo(function MessageView({
             dir="auto"
             meta={i === skillLineBubble && skillLines.length > 0 ? skillLines : undefined}
           >
-            <ChatMarkdown>{shown}</ChatMarkdown>
+            <ChatMarkdown mentions={mentions}>{shown}</ChatMarkdown>
           </MessageBubble>
         );
       }

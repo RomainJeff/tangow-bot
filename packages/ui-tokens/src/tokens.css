@@ -18,6 +18,7 @@
   --chat-user-foreground: #f2f2f0;
   --mention-chip: #222226;
   --mention-chip-foreground: #f2f2f0;
+  --link-mention-tile: #2e2e30;
   --muted: #1f1f21;
   --muted-foreground: #9a9aa1;
   --accent: #1b1b1c;
@@ -66,6 +67,7 @@
   --chat-user-foreground: #fbfbf9;
   --mention-chip: #f1f1ee;
   --mention-chip-foreground: #111114;
+  --link-mention-tile: #f3f3f1;
   --muted: #ededeb;
   --muted-foreground: #6e6e73;
   --accent: #efefee;
@@ -171,6 +173,7 @@
   --corner-draft: 16px;
   --corner-block: 18px;
   --corner-bubble: 18px;
+  --corner-link-mention: 4px;
   --corner-composer: 24px;
   --corner-pill: 9999px;
   --size-receipt: 14px;
@@ -197,6 +200,8 @@
   --size-link-thumb: 56px;
   --size-link-icon-inset: 8px;
   --size-link-photo-max: 320px;
+  --size-link-mention-icon: 16px;
+  --size-link-mention-gap: 5px;
   --duration-arrive: 240ms;
   --duration-press: 160ms;
   --duration-hover: 160ms;

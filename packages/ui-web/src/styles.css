@@ -22,6 +22,7 @@
   --color-chat-user-foreground: var(--chat-user-foreground);
   --color-mention-chip: var(--mention-chip);
   --color-mention-chip-foreground: var(--mention-chip-foreground);
+  --color-link-mention-tile: var(--link-mention-tile);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);

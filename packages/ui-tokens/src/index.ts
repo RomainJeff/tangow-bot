@@ -27,6 +27,8 @@ export type ColorTokens = {
   chatUserForeground: string;
   mentionChip: string;
   mentionChipForeground: string;
+  /** The tile behind a link mention's fallback glyph in a bot bubble: a shade lighter than `muted`. */
+  linkMentionTile: string;
   muted: string;
   mutedForeground: string;
   accent: string;
@@ -68,6 +70,7 @@ export const darkTokens = {
   chatUserForeground: "#F2F2F0",
   mentionChip: "#222226",
   mentionChipForeground: "#F2F2F0",
+  linkMentionTile: "#2E2E30",
   muted: "#1F1F21",
   mutedForeground: "#9A9AA1",
   accent: "#1B1B1C",
@@ -107,6 +110,7 @@ export const lightTokens = {
   chatUserForeground: "#FBFBF9",
   mentionChip: "#F1F1EE",
   mentionChipForeground: "#111114",
+  linkMentionTile: "#F3F3F1",
   muted: "#EDEDEB",
   mutedForeground: "#6E6E73",
   accent: "#EFEFEE",
@@ -205,6 +209,8 @@ export const radii = {
   draft: 16,
   block: 18,
   bubble: 18,
+  /** A link mention's 16 px site icon or fallback tile. */
+  linkMention: 4,
   composer: 24,
   pill: 9999,
 } as const satisfies Record<string, number>;
@@ -310,6 +316,10 @@ export const sizes = {
   linkIconInset: 8,
   /** Max height of a link preview shown as a photo. */
   linkPhotoMax: 320,
+  /** The site icon of a link mention, inline in a bubble's text (web and iOS). */
+  linkMentionIcon: 16,
+  /** Space between a link mention's icon and its label. */
+  linkMentionGap: 5,
 } as const satisfies Record<string, number>;
 
 /** Width over height of a large link preview's picture: the one ratio, web and iOS. */
