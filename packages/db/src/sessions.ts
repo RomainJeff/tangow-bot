@@ -324,6 +324,11 @@ export async function appendSessionEntryInTransaction(
   return entry;
 }
 
+/** The next entry this transaction appends to the thread opens a new feed event. */
+export function endThreadFeedEvent(tx: Prisma.TransactionClient, threadId: string): void {
+  transactionLog(tx).feedOf.delete(threadId);
+}
+
 export async function threadOfSession(
   prisma: PrismaClient | Prisma.TransactionClient,
   sessionId: string,

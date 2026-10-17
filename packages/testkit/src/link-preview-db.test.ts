@@ -1,6 +1,7 @@
 import { createLinkPreviewPurge, sweepOrphanPreviewArtifacts } from "@rakazo/adapters";
+import { ThreadEntrySchema } from "@rakazo/contracts";
 import {
-  appendLinkPreviewBlock,
+  appendLinkBlocks,
   findCachedLinkPreview,
   findOrphanPreviewArtifacts,
   LINK_PREVIEW_ACTOR_READS_PER_MINUTE,
@@ -14,7 +15,7 @@ import {
   rewindThread,
   storeLinkPreviewCache,
 } from "@rakazo/db";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createFakeThreadDb } from "./fake-thread-db.js";
 import { openThreadDb, type ThreadDb } from "./thread-db.js";
 
@@ -501,9 +502,9 @@ describe("a message's preview in the log", () => {
         messages: [{ id: "m1", blocks: [text] }],
       });
 
-      await appendLinkPreviewBlock(db.prisma, {
+      await appendLinkBlocks(db.prisma, {
         ...scope,
-        block: { kind: "link_preview", url, format: "compact", title: "A page" },
+        blocks: [{ kind: "link_preview", url, format: "compact", title: "A page" }],
       });
       expect(await lastFeed()).toEqual({ botId: "bot-b", runId: null });
 
@@ -515,9 +516,9 @@ describe("a message's preview in the log", () => {
       await db.seedThread({ id: "thread-1" });
       await db.seedMessage({ id: "m1", threadId: "thread-1", blocks: [text] });
 
-      await appendLinkPreviewBlock(db.prisma, {
+      await appendLinkBlocks(db.prisma, {
         ...scope,
-        block: { kind: "link_preview", url, format: "compact", title: "A page" },
+        blocks: [{ kind: "link_preview", url, format: "compact", title: "A page" }],
       });
 
       expect(await lastFeed()).toEqual({ botId: "bot-1", runId: null });
@@ -532,9 +533,9 @@ describe("a message's preview in the log", () => {
     await db.seedMessage({ id: "m2", threadId: "thread-2", blocks: [text] });
 
     const outcomes = [
-      await appendLinkPreviewBlock(db.prisma, { ...scope, block: card }),
-      await appendLinkPreviewBlock(db.prisma, { ...scope, block: card }),
-      await appendLinkPreviewBlock(db.prisma, { ...scope, messageId: "m2", block: card }),
+      await appendLinkBlocks(db.prisma, { ...scope, blocks: [card] }),
+      await appendLinkBlocks(db.prisma, { ...scope, blocks: [card] }),
+      await appendLinkBlocks(db.prisma, { ...scope, messageId: "m2", blocks: [card] }),
       await removeLinkPreviewBlock(db.prisma, { ...scope, messageId: "m2" }),
     ];
 
@@ -552,9 +553,9 @@ describe("a message's preview in the log", () => {
     await db.seedMessage({ id: "m1", threadId: "thread-1", blocks: [text] });
     await rewindThread(db.prisma, { ...scope, botId: "bot-1" });
 
-    const appended = await appendLinkPreviewBlock(db.prisma, {
+    const appended = await appendLinkBlocks(db.prisma, {
       ...scope,
-      block: { kind: "link_preview", url, format: "compact", title: "A page" },
+      blocks: [{ kind: "link_preview", url, format: "compact", title: "A page" }],
     });
 
     expect(appended).toEqual({ outcome: "gone" });
@@ -585,14 +586,16 @@ describe("a message's preview in the log", () => {
       await db.seedThread({ id: "thread-1" });
       await db.seedMessage({ id: "m1", threadId: "thread-1", blocks: [text] });
       await previewArtifact("a1", "blob-1");
-      await appendLinkPreviewBlock(db.prisma, {
+      await appendLinkBlocks(db.prisma, {
         ...scope,
-        block: {
-          kind: "link_preview",
-          url,
-          format: "photo",
-          image: { artifactId: "a1", width: 1, height: 1 },
-        },
+        blocks: [
+          {
+            kind: "link_preview",
+            url,
+            format: "photo",
+            image: { artifactId: "a1", width: 1, height: 1 },
+          },
+        ],
       });
     }
 
@@ -630,11 +633,134 @@ describe("a message's preview in the log", () => {
 
       expect(await db.previewOf("m1")).toEqual({ removed: true });
       await expect(
-        appendLinkPreviewBlock(db.prisma, {
+        appendLinkBlocks(db.prisma, {
           ...scope,
-          block: { kind: "link_preview", url, format: "compact", title: "A page" },
+          blocks: [{ kind: "link_preview", url, format: "compact", title: "A page" }],
         }),
       ).resolves.toEqual({ outcome: "present" });
+    });
+
+    const mention = (path: string, artifactId?: string) => ({
+      kind: "link_mention" as const,
+      url: `https://docs.test/${path}`,
+      title: path,
+      ...(artifactId ? { icon: { artifactId } } : {}),
+    });
+
+    /** The kind and URL of each block every feed event since `from` carries, event by event. */
+    const feedSince = async (from: number) =>
+      (
+        await db.prisma.event.findMany({
+          where: { type: "session.entry.appended", seq: { gt: from } },
+          orderBy: { seq: "asc" },
+        })
+      ).map((event) => (event.payload as { entries: unknown[] }).entries);
+    const blocksOf = (entries: unknown[]) =>
+      (entries as Array<{ payload: { block: { kind: string; url: string } } }>).map(
+        ({ payload: { block } }) => `${block.kind} ${block.url}`,
+      );
+    const lastSeq = async () =>
+      (await db.prisma.thread.findUniqueOrThrow({ where: { id: "thread-1" } })).nextEventSeq - 1;
+
+    it("writes the card, then the mentions, in one transaction and two feed events, and a rerun adds only what is missing (CA 22)", async () => {
+      await db.seedThread({ id: "thread-1" });
+      await db.seedMessage({ id: "m1", threadId: "thread-1", blocks: [text] });
+      const card = { kind: "link_preview" as const, url, format: "compact" as const, title: "A" };
+      const from = await lastSeq();
+      const transactions = vi.spyOn(db.prisma, "$transaction");
+
+      const first = await appendLinkBlocks(db.prisma, {
+        ...scope,
+        blocks: [mention("a"), card, mention("b#top"), mention("b")],
+      });
+
+      expect(transactions).toHaveBeenCalledTimes(1);
+      transactions.mockRestore();
+      expect(first).toMatchObject({ outcome: "appended", seq: from + 2, artifactIds: [] });
+      expect((await feedSince(from)).map(blocksOf)).toEqual([
+        [`link_preview ${url}`],
+        ["link_mention https://docs.test/a", "link_mention https://docs.test/b#top"],
+      ]);
+
+      const rerun = await appendLinkBlocks(db.prisma, {
+        ...scope,
+        blocks: [{ ...card, title: "B" }, mention("a"), mention("c", "a2")],
+      });
+      expect(rerun).toMatchObject({ outcome: "appended", seq: from + 3, artifactIds: ["a2"] });
+      expect((await feedSince(from + 2)).map(blocksOf)).toEqual([
+        ["link_mention https://docs.test/c"],
+      ]);
+      expect((await db.mentionsOf("m1")).map((block) => block.url)).toEqual([
+        "https://docs.test/a",
+        "https://docs.test/b#top",
+        "https://docs.test/c",
+      ]);
+      expect((await db.previewOf("m1")).card?.title).toBe("A");
+    });
+
+    it("keeps the card live on a client released before mentions, which drops a whole event holding one (CA 22)", async () => {
+      await db.seedThread({ id: "thread-1" });
+      await db.seedMessage({ id: "m1", threadId: "thread-1", blocks: [text] });
+      const card = { kind: "link_preview" as const, url, format: "compact" as const, title: "A" };
+      const from = await lastSeq();
+      // That client's `link.preview` entry holds a card and nothing else.
+      const oldClient = ThreadEntrySchema.refine(
+        (entry) => entry.type !== "link.preview" || entry.payload.block.kind === "link_preview",
+      ).array();
+
+      await appendLinkBlocks(db.prisma, { ...scope, blocks: [card, mention("a")] });
+
+      const events = await feedSince(from);
+      const kept = events.flatMap((entries) => oldClient.safeParse(entries).data ?? []);
+      expect(kept.map((entry) => entry.type === "link.preview" && entry.payload.block)).toEqual([
+        card,
+      ]);
+      expect(oldClient.safeParse(events.flat()).success).toBe(false);
+    });
+
+    it("keeps the mentions and their icons when the card is removed (CA 12)", async () => {
+      await withCard();
+      await previewArtifact("a2", "blob-2");
+      await appendLinkBlocks(db.prisma, { ...scope, blocks: [mention("a", "a2")] });
+
+      const removed = await removeLinkPreviewBlock(db.prisma, scope);
+
+      expect(removed).toMatchObject({ artifacts: [{ id: "a1", storageKey: "blob-1" }] });
+      expect(await db.previewOf("m1")).toEqual({ removed: true });
+      expect(await db.mentionsOf("m1")).toEqual([mention("a", "a2")]);
+      expect((await db.prisma.artifact.findMany()).map((row) => row.id)).toEqual(["a2"]);
+      expect(await findOrphanPreviewArtifacts(db.prisma, { now: at(61 * 60_000) })).toEqual([]);
+    });
+
+    it("gives a message sent with its preview off neither card nor mention", async () => {
+      await db.seedThread({ id: "thread-1" });
+      const optOut = { kind: "link_preview" as const, removed: true as const };
+      await db.seedMessage({ id: "m1", threadId: "thread-1", blocks: [text, optOut] });
+
+      const card = { kind: "link_preview" as const, url, format: "compact" as const, title: "A" };
+      await expect(
+        appendLinkBlocks(db.prisma, { ...scope, blocks: [card, mention("a")] }),
+      ).resolves.toEqual({ outcome: "present" });
+      expect(await db.mentionsOf("m1")).toEqual([]);
+    });
+
+    it("stays coherent when two writers and a removal race (CA 12)", async () => {
+      await db.seedThread({ id: "thread-1" });
+      await db.seedMessage({ id: "m1", threadId: "thread-1", blocks: [text] });
+      const card = { kind: "link_preview" as const, url, format: "compact" as const, title: "A" };
+
+      await Promise.all([
+        appendLinkBlocks(db.prisma, { ...scope, blocks: [card, mention("a")] }),
+        appendLinkBlocks(db.prisma, { ...scope, blocks: [mention("a"), mention("b")] }),
+        removeLinkPreviewBlock(db.prisma, scope),
+      ]);
+
+      // Whichever ran first, the card is gone or never came, and each mention is there once.
+      expect(await db.previewOf("m1")).toEqual({ removed: true });
+      expect((await db.mentionsOf("m1")).map((block) => block.url).sort()).toEqual([
+        "https://docs.test/a",
+        "https://docs.test/b",
+      ]);
     });
 
     it("finds the card images left behind when a thread goes, and sweeps rows and bytes", async () => {
@@ -695,14 +821,16 @@ describe("a message's preview in the log", () => {
         ),
       ).toEqual(["lost"]);
       // Once the card is there, it is no orphan.
-      await appendLinkPreviewBlock(db.prisma, {
+      await appendLinkBlocks(db.prisma, {
         ...scope,
-        block: {
-          kind: "link_preview",
-          url,
-          format: "photo",
-          image: { artifactId: "lost", width: 1, height: 1 },
-        },
+        blocks: [
+          {
+            kind: "link_preview",
+            url,
+            format: "photo",
+            image: { artifactId: "lost", width: 1, height: 1 },
+          },
+        ],
       });
       expect(await findOrphanPreviewArtifacts(db.prisma, { now: at(61 * 60_000) })).toEqual([]);
     });
