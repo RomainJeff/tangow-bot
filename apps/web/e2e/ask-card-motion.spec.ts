@@ -19,8 +19,11 @@ type Frame = {
   rows: number;
 };
 
-/** Opens the city question after `history` earlier exchanges, scrolled to the end of the thread. */
-async function openCityCard(page: Page, name: string, history = 0) {
+const cities = { prompt: "pick from these cities with tappable choices", ready: "Seoul" };
+const fridge = { prompt: "ask me three questions", ready: "Built-in, 54–56 cm" };
+
+/** Opens a scripted question card after `history` earlier exchanges, scrolled to the end of the thread. */
+async function openCard(page: Page, name: string, history = 0, { prompt, ready } = cities) {
   await signup(page, `${name}-${Date.now()}@rakazo.test`, "password12", "Ask Motion");
   await completeOnboarding(page);
   const botId = activeBotId(page);
@@ -36,7 +39,7 @@ async function openCityCard(page: Page, name: string, history = 0) {
       )
       .toBe(turn);
   }
-  await page.getByPlaceholder(/Message/).fill("pick from these cities with tappable choices");
+  await page.getByPlaceholder(/Message/).fill(prompt);
   await page.keyboard.press("Enter");
   await expect
     .poll(
@@ -46,59 +49,69 @@ async function openCityCard(page: Page, name: string, history = 0) {
       { timeout: 60_000 },
     )
     .toBe("waiting_input");
-  const seoul = page.getByRole("button", { name: "Seoul", exact: true });
-  if ((await seoul.count()) === 0) await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(seoul).toBeVisible({ timeout: 15_000 });
-  return seoul;
+  const first = page.getByRole("button", { name: ready, exact: true });
+  if ((await first.count()) === 0) await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(first).toBeVisible({ timeout: 15_000 });
+  return first;
 }
 
-/** Taps the tile and records every frame until `ms` after the hold has ended. */
-async function sampleCommit(page: Page, tile: ReturnType<Page["getByRole"]>, ms: number) {
-  await page.evaluate((window_) => {
-    const transcript = document.querySelector('[data-testid="transcript"]') as HTMLElement;
-    const card = document.querySelector('[data-slot="question-card"]') as HTMLElement;
-    const rows = [...transcript.querySelectorAll("[data-message-id]")];
-    const above = rows[rows.indexOf(card.closest("[data-message-id]") as Element) - 1] as Element;
-    const rect = (element: Element | null) => {
-      if (!element) return null;
-      const { x, y, width, height } = element.getBoundingClientRect();
-      return { x, y, width, height };
-    };
-    const flights: number[] = [];
-    new MutationObserver((records) => {
-      for (const record of records) {
-        for (const node of record.addedNodes) {
-          if (node instanceof HTMLElement && node.matches("[data-ask-flight]")) flights.push(1);
-        }
-      }
-    }).observe(card, { childList: true, subtree: true });
-    const frames: Frame[] = [];
-    let heldAt: number | null = null;
-    const probe = window as unknown as { commit: Promise<{ frames: Frame[]; flights: number[] }> };
-    probe.commit = new Promise((resolve) => {
-      const step = (now: number) => {
-        const bubble = card.querySelector('[data-slot="user-bubble"]');
-        const frame = {
-          t: now,
-          busy: Boolean(card.querySelector("fieldset:disabled")),
-          clone: rect(card.querySelector("[data-ask-flight]")),
-          card: rect(card) as Rect,
-          above: rect(above) as Rect,
-          bubble: rect(bubble),
-          bubbleVisible: Boolean(bubble && getComputedStyle(bubble).visibility === "visible"),
-          scrollTop: transcript.scrollTop,
-          scrollMax: transcript.scrollHeight - transcript.clientHeight,
-          fold: (card.firstElementChild as Element).getBoundingClientRect().height,
-          rows: transcript.querySelectorAll("[data-message-id]").length,
-        };
-        frames.push(frame);
-        if (frame.busy && heldAt === null) heldAt = frame.t;
-        if (heldAt !== null && frame.t - heldAt > window_) resolve({ frames, flights });
-        else requestAnimationFrame(step);
+/** Clicks and records every frame until `ms` after the commit has begun, which `started` marks. */
+async function sampleCommit(
+  page: Page,
+  tile: ReturnType<Page["getByRole"]>,
+  ms: number,
+  started = "fieldset:disabled",
+) {
+  await page.evaluate(
+    ([window_, started]) => {
+      const transcript = document.querySelector('[data-testid="transcript"]') as HTMLElement;
+      const card = document.querySelector('[data-slot="question-card"]') as HTMLElement;
+      const rows = [...transcript.querySelectorAll("[data-message-id]")];
+      const above = rows[rows.indexOf(card.closest("[data-message-id]") as Element) - 1] as Element;
+      const rect = (element: Element | null) => {
+        if (!element) return null;
+        const { x, y, width, height } = element.getBoundingClientRect();
+        return { x, y, width, height };
       };
-      requestAnimationFrame(step);
-    });
-  }, ms);
+      const flights: number[] = [];
+      new MutationObserver((records) => {
+        for (const record of records) {
+          for (const node of record.addedNodes) {
+            if (node instanceof HTMLElement && node.matches("[data-ask-flight]")) flights.push(1);
+          }
+        }
+      }).observe(card, { childList: true, subtree: true });
+      const frames: Frame[] = [];
+      let heldAt: number | null = null;
+      const probe = window as unknown as {
+        commit: Promise<{ frames: Frame[]; flights: number[] }>;
+      };
+      probe.commit = new Promise((resolve) => {
+        const step = (now: number) => {
+          const bubble = card.querySelector('[data-slot="user-bubble"]');
+          const frame = {
+            t: now,
+            busy: Boolean(card.querySelector(started)),
+            clone: rect(card.querySelector("[data-ask-flight]")),
+            card: rect(card) as Rect,
+            above: rect(above) as Rect,
+            bubble: rect(bubble),
+            bubbleVisible: Boolean(bubble && getComputedStyle(bubble).visibility === "visible"),
+            scrollTop: transcript.scrollTop,
+            scrollMax: transcript.scrollHeight - transcript.clientHeight,
+            fold: (card.firstElementChild as Element).getBoundingClientRect().height,
+            rows: transcript.querySelectorAll("[data-message-id]").length,
+          };
+          frames.push(frame);
+          if (frame.busy && heldAt === null) heldAt = frame.t;
+          if (heldAt !== null && frame.t - heldAt > window_) resolve({ frames, flights });
+          else requestAnimationFrame(step);
+        };
+        requestAnimationFrame(step);
+      });
+    },
+    [ms, started] as const,
+  );
   const clicked = await page.evaluate(() => performance.now());
   await tile.click();
   const { frames, flights } = await page.evaluate(
@@ -136,7 +149,7 @@ for (const { viewport, history, band } of [
     page,
   }, testInfo) => {
     await page.setViewportSize(viewport);
-    const seoul = await openCityCard(page, `ask-motion-${viewport.width}`, history);
+    const seoul = await openCard(page, `ask-motion-${viewport.width}`, history);
     await expect(seoul).toBeInViewport();
     const { frames, flights } = await sampleCommit(page, seoul, 1000);
 
@@ -239,7 +252,7 @@ test("with reduced motion the answer fades in after the same hold, with no fligh
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  const seoul = await openCityCard(page, "ask-motion-reduced");
+  const seoul = await openCard(page, "ask-motion-reduced");
   const answered = page.waitForRequest((request) => request.url().includes("/rpc/threads/answer"));
   const { frames, flights, clicked } = await sampleCommit(page, seoul, 700);
   await answered;
@@ -255,7 +268,7 @@ test("with reduced motion the answer fades in after the same hold, with no fligh
 test("an answer that fails mid-flight reopens the card on the choice, with no bubble left (CA4)", async ({
   page,
 }) => {
-  const seoul = await openCityCard(page, "ask-motion-failed");
+  const seoul = await openCard(page, "ask-motion-failed");
   await page.route("**/rpc/threads/answer", async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 300));
     await route.abort();
@@ -274,11 +287,69 @@ test("an answer that fails mid-flight reopens the card on the choice, with no bu
   ).toBe("");
 });
 
+test("a stack's Send folds the card while the answers rise into their bubble, in one movement (CA5, stack)", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 640 });
+  const builtIn = await openCard(page, "ask-motion-stack", 2, fridge);
+  const card = page.locator('[data-slot="question-card"]');
+  await builtIn.click();
+  await expect(card.locator('[data-slot="stack-head"]')).toHaveText("Extras·1 more");
+  await card.getByRole("button", { name: "Ice maker", exact: true }).click();
+  await card.getByRole("button", { name: "Next", exact: true }).click();
+  await card.getByRole("button", { name: "Skip", exact: true }).click();
+  const send = card.getByRole("button", { name: "Send", exact: true });
+  await expect(send).toBeInViewport();
+  const { frames, flights } = await sampleCommit(page, send, 700, '[data-slot="user-bubble"]');
+
+  const first = frames.findIndex((frame) => frame.busy);
+  const before = frames[first - 1]!;
+  const moving = frames.slice(first);
+  const final = frames.at(-1)!;
+  const series = {
+    bubbleY: [moving.map((f) => f.bubble!.y), moving[0]!.bubble!.y, final.bubble!.y],
+    // The clip that folds the old card exists only while it folds; then the card is its own height.
+    cardHeight: [
+      moving.map((f) => (f.fold > 0 ? f.fold : f.card.height)),
+      before.card.height,
+      final.card.height,
+    ],
+    rowAbove: [moving.map((f) => f.above.y), before.above.y, final.above.y],
+  } as const;
+  const report = {
+    fold: before.card.height - final.card.height,
+    rise: moving[0]!.bubble!.y - final.bubble!.y,
+    wobble: Object.fromEntries(
+      Object.entries(series).map(([name, [values, from, to]]) => [name, wobble(values, from, to)]),
+    ),
+    endFrames: Object.fromEntries(
+      Object.entries(series).map(([name, [values, from, to]]) => [
+        name,
+        progress(values, from, to).findIndex((value) => value >= 0.995),
+      ]),
+    ),
+  };
+  writeFileSync(testInfo.outputPath("ca5-stack-frames.json"), JSON.stringify(frames));
+  writeFileSync(testInfo.outputPath("ca5-stack-report.json"), JSON.stringify(report, null, 2));
+  await testInfo.attach("ca5-stack-report", { path: testInfo.outputPath("ca5-stack-report.json") });
+
+  expect(flights).toEqual([]);
+  expect(report.fold).toBeGreaterThan(100);
+  expect(report.rise).toBeGreaterThan(20);
+  for (const { back, over } of Object.values(report.wobble)) {
+    expect(back).toBeLessThanOrEqual(3);
+    expect(over).toBeLessThanOrEqual(3);
+  }
+  const ends = Object.values(report.endFrames);
+  expect(Math.max(...ends) - Math.min(...ends)).toBeLessThanOrEqual(1);
+  expect(new Set(frames.map((f) => f.rows)).size).toBe(1);
+});
+
 test("a resize mid-flight lands the answer where its bubble now stands, without a jump (CA5)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 640 });
-  const seoul = await openCityCard(page, "ask-motion-resize");
+  const seoul = await openCard(page, "ask-motion-resize");
   await page.evaluate(() => {
     const probe = window as unknown as { resizedAt: number };
     window.addEventListener("resize", () => {

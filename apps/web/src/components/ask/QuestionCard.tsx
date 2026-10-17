@@ -189,7 +189,7 @@ export function QuestionCard({
           {pile}
           <div data-slot="stack-step" className={cn(pile.length > 0 && "pt-2.5")}>
             {left === null ? null : (
-              <p className="flex min-w-0 items-baseline gap-1.5 pb-1">
+              <p data-slot="stack-head" className="flex min-w-0 items-baseline gap-1.5 pb-1">
                 {question.header ? (
                   <>
                     <span dir="auto" className="min-w-0 truncate font-medium">

@@ -829,7 +829,7 @@ describe("AskCard open question", () => {
       lines: [...container.querySelectorAll('[data-slot="stack-line"]')].map(
         (line) => line.textContent,
       ),
-      head: container.querySelector('[data-slot="stack-step"] p')?.textContent ?? null,
+      head: container.querySelector('[data-slot="stack-head"]')?.textContent ?? null,
       actions: [...container.querySelectorAll('[data-slot="framed-block-actions"] button')].map(
         (button) => button.textContent,
       ),
