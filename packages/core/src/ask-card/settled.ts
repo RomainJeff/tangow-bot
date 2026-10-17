@@ -16,11 +16,15 @@ export type AskSettledView =
 
 const UNKNOWN_CHOICE_ID = /^choice-\d+$/;
 
-function labelOf(question: FormQuestion): string {
+/** A question's name on one line: its header, or the question as plain text. */
+export function labelOf(question: FormQuestion): string {
   return question.header ?? plainText(question.text);
 }
 
-function answerValue(question: FormQuestion, answer: AskAnswers[string] | undefined): AnswerValue {
+export function answerValue(
+  question: FormQuestion,
+  answer: AskAnswers[string] | undefined,
+): AnswerValue {
   const labels = (answer?.selected ?? []).flatMap(
     (id) => question.options.find((option) => option.id === id)?.label ?? [],
   );

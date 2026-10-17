@@ -68,6 +68,17 @@ export function askFormOf(block: AskCardBlock): AskForm | null {
   return { questions: [question], encoding: options.length ? "legacy-choice" : "legacy-text" };
 }
 
+/** One question's entry in `answers`, exactly as the server stores it. */
+export function answerOf(response: AskResponse): AskAnswers[string] {
+  const other =
+    response.kind === "text" ? response.text : response.kind === "options" ? response.other : null;
+  return {
+    ...(response.kind === "options" ? { selected: [...response.ids] } : {}),
+    ...(other?.trim() ? { other: other.trim() } : {}),
+    ...(response.kind === "skipped" ? { skipped: true } : {}),
+  };
+}
+
 /** What `threads.answer` carries, and what the block stores once the server accepts it. */
 export function encodeAnswer(
   form: AskForm,
@@ -76,18 +87,7 @@ export function encodeAnswer(
   if (form.encoding === "answers") {
     const answers: AskAnswers = {};
     for (const question of form.questions) {
-      const response = responses.get(question.id) ?? { kind: "skipped" };
-      const other =
-        response.kind === "text"
-          ? response.text
-          : response.kind === "options"
-            ? response.other
-            : null;
-      answers[question.id] = {
-        ...(response.kind === "options" ? { selected: [...response.ids] } : {}),
-        ...(other?.trim() ? { other: other.trim() } : {}),
-        ...(response.kind === "skipped" ? { skipped: true } : {}),
-      };
+      answers[question.id] = answerOf(responses.get(question.id) ?? { kind: "skipped" });
     }
     return { wire: JSON.stringify({ answers }), stored: { kind: "answers", answers } };
   }
