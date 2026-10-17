@@ -1,5 +1,6 @@
 import { activeBotId, captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
-import { expect, type Page, type TestInfo, test } from "./test";
+import type { Page, TestInfo } from "./test";
+import { expect, test } from "./test";
 
 /** Opens the scripted three-question card. */
 async function openStack(page: Page, name: string) {

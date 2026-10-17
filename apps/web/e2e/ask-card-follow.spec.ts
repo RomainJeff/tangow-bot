@@ -1,6 +1,7 @@
 import { writeFileSync } from "node:fs";
 import { activeBotId, completeOnboarding, rpc, signup } from "./helpers";
-import { expect, type Page, test } from "./test";
+import type { Page } from "./test";
+import { expect, test } from "./test";
 import { threadEntries } from "./thread-log";
 
 type Frame = {
