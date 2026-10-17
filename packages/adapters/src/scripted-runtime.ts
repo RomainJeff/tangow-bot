@@ -7,6 +7,8 @@ import type {
 import { abortableDelay, inferHandoffTargetName } from "@rakazo/core";
 
 const running = new Map<string, AbortController>();
+/** Runs that stopped on a question card, so their next turn answers it. */
+const asked = new Set<string>();
 const CHOICE_REPLY_DELAY_MS = 1_200;
 
 export class ScriptedAgentRuntime implements AgentRuntime {
@@ -44,11 +46,9 @@ export class ScriptedAgentRuntime implements AgentRuntime {
         yield { type: "done", text: "stopped" };
         return;
       }
-      // A model takes longer than a card's commit movement to answer a tapped choice; replying
-      // inside it would move the thread mid-flight and blur what the motion e2e measures.
-      if (request.prompt.includes("Selected choice ")) {
-        await abortableDelay(CHOICE_REPLY_DELAY_MS, signal);
-      }
+      // A model takes longer than a card's commit movement to answer the card; replying inside
+      // it would move the thread mid-flight and blur what the motion e2e measures.
+      if (asked.delete(request.runId)) await abortableDelay(CHOICE_REPLY_DELAY_MS, signal);
       const script = request.script ?? inferScript(request.prompt, request.resumeFromCheckpoint);
       // Per-run call index so repeated tools (e.g. message_agent) get distinct
       // executionIds — delivery keys and effect replays key off this value.
@@ -110,6 +110,7 @@ export class ScriptedAgentRuntime implements AgentRuntime {
           };
         }
         if (turn.ask) {
+          asked.add(request.runId);
           yield {
             type: "ask",
             text: turn.ask.text,
