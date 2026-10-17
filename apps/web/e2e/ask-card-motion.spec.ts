@@ -17,6 +17,9 @@ type Frame = {
   scrollMax: number;
   fold: number;
   rows: number;
+  /** The old card fading as it folds, and the answer's bubble fading in. */
+  ghost: number;
+  bubbleOpacity: number;
 };
 
 const cities = { prompt: "pick from these cities with tappable choices", ready: "Seoul" };
@@ -101,6 +104,13 @@ async function sampleCommit(
             scrollMax: transcript.scrollHeight - transcript.clientHeight,
             fold: (card.firstElementChild as Element).getBoundingClientRect().height,
             rows: transcript.querySelectorAll("[data-message-id]").length,
+            ghost: Math.max(
+              0,
+              ...[...(card.firstElementChild as Element).children]
+                .filter((child) => !child.matches("[data-ask-flight]"))
+                .map((child) => Number(getComputedStyle(child).opacity)),
+            ),
+            bubbleOpacity: bubble ? Number(getComputedStyle(bubble).opacity) : 0,
           };
           frames.push(frame);
           if (frame.busy && heldAt === null) heldAt = frame.t;
@@ -334,6 +344,8 @@ test("a stack's Send folds the card while the answers rise into their bubble, in
   await testInfo.attach("ca5-stack-report", { path: testInfo.outputPath("ca5-stack-report.json") });
 
   expect(flights).toEqual([]);
+  // The bubble shows only once the old card has faded: never both at once.
+  expect(frames.filter((f) => f.ghost > 0.01 && f.bubbleOpacity > 0.01)).toEqual([]);
   expect(report.fold).toBeGreaterThan(100);
   expect(report.rise).toBeGreaterThan(20);
   for (const { back, over } of Object.values(report.wobble)) {

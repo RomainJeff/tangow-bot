@@ -156,9 +156,12 @@ export function fly(
             [{ transform: `translateY(${height - to.top - to.height}px)` }, { transform: "none" }],
             timing,
           ),
+          // Only once the old card has faded, so the two never show at once.
           land.animate([{ opacity: 0 }, { opacity: 1 }], {
             duration: motion.fill,
+            delay: motion.fill,
             easing: motion.ease,
+            fill: "backwards",
           }),
         ],
       };
@@ -167,10 +170,12 @@ export function fly(
     fold,
     ...flight.animations,
     ghost.animate([{ opacity: 1 }, { opacity: 0 }], { duration: motion.fill, fill: "forwards" }),
-    settled.firstElementChild?.animate(
-      [{ opacity: 0 }, { opacity: 0, offset: motion.fill / motion.flight }, { opacity: 1 }],
-      { duration: motion.flight, easing: motion.ease },
-    ),
+    settled.firstElementChild?.animate([{ opacity: 0 }, { opacity: 1 }], {
+      duration: motion.flight - motion.fill,
+      delay: motion.fill,
+      easing: motion.ease,
+      fill: "backwards",
+    }),
   ];
   const end = () => {
     for (const animation of animations) animation?.cancel();
