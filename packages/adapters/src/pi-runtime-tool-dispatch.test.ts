@@ -18,7 +18,9 @@ const fakeAgentState = vi.hoisted(() => ({
     | "ask-pause"
     | "nested-ask-pause"
     | "subagent-log"
-    | "turns",
+    | "turns"
+    | "recap",
+  closing: "",
   turns: [] as string[][],
   emitFinalAfterFollowUp: true,
   abortCount: 0,
@@ -78,6 +80,18 @@ vi.mock("@earendil-works/pi-agent-core", () => ({
         return;
       }
 
+      if (fakeAgentState.mode === "recap") {
+        this.emit({
+          type: "message_update",
+          assistantMessageEvent: { type: "text_delta", delta: "Private narration" },
+        });
+        this.emit({
+          type: "turn_end",
+          message: { role: "assistant", content: [{ type: "text", text: fakeAgentState.closing }] },
+          toolResults: [],
+        });
+        return;
+      }
       if (fakeAgentState.mode === "dispatch") {
         const target =
           this.tools.find((tool) => tool.name === fakeAgentState.invoke.name) ?? this.tools[0];
@@ -726,6 +740,49 @@ describe("Pi connector tool dispatch", () => {
       text: "I will check the destination first.The final answer.",
     });
   });
+
+  it.each([false, true])(
+    "keeps the existing contact policy for a private closing, silent permitted %s",
+    async (silent) => {
+      fakeAgentState.mode = "recap";
+      fakeAgentState.closing = silent
+        ? ""
+        : JSON.stringify({ version: 1, results: ["Found the report"], references: [] });
+      const events = [];
+      for await (const event of new PiAgentRuntime().run(
+        {
+          botId: "b",
+          threadId: "t",
+          runId: "recap",
+          prompt: "Check quietly",
+          instructions: "Close with facts",
+          history: [],
+          tools: [],
+          model: { provider: "test", id: "dispatch-test-model" },
+          freeTextIsPrivate: true,
+          runRecap: true,
+          allowSilentEmpty: silent,
+        },
+        { signal: new AbortController().signal },
+      ))
+        events.push(event);
+      expect(events.at(-1)).toEqual({
+        type: "done",
+        text: "Private narration",
+        privateFinalText: fakeAgentState.closing,
+      });
+      expect(fakeAgentState.followUpMessages).toEqual(
+        silent
+          ? []
+          : [
+              expect.objectContaining({
+                content: expect.stringContaining("Nothing you wrote reached the user"),
+              }),
+            ],
+      );
+      expect(fakeAgentState.promptInputs).toHaveLength(1);
+    },
+  );
 
   it("ends without a follow-up once a tool turn only messaged the user", async () => {
     fakeAgentState.mode = "silent-continuation";

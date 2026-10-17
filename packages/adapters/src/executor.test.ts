@@ -1234,6 +1234,7 @@ description: Prepare standup notes
     });
     const run = {
       id: "run-1",
+      sessionId: "session-main",
       botId: "bot-1",
       threadId: "thread-1",
       taskId: "task-1",

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { SessionEntryDraft } from "@rakazo/adapter-kit";
-import type { MessageBlock, SessionEntry } from "@rakazo/contracts";
+import type { FactualRunRecap, MessageBlock, SessionEntry } from "@rakazo/contracts";
 import { EntryId, EntrySeq, SessionId } from "@rakazo/contracts";
 import { projectThreadItems, spawnBotApprovalBlock, visibleEntries } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
@@ -794,6 +794,375 @@ describe("session log writers", () => {
       ["assistant.ask", helper.sessionId],
     ]);
   });
+
+  it("opens two interactive sessions, persists source anchors and raises only explicit user messages", async () => {
+    const { prisma } = database;
+    const owner = await seedBot(prisma, "Interactive");
+    const source = await prisma.$transaction((tx) =>
+      createThreadMessageInTransaction(tx, {
+        threadId: owner.threadId,
+        role: "user",
+        blocks: [{ kind: "text", text: "Find the answer" }],
+      }),
+    );
+    const first = await seedRun(prisma, owner.bot.id, owner.threadId);
+    await prisma.run.update({ where: { id: first.id }, data: { sourceMessageId: source.id } });
+    const run = await prisma.run.findUniqueOrThrow({ where: { id: first.id } });
+    const open = () =>
+      openRunLog(
+        { prisma, sessionLog: log },
+        run,
+        { sessionId: owner.sessionId, runId: run.id, botId: owner.bot.id },
+        SCRIPTED,
+        null,
+      );
+    const opened = await open();
+    const again = await open();
+    expect(again.sessionId).toBe(opened.sessionId);
+    expect(
+      await prisma.conversationSession.findUnique({ where: { id: opened.sessionId } }),
+    ).toMatchObject({
+      kind: "interactive",
+      parentSessionId: owner.sessionId,
+      parentEntryId: source.id,
+      threadId: null,
+    });
+    const write = writerOf(prisma, run);
+    await write({ type: "assistant.reasoning", payload: { text: "Private deliberation" } });
+    await write({
+      type: "assistant.text",
+      payload: { blocks: [{ kind: "text", text: "Private text" }] },
+    });
+    await prisma.$transaction((tx) =>
+      createBotMessageInTransaction(tx, {
+        threadId: owner.threadId,
+        botId: owner.bot.id,
+        runId: run.id,
+        blocks: [{ kind: "text", text: "The answer is 42." }],
+        toPerson: true,
+        midTurn: true,
+      }),
+    );
+    const second = await seedRun(prisma, owner.bot.id, owner.threadId);
+    const next = await openRunLog(
+      { prisma, sessionLog: log },
+      second,
+      { sessionId: owner.sessionId, runId: second.id, botId: owner.bot.id },
+      SCRIPTED,
+      null,
+    );
+    expect(next.sessionId).not.toBe(opened.sessionId);
+    const nextSession = await prisma.conversationSession.findUniqueOrThrow({
+      where: { id: next.sessionId },
+    });
+    expect(nextSession).toMatchObject({ kind: "interactive", parentSessionId: owner.sessionId });
+    expect(
+      await log.readEntry(owner.sessionId, EntryId.parse(nextSession.parentEntryId)),
+    ).toMatchObject({
+      type: "run.opened",
+      payload: { sessionId: next.sessionId },
+    });
+    const main = await log.readTail(owner.sessionId);
+    expect(
+      projectThreadItems(main).filter((item) => item.kind === "message" && item.role === "bot"),
+    ).toEqual([
+      expect.objectContaining({
+        blocks: [{ kind: "text", text: "The answer is 42." }],
+        origin: { sessionId: opened.sessionId },
+      }),
+    ]);
+    expect(JSON.stringify(main)).not.toContain("Private deliberation");
+    expect(JSON.stringify(main)).not.toContain("Private text");
+    expect(await types(opened.sessionId)).toEqual([
+      "run.started",
+      "assistant.reasoning",
+      "assistant.text",
+    ]);
+  });
+
+  it.each([
+    "available",
+    "absent",
+    "foreign",
+    "reasoning",
+    "unanswered",
+    "rewound",
+    "failed",
+    "cancelled",
+  ] as const)(
+    "durably closes an interactive run once with a truthful %s recap and no user bubble",
+    async (scenario) => {
+      const { prisma } = database;
+      const owner = await seedBot(prisma, `Recap ${scenario}`);
+      const lease = { leaseOwner: "worker-1", leaseFence: 1 };
+      const run = await seedRun(prisma, owner.bot.id, owner.threadId, lease);
+      const opened = await openRunLog(
+        { prisma, sessionLog: log },
+        run,
+        { sessionId: owner.sessionId, runId: run.id, botId: owner.bot.id },
+        SCRIPTED,
+        null,
+      );
+      const write = writerOf(prisma, run);
+      const call = await write({
+        type: "tool.call",
+        payload: { callId: "lookup", name: "list_files", input: "{}" },
+      });
+      const result = await write({
+        type: "tool.result",
+        payload: { callId: "lookup", output: "Found report.txt", isError: false, artifactIds: [] },
+      });
+      const reasoning = await write({
+        type: "assistant.reasoning",
+        payload: { text: "Private reasoning" },
+      });
+      if (scenario === "unanswered")
+        await write({
+          type: "tool.call",
+          payload: { callId: "pending", name: "list_files", input: "{}" },
+        });
+      if (scenario === "rewound")
+        await prisma.$transaction((tx) =>
+          log.append(tx, {
+            type: "rewind",
+            sessionId: opened.sessionId,
+            parentId: call.id,
+            botId: owner.bot.id,
+            payload: {},
+          }),
+        );
+      const recap: FactualRunRecap | undefined =
+        scenario === "absent"
+          ? undefined
+          : {
+              state: "available",
+              facts: {
+                version: 1,
+                results: ["Found report.txt"],
+                references:
+                  scenario === "foreign"
+                    ? [{ entryId: EntryId.parse("not-this-run") }]
+                    : scenario === "reasoning"
+                      ? [{ entryId: reasoning.id }]
+                      : scenario === "unanswered"
+                        ? [{ callId: "pending" }]
+                        : [{ callId: "lookup" }, { entryId: result.id }],
+              },
+            };
+      const attempt = await prisma.attempt.create({
+        data: { runId: run.id, fence: 1, status: "running" },
+      });
+      const close = () =>
+        scenario === "cancelled"
+          ? prisma.$transaction((tx) => cancelRunsInTransaction(tx, [run], new Date()))
+          : finalizeRun(prisma, {
+              spaceId: SPACE,
+              threadId: owner.threadId,
+              botId: owner.bot.id,
+              runId: run.id,
+              taskId: run.taskId,
+              attemptId: attempt.id,
+              ...lease,
+              recap,
+              ...(scenario === "failed"
+                ? { outcome: "failed" as const, error: "Connection interrupted" }
+                : { outcome: "completed" as const, blocks: [], markUnread: false }),
+            });
+      await close();
+      await close();
+      const main = await log.readTail(owner.sessionId);
+      const recaps = main.filter((entry) => entry.type === "run.recap");
+      const expected =
+        scenario === "available"
+          ? recap
+          : {
+              state: "missing",
+              reason:
+                scenario === "absent"
+                  ? "absent"
+                  : scenario === "failed" || scenario === "cancelled"
+                    ? "interrupted"
+                    : "invalid_reference",
+            };
+      expect(recaps).toEqual([
+        expect.objectContaining({
+          runId: run.id,
+          payload: {
+            version: 1,
+            sessionId: opened.sessionId,
+            outcome: expect.objectContaining({
+              status: scenario === "failed" || scenario === "cancelled" ? scenario : "completed",
+            }),
+            recap: expected,
+          },
+        }),
+      ]);
+      expect(await types(opened.sessionId)).toContain("run.finished");
+      expect(
+        (await log.readTail(opened.sessionId)).filter((entry) => entry.type === "run.finished"),
+      ).toHaveLength(1);
+      expect(projectThreadItems(main)).toEqual([]);
+      expect(
+        (await prisma.thread.findUniqueOrThrow({ where: { id: owner.threadId } })).unread,
+      ).toBe(false);
+    },
+  );
+
+  it("indexes a run cancelled before its execution session opens without inventing a completed log", async () => {
+    const { prisma } = database;
+    const owner = await seedBot(prisma, "Cancelled before start");
+    const run = await seedRun(prisma, owner.bot.id, owner.threadId);
+    await prisma.$transaction((tx) => cancelRunsInTransaction(tx, [run], new Date()));
+    await prisma.$transaction((tx) => cancelRunsInTransaction(tx, [run], new Date()));
+    const main = await log.readTail(owner.sessionId);
+    expect(main).toEqual([
+      expect.objectContaining({
+        type: "run.recap",
+        runId: run.id,
+        payload: {
+          version: 1,
+          sessionId: owner.sessionId,
+          outcome: { status: "cancelled", usage: { inputTokens: 0, outputTokens: 0 } },
+          recap: { state: "missing", reason: "interrupted" },
+        },
+      }),
+    ]);
+    expect(projectThreadItems(main)).toEqual([]);
+  });
+
+  it.each([true, false])(
+    "claims steering once across interactive finalization, claimed before finish %s",
+    async (claimBeforeFinish) => {
+      const { prisma } = database;
+      const owner = await seedBot(prisma, `Steering ${claimBeforeFinish}`);
+      const lease = { leaseOwner: "worker-1", leaseFence: 1 };
+      const run = await seedRun(prisma, owner.bot.id, owner.threadId, lease);
+      const opened = await openRunLog(
+        { prisma, sessionLog: log },
+        run,
+        { sessionId: owner.sessionId, runId: run.id, botId: owner.bot.id },
+        SCRIPTED,
+        null,
+      );
+      const attempt = await prisma.attempt.create({
+        data: { runId: run.id, fence: 1, status: "running" },
+      });
+      const events = createThreadEvents(prisma);
+      const sent = await events.sendUserMessage({
+        spaceId: SPACE,
+        botId: owner.bot.id,
+        userId: USER,
+        threadId: owner.threadId,
+        blocks: [{ kind: "text", text: "Use the updated date" }],
+        prompt: "Use the updated date",
+        trigger: "follow_up",
+      });
+      const fence = {
+        threadId: owner.threadId,
+        botId: owner.bot.id,
+        runId: run.id,
+        ...lease,
+        seenIds: [],
+      };
+      if (claimBeforeFinish) {
+        const claimed = await events.claimSteering(fence);
+        expect(claimed).toEqual([
+          expect.objectContaining({ messageId: sent.messageId, text: "Use the updated date" }),
+        ]);
+        expect(
+          await events.claimSteering({ ...fence, seenIds: claimed.map((item) => item.id) }),
+        ).toEqual([]);
+      }
+      const terminal = await events.finalizeRun({
+        spaceId: SPACE,
+        threadId: owner.threadId,
+        botId: owner.bot.id,
+        runId: run.id,
+        taskId: run.taskId,
+        attemptId: attempt.id,
+        ...lease,
+        outcome: "completed",
+        blocks: [],
+        markUnread: false,
+      });
+      expect(terminal).toEqual({
+        continuationRunId: claimBeforeFinish ? null : expect.any(String),
+      });
+      expect(await events.claimSteering(fence)).toEqual([]);
+      if (!claimBeforeFinish && terminal) {
+        const continuation = await prisma.run.update({
+          where: { id: terminal.continuationRunId! },
+          data: { status: "running", ...lease },
+        });
+        const next = await openRunLog(
+          { prisma, sessionLog: log },
+          continuation,
+          { sessionId: owner.sessionId, runId: continuation.id, botId: owner.bot.id },
+          SCRIPTED,
+          null,
+        );
+        expect(next.sessionId).not.toBe(opened.sessionId);
+        const continuationFence = { ...fence, runId: continuation.id };
+        const claimed = await events.claimSteering(continuationFence);
+        expect(claimed).toEqual([expect.objectContaining({ messageId: sent.messageId })]);
+        expect(
+          await events.claimSteering({
+            ...continuationFence,
+            seenIds: claimed.map((item) => item.id),
+          }),
+        ).toEqual([]);
+      }
+      expect(
+        (await log.readTail(owner.sessionId)).filter((entry) => entry.type === "user.message"),
+      ).toEqual([expect.objectContaining({ id: sent.messageId })]);
+    },
+  );
+
+  it.each(["messaging", "follow_up"])(
+    "keeps %s channel work in the existing main session",
+    async (trigger) => {
+      const { prisma } = database;
+      const owner = await seedBot(prisma, `Channel ${trigger}`);
+      const source = await prisma.$transaction((tx) =>
+        createThreadMessageInTransaction(tx, {
+          threadId: owner.threadId,
+          role: "user",
+          blocks: [
+            {
+              kind: "channel_message",
+              provider: "imessage",
+              channelId: "channel-1",
+              fromAddress: "+10000000000",
+              fromLabel: "Fixture",
+              text: "Channel request",
+            },
+          ],
+        }),
+      );
+      const queued = await seedRun(prisma, owner.bot.id, owner.threadId, { trigger });
+      const run = await prisma.run.update({
+        where: { id: queued.id },
+        data: { sourceMessageId: source.id },
+      });
+      const opened = await openRunLog(
+        { prisma, sessionLog: log },
+        run,
+        { sessionId: owner.sessionId, runId: run.id, botId: owner.bot.id },
+        SCRIPTED,
+        null,
+      );
+      expect(opened.sessionId).toBe(owner.sessionId);
+      expect((await prisma.run.findUniqueOrThrow({ where: { id: run.id } })).sessionId).toBe(
+        owner.sessionId,
+      );
+      expect(
+        await prisma.conversationSession.count({
+          where: { parentSessionId: owner.sessionId, kind: "interactive" },
+        }),
+      ).toBe(0);
+      expect(await types(owner.sessionId)).toEqual(["user.message", "run.started"]);
+    },
+  );
 
   it("opens a webhook routine run's own session once, and a resumed run reopens that one", async () => {
     const { prisma } = database;

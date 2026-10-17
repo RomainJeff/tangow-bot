@@ -405,6 +405,7 @@ export class PiAgentRuntime implements AgentRuntime {
         signal.addEventListener("abort", onAbort);
 
         let streamed = "";
+        let privateFinalText: string | undefined;
         let toolCalls = 0;
         let toolActivityShowing = false;
         let silentToolContinuations = 0;
@@ -467,6 +468,7 @@ export class PiAgentRuntime implements AgentRuntime {
                   )
                 : [];
             const hasToolCalls = toolCallNames.length > 0;
+            if (request.runRecap) privateFinalText = hasToolCalls ? undefined : messageText;
             const hasToolResults = event.toolResults.length > 0;
             // An update sent before more tool work did not deliver what that work found.
             if (hasToolCalls) messagedUser = toolCallNames.includes("message_user");
@@ -606,7 +608,11 @@ export class PiAgentRuntime implements AgentRuntime {
           }
         }
         traceOutput = streamed;
-        queue.push(streamed.trim() ? { type: "done", text: streamed } : { type: "done" });
+        queue.push({
+          type: "done",
+          ...(streamed.trim() ? { text: streamed } : {}),
+          ...(request.runRecap ? { privateFinalText: privateFinalText ?? "" } : {}),
+        });
       } catch (error) {
         traceError = error;
         const message = sanitizeError(error instanceof Error ? error.message : String(error));

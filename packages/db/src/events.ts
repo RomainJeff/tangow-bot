@@ -1,5 +1,5 @@
 import type { RealtimeFanout } from "@rakazo/adapter-kit";
-import type { AskAnswers, SessionId } from "@rakazo/contracts";
+import type { AskAnswers, FactualRunRecap, SessionId } from "@rakazo/contracts";
 import {
   ASK_ANSWER_MAX_LENGTH,
   type AskQuestion,
@@ -145,6 +145,7 @@ export interface FinalizeRunResult {
 }
 
 interface FinalizeRunBase {
+  recap?: FactualRunRecap;
   spaceId: string;
   threadId: string;
   botId: string;
@@ -1823,7 +1824,7 @@ async function finalizeRunOnce(
       input.outcome === "completed"
         ? { status: "completed" }
         : { status: "failed", error: input.error },
-      { result: input.outcome === "completed" ? input.result : undefined },
+      { result: input.outcome === "completed" ? input.result : undefined, recap: input.recap },
     );
     const lastEvent = await appendEventInTransaction(tx, {
       spaceId: input.spaceId,

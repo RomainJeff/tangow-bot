@@ -1,12 +1,24 @@
-import type { AgentRunRequest, SemanticMemoryRecallRequest, SessionLog } from "@rakazo/adapter-kit";
+import type {
+  AgentRunRequest,
+  AgentRuntimeEvent,
+  SemanticMemoryRecallRequest,
+  SessionLog,
+} from "@rakazo/adapter-kit";
 import type { MessageBlock, SessionEntry, SessionId } from "@rakazo/contracts";
-import { EntryId, EntrySeq, SessionEntrySchema } from "@rakazo/contracts";
+import {
+  EntryId,
+  EntrySeq,
+  SessionEntrySchema,
+  SessionId as SessionIdSchema,
+} from "@rakazo/contracts";
+import { projectThreadItems } from "@rakazo/core";
+import type { PrismaClient } from "@rakazo/db";
 import { createThreadEvents } from "@rakazo/db";
 import type { PgliteDatabase } from "@rakazo/db/pglite.test-support";
 import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
 import type { LogEvent } from "@rakazo/logging";
 import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
 import { createRunExecutor } from "./executor.js";
 import { formatRecalledMemory } from "./history-compaction.js";
@@ -74,6 +86,8 @@ function fixture(
     /** A tool the model calls, which the runtime runs the way Pi does: a throw becomes its error. */
     call?: { name: string; args: Record<string, unknown> };
     sandbox?: Record<string, unknown>;
+    database?: PrismaClient;
+    runtime?: (request: AgentRunRequest) => AsyncGenerator<AgentRuntimeEvent>;
   } = {},
 ) {
   const run = {
@@ -180,11 +194,27 @@ function fixture(
       updateMany: vi.fn(async () => ({ count: 0 })),
     },
   };
+  if (options.database) {
+    const db = options.database;
+    Object.assign(prisma, {
+      run: db.run,
+      task: db.task,
+      attempt: db.attempt,
+      thread: db.thread,
+      sessionEntry: db.sessionEntry,
+      $transaction: db.$transaction.bind(db),
+      $queryRaw: db.$queryRaw.bind(db),
+    });
+  }
   const recall = vi.fn(async (_request: SemanticMemoryRecallRequest) => ({
     ok: true as const,
     value: remembered,
   }));
   const runtimeRun = vi.fn(async function* (request: AgentRunRequest) {
+    if (options.runtime) {
+      yield* options.runtime(request);
+      return;
+    }
     if (options.call) {
       await request.executeTool!(options.call.name, options.call.args, "call-1").catch(() => {});
     }
@@ -192,14 +222,17 @@ function fixture(
   });
   const jobs = { enqueue: vi.fn(async (_job: unknown) => undefined) };
   const executor = createRunExecutor({
-    sessionLog: options.reads
-      ? {
-          ...log.sessionLog,
-          readTail: options.reads.readTail.bind(options.reads),
-          readPage: options.reads.readPage.bind(options.reads),
-          readEntry: options.reads.readEntry.bind(options.reads),
-        }
-      : log.sessionLog,
+    sessionLog: options.database
+      ? new PostgresSessionLog(options.database)
+      : options.reads
+        ? {
+            ...log.sessionLog,
+            readTail: options.reads.readTail.bind(options.reads),
+            readPage: options.reads.readPage.bind(options.reads),
+            readEntry: options.reads.readEntry.bind(options.reads),
+          }
+        : log.sessionLog,
+    skillLearning: "off",
     artifacts: { get: vi.fn(async () => new Uint8Array([1, 2])) },
     prisma,
     runtime: {
@@ -231,11 +264,13 @@ function fixture(
         },
       }),
     },
-    events: {
-      append: vi.fn(async () => undefined),
-      pauseRunForInput: vi.fn(async () => true),
-      finalizeRun: vi.fn(async () => ({ continuationRunId: null })),
-    },
+    events: options.database
+      ? createThreadEvents(options.database)
+      : {
+          append: vi.fn(async () => undefined),
+          pauseRunForInput: vi.fn(async () => true),
+          finalizeRun: vi.fn(async () => ({ continuationRunId: null })),
+        },
     jobs,
     secrets: [],
   } as unknown as Parameters<typeof createRunExecutor>[0]);
@@ -683,5 +718,191 @@ describe("a channel run's history, read from the database", () => {
       { role: "user", content: "Latest in the channel" },
       { role: "assistant", content: "Working on it" },
     ]);
+  });
+});
+
+describe("interactive executor sessions with durable history", () => {
+  let database: PgliteDatabase;
+  beforeAll(async () => {
+    database = await openPgliteDatabase();
+    const { prisma } = database;
+    await prisma.user.create({ data: { id: "user-1", name: "U", email: "u@rakazo.test" } });
+    await prisma.organization.create({
+      data: { id: "org-1", name: "O", slug: "org-1", createdAt: new Date() },
+    });
+    await prisma.space.create({ data: { id: "space-1", organizationId: "org-1", name: "S" } });
+    await prisma.bot.create({
+      data: { id: BOT, spaceId: "space-1", userId: "user-1", name: "Assistant", color: "#00C46A" },
+    });
+  });
+  afterAll(() => database.close());
+
+  beforeEach(async () => {
+    await database.prisma.thread.deleteMany({ where: { botId: BOT } });
+  });
+
+  it("runs twice with isolated traces, one published answer and a silent closing, while preserving tool history for P3", async () => {
+    const { prisma } = database;
+    const thread = await prisma.thread.create({
+      data: { spaceId: "space-1", userId: "user-1", botId: BOT },
+    });
+    const events = createThreadEvents(prisma);
+    const source = async (text: string) => {
+      const sent = await events.sendUserMessage({
+        spaceId: "space-1",
+        threadId: thread.id,
+        botId: BOT,
+        userId: "user-1",
+        blocks: [{ kind: "text", text }],
+        prompt: text,
+        trigger: "user",
+      });
+      return prisma.run.findUniqueOrThrow({ where: { id: sent.runId! } });
+    };
+    const run = await source("Find the saved report");
+    const closing = JSON.stringify({
+      version: 1,
+      results: ["Found report.txt"],
+      references: [{ callId: "lookup" }],
+    });
+    const first = fixture({
+      database: prisma,
+      run,
+      sandbox: { listFiles: async () => [{ name: "report.txt", kind: "file" }] },
+      runtime: async function* (request) {
+        await request.executeTool!("list_files", { path: "." }, "lookup");
+        await request.executeTool!("message_user", { message: "The report is saved." }, "say");
+        yield {
+          type: "done",
+          text: "Private narration must not become a recap",
+          privateFinalText: closing,
+        };
+      },
+    });
+    const firstRequest = await first.request();
+    expect(firstRequest.runRecap).toBe(true);
+    expect(firstRequest.instructions).toContain("Private factual run closing");
+    expect((await prisma.run.findUniqueOrThrow({ where: { id: run.id } })).status).toBe(
+      "completed",
+    );
+    const secondRun = await source("Continue silently");
+    const second = fixture({
+      database: prisma,
+      run: secondRun,
+      runtime: async function* () {
+        yield { type: "done", text: "Arbitrary final words are not facts" };
+      },
+    });
+    const history = (await second.request()).history;
+    expect(JSON.stringify(history)).toContain("report.txt");
+    expect(JSON.stringify(history)).toContain("The report is saved.");
+    const stored = await prisma.run.findMany({
+      where: { threadId: thread.id },
+      orderBy: { createdAt: "asc" },
+    });
+    expect(new Set(stored.map((item) => item.sessionId)).size).toBe(2);
+    expect(
+      stored.every((item) => item.sessionId !== thread.sessionId && item.status === "completed"),
+    ).toBe(true);
+    const log = new PostgresSessionLog(prisma);
+    const main = await log.readTail(SessionIdSchema.parse(thread.sessionId));
+    const recaps = main.filter((entry) => entry.type === "run.recap");
+    expect(recaps.map((entry) => entry.payload.recap)).toEqual([
+      {
+        state: "available",
+        facts: { version: 1, results: ["Found report.txt"], references: [{ callId: "lookup" }] },
+      },
+      { state: "missing", reason: "invalid" },
+    ]);
+    expect(
+      projectThreadItems(main).filter((item) => item.kind === "message" && item.role === "bot"),
+    ).toEqual([
+      expect.objectContaining({ blocks: [{ kind: "text", text: "The report is saved." }] }),
+    ]);
+    expect(JSON.stringify(main)).not.toContain("Private narration");
+    expect(JSON.stringify(main)).not.toContain("Arbitrary final words");
+    expect(
+      (await log.readRun(run.id)).some(
+        (entry) => entry.type === "tool.result" && entry.payload.callId === "lookup",
+      ),
+    ).toBe(true);
+  });
+
+  it("reclaims a lost lease after publication without duplicating the message or session", async () => {
+    const { prisma } = database;
+    const thread = await prisma.thread.create({
+      data: { spaceId: "space-1", userId: "user-1", botId: BOT },
+    });
+    const events = createThreadEvents(prisma);
+    const sent = await events.sendUserMessage({
+      spaceId: "space-1",
+      threadId: thread.id,
+      botId: BOT,
+      userId: "user-1",
+      blocks: [{ kind: "text", text: "Report once" }],
+      prompt: "Report once",
+      trigger: "user",
+    });
+    const run = await prisma.run.findUniqueOrThrow({ where: { id: sent.runId! } });
+    await fixture({
+      database: prisma,
+      run,
+      runtime: async function* (request) {
+        await request.executeTool!("message_user", { message: "The saved result." }, "say");
+        await prisma.run.update({
+          where: { id: run.id },
+          data: { leaseOwner: "expired-worker", leaseExpiresAt: new Date(0) },
+        });
+        yield {
+          type: "done",
+          privateFinalText: JSON.stringify({
+            version: 1,
+            results: ["This attempt lost its lease"],
+            references: [],
+          }),
+        };
+      },
+    }).request();
+    const interrupted = await prisma.run.findUniqueOrThrow({ where: { id: run.id } });
+    const log = new PostgresSessionLog(prisma);
+    expect(
+      (await log.readTail(SessionIdSchema.parse(thread.sessionId))).filter(
+        (entry) => entry.type === "run.recap",
+      ),
+    ).toEqual([]);
+    await fixture({
+      database: prisma,
+      run: interrupted,
+      runtime: async function* (request) {
+        expect(JSON.stringify(request.history)).toContain("The saved result.");
+        await request.executeTool!("message_user", { message: "The saved result." }, "say-again");
+        yield {
+          type: "done",
+          privateFinalText: JSON.stringify({
+            version: 1,
+            results: ["Reported the saved result"],
+            references: [],
+          }),
+        };
+      },
+    }).request();
+    const recovered = await prisma.run.findUniqueOrThrow({ where: { id: run.id } });
+    expect(recovered).toMatchObject({
+      status: "completed",
+      sessionId: interrupted.sessionId,
+      leaseFence: interrupted.leaseFence + 1,
+    });
+    const main = await log.readTail(SessionIdSchema.parse(thread.sessionId));
+    expect(main.filter((entry) => entry.type === "assistant.text")).toEqual([
+      expect.objectContaining({
+        payload: expect.objectContaining({ blocks: [{ kind: "text", text: "The saved result." }] }),
+      }),
+    ]);
+    expect(main.filter((entry) => entry.type === "run.recap")).toHaveLength(1);
+    expect(
+      (await log.readTail(SessionIdSchema.parse(recovered.sessionId))).filter(
+        (entry) => entry.type === "run.started",
+      ),
+    ).toHaveLength(1);
   });
 });

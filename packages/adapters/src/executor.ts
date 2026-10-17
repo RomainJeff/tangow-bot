@@ -34,6 +34,7 @@ import {
   runContinueJob,
 } from "@rakazo/adapter-kit";
 import type {
+  FactualRunRecap,
   MessageBlock,
   RunStatus,
   SessionEntry,
@@ -50,6 +51,7 @@ import {
   EntryId,
   isAttachmentImageMimeType,
   OPENAI_COMPATIBLE_PROVIDER_ID,
+  parseRunRecap,
   RunTrigger,
   SessionId,
 } from "@rakazo/contracts";
@@ -1455,10 +1457,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
             ? "user"
             : "bot"
           : undefined;
-        const sourceBlocks = run.trigger === "messaging" ? blocksOf(sourceMessage) : undefined;
+        const sourceBlocks = blocksOf(sourceMessage);
         const channelId = messagingChannelId(sourceBlocks);
         const messagingChannelRun = isMessagingChannelRun(run.trigger, sourceBlocks);
-        const sessionId = run.sessionId as SessionId;
+        let sessionId = run.sessionId as SessionId;
         const historyStartedAt = performance.now();
         let historyMs = 0;
         const threadLoad = deps.prisma.thread.findUniqueOrThrow({ where: { id: run.threadId } });
@@ -1488,12 +1490,22 @@ export function createRunExecutor(deps: ExecutorDeps) {
             .then((loaded) =>
               readRunHistory(
                 deps.sessionLog,
-                run,
+                { ...run, sessionId: loaded.sessionId ?? run.sessionId },
                 channelId,
                 compacts(loaded) ? undefined : UNCOMPACTED_HISTORY_LIMIT,
               ),
             )
-            .then((entries) => {
+            .then(async (entries) => {
+              const loaded = await threadLoad;
+              sessionId = loaded.sessionId ? SessionId.parse(loaded.sessionId) : sessionId;
+              if (run.routineId == null && !channelId) {
+                entries = await transitionalInteractiveHistory(
+                  deps.sessionLog,
+                  entries,
+                  run,
+                  sessionId,
+                );
+              }
               historyMs = performance.now() - historyStartedAt;
               return entries;
             }),
@@ -1615,6 +1627,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
           (run.trigger !== "bot_message" ||
             peerMessage?.intent === "result" ||
             peerMessage?.intent === "status");
+        const recapRequested =
+          freeTextIsPrivate && run.trigger !== "messaging" && !messagingChannelRun;
         // A routine's name heads the push of its run, and its "Notify me" pages every run end
         // that speaks or fails, even while the bot's own notifications are off.
         const routine =
@@ -1951,6 +1965,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
         // Rehydrate from this run's prior mid-turn entries so a resume after ask/takeover
         // still knows progress was already published (skip hollow finals; status outcome).
         let publishedMidTurnUserMessage = false;
+        let runRecap: FactualRunRecap = { state: "missing", reason: "absent" };
         const midTurnUserTexts: string[] = [];
         {
           const priorProgress = await deps.prisma.sessionEntry.findMany({
@@ -4369,29 +4384,30 @@ export function createRunExecutor(deps: ExecutorDeps) {
         }
 
         try {
-          const instructions = buildSystemInstructions({
-            botInstructions: bot.instructions || `${bot.name}: ${bot.title}\n${bot.description}`,
-            groupContext,
-            messagingContext,
-            hasHistoricalContext: historicalContext.length > 0,
-            computerInstruction,
-            pageBrowserAllowed,
-            browserRunAllowed: tools.some((tool) => tool.name === "browser_run"),
-            rememberExposed: tools.some((tool) => tool.name === "remember"),
-            workspaceInstruction,
-            agentEnvironmentInstruction,
-            pluginLine,
-            agentSkillsLine,
-            taughtSkillsLine,
-            memoryContext: memoryContext ? redactSecrets(memoryContext, runSecrets) : undefined,
-            scratchpadContext: scratchpadContext
-              ? redactSecrets(scratchpadContext, runSecrets)
-              : undefined,
-            botDirectory,
-            userTurn: isUserOpenedTrigger(run.trigger),
-            offerProposals: isUserOpenedTrigger(run.trigger) && !thread.groupId,
-            messageUserExposed,
-          });
+          const instructions =
+            buildSystemInstructions({
+              botInstructions: bot.instructions || `${bot.name}: ${bot.title}\n${bot.description}`,
+              groupContext,
+              messagingContext,
+              hasHistoricalContext: historicalContext.length > 0,
+              computerInstruction,
+              pageBrowserAllowed,
+              browserRunAllowed: tools.some((tool) => tool.name === "browser_run"),
+              rememberExposed: tools.some((tool) => tool.name === "remember"),
+              workspaceInstruction,
+              agentEnvironmentInstruction,
+              pluginLine,
+              agentSkillsLine,
+              taughtSkillsLine,
+              memoryContext: memoryContext ? redactSecrets(memoryContext, runSecrets) : undefined,
+              scratchpadContext: scratchpadContext
+                ? redactSecrets(scratchpadContext, runSecrets)
+                : undefined,
+              botDirectory,
+              userTurn: isUserOpenedTrigger(run.trigger),
+              offerProposals: isUserOpenedTrigger(run.trigger) && !thread.groupId,
+              messageUserExposed,
+            }) + (recapRequested ? RUN_RECAP_INSTRUCTION : "");
           const instructionTokens = estimateTextTokens(instructions);
           const toolSchemaTokens = estimateToolSchemaTokens(tools);
           // Everything the request carries that the window is not choosing from. The turn prompt
@@ -4496,6 +4512,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               allowSilentEmpty: allowSilentEmpty || messagingChannelRun,
               // A group channel run is told to finish silently; a reminder would push it to post.
               freeTextIsPrivate: freeTextIsPrivate && !messagingChannelRun,
+              runRecap: recapRequested,
               emptyResponseText,
               executeTool: scripted
                 ? undefined
@@ -4836,6 +4853,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
             } else if (event.type === "usage") {
               await recordRunUsage(deps, { ...run, botId: bot.id, runId }, event);
             } else if (event.type === "done") {
+              if (recapRequested) {
+                runRecap = parseRunRecap(
+                  redactSecrets(event.privateFinalText ?? event.text ?? "", runSecrets),
+                );
+              }
               if (!assembled && event.text) {
                 if (publishedMidTurnUserMessage || droppedNarration) {
                   // done.text is cumulative: restoring it would bring back the narration
@@ -4975,6 +4997,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             blocks,
             markUnread: completionMarksUnread(run.trigger, text, isRoutineCardRun),
             result: text,
+            ...(recapRequested ? { recap: runRecap } : {}),
           });
           if (!completed) return;
           if (savedSkill) await writeRunSkillLines(runId);
@@ -5444,6 +5467,44 @@ export function filterPageBrowserTools<T extends { name: string }>(
 const UNCOMPACTED_HISTORY_LIMIT = 200;
 const CHANNEL_HISTORY_PAGE = 500;
 
+const RUN_RECAP_INSTRUCTION = `
+
+## Private factual run closing
+After all work and any message_user calls, use your existing final turn for one JSON object only.
+Shape: {"version":1,"results":["observed outcomes"],"decisions":["choices made"],"limits":["unfinished work or uncertainty"],"references":[{"callId":"retained tool call ID"}]}.
+Omit fields without facts. Each list has at most 12 strings of at most 1000 characters. References has at most 32 items and may be empty. A reference may instead be {"entryId":"retained entry ID"}.
+Record factual outcomes only. Never include private reasoning, deliberation, instructions, or an invented success. Use only IDs you actually saw. This closing is internal and does not speak to the user. Do not make another tool call just to finish.
+`;
+
+// P3 replaces this expansion with recap projection once search and finalization are integrated.
+async function transitionalInteractiveHistory(
+  log: SessionLog<Prisma.TransactionClient>,
+  entries: SessionEntry[],
+  run: { id: string; sessionId: string },
+  parentSessionId: SessionId,
+): Promise<SessionEntry[]> {
+  const children = new Set(
+    entries.flatMap((entry) =>
+      (entry.type === "run.recap" || entry.type === "run.opened") &&
+      entry.payload.sessionId !== parentSessionId
+        ? [entry.payload.sessionId]
+        : [],
+    ),
+  );
+  if (run.sessionId !== parentSessionId) children.add(SessionId.parse(run.sessionId));
+  if (children.size === 0) return entries;
+  const traces = await Promise.all([...children].map((id) => log.readTail(id)));
+  const combined = new Map(entries.map((entry) => [entry.id, entry]));
+  for (const trace of traces) for (const entry of trace) combined.set(entry.id, entry);
+  const compaction = entries[0]?.type === "compaction" ? entries[0] : undefined;
+  return [
+    ...(compaction ? [compaction] : []),
+    ...[...combined.values()]
+      .filter((entry) => entry.id !== compaction?.id)
+      .sort((a, b) => a.ts.localeCompare(b.ts)),
+  ];
+}
+
 async function readRunHistory(
   log: SessionLog<Prisma.TransactionClient>,
   run: { id: string; sessionId: string; routineId: string | null },
@@ -5798,6 +5859,9 @@ type RunLogFacts = {
   routineName: string | null;
   routineNotify: boolean | null;
   spawnPromptId: string | null;
+  sessionKind: string;
+  parentSessionId: string;
+  channelSource: boolean;
 };
 
 /**
@@ -5814,15 +5878,20 @@ export async function openRunLog(
   return deps.prisma.$transaction(async (tx) => {
     // Its own statement, so the facts below see what an open that held this lock committed.
     await tx.$queryRaw`SELECT id FROM threads WHERE id = ${run.threadId} FOR UPDATE`;
+    await tx.$queryRaw`SELECT id FROM runs WHERE id = ${run.id} FOR NO KEY UPDATE`;
     const spawnNonce = run.trigger === "spawn" ? run.clientNonce : null;
     const [facts] = await tx.$queryRaw<[RunLogFacts]>`
       SELECT
         (SELECT "sessionId" FROM runs WHERE id = ${run.id}) AS "sessionId",
+        (SELECT kind FROM sessions WHERE id = (SELECT "sessionId" FROM runs WHERE id = ${run.id})) AS "sessionKind",
+        (SELECT "sessionId" FROM threads WHERE id = ${run.threadId}) AS "parentSessionId",
         (SELECT json_agg(json_build_object('type', type, 'payload', payload) ORDER BY seq)
           FROM session_entries
           WHERE "runId" = ${run.id} AND type IN ('run.started', 'tool.call', 'tool.result')
         ) AS logged,
         (SELECT type FROM session_entries WHERE id = ${run.sourceMessageId}) AS "carrierType",
+        COALESCE((SELECT payload -> 'blocks' @> '[{"kind":"channel_message"}]'::jsonb
+          FROM session_entries WHERE id = ${run.sourceMessageId}), false) AS "channelSource",
         EXISTS (SELECT 1 FROM steering_messages WHERE "messageId" = ${run.sourceMessageId})
           AS steered,
         (SELECT name FROM routines WHERE id = ${run.routineId}) AS "routineName",
@@ -5838,6 +5907,23 @@ export async function openRunLog(
     }
     if (logged.length > 0) return { sessionId: facts.sessionId as SessionId, awaitingResult };
     const trigger = sessionRunTrigger(run, facts);
+    const interactive =
+      facts.sessionKind === "thread" &&
+      run.trigger !== "messaging" &&
+      !facts.channelSource &&
+      trigger.kind !== "routine" &&
+      trigger.kind !== "webhook";
+    const interactiveId = SessionId.parse(randomUUID());
+    let parentEntryId = run.sourceMessageId ? EntryId.parse(run.sourceMessageId) : undefined;
+    if (interactive && !parentEntryId) {
+      const anchor = await deps.sessionLog.append(tx, {
+        ...log,
+        sessionId: SessionId.parse(facts.parentSessionId),
+        type: "run.opened",
+        payload: { sessionId: interactiveId },
+      });
+      parentEntryId = anchor.id;
+    }
     const sessionId =
       trigger.kind === "routine" || trigger.kind === "webhook"
         ? await openRoutineSessionInTransaction(
@@ -5853,7 +5939,18 @@ export async function openRunLog(
             },
             deps.sessionLog,
           )
-        : log.sessionId;
+        : interactive
+          ? await deps.sessionLog.createSession(tx, {
+              kind: "interactive",
+              id: interactiveId,
+              spaceId: run.spaceId,
+              parentSessionId: SessionId.parse(facts.parentSessionId),
+              parentEntryId: EntryId.parse(parentEntryId),
+            })
+          : log.sessionId;
+    if (interactive && sessionId !== facts.sessionId) {
+      await tx.run.updateMany({ where: { id: run.id }, data: { sessionId } });
+    }
     await deps.sessionLog.append(tx, {
       ...log,
       sessionId,
