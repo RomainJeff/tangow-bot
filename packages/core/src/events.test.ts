@@ -33,6 +33,25 @@ describe("redactSecrets", () => {
     expect(secrets).toEqual(["token", 'token"tail']);
   });
 
+  it("masks the union of overlapping values without exposing their suffixes", () => {
+    expect(redactSecrets("abcde public", ["abc", "cde"])).toBe("[redacted] public");
+  });
+
+  it("preserves JSON escaping while masking nested string values and keys", () => {
+    const input = JSON.stringify({
+      text: JSON.stringify({ 'key"value': "line\nbreak", public: "K731" }),
+    });
+    expect(JSON.parse(JSON.parse(redactSecrets(input, ['key"value', "line\nbreak"])).text)).toEqual(
+      { "[redacted]": "[redacted]", public: "K731" },
+    );
+  });
+
+  it("masks a field when nested JSON exceeds the shared work budget", () => {
+    let input = "public";
+    for (let i = 0; i < 20; i++) input = JSON.stringify(input);
+    expect(redactSecrets(input, ["credential"])).toBe("[redacted]");
+  });
+
   it("ignores empty secrets and preserves text when no secrets are known", () => {
     expect(redactSecrets("safe token token", ["", "token", ""])).toBe("safe [redacted] [redacted]");
     expect(redactSecrets("safe text", [""])).toBe("safe text");
