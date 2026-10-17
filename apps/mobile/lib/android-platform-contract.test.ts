@@ -193,7 +193,6 @@ describe("Android mobile platform contract", () => {
     expect(thread).not.toContain("Messages sent now guide the next turn.");
     expect(thread).not.toContain("Steer ");
     expect(thread).not.toContain("steering message");
-    expect(thread).toContain('t("Message {name}"');
     expect(thread).toContain("const clientNonce = newClientNonce()");
     expect(thread).toContain("Work stopped, but the thread could not refresh");
     expect(stopSource).toContain("const targetBotId = botId;");

@@ -18,7 +18,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { mobileTokens } from "../lib/appearance";
-import { answerLines, interruptWhenAway } from "../lib/ask-card";
+import { answerLines, interruptWhenAway, optionDetail } from "../lib/ask-card";
 import { CHAT_MOTION, useChatReducedMotion } from "../lib/chat-motion";
 import { commitHaptic, selectionHaptic } from "../lib/haptics";
 import { useI18n } from "../lib/i18n";
@@ -415,6 +415,7 @@ export function QuestionCard({
                 key={option.id}
                 ref={fill ? fold.source : undefined}
                 label={option.label}
+                detail={optionDetail(option, t)}
                 selected={chosen}
                 filled={fill}
                 multi={question.multiSelect}
@@ -458,6 +459,7 @@ export function QuestionCard({
 function Tile({
   ref,
   label,
+  detail,
   selected = false,
   filled = false,
   multi = false,
@@ -468,6 +470,7 @@ function Tile({
 }: {
   ref?: Ref<View>;
   label: string;
+  detail?: string;
   selected?: boolean;
   filled?: boolean;
   multi?: boolean;
@@ -499,9 +502,16 @@ function Tile({
             },
       ]}
     >
-      <Text style={[styles.tileLabel, { color: muted ? tokens.mutedForeground : ink }]}>
-        {label}
-      </Text>
+      <View style={styles.tileText}>
+        <Text style={[styles.tileLabel, { color: muted ? tokens.mutedForeground : ink }]}>
+          {label}
+        </Text>
+        {detail ? (
+          <Text style={[styles.tileDetail, { color: filled ? ink : tokens.mutedForeground }]}>
+            {detail}
+          </Text>
+        ) : null}
+      </View>
       {trailing ? (
         <NativeSymbol
           ios={trailing}
@@ -633,9 +643,11 @@ function createStyles() {
       paddingVertical: 14,
       borderRadius: radii.card,
     },
-    tileLabel: { flex: 1, ...nativeTextStyle("question", { weight: 500, leading: 1.3 }) },
+    tileText: { flex: 1 },
+    tileLabel: nativeTextStyle("question", { weight: 500, leading: 1.3 }),
+    tileDetail: nativeTextStyle("meta"),
     field: { paddingVertical: 8, paddingEnd: 8 },
-    input: { fontWeight: "400", paddingVertical: 4 },
+    input: { flex: 1, fontWeight: "400", paddingVertical: 4 },
     send: {
       width: 32,
       height: 32,

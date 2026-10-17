@@ -23,7 +23,9 @@ import {
   type MessageReaction,
 } from "@rakazo/contracts";
 import {
+  ACTIVE_RUN_STATUSES,
   abortableDelay,
+  answersPendingQuestion,
   appendedEntries,
   attachmentsForThread,
   botWordsOf,
@@ -36,6 +38,7 @@ import {
   isAsideOnlyMessage,
   isRunTerminalEvent,
   isSecretAskBlock,
+  isWorkingStatus,
   latestActivityLabel,
   mentionChipKey,
   projectThreadView,
@@ -157,7 +160,7 @@ import {
 } from "../lib/api";
 import { mobileTokens, resolveMobileAppearance } from "../lib/appearance";
 import { type MobileArtifactTarget, openMobileArtifact } from "../lib/artifact-open";
-import { questionCardOf } from "../lib/ask-card";
+import { composerName, questionCardOf } from "../lib/ask-card";
 import { presentAttachSheet } from "../lib/attach-sheet";
 import { failureReason } from "../lib/bot-activity";
 import {
@@ -322,14 +325,8 @@ function isAsideItem(item: ThreadItem, showSteps: boolean): boolean {
   }
 }
 
-function isWorkingStatus(status: string | undefined): boolean {
-  return (
-    status === "queued" ||
-    status === "leased" ||
-    status === "running" ||
-    status === "waiting_input" ||
-    status === "waiting_takeover"
-  );
+function isActiveStatus(status: string | undefined): boolean {
+  return ACTIVE_RUN_STATUSES.some((active) => active === status);
 }
 
 type NotificationRouteState = "loading" | "ready" | "failed";
@@ -585,12 +582,13 @@ function Thread() {
   const hasLiveProgress = liveItems.length > 0;
   // One bot only: an activity line names one bot's tool, so it would mislabel a group.
   const activityLabel = latestActivityLabel(liveItems);
-  const busyRuns = useMemo(
-    () =>
-      (snap?.activeRuns ?? (snap?.run ? [snap.run] : [])).filter((run) =>
-        isWorkingStatus(run.status),
-      ),
+  const threadRuns = useMemo(
+    () => snap?.activeRuns ?? (snap?.run ? [snap.run] : []),
     [snap?.activeRuns, snap?.run],
+  );
+  const busyRuns = useMemo(
+    () => threadRuns.filter((run) => isWorkingStatus(run.status)),
+    [threadRuns],
   );
   const workingRuns = useMemo(
     () => busyRuns.filter((run) => run.id !== waiting?.runId),
@@ -608,7 +606,17 @@ function Thread() {
     });
   }, [inGroup, snap?.members, workingRuns]);
   const botWorking = isWorkingStatus(currentBotStatus) && snap?.run?.id !== waiting?.runId;
-  const working = inGroup ? workingGroupBots.length > 0 : botWorking;
+  // Stop follows the run, as on web: it stays while a bot waits on the person.
+  const stoppable = inGroup
+    ? threadRuns.some((run) => isActiveStatus(run.status))
+    : isActiveStatus(currentBotStatus);
+  // A send without a mention goes to the bot, or to a group's first member.
+  const sendsTo = inGroup ? snap?.members?.[0]?.botId : botId;
+  const answerName =
+    sendsTo && answersPendingQuestion(view, sendsTo, threadRuns)
+      ? (mentionBots.find((bot) => bot.id === sendsTo)?.name ??
+        snap?.members?.find((member) => member.botId === sendsTo)?.name)
+      : undefined;
 
   useEffect(() => {
     void rpc<AgentSkillCatalogEntry[]>("agentSkills/list")
@@ -2817,7 +2825,7 @@ function Thread() {
                         />
                       </ComposerButton>
                     ) : null}
-                    {working ? (
+                    {stoppable ? (
                       <ComposerButton
                         label={t("Stop")}
                         haptic="commit"
@@ -2853,7 +2861,7 @@ function Thread() {
               dictationConfirm={
                 dictation.dictating ? (
                   <>
-                    {working ? (
+                    {stoppable ? (
                       <ComposerButton
                         label={t("Stop")}
                         haptic="commit"
@@ -2898,9 +2906,7 @@ function Thread() {
                   ref={textInputRef}
                   value={draft}
                   onChangeText={updateDraft}
-                  accessibilityLabel={
-                    displayName ? t("Message {name}", { name: displayName }) : t("Message")
-                  }
+                  accessibilityLabel={composerName(t, displayName, answerName)}
                   onKeyPress={(event) => {
                     if (
                       event.nativeEvent.key === "Backspace" &&
@@ -2913,8 +2919,8 @@ function Thread() {
                   placeholder={
                     selectedSkill || selectedMentions.length
                       ? undefined
-                      : displayName
-                        ? t("Message {name}", { name: displayName })
+                      : displayName || answerName
+                        ? composerName(t, displayName, answerName)
                         : t("Message…")
                   }
                   placeholderTextColor={tokens.mutedForeground}

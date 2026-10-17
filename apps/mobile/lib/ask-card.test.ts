@@ -2,11 +2,19 @@ import type { MessageBlock } from "@rakazo/contracts";
 import type { Clock, OptionId } from "@rakazo/core";
 import { askSettledOf, createAskCard, storedAnswerOf } from "@rakazo/core";
 import { describe, expect, it } from "vitest";
-import { answerLines, interruptWhenAway, questionCardOf } from "./ask-card";
+import {
+  answerLines,
+  composerName,
+  interruptWhenAway,
+  optionDetail,
+  questionCardOf,
+} from "./ask-card";
 
 type AskBlock = Extract<MessageBlock, { kind: "ask" }>;
 
 const t = (message: string) => `«${message}»`;
+const say = (message: string, values: Record<string, string | number> = {}) =>
+  message.replace(/\{(\w+)\}/g, (_, key: string) => String(values[key]));
 const cities: AskBlock = {
   kind: "ask",
   text: "Which city?",
@@ -173,5 +181,25 @@ describe("interruptWhenAway", () => {
     emit("background");
     clock.advance(650);
     expect(sent).toEqual(["choice-2"]);
+  });
+});
+
+describe("optionDetail", () => {
+  it.each([
+    [{}, undefined],
+    [{ description: "Keeps the draft" }, "Keeps the draft"],
+    [{ recommended: true }, "Recommended"],
+    [{ description: "Keeps the draft", recommended: true }, "Recommended · Keeps the draft"],
+  ])("reads %j as %j", (option, line) => {
+    expect(optionDetail(option, say)).toBe(line);
+  });
+});
+
+describe("composerName", () => {
+  it("names the bot to answer while its question waits, else the bot to message", () => {
+    expect(composerName(say, "Scout", "Scout")).toBe("Answer Scout…");
+    expect(composerName(say, "Team", "Scout")).toBe("Answer Scout…");
+    expect(composerName(say, "Scout")).toBe("Message Scout");
+    expect(composerName(say)).toBe("Message");
   });
 });
