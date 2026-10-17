@@ -35,7 +35,7 @@ export interface LinkPreviewCardProps {
   /** The bubble's edge the card lines up with: the start for a bot, the end for the person. */
   align: "start" | "end";
   /** The message's long press: its action sheet. */
-  onLongPress: () => void;
+  onLongPress?: () => void;
   accessibilityActions?: ViewProps["accessibilityActions"];
   onAccessibilityAction?: ViewProps["onAccessibilityAction"];
 }

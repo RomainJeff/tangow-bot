@@ -423,7 +423,7 @@ pill or a background (it would read as a composer mention chip), an initial in p
 the glyph, a loading state or a host beside the label.
 
 iPhone (`packages/chat-ui/src/link-mention.native.tsx`, given the message's resolver by
-`MessageBubble` in `apps/mobile/app/thread.tsx`, memoized the same way). The mention is a
+`MessageBubble` and `RoutineBubble` in `apps/mobile/app/thread.tsx`, memoized the same way). The mention is a
 `Text` nested in the sentence, never a `Pressable`, so the paragraph keeps one layout and one
 selection. The icon frame is an inline view `linkMentionIcon + linkMentionGap` wide that
 carries the gap, since nested text has no margins; iOS sets an inline view's bottom on the
@@ -433,7 +433,7 @@ word joiner (U+2060) between the frame and the label keeps them on one line, and
 server caps its title at 80 characters. The site icon (`components/link-mention-icon.tsx`)
 reads the thread's artifact like a card's picture; the glyph is the `link` SF Symbol at 62.5%
 of the frame. The hairline is drawn under the icon, as the web's inset shadow is, so an opaque
-icon covers it. Tap opens the link; a long press stays the message's action sheet. The label
+icon covers it. Tap opens the link; a long press stays the message's action sheet (a routine bubble has none, so a long press on its card does nothing). The label
 takes the text style of the link's ancestors in the markdown, never its own runs, so a bold
 sentence makes it bold and a code label stays a plain label; in the person's bubble it takes
 the bubble's. VoiceOver reads the mention's label, without the host the web adds, since iOS

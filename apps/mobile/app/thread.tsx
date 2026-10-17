@@ -4715,7 +4715,10 @@ function RoutineBubble({
   const colorScheme = useResolvedAppearance();
   const links = routineLinkBlocks(item);
   const mentionsKey = linkMentionsKey({ role: "bot", blocks: links });
-  const target: MobileArtifactTarget = groupId ? { groupId } : { botId: botId ?? item.botId };
+  const target = useMemo<MobileArtifactTarget>(
+    () => (groupId ? { groupId } : { botId: botId ?? item.botId }),
+    [groupId, botId, item.botId],
+  );
   const mentions = useMemo<NativeLinkMentions | undefined>(() => {
     const lookup = linkMentionsOf({ role: "bot", blocks: links });
     return (
@@ -4726,7 +4729,7 @@ function RoutineBubble({
         ),
       }
     );
-  }, [mentionsKey, groupId, botId]);
+  }, [mentionsKey, target]);
   const card = linkPreviewCardOf({ role: "bot", blocks: links });
   // Without the line that is only the card's link, as a message's bubble draws it.
   const shown = card ? textWithoutPreviewedLinkLine(text, card.url) : text;
@@ -4746,15 +4749,7 @@ function RoutineBubble({
             </ChatMarkdown>
           </BotBubble>
         ) : null}
-        {card ? (
-          <LinkPreviewCard
-            card={card}
-            target={target}
-            mono={mono}
-            align="start"
-            onLongPress={() => {}}
-          />
-        ) : null}
+        {card ? <LinkPreviewCard card={card} target={target} mono={mono} align="start" /> : null}
       </View>
     </MessageArrival>
   );
