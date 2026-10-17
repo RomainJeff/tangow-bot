@@ -116,6 +116,110 @@ test("link previews render in three formats, only for articles and photos, and n
   await captureScreenshot(page, testInfo, "link-preview-phone");
 });
 
+test("links the server resolved show as mentions with their site's icon, in place in the sentence", async ({
+  page,
+}, testInfo) => {
+  const requested: string[] = [];
+  page.on("request", (request) => requested.push(request.url()));
+  await page.route("**/rpc/artifacts/get", (route) =>
+    route.request().postDataJSON()?.json?.artifactId === "art-broken"
+      ? route.fulfill({ status: 500, json: {} })
+      : route.fulfill({
+          json: {
+            json: { id: "art-1", name: "icon.webp", mimeType: "image/png", contentBase64: PIXEL },
+          },
+        }),
+  );
+  await page.goto("/e2e/fixtures/link-preview.html");
+
+  const bot = page.locator('[data-message-id="mention-bot"]');
+  const user = page.locator('[data-message-id="mention-user"]');
+  const mentions = page.locator('[data-slot="link-mention"]');
+  await expect(bot.locator('[data-slot="link-mention"]')).toHaveCount(4);
+  await expect(user.locator('[data-slot="link-mention"]')).toHaveCount(2);
+
+  // Named "label, host"; the label is the author's words, else the server's title, else the host.
+  for (const name of [
+    "Compte rendu du 12 octobre, docs.example.org",
+    "Put the iPhone key's eye and copy icons inside the field, like the web, code.example.org",
+    "tracker.example.net",
+    "Handbook, wiki.example.org",
+  ]) {
+    await expect(bot.getByRole("link", { name, exact: true })).toBeVisible();
+  }
+  await expect(user.getByRole("link", { name: "Roadmap Q4, notion.example.com" })).toBeVisible();
+  await expect(
+    user.getByRole("link", { name: "Onboarding flow, design.example.net" }),
+  ).toBeVisible();
+  for (const mention of await mentions.all()) {
+    await expect(mention).toHaveAttribute("title", /^https:\/\//);
+    await expect(mention).toHaveAttribute("rel", "noreferrer noopener");
+    await expect(mention.locator(".rk-link-mention-icon")).toHaveAttribute("aria-hidden", "true");
+  }
+
+  // The icon comes from the thread's artifact, read once the mention nears the viewport; no icon,
+  // or one that cannot be read, is the glyph.
+  const docs = bot.getByRole("link", { name: "Compte rendu du 12 octobre, docs.example.org" });
+  await docs.scrollIntoViewIfNeeded();
+  await expect(docs.locator("img")).toHaveAttribute("src", /^blob:/);
+  for (const name of ["tracker.example.net", "Handbook, wiki.example.org"]) {
+    const mention = bot.getByRole("link", { name, exact: true });
+    await mention.scrollIntoViewIfNeeded();
+    await expect(mention.locator('[data-slot="link-mention-glyph"]')).toBeVisible();
+    await expect(mention.locator("img")).toHaveCount(0);
+  }
+  await expect(
+    user
+      .getByRole("link", { name: "Roadmap Q4, notion.example.com" })
+      .locator('[data-slot="link-mention-glyph"]'),
+  ).toBeVisible();
+
+  // A link without a mention is the plain link it always was.
+  const plain = bot.locator('a[href="https://forum.example.com/t/unrelated"]');
+  await expect(plain).toHaveText("https://forum.example.com/t/unrelated");
+  await expect(plain).not.toHaveAttribute("data-slot", "link-mention");
+
+  // One line box tall, icon at 16 px and never split from its label; a long label ends in an
+  // ellipsis inside the bubble.
+  const long = bot.getByRole("link", { name: /^Put the iPhone key's eye/ });
+  const lineHeight = await long.evaluate((element) =>
+    Number.parseFloat(getComputedStyle(element.parentElement!).lineHeight),
+  );
+  const box = (await long.boundingBox())!;
+  expect(box.height).toBeLessThanOrEqual(lineHeight + 0.5);
+  const icon = (await long.locator("img").boundingBox())!;
+  expect(icon.width).toBe(16);
+  expect(icon.height).toBe(16);
+  expect(icon.y - box.y).toBeCloseTo((box.height - 16) / 2, 0);
+  const label = long.locator(".rk-link-mention-label");
+  await expect(label).toHaveCSS("text-overflow", "ellipsis");
+  expect(await label.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+
+  expect(requested.filter((url) => /example\.(com|org|net)/.test(url))).toEqual([]);
+
+  await bot.scrollIntoViewIfNeeded();
+  for (const scheme of ["light", "dark"]) {
+    await page.evaluate(
+      (value) => document.documentElement.setAttribute("data-theme", value),
+      scheme,
+    );
+    await captureScreenshot(page, testInfo, `link-mention-${scheme}`);
+  }
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  for (const message of [bot, user]) {
+    const bubble = (await message
+      .locator('[data-slot="message-row-bubble"], [data-slot="user-bubble"]')
+      .first()
+      .boundingBox())!;
+    for (const mention of await message.locator('[data-slot="link-mention"]').all()) {
+      const edge = (await mention.boundingBox())!;
+      expect(edge.x + edge.width).toBeLessThanOrEqual(bubble.x + bubble.width);
+    }
+  }
+  await captureScreenshot(page, testInfo, "link-mention-phone");
+});
+
 test("the composer's draft card shrinks to a phone-width capsule", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto("/e2e/fixtures/link-preview.html");

@@ -81,6 +81,53 @@ const MESSAGES: MessageItem[] = [
   message("plain", "bot", [
     { kind: "text", text: "The roadmap is here: https://docs.example.net/roadmap" },
   ]),
+  message("mention-bot", "bot", [
+    {
+      kind: "text",
+      text: [
+        "Relu. Trois points à trancher, tous notés dans [Compte rendu du 12 octobre](https://docs.example.org/document/d/1/edit) :",
+        "",
+        "- le périmètre iOS, déjà chiffré dans https://code.example.org/acme/app/pull/193",
+        "- la date de gel, alignée sur https://tracker.example.net/team/plan",
+        "- le guide https://wiki.example.org/handbook et le fil https://forum.example.com/t/unrelated",
+      ].join("\n"),
+    },
+    {
+      kind: "link_mention",
+      url: "https://docs.example.org/document/d/1/edit",
+      icon: { artifactId: "art-1" },
+    },
+    {
+      kind: "link_mention",
+      url: "https://code.example.org/acme/app/pull/193",
+      title: "Put the iPhone key's eye and copy icons inside the field, like the web",
+      icon: { artifactId: "art-1" },
+    },
+    { kind: "link_mention", url: "https://tracker.example.net/team/plan" },
+    {
+      kind: "link_mention",
+      url: "https://wiki.example.org/handbook",
+      title: "Handbook",
+      icon: { artifactId: "art-broken" },
+    },
+  ]),
+  message("mention-user", "user", [
+    {
+      kind: "text",
+      text: "Tu peux relire https://www.notion.example.com/acme/Roadmap-Q4-3f9a2c7e81d04b5f et https://design.example.net/file/onboarding avant demain ?",
+    },
+    {
+      kind: "link_mention",
+      url: "https://www.notion.example.com/acme/Roadmap-Q4-3f9a2c7e81d04b5f",
+      title: "Roadmap Q4",
+    },
+    {
+      kind: "link_mention",
+      url: "https://design.example.net/file/onboarding",
+      title: "Onboarding flow",
+      icon: { artifactId: "art-1" },
+    },
+  ]),
   message("photo", "user", [
     { kind: "text", text: "https://images.example.com/p.jpg" },
     {

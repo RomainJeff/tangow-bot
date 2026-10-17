@@ -56,8 +56,7 @@ describePostgres("link preview cache (PostgreSQL)", () => {
           spaceId,
           keyHash,
           entry: {
-            status: "ok",
-            format: "large",
+            kind: "photo",
             image: { key: imageKey, width: 10, height: 10, bytes: 100 },
           },
         });

@@ -7,7 +7,9 @@ export function isHiddenActivityBlock(block: MessageBlock, showSteps: boolean): 
   return isToolActivityBlock(block) && !(showSteps && block.kind === "steps");
 }
 
+/** Kinds that draw nothing of their own; a `link_mention` is drawn inside its message's text. */
 const UNRENDERED_BLOCK_KINDS = new Set<MessageBlock["kind"]>([
+  "link_mention",
   "connect",
   "reasoning",
   "routine_run",

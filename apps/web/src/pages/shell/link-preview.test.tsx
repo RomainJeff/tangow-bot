@@ -165,6 +165,12 @@ describe("link preview in the thread", () => {
     await renderMessage(message("user", [text(`<${URL_A}>`), card()]));
     expect(bubbles()).toHaveLength(0);
 
+    await renderMessage(
+      message("user", [text(URL_A), card(), { kind: "link_mention", url: URL_A, title: "A" }]),
+    );
+    expect(bubbles()).toHaveLength(0);
+    expect(cards()).toHaveLength(1);
+
     // Preview removed: the bubble is back, the card gone.
     await renderMessage(
       message("user", [text(URL_A), { kind: "link_preview", url: URL_A, removed: true }]),

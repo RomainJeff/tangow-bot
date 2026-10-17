@@ -4,13 +4,7 @@ import {
   LINK_PREVIEW_THUMBNAIL_MAX_LENGTH,
   LINK_PREVIEW_THUMBNAIL_PREFIX,
 } from "@rakazo/contracts";
-import {
-  firstEligibleLink,
-  hasSecretParam,
-  isAuthenticationDestination,
-  previewSiteLabel,
-  sanitizePreviewTitle,
-} from "./link-preview.js";
+import { linkMentionCandidates, previewSiteLabel, sanitizePreviewTitle } from "./link-preview.js";
 import { extractLinkOccurrences } from "./search.js";
 
 /** How long a complete link must stay the first link before the page is read. */
@@ -44,17 +38,17 @@ export function inferComposerChange(prev: string, next: string): ComposerChange 
 }
 
 /**
- * The link of `next` that is ready to be read, or undefined. The first eligible link must be
- * complete: pasted, or its word followed by a space or a line break. A link still being typed
- * (nothing after it yet) never is, and neither is a link with a secret in its query or one to a sign-in page.
+ * The link of `next` that is ready to be read, or undefined. The first eligible link (the one a
+ * card may go with) must be complete: pasted, or its word followed by a space or a line break. A
+ * link still being typed (nothing after it yet) never is.
  */
 export function composerLinkPreviewTrigger(
   prev: string,
   next: string,
   change: ComposerChange,
 ): string | undefined {
-  const link = firstEligibleLink(next);
-  if (!link || hasSecretParam(link) || isAuthenticationDestination(link)) return undefined;
+  const link = cardCandidate(next);
+  if (!link) return undefined;
   const pasted = change === "paste" ? insertedSpan(prev, next) : undefined;
   for (const { href, start, end } of extractLinkOccurrences(next)) {
     if (href !== link) continue;
@@ -63,6 +57,10 @@ export function composerLinkPreviewTrigger(
     if (/\s/u.test(next.slice(end))) return link;
   }
   return undefined;
+}
+
+function cardCandidate(text: string): string | undefined {
+  return linkMentionCandidates(text)[0]?.url;
 }
 
 /**
@@ -236,7 +234,7 @@ export function createComposerLinkPreview(
       if (next.trim() === "") return reset();
       if (removed) return;
       // Only a new link must be complete: typing elsewhere in the draft keeps the current one.
-      if (link && firstEligibleLink(next) === link) return;
+      if (link && cardCandidate(next) === link) return;
       const target = composerLinkPreviewTrigger(prev, next, change);
       if (target === link) return;
       stop();

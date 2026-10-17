@@ -1,7 +1,9 @@
 import dns from "node:dns";
+import { readdirSync, readFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo, Socket } from "node:net";
 import { Readable } from "node:stream";
+import { fileURLToPath } from "node:url";
 import { createGzip } from "node:zlib";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { isTransientReason, LinkPreviewError, type LinkPreviewFailureReason } from "./errors.js";
@@ -12,6 +14,7 @@ import {
   type LinkPreviewFetchMode,
   type LinkPreviewFetchOptions,
   MAX_HTML_BYTES,
+  MAX_ICON_BYTES,
   MAX_IMAGE_BYTES,
 } from "./safe-fetch.js";
 import {
@@ -50,31 +53,36 @@ async function reasonOf(promise: Promise<unknown>): Promise<LinkPreviewFailureRe
   }
 }
 
+const BLOCKED_TARGETS = [
+  ["file:///etc/passwd", "unsafe_url"],
+  ["gopher://example.test/1", "unsafe_url"],
+  ["ftp://example.test/file", "unsafe_url"],
+  ["javascript:alert(1)", "unsafe_url"],
+  ["not a url", "unsafe_url"],
+  ["http://user:secret@example.test/", "unsafe_url"],
+  ["https://example.test:8443/", "unsafe_url"],
+  ["http://example.test:8080/", "unsafe_url"],
+  [`https://example.test/${"a".repeat(2048)}`, "unsafe_url"],
+  ["http://127.0.0.1/", "blocked_address"],
+  ["http://localhost/", "blocked_address"],
+  ["http://localhost./", "blocked_address"],
+  ["http://foo.localhost/", "blocked_address"],
+  ["http://x.internal/", "blocked_address"],
+  ["http://x.local/", "blocked_address"],
+  ["http://2130706433/", "blocked_address"],
+  ["http://0177.0.0.1/", "blocked_address"],
+  ["http://0x7f.1/", "blocked_address"],
+  ["http://[::ffff:7f00:1]/", "blocked_address"],
+  ["http://[::1]/", "blocked_address"],
+  ["http://169.254.169.254/latest/meta-data", "blocked_address"],
+  ["http://168.63.129.16/", "blocked_address"],
+] as const;
+
+/** The host of a URL, as the site an icon of that URL would be read for. */
+const siteOf = (url: string) => URL.parse(url)?.hostname ?? "example.test";
+
 describe("link preview fetch: URL policy and redirects (injected client)", () => {
-  it.each([
-    ["file:///etc/passwd", "unsafe_url"],
-    ["gopher://example.test/1", "unsafe_url"],
-    ["ftp://example.test/file", "unsafe_url"],
-    ["javascript:alert(1)", "unsafe_url"],
-    ["not a url", "unsafe_url"],
-    ["http://user:secret@example.test/", "unsafe_url"],
-    ["https://example.test:8443/", "unsafe_url"],
-    ["http://example.test:8080/", "unsafe_url"],
-    [`https://example.test/${"a".repeat(2048)}`, "unsafe_url"],
-    ["http://127.0.0.1/", "blocked_address"],
-    ["http://localhost/", "blocked_address"],
-    ["http://localhost./", "blocked_address"],
-    ["http://foo.localhost/", "blocked_address"],
-    ["http://x.internal/", "blocked_address"],
-    ["http://x.local/", "blocked_address"],
-    ["http://2130706433/", "blocked_address"],
-    ["http://0177.0.0.1/", "blocked_address"],
-    ["http://0x7f.1/", "blocked_address"],
-    ["http://[::ffff:7f00:1]/", "blocked_address"],
-    ["http://[::1]/", "blocked_address"],
-    ["http://169.254.169.254/latest/meta-data", "blocked_address"],
-    ["http://168.63.129.16/", "blocked_address"],
-  ] as const)("refuses %s before opening a connection", async (url, reason) => {
+  it.each(BLOCKED_TARGETS)("refuses %s before opening a connection", async (url, reason) => {
     const fetchMock = vi.fn<typeof fetch>();
     expect(
       await reasonOf(
@@ -250,6 +258,141 @@ describe("link preview fetch: URL policy and redirects (injected client)", () =>
         }),
       ),
     ).toBe("blocked_address");
+  });
+});
+
+describe("one network door (CA 24)", () => {
+  it("lets only safe-fetch.ts reach an HTTP client", () => {
+    const dir = fileURLToPath(new URL(".", import.meta.url));
+    const client =
+      /from "(?:undici|node:https?|node:net|node:tls|node-fetch|axios|got|\.\.\/undici-fetch\.js)"|\bfetch\(/;
+    const readers = readdirSync(dir)
+      .filter((file) => file.endsWith(".ts") && !file.endsWith(".test.ts"))
+      .filter((file) => client.test(readFileSync(`${dir}/${file}`, "utf8")))
+      .sort();
+    expect(readers).toEqual(["safe-fetch.ts"]);
+  });
+});
+
+describe("link preview fetch: icons stay on their page's site", () => {
+  const options = (site: string | undefined, fetchMock: typeof fetch) => ({
+    fetch: fetchMock,
+    resolveHostname: publicResolver,
+    limiter: createReadLimiter(),
+    ...(site === undefined ? {} : { site }),
+  });
+  const icon = () =>
+    new Response(new Uint8Array([1, 2, 3]), { headers: { "content-type": "image/png" } });
+
+  it.each(BLOCKED_TARGETS)(
+    "refuses %s as an icon before opening a connection",
+    async (url, reason) => {
+      const fetchMock = vi.fn<typeof fetch>();
+      expect(await reasonOf(fetchWithSeams(url, "icon", options(siteOf(url), fetchMock)))).toBe(
+        reason,
+      );
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ["http://127.0.0.1/", "off_site"],
+    ["https://example.test:8443/", "unsafe_url"],
+    ["file:///etc/passwd", "unsafe_url"],
+    ["gopher://example.test/1", "unsafe_url"],
+    ["//127.0.0.1/x", "off_site"],
+    ["https://cdn.other.test/i.png", "off_site"],
+    ["https://169.254.169.254.nip.example/i.png", "off_site"],
+  ] as const)("refuses an icon redirect to %s", async (location, reason) => {
+    const fetchMock = vi.fn<typeof fetch>(async () => redirect(location));
+    expect(
+      await reasonOf(
+        fetchWithSeams("https://example.test/i.png", "icon", options("example.test", fetchMock)),
+      ),
+    ).toBe(reason);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["https://static.figma.com/icon.png", "www.figma.com"],
+    ["https://example.co.uk/icon.png", "news.example.co.uk"],
+    ["http://wiki/icon.png", "wiki"],
+    ["http://93.184.216.34/icon.png", "93.184.216.34"],
+  ])("reads %s for a page on %s", async (url, site) => {
+    const fetchMock = vi.fn<typeof fetch>(async () => icon());
+    const resource = await fetchWithSeams(url, "icon", options(site, fetchMock));
+    expect(resource).toMatchObject({ kind: "image", url });
+  });
+
+  it.each([
+    ["https://cdn.tracker.test/icon.png", "news.example.test"],
+    ["https://b.github.io/icon.png", "a.github.io"],
+    ["https://y.co.uk/icon.png", "x.co.uk"],
+    ["http://cdn/icon.png", "wiki"],
+    ["http://93.184.216.35/icon.png", "93.184.216.34"],
+  ])("refuses %s for a page on %s, before opening a connection", async (url, site) => {
+    const fetchMock = vi.fn<typeof fetch>(async () => icon());
+    expect(await reasonOf(fetchWithSeams(url, "icon", options(site, fetchMock)))).toBe("off_site");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("follows a redirect that stays on the site", async () => {
+    const fetchMock = vi.fn<typeof fetch>(async (input) =>
+      String(input) === "https://example.test/i.png"
+        ? redirect("https://static.example.test/i.png")
+        : icon(),
+    );
+    const resource = await fetchWithSeams(
+      "https://example.test/i.png",
+      "icon",
+      options("example.test", fetchMock),
+    );
+    expect(resource.url).toBe("https://static.example.test/i.png");
+  });
+
+  it("refuses to read an icon for no site at all", async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () => icon());
+    expect(
+      await reasonOf(
+        fetchWithSeams("https://example.test/i.png", "icon", options(undefined, fetchMock)),
+      ),
+    ).toBe("unsafe_url");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("caps an icon at 1 MiB, whatever its Content-Length says, and accepts one at the cap", async () => {
+    const respond = (size: number, length?: number) =>
+      vi.fn<typeof fetch>(
+        async () =>
+          new Response(new Uint8Array(size), {
+            headers: {
+              "content-type": "image/png",
+              ...(length === undefined ? {} : { "content-length": String(length) }),
+            },
+          }),
+      );
+    const site = "example.test";
+    const url = "https://example.test/i.png";
+    expect(
+      await reasonOf(fetchWithSeams(url, "icon", options(site, respond(MAX_ICON_BYTES + 1)))),
+    ).toBe("too_large");
+    expect(
+      await reasonOf(fetchWithSeams(url, "icon", options(site, respond(MAX_ICON_BYTES + 1, 10)))),
+    ).toBe("too_large");
+    expect(
+      await reasonOf(fetchWithSeams(url, "icon", options(site, respond(10, MAX_ICON_BYTES + 1)))),
+    ).toBe("too_large");
+    const atCap = await fetchWithSeams(url, "icon", options(site, respond(MAX_ICON_BYTES)));
+    expect(atCap.bytes.byteLength).toBe(MAX_ICON_BYTES);
+  });
+
+  it("refuses a page where an icon was asked for", async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () => html("<title>t</title>"));
+    expect(
+      await reasonOf(
+        fetchWithSeams("https://example.test/i.png", "icon", options("example.test", fetchMock)),
+      ),
+    ).toBe("unsupported_type");
   });
 });
 

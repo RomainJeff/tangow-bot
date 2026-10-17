@@ -72,7 +72,7 @@ function composer(
     options.read ??
       (async () => ({
         ok: true as const,
-        format: "compact" as const,
+        kind: "page" as const,
         article: true as const,
         title: "A page",
       })),
@@ -81,7 +81,7 @@ function composer(
     options.readFromHead ??
       (async () => ({
         ok: true as const,
-        format: "compact" as const,
+        kind: "page" as const,
         article: true as const,
         title: "From the head",
       })),
@@ -101,9 +101,10 @@ function composer(
 
 const fresh = {
   expiresAt: new Date(Date.now() + 3_600_000),
-  status: "ok",
+  status: "page",
   article: true,
   imageBytes: 0,
+  iconBytes: 0,
 };
 
 describe("links.preview: access first (CA 19, CA 54)", () => {
@@ -169,7 +170,6 @@ describe("links.preview: what it answers", () => {
     const { deps, prisma, artifacts } = composer({
       cached: {
         ...fresh,
-        format: "large",
         title: "Big",
         imageKey: "blob-1",
         imageWidth: 800,
@@ -197,7 +197,6 @@ describe("links.preview: what it answers", () => {
     const { deps } = composer({
       cached: {
         ...fresh,
-        format: "compact",
         title: "Home",
         imageKey: "blob-1",
         imageWidth: 180,
@@ -221,7 +220,7 @@ describe("links.preview: what it answers", () => {
     const { deps } = composer({
       cached: {
         ...fresh,
-        format: "photo",
+        status: "photo",
         title: "should not show",
         imageKey: "blob-1",
         imageWidth: 40,
@@ -244,7 +243,7 @@ describe("links.preview: what it answers", () => {
     const reasons = [
       "blocked_address",
       "unsafe_url",
-      "no_title",
+      "off_site",
       "http_error",
       "unsupported_type",
       "login_page",
@@ -266,7 +265,7 @@ describe("links.preview: what it answers", () => {
     }
     expect(answers).toEqual(reasons.map(() => null));
     // A cached definitive failure looks the same.
-    const { deps } = composer({ cached: { ...fresh, status: "failed" } });
+    const { deps } = composer({ cached: { ...fresh, status: "unreadable" } });
     await expect(
       previewLinkForComposer(
         deps,
@@ -278,7 +277,7 @@ describe("links.preview: what it answers", () => {
   });
 
   it("serves the second ask from the cache without reading again", async () => {
-    const { deps, read } = composer({ cached: { ...fresh, format: "compact", title: "Cached" } });
+    const { deps, read } = composer({ cached: { ...fresh, title: "Cached" } });
     await expect(
       previewLinkForComposer(
         deps,
@@ -306,13 +305,13 @@ describe("links.preview: the sender's device may read (spec 22)", () => {
     );
 
   it("flags a refusal, and a failure that may pass, with a draft that shows nothing", async () => {
-    for (const [reason, transient] of [
-      ["access_denied", false],
-      ["rate_limited", true],
-      ["server_error", true],
+    for (const result of [
+      { ok: true, kind: "refused" },
+      { ok: false, reason: "rate_limited", transient: true },
+      { ok: false, reason: "server_error", transient: true },
     ] as const) {
-      const { deps } = composer({ read: async () => ({ ok: false, reason, transient }) });
-      await expect(ask(deps), reason).resolves.toEqual({
+      const { deps } = composer({ read: async () => result });
+      await expect(ask(deps), JSON.stringify(result)).resolves.toEqual({
         format: "compact",
         deviceReadable: true,
       });
@@ -333,7 +332,7 @@ describe("links.preview: the sender's device may read (spec 22)", () => {
   });
 
   it("uses a pageHead only while the server is still refused, and answers with the card it makes", async () => {
-    const restricted = { ...fresh, status: "failed", source: "restricted" };
+    const restricted = { ...fresh, status: "refused" };
     const { deps, read, readFromHead, tx } = composer({ cached: restricted });
 
     const draft = await ask(deps, "<head><title>Caf\u00e9</title></head>");
@@ -353,7 +352,7 @@ describe("links.preview: the sender's device may read (spec 22)", () => {
   });
 
   it("hands the response's Content-Type to the head reader, for its charset", async () => {
-    const restricted = { ...fresh, status: "failed", source: "restricted" };
+    const restricted = { ...fresh, status: "refused" };
     const { deps, readFromHead } = composer({ cached: restricted });
     await ask(deps, "<head></head>", "text/html; charset=iso-8859-1");
     expect(readFromHead.mock.calls[0]?.[3]).toBe("text/html; charset=iso-8859-1");
@@ -365,7 +364,7 @@ describe("links.preview: the sender's device may read (spec 22)", () => {
       read: async () => ({ ok: false, reason: "server_error", transient: true }),
       readFromHead: async () => ({
         ok: true,
-        format: "compact",
+        kind: "page",
         article: true,
         title: "From the head",
         image: { bytes: Buffer.from(TINY_WEBP), width: 1, height: 1 },
@@ -380,7 +379,7 @@ describe("links.preview: the sender's device may read (spec 22)", () => {
   });
 
   it("ignores a pageHead for a page the server can read", async () => {
-    const readable = { ...fresh, format: "compact", title: "Server", source: "server" };
+    const readable = { ...fresh, title: "Server", source: "server" };
     const { deps, readFromHead } = composer({ cached: readable });
     await expect(ask(deps, "<head><title>Forged</title></head>")).resolves.toEqual({
       format: "compact",
@@ -424,7 +423,7 @@ describe("links.preview: quotas (CA 38, CA 55)", () => {
       inFlight,
       read: () =>
         new Promise((resolve) => {
-          release.push(() => resolve({ ok: true, format: "compact", article: true, title: "T" }));
+          release.push(() => resolve({ ok: true, kind: "page", article: true, title: "T" }));
         }),
     });
     const ask = () =>
@@ -494,6 +493,27 @@ describe("links.preview: cancellation and deadline", () => {
     );
     expect(timeout).toHaveBeenCalledWith(10_000);
   });
+
+  it("tells both readers when those ten seconds end, so an icon never outlasts them", async () => {
+    const { deps, read, readFromHead } = composer({
+      read: async () => ({ ok: true, kind: "refused" }),
+    });
+    const before = Date.now();
+    await previewLinkForComposer(
+      deps,
+      actor,
+      { threadId: "thread-1", url: URL_TO_PREVIEW, pageHead: "<head><title>T</title></head>" },
+      new AbortController().signal,
+    );
+    const after = Date.now();
+    for (const deadlineAt of [
+      read.mock.calls[0]?.[1].deadlineAt,
+      readFromHead.mock.calls[0]?.[2].deadlineAt,
+    ]) {
+      expect(deadlineAt).toBeGreaterThanOrEqual(before + 10_000);
+      expect(deadlineAt).toBeLessThanOrEqual(after + 10_000);
+    }
+  });
 });
 
 describe("messages.removeLinkPreview (CA 16, CA 19, CA 54)", () => {
@@ -519,7 +539,15 @@ describe("messages.removeLinkPreview (CA 16, CA 19, CA 54)", () => {
           : [],
       ),
       sessionEntry: {
-        findMany: vi.fn().mockResolvedValueOnce(previews).mockResolvedValueOnce(removals),
+        findMany: vi
+          .fn()
+          .mockResolvedValueOnce(
+            previews.map((preview) => ({
+              ...preview,
+              payload: { block: { kind: "link_preview" }, artifactId: "a1" },
+            })),
+          )
+          .mockResolvedValueOnce(removals),
       },
       thread: {
         findUnique: vi.fn(async () => ({ botId: "bot-1", groupId: null })),

@@ -1,11 +1,13 @@
 import { createHash } from "node:crypto";
-import type { LinkPreviewCard } from "@rakazo/contracts";
+import type { LinkMentionBlock, LinkPreviewCard } from "@rakazo/contracts";
 import { EntryId } from "@rakazo/contracts";
+import { linkKey } from "@rakazo/core";
 import type { Prisma, PrismaClient } from "./client.js";
 import {
   appendCardStateInTransaction,
   blocksOf,
   ENTRY_ON_CHAIN,
+  endThreadFeedEvent,
   threadEventSeq,
 } from "./sessions.js";
 
@@ -44,29 +46,44 @@ export function linkPreviewDeviceKeyHash(
 }
 
 /**
- * Where an entry came from. `restricted`: the site refused the server (401, 402, 403, 451), so the
- * entry is a bare failure, and the sender's device may still read the page.
- * `device`: the head was read by the sender's device and the server fetched the image; such an
- * entry is stored under that person's own key (`linkPreviewDeviceKeyHash`). Absent means
- * `server`.
+ * Where an entry came from. `device`: the head was read by the sender's device and the server
+ * fetched the image; such an entry is stored under that person's own key
+ * (`linkPreviewDeviceKeyHash`). Absent means `server`.
  */
-export type LinkPreviewCacheSource = "server" | "restricted" | "device";
+export type LinkPreviewCacheSource = "server" | "device";
 
-export type CachedLinkPreview =
+/**
+ * What one read learned about a link, so that a card and a mention both derive from it. `Img`
+ * and `Icon` are bytes just read, or store keys once cached. A page's title is absent when the
+ * page names its site rather than itself; `crossSite` means the read ended on another site than
+ * the link's, whose title a mention must never show (a card shows the host). A page image is only
+ * read for an article (`fit: "contain"` when the site's icon stands in for it); `article: "unread"`
+ * is an article read for a mention, whose image was never asked for. `refused`: the site answered
+ * 401, 402, 403 or 451, so only its home page's icon is known.
+ */
+export type LinkFacts<Img, Icon> =
+  | { kind: "photo"; image: Img }
   | {
-      status: "ok";
-      format: "large" | "photo" | "compact";
+      kind: "page";
+      article: boolean | "unread";
       title?: string;
-      image?: { key: string; width: number; height: number; bytes: number; fit?: "contain" };
-      /** The page declared itself an article. Absent for a photo, which needs no declaration. */
-      article?: true;
-      source?: LinkPreviewCacheSource;
+      crossSite?: true;
+      image?: Img & { fit?: "contain" };
+      icon?: Icon;
     }
-  | { status: "failed"; source?: LinkPreviewCacheSource };
+  | { kind: "refused"; icon?: Icon };
+
+/** The facts of a link's last read, or that it cannot be read at all (`unreadable`). */
+export type CachedLinkRead = (
+  | LinkFacts<
+      { key: string; width: number; height: number; bytes: number },
+      { key: string; bytes: number }
+    >
+  | { kind: "unreadable" }
+) & { source?: LinkPreviewCacheSource };
 
 type CacheRow = {
   status: string;
-  format: string | null;
   title: string | null;
   imageKey: string | null;
   imageWidth: number | null;
@@ -74,38 +91,42 @@ type CacheRow = {
   imageBytes: number;
   imageFit: string | null;
   article: boolean | null;
+  crossSite: boolean;
+  iconKey: string | null;
+  iconBytes: number;
   source: string;
 };
 
-function toSource(value: string): LinkPreviewCacheSource {
-  return value === "restricted" || value === "device" ? value : "server";
-}
-
-function toCached(row: CacheRow): CachedLinkPreview | null {
-  const source = toSource(row.source);
-  if (row.status === "failed") return { status: "failed", source };
-  if (row.status !== "ok") return null;
-  if (row.format !== "large" && row.format !== "photo" && row.format !== "compact") return null;
-  // A page card written before cards were limited to articles never recorded the signal: a miss, so the page is read again.
-  if (row.format !== "photo" && row.article !== true) return null;
-  return {
-    status: "ok",
-    source,
-    format: row.format,
-    ...(row.article === true ? { article: true as const } : {}),
-    ...(row.title ? { title: row.title } : {}),
-    ...(row.imageKey && row.imageWidth && row.imageHeight
-      ? {
-          image: {
-            key: row.imageKey,
-            width: row.imageWidth,
-            height: row.imageHeight,
-            bytes: row.imageBytes,
-            ...(row.imageFit === "contain" ? { fit: "contain" as const } : {}),
-          },
-        }
-      : {}),
-  };
+/** Rows written before reads were facts (`ok`, `failed`) are misses. */
+function toCached(row: CacheRow): CachedLinkRead | null {
+  const source = row.source === "device" ? "device" : "server";
+  const image =
+    row.imageKey && row.imageWidth && row.imageHeight
+      ? { key: row.imageKey, width: row.imageWidth, height: row.imageHeight, bytes: row.imageBytes }
+      : undefined;
+  const icon = row.iconKey ? { icon: { key: row.iconKey, bytes: row.iconBytes } } : {};
+  switch (row.status) {
+    case "photo":
+      return image ? { kind: "photo", image, source } : null;
+    case "page":
+      return {
+        kind: "page",
+        article: row.article ?? "unread",
+        ...(row.title ? { title: row.title } : {}),
+        ...(row.crossSite ? { crossSite: true } : {}),
+        ...(image
+          ? { image: row.imageFit === "contain" ? { ...image, fit: "contain" } : image }
+          : {}),
+        ...icon,
+        source,
+      };
+    case "refused":
+      return { kind: "refused", ...icon, source };
+    case "unreadable":
+      return { kind: "unreadable", source };
+    default:
+      return null;
+  }
 }
 
 /** A live (unexpired) cache entry of this space, or null. */
@@ -114,7 +135,7 @@ export async function findCachedLinkPreview(
   spaceId: string,
   keyHash: string,
   now = new Date(),
-): Promise<CachedLinkPreview | null> {
+): Promise<CachedLinkRead | null> {
   const row = await prisma.linkPreviewCache.findUnique({
     where: { spaceId_keyHash: { spaceId, keyHash } },
   });
@@ -130,44 +151,35 @@ export async function findCachedLinkPreview(
  */
 export async function storeLinkPreviewCache(
   prisma: Pick<PrismaClient, "$transaction">,
-  input: { spaceId: string; keyHash: string; entry: CachedLinkPreview; now?: Date },
+  input: { spaceId: string; keyHash: string; entry: CachedLinkRead; now?: Date },
 ): Promise<{ removedImageKeys: string[] }> {
   const now = input.now ?? new Date();
   const { entry } = input;
-  const data =
-    entry.status === "failed"
-      ? {
-          status: "failed",
-          format: null,
-          title: null,
-          imageKey: null,
-          imageWidth: null,
-          imageHeight: null,
-          imageBytes: 0,
-          imageFit: null,
-          article: null,
-          source: entry.source ?? "server",
-        }
-      : {
-          status: "ok",
-          format: entry.format,
-          title: entry.title ?? null,
-          imageKey: entry.image?.key ?? null,
-          imageWidth: entry.image?.width ?? null,
-          imageHeight: entry.image?.height ?? null,
-          imageBytes: entry.image?.bytes ?? 0,
-          imageFit: entry.image?.fit ?? null,
-          article: entry.article ?? null,
-          source: entry.source ?? "server",
-        };
+  const page = entry.kind === "page" ? entry : undefined;
+  const image = entry.kind === "photo" ? entry.image : page?.image;
+  const icon = entry.kind === "page" || entry.kind === "refused" ? entry.icon : undefined;
+  const data = {
+    status: entry.kind,
+    title: page?.title ?? null,
+    imageKey: image?.key ?? null,
+    imageWidth: image?.width ?? null,
+    imageHeight: image?.height ?? null,
+    imageBytes: image?.bytes ?? 0,
+    imageFit: page?.image?.fit ?? null,
+    article: page && page.article !== "unread" ? page.article : null,
+    crossSite: page?.crossSite === true,
+    iconKey: icon?.key ?? null,
+    iconBytes: icon?.bytes ?? 0,
+    source: entry.source ?? "server",
+  };
+  const keysOf = (row: { imageKey: string | null; iconKey: string | null }) =>
+    [row.imageKey, row.iconKey].filter((key): key is string => key !== null);
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`link-preview-cache:${input.spaceId}`}))`;
-    const removedImageKeys: string[] = [];
     const where = { spaceId_keyHash: { spaceId: input.spaceId, keyHash: input.keyHash } };
     const previous = await tx.linkPreviewCache.findUnique({ where });
-    if (previous?.imageKey && previous.imageKey !== data.imageKey) {
-      removedImageKeys.push(previous.imageKey);
-    }
+    const kept = new Set(keysOf(data));
+    const removedImageKeys = previous ? keysOf(previous).filter((key) => !kept.has(key)) : [];
     await tx.linkPreviewCache.upsert({
       where,
       create: {
@@ -186,10 +198,17 @@ export async function storeLinkPreviewCache(
     const rows = await tx.linkPreviewCache.findMany({
       where: { spaceId: input.spaceId },
       orderBy: { createdAt: "asc" },
-      select: { id: true, keyHash: true, imageKey: true, imageBytes: true },
+      select: {
+        id: true,
+        keyHash: true,
+        imageKey: true,
+        imageBytes: true,
+        iconKey: true,
+        iconBytes: true,
+      },
     });
     let count = rows.length;
-    let bytes = rows.reduce((sum, row) => sum + row.imageBytes, 0);
+    let bytes = rows.reduce((sum, row) => sum + row.imageBytes + row.iconBytes, 0);
     const evicted: string[] = [];
     for (const row of rows) {
       if (count <= LINK_PREVIEW_CACHE_MAX_ENTRIES && bytes <= LINK_PREVIEW_CACHE_MAX_BYTES) break;
@@ -197,8 +216,8 @@ export async function storeLinkPreviewCache(
       if (row.keyHash === input.keyHash) break;
       evicted.push(row.id);
       count -= 1;
-      bytes -= row.imageBytes;
-      if (row.imageKey) removedImageKeys.push(row.imageKey);
+      bytes -= row.imageBytes + row.iconBytes;
+      removedImageKeys.push(...keysOf(row));
     }
     if (evicted.length) await tx.linkPreviewCache.deleteMany({ where: { id: { in: evicted } } });
     return { removedImageKeys };
@@ -260,20 +279,31 @@ export async function purgeLinkPreviewState(
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const expired = await tx.linkPreviewCache.findMany({
       where: { expiresAt: { lte: now } },
-      select: { id: true, spaceId: true, imageKey: true },
+      select: { id: true, spaceId: true, imageKey: true, iconKey: true },
       take: 1000,
     });
+    // Guarded by the select's own cutoff: a row refreshed since keeps its new content and keys.
+    let purged = expired;
     if (expired.length) {
-      await tx.linkPreviewCache.deleteMany({
-        where: { id: { in: expired.map((row) => row.id) } },
+      const ids = expired.map((row) => row.id);
+      const { count } = await tx.linkPreviewCache.deleteMany({
+        where: { id: { in: ids }, expiresAt: { lte: now } },
       });
+      if (count < expired.length) {
+        const kept = new Set(
+          (
+            await tx.linkPreviewCache.findMany({ where: { id: { in: ids } }, select: { id: true } })
+          ).map((row) => row.id),
+        );
+        purged = expired.filter((row) => !kept.has(row.id));
+      }
     }
     await tx.linkPreviewRead.deleteMany({
       where: { createdAt: { lt: new Date(now.getTime() - READ_ROW_RETENTION_MS) } },
     });
     return {
-      removedImages: expired.flatMap((row) =>
-        row.imageKey ? [{ spaceId: row.spaceId, key: row.imageKey }] : [],
+      removedImages: purged.flatMap((row) =>
+        [row.imageKey, row.iconKey].flatMap((key) => (key ? [{ spaceId: row.spaceId, key }] : [])),
       ),
     };
   });
@@ -310,10 +340,16 @@ async function eventBotIdForThread(
   return member?.botId ?? null;
 }
 
+function blockOf(payload: Prisma.JsonValue): { kind?: unknown; url?: unknown } {
+  const block = (payload as { block?: unknown } | null)?.block;
+  return block && typeof block === "object" ? block : {};
+}
+
 /**
- * The message a preview goes under, read under the thread lock while it is still on the thread's
- * chain, with what it holds of a preview: an opt-out marker it was sent with, its preview entries,
- * and whether one was removed.
+ * The message a link's blocks go under, read under the thread lock while it is still on the
+ * thread's chain, with what it already holds: an inline marker (the opt-out it was sent with, or
+ * an old inline card), whether its one card slot is taken (a card, or a removal), the card shown,
+ * and the keys of its mentions.
  */
 async function previewTarget(
   tx: Prisma.TransactionClient,
@@ -327,20 +363,28 @@ async function previewTarget(
     JOIN sessions s ON s.id = e."sessionId" AND s."threadId" = ${input.threadId} AND s.kind = 'thread'
     WHERE e.id = ${input.messageId} AND ${ENTRY_ON_CHAIN}`;
   if (!message) return null;
-  const previews = await tx.sessionEntry.findMany({
+  const entries = await tx.sessionEntry.findMany({
     where: {
       sessionId: message.sessionId,
       type: "link.preview",
       payload: { path: ["target"], equals: message.id },
     },
     orderBy: { seq: "asc" },
-    select: { id: true },
+    select: { id: true, payload: true },
   });
+  const cards = entries.filter((entry) => blockOf(entry.payload).kind === "link_preview");
+  const mentionKeys = new Set(
+    entries.flatMap((entry) => {
+      const { kind, url } = blockOf(entry.payload);
+      const key = kind === "link_mention" && typeof url === "string" ? linkKey(url) : null;
+      return key ? [key] : [];
+    }),
+  );
   const removals = await tx.sessionEntry.findMany({
     where: {
       sessionId: message.sessionId,
       type: "link.preview.removed",
-      OR: [message.id, ...previews.map((preview) => preview.id)].map((target) => ({
+      OR: [message.id, ...cards.map((card) => card.id)].map((target) => ({
         payload: { path: ["target"], equals: target },
       })),
     },
@@ -349,41 +393,89 @@ async function previewTarget(
   const removed = new Set(
     removals.map((removal) => (removal.payload as { target: string }).target),
   );
+  const inline = blocksOf(message).some(isPreviewBlock);
   return {
     message,
     botId: message.botId ?? (await eventBotIdForThread(tx, input.threadId)),
-    marked: previews.length > 0 || removed.size > 0 || blocksOf(message).some(isPreviewBlock),
-    shown: previews.findLast((preview) => !removed.has(preview.id)),
+    inline,
+    cardTaken: inline || cards.length > 0 || removed.size > 0,
+    shown: cards.findLast((card) => !removed.has(card.id)),
+    mentionKeys,
   };
 }
 
-export type AppendLinkPreviewResult =
-  | { outcome: "appended"; seq: number }
+/**
+ * On `appended`, `artifactIds` are the artifacts the written entries show; the caller discards
+ * the others.
+ */
+export type AppendLinkBlocksResult =
+  | { outcome: "appended"; seq: number; artifactIds: string[] }
   | { outcome: "gone" | "present" };
 
 /**
- * Attaches a preview card to a message: the one short transaction that holds the thread lock. If
- * the message is not the thread's, or already has a preview, a removed one or the opt-out marker,
- * nothing is written. The entry reaches the thread's feed under the message's own bot.
+ * Attaches a message's card and mentions in the one short transaction that holds the thread lock,
+ * one `link.preview` entry per block, each naming the one artifact it shows, the card in one feed
+ * event and the mentions in the next. Idempotent: the card is written only while the message's
+ * card slot is free (no card, no removal), and a mention only for a link key the message has no
+ * mention for yet, so a rerun completes a partial set without a duplicate. A message sent with its
+ * preview off (or gone from the thread) gets nothing.
  */
-export async function appendLinkPreviewBlock(
+export async function appendLinkBlocks(
   prisma: Pick<PrismaClient, "$transaction">,
-  input: { spaceId: string; threadId: string; messageId: string; block: LinkPreviewCard },
-): Promise<AppendLinkPreviewResult> {
+  input: {
+    spaceId: string;
+    threadId: string;
+    messageId: string;
+    blocks: Array<LinkPreviewCard | LinkMentionBlock>;
+  },
+): Promise<AppendLinkBlocksResult> {
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const target = await previewTarget(tx, input);
     if (!target?.botId) return { outcome: "gone" } as const;
-    if (target.marked) return { outcome: "present" } as const;
-    await appendCardStateInTransaction(tx, {
-      type: "link.preview",
-      feedBotId: target.botId,
-      payload: {
-        target: EntryId.parse(target.message.id),
-        block: input.block,
-        ...(input.block.image ? { artifactId: input.block.image.artifactId } : {}),
-      },
+    if (target.inline) return { outcome: "present" } as const;
+    let cardTaken = target.cardTaken;
+    const keys = new Set(target.mentionKeys);
+    const written = input.blocks.filter((block) => {
+      if (block.kind === "link_preview") {
+        if (cardTaken) return false;
+        cardTaken = true;
+        return true;
+      }
+      const key = linkKey(block.url);
+      if (!key || keys.has(key)) return false;
+      keys.add(key);
+      return true;
     });
-    return { outcome: "appended", seq: await threadEventSeq(tx, input.threadId) } as const;
+    if (written.length === 0) return { outcome: "present" } as const;
+    // A client released before mentions drops a whole feed event that holds one, so the card
+    // goes alone in the first event and the mentions follow in a second.
+    const events = [
+      written.filter((block) => block.kind === "link_preview"),
+      written.filter((block) => block.kind === "link_mention"),
+    ];
+    const artifactIds: string[] = [];
+    for (const blocks of events) {
+      for (const block of blocks) {
+        const artifactId =
+          block.kind === "link_preview" ? block.image?.artifactId : block.icon?.artifactId;
+        if (artifactId) artifactIds.push(artifactId);
+        await appendCardStateInTransaction(tx, {
+          type: "link.preview",
+          feedBotId: target.botId,
+          payload: {
+            target: EntryId.parse(target.message.id),
+            block,
+            ...(artifactId ? { artifactId } : {}),
+          },
+        });
+      }
+      endThreadFeedEvent(tx, input.threadId);
+    }
+    return {
+      outcome: "appended",
+      seq: await threadEventSeq(tx, input.threadId),
+      artifactIds,
+    } as const;
   });
 }
 
@@ -393,9 +485,10 @@ export type RemoveLinkPreviewResult =
   | { outcome: "gone" };
 
 /**
- * Removes the message's preview, or marks it as having none when no card arrived yet, so a read
- * still in flight cannot add one, and deletes the card's image artifact rows. A second call finds
- * the removal and writes nothing. The caller deletes the returned artifacts' bytes afterwards.
+ * Removes the message's card, or marks it as having none when no card arrived yet, so a read
+ * still in flight cannot add one, and deletes the card's image artifact row. Mentions and their
+ * icons stay. A second call finds the removal and writes nothing. The caller deletes the returned
+ * artifacts' bytes afterwards.
  */
 export async function removeLinkPreviewBlock(
   prisma: Pick<PrismaClient, "$transaction">,
@@ -404,16 +497,19 @@ export async function removeLinkPreviewBlock(
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const target = await previewTarget(tx, input);
     if (!target?.botId) return { outcome: "gone" } as const;
-    if (target.marked && !target.shown) return { outcome: "unchanged" } as const;
+    if (target.cardTaken && !target.shown) return { outcome: "unchanged" } as const;
     await appendCardStateInTransaction(tx, {
       type: "link.preview.removed",
       feedBotId: target.botId,
       payload: { target: EntryId.parse(target.shown?.id ?? target.message.id) },
     });
-    const artifacts = await tx.artifact.findMany({
-      where: { isLinkPreview: true, previewMessageId: target.message.id },
-      select: { id: true, storageKey: true },
-    });
+    const artifactId = (target.shown?.payload as { artifactId?: string } | undefined)?.artifactId;
+    const artifacts = artifactId
+      ? await tx.artifact.findMany({
+          where: { id: artifactId, isLinkPreview: true, previewMessageId: target.message.id },
+          select: { id: true, storageKey: true },
+        })
+      : [];
     if (artifacts.length) {
       await tx.artifact.deleteMany({ where: { id: { in: artifacts.map((row) => row.id) } } });
     }

@@ -18,6 +18,7 @@ const PNG = Buffer.from(
 );
 const ARTICLE = "https://news.test/article/le-vrai-titre-du-jour";
 const IMAGE = "https://img.test/og.png";
+const ICON = "https://news.test/icon.png";
 const ARTICLE_META = '<meta property="og:type" content="article">';
 const HEAD = `<head>${ARTICLE_META}<title>Le vrai titre</title><meta property="og:image" content="${IMAGE}"></head>`;
 const scope = { spaceId: "space-1", userId: "user-1", source: "composer" as const };
@@ -58,11 +59,11 @@ function site(
 }
 
 describe("the server tells the device it may read (CA 81, CA 54)", () => {
-  it("flags a refusal of the site, with no card, and remembers it as restricted", async () => {
+  it("flags a refusal of the site, with no card, and remembers the refusal", async () => {
     const { deps, cacheRows } = site();
     const answer = await resolveLinkPreviewDetailed(deps, scope, ARTICLE);
     expect(answer).toMatchObject({ preview: null, deviceReadable: true, refused: true });
-    expect(cacheRows()).toMatchObject([{ status: "failed", source: "restricted" }]);
+    expect(cacheRows()).toMatchObject([{ status: "refused", source: "server" }]);
     // The second ask is served from the cache and says the same.
     const again = await resolveLinkPreviewDetailed(deps, scope, ARTICLE);
     expect(again.deviceReadable).toBe(true);
@@ -77,6 +78,17 @@ describe("the server tells the device it may read (CA 81, CA 54)", () => {
       });
       expect(passing.cacheRows()).toEqual([]);
     }
+  });
+
+  it("still flags a refusal when the deadline cuts the read of its home page short", async () => {
+    const controller = new AbortController();
+    const { deps } = site((url) => {
+      if (url !== "https://news.test/") return undefined;
+      controller.abort();
+      return refusal();
+    });
+    const answer = await resolveLinkPreviewDetailed(deps, scope, ARTICLE, controller.signal);
+    expect(answer).toMatchObject({ preview: null, deviceReadable: true, refused: true });
   });
 
   it("does not flag a timeout or a network error (no HTTP answer, so no oracle on private names)", async () => {
@@ -166,9 +178,9 @@ describe("the server takes a device's page head (CA 84)", () => {
     expect(requests).toEqual([IMAGE]);
     // The space keeps the server's refusal; the device's card is a second entry, this person's own.
     expect(cacheRows()).toHaveLength(2);
-    expect(cacheRows().find((row) => row.source === "restricted")).toBeDefined();
+    expect(cacheRows().find((row) => row.status === "refused")).toBeDefined();
     const device = cacheRows().find((row) => row.source === "device");
-    expect(device).toMatchObject({ status: "ok", title: "Le vrai titre" });
+    expect(device).toMatchObject({ status: "page", title: "Le vrai titre" });
     expect(deps.artifacts.keys()).toContain(device?.imageKey as string);
   });
 
@@ -186,6 +198,45 @@ describe("the server takes a device's page head (CA 84)", () => {
       // Its image is in the store only until the caller has used it.
       expect(deps.artifacts.keys()).toEqual([answer.ephemeralImageKey]);
     }
+  });
+
+  it("stores no icon for a card made while the site fails for now (429)", async () => {
+    // No page image, so the icon is read to stand in for it.
+    const head = `<head>${ARTICLE_META}<title>Le vrai titre</title><link rel="icon" sizes="128x128" href="${ICON}"></head>`;
+    const { deps, requests, cacheRows } = site((url) => {
+      if (url === ARTICLE) return new Response("x", { status: 429 });
+      if (url === ICON) return new Response(PNG, { headers: { "content-type": "image/png" } });
+      return undefined;
+    });
+    const answer = await resolveLinkPreviewWithDeviceHead(deps, scope, ARTICLE, head);
+    expect(answer).toMatchObject({ refused: false, ephemeralImageKey: expect.any(String) });
+    expect(requests).toContain(ICON);
+    expect(cacheRows()).toEqual([]);
+    // The icon stands in for the card's picture (the ephemeral image); its own blob is never kept.
+    expect(deps.artifacts.keys()).toEqual([answer.ephemeralImageKey]);
+  });
+
+  it("keeps a refusal's device card when its icon cannot be stored, leaving no orphan", async () => {
+    // No page image, so the icon is read to stand in for it.
+    const head = `<head>${ARTICLE_META}<title>Le vrai titre</title><link rel="icon" sizes="128x128" href="${ICON}"></head>`;
+    const { deps, cacheRows } = site((url) =>
+      url === ICON ? new Response(PNG, { headers: { "content-type": "image/png" } }) : undefined,
+    );
+    await resolveLinkPreviewDetailed(deps, scope, ARTICLE);
+    let puts = 0;
+    const put = deps.artifacts.put.bind(deps.artifacts);
+    deps.artifacts.put = async (...args) => {
+      puts += 1;
+      if (puts === 2) throw new Error("store full");
+      return put(...args);
+    };
+    const answer = await resolveLinkPreviewWithDeviceHead(deps, scope, ARTICLE, head);
+    expect(answer).toMatchObject({ refused: true, deviceReadable: false });
+    expect(answer.preview).toMatchObject({ title: "Le vrai titre" });
+    const device = cacheRows().find((row) => row.source === "device");
+    expect(device).toMatchObject({ iconKey: null });
+    expect(puts).toBe(2);
+    expect(deps.artifacts.keys()).toEqual([device?.imageKey]);
   });
 
   it("caches the card for a refusal of the site itself (401, 402, 403, 451)", async () => {
@@ -268,7 +319,7 @@ describe("the server takes a device's page head (CA 84)", () => {
       const answer = await resolveLinkPreviewWithDeviceHead(deps, scope, ARTICLE, head);
       expect(answer).toMatchObject({ preview: null, deviceReadable: true });
       expect(requests).toEqual([]);
-      expect(cacheRows()).toMatchObject([{ source: "restricted" }]);
+      expect(cacheRows()).toMatchObject([{ status: "refused" }]);
     }
     // A head of exactly 512 KiB is accepted.
     const { deps } = site();
@@ -288,7 +339,7 @@ describe("the server takes a device's page head (CA 84)", () => {
     const { deps, cacheRows } = site();
     const answer = await resolveLinkPreviewWithDeviceHead(deps, scope, ARTICLE, head);
     expect(answer).toMatchObject({ preview: null, deviceReadable: true });
-    expect(cacheRows()).toMatchObject([{ source: "restricted" }]);
+    expect(cacheRows()).toMatchObject([{ status: "refused" }]);
   });
 
   it("reads the head the way a fetched page is read: charset, entities, a remote image named by <base>", async () => {
@@ -323,7 +374,7 @@ describe("the server takes a device's page head (CA 84)", () => {
     // One read left: the refusal check takes it, the device head finds the budget gone.
     const answer = await resolveLinkPreviewWithDeviceHead(limited.deps, scope, ARTICLE, HEAD);
     expect(answer.preview).toBeNull();
-    expect(limited.cacheRows()).toMatchObject([{ source: "restricted" }]);
+    expect(limited.cacheRows()).toMatchObject([{ status: "refused" }]);
   });
 });
 
