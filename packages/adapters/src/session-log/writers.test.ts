@@ -1773,6 +1773,82 @@ describe("session log writers", () => {
       ]);
     });
 
+    it("commits a recovery notice once after approval resume while keeping final prose private", async () => {
+      const { prisma } = database;
+      const owner = await seedBot(prisma, "Recovery");
+      const effectId = `effect_${randomUUID()}`;
+      const request = { name: "Scout", instructions: "Check the report." };
+      const { run, messageId } = await paused(
+        owner,
+        [spawnBotApprovalBlock(effectId, request, USER)],
+        {
+          id: effectId,
+          kind: "spawn_bot",
+          request,
+        },
+      );
+      await prisma.$transaction((tx) =>
+        answerRunInputInTransaction(tx, {
+          spaceId: SPACE,
+          threadId: owner.threadId,
+          runId: run.id,
+          messageId,
+          answeredByUserId: USER,
+          answer: "allow",
+        }),
+      );
+      const approved = await prisma.externalEffect.findUniqueOrThrow({ where: { id: effectId } });
+      expect(approved.status).toBe("approved");
+      const resumed = await prisma.run.update({
+        where: { id: run.id },
+        data: {
+          status: "running",
+          leaseOwner: "resumed-worker",
+          leaseFence: run.leaseFence + 1,
+        },
+      });
+      const opened = await openRunLog(
+        { prisma, sessionLog: log },
+        resumed,
+        { sessionId: SessionId.parse(resumed.sessionId), runId: run.id, botId: owner.bot.id },
+        SCRIPTED,
+        null,
+      );
+      const attempt = await prisma.attempt.create({
+        data: { runId: run.id, fence: resumed.leaseFence, status: "running" },
+      });
+      const finish = () =>
+        finalizeRun(prisma, {
+          spaceId: SPACE,
+          threadId: owner.threadId,
+          botId: owner.bot.id,
+          runId: run.id,
+          taskId: run.taskId,
+          attemptId: attempt.id,
+          leaseOwner: "resumed-worker",
+          leaseFence: resumed.leaseFence,
+          outcome: "completed",
+          blocks: [{ kind: "text", text: "Private final words" }],
+          publicBlocks: [{ kind: "text", text: "Please ask me to continue." }],
+        });
+      expect(await finish()).toEqual({ continuationRunId: null });
+      expect(await finish()).toBe(false);
+      const main = await log.readTail(owner.sessionId);
+      expect(
+        main
+          .filter((entry) => entry.type === "assistant.text")
+          .map((entry) => entry.payload.blocks),
+      ).toEqual([[{ kind: "text", text: "Please ask me to continue." }]]);
+      expect(
+        (await log.readTail(opened.sessionId))
+          .filter((entry) => entry.type === "assistant.text")
+          .map((entry) => entry.payload.blocks),
+      ).toEqual([[{ kind: "text", text: "Private final words" }]]);
+      expect((await prisma.run.findUniqueOrThrow({ where: { id: run.id } })).status).toBe(
+        "completed",
+      );
+    });
+
     it("logs a secret answer as answered, without the secret", async () => {
       const owner = await seedBot(database.prisma, "Babbage");
       const { run, messageId } = await paused(owner, [

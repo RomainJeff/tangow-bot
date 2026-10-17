@@ -527,7 +527,13 @@ export type AgentRuntimeEvent =
       progress?: string;
       result?: string;
     }
-  | { type: "done"; text?: string; privateFinalText?: string };
+  | {
+      type: "done";
+      text?: string;
+      privateFinalText?: string;
+      /** Recovery text authored by the runtime, never inferred from model prose. */
+      runtimeNotice?: string;
+    };
 
 export interface AgentRuntimeCapabilities {
   streaming: boolean;

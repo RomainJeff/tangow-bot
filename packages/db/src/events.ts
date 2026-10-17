@@ -161,6 +161,8 @@ export type FinalizeRunInput = FinalizeRunBase &
     | {
         outcome: "completed";
         blocks: MessageBlock[];
+        /** Explicitly addressed terminal output, committed with the run's completion. */
+        publicBlocks?: MessageBlock[];
         markUnread?: boolean;
         /** The run's final words, which a routine run reports to its thread. */
         result?: string;
@@ -1809,6 +1811,16 @@ async function finalizeRunOnce(
           botId: input.botId,
           runId: input.runId,
           blocks: completedBlocks,
+          markUnread: input.markUnread,
+        });
+      }
+      if (input.publicBlocks?.length) {
+        await createBotMessageInTransaction(tx, {
+          threadId: input.threadId,
+          botId: input.botId,
+          runId: input.runId,
+          blocks: input.publicBlocks,
+          toPerson: true,
           markUnread: input.markUnread,
         });
       }

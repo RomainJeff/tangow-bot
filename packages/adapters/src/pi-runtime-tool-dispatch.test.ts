@@ -979,6 +979,8 @@ describe("Pi connector tool dispatch", () => {
     expect(events.at(-1)).toEqual({
       type: "done",
       text: "I completed the tool step but could not produce a final response. Please ask me to continue.",
+      runtimeNotice:
+        "I completed the tool step but could not produce a final response. Please ask me to continue.",
     });
   });
 
@@ -1200,6 +1202,8 @@ describe("Pi connector tool dispatch", () => {
     expect(events.at(-1)).toEqual({
       type: "done",
       text: "I stopped after reaching the limit of 80 tool calls in this turn. Send another message to continue.",
+      runtimeNotice:
+        "I stopped after reaching the limit of 80 tool calls in this turn. Send another message to continue.",
     });
   });
 
@@ -1253,6 +1257,8 @@ describe("Pi connector tool dispatch", () => {
     expect(events).toContainEqual({
       type: "done",
       text: "I stopped after reaching the limit of 80 tool calls in this turn. Send another message to continue.",
+      runtimeNotice:
+        "I stopped after reaching the limit of 80 tool calls in this turn. Send another message to continue.",
     });
     const subagentEvents = events.filter(
       (event): event is { type: "subagent"; status: string; result?: string } =>
