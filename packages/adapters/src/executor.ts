@@ -5735,7 +5735,7 @@ const TOOL_DETAIL_MAX_CHARS = 4000;
 function describeToolPayload(value: unknown, secrets: string[] = []): string {
   if (value === undefined) return "";
   const text = redactSecrets(
-    typeof value === "string" ? value : safeStringifyToolPayload(value),
+    typeof value === "string" ? value : safeStringifyToolPayload(value, secrets),
     secrets,
   );
   return text.length > TOOL_DETAIL_MAX_CHARS
@@ -5743,9 +5743,16 @@ function describeToolPayload(value: unknown, secrets: string[] = []): string {
     : text;
 }
 
-function safeStringifyToolPayload(value: unknown): string {
+function safeStringifyToolPayload(value: unknown, secrets: string[]): string {
   try {
-    return JSON.stringify(value, null, 2) ?? String(value);
+    return (
+      JSON.stringify(
+        value,
+        (_key, nested: unknown) =>
+          typeof nested === "string" ? redactSecrets(nested, secrets) : nested,
+        2,
+      ) ?? String(value)
+    );
   } catch {
     return String(value);
   }

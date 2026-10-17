@@ -38,9 +38,12 @@ describe("redactSecrets", () => {
   });
 
   it("preserves JSON escaping while masking nested string values and keys", () => {
-    const input = JSON.stringify({ text: JSON.stringify({ 'key"value': 'line\nbreak', public: "K731" }) });
-    expect(JSON.parse(JSON.parse(redactSecrets(input, ['key"value', "line\nbreak"])).text))
-      .toEqual({ "[redacted]": "[redacted]", public: "K731" });
+    const input = JSON.stringify({
+      text: JSON.stringify({ 'key"value': "line\nbreak", public: "K731" }),
+    });
+    expect(JSON.parse(JSON.parse(redactSecrets(input, ['key"value', "line\nbreak"])).text)).toEqual(
+      { "[redacted]": "[redacted]", public: "K731" },
+    );
   });
 
   it("masks a field when nested JSON exceeds the shared work budget", () => {

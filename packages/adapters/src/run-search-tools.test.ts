@@ -285,8 +285,9 @@ describe("search_runs authorization and archive discovery", () => {
               expect(found.hits[0].excerpt).toContain("[redacted]");
               expect(found.hits[0].excerpt).not.toContain("fake-line");
               for (const query of ["fake-line-one", "fake-line-two"]) {
-                expect(await request.executeTool("search_runs", { runId: old.id, query }, query))
-                  .toMatchObject({ status: "ok", hits: [], nextCursor: null });
+                expect(
+                  await request.executeTool("search_runs", { runId: old.id, query }, query),
+                ).toMatchObject({ status: "ok", hits: [], nextCursor: null });
               }
               await request.executeTool(
                 "message_user",
@@ -314,12 +315,6 @@ describe("search_runs authorization and archive discovery", () => {
       ).toEqual({ status: "completed", error: null });
       const stored = await log.readRun(old.id);
       const result = stored.find((entry) => entry.type === "tool.result");
-      expect(
-        result?.type === "tool.result" ? result.payload.output.includes("receipt K731") : false,
-      ).toBe(true);
-      expect(
-        result?.type === "tool.result" ? result.payload.output.includes("[redacted]") : false,
-      ).toBe(true);
       if (result?.type !== "tool.result") throw new Error("Missing tool result");
       expect(JSON.parse(JSON.parse(result.payload.output).text)).toEqual({
         receipt: "receipt K731",
