@@ -125,6 +125,10 @@ msgstr "Computadora de {botName}"
 msgid "{count} · next {next}"
 msgstr "{count} · próxima {next}"
 
+#: src/components/ask/QuestionCard.tsx:175
+msgid "{count} more"
+msgstr ""
+
 #: src/pages/ActivityList.tsx:140
 msgid "{days}d ago"
 msgstr "hace {days} d"
@@ -134,7 +138,7 @@ msgid "{failures, plural, one {# failure since {since}} other {# failures since 
 msgstr ""
 
 #: src/pages/shell/message-view.tsx:365
-#: src/pages/shell/thread-row.tsx:325
+#: src/pages/shell/thread-row.tsx:315
 msgid "{from} handed the thread to {to}"
 msgstr ""
 
@@ -486,7 +490,7 @@ msgstr "Permitir siempre esta herramienta"
 msgid "Always allowed"
 msgstr "Siempre permitido"
 
-#: src/components/ask/QuestionCard.tsx:187
+#: src/components/ask/QuestionCard.tsx:238
 msgid "Answer"
 msgstr "Responder"
 
@@ -689,7 +693,6 @@ msgstr "Disponible cuando {0} esté libre"
 msgid "Avatars"
 msgstr "Avatares"
 
-#: src/components/AskCard.tsx:571
 #: src/pages/PluginsOverlay.tsx:554
 msgid "Back"
 msgstr "Atrás"
@@ -722,15 +725,15 @@ msgstr "Iniciando la computadora de {0}"
 #: src/pages/shell/message-view.tsx:353
 #: src/pages/shell/message-view.tsx:354
 #: src/pages/shell/message-view.tsx:428
-#: src/pages/shell/thread-row.tsx:316
-#: src/pages/shell/thread-row.tsx:317
+#: src/pages/shell/thread-row.tsx:306
+#: src/pages/shell/thread-row.tsx:307
 msgid "bot"
 msgstr "bot"
 
 #: src/pages/IntegrationSetup.tsx:51
 #: src/pages/Shell.tsx:1693
 #: src/pages/shell/message-view.tsx:232
-#: src/pages/shell/thread-row.tsx:296
+#: src/pages/shell/thread-row.tsx:286
 msgid "Bot"
 msgstr "Bot"
 
@@ -1190,7 +1193,7 @@ msgstr ""
 msgid "Continue with email"
 msgstr "Continuar con el correo"
 
-#: src/pages/shell/thread-row.tsx:402
+#: src/pages/shell/thread-row.tsx:392
 msgid "Conversation cleared"
 msgstr ""
 
@@ -1581,11 +1584,7 @@ msgstr "No se pudo iniciar OAuth"
 msgid "Could not start teaching"
 msgstr "No se pudo iniciar la enseñanza"
 
-#: src/components/AskCard.tsx:519
-msgid "Could not submit these answers"
-msgstr ""
-
-#: src/components/AskCard.tsx:198
+#: src/components/AskCard.tsx:189
 msgid "Could not submit this answer"
 msgstr "No se pudo enviar esta respuesta"
 
@@ -1659,7 +1658,7 @@ msgstr "Crear cuenta"
 msgid "Create bot"
 msgstr "Crear bot"
 
-#: src/components/AskCard.tsx:409
+#: src/components/AskCard.tsx:397
 msgid "Create bot?"
 msgstr "¿Crear bot?"
 
@@ -1977,11 +1976,11 @@ msgstr "Duplicar"
 msgid "Earlier message"
 msgstr "Mensaje anterior"
 
-#: src/pages/shell/thread-row.tsx:399
+#: src/pages/shell/thread-row.tsx:389
 msgid "Earlier messages summarized"
 msgstr ""
 
-#: src/components/AskCard.tsx:313
+#: src/components/AskCard.tsx:301
 msgid "Edit"
 msgstr "Editar"
 
@@ -2184,7 +2183,7 @@ msgstr "Gratis"
 msgid "Fullscreen"
 msgstr "Pantalla completa"
 
-#: src/pages/shell/thread-row.tsx:351
+#: src/pages/shell/thread-row.tsx:341
 msgid "FYI"
 msgstr ""
 
@@ -2376,7 +2375,7 @@ msgstr "Clave de API de instancia"
 msgid "Instruction"
 msgstr "Instrucción"
 
-#: src/components/AskCard.tsx:350
+#: src/components/AskCard.tsx:338
 #: src/pages/bot-page/SettingDetails.tsx:51
 #: src/pages/bot-page/SettingsTab.tsx:26
 msgid "Instructions"
@@ -2417,7 +2416,7 @@ msgstr "Aislado"
 msgid "Its conversation, files, and routines will be permanently deleted. Bots it created stay in your list."
 msgstr "Su conversación, archivos y rutinas se eliminarán de forma permanente. Los bots que creó permanecerán en tu lista."
 
-#: src/pages/shell/transcript.tsx:615
+#: src/pages/shell/transcript.tsx:614
 msgid "Jump to latest"
 msgstr "Ir al más reciente"
 
@@ -2446,6 +2445,10 @@ msgstr "Conocimientos"
 #: src/pages/AccountSettingsOverlay.tsx:678
 msgid "Language"
 msgstr "Idioma"
+
+#: src/components/ask/QuestionCard.tsx:175
+msgid "Last one"
+msgstr ""
 
 #: src/pages/bot-page/RoutinesTab.tsx:107
 msgid "Last run failed"
@@ -2674,7 +2677,7 @@ msgstr ""
 msgid "Message composer"
 msgstr "Redactor de mensajes"
 
-#: src/pages/shell/thread-row.tsx:401
+#: src/pages/shell/thread-row.tsx:391
 msgid "Message edited"
 msgstr ""
 
@@ -2682,8 +2685,8 @@ msgstr ""
 msgid "Message event"
 msgstr ""
 
-#: src/pages/shell/thread-row.tsx:353
-#: src/pages/shell/thread-row.tsx:392
+#: src/pages/shell/thread-row.tsx:343
+#: src/pages/shell/thread-row.tsx:382
 msgid "Message from {peer}"
 msgstr "Mensaje de {peer}"
 
@@ -2691,8 +2694,8 @@ msgstr "Mensaje de {peer}"
 msgid "Message…"
 msgstr "Mensaje…"
 
-#: src/pages/shell/thread-row.tsx:353
-#: src/pages/shell/thread-row.tsx:392
+#: src/pages/shell/thread-row.tsx:343
+#: src/pages/shell/thread-row.tsx:382
 msgid "Messaged {peer}"
 msgstr "Mensaje enviado a {peer}"
 
@@ -2800,7 +2803,7 @@ msgstr "Mover a"
 msgid "Mute"
 msgstr ""
 
-#: src/components/AskCard.tsx:332
+#: src/components/AskCard.tsx:320
 #: src/components/teach/SkillDraftCard.tsx:79
 #: src/pages/Auth.tsx:131
 #: src/pages/bot-page/BotHero.tsx:49
@@ -2828,7 +2831,6 @@ msgid "Name this routine"
 msgstr "Nombra esta rutina"
 
 #: src/pages/ActivityList.tsx:154
-#: src/pages/shell/thread-row.tsx:240
 msgid "Needs input"
 msgstr "Necesita entrada"
 
@@ -2840,7 +2842,7 @@ msgstr "Necesita toma de control"
 msgid "Needs you"
 msgstr "Te necesita"
 
-#: src/components/AskCard.tsx:227
+#: src/components/AskCard.tsx:215
 msgid "Needs your call"
 msgstr ""
 
@@ -2880,7 +2882,8 @@ msgstr "Nueva habilidad"
 msgid "New space"
 msgstr "Nuevo space"
 
-#: src/components/AskCard.tsx:606
+#: src/components/ask/QuestionCard.tsx:139
+#: src/components/ask/QuestionCard.tsx:235
 msgid "Next"
 msgstr ""
 
@@ -2933,7 +2936,7 @@ msgid "No integrations installed yet."
 msgstr "Aún no hay integraciones instaladas."
 
 #: src/components/ask/AskSettled.tsx:28
-#: src/components/AskCard.tsx:248
+#: src/components/AskCard.tsx:236
 msgid "No longer active"
 msgstr "Ya no está activo"
 
@@ -3190,8 +3193,7 @@ msgstr "Orgánico"
 msgid "Organization API key"
 msgstr "Clave de API de organización"
 
-#: src/components/ask/QuestionCard.tsx:187
-#: src/components/AskCard.tsx:655
+#: src/components/ask/QuestionCard.tsx:238
 msgid "Other answer"
 msgstr ""
 
@@ -3201,9 +3203,8 @@ msgstr ""
 msgid "Other model…"
 msgstr "Otro modelo…"
 
-#: src/components/ask/QuestionCard.tsx:188
-#: src/components/ask/QuestionCard.tsx:200
-#: src/components/AskCard.tsx:646
+#: src/components/ask/QuestionCard.tsx:239
+#: src/components/ask/QuestionCard.tsx:251
 msgid "Other…"
 msgstr ""
 
@@ -3306,7 +3307,7 @@ msgstr "Proveedor"
 msgid "Providers"
 msgstr "Proveedores"
 
-#: src/pages/shell/thread-row.tsx:349
+#: src/pages/shell/thread-row.tsx:339
 msgid "Question"
 msgstr ""
 
@@ -3533,7 +3534,7 @@ msgstr "Responder en varios mensajes cortos"
 msgid "Replying to {replyName}"
 msgstr "Respondiendo a {replyName}"
 
-#: src/pages/shell/thread-row.tsx:347
+#: src/pages/shell/thread-row.tsx:337
 msgid "Request"
 msgstr ""
 
@@ -3585,7 +3586,7 @@ msgstr "Restaurar el texto sin guardar"
 msgid "Restoring your workspace"
 msgstr ""
 
-#: src/pages/shell/thread-row.tsx:348
+#: src/pages/shell/thread-row.tsx:338
 msgid "Result"
 msgstr ""
 
@@ -3682,7 +3683,7 @@ msgstr "Ejecutando…"
 msgid "Runs when this bot receives a verified message from this provider."
 msgstr ""
 
-#: src/components/AskCard.tsx:392
+#: src/components/AskCard.tsx:380
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/ExternalConversationSettings.tsx:255
 #: src/pages/GroupPanel.tsx:279
@@ -3717,7 +3718,7 @@ msgstr ""
 msgid "Saving..."
 msgstr ""
 
-#: src/components/AskCard.tsx:392
+#: src/components/AskCard.tsx:380
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/bot-page/page-kit.tsx:50
 #: src/pages/GroupPanel.tsx:279
@@ -3792,8 +3793,8 @@ msgstr "Seleccionar {0}"
 msgid "Select a bot"
 msgstr "Selecciona un bot"
 
-#: src/components/ask/QuestionCard.tsx:142
-#: src/components/ask/QuestionCard.tsx:184
+#: src/components/ask/QuestionCard.tsx:139
+#: src/components/ask/QuestionCard.tsx:235
 #: src/pages/shell/composer.tsx:968
 msgid "Send"
 msgstr "Enviar"
@@ -3802,16 +3803,11 @@ msgstr "Enviar"
 msgid "Send <0>{linkCode}</0> to the line from your chat app within 10 minutes. You'll get a confirmation reply once linked."
 msgstr "Envía <0>{linkCode}</0> a la línea desde tu app de chat en un plazo de 10 minutos. Recibirás una confirmación cuando esté vinculado."
 
-#: src/components/AskCard.tsx:596
-msgid "Send answers"
-msgstr ""
-
 #: src/pages/Auth.tsx:215
 msgid "Send reset link"
 msgstr "Enviar enlace de restablecimiento"
 
-#: src/components/AskCard.tsx:292
-#: src/components/AskCard.tsx:596
+#: src/components/AskCard.tsx:280
 msgid "Sending…"
 msgstr "Enviando…"
 
@@ -3952,8 +3948,7 @@ msgstr ""
 msgid "Skills"
 msgstr "Habilidades"
 
-#: src/components/ask/QuestionCard.tsx:137
-#: src/components/AskCard.tsx:585
+#: src/components/ask/QuestionCard.tsx:134
 #: src/components/integrations/IntegrationSetup.tsx:364
 #: src/pages/shell/side-panel.tsx:529
 msgid "Skip"
@@ -3964,6 +3959,7 @@ msgid "Skip or deploy key"
 msgstr "Omitir o desplegar clave"
 
 #: src/components/ask/AskSettled.tsx:9
+#: src/components/ask/QuestionCard.tsx:158
 msgid "Skipped"
 msgstr ""
 
@@ -4021,7 +4017,7 @@ msgstr "Iniciando"
 msgid "Starting…"
 msgstr "Iniciando…"
 
-#: src/pages/shell/thread-row.tsx:350
+#: src/pages/shell/thread-row.tsx:340
 msgid "Status"
 msgstr ""
 
@@ -4060,7 +4056,7 @@ msgid "Stored securely. Never shown here."
 msgstr "Almacenado de forma segura. Nunca se muestra aquí."
 
 #: src/pages/shell/thread-row.tsx:108
-#: src/pages/shell/thread-row.tsx:254
+#: src/pages/shell/thread-row.tsx:244
 msgid "subagent"
 msgstr "subagente"
 
@@ -4242,12 +4238,7 @@ msgstr "Token de Treg"
 msgid "Try again"
 msgstr "Intentarlo de nuevo"
 
-#: src/components/AskCard.tsx:666
-msgid "Type a different answer"
-msgstr ""
-
-#: src/components/ask/QuestionCard.tsx:188
-#: src/components/AskCard.tsx:666
+#: src/components/ask/QuestionCard.tsx:239
 msgid "Type your answer"
 msgstr "Escribe tu respuesta"
 

@@ -125,6 +125,10 @@ msgstr "{botName} का कंप्यूटर"
 msgid "{count} · next {next}"
 msgstr "{count} · अगला {next}"
 
+#: src/components/ask/QuestionCard.tsx:175
+msgid "{count} more"
+msgstr ""
+
 #: src/pages/ActivityList.tsx:140
 msgid "{days}d ago"
 msgstr "{days} दिन पहले"
@@ -134,7 +138,7 @@ msgid "{failures, plural, one {# failure since {since}} other {# failures since 
 msgstr ""
 
 #: src/pages/shell/message-view.tsx:365
-#: src/pages/shell/thread-row.tsx:325
+#: src/pages/shell/thread-row.tsx:315
 msgid "{from} handed the thread to {to}"
 msgstr ""
 
@@ -486,7 +490,7 @@ msgstr "इस टूल को हमेशा अनुमति दें"
 msgid "Always allowed"
 msgstr "हमेशा अनुमत"
 
-#: src/components/ask/QuestionCard.tsx:187
+#: src/components/ask/QuestionCard.tsx:238
 msgid "Answer"
 msgstr "उत्तर"
 
@@ -689,7 +693,6 @@ msgstr "{0} के खाली होने पर उपलब्ध"
 msgid "Avatars"
 msgstr "अवतार"
 
-#: src/components/AskCard.tsx:571
 #: src/pages/PluginsOverlay.tsx:554
 msgid "Back"
 msgstr "वापस"
@@ -722,15 +725,15 @@ msgstr "{0} का कंप्यूटर शुरू हो रहा है
 #: src/pages/shell/message-view.tsx:353
 #: src/pages/shell/message-view.tsx:354
 #: src/pages/shell/message-view.tsx:428
-#: src/pages/shell/thread-row.tsx:316
-#: src/pages/shell/thread-row.tsx:317
+#: src/pages/shell/thread-row.tsx:306
+#: src/pages/shell/thread-row.tsx:307
 msgid "bot"
 msgstr "बॉट"
 
 #: src/pages/IntegrationSetup.tsx:51
 #: src/pages/Shell.tsx:1693
 #: src/pages/shell/message-view.tsx:232
-#: src/pages/shell/thread-row.tsx:296
+#: src/pages/shell/thread-row.tsx:286
 msgid "Bot"
 msgstr "बॉट"
 
@@ -1190,7 +1193,7 @@ msgstr ""
 msgid "Continue with email"
 msgstr "ईमेल से जारी रखें"
 
-#: src/pages/shell/thread-row.tsx:402
+#: src/pages/shell/thread-row.tsx:392
 msgid "Conversation cleared"
 msgstr ""
 
@@ -1581,11 +1584,7 @@ msgstr "OAuth शुरू नहीं हो सका"
 msgid "Could not start teaching"
 msgstr "सिखाना शुरू नहीं किया जा सका"
 
-#: src/components/AskCard.tsx:519
-msgid "Could not submit these answers"
-msgstr ""
-
-#: src/components/AskCard.tsx:198
+#: src/components/AskCard.tsx:189
 msgid "Could not submit this answer"
 msgstr "यह उत्तर सबमिट नहीं किया जा सका"
 
@@ -1659,7 +1658,7 @@ msgstr "खाता बनाएं"
 msgid "Create bot"
 msgstr "बॉट बनाएं"
 
-#: src/components/AskCard.tsx:409
+#: src/components/AskCard.tsx:397
 msgid "Create bot?"
 msgstr "बॉट बनाएं?"
 
@@ -1977,11 +1976,11 @@ msgstr "डुप्लिकेट"
 msgid "Earlier message"
 msgstr "पुराना संदेश"
 
-#: src/pages/shell/thread-row.tsx:399
+#: src/pages/shell/thread-row.tsx:389
 msgid "Earlier messages summarized"
 msgstr ""
 
-#: src/components/AskCard.tsx:313
+#: src/components/AskCard.tsx:301
 msgid "Edit"
 msgstr "संपादित करें"
 
@@ -2184,7 +2183,7 @@ msgstr "मुफ़्त"
 msgid "Fullscreen"
 msgstr "फ़ुलस्क्रीन"
 
-#: src/pages/shell/thread-row.tsx:351
+#: src/pages/shell/thread-row.tsx:341
 msgid "FYI"
 msgstr ""
 
@@ -2376,7 +2375,7 @@ msgstr "इंस्टेंस API कुंजी"
 msgid "Instruction"
 msgstr "निर्देश"
 
-#: src/components/AskCard.tsx:350
+#: src/components/AskCard.tsx:338
 #: src/pages/bot-page/SettingDetails.tsx:51
 #: src/pages/bot-page/SettingsTab.tsx:26
 msgid "Instructions"
@@ -2417,7 +2416,7 @@ msgstr "पृथक"
 msgid "Its conversation, files, and routines will be permanently deleted. Bots it created stay in your list."
 msgstr "इसकी बातचीत, फ़ाइलें और रूटीन स्थायी रूप से डिलीट कर दिए जाएंगे। इसके बनाए बॉट आपकी सूची में बने रहेंगे।"
 
-#: src/pages/shell/transcript.tsx:615
+#: src/pages/shell/transcript.tsx:614
 msgid "Jump to latest"
 msgstr "नवीनतम संदेश पर जाएँ"
 
@@ -2446,6 +2445,10 @@ msgstr "ज्ञान"
 #: src/pages/AccountSettingsOverlay.tsx:678
 msgid "Language"
 msgstr "भाषा"
+
+#: src/components/ask/QuestionCard.tsx:175
+msgid "Last one"
+msgstr ""
 
 #: src/pages/bot-page/RoutinesTab.tsx:107
 msgid "Last run failed"
@@ -2674,7 +2677,7 @@ msgstr ""
 msgid "Message composer"
 msgstr "संदेश रचयिता"
 
-#: src/pages/shell/thread-row.tsx:401
+#: src/pages/shell/thread-row.tsx:391
 msgid "Message edited"
 msgstr ""
 
@@ -2682,8 +2685,8 @@ msgstr ""
 msgid "Message event"
 msgstr ""
 
-#: src/pages/shell/thread-row.tsx:353
-#: src/pages/shell/thread-row.tsx:392
+#: src/pages/shell/thread-row.tsx:343
+#: src/pages/shell/thread-row.tsx:382
 msgid "Message from {peer}"
 msgstr "{peer} का संदेश"
 
@@ -2691,8 +2694,8 @@ msgstr "{peer} का संदेश"
 msgid "Message…"
 msgstr "संदेश…"
 
-#: src/pages/shell/thread-row.tsx:353
-#: src/pages/shell/thread-row.tsx:392
+#: src/pages/shell/thread-row.tsx:343
+#: src/pages/shell/thread-row.tsx:382
 msgid "Messaged {peer}"
 msgstr "{peer} को संदेश भेजा"
 
@@ -2800,7 +2803,7 @@ msgstr "यहां ले जाएं"
 msgid "Mute"
 msgstr ""
 
-#: src/components/AskCard.tsx:332
+#: src/components/AskCard.tsx:320
 #: src/components/teach/SkillDraftCard.tsx:79
 #: src/pages/Auth.tsx:131
 #: src/pages/bot-page/BotHero.tsx:49
@@ -2828,7 +2831,6 @@ msgid "Name this routine"
 msgstr "इस रूटीन का नाम दें"
 
 #: src/pages/ActivityList.tsx:154
-#: src/pages/shell/thread-row.tsx:240
 msgid "Needs input"
 msgstr "इनपुट चाहिए"
 
@@ -2840,7 +2842,7 @@ msgstr "नियंत्रण लेना ज़रूरी"
 msgid "Needs you"
 msgstr "आपकी ज़रूरत है"
 
-#: src/components/AskCard.tsx:227
+#: src/components/AskCard.tsx:215
 msgid "Needs your call"
 msgstr ""
 
@@ -2880,7 +2882,8 @@ msgstr "नई स्किल"
 msgid "New space"
 msgstr "नया स्पेस"
 
-#: src/components/AskCard.tsx:606
+#: src/components/ask/QuestionCard.tsx:139
+#: src/components/ask/QuestionCard.tsx:235
 msgid "Next"
 msgstr ""
 
@@ -2933,7 +2936,7 @@ msgid "No integrations installed yet."
 msgstr "अभी कोई इंटीग्रेशन इंस्टॉल नहीं है।"
 
 #: src/components/ask/AskSettled.tsx:28
-#: src/components/AskCard.tsx:248
+#: src/components/AskCard.tsx:236
 msgid "No longer active"
 msgstr "अब सक्रिय नहीं"
 
@@ -3190,8 +3193,7 @@ msgstr "ऑर्गेनिक"
 msgid "Organization API key"
 msgstr "संगठन API कुंजी"
 
-#: src/components/ask/QuestionCard.tsx:187
-#: src/components/AskCard.tsx:655
+#: src/components/ask/QuestionCard.tsx:238
 msgid "Other answer"
 msgstr ""
 
@@ -3201,9 +3203,8 @@ msgstr ""
 msgid "Other model…"
 msgstr "अन्य मॉडल…"
 
-#: src/components/ask/QuestionCard.tsx:188
-#: src/components/ask/QuestionCard.tsx:200
-#: src/components/AskCard.tsx:646
+#: src/components/ask/QuestionCard.tsx:239
+#: src/components/ask/QuestionCard.tsx:251
 msgid "Other…"
 msgstr ""
 
@@ -3306,7 +3307,7 @@ msgstr "प्रोवाइडर"
 msgid "Providers"
 msgstr "प्रोवाइडर्स"
 
-#: src/pages/shell/thread-row.tsx:349
+#: src/pages/shell/thread-row.tsx:339
 msgid "Question"
 msgstr ""
 
@@ -3533,7 +3534,7 @@ msgstr "कई छोटे संदेशों में उत्तर द�
 msgid "Replying to {replyName}"
 msgstr "{replyName} को उत्तर दे रहे हैं"
 
-#: src/pages/shell/thread-row.tsx:347
+#: src/pages/shell/thread-row.tsx:337
 msgid "Request"
 msgstr ""
 
@@ -3585,7 +3586,7 @@ msgstr "बिना सहेजा टेक्स्ट बहाल कर�
 msgid "Restoring your workspace"
 msgstr ""
 
-#: src/pages/shell/thread-row.tsx:348
+#: src/pages/shell/thread-row.tsx:338
 msgid "Result"
 msgstr ""
 
@@ -3682,7 +3683,7 @@ msgstr "चल रहा है…"
 msgid "Runs when this bot receives a verified message from this provider."
 msgstr ""
 
-#: src/components/AskCard.tsx:392
+#: src/components/AskCard.tsx:380
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/ExternalConversationSettings.tsx:255
 #: src/pages/GroupPanel.tsx:279
@@ -3717,7 +3718,7 @@ msgstr ""
 msgid "Saving..."
 msgstr ""
 
-#: src/components/AskCard.tsx:392
+#: src/components/AskCard.tsx:380
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/bot-page/page-kit.tsx:50
 #: src/pages/GroupPanel.tsx:279
@@ -3792,8 +3793,8 @@ msgstr "{0} चुनें"
 msgid "Select a bot"
 msgstr "एक बॉट चुनें"
 
-#: src/components/ask/QuestionCard.tsx:142
-#: src/components/ask/QuestionCard.tsx:184
+#: src/components/ask/QuestionCard.tsx:139
+#: src/components/ask/QuestionCard.tsx:235
 #: src/pages/shell/composer.tsx:968
 msgid "Send"
 msgstr "भेजें"
@@ -3802,16 +3803,11 @@ msgstr "भेजें"
 msgid "Send <0>{linkCode}</0> to the line from your chat app within 10 minutes. You'll get a confirmation reply once linked."
 msgstr "10 मिनट के भीतर अपने चैट ऐप से उस लाइन पर <0>{linkCode}</0> भेजें। जुड़ते ही आपको पुष्टि का उत्तर मिलेगा।"
 
-#: src/components/AskCard.tsx:596
-msgid "Send answers"
-msgstr ""
-
 #: src/pages/Auth.tsx:215
 msgid "Send reset link"
 msgstr "रीसेट लिंक भेजें"
 
-#: src/components/AskCard.tsx:292
-#: src/components/AskCard.tsx:596
+#: src/components/AskCard.tsx:280
 msgid "Sending…"
 msgstr "भेजा जा रहा है…"
 
@@ -3952,8 +3948,7 @@ msgstr ""
 msgid "Skills"
 msgstr "स्किल्स"
 
-#: src/components/ask/QuestionCard.tsx:137
-#: src/components/AskCard.tsx:585
+#: src/components/ask/QuestionCard.tsx:134
 #: src/components/integrations/IntegrationSetup.tsx:364
 #: src/pages/shell/side-panel.tsx:529
 msgid "Skip"
@@ -3964,6 +3959,7 @@ msgid "Skip or deploy key"
 msgstr "छोड़ें या डिप्लॉय कुंजी दें"
 
 #: src/components/ask/AskSettled.tsx:9
+#: src/components/ask/QuestionCard.tsx:158
 msgid "Skipped"
 msgstr ""
 
@@ -4021,7 +4017,7 @@ msgstr "शुरू हो रहा है"
 msgid "Starting…"
 msgstr "शुरू हो रहा है…"
 
-#: src/pages/shell/thread-row.tsx:350
+#: src/pages/shell/thread-row.tsx:340
 msgid "Status"
 msgstr ""
 
@@ -4060,7 +4056,7 @@ msgid "Stored securely. Never shown here."
 msgstr "सुरक्षित रूप से संग्रहीत। यहां कभी नहीं दिखाया जाता।"
 
 #: src/pages/shell/thread-row.tsx:108
-#: src/pages/shell/thread-row.tsx:254
+#: src/pages/shell/thread-row.tsx:244
 msgid "subagent"
 msgstr "सबएजेंट"
 
@@ -4242,12 +4238,7 @@ msgstr "Treg टोकन"
 msgid "Try again"
 msgstr "फिर से कोशिश करें"
 
-#: src/components/AskCard.tsx:666
-msgid "Type a different answer"
-msgstr ""
-
-#: src/components/ask/QuestionCard.tsx:188
-#: src/components/AskCard.tsx:666
+#: src/components/ask/QuestionCard.tsx:239
 msgid "Type your answer"
 msgstr "अपना उत्तर लिखें"
 

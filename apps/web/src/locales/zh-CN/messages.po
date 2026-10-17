@@ -125,6 +125,10 @@ msgstr "{botName} 的电脑"
 msgid "{count} · next {next}"
 msgstr "{count} · 下次{next}"
 
+#: src/components/ask/QuestionCard.tsx:175
+msgid "{count} more"
+msgstr ""
+
 #: src/pages/ActivityList.tsx:140
 msgid "{days}d ago"
 msgstr "{days} 天前"
@@ -134,7 +138,7 @@ msgid "{failures, plural, one {# failure since {since}} other {# failures since 
 msgstr ""
 
 #: src/pages/shell/message-view.tsx:365
-#: src/pages/shell/thread-row.tsx:325
+#: src/pages/shell/thread-row.tsx:315
 msgid "{from} handed the thread to {to}"
 msgstr ""
 
@@ -486,7 +490,7 @@ msgstr "始终允许此工具"
 msgid "Always allowed"
 msgstr "始终允许"
 
-#: src/components/ask/QuestionCard.tsx:187
+#: src/components/ask/QuestionCard.tsx:238
 msgid "Answer"
 msgstr "回答"
 
@@ -689,7 +693,6 @@ msgstr "{0} 空闲时可用"
 msgid "Avatars"
 msgstr "头像"
 
-#: src/components/AskCard.tsx:571
 #: src/pages/PluginsOverlay.tsx:554
 msgid "Back"
 msgstr "返回"
@@ -722,15 +725,15 @@ msgstr "正在启动 {0} 的电脑"
 #: src/pages/shell/message-view.tsx:353
 #: src/pages/shell/message-view.tsx:354
 #: src/pages/shell/message-view.tsx:428
-#: src/pages/shell/thread-row.tsx:316
-#: src/pages/shell/thread-row.tsx:317
+#: src/pages/shell/thread-row.tsx:306
+#: src/pages/shell/thread-row.tsx:307
 msgid "bot"
 msgstr "Bot"
 
 #: src/pages/IntegrationSetup.tsx:51
 #: src/pages/Shell.tsx:1693
 #: src/pages/shell/message-view.tsx:232
-#: src/pages/shell/thread-row.tsx:296
+#: src/pages/shell/thread-row.tsx:286
 msgid "Bot"
 msgstr "Bot"
 
@@ -1190,7 +1193,7 @@ msgstr ""
 msgid "Continue with email"
 msgstr "使用邮箱继续"
 
-#: src/pages/shell/thread-row.tsx:402
+#: src/pages/shell/thread-row.tsx:392
 msgid "Conversation cleared"
 msgstr ""
 
@@ -1581,11 +1584,7 @@ msgstr "无法开始 OAuth"
 msgid "Could not start teaching"
 msgstr "无法开始教学"
 
-#: src/components/AskCard.tsx:519
-msgid "Could not submit these answers"
-msgstr ""
-
-#: src/components/AskCard.tsx:198
+#: src/components/AskCard.tsx:189
 msgid "Could not submit this answer"
 msgstr "无法提交此回答"
 
@@ -1659,7 +1658,7 @@ msgstr "创建账户"
 msgid "Create bot"
 msgstr "创建 Bot"
 
-#: src/components/AskCard.tsx:409
+#: src/components/AskCard.tsx:397
 msgid "Create bot?"
 msgstr "创建 Bot？"
 
@@ -1977,11 +1976,11 @@ msgstr "复制"
 msgid "Earlier message"
 msgstr "更早的消息"
 
-#: src/pages/shell/thread-row.tsx:399
+#: src/pages/shell/thread-row.tsx:389
 msgid "Earlier messages summarized"
 msgstr ""
 
-#: src/components/AskCard.tsx:313
+#: src/components/AskCard.tsx:301
 msgid "Edit"
 msgstr "编辑"
 
@@ -2184,7 +2183,7 @@ msgstr "免费"
 msgid "Fullscreen"
 msgstr "全屏"
 
-#: src/pages/shell/thread-row.tsx:351
+#: src/pages/shell/thread-row.tsx:341
 msgid "FYI"
 msgstr "供参考"
 
@@ -2376,7 +2375,7 @@ msgstr "实例 API 密钥"
 msgid "Instruction"
 msgstr "指令"
 
-#: src/components/AskCard.tsx:350
+#: src/components/AskCard.tsx:338
 #: src/pages/bot-page/SettingDetails.tsx:51
 #: src/pages/bot-page/SettingsTab.tsx:26
 msgid "Instructions"
@@ -2417,7 +2416,7 @@ msgstr "隔离"
 msgid "Its conversation, files, and routines will be permanently deleted. Bots it created stay in your list."
 msgstr "它的对话、文件和例行任务将被永久删除。它创建的 Bot 仍留在列表中。"
 
-#: src/pages/shell/transcript.tsx:615
+#: src/pages/shell/transcript.tsx:614
 msgid "Jump to latest"
 msgstr "跳到最新"
 
@@ -2446,6 +2445,10 @@ msgstr "知识"
 #: src/pages/AccountSettingsOverlay.tsx:678
 msgid "Language"
 msgstr "语言"
+
+#: src/components/ask/QuestionCard.tsx:175
+msgid "Last one"
+msgstr ""
 
 #: src/pages/bot-page/RoutinesTab.tsx:107
 msgid "Last run failed"
@@ -2674,7 +2677,7 @@ msgstr ""
 msgid "Message composer"
 msgstr "消息输入框"
 
-#: src/pages/shell/thread-row.tsx:401
+#: src/pages/shell/thread-row.tsx:391
 msgid "Message edited"
 msgstr ""
 
@@ -2682,8 +2685,8 @@ msgstr ""
 msgid "Message event"
 msgstr ""
 
-#: src/pages/shell/thread-row.tsx:353
-#: src/pages/shell/thread-row.tsx:392
+#: src/pages/shell/thread-row.tsx:343
+#: src/pages/shell/thread-row.tsx:382
 msgid "Message from {peer}"
 msgstr "来自 {peer} 的消息"
 
@@ -2691,8 +2694,8 @@ msgstr "来自 {peer} 的消息"
 msgid "Message…"
 msgstr "消息…"
 
-#: src/pages/shell/thread-row.tsx:353
-#: src/pages/shell/thread-row.tsx:392
+#: src/pages/shell/thread-row.tsx:343
+#: src/pages/shell/thread-row.tsx:382
 msgid "Messaged {peer}"
 msgstr "已发给 {peer}"
 
@@ -2800,7 +2803,7 @@ msgstr "移动到"
 msgid "Mute"
 msgstr ""
 
-#: src/components/AskCard.tsx:332
+#: src/components/AskCard.tsx:320
 #: src/components/teach/SkillDraftCard.tsx:79
 #: src/pages/Auth.tsx:131
 #: src/pages/bot-page/BotHero.tsx:49
@@ -2828,7 +2831,6 @@ msgid "Name this routine"
 msgstr "给这个例行任务命名"
 
 #: src/pages/ActivityList.tsx:154
-#: src/pages/shell/thread-row.tsx:240
 msgid "Needs input"
 msgstr "需要输入"
 
@@ -2840,7 +2842,7 @@ msgstr "需要接管"
 msgid "Needs you"
 msgstr "需要你处理"
 
-#: src/components/AskCard.tsx:227
+#: src/components/AskCard.tsx:215
 msgid "Needs your call"
 msgstr ""
 
@@ -2880,7 +2882,8 @@ msgstr "新建技能"
 msgid "New space"
 msgstr "新建工作区"
 
-#: src/components/AskCard.tsx:606
+#: src/components/ask/QuestionCard.tsx:139
+#: src/components/ask/QuestionCard.tsx:235
 msgid "Next"
 msgstr ""
 
@@ -2933,7 +2936,7 @@ msgid "No integrations installed yet."
 msgstr "尚未安装任何集成。"
 
 #: src/components/ask/AskSettled.tsx:28
-#: src/components/AskCard.tsx:248
+#: src/components/AskCard.tsx:236
 msgid "No longer active"
 msgstr "已停用"
 
@@ -3190,8 +3193,7 @@ msgstr "自然"
 msgid "Organization API key"
 msgstr "组织 API 密钥"
 
-#: src/components/ask/QuestionCard.tsx:187
-#: src/components/AskCard.tsx:655
+#: src/components/ask/QuestionCard.tsx:238
 msgid "Other answer"
 msgstr ""
 
@@ -3201,9 +3203,8 @@ msgstr ""
 msgid "Other model…"
 msgstr "其他模型…"
 
-#: src/components/ask/QuestionCard.tsx:188
-#: src/components/ask/QuestionCard.tsx:200
-#: src/components/AskCard.tsx:646
+#: src/components/ask/QuestionCard.tsx:239
+#: src/components/ask/QuestionCard.tsx:251
 msgid "Other…"
 msgstr ""
 
@@ -3306,7 +3307,7 @@ msgstr "提供方"
 msgid "Providers"
 msgstr "提供方"
 
-#: src/pages/shell/thread-row.tsx:349
+#: src/pages/shell/thread-row.tsx:339
 msgid "Question"
 msgstr "问题"
 
@@ -3533,7 +3534,7 @@ msgstr "分成多条简短消息回复"
 msgid "Replying to {replyName}"
 msgstr "正在回复 {replyName}"
 
-#: src/pages/shell/thread-row.tsx:347
+#: src/pages/shell/thread-row.tsx:337
 msgid "Request"
 msgstr "请求"
 
@@ -3585,7 +3586,7 @@ msgstr "恢复未保存的文本"
 msgid "Restoring your workspace"
 msgstr ""
 
-#: src/pages/shell/thread-row.tsx:348
+#: src/pages/shell/thread-row.tsx:338
 msgid "Result"
 msgstr "结果"
 
@@ -3682,7 +3683,7 @@ msgstr "正在运行…"
 msgid "Runs when this bot receives a verified message from this provider."
 msgstr ""
 
-#: src/components/AskCard.tsx:392
+#: src/components/AskCard.tsx:380
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/ExternalConversationSettings.tsx:255
 #: src/pages/GroupPanel.tsx:279
@@ -3717,7 +3718,7 @@ msgstr ""
 msgid "Saving..."
 msgstr ""
 
-#: src/components/AskCard.tsx:392
+#: src/components/AskCard.tsx:380
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/bot-page/page-kit.tsx:50
 #: src/pages/GroupPanel.tsx:279
@@ -3792,8 +3793,8 @@ msgstr "选择 {0}"
 msgid "Select a bot"
 msgstr "选择 Bot"
 
-#: src/components/ask/QuestionCard.tsx:142
-#: src/components/ask/QuestionCard.tsx:184
+#: src/components/ask/QuestionCard.tsx:139
+#: src/components/ask/QuestionCard.tsx:235
 #: src/pages/shell/composer.tsx:968
 msgid "Send"
 msgstr "发送"
@@ -3802,16 +3803,11 @@ msgstr "发送"
 msgid "Send <0>{linkCode}</0> to the line from your chat app within 10 minutes. You'll get a confirmation reply once linked."
 msgstr "请在 10 分钟内从聊天应用向该线路发送 <0>{linkCode}</0>。关联成功后你会收到确认回复。"
 
-#: src/components/AskCard.tsx:596
-msgid "Send answers"
-msgstr ""
-
 #: src/pages/Auth.tsx:215
 msgid "Send reset link"
 msgstr "发送重置链接"
 
-#: src/components/AskCard.tsx:292
-#: src/components/AskCard.tsx:596
+#: src/components/AskCard.tsx:280
 msgid "Sending…"
 msgstr "正在发送…"
 
@@ -3952,8 +3948,7 @@ msgstr ""
 msgid "Skills"
 msgstr "技能"
 
-#: src/components/ask/QuestionCard.tsx:137
-#: src/components/AskCard.tsx:585
+#: src/components/ask/QuestionCard.tsx:134
 #: src/components/integrations/IntegrationSetup.tsx:364
 #: src/pages/shell/side-panel.tsx:529
 msgid "Skip"
@@ -3964,6 +3959,7 @@ msgid "Skip or deploy key"
 msgstr "跳过或使用部署密钥"
 
 #: src/components/ask/AskSettled.tsx:9
+#: src/components/ask/QuestionCard.tsx:158
 msgid "Skipped"
 msgstr ""
 
@@ -4021,7 +4017,7 @@ msgstr "正在开始"
 msgid "Starting…"
 msgstr "正在开始…"
 
-#: src/pages/shell/thread-row.tsx:350
+#: src/pages/shell/thread-row.tsx:340
 msgid "Status"
 msgstr "状态"
 
@@ -4060,7 +4056,7 @@ msgid "Stored securely. Never shown here."
 msgstr "已安全存储。不会显示在这里。"
 
 #: src/pages/shell/thread-row.tsx:108
-#: src/pages/shell/thread-row.tsx:254
+#: src/pages/shell/thread-row.tsx:244
 msgid "subagent"
 msgstr "子 Agent"
 
@@ -4242,12 +4238,7 @@ msgstr "Treg token"
 msgid "Try again"
 msgstr "重试"
 
-#: src/components/AskCard.tsx:666
-msgid "Type a different answer"
-msgstr ""
-
-#: src/components/ask/QuestionCard.tsx:188
-#: src/components/AskCard.tsx:666
+#: src/components/ask/QuestionCard.tsx:239
 msgid "Type your answer"
 msgstr "输入你的回答"
 

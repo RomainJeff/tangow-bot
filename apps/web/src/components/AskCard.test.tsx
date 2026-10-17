@@ -465,12 +465,6 @@ describe("AskCard action layout", () => {
       ),
     };
   };
-  const optionsRow = (html: string) => {
-    const start = html.indexOf('data-testid="ask-options"');
-    return html.slice(start, html.indexOf("</div>", start));
-  };
-  const actionsHtml = (html: string) =>
-    html.slice(html.indexOf('data-slot="framed-block-actions"'));
 
   it("keeps an approval's decision on the right, primary last", () => {
     const html = render({
@@ -518,81 +512,6 @@ describe("AskCard action layout", () => {
       ],
     });
     expect(actionsRow(html)).toEqual({ align: "end", labels: ["Skip"] });
-  });
-
-  it("puts a stepper's navigation before its primary, on the right", () => {
-    const html = renderToStaticMarkup(
-      <AskCard
-        block={{
-          kind: "ask",
-          text: "Two questions",
-          questions: [
-            { id: "q1", question: "Where?", options: [{ id: "a", label: "Seoul" }] },
-            { id: "q2", question: "When?", required: false, options: [{ id: "b", label: "May" }] },
-          ],
-        }}
-        canAnswer={true}
-        onAnswer={async () => {}}
-        messageId="msg-stepper"
-      />,
-    );
-    expect(actionsRow(html)).toEqual({ align: "end", labels: ["Next"] });
-    expect(optionsRow(html)).toContain("Seoul");
-    expect(actionsHtml(html)).not.toContain("Seoul");
-  });
-});
-
-describe("AskCard stepper navigation", () => {
-  let container: HTMLElement;
-  let root: Root;
-
-  beforeEach(() => {
-    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-    container = document.createElement("div");
-    document.body.append(container);
-    root = createRoot(container);
-  });
-  afterEach(() => {
-    act(() => root.unmount());
-    container.remove();
-    vi.unstubAllGlobals();
-  });
-
-  it("orders Back, Skip, Send answers in the end-aligned row on an optional last step", () => {
-    act(() => {
-      root.render(
-        <AskCard
-          block={{
-            kind: "ask",
-            text: "Two questions",
-            questions: [
-              { id: "q1", question: "Where?", options: [{ id: "a", label: "Seoul" }] },
-              {
-                id: "q2",
-                question: "When?",
-                required: false,
-                options: [{ id: "b", label: "May" }],
-              },
-            ],
-          }}
-          canAnswer={true}
-          onAnswer={async () => {}}
-          messageId="msg-stepper-client"
-        />,
-      );
-    });
-    const next = [...container.querySelectorAll("button")].find((el) => el.textContent === "Next");
-    act(() => next?.click());
-
-    const row = container.querySelector('[data-slot="framed-block-actions"]');
-    expect(row?.getAttribute("data-align")).toBe("end");
-    expect([...(row?.querySelectorAll("button") ?? [])].map((el) => el.textContent)).toEqual([
-      "Back",
-      "Skip",
-      "Send answers",
-    ]);
-    expect(row?.textContent).not.toContain("May");
-    expect(container.textContent).toContain("When?");
   });
 });
 
@@ -873,6 +792,127 @@ describe("AskCard open question", () => {
     );
     expect(tile("[Verified](https://evil.example) <b>now</b>")).toBeDefined();
     expect(container.querySelector("a")).toBeNull();
+  });
+  describe("a stack of questions", () => {
+    const fridge: AskBlock = {
+      kind: "ask",
+      text: "",
+      questions: [
+        {
+          id: "q1",
+          header: "Format",
+          question: "Which fridge do you have now?",
+          options: [
+            { id: "q1o1", label: "Freestanding" },
+            { id: "q1o2", label: "Built-in" },
+          ],
+        },
+        {
+          id: "q2",
+          header: "Extras",
+          question: "What should the new one have?",
+          multiSelect: true,
+          options: [
+            { id: "q2o1", label: "Ice maker" },
+            { id: "q2o2", label: "No frost" },
+          ],
+        },
+        {
+          id: "q3",
+          question: "Do you already have a separate freezer?",
+          required: false,
+          options: [{ id: "q3o1", label: "Yes" }],
+        },
+      ],
+    };
+    const shown = () => ({
+      lines: [...container.querySelectorAll('[data-slot="stack-line"]')].map(
+        (line) => line.textContent,
+      ),
+      head: container.querySelector('[data-slot="stack-step"] p')?.textContent ?? null,
+      actions: [...container.querySelectorAll('[data-slot="framed-block-actions"] button')].map(
+        (button) => button.textContent,
+      ),
+    });
+    const button = (name: string) =>
+      [...container.querySelectorAll("button")].find((element) => element.textContent === name);
+
+    it("shows one question at a time, folds answers into lines, and sends from the recap (CA6, CA7, CA10)", async () => {
+      const sent: string[] = [];
+      mount(fridge, async (text) => void sent.push(text));
+      const seen = [shown()];
+      act(() => tile("Built-in")?.click());
+      await act(async () => vi.advanceTimersByTime(550));
+      act(() => tile("Ice maker")?.click());
+      seen.push(shown());
+      act(() => button("Next")?.click());
+      seen.push(shown());
+      act(() => button("Skip")?.click());
+      seen.push(shown());
+      act(() => button("Send")?.click());
+      await act(async () => vi.advanceTimersByTime(0));
+      expect(seen).toEqual([
+        { lines: [], head: "Format·2 more", actions: [] },
+        { lines: ["FormatBuilt-in"], head: "Extras·1 more", actions: ["Next"] },
+        {
+          lines: ["FormatBuilt-in", "ExtrasIce maker"],
+          head: "Last one",
+          actions: ["Skip"],
+        },
+        {
+          lines: [
+            "FormatBuilt-in",
+            "ExtrasIce maker",
+            "Do you already have a separate freezer?Skipped",
+          ],
+          head: null,
+          actions: ["Send"],
+        },
+      ]);
+      expect(sent.map((wire) => JSON.parse(wire))).toEqual([
+        {
+          answers: {
+            q1: { selected: ["q1o2"] },
+            q2: { selected: ["q2o1"] },
+            q3: { skipped: true },
+          },
+        },
+      ]);
+      expect(container.querySelector('[data-slot="user-bubble"]')?.getAttribute("aria-label")).toBe(
+        "Your answer: Format — Built-in; Extras — Ice maker; Do you already have a separate freezer? — Skipped",
+      );
+    });
+
+    it("reopens a line on its answer, then comes back to the recap", async () => {
+      mount(fridge, async () => {});
+      act(() => tile("Built-in")?.click());
+      await act(async () => vi.advanceTimersByTime(550));
+      act(() => tile("No frost")?.click());
+      act(() => button("Next")?.click());
+      act(() => button("Skip")?.click());
+      const line = container.querySelector<HTMLButtonElement>('[data-slot="stack-line"]');
+      act(() => line?.click());
+      const reopened = { ...shown(), pressed: tile("Built-in")?.getAttribute("aria-pressed") };
+      act(() => tile("Freestanding")?.click());
+      await act(async () => vi.advanceTimersByTime(550));
+      expect([reopened, shown()]).toEqual([
+        {
+          lines: ["ExtrasNo frost", "Do you already have a separate freezer?Skipped"],
+          head: "Format·Last one",
+          actions: [],
+          pressed: "true",
+        },
+        {
+          lines: [
+            "FormatFreestanding",
+            "ExtrasNo frost",
+            "Do you already have a separate freezer?Skipped",
+          ],
+          head: null,
+          actions: ["Send"],
+        },
+      ]);
+    });
   });
 });
 

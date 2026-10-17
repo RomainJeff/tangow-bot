@@ -216,5 +216,7 @@
   --duration-flow: 2600ms;
   --duration-fill: 80ms;
   --duration-flight: 520ms;
+  --duration-step-out: 100ms;
+  --duration-step-in: 160ms;
   --motion-ease: cubic-bezier(0.32, 0.72, 0, 1);
 }

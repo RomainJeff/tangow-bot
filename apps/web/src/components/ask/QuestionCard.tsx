@@ -5,12 +5,12 @@ import { ASK_ANSWER_MAX_LENGTH } from "@rakazo/contracts";
 import type { AskCardBlock, AskForm, OptionId, Presenter } from "@rakazo/core";
 import { motion } from "@rakazo/ui-tokens";
 import { Button, cn, FramedBlock, OptionField, OptionTile } from "@rakazo/ui-web";
-import { Pencil } from "lucide-react";
+import { ChevronRight, Pencil } from "lucide-react";
 import type { KeyboardEvent, ReactNode } from "react";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { AskSettled } from "./AskSettled";
 import type { Departure } from "./flight";
-import { departure, fly } from "./flight";
+import { advance, departure, fly } from "./flight";
 
 /** Also where `linear()` easing is unknown (Safari before 17.2): `animate()` would throw on the spring. */
 const reducedMotion = () =>
@@ -45,11 +45,14 @@ export function QuestionCard({
       reopened.current = true;
       return apply();
     }
-    if (change.from.kind === "button") return apply();
-    filling.current = setTimeout(() => {
-      leaving.current = card.current && !reducedMotion() ? departure(card.current) : null;
+    if (change.kind === "advance") return advance(card.current, apply, reducedMotion());
+    const { from } = change;
+    const leave = () => {
+      leaving.current = card.current && !reducedMotion() ? departure(card.current, from) : null;
       if (!apply()) leaving.current = null;
-    }, motion.fill);
+    };
+    if (from.kind === "button") leave();
+    else filling.current = setTimeout(leave, motion.fill);
   };
   const { view, act } = useAskCard({
     block,
@@ -100,9 +103,7 @@ export function QuestionCard({
     );
   }
 
-  const { step, busy, filled } = view;
-  const { question } = step;
-  const choices = question.options.length > 0;
+  const { lines, step, busy, filled } = view;
   const isFilled = (id: OptionId) => filled?.kind === "option" && filled.optionId === id;
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
@@ -122,7 +123,9 @@ export function QuestionCard({
       tiles[(index + (event.key === "ArrowDown" ? 1 : tiles.length - 1)) % tiles.length]?.focus();
       return;
     }
-    const option = /^[1-9]$/.test(event.key) ? question.options[Number(event.key) - 1] : undefined;
+    const option = /^[1-9]$/.test(event.key)
+      ? step?.question.options[Number(event.key) - 1]
+      : undefined;
     if (option) {
       event.preventDefault();
       act.tap(option.id);
@@ -130,27 +133,80 @@ export function QuestionCard({
   }
 
   const actions =
-    step.skip || view.send ? (
+    step?.skip || view.primary ? (
       <>
-        {step.skip ? (
+        {step?.skip ? (
           <Button variant="tertiary" size="capsule" disabled={busy} onClick={act.skip}>
             <Trans>Skip</Trans>
           </Button>
         ) : null}
-        {view.send ? (
+        {view.primary ? (
           <Button variant="capsule" size="capsule" disabled={busy} onClick={act.confirm}>
-            <Trans>Send</Trans>
+            {view.primary === "next" ? <Trans>Next</Trans> : <Trans>Send</Trans>}
           </Button>
         ) : null}
       </>
     ) : undefined;
 
+  const pile = lines.map((line) => (
+    <button
+      key={line.questionId}
+      type="button"
+      data-slot="stack-line"
+      disabled={busy}
+      onClick={() => act.reopen(line.questionId)}
+      className="-mx-2 flex min-h-11 items-center gap-2 rounded-row px-2 py-2.5 text-start text-row-name transition-colors duration-(--duration-hover) ease-quiet focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring enabled:hover:bg-pressed"
+    >
+      <span dir="auto" className="max-w-1/2 shrink-0 truncate text-muted-foreground">
+        {line.label}
+      </span>
+      <span dir="auto" className="min-w-0 flex-1 truncate text-foreground">
+        {line.value.kind === "skipped" ? t`Skipped` : line.value.text}
+      </span>
+      <ChevronRight aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
+    </button>
+  ));
+
+  if (!step) {
+    return shell(
+      <FramedBlock
+        className={reopened.current ? "animate-in fade-in duration-(--duration-arrive)" : undefined}
+        question={<div className="flex flex-col pb-0.5">{pile}</div>}
+        actions={actions}
+      />,
+    );
+  }
+
+  const { question, left } = step;
+  const more = (count: number) => (count > 0 ? t`${count} more` : t`Last one`);
+  const choices = question.options.length > 0;
+
   return shell(
     <FramedBlock
       className={reopened.current ? "animate-in fade-in duration-(--duration-arrive)" : undefined}
       question={
-        <div id={questionId}>
-          <ChatMarkdown allowImages={false}>{question.text}</ChatMarkdown>
+        <div className="flex flex-col">
+          {pile}
+          <div data-slot="stack-step" className={cn(pile.length > 0 && "pt-2.5")}>
+            {left === null ? null : (
+              <p className="flex min-w-0 items-baseline gap-1.5 pb-1">
+                {question.header ? (
+                  <>
+                    <span dir="auto" className="min-w-0 truncate font-medium">
+                      {question.header}
+                    </span>
+                    <span aria-hidden className="text-muted-foreground">
+                      ·
+                    </span>
+                  </>
+                ) : null}
+                <span className="shrink-0 text-muted-foreground">{more(left)}</span>
+              </p>
+            )}
+            <div id={questionId}>
+              <ChatMarkdown allowImages={false}>{question.text}</ChatMarkdown>
+            </div>
+          </div>
         </div>
       }
       consequence={
@@ -181,7 +237,8 @@ export function QuestionCard({
         {step.field ? (
           <OptionField
             filled={filled?.kind === "field"}
-            sendLabel={t`Send`}
+            confirms={left !== null}
+            sendLabel={left === null ? t`Send` : t`Next`}
             canSend={step.field.canSend}
             onSend={act.confirm}
             aria-label={choices ? t`Other answer` : t`Answer`}

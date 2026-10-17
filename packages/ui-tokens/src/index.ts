@@ -280,6 +280,9 @@ export type MotionTokens = {
   flight: number;
   /** One spring for that movement: `response` in ms, `bounce` 0 (none) to 1. */
   spring: { response: number; bounce: number };
+  /** A stack's answered question fading out, then the next one fading in while the card springs to its height. */
+  stepOut: number;
+  stepIn: number;
 };
 
 export const motion: MotionTokens = {
@@ -295,6 +298,8 @@ export const motion: MotionTokens = {
   fill: 80,
   flight: 520,
   spring: { response: 320, bounce: 0.1 },
+  stepOut: 100,
+  stepIn: 160,
 };
 
 /** `motion.spring` sampled over `motion.flight` as a CSS `linear()` easing. */
