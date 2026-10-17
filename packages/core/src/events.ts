@@ -139,10 +139,14 @@ export function progressMessageText(
 }
 
 export function redactSecrets(value: string, secrets: string[]): string {
-  return secrets.reduce((acc, secret) => {
-    if (!secret) return acc;
-    return acc.split(secret).join("[redacted]");
-  }, value);
+  const variants = [
+    ...new Set(
+      secrets
+        .filter((secret) => secret.length > 0)
+        .flatMap((secret) => [secret, JSON.stringify(secret).slice(1, -1)]),
+    ),
+  ].sort((a, b) => b.length - a.length);
+  return variants.reduce((acc, secret) => acc.split(secret).join("[redacted]"), value);
 }
 
 export function containsSecret(value: unknown, secrets: string[]): boolean {
