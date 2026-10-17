@@ -1618,7 +1618,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const routineRun =
           run.routineId != null && (run.trigger === "routine" || run.trigger === "webhook");
         const messageUserExposed =
-          !routineRun && (bot.parentBotId == null || isUserOpenedTrigger(run.trigger));
+          !routineRun &&
+          (bot.parentBotId == null || runStartedByUser({ trigger: run.trigger, sourceRole }));
         const publishRecoveryNotice = messageUserExposed && run.trigger !== "bot_message";
         // Text the model writes outside message_user is private scratch, and a turn that never
         // calls it stays silent. A delegated run's text is its result for the ordering bot, but a

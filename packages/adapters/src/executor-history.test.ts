@@ -13,7 +13,7 @@ import {
 } from "@rakazo/contracts";
 import { projectThreadItems } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
-import { createThreadEvents } from "@rakazo/db";
+import { appendSessionEntryInTransaction, createThreadEvents } from "@rakazo/db";
 import type { PgliteDatabase } from "@rakazo/db/pglite.test-support";
 import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
 import type { LogEvent } from "@rakazo/logging";
@@ -985,7 +985,7 @@ describe("interactive executor sessions with durable history", () => {
     await database.prisma.bot.update({ where: { id: BOT }, data: { parentBotId: null } });
   });
 
-  async function conversation() {
+  async function conversation(trigger: "user" | "follow_up" = "user") {
     const { prisma } = database;
     const thread = await prisma.thread.create({
       data: { spaceId: "space-1", userId: "user-1", botId: BOT },
@@ -997,7 +997,7 @@ describe("interactive executor sessions with durable history", () => {
       userId: "user-1",
       blocks: [{ kind: "text", text: "Find the answer" }],
       prompt: "Find the answer",
-      trigger: "user",
+      trigger,
     });
     const run = await prisma.run.findUniqueOrThrow({ where: { id: sent.runId! } });
     const log = new PostgresSessionLog(prisma);
@@ -1010,26 +1010,35 @@ describe("interactive executor sessions with durable history", () => {
     };
   }
 
-  it("publishes a direct child bot's message_user answer while its final words stay private", async () => {
-    const c = await conversation();
-    await c.prisma.bot.update({ where: { id: BOT }, data: { parentBotId: "parent-1" } });
-    const request = await fixture({
-      database: c.prisma,
-      run: c.run,
-      parentBotId: "parent-1",
-      runtime: async function* (request) {
-        await request.executeTool!("message_user", { message: "The answer is 42." }, "answer");
-        yield { type: "done", text: "Private closing words" };
-      },
-    }).request();
-    expect(request.freeTextIsPrivate).toBe(true);
-    expect(request.instructions).toContain("message_user is the only way to reach the user");
-    const parent = await c.parent();
-    expect(
-      projectThreadItems(parent).filter((item) => item.kind === "message" && item.role === "bot"),
-    ).toEqual([expect.objectContaining({ blocks: [{ kind: "text", text: "The answer is 42." }] })]);
-    expect(JSON.stringify(parent)).not.toContain("Private closing words");
-  });
+  it.each(["user", "follow_up"] as const)(
+    "publishes a direct child bot's %s answer while its final words stay private",
+    async (trigger) => {
+      const c = await conversation(trigger);
+      await c.prisma.bot.update({ where: { id: BOT }, data: { parentBotId: "parent-1" } });
+      const request = await fixture({
+        database: c.prisma,
+        run: c.run,
+        parentBotId: "parent-1",
+        runtime: async function* (request) {
+          if (request.tools.some((tool) => tool.name === "message_user")) {
+            await request.executeTool!("message_user", { message: "The answer is 42." }, "answer");
+            yield { type: "done", text: "Private closing words" };
+          } else {
+            yield { type: "done", text: "The answer is 42." };
+          }
+        },
+      }).request();
+      const parent = await c.parent();
+      expect(
+        projectThreadItems(parent).filter((item) => item.kind === "message" && item.role === "bot"),
+      ).toEqual([
+        expect.objectContaining({ blocks: [{ kind: "text", text: "The answer is 42." }] }),
+      ]);
+      expect(JSON.stringify(parent)).not.toContain("Private closing words");
+      expect(request.freeTextIsPrivate).toBe(true);
+      expect(request.instructions).toContain("message_user is the only way to reach the user");
+    },
+  );
 
   it.each([
     [
@@ -1109,7 +1118,7 @@ describe("interactive executor sessions with durable history", () => {
     ]);
   });
 
-  it.each(["routine", "bot_message"] as const)(
+  it.each(["routine", "bot_message", "follow_up"] as const)(
     "keeps %s final output private and returns delegated results to the parent",
     async (trigger) => {
       const c = await conversation();
@@ -1140,6 +1149,16 @@ describe("interactive executor sessions with durable history", () => {
             hop: 1,
           }),
         );
+      } else if (trigger === "follow_up") {
+        const handoff = await c.prisma.$transaction((tx) =>
+          appendSessionEntryInTransaction(tx, {
+            type: "handoff",
+            sessionId: SessionIdSchema.parse(c.thread.sessionId),
+            botId: "parent-1",
+            payload: { fromBotId: "parent-1", toBotId: BOT, text: "Find the answer", hop: 1 },
+          }),
+        );
+        sourceMessageId = handoff.id;
       } else {
         const routine = await c.prisma.routine.create({
           data: {
@@ -1195,6 +1214,50 @@ describe("interactive executor sessions with durable history", () => {
       }
     },
   );
+
+  it("publishes a trusted recovery notice for a child bot's queued human follow-up", async () => {
+    const c = await conversation();
+    await fixture({
+      database: c.prisma,
+      run: c.run,
+      parentBotId: "parent-1",
+      runtime: async function* () {
+        await createThreadEvents(c.prisma).sendUserMessage({
+          spaceId: "space-1",
+          threadId: c.thread.id,
+          botId: BOT,
+          userId: "user-1",
+          blocks: [{ kind: "text", text: "Continue with the updated question" }],
+          prompt: "Continue with the updated question",
+          trigger: "follow_up",
+        });
+        yield { type: "done" };
+      },
+    }).request();
+    const followUp = await c.prisma.run.findFirstOrThrow({
+      where: { threadId: c.thread.id, trigger: "follow_up" },
+    });
+    expect(followUp.status).toBe("queued");
+    const source = await c.prisma.sessionEntry.findUniqueOrThrow({
+      where: { id: followUp.sourceMessageId! },
+    });
+    expect(source.type).toBe("user.message");
+    const notice =
+      "I completed the tool step but could not produce a final response. Please ask me to continue.";
+    await fixture({
+      database: c.prisma,
+      run: followUp,
+      parentBotId: "parent-1",
+      runtime: async function* () {
+        yield { type: "done", runtimeNotice: notice };
+      },
+    }).request();
+    expect(
+      projectThreadItems(await c.parent()).filter(
+        (item) => item.kind === "message" && item.role === "bot",
+      ),
+    ).toEqual([expect.objectContaining({ blocks: [{ kind: "text", text: notice }] })]);
+  });
 
   it("does not publish a terminal notice after cancellation", async () => {
     const c = await conversation();
