@@ -190,7 +190,7 @@ const EntryShapes = z.discriminatedUnion("type", [
        * Words the bot addressed to the person through `message_user`, or a block they must act
        * on: kept even in a hidden peer run.
        */
-      toPerson: z.literal(true).optional(),
+      toPerson: z.boolean().optional(),
       /** Sent before the run's final reply: narration or `message_user` words. */
       midTurn: z.literal(true).optional(),
     }),
@@ -460,7 +460,7 @@ export const ENTRY_AUDIENCE = {
   "bot.message.received": { inference: "yes", ui: true },
   "run.started": { inference: "context", ui: true },
   "run.finished": { inference: "no", ui: true },
-  "run.recap": { inference: "no", ui: false },
+  "run.recap": { inference: "context", ui: false },
   "run.opened": { inference: "no", ui: false },
   "effect.requested": { inference: "no", ui: true },
   "effect.edited": { inference: "no", ui: true },

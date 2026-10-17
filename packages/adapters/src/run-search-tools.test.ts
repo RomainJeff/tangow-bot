@@ -272,6 +272,12 @@ describe("search_runs authorization and archive discovery", () => {
                 "fetch-1",
               );
             } else {
+              const catalog = await request.executeTool(
+                "search_runs",
+                { query: "K731" },
+                "catalog-1",
+              );
+              expect(catalog).toMatchObject({ items: [{ runId: old.id }] });
               const found = RunSearchPage.parse(
                 await request.executeTool(
                   "search_runs",
@@ -285,9 +291,19 @@ describe("search_runs authorization and archive discovery", () => {
               expect(found.hits[0].excerpt).toContain("[redacted]");
               expect(found.hits[0].excerpt).not.toContain("fake-line");
               for (const query of ["fake-line-one", "fake-line-two"]) {
-                expect(
-                  await request.executeTool("search_runs", { runId: old.id, query }, query),
-                ).toMatchObject({ status: "ok", hits: [], nextCursor: null });
+                let cursor: string | undefined;
+                do {
+                  const page = RunSearchPage.parse(
+                    await request.executeTool(
+                      "search_runs",
+                      { runId: old.id, query, ...(cursor ? { cursor } : {}) },
+                      query,
+                    ),
+                  );
+                  expect(page).toMatchObject({ status: "ok", hits: [] });
+                  if (page.status !== "ok") throw new Error("Archive search unavailable");
+                  cursor = page.nextCursor ?? undefined;
+                } while (cursor);
               }
               await request.executeTool(
                 "message_user",
@@ -300,9 +316,21 @@ describe("search_runs authorization and archive discovery", () => {
                   { runId: old.id, query: "missing-id" },
                   "search-2",
                 ),
-              ).toMatchObject({ hits: [], nextCursor: null });
+              ).toMatchObject({ status: "ok", hits: [] });
             }
-            yield { type: "done", text: "" };
+            yield {
+              type: "done",
+              text: "",
+              ...(currentId === old.id
+                ? {
+                    privateFinalText: JSON.stringify({
+                      version: 1,
+                      results: ["The retained receipt is K731."],
+                      references: [{ callId: "fetch-1" }],
+                    }),
+                  }
+                : {}),
+            };
           },
         },
       });
@@ -328,6 +356,17 @@ describe("search_runs authorization and archive discovery", () => {
         type: "compaction",
         parentId: head!.id,
         payload: { summary: "Retrieved a receipt.", coveredUpToSeq: EntrySeq.parse(head!.seq) },
+      });
+      const [compactedHead] = await log.readPage(c.sessionId, { limit: 1 });
+      await append({
+        sessionId: c.sessionId,
+        botId: c.bot.id,
+        type: "compaction",
+        parentId: compactedHead!.id,
+        payload: {
+          summary: "Earlier work finished.",
+          coveredUpToSeq: EntrySeq.parse(compactedHead!.seq),
+        },
       });
       const current = await runOf(c, "What was the receipt?");
       currentId = current.id;
@@ -359,6 +398,135 @@ describe("search_runs authorization and archive discovery", () => {
     } finally {
       await rm(root, { recursive: true, force: true });
     }
+  });
+
+  it.each([false, true])(
+    "authorizes a fresh interactive child through its %s source-less anchor and revokes it on rewind and clear",
+    async (sourceLess) => {
+      const c = await conversation();
+      const current = await caller(c);
+      const keep = (await log.readTail(c.sessionId)).at(-1)!;
+      const allowed = await runOf(c, "Find retained receipt");
+      await text(allowed, "receipt K731");
+      const fresh = await runOf(c, "Find earlier receipt");
+      const childId = SessionId.parse(crypto.randomUUID());
+      const anchor = await append(
+        sourceLess
+          ? {
+              sessionId: c.sessionId,
+              botId: c.bot.id,
+              runId: fresh.id,
+              type: "run.opened",
+              payload: { sessionId: childId },
+            }
+          : {
+              sessionId: c.sessionId,
+              type: "user.message",
+              payload: { source: "app", blocks: [{ kind: "text", text: "Find earlier receipt" }] },
+            },
+      );
+      await database.prisma.$transaction((tx) =>
+        log.createSession(tx, {
+          kind: "interactive",
+          id: childId,
+          spaceId: c.bot.spaceId,
+          parentSessionId: c.sessionId,
+          parentEntryId: anchor.id,
+        }),
+      );
+      await database.prisma.run.update({
+        where: { id: fresh.id },
+        data: {
+          sessionId: childId,
+          sourceMessageId: sourceLess ? null : anchor.id,
+        },
+      });
+      expect(await search(fresh.id, { query: "Find retained receipt" })).toMatchObject({
+        status: "ok",
+        items: [{ runId: allowed.id }],
+      });
+      await text({ ...fresh, sessionId: childId }, "receipt child");
+      await text(fresh, "receipt published", c.sessionId);
+      await database.prisma.run.update({ where: { id: fresh.id }, data: { status: "completed" } });
+      await append({
+        sessionId: c.sessionId,
+        botId: c.bot.id,
+        runId: fresh.id,
+        type: "run.recap",
+        payload: {
+          version: 1,
+          sessionId: childId,
+          outcome: { status: "completed", usage: { inputTokens: 0, outputTokens: 0 } },
+          recap: { state: "missing", reason: sourceLess ? "absent" : "invalid" },
+        },
+      });
+      const page = await search(current.id, { runId: fresh.id, query: "receipt" });
+      expect(page).toMatchObject({ hits: [{ excerpt: "receipt child" }], incomplete: true });
+      if (!("nextCursor" in page) || !page.nextCursor) throw new Error("Missing raised phase");
+      expect(
+        await search(current.id, { runId: fresh.id, query: "receipt", cursor: page.nextCursor }),
+      ).toMatchObject({
+        hits: [{ excerpt: "receipt published" }],
+        nextCursor: null,
+      });
+      await append({ sessionId: c.sessionId, type: "rewind", parentId: keep.id, payload: {} });
+      expect(await search(current.id, { runId: fresh.id, query: "receipt" })).toEqual({
+        status: "unavailable",
+        reason: "not_found_or_denied",
+      });
+      await append({ sessionId: c.sessionId, type: "clear", payload: {} });
+      expect(await search(fresh.id, {})).toEqual({
+        status: "unavailable",
+        reason: "not_found_or_denied",
+      });
+    },
+  );
+
+  it("matches only authorized bounded recap facts after compaction and redacts them before discovery", async () => {
+    const c = await conversation();
+    const current = await caller(c);
+    const target = await runOf(c, "Investigate stored artifact");
+    await text(target, "private text never searched by the catalog");
+    const secret = 'fake-key-quote"line\nend';
+    await append({
+      sessionId: c.sessionId,
+      botId: c.bot.id,
+      runId: target.id,
+      type: "run.recap",
+      payload: {
+        version: 1,
+        sessionId: c.sessionId,
+        outcome: { status: "completed", usage: { inputTokens: 0, outputTokens: 0 } },
+        recap: {
+          state: "available",
+          facts: { version: 1, results: ["Zebra731 receipt", secret], references: [] },
+        },
+      },
+    });
+    await append({
+      sessionId: c.sessionId,
+      botId: c.bot.id,
+      runId: target.id,
+      type: "assistant.reasoning",
+      payload: { text: "forbidden-private-reasoning" },
+    });
+    const [head] = await log.readPage(c.sessionId, { limit: 1 });
+    await append({
+      sessionId: c.sessionId,
+      type: "compaction",
+      parentId: head!.id,
+      payload: { summary: "Previous work", coveredUpToSeq: EntrySeq.parse(head!.seq) },
+    });
+    const redaction = { redact: (value: string) => redactSecrets(value, [secret]) };
+    expect(await search(current.id, { query: "Zebra731" }, redaction)).toMatchObject({
+      items: [{ runId: target.id, excerpt: expect.stringContaining("Zebra731 receipt") }],
+    });
+    expect(await search(current.id, { query: "fake-key-quote" }, redaction)).toMatchObject({
+      items: [],
+    });
+    expect(await search(current.id, { query: "forbidden-private-reasoning" })).toMatchObject({
+      items: [],
+    });
   });
 
   it("discovers an active old source beyond the journal scan bound without misreporting an access denial", async () => {

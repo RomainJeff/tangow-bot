@@ -1,5 +1,5 @@
 import type { RunSearchInput, SessionLog } from "@rakazo/adapter-kit";
-import { SessionId } from "@rakazo/contracts";
+import { FactualRunRecapSchema, SessionId } from "@rakazo/contracts";
 import { matchesSearchQuery, snippetAroundMatch } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import { ENTRY_ON_CHAIN, Prisma } from "@rakazo/db";
@@ -61,6 +61,7 @@ async function authorizeRun(
   const seen = new Set<string>();
   let currentRun = run;
   let currentId = run.sessionId;
+  let anchoredInteractive = false;
   for (let depth = 0; depth < 16; depth++) {
     if (seen.has(currentId)) return undefined;
     seen.add(currentId);
@@ -105,6 +106,7 @@ async function authorizeRun(
     if (session.kind === "thread") {
       if (session.id !== mainId || session.threadId !== actor.threadId) return undefined;
       if (
+        !anchoredInteractive &&
         !(await activeEntry(
           tx,
           currentId,
@@ -119,7 +121,21 @@ async function authorizeRun(
       };
     }
     if (!session.parentSessionId) return undefined;
-    if (session.kind === "subagent") {
+    if (session.kind === "interactive") {
+      if (session.parentSessionId !== mainId || !session.parentEntryId) return undefined;
+      const anchor = await activeEntry(
+        tx,
+        mainId,
+        currentRun.sourceMessageId
+          ? Prisma.sql`e.id = ${session.parentEntryId} AND e.id = ${currentRun.sourceMessageId}`
+          : Prisma.sql`e.id = ${session.parentEntryId} AND e.type = 'run.opened'
+              AND e."runId" = ${currentRun.id} AND e."botId" = ${actor.botId}
+              AND e.payload ->> 'sessionId' = ${session.id}`,
+      );
+      if (!anchor || anchor.channel) return undefined;
+      anchoredInteractive = true;
+      currentRun = { ...currentRun, sessionId: mainId };
+    } else if (session.kind === "subagent") {
       if (!session.parentEntryId || !currentRun.parentRunId) return undefined;
       const launch = await activeEntry(
         tx,
@@ -253,7 +269,26 @@ export async function searchRunsFromTool(
           SELECT CASE WHEN octet_length(prompt) <= ${RUN_SEARCH_RECORD_BYTES} THEN prompt END AS text,
             octet_length(prompt) > ${RUN_SEARCH_RECORD_BYTES} AS oversized FROM tasks WHERE id = ${row.taskId}`;
         if (text?.oversized) limitations.push("oversized_records");
-        const safe = redaction.redact(text?.text ?? "");
+        const recaps = await tx.$queryRaw<Array<{ recap: unknown; oversized: boolean }>>`
+          SELECT CASE WHEN octet_length(e.payload::text) <= ${RUN_SEARCH_RECORD_BYTES}
+              THEN e.payload -> 'recap' END AS recap,
+            octet_length(e.payload::text) > ${RUN_SEARCH_RECORD_BYTES} AS oversized
+          FROM session_entries e WHERE e."sessionId" = ${thread.sessionId}
+            AND e."runId" = ${row.id} AND e."botId" = ${actor.botId}
+            AND e.type = 'run.recap' AND e.payload ->> 'sessionId' = ${row.sessionId}
+            AND ${ENTRY_ON_CHAIN} ORDER BY e.seq DESC LIMIT 1`;
+        const stored = recaps[0];
+        if (stored?.oversized) limitations.push("oversized_records");
+        const recap = FactualRunRecapSchema.safeParse(stored?.recap);
+        const facts =
+          recap.success && recap.data.state === "available"
+            ? [
+                ...(recap.data.facts.results ?? []),
+                ...(recap.data.facts.decisions ?? []),
+                ...(recap.data.facts.limits ?? []),
+              ].join("\n")
+            : "";
+        const safe = redaction.redact([text?.text, facts].filter(Boolean).join("\n"));
         if (!query.trim() || matchesSearchQuery(query, safe)) {
           const item = {
             runId: row.id,

@@ -22,7 +22,12 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import { appendBotMessageInTransaction } from "./bot-messages.js";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
 import { createRunExecutor } from "./executor.js";
-import { formatRecalledMemory } from "./history-compaction.js";
+import {
+  estimateHistoryTokens,
+  estimateTextTokens,
+  estimateToolSchemaTokens,
+  formatRecalledMemory,
+} from "./history-compaction.js";
 import { PostgresSessionLog } from "./session-log/postgres.js";
 import { recordingSessionLog } from "./session-log/recording.test-support.js";
 
@@ -31,6 +36,13 @@ vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
   acquireComputerExecutionLease: async () => null,
   provisionComputer: async () => ({ id: "computer-1", kind: "desktop" }),
 }));
+
+beforeAll(() => {
+  vi.stubEnv("RAKAZO_LOCAL_MODELS", "capacity-local");
+  vi.stubEnv("RAKAZO_LOCAL_CONTEXT_WINDOW", "32768");
+  vi.stubEnv("RAKAZO_LOCAL_MAX_TOKENS", "32768");
+});
+afterAll(() => vi.unstubAllEnvs());
 
 const RUN = "run-1";
 const BOT = "bot-1";
@@ -73,6 +85,7 @@ const started = {
 function fixture(
   options: {
     tail?: SessionEntry[];
+    prompt?: string;
     page?: SessionEntry[];
     clearSeq?: number;
     run?: Record<string, unknown>;
@@ -167,7 +180,10 @@ function fixture(
       })),
     },
     task: {
-      findUniqueOrThrow: vi.fn(async () => ({ id: run.taskId, prompt: "What did Ava decide?" })),
+      findUniqueOrThrow: vi.fn(async () => ({
+        id: run.taskId,
+        prompt: options.prompt ?? "What did Ava decide?",
+      })),
     },
     routine: { findUnique: vi.fn(async () => null) },
     connection: { findMany: vi.fn(async () => []) },
@@ -227,6 +243,7 @@ function fixture(
     yield { type: "done" as const, text: "Done" };
   });
   const jobs = { enqueue: vi.fn(async (_job: unknown) => undefined) };
+  let finalized: unknown;
   const executor = createRunExecutor({
     sessionLog: options.database
       ? new PostgresSessionLog(options.database)
@@ -275,7 +292,10 @@ function fixture(
       : {
           append: vi.fn(async () => undefined),
           pauseRunForInput: vi.fn(async () => true),
-          finalizeRun: vi.fn(async () => ({ continuationRunId: null })),
+          finalizeRun: vi.fn(async (outcome: unknown) => {
+            finalized = outcome;
+            return { continuationRunId: null };
+          }),
         },
     jobs,
     secrets: options.secrets ?? [],
@@ -284,7 +304,10 @@ function fixture(
     log,
     recall,
     jobs,
-    execute: () => executor.continueRun(run.id, "worker-1"),
+    async execute() {
+      await executor.continueRun(run.id, "worker-1");
+      return { runtimeRun, finalized };
+    },
     async request() {
       await executor.continueRun(run.id, "worker-1");
       const [request] = runtimeRun.mock.calls[0]!;
@@ -297,6 +320,205 @@ function fixture(
 }
 
 describe("the history a run reads from its session log", () => {
+  it.each([false, true])(
+    "counts the source prompt once while preserving active effects and steering, resumed=%s",
+    async (resumed) => {
+      const prompt = "x".repeat(245_000);
+      const own = { botId: BOT, runId: RUN };
+      const tail = chain(0, [
+        said(prompt),
+        ...(resumed
+          ? [
+              { ...started, ...own },
+              {
+                ...own,
+                type: "tool.call",
+                payload: { callId: "effect", name: "write_file", input: '{"path":"result.txt"}' },
+              },
+              {
+                ...own,
+                type: "tool.result",
+                payload: {
+                  callId: "effect",
+                  output: "written once",
+                  isError: false,
+                  artifactIds: [],
+                },
+              },
+              said("Do not write the file again"),
+            ]
+          : []),
+      ]);
+      const { runtimeRun, finalized } = await fixture({
+        prompt,
+        tail,
+        run: { sourceMessageId: "e-0" },
+        model: { provider: "openai", id: "gpt-4o" },
+      }).execute();
+      expect(finalized).toMatchObject({ outcome: "completed" });
+      expect(runtimeRun.mock.calls).toHaveLength(1);
+      const request = runtimeRun.mock.calls[0]![0];
+      expect(request.prompt).toContain(prompt);
+      expect(request.history.some((turn) => turn.id === "e-0")).toBe(false);
+      expect(
+        estimateTextTokens(request.prompt) +
+          estimateTextTokens(request.instructions) +
+          estimateToolSchemaTokens(request.tools) +
+          estimateHistoryTokens(request.history) +
+          16_384,
+      ).toBeLessThan(128_000);
+      if (resumed) {
+        expect(request.history.flatMap((turn) => turn.parts ?? [])).toContainEqual({
+          type: "toolCalls",
+          calls: [
+            {
+              id: "effect",
+              name: "write_file",
+              args: { path: "result.txt" },
+              output: "written once",
+            },
+          ],
+        });
+        expect(request.history.map((turn) => turn.content)).toContain(
+          "Do not write the file again",
+        );
+      }
+    },
+  );
+
+  it.each([
+    { model: { provider: "openai", id: "gpt-4o" }, recallChars: 245_000 },
+    { model: { provider: "local", id: "capacity-local" }, recallChars: 100_000 },
+    { model: { provider: "scripted", id: "scripted" }, recallChars: 245_000 },
+    { model: { provider: "openai", id: "gpt-4o" }, recallChars: 230_000 },
+  ])(
+    "bounds combined historical blocks before admitting finished turns, $model.id/$recallChars",
+    async ({ model, recallChars }) => {
+      const summary = `Summary survives. ${"s".repeat(20_000)}`;
+      const tail = chain(1, [
+        { type: "compaction", payload: { summary, coveredUpToSeq: 0 } },
+        said("Recent question"),
+        started,
+        replied("Recent answer"),
+      ]);
+      const f = fixture({ tail, model });
+      f.recall.mockResolvedValue({
+        ok: true,
+        value: [{ memory: "r".repeat(recallChars), score: 0.9 }],
+      });
+      const { runtimeRun, finalized } = await f.execute();
+      expect(finalized).toMatchObject({ outcome: "completed" });
+      expect(runtimeRun.mock.calls).toHaveLength(1);
+      const request = runtimeRun.mock.calls[0]![0];
+      expect(estimateHistoryTokens(request.history)).toBeLessThanOrEqual(60_000);
+      expect(request.history[0]!.content).toContain("Summary survives.");
+      expect(request.history.map((turn) => turn.content)).toContain("Recent question");
+      expect(request.history.map((turn) => turn.content)).toContain("Recent answer");
+      if (request.model.contextWindow !== undefined) {
+        expect(
+          estimateTextTokens(request.prompt) +
+            estimateTextTokens(request.instructions) +
+            estimateToolSchemaTokens(request.tools) +
+            estimateHistoryTokens(request.history) +
+            16_384,
+        ).toBeLessThanOrEqual(request.model.contextWindow);
+      }
+    },
+  );
+
+  it("rejects oversized active tool state instead of silently forgetting its effects", async () => {
+    const own = { botId: BOT, runId: RUN };
+    const tail = chain(0, [
+      { ...started, ...own },
+      {
+        ...own,
+        type: "tool.call",
+        payload: {
+          callId: "effect",
+          name: "write_file",
+          input: JSON.stringify({ content: "x".repeat(700_000) }),
+        },
+      },
+      {
+        ...own,
+        type: "tool.result",
+        payload: { callId: "effect", output: "written once", isError: false, artifactIds: [] },
+      },
+    ]);
+    const { runtimeRun, finalized } = await fixture({
+      tail,
+      model: { provider: "openai", id: "gpt-4o" },
+    }).execute();
+    expect(runtimeRun.mock.calls).toEqual([]);
+    expect(finalized).toMatchObject({
+      outcome: "failed",
+      error: "Model context cannot fit the fixed prompt, active run, and reply reserve",
+    });
+  });
+
+  it("drops an oversized finished legacy tool trace without rejecting a fresh request", async () => {
+    const tail = chain(0, [
+      said("Earlier task"),
+      started,
+      {
+        ...ownRun,
+        type: "tool.call",
+        payload: {
+          callId: "old",
+          name: "write_file",
+          input: JSON.stringify({ content: "x".repeat(700_000) }),
+        },
+      },
+      {
+        ...ownRun,
+        type: "tool.result",
+        payload: { callId: "old", output: "written", isError: false, artifactIds: [] },
+      },
+      {
+        ...ownRun,
+        type: "run.finished",
+        payload: { status: "completed", usage: { inputTokens: 0, outputTokens: 0 } },
+      },
+    ]);
+    const request = await fixture({ tail, model: { provider: "openai", id: "gpt-4o" } }).request();
+    expect(request.history.map((turn) => turn.content).join("\n")).toContain('"runId":"run-0"');
+    expect(request.history.flatMap((turn) => turn.parts ?? [])).toEqual([]);
+  });
+
+  it("protects active tool effects and steering across the unknown-window history limit", async () => {
+    const own = { botId: BOT, runId: RUN };
+    const tail = chain(0, [
+      ...Array.from({ length: 230 }, (_, index) => said(`Old ${index}`)),
+      { ...started, ...own },
+      {
+        ...own,
+        type: "tool.call",
+        payload: { callId: "effect", name: "write_file", input: '{"path":"result.txt"}' },
+      },
+      {
+        ...own,
+        type: "tool.result",
+        payload: { callId: "effect", output: "written once", isError: false, artifactIds: [] },
+      },
+      ...Array.from({ length: 220 }, (_, index) => said(`Steering ${index}`)),
+      {
+        ...own,
+        type: "tool.call",
+        payload: { callId: "pending", name: "read_file", input: '{"path":"result.txt"}' },
+      },
+    ]);
+    const request = await fixture({ tail }).request();
+    expect(request.history.flatMap((turn) => turn.parts ?? [])).toContainEqual({
+      type: "toolCalls",
+      calls: [
+        { id: "effect", name: "write_file", args: { path: "result.txt" }, output: "written once" },
+      ],
+    });
+    expect(request.history.map((turn) => turn.content)).toContain("Steering 0");
+    expect(request.history.map((turn) => turn.content)).toContain("Steering 219");
+    expect(JSON.stringify(request.history)).not.toContain('"id":"pending"');
+  });
+
   it("opens with the compaction summary, then recalled memory, then the turns after it, never an aside", async () => {
     const [covered] = chain(3, [said("Earlier")]);
     const tail = chain(4, [
@@ -609,8 +831,9 @@ describe("the history a run reads from its session log", () => {
     const [gpt4o] = await budgets("gpt-4o", 60_000);
     const [gpt41] = await budgets("gpt-4.1", 600_000);
 
-    expect(await budgets("gpt-4o", 40_000)).toEqual([]);
-    expect(gpt41! - gpt4o!).toBe(1_047_576 - 128_000);
+    expect(await budgets("gpt-4o", 30_000)).toEqual([]);
+    expect(await budgets("gpt-4o", 40_000)).toEqual([60_000]);
+    expect([gpt4o, gpt41]).toEqual([60_000, 60_000]);
   });
 });
 
@@ -709,7 +932,7 @@ describe("a channel run's history, read from the database", () => {
     const source = await send([latest]);
     await speak(current.id, "Working on it");
 
-    const history = await fixture({
+    const request = await fixture({
       reads: log as SessionLog<unknown>,
       run: {
         id: current.id,
@@ -718,9 +941,11 @@ describe("a channel run's history, read from the database", () => {
         sourceMessageId: source.messageId,
       },
       source: { type: "user.message", payload: { blocks: [latest] } },
-    }).history();
+    }).request();
 
-    expect(history.map(({ role, content }) => ({ role, content }))).toEqual([
+    expect(request.tools.some((tool) => tool.name === "search_runs")).toBe(false);
+    expect(request.instructions).not.toContain("Use search_runs");
+    expect(request.history.map(({ role, content }) => ({ role, content }))).toEqual([
       { role: "user", content: "Earlier in the channel" },
       { role: "user", content: "Latest in the channel" },
       { role: "assistant", content: "Working on it" },
@@ -1099,7 +1324,95 @@ describe("interactive executor sessions with durable history", () => {
     ).toEqual([{ kind: "text", text: notice }]);
   });
 
-  it("runs twice with isolated traces, one published answer and a silent closing, while preserving tool history for P3", async () => {
+  it("persists one terminal capacity failure before opening a child and never retries it", async () => {
+    const { prisma } = database;
+    const thread = await prisma.thread.create({
+      data: { spaceId: "space-1", userId: "user-1", botId: BOT },
+    });
+    const sent = await createThreadEvents(prisma).sendUserMessage({
+      spaceId: "space-1",
+      userId: "user-1",
+      threadId: thread.id,
+      botId: BOT,
+      blocks: [{ kind: "text", text: "Large request" }],
+      prompt: "x".repeat(600_000),
+      trigger: "user",
+    });
+    const run = await prisma.run.findUniqueOrThrow({ where: { id: sent.runId! } });
+    const f = fixture({ database: prisma, run, model: { provider: "openai", id: "gpt-4o" } });
+    const { runtimeRun } = await f.execute();
+    expect(
+      await prisma.run.findUnique({
+        where: { id: run.id },
+        select: { status: true, error: true, leaseOwner: true },
+      }),
+    ).toEqual({
+      status: "failed",
+      error: "Model context cannot fit the fixed prompt, active run, and reply reserve",
+      leaseOwner: null,
+    });
+    expect(
+      await prisma.task.findUnique({ where: { id: run.taskId }, select: { status: true } }),
+    ).toEqual({ status: "failed" });
+    expect(
+      await prisma.attempt.findMany({ where: { runId: run.id }, select: { status: true } }),
+    ).toEqual([{ status: "failed" }]);
+    expect(runtimeRun.mock.calls).toEqual([]);
+    expect(f.jobs.enqueue.mock.calls.map(([job]) => job)).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: "run.continue" })]),
+    );
+    await f.execute();
+    expect(await prisma.attempt.count({ where: { runId: run.id } })).toBe(1);
+    expect(
+      await prisma.conversationSession.count({
+        where: { parentSessionId: thread.sessionId, kind: "interactive" },
+      }),
+    ).toBe(0);
+    const parent = await new PostgresSessionLog(prisma).readTail(
+      SessionIdSchema.parse(thread.sessionId),
+    );
+    expect(parent.filter((entry) => entry.type === "run.recap")).toMatchObject([
+      {
+        payload: {
+          outcome: { status: "failed" },
+          recap: { state: "missing", reason: "interrupted" },
+        },
+      },
+    ]);
+  });
+
+  it("runs a local model whose output metadata equals its 32k window with the unchanged default generation cap", async () => {
+    const { prisma } = database;
+    const thread = await prisma.thread.create({
+      data: { spaceId: "space-1", userId: "user-1", botId: BOT },
+    });
+    const sent = await createThreadEvents(prisma).sendUserMessage({
+      spaceId: "space-1",
+      userId: "user-1",
+      threadId: thread.id,
+      botId: BOT,
+      blocks: [{ kind: "text", text: "Answer briefly" }],
+      prompt: "Answer briefly",
+      trigger: "user",
+    });
+    const run = await prisma.run.findUniqueOrThrow({ where: { id: sent.runId! } });
+    const request = await fixture({
+      database: prisma,
+      run,
+      model: { provider: "local", id: "capacity-local" },
+    }).request();
+    expect(request.model).toMatchObject({
+      provider: "local",
+      id: "capacity-local",
+      contextWindow: 32768,
+    });
+    expect(request.model.maxTokens).toBeUndefined();
+    expect(
+      await prisma.run.findUnique({ where: { id: run.id }, select: { status: true, error: true } }),
+    ).toEqual({ status: "completed", error: null });
+  });
+
+  it("runs twice with isolated traces, one published answer and a factual recap without replaying finished tools", async () => {
     const { prisma } = database;
     const thread = await prisma.thread.create({
       data: { spaceId: "space-1", userId: "user-1", botId: BOT },
@@ -1138,6 +1451,8 @@ describe("interactive executor sessions with durable history", () => {
       },
     });
     const firstRequest = await first.request();
+    expect(firstRequest.tools.some((tool) => tool.name === "search_runs")).toBe(true);
+    expect(firstRequest.instructions).toContain("Use search_runs");
     expect(firstRequest.runRecap).toBe(true);
     expect(firstRequest.instructions).toContain("Private factual run closing");
     expect((await prisma.run.findUniqueOrThrow({ where: { id: run.id } })).status).toBe(
@@ -1154,6 +1469,11 @@ describe("interactive executor sessions with durable history", () => {
     const history = (await second.request()).history;
     expect(JSON.stringify(history)).toContain("report.txt");
     expect(JSON.stringify(history)).toContain("The report is saved.");
+    expect(JSON.stringify(history)).toContain(run.id);
+    expect(JSON.stringify(history)).not.toContain("Private narration");
+    expect(
+      history.flatMap((turn) => turn.parts ?? []).some((part) => part.type === "toolCalls"),
+    ).toBe(false);
     const stored = await prisma.run.findMany({
       where: { threadId: thread.id },
       orderBy: { createdAt: "asc" },
@@ -1244,7 +1564,8 @@ describe("interactive executor sessions with durable history", () => {
       ]);
       const next = await source("Continue");
       const request = await fixture({ database: prisma, run: next, secrets: [secret] }).request();
-      expect(JSON.stringify(request.history)).toContain("report.txt");
+      expect(JSON.stringify(request.history)).toContain("Result [redacted]");
+      expect(JSON.stringify(request.history)).toContain(run.id);
       for (const turn of request.history) {
         expect(turn.content).not.toContain(`Result ${secret}`);
         expect(turn.content).not.toContain(`Decision ${secret}`);
@@ -1274,6 +1595,20 @@ describe("interactive executor sessions with durable history", () => {
       run,
       runtime: async function* (request) {
         await request.executeTool!("message_user", { message: "The saved result." }, "say");
+        const opened = await prisma.run.findUniqueOrThrow({ where: { id: run.id } });
+        await prisma.$transaction((tx) =>
+          new PostgresSessionLog(prisma).append(tx, {
+            type: "tool.call",
+            sessionId: SessionIdSchema.parse(opened.sessionId),
+            botId: BOT,
+            runId: run.id,
+            payload: {
+              callId: "resume-list",
+              name: "list_files",
+              input: JSON.stringify({ path: "." }, null, 2),
+            },
+          }),
+        );
         await prisma.run.update({
           where: { id: run.id },
           data: { leaseOwner: "expired-worker", leaseExpiresAt: new Date(0) },
@@ -1298,8 +1633,10 @@ describe("interactive executor sessions with durable history", () => {
     await fixture({
       database: prisma,
       run: interrupted,
+      sandbox: { listFiles: async () => [{ name: "report.txt", kind: "file" }] },
       runtime: async function* (request) {
         expect(JSON.stringify(request.history)).toContain("The saved result.");
+        await request.executeTool!("list_files", { path: "." }, "resume-list");
         await request.executeTool!("message_user", { message: "The saved result." }, "say-again");
         yield {
           type: "done",
@@ -1324,6 +1661,15 @@ describe("interactive executor sessions with durable history", () => {
       }),
     ]);
     expect(main.filter((entry) => entry.type === "run.recap")).toHaveLength(1);
+    const pending = (await log.readRun(run.id)).filter(
+      (entry) =>
+        (entry.type === "tool.call" || entry.type === "tool.result") &&
+        entry.payload.callId === "resume-list",
+    );
+    expect(pending.map((entry) => entry.type)).toEqual(["tool.call", "tool.result"]);
+    expect(pending[1]).toMatchObject({
+      payload: { isError: false, output: expect.stringContaining("report.txt") },
+    });
     expect(
       (await log.readTail(SessionIdSchema.parse(recovered.sessionId))).filter(
         (entry) => entry.type === "run.started",
