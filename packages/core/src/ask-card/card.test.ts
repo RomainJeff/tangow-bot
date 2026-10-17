@@ -584,19 +584,70 @@ describe("a stack of questions (CA6)", () => {
   });
 
   type Subject = ReturnType<typeof card>["card"];
+  const holding = (subject: Subject) => {
+    const view = subject.view();
+    return {
+      ...shown(subject),
+      selected: view.kind === "open" ? (view.step?.selected ?? null) : null,
+      field: view.kind === "open" ? (view.step?.field ?? null) : null,
+    };
+  };
+  const onFreezer = {
+    lines: ["Format: Built-in", "Extras: Ice maker, No frost"],
+    step: { id: "q3", left: 0, skip: true, reopened: true },
+    primary: null,
+  };
   it.each([
-    ["reopening a line", (subject: Subject) => subject.reopen("q1" as QuestionId), "q1"],
-    ["opening Other…", (subject: Subject) => subject.openOther(), "q3"],
-    ["unmount or background", (subject: Subject) => subject.interrupt(), "q3"],
-    ["the card no longer waiting", (subject: Subject) => subject.setWaiting(false), "q3"],
+    [
+      "reopening a line",
+      (subject: Subject) => subject.reopen("q1" as QuestionId),
+      {
+        lines: ["Extras: Ice maker, No frost", "Do you already have a separate freezer?: Skipped"],
+        step: { id: "q1", left: 0, skip: false, reopened: true },
+        primary: null,
+        selected: ["q1o2"],
+        field: null,
+      },
+    ],
+    [
+      "opening Other…",
+      (subject: Subject) => subject.openOther(),
+      { ...onFreezer, selected: [], field: { text: "", canSend: false } },
+    ],
+    [
+      "unmount or background",
+      (subject: Subject) => subject.interrupt(),
+      { ...onFreezer, selected: ["q3o1"], field: null },
+    ],
+    [
+      "the card no longer waiting",
+      (subject: Subject) => subject.setWaiting(false),
+      { ...onFreezer, selected: ["q3o1"], field: null },
+    ],
   ])("does not move on after %s during the step hold (CA2)", (_trigger, cancel, stays) => {
-    const { card: subject, clock } = toRecap();
-    subject.reopen("q3" as QuestionId);
-    subject.tap(id("q3o1"));
-    clock.advance(300);
-    cancel(subject);
-    clock.advance(5000);
-    expect(subject.view()).toMatchObject({ step: { question: { id: stays } } });
+    const run = (interrupt?: (subject: Subject) => void) => {
+      const { card: subject, clock } = toRecap();
+      subject.reopen("q3" as QuestionId);
+      subject.tap(id("q3o1"));
+      clock.advance(300);
+      interrupt?.(subject);
+      clock.advance(5000);
+      return holding(subject);
+    };
+    expect({ held: run(), cancelled: run(cancel) }).toEqual({
+      held: {
+        lines: [
+          "Format: Built-in",
+          "Extras: Ice maker, No frost",
+          "Do you already have a separate freezer?: Yes",
+        ],
+        step: null,
+        primary: "send",
+        selected: null,
+        field: null,
+      },
+      cancelled: stays,
+    });
   });
 
   it("keeps showing the answered question until the presenter applies the move", () => {
