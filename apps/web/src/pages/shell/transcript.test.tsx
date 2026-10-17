@@ -226,6 +226,23 @@ describe("the transcript", () => {
     ).toBe("false");
   });
 
+  it("keeps following the end through a tap on a row, not through a press that scrolled", async () => {
+    const following = { current: true };
+    const scrollRef = createRef<HTMLDivElement>();
+    await renderThread(9, { scrollRef, followingRef: following });
+    const element = scrollRef.current!;
+    const row = element.querySelector("[data-message-id]")!;
+    const press = async (from: number, to: number) => {
+      Object.defineProperty(element, "scrollTop", { configurable: true, value: from });
+      await act(async () => row.dispatchEvent(new Event("pointerdown", { bubbles: true })));
+      Object.defineProperty(element, "scrollTop", { configurable: true, value: to });
+      await act(async () => row.dispatchEvent(new Event("pointerup", { bubbles: true })));
+      return following.current;
+    };
+
+    expect([await press(600, 600), await press(600, 540)]).toEqual([true, false]);
+  });
+
   it("draws nothing for an effect that carries no card", async () => {
     await renderThread([
       ...fixture.slice(0, 1),
