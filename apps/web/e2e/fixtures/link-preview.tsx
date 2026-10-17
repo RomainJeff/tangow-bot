@@ -1,6 +1,8 @@
 import { setupI18n } from "@lingui/core";
 import { I18nProvider } from "@lingui/react";
 import type { MessageBlock } from "@rakazo/contracts";
+import { SessionEntrySchema } from "@rakazo/contracts";
+import { projectThreadView } from "@rakazo/core";
 import { ComposerLinkPreview, ComposerShell } from "@rakazo/ui-web";
 import { createRoot } from "react-dom/client";
 import type { MessageItem } from "../../src/lib/thread-items";
@@ -10,6 +12,8 @@ import {
   UserMessageActions,
 } from "../../src/pages/shell/message-hover-actions";
 import { MessageView } from "../../src/pages/shell/message-view";
+import type { RowContext } from "../../src/pages/shell/thread-row";
+import { ThreadRowBody } from "../../src/pages/shell/thread-row";
 import "../../src/styles.css";
 
 const i18n = setupI18n({ locale: "en", messages: { en: {} } });
@@ -139,6 +143,117 @@ const MESSAGES: MessageItem[] = [
   ]),
 ];
 
+/** A digest routine's result, drawn from the thread's entries as the bot's bubble. */
+const DIGEST_RUN = { botId: "bot-1", runId: "run_digest" };
+const ROUTINE_ENTRIES = [
+  {
+    ...DIGEST_RUN,
+    type: "routine.started",
+    payload: {
+      sessionId: "ses_digest",
+      routineId: "rtn_digest",
+      name: "Weekly digest",
+      trigger: "routine",
+      scheduledAt: "2026-10-05T09:00:00.000Z",
+      model: { provider: "local", id: "emulator-1" },
+    },
+  },
+  {
+    ...DIGEST_RUN,
+    type: "routine.finished",
+    payload: {
+      status: "completed",
+      usage: { inputTokens: 1, outputTokens: 1 },
+      result: [
+        "This week:",
+        "",
+        "- [Traffic lights, three years on](https://news.example.org/lights-three-years)",
+        "- the roadmap moved to https://docs.example.org/document/d/7/edit",
+        "- two open reviews in https://code.example.org/acme/app/pull/201",
+      ].join("\n"),
+    },
+  },
+  {
+    type: "link.preview",
+    payload: {
+      target: "rtn-1",
+      block: {
+        kind: "link_preview",
+        url: "https://news.example.org/lights-three-years",
+        format: "compact",
+        title: "Traffic lights, three years on",
+        image: IMAGE,
+      },
+    },
+  },
+  {
+    type: "link.preview",
+    payload: {
+      target: "rtn-1",
+      block: {
+        kind: "link_mention",
+        url: "https://news.example.org/lights-three-years",
+        icon: { artifactId: "art-1" },
+      },
+    },
+  },
+  {
+    type: "link.preview",
+    payload: {
+      target: "rtn-1",
+      block: {
+        kind: "link_mention",
+        url: "https://docs.example.org/document/d/7/edit",
+        title: "Roadmap",
+        icon: { artifactId: "art-1" },
+      },
+    },
+  },
+  {
+    type: "link.preview",
+    payload: {
+      target: "rtn-1",
+      block: {
+        kind: "link_mention",
+        url: "https://code.example.org/acme/app/pull/201",
+        title: "Fold routine failures",
+      },
+    },
+  },
+].map((entry, seq) =>
+  SessionEntrySchema.parse({
+    id: `rtn-${seq}`,
+    sessionId: "ses_main",
+    seq,
+    parentId: seq === 0 ? null : `rtn-${seq - 1}`,
+    ts: `2026-10-05T09:00:0${seq}.000Z`,
+    ...entry,
+  }),
+);
+
+function RoutineRow() {
+  const [row] = projectThreadView(ROUTINE_ENTRIES).rows;
+  const context = {
+    artifactTarget: { botId: "bot-1" },
+    inGroup: false,
+    waiting: null,
+    peerBot: () => undefined,
+    onOpenSession: () => undefined,
+  } as unknown as RowContext;
+  return (
+    <div data-message-id="mention-routine">
+      <ThreadRowBody
+        row={row!}
+        context={context}
+        chrome="row"
+        showAuthor={false}
+        showAvatar={false}
+        arrivesLive={false}
+      />
+    </div>
+  );
+}
+
 function Row({ message: row }: { message: MessageItem }) {
   return (
     <div
@@ -190,6 +305,7 @@ createRoot(document.getElementById("root")!).render(
       {MESSAGES.map((entry) => (
         <Row key={entry.id} message={entry} />
       ))}
+      <RoutineRow />
       <ComposerShell
         data-testid="composer-bar"
         attachments={
