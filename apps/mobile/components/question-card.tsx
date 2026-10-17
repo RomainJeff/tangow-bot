@@ -1,21 +1,25 @@
 import { useAskCard } from "@rakazo/chat-ui/ask-card";
 import { ASK_ANSWER_MAX_LENGTH } from "@rakazo/contracts";
 import type { AskCardBlock, AskForm, AskSettledView, Presenter, ViewChange } from "@rakazo/core";
-import { motion, radii, sizes } from "@rakazo/ui-tokens";
+import { motion, radii, sizes, springAt } from "@rakazo/ui-tokens";
+import type { Ref } from "react";
 import { useEffect, useRef, useState } from "react";
 import type { LayoutChangeEvent, TextProps } from "react-native";
 import { AppState, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import Animated, {
+  cancelAnimation,
   FadeIn,
-  FadeOut,
+  LayoutAnimationConfig,
   ReduceMotion,
+  runOnJS,
+  runOnUI,
   useAnimatedStyle,
   useSharedValue,
-  withSpring,
+  withTiming,
 } from "react-native-reanimated";
 import { mobileTokens } from "../lib/appearance";
 import { answerLines, interruptWhenAway } from "../lib/ask-card";
-import { useChatReducedMotion } from "../lib/chat-motion";
+import { CHAT_MOTION, useChatReducedMotion } from "../lib/chat-motion";
 import { commitHaptic, selectionHaptic } from "../lib/haptics";
 import { useI18n } from "../lib/i18n";
 import { useMobileTokens, useThemedStyles } from "../lib/native";
@@ -29,54 +33,158 @@ import { UserBubble } from "./user-bubble";
 const BLEED = 28;
 const BLEED_TOP = 4;
 const FREE = 1e5;
-const SPRING = { duration: motion.spring.response, dampingRatio: 1 - motion.spring.bounce };
-const fade = (ms: number, delay = 0) =>
-  FadeIn.duration(ms).delay(delay).reduceMotion(ReduceMotion.Never);
-/** Each arrival waits for what leaves to fade; a stack's step swaps at once, so the card never shows blank. */
-const ARRIVALS: Partial<Record<ViewChange["kind"], ReturnType<typeof fade>>> = {
-  settle: fade(motion.arrive, motion.fill),
-  reopen: fade(motion.arrive, motion.fill),
+const STEPS = 60;
+const CURVE = Array.from({ length: STEPS + 1 }, (_, i) =>
+  i === STEPS ? 1 : springAt((motion.flight * i) / STEPS),
+);
+/** `motion.spring` over `motion.flight`, the curve the web flight runs on, so both end on time. */
+const FLIGHT = {
+  duration: motion.flight,
+  easing: (t: number) => {
+    "worklet";
+    const at = Math.min(t * STEPS, STEPS - 1e-6);
+    const i = Math.floor(at);
+    const from = CURVE[i] ?? 1;
+    return from + ((CURVE[i + 1] ?? 1) - from) * (at - i);
+  },
 };
-const EXIT = FadeOut.duration(motion.fill).reduceMotion(ReduceMotion.Never);
+const fade = (ms: number) => FadeIn.duration(ms).reduceMotion(ReduceMotion.Never);
+
+/** A rect in the card's overlay, measured from its foot, which the inverted thread keeps still. */
+type Box = { left: number; bottom: number; width: number; height: number; radius: number };
+
+function boxIn(overlay: View, view: View, radius: number, done: (box: Box) => void) {
+  overlay.measureInWindow((ox, oy, _width, oh) =>
+    view.measureInWindow((left, top, width, height) =>
+      done({ left: left - ox, bottom: oy + oh - top - height, width, height, radius }),
+    ),
+  );
+}
 
 /**
- * The card keeps its height while its content changes, then springs to the new content's height.
- * Its height is a real layout prop, so the rows above in the inverted thread follow frame by frame.
+ * One movement on one spring. The card's height goes from what it was to its new content's as a
+ * layout prop, so the rows above in the inverted thread follow frame by frame. On a commit the
+ * answer's solid clone rides the same progress from its tile, or up from the card's foot, into the
+ * bubble, which shows on the frame the clone lands.
  */
-function useFold(still: boolean) {
-  const low = useSharedValue(0);
-  const high = useSharedValue(FREE);
-  /** Held or springing: until the spring rests, each new measure of the content retargets it. */
+function useFold() {
+  const progress = useSharedValue(1);
   const bound = useSharedValue(false);
-  const style = useAnimatedStyle(() => ({ minHeight: low.value, maxHeight: high.value }));
-  const [fold] = useState(() => {
-    let measured = 0;
+  const from = useSharedValue(0);
+  const to = useSharedValue(0);
+  const start = useSharedValue<Box | null>(null);
+  const end = useSharedValue<Box | null>(null);
+  const hidden = useSharedValue(false);
+  const [flying, setFlying] = useState(false);
+  const overlay = useRef<View>(null);
+  const source = useRef<View>(null);
+  const bubble = useRef<Text>(null);
+  const [state] = useState({ measured: 0, waiting: false, flying: false });
+  const land = () => {
+    state.flying = false;
+    setFlying(false);
+  };
+  const clear = () => {
+    "worklet";
+    start.value = null;
+    end.value = null;
+    hidden.value = false;
+  };
+  const fly = () => {
+    progress.value = withTiming(1, FLIGHT, (done) => {
+      if (!done) return;
+      bound.value = false;
+      clear();
+      runOnJS(land)();
+    });
+  };
+  const release = () => {
+    state.waiting = false;
+    bound.value = false;
+    clear();
+    land();
+  };
+  const style = useAnimatedStyle(() => {
+    const height = from.value + (to.value - from.value) * progress.value;
+    return bound.value
+      ? { minHeight: height, maxHeight: height }
+      : { minHeight: 0, maxHeight: FREE };
+  });
+  const clone = useAnimatedStyle(() => {
+    const target = end.value;
+    const origin = start.value ?? (target && { ...target, height: 0 });
+    if (!origin) return { display: "none" as const };
+    const rest = target ?? origin;
+    const at = (a: number, b: number) => a + (b - a) * (target ? progress.value : 0);
     return {
-      release() {
-        bound.value = false;
-        low.value = 0;
-        high.value = FREE;
-      },
-      hold(skip: boolean) {
-        if (skip) return;
-        bound.value = true;
-        low.value = measured;
-        high.value = measured;
-      },
-      onLayout(event: LayoutChangeEvent) {
-        measured = event.nativeEvent.layout.height + BLEED_TOP + BLEED;
-        if (!bound.value) return;
-        low.value = withSpring(measured, SPRING);
-        high.value = withSpring(measured, SPRING, (done) => {
-          if (!done) return;
-          bound.value = false;
-          low.value = 0;
-          high.value = FREE;
-        });
-      },
+      display: "flex" as const,
+      left: at(origin.left, rest.left),
+      bottom: at(origin.bottom, rest.bottom),
+      width: at(origin.width, rest.width),
+      height: at(origin.height, rest.height),
+      borderRadius: at(origin.radius, rest.radius),
     };
   });
-  return { ...fold, style, hold: () => fold.hold(still) };
+  /** The clone's text is laid out at the bubble's width from the start, so it never reflows. */
+  const cloneText = useAnimatedStyle(() => ({ width: (end.value ?? start.value)?.width ?? 0 }));
+  const shown = useAnimatedStyle(() => ({ opacity: hidden.value ? 0 : 1 }));
+  return {
+    flying,
+    overlay,
+    source,
+    bubble,
+    style,
+    clone,
+    cloneText,
+    shown,
+    release,
+    /**
+     * Keeps the card at its height, or where a running fold has it, until the new content lays out.
+     * `then` runs once the card is held on screen, so the new content never shows a frame unheld.
+     */
+    hold(then: () => void) {
+      const running = state.waiting || state.flying;
+      const { measured } = state;
+      state.waiting = true;
+      land();
+      runOnUI(() => {
+        cancelAnimation(progress);
+        const height = running ? from.value + (to.value - from.value) * progress.value : measured;
+        clear();
+        from.value = height;
+        to.value = height;
+        progress.value = 0;
+        bound.value = true;
+        // The style follows on the next frame; the content changes only after it held.
+        requestAnimationFrame(() => requestAnimationFrame(() => runOnJS(then)()));
+      })();
+    },
+    /** The chosen tile or field leaves as a clone; a button's answer rises from the card's foot. */
+    depart(fromSource: boolean, then: () => void) {
+      const lift = (box: Box | null) => {
+        start.value = box;
+        hidden.value = true;
+        state.flying = true;
+        setFlying(true);
+        then();
+      };
+      if (fromSource && overlay.current && source.current) {
+        boxIn(overlay.current, source.current, radii.card, lift);
+      } else lift(null);
+    },
+    onLayout(event: LayoutChangeEvent) {
+      state.measured = event.nativeEvent.layout.height + BLEED_TOP + BLEED;
+      // A later layout, mid-fold, moves where the fold ends.
+      to.value = state.measured;
+      if (!state.waiting) return;
+      state.waiting = false;
+      if (!state.flying || !overlay.current || !bubble.current) return fly();
+      boxIn(overlay.current, bubble.current, radii.bubble, (box) => {
+        end.value = box;
+        fly();
+      });
+    },
+  };
 }
 
 export function QuestionCard({
@@ -98,31 +206,27 @@ export function QuestionCard({
   const { t } = useI18n();
   const tokens = useMobileTokens();
   const styles = useThemedStyles(createStyles);
-  const fold = useFold(useChatReducedMotion());
-  const { release } = fold;
-  const [leaving, setLeaving] = useState<{ change: ViewChange; apply: () => boolean } | null>(null);
+  const still = useChatReducedMotion();
+  const fold = useFold();
   const arrival = useRef<ViewChange["kind"] | null>(null);
-  // The leaving content renders once with its exit before the change applies; a chosen tile
-  // shows its fill first.
+  const filling = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(filling.current), []);
+  /** The chosen tile fills, then flies into its bubble; reduced motion swaps after the same fill. */
   const present: Presenter = (change, apply) => {
-    fold.hold();
     if (change.kind === "settle") commitHaptic();
-    setLeaving({ change, apply });
+    const swap = () => {
+      arrival.current = change.kind;
+      if (!apply()) fold.release();
+    };
+    const source = change.kind === "settle" && change.from.kind !== "button";
+    const leave = change.kind !== "settle" || still ? swap : () => fold.depart(source, swap);
+    const go = () => {
+      if (source) filling.current = setTimeout(leave, motion.fill);
+      else leave();
+    };
+    if (still) go();
+    else fold.hold(go);
   };
-  useEffect(() => {
-    if (!leaving) return;
-    const { change, apply } = leaving;
-    const filling = change.kind === "settle" && change.from.kind !== "button";
-    const timer = setTimeout(
-      () => {
-        arrival.current = change.kind;
-        setLeaving(null);
-        if (!apply()) release();
-      },
-      filling ? motion.fill : 0,
-    );
-    return () => clearTimeout(timer);
-  }, [leaving, release]);
 
   const { view, act } = useAskCard({
     block,
@@ -135,22 +239,76 @@ export function QuestionCard({
   useEffect(() => interruptWhenAway(AppState, act.interrupt), [act]);
 
   const step = view.kind === "open" ? view.step : null;
+  const entering =
+    arrival.current === "reopen"
+      ? fade(motion.arrive)
+      : arrival.current === "settle" && still
+        ? fade(CHAT_MOTION.reducedFadeMs)
+        : undefined;
   return (
     <Animated.View pointerEvents="box-none" style={[styles.fold, fold.style]}>
       <Animated.View
         key={view.kind === "settled" ? "settled" : (step?.question.id ?? "recap")}
         onLayout={fold.onLayout}
-        entering={arrival.current ? ARRIVALS[arrival.current] : undefined}
-        exiting={leaving && leaving.change.kind !== "advance" ? EXIT : undefined}
+        entering={entering}
       >
-        {view.kind === "settled" ? (
-          <AskSettled view={view.settled} lineProps={questionProps} />
-        ) : (
-          openCard()
-        )}
+        {/* What leaves goes at once: the framed block's own exit would fade it over the flight. */}
+        <LayoutAnimationConfig skipExiting>
+          {view.kind === "settled" ? settled(view.settled) : openCard()}
+        </LayoutAnimationConfig>
       </Animated.View>
+      <View
+        ref={fold.overlay}
+        collapsable={false}
+        pointerEvents="none"
+        style={StyleSheet.absoluteFill}
+      >
+        {fold.flying && view.kind === "settled" ? (
+          <Animated.View style={[styles.clone, fold.clone]}>
+            <Animated.View style={[styles.cloneText, fold.cloneText]}>
+              <UserBubble style={styles.cloneBubble}>
+                {answerLines(view.settled, t).join("\n")}
+              </UserBubble>
+            </Animated.View>
+          </Animated.View>
+        ) : null}
+      </View>
     </Animated.View>
   );
+
+  /** A question card once answered or no longer waiting: one muted line, then the answer. */
+  function settled(settledView: AskSettledView) {
+    const lines = answerLines(settledView, t);
+    const muted = [styles.settledText, { color: tokens.mutedForeground }];
+    const answered = settledView.kind === "answered";
+    return (
+      <View style={styles.settled}>
+        <View style={styles.settledLine}>
+          <NativeSymbol
+            ios={answered ? "checkmark" : "stop.circle"}
+            android={answered ? "checkmark" : "stop-circle-outline"}
+            size={13}
+            color={tokens.mutedForeground}
+          />
+          <Text {...questionProps} numberOfLines={1} style={[muted, styles.shrink]}>
+            {settledView.line}
+          </Text>
+          {answered ? null : <Text style={muted}>· {t("No longer active")}</Text>}
+        </View>
+        {lines.length ? (
+          <Animated.View style={fold.shown}>
+            <UserBubble
+              ref={fold.bubble}
+              selectable
+              accessibilityLabel={t("Your answer: {answer}", { answer: lines.join("; ") })}
+            >
+              {lines.join("\n")}
+            </UserBubble>
+          </Animated.View>
+        ) : null}
+      </View>
+    );
+  }
 
   function openCard() {
     if (view.kind !== "open") return null;
@@ -213,24 +371,26 @@ export function QuestionCard({
           {step ? null : alert}
         </View>
       ) : undefined;
+    // Not disabled while busy: the card ignores them as it commits, and a dimmed Send would show
+    // grey on the frames before it folds.
     const actions =
       step?.skip || view.primary ? (
         <>
           {step?.skip ? (
-            <CapsuleButton
-              kind="tertiary"
-              height={TERTIARY_CAPSULE_HEIGHT}
-              label={t("Skip")}
-              disabled={busy}
-              onPress={act.skip}
-            />
+            <View style={styles.trailing}>
+              <CapsuleButton
+                kind="tertiary"
+                height={TERTIARY_CAPSULE_HEIGHT}
+                label={t("Skip")}
+                onPress={act.skip}
+              />
+            </View>
           ) : null}
           {view.primary ? (
             <CapsuleButton
               kind="primary"
               height={sizes.mobileStack}
               label={view.primary === "next" ? t("Next") : t("Send")}
-              disabled={busy}
               onPress={act.confirm}
             />
           ) : null}
@@ -249,12 +409,14 @@ export function QuestionCard({
         <View style={[styles.tiles, !actions && styles.tilesFoot]}>
           {question.options.map((option) => {
             const chosen = selected.includes(option.id);
+            const fill = filled?.kind === "option" && filled.optionId === option.id;
             return (
               <Tile
                 key={option.id}
+                ref={fill ? fold.source : undefined}
                 label={option.label}
                 selected={chosen}
-                filled={filled?.kind === "option" && filled.optionId === option.id}
+                filled={fill}
                 multi={question.multiSelect}
                 disabled={busy}
                 onPress={() => {
@@ -267,6 +429,7 @@ export function QuestionCard({
           })}
           {field ? (
             <AnswerField
+              ref={filled?.kind === "field" ? fold.source : undefined}
               text={field.text}
               canSend={field.canSend}
               filled={filled?.kind === "field"}
@@ -293,6 +456,7 @@ export function QuestionCard({
 }
 
 function Tile({
+  ref,
   label,
   selected = false,
   filled = false,
@@ -302,6 +466,7 @@ function Tile({
   trailing,
   onPress,
 }: {
+  ref?: Ref<View>;
   label: string;
   selected?: boolean;
   filled?: boolean;
@@ -316,6 +481,7 @@ function Tile({
   const ink = filled ? tokens.chatUserForeground : tokens.foreground;
   return (
     <Pressable
+      ref={ref}
       accessibilityRole={multi ? "checkbox" : "button"}
       accessibilityState={multi ? { checked: selected, disabled } : { selected, disabled }}
       disabled={disabled}
@@ -349,6 +515,7 @@ function Tile({
 }
 
 function AnswerField({
+  ref,
   text,
   canSend,
   filled,
@@ -358,6 +525,7 @@ function AnswerField({
   onChange,
   onSend,
 }: {
+  ref?: Ref<View>;
   text: string;
   canSend: boolean;
   filled: boolean;
@@ -378,6 +546,7 @@ function AnswerField({
     : `0 0 0 1px ${tokens.optionRingHover}`;
   return (
     <View
+      ref={ref}
       style={[
         styles.tile,
         styles.field,
@@ -420,39 +589,6 @@ function AnswerField({
           color={tokens.primaryForeground}
         />
       </Pressable>
-    </View>
-  );
-}
-
-/** A question card once answered or no longer waiting: one muted line, then the answer. */
-export function AskSettled({ view, lineProps }: { view: AskSettledView; lineProps?: TextProps }) {
-  const { t } = useI18n();
-  const tokens = useMobileTokens();
-  const styles = useThemedStyles(createStyles);
-  const lines = answerLines(view, t);
-  const muted = [styles.settledText, { color: tokens.mutedForeground }];
-  return (
-    <View style={styles.settled}>
-      <View style={styles.settledLine}>
-        <NativeSymbol
-          ios={view.kind === "answered" ? "checkmark" : "stop.circle"}
-          android={view.kind === "answered" ? "checkmark" : "stop-circle-outline"}
-          size={13}
-          color={tokens.mutedForeground}
-        />
-        <Text {...lineProps} numberOfLines={1} style={[muted, styles.shrink]}>
-          {view.line}
-        </Text>
-        {view.kind === "inactive" ? <Text style={muted}>· {t("No longer active")}</Text> : null}
-      </View>
-      {lines.length ? (
-        <UserBubble
-          selectable
-          accessibilityLabel={t("Your answer: {answer}", { answer: lines.join("; ") })}
-        >
-          {lines.join("\n")}
-        </UserBubble>
-      ) : null}
     </View>
   );
 }
@@ -508,6 +644,10 @@ function createStyles() {
       justifyContent: "center",
       backgroundColor: tokens.primary,
     },
+    trailing: { flexDirection: "row", justifyContent: "flex-end" },
+    clone: { position: "absolute", overflow: "hidden", backgroundColor: tokens.chatUser },
+    cloneText: { position: "absolute", top: 0, bottom: 0, left: 0, justifyContent: "center" },
+    cloneBubble: { alignSelf: "flex-start", maxWidth: "100%" },
     settled: { gap: 14 },
     settledLine: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 14 },
     settledText: nativeTextStyle("meta", { size: 14 }),
