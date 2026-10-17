@@ -16,7 +16,7 @@ import {
   previewStoreContext,
   type ResolvedLinkPreview,
   removePreviewBytes,
-  resolveLinkPreview,
+  resolveLinkPreviewDetailed,
 } from "./service.js";
 
 /** The whole job, from the first read to the last write. */
@@ -147,7 +147,13 @@ async function attachPreview(
   budget: JobBudget,
 ): Promise<void> {
   const scope = { spaceId: thread.spaceId, userId: thread.userId, source: "job" as const };
-  const preview = await resolveLinkPreview(deps, scope, link, budget.signal, budget.deadlineAt);
+  const { preview } = await resolveLinkPreviewDetailed(
+    deps,
+    scope,
+    link,
+    budget.signal,
+    budget.deadlineAt,
+  );
   // Past the deadline the page may be gone from under us: write nothing.
   if (!preview || budget.signal.aborted) return;
 

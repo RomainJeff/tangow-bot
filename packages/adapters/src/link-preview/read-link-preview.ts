@@ -1,4 +1,5 @@
-import { LINK_PREVIEW_IMAGE_FIT } from "@rakazo/contracts";
+import { LINK_MENTION_TITLE_MAX_LENGTH, LINK_PREVIEW_IMAGE_FIT } from "@rakazo/contracts";
+import { previewTitleFromUrl, sanitizePreviewTitle } from "@rakazo/core";
 import type { LinkFacts } from "@rakazo/db";
 import { isTransientReason, LinkPreviewError, type LinkPreviewFailureReason } from "./errors.js";
 import type { LinkPreviewHead } from "./head-parser.js";
@@ -55,7 +56,7 @@ export function cardOf<Img extends { width: number; height: number }>(
   read: LinkFacts<Img, unknown>,
 ): { format: LinkPreviewFormat; title?: string; image?: Img & { fit?: "contain" } } | null {
   if (read.kind === "photo") return { format: "photo", image: read.image };
-  if (read.kind !== "page" || !read.article || !read.title) return null;
+  if (read.kind !== "page" || read.article !== true || !read.title) return null;
   const { title, image } = read;
   // An icon standing in for the page image never makes a large card.
   const format = decideLinkPreviewFormat({
@@ -67,12 +68,35 @@ export function cardOf<Img extends { width: number; height: number }>(
   return format && { format, title, ...(image ? { image } : {}) };
 }
 
+/**
+ * The mention a read makes for a link written as `url`, or null when the link stays plain (it
+ * could not be read, or is a direct image). The title is the page's own unless the read ended on
+ * another site, else the label of the link's path, and absent when only the host is left.
+ */
+export function mentionOf<Icon>(
+  url: string,
+  read: LinkFacts<unknown, Icon> | { kind: "unreadable" },
+): { title?: string; icon?: Icon } | null {
+  if (read.kind !== "page" && read.kind !== "refused") return null;
+  const own = read.kind === "page" && !read.crossSite ? read.title : undefined;
+  const title = [own, previewTitleFromUrl(url)]
+    .map((label) => label && sanitizePreviewTitle(label, LINK_MENTION_TITLE_MAX_LENGTH))
+    .find(Boolean);
+  return { ...(title ? { title } : {}), ...(read.icon ? { icon: read.icon } : {}) };
+}
+
+/** One icon read per site and per job: a later link of the same site reuses the first answer. */
+export type IconReads = Map<string, Promise<Uint8Array | undefined>>;
+
 export interface LinkPreviewReadDeps
   extends Pick<LinkPreviewFetchOptions, "resolveHostname" | "signal" | "limiter"> {
   /** Tests only (`createLinkPreviewFetcherForTests`): production composition never sets it. */
   fetchResource?: LinkPreviewResourceFetcher;
   pageTimeoutMs?: number;
   imageTimeoutMs?: number;
+  /** False for a link that can only become a mention: its page image is never read. */
+  pageImage?: false;
+  icons?: IconReads;
   /** When the job's budget ends (epoch ms). Without it the icon is always tried. */
   deadlineAt?: number;
   encode?: ImageEncodeOptions;
@@ -156,8 +180,10 @@ async function previewFromHead(
   const at = new URL(link);
   const title = namesItsSite(head, at) ? undefined : head.title;
   const crossSite = !sameSite(at.hostname, new URL(final).hostname);
-  // The page image costs a request: not worth it for a page that gets no card.
-  const card = head.article && title !== undefined;
+  // The page image costs a request: not worth it for a page that gets no card. An article read
+  // for a mention is recorded as unread, so a card read later reads it again.
+  const cardable = head.article && title !== undefined;
+  const card = cardable && deps.pageImage !== false;
   let image: (EncodedPreviewImage & { fit?: typeof LINK_PREVIEW_IMAGE_FIT }) | undefined =
     card && head.imageUrl ? await readImage(head.imageUrl, deps, fail) : undefined;
   if (card && head.imageUrl && !image && deps.signal?.aborted) return cutShort("aborted");
@@ -180,7 +206,7 @@ async function previewFromHead(
   return {
     ok: true,
     kind: "page",
-    article: head.article,
+    article: cardable && !card ? "unread" : head.article,
     ...(title ? { title } : {}),
     ...(crossSite ? { crossSite: true } : {}),
     ...(image ? { image } : {}),
@@ -292,23 +318,30 @@ async function readImage(
 }
 
 /** The bytes of the icon a page names, read only from that page's own site, every redirect included. */
-async function readIcon(
+function readIcon(
   iconUrl: string,
   pageUrl: string,
   deps: LinkPreviewReadDeps,
   fail: Fail,
 ): Promise<Uint8Array | undefined> {
-  try {
-    const resource = await (deps.fetchResource ?? fetchLinkPreviewResource)(iconUrl, "icon", {
-      ...fetchOptionsOf(deps),
-      deadlineMs: deps.imageTimeoutMs ?? LINK_PREVIEW_IMAGE_TIMEOUT_MS,
-      site: new URL(pageUrl).hostname,
-    });
-    return resource.bytes;
-  } catch (error) {
-    fail("icon", error);
-    return undefined;
-  }
+  const site = new URL(pageUrl).hostname;
+  const known = deps.icons?.get(site);
+  if (known) return known;
+  const read = (async () => {
+    try {
+      const resource = await (deps.fetchResource ?? fetchLinkPreviewResource)(iconUrl, "icon", {
+        ...fetchOptionsOf(deps),
+        deadlineMs: deps.imageTimeoutMs ?? LINK_PREVIEW_IMAGE_TIMEOUT_MS,
+        site,
+      });
+      return resource.bytes;
+    } catch (error) {
+      fail("icon", error);
+      return undefined;
+    }
+  })();
+  deps.icons?.set(site, read);
+  return read;
 }
 
 async function encodeIcon(
