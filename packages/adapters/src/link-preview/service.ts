@@ -1,6 +1,5 @@
 import type { AdapterContext, ArtifactStore } from "@rakazo/adapter-kit";
-import { isPreviewableUrl } from "@rakazo/contracts";
-import { hasSecretParam, isAuthenticationDestination, normalizePreviewUrl } from "@rakazo/core";
+import { isEligibleLink, normalizePreviewUrl } from "@rakazo/core";
 import {
   type CachedLinkRead,
   findCachedLinkPreview,
@@ -16,6 +15,7 @@ import type { LinkPreviewFailureReason } from "./errors.js";
 import type { EncodedPreviewImage } from "./image.js";
 import {
   cardOf,
+  type IconReads,
   type LinkPreviewReadDeps,
   type LinkPreviewReadResult,
   readLinkPreview,
@@ -83,6 +83,10 @@ export async function removePreviewBytes(
 /** What a preview lookup found, and whether the sender's own device may still read the page. */
 export interface LinkPreviewResolution {
   preview: ResolvedLinkPreview | null;
+  /** What the space's own read knows of the page (a mention's only source), or null. */
+  read: CachedLinkRead | null;
+  /** The space's read quota said no: nothing was read or cached. */
+  limited?: true;
   /**
    * The site refused the server (401, 402, 403, 451) or answered with a passing HTTP error (429, 5xx): the
    * sender's device may read the page and send its head (`resolveLinkPreviewWithDeviceHead`).
@@ -111,22 +115,17 @@ const DEVICE_RETRY_REASONS: ReadonlySet<LinkPreviewFailureReason> = new Set([
   "server_error",
 ]);
 
-const NOTHING: LinkPreviewResolution = { preview: null, deviceReadable: false, refused: false };
+const NOTHING: LinkPreviewResolution = {
+  preview: null,
+  read: null,
+  deviceReadable: false,
+  refused: false,
+};
 
-/**
- * One preview, from the cache or from the page: the single path the job and the composer share.
- * A link that is not previewable, or names a secret in its query, is never read, cached or logged.
- * Returns null whenever there is nothing to show: a refusal, a failed read, or a limit (a limit
- * caches nothing, so the link is tried again later). Never throws.
- */
-export async function resolveLinkPreview(
-  deps: LinkPreviewServiceDeps,
-  scope: LinkPreviewScope,
-  url: string,
-  signal?: AbortSignal,
-  deadlineAt?: number,
-): Promise<ResolvedLinkPreview | null> {
-  return (await resolveLinkPreviewDetailed(deps, scope, url, signal, deadlineAt)).preview;
+/** How deep a link is read: a mention never needs the page image. */
+export interface LinkReadOptions {
+  mention?: true;
+  icons?: IconReads;
 }
 
 /**
@@ -148,27 +147,35 @@ function cardOfCached(entry: CachedLinkRead): ResolvedLinkPreview | null {
   return entry.kind === "unreadable" ? null : cardOf(entry);
 }
 
-/** `resolveLinkPreview`, plus whether the sender's device may read what the server could not. */
+/**
+ * One link, from the cache or from the page: the single path the job and the composer share. A
+ * link `isEligibleLink` refuses is never read, cached or logged. `preview` is null whenever there
+ * is no card: a refusal, a failed read, a page that is no article, or a limit (a limit caches
+ * nothing, so the link is tried again later). Also says whether the sender's device may read what
+ * the server could not. Never throws.
+ */
 export async function resolveLinkPreviewDetailed(
   deps: LinkPreviewServiceDeps,
   scope: LinkPreviewScope,
   url: string,
   signal?: AbortSignal,
   deadlineAt?: number,
+  options: LinkReadOptions = {},
 ): Promise<LinkPreviewResolution> {
   try {
-    if (!isPreviewableUrl(url) || hasSecretParam(url)) return NOTHING;
+    if (!isEligibleLink(url)) return NOTHING;
     const normalized = normalizePreviewUrl(url);
     if (!normalized) return NOTHING;
     const now = deps.now?.() ?? new Date();
     const keyHash = linkPreviewKeyHash(scope.spaceId, normalized);
 
     const cached = await findCachedLinkPreview(deps.prisma, scope.spaceId, keyHash, now);
-    if (cached) {
+    // An article read for a mention lacks what its card needs: read it again for one.
+    if (cached && (options.mention || cached.kind !== "page" || cached.article !== "unread")) {
       const refused = cached.kind === "refused";
       const device = refused ? await findOwnDeviceCard(deps, scope, normalized, now) : null;
-      if (device) return { preview: device, deviceReadable: false, refused };
-      return { preview: cardOfCached(cached), deviceReadable: refused, refused };
+      if (device) return { preview: device, read: cached, deviceReadable: false, refused };
+      return { preview: cardOfCached(cached), read: cached, deviceReadable: refused, refused };
     }
 
     if (signal?.aborted) return NOTHING;
@@ -178,13 +185,15 @@ export async function resolveLinkPreviewDetailed(
       source: scope.source,
       now,
     });
-    if (!allowed) return NOTHING;
+    if (!allowed) return { ...NOTHING, limited: true };
 
     const read = deps.read ?? readLinkPreview;
     const result = await read(url, {
       ...deps.readDeps,
       ...(signal ? { signal } : {}),
       ...(deadlineAt === undefined ? {} : { deadlineAt }),
+      ...(options.mention ? { pageImage: false as const } : {}),
+      ...(options.icons ? { icons: options.icons } : {}),
       // Host and reason only: the link can carry a token.
       log: (event) => getLogger().info("link preview read failed", event),
     });
@@ -192,13 +201,14 @@ export async function resolveLinkPreviewDetailed(
       // Only a failure that describes the link is worth remembering; a slow or busy site is not.
       if (!result.transient) await storeEntry(deps, scope, keyHash, { kind: "unreadable" }, now);
       const deviceReadable = result.transient && DEVICE_RETRY_REASONS.has(result.reason);
-      return { preview: null, deviceReadable, refused: false };
+      return { preview: null, read: null, deviceReadable, refused: false };
     }
     const refused = result.kind === "refused";
     const device = refused ? await findOwnDeviceCard(deps, scope, normalized, now) : null;
     const entry = await storeResult(deps, scope, keyHash, result, now);
-    if (device) return { preview: device, deviceReadable: false, refused };
-    return { preview: entry ? cardOfCached(entry) : null, deviceReadable: refused, refused };
+    if (device) return { preview: device, read: entry, deviceReadable: false, refused };
+    const preview = entry ? cardOfCached(entry) : null;
+    return { preview, read: entry, deviceReadable: refused, refused };
   } catch (error) {
     // The error name only: Prisma and fetch errors can carry the request.
     getLogger().warn("link preview failed", {
@@ -228,9 +238,8 @@ export async function resolveLinkPreviewWithDeviceHead(
 ): Promise<LinkPreviewResolution> {
   const server = await resolveLinkPreviewDetailed(deps, scope, url, signal);
   try {
+    // A link that is not eligible never got this far.
     if (!server.deviceReadable) return server;
-    // An address that cannot be previewed never got this far; a sign-in page is refused here too.
-    if (isAuthenticationDestination(url)) return NOTHING;
     if (pageHead.length === 0 || pageHead.length > MAX_HTML_BYTES || BEYOND_LATIN1.test(pageHead)) {
       return server;
     }
@@ -267,6 +276,7 @@ export async function resolveLinkPreviewWithDeviceHead(
     if (!preview) return server;
     return {
       preview,
+      read: server.read,
       deviceReadable: false,
       refused: server.refused,
       ...(!server.refused && preview.image ? { ephemeralImageKey: preview.image.key } : {}),

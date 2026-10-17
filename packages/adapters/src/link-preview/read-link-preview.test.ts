@@ -4,8 +4,10 @@ import { createReadLimiter } from "./limits.js";
 import {
   cardOf,
   decideLinkPreviewFormat,
+  type IconReads,
   type LinkPreviewReadDeps,
   type LinkPreviewReadResult,
+  mentionOf,
   readLinkPreview,
   readLinkPreviewFromHead,
 } from "./read-link-preview.js";
@@ -553,6 +555,43 @@ describe("readLinkPreview: site icon fallback (CA 61-63)", () => {
   });
 });
 
+describe("mentionOf", () => {
+  const icon = { key: "icon-1" };
+  const DOC = "https://app.notion.test/team/Roadmap-Q4-0123456789abcdef";
+
+  it("takes the page title and icon", () => {
+    expect(mentionOf(DOC, { kind: "page", article: false, title: "Roadmap", icon })).toEqual({
+      title: "Roadmap",
+      icon,
+    });
+  });
+
+  it("falls back on the path label for a title from another site, none, or a refused page", () => {
+    const fromElsewhere = {
+      kind: "page",
+      article: false,
+      title: "Sign in",
+      crossSite: true,
+    } as const;
+    expect(mentionOf(DOC, fromElsewhere)).toEqual({ title: "Roadmap Q4" });
+    expect(mentionOf(DOC, { kind: "page", article: true })).toEqual({ title: "Roadmap Q4" });
+    expect(mentionOf(DOC, { kind: "refused", icon })).toEqual({ title: "Roadmap Q4", icon });
+  });
+
+  it("still makes a mention when only the host is left, and caps a long title at 80", () => {
+    expect(mentionOf("https://figma.test/file/x/edit", { kind: "page", article: false })).toEqual(
+      {},
+    );
+    const long = mentionOf(DOC, { kind: "page", article: false, title: "a".repeat(200) });
+    expect(long?.title).toBe("a".repeat(80));
+  });
+
+  it("leaves an unreadable link or a direct image plain", () => {
+    expect(mentionOf(DOC, { kind: "unreadable" })).toBeNull();
+    expect(mentionOf(DOC, { kind: "photo", image: { width: 1, height: 1 } })).toBeNull();
+  });
+});
+
 describe("readLinkPreview: pages that are not articles", () => {
   const NOTION = "https://app.notion.test/workspace/Roadmap-0123456789abcdef";
   // The private Notion-style page measured on 2026-10-16: HTTP 200, a marketing title and image.
@@ -747,6 +786,46 @@ describe("readLinkPreview: the facts one read records", () => {
       icon: expect.objectContaining(icon64),
     });
     expect(requests).toEqual([ARTICLE, "https://news.example.test/touch.png"]);
+  });
+
+  it("reads an article for a mention without its page image, and records it unread", async () => {
+    const icon = await png(180, 180);
+    const { deps: d, requests } = deps((url) =>
+      url === ARTICLE
+        ? head(
+            `${ART}<title>Doc</title><meta property="og:image" content="/og.png"><link rel="apple-touch-icon" href="/i.png">`,
+          )
+        : imageResponse(icon),
+    );
+    expect(await readLinkPreview(ARTICLE, { ...d, pageImage: false })).toEqual({
+      ok: true,
+      kind: "page",
+      article: "unread",
+      title: "Doc",
+      icon: expect.objectContaining(icon64),
+    });
+    expect(requests).toEqual([ARTICLE, "https://news.example.test/i.png"]);
+  });
+
+  it("reads one icon per site for all the links of a job (CA 23)", async () => {
+    const icon = await png(64, 64);
+    const { deps: d, requests } = deps((url) =>
+      url.endsWith(".png")
+        ? imageResponse(icon)
+        : head(`<title>${url.slice(-1)}</title><link rel="apple-touch-icon" href="/i.png">`),
+    );
+    const icons: IconReads = new Map();
+    const first = await readLinkPreview("https://docs.example.test/a", { ...d, icons });
+    const second = await readLinkPreview("https://docs.example.test/b", { ...d, icons });
+    expect([first, second]).toMatchObject([
+      { title: "a", icon: icon64 },
+      { title: "b", icon: icon64 },
+    ]);
+    expect(requests).toEqual([
+      "https://docs.example.test/a",
+      "https://docs.example.test/i.png",
+      "https://docs.example.test/b",
+    ]);
   });
 
   it.each([

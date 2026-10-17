@@ -1,12 +1,7 @@
 import { createHash } from "node:crypto";
 import type { ArtifactStore, BackgroundJobPayloads } from "@rakazo/adapter-kit";
 import { LinkPreviewBlock, type LinkPreviewCard } from "@rakazo/contracts";
-import {
-  firstEligibleLink,
-  hasSecretParam,
-  isAuthenticationDestination,
-  messageHostsLinkPreview,
-} from "@rakazo/core";
+import { linkMentionCandidates, messageHostsLinkPreview } from "@rakazo/core";
 import {
   appendLinkPreviewBlock,
   blocksOf,
@@ -21,7 +16,7 @@ import {
   previewStoreContext,
   type ResolvedLinkPreview,
   removePreviewBytes,
-  resolveLinkPreview,
+  resolveLinkPreviewDetailed,
 } from "./service.js";
 
 /** The whole job, from the first read to the last write. */
@@ -64,8 +59,7 @@ export function linkPreviewCandidate(message: { role: string; blocks: unknown })
         : [],
     )
     .join("\n");
-  const link = firstEligibleLink(text);
-  return link && !hasSecretParam(link) && !isAuthenticationDestination(link) ? link : null;
+  return linkMentionCandidates(text)[0]?.url ?? null;
 }
 
 type ThreadScope = {
@@ -153,7 +147,13 @@ async function attachPreview(
   budget: JobBudget,
 ): Promise<void> {
   const scope = { spaceId: thread.spaceId, userId: thread.userId, source: "job" as const };
-  const preview = await resolveLinkPreview(deps, scope, link, budget.signal, budget.deadlineAt);
+  const { preview } = await resolveLinkPreviewDetailed(
+    deps,
+    scope,
+    link,
+    budget.signal,
+    budget.deadlineAt,
+  );
   // Past the deadline the page may be gone from under us: write nothing.
   if (!preview || budget.signal.aborted) return;
 

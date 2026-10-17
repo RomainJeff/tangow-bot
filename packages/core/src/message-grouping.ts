@@ -1,4 +1,5 @@
 import type { MessageBlock, ThreadItem, ThreadMessage } from "@rakazo/contracts";
+import { LINK_BLOCK_KINDS } from "@rakazo/contracts";
 import { showsTimeMarker } from "./thread-time-markers.js";
 
 /** Consecutive messages from the same bot within this window collapse under one header
@@ -26,8 +27,8 @@ export function isNarrationMessage(message: Pick<ThreadMessage, "role" | "blocks
         block.kind === "text" ||
         block.kind === "progress" ||
         block.kind === "steps" ||
-        block.kind === "link_preview" ||
-        block.kind === "skill_source",
+        block.kind === "skill_source" ||
+        LINK_BLOCK_KINDS.has(block.kind),
     )
   );
 }
@@ -73,7 +74,7 @@ export function isUserNarrationMessage(message: Pick<ThreadMessage, "role" | "bl
   return (
     message.role === "user" &&
     message.blocks.length > 0 &&
-    message.blocks.every((block) => block.kind === "text" || block.kind === "link_preview")
+    message.blocks.every((block) => block.kind === "text" || LINK_BLOCK_KINDS.has(block.kind))
   );
 }
 

@@ -1,5 +1,5 @@
 import type { Actor, MessageBlock, SearchHit } from "@rakazo/contracts";
-import { toThreadEntry } from "@rakazo/contracts";
+import { LINK_BLOCK_KINDS, toThreadEntry } from "@rakazo/contracts";
 import { extractLinksFromText, matchesSearchQuery, snippetAroundMatch } from "@rakazo/core";
 import type { SessionEntryRow } from "@rakazo/db";
 import { ENTRY_ON_CHAIN, Prisma, type PrismaClient, sessionEntryFromRow } from "@rakazo/db";
@@ -10,6 +10,11 @@ const SEARCH_LIMIT = 25;
 const CONVERSATION_HIT_LIMIT = 5;
 /** The entries of a thread's main session that hold what someone said, as message blocks. */
 const MESSAGE_ENTRY_TYPES = Prisma.sql`('user.message', 'assistant.text', 'bot.text')`;
+
+/** The JSON path of the blocks the SQL pre-filter may match: never a link's card or mention. */
+const SEARCHABLE_BLOCKS = `$[*] ? (!exists(@.kind) || (${[...LINK_BLOCK_KINDS]
+  .map((kind) => `@.kind != "${kind}"`)
+  .join(" && ")}))`;
 
 /** The columns of a searched entry, its own bot named apart from the thread's. */
 const ENTRY_COLUMNS = Prisma.sql`e.id, e."sessionId", e.seq, e."parentId", e.type, e.payload,
@@ -290,7 +295,7 @@ export async function querySpaceSearch(
       AND t."userId" = ${actor.userId}
       AND b."archivedAt" IS NULL
       AND e.type IN ${MESSAGE_ENTRY_TYPES}
-      AND jsonb_path_query_array(e.payload -> 'blocks', '$[*] ? (!exists(@.kind) || @.kind != "link_preview")')::text ILIKE ${pattern}
+      AND jsonb_path_query_array(e.payload -> 'blocks', ${SEARCHABLE_BLOCKS}::jsonpath)::text ILIKE ${pattern}
       AND ${ENTRY_ON_CHAIN}
     ORDER BY e."createdAt" DESC, e.id
     LIMIT ${SEARCH_LIMIT} OFFSET ${offset}
@@ -321,7 +326,7 @@ export async function querySpaceSearch(
     WHERE t."spaceId" = ${actor.spaceId}
       AND t."userId" = ${actor.userId}
       AND e.type IN ${MESSAGE_ENTRY_TYPES}
-      AND jsonb_path_query_array(e.payload -> 'blocks', '$[*] ? (!exists(@.kind) || @.kind != "link_preview")')::text ILIKE ${pattern}
+      AND jsonb_path_query_array(e.payload -> 'blocks', ${SEARCHABLE_BLOCKS}::jsonpath)::text ILIKE ${pattern}
       AND ${ENTRY_ON_CHAIN}
     ORDER BY e."createdAt" DESC, e.id
     LIMIT ${SEARCH_LIMIT} OFFSET ${offset}
@@ -389,8 +394,8 @@ function pushMessageHits(
       }
     }
   }
-  // A preview card holds page content (title, image id), not anything the person wrote or kept.
-  const searchable = blocks.filter((block) => block.kind !== "link_preview");
+  // A link's card or mention holds page content (title, image id), not anything anyone wrote.
+  const searchable = blocks.filter((block) => !LINK_BLOCK_KINDS.has(block.kind));
   if (!messageHit && matchesSearchQuery(ctx.query, JSON.stringify(searchable))) {
     ctx.push({
       kind: "message",

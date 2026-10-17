@@ -520,6 +520,7 @@ const RUN_BLOCK_ENTRY: {
   handoff: null,
   routine_run: null,
   skill_source: null,
+  link_mention: null,
 };
 
 /**

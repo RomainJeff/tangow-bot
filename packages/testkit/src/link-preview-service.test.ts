@@ -1,4 +1,4 @@
-import { createLinkPreviewFetcherForTests, resolveLinkPreview } from "@rakazo/adapters";
+import { createLinkPreviewFetcherForTests, resolveLinkPreviewDetailed } from "@rakazo/adapters";
 import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createFakeThreadDb } from "./fake-thread-db.js";
@@ -8,6 +8,9 @@ const scope = { spaceId: "space-1", userId: "user-1", source: "job" as const };
 const publicResolver = async () => [{ address: "8.8.8.8", family: 4 }];
 const page = (body: string) =>
   new Response(body, { headers: { "content-type": "text/html; charset=utf-8" } });
+
+const resolveLinkPreview = async (...args: Parameters<typeof resolveLinkPreviewDetailed>) =>
+  (await resolveLinkPreviewDetailed(...args)).preview;
 
 afterEach(() => installLogger(createLogger({ service: "rakazo-worker", level: "off", sinks: [] })));
 
@@ -124,6 +127,8 @@ describe("logs hold the host only (CA 56)", () => {
       "https://exa mple.test/%zz?token=SECRETVALUE",
       "https://h.tld/p?token=SECRETVALUE#f",
       "https://h.tld/p?Session=SECRETVALUE",
+      "https://h.tld/invite/SECRETVALUE",
+      "https://h.tld/a/Confirm/SECRETVALUE",
       "javascript:alert(1)",
       "https://user:pw@h.tld/",
     ]) {
@@ -155,6 +160,38 @@ describe("one attempt (CA 37)", () => {
     expect(failing.requests).toEqual(["https://h.tld/b"]);
     // A transient failure leaves nothing in the cache.
     expect(failing.db.tables.linkPreviewCache.size).toBe(0);
+  });
+});
+
+describe("a mention's read (CA 16 to 19)", () => {
+  const ARTICLE = `<head><meta property="og:type" content="article"><title>T</title><meta property="og:image" content="/img.png"></head>`;
+
+  it("never reads the page image, and a card read later reads the article again for it", async () => {
+    const { deps, requests } = service((url) =>
+      url === "https://h.tld/a" ? page(ARTICLE) : new Response("down", { status: 503 }),
+    );
+
+    const mention = await resolveLinkPreviewDetailed(
+      deps,
+      scope,
+      "https://h.tld/a",
+      undefined,
+      undefined,
+      {
+        mention: true,
+      },
+    );
+    expect(mention).toMatchObject({
+      preview: null,
+      read: { kind: "page", article: "unread", title: "T" },
+    });
+    expect(requests).toEqual(["https://h.tld/a"]);
+
+    await expect(resolveLinkPreview(deps, scope, "https://h.tld/a")).resolves.toMatchObject({
+      format: "compact",
+      title: "T",
+    });
+    expect(requests).toEqual(["https://h.tld/a", "https://h.tld/a", "https://h.tld/img.png"]);
   });
 });
 

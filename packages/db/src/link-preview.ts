@@ -55,14 +55,15 @@ export type LinkPreviewCacheSource = "server" | "device";
  * and `Icon` are bytes just read, or store keys once cached. A page's title is absent when the
  * page names its site rather than itself; `crossSite` means the read ended on another site than
  * the link's, whose title a mention must never show (a card shows the host). A page image is only
- * read for an article (`fit: "contain"` when the site's icon stands in for it). `refused`: the
- * site answered 401, 402, 403 or 451, so only its home page's icon is known.
+ * read for an article (`fit: "contain"` when the site's icon stands in for it); `article: "unread"`
+ * is an article read for a mention, whose image was never asked for. `refused`: the site answered
+ * 401, 402, 403 or 451, so only its home page's icon is known.
  */
 export type LinkFacts<Img, Icon> =
   | { kind: "photo"; image: Img }
   | {
       kind: "page";
-      article: boolean;
+      article: boolean | "unread";
       title?: string;
       crossSite?: true;
       image?: Img & { fit?: "contain" };
@@ -108,7 +109,7 @@ function toCached(row: CacheRow): CachedLinkRead | null {
     case "page":
       return {
         kind: "page",
-        article: row.article === true,
+        article: row.article ?? "unread",
         ...(row.title ? { title: row.title } : {}),
         ...(row.crossSite ? { crossSite: true } : {}),
         ...(image
@@ -163,7 +164,7 @@ export async function storeLinkPreviewCache(
     imageHeight: image?.height ?? null,
     imageBytes: image?.bytes ?? 0,
     imageFit: page?.image?.fit ?? null,
-    article: page?.article ?? null,
+    article: page && page.article !== "unread" ? page.article : null,
     crossSite: page?.crossSite === true,
     iconKey: icon?.key ?? null,
     iconBytes: icon?.bytes ?? 0,

@@ -1,7 +1,7 @@
 import * as z from "zod";
 import { BotSecretDestination } from "./bot-secrets.js";
 import { Id, SkillUidSchema } from "./ids.js";
-import { LinkPreviewBlock } from "./link-preview.js";
+import { LinkMentionBlock, LinkPreviewBlock } from "./link-preview.js";
 import { McpTransportSchema } from "./mcp.js";
 
 export const ProductEventType = z.enum([
@@ -365,6 +365,7 @@ export const MessageBlock = z.discriminatedUnion("kind", [
     change: SkillChange,
   }),
   LinkPreviewBlock,
+  LinkMentionBlock,
 ]);
 export type MessageBlock = z.infer<typeof MessageBlock>;
 
