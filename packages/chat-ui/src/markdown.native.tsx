@@ -1,13 +1,21 @@
 import { type ColorTokens, darkTokens, type ResolvedAppearance } from "@rakazo/ui-tokens";
 import Markdown, {
+  type ASTNode,
   createMarkdownIt,
   MarkdownStream,
+  type MarkdownStyleMap,
   type RenderRules,
 } from "@ronradtke/react-native-markdown-display";
 import { memo, useMemo } from "react";
-import type { TextProps } from "react-native";
+import type { TextProps, TextStyle } from "react-native";
 import { Linking, StyleSheet, Text, View } from "react-native";
-import { linkUnderline, USER_LINK_UNDERLINE } from "./link-underline";
+import type { NativeLinkMentions } from "./link-mention.native";
+import {
+  botLinkMentionTone,
+  nativeLinkMention,
+  personLinkMentionTone,
+} from "./link-mention.native";
+import { linkUnderline } from "./link-underline";
 import type { ChatMarkdownProps } from "./markdown";
 import { linkHref, linkifyText, nativeImagePolicy, repairMarkdownTables } from "./markdown";
 import type { GridNode } from "./table-grid.native";
@@ -163,6 +171,57 @@ const renderRules: RenderRules = {
   ),
 };
 
+function textOf(node: ASTNode): string {
+  return node.children.length > 0 ? node.children.map(textOf).join("") : (node.content ?? "");
+}
+
+const INHERITED_TEXT_PROPS: ReadonlySet<string> = new Set([
+  "color",
+  "fontFamily",
+  "fontSize",
+  "fontStyle",
+  "fontWeight",
+  "letterSpacing",
+  "lineHeight",
+  "textDecorationColor",
+  "textDecorationLine",
+  "textDecorationStyle",
+]);
+
+/**
+ * The text style the link's ancestors give it, root to nearest, as the library gives a text run.
+ * Its own runs are not read: a code-labelled link would turn the whole mention into a code chip.
+ */
+function inheritedTextStyle(parents: ASTNode[], styleMap: MarkdownStyleMap): TextStyle {
+  const style: TextStyle = {};
+  for (const parent of [...parents].reverse()) {
+    for (const [prop, value] of Object.entries(StyleSheet.flatten(styleMap[parent.type]) ?? {})) {
+      if (value !== undefined && INHERITED_TEXT_PROPS.has(prop))
+        Object.assign(style, { [prop]: value });
+    }
+  }
+  return style;
+}
+
+/** The link rule once the message has mentions: a resolved link draws as its mention. */
+function mentionLinkRule(mentions: NativeLinkMentions, palette: ColorTokens): RenderRules["link"] {
+  const tone = botLinkMentionTone(palette);
+  return (node, children, parent, styleMap) => {
+    const href = node.attributes.href ?? "";
+    return (
+      nativeLinkMention({
+        mentions,
+        href,
+        authorText: textOf(node),
+        tone,
+        style: inheritedTextStyle(parent, styleMap),
+        onPress: () => openSafeLink(href),
+        key: node.key,
+      }) ?? renderRules.link?.(node, children, parent, styleMap)
+    );
+  };
+}
+
 // Untrusted content: drop every image node. The render rule returning null is
 // the robust guard (independent of the library's `defaultImageHandler`, which
 // defaults to `'https://'` and would otherwise reload a scheme-less URL);
@@ -210,6 +269,7 @@ export const ChatMarkdown = memo(function ChatMarkdown({
   colorScheme = "dark",
   inBubble = false,
   bleed,
+  mentions,
 }: ChatMarkdownProps & {
   palette?: ColorTokens;
   colorScheme?: ResolvedAppearance;
@@ -223,18 +283,19 @@ export const ChatMarkdown = memo(function ChatMarkdown({
    * to the host's edge and lines its first column up with the host's text.
    * A bubble uses its own 14. */
   bleed?: number;
+  /** The message's link mentions; keep it referentially stable, this view is memoized. */
+  mentions?: NativeLinkMentions;
 }) {
   const styles = useMemo(() => markdownStyles(palette, inBubble), [palette, inBubble]);
   const imagePolicy = nativeImagePolicy(allowImages);
-  const rules = useMemo(
-    () =>
-      withTables(
-        imagePolicy.blockImages ? renderRulesNoImages : renderRules,
-        palette,
-        bleed ?? (inBubble ? 14 : 0),
-      ),
-    [imagePolicy.blockImages, palette, inBubble, bleed],
-  );
+  const rules = useMemo(() => {
+    const base = withTables(
+      imagePolicy.blockImages ? renderRulesNoImages : renderRules,
+      palette,
+      bleed ?? (inBubble ? 14 : 0),
+    );
+    return mentions ? { ...base, link: mentionLinkRule(mentions, palette) } : base;
+  }, [imagePolicy.blockImages, palette, inBubble, bleed, mentions]);
   const sharedProps = {
     colorScheme,
     style: styles,
@@ -261,33 +322,46 @@ export const ChatMarkdown = memo(function ChatMarkdown({
   );
 });
 
-/** Plain text (what the person typed) with every URL in it made clickable. Nest
- * it in a `Text` so links inherit the surrounding ink. A link is its own touch
- * responder, so pass the bubble's `onLongPress` to keep its actions reachable. */
+/** Plain text (what the person typed) with every URL in it made clickable, as a
+ * mention when the server resolved one for it. Nest it in a `Text` so links
+ * inherit the surrounding ink. A link is its own touch responder, so pass the
+ * bubble's `onLongPress` to keep its actions reachable. */
 export function LinkifiedText({
   children,
   ink,
   onLongPress,
+  mentions,
 }: {
   children: string;
   /** The bubble's text colour, which the underline is drawn from. */
   ink: string;
   onLongPress?: TextProps["onLongPress"];
+  mentions?: NativeLinkMentions;
 }) {
+  const tone = personLinkMentionTone(ink);
   return linkifyText(children).map((segment, i) => {
     const href = segment.href;
-    return href ? (
-      <Text
-        accessibilityRole="link"
-        key={i}
-        style={[layout.link, { textDecorationColor: linkUnderline(ink, USER_LINK_UNDERLINE) }]}
-        onPress={() => openSafeLink(href)}
-        onLongPress={onLongPress}
-      >
-        {segment.text}
-      </Text>
-    ) : (
-      segment.text
+    if (!href) return segment.text;
+    return (
+      nativeLinkMention({
+        mentions,
+        href,
+        authorText: segment.text,
+        tone,
+        onPress: () => openSafeLink(href),
+        onLongPress,
+        key: i,
+      }) ?? (
+        <Text
+          accessibilityRole="link"
+          key={i}
+          style={[layout.link, { textDecorationColor: tone.underline }]}
+          onPress={() => openSafeLink(href)}
+          onLongPress={onLongPress}
+        >
+          {segment.text}
+        </Text>
+      )
     );
   });
 }
@@ -307,6 +381,7 @@ const layout = StyleSheet.create({
   },
 });
 
+export type { NativeLinkMentions } from "./link-mention.native";
 export type { ChatMarkdownProps } from "./markdown";
 export { hasMarkdownTable, truncateMarkdownForRender } from "./markdown";
 export type { GridNode, TableActions } from "./table-grid.native";

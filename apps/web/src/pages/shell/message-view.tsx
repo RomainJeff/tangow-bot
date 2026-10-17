@@ -6,8 +6,8 @@ import type { LinkMentionResolver, SkillSourceBlock } from "@rakazo/core";
 import {
   isLinkOnlyMessage,
   isNarrationMessage,
+  linkMentionsKey,
   linkMentionsOf,
-  messageHostsLinkPreview,
   narrationSegments,
   previewSiteLabel,
   sanitizePreviewTitle,
@@ -102,9 +102,7 @@ export function useLinkMentions(
   message: { role: string; blocks: readonly MessageBlock[] },
   artifactTarget: ArtifactTarget,
 ): LinkMentionResolver<ReactNode> | undefined {
-  const mentionsKey = messageHostsLinkPreview(message)
-    ? JSON.stringify(message.blocks.filter((block) => block.kind === "link_mention"))
-    : "";
+  const mentionsKey = linkMentionsKey(message);
   return useMemo<LinkMentionResolver<ReactNode> | undefined>(() => {
     const lookup = linkMentionsOf(message);
     return (

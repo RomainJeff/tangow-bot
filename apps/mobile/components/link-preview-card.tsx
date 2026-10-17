@@ -35,7 +35,7 @@ export interface LinkPreviewCardProps {
   /** The bubble's edge the card lines up with: the start for a bot, the end for the person. */
   align: "start" | "end";
   /** The message's long press: its action sheet. */
-  onLongPress: () => void;
+  onLongPress?: () => void;
   accessibilityActions?: ViewProps["accessibilityActions"];
   onAccessibilityAction?: ViewProps["onAccessibilityAction"];
 }
@@ -43,10 +43,10 @@ export interface LinkPreviewCardProps {
 type ImageState = { uri?: string; failed: boolean };
 
 /**
- * The image comes from the artifact the server stored, read through the thread like any
- * attachment: the phone never requests the linked site.
+ * A preview's image (a card's picture, a mention's icon) comes from the artifact the server
+ * stored, read through the thread like any attachment: the phone never requests the linked site.
  */
-function useCardImage(
+export function useArtifactImage(
   target: MobileArtifactTarget,
   artifactId: string | undefined,
 ): ImageState & { fail: () => void } {
@@ -94,7 +94,7 @@ export function LinkPreviewCard({
     byPerson: align === "end",
   });
   const href = openableLinkPreviewUrl(card.url);
-  const image = useCardImage(target, card.image?.artifactId);
+  const image = useArtifactImage(target, card.image?.artifactId);
   const site = previewSiteLabel(card.url);
   const imageHeight = linkPreviewImageHeight(card, width);
   // A site icon is drawn whole inside its thumbnail; every other picture fills and crops.

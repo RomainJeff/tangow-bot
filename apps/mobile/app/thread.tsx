@@ -1,4 +1,4 @@
-import type { GridNode, TableActions } from "@rakazo/chat-ui/native";
+import type { GridNode, NativeLinkMentions, TableActions } from "@rakazo/chat-ui/native";
 import {
   ChatMarkdown,
   hasMarkdownTable,
@@ -40,6 +40,8 @@ import {
   isSecretAskBlock,
   isWorkingStatus,
   latestActivityLabel,
+  linkMentionsKey,
+  linkMentionsOf,
   mentionChipKey,
   projectThreadView,
   type RoutineItem,
@@ -53,6 +55,7 @@ import {
   slashSkillOptions as slashSkills,
   type ThreadRow,
   type ThreadView,
+  textWithoutPreviewedLinkLine,
   threadEntriesOf,
   threadTimeMarkerLabel,
   truncateSlashDescription,
@@ -114,6 +117,7 @@ import { DictationPreview } from "../components/dictation-preview";
 import { FramedBlock } from "../components/framed-block";
 import { GroupAvatar } from "../components/group-avatar";
 import { HandoffDivider, Interstitial } from "../components/interstitial";
+import { LinkMentionIcon } from "../components/link-mention-icon";
 import { LinkPreviewCard } from "../components/link-preview-card";
 import {
   MarkdownArtifactPreview,
@@ -3310,6 +3314,21 @@ const MessageBubble = memo(function MessageBubble({
   const showSteps = useDisplayAgentSteps();
   const artifactTarget: MobileArtifactTarget = groupId ? { groupId } : { botId };
   const cardBotId = message.role === "bot" ? message.botId : botId;
+  // The projection rebuilds the message on every event: keyed on its mentions' content, the
+  // resolver stays the same object and the memoized markdown it feeds does not re-parse.
+  const mentionsKey = linkMentionsKey(message);
+  const mentions = useMemo<NativeLinkMentions | undefined>(() => {
+    const lookup = linkMentionsOf(message);
+    const target: MobileArtifactTarget = groupId ? { groupId } : { botId };
+    return (
+      lookup && {
+        ...lookup,
+        icon: (artifactId, tint) => (
+          <LinkMentionIcon target={target} artifactId={artifactId} tint={tint} />
+        ),
+      }
+    );
+  }, [mentionsKey, groupId, botId]);
   // Mono-bot grammar (design contract §3b): the narration bubble caps at 82%
   // of the thread instead of 88% of the content column.
   const mono = !groupId;
@@ -3651,6 +3670,7 @@ const MessageBubble = memo(function MessageBubble({
             actionProps={actionProps}
             mono={mono}
             meta={index === lastContent ? metaLines : undefined}
+            mentions={mentions}
           />
         ),
       )}
@@ -3802,7 +3822,6 @@ const ItemRow = memo(function ItemRow({
   readOnly?: boolean;
 }) {
   const tokens = mobileTokens();
-  const colorScheme = useResolvedAppearance();
   const { t } = useI18n();
   const router = useRouter();
   const [session, setSession] = useState<OpenedSession | null>(null);
@@ -3881,18 +3900,14 @@ const ItemRow = memo(function ItemRow({
                 showAvatar={inGroup && row.lastOfGroup}
                 mono={!inGroup}
               >
-                <MessageArrival isNew={isNew}>
-                  <BotBubble mono={!inGroup}>
-                    <ChatMarkdown
-                      allowImages={false}
-                      palette={tokens}
-                      colorScheme={colorScheme}
-                      inBubble
-                    >
-                      {truncateMarkdownForRender(role.text)}
-                    </ChatMarkdown>
-                  </BotBubble>
-                </MessageArrival>
+                <RoutineBubble
+                  item={item}
+                  text={role.text}
+                  groupId={groupId}
+                  botId={botId}
+                  isNew={isNew}
+                  mono={!inGroup}
+                />
               </MessageRow>
             </>
           );
@@ -4619,6 +4634,7 @@ function MessageText({
   actionProps,
   mono = false,
   meta,
+  mentions,
 }: {
   message: MobileMessage;
   replyPreview?: MobileMessage;
@@ -4626,6 +4642,8 @@ function MessageText({
   mono?: boolean;
   /** The skill lines under its last bubble. */
   meta?: readonly BotBubbleMeta[];
+  /** The whole message's link mentions: a segment's blocks may not carry them. */
+  mentions?: NativeLinkMentions;
 }) {
   const colorScheme = useResolvedAppearance();
   const tokens = mobileTokens();
@@ -4646,7 +4664,9 @@ function MessageText({
           onAccessibilityAction={actionProps.onAccessibilityAction}
         >
           {/* The long press is the row gesture's (AnimatedMessageBubble), not the text's. */}
-          <LinkifiedText ink={tokens.chatUserForeground}>{contentText}</LinkifiedText>
+          <LinkifiedText ink={tokens.chatUserForeground} mentions={mentions}>
+            {contentText}
+          </LinkifiedText>
         </UserBubble>
       </View>
     );
@@ -4665,11 +4685,72 @@ function MessageText({
           colorScheme={colorScheme}
           streaming={isLiveMessage(message)}
           inBubble
+          mentions={mentions}
         >
           {contentText}
         </ChatMarkdown>
       </BotBubble>
     </View>
+  );
+}
+
+/** A routine's shown result, with the link mentions and card the server wrote for it. */
+function RoutineBubble({
+  item,
+  text,
+  groupId,
+  botId,
+  isNew,
+  mono,
+}: {
+  item: RoutineItem;
+  text: string;
+  groupId: string | undefined;
+  botId: string | undefined;
+  isNew: boolean;
+  mono: boolean;
+}) {
+  const tokens = mobileTokens();
+  const colorScheme = useResolvedAppearance();
+  const links = item.links ?? [];
+  const mentionsKey = linkMentionsKey({ role: "bot", blocks: links });
+  const target = useMemo<MobileArtifactTarget>(
+    () => (groupId ? { groupId } : { botId: botId ?? item.botId }),
+    [groupId, botId, item.botId],
+  );
+  const mentions = useMemo<NativeLinkMentions | undefined>(() => {
+    const lookup = linkMentionsOf({ role: "bot", blocks: links });
+    return (
+      lookup && {
+        ...lookup,
+        icon: (artifactId, tint) => (
+          <LinkMentionIcon target={target} artifactId={artifactId} tint={tint} />
+        ),
+      }
+    );
+  }, [mentionsKey, target]);
+  const card = linkPreviewCardOf({ role: "bot", blocks: links });
+  // Without the line that is only the card's link, as a message's bubble draws it.
+  const shown = card ? textWithoutPreviewedLinkLine(text, card.url) : text;
+  return (
+    <MessageArrival isNew={isNew}>
+      <View style={{ gap: 4 }}>
+        {shown ? (
+          <BotBubble mono={mono}>
+            <ChatMarkdown
+              allowImages={false}
+              palette={tokens}
+              colorScheme={colorScheme}
+              inBubble
+              mentions={mentions}
+            >
+              {truncateMarkdownForRender(shown)}
+            </ChatMarkdown>
+          </BotBubble>
+        ) : null}
+        {card ? <LinkPreviewCard card={card} target={target} mono={mono} align="start" /> : null}
+      </View>
+    </MessageArrival>
   );
 }
 
