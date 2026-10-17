@@ -988,10 +988,20 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
             expect(nudge.calls).toEqual(said.calls);
             expect(nudge.outputs).toEqual(said.outputs);
             expect(nudge.outputs.map(([id]) => id)).toEqual([...calls, "journey-reply"]);
-            expect(nudge.texts.slice(0, -1)).toEqual([
+            expect(nudge.texts.slice(0, -2)).toEqual([
               ...said.texts,
               ["assistant", "Booked the table."],
             ]);
+            const [role, recap] = nudge.texts.at(-2)!;
+            expect(role).toBe("user");
+            const match = /<run_recap>\n(.*)\n<\/run_recap>/.exec(recap);
+            expect(match).not.toBeNull();
+            expect(JSON.parse(match![1]!)).toEqual({
+              runId: expect.any(String),
+              sessionId: expect.any(String),
+              status: "completed",
+              missingFacts: "absent",
+            });
             expect(nudge.texts.at(-1)?.[1]).toContain("This task took many steps.");
           },
           response: { type: "text", text: "Nothing to keep." },
