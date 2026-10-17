@@ -1,4 +1,5 @@
 import type { LinkMentionResolver } from "@rakazo/core";
+import { wwwLinkHref } from "@rakazo/core";
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import { createContext, Fragment, memo, useCallback, useContext, useRef, useState } from "react";
 import type { Components, ExtraProps } from "react-markdown";
@@ -97,9 +98,12 @@ function textOf(node: HastNode | undefined): string {
   return node.children?.map(textOf).join("") ?? "";
 }
 
-function MarkdownLink({ node, ...props }: ComponentPropsWithoutRef<"a"> & ExtraProps) {
-  const mention = resolvedLinkMention(useContext(LinkMentions), props.href, textOf(node));
-  return mention ?? <a {...props} target="_blank" rel="noreferrer noopener" />;
+function MarkdownLink({ node, href, ...props }: ComponentPropsWithoutRef<"a"> & ExtraProps) {
+  const text = textOf(node);
+  // GFM links a bare `www.` address as http; it stands for its https link, as the server keys it.
+  const target = href === `http://${text}` ? (wwwLinkHref(text) ?? href) : href;
+  const mention = resolvedLinkMention(useContext(LinkMentions), target, text);
+  return mention ?? <a {...props} href={target} target="_blank" rel="noreferrer noopener" />;
 }
 
 const components: Components = {

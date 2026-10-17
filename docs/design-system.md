@@ -54,7 +54,7 @@ colours. An `rgba` in a slot is a bug.
 | `chatUserForeground` | `#FBFBF9` | `#F2F2F0` | |
 | `mentionChip` | `#F1F1EE` | `#222226` | mention chip in the composer |
 | `mentionChipForeground` | `#111114` | `#F2F2F0` | |
-| `linkMentionTile` | `#F3F3F1` | `#2E2E30` | the tile behind a link mention's glyph in a bot bubble, a shade lighter than `muted` |
+| `linkMentionTile` | `#F3F3F1` | `#2E2E30` | the tile behind a link mention's icon in a bot bubble, a shade lighter than `muted` |
 | `muted` | `#EDEDEB` [6%] | `#1F1F21` [8%] | bot bubble, segmented track |
 | `mutedForeground` | `#6E6E73` | `#9A9AA1` | clickable grey: meta, times, section labels, icons |
 | `accent` | `#EFEFEE` [5%] | `#1B1B1C` [6%] | icon-button hover |
@@ -346,8 +346,8 @@ A link the server resolved, in place in the sentence: the site's icon, then a re
 label, in the bubble's ink with the bubble's link underline. No box and no fill: the icon
 alone says the link goes somewhere. `packages/chat-ui/src/link-mention.web.tsx`, drawn by
 `ChatMarkdown` for a bot and `LinkifiedText` for the person, both given the message's
-resolver (`mentions`, memoized per message in `message-view.tsx` so the markdown stays
-memoized). A link turns into a mention only when the message has a `link_mention` block
+resolver (`mentions`, memoized on the message's `link_mention` blocks in `message-view.tsx`,
+so an equal re-projection does not re-parse the markdown). A link turns into a mention only when the message has a `link_mention` block
 for it (`linkMentionsOf`, matched by `linkKey`); every other link renders as before.
 The label is the author's markdown label when it says more than the address, else the
 server's title, else the host (`linkMentionLabel`).
@@ -356,24 +356,25 @@ Anatomy: an `<a data-slot="link-mention" target="_blank" rel="noreferrer noopene
 `inline-flex`, exactly one line box tall and bottom-aligned, so its text keeps the
 sentence's baseline and the icon sits centred on the line; `nowrap`, so the icon never ends
 a line alone; at most `min(32ch, 100%)` wide. The icon frame is `linkMentionIcon` (16) at
-`--corner-link-mention` (4), `linkMentionGap` (5) before the label, never underlined and
-`aria-hidden`. The label is inert text in a `<bdi>` and ends in an ellipsis rather than
-widen the bubble. Name "label, host" (the host alone when it is the label), the full URL
-as `title`.
+`--corner-link-mention` (4) on a `linkMentionTile` tile with a 10% `foreground` hairline, so
+a dark or transparent site icon still reads on the bubble; in the person's bubble the tile
+is a 14% veil of its text colour and no hairline. `linkMentionGap` (5) before the label,
+never underlined and `aria-hidden`. The label is inert text in a `<bdi>` and ends in an
+ellipsis rather than widen the bubble. Name "label, host" (the host alone when it is the
+label), the full URL as `title`, its host in punycode as the browser will open it.
 
 States. The site icon comes from the thread's artifact like a card's picture
-(`LinkMentionIcon`), never a remote URL; the frame stays empty while it loads and the icon
-arrives without motion. With no icon, or one that cannot be read, `LinkMentionGlyph`
-draws lucide's link glyph in `mutedForeground` on a `linkMentionTile` tile with a 10%
-`foreground` hairline; in the person's bubble the tile is a 14% veil of its text colour and
-the glyph takes that colour. Before the server read the page, or when the read failed, the
-link stays plain. Hover makes the underline solid. Focus is a 2 px outline at 2 px offset
-in `ring`; in the person's bubble its text colour at 60%, since `ring` reaches only about
-3:1 there.
+(`LinkMentionIcon`), never a remote URL; the frame shows only its tile while it loads and
+the icon arrives without motion. With no icon, or one that cannot be read, `LinkMentionGlyph`
+draws lucide's link glyph at 62.5% of the frame in `mutedForeground` on the same tile; in
+the person's bubble the glyph takes its text colour. Before the server read the page, or
+when the read failed, the link stays plain. Hover makes the underline solid. Focus is a
+2 px outline at 2 px offset in `ring`; in the person's bubble its text colour at 60%, since
+`ring` reaches only about 3:1 there.
 
 Do: keep the mention a link in the sentence and let its label truncate. Don't: give it a
 pill or a background (it would read as a composer mention chip), an initial in place of
-the glyph, a loading state or the host as visible text.
+the glyph, a loading state or a host beside the label.
 
 Used by: the web and desktop thread. iPhone has no native mirror yet; its links stay plain.
 

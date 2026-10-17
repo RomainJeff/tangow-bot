@@ -682,6 +682,34 @@ describe("a message's mentions", () => {
     );
   });
 
+  it("counts a long bare URL and a scheme-less or www-less spelling as the address", () => {
+    const long = `https://www.example.test/a/${"x".repeat(400)}`;
+    expect(linkMentionLabel({ href: long, authorText: long, block: { title: "Long read" } })).toBe(
+      "Long read",
+    );
+    expect(
+      linkMentionLabel({
+        href: "https://www.example.test/a",
+        authorText: "example.test/a",
+        block: { title: "A" },
+      }),
+    ).toBe("A");
+    expect(
+      linkMentionLabel({
+        href: "https://example.test/a",
+        authorText: "www.example.test/a",
+        block: { title: "A" },
+      }),
+    ).toBe("A");
+    expect(
+      linkMentionLabel({
+        href: "https://www.example.test/a",
+        authorText: "example.test/b",
+        block: { title: "A" },
+      }),
+    ).toBe("example.test/b");
+  });
+
   it("strips bidirectional controls from a label", () => {
     expect(
       linkMentionLabel({

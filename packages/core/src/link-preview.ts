@@ -147,9 +147,9 @@ export function linkMentionsOf(message: {
   };
 }
 
-/** A link's identity without its scheme, read from a URL or from text that only spells one. */
+/** A link's identity without its scheme or `www.`, read from a URL or from text that spells one. */
 function spelledLink(value: string): string | undefined {
-  return (linkKey(value) ?? linkKey(`https://${value}`))?.replace(/^https?:\/\//, "");
+  return (linkKey(value) ?? linkKey(`https://${value}`))?.replace(/^https?:\/\/(?:www\.)?/i, "");
 }
 
 /**
@@ -165,8 +165,12 @@ export function linkMentionLabel({
   authorText?: string;
   block: Pick<LinkMentionBlock, "title">;
 }): string {
-  const written = authorText ? sanitizePreviewTitle(authorText) : "";
-  if (written && spelledLink(written) !== spelledLink(href)) return written;
+  // Compared as written: sanitising caps it, so a long bare URL would no longer match itself.
+  const written = authorText?.trim() ?? "";
+  if (written && spelledLink(written) !== spelledLink(href)) {
+    const label = sanitizePreviewTitle(written);
+    if (label) return label;
+  }
   return (block.title && sanitizePreviewTitle(block.title)) || previewSiteLabel(href);
 }
 

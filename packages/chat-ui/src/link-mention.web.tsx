@@ -7,8 +7,8 @@ export function LinkMentionGlyph() {
   return (
     <span data-slot="link-mention-glyph" className="rk-link-mention-glyph">
       <svg
-        width="10"
-        height="10"
+        width="62.5%"
+        height="62.5%"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -22,6 +22,15 @@ export function LinkMentionGlyph() {
       </svg>
     </span>
   );
+}
+
+/** The URL as the browser will open it: an internationalised host in its punycode form. */
+function asciiHref(href: string): string {
+  try {
+    return new URL(href).href;
+  } catch {
+    return href;
+  }
 }
 
 /**
@@ -51,7 +60,7 @@ function LinkMention({
       href={href}
       target="_blank"
       rel="noreferrer noopener"
-      title={href}
+      title={asciiHref(href)}
       aria-label={label === site ? site : `${label}, ${site}`}
     >
       <span className="rk-link-mention-icon" aria-hidden="true">

@@ -7,6 +7,7 @@ import {
   isLinkOnlyMessage,
   isNarrationMessage,
   linkMentionsOf,
+  messageHostsLinkPreview,
   narrationSegments,
   previewSiteLabel,
   sanitizePreviewTitle,
@@ -186,7 +187,11 @@ export const MessageView = memo(function MessageView({
   const skills = skillSourcesOf(message.blocks);
   const skillsAtMount = useRef(skills.length);
   const skillLinesLive = arrivesLive || skills.length > skillsAtMount.current;
-  // One resolver per message version, so the memoized markdown it feeds does not re-render.
+  // The projection rebuilds the message on every event: keyed on its mentions' content, the
+  // resolver stays the same object and the memoized markdown it feeds does not re-parse.
+  const mentionsKey = messageHostsLinkPreview(message)
+    ? JSON.stringify(message.blocks.filter((block) => block.kind === "link_mention"))
+    : "";
   const mentions = useMemo<LinkMentionResolver<ReactNode> | undefined>(() => {
     const lookup = linkMentionsOf(message);
     return (
@@ -195,7 +200,7 @@ export const MessageView = memo(function MessageView({
         icon: (artifactId) => <LinkMentionIcon target={artifactTarget} artifactId={artifactId} />,
       }
     );
-  }, [message, artifactTarget]);
+  }, [mentionsKey, artifactTarget]);
   const isNarration = isNarrationMessage(message);
   const botId = botIdOf(message);
   const isLive = message.role === "bot" && message.live === true;

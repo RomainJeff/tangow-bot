@@ -15,6 +15,19 @@ vi.mock("@lingui/react/macro", () => ({
   Trans: ({ children }: { children?: ReactNode }) => children,
 }));
 
+const markdown = vi.hoisted(() => ({ parses: 0 }));
+// By the path chat-ui imports it from: apps/web has no react-markdown of its own to name.
+vi.mock("../../../../../packages/chat-ui/node_modules/react-markdown", async (importOriginal) => {
+  const real = await importOriginal<{ default: (props: object) => ReactNode }>();
+  return {
+    ...real,
+    default: (props: object) => {
+      markdown.parses += 1;
+      return real.default(props);
+    },
+  };
+});
+
 const api = vi.hoisted(() => ({ artifactsGet: vi.fn() }));
 vi.mock("../../lib/rpc", () => ({ rpc: { artifacts: { get: api.artifactsGet } } }));
 
@@ -42,6 +55,9 @@ const mention = (url: string, extra: Record<string, unknown> = {}) => ({
   ...extra,
 });
 
+/** Stable, as the thread memoizes it. */
+const TARGET = { botId: "bot1" };
+
 let container: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
 
@@ -64,7 +80,7 @@ async function renderMessage(msg: MessageItem) {
   await act(async () => {
     root.render(
       <MessageView
-        artifactTarget={{ botId: "bot1" }}
+        artifactTarget={TARGET}
         chrome="row"
         message={msg}
         inGroup={false}
@@ -164,6 +180,56 @@ describe("link mentions in the thread", () => {
     });
 
     expect(mentions()).toMatchObject([{ icon: null, glyph: true }]);
+  });
+
+  it("does not re-parse a bot's markdown when the projection rebuilds an equal message", async () => {
+    const blocks = () => [text(`Notes in [the doc](${DOC})`), mention(DOC, { title: "Doc" })];
+    await renderMessage(message("bot", blocks()));
+    markdown.parses = 0;
+    await renderMessage(message("bot", blocks()));
+    await renderMessage(message("bot", blocks()));
+    expect(markdown.parses).toBe(0);
+
+    await renderMessage(
+      message("bot", [
+        text(`Notes in [the doc](${DOC})`),
+        mention(DOC, { title: "Doc", icon: { artifactId: "i" } }),
+      ]),
+    );
+    expect(markdown.parses).toBe(1);
+  });
+
+  it("takes a bot's bare www. address for the https link the server read", async () => {
+    await renderMessage(
+      message("bot", [
+        text("See www.example.test/plan today"),
+        mention("https://www.example.test/plan", { title: "Plan" }),
+      ]),
+    );
+
+    expect(mentions()).toMatchObject([
+      { name: "Plan, example.test", href: "https://www.example.test/plan", label: "Plan" },
+    ]);
+  });
+
+  it("names and titles a look-alike host by its real, ASCII host", async () => {
+    const idn = "https://\u0430pple.example.test/login";
+    const lookalike = "https://accounts.google.com.evil.test/x";
+    await renderMessage(
+      message("bot", [
+        text(`[Apple](${idn}) and [Google sign-in](${lookalike})`),
+        mention(idn),
+        mention(lookalike),
+      ]),
+    );
+
+    expect(mentions()).toMatchObject([
+      {
+        name: "Apple, xn--pple-43d.example.test",
+        title: "https://xn--pple-43d.example.test/login",
+      },
+      { name: "Google sign-in, accounts.google.com.evil.test", title: lookalike },
+    ]);
   });
 
   it("leaves the links of a message that is itself a card as plain links", async () => {

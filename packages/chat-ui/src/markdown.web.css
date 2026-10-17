@@ -344,6 +344,14 @@
   height: var(--size-link-mention-icon);
   overflow: hidden;
   border-radius: var(--corner-link-mention);
+  background: var(--link-mention-tile);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground) 10%, transparent);
+}
+
+/* The person's ink bubble: a veil of its text colour instead of the tile. */
+.rk-linkified .rk-link-mention-icon {
+  background: color-mix(in srgb, currentColor 14%, transparent);
+  box-shadow: none;
 }
 
 /* The icon node a renderer passes fills the frame, whatever element it is. */
@@ -373,13 +381,9 @@
 .rk-link-mention-glyph {
   display: grid;
   place-items: center;
-  background: var(--link-mention-tile);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground) 10%, transparent);
   color: var(--muted-foreground);
 }
 
 .rk-linkified .rk-link-mention-glyph {
-  background: color-mix(in srgb, currentColor 14%, transparent);
-  box-shadow: none;
   color: inherit;
 }
