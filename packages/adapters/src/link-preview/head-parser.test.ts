@@ -196,7 +196,7 @@ describe("image", () => {
 });
 
 describe("inert parsing", () => {
-  it("runs no script and ignores refresh, og:url and og:site_name", () => {
+  it("runs no script, ignores refresh and og:site_name, and keeps og:url only as the page's address", () => {
     const result = parse(`<head>
       <title>Real</title>
       <script>document.title = "pwned"</script>
@@ -206,7 +206,22 @@ describe("inert parsing", () => {
       <meta property="og:description" content="never kept">
       <link rel="stylesheet" href="https://evil.test/a.css">
     </head><body><img src="https://evil.test/p.png"><iframe src="https://evil.test/f"></iframe></body>`);
-    expect(result).toEqual({ article: false, title: "Real" });
+    expect(result).toEqual({
+      article: false,
+      title: "Real",
+      canonicalUrl: "https://evil.test/canonical",
+    });
+  });
+
+  it("takes the page's address from its canonical link first, resolved, and only an http(s) one", () => {
+    expect(
+      parse(
+        `<head><meta property="og:url" content="https://example.test/og"><link rel="alternate canonical" href="/doc"></head>`,
+      ).canonicalUrl,
+    ).toBe("https://example.test/doc");
+    expect(
+      parse(`<head><link rel="canonical" href="javascript:alert(1)"></head>`).canonicalUrl,
+    ).toBeUndefined();
   });
 
   it("copes with a truncated document and garbage", () => {

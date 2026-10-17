@@ -4,6 +4,8 @@ import { processEncodeSemaphore, type Semaphore } from "./limits.js";
 
 export const MAX_INPUT_PIXELS = 25_000_000;
 export const MAX_PREVIEW_IMAGE_WIDTH = 1200;
+/** A site icon shown beside a link is drawn small: this width is enough for any screen. */
+export const MAX_ICON_WIDTH = 64;
 export const MAX_PREVIEW_IMAGE_BYTES = 400 * 1024;
 /** Length cap of the thumbnail data URL as a whole, prefix and base64 included. */
 export const MAX_THUMBNAIL_DATA_URL_LENGTH = 50 * 1024;
@@ -28,13 +30,14 @@ export interface ImageEncodeOptions {
 }
 
 /**
- * Re-encode a downloaded image as a WebP card image: first frame only, EXIF orientation applied
- * then all metadata dropped, 1200 px wide at most. Throws only `LinkPreviewError`
+ * Re-encode a downloaded image as WebP: first frame only, EXIF orientation applied then all
+ * metadata dropped, `maxWidth` wide at most (1200 px for a card). Throws only `LinkPreviewError`
  * (`unsupported_type`, `too_large`, `timeout`).
  */
 export async function encodePreviewImage(
   input: Uint8Array,
   options: ImageEncodeOptions = {},
+  maxWidth = MAX_PREVIEW_IMAGE_WIDTH,
 ): Promise<EncodedPreviewImage> {
   const magic = sniffFormat(input);
   if (!magic) throw new LinkPreviewError("unsupported_type");
@@ -46,7 +49,7 @@ export async function encodePreviewImage(
     for (const quality of WEBP_QUALITIES) {
       const { data, info } = await open()
         .rotate()
-        .resize({ width: MAX_PREVIEW_IMAGE_WIDTH, withoutEnlargement: true })
+        .resize({ width: maxWidth, withoutEnlargement: true })
         .webp({ quality })
         .toBuffer({ resolveWithObject: true });
       if (data.byteLength <= MAX_PREVIEW_IMAGE_BYTES) {

@@ -13,7 +13,9 @@ import {
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 import type { LinkPreviewFailureReason } from "./errors.js";
+import type { EncodedPreviewImage } from "./image.js";
 import {
+  cardOf,
   type LinkPreviewReadDeps,
   type LinkPreviewReadResult,
   readLinkPreview,
@@ -24,7 +26,7 @@ import { MAX_HTML_BYTES } from "./safe-fetch.js";
 export interface LinkPreviewServiceDeps {
   prisma: Pick<PrismaClient, "$transaction" | "linkPreviewCache" | "linkPreviewRead">;
   artifacts: ArtifactStore;
-  /** Test seams: the page reader and its network seams. */
+  /** The page reader and its options: test seams, and a caller's deadline. */
   read?: (url: string, deps: LinkPreviewReadDeps) => Promise<LinkPreviewReadResult>;
   readFromHead?: (
     url: string,
@@ -194,14 +196,15 @@ export async function resolveLinkPreviewDetailed(
       // Host and reason only: the link can carry a token.
       log: (event) => getLogger().info("link preview read failed", event),
     });
-    const refused = !result.ok && result.reason === "access_denied";
+    const refused = result.ok && result.kind === "refused";
     const source = refused ? ("restricted" as const) : undefined;
     const device = refused ? await findOwnDeviceRead(deps, scope, normalized, now) : null;
     const deviceReadable =
       refused || (!result.ok && result.transient && DEVICE_RETRY_REASONS.has(result.reason));
-    if (!result.ok) {
+    const card = result.ok ? cardOf(result) : null;
+    if (!card) {
       // Only a failure that describes the link is worth remembering; a slow or busy site is not.
-      if (!result.transient) {
+      if (result.ok || !result.transient) {
         await storeEntry(
           deps,
           scope,
@@ -213,7 +216,7 @@ export async function resolveLinkPreviewDetailed(
       if (device) return { preview: resolvedOf(device), deviceReadable: false, refused };
       return { preview: null, deviceReadable, refused };
     }
-    const entry = await storeResult(deps, scope, keyHash, result, now);
+    const entry = await storeResult(deps, scope, keyHash, card, now);
     if (device) return { preview: resolvedOf(device), deviceReadable: false, refused };
     return entry ? { preview: resolvedOf(entry), deviceReadable, refused } : NOTHING;
   } catch (error) {
@@ -273,12 +276,13 @@ export async function resolveLinkPreviewWithDeviceHead(
       },
       pageHeadType,
     );
-    // A head that gives nothing leaves the server's answer in place, uncached and unchanged.
-    if (!result.ok) return server;
+    // A head that makes no card leaves the server's answer in place, uncached and unchanged.
+    const card = result.ok ? cardOf(result) : null;
+    if (!card) return server;
     const keyHash = linkPreviewDeviceKeyHash(scope.spaceId, scope.userId, normalized);
     // Only a refusal by the site itself lets a device-read card be remembered for this person: while
     // the site merely fails for now (429, 5xx) the card serves this draft and nothing else.
-    const entry = await storeResult(deps, scope, keyHash, result, now, "device", server.refused);
+    const entry = await storeResult(deps, scope, keyHash, card, now, "device", server.refused);
     if (!entry) return server;
     return {
       preview: resolvedOf(entry),
@@ -302,7 +306,7 @@ async function storeResult(
   deps: LinkPreviewServiceDeps,
   scope: LinkPreviewScope,
   keyHash: string,
-  result: Extract<LinkPreviewReadResult, { ok: true }>,
+  result: NonNullable<ReturnType<typeof cardOf<EncodedPreviewImage>>>,
   now: Date,
   source?: "device",
   cache = true,
@@ -322,7 +326,7 @@ async function storeResult(
       width: result.image.width,
       height: result.image.height,
       bytes: result.image.bytes.byteLength,
-      ...(result.imageFit ? { fit: result.imageFit } : {}),
+      ...(result.image.fit ? { fit: result.image.fit } : {}),
     };
   }
   const entry: Extract<CachedLinkPreview, { status: "ok" }> = {
@@ -330,7 +334,7 @@ async function storeResult(
     format: result.format,
     ...(result.title ? { title: result.title } : {}),
     ...(image ? { image } : {}),
-    ...(result.article ? { article: true as const } : {}),
+    ...(result.format !== "photo" ? { article: true as const } : {}),
     ...(source ? { source } : {}),
   };
   if (cache && !(await storeEntry(deps, scope, keyHash, entry, now))) {

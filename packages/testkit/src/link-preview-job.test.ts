@@ -13,16 +13,17 @@ const PAGE = "https://example.test/articles/one?id=7";
 const png = new Uint8Array([1, 2, 3, 4]);
 const okCompact: LinkPreviewReadResult = {
   ok: true,
-  format: "compact",
+  kind: "page",
   article: true,
   title: "A page",
 };
+const image = { bytes: Buffer.from(png), width: 1200, height: 630 };
 const okLarge: LinkPreviewReadResult = {
   ok: true,
-  format: "large",
+  kind: "page",
   article: true,
   title: "A big page",
-  image: { bytes: Buffer.from(png), width: 1200, height: 630 },
+  image,
 };
 
 let db: ThreadDb;
@@ -118,11 +119,7 @@ describe("link.preview job for a message a person sent", () => {
 
   it("writes the icon marker on the card image of a site icon, and not on a page image", async () => {
     const icon = await setup({
-      read: async () => ({
-        ...okCompact,
-        image: okLarge.ok ? okLarge.image : undefined,
-        imageFit: "contain",
-      }),
+      read: async () => ({ ...okLarge, image: { ...image, fit: "contain" } }),
     });
     await said("m1", [text(PAGE)]);
     await runLinkPreviewJob(icon.deps, { messageId: "m1" });
@@ -258,7 +255,7 @@ describe("link.preview job for a message a person sent", () => {
 
     it("caches a definitive failure and shows no card", async () => {
       const { read, deps } = await setup({
-        read: async () => ({ ok: false, reason: "no_title", transient: false }),
+        read: async () => ({ ok: false, reason: "http_error", transient: false }),
       });
       await said("m1", [text(PAGE)]);
       await said("m2", [text(PAGE)]);

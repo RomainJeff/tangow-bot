@@ -9,8 +9,14 @@ export interface LinkPreviewHead {
   article: boolean;
   title?: string;
   imageUrl?: string;
-  /** The best site icon the head declares (see `pickIconUrl`), for a page with no usable image. */
+  /** The best site icon the head declares (see `pickIconUrl`). */
   iconUrl?: string;
+  /**
+   * The address the page gives for itself, `<link rel=canonical>` else `og:url`, only ever
+   * compared with the link (a site root for a page with a path means the page read is not the
+   * page asked for). Never fetched.
+   */
+  canonicalUrl?: string;
 }
 
 /** An icon smaller than this (declared `sizes`) is a favicon, too small for a 56 pt thumbnail. */
@@ -19,7 +25,7 @@ const MIN_ICON_SIZE = 64;
 /**
  * Title and image of an HTML head. Nothing runs and nothing loads: JSDOM is used as a parser
  * only (no `runScripts`, no `resources`), so scripts, images, frames, stylesheets and
- * `<meta http-equiv=refresh>` stay inert. `og:url` and `og:site_name` are never read.
+ * `<meta http-equiv=refresh>` stay inert. `og:site_name` is never read.
  * `url` is the final URL of the page, the base for a relative image or icon.
  */
 export function parseLinkPreviewHead(
@@ -37,14 +43,16 @@ export function parseLinkPreviewHead(
       ]);
       const base = baseUrl(doc, options.url);
       const imageUrl = [metaContent(doc, "og:image"), metaContent(doc, "twitter:image")]
-        .map((raw) => resolveImage(raw, base))
+        .map((raw) => resolveHttpUrl(raw, base))
         .find((resolved) => resolved !== undefined);
       const iconUrl = pickIconUrl(doc, base);
+      const canonicalUrl = resolveHttpUrl(canonicalHref(doc) ?? metaContent(doc, "og:url"), base);
       return {
         article: declaresArticle(doc),
         ...(title ? { title } : {}),
         ...(imageUrl ? { imageUrl } : {}),
         ...(iconUrl ? { iconUrl } : {}),
+        ...(canonicalUrl ? { canonicalUrl } : {}),
       };
     } finally {
       dom.window.close();
@@ -154,6 +162,15 @@ function baseUrl(doc: Document, pageUrl: string): string {
   }
 }
 
+function canonicalHref(doc: Document): string | undefined {
+  for (const link of doc.querySelectorAll("link[href]")) {
+    if ((link.getAttribute("rel") ?? "").toLowerCase().split(/\s+/).includes("canonical")) {
+      return link.getAttribute("href")?.trim() || undefined;
+    }
+  }
+  return undefined;
+}
+
 type IconCandidate = { href: string; size: number; order: number };
 
 /**
@@ -173,7 +190,7 @@ function pickIconUrl(doc: Document, base: string): string | undefined {
     const isTouch =
       rel.includes("apple-touch-icon") || rel.includes("apple-touch-icon-precomposed");
     if (!isTouch && !rel.includes("icon")) continue;
-    const href = resolveImage(link.getAttribute("href")?.trim(), base);
+    const href = resolveHttpUrl(link.getAttribute("href")?.trim(), base);
     if (!href || isVectorOrIco(href, link.getAttribute("type"))) continue;
     const size = declaredSize(link.getAttribute("sizes"));
     if (isTouch) {
@@ -220,7 +237,7 @@ function isRasterIcon(href: string, type: string | null): boolean {
   return ["png", "webp", "jpg", "jpeg"].includes(pathExtension(href));
 }
 
-function resolveImage(raw: string | undefined, base: string): string | undefined {
+function resolveHttpUrl(raw: string | undefined, base: string): string | undefined {
   if (!raw) return undefined;
   try {
     const href = new URL(raw, base).href;
