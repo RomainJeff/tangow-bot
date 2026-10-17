@@ -6,15 +6,16 @@ import type { AskCardBlock, AskForm, OptionId, Presenter } from "@rakazo/core";
 import { motion } from "@rakazo/ui-tokens";
 import { Button, cn, FramedBlock, OptionField, OptionTile } from "@rakazo/ui-web";
 import { Pencil } from "lucide-react";
-import type { KeyboardEvent } from "react";
-import { useEffect, useId, useRef, useState } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { AskSettled } from "./AskSettled";
+import type { Departure } from "./flight";
+import { departure, fly } from "./flight";
 
-/** A chosen answer fills with the user's colour, then the card settles with a fade. */
-const present: Presenter = (change, apply) => {
-  if (change.kind === "settle" && change.from.kind !== "button") setTimeout(apply, motion.fill);
-  else apply();
-};
+/** Also where `linear()` easing is unknown (Safari before 17.2): `animate()` would throw on the spring. */
+const reducedMotion = () =>
+  window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
+  !CSS.supports("animation-timing-function", "linear(0, 1)");
 
 export function QuestionCard({
   block,
@@ -32,6 +33,24 @@ export function QuestionCard({
   const { t } = useLingui();
   const questionId = useId();
   const group = useRef<HTMLFieldSetElement>(null);
+  const card = useRef<HTMLDivElement>(null);
+  const layer = useRef<HTMLDivElement>(null);
+  const leaving = useRef<Departure | null>(null);
+  const filling = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const reopened = useRef(false);
+  /** A chosen answer fills with the user's colour, then flies into its bubble, or fades with reduced motion. */
+  const present: Presenter = (change, apply) => {
+    if (change.kind === "reopen") {
+      leaving.current = null;
+      reopened.current = true;
+      return apply();
+    }
+    if (change.from.kind === "button") return apply();
+    filling.current = setTimeout(() => {
+      leaving.current = card.current && !reducedMotion() ? departure(card.current) : null;
+      if (!apply()) leaving.current = null;
+    }, motion.fill);
+  };
   const { view, act } = useAskCard({
     block,
     form,
@@ -42,6 +61,13 @@ export function QuestionCard({
   });
   const [openedHere] = useState(view.kind === "open");
   const error = view.kind === "open" ? view.error : null;
+  const settled = view.kind === "settled";
+  useEffect(() => () => clearTimeout(filling.current), []);
+  useLayoutEffect(() => {
+    if (settled && leaving.current && card.current && layer.current) {
+      return fly(card.current, layer.current, leaving.current);
+    }
+  }, [settled]);
   useEffect(() => {
     if (!error) return;
     group.current
@@ -49,12 +75,28 @@ export function QuestionCard({
       ?.focus();
   }, [error]);
 
+  const shell = (body: ReactNode, onKeyDown?: (event: KeyboardEvent<HTMLDivElement>) => void) => (
+    // biome-ignore lint/a11y/noStaticElementInteractions: digit shortcuts only while focus is inside the card
+    <div ref={card} data-slot="question-card" className="relative mt-1.5" onKeyDown={onKeyDown}>
+      <div
+        ref={layer}
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 overflow-x-visible overflow-y-clip"
+      />
+      {body}
+    </div>
+  );
+
   if (view.kind === "settled") {
-    return (
+    return shell(
       <AskSettled
         view={view.settled}
-        className={cn("mt-1.5", openedHere && "animate-in fade-in duration-(--duration-arrive)")}
-      />
+        className={
+          openedHere && !leaving.current
+            ? "animate-in fade-in duration-(--duration-arrive)"
+            : undefined
+        }
+      />,
     );
   }
 
@@ -103,70 +145,68 @@ export function QuestionCard({
       </>
     ) : undefined;
 
-  return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: digit shortcuts only while focus is inside the card
-    <div onKeyDown={onKeyDown}>
-      <FramedBlock
-        className="mt-1.5"
-        question={
-          <div id={questionId}>
-            <ChatMarkdown allowImages={false}>{question.text}</ChatMarkdown>
-          </div>
-        }
-        consequence={
-          block.detail ? (
-            <span dir="auto" className="whitespace-pre-wrap">
-              {block.detail}
-            </span>
-          ) : undefined
-        }
-        actions={actions}
+  return shell(
+    <FramedBlock
+      className={reopened.current ? "animate-in fade-in duration-(--duration-arrive)" : undefined}
+      question={
+        <div id={questionId}>
+          <ChatMarkdown allowImages={false}>{question.text}</ChatMarkdown>
+        </div>
+      }
+      consequence={
+        block.detail ? (
+          <span dir="auto" className="whitespace-pre-wrap">
+            {block.detail}
+          </span>
+        ) : undefined
+      }
+      actions={actions}
+    >
+      <fieldset
+        ref={group}
+        aria-labelledby={questionId}
+        disabled={busy}
+        className={cn("flex min-w-0 flex-col gap-2", !actions && "pb-3.5")}
       >
-        <fieldset
-          ref={group}
-          aria-labelledby={questionId}
-          disabled={busy}
-          className={cn("flex min-w-0 flex-col gap-2", !actions && "pb-3.5")}
-        >
-          {question.options.map((option) => (
-            <OptionTile
-              key={option.id}
-              selected={step.selected.includes(option.id)}
-              filled={isFilled(option.id)}
-              onClick={() => act.tap(option.id)}
-            >
-              {option.label}
-            </OptionTile>
-          ))}
-          {step.field ? (
-            <OptionField
-              filled={filled?.kind === "field"}
-              sendLabel={t`Send`}
-              canSend={step.field.canSend}
-              onSend={act.confirm}
-              aria-label={choices ? t`Other answer` : t`Answer`}
-              placeholder={choices ? t`Other…` : t`Type your answer`}
-              autoFocus={choices}
-              maxLength={ASK_ANSWER_MAX_LENGTH}
-              value={step.field.text}
-              onChange={(event) => act.typeOther(event.target.value)}
-            />
-          ) : (
-            <OptionTile
-              trailing={<Pencil aria-hidden className="size-4 shrink-0" />}
-              className="font-normal text-muted-foreground"
-              onClick={act.openOther}
-            >
-              <Trans>Other…</Trans>
-            </OptionTile>
-          )}
-          {view.error ? (
-            <p role="alert" className="text-meta text-destructive">
-              {view.error}
-            </p>
-          ) : null}
-        </fieldset>
-      </FramedBlock>
-    </div>
+        {question.options.map((option) => (
+          <OptionTile
+            key={option.id}
+            selected={step.selected.includes(option.id)}
+            filled={isFilled(option.id)}
+            onClick={() => act.tap(option.id)}
+          >
+            {option.label}
+          </OptionTile>
+        ))}
+        {step.field ? (
+          <OptionField
+            filled={filled?.kind === "field"}
+            sendLabel={t`Send`}
+            canSend={step.field.canSend}
+            onSend={act.confirm}
+            aria-label={choices ? t`Other answer` : t`Answer`}
+            placeholder={choices ? t`Other…` : t`Type your answer`}
+            autoFocus={choices}
+            maxLength={ASK_ANSWER_MAX_LENGTH}
+            value={step.field.text}
+            onChange={(event) => act.typeOther(event.target.value)}
+          />
+        ) : (
+          <OptionTile
+            trailing={<Pencil aria-hidden className="size-4 shrink-0" />}
+            className="font-normal text-muted-foreground"
+            onClick={act.openOther}
+          >
+            <Trans>Other…</Trans>
+          </OptionTile>
+        )}
+        {view.error ? (
+          <p role="alert" className="text-meta text-destructive">
+            {view.error}
+          </p>
+        ) : null}
+      </fieldset>
+    </FramedBlock>,
+    onKeyDown,
   );
 }

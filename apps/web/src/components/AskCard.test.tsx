@@ -603,6 +603,8 @@ describe("AskCard open question", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    // jsdom has no Web Animations, so these run the reduced-motion commit; e2e flies the tile.
+    vi.stubGlobal("matchMedia", () => ({ matches: true }));
     container = document.createElement("div");
     document.body.append(container);
     root = createRoot(container);
@@ -790,6 +792,66 @@ describe("AskCard open question", () => {
     await act(async () => container.querySelector("form")?.requestSubmit());
     await act(async () => vi.advanceTimersByTime(800));
     expect(document.activeElement?.getAttribute("aria-label")).toBe("Other answer");
+  });
+
+  it("flies nothing when the answer, failed before its fill, then arrives from another device (§6)", async () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: false }));
+    const animate = Element.prototype.animate;
+    Element.prototype.animate = () =>
+      ({ cancel() {}, finished: new Promise(() => {}) }) as unknown as Animation;
+    const messageId = `msg-open-${++messages}`;
+    const render = (block: AskBlock, canAnswer: boolean) =>
+      act(() => {
+        root.render(
+          <AskCard
+            block={block}
+            canAnswer={canAnswer}
+            onAnswer={() => Promise.reject(new Error("offline"))}
+            messageId={messageId}
+          />,
+        );
+      });
+    render(cities, true);
+    act(() => tile("Seoul")?.click());
+    await act(async () => vi.advanceTimersByTime(650));
+    await act(async () => {});
+    const failed = container.querySelector('[role="alert"]')?.textContent ?? null;
+    await act(async () => vi.advanceTimersByTime(80));
+    render({ ...cities, status: "answered", answer: "choice-1" }, false);
+    const shown = {
+      failed,
+      bubble: container.querySelector('[data-slot="user-bubble"]')?.textContent,
+      flights: container.querySelectorAll("[data-ask-flight]").length,
+    };
+    Element.prototype.animate = animate;
+    expect(shown).toEqual({ failed: "offline", bubble: "Berlin", flights: 0 });
+  });
+
+  it("settles with the fade where the spring's linear() easing is unknown (Safari before 17.2)", async () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: false }));
+    const supports = vi.spyOn(CSS, "supports").mockReturnValue(false);
+    const animate = Element.prototype.animate;
+    Element.prototype.animate = (_frames, options) => {
+      if (typeof options === "object" && options.easing?.startsWith("linear(")) {
+        throw new TypeError("'linear(…)' is not a valid value for easing");
+      }
+      return { cancel() {}, finished: new Promise(() => {}) } as unknown as Animation;
+    };
+    const errors: unknown[] = [];
+    const onError = (event: ErrorEvent) => errors.push(event.error);
+    window.addEventListener("error", onError);
+    mount(cities, async () => {});
+    act(() => tile("Seoul")?.click());
+    await act(async () => vi.advanceTimersByTime(800));
+    const shown = {
+      errors,
+      bubble: container.querySelector('[data-slot="user-bubble"]')?.textContent,
+      flights: container.querySelectorAll("[data-ask-flight]").length,
+    };
+    window.removeEventListener("error", onError);
+    Element.prototype.animate = animate;
+    supports.mockRestore();
+    expect(shown).toEqual({ errors: [], bubble: "Seoul", flights: 0 });
   });
 
   it("keeps the line breaks of the question's detail", () => {

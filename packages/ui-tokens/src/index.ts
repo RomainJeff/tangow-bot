@@ -276,6 +276,10 @@ export type MotionTokens = {
   flow: number;
   /** A chosen answer filling with the user's bubble colour before it settles. */
   fill: number;
+  /** The answer flying into its bubble while the card folds, on `spring`, until it rests. */
+  flight: number;
+  /** One spring for that movement: `response` in ms, `bounce` 0 (none) to 1. */
+  spring: { response: number; bounce: number };
 };
 
 export const motion: MotionTokens = {
@@ -289,7 +293,27 @@ export const motion: MotionTokens = {
   morph: 260,
   flow: 2600,
   fill: 80,
+  flight: 520,
+  spring: { response: 320, bounce: 0.1 },
 };
+
+/** `motion.spring` sampled over `motion.flight` as a CSS `linear()` easing. */
+export const springEasing = (() => {
+  const { response, bounce } = motion.spring;
+  const omega = (2 * Math.PI * 1000) / response;
+  const damping = 1 - bounce;
+  const damped = omega * Math.sqrt(1 - damping * damping);
+  const steps = 52;
+  const points = Array.from({ length: steps }, (_, step) => {
+    const t = (motion.flight / 1000) * (step / steps);
+    const decay = Math.exp(-damping * omega * t);
+    return (
+      1 -
+      decay * (Math.cos(damped * t) + ((damping * omega) / damped) * Math.sin(damped * t))
+    ).toFixed(4);
+  });
+  return `linear(${[...points, "1"].join(", ")})`;
+})();
 
 /** Sizes — avatars and round controls, in px. Consumed via primitive `size` props. */
 export const sizes = {
@@ -494,10 +518,9 @@ function renderSizeLines(): string[] {
 }
 
 function renderMotionLines(): string[] {
-  const durationKeys = (Object.keys(motion) as (keyof MotionTokens)[]).filter(
-    (key): key is Exclude<keyof MotionTokens, "ease"> => key !== "ease",
+  const lines = Object.entries(motion).flatMap(([key, value]) =>
+    typeof value === "number" ? [`  --duration-${kebabCase(key)}: ${value}ms;`] : [],
   );
-  const lines = durationKeys.map((key) => `  --duration-${kebabCase(key)}: ${motion[key]}ms;`);
   lines.push(`  --motion-ease: ${motion.ease};`);
   return lines;
 }

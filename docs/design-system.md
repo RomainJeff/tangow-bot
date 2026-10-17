@@ -162,6 +162,9 @@ Unframed cards have **no** shadow: `bg-surface` and a `border` hairline.
 | `pivot` | 320 ms, rotate -90° → 0 with scale and fade | the send arrow arriving with the first character |
 | `morph` | 260 ms, rotate 45° | the mobile + turning into × while its sheet is open |
 | `flow` | 2.6 s per lap | the Stop contour while a reply streams (static under reduced motion) |
+| `fill` | 80 ms | a chosen answer taking the user's bubble colour before it leaves (`duration-(--duration-fill)`) |
+| `spring` | response 320 ms, bounce 0.1 | the one spring of a question card's movement, as the CSS easing `springEasing` (a sampled `linear()`) |
+| `flight` | 520 ms | how long that spring runs: the answer flying into its bubble while the card folds and the rows above slide |
 
 ### Sizes
 
@@ -817,7 +820,10 @@ props land on the input or textarea.
 
 ## Motion rules
 
-- One easing curve, `ease-quiet`, for every transition.
+- One easing curve, `ease-quiet`, for every transition. A question card's movement
+  is the one exception: it runs on `motion.spring` over `flight`, and everything
+  in it (the answer, the card's height, the rows above) starts and ends on the
+  same frame. Where `linear()` easing is unknown it takes the reduced-motion fade.
 - `animate-arrive` for a message, block or capsule entering; capsules in one row
   stagger 60 ms apart.
 - `rk-press` on anything pressable; `duration-(--duration-hover)` for hover.

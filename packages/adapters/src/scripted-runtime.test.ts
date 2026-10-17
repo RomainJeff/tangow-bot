@@ -1,5 +1,5 @@
 import type { AgentRuntimeEvent } from "@rakazo/adapter-kit";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { inferScript, ScriptedAgentRuntime } from "./scripted-runtime.js";
 
 describe("inferScript message_bot", () => {
@@ -105,5 +105,43 @@ describe("ScriptedAgentRuntime executionIds", () => {
       )
       .map((event) => event.executionId);
     expect(toolIds).toEqual(["run-1:message_agent:0", "run-1:message_agent:1"]);
+  });
+});
+
+describe("a run resumed from its question card", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("answers only after the card's commit movement, whatever the answer's wording", async () => {
+    vi.useFakeTimers();
+    const runtime = new ScriptedAgentRuntime();
+    const run = (runId: string, prompt: string) =>
+      runtime.run({
+        botId: "bot-1",
+        threadId: "thread-1",
+        runId,
+        prompt,
+        instructions: "",
+        history: [],
+        tools: [],
+        model: { provider: "scripted", id: "scripted" },
+      });
+    for await (const _event of run("run-asked", "pick from these cities with tappable choices"));
+    const firstEvent = async (runId: string) => {
+      let arrived = false;
+      void run(runId, "thanks")
+        [Symbol.asyncIterator]()
+        .next()
+        .then(() => {
+          arrived = true;
+        });
+      await vi.advanceTimersByTimeAsync(1_199);
+      const early = arrived;
+      await vi.advanceTimersByTimeAsync(1);
+      return { early, late: arrived };
+    };
+    expect({
+      resumed: await firstEvent("run-asked"),
+      fresh: await firstEvent("run-fresh"),
+    }).toEqual({ resumed: { early: false, late: true }, fresh: { early: true, late: true } });
   });
 });

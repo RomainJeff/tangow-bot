@@ -1,7 +1,7 @@
 import type { MessageBlock } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
 import type { AskCardOptions, Clock, SendResult } from "./card.js";
-import { createAskCard } from "./card.js";
+import { createAskCard, resolveAskCardView } from "./card.js";
 import type { OptionId } from "./form.js";
 import { askFormOf } from "./form.js";
 
@@ -271,8 +271,8 @@ describe("commit", () => {
     });
   });
 
-  it("drops a settle the presenter has not applied yet when the answer fails", async () => {
-    const applies: (() => void)[] = [];
+  it("drops a settle the presenter has not applied yet when the answer fails, and says so", async () => {
+    const applies: (() => boolean)[] = [];
     const { card: subject, clock } = card(cities, {
       result: { ok: false, message: "Run is busy" },
       present: (_change, apply) => applies.push(apply),
@@ -285,8 +285,38 @@ describe("commit", () => {
       filled: { kind: "option", optionId: seoul },
     });
     await flush();
-    for (const apply of applies) apply();
+    expect(applies.map((apply) => apply())).toEqual([false]);
     expect(subject.view()).toMatchObject({ kind: "open", busy: false, error: "Run is busy" });
+  });
+});
+
+describe("an answered event during the fill", () => {
+  it("keeps the filled tile until the presenter settles, then shows the same answer", async () => {
+    const applies: (() => void)[] = [];
+    const { card: subject, clock } = card(cities, {
+      present: (_change, apply) => applies.push(apply),
+    });
+    const form = askFormOf(cities)!;
+    const answered: AskBlock = { ...cities, status: "answered", answer: "choice-2" };
+    subject.tap(seoul);
+    clock.advance(650);
+    await flush();
+    const filling = resolveAskCardView(answered, form, subject.view(), true);
+    for (const apply of applies) apply();
+    expect({
+      filling: filling.kind === "open" && filling.filled,
+      settled: resolveAskCardView(answered, form, subject.view(), true),
+    }).toEqual({
+      filling: { kind: "option", optionId: seoul },
+      settled: {
+        kind: "settled",
+        settled: {
+          kind: "answered",
+          line: "Which city?",
+          bubble: { kind: "single", value: { kind: "text", text: "Seoul" } },
+        },
+      },
+    });
   });
 });
 

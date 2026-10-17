@@ -32,7 +32,8 @@ export type CommitSource =
 
 /** The card says which change happens; the presenter calls `apply` once, when its motion allows. */
 export type ViewChange = { kind: "settle"; from: CommitSource } | { kind: "reopen" };
-export type Presenter = (change: ViewChange, apply: () => void) => void;
+/** `apply` returns false when the change went stale meanwhile, so what was measured for it is dropped. */
+export type Presenter = (change: ViewChange, apply: () => boolean) => void;
 
 export type SendResult = { ok: true } | { ok: false; message: string };
 
@@ -166,7 +167,9 @@ export function createAskCard({
     const gen = ++generation;
     update({ kind: "committing", generation: gen, source, stored, shown: false });
     present({ kind: "settle", from: source }, () => {
-      if (phase.kind === "committing" && current(gen)) update({ ...phase, shown: true });
+      if (phase.kind !== "committing" || !current(gen)) return false;
+      update({ ...phase, shown: true });
+      return true;
     });
     const entry = { source, stored, result: send(wire) };
     inflight.set(key, entry);
@@ -184,7 +187,9 @@ export function createAskCard({
         return;
       }
       const reopen = () => {
-        if (current(gen)) update({ kind: "idle", error: outcome.message });
+        if (!current(gen)) return false;
+        update({ kind: "idle", error: outcome.message });
+        return true;
       };
       if (phase.shown) present({ kind: "reopen" }, reopen);
       else reopen();
@@ -259,7 +264,8 @@ export function resolveAskCardView(
   view: AskCardView,
   waiting: boolean,
 ): AskCardView {
-  if (block.status === "answered") {
+  // While its own answer fills, the card waits for its presenter, so an early event cuts nothing short.
+  if (block.status === "answered" && !(view.kind === "open" && view.busy)) {
     return { kind: "settled", settled: askSettledOf(form, storedAnswerOf(form, block)) };
   }
   if (waiting || view.kind === "settled" || view.busy) return view;
