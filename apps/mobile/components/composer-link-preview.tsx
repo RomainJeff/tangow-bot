@@ -1,5 +1,5 @@
 import type { ComposerLinkPreviewView } from "@rakazo/core";
-import { previewSiteInitial, previewSiteLabel } from "@rakazo/core";
+import { previewSiteInitial } from "@rakazo/core";
 import { radii, sizes } from "@rakazo/ui-tokens";
 import { memo } from "react";
 import { Image, Pressable, Text, View } from "react-native";
@@ -8,7 +8,6 @@ import { composerThumbnailFit } from "../lib/link-preview";
 import { useMobileTokens } from "../lib/native";
 import { nativeTextStyle } from "../lib/typography";
 import { NativeSymbol } from "./native-symbol";
-import { ShimmerText } from "./shimmer-text";
 
 const THUMB = sizes.linkThumb;
 const REMOVE_SIZE = sizes.composerRemove;
@@ -25,7 +24,7 @@ export const ComposerLinkPreview = memo(function ComposerLinkPreview({
   disabled = false,
   width,
 }: {
-  view: Exclude<ComposerLinkPreviewView, { status: "idle" }>;
+  view: Extract<ComposerLinkPreviewView, { status: "ready" }>;
   onRemove: () => void;
   /** The attachments row's width: a horizontal scroll view does not bound its children. */
   width?: number;
@@ -33,12 +32,9 @@ export const ComposerLinkPreview = memo(function ComposerLinkPreview({
   disabled?: boolean;
 }) {
   const tokens = useMobileTokens();
-  const loading = view.status === "loading";
-  const thumbnail = view.status === "ready" ? view.thumbnail : undefined;
+  const { thumbnail, site } = view;
   // A site icon is drawn whole inside the tile; every other thumbnail fills and crops.
-  const fit = composerThumbnailFit(view.status === "ready" ? view.thumbnailFit : undefined);
-  // While the page is read the host is all there is to say, and the one thing that moves.
-  const site = view.status === "ready" ? view.site : previewSiteLabel(view.url);
+  const fit = composerThumbnailFit(view.thumbnailFit);
   return (
     // The card fills the composer row (never wider than a link card), and leaves room in its
     // corner for the remove disc so neither the title nor the disc is clipped by the capsule.
@@ -52,9 +48,7 @@ export const ComposerLinkPreview = memo(function ComposerLinkPreview({
     >
       <View
         accessible
-        accessibilityLabel={
-          view.status === "ready" ? [view.title, view.site].filter(Boolean).join(", ") : site
-        }
+        accessibilityLabel={[view.title, site].filter(Boolean).join(", ")}
         style={{
           height: sizes.composerAttachmentThumb,
           flexDirection: "row",
@@ -66,16 +60,7 @@ export const ComposerLinkPreview = memo(function ComposerLinkPreview({
           backgroundColor: tokens.background,
         }}
       >
-        {loading ? (
-          <View
-            style={{
-              width: THUMB,
-              height: THUMB,
-              borderRadius: radii.chip,
-              backgroundColor: tokens.secondary,
-            }}
-          />
-        ) : thumbnail ? (
+        {thumbnail ? (
           <View
             accessibilityElementsHidden
             style={{
@@ -111,7 +96,7 @@ export const ComposerLinkPreview = memo(function ComposerLinkPreview({
           </View>
         )}
         <View style={{ flexShrink: 1, minWidth: 0 }}>
-          {view.status === "ready" && view.title ? (
+          {view.title ? (
             <Text
               numberOfLines={2}
               style={{
@@ -123,29 +108,17 @@ export const ComposerLinkPreview = memo(function ComposerLinkPreview({
               {view.title}
             </Text>
           ) : null}
-          {loading ? (
-            <ShimmerText
-              style={{
-                color: tokens.mutedForeground,
-                writingDirection: "ltr",
-                ...nativeTextStyle("meta"),
-              }}
-            >
-              {site}
-            </ShimmerText>
-          ) : (
-            <Text
-              numberOfLines={1}
-              ellipsizeMode="head"
-              style={{
-                color: tokens.mutedForeground,
-                writingDirection: "ltr",
-                ...nativeTextStyle("meta"),
-              }}
-            >
-              {site}
-            </Text>
-          )}
+          <Text
+            numberOfLines={1}
+            ellipsizeMode="head"
+            style={{
+              color: tokens.mutedForeground,
+              writingDirection: "ltr",
+              ...nativeTextStyle("meta"),
+            }}
+          >
+            {site}
+          </Text>
         </View>
       </View>
       <Pressable

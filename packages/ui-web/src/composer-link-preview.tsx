@@ -1,11 +1,8 @@
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import { ComposerRemoveButton } from "./composer-attachment.js";
 import { cn } from "./lib/utils.js";
-import { Shimmer } from "./shimmer.js";
 
 export interface ComposerLinkPreviewProps extends ComponentPropsWithoutRef<"div"> {
-  /** A read in progress: the host sweeps in `Shimmer` while the page is read, nothing else moves. */
-  loading?: boolean;
   /** The host of the link, derived by `previewSiteLabel`. */
   site?: string;
   /** Plain text, already sanitized. */
@@ -28,7 +25,6 @@ export interface ComposerLinkPreviewProps extends ComponentPropsWithoutRef<"div"
  * link (the card opens nothing here); its × takes the preview off this message.
  */
 export function ComposerLinkPreview({
-  loading,
   site,
   title,
   image,
@@ -41,29 +37,29 @@ export function ComposerLinkPreview({
   return (
     <div
       data-slot="composer-link-preview"
-      data-state={loading ? "loading" : "ready"}
+      data-state="ready"
       className={cn("relative min-w-0 max-w-full", className)}
       {...props}
     >
       <div className="flex h-composer-attachment-thumb max-w-link-card items-center gap-2.5 rounded-card bg-background p-1 pe-3">
-        {loading || image ? (
+        {image ? (
           <div
             aria-hidden
             className="relative size-link-thumb shrink-0 overflow-hidden rounded-chip bg-secondary"
           >
-            {loading ? null : image}
+            {image}
           </div>
         ) : (
           <div className="w-2 shrink-0" />
         )}
         <div className="min-w-0">
-          {title && !loading ? (
+          {title ? (
             <div className="truncate text-row-name font-medium text-foreground" dir="auto">
               <bdi>{title}</bdi>
             </div>
           ) : null}
           <div className="truncate text-meta text-muted-foreground">
-            <bdi dir="ltr">{loading ? <Shimmer>{site}</Shimmer> : site}</bdi>
+            <bdi dir="ltr">{site}</bdi>
           </div>
         </div>
       </div>

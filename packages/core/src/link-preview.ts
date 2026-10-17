@@ -202,38 +202,3 @@ export function sanitizePreviewTitle(title: string): string {
   const lastUnit = cut.charCodeAt(cut.length - 1);
   return (lastUnit >= 0xd800 && lastUnit <= 0xdbff ? cut.slice(0, -1) : cut).trimEnd();
 }
-
-/** A single-letter article or `qu` before a vowel or `h`, which French elides (`j ai` is `j'ai`). */
-const SLUG_ELISION = /(^|\s)(qu|[jldnsmtc]) (?=[aeiouàâäéèêëîïôöùûüœæh])/giu;
-
-const SLUG_EXTENSION = /\.(?:html?|php)$/i;
-const SLUG_TRAILING_ID = /(?:[-_]\d+)+$/;
-
-/**
- * A card title drawn from the address alone, for a site that refuses to be read: the last
- * non-empty path segment, percent-decoded, without extension (`.html`, `.htm`, `.php`) or trailing
- * numeric id (`_6788472_3210`, `-12345`), dashes and underscores as spaces, French elisions restored
- * (`j ai` gives `j'ai`; accents are never guessed), first letter capitalised.
- * Null unless at least two words with a letter remain, so a bare id or a one-word section gives no card.
- */
-export function previewTitleFromUrl(url: string): string | null {
-  let segment: string | undefined;
-  try {
-    segment = new URL(url).pathname.split("/").filter(Boolean).at(-1);
-  } catch {
-    return null;
-  }
-  if (!segment) return null;
-  let decoded = segment;
-  try {
-    decoded = decodeURIComponent(segment);
-  } catch {
-    // A malformed escape stays as written.
-  }
-  const title = sanitizePreviewTitle(
-    decoded.replace(SLUG_EXTENSION, "").replace(SLUG_TRAILING_ID, "").replace(/[-_]+/g, " "),
-  )
-    .replace(SLUG_ELISION, "$1$2'")
-    .replace(/^\p{L}/u, (first) => first.toUpperCase());
-  return title.split(" ").filter((word) => /\p{L}/u.test(word)).length >= 2 ? title : null;
-}

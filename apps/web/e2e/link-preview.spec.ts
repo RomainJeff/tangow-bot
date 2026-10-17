@@ -7,7 +7,7 @@ import { expect, test } from "./test";
 const PIXEL =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
 
-test("link previews render in three formats and never contact the linked site", async ({
+test("link previews render in three formats, only for articles and photos, and never contact the linked site", async ({
   page,
 }, testInfo) => {
   const requested: string[] = [];
@@ -35,6 +35,13 @@ test("link previews render in three formats and never contact the linked site", 
     await expect(card).toHaveAttribute("rel", "noreferrer noopener");
     await expect(card).toHaveAttribute("href", /^https:\/\//);
   }
+
+  // A link to a page that is not an article has no card: it stays a plain link in the bubble.
+  const plain = page.locator('[data-message-id="plain"]');
+  await expect(plain.locator('[data-slot="link-preview-card"]')).toHaveCount(0);
+  await expect(plain.locator('[data-testid="message-bot-bubble"]')).toContainText(
+    "https://docs.example.net/roadmap",
+  );
 
   // The picture comes from the thread's artifact, as a local blob.
   await expect(page.locator('[data-format="large"] img')).toHaveAttribute("src", /^blob:/);

@@ -70,7 +70,7 @@ describe("logs hold the host only (CA 56)", () => {
         service((url) =>
           url.startsWith("https://h.tld/private")
             ? page(
-                '<head><title>T</title><meta property="og:image" content="/img/secret.png?k=SECRETVALUE"></head>',
+                '<head><meta property="og:type" content="article"><title>T</title><meta property="og:image" content="/img/secret.png?k=SECRETVALUE"></head>',
               )
             : new Response("x", { status: 404 }),
         ),
@@ -139,7 +139,9 @@ describe("one attempt (CA 37)", () => {
   it("makes one page request and, at most, one image request, and never retries a failure", async () => {
     const { deps, requests } = service((url) =>
       url === "https://h.tld/a"
-        ? page('<head><title>T</title><meta property="og:image" content="/img.png"></head>')
+        ? page(
+            '<head><meta property="og:type" content="article"><title>T</title><meta property="og:image" content="/img.png"></head>',
+          )
         : new Response("down", { status: 503 }),
     );
 
@@ -153,5 +155,21 @@ describe("one attempt (CA 37)", () => {
     expect(failing.requests).toEqual(["https://h.tld/b"]);
     // A transient failure leaves nothing in the cache.
     expect(failing.db.tables.linkPreviewCache.size).toBe(0);
+  });
+});
+
+describe("only articles get a card", () => {
+  const WEBSITE = `<head><title>Notion | Where teams and agents work together</title><meta property="og:type" content="website"><meta property="og:image" content="/og.png"></head>`;
+
+  it("gives a page that is no article no card, and remembers that instead of reading it again", async () => {
+    const { deps, requests, db } = service(() => page(WEBSITE));
+
+    await expect(resolveLinkPreview(deps, scope, "https://h.tld/doc")).resolves.toBeNull();
+    await expect(resolveLinkPreview(deps, scope, "https://h.tld/doc")).resolves.toBeNull();
+
+    expect(requests).toEqual(["https://h.tld/doc"]);
+    expect([...db.tables.linkPreviewCache.values()]).toMatchObject([
+      { status: "failed", source: "server" },
+    ]);
   });
 });

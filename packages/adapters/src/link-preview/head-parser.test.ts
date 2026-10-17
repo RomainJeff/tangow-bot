@@ -63,8 +63,8 @@ describe("title", () => {
   });
 
   it("returns nothing for a page without title", () => {
-    expect(parse("<html><head></head><body>hello</body></html>")).toEqual({});
-    expect(parse("")).toEqual({});
+    expect(parse("<html><head></head><body>hello</body></html>")).toEqual({ article: false });
+    expect(parse("")).toEqual({ article: false });
   });
 });
 
@@ -206,17 +206,18 @@ describe("inert parsing", () => {
       <meta property="og:description" content="never kept">
       <link rel="stylesheet" href="https://evil.test/a.css">
     </head><body><img src="https://evil.test/p.png"><iframe src="https://evil.test/f"></iframe></body>`);
-    expect(result).toEqual({ title: "Real" });
+    expect(result).toEqual({ article: false, title: "Real" });
   });
 
   it("copes with a truncated document and garbage", () => {
     expect(
       parse(`<html><head><title>Cut</title><meta property="og:image" content="/a.png"></head`),
     ).toEqual({
+      article: false,
       title: "Cut",
       imageUrl: "https://example.test/a.png",
     });
-    expect(parse(new Uint8Array([0, 255, 254, 1, 2, 3]))).toEqual({});
+    expect(parse(new Uint8Array([0, 255, 254, 1, 2, 3]))).toEqual({ article: false });
   });
 });
 
@@ -306,5 +307,76 @@ describe("site icon", () => {
     expect(
       icon(`<link rel="apple-touch-icon" href="https://u:p@c.test/a.png">`).iconUrl,
     ).toBeUndefined();
+  });
+});
+
+describe("article", () => {
+  const article = (head: string) => parse(`<head>${head}</head>`).article;
+  const ldJson = (json: string) => `<script type="application/ld+json">${json}</script>`;
+
+  it("is declared by og:type=article, whatever the case", () => {
+    expect(article(`<meta property="og:type" content="article">`)).toBe(true);
+    expect(article(`<meta name="OG:Type" content=" Article ">`)).toBe(true);
+  });
+
+  it("is declared by article:published_time", () => {
+    expect(article(`<meta property="article:published_time" content="2026-10-16T08:00:00Z">`)).toBe(
+      true,
+    );
+  });
+
+  it.each([
+    ["a string type", `{"@type":"NewsArticle"}`],
+    ["an array of types", `{"@type":["WebPage","BlogPosting"]}`],
+    ["a root array", `[{"@type":"Organization"},{"@type":"TechArticle"}]`],
+    [
+      "one level of @graph",
+      `{"@context":"https://schema.org","@graph":[{"@type":"WebSite"},{"@type":"Report"}]}`,
+    ],
+  ])("is declared by JSON-LD with %s", (_name, json) => {
+    expect(article(ldJson(json))).toBe(true);
+  });
+
+  it("is not declared by a home page or a document page", () => {
+    // The Notion-style private page measured on 2026-10-16.
+    expect(
+      article(
+        `<title>Notion</title><meta property="og:type" content="website"><meta property="og:url" content="https://app.notion.com"><meta property="og:title" content="Notion | Where teams and agents work together"><meta property="og:image" content="https://app.notion.com/og.png">`,
+      ),
+    ).toBe(false);
+    expect(article(ldJson(`{"@type":["WebSite","Organization","Product"]}`))).toBe(false);
+  });
+
+  it("is not declared by a type nested deeper than @graph", () => {
+    expect(article(ldJson(`{"mainEntity":{"@type":"Article"}}`))).toBe(false);
+    expect(article(ldJson(`{"@graph":[{"@graph":[{"@type":"Article"}]}]}`))).toBe(false);
+  });
+
+  it("survives hostile JSON-LD without declaring an article or throwing", () => {
+    const hostile = [
+      "[".repeat(64 * 1024 - 1),
+      `{"__proto__":{"@type":"Article"}}`,
+      `{"@type":"constructor"}`,
+      `{"@type":["toString","__proto__","hasOwnProperty"]}`,
+      `{"@type":[${Array.from({ length: 10_000 }, () => '"x"').join(",")}]}`,
+      `{"@type":`,
+    ];
+    const real = ldJson(`{"@type":"Article"}`);
+    for (const json of hostile) {
+      expect(article(ldJson(json))).toBe(false);
+      expect(article(`${ldJson(json)}${real}`)).toBe(true);
+    }
+  });
+
+  it("reads at most 8 scripts, 64 KB each and 256 KB in all", () => {
+    const real = ldJson(`{"@type":"Article"}`);
+    expect(article(`${ldJson("{}").repeat(7)}${real}`)).toBe(true);
+    expect(article(`${ldJson("{}").repeat(8)}${real}`)).toBe(false);
+    expect(article(ldJson(`{"@type":"Article","pad":"${"x".repeat(65 * 1024)}"}`))).toBe(false);
+    expect(article(ldJson("{}").repeat(1000))).toBe(false);
+    const heavy = `{"pad":"${"x".repeat(60 * 1024)}"}`;
+    expect(article(`${ldJson(heavy).repeat(5)}${real}`)).toBe(false);
+    const oversized = `{"pad":"${"x".repeat(200 * 1024)}"}`;
+    expect(article(`${ldJson(oversized)}${ldJson(heavy)}${real}`)).toBe(true);
   });
 });

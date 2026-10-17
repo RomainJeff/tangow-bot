@@ -56,12 +56,12 @@ const MESSAGES: MessageItem[] = [
     },
   ]),
   message("icon", "bot", [
-    { kind: "text", text: "The front page: https://www.example.fr/" },
+    { kind: "text", text: "The review: https://www.example.fr/tests/laptop-review" },
     {
       kind: "link_preview",
-      url: "https://www.example.fr/",
+      url: "https://www.example.fr/tests/laptop-review",
       format: "compact",
-      title: "Example, tech news and tests",
+      title: "Laptop review: two weeks on battery",
       image: { artifactId: "art-1", width: 180, height: 180, fit: "contain" },
     },
   ]),
@@ -77,6 +77,9 @@ const MESSAGES: MessageItem[] = [
       title:
         "J'ai eu peur je suis rentre chez moi la colere et l'inquietude des eleves et leurs parents face aux violences devant les lycees",
     },
+  ]),
+  message("plain", "bot", [
+    { kind: "text", text: "The roadmap is here: https://docs.example.net/roadmap" },
   ]),
   message("photo", "user", [
     { kind: "text", text: "https://images.example.com/p.jpg" },

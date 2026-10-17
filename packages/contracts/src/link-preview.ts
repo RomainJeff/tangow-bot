@@ -117,7 +117,7 @@ export const LinkPreviewDraftSchema = z.object({
    * True when the site refused the server (or answered with a passing 429 or 5xx) and the
    * sender's own device may read the page and send its head back as `pageHead`. It says nothing
    * more: a refused address, a missing page or a limit never set it. A draft with no title and
-   * no thumbnail shows nothing; it is how a refusal with no usable fallback carries this flag.
+   * no thumbnail shows nothing; it is how a refusal carries this flag.
    */
   deviceReadable: z.literal(true).optional(),
 });

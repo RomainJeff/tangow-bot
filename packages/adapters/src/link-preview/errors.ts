@@ -11,6 +11,7 @@ export type LinkPreviewFailureReason =
   | "too_large"
   | "tls_error"
   | "no_title"
+  | "not_article"
   | "timeout"
   | "network"
   | "rate_limited"

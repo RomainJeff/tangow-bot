@@ -294,12 +294,15 @@ outlined for a delegated task's result (subagent).
 
 ### LinkPreviewCard
 
-What the page behind a link looks like, kept with the message's attachments: under
+What the article or photo behind a link looks like, kept with the message's attachments: under
 the bubble (or alone, in the bubble's place, when the message is only its link),
 `gap-1` below it and aligned to its edge. Three formats the server picks from what
 it downloaded: `large` (picture at `linkLargeImageRatio`, 1.91:1, from `@rakazo/ui-tokens` on both surfaces, then title and site), `compact`
 (56 px thumbnail when there is a picture, title, site) and `photo` (the picture
 alone in a `rounded-bubble` frame capped at `linkPhotoMax`, the site under it).
+Only an article (a page whose head declares one) or a direct image link gets a card; a
+document, a tool or a home page stays a plain link, and so does a site that refuses the
+server's read unless the sender's device can read it.
 When the page has no usable picture, a compact card takes the site's icon as its
 thumbnail (the server marks the image `fit: "contain"`; an icon is never a `large`
 card): the icon is drawn whole and centered in the same 56 px `bg-secondary` tile,
@@ -340,10 +343,9 @@ What the first complete link of the draft will look like, in the composer's
 `attachments` row beside `ComposerAttachment` (iOS: the same row, `components/
 composer-link-preview.tsx`). Always the compact card whatever format the server
 picked: `h-composer-attachment-thumb` (64) in `bg-background` at `rounded-card`,
-a `size-link-thumb` thumbnail, the title on one line, the site under it. While the
-page is read, the thumbnail is an empty `bg-secondary` tile and the host is the
-shared `Shimmer` (iOS: `ShimmerText`), the one thing that moves; the card is named
-by that host. The × is the shared
+a `size-link-thumb` thumbnail, the title on one line, the site under it. Nothing
+shows while the page is read: the card appears only once it is ready, so a link
+that is not an article never flashes one. The × is the shared
 `ComposerRemoveButton` (`composerRemove`, `bg-primary`, `border-surface` ring,
 named "Remove preview"; 44 pt target on iOS). The card is not a link and a failed
 or empty read draws nothing and says nothing.
