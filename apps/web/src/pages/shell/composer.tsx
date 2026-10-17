@@ -49,6 +49,7 @@ const ATTACHMENT_ACCEPT = ATTACHMENT_ALLOWED_MIME_TYPES.join(",");
 
 export const Composer = memo(function Composer({
   activeName,
+  answerName,
   running,
   botColor,
   disabled,
@@ -83,6 +84,8 @@ export const Composer = memo(function Composer({
   recentWriting,
 }: {
   activeName?: string;
+  /** The bot whose pending question the next send answers, from the roster. */
+  answerName?: string;
   running: boolean;
   /** The responding bot's identity colour (data, not a token); omitted in a group. */
   botColor?: string;
@@ -656,6 +659,11 @@ export const Composer = memo(function Composer({
   const showComposerPlaceholder =
     draft.length === 0 && selectedSkill === null && selectedMentions.length === 0;
   const replyName = replyTarget ? (replyTargetName ?? previewMessageText(replyTarget)) : "";
+  const fieldName = answerName
+    ? t`Answer ${answerName}…`
+    : activeName
+      ? t`Message ${activeName}`
+      : t`Message`;
 
   return (
     <fieldset
@@ -1038,7 +1046,7 @@ export const Composer = memo(function Composer({
             role="textbox"
             aria-readonly="true"
             aria-multiline="true"
-            aria-label={activeName ? t`Message ${activeName}` : t`Message`}
+            aria-label={fieldName}
             tabIndex={-1}
             dir="auto"
             onKeyDown={(event) => {
@@ -1134,12 +1142,12 @@ export const Composer = memo(function Composer({
             disabled={disabled}
             placeholder={
               showComposerPlaceholder
-                ? activeName
-                  ? t`Message ${activeName}`
+                ? activeName || answerName
+                  ? fieldName
                   : t`Message…`
                 : undefined
             }
-            aria-label={activeName ? t`Message ${activeName}` : t`Message`}
+            aria-label={fieldName}
             role="combobox"
             aria-autocomplete="list"
             aria-haspopup="listbox"

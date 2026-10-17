@@ -37,12 +37,12 @@ msgid "{0, plural, one {# run} other {# runs}}"
 msgstr "{0, plural, one {# run} other {# runs}}"
 
 #. placeholder {0}: file.name
-#: src/pages/Shell.tsx:1934
+#: src/pages/Shell.tsx:1941
 msgid "{0} (max {ATTACHMENT_MAX_COUNT} attachments)"
 msgstr "{0} (max {ATTACHMENT_MAX_COUNT} attachments)"
 
 #. placeholder {0}: file.name
-#: src/pages/Shell.tsx:1938
+#: src/pages/Shell.tsx:1945
 msgid "{0} (over 10 MiB)"
 msgstr "{0} (over 10 MiB)"
 
@@ -207,7 +207,7 @@ msgid "{workingBotName} is working"
 msgstr "{workingBotName} is working"
 
 #. placeholder {0}: mention.name
-#: src/pages/shell/composer.tsx:755
+#: src/pages/shell/composer.tsx:763
 msgid "@{0}"
 msgstr "@{0}"
 
@@ -259,12 +259,12 @@ msgstr "Action confirmations"
 #. placeholder {0}: sectionMenu.section.name
 #: src/pages/bot-page/BotPage.tsx:343
 #: src/pages/BotContextMenu.tsx:86
-#: src/pages/Shell.tsx:3262
+#: src/pages/Shell.tsx:3270
 #: src/pages/shell/sidebar.tsx:409
 msgid "Actions for {0}"
 msgstr "Actions for {0}"
 
-#: src/pages/Shell.tsx:3136
+#: src/pages/Shell.tsx:3144
 msgid "Actions for space"
 msgstr "Actions for space"
 
@@ -494,6 +494,10 @@ msgstr "Always allowed"
 msgid "Answer"
 msgstr "Answer"
 
+#: src/pages/shell/composer.tsx:664
+msgid "Answer {answerName}…"
+msgstr "Answer {answerName}…"
+
 #: src/pages/CallView.tsx:400
 msgid "Answer in text"
 msgstr "Answer in text"
@@ -642,7 +646,7 @@ msgstr "at {0}"
 msgid "at {timeSelect}"
 msgstr "at {timeSelect}"
 
-#: src/pages/shell/composer.tsx:886
+#: src/pages/shell/composer.tsx:894
 msgid "Attach file"
 msgstr "Attach file"
 
@@ -731,7 +735,7 @@ msgid "bot"
 msgstr "bot"
 
 #: src/pages/IntegrationSetup.tsx:51
-#: src/pages/Shell.tsx:1697
+#: src/pages/Shell.tsx:1704
 #: src/pages/shell/message-view.tsx:232
 #: src/pages/shell/thread-row.tsx:286
 msgid "Bot"
@@ -750,8 +754,8 @@ msgstr "Bot screen"
 msgid "Bot screen preview"
 msgstr "Bot screen preview"
 
-#: src/pages/Shell.tsx:3073
-#: src/pages/shell/composer.tsx:1170
+#: src/pages/Shell.tsx:3081
+#: src/pages/shell/composer.tsx:1174
 #: src/pages/shell/thread-header.tsx:154
 #: src/pages/shell/thread-header.tsx:155
 msgid "Bot settings"
@@ -803,11 +807,11 @@ msgstr "Can't reach the server."
 msgid "Cancel"
 msgstr "Cancel"
 
-#: src/pages/shell/composer.tsx:1000
+#: src/pages/shell/composer.tsx:1008
 msgid "Cancel dictation"
 msgstr "Cancel dictation"
 
-#: src/pages/shell/composer.tsx:723
+#: src/pages/shell/composer.tsx:731
 msgid "Cancel edit"
 msgstr "Cancel edit"
 
@@ -819,7 +823,7 @@ msgstr "Cancel new bot"
 msgid "Cancel new group"
 msgstr "Cancel new group"
 
-#: src/pages/shell/composer.tsx:704
+#: src/pages/shell/composer.tsx:712
 msgid "Cancel reply"
 msgstr "Cancel reply"
 
@@ -981,7 +985,7 @@ msgstr "Close messaging settings"
 msgid "Close model settings"
 msgstr "Close model settings"
 
-#: src/pages/Shell.tsx:2724
+#: src/pages/Shell.tsx:2731
 msgid "Close navigation"
 msgstr "Close navigation"
 
@@ -1285,13 +1289,13 @@ msgstr "Could not connect this provider"
 msgid "Could not connect this voice provider"
 msgstr "Could not connect this voice provider"
 
-#: src/pages/Shell.tsx:885
-#: src/pages/Shell.tsx:2559
+#: src/pages/Shell.tsx:886
+#: src/pages/Shell.tsx:2566
 msgid "Could not connect to the computer screen"
 msgstr "Could not connect to the computer screen"
 
 #: src/pages/Auth.tsx:101
-#: src/pages/Shell.tsx:2533
+#: src/pages/Shell.tsx:2540
 msgid "Could not continue"
 msgstr "Could not continue"
 
@@ -1588,7 +1592,7 @@ msgstr "Could not start teaching"
 msgid "Could not submit this answer"
 msgstr "Could not submit this answer"
 
-#: src/pages/Shell.tsx:2386
+#: src/pages/Shell.tsx:2393
 msgid "Could not take control"
 msgstr "Could not take control"
 
@@ -1609,7 +1613,7 @@ msgstr "Could not update computer"
 msgid "Could not update plugin"
 msgstr "Could not update plugin"
 
-#: src/pages/Shell.tsx:1920
+#: src/pages/Shell.tsx:1927
 msgid "Could not update reaction"
 msgstr "Could not update reaction"
 
@@ -1666,7 +1670,7 @@ msgstr "Create bot?"
 msgid "Create group"
 msgstr "Create group"
 
-#: src/pages/Shell.tsx:2872
+#: src/pages/Shell.tsx:2879
 #: src/pages/shell/bot-picker.tsx:74
 msgid "Create new Bot"
 msgstr "Create new Bot"
@@ -1814,7 +1818,7 @@ msgstr "Delete memories too"
 msgid "Delete routine"
 msgstr "Delete routine"
 
-#: src/pages/Shell.tsx:3150
+#: src/pages/Shell.tsx:3158
 msgid "Delete space"
 msgstr "Delete space"
 
@@ -1860,11 +1864,11 @@ msgstr "Desktop app"
 msgid "Desktop update"
 msgstr "Desktop update"
 
-#: src/pages/shell/composer.tsx:956
+#: src/pages/shell/composer.tsx:964
 msgid "Dictate"
 msgstr "Dictate"
 
-#: src/pages/shell/composer.tsx:1038
+#: src/pages/shell/composer.tsx:1046
 msgid "Dictating"
 msgstr "Dictating"
 
@@ -1896,7 +1900,7 @@ msgstr "Disconnecting…"
 msgid "Dismiss"
 msgstr "Dismiss"
 
-#: src/pages/shell/composer.tsx:683
+#: src/pages/shell/composer.tsx:691
 msgid "Dismiss error"
 msgstr "Dismiss error"
 
@@ -1989,12 +1993,12 @@ msgstr "Edit"
 msgid "Edit and resend"
 msgstr "Edit and resend"
 
-#: src/pages/Shell.tsx:3073
+#: src/pages/Shell.tsx:3081
 msgid "Edit Profile"
 msgstr "Edit Profile"
 
 #. placeholder {0}: rewindRemovedCount ?? 0
-#: src/pages/shell/composer.tsx:719
+#: src/pages/shell/composer.tsx:727
 msgid "Editing message from {rewindTime} · {0} messages after it will be removed"
 msgstr "Editing message from {rewindTime} · {0} messages after it will be removed"
 
@@ -2110,14 +2114,14 @@ msgstr "Failed"
 msgid "Failed {when}"
 msgstr "Failed {when}"
 
-#: src/pages/Shell.tsx:2126
-#: src/pages/Shell.tsx:2128
-#: src/pages/Shell.tsx:2130
+#: src/pages/Shell.tsx:2133
+#: src/pages/Shell.tsx:2135
+#: src/pages/Shell.tsx:2137
 msgid "Failed to send message"
 msgstr "Failed to send message"
 
-#: src/pages/Shell.tsx:2186
-#: src/pages/Shell.tsx:2205
+#: src/pages/Shell.tsx:2193
+#: src/pages/Shell.tsx:2212
 msgid "Failed to stop"
 msgstr "Failed to stop"
 
@@ -2341,7 +2345,7 @@ msgstr "Input"
 msgid "Inputs"
 msgstr "Inputs"
 
-#: src/pages/shell/composer.tsx:1014
+#: src/pages/shell/composer.tsx:1022
 msgid "Insert dictation"
 msgstr "Insert dictation"
 
@@ -2644,7 +2648,7 @@ msgstr "Memory"
 msgid "Memory scope"
 msgstr "Memory scope"
 
-#: src/pages/shell/composer.tsx:741
+#: src/pages/shell/composer.tsx:749
 msgid "Mentions"
 msgstr "Mentions"
 
@@ -2652,8 +2656,7 @@ msgstr "Mentions"
 msgid "Mentions only"
 msgstr "Mentions only"
 
-#: src/pages/shell/composer.tsx:1047
-#: src/pages/shell/composer.tsx:1148
+#: src/pages/shell/composer.tsx:667
 #: src/pages/shell/message-view.tsx:103
 msgid "Message"
 msgstr "Message"
@@ -2663,9 +2666,7 @@ msgstr "Message"
 msgid "Message"
 msgstr "Message"
 
-#: src/pages/shell/composer.tsx:1047
-#: src/pages/shell/composer.tsx:1144
-#: src/pages/shell/composer.tsx:1148
+#: src/pages/shell/composer.tsx:666
 msgid "Message {activeName}"
 msgstr "Message {activeName}"
 
@@ -2673,7 +2674,7 @@ msgstr "Message {activeName}"
 msgid "Message actions"
 msgstr "Message actions"
 
-#: src/pages/shell/composer.tsx:663
+#: src/pages/shell/composer.tsx:671
 msgid "Message composer"
 msgstr "Message composer"
 
@@ -2690,7 +2691,7 @@ msgstr "Message event"
 msgid "Message from {peer}"
 msgstr "Message from {peer}"
 
-#: src/pages/shell/composer.tsx:1145
+#: src/pages/shell/composer.tsx:1150
 msgid "Message…"
 msgstr "Message…"
 
@@ -2829,10 +2830,6 @@ msgstr "Name this group"
 #: src/pages/bot-page/RoutineCreateForm.tsx:80
 msgid "Name this routine"
 msgstr "Name this routine"
-
-#: src/pages/ActivityList.tsx:154
-msgid "Needs input"
-msgstr "Needs input"
 
 #: src/pages/ActivityList.tsx:156
 msgid "Needs takeover"
@@ -3108,7 +3105,7 @@ msgstr "on the 1st at {0}"
 msgid "One-time"
 msgstr "One-time"
 
-#: src/pages/Shell.tsx:3188
+#: src/pages/Shell.tsx:3196
 msgid "Only empty spaces can be deleted. Delete its bots and groups first."
 msgstr "Only empty spaces can be deleted. Delete its bots and groups first."
 
@@ -3452,8 +3449,8 @@ msgstr "Remove"
 
 #. placeholder {0}: artifact.name
 #. placeholder {0}: attachment.file.name
-#: src/pages/shell/composer.tsx:833
-#: src/pages/shell/composer.tsx:843
+#: src/pages/shell/composer.tsx:841
+#: src/pages/shell/composer.tsx:851
 msgid "Remove {0}"
 msgstr "Remove {0}"
 
@@ -3467,7 +3464,7 @@ msgid "Remove marketplace {0} and its skills?"
 msgstr "Remove marketplace {0} and its skills?"
 
 #. placeholder {0}: mention.name
-#: src/pages/shell/composer.tsx:931
+#: src/pages/shell/composer.tsx:939
 msgid "Remove mention {0}"
 msgstr "Remove mention {0}"
 
@@ -3475,7 +3472,7 @@ msgstr "Remove mention {0}"
 msgid "Remove message trigger?"
 msgstr "Remove message trigger?"
 
-#: src/pages/shell/composer.tsx:865
+#: src/pages/shell/composer.tsx:873
 #: src/pages/shell/message-actions-sheet.tsx:83
 #: src/pages/shell/message-hover-actions.tsx:107
 #: src/pages/shell/message-hover-actions.tsx:108
@@ -3485,7 +3482,7 @@ msgid "Remove preview"
 msgstr "Remove preview"
 
 #. placeholder {0}: selectedSkill.name
-#: src/pages/shell/composer.tsx:909
+#: src/pages/shell/composer.tsx:917
 msgid "Remove skill {0}"
 msgstr "Remove skill {0}"
 
@@ -3509,7 +3506,7 @@ msgid "Removing…"
 msgstr "Removing…"
 
 #: src/pages/BotContextMenu.tsx:121
-#: src/pages/Shell.tsx:3277
+#: src/pages/Shell.tsx:3285
 #: src/pages/shell/dialogs.tsx:246
 msgid "Rename section"
 msgstr "Rename section"
@@ -3538,7 +3535,7 @@ msgstr "Reply"
 msgid "Reply in several short messages"
 msgstr "Reply in several short messages"
 
-#: src/pages/shell/composer.tsx:701
+#: src/pages/shell/composer.tsx:709
 msgid "Replying to {replyName}"
 msgstr "Replying to {replyName}"
 
@@ -3609,7 +3606,7 @@ msgstr "Retry"
 msgid "Retry now"
 msgstr "Retry now"
 
-#: src/pages/Shell.tsx:2566
+#: src/pages/Shell.tsx:2573
 msgid "Retry screen"
 msgstr "Retry screen"
 
@@ -3803,7 +3800,7 @@ msgstr "Select a bot"
 
 #: src/components/ask/QuestionCard.tsx:205
 #: src/components/ask/QuestionCard.tsx:306
-#: src/pages/shell/composer.tsx:968
+#: src/pages/shell/composer.tsx:976
 msgid "Send"
 msgstr "Send"
 
@@ -3846,11 +3843,11 @@ msgstr "Server URL"
 msgid "Settings"
 msgstr "Settings"
 
-#: src/pages/shell/composer.tsx:1172
+#: src/pages/shell/composer.tsx:1176
 msgid "Settings: General"
 msgstr "Settings: General"
 
-#: src/pages/shell/composer.tsx:1174
+#: src/pages/shell/composer.tsx:1178
 msgid "Settings: Usage"
 msgstr "Settings: Usage"
 
@@ -3933,7 +3930,7 @@ msgid "Sign up"
 msgstr "Sign up"
 
 #. placeholder {0}: skill.name
-#: src/pages/shell/composer.tsx:788
+#: src/pages/shell/composer.tsx:796
 msgid "Skill {0}"
 msgstr "Skill {0}"
 
@@ -3972,7 +3969,7 @@ msgid "Skipped"
 msgstr "Skipped"
 
 #. placeholder {0}: skipped.join(", ")
-#: src/pages/Shell.tsx:1954
+#: src/pages/Shell.tsx:1961
 msgid "Skipped {0}"
 msgstr "Skipped {0}"
 
@@ -4033,8 +4030,8 @@ msgstr "Status"
 msgid "Steps"
 msgstr "Steps"
 
-#: src/pages/shell/composer.tsx:984
-#: src/pages/shell/composer.tsx:1025
+#: src/pages/shell/composer.tsx:992
+#: src/pages/shell/composer.tsx:1033
 #: src/pages/shell/side-panel.tsx:421
 #: src/pages/shell/side-panel.tsx:426
 msgid "Stop"
@@ -4101,7 +4098,7 @@ msgstr "System"
 msgid "Teach a task"
 msgstr "Teach a task"
 
-#: src/pages/Shell.tsx:2913
+#: src/pages/Shell.tsx:2920
 msgid "Teaching in progress. Stop teaching before sending a new message."
 msgstr "Teaching in progress. Stop teaching before sending a new message."
 
@@ -4271,7 +4268,7 @@ msgid "Unpin"
 msgstr "Unpin"
 
 #. placeholder {0}: pending.file.name
-#: src/pages/Shell.tsx:2041
+#: src/pages/Shell.tsx:2048
 msgid "Unsupported file type: {0}"
 msgstr "Unsupported file type: {0}"
 
@@ -4400,6 +4397,10 @@ msgstr "Waiting for sign-in…"
 msgid "Waiting for the API to come back…"
 msgstr "Waiting for the API to come back…"
 
+#: src/pages/ActivityList.tsx:154
+msgid "Waiting for you"
+msgstr "Waiting for you"
+
 #: src/pages/shell/message-cards.tsx:202
 msgid "Waiting…"
 msgstr "Waiting…"
@@ -4490,8 +4491,8 @@ msgstr "Yearly on {date} at {time}"
 msgid "Yesterday"
 msgstr "Yesterday"
 
-#: src/pages/Shell.tsx:1696
-#: src/pages/Shell.tsx:2590
+#: src/pages/Shell.tsx:1703
+#: src/pages/Shell.tsx:2597
 msgid "You"
 msgstr "You"
 

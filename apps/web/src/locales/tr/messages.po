@@ -37,12 +37,12 @@ msgid "{0, plural, one {# run} other {# runs}}"
 msgstr ""
 
 #. placeholder {0}: file.name
-#: src/pages/Shell.tsx:1934
+#: src/pages/Shell.tsx:1941
 msgid "{0} (max {ATTACHMENT_MAX_COUNT} attachments)"
 msgstr "{0} (en fazla {ATTACHMENT_MAX_COUNT} ek)"
 
 #. placeholder {0}: file.name
-#: src/pages/Shell.tsx:1938
+#: src/pages/Shell.tsx:1945
 msgid "{0} (over 10 MiB)"
 msgstr "{0} (10 MiB üzeri)"
 
@@ -207,7 +207,7 @@ msgid "{workingBotName} is working"
 msgstr "{workingBotName} çalışıyor"
 
 #. placeholder {0}: mention.name
-#: src/pages/shell/composer.tsx:755
+#: src/pages/shell/composer.tsx:763
 msgid "@{0}"
 msgstr "@{0}"
 
@@ -259,12 +259,12 @@ msgstr "İşlem onayları"
 #. placeholder {0}: sectionMenu.section.name
 #: src/pages/bot-page/BotPage.tsx:343
 #: src/pages/BotContextMenu.tsx:86
-#: src/pages/Shell.tsx:3262
+#: src/pages/Shell.tsx:3270
 #: src/pages/shell/sidebar.tsx:409
 msgid "Actions for {0}"
 msgstr "{0} için işlemler"
 
-#: src/pages/Shell.tsx:3136
+#: src/pages/Shell.tsx:3144
 msgid "Actions for space"
 msgstr ""
 
@@ -494,6 +494,10 @@ msgstr "Her zaman izinli"
 msgid "Answer"
 msgstr "Yanıtla"
 
+#: src/pages/shell/composer.tsx:664
+msgid "Answer {answerName}…"
+msgstr ""
+
 #: src/pages/CallView.tsx:400
 msgid "Answer in text"
 msgstr ""
@@ -642,7 +646,7 @@ msgstr "saat {0}"
 msgid "at {timeSelect}"
 msgstr "saat {timeSelect}"
 
-#: src/pages/shell/composer.tsx:886
+#: src/pages/shell/composer.tsx:894
 msgid "Attach file"
 msgstr "Dosya ekle"
 
@@ -731,7 +735,7 @@ msgid "bot"
 msgstr "bot"
 
 #: src/pages/IntegrationSetup.tsx:51
-#: src/pages/Shell.tsx:1697
+#: src/pages/Shell.tsx:1704
 #: src/pages/shell/message-view.tsx:232
 #: src/pages/shell/thread-row.tsx:286
 msgid "Bot"
@@ -750,8 +754,8 @@ msgstr "Bot ekranı"
 msgid "Bot screen preview"
 msgstr "Bot ekranı önizlemesi"
 
-#: src/pages/Shell.tsx:3073
-#: src/pages/shell/composer.tsx:1170
+#: src/pages/Shell.tsx:3081
+#: src/pages/shell/composer.tsx:1174
 #: src/pages/shell/thread-header.tsx:154
 #: src/pages/shell/thread-header.tsx:155
 msgid "Bot settings"
@@ -803,11 +807,11 @@ msgstr "Sunucuya ulaşılamıyor."
 msgid "Cancel"
 msgstr "İptal"
 
-#: src/pages/shell/composer.tsx:1000
+#: src/pages/shell/composer.tsx:1008
 msgid "Cancel dictation"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:723
+#: src/pages/shell/composer.tsx:731
 msgid "Cancel edit"
 msgstr "Düzenlemeyi iptal et"
 
@@ -819,7 +823,7 @@ msgstr "Yeni botu iptal et"
 msgid "Cancel new group"
 msgstr "Yeni grubu iptal et"
 
-#: src/pages/shell/composer.tsx:704
+#: src/pages/shell/composer.tsx:712
 msgid "Cancel reply"
 msgstr "Yanıtı iptal et"
 
@@ -981,7 +985,7 @@ msgstr "Mesajlaşma ayarlarını kapat"
 msgid "Close model settings"
 msgstr "Model ayarlarını kapat"
 
-#: src/pages/Shell.tsx:2724
+#: src/pages/Shell.tsx:2731
 msgid "Close navigation"
 msgstr "Gezinmeyi kapat"
 
@@ -1285,13 +1289,13 @@ msgstr "Bu sağlayıcı bağlanamadı"
 msgid "Could not connect this voice provider"
 msgstr "Bu ses sağlayıcısı bağlanamadı"
 
-#: src/pages/Shell.tsx:885
-#: src/pages/Shell.tsx:2559
+#: src/pages/Shell.tsx:886
+#: src/pages/Shell.tsx:2566
 msgid "Could not connect to the computer screen"
 msgstr "Bilgisayar ekranına bağlanılamadı"
 
 #: src/pages/Auth.tsx:101
-#: src/pages/Shell.tsx:2533
+#: src/pages/Shell.tsx:2540
 msgid "Could not continue"
 msgstr "Devam edilemedi"
 
@@ -1588,7 +1592,7 @@ msgstr "Öğretme başlatılamadı"
 msgid "Could not submit this answer"
 msgstr "Bu yanıt gönderilemedi"
 
-#: src/pages/Shell.tsx:2386
+#: src/pages/Shell.tsx:2393
 msgid "Could not take control"
 msgstr "Kontrol alınamadı"
 
@@ -1609,7 +1613,7 @@ msgstr "Bilgisayar güncellenemedi"
 msgid "Could not update plugin"
 msgstr "Eklenti güncellenemedi"
 
-#: src/pages/Shell.tsx:1920
+#: src/pages/Shell.tsx:1927
 msgid "Could not update reaction"
 msgstr "Tepki güncellenemedi"
 
@@ -1666,7 +1670,7 @@ msgstr "Bot oluşturulsun mu?"
 msgid "Create group"
 msgstr "Grup oluştur"
 
-#: src/pages/Shell.tsx:2872
+#: src/pages/Shell.tsx:2879
 #: src/pages/shell/bot-picker.tsx:74
 msgid "Create new Bot"
 msgstr "Yeni bot oluştur"
@@ -1814,7 +1818,7 @@ msgstr "Hafızayı da sil"
 msgid "Delete routine"
 msgstr "Rutini sil"
 
-#: src/pages/Shell.tsx:3150
+#: src/pages/Shell.tsx:3158
 msgid "Delete space"
 msgstr ""
 
@@ -1860,11 +1864,11 @@ msgstr ""
 msgid "Desktop update"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:956
+#: src/pages/shell/composer.tsx:964
 msgid "Dictate"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:1038
+#: src/pages/shell/composer.tsx:1046
 msgid "Dictating"
 msgstr ""
 
@@ -1896,7 +1900,7 @@ msgstr "Bağlantı kesiliyor…"
 msgid "Dismiss"
 msgstr "Kapat"
 
-#: src/pages/shell/composer.tsx:683
+#: src/pages/shell/composer.tsx:691
 msgid "Dismiss error"
 msgstr "Hatayı kapat"
 
@@ -1989,12 +1993,12 @@ msgstr "Düzenle"
 msgid "Edit and resend"
 msgstr "Düzenle ve yeniden gönder"
 
-#: src/pages/Shell.tsx:3073
+#: src/pages/Shell.tsx:3081
 msgid "Edit Profile"
 msgstr "Profili Düzenle"
 
 #. placeholder {0}: rewindRemovedCount ?? 0
-#: src/pages/shell/composer.tsx:719
+#: src/pages/shell/composer.tsx:727
 msgid "Editing message from {rewindTime} · {0} messages after it will be removed"
 msgstr "{rewindTime} tarihli mesaj düzenleniyor · sonraki {0} mesaj kaldırılacak"
 
@@ -2110,14 +2114,14 @@ msgstr "Başarısız"
 msgid "Failed {when}"
 msgstr "{when} başarısız oldu"
 
-#: src/pages/Shell.tsx:2126
-#: src/pages/Shell.tsx:2128
-#: src/pages/Shell.tsx:2130
+#: src/pages/Shell.tsx:2133
+#: src/pages/Shell.tsx:2135
+#: src/pages/Shell.tsx:2137
 msgid "Failed to send message"
 msgstr "Mesaj gönderilemedi"
 
-#: src/pages/Shell.tsx:2186
-#: src/pages/Shell.tsx:2205
+#: src/pages/Shell.tsx:2193
+#: src/pages/Shell.tsx:2212
 msgid "Failed to stop"
 msgstr "Durdurulamadı"
 
@@ -2341,7 +2345,7 @@ msgstr "Girdi"
 msgid "Inputs"
 msgstr "Girdiler"
 
-#: src/pages/shell/composer.tsx:1014
+#: src/pages/shell/composer.tsx:1022
 msgid "Insert dictation"
 msgstr ""
 
@@ -2644,7 +2648,7 @@ msgstr "Hafıza"
 msgid "Memory scope"
 msgstr "Hafıza kapsamı"
 
-#: src/pages/shell/composer.tsx:741
+#: src/pages/shell/composer.tsx:749
 msgid "Mentions"
 msgstr "Bahsetmeler"
 
@@ -2652,8 +2656,7 @@ msgstr "Bahsetmeler"
 msgid "Mentions only"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:1047
-#: src/pages/shell/composer.tsx:1148
+#: src/pages/shell/composer.tsx:667
 #: src/pages/shell/message-view.tsx:103
 msgid "Message"
 msgstr ""
@@ -2663,9 +2666,7 @@ msgstr ""
 msgid "Message"
 msgstr "Mesaj"
 
-#: src/pages/shell/composer.tsx:1047
-#: src/pages/shell/composer.tsx:1144
-#: src/pages/shell/composer.tsx:1148
+#: src/pages/shell/composer.tsx:666
 msgid "Message {activeName}"
 msgstr "{activeName} sohbetine yaz"
 
@@ -2673,7 +2674,7 @@ msgstr "{activeName} sohbetine yaz"
 msgid "Message actions"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:663
+#: src/pages/shell/composer.tsx:671
 msgid "Message composer"
 msgstr "Mesaj düzenleyici"
 
@@ -2690,7 +2691,7 @@ msgstr ""
 msgid "Message from {peer}"
 msgstr "{peer} botundan mesaj"
 
-#: src/pages/shell/composer.tsx:1145
+#: src/pages/shell/composer.tsx:1150
 msgid "Message…"
 msgstr "Mesaj…"
 
@@ -2829,10 +2830,6 @@ msgstr "Gruba bir ad ver"
 #: src/pages/bot-page/RoutineCreateForm.tsx:80
 msgid "Name this routine"
 msgstr "Bu rutine bir ad verin"
-
-#: src/pages/ActivityList.tsx:154
-msgid "Needs input"
-msgstr "Girdi bekliyor"
 
 #: src/pages/ActivityList.tsx:156
 msgid "Needs takeover"
@@ -3108,7 +3105,7 @@ msgstr "her ayın 1'inde saat {0}"
 msgid "One-time"
 msgstr "Tek seferlik"
 
-#: src/pages/Shell.tsx:3188
+#: src/pages/Shell.tsx:3196
 msgid "Only empty spaces can be deleted. Delete its bots and groups first."
 msgstr ""
 
@@ -3452,8 +3449,8 @@ msgstr "Kaldır"
 
 #. placeholder {0}: artifact.name
 #. placeholder {0}: attachment.file.name
-#: src/pages/shell/composer.tsx:833
-#: src/pages/shell/composer.tsx:843
+#: src/pages/shell/composer.tsx:841
+#: src/pages/shell/composer.tsx:851
 msgid "Remove {0}"
 msgstr "{0} kaldır"
 
@@ -3467,7 +3464,7 @@ msgid "Remove marketplace {0} and its skills?"
 msgstr "{0} pazar yeri ve yetenekleri kaldırılsın mı?"
 
 #. placeholder {0}: mention.name
-#: src/pages/shell/composer.tsx:931
+#: src/pages/shell/composer.tsx:939
 msgid "Remove mention {0}"
 msgstr "{0} bahsini kaldır"
 
@@ -3475,7 +3472,7 @@ msgstr "{0} bahsini kaldır"
 msgid "Remove message trigger?"
 msgstr "Mesaj tetikleyicisi kaldırılsın mı?"
 
-#: src/pages/shell/composer.tsx:865
+#: src/pages/shell/composer.tsx:873
 #: src/pages/shell/message-actions-sheet.tsx:83
 #: src/pages/shell/message-hover-actions.tsx:107
 #: src/pages/shell/message-hover-actions.tsx:108
@@ -3485,7 +3482,7 @@ msgid "Remove preview"
 msgstr "Önizlemeyi kaldır"
 
 #. placeholder {0}: selectedSkill.name
-#: src/pages/shell/composer.tsx:909
+#: src/pages/shell/composer.tsx:917
 msgid "Remove skill {0}"
 msgstr "{0} becerisini kaldır"
 
@@ -3509,7 +3506,7 @@ msgid "Removing…"
 msgstr "Kaldırılıyor…"
 
 #: src/pages/BotContextMenu.tsx:121
-#: src/pages/Shell.tsx:3277
+#: src/pages/Shell.tsx:3285
 #: src/pages/shell/dialogs.tsx:246
 msgid "Rename section"
 msgstr ""
@@ -3538,7 +3535,7 @@ msgstr "Yanıtla"
 msgid "Reply in several short messages"
 msgstr "Birkaç kısa mesajla yanıtla"
 
-#: src/pages/shell/composer.tsx:701
+#: src/pages/shell/composer.tsx:709
 msgid "Replying to {replyName}"
 msgstr "{replyName} yanıtlanıyor"
 
@@ -3609,7 +3606,7 @@ msgstr "Tekrar dene"
 msgid "Retry now"
 msgstr "Şimdi tekrar dene"
 
-#: src/pages/Shell.tsx:2566
+#: src/pages/Shell.tsx:2573
 msgid "Retry screen"
 msgstr "Ekranı yeniden dene"
 
@@ -3803,7 +3800,7 @@ msgstr "Bir bot seç"
 
 #: src/components/ask/QuestionCard.tsx:205
 #: src/components/ask/QuestionCard.tsx:306
-#: src/pages/shell/composer.tsx:968
+#: src/pages/shell/composer.tsx:976
 msgid "Send"
 msgstr "Gönder"
 
@@ -3846,11 +3843,11 @@ msgstr "Sunucu URL'si"
 msgid "Settings"
 msgstr "Ayarlar"
 
-#: src/pages/shell/composer.tsx:1172
+#: src/pages/shell/composer.tsx:1176
 msgid "Settings: General"
 msgstr "Ayarlar: Genel"
 
-#: src/pages/shell/composer.tsx:1174
+#: src/pages/shell/composer.tsx:1178
 msgid "Settings: Usage"
 msgstr "Ayarlar: Kullanım"
 
@@ -3933,7 +3930,7 @@ msgid "Sign up"
 msgstr "Kaydol"
 
 #. placeholder {0}: skill.name
-#: src/pages/shell/composer.tsx:788
+#: src/pages/shell/composer.tsx:796
 msgid "Skill {0}"
 msgstr "Beceri: {0}"
 
@@ -3972,7 +3969,7 @@ msgid "Skipped"
 msgstr ""
 
 #. placeholder {0}: skipped.join(", ")
-#: src/pages/Shell.tsx:1954
+#: src/pages/Shell.tsx:1961
 msgid "Skipped {0}"
 msgstr "{0} atlandı"
 
@@ -4033,8 +4030,8 @@ msgstr ""
 msgid "Steps"
 msgstr "Adımlar"
 
-#: src/pages/shell/composer.tsx:984
-#: src/pages/shell/composer.tsx:1025
+#: src/pages/shell/composer.tsx:992
+#: src/pages/shell/composer.tsx:1033
 #: src/pages/shell/side-panel.tsx:421
 #: src/pages/shell/side-panel.tsx:426
 msgid "Stop"
@@ -4101,7 +4098,7 @@ msgstr "Sistem"
 msgid "Teach a task"
 msgstr "Görev öğret"
 
-#: src/pages/Shell.tsx:2913
+#: src/pages/Shell.tsx:2920
 msgid "Teaching in progress. Stop teaching before sending a new message."
 msgstr "Öğretme sürüyor. Yeni mesaj göndermeden önce öğretmeyi durdur."
 
@@ -4271,7 +4268,7 @@ msgid "Unpin"
 msgstr "Sabitlemeyi kaldır"
 
 #. placeholder {0}: pending.file.name
-#: src/pages/Shell.tsx:2041
+#: src/pages/Shell.tsx:2048
 msgid "Unsupported file type: {0}"
 msgstr "Desteklenmeyen dosya türü: {0}"
 
@@ -4400,6 +4397,10 @@ msgstr "Oturum açma bekleniyor…"
 msgid "Waiting for the API to come back…"
 msgstr "API'nin geri gelmesi bekleniyor…"
 
+#: src/pages/ActivityList.tsx:154
+msgid "Waiting for you"
+msgstr ""
+
 #: src/pages/shell/message-cards.tsx:202
 msgid "Waiting…"
 msgstr "Bekleniyor…"
@@ -4490,8 +4491,8 @@ msgstr "Her yıl {date} {time}"
 msgid "Yesterday"
 msgstr "Dün"
 
-#: src/pages/Shell.tsx:1696
-#: src/pages/Shell.tsx:2590
+#: src/pages/Shell.tsx:1703
+#: src/pages/Shell.tsx:2597
 msgid "You"
 msgstr "Sen"
 

@@ -37,12 +37,12 @@ msgid "{0, plural, one {# run} other {# runs}}"
 msgstr ""
 
 #. placeholder {0}: file.name
-#: src/pages/Shell.tsx:1934
+#: src/pages/Shell.tsx:1941
 msgid "{0} (max {ATTACHMENT_MAX_COUNT} attachments)"
 msgstr "{0} (макс. {ATTACHMENT_MAX_COUNT} вложений)"
 
 #. placeholder {0}: file.name
-#: src/pages/Shell.tsx:1938
+#: src/pages/Shell.tsx:1945
 msgid "{0} (over 10 MiB)"
 msgstr "{0} (более 10 МБ)"
 
@@ -207,7 +207,7 @@ msgid "{workingBotName} is working"
 msgstr "{workingBotName} работает"
 
 #. placeholder {0}: mention.name
-#: src/pages/shell/composer.tsx:755
+#: src/pages/shell/composer.tsx:763
 msgid "@{0}"
 msgstr "@{0}"
 
@@ -259,12 +259,12 @@ msgstr "Подтверждения действий"
 #. placeholder {0}: sectionMenu.section.name
 #: src/pages/bot-page/BotPage.tsx:343
 #: src/pages/BotContextMenu.tsx:86
-#: src/pages/Shell.tsx:3262
+#: src/pages/Shell.tsx:3270
 #: src/pages/shell/sidebar.tsx:409
 msgid "Actions for {0}"
 msgstr "Действия для {0}"
 
-#: src/pages/Shell.tsx:3136
+#: src/pages/Shell.tsx:3144
 msgid "Actions for space"
 msgstr "Действия для пространства"
 
@@ -494,6 +494,10 @@ msgstr "Всегда разрешено"
 msgid "Answer"
 msgstr "Ответ"
 
+#: src/pages/shell/composer.tsx:664
+msgid "Answer {answerName}…"
+msgstr ""
+
 #: src/pages/CallView.tsx:400
 msgid "Answer in text"
 msgstr ""
@@ -642,7 +646,7 @@ msgstr "в {0}"
 msgid "at {timeSelect}"
 msgstr "в {timeSelect}"
 
-#: src/pages/shell/composer.tsx:886
+#: src/pages/shell/composer.tsx:894
 msgid "Attach file"
 msgstr "Прикрепить файл"
 
@@ -731,7 +735,7 @@ msgid "bot"
 msgstr "бот"
 
 #: src/pages/IntegrationSetup.tsx:51
-#: src/pages/Shell.tsx:1697
+#: src/pages/Shell.tsx:1704
 #: src/pages/shell/message-view.tsx:232
 #: src/pages/shell/thread-row.tsx:286
 msgid "Bot"
@@ -750,8 +754,8 @@ msgstr "Экран бота"
 msgid "Bot screen preview"
 msgstr "Предварительный просмотр экрана бота"
 
-#: src/pages/Shell.tsx:3073
-#: src/pages/shell/composer.tsx:1170
+#: src/pages/Shell.tsx:3081
+#: src/pages/shell/composer.tsx:1174
 #: src/pages/shell/thread-header.tsx:154
 #: src/pages/shell/thread-header.tsx:155
 msgid "Bot settings"
@@ -803,11 +807,11 @@ msgstr "Не удаётся связаться с сервером."
 msgid "Cancel"
 msgstr "Отмена"
 
-#: src/pages/shell/composer.tsx:1000
+#: src/pages/shell/composer.tsx:1008
 msgid "Cancel dictation"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:723
+#: src/pages/shell/composer.tsx:731
 msgid "Cancel edit"
 msgstr ""
 
@@ -819,7 +823,7 @@ msgstr "Отменить создание бота"
 msgid "Cancel new group"
 msgstr "Отменить создание группы"
 
-#: src/pages/shell/composer.tsx:704
+#: src/pages/shell/composer.tsx:712
 msgid "Cancel reply"
 msgstr "Отменить ответ"
 
@@ -981,7 +985,7 @@ msgstr "Закрыть настройки обмена сообщениями"
 msgid "Close model settings"
 msgstr "Закрыть настройки модели"
 
-#: src/pages/Shell.tsx:2724
+#: src/pages/Shell.tsx:2731
 msgid "Close navigation"
 msgstr "Закрыть навигацию"
 
@@ -1285,13 +1289,13 @@ msgstr "Не удалось подключить этого провайдера
 msgid "Could not connect this voice provider"
 msgstr "Не удалось подключить этого голосового провайдера."
 
-#: src/pages/Shell.tsx:885
-#: src/pages/Shell.tsx:2559
+#: src/pages/Shell.tsx:886
+#: src/pages/Shell.tsx:2566
 msgid "Could not connect to the computer screen"
 msgstr "Не удалось подключиться к экрану компьютера"
 
 #: src/pages/Auth.tsx:101
-#: src/pages/Shell.tsx:2533
+#: src/pages/Shell.tsx:2540
 msgid "Could not continue"
 msgstr "Не удалось продолжить"
 
@@ -1588,7 +1592,7 @@ msgstr "Не удалось начать обучение"
 msgid "Could not submit this answer"
 msgstr "Не удалось отправить этот ответ"
 
-#: src/pages/Shell.tsx:2386
+#: src/pages/Shell.tsx:2393
 msgid "Could not take control"
 msgstr "Не смог взять под контроль"
 
@@ -1609,7 +1613,7 @@ msgstr "Не удалось обновить компьютер"
 msgid "Could not update plugin"
 msgstr ""
 
-#: src/pages/Shell.tsx:1920
+#: src/pages/Shell.tsx:1927
 msgid "Could not update reaction"
 msgstr "Не удалось обновить реакцию"
 
@@ -1666,7 +1670,7 @@ msgstr "Создать бота?"
 msgid "Create group"
 msgstr "Создать группу"
 
-#: src/pages/Shell.tsx:2872
+#: src/pages/Shell.tsx:2879
 #: src/pages/shell/bot-picker.tsx:74
 msgid "Create new Bot"
 msgstr "Создать нового бота"
@@ -1814,7 +1818,7 @@ msgstr "Удалите воспоминания тоже"
 msgid "Delete routine"
 msgstr "Удалить задачу"
 
-#: src/pages/Shell.tsx:3150
+#: src/pages/Shell.tsx:3158
 msgid "Delete space"
 msgstr "Удалить пространство"
 
@@ -1860,11 +1864,11 @@ msgstr "Настольное приложение"
 msgid "Desktop update"
 msgstr "Обновление настольного приложения"
 
-#: src/pages/shell/composer.tsx:956
+#: src/pages/shell/composer.tsx:964
 msgid "Dictate"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:1038
+#: src/pages/shell/composer.tsx:1046
 msgid "Dictating"
 msgstr ""
 
@@ -1896,7 +1900,7 @@ msgstr "Отключение…"
 msgid "Dismiss"
 msgstr "Закрыть"
 
-#: src/pages/shell/composer.tsx:683
+#: src/pages/shell/composer.tsx:691
 msgid "Dismiss error"
 msgstr "Закрыть ошибку"
 
@@ -1989,12 +1993,12 @@ msgstr "Изменить"
 msgid "Edit and resend"
 msgstr ""
 
-#: src/pages/Shell.tsx:3073
+#: src/pages/Shell.tsx:3081
 msgid "Edit Profile"
 msgstr "Редактировать профиль"
 
 #. placeholder {0}: rewindRemovedCount ?? 0
-#: src/pages/shell/composer.tsx:719
+#: src/pages/shell/composer.tsx:727
 msgid "Editing message from {rewindTime} · {0} messages after it will be removed"
 msgstr ""
 
@@ -2110,14 +2114,14 @@ msgstr "Ошибка"
 msgid "Failed {when}"
 msgstr "Ошибка {when}"
 
-#: src/pages/Shell.tsx:2126
-#: src/pages/Shell.tsx:2128
-#: src/pages/Shell.tsx:2130
+#: src/pages/Shell.tsx:2133
+#: src/pages/Shell.tsx:2135
+#: src/pages/Shell.tsx:2137
 msgid "Failed to send message"
 msgstr "Не удалось отправить сообщение"
 
-#: src/pages/Shell.tsx:2186
-#: src/pages/Shell.tsx:2205
+#: src/pages/Shell.tsx:2193
+#: src/pages/Shell.tsx:2212
 msgid "Failed to stop"
 msgstr "Не удалось остановить"
 
@@ -2341,7 +2345,7 @@ msgstr ""
 msgid "Inputs"
 msgstr "Входы"
 
-#: src/pages/shell/composer.tsx:1014
+#: src/pages/shell/composer.tsx:1022
 msgid "Insert dictation"
 msgstr ""
 
@@ -2644,7 +2648,7 @@ msgstr "Память"
 msgid "Memory scope"
 msgstr "Область памяти"
 
-#: src/pages/shell/composer.tsx:741
+#: src/pages/shell/composer.tsx:749
 msgid "Mentions"
 msgstr "Упоминания"
 
@@ -2652,8 +2656,7 @@ msgstr "Упоминания"
 msgid "Mentions only"
 msgstr "Только упоминания"
 
-#: src/pages/shell/composer.tsx:1047
-#: src/pages/shell/composer.tsx:1148
+#: src/pages/shell/composer.tsx:667
 #: src/pages/shell/message-view.tsx:103
 msgid "Message"
 msgstr "Сообщение"
@@ -2663,9 +2666,7 @@ msgstr "Сообщение"
 msgid "Message"
 msgstr "Сообщение"
 
-#: src/pages/shell/composer.tsx:1047
-#: src/pages/shell/composer.tsx:1144
-#: src/pages/shell/composer.tsx:1148
+#: src/pages/shell/composer.tsx:666
 msgid "Message {activeName}"
 msgstr "Сообщение {activeName}"
 
@@ -2673,7 +2674,7 @@ msgstr "Сообщение {activeName}"
 msgid "Message actions"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:663
+#: src/pages/shell/composer.tsx:671
 msgid "Message composer"
 msgstr "Поле сообщения"
 
@@ -2690,7 +2691,7 @@ msgstr "Событие сообщения"
 msgid "Message from {peer}"
 msgstr "Сообщение от {peer}"
 
-#: src/pages/shell/composer.tsx:1145
+#: src/pages/shell/composer.tsx:1150
 msgid "Message…"
 msgstr "Сообщение…"
 
@@ -2829,10 +2830,6 @@ msgstr "Назовите эту группу"
 #: src/pages/bot-page/RoutineCreateForm.tsx:80
 msgid "Name this routine"
 msgstr "Назовите эту задачу"
-
-#: src/pages/ActivityList.tsx:154
-msgid "Needs input"
-msgstr "Требуется ввод данных"
 
 #: src/pages/ActivityList.tsx:156
 msgid "Needs takeover"
@@ -3108,7 +3105,7 @@ msgstr "1-го числа в {0}"
 msgid "One-time"
 msgstr "Однократно"
 
-#: src/pages/Shell.tsx:3188
+#: src/pages/Shell.tsx:3196
 msgid "Only empty spaces can be deleted. Delete its bots and groups first."
 msgstr "Удалить можно только пустые пространства. Сначала удалите их ботов и группы."
 
@@ -3452,8 +3449,8 @@ msgstr "Удалить"
 
 #. placeholder {0}: artifact.name
 #. placeholder {0}: attachment.file.name
-#: src/pages/shell/composer.tsx:833
-#: src/pages/shell/composer.tsx:843
+#: src/pages/shell/composer.tsx:841
+#: src/pages/shell/composer.tsx:851
 msgid "Remove {0}"
 msgstr "Удалить {0}"
 
@@ -3467,7 +3464,7 @@ msgid "Remove marketplace {0} and its skills?"
 msgstr ""
 
 #. placeholder {0}: mention.name
-#: src/pages/shell/composer.tsx:931
+#: src/pages/shell/composer.tsx:939
 msgid "Remove mention {0}"
 msgstr "Удалить упоминание {0}"
 
@@ -3475,7 +3472,7 @@ msgstr "Удалить упоминание {0}"
 msgid "Remove message trigger?"
 msgstr "Удалить триггер сообщений?"
 
-#: src/pages/shell/composer.tsx:865
+#: src/pages/shell/composer.tsx:873
 #: src/pages/shell/message-actions-sheet.tsx:83
 #: src/pages/shell/message-hover-actions.tsx:107
 #: src/pages/shell/message-hover-actions.tsx:108
@@ -3485,7 +3482,7 @@ msgid "Remove preview"
 msgstr "Убрать предпросмотр"
 
 #. placeholder {0}: selectedSkill.name
-#: src/pages/shell/composer.tsx:909
+#: src/pages/shell/composer.tsx:917
 msgid "Remove skill {0}"
 msgstr "Удалить навык {0}"
 
@@ -3509,7 +3506,7 @@ msgid "Removing…"
 msgstr "Удаление…"
 
 #: src/pages/BotContextMenu.tsx:121
-#: src/pages/Shell.tsx:3277
+#: src/pages/Shell.tsx:3285
 #: src/pages/shell/dialogs.tsx:246
 msgid "Rename section"
 msgstr ""
@@ -3538,7 +3535,7 @@ msgstr "Ответить"
 msgid "Reply in several short messages"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:701
+#: src/pages/shell/composer.tsx:709
 msgid "Replying to {replyName}"
 msgstr "Ответ на {replyName}"
 
@@ -3609,7 +3606,7 @@ msgstr "Повторить"
 msgid "Retry now"
 msgstr "Повторить попытку сейчас"
 
-#: src/pages/Shell.tsx:2566
+#: src/pages/Shell.tsx:2573
 msgid "Retry screen"
 msgstr "Повторить загрузку экрана"
 
@@ -3803,7 +3800,7 @@ msgstr "Выберите бота"
 
 #: src/components/ask/QuestionCard.tsx:205
 #: src/components/ask/QuestionCard.tsx:306
-#: src/pages/shell/composer.tsx:968
+#: src/pages/shell/composer.tsx:976
 msgid "Send"
 msgstr "Отправить"
 
@@ -3846,11 +3843,11 @@ msgstr "URL-адрес сервера"
 msgid "Settings"
 msgstr "Настройки"
 
-#: src/pages/shell/composer.tsx:1172
+#: src/pages/shell/composer.tsx:1176
 msgid "Settings: General"
 msgstr "Настройки: Общие"
 
-#: src/pages/shell/composer.tsx:1174
+#: src/pages/shell/composer.tsx:1178
 msgid "Settings: Usage"
 msgstr "Настройки: Использование"
 
@@ -3933,7 +3930,7 @@ msgid "Sign up"
 msgstr "Зарегистрироваться"
 
 #. placeholder {0}: skill.name
-#: src/pages/shell/composer.tsx:788
+#: src/pages/shell/composer.tsx:796
 msgid "Skill {0}"
 msgstr "Навык {0}"
 
@@ -3972,7 +3969,7 @@ msgid "Skipped"
 msgstr ""
 
 #. placeholder {0}: skipped.join(", ")
-#: src/pages/Shell.tsx:1954
+#: src/pages/Shell.tsx:1961
 msgid "Skipped {0}"
 msgstr "Пропущен {0}"
 
@@ -4033,8 +4030,8 @@ msgstr "Статус"
 msgid "Steps"
 msgstr "Шаги"
 
-#: src/pages/shell/composer.tsx:984
-#: src/pages/shell/composer.tsx:1025
+#: src/pages/shell/composer.tsx:992
+#: src/pages/shell/composer.tsx:1033
 #: src/pages/shell/side-panel.tsx:421
 #: src/pages/shell/side-panel.tsx:426
 msgid "Stop"
@@ -4101,7 +4098,7 @@ msgstr "Системная"
 msgid "Teach a task"
 msgstr "Научить задачу"
 
-#: src/pages/Shell.tsx:2913
+#: src/pages/Shell.tsx:2920
 msgid "Teaching in progress. Stop teaching before sending a new message."
 msgstr "Обучение в процессе. Прекратите обучение, прежде чем отправлять новое сообщение."
 
@@ -4271,7 +4268,7 @@ msgid "Unpin"
 msgstr "Открепить"
 
 #. placeholder {0}: pending.file.name
-#: src/pages/Shell.tsx:2041
+#: src/pages/Shell.tsx:2048
 msgid "Unsupported file type: {0}"
 msgstr "Неподдерживаемый тип файла: {0}."
 
@@ -4400,6 +4397,10 @@ msgstr "Ожидание входа в систему…"
 msgid "Waiting for the API to come back…"
 msgstr "Ждём возвращения API…"
 
+#: src/pages/ActivityList.tsx:154
+msgid "Waiting for you"
+msgstr ""
+
 #: src/pages/shell/message-cards.tsx:202
 msgid "Waiting…"
 msgstr "Ожидание…"
@@ -4490,8 +4491,8 @@ msgstr "Ежегодно {date} в {time}"
 msgid "Yesterday"
 msgstr ""
 
-#: src/pages/Shell.tsx:1696
-#: src/pages/Shell.tsx:2590
+#: src/pages/Shell.tsx:1703
+#: src/pages/Shell.tsx:2597
 msgid "You"
 msgstr "Вы"
 

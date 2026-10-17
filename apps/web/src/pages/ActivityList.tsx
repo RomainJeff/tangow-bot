@@ -7,9 +7,9 @@ import { rpc } from "../lib/rpc";
 
 function statusTone(status: RunActivityRow["status"]): string {
   if (status === "failed") return "text-destructive";
-  if (status === "cancelled") return "text-muted-foreground";
+  if (status === "cancelled" || status === "waiting_input") return "text-muted-foreground";
   if (status === "completed") return "text-success";
-  if (status === "waiting_input" || status === "waiting_takeover") return "text-warning";
+  if (status === "waiting_takeover") return "text-warning";
   return "text-foreground";
 }
 
@@ -151,7 +151,7 @@ export function runStatusLabel(status: string): string {
     case "running":
       return t`Running`;
     case "waiting_input":
-      return t`Needs input`;
+      return t`Waiting for you`;
     case "waiting_takeover":
       return t`Needs takeover`;
     case "completed":

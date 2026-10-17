@@ -30,7 +30,7 @@ test("renders tappable choice buttons and submits the offered action id", async 
   const prompt = page.locator("p").filter({ hasText: /^Which city should I use\?$/ });
   if ((await prompt.count()) === 0) {
     await page.reload({ waitUntil: "domcontentloaded" });
-    await expect(page.getByPlaceholder(/Message/)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByPlaceholder(/Message|Answer/)).toBeVisible({ timeout: 15_000 });
   }
   await expect(prompt).toBeVisible({ timeout: 15_000 });
 

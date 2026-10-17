@@ -34,6 +34,7 @@ import type {
   ThreadView,
 } from "@rakazo/core";
 import {
+  answersPendingQuestion,
   appendedEntries,
   attachmentsForThread,
   blocksOfBotWords,
@@ -1671,6 +1672,12 @@ export function ShellPage() {
     },
     [bots, transcriptMembers],
   );
+  // A send without a mention goes to the bot, or to a group's first member.
+  const sendsTo = inGroup ? transcriptMembers?.[0]?.botId : active?.id;
+  const answerName =
+    sendsTo && answersPendingQuestion(view, sendsTo, currentRuns)
+      ? resolveTranscriptBot(sendsTo)?.name
+      : undefined;
   const workingBots: GroupAvatarMember[] = workingRuns.map((run) => {
     const bot = resolveTranscriptBot(run.botId);
     return {
@@ -2919,6 +2926,7 @@ export function ShellPage() {
                 activeName={
                   inGroup ? (activeGroup?.name ?? activeSnapshot?.groupName) : active?.name
                 }
+                answerName={answerName}
                 running={composerRunning}
                 botColor={active?.color}
                 disabled={Boolean(recordingSkill)}

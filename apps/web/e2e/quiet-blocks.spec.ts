@@ -53,7 +53,7 @@ test("framed blocks capture a pending approval and an answered question as norma
   // threads/get can observe waiting_input before the shell realtime feed paints the ask card.
   if ((await allowOnce.count()) === 0) {
     await page.reload({ waitUntil: "domcontentloaded" });
-    await expect(page.getByPlaceholder(/Message/)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByPlaceholder(/Message|Answer/)).toBeVisible({ timeout: 15_000 });
   }
   await expect(allowOnce).toBeVisible({ timeout: 15_000 });
   await expect(
@@ -88,7 +88,7 @@ test("framed blocks capture a pending approval and an answered question as norma
   const berlin = page.getByRole("button", { name: "Berlin", exact: true });
   if ((await berlin.count()) === 0) {
     await page.reload({ waitUntil: "domcontentloaded" });
-    await expect(page.getByPlaceholder(/Message/)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByPlaceholder(/Message|Answer/)).toBeVisible({ timeout: 15_000 });
   }
   // The question is a normal bot row too, before it is answered.
   const questionMessage = page.locator("[data-message-id]").filter({ has: berlin });
