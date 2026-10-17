@@ -3166,14 +3166,19 @@ export function createRunExecutor(deps: ExecutorDeps) {
               if (args.attach !== false && chartFits) {
                 // Live inline chart: the client re-renders the validated spec
                 // and the PNG stays on disk as the exportable copy.
-                await publishMessage(deps, run, [
-                  {
-                    kind: "chart",
-                    name: chartName,
-                    spec: chartSpec,
-                    data: chartRows,
-                  },
-                ]);
+                await publishMessage(
+                  deps,
+                  run,
+                  [
+                    {
+                      kind: "chart",
+                      name: chartName,
+                      spec: chartSpec,
+                      data: chartRows,
+                    },
+                  ],
+                  { toPerson: true },
+                );
                 attached = true;
               } else if (args.attach !== false && deps.artifacts) {
                 const result = await attachWorkspaceFileToThread(
@@ -3188,7 +3193,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                     operationId: executionId,
                   },
                 );
-                await publishMessage(deps, run, [result.block]);
+                await publishMessage(deps, run, [result.block], { toPerson: true });
                 attached = true;
               }
               return finish({ ok: true, path: outPath, attached });
@@ -3233,7 +3238,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   operationId: executionId,
                 },
               );
-              await publishMessage(deps, run, [attached.block]);
+              await publishMessage(deps, run, [attached.block], { toPerson: true });
               return finish({ ok: true, artifactId: attached.artifactId, path: filePath });
             } catch (error) {
               return finish({
@@ -3995,15 +4000,20 @@ export function createRunExecutor(deps: ExecutorDeps) {
             if ("error" in spawned) return finish(spawned);
             if (!(await persistEffectResult(spawned))) return uncertainEffectResult(name);
             try {
-              await publishMessage(deps, run, [
-                {
-                  kind: "child_bot",
-                  botId: spawned.botId,
-                  name: spawned.name,
-                  title: spawned.title,
-                  status: "created",
-                },
-              ]);
+              await publishMessage(
+                deps,
+                run,
+                [
+                  {
+                    kind: "child_bot",
+                    botId: spawned.botId,
+                    name: spawned.name,
+                    title: spawned.title,
+                    status: "created",
+                  },
+                ],
+                { toPerson: true },
+              );
               await deps.events.append({
                 spaceId: run.spaceId,
                 threadId: thread.id,
@@ -4215,14 +4225,19 @@ export function createRunExecutor(deps: ExecutorDeps) {
             if ("error" in archived) return finish(archived);
             if (!(await persistEffectResult(archived))) return uncertainEffectResult(name);
             try {
-              await publishMessage(deps, run, [
-                {
-                  kind: "child_bot",
-                  botId: archived.botId,
-                  name: archived.name,
-                  status: "archived",
-                },
-              ]);
+              await publishMessage(
+                deps,
+                run,
+                [
+                  {
+                    kind: "child_bot",
+                    botId: archived.botId,
+                    name: archived.name,
+                    status: "archived",
+                  },
+                ],
+                { toPerson: true },
+              );
               await deps.events.append({
                 spaceId: run.spaceId,
                 threadId: thread.id,

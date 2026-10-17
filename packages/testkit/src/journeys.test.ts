@@ -1747,7 +1747,14 @@ describeJourneys("required product journeys", () => {
       (s) => !s.run || ["completed", "failed", "cancelled"].includes(s.run.status),
     );
     const snap = await rpc<Snap>(app, cookie, "threads/get", { botId: parent.id });
-    expect(JSON.stringify(snap.entries)).toMatch(/child_bot|Scout/);
+    expect(threadMessages(snap).flatMap((message) => message.blocks)).toContainEqual(
+      expect.objectContaining({
+        kind: "child_bot",
+        botId: scout!.id,
+        name: "Scout",
+        status: "created",
+      }),
+    );
     const spawnRun = await prisma.run.findFirstOrThrow({
       where: { botId: scout!.id, trigger: "spawn" },
     });
@@ -1794,6 +1801,15 @@ describeJourneys("required product journeys", () => {
     const afterScout = await rpc<Bot[]>(app, cookie, "bots/list");
     expect(afterScout.some((bot) => bot.id === scout!.id)).toBe(false);
     expect(afterScout.some((bot) => bot.id === nested!.id)).toBe(true);
+    const archived = await rpc<Snap>(app, cookie, "threads/get", { botId: parent.id });
+    expect(threadMessages(archived).flatMap((message) => message.blocks)).toContainEqual(
+      expect.objectContaining({
+        kind: "child_bot",
+        botId: scout!.id,
+        name: "Scout",
+        status: "archived",
+      }),
+    );
 
     await rpc(app, cookie, "bots/remove", { botId: parent.id });
     expect((await rpc<Bot[]>(app, cookie, "bots/list")).map((bot) => bot.name)).toEqual(["Nested"]);
