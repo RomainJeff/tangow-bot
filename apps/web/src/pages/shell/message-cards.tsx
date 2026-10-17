@@ -564,11 +564,7 @@ export function LinkMentionIcon({
 }) {
   const { container, src, failed } = useArtifactImageSrc<HTMLSpanElement>(target, artifactId);
   if (failed) return <LinkMentionGlyph />;
-  return (
-    <span ref={container} className="block size-full">
-      {src ? <img src={src} alt="" /> : null}
-    </span>
-  );
+  return <span ref={container}>{src ? <img src={src} alt="" /> : null}</span>;
 }
 
 export function ArtifactImage({
