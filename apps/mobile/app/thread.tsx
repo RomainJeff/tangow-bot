@@ -52,6 +52,7 @@ import {
   slashSkillOptions as slashSkills,
   type ThreadRow,
   type ThreadView,
+  textWithoutPreviewedLinkLine,
   threadEntriesOf,
   threadTimeMarkerLabel,
   truncateSlashDescription,
@@ -184,6 +185,7 @@ import {
   blocksWithoutPreviewedLinkLine,
   cardReplacesBubble,
   linkPreviewCardOf,
+  routineLinkBlocks,
 } from "../lib/link-preview";
 import {
   dismissThreadNotifications,
@@ -3847,7 +3849,6 @@ const ItemRow = memo(function ItemRow({
   readOnly?: boolean;
 }) {
   const tokens = mobileTokens();
-  const colorScheme = useResolvedAppearance();
   const { t } = useI18n();
   const router = useRouter();
   const [session, setSession] = useState<OpenedSession | null>(null);
@@ -3926,18 +3927,14 @@ const ItemRow = memo(function ItemRow({
                 showAvatar={inGroup && row.lastOfGroup}
                 mono={!inGroup}
               >
-                <MessageArrival isNew={isNew}>
-                  <BotBubble mono={!inGroup}>
-                    <ChatMarkdown
-                      allowImages={false}
-                      palette={tokens}
-                      colorScheme={colorScheme}
-                      inBubble
-                    >
-                      {truncateMarkdownForRender(role.text)}
-                    </ChatMarkdown>
-                  </BotBubble>
-                </MessageArrival>
+                <RoutineBubble
+                  item={item}
+                  text={role.text}
+                  groupId={groupId}
+                  botId={botId}
+                  isNew={isNew}
+                  mono={!inGroup}
+                />
               </MessageRow>
             </>
           );
@@ -4721,6 +4718,71 @@ function MessageText({
         </ChatMarkdown>
       </BotBubble>
     </View>
+  );
+}
+
+/** A routine's shown result, with the link mentions and card the server wrote for it. */
+function RoutineBubble({
+  item,
+  text,
+  groupId,
+  botId,
+  isNew,
+  mono,
+}: {
+  item: RoutineItem;
+  text: string;
+  groupId: string | undefined;
+  botId: string | undefined;
+  isNew: boolean;
+  mono: boolean;
+}) {
+  const tokens = mobileTokens();
+  const colorScheme = useResolvedAppearance();
+  const links = routineLinkBlocks(item);
+  const mentionsKey = linkMentionsKey({ role: "bot", blocks: links });
+  const target: MobileArtifactTarget = groupId ? { groupId } : { botId: botId ?? item.botId };
+  const mentions = useMemo<NativeLinkMentions | undefined>(() => {
+    const lookup = linkMentionsOf({ role: "bot", blocks: links });
+    return (
+      lookup && {
+        ...lookup,
+        icon: (artifactId, tint) => (
+          <LinkMentionIcon target={target} artifactId={artifactId} tint={tint} />
+        ),
+      }
+    );
+  }, [mentionsKey, groupId, botId]);
+  const card = linkPreviewCardOf({ role: "bot", blocks: links });
+  // Without the line that is only the card's link, as a message's bubble draws it.
+  const shown = card ? textWithoutPreviewedLinkLine(text, card.url) : text;
+  return (
+    <MessageArrival isNew={isNew}>
+      <View style={{ gap: 4 }}>
+        {shown ? (
+          <BotBubble mono={mono}>
+            <ChatMarkdown
+              allowImages={false}
+              palette={tokens}
+              colorScheme={colorScheme}
+              inBubble
+              mentions={mentions}
+            >
+              {truncateMarkdownForRender(shown)}
+            </ChatMarkdown>
+          </BotBubble>
+        ) : null}
+        {card ? (
+          <LinkPreviewCard
+            card={card}
+            target={target}
+            mono={mono}
+            align="start"
+            onLongPress={() => {}}
+          />
+        ) : null}
+      </View>
+    </MessageArrival>
   );
 }
 
