@@ -10,7 +10,13 @@ import {
   writeFile,
 } from "node:fs/promises";
 import path from "node:path";
-import type { NewSession, SessionEntryDraft, SessionHead, SessionLog } from "@rakazo/adapter-kit";
+import type {
+  NewSession,
+  RunSearchInput,
+  SessionEntryDraft,
+  SessionHead,
+  SessionLog,
+} from "@rakazo/adapter-kit";
 import {
   assertEntryCount,
   nextSessionEntry,
@@ -18,10 +24,23 @@ import {
   SessionReadError,
   sessionEntryNonce,
 } from "@rakazo/adapter-kit";
-import type { EntryId, SessionEntry } from "@rakazo/contracts";
-import { isCardState, SessionId } from "@rakazo/contracts";
+import type { EntryId, RunSearchLimitation, RunSearchPage, SessionEntry } from "@rakazo/contracts";
+import { isCardState, SessionEntrySchema, SessionId } from "@rakazo/contracts";
 import type { TailSource } from "@rakazo/core";
 import { decodeEntries, readTailFromEnd, SessionEntryMissingParentError } from "@rakazo/core";
+
+import {
+  boundedSearchPage,
+  openRunSearch,
+  RUN_SEARCH_CHAIN_ENTRIES,
+  RUN_SEARCH_RECORD_BYTES,
+  RUN_SEARCH_SCAN_ENTRIES,
+  searchExcerpt,
+  searchRunSessions,
+  searchText,
+} from "./run-search.js";
+
+const SEARCH_FILE_BYTES = 64 * 1024 * 1024;
 
 const TAIL_CHUNK_BYTES = 64 * 1024;
 const FILE_SAFE_ID = /^[A-Za-z0-9_-]+$/;
@@ -160,6 +179,150 @@ export class FileSessionLog implements SessionLog<undefined> {
     return limit === undefined ? sorted : sorted.slice(-limit);
   }
 
+  searchRun(input: RunSearchInput): Promise<RunSearchPage> {
+    return searchRunSessions(
+      input,
+      async (sessionId) => {
+        let head: { id: EntryId; seq: number } | null = null;
+        let cut = -1;
+        for await (const record of searchRecords(this.fileOf(sessionId))) {
+          if (!("entry" in record)) continue;
+          const e = record.entry;
+          head = { id: e.id, seq: e.seq };
+          if (e.type === "rewind" || e.type === "clear") cut = e.seq;
+        }
+        return { head, cut };
+      },
+      (page) => this.searchRunSession(page),
+    );
+  }
+
+  private async searchRunSession(input: RunSearchInput): Promise<RunSearchPage> {
+    const { sessionId, runId, botId } = input.scope;
+    return this.locked(sessionId, async () => {
+      const limitations: RunSearchLimitation[] = [];
+      const metadata = new Map<
+        string,
+        Pick<SessionEntry, "id" | "seq" | "parentId" | "type" | "runId" | "botId"> & {
+          callId?: string;
+        }
+      >();
+      let head: { id: EntryId; seq: number } | null = null;
+      let cut = -1;
+      let unknownHead = false;
+      const file = this.fileOf(sessionId);
+      for await (const record of searchRecords(file)) {
+        if ("limitation" in record) {
+          limitations.push(record.limitation);
+          unknownHead = true;
+          continue;
+        }
+        const e = record.entry;
+        unknownHead = false;
+        head = { id: e.id, seq: e.seq };
+        if (e.type === "rewind" || e.type === "clear") cut = e.seq;
+        metadata.set(e.id, {
+          id: e.id,
+          seq: e.seq,
+          parentId: e.parentId,
+          type: e.type,
+          botId: e.botId,
+          runId: e.runId,
+          ...(e.type === "tool.call" ? { callId: e.payload.callId } : {}),
+        });
+        if (metadata.size >= RUN_SEARCH_CHAIN_ENTRIES) {
+          limitations.push("scan_limit");
+          unknownHead = true;
+          break;
+        }
+      }
+      const cursor = openRunSearch(input, { head, cut });
+      if ("status" in cursor) return cursor;
+      if (unknownHead) return boundedSearchPage(input, cursor, [], false, limitations);
+      const active = new Set<string>();
+      let current = head ? metadata.get(head.id) : undefined;
+      while (current) {
+        active.add(current.id);
+        const parent = current.parentId ? metadata.get(current.parentId) : undefined;
+        if (current.parentId && !parent) limitations.push("unreadable_records");
+        if (parent && parent.seq >= current.seq) {
+          limitations.push("unreadable_records");
+          break;
+        }
+        current = parent;
+      }
+      if (cursor.head && !active.has(cursor.head.id))
+        return { status: "unavailable", reason: "stale_cursor" };
+      if (
+        cursor.after !== -1 &&
+        ![...metadata.values()].some((e) => active.has(e.id) && e.seq === cursor.after)
+      ) {
+        return { status: "unavailable", reason: "invalid_cursor" };
+      }
+      const calls = new Map<string, number>();
+      for (const e of metadata.values()) {
+        if (
+          active.has(e.id) &&
+          e.type === "tool.call" &&
+          e.botId === botId &&
+          e.runId === runId &&
+          e.callId !== undefined
+        ) {
+          calls.set(e.callId, Math.min(calls.get(e.callId) ?? e.seq, e.seq));
+        }
+      }
+      const candidates: Array<{
+        seq: number;
+        hit?: {
+          runId: string;
+          sessionId: SessionId;
+          entryId: EntryId;
+          ts: string;
+          excerpt: string;
+        };
+      }> = [];
+      let hits = 0;
+      let more = false;
+      for await (const record of searchRecords(file)) {
+        if (!("entry" in record)) continue;
+        const e = record.entry;
+        if (
+          !active.has(e.id) ||
+          e.seq <= cursor.after ||
+          e.seq > (cursor.head?.seq ?? -1) ||
+          e.runId !== runId ||
+          e.botId !== botId
+        )
+          continue;
+        const text = searchText(e);
+        if (text === undefined) continue;
+        if (e.type === "tool.result" && (calls.get(e.payload.callId) ?? Infinity) >= e.seq)
+          continue;
+        const excerpt = searchExcerpt(input, text);
+        candidates.push({
+          seq: e.seq,
+          ...(excerpt === undefined
+            ? {}
+            : {
+                hit: {
+                  runId,
+                  sessionId,
+                  entryId: e.id,
+                  ts: e.ts,
+                  excerpt,
+                },
+              }),
+        });
+        if (excerpt !== undefined) hits++;
+        if (hits > 10 || candidates.length >= RUN_SEARCH_SCAN_ENTRIES) {
+          more = true;
+          break;
+        }
+      }
+      return boundedSearchPage(input, cursor, candidates, more, limitations);
+    });
+  }
+
   async readEntry(sessionId: SessionId, entryId: EntryId): Promise<SessionEntry | undefined> {
     return (await this.readAll(sessionId)).find((entry) => entry.id === entryId);
   }
@@ -282,4 +445,72 @@ function errorCode(error: unknown): unknown {
 
 function isMissing(error: unknown): boolean {
   return errorCode(error) === "ENOENT";
+}
+
+async function* searchRecords(
+  file: string,
+): AsyncGenerator<{ entry: SessionEntry } | { limitation: RunSearchLimitation }> {
+  let handle: Awaited<ReturnType<typeof open>>;
+  try {
+    handle = await open(file, "r");
+  } catch (error) {
+    if (isMissing(error)) return;
+    throw error;
+  }
+  try {
+    const { size } = await handle.stat();
+    if (size > SEARCH_FILE_BYTES) {
+      yield { limitation: "scan_limit" };
+      return;
+    }
+    const chunk = Buffer.alloc(64 * 1024);
+    let parts: Buffer[] = [];
+    let length = 0;
+    let oversized = false;
+    for (let position = 0; position < size; ) {
+      const { bytesRead } = await handle.read(
+        chunk,
+        0,
+        Math.min(chunk.length, size - position),
+        position,
+      );
+      if (!bytesRead) break;
+      position += bytesRead;
+      let start = 0;
+      for (let i = 0; i < bytesRead; i++) {
+        if (chunk[i] !== 10) continue;
+        const part = chunk.subarray(start, i);
+        if (!oversized && length + part.length <= RUN_SEARCH_RECORD_BYTES)
+          parts.push(Buffer.from(part));
+        else oversized = true;
+        if (oversized) yield { limitation: "oversized_records" };
+        else if (length + part.length > 0)
+          yield parseSearchRecord(Buffer.concat(parts).toString("utf8"));
+        parts = [];
+        length = 0;
+        oversized = false;
+        start = i + 1;
+      }
+      const part = chunk.subarray(start, bytesRead);
+      length += part.length;
+      if (length > RUN_SEARCH_RECORD_BYTES) {
+        oversized = true;
+        parts = [];
+      } else if (!oversized && part.length) parts.push(Buffer.from(part));
+    }
+    if (oversized) yield { limitation: "oversized_records" };
+    else if (length) yield parseSearchRecord(Buffer.concat(parts).toString("utf8"));
+  } finally {
+    await handle.close();
+  }
+}
+
+function parseSearchRecord(
+  text: string,
+): { entry: SessionEntry } | { limitation: RunSearchLimitation } {
+  try {
+    const parsed = SessionEntrySchema.safeParse(JSON.parse(text));
+    if (parsed.success) return { entry: parsed.data };
+  } catch {}
+  return { limitation: "unreadable_records" };
 }

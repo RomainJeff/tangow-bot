@@ -73,6 +73,52 @@ describe("FileSessionLog", () => {
     await rm(root, { recursive: true, force: true });
   });
 
+  it("skips oversized records explicitly and advances through later pages after reopening", async () => {
+    const root = await temporaryRoot();
+    const log = new FileSessionLog(root);
+    await log.createSession(undefined, {
+      kind: "thread",
+      id: sessionId,
+      spaceId: "space",
+      threadId: "thread",
+    });
+    const ofRun = { sessionId, botId: "bot", runId: "old-run" };
+    await log.append(undefined, {
+      ...ofRun,
+      type: "assistant.text",
+      payload: { blocks: [{ kind: "text", text: `hidden receipt ${"x".repeat(1_100_000)}` }] },
+    });
+    for (let i = 0; i < 13; i++)
+      await log.append(undefined, {
+        ...ofRun,
+        type: "assistant.text",
+        payload: { blocks: [{ kind: "text", text: `receipt ${i}` }] },
+      });
+    const input = {
+      scope: { ...ofRun, authorizationKey: "file" },
+      query: "receipt",
+      redaction: { redact: (value: string) => value },
+    };
+    const first = await log.searchRun(input);
+    expect(first).toMatchObject({
+      status: "ok",
+      limitations: expect.arrayContaining(["oversized_records"]),
+      incomplete: true,
+    });
+    if (first.status !== "ok" || !first.nextCursor) throw new Error("Expected continuation");
+    const second = await new FileSessionLog(root).searchRun({ ...input, cursor: first.nextCursor });
+    expect(second).toMatchObject({
+      hits: [{ excerpt: "receipt 10" }, { excerpt: "receipt 11" }, { excerpt: "receipt 12" }],
+      nextCursor: null,
+      incomplete: true,
+      limitations: expect.arrayContaining(["oversized_records"]),
+    });
+    expect(first.hits.map((hit) => hit.excerpt)).toEqual(
+      Array.from({ length: 10 }, (_, i) => `receipt ${i}`),
+    );
+    await rm(root, { recursive: true, force: true });
+  });
+
   it("refuses a session id that is not a safe file name", async () => {
     const root = await temporaryRoot();
     const log = new FileSessionLog(root);

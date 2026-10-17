@@ -1,11 +1,13 @@
 import type {
   NewSession,
+  RunSearchInput,
   SessionAppendRefusal,
   SessionEntryDraft,
   SessionLog,
 } from "@rakazo/adapter-kit";
 import type { SessionEntry } from "@rakazo/contracts";
 import { EntryId, EntrySeq, SessionId } from "@rakazo/contracts";
+import { redactSecrets } from "@rakazo/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 export interface SessionLogHarness<Tx> {
@@ -87,6 +89,278 @@ export function runSessionLogConformance<Tx>(makeLog: () => Promise<SessionLogHa
       for (const draft of drafts) entries.push(await append(draft));
       return entries;
     }
+
+    function searchInput(sessionId: SessionId, runId: string, query: string): RunSearchInput {
+      return {
+        scope: { sessionId, runId, botId: BOT, authorizationKey: "conformance" },
+        query,
+        redaction: { redact: (text) => text },
+      };
+    }
+
+    it("recovers retained literal tool output beyond replay caps after compaction, without reasoning or JSON", async () => {
+      const { sessionId, runId } = await created();
+      const ofRun = { sessionId, runId, botId: BOT };
+      await append({
+        ...ofRun,
+        type: "tool.call",
+        payload: { callId: "receipt", name: "lookup", input: "private-input" },
+      });
+      const receipt = await append({
+        ...ofRun,
+        type: "tool.result",
+        payload: {
+          callId: "receipt",
+          output: `${"x".repeat(180_000)} receipt_%_B731 done`,
+          isError: false,
+          artifactIds: [],
+        },
+      });
+      await append({
+        ...ofRun,
+        type: "assistant.reasoning",
+        payload: { text: "reasoning_%_B731" },
+      });
+      const text = await append(replied(sessionId, runId, "Visible response"));
+      await append(compacted(text, text.seq));
+      const found = await harness.log.searchRun(searchInput(sessionId, runId, "RECEIPT_%_b731"));
+      expect(found).toMatchObject({
+        status: "ok",
+        hits: [{ entryId: receipt.id, runId, sessionId, ts: receipt.ts }],
+        nextCursor: null,
+        incomplete: false,
+      });
+      if (found.status !== "ok") throw new Error("Expected search page");
+      expect(found.hits.map((hit) => hit.excerpt.includes("receipt_%_B731 done"))).toEqual([true]);
+      expect(Buffer.byteLength(JSON.stringify(found))).toBeLessThanOrEqual(4000);
+      expect(
+        await harness.log.searchRun(searchInput(sessionId, runId, "reasoning_%_B731")),
+      ).toEqual({ status: "ok", hits: [], nextCursor: null, incomplete: false, limitations: [] });
+      expect(await harness.log.searchRun(searchInput(sessionId, runId, "private-input"))).toEqual({
+        status: "ok",
+        hits: [],
+        nextCursor: null,
+        incomplete: false,
+        limitations: [],
+      });
+    });
+
+    it("searches only active text and tool results with an active matching call, then excludes cleared history", async () => {
+      const { sessionId, runId } = await created();
+      const ofRun = { sessionId, runId, botId: BOT };
+      const keep = await append(replied(sessionId, runId, "receipt retained"));
+      await append({
+        ...ofRun,
+        type: "tool.call",
+        payload: { callId: "removed", name: "lookup", input: "{}" },
+      });
+      await append(replied(sessionId, runId, "receipt removed"));
+      const input = searchInput(sessionId, runId, "receipt");
+      expect(await harness.log.searchRun(input)).toMatchObject({
+        hits: [{ entryId: keep.id }, { excerpt: "receipt removed" }],
+      });
+      await append({ sessionId, type: "rewind", parentId: keep.id, payload: {} });
+      await append({
+        ...ofRun,
+        type: "tool.result",
+        payload: { callId: "removed", output: "receipt orphan", isError: false, artifactIds: [] },
+      });
+      const after = await harness.log.searchRun(input);
+      expect(after).toMatchObject({
+        hits: [{ entryId: keep.id, excerpt: "receipt retained" }],
+        nextCursor: null,
+      });
+      if (after.status !== "ok") throw new Error("Expected search page");
+      expect(after.hits.map((hit) => hit.entryId)).toEqual([keep.id]);
+      await append({ sessionId, type: "clear", payload: {} });
+      expect(await harness.log.searchRun(input)).toEqual({
+        status: "ok",
+        hits: [],
+        nextCursor: null,
+        incomplete: false,
+        limitations: [],
+      });
+    });
+
+    it("pages a stable snapshot, binds cursor scope and query, rejects cuts and too-small budgets", async () => {
+      const { sessionId, runId } = await created();
+      const written = await appendAll(
+        Array.from({ length: 16 }, (_, i) => ({
+          ...replied(sessionId, runId, `receipt ${i}`),
+          ts: "2026-10-17T00:00:00.000Z",
+        })),
+      );
+      const input = searchInput(sessionId, runId, "receipt");
+      const first = await harness.log.searchRun(input);
+      expect(first).toMatchObject({ status: "ok", incomplete: true });
+      if (first.status !== "ok" || !first.nextCursor) throw new Error("Expected continuation");
+      expect(first.hits.map((hit) => hit.excerpt)).toEqual(
+        Array.from({ length: 10 }, (_, i) => `receipt ${i}`),
+      );
+      await append(replied(sessionId, runId, "receipt later"));
+      const second = await harness.log.searchRun({ ...input, cursor: first.nextCursor });
+      expect(second).toMatchObject({
+        hits: written.slice(10).map((e) => ({ entryId: e.id })),
+        nextCursor: null,
+        incomplete: false,
+      });
+      expect(
+        await harness.log.searchRun({ ...input, query: "later", cursor: first.nextCursor }),
+      ).toEqual({ status: "unavailable", reason: "invalid_cursor" });
+      expect(
+        await harness.log.searchRun({
+          ...input,
+          scope: { ...input.scope, authorizationKey: "other" },
+          cursor: first.nextCursor,
+        }),
+      ).toEqual({ status: "unavailable", reason: "invalid_cursor" });
+      expect(await harness.log.searchRun({ ...input, cursor: "invalid" })).toEqual({
+        status: "unavailable",
+        reason: "invalid_cursor",
+      });
+      expect(await harness.log.searchRun({ ...input, maxBytes: 128 })).toEqual({
+        status: "unavailable",
+        reason: "budget_too_small",
+      });
+      await append({ sessionId, type: "rewind", parentId: written[0]!.id, payload: {} });
+      expect(await harness.log.searchRun({ ...input, cursor: first.nextCursor })).toEqual({
+        status: "unavailable",
+        reason: "stale_cursor",
+      });
+    });
+
+    it("finds a receipt after 162 nonmatching retained actions in one search call", async () => {
+      const { sessionId, runId } = await created();
+      await appendAll(
+        Array.from({ length: 162 }, () => replied(sessionId, runId, "Earlier retained output")),
+      );
+      await append(replied(sessionId, runId, "receipt late-action-163"));
+      expect(
+        await harness.log.searchRun(searchInput(sessionId, runId, "late-action-163")),
+      ).toMatchObject({
+        hits: [{ excerpt: "receipt late-action-163" }],
+        nextCursor: null,
+        incomplete: false,
+      });
+    });
+
+    it("advances an empty bounded scan page until a later retained match", async () => {
+      const { sessionId, runId } = await created();
+      await appendAll(
+        Array.from({ length: 300 }, (_, i) =>
+          replied(sessionId, runId, i === 299 ? "receipt late" : "Other output"),
+        ),
+      );
+      const input = searchInput(sessionId, runId, "receipt");
+      const first = await harness.log.searchRun(input);
+      expect(first).toMatchObject({ status: "ok", hits: [], incomplete: true });
+      if (first.status !== "ok" || !first.nextCursor) throw new Error("Expected scan continuation");
+      expect(await harness.log.searchRun({ ...input, cursor: first.nextCursor })).toMatchObject({
+        hits: [{ excerpt: "receipt late" }],
+        incomplete: false,
+        nextCursor: null,
+      });
+    });
+
+    it("searches a child trace and its raised text as bounded snapshot phases", async () => {
+      const { sessionId, runId, session } = await created();
+      const childId = SessionId.parse(`search-child-${runId}`);
+      await harness.transaction((tx) =>
+        harness.log.createSession(tx, {
+          kind: "routine",
+          id: childId,
+          spaceId: session.spaceId,
+          parentSessionId: sessionId,
+        }),
+      );
+      const child = await append(replied(childId, runId, "receipt in trace"));
+      const raised = await append(replied(sessionId, runId, "receipt in parent"));
+      const input = {
+        ...searchInput(childId, runId, "receipt"),
+        scope: { ...searchInput(childId, runId, "receipt").scope, raisedSessionId: sessionId },
+      };
+      const first = await harness.log.searchRun(input);
+      expect(first).toMatchObject({ hits: [{ entryId: child.id }], incomplete: true });
+      if (first.status !== "ok" || !first.nextCursor) throw new Error("Expected parent phase");
+      await append(replied(sessionId, runId, "receipt later"));
+      expect(await harness.log.searchRun({ ...input, cursor: first.nextCursor })).toMatchObject({
+        hits: [{ entryId: raised.id, excerpt: "receipt in parent" }],
+        incomplete: false,
+        nextCursor: null,
+      });
+    });
+
+    it.each([
+      {
+        name: "redacts a second secret after a masked first match",
+        gap: 398,
+        tail: "needle fake-credential-BBBBBBBBBBBBBBBB",
+      },
+      {
+        name: "finds a public match beyond a masked first match",
+        gap: 1000,
+        tail: "needle public",
+      },
+    ])("$name", async ({ gap, tail }) => {
+      const { sessionId, runId } = await created();
+      const secrets = ["needleAAAAAAAAAAAAAAAAAAAAAAAAAA", "fake-credential-BBBBBBBBBBBBBBBB"];
+      await append(replied(sessionId, runId, `${secrets[0]}${"x".repeat(gap)}${tail}`));
+      const input = {
+        ...searchInput(sessionId, runId, "needle"),
+        redaction: { redact: (value: string) => redactSecrets(value, secrets) },
+      };
+      const result = await harness.log.searchRun(input);
+      expect(result).toMatchObject({
+        status: "ok",
+        hits: [
+          { excerpt: expect.stringContaining(gap === 398 ? "needle [redacted]" : "needle public") },
+        ],
+      });
+      expect(JSON.stringify(result).includes("fake-credential")).toBe(false);
+    });
+
+    it("reports an incomplete search when a missing parent hides retained text", async () => {
+      const { sessionId, runId } = await created();
+      await append(replied(sessionId, runId, "receipt retained before break"));
+      const middle = await append(replied(sessionId, runId, "middle"));
+      const latest = await append(replied(sessionId, runId, "latest visible"));
+      const input = searchInput(sessionId, runId, "receipt");
+      expect(await harness.log.searchRun(input)).toMatchObject({
+        hits: [{ excerpt: "receipt retained before break" }],
+        incomplete: false,
+      });
+      await harness.dropEntry(middle);
+      expect(await harness.log.searchRun(input)).toMatchObject({
+        status: "ok",
+        hits: [],
+        incomplete: true,
+        limitations: ["unreadable_records"],
+      });
+      expect(await harness.log.searchRun({ ...input, query: "latest" })).toMatchObject({
+        hits: [{ entryId: latest.id, excerpt: "latest visible" }],
+        incomplete: true,
+      });
+    });
+
+    it("masks known secrets before clipping or matching, including snippet boundaries", async () => {
+      const { sessionId, runId } = await created();
+      const secret = `fake-credential-${"z".repeat(210)}`;
+      await append(replied(sessionId, runId, `receipt ${"a".repeat(130)} ${secret} end`));
+      const input = {
+        ...searchInput(sessionId, runId, "receipt"),
+        redaction: {
+          redact: (text: string) => redactSecrets(text, [secret]),
+        },
+      };
+      expect(await harness.log.searchRun(input)).toMatchObject({
+        hits: [{ excerpt: `receipt ${"a".repeat(130)} [redacted] end` }],
+      });
+      expect(await harness.log.searchRun({ ...input, query: "fake-credential" })).toMatchObject({
+        status: "ok",
+        hits: [],
+        nextCursor: null,
+      });
+    });
 
     it("appends in order, each entry's parent the one before, and reads them back", async () => {
       const { sessionId, runId } = await created();

@@ -18,6 +18,35 @@ export type SessionId = z.infer<typeof SessionId>;
 export const EntrySeq = z.number().int().nonnegative().brand<"EntrySeq">();
 export type EntrySeq = z.infer<typeof EntrySeq>;
 
+export const RunSearchHit = z.object({
+  runId: Id,
+  sessionId: SessionId,
+  entryId: EntryId,
+  ts: IsoDate,
+  excerpt: z.string(),
+});
+export type RunSearchHit = z.infer<typeof RunSearchHit>;
+export const RunSearchLimitation = z.enum([
+  "oversized_records",
+  "scan_limit",
+  "unreadable_records",
+]);
+export type RunSearchLimitation = z.infer<typeof RunSearchLimitation>;
+export const RunSearchPage = z.discriminatedUnion("status", [
+  z.object({
+    status: z.literal("ok"),
+    hits: z.array(RunSearchHit),
+    nextCursor: z.string().nullable(),
+    incomplete: z.boolean(),
+    limitations: z.array(RunSearchLimitation),
+  }),
+  z.object({
+    status: z.literal("unavailable"),
+    reason: z.enum(["invalid_cursor", "stale_cursor", "budget_too_small"]),
+  }),
+]);
+export type RunSearchPage = z.infer<typeof RunSearchPage>;
+
 export const Peer = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("bot"), botId: Id, name: z.string() }),
   /** A connected agent from another owner, reached by its messaging address. */
