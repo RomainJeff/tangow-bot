@@ -8,7 +8,7 @@ import type {
   SemanticMemorySaveRequest,
   SessionEntryDraft,
 } from "@rakazo/adapter-kit";
-import type { EntryId, SessionEntry, SessionId } from "@rakazo/contracts";
+import type { AgentHistoryTurn, EntryId, SessionEntry, SessionId } from "@rakazo/contracts";
 import { EntrySeq } from "@rakazo/contracts";
 import { projectInferenceTurns } from "@rakazo/core";
 import { createThreadEvents, rewindThread } from "@rakazo/db";
@@ -26,7 +26,6 @@ import {
   historyBudgetTokens,
   MAX_COMPACTED_SUMMARY_CHARS,
   MAX_TRANSCRIPT_CHARS,
-  NON_HISTORY_TOKEN_ESTIMATE,
   selectHistoryWindow,
   shouldEnqueueCompaction,
 } from "./history-compaction.js";
@@ -43,9 +42,9 @@ describe("shouldEnqueueCompaction", () => {
       shouldEnqueueCompaction(ofTokens(half + 1), budget),
     ];
 
-    expect([small, large, historyBudgetTokens(undefined)]).toEqual([20_000, 171_616, undefined]);
-    expect(crosses(small, 10_000)).toEqual([false, true]);
-    expect(crosses(large, 85_808)).toEqual([false, true]);
+    expect([small, large, historyBudgetTokens(undefined)]).toEqual([0, 60_000, undefined]);
+    expect(crosses(small, 0)).toEqual([false, true]);
+    expect(crosses(large, 30_000)).toEqual([false, true]);
     expect(crosses(undefined, 20_000)).toEqual([false, true]);
   });
 
@@ -59,113 +58,184 @@ describe("shouldEnqueueCompaction", () => {
   });
 });
 
+describe("historyBudgetTokens", () => {
+  it.each([
+    [200_000, 2_000, 60_000],
+    [80_000, 12_000, 51_616],
+    [20_000, 2_000, 1_616],
+    [8_192, 12_000, 0],
+    [128_000, 200_000, 0],
+    [18_384, 2_000, 0],
+  ])("bounds history for context %i and fixed context %i", (context, fixed, expected) => {
+    expect(historyBudgetTokens(context, fixed)).toBe(expected);
+  });
+
+  it.each([undefined, 0, -1, Infinity, NaN])("treats %s as an unknown window", (context) => {
+    expect(historyBudgetTokens(context)).toBeUndefined();
+  });
+});
+
 describe("selectHistoryWindow", () => {
-  const turn = (index: number, content = `message ${index}`) => [
-    { role: "user" as const, content },
-    { role: "assistant" as const, content: `reply ${index}` },
-  ];
-  const conversation = (turns: number, content?: (index: number) => string) =>
-    Array.from({ length: turns }, (_, index) => turn(index, content?.(index))).flat();
+  const user = (tokens: number): AgentHistoryTurn => ({
+    role: "user",
+    content: "x".repeat(tokens * 4),
+  });
+  const assistant = (tokens: number): AgentHistoryTurn => ({
+    role: "assistant",
+    content: "y".repeat(tokens * 4),
+  });
+  const toolTurn: AgentHistoryTurn = {
+    role: "assistant",
+    content: "Completed a tool.",
+    parts: [
+      { type: "toolCalls", calls: [{ id: "c1", name: "shell", args: {}, output: "result" }] },
+    ],
+  };
 
-  it("falls back to the message count when the context window is unknown", () => {
-    const history = conversation(10);
-    expect(
-      selectHistoryWindow({ history, contextWindow: undefined, messageWindowSize: 4 }),
-    ).toEqual({ messages: history.slice(-4), mode: "count" });
-    expect(selectHistoryWindow({ history, contextWindow: 0, messageWindowSize: 4 })).toEqual({
-      messages: history.slice(-4),
-      mode: "count",
-    });
+  it("retains exactly 60,000 estimated tokens on a large model", () => {
+    const history = Array.from({ length: 8 }, () => [user(9_999), assistant(1)]).flat();
+    const window = selectHistoryWindow({ history, contextWindow: 200_000, messageWindowSize: 2 });
+    expect(window).toEqual({ messages: history.slice(-12), mode: "tokens" });
+    expect(estimateHistoryTokens(window.messages)).toBe(60_000);
   });
 
-  it("keeps far more than the count window when the messages are small and the window is large", () => {
-    const history = conversation(200);
-    const { messages: kept, mode } = selectHistoryWindow({
+  it("uses the smaller measured capacity and starts at a user boundary when one fits", () => {
+    const history = [user(500), assistant(500), user(500), assistant(500)];
+    const window = selectHistoryWindow({
       history,
-      contextWindow: 200_000,
-      messageWindowSize: 4,
-    });
-    expect(kept.length).toBeGreaterThan(4);
-    expect(kept[kept.length - 1]).toEqual(history[history.length - 1]);
-    expect(mode).toBe("tokens");
-  });
-
-  it("drops older turns when the messages are large", () => {
-    const history = conversation(40, () => "x".repeat(20_000));
-    const { messages: kept, mode } = selectHistoryWindow({
-      history,
-      contextWindow: 128_000,
-      messageWindowSize: 400,
-    });
-    expect(kept.length).toBeLessThan(history.length);
-    expect(estimateHistoryTokens(kept)).toBeLessThanOrEqual(
-      128_000 - 16_384 - NON_HISTORY_TOKEN_ESTIMATE + estimateHistoryTokens([history[0]!]),
-    );
-    expect(mode).toBe("tokens");
-  });
-
-  it("keeps fewer messages when the run's non-history context is larger", () => {
-    const history = conversation(200, () => "x".repeat(2_000));
-    const lean = selectHistoryWindow({
-      history,
-      contextWindow: 128_000,
-      messageWindowSize: 4,
+      contextWindow: 20_000,
       nonHistoryTokens: 2_000,
+      messageWindowSize: 200,
     });
-    const heavy = selectHistoryWindow({
-      history,
-      contextWindow: 128_000,
-      messageWindowSize: 4,
-      nonHistoryTokens: 60_000,
-    });
-    expect(lean.mode).toBe("tokens");
-    expect(heavy.mode).toBe("tokens");
-    expect(heavy.messages.length).toBeLessThan(lean.messages.length);
+    expect(window).toEqual({ messages: history.slice(-2), mode: "tokens" });
+    expect(estimateHistoryTokens(window.messages)).toBe(1_000);
   });
 
-  it("falls back to the shared estimate when the caller measures nothing", () => {
-    const history = conversation(200, () => "x".repeat(2_000));
-    expect(selectHistoryWindow({ history, contextWindow: 128_000, messageWindowSize: 4 })).toEqual(
+  it("returns no history when fixed context exhausts the usable capacity", () => {
+    const history = [user(1), assistant(1)];
+    expect(
       selectHistoryWindow({
         history,
-        contextWindow: 128_000,
-        messageWindowSize: 4,
-        nonHistoryTokens: NON_HISTORY_TOKEN_ESTIMATE,
+        contextWindow: 20_000,
+        nonHistoryTokens: 10_000,
+        messageWindowSize: 200,
       }),
-    );
+    ).toEqual({ messages: [], mode: "tokens" });
+    expect(
+      selectHistoryWindow({
+        history,
+        contextWindow: 20_000,
+        nonHistoryTokens: 2_000,
+        messageWindowSize: 200,
+      }),
+    ).toEqual({ messages: history, mode: "tokens" });
   });
 
-  it("opens the window on a user message, never mid-reply", () => {
-    const history = conversation(40, () => "x".repeat(20_000));
-    const { messages: kept } = selectHistoryWindow({
+  it("keeps a bounded suffix without falling back to count when no user boundary fits", () => {
+    const history = [user(5_000), assistant(1_000), assistant(616)];
+    const window = selectHistoryWindow({
       history,
-      contextWindow: 128_000,
-      messageWindowSize: 400,
+      contextWindow: 20_000,
+      nonHistoryTokens: 2_000,
+      messageWindowSize: 200,
     });
-    expect(kept[0]!.role).toBe("user");
+    expect(window).toEqual({ messages: history.slice(-2), mode: "tokens" });
+    expect(estimateHistoryTokens(window.messages)).toBe(1_616);
   });
 
-  it("keeps the most recent message even when it alone is over budget", () => {
-    const history = [
-      { role: "user" as const, content: "hi" },
-      { role: "assistant" as const, content: "hello" },
-      { role: "user" as const, content: "x".repeat(2_000_000) },
-    ];
-    const kept = selectHistoryWindow({ history, contextWindow: 128_000, messageWindowSize: 2 });
-    expect(kept).toEqual({ messages: history.slice(-1), mode: "tokens" });
-  });
+  it.each(["user", "assistant"] as const)(
+    "does not replay an oversized newest %s message",
+    (role) => {
+      const history = [user(1), { role, content: "x".repeat(240_004) }];
+      expect(
+        selectHistoryWindow({ history, contextWindow: 200_000, messageWindowSize: 200 }),
+      ).toEqual({ messages: [], mode: "tokens" });
+      expect(
+        selectHistoryWindow({ history: [user(1)], contextWindow: 200_000, messageWindowSize: 200 }),
+      ).toEqual({ messages: [user(1)], mode: "tokens" });
+    },
+  );
 
-  it("reports the count fallback when no message within budget starts a turn", () => {
-    // The single oversized assistant reply cannot open a window, so sizing falls through to the
-    // message count even though a context window was known.
-    const history = [
-      { role: "user" as const, content: "hi" },
-      { role: "assistant" as const, content: "x".repeat(2_000_000) },
-    ];
-    expect(selectHistoryWindow({ history, contextWindow: 128_000, messageWindowSize: 1 })).toEqual({
-      messages: history.slice(-1),
+  it("uses the count fallback for unknown models but still enforces the candidate token ceiling", () => {
+    const history = [user(30_000), assistant(30_000), user(30_000), assistant(30_000)];
+    expect(
+      selectHistoryWindow({ history, contextWindow: undefined, messageWindowSize: 200 }),
+    ).toEqual({ messages: history.slice(-2), mode: "count" });
+    expect(
+      selectHistoryWindow({ history, contextWindow: undefined, messageWindowSize: 1 }),
+    ).toEqual({ messages: history.slice(-1), mode: "count" });
+    expect(selectHistoryWindow({ history, contextWindow: 0, messageWindowSize: 0 })).toEqual({
+      messages: [],
       mode: "count",
     });
+  });
+
+  it("uses the shared fixed-context estimate when the caller measures nothing", () => {
+    const history = [user(30_000), assistant(30_000)];
+    expect(selectHistoryWindow({ history, contextWindow: 80_000, messageWindowSize: 200 })).toEqual(
+      { messages: history.slice(-1), mode: "tokens" },
+    );
+    expect(
+      selectHistoryWindow({
+        history,
+        contextWindow: 80_000,
+        nonHistoryTokens: 0,
+        messageWindowSize: 200,
+      }),
+    ).toEqual({ messages: history, mode: "tokens" });
+  });
+
+  it("preserves a fitting tool exchange and rejects partial truncation of potentially active tool state", () => {
+    const history = [user(60_000), toolTurn];
+    expect(() =>
+      selectHistoryWindow({ history, contextWindow: 200_000, messageWindowSize: 200 }),
+    ).toThrow("History budget cannot preserve the newest tool exchange");
+    expect(
+      selectHistoryWindow({
+        history: [user(1), toolTurn],
+        contextWindow: 200_000,
+        messageWindowSize: 200,
+      }),
+    ).toEqual({ messages: [user(1), toolTurn], mode: "tokens" });
+    expect(() =>
+      selectHistoryWindow({ history: [toolTurn], contextWindow: 8_192, messageWindowSize: 200 }),
+    ).toThrow("History budget cannot preserve the newest tool exchange");
+    expect(() =>
+      selectHistoryWindow({
+        history: [user(1), toolTurn],
+        contextWindow: undefined,
+        messageWindowSize: 1,
+      }),
+    ).toThrow("History budget cannot preserve the newest tool exchange");
+  });
+
+  it("rejects oversized tool replay even when its rendered text fits", () => {
+    const oversizedTool: AgentHistoryTurn = {
+      ...toolTurn,
+      parts: [
+        {
+          type: "toolCalls",
+          calls: [{ id: "c1", name: "shell", args: {}, output: "x".repeat(240_000) }],
+        },
+      ],
+    };
+    expect(() =>
+      selectHistoryWindow({
+        history: [oversizedTool],
+        contextWindow: 200_000,
+        messageWindowSize: 200,
+      }),
+    ).toThrow("History budget cannot preserve the newest tool exchange");
+    expect(
+      selectHistoryWindow({ history: [toolTurn], contextWindow: 200_000, messageWindowSize: 200 }),
+    ).toEqual({ messages: [toolTurn], mode: "tokens" });
+  });
+
+  it("drops completed older tool exchanges once a newer user boundary fits", () => {
+    const history = [user(60_000), toolTurn, user(1), assistant(1)];
+    expect(
+      selectHistoryWindow({ history, contextWindow: 200_000, messageWindowSize: 200 }),
+    ).toEqual({ messages: history.slice(-2), mode: "tokens" });
   });
 });
 
@@ -568,8 +638,8 @@ describe("compactHistory", () => {
       return [compaction?.after.length, compaction?.entry.payload.coveredUpToSeq];
     };
 
-    expect(await keptOf(historyBudgetTokens(8_192))).toEqual([4, 45]);
-    expect(await keptOf(historyBudgetTokens(200_000))).toEqual([42, 7]);
+    expect(await keptOf(historyBudgetTokens(8_192))).toEqual([2, 47]);
+    expect(await keptOf(historyBudgetTokens(200_000))).toEqual([14, 35]);
     expect(await keptOf(undefined)).toEqual([10, 39]);
   });
 
