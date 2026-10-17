@@ -486,7 +486,7 @@ msgstr "Always allow this tool"
 msgid "Always allowed"
 msgstr "Always allowed"
 
-#: src/components/ask/QuestionCard.tsx:145
+#: src/components/ask/QuestionCard.tsx:147
 msgid "Answer"
 msgstr "Answer"
 
@@ -3190,7 +3190,7 @@ msgstr "Organic"
 msgid "Organization API key"
 msgstr "Organization API key"
 
-#: src/components/ask/QuestionCard.tsx:145
+#: src/components/ask/QuestionCard.tsx:147
 #: src/components/AskCard.tsx:655
 msgid "Other answer"
 msgstr "Other answer"
@@ -3201,8 +3201,8 @@ msgstr "Other answer"
 msgid "Other model…"
 msgstr "Other model…"
 
-#: src/components/ask/QuestionCard.tsx:146
-#: src/components/ask/QuestionCard.tsx:158
+#: src/components/ask/QuestionCard.tsx:148
+#: src/components/ask/QuestionCard.tsx:160
 #: src/components/AskCard.tsx:646
 msgid "Other…"
 msgstr "Other…"
@@ -3792,8 +3792,8 @@ msgstr "Select {0}"
 msgid "Select a bot"
 msgstr "Select a bot"
 
-#: src/components/ask/QuestionCard.tsx:98
-#: src/components/ask/QuestionCard.tsx:142
+#: src/components/ask/QuestionCard.tsx:100
+#: src/components/ask/QuestionCard.tsx:144
 #: src/pages/shell/composer.tsx:968
 msgid "Send"
 msgstr "Send"
@@ -3952,7 +3952,7 @@ msgstr "Skill updated · {name}"
 msgid "Skills"
 msgstr "Skills"
 
-#: src/components/ask/QuestionCard.tsx:93
+#: src/components/ask/QuestionCard.tsx:95
 #: src/components/AskCard.tsx:585
 #: src/components/integrations/IntegrationSetup.tsx:364
 #: src/pages/shell/side-panel.tsx:529
@@ -4246,7 +4246,7 @@ msgstr "Try again"
 msgid "Type a different answer"
 msgstr "Type a different answer"
 
-#: src/components/ask/QuestionCard.tsx:146
+#: src/components/ask/QuestionCard.tsx:148
 #: src/components/AskCard.tsx:666
 msgid "Type your answer"
 msgstr "Type your answer"
