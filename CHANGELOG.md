@@ -11,11 +11,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Added
 
 - **Links in messages now show as mentions with their site's icon.** A link to a document, a tool or a page shows the site's icon and a readable name instead of the raw address, up to five per message, on web, desktop and iPhone; articles keep their preview card.
+- **Bots now ask their questions with a card you answer in one tap, on web, desktop and iPhone, replacing the form and its Send answers button.** Each option can say what it does and the bot's pick reads Recommended; several questions come one at a time, Other takes your own words, and once you answer the card folds into one line with your answer under it. While a question waits, the composer reads "Answer {bot}…" and the sidebar and iPhone inbox say "Waiting for you" instead of "Needs input".
 
 #### Changed
 
 - Links in messages and on the desktop setup screen now take the colour of the text around them instead of blue, on web, desktop and iPhone.
 - Link previews now appear only for articles and photos.
+
+#### Fixed
+
+- On web and desktop, tapping an answer or a button in the conversation no longer stops it from following new messages, so the bot's working line and reply stay in view above the composer.
 
 ### 2026-10-16
 

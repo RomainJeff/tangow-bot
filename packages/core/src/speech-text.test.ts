@@ -84,6 +84,28 @@ describe("speakable", () => {
       ]),
     ).toContain("Ship it?");
   });
+
+  it("reads a question card's text, never what an option does (CA21)", () => {
+    expect(
+      speechFromBlocks([
+        {
+          kind: "ask",
+          text: "Which fridge?",
+          status: "pending",
+          questions: [
+            {
+              id: "q1",
+              question: "Which fridge?",
+              options: [
+                { id: "q1o1", label: "Freestanding", description: "Fits most kitchens" },
+                { id: "q1o2", label: "Built-in", recommended: true },
+              ],
+            },
+          ],
+        },
+      ]),
+    ).toBe("Which fridge?");
+  });
 });
 
 describe("toUtterances", () => {

@@ -23,14 +23,20 @@ describe("BotAvatar", () => {
     expect(html).toContain(`stroke="url(#${gradMatches[1]})"`);
   });
 
-  it.each(["running", "queued", "leased", "waiting_input", "waiting_takeover"])(
-    "renders active working ring for %s status",
-    (status) => {
-      const html = renderToString(<BotAvatar color="#3B82F6" status={status} variant="robot" />);
-      expect(html).toContain("<svg");
-      expect(html).toContain("rakazo-bot-avatar-ring");
-    },
-  );
+  it.each([
+    ["running", "true"],
+    ["queued", "true"],
+    ["leased", "true"],
+    ["waiting_input", "false"],
+    ["waiting_takeover", "false"],
+  ])("draws a %s bot as working: %s", (status, working) => {
+    for (const variant of ["robot", "organic"] as const) {
+      const html = renderToString(
+        <BotAvatar color="#3B82F6" identity="maya" status={status} variant={variant} />,
+      );
+      expect(html).toContain(`data-working="${working}"`);
+    }
+  });
 
   it("keeps the working ring mounted when idle so its timeline does not reset", () => {
     const html = renderToString(<BotAvatar color="#F59E0B" status="idle" variant="robot" />);

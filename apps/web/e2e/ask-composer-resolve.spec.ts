@@ -11,7 +11,7 @@ test("resolves a pending ask from the main composer", async ({ page }, testInfo)
   await completeOnboarding(page);
 
   const botId = activeBotId(page);
-  const composer = page.getByPlaceholder(/Message/);
+  const composer = page.locator('textarea[name="chat-message"]');
   await composer.fill("ask me which city to use");
   await page.keyboard.press("Enter");
 
@@ -31,11 +31,15 @@ test("resolves a pending ask from the main composer", async ({ page }, testInfo)
   const prompt = page.locator("p").filter({ hasText: /^Which city should I use\?$/ });
   if ((await prompt.count()) === 0) {
     await page.reload({ waitUntil: "domcontentloaded" });
-    await expect(page.getByPlaceholder(/Message/)).toBeVisible({ timeout: 15_000 });
+    await expect(composer).toBeVisible({ timeout: 15_000 });
   }
   await expect(prompt).toBeVisible({ timeout: 15_000 });
-  // The card offers its own affordances, but the composer is a first-class answer channel too.
-  await expect(page.getByRole("button", { name: "Send it" })).toBeVisible();
+  // While the question waits, the composer says it answers Chief, and Stop stays.
+  await expect(composer).toHaveAttribute("placeholder", "Answer Chief…");
+  await expect(page.getByRole("combobox", { name: "Answer Chief…", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Stop", exact: true })).toBeVisible();
+  // The card offers its own field, but the composer is a first-class answer channel too.
+  await expect(page.getByRole("textbox", { name: "Answer", exact: true })).toBeVisible();
   await captureScreenshot(page, testInfo, "ask-composer-pending");
 
   // Answer in the main composer, not the card. Prose avoids any scripted-runtime trigger so the
@@ -64,7 +68,10 @@ test("resolves a pending ask from the main composer", async ({ page }, testInfo)
 
   // The card no longer repeats the reply: exactly one instance of the prose (the bubble).
   await expect(page.getByText("Go with the northern one.", { exact: true })).toHaveCount(1);
-  await expect(page.getByRole("button", { name: "Send it" })).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "Answer", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("group", { name: /^Your answer/ })).toHaveCount(0);
+  await expect(composer).toHaveAttribute("placeholder", "Message Chief");
+  await expect(page.getByRole("combobox", { name: "Message Chief", exact: true })).toBeVisible();
   await expect(
     page.getByText("on it. i will work this in the background and come back with a result.", {
       exact: true,

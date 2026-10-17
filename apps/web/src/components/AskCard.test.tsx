@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import { routineConfirmationBlock, selectedAskActionLabel, settleRoutineAsk } from "@rakazo/core";
-import { act } from "react";
+import { routineConfirmationBlock, settleRoutineAsk } from "@rakazo/core";
+import { act, useLayoutEffect } from "react";
 import type { Root } from "react-dom/client";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -21,22 +21,16 @@ vi.mock("@lingui/react/macro", () => ({
 
 import { type AskBlock, AskCard } from "./AskCard";
 
-describe("selectedAskActionLabel", () => {
-  it("maps a choice answer id to its user-facing label", () => {
-    expect(
-      selectedAskActionLabel("choice-2", [
-        { id: "choice-1", label: "Berlin" },
-        { id: "choice-2", label: "Seoul" },
-      ]),
-    ).toBe("Seoul");
-  });
+const cities: AskBlock = {
+  kind: "ask",
+  text: "Which city should I use?",
+  actions: [
+    { id: "choice-1", label: "Berlin" },
+    { id: "choice-2", label: "Seoul" },
+  ],
+};
 
-  it("falls back to the answer when an action is unavailable", () => {
-    expect(selectedAskActionLabel("custom", undefined)).toBe("custom");
-  });
-});
-
-describe("AskCard multi-question answered rendering", () => {
+describe("AskCard settled question (CA3)", () => {
   const questions: NonNullable<AskBlock["questions"]> = [
     {
       id: "q1",
@@ -45,111 +39,110 @@ describe("AskCard multi-question answered rendering", () => {
     },
     { id: "q2", question: "Any dietary restriction?" },
   ];
+  const render = (block: AskBlock) =>
+    renderToStaticMarkup(
+      <AskCard block={block} canAnswer={false} onAnswer={async () => {}} messageId="msg-settled" />,
+    );
 
-  it("resolved via the composer (no block.answers): compact trace, no fabricated per-question value", () => {
-    const block: AskBlock = {
+  it("answered from the composer: the questions as one line, no answer bubble", () => {
+    const html = render({
       kind: "ask",
       text: "",
       status: "answered",
       answer: "Berlin, no restrictions",
       questions,
-    };
-
-    const html = renderToStaticMarkup(
-      <AskCard block={block} canAnswer={true} onAnswer={async () => {}} messageId="msg-composer" />,
-    );
-
-    // Questions stay as a resolved trace of what was asked.
-    expect(html).toContain("Which city should I use?");
-    expect(html).toContain("Any dietary restriction?");
-    // No per-question "Answered" is repeated, and the free-text answer isn't duplicated
-    // into the card (it lives in the user's message bubble instead).
-    expect(html).not.toContain("Answered");
+    });
+    expect(html).toContain("Which city should I use? · Any dietary restriction?");
+    expect(html).not.toContain("Your answer");
     expect(html).not.toContain("Berlin, no restrictions");
-    // Settled: the progress dots have nothing left to track.
-    expect(html).not.toContain("bg-success");
-    expect(html).not.toContain("bg-muted-foreground/40");
   });
 
-  it("resolved via the card (block.answers present): structured breakdown is unchanged", () => {
-    const block: AskBlock = {
+  it("answered on the card: one line per question in the answer bubble", () => {
+    const html = render({
       kind: "ask",
       text: "",
       status: "answered",
-      answer: "",
       questions,
-      answers: {
-        q1: { selected: ["berlin"] },
-        q2: { other: "vegetarian" },
-      },
-    };
-
-    const html = renderToStaticMarkup(
-      <AskCard block={block} canAnswer={true} onAnswer={async () => {}} messageId="msg-card" />,
+      answers: { q1: { selected: ["berlin"] }, q2: { other: "vegetarian" } },
+    });
+    expect(html).toContain(
+      'aria-label="Your answer: Which city should I use? — Berlin; Any dietary restriction? — vegetarian"',
     );
-
-    expect(html).toContain("Berlin");
-    expect(html).toContain("Other: vegetarian");
   });
 
-  it("a single settled question shows its answer under the question, once", () => {
-    const block: AskBlock = {
-      kind: "ask",
-      text: "",
-      status: "answered",
-      answer: "",
-      questions: [questions[0]!],
-      answers: { q1: { selected: ["berlin"] } },
-    };
-
-    const html = renderToStaticMarkup(
-      <AskCard block={block} canAnswer={true} onAnswer={async () => {}} messageId="msg-single" />,
-    );
-
+  it("a legacy choice: the question once, and the chosen label as the user's answer", () => {
+    const html = render({ ...cities, status: "answered", answer: "choice-2" });
     expect(html.split("Which city should I use?").length - 1).toBe(1);
-    expect(html).not.toContain("1. ");
-    expect(html).toContain("Berlin");
-  });
-});
-
-describe("AskCard mono-question answered rendering", () => {
-  it("resolved via the composer (no block.answer): plain resolved state, reply not echoed onto the card", () => {
-    // The backend marks the card answered without an `answer` payload (design D2 — the reply
-    // lives in the user's message bubble), so the card must not reprint it.
-    const block: AskBlock = {
-      kind: "ask",
-      text: "Which city should I use?",
-      status: "answered",
-      input: "text",
-    };
-
-    const html = renderToStaticMarkup(
-      <AskCard block={block} canAnswer={true} onAnswer={async () => {}} messageId="msg-composer" />,
-    );
-
-    // The question stays as a trace; the resolved state reads "Answered" with no echoed value.
-    expect(html).toContain("Which city should I use?");
-    expect(html).toContain("Answered");
-    expect(html).not.toContain("Answered:");
+    expect(html).toContain('aria-label="Your answer: Seoul"');
+    expect(html).not.toContain("<button");
   });
 
-  it("resolved via the card (block.answer present): the chosen label is still shown", () => {
-    const block: AskBlock = {
-      kind: "ask",
-      text: "Which city should I use?",
-      status: "answered",
-      answer: "choice-2",
-      actions: [
-        { id: "choice-1", label: "Berlin" },
-        { id: "choice-2", label: "Seoul" },
-      ],
+  it("an answered secret or approval keeps its own state line, with no answer bubble (TM CA22)", () => {
+    const text = (block: AskBlock) => render(block).replace(/<[^>]+>/g, "");
+    expect({
+      secret: text({
+        kind: "ask",
+        text: "API key?",
+        input: "secret",
+        status: "answered",
+        answer: "",
+      }),
+      approval: text({
+        kind: "ask",
+        text: "Send?",
+        approvalEffectId: "e1",
+        status: "answered",
+        answer: "allow",
+        actions: [
+          { id: "allow", label: "Allow" },
+          { id: "deny", label: "Deny" },
+        ],
+      }),
+    }).toEqual({ secret: "API key?Saved", approval: "Needs your callSend?Allowed once" });
+  });
+
+  it("lists two answers that read the same as two lines", () => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    const day = (id: string) => ({
+      id,
+      header: "Day",
+      question: "Which day?",
+      options: [{ id: `${id}-monday`, label: "Monday" }],
+    });
+    act(() => {
+      root.render(
+        <AskCard
+          block={{
+            kind: "ask",
+            text: "",
+            status: "answered",
+            questions: [day("q1"), day("q2")],
+            answers: { q1: { selected: ["q1-monday"] }, q2: { selected: ["q2-monday"] } },
+          }}
+          canAnswer={false}
+          onAnswer={async () => {}}
+          messageId="msg-same-lines"
+        />,
+      );
+    });
+    const bubble = container.querySelector('[aria-label^="Your answer"]');
+    const shown = {
+      lines: [...(bubble?.children ?? [])].map((line) => line.textContent),
+      keyWarnings: errors.mock.calls.filter(([message]) => String(message).includes("same key")),
     };
+    act(() => root.unmount());
+    errors.mockRestore();
+    vi.unstubAllGlobals();
+    expect(shown).toEqual({ lines: ["Day — Monday", "Day — Monday"], keyWarnings: [] });
+  });
 
-    const html = renderToStaticMarkup(
-      <AskCard block={block} canAnswer={true} onAnswer={async () => {}} messageId="msg-card" />,
-    );
-
-    expect(html).toContain("Answered: Seoul");
+  it("no longer waiting: the question and No longer active, nothing to press", () => {
+    const html = render(cities);
+    expect(html).toContain("No longer active");
+    expect(html).not.toContain("<button");
   });
 });
 
@@ -219,12 +212,19 @@ describe("AskCard approval actions", () => {
     { id: "deny", label: "Cancel", outcome: "cancelled" },
   ];
 
-  it("drops an image in an approval question, but not in a plain ask", () => {
+  it("never fetches an image in a question, an approval's or a plain one (CA16)", () => {
     const image = "![](https://e.example/p.png)";
-    expect(render(approvalBlock(`Create bot “${image}”?`, spawnActions))).not.toContain("<img");
-
-    const plain = render({ kind: "ask", text: `Is this right? ${image}` });
-    expect(plain).toContain("<img");
+    const shown = (html: string) => ({
+      images: html.includes("<img"),
+      text: /<p[^>]*>(.*?)<\/p>/.exec(html)?.[1],
+    });
+    expect({
+      approval: shown(render(approvalBlock(`Create bot “${image}”?`, spawnActions))),
+      plain: shown(render({ kind: "ask", text: `Is this right? ${image}` })),
+    }).toEqual({
+      approval: { images: false, text: "Create bot “”?" },
+      plain: { images: false, text: "Is this right? " },
+    });
   });
 });
 
@@ -465,12 +465,6 @@ describe("AskCard action layout", () => {
       ),
     };
   };
-  const optionsRow = (html: string) => {
-    const start = html.indexOf('data-testid="ask-options"');
-    return html.slice(start, html.indexOf("</div>", start));
-  };
-  const actionsHtml = (html: string) =>
-    html.slice(html.indexOf('data-slot="framed-block-actions"'));
 
   it("keeps an approval's decision on the right, primary last", () => {
     const html = render({
@@ -499,53 +493,37 @@ describe("AskCard action layout", () => {
     expect(actionsRow(html)).toEqual({ align: "end", labels: ["Save"] });
   });
 
-  it("keeps the answers of a choice on the left, not the decision to type another", () => {
+  it("lists a choice's answers as tiles, Other… last, with no action row", () => {
+    const html = render(cities);
+    expect(actionsRow(html)).toBeNull();
+    expect(
+      [...html.matchAll(/data-slot="option-tile"[^>]*>(.*?)<\/button>/g)].map((match) =>
+        match[1]?.replace(/<[^>]+>/g, ""),
+      ),
+    ).toEqual(["Berlin", "Seoul", "Other…"]);
+  });
+
+  it("puts an optional question's Skip on the right", () => {
     const html = render({
       kind: "ask",
-      text: "Which city?",
-      actions: [
-        { id: "seoul", label: "Seoul" },
-        { id: "tokyo", label: "Tokyo" },
+      text: "",
+      questions: [
+        { id: "q1", question: "When?", required: false, options: [{ id: "b", label: "May" }] },
       ],
     });
-    expect(optionsRow(html)).toContain("Seoul");
-    expect(actionsHtml(html)).not.toContain("Seoul");
-    expect(actionsRow(html)).toEqual({ align: "start", labels: ["Other answer…"] });
-  });
-
-  it("puts a plain question's decision on the right, Edit first before Send it", () => {
-    const html = render({ kind: "ask", text: "Send this draft?" });
-    expect(actionsRow(html)).toEqual({ align: "end", labels: ["Edit first", "Send it"] });
-  });
-
-  it("puts a stepper's navigation before its primary, on the right", () => {
-    const html = renderToStaticMarkup(
-      <AskCard
-        block={{
-          kind: "ask",
-          text: "Two questions",
-          questions: [
-            { id: "q1", question: "Where?", options: [{ id: "a", label: "Seoul" }] },
-            { id: "q2", question: "When?", required: false, options: [{ id: "b", label: "May" }] },
-          ],
-        }}
-        canAnswer={true}
-        onAnswer={async () => {}}
-        messageId="msg-stepper"
-      />,
-    );
-    expect(actionsRow(html)).toEqual({ align: "end", labels: ["Next"] });
-    expect(optionsRow(html)).toContain("Seoul");
-    expect(actionsHtml(html)).not.toContain("Seoul");
+    expect(actionsRow(html)).toEqual({ align: "end", labels: ["Skip"] });
   });
 });
 
-describe("AskCard stepper navigation", () => {
+describe("AskCard open question", () => {
   let container: HTMLElement;
   let root: Root;
 
   beforeEach(() => {
+    vi.useFakeTimers();
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    // jsdom has no Web Animations, so these run the reduced-motion commit; e2e flies the tile.
+    vi.stubGlobal("matchMedia", () => ({ matches: true }));
     container = document.createElement("div");
     document.body.append(container);
     root = createRoot(container);
@@ -554,43 +532,502 @@ describe("AskCard stepper navigation", () => {
     act(() => root.unmount());
     container.remove();
     vi.unstubAllGlobals();
+    vi.useRealTimers();
   });
 
-  it("orders Back, Skip, Send answers in the end-aligned row on an optional last step", () => {
+  let messages = 0;
+  function mount(block: AskBlock, onAnswer: (text: string) => Promise<void>) {
+    const messageId = `msg-open-${++messages}`;
     act(() => {
       root.render(
-        <AskCard
-          block={{
-            kind: "ask",
-            text: "Two questions",
-            questions: [
-              { id: "q1", question: "Where?", options: [{ id: "a", label: "Seoul" }] },
-              {
-                id: "q2",
-                question: "When?",
-                required: false,
-                options: [{ id: "b", label: "May" }],
-              },
-            ],
-          }}
-          canAnswer={true}
-          onAnswer={async () => {}}
-          messageId="msg-stepper-client"
-        />,
+        <AskCard block={block} canAnswer={true} onAnswer={onAnswer} messageId={messageId} />,
       );
     });
-    const next = [...container.querySelectorAll("button")].find((el) => el.textContent === "Next");
-    act(() => next?.click());
+  }
+  const tile = (name: string) =>
+    [...container.querySelectorAll<HTMLButtonElement>('[data-slot="option-tile"]')].find(
+      (button) => button.textContent === name,
+    );
+  const press = (target: Element, key: string) =>
+    act(() => {
+      target.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+    });
+  const type = (input: HTMLInputElement, value: string) =>
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, value);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
 
-    const row = container.querySelector('[data-slot="framed-block-actions"]');
-    expect(row?.getAttribute("data-align")).toBe("end");
-    expect([...(row?.querySelectorAll("button") ?? [])].map((el) => el.textContent)).toEqual([
-      "Back",
-      "Skip",
-      "Send answers",
+  it("holds a tapped option 650 ms, then shows it as the user's answer", async () => {
+    const sent: string[] = [];
+    mount(cities, async (text) => void sent.push(text));
+    act(() => tile("Seoul")?.click());
+    expect(tile("Seoul")?.getAttribute("aria-pressed")).toBe("true");
+    await act(async () => vi.advanceTimersByTime(649));
+    expect(sent).toEqual([]);
+    await act(async () => vi.advanceTimersByTime(1));
+    expect(sent).toEqual(["choice-2"]);
+    await act(async () => vi.advanceTimersByTime(80));
+    expect(container.querySelector('[aria-label="Your answer: Seoul"]')?.textContent).toBe("Seoul");
+  });
+
+  it("reopens on the selection with the error when the answer fails (CA4)", async () => {
+    mount(cities, async () => {
+      throw new Error("The bot moved on");
+    });
+    act(() => tile("Seoul")?.click());
+    await act(async () => vi.advanceTimersByTime(800));
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe("The bot moved on");
+    expect(tile("Seoul")?.getAttribute("aria-pressed")).toBe("true");
+    expect(container.querySelector('[aria-label^="Your answer"]')).toBeNull();
+  });
+
+  it("sends what a legacy free-text card's field holds, never approved (CA9)", async () => {
+    const sent: string[] = [];
+    mount({ kind: "ask", text: "Which city should I use?" }, async (text) => void sent.push(text));
+    const field = container.querySelector<HTMLInputElement>('input[aria-label="Answer"]');
+    if (!field) throw new Error("no answer field");
+    type(field, "Paris");
+    await act(async () => container.querySelector("form")?.requestSubmit());
+    expect(sent).toEqual(["Paris"]);
+  });
+
+  it("selects with a digit only from inside the card (CA12)", async () => {
+    const sent: string[] = [];
+    mount(cities, async (text) => void sent.push(text));
+    press(document.body, "2");
+    expect(tile("Seoul")?.getAttribute("aria-pressed")).toBe("false");
+    press(tile("Berlin")!, "2");
+    expect(tile("Seoul")?.getAttribute("aria-pressed")).toBe("true");
+    await act(async () => vi.advanceTimersByTime(650));
+    expect(sent).toEqual(["choice-2"]);
+  });
+
+  it("moves focus with the arrows without selecting (CA12)", () => {
+    mount(cities, async () => {});
+    tile("Berlin")?.focus();
+    press(tile("Berlin")!, "ArrowDown");
+    expect(document.activeElement?.textContent).toBe("Seoul");
+    expect(tile("Seoul")?.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("keeps the arrows on the tiles once Other is open (CA12)", () => {
+    mount(cities, async () => {});
+    act(() => tile("Other…")?.click());
+    tile("Seoul")?.focus();
+    press(tile("Seoul")!, "ArrowDown");
+    expect(document.activeElement?.textContent).toBe("Berlin");
+  });
+
+  it("mounted again while its answer is in flight, shows it and takes no other (TM CA20)", async () => {
+    const sent: string[] = [];
+    const onAnswer = (text: string) => {
+      sent.push(text);
+      return new Promise<void>(() => {});
+    };
+    const show = () =>
+      act(() => {
+        root.render(
+          <AskCard block={cities} canAnswer={true} onAnswer={onAnswer} messageId="msg-remount" />,
+        );
+      });
+    show();
+    act(() => tile("Seoul")?.click());
+    await act(async () => vi.advanceTimersByTime(800));
+    act(() => root.render(<div />));
+    show();
+    act(() => tile("Berlin")?.click());
+    await act(async () => vi.advanceTimersByTime(800));
+    expect({
+      sent,
+      answer: container.querySelector('[aria-label^="Your answer"]')?.getAttribute("aria-label"),
+      tiles: container.querySelectorAll('[data-slot="option-tile"]').length,
+    }).toEqual({ sent: ["choice-2"], answer: "Your answer: Seoul", tiles: 0 });
+  });
+
+  it("sends nothing when the hold ends between the card stopping waiting and its effect", async () => {
+    const sent: string[] = [];
+    const onAnswer = async (text: string) => void sent.push(text);
+    /** A timer the event loop runs after React commits, before its passive effects. */
+    function TimerBetween({ ms }: { ms: number }) {
+      useLayoutEffect(() => void vi.advanceTimersByTime(ms), [ms]);
+      return null;
+    }
+    const show = (canAnswer: boolean, timer?: number) =>
+      act(() => {
+        root.render(
+          <>
+            <AskCard
+              block={cities}
+              canAnswer={canAnswer}
+              onAnswer={onAnswer}
+              messageId="msg-race"
+            />
+            {timer ? <TimerBetween ms={timer} /> : null}
+          </>,
+        );
+      });
+    show(true);
+    act(() => tile("Seoul")?.click());
+    await act(async () => vi.advanceTimersByTime(649));
+    show(false, 1);
+    await act(async () => vi.advanceTimersByTime(800));
+    expect({
+      sent,
+      bubble: container.querySelector('[aria-label^="Your answer"]'),
+      line: container.querySelector('[data-testid="ask-settled"]')?.textContent,
+    }).toEqual({ sent: [], bubble: null, line: "Which city should I use?·No longer active" });
+  });
+
+  it("keeps the typed answer when a digit is pressed on the field's send button (CA12)", () => {
+    mount(cities, async () => {});
+    act(() => tile("Other…")?.click());
+    const field = () =>
+      container.querySelector<HTMLInputElement>('input[aria-label="Other answer"]');
+    type(field()!, "Lisbon");
+    press(container.querySelector('button[type="submit"]')!, "1");
+    expect({
+      typed: field()?.value,
+      berlin: tile("Berlin")?.getAttribute("aria-pressed"),
+    }).toEqual({ typed: "Lisbon", berlin: "false" });
+  });
+
+  it("puts focus back on the chosen tile when the answer fails (CA4)", async () => {
+    mount(cities, async () => {
+      throw new Error("The bot moved on");
+    });
+    tile("Seoul")?.focus();
+    act(() => tile("Seoul")?.click());
+    await act(async () => vi.advanceTimersByTime(800));
+    expect(document.activeElement?.textContent).toBe("Seoul");
+  });
+
+  it("puts focus back in the field when a typed answer fails (CA4)", async () => {
+    mount(cities, async () => {
+      throw new Error("The bot moved on");
+    });
+    act(() => tile("Other…")?.click());
+    type(container.querySelector<HTMLInputElement>('input[aria-label="Other answer"]')!, "Lisbon");
+    await act(async () => container.querySelector("form")?.requestSubmit());
+    await act(async () => vi.advanceTimersByTime(800));
+    expect(document.activeElement?.getAttribute("aria-label")).toBe("Other answer");
+  });
+
+  it("flies nothing when the answer, failed before its fill, then arrives from another device (§6)", async () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: false }));
+    const animate = Element.prototype.animate;
+    Element.prototype.animate = () =>
+      ({ cancel() {}, finished: new Promise(() => {}) }) as unknown as Animation;
+    const messageId = `msg-open-${++messages}`;
+    const render = (block: AskBlock, canAnswer: boolean) =>
+      act(() => {
+        root.render(
+          <AskCard
+            block={block}
+            canAnswer={canAnswer}
+            onAnswer={() => Promise.reject(new Error("offline"))}
+            messageId={messageId}
+          />,
+        );
+      });
+    render(cities, true);
+    act(() => tile("Seoul")?.click());
+    await act(async () => vi.advanceTimersByTime(650));
+    await act(async () => {});
+    const failed = container.querySelector('[role="alert"]')?.textContent ?? null;
+    await act(async () => vi.advanceTimersByTime(80));
+    render({ ...cities, status: "answered", answer: "choice-1" }, false);
+    const shown = {
+      failed,
+      bubble: container.querySelector('[data-slot="user-bubble"]')?.textContent,
+      flights: container.querySelectorAll("[data-ask-flight]").length,
+    };
+    Element.prototype.animate = animate;
+    expect(shown).toEqual({ failed: "offline", bubble: "Berlin", flights: 0 });
+  });
+
+  it("settles with the fade where the spring's linear() easing is unknown (Safari before 17.2)", async () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: false }));
+    const supports = vi.spyOn(CSS, "supports").mockReturnValue(false);
+    const animate = Element.prototype.animate;
+    Element.prototype.animate = (_frames, options) => {
+      if (typeof options === "object" && options.easing?.startsWith("linear(")) {
+        throw new TypeError("'linear(…)' is not a valid value for easing");
+      }
+      return { cancel() {}, finished: new Promise(() => {}) } as unknown as Animation;
+    };
+    const errors: unknown[] = [];
+    const onError = (event: ErrorEvent) => errors.push(event.error);
+    window.addEventListener("error", onError);
+    mount(cities, async () => {});
+    act(() => tile("Seoul")?.click());
+    await act(async () => vi.advanceTimersByTime(800));
+    const shown = {
+      errors,
+      bubble: container.querySelector('[data-slot="user-bubble"]')?.textContent,
+      flights: container.querySelectorAll("[data-ask-flight]").length,
+    };
+    window.removeEventListener("error", onError);
+    Element.prototype.animate = animate;
+    supports.mockRestore();
+    expect(shown).toEqual({ errors: [], bubble: "Seoul", flights: 0 });
+  });
+
+  it("keeps the line breaks of the question's detail", () => {
+    mount({ ...cities, detail: "Berlin: rain\nSeoul: sun" }, async () => {});
+    const detail = [...container.querySelectorAll(".whitespace-pre-wrap")].find((el) =>
+      el.textContent?.startsWith("Berlin: rain"),
+    );
+    expect(detail?.textContent).toBe("Berlin: rain\nSeoul: sun");
+  });
+
+  it("shows what an option does under it and a muted Recommended, choosing nothing (CA19)", async () => {
+    const sent: string[] = [];
+    const ask = (
+      options: NonNullable<NonNullable<AskBlock["questions"]>[number]["options"]>,
+    ): AskBlock => ({
+      kind: "ask",
+      text: "",
+      questions: [{ id: "q1", question: "Which fridge?", options }],
+    });
+    const tiles = () =>
+      [...container.querySelectorAll('[data-slot="option-tile"]')].map((tile) => {
+        const text = (attribute: string) => {
+          const id = tile.getAttribute(attribute);
+          return id ? document.getElementById(id)?.textContent : null;
+        };
+        return [
+          text("aria-labelledby") ?? tile.textContent,
+          text("aria-describedby"),
+          tile.getAttribute("aria-pressed"),
+        ];
+      });
+
+    mount(
+      ask([
+        { id: "q1o1", label: "Freestanding", description: "Fits most kitchens", recommended: true },
+        { id: "q1o2", label: "Built-in", description: "Hides in a cabinet" },
+        { id: "q1o3", label: "American" },
+      ]),
+      async (text) => void sent.push(text),
+    );
+    expect(tiles()).toEqual([
+      ["Freestanding", "Recommended · Fits most kitchens", "false"],
+      ["Built-in", "Hides in a cabinet", "false"],
+      ["American", null, "false"],
+      ["Other…", null, null],
     ]);
-    expect(row?.textContent).not.toContain("May");
-    expect(container.textContent).toContain("When?");
+    expect(document.activeElement).toBe(document.body);
+    press(container.querySelector('[data-slot="question-card"]')!, "Enter");
+    await act(async () => vi.advanceTimersByTime(1000));
+    expect(sent).toEqual([]);
+
+    mount(
+      ask([
+        { id: "q1o1", label: "Yes" },
+        { id: "q1o2", label: "No", recommended: true },
+      ]),
+      async () => {},
+    );
+    expect(tiles().slice(0, 2)).toEqual([
+      ["Yes", null, "false"],
+      ["No", "Recommended", "false"],
+    ]);
+  });
+
+  it("shows a label written in markdown literally, without a link (CA16)", () => {
+    mount(
+      {
+        kind: "ask",
+        text: "Pick one",
+        actions: [{ id: "choice-1", label: "[Verified](https://evil.example) <b>now</b>" }],
+      },
+      async () => {},
+    );
+    expect(tile("[Verified](https://evil.example) <b>now</b>")).toBeDefined();
+    expect(container.querySelector("a")).toBeNull();
+  });
+  describe("a stack of questions", () => {
+    const fridge: AskBlock = {
+      kind: "ask",
+      text: "",
+      questions: [
+        {
+          id: "q1",
+          header: "Format",
+          question: "Which fridge do you have now?",
+          options: [
+            { id: "q1o1", label: "Freestanding" },
+            { id: "q1o2", label: "Built-in" },
+          ],
+        },
+        {
+          id: "q2",
+          header: "Extras",
+          question: "What should the new one have?",
+          multiSelect: true,
+          options: [
+            { id: "q2o1", label: "Ice maker" },
+            { id: "q2o2", label: "No frost" },
+          ],
+        },
+        {
+          id: "q3",
+          question: "Do you already have a separate freezer?",
+          required: false,
+          options: [{ id: "q3o1", label: "Yes" }],
+        },
+      ],
+    };
+    const shown = () => ({
+      lines: [...container.querySelectorAll('[data-slot="stack-line"]')].map(
+        (line) => line.textContent,
+      ),
+      head: container.querySelector('[data-slot="stack-head"]')?.textContent ?? null,
+      actions: [...container.querySelectorAll('[data-slot="framed-block-actions"] button')].map(
+        (button) => button.textContent,
+      ),
+    });
+    const button = (name: string) =>
+      [...container.querySelectorAll("button")].find((element) => element.textContent === name);
+
+    it("shows one question at a time, folds answers into lines, and sends from the recap (CA6, CA7, CA10)", async () => {
+      const sent: string[] = [];
+      mount(fridge, async (text) => void sent.push(text));
+      const seen = [shown()];
+      act(() => tile("Built-in")?.click());
+      await act(async () => vi.advanceTimersByTime(550));
+      act(() => tile("Ice maker")?.click());
+      seen.push(shown());
+      act(() => button("Next")?.click());
+      seen.push(shown());
+      act(() => button("Skip")?.click());
+      seen.push(shown());
+      act(() => button("Send")?.click());
+      await act(async () => vi.advanceTimersByTime(0));
+      expect(seen).toEqual([
+        { lines: [], head: "Format·2 more", actions: [] },
+        { lines: ["FormatBuilt-in"], head: "Extras·1 more", actions: ["Next"] },
+        {
+          lines: ["FormatBuilt-in", "ExtrasIce maker"],
+          head: "Last one",
+          actions: ["Skip"],
+        },
+        {
+          lines: [
+            "FormatBuilt-in",
+            "ExtrasIce maker",
+            "Do you already have a separate freezer?Skipped",
+          ],
+          head: null,
+          actions: ["Send"],
+        },
+      ]);
+      expect(sent.map((wire) => JSON.parse(wire))).toEqual([
+        {
+          answers: {
+            q1: { selected: ["q1o2"] },
+            q2: { selected: ["q2o1"] },
+            q3: { skipped: true },
+          },
+        },
+      ]);
+      expect(container.querySelector('[data-slot="user-bubble"]')?.getAttribute("aria-label")).toBe(
+        "Your answer: Format — Built-in; Extras — Ice maker; Do you already have a separate freezer? — Skipped",
+      );
+    });
+
+    it("reopens a line on its answer, then comes back to the recap", async () => {
+      mount(fridge, async () => {});
+      act(() => tile("Built-in")?.click());
+      await act(async () => vi.advanceTimersByTime(550));
+      act(() => tile("No frost")?.click());
+      act(() => button("Next")?.click());
+      act(() => button("Skip")?.click());
+      const line = container.querySelector<HTMLButtonElement>('[data-slot="stack-line"]');
+      act(() => line?.click());
+      const reopened = { ...shown(), pressed: tile("Built-in")?.getAttribute("aria-pressed") };
+      act(() => tile("Freestanding")?.click());
+      await act(async () => vi.advanceTimersByTime(550));
+      expect([reopened, shown()]).toEqual([
+        {
+          lines: ["ExtrasNo frost", "Do you already have a separate freezer?Skipped"],
+          head: "Format",
+          actions: [],
+          pressed: "true",
+        },
+        {
+          lines: [
+            "FormatFreestanding",
+            "ExtrasNo frost",
+            "Do you already have a separate freezer?Skipped",
+          ],
+          head: null,
+          actions: ["Send"],
+        },
+      ]);
+    });
+
+    const toRecap = async () => {
+      act(() => tile("Built-in")?.click());
+      await act(async () => vi.advanceTimersByTime(550));
+      act(() => tile("Ice maker")?.click());
+      act(() => button("Next")?.click());
+      act(() => button("Skip")?.click());
+    };
+
+    it("says why a Send from the recap failed, with focus back on Send (CA4)", async () => {
+      mount(fridge, async () => {
+        throw new Error("The bot moved on");
+      });
+      await toRecap();
+      act(() => button("Send")?.click());
+      await act(async () => vi.advanceTimersByTime(800));
+      expect({
+        ...shown(),
+        alert: container.querySelector('[role="alert"]')?.textContent ?? null,
+        focus: document.activeElement?.textContent,
+      }).toEqual({
+        lines: [
+          "FormatBuilt-in",
+          "ExtrasIce maker",
+          "Do you already have a separate freezer?Skipped",
+        ],
+        head: null,
+        actions: ["Send"],
+        alert: "The bot moved on",
+        focus: "Send",
+      });
+    });
+
+    it("moves focus from an answered question to the next one's first tile, then to Send (CA12)", async () => {
+      mount(fridge, async () => {});
+      const focused = () => document.activeElement?.textContent ?? null;
+      tile("Built-in")?.focus();
+      act(() => tile("Built-in")?.click());
+      await act(async () => vi.advanceTimersByTime(550));
+      const next = focused();
+      tile("Ice maker")?.focus();
+      act(() => tile("Ice maker")?.click());
+      button("Next")?.focus();
+      act(() => button("Next")?.click());
+      const last = focused();
+      button("Skip")?.focus();
+      act(() => button("Skip")?.click());
+      expect([next, last, focused()]).toEqual(["Ice maker", "Yes", "Send"]);
+    });
+
+    it("leaves focus where it is when it was outside the card", async () => {
+      mount(fridge, async () => {});
+      const composer = document.createElement("textarea");
+      document.body.append(composer);
+      composer.focus();
+      act(() => tile("Built-in")?.click());
+      await act(async () => vi.advanceTimersByTime(550));
+      const focus = document.activeElement === composer;
+      composer.remove();
+      expect({ head: shown().head, focus }).toEqual({ head: "Extras·1 more", focus: true });
+    });
   });
 });
 

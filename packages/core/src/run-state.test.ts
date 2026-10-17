@@ -1,6 +1,6 @@
 import * as fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { assertTransition, canTransition } from "./run-state.js";
+import { assertTransition, canTransition, isActive, isWorkingStatus } from "./run-state.js";
 
 describe("run state machine", () => {
   it("allows takeover resume onto a lease", () => {
@@ -28,5 +28,23 @@ describe("run state machine", () => {
         },
       ),
     );
+  });
+
+  it.each([
+    ["queued", true],
+    ["leased", true],
+    ["running", true],
+    ["waiting_input", false],
+    ["waiting_takeover", false],
+    ["completed", false],
+    ["idle", false],
+    [undefined, false],
+  ])("reads %s as working: %s", (status, working) => {
+    expect(isWorkingStatus(status)).toBe(working);
+  });
+
+  it("keeps a run waiting on the person active, so Stop and locks stay", () => {
+    expect(isActive("waiting_input")).toBe(true);
+    expect(isWorkingStatus("waiting_input")).toBe(false);
   });
 });

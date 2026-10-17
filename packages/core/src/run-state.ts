@@ -34,6 +34,15 @@ export function isActive(status: RunStatus): boolean {
   return (ACTIVE_RUN_STATUSES as readonly RunStatus[]).includes(status);
 }
 
+/** A bot busy on its own: not one waiting on the person. Stop and locks still read `isActive`. */
+export function isWorkingStatus(status: string | undefined): boolean {
+  return (
+    status !== "waiting_input" &&
+    status !== "waiting_takeover" &&
+    ACTIVE_RUN_STATUSES.some((active) => active === status)
+  );
+}
+
 export function isTerminal(status: RunStatus): boolean {
   return TERMINAL.includes(status);
 }

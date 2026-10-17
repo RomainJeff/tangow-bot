@@ -236,7 +236,7 @@ export const builtinAgentTools: ConnectorTool[] = [
   {
     name: "ask_user",
     description:
-      'Ask the user one to four questions in a single card, then wait for all answers at once. The card shows one question at a time with a counter (e.g. 2/3) and previous/next navigation. Each question may offer up to four tappable options; the user can always type a custom "Other" answer, and questions marked required:false can be skipped. Provide `questions`: for each, a short `question`, an optional `header` (a <=24-char tab label), optional `options` (2-4 concise choices; omit for a free-text question), optional `multiSelect`, and optional `required` (default true). Prefer batching related questions into one call over several sequential ask_user turns.',
+      'Ask the user one to four questions in a single card, then wait for all answers at once. Each question may offer two to four tappable options, and the user can always answer in their own words; questions marked required:false can be skipped. Provide `questions`: for each, a short `question`, an optional short `header` (at most 24 characters), optional `options` (omit them for a free-text question), optional `multiSelect`, and optional `required` (default true). An option is a concise label, or `{ label, description, recommended }`: put what the option does in `description`, one short line, and mark at most one option `recommended: true`. Never write "Reco:" in the question. Prefer batching related questions into one call over several sequential ask_user turns.',
     inputSchema: {
       type: "object",
       properties: {
@@ -251,10 +251,22 @@ export const builtinAgentTools: ConnectorTool[] = [
               header: { type: "string", maxLength: 24 },
               options: {
                 type: "array",
-                items: { type: "string", minLength: 1, maxLength: 80 },
+                items: {
+                  anyOf: [
+                    { type: "string", minLength: 1, maxLength: 80 },
+                    {
+                      type: "object",
+                      properties: {
+                        label: { type: "string", minLength: 1, maxLength: 80 },
+                        description: { type: "string" },
+                        recommended: { type: "boolean" },
+                      },
+                      required: ["label"],
+                    },
+                  ],
+                },
                 minItems: 2,
                 maxItems: 4,
-                uniqueItems: true,
               },
               multiSelect: { type: "boolean" },
               required: { type: "boolean" },

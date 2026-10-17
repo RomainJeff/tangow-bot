@@ -27,7 +27,10 @@ export interface FramedBlockProps extends Omit<ViewProps, "children"> {
   /** Omitted when the row above already names who is asking (a bot row's
    * author line) — the question then opens the card with no header line. */
   header?: FramedBlockHeader;
-  question: ReactNode;
+  /** Above the question, on its left edge: a stack's answered questions. */
+  lead?: ReactNode;
+  /** Omitted on a stack's recap, which is only its lead and its action. */
+  question?: ReactNode;
   /** What pressing the primary action will do, one line under the question. */
   consequence?: ReactNode;
   /** Controls between the question and the actions (options, a text field). */
@@ -57,6 +60,7 @@ export interface FramedBlockProps extends Omit<ViewProps, "children"> {
  */
 export function FramedBlock({
   header,
+  lead,
   question,
   consequence,
   children,
@@ -100,9 +104,12 @@ export function FramedBlock({
           </Text>
         </View>
       ) : null}
-      <Text style={[styles.question, header ? undefined : styles.questionNoHeader]}>
-        {question}
-      </Text>
+      {lead ? <View style={styles.lead}>{lead}</View> : null}
+      {question ? (
+        <Text style={[styles.question, header || lead ? undefined : styles.questionNoHeader]}>
+          {question}
+        </Text>
+      ) : null}
       {consequence ? <Text style={styles.consequence}>{consequence}</Text> : null}
       {answered ? (
         <Animated.View
@@ -163,6 +170,10 @@ function createFramedBlockStyles() {
       flexShrink: 1,
       color: tokens.mutedForeground,
       ...nativeTextStyle("blockHeader"),
+    },
+    lead: {
+      paddingHorizontal: 14,
+      paddingTop: 12,
     },
     question: {
       paddingHorizontal: 14,

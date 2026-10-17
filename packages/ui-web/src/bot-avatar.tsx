@@ -1,11 +1,11 @@
 import {
-  ACTIVE_RUN_STATUSES,
   avatarIdentitySeed,
   avatarInk,
   BotEngine,
   type BotFrame,
   EXPRESSION_BY_ID,
   GLANCE_MORPH,
+  isWorkingStatus,
   mixHex,
   NOTIF_BLUE,
   nextWorkingGlance,
@@ -39,7 +39,7 @@ export const BotAvatar = memo(function BotAvatar({
   shapeSeed,
   className,
 }: BotAvatarProps) {
-  const isWorking = ACTIVE_RUN_STATUSES.some((activeStatus) => activeStatus === status);
+  const isWorking = isWorkingStatus(status);
   const gradId = `spin-grad-${useId().replace(/[^a-zA-Z0-9-_]/g, "")}`;
   const preferredVariant = useAvatarStyle();
   if ((variant ?? preferredVariant) === "organic") {

@@ -23,7 +23,9 @@ import {
   type MessageReaction,
 } from "@rakazo/contracts";
 import {
+  ACTIVE_RUN_STATUSES,
   abortableDelay,
+  answersPendingQuestion,
   appendedEntries,
   attachmentsForThread,
   botWordsOf,
@@ -36,6 +38,7 @@ import {
   isAsideOnlyMessage,
   isRunTerminalEvent,
   isSecretAskBlock,
+  isWorkingStatus,
   latestActivityLabel,
   linkMentionsKey,
   linkMentionsOf,
@@ -100,12 +103,7 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import { AppConnectCard } from "../components/AppConnectCard";
-import {
-  AskActions,
-  CapsuleButton,
-  QuickReplyCapsules,
-  TERTIARY_CAPSULE_HEIGHT,
-} from "../components/AskActions";
+import { AskActions, CapsuleButton } from "../components/AskActions";
 import { AgentSteps } from "../components/agent-steps";
 import { AnimatedMessageBubble, MessageArrival } from "../components/animated-message-bubble";
 import { BotAvatar } from "../components/bot-avatar";
@@ -130,6 +128,7 @@ import { MessageActionsSheet } from "../components/message-actions-sheet";
 import { MessageRow } from "../components/message-row";
 import { NativeSymbol } from "../components/native-symbol";
 import { PreviewSheet } from "../components/preview-sheet";
+import { QuestionCard } from "../components/question-card";
 import { ReactionPill } from "../components/reaction-pill";
 import { RoutineCardPreview } from "../components/routine-card-preview";
 import { ShimmerText } from "../components/shimmer-text";
@@ -165,6 +164,7 @@ import {
 } from "../lib/api";
 import { mobileTokens, resolveMobileAppearance } from "../lib/appearance";
 import { type MobileArtifactTarget, openMobileArtifact } from "../lib/artifact-open";
+import { composerName, questionCardOf } from "../lib/ask-card";
 import { presentAttachSheet } from "../lib/attach-sheet";
 import { failureReason } from "../lib/bot-activity";
 import {
@@ -330,14 +330,8 @@ function isAsideItem(item: ThreadItem, showSteps: boolean): boolean {
   }
 }
 
-function isWorkingStatus(status: string | undefined): boolean {
-  return (
-    status === "queued" ||
-    status === "leased" ||
-    status === "running" ||
-    status === "waiting_input" ||
-    status === "waiting_takeover"
-  );
+function isActiveStatus(status: string | undefined): boolean {
+  return ACTIVE_RUN_STATUSES.some((active) => active === status);
 }
 
 type NotificationRouteState = "loading" | "ready" | "failed";
@@ -593,12 +587,13 @@ function Thread() {
   const hasLiveProgress = liveItems.length > 0;
   // One bot only: an activity line names one bot's tool, so it would mislabel a group.
   const activityLabel = latestActivityLabel(liveItems);
-  const busyRuns = useMemo(
-    () =>
-      (snap?.activeRuns ?? (snap?.run ? [snap.run] : [])).filter((run) =>
-        isWorkingStatus(run.status),
-      ),
+  const threadRuns = useMemo(
+    () => snap?.activeRuns ?? (snap?.run ? [snap.run] : []),
     [snap?.activeRuns, snap?.run],
+  );
+  const busyRuns = useMemo(
+    () => threadRuns.filter((run) => isWorkingStatus(run.status)),
+    [threadRuns],
   );
   const workingRuns = useMemo(
     () => busyRuns.filter((run) => run.id !== waiting?.runId),
@@ -616,7 +611,17 @@ function Thread() {
     });
   }, [inGroup, snap?.members, workingRuns]);
   const botWorking = isWorkingStatus(currentBotStatus) && snap?.run?.id !== waiting?.runId;
-  const working = inGroup ? workingGroupBots.length > 0 : botWorking;
+  // Stop follows the run, as on web: it stays while a bot waits on the person.
+  const stoppable = inGroup
+    ? threadRuns.some((run) => isActiveStatus(run.status))
+    : isActiveStatus(currentBotStatus);
+  // A send without a mention goes to the bot, or to a group's first member.
+  const sendsTo = inGroup ? snap?.members?.[0]?.botId : botId;
+  const answerName =
+    sendsTo && answersPendingQuestion(view, sendsTo, threadRuns)
+      ? (mentionBots.find((bot) => bot.id === sendsTo)?.name ??
+        snap?.members?.find((member) => member.botId === sendsTo)?.name)
+      : undefined;
 
   useEffect(() => {
     void rpc<AgentSkillCatalogEntry[]>("agentSkills/list")
@@ -1583,7 +1588,8 @@ function Thread() {
         }
         throw error;
       }
-      if (isCurrentTarget(targetBotId, targetGroupId)) await refresh();
+      // The answer is accepted: a failed reload must not read as a failed answer.
+      if (isCurrentTarget(targetBotId, targetGroupId)) await refresh().catch(() => undefined);
     },
     [botId, groupId],
   );
@@ -2014,17 +2020,6 @@ function Thread() {
               bots={mentionBots}
               members={snap?.members}
             />
-          ) : null}
-          {item.id === waiting?.itemId ? (
-            <Text
-              style={{
-                marginBottom: 4,
-                color: tokens.mutedForeground,
-                ...nativeTextStyle("label"),
-              }}
-            >
-              {t("Needs input")}
-            </Text>
           ) : null}
           {item.kind === "message" ? (
             renderMessage(row, item, isNew, options?.enableJump)
@@ -2836,7 +2831,7 @@ function Thread() {
                         />
                       </ComposerButton>
                     ) : null}
-                    {working ? (
+                    {stoppable ? (
                       <ComposerButton
                         label={t("Stop")}
                         haptic="commit"
@@ -2872,7 +2867,7 @@ function Thread() {
               dictationConfirm={
                 dictation.dictating ? (
                   <>
-                    {working ? (
+                    {stoppable ? (
                       <ComposerButton
                         label={t("Stop")}
                         haptic="commit"
@@ -2917,9 +2912,7 @@ function Thread() {
                   ref={textInputRef}
                   value={draft}
                   onChangeText={updateDraft}
-                  accessibilityLabel={
-                    displayName ? t("Message {name}", { name: displayName }) : t("Message")
-                  }
+                  accessibilityLabel={composerName(t, displayName, answerName)}
                   onKeyPress={(event) => {
                     if (
                       event.nativeEvent.key === "Backspace" &&
@@ -2932,8 +2925,8 @@ function Thread() {
                   placeholder={
                     selectedSkill || selectedMentions.length
                       ? undefined
-                      : displayName
-                        ? t("Message {name}", { name: displayName })
+                      : displayName || answerName
+                        ? composerName(t, displayName, answerName)
                         : t("Message…")
                   }
                   placeholderTextColor={tokens.mutedForeground}
@@ -3355,49 +3348,32 @@ const MessageBubble = memo(function MessageBubble({
     (block): block is Extract<MessageBlock, { kind: "app_connect" }> =>
       block.kind === "app_connect",
   );
-  const questionsAsk = message.blocks.find(
+  const questionCard = questionCardOf(message.blocks);
+  const secretAsk = message.blocks.find(
     (block): block is Extract<MessageBlock, { kind: "ask" }> =>
-      block.kind === "ask" && Boolean(block.questions?.length),
+      block.kind === "ask" && isSecretAskBlock(block),
   );
-  if (questionsAsk) {
+  if (questionCard || secretAsk) {
     return (
       <View style={{ gap: 8, width: "100%" }}>
-        <MultiQuestionAskBlock
-          ask={questionsAsk}
-          actionProps={actionProps}
-          canAnswer={canAnswer}
-          onAnswer={(answer) => onAnswer(message, answer)}
-          messageId={message.id}
-        />
-        {appConnectBlocks.map((block, index) => (
-          <AppConnectCard
-            key={`${block.provider}-${index}`}
-            botId={cardBotId}
-            block={block}
-            accessibilityActions={actionProps.accessibilityActions}
-            onAccessibilityAction={actionProps.onAccessibilityAction}
+        {questionCard ? (
+          <QuestionCard
+            key={message.id}
+            block={questionCard.block}
+            form={questionCard.form}
+            messageId={message.id}
+            canAnswer={canAnswer}
+            onAnswer={(answer) => onAnswer(message, answer)}
+            questionProps={actionProps}
           />
-        ))}
-        {metaLines.length > 0 ? <BubbleMeta lines={metaLines} standalone /> : null}
-      </View>
-    );
-  }
-  const ask = message.blocks.find(
-    (block): block is Extract<MessageBlock, { kind: "ask" }> =>
-      block.kind === "ask" &&
-      !isApprovalAskBlock(block) &&
-      !block.actions?.length &&
-      !block.questions?.length,
-  );
-  if (ask) {
-    return (
-      <View style={{ gap: 8, width: "100%" }}>
-        <AskBlock
-          ask={ask}
-          actionProps={actionProps}
-          canAnswer={canAnswer}
-          onAnswer={(answer) => onAnswer(message, answer)}
-        />
+        ) : secretAsk ? (
+          <SecretAskBlock
+            ask={secretAsk}
+            actionProps={actionProps}
+            canAnswer={canAnswer}
+            onAnswer={(answer) => onAnswer(message, answer)}
+          />
+        ) : null}
         {appConnectBlocks.map((block, index) => (
           <AppConnectCard
             key={`${block.provider}-${index}`}
@@ -3789,12 +3765,10 @@ function ApprovalCard({
       consequence={routineCard ? undefined : block.detail}
       answered={answeredLine}
       actions={
-        answeredLine === undefined ? (
+        answeredLine === undefined && approval ? (
           <AskActions
             actions={block.actions ?? []}
-            approval={approval}
             consequential={!routineCard}
-            allowFreeText={!approval}
             accessibilityActions={actionProps.accessibilityActions}
             onAccessibilityAction={actionProps.onAccessibilityAction}
             onAnswer={(answer) => onAnswer(answer)}
@@ -4786,7 +4760,7 @@ function RoutineBubble({
   );
 }
 
-function AskBlock({
+function SecretAskBlock({
   ask,
   canAnswer,
   onAnswer,
@@ -4802,54 +4776,47 @@ function AskBlock({
   const [answer, setAnswer] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const answered = ask.status === "answered";
-  const secretInput = isSecretAskBlock(ask);
   const secretLabel =
     ask.purpose === "password"
       ? t("Password")
       : ask.purpose === "api_key"
         ? t("API key")
         : t("Code");
-  const submitLabel = secretInput ? t("Save") : t("Send answer");
-  const submittingLabel = secretInput ? t("Saving…") : t("Sending…");
 
   async function submit() {
-    if (submitting) return;
-    if (secretInput ? answer.length === 0 : !answer.trim()) return;
-    const submitValue = secretInput ? answer : answer.trim();
+    if (submitting || answer.length === 0) return;
+    const submitValue = answer;
     setSubmitting(true);
     setError(null);
-    if (secretInput) setAnswer("");
+    setAnswer("");
     try {
       await onAnswer(submitValue);
-    } catch (cause) {
-      setError(!secretInput && cause instanceof Error ? cause.message : t("Could not send answer"));
+    } catch {
+      setError(t("Could not send answer"));
     } finally {
       setSubmitting(false);
     }
   }
 
-  const answeredLine = answered
-    ? secretInput
+  const answeredLine =
+    ask.status === "answered"
       ? t("Saved")
-      : t("Answered: {answer}", { answer: ask.answer ?? t("Done") })
-    : !canAnswer
-      ? t("Waiting for this bot’s response.")
-      : undefined;
-  const disabled = (secretInput ? answer.length === 0 : !answer.trim()) || submitting;
+      : !canAnswer
+        ? t("Waiting for this bot’s response.")
+        : undefined;
 
   return (
     <FramedBlock
       question={<Text {...actionProps}>{ask.text}</Text>}
-      consequence={secretInput ? ask.credential?.origin : ask.detail}
+      consequence={ask.credential?.origin}
       answered={answeredLine}
       actions={
         answeredLine === undefined ? (
           <CapsuleButton
             kind="primary"
             height={sizes.mobileStack}
-            label={submitting ? submittingLabel : submitLabel}
-            disabled={disabled}
+            label={submitting ? t("Saving…") : t("Save")}
+            disabled={answer.length === 0 || submitting}
             onPress={() => void submit()}
           />
         ) : undefined
@@ -4858,15 +4825,15 @@ function AskBlock({
       {answeredLine === undefined ? (
         <View style={{ gap: 10 }}>
           <TextInput
-            accessibilityLabel={secretInput ? secretLabel : t("Answer")}
+            accessibilityLabel={secretLabel}
             value={answer}
             onChangeText={setAnswer}
-            placeholder={secretInput ? secretLabel : t("Type your answer")}
+            placeholder={secretLabel}
             placeholderTextColor={tokens.mutedForeground}
-            secureTextEntry={secretInput}
+            secureTextEntry
             autoComplete="off"
-            autoCorrect={secretInput ? false : undefined}
-            autoCapitalize={secretInput ? "none" : "sentences"}
+            autoCorrect={false}
+            autoCapitalize="none"
             editable={!submitting}
             onSubmitEditing={() => void submit()}
             style={{
@@ -4881,304 +4848,6 @@ function AskBlock({
               ...nativeTextStyle("body"),
             }}
           />
-          {error ? (
-            <Text style={{ color: tokens.destructive, ...nativeTextStyle("meta") }}>{error}</Text>
-          ) : null}
-        </View>
-      ) : null}
-    </FramedBlock>
-  );
-}
-
-type MobileLocalAnswer = {
-  selected: string[];
-  other: string;
-  otherOpen: boolean;
-  skipped: boolean;
-};
-
-function mobileAnswered(a: MobileLocalAnswer): boolean {
-  return a.selected.length > 0 || a.other.trim().length > 0;
-}
-
-type MobileAskDraft = { answers: Record<string, MobileLocalAnswer>; index: number };
-// Keep an in-progress multi-question draft while the card unmounts (leaving and returning to the
-// thread), keyed by the ask message id, until it is submitted.
-const mobileAskDrafts = new Map<string, MobileAskDraft>();
-
-function MultiQuestionAskBlock({
-  ask,
-  canAnswer,
-  onAnswer,
-  actionProps,
-  messageId,
-}: {
-  ask: Extract<MobileMessage["blocks"][number], { kind: "ask" }>;
-  canAnswer: boolean;
-  onAnswer: (answer: string) => Promise<void>;
-  actionProps: MessageActionProps;
-  messageId: string;
-}) {
-  const tokens = useMobileTokens();
-  const { t } = useI18n();
-  const questions = ask.questions ?? [];
-  const [index, setIndex] = useState(() => mobileAskDrafts.get(messageId)?.index ?? 0);
-  const [answers, setAnswers] = useState<Record<string, MobileLocalAnswer>>(
-    () => mobileAskDrafts.get(messageId)?.answers ?? {},
-  );
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    mobileAskDrafts.set(messageId, { answers, index });
-  }, [messageId, answers, index]);
-
-  const total = questions.length;
-  const current = questions[index]!;
-  const isLast = index === total - 1;
-  const answered = ask.status === "answered";
-  const get = (id: string): MobileLocalAnswer =>
-    answers[id] ?? { selected: [], other: "", otherOpen: false, skipped: false };
-
-  function update(id: string, patch: Partial<MobileLocalAnswer>) {
-    setAnswers((prev) => ({
-      ...prev,
-      [id]: {
-        ...(prev[id] ?? { selected: [], other: "", otherOpen: false, skipped: false }),
-        ...patch,
-      },
-    }));
-  }
-
-  function toggleOption(optionId: string) {
-    const state = get(current.id);
-    if (current.multiSelect) {
-      const selected = state.selected.includes(optionId)
-        ? state.selected.filter((id) => id !== optionId)
-        : [...state.selected, optionId];
-      update(current.id, { selected, skipped: false });
-    } else {
-      const selected = state.selected[0] === optionId ? [] : [optionId];
-      update(current.id, { selected, other: "", skipped: false });
-    }
-  }
-
-  const requiredSatisfied = questions.every(
-    (question) => question.required === false || mobileAnswered(get(question.id)),
-  );
-
-  async function submit() {
-    if (submitting || !requiredSatisfied) return;
-    const payload: Record<string, { selected?: string[]; other?: string; skipped?: boolean }> = {};
-    for (const question of questions) {
-      const state = get(question.id);
-      const other = state.other.trim();
-      if (mobileAnswered(state)) {
-        payload[question.id] = {
-          ...(state.selected.length ? { selected: state.selected } : {}),
-          ...(other ? { other } : {}),
-        };
-      } else {
-        payload[question.id] = { skipped: true };
-      }
-    }
-    setSubmitting(true);
-    setError(null);
-    try {
-      await onAnswer(JSON.stringify({ answers: payload }));
-      mobileAskDrafts.delete(messageId);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t("Could not submit these answers"));
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  const progressRow = (
-    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-      <View style={{ flexDirection: "row", gap: 6 }}>
-        {questions.map((question, dotIndex) => {
-          const done = answered || mobileAnswered(get(question.id));
-          const active = !answered && dotIndex === index;
-          return (
-            <View
-              key={question.id}
-              style={{
-                height: 6,
-                width: active ? 22 : 6,
-                borderRadius: 3,
-                backgroundColor: active
-                  ? tokens.foreground
-                  : done
-                    ? tokens.success
-                    : tokens.mutedForeground,
-                opacity: active ? 1 : done ? 1 : 0.4,
-              }}
-            />
-          );
-        })}
-      </View>
-      {!answered ? (
-        <Text
-          style={{ color: tokens.mutedForeground, ...nativeTextStyle("label", { weight: 600 }) }}
-        >
-          {index + 1}/{total}
-        </Text>
-      ) : null}
-    </View>
-  );
-
-  // Once settled the progress dots have nothing left to track, and a single
-  // question is already the card's own question line: only the answer stays.
-  // Mirrors `apps/web/src/components/AskCard.tsx`.
-  const answerValue = (question: (typeof questions)[number]) => {
-    const stored = ask.answers?.[question.id];
-    const labels = (stored?.selected ?? []).map(
-      (id) => question.options?.find((option) => option.id === id)?.label ?? id,
-    );
-    if (stored?.other) labels.push(`${t("Other")}: ${stored.other}`);
-    return stored?.skipped && labels.length === 0 ? t("Skipped") : labels.join(", ");
-  };
-  const hasStoredAnswers = Boolean(ask.answers && Object.keys(ask.answers).length > 0);
-  const answeredContent = answered ? (
-    total === 1 ? (
-      hasStoredAnswers ? (
-        <Text style={{ color: tokens.foreground, ...nativeTextStyle("body") }}>
-          {answerValue(current) || t("Answered")}
-        </Text>
-      ) : (
-        <Text style={{ color: tokens.mutedForeground, ...nativeTextStyle("meta") }}>
-          {t("Answered")}
-        </Text>
-      )
-    ) : (
-      <View style={{ gap: 10 }}>
-        {questions.map((question, qIndex) => (
-          <View key={question.id}>
-            <Text style={{ color: tokens.mutedForeground, ...nativeTextStyle("meta") }}>
-              {qIndex + 1}. {question.question}
-            </Text>
-            {hasStoredAnswers ? (
-              <Text style={{ color: tokens.foreground, ...nativeTextStyle("body") }}>
-                {answerValue(question) || t("Answered")}
-              </Text>
-            ) : null}
-          </View>
-        ))}
-      </View>
-    )
-  ) : !canAnswer ? (
-    <Text style={{ color: tokens.mutedForeground, ...nativeTextStyle("meta") }}>
-      {t("No longer active")}
-    </Text>
-  ) : undefined;
-
-  const optionEntries = current.options ?? [];
-  const withOther =
-    optionEntries.length && current.multiSelect
-      ? [...optionEntries, { id: "__other__", label: t("Other…") }]
-      : optionEntries;
-  const selectedIds = [
-    ...get(current.id).selected,
-    ...(get(current.id).otherOpen ? ["__other__"] : []),
-  ];
-  const showOtherField =
-    !current.options?.length || !current.multiSelect || get(current.id).otherOpen;
-
-  return (
-    <FramedBlock
-      question={<Text {...actionProps}>{current.question}</Text>}
-      answered={answeredContent}
-      actions={
-        answeredContent === undefined ? (
-          <View style={{ gap: 8 }}>
-            {index > 0 ? (
-              <CapsuleButton
-                kind="tertiary"
-                height={TERTIARY_CAPSULE_HEIGHT}
-                label={t("Back")}
-                disabled={submitting}
-                onPress={() => setIndex(index - 1)}
-              />
-            ) : null}
-            {current.required === false ? (
-              <CapsuleButton
-                kind="tertiary"
-                height={TERTIARY_CAPSULE_HEIGHT}
-                label={t("Skip")}
-                disabled={submitting}
-                onPress={() => {
-                  update(current.id, { selected: [], other: "", skipped: true });
-                  if (!isLast) setIndex(index + 1);
-                }}
-              />
-            ) : null}
-            <CapsuleButton
-              kind="primary"
-              height={sizes.mobileStack}
-              label={isLast ? (submitting ? t("Sending…") : t("Send answers")) : t("Next")}
-              disabled={submitting || (isLast && !requiredSatisfied)}
-              onPress={() => (isLast ? void submit() : setIndex(index + 1))}
-            />
-          </View>
-        ) : undefined
-      }
-    >
-      {answeredContent === undefined ? (
-        <View style={{ gap: 10 }}>
-          {progressRow}
-          <QuickReplyCapsules
-            options={withOther}
-            selectedIds={selectedIds}
-            disabled={submitting}
-            multiSelect={current.multiSelect}
-            onSelect={(id) => {
-              if (id === "__other__") {
-                const open = !get(current.id).otherOpen;
-                update(current.id, {
-                  otherOpen: open,
-                  ...(open ? {} : { other: "" }),
-                  skipped: false,
-                });
-              } else {
-                toggleOption(id);
-              }
-            }}
-          />
-          {current.options?.length && !current.multiSelect ? (
-            <Text style={{ color: tokens.mutedForeground, ...nativeTextStyle("meta") }}>
-              {t("Or type your own answer")}
-            </Text>
-          ) : null}
-          {showOtherField ? (
-            <TextInput
-              value={get(current.id).other}
-              onChangeText={(value) =>
-                update(current.id, {
-                  other: value,
-                  ...(current.multiSelect || !value.trim() ? {} : { selected: [] }),
-                  skipped: false,
-                })
-              }
-              editable={!submitting}
-              autoFocus={current.multiSelect && get(current.id).otherOpen}
-              placeholder={
-                current.options?.length ? t("Type a different answer") : t("Type your answer")
-              }
-              placeholderTextColor={tokens.mutedForeground}
-              multiline
-              style={{
-                borderRadius: radii.card,
-                borderWidth: 1,
-                borderColor: tokens.outline,
-                backgroundColor: tokens.surface,
-                paddingHorizontal: 14,
-                paddingVertical: 10,
-                color: tokens.foreground,
-                minHeight: 44,
-                ...nativeTextStyle("body"),
-              }}
-            />
-          ) : null}
           {error ? (
             <Text style={{ color: tokens.destructive, ...nativeTextStyle("meta") }}>{error}</Text>
           ) : null}

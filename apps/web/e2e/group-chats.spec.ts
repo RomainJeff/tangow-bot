@@ -194,10 +194,10 @@ test("create group from + and see two bots in one transcript", async ({ page }, 
     });
   }
   await expect(cityAsk).toBeVisible({ timeout: 15_000 });
-  await page.getByRole("button", { name: "Edit first" }).click();
-  await page.getByRole("textbox", { name: "Answer" }).fill("Paris");
-  await page.getByRole("button", { name: "Send answer" }).click();
-  await expect(page.getByText("Answered: Paris", { exact: true })).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("textbox", { name: "Answer", exact: true }).fill("Paris");
+  await page.getByRole("textbox", { name: "Answer", exact: true }).press("Enter");
+  const parisAnswer = page.getByRole("group", { name: "Your answer: Paris" });
+  await expect(parisAnswer).toBeVisible({ timeout: 30_000 });
 
   // Only bot replies carry Reply; your own messages have no hover pill.
   const replyButton = researcherRow.getByRole("button", { name: "Reply", exact: true });
@@ -231,12 +231,12 @@ test("create group from + and see two bots in one transcript", async ({ page }, 
   await sidebar.getByRole("button", { name: /^Review team/ }).click();
   await reviewSnapshotIntercepted;
   await expect(page).toHaveURL(new RegExp(`/app/g/${reviewGroup.id}$`));
-  await expect(page.getByTestId("transcript")).not.toContainText("Answered: Paris");
+  await expect(parisAnswer).toHaveCount(0);
   releaseReviewSnapshot();
   await expect(page.getByRole("combobox", { name: "Message Review team" })).toBeVisible();
   await page.unroute("**/rpc/threads/get");
   await sidebar.getByRole("button", { name: /^Draft team/ }).click();
-  await expect(page.getByText("Answered: Paris", { exact: true })).toBeVisible();
+  await expect(parisAnswer).toBeVisible();
 
   await composer.fill(
     "@Researcher write path notes/group-preview.md and attach it to the thread says # Group artifact",

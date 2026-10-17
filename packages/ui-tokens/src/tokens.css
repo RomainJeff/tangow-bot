@@ -40,6 +40,9 @@
   --overlay: rgba(4, 4, 5, 0.72);
   --scrollbar: #1e2026;
   --scrollbar-hover: #2e313a;
+  --option-ring: #3b3b3d;
+  --option-ring-hover: #4e4e4f;
+  --pressed: #333335;
   --radius: 0.75rem;
   --elevation-row: none;
   --elevation-card: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 12px 30px -16px rgba(0, 0, 0, 0.8);
@@ -89,6 +92,9 @@
   --overlay: rgba(20, 20, 22, 0.45);
   --scrollbar: #c8c8c4;
   --scrollbar-hover: #a8a8a4;
+  --option-ring: #eaeaea;
+  --option-ring-hover: #d9d9d9;
+  --pressed: #ededeb;
   --radius: 0.75rem;
   --elevation-row: 0 1px 2px rgba(17, 17, 20, 0.06);
   --elevation-card: 0 0 0 1px rgba(17, 17, 20, 0.08), 0 12px 30px -16px rgba(17, 17, 20, 0.4);
@@ -193,6 +199,7 @@
   --size-capsule: 36px;
   --size-mobile-stack: 44px;
   --size-call-button: 52px;
+  --size-selected-ring: 1.5px;
   --size-composer-attachment-thumb: 64px;
   --size-composer-attachment-tile: 200px;
   --size-composer-remove: 22px;
@@ -210,5 +217,9 @@
   --duration-pivot: 320ms;
   --duration-morph: 260ms;
   --duration-flow: 2600ms;
+  --duration-fill: 80ms;
+  --duration-flight: 520ms;
+  --duration-step-out: 100ms;
+  --duration-step-in: 160ms;
   --motion-ease: cubic-bezier(0.32, 0.72, 0, 1);
 }

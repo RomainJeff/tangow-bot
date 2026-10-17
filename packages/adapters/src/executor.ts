@@ -4640,8 +4640,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 ...(question.options
                   ? {
                       options: question.options.map((option) => ({
-                        id: option.id,
+                        ...option,
                         label: redactSecrets(option.label, runSecrets),
+                        ...(option.description
+                          ? { description: redactSecrets(option.description, runSecrets) }
+                          : {}),
                       })),
                     }
                   : {}),

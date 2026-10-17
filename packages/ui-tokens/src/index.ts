@@ -50,6 +50,11 @@ export type ColorTokens = {
   overlay: string;
   scrollbar: string;
   scrollbarHover: string;
+  /** A question card's option tile at rest, and under the pointer. */
+  optionRing: string;
+  optionRingHover: string;
+  /** The fill of a control being pressed. */
+  pressed: string;
 };
 
 // Alpha overlays from the design are flattened on `background` so every slot
@@ -92,6 +97,9 @@ export const darkTokens = {
   overlay: "rgba(4, 4, 5, 0.72)",
   scrollbar: "#1E2026",
   scrollbarHover: "#2E313A",
+  optionRing: "#3B3B3D",
+  optionRingHover: "#4E4E4F",
+  pressed: "#333335",
 } as const satisfies ColorTokens;
 
 export const lightTokens = {
@@ -132,6 +140,9 @@ export const lightTokens = {
   overlay: "rgba(20, 20, 22, 0.45)",
   scrollbar: "#C8C8C4",
   scrollbarHover: "#A8A8A4",
+  optionRing: "#EAEAEA",
+  optionRingHover: "#D9D9D9",
+  pressed: "#EDEDEB",
 } as const satisfies ColorTokens;
 
 /** Dark palette. Prefer `tokensForAppearance` when theme-aware. */
@@ -266,6 +277,15 @@ export type MotionTokens = {
   morph: number;
   /** One lap of the Stop contour while a reply streams. */
   flow: number;
+  /** A chosen answer filling with the user's bubble colour before it settles. */
+  fill: number;
+  /** The answer flying into its bubble while the card folds, on `spring`, until it rests. */
+  flight: number;
+  /** One spring for that movement: `response` in ms, `bounce` 0 (none) to 1. */
+  spring: { response: number; bounce: number };
+  /** A stack's answered question fading out, then the next one fading in while the card springs to its height. */
+  stepOut: number;
+  stepIn: number;
 };
 
 export const motion: MotionTokens = {
@@ -278,7 +298,32 @@ export const motion: MotionTokens = {
   pivot: 320,
   morph: 260,
   flow: 2600,
+  fill: 80,
+  flight: 520,
+  spring: { response: 320, bounce: 0.1 },
+  stepOut: 100,
+  stepIn: 160,
 };
+
+/** How far `motion.spring` has gone, from 0 to 1 with its small overshoot, `ms` after it starts. */
+export function springAt(ms: number): number {
+  const { response, bounce } = motion.spring;
+  const omega = (2 * Math.PI * 1000) / response;
+  const damping = 1 - bounce;
+  const damped = omega * Math.sqrt(1 - damping * damping);
+  const t = ms / 1000;
+  const decay = Math.exp(-damping * omega * t);
+  return 1 - decay * (Math.cos(damped * t) + ((damping * omega) / damped) * Math.sin(damped * t));
+}
+
+/** `motion.spring` sampled over `motion.flight` as a CSS `linear()` easing. */
+export const springEasing = (() => {
+  const steps = 52;
+  const points = Array.from({ length: steps }, (_, step) =>
+    springAt(motion.flight * (step / steps)).toFixed(4),
+  );
+  return `linear(${[...points, "1"].join(", ")})`;
+})();
 
 /** Sizes — avatars and round controls, in px. Consumed via primitive `size` props. */
 export const sizes = {
@@ -302,6 +347,8 @@ export const sizes = {
   capsule: 36,
   mobileStack: 44,
   callButton: 52,
+  /** The ring of a chosen option, or of an answer field being typed in. */
+  selectedRing: 1.5,
   /** The composer's attachment thumbnail / file-tile height (both devices). */
   composerAttachmentThumb: 64,
   /** Max width of a composer file tile before its name truncates. */
@@ -485,10 +532,9 @@ function renderSizeLines(): string[] {
 }
 
 function renderMotionLines(): string[] {
-  const durationKeys = (Object.keys(motion) as (keyof MotionTokens)[]).filter(
-    (key): key is Exclude<keyof MotionTokens, "ease"> => key !== "ease",
+  const lines = Object.entries(motion).flatMap(([key, value]) =>
+    typeof value === "number" ? [`  --duration-${kebabCase(key)}: ${value}ms;`] : [],
   );
-  const lines = durationKeys.map((key) => `  --duration-${kebabCase(key)}: ${motion[key]}ms;`);
   lines.push(`  --motion-ease: ${motion.ease};`);
   return lines;
 }

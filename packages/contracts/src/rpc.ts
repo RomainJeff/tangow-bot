@@ -79,7 +79,7 @@ import {
   VoiceInfoSchema,
   VoiceStatusSchema,
 } from "./domain.js";
-import { ProductEventSchema } from "./events.js";
+import { ASK_ANSWER_MAX_LENGTH, ProductEventSchema } from "./events.js";
 import { Id, IsoDate } from "./ids.js";
 import {
   IntegrationProviderConfigSchema,
@@ -364,7 +364,11 @@ export const appContract = {
         threadTarget.safeExtend({
           runId: Id,
           messageId: Id,
-          answer: z.string().min(1),
+          /** Room for a card's JSON answers, each typed text capped by `ASK_ANSWER_MAX_LENGTH`. */
+          answer: z
+            .string()
+            .min(1)
+            .max(16 * ASK_ANSWER_MAX_LENGTH),
           /**
            * Changes to a Create bot card, only with "allow". The bounds sit above the product
            * limits so an enormous body is refused before any lock; the limits themselves are
