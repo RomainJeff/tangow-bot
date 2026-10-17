@@ -6,12 +6,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-### 2026-10-17
-
-#### Fixed
-
-- On web and desktop, tapping an answer or a button in the conversation no longer stops it from following new messages, so the bot's working line and reply stay in view above the composer.
-
 ### 2026-10-16
 
 #### Changed
