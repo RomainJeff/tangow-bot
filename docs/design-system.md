@@ -67,7 +67,6 @@ colours. An `rgba` in a slot is a bug.
 | `sidebarForeground` | `#111114` | `#F2F2F0` | |
 | `sidebarAccent` | `#FFFFFF` | `#1D1D1F` [7%] | selected and hovered row |
 | `sidebarAccentForeground` | `#111114` | `#F2F2F0` | |
-| `link` | `#2563EB` | `#86B7FF` | |
 | `destructive` | `#DC2626` | `#EF4444` | |
 | `destructiveForeground` | `#FFFFFF` | `#FFFFFF` | |
 | `success` | `#228B3B` | `#4ECB71` | |
@@ -472,6 +471,10 @@ surface, their hairlines running edge to edge.
 
 One message is one bubble: never split a message by paragraph. Agent steps sit
 above the bubble, unfilled.
+
+A link in a bubble, bot's or person's, is ink: the bubble's text colour, underlined 1 px at
+0.2em, as a 35% veil of that ink in a bot bubble and 45% in the person's, solid on hover
+(web). There is no link colour token.
 
 The native mirror is `apps/mobile/components/bot-bubble.tsx`. It caps its width
 with a number computed from the window: a bubble that fits its content has no

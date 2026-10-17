@@ -4672,7 +4672,7 @@ function MessageText({
           onAccessibilityAction={actionProps.onAccessibilityAction}
         >
           {/* The long press is the row gesture's (AnimatedMessageBubble), not the text's. */}
-          <LinkifiedText>{contentText}</LinkifiedText>
+          <LinkifiedText ink={tokens.chatUserForeground}>{contentText}</LinkifiedText>
         </UserBubble>
       </View>
     );

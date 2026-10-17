@@ -43,7 +43,6 @@ export type ColorTokens = {
   sidebarAccent: string;
   sidebarAccentForeground: string;
   surface: string;
-  link: string;
   success: string;
   warning: string;
   overlay: string;
@@ -85,7 +84,6 @@ export const darkTokens = {
   sidebarAccent: "#1D1D1F",
   sidebarAccentForeground: "#F2F2F0",
   surface: "#161618",
-  link: "#86B7FF",
   success: "#4ECB71",
   warning: "#E9C46A",
   overlay: "rgba(4, 4, 5, 0.72)",
@@ -125,7 +123,6 @@ export const lightTokens = {
   sidebarAccent: "#FFFFFF",
   sidebarAccentForeground: "#111114",
   surface: "#FFFFFF",
-  link: "#2563EB",
   success: "#228B3B",
   warning: "#B7791F",
   overlay: "rgba(20, 20, 22, 0.45)",
