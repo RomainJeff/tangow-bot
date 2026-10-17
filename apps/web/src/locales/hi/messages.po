@@ -125,7 +125,7 @@ msgstr "{botName} का कंप्यूटर"
 msgid "{count} · next {next}"
 msgstr "{count} · अगला {next}"
 
-#: src/components/ask/QuestionCard.tsx:175
+#: src/components/ask/QuestionCard.tsx:214
 msgid "{count} more"
 msgstr ""
 
@@ -490,7 +490,7 @@ msgstr "इस टूल को हमेशा अनुमति दें"
 msgid "Always allowed"
 msgstr "हमेशा अनुमत"
 
-#: src/components/ask/QuestionCard.tsx:238
+#: src/components/ask/QuestionCard.tsx:278
 msgid "Answer"
 msgstr "उत्तर"
 
@@ -2446,7 +2446,7 @@ msgstr "ज्ञान"
 msgid "Language"
 msgstr "भाषा"
 
-#: src/components/ask/QuestionCard.tsx:175
+#: src/components/ask/QuestionCard.tsx:215
 msgid "Last one"
 msgstr ""
 
@@ -2882,8 +2882,8 @@ msgstr "नई स्किल"
 msgid "New space"
 msgstr "नया स्पेस"
 
-#: src/components/ask/QuestionCard.tsx:139
-#: src/components/ask/QuestionCard.tsx:235
+#: src/components/ask/QuestionCard.tsx:175
+#: src/components/ask/QuestionCard.tsx:275
 msgid "Next"
 msgstr ""
 
@@ -3193,7 +3193,7 @@ msgstr "ऑर्गेनिक"
 msgid "Organization API key"
 msgstr "संगठन API कुंजी"
 
-#: src/components/ask/QuestionCard.tsx:238
+#: src/components/ask/QuestionCard.tsx:278
 msgid "Other answer"
 msgstr ""
 
@@ -3203,8 +3203,8 @@ msgstr ""
 msgid "Other model…"
 msgstr "अन्य मॉडल…"
 
-#: src/components/ask/QuestionCard.tsx:239
-#: src/components/ask/QuestionCard.tsx:251
+#: src/components/ask/QuestionCard.tsx:279
+#: src/components/ask/QuestionCard.tsx:291
 msgid "Other…"
 msgstr ""
 
@@ -3793,8 +3793,8 @@ msgstr "{0} चुनें"
 msgid "Select a bot"
 msgstr "एक बॉट चुनें"
 
-#: src/components/ask/QuestionCard.tsx:139
-#: src/components/ask/QuestionCard.tsx:235
+#: src/components/ask/QuestionCard.tsx:175
+#: src/components/ask/QuestionCard.tsx:275
 #: src/pages/shell/composer.tsx:968
 msgid "Send"
 msgstr "भेजें"
@@ -3948,7 +3948,7 @@ msgstr ""
 msgid "Skills"
 msgstr "स्किल्स"
 
-#: src/components/ask/QuestionCard.tsx:134
+#: src/components/ask/QuestionCard.tsx:164
 #: src/components/integrations/IntegrationSetup.tsx:364
 #: src/pages/shell/side-panel.tsx:529
 msgid "Skip"
@@ -3959,7 +3959,7 @@ msgid "Skip or deploy key"
 msgstr "छोड़ें या डिप्लॉय कुंजी दें"
 
 #: src/components/ask/AskSettled.tsx:9
-#: src/components/ask/QuestionCard.tsx:158
+#: src/components/ask/QuestionCard.tsx:187
 msgid "Skipped"
 msgstr ""
 
@@ -4238,7 +4238,7 @@ msgstr "Treg टोकन"
 msgid "Try again"
 msgstr "फिर से कोशिश करें"
 
-#: src/components/ask/QuestionCard.tsx:239
+#: src/components/ask/QuestionCard.tsx:279
 msgid "Type your answer"
 msgstr "अपना उत्तर लिखें"
 

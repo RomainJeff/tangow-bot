@@ -125,7 +125,7 @@ msgstr "Компьютер {botName}"
 msgid "{count} · next {next}"
 msgstr "{count} · следующая {next}"
 
-#: src/components/ask/QuestionCard.tsx:175
+#: src/components/ask/QuestionCard.tsx:214
 msgid "{count} more"
 msgstr ""
 
@@ -490,7 +490,7 @@ msgstr "Всегда разрешать этот инструмент"
 msgid "Always allowed"
 msgstr "Всегда разрешено"
 
-#: src/components/ask/QuestionCard.tsx:238
+#: src/components/ask/QuestionCard.tsx:278
 msgid "Answer"
 msgstr "Ответ"
 
@@ -2446,7 +2446,7 @@ msgstr "Знание"
 msgid "Language"
 msgstr "Язык"
 
-#: src/components/ask/QuestionCard.tsx:175
+#: src/components/ask/QuestionCard.tsx:215
 msgid "Last one"
 msgstr ""
 
@@ -2882,8 +2882,8 @@ msgstr "Новый навык"
 msgid "New space"
 msgstr "Новое пространство"
 
-#: src/components/ask/QuestionCard.tsx:139
-#: src/components/ask/QuestionCard.tsx:235
+#: src/components/ask/QuestionCard.tsx:175
+#: src/components/ask/QuestionCard.tsx:275
 msgid "Next"
 msgstr ""
 
@@ -3193,7 +3193,7 @@ msgstr "Органичный"
 msgid "Organization API key"
 msgstr "Ключ API организации"
 
-#: src/components/ask/QuestionCard.tsx:238
+#: src/components/ask/QuestionCard.tsx:278
 msgid "Other answer"
 msgstr ""
 
@@ -3203,8 +3203,8 @@ msgstr ""
 msgid "Other model…"
 msgstr "Другая модель…"
 
-#: src/components/ask/QuestionCard.tsx:239
-#: src/components/ask/QuestionCard.tsx:251
+#: src/components/ask/QuestionCard.tsx:279
+#: src/components/ask/QuestionCard.tsx:291
 msgid "Other…"
 msgstr ""
 
@@ -3793,8 +3793,8 @@ msgstr ""
 msgid "Select a bot"
 msgstr "Выберите бота"
 
-#: src/components/ask/QuestionCard.tsx:139
-#: src/components/ask/QuestionCard.tsx:235
+#: src/components/ask/QuestionCard.tsx:175
+#: src/components/ask/QuestionCard.tsx:275
 #: src/pages/shell/composer.tsx:968
 msgid "Send"
 msgstr "Отправить"
@@ -3948,7 +3948,7 @@ msgstr ""
 msgid "Skills"
 msgstr "Навыки"
 
-#: src/components/ask/QuestionCard.tsx:134
+#: src/components/ask/QuestionCard.tsx:164
 #: src/components/integrations/IntegrationSetup.tsx:364
 #: src/pages/shell/side-panel.tsx:529
 msgid "Skip"
@@ -3959,7 +3959,7 @@ msgid "Skip or deploy key"
 msgstr "Пропустить или добавить ключ"
 
 #: src/components/ask/AskSettled.tsx:9
-#: src/components/ask/QuestionCard.tsx:158
+#: src/components/ask/QuestionCard.tsx:187
 msgid "Skipped"
 msgstr ""
 
@@ -4238,7 +4238,7 @@ msgstr "Токен Treg"
 msgid "Try again"
 msgstr ""
 
-#: src/components/ask/QuestionCard.tsx:239
+#: src/components/ask/QuestionCard.tsx:279
 msgid "Type your answer"
 msgstr "Введите ответ"
 

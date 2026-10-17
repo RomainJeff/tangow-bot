@@ -4,8 +4,8 @@ import { ChatMarkdown } from "@rakazo/chat-ui/web";
 import { ASK_ANSWER_MAX_LENGTH } from "@rakazo/contracts";
 import type { AskCardBlock, AskForm, OptionId, Presenter } from "@rakazo/core";
 import { motion } from "@rakazo/ui-tokens";
-import { Button, cn, FramedBlock, OptionField, OptionTile } from "@rakazo/ui-web";
-import { ChevronRight, Pencil } from "lucide-react";
+import { Button, cn, FramedBlock, OptionField, OptionTile, StackLine } from "@rakazo/ui-web";
+import { Pencil } from "lucide-react";
 import type { KeyboardEvent, ReactNode } from "react";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { AskSettled } from "./AskSettled";
@@ -184,22 +184,13 @@ export function QuestionCard({
     ) : undefined;
 
   const pile = lines.map((line) => (
-    <button
+    <StackLine
       key={line.questionId}
-      type="button"
-      data-slot="stack-line"
       disabled={busy}
       onClick={() => act.reopen(line.questionId)}
-      className="-mx-2 flex min-h-11 items-center gap-2 rounded-row px-2 py-2.5 text-start text-row-name transition-colors duration-(--duration-hover) ease-quiet focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring enabled:hover:bg-pressed"
-    >
-      <span dir="auto" className="max-w-1/2 shrink-0 truncate text-muted-foreground">
-        {line.label}
-      </span>
-      <span dir="auto" className="min-w-0 flex-1 truncate text-foreground">
-        {line.value.kind === "skipped" ? t`Skipped` : line.value.text}
-      </span>
-      <ChevronRight aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
-    </button>
+      label={line.label}
+      value={line.value.kind === "skipped" ? t`Skipped` : line.value.text}
+    />
   ));
   const alert = view.error ? (
     <p role="alert" className="text-meta text-destructive">

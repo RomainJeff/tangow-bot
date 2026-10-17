@@ -125,7 +125,7 @@ msgstr "{botName}의 컴퓨터"
 msgid "{count} · next {next}"
 msgstr "{count} · 다음 실행 {next}"
 
-#: src/components/ask/QuestionCard.tsx:175
+#: src/components/ask/QuestionCard.tsx:214
 msgid "{count} more"
 msgstr ""
 
@@ -490,7 +490,7 @@ msgstr "이 도구 항상 허용"
 msgid "Always allowed"
 msgstr "항상 허용됨"
 
-#: src/components/ask/QuestionCard.tsx:238
+#: src/components/ask/QuestionCard.tsx:278
 msgid "Answer"
 msgstr "답변"
 
@@ -2446,7 +2446,7 @@ msgstr "지식"
 msgid "Language"
 msgstr "언어"
 
-#: src/components/ask/QuestionCard.tsx:175
+#: src/components/ask/QuestionCard.tsx:215
 msgid "Last one"
 msgstr ""
 
@@ -2882,8 +2882,8 @@ msgstr "새 스킬"
 msgid "New space"
 msgstr "새 스페이스"
 
-#: src/components/ask/QuestionCard.tsx:139
-#: src/components/ask/QuestionCard.tsx:235
+#: src/components/ask/QuestionCard.tsx:175
+#: src/components/ask/QuestionCard.tsx:275
 msgid "Next"
 msgstr ""
 
@@ -3193,7 +3193,7 @@ msgstr "자연스럽게"
 msgid "Organization API key"
 msgstr "조직 API 키"
 
-#: src/components/ask/QuestionCard.tsx:238
+#: src/components/ask/QuestionCard.tsx:278
 msgid "Other answer"
 msgstr ""
 
@@ -3203,8 +3203,8 @@ msgstr ""
 msgid "Other model…"
 msgstr "다른 모델 직접 입력…"
 
-#: src/components/ask/QuestionCard.tsx:239
-#: src/components/ask/QuestionCard.tsx:251
+#: src/components/ask/QuestionCard.tsx:279
+#: src/components/ask/QuestionCard.tsx:291
 msgid "Other…"
 msgstr ""
 
@@ -3793,8 +3793,8 @@ msgstr "{0} 선택"
 msgid "Select a bot"
 msgstr "대화할 Bot을 선택하세요"
 
-#: src/components/ask/QuestionCard.tsx:139
-#: src/components/ask/QuestionCard.tsx:235
+#: src/components/ask/QuestionCard.tsx:175
+#: src/components/ask/QuestionCard.tsx:275
 #: src/pages/shell/composer.tsx:968
 msgid "Send"
 msgstr "보내기"
@@ -3948,7 +3948,7 @@ msgstr ""
 msgid "Skills"
 msgstr "스킬"
 
-#: src/components/ask/QuestionCard.tsx:134
+#: src/components/ask/QuestionCard.tsx:164
 #: src/components/integrations/IntegrationSetup.tsx:364
 #: src/pages/shell/side-panel.tsx:529
 msgid "Skip"
@@ -3959,7 +3959,7 @@ msgid "Skip or deploy key"
 msgstr "건너뛰거나 배포 키"
 
 #: src/components/ask/AskSettled.tsx:9
-#: src/components/ask/QuestionCard.tsx:158
+#: src/components/ask/QuestionCard.tsx:187
 msgid "Skipped"
 msgstr ""
 
@@ -4238,7 +4238,7 @@ msgstr "Treg 토큰"
 msgid "Try again"
 msgstr "다시 시도"
 
-#: src/components/ask/QuestionCard.tsx:239
+#: src/components/ask/QuestionCard.tsx:279
 msgid "Type your answer"
 msgstr "답변을 입력하세요"
 
