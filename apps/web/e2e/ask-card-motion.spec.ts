@@ -316,8 +316,10 @@ test("a stack's Send folds the card while the answers rise into their bubble, in
   const before = frames[first - 1]!;
   const moving = frames.slice(first);
   const final = frames.at(-1)!;
+  // Within the card: at the end of the thread the list's scroll brings the card down instead.
+  const rise = (f: Frame) => f.bubble!.y - f.card.y;
   const series = {
-    bubbleY: [moving.map((f) => f.bubble!.y), moving[0]!.bubble!.y, final.bubble!.y],
+    bubbleY: [moving.map(rise), rise(moving[0]!), rise(final)],
     // The clip that folds the old card exists only while it folds; then the card is its own height.
     cardHeight: [
       moving.map((f) => (f.fold > 0 ? f.fold : f.card.height)),
@@ -328,7 +330,7 @@ test("a stack's Send folds the card while the answers rise into their bubble, in
   } as const;
   const report = {
     fold: before.card.height - final.card.height,
-    rise: moving[0]!.bubble!.y - final.bubble!.y,
+    rise: rise(moving[0]!) - rise(final),
     wobble: Object.fromEntries(
       Object.entries(series).map(([name, [values, from, to]]) => [name, wobble(values, from, to)]),
     ),
@@ -381,4 +383,112 @@ test("a resize mid-flight lands the answer where its bubble now stands, without 
   expect(after.length).toBeGreaterThan(10);
   expect(after.filter((frame) => frame.clone)).toEqual([]);
   expect(after.every((frame) => frame.bubbleVisible)).toBe(true);
+});
+
+type Move = {
+  t: number;
+  /** Each folded line's opacity, by its label. */
+  lines: Record<string, number>;
+  /** The old question fading out over the card. */
+  ghost: number;
+  /** The question (or the recap's actions) fading in. */
+  incoming: number;
+};
+
+/** Records every frame while `act` moves the stack on, for `ms`. */
+async function sampleMove(page: Page, act: () => Promise<void>, ms: number) {
+  await page.evaluate((window_) => {
+    const card = document.querySelector('[data-slot="question-card"]') as HTMLElement;
+    const seen = (element: Element | null | undefined) => {
+      let opacity = 1;
+      for (let node = element ?? null; node && node !== card; node = node.parentElement) {
+        opacity *= Number(getComputedStyle(node).opacity);
+      }
+      return element ? opacity : 0;
+    };
+    const live = (selector: string) =>
+      [...card.querySelectorAll(selector)].filter(
+        (element) => !element.closest("[data-ask-ghost]"),
+      );
+    const frames: Move[] = [];
+    const start = performance.now();
+    (window as unknown as { move: Promise<Move[]> }).move = new Promise((resolve) => {
+      const step = (now: number) => {
+        const incoming = live('[data-slot="stack-step"], [data-slot="framed-block-actions"]');
+        frames.push({
+          t: now - start,
+          lines: Object.fromEntries(
+            live('[data-slot="stack-line"]').map((line) => [
+              line.firstElementChild?.textContent ?? "",
+              seen(line),
+            ]),
+          ),
+          ghost: seen(card.querySelector("[data-ask-ghost]")),
+          incoming: Math.max(0, ...incoming.map(seen)),
+        });
+        if (now - start > window_) resolve(frames);
+        else requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    });
+  }, ms);
+  await act();
+  return page.evaluate(() => (window as unknown as { move: Promise<Move[]> }).move);
+}
+
+/** Where the card's foot stands against the bottom of the thread, in px; positive is hidden. */
+const footBelow = (page: Page) =>
+  page.evaluate(() => {
+    const transcript = document.querySelector('[data-testid="transcript"]') as HTMLElement;
+    const block = document.querySelector('[data-slot="question-card"] [data-slot="framed-block"]');
+    return (
+      (block as Element).getBoundingClientRect().bottom - transcript.getBoundingClientRect().bottom
+    );
+  });
+
+/** The frames of a move from the first one where anything fades, after a tap's hold. */
+const moving = (frames: Move[]) => {
+  const fading = (f: Move) =>
+    f.ghost > 0 || f.incoming < 0.999 || Object.values(f.lines).some((line) => line < 0.999);
+  const first = frames.findIndex(fading);
+  return first < 0 ? [] : frames.slice(first);
+};
+
+test("a stack moves on in place: kept lines stay, the card is never blank, its foot stays in view (CA5, stack)", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 760 });
+  const builtIn = await openCard(page, "ask-motion-advance", 2, fridge);
+  const card = page.locator('[data-slot="question-card"]');
+  const button = (name: string) => card.getByRole("button", { name, exact: true });
+  await expect(builtIn).toBeInViewport();
+
+  const first = moving(await sampleMove(page, () => builtIn.click(), 1300));
+  await expect(card.locator('[data-slot="stack-head"]')).toHaveText("Extras·1 more");
+  const afterFirst = await footBelow(page);
+  await button("Ice maker").click();
+  await expect(button("Next")).toBeVisible();
+  await page.waitForTimeout(700);
+  const afterTick = await footBelow(page);
+  const second = moving(await sampleMove(page, () => button("Next").click(), 700));
+  const third = moving(await sampleMove(page, () => button("Skip").click(), 700));
+  await expect(button("Send")).toBeVisible();
+  await page.waitForTimeout(100);
+  const afterRecap = await footBelow(page);
+  const report = { first, second, third, afterFirst, afterTick, afterRecap };
+  writeFileSync(testInfo.outputPath("stack-moves.json"), JSON.stringify(report));
+
+  for (const frames of [first, second, third]) {
+    expect(frames.length).toBeGreaterThan(10);
+    // Never a blank card: what leaves and what arrives overlap.
+    expect(Math.min(...frames.map((f) => Math.max(f.ghost, f.incoming)))).toBeGreaterThan(0.4);
+  }
+  // The lines already folded never fade, into the recap included.
+  for (const frame of second) expect(frame.lines.Format).toBe(1);
+  for (const frame of third) expect([frame.lines.Format, frame.lines.Extras]).toEqual([1, 1]);
+  // A newly folded line shows once the old question is gone, so its answer never shows twice.
+  const twice = (frames: Move[], label: string) =>
+    frames.filter((f) => f.ghost > 0.01 && (f.lines[label] ?? 0) > 0.01);
+  expect([twice(first, "Format"), twice(second, "Extras")]).toEqual([[], []]);
+  for (const below of [afterFirst, afterTick, afterRecap]) expect(below).toBeLessThanOrEqual(0);
 });

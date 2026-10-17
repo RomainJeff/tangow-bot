@@ -302,21 +302,23 @@ export const motion: MotionTokens = {
   stepIn: 160,
 };
 
-/** `motion.spring` sampled over `motion.flight` as a CSS `linear()` easing. */
-export const springEasing = (() => {
+/** How far `motion.spring` has gone, from 0 to 1 with its small overshoot, `ms` after it starts. */
+export function springAt(ms: number): number {
   const { response, bounce } = motion.spring;
   const omega = (2 * Math.PI * 1000) / response;
   const damping = 1 - bounce;
   const damped = omega * Math.sqrt(1 - damping * damping);
+  const t = ms / 1000;
+  const decay = Math.exp(-damping * omega * t);
+  return 1 - decay * (Math.cos(damped * t) + ((damping * omega) / damped) * Math.sin(damped * t));
+}
+
+/** `motion.spring` sampled over `motion.flight` as a CSS `linear()` easing. */
+export const springEasing = (() => {
   const steps = 52;
-  const points = Array.from({ length: steps }, (_, step) => {
-    const t = (motion.flight / 1000) * (step / steps);
-    const decay = Math.exp(-damping * omega * t);
-    return (
-      1 -
-      decay * (Math.cos(damped * t) + ((damping * omega) / damped) * Math.sin(damped * t))
-    ).toFixed(4);
-  });
+  const points = Array.from({ length: steps }, (_, step) =>
+    springAt(motion.flight * (step / steps)).toFixed(4),
+  );
   return `linear(${[...points, "1"].join(", ")})`;
 })();
 

@@ -10,7 +10,7 @@ import type { KeyboardEvent, ReactNode } from "react";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { AskSettled } from "./AskSettled";
 import type { Departure } from "./flight";
-import { advance, departure, fly } from "./flight";
+import { advance, departure, fly, reveal } from "./flight";
 
 /** Also where `linear()` easing is unknown (Safari before 17.2): `animate()` would throw on the spring. */
 const reducedMotion = () =>
@@ -41,6 +41,7 @@ export function QuestionCard({
   const reopened = useRef(false);
   /** Set when focus was in the card as it moved on, so it follows to the next question. */
   const refocus = useRef(false);
+  const grown = useRef(false);
   /** A chosen answer fills with the user's colour, then flies into its bubble, or fades with reduced motion. */
   const present: Presenter = (change, apply) => {
     if (change.kind === "reopen") {
@@ -73,6 +74,7 @@ export function QuestionCard({
   const error = view.kind === "open" ? view.error : null;
   const settled = view.kind === "settled";
   const shownStep = view.kind === "open" ? (view.step?.question.id ?? "recap") : null;
+  const primary = view.kind === "open" ? view.primary : null;
   /** The chosen tile, the field, or the first tile; the recap's Send. */
   const focusAnswer = () => {
     const tiles = group.current;
@@ -97,6 +99,13 @@ export function QuestionCard({
     refocus.current = false;
     focusAnswer();
   }, [shownStep]);
+  // The card grows down under the fold as it moves on or shows its Next: its foot comes into view.
+  useLayoutEffect(() => {
+    const block = card.current?.querySelector<HTMLElement>('[data-slot="framed-block"]');
+    if (!shownStep || !block) return;
+    if (grown.current) reveal(block, reducedMotion());
+    grown.current = true;
+  }, [shownStep, primary]);
 
   const shell = (body: ReactNode, onKeyDown?: (event: KeyboardEvent<HTMLDivElement>) => void) => (
     // biome-ignore lint/a11y/noStaticElementInteractions: digit shortcuts only while focus is inside the card
@@ -202,7 +211,7 @@ export function QuestionCard({
   if (!step) {
     return shell(
       <FramedBlock
-        className={arrives}
+        className={cn("relative", arrives)}
         question={
           <div className="flex flex-col pb-0.5">
             {pile}
@@ -221,7 +230,7 @@ export function QuestionCard({
 
   return shell(
     <FramedBlock
-      className={arrives}
+      className={cn("relative", arrives)}
       question={
         <div className="flex flex-col">
           {pile}

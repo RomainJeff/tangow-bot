@@ -1,5 +1,5 @@
 import type { CommitSource } from "@rakazo/core";
-import { motion, springEasing } from "@rakazo/ui-tokens";
+import { motion, springAt, springEasing } from "@rakazo/ui-tokens";
 import { flushSync } from "react-dom";
 
 type Rect = { left: number; top: number; width: number; height: number };
@@ -16,6 +16,10 @@ export type Departure = {
 };
 
 const SOURCE = { option: '[aria-pressed="true"]', field: '[data-slot="option-field"]' };
+/** What a stack's last move left fading over the card. */
+const GHOST = "[data-ask-ghost]";
+/** The frame each list's reveal scroll waits for. */
+const reveals = new WeakMap<Element, number>();
 
 function within(element: Element, card: Element): Rect {
   const rect = element.getBoundingClientRect();
@@ -49,11 +53,14 @@ export function departure(card: HTMLElement, leaving: CommitSource): Departure |
   const content = card.lastElementChild;
   if ((selector && !source) || !content) return null;
   const ghost = content.cloneNode(true) as HTMLElement;
+  for (const element of ghost.querySelectorAll(GHOST)) element.remove();
   if (selector)
     ghost.querySelector<HTMLElement>(selector)?.style.setProperty("visibility", "hidden");
   for (const element of ghost.querySelectorAll("[id]")) element.removeAttribute("id");
   ghost.inert = true;
   const list = scrollingList(card);
+  // A reveal still scrolling would move the rows after they are measured.
+  if (list) cancelAnimationFrame(reveals.get(list) ?? 0);
   const style = source && getComputedStyle(source);
   return {
     from: source &&
@@ -192,42 +199,99 @@ export function fly(
 }
 
 const LINE = '[data-slot="stack-line"]';
+/** What stays across a move, the folded lines and the card's detail: it slides, never fades. */
+const KEPT = `${LINE}, [data-slot="framed-block-consequence"]`;
 const STEP =
   '[data-slot="stack-step"], [data-slot="framed-block-body"], [data-slot="framed-block-actions"]';
 
 /**
- * A stack moving to another question: what changes fades out, then the card springs to its new
- * height while the next question and the newly folded line fade in. Nothing moves with reduced motion.
+ * A stack moving to another question, in place: the old question fades out over the new one while
+ * the card springs to its new height and the lines it keeps slide to their places. A newly folded
+ * line shows once the old question is gone, so no answer shows twice. Nothing moves with reduced
+ * motion.
  */
-export function advance(card: HTMLElement | null, apply: () => void, still: boolean) {
+export function advance(card: HTMLElement | null, apply: () => boolean, still: boolean) {
   const block = card?.querySelector<HTMLElement>('[data-slot="framed-block"]');
-  if (!block || still) return apply();
-  const kept = new Set(block.querySelectorAll(LINE));
-  const out = [...block.querySelectorAll(STEP)].map((element) =>
-    element.animate([{ opacity: 1 }, { opacity: 0 }], {
+  if (!block || still) return void apply();
+  for (const old of block.querySelectorAll(`:scope > ${GHOST}`)) old.remove();
+  const from = block.offsetHeight;
+  const kept = new Map(
+    [...block.querySelectorAll(KEPT)].map((el) => [el, el.getBoundingClientRect().top]),
+  );
+  const ghost = document.createElement("div");
+  ghost.dataset.askGhost = "";
+  ghost.inert = true;
+  ghost.ariaHidden = "true";
+  ghost.className = "pointer-events-none absolute inset-x-0 top-0";
+  for (const child of block.children) ghost.append(child.cloneNode(true));
+  const clones = ghost.querySelectorAll<HTMLElement>(KEPT);
+  const copies = new Map([...kept.keys()].map((el, index) => [el, clones[index]]));
+  // A picture of the old question: nothing that finds the card's parts finds it.
+  for (const element of ghost.querySelectorAll("[id], [data-slot]")) {
+    element.removeAttribute("id");
+    element.removeAttribute("data-slot");
+  }
+  if (!flushSync(apply)) return;
+  const timing = { duration: motion.flight, easing: springEasing };
+  const fresh = [...block.querySelectorAll(LINE)].filter((line) => !kept.has(line));
+  for (const element of block.querySelectorAll(STEP)) {
+    element.animate([{ opacity: 0 }, { opacity: 1 }], {
+      duration: motion.stepIn,
+      easing: motion.ease,
+    });
+  }
+  for (const line of fresh) {
+    line.animate([{ opacity: 0 }, { opacity: 1 }], {
+      duration: motion.stepIn,
+      delay: motion.stepOut,
+      easing: motion.ease,
+      fill: "backwards",
+    });
+  }
+  for (const [element, top] of kept) {
+    if (!element.isConnected) continue;
+    copies.get(element)?.style.setProperty("visibility", "hidden");
+    const shift = top - element.getBoundingClientRect().top;
+    if (Math.abs(shift) >= 0.5) {
+      element.animate([{ transform: `translateY(${shift}px)` }, { transform: "none" }], timing);
+    }
+  }
+  block.append(ghost);
+  block.animate([{ height: `${from}px` }, { height: `${block.offsetHeight}px` }], timing);
+  ghost
+    .animate([{ opacity: 1 }, { opacity: 0 }], {
       duration: motion.stepOut,
       easing: motion.ease,
       fill: "forwards",
-    }),
-  );
-  const swap = () => {
-    const from = block.offsetHeight;
-    flushSync(apply);
-    const incoming = [
-      ...block.querySelectorAll(STEP),
-      ...[...block.querySelectorAll(LINE)].filter((line) => !kept.has(line)),
-    ];
-    for (const element of incoming) {
-      element.animate([{ opacity: 0 }, { opacity: 1 }], {
-        duration: motion.stepIn,
-        easing: motion.ease,
-      });
-    }
-    for (const animation of out) animation.cancel();
-    block.animate([{ height: `${from}px` }, { height: `${block.offsetHeight}px` }], {
-      duration: motion.flight,
-      easing: springEasing,
-    });
+    })
+    .finished.finally(() => ghost.remove())
+    .catch(() => {});
+}
+
+/**
+ * When the card is in view but its foot is not, scrolls its list on the spring until the foot is,
+ * without taking its top out of view. Called as the card grows, so both move on the same curve.
+ */
+export function reveal(block: HTMLElement, still: boolean) {
+  const list = scrollingList(block);
+  if (!list) return;
+  const view = list.getBoundingClientRect();
+  const { top } = block.getBoundingClientRect();
+  if (top >= view.bottom || top + block.offsetHeight <= view.top) return;
+  const room = Number.parseFloat(getComputedStyle(list).paddingBottom) || 0;
+  const by = Math.min(top + block.offsetHeight + room - view.bottom, top - view.top);
+  if (by < 1) return;
+  const from = list.scrollTop;
+  cancelAnimationFrame(reveals.get(list) ?? 0);
+  if (still) {
+    list.scrollTop = from + by;
+    return;
+  }
+  const start = performance.now();
+  const step = (now: number) => {
+    const elapsed = Math.min(now - start, motion.flight);
+    list.scrollTop = from + by * springAt(elapsed);
+    if (elapsed < motion.flight) reveals.set(list, requestAnimationFrame(step));
   };
-  Promise.all(out.map((animation) => animation.finished)).then(swap, swap);
+  reveals.set(list, requestAnimationFrame(step));
 }
