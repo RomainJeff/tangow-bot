@@ -1,6 +1,11 @@
-import { memo, useCallback, useRef, useState } from "react";
-import ReactMarkdown, { type Components } from "react-markdown";
+import type { LinkMentionResolver } from "@rakazo/core";
+import { wwwLinkHref } from "@rakazo/core";
+import type { ComponentPropsWithoutRef, ReactNode } from "react";
+import { createContext, Fragment, memo, useCallback, useContext, useRef, useState } from "react";
+import type { Components, ExtraProps } from "react-markdown";
+import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { resolvedLinkMention } from "./link-mention.web";
 import "./markdown.web.css";
 import {
   type ChatMarkdownProps,
@@ -82,10 +87,27 @@ function CodeBlock(props: React.ComponentPropsWithoutRef<"pre">) {
   );
 }
 
+/** The mentions of the message being rendered, read by its links without rebuilding `components`. */
+const LinkMentions = createContext<LinkMentionResolver<ReactNode> | undefined>(undefined);
+
+type HastNode = { type: string; value?: string; children?: readonly HastNode[] };
+
+function textOf(node: HastNode | undefined): string {
+  if (!node) return "";
+  if (node.type === "text") return node.value ?? "";
+  return node.children?.map(textOf).join("") ?? "";
+}
+
+function MarkdownLink({ node, href, ...props }: ComponentPropsWithoutRef<"a"> & ExtraProps) {
+  const text = textOf(node);
+  // GFM links a bare `www.` address as http; it stands for its https link, as the server keys it.
+  const target = href === `http://${text}` ? (wwwLinkHref(text) ?? href) : href;
+  const mention = resolvedLinkMention(useContext(LinkMentions), target, text);
+  return mention ?? <a {...props} href={target} target="_blank" rel="noreferrer noopener" />;
+}
+
 const components: Components = {
-  a({ node: _node, ...props }) {
-    return <a {...props} target="_blank" rel="noreferrer noopener" />;
-  },
+  a: MarkdownLink,
   img({ node: _node, ...props }) {
     return <img {...props} alt={props.alt ?? ""} loading="lazy" />;
   },
@@ -115,44 +137,58 @@ export const ChatMarkdown = memo(function ChatMarkdown({
   children,
   streaming = false,
   allowImages = true,
-}: ChatMarkdownProps) {
+  mentions,
+}: ChatMarkdownProps & {
+  /** The message's link mentions; keep it referentially stable, this view is memoized. */
+  mentions?: LinkMentionResolver<ReactNode>;
+}) {
   const source = repairMarkdownTables(streaming ? closeUnterminatedFence(children) : children);
 
   return (
     <div className={streaming ? "rk-chat-markdown rk-chat-markdown-streaming" : "rk-chat-markdown"}>
-      <ReactMarkdown
-        components={allowImages ? components : componentsNoImages}
-        remarkPlugins={[remarkGfm]}
-        skipHtml
-        urlTransform={(url, key) =>
-          (key === "href" ? linkHref(url, true) : sanitizeMarkdownUrl(url, true)) ?? ""
-        }
-      >
-        {source}
-      </ReactMarkdown>
+      <LinkMentions value={mentions}>
+        <ReactMarkdown
+          components={allowImages ? components : componentsNoImages}
+          remarkPlugins={[remarkGfm]}
+          skipHtml
+          urlTransform={(url, key) =>
+            (key === "href" ? linkHref(url, true) : sanitizeMarkdownUrl(url, true)) ?? ""
+          }
+        >
+          {source}
+        </ReactMarkdown>
+      </LinkMentions>
       {streaming ? <span aria-hidden="true" className="rk-chat-markdown-cursor" /> : null}
     </div>
   );
 });
 
-/** Plain text (what the person typed) with every URL in it made clickable. */
-export function LinkifiedText({ text }: { text: string }) {
+/**
+ * Plain text (what the person typed) with every URL in it made clickable, as a mention when the
+ * server resolved one for it.
+ */
+export function LinkifiedText({
+  text,
+  mentions,
+}: {
+  text: string;
+  mentions?: LinkMentionResolver<ReactNode>;
+}) {
   return linkifyText(text).map((segment, i) =>
     segment.href ? (
-      <a
-        key={i}
-        className="rk-linkified"
-        href={segment.href}
-        target="_blank"
-        rel="noreferrer noopener"
-      >
-        {segment.text}
-      </a>
+      <Fragment key={i}>
+        {resolvedLinkMention(mentions, segment.href, segment.text, "rk-linkified") ?? (
+          <a className="rk-linkified" href={segment.href} target="_blank" rel="noreferrer noopener">
+            {segment.text}
+          </a>
+        )}
+      </Fragment>
     ) : (
       segment.text
     ),
   );
 }
 
+export { LinkMentionGlyph } from "./link-mention.web";
 export type { ChatMarkdownProps } from "./markdown";
 export { truncateMarkdownForRender } from "./markdown";

@@ -8,6 +8,8 @@ import {
   isLinkOnlyMessage,
   linkKey,
   linkMentionCandidates,
+  linkMentionLabel,
+  linkMentionsOf,
   messageHostsLinkPreview,
   normalizePreviewUrl,
   previewSiteInitial,
@@ -629,5 +631,92 @@ describe("previewTitleFromUrl", () => {
     expect(previewTitleFromUrl("https://a.tld/pay%E2%80%AEevil-now")).toBe("Payevil now");
     const long = `https://a.tld/${"word-".repeat(200)}end`;
     expect(previewTitleFromUrl(long)).toHaveLength(299);
+  });
+});
+
+describe("a message's mentions", () => {
+  const mention = {
+    kind: "link_mention",
+    url: "https://www.notion.so/acme/Roadmap-Q4-3f9a2c7e81d04b5f",
+    title: "Roadmap Q4",
+    icon: { artifactId: "icon-1" },
+  } as const;
+  const message = (blocks: unknown[], role = "user") => ({
+    role,
+    blocks: [{ kind: "text", text: "see it" }, ...blocks] as MessageBlock[],
+  });
+
+  it("finds a mention by any written form of its link, and nothing for another link", () => {
+    const mentions = linkMentionsOf(message([mention]));
+    expect(mentions?.find("www.notion.so/acme/Roadmap-Q4-3f9a2c7e81d04b5f")).toBe(mention);
+    expect(mentions?.find("https://WWW.notion.so/acme/Roadmap-Q4-3f9a2c7e81d04b5f#h")).toBe(
+      mention,
+    );
+    expect(mentions?.find("https://www.notion.so/acme/Other")).toBeUndefined();
+  });
+
+  it("has nothing to find without a mention block or on a message that is itself a card", () => {
+    expect(linkMentionsOf(message([]))).toBeUndefined();
+    expect(linkMentionsOf(message([mention], "system"))).toBeUndefined();
+    expect(linkMentionsOf(message([{ kind: "meta", text: "m" }, mention]))).toBeUndefined();
+    expect(linkMentionsOf(message([mention], "bot"))?.find(mention.url)).toBe(mention);
+  });
+
+  it("labels a mention with the author's words, then the server's title, then the host", () => {
+    const href = "https://www.example.test/doc/abc";
+    const titled = { title: "Q4 plan" };
+    expect(linkMentionLabel({ href, authorText: "Compte rendu", block: titled })).toBe(
+      "Compte rendu",
+    );
+    expect(linkMentionLabel({ href, authorText: href, block: titled })).toBe("Q4 plan");
+    expect(linkMentionLabel({ href, authorText: "www.example.test/doc/abc", block: titled })).toBe(
+      "Q4 plan",
+    );
+    expect(
+      linkMentionLabel({ href, authorText: "http://www.example.test/doc/abc#x", block: titled }),
+    ).toBe("Q4 plan");
+    expect(linkMentionLabel({ href, block: titled })).toBe("Q4 plan");
+    expect(linkMentionLabel({ href, authorText: href, block: {} })).toBe("example.test");
+    expect(linkMentionLabel({ href, authorText: " ", block: { title: "\u202e " } })).toBe(
+      "example.test",
+    );
+  });
+
+  it("counts a long bare URL and a scheme-less or www-less spelling as the address", () => {
+    const long = `https://www.example.test/a/${"x".repeat(400)}`;
+    expect(linkMentionLabel({ href: long, authorText: long, block: { title: "Long read" } })).toBe(
+      "Long read",
+    );
+    expect(
+      linkMentionLabel({
+        href: "https://www.example.test/a",
+        authorText: "example.test/a",
+        block: { title: "A" },
+      }),
+    ).toBe("A");
+    expect(
+      linkMentionLabel({
+        href: "https://example.test/a",
+        authorText: "www.example.test/a",
+        block: { title: "A" },
+      }),
+    ).toBe("A");
+    expect(
+      linkMentionLabel({
+        href: "https://www.example.test/a",
+        authorText: "example.test/b",
+        block: { title: "A" },
+      }),
+    ).toBe("example.test/b");
+  });
+
+  it("strips bidirectional controls from a label", () => {
+    expect(
+      linkMentionLabel({
+        href: "https://example.test/a",
+        authorText: "invoice\u202Egpj.exe",
+        block: {},
+      }),
+    ).toBe("invoicegpj.exe");
   });
 });

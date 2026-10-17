@@ -1,3 +1,4 @@
+import type { LinkMentionBlock, MessageBlock } from "@rakazo/contracts";
 import {
   isAuthenticationDestination,
   isPreviewableUrl,
@@ -110,6 +111,67 @@ export function linkMentionCandidates(text: string): LinkCandidate[] {
     }
   }
   return [...candidates.values()];
+}
+
+/** A message's mentions, found by any written form of their link (`linkKey`). */
+export interface LinkMentionLookup {
+  find(href: string): LinkMentionBlock | undefined;
+}
+
+/** What a renderer needs to draw a message's mentions: the block of a link and its site icon. */
+export interface LinkMentionResolver<Icon> extends LinkMentionLookup {
+  icon(artifactId: string): Icon;
+}
+
+/**
+ * The mentions the server added to a message, keyed by `linkKey`. Undefined when it has none or
+ * may carry no link preview (`messageHostsLinkPreview`), so its links render as plain links.
+ */
+export function linkMentionsOf(message: {
+  role: string;
+  blocks: readonly MessageBlock[];
+}): LinkMentionLookup | undefined {
+  if (!messageHostsLinkPreview(message)) return undefined;
+  const byKey = new Map<string, LinkMentionBlock>();
+  for (const block of message.blocks) {
+    if (block.kind !== "link_mention") continue;
+    const key = linkKey(block.url);
+    if (key && !byKey.has(key)) byKey.set(key, block);
+  }
+  if (byKey.size === 0) return undefined;
+  return {
+    find(href) {
+      const key = linkKey(href);
+      return key ? byKey.get(key) : undefined;
+    },
+  };
+}
+
+/** A link's identity without its scheme or `www.`, read from a URL or from text that spells one. */
+function spelledLink(value: string): string | undefined {
+  return (linkKey(value) ?? linkKey(`https://${value}`))?.replace(/^https?:\/\/(?:www\.)?/i, "");
+}
+
+/**
+ * The words a mention shows: what the author wrote for the link when it is more than the address
+ * itself (a markdown label), else the label the server resolved, else the host.
+ */
+export function linkMentionLabel({
+  href,
+  authorText,
+  block,
+}: {
+  href: string;
+  authorText?: string;
+  block: Pick<LinkMentionBlock, "title">;
+}): string {
+  // Compared as written: sanitising caps it, so a long bare URL would no longer match itself.
+  const written = authorText?.trim() ?? "";
+  if (written && spelledLink(written) !== spelledLink(href)) {
+    const label = sanitizePreviewTitle(written);
+    if (label) return label;
+  }
+  return (block.title && sanitizePreviewTitle(block.title)) || previewSiteLabel(href);
 }
 
 /** Blocks that make a message a card of its own: no link preview is ever put under it. */
