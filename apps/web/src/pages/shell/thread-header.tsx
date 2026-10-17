@@ -1,6 +1,6 @@
 import { useLingui } from "@lingui/react/macro";
 import type { Bot, Group, ThreadSnapshot } from "@rakazo/contracts";
-import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
+import { isWorkingStatus } from "@rakazo/core";
 import { BotAvatar, Button, StackedAvatars } from "@rakazo/ui-web";
 import { Menu, Monitor, PanelLeftOpen, Phone, Settings } from "lucide-react";
 import type { Dispatch, RefObject, SetStateAction } from "react";
@@ -104,7 +104,7 @@ export function ThreadHeader({
                 color: member.color,
                 identity: member.botId,
                 shapeSeed: member.shapeSeed,
-                working: ACTIVE_RUN_STATUSES.some((status) => status === member.status),
+                working: isWorkingStatus(member.status),
               }))}
             />
           ) : null}

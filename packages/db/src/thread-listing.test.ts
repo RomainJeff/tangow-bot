@@ -45,4 +45,40 @@ describe("entryPreview", () => {
     });
     expect(entryPreview(learnt)).toBe("Skill learned · Coffee");
   });
+
+  it("previews a question card by its question, never what an option does (CA21)", () => {
+    const ask = SessionEntrySchema.parse({
+      id: "entry-2",
+      sessionId: "session-1",
+      seq: 0,
+      parentId: null,
+      type: "assistant.ask",
+      runId: "run-1",
+      payload: {
+        block: {
+          kind: "ask",
+          text: "Which fridge?",
+          status: "pending",
+          questions: [
+            {
+              id: "q1",
+              question: "Which fridge?",
+              options: [
+                {
+                  id: "q1o1",
+                  label: "Freestanding",
+                  description: "Fits most kitchens",
+                  recommended: true,
+                },
+                { id: "q1o2", label: "Built-in" },
+              ],
+            },
+          ],
+        },
+      },
+      botId: "bot-1",
+      ts: "2026-10-12T09:00:00.000Z",
+    });
+    expect(entryPreview(ask)).toBe("Which fridge?");
+  });
 });

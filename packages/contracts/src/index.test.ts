@@ -529,6 +529,33 @@ describe("editable Create bot card contract", () => {
   });
 });
 
+describe("question card options", () => {
+  const question = { id: "q1", question: "Which fridge?" };
+
+  it("reads a card stored before options carried a description, and one that carries it", () => {
+    const stored = {
+      kind: "ask",
+      text: "Which fridge?",
+      status: "pending",
+      questions: [{ ...question, options: [{ id: "q1o1", label: "Freestanding" }] }],
+    } as const;
+    const described = {
+      ...stored,
+      questions: [
+        {
+          ...question,
+          options: [
+            { id: "q1o1", label: "Freestanding", description: "Fits most kitchens" },
+            { id: "q1o2", label: "Built-in", recommended: true },
+          ],
+        },
+      ],
+    } as const;
+    expect(MessageBlock.parse(stored)).toEqual(stored);
+    expect(MessageBlock.parse(described)).toEqual(described);
+  });
+});
+
 describe("routine proposal card contract", () => {
   const card = {
     kind: "ask",

@@ -233,16 +233,6 @@ function BotSide({ inGroup, children }: { inGroup: boolean; children: ReactNode 
   );
 }
 
-export function WaitingLine({ inGroup }: { inGroup: boolean }) {
-  return (
-    <BotSide inGroup={inGroup}>
-      <p data-testid="run-waiting" className="text-reasoning text-muted-foreground">
-        <Trans>Needs input</Trans>
-      </p>
-    </BotSide>
-  );
-}
-
 function SubagentCard({
   item,
   onOpenSession,

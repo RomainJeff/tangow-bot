@@ -7,6 +7,9 @@ import type {
 import { abortableDelay, inferHandoffTargetName } from "@rakazo/core";
 
 const running = new Map<string, AbortController>();
+/** Runs that stopped on a question card, so their next turn answers it. */
+const asked = new Set<string>();
+const CHOICE_REPLY_DELAY_MS = 1_200;
 
 export class ScriptedAgentRuntime implements AgentRuntime {
   describe() {
@@ -43,6 +46,9 @@ export class ScriptedAgentRuntime implements AgentRuntime {
         yield { type: "done", text: "stopped" };
         return;
       }
+      // A model takes longer than a card's commit movement to answer the card; replying inside
+      // it would move the thread mid-flight and blur what the motion e2e measures.
+      if (asked.delete(request.runId)) await abortableDelay(CHOICE_REPLY_DELAY_MS, signal);
       const script = request.script ?? inferScript(request.prompt, request.resumeFromCheckpoint);
       // Per-run call index so repeated tools (e.g. message_agent) get distinct
       // executionIds — delivery keys and effect replays key off this value.
@@ -104,11 +110,13 @@ export class ScriptedAgentRuntime implements AgentRuntime {
           };
         }
         if (turn.ask) {
+          asked.add(request.runId);
           yield {
             type: "ask",
             text: turn.ask.text,
             detail: turn.ask.detail,
             actions: turn.ask.actions,
+            questions: turn.ask.questions,
           };
           return;
         }
@@ -234,6 +242,57 @@ export function inferScript(
             { id: "choice-2", label: "Seoul" },
             { id: "choice-3", label: "Toronto" },
             { id: "choice-4", label: "Lisbon" },
+          ],
+        },
+      },
+    ];
+  }
+  if (lower.includes("ask me three questions")) {
+    return [
+      {
+        assistant: "three quick questions so i look at the right fridges.",
+        ask: {
+          text: "Three quick questions about the fridge.",
+          questions: [
+            {
+              id: "q1",
+              header: "Format",
+              question: "Which fridge do you have now?",
+              options: [
+                {
+                  id: "q1o1",
+                  label: "Freestanding, 60 cm",
+                  description: "Fits most kitchens",
+                  recommended: true,
+                },
+                {
+                  id: "q1o2",
+                  label: "Built-in, 54–56 cm",
+                  description: "Hides behind a cabinet door",
+                },
+                { id: "q1o3", label: "American or XXL" },
+              ],
+            },
+            {
+              id: "q2",
+              header: "Extras",
+              question: "What should the new one have?",
+              multiSelect: true,
+              options: [
+                { id: "q2o1", label: "Ice maker" },
+                { id: "q2o2", label: "No frost" },
+                { id: "q2o3", label: "Quiet, under 38 dB" },
+              ],
+            },
+            {
+              id: "q3",
+              question: "Do you already have a separate freezer?",
+              required: false,
+              options: [
+                { id: "q3o1", label: "Yes, we have one" },
+                { id: "q3o2", label: "No, quote one too" },
+              ],
+            },
           ],
         },
       },

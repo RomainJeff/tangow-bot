@@ -34,6 +34,7 @@ import type {
   ThreadView,
 } from "@rakazo/core";
 import {
+  answersPendingQuestion,
   appendedEntries,
   attachmentsForThread,
   blocksOfBotWords,
@@ -116,7 +117,11 @@ import {
 } from "../lib/thread-events";
 import type { CardAnswerTarget, MessageItem } from "../lib/thread-items";
 import { botIdOf } from "../lib/thread-items";
-import { transcriptCanSnapAfterFrame, transcriptIsNearEnd } from "../lib/transcript-scroll";
+import {
+  transcriptCanSnapAfterFrame,
+  transcriptEnd,
+  transcriptIsNearEnd,
+} from "../lib/transcript-scroll";
 import { speaker } from "../lib/tts";
 import { useMediaQuery } from "../lib/use-media-query";
 import type { ContextMenuPosition } from "./BotContextMenu";
@@ -769,7 +774,7 @@ export function ShellPage() {
     window.requestAnimationFrame(() => {
       const element = messageScroll.current;
       if (transcriptCanSnapAfterFrame(element, queuedElement, queuedScrollTop)) {
-        queuedElement.scrollTop = queuedElement.scrollHeight;
+        queuedElement.scrollTop = transcriptEnd(queuedElement);
       }
     });
   }
@@ -1667,6 +1672,12 @@ export function ShellPage() {
     },
     [bots, transcriptMembers],
   );
+  // A send without a mention goes to the bot, or to a group's first member.
+  const sendsTo = inGroup ? transcriptMembers?.[0]?.botId : active?.id;
+  const answerName =
+    sendsTo && answersPendingQuestion(view, sendsTo, currentRuns)
+      ? resolveTranscriptBot(sendsTo)?.name
+      : undefined;
   const workingBots: GroupAvatarMember[] = workingRuns.map((run) => {
     const bot = resolveTranscriptBot(run.botId);
     return {
@@ -2915,6 +2926,7 @@ export function ShellPage() {
                 activeName={
                   inGroup ? (activeGroup?.name ?? activeSnapshot?.groupName) : active?.name
                 }
+                answerName={answerName}
                 running={composerRunning}
                 botColor={active?.color}
                 disabled={Boolean(recordingSkill)}

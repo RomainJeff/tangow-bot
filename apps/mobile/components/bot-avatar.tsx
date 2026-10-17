@@ -1,12 +1,12 @@
 import type { AvatarStyle } from "@rakazo/contracts";
 import type { BotFrame, ExpressionId, Look } from "@rakazo/core";
 import {
-  ACTIVE_RUN_STATUSES,
   avatarIdentitySeed,
   avatarInk,
   BotEngine,
   EXPRESSION_BY_ID,
   GLANCE_MORPH,
+  isWorkingStatus,
   mixHex,
   nextWorkingGlance,
   RAYON,
@@ -59,7 +59,7 @@ export const BotAvatar = memo(function BotAvatar({
 }) {
   const { t } = useI18n();
   const tokens = useMobileTokens();
-  const isWorking = ACTIVE_RUN_STATUSES.some((activeStatus) => activeStatus === status);
+  const isWorking = isWorkingStatus(status);
   const { avatarStyle } = useAvatarStyle();
   const visorW = Math.round(size * 0.68);
   const visorH = Math.round(size * 0.44);

@@ -1003,7 +1003,7 @@ describe("answerRunInput", () => {
     );
   });
 
-  it("resumes a multi-question ask from one structured submission", async () => {
+  it("resumes a multi-question ask from one structured submission, with labels alone (CA21)", async () => {
     const tx = {
       $queryRaw: vi.fn().mockResolvedValue([{ id: "thread-1" }]),
       sessionEntry: {
@@ -1017,7 +1017,12 @@ describe("answerRunInput", () => {
                 id: "q1",
                 question: "Ta cible ?",
                 options: [
-                  { id: "q1o1", label: "DG PME" },
+                  {
+                    id: "q1o1",
+                    label: "DG PME",
+                    description: "Décide seul du budget",
+                    recommended: true,
+                  },
                   { id: "q1o2", label: "Direction BU" },
                 ],
               },
@@ -1062,14 +1067,12 @@ describe("answerRunInput", () => {
       }),
     ).resolves.toBe(true);
 
-    expect(tx.task.updateMany).toHaveBeenCalledWith({
-      where: { runs: { some: { id: "run-1" } } },
-      data: {
-        prompt: expect.stringContaining(
-          "The user answered your questions:\n1. Ta cible ? — DG PME\n2. Ton horizon ? — Other: 6 mois",
-        ),
-      },
-    });
+    const prompt = tx.task.updateMany.mock.calls[0]![0].data.prompt as string;
+    expect(prompt.split("\n\n")[0]).toBe(
+      "The user answered your questions:\n1. Ta cible ? — DG PME\n2. Ton horizon ? — Other: 6 mois",
+    );
+    expect(prompt).not.toContain("budget");
+    expect(prompt).not.toContain("Recommended");
     expect(tx.run.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: { status: "queued", checkpoint: null } }),
     );
@@ -1186,6 +1189,61 @@ describe("answerRunInput", () => {
     ).rejects.toThrow(InvalidAnswerError);
     expect(tx.run.updateMany).not.toHaveBeenCalled();
     expect(tx.task.updateMany).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      card: "a question's Other text",
+      block: { questions: [{ id: "q1", question: "Ta cible ?" }] },
+      answerOf: (text: string) => JSON.stringify({ answers: { q1: { other: text } } }),
+    },
+    { card: "a free-text answer", block: {}, answerOf: (text: string) => text },
+  ])("takes $card of 2,000 characters and refuses 2,001", async ({ block, answerOf }) => {
+    async function answerWith(length: number) {
+      const tx = {
+        $queryRaw: vi.fn().mockResolvedValue([{ id: "thread-1" }]),
+        sessionEntry: {
+          findFirst: vi.fn().mockResolvedValue(
+            askEntry("message-1", {
+              kind: "ask",
+              text: "Ta cible ?",
+              status: "pending",
+              ...block,
+            }),
+          ),
+        },
+        run: {
+          findFirst: vi.fn().mockResolvedValue({ botId: "bot-2", userId: "user-1" }),
+          updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+          findUnique: vi.fn().mockResolvedValue({
+            status: "queued",
+            createdAt: new Date("2026-08-16T12:00:00.000Z"),
+            threadId: "thread-1",
+          }),
+        },
+        task: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+        thread: { findUniqueOrThrow: vi.fn().mockResolvedValue({ nextEventSeq: 10 }) },
+        event: { create: vi.fn(), findFirst: vi.fn().mockResolvedValue(null) },
+      };
+      const prisma = {
+        $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
+      } as unknown as PrismaClient;
+      const outcome = await answerRunInput(prisma, {
+        spaceId: "workspace-1",
+        threadId: "thread-1",
+        runId: "run-1",
+        messageId: "message-1",
+        answeredByUserId: "user-1",
+        answer: answerOf("x".repeat(length)),
+      }).then(
+        (result) => result,
+        (error: unknown) => (error instanceof InvalidAnswerError ? "refused" : error),
+      );
+      return { outcome, resumed: tx.run.updateMany.mock.calls.map(([call]) => call.data.status) };
+    }
+
+    expect(await answerWith(2000)).toEqual({ outcome: true, resumed: ["queued"] });
+    expect(await answerWith(2001)).toEqual({ outcome: "refused", resumed: [] });
   });
 
   it("rejects a multi-question submission that leaves a required question unanswered", async () => {
@@ -1850,7 +1908,15 @@ describe("resumeAskWithComposerTextInTransaction", () => {
       text: "",
       status: "pending",
       questions: [
-        { id: "q1", question: "Where do you want to go?", required: true },
+        {
+          id: "q1",
+          question: "Where do you want to go?",
+          required: true,
+          options: [
+            { id: "q1o1", label: "Lisbon", description: "Warm in winter", recommended: true },
+            { id: "q1o2", label: "Oslo" },
+          ],
+        },
         { id: "q2", question: "What's your budget?", required: true },
         { id: "q3", question: "Any dietary constraints?", required: false },
       ],
@@ -1871,6 +1937,7 @@ describe("resumeAskWithComposerTextInTransaction", () => {
     expect(prompt).toContain("Somewhere warm, budget doesn't matter much");
     expect(prompt).toContain("Where do you want to go?");
     expect(prompt).toContain("What's your budget?");
+    expect(prompt).not.toContain("Warm in winter");
   });
 
   it("resolves a partial reply even when required questions in the batch stay uncovered", async () => {

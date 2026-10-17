@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { AgentRunRequest, ConnectorCall } from "@rakazo/adapter-kit";
+import type { AgentRunRequest, AgentRuntimeEvent, ConnectorCall } from "@rakazo/adapter-kit";
 import type { SessionEntry } from "@rakazo/contracts";
 import { EntryId, EntrySeq, SessionId } from "@rakazo/contracts";
 import {
@@ -159,6 +159,10 @@ function fixture(
     entries?: SessionEntry[];
     /** The person's messages the run claimed as steering. */
     claimedSteering?: string[];
+    /** The model asks this once the calls ran. */
+    ask?: Extract<AgentRuntimeEvent, { type: "ask" }>;
+    /** Values the run redacts. */
+    secrets?: string[];
   } = {},
 ) {
   const effects: Effect[] = [...(options.effects ?? [])];
@@ -402,6 +406,10 @@ function fixture(
       if (settled.some(isApprovalPausedResult)) return;
     }
     if (options.fails && !nudge) throw new Error(options.fails);
+    if (options.ask && !nudge) {
+      yield options.ask;
+      return;
+    }
     if (nudge && options.nudgeUsage) {
       yield {
         type: "usage" as const,
@@ -436,7 +444,7 @@ function fixture(
       claimSteering,
     },
     jobs: { enqueue, cancel },
-    secrets: [],
+    secrets: options.secrets ?? [],
     dataDir,
     skillLock: options.skillLock ?? createInMemorySkillLock(),
     skillLearning: options.skillLearning,
@@ -1964,5 +1972,43 @@ describe("the skill nudge at the end of an exchange", () => {
     await f.play([longTask]);
     expect(f.requests()).toHaveLength(1);
     expect(f.eventsOf("agent.skill.nudge")).toEqual([]);
+  });
+});
+
+describe("a question card the bot asks", () => {
+  it("masks a run secret in what an option does and keeps its recommended mark (CA21)", async () => {
+    const f = fixture({
+      secrets: ["hunter2-secret"],
+      ask: {
+        type: "ask",
+        text: "Which key?",
+        questions: [
+          {
+            id: "q1",
+            question: "Which key?",
+            options: [
+              { id: "q1o1", label: "Prod", description: "Uses hunter2-secret", recommended: true },
+              { id: "q1o2", label: "Staging" },
+            ],
+          },
+        ],
+      },
+    });
+    await f.play([]);
+
+    expect(f.askBlock()).toMatchObject({
+      questions: [
+        {
+          options: [
+            { id: "q1o1", label: "Prod", description: "Uses [redacted]", recommended: true },
+            { id: "q1o2", label: "Staging" },
+          ],
+        },
+      ],
+    });
+    expect(f.send).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "help", body: "Which key?" }),
+      expect.anything(),
+    );
   });
 });

@@ -1,6 +1,7 @@
 import type { RealtimeFanout } from "@rakazo/adapter-kit";
 import type { AskAnswers, SessionId } from "@rakazo/contracts";
 import {
+  ASK_ANSWER_MAX_LENGTH,
   type AskQuestion,
   type BotSecretDestination,
   type MessageBlock,
@@ -969,6 +970,9 @@ export async function answerRunInputInTransaction(
         // id, whatever a direct API call submits.
         const selected = question.multiSelect ? selectedIds : selectedIds.slice(0, 1);
         const other = typeof entry.other === "string" ? entry.other.trim() : "";
+        if (other.length > ASK_ANSWER_MAX_LENGTH) {
+          throw new InvalidAnswerError(`Answer ${index + 1} is too long`);
+        }
         const answered = selected.length > 0 || other.length > 0;
         // Only the question's own `required` flag decides whether it may be skipped — a
         // client-asserted `skipped` cannot waive a required question (defense in depth: the
@@ -1027,6 +1031,14 @@ export async function answerRunInputInTransaction(
     const freeTextAnswer = choiceAsk && !selectedChoice ? input.answer.trim() : "";
     if (choiceAsk && !selectedChoice && !freeTextAnswer) {
       throw new InvalidAnswerError("Pick one of the offered choices or type an answer");
+    }
+    if (
+      !approvalAsk &&
+      !secretAsk &&
+      !selectedChoice &&
+      input.answer.trim().length > ASK_ANSWER_MAX_LENGTH
+    ) {
+      throw new InvalidAnswerError("This answer is too long");
     }
     if (secretAsk && !runSecretWriter) return null;
     if (secretAsk && pendingAsk.credential && run.userId !== input.answeredByUserId) return null;

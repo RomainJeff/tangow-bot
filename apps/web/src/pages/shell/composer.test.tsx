@@ -471,3 +471,26 @@ describe("Composer dictation forced-cancel paths", () => {
     unmount(root, container);
   });
 });
+
+describe("Composer while a question waits", () => {
+  it("names the bot to answer in its placeholder and accessible name, and keeps Stop", () => {
+    const { container, root } = mount({ answerName: "Maya", running: true });
+    const field = draftTextarea(container);
+    expect([field.placeholder, field.getAttribute("aria-label")]).toEqual([
+      "Answer Maya…",
+      "Answer Maya…",
+    ]);
+    expect(queryButton(container, "Stop")?.getAttribute("aria-label")).toBe("Stop");
+    unmount(root, container);
+  });
+
+  it("says Message again once nothing waits", () => {
+    const { container, root } = mount();
+    const field = draftTextarea(container);
+    expect([field.placeholder, field.getAttribute("aria-label")]).toEqual([
+      "Message Maya",
+      "Message Maya",
+    ]);
+    unmount(root, container);
+  });
+});
