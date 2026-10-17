@@ -185,6 +185,6 @@ export function LinkifiedText({
   );
 }
 
-export { LinkMention, LinkMentionGlyph } from "./link-mention.web";
+export { LinkMentionGlyph } from "./link-mention.web";
 export type { ChatMarkdownProps } from "./markdown";
 export { truncateMarkdownForRender } from "./markdown";

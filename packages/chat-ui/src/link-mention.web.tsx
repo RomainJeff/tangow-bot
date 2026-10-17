@@ -29,7 +29,7 @@ export function LinkMentionGlyph() {
  * inert, bidi-isolated text that ends in an ellipsis rather than widen the bubble; the full URL is
  * its tooltip and the host completes its accessible name, since the label alone can say anything.
  */
-export function LinkMention({
+function LinkMention({
   href,
   label,
   site,
