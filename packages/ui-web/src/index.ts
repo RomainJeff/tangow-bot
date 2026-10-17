@@ -78,6 +78,7 @@ export {
 export { SegmentedControl, type SegmentedControlProps } from "./segmented-control.js";
 export { SettingRow, type SettingRowProps } from "./setting-row.js";
 export { Shimmer, type ShimmerProps } from "./shimmer.js";
+export { StackLine, type StackLineProps } from "./stack-line.js";
 export {
   type StackedAvatarItem,
   type StackedAvatarSize,

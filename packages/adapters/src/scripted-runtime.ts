@@ -116,6 +116,7 @@ export class ScriptedAgentRuntime implements AgentRuntime {
             text: turn.ask.text,
             detail: turn.ask.detail,
             actions: turn.ask.actions,
+            questions: turn.ask.questions,
           };
           return;
         }
@@ -241,6 +242,48 @@ export function inferScript(
             { id: "choice-2", label: "Seoul" },
             { id: "choice-3", label: "Toronto" },
             { id: "choice-4", label: "Lisbon" },
+          ],
+        },
+      },
+    ];
+  }
+  if (lower.includes("ask me three questions")) {
+    return [
+      {
+        assistant: "three quick questions so i look at the right fridges.",
+        ask: {
+          text: "Three quick questions about the fridge.",
+          questions: [
+            {
+              id: "q1",
+              header: "Format",
+              question: "Which fridge do you have now?",
+              options: [
+                { id: "q1o1", label: "Freestanding, 60 cm" },
+                { id: "q1o2", label: "Built-in, 54–56 cm" },
+                { id: "q1o3", label: "American or XXL" },
+              ],
+            },
+            {
+              id: "q2",
+              header: "Extras",
+              question: "What should the new one have?",
+              multiSelect: true,
+              options: [
+                { id: "q2o1", label: "Ice maker" },
+                { id: "q2o2", label: "No frost" },
+                { id: "q2o3", label: "Quiet, under 38 dB" },
+              ],
+            },
+            {
+              id: "q3",
+              question: "Do you already have a separate freezer?",
+              required: false,
+              options: [
+                { id: "q3o1", label: "Yes, we have one" },
+                { id: "q3o2", label: "No, quote one too" },
+              ],
+            },
           ],
         },
       },

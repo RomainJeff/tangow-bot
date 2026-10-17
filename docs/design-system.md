@@ -163,8 +163,10 @@ Unframed cards have **no** shadow: `bg-surface` and a `border` hairline.
 | `morph` | 260 ms, rotate 45° | the mobile + turning into × while its sheet is open |
 | `flow` | 2.6 s per lap | the Stop contour while a reply streams (static under reduced motion) |
 | `fill` | 80 ms | a chosen answer taking the user's bubble colour before it leaves (`duration-(--duration-fill)`) |
-| `spring` | response 320 ms, bounce 0.1 | the one spring of a question card's movement, as the CSS easing `springEasing` (a sampled `linear()`) |
-| `flight` | 520 ms | how long that spring runs: the answer flying into its bubble while the card folds and the rows above slide |
+| `spring` | response 320 ms, bounce 0.1 | the one spring of a question card's movement, as the CSS easing `springEasing` (a sampled `linear()`) or `springAt(ms)` for a scroll that follows it |
+| `flight` | 520 ms | how long that spring runs: the answer flying into its bubble while the card folds, a stack's height, the list scrolling a card's foot into view |
+| `stepOut` | 100 ms | a stack's old question fading out over the next one |
+| `stepIn` | 160 ms, from the same frame | the next question fading in; a newly folded line waits `stepOut` first, so its answer never shows twice |
 
 ### Sizes
 
@@ -304,6 +306,14 @@ question.
 holding an `<input>` (its native props) and a primary `roundIconSm` send.
 Props: `sendLabel`, `canSend`, `onSend`, `filled?` (as on a tile). Digit
 shortcuts never reach it.
+
+`StackLine` is an answered question of a stack, folded above the current one:
+a `<button>` at least 44 px (`min-h-11`), `py-2.5`, bleeding 8 into the card's
+inset (`-mx-2 px-2`) so its `rounded-row` hover fill (`pressed`) lines up with
+the question. One `text-row-name` row: the `label` muted and truncated at half
+the width, the `value` in `foreground` taking the rest, then a muted 14 px
+chevron. Pressing it opens the question again. Props: `label`, `value`, and the
+native button props.
 
 A question card once answered or no longer waiting is not a `FramedBlock` but
 `AskSettled`: one muted `text-meta` line (a check, or a stop and "No longer
@@ -822,8 +832,16 @@ props land on the input or textarea.
 
 - One easing curve, `ease-quiet`, for every transition. A question card's movement
   is the one exception: it runs on `motion.spring` over `flight`, and everything
-  in it (the answer, the card's height, the rows above) starts and ends on the
-  same frame. Where `linear()` easing is unknown it takes the reduced-motion fade.
+  in it (the answer, the card's height, the rows above, the list's scroll) starts
+  and ends on the same frame. Where `linear()` easing is unknown it takes the
+  reduced-motion fade.
+- A thread at its end keeps to it while a card commits: a working line or reply
+  that lands before the flight is carried by it, one that lands mid-flight glides
+  in on the same spring, and after the landing the thread follows as for a sent
+  message.
+- A card never shows two copies of one answer at once: its bubble appears only
+  once the old card has faded, and a newly folded line only once the question
+  it answers has.
 - `animate-arrive` for a message, block or capsule entering; capsules in one row
   stagger 60 ms apart.
 - `rk-press` on anything pressable; `duration-(--duration-hover)` for hover.

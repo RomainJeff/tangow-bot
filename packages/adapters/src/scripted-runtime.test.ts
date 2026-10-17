@@ -108,6 +108,39 @@ describe("ScriptedAgentRuntime executionIds", () => {
   });
 });
 
+describe("the scripted three-question card (CA18)", () => {
+  it("asks three questions: a single choice with a header, a multi-select, an optional one", async () => {
+    const runtime = new ScriptedAgentRuntime();
+    const events: AgentRuntimeEvent[] = [];
+    for await (const event of runtime.run({
+      botId: "bot-1",
+      threadId: "thread-1",
+      runId: "run-questions",
+      prompt: "ask me three questions",
+      instructions: "",
+      history: [],
+      tools: [],
+      model: { provider: "scripted", id: "scripted" },
+    })) {
+      events.push(event);
+    }
+    const ask = events.find((event) => event.type === "ask");
+    expect(
+      ask?.type === "ask" &&
+        ask.questions?.map((question) => ({
+          header: question.header ?? null,
+          multiSelect: question.multiSelect === true,
+          required: question.required !== false,
+          options: question.options?.length,
+        })),
+    ).toEqual([
+      { header: "Format", multiSelect: false, required: true, options: 3 },
+      { header: "Extras", multiSelect: true, required: true, options: 3 },
+      { header: null, multiSelect: false, required: false, options: 2 },
+    ]);
+  });
+});
+
 describe("a run resumed from its question card", () => {
   afterEach(() => vi.useRealTimers());
 

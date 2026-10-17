@@ -17,10 +17,16 @@ type Frame = {
   scrollMax: number;
   fold: number;
   rows: number;
+  /** The old card fading as it folds, and the answer's bubble fading in. */
+  ghost: number;
+  bubbleOpacity: number;
 };
 
-/** Opens the city question after `history` earlier exchanges, scrolled to the end of the thread. */
-async function openCityCard(page: Page, name: string, history = 0) {
+const cities = { prompt: "pick from these cities with tappable choices", ready: "Seoul" };
+const fridge = { prompt: "ask me three questions", ready: "Built-in, 54–56 cm" };
+
+/** Opens a scripted question card after `history` earlier exchanges, scrolled to the end of the thread. */
+async function openCard(page: Page, name: string, history = 0, { prompt, ready } = cities) {
   await signup(page, `${name}-${Date.now()}@rakazo.test`, "password12", "Ask Motion");
   await completeOnboarding(page);
   const botId = activeBotId(page);
@@ -36,7 +42,7 @@ async function openCityCard(page: Page, name: string, history = 0) {
       )
       .toBe(turn);
   }
-  await page.getByPlaceholder(/Message/).fill("pick from these cities with tappable choices");
+  await page.getByPlaceholder(/Message/).fill(prompt);
   await page.keyboard.press("Enter");
   await expect
     .poll(
@@ -46,59 +52,76 @@ async function openCityCard(page: Page, name: string, history = 0) {
       { timeout: 60_000 },
     )
     .toBe("waiting_input");
-  const seoul = page.getByRole("button", { name: "Seoul", exact: true });
-  if ((await seoul.count()) === 0) await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(seoul).toBeVisible({ timeout: 15_000 });
-  return seoul;
+  const first = page.getByRole("button", { name: ready, exact: true });
+  if ((await first.count()) === 0) await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(first).toBeVisible({ timeout: 15_000 });
+  return first;
 }
 
-/** Taps the tile and records every frame until `ms` after the hold has ended. */
-async function sampleCommit(page: Page, tile: ReturnType<Page["getByRole"]>, ms: number) {
-  await page.evaluate((window_) => {
-    const transcript = document.querySelector('[data-testid="transcript"]') as HTMLElement;
-    const card = document.querySelector('[data-slot="question-card"]') as HTMLElement;
-    const rows = [...transcript.querySelectorAll("[data-message-id]")];
-    const above = rows[rows.indexOf(card.closest("[data-message-id]") as Element) - 1] as Element;
-    const rect = (element: Element | null) => {
-      if (!element) return null;
-      const { x, y, width, height } = element.getBoundingClientRect();
-      return { x, y, width, height };
-    };
-    const flights: number[] = [];
-    new MutationObserver((records) => {
-      for (const record of records) {
-        for (const node of record.addedNodes) {
-          if (node instanceof HTMLElement && node.matches("[data-ask-flight]")) flights.push(1);
-        }
-      }
-    }).observe(card, { childList: true, subtree: true });
-    const frames: Frame[] = [];
-    let heldAt: number | null = null;
-    const probe = window as unknown as { commit: Promise<{ frames: Frame[]; flights: number[] }> };
-    probe.commit = new Promise((resolve) => {
-      const step = (now: number) => {
-        const bubble = card.querySelector('[data-slot="user-bubble"]');
-        const frame = {
-          t: now,
-          busy: Boolean(card.querySelector("fieldset:disabled")),
-          clone: rect(card.querySelector("[data-ask-flight]")),
-          card: rect(card) as Rect,
-          above: rect(above) as Rect,
-          bubble: rect(bubble),
-          bubbleVisible: Boolean(bubble && getComputedStyle(bubble).visibility === "visible"),
-          scrollTop: transcript.scrollTop,
-          scrollMax: transcript.scrollHeight - transcript.clientHeight,
-          fold: (card.firstElementChild as Element).getBoundingClientRect().height,
-          rows: transcript.querySelectorAll("[data-message-id]").length,
-        };
-        frames.push(frame);
-        if (frame.busy && heldAt === null) heldAt = frame.t;
-        if (heldAt !== null && frame.t - heldAt > window_) resolve({ frames, flights });
-        else requestAnimationFrame(step);
+/** Clicks and records every frame until `ms` after the commit has begun, which `started` marks. */
+async function sampleCommit(
+  page: Page,
+  tile: ReturnType<Page["getByRole"]>,
+  ms: number,
+  started = "fieldset:disabled",
+) {
+  await page.evaluate(
+    ([window_, started]) => {
+      const transcript = document.querySelector('[data-testid="transcript"]') as HTMLElement;
+      const card = document.querySelector('[data-slot="question-card"]') as HTMLElement;
+      const rows = [...transcript.querySelectorAll("[data-message-id]")];
+      const above = rows[rows.indexOf(card.closest("[data-message-id]") as Element) - 1] as Element;
+      const rect = (element: Element | null) => {
+        if (!element) return null;
+        const { x, y, width, height } = element.getBoundingClientRect();
+        return { x, y, width, height };
       };
-      requestAnimationFrame(step);
-    });
-  }, ms);
+      const flights: number[] = [];
+      new MutationObserver((records) => {
+        for (const record of records) {
+          for (const node of record.addedNodes) {
+            if (node instanceof HTMLElement && node.matches("[data-ask-flight]")) flights.push(1);
+          }
+        }
+      }).observe(card, { childList: true, subtree: true });
+      const frames: Frame[] = [];
+      let heldAt: number | null = null;
+      const probe = window as unknown as {
+        commit: Promise<{ frames: Frame[]; flights: number[] }>;
+      };
+      probe.commit = new Promise((resolve) => {
+        const step = (now: number) => {
+          const bubble = card.querySelector('[data-slot="user-bubble"]');
+          const frame = {
+            t: now,
+            busy: Boolean(card.querySelector(started)),
+            clone: rect(card.querySelector("[data-ask-flight]")),
+            card: rect(card) as Rect,
+            above: rect(above) as Rect,
+            bubble: rect(bubble),
+            bubbleVisible: Boolean(bubble && getComputedStyle(bubble).visibility === "visible"),
+            scrollTop: transcript.scrollTop,
+            scrollMax: transcript.scrollHeight - transcript.clientHeight,
+            fold: (card.firstElementChild as Element).getBoundingClientRect().height,
+            rows: transcript.querySelectorAll("[data-message-id]").length,
+            ghost: Math.max(
+              0,
+              ...[...(card.firstElementChild as Element).children]
+                .filter((child) => !child.matches("[data-ask-flight]"))
+                .map((child) => Number(getComputedStyle(child).opacity)),
+            ),
+            bubbleOpacity: bubble ? Number(getComputedStyle(bubble).opacity) : 0,
+          };
+          frames.push(frame);
+          if (frame.busy && heldAt === null) heldAt = frame.t;
+          if (heldAt !== null && frame.t - heldAt > window_) resolve({ frames, flights });
+          else requestAnimationFrame(step);
+        };
+        requestAnimationFrame(step);
+      });
+    },
+    [ms, started] as const,
+  );
   const clicked = await page.evaluate(() => performance.now());
   await tile.click();
   const { frames, flights } = await page.evaluate(
@@ -125,6 +148,16 @@ function wobble(values: number[], from: number, to: number) {
   return { back, over };
 }
 
+/**
+ * Holds the answer back from the server for `ms`, so the run resumes (and its working line lands
+ * under the card) only once the movement has rested; ask-card-follow covers it landing mid-flight.
+ */
+const holdAnswer = (page: Page, ms: number) =>
+  page.route("**/rpc/threads/answer", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, ms));
+    await route.continue();
+  });
+
 /** The spring's steepest stretch moves 0.78% of the way per ms; no frame may outrun it. */
 const STEEPEST_PER_MS = 0.0078;
 
@@ -136,7 +169,8 @@ for (const { viewport, history, band } of [
     page,
   }, testInfo) => {
     await page.setViewportSize(viewport);
-    const seoul = await openCityCard(page, `ask-motion-${viewport.width}`, history);
+    const seoul = await openCard(page, `ask-motion-${viewport.width}`, history);
+    await holdAnswer(page, 1500);
     await expect(seoul).toBeInViewport();
     const { frames, flights } = await sampleCommit(page, seoul, 1000);
 
@@ -239,7 +273,7 @@ test("with reduced motion the answer fades in after the same hold, with no fligh
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  const seoul = await openCityCard(page, "ask-motion-reduced");
+  const seoul = await openCard(page, "ask-motion-reduced");
   const answered = page.waitForRequest((request) => request.url().includes("/rpc/threads/answer"));
   const { frames, flights, clicked } = await sampleCommit(page, seoul, 700);
   await answered;
@@ -255,7 +289,7 @@ test("with reduced motion the answer fades in after the same hold, with no fligh
 test("an answer that fails mid-flight reopens the card on the choice, with no bubble left (CA4)", async ({
   page,
 }) => {
-  const seoul = await openCityCard(page, "ask-motion-failed");
+  const seoul = await openCard(page, "ask-motion-failed");
   await page.route("**/rpc/threads/answer", async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 300));
     await route.abort();
@@ -274,11 +308,74 @@ test("an answer that fails mid-flight reopens the card on the choice, with no bu
   ).toBe("");
 });
 
+test("a stack's Send folds the card while the answers rise into their bubble, in one movement (CA5, stack)", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 640 });
+  const builtIn = await openCard(page, "ask-motion-stack", 2, fridge);
+  await holdAnswer(page, 1500);
+  const card = page.locator('[data-slot="question-card"]');
+  await builtIn.click();
+  await expect(card.locator('[data-slot="stack-head"]')).toHaveText("Extras·1 more");
+  await card.getByRole("button", { name: "Ice maker", exact: true }).click();
+  await card.getByRole("button", { name: "Next", exact: true }).click();
+  await card.getByRole("button", { name: "Skip", exact: true }).click();
+  const send = card.getByRole("button", { name: "Send", exact: true });
+  await expect(send).toBeInViewport();
+  const { frames, flights } = await sampleCommit(page, send, 700, '[data-slot="user-bubble"]');
+
+  const first = frames.findIndex((frame) => frame.busy);
+  const before = frames[first - 1]!;
+  const moving = frames.slice(first);
+  const final = frames.at(-1)!;
+  // Within the card: at the end of the thread the list's scroll brings the card down instead.
+  const rise = (f: Frame) => f.bubble!.y - f.card.y;
+  const series = {
+    bubbleY: [moving.map(rise), rise(moving[0]!), rise(final)],
+    // The clip that folds the old card exists only while it folds; then the card is its own height.
+    cardHeight: [
+      moving.map((f) => (f.fold > 0 ? f.fold : f.card.height)),
+      before.card.height,
+      final.card.height,
+    ],
+    rowAbove: [moving.map((f) => f.above.y), before.above.y, final.above.y],
+  } as const;
+  const report = {
+    fold: before.card.height - final.card.height,
+    rise: rise(moving[0]!) - rise(final),
+    wobble: Object.fromEntries(
+      Object.entries(series).map(([name, [values, from, to]]) => [name, wobble(values, from, to)]),
+    ),
+    endFrames: Object.fromEntries(
+      Object.entries(series).map(([name, [values, from, to]]) => [
+        name,
+        progress(values, from, to).findIndex((value) => value >= 0.995),
+      ]),
+    ),
+  };
+  writeFileSync(testInfo.outputPath("ca5-stack-frames.json"), JSON.stringify(frames));
+  writeFileSync(testInfo.outputPath("ca5-stack-report.json"), JSON.stringify(report, null, 2));
+  await testInfo.attach("ca5-stack-report", { path: testInfo.outputPath("ca5-stack-report.json") });
+
+  expect(flights).toEqual([]);
+  // The bubble shows only once the old card has faded: never both at once.
+  expect(frames.filter((f) => f.ghost > 0.01 && f.bubbleOpacity > 0.01)).toEqual([]);
+  expect(report.fold).toBeGreaterThan(100);
+  expect(report.rise).toBeGreaterThan(20);
+  for (const { back, over } of Object.values(report.wobble)) {
+    expect(back).toBeLessThanOrEqual(3);
+    expect(over).toBeLessThanOrEqual(3);
+  }
+  const ends = Object.values(report.endFrames);
+  expect(Math.max(...ends) - Math.min(...ends)).toBeLessThanOrEqual(1);
+  expect(new Set(frames.map((f) => f.rows)).size).toBe(1);
+});
+
 test("a resize mid-flight lands the answer where its bubble now stands, without a jump (CA5)", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 640 });
-  const seoul = await openCityCard(page, "ask-motion-resize");
+  const seoul = await openCard(page, "ask-motion-resize");
   await page.evaluate(() => {
     const probe = window as unknown as { resizedAt: number };
     window.addEventListener("resize", () => {
@@ -298,4 +395,128 @@ test("a resize mid-flight lands the answer where its bubble now stands, without 
   expect(after.length).toBeGreaterThan(10);
   expect(after.filter((frame) => frame.clone)).toEqual([]);
   expect(after.every((frame) => frame.bubbleVisible)).toBe(true);
+});
+
+type Move = {
+  t: number;
+  /** How much of each folded line shows, by its label: its opacity times the share the card does not clip. */
+  lines: Record<string, number>;
+  /** Where the row above the card stands. */
+  above: number;
+  /** The old question fading out over the card. */
+  ghost: number;
+  /** The question (or the recap's actions) fading in. */
+  incoming: number;
+};
+
+/** Records every frame while `act` moves the stack on, for `ms`. */
+async function sampleMove(page: Page, act: () => Promise<void>, ms: number) {
+  await page.evaluate((window_) => {
+    const card = document.querySelector('[data-slot="question-card"]') as HTMLElement;
+    const seen = (element: Element | null | undefined) => {
+      let opacity = 1;
+      for (let node = element ?? null; node && node !== card; node = node.parentElement) {
+        opacity *= Number(getComputedStyle(node).opacity);
+      }
+      return element ? opacity : 0;
+    };
+    const live = (selector: string) =>
+      [...card.querySelectorAll(selector)].filter(
+        (element) => !element.closest("[data-ask-ghost]"),
+      );
+    const frames: Move[] = [];
+    const start = performance.now();
+    (window as unknown as { move: Promise<Move[]> }).move = new Promise((resolve) => {
+      const step = (now: number) => {
+        const incoming = live('[data-slot="stack-step"], [data-slot="framed-block-actions"]');
+        const block = card.querySelector('[data-slot="framed-block"]') as Element;
+        const shown = (line: Element) => {
+          const box = block.getBoundingClientRect();
+          const rect = line.getBoundingClientRect();
+          const inside = Math.min(rect.bottom, box.bottom) - Math.max(rect.top, box.top);
+          return seen(line) * Math.max(0, Math.min(1, inside / rect.height));
+        };
+        const row = card.closest("[data-message-id]") as Element;
+        const rows = [...document.querySelectorAll("[data-message-id]")];
+        frames.push({
+          t: now - start,
+          lines: Object.fromEntries(
+            live('[data-slot="stack-line"]').map((line) => [
+              line.firstElementChild?.textContent ?? "",
+              Math.round(shown(line) * 1000) / 1000,
+            ]),
+          ),
+          ghost: seen(card.querySelector("[data-ask-ghost]")),
+          incoming: Math.max(0, ...incoming.map(seen)),
+          above: (rows[rows.indexOf(row) - 1] as Element).getBoundingClientRect().top,
+        });
+        if (now - start > window_) resolve(frames);
+        else requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    });
+  }, ms);
+  await act();
+  return page.evaluate(() => (window as unknown as { move: Promise<Move[]> }).move);
+}
+
+/** Where the card's foot stands against the bottom of the thread, in px; positive is hidden. */
+const footBelow = (page: Page) =>
+  page.evaluate(() => {
+    const transcript = document.querySelector('[data-testid="transcript"]') as HTMLElement;
+    const block = document.querySelector('[data-slot="question-card"] [data-slot="framed-block"]');
+    return (
+      (block as Element).getBoundingClientRect().bottom - transcript.getBoundingClientRect().bottom
+    );
+  });
+
+/** The frames of a move from the first one where anything fades, after a tap's hold. */
+const moving = (frames: Move[]) => {
+  const fading = (f: Move) =>
+    f.ghost > 0 || f.incoming < 0.999 || Object.values(f.lines).some((line) => line < 0.999);
+  const first = frames.findIndex(fading);
+  return first < 0 ? [] : frames.slice(first);
+};
+
+test("a stack moves on in place: kept lines stay, the card is never blank, its foot stays in view (CA5, stack)", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 640 });
+  const builtIn = await openCard(page, "ask-motion-advance", 2, fridge);
+  const card = page.locator('[data-slot="question-card"]');
+  const button = (name: string) => card.getByRole("button", { name, exact: true });
+  await expect(builtIn).toBeInViewport();
+
+  const first = moving(await sampleMove(page, () => builtIn.click(), 1300));
+  await expect(card.locator('[data-slot="stack-head"]')).toHaveText("Extras·1 more");
+  const afterFirst = await footBelow(page);
+  await button("Ice maker").click();
+  await expect(button("Next")).toBeVisible();
+  await page.waitForTimeout(700);
+  const afterTick = await footBelow(page);
+  const second = moving(await sampleMove(page, () => button("Next").click(), 700));
+  const third = moving(await sampleMove(page, () => button("Skip").click(), 700));
+  await expect(button("Send")).toBeVisible();
+  await page.waitForTimeout(100);
+  const afterRecap = await footBelow(page);
+  const report = { first, second, third, afterFirst, afterTick, afterRecap };
+  writeFileSync(testInfo.outputPath("stack-moves.json"), JSON.stringify(report));
+
+  for (const frames of [first, second, third]) {
+    expect(frames.length).toBeGreaterThan(10);
+    // The thread above moves on the spring or not at all: no frame jumps.
+    const travel = Math.abs(frames.at(-1)!.above - frames[0]!.above);
+    const steps = frames.slice(1).map((f, i) => Math.abs(f.above - frames[i]!.above));
+    expect(Math.max(...steps)).toBeLessThanOrEqual(travel * 0.2 + 1);
+    // Never a blank card: what leaves and what arrives overlap.
+    expect(Math.min(...frames.map((f) => Math.max(f.ghost, f.incoming)))).toBeGreaterThan(0.4);
+  }
+  // The lines already folded never fade, into the recap included.
+  for (const frame of second) expect(frame.lines.Format).toBe(1);
+  for (const frame of third) expect([frame.lines.Format, frame.lines.Extras]).toEqual([1, 1]);
+  // A newly folded line shows once the old question is gone, so its answer never shows twice.
+  const twice = (frames: Move[], label: string) =>
+    frames.filter((f) => f.ghost > 0.01 && (f.lines[label] ?? 0) > 0.01);
+  expect([twice(first, "Format"), twice(second, "Extras")]).toEqual([[], []]);
+  for (const below of [afterFirst, afterTick, afterRecap]) expect(below).toBeLessThanOrEqual(0);
 });

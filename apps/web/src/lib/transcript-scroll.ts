@@ -4,6 +4,25 @@ export function transcriptIsNearEnd(
   return element.scrollHeight - element.scrollTop - element.clientHeight < 80;
 }
 
+/**
+ * The scroll that shows the list's last row, from layout. A row moving on a transform still widens
+ * scrollHeight, so while rows glide scrollHeight runs past the end and the browser pulls the scroll
+ * back as they settle.
+ */
+export function transcriptEnd(element: HTMLElement): number {
+  const max = element.scrollHeight - element.clientHeight;
+  const last = element.lastElementChild;
+  if (!(last instanceof HTMLElement) || !last.offsetParent) return max;
+  const origin = last.offsetParent === element ? 0 : element.offsetTop + element.clientTop;
+  const bottom =
+    last.offsetTop -
+    origin +
+    last.offsetHeight +
+    Number.parseFloat(getComputedStyle(last).marginBottom) +
+    Number.parseFloat(getComputedStyle(element).paddingBottom);
+  return Math.min(max, Math.max(0, bottom - element.clientHeight));
+}
+
 export function transcriptCanSnapAfterFrame(
   element: Pick<HTMLElement, "scrollTop"> | null,
   queuedElement: Pick<HTMLElement, "scrollTop">,
