@@ -140,18 +140,12 @@ describe("the transcript", () => {
     ]);
   });
 
-  it("says a run needs input above the card it waits on, and nothing while it runs", async () => {
-    await renderThread(6);
-    expect(text('[data-testid="run-waiting"]')).toEqual([]);
-
+  it("shows the card a run waits on with no status line above it (CA27)", async () => {
     await renderThread(7);
-    expect(text('[data-testid="run-waiting"]')).toEqual(["Needs input"]);
-    expect(
-      document
-        .querySelector('[data-testid="run-waiting"]')
-        ?.closest('[data-slot="message-row"]')
-        ?.nextElementSibling?.getAttribute("data-message-id"),
-    ).toBe("str-06");
+    expect(text('[data-slot="question-card"] [data-slot="framed-block-question"]')).toEqual([
+      "Compare prices too?",
+    ]);
+    expect(document.body.textContent).not.toContain("Needs input");
   });
 
   it("holds a jump to a reply's parent against the next row, then follows a scroll back down", async () => {
