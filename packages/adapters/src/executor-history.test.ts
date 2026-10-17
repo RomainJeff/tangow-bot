@@ -21,7 +21,12 @@ import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
 import { createRunExecutor } from "./executor.js";
-import { formatRecalledMemory } from "./history-compaction.js";
+import {
+  estimateHistoryTokens,
+  estimateTextTokens,
+  estimateToolSchemaTokens,
+  formatRecalledMemory,
+} from "./history-compaction.js";
 import { PostgresSessionLog } from "./session-log/postgres.js";
 import { recordingSessionLog } from "./session-log/recording.test-support.js";
 
@@ -79,6 +84,7 @@ const started = {
 function fixture(
   options: {
     tail?: SessionEntry[];
+    prompt?: string;
     page?: SessionEntry[];
     clearSeq?: number;
     run?: Record<string, unknown>;
@@ -173,7 +179,7 @@ function fixture(
     task: {
       findUniqueOrThrow: vi.fn(async () => ({
         id: run.taskId,
-        prompt: "What did Ava decide?",
+        prompt: options.prompt ?? "What did Ava decide?",
       })),
     },
     routine: { findUnique: vi.fn(async () => null) },
@@ -309,6 +315,112 @@ function fixture(
 }
 
 describe("the history a run reads from its session log", () => {
+  it.each([false, true])(
+    "counts the source prompt once while preserving active effects and steering, resumed=%s",
+    async (resumed) => {
+      const prompt = "x".repeat(245_000);
+      const own = { botId: BOT, runId: RUN };
+      const tail = chain(0, [
+        said(prompt),
+        ...(resumed
+          ? [
+              { ...started, ...own },
+              {
+                ...own,
+                type: "tool.call",
+                payload: { callId: "effect", name: "write_file", input: '{"path":"result.txt"}' },
+              },
+              {
+                ...own,
+                type: "tool.result",
+                payload: {
+                  callId: "effect",
+                  output: "written once",
+                  isError: false,
+                  artifactIds: [],
+                },
+              },
+              said("Do not write the file again"),
+            ]
+          : []),
+      ]);
+      const { runtimeRun, finalized } = await fixture({
+        prompt,
+        tail,
+        run: { sourceMessageId: "e-0" },
+        model: { provider: "openai", id: "gpt-4o" },
+      }).execute();
+      expect(finalized).toMatchObject({ outcome: "completed" });
+      expect(runtimeRun.mock.calls).toHaveLength(1);
+      const request = runtimeRun.mock.calls[0]![0];
+      expect(request.prompt).toContain(prompt);
+      expect(request.history.some((turn) => turn.id === "e-0")).toBe(false);
+      expect(
+        estimateTextTokens(request.prompt) +
+          estimateTextTokens(request.instructions) +
+          estimateToolSchemaTokens(request.tools) +
+          estimateHistoryTokens(request.history) +
+          16_384,
+      ).toBeLessThan(128_000);
+      if (resumed) {
+        expect(request.history.flatMap((turn) => turn.parts ?? [])).toContainEqual({
+          type: "toolCalls",
+          calls: [
+            {
+              id: "effect",
+              name: "write_file",
+              args: { path: "result.txt" },
+              output: "written once",
+            },
+          ],
+        });
+        expect(request.history.map((turn) => turn.content)).toContain(
+          "Do not write the file again",
+        );
+      }
+    },
+  );
+
+  it.each([
+    { model: { provider: "openai", id: "gpt-4o" }, recallChars: 245_000 },
+    { model: { provider: "local", id: "capacity-local" }, recallChars: 100_000 },
+    { model: { provider: "scripted", id: "scripted" }, recallChars: 245_000 },
+    { model: { provider: "openai", id: "gpt-4o" }, recallChars: 230_000 },
+  ])(
+    "bounds combined historical blocks before admitting finished turns, $model.id/$recallChars",
+    async ({ model, recallChars }) => {
+      const summary = `Summary survives. ${"s".repeat(20_000)}`;
+      const tail = chain(1, [
+        { type: "compaction", payload: { summary, coveredUpToSeq: 0 } },
+        said("Recent question"),
+        started,
+        replied("Recent answer"),
+      ]);
+      const f = fixture({ tail, model });
+      f.recall.mockResolvedValue({
+        ok: true,
+        value: [{ memory: "r".repeat(recallChars), score: 0.9 }],
+      });
+      const { runtimeRun, finalized } = await f.execute();
+      expect(finalized).toMatchObject({ outcome: "completed" });
+      expect(runtimeRun.mock.calls).toHaveLength(1);
+      const request = runtimeRun.mock.calls[0]![0];
+      expect(estimateHistoryTokens(request.history)).toBeLessThanOrEqual(60_000);
+      expect(request.history[0]!.content).toContain("Summary survives.");
+      expect(request.history.map((turn) => turn.content)).toContain("Recent question");
+      expect(request.history.map((turn) => turn.content)).toContain("Recent answer");
+      if (request.model.contextWindow !== undefined) {
+        expect(
+          estimateTextTokens(request.prompt) +
+            estimateTextTokens(request.instructions) +
+            estimateToolSchemaTokens(request.tools) +
+            estimateHistoryTokens(request.history) +
+            16_384,
+        ).toBeLessThanOrEqual(request.model.contextWindow);
+      }
+    },
+  );
+
   it("rejects oversized active tool state instead of silently forgetting its effects", async () => {
     const own = { botId: BOT, runId: RUN };
     const tail = chain(0, [

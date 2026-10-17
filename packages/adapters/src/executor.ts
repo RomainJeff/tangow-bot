@@ -287,6 +287,7 @@ import {
   estimateToolSchemaTokens,
   formatRecalledMemory,
   HISTORY_COUNT_WINDOW,
+  HISTORY_TOKEN_CEILING,
   historyBudgetTokens,
   MAX_RECALLED_MEMORIES,
   selectHistoryWindow,
@@ -1685,7 +1686,14 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const activeStart = !archiveHistory
           ? -1
           : uncompactedHistory.findIndex((turn) => turn.id !== undefined && activeIds.has(turn.id));
-        const activeHistory = activeStart < 0 ? [] : uncompactedHistory.slice(activeStart);
+        // Pi removes the source user turn by ID because the prompt already carries it.
+        // Find the active boundary first so later steering stays protected on a resumed run.
+        const activeHistory =
+          activeStart < 0
+            ? []
+            : uncompactedHistory
+                .slice(activeStart)
+                .filter((turn) => turn.role !== "user" || turn.id !== run.sourceMessageId);
         const finishedHistory =
           activeStart < 0 ? uncompactedHistory : uncompactedHistory.slice(0, activeStart);
         historyMs += performance.now() - projectStartedAt;
@@ -4426,19 +4434,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             }) + (recapRequested ? RUN_RECAP_INSTRUCTION : "");
           const instructionTokens = estimateTextTokens(instructions);
           const toolSchemaTokens = estimateToolSchemaTokens(tools);
-          // Everything the request carries that the window is not choosing from. The turn prompt
-          // (quoted reply context and inlined attachments) and the compacted-summary and
-          // recalled-memory blocks ride in front of the thread messages, so leaving them out let
-          // the window keep messages that no longer fit and the provider reject the request.
-          const nonHistoryTokens =
-            instructionTokens +
-            toolSchemaTokens +
-            estimateTextTokens(prompt) +
-            estimateHistoryTokens(historicalContext);
-          // Sized here rather than where `history` is built, because the window depends on the
-          // resolved model's context window and on what the rest of the run costs: the rendered
-          // instructions already carry memory, scratchpad and the peer directory, so a bot with a
-          // large durable memory or many connector tools keeps fewer messages than a bare one.
+          const promptTokens = instructionTokens + toolSchemaTokens + estimateTextTokens(prompt);
           const policy = archiveHistory ? "bounded" : "channel";
           const activeTokens = estimateHistoryTokens(activeHistory);
           const outputReserve = Math.max(
@@ -4448,7 +4444,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               resolved.maxTokens,
             ),
           );
-          const requiredTokens = nonHistoryTokens + activeTokens + outputReserve;
+          const requiredTokens = promptTokens + activeTokens + outputReserve;
           if (
             archiveHistory &&
             resolved.contextWindow !== undefined &&
@@ -4460,11 +4456,27 @@ export function createRunExecutor(deps: ExecutorDeps) {
               "Model context cannot fit the fixed prompt, active run, and reply reserve",
             );
           }
-          const fixedTokens = archiveHistory
-            ? nonHistoryTokens +
+          const activeFixedTokens = archiveHistory
+            ? promptTokens +
               activeTokens +
               Math.max(0, outputReserve - DEFAULT_COMPACTION_SETTINGS.reserveTokens)
-            : nonHistoryTokens;
+            : promptTokens;
+          let historicalBudget =
+            historyBudgetTokens(resolved.contextWindow, activeFixedTokens, policy) ??
+            HISTORY_TOKEN_CEILING;
+          // Summary and recall are optional historical data. Preserve whole blocks in priority
+          // order, and reserve active effects before admitting either block or finished turns.
+          const boundedHistoricalContext = archiveHistory
+            ? historicalContext.filter((turn) => {
+                const tokens = estimateHistoryMessageTokens(turn);
+                if (tokens > historicalBudget) return false;
+                historicalBudget -= tokens;
+                return true;
+              })
+            : historicalContext;
+          const historicalContextTokens = estimateHistoryTokens(boundedHistoricalContext);
+          const nonHistoryTokens = promptTokens + historicalContextTokens;
+          const fixedTokens = activeFixedTokens + historicalContextTokens;
           const historyBudget = historyBudgetTokens(resolved.contextWindow, fixedTokens, policy);
           const windowStartedAt = performance.now();
           const window = selectHistoryWindow({
@@ -4473,12 +4485,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
             nonHistoryTokens: fixedTokens,
             messageWindowSize: HISTORY_COUNT_WINDOW,
             policy,
-            historicalContextTokens: estimateHistoryTokens(historicalContext),
+            historicalContextTokens,
             protectToolExchange: false,
           });
           historyMs += performance.now() - windowStartedAt;
           const history = [...window.messages, ...activeHistory];
-          const runtimeHistory = [...historicalContext, ...history];
+          const runtimeHistory = [...boundedHistoricalContext, ...history];
           // Split by role so a change in how past turns are rehydrated is visible here.
           const historyTokensByRole = runtimeHistory.reduce<Record<string, number>>(
             (totals, message) => {

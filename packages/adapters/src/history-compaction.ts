@@ -25,7 +25,7 @@ import type {
 export const MAX_COMPACTED_SUMMARY_CHARS = 20_000;
 /** Maximum message count when the model context window is unknown. */
 export const HISTORY_COUNT_WINDOW = 200;
-const HISTORY_TOKEN_CEILING = 60_000;
+export const HISTORY_TOKEN_CEILING = 60_000;
 /** How many semantic memories can be injected into one run. */
 export const MAX_RECALLED_MEMORIES = 5;
 
