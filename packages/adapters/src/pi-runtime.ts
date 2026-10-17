@@ -75,7 +75,10 @@ function cardText(value: unknown, max = Number.POSITIVE_INFINITY, keepLines = fa
   const folded = keepLines
     ? cleaned
         .split(/\r?\n/)
-        .map((line) => line.replace(/\s+/g, " ").trim())
+        .map((line) => {
+          const indent = /^[ \t]*/.exec(line)?.[0] ?? "";
+          return indent + line.slice(indent.length).replace(/\s+/g, " ").trim();
+        })
         .join("\n")
         .replace(/\n{3,}/g, "\n\n")
     : cleaned.replace(/\s+/g, " ");

@@ -193,9 +193,14 @@ describe("ask_user option normalization (CA20)", () => {
   it("keeps a question's Markdown line breaks", () => {
     const [question] =
       normalizeAskQuestions({
-        questions: [{ question: "Pick one:\n- fast\n- cheap\n\n\n\nWhich?", options: ["A", "B"] }],
+        questions: [
+          {
+            question: "Pick one:\n- fast\n  - very  fast\n- cheap\n\n\n\nWhich?",
+            options: ["A", "B"],
+          },
+        ],
       }) ?? [];
-    expect(question?.question).toBe("Pick one:\n- fast\n- cheap\n\nWhich?");
+    expect(question?.question).toBe("Pick one:\n- fast\n  - very fast\n- cheap\n\nWhich?");
   });
 
   it("removes bidi, control and zero-width characters, keeps the emoji joiner, and folds spaces", () => {
@@ -215,7 +220,7 @@ describe("ask_user option normalization (CA20)", () => {
     expect(question).toEqual({
       id: "q1",
       header: "Format",
-      question: "Which\n\nfridge?",
+      question: "Which\n\n fridge?",
       options: [
         { id: "q1o1", label: "Allow", description: "Café 👩\u200D💻" },
         { id: "q1o2", label: "Deny" },
