@@ -4,6 +4,7 @@ import { nextSessionEntry, SessionAppendError, sessionEntryNonce } from "@rakazo
 import type {
   CARD_STATE_TYPES,
   EntryId,
+  FactualRunRecap,
   MessageBlock,
   RunOutcome,
   SessionEntry,
@@ -12,6 +13,7 @@ import type {
   ThreadEntry,
 } from "@rakazo/contracts";
 import {
+  FactualRunRecapSchema,
   isRunTrace,
   needsThePerson,
   parseKnownMessageBlocks,
@@ -718,14 +720,27 @@ export async function appendRunFinishedInTransaction(
   tx: Prisma.TransactionClient,
   runId: string,
   ending: RunEnding,
-  { usage, result = "" }: { usage?: RunOutcome["usage"]; result?: string } = {},
+  {
+    usage,
+    result = "",
+    recap,
+  }: { usage?: RunOutcome["usage"]; result?: string; recap?: FactualRunRecap } = {},
 ): Promise<void> {
   // Thread, then run, then session, as finalize and every canceller take them, so that the run's
   // status and its log are read after whichever of them committed first.
   await tx.$queryRaw`
     SELECT id FROM threads WHERE id = (SELECT "threadId" FROM runs WHERE id = ${runId}) FOR UPDATE`;
-  const [run] = await tx.$queryRaw<Array<{ status: string }>>`
-    SELECT status FROM runs WHERE id = ${runId} FOR NO KEY UPDATE`;
+  const [run] = await tx.$queryRaw<
+    Array<{
+      status: string;
+      sessionId: string;
+      botId: string;
+      routineId: string | null;
+      parentRunId: string | null;
+      trigger: string;
+    }>
+  >`
+    SELECT status, "sessionId", "botId", "routineId", "parentRunId", trigger FROM runs WHERE id = ${runId} FOR NO KEY UPDATE`;
   const endingNow =
     ending.status === "cancelled"
       ? ACTIVE_RUN_STATUSES.some((status) => status === run?.status)
@@ -741,7 +756,37 @@ export async function appendRunFinishedInTransaction(
     },
   });
   const started = logged.find((entry) => entry.type === "run.started");
-  if (!started?.botId || logged.some((entry) => entry.type === "run.finished")) return;
+  if (logged.some((entry) => entry.type === "run.finished")) return;
+  if (!started?.botId) {
+    if (!run || run.routineId || run.parentRunId || !run.sessionId || run.trigger === "messaging")
+      return;
+    const session = await tx.conversationSession.findUnique({
+      where: { id: run.sessionId },
+      select: { kind: true },
+    });
+    if (session?.kind !== "thread") return;
+    const indexed = await tx.sessionEntry.findFirst({
+      where: { runId, type: "run.recap" },
+      select: { id: true },
+    });
+    if (!indexed)
+      await appendSessionEntryInTransaction(tx, {
+        type: "run.recap",
+        sessionId: SessionId.parse(run.sessionId),
+        botId: run.botId,
+        runId,
+        payload: {
+          version: 1,
+          sessionId: SessionId.parse(run.sessionId),
+          outcome: { ...ending, usage: { inputTokens: 0, outputTokens: 0 } },
+          recap: {
+            state: "missing",
+            reason: ending.status === "completed" ? "absent" : "interrupted",
+          },
+        },
+      });
+    return;
+  }
   const recorded = usage
     ? undefined
     : await tx.usageRecord.aggregate({
@@ -755,6 +800,50 @@ export async function appendRunFinishedInTransaction(
       outputTokens: recorded?._sum.outputTokens ?? 0,
     },
   };
+  const { kind, parentSessionId } = started.session;
+  if (kind === "interactive" && parentSessionId) {
+    let validated: FactualRunRecap =
+      ending.status === "completed"
+        ? (recap ?? { state: "missing", reason: "absent" })
+        : { state: "missing", reason: "interrupted" };
+    validated = FactualRunRecapSchema.parse(validated);
+    if (validated.state === "available") {
+      const retained = await tx.$queryRaw<Array<{ id: string; type: string; callId: string }>>`
+        SELECT e.id, e.type, e.payload ->> 'callId' AS "callId"
+        FROM session_entries e WHERE e."runId" = ${runId}
+          AND e.type IN ('tool.call', 'tool.result') AND ${ENTRY_ON_CHAIN}`;
+      const results = new Set(
+        retained.filter((entry) => entry.type === "tool.result").map((entry) => entry.callId),
+      );
+      const calls = new Set(
+        retained
+          .filter((entry) => entry.type === "tool.call" && results.has(entry.callId))
+          .map((entry) => entry.callId),
+      );
+      const ids = new Set(
+        retained.filter((entry) => calls.has(entry.callId)).map((entry) => entry.id),
+      );
+      if (
+        validated.facts.references.some((ref) =>
+          "entryId" in ref ? !ids.has(ref.entryId) : !calls.has(ref.callId),
+        )
+      ) {
+        validated = { state: "missing", reason: "invalid_reference" };
+      }
+    }
+    await appendSessionEntryInTransaction(tx, {
+      type: "run.recap",
+      sessionId: SessionId.parse(parentSessionId),
+      botId: started.botId,
+      runId,
+      payload: {
+        version: 1,
+        sessionId: SessionId.parse(started.sessionId),
+        outcome,
+        recap: validated,
+      },
+    });
+  }
   await appendSessionEntryInTransaction(tx, {
     type: "run.finished",
     sessionId: started.sessionId as SessionId,
@@ -762,7 +851,6 @@ export async function appendRunFinishedInTransaction(
     runId,
     payload: outcome,
   });
-  const { kind, parentSessionId } = started.session;
   if (kind !== "routine" || !parentSessionId) return;
   await appendSessionEntryInTransaction(tx, {
     type: "routine.finished",

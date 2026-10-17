@@ -25,6 +25,13 @@ export type NewSession =
       parentEntryId: EntryId;
     }
   | {
+      kind: "interactive";
+      id: SessionId;
+      spaceId: string;
+      parentSessionId: SessionId;
+      parentEntryId: EntryId;
+    }
+  | {
       kind: "routine";
       id: SessionId;
       spaceId: string;

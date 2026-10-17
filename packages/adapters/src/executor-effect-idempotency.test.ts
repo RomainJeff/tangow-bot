@@ -55,6 +55,7 @@ function fixture(runId = "run-1") {
   }> = [];
   const run = {
     id: runId,
+    sessionId: "session-main",
     botId: "bot-1",
     threadId: "thread-1",
     taskId: "task-1",
