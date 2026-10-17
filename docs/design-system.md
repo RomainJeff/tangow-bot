@@ -823,7 +823,7 @@ props land on the input or textarea.
 - One easing curve, `ease-quiet`, for every transition. A question card's movement
   is the one exception: it runs on `motion.spring` over `flight`, and everything
   in it (the answer, the card's height, the rows above) starts and ends on the
-  same frame.
+  same frame. Where `linear()` easing is unknown it takes the reduced-motion fade.
 - `animate-arrive` for a message, block or capsule entering; capsules in one row
   stagger 60 ms apart.
 - `rk-press` on anything pressable; `duration-(--duration-hover)` for hover.

@@ -827,6 +827,33 @@ describe("AskCard open question", () => {
     expect(shown).toEqual({ failed: "offline", bubble: "Berlin", flights: 0 });
   });
 
+  it("settles with the fade where the spring's linear() easing is unknown (Safari before 17.2)", async () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: false }));
+    const supports = vi.spyOn(CSS, "supports").mockReturnValue(false);
+    const animate = Element.prototype.animate;
+    Element.prototype.animate = (_frames, options) => {
+      if (typeof options === "object" && options.easing?.startsWith("linear(")) {
+        throw new TypeError("'linear(…)' is not a valid value for easing");
+      }
+      return { cancel() {}, finished: new Promise(() => {}) } as unknown as Animation;
+    };
+    const errors: unknown[] = [];
+    const onError = (event: ErrorEvent) => errors.push(event.error);
+    window.addEventListener("error", onError);
+    mount(cities, async () => {});
+    act(() => tile("Seoul")?.click());
+    await act(async () => vi.advanceTimersByTime(800));
+    const shown = {
+      errors,
+      bubble: container.querySelector('[data-slot="user-bubble"]')?.textContent,
+      flights: container.querySelectorAll("[data-ask-flight]").length,
+    };
+    window.removeEventListener("error", onError);
+    Element.prototype.animate = animate;
+    supports.mockRestore();
+    expect(shown).toEqual({ errors: [], bubble: "Seoul", flights: 0 });
+  });
+
   it("keeps the line breaks of the question's detail", () => {
     mount({ ...cities, detail: "Berlin: rain\nSeoul: sun" }, async () => {});
     const detail = [...container.querySelectorAll(".whitespace-pre-wrap")].find((el) =>

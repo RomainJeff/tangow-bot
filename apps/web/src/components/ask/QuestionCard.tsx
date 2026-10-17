@@ -12,7 +12,10 @@ import { AskSettled } from "./AskSettled";
 import type { Departure } from "./flight";
 import { departure, fly } from "./flight";
 
-const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+/** Also where `linear()` easing is unknown (Safari before 17.2): `animate()` would throw on the spring. */
+const reducedMotion = () =>
+  window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
+  !CSS.supports("animation-timing-function", "linear(0, 1)");
 
 export function QuestionCard({
   block,
