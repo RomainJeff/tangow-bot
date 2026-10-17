@@ -95,7 +95,14 @@ export const SecretAskPurpose = z.enum(["otp", "password", "api_key"]);
 export type SecretAskPurpose = z.infer<typeof SecretAskPurpose>;
 
 /** ask_user v2: one or more questions answered in a single card (Claude Code style). */
-export const AskQuestionOption = z.object({ id: z.string(), label: z.string() });
+export const AskQuestionOption = z.object({
+  id: z.string(),
+  label: z.string(),
+  /** What the option does, one short line shown under the label. */
+  description: z.string().optional(),
+  /** At most one per question, shown as a muted "Recommended", never preselected. */
+  recommended: z.boolean().optional(),
+});
 export const AskQuestion = z.object({
   id: z.string(),
   /** Short chip/tab label (<= 12 chars recommended). */

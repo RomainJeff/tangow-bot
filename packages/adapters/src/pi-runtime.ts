@@ -61,12 +61,42 @@ import { textContentArg } from "./tool-text.js";
 import type { TraceExporter } from "./trace-export.js";
 import { TOOL_FINAL_RESPONSE_FALLBACK, toolCallBudgetNotice } from "./user-progress.js";
 
+// C0 and C1 controls (whitespace aside, collapsed below), bidi marks and overrides, and zero-width
+// characters. U+200D stays: it joins emoji.
+const INVISIBLE =
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: these are the characters removed
+  /[\u0000-\u0008\u000E-\u001F\u007F-\u009F\u061C\u200B\u200E\u200F\u202A-\u202E\u2060\u2066-\u2069\uFEFF]/g;
+
+/** Model text a card shows as plain text: visible characters on one line, NFC, at most `max` code points. */
+function cardText(value: unknown, max = Number.POSITIVE_INFINITY): string {
+  if (typeof value !== "string") return "";
+  const text = value.replace(INVISIBLE, "").replace(/\s+/g, " ").trim().normalize("NFC");
+  return Array.from(text).slice(0, max).join("").trimEnd();
+}
+
+type AskOptionInput = { label: string; description?: string; recommended?: true };
+
+function askOption(raw: unknown): AskOptionInput {
+  if (typeof raw === "string") return { label: cardText(raw) };
+  const option = (raw ?? {}) as Record<string, unknown>;
+  const label = cardText(option.label);
+  if (!label) {
+    throw new Error('each ask_user option is a string or an object with a non-empty "label"');
+  }
+  const description = cardText(option.description, 80);
+  return {
+    label,
+    ...(description ? { description } : {}),
+    ...(option.recommended === true ? { recommended: true } : {}),
+  };
+}
+
 /**
  * Normalize the ask_user v2 `questions` argument into validated AskQuestion[] with stable ids.
  * Returns null when no `questions` array is present (caller falls back to the legacy single
  * question + options shape). Throws on a malformed questions array so the model sees the error.
  */
-function normalizeAskQuestions(raw: Record<string, unknown>): AskQuestion[] | null {
+export function normalizeAskQuestions(raw: Record<string, unknown>): AskQuestion[] | null {
   if (!Array.isArray(raw.questions)) return null;
   const rawQuestions = raw.questions;
   if (rawQuestions.length < 1 || rawQuestions.length > 4) {
@@ -74,32 +104,33 @@ function normalizeAskQuestions(raw: Record<string, unknown>): AskQuestion[] | nu
   }
   return rawQuestions.map((entry, qIndex) => {
     const q = (entry ?? {}) as Record<string, unknown>;
-    const question = String(q.question ?? "").trim();
+    const question = cardText(q.question, 240);
     if (!question) throw new Error("each ask_user question needs non-empty question text");
-    const options = Array.isArray(q.options)
-      ? q.options.map((option) => (typeof option === "string" ? option.trim() : ""))
-      : [];
+    const options = Array.isArray(q.options) ? q.options.map(askOption) : [];
+    const labels = options.map((option) => option.label);
     if (
       options.length > 0 &&
       (options.length < 2 ||
         options.length > 4 ||
-        options.some((option) => option.length === 0 || option.length > 80) ||
-        new Set(options).size !== options.length)
+        labels.some((label) => label.length === 0 || label.length > 80) ||
+        new Set(labels).size !== labels.length)
     ) {
       throw new Error(
         "each ask_user question offers two to four unique, non-empty options (or none for a free-text answer)",
       );
     }
-    const header = q.header ? String(q.header).trim().slice(0, 24) : undefined;
+    const recommended = options.findIndex((option) => option.recommended);
+    const header = cardText(q.header, 24);
     return {
       id: `q${qIndex + 1}`,
       ...(header ? { header } : {}),
-      question: question.slice(0, 240),
+      question,
       ...(options.length
         ? {
-            options: options.map((label, oIndex) => ({
+            options: options.map(({ recommended: _, ...option }, oIndex) => ({
               id: `q${qIndex + 1}o${oIndex + 1}`,
-              label,
+              ...option,
+              ...(oIndex === recommended ? { recommended: true } : {}),
             })),
           }
         : {}),
@@ -1212,8 +1243,16 @@ function toAgentTool(tool: ConnectorTool, host: ToolHost, exposedName: string): 
                 terminate: true,
               };
             }
+            if (
+              Array.isArray(args.options) &&
+              args.options.some((option) => typeof option !== "string")
+            ) {
+              throw new Error(
+                "ask_user's top-level options are plain strings; give an option a description or a recommended mark inside questions[].options",
+              );
+            }
             const options = Array.isArray(args.options)
-              ? args.options.map((option) => String(option).trim())
+              ? args.options.map((option) => cardText(option))
               : [];
             if (
               options.length < 2 ||
@@ -1609,11 +1648,20 @@ function builtinParameters(tool: ConnectorTool) {
     return Type.Object({ reason: Type.String() });
   }
   if (tool.name === "ask_user") {
-    const questionOptions = Type.Array(Type.String({ minLength: 1, maxLength: 80 }), {
-      minItems: 2,
-      maxItems: 4,
-      uniqueItems: true,
-    });
+    const optionLabel = Type.String({ minLength: 1, maxLength: 80 });
+    const legacyOptions = Type.Array(optionLabel, { minItems: 2, maxItems: 4, uniqueItems: true });
+    // Labels must be unique, which JSON Schema cannot say of objects: normalizeAskQuestions checks.
+    const questionOptions = Type.Array(
+      Type.Union([
+        optionLabel,
+        Type.Object({
+          label: optionLabel,
+          description: Type.Optional(Type.String()),
+          recommended: Type.Optional(Type.Boolean()),
+        }),
+      ]),
+      { minItems: 2, maxItems: 4 },
+    );
     // All fields optional at the wire level; normalizeAskQuestions enforces the real rules and
     // both the v2 `questions` shape and the legacy question+options shape validate here.
     return Type.Object({
@@ -1630,7 +1678,7 @@ function builtinParameters(tool: ConnectorTool) {
         ),
       ),
       question: Type.Optional(Type.String({ maxLength: 240 })),
-      options: Type.Optional(questionOptions),
+      options: Type.Optional(legacyOptions),
     });
   }
   if (tool.name === "remember") {
