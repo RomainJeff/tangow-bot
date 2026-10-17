@@ -387,8 +387,10 @@ test("a resize mid-flight lands the answer where its bubble now stands, without 
 
 type Move = {
   t: number;
-  /** Each folded line's opacity, by its label. */
+  /** How much of each folded line shows, by its label: its opacity times the share the card does not clip. */
   lines: Record<string, number>;
+  /** Where the row above the card stands. */
+  above: number;
   /** The old question fading out over the card. */
   ghost: number;
   /** The question (or the recap's actions) fading in. */
@@ -415,16 +417,26 @@ async function sampleMove(page: Page, act: () => Promise<void>, ms: number) {
     (window as unknown as { move: Promise<Move[]> }).move = new Promise((resolve) => {
       const step = (now: number) => {
         const incoming = live('[data-slot="stack-step"], [data-slot="framed-block-actions"]');
+        const block = card.querySelector('[data-slot="framed-block"]') as Element;
+        const shown = (line: Element) => {
+          const box = block.getBoundingClientRect();
+          const rect = line.getBoundingClientRect();
+          const inside = Math.min(rect.bottom, box.bottom) - Math.max(rect.top, box.top);
+          return seen(line) * Math.max(0, Math.min(1, inside / rect.height));
+        };
+        const row = card.closest("[data-message-id]") as Element;
+        const rows = [...document.querySelectorAll("[data-message-id]")];
         frames.push({
           t: now - start,
           lines: Object.fromEntries(
             live('[data-slot="stack-line"]').map((line) => [
               line.firstElementChild?.textContent ?? "",
-              seen(line),
+              Math.round(shown(line) * 1000) / 1000,
             ]),
           ),
           ghost: seen(card.querySelector("[data-ask-ghost]")),
           incoming: Math.max(0, ...incoming.map(seen)),
+          above: (rows[rows.indexOf(row) - 1] as Element).getBoundingClientRect().top,
         });
         if (now - start > window_) resolve(frames);
         else requestAnimationFrame(step);
@@ -457,7 +469,7 @@ const moving = (frames: Move[]) => {
 test("a stack moves on in place: kept lines stay, the card is never blank, its foot stays in view (CA5, stack)", async ({
   page,
 }, testInfo) => {
-  await page.setViewportSize({ width: 1440, height: 760 });
+  await page.setViewportSize({ width: 1440, height: 640 });
   const builtIn = await openCard(page, "ask-motion-advance", 2, fridge);
   const card = page.locator('[data-slot="question-card"]');
   const button = (name: string) => card.getByRole("button", { name, exact: true });
@@ -480,6 +492,10 @@ test("a stack moves on in place: kept lines stay, the card is never blank, its f
 
   for (const frames of [first, second, third]) {
     expect(frames.length).toBeGreaterThan(10);
+    // The thread above moves on the spring or not at all: no frame jumps.
+    const travel = Math.abs(frames.at(-1)!.above - frames[0]!.above);
+    const steps = frames.slice(1).map((f, i) => Math.abs(f.above - frames[i]!.above));
+    expect(Math.max(...steps)).toBeLessThanOrEqual(travel * 0.2 + 1);
     // Never a blank card: what leaves and what arrives overlap.
     expect(Math.min(...frames.map((f) => Math.max(f.ghost, f.incoming)))).toBeGreaterThan(0.4);
   }

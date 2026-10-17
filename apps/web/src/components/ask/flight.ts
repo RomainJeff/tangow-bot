@@ -215,9 +215,11 @@ export function advance(card: HTMLElement | null, apply: () => boolean, still: b
   if (!block || still) return void apply();
   for (const old of block.querySelectorAll(`:scope > ${GHOST}`)) old.remove();
   const from = block.offsetHeight;
-  const kept = new Map(
-    [...block.querySelectorAll(KEPT)].map((el) => [el, el.getBoundingClientRect().top]),
-  );
+  const list = scrollingList(block);
+  const scrolled = list?.scrollTop ?? 0;
+  const inBlock = (element: Element) =>
+    element.getBoundingClientRect().top - block.getBoundingClientRect().top;
+  const kept = new Map([...block.querySelectorAll(KEPT)].map((el) => [el, inBlock(el)]));
   const ghost = document.createElement("div");
   ghost.dataset.askGhost = "";
   ghost.inert = true;
@@ -248,16 +250,19 @@ export function advance(card: HTMLElement | null, apply: () => boolean, still: b
       fill: "backwards",
     });
   }
+  block.append(ghost);
+  block.animate([{ height: `${from}px` }, { height: `${block.offsetHeight}px` }], timing);
+  // A card that got shorter made the list clamp its scroll at once; back at its old height, the
+  // list takes its scroll back and gives it up along the spring.
+  if (list) list.scrollTop = scrolled;
   for (const [element, top] of kept) {
     if (!element.isConnected) continue;
     copies.get(element)?.style.setProperty("visibility", "hidden");
-    const shift = top - element.getBoundingClientRect().top;
+    const shift = top - inBlock(element);
     if (Math.abs(shift) >= 0.5) {
       element.animate([{ transform: `translateY(${shift}px)` }, { transform: "none" }], timing);
     }
   }
-  block.append(ghost);
-  block.animate([{ height: `${from}px` }, { height: `${block.offsetHeight}px` }], timing);
   ghost
     .animate([{ opacity: 1 }, { opacity: 0 }], {
       duration: motion.stepOut,
@@ -270,7 +275,8 @@ export function advance(card: HTMLElement | null, apply: () => boolean, still: b
 
 /**
  * When the card is in view but its foot is not, scrolls its list on the spring until the foot is,
- * without taking its top out of view. Called as the card grows, so both move on the same curve.
+ * without taking the current question out of view; the lines above it may go. Called as the card
+ * grows, so both move on the same curve.
  */
 export function reveal(block: HTMLElement, still: boolean) {
   const list = scrollingList(block);
@@ -279,7 +285,11 @@ export function reveal(block: HTMLElement, still: boolean) {
   const { top } = block.getBoundingClientRect();
   if (top >= view.bottom || top + block.offsetHeight <= view.top) return;
   const room = Number.parseFloat(getComputedStyle(list).paddingBottom) || 0;
-  const by = Math.min(top + block.offsetHeight + room - view.bottom, top - view.top);
+  const question = block.querySelector('[data-slot="stack-step"]') ?? block;
+  const by = Math.min(
+    top + block.offsetHeight + room - view.bottom,
+    question.getBoundingClientRect().top - view.top,
+  );
   if (by < 1) return;
   const from = list.scrollTop;
   cancelAnimationFrame(reveals.get(list) ?? 0);
