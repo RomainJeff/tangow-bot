@@ -21,6 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Fixed
 
 - On web and desktop, tapping an answer or a button in the conversation no longer stops it from following new messages, so the bot's working line and reply stay in view above the composer.
+- On iPhone, a question card at the bottom of the conversation keeps its full outline and shadow instead of looking cut off above the composer.
 
 ### 2026-10-16
 
