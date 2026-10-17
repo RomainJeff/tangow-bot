@@ -1,15 +1,15 @@
 import { ASK_ANSWER_MAX_LENGTH } from "@rakazo/contracts";
-import {
-  type AskCardBlock,
-  type AskForm,
-  type AskResponse,
-  encodeAnswer,
-  type FormQuestion,
-  type OptionId,
-  type StoredAnswer,
-  storedAnswerOf,
+import type {
+  AskCardBlock,
+  AskForm,
+  AskResponse,
+  FormQuestion,
+  OptionId,
+  StoredAnswer,
 } from "./form.js";
-import { type AskSettledView, askSettledOf } from "./settled.js";
+import { encodeAnswer, storedAnswerOf } from "./form.js";
+import type { AskSettledView } from "./settled.js";
+import { askSettledOf } from "./settled.js";
 
 /** How long a single choice stays selected before it is sent. */
 export const ASK_SEND_HOLD_MS = 650;

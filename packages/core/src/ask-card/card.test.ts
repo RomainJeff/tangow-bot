@@ -1,7 +1,9 @@
 import type { MessageBlock } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
-import { type AskCardOptions, type Clock, createAskCard, type SendResult } from "./card.js";
-import { askFormOf, type OptionId } from "./form.js";
+import type { AskCardOptions, Clock, SendResult } from "./card.js";
+import { createAskCard } from "./card.js";
+import type { OptionId } from "./form.js";
+import { askFormOf } from "./form.js";
 
 type AskBlock = Extract<MessageBlock, { kind: "ask" }>;
 
