@@ -2,8 +2,14 @@ import { i18n } from "@lingui/core";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { ChatMarkdown, truncateMarkdownForRender } from "@rakazo/chat-ui/web";
 import type { ThreadItem } from "@rakazo/contracts";
+import { isLinkPreviewCard } from "@rakazo/contracts";
 import type { RoutineItem, SkillSourceBlock, ThreadRow, WaitingCard } from "@rakazo/core";
-import { isAsideOnlyMessage, sessionOriginOf, threadTimeMarkerLabel } from "@rakazo/core";
+import {
+  isAsideOnlyMessage,
+  sessionOriginOf,
+  textWithoutPreviewedLinkLine,
+  threadTimeMarkerLabel,
+} from "@rakazo/core";
 import type { StackedAvatarItem } from "@rakazo/ui-web";
 import {
   BotAvatar,
@@ -29,7 +35,7 @@ import type {
   SessionViewTarget,
 } from "../../lib/thread-items";
 import { FALLBACK_BOT_COLOR, threadJumpLocation } from "./layout";
-import { MessageView, skillLine } from "./message-view";
+import { LinkPreviewRow, MessageView, skillLine, useLinkMentions } from "./message-view";
 import { RoutineFailureLine } from "./routine-run-line";
 
 type PeerBot = (
@@ -271,7 +277,14 @@ function RoutineMessage({
   context: RowContext;
 }) {
   const { t } = useLingui();
-  const { inGroup } = context;
+  const { inGroup, artifactTarget } = context;
+  const links = item.links ?? [];
+  const mentions = useLinkMentions({ role: "bot", blocks: links }, artifactTarget);
+  const [card] = links.flatMap((block) =>
+    block.kind === "link_preview" && isLinkPreviewCard(block) ? [block] : [],
+  );
+  // Without the line that is only the card's link, as a message's bubble draws it.
+  const shown = card ? textWithoutPreviewedLinkLine(text, card.url) : text;
   const bot = context.peerBot(item.botId);
   const origin = (
     <OriginLabel title={item.name} onOpen={() => openRoutineRun(context, item)} inline={inGroup} />
@@ -292,9 +305,21 @@ function RoutineMessage({
         showAuthor={inGroup}
         showAvatar={inGroup}
       >
-        <MessageBubble data-testid="routine-message" inGroup={inGroup} dir="auto">
-          <ChatMarkdown allowImages={false}>{truncateMarkdownForRender(text)}</ChatMarkdown>
-        </MessageBubble>
+        {shown ? (
+          <MessageBubble data-testid="routine-message" inGroup={inGroup} dir="auto">
+            <ChatMarkdown allowImages={false} mentions={mentions}>
+              {truncateMarkdownForRender(shown)}
+            </ChatMarkdown>
+          </MessageBubble>
+        ) : null}
+        {card ? (
+          <LinkPreviewRow
+            card={card}
+            artifactTarget={artifactTarget}
+            side="bot"
+            inGroup={inGroup}
+          />
+        ) : null}
       </MessageRow>
     </>
   );

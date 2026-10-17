@@ -11,6 +11,13 @@ export type RoutineRole =
       folded: readonly string[];
     };
 
+/** What a routine run shows in the thread: its final text, once the run completed with some. */
+export function routineShownText(
+  finished: { status?: string; result?: string } | null | undefined,
+): string | null {
+  return (finished?.status === "completed" && finished.result?.trim()) || null;
+}
+
 export function routineRoles(items: readonly ThreadItem[]): {
   roles: ReadonlyMap<string, RoutineRole>;
   hidden: ReadonlySet<string>;
@@ -38,7 +45,7 @@ export function routineRoles(items: readonly ThreadItem[]): {
       continue;
     }
     const { finished } = item;
-    const text = finished?.status === "completed" ? finished.result.trim() : "";
+    const text = routineShownText(finished);
     if (text) {
       endStreak();
       roles.set(item.id, { kind: "message", text });

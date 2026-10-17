@@ -1,7 +1,7 @@
 import { t } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { ChatMarkdown, LinkifiedText } from "@rakazo/chat-ui/web";
-import type { MessageBlock } from "@rakazo/contracts";
+import type { LinkPreviewCard as LinkPreviewCardBlock, MessageBlock } from "@rakazo/contracts";
 import type { LinkMentionResolver, SkillSourceBlock } from "@rakazo/core";
 import {
   isLinkOnlyMessage,
@@ -92,6 +92,66 @@ import {
   LinkPreviewImage,
   McpApprovalCard,
 } from "./message-cards";
+
+/**
+ * The mentions a message's links render as. The projection rebuilds the message on every event:
+ * keyed on its mentions' content, the resolver stays the same object and the memoized markdown it
+ * feeds does not re-parse.
+ */
+export function useLinkMentions(
+  message: { role: string; blocks: readonly MessageBlock[] },
+  artifactTarget: ArtifactTarget,
+): LinkMentionResolver<ReactNode> | undefined {
+  const mentionsKey = messageHostsLinkPreview(message)
+    ? JSON.stringify(message.blocks.filter((block) => block.kind === "link_mention"))
+    : "";
+  return useMemo<LinkMentionResolver<ReactNode> | undefined>(() => {
+    const lookup = linkMentionsOf(message);
+    return (
+      lookup && {
+        ...lookup,
+        icon: (artifactId) => <LinkMentionIcon target={artifactTarget} artifactId={artifactId} />,
+      }
+    );
+  }, [mentionsKey, artifactTarget]);
+}
+
+/** A preview card under the bubble it stands for, aligned to its edge and capped to its width. */
+export function LinkPreviewRow({
+  card,
+  artifactTarget,
+  side,
+  inGroup,
+}: {
+  card: LinkPreviewCardBlock;
+  artifactTarget: ArtifactTarget;
+  side: "user" | "bot";
+  inGroup: boolean;
+}) {
+  const image = card.image;
+  return (
+    <div className={`mt-1 flex first:mt-0 ${side === "user" ? "justify-end" : "justify-start"}`}>
+      <LinkPreviewCard
+        // The same width cap as the bubble it stands for, so the side still says who sent it.
+        className={side === "user" ? "max-w-39/50" : inGroup ? "max-w-22/25" : "max-w-41/50"}
+        href={card.url}
+        site={previewSiteLabel(card.url)}
+        title={card.title ? sanitizePreviewTitle(card.title) : undefined}
+        format={card.format}
+        imageRatio={image ? image.width / image.height : undefined}
+        image={
+          image ? (
+            <LinkPreviewImage
+              target={artifactTarget}
+              artifactId={image.artifactId}
+              fit={image.fit}
+            />
+          ) : undefined
+        }
+      />
+    </div>
+  );
+}
 
 export function previewMessageText(message: { blocks: readonly MessageBlock[] }): string {
   const text = message.blocks
@@ -187,20 +247,7 @@ export const MessageView = memo(function MessageView({
   const skills = skillSourcesOf(message.blocks);
   const skillsAtMount = useRef(skills.length);
   const skillLinesLive = arrivesLive || skills.length > skillsAtMount.current;
-  // The projection rebuilds the message on every event: keyed on its mentions' content, the
-  // resolver stays the same object and the memoized markdown it feeds does not re-parse.
-  const mentionsKey = messageHostsLinkPreview(message)
-    ? JSON.stringify(message.blocks.filter((block) => block.kind === "link_mention"))
-    : "";
-  const mentions = useMemo<LinkMentionResolver<ReactNode> | undefined>(() => {
-    const lookup = linkMentionsOf(message);
-    return (
-      lookup && {
-        ...lookup,
-        icon: (artifactId) => <LinkMentionIcon target={artifactTarget} artifactId={artifactId} />,
-      }
-    );
-  }, [mentionsKey, artifactTarget]);
+  const mentions = useLinkMentions(message, artifactTarget);
   const isNarration = isNarrationMessage(message);
   const botId = botIdOf(message);
   const isLive = message.role === "bot" && message.live === true;
@@ -273,38 +320,16 @@ export const MessageView = memo(function MessageView({
     const shown = textWithoutPreviewedLinkLine(text, previewCard.url);
     return shown || shown === text ? shown : undefined;
   };
-  /** The preview card, under the bubble and aligned to its edge. */
-  const previewView = (key?: number) => {
-    if (!previewCard) return null;
-    const image = previewCard.image;
-    return (
-      <div
+  const previewView = (key?: number) =>
+    previewCard ? (
+      <LinkPreviewRow
         key={key}
-        className={`mt-1 flex first:mt-0 ${message.role === "user" ? "justify-end" : "justify-start"}`}
-      >
-        <LinkPreviewCard
-          // The same width cap as the bubble it stands for, so the side still says who sent it.
-          className={
-            message.role === "user" ? "max-w-39/50" : inGroup ? "max-w-22/25" : "max-w-41/50"
-          }
-          href={previewCard.url}
-          site={previewSiteLabel(previewCard.url)}
-          title={previewCard.title ? sanitizePreviewTitle(previewCard.title) : undefined}
-          format={previewCard.format}
-          imageRatio={image ? image.width / image.height : undefined}
-          image={
-            image ? (
-              <LinkPreviewImage
-                target={artifactTarget}
-                artifactId={image.artifactId}
-                fit={image.fit}
-              />
-            ) : undefined
-          }
-        />
-      </div>
-    );
-  };
+        card={previewCard}
+        artifactTarget={artifactTarget}
+        side={message.role === "user" ? "user" : "bot"}
+        inGroup={inGroup}
+      />
+    ) : null;
   const skillLines = skills.map((skill) => skillLine(skill, skillLinesLive, onOpenSkill));
   if (!drawsSomething) return null;
   if (isNarration) {
