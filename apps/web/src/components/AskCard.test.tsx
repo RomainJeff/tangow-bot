@@ -690,6 +690,14 @@ describe("AskCard open question", () => {
     expect(tile("Seoul")?.getAttribute("aria-pressed")).toBe("false");
   });
 
+  it("keeps the arrows on the tiles once Other is open (CA12)", () => {
+    mount(cities, async () => {});
+    act(() => tile("Other…")?.click());
+    tile("Seoul")?.focus();
+    press(tile("Seoul")!, "ArrowDown");
+    expect(document.activeElement?.textContent).toBe("Berlin");
+  });
+
   it("mounted again while its answer is in flight, shows it and takes no other (TM CA20)", async () => {
     const sent: string[] = [];
     const onAnswer = (text: string) => {

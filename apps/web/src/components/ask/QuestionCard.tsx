@@ -71,7 +71,9 @@ export function QuestionCard({
     if (event.metaKey || event.ctrlKey || event.altKey || event.repeat) return;
     if (event.nativeEvent.isComposing) return;
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-      const tiles = [...(group.current?.querySelectorAll("button") ?? [])];
+      const tiles = [
+        ...(group.current?.querySelectorAll<HTMLButtonElement>('[data-slot="option-tile"]') ?? []),
+      ];
       const index = tiles.indexOf(target as HTMLButtonElement);
       if (index < 0) return;
       event.preventDefault();
