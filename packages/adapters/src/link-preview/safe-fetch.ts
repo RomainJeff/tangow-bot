@@ -13,11 +13,13 @@ import { dispatcherFetch } from "../undici-fetch.js";
 import { cancelResponseBody, isBlockedHostname, withAbort } from "../web-ssrf.js";
 import { LinkPreviewError } from "./errors.js";
 import { processReadLimiter, type ReadLimiter } from "./limits.js";
+import { sameSite } from "./site.js";
 
 export const LINK_PREVIEW_PAGE_TIMEOUT_MS = 8_000;
 export const LINK_PREVIEW_IMAGE_TIMEOUT_MS = 8_000;
 export const MAX_HTML_BYTES = 512 * 1024;
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+export const MAX_ICON_BYTES = 1024 * 1024;
 const MAX_REDIRECTS = 5;
 const CONNECT_TIMEOUT_MS = 5_000;
 const DNS_TIMEOUT_MS = 3_000;
@@ -41,9 +43,11 @@ const FIXED_HEADERS = {
 const ACCEPT = {
   page: "text/html,application/xhtml+xml;q=0.9,image/*;q=0.8",
   image: "image/*",
+  icon: "image/*",
 };
 
-export type LinkPreviewFetchMode = "page" | "image";
+/** `icon` is an image capped at 1 MiB that must stay on `site` at every hop. */
+export type LinkPreviewFetchMode = "page" | "image" | "icon";
 
 export type LinkPreviewResource =
   | { kind: "html"; url: string; bytes: Uint8Array; contentType: string }
@@ -55,6 +59,11 @@ export interface LinkPreviewFetchOptions {
   deadlineMs?: number;
   signal?: AbortSignal;
   limiter?: ReadLimiter;
+  /**
+   * A host whose site (`sameSite`) the URL and every redirect must stay on, else `off_site`.
+   * Required in `icon` mode: an icon is only ever read from the site of its page.
+   */
+  site?: string;
 }
 
 /** Fetches one page or image: `fetchLinkPreviewResource`, or a stand-in a test injects. */
@@ -113,7 +122,10 @@ export async function fetchLinkPreviewResourceWithSeams(
   const policy = seams.unsafeForTests ?? {};
   const isAddressAllowed =
     policy.isAddressAllowed ?? ((address: string) => !isPrivateAddress(address));
-  const first = parseHopUrl(rawUrl, undefined, mode, policy.allowAnyPort);
+  if (mode === "icon" && !options.site) throw new LinkPreviewError("unsafe_url");
+  const parseHop = (raw: string, base?: string) =>
+    parseHopUrl(raw, base, mode, options.site, policy.allowAnyPort);
+  const first = parseHop(rawUrl);
   const release = (options.limiter ?? processReadLimiter).tryAcquire(first.hostname);
   if (!release) throw new LinkPreviewError("busy");
 
@@ -157,7 +169,7 @@ export async function fetchLinkPreviewResourceWithSeams(
         await cancelResponseBody(response, signal);
         if (!location) throw new LinkPreviewError("http_error");
         if (redirects >= MAX_REDIRECTS) throw new LinkPreviewError("too_many_redirects");
-        url = parseHopUrl(location, url.href, mode, policy.allowAnyPort);
+        url = parseHop(location, url.href);
         continue;
       }
       return await readResource(response, url.href, mode, signal);
@@ -191,12 +203,14 @@ async function settleWithin(work: Promise<unknown>, ms: number): Promise<void> {
 
 /**
  * Scheme, credentials, port and length checks, applied to the first URL and every redirect. A page
- * that is a sign-in page is refused as well, at the first URL and at each hop.
+ * that is a sign-in page is refused as well, and so is a hop off the required site, at the first
+ * URL and at each hop.
  */
 function parseHopUrl(
   raw: string,
   base: string | undefined,
   mode: LinkPreviewFetchMode,
+  site: string | undefined,
   allowAnyPort = false,
 ): URL {
   if (raw.length > LINK_PREVIEW_URL_MAX_LENGTH) throw new LinkPreviewError("unsafe_url");
@@ -218,6 +232,7 @@ function parseHopUrl(
   if (mode === "page" && isAuthenticationDestination(url.href)) {
     throw new LinkPreviewError("login_page");
   }
+  if (site !== undefined && !sameSite(url.hostname, site)) throw new LinkPreviewError("off_site");
   return url;
 }
 
@@ -254,25 +269,27 @@ async function readResource(
     encodings.length > 1 ||
     !ACCEPTED_ENCODINGS.has(encodings[0] ?? "") ||
     !kind ||
-    (mode === "image" && kind !== "image")
+    (mode !== "page" && kind !== "image")
   ) {
     await cancelResponseBody(response, signal);
     throw new LinkPreviewError("unsupported_type");
   }
   // Content-Length can lie: it only lets an honest oversized image fail early. The byte caps
   // below apply to decoded bytes, whatever the header says.
-  if (kind === "image" && Number(response.headers.get("content-length")) > MAX_IMAGE_BYTES) {
+  const imageCap = mode === "icon" ? MAX_ICON_BYTES : MAX_IMAGE_BYTES;
+  if (kind === "image" && Number(response.headers.get("content-length")) > imageCap) {
     await cancelResponseBody(response, signal);
     throw new LinkPreviewError("too_large");
   }
-  const bytes = await readBody(response, kind, signal);
+  const bytes = await readBody(response, kind, imageCap, signal);
   return { kind, url, bytes, contentType };
 }
 
-/** HTML is cut at `</head` or 512 KiB without error; an image over 10 MiB is an error. */
+/** HTML is cut at `</head` or 512 KiB without error; an image over its cap is an error. */
 async function readBody(
   response: Response,
   kind: "html" | "image",
+  imageCap: number,
   signal: AbortSignal,
 ): Promise<Uint8Array> {
   const reader = response.body?.getReader();
@@ -287,7 +304,7 @@ async function readBody(
       if (!value?.byteLength) continue;
       if (kind === "image") {
         total += value.byteLength;
-        if (total > MAX_IMAGE_BYTES) throw new LinkPreviewError("too_large");
+        if (total > imageCap) throw new LinkPreviewError("too_large");
         chunks.push(value);
         continue;
       }
