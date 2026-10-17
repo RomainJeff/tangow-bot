@@ -9,6 +9,7 @@ import {
   linkKey,
   linkMentionCandidates,
   linkMentionLabel,
+  linkMentionsKey,
   linkMentionsOf,
   messageHostsLinkPreview,
   normalizePreviewUrl,
@@ -660,6 +661,12 @@ describe("a message's mentions", () => {
     expect(linkMentionsOf(message([mention], "system"))).toBeUndefined();
     expect(linkMentionsOf(message([{ kind: "meta", text: "m" }, mention]))).toBeUndefined();
     expect(linkMentionsOf(message([mention], "bot"))?.find(mention.url)).toBe(mention);
+  });
+
+  it("keys a message on its mentions alone, and on nothing when it may carry none", () => {
+    expect(linkMentionsKey(message([mention]))).toBe(JSON.stringify([mention]));
+    expect(linkMentionsKey(message([mention], "system"))).toBe("");
+    expect(linkMentionsKey(message([]))).toBe("[]");
   });
 
   it("labels a mention with the author's words, then the server's title, then the host", () => {

@@ -6,8 +6,8 @@ import type { LinkMentionResolver, SkillSourceBlock } from "@rakazo/core";
 import {
   isLinkOnlyMessage,
   isNarrationMessage,
+  linkMentionsKey,
   linkMentionsOf,
-  messageHostsLinkPreview,
   narrationSegments,
   previewSiteLabel,
   sanitizePreviewTitle,
@@ -189,9 +189,7 @@ export const MessageView = memo(function MessageView({
   const skillLinesLive = arrivesLive || skills.length > skillsAtMount.current;
   // The projection rebuilds the message on every event: keyed on its mentions' content, the
   // resolver stays the same object and the memoized markdown it feeds does not re-parse.
-  const mentionsKey = messageHostsLinkPreview(message)
-    ? JSON.stringify(message.blocks.filter((block) => block.kind === "link_mention"))
-    : "";
+  const mentionsKey = linkMentionsKey(message);
   const mentions = useMemo<LinkMentionResolver<ReactNode> | undefined>(() => {
     const lookup = linkMentionsOf(message);
     return (

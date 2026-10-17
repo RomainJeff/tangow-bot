@@ -147,6 +147,19 @@ export function linkMentionsOf(message: {
   };
 }
 
+/**
+ * What a message's mentions are made of, as one string: equal for every re-projection of the
+ * same message, so a renderer keyed on it keeps one resolver and its memoized markdown.
+ */
+export function linkMentionsKey(message: {
+  role: string;
+  blocks: readonly MessageBlock[];
+}): string {
+  return messageHostsLinkPreview(message)
+    ? JSON.stringify(message.blocks.filter((block) => block.kind === "link_mention"))
+    : "";
+}
+
 /** A link's identity without its scheme or `www.`, read from a URL or from text that spells one. */
 function spelledLink(value: string): string | undefined {
   return (linkKey(value) ?? linkKey(`https://${value}`))?.replace(/^https?:\/\/(?:www\.)?/i, "");
