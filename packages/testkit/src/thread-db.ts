@@ -3,7 +3,9 @@ import type { LinkMentionBlock, LinkPreviewCard, MessageBlock } from "@rakazo/co
 import { EntryId, SessionId } from "@rakazo/contracts";
 import {
   appendRunBlocksInTransaction,
+  appendRunFinishedInTransaction,
   appendSessionEntryInTransaction,
+  openRoutineSessionInTransaction,
   type PrismaClient,
 } from "@rakazo/db";
 import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
@@ -44,6 +46,11 @@ export interface ThreadDb {
     trigger?: string;
     updatedAt?: Date;
     messages?: Array<{ id: string; blocks: MessageBlock[]; midTurn?: true; toPerson?: true }>;
+    /**
+     * A routine run: its own session under the thread's, and once it ends, the mark in the
+     * thread that carries its final words.
+     */
+    routine?: { result: string };
   }): Promise<void>;
   /** The preview a message shows now, and whether one was ever removed or refused. */
   previewOf(messageId: string): Promise<{ card?: LinkPreviewCard; removed: boolean }>;
@@ -192,6 +199,7 @@ export async function openThreadDb(): Promise<ThreadDb> {
       trigger = "user",
       updatedAt,
       messages = [],
+      routine,
     }) {
       const thread = await sessionOf(threadId);
       const runBotId = botId ?? thread.feedBotId;
@@ -217,6 +225,25 @@ export async function openThreadDb(): Promise<ThreadDb> {
           trigger,
         },
       });
+      if (routine) {
+        const scheduledAt = new Date(0).toISOString();
+        const model = { provider: "local", id: "test" };
+        const started = { routineId: "routine-1", name: "Digest", scheduledAt };
+        await prisma.$transaction(async (tx) => {
+          const sessionId = await openRoutineSessionInTransaction(
+            tx,
+            { id, spaceId: thread.spaceId, threadId, botId: runBotId },
+            { ...started, trigger: "routine", model },
+          );
+          await appendSessionEntryInTransaction(tx, {
+            type: "run.started",
+            sessionId,
+            botId: runBotId,
+            runId: id,
+            payload: { trigger: { kind: "routine", ...started }, model, effort: null },
+          });
+        });
+      }
       for (const { id: messageId, blocks, midTurn, toPerson } of messages) {
         await prisma.$transaction((tx) =>
           appendRunBlocksInTransaction(
@@ -236,6 +263,13 @@ export async function openThreadDb(): Promise<ThreadDb> {
         where: { id },
         data: { status, ...(updatedAt ? { updatedAt } : {}) },
       });
+      if (routine && (status === "completed" || status === "failed")) {
+        const ending =
+          status === "completed" ? { status } : { status, error: "the routine failed" };
+        await prisma.$transaction((tx) =>
+          appendRunFinishedInTransaction(tx, id, ending, { result: routine.result }),
+        );
+      }
     },
     async previewOf(messageId) {
       const previews = (await linkEntries(messageId)).filter(

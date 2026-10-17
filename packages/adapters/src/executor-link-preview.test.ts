@@ -438,12 +438,9 @@ describe("link previews of a run (CA 13, CA 14, CA 70, CA 72)", () => {
     expect(failed.pushes.mock.calls.map(([message]) => message.body)).toEqual(["model exploded"]);
   });
 
-  it.each([
-    ["a bot-to-bot run", { trigger: "bot_message" }],
-    ["a routine card run", { trigger: "routine", routineId: "routine-1", parentBotId: "bot-0" }],
-  ])("queues nothing for %s", async (_name, options) => {
+  it("queues nothing for a bot-to-bot run", async () => {
     const f = fixture({
-      ...options,
+      trigger: "bot_message",
       async *runtimeRun() {
         yield { type: "text", text: "Done: https://example.test/a" };
         yield { type: "done" };
@@ -453,6 +450,24 @@ describe("link previews of a run (CA 13, CA 14, CA 70, CA 72)", () => {
     await f.run();
 
     expect(previewJobs(f)).toEqual([]);
+  });
+
+  it("queues one job for a routine card run: its result is a bubble the person reads", async () => {
+    const f = fixture({
+      trigger: "routine",
+      routineId: "routine-1",
+      parentBotId: "bot-0",
+      async *runtimeRun() {
+        yield { type: "text", text: "Done: https://example.test/a" };
+        yield { type: "done" };
+      },
+    });
+
+    await f.run();
+
+    expect(previewJobs(f)).toEqual([
+      expect.objectContaining({ name: "link.preview", payload: { runId: "run-1" } }),
+    ]);
   });
 
   it("queues nothing for a run that failed", async () => {

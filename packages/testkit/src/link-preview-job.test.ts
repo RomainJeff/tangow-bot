@@ -846,3 +846,59 @@ describe("link.preview job for a bot's run (CA 13, CA 70, CA 71)", () => {
     expect(await card("final")).toMatchObject({ url: link });
   });
 });
+
+describe("link.preview job for a routine's result (spec 3.5)", () => {
+  const LINKS = ["https://a.test/1", "https://b.test/2", "https://c.test/3"];
+  const tool = (title: string): LinkPreviewReadResult => ({
+    ok: true,
+    kind: "page",
+    article: false,
+    title,
+  });
+
+  async function routineRun(options: { status?: string; result: string }) {
+    const ctx = await setup({ read: async (url) => tool(new URL(url).hostname) });
+    await db.seedRun({
+      id: "run-1",
+      threadId: "thread-1",
+      status: options.status ?? "completed",
+      trigger: "routine",
+      messages: [{ id: "final", blocks: [text(options.result)] }],
+      routine: { result: options.result },
+    });
+    const report = await db.prisma.sessionEntry.findFirst({
+      where: { type: "routine.finished" },
+      select: { id: true },
+    });
+    return { ...ctx, reportId: report?.id };
+  }
+
+  it("mentions every link of the result the thread shows, on the routine's mark", async () => {
+    const { deps, reportId } = await routineRun({
+      result: `This week: ${LINKS[0]}, ${LINKS[1]} and ${LINKS[2]}`,
+    });
+
+    await runLinkPreviewJob(deps, { runId: "run-1" });
+
+    expect((await db.mentionsOf(reportId!)).map(({ url, title }) => ({ url, title }))).toEqual([
+      { url: "https://a.test/1", title: "a.test" },
+      { url: "https://b.test/2", title: "b.test" },
+      { url: "https://c.test/3", title: "c.test" },
+    ]);
+    // The run's own words stay in its session, which the thread does not show.
+    expect(await db.mentionsOf("final")).toEqual([]);
+  });
+
+  it.each([
+    ["a routine that had nothing to say", { result: "" }],
+    ["a routine that failed", { status: "failed", result: `Partial: ${LINKS[0]}` }],
+  ])("reads nothing for %s", async (_name, options) => {
+    const { read, deps, reportId } = await routineRun(options);
+
+    await runLinkPreviewJob(deps, { runId: "run-1" });
+
+    expect(reportId).toEqual(expect.any(String));
+    expect(read).not.toHaveBeenCalled();
+    expect(await db.mentionsOf(reportId!)).toEqual([]);
+  });
+});

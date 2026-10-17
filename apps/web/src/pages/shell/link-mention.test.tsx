@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 
 import type { MessageBlock } from "@rakazo/contracts";
+import { SessionEntrySchema } from "@rakazo/contracts";
+import { projectThreadView } from "@rakazo/core";
 import type { ReactNode } from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
@@ -33,6 +35,8 @@ vi.mock("../../lib/rpc", () => ({ rpc: { artifacts: { get: api.artifactsGet } } 
 
 import type { MessageItem } from "../../lib/thread-items";
 import { MessageView } from "./message-view";
+import type { RowContext } from "./thread-row";
+import { ThreadRowBody } from "./thread-row";
 
 const DOC = "https://docs.example.test/d/abc";
 const NOTION = "https://www.notion.so/acme/Roadmap-Q4-3f9a2c7e81d04b5f";
@@ -242,5 +246,89 @@ describe("link mentions in the thread", () => {
     );
 
     expect(mentions()).toEqual([]);
+  });
+});
+
+describe("link mentions in a routine's result", () => {
+  const ARTICLE = "https://news.example.test/story";
+  const routine = { botId: "bot1", runId: "run_digest" };
+  const entries = [
+    {
+      ...routine,
+      type: "routine.started",
+      payload: {
+        sessionId: "ses_digest",
+        routineId: "rtn_digest",
+        name: "Digest",
+        trigger: "routine",
+        scheduledAt: "2026-10-17T10:00:00.000Z",
+        model: { provider: "local", id: "emulator-1" },
+      },
+    },
+    {
+      ...routine,
+      type: "routine.finished",
+      payload: {
+        status: "completed",
+        usage: { inputTokens: 1, outputTokens: 1 },
+        result: `This week: [the story](${ARTICLE}) and the notes at ${DOC}`,
+      },
+    },
+    {
+      type: "link.preview",
+      payload: {
+        target: "e_1",
+        block: { kind: "link_preview", url: ARTICLE, format: "compact", title: "The story" },
+      },
+    },
+    {
+      type: "link.preview",
+      payload: {
+        target: "e_1",
+        block: mention(DOC, { title: "Compte rendu", icon: { artifactId: "icon-doc" } }),
+      },
+    },
+  ].map((entry, seq) =>
+    SessionEntrySchema.parse({
+      id: `e_${seq}`,
+      sessionId: "ses_main",
+      seq,
+      parentId: seq === 0 ? null : `e_${seq - 1}`,
+      ts: `2026-10-17T10:00:0${seq}.000Z`,
+      ...entry,
+    }),
+  );
+
+  it("draws its links as mentions, with the card under the bubble", async () => {
+    const [row] = projectThreadView(entries).rows;
+    const context = {
+      artifactTarget: TARGET,
+      inGroup: false,
+      waiting: null,
+      peerBot: () => undefined,
+      onOpenSession: () => undefined,
+    } as unknown as RowContext;
+    await act(async () => {
+      root.render(
+        <ThreadRowBody
+          row={row!}
+          context={context}
+          chrome="row"
+          showAuthor={false}
+          showAvatar={false}
+          arrivesLive={false}
+        />,
+      );
+    });
+
+    expect(container.querySelector('[data-testid="routine-message"]')).not.toBeNull();
+    expect(mentions().map(({ name, href, icon }) => ({ name, href, icon }))).toEqual([
+      { name: "Compte rendu, docs.example.test", href: DOC, icon: "blob:icon" },
+    ]);
+    expect(
+      [...container.querySelectorAll('[data-slot="link-preview-card"]')].map((card) =>
+        card.getAttribute("href"),
+      ),
+    ).toEqual([ARTICLE]);
   });
 });
