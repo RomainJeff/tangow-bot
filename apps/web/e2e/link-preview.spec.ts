@@ -22,7 +22,7 @@ test("link previews render in three formats, only for articles and photos, and n
   await page.goto("/e2e/fixtures/link-preview.html");
 
   const cards = page.locator('[data-slot="link-preview-card"]');
-  await expect(cards).toHaveCount(6);
+  await expect(cards).toHaveCount(7);
   await expect(page.locator('[data-format="large"]')).toHaveAttribute(
     "aria-label",
     "The city that removed its traffic lights, example.com",
@@ -231,4 +231,44 @@ test("the composer's draft card shrinks to a phone-width capsule", async ({ page
   expect(draft!.x + draft!.width).toBeLessThanOrEqual(composer!.x + composer!.width);
   await page.locator('[data-slot="composer-link-preview"]').scrollIntoViewIfNeeded();
   await captureScreenshot(page, testInfo, "link-preview-composer-phone");
+});
+
+test("a routine's result shows its links as mentions, with its card under the bubble", async ({
+  page,
+}, testInfo) => {
+  await page.route("**/rpc/artifacts/get", (route) =>
+    route.fulfill({
+      json: {
+        json: { id: "art-1", name: "icon.webp", mimeType: "image/png", contentBase64: PIXEL },
+      },
+    }),
+  );
+  await page.goto("/e2e/fixtures/link-preview.html");
+
+  const routine = page.locator('[data-message-id="mention-routine"]');
+  const bubble = routine.getByTestId("routine-message");
+  await expect(bubble.locator('[data-slot="link-mention"]')).toHaveCount(3);
+  for (const name of [
+    "Traffic lights, three years on, news.example.org",
+    "Roadmap, docs.example.org",
+    "Fold routine failures, code.example.org",
+  ]) {
+    await expect(bubble.getByRole("link", { name, exact: true })).toBeVisible();
+  }
+  await expect(routine.locator('[data-slot="link-preview-card"]')).toHaveAttribute(
+    "href",
+    "https://news.example.org/lights-three-years",
+  );
+
+  await routine.scrollIntoViewIfNeeded();
+  for (const scheme of ["light", "dark"]) {
+    await page.evaluate(
+      (value) => document.documentElement.setAttribute("data-theme", value),
+      scheme,
+    );
+    await captureScreenshot(page, testInfo, `link-mention-routine-${scheme}`);
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await routine.scrollIntoViewIfNeeded();
+  await captureScreenshot(page, testInfo, "link-mention-routine-phone");
 });

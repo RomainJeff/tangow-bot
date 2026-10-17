@@ -34,15 +34,6 @@ export function linkPreviewCardOf(message: {
   return title === card.title ? card : { ...card, title };
 }
 
-/**
- * The link blocks of a routine's shown result. The `links` field lands on the routine item with
- * the server change that writes them, so it is read through a guard here, not through the type:
- * an item without it (or a payload from an older server) has none.
- */
-export function routineLinkBlocks(item: object): readonly MessageBlock[] {
-  return "links" in item && Array.isArray(item.links) ? (item.links as MessageBlock[]) : [];
-}
-
 /** The only url a card may open: http(s), no credentials. Never `tel:`, `mailto:` or a custom scheme. */
 export function openableLinkPreviewUrl(url: string): string | undefined {
   return isPreviewableUrl(url) ? url : undefined;

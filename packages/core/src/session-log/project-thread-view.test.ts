@@ -750,6 +750,53 @@ describe("projectThreadView rows", () => {
     });
   });
 
+  it("adds a routine result's card and mentions to its routine, and removing the card keeps the mention", () => {
+    const card = {
+      kind: "link_preview",
+      url: "https://a.test/post",
+      format: "compact",
+      title: "Post",
+    };
+    const mention = { kind: "link_mention", url: "https://b.test/doc", title: "Doc" };
+    const routine = { botId: "bot_ada", runId: "run_digest" };
+    const bodies = [
+      {
+        ...routine,
+        type: "routine.started",
+        payload: {
+          sessionId: "ses_digest",
+          routineId: "rtn_digest",
+          name: "Digest",
+          trigger: "routine",
+          scheduledAt: at(0),
+          model,
+        },
+      },
+      {
+        ...routine,
+        type: "routine.finished",
+        payload: {
+          status: "completed",
+          usage: { inputTokens: 1, outputTokens: 1 },
+          result: "https://a.test/post and https://b.test/doc",
+        },
+      },
+      { type: "link.preview", payload: { target: "rl-1", block: card } },
+      { type: "link.preview", payload: { target: "rl-1", block: mention } },
+    ];
+    const row = (entries: ThreadEntry[]) =>
+      projectThreadView(entries).rows.find((candidate) => candidate.item.id === "rl-0");
+    expect(row(linkEntries("rl", bodies))).toMatchObject({
+      item: { kind: "routine", links: [card, mention] },
+      routine: { kind: "message", text: "https://a.test/post and https://b.test/doc" },
+      previewMessageId: "rl-1",
+    });
+    const removal = { type: "link.preview.removed", payload: { target: "rl-2" } };
+    const removed = row(linkEntries("rl", [...bodies, removal]));
+    expect(removed?.item).toMatchObject({ kind: "routine", links: [mention] });
+    expect(removed?.previewMessageId).toBeUndefined();
+  });
+
   it("replays a routine history as its words, its folded failures and nothing for silent runs", () => {
     const usage = { inputTokens: 1, outputTokens: 1 };
     const routine = (n: number, outcome: Record<string, unknown>) => [

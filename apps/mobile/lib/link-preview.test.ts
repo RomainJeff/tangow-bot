@@ -11,7 +11,6 @@ import {
   linkPreviewImageHeight,
   linkPreviewLabel,
   openableLinkPreviewUrl,
-  routineLinkBlocks,
 } from "./link-preview";
 
 const image = { artifactId: "art_1", width: 1200, height: 630 };
@@ -267,14 +266,5 @@ describe("blocksWithoutPreviewedLinkLine", () => {
     const blocks = [text(`Voici :\n${url}`)];
     blocksWithoutPreviewedLinkLine(blocks, url);
     expect(blocks).toEqual([text(`Voici :\n${url}`)]);
-  });
-});
-
-describe("routineLinkBlocks", () => {
-  it("reads the links of a routine item, and none from an item without them", () => {
-    const mention = { kind: "link_mention", url: "https://example.com/a", title: "A" };
-    expect(routineLinkBlocks({ kind: "routine", links: [mention] })).toEqual([mention]);
-    expect(routineLinkBlocks({ kind: "routine" })).toEqual([]);
-    expect(routineLinkBlocks({ kind: "routine", links: "nope" })).toEqual([]);
   });
 });

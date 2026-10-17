@@ -6,6 +6,7 @@ import {
   type LinkCandidate,
   linkMentionCandidates,
   messageHostsLinkPreview,
+  routineShownText,
 } from "@rakazo/core";
 import {
   appendLinkBlocks,
@@ -152,12 +153,34 @@ async function previewRunMessages(
   // Only a run that ended well, and only one a person is reading (never bot to bot).
   if (run?.status !== "completed" || run.trigger === "bot_message") return;
   // The final reply and message_user posts are addressed to the person; narration never is.
-  for (const message of await runMessages(deps.prisma, runId)) {
+  const said = (await runMessages(deps.prisma, runId)).flatMap((message) =>
+    message.midTurn && !message.toPerson
+      ? []
+      : [{ id: message.id, ...messageLinks({ role: "bot", blocks: message.blocks }) }],
+  );
+  for (const { id, ...found } of [...said, ...(await routineReport(deps.prisma, runId))]) {
     if (budget.signal.aborted) return;
-    if (message.midTurn && !message.toPerson) continue;
-    const found = messageLinks({ role: "bot", blocks: message.blocks });
-    if (found.links.length) await attachLinks(deps, run.thread, message.id, found, budget);
+    if (found.links.length) await attachLinks(deps, run.thread, id, found, budget);
   }
+}
+
+/**
+ * A routine run's words live in its own session; what the thread shows of them is the final text
+ * its mark carries, drawn as the bot's bubble once the run completed with something to say.
+ */
+async function routineReport(
+  prisma: PrismaClient,
+  runId: string,
+): Promise<Array<MessageLinks & { id: string }>> {
+  const mark = await prisma.sessionEntry.findFirst({
+    where: { runId, type: "routine.finished", session: { kind: "thread" } },
+    select: { id: true, payload: true },
+  });
+  const result = routineShownText(
+    mark?.payload as { status?: string; result?: string } | undefined,
+  );
+  if (!mark || !result) return [];
+  return [{ id: mark.id, text: result, links: linkMentionCandidates(result) }];
 }
 
 /**

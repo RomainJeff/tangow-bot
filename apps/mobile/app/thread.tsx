@@ -185,7 +185,6 @@ import {
   blocksWithoutPreviewedLinkLine,
   cardReplacesBubble,
   linkPreviewCardOf,
-  routineLinkBlocks,
 } from "../lib/link-preview";
 import {
   dismissThreadNotifications,
@@ -4713,7 +4712,7 @@ function RoutineBubble({
 }) {
   const tokens = mobileTokens();
   const colorScheme = useResolvedAppearance();
-  const links = routineLinkBlocks(item);
+  const links = item.links ?? [];
   const mentionsKey = linkMentionsKey({ role: "bot", blocks: links });
   const target = useMemo<MobileArtifactTarget>(
     () => (groupId ? { groupId } : { botId: botId ?? item.botId }),
