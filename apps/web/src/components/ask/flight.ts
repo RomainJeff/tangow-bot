@@ -1,6 +1,7 @@
 import type { CommitSource } from "@rakazo/core";
 import { motion, springAt, springEasing } from "@rakazo/ui-tokens";
 import { flushSync } from "react-dom";
+import { transcriptEnd } from "../../lib/transcript-scroll";
 
 type Rect = { left: number; top: number; width: number; height: number };
 
@@ -64,7 +65,7 @@ export function steady(card: HTMLElement): Steady {
     const by = list.scrollTop - top;
     top = list.scrollTop;
     // A person scrolling away from the end keeps their own scroll.
-    if (Math.abs(by) < 0.5 || list.scrollHeight - list.clientHeight - top > 1) return;
+    if (Math.abs(by) < 0.5 || transcriptEnd(list) - top > 1) return;
     const view = list.getBoundingClientRect();
     const seen = (y: number, height: number) => y < view.bottom && y + height > view.top;
     for (const row of list.children) {

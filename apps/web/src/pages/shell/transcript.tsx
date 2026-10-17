@@ -30,6 +30,7 @@ import type { CardAnswerTarget, MessageItem, SessionViewTarget } from "../../lib
 import { isLiveItem } from "../../lib/thread-items";
 import {
   arrivedAfterMount,
+  transcriptEnd,
   transcriptIsNearEnd,
   transcriptMovedDown,
 } from "../../lib/transcript-scroll";
@@ -245,7 +246,7 @@ export const Transcript = memo(function Transcript({
     following.current = true;
     autoScrolling.current = false;
     setAtEnd(true);
-    element.scrollTo({ top: element.scrollHeight, behavior: "auto" });
+    element.scrollTo({ top: transcriptEnd(element), behavior: "auto" });
   }, [scrollRef]);
 
   const jumpToLatest = useCallback(() => {

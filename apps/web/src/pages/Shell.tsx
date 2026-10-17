@@ -116,7 +116,11 @@ import {
 } from "../lib/thread-events";
 import type { CardAnswerTarget, MessageItem } from "../lib/thread-items";
 import { botIdOf } from "../lib/thread-items";
-import { transcriptCanSnapAfterFrame, transcriptIsNearEnd } from "../lib/transcript-scroll";
+import {
+  transcriptCanSnapAfterFrame,
+  transcriptEnd,
+  transcriptIsNearEnd,
+} from "../lib/transcript-scroll";
 import { speaker } from "../lib/tts";
 import { useMediaQuery } from "../lib/use-media-query";
 import type { ContextMenuPosition } from "./BotContextMenu";
@@ -769,7 +773,7 @@ export function ShellPage() {
     window.requestAnimationFrame(() => {
       const element = messageScroll.current;
       if (transcriptCanSnapAfterFrame(element, queuedElement, queuedScrollTop)) {
-        queuedElement.scrollTop = queuedElement.scrollHeight;
+        queuedElement.scrollTop = transcriptEnd(queuedElement);
       }
     });
   }
