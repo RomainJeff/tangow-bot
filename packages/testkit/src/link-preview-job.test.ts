@@ -860,7 +860,6 @@ describe("link.preview job for a routine's result (spec 3.5)", () => {
     status?: string;
     result: string;
     read?: (url: string) => Promise<LinkPreviewReadResult>;
-    said?: string;
   }) {
     const ctx = await setup({
       read: options.read ?? (async (url) => tool(new URL(url).hostname)),
@@ -870,7 +869,7 @@ describe("link.preview job for a routine's result (spec 3.5)", () => {
       threadId: "thread-1",
       status: options.status ?? "completed",
       trigger: "routine",
-      messages: [{ id: "final", blocks: [text(options.said ?? options.result)] }],
+      messages: [{ id: "final", blocks: [text(options.result)] }],
       routine: { result: options.result },
     });
     const report = await db.prisma.sessionEntry.findFirst({
@@ -894,15 +893,6 @@ describe("link.preview job for a routine's result (spec 3.5)", () => {
     ]);
     // The run's own words stay in its session, which the thread does not show.
     expect(await db.mentionsOf("final")).toEqual([]);
-  });
-
-  it("reads nothing when the result is blank, though the run's own message has a link", async () => {
-    const { read, deps, reportId } = await routineRun({ result: "  \n ", said: LINKS[0] });
-
-    await runLinkPreviewJob(deps, { runId: "run-1" });
-
-    expect(read).not.toHaveBeenCalled();
-    expect(await db.mentionsOf(reportId!)).toEqual([]);
   });
 
   it("writes the same mentions when the job runs twice on the mark", async () => {
@@ -934,6 +924,7 @@ describe("link.preview job for a routine's result (spec 3.5)", () => {
 
   it.each([
     ["a routine that had nothing to say", { result: "" }],
+    ["a blank result", { result: "  \n " }],
     ["a routine that failed", { status: "failed", result: `Partial: ${LINKS[0]}` }],
   ])("reads nothing for %s", async (_name, options) => {
     const { read, deps, reportId } = await routineRun(options);
