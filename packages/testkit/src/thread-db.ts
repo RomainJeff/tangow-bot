@@ -265,7 +265,9 @@ export async function openThreadDb(): Promise<ThreadDb> {
       });
       if (routine && (status === "completed" || status === "failed")) {
         const ending =
-          status === "completed" ? { status } : { status, error: "the routine failed" };
+          status === "completed"
+            ? { status: "completed" as const }
+            : { status: "failed" as const, error: "the routine failed" };
         await prisma.$transaction((tx) =>
           appendRunFinishedInTransaction(tx, id, ending, { result: routine.result }),
         );
