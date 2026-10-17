@@ -4,7 +4,7 @@ import {
   runLinkPreviewJob,
 } from "@rakazo/adapters";
 import type { MessageBlock } from "@rakazo/contracts";
-import { removeLinkPreviewBlock } from "@rakazo/db";
+import { appendLinkBlocks, removeLinkPreviewBlock } from "@rakazo/db";
 import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { openThreadDb, type ThreadDb } from "./thread-db.js";
@@ -417,9 +417,10 @@ describe("link.preview job for a message a person sent", () => {
     it("gives up after its own deadline", async () => {
       const { deps } = await setup({
         read: async (_url, readDeps) => {
-          await new Promise<void>((resolve) =>
-            readDeps.signal?.addEventListener("abort", () => resolve()),
-          );
+          await new Promise<void>((resolve) => {
+            if (readDeps.signal?.aborted) resolve();
+            readDeps.signal?.addEventListener("abort", () => resolve());
+          });
           return { ok: false, reason: "aborted", transient: true };
         },
       });
@@ -429,6 +430,178 @@ describe("link.preview job for a message a person sent", () => {
 
       expect(await card("m1")).toBeUndefined();
     });
+  });
+});
+
+describe("link.preview job: one mention per link (CA 6, 7, 16, 19, 20, 22, 30)", () => {
+  const tool = (title: string): LinkPreviewReadResult => ({
+    ok: true,
+    kind: "page",
+    article: false,
+    title,
+  });
+  const byHost: LinkPreviewJobDeps["read"] = async (url) =>
+    url.includes("news.test") ? okCompact : tool(new URL(url).hostname);
+  const mentions = async (id: string) => (await db.mentionsOf(id)).map((block) => block.url);
+  const readUrls = (read: { mock: { calls: Array<[string, ...unknown[]]> } }) =>
+    read.mock.calls.map(([url]) => url);
+
+  it("filters links before counting: a token or sign-in link takes no slot and no read (CA 20)", async () => {
+    const { read, deps } = await setup({ read: byHost });
+    await said("m1", [
+      text(
+        "https://a.test/x?token=1 https://accounts.google.com/signin https://b.test/1 https://c.test/2 https://d.test/3",
+      ),
+    ]);
+
+    await runLinkPreviewJob(deps, { messageId: "m1" });
+
+    expect(readUrls(read)).toEqual(["https://b.test/1", "https://c.test/2", "https://d.test/3"]);
+    expect(await mentions("m1")).toEqual([
+      "https://b.test/1",
+      "https://c.test/2",
+      "https://d.test/3",
+    ]);
+  });
+
+  it("mentions the first five links in text order and leaves the rest plain (CA 6)", async () => {
+    const { read, deps } = await setup({ read: byHost });
+    const seven = Array.from({ length: 7 }, (_, i) => `https://s${i}.test/p`);
+    await said("m1", [text(seven.join(" "))]);
+
+    await runLinkPreviewJob(deps, { messageId: "m1" });
+
+    expect(readUrls(read)).toEqual(seven.slice(0, 5));
+    expect(await mentions("m1")).toEqual(seven.slice(0, 5));
+  });
+
+  it("reads and mentions a link once, however it is written (CA 16)", async () => {
+    const { read, deps } = await setup({ read: byHost });
+    await said("m1", [
+      text(
+        "www.x.test/a and https://www.x.test/a#b\n- https://y.test/doc\n\nsee [the doc](https://y.test/doc)",
+      ),
+    ]);
+
+    await runLinkPreviewJob(deps, { messageId: "m1" });
+
+    expect(readUrls(read)).toEqual(["https://www.x.test/a", "https://y.test/doc"]);
+    expect(await mentions("m1")).toEqual(["https://www.x.test/a", "https://y.test/doc"]);
+  });
+
+  it("gives a first article a card and every link a mention; never reads a mention's page image (CA 7)", async () => {
+    const { read, deps } = await setup({ read: byHost });
+    const article = "https://news.test/story";
+    await said("m1", [text(`${article} https://figma.test/f https://notion.test/n`)]);
+    await said("m2", [text(`https://figma.test/f ${article} https://notion.test/n`)]);
+
+    await runLinkPreviewJob(deps, { messageId: "m1" });
+    await runLinkPreviewJob(deps, { messageId: "m2" });
+
+    expect(await card("m1")).toEqual({
+      kind: "link_preview",
+      url: article,
+      format: "compact",
+      title: "A page",
+    });
+    expect(await db.mentionsOf("m1")).toEqual([
+      { kind: "link_mention", url: article, title: "A page" },
+      { kind: "link_mention", url: "https://figma.test/f", title: "figma.test" },
+      { kind: "link_mention", url: "https://notion.test/n", title: "notion.test" },
+    ]);
+    expect(read.mock.calls.slice(0, 3).map(([url, d]) => [url, d.pageImage])).toEqual([
+      [article, undefined],
+      ["https://figma.test/f", false],
+      ["https://notion.test/n", false],
+    ]);
+    expect(await card("m2")).toBeUndefined();
+    expect(await mentions("m2")).toEqual([
+      "https://figma.test/f",
+      article,
+      "https://notion.test/n",
+    ]);
+  });
+
+  it("writes a five-link message as a card event, then a mention event, and one notification (CA 22)", async () => {
+    const { notify, deps } = await setup({ read: byHost });
+    await said("m1", [
+      text(
+        "https://news.test/1 https://b.test/2 https://c.test/3 https://d.test/4 https://e.test/5",
+      ),
+    ]);
+    const feed = async () =>
+      (
+        await db.prisma.event.findMany({
+          where: { type: "session.entry.appended" },
+          orderBy: { seq: "asc" },
+        })
+      ).map((event) =>
+        (
+          event.payload as { entries: Array<{ payload: { block?: { kind: string } } }> }
+        ).entries.map((entry) => entry.payload.block?.kind),
+      );
+    const before = (await feed()).length;
+
+    await runLinkPreviewJob(deps, { messageId: "m1" });
+
+    expect((await feed()).slice(before)).toEqual([
+      ["link_preview"],
+      ["link_mention", "link_mention", "link_mention", "link_mention", "link_mention"],
+    ]);
+    expect(notify).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves the remaining links plain once the space's quota is spent (CA 19)", async () => {
+    const { read, deps } = await setup({ read: byHost });
+    await db.prisma.linkPreviewRead.createMany({
+      data: Array.from({ length: 28 }, () => ({ spaceId: "space-1", source: "job" })),
+    });
+    const five = ["a", "b", "c", "d", "e"].map((host) => `https://${host}.test/p`);
+    await said("m1", [text(five.join(" "))]);
+
+    await runLinkPreviewJob(deps, { messageId: "m1" });
+    await runLinkPreviewJob(deps, { messageId: "m1" });
+
+    expect(readUrls(read)).toEqual(five.slice(0, 2));
+    expect(await mentions("m1")).toEqual(five.slice(0, 2));
+  });
+
+  it("completes a partial set on a rerun without a duplicate", async () => {
+    const { deps } = await setup({ read: byHost });
+    await said("m1", [text("https://a.test/1 https://b.test/2 https://c.test/3")]);
+    await appendLinkBlocks(db.prisma, {
+      spaceId: "space-1",
+      threadId: "thread-1",
+      messageId: "m1",
+      blocks: [{ kind: "link_mention", url: "https://b.test/2", title: "Earlier" }],
+    });
+
+    await runLinkPreviewJob(deps, { messageId: "m1" });
+
+    expect(await db.mentionsOf("m1")).toEqual([
+      { kind: "link_mention", url: "https://b.test/2", title: "Earlier" },
+      { kind: "link_mention", url: "https://a.test/1", title: "a.test" },
+      { kind: "link_mention", url: "https://c.test/3", title: "c.test" },
+    ]);
+  });
+
+  it("copies a mention's icon into a preview artifact of the message (CA 30)", async () => {
+    const icon = { bytes: Buffer.from(png), width: 64, height: 64 };
+    const { deps } = await setup({ read: async () => ({ ...tool("Doc"), icon }) });
+    await said("m1", [text("https://docs.test/d")]);
+
+    await runLinkPreviewJob(deps, { messageId: "m1" });
+
+    const [artifact] = await previewArtifacts();
+    expect(artifact).toMatchObject({ isLinkPreview: true, previewMessageId: "m1" });
+    expect(await db.mentionsOf("m1")).toEqual([
+      {
+        kind: "link_mention",
+        url: "https://docs.test/d",
+        title: "Doc",
+        icon: { artifactId: artifact?.id },
+      },
+    ]);
   });
 });
 
