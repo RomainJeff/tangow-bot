@@ -22,85 +22,85 @@ import { isNarrationMessage, isUserNarrationMessage } from "./message-grouping.j
 import { isAsideOnlyMessage } from "./message-visibility.js";
 import { speechFromBlocks } from "./speech-text.js";
 
-const firstEligibleLink = (text: string) => linkMentionCandidates(text)[0]?.url;
+const firstCandidate = (text: string) => linkMentionCandidates(text)[0]?.url;
 
 describe("the first link candidate", () => {
   it("takes the first http(s) link and ignores the others", () => {
-    expect(firstEligibleLink("a https://a.tld/1 b https://b.tld/2")).toBe("https://a.tld/1");
-    expect(firstEligibleLink("no link here")).toBeUndefined();
-    expect(firstEligibleLink("ftp://a.tld/x javascript:alert(1) mailto:a@b.tld")).toBeUndefined();
+    expect(firstCandidate("a https://a.tld/1 b https://b.tld/2")).toBe("https://a.tld/1");
+    expect(firstCandidate("no link here")).toBeUndefined();
+    expect(firstCandidate("ftp://a.tld/x javascript:alert(1) mailto:a@b.tld")).toBeUndefined();
   });
 
   it("takes a bare www. address as the https link it stands for", () => {
-    expect(firstEligibleLink("www.lemonde.fr ")).toBe("https://www.lemonde.fr");
-    expect(firstEligibleLink("voir www.lemonde.fr/x, merci")).toBe("https://www.lemonde.fr/x");
-    expect(firstEligibleLink("(see www.lemonde.fr/x).")).toBe("https://www.lemonde.fr/x");
-    expect(firstEligibleLink("`www.lemonde.fr`")).toBeUndefined();
-    expect(firstEligibleLink("```\nwww.lemonde.fr\n```")).toBeUndefined();
-    expect(firstEligibleLink("lemonde.fr")).toBeUndefined();
-    expect(firstEligibleLink("README.md www.lemonde")).toBeUndefined();
-    expect(firstEligibleLink("awww.lemonde.fr")).toBeUndefined();
-    expect(firstEligibleLink("www.lemonde.fr then https://a.tld")).toBe("https://www.lemonde.fr");
+    expect(firstCandidate("www.lemonde.fr ")).toBe("https://www.lemonde.fr");
+    expect(firstCandidate("voir www.lemonde.fr/x, merci")).toBe("https://www.lemonde.fr/x");
+    expect(firstCandidate("(see www.lemonde.fr/x).")).toBe("https://www.lemonde.fr/x");
+    expect(firstCandidate("`www.lemonde.fr`")).toBeUndefined();
+    expect(firstCandidate("```\nwww.lemonde.fr\n```")).toBeUndefined();
+    expect(firstCandidate("lemonde.fr")).toBeUndefined();
+    expect(firstCandidate("README.md www.lemonde")).toBeUndefined();
+    expect(firstCandidate("awww.lemonde.fr")).toBeUndefined();
+    expect(firstCandidate("www.lemonde.fr then https://a.tld")).toBe("https://www.lemonde.fr");
   });
 
   it("skips fenced and inline code", () => {
-    expect(firstEligibleLink("```\nhttps://code.tld/1\n```\nhttps://real.tld/2")).toBe(
+    expect(firstCandidate("```\nhttps://code.tld/1\n```\nhttps://real.tld/2")).toBe(
       "https://real.tld/2",
     );
-    expect(firstEligibleLink("```js\nfetch('https://code.tld/1')\n```")).toBeUndefined();
-    expect(firstEligibleLink("~~~\nhttps://code.tld/1\n~~~\n")).toBeUndefined();
-    expect(firstEligibleLink("an unterminated fence\n```\nhttps://code.tld/1")).toBeUndefined();
-    expect(firstEligibleLink("run `curl https://code.tld/1` then https://real.tld/2")).toBe(
+    expect(firstCandidate("```js\nfetch('https://code.tld/1')\n```")).toBeUndefined();
+    expect(firstCandidate("~~~\nhttps://code.tld/1\n~~~\n")).toBeUndefined();
+    expect(firstCandidate("an unterminated fence\n```\nhttps://code.tld/1")).toBeUndefined();
+    expect(firstCandidate("run `curl https://code.tld/1` then https://real.tld/2")).toBe(
       "https://real.tld/2",
     );
-    expect(firstEligibleLink("``a ` https://code.tld/1 ``")).toBeUndefined();
-    expect(firstEligibleLink("an unclosed ` tick https://real.tld/2")).toBe("https://real.tld/2");
-    expect(firstEligibleLink("```inline https://code.tld/1``` then https://real.tld/2")).toBe(
+    expect(firstCandidate("``a ` https://code.tld/1 ``")).toBeUndefined();
+    expect(firstCandidate("an unclosed ` tick https://real.tld/2")).toBe("https://real.tld/2");
+    expect(firstCandidate("```inline https://code.tld/1``` then https://real.tld/2")).toBe(
       "https://real.tld/2",
     );
     // A longer fence is not closed by a shorter one.
-    expect(firstEligibleLink("````\n```\nhttps://code.tld/1\n```\n````\nend")).toBeUndefined();
+    expect(firstCandidate("````\n```\nhttps://code.tld/1\n```\n````\nend")).toBeUndefined();
   });
 
   it("counts a markdown link by its destination", () => {
-    expect(firstEligibleLink("[the docs](https://a.tld/docs) and https://b.tld")).toBe(
+    expect(firstCandidate("[the docs](https://a.tld/docs) and https://b.tld")).toBe(
       "https://a.tld/docs",
     );
-    expect(firstEligibleLink("[https://label.tld](https://target.tld/x)")).toBe(
+    expect(firstCandidate("[https://label.tld](https://target.tld/x)")).toBe(
       "https://target.tld/x",
     );
-    expect(firstEligibleLink("[a](https://a.tld/p)text")).toBe("https://a.tld/p");
-    expect(firstEligibleLink("[a](https://a.tld/Foo_(bar))")).toBe("https://a.tld/Foo_(bar)");
-    expect(firstEligibleLink('[a](https://a.tld/x "title")')).toBe("https://a.tld/x");
-    expect(firstEligibleLink("[a](/relative) then https://b.tld")).toBe("https://b.tld");
-    expect(firstEligibleLink("[`code`](https://a.tld/x)")).toBe("https://a.tld/x");
-    expect(firstEligibleLink("<https://a.tld/x>")).toBe("https://a.tld/x");
+    expect(firstCandidate("[a](https://a.tld/p)text")).toBe("https://a.tld/p");
+    expect(firstCandidate("[a](https://a.tld/Foo_(bar))")).toBe("https://a.tld/Foo_(bar)");
+    expect(firstCandidate('[a](https://a.tld/x "title")')).toBe("https://a.tld/x");
+    expect(firstCandidate("[a](/relative) then https://b.tld")).toBe("https://b.tld");
+    expect(firstCandidate("[`code`](https://a.tld/x)")).toBe("https://a.tld/x");
+    expect(firstCandidate("<https://a.tld/x>")).toBe("https://a.tld/x");
   });
 
   it("keeps balanced parentheses and apostrophes, trims trailing punctuation", () => {
-    expect(firstEligibleLink("https://en.wikipedia.org/wiki/Foo_(bar)")).toBe(
+    expect(firstCandidate("https://en.wikipedia.org/wiki/Foo_(bar)")).toBe(
       "https://en.wikipedia.org/wiki/Foo_(bar)",
     );
-    expect(firstEligibleLink("(see https://a.tld/docs).")).toBe("https://a.tld/docs");
-    expect(firstEligibleLink("(see https://a.tld/Foo_(bar)).")).toBe("https://a.tld/Foo_(bar)");
-    expect(firstEligibleLink("https://a.tld/it's-a-page")).toBe("https://a.tld/it's-a-page");
-    expect(firstEligibleLink("'https://a.tld/x'")).toBe("https://a.tld/x");
-    expect(firstEligibleLink('"https://a.tld/x",')).toBe("https://a.tld/x");
-    expect(firstEligibleLink("so https://a.tld/x?a=1&b=2, or https://b.tld!")).toBe(
+    expect(firstCandidate("(see https://a.tld/docs).")).toBe("https://a.tld/docs");
+    expect(firstCandidate("(see https://a.tld/Foo_(bar)).")).toBe("https://a.tld/Foo_(bar)");
+    expect(firstCandidate("https://a.tld/it's-a-page")).toBe("https://a.tld/it's-a-page");
+    expect(firstCandidate("'https://a.tld/x'")).toBe("https://a.tld/x");
+    expect(firstCandidate('"https://a.tld/x",')).toBe("https://a.tld/x");
+    expect(firstCandidate("so https://a.tld/x?a=1&b=2, or https://b.tld!")).toBe(
       "https://a.tld/x?a=1&b=2",
     );
-    expect(firstEligibleLink("[https://a.tld/x]")).toBe("https://a.tld/x");
-    expect(firstEligibleLink("*https://a.tld/x*")).toBe("https://a.tld/x");
+    expect(firstCandidate("[https://a.tld/x]")).toBe("https://a.tld/x");
+    expect(firstCandidate("*https://a.tld/x*")).toBe("https://a.tld/x");
   });
 
   it("rejects credentials and over-long urls, and moves on to the next link", () => {
-    expect(firstEligibleLink("https://user:pw@a.tld/x")).toBeUndefined();
-    expect(firstEligibleLink("https://user@a.tld/x https://b.tld/y")).toBe("https://b.tld/y");
+    expect(firstCandidate("https://user:pw@a.tld/x")).toBeUndefined();
+    expect(firstCandidate("https://user@a.tld/x https://b.tld/y")).toBe("https://b.tld/y");
     const long = `https://a.tld/${"a".repeat(2048)}`;
-    expect(firstEligibleLink(long)).toBeUndefined();
-    expect(firstEligibleLink(`${long} https://b.tld/y`)).toBe("https://b.tld/y");
+    expect(firstCandidate(long)).toBeUndefined();
+    expect(firstCandidate(`${long} https://b.tld/y`)).toBe("https://b.tld/y");
     const exact = `https://a.tld/${"a".repeat(2048 - "https://a.tld/".length)}`;
-    expect(firstEligibleLink(exact)).toBe(exact);
+    expect(firstCandidate(exact)).toBe(exact);
   });
 });
 
