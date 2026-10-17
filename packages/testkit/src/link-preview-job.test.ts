@@ -264,7 +264,7 @@ describe("link.preview job for a message a person sent", () => {
       await runLinkPreviewJob(deps, { messageId: "m2" });
 
       expect(read).toHaveBeenCalledTimes(1);
-      expect((await db.prisma.linkPreviewCache.findFirst())?.status).toBe("failed");
+      expect((await db.prisma.linkPreviewCache.findFirst())?.status).toBe("unreadable");
       expect(await card("m1")).toBeUndefined();
       expect(await card("m2")).toBeUndefined();
     });

@@ -44,25 +44,11 @@ export function linkPreviewDeviceKeyHash(
 }
 
 /**
- * Where an entry came from. `restricted`: the site refused the server (401, 402, 403, 451), so the
- * entry is a bare failure, and the sender's device may still read the page.
- * `device`: the head was read by the sender's device and the server fetched the image; such an
- * entry is stored under that person's own key (`linkPreviewDeviceKeyHash`). Absent means
- * `server`.
+ * Where an entry came from. `device`: the head was read by the sender's device and the server
+ * fetched the image; such an entry is stored under that person's own key
+ * (`linkPreviewDeviceKeyHash`). Absent means `server`.
  */
-export type LinkPreviewCacheSource = "server" | "restricted" | "device";
-
-export type CachedLinkPreview =
-  | {
-      status: "ok";
-      format: "large" | "photo" | "compact";
-      title?: string;
-      image?: { key: string; width: number; height: number; bytes: number; fit?: "contain" };
-      /** The page declared itself an article. Absent for a photo, which needs no declaration. */
-      article?: true;
-      source?: LinkPreviewCacheSource;
-    }
-  | { status: "failed"; source?: LinkPreviewCacheSource };
+export type LinkPreviewCacheSource = "server" | "device";
 
 /**
  * What one read learned about a link, so that a card and a mention both derive from it. `Img`
@@ -84,9 +70,17 @@ export type LinkFacts<Img, Icon> =
     }
   | { kind: "refused"; icon?: Icon };
 
+/** The facts of a link's last read, or that it cannot be read at all (`unreadable`). */
+export type CachedLinkRead = (
+  | LinkFacts<
+      { key: string; width: number; height: number; bytes: number },
+      { key: string; bytes: number }
+    >
+  | { kind: "unreadable" }
+) & { source?: LinkPreviewCacheSource };
+
 type CacheRow = {
   status: string;
-  format: string | null;
   title: string | null;
   imageKey: string | null;
   imageWidth: number | null;
@@ -94,38 +88,42 @@ type CacheRow = {
   imageBytes: number;
   imageFit: string | null;
   article: boolean | null;
+  crossSite: boolean;
+  iconKey: string | null;
+  iconBytes: number;
   source: string;
 };
 
-function toSource(value: string): LinkPreviewCacheSource {
-  return value === "restricted" || value === "device" ? value : "server";
-}
-
-function toCached(row: CacheRow): CachedLinkPreview | null {
-  const source = toSource(row.source);
-  if (row.status === "failed") return { status: "failed", source };
-  if (row.status !== "ok") return null;
-  if (row.format !== "large" && row.format !== "photo" && row.format !== "compact") return null;
-  // A page card written before cards were limited to articles never recorded the signal: a miss, so the page is read again.
-  if (row.format !== "photo" && row.article !== true) return null;
-  return {
-    status: "ok",
-    source,
-    format: row.format,
-    ...(row.article === true ? { article: true as const } : {}),
-    ...(row.title ? { title: row.title } : {}),
-    ...(row.imageKey && row.imageWidth && row.imageHeight
-      ? {
-          image: {
-            key: row.imageKey,
-            width: row.imageWidth,
-            height: row.imageHeight,
-            bytes: row.imageBytes,
-            ...(row.imageFit === "contain" ? { fit: "contain" as const } : {}),
-          },
-        }
-      : {}),
-  };
+/** Rows written before reads were facts (`ok`, `failed`) are misses. */
+function toCached(row: CacheRow): CachedLinkRead | null {
+  const source = row.source === "device" ? "device" : "server";
+  const image =
+    row.imageKey && row.imageWidth && row.imageHeight
+      ? { key: row.imageKey, width: row.imageWidth, height: row.imageHeight, bytes: row.imageBytes }
+      : undefined;
+  const icon = row.iconKey ? { icon: { key: row.iconKey, bytes: row.iconBytes } } : {};
+  switch (row.status) {
+    case "photo":
+      return image ? { kind: "photo", image, source } : null;
+    case "page":
+      return {
+        kind: "page",
+        article: row.article === true,
+        ...(row.title ? { title: row.title } : {}),
+        ...(row.crossSite ? { crossSite: true } : {}),
+        ...(image
+          ? { image: row.imageFit === "contain" ? { ...image, fit: "contain" } : image }
+          : {}),
+        ...icon,
+        source,
+      };
+    case "refused":
+      return { kind: "refused", ...icon, source };
+    case "unreadable":
+      return { kind: "unreadable", source };
+    default:
+      return null;
+  }
 }
 
 /** A live (unexpired) cache entry of this space, or null. */
@@ -134,7 +132,7 @@ export async function findCachedLinkPreview(
   spaceId: string,
   keyHash: string,
   now = new Date(),
-): Promise<CachedLinkPreview | null> {
+): Promise<CachedLinkRead | null> {
   const row = await prisma.linkPreviewCache.findUnique({
     where: { spaceId_keyHash: { spaceId, keyHash } },
   });
@@ -150,44 +148,35 @@ export async function findCachedLinkPreview(
  */
 export async function storeLinkPreviewCache(
   prisma: Pick<PrismaClient, "$transaction">,
-  input: { spaceId: string; keyHash: string; entry: CachedLinkPreview; now?: Date },
+  input: { spaceId: string; keyHash: string; entry: CachedLinkRead; now?: Date },
 ): Promise<{ removedImageKeys: string[] }> {
   const now = input.now ?? new Date();
   const { entry } = input;
-  const data =
-    entry.status === "failed"
-      ? {
-          status: "failed",
-          format: null,
-          title: null,
-          imageKey: null,
-          imageWidth: null,
-          imageHeight: null,
-          imageBytes: 0,
-          imageFit: null,
-          article: null,
-          source: entry.source ?? "server",
-        }
-      : {
-          status: "ok",
-          format: entry.format,
-          title: entry.title ?? null,
-          imageKey: entry.image?.key ?? null,
-          imageWidth: entry.image?.width ?? null,
-          imageHeight: entry.image?.height ?? null,
-          imageBytes: entry.image?.bytes ?? 0,
-          imageFit: entry.image?.fit ?? null,
-          article: entry.article ?? null,
-          source: entry.source ?? "server",
-        };
+  const page = entry.kind === "page" ? entry : undefined;
+  const image = entry.kind === "photo" ? entry.image : page?.image;
+  const icon = entry.kind === "page" || entry.kind === "refused" ? entry.icon : undefined;
+  const data = {
+    status: entry.kind,
+    title: page?.title ?? null,
+    imageKey: image?.key ?? null,
+    imageWidth: image?.width ?? null,
+    imageHeight: image?.height ?? null,
+    imageBytes: image?.bytes ?? 0,
+    imageFit: page?.image?.fit ?? null,
+    article: page?.article ?? null,
+    crossSite: page?.crossSite === true,
+    iconKey: icon?.key ?? null,
+    iconBytes: icon?.bytes ?? 0,
+    source: entry.source ?? "server",
+  };
+  const keysOf = (row: { imageKey: string | null; iconKey: string | null }) =>
+    [row.imageKey, row.iconKey].filter((key): key is string => key !== null);
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`link-preview-cache:${input.spaceId}`}))`;
-    const removedImageKeys: string[] = [];
     const where = { spaceId_keyHash: { spaceId: input.spaceId, keyHash: input.keyHash } };
     const previous = await tx.linkPreviewCache.findUnique({ where });
-    if (previous?.imageKey && previous.imageKey !== data.imageKey) {
-      removedImageKeys.push(previous.imageKey);
-    }
+    const kept = new Set(keysOf(data));
+    const removedImageKeys = previous ? keysOf(previous).filter((key) => !kept.has(key)) : [];
     await tx.linkPreviewCache.upsert({
       where,
       create: {
@@ -206,10 +195,17 @@ export async function storeLinkPreviewCache(
     const rows = await tx.linkPreviewCache.findMany({
       where: { spaceId: input.spaceId },
       orderBy: { createdAt: "asc" },
-      select: { id: true, keyHash: true, imageKey: true, imageBytes: true },
+      select: {
+        id: true,
+        keyHash: true,
+        imageKey: true,
+        imageBytes: true,
+        iconKey: true,
+        iconBytes: true,
+      },
     });
     let count = rows.length;
-    let bytes = rows.reduce((sum, row) => sum + row.imageBytes, 0);
+    let bytes = rows.reduce((sum, row) => sum + row.imageBytes + row.iconBytes, 0);
     const evicted: string[] = [];
     for (const row of rows) {
       if (count <= LINK_PREVIEW_CACHE_MAX_ENTRIES && bytes <= LINK_PREVIEW_CACHE_MAX_BYTES) break;
@@ -217,8 +213,8 @@ export async function storeLinkPreviewCache(
       if (row.keyHash === input.keyHash) break;
       evicted.push(row.id);
       count -= 1;
-      bytes -= row.imageBytes;
-      if (row.imageKey) removedImageKeys.push(row.imageKey);
+      bytes -= row.imageBytes + row.iconBytes;
+      removedImageKeys.push(...keysOf(row));
     }
     if (evicted.length) await tx.linkPreviewCache.deleteMany({ where: { id: { in: evicted } } });
     return { removedImageKeys };
@@ -280,20 +276,31 @@ export async function purgeLinkPreviewState(
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const expired = await tx.linkPreviewCache.findMany({
       where: { expiresAt: { lte: now } },
-      select: { id: true, spaceId: true, imageKey: true },
+      select: { id: true, spaceId: true, imageKey: true, iconKey: true },
       take: 1000,
     });
+    // Guarded by the select's own cutoff: a row refreshed since keeps its new content and keys.
+    let purged = expired;
     if (expired.length) {
-      await tx.linkPreviewCache.deleteMany({
-        where: { id: { in: expired.map((row) => row.id) } },
+      const ids = expired.map((row) => row.id);
+      const { count } = await tx.linkPreviewCache.deleteMany({
+        where: { id: { in: ids }, expiresAt: { lte: now } },
       });
+      if (count < expired.length) {
+        const kept = new Set(
+          (
+            await tx.linkPreviewCache.findMany({ where: { id: { in: ids } }, select: { id: true } })
+          ).map((row) => row.id),
+        );
+        purged = expired.filter((row) => !kept.has(row.id));
+      }
     }
     await tx.linkPreviewRead.deleteMany({
       where: { createdAt: { lt: new Date(now.getTime() - READ_ROW_RETENTION_MS) } },
     });
     return {
-      removedImages: expired.flatMap((row) =>
-        row.imageKey ? [{ spaceId: row.spaceId, key: row.imageKey }] : [],
+      removedImages: purged.flatMap((row) =>
+        [row.imageKey, row.iconKey].flatMap((key) => (key ? [{ spaceId: row.spaceId, key }] : [])),
       ),
     };
   });

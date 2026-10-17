@@ -21,8 +21,7 @@ import { openThreadDb, type ThreadDb } from "./thread-db.js";
 const NOW = new Date("2026-10-05T12:00:00.000Z");
 const at = (ms: number) => new Date(NOW.getTime() + ms);
 const ok = (extra: Record<string, unknown> = {}) => ({
-  status: "ok" as const,
-  format: "compact" as const,
+  kind: "page" as const,
   title: "A page",
   article: true as const,
   ...extra,
@@ -50,7 +49,7 @@ describe("cache entries", () => {
     });
 
     expect(await findCachedLinkPreview(db.prisma, "space-1", key, at(1000))).toMatchObject({
-      status: "ok",
+      kind: "page",
       title: "A page",
     });
     expect(
@@ -59,14 +58,20 @@ describe("cache entries", () => {
     expect(await findCachedLinkPreview(db.prisma, "space-2", key, at(1000))).toBeNull();
   });
 
-  it("reads a page card written before cards were limited to articles as a miss, and a photo as a hit", async () => {
+  it("reads every row written before reads were facts as a miss", async () => {
     const db = createFakeThreadDb();
-    const row = (keyHash: string, format: string, article: boolean | null) => {
+    const row = (
+      keyHash: string,
+      format: string,
+      article: boolean | null,
+      status = "ok",
+      source = "server",
+    ) => {
       db.tables.linkPreviewCache.set(keyHash, {
         id: keyHash,
         spaceId: "space-1",
         keyHash,
-        status: "ok",
+        status,
         format,
         title: "Old",
         imageKey: null,
@@ -75,7 +80,7 @@ describe("cache entries", () => {
         imageBytes: 0,
         imageFit: null,
         article,
-        source: "server",
+        source,
         expiresAt: at(1000),
       });
     };
@@ -83,28 +88,51 @@ describe("cache entries", () => {
     row("old-large", "large", null);
     row("old-photo", "photo", null);
     row("article", "compact", true);
+    row("old-failed", "compact", null, "failed", "restricted");
+    row("old-device", "compact", null, "ok", "device");
     const read = (key: string) => findCachedLinkPreview(db.prisma, "space-1", key, NOW);
-    expect(await read("old-page")).toBeNull();
-    expect(await read("old-large")).toBeNull();
-    expect(await read("old-photo")).toMatchObject({ status: "ok", format: "photo" });
-    expect(await read("article")).toMatchObject({ status: "ok", article: true });
+    for (const key of [
+      "old-page",
+      "old-large",
+      "old-photo",
+      "article",
+      "old-failed",
+      "old-device",
+    ]) {
+      expect(await read(key), key).toBeNull();
+    }
   });
 
-  it("keeps a definitive failure as a bare failed entry", async () => {
+  it("keeps what a read learned: a photo, a page, an article reached on another site, a refusal, a failure", async () => {
     const db = createFakeThreadDb();
-    await storeLinkPreviewCache(db.prisma, {
-      spaceId: "space-1",
-      keyHash: "k",
-      entry: { status: "failed" },
-      now: NOW,
-    });
-    expect(await findCachedLinkPreview(db.prisma, "space-1", "k", NOW)).toEqual({
-      status: "failed",
-      source: "server",
-    });
+    const icon = { key: "icon", bytes: 3 };
+    const entries = {
+      photo: { kind: "photo", image: { key: "p", width: 40, height: 30, bytes: 5 } },
+      page: { kind: "page", article: false, title: "Doc", icon },
+      crossSite: {
+        kind: "page",
+        article: true,
+        title: "Story",
+        crossSite: true,
+        image: { key: "i", width: 180, height: 180, bytes: 4, fit: "contain" },
+        icon,
+      },
+      refused: { kind: "refused", icon },
+      bare: { kind: "refused" },
+      failure: { kind: "unreadable" },
+    } as const;
+    for (const [keyHash, entry] of Object.entries(entries)) {
+      await storeLinkPreviewCache(db.prisma, { spaceId: "space-1", keyHash, entry, now: NOW });
+    }
+    for (const [keyHash, entry] of Object.entries(entries)) {
+      expect(await findCachedLinkPreview(db.prisma, "space-1", keyHash, NOW), keyHash).toEqual({
+        ...entry,
+        source: "server",
+      });
+    }
   });
 
-  it("remembers where an entry came from: the server, a refusal of the site, or the device", async () => {
+  it("remembers where an entry came from: the server or the device", async () => {
     const db = createFakeThreadDb();
     const read = async (key: string) => findCachedLinkPreview(db.prisma, "space-1", key, NOW);
     await storeLinkPreviewCache(db.prisma, {
@@ -115,27 +143,12 @@ describe("cache entries", () => {
     });
     await storeLinkPreviewCache(db.prisma, {
       spaceId: "space-1",
-      keyHash: "refused",
-      entry: { status: "failed", source: "restricted" },
-      now: NOW,
-    });
-    await storeLinkPreviewCache(db.prisma, {
-      spaceId: "space-1",
       keyHash: "device",
       entry: ok({ title: "T", source: "device" }),
       now: NOW,
     });
-    expect(await read("plain")).toMatchObject({ status: "ok", source: "server" });
-    expect(await read("refused")).toEqual({ status: "failed", source: "restricted" });
-    expect(await read("device")).toMatchObject({ status: "ok", source: "device" });
-    // A device-read card replaces the refusal it was made for.
-    await storeLinkPreviewCache(db.prisma, {
-      spaceId: "space-1",
-      keyHash: "refused",
-      entry: ok({ title: "Real", source: "device" }),
-      now: NOW,
-    });
-    expect(await read("refused")).toMatchObject({ title: "Real", source: "device" });
+    expect(await read("plain")).toMatchObject({ kind: "page", source: "server" });
+    expect(await read("device")).toMatchObject({ kind: "page", source: "device" });
   });
 
   it("remembers that an image is a site icon, and only then", async () => {
@@ -159,22 +172,20 @@ describe("cache entries", () => {
     expect(page).not.toHaveProperty("image.fit");
   });
 
-  it("hands back the image of an entry it replaced, for deletion", async () => {
+  it("hands back the image and icon of an entry it replaced, for deletion", async () => {
     const db = createFakeThreadDb();
     const image = (key: string) => ({ key, width: 600, height: 400, bytes: 10 });
-    await storeLinkPreviewCache(db.prisma, {
-      spaceId: "space-1",
-      keyHash: "k",
-      entry: ok({ image: image("old") }),
-      now: NOW,
-    });
-    const replaced = await storeLinkPreviewCache(db.prisma, {
-      spaceId: "space-1",
-      keyHash: "k",
-      entry: ok({ image: image("new") }),
-      now: at(5),
-    });
-    expect(replaced.removedImageKeys).toEqual(["old"]);
+    const icon = { key: "icon", bytes: 3 };
+    const store = (entry: object, ms: number) =>
+      storeLinkPreviewCache(db.prisma, {
+        spaceId: "space-1",
+        keyHash: "k",
+        entry: entry as never,
+        now: at(ms),
+      });
+    await store(ok({ image: image("old"), icon }), 0);
+    expect((await store(ok({ image: image("new"), icon }), 5)).removedImageKeys).toEqual(["old"]);
+    expect((await store({ kind: "unreadable" }, 10)).removedImageKeys).toEqual(["new", "icon"]);
     expect(db.tables.linkPreviewCache.size).toBe(1);
   });
 
@@ -226,12 +237,33 @@ describe("cache entries", () => {
     );
   });
 
+  it("counts icons toward the 100 MB, and hands back the icons it evicts", async () => {
+    const db = createFakeThreadDb();
+    const heavy = 3 * 1024 * 1024;
+    const evicted: string[] = [];
+    for (let index = 0; index < 50; index += 1) {
+      const { removedImageKeys } = await storeLinkPreviewCache(db.prisma, {
+        spaceId: "space-1",
+        keyHash: `k${index}`,
+        entry: { kind: "refused", icon: { key: `icon-${index}`, bytes: heavy } },
+        now: at(index),
+      });
+      evicted.push(...removedImageKeys);
+    }
+    const kept = Math.floor(LINK_PREVIEW_CACHE_MAX_BYTES / heavy);
+    expect(db.tables.linkPreviewCache.size).toBe(kept);
+    expect(evicted).toEqual(Array.from({ length: 50 - kept }, (_, index) => `icon-${index}`));
+  });
+
   it("purges expired rows and spent read counters, returning the images to delete", async () => {
     const db = createFakeThreadDb();
     await storeLinkPreviewCache(db.prisma, {
       spaceId: "space-1",
       keyHash: "old",
-      entry: ok({ image: { key: "blob-old", width: 1, height: 1, bytes: 5 } }),
+      entry: ok({
+        image: { key: "blob-old", width: 1, height: 1, bytes: 5 },
+        icon: { key: "icon-old", bytes: 2 },
+      }),
       now: NOW,
     });
     await storeLinkPreviewCache(db.prisma, {
@@ -249,9 +281,56 @@ describe("cache entries", () => {
 
     const purged = await purgeLinkPreviewState(db.prisma, at(LINK_PREVIEW_CACHE_TTL_MS + 1000));
 
-    expect(purged.removedImages).toEqual([{ spaceId: "space-1", key: "blob-old" }]);
+    expect(purged.removedImages).toEqual([
+      { spaceId: "space-1", key: "blob-old" },
+      { spaceId: "space-1", key: "icon-old" },
+    ]);
     expect([...db.tables.linkPreviewCache.values()].map((row) => row.keyHash)).toEqual(["fresh"]);
     expect(db.tables.linkPreviewRead.size).toBe(0);
+  });
+
+  it("keeps a row refreshed between the purge's read and its delete, and its keys", async () => {
+    const db = createFakeThreadDb();
+    for (const keyHash of ["stale", "refreshed"]) {
+      await storeLinkPreviewCache(db.prisma, {
+        spaceId: "space-1",
+        keyHash,
+        entry: ok({ image: { key: `blob-${keyHash}`, width: 1, height: 1, bytes: 5 } }),
+        now: NOW,
+      });
+    }
+    const racing = {
+      $transaction: <T>(fn: (tx: never) => Promise<T>) =>
+        db.prisma.$transaction((tx: never) =>
+          fn({
+            ...(tx as object),
+            linkPreviewCache: {
+              ...(tx as { linkPreviewCache: object }).linkPreviewCache,
+              findMany: async (args: never) => {
+                const rows = await (
+                  tx as { linkPreviewCache: { findMany: (a: never) => Promise<unknown[]> } }
+                ).linkPreviewCache.findMany(args);
+                // A refresh commits after the read, before the delete.
+                for (const row of db.tables.linkPreviewCache.values()) {
+                  if (row.keyHash === "refreshed")
+                    row.expiresAt = at(LINK_PREVIEW_CACHE_TTL_MS * 3);
+                }
+                return rows;
+              },
+            },
+          } as never),
+        ),
+    };
+
+    const purged = await purgeLinkPreviewState(
+      racing as never,
+      at(LINK_PREVIEW_CACHE_TTL_MS + 1000),
+    );
+
+    expect(purged.removedImages).toEqual([{ spaceId: "space-1", key: "blob-stale" }]);
+    expect([...db.tables.linkPreviewCache.values()].map((row) => row.keyHash)).toEqual([
+      "refreshed",
+    ]);
   });
 
   it("purges at most once per interval, bytes included", async () => {

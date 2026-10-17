@@ -101,9 +101,10 @@ function composer(
 
 const fresh = {
   expiresAt: new Date(Date.now() + 3_600_000),
-  status: "ok",
+  status: "page",
   article: true,
   imageBytes: 0,
+  iconBytes: 0,
 };
 
 describe("links.preview: access first (CA 19, CA 54)", () => {
@@ -169,7 +170,6 @@ describe("links.preview: what it answers", () => {
     const { deps, prisma, artifacts } = composer({
       cached: {
         ...fresh,
-        format: "large",
         title: "Big",
         imageKey: "blob-1",
         imageWidth: 800,
@@ -197,7 +197,6 @@ describe("links.preview: what it answers", () => {
     const { deps } = composer({
       cached: {
         ...fresh,
-        format: "compact",
         title: "Home",
         imageKey: "blob-1",
         imageWidth: 180,
@@ -221,7 +220,7 @@ describe("links.preview: what it answers", () => {
     const { deps } = composer({
       cached: {
         ...fresh,
-        format: "photo",
+        status: "photo",
         title: "should not show",
         imageKey: "blob-1",
         imageWidth: 40,
@@ -266,7 +265,7 @@ describe("links.preview: what it answers", () => {
     }
     expect(answers).toEqual(reasons.map(() => null));
     // A cached definitive failure looks the same.
-    const { deps } = composer({ cached: { ...fresh, status: "failed" } });
+    const { deps } = composer({ cached: { ...fresh, status: "unreadable" } });
     await expect(
       previewLinkForComposer(
         deps,
@@ -278,7 +277,7 @@ describe("links.preview: what it answers", () => {
   });
 
   it("serves the second ask from the cache without reading again", async () => {
-    const { deps, read } = composer({ cached: { ...fresh, format: "compact", title: "Cached" } });
+    const { deps, read } = composer({ cached: { ...fresh, title: "Cached" } });
     await expect(
       previewLinkForComposer(
         deps,
@@ -333,7 +332,7 @@ describe("links.preview: the sender's device may read (spec 22)", () => {
   });
 
   it("uses a pageHead only while the server is still refused, and answers with the card it makes", async () => {
-    const restricted = { ...fresh, status: "failed", source: "restricted" };
+    const restricted = { ...fresh, status: "refused" };
     const { deps, read, readFromHead, tx } = composer({ cached: restricted });
 
     const draft = await ask(deps, "<head><title>Caf\u00e9</title></head>");
@@ -353,7 +352,7 @@ describe("links.preview: the sender's device may read (spec 22)", () => {
   });
 
   it("hands the response's Content-Type to the head reader, for its charset", async () => {
-    const restricted = { ...fresh, status: "failed", source: "restricted" };
+    const restricted = { ...fresh, status: "refused" };
     const { deps, readFromHead } = composer({ cached: restricted });
     await ask(deps, "<head></head>", "text/html; charset=iso-8859-1");
     expect(readFromHead.mock.calls[0]?.[3]).toBe("text/html; charset=iso-8859-1");
@@ -380,7 +379,7 @@ describe("links.preview: the sender's device may read (spec 22)", () => {
   });
 
   it("ignores a pageHead for a page the server can read", async () => {
-    const readable = { ...fresh, format: "compact", title: "Server", source: "server" };
+    const readable = { ...fresh, title: "Server", source: "server" };
     const { deps, readFromHead } = composer({ cached: readable });
     await expect(ask(deps, "<head><title>Forged</title></head>")).resolves.toEqual({
       format: "compact",
