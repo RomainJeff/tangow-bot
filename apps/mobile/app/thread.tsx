@@ -1583,7 +1583,8 @@ function Thread() {
         }
         throw error;
       }
-      if (isCurrentTarget(targetBotId, targetGroupId)) await refresh();
+      // The answer is accepted: a failed reload must not read as a failed answer.
+      if (isCurrentTarget(targetBotId, targetGroupId)) await refresh().catch(() => undefined);
     },
     [botId, groupId],
   );

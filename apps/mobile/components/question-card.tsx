@@ -5,7 +5,15 @@ import { motion, radii, sizes, springAt } from "@rakazo/ui-tokens";
 import type { Ref } from "react";
 import { useEffect, useRef, useState } from "react";
 import type { LayoutChangeEvent, TextProps } from "react-native";
-import { AppState, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  AccessibilityInfo,
+  AppState,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import Animated, {
   cancelAnimation,
   FadeIn,
@@ -237,6 +245,11 @@ export function QuestionCard({
     present,
   });
   useEffect(() => interruptWhenAway(AppState, act.interrupt), [act]);
+  // An inline alert role is not read out on iOS: say a failed answer aloud.
+  const failure = view.kind === "open" ? view.error : undefined;
+  useEffect(() => {
+    if (failure) AccessibilityInfo.announceForAccessibility(failure);
+  }, [failure]);
 
   const step = view.kind === "open" ? view.step : null;
   const entering =

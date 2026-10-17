@@ -11,7 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Added
 
 - **Links in messages now show as mentions with their site's icon.** A link to a document, a tool or a page shows the site's icon and a readable name instead of the raw address, up to five per message, on web and desktop; articles keep their preview card.
-- **When a bot needs an answer to keep going, it now asks with a question card you answer in one tap, on web, desktop and iPhone, replacing the form and its Send answers button.** Each option is a tile that can say what it does, with the bot's pick marked Recommended; your choice stays visible for a moment and then sends, several questions come one at a time with your answers piling up, Other takes your own words, and the card then folds into one line followed by your answer as your own message. While a question waits, the composer reads "Answer {bot}…" and the sidebar and the iPhone inbox say "Waiting for you" instead of "Needs input", with the bot's avatar at rest and Stop still there.
+- **Bots now ask their questions with a card you answer in one tap, on web, desktop and iPhone, replacing the form and its Send answers button.** Each option can say what it does and the bot's pick reads Recommended; several questions come one at a time, Other takes your own words, and once you answer the card folds into one line with your answer under it. While a question waits, the composer reads "Answer {bot}…" and the sidebar and iPhone inbox say "Waiting for you" instead of "Needs input".
 
 #### Changed
 
