@@ -68,9 +68,18 @@ const INVISIBLE =
   /[\u0000-\u0008\u000E-\u001F\u007F-\u009F\u061C\u200B\u200E\u200F\u202A-\u202E\u2060\u2066-\u2069\uFEFF]/g;
 
 /** Model text a card shows as plain text: visible characters on one line, NFC, at most `max` code points. */
-function cardText(value: unknown, max = Number.POSITIVE_INFINITY): string {
+function cardText(value: unknown, max = Number.POSITIVE_INFINITY, keepLines = false): string {
   if (typeof value !== "string") return "";
-  const text = value.replace(INVISIBLE, "").replace(/\s+/g, " ").trim().normalize("NFC");
+  const cleaned = value.replace(INVISIBLE, "");
+  // A question is Markdown, so its line breaks carry lists and paragraphs: fold spaces per line only.
+  const folded = keepLines
+    ? cleaned
+        .split(/\r?\n/)
+        .map((line) => line.replace(/\s+/g, " ").trim())
+        .join("\n")
+        .replace(/\n{3,}/g, "\n\n")
+    : cleaned.replace(/\s+/g, " ");
+  const text = folded.trim().normalize("NFC");
   return Array.from(text).slice(0, max).join("").trimEnd();
 }
 
@@ -104,7 +113,7 @@ export function normalizeAskQuestions(raw: Record<string, unknown>): AskQuestion
   }
   return rawQuestions.map((entry, qIndex) => {
     const q = (entry ?? {}) as Record<string, unknown>;
-    const question = cardText(q.question, 240);
+    const question = cardText(q.question, 240, true);
     if (!question) throw new Error("each ask_user question needs non-empty question text");
     const options = Array.isArray(q.options) ? q.options.map(askOption) : [];
     const labels = options.map((option) => option.label);

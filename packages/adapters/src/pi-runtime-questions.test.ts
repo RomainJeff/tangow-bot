@@ -190,7 +190,15 @@ describe("ask_user option normalization (CA20)", () => {
     expect(option?.description).toBe(`${"x".repeat(79)}😀`);
   });
 
-  it("removes bidi, control and zero-width characters, keeps the emoji joiner, and folds lines", () => {
+  it("keeps a question's Markdown line breaks", () => {
+    const [question] =
+      normalizeAskQuestions({
+        questions: [{ question: "Pick one:\n- fast\n- cheap\n\n\n\nWhich?", options: ["A", "B"] }],
+      }) ?? [];
+    expect(question?.question).toBe("Pick one:\n- fast\n- cheap\n\nWhich?");
+  });
+
+  it("removes bidi, control and zero-width characters, keeps the emoji joiner, and folds spaces", () => {
     const [question] =
       normalizeAskQuestions({
         questions: [
@@ -207,7 +215,7 @@ describe("ask_user option normalization (CA20)", () => {
     expect(question).toEqual({
       id: "q1",
       header: "Format",
-      question: "Which fridge?",
+      question: "Which\n\nfridge?",
       options: [
         { id: "q1o1", label: "Allow", description: "Café 👩\u200D💻" },
         { id: "q1o2", label: "Deny" },
