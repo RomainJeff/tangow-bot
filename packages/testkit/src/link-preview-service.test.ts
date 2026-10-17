@@ -169,7 +169,7 @@ describe("only articles get a card", () => {
 
     expect(requests).toEqual(["https://h.tld/doc"]);
     expect([...db.tables.linkPreviewCache.values()]).toMatchObject([
-      { status: "failed", source: "server" },
+      { status: "page", article: false, source: "server" },
     ]);
   });
 });

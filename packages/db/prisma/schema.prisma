@@ -1039,8 +1039,9 @@ model LinkPreviewCache {
   spaceId     String
   space       Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
   keyHash     String
-  /// "ok" or "failed"
+  /// "photo", "page", "refused" or "unreadable". Rows written before ("ok", "failed") are misses.
   status      String
+  /// Unused: kept so that an older build rolled back to can still read the table.
   format      String?
   title       String?
   /// Storage key of the WebP bytes in the artifact store; null without an image.
@@ -1050,11 +1051,15 @@ model LinkPreviewCache {
   imageBytes  Int      @default(0)
   /// "contain" when the image is the site's icon (drawn whole); null otherwise.
   imageFit    String?
-  /// True when the page declared itself an article. Null on a photo, and on a page card written
-  /// before cards were limited to articles (read again as a cache miss).
+  /// On a page: whether it declared itself an article.
   article     Boolean?
-  /// "server" (read by the server), "restricted" (the site refused the server: a bare failure) or
-  /// "device" (the head was read by the sender's device and the server fetched the image).
+  /// On a page: the read ended on another site than the link's.
+  crossSite   Boolean  @default(false)
+  /// Storage key of the 64 px WebP site icon; null without one.
+  iconKey     String?
+  iconBytes   Int      @default(0)
+  /// "server" (read by the server) or "device" (the head was read by the sender's device and the
+  /// server fetched the image).
   source      String   @default("server")
   createdAt   DateTime @default(now())
   expiresAt   DateTime
