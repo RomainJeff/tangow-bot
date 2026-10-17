@@ -54,7 +54,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function renderSidebar() {
+function renderSidebar(overrides: Partial<ComponentProps<typeof BotsSidebar>> = {}) {
   const ref = { current: null };
   const props = {
     botsSidebarCollapsed: false,
@@ -115,7 +115,7 @@ function renderSidebar() {
     setUsage: vi.fn(),
     botsSidebarEdgeDragRef: { current: null },
   } satisfies ComponentProps<typeof BotsSidebar>;
-  act(() => root.render(<BotsSidebar {...props} />));
+  act(() => root.render(<BotsSidebar {...props} {...overrides} />));
   return props;
 }
 
@@ -141,4 +141,35 @@ it("restores an archived bot from its row without opening its page", () => {
 
   expect(props.onRestoreBot.mock.calls).toEqual([["bot-9"]]);
   expect(props.onOpenArchivedBot).not.toHaveBeenCalled();
+});
+
+it("reads a bot waiting on the person as Waiting for you, with its avatar at rest", () => {
+  const waiting = {
+    ...ARCHIVED,
+    id: "bot-1",
+    name: "Maya",
+    status: "waiting_input",
+    archivedAt: null,
+    title: "Which city should I use?",
+    preview: "Which city should I use?",
+  } as unknown as Bot;
+  renderSidebar({
+    archivedBots: [],
+    sidebarGroups: [
+      {
+        key: "space-1",
+        title: null,
+        bots: [{ kind: "bot", chat: waiting, pinned: false, sectionId: null }],
+        sectionId: null,
+        showLock: false,
+        emptySpaceId: undefined,
+        spaceId: "space-1",
+        spaceName: "Home",
+        canDeleteSpace: false,
+      },
+    ],
+  });
+  const row = container.querySelector<HTMLButtonElement>('[data-roster-bot-id="bot-1"]')!;
+  expect(row.textContent).toBe("MayaWaiting for you");
+  expect(row.querySelector("[data-working]")?.getAttribute("data-working")).toBe("false");
 });
