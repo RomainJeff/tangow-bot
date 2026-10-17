@@ -21,6 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Fixed
 
 - On web and desktop, tapping an answer or a button in the conversation no longer stops it from following new messages, so the bot's working line and reply stay in view above the composer.
+- A routine's result now shows its links as mentions too, on web and desktop.
 
 ### 2026-10-16
 
