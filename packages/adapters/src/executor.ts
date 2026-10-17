@@ -4970,9 +4970,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
           });
           if (!completed) return;
           if (savedSkill) await writeRunSkillLines(runId);
-          // After the commit, never inside it. Delegated runs report back to the ordering bot
-          // and routine cards are not messages to the person: no preview for either.
-          if (run.trigger !== "bot_message" && !isRoutineCardRun) {
+          // After the commit, never inside it. Delegated runs report back to the ordering bot:
+          // no preview for them.
+          if (run.trigger !== "bot_message") {
             await deps.jobs
               .enqueue(linkPreviewJob({ runId }))
               .catch((error) => getLogger().error("link.preview enqueue", error));
