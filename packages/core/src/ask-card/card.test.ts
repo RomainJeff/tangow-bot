@@ -133,7 +133,7 @@ describe("cancellation (CA2)", () => {
       view: {
         kind: "open",
         lines: [],
-        step: { question: expect.anything(), left: null, ...draft, skip: false },
+        step: { question: expect.anything(), left: null, ...draft, skip: false, reopened: false },
         primary: null,
         busy: false,
         filled: null,
@@ -451,7 +451,12 @@ describe("a stack of questions (CA6)", () => {
       lines: view.lines.map(
         (line) => `${line.label}: ${line.value.kind === "text" ? line.value.text : "Skipped"}`,
       ),
-      step: view.step && { id: view.step.question.id, left: view.step.left, skip: view.step.skip },
+      step: view.step && {
+        id: view.step.question.id,
+        left: view.step.left,
+        skip: view.step.skip,
+        reopened: view.step.reopened,
+      },
       primary: view.primary,
     };
   };
@@ -492,13 +497,21 @@ describe("a stack of questions (CA6)", () => {
     seen.push(shown(subject));
     subject.confirm();
     expect(seen).toEqual([
-      { lines: [], step: { id: "q1", left: 2, skip: false }, primary: null },
-      { lines: [], step: { id: "q1", left: 2, skip: false }, primary: null },
-      { lines: ["Format: Built-in"], step: { id: "q2", left: 1, skip: false }, primary: null },
-      { lines: ["Format: Built-in"], step: { id: "q2", left: 1, skip: false }, primary: "next" },
+      { lines: [], step: { id: "q1", left: 2, skip: false, reopened: false }, primary: null },
+      { lines: [], step: { id: "q1", left: 2, skip: false, reopened: false }, primary: null },
+      {
+        lines: ["Format: Built-in"],
+        step: { id: "q2", left: 1, skip: false, reopened: false },
+        primary: null,
+      },
+      {
+        lines: ["Format: Built-in"],
+        step: { id: "q2", left: 1, skip: false, reopened: false },
+        primary: "next",
+      },
       {
         lines: ["Format: Built-in", "Extras: Ice maker, No frost"],
-        step: { id: "q3", left: 0, skip: true },
+        step: { id: "q3", left: 0, skip: true, reopened: false },
         primary: null,
       },
       recap,
@@ -522,7 +535,7 @@ describe("a stack of questions (CA6)", () => {
     subject.tap(id("q2o2"));
     expect(shown(subject)).toEqual({
       lines: ["Format: Freestanding"],
-      step: { id: "q2", left: 0, skip: false },
+      step: { id: "q2", left: 0, skip: false, reopened: false },
       primary: "send",
     });
     subject.confirm();
@@ -537,7 +550,7 @@ describe("a stack of questions (CA6)", () => {
     expect([shown(subject), subject.view()]).toEqual([
       {
         lines: ["Format: Built-in", "Do you already have a separate freezer?: Skipped"],
-        step: { id: "q2", left: 0, skip: false },
+        step: { id: "q2", left: 0, skip: false, reopened: true },
         primary: "next",
       },
       expect.objectContaining({ step: expect.objectContaining({ selected: ["q2o1", "q2o2"] }) }),
@@ -557,13 +570,17 @@ describe("a stack of questions (CA6)", () => {
     subject.tap(id("q1o2"));
     clock.advance(550);
     subject.reopen("q1" as QuestionId);
+    const reopened = shown(subject);
     subject.tap(id("q1o1"));
     clock.advance(550);
-    expect(shown(subject)).toEqual({
-      lines: ["Format: Freestanding"],
-      step: { id: "q2", left: 1, skip: false },
-      primary: null,
-    });
+    expect([reopened, shown(subject)]).toEqual([
+      { lines: [], step: { id: "q1", left: 2, skip: false, reopened: true }, primary: null },
+      {
+        lines: ["Format: Freestanding"],
+        step: { id: "q2", left: 1, skip: false, reopened: false },
+        primary: null,
+      },
+    ]);
   });
 
   type Subject = ReturnType<typeof card>["card"];
@@ -593,8 +610,12 @@ describe("a stack of questions (CA6)", () => {
     const during = shown(subject);
     for (const apply of applies) apply();
     expect([during, shown(subject)]).toEqual([
-      { lines: [], step: { id: "q1", left: 2, skip: false }, primary: null },
-      { lines: ["Format: Built-in"], step: { id: "q2", left: 1, skip: false }, primary: null },
+      { lines: [], step: { id: "q1", left: 2, skip: false, reopened: false }, primary: null },
+      {
+        lines: ["Format: Built-in"],
+        step: { id: "q2", left: 1, skip: false, reopened: false },
+        primary: null,
+      },
     ]);
   });
 });

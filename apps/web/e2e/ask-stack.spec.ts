@@ -71,7 +71,7 @@ for (const width of [1440, 390]) {
     await shoot(page, testInfo, "recap");
 
     await lines.first().click();
-    await expect(head).toHaveText("Format·Last one");
+    await expect(head).toHaveText("Format");
     await expect(button("Built-in, 54–56 cm")).toHaveAttribute("aria-pressed", "true");
     await button("Freestanding, 60 cm").click();
     await expect(lines.first()).toHaveText("FormatFreestanding, 60 cm");

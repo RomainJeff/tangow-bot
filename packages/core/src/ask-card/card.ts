@@ -47,6 +47,8 @@ export type QuestionStep = {
   question: FormQuestion;
   /** In a stack, how many questions are still unseen besides this one; null on a one-question card. */
   left: number | null;
+  /** Opened again from its line: already seen, so never the last one. */
+  reopened: boolean;
   selected: readonly OptionId[];
   /** Null while closed; open from the start on a free-text question. */
   field: { text: string; canSend: boolean } | null;
@@ -201,6 +203,7 @@ export function createAskCard({
       selected: picked,
       field: other === null ? null : { text: other, canSend: typed },
       skip: !question.required,
+      reopened: draft.reopened !== null,
     };
     return {
       kind: "open",

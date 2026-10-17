@@ -898,7 +898,7 @@ describe("AskCard open question", () => {
       expect([reopened, shown()]).toEqual([
         {
           lines: ["ExtrasNo frost", "Do you already have a separate freezer?Skipped"],
-          head: "Format·Last one",
+          head: "Format",
           actions: [],
           pressed: "true",
         },

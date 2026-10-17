@@ -225,7 +225,8 @@ export function QuestionCard({
   }
 
   const { question, left } = step;
-  const more = (count: number) => (count > 0 ? t`${count} more` : t`Last one`);
+  const more = (count: number) => t`${count} more`;
+  const mark = left === null ? null : left > 0 ? more(left) : step.reopened ? null : t`Last one`;
   const choices = question.options.length > 0;
 
   return shell(
@@ -235,19 +236,19 @@ export function QuestionCard({
         <div className="flex flex-col">
           {pile}
           <div data-slot="stack-step" className={cn(pile.length > 0 && "pt-2.5")}>
-            {left === null ? null : (
+            {left === null || (!question.header && !mark) ? null : (
               <p data-slot="stack-head" className="flex min-w-0 items-baseline gap-1.5 pb-1">
                 {question.header ? (
-                  <>
-                    <span dir="auto" className="min-w-0 truncate font-medium">
-                      {question.header}
-                    </span>
-                    <span aria-hidden className="text-muted-foreground">
-                      ·
-                    </span>
-                  </>
+                  <span dir="auto" className="min-w-0 truncate font-medium">
+                    {question.header}
+                  </span>
                 ) : null}
-                <span className="shrink-0 text-muted-foreground">{more(left)}</span>
+                {question.header && mark ? (
+                  <span aria-hidden className="text-muted-foreground">
+                    ·
+                  </span>
+                ) : null}
+                {mark ? <span className="shrink-0 text-muted-foreground">{mark}</span> : null}
               </p>
             )}
             <div id={questionId}>
