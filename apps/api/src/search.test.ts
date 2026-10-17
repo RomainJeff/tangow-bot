@@ -1,4 +1,5 @@
 import type { Actor } from "@rakazo/contracts";
+import { LINK_BLOCK_KINDS } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
 import { querySpaceSearch } from "./search.js";
@@ -101,20 +102,22 @@ describe("link previews in search (CA 44, CA 46)", () => {
     expect(group).toMatchObject({ isLinkPreview: false });
   });
 
-  it("cuts preview cards out of the JSON the SQL pre-filter matches, so a title takes no result slot", async () => {
+  it("cuts every link block kind out of the JSON the SQL pre-filter matches, so a title takes no result slot", async () => {
     const { prisma } = fixture(0);
     await querySpaceSearch(prisma as unknown as PrismaClient, actor, "report");
     // No artifact matched, so both calls are the tagged-template message searches.
-    const sql = prisma.$queryRaw.mock.calls.slice(0, 2).map(([strings]) => [...strings].join("?"));
-    expect(sql).toHaveLength(2);
-    for (const text of sql) {
-      expect(text).toContain("jsonb_path_query_array(e.payload -> 'blocks'");
-      expect(text).toContain("link_preview");
+    const calls = prisma.$queryRaw.mock.calls.slice(0, 2);
+    expect(calls).toHaveLength(2);
+    for (const [strings, ...values] of calls) {
+      const text = [...strings].join("?");
+      expect(text).toContain("jsonb_path_query_array(e.payload -> 'blocks', ?::jsonpath)");
       expect(text).not.toContain("e.payload::text");
+      const path = values.find((value) => typeof value === "string" && value.startsWith("$[*]"));
+      for (const kind of LINK_BLOCK_KINDS) expect(path).toContain(`@.kind != "${kind}"`);
     }
   });
 
-  it("never matches a page title kept in a preview card", async () => {
+  it("never matches a page title kept in a preview card or a mention", async () => {
     const sentinel = "ZEBRA-SENTINEL-TITLE";
     const { prisma } = fixture(0);
     // No artifact matched, so the first query is the direct message search.
@@ -128,6 +131,7 @@ describe("link previews in search (CA 44, CA 46)", () => {
             format: "compact",
             title: sentinel,
           },
+          { kind: "link_mention", url: "https://example.test/a", title: sentinel },
         ]),
         said("message-2", 4, [{ kind: "text", text: `I wrote ${sentinel} myself` }]),
       ])

@@ -64,6 +64,12 @@ describe("composerLinkPreviewTrigger", () => {
     expect(composerLinkPreviewTrigger("", "https://a.tld/x?Sig=abc", "paste")).toBeUndefined();
   });
 
+  it("takes the first eligible link, past a secret or one-shot link (CA 20)", () => {
+    expect(
+      composerLinkPreviewTrigger("", "https://a.tld/invite/x?token=1 https://b.tld/y ", "type"),
+    ).toBe("https://b.tld/y");
+  });
+
   it("never fires for a link to a sign-in page (CA 71)", () => {
     expect(composerLinkPreviewTrigger("", "https://login.a.tld/ ", "type")).toBeUndefined();
     expect(composerLinkPreviewTrigger("", "https://a.tld/sso", "paste")).toBeUndefined();

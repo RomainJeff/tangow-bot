@@ -9,7 +9,7 @@ import {
   SkillDraftBlock,
 } from "./events.js";
 import { Id, IsoDate, RunFailureKind, ThinkingLevelSchema } from "./ids.js";
-import { isLinkPreviewCard, LinkPreviewBlock } from "./link-preview.js";
+import { isLinkPreviewCard, LinkMentionBlock, LinkPreviewBlock } from "./link-preview.js";
 
 export const EntryId = Id.brand<"EntryId">();
 export type EntryId = z.infer<typeof EntryId>;
@@ -285,7 +285,11 @@ const EntryShapes = z.discriminatedUnion("type", [
     "link.preview",
     z.object({
       ...target,
-      block: LinkPreviewBlock.refine(isLinkPreviewCard, "A preview entry holds a card"),
+      block: z.union([
+        LinkPreviewBlock.refine(isLinkPreviewCard, "A preview entry holds a card"),
+        LinkMentionBlock,
+      ]),
+      /** The one artifact this entry shows: the card's image or the mention's icon. */
       artifactId: Id.optional(),
     }),
   ),

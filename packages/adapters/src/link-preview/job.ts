@@ -1,12 +1,7 @@
 import { createHash } from "node:crypto";
 import type { ArtifactStore, BackgroundJobPayloads } from "@rakazo/adapter-kit";
 import { LinkPreviewBlock, type LinkPreviewCard } from "@rakazo/contracts";
-import {
-  firstEligibleLink,
-  hasSecretParam,
-  isAuthenticationDestination,
-  messageHostsLinkPreview,
-} from "@rakazo/core";
+import { linkMentionCandidates, messageHostsLinkPreview } from "@rakazo/core";
 import {
   appendLinkPreviewBlock,
   blocksOf,
@@ -64,8 +59,7 @@ export function linkPreviewCandidate(message: { role: string; blocks: unknown })
         : [],
     )
     .join("\n");
-  const link = firstEligibleLink(text);
-  return link && !hasSecretParam(link) && !isAuthenticationDestination(link) ? link : null;
+  return linkMentionCandidates(text)[0]?.url ?? null;
 }
 
 type ThreadScope = {

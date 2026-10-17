@@ -2,10 +2,12 @@ import type { MessageBlock } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
 import { blocksToAgentHistoryText } from "./attachments.js";
 import {
-  firstEligibleLink,
   hasSecretParam,
   isAuthenticationDestination,
+  isEligibleLink,
   isLinkOnlyMessage,
+  linkKey,
+  linkMentionCandidates,
   messageHostsLinkPreview,
   normalizePreviewUrl,
   previewSiteInitial,
@@ -18,7 +20,9 @@ import { isNarrationMessage, isUserNarrationMessage } from "./message-grouping.j
 import { isAsideOnlyMessage } from "./message-visibility.js";
 import { speechFromBlocks } from "./speech-text.js";
 
-describe("firstEligibleLink", () => {
+const firstEligibleLink = (text: string) => linkMentionCandidates(text)[0]?.url;
+
+describe("the first link candidate", () => {
   it("takes the first http(s) link and ignores the others", () => {
     expect(firstEligibleLink("a https://a.tld/1 b https://b.tld/2")).toBe("https://a.tld/1");
     expect(firstEligibleLink("no link here")).toBeUndefined();
@@ -95,6 +99,93 @@ describe("firstEligibleLink", () => {
     expect(firstEligibleLink(`${long} https://b.tld/y`)).toBe("https://b.tld/y");
     const exact = `https://a.tld/${"a".repeat(2048 - "https://a.tld/".length)}`;
     expect(firstEligibleLink(exact)).toBe(exact);
+  });
+});
+
+describe("linkMentionCandidates (CA 6, 16, 20, 21)", () => {
+  const urls = (text: string) => linkMentionCandidates(text).map((link) => link.url);
+
+  it("keeps the first five distinct keys in text order", () => {
+    const seven = Array.from({ length: 7 }, (_, i) => `https://s${i}.test/p`).join(" and ");
+    expect(urls(seven)).toEqual([
+      "https://s0.test/p",
+      "https://s1.test/p",
+      "https://s2.test/p",
+      "https://s3.test/p",
+      "https://s4.test/p",
+    ]);
+  });
+
+  it("filters every link before counting, so a token or sign-in link takes no slot", () => {
+    const text =
+      "https://a.test/x?token=abc https://accounts.google.com/signin " +
+      "https://b.test/1 https://c.test/2 https://d.test/3 https://e.test/4 https://f.test/5";
+    expect(urls(text)).toEqual([
+      "https://b.test/1",
+      "https://c.test/2",
+      "https://d.test/3",
+      "https://e.test/4",
+      "https://f.test/5",
+    ]);
+  });
+
+  it("gives one candidate per key: a bare www. form, fragments, and a link said twice", () => {
+    expect(linkMentionCandidates("www.x.test/a then https://www.x.test/a")).toEqual([
+      { key: "https://www.x.test/a", url: "https://www.x.test/a" },
+    ]);
+    expect(linkMentionCandidates("https://x.test/a#b and https://x.test/a#c")).toEqual([
+      { key: "https://x.test/a", url: "https://x.test/a#b" },
+    ]);
+    expect(urls("- https://x.test/doc\n\nas said, [the doc](https://x.test/doc).")).toEqual([
+      "https://x.test/doc",
+    ]);
+  });
+
+  it("never takes a link in code", () => {
+    expect(urls("`https://a.test/x` and https://b.test/y")).toEqual(["https://b.test/y"]);
+  });
+});
+
+describe("linkKey", () => {
+  it("is the normalized https form, without fragment", () => {
+    expect(linkKey("www.X.test/a#top")).toBe("https://www.x.test/a");
+    expect(linkKey("https://x.test:443/a?b=1#c")).toBe("https://x.test/a?b=1");
+    expect(linkKey("ftp://x.test/a")).toBeNull();
+    expect(linkKey("not a link")).toBeNull();
+  });
+});
+
+describe("isEligibleLink (CA 20, 21)", () => {
+  it("refuses whole one-shot path segments, decoded and in any case", () => {
+    for (const url of [
+      "https://a.test/unsubscribe/x",
+      "https://a.test/a/confirm/x",
+      "https://a.test/Reset/x",
+      "https://a.test/invite/x",
+      "https://a.test/%69nvite/x",
+      "https://slack.test/shared_invite/zt-1",
+      "https://a.test/opt-out",
+    ]) {
+      expect([url, isEligibleLink(url)]).toEqual([url, false]);
+    }
+  });
+
+  it("still reads a path that only contains such a word, and ordinary documents", () => {
+    for (const url of [
+      "https://a.test/blog/how-to-reset-password",
+      "https://docs.test/document/d/1AbC/edit",
+      "https://a.test/invited-talks",
+    ]) {
+      expect([url, isEligibleLink(url)]).toEqual([url, true]);
+    }
+  });
+
+  it("refuses a secret query, a sign-in page, another scheme and a link over 2 048 characters", () => {
+    expect(isEligibleLink("https://a.test/x?access_token=1")).toBe(false);
+    expect(isEligibleLink("https://accounts.google.com/signin")).toBe(false);
+    expect(isEligibleLink("ftp://a.test/x")).toBe(false);
+    expect(isEligibleLink(`https://a.test/${"a".repeat(2048)}`)).toBe(false);
+    expect(isEligibleLink("https://a.test/x?page=2")).toBe(true);
   });
 });
 
@@ -391,27 +482,30 @@ describe("link_preview in block consumers", () => {
     title: SENTINEL,
   };
   const marker: MessageBlock = { kind: "link_preview", removed: true, url: "https://a.tld/x" };
+  const mention: MessageBlock = { kind: "link_mention", url: "https://a.tld/x", title: SENTINEL };
 
   it("never reaches the model through blocksToAgentHistoryText", () => {
     const withPreview = blocksToAgentHistoryText([
       { kind: "text", text: "see https://a.tld/x" },
       preview,
       marker,
+      mention,
     ]);
     expect(withPreview).toBe(
       blocksToAgentHistoryText([{ kind: "text", text: "see https://a.tld/x" }]),
     );
     expect(withPreview).not.toContain(SENTINEL);
-    expect(blocksToAgentHistoryText([preview, marker])).toBe("");
+    expect(blocksToAgentHistoryText([preview, marker, mention])).toBe("");
   });
 
   it("is not read aloud", () => {
-    expect(speechFromBlocks([preview, marker])).toBe("");
-    expect(speechFromBlocks([{ kind: "text", text: "hi" }, preview])).toBe("hi");
+    expect(speechFromBlocks([preview, marker, mention])).toBe("");
+    expect(speechFromBlocks([{ kind: "text", text: "hi" }, preview, mention])).toBe("hi");
   });
 
   it("is never an aside", () => {
     expect(isAsideOnlyMessage([preview])).toBe(false);
+    expect(isAsideOnlyMessage([mention])).toBe(false);
   });
 
   it("does not change whether a message groups as narration", () => {
@@ -419,6 +513,8 @@ describe("link_preview in block consumers", () => {
     expect(isUserNarrationMessage({ role: "user", blocks: [text, preview] })).toBe(true);
     expect(isNarrationMessage({ role: "bot", blocks: [text, preview] })).toBe(true);
     expect(isNarrationMessage({ role: "bot", blocks: [text, marker] })).toBe(true);
+    expect(isUserNarrationMessage({ role: "user", blocks: [text, mention] })).toBe(true);
+    expect(isNarrationMessage({ role: "bot", blocks: [text, mention] })).toBe(true);
   });
 });
 

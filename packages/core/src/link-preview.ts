@@ -1,5 +1,9 @@
-import { isPreviewableUrl, LINK_PREVIEW_TITLE_MAX_LENGTH } from "@rakazo/contracts";
-import { extractLinksFromText, wwwLinkHref } from "./search.js";
+import {
+  isAuthenticationDestination,
+  isPreviewableUrl,
+  LINK_PREVIEW_TITLE_MAX_LENGTH,
+} from "@rakazo/contracts";
+import { extractLinkOccurrences, wwwLinkHref } from "./search.js";
 
 /**
  * Words that mark a query parameter as a secret when its name holds one (`access_token`,
@@ -27,9 +31,85 @@ const SECRET_PARAM_WORDS: ReadonlySet<string> = new Set([
 /** Prefixes of presigned cloud storage links (S3, GCS): every such parameter belongs to one. */
 const SECRET_PARAM_PREFIXES = ["x-amz-", "x-goog-"];
 
-/** The one link a message may preview: its first eligible http(s) or bare `www.` link, outside code. */
-export function firstEligibleLink(text: string): string | undefined {
-  return extractLinksFromText(text).find(isPreviewableUrl);
+/**
+ * Whole path segments that mark a one-shot or invitation link (`/invite/…`, `/reset/…`): compared
+ * whole after decoding and lowercasing, so `/blog/how-to-reset-password` is still read.
+ */
+const SECRET_PATH_SEGMENTS: ReadonlySet<string> = new Set([
+  "unsubscribe",
+  "optout",
+  "opt-out",
+  "confirm",
+  "verify",
+  "activate",
+  "reset",
+  "invite",
+  "accept",
+  "magic",
+  "token",
+  "redeem",
+  "claim",
+  "approve",
+  "shared_invite",
+]);
+
+function hasSecretPath(url: string): boolean {
+  return new URL(url).pathname.split("/").some((segment) => {
+    let decoded = segment;
+    try {
+      decoded = decodeURIComponent(segment);
+    } catch {
+      // A malformed escape is compared as written.
+    }
+    return SECRET_PATH_SEGMENTS.has(decoded.toLowerCase());
+  });
+}
+
+/**
+ * The one identity of a link, for the server that reads it, the cache that remembers it and the
+ * renderers that match it to its block: a bare `www.` form as its https link, then
+ * `normalizePreviewUrl` (fragment dropped). Null when it is no http(s) URL.
+ */
+export function linkKey(href: string): string | null {
+  const key = normalizePreviewUrl(wwwLinkHref(href) ?? href);
+  return key && isPreviewableUrl(key) ? key : null;
+}
+
+/**
+ * Whether a link may be read at all: http(s), bounded and without credentials, no secret in its
+ * query or path, not a sign-in page. Every link of a message passes it before any counting.
+ */
+export function isEligibleLink(url: string): boolean {
+  return (
+    isPreviewableUrl(url) &&
+    !hasSecretParam(url) &&
+    !hasSecretPath(url) &&
+    !isAuthenticationDestination(url)
+  );
+}
+
+export const LINK_MENTIONS_PER_MESSAGE = 5;
+
+/** A link a message may show as a mention: its identity and the URL as first written. */
+export interface LinkCandidate {
+  key: string;
+  url: string;
+}
+
+/**
+ * The links of a text that may become mentions: the first five distinct keys in text order among
+ * eligible links outside code. The first one is also the only one that may get a card.
+ */
+export function linkMentionCandidates(text: string): LinkCandidate[] {
+  const candidates = new Map<string, LinkCandidate>();
+  for (const { href } of extractLinkOccurrences(text)) {
+    if (candidates.size === LINK_MENTIONS_PER_MESSAGE) break;
+    const key = linkKey(href);
+    if (key && !candidates.has(key) && isEligibleLink(href)) {
+      candidates.set(key, { key, url: href });
+    }
+  }
+  return [...candidates.values()];
 }
 
 /** Blocks that make a message a card of its own: no link preview is ever put under it. */
@@ -181,14 +261,14 @@ export function hasSecretParam(url: string): boolean {
 
 // One implementation, in contracts: the desktop main process (which cannot import this package)
 // applies the same rule to the pages its device reads.
-export { isAuthenticationDestination } from "@rakazo/contracts";
+export { isAuthenticationDestination };
 
 /**
  * A page title made safe to render: control, bidirectional, zero-width and tag characters are
  * removed (all of them are format or control characters), whitespace is collapsed, and the
- * result is capped without splitting a surrogate pair.
+ * result is capped at `max` without splitting a surrogate pair.
  */
-export function sanitizePreviewTitle(title: string): string {
+export function sanitizePreviewTitle(title: string, max = LINK_PREVIEW_TITLE_MAX_LENGTH): string {
   // Format characters go first (the BOM counts as whitespace, so it would otherwise leave a gap),
   // then whitespace collapses (tab and newline are controls too), then any other control goes.
   // ZWNJ and ZWJ stay: emoji sequences and several scripts need them to render correctly.
@@ -197,8 +277,8 @@ export function sanitizePreviewTitle(title: string): string {
     .replace(/\s+/gu, " ")
     .replace(/\p{Cc}/gu, "")
     .trim();
-  if (clean.length <= LINK_PREVIEW_TITLE_MAX_LENGTH) return clean;
-  const cut = clean.slice(0, LINK_PREVIEW_TITLE_MAX_LENGTH);
+  if (clean.length <= max) return clean;
+  const cut = clean.slice(0, max);
   const lastUnit = cut.charCodeAt(cut.length - 1);
   return (lastUnit >= 0xd800 && lastUnit <= 0xdbff ? cut.slice(0, -1) : cut).trimEnd();
 }
