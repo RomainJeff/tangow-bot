@@ -1,11 +1,12 @@
 import { radii } from "@rakazo/ui-tokens";
+import type { Ref } from "react";
 import type { TextProps } from "react-native";
 import { StyleSheet, Text } from "react-native";
 import { mobileTokens } from "../lib/appearance";
 import { useThemedStyles } from "../lib/native";
 import { nativeTextStyle } from "../lib/typography";
 
-export type UserBubbleProps = TextProps;
+export type UserBubbleProps = TextProps & { ref?: Ref<Text> };
 
 /**
  * What the person said, one of the thread's two filled bubbles (the other is

@@ -1,4 +1,3 @@
-import type { Run } from "@rakazo/contracts";
 import type { ThreadView } from "../session-log/project-thread-view.js";
 import { askFormOf } from "./form.js";
 
@@ -10,7 +9,7 @@ import { askFormOf } from "./form.js";
 export function answersPendingQuestion(
   view: Pick<ThreadView, "rows" | "waiting">,
   sendsTo: string,
-  runs: readonly Pick<Run, "botId" | "status">[],
+  runs: readonly { botId?: string; status: string }[],
 ): boolean {
   const { waiting } = view;
   const item = waiting && view.rows.find((row) => row.item.id === waiting.itemId)?.item;
