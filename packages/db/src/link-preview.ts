@@ -404,17 +404,21 @@ async function previewTarget(
   };
 }
 
+/**
+ * On `appended`, `artifactIds` are the artifacts the written entries show; the caller discards
+ * the others.
+ */
 export type AppendLinkBlocksResult =
-  /** `artifactIds`: the artifacts the written entries show; the caller discards the others. */
-  { outcome: "appended"; seq: number; artifactIds: string[] } | { outcome: "gone" | "present" };
+  | { outcome: "appended"; seq: number; artifactIds: string[] }
+  | { outcome: "gone" | "present" };
 
 /**
  * Attaches a message's card and mentions in the one short transaction that holds the thread lock,
  * one `link.preview` entry per block, each naming the one artifact it shows, the card in one feed
- * event and the mentions in the next. Idempotent: the card
- * is written only while the message's card slot is free (no card, no removal), and a mention only
- * for a link key the message has no mention for yet, so a rerun completes a partial set without a
- * duplicate. A message sent with its preview off (or gone from the thread) gets nothing.
+ * event and the mentions in the next. Idempotent: the card is written only while the message's
+ * card slot is free (no card, no removal), and a mention only for a link key the message has no
+ * mention for yet, so a rerun completes a partial set without a duplicate. A message sent with its
+ * preview off (or gone from the thread) gets nothing.
  */
 export async function appendLinkBlocks(
   prisma: Pick<PrismaClient, "$transaction">,

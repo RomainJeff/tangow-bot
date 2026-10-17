@@ -141,6 +141,13 @@ describe("cardReplacesBubble", () => {
     );
   });
 
+  it("still takes the bubble's place when the link also carries a mention", () => {
+    const mention = unchecked({ kind: "link_mention", url: "https://www.example.com/post" });
+    expect(cardReplacesBubble([text("https://www.example.com/post"), compact, mention], card)).toBe(
+      true,
+    );
+  });
+
   it("keeps the bubble when a word is added or other content is attached", () => {
     expect(cardReplacesBubble([text("look https://www.example.com/post"), compact], card)).toBe(
       false,
