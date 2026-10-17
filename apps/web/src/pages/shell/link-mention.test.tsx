@@ -155,6 +155,17 @@ describe("link mentions in the thread", () => {
     ]);
   });
 
+  it("falls back to the glyph when the icon read is not an image the browser can decode", async () => {
+    await renderMessage(
+      message("bot", [text(`see ${DOC}`), mention(DOC, { icon: { artifactId: "icon-doc" } })]),
+    );
+    await act(async () => {
+      container.querySelector("img")?.dispatchEvent(new Event("error"));
+    });
+
+    expect(mentions()).toMatchObject([{ icon: null, glyph: true }]);
+  });
+
   it("leaves the links of a message that is itself a card as plain links", async () => {
     await renderMessage(
       message("bot", [

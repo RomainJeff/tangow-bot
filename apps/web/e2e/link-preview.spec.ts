@@ -157,11 +157,14 @@ test("links the server resolved show as mentions with their site's icon, in plac
     await expect(mention.locator(".rk-link-mention-icon")).toHaveAttribute("aria-hidden", "true");
   }
 
-  // The icon comes from the thread's artifact; no icon, or one that cannot be read, is the glyph.
+  // The icon comes from the thread's artifact, read once the mention nears the viewport; no icon,
+  // or one that cannot be read, is the glyph.
   const docs = bot.getByRole("link", { name: "Compte rendu du 12 octobre, docs.example.org" });
+  await docs.scrollIntoViewIfNeeded();
   await expect(docs.locator("img")).toHaveAttribute("src", /^blob:/);
   for (const name of ["tracker.example.net", "Handbook, wiki.example.org"]) {
     const mention = bot.getByRole("link", { name, exact: true });
+    await mention.scrollIntoViewIfNeeded();
     await expect(mention.locator('[data-slot="link-mention-glyph"]')).toBeVisible();
     await expect(mention.locator("img")).toHaveCount(0);
   }

@@ -457,7 +457,8 @@ export function ChartBlockView({
 
 /**
  * Loads an image artifact of the thread as an object URL, once its container nears the viewport.
- * `failed` turns true when the artifact cannot be read, so a caller can draw its fallback.
+ * `failed` turns true when the artifact cannot be read, or when an image given `onImageError`
+ * cannot decode it, so a caller can draw its fallback.
  */
 function useArtifactImageSrc<Container extends HTMLElement = HTMLDivElement>(
   target: ArtifactTarget,
@@ -518,7 +519,7 @@ function useArtifactImageSrc<Container extends HTMLElement = HTMLDivElement>(
     };
   }, [artifactId, targetBotId, targetGroupId, visible]);
 
-  return { container, src, failed };
+  return { container, src, failed, onImageError: () => setFailed(true) };
 }
 
 /**
@@ -553,7 +554,7 @@ export function LinkPreviewImage({
 
 /**
  * The site icon of a link mention, read from the thread's artifacts like a card's picture, never
- * a remote URL. The link glyph stands in when the artifact cannot be read.
+ * a remote URL. The link glyph stands in when the artifact cannot be read or is not an image.
  */
 export function LinkMentionIcon({
   target,
@@ -562,9 +563,14 @@ export function LinkMentionIcon({
   target: ArtifactTarget;
   artifactId: string;
 }) {
-  const { container, src, failed } = useArtifactImageSrc<HTMLSpanElement>(target, artifactId);
+  const { container, src, failed, onImageError } = useArtifactImageSrc<HTMLSpanElement>(
+    target,
+    artifactId,
+  );
   if (failed) return <LinkMentionGlyph />;
-  return <span ref={container}>{src ? <img src={src} alt="" /> : null}</span>;
+  return (
+    <span ref={container}>{src ? <img src={src} alt="" onError={onImageError} /> : null}</span>
+  );
 }
 
 export function ArtifactImage({
