@@ -44,6 +44,10 @@
   --color-overlay: var(--overlay);
   --color-scrollbar: var(--scrollbar);
   --color-scrollbar-hover: var(--scrollbar-hover);
+  --color-option-ring: var(--option-ring);
+  --color-option-ring-hover: var(--option-ring-hover);
+  --color-pressed: var(--pressed);
+  --ring-width-selected: var(--size-selected-ring);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -270,6 +274,11 @@
 
   .rk-press-round:active {
     transform: scale(0.94);
+  }
+
+  /* An option tile is wide, so it settles less: 0.985. */
+  .rk-press-tile:enabled:active {
+    transform: scale(0.985);
   }
 
   /* Suppresses iOS's own long-press callout ("Copy / Look Up / Share…") on a
@@ -565,7 +574,8 @@
   }
 
   .rk-press:active,
-  .rk-press-round:active {
+  .rk-press-round:active,
+  .rk-press-tile:enabled:active {
     transform: none;
   }
 

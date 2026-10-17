@@ -5,23 +5,20 @@ import type { ThreadMessage } from "@rakazo/contracts";
 import { BOT_NAME_MAX_LENGTH, SPAWN_BOT_INSTRUCTIONS_MAX_LENGTH } from "@rakazo/contracts";
 import {
   askFormOf,
-  askSettledOf,
   canEditSpawnBotCard,
   isApprovalAskBlock,
   isSecretAskBlock,
   routineCardSettlement,
   spawnBotEdits,
   spawnBotReadOnlyDetail,
-  storedAnswerOf,
 } from "@rakazo/core";
-import type { FramedBlockActionsAlign } from "@rakazo/ui-web";
 import { Button, FramedBlock, Input, Surface, Textarea } from "@rakazo/ui-web";
 import { ChevronRight, Repeat } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 import { Fragment, useEffect, useId, useState } from "react";
 import { Link } from "react-router-dom";
 import { approvalActionLabel } from "../lib/approval-labels";
-import { AskSettled } from "./ask/AskSettled";
+import { QuestionCard } from "./ask/QuestionCard";
 
 const DETAIL_CLASS =
   "max-h-72 overflow-auto rounded-card bg-muted px-3.5 py-3 font-mono text-mono whitespace-pre-wrap break-words text-muted-foreground";
@@ -172,7 +169,6 @@ export function AskCard({
 }) {
   const { t } = useLingui();
   const fieldId = useId();
-  const [editing, setEditing] = useState(false);
   // Keyed by message: a card that changes (another thread, another ask) drops the edit.
   const [botDraft, setBotDraft] = useState<{
     messageId: string;
@@ -185,7 +181,6 @@ export function AskCard({
   const submitting = pendingAction !== null;
   const approval = isApprovalAskBlock(block);
   const approvalActions = approval ? block.actions : undefined;
-  const askActions = block.actions;
   const secretInput = isSecretAskBlock(block);
   const secretLabel = secretFieldLabel(block.purpose);
 
@@ -208,12 +203,20 @@ export function AskCard({
   }
 
   const form = askFormOf(block);
-  if (form && (block.status === "answered" || !canAnswer)) {
-    const stored = block.status === "answered" ? storedAnswerOf(form, block) : null;
-    return <AskSettled view={askSettledOf(form, stored)} className="mt-1.5" />;
-  }
-  if (block.questions?.length) {
+  if (form && form.questions.length > 1 && block.status !== "answered" && canAnswer) {
     return <MultiQuestionAsk block={block} onAnswer={onAnswer} messageId={messageId} />;
+  }
+  if (form) {
+    return (
+      <QuestionCard
+        key={messageId}
+        block={block}
+        form={form}
+        messageId={messageId}
+        canAnswer={canAnswer}
+        onAnswer={onAnswer}
+      />
+    );
   }
 
   // A routine card, proposed by the bot or confirming one set up, shows what it creates instead
@@ -247,7 +250,6 @@ export function AskCard({
 
   let children: ReactNode = null;
   let actions: ReactNode = null;
-  let actionsAlign: FramedBlockActionsAlign = "end";
 
   // Only a pending spawn_bot card that carries its fields can be edited, and only by the run's
   // owner. A card from an older server has no `spawnBot`: it stays read-only, approve or cancel.
@@ -390,133 +392,6 @@ export function AskCard({
           {submitting ? <Trans>Saving…</Trans> : <Trans>Save</Trans>}
         </Button>
       );
-    } else if (askActions?.length) {
-      // "Other answer…" belongs to the list of answers; sending a typed one is a decision.
-      if (!editing) actionsAlign = "start";
-      children = (
-        <>
-          <OptionsRow>
-            {askActions.map((action) => (
-              <Button
-                key={action.id}
-                type="button"
-                variant={pendingAction === action.id ? "capsule" : "quickReply"}
-                size="quickReply"
-                aria-pressed={pendingAction === action.id}
-                disabled={submitting}
-                onClick={() => void submitAnswer(action.id)}
-              >
-                {pendingAction === action.id ? <Trans>Sending…</Trans> : action.label}
-              </Button>
-            ))}
-          </OptionsRow>
-          {editing ? (
-            <AnswerInput
-              className="mt-2.5"
-              aria-label={t`Other answer`}
-              value={answer}
-              onChange={(event) => setAnswer(event.target.value)}
-              onSubmit={() => void submitAnswer(answer)}
-              placeholder={t`Type a different answer`}
-              autoFocus
-              disabled={submitting}
-            />
-          ) : null}
-        </>
-      );
-      actions = editing ? (
-        <>
-          <Button
-            type="button"
-            variant="tertiary"
-            size="capsule"
-            disabled={submitting}
-            onClick={() => {
-              setAnswer("");
-              setEditing(false);
-            }}
-          >
-            <Trans>Cancel</Trans>
-          </Button>
-          <Button
-            type="button"
-            variant="capsule"
-            size="capsule"
-            disabled={!answer.trim() || submitting}
-            onClick={() => void submitAnswer(answer)}
-          >
-            {submitting ? <Trans>Sending…</Trans> : <Trans>Send answer</Trans>}
-          </Button>
-        </>
-      ) : (
-        <Button
-          type="button"
-          variant="tertiary"
-          size="capsule"
-          disabled={submitting}
-          onClick={() => setEditing(true)}
-        >
-          <Trans>Other answer…</Trans>
-        </Button>
-      );
-    } else {
-      children = editing ? (
-        <AnswerInput
-          aria-label={t`Answer`}
-          value={answer}
-          onChange={(event) => setAnswer(event.target.value)}
-          onSubmit={() => void submitAnswer(answer)}
-          placeholder={t`Type your answer`}
-          autoFocus
-          disabled={submitting}
-        />
-      ) : null;
-      actions = editing ? (
-        <>
-          <Button
-            type="button"
-            variant="tertiary"
-            size="capsule"
-            disabled={submitting}
-            onClick={() => {
-              setAnswer("");
-              setEditing(false);
-            }}
-          >
-            <Trans>Cancel</Trans>
-          </Button>
-          <Button
-            type="button"
-            variant="capsule"
-            size="capsule"
-            disabled={!answer.trim() || submitting}
-            onClick={() => void submitAnswer(answer)}
-          >
-            {submitting ? <Trans>Sending…</Trans> : <Trans>Send answer</Trans>}
-          </Button>
-        </>
-      ) : (
-        <>
-          <Button
-            type="button"
-            variant="tertiary"
-            size="capsule"
-            disabled={submitting}
-            onClick={() => setEditing(true)}
-          >
-            <Trans>Edit first</Trans>
-          </Button>
-          <Button
-            type="button"
-            variant="capsule"
-            size="capsule"
-            disabled={submitting}
-            onClick={() => void submitAnswer("approved")}
-          >
-            {submitting ? <Trans>Sending…</Trans> : <Trans>Send it</Trans>}
-          </Button>
-        </>
-      );
     }
   }
 
@@ -538,7 +413,6 @@ export function AskCard({
       consequence={botEditing ? undefined : consequence}
       answered={answered}
       actions={actions}
-      actionsAlign={actionsAlign}
     >
       {children}
       {error && !botEditing ? (
@@ -562,7 +436,7 @@ function isAnswered(a: LocalAnswer): boolean {
   return a.selected.length > 0 || a.other.trim().length > 0;
 }
 
-/** An open card of questions; answered or no longer waiting, it is an AskSettled. */
+/** An open card of several questions; answered or no longer waiting, it is a QuestionCard. */
 function MultiQuestionAsk({
   block,
   onAnswer,

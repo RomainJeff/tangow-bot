@@ -49,6 +49,11 @@ export type ColorTokens = {
   overlay: string;
   scrollbar: string;
   scrollbarHover: string;
+  /** A question card's option tile at rest, and under the pointer. */
+  optionRing: string;
+  optionRingHover: string;
+  /** The fill of a control being pressed. */
+  pressed: string;
 };
 
 // Alpha overlays from the design are flattened on `background` so every slot
@@ -91,6 +96,9 @@ export const darkTokens = {
   overlay: "rgba(4, 4, 5, 0.72)",
   scrollbar: "#1E2026",
   scrollbarHover: "#2E313A",
+  optionRing: "#3B3B3D",
+  optionRingHover: "#4E4E4F",
+  pressed: "#333335",
 } as const satisfies ColorTokens;
 
 export const lightTokens = {
@@ -131,6 +139,9 @@ export const lightTokens = {
   overlay: "rgba(20, 20, 22, 0.45)",
   scrollbar: "#C8C8C4",
   scrollbarHover: "#A8A8A4",
+  optionRing: "#EAEAEA",
+  optionRingHover: "#D9D9D9",
+  pressed: "#EDEDEB",
 } as const satisfies ColorTokens;
 
 /** Dark palette. Prefer `tokensForAppearance` when theme-aware. */
@@ -263,6 +274,8 @@ export type MotionTokens = {
   morph: number;
   /** One lap of the Stop contour while a reply streams. */
   flow: number;
+  /** A chosen answer filling with the user's bubble colour before it settles. */
+  fill: number;
 };
 
 export const motion: MotionTokens = {
@@ -275,6 +288,7 @@ export const motion: MotionTokens = {
   pivot: 320,
   morph: 260,
   flow: 2600,
+  fill: 80,
 };
 
 /** Sizes — avatars and round controls, in px. Consumed via primitive `size` props. */
@@ -299,6 +313,8 @@ export const sizes = {
   capsule: 36,
   mobileStack: 44,
   callButton: 52,
+  /** The ring of a chosen option, or of an answer field being typed in. */
+  selectedRing: 1.5,
   /** The composer's attachment thumbnail / file-tile height (both devices). */
   composerAttachmentThumb: 64,
   /** Max width of a composer file tile before its name truncates. */

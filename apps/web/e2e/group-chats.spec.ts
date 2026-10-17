@@ -194,9 +194,8 @@ test("create group from + and see two bots in one transcript", async ({ page }, 
     });
   }
   await expect(cityAsk).toBeVisible({ timeout: 15_000 });
-  await page.getByRole("button", { name: "Edit first" }).click();
-  await page.getByRole("textbox", { name: "Answer" }).fill("Paris");
-  await page.getByRole("button", { name: "Send answer" }).click();
+  await page.getByRole("textbox", { name: "Answer", exact: true }).fill("Paris");
+  await page.getByRole("textbox", { name: "Answer", exact: true }).press("Enter");
   const parisAnswer = page.getByRole("group", { name: "Your answer: Paris" });
   await expect(parisAnswer).toBeVisible({ timeout: 30_000 });
 
