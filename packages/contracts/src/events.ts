@@ -108,6 +108,8 @@ export const AskQuestion = z.object({
   required: z.boolean().optional(),
 });
 export type AskQuestion = z.infer<typeof AskQuestion>;
+/** The longest typed answer a question card takes: an "Other" text or a free-text answer. */
+export const ASK_ANSWER_MAX_LENGTH = 2_000;
 /** One question's answer: chosen option ids, an optional free-text "Other", or skipped. */
 export const AskAnswer = z.object({
   selected: z.array(z.string()).optional(),

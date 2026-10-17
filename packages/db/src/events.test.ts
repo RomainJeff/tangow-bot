@@ -1188,6 +1188,61 @@ describe("answerRunInput", () => {
     expect(tx.task.updateMany).not.toHaveBeenCalled();
   });
 
+  it.each([
+    {
+      card: "a question's Other text",
+      block: { questions: [{ id: "q1", question: "Ta cible ?" }] },
+      answerOf: (text: string) => JSON.stringify({ answers: { q1: { other: text } } }),
+    },
+    { card: "a free-text answer", block: {}, answerOf: (text: string) => text },
+  ])("takes $card of 2,000 characters and refuses 2,001", async ({ block, answerOf }) => {
+    async function answerWith(length: number) {
+      const tx = {
+        $queryRaw: vi.fn().mockResolvedValue([{ id: "thread-1" }]),
+        sessionEntry: {
+          findFirst: vi.fn().mockResolvedValue(
+            askEntry("message-1", {
+              kind: "ask",
+              text: "Ta cible ?",
+              status: "pending",
+              ...block,
+            }),
+          ),
+        },
+        run: {
+          findFirst: vi.fn().mockResolvedValue({ botId: "bot-2", userId: "user-1" }),
+          updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+          findUnique: vi.fn().mockResolvedValue({
+            status: "queued",
+            createdAt: new Date("2026-08-16T12:00:00.000Z"),
+            threadId: "thread-1",
+          }),
+        },
+        task: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+        thread: { findUniqueOrThrow: vi.fn().mockResolvedValue({ nextEventSeq: 10 }) },
+        event: { create: vi.fn(), findFirst: vi.fn().mockResolvedValue(null) },
+      };
+      const prisma = {
+        $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
+      } as unknown as PrismaClient;
+      const outcome = await answerRunInput(prisma, {
+        spaceId: "workspace-1",
+        threadId: "thread-1",
+        runId: "run-1",
+        messageId: "message-1",
+        answeredByUserId: "user-1",
+        answer: answerOf("x".repeat(length)),
+      }).then(
+        (result) => result,
+        (error: unknown) => (error instanceof InvalidAnswerError ? "refused" : error),
+      );
+      return { outcome, resumed: tx.run.updateMany.mock.calls.map(([call]) => call.data.status) };
+    }
+
+    expect(await answerWith(2000)).toEqual({ outcome: true, resumed: ["queued"] });
+    expect(await answerWith(2001)).toEqual({ outcome: "refused", resumed: [] });
+  });
+
   it("rejects a multi-question submission that leaves a required question unanswered", async () => {
     const tx = {
       $queryRaw: vi.fn().mockResolvedValue([{ id: "thread-1" }]),

@@ -65,6 +65,7 @@ test("resolves a pending ask from the main composer", async ({ page }, testInfo)
   // The card no longer repeats the reply: exactly one instance of the prose (the bubble).
   await expect(page.getByText("Go with the northern one.", { exact: true })).toHaveCount(1);
   await expect(page.getByRole("button", { name: "Send it" })).toHaveCount(0);
+  await expect(page.getByRole("group", { name: /^Your answer/ })).toHaveCount(0);
   await expect(
     page.getByText("on it. i will work this in the background and come back with a result.", {
       exact: true,

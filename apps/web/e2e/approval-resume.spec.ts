@@ -28,7 +28,7 @@ test("approval input resumes durable work", async ({ page }, testInfo) => {
 
   await expect(prompt).toHaveCount(2, { timeout: 30_000 });
   await expect(
-    page.getByText("Answered: ask me which city to use again", { exact: true }),
+    page.getByRole("group", { name: "Your answer: ask me which city to use again" }),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Send it" })).toHaveCount(1);
   await captureScreenshot(page, testInfo, "22-second-approval-prompt");
@@ -45,12 +45,13 @@ test("approval input resumes durable work", async ({ page }, testInfo) => {
   await expect(resumed).toBeVisible({ timeout: 30_000 });
   const handledAnswer = page.getByText("done. i handled: Paris", { exact: true });
   await expect(handledAnswer).toBeVisible();
-  await expect(page.getByText("Answered: Paris", { exact: true })).toBeVisible();
+  const paris = page.getByRole("group", { name: "Your answer: Paris" });
+  await expect(paris).toBeVisible();
 
   await page.reload();
   await expect(resumed).toBeVisible({ timeout: 20_000 });
   await expect(handledAnswer).toBeVisible();
-  await expect(page.getByText("Answered: Paris", { exact: true })).toBeVisible();
+  await expect(paris).toBeVisible();
   await captureScreenshot(page, testInfo, "24-approval-resumed-after-reload");
 
   await composer.fill("ask me which city to use");

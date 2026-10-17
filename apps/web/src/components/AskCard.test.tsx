@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { routineConfirmationBlock, selectedAskActionLabel, settleRoutineAsk } from "@rakazo/core";
+import { routineConfirmationBlock, settleRoutineAsk } from "@rakazo/core";
 import { act } from "react";
 import type { Root } from "react-dom/client";
 import { createRoot } from "react-dom/client";
@@ -21,22 +21,16 @@ vi.mock("@lingui/react/macro", () => ({
 
 import { type AskBlock, AskCard } from "./AskCard";
 
-describe("selectedAskActionLabel", () => {
-  it("maps a choice answer id to its user-facing label", () => {
-    expect(
-      selectedAskActionLabel("choice-2", [
-        { id: "choice-1", label: "Berlin" },
-        { id: "choice-2", label: "Seoul" },
-      ]),
-    ).toBe("Seoul");
-  });
+const cities: AskBlock = {
+  kind: "ask",
+  text: "Which city should I use?",
+  actions: [
+    { id: "choice-1", label: "Berlin" },
+    { id: "choice-2", label: "Seoul" },
+  ],
+};
 
-  it("falls back to the answer when an action is unavailable", () => {
-    expect(selectedAskActionLabel("custom", undefined)).toBe("custom");
-  });
-});
-
-describe("AskCard multi-question answered rendering", () => {
+describe("AskCard settled question (CA3)", () => {
   const questions: NonNullable<AskBlock["questions"]> = [
     {
       id: "q1",
@@ -45,111 +39,110 @@ describe("AskCard multi-question answered rendering", () => {
     },
     { id: "q2", question: "Any dietary restriction?" },
   ];
+  const render = (block: AskBlock) =>
+    renderToStaticMarkup(
+      <AskCard block={block} canAnswer={false} onAnswer={async () => {}} messageId="msg-settled" />,
+    );
 
-  it("resolved via the composer (no block.answers): compact trace, no fabricated per-question value", () => {
-    const block: AskBlock = {
+  it("answered from the composer: the questions as one line, no answer bubble", () => {
+    const html = render({
       kind: "ask",
       text: "",
       status: "answered",
       answer: "Berlin, no restrictions",
       questions,
-    };
-
-    const html = renderToStaticMarkup(
-      <AskCard block={block} canAnswer={true} onAnswer={async () => {}} messageId="msg-composer" />,
-    );
-
-    // Questions stay as a resolved trace of what was asked.
-    expect(html).toContain("Which city should I use?");
-    expect(html).toContain("Any dietary restriction?");
-    // No per-question "Answered" is repeated, and the free-text answer isn't duplicated
-    // into the card (it lives in the user's message bubble instead).
-    expect(html).not.toContain("Answered");
+    });
+    expect(html).toContain("Which city should I use? · Any dietary restriction?");
+    expect(html).not.toContain("Your answer");
     expect(html).not.toContain("Berlin, no restrictions");
-    // Settled: the progress dots have nothing left to track.
-    expect(html).not.toContain("bg-success");
-    expect(html).not.toContain("bg-muted-foreground/40");
   });
 
-  it("resolved via the card (block.answers present): structured breakdown is unchanged", () => {
-    const block: AskBlock = {
+  it("answered on the card: one line per question in the answer bubble", () => {
+    const html = render({
       kind: "ask",
       text: "",
       status: "answered",
-      answer: "",
       questions,
-      answers: {
-        q1: { selected: ["berlin"] },
-        q2: { other: "vegetarian" },
-      },
-    };
-
-    const html = renderToStaticMarkup(
-      <AskCard block={block} canAnswer={true} onAnswer={async () => {}} messageId="msg-card" />,
+      answers: { q1: { selected: ["berlin"] }, q2: { other: "vegetarian" } },
+    });
+    expect(html).toContain(
+      'aria-label="Your answer: Which city should I use? — Berlin; Any dietary restriction? — vegetarian"',
     );
-
-    expect(html).toContain("Berlin");
-    expect(html).toContain("Other: vegetarian");
   });
 
-  it("a single settled question shows its answer under the question, once", () => {
-    const block: AskBlock = {
-      kind: "ask",
-      text: "",
-      status: "answered",
-      answer: "",
-      questions: [questions[0]!],
-      answers: { q1: { selected: ["berlin"] } },
-    };
-
-    const html = renderToStaticMarkup(
-      <AskCard block={block} canAnswer={true} onAnswer={async () => {}} messageId="msg-single" />,
-    );
-
+  it("a legacy choice: the question once, and the chosen label as the user's answer", () => {
+    const html = render({ ...cities, status: "answered", answer: "choice-2" });
     expect(html.split("Which city should I use?").length - 1).toBe(1);
-    expect(html).not.toContain("1. ");
-    expect(html).toContain("Berlin");
-  });
-});
-
-describe("AskCard mono-question answered rendering", () => {
-  it("resolved via the composer (no block.answer): plain resolved state, reply not echoed onto the card", () => {
-    // The backend marks the card answered without an `answer` payload (design D2 — the reply
-    // lives in the user's message bubble), so the card must not reprint it.
-    const block: AskBlock = {
-      kind: "ask",
-      text: "Which city should I use?",
-      status: "answered",
-      input: "text",
-    };
-
-    const html = renderToStaticMarkup(
-      <AskCard block={block} canAnswer={true} onAnswer={async () => {}} messageId="msg-composer" />,
-    );
-
-    // The question stays as a trace; the resolved state reads "Answered" with no echoed value.
-    expect(html).toContain("Which city should I use?");
-    expect(html).toContain("Answered");
-    expect(html).not.toContain("Answered:");
+    expect(html).toContain('aria-label="Your answer: Seoul"');
+    expect(html).not.toContain("<button");
   });
 
-  it("resolved via the card (block.answer present): the chosen label is still shown", () => {
-    const block: AskBlock = {
-      kind: "ask",
-      text: "Which city should I use?",
-      status: "answered",
-      answer: "choice-2",
-      actions: [
-        { id: "choice-1", label: "Berlin" },
-        { id: "choice-2", label: "Seoul" },
-      ],
+  it("an answered secret or approval keeps its own state line, with no answer bubble (TM CA22)", () => {
+    const text = (block: AskBlock) => render(block).replace(/<[^>]+>/g, "");
+    expect({
+      secret: text({
+        kind: "ask",
+        text: "API key?",
+        input: "secret",
+        status: "answered",
+        answer: "",
+      }),
+      approval: text({
+        kind: "ask",
+        text: "Send?",
+        approvalEffectId: "e1",
+        status: "answered",
+        answer: "allow",
+        actions: [
+          { id: "allow", label: "Allow" },
+          { id: "deny", label: "Deny" },
+        ],
+      }),
+    }).toEqual({ secret: "API key?Saved", approval: "Needs your callSend?Allowed once" });
+  });
+
+  it("lists two answers that read the same as two lines", () => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    const day = (id: string) => ({
+      id,
+      header: "Day",
+      question: "Which day?",
+      options: [{ id: `${id}-monday`, label: "Monday" }],
+    });
+    act(() => {
+      root.render(
+        <AskCard
+          block={{
+            kind: "ask",
+            text: "",
+            status: "answered",
+            questions: [day("q1"), day("q2")],
+            answers: { q1: { selected: ["q1-monday"] }, q2: { selected: ["q2-monday"] } },
+          }}
+          canAnswer={false}
+          onAnswer={async () => {}}
+          messageId="msg-same-lines"
+        />,
+      );
+    });
+    const bubble = container.querySelector('[aria-label^="Your answer"]');
+    const shown = {
+      lines: [...(bubble?.children ?? [])].map((line) => line.textContent),
+      keyWarnings: errors.mock.calls.filter(([message]) => String(message).includes("same key")),
     };
+    act(() => root.unmount());
+    errors.mockRestore();
+    vi.unstubAllGlobals();
+    expect(shown).toEqual({ lines: ["Day — Monday", "Day — Monday"], keyWarnings: [] });
+  });
 
-    const html = renderToStaticMarkup(
-      <AskCard block={block} canAnswer={true} onAnswer={async () => {}} messageId="msg-card" />,
-    );
-
-    expect(html).toContain("Answered: Seoul");
+  it("no longer waiting: the question and No longer active, nothing to press", () => {
+    const html = render(cities);
+    expect(html).toContain("No longer active");
+    expect(html).not.toContain("<button");
   });
 });
 
