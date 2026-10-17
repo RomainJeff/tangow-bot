@@ -33,6 +33,7 @@ export function QuestionCard({
   const card = useRef<HTMLDivElement>(null);
   const layer = useRef<HTMLDivElement>(null);
   const leaving = useRef<Departure | null>(null);
+  const filling = useRef<ReturnType<typeof setTimeout>>(undefined);
   const reopened = useRef(false);
   /** A chosen answer fills with the user's colour, then flies into its bubble, or fades with reduced motion. */
   const present: Presenter = (change, apply) => {
@@ -42,9 +43,9 @@ export function QuestionCard({
       return apply();
     }
     if (change.from.kind === "button") return apply();
-    setTimeout(() => {
+    filling.current = setTimeout(() => {
       leaving.current = card.current && !reducedMotion() ? departure(card.current) : null;
-      apply();
+      if (!apply()) leaving.current = null;
     }, motion.fill);
   };
   const { view, act } = useAskCard({
@@ -58,6 +59,7 @@ export function QuestionCard({
   const [openedHere] = useState(view.kind === "open");
   const error = view.kind === "open" ? view.error : null;
   const settled = view.kind === "settled";
+  useEffect(() => () => clearTimeout(filling.current), []);
   useLayoutEffect(() => {
     if (settled && leaving.current && card.current && layer.current) {
       return fly(card.current, layer.current, leaving.current);
@@ -65,7 +67,6 @@ export function QuestionCard({
   }, [settled]);
   useEffect(() => {
     if (!error) return;
-    leaving.current = null;
     group.current
       ?.querySelector<HTMLElement>('[aria-pressed="true"], [data-slot="option-field"] input')
       ?.focus();

@@ -271,8 +271,8 @@ describe("commit", () => {
     });
   });
 
-  it("drops a settle the presenter has not applied yet when the answer fails", async () => {
-    const applies: (() => void)[] = [];
+  it("drops a settle the presenter has not applied yet when the answer fails, and says so", async () => {
+    const applies: (() => boolean)[] = [];
     const { card: subject, clock } = card(cities, {
       result: { ok: false, message: "Run is busy" },
       present: (_change, apply) => applies.push(apply),
@@ -285,7 +285,7 @@ describe("commit", () => {
       filled: { kind: "option", optionId: seoul },
     });
     await flush();
-    for (const apply of applies) apply();
+    expect(applies.map((apply) => apply())).toEqual([false]);
     expect(subject.view()).toMatchObject({ kind: "open", busy: false, error: "Run is busy" });
   });
 });
