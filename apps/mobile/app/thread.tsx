@@ -336,6 +336,12 @@ function isActiveStatus(status: string | undefined): boolean {
 type NotificationRouteState = "loading" | "ready" | "failed";
 
 const KEEP_VISIBLE_POSITION = { minIndexForVisible: 0 };
+/** Between the thread and the composer row. The thread draws into it under a fade, so a question card's shadow dies out there instead of ending on the list's edge. */
+const COMPOSER_GAP = 16;
+/** The thread column's side margin. The thread draws into it too, for the same shadow. */
+const THREAD_GUTTER = 14;
+/** Where the thread draws past its column, and the room it gives back inside. */
+const BLEED_STYLE = { marginHorizontal: -THREAD_GUTTER, marginBottom: -COMPOSER_GAP };
 
 export default function ThreadRoute() {
   const tokens = useMobileTokens();
@@ -2332,7 +2338,7 @@ function Thread() {
         style={{
           flex: 1,
           backgroundColor: tokens.background,
-          paddingHorizontal: 14,
+          paddingHorizontal: THREAD_GUTTER,
         }}
       >
         {error ? (
@@ -2346,7 +2352,11 @@ function Thread() {
             <ScrollView
               key={jumpScrollTarget.current ?? pinnedTarget?.messageId ?? threadKey}
               ref={pinnedScroll}
-              style={{ flex: 1, marginTop: 8 }}
+              style={[{ flex: 1, marginTop: 8 }, BLEED_STYLE]}
+              contentContainerStyle={{
+                paddingHorizontal: THREAD_GUTTER,
+                paddingBottom: COMPOSER_GAP,
+              }}
               maintainVisibleContentPosition={KEEP_VISIBLE_POSITION}
               keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
               keyboardShouldPersistTaps="handled"
@@ -2365,7 +2375,9 @@ function Thread() {
               inverted
               keyExtractor={(row) => row.item.id}
               extraData={listExtraData}
-              style={{ flex: 1, marginTop: 8 }}
+              style={[{ flex: 1, marginTop: 8 }, BLEED_STYLE]}
+              // Inverted: the top padding is the thread's bottom edge.
+              contentContainerStyle={{ paddingHorizontal: THREAD_GUTTER, paddingTop: COMPOSER_GAP }}
               maintainVisibleContentPosition={KEEP_VISIBLE_POSITION}
               scrollEventThrottle={16}
               // dragging the thread down dismisses the keyboard following the
@@ -2399,6 +2411,26 @@ function Thread() {
               renderItem={({ item, index }) => renderRow(item, { previous: liveRows[index + 1] })}
             />
           )}
+          <View
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              left: -THREAD_GUTTER,
+              right: -THREAD_GUTTER,
+              bottom: -COMPOSER_GAP,
+              height: COMPOSER_GAP,
+            }}
+          >
+            <Svg width="100%" height={COMPOSER_GAP}>
+              <Defs>
+                <LinearGradient id="composer-gap-fade" x1="0" y1="0" x2="0" y2="1">
+                  <Stop offset="0" stopColor={tokens.background} stopOpacity={0} />
+                  <Stop offset="1" stopColor={tokens.background} stopOpacity={1} />
+                </LinearGradient>
+              </Defs>
+              <Rect width="100%" height={COMPOSER_GAP} fill="url(#composer-gap-fade)" />
+            </Svg>
+          </View>
           {!showPinnedPage && threadScrollState.detached ? (
             <Pressable
               accessibilityRole="button"
@@ -2643,7 +2675,7 @@ function Thread() {
           ) : null}
           <View
             style={{
-              marginTop: 16,
+              marginTop: COMPOSER_GAP,
               // 12 px side margins — the screen already gives the thread
               // column 20 px (`paddingHorizontal` above), so this row claims
               // back 8 of those to land on 12.
