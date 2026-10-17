@@ -299,7 +299,7 @@ html[data-platform="darwin"] .titlebar {
   padding: 0;
   font: inherit;
   font-size: 13px;
-  color: var(--link);
+  color: var(--foreground);
   cursor: pointer;
   text-decoration: underline;
   text-underline-offset: 2px;

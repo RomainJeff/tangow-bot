@@ -80,10 +80,16 @@
 }
 
 .rk-chat-markdown a {
-  color: var(--link);
+  color: inherit;
   text-decoration: underline;
-  text-decoration-color: color-mix(in srgb, var(--link) 55%, transparent);
-  text-underline-offset: 0.15em;
+  text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
+  text-decoration-thickness: 1px;
+  text-decoration-skip-ink: auto;
+  text-underline-offset: 0.2em;
+}
+
+.rk-chat-markdown a:hover {
+  text-decoration-color: currentColor;
 }
 
 .rk-chat-markdown code {
@@ -298,5 +304,12 @@
 .rk-linkified {
   color: inherit;
   text-decoration: underline;
-  text-underline-offset: 0.15em;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+  text-decoration-thickness: 1px;
+  text-decoration-skip-ink: auto;
+  text-underline-offset: 0.2em;
+}
+
+.rk-linkified:hover {
+  text-decoration-color: currentColor;
 }
