@@ -9,8 +9,8 @@ import { Pencil } from "lucide-react";
 import type { KeyboardEvent, ReactNode } from "react";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { AskSettled } from "./AskSettled";
-import type { Departure } from "./flight";
-import { advance, departure, fly, reveal } from "./flight";
+import type { Departure, Steady } from "./flight";
+import { advance, departure, fly, reveal, steady } from "./flight";
 
 /** Also where `linear()` easing is unknown (Safari before 17.2): `animate()` would throw on the spring. */
 const reducedMotion = () =>
@@ -37,15 +37,22 @@ export function QuestionCard({
   const card = useRef<HTMLDivElement>(null);
   const layer = useRef<HTMLDivElement>(null);
   const leaving = useRef<Departure | null>(null);
+  /** Holds the thread's follow of its end into the movement, from the commit until it lands. */
+  const held = useRef<Steady | null>(null);
   const filling = useRef<ReturnType<typeof setTimeout>>(undefined);
   const reopened = useRef(false);
   /** Set when focus was in the card as it moved on, so it follows to the next question. */
   const refocus = useRef(false);
   const grown = useRef(false);
+  const release = () => {
+    held.current?.stop();
+    held.current = null;
+  };
   /** A chosen answer fills with the user's colour, then flies into its bubble, or fades with reduced motion. */
   const present: Presenter = (change, apply) => {
     if (change.kind === "reopen") {
       leaving.current = null;
+      release();
       reopened.current = true;
       apply();
       return;
@@ -55,9 +62,13 @@ export function QuestionCard({
       return advance(card.current, apply, reducedMotion());
     }
     const { from } = change;
+    release();
+    if (card.current && !reducedMotion()) held.current = steady(card.current);
     const leave = () => {
       leaving.current = card.current && !reducedMotion() ? departure(card.current, from) : null;
-      if (!apply()) leaving.current = null;
+      if (apply()) return;
+      leaving.current = null;
+      release();
     };
     if (from.kind === "button") leave();
     else filling.current = setTimeout(leave, motion.fill);
@@ -85,11 +96,21 @@ export function QuestionCard({
       : primaryAction.current;
     target?.focus();
   };
-  useEffect(() => () => clearTimeout(filling.current), []);
+  useEffect(
+    () => () => {
+      clearTimeout(filling.current);
+      release();
+    },
+    [],
+  );
   useLayoutEffect(() => {
-    if (settled && leaving.current && card.current && layer.current) {
-      return fly(card.current, layer.current, leaving.current);
+    if (!settled) return;
+    const steadied = held.current;
+    held.current = null;
+    if (steadied && leaving.current && card.current && layer.current) {
+      return fly(card.current, layer.current, leaving.current, steadied);
     }
+    steadied?.stop();
   }, [settled]);
   useEffect(() => {
     if (error) focusAnswer();

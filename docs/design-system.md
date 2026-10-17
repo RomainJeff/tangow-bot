@@ -835,6 +835,10 @@ props land on the input or textarea.
   in it (the answer, the card's height, the rows above, the list's scroll) starts
   and ends on the same frame. Where `linear()` easing is unknown it takes the
   reduced-motion fade.
+- A thread at its end keeps to it while a card commits: a working line or reply
+  that lands before the flight is carried by it, one that lands mid-flight glides
+  in on the same spring, and after the landing the thread follows as for a sent
+  message.
 - A card never shows two copies of one answer at once: its bubble appears only
   once the old card has faded, and a newly folded line only once the question
   it answers has.

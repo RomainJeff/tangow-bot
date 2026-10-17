@@ -148,6 +148,16 @@ function wobble(values: number[], from: number, to: number) {
   return { back, over };
 }
 
+/**
+ * Holds the answer back from the server for `ms`, so the run resumes (and its working line lands
+ * under the card) only once the movement has rested; ask-card-follow covers it landing mid-flight.
+ */
+const holdAnswer = (page: Page, ms: number) =>
+  page.route("**/rpc/threads/answer", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, ms));
+    await route.continue();
+  });
+
 /** The spring's steepest stretch moves 0.78% of the way per ms; no frame may outrun it. */
 const STEEPEST_PER_MS = 0.0078;
 
@@ -160,6 +170,7 @@ for (const { viewport, history, band } of [
   }, testInfo) => {
     await page.setViewportSize(viewport);
     const seoul = await openCard(page, `ask-motion-${viewport.width}`, history);
+    await holdAnswer(page, 1500);
     await expect(seoul).toBeInViewport();
     const { frames, flights } = await sampleCommit(page, seoul, 1000);
 
@@ -302,6 +313,7 @@ test("a stack's Send folds the card while the answers rise into their bubble, in
 }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 640 });
   const builtIn = await openCard(page, "ask-motion-stack", 2, fridge);
+  await holdAnswer(page, 1500);
   const card = page.locator('[data-slot="question-card"]');
   await builtIn.click();
   await expect(card.locator('[data-slot="stack-head"]')).toHaveText("Extras·1 more");

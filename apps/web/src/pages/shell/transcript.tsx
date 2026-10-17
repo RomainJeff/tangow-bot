@@ -147,6 +147,7 @@ export const Transcript = memo(function Transcript({
   const jumpedAt = useRef(Number.NEGATIVE_INFINITY);
   const jumpSettleTimer = useRef<number | undefined>(undefined);
   const lastScrollTop = useRef<number | null>(null);
+  const press = useRef<{ top: number; following: boolean } | null>(null);
   const autoScrollTimer = useRef<number | undefined>(undefined);
   const jumpButtonRef = useRef<HTMLButtonElement>(null);
   const [sessionTarget, setSessionTarget] = useState<SessionViewTarget | null>(null);
@@ -425,9 +426,18 @@ export const Transcript = memo(function Transcript({
         ref={scrollRef}
         data-testid="transcript"
         onPointerDown={(event) => {
+          press.current = { top: event.currentTarget.scrollTop, following: following.current };
           lastScrollTop.current = event.currentTarget.scrollTop;
           autoScrolling.current = false;
           following.current = false;
+        }}
+        onPointerUp={(event) => {
+          // A press that left the list where it was is a tap on a row (a card's choice), not a
+          // hand on the scroll: the view keeps following the end it followed.
+          if (press.current?.following && event.currentTarget.scrollTop === press.current.top) {
+            following.current = true;
+          }
+          press.current = null;
         }}
         onTouchStart={(event) => {
           lastScrollTop.current = event.currentTarget.scrollTop;

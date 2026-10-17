@@ -46,6 +46,61 @@ function scrollingList(card: HTMLElement) {
   return node;
 }
 
+export type Steady = { carry: () => void; stop: () => void };
+
+/**
+ * From the commit until the answer lands, the thread keeps to its end as the working line or a reply
+ * lands under the card, which moves the list's scroll at once. Until the flight starts the rows hold
+ * their place on screen and the flight carries them from there; once it flies they glide to their new
+ * place on the spring. Either way the follow joins the movement instead of jumping.
+ */
+export function steady(card: HTMLElement): Steady {
+  const list = scrollingList(card);
+  if (!list) return { carry() {}, stop() {} };
+  let top = list.scrollTop;
+  let holds: Animation[] = [];
+  let flying = false;
+  const follow = () => {
+    const by = list.scrollTop - top;
+    top = list.scrollTop;
+    // A person scrolling away from the end keeps their own scroll.
+    if (Math.abs(by) < 0.5 || list.scrollHeight - list.clientHeight - top > 1) return;
+    const view = list.getBoundingClientRect();
+    const seen = (y: number, height: number) => y < view.bottom && y + height > view.top;
+    for (const row of list.children) {
+      const now = row.getBoundingClientRect();
+      if (!(seen(now.top, now.height) || seen(now.top + by, now.height))) continue;
+      const from = { transform: `translateY(${by}px)` };
+      if (flying) {
+        row.animate([from, { transform: "translateY(0)" }], {
+          duration: motion.flight,
+          easing: springEasing,
+          composite: "add",
+        });
+      } else {
+        holds.push(row.animate([from, from], { duration: Infinity, composite: "add" }));
+      }
+    }
+  };
+  const release = () => {
+    for (const hold of holds) hold.cancel();
+    holds = [];
+  };
+  list.addEventListener("scroll", follow);
+  return {
+    /** The flight measured the rows where they were held: it carries them from there. */
+    carry() {
+      release();
+      flying = true;
+      top = list.scrollTop;
+    },
+    stop() {
+      list.removeEventListener("scroll", follow);
+      release();
+    },
+  };
+}
+
 /** Measures the card and the list it sits in, before the card settles. */
 export function departure(card: HTMLElement, leaving: CommitSource): Departure | null {
   const selector = leaving.kind === "button" ? null : SOURCE[leaving.kind];
@@ -132,13 +187,18 @@ export function fly(
   card: HTMLElement,
   layer: HTMLElement,
   { from, height, ghost, list, rows }: Departure,
+  held: Steady,
 ) {
   const land = card.querySelector<HTMLElement>('[data-slot="user-bubble"]');
   const settled = card.lastElementChild;
-  if (!land || !settled) return () => {};
+  if (!land || !settled) {
+    held.stop();
+    return () => {};
+  }
   // The settled card is shorter, so the list may clamp its scroll and move the row it anchors
   // to; anchored from there, the next reply would jump the thread back.
   list?.style.setProperty("overflow-anchor", "none");
+  held.carry();
   const to = within(land, card);
   const timing = { duration: motion.flight, easing: springEasing };
   const view = list?.getBoundingClientRect();
@@ -190,6 +250,7 @@ export function fly(
     flight.clone?.remove();
     land.style.visibility = "";
     list?.style.removeProperty("overflow-anchor");
+    held.stop();
     window.removeEventListener("resize", end);
   };
   // The flight aims at where the bubble stood when it left; a resize moves it, so it snaps there.
