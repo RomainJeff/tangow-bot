@@ -405,6 +405,8 @@ export class PiAgentRuntime implements AgentRuntime {
         signal.addEventListener("abort", onAbort);
 
         let streamed = "";
+        let privateFinalText: string | undefined;
+        let runtimeNotice: string | undefined;
         let toolCalls = 0;
         let toolActivityShowing = false;
         let silentToolContinuations = 0;
@@ -467,6 +469,7 @@ export class PiAgentRuntime implements AgentRuntime {
                   )
                 : [];
             const hasToolCalls = toolCallNames.length > 0;
+            if (request.runRecap) privateFinalText = hasToolCalls ? undefined : messageText;
             const hasToolResults = event.toolResults.length > 0;
             // An update sent before more tool work did not deliver what that work found.
             if (hasToolCalls) messagedUser = toolCallNames.includes("message_user");
@@ -576,6 +579,7 @@ export class PiAgentRuntime implements AgentRuntime {
         }
         if (budgetExceeded) {
           const budgetMessage = toolCallBudgetExceededMessage(host.toolCallBudget.limit);
+          runtimeNotice = budgetMessage;
           if (streamed.trim()) {
             const suffix = `\n\n${budgetMessage}`;
             queue.push({ type: "text", text: suffix });
@@ -588,6 +592,7 @@ export class PiAgentRuntime implements AgentRuntime {
           // Discard cumulative pre-tool narration from the terminal payload and make the
           // missing final response visible to the user instead of silently completing.
           streamed = TOOL_FINAL_RESPONSE_FALLBACK;
+          runtimeNotice = streamed;
           queue.push({ type: "text", text: streamed });
         } else if (!streamed.trim() && !host.pausePending) {
           streamed = "";
@@ -599,6 +604,7 @@ export class PiAgentRuntime implements AgentRuntime {
           } else if (toolWorkPendingFinal) {
             // A tool-bearing run must never finish with only a progress/narration message.
             streamed = TOOL_FINAL_RESPONSE_FALLBACK;
+            runtimeNotice = streamed;
             queue.push({ type: "text", text: streamed });
           } else if (toolCalls === 0 && !request.allowSilentEmpty) {
             streamed = request.emptyResponseText?.trim() || "No response. Try again.";
@@ -606,7 +612,12 @@ export class PiAgentRuntime implements AgentRuntime {
           }
         }
         traceOutput = streamed;
-        queue.push(streamed.trim() ? { type: "done", text: streamed } : { type: "done" });
+        queue.push({
+          type: "done",
+          ...(streamed.trim() ? { text: streamed } : {}),
+          ...(request.runRecap ? { privateFinalText: privateFinalText ?? "" } : {}),
+          ...(runtimeNotice ? { runtimeNotice } : {}),
+        });
       } catch (error) {
         traceError = error;
         const message = sanitizeError(error instanceof Error ? error.message : String(error));

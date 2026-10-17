@@ -5,7 +5,6 @@ import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
 import { createRunExecutor } from "./executor.js";
 import type { FakeWebProvider } from "./fake-web.js";
 import { recordingSessionLog } from "./session-log/recording.test-support.js";
-import { TOOL_FINAL_RESPONSE_FALLBACK, toolCallBudgetNotice } from "./user-progress.js";
 
 vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ComputerLifecycleModule>()),
@@ -68,6 +67,7 @@ function fixture({
 }) {
   const run = {
     id: "run-1",
+    sessionId: "session-main",
     botId: "bot-1",
     threadId: "thread-1",
     taskId: "task-1",
@@ -352,46 +352,6 @@ describe("link previews of a run (CA 13, CA 14, CA 70, CA 72)", () => {
     );
     expect(streamed).toEqual([]);
   });
-
-  it("lets a sub-bot answer with its final reply, without message_user", async () => {
-    let offered: string[] = [];
-    const f = fixture({
-      trigger: "user",
-      parentBotId: "bot-0",
-      async *runtimeRun(request) {
-        offered = request.tools.map((tool) => tool.name);
-        yield { type: "text", text: "Status: green." };
-        yield { type: "done" };
-      },
-    });
-
-    await f.run();
-
-    expect(offered).not.toContain("message_user");
-    const finalBlocks = f.finalizeRun.mock.calls.at(-1)![0].blocks ?? [];
-    expect(finalBlocks).toEqual([{ kind: "text", text: "Status: green." }]);
-  });
-
-  it.each([
-    ["the tool-call limit", toolCallBudgetNotice(40)],
-    ["a stalled tool step", TOOL_FINAL_RESPONSE_FALLBACK],
-  ])(
-    "keeps the runtime's notice for %s when the final reply stays private",
-    async (_name, notice) => {
-      const f = fixture({
-        trigger: "user",
-        async *runtimeRun() {
-          yield { type: "text", text: `Half done.\n\n${notice}` };
-          yield { type: "done" };
-        },
-      });
-
-      await f.run();
-
-      const finalBlocks = f.finalizeRun.mock.calls.at(-1)![0].blocks ?? [];
-      expect(finalBlocks).toEqual([{ kind: "text", text: notice }]);
-    },
-  );
 
   it("pushes the last message_user's words without its markdown", async () => {
     const f = fixture({

@@ -482,12 +482,33 @@ describeJourneys("required product journeys", () => {
     const snap = await rpc<Snap>(app, cookie, "threads/get", { botId: bot.id });
     expect(threadMessages(snap)).toEqual([]);
     expect(snap.run).toBeNull();
-    expect(
-      await prisma.event.findMany({ where: { threadId: thread.id }, orderBy: { seq: "asc" } }),
-    ).toMatchObject([
+    const clearedEvents = await prisma.event.findMany({
+      where: { threadId: thread.id },
+      orderBy: { seq: "asc" },
+    });
+    expect(clearedEvents).toMatchObject([
       {
         type: "session.entry.appended",
-        payload: { entries: [{ type: "clear", parentId: null }] },
+        payload: {
+          entries: [
+            {
+              type: "run.recap",
+              runId: run.id,
+              botId: bot.id,
+              payload: {
+                version: 1,
+                sessionId: thread.sessionId,
+                outcome: {
+                  status: "cancelled",
+                  by: thread.userId,
+                  usage: { inputTokens: 0, outputTokens: 0 },
+                },
+                recap: { state: "missing", reason: "interrupted" },
+              },
+            },
+            { type: "clear", parentId: null },
+          ],
+        },
       },
     ]);
     expect(await prisma.run.findUniqueOrThrow({ where: { id: run.id } })).toMatchObject({
@@ -536,12 +557,7 @@ describeJourneys("required product journeys", () => {
     ).rejects.toThrow(RunHistoryWriteError);
     expect(
       await prisma.event.findMany({ where: { threadId: thread.id }, orderBy: { seq: "asc" } }),
-    ).toMatchObject([
-      {
-        type: "session.entry.appended",
-        payload: { entries: [{ type: "clear", parentId: null }] },
-      },
-    ]);
+    ).toEqual(clearedEvents);
 
     const after = await sendAndWait(
       app,
@@ -1592,10 +1608,18 @@ describeJourneys("required product journeys", () => {
         0,
     );
     await rpc(app, ada, "bots/archive", { botId: gone.id });
+    const archivedRun = await prisma.run.findUniqueOrThrow({
+      where: { id: busy.runId },
+      include: { session: true, thread: true },
+    });
+    expect(archivedRun).toMatchObject({
+      status: "cancelled",
+      session: { kind: "interactive", parentSessionId: archivedRun.thread.sessionId },
+    });
     expect(
       (
         await prisma.sessionEntry.findMany({
-          where: { runId: busy.runId },
+          where: { runId: busy.runId, sessionId: archivedRun.sessionId },
           orderBy: { seq: "asc" },
         })
       )
@@ -1607,6 +1631,23 @@ describeJourneys("required product journeys", () => {
         expect.objectContaining({ trigger: expect.objectContaining({ kind: "message" }) }),
       ],
       ["run.finished", { status: "cancelled", usage: { inputTokens: 0, outputTokens: 0 } }],
+    ]);
+    expect(
+      await prisma.sessionEntry.findMany({
+        where: { runId: busy.runId, sessionId: archivedRun.thread.sessionId },
+        orderBy: { seq: "asc" },
+        select: { type: true, payload: true },
+      }),
+    ).toEqual([
+      {
+        type: "run.recap",
+        payload: {
+          version: 1,
+          sessionId: archivedRun.sessionId,
+          outcome: { status: "cancelled", usage: { inputTokens: 0, outputTokens: 0 } },
+          recap: { state: "missing", reason: "interrupted" },
+        },
+      },
     ]);
     expect((await rpc<Bot[]>(app, ada, "bots/list")).map((bot) => bot.id)).not.toContain(gone.id);
     expect((await rpc<Bot[]>(app, ada, "bots/listArchived")).map((bot) => bot.id)).toContain(
@@ -1706,7 +1747,14 @@ describeJourneys("required product journeys", () => {
       (s) => !s.run || ["completed", "failed", "cancelled"].includes(s.run.status),
     );
     const snap = await rpc<Snap>(app, cookie, "threads/get", { botId: parent.id });
-    expect(JSON.stringify(snap.entries)).toMatch(/child_bot|Scout/);
+    expect(threadMessages(snap).flatMap((message) => message.blocks)).toContainEqual(
+      expect.objectContaining({
+        kind: "child_bot",
+        botId: scout!.id,
+        name: "Scout",
+        status: "created",
+      }),
+    );
     const spawnRun = await prisma.run.findFirstOrThrow({
       where: { botId: scout!.id, trigger: "spawn" },
     });
@@ -1753,6 +1801,15 @@ describeJourneys("required product journeys", () => {
     const afterScout = await rpc<Bot[]>(app, cookie, "bots/list");
     expect(afterScout.some((bot) => bot.id === scout!.id)).toBe(false);
     expect(afterScout.some((bot) => bot.id === nested!.id)).toBe(true);
+    const archived = await rpc<Snap>(app, cookie, "threads/get", { botId: parent.id });
+    expect(threadMessages(archived).flatMap((message) => message.blocks)).toContainEqual(
+      expect.objectContaining({
+        kind: "child_bot",
+        botId: scout!.id,
+        name: "Scout",
+        status: "archived",
+      }),
+    );
 
     await rpc(app, cookie, "bots/remove", { botId: parent.id });
     expect((await rpc<Bot[]>(app, cookie, "bots/list")).map((bot) => bot.name)).toEqual(["Nested"]);
@@ -2535,26 +2592,66 @@ describeJourneys("required product journeys", () => {
     });
     expect(saved.status).toBe("saved");
     const teacher = await rpc<Me>(app, cookie, "me");
+    const interruptedRun = await prisma.run.findUniqueOrThrow({
+      where: { id: busy.runId },
+      include: { session: true, thread: true },
+    });
+    expect(interruptedRun).toMatchObject({
+      status: "cancelled",
+      session: { kind: "interactive", parentSessionId: interruptedRun.thread.sessionId },
+    });
+    expect(
+      await prisma.sessionEntry.findMany({
+        where: { sessionId: interruptedRun.sessionId, runId: busy.runId, type: "run.finished" },
+        select: { type: true, payload: true },
+      }),
+    ).toEqual([
+      {
+        type: "run.finished",
+        payload: {
+          status: "cancelled",
+          by: teacher.userId,
+          usage: { inputTokens: 0, outputTokens: 0 },
+        },
+      },
+    ]);
     const teachingLog = await prisma.sessionEntry.findMany({
       where: {
-        session: { thread: { botId: bot.id } },
-        type: { in: ["run.finished", "bot.text"] },
+        sessionId: interruptedRun.thread.sessionId,
+        type: { in: ["run.finished", "run.recap", "bot.text"] },
       },
       orderBy: { seq: "asc" },
       select: { type: true, runId: true, payload: true },
     });
-    expect(
-      teachingLog.map(({ type, runId, payload }) => {
-        const fields = payload as {
-          status?: string;
-          by?: string;
-          blocks?: Array<{ kind: string }>;
-        };
-        return [type, runId, fields.status ?? fields.blocks?.[0]?.kind, fields.by];
-      }),
-    ).toEqual([
-      ["run.finished", busy.runId, "cancelled", teacher.userId],
-      ["bot.text", null, "skill_draft", undefined],
+    expect(teachingLog).toEqual([
+      {
+        type: "run.recap",
+        runId: busy.runId,
+        payload: {
+          version: 1,
+          sessionId: interruptedRun.sessionId,
+          outcome: {
+            status: "cancelled",
+            by: teacher.userId,
+            usage: { inputTokens: 0, outputTokens: 0 },
+          },
+          recap: { state: "missing", reason: "interrupted" },
+        },
+      },
+      {
+        type: "bot.text",
+        runId: null,
+        payload: expect.objectContaining({
+          blocks: [
+            expect.objectContaining({
+              kind: "skill_draft",
+              skillId: skill.id,
+              name: "Export weekly CRM list",
+              status: "draft",
+            }),
+          ],
+        }),
+      },
     ]);
     const listed = await rpc<Array<{ id: string; name: string }>>(app, cookie, "skills/list", {
       botId: bot.id,

@@ -408,6 +408,8 @@ export interface AgentRunRequest {
   allowSilentEmpty?: boolean;
   /** Only message_user reaches the person; the run's own text is private scratch. */
   freeTextIsPrivate?: boolean;
+  /** Request a factual structured closing in the existing final model turn. */
+  runRecap?: boolean;
   /** Contextual fallback when a non-silent run produces no written response. */
   emptyResponseText?: string;
   executeTool?: (
@@ -525,7 +527,13 @@ export type AgentRuntimeEvent =
       progress?: string;
       result?: string;
     }
-  | { type: "done"; text?: string };
+  | {
+      type: "done";
+      text?: string;
+      privateFinalText?: string;
+      /** Recovery text authored by the runtime, never inferred from model prose. */
+      runtimeNotice?: string;
+    };
 
 export interface AgentRuntimeCapabilities {
   streaming: boolean;

@@ -1,12 +1,25 @@
-import type { AgentRunRequest, SemanticMemoryRecallRequest, SessionLog } from "@rakazo/adapter-kit";
+import type {
+  AgentRunRequest,
+  AgentRuntimeEvent,
+  SemanticMemoryRecallRequest,
+  SessionLog,
+} from "@rakazo/adapter-kit";
 import type { MessageBlock, SessionEntry, SessionId } from "@rakazo/contracts";
-import { EntryId, EntrySeq, SessionEntrySchema } from "@rakazo/contracts";
-import { createThreadEvents } from "@rakazo/db";
+import {
+  EntryId,
+  EntrySeq,
+  SessionEntrySchema,
+  SessionId as SessionIdSchema,
+} from "@rakazo/contracts";
+import { projectThreadItems } from "@rakazo/core";
+import type { PrismaClient } from "@rakazo/db";
+import { appendSessionEntryInTransaction, createThreadEvents } from "@rakazo/db";
 import type { PgliteDatabase } from "@rakazo/db/pglite.test-support";
 import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
 import type { LogEvent } from "@rakazo/logging";
 import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { appendBotMessageInTransaction } from "./bot-messages.js";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
 import { createRunExecutor } from "./executor.js";
 import { formatRecalledMemory } from "./history-compaction.js";
@@ -74,6 +87,10 @@ function fixture(
     /** A tool the model calls, which the runtime runs the way Pi does: a throw becomes its error. */
     call?: { name: string; args: Record<string, unknown> };
     sandbox?: Record<string, unknown>;
+    database?: PrismaClient;
+    secrets?: string[];
+    parentBotId?: string;
+    runtime?: (request: AgentRunRequest) => AsyncGenerator<AgentRuntimeEvent>;
   } = {},
 ) {
   const run = {
@@ -118,6 +135,7 @@ function fixture(
     bot: {
       findUniqueOrThrow: vi.fn(async () => ({
         id: BOT,
+        parentBotId: options.parentBotId,
         name: "Assistant",
         title: "Assistant",
         description: "Test assistant",
@@ -180,11 +198,29 @@ function fixture(
       updateMany: vi.fn(async () => ({ count: 0 })),
     },
   };
+  if (options.database) {
+    const db = options.database;
+    Object.assign(prisma, {
+      run: db.run,
+      task: db.task,
+      attempt: db.attempt,
+      thread: db.thread,
+      routine: db.routine,
+      sessionEntry: db.sessionEntry,
+      $transaction: db.$transaction.bind(db),
+      $queryRaw: db.$queryRaw.bind(db),
+    });
+    Object.assign(prisma.bot, { findMany: db.bot.findMany });
+  }
   const recall = vi.fn(async (_request: SemanticMemoryRecallRequest) => ({
     ok: true as const,
     value: remembered,
   }));
   const runtimeRun = vi.fn(async function* (request: AgentRunRequest) {
+    if (options.runtime) {
+      yield* options.runtime(request);
+      return;
+    }
     if (options.call) {
       await request.executeTool!(options.call.name, options.call.args, "call-1").catch(() => {});
     }
@@ -192,14 +228,17 @@ function fixture(
   });
   const jobs = { enqueue: vi.fn(async (_job: unknown) => undefined) };
   const executor = createRunExecutor({
-    sessionLog: options.reads
-      ? {
-          ...log.sessionLog,
-          readTail: options.reads.readTail.bind(options.reads),
-          readPage: options.reads.readPage.bind(options.reads),
-          readEntry: options.reads.readEntry.bind(options.reads),
-        }
-      : log.sessionLog,
+    sessionLog: options.database
+      ? new PostgresSessionLog(options.database)
+      : options.reads
+        ? {
+            ...log.sessionLog,
+            readTail: options.reads.readTail.bind(options.reads),
+            readPage: options.reads.readPage.bind(options.reads),
+            readEntry: options.reads.readEntry.bind(options.reads),
+          }
+        : log.sessionLog,
+    skillLearning: "off",
     artifacts: { get: vi.fn(async () => new Uint8Array([1, 2])) },
     prisma,
     runtime: {
@@ -231,18 +270,21 @@ function fixture(
         },
       }),
     },
-    events: {
-      append: vi.fn(async () => undefined),
-      pauseRunForInput: vi.fn(async () => true),
-      finalizeRun: vi.fn(async () => ({ continuationRunId: null })),
-    },
+    events: options.database
+      ? createThreadEvents(options.database)
+      : {
+          append: vi.fn(async () => undefined),
+          pauseRunForInput: vi.fn(async () => true),
+          finalizeRun: vi.fn(async () => ({ continuationRunId: null })),
+        },
     jobs,
-    secrets: [],
+    secrets: options.secrets ?? [],
   } as unknown as Parameters<typeof createRunExecutor>[0]);
   return {
     log,
     recall,
     jobs,
+    execute: () => executor.continueRun(run.id, "worker-1"),
     async request() {
       await executor.continueRun(run.id, "worker-1");
       const [request] = runtimeRun.mock.calls[0]!;
@@ -683,5 +725,609 @@ describe("a channel run's history, read from the database", () => {
       { role: "user", content: "Latest in the channel" },
       { role: "assistant", content: "Working on it" },
     ]);
+  });
+});
+
+describe("interactive executor sessions with durable history", () => {
+  let database: PgliteDatabase;
+  beforeAll(async () => {
+    database = await openPgliteDatabase();
+    const { prisma } = database;
+    await prisma.user.create({ data: { id: "user-1", name: "U", email: "u@rakazo.test" } });
+    await prisma.organization.create({
+      data: { id: "org-1", name: "O", slug: "org-1", createdAt: new Date() },
+    });
+    await prisma.space.create({ data: { id: "space-1", organizationId: "org-1", name: "S" } });
+    await prisma.bot.create({
+      data: { id: BOT, spaceId: "space-1", userId: "user-1", name: "Assistant", color: "#00C46A" },
+    });
+  });
+  afterAll(() => database.close());
+
+  beforeEach(async () => {
+    await database.prisma.thread.deleteMany({ where: { spaceId: "space-1" } });
+    await database.prisma.bot.upsert({
+      where: { id: "parent-1" },
+      create: {
+        id: "parent-1",
+        spaceId: "space-1",
+        userId: "user-1",
+        name: "Parent",
+        color: "#000000",
+      },
+      update: {},
+    });
+    await database.prisma.bot.update({ where: { id: BOT }, data: { parentBotId: null } });
+  });
+
+  async function conversation(trigger: "user" | "follow_up" = "user") {
+    const { prisma } = database;
+    const thread = await prisma.thread.create({
+      data: { spaceId: "space-1", userId: "user-1", botId: BOT },
+    });
+    const sent = await createThreadEvents(prisma).sendUserMessage({
+      spaceId: "space-1",
+      threadId: thread.id,
+      botId: BOT,
+      userId: "user-1",
+      blocks: [{ kind: "text", text: "Find the answer" }],
+      prompt: "Find the answer",
+      trigger,
+    });
+    const run = await prisma.run.findUniqueOrThrow({ where: { id: sent.runId! } });
+    const log = new PostgresSessionLog(prisma);
+    return {
+      prisma,
+      thread,
+      run,
+      log,
+      parent: () => log.readTail(SessionIdSchema.parse(thread.sessionId)),
+    };
+  }
+
+  it.each(["user", "follow_up"] as const)(
+    "publishes a direct child bot's %s answer while its final words stay private",
+    async (trigger) => {
+      const c = await conversation(trigger);
+      await c.prisma.bot.update({ where: { id: BOT }, data: { parentBotId: "parent-1" } });
+      const request = await fixture({
+        database: c.prisma,
+        run: c.run,
+        parentBotId: "parent-1",
+        runtime: async function* (request) {
+          if (request.tools.some((tool) => tool.name === "message_user")) {
+            await request.executeTool!("message_user", { message: "The answer is 42." }, "answer");
+            yield { type: "done", text: "Private closing words" };
+          } else {
+            yield { type: "done", text: "The answer is 42." };
+          }
+        },
+      }).request();
+      const parent = await c.parent();
+      expect(
+        projectThreadItems(parent).filter((item) => item.kind === "message" && item.role === "bot"),
+      ).toEqual([
+        expect.objectContaining({ blocks: [{ kind: "text", text: "The answer is 42." }] }),
+      ]);
+      expect(JSON.stringify(parent)).not.toContain("Private closing words");
+      expect(request.freeTextIsPrivate).toBe(true);
+      expect(request.instructions).toContain("message_user is the only way to reach the user");
+    },
+  );
+
+  it.each([
+    [
+      "budget",
+      "I stopped after reaching the limit of 40 tool calls in this turn. Send another message to continue.",
+    ],
+    [
+      "missing final response",
+      "I completed the tool step but could not produce a final response. Please ask me to continue.",
+    ],
+  ])(
+    "publishes a trusted %s notice once and keeps matching model prose private",
+    async (_kind, notice) => {
+      const c = await conversation();
+      await fixture({
+        database: c.prisma,
+        run: c.run,
+        runtime: async function* () {
+          yield { type: "text", text: `Private work.\n\n${notice}` };
+          yield { type: "done", text: notice, runtimeNotice: notice };
+        },
+      }).request();
+      await fixture({ database: c.prisma, run: c.run }).execute();
+      const parent = await c.parent();
+      expect(
+        projectThreadItems(parent).filter((item) => item.kind === "message" && item.role === "bot"),
+      ).toEqual([expect.objectContaining({ blocks: [{ kind: "text", text: notice }] })]);
+      expect(
+        parent.filter((entry) => entry.type === "run.recap").map((entry) => entry.payload.recap),
+      ).toEqual([{ state: "missing", reason: "absent" }]);
+      await c.prisma.thread.delete({ where: { id: c.thread.id } });
+      const other = await conversation();
+      await fixture({
+        database: other.prisma,
+        run: other.run,
+        runtime: async function* () {
+          yield { type: "done", text: `Private work.\n\n${notice}` };
+        },
+      }).request();
+      expect(
+        (await other.prisma.run.findUniqueOrThrow({ where: { id: other.run.id } })).status,
+      ).toBe("completed");
+      expect(
+        projectThreadItems(await other.parent()).filter(
+          (item) => item.kind === "message" && item.role === "bot",
+        ),
+      ).toEqual([]);
+    },
+  );
+
+  it("publishes the repeated-tool stop once without publishing model narration", async () => {
+    const c = await conversation();
+    await fixture({
+      database: c.prisma,
+      run: c.run,
+      runtime: async function* () {
+        yield { type: "text", text: "Private work" };
+        for (let i = 0; i < 6; i++) {
+          yield { type: "tool", name: "list_files", args: { path: "." }, executionId: `loop-${i}` };
+        }
+      },
+    }).request();
+    await fixture({ database: c.prisma, run: c.run }).execute();
+    expect(
+      projectThreadItems(await c.parent()).filter(
+        (item) => item.kind === "message" && item.role === "bot",
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        blocks: [
+          {
+            kind: "text",
+            text: "I got stuck calling List files with the same input 6 times in a row without making progress, so I stopped early. Try rephrasing this, or ask me to try a different approach.",
+          },
+        ],
+      }),
+    ]);
+  });
+
+  it.each(["routine", "bot_message", "follow_up"] as const)(
+    "keeps %s final output private and returns delegated results to the parent",
+    async (trigger) => {
+      const c = await conversation();
+      let sourceMessageId: string | undefined;
+      let routineId: string | undefined;
+      const parentThread = await c.prisma.thread.create({
+        data: { spaceId: "space-1", userId: "user-1", botId: "parent-1" },
+      });
+      if (trigger === "bot_message") {
+        sourceMessageId = "delegated-request";
+        await c.prisma.$transaction((tx) =>
+          appendBotMessageInTransaction(tx, {
+            sender: {
+              sessionId: SessionIdSchema.parse(parentThread.sessionId),
+              botId: "parent-1",
+              peer: { kind: "bot", botId: "parent-1", name: "Parent" },
+            },
+            receiver: {
+              sessionId: SessionIdSchema.parse(c.thread.sessionId),
+              botId: BOT,
+              peer: { kind: "bot", botId: BOT, name: "Assistant" },
+            },
+            sentId: "sent-request",
+            receivedId: sourceMessageId!,
+            sourceMessageId: null,
+            text: "Find the answer",
+            intent: "request",
+            hop: 1,
+          }),
+        );
+      } else if (trigger === "follow_up") {
+        const handoff = await c.prisma.$transaction((tx) =>
+          appendSessionEntryInTransaction(tx, {
+            type: "handoff",
+            sessionId: SessionIdSchema.parse(c.thread.sessionId),
+            botId: "parent-1",
+            payload: { fromBotId: "parent-1", toBotId: BOT, text: "Find the answer", hop: 1 },
+          }),
+        );
+        sourceMessageId = handoff.id;
+      } else {
+        const routine = await c.prisma.routine.create({
+          data: {
+            spaceId: "space-1",
+            userId: "user-1",
+            botId: BOT,
+            threadId: c.thread.id,
+            name: "Check",
+            prompt: "Check",
+            crons: [],
+          },
+        });
+        routineId = routine.id;
+      }
+      const run = await c.prisma.run.update({
+        where: { id: c.run.id },
+        data: { trigger, sourceMessageId, routineId },
+      });
+      const request = await fixture({
+        database: c.prisma,
+        run,
+        parentBotId: "parent-1",
+        runtime: async function* () {
+          yield { type: "text", text: "The delegated answer is 42." };
+          yield {
+            type: "done",
+            text: "The delegated answer is 42.",
+            runtimeNotice: "Trusted recovery",
+          };
+        },
+      }).request();
+      expect(request.tools.map((tool) => tool.name)).not.toContain("message_user");
+      expect((await c.prisma.run.findUniqueOrThrow({ where: { id: run.id } })).status).toBe(
+        "completed",
+      );
+      expect(
+        projectThreadItems(await c.parent()).filter(
+          (item) => item.kind === "message" && item.role === "bot",
+        ),
+      ).toEqual([]);
+      const trace = await c.log.readRun(run.id);
+      expect(JSON.stringify(trace)).toContain("The delegated answer is 42.");
+      if (trigger === "bot_message") {
+        const parent = await c.log.readTail(SessionIdSchema.parse(parentThread.sessionId));
+        expect(
+          parent
+            .filter((entry) => entry.type === "bot.message.received")
+            .map((entry) => entry.payload.text),
+        ).toEqual(["The delegated answer is 42."]);
+        expect(
+          (await c.prisma.run.findUniqueOrThrow({ where: { id: run.id } })).botOutcomeReturnedAt,
+        ).not.toBeNull();
+      }
+    },
+  );
+
+  it("publishes a trusted recovery notice for a child bot's queued human follow-up", async () => {
+    const c = await conversation();
+    await fixture({
+      database: c.prisma,
+      run: c.run,
+      parentBotId: "parent-1",
+      runtime: async function* () {
+        await createThreadEvents(c.prisma).sendUserMessage({
+          spaceId: "space-1",
+          threadId: c.thread.id,
+          botId: BOT,
+          userId: "user-1",
+          blocks: [{ kind: "text", text: "Continue with the updated question" }],
+          prompt: "Continue with the updated question",
+          trigger: "follow_up",
+        });
+        yield { type: "done" };
+      },
+    }).request();
+    const followUp = await c.prisma.run.findFirstOrThrow({
+      where: { threadId: c.thread.id, trigger: "follow_up" },
+    });
+    expect(followUp.status).toBe("queued");
+    const source = await c.prisma.sessionEntry.findUniqueOrThrow({
+      where: { id: followUp.sourceMessageId! },
+    });
+    expect(source.type).toBe("user.message");
+    const notice =
+      "I completed the tool step but could not produce a final response. Please ask me to continue.";
+    await fixture({
+      database: c.prisma,
+      run: followUp,
+      parentBotId: "parent-1",
+      runtime: async function* () {
+        yield { type: "done", runtimeNotice: notice };
+      },
+    }).request();
+    expect(
+      projectThreadItems(await c.parent()).filter(
+        (item) => item.kind === "message" && item.role === "bot",
+      ),
+    ).toEqual([expect.objectContaining({ blocks: [{ kind: "text", text: notice }] })]);
+  });
+
+  it("does not publish a terminal notice after cancellation", async () => {
+    const c = await conversation();
+    await fixture({
+      database: c.prisma,
+      run: c.run,
+      runtime: async function* () {
+        await createThreadEvents(c.prisma).clearThread({
+          spaceId: "space-1",
+          threadId: c.thread.id,
+          botId: BOT,
+          userId: "user-1",
+        });
+        yield { type: "done", runtimeNotice: "Cancelled recovery must stay hidden" };
+      },
+    }).request();
+    expect((await c.prisma.run.findUniqueOrThrow({ where: { id: c.run.id } })).status).toBe(
+      "cancelled",
+    );
+    expect(
+      projectThreadItems(await c.parent()).filter(
+        (item) => item.kind === "message" && item.role === "bot",
+      ),
+    ).toEqual([]);
+  });
+
+  it("publishes one recovery notice after an answered pause and a repeated completion", async () => {
+    const c = await conversation();
+    await fixture({
+      database: c.prisma,
+      run: c.run,
+      runtime: async function* () {
+        yield { type: "ask", text: "Continue?", actions: [{ id: "continue", label: "Continue" }] };
+      },
+    }).request();
+    const ask = (await c.log.readRun(c.run.id)).find((entry) => entry.type === "assistant.ask");
+    expect(ask?.type).toBe("assistant.ask");
+    expect(
+      await createThreadEvents(c.prisma).answerRunInput({
+        spaceId: "space-1",
+        threadId: c.thread.id,
+        runId: c.run.id,
+        messageId: ask!.id,
+        answeredByUserId: "user-1",
+        answer: "continue",
+      }),
+    ).toBe(true);
+    const resumed = await c.prisma.run.findUniqueOrThrow({ where: { id: c.run.id } });
+    const notice =
+      "I completed the tool step but could not produce a final response. Please ask me to continue.";
+    const f = fixture({
+      database: c.prisma,
+      run: resumed,
+      runtime: async function* () {
+        yield { type: "done", runtimeNotice: notice };
+      },
+    });
+    await f.execute();
+    await f.execute();
+    expect(
+      projectThreadItems(await c.parent())
+        .filter((item) => item.kind === "message" && item.role === "bot")
+        .flatMap((item) => item.blocks.filter((block) => block.kind === "text")),
+    ).toEqual([{ kind: "text", text: notice }]);
+  });
+
+  it("runs twice with isolated traces, one published answer and a silent closing, while preserving tool history for P3", async () => {
+    const { prisma } = database;
+    const thread = await prisma.thread.create({
+      data: { spaceId: "space-1", userId: "user-1", botId: BOT },
+    });
+    const events = createThreadEvents(prisma);
+    const source = async (text: string) => {
+      const sent = await events.sendUserMessage({
+        spaceId: "space-1",
+        threadId: thread.id,
+        botId: BOT,
+        userId: "user-1",
+        blocks: [{ kind: "text", text }],
+        prompt: text,
+        trigger: "user",
+      });
+      return prisma.run.findUniqueOrThrow({ where: { id: sent.runId! } });
+    };
+    const run = await source("Find the saved report");
+    const closing = JSON.stringify({
+      version: 1,
+      results: ["Found report.txt"],
+      references: [{ callId: "lookup" }],
+    });
+    const first = fixture({
+      database: prisma,
+      run,
+      sandbox: { listFiles: async () => [{ name: "report.txt", kind: "file" }] },
+      runtime: async function* (request) {
+        await request.executeTool!("list_files", { path: "." }, "lookup");
+        await request.executeTool!("message_user", { message: "The report is saved." }, "say");
+        yield {
+          type: "done",
+          text: "Private narration must not become a recap",
+          privateFinalText: closing,
+        };
+      },
+    });
+    const firstRequest = await first.request();
+    expect(firstRequest.runRecap).toBe(true);
+    expect(firstRequest.instructions).toContain("Private factual run closing");
+    expect((await prisma.run.findUniqueOrThrow({ where: { id: run.id } })).status).toBe(
+      "completed",
+    );
+    const secondRun = await source("Continue silently");
+    const second = fixture({
+      database: prisma,
+      run: secondRun,
+      runtime: async function* () {
+        yield { type: "done", text: "Arbitrary final words are not facts" };
+      },
+    });
+    const history = (await second.request()).history;
+    expect(JSON.stringify(history)).toContain("report.txt");
+    expect(JSON.stringify(history)).toContain("The report is saved.");
+    const stored = await prisma.run.findMany({
+      where: { threadId: thread.id },
+      orderBy: { createdAt: "asc" },
+    });
+    expect(new Set(stored.map((item) => item.sessionId)).size).toBe(2);
+    expect(
+      stored.every((item) => item.sessionId !== thread.sessionId && item.status === "completed"),
+    ).toBe(true);
+    const log = new PostgresSessionLog(prisma);
+    const main = await log.readTail(SessionIdSchema.parse(thread.sessionId));
+    const recaps = main.filter((entry) => entry.type === "run.recap");
+    expect(recaps.map((entry) => entry.payload.recap)).toEqual([
+      {
+        state: "available",
+        facts: { version: 1, results: ["Found report.txt"], references: [{ callId: "lookup" }] },
+      },
+      { state: "missing", reason: "invalid" },
+    ]);
+    expect(
+      projectThreadItems(main).filter((item) => item.kind === "message" && item.role === "bot"),
+    ).toEqual([
+      expect.objectContaining({ blocks: [{ kind: "text", text: "The report is saved." }] }),
+    ]);
+    expect(JSON.stringify(main)).not.toContain("Private narration");
+    expect(JSON.stringify(main)).not.toContain("Arbitrary final words");
+    expect(
+      (await log.readRun(run.id)).some(
+        (entry) => entry.type === "tool.result" && entry.payload.callId === "lookup",
+      ),
+    ).toBe(true);
+  });
+
+  it.each(['fake"quoted', "fake\nmultiline", "fake\\backslash", "1", "lookup"])(
+    "redacts decoded factual fields before storing a private closing with secret %j",
+    async (secret) => {
+      const { prisma } = database;
+      const thread = await prisma.thread.create({
+        data: { spaceId: "space-1", userId: "user-1", botId: BOT },
+      });
+      const events = createThreadEvents(prisma);
+      const source = async (text: string) => {
+        const sent = await events.sendUserMessage({
+          spaceId: "space-1",
+          threadId: thread.id,
+          botId: BOT,
+          userId: "user-1",
+          blocks: [{ kind: "text", text }],
+          prompt: text,
+          trigger: "user",
+        });
+        return prisma.run.findUniqueOrThrow({ where: { id: sent.runId! } });
+      };
+      const run = await source("Read the report");
+      await fixture({
+        database: prisma,
+        run,
+        secrets: [secret],
+        sandbox: { listFiles: async () => [{ name: "report.txt", kind: "file" }] },
+        runtime: async function* (request) {
+          await request.executeTool!("list_files", { path: "." }, "lookup");
+          yield {
+            type: "done",
+            privateFinalText: JSON.stringify({
+              version: 1,
+              results: [`Result ${secret}`],
+              decisions: [`Decision ${secret}`],
+              limits: [`Limit ${secret}`],
+              references: [{ callId: "lookup" }],
+            }),
+          };
+        },
+      }).request();
+      const log = new PostgresSessionLog(prisma);
+      const parent = await log.readTail(SessionIdSchema.parse(thread.sessionId));
+      expect(
+        parent.filter((entry) => entry.type === "run.recap").map((entry) => entry.payload.recap),
+      ).toEqual([
+        {
+          state: "available",
+          facts: {
+            version: 1,
+            results: ["Result [redacted]"],
+            decisions: ["Decision [redacted]"],
+            limits: ["Limit [redacted]"],
+            references: [{ callId: "lookup" }],
+          },
+        },
+      ]);
+      const next = await source("Continue");
+      const request = await fixture({ database: prisma, run: next, secrets: [secret] }).request();
+      expect(JSON.stringify(request.history)).toContain("report.txt");
+      for (const turn of request.history) {
+        expect(turn.content).not.toContain(`Result ${secret}`);
+        expect(turn.content).not.toContain(`Decision ${secret}`);
+        expect(turn.content).not.toContain(`Limit ${secret}`);
+      }
+    },
+  );
+
+  it("reclaims a lost lease after publication without duplicating the message or session", async () => {
+    const { prisma } = database;
+    const thread = await prisma.thread.create({
+      data: { spaceId: "space-1", userId: "user-1", botId: BOT },
+    });
+    const events = createThreadEvents(prisma);
+    const sent = await events.sendUserMessage({
+      spaceId: "space-1",
+      threadId: thread.id,
+      botId: BOT,
+      userId: "user-1",
+      blocks: [{ kind: "text", text: "Report once" }],
+      prompt: "Report once",
+      trigger: "user",
+    });
+    const run = await prisma.run.findUniqueOrThrow({ where: { id: sent.runId! } });
+    await fixture({
+      database: prisma,
+      run,
+      runtime: async function* (request) {
+        await request.executeTool!("message_user", { message: "The saved result." }, "say");
+        await prisma.run.update({
+          where: { id: run.id },
+          data: { leaseOwner: "expired-worker", leaseExpiresAt: new Date(0) },
+        });
+        yield {
+          type: "done",
+          privateFinalText: JSON.stringify({
+            version: 1,
+            results: ["This attempt lost its lease"],
+            references: [],
+          }),
+        };
+      },
+    }).request();
+    const interrupted = await prisma.run.findUniqueOrThrow({ where: { id: run.id } });
+    const log = new PostgresSessionLog(prisma);
+    expect(
+      (await log.readTail(SessionIdSchema.parse(thread.sessionId))).filter(
+        (entry) => entry.type === "run.recap",
+      ),
+    ).toEqual([]);
+    await fixture({
+      database: prisma,
+      run: interrupted,
+      runtime: async function* (request) {
+        expect(JSON.stringify(request.history)).toContain("The saved result.");
+        await request.executeTool!("message_user", { message: "The saved result." }, "say-again");
+        yield {
+          type: "done",
+          privateFinalText: JSON.stringify({
+            version: 1,
+            results: ["Reported the saved result"],
+            references: [],
+          }),
+        };
+      },
+    }).request();
+    const recovered = await prisma.run.findUniqueOrThrow({ where: { id: run.id } });
+    expect(recovered).toMatchObject({
+      status: "completed",
+      sessionId: interrupted.sessionId,
+      leaseFence: interrupted.leaseFence + 1,
+    });
+    const main = await log.readTail(SessionIdSchema.parse(thread.sessionId));
+    expect(main.filter((entry) => entry.type === "assistant.text")).toEqual([
+      expect.objectContaining({
+        payload: expect.objectContaining({ blocks: [{ kind: "text", text: "The saved result." }] }),
+      }),
+    ]);
+    expect(main.filter((entry) => entry.type === "run.recap")).toHaveLength(1);
+    expect(
+      (await log.readTail(SessionIdSchema.parse(recovered.sessionId))).filter(
+        (entry) => entry.type === "run.started",
+      ),
+    ).toHaveLength(1);
   });
 });

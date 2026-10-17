@@ -50,6 +50,11 @@ export function projectThreadItems(entries: readonly ThreadEntry[]): ThreadItem[
 }
 
 export function projectThread(entries: readonly ThreadEntry[]): ProjectedThread {
+  const finishedAt = new Map(
+    entries.flatMap((entry) =>
+      entry.type === "run.finished" || entry.type === "run.recap" ? [[entry.runId, entry.seq]] : [],
+    ),
+  );
   const visible = entries.filter(isUiEntry);
   const received = new Map<string, ThreadEntryOf<"bot.message.received">[]>();
   for (const entry of visible) {
@@ -64,9 +69,6 @@ export function projectThread(entries: readonly ThreadEntry[]): ProjectedThread 
     sessionId ? { origin: { sessionId, ...children.get(sessionId) } } : {};
   const answers = toolAnswers(visible);
   const seqOf = new Map<string, number>(visible.map((entry) => [entry.id, entry.seq]));
-  const finishedAt = new Map(
-    visible.flatMap((entry) => (entry.type === "run.finished" ? [[entry.runId, entry.seq]] : [])),
-  );
   const runs = new Map<string, RunItem>();
   const runMessages = new Map<string, MessageItem[]>();
   const effects = new Map<string, EffectItem>();
