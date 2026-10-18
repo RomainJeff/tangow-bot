@@ -39,7 +39,6 @@ import {
   isRunTerminalEvent,
   isSecretAskBlock,
   isWorkingStatus,
-  latestActivityLabel,
   linkMentionsKey,
   linkMentionsOf,
   mentionChipKey,
@@ -591,7 +590,7 @@ function Thread() {
   );
   const hasLiveProgress = liveItems.length > 0;
   // One bot only: an activity line names one bot's tool, so it would mislabel a group.
-  const activityLabel = latestActivityLabel(liveItems);
+  const activityLabel = view.activityLabel;
   const threadRuns = useMemo(
     () => snap?.activeRuns ?? (snap?.run ? [snap.run] : []),
     [snap?.activeRuns, snap?.run],

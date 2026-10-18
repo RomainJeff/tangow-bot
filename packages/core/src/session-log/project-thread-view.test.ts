@@ -2,12 +2,13 @@ import { readFileSync } from "node:fs";
 import type { ProductEvent, ThreadEntry } from "@rakazo/contracts";
 import { SessionEntrySchema, toThreadEntry } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
-import { latestActivityLabel } from "../tool-activity.js";
+import { isToolActivityBlock } from "../tool-activity.js";
 import { linkEntries } from "./fixtures/read-fixture.js";
 import type { ProgressLayer, ThreadEntries } from "./project-thread-view.js";
 import {
   appendedEntries,
   applyEntryEvent,
+  drawsNothing,
   mergeEntries,
   projectThreadView,
   reduceProgressLayer,
@@ -1155,7 +1156,7 @@ describe("the entry feed", () => {
     expect(reduceProgressLayer(streaming, event("thread.meta", {}))).toBe(streaming);
   });
 
-  it("keeps a run's tool line on while it logs the call and its result", () => {
+  it("keeps a run's tool line on while it logs its calls, their results and a helper's", () => {
     const work = linkEntries("work", [
       {
         botId: "bot_ada",
@@ -1169,20 +1170,40 @@ describe("the entry feed", () => {
         type: "tool.result",
         payload: { callId: "call_1", output: "…", isError: false, artifactIds: [] },
       },
+      {
+        botId: "bot_ada",
+        runId: "run_1",
+        type: "subagent",
+        payload: {
+          callId: "call_2",
+          name: "scout",
+          model,
+          task: "Read the tests",
+          status: "completed",
+          result: "Read them.",
+          usage: { inputTokens: 1, outputTokens: 1 },
+        },
+      },
     ]).map(toThreadEntry);
     const working = reduceProgressLayer(
       new Map(),
       event("thread.progress", { text: "Reading src/app.ts", activity: true }, "run_1"),
     );
-    const layer = [work.slice(0, 1), work.slice(1)].reduce(
-      (held, entries) =>
-        reduceProgressLayer(held, event("session.entry.appended", { entries }, "run_1")),
-      working,
-    );
-    const live = projectThreadView(mergeEntries(chain.slice(0, 1), work), {
+    const layer = work
+      .map((entry) => [entry])
+      .reduce(
+        (held, entries) =>
+          reduceProgressLayer(held, event("session.entry.appended", { entries }, "run_1")),
+        working,
+      );
+    // As web and iPhone draw it: the live row holding only the tool line draws nothing.
+    const view = projectThreadView(mergeEntries(chain.slice(0, 1), work), {
       progress: layer,
-    }).rows.flatMap((row) => (row.item.kind === "message" ? [row.item] : []));
-    expect(latestActivityLabel(live)).toBe("Reading src/app.ts");
+      rendersNothing: (item) =>
+        drawsNothing(item, (blocks) => blocks.some((block) => !isToolActivityBlock(block))),
+    });
+    expect(view.rows.map((row) => row.item.id)).not.toContain("progress:run_1");
+    expect(view.activityLabel).toBe("Reading src/app.ts");
   });
 
   it("merges a replayed event and an overlapping page without adding an entry twice", () => {

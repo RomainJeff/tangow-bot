@@ -510,15 +510,22 @@ export const RUN_TRACE_TYPES: ReadonlySet<SessionEntryType> = new Set([
 ] satisfies SessionEntryType[]);
 
 /**
- * What a run logs while it works, between the words it says. None of it replaces the run's live
- * line, the text it streams and the tool it is on, which only its words or its end do.
+ * What a run logs about its tools while it works. Its live line, the tool it is on, outlives these;
+ * any other entry of the run replaces it.
  */
 export const RUN_WORK_TYPES = [
   "run.started",
   "assistant.reasoning",
   "tool.call",
   "tool.result",
+  "subagent",
 ] as const satisfies readonly SessionEntryType[];
+
+const RUN_WORK: ReadonlySet<SessionEntryType> = new Set(RUN_WORK_TYPES);
+
+export function isRunWork(entry: { type: SessionEntryType }): boolean {
+  return RUN_WORK.has(entry.type);
+}
 
 /**
  * What settles or annotates an earlier card or message, appended to the session that holds it.
