@@ -142,6 +142,7 @@ multiple of 0.25 rem: `gap-3` is 12, `gap-5` is 20, `gap-7` is 28. Never
 | `bubble` | 20 | `rounded-bubble` | every message bubble, bot and user, and everything on the bot's paper |
 | `linkMention` | 4 | — | a link mention's icon frame (`--corner-link-mention`) |
 | `composer` | 24 | `rounded-composer` | the composer |
+| `pane` | 18 | `rounded-pane` | the floating sidebar and side panel |
 | `pill` | 9999 | `rounded-full` | capsules, round buttons, avatars |
 
 A radius nested inside another is concentric: inner = outer − inset, when the

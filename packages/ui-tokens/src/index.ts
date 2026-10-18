@@ -230,6 +230,8 @@ export const radii = {
   /** A link mention's 16 px site icon or fallback tile. */
   linkMention: 4,
   composer: 24,
+  /** The floating sidebar and side panel: 26 − the 8 they float from the window's edge. */
+  pane: 18,
   pill: 9999,
 } as const satisfies Record<string, number>;
 
@@ -484,3 +486,5 @@ function readStoredAppearance(storage: Pick<Storage, "getItem"> | null | undefin
     return null;
   }
 }
+
+export * from "./materials.js";

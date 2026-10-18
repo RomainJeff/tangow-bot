@@ -55,6 +55,30 @@
   --elevation-composer-focus:
     0 0 0 1px rgba(255, 255, 255, 0.16), 0 12px 28px -18px rgba(0, 0, 0, 0.8);
   --elevation-floating: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 8px 20px -10px rgba(0, 0, 0, 0.7);
+  --material-chrome-fill: rgba(36, 36, 40, 0.55);
+  --material-chrome-edge:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 1px rgba(255, 255, 255, 0.07),
+    0 2px 8px -2px rgba(0, 0, 0, 0.4);
+  --material-chrome-fallback: var(--sidebar);
+  --material-control-fill: rgba(44, 44, 48, 0.72);
+  --material-control-edge:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 2px 8px -2px rgba(0, 0, 0, 0.5);
+  --material-control-fallback: var(--card);
+  --material-menu-fill: rgba(44, 44, 48, 0.8);
+  --material-menu-edge:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 0 0 1px rgba(255, 255, 255, 0.09),
+    0 16px 40px -10px rgba(0, 0, 0, 0.7);
+  --material-menu-fallback: var(--card);
+  --material-list-fill: rgba(40, 40, 44, 0.94);
+  --material-list-edge:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 0 0 1px rgba(255, 255, 255, 0.09),
+    0 16px 40px -10px rgba(0, 0, 0, 0.7);
+  --material-list-fallback: var(--card);
+  --ambient:
+    radial-gradient(110% 85% at 34% 0%, #303035 0%, rgba(48, 48, 53, 0) 62%),
+    linear-gradient(165deg, #1e1e21 0%, #0d0d0e 100%);
+  --scroll-edge-tone: 20 20 22;
 }
 
 [data-theme="light"] {
@@ -111,6 +135,30 @@
   --elevation-composer-focus:
     0 0 0 1px rgba(17, 17, 20, 0.09), 0 12px 28px -18px rgba(17, 17, 20, 0.55);
   --elevation-floating: 0 1px 2px rgba(17, 17, 20, 0.08), 0 8px 20px -10px rgba(17, 17, 20, 0.35);
+  --material-chrome-fill: rgba(255, 255, 255, 0.68);
+  --material-chrome-edge:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 0 0 1px rgba(0, 0, 0, 0.07),
+    0 2px 8px -2px rgba(0, 0, 0, 0.08);
+  --material-chrome-fallback: var(--sidebar);
+  --material-control-fill: rgba(255, 255, 255, 0.72);
+  --material-control-edge:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 0 0 1px rgba(0, 0, 0, 0.08),
+    0 2px 8px -2px rgba(0, 0, 0, 0.1);
+  --material-control-fallback: var(--card);
+  --material-menu-fill: rgba(255, 255, 255, 0.8);
+  --material-menu-edge:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 0 0 1px rgba(0, 0, 0, 0.08),
+    0 12px 32px -8px rgba(0, 0, 0, 0.22);
+  --material-menu-fallback: var(--card);
+  --material-list-fill: rgba(250, 250, 251, 0.94);
+  --material-list-edge:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 0 0 1px rgba(0, 0, 0, 0.08),
+    0 12px 32px -8px rgba(0, 0, 0, 0.22);
+  --material-list-fallback: var(--card);
+  --ambient:
+    radial-gradient(120% 90% at 0% 0%, #ffffff 0%, rgba(255, 255, 255, 0) 62%),
+    linear-gradient(160deg, #f6f6f8 0%, #e8e8ec 100%);
+  --scroll-edge-tone: 245 245 247;
 }
 
 :root {
@@ -189,6 +237,7 @@
   --corner-bubble: 20px;
   --corner-link-mention: 4px;
   --corner-composer: 24px;
+  --corner-pane: 18px;
   --corner-pill: 9999px;
   --size-receipt: 14px;
   --size-stack-xs: 16px;
@@ -230,4 +279,27 @@
   --duration-step-out: 100ms;
   --duration-step-in: 160ms;
   --motion-ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --material-chrome-blur: 30px;
+  --material-chrome-saturate: 160%;
+  --material-control-blur: 24px;
+  --material-control-saturate: 170%;
+  --material-menu-blur: 30px;
+  --material-menu-saturate: 180%;
+  --material-list-blur: 40px;
+  --material-list-saturate: 180%;
+}
+
+@media (max-width: 767px) {
+  :root,
+  [data-theme="dark"] {
+    --ambient:
+      radial-gradient(130% 62% at 0% 0%, #36363c 0%, rgba(54, 54, 60, 0) 100%),
+      linear-gradient(165deg, #19191c 0%, #0c0c0d 100%);
+  }
+
+  [data-theme="light"] {
+    --ambient:
+      radial-gradient(130% 62% at 0% 0%, #ffffff 0%, rgba(255, 255, 255, 0) 100%),
+      linear-gradient(165deg, #f3f3f5 0%, #e2e2e7 100%);
+  }
 }

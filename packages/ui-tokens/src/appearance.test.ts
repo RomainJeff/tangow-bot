@@ -117,6 +117,18 @@ describe("tokens.css", () => {
     expect(css).toContain("--duration-arrive: 240ms");
     expect(css).toContain("--motion-ease");
   });
+
+  it("emits the materials per theme and a phone-width ambient light", () => {
+    const css = renderTokensCss();
+    const [dark, light, narrow] = css.split(/\n\[data-theme="light"\] \{|\n@media /);
+    expect(dark).toContain("--material-chrome-fill: rgba(36, 36, 40, 0.55);");
+    expect(light).toContain("--material-chrome-fill: rgba(255, 255, 255, 0.68);");
+    expect(light).toContain("--material-chrome-fallback: var(--sidebar);");
+    expect(light).toContain("--material-control-blur: 24px;");
+    expect(light).toContain("--scroll-edge-tone: 245 245 247;");
+    expect(narrow).toMatch(/^\(max-width: 767px\) \{\n {2}:root,/);
+    expect(narrow).toContain("#36363c 0%");
+  });
 });
 
 // The composer placeholder uses `mutedForeground`: `foregroundSubtle` falls

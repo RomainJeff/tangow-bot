@@ -1,6 +1,7 @@
 @import "tw-animate-css";
 @import "./shadcn.css";
 @import "@rakazo/ui-tokens/css";
+@import "./materials.css";
 
 @source "./**/*.{ts,tsx}";
 
@@ -60,6 +61,7 @@
   --radius-block: var(--corner-block);
   --radius-bubble: var(--corner-bubble);
   --radius-composer: var(--corner-composer);
+  --radius-pane: var(--corner-pane);
 
   --shadow-row: var(--elevation-row);
   --shadow-bubble: var(--elevation-bubble);
