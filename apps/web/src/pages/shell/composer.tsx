@@ -310,7 +310,7 @@ export const Composer = memo(function Composer({
       aria-label={t`Message composer`}
       data-dragging={draggingFiles ? "files" : undefined}
       {...dropHandlers}
-      className={`relative z-30 m-0 min-w-0 border-0 pb-4 pt-3 md:pb-6 ${
+      className={`relative z-30 m-0 min-w-0 border-0 pt-3 pb-5 ${
         draggingFiles ? "rounded-card ring-2 ring-inset ring-ring" : ""
       }`}
     >

@@ -28,7 +28,7 @@ export function HoverPill({ className, ...props }: HoverPillProps) {
     <div
       data-slot="hover-pill"
       className={cn(
-        "pointer-events-none absolute -top-3 end-3 z-10 flex items-center gap-0.5 rounded-full bg-surface p-0.75 opacity-0 shadow-floating transition-opacity duration-(--duration-hover) ease-quiet",
+        "rk-glass-control pointer-events-none absolute -top-3 end-3 z-10 flex items-center gap-0.5 rounded-full p-0.75 opacity-0 transition-opacity duration-(--duration-hover) ease-quiet",
         "group-hover:pointer-events-auto group-hover:opacity-100",
         "group-has-[:focus-visible]:pointer-events-auto group-has-[:focus-visible]:opacity-100",
         "group-data-[pill=beside]:end-auto group-data-[pill=beside]:top-(--pill-y) group-data-[pill=beside]:start-(--pill-x)",

@@ -210,15 +210,18 @@ export const Transcript = memo(function Transcript({
   }, [scrollRef]);
 
   return (
-    <div className="relative flex min-h-0 flex-1">
+    // The thread runs under the header above and 64 px under the composer below
+    // (`-mb-16`), fading out at both ends (`rk-thread-mask`): pt-21 clears the mask's
+    // top fade, and pb-24 is that overlap plus room for a card's shadow.
+    <div className="relative -mb-16 flex min-h-0 flex-1">
       <div
         ref={scrollRef}
         data-testid="transcript"
         {...scrollerHandlers}
-        // px-3 / pb-8 keep a card's soft drop shadow (shadow-card reaches ~14px sideways and
+        // px-3 keeps a card's soft drop shadow (shadow-card reaches ~14px sideways and
         // ~26px down) from being clipped by this scroll container's overflow or hidden under
         // the rk-scroll scrollbar on the right.
-        className="rk-scroll flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-3 pt-5 pb-8 md:pt-6"
+        className="rk-scroll rk-thread-mask flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-3 pt-21 pb-24"
       >
         {olderCursor != null ? (
           <button

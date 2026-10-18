@@ -9,6 +9,9 @@ import { WindowChrome } from "../WindowChrome";
 import type { BotPageView, Panel } from "./layout";
 import { botPageFor } from "./layout";
 
+// 32 px buttons in the 36 px glass capsule; chrome icons are full ink.
+const CAPSULE_BUTTON = "app-no-drag size-8 text-foreground aria-pressed:bg-accent";
+
 export function ThreadHeader({
   botsSidebarCollapsed,
   setMobileSidebarOpen,
@@ -45,7 +48,14 @@ export function ThreadHeader({
   const { t } = useLingui();
   const members = activeSnapshot?.members ?? activeGroup?.members ?? [];
   return (
-    <div className="app-drag flex h-header shrink-0 items-center justify-between gap-2 px-3 md:px-5.5">
+    // No band: it overlays the thread, which fades out under the scroll edge;
+    // `-mb-header` pulls the thread up under it. `pt-1.5` centres it on the
+    // floating sidebar's header line.
+    <div className="app-drag relative z-20 -mb-header flex h-header shrink-0 items-center justify-between gap-2 ps-3 pe-3 pt-1.5 md:ps-5.5">
+      <div
+        aria-hidden="true"
+        className="rk-scroll-edge pointer-events-none absolute inset-x-0 top-0 -z-10 h-16"
+      />
       <div className="flex min-w-0 items-center gap-2">
         {/* Collapsed bots sidebar: this header is the leading edge for window chrome. */}
         {botsSidebarCollapsed && desktopBridge() ? <WindowChrome /> : null}
@@ -54,9 +64,9 @@ export function ThreadHeader({
           size="roundIconSm"
           aria-label={t`Open navigation`}
           onClick={() => setMobileSidebarOpen(true)}
-          className="app-no-drag shrink-0 md:hidden"
+          className="rk-glass-control app-no-drag size-capsule shrink-0 text-foreground md:hidden"
         >
-          <Menu size={19} strokeWidth={1.7} />
+          <Menu size={18} strokeWidth={1.7} />
         </Button>
         {botsSidebarCollapsed ? (
           <Button
@@ -66,9 +76,9 @@ export function ThreadHeader({
             aria-label={t`Show bots`}
             title={t`Show bots`}
             onClick={() => setBotsSidebarCollapsedPref(false)}
-            className="app-no-drag hidden shrink-0 md:inline-flex"
+            className="app-no-drag hidden shrink-0 text-foreground md:inline-flex"
           >
-            <PanelLeftOpen size={19} strokeWidth={1.7} aria-hidden="true" />
+            <PanelLeftOpen size={16} strokeWidth={1.8} aria-hidden="true" />
           </Button>
         ) : null}
         <button
@@ -110,60 +120,58 @@ export function ThreadHeader({
           ) : null}
         </button>
       </div>
-      <div className="flex items-center gap-1">
-        {!inGroup && active && onVoice ? (
+      {!inGroup && active ? (
+        <div className="rk-glass-control flex h-capsule shrink-0 items-center rounded-full p-0.5">
+          {onVoice ? (
+            <Button
+              ref={voiceButtonRef}
+              variant="roundIcon"
+              size="roundIcon"
+              data-testid="open-voice-call"
+              aria-label={t`Voice`}
+              title={t`Voice`}
+              disabled={disabled}
+              onClick={onVoice}
+              className={CAPSULE_BUTTON}
+            >
+              <Phone size={16} strokeWidth={1.8} aria-hidden="true" />
+            </Button>
+          ) : null}
           <Button
-            ref={voiceButtonRef}
-            variant="tertiary"
-            size="capsule"
-            data-testid="open-voice-call"
-            aria-label={t`Voice`}
-            title={t`Voice`}
-            disabled={disabled}
-            onClick={onVoice}
-            className="app-no-drag"
-          >
-            <Phone size={17} strokeWidth={1.6} aria-hidden="true" />
-          </Button>
-        ) : null}
-        {!inGroup && active ? (
-          <>
-            <Button
-              variant="tertiary"
-              size="capsule"
-              data-testid="open-computer-panel"
-              aria-label={t`Screen`}
-              title={t`Screen`}
-              onClick={() => {
-                const next = panel === "computer" ? null : "computer";
-                setPanel(next);
-                if (next === "computer" && active) {
-                  // Refresh run/computer so Take control isn't stuck on a stale busyBotName.
-                  void refreshThread(active.id).catch(() => undefined);
-                }
-              }}
-              aria-pressed={panel === "computer"}
-              className="app-no-drag"
-            >
-              <Monitor size={17} strokeWidth={1.6} aria-hidden="true" />
-            </Button>
-            <Button
-              variant="tertiary"
-              size="capsule"
-              data-testid="open-settings-panel"
-              aria-label={t`Bot settings`}
-              title={t`Bot settings`}
-              onClick={() =>
-                panel === "bot" ? setPanel(null) : onOpenBotPage(botPageFor("gear", active))
+            variant="roundIcon"
+            size="roundIcon"
+            data-testid="open-computer-panel"
+            aria-label={t`Screen`}
+            title={t`Screen`}
+            onClick={() => {
+              const next = panel === "computer" ? null : "computer";
+              setPanel(next);
+              if (next === "computer") {
+                // Refresh run/computer so Take control isn't stuck on a stale busyBotName.
+                void refreshThread(active.id).catch(() => undefined);
               }
-              aria-pressed={panel === "bot"}
-              className="app-no-drag"
-            >
-              <Settings size={17} strokeWidth={1.6} aria-hidden="true" />
-            </Button>
-          </>
-        ) : null}
-      </div>
+            }}
+            aria-pressed={panel === "computer"}
+            className={CAPSULE_BUTTON}
+          >
+            <Monitor size={16} strokeWidth={1.8} aria-hidden="true" />
+          </Button>
+          <Button
+            variant="roundIcon"
+            size="roundIcon"
+            data-testid="open-settings-panel"
+            aria-label={t`Bot settings`}
+            title={t`Bot settings`}
+            onClick={() =>
+              panel === "bot" ? setPanel(null) : onOpenBotPage(botPageFor("gear", active))
+            }
+            aria-pressed={panel === "bot"}
+            className={CAPSULE_BUTTON}
+          >
+            <Settings size={16} strokeWidth={1.8} aria-hidden="true" />
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }

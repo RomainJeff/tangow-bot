@@ -40,7 +40,7 @@ export function SidebarHeader({
   const { t } = useLingui();
   const hasUnread = sidebarGroups.some((group) => group.bots.some((item) => item.chat.unread));
   return (
-    <div className="app-drag flex h-header shrink-0 items-center justify-between gap-2 px-4 ps-4.5">
+    <div className="app-drag flex h-11.5 shrink-0 items-center justify-between gap-2 px-4 ps-4.5">
       <div className="flex min-w-0 items-center gap-1">
         {desktopBridge() ? <WindowChrome /> : null}
         <Button

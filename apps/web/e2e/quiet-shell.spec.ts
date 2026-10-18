@@ -32,6 +32,19 @@ test("the shell is a sidebar and a centred thread", async ({ page }, testInfo) =
     (mainBox?.x ?? 0) + (mainBox?.width ?? 0) - ((columnBox?.x ?? 0) + (columnBox?.width ?? 0));
   expect(Math.abs(leading - trailing)).toBeLessThanOrEqual(2);
 
+  // The sidebar floats 8 from the window's top, bottom and start edges, 264 wide in its
+  // 280 column, and the composer floats 20 above the bottom edge.
+  const viewport = page.viewportSize();
+  expect(viewport).not.toBeNull();
+  expect(await page.getByTestId("bots-sidebar-pane").boundingBox()).toEqual({
+    x: 8,
+    y: 8,
+    width: 264,
+    height: (viewport?.height ?? 0) - 16,
+  });
+  const composerBox = await page.getByTestId("composer-bar").boundingBox();
+  expect((viewport?.height ?? 0) - (composerBox?.y ?? 0) - (composerBox?.height ?? 0)).toBe(20);
+
   // One header button opens the bot's screen over the thread; Escape closes it.
   const openPanel = page.getByRole("button", { name: "Screen" });
   await expect(openPanel).toHaveAttribute("data-testid", "open-computer-panel");
@@ -68,6 +81,28 @@ test("the shell is a sidebar and a centred thread", async ({ page }, testInfo) =
   await settings.getByRole("button", { name: "Close user settings" }).click();
   await expect(settings).toBeHidden();
   await captureScreenshot(page, testInfo, "quiet-shell-dark");
+});
+
+/** Reduce Transparency turns every material into its opaque slot; the ambient light stays. */
+test("Reduce Transparency makes the glass opaque", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "light" });
+  await signup(page, `quiet-opaque-${Date.now()}@rakazo.test`, "password12", "Quiet Opaque");
+  await completeOnboarding(page);
+  await page.waitForURL(/\/app\/[^/]+$/);
+
+  const pane = page.getByTestId("bots-sidebar-pane");
+  const composer = page.getByTestId("composer-bar");
+  await expect(pane).toHaveCSS("background-color", "rgba(255, 255, 255, 0.68)");
+  await expect(composer).toHaveCSS("background-color", "rgba(255, 255, 255, 0.72)");
+
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Emulation.setEmulatedMedia", {
+    features: [{ name: "prefers-reduced-transparency", value: "reduce" }],
+  });
+  await expect(pane).toHaveCSS("background-color", "rgb(245, 245, 247)");
+  await expect(pane).toHaveCSS("backdrop-filter", "none");
+  await expect(composer).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(page.getByTestId("shell-root")).toHaveCSS("background-image", /radial-gradient/);
 });
 
 /** Below `lg` the panel is full width over the thread, so the covered column must

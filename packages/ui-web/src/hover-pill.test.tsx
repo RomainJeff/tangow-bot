@@ -33,8 +33,7 @@ describe("HoverPill", () => {
     expect(html).toContain("z-10");
     expect(html).toContain("end-3");
     expect(html).toContain("rounded-full");
-    expect(html).toContain("bg-surface");
-    expect(html).toContain("shadow-floating");
+    expect(html).toContain("rk-glass-control");
     expect(html).not.toContain("right-");
   });
 

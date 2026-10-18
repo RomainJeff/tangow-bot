@@ -5,6 +5,7 @@ import { Search } from "lucide-react";
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import { useRef } from "react";
 import { BOTS_SIDEBAR_EDGE_DRAG_PX } from "../../lib/bots-sidebar-pref";
+import { useMediaQuery } from "../../lib/use-media-query";
 import { ActivityList } from "../ActivityList";
 import { SpaceSearchResults } from "../SpaceSearch";
 import type { SidebarArchivedProps, SidebarFooterProps } from "./sidebar-footer";
@@ -47,70 +48,84 @@ export function BotsSidebar(props: BotsSidebarProps) {
   } = props;
   const { t } = useLingui();
   const searchRef = useRef<HTMLInputElement>(null);
+  // Below `md` the sidebar is the drawer, a dense list over the veil.
+  const desktopWidth = useMediaQuery("(min-width: 768px)");
   return (
     <>
+      {/* The column: the sidebar floats 8 from the window's edges inside it, over the ambient light. */}
       <aside
         data-testid="bots-sidebar"
         data-collapsed={botsSidebarCollapsed ? "true" : "false"}
         inert={botsSidebarCollapsed && !mobileSidebarOpen ? true : undefined}
-        className={`absolute inset-y-0 start-0 z-40 flex w-sidebar max-w-full shrink-0 flex-col bg-sidebar transition-[transform,width,opacity] md:static md:z-auto md:translate-x-0 ${
+        className={`absolute inset-y-0 start-0 z-40 flex w-sidebar max-w-full shrink-0 flex-col py-2 ps-2 transition-[transform,width,opacity,padding] md:relative md:z-auto md:translate-x-0 ${
           mobileSidebarOpen ? "translate-x-0" : "-translate-x-full rtl:translate-x-full"
         } ${
           botsSidebarCollapsed
-            ? "md:w-0 md:overflow-hidden md:opacity-0 md:pointer-events-none"
-            : "md:w-sidebar"
+            ? "md:w-0 md:overflow-hidden md:p-0 md:opacity-0 md:pointer-events-none"
+            : "md:w-sidebar md:pe-2"
         }`}
       >
-        <SidebarHeader {...props} />
-        <InputGroup
-          data-testid="sidebar-search"
-          className="mx-2.5 mb-2 w-auto rounded-row bg-surface"
+        <div aria-hidden="true" className="app-drag absolute inset-x-0 top-0 h-2" />
+        <div
+          data-testid="bots-sidebar-pane"
+          className={`flex min-h-0 flex-1 flex-col overflow-hidden rounded-pane ${
+            desktopWidth
+              ? "rk-glass-chrome"
+              : // The closed drawer's shadow would otherwise show at the window's edge.
+                `rk-glass-list ${mobileSidebarOpen ? "" : "shadow-none"}`
+          }`}
         >
-          <InputGroupAddon>
-            <Search size={16} strokeWidth={1.8} aria-hidden="true" />
-          </InputGroupAddon>
-          <InputGroupInput
-            ref={searchRef}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(event) => {
-              if (event.key !== "Escape") return;
-              // Escape clears the query and drops focus; the field stays in
-              // place. Its own listener must not reach the panel's Escape.
-              event.preventDefault();
-              event.stopPropagation();
-              setQuery("");
-              searchRef.current?.blur();
-            }}
-            placeholder={t`Search`}
-            autoComplete="off"
-            name="sidebar-search"
-          />
-        </InputGroup>
-        <div className="rk-scroll flex flex-1 flex-col gap-0.5 overflow-y-auto px-2.5 pb-2.5">
-          {showSpaceSearch ? (
-            <SpaceSearchResults
-              hits={searchHits}
-              loading={searchLoading}
-              onSelect={(hit) => void jumpToSearchHit(hit)}
+          <SidebarHeader {...props} />
+          <InputGroup
+            data-testid="sidebar-search"
+            className="mx-2.5 mb-2 w-auto rounded-row border-transparent bg-sidebar-accent dark:bg-sidebar-accent"
+          >
+            <InputGroupAddon>
+              <Search size={16} strokeWidth={1.8} aria-hidden="true" />
+            </InputGroupAddon>
+            <InputGroupInput
+              ref={searchRef}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== "Escape") return;
+                // Escape clears the query and drops focus; the field stays in
+                // place. Its own listener must not reach the panel's Escape.
+                event.preventDefault();
+                event.stopPropagation();
+                setQuery("");
+                searchRef.current?.blur();
+              }}
+              placeholder={t`Search`}
+              autoComplete="off"
+              name="sidebar-search"
             />
-          ) : (
-            <>
-              {activityMode ? (
-                <ActivityList
-                  onOpenRun={(run) => {
-                    setMobileSidebarOpen(false);
-                    if (run.groupId) navigate(`/app/g/${run.groupId}`);
-                    else navigate(`/app/${run.botId}`);
-                  }}
-                />
-              ) : null}
-              <SidebarRoster {...props} />
-            </>
-          )}
-          {showSpaceSearch ? null : <SidebarArchived {...props} />}
+          </InputGroup>
+          <div className="rk-scroll flex flex-1 flex-col gap-0.5 overflow-y-auto px-2.5 pb-2.5">
+            {showSpaceSearch ? (
+              <SpaceSearchResults
+                hits={searchHits}
+                loading={searchLoading}
+                onSelect={(hit) => void jumpToSearchHit(hit)}
+              />
+            ) : (
+              <>
+                {activityMode ? (
+                  <ActivityList
+                    onOpenRun={(run) => {
+                      setMobileSidebarOpen(false);
+                      if (run.groupId) navigate(`/app/g/${run.groupId}`);
+                      else navigate(`/app/${run.botId}`);
+                    }}
+                  />
+                ) : null}
+                <SidebarRoster {...props} />
+              </>
+            )}
+            {showSpaceSearch ? null : <SidebarArchived {...props} />}
+          </div>
+          <SidebarFooter {...props} />
         </div>
-        <SidebarFooter {...props} />
       </aside>
 
       <button
