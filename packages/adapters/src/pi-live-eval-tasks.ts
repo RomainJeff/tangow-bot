@@ -1,6 +1,7 @@
 import { isDeepStrictEqual } from "node:util";
+import { createConfigFleetTask } from "./pi-live-eval-fleet.js";
 
-export const LIVE_EVAL_TASK_IDS = ["reconcile", "config-repair"] as const;
+export const LIVE_EVAL_TASK_IDS = ["reconcile", "config-repair", "config-fleet"] as const;
 export type LiveEvalTaskId = (typeof LIVE_EVAL_TASK_IDS)[number];
 
 export interface LiveEvalGrade {
@@ -22,8 +23,22 @@ export interface LiveEvalTask {
 export const LIVE_EVAL_INSTRUCTIONS =
   "You work in a project directory through the provided file tools and run_check. Paths are relative to the project directory. There is no shell. Inspect the files you need, make the requested changes, verify them with run_check, then reply with a one-sentence summary.";
 
+const CONFIG_FLEET_UNITS = 24;
+
 export function createLiveEvalTask(id: LiveEvalTaskId, seed: number): LiveEvalTask {
-  return id === "reconcile" ? reconcileTask(seed) : configRepairTask(seed);
+  switch (id) {
+    case "reconcile":
+      return reconcileTask(seed);
+    case "config-repair":
+      return configRepairTask(seed);
+    case "config-fleet":
+      return createConfigFleetTask(
+        seed,
+        Array.from({ length: CONFIG_FLEET_UNITS }, (_, index) =>
+          configRepairTask(seed * 100 + index),
+        ),
+      );
+  }
 }
 
 function random(seed: number) {

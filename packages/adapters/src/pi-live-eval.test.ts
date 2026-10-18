@@ -85,6 +85,25 @@ function repairConfig(files: ReadonlyMap<string, string>): Map<string, string> {
   return repaired;
 }
 
+function unitFiles(files: ReadonlyMap<string, string>, root: string) {
+  return new Map(
+    [...files]
+      .filter(([path]) => path.startsWith(`${root}/`))
+      .map(([path, text]) => [path.slice(root.length + 1), text]),
+  );
+}
+
+function repairFleet(files: ReadonlyMap<string, string>): Map<string, string> {
+  const { units }: { units: string[] } = JSON.parse(files.get("release-manifest.json") ?? "");
+  const repaired = new Map(files);
+  for (const root of units) {
+    for (const [path, text] of repairConfig(unitFiles(files, root))) {
+      repaired.set(`${root}/${path}`, text);
+    }
+  }
+  return repaired;
+}
+
 const seedFiles = (task: LiveEvalTask) => new Map(Object.entries(task.files));
 const withFile = (files: ReadonlyMap<string, string>, path: string, text: string) =>
   new Map(files).set(path, text);
@@ -162,6 +181,60 @@ describe.each(SEEDS)("live eval tasks with seed %i", (seed) => {
       expect(task.check(wrong)).toEqual([]);
       expect(task.grade(wrong).passed).toBe(false);
     }
+  });
+
+  it("grades a release fleet as every unit's own config repair", () => {
+    const task = createLiveEvalTask("config-fleet", seed);
+    const seeded = seedFiles(task);
+    const { units, total_units } = JSON.parse(seeded.get("release-manifest.json") ?? "");
+    expect(total_units).toBe(24);
+    expect(seeded.size).toBe(193);
+    units.forEach((root: string, index: number) => {
+      const unit = createLiveEvalTask("config-repair", seed * 100 + index);
+      expect(Object.fromEntries(unitFiles(seeded, root))).toEqual(unit.files);
+    });
+    expect(task.check(seeded)).toHaveLength(24 * 4);
+    expect(task.grade(seeded)).toMatchObject({ passed: false, score: 0 });
+    const repaired = repairFleet(seeded);
+    expect(task.check(repaired)).toEqual([]);
+    expect(task.grade(repaired)).toEqual({ passed: true, score: 1, findings: [] });
+
+    const unfixed = new Map(repaired);
+    for (const [path, text] of seeded) if (path.startsWith(`${units[6]}/`)) unfixed.set(path, text);
+    const unfixedGrade = task.grade(unfixed);
+    expect(unfixedGrade).toMatchObject({ passed: false, score: 23 / 24 });
+    expect(unfixedGrade.findings.every((finding) => finding.startsWith(`${units[6]}: `))).toBe(
+      true,
+    );
+    const deleted = new Map(repaired);
+    deleted.delete(`${units[2]}/routes.json`);
+    expect(task.grade(deleted).findings).toContain(`${units[2]}: deleted routes.json`);
+
+    const undepended = new Map(repaired);
+    for (const [path, text] of unitFiles(repaired, units[0])) {
+      if (path.startsWith("services/")) {
+        undepended.set(
+          `${units[0]}/${path}`,
+          JSON.stringify({ ...JSON.parse(text), depends_on: [] }),
+        );
+      }
+    }
+    const tamperedManifest = withFile(
+      repaired,
+      "release-manifest.json",
+      JSON.stringify({ total_units: 23, units: units.slice(1) }),
+    );
+    for (const wrong of [
+      undepended,
+      tamperedManifest,
+      withFile(repaired, "notes.md", "done"),
+      withFile(repaired, `${units[5]}/notes.md`, "done"),
+      withFile(repaired, "deployments/unit-25/routes.json", "{}"),
+    ]) {
+      expect(task.grade(wrong).passed).toBe(false);
+    }
+    expect(task.check(undepended)).toEqual([]);
+    expect(task.check(tamperedManifest)).not.toEqual([]);
   });
 });
 
@@ -295,17 +368,24 @@ describe.each(LIVE_EVAL_ARMS)("live eval arm %s", (arm) => {
   });
 });
 
-it("caps each arm at the shared tool budget", async () => {
-  const task = createLiveEvalTask("config-repair", 3);
-  const listing = Array.from({ length: 41 }, () => ({
-    name: "list_files",
-    arguments: { path: "services" },
-  }));
-  const wire = await fixture("openai-completions", [toolStep(listing)]);
-  const result = await runLiveEvalArm(await armInput("sdk-same-tools", wire, task));
-  wire.assertComplete();
+it.each([undefined, 2])(
+  "enforces the default or configured tool budget %s",
+  async (maxToolCalls) => {
+    const task = createLiveEvalTask("config-repair", 3);
+    const expectedLimit = maxToolCalls ?? 40;
+    const listing = Array.from({ length: expectedLimit + 1 }, () => ({
+      name: "list_files",
+      arguments: { path: "services" },
+    }));
+    const wire = await fixture("openai-completions", [toolStep(listing)]);
+    const result = await runLiveEvalArm({
+      ...(await armInput("sdk-same-tools", wire, task)),
+      maxToolCalls,
+    });
+    wire.assertComplete();
 
-  expect(result.status).toBe("tool_budget");
-  expect(result.metrics.toolCalls).toBe(40);
-  expect(result.errors).not.toContain("unsettled");
-});
+    expect(result.status).toBe("tool_budget");
+    expect(result.metrics.toolCalls).toBe(expectedLimit);
+    expect(result.errors).not.toContain("unsettled");
+  },
+);

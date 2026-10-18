@@ -42,6 +42,7 @@ export interface LiveEvalArmInput {
   /** Values the current runtime redacts from its in-process trace. */
   secrets?: readonly string[];
   deadlineMs?: number;
+  maxToolCalls?: number;
 }
 
 export type LiveEvalStatus = "completed" | "failed" | "aborted" | "deadline" | "tool_budget";
@@ -142,7 +143,7 @@ export async function runLiveEvalArm(input: LiveEvalArmInput): Promise<LiveEvalA
   const budget = new AbortController();
   const deadline = AbortSignal.timeout(input.deadlineMs ?? LIVE_EVAL_DEADLINE_MS);
   const signal = AbortSignal.any([input.signal, deadline, budget.signal]);
-  const counter = new LiveEvalToolCounter(() => budget.abort());
+  const counter = new LiveEvalToolCounter(() => budget.abort(), input.maxToolCalls);
   const workspace = new LiveEvalWorkspace({ root: input.cwd, files: input.task.files, signal });
   const runTool = (name: string, args: Record<string, unknown>) =>
     counter.run(async () => {

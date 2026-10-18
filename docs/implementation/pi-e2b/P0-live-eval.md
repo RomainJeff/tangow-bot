@@ -35,4 +35,12 @@ Observed durations span 6.23 to 27.71 seconds. These tasks therefore do not esta
 
 ## Longer workload
 
-A separate follow-up expands the configuration work into a release across multiple deployment units. It retains the same policy and strict preservation grading. It adds real files and repairs, without an artificial duration floor. Its results will remain separate from the frozen short-task pilot.
+The separate `config-fleet` case expands the configuration work into a release across 24 independent deployment units. It contains 193 files and 72 planted faults, producing 96 initial checker findings because each invalid dependency also creates a cycle. Each unit retains the original policy and strict preservation grader. Unit seeds are `seed * 100 + index`, with zero-based indices. The release manifest must retain its meaning and unexpected files fail grading.
+
+This increases reading and editing volume, rather than introducing a new kind of reasoning. The source task, deadlines and budgets are frozen before the run. The long pilot plans six trials per variant with a 512-call cap and a 300-second deadline. These are maximums, not a target duration. Reasoning and response limits remain medium and 4,096 tokens for every variant. The larger tool budget also sets the current runtime's existing per-turn limit for this comparison. No product default changes.
+
+```sh
+pnpm eval:pi-sdk --live --case config-fleet --trials 6 --max-tool-calls 512 --timeout-ms 300000 --max-usd 3 --output test-report/pi-live-eval/long.json
+```
+
+The default invocation still selects only the two short cases with a 40-call budget. Both default and long-case dry runs create a not-run report without model calls. After adding the fleet and configurable budget, 17 evaluator tests and 15 shared file-operation tests pass and workspace typechecking passes all 23 tasks. The cost guard can stop a rotation partway through. All recorded outcomes remain visible, but paired speed comparisons use only complete matching seeds with successful results. Long-pilot results are pending and will remain separate from the short pilot.

@@ -22,6 +22,7 @@ const Controls = z.object({
   timeoutMs: z.coerce.number().int().min(1_000).max(300_000),
   maxUsd: z.coerce.number().positive().max(25),
   maxTokens: z.coerce.number().int().min(256).max(8_192),
+  maxToolCalls: z.coerce.number().int().min(1).max(512),
 });
 
 function configuration(args: string[]) {
@@ -37,7 +38,8 @@ function configuration(args: string[]) {
       "timeout-ms": { type: "string", default: "180000" },
       "max-usd": { type: "string", default: "3" },
       "max-tokens": { type: "string", default: "4096" },
-      case: { type: "string", multiple: true },
+      "max-tool-calls": { type: "string", default: String(LIVE_EVAL_LIMITS.toolCalls) },
+      case: { type: "string", multiple: true, default: ["reconcile", "config-repair"] },
       output: { type: "string", default: "test-report/pi-live-eval/report.json" },
       "artifacts-dir": { type: "string" },
     },
@@ -47,6 +49,7 @@ function configuration(args: string[]) {
     timeoutMs: values["timeout-ms"],
     maxUsd: values["max-usd"],
     maxTokens: values["max-tokens"],
+    maxToolCalls: values["max-tool-calls"],
   });
   return { values, controls };
 }
@@ -180,7 +183,7 @@ async function main() {
     !selected.length ||
     values.case?.some((id) => !selected.some((selectedId) => selectedId === id))
   ) {
-    throw new Error("Unknown case; choose reconcile or config-repair.");
+    throw new Error(`Unknown case; choose ${LIVE_EVAL_TASK_IDS.join(", ")}.`);
   }
   const trials: RecordedTrial[] = [];
   const report = {
@@ -190,7 +193,7 @@ async function main() {
     model: values.model,
     provider: values.provider,
     api: "unresolved",
-    controls: { ...controls, maxToolCalls: LIVE_EVAL_LIMITS.toolCalls, thinkingLevel: "medium" },
+    controls: { ...controls, thinkingLevel: "medium" },
     metadata: {
       instructionsSha256: createHash("sha256").update(LIVE_EVAL_INSTRUCTIONS).digest("hex"),
       sharedToolsSha256: createHash("sha256")
@@ -211,6 +214,11 @@ async function main() {
       cost: "Catalog estimates from reported token usage, not a billing receipt. Stop before another run once the cumulative estimate reaches maxUsd; one bounded run may overshoot. Missing cost stops further runs.",
       limitations: [
         "Descriptive pilot; no statistical significance or general task-quality claim.",
+        ...(selected.includes("config-fleet")
+          ? [
+              "The fleet adds reading/editing volume across independent deployment units, not harder reasoning, coding or production worker integration.",
+            ]
+          : []),
         "Synthetic task data and in-memory file IO; no shell, browser, external service or generated-code execution.",
         "SDK native file-tool ergonomics are exercised, but the production SDK adapter and worker remain unbuilt.",
         "This does not replace approval, steering, compaction, private-text, trace or recovery conformance tests.",
@@ -240,7 +248,7 @@ async function main() {
   report.status = "running";
   await saveReport(output, report, connection.apiKey);
   process.env.LOG_LEVEL = "off";
-  process.env.MAX_TOOL_CALLS_PER_TURN = String(LIVE_EVAL_LIMITS.toolCalls);
+  process.env.MAX_TOOL_CALLS_PER_TURN = String(controls.maxToolCalls);
   const controller = new AbortController();
   const stop = () => controller.abort();
   process.once("SIGINT", stop);
@@ -295,6 +303,7 @@ async function main() {
               secrets: [connection.apiKey],
               signal: controller.signal,
               deadlineMs: controls.timeoutMs,
+              maxToolCalls: controls.maxToolCalls,
             });
             const { artifacts: _artifacts, ...record } = result;
             const cpu = process.cpuUsage(cpuStarted);
