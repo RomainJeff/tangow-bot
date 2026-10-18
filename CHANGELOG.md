@@ -6,11 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-### 2026-10-18
+### 2026-10-19
 
 #### Fixed
 
 - A routine check, or a bot in a group chat, with nothing to say after using a tool now stays silent on web, desktop, and iPhone instead of posting "I completed the tool step but could not produce a final response."
+
+### 2026-10-18
+
+#### Added
+
+- **A bot's avatar on its page looks toward your mouse, on web and desktop.** The organic avatar at the top of the bot page turns its eyes toward the pointer wherever it is on the page and comes back to rest when the pointer leaves the window; it keeps its own glances while the bot works and stays still with reduced motion or on a touch screen.
 
 #### Changed
 
