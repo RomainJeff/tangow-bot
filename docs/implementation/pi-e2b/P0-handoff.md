@@ -142,3 +142,12 @@ The host had 18 logical CPUs and other system work remained active. A/B and B/A 
 P1/I1 may consume the API constraints as proof inputs; they must not treat this as approval to switch the engine. Before P3 adoption, profile equivalent model/provider paths and the real executor, preserve per-run isolation, then repeat at least 30 alternating trials. Resolve the budget or obtain an explicit product decision accepting its measured cost. The estimate above includes investigation, not a promised SDK optimization or authorization to fork.
 
 No E2B VM, volume, deployment or real credential was used. PostgreSQL harnesses and loopback fixtures cleaned up, and final reconciliation found no running task-owned test processes or Docker containers. CI and automated PR review are separate delivery gates; local receipts do not claim they have completed.
+
+
+## Follow-up verification
+
+The original receipt above describes commit `014e9a6` and remains historical. CI on `c8180a9` found three abort-test failures under Node 22. The requests had closed, but the HTTP client retained an idle TCP connection. Commit `359d47f` replaces the socket-count assertion with an in-flight HTTP-response count and awaits stream closure plus session settlement within the same five-second deadline. Removing abort propagation still fails the proof. The corrected local `test:pi` run passes all 30 tests.
+
+Commit `79cccff` adds a real-model comparison command. Its 28 focused offline tests pass, as do the adapters typecheck and targeted formatting checks. The [live comparison protocol](P0-live-eval.md) records its scope. Live outcomes are pending and do not change the historical benchmark verdict.
+
+The required affected selector ran the full web suite again after these changes. This execution reports 210 passed and 12 failed. It includes the previous 11 failures and an additional mention-picker keyboard failure waiting for the inserted mention chip. The additional failure is not yet attributed. No product runtime or UI source changed in this follow-up. The web suite remains red; this result does not claim preservation passed.
