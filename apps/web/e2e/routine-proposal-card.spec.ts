@@ -39,6 +39,6 @@ test("a routine the bot proposes shows what it creates, decides on the right, an
   await testInfo.attach("routine-proposal-card", { contentType: "image/png", path: shot });
   await captureScreenshot(page, testInfo, "routine-proposal-light");
   await page.evaluate(() => document.documentElement.setAttribute("data-theme", "dark"));
-  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(12, 12, 14)");
+  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(22, 22, 24)");
   await captureScreenshot(page, testInfo, "routine-proposal-dark");
 });

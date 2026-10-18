@@ -171,7 +171,7 @@ describe("a mention in the bot's markdown", () => {
     );
     expect(shown(view)).toBe("[icon-1 #6E6E73]\u2060\u2068x.ts\u2069");
     expect(view.props.style).toEqual({
-      color: "#111114",
+      color: "#1D1D1F",
       fontSize: 16,
       lineHeight: 23,
       fontWeight: "700",
@@ -181,7 +181,7 @@ describe("a mention in the bot's markdown", () => {
   it("drops the emphasis inside its own label, as the web does, and names an empty link", () => {
     const strong = astNode("strong", [astNode("text", [], "x")]);
     expect(drawLink([strong], [paragraph, body]).props.style).toEqual({
-      color: "#111114",
+      color: "#1D1D1F",
       fontSize: 16,
       lineHeight: 23,
     });
