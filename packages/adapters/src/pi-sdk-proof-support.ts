@@ -1,6 +1,5 @@
 import type { IncomingMessage } from "node:http";
 import { createServer } from "node:http";
-import type { Socket } from "node:net";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AgentSession, ResourceLoader, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import {
@@ -46,9 +45,11 @@ const NO_USAGE: WireUsage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }
 export async function startWireFixture(options: { protocol: WireProtocol; steps: WireStep[] }) {
   const requests: WireRequest[] = [];
   const failures: Error[] = [];
-  const sockets = new Set<Socket>();
   let stepIndex = 0;
+  let inFlight = 0;
   const server = createServer((request, response) => {
+    inFlight++;
+    response.once("close", () => inFlight--);
     void (async () => {
       const body = await readJson(request);
       if (!isRecord(body) || body.model !== MODEL_ID || body.stream !== true) {
@@ -79,10 +80,6 @@ export async function startWireFixture(options: { protocol: WireProtocol; steps:
       else response.writeHead(400).end();
     });
   });
-  server.on("connection", (socket) => {
-    sockets.add(socket);
-    socket.once("close", () => sockets.delete(socket));
-  });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
   if (typeof address !== "object" || address === null) {
@@ -93,7 +90,7 @@ export async function startWireFixture(options: { protocol: WireProtocol; steps:
     protocol: options.protocol,
     baseUrl: options.protocol === "openai-completions" ? `${origin}/v1` : origin,
     requests,
-    openConnections: () => sockets.size,
+    openResponses: () => inFlight,
     assertComplete() {
       if (failures.length)
         throw new AggregateError(failures, failures.map((e) => e.message).join("\n"));

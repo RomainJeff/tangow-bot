@@ -193,11 +193,3 @@ export async function settledWithin<T>(ms: number, work: Promise<T>) {
     clearTimeout(timer);
   }
 }
-
-export async function untilNoConnections(wire: WireFixture) {
-  const deadline = Date.now() + 2_000;
-  while (wire.openConnections() > 0 && Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
-  return wire.openConnections();
-}

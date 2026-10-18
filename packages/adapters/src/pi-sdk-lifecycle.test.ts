@@ -21,7 +21,6 @@ import {
   text,
   tool,
   track,
-  untilNoConnections,
   usePoisonedWorkspace,
   workspace,
 } from "./pi-sdk-test-support.js";
@@ -90,13 +89,10 @@ describe.each(PROTOCOLS)("Pi SDK session over %s", (protocol) => {
     });
     const run = created.prompt("go", { expandPromptTemplates: false });
     await streaming.promise;
-    await settledWithin(
-      5_000,
-      created.abort().then(() => run),
-    );
-    await closed.promise;
+    expect(wire.openResponses()).toBe(1);
+    await settledWithin(5_000, Promise.all([created.abort().then(() => run), closed.promise]));
 
-    expect(await untilNoConnections(wire)).toBe(0);
+    expect(wire.openResponses()).toBe(0);
     expect(created.isIdle).toBe(true);
     expect(created.agent.signal).toBeUndefined();
     wire.assertComplete();
@@ -250,13 +246,13 @@ describe("Pi SDK session lifecycle", () => {
     });
     const run = created.prompt("go", { expandPromptTemplates: false });
     await Promise.all([toolStarted.promise, helperStreaming.promise]);
+    expect(helperWire.openResponses()).toBe(1);
     await settledWithin(
       5_000,
-      created.abort().then(() => run),
+      Promise.all([created.abort().then(() => run), helperClosed.promise]),
     );
-    await helperClosed.promise;
 
-    expect(await untilNoConnections(helperWire)).toBe(0);
+    expect(helperWire.openResponses()).toBe(0);
     expect(created.isIdle).toBe(true);
     expect(child?.isIdle).toBe(true);
     wire.assertComplete();
