@@ -12,10 +12,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - The model picker on web, desktop, and iPhone now includes the latest Pi catalog, including GPT-6.1 Sol and Claude 5.5 models.
 
-#### Fixed
-
-- Bots can run again on web, desktop, and iPhone after API and worker startup with the pinned Pi runtime.
-
 ### 2026-10-17
 
 #### Added
