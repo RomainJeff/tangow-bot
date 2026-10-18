@@ -253,9 +253,7 @@
       "grade": {
         "passed": false,
         "score": 1,
-        "findings": [
-          "collateral change in services/auth.json"
-        ]
+        "findings": ["collateral change in services/auth.json"]
       },
       "trial": 3,
       "position": 1,

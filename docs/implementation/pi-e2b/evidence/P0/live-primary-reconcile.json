@@ -445,9 +445,7 @@
       "grade": {
         "passed": false,
         "score": 0.8571428571428571,
-        "findings": [
-          "missed 1 of 7 discrepancies"
-        ]
+        "findings": ["missed 1 of 7 discrepancies"]
       },
       "trial": 5,
       "position": 1,
@@ -479,9 +477,7 @@
       "grade": {
         "passed": false,
         "score": 0.8571428571428571,
-        "findings": [
-          "missed 1 of 7 discrepancies"
-        ]
+        "findings": ["missed 1 of 7 discrepancies"]
       },
       "trial": 5,
       "position": 2,
