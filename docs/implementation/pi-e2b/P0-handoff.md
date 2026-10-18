@@ -1,6 +1,6 @@
 # P0 SDK handoff
 
-**Verdict: SDK composition passes; migration is blocked on the proposed performance gate.** The synthetic comparison exceeds 1.20×. Product performance remains inconclusive. This document does not authorize a product runtime switch, deployment, or final feature merge.
+**Verdict: SDK composition passes; production adoption still needs a full executor comparison.** The synthetic comparison exceeds the proposed 1.20× budget. The real-model pilots show no stable full-task latency or quality advantage. This document does not authorize a product runtime switch, deployment, or final feature merge.
 
 ## Integrated references
 
@@ -125,7 +125,7 @@ Source inventory at the frozen base finds 2,221 lines in `pi-runtime.ts`. Its tw
 
 Estimate, not a delivery commitment: allow 3–5 engineering days for the runtime adapter, event translation and approval/steering/abort parity after P2 contracts are stable, plus 1–2 days to profile and resolve the performance gate. Worker transport, infrastructure isolation, file migration, MCP OAuth and recovery are separate successor work. Do not start a fork to absorb an unresolved gate.
 
-## Final results and performance gate
+## Initial offline results and proposed performance gate
 
 The tested code commit is `014e9a631281b9227152ae03a9ba7ac2da2755dd`. The [verification receipt](evidence/P0/verification.json) binds its source and lockfile hashes to commands, individual gates, media and cleanup. The later evidence commit changes documentation and captures only. The [reproduction sheet](evidence/P0/reproduce.txt) contains the CLI commands and observed test summary.
 
@@ -141,7 +141,7 @@ The host had 18 logical CPUs and other system work remained active. A/B and B/A 
 
 P1/I1 may consume the API constraints as proof inputs; they must not treat this as approval to switch the engine. Before P3 adoption, profile equivalent model/provider paths and the real executor, preserve per-run isolation, then repeat at least 30 alternating trials. Resolve the budget or obtain an explicit product decision accepting its measured cost. The estimate above includes investigation, not a promised SDK optimization or authorization to fork.
 
-No E2B VM, volume, deployment or real credential was used. PostgreSQL harnesses and loopback fixtures cleaned up, and final reconciliation found no running task-owned test processes or Docker containers. CI and automated PR review are separate delivery gates; local receipts do not claim they have completed.
+These offline runs used no E2B VM, volume, deployment or real credential. The separate live pilots below use real model requests. PostgreSQL harnesses and loopback fixtures cleaned up, and final reconciliation found no running task-owned test processes or Docker containers. CI and automated PR review are separate delivery gates; local receipts do not claim they have completed.
 
 
 ## Follow-up verification
@@ -151,3 +151,8 @@ The original receipt above describes commit `014e9a6` and remains historical. CI
 Commit `79cccff` adds a real-model comparison command. Its 28 focused offline tests pass, as do the adapters typecheck and targeted formatting checks. The [live comparison protocol](P0-live-eval.md) records its scope. The first real-model pilot passes 33 of 36 short tasks, with 11 of 12 passes per variant and no consistent latency advantage. It does not change the historical synthetic result. Longer-workload evidence remains separate.
 
 The required affected selector ran the full web suite again after these changes. This execution reports 210 passed and 12 failed. It includes the previous 11 failures and an additional mention-picker keyboard failure waiting for the inserted mention chip. The additional failure is not yet attributed. No product runtime or UI source changed in this follow-up. The web suite remains red; this result does not claim preservation passed.
+
+
+The separate long pilot at `4561b93` completes all 18 real GPT-6 Luna runs successfully in 56 to 97 seconds each. Paired SDK-to-current median time ratios are 0.978 and 0.982, with ranges spanning parity. This does not establish the synthetic 2.051x ratio as a full-task slowdown or demonstrate a stable SDK advantage. Quality is saturated on this workload. The [live report](P0-live-eval.md) and [follow-up verification receipt](evidence/P0/verification-followup.json) preserve controls, hashes and limits. No product engine is switched.
+
+The latest required affected-selector execution returns to 211 web tests passing and the same 11 diagnosed failures. The intervening mention-picker failure did not recur; its cause remains unestablished. The web suite is still red. CI on `72c7ca9`, including the corrected abort tests, passes lint, typechecks, unit tests and PostgreSQL journeys. New commits require their own terminal CI and automated review before delivery.

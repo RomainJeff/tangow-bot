@@ -1,6 +1,6 @@
 # P0 real-model comparison
 
-The first pilot finds no consistent latency or quality improvement on its two short tasks. Every variant passes 11 of 12 tasks. The evaluator source was frozen at `79cccff84` before that pilot. The earlier microbenchmark and its failed diagnostic budget remain in [P0-handoff.md](P0-handoff.md).
+The real-model pilots find no consistent latency or quality improvement on these workloads. Every variant passes 11 of 12 short tasks and all six longer tasks. The evaluator source was frozen at `79cccff84` before that pilot. The earlier microbenchmark and its failed diagnostic budget remain in [P0-handoff.md](P0-handoff.md).
 
 The question is whether task completion, latency and token use change when the session engine or file tools change. The pilot uses real OpenAI Responses requests to `gpt-6-luna`, with medium reasoning, a 4,096-token response limit, a 40-tool budget and a 180-second task deadline.
 
@@ -37,10 +37,29 @@ Observed durations span 6.23 to 27.71 seconds. These tasks therefore do not esta
 
 The separate `config-fleet` case expands the configuration work into a release across 24 independent deployment units. It contains 193 files and 72 planted faults, producing 96 initial checker findings because each invalid dependency also creates a cycle. Each unit retains the original policy and strict preservation grader. Unit seeds are `seed * 100 + index`, with zero-based indices. The release manifest must retain its meaning and unexpected files fail grading.
 
-This increases reading and editing volume, rather than introducing a new kind of reasoning. The source task, deadlines and budgets are frozen before the run. The long pilot plans six trials per variant with a 512-call cap and a 300-second deadline. These are maximums, not a target duration. Reasoning and response limits remain medium and 4,096 tokens for every variant. The larger tool budget also sets the current runtime's existing per-turn limit for this comparison. No product default changes.
+This increases reading and editing volume, rather than introducing a new kind of reasoning. The source task, deadlines and budgets were frozen at `4561b93cc24534e7adc795882d6b81cf5aa9d8de` before the run. The long pilot ran six trials per variant with a 512-call cap and a 300-second deadline. These are maximums, not a target duration. Reasoning and response limits remain medium and 4,096 tokens for every variant. The larger tool budget also sets the current runtime's existing per-turn limit for this comparison. No product default changes.
 
 ```sh
 pnpm eval:pi-sdk --live --case config-fleet --trials 6 --max-tool-calls 512 --timeout-ms 300000 --max-usd 3 --output test-report/pi-live-eval/long.json
 ```
 
-The default invocation still selects only the two short cases with a 40-call budget. Both default and long-case dry runs create a not-run report without model calls. After adding the fleet and configurable budget, 17 evaluator tests and 15 shared file-operation tests pass and workspace typechecking passes all 23 tasks. The cost guard can stop a rotation partway through. All recorded outcomes remain visible, but paired speed comparisons use only complete matching seeds with successful results. Long-pilot results are pending and will remain separate from the short pilot.
+The default invocation still selects only the two short cases with a 40-call budget. Both default and long-case dry runs create a not-run report without model calls. After adding the fleet and configurable budget, 17 evaluator tests and 15 shared file-operation tests pass and workspace typechecking passes all 23 tasks. The cost guard can stop a rotation partway through. All recorded outcomes remain visible, but paired speed comparisons use only complete matching seeds with successful results. The long results below remain separate from the short pilot.
+
+
+## Long-workload results
+
+All 18 runs completed and passed. Every saved artifact also matches an independent policy-repair implementation. Each run fixes all 72 faults and preserves every other configuration value. No run errors, deadline hits or cost-stop guards occurred. Two tool calls failed in the native SDK variant, and both runs recovered and passed. The evaluator records those errors as counts, so their tool names and causes are unknown.
+
+The [long summary receipt](evidence/P0/live-long-summary.json) includes full source hashes, task hashes, controls, raw-sample links, token usage, costs and paired comparisons. Each variant has six successful runs:
+
+- The [current runtime](evidence/P0/live-long-current-runtime.json) has a wall median of 70.56 seconds, ranging from 57.58 to 73.98 seconds. Median tool calls are 174 and model turns are 14.
+- The [SDK with the same tools](evidence/P0/live-long-sdk-same-tools.json) has a wall median of 63.24 seconds, ranging from 56.45 to 82.68 seconds. Median tool calls are 152.5 and model turns are 15.
+- The [SDK with native file tools](evidence/P0/live-long-sdk-native-files.json) has a wall median of 66.24 seconds, ranging from 56.37 to 96.65 seconds. Median tool calls are 131 and model turns are 17.
+
+The median of the six same-seed SDK-to-current time ratios is 0.978 for the same-tool variant, ranging from 0.800 to 1.126. It is 0.982 for native file tools, ranging from 0.768 to 1.408. These paired comparisons avoid inferring a speedup from the ratio of two unrelated medians. The variation is larger than the paired median difference. Six pairs do not establish a stable speedup or regression.
+
+The native tools require fewer calls in median, but more model turns, and do not establish a latency or cost advantage here. Estimated total costs across each variant's six runs are $0.03762, $0.03420 and $0.03971, respectively. The full long pilot costs an estimated $0.11153. Most reported context tokens are cache reads, so those totals also reflect actual provider caching. They are catalog estimates, not invoices.
+
+Local process CPU totals 7.3 seconds against 1,237.5 seconds of wall time, about 0.6%. Waiting on the model and network is the likely limiter, inferred from those counters. Remote model compute was not profiled, and unrelated host activity remained uncontrolled. The 56-to-97-second task durations are observed, with no injected waits.
+
+All variants reach a perfect task score, so this workload cannot distinguish their quality. It tests sustained reading and editing volume, with synthetic files in memory. It does not establish harder reasoning, coding ability, worker integration or production readiness. Together, the pilots show that the historical 2.051x microbenchmark ratio is not an observed 2x full-task slowdown. They neither erase that diagnostic result nor prove that migration improves task outcomes.

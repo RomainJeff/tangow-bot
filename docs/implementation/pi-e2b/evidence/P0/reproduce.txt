@@ -26,3 +26,19 @@ They prove preservation of the public recap projection, not a new SDK product en
 
 Read P0-handoff.md before consuming these results. Performance and infrastructure
 limits remain separate from the passing SDK composition gates.
+
+Real-model follow-up
+Short evaluator source: 79cccff8427129d26c5663ee6ea702c6f9a4695a
+Long evaluator source: 4561b93cc24534e7adc795882d6b81cf5aa9d8de
+Use an existing private model connection or process credential; never commit it.
+Without --live these commands record not-run and send no model requests.
+
+pnpm eval:pi-sdk --live --trials 6 --max-usd 3 --output test-report/pi-live-eval/short.json
+pnpm eval:pi-sdk --live --case config-fleet --trials 6 --max-tool-calls 512 --timeout-ms 300000 --max-usd 3 --output test-report/pi-live-eval/long.json
+
+The short pilot completes 36 runs with 33 correct artifacts and exits 1 for graded failures.
+The long pilot completes 18 runs with 18 correct artifacts and exits 0.
+Keep them separate; both use gpt-6-luna, medium reasoning and real Responses requests.
+Long samples span 56 to 97 seconds, with no injected delay. Six paired seeds do not
+establish a stable latency advantage. See P0-live-eval.md and the live JSON receipts.
+The final affected selector still reports 211 passing and 11 failing web tests.
