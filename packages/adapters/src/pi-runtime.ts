@@ -407,6 +407,17 @@ export class PiAgentRuntime implements AgentRuntime {
         signal.addEventListener("abort", onAbort);
 
         let streamed = "";
+        let pendingTail = "";
+        const emitText = (text: string) => {
+          if (!text) return;
+          if (toolActivityShowing) {
+            // Real text replaces the activity line instead of appending to it.
+            toolActivityShowing = false;
+            queue.push({ type: "progress", text: "", activity: true });
+          }
+          streamed += text;
+          queue.push({ type: "text", text });
+        };
         let privateFinalText: string | undefined;
         let runtimeNotice: string | undefined;
         let toolCalls = 0;
@@ -450,16 +461,13 @@ export class PiAgentRuntime implements AgentRuntime {
             event.type === "message_update" &&
             event.assistantMessageEvent.type === "text_delta"
           ) {
-            const delta = stripModelControlTokens(event.assistantMessageEvent.delta ?? "");
-            if (delta) {
-              if (toolActivityShowing) {
-                // Real text replaces the activity line instead of appending to it.
-                toolActivityShowing = false;
-                queue.push({ type: "progress", text: "", activity: true });
-              }
-              streamed += delta;
-              queue.push({ type: "text", text: delta });
-            }
+            const clean = stripModelControlTokens(
+              pendingTail + (event.assistantMessageEvent.delta ?? ""),
+            );
+            // A control token can be split across deltas: hold back what may still become one.
+            const held = PARTIAL_CONTROL_TOKEN_TAIL.exec(clean)?.[0] ?? "";
+            pendingTail = held;
+            emitText(clean.slice(0, clean.length - held.length));
           }
           if (event.type === "turn_end") {
             const messageText =
@@ -534,6 +542,8 @@ export class PiAgentRuntime implements AgentRuntime {
             }
           }
           if (event.type === "message_end" && event.message.role === "assistant") {
+            emitText(stripModelControlTokens(pendingTail));
+            pendingTail = "";
             const text = assistantText(event.message);
             if (text && !streamed) {
               streamed = text;
@@ -1943,6 +1953,8 @@ function boundAgentToolResult<T>(result: AgentToolResult<T>): AgentToolResult<T>
     content: clipToolResultContent(result.content),
   };
 }
+
+const PARTIAL_CONTROL_TOKEN_TAIL = /<(?:\|(?:[^\s|>]{0,64}\|?)?)?$/;
 
 /**
  * Remove model control / special tokens that leak into assistant text. Some models and

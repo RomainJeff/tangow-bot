@@ -12,6 +12,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - The model picker on web, desktop, and iPhone now includes the latest Pi catalog, including GPT-6.1 Sol and Claude 5.5 models.
 
+#### Fixed
+
+- Bot replies no longer show stray model markers such as `<|eos|>` when a model writes one in pieces.
+
 ### 2026-10-17
 
 #### Added
