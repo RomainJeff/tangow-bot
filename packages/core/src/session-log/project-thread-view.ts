@@ -7,7 +7,12 @@ import type {
   ThreadEntryOf,
   ThreadItem,
 } from "@rakazo/contracts";
-import { CARD_STATE_TYPES, isLinkPreviewCard, ThreadEntrySchema } from "@rakazo/contracts";
+import {
+  CARD_STATE_TYPES,
+  isLinkPreviewCard,
+  RUN_WORK_TYPES,
+  ThreadEntrySchema,
+} from "@rakazo/contracts";
 import { isRunTerminalEvent, progressMessageId, reduceLiveMessageBlocks } from "../events.js";
 import { computeItemGroups } from "../message-grouping.js";
 import type { ItemReactions } from "../message-reactions.js";
@@ -289,6 +294,8 @@ export function textOfBotWords(entry: BotWords): string {
   }
 }
 
+const RUN_WORK: ReadonlySet<string> = new Set(RUN_WORK_TYPES);
+
 export function reduceProgressLayer(layer: ProgressLayer, event: ProductEvent): ProgressLayer {
   if (event.type === "thread.progress") {
     if (!event.runId) return layer;
@@ -297,7 +304,9 @@ export function reduceProgressLayer(layer: ProgressLayer, event: ProductEvent): 
   }
   const ended =
     event.type === "session.entry.appended"
-      ? appendedEntries(event).flatMap((entry) => (entry.runId ? [entry.runId] : []))
+      ? appendedEntries(event).flatMap((entry) =>
+          entry.runId && !RUN_WORK.has(entry.type) ? [entry.runId] : [],
+        )
       : isRunTerminalEvent(event) && event.runId
         ? [event.runId]
         : [];
