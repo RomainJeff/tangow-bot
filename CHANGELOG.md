@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Fixed
 
-- Bot replies no longer show stray model markers such as `<|eos|>` when a model writes one in pieces.
+- Bot replies, helper progress cards and the results helpers hand back to their bot no longer show stray model markers such as `<|eos|>`, even when a model writes one in pieces.
 
 ### 2026-10-18
 
