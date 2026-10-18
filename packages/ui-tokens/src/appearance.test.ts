@@ -5,17 +5,16 @@ import {
   botAccentOn,
   type ColorTokens,
   contrastRatio,
-  cssVariableName,
   darkTokens,
   lightTokens,
   normalizeAppearancePreference,
   persistAppearancePreference,
-  renderTokensCss,
   resolveAppearance,
   resolveAppearancePreference,
   tokensForAppearance,
   UI_APPEARANCE_STORAGE_KEY,
 } from "./index.js";
+import { cssVariableName, renderTokensCss } from "./render-css.js";
 
 describe("appearance preference", () => {
   it("defaults unknown values to system", () => {
@@ -64,8 +63,8 @@ describe("appearance preference", () => {
   it("separates user bubbles from bot bubbles and the sidebar from the app", () => {
     const dark = tokensForAppearance("dark");
     const light = tokensForAppearance("light");
-    expect(dark.chatUser).not.toBe(dark.muted);
-    expect(light.chatUser).not.toBe(light.muted);
+    expect(dark.chatUser).not.toBe(dark.chatBot);
+    expect(light.chatUser).not.toBe(light.chatBot);
     expect(dark.sidebar).not.toBe(dark.background);
     expect(light.sidebar).not.toBe(light.background);
   });
@@ -112,8 +111,8 @@ describe("tokens.css", () => {
   it("emits typography, space, corner, elevation, motion and size tokens", () => {
     const css = renderTokensCss();
     expect(css).toContain("--elevation-card");
-    expect(css).toContain("--type-body-size: 16.5px");
-    expect(css).toContain("--corner-block: 18px");
+    expect(css).toContain("--type-body-size: 16px");
+    expect(css).toContain("--corner-block: 24px");
     expect(css).toContain("--space-sidebar: 280px");
     expect(css).toContain("--duration-arrive: 240ms");
     expect(css).toContain("--motion-ease");
@@ -139,9 +138,14 @@ describe("composer placeholder contrast", () => {
 });
 
 describe("botAccentOn", () => {
-  it("keeps a bot colour that reads on the page", () => {
+  it("keeps a bot colour that reads in the composer", () => {
     expect(botAccentOn("#E0714F", "light")).toBe("#E0714F");
     expect(botAccentOn("#E0714F", "dark")).toBe("#E0714F");
+  });
+
+  it("keeps every palette colour on the dark composer, violet and red included", () => {
+    expect(botAccentOn("#8B5CF6", "dark")).toBe("#8B5CF6");
+    expect(botAccentOn("#E0524A", "dark")).toBe("#E0524A");
   });
 
   it("drops the near-black bot colour on dark and white on light", () => {

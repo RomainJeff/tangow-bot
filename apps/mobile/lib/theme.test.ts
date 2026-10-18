@@ -4,9 +4,9 @@ import { botColors, shadowsForAppearance, tokens } from "./theme.js";
 
 describe("mobile theme tokens", () => {
   it("exposes the shared product palette used by custom surfaces", () => {
-    expect(tokens.background).toBe("#0C0C0E");
-    expect(tokens.foreground).toBe("#F2F2F0");
-    expect(tokens.primary).toBe("#F2F2F0");
+    expect(tokens.background).toBe("#161618");
+    expect(tokens.foreground).toBe("#F5F5F7");
+    expect(tokens.primary).toBe("#F5F5F7");
   });
 
   it("re-exports botColors for identity accents", () => {
@@ -20,6 +20,7 @@ describe("mobile elevation", () => {
     expect(shadowsForAppearance("light")).toBe(lightShadows);
     expect(shadowsForAppearance("dark")).toBe(darkShadows);
     expect(Object.keys(lightShadows).sort()).toEqual([
+      "bubble",
       "card",
       "composerFocus",
       "composerRest",

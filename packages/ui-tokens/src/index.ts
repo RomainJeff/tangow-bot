@@ -23,11 +23,13 @@ export type ColorTokens = {
   primaryForeground: string;
   secondary: string;
   secondaryForeground: string;
+  /** A bot's words: the paper every bot bubble, and what the bot produces, sits on. */
+  chatBot: string;
   chatUser: string;
   chatUserForeground: string;
   mentionChip: string;
   mentionChipForeground: string;
-  /** The tile behind a link mention's fallback glyph in a bot bubble: a shade lighter than `muted`. */
+  /** The tile behind a link mention's fallback glyph in a bot bubble: a step off `chatBot`. */
   linkMentionTile: string;
   muted: string;
   mutedForeground: string;
@@ -57,92 +59,95 @@ export type ColorTokens = {
   pressed: string;
 };
 
-// Alpha overlays from the design are flattened on `background` so every slot
-// stays opaque (opacity modifiers and color-mix must keep working).
+// Alpha overlays from the design are flattened so every slot stays opaque
+// (opacity modifiers and color-mix must keep working). The dark planes rise
+// in steps: background, chatBot, surface, secondary.
 export const darkTokens = {
-  background: "#0C0C0E",
-  foreground: "#F2F2F0",
-  foregroundSubtle: "#6E6E73",
-  card: "#161618",
-  cardForeground: "#F2F2F0",
-  popover: "#161618",
-  popoverForeground: "#F2F2F0",
-  primary: "#F2F2F0",
-  primaryForeground: "#0C0C0E",
-  secondary: "#1F1F21",
-  secondaryForeground: "#F2F2F0",
-  chatUser: "#3E3E44",
-  chatUserForeground: "#F2F2F0",
-  mentionChip: "#222226",
-  mentionChipForeground: "#F2F2F0",
-  linkMentionTile: "#2E2E30",
-  muted: "#1F1F21",
-  mutedForeground: "#9A9AA1",
-  accent: "#1B1B1C",
-  accentForeground: "#F2F2F0",
+  background: "#161618",
+  foreground: "#F5F5F7",
+  foregroundSubtle: "#7C7C81",
+  card: "#2C2C2E",
+  cardForeground: "#F5F5F7",
+  popover: "#2C2C2E",
+  popoverForeground: "#F5F5F7",
+  primary: "#F5F5F7",
+  primaryForeground: "#1D1D1F",
+  secondary: "#56565A",
+  secondaryForeground: "#F5F5F7",
+  chatBot: "#2C2C2F",
+  chatUser: "#636366",
+  chatUserForeground: "#F5F5F7",
+  mentionChip: "#3A3A3D",
+  mentionChipForeground: "#F5F5F7",
+  linkMentionTile: "#444447",
+  muted: "#2A2A2D",
+  mutedForeground: "#AEAEB2",
+  accent: "#252527",
+  accentForeground: "#F5F5F7",
   destructive: "#EF4444",
   destructiveForeground: "#FFFFFF",
-  border: "#1F1F21",
-  outline: "#333335",
-  input: "#29292B",
-  ring: "#9A9AA1",
-  sidebar: "#131315",
-  sidebarForeground: "#F2F2F0",
-  sidebarBorder: "#1F1F21",
-  sidebarAccent: "#1D1D1F",
-  sidebarAccentForeground: "#F2F2F0",
-  surface: "#161618",
+  border: "#2D2D30",
+  outline: "#3F3F42",
+  input: "#363639",
+  ring: "#AEAEB2",
+  sidebar: "#2C2C2E",
+  sidebarForeground: "#F5F5F7",
+  sidebarBorder: "#2D2D30",
+  sidebarAccent: "#414143",
+  sidebarAccentForeground: "#F5F5F7",
+  surface: "#3C3C3F",
   success: "#4ECB71",
   warning: "#E9C46A",
   overlay: "rgba(4, 4, 5, 0.72)",
-  scrollbar: "#1E2026",
-  scrollbarHover: "#2E313A",
-  optionRing: "#3B3B3D",
-  optionRingHover: "#4E4E4F",
-  pressed: "#333335",
+  scrollbar: "#3A3A3D",
+  scrollbarHover: "#4A4A4D",
+  optionRing: "#636366",
+  optionRingHover: "#77777B",
+  pressed: "#4A4A4D",
 } as const satisfies ColorTokens;
 
 export const lightTokens = {
-  background: "#FBFBF9",
-  foreground: "#111114",
+  background: "#F2F2F4",
+  foreground: "#1D1D1F",
   foregroundSubtle: "#86868B",
   card: "#FFFFFF",
-  cardForeground: "#111114",
+  cardForeground: "#1D1D1F",
   popover: "#FFFFFF",
-  popoverForeground: "#111114",
-  primary: "#111114",
-  primaryForeground: "#FBFBF9",
-  secondary: "#EDEDEB",
-  secondaryForeground: "#111114",
-  chatUser: "#111114",
-  chatUserForeground: "#FBFBF9",
-  mentionChip: "#F1F1EE",
-  mentionChipForeground: "#111114",
-  linkMentionTile: "#F3F3F1",
-  muted: "#EDEDEB",
+  popoverForeground: "#1D1D1F",
+  primary: "#1D1D1F",
+  primaryForeground: "#FFFFFF",
+  secondary: "#E8E8EA",
+  secondaryForeground: "#1D1D1F",
+  chatBot: "#FFFFFF",
+  chatUser: "#1D1D1F",
+  chatUserForeground: "#FFFFFF",
+  mentionChip: "#EDEDF0",
+  mentionChipForeground: "#1D1D1F",
+  linkMentionTile: "#F2F2F4",
+  muted: "#E8E8EA",
   mutedForeground: "#6E6E73",
-  accent: "#EFEFEE",
-  accentForeground: "#111114",
+  accent: "#EBEBED",
+  accentForeground: "#1D1D1F",
   destructive: "#DC2626",
   destructiveForeground: "#FFFFFF",
-  border: "#E8E8E7",
-  outline: "#DADAD9",
-  input: "#DFDFDE",
+  border: "#E3E3E6",
+  outline: "#D2D2D6",
+  input: "#D8D8DC",
   ring: "#6E6E73",
-  sidebar: "#F4F4F3",
-  sidebarForeground: "#111114",
-  sidebarBorder: "#E8E8E7",
-  sidebarAccent: "#FFFFFF",
-  sidebarAccentForeground: "#111114",
+  sidebar: "#F5F5F7",
+  sidebarForeground: "#1D1D1F",
+  sidebarBorder: "#E3E3E6",
+  sidebarAccent: "#E6E6E9",
+  sidebarAccentForeground: "#1D1D1F",
   surface: "#FFFFFF",
   success: "#228B3B",
   warning: "#B7791F",
   overlay: "rgba(20, 20, 22, 0.45)",
-  scrollbar: "#C8C8C4",
-  scrollbarHover: "#A8A8A4",
-  optionRing: "#EAEAEA",
-  optionRingHover: "#D9D9D9",
-  pressed: "#EDEDEB",
+  scrollbar: "#C7C7CC",
+  scrollbarHover: "#AEAEB2",
+  optionRing: "#DADADD",
+  optionRingHover: "#C7C7CC",
+  pressed: "#E8E8EA",
 } as const satisfies ColorTokens;
 
 /** Dark palette. Prefer `tokensForAppearance` when theme-aware. */
@@ -173,23 +178,25 @@ export type TypographyToken = {
   weight: number;
 };
 
+// Whole-pixel sizes on whole-pixel lines: `leading` is the line height over
+// the size, so `size * leading` is always an integer.
 export const typography = {
-  body: { size: 16.5, leading: 1.58, tracking: "-0.008em", weight: 400 },
-  author: { size: 13, leading: 1.3, tracking: "-0.004em", weight: 500 },
-  time: { size: 12, leading: 1.3, tracking: "0", weight: 400 },
-  meta: { size: 13, leading: 1.4, tracking: "0", weight: 400 },
-  label: { size: 12.5, leading: 1.3, tracking: "0", weight: 400 },
-  rowName: { size: 14.5, leading: 1.3, tracking: "-0.005em", weight: 400 },
-  rowStatus: { size: 12.5, leading: 1.3, tracking: "0", weight: 400 },
-  title: { size: 19, leading: 1.2, tracking: "-0.014em", weight: 500 },
-  capsule: { size: 14, leading: 1, tracking: "0", weight: 400 },
-  working: { size: 15, leading: 1.3, tracking: "-0.006em", weight: 400 },
-  reasoning: { size: 13.5, leading: 1.45, tracking: "0", weight: 400 },
-  blockHeader: { size: 12.5, leading: 1.3, tracking: "0.01em", weight: 500 },
-  question: { size: 16, leading: 1.45, tracking: "-0.008em", weight: 400 },
-  mono: { size: 12.5, leading: 1.3, tracking: "0", weight: 400 },
+  body: { size: 16, leading: 24 / 16, tracking: "-0.01em", weight: 400 },
+  author: { size: 13, leading: 18 / 13, tracking: "0", weight: 500 },
+  time: { size: 12, leading: 16 / 12, tracking: "0", weight: 400 },
+  meta: { size: 13, leading: 18 / 13, tracking: "0", weight: 400 },
+  label: { size: 12, leading: 16 / 12, tracking: "0", weight: 600 },
+  rowName: { size: 14, leading: 20 / 14, tracking: "-0.006em", weight: 400 },
+  rowStatus: { size: 13, leading: 18 / 13, tracking: "0", weight: 400 },
+  title: { size: 15, leading: 20 / 15, tracking: "-0.01em", weight: 600 },
+  capsule: { size: 14, leading: 1, tracking: "0", weight: 500 },
+  working: { size: 15, leading: 20 / 15, tracking: "-0.01em", weight: 400 },
+  reasoning: { size: 13, leading: 18 / 13, tracking: "0", weight: 400 },
+  blockHeader: { size: 12, leading: 16 / 12, tracking: "0", weight: 600 },
+  question: { size: 17, leading: 22 / 17, tracking: "-0.02em", weight: 600 },
+  mono: { size: 13, leading: 18 / 13, tracking: "0", weight: 400 },
   /** The mobile composer field: the native iOS body, 17/22. */
-  composer: { size: 17, leading: 1.294, tracking: "-0.01em", weight: 400 },
+  composer: { size: 17, leading: 22 / 17, tracking: "-0.01em", weight: 400 },
 } as const satisfies Record<string, TypographyToken>;
 
 export type TypographyKey = keyof typeof typography;
@@ -215,11 +222,11 @@ export type SpaceTokens = typeof space;
 /** Radii — in px. `pill` is expressed as `rounded-full` on the surfaces, not a radius var. */
 export const radii = {
   chip: 6,
-  row: 11,
+  row: 8,
   card: 14,
   draft: 16,
-  block: 18,
-  bubble: 18,
+  block: 24,
+  bubble: 20,
   /** A link mention's 16 px site icon or fallback tile. */
   linkMention: 4,
   composer: 24,
@@ -231,10 +238,12 @@ export type RadiiTokens = typeof radii;
 
 /** Elevation — the only shadows in the product, one per screen at most. */
 export const lightShadows = {
-  row: "0 1px 2px rgba(17, 17, 20, 0.06)",
-  card: "0 0 0 1px rgba(17, 17, 20, 0.08), 0 12px 30px -16px rgba(17, 17, 20, 0.4)",
-  /** A decision once answered: the card's hairline without its drop, so it gives the thread back its one elevation. */
-  settled: "0 0 0 1px rgba(17, 17, 20, 0.08)",
+  row: "none",
+  /** A bot bubble, and everything else on the bot's paper: a whisper of an edge, no lift. */
+  bubble: "0 0 0 1px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.05)",
+  card: "0 0 0 1px rgba(0, 0, 0, 0.06), 0 2px 6px rgba(0, 0, 0, 0.05), 0 14px 32px -12px rgba(0, 0, 0, 0.18)",
+  /** A decision once answered: back on the bot's paper, so it gives the thread back its one elevation. */
+  settled: "0 0 0 1px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.05)",
   /** The composer at rest: a hairline, no drop shadow. */
   composerRest: "0 0 0 1px rgba(17, 17, 20, 0.09)",
   /** The composer while its field has focus: the hairline and the one drop shadow. */
@@ -247,8 +256,9 @@ export type ShadowTokens = Record<ShadowKey, string>;
 
 export const darkShadows = {
   row: "none",
-  card: "0 0 0 1px rgba(255, 255, 255, 0.08), 0 12px 30px -16px rgba(0, 0, 0, 0.8)",
-  settled: "0 0 0 1px rgba(255, 255, 255, 0.08)",
+  bubble: "inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 0 0 1px rgba(255, 255, 255, 0.05)",
+  card: "0 0 0 1px rgba(255, 255, 255, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 16px 40px -12px rgba(0, 0, 0, 0.7)",
+  settled: "inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 0 0 1px rgba(255, 255, 255, 0.05)",
   composerRest: "0 0 0 1px rgba(255, 255, 255, 0.08)",
   // A drop shadow barely reads on a near-black page, so focus also brightens the hairline.
   composerFocus: "0 0 0 1px rgba(255, 255, 255, 0.16), 0 12px 28px -18px rgba(0, 0, 0, 0.8)",
@@ -452,8 +462,9 @@ export function contrastRatio(a: string, b: string): number {
 }
 
 /**
- * A bot's colour for a thin mark drawn on the page (the Stop contour), or
- * `undefined` when it would not read against that appearance's background —
+ * A bot's colour for a thin mark drawn in the composer (the Stop contour), or
+ * `undefined` when it would not read against that appearance's `card`, the
+ * composer's opaque plane (its glass falls back to it) —
  * the near-black bot colour on dark, white on light. 3:1 is WCAG's floor for
  * non-text graphics.
  */
@@ -462,7 +473,7 @@ export function botAccentOn(
   appearance: ResolvedAppearance,
 ): string | undefined {
   if (!color || !/^#[0-9a-f]{6}$/i.test(color)) return undefined;
-  return contrastRatio(color, tokensForAppearance(appearance).background) >= 3 ? color : undefined;
+  return contrastRatio(color, tokensForAppearance(appearance).card) >= 3 ? color : undefined;
 }
 
 function readStoredAppearance(storage: Pick<Storage, "getItem"> | null | undefined): string | null {
@@ -472,103 +483,4 @@ function readStoredAppearance(storage: Pick<Storage, "getItem"> | null | undefin
   } catch {
     return null;
   }
-}
-
-/** `cardForeground` -> `card-foreground` (no leading `--`). */
-function kebabCase(key: string): string {
-  return key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
-}
-
-/** `cardForeground` -> `--card-foreground` */
-export function cssVariableName(token: keyof ColorTokens): string {
-  return `--${kebabCase(token)}`;
-}
-
-/** `biome`'s CSS formatter (100-col `lineWidth`) wraps a declaration that
- * doesn't fit on one line onto two, indenting the value by 4 spaces: this
- * keeps a fresh `generate` byte-identical to what `biome check --write`
- * would produce, so `tokens.css` never has to be reformatted by hand. */
-function renderDeclaration(name: string, value: string): string {
-  const oneLine = `  ${name}: ${value};`;
-  return oneLine.length <= 100 ? oneLine : `  ${name}:\n    ${value};`;
-}
-
-function renderShadowLines(appearance: ResolvedAppearance): string[] {
-  const palette = shadowsForAppearance(appearance);
-  return (Object.keys(palette) as ShadowKey[]).map((key) =>
-    renderDeclaration(`--elevation-${kebabCase(key)}`, palette[key]),
-  );
-}
-
-function renderTypographyLines(): string[] {
-  return (Object.keys(typography) as TypographyKey[]).flatMap((key) => {
-    const token = typography[key];
-    const name = `type-${kebabCase(key)}`;
-    return [
-      `  --${name}-size: ${token.size}px;`,
-      `  --${name}-leading: ${token.leading};`,
-      `  --${name}-tracking: ${token.tracking};`,
-      `  --${name}-weight: ${token.weight};`,
-    ];
-  });
-}
-
-function renderSpaceLines(): string[] {
-  return (Object.keys(space) as SpaceKey[]).map(
-    (key) => `  --space-${kebabCase(key)}: ${space[key]}px;`,
-  );
-}
-
-function renderRadiiLines(): string[] {
-  return (Object.keys(radii) as RadiusKey[]).map(
-    (key) => `  --corner-${kebabCase(key)}: ${radii[key]}px;`,
-  );
-}
-
-function renderSizeLines(): string[] {
-  return (Object.keys(sizes) as SizeKey[]).map(
-    (key) => `  --size-${kebabCase(key)}: ${sizes[key]}px;`,
-  );
-}
-
-function renderMotionLines(): string[] {
-  const lines = Object.entries(motion).flatMap(([key, value]) =>
-    typeof value === "number" ? [`  --duration-${kebabCase(key)}: ${value}ms;`] : [],
-  );
-  lines.push(`  --motion-ease: ${motion.ease};`);
-  return lines;
-}
-
-function renderBlock(
-  selector: string,
-  colorScheme: ResolvedAppearance,
-  palette: ColorTokens,
-): string {
-  const lines = (Object.keys(palette) as (keyof ColorTokens)[]).map(
-    (token) => `  ${cssVariableName(token)}: ${palette[token].toLowerCase()};`,
-  );
-  lines.push(`  --radius: ${RADIUS};`);
-  lines.push(...renderShadowLines(colorScheme));
-  return `${selector} {\n  color-scheme: ${colorScheme};\n${lines.join("\n")}\n}`;
-}
-
-function renderThemeIndependentBlock(): string {
-  const lines = [
-    ...renderTypographyLines(),
-    ...renderSpaceLines(),
-    ...renderRadiiLines(),
-    ...renderSizeLines(),
-    ...renderMotionLines(),
-  ];
-  return `:root {\n${lines.join("\n")}\n}`;
-}
-
-/** The CSS in `tokens.css`. Generated from the TS palette so both stay in sync. */
-export function renderTokensCss(): string {
-  return `${[
-    "/* Generated by `pnpm --filter @rakazo/ui-tokens generate`. Edit src/index.ts instead. */",
-    renderBlock(':root,\n[data-theme="dark"]', "dark", darkTokens),
-    renderBlock('[data-theme="light"]', "light", lightTokens),
-    renderThemeIndependentBlock(),
-  ].join("\n\n")}\n`;
 }

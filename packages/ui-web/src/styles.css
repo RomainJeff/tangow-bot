@@ -18,6 +18,7 @@
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
+  --color-chat-bot: var(--chat-bot);
   --color-chat-user: var(--chat-user);
   --color-chat-user-foreground: var(--chat-user-foreground);
   --color-mention-chip: var(--mention-chip);
@@ -61,6 +62,7 @@
   --radius-composer: var(--corner-composer);
 
   --shadow-row: var(--elevation-row);
+  --shadow-bubble: var(--elevation-bubble);
   --shadow-card: var(--elevation-card);
   --shadow-settled: var(--elevation-settled);
   --shadow-composer-rest: var(--elevation-composer-rest);
@@ -164,8 +166,9 @@
 /* Not `inline`: the families have to reach `:root` as real variables, because
    stylesheets outside Tailwind's reach (the chat markdown) spend them. */
 @theme {
-  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 @layer base {

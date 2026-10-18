@@ -88,6 +88,6 @@ test("a skill line sits under the bot's message, opens the skill, and cannot be 
 
   await captureScreenshot(page, testInfo, "skill-line-light");
   await page.evaluate(() => document.documentElement.setAttribute("data-theme", "dark"));
-  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(12, 12, 14)");
+  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(22, 22, 24)");
   await captureScreenshot(page, testInfo, "skill-line-dark");
 });
