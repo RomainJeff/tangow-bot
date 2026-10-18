@@ -23,9 +23,10 @@ function windowChrome(platform: NodeJS.Platform) {
     autoHideMenuBar: true,
     frame: mac,
     titleBarStyle: mac ? ("hiddenInset" as const) : undefined,
-    // Centred in the 56px header (h-header) so the lights line up with the
-    // sidebar controls beside them, instead of riding high near the top.
-    trafficLightPosition: mac ? { x: 16, y: 21 } : undefined,
+    // Inside the floating sidebar's header (8 from the window's edges): the
+    // 14 px lights are centred on y 31, the line of the header title and the
+    // sidebar controls beside them.
+    trafficLightPosition: mac ? { x: 26, y: 24 } : undefined,
   };
 }
 
