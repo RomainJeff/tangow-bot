@@ -113,6 +113,28 @@ test("bot creation, editing, and deletion persist", async ({ page }, testInfo) =
   await expect(picker).toBeHidden();
   await captureScreenshot(page, testInfo, "27a-new-bot");
 
+  // The avatar at the top of the page looks toward the mouse wherever it is.
+  const heroAvatar = botPage
+    .getByTestId("bot-appearance-trigger")
+    .locator(".rakazo-organic-avatar");
+  const heroBox = await heroAvatar.boundingBox();
+  if (!heroBox) throw new Error("the bot page avatar has no box");
+  const gaze = () =>
+    heroAvatar.evaluate((svg) => {
+      const box = svg.getBoundingClientRect();
+      const eyes = [...svg.querySelectorAll("g[clip-path] > path")].map((eye) => {
+        const rect = eye.getBoundingClientRect();
+        return rect.left + rect.width / 2;
+      });
+      return eyes.reduce((sum, x) => sum + x, 0) / eyes.length - (box.left + box.width / 2);
+    });
+  const heroMiddle = heroBox.y + heroBox.height / 2;
+  await page.mouse.move(heroBox.x - 300, heroMiddle);
+  await expect.poll(gaze).toBeLessThan(-2);
+  await page.mouse.move(heroBox.x + heroBox.width + 300, heroMiddle);
+  await expect.poll(gaze).toBeGreaterThan(2);
+  await captureScreenshot(page, testInfo, "27a-bot-avatar-follows-pointer");
+
   // Writing instructions opens the wide editor; once saved, the link to write them goes.
   await created.getByRole("button", { name: "Write its first instructions" }).click();
   await expect(sidePanel).toHaveAttribute("data-detail", "instructions");

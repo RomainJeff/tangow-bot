@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### 2026-10-18
 
+#### Added
+
+- **A bot's avatar on its page looks toward your mouse, on web and desktop.** The organic avatar at the top of the bot page turns its eyes toward the pointer wherever it is on the page and comes back to rest when the pointer leaves the window; it keeps its own glances while the bot works and stays still with reduced motion or on a touch screen.
+
 #### Changed
 
 - The model picker on web, desktop, and iPhone now includes the latest Pi catalog, including GPT-6.1 Sol and Claude 5.5 models.
