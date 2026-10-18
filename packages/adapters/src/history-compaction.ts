@@ -24,8 +24,9 @@ import type {
 const DEFAULT_COMPACTION_SETTINGS = { reserveTokens: 16_384, keepRecentTokens: 20_000 };
 
 export const MAX_COMPACTED_SUMMARY_CHARS = 20_000;
-/** How many turns a run keeps when its model's context window is unknown. */
+/** Maximum message count when the model context window is unknown. */
 export const HISTORY_COUNT_WINDOW = 200;
+export const HISTORY_TOKEN_CEILING = 60_000;
 /** How many semantic memories can be injected into one run. */
 export const MAX_RECALLED_MEMORIES = 5;
 
@@ -38,18 +39,20 @@ export const MAX_RECALLED_MEMORIES = 5;
 export const NON_HISTORY_TOKEN_ESTIMATE = 12_000;
 
 /**
- * The tokens a run's history may fill: the model's context window less the reply reserve and the
- * rest of the request, never under pi's recent-token floor. Undefined when the window is unknown.
+ * Estimated history capacity after fixed context and the reply reserve, capped at 60,000 tokens.
+ * Unknown windows return undefined. This does not bound the whole prompt or provider tokenization.
  */
 export function historyBudgetTokens(
   contextWindow: number | undefined,
   nonHistoryTokens = NON_HISTORY_TOKEN_ESTIMATE,
+  policy: "bounded" | "channel" = "bounded",
 ): number | undefined {
-  if (!contextWindow || contextWindow <= 0) return undefined;
-  return Math.max(
-    DEFAULT_COMPACTION_SETTINGS.keepRecentTokens,
-    contextWindow - DEFAULT_COMPACTION_SETTINGS.reserveTokens - nonHistoryTokens,
-  );
+  if (contextWindow === undefined || !Number.isFinite(contextWindow) || contextWindow <= 0) {
+    return undefined;
+  }
+  const usable = contextWindow - DEFAULT_COMPACTION_SETTINGS.reserveTokens - nonHistoryTokens;
+  if (policy === "channel") return Math.max(DEFAULT_COMPACTION_SETTINGS.keepRecentTokens, usable);
+  return Math.max(0, Math.min(HISTORY_TOKEN_CEILING, usable));
 }
 
 /**
@@ -118,10 +121,10 @@ export interface HistoryWindow<T> {
 }
 
 /**
- * Message count is a poor proxy for context: fifty one-line replies and fifty pasted stack traces
- * cost wildly different amounts, so a fixed count either wastes a large window or overflows a
- * small one. Size by tokens whenever the model's context window is known, and start the window on
- * a user message — one that opens on a bot reply shows an answer with the request cut away.
+ * Select a suffix within the estimated history budget, preferring a user boundary when one fits.
+ * Unknown models also apply the count limit, but cannot guarantee model context capacity.
+ * The caller must separate active-run context using run identity. Without that identity, a newest
+ * exchange containing tool replay is conservatively indivisible, so truncation fails explicitly.
  */
 export function selectHistoryWindow<T extends SizedHistoryMessage & { role: string }>(options: {
   history: T[];
@@ -129,28 +132,58 @@ export function selectHistoryWindow<T extends SizedHistoryMessage & { role: stri
   messageWindowSize: number;
   /** What the run's non-history context actually costs; `NON_HISTORY_TOKEN_ESTIMATE` when unknown. */
   nonHistoryTokens?: number;
+  policy?: "bounded" | "channel";
+  historicalContextTokens?: number;
+  /** False when the caller separates active context by run identity. */
+  protectToolExchange?: boolean;
 }): HistoryWindow<T> {
   const { history } = options;
-  const budget = historyBudgetTokens(options.contextWindow, options.nonHistoryTokens);
-  if (budget === undefined) {
+  const channel = options.policy === "channel";
+  const capacity = historyBudgetTokens(
+    options.contextWindow,
+    options.nonHistoryTokens,
+    options.policy,
+  );
+  if (channel && capacity === undefined) {
     return { messages: history.slice(-options.messageWindowSize), mode: "count" };
   }
+  const budget = channel
+    ? (capacity ?? HISTORY_TOKEN_CEILING)
+    : Math.min(
+        capacity ?? HISTORY_TOKEN_CEILING,
+        Math.max(0, HISTORY_TOKEN_CEILING - (options.historicalContextTokens ?? 0)),
+      );
+  const mode = capacity === undefined ? "count" : "tokens";
+  const countStart =
+    capacity === undefined
+      ? Math.max(0, history.length - Math.max(0, options.messageWindowSize))
+      : 0;
   let used = 0;
   let start = history.length;
-  for (let index = history.length - 1; index >= 0; index -= 1) {
+  for (let index = history.length - 1; index >= countStart; index -= 1) {
     const tokens = estimateHistoryMessageTokens(history[index]!);
-    // The most recent message is kept even when it alone is over budget; dropping it would hand
-    // the model a turn with no content at all.
-    if (used + tokens > budget && start < history.length) break;
+    if (used + tokens > budget && (!channel || start < history.length)) break;
     used += tokens;
     start = index;
   }
-  for (let index = start; index < history.length; index += 1) {
-    if (history[index]!.role === "user") return { messages: history.slice(index), mode: "tokens" };
+  const newestUser = history.findLastIndex((message) => message.role === "user");
+  const newestExchangeStart = Math.max(0, newestUser);
+  if (
+    !channel &&
+    options.protectToolExchange !== false &&
+    start > newestExchangeStart &&
+    history
+      .slice(newestExchangeStart)
+      .some((message) => message.parts?.some((part) => part.type === "toolCalls"))
+  ) {
+    throw new Error("History budget cannot preserve the newest tool exchange");
   }
-  // Nothing within budget starts a turn, so the budget is smaller than the last exchange. Fall
-  // back to the count window rather than opening mid-reply.
-  return { messages: history.slice(-options.messageWindowSize), mode: "count" };
+  for (let index = start; index < history.length; index += 1) {
+    if (history[index]!.role === "user") return { messages: history.slice(index), mode };
+  }
+  return channel
+    ? { messages: history.slice(-options.messageWindowSize), mode: "count" }
+    : { messages: history.slice(start), mode };
 }
 
 export function formatRecalledMemory(
@@ -482,8 +515,26 @@ function exchangesOf(entries: readonly SessionEntry[], selfBotId: string): Excha
     if (last && entry.type !== "user.message") last.push(entry);
     else groups.push([entry]);
   }
+  const isChannel = (group: readonly SessionEntry[]) =>
+    group.some(
+      (entry) =>
+        entry.type === "user.message" &&
+        entry.payload.blocks.some((block) => block.kind === "channel_message"),
+    );
+  const safeTurns = new Map(
+    projectInferenceTurns(groups.filter((group) => !isChannel(group)).flat(), {
+      selfBotId,
+      runHistory: {},
+    }).map((turn) => [turn.id, turn]),
+  );
   return groups.map((group) => {
-    const turns = projectInferenceTurns(group, { selfBotId });
+    const channel = isChannel(group);
+    const turns = channel
+      ? projectInferenceTurns(group, { selfBotId })
+      : group.flatMap((entry) => {
+          const turn = safeTurns.get(entry.id);
+          return turn ? [turn] : [];
+        });
     return {
       entries: group,
       tokens: estimateHistoryTokens(turns),
@@ -493,11 +544,7 @@ function exchangesOf(entries: readonly SessionEntry[], selfBotId: string): Excha
         .slice(0, MAX_TRANSCRIPT_CHARS),
       // Channel posts are carried into the owner bot's own thread, so the exchange, not the
       // thread, is what says a conversation was public.
-      channel: group.some(
-        (entry) =>
-          entry.type === "user.message" &&
-          entry.payload.blocks.some((block) => block.kind === "channel_message"),
-      ),
+      channel,
     };
   });
 }

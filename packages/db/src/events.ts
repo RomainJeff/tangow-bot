@@ -1,5 +1,5 @@
 import type { RealtimeFanout } from "@rakazo/adapter-kit";
-import type { AskAnswers, SessionId } from "@rakazo/contracts";
+import type { AskAnswers, FactualRunRecap, SessionId } from "@rakazo/contracts";
 import {
   ASK_ANSWER_MAX_LENGTH,
   type AskQuestion,
@@ -145,6 +145,7 @@ export interface FinalizeRunResult {
 }
 
 interface FinalizeRunBase {
+  recap?: FactualRunRecap;
   spaceId: string;
   threadId: string;
   botId: string;
@@ -160,6 +161,8 @@ export type FinalizeRunInput = FinalizeRunBase &
     | {
         outcome: "completed";
         blocks: MessageBlock[];
+        /** Explicitly addressed terminal output, committed with the run's completion. */
+        publicBlocks?: MessageBlock[];
         markUnread?: boolean;
         /** The run's final words, which a routine run reports to its thread. */
         result?: string;
@@ -1811,6 +1814,16 @@ async function finalizeRunOnce(
           markUnread: input.markUnread,
         });
       }
+      if (input.publicBlocks?.length) {
+        await createBotMessageInTransaction(tx, {
+          threadId: input.threadId,
+          botId: input.botId,
+          runId: input.runId,
+          blocks: input.publicBlocks,
+          toPerson: true,
+          markUnread: input.markUnread,
+        });
+      }
     }
     const strandedHelpers = await tx.run.findMany({
       where: { parentRunId: input.runId, status: { in: [...ACTIVE_RUN_STATUSES] } },
@@ -1823,7 +1836,7 @@ async function finalizeRunOnce(
       input.outcome === "completed"
         ? { status: "completed" }
         : { status: "failed", error: input.error },
-      { result: input.outcome === "completed" ? input.result : undefined },
+      { result: input.outcome === "completed" ? input.result : undefined, recap: input.recap },
     );
     const lastEvent = await appendEventInTransaction(tx, {
       spaceId: input.spaceId,

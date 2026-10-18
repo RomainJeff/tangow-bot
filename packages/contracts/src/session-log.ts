@@ -10,6 +10,7 @@ import {
 } from "./events.js";
 import { Id, IsoDate, RunFailureKind, ThinkingLevelSchema } from "./ids.js";
 import { isLinkPreviewCard, LinkMentionBlock, LinkPreviewBlock } from "./link-preview.js";
+import { FactualRunRecapSchema } from "./run-recap.js";
 
 export const EntryId = Id.brand<"EntryId">();
 export type EntryId = z.infer<typeof EntryId>;
@@ -17,6 +18,35 @@ export const SessionId = Id.brand<"SessionId">();
 export type SessionId = z.infer<typeof SessionId>;
 export const EntrySeq = z.number().int().nonnegative().brand<"EntrySeq">();
 export type EntrySeq = z.infer<typeof EntrySeq>;
+
+export const RunSearchHit = z.object({
+  runId: Id,
+  sessionId: SessionId,
+  entryId: EntryId,
+  ts: IsoDate,
+  excerpt: z.string(),
+});
+export type RunSearchHit = z.infer<typeof RunSearchHit>;
+export const RunSearchLimitation = z.enum([
+  "oversized_records",
+  "scan_limit",
+  "unreadable_records",
+]);
+export type RunSearchLimitation = z.infer<typeof RunSearchLimitation>;
+export const RunSearchPage = z.discriminatedUnion("status", [
+  z.object({
+    status: z.literal("ok"),
+    hits: z.array(RunSearchHit),
+    nextCursor: z.string().nullable(),
+    incomplete: z.boolean(),
+    limitations: z.array(RunSearchLimitation),
+  }),
+  z.object({
+    status: z.literal("unavailable"),
+    reason: z.enum(["invalid_cursor", "stale_cursor", "budget_too_small"]),
+  }),
+]);
+export type RunSearchPage = z.infer<typeof RunSearchPage>;
 
 export const Peer = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("bot"), botId: Id, name: z.string() }),
@@ -160,7 +190,7 @@ const EntryShapes = z.discriminatedUnion("type", [
        * Words the bot addressed to the person through `message_user`, or a block they must act
        * on: kept even in a hidden peer run.
        */
-      toPerson: z.literal(true).optional(),
+      toPerson: z.boolean().optional(),
       /** Sent before the run's final reply: narration or `message_user` words. */
       midTurn: z.literal(true).optional(),
     }),
@@ -190,6 +220,16 @@ const EntryShapes = z.discriminatedUnion("type", [
     }),
   ),
   runEntry("run.finished", RunOutcome),
+  runEntry("run.opened", z.object({ sessionId: SessionId })),
+  runEntry(
+    "run.recap",
+    z.object({
+      version: z.literal(1),
+      sessionId: SessionId,
+      outcome: RunOutcome,
+      recap: FactualRunRecapSchema,
+    }),
+  ),
   runEntry("subagent", SubagentPayload),
   /** In the thread's main session, when a routine run opens its own session `sessionId`. */
   runEntry(
@@ -420,6 +460,8 @@ export const ENTRY_AUDIENCE = {
   "bot.message.received": { inference: "yes", ui: true },
   "run.started": { inference: "context", ui: true },
   "run.finished": { inference: "no", ui: true },
+  "run.recap": { inference: "context", ui: false },
+  "run.opened": { inference: "no", ui: false },
   "effect.requested": { inference: "no", ui: true },
   "effect.edited": { inference: "no", ui: true },
   "effect.resolved": { inference: "no", ui: true },
@@ -455,6 +497,9 @@ export type UiEntry = ThreadEntryOf<
  * writes is conversation with the person and lands in the thread's main session.
  */
 export const RUN_TRACE_TYPES: ReadonlySet<SessionEntryType> = new Set([
+  "rewind",
+  "clear",
+  "compaction",
   "run.started",
   "run.finished",
   "assistant.text",
@@ -511,7 +556,9 @@ type EntryBody = {
  * `assistant.text` holding a block that needs the person, which goes to the person whole.
  */
 export function isRunTrace(entry: EntryBody): boolean {
-  if (entry.type === "assistant.text") return !needsThePerson(entry.payload.blocks);
+  if (entry.type === "assistant.text") {
+    return !entry.payload.toPerson && !needsThePerson(entry.payload.blocks);
+  }
   return RUN_TRACE_TYPES.has(entry.type);
 }
 

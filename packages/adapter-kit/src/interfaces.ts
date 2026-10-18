@@ -1,5 +1,5 @@
-import type { EntryId, SessionEntry, SessionId } from "@rakazo/contracts";
-import type { NewSession, SessionEntryDraft } from "./session-log.js";
+import type { EntryId, RunSearchPage, SessionEntry, SessionId } from "@rakazo/contracts";
+import type { NewSession, RunSearchInput, SessionEntryDraft } from "./session-log.js";
 import type {
   AdapterContext,
   AdapterDescriptor,
@@ -338,6 +338,8 @@ export interface SessionLog<Tx> {
    * With `limit`, only the newest `limit` of them, in the same order.
    */
   readRun(runId: string, options?: { limit?: number }): Promise<SessionEntry[]>;
+  /** Bounded inference-safe excerpts on the active chain. The caller authorizes scope first. */
+  searchRun(input: RunSearchInput, tx?: Tx): Promise<RunSearchPage>;
   /** One entry of the session, on the chain or not. */
   readEntry(sessionId: SessionId, entryId: EntryId): Promise<SessionEntry | undefined>;
 }

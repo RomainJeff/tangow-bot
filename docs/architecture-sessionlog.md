@@ -42,6 +42,8 @@ In the Model column, `context` means one short line in the model's history. A Th
 | `bot.text` | yes | yes | A bot's words outside a run |
 | `run.started` | context | yes | Trigger, model and effort |
 | `run.finished` | no | yes | Outcome and usage |
+| `run.opened` | no | no | Anchor for source-less interactive work |
+| `run.recap` | context | no | Own-bot factual recap or missing-facts marker, with run and session references |
 | `subagent` | yes | yes | A helper's result |
 | `routine.started` | context | yes | A routine run opened its session |
 | `routine.finished` | yes | yes | The routine's final words and outcome |
@@ -62,11 +64,13 @@ Nothing writes `attachment.added`, `session.title` or `harness.session` yet. Str
 
 ## Child sessions keep their own trace
 
-A thread owns one main session. A routine run or a helper runs in a child session that keeps its run's trace, and every other entry it writes rises to the main session.
+A thread owns one main session. Interactive runs, routine runs, and helpers keep execution traces in child sessions. Public `message_user` replies, questions, approvals, and card state rise to the main session.
 
-A session's `kind` is `thread`, `subagent` or `routine`. A thread points at its main session through `threads.sessionId`. A child session points at its parent session, and a subagent session also at `parentEntryId`, the `tool.call` that launched it. Neither child kind has a thread.
+A session's `kind` is `thread`, `interactive`, `subagent`, or `routine`. A thread points at its main session through `threads.sessionId`. A child points at its parent session. An interactive session requires `parentEntryId`, the source entry or a `run.opened` anchor for source-less work. A subagent requires its launching `tool.call`. Child sessions have no thread.
 
-In Postgres, `routeOf` in [`sessions.ts`](../packages/db/src/sessions.ts) decides where an entry lands. A child session at any depth keeps its run's trace, the `RUN_TRACE_TYPES`: `run.*`, `assistant.text`, `assistant.reasoning`, `tool.*` and `subagent`. An `assistant.text` that holds an MCP approval is not trace. Anything else, such as an ask, an approval, the person's answer or a learned skill, goes to the top-most ancestor with a thread. The store sets `originSessionId` on the types that carry it, the child the entry came from, so the thread names the routine or helper and links to it. The split keeps a child's tool calls out of the person's next question.
+`openRunLog` opens an interactive child and persists `run.sessionId` with `run.started` in one transaction. Recovery reuses that child. Terminal finalization writes `run.finished` in the child and `run.recap` in the parent. Messaging and channel-source follow-ups retain their main session. See [Interactive run memory](interactive-run-memory.md).
+
+In Postgres, `routeOf` in [`sessions.ts`](../packages/db/src/sessions.ts) decides where an entry lands. A child session at any depth keeps its run's trace, the `RUN_TRACE_TYPES`: `run.*`, `assistant.text`, `assistant.reasoning`, `tool.*` and `subagent`. An `assistant.text` addressed to the person, or containing a card they must act on, rises to the main session instead. Anything else, such as an ask, an approval, the person's answer or a learned skill, goes to the top-most ancestor with a thread. The store sets `originSessionId` on the types that carry it, the child the entry came from, so the thread names the routine or helper and links to it. The split keeps a child's tool calls out of the person's next question.
 
 A routine run opens its own session in `openRoutineSessionInTransaction`. The main session gets `routine.started` at launch and `routine.finished` at the end, with the final words, the status and the usage. The thread folds both into one card that opens the routine session.
 
@@ -80,7 +84,9 @@ The model and the person read the same entries through pure functions in `packag
 
 Both fold entries with `foldRuns` in [`run-fold.ts`](../packages/core/src/session-log/run-fold.ts), which turns a run's `assistant.*` and `tool.*` entries into one message per stretch. Any other entry closes the stretch, except `subagent` and the card-state entries. The thread also closes it at a `run_subagent` call, so the helper's card sits inside the reply. `toolAnswers` pairs each `tool.result` or `subagent` entry with the latest unanswered call of the same run and call id, since providers reuse ids.
 
-**Inference.** [`project-inference.ts`](../packages/core/src/session-log/project-inference.ts) keeps the types whose audience is `yes` or `context`. It drops a tool call with no answer, and a cancelled run replays only its answered calls. Only the leading compaction becomes a turn. A `subagent` entry adds no turn, because its `result` replays as the output of the `run_subagent` call. `routine.started` is a context line. `routine.finished` replays the final words as words of the bot that ran it, or a context line when the routine failed or was cancelled without any.
+**Inference.** [`project-inference.ts`](../packages/core/src/session-log/project-inference.ts) keeps the types whose audience is `yes` or `context`. Interactive history keeps the safe parent conversation and the current run's child context. Finished child traces do not replay. Completed legacy mainline traces become compact references while preserving public replies and raised cards. An own-bot `run.recap` renders escaped factual data with run ID, session ID, and status, or an explicit missing-facts reason. Another bot's recap facts never become peer text. Private reasoning is excluded.
+
+Unanswered tool calls do not replay. Active answered tools remain available for resume. Only the leading compaction becomes a turn. A `subagent` entry adds no turn because its result answers `run_subagent`. Routine start and finish projection and channel history keep their existing behavior.
 
 **Thread.** `projectThreadView` in [`project-thread-view.ts`](../packages/core/src/session-log/project-thread-view.ts) is the one projection web and mobile call. It cuts what a rewind or clear removed, projects items with [`project-ui.ts`](../packages/core/src/session-log/project-ui.ts), adds the live layer, then folds reactions, groups, routine runs and time markers. A `ThreadItem` is a `message`, `run`, `subagent`, `routine`, `handoff`, `botMessage`, `divider`, `effect` or `note`. A `run` item draws nothing.
 
@@ -102,7 +108,11 @@ seq    0 ... 40     41 ... 52     53           54 ... 60
 read   53, 41 ... 52, 54 ... 60
 ```
 
-B is the history budget, the model's context window less a 16 384 token reply reserve and the rest of the request, never under 20 000 tokens. After a completed run, the executor enqueues a compaction once the turns after the last summary pass B/2 tokens. The job keeps the newest exchanges within B/4 tokens, at least one, and summarizes the rest. Without a known context window, the trigger is 20 000 tokens and the kept window 10 000. A thread with no owning bot, such as a group, or one on a runtime that cannot compact, reads the newest 200 entries.
+For interactive history, B is the smaller of 60,000 estimated tokens and the model window after fixed context, active context, and reply reserve. The reserve is at least 16,384 tokens and covers a larger actual output cap, resolved through the same helper Pi uses. There is no recent-history floor. The executor rejects a known window that cannot fit the fixed prompt and active work with that reserve. Unknown windows limit finished history by both 200 turns and the 60,000-token estimate, without guaranteeing full prompt capacity.
+
+The executor separates active work before selecting finished history. A large old trace cannot force a fresh request to fail. After a completed run, compaction starts when uncompacted turns exceed B/2 tokens. The job keeps the newest exchanges within B/4 tokens, at least one, and summarizes the rest. Without a known window, the trigger is 20,000 tokens and the kept window is 10,000. Messaging and channel-source follow-ups retain their original budget and replay policy. A group or runtime without compaction reads at most 200 parent entries before projection.
+
+The `search_runs` catalog discovers retained authorized IDs by originating prompt and stored factual recap even after compaction removes those IDs from the tail. A run-ID query searches bounded child results and raised parent replies. Authorization requires an active source or launch anchor and rechecks rewind and clear reachability. Source-message and peer bodies are excluded.
 
 The job appends on the head it read. If the session moved on, the append fails, and the job retries once when only new entries landed or drops its work. The budget is in [`history-compaction.ts`](../packages/adapters/src/history-compaction.ts) and the walk in [`postgres.ts`](../packages/adapters/src/session-log/postgres.ts).
 
@@ -135,7 +145,7 @@ In [`schema.prisma`](../packages/db/prisma/schema.prisma), `sessions` owns ident
 
 Every append locks the thread, then the session row, so appends to a session serialize without a deadlock.
 
-The port is `SessionLog<Tx>` in [`interfaces.ts`](../packages/adapter-kit/src/interfaces.ts), with `createSession`, `append`, `readTail`, `readPage`, `readAround`, `readRun` and `readEntry`. It has two backends:
+The port is `SessionLog<Tx>` in [`interfaces.ts`](../packages/adapter-kit/src/interfaces.ts), with `createSession`, `append`, `readTail`, `readPage`, `readAround`, `readRun`, `readEntry`, and `searchRun`. It has two backends:
 
 - `PostgresSessionLog` in [`postgres.ts`](../packages/adapters/src/session-log/postgres.ts), which the API and the worker use.
 - `FileSessionLog` in [`file.ts`](../packages/adapters/src/session-log/file.ts), one JSONL file per session through [`jsonl.ts`](../packages/core/src/session-log/jsonl.ts). It is meant for a single process install, and today only its tests use it.

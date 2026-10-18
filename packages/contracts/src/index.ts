@@ -14,6 +14,7 @@ export * from "./openai-compatible-ui.js";
 export * from "./page-head-reader.js";
 export * from "./reactions.js";
 export * from "./rpc.js";
+export * from "./run-recap.js";
 export * from "./runs.js";
 export * from "./search.js";
 export * from "./session-log.js";

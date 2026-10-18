@@ -3,7 +3,9 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { ComposioEmulator, PostgresSessionLog } from "@rakazo/adapters";
-import type { SessionEntry, SessionId } from "@rakazo/contracts";
+import type { SessionEntry, SessionId, ThreadEntry } from "@rakazo/contracts";
+import { EntrySeq, SessionId as SessionIdSchema } from "@rakazo/contracts";
+import { projectThreadItems } from "@rakazo/core";
 import { describe, expect, it } from "vitest";
 import type { createApp } from "../../../apps/api/src/app.ts";
 import { latestCard, sessionCookieHeader } from "./index.js";
@@ -21,6 +23,139 @@ const fixtureOrigin = "http://127.0.0.1:5173";
 const fixtureKey = "offline-product-fixture-key";
 
 describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
+  it("discovers a fact only in an archived recap after compaction and answers without repeating file tools", async () => {
+    let priorRunId = "";
+    const toolResult = (request: ModelEmulatorRequest) =>
+      JSON.parse(String(request.messages.findLast((message) => message.role === "tool")?.content));
+    await journey(
+      [
+        {
+          expect() {},
+          response: {
+            type: "tool",
+            id: "save",
+            name: "write_file",
+            arguments: { path: "receipt.txt", content: "Receipt Zebra731" },
+          },
+        },
+        {
+          expect(request) {
+            expect(toolResult(request)).toMatchObject({ ok: true });
+          },
+          response: {
+            type: "tool",
+            id: "read",
+            name: "read_file",
+            arguments: { path: "receipt.txt" },
+          },
+        },
+        {
+          expect(request) {
+            expect(toolResult(request)).toMatchObject({ content: "Receipt Zebra731" });
+          },
+          response: {
+            type: "tool",
+            id: "say",
+            name: "message_user",
+            arguments: { message: "Receipt captured." },
+          },
+        },
+        {
+          expect() {},
+          response: {
+            type: "text",
+            text: JSON.stringify({
+              version: 1,
+              results: ["Receipt Zebra731"],
+              references: [{ callId: "read" }],
+            }),
+          },
+        },
+        {
+          expect(request) {
+            expect(JSON.stringify(request.messages)).not.toContain("Zebra731");
+            expect(request.messages.some((message) => message.role === "tool")).toBe(false);
+          },
+          response: {
+            type: "tool",
+            id: "catalog",
+            name: "search_runs",
+            arguments: { query: "Zebra731" },
+          },
+        },
+        {
+          expect(request) {
+            expect(toolResult(request)).toMatchObject({ items: [{ runId: priorRunId }] });
+          },
+          response: () => ({
+            type: "tool",
+            id: "archive",
+            name: "search_runs",
+            arguments: { runId: priorRunId, query: "Zebra731" },
+          }),
+        },
+        {
+          expect(request) {
+            expect(toolResult(request)).toMatchObject({
+              hits: [{ runId: priorRunId, excerpt: expect.stringContaining("Receipt Zebra731") }],
+            });
+          },
+          response: {
+            type: "tool",
+            id: "answer",
+            name: "message_user",
+            arguments: { message: "The captured receipt was Zebra731." },
+          },
+        },
+        {
+          expect() {},
+          response: {
+            type: "text",
+            text: JSON.stringify({
+              version: 1,
+              results: ["Answered from the retained receipt"],
+              references: [],
+            }),
+          },
+        },
+      ],
+      async ({ app, cookie, bot, prisma, log, send }) => {
+        const first = await send("Capture the receipt in its file.");
+        await first.settled("completed");
+        priorRunId = first.runId;
+        for (let index = 0; index < 2; index++) {
+          const head = (await log.readTail(first.sessionId)).at(-1)!;
+          await prisma.$transaction((tx) =>
+            log.append(tx, {
+              type: "compaction",
+              sessionId: first.sessionId,
+              botId: bot.id,
+              parentId: head.id,
+              payload: {
+                summary: "Earlier work finished.",
+                coveredUpToSeq: EntrySeq.parse(head.seq),
+              },
+            }),
+          );
+        }
+        const second = await send("What did the captured receipt say?");
+        await second.settled("completed");
+        const entries = await log.readRun(second.runId);
+        expect(
+          entries.filter((entry) => entry.type === "tool.call").map((entry) => entry.payload.name),
+        ).toEqual(["search_runs", "search_runs", "message_user"]);
+        const thread = await rpc<{ entries: ThreadEntry[] }>(app, cookie, "threads/get", {
+          botId: bot.id,
+        });
+        const messages = projectThreadItems(thread.entries).filter(
+          (item) => item.kind === "message",
+        );
+        expect(JSON.stringify(messages)).toContain("The captured receipt was Zebra731.");
+        expect(JSON.stringify(messages)).not.toContain("Answered from the retained receipt");
+      },
+    );
+  }, 30_000);
+
   it("uses a saved model connection and the real executor to persist a file and completed run", async () => {
     await journey(
       [
@@ -56,7 +191,17 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
             arguments: { message: "Saved notes/result.txt." },
           },
         },
-        { expect() {}, response: { type: "text", text: "" } },
+        {
+          expect() {},
+          response: {
+            type: "text",
+            text: JSON.stringify({
+              version: 1,
+              results: ["Saved hello to notes/result.txt"],
+              references: [{ callId: "product-write" }],
+            }),
+          },
+        },
       ],
       async ({ app, cookie, bot, prisma, send }) => {
         const sent = await send("Save hello to notes/result.txt.");
@@ -66,12 +211,31 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
           path: "notes/result.txt",
         });
         expect(file.content).toBe("hello");
-        const thread = await rpc<{ entries: unknown[] }>(app, cookie, "threads/get", {
+        const thread = await rpc<{ entries: ThreadEntry[] }>(app, cookie, "threads/get", {
           botId: bot.id,
         });
         const entries = JSON.stringify(thread.entries);
         expect(entries).toContain("Saved notes/result.txt.");
         expect(entries).not.toContain(fixtureKey);
+        expect(thread.entries.filter((entry) => entry.type === "run.recap")).toEqual([
+          expect.objectContaining({
+            runId: sent.runId,
+            payload: expect.objectContaining({
+              recap: {
+                state: "available",
+                facts: {
+                  version: 1,
+                  results: ["Saved hello to notes/result.txt"],
+                  references: [{ callId: "product-write" }],
+                },
+              },
+            }),
+          }),
+        ]);
+        const visible = JSON.stringify(projectThreadItems(thread.entries));
+        expect(visible).toContain("Saved notes/result.txt.");
+        expect(visible).not.toContain('"references"');
+        expect(visible).not.toContain('"recap"');
         const tools = await prisma.sessionEntry.findMany({
           where: { botId: bot.id, type: "tool.call" },
           orderBy: { seq: "asc" },
@@ -85,39 +249,51 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
     );
   }, 30_000);
 
-  it("reaches the person when the model answers in plain text instead of message_user", async () => {
-    const answer = "Le Monde leads with the supermarket cyberattack.";
-    await journey(
-      [
-        {
-          expect(request) {
-            expect(JSON.stringify(request.messages)).toContain("What is on the front page?");
+  it.each([false, true])(
+    "reaches the person when the model initially writes privately, structured recap %s",
+    async (structured) => {
+      const answer = "Le Monde leads with the supermarket cyberattack.";
+      const privateText = structured
+        ? JSON.stringify({ version: 1, results: [answer], references: [] })
+        : answer;
+      await journey(
+        [
+          {
+            expect(request) {
+              expect(JSON.stringify(request.messages)).toContain("What is on the front page?");
+            },
+            response: { type: "text", text: privateText },
           },
-          response: { type: "text", text: answer },
-        },
-        {
-          expect(request) {
-            expect(turnsOf(request.messages).texts.at(-2)).toEqual(["assistant", answer]);
+          {
+            expect(request) {
+              expect(turnsOf(request.messages).texts.at(-2)).toEqual(["assistant", privateText]);
+            },
+            response: reply(answer),
           },
-          response: reply(answer),
+          DONE,
+        ],
+        async ({ bot, prisma, send }) => {
+          const sent = await send("What is on the front page?");
+          await sent.settled("completed");
+          const shown = await prisma.sessionEntry.findMany({
+            where: { botId: bot.id, runId: sent.runId, type: "assistant.text" },
+            orderBy: { seq: "asc" },
+            select: { payload: true },
+          });
+          expect(JSON.stringify(shown)).toContain(answer);
+          expect(JSON.stringify(shown)).not.toContain('"references"');
         },
-        DONE,
-      ],
-      async ({ bot, prisma, send }) => {
-        const sent = await send("What is on the front page?");
-        await sent.settled("completed");
-        const shown = await prisma.sessionEntry.findMany({
-          where: { botId: bot.id, runId: sent.runId, type: "assistant.text" },
-          orderBy: { seq: "asc" },
-          select: { payload: true },
-        });
-        expect(JSON.stringify(shown)).toContain(answer);
-      },
-    );
-  }, 30_000);
+      );
+    },
+    30_000,
+  );
 
   it("keeps a deliberate silence after one reminder", async () => {
-    const text = "Nothing worth sending today.";
+    const text = JSON.stringify({
+      version: 1,
+      limits: ["Nothing worth sending today"],
+      references: [],
+    });
     await journey(
       [
         { expect() {}, response: { type: "text", text } },
@@ -130,7 +306,21 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
           where: { botId: bot.id, runId: sent.runId, type: "assistant.text" },
           select: { payload: true },
         });
-        expect(JSON.stringify(shown)).not.toContain(text);
+        expect(shown).toEqual([]);
+        const recaps = await prisma.sessionEntry.findMany({
+          where: { runId: sent.runId, type: "run.recap" },
+          select: { payload: true },
+        });
+        expect(recaps).toEqual([
+          {
+            payload: expect.objectContaining({
+              recap: {
+                state: "available",
+                facts: { version: 1, limits: ["Nothing worth sending today"], references: [] },
+              },
+            }),
+          },
+        ]);
       },
     );
   }, 30_000);
@@ -226,17 +416,15 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
         const sent = await send("Save hello, then have a helper check it.");
         await sent.settled("completed");
 
-        const parent = await log.readTail(sent.sessionId);
-        const [, , call, result, delegation, subagent] = parent;
+        const parent = await log.readTail(await sent.executionSessionId());
+        const [, call, result, delegation, subagent] = parent;
         expect(parent.map((entry) => entry.type)).toEqual([
-          "user.message",
           "run.started",
           "tool.call",
           "tool.result",
           "tool.call",
           "subagent",
           "tool.call",
-          "assistant.text",
           "tool.result",
           "run.finished",
         ]);
@@ -244,9 +432,11 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
           null,
           ...parent.slice(0, -1).map((entry) => entry.id),
         ]);
-        expect(await prisma.sessionEntry.count({ where: { sessionId: sent.sessionId } })).toBe(
-          parent.length,
-        );
+        expect(
+          await prisma.sessionEntry.count({
+            where: { sessionId: await sent.executionSessionId() },
+          }),
+        ).toBe(parent.length);
         expect([call, result].map((entry) => payloadOf(entry).callId)).toEqual([
           "journey-write",
           "journey-write",
@@ -263,6 +453,13 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
           result: "checked",
         });
 
+        const conversation = await log.readTail(sent.sessionId);
+        expect(conversation.map((entry) => entry.type)).toEqual([
+          "user.message",
+          "assistant.text",
+          "run.recap",
+        ]);
+        expect(JSON.stringify(projectThreadItems(conversation))).toContain("Saved and checked.");
         const helper = await log.readTail(payloadOf(subagent).sessionId as SessionId);
         const helperRunId = helper[0]?.runId;
         expect(helper.map((entry) => [entry.type, entry.runId])).toEqual([
@@ -382,15 +579,13 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
           const sent = await send("Have a helper check it.");
           await sent.settled("completed");
 
-          const parent = await log.readTail(sent.sessionId);
+          const parent = await log.readTail(await sent.executionSessionId());
           const subagent = parent.find((entry) => entry.type === "subagent");
           expect(parent.map((entry) => entry.type)).toEqual([
-            "user.message",
             "run.started",
             "tool.call",
             "subagent",
             "tool.call",
-            "assistant.text",
             "tool.result",
             "run.finished",
           ]);
@@ -434,18 +629,16 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
           const sent = await send("Have a helper check it.");
           await sent.settled("completed");
 
-          const parent = await log.readTail(sent.sessionId);
+          const parent = await log.readTail(await sent.executionSessionId());
           expect(parent.map((entry) => entry.type)).toEqual([
-            "user.message",
             "run.started",
             "tool.call",
             "tool.result",
             "tool.call",
-            "assistant.text",
             "tool.result",
             "run.finished",
           ]);
-          expect(payloadOf(parent[3])).toMatchObject({
+          expect(payloadOf(parent[2])).toMatchObject({
             callId: "journey-delegate",
             isError: true,
             output: expect.stringMatching(failure),
@@ -525,6 +718,7 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
           ["tool.call", "journey-reply", undefined],
           ["assistant.text", undefined, undefined],
           ["tool.result", "journey-reply", expect.any(String)],
+          ["run.recap", undefined, undefined],
           ["run.finished", undefined, undefined],
         ]);
         const spawnCalls = entries.filter(
@@ -592,6 +786,7 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
           ["tool.call", undefined],
           ["assistant.text", undefined],
           ["tool.result", expect.any(String)],
+          ["run.recap", undefined],
           ["run.finished", "completed"],
         ]);
       },
@@ -624,6 +819,7 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
         expect(await ended(sent.runId)).toEqual([
           ["run.started", undefined],
           ["tool.call", undefined],
+          ["run.recap", undefined],
           ["run.finished", "cancelled"],
         ]);
         expect(
@@ -700,21 +896,15 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
           ),
         ).toEqual([
           "user:false",
-          "run.started",
-          "tool.call",
-          "tool.result",
-          "tool.call",
           "assistant.text",
-          "tool.result",
           "user:true",
-          "run.finished",
-          "run.started",
-          "tool.call",
+          "run.recap",
           "assistant.text",
-          "tool.result",
-          "run.finished",
+          "run.recap",
         ]);
-        expect(payloadOf(chain.findLast((entry) => entry.type === "run.started")).trigger).toEqual({
+        const continued = await prisma.run.findUniqueOrThrow({ where: { id: continuation.id } });
+        const trace = await log.readTail(SessionIdSchema.parse(continued.sessionId));
+        expect(payloadOf(trace.find((entry) => entry.type === "run.started")).trigger).toEqual({
           kind: "steering",
           entryId: steering?.id,
         });
@@ -760,6 +950,7 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
             ["tool.call", "journey-reply"],
             ["assistant.text", undefined],
             ["tool.result", "journey-reply"],
+            ["run.recap", undefined],
             ["run.finished", undefined],
             ["skill.learnt", "learned"],
           ]);
@@ -797,10 +988,20 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
             expect(nudge.calls).toEqual(said.calls);
             expect(nudge.outputs).toEqual(said.outputs);
             expect(nudge.outputs.map(([id]) => id)).toEqual([...calls, "journey-reply"]);
-            expect(nudge.texts.slice(0, -1)).toEqual([
+            expect(nudge.texts.slice(0, -2)).toEqual([
               ...said.texts,
               ["assistant", "Booked the table."],
             ]);
+            const [role, recap] = nudge.texts.at(-2)!;
+            expect(role).toBe("user");
+            const match = /<run_recap>\n(.*)\n<\/run_recap>/.exec(recap);
+            expect(match).not.toBeNull();
+            expect(JSON.parse(match![1]!)).toEqual({
+              runId: expect.any(String),
+              sessionId: expect.any(String),
+              status: "completed",
+              missingFacts: "absent",
+            });
             expect(nudge.texts.at(-1)?.[1]).toContain("This task took many steps.");
           },
           response: { type: "text", text: "Nothing to keep." },
@@ -874,7 +1075,8 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
               request.messages.flatMap((message) =>
                 message.role === "tool" ? [message.tool_call_id] : [],
               ),
-            ).toEqual(["journey-hello"]);
+            ).toEqual([]);
+            expect(history).toContain("Hello.");
           },
           response: reply("It is in notes/brief.txt.", "journey-where"),
         },
@@ -922,19 +1124,13 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
         ).toEqual(["write_file"]);
         expect(await types(asked.sessionId)).toEqual([
           "user.message",
-          "run.started",
-          "tool.call",
           "assistant.text",
-          "tool.result",
-          "run.finished",
+          "run.recap",
           "routine.started",
           "routine.finished",
           "user.message",
-          "run.started",
-          "tool.call",
           "assistant.text",
-          "tool.result",
-          "run.finished",
+          "run.recap",
         ]);
       },
     );
@@ -965,8 +1161,15 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
         await reply.settled("completed");
 
         const cancelled = await log.readRun(stopped.runId);
-        expect(cancelled.map((entry) => entry.type)).toEqual(["run.started", "run.finished"]);
-        expect(payloadOf(cancelled[1])).toMatchObject({ status: "cancelled", by: userId });
+        expect(cancelled.map((entry) => entry.type)).toEqual([
+          "run.started",
+          "run.recap",
+          "run.finished",
+        ]);
+        expect(payloadOf(cancelled.find((entry) => entry.type === "run.finished"))).toMatchObject({
+          status: "cancelled",
+          by: userId,
+        });
         const replied = (await log.readTail(reply.sessionId)).find(
           (entry) => entry.type === "user.message" && entry.id !== asked?.id,
         );
@@ -1281,6 +1484,7 @@ type JourneyFixture = {
   ) => Promise<{
     runId: string;
     sessionId: SessionId;
+    executionSessionId: () => Promise<SessionId>;
     settled: (status: string) => Promise<void>;
   }>;
 };
@@ -1357,6 +1561,13 @@ async function journey(
         return {
           runId: sent.runId,
           sessionId: thread.sessionId as SessionId,
+          async executionSessionId() {
+            const run = await handles.prisma.run.findUniqueOrThrow({
+              where: { id: sent.runId },
+              select: { sessionId: true },
+            });
+            return SessionIdSchema.parse(run.sessionId);
+          },
           async settled(status) {
             await expect
               .poll(

@@ -1,6 +1,16 @@
-import type { NewSession, SessionEntryDraft, SessionLog } from "@rakazo/adapter-kit";
+import type {
+  NewSession,
+  RunSearchInput,
+  SessionEntryDraft,
+  SessionLog,
+} from "@rakazo/adapter-kit";
 import { assertEntryCount, SessionReadError } from "@rakazo/adapter-kit";
-import type { SessionEntry, SessionId } from "@rakazo/contracts";
+import type {
+  RunSearchLimitation,
+  RunSearchPage,
+  SessionEntry,
+  SessionId,
+} from "@rakazo/contracts";
 import { CARD_STATE_TYPES, EntryId } from "@rakazo/contracts";
 import { compactionFirst } from "@rakazo/core";
 import type { PrismaClient, SessionEntryRow } from "@rakazo/db";
@@ -10,6 +20,17 @@ import {
   Prisma,
   sessionEntryFromRow,
 } from "@rakazo/db";
+
+import {
+  boundedSearchPage,
+  openRunSearch,
+  RUN_SEARCH_BATCH_ENTRIES,
+  RUN_SEARCH_CHAIN_ENTRIES,
+  RUN_SEARCH_RECORD_BYTES,
+  RUN_SEARCH_SCAN_ENTRIES,
+  searchExcerpt,
+  searchRunSessions,
+} from "./run-search.js";
 
 const HEAD = Prisma.sql`ORDER BY e.seq DESC LIMIT 1`;
 /** The last seq a compaction `e` covers, where a tail that met it ends; -1 for any other entry. */
@@ -104,6 +125,138 @@ export class PostgresSessionLog implements SessionLog<Prisma.TransactionClient> 
         ORDER BY "createdAt" DESC, seq DESC ${newest}
       ) entries ORDER BY "createdAt", seq`;
     return rows.map(sessionEntryFromRow);
+  }
+
+  searchRun(
+    input: RunSearchInput,
+    tx: Prisma.TransactionClient = this.prisma,
+  ): Promise<RunSearchPage> {
+    return searchRunSessions(
+      input,
+      (id) => this.searchState(id, tx),
+      (page) => this.searchRunSession(page, tx),
+    );
+  }
+
+  private async searchState(sessionId: SessionId, tx: Prisma.TransactionClient) {
+    const [state] = await tx.$queryRaw<
+      Array<{ id: string | null; seq: number | null; cut: number }>
+    >`
+      SELECT h.id, h.seq, COALESCE((SELECT max(seq) FROM session_entries
+        WHERE "sessionId" = ${sessionId} AND type IN ('rewind', 'clear')), -1) AS cut
+      FROM sessions s LEFT JOIN LATERAL (
+        SELECT id, seq FROM session_entries WHERE "sessionId" = s.id ORDER BY seq DESC LIMIT 1
+      ) h ON true WHERE s.id = ${sessionId}`;
+    return {
+      head: state?.id ? { id: EntryId.parse(state.id), seq: state.seq! } : null,
+      cut: state?.cut ?? -1,
+    };
+  }
+
+  private async searchRunSession(
+    input: RunSearchInput,
+    tx: Prisma.TransactionClient,
+  ): Promise<RunSearchPage> {
+    const { sessionId, runId, botId } = input.scope;
+    const cursor = openRunSearch(input, await this.searchState(sessionId, tx));
+    if ("status" in cursor) return cursor;
+    const chain = Prisma.sql`WITH RECURSIVE chain AS (
+      (SELECT id, seq, "parentId", 1 AS depth FROM session_entries
+        WHERE "sessionId" = ${sessionId} ORDER BY seq DESC LIMIT 1)
+      UNION ALL
+      SELECT e.id, e.seq, e."parentId", c.depth + 1 FROM session_entries e
+      JOIN chain c ON e.id = c."parentId" AND e."sessionId" = ${sessionId} AND e.seq < c.seq
+      WHERE c.depth < ${RUN_SEARCH_CHAIN_ENTRIES}
+    )`;
+    const [membership] = await tx.$queryRaw<
+      Array<{ present: boolean; truncated: boolean; broken: boolean; position: boolean }>
+    >`
+      ${chain} SELECT
+        EXISTS(SELECT 1 FROM chain WHERE id = ${cursor.head?.id ?? ""} AND seq = ${cursor.head?.seq ?? -1}) AS present,
+        EXISTS(SELECT 1 FROM chain WHERE depth = ${RUN_SEARCH_CHAIN_ENTRIES} AND "parentId" IS NOT NULL) AS truncated,
+        EXISTS(SELECT 1 FROM chain c WHERE c."parentId" IS NOT NULL AND NOT EXISTS(
+          SELECT 1 FROM session_entries p WHERE p.id = c."parentId" AND p."sessionId" = ${sessionId} AND p.seq < c.seq)) AS broken,
+        ${cursor.after} = -1 OR EXISTS(SELECT 1 FROM chain WHERE seq = ${cursor.after}) AS position`;
+    if (cursor.head && !membership?.present)
+      return { status: "unavailable", reason: "stale_cursor" };
+    if (!membership?.position) return { status: "unavailable", reason: "invalid_cursor" };
+    if (!cursor.head) return boundedSearchPage(input, cursor, [], false, []);
+    const limitations: RunSearchLimitation[] = [];
+    if (membership?.truncated) limitations.push("scan_limit");
+    if (membership?.broken) limitations.push("unreadable_records");
+    const candidates: Array<{
+      seq: number;
+      hit?: {
+        runId: string;
+        sessionId: SessionId;
+        entryId: EntryId;
+        ts: string;
+        excerpt: string;
+      };
+    }> = [];
+    let after = cursor.after;
+    let more = false;
+    let hits = 0;
+    while (candidates.length < RUN_SEARCH_SCAN_ENTRIES) {
+      const rows = await tx.$queryRaw<
+        Array<{
+          id: string;
+          seq: number;
+          createdAt: Date;
+          oversized: boolean;
+          text: string | null;
+        }>
+      >`
+        ${chain}, candidates AS MATERIALIZED (
+          SELECT e.id, e.seq, e."createdAt", e.type,
+            CASE WHEN octet_length(e.payload::text) <= ${RUN_SEARCH_RECORD_BYTES} THEN e.payload END AS payload,
+            octet_length(e.payload::text) > ${RUN_SEARCH_RECORD_BYTES} AS oversized
+          FROM chain c JOIN session_entries e ON e.id = c.id
+          WHERE e.seq > ${after} AND e.seq <= ${cursor.head.seq}
+            AND e."runId" = ${runId} AND e."botId" = ${botId}
+            AND e.type IN ('assistant.text', 'tool.result', 'subagent', 'routine.finished')
+            AND (e.type <> 'tool.result' OR EXISTS (
+              SELECT 1 FROM chain cc JOIN session_entries call ON call.id = cc.id
+              WHERE call.type = 'tool.call' AND call."runId" = ${runId} AND call."botId" = ${botId}
+                AND call.seq < e.seq AND call.payload ->> 'callId' = e.payload ->> 'callId'))
+          ORDER BY e.seq LIMIT ${RUN_SEARCH_BATCH_ENTRIES + 1}
+        )
+        SELECT id, seq, "createdAt", oversized, CASE type
+          WHEN 'tool.result' THEN payload ->> 'output'
+          WHEN 'subagent' THEN payload ->> 'result'
+          WHEN 'routine.finished' THEN payload ->> 'result'
+          WHEN 'assistant.text' THEN (SELECT string_agg(b ->> 'text', E'\\n' ORDER BY n)
+            FROM jsonb_array_elements(payload -> 'blocks') WITH ORDINALITY AS blocks(b, n)
+            WHERE b ->> 'kind' = 'text') END AS text
+        FROM candidates ORDER BY seq`;
+      more = rows.length > RUN_SEARCH_BATCH_ENTRIES;
+      for (const row of rows.slice(0, RUN_SEARCH_BATCH_ENTRIES)) {
+        if (row.oversized) limitations.push("oversized_records");
+        const excerpt = row.text === null ? undefined : searchExcerpt(input, row.text);
+        candidates.push({
+          seq: row.seq,
+          ...(excerpt === undefined
+            ? {}
+            : {
+                hit: {
+                  runId,
+                  sessionId,
+                  entryId: EntryId.parse(row.id),
+                  ts: row.createdAt.toISOString(),
+                  excerpt,
+                },
+              }),
+        });
+        after = row.seq;
+        if (excerpt !== undefined) hits++;
+        if (hits > 10) {
+          more = true;
+          break;
+        }
+      }
+      if (!more || hits > 10) break;
+    }
+    return boundedSearchPage(input, cursor, candidates, more, limitations);
   }
 
   async readEntry(sessionId: SessionId, entryId: EntryId): Promise<SessionEntry | undefined> {

@@ -7,6 +7,7 @@ import {
   endsSentence,
   humanizeToolName,
   isRunTerminalEvent,
+  redactSecrets,
   reduceLiveMessageBlocks,
   runFailureError,
   sanitizeJsonValue,
@@ -14,6 +15,50 @@ import {
   trackToolCallStreak,
   trackToolNameStreak,
 } from "./events.js";
+
+describe("redactSecrets", () => {
+  it.each([
+    ['api"key', 'raw=api"key; output={"value":"api\\"key"}'],
+    ["line\nbreak", 'raw=line\nbreak; output={"value":"line\\nbreak"}'],
+    ["path\\key", 'raw=path\\key; output={"value":"path\\\\key"}'],
+  ])("masks raw and canonical JSON-escaped occurrences of %j", (secret, value) => {
+    expect(redactSecrets(value, [secret])).toBe('raw=[redacted]; output={"value":"[redacted]"}');
+  });
+
+  it("masks overlapping known values completely without reordering the caller's secrets", () => {
+    const secrets = ["token", 'token"tail'];
+    expect(redactSecrets('token token"tail {"value":"token\\"tail"}', secrets)).toBe(
+      '[redacted] [redacted] {"value":"[redacted]"}',
+    );
+    expect(secrets).toEqual(["token", 'token"tail']);
+  });
+
+  it("masks the union of overlapping values without exposing their suffixes", () => {
+    expect(redactSecrets("abcde public", ["abc", "cde"])).toBe("[redacted] public");
+  });
+
+  it("preserves JSON escaping while masking nested string values and keys", () => {
+    const input = JSON.stringify({
+      text: JSON.stringify({ 'key"value': "line\nbreak", public: "K731" }),
+    });
+    expect(JSON.parse(JSON.parse(redactSecrets(input, ['key"value', "line\nbreak"])).text)).toEqual(
+      { "[redacted]": "[redacted]", public: "K731" },
+    );
+  });
+
+  it("masks a field when nested JSON exceeds the shared work budget", () => {
+    let input = "public";
+    for (let i = 0; i < 20; i++) input = JSON.stringify(input);
+    expect(redactSecrets(input, ["credential"])).toBe("[redacted]");
+  });
+
+  it("ignores empty secrets and preserves text when no secrets are known", () => {
+    expect(redactSecrets("safe token token", ["", "token", ""])).toBe("safe [redacted] [redacted]");
+    expect(redactSecrets("safe text", [""])).toBe("safe text");
+    expect(redactSecrets("safe text", [])).toBe("safe text");
+    expect(redactSecrets("", ["token"])).toBe("");
+  });
+});
 
 describe("containsSecret", () => {
   it("detects secrets that JSON escaping changes", () => {
