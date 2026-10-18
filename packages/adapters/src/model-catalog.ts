@@ -6,6 +6,10 @@ import {
   registerOpenAiCompatibleCatalog,
 } from "./pi-openai-compatible-provider.js";
 
+export function piProviderId(provider: string): string {
+  return provider === "azure-openai-responses" ? "azure" : provider;
+}
+
 let catalogModelsCache: Models | undefined;
 
 function catalogModels(): Models {
@@ -20,7 +24,7 @@ function catalogModels(): Models {
  */
 export function catalogModel(provider: string, modelId: string): Model<Api> | undefined {
   const models = catalogModels();
-  const model = models.getModel(provider, modelId);
+  const model = models.getModel(piProviderId(provider), modelId);
   if (model) return model;
   if (provider === "openrouter" || provider === OPENAI_COMPATIBLE_PROVIDER_ID) return undefined;
   return models.getModel("openrouter", modelId);

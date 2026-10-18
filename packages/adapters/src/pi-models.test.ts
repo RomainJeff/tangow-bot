@@ -126,6 +126,7 @@ describe("catalogModelLabel", () => {
     ["mistral-small", "Mistral Small Latest", "Mistral Small (auto-updates)"],
     ["gemini-flash-latest", "Gemini Flash Latest", "Gemini Flash (auto-updates)"],
     ["foo-latest", "foo-latest", "foo (auto-updates)"],
+    ["foo-latest", "Foo Latest (Foo 2)", "Foo (Foo 2) (auto-updates)"],
     ["foo/latest", "foo/latest", "foo (auto-updates)"],
     // Pinned: `-preview` is its own model and a dated id is already a snapshot, so promise nothing.
     ["foo", "Foo Latest", "Foo"],

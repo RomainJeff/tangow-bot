@@ -33,9 +33,11 @@ import type {
 import type { AskQuestion } from "@rakazo/contracts";
 import { redactSecrets } from "@rakazo/core";
 import { getLogger, redactSensitiveText } from "@rakazo/logging";
+import { z } from "zod";
 import { isToolPauseResult } from "./approval-effect.js";
 import { builtinAgentTools, DELEGATION_TOOL_NAMES } from "./builtin-tools.js";
 import { DEFAULT_OPENROUTER_MODEL_ID } from "./deployment-model.js";
+import { piProviderId } from "./model-catalog.js";
 import {
   normalizeOpenAiToolParameters,
   openAiToolParametersNeedNormalization,
@@ -677,7 +679,8 @@ function resolveRuntimeModel(modelConfig: AgentRunRequest["model"]): {
   model: Model<Api> | undefined;
   apiKey: string | undefined;
 } {
-  const provider = modelConfig.provider === "scripted" ? "openrouter" : modelConfig.provider;
+  const provider =
+    modelConfig.provider === "scripted" ? "openrouter" : piProviderId(modelConfig.provider);
   const envDefaultModel = process.env.PI_DEFAULT_MODEL?.trim();
   const envDefaultProvider = process.env.PI_DEFAULT_PROVIDER?.trim() || "openrouter";
   const modelId =
@@ -1012,7 +1015,7 @@ export function toHistory(
           type: "toolCall",
           id: call.id,
           name: call.name,
-          arguments: call.args,
+          arguments: z.record(z.string(), z.json()).parse(call.args),
         }));
         messages.push(assistant([...text, ...toolCalls], "toolUse"));
         text = [];

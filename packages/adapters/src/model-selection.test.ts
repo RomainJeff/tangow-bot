@@ -117,6 +117,18 @@ describe("connected model validation", () => {
     spaceId: "space-1",
   };
 
+  it("accepts another Azure model through a saved connection after Pi renames its provider", async () => {
+    const prisma = {
+      spaceModelPreference: { findFirst: async () => null },
+      userModelCredential: {
+        findFirst: async () => credential("azure-openai-responses", "gpt-4o"),
+      },
+    } as unknown as PrismaClient;
+    await expect(
+      validateConnectedModelChoice(prisma, actor, "azure-openai-responses", "gpt-6.1-sol"),
+    ).resolves.toBeUndefined();
+  });
+
   it("accepts catalog and saved free-form models but rejects unavailable choices", async () => {
     const catalogPrisma = {
       spaceModelPreference: { findFirst: async () => null },
