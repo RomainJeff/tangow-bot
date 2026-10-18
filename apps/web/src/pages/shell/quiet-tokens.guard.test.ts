@@ -21,6 +21,7 @@ const GUARDED = [
   "pages/shell/screen-frame.tsx",
   "pages/shell/message-view.tsx",
   "pages/shell/transcript.tsx",
+  "pages/shell/jump-to-latest.tsx",
   "pages/shell/sidebar.tsx",
   "pages/shell/thread-header.tsx",
   "pages/shell/message-hover-actions.tsx",
