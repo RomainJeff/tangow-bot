@@ -2,7 +2,7 @@
 // package ships raw TypeScript, which Node cannot import at runtime inside the
 // packaged asar. Hold the dark window background as a literal here; the test
 // pins it to the shared token so it cannot drift.
-export const WINDOW_BACKGROUND = "#0C0C0E";
+export const WINDOW_BACKGROUND = "#161618";
 
 export const DEFAULT_WARM_WINDOW_TTL_MS = 15 * 60_000;
 const MAX_TIMER_DELAY_MS = 2_147_483_647;

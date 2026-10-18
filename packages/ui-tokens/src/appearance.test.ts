@@ -138,9 +138,14 @@ describe("composer placeholder contrast", () => {
 });
 
 describe("botAccentOn", () => {
-  it("keeps a bot colour that reads on the page", () => {
+  it("keeps a bot colour that reads in the composer", () => {
     expect(botAccentOn("#E0714F", "light")).toBe("#E0714F");
     expect(botAccentOn("#E0714F", "dark")).toBe("#E0714F");
+  });
+
+  it("keeps every palette colour on the dark composer, violet and red included", () => {
+    expect(botAccentOn("#8B5CF6", "dark")).toBe("#8B5CF6");
+    expect(botAccentOn("#E0524A", "dark")).toBe("#E0524A");
   });
 
   it("drops the near-black bot colour on dark and white on light", () => {

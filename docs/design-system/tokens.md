@@ -21,7 +21,7 @@ light: `background`, `chatBot`, `surface`, `secondary`.
 | --- | --- | --- | --- |
 | `background` | `#F2F2F4` | `#161618` | the page, under the ambient light |
 | `foreground` | `#1D1D1F` | `#F5F5F7` | ink: text, primary, chrome icons |
-| `foregroundSubtle` | `#86868B` | `#6E6E73` | passive grey: sidebar second line, placeholders (≈ 3.3:1) |
+| `foregroundSubtle` | `#86868B` | `#7C7C81` | passive grey: sidebar second line, placeholders (≈ 3.3:1) |
 | `card`, `popover` | `#FFFFFF` | `#2C2C2E` | popovers; the opaque fallback of a glass control |
 | `cardForeground`, `popoverForeground` | `#1D1D1F` | `#F5F5F7` | |
 | `primary` | `#1D1D1F` | `#F5F5F7` | primary capsule, Send |
@@ -59,7 +59,8 @@ light: `background`, `chatBot`, `surface`, `secondary`.
 | `pressed` | `#E8E8EA` (`secondary`) | `#4A4A4D` | a control being pressed; 40% under the pointer |
 
 `botColors` is user data and never changes with the skin. `botAccentOn`
-judges a bot colour against `surface`, where the Stop contour is drawn.
+judges a bot colour against `card`, the composer's opaque plane, where the
+Stop contour is drawn.
 
 Status starts in ink. A success check is grey
 (`mutedForeground`), since a green check next to a green bot reads as the bot.

@@ -65,7 +65,7 @@ export type ColorTokens = {
 export const darkTokens = {
   background: "#161618",
   foreground: "#F5F5F7",
-  foregroundSubtle: "#6E6E73",
+  foregroundSubtle: "#7C7C81",
   card: "#2C2C2E",
   cardForeground: "#F5F5F7",
   popover: "#2C2C2E",
@@ -463,7 +463,8 @@ export function contrastRatio(a: string, b: string): number {
 
 /**
  * A bot's colour for a thin mark drawn in the composer (the Stop contour), or
- * `undefined` when it would not read against that appearance's `surface` —
+ * `undefined` when it would not read against that appearance's `card`, the
+ * composer's opaque plane (its glass falls back to it) —
  * the near-black bot colour on dark, white on light. 3:1 is WCAG's floor for
  * non-text graphics.
  */
@@ -472,7 +473,7 @@ export function botAccentOn(
   appearance: ResolvedAppearance,
 ): string | undefined {
   if (!color || !/^#[0-9a-f]{6}$/i.test(color)) return undefined;
-  return contrastRatio(color, tokensForAppearance(appearance).surface) >= 3 ? color : undefined;
+  return contrastRatio(color, tokensForAppearance(appearance).card) >= 3 ? color : undefined;
 }
 
 function readStoredAppearance(storage: Pick<Storage, "getItem"> | null | undefined): string | null {
