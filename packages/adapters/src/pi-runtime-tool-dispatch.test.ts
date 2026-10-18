@@ -23,6 +23,7 @@ const fakeAgentState = vi.hoisted(() => ({
   closing: "",
   turns: [] as string[][],
   emitFinalAfterFollowUp: true,
+  followUpReply: "The final answer.",
   abortCount: 0,
   tools: [] as Array<{
     name: string;
@@ -164,7 +165,7 @@ vi.mock("@earendil-works/pi-agent-core", () => ({
           toolResults: [],
         });
         if (fakeAgentState.followUpMessages.length > 0 && fakeAgentState.emitFinalAfterFollowUp) {
-          const text = "The final answer.";
+          const text = fakeAgentState.followUpReply;
           this.emit({
             type: "message_update",
             assistantMessageEvent: { type: "text_delta", delta: text },
@@ -390,6 +391,7 @@ describe("Pi connector tool dispatch", () => {
     fakeAgentState.followUpMessages = [];
     fakeAgentState.turns = [];
     fakeAgentState.emitFinalAfterFollowUp = true;
+    fakeAgentState.followUpReply = "The final answer.";
     fakeAgentState.initialMessages = [];
     fakeAgentState.promptInputs = [];
     fakeAgentState.promptImages = [];
@@ -985,16 +987,38 @@ describe("Pi connector tool dispatch", () => {
   });
 
   it.each([
-    { freeTextIsPrivate: false, ends: "silently" },
-    { freeTextIsPrivate: true, ends: "with the stalled-step notice" },
+    {
+      when: "allows silence and the model then ends with no reply",
+      freeTextIsPrivate: false,
+      reply: "",
+      prompt:
+        "Continue the original task from the latest tool result. Use any remaining tools needed, then deliver the result, or end with no reply if there is nothing to report.",
+      runtimeNotice: undefined,
+    },
+    {
+      when: "allows silence and the model then answers",
+      freeTextIsPrivate: false,
+      reply: "The final answer.",
+      prompt:
+        "Continue the original task from the latest tool result. Use any remaining tools needed, then deliver the result, or end with no reply if there is nothing to report.",
+      runtimeNotice: undefined,
+    },
+    {
+      when: "keeps the stalled-step notice when free text is private",
+      freeTextIsPrivate: true,
+      reply: undefined,
+      prompt:
+        "Continue the original task from the latest tool result. Do not stop after a tool call; use any remaining tools needed, then deliver the result.",
+      runtimeNotice:
+        "I completed the tool step but could not produce a final response. Please ask me to continue.",
+    },
   ])(
-    "ends $ends when silence is allowed and the closing turn after tool work is empty",
-    async ({ freeTextIsPrivate }) => {
+    "follows an empty turn after tool work once: $when",
+    async ({ freeTextIsPrivate, reply, prompt, runtimeNotice }) => {
       fakeAgentState.mode = "silent-continuation";
-      fakeAgentState.emitFinalAfterFollowUp = false;
-      const notice =
-        "I completed the tool step but could not produce a final response. Please ask me to continue.";
-      const events: unknown[] = [];
+      fakeAgentState.emitFinalAfterFollowUp = reply !== undefined;
+      fakeAgentState.followUpReply = reply ?? "";
+      const events: Array<Record<string, unknown>> = [];
 
       for await (const event of new PiAgentRuntime().run(
         {
@@ -1018,19 +1042,14 @@ describe("Pi connector tool dispatch", () => {
           signal: new AbortController().signal,
         },
       )) {
-        events.push(event);
+        events.push(event as Record<string, unknown>);
       }
 
-      if (freeTextIsPrivate) {
-        expect(events.at(-1)).toMatchObject({ type: "done", runtimeNotice: notice });
-      } else {
-        expect(fakeAgentState.followUpMessages).toEqual([]);
-        expect(JSON.stringify(events)).not.toContain("could not produce a final response");
-        expect(events.at(-1)).toEqual({
-          type: "done",
-          text: "I will check the destination first.",
-        });
-      }
+      expect(fakeAgentState.followUpMessages).toEqual([
+        expect.objectContaining({ role: "user", content: prompt }),
+      ]);
+      expect(events.at(-1)?.runtimeNotice).toBe(runtimeNotice);
+      if (reply) expect(events).toContainEqual({ type: "text", text: reply });
     },
   );
 

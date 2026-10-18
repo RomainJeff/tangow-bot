@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Fixed
 
-- A routine check that finds nothing now stays silent on web, desktop, and iPhone instead of posting "I completed the tool step but could not produce a final response."
+- A routine check, or a bot in a group chat, with nothing to say after using a tool now stays silent on web, desktop, and iPhone instead of posting "I completed the tool step but could not produce a final response."
 
 #### Changed
 
