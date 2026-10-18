@@ -9,7 +9,7 @@
     "node": "^22.22.2 || ^24.0.0 || >=26.0.0"
   },
   "scripts": {
-    "prepare": "git config core.hooksPath .githooks",
+    "prepare": "git rev-parse --git-dir > /dev/null 2>&1 || exit 0; git config core.hooksPath .githooks",
     "check:staged-size": "node scripts/check-staged-file-size.mjs",
     "test:staged-size": "node --test scripts/check-staged-file-size.test.mjs",
     "dev": "cross-env COREPACK_ENABLE_DOWNLOAD_PROMPT=0 turbo dev --filter=@rakazo/api --filter=@rakazo/worker --filter=@rakazo/web --filter=@rakazo/sandbox-supervisor",
