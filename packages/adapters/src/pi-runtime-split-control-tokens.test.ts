@@ -58,6 +58,7 @@ describe("streamed control tokens", () => {
     { split: ["Hello <|", "eos|>"], text: "Hello " },
     { split: ["<|eo", "s|> world"], text: " world" },
     { split: ["a <", "|x", "|", ">b <|"], text: "a b <|" },
+    { split: ["1 <", " 2"], text: "1 < 2" },
   ])("never reach the thread when split across deltas: $split", async ({ split, text }) => {
     deltas.current = split;
     const events: Array<{ type: string; text?: string }> = [];

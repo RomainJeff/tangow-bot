@@ -408,6 +408,15 @@ export class PiAgentRuntime implements AgentRuntime {
 
         let streamed = "";
         let pendingTail = "";
+        let privateFinalText: string | undefined;
+        let runtimeNotice: string | undefined;
+        let toolCalls = 0;
+        let toolActivityShowing = false;
+        let silentToolContinuations = 0;
+        let toolWorkPendingFinal = false;
+        let messagedUser = false;
+        let privateTextNudged = false;
+        let toolCallsSinceContact = 0;
         const emitText = (text: string) => {
           if (!text) return;
           if (toolActivityShowing) {
@@ -418,15 +427,6 @@ export class PiAgentRuntime implements AgentRuntime {
           streamed += text;
           queue.push({ type: "text", text });
         };
-        let privateFinalText: string | undefined;
-        let runtimeNotice: string | undefined;
-        let toolCalls = 0;
-        let toolActivityShowing = false;
-        let silentToolContinuations = 0;
-        let toolWorkPendingFinal = false;
-        let messagedUser = false;
-        let privateTextNudged = false;
-        let toolCallsSinceContact = 0;
         agent.subscribe(async (event) => {
           if (event.type === "message_end") {
             traceRecorder?.message(event.message);
@@ -542,7 +542,7 @@ export class PiAgentRuntime implements AgentRuntime {
             }
           }
           if (event.type === "message_end" && event.message.role === "assistant") {
-            emitText(stripModelControlTokens(pendingTail));
+            emitText(pendingTail);
             pendingTail = "";
             const text = assistantText(event.message);
             if (text && !streamed) {
