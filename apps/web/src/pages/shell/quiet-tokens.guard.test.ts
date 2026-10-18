@@ -16,6 +16,10 @@ const srcDir = path.join(shell, "../..");
 
 const GUARDED = [
   "pages/shell/composer.tsx",
+  "pages/shell/composer-attachments.tsx",
+  "pages/shell/composer-dictation.tsx",
+  "pages/shell/composer-notices.tsx",
+  "pages/shell/composer-pickers.tsx",
   "pages/shell/message-cards.tsx",
   "pages/shell/side-panel.tsx",
   "pages/shell/screen-frame.tsx",
