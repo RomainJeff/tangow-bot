@@ -53,7 +53,7 @@ function buildPiCatalog(): PiCatalogEntry[] {
     for (const model of providerModels) {
       const thinkingLevels = getSupportedThinkingLevels(model) as ThinkingLevel[];
       entries.push({
-        provider: provider.id,
+        provider: provider.id === "azure" ? "azure-openai-responses" : provider.id,
         providerName: provider.name,
         id: model.id,
         label: catalogModelLabel(model.id, model.name, modelIds),
@@ -97,7 +97,7 @@ function buildPiCatalog(): PiCatalogEntry[] {
 }
 
 /** Trailing upstream "latest" marker: "Claude Opus 4.5 (latest)", "Gemini Flash Latest", "foo-latest". */
-const LATEST_MARKER = /[\s(/-]*\blatest\b\s*\)?\s*$/i;
+const LATEST_MARKER = /[\s(/-]*\blatest\b\s*\)?(?=\s*(?:\([^)]*\))?\s*$)/i;
 
 /**
  * Upstream marks auto-updating alias ids with a trailing "latest". That is an alias marker, not a
@@ -112,7 +112,7 @@ export function catalogModelLabel(
 ): string {
   const label = name || id;
   if (!LATEST_MARKER.test(label)) return label;
-  const base = label.replace(LATEST_MARKER, "").trim();
+  const base = label.replace(LATEST_MARKER, " ").trim();
   if (!base) return label;
   return isAliasModelId(id, providerModelIds) ? `${base} (auto-updates)` : base;
 }
