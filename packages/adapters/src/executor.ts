@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { DEFAULT_COMPACTION_SETTINGS } from "@earendil-works/pi-agent-core";
 import type {
   AdapterContext,
   AgentHomeStore,
@@ -281,6 +280,7 @@ import type { TextEditResult } from "./file-text.js";
 import { applyTextEdit, readLineWindow } from "./file-text.js";
 import { handoffToGroupBot, loadGroupContext } from "./group-handoff.js";
 import {
+  DEFAULT_COMPACTION_SETTINGS,
   estimateHistoryMessageTokens,
   estimateHistoryTokens,
   estimateTextTokens,
