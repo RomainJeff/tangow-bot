@@ -413,6 +413,8 @@ export class PiAgentRuntime implements AgentRuntime {
         let toolActivityShowing = false;
         let silentToolContinuations = 0;
         let toolWorkPendingFinal = false;
+        // The run's own text is its output, so an empty closing turn is the silence it was allowed.
+        const emptyFinalIsSilence = request.allowSilentEmpty && !request.freeTextIsPrivate;
         let messagedUser = false;
         let privateTextNudged = false;
         let toolCallsSinceContact = 0;
@@ -517,7 +519,7 @@ export class PiAgentRuntime implements AgentRuntime {
               toolWorkPendingFinal = true;
               silentToolContinuations = 0;
             } else if (toolWorkPendingFinal && !hasToolCalls && !hasToolResults) {
-              if (messageText.trim()) {
+              if (messageText.trim() || emptyFinalIsSilence) {
                 toolWorkPendingFinal = false;
                 silentToolContinuations = 0;
               } else if (

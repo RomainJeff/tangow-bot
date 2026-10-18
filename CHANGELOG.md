@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### 2026-10-18
 
+#### Fixed
+
+- A routine check that finds nothing now stays silent on web, desktop, and iPhone instead of posting "I completed the tool step but could not produce a final response."
+
 #### Changed
 
 - The model picker on web, desktop, and iPhone now includes the latest Pi catalog, including GPT-6.1 Sol and Claude 5.5 models.
