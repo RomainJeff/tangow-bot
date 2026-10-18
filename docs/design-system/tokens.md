@@ -28,8 +28,8 @@ light: `background`, `chatBot`, `surface`, `secondary`.
 | `primaryForeground` | `#FFFFFF` | `#1D1D1F` | |
 | `secondary` | `#E8E8EA` | `#56565A` | secondary capsule, Stop |
 | `secondaryForeground` | `#1D1D1F` | `#F5F5F7` | |
-| `chatBot` | `#FFFFFF` | `#333336` | the bot's paper: every bot bubble, and everything the bot produces |
-| `chatUser` | `#1D1D1F` | `#48484B` | user bubble and avatar: ink in light, tone on tone in dark |
+| `chatBot` | `#FFFFFF` | `#2C2C2F` | the bot's paper: every bot bubble, and everything the bot produces |
+| `chatUser` | `#1D1D1F` | `#636366` | user bubble and avatar: ink in light, a clear step above the bot's paper in dark |
 | `chatUserForeground` | `#FFFFFF` | `#F5F5F7` | |
 | `mentionChip` | `#EDEDF0` | `#3A3A3D` | mention chip in the composer |
 | `mentionChipForeground` | `#1D1D1F` | `#F5F5F7` | |
