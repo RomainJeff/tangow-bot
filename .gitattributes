@@ -6,3 +6,20 @@ infra/sandboxes/computer/fluxbox.* text eol=lf
 *.png binary
 *.jpg binary
 *.ico binary
+
+# Machine-generated and vendored files are exempt from the staged token limit.
+pnpm-lock.yaml linguist-generated
+package-lock.json linguist-generated
+yarn.lock linguist-generated
+bun.lock linguist-generated
+bun.lockb linguist-generated
+Cargo.lock linguist-generated
+poetry.lock linguist-generated
+uv.lock linguist-generated
+**/generated/** linguist-generated
+**/__generated__/** linguist-generated
+*.generated.* linguist-generated
+*.snap linguist-generated
+packages/ui-tokens/src/tokens.css linguist-generated
+packages/ui-web/src/components/ui/** linguist-vendored
+packages/ui-web/src/shadcn.css linguist-vendored

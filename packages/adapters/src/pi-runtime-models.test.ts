@@ -1,6 +1,7 @@
 import { getSupportedThinkingLevels } from "@earendil-works/pi-ai";
 import type { AgentRunRequest } from "@rakazo/adapter-kit";
 import { describe, expect, it } from "vitest";
+import { catalogModel } from "./model-catalog.js";
 import { buildModelConnectPlaintext, modelCredentialDto } from "./model-connect.js";
 import { modelAcceptsImageInput } from "./model-vision.js";
 import { listPiCatalog } from "./pi-models.js";
@@ -13,6 +14,13 @@ function requestModel(id: string, baseUrl: string): Pick<AgentRunRequest, "model
 }
 
 describe("request model catalogs", () => {
+  it("keeps saved Azure connections resolvable after the provider rename", () => {
+    const model = catalogModel("azure-openai-responses", "gpt-4o");
+    expect(model?.provider).toBe("azure");
+    expect(model?.id).toBe("gpt-4o");
+    expect(modelAcceptsImageInput("azure-openai-responses", "gpt-4o")).toBe(true);
+  });
+
   it.each([
     ["openrouter", "openai/gpt-5.6-luna"],
     ["openai-codex", "gpt-6-astra"],

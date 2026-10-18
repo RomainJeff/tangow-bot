@@ -1,4 +1,3 @@
-import { DEFAULT_COMPACTION_SETTINGS, estimateTokens } from "@earendil-works/pi-agent-core";
 import type {
   AdapterContext,
   AgentRunRequest,
@@ -21,6 +20,8 @@ import type {
   ConfiguredMemoryProvider,
   MemoryProviderResolver,
 } from "./memory-provider-factory.js";
+
+const DEFAULT_COMPACTION_SETTINGS = { reserveTokens: 16_384, keepRecentTokens: 20_000 };
 
 export const MAX_COMPACTED_SUMMARY_CHARS = 20_000;
 /** Maximum message count when the model context window is unknown. */
@@ -74,12 +75,8 @@ function keptWindowTokens(historyBudget: number | undefined): number {
     : historyBudget / 4;
 }
 
-/**
- * pi's estimator takes a pi `AgentMessage`; Rakazo history rows are `{ role, content }` with the
- * content already rendered to text, and the estimator reads a user message's content as-is.
- */
 function estimateMessageTokens(content: string): number {
-  return estimateTokens({ role: "user", content, timestamp: 0 });
+  return Math.ceil(content.length / 4);
 }
 
 type SizedHistoryMessage = Pick<AgentHistoryTurn, "content" | "parts">;

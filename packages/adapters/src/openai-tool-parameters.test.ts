@@ -1,3 +1,4 @@
+import type { ToolCall } from "@earendil-works/pi-ai";
 import { validateToolArguments } from "@earendil-works/pi-ai";
 import { describe, expect, it } from "vitest";
 
@@ -138,7 +139,7 @@ describe("parametersFor OpenAI wire fidelity", () => {
         ],
       },
     });
-    const check = (args: Record<string, unknown>) =>
+    const check = (args: ToolCall["arguments"]) =>
       validateToolArguments(
         { name: "ask_user", description: "", parameters },
         { type: "toolCall", id: "call-1", name: "ask_user", arguments: args },
