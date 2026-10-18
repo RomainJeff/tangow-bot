@@ -1,51 +1,31 @@
-import { i18n } from "@lingui/core";
-import { t } from "@lingui/core/macro";
 import { useLingui } from "@lingui/react/macro";
-import type { AgentSkillCatalogEntry, LinkPreviewDraft } from "@rakazo/contracts";
-import { ATTACHMENT_ALLOWED_MIME_TYPES } from "@rakazo/contracts";
-import type { ComposerMention, ComposerPageHead, SlashActionId } from "@rakazo/core";
-import {
-  type ComposerChange,
-  clampMentionHighlightIndex,
-  createComposerLinkPreview,
-  mentionChipKey,
-  resolveMentionPickerKey,
-  SLASH_ACTIONS,
-  serializeComposerPrompt,
-  slashSkillOptions as slashSkills,
-  truncateSlashDescription,
-} from "@rakazo/core";
+import type { AgentSkillCatalogEntry } from "@rakazo/contracts";
+import type { ComposerChange, ComposerMention, SlashActionId } from "@rakazo/core";
+import { mentionChipKey, resolveMentionPickerKey, serializeComposerPrompt } from "@rakazo/core";
 import type { ComposerState } from "@rakazo/ui-web";
-import {
-  BotAvatar,
-  Button,
-  ComposerAttachment,
-  ComposerLinkPreview,
-  ComposerShell,
-  LinkPreviewPicture,
-  StopContour,
-} from "@rakazo/ui-web";
-import { ArrowUp, Box, Check, Clock, Mic, Pencil, Plus, Puzzle, Settings, X } from "lucide-react";
-import type { ClipboardEvent, DragEvent, RefObject } from "react";
-import {
-  memo,
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
-import { desktopBridge, readPageHeadOnDesktop } from "../../lib/desktop.js";
-import { dictation, webSpeechAvailable } from "../../lib/dictation.js";
-import { isFileDrag, isFilePaste } from "../../lib/pending-attachments";
+import { Button, ComposerShell, StopContour } from "@rakazo/ui-web";
+import { ArrowUp } from "lucide-react";
+import type { ClipboardEvent, RefObject } from "react";
+import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { isFilePaste } from "../../lib/pending-attachments";
 import type { MessageItem } from "../../lib/thread-items";
+import type { PreviewLink } from "./composer-attachments";
+import {
+  AttachButton,
+  AttachmentTray,
+  useComposerFileDrop,
+  useDraftLinkPreview,
+} from "./composer-attachments";
+import {
+  DictateButton,
+  DictationCancel,
+  DictationConfirm,
+  DictationPreview,
+  useComposerDictation,
+} from "./composer-dictation";
+import { ComposerNotices } from "./composer-notices";
+import { MentionPicker, SelectedChips, SlashPicker, useComposerPickers } from "./composer-pickers";
 import type { PendingAttachment } from "./layout";
-import { FALLBACK_BOT_COLOR } from "./layout";
-import { previewMessageText } from "./message-view";
-
-const ATTACHMENT_ACCEPT = ATTACHMENT_ALLOWED_MIME_TYPES.join(",");
 
 export const Composer = memo(function Composer({
   activeName,
@@ -107,11 +87,7 @@ export const Composer = memo(function Composer({
     options?: { linkPreview?: false },
   ) => Promise<void>;
   /** Reads what the first complete link of the draft looks like; absent, no preview is shown. */
-  previewLink?: (
-    url: string,
-    signal: AbortSignal,
-    page?: ComposerPageHead,
-  ) => Promise<LinkPreviewDraft | null>;
+  previewLink?: PreviewLink;
   onStop: () => Promise<void>;
   /** Whether the configured voice provider can transcribe — the dictation
    * engine used when Web Speech isn't available (Electron, most non-Chrome
@@ -136,37 +112,12 @@ export const Composer = memo(function Composer({
 }) {
   const { t } = useLingui();
   const [draft, setDraft] = useState("");
-  const previewLinkRef = useRef(previewLink);
-  previewLinkRef.current = previewLink;
-  const [linkPreview] = useState(() =>
-    createComposerLinkPreview({
-      read: (url, signal, page) =>
-        previewLinkRef.current?.(url, signal, page) ?? Promise.resolve(null),
-      // Only the desktop app can read another site's page: a plain browser keeps the server's card.
-      ...(desktopBridge()?.pageHead ? { readPageHead: readPageHeadOnDesktop } : {}),
-    }),
-  );
-  const linkPreviewView = useSyncExternalStore(linkPreview.subscribe, linkPreview.getView);
-  // What changed the draft, told by the field itself: only a paste says so (a typed or
-  // programmatic edit waits for the link to be followed by a space).
-  const draftChange = useRef<ComposerChange>("type");
-  useEffect(() => {
-    linkPreview.update(draft, draftChange.current);
-    draftChange.current = "type";
-  }, [draft, linkPreview]);
-  useEffect(() => () => linkPreview.cancel(), [linkPreview]);
-  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
-  const [mentionHighlightIndex, setMentionHighlightIndex] = useState(0);
-  const [slashQuery, setSlashQuery] = useState<string | null>(null);
+  const { linkPreview, linkPreviewView, draftChange } = useDraftLinkPreview(draft, previewLink);
+  const pickers = useComposerPickers({ mentionTargets, agentSkills, onSlashOpen });
   const [selectedSkill, setSelectedSkill] = useState<AgentSkillCatalogEntry | null>(null);
   const [selectedMentions, setSelectedMentions] = useState<ComposerMention[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const shellRef = useRef<HTMLDivElement>(null);
-  const runErrorRef = useRef<HTMLDivElement>(null);
-  const presentedRunErrorIdRef = useRef<string | null>(null);
-  const mentionListboxId = useId();
-  const dragDepth = useRef(0);
-  const [draggingFiles, setDraggingFiles] = useState(false);
   const canSend =
     draft.trim().length > 0 ||
     selectedSkill !== null ||
@@ -174,57 +125,6 @@ export const Composer = memo(function Composer({
     pendingAttachments.length > 0 ||
     (rewindArtifacts?.length ?? 0) > 0;
 
-  // Dictation: the mic turns speech into text in the field; nothing is ever
-  // sent on its own. `dictateSnapshotRef` freezes the draft/chips at the tap
-  // so × can restore them exactly; `isDictatingRef` mirrors `isDictating` so
-  // the `dictation.subscribe` effect below (mounted once) always reads the
-  // latest without resubscribing on every render.
-  const [isDictating, setIsDictating] = useState(false);
-  const isDictatingRef = useRef(false);
-  isDictatingRef.current = isDictating;
-  const [dictateSpeech, setDictateSpeech] = useState({ committed: "", interim: "" });
-  // Why the last dictation session ended on its own (mic denied, engine or
-  // transcription failure), shown in the composer's error banner.
-  const [dictationError, setDictationError] = useState<string | null>(null);
-  const dictateSnapshotRef = useRef<{
-    draft: string;
-    mentions: ComposerMention[];
-    skill: AgentSkillCatalogEntry | null;
-  } | null>(null);
-  const dictateInsertingRef = useRef(false);
-  const dictateActivityRef = useRef(0);
-  const dictateStartedRef = useRef(0);
-  // Only a genuinely new final/interim result counts as activity for the 60s
-  // silence cap — a natural engine restart re-announces the same committed
-  // text with an empty interim tail, which must not look like fresh speech.
-  const dictateLastSpeechRef = useRef({ transcript: "", interim: "" });
-  const dictationPreviewRef = useRef<HTMLDivElement>(null);
-  // ✓ on the recorder fallback (no Web Speech) has to wait for the last
-  // in-flight chunk transcription before it knows the final text; this
-  // tracks that brief window so the UI can show it and × can still cut in.
-  const [dictateFinishing, setDictateFinishing] = useState(false);
-  const dictateFinishCancelledRef = useRef(false);
-  // Set only by ×: every other way dictation ends (an engine error, a call
-  // cutting it off) keeps what was dictated rather than restoring the
-  // pre-dictation draft.
-  const dictateUserCancelRef = useRef(false);
-  const speechAvailable = useMemo(() => webSpeechAvailable(), []);
-  const dictationAvailable = speechAvailable || Boolean(dictationTranscribe);
-  // Electron's Chromium reports Web Speech as available but it usually has no
-  // speech-service key configured there, so on desktop the configured voice
-  // provider is tried first when it can transcribe (dictation.ts also falls
-  // back to it if Web Speech then fails to start).
-  const preferTranscribe = Boolean(desktopBridge()) && Boolean(dictationTranscribe);
-
-  // The Stop contour carries the "a run is going" signal now; the shell's own
-  // state only distinguishes an empty field from one that can send.
-  const composerState: ComposerState = isDictating ? "dictating" : canSend ? "typing" : "idle";
-  const rewindTime = rewindTarget
-    ? new Date(rewindTarget.ts).toLocaleTimeString(i18n.locale || "en", {
-        hour: "numeric",
-        minute: "2-digit",
-      })
-    : "";
   const rewindDraftKey = rewindDraft?.key ?? null;
   const rewindDraftText = rewindDraft?.text ?? "";
   const rewindDraftLinkPreviewRemoved = rewindDraft?.linkPreviewRemoved ?? false;
@@ -236,203 +136,35 @@ export const Composer = memo(function Composer({
     textareaRef.current?.focus();
   }, [rewindDraftKey, rewindDraftText, rewindDraftLinkPreviewRemoved, linkPreview]);
 
-  function exitDictation(keepDictated: boolean) {
-    setIsDictating(false);
-    const snapshot = dictateSnapshotRef.current;
-    const wasActive = snapshot !== null;
-    dictateSnapshotRef.current = null;
-    if (snapshot) {
-      const last = dictateLastSpeechRef.current;
-      const dictated = keepDictated
-        ? [last.transcript, last.interim].filter(Boolean).join(" ")
-        : "";
-      setDraft([snapshot.draft, dictated].filter(Boolean).join(" "));
-      setSelectedMentions(snapshot.mentions);
-      setSelectedSkill(snapshot.skill);
-    }
-    setDictateSpeech({ committed: "", interim: "" });
-    window.requestAnimationFrame(() => textareaRef.current?.focus());
-    // Defensive: whatever left dictation should already have stopped the
-    // engine itself, but this exit is the one place the composer leaves
-    // dictation, so make sure nothing can keep the mic running behind it.
-    // `stop()` is idempotent — a no-op once the session already ended.
-    if (wasActive) dictation.stop("cancel");
-  }
+  const {
+    isDictating,
+    dictateSpeech,
+    dictatedPrefix,
+    dictateFinishing,
+    dictationAvailable,
+    dictationError,
+    setDictationError,
+    dictationPreviewRef,
+    startDictation,
+    cancelDictation,
+    insertDictation,
+  } = useComposerDictation({
+    disabled,
+    dictationTranscribe,
+    recentWriting,
+    draft,
+    setDraft,
+    selectedMentions,
+    setSelectedMentions,
+    selectedSkill,
+    setSelectedSkill,
+    textareaRef,
+    onStart: pickers.closeAll,
+  });
 
-  // The single place dictation actually exits: subscribing (not calling
-  // stop() reactively) means × (below), a forced cancel, and the shared
-  // `dictation` instance being cut off from elsewhere (starting the call)
-  // all funnel through here: × restores the pre-dictation draft, anything
-  // else keeps the dictated text and surfaces the engine's error, if any.
-  // `insertDictation` is the one path
-  // that already made its own exit and sets `dictateInsertingRef` first so
-  // this effect leaves its result alone.
-  useEffect(() => {
-    const unsubscribe = dictation.subscribe((snapshot) => {
-      if (!isDictatingRef.current) return;
-      if (snapshot.status !== "idle") {
-        const transcript = snapshot.transcript;
-        const interim = snapshot.interim ?? "";
-        const last = dictateLastSpeechRef.current;
-        // A natural restart re-announces the same committed text with the
-        // interim tail reset to "" — that reset alone isn't new speech, only
-        // a longer transcript or a genuinely new (non-empty) interim is.
-        const isNewSpeech =
-          transcript !== last.transcript || (interim !== "" && interim !== last.interim);
-        if (isNewSpeech) dictateActivityRef.current = Date.now();
-        dictateLastSpeechRef.current = { transcript, interim };
-        setDictateSpeech({ committed: transcript, interim });
-        return;
-      }
-      if (dictateInsertingRef.current || !dictateSnapshotRef.current) return;
-      if (snapshot.error) setDictationError(snapshot.error);
-      exitDictation(!dictateUserCancelRef.current);
-    });
-    return () => {
-      unsubscribe();
-      if (isDictatingRef.current) dictation.stop("cancel");
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    if (!isDictating) return;
-    // Auto-stops end dictation like ✓ (keeping what was said, including the
-    // recorder's pending chunk), never like ×. A ✓ already in flight is a
-    // bounded wait, not idle listening — leave it alone.
-    function stopIfHidden() {
-      if (dictateInsertingRef.current) return;
-      if (document.hidden) void insertDictation();
-    }
-    const interval = setInterval(() => {
-      if (dictateInsertingRef.current) return;
-      const now = Date.now();
-      const silentTooLong = now - dictateActivityRef.current > 60_000;
-      const sessionTooLong = now - dictateStartedRef.current > 5 * 60_000;
-      if (silentTooLong || sessionTooLong) void insertDictation();
-    }, 2_000);
-    document.addEventListener("visibilitychange", stopIfHidden);
-    return () => {
-      clearInterval(interval);
-      document.removeEventListener("visibilitychange", stopIfHidden);
-    };
-  }, [isDictating]);
-
-  function startDictation() {
-    if (disabled || isDictating || !dictationAvailable) return;
-    setMentionQuery(null);
-    setMentionHighlightIndex(0);
-    setSlashQuery(null);
-    setDictationError(null);
-    dictateSnapshotRef.current = { draft, mentions: selectedMentions, skill: selectedSkill };
-    setDictateSpeech({ committed: "", interim: "" });
-    dictateLastSpeechRef.current = { transcript: "", interim: "" };
-    dictateActivityRef.current = Date.now();
-    dictateStartedRef.current = Date.now();
-    dictateUserCancelRef.current = false;
-    setIsDictating(true);
-    window.requestAnimationFrame(() => dictationPreviewRef.current?.focus());
-    void dictation.listen({
-      mode: "dictate",
-      transcribe: dictationTranscribe,
-      preferTranscribe,
-      recentTexts: [...(recentWriting?.() ?? []), draft],
-      // Dictate mode never finishes on its own (no silence endpoint, and a
-      // natural restart keeps listening) — only ✓/×/forced-cancel end it,
-      // all read live off `dictation.state` instead of this callback.
-      onFinal: () => undefined,
-    });
-  }
-
-  function cancelDictation() {
-    if (!isDictating) return;
-    if (dictateInsertingRef.current) {
-      // ✓ is waiting on the recorder fallback's last chunk — × still cancels
-      // immediately: restore now and mark it so the pending insert discards
-      // whatever text finishes transcribing afterwards.
-      dictateFinishCancelledRef.current = true;
-      dictation.stop("cancel");
-      exitDictation(false);
-      return;
-    }
-    dictateUserCancelRef.current = true;
-    dictation.stop("cancel");
-  }
-
-  async function insertDictation() {
-    if (!isDictating || dictateInsertingRef.current) return;
-    const snapshot = dictateSnapshotRef.current;
-    setDictateFinishing(true);
-    dictateInsertingRef.current = true;
-    dictateFinishCancelledRef.current = false;
-    // On Web Speech this resolves right away (the text is already live); on
-    // the recorder fallback it waits for the in-flight/last chunk, bounded by
-    // the transcription timeout. The `finally` clears the finishing state
-    // even if a × landing in that window (or anything else) makes it settle
-    // early, so the composer never gets stuck with ✓ disabled.
-    let dictated = "";
-    try {
-      dictated = await dictation.finishDictate();
-    } finally {
-      dictateInsertingRef.current = false;
-      setDictateFinishing(false);
-    }
-    if (dictateFinishCancelledRef.current) {
-      dictateFinishCancelledRef.current = false;
-      return;
-    }
-    // Partial text (a chunk failed or timed out) is kept, with the error shown.
-    if (dictation.state.error) setDictationError(dictation.state.error);
-    setIsDictating(false);
-    dictateSnapshotRef.current = null;
-    setDictateSpeech({ committed: "", interim: "" });
-    const merged = snapshot?.draft
-      ? dictated
-        ? `${snapshot.draft} ${dictated}`
-        : snapshot.draft
-      : dictated;
-    setDraft(merged);
-    window.requestAnimationFrame(() => {
-      const el = textareaRef.current;
-      if (!el) return;
-      el.focus();
-      el.setSelectionRange(merged.length, merged.length);
-    });
-  }
-
-  useEffect(() => {
-    if (!runError || !runErrorId) return;
-    const currentRunErrorId = runErrorId;
-    let frame = 0;
-    function recordIfPresented() {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => {
-        const element = runErrorRef.current;
-        if (!element || document.visibilityState !== "visible") return;
-        const rect = element.getBoundingClientRect();
-        const topElement = document.elementFromPoint(
-          rect.left + rect.width / 2,
-          rect.top + rect.height / 2,
-        );
-        if (topElement && (topElement === element || element.contains(topElement))) {
-          if (presentedRunErrorIdRef.current === currentRunErrorId) return;
-          presentedRunErrorIdRef.current = currentRunErrorId;
-          onRunErrorPresented(currentRunErrorId);
-        }
-      });
-    }
-    recordIfPresented();
-    const observer = new MutationObserver(recordIfPresented);
-    observer.observe(document.body, { childList: true, subtree: true });
-    document.addEventListener("transitionend", recordIfPresented);
-    document.addEventListener("visibilitychange", recordIfPresented);
-    return () => {
-      cancelAnimationFrame(frame);
-      observer.disconnect();
-      document.removeEventListener("transitionend", recordIfPresented);
-      document.removeEventListener("visibilitychange", recordIfPresented);
-    };
-  }, [onRunErrorPresented, runError, runErrorId]);
+  // The Stop contour carries the "a run is going" signal now; the shell's own
+  // state only distinguishes an empty field from one that can send.
+  const composerState: ComposerState = isDictating ? "dictating" : canSend ? "typing" : "idle";
 
   useLayoutEffect(() => {
     const el = textareaRef.current;
@@ -463,26 +195,10 @@ export const Composer = memo(function Composer({
     // coming back as a single line.
   }, [draft, isDictating]);
 
-  // The dictation preview keeps the newest words in view once the text
-  // outgrows the field's height cap, instead of leaving them scrolled out of
-  // sight below the fold.
-  useEffect(() => {
-    if (!isDictating) return;
-    const el = dictationPreviewRef.current;
-    if (!el) return;
-    el.scrollTop = el.scrollHeight;
-  }, [isDictating, dictateSpeech]);
-
   function updateDraft(value: string, change: ComposerChange = "type") {
     draftChange.current = change;
     setDraft(value);
-    const mentionMatch = /(?:^|\s)@([\w-]*)$/.exec(value);
-    setMentionQuery(mentionMatch ? (mentionMatch[1] ?? "") : null);
-    // `/` only at the start of the draft so forced skills expand (`Use skill:` / `/Name` prefix).
-    const slashMatch = selectedSkill === null ? /^\/([^\n]*)$/.exec(value) : null;
-    const nextSlash = slashMatch ? (slashMatch[1] ?? "") : null;
-    if (nextSlash !== null && slashQuery === null) onSlashOpen?.();
-    setSlashQuery(nextSlash);
+    pickers.trackDraft(value, selectedSkill === null);
   }
 
   function focusComposer() {
@@ -491,8 +207,7 @@ export const Composer = memo(function Composer({
 
   function insertMention(mention: ComposerMention) {
     setDraft((current) => current.replace(/@([\w-]*)$/, ""));
-    setMentionQuery(null);
-    setMentionHighlightIndex(0);
+    pickers.closeMentions();
     setSelectedMentions((current) =>
       current.some((selected) => mentionChipKey(selected) === mentionChipKey(mention))
         ? current
@@ -504,12 +219,12 @@ export const Composer = memo(function Composer({
   function insertSkill(skill: AgentSkillCatalogEntry) {
     setSelectedSkill(skill);
     setDraft("");
-    setSlashQuery(null);
+    pickers.closeSlash();
   }
 
   function runSlashAction(action: SlashActionId) {
     setDraft("");
-    setSlashQuery(null);
+    pickers.closeSlash();
     onSlashAction?.(action);
   }
 
@@ -521,56 +236,11 @@ export const Composer = memo(function Composer({
     if (selectedSkill) setSelectedSkill(null);
   }
 
-  const mentionOptions = useMemo(() => {
-    if (mentionQuery === null || !mentionTargets?.length) return [];
-    const query = mentionQuery.trim().toLowerCase();
-    return mentionTargets
-      .filter((target) => !query || target.name.toLowerCase().startsWith(query))
-      .slice(0, 10);
-  }, [mentionQuery, mentionTargets]);
-
-  useEffect(() => {
-    setMentionHighlightIndex(0);
-  }, [mentionQuery, mentionOptions]);
-
-  const activeMentionIndex = clampMentionHighlightIndex(
-    mentionHighlightIndex,
-    mentionOptions.length,
-  );
-  const mentionPickerOpen = mentionOptions.length > 0;
-  const activeMentionOptionId = mentionPickerOpen
-    ? `${mentionListboxId}-option-${activeMentionIndex}`
-    : undefined;
-
-  const slashSkillOptions = useMemo(
-    () => (slashQuery === null ? [] : slashSkills(agentSkills ?? [], slashQuery)),
-    [agentSkills, slashQuery],
-  );
-
-  const slashActionOptions = useMemo(() => {
-    if (slashQuery === null) return [];
-    const query = slashQuery.trim().toLowerCase();
-    // The picker shows each action under its own label, so a search matches that label too.
-    return SLASH_ACTIONS.filter(
-      (action) =>
-        !query ||
-        action.label.toLowerCase().includes(query) ||
-        slashActionLabel(action.id).toLowerCase().includes(query),
-    );
-  }, [slashQuery]);
-
-  const showSlashPicker =
-    slashQuery !== null &&
-    mentionQuery === null &&
-    (slashSkillOptions.length > 0 || slashActionOptions.length > 0);
-
   function send() {
     if (!canSend || sending || disabled) return;
     const text = serializeComposerPrompt(draft, selectedSkill, selectedMentions);
     setDraft("");
-    setMentionQuery(null);
-    setMentionHighlightIndex(0);
-    setSlashQuery(null);
+    pickers.closeAll();
     setSelectedSkill(null);
     const mentions = selectedMentions;
     setSelectedMentions([]);
@@ -589,52 +259,10 @@ export const Composer = memo(function Composer({
   // Attachments stay unchanged while dictating: a file dropped or pasted in
   // is ignored the same way it already is while `disabled`.
   const dropDisabled = disabled || isDictating;
-
-  function handleDragEnter(event: DragEvent<HTMLFieldSetElement>) {
-    const dataTransfer = event.dataTransfer;
-    if (!isFileDrag(dataTransfer)) return;
-    event.preventDefault();
-    if (dropDisabled) {
-      dragDepth.current = 0;
-      setDraggingFiles(false);
-      return;
-    }
-    dragDepth.current += 1;
-    setDraggingFiles(true);
-  }
-
-  function handleDragOver(event: DragEvent<HTMLFieldSetElement>) {
-    const dataTransfer = event.dataTransfer;
-    if (!isFileDrag(dataTransfer)) return;
-    event.preventDefault();
-    dataTransfer.dropEffect = dropDisabled ? "none" : "copy";
-    if (dropDisabled) {
-      dragDepth.current = 0;
-      setDraggingFiles(false);
-      return;
-    }
-    setDraggingFiles(true);
-  }
-
-  function handleDragLeave(event: DragEvent<HTMLFieldSetElement>) {
-    if (!isFileDrag(event.dataTransfer)) return;
-    if (dropDisabled) {
-      dragDepth.current = 0;
-      setDraggingFiles(false);
-      return;
-    }
-    dragDepth.current = Math.max(0, dragDepth.current - 1);
-    if (dragDepth.current === 0) setDraggingFiles(false);
-  }
-
-  function handleDrop(event: DragEvent<HTMLFieldSetElement>) {
-    const dataTransfer = event.dataTransfer;
-    if (!isFileDrag(dataTransfer)) return;
-    event.preventDefault();
-    dragDepth.current = 0;
-    setDraggingFiles(false);
-    if (!dropDisabled) void onAttachmentPick(dataTransfer.files);
-  }
+  const { draggingFiles, dropHandlers } = useComposerFileDrop({
+    disabled: dropDisabled,
+    onAttachmentPick,
+  });
 
   function handlePaste(event: ClipboardEvent<HTMLTextAreaElement>) {
     const clipboardData = event.clipboardData;
@@ -658,171 +286,69 @@ export const Composer = memo(function Composer({
 
   const showComposerPlaceholder =
     draft.length === 0 && selectedSkill === null && selectedMentions.length === 0;
-  const replyName = replyTarget ? (replyTargetName ?? previewMessageText(replyTarget)) : "";
   const fieldName = answerName
     ? t`Answer ${answerName}…`
     : activeName
       ? t`Message ${activeName}`
       : t`Message`;
 
+  const stopButton = running ? (
+    <Button
+      variant="roundIcon"
+      size="roundIcon"
+      aria-label={t`Stop`}
+      disabled={sending}
+      onClick={() => void onStop()}
+      className="hover:bg-transparent"
+    >
+      <StopContour color={botColor} />
+    </Button>
+  ) : null;
+
   return (
     <fieldset
       aria-label={t`Message composer`}
       data-dragging={draggingFiles ? "files" : undefined}
-      onDragEnter={handleDragEnter}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
+      {...dropHandlers}
       className={`relative z-30 m-0 min-w-0 border-0 pb-4 pt-3 md:pb-6 ${
         draggingFiles ? "rounded-card ring-2 ring-inset ring-ring" : ""
       }`}
     >
-      {sendError || runError || dictationError ? (
-        <div
-          ref={runErrorRef}
-          role="alert"
-          data-testid="composer-error"
-          className="mb-3 flex items-center gap-2 rounded-card border border-destructive/40 bg-destructive/10 px-4 py-2 text-meta text-destructive"
-        >
-          <span className="min-w-0 flex-1">{sendError ?? runError ?? dictationError}</span>
-          <button
-            type="button"
-            aria-label={t`Dismiss error`}
-            data-testid="composer-error-dismiss"
-            onClick={() => {
-              setDictationError(null);
-              onDismissError();
-              window.requestAnimationFrame(() => textareaRef.current?.focus());
-            }}
-            className="shrink-0 text-destructive hover:text-foreground"
-          >
-            <X size={13} strokeWidth={2} />
-          </button>
-        </div>
+      <ComposerNotices
+        sendError={sendError}
+        runError={runError}
+        dictationError={dictationError}
+        runErrorId={runErrorId}
+        onRunErrorPresented={onRunErrorPresented}
+        onDismissError={() => {
+          setDictationError(null);
+          onDismissError();
+          window.requestAnimationFrame(() => textareaRef.current?.focus());
+        }}
+        replyTarget={replyTarget}
+        replyTargetName={replyTargetName}
+        onClearReply={onClearReply}
+        rewindTarget={rewindTarget}
+        rewindRemovedCount={rewindRemovedCount}
+        onCancelRewind={onCancelRewind}
+        attachmentNotice={attachmentNotice}
+      />
+      {pickers.mentionPickerOpen ? (
+        <MentionPicker
+          id={pickers.mentionListboxId}
+          options={pickers.mentionOptions}
+          activeIndex={pickers.activeMentionIndex}
+          onPick={insertMention}
+          onHighlight={pickers.setMentionHighlightIndex}
+        />
       ) : null}
-      {replyTarget ? (
-        <div
-          data-testid="reply-chip"
-          className="mb-2 flex items-center gap-2 rounded-full border border-border bg-muted px-3 py-1.5 text-meta text-foreground/75"
-        >
-          <span className="min-w-0 flex-1 truncate text-muted-foreground">{t`Replying to ${replyName}`}</span>
-          <button
-            type="button"
-            aria-label={t`Cancel reply`}
-            onClick={onClearReply}
-            className="shrink-0 text-muted-foreground hover:text-foreground"
-          >
-            <X size={13} strokeWidth={2} />
-          </button>
-        </div>
-      ) : null}
-      {rewindTarget ? (
-        <div
-          data-testid="rewind-chip"
-          className="mb-2 flex items-center gap-2 rounded-full border border-border bg-sidebar-border px-3 py-1.5 text-meta text-foreground"
-        >
-          <Pencil size={13} strokeWidth={1.8} className="shrink-0 text-muted-foreground" />
-          <span className="min-w-0 flex-1 truncate text-muted-foreground">
-            {t`Editing message from ${rewindTime} · ${rewindRemovedCount ?? 0} messages after it will be removed`}
-          </span>
-          <button
-            type="button"
-            aria-label={t`Cancel edit`}
-            data-testid="rewind-chip-cancel"
-            onClick={onCancelRewind}
-            className="shrink-0 text-muted-foreground hover:text-foreground"
-          >
-            <X size={13} strokeWidth={2} />
-          </button>
-        </div>
-      ) : null}
-      {attachmentNotice ? (
-        <div className="mb-3 rounded-card border border-warning/40 bg-warning/10 px-4 py-2 text-meta text-warning">
-          {attachmentNotice}
-        </div>
-      ) : null}
-      {mentionPickerOpen ? (
-        <div
-          id={mentionListboxId}
-          role="listbox"
-          aria-label={t`Mentions`}
-          data-testid="mention-picker"
-          className="mb-2 overflow-hidden rounded-card border border-border bg-muted"
-        >
-          {mentionOptions.map((mention, index) => {
-            const optionId = `${mentionListboxId}-option-${index}`;
-            const highlighted = index === activeMentionIndex;
-            return (
-              <button
-                id={optionId}
-                key={mentionChipKey(mention)}
-                type="button"
-                role="option"
-                aria-selected={highlighted}
-                aria-label={t`@${mention.name}`}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => insertMention(mention)}
-                onMouseEnter={() => setMentionHighlightIndex(index)}
-                className={`flex w-full items-start gap-3 px-4 py-2.5 text-start hover:bg-accent ${
-                  highlighted ? "bg-accent" : ""
-                }`}
-              >
-                <MentionOptionIcon mention={mention} />
-                <span className="min-w-0">
-                  <span dir="auto" className="block text-capsule text-foreground">
-                    @{mention.name}
-                  </span>
-                  {mention.subtitle ? (
-                    <span dir="auto" className="block truncate text-label text-muted-foreground">
-                      {mention.subtitle}
-                    </span>
-                  ) : null}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      ) : null}
-      {showSlashPicker ? (
-        <div
-          data-testid="slash-picker"
-          className="mb-2 overflow-hidden rounded-card border border-border bg-muted"
-        >
-          {slashSkillOptions.map((skill) => (
-            <button
-              key={skill.id}
-              type="button"
-              aria-label={t`Skill ${skill.name}`}
-              onClick={() => insertSkill(skill)}
-              className="flex w-full items-start gap-3 px-4 py-2.5 text-start hover:bg-accent"
-            >
-              <Box size={16} strokeWidth={1.7} className="mt-0.5 shrink-0 text-muted-foreground" />
-              <span className="min-w-0">
-                <span dir="auto" className="block text-capsule text-foreground">
-                  {skill.name}
-                </span>
-                <span dir="auto" className="block truncate text-label text-muted-foreground">
-                  {truncateSlashDescription(skill.description)}
-                </span>
-              </span>
-            </button>
-          ))}
-          {slashActionOptions.map((action) => {
-            const label = slashActionLabel(action.id);
-            return (
-              <button
-                key={action.id}
-                type="button"
-                aria-label={label}
-                onClick={() => runSlashAction(action.id)}
-                className="flex w-full items-center gap-3 px-4 py-2.5 text-start hover:bg-accent"
-              >
-                <Settings size={16} strokeWidth={1.7} className="shrink-0 text-muted-foreground" />
-                <span className="text-capsule text-foreground">{label}</span>
-              </button>
-            );
-          })}
-        </div>
+      {pickers.showSlashPicker ? (
+        <SlashPicker
+          skills={pickers.slashSkillOptions}
+          actions={pickers.slashActionOptions}
+          onSkill={insertSkill}
+          onAction={runSlashAction}
+        />
       ) : null}
       <ComposerShell
         ref={shellRef}
@@ -832,136 +358,46 @@ export const Composer = memo(function Composer({
           (rewindArtifacts?.length ?? 0) > 0 ||
           pendingAttachments.length > 0 ||
           linkPreviewView.status !== "idle" ? (
-            <>
-              {rewindArtifacts?.map((artifact) => (
-                <ComposerAttachment
-                  key={artifact.id}
-                  name={artifact.name}
-                  removeLabel={t`Remove ${artifact.name}`}
-                  onRemove={() => onRemoveRewindArtifact?.(artifact.id)}
-                  disabled={isDictating}
-                />
-              ))}
-              {pendingAttachments.map((attachment) => (
-                <ComposerAttachment
-                  key={attachment.id}
-                  name={attachment.file.name}
-                  previewUrl={attachment.previewUrl}
-                  removeLabel={t`Remove ${attachment.file.name}`}
-                  onRemove={() => onRemoveAttachment(attachment)}
-                  disabled={isDictating}
-                />
-              ))}
-              {linkPreviewView.status === "idle" ? null : (
-                <ComposerLinkPreview
-                  site={linkPreviewView.site}
-                  title={linkPreviewView.title}
-                  image={
-                    linkPreviewView.thumbnail ? (
-                      <LinkPreviewPicture
-                        src={linkPreviewView.thumbnail}
-                        fit={linkPreviewView.thumbnailFit}
-                      />
-                    ) : undefined
-                  }
-                  removeLabel={t`Remove preview`}
-                  onRemove={() => linkPreview.remove()}
-                  disabled={isDictating}
-                />
-              )}
-            </>
+            <AttachmentTray
+              rewindArtifacts={rewindArtifacts}
+              onRemoveRewindArtifact={onRemoveRewindArtifact}
+              pendingAttachments={pendingAttachments}
+              onRemoveAttachment={onRemoveAttachment}
+              linkPreview={linkPreviewView}
+              onRemoveLinkPreview={() => linkPreview.remove()}
+              disabled={isDictating}
+            />
           ) : undefined
         }
         attach={
-          <>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept={ATTACHMENT_ACCEPT}
-              className="hidden"
-              onChange={(event) => void onAttachmentPick(event.target.files)}
-            />
-            <Button
-              variant="roundIcon"
-              size="roundIcon"
-              aria-label={t`Attach file`}
-              disabled={disabled || isDictating}
-              onClick={() => fileInputRef.current?.click()}
-              className="hover:bg-secondary"
-            >
-              <Plus size={17} strokeWidth={1.8} />
-            </Button>
-          </>
+          <AttachButton
+            inputRef={fileInputRef}
+            onPick={onAttachmentPick}
+            disabled={disabled || isDictating}
+          />
         }
         leading={
           selectedSkill || selectedMentions.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-1.5">
-              {selectedSkill ? (
-                <span
-                  data-testid="skill-chip"
-                  className="inline-flex h-7.5 max-w-full items-center gap-1.5 rounded-full bg-accent ps-2.5 pe-2.5 text-capsule text-foreground"
-                >
-                  <Box size={13} strokeWidth={1.7} className="shrink-0 text-muted-foreground/70" />
-                  <span dir="auto" className="truncate">
-                    {selectedSkill.name}
-                  </span>
-                  <button
-                    type="button"
-                    aria-label={t`Remove skill ${selectedSkill.name}`}
-                    onClick={() => setSelectedSkill(null)}
-                    disabled={isDictating}
-                    className="text-muted-foreground hover:text-foreground disabled:pointer-events-none"
-                  >
-                    <X size={12} strokeWidth={2} />
-                  </button>
-                </span>
-              ) : null}
-              {selectedMentions.map((mention) => (
-                <span
-                  key={mentionChipKey(mention)}
-                  data-testid="mention-chip"
-                  data-mention-kind={mention.kind}
-                  className="inline-flex h-7.5 max-w-full items-center gap-1.5 rounded-full bg-mention-chip ps-1.25 pe-2.5 text-capsule text-mention-chip-foreground"
-                >
-                  <MentionChipIcon mention={mention} />
-                  <span dir="auto" className="truncate">
-                    {mention.name}
-                  </span>
-                  <button
-                    type="button"
-                    aria-label={t`Remove mention ${mention.name}`}
-                    onClick={() =>
-                      setSelectedMentions((current) =>
-                        current.filter(
-                          (selected) => mentionChipKey(selected) !== mentionChipKey(mention),
-                        ),
-                      )
-                    }
-                    disabled={isDictating}
-                    className="text-muted-foreground hover:text-foreground disabled:pointer-events-none"
-                  >
-                    <X size={12} strokeWidth={2} />
-                  </button>
-                </span>
-              ))}
-            </div>
+            <SelectedChips
+              skill={selectedSkill}
+              mentions={selectedMentions}
+              disabled={isDictating}
+              onRemoveSkill={() => setSelectedSkill(null)}
+              onRemoveMention={(mention) =>
+                setSelectedMentions((current) =>
+                  current.filter(
+                    (selected) => mentionChipKey(selected) !== mentionChipKey(mention),
+                  ),
+                )
+              }
+            />
           ) : undefined
         }
         trailing={
           isDictating ? undefined : (
             <>
               {dictationAvailable ? (
-                <Button
-                  variant="roundIcon"
-                  size="roundIcon"
-                  aria-label={t`Dictate`}
-                  disabled={disabled}
-                  onClick={startDictation}
-                  className="hover:bg-secondary"
-                >
-                  <Mic size={17} strokeWidth={1.8} />
-                </Button>
+                <DictateButton disabled={disabled} onStart={startDictation} />
               ) : null}
               {canSend ? (
                 <Button
@@ -979,59 +415,19 @@ export const Composer = memo(function Composer({
                   />
                 </Button>
               ) : null}
-              {running ? (
-                <Button
-                  variant="roundIcon"
-                  size="roundIcon"
-                  aria-label={t`Stop`}
-                  disabled={sending}
-                  onClick={() => void onStop()}
-                  className="hover:bg-transparent"
-                >
-                  <StopContour color={botColor} />
-                </Button>
-              ) : null}
+              {stopButton}
             </>
           )
         }
-        dictationCancel={
-          isDictating ? (
-            <Button
-              variant="roundIcon"
-              size="roundIcon"
-              aria-label={t`Cancel dictation`}
-              onClick={cancelDictation}
-              className="hover:bg-secondary"
-            >
-              <X size={16} strokeWidth={2.2} />
-            </Button>
-          ) : undefined
-        }
+        dictationCancel={isDictating ? <DictationCancel onCancel={cancelDictation} /> : undefined}
         dictationConfirm={
           isDictating ? (
             <>
-              <Button
-                variant="roundIcon"
-                size="roundIcon"
-                aria-label={t`Insert dictation`}
-                disabled={dictateFinishing}
-                onClick={() => void insertDictation()}
-                className="bg-primary text-primary-foreground hover:bg-primary hover:opacity-85"
-              >
-                <Check size={16} strokeWidth={2.4} />
-              </Button>
-              {running ? (
-                <Button
-                  variant="roundIcon"
-                  size="roundIcon"
-                  aria-label={t`Stop`}
-                  disabled={sending}
-                  onClick={() => void onStop()}
-                  className="hover:bg-transparent"
-                >
-                  <StopContour color={botColor} />
-                </Button>
-              ) : null}
+              <DictationConfirm
+                finishing={dictateFinishing}
+                onConfirm={() => void insertDictation()}
+              />
+              {stopButton}
             </>
           ) : undefined
         }
@@ -1040,47 +436,13 @@ export const Composer = memo(function Composer({
           {isDictating ? t`Dictating` : ""}
         </span>
         {isDictating ? (
-          // biome-ignore lint/a11y/useSemanticElements: a real <textarea> can't style per-word ranges (blur-in words, a muted interim tail); this read-only preview replaces it only while dictating.
-          <div
-            ref={dictationPreviewRef}
-            role="textbox"
-            aria-readonly="true"
-            aria-multiline="true"
-            aria-label={fieldName}
-            tabIndex={-1}
-            dir="auto"
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
-                void insertDictation();
-              }
-            }}
-            className="rk-scroll block max-h-composer-field min-h-6 w-full overflow-y-auto py-1 text-body text-foreground outline-none"
-          >
-            {(() => {
-              const snapshot = dictateSnapshotRef.current;
-              const prefix = snapshot?.draft ?? "";
-              // Append-only: each word's index mounts once and keeps its DOM
-              // node, so only a newly dictated word (a fresh index) plays the
-              // blur-in entrance below — earlier ones don't replay it.
-              const words = dictateSpeech.committed.split(/\s+/).filter(Boolean);
-              return (
-                <>
-                  {prefix ? <span>{prefix} </span> : null}
-                  {words.map((word, index) => (
-                    <span key={index} className="rk-word-in">
-                      {word}{" "}
-                    </span>
-                  ))}
-                  {dictateSpeech.interim ? (
-                    <span key="interim" className="rk-word-in text-muted-foreground">
-                      {dictateSpeech.interim}
-                    </span>
-                  ) : null}
-                </>
-              );
-            })()}
-          </div>
+          <DictationPreview
+            previewRef={dictationPreviewRef}
+            label={fieldName}
+            prefix={dictatedPrefix}
+            speech={dictateSpeech}
+            onConfirm={() => void insertDictation()}
+          />
         ) : (
           <textarea
             ref={textareaRef}
@@ -1104,7 +466,7 @@ export const Composer = memo(function Composer({
                 removeLastChip();
                 return;
               }
-              if (event.key === "Escape" && !mentionPickerOpen && rewindTarget) {
+              if (event.key === "Escape" && !pickers.mentionPickerOpen && rewindTarget) {
                 event.preventDefault();
                 onCancelRewind?.();
                 return;
@@ -1113,11 +475,11 @@ export const Composer = memo(function Composer({
                 key: event.key,
                 shiftKey: event.shiftKey,
                 isComposing: event.nativeEvent.isComposing || event.keyCode === 229,
-                optionCount: mentionOptions.length,
-                highlightedIndex: activeMentionIndex,
+                optionCount: pickers.mentionOptions.length,
+                highlightedIndex: pickers.activeMentionIndex,
               });
               if (action.type === "complete") {
-                const mention = mentionOptions[action.index];
+                const mention = pickers.mentionOptions[action.index];
                 if (!mention) return;
                 event.preventDefault();
                 insertMention(mention);
@@ -1125,13 +487,12 @@ export const Composer = memo(function Composer({
               }
               if (action.type === "move") {
                 event.preventDefault();
-                setMentionHighlightIndex(action.index);
+                pickers.setMentionHighlightIndex(action.index);
                 return;
               }
               if (action.type === "dismiss") {
                 event.preventDefault();
-                setMentionQuery(null);
-                setMentionHighlightIndex(0);
+                pickers.closeMentions();
                 return;
               }
               if (action.type === "send") {
@@ -1151,9 +512,9 @@ export const Composer = memo(function Composer({
             role="combobox"
             aria-autocomplete="list"
             aria-haspopup="listbox"
-            aria-expanded={mentionPickerOpen}
-            aria-controls={mentionPickerOpen ? mentionListboxId : undefined}
-            aria-activedescendant={activeMentionOptionId}
+            aria-expanded={pickers.mentionPickerOpen}
+            aria-controls={pickers.mentionPickerOpen ? pickers.mentionListboxId : undefined}
+            aria-activedescendant={pickers.activeMentionOptionId}
             name="chat-message"
             autoComplete="off"
             dir="auto"
@@ -1165,70 +526,3 @@ export const Composer = memo(function Composer({
     </fieldset>
   );
 });
-
-function slashActionLabel(id: SlashActionId) {
-  switch (id) {
-    case "chat-settings":
-      return t`Bot settings`;
-    case "settings-general":
-      return t`Settings: General`;
-    case "settings-usage":
-      return t`Settings: Usage`;
-  }
-}
-
-function MentionOptionIcon({ mention }: { mention: ComposerMention }) {
-  if (mention.kind === "routine") {
-    return <Clock size={16} strokeWidth={1.7} className="mt-0.5 shrink-0 text-muted-foreground" />;
-  }
-  if (mention.kind === "connector") {
-    return <Puzzle size={16} strokeWidth={1.7} className="mt-0.5 shrink-0 text-muted-foreground" />;
-  }
-  if (mention.kind === "group") {
-    return (
-      <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-accent text-[9px] text-foreground/75">
-        G
-      </span>
-    );
-  }
-  if (mention.kind === "everyone") {
-    return (
-      <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-accent text-[9px] text-foreground/75">
-        @
-      </span>
-    );
-  }
-  return (
-    <BotAvatar
-      color={mention.color ?? FALLBACK_BOT_COLOR}
-      identity={mention.id}
-      shapeSeed={mention.shapeSeed}
-      size={16}
-    />
-  );
-}
-
-/** The 18 px avatar sized for the Quiet mention chip (see docs/design-system.md). */
-function MentionChipIcon({ mention }: { mention: ComposerMention }) {
-  if (mention.kind === "routine") {
-    return <Clock size={13} strokeWidth={1.7} className="shrink-0 text-muted-foreground/70" />;
-  }
-  if (mention.kind === "connector") {
-    return <Puzzle size={13} strokeWidth={1.7} className="shrink-0 text-muted-foreground/70" />;
-  }
-  if (mention.kind === "group" || mention.kind === "everyone") {
-    return (
-      <span className="grid h-4 w-4 shrink-0 place-items-center rounded-full bg-accent text-[9px] text-foreground/75">
-        {mention.kind === "group" ? "G" : "@"}
-      </span>
-    );
-  }
-  return (
-    <BotAvatar
-      color={mention.color ?? FALLBACK_BOT_COLOR}
-      identity={mention.id}
-      shapeSeed={mention.shapeSeed}
-      size={18}
-    />
-  );
-}
