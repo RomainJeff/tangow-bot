@@ -1,0 +1,28 @@
+P0 offline reproduction
+
+Use Node 24 and pnpm 9.15.0. Docker supplies temporary PostgreSQL databases.
+No vendor key, production database, E2B VM or shared-server restart is used.
+
+pnpm install --frozen-lockfile
+pnpm db:generate
+pnpm check
+pnpm lint
+pnpm test:pi
+pnpm exec vitest run packages/adapters/src/pi-runtime.test.ts packages/adapters/src/pi-runtime-cancellation.test.ts packages/adapters/src/executor-approval-pi.test.ts packages/adapters/src/executor-secret-pi.test.ts
+pnpm exec vitest run packages/adapters/src/pi-runtime-tool-dispatch.test.ts packages/adapters/src/pi-runtime-models.test.ts packages/adapters/src/pi-run-trace.test.ts packages/adapters/src/run-trace.test.ts
+pnpm test:integration
+pnpm test:e2e:affected
+pnpm bench:pi-sdk --trials 30 --out pi-sdk-benchmark.json
+
+Observed SDK CLI result on the code commit recorded in verification.json:
+Test Files  4 passed (4)
+Tests       30 passed (30)
+These are 19 real SDK cases and 11 existing offline product cases.
+
+The affected selector chose the complete web suite because no readable impact map exists.
+The unrelated web failures and exact totals are recorded in verification.json.
+The recap desktop and phone images show a synthetic thread fixture with real signup.
+They prove preservation of the public recap projection, not a new SDK product engine.
+
+Read P0-handoff.md before consuming these results. Performance and infrastructure
+limits remain separate from the passing SDK composition gates.
