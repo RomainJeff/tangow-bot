@@ -984,6 +984,56 @@ describe("Pi connector tool dispatch", () => {
     });
   });
 
+  it.each([
+    { freeTextIsPrivate: false, ends: "silently" },
+    { freeTextIsPrivate: true, ends: "with the stalled-step notice" },
+  ])(
+    "ends $ends when silence is allowed and the closing turn after tool work is empty",
+    async ({ freeTextIsPrivate }) => {
+      fakeAgentState.mode = "silent-continuation";
+      fakeAgentState.emitFinalAfterFollowUp = false;
+      const notice =
+        "I completed the tool step but could not produce a final response. Please ask me to continue.";
+      const events: unknown[] = [];
+
+      for await (const event of new PiAgentRuntime().run(
+        {
+          botId: "b",
+          threadId: "t",
+          runId: "silent-after-tools",
+          prompt: "check the calendars and stay silent if nothing needs attention",
+          instructions: "Send nothing when a check finds nothing.",
+          history: [],
+          tools: [destinationTool],
+          model: { provider: "test", id: "dispatch-test-model" },
+          allowSilentEmpty: true,
+          freeTextIsPrivate,
+          executeTool: vi.fn(async () => ({ ok: true })),
+        },
+        {
+          operationId: "silent-after-tools",
+          traceId: "silent-after-tools",
+          spaceId: "w",
+          userId: "u",
+          signal: new AbortController().signal,
+        },
+      )) {
+        events.push(event);
+      }
+
+      if (freeTextIsPrivate) {
+        expect(events.at(-1)).toMatchObject({ type: "done", runtimeNotice: notice });
+      } else {
+        expect(fakeAgentState.followUpMessages).toEqual([]);
+        expect(JSON.stringify(events)).not.toContain("could not produce a final response");
+        expect(events.at(-1)).toEqual({
+          type: "done",
+          text: "I will check the destination first.",
+        });
+      }
+    },
+  );
+
   it("keeps FYI bot-message wakes silent when the model produces nothing", async () => {
     fakeAgentState.mode = "empty";
     const runtime = new PiAgentRuntime();
