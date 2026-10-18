@@ -21,7 +21,7 @@ import type {
   MemoryProviderResolver,
 } from "./memory-provider-factory.js";
 
-const DEFAULT_COMPACTION_SETTINGS = { reserveTokens: 16_384, keepRecentTokens: 20_000 };
+export const DEFAULT_COMPACTION_SETTINGS = { reserveTokens: 16_384, keepRecentTokens: 20_000 };
 
 export const MAX_COMPACTED_SUMMARY_CHARS = 20_000;
 /** Maximum message count when the model context window is unknown. */
