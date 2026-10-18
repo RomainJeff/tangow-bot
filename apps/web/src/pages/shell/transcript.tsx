@@ -187,7 +187,6 @@ export const Transcript = memo(function Transcript({
     onOpenSkill,
     messages,
     rowOf,
-    scrollRef,
   ]);
   const workingBotName = workingBots.length === 1 ? workingBots[0]?.name : undefined;
   const workingFallback = `${
