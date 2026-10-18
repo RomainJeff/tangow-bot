@@ -1,0 +1,588 @@
+{
+  "schemaVersion": 1,
+  "kind": "real-model-pi-task-samples",
+  "sourceSha": "79cccff8427129d26c5663ee6ea702c6f9a4695a",
+  "task": "reconcile",
+  "trials": [
+    {
+      "arm": "current-runtime",
+      "task": "reconcile",
+      "seed": 7301,
+      "status": "completed",
+      "done": true,
+      "errors": [],
+      "settleMs": null,
+      "metrics": {
+        "wallMs": 11960,
+        "firstTokenMs": 1916,
+        "modelTurns": 5,
+        "toolCalls": 8,
+        "toolErrors": 0,
+        "usage": {
+          "input": 1336,
+          "output": 827,
+          "cacheRead": 5073,
+          "cacheWrite": 2904
+        },
+        "costUSD": 0.00096083
+      },
+      "grade": {
+        "passed": true,
+        "score": 1,
+        "findings": []
+      },
+      "trial": 1,
+      "position": 0,
+      "connectionSetupMs": 0,
+      "processCpuMs": 344.626
+    },
+    {
+      "arm": "sdk-same-tools",
+      "task": "reconcile",
+      "seed": 7301,
+      "status": "completed",
+      "done": true,
+      "errors": [],
+      "settleMs": null,
+      "metrics": {
+        "wallMs": 9960.856749999999,
+        "firstTokenMs": 1637,
+        "modelTurns": 4,
+        "toolCalls": 7,
+        "toolErrors": 0,
+        "usage": {
+          "input": 670,
+          "output": 607,
+          "cacheRead": 4846,
+          "cacheWrite": 2699
+        },
+        "costUSD": 0.000756335
+      },
+      "grade": {
+        "passed": true,
+        "score": 1,
+        "findings": []
+      },
+      "trial": 1,
+      "position": 1,
+      "connectionSetupMs": 2.8567499999990105,
+      "processCpuMs": 268.258
+    },
+    {
+      "arm": "sdk-native-files",
+      "task": "reconcile",
+      "seed": 7301,
+      "status": "completed",
+      "done": true,
+      "errors": [],
+      "settleMs": null,
+      "metrics": {
+        "wallMs": 11998.653125,
+        "firstTokenMs": 1646,
+        "modelTurns": 5,
+        "toolCalls": 8,
+        "toolErrors": 0,
+        "usage": {
+          "input": 1642,
+          "output": 677,
+          "cacheRead": 5245,
+          "cacheWrite": 2899
+        },
+        "costUSD": 0.000917525
+      },
+      "grade": {
+        "passed": true,
+        "score": 1,
+        "findings": []
+      },
+      "trial": 1,
+      "position": 2,
+      "connectionSetupMs": 3.6531250000007276,
+      "processCpuMs": 206.556
+    },
+    {
+      "arm": "sdk-native-files",
+      "task": "reconcile",
+      "seed": 7302,
+      "status": "completed",
+      "done": true,
+      "errors": [],
+      "settleMs": null,
+      "metrics": {
+        "wallMs": 10541.372124999994,
+        "firstTokenMs": 841,
+        "modelTurns": 6,
+        "toolCalls": 8,
+        "toolErrors": 0,
+        "usage": {
+          "input": 2427,
+          "output": 523,
+          "cacheRead": 5069,
+          "cacheWrite": 2742
+        },
+        "costUSD": 0.0008976400000000001
+      },
+      "grade": {
+        "passed": true,
+        "score": 1,
+        "findings": []
+      },
+      "trial": 2,
+      "position": 0,
+      "connectionSetupMs": 3.372124999994412,
+      "processCpuMs": 149.677
+    },
+    {
+      "arm": "sdk-same-tools",
+      "task": "reconcile",
+      "seed": 7302,
+      "status": "completed",
+      "done": true,
+      "errors": [],
+      "settleMs": null,
+      "metrics": {
+        "wallMs": 6227.046707999994,
+        "firstTokenMs": 1278,
+        "modelTurns": 4,
+        "toolCalls": 7,
+        "toolErrors": 0,
+        "usage": {
+          "input": 668,
+          "output": 447,
+          "cacheRead": 4674,
+          "cacheWrite": 2533
+        },
+        "costUSD": 0.0006536649999999999
+      },
+      "grade": {
+        "passed": true,
+        "score": 1,
+        "findings": []
+      },
+      "trial": 2,
+      "position": 1,
+      "connectionSetupMs": 3.0467079999943962,
+      "processCpuMs": 104.876
+    },
+    {
+      "arm": "current-runtime",
+      "task": "reconcile",
+      "seed": 7302,
+      "status": "completed",
+      "done": true,
+      "errors": [],
+      "settleMs": null,
+      "metrics": {
+        "wallMs": 10154,
+        "firstTokenMs": 1828,
+        "modelTurns": 4,
+        "toolCalls": 7,
+        "toolErrors": 0,
+        "usage": {
+          "input": 631,
+          "output": 618,
+          "cacheRead": 4771,
+          "cacheWrite": 2667
+        },
+        "costUSD": 0.0007531850000000001
+      },
+      "grade": {
+        "passed": true,
+        "score": 1,
+        "findings": []
+      },
+      "trial": 2,
+      "position": 2,
+      "connectionSetupMs": 0,
+      "processCpuMs": 96.425
+    },
+    {
+      "arm": "sdk-same-tools",
+      "task": "reconcile",
+      "seed": 7303,
+      "status": "completed",
+      "done": true,
+      "errors": [],
+      "settleMs": null,
+      "metrics": {
+        "wallMs": 27708.35954199999,
+        "firstTokenMs": 15169,
+        "modelTurns": 5,
+        "toolCalls": 8,
+        "toolErrors": 0,
+        "usage": {
+          "input": 1412,
+          "output": 684,
+          "cacheRead": 5006,
+          "cacheWrite": 2799
+        },
+        "costUSD": 0.0008831350000000001
+      },
+      "grade": {
+        "passed": true,
+        "score": 1,
+        "findings": []
+      },
+      "trial": 3,
+      "position": 0,
+      "connectionSetupMs": 2.359541999991052,
+      "processCpuMs": 137.282
+    },
+    {
+      "arm": "sdk-native-files",
+      "task": "reconcile",
+      "seed": 7303,
+      "status": "completed",
+      "done": true,
+      "errors": [],
+      "settleMs": null,
+      "metrics": {
+        "wallMs": 11721.428375000018,
+        "firstTokenMs": 1204,
+        "modelTurns": 5,
+        "toolCalls": 8,
+        "toolErrors": 0,
+        "usage": {
+          "input": 1640,
+          "output": 673,
+          "cacheRead": 5243,
+          "cacheWrite": 2894
+        },
+        "costUSD": 0.0009146800000000001
+      },
+      "grade": {
+        "passed": true,
+        "score": 1,
+        "findings": []
+      },
+      "trial": 3,
+      "position": 1,
+      "connectionSetupMs": 2.428375000017695,
+      "processCpuMs": 131.12
+    },
+    {
+      "arm": "current-runtime",
+      "task": "reconcile",
+      "seed": 7303,
+      "status": "completed",
+      "done": true,
+      "errors": [],
+      "settleMs": null,
+      "metrics": {
+        "wallMs": 10648,
+        "firstTokenMs": 857,
+        "modelTurns": 6,
+        "toolCalls": 8,
+        "toolErrors": 0,
+        "usage": {
+          "input": 1979,
+          "output": 618,
+          "cacheRead": 4856,
+          "cacheWrite": 2697
+        },
+        "costUSD": 0.000892585
+      },
+      "grade": {
+        "passed": true,
+        "score": 1,
+        "findings": []
+      },
+      "trial": 3,
+      "position": 2,
+      "connectionSetupMs": 0,
+      "processCpuMs": 188.402
+    },
+    {
+      "arm": "current-runtime",
+      "task": "reconcile",
+      "seed": 7304,
+      "status": "completed",
+      "done": true,
+      "errors": [],
+      "settleMs": null,
+      "metrics": {
+        "wallMs": 13893,
+        "firstTokenMs": 1082,
+        "modelTurns": 5,
+        "toolCalls": 8,
+        "toolErrors": 0,
+        "usage": {
+          "input": 1336,
+          "output": 1014,
+          "cacheRead": 5254,
+          "cacheWrite": 3088
+        },
+        "costUSD": 0.00107914
+      },
+      "grade": {
+        "passed": true,
+        "score": 1,
+        "findings": []
+      },
+      "trial": 4,
+      "position": 0,
+      "connectionSetupMs": 0,
+      "processCpuMs": 105.882
+    },
+    {
+      "arm": "sdk-native-files",
+      "task": "reconcile",
+      "seed": 7304,
+      "status": "completed",
+      "done": true,
+      "errors": [],
+      "settleMs": null,
+      "metrics": {
+        "wallMs": 22699.89850000001,
+        "firstTokenMs": 1262,
+        "modelTurns": 5,
+        "toolCalls": 8,
+        "toolErrors": 0,
+        "usage": {
+          "input": 1640,
+          "output": 547,
+          "cacheRead": 5107,
+          "cacheWrite": 2765
+        },
+        "costUSD": 0.0008341949999999999
+      },
+      "grade": {
+        "passed": true,
+        "score": 1,
+        "findings": []
+      },
+      "trial": 4,
+      "position": 1,
+      "connectionSetupMs": 1.8985000000102445,
+      "processCpuMs": 142.033
+    },
+    {
+      "arm": "sdk-same-tools",
+      "task": "reconcile",
+      "seed": 7304,
+      "status": "completed",
+      "done": true,
+      "errors": [],
+      "settleMs": null,
+      "metrics": {
+        "wallMs": 8933.980624999997,
+        "firstTokenMs": 1046,
+        "modelTurns": 5,
+        "toolCalls": 8,
+        "toolErrors": 0,
+        "usage": {
+          "input": 1414,
+          "output": 467,
+          "cacheRead": 4785,
+          "cacheWrite": 2580
+        },
+        "costUSD": 0.00074525
+      },
+      "grade": {
+        "passed": true,
+        "score": 1,
+        "findings": []
+      },
+      "trial": 4,
+      "position": 2,
+      "connectionSetupMs": 1.9806249999965075,
+      "processCpuMs": 99.822
+    },
+    {
+      "arm": "sdk-native-files",
+      "task": "reconcile",
+      "seed": 7305,
+      "status": "completed",
+      "done": true,
+      "errors": [],
+      "settleMs": null,
+      "metrics": {
+        "wallMs": 10881.735583000001,
+        "firstTokenMs": 1692,
+        "modelTurns": 4,
+        "toolCalls": 7,
+        "toolErrors": 0,
+        "usage": {
+          "input": 785,
+          "output": 643,
+          "cacheRead": 5127,
+          "cacheWrite": 2840
+        },
+        "costUSD": 0.00080627
+      },
+      "grade": {
+        "passed": true,
+        "score": 1,
+        "findings": []
+      },
+      "trial": 5,
+      "position": 0,
+      "connectionSetupMs": 2.7355830000014976,
+      "processCpuMs": 154.655
+    },
+    {
+      "arm": "current-runtime",
+      "task": "reconcile",
+      "seed": 7305,
+      "status": "completed",
+      "done": true,
+      "errors": [],
+      "settleMs": null,
+      "metrics": {
+        "wallMs": 9083,
+        "firstTokenMs": 1834,
+        "modelTurns": 4,
+        "toolCalls": 7,
+        "toolErrors": 0,
+        "usage": {
+          "input": 631,
+          "output": 597,
+          "cacheRead": 4754,
+          "cacheWrite": 2648
+        },
+        "costUSD": 0.0007401399999999999
+      },
+      "grade": {
+        "passed": false,
+        "score": 0.8571428571428571,
+        "findings": [
+          "missed 1 of 7 discrepancies"
+        ]
+      },
+      "trial": 5,
+      "position": 1,
+      "connectionSetupMs": 0,
+      "processCpuMs": 82.879
+    },
+    {
+      "arm": "sdk-same-tools",
+      "task": "reconcile",
+      "seed": 7305,
+      "status": "completed",
+      "done": true,
+      "errors": [],
+      "settleMs": null,
+      "metrics": {
+        "wallMs": 10767.376374999993,
+        "firstTokenMs": 1183,
+        "modelTurns": 5,
+        "toolCalls": 8,
+        "toolErrors": 0,
+        "usage": {
+          "input": 1416,
+          "output": 572,
+          "cacheRead": 4895,
+          "cacheWrite": 2688
+        },
+        "costUSD": 0.0008125500000000001
+      },
+      "grade": {
+        "passed": false,
+        "score": 0.8571428571428571,
+        "findings": [
+          "missed 1 of 7 discrepancies"
+        ]
+      },
+      "trial": 5,
+      "position": 2,
+      "connectionSetupMs": 2.3763749999925494,
+      "processCpuMs": 134.028
+    },
+    {
+      "arm": "sdk-same-tools",
+      "task": "reconcile",
+      "seed": 7306,
+      "status": "completed",
+      "done": true,
+      "errors": [],
+      "settleMs": null,
+      "metrics": {
+        "wallMs": 9407.123332999996,
+        "firstTokenMs": 1198,
+        "modelTurns": 5,
+        "toolCalls": 8,
+        "toolErrors": 0,
+        "usage": {
+          "input": 1412,
+          "output": 541,
+          "cacheRead": 4857,
+          "cacheWrite": 2650
+        },
+        "costUSD": 0.0007915200000000001
+      },
+      "grade": {
+        "passed": true,
+        "score": 1,
+        "findings": []
+      },
+      "trial": 6,
+      "position": 0,
+      "connectionSetupMs": 2.1233329999959096,
+      "processCpuMs": 90.827
+    },
+    {
+      "arm": "current-runtime",
+      "task": "reconcile",
+      "seed": 7306,
+      "status": "completed",
+      "done": true,
+      "errors": [],
+      "settleMs": null,
+      "metrics": {
+        "wallMs": 8562,
+        "firstTokenMs": 1526,
+        "modelTurns": 4,
+        "toolCalls": 7,
+        "toolErrors": 0,
+        "usage": {
+          "input": 631,
+          "output": 605,
+          "cacheRead": 4766,
+          "cacheWrite": 2658
+        },
+        "costUSD": 0.00074551
+      },
+      "grade": {
+        "passed": true,
+        "score": 1,
+        "findings": []
+      },
+      "trial": 6,
+      "position": 1,
+      "connectionSetupMs": 0,
+      "processCpuMs": 113.752
+    },
+    {
+      "arm": "sdk-native-files",
+      "task": "reconcile",
+      "seed": 7306,
+      "status": "completed",
+      "done": true,
+      "errors": [],
+      "settleMs": null,
+      "metrics": {
+        "wallMs": 8217.472042000038,
+        "firstTokenMs": 1811,
+        "modelTurns": 4,
+        "toolCalls": 7,
+        "toolErrors": 0,
+        "usage": {
+          "input": 783,
+          "output": 512,
+          "cacheRead": 4993,
+          "cacheWrite": 2709
+        },
+        "costUSD": 0.000722855
+      },
+      "grade": {
+        "passed": true,
+        "score": 1,
+        "findings": []
+      },
+      "trial": 6,
+      "position": 2,
+      "connectionSetupMs": 2.472042000037618,
+      "processCpuMs": 70.51
+    }
+  ]
+}
