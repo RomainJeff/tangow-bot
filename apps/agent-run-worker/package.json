@@ -3,7 +3,11 @@
   "version": "0.1.0",
   "license": "Apache-2.0",
   "type": "module",
+  "exports": {
+    ".": "./src/guest.ts"
+  },
   "scripts": {
+    "start": "tsx src/main.ts",
     "check": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run --root ../.. apps/agent-run-worker/src"
   },

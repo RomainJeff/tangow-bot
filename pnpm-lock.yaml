@@ -933,6 +933,9 @@ importers:
       '@rakazo/adapters':
         specifier: workspace:*
         version: link:../adapters
+      '@rakazo/agent-run-worker':
+        specifier: workspace:*
+        version: link:../../apps/agent-run-worker
       '@rakazo/contracts':
         specifier: workspace:*
         version: link:../contracts

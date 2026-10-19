@@ -1,3 +1,5 @@
+import { TOOL_RESULT_TEXT_LIMIT } from "../pi-runtime-limits.js";
+
 const KiB = 1024;
 const MiB = 1024 * KiB;
 
@@ -19,8 +21,11 @@ export const WORKER_LIMITS = {
   textFlushBytes: 4 * KiB,
   textFlushMs: 50,
   toolArgsBytes: 256 * KiB,
-  /** What a guest tool shows the model, head and tail: Pi's own bash bounds. */
-  localOutputModelBytes: 50 * KiB,
+  /**
+   * What a guest tool shows the model, head and tail. PiAgentRuntime shows the model at most
+   * this many characters of any tool result, so a longer text would lose its tail and its marker.
+   */
+  localOutputModelChars: TOOL_RESULT_TEXT_LIMIT,
   localOutputModelLines: 2000,
   /** Per command, on the guest disk only; capture stops past it. */
   localOutputSpoolBytes: 16 * MiB,
