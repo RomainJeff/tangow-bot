@@ -868,8 +868,6 @@ export const ZH_MESSAGES: Record<string, string> = {
   Proposals: "建议",
   Remember: "记住",
   "Untitled memory": "未命名记忆",
-  "Valid from": "生效日期",
-  "Valid until": "有效至",
   Withdrawn: "已撤回",
   "All bots": "所有 Bot",
   "Could not load space": "无法加载空间",

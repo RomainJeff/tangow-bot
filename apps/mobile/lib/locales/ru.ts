@@ -886,8 +886,6 @@ export const RU_MESSAGES: Record<string, string> = {
   Proposals: "Предложения",
   Remember: "Запомнить",
   "Untitled memory": "Память без названия",
-  "Valid from": "Действует с",
-  "Valid until": "Действует до",
   Withdrawn: "Отозвано",
   "All bots": "Все боты",
   "Could not load space": "Не удалось загрузить пространство",
