@@ -49,7 +49,8 @@ export class VolumeBusyError extends Error {
   }
 }
 
-export type StartedWorker = { providerRef: string; start: WorkerStartV1 };
+/** The run input is added by the runtime that launches the guest. */
+export type StartedWorker = { providerRef: string; start: Omit<WorkerStartV1, "run"> };
 
 export type HomeAdoption =
   | "adopted"
