@@ -15,7 +15,8 @@ white; they are flattened because opacity modifiers, `color-mix` and native
 stacked fills all treat these as full colours. An `rgba` in a slot is a bug:
 translucency lives only in the material layer (see [Material](materials.md#material)), never in a slot.
 The dark planes rise in steps, each distinct from the one below on the ambient
-light: `background`, `chatBot`, `surface`, `secondary`.
+light: `background`, `chatBot`, `surface`, `secondary`. A panel rises the same
+way: `sheet`, then its `group`s.
 
 | Slot | Light | Dark | Role |
 | --- | --- | --- | --- |
@@ -43,6 +44,8 @@ light: `background`, `chatBot`, `surface`, `secondary`.
 | `input` | `#D8D8DC` | `#363639` | field edge |
 | `ring` | `#6E6E73` | `#AEAEB2` | focus |
 | `surface` | `#FFFFFF` | `#3C3C3F` | the one elevation: the decision card |
+| `sheet` | `#F5F5F7` | `#232326` | the opaque plane of the side panel and the overlay windows |
+| `group` | `#FFFFFF` | `#333336` | a settings group or an activity day on a sheet; at phone width, the drawer's selected row and search field |
 | `sidebar` | `#F5F5F7` | `#2C2C2E` | the opaque fallback of the sidebar's glass |
 | `sidebarForeground` | `#1D1D1F` | `#F5F5F7` | |
 | `sidebarAccent` | `#E6E6E9` | `#414143` | selected and hovered row |
@@ -163,9 +166,12 @@ navigation panel 16 (24 − 8). Media inside a panel is 12. Settings groups are
 | `composerFocus` | `0 0 0 1px rgba(17, 17, 20, 0.09), 0 12px 28px -18px rgba(17, 17, 20, 0.55)` | `0 0 0 1px rgba(255, 255, 255, 0.16), 0 12px 28px -18px rgba(0, 0, 0, 0.8)` | the composer while its field has focus (dark also brightens the hairline) |
 | `floating` | `0 1px 2px rgba(17, 17, 20, 0.08), 0 8px 20px -10px rgba(17, 17, 20, 0.35)` | `0 0 0 1px rgba(255, 255, 255, 0.08), 0 8px 20px -10px rgba(0, 0, 0, 0.7)` | the hover pill |
 | `settled` | `0 0 0 1px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.05)` | `inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 0 0 1px rgba(255, 255, 255, 0.05)` | an answered framed block: back on the bot's paper, the `bubble` edge |
+| `sheet` | `0 0 0 1px rgba(0, 0, 0, 0.07), 0 2px 8px -2px rgba(0, 0, 0, 0.08), 0 24px 48px -24px rgba(0, 0, 0, 0.22)` | `0 0 0 1px rgba(255, 255, 255, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 48px -20px rgba(0, 0, 0, 0.7)` | the side panel, an overlay window |
+| `group` | `0 0 0 1px rgba(0, 0, 0, 0.05)` | `0 0 0 1px rgba(255, 255, 255, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.04)` | a group's hairline |
 
 Utilities `shadow-row`, `shadow-bubble`, `shadow-card`, `shadow-composer-rest`,
-`shadow-composer-focus`, `shadow-floating`, `shadow-settled`.
+`shadow-composer-focus`, `shadow-floating`, `shadow-settled`, `shadow-sheet`,
+`shadow-group`.
 Everything the bot produces has **no** lift: `bg-chat-bot` and `shadow-bubble`,
 like its bubble. Glass carries its own hairline and inner highlight, which do
 not count as an elevation.

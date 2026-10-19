@@ -204,16 +204,14 @@ export function RoutineDetail({
             {runError}
           </p>
         ) : null}
-        <div className="px-3.5">
-          <BotActivity
-            botId={bot.id}
-            routineId={routine.id}
-            commands={{
-              activityEpoch: commands.activityEpoch + testRuns,
-              openRun: commands.openRun,
-            }}
-          />
-        </div>
+        <BotActivity
+          botId={bot.id}
+          routineId={routine.id}
+          commands={{
+            activityEpoch: commands.activityEpoch + testRuns,
+            openRun: commands.openRun,
+          }}
+        />
       </section>
 
       <div className="flex justify-end">
