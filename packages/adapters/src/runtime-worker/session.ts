@@ -115,6 +115,16 @@ export function createSession(
     fail(new WorkerViolationError(reason));
   };
 
+  /** The attempt lost its run: nothing more is decided for this guest. */
+  const revoke = (): ReplyFinal => {
+    inbox.revoke();
+    setImmediate(() => {
+      bound?.close();
+      fail(new AgentRuntimeUnavailableError("This attempt no longer holds the run"));
+    });
+    return { type: "refused", reason: "revoked" };
+  };
+
   /** Refuses a request frame: the guest gets the refusal, then the channel ends. */
   const refuse = (reason: RefusalReason): ReplyFinal => {
     setImmediate(() => violation(reason));
@@ -301,6 +311,8 @@ export function createSession(
         relays.get(body.re)?.abort();
         return { type: "ack" };
       case "tool.call":
+        // The executor checks its lease only between events: a guest must not outrun it.
+        if (!(await launched!.holdsFence())) return revoke();
         return callTool(body);
       case "tool.done":
         return recordLocalResult(body);

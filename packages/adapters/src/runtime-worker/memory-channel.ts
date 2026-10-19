@@ -13,6 +13,10 @@ export interface FrameSummary {
 export interface ChannelFaults {
   /** Lose this controller frame. */
   dropControllerFrame?(frame: FrameSummary): boolean;
+  /** Sever the connection instead of delivering this controller frame. */
+  cutBeforeControllerFrame?(frame: FrameSummary): boolean;
+  /** Sever the connection instead of delivering this guest frame. */
+  cutBeforeGuestFrame?(frame: FrameSummary): boolean;
   /** Sever the connection right after delivering this guest frame. */
   cutAfterGuestFrame?(frame: FrameSummary): boolean;
   /** Deliver this guest frame, and every later one, once the promise settles. */
@@ -85,7 +89,10 @@ export function memoryChannelPair(faults: ChannelFaults = {}): {
   return {
     controller: {
       async send(frame) {
-        if (open && !faults.dropControllerFrame?.(summarize(frame))) toGuest.push(frame);
+        if (!open) return;
+        const summary = summarize(frame);
+        if (faults.cutBeforeControllerFrame?.(summary)) return cut();
+        if (!faults.dropControllerFrame?.(summary)) toGuest.push(frame);
       },
       frames: toController.frames(),
       close: cut,
@@ -96,6 +103,7 @@ export function memoryChannelPair(faults: ChannelFaults = {}): {
           const summary = summarize(frame);
           await faults.holdGuestFrame?.(summary);
           if (!open) return;
+          if (faults.cutBeforeGuestFrame?.(summary)) return cut();
           toController.push(frame);
           if (faults.cutAfterGuestFrame?.(summary)) cut();
         });

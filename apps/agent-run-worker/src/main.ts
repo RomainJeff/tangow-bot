@@ -17,6 +17,10 @@ if (!capability || !harness) {
 // Commands the run starts do not inherit it.
 delete process.env.RAKAZO_WORKER_CAPABILITY;
 
+// Termination stops the run's tools first: each command runs in a process group of its own.
+const terminated = new AbortController();
+process.once("SIGTERM", () => terminated.abort());
+
 async function* stdio() {
   yield streamChannel(process.stdin, process.stdout, WORKER_LIMITS.controllerFrameBytes);
 }
@@ -27,6 +31,7 @@ const exit = await runGuest({
   harness,
   spoolDir: process.env.RAKAZO_WORKER_SPOOL_DIR ?? path.join(tmpdir(), "rakazo-tool-output"),
   root: process.env.RAKAZO_WORKER_ROOT,
+  signal: terminated.signal,
 });
 console.error(`agent run worker: ${exit}`);
 process.exit(exit === "done" || exit === "paused" ? 0 : 1);

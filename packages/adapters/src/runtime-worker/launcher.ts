@@ -18,6 +18,8 @@ export interface LaunchedGuest {
   exited: Promise<void>;
   /** Destroys the VM. Only `released` confirms it is gone. */
   release(): Promise<ReleaseOutcome>;
+  /** Whether the attempt still holds its running run's fence. */
+  holdsFence(): Promise<boolean>;
 }
 
 export interface WorkerLauncher {
@@ -90,6 +92,7 @@ export function createLifecycleLauncher(deps: {
         start: started.start,
         ...guest,
         release: () => deps.lifecycle.release(worker.attemptId, context),
+        holdsFence: async () => (await deps.lifecycle.status(worker.attemptId))?.active === true,
       };
     },
   };

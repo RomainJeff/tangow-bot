@@ -19,7 +19,7 @@ import {
   type WorkerClock,
 } from "@rakazo/adapters/runtime-worker";
 import type { SessionEntry } from "@rakazo/contracts";
-import { createThreadEvents } from "@rakazo/db";
+import { createThreadEvents, type PrismaClient } from "@rakazo/db";
 import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
 import { type LocalWorkerFaults, LocalWorkerProvider } from "./local-worker-provider.js";
 import { type ModelEmulatorStep, startModelEmulator } from "./model-emulator.js";
@@ -56,6 +56,8 @@ export async function startWorkerRun(options: {
   mode?: "memory" | "child";
   faults?: LocalWorkerFaults;
   clock?: WorkerClock;
+  /** Runs the bot with this runtime instead of a guest. */
+  runtime?: (prisma: PrismaClient) => AgentRuntime;
 }) {
   const database = await openPgliteDatabase();
   const { prisma } = database;
@@ -147,15 +149,17 @@ export async function startWorkerRun(options: {
       root: path.join(dir, "workers"),
       faults: options.faults,
     });
-    const runtime: AgentRuntime = createWorkerAgentRuntime({
-      launcher: createLifecycleLauncher({
-        prisma,
-        lifecycle: createWorkerLifecycle({ prisma, provider }),
-        connector: provider,
-      }),
-      stops: createStopJournal(prisma),
-      clock: options.clock,
-    });
+    const runtime: AgentRuntime =
+      options.runtime?.(prisma) ??
+      createWorkerAgentRuntime({
+        launcher: createLifecycleLauncher({
+          prisma,
+          lifecycle: createWorkerLifecycle({ prisma, provider }),
+          connector: provider,
+        }),
+        stops: createStopJournal(prisma),
+        clock: options.clock,
+      });
     const executor = createRunExecutor({
       prisma,
       sessionLog,

@@ -30,7 +30,7 @@ async function* once(channel: FrameChannel) {
   yield channel;
 }
 
-describe("a guest run with a local bash call", () => {
+describe("run channel conformance of the Pi harness", () => {
   it("bounds a 5 MiB output for the model and the wire, and keeps it on the guest disk", async () => {
     const workdir = await mkdtemp(path.join(tmpdir(), "rakazo-guest-run-"));
     cleanups.push(() => rm(workdir, { recursive: true, force: true }));

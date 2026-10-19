@@ -29,6 +29,8 @@ export interface GuestOptions {
   spoolDir: string;
   /** Prefix of every guest path the controller names. `/` in a VM. */
   root?: string;
+  /** Stops the run like a `worker.cancel`, for the process's own termination. */
+  signal?: AbortSignal;
 }
 
 const NEEDS: Partial<Record<GuestBody["type"], HarnessCapability>> = {
@@ -61,6 +63,7 @@ export async function runGuest(options: GuestOptions): Promise<GuestExit> {
   if (!worker) throw new Error("Unreadable worker capability");
   const outbox = createOutbox(worker);
   const cancel = new AbortController();
+  options.signal?.addEventListener("abort", () => cancel.abort(), { once: true });
   const started = deferred<WorkerStartV1 | null>();
   const link = { finished: false, lost: false };
   let current: FrameChannel | undefined;
