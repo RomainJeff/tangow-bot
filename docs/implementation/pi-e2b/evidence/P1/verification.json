@@ -1,0 +1,129 @@
+{
+  "ticket": "RomainJeff/rakazo-bot#195",
+  "tested_commit": "aac7a2608615a86b013a6cfabc7d711f7326d112",
+  "feature_base": "af6940d24",
+  "baseline_commit": "cb86a2f60",
+  "sdk": "@earendil-works/pi-coding-agent 1.3.0 (unchanged from P0)",
+  "infra_reference": "09f242991ada8fdab2a9ce7a1fa847671d511874",
+  "vm_profiles": "none: no VM was created",
+  "host": {
+    "platform": "Darwin",
+    "arch": "arm64",
+    "logical_cpus": 18,
+    "node": "v24.21.0"
+  },
+  "lockfile_sha256": "e57deb4e1b9701efe103df45d9e9dbca9f5efc37d309d021dc4ba189ba1dd449",
+  "schema_sha256": "c2a47a3c5b494bcab009ac3576836d2fce284454b47bbea2fa28bba57e64fba4",
+  "baseline": {
+    "commit": "cb86a2f60",
+    "adapter_kit_check": "passed",
+    "adapters_check": "passed",
+    "test_integration": "passed, 159 tests in 22 suites"
+  },
+  "head": {
+    "pnpm check": "passed, 23 tasks",
+    "pnpm lint": "passed, 47 warnings and 1 info, the same as the base",
+    "unit": "passed, 5008 tests in 320 files with 195 skipped, across core, adapter-kit, adapters, db, contracts and testkit",
+    "lane tests": "passed, 61 tests in 6 files",
+    "pnpm test:integration": "passed, 162 tests in 23 suites"
+  },
+  "perf": {
+    "plan_resolution": {
+      "source": "worker-plan-bench.json",
+      "p50_ms": 0.40895799999998417,
+      "p95_ms": 0.5430410000000165,
+      "max_ms": 0.846416999999974,
+      "queries_per_plan": [1],
+      "budget": "p95 under 100 ms, constant query count",
+      "result": "pass"
+    },
+    "start_release": {
+      "p50_ms": 2.3665000000000873,
+      "p95_ms": 2.7848330000001624,
+      "queries_per_cycle": [12],
+      "note": "New capability with no trunk equivalent; no ratio is reported."
+    },
+    "common_path": {
+      "probe": "common-path-probe.ts",
+      "trials": 30,
+      "order": "alternating trunk-head and head-trunk, one fresh process per sample, 50 iterations per sample, median per sample",
+      "database": "none: AgentHomeStore on a temporary directory and FakeSandboxProvider",
+      "results": {
+        "snapshotMs": {
+          "trunk": {
+            "median": 16.7988,
+            "min": 15.9743,
+            "max": 19.7316,
+            "samples": [
+              16.0387, 15.9994, 17.4545, 16.1693, 15.9743, 17.3297, 17.834, 19.1028, 16.1904,
+              16.892, 16.3283, 16.3199, 19.0736, 16.3383, 16.274, 16.8133, 17.7822, 16.9568,
+              18.1724, 16.4956, 19.7316, 16.7843, 16.1008, 18.3064, 16.3655, 16.0598, 16.536,
+              18.6758, 17.1305, 17.3688
+            ]
+          },
+          "head": {
+            "median": 17.0525,
+            "min": 15.8974,
+            "max": 27.3035,
+            "samples": [
+              17.5183, 16.2534, 16.5514, 16.2752, 16.4877, 17.1767, 18.3148, 16.984, 18.0445,
+              17.121, 17.7987, 27.3035, 20.1241, 16.6514, 16.5065, 16.4288, 17.4135, 16.565,
+              18.1418, 17.3272, 16.5083, 16.0892, 17.4563, 17.4111, 16.0029, 16.4088, 16.1728,
+              15.8974, 17.6473, 19.1043
+            ]
+          },
+          "ratio": 1.015
+        },
+        "mountedMs": {
+          "trunk": {
+            "median": 0.1101,
+            "min": 0.0983,
+            "max": 0.1325,
+            "samples": [
+              0.1027, 0.1025, 0.1197, 0.1032, 0.1026, 0.1177, 0.1228, 0.1302, 0.1035, 0.1102,
+              0.1026, 0.1031, 0.1299, 0.1038, 0.0983, 0.1078, 0.1216, 0.112, 0.1325, 0.1076, 0.1196,
+              0.1107, 0.1005, 0.1298, 0.11, 0.0993, 0.1082, 0.1307, 0.1128, 0.1236
+            ]
+          },
+          "head": {
+            "median": 0.114,
+            "min": 0.0958,
+            "max": 0.1954,
+            "samples": [
+              0.1229, 0.1066, 0.1061, 0.1047, 0.1104, 0.1169, 0.1279, 0.117, 0.1135, 0.1169, 0.122,
+              0.1954, 0.1394, 0.1033, 0.1039, 0.1051, 0.1169, 0.1068, 0.1185, 0.1157, 0.1101,
+              0.1023, 0.1146, 0.1205, 0.1008, 0.1053, 0.1078, 0.0958, 0.1218, 0.1347
+            ]
+          },
+          "ratio": 1.036
+        }
+      },
+      "budget": "at most 20 percent slower",
+      "result": "pass"
+    }
+  },
+  "cleanup": "PGlite databases are in memory and closed by each suite. The integration harness dropped its per-suite databases and stopped its container. The probes removed their temporary directories.",
+  "not_run": [
+    "Live E2B lanes: P1 creates no VM and no volume.",
+    "Electron E2E: CI only, by repository rule.",
+    "Native iOS captures: no mobile code changed."
+  ],
+  "e2e": {
+    "command": "pnpm test:e2e:affected",
+    "selection": "Full web suite, because no readable impact map exists",
+    "result": "211 passed, 11 failed",
+    "failures": [
+      "ask-card-follow.spec.ts: 4 cases",
+      "ask-card-motion.spec.ts: 3 cases",
+      "message-hover-actions.spec.ts: a send after a search jump lands on the latest messages",
+      "message-quote.spec.ts: selecting a text span quotes it into a reply",
+      "team-computer.spec.ts: 2 cases"
+    ],
+    "attribution": "The same 211 and 11 as the P0 baseline, at the tested commit. team-computer.spec.ts, the only failing spec near the changed home code, fails identically on the feature base af6940d24 with 2 passed and 2 failed, waiting for a run to finish. No web or UI source changed in P1.",
+    "status": "red, pre-existing"
+  },
+  "review": {
+    "rounds": 2,
+    "summary": "Two independent review rounds reproduced lease and VM leaks in the start, release and reconcile interleavings. The fixes lock run, attempt and volumes in one order, allow one start per attempt, keep a separate ensure clock, and record an orphaned VM before destroying it. Each protection has a mutation check that fails a test when the protection is removed."
+  }
+}

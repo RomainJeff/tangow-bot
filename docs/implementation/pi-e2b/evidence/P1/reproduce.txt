@@ -1,0 +1,46 @@
+P1 reproduction sheet
+
+Requirements: Node 24, pnpm 9.15.0, Docker for the PostgreSQL harness and the web E2E suite. No vendor credentials.
+Start from a clean checkout of the P1 slice.
+
+Setup
+  pnpm install --frozen-lockfile
+  pnpm db:generate
+
+Checks
+  pnpm check
+  pnpm lint
+  pnpm --filter @rakazo/adapter-kit check
+  pnpm --filter @rakazo/adapters check
+
+Lane tests on PGlite with every migration (lanes 1 and 3 to 10)
+  pnpm exec vitest run packages/core/src/worker-plan.test.ts packages/adapter-kit/src/worker-protocol.test.ts packages/adapters/src/worker-lifecycle.test.ts packages/adapters/src/worker-volumes.test.ts packages/adapters/src/worker-migration.test.ts packages/adapters/src/computer-workspace.test.ts
+
+Lane 2 races and the full PostgreSQL journeys (Testcontainers PostgreSQL 16)
+  pnpm test:integration
+  The harness runs packages/adapters/src/worker-lifecycle.postgres.test.ts as its last suite.
+
+One lane, for example lane 3
+  pnpm exec vitest run packages/adapters/src/worker-lifecycle.test.ts -t "private_volume_of_other_bot"
+
+Plan resolution and start-release probe
+  pnpm bench:worker-plan --out worker-plan-bench.json
+
+Common path, alternating trunk and head
+  Create a second checkout of the feature base (af6940d24) and install it, then run 30 trials.
+  Odd trials run trunk first, even trials run head first. Each sample is a fresh process.
+    pnpm exec tsx docs/implementation/pi-e2b/evidence/P1/common-path-probe.ts <trunk checkout> trunk 50
+    pnpm exec tsx docs/implementation/pi-e2b/evidence/P1/common-path-probe.ts . head 50
+
+Web E2E
+  pnpm test:e2e:affected
+
+Observed at the tested commit (see verification.json)
+  pnpm check: 23 tasks passed.
+  pnpm lint: passed with 47 warnings and 1 info, the same as the base.
+  Unit tests across core, adapter-kit, adapters, db, contracts and testkit: 5008 passed, 195 skipped.
+  pnpm test:integration: 162 passed in 23 suites. The base passes 159 in 22 suites.
+  Lane tests: 61 passed.
+  Plan resolution: p95 0.54 ms with 1 query per plan, budget 100 ms. Start and release: p95 2.78 ms with 12 queries per cycle.
+  Common path: snapshot median 16.80 ms on trunk and 17.05 ms on head, ratio 1.015. Mounted Docker median 0.110 ms and 0.114 ms, ratio 1.036. Budget 1.20.
+  pnpm test:e2e:affected: full suite, 211 passed and 11 failed, the same failures as the base.

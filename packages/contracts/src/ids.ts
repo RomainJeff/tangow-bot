@@ -87,3 +87,18 @@ export type ThinkingLevel = z.infer<typeof ThinkingLevelSchema>;
 
 export const SandboxKind = z.enum(["docker", "e2b", "daytona", "box", "desktop", "fake"]);
 export type SandboxKind = z.infer<typeof SandboxKind>;
+
+/** The worker VM of one run attempt. Null on in-process attempts; live while requested, created or ready. */
+export const WorkerState = z.enum(["requested", "created", "ready", "releasing", "released"]);
+export type WorkerState = z.infer<typeof WorkerState>;
+
+/** A bot's private volume, or the shared volume of its space. */
+export const VolumeKind = z.enum(["bot_private", "space_shared"]);
+export type VolumeKind = z.infer<typeof VolumeKind>;
+
+export const VolumeAccess = z.enum(["rw", "ro"]);
+export type VolumeAccess = z.infer<typeof VolumeAccess>;
+
+/** Where a computer home lives durably: AgentHomeStore snapshots, or the bot and space volumes. */
+export const HomeStorage = z.enum(["snapshot", "volumes"]);
+export type HomeStorage = z.infer<typeof HomeStorage>;
