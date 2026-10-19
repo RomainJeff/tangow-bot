@@ -81,10 +81,10 @@ export function SkillsOverlay({
       <DialogContent
         variant="window"
         showCloseButton={false}
-        className="flex h-[760px] max-h-[calc(100%-2rem)] w-[1080px] max-w-[calc(100%-2rem)] flex-row gap-0 overflow-hidden p-0 max-sm:flex-col sm:max-w-[1080px]"
+        className="flex h-[760px] max-h-[calc(100%-2rem)] w-[1080px] max-w-[calc(100%-2rem)] flex-row gap-0 overflow-hidden p-0 max-md:flex-col sm:max-w-[1080px]"
       >
         {sidebar}
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <DialogHeader className="flex-row items-start justify-between px-8 pt-7">
             <DialogTitle className="text-2xl text-foreground">
               <Trans>Skills</Trans>

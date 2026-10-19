@@ -1,4 +1,4 @@
-import { Trans } from "@lingui/react/macro";
+import { Trans, useLingui } from "@lingui/react/macro";
 import { Puzzle, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { PluginsOverlay } from "./PluginsOverlay";
@@ -14,13 +14,17 @@ function CustomizeNav({
   section: CustomizeSection;
   onSelect: (section: CustomizeSection) => void;
 }) {
+  const { t } = useLingui();
   const items = [
     { id: "integrations" as const, label: <Trans>Integrations</Trans>, Icon: Puzzle },
     { id: "skills" as const, label: <Trans>Skills</Trans>, Icon: Sparkles },
   ];
   return (
-    <nav className="flex shrink-0 flex-row gap-1 overflow-x-auto px-3 py-3 sm:m-2 sm:w-56 sm:flex-col sm:rounded-xl sm:bg-group sm:p-2 sm:pt-5 sm:shadow-group">
-      <div className="hidden px-2.5 pb-4 text-2xl text-foreground sm:block">
+    <nav
+      aria-label={t`Customize`}
+      className="flex shrink-0 flex-row gap-1 overflow-x-auto px-3 py-3 md:m-2 md:w-56 md:flex-col md:rounded-xl md:bg-group md:p-2 md:pt-5 md:shadow-group"
+    >
+      <div className="hidden px-2.5 pb-4 text-2xl text-foreground md:block">
         <Trans>Customize</Trans>
       </div>
       {items.map(({ id, label, Icon }) => (
@@ -32,7 +36,7 @@ function CustomizeNav({
           onClick={() => onSelect(id)}
           className={`flex shrink-0 items-center gap-2.5 rounded-[11px] px-2.5 py-2 text-start text-[14.5px] ${
             section === id
-              ? "bg-sidebar-accent font-medium text-foreground max-sm:bg-group max-sm:shadow-group"
+              ? "bg-sidebar-accent font-medium text-foreground max-md:bg-group max-md:shadow-group"
               : "text-foreground/80 hover:bg-sidebar-accent/60"
           }`}
         >

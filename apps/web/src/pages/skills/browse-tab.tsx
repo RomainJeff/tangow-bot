@@ -114,7 +114,7 @@ export function BrowseTab({
       {picked.size > 0 ? (
         <div
           role="status"
-          className="sticky top-0 z-10 flex items-center justify-between rounded-card bg-group px-4 py-2 shadow-group"
+          className="sticky top-0 z-10 flex items-center justify-between rounded-card bg-sheet px-4 py-2 shadow-sheet"
         >
           <span className="text-[13px] text-muted-foreground">
             <Trans>{picked.size} selected</Trans>

@@ -115,7 +115,7 @@ export function ModelSettingsOverlay({
                     type="button"
                     onClick={() => chooseProvider(group.id)}
                     className={`flex w-full items-center gap-3 border-b border-border px-3.5 py-3 text-start last:border-0 ${
-                      group.id === provider ? "bg-muted" : "hover:bg-accent"
+                      group.id === provider ? "bg-sidebar-accent" : "hover:bg-sidebar-accent/60"
                     }`}
                   >
                     <span className="min-w-0 flex-1">
