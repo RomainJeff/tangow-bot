@@ -3,7 +3,8 @@ import type { ConnectionCatalogItem } from "@rakazo/contracts";
 import { humanizeToolName } from "@rakazo/core";
 import { Button, Card, CardContent, CardHeader, CardTitle, Input } from "@rakazo/ui-web";
 import { ChevronDown, ChevronLeft, ChevronUp } from "lucide-react";
-import { activeAccounts, type Integrations, itemKey } from "./use-integrations";
+import type { Integrations } from "./use-integrations";
+import { activeAccounts, itemKey } from "./use-integrations";
 
 export function ConnectionDetail({
   item,
