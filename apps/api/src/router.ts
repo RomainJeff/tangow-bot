@@ -149,6 +149,7 @@ import {
   touchGroupUpdatedAt,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
+import { MarkdownMemoryLibrary, MemoryAccessError, MemoryConflictError } from "@rakazo/memory";
 import { deleteAgentSecret, listAgentSecrets, putAgentSecret } from "./agent-secrets.js";
 import { createAgentSkillsService } from "./agent-skills.js";
 import { aiConsentStatus, allowAiConsent } from "./ai-consent.js";
@@ -363,6 +364,18 @@ function computerContext(actor: Actor, botId: string, operationId: string): Adap
   };
 }
 
+async function memoryLibraryCall<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    if (error instanceof MemoryConflictError) {
+      throw new ORPCError("CONFLICT", { message: error.message });
+    }
+    if (error instanceof MemoryAccessError) throw new ORPCError("NOT_FOUND");
+    throw error;
+  }
+}
+
 /**
  * Durable memories remain in their Space-private containers. Truncating history only removes the
  * conversation-derived summaries filed under the generation it ended; a compaction still saving
@@ -575,6 +588,7 @@ export function createRouter(deps: RouterDeps) {
   });
   const agentSkills = createAgentSkillsService(deps.prisma, deps.dataDir, deps.skillLock);
   const marketplaces = createMarketplacesService({ prisma: deps.prisma, dataDir: deps.dataDir });
+  const library = new MarkdownMemoryLibrary(deps.prisma);
 
   const authed = os.use(async ({ context, next }) => {
     if (!context.actor) throw new ORPCError("UNAUTHORIZED");
@@ -2363,6 +2377,26 @@ export function createRouter(deps: RouterDeps) {
       }),
     },
     memory: {
+      library: {
+        list: authed.memory.library.list.handler(async ({ context, input }) =>
+          library.list(context.actor, input),
+        ),
+        get: authed.memory.library.get.handler(async ({ context, input }) =>
+          memoryLibraryCall(() => library.get(context.actor, input.documentId)),
+        ),
+        annotations: authed.memory.library.annotations.handler(async ({ context, input }) =>
+          memoryLibraryCall(() => library.memoryAnnotations(context.actor, input.documentId)),
+        ),
+        create: authed.memory.library.create.handler(async ({ context, input }) =>
+          memoryLibraryCall(() => library.create(context.actor, { ...input, active: true })),
+        ),
+        capture: authed.memory.library.capture.handler(async ({ context, input }) =>
+          memoryLibraryCall(() => library.captureMessage(context.actor, input)),
+        ),
+        history: authed.memory.library.history.handler(async ({ context, input }) =>
+          memoryLibraryCall(() => library.history(context.actor, input.documentId)),
+        ),
+      },
       list: authed.memory.list.handler(async ({ context, input }) => {
         const docs = await deps.prisma.memoryDocument.findMany({
           where: {
@@ -2391,26 +2425,18 @@ export function createRouter(deps: RouterDeps) {
           },
         });
         if (!doc) throw new IsolationError();
-        const updated = await deps.memory.commit(
-          {
-            scope: doc.scope as "bot" | "user",
-            botId: doc.botId ?? undefined,
-            path: doc.path,
+        const updated = await memoryLibraryCall(() =>
+          library.update(context.actor, {
+            documentId: doc.id,
+            expectedRevision: input.expectedRevision,
             content: input.content,
-          },
-          {
-            operationId: "mem",
-            traceId: "mem",
-            spaceId: context.actor.spaceId,
-            userId: context.actor.userId,
-            signal: new AbortController().signal,
-          },
+          }),
         );
         return {
           id: updated.id,
           scope: doc.scope as "bot" | "user",
           botId: doc.botId,
-          path: updated.path,
+          path: doc.path,
           content: updated.content,
           revision: updated.revision,
           updatedAt: new Date().toISOString(),

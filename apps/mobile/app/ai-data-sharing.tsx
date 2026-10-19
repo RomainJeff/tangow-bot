@@ -49,6 +49,7 @@ export default function AiDataSharing() {
                       scope: status.scope,
                       version: status.version,
                       keys: [recipient.key],
+                      query: {},
                     }),
                   );
               })()

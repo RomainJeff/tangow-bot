@@ -39,6 +39,9 @@ test("settings shell is two-pane and deep-links Models Memory Decision Model Voi
   await expect(settings.getByRole("heading", { name: "Memory", exact: true })).toBeVisible();
   await expect(settings.getByTestId("memory-settings")).toBeVisible();
   const memory = settings.getByTestId("memory-settings");
+  await expect(memory.getByLabel("Provider")).not.toBeVisible();
+  await captureScreenshot(page, testInfo, "settings-shell-memory-library");
+  await memory.locator("summary", { hasText: "Connections" }).click();
   await expect(memory.getByLabel("Provider")).toBeVisible();
   await memory.getByLabel("Provider").selectOption("serenity");
   await expect(memory.getByLabel("MCP endpoint")).toBeVisible();

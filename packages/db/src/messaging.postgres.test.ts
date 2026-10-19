@@ -87,12 +87,20 @@ describePostgres("provisionMessagingIdentity (PostgreSQL)", () => {
     expect(identity!.outboundSinceInbound).toBe(0);
     expect(identity!.verifiedAt).toBeNull();
 
-    // bootstrap parity: same surrounding rows the auth signup hook creates
-    const memories = await prisma.memoryDocument.findMany({
-      where: { spaceId: result.spaceId, userId: result.userId },
+    // Bootstrap creates canonical collections but no empty memory documents.
+    const collections = await prisma.memoryCollection.findMany({
+      where: { spaceId: result.spaceId },
     });
-    expect(memories.some((m) => m.scope === "user" && m.path === "MEMORY.md")).toBe(true);
-    expect(memories.some((m) => m.scope === "bot" && m.botId === result.botId)).toBe(true);
+    expect(
+      collections.some(
+        (collection) => collection.kind === "personal" && collection.ownerUserId === result.userId,
+      ),
+    ).toBe(true);
+    expect(
+      collections.some(
+        (collection) => collection.kind === "agent" && collection.botId === result.botId,
+      ),
+    ).toBe(true);
     const pref = await prisma.notificationPreference.findFirst({
       where: { spaceId: result.spaceId, userId: result.userId },
     });

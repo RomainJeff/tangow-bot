@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { ORPCError } from "@orpc/server";
 import {
   aiRecipient,
+  memoryClassificationRecipient,
   parseModelSecret,
   selectConfiguredModel,
   toStringRecord,
@@ -12,7 +13,9 @@ import {
   findDefaultModelCredential,
   findDefaultVoiceCredential,
   findModelCredential,
+  findSpaceDecisionConfig,
 } from "@rakazo/db";
+import { memoryDecisionConnection } from "@rakazo/memory";
 import type { RouterDeps } from "./router.js";
 import { resolveThreadTarget } from "./thread-target.js";
 
@@ -21,10 +24,12 @@ export async function aiConsentStatus(
   actor: Actor,
   query: AiConsentQuery = {},
 ): Promise<AiConsentStatus> {
-  const uses = query.uses ?? ["model", "memory", "voice"];
+  const uses = query.uses ?? ["model", "memory", "voice", "memory-classification"];
   const modelsEnabled = uses.includes("model") && deps.env.agentRuntime !== "scripted";
   const target =
-    query.botId || query.groupId ? await resolveThreadTarget(deps.prisma, actor, query) : null;
+    uses.includes("model") && (query.botId || query.groupId)
+      ? await resolveThreadTarget(deps.prisma, actor, query)
+      : null;
   const botIds = target
     ? target.kind === "bot"
       ? [target.botId]
@@ -32,7 +37,7 @@ export async function aiConsentStatus(
     : undefined;
   const [preferences, defaultCredential, bots, voices, memory, settings, consents] =
     await Promise.all([
-      modelsEnabled
+      uses.includes("model") && modelsEnabled
         ? deps.prisma.spaceModelPreference.findMany({
             where: { userId: actor.userId, spaceId: actor.spaceId },
             include: { credential: true },
@@ -96,18 +101,19 @@ export async function aiConsentStatus(
       }),
     );
     // Connected models remain reachable by helpers during a targeted bot run.
-    for (const preference of preferences)
-      selected.push({
-        provider: preference.credential.provider,
-        id: preference.modelId ?? "",
-        credential: {
-          ...preference.credential,
-          isDefault: preference.isDefault,
-          defaultModel: preference.modelId,
-        },
-        thinkingLevel: null,
-      });
-    if (deps.env.teamChatJudgeProvider && deps.env.teamChatJudgeModel) {
+    if (uses.includes("model"))
+      for (const preference of preferences)
+        selected.push({
+          provider: preference.credential.provider,
+          id: preference.modelId ?? "",
+          credential: {
+            ...preference.credential,
+            isDefault: preference.isDefault,
+            defaultModel: preference.modelId,
+          },
+          thinkingLevel: null,
+        });
+    if (uses.includes("model") && deps.env.teamChatJudgeProvider && deps.env.teamChatJudgeModel) {
       selected.push({
         provider: deps.env.teamChatJudgeProvider,
         id: deps.env.teamChatJudgeModel,
@@ -160,6 +166,30 @@ export async function aiConsentStatus(
   }
   for (const voice of voices)
     add(aiRecipient({ provider: voice.credential.provider, use: "voice" }));
+  if (uses.includes("memory-classification")) {
+    const method = query.botId
+      ? await deps.prisma.botMemoryMethod.findFirst({
+          where: {
+            botId: query.botId,
+            bot: {
+              spaceId: actor.spaceId,
+              userId: actor.userId,
+              archivedAt: null,
+              memoryMethodDisabledAt: null,
+              space: { memberships: { some: { userId: actor.userId } } },
+            },
+          },
+          orderBy: { version: "desc" },
+        })
+      : null;
+    const connection = memoryDecisionConnection(
+      await findSpaceDecisionConfig(deps.prisma, actor.spaceId),
+    );
+    const applies = method
+      ? method.provider === connection?.provider && method.model === connection.model
+      : !query.botId;
+    if (connection && applies) add(memoryClassificationRecipient(connection));
+  }
   if (memory)
     add(
       aiRecipient({
@@ -181,9 +211,10 @@ export async function aiConsentStatus(
 export async function allowAiConsent(
   deps: RouterDeps,
   actor: Actor,
-  input: { scope: string; version: string; keys: string[] },
+  input: { scope: string; version: string; keys: string[]; query?: AiConsentQuery },
 ) {
-  const current = await aiConsentStatus(deps, actor);
+  const query = input.query ?? {};
+  const current = await aiConsentStatus(deps, actor, query);
   const known = new Set(current.recipients.map((recipient) => recipient.key));
   if (
     input.scope !== current.scope ||

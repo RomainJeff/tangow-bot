@@ -1,4 +1,11 @@
-import type { EntryId, RunSearchPage, SessionEntry, SessionId } from "@rakazo/contracts";
+import type {
+  BotMemoryClassificationSuggestion,
+  EntryId,
+  PreparedMemoryMethod,
+  RunSearchPage,
+  SessionEntry,
+  SessionId,
+} from "@rakazo/contracts";
 import type { NewSession, RunSearchInput, SessionEntryDraft } from "./session-log.js";
 import type {
   AdapterContext,
@@ -203,6 +210,23 @@ export interface MemoryStore {
     context: AdapterContext,
   ): Promise<MemoryRevision>;
 }
+
+/** A durable-memory classification suggestion that never activates or edits the memory. */
+export type MemoryClassificationToolResult = {
+  classificationId: string;
+  documentId: string;
+  revision: number;
+  reviewPath: string;
+  questions: Array<Pick<PreparedMemoryMethod["questions"][number], "key" | "label" | "options">>;
+  suggestion: BotMemoryClassificationSuggestion;
+};
+
+/** Callback supplied by the host. Bot identity comes from the active run, never the tool arguments. */
+export type ClassifyMemoryForBot = (input: {
+  actor: { userId: string; spaceId: string };
+  botId: string;
+  memoryId: string;
+}) => Promise<MemoryClassificationToolResult>;
 
 /** Optional semantic memory. Durable Markdown memory remains owned by MemoryStore. */
 export interface SemanticMemoryProvider {

@@ -1,4 +1,4 @@
-import type { AgentRunRequest, SemanticMemoryRecallRequest } from "@rakazo/adapter-kit";
+import type { AgentRunRequest } from "@rakazo/adapter-kit";
 import type { LogEvent } from "@rakazo/logging";
 import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
 import { describe, expect, it, vi } from "vitest";
@@ -108,10 +108,6 @@ function fixture(options: { taskPrompt?: string } = {}) {
       updateMany: vi.fn(async () => ({ count: 0 })),
     },
   };
-  const recall = vi.fn(async (_request: SemanticMemoryRecallRequest) => ({
-    ok: true as const,
-    value: [{ memory: "Ava decided to ship behind a feature flag.", score: 0.9 }],
-  }));
   const runtimeRun = vi.fn(async function* () {
     yield { type: "done" as const, text: "Done" };
   });
@@ -120,27 +116,19 @@ function fixture(options: { taskPrompt?: string } = {}) {
     prisma,
     runtime: { describe: () => ({ capabilities: { scripted: false } }), run: runtimeRun },
     sandbox: { describe: () => ({ capabilities: { graphical: false } }) },
-    memory: { read: async () => ({ documents: [] }) },
-    memoryProviders: {
-      resolve: async () => ({
-        defaultScope: "isolated" as const,
-        provider: {
-          describe: () => ({
-            id: "test-memory",
-            contractVersion: "1",
-            adapterVersion: "1",
-            capabilities: {
-              recall: true,
-              save: true,
-              purgeHistory: true,
-              sharedScope: true,
-            } as const,
-          }),
-          recall,
-          save: vi.fn(),
-          purgeHistory: vi.fn(),
-        },
+    memory: {
+      read: async () => ({
+        documents: [
+          {
+            id: "memory-1",
+            path: "MEMORY.md",
+            content: "Ava decided to ship behind a feature flag.",
+            revision: 2,
+            accessVersion: 4,
+          },
+        ],
       }),
+      search: async () => [],
     },
     events: {
       append: vi.fn(async () => undefined),
@@ -151,7 +139,6 @@ function fixture(options: { taskPrompt?: string } = {}) {
     secrets: [],
   } as unknown as Parameters<typeof createRunExecutor>[0]);
   return {
-    recall,
     runtimeRun,
     async run() {
       await executor.continueRun(run.id, "worker-1");
@@ -160,28 +147,20 @@ function fixture(options: { taskPrompt?: string } = {}) {
   };
 }
 
-describe("automatic semantic recall", () => {
-  it("recalls durable memory on a thread that was never compacted", async () => {
+describe("canonical memory recall", () => {
+  it("loads authorized local memory without calling an external provider", async () => {
     const f = fixture();
 
     await f.run();
 
-    expect(f.recall).toHaveBeenCalledOnce();
-    const [request] = f.recall.mock.calls[0]!;
-    expect(request.query).toBe("What did Ava decide?");
-    expect(request.scope).toBe("isolated");
-    // No compaction yet, so the provider must not be pointed at a history generation.
-    expect(request).not.toHaveProperty("historyGeneration");
-    expect(request.limit).toBeGreaterThan(0);
-
     const [runtimeRequest] = f.runtimeRun.mock.calls[0]! as unknown as [AgentRunRequest];
     const recalledBlock = runtimeRequest.history?.find((entry) =>
-      entry.content.includes("<recalled_memory>"),
+      entry.content.includes("<durable_memory>"),
     );
     expect(recalledBlock?.content).toContain("Ava decided to ship behind a feature flag.");
   });
 
-  it("charges the turn prompt and the recalled-memory block to the history budget", async () => {
+  it("charges the turn prompt and local memory data to the history budget", async () => {
     // A long task prompt and a recalled memory are exactly the run this used to get wrong: both
     // ride into the request outside the window `selectHistoryWindow` chooses from.
     const f = fixture({
@@ -196,7 +175,7 @@ describe("automatic semantic recall", () => {
       const [request] = f.runtimeRun.mock.calls[0]! as unknown as [AgentRunRequest];
       // The thread has no messages, so everything handed over as history is historical context.
       expect(request.history.map((entry) => entry.content)).toEqual([
-        expect.stringContaining("<recalled_memory>"),
+        expect.stringContaining("<durable_memory>"),
       ]);
       const logged = sink.events.find((event: LogEvent) => event.message === "agent.run.context") as
         | (LogEvent & { nonHistoryTokens?: number })

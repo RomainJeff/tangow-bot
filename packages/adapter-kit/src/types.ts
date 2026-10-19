@@ -234,6 +234,8 @@ export interface MemorySnapshot {
     path: string;
     content: string;
     revision: number;
+    /** Changes whenever a canonical document's content or access state changes. */
+    accessVersion?: number;
     updatedAt?: string;
   }>;
 }
@@ -245,6 +247,10 @@ export interface MemorySearchRequest {
 }
 
 export interface MemorySearchResult {
+  /** Canonical identity when the store can hydrate a search hit safely. */
+  documentId?: string;
+  revision?: number;
+  accessVersion?: number;
   path: string;
   snippet: string;
   score: number;
@@ -263,6 +269,17 @@ export interface MemoryCommitRequest {
   mode?: "replace" | "append";
   sourceRunId?: string;
   sourceThreadId?: string;
+  /** Stable, caller-derived identity for retry-safe proposal creation. */
+  idempotencyKey?: string;
+  /** Verifiable source passages supporting this one memory candidate. */
+  evidence?: Array<{
+    sourceKind: "message" | "thread" | "run";
+    sourceReferenceId: string;
+    sourceVersion: string;
+    startOffset: number | null;
+    endOffset: number | null;
+    excerpt: string | null;
+  }>;
 }
 
 export interface MemoryRevision {
@@ -422,6 +439,12 @@ export interface AgentRunRequest {
   ) => Promise<unknown>;
   /** Called after a tool returns; implementations must not persist raw result contents. */
   onToolCompleted?: (completion: AgentToolCompletion) => Promise<void> | void;
+  /**
+   * Checks whether the data supplied to this run may still be sent to a model.
+   * Runtimes invoke it immediately before every provider request, including
+   * continuations after a tool result. Throwing cancels that request.
+   */
+  beforeModelCall?: () => Promise<void> | void;
   /** Atomically claim durable user steering at the runtime's next safe turn boundary. */
   claimSteering?: (seenIds: string[]) => Promise<AgentSteeringMessage[]>;
   /** Open the log of one `run_subagent` call: the helper runs in a session of its own. */

@@ -23,6 +23,7 @@ import {
 } from "@rakazo/ui-web";
 import {
   Bell,
+  Brain,
   ChevronDown,
   Gauge,
   Lock,
@@ -40,6 +41,7 @@ import { authClient } from "../../lib/auth";
 import { BOTS_SIDEBAR_EDGE_DRAG_PX } from "../../lib/bots-sidebar-pref";
 import { desktopBridge } from "../../lib/desktop";
 import { clearSpaceSelection, rpc } from "../../lib/rpc";
+import { useOpenMemoryLibrary } from "../../lib/use-open-memory-library";
 import { ActivityList, runStatusLabel } from "../ActivityList";
 import type { ContextMenuPosition } from "../BotContextMenu";
 import type { SettingsSection } from "../SettingsOverlay";
@@ -177,6 +179,7 @@ export function BotsSidebar({
   botsSidebarEdgeDragRef: RefObject<{ startX: number; mode: "expand" | "collapse" } | null>;
 }) {
   const { t } = useLingui();
+  const openMemory = useOpenMemoryLibrary();
   const searchRef = useRef<HTMLInputElement>(null);
   const hasUnread = sidebarGroups.some((group) => group.bots.some((item) => item.chat.unread));
   return (
@@ -692,6 +695,18 @@ export function BotsSidebar({
                 align="start"
                 className="w-56 gap-0 p-1 data-closed:animate-none"
               >
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start font-normal"
+                  aria-label={t`Memory`}
+                  onClick={() => {
+                    setMenuOpen(false);
+                    openMemory("personal");
+                  }}
+                >
+                  <Brain className="text-muted-foreground" strokeWidth={1.75} />
+                  <Trans>Memory</Trans>
+                </Button>
                 <Button
                   variant="ghost"
                   className="w-full justify-start font-normal"
