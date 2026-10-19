@@ -4,8 +4,6 @@ import type {
   AgentRuntimeEvent,
   MemoryCommitRequest,
   MemoryStore,
-  SemanticMemoryResponse,
-  SemanticMemorySaveRequest,
   SessionEntryDraft,
 } from "@rakazo/adapter-kit";
 import type { AgentHistoryTurn, EntryId, SessionEntry, SessionId } from "@rakazo/contracts";
@@ -422,6 +420,7 @@ describe("compactHistory", () => {
         userId: USER,
         status: "running",
         trigger: "user",
+        memoryContextManifest: [],
       },
     });
     return {
@@ -468,8 +467,7 @@ describe("compactHistory", () => {
     seeded: Seeded,
     options: {
       deploymentModelKey?: string | null;
-      memoryScope?: "isolated" | "shared" | null;
-      memoryDocuments?: Array<{ path: string; content: string; revision: number }>;
+      memoryDocuments?: Array<{ id: string; path: string; content: string; revision: number }>;
       learnedText?: string;
       runtimeEvents?: AgentRuntimeEvent[];
       resolveModel?: CompactHistoryDeps["resolveModel"];
@@ -497,40 +495,6 @@ describe("compactHistory", () => {
         yield { type: "done", text };
       }),
     };
-    const saveMemory = vi.fn(
-      async (_request: SemanticMemorySaveRequest): Promise<SemanticMemoryResponse> => ({
-        ok: true,
-        value: undefined,
-      }),
-    );
-    const purgeHistory = vi.fn(
-      async (): Promise<SemanticMemoryResponse> => ({ ok: true, value: undefined }),
-    );
-    const memoryProviders = {
-      resolve: vi.fn(async () =>
-        options.memoryScope === null
-          ? null
-          : {
-              defaultScope: options.memoryScope ?? ("isolated" as const),
-              provider: {
-                describe: () => ({
-                  id: "test-memory",
-                  contractVersion: "1",
-                  adapterVersion: "1",
-                  capabilities: {
-                    recall: true,
-                    save: true,
-                    purgeHistory: true,
-                    sharedScope: true,
-                  } as const,
-                }),
-                recall: vi.fn(),
-                save: saveMemory,
-                purgeHistory,
-              },
-            },
-      ),
-    };
     const memoryCommit = vi.fn(async (request: MemoryCommitRequest) => ({
       id: "memory-1",
       path: request.path,
@@ -541,6 +505,7 @@ describe("compactHistory", () => {
       read: vi.fn(async (request: { scope: string }) => ({
         documents: request.scope === "bot" ? (options.memoryDocuments ?? []) : [],
       })),
+      search: vi.fn(async () => []),
       commit: memoryCommit,
     } as unknown as MemoryStore;
     const deps: CompactHistoryDeps = {
@@ -548,7 +513,6 @@ describe("compactHistory", () => {
       sessionLog: log,
       runtime: runtime as unknown as AgentRuntime,
       memory,
-      memoryProviders,
       ...(options.deploymentModelKey === null
         ? {}
         : { deploymentModelKey: options.deploymentModelKey ?? "openrouter-key" }),
@@ -561,9 +525,7 @@ describe("compactHistory", () => {
     return {
       deps,
       runtime,
-      saveMemory,
-      purgeHistory,
-      memoryProviders,
+      memory,
       memoryCommit,
       calls,
       compact: (
@@ -872,7 +834,7 @@ describe("compactHistory", () => {
     await h.compact();
 
     expect((await log.readTail(seeded.sessionId)).map((entry) => entry.type)).toEqual(["clear"]);
-    expect(h.saveMemory).not.toHaveBeenCalled();
+    expect(h.memoryCommit).not.toHaveBeenCalled();
     expect(h.calls("learn")).toEqual([]);
   });
 
@@ -898,7 +860,6 @@ describe("compactHistory", () => {
     await h.compact();
 
     expect(h.runtime.run).not.toHaveBeenCalled();
-    expect(h.memoryProviders.resolve).not.toHaveBeenCalled();
   });
 
   it("reads from the compaction a rewind into its kept window cut off, and summarizes nothing of it again", async () => {
@@ -949,80 +910,6 @@ describe("compactHistory", () => {
 
     expect(shown(rewound)).toEqual(["Answered question 0.", "question 1", "answer 1", "rewind"]);
     expect(await log.readTail(seeded.sessionId)).toEqual(rewound);
-  });
-
-  it("files the summary privately under the session's history generation, even for a shared bot", async () => {
-    const seeded = await seedThread();
-    await append(seeded, [
-      ...exchanges(seeded, 1),
-      { type: "clear", payload: {} },
-      ...exchanges(seeded, 2),
-    ]);
-    const h = harness(seeded, { memoryScope: "shared" });
-
-    await h.compact();
-
-    expect(h.saveMemory).toHaveBeenCalledWith(
-      {
-        content: "Summary of the session.",
-        scope: "isolated",
-        botId: seeded.botId,
-        source: { kind: "history", generation: 2 },
-      },
-      expect.objectContaining({ spaceId: SPACE, userId: USER, botId: seeded.botId }),
-    );
-    expect(h.purgeHistory).not.toHaveBeenCalled();
-  });
-
-  it("purges its own save when a clear lands while saving, and still compacts when that purge fails", async () => {
-    const seeded = await seedThread();
-    await append(seeded, exchanges(seeded, 2));
-    const h = harness(seeded);
-    h.saveMemory.mockImplementationOnce(async () => {
-      await append(seeded, [{ type: "clear", payload: {} }]);
-      return { ok: true, value: undefined };
-    });
-    h.purgeHistory.mockRejectedValueOnce(new Error("provider unavailable"));
-
-    await expect(h.compact()).resolves.toBeUndefined();
-
-    expect(h.purgeHistory).toHaveBeenCalledWith(
-      { botId: seeded.botId, generations: [0] },
-      expect.objectContaining({ botId: seeded.botId }),
-    );
-  });
-
-  it("purges its own save when a rewind that cuts what it summarized lands while saving", async () => {
-    const seeded = await seedThread();
-    const [first] = await append(seeded, exchanges(seeded, 2));
-    const h = harness(seeded);
-    h.saveMemory.mockImplementationOnce(async () => {
-      await append(seeded, [
-        { type: "rewind", parentId: first!.id, payload: { cutsSummary: true } },
-      ]);
-      return { ok: true, value: undefined };
-    });
-
-    await h.compact();
-
-    expect(h.purgeHistory.mock.calls).toEqual([
-      [{ botId: seeded.botId, generations: [0] }, expect.objectContaining({ botId: seeded.botId })],
-    ]);
-  });
-
-  it("compacts locally when the memory provider is missing, fails to load, or fails to save", async () => {
-    for (const fault of ["missing", "throws", "save fails"] as const) {
-      const seeded = await seedThread();
-      await append(seeded, exchanges(seeded, 2));
-      const h = harness(seeded, { memoryScope: fault === "missing" ? null : "isolated" });
-      if (fault === "throws") h.memoryProviders.resolve.mockRejectedValueOnce(new Error("down"));
-      if (fault === "save fails")
-        h.saveMemory.mockResolvedValueOnce({ ok: false, error: "network" });
-
-      await h.compact();
-
-      expect((await compactionOf(seeded))?.entry.payload.coveredUpToSeq).toBe(1);
-    }
   });
 
   it("uses the thread owner's resolved model, else the deployment's", async () => {
@@ -1142,7 +1029,7 @@ describe("compactHistory", () => {
       await expect(h.compact()).rejects.toThrow(failure.error);
 
       expect(await compactionOf(seeded)).toBeUndefined();
-      expect(h.saveMemory).not.toHaveBeenCalled();
+      expect(h.memoryCommit).not.toHaveBeenCalled();
     }
   });
 
@@ -1213,7 +1100,9 @@ describe("compactHistory", () => {
     const seeded = await seedThread();
     await append(seeded, exchanges(seeded, 2));
     const h = harness(seeded, {
-      memoryDocuments: [{ path: "MEMORY.md", content: "- Ships on Fridays", revision: 3 }],
+      memoryDocuments: [
+        { id: "memory-1", path: "MEMORY.md", content: "- Ships on Fridays", revision: 3 },
+      ],
       learnedText: "- Call the user Rom\n- The repo is rakazo-bot",
     });
 
@@ -1290,6 +1179,41 @@ describe("compactHistory", () => {
     expect(commit.content).not.toContain("sk-live-abcdefgh12345678");
     expect(bullets[0]).toBe("- The deploy token is [Redacted]");
     expect(bullets[9]).toBe("- Fact 8");
+  });
+
+  it("drops a summary or a reply whose memory dependencies are unknown or withdrawn", async () => {
+    const seeded = await seedThread();
+    const [first, reply] = await append(seeded, exchanges(seeded, 1));
+    await append(seeded, [
+      {
+        type: "compaction",
+        parentId: reply!.id,
+        payload: { summary: "Legacy summary", coveredUpToSeq: EntrySeq.parse(first!.seq) },
+      },
+    ]);
+    await database.prisma.run.update({
+      where: { id: seeded.runId },
+      data: {
+        memoryContextManifest: [
+          {
+            documentId: "memory-gone",
+            revision: 1,
+            scope: "bot",
+            path: "MEMORY.md",
+            reason: "recent_authorized",
+            excerptBytes: 1,
+          },
+        ],
+      },
+    });
+    await append(seeded, [...exchanges(seeded, 2, (index) => `turn ${index}`)]);
+    const h = harness(seeded);
+
+    await h.compact();
+
+    const [summarizer] = h.calls("compact");
+    expect(summarizer!.prompt).not.toContain("Legacy summary");
+    expect(conversationOf(summarizer!)).toBe("user: turn 0");
   });
 
   it("learns nothing from a chunk that carries a messaging channel post", async () => {

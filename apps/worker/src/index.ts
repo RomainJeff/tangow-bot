@@ -50,7 +50,6 @@ import {
   resolveSandboxProvider,
   ScriptedAgentRuntime,
   SpaceDecisionProviderResolver,
-  SpaceMemoryProviderResolver,
 } from "@rakazo/adapters";
 import { parseSkillLearningMode, resolveEncryptionKey, resolveSupervisorToken } from "@rakazo/core";
 import {
@@ -168,7 +167,6 @@ async function main() {
   await connector.start();
   integrationSettings.warmDirectories();
   const memory = new MarkdownMemoryStore(prisma);
-  const memoryProviders = new SpaceMemoryProviderResolver(prisma, secrets);
   const decisionProviders = new SpaceDecisionProviderResolver(prisma, secrets);
   const home = new LocalAgentHomeStore(dataDir);
   const artifacts = new LocalArtifactStore(dataDir);
@@ -206,7 +204,6 @@ async function main() {
     runtime,
     sandbox,
     memory,
-    memoryProviders,
     decisionProviders,
     home,
     artifacts,
@@ -247,7 +244,6 @@ async function main() {
     runtime,
     secretStore: secrets,
     memory,
-    memoryProviders,
     deploymentModelKey,
     messaging,
     artifacts,

@@ -75,7 +75,12 @@ describe("tool completion audit", () => {
     await expect(
       appendToolCompletionAudit(
         { events: { append } },
-        { spaceId: "space-1", threadId: "thread-1", botId: "bot-1", runId: "run-1" },
+        {
+          spaceId: "space-1",
+          threadId: "thread-1",
+          botId: "bot-1",
+          runId: "run-1",
+        },
         {
           name: "destination.write",
           executionId: "call-1",
@@ -183,7 +188,6 @@ describe("run tool selection", () => {
       pageBrowserAllowed: page,
       groupId: null,
       trigger: "message",
-      semanticMemoryEnabled: false,
       messagingChannelRun: false,
     }).map((tool) => tool.name);
     expect(names.includes("browser_snapshot")).toBe(page);
@@ -200,7 +204,6 @@ describe("run tool selection", () => {
       pageBrowserAllowed: options?.pageBrowserAllowed ?? true,
       groupId,
       trigger,
-      semanticMemoryEnabled: false,
       messagingChannelRun: false,
     }).map((tool) => tool.name);
 
@@ -247,7 +250,6 @@ describe("run tool selection", () => {
       graphicalToolsAllowed: true,
       groupId: null,
       trigger: "user",
-      semanticMemoryEnabled: false,
       messagingChannelRun: false,
     });
     const schedule = tools.find((tool) => tool.name === "schedule_create");
@@ -260,14 +262,27 @@ describe("run tool selection", () => {
 describe("steering attachment hydration", () => {
   it("keeps successful attachment parts when another part is unavailable", async () => {
     const imageBlocks: MessageBlock[] = [
-      { kind: "image", artifactId: "image-1", name: "one.png", mimeType: "image/png" },
-      { kind: "image", artifactId: "image-2", name: "two.png", mimeType: "image/png" },
+      {
+        kind: "image",
+        artifactId: "image-1",
+        name: "one.png",
+        mimeType: "image/png",
+      },
+      {
+        kind: "image",
+        artifactId: "image-2",
+        name: "two.png",
+        mimeType: "image/png",
+      },
     ];
     const withoutImage = await settleSteeringAttachmentLoads(
       Promise.reject(new Error("image missing")),
       Promise.resolve(["attachment.pdf"]),
     );
-    expect(withoutImage).toMatchObject({ images: undefined, files: ["attachment.pdf"] });
+    expect(withoutImage).toMatchObject({
+      images: undefined,
+      files: ["attachment.pdf"],
+    });
     expect(withoutImage.unavailableInstruction).toContain("do not guess its contents");
 
     const withoutFile = await settleSteeringAttachmentLoads(
@@ -349,8 +364,18 @@ describe("steering attachment hydration", () => {
 
   it("treats unreadable image bytes as missing instead of failing hydration", async () => {
     const blocks: MessageBlock[] = [
-      { kind: "image", artifactId: "image-1", name: "one.png", mimeType: "image/png" },
-      { kind: "image", artifactId: "image-2", name: "two.png", mimeType: "image/png" },
+      {
+        kind: "image",
+        artifactId: "image-1",
+        name: "one.png",
+        mimeType: "image/png",
+      },
+      {
+        kind: "image",
+        artifactId: "image-2",
+        name: "two.png",
+        mimeType: "image/png",
+      },
     ];
     const images = await loadCurrentTurnImages(
       {
@@ -405,7 +430,14 @@ describe("steering attachment hydration", () => {
             },
           },
         } as never,
-        [{ kind: "image", artifactId: "image-1", name: "one.png", mimeType: "image/png" }],
+        [
+          {
+            kind: "image",
+            artifactId: "image-1",
+            name: "one.png",
+            mimeType: "image/png",
+          },
+        ],
         {
           operationId: "run-1",
           traceId: "run-1",
@@ -421,8 +453,18 @@ describe("steering attachment hydration", () => {
 
   it("warns when an ordinary turn expects more images than were loaded", () => {
     const blocks: MessageBlock[] = [
-      { kind: "image", artifactId: "image-1", name: "one.png", mimeType: "image/png" },
-      { kind: "image", artifactId: "image-2", name: "two.png", mimeType: "image/png" },
+      {
+        kind: "image",
+        artifactId: "image-1",
+        name: "one.png",
+        mimeType: "image/png",
+      },
+      {
+        kind: "image",
+        artifactId: "image-2",
+        name: "two.png",
+        mimeType: "image/png",
+      },
     ];
     expect(missingTurnImagesInstruction(blocks, [{ name: "one.png" } as never])).toContain(
       "do not guess its contents",
@@ -468,7 +510,10 @@ function modelPreference({
 
 describe("run notification preference", () => {
   it("silences direct messages but leaves group notifications enabled", async () => {
-    let source: { bot: { notifyOnFinish: boolean }; thread: { groupId: string | null } } | null = {
+    let source: {
+      bot: { notifyOnFinish: boolean };
+      thread: { groupId: string | null };
+    } | null = {
       bot: { notifyOnFinish: false },
       thread: { groupId: null },
     };
@@ -519,7 +564,12 @@ describe("run notification preference", () => {
     await expect(
       runNotificationsEnabled(
         prisma,
-        { botId: "bot-1", threadId: "thread-1", spaceId: "workspace-1", userId: "user-1" },
+        {
+          botId: "bot-1",
+          threadId: "thread-1",
+          spaceId: "workspace-1",
+          userId: "user-1",
+        },
         { forceEnabled: true },
       ),
     ).resolves.toBe(true);
@@ -567,12 +617,10 @@ describe("createRunExecutor", () => {
       graphicalToolsAllowed: false,
       groupId: null,
       trigger: "messaging",
-      semanticMemoryEnabled: true,
       messagingChannelRun: true,
     }).map((tool) => tool.name);
     expect(tools).not.toContain("recall_memory");
     expect(tools).not.toContain("remember");
-    expect(tools).not.toContain("save_memory");
     expect(tools.some((tool) => tool.startsWith("scratchpad_"))).toBe(false);
     expect(tools).toContain("web_fetch");
   });
@@ -636,10 +684,14 @@ describe("createRunExecutor", () => {
     expect(enqueue).toHaveBeenCalledTimes(1);
     expect(enqueue).toHaveBeenCalledWith(expect.objectContaining({ name: "run.continue" }));
     expect(taskCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ threadId: "group-thread-1" }) }),
+      expect.objectContaining({
+        data: expect.objectContaining({ threadId: "group-thread-1" }),
+      }),
     );
     expect(runCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ threadId: "group-thread-1" }) }),
+      expect.objectContaining({
+        data: expect.objectContaining({ threadId: "group-thread-1" }),
+      }),
     );
     expect(append).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -702,17 +754,27 @@ describe("createRunExecutor", () => {
 
     expect(findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ id: "group-thread-1", spaceId: "ws-1" }),
+        where: expect.objectContaining({
+          id: "group-thread-1",
+          spaceId: "ws-1",
+        }),
       }),
     );
     expect(taskCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ threadId: "group-thread-1" }) }),
+      expect.objectContaining({
+        data: expect.objectContaining({ threadId: "group-thread-1" }),
+      }),
     );
     expect(runCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ threadId: "group-thread-1" }) }),
+      expect.objectContaining({
+        data: expect.objectContaining({ threadId: "group-thread-1" }),
+      }),
     );
     expect(append).toHaveBeenCalledWith(
-      expect.objectContaining({ type: "routine.fired", threadId: "group-thread-1" }),
+      expect.objectContaining({
+        type: "routine.fired",
+        threadId: "group-thread-1",
+      }),
     );
   });
 
@@ -772,13 +834,20 @@ describe("createRunExecutor", () => {
       }),
     );
     expect(taskCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ threadId: "dm-thread-1" }) }),
+      expect.objectContaining({
+        data: expect.objectContaining({ threadId: "dm-thread-1" }),
+      }),
     );
     expect(runCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ threadId: "dm-thread-1" }) }),
+      expect.objectContaining({
+        data: expect.objectContaining({ threadId: "dm-thread-1" }),
+      }),
     );
     expect(append).toHaveBeenCalledWith(
-      expect.objectContaining({ type: "routine.fired", threadId: "dm-thread-1" }),
+      expect.objectContaining({
+        type: "routine.fired",
+        threadId: "dm-thread-1",
+      }),
     );
   });
 
@@ -837,7 +906,11 @@ description: Prepare standup notes
     const executor = createRunExecutor({
       prisma,
       dataDir,
-      jobs: { enqueue, cancel: vi.fn(async () => undefined), close: vi.fn(async () => undefined) },
+      jobs: {
+        enqueue,
+        cancel: vi.fn(async () => undefined),
+        close: vi.fn(async () => undefined),
+      },
       events: { append: vi.fn(async () => undefined) },
     } as unknown as Parameters<typeof createRunExecutor>[0]);
 
@@ -887,7 +960,9 @@ description: Prepare standup notes
         callback({
           routine: { updateMany },
           task: { create: vi.fn(async () => ({ id: "task-1" })) },
-          run: { create: vi.fn(async () => ({ id: "run-1", taskId: "task-1" })) },
+          run: {
+            create: vi.fn(async () => ({ id: "run-1", taskId: "task-1" })),
+          },
         }),
       ),
     } as unknown as PrismaClient;
@@ -944,7 +1019,9 @@ description: Prepare standup notes
           return callback({
             routine: { updateMany: claimUpdateMany },
             task: { create: vi.fn(async () => ({ id: "task-1" })) },
-            run: { create: vi.fn(async () => ({ id: "run-1", taskId: "task-1" })) },
+            run: {
+              create: vi.fn(async () => ({ id: "run-1", taskId: "task-1" })),
+            },
           });
         }
         return callback({
@@ -956,18 +1033,30 @@ description: Prepare standup notes
     } as unknown as PrismaClient;
     const executor = createRunExecutor({
       prisma,
-      jobs: { enqueue, cancel: vi.fn(async () => undefined), close: vi.fn(async () => undefined) },
+      jobs: {
+        enqueue,
+        cancel: vi.fn(async () => undefined),
+        close: vi.fn(async () => undefined),
+      },
       events: { append: vi.fn(async () => undefined) },
     } as unknown as Parameters<typeof createRunExecutor>[0]);
 
     await expect(executor.wakeRoutine("routine-1", scheduledAt.toISOString())).rejects.toThrow(
       "enqueue failed",
     );
-    expect(deleteRunMany).toHaveBeenCalledWith({ where: { id: "run-1", status: "queued" } });
-    expect(deleteTaskMany).toHaveBeenCalledWith({ where: { id: "task-1", status: "queued" } });
+    expect(deleteRunMany).toHaveBeenCalledWith({
+      where: { id: "run-1", status: "queued" },
+    });
+    expect(deleteTaskMany).toHaveBeenCalledWith({
+      where: { id: "task-1", status: "queued" },
+    });
     expect(restoreUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ id: "routine-1", active: false, nextRunAt: null }),
+        where: expect.objectContaining({
+          id: "routine-1",
+          active: false,
+          nextRunAt: null,
+        }),
         data: expect.objectContaining({
           nextRunAt: scheduledAt,
           active: true,
@@ -1081,7 +1170,10 @@ description: Prepare standup notes
           checkpoint: "takeover-skipped",
           leaseFence: 0,
         })),
-        findUniqueOrThrow: vi.fn(async () => ({ status: "leased", startedAt: null })),
+        findUniqueOrThrow: vi.fn(async () => ({
+          status: "leased",
+          startedAt: null,
+        })),
         updateMany,
       },
       bot: {
@@ -1091,9 +1183,10 @@ description: Prepare standup notes
         })),
       },
     } as unknown as PrismaClient;
-    const executor = createRunExecutor({ prisma, jobs: { enqueue } } as unknown as Parameters<
-      typeof createRunExecutor
-    >[0]);
+    const executor = createRunExecutor({
+      prisma,
+      jobs: { enqueue },
+    } as unknown as Parameters<typeof createRunExecutor>[0]);
 
     await executor.continueRun("run-1", "worker-1");
 
@@ -1125,9 +1218,13 @@ description: Prepare standup notes
           return { count: 1 };
         }
         if (args.where.checkpoint && typeof args.where.checkpoint === "object") {
-          return { count: args.where.checkpoint.in.includes(checkpoint ?? "") ? 1 : 0 };
+          return {
+            count: args.where.checkpoint.in.includes(checkpoint ?? "") ? 1 : 0,
+          };
         }
-        return { count: args.where.checkpoint === null && checkpoint === null ? 1 : 0 };
+        return {
+          count: args.where.checkpoint === null && checkpoint === null ? 1 : 0,
+        };
       },
     );
     const enqueue = vi.fn(async () => undefined);
@@ -1140,7 +1237,10 @@ description: Prepare standup notes
           checkpoint: null,
           leaseFence: 0,
         })),
-        findUniqueOrThrow: vi.fn(async () => ({ status: "leased", startedAt: null })),
+        findUniqueOrThrow: vi.fn(async () => ({
+          status: "leased",
+          startedAt: null,
+        })),
         updateMany,
       },
       bot: {
@@ -1150,9 +1250,10 @@ description: Prepare standup notes
         })),
       },
     } as unknown as PrismaClient;
-    const executor = createRunExecutor({ prisma, jobs: { enqueue } } as unknown as Parameters<
-      typeof createRunExecutor
-    >[0]);
+    const executor = createRunExecutor({
+      prisma,
+      jobs: { enqueue },
+    } as unknown as Parameters<typeof createRunExecutor>[0]);
 
     await executor.continueRun("run-1", "worker-1");
 
@@ -1197,7 +1298,10 @@ description: Prepare standup notes
           checkpoint: null,
           leaseFence: 0,
         })),
-        findUniqueOrThrow: vi.fn(async () => ({ status: "leased", startedAt: null })),
+        findUniqueOrThrow: vi.fn(async () => ({
+          status: "leased",
+          startedAt: null,
+        })),
         updateMany,
       },
       bot: {
@@ -1207,9 +1311,10 @@ description: Prepare standup notes
         })),
       },
     } as unknown as PrismaClient;
-    const executor = createRunExecutor({ prisma, jobs: { enqueue } } as unknown as Parameters<
-      typeof createRunExecutor
-    >[0]);
+    const executor = createRunExecutor({
+      prisma,
+      jobs: { enqueue },
+    } as unknown as Parameters<typeof createRunExecutor>[0]);
 
     await executor.continueRun("run-1", "worker-1");
 
@@ -1263,12 +1368,18 @@ description: Prepare standup notes
     const prisma = {
       run: {
         findUnique: vi.fn(async () => run),
-        findUniqueOrThrow: vi.fn(async () => ({ status: "leased", startedAt: null })),
+        findUniqueOrThrow: vi.fn(async () => ({
+          status: "leased",
+          startedAt: null,
+        })),
         updateMany: vi.fn(async () => ({ count: 1 })),
       },
       bot: { findUniqueOrThrow: botLookup },
       computer: {
-        findUniqueOrThrow: vi.fn(async () => ({ scope: "private", state: "running" })),
+        findUniqueOrThrow: vi.fn(async () => ({
+          scope: "private",
+          state: "running",
+        })),
       },
       attempt: {
         create: vi.fn(async () => ({ id: "attempt-1" })),
@@ -1295,8 +1406,7 @@ description: Prepare standup notes
         describe: () => ({ capabilities: { scripted: false } }),
         run: runtimeRun,
       },
-      memoryProviders: { resolve: vi.fn(async () => null) },
-      memory: { read: vi.fn(async () => ({ documents: [] })) },
+      memory: { read: vi.fn(async () => ({ documents: [] })), search: async () => [] },
       events: { append: vi.fn(async () => undefined), finalizeRun },
       jobs: { enqueue: vi.fn(async () => undefined) },
       secrets: [],
@@ -1347,7 +1457,10 @@ description: Prepare standup notes
       spaceModelPreference: { findFirst },
       userModelCredential: { findFirst: vi.fn(async () => null) },
       deploymentSettings: { findUnique: vi.fn(async () => null) },
-      secret: { findFirst: vi.fn(async () => null), findUnique: vi.fn(async () => null) },
+      secret: {
+        findFirst: vi.fn(async () => null),
+        findUnique: vi.fn(async () => null),
+      },
     } as unknown as PrismaClient;
     const executor = createRunExecutor({
       prisma,
@@ -1389,7 +1502,10 @@ description: Prepare standup notes
     const prisma = {
       spaceModelPreference: { findFirst },
       userModelCredential: { findFirst: vi.fn(async () => null) },
-      secret: { findFirst: vi.fn(async () => null), findUnique: vi.fn(async () => null) },
+      secret: {
+        findFirst: vi.fn(async () => null),
+        findUnique: vi.fn(async () => null),
+      },
     } as unknown as PrismaClient;
     const executor = createRunExecutor({
       prisma,
@@ -1402,7 +1518,11 @@ description: Prepare standup notes
       "grok-4.6",
     );
 
-    expect(model).toMatchObject({ provider: "xai", id: "grok-4.6", thinkingLevel: null });
+    expect(model).toMatchObject({
+      provider: "xai",
+      id: "grok-4.6",
+      thinkingLevel: null,
+    });
     expect(findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
@@ -1424,7 +1544,10 @@ description: Prepare standup notes
     });
     const findFirst = vi.fn(
       async (args: {
-        where: { credential?: { provider?: string; userId?: string }; modelId?: string };
+        where: {
+          credential?: { provider?: string; userId?: string };
+          modelId?: string;
+        };
         select?: unknown;
       }) => {
         if (args.select) {
@@ -1438,7 +1561,10 @@ description: Prepare standup notes
     const prisma = {
       spaceModelPreference: { findFirst },
       userModelCredential: { findFirst: vi.fn(async () => null) },
-      secret: { findFirst: vi.fn(async () => null), findUnique: vi.fn(async () => null) },
+      secret: {
+        findFirst: vi.fn(async () => null),
+        findUnique: vi.fn(async () => null),
+      },
     } as unknown as PrismaClient;
     const executor = createRunExecutor({
       prisma,
@@ -1501,7 +1627,11 @@ description: Prepare standup notes
     } as unknown as Parameters<typeof createRunExecutor>[0]);
 
     await expect(
-      executor.resolveModel({ userId: "user-1", spaceId: "ws-1", botId: "bot-1" }),
+      executor.resolveModel({
+        userId: "user-1",
+        spaceId: "ws-1",
+        botId: "bot-1",
+      }),
     ).resolves.toMatchObject({
       provider,
       id: "bot-vision-model",
@@ -1513,7 +1643,11 @@ description: Prepare standup notes
 
     bot.modelId = "text-only-model";
     await expect(
-      executor.resolveModel({ userId: "user-1", spaceId: "ws-1", botId: "bot-1" }),
+      executor.resolveModel({
+        userId: "user-1",
+        spaceId: "ws-1",
+        botId: "bot-1",
+      }),
     ).resolves.toMatchObject({
       provider,
       id: "text-only-model",
@@ -1566,7 +1700,10 @@ description: Prepare standup notes
     } as unknown as PrismaClient;
     const executor = createRunExecutor({
       prisma,
-      secretStore: { load: vi.fn((ciphertext: string) => ciphertext), put: vi.fn() },
+      secretStore: {
+        load: vi.fn((ciphertext: string) => ciphertext),
+        put: vi.fn(),
+      },
     } as unknown as Parameters<typeof createRunExecutor>[0]);
     const scope = { userId: "user-1", spaceId: "ws-1", botId: "bot-1" };
 
@@ -1609,7 +1746,10 @@ description: Prepare standup notes
       spaceModelPreference: { findFirst },
       userModelCredential: { findFirst: vi.fn(async () => null) },
       deploymentSettings: { findUnique: vi.fn(async () => null) },
-      secret: { findFirst: vi.fn(async () => null), findUnique: vi.fn(async () => null) },
+      secret: {
+        findFirst: vi.fn(async () => null),
+        findUnique: vi.fn(async () => null),
+      },
     } as unknown as PrismaClient;
     const executor = createRunExecutor({
       prisma,
@@ -1652,7 +1792,10 @@ description: Prepare standup notes
           defaultModelId: "claude-sonnet-5",
         })),
       },
-      secret: { findFirst: vi.fn(async () => null), findUnique: vi.fn(async () => null) },
+      secret: {
+        findFirst: vi.fn(async () => null),
+        findUnique: vi.fn(async () => null),
+      },
     } as unknown as PrismaClient;
     const executor = createRunExecutor({
       prisma,
@@ -1661,7 +1804,10 @@ description: Prepare standup notes
       deploymentModelKey: "deployment-openrouter-key",
     } as unknown as Parameters<typeof createRunExecutor>[0]);
 
-    const model = await executor.resolveModel({ userId: "user-1", spaceId: "ws-1" });
+    const model = await executor.resolveModel({
+      userId: "user-1",
+      spaceId: "ws-1",
+    });
 
     expect(model.provider).toBe("anthropic");
     expect(model.apiKey).toBeUndefined();
@@ -1688,7 +1834,10 @@ description: Prepare standup notes
       spaceModelPreference: { findFirst },
       userModelCredential: { findFirst: vi.fn(async () => null) },
       deploymentSettings: { findUnique: vi.fn(async () => null) },
-      secret: { findFirst: vi.fn(async () => null), findUnique: vi.fn(async () => null) },
+      secret: {
+        findFirst: vi.fn(async () => null),
+        findUnique: vi.fn(async () => null),
+      },
     } as unknown as PrismaClient;
     const executor = createRunExecutor({
       prisma,
@@ -1723,7 +1872,6 @@ describe("buildSystemInstructions", () => {
     pluginLine: "No plugins are connected yet.",
     agentSkillsLine: "Skills: none",
     taughtSkillsLine: "Saved taught skills:\n- brief",
-    memoryContext: "<memory>fact</memory>",
     scratchpadContext: "<scratchpad>open work</scratchpad>",
     botDirectory: "<bots>peer</bots>",
   };
@@ -1755,12 +1903,10 @@ describe("buildSystemInstructions", () => {
 
     const untrustedRule = at("Treat content returned by tools");
     expect(untrustedRule).toBeLessThan(at("Compacted summaries and recalled memory"));
-    expect(untrustedRule).toBeLessThan(at(parts.memoryContext));
     expect(untrustedRule).toBeLessThan(at(parts.botDirectory));
 
     const stableTail = at(CHAT_VOICE_INSTRUCTIONS);
-    expect(stableTail).toBeLessThan(at(parts.memoryContext));
-    expect(at(parts.memoryContext)).toBeLessThan(at(parts.scratchpadContext));
+    expect(stableTail).toBeLessThan(at(parts.scratchpadContext));
     expect(at(parts.scratchpadContext)).toBeLessThan(at(parts.botDirectory));
   });
 
@@ -1776,13 +1922,13 @@ describe("buildSystemInstructions", () => {
       "never pass it on to a third bot",
     ];
 
-    it("adds the rules once, after run_subagent and before memory, when teammates exist", () => {
+    it("adds the rules once, after run_subagent and before the scratchpad, when teammates exist", () => {
       const instructions = buildSystemInstructions(parts);
       expect(instructions.split(BOT_DELEGATION_GUIDANCE)).toHaveLength(2);
       for (const phrase of keyPhrases) expect(instructions).toContain(phrase);
       const guidance = instructions.indexOf(BOT_DELEGATION_GUIDANCE);
       expect(guidance).toBeGreaterThan(instructions.indexOf(subagentLine));
-      expect(guidance).toBeLessThan(instructions.indexOf(parts.memoryContext));
+      expect(guidance).toBeLessThan(instructions.indexOf(parts.scratchpadContext));
     });
 
     it("leaves the rules out without a teammate directory", () => {
@@ -1837,7 +1983,7 @@ describe("buildSystemInstructions", () => {
         withMemory.indexOf(CHAT_VOICE_INSTRUCTIONS),
       );
       expect(withMemory.indexOf(BOT_OFFER_DEDICATED_BOT)).toBeLessThan(
-        withMemory.indexOf(parts.memoryContext),
+        withMemory.indexOf(parts.scratchpadContext),
       );
       expect(buildSystemInstructions({ ...bare, userTurn: false })).not.toContain(
         BOT_OFFER_DEDICATED_BOT,
@@ -1846,15 +1992,14 @@ describe("buildSystemInstructions", () => {
     });
   });
 
-  it("keeps the prefix identical up to memory when only memory and scratchpad differ", () => {
+  it("keeps the prefix identical up to the scratchpad when only the scratchpad differs", () => {
     const first = buildSystemInstructions({ ...parts, userTurn: true });
     const second = buildSystemInstructions({
       ...parts,
       userTurn: true,
-      memoryContext: "<memory>another fact</memory>",
       scratchpadContext: "<scratchpad>other work</scratchpad>",
     });
-    const prefix = first.slice(0, first.indexOf(parts.memoryContext));
+    const prefix = first.slice(0, first.indexOf(parts.scratchpadContext));
     expect(prefix).toContain(BOT_DELEGATION_GUIDANCE);
     expect(second.startsWith(prefix)).toBe(true);
   });
@@ -1873,10 +2018,11 @@ describe("buildSystemInstructions", () => {
     expect(instructions.startsWith(parts.botInstructions)).toBe(true);
   });
 
-  it("promises remember only when the tool is exposed, and says when to call it", () => {
+  it("describes remember as a proposal only when the tool is exposed", () => {
     const exposed = buildSystemInstructions(parts);
-    expect(exposed).toContain("Call remember the moment the user states a preference");
-    expect(exposed).toContain("not at the end of the conversation");
+    expect(exposed).toContain("Call remember when the user states a preference");
+    expect(exposed).toContain("creates a memory proposal for review");
+    expect(exposed).toContain("do not claim it is active");
 
     expect(buildSystemInstructions({ ...parts, rememberExposed: false })).not.toContain("remember");
   });
@@ -1886,7 +2032,7 @@ describe("buildSystemInstructions", () => {
     const voice = instructions.indexOf(CHAT_VOICE_INSTRUCTIONS);
     expect(instructions.startsWith(parts.botInstructions)).toBe(true);
     expect(voice).toBeGreaterThan(instructions.indexOf(parts.agentSkillsLine));
-    expect(voice).toBeLessThan(instructions.indexOf(parts.memoryContext));
+    expect(voice).toBeLessThan(instructions.indexOf(parts.scratchpadContext));
 
     const messaging = buildSystemInstructions({
       ...parts,

@@ -368,8 +368,7 @@ export class PiAgentRuntime implements AgentRuntime {
         agent = new Agent({
           sessionId: conversationSessionId(request.threadId, request.botId),
           steeringMode: "all",
-          streamFn: (m, ctx, options) =>
-            models.streamSimple(m, ctx, reliableStreamOptions(m, options, request.model.maxTokens)),
+          streamFn: checkedStream(request, models, request.model.maxTokens),
           getApiKey: async () => apiKey,
           transformContext: async (messages) =>
             pruneComputerScreenshotContext(messages, request.model.maxImagesPerPrompt),
@@ -1523,12 +1522,7 @@ async function runSubagent(
   };
   const nested = new Agent({
     sessionId: conversationSessionId(host.request.threadId, host.request.botId, agentId),
-    streamFn: (m, ctx, options) =>
-      selectedModel.models.streamSimple(
-        m,
-        ctx,
-        reliableStreamOptions(m, options, requestModel.maxTokens),
-      ),
+    streamFn: checkedStream(host.request, selectedModel.models, requestModel.maxTokens),
     getApiKey: async () => selectedModel.apiKey,
     transformContext: async (messages) =>
       pruneComputerScreenshotContext(messages, requestModel.maxImagesPerPrompt),
@@ -2187,6 +2181,18 @@ function createQueue(): EventQueue {
         });
       }
     },
+  };
+}
+
+/** Streams one provider request once the run confirms its data may still reach a model. */
+function checkedStream(
+  request: Pick<AgentRunRequest, "beforeModelCall">,
+  models: Models,
+  maxTokens: number | undefined,
+) {
+  return async (...[model, context, options]: Parameters<Models["streamSimple"]>) => {
+    await request.beforeModelCall?.();
+    return models.streamSimple(model, context, reliableStreamOptions(model, options, maxTokens));
   };
 }
 

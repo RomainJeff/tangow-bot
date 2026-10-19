@@ -313,7 +313,8 @@ describe("sessions migration", () => {
     const { prisma } = database;
     const threads = await prisma.thread.findMany({ orderBy: { id: "asc" } });
     const sessions = await prisma.conversationSession.findMany({ orderBy: { threadId: "asc" } });
-    const runs = await prisma.run.findMany();
+    // Columns of later migrations are not applied here, so read only the ones this one wrote.
+    const runs = await prisma.run.findMany({ select: { id: true, sessionId: true } });
 
     expect(sessions.map(({ id, kind, threadId }) => ({ id, kind, threadId }))).toEqual(
       threads.map((thread) => ({ id: thread.sessionId, kind: "thread", threadId: thread.id })),
@@ -363,6 +364,7 @@ describe("sessions migration", () => {
     const { prisma } = database;
     const bot = await prisma.bot.create({
       data: { spaceId: "s1", userId: "u1", name: "C", color: "#000000" },
+      select: { id: true },
     });
     const thread = await prisma.thread.create({
       data: { spaceId: "s1", userId: "u1", botId: bot.id },
@@ -377,6 +379,7 @@ describe("sessions migration", () => {
         status: "queued",
         trigger: "user",
       },
+      select: { sessionId: true },
     });
 
     expect(
