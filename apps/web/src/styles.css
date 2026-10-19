@@ -25,6 +25,13 @@ body,
   background: transparent;
 }
 
+/* Same reason: the drawer's veil blurs the thread in the page background instead of
+   darkening it, so it meets Safari's bars, painted in that colour, without a line. */
+[data-testid="shell-root"] > button.bg-overlay {
+  background: color-mix(in srgb, var(--background) 55%, transparent);
+  backdrop-filter: blur(6px);
+}
+
 .rk-scroll::-webkit-scrollbar {
   width: 6px;
 }

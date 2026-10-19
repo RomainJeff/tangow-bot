@@ -29,34 +29,43 @@
     backdrop-filter: blur(var(--material-list-blur)) saturate(var(--material-list-saturate));
   }
 
-  /* The scroll edge under the header: the page tone, blurred, fading out at 55%. */
+  /* The scroll edge under the header: the page background, blurred, fading out
+     at 55%. Phone width only: Safari paints its status bar in that colour, so
+     the two meet without a line. Beside the sidebar it only blurs, as a tint
+     would stop at the column's edge against the ambient light. */
   .rk-scroll-edge {
-    background: linear-gradient(
-      to bottom,
-      rgb(var(--scroll-edge-tone) / 0.96) 0%,
-      rgb(var(--scroll-edge-tone) / 0.85) 55%,
-      rgb(var(--scroll-edge-tone) / 0) 100%
-    );
     backdrop-filter: blur(var(--scroll-edge-blur));
     mask-image: linear-gradient(to bottom, #000 55%, transparent);
   }
 
-  /* The thread fades out under the header and the composer, so a dark bubble
-     leaves no smear behind either. */
+  @media (width < 48rem) {
+    .rk-scroll-edge {
+      background: linear-gradient(
+        to bottom,
+        color-mix(in srgb, var(--background) 96%, transparent) 0%,
+        color-mix(in srgb, var(--background) 85%, transparent) 55%,
+        transparent 100%
+      );
+    }
+  }
+
+  /* The thread fades in under the header, so a dark bubble leaves no smear
+     behind the title, and out across the composer's bar: its glass blurs the
+     thread above, and nothing shows in the gap under it. */
   .rk-thread-mask {
     mask-image: linear-gradient(
       to bottom,
       transparent var(--thread-fade-top-start),
       #000 var(--thread-fade-top-end),
-      #000 calc(100% - var(--thread-fade-bottom)),
-      transparent
+      #000 calc(100% - var(--thread-fade-bottom-start)),
+      transparent calc(100% - var(--thread-fade-bottom-end))
     );
   }
 
-  /* The thread runs its bottom fade under the composer, but not under a line
-     the shell sets between them (teaching in progress): it would paint over it. */
+  /* The thread runs under the composer, but not under a line the shell sets
+     between them (teaching in progress): it would paint over it. */
   .rk-thread-overlap:has(+ [data-slot="composer"]) {
-    margin-bottom: calc(-1 * var(--thread-fade-bottom));
+    margin-bottom: calc(-1 * var(--thread-under-composer));
   }
 
   /* Reduce Transparency: every material turns opaque; the ambient light stays. */

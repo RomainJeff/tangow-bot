@@ -14,7 +14,7 @@ carries content: no bubble, card or panel is glass.
 | Material | Light | Dark | Blur | Use |
 | --- | --- | --- | --- | --- |
 | `chrome` | `rgba(255, 255, 255, 0.68)` | `rgba(36, 36, 40, 0.55)` | 30 px, saturate 160% | the sidebar |
-| `control` | `rgba(255, 255, 255, 0.72)` | `rgba(44, 44, 48, 0.72)` | 24 px, saturate 170% | the header's action capsule, the composer, the hover pill, round buttons |
+| `control` | `rgba(255, 255, 255, 0.6)` | `rgba(44, 44, 48, 0.6)` | 12 px, saturate 170% | the header's action capsule, the composer, the hover pill, round buttons |
 | `menu` | `rgba(255, 255, 255, 0.8)` | `rgba(44, 44, 48, 0.8)` | 30 px, saturate 180% | small menus, tooltips: a step more opaque, to stay legible over thread text |
 | `list` | `rgba(250, 250, 251, 0.94)` | `rgba(40, 40, 44, 0.94)` | 40 px, saturate 180% | dense lists: the ⌘K palette, the bot drawer at phone width |
 
@@ -29,7 +29,7 @@ Under Reduce Transparency every material turns opaque: `chrome` takes
 
 The values live in `packages/ui-tokens/src/materials.ts` and reach CSS as
 `--material-<name>-*`, `--ambient` (phone width included),
-`--scroll-edge-tone`, `--scroll-edge-blur` and `--thread-fade-*`. Screens
+`--scroll-edge-blur`, `--thread-fade-*` and `--thread-under-composer`. Screens
 spend them through `rk-glass-chrome`, `rk-glass-control`, `rk-glass-menu`,
 `rk-glass-list`, `rk-scroll-edge`, `rk-thread-mask` and `rk-thread-overlap`
 from `packages/ui-web/src/materials.css`.
@@ -56,23 +56,30 @@ tint.
 
 Dark desktop puts the light at 34% of the width, so it falls on the thread
 rather than under the sidebar. iPhone has its own values, higher and from the
-corner. Don't: darken the dark gradients further (their steps are already near
-the edge of perception), or reuse the desktop values on iPhone.
+corner. At phone width the web adds a fade into the page background over the
+bottom 22%, since Safari paints its toolbar in that colour. Don't: darken the
+dark gradients further (their steps are already near the edge of perception),
+or reuse the desktop values on iPhone.
 
 ## Scroll edge
 
 Content passing under the header fades out instead of meeting a band.
 
-- Desktop: a 64 px layer at the top of the thread, beside the sidebar: a
-  gradient of the page tone (light `rgb(245, 245, 247)`, dark
-  `rgb(20, 20, 22)`) at 0.96, 0.85 then 0, blurred 20 px and masked at 55%.
-  The thread is masked too: transparent to 60 px, opaque from 84 px, opaque
-  down to 64 px above the bottom, transparent at the bottom, so a dark bubble
-  leaves no smear under the header.
+- Web: a 64 px layer at the top of the thread, blurred 20 px and masked at
+  55%. Beside the sidebar it only blurs: a tint would stop at the column's
+  edge against the ambient light. At phone width it also takes the page
+  background at 0.96, 0.85 then 0, the colour Safari paints its status bar,
+  so the two meet without a line. The thread is masked: transparent to 60 px
+  and opaque from 84 px, so a dark bubble leaves no smear under the title.
+- Web composer: the thread runs 80 px under it (its 12 top inset, 48 bar and
+  20 bottom gap) and fades across the bar, opaque 68 px above the window's
+  edge and gone 20 px above it, so the glass blurs the thread and nothing
+  shows in the gap below.
 - iPhone: the navigation bar's native scroll-edge effect. Where it is not
-  available, a 124 px layer of the same tones at 0.55, 0.30 then 0, blurred
-  12 px, and a thread mask transparent to 60 px, opaque from 124 px, fading
-  between 100 and 28 px above the bottom.
+  available, a 124 px layer of the page tone (light `rgb(245, 245, 247)`,
+  dark `rgb(20, 20, 22)`) at 0.55, 0.30 then 0, blurred 12 px, and a thread
+  mask transparent to 60 px, opaque from 124 px, fading between 100 and 28 px
+  above the bottom.
 
 Do: strengthen the edge until the title stays legible over a user bubble
 passing under it.
@@ -101,6 +108,9 @@ passing under it.
   `rounded-full`, never as a block in the thread.
 - Phone width on web and iPhone screens outside the thread take the same
   chrome: round buttons and capsules on `control`, lists and groups on the
-  ambient light. The web drawer is the sidebar itself, on `list`.
+  ambient light. The web drawer is the sidebar itself, on `list`, full height
+  against the start edge with no radius, over a veil that blurs the thread
+  6 px in the page background at 55% instead of darkening it: Safari's bars
+  stay in that colour.
 - Desktop window: the system's opaque window; the glass blurs the app's own
   ambient light, never the desktop. A window the app draws takes radius 26.

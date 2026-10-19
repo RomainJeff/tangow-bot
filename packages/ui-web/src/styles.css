@@ -1,3 +1,7 @@
+/* Tailwind's layer order, declared first: `bot-avatar.tsx` loads this file on its own,
+   before the app's sheet, and the first layer named sets the order for the page. */
+@layer theme, base, components, utilities;
+
 @import "tw-animate-css";
 @import "./shadcn.css";
 @import "@rakazo/ui-tokens/css";

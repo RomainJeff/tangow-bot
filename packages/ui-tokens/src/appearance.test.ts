@@ -126,11 +126,10 @@ describe("tokens.css", () => {
     expect(dark).toContain("--material-chrome-fill: rgba(36, 36, 40, 0.55);");
     expect(light).toContain("--material-chrome-fill: rgba(255, 255, 255, 0.68);");
     expect(light).toContain("--material-chrome-fallback: var(--sidebar);");
-    expect(light).toContain("--scroll-edge-tone: 245 245 247;");
     expect(light).not.toContain("--material-control-blur");
-    expect(geometry).toContain("--material-control-blur: 24px;");
+    expect(geometry).toContain("--material-control-blur: 12px;");
     expect(geometry).toContain("--scroll-edge-blur: 20px;");
-    expect(geometry).toContain("--thread-fade-bottom: 64px;");
+    expect(geometry).toContain("--thread-under-composer: 80px;");
     expect(narrow).toMatch(/^\(max-width: 767px\) \{\n {2}:root,/);
     expect(narrow).toContain("#36363c 0%");
   });

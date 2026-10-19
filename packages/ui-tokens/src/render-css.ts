@@ -19,14 +19,7 @@ import {
   typography,
 } from "./index.js";
 import type { MaterialKey } from "./materials.js";
-import {
-  ambient,
-  materials,
-  narrowMaxWidth,
-  scrollEdgeBlur,
-  scrollEdgeTone,
-  threadFade,
-} from "./materials.js";
+import { ambient, materials, narrowMaxWidth, scrollEdgeBlur, threadFade } from "./materials.js";
 
 /** `cardForeground` -> `card-foreground` (no leading `--`). */
 function kebabCase(key: string): string {
@@ -80,7 +73,6 @@ function renderMaterialLines(appearance: ResolvedAppearance): string[] {
       `  --material-${key}-fallback: var(${cssVariableName(materials[key].fallback)});`,
     ]),
     renderDeclaration("--ambient", ambient.desktop[appearance]),
-    `  --scroll-edge-tone: ${scrollEdgeTone[appearance]};`,
   ];
 }
 
@@ -93,7 +85,9 @@ function renderMaterialGeometryLines(): string[] {
     `  --scroll-edge-blur: ${scrollEdgeBlur}px;`,
     `  --thread-fade-top-start: ${threadFade.topStart}px;`,
     `  --thread-fade-top-end: ${threadFade.topEnd}px;`,
-    `  --thread-fade-bottom: ${threadFade.bottom}px;`,
+    `  --thread-fade-bottom-start: ${threadFade.bottomStart}px;`,
+    `  --thread-fade-bottom-end: ${threadFade.bottomEnd}px;`,
+    `  --thread-under-composer: ${threadFade.underComposer}px;`,
   ];
 }
 

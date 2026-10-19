@@ -52,23 +52,24 @@ export function BotsSidebar(props: BotsSidebarProps) {
   const desktopWidth = useMediaQuery("(min-width: 768px)");
   return (
     <>
-      {/* The column: the sidebar floats 8 from the window's edges inside it, over the ambient light. */}
+      {/* The column: the sidebar floats 8 from the window's edges inside it, over the ambient
+          light. At phone width it is the drawer, full height against the start edge. */}
       <aside
         data-testid="bots-sidebar"
         data-collapsed={botsSidebarCollapsed ? "true" : "false"}
         inert={botsSidebarCollapsed && !mobileSidebarOpen ? true : undefined}
-        className={`absolute inset-y-0 start-0 z-40 flex w-sidebar max-w-full shrink-0 flex-col py-2 ps-2 transition-[transform,width,opacity,padding] md:relative md:z-auto md:translate-x-0 ${
+        className={`absolute inset-y-0 start-0 z-40 flex w-sidebar max-w-full shrink-0 flex-col transition-[transform,width,opacity,padding] md:relative md:z-auto md:translate-x-0 ${
           mobileSidebarOpen ? "translate-x-0" : "-translate-x-full rtl:translate-x-full"
         } ${
           botsSidebarCollapsed
             ? "md:w-0 md:overflow-hidden md:p-0 md:opacity-0 md:pointer-events-none"
-            : "md:w-sidebar md:pe-2"
+            : "md:w-sidebar md:p-2"
         }`}
       >
         <div aria-hidden="true" className="app-drag absolute inset-x-0 top-0 h-2" />
         <div
           data-testid="bots-sidebar-pane"
-          className={`flex min-h-0 flex-1 flex-col overflow-hidden rounded-pane ${
+          className={`flex min-h-0 flex-1 flex-col overflow-hidden md:rounded-pane ${
             desktopWidth
               ? "rk-glass-chrome"
               : // The closed drawer's shadow would otherwise show at the window's edge.

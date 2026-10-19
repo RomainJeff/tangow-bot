@@ -44,6 +44,9 @@ test("the shell is a sidebar and a centred thread", async ({ page }, testInfo) =
   });
   const composerBox = await page.getByTestId("composer-bar").boundingBox();
   expect((viewport?.height ?? 0) - (composerBox?.y ?? 0) - (composerBox?.height ?? 0)).toBe(20);
+  // The thread runs on under the composer, so its glass has something to blur.
+  const transcriptBox = await page.getByTestId("transcript").boundingBox();
+  expect((transcriptBox?.y ?? 0) + (transcriptBox?.height ?? 0)).toBe(viewport?.height);
 
   // One header button opens the bot's screen over the thread; Escape closes it.
   const openPanel = page.getByRole("button", { name: "Screen" });
@@ -93,7 +96,7 @@ test("Reduce Transparency makes the glass opaque", async ({ page }) => {
   const pane = page.getByTestId("bots-sidebar-pane");
   const composer = page.getByTestId("composer-bar");
   await expect(pane).toHaveCSS("background-color", "rgba(255, 255, 255, 0.68)");
-  await expect(composer).toHaveCSS("background-color", "rgba(255, 255, 255, 0.72)");
+  await expect(composer).toHaveCSS("background-color", "rgba(255, 255, 255, 0.6)");
 
   const cdp = await page.context().newCDPSession(page);
   await cdp.send("Emulation.setEmulatedMedia", {
