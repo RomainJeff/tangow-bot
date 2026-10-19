@@ -140,7 +140,7 @@ export function createOpenAiCompatibleLookup(
   });
 }
 
-function headersCarryAuthorization(headers: HeadersInit): boolean {
+function headersCarryAuthorization(headers: NonNullable<RequestInit["headers"]>): boolean {
   if (headers instanceof Headers) return Boolean(headers.get("authorization"));
   if (Array.isArray(headers)) {
     return headers.some(
@@ -153,7 +153,10 @@ function headersCarryAuthorization(headers: HeadersInit): boolean {
 }
 
 /** Matches fetch: when init.headers is set it replaces Request headers entirely. */
-function requestCarriesAuthorization(input: RequestInfo | URL, init?: RequestInit): boolean {
+function requestCarriesAuthorization(
+  input: Parameters<typeof fetch>[0],
+  init?: RequestInit,
+): boolean {
   if (init?.headers !== undefined) return headersCarryAuthorization(init.headers);
   return input instanceof Request ? Boolean(input.headers.get("authorization")) : false;
 }
@@ -191,7 +194,10 @@ export function createOpenAiCompatibleFetch(
  * Request class and reads a global Request as the string "[object Request]".
  * Flatten Request inputs to a URL plus init, with init overriding the
  * Request's fields the way fetch itself merges them. */
-async function requestInitFor(input: RequestInfo | URL, init?: RequestInit): Promise<RequestInit> {
+async function requestInitFor(
+  input: Parameters<typeof fetch>[0],
+  init?: RequestInit,
+): Promise<RequestInit> {
   if (!(input instanceof Request)) return init ?? {};
   const request = new Request(input, init);
   const body =

@@ -8,6 +8,7 @@
     "./runtime-worker": "./src/runtime-worker/index.ts",
     "./runtime-worker/wire": "./src/runtime-worker/wire.ts",
     "./runtime-worker/pi-ai": "./src/runtime-worker/dialects/pi-ai.ts",
+    "./pi-runtime": "./src/pi-runtime.ts",
     "./e2b-worker": "./src/e2b-worker.ts"
   },
   "scripts": {
