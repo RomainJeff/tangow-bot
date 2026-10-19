@@ -1,6 +1,6 @@
 # Memory
 
-On web and desktop, open **Memory** from the user menu for personal memories, or from bot and Space settings for their collections. The library separates three collections: **Personal** memories, **Bot** memories belonging to one bot, and **Space** memories shared with the current Space. Terms are defined in the [glossary](../GLOSSARY.md); the main design decisions are recorded in [ADRs](adr/).
+On web and desktop, open **Memory** from the user menu for personal memories, or from bot and Space settings for their collections. On mobile, the memory entry opens the same collection choices. The library separates three collections: **Personal** memories, **Bot** memories belonging to one bot, and **Space** memories shared with the current Space. Terms are defined in the [glossary](../GLOSSARY.md); the main design decisions are recorded in [ADRs](adr/).
 
 ## Read and manage
 
@@ -80,4 +80,4 @@ Back up the database before a deployment migration and deploy the API and worker
 
 For a controlled rollout or incident, an operator can set `Space.memoryRecallEnabled` to `false` for the affected Space. The library and its revision history remain available, but canonical reads and searches return no recall candidates. Runs revalidate their manifest before subsequent model calls and tools; disabling recall does not retract text already sent. Set the field back to `true` after verification. Do not roll back to an older worker or restore direct provider injection as a fallback.
 
-The automatic safety checks cover governed memory and its recorded dependencies. They do not erase an independently present fact from an authorized source message. No deterministic test suite proves that every model will ignore every malicious instruction embedded in text.
+The automatic safety checks cover governed memory and its recorded dependencies. They do not erase an independently present fact from an authorized source message. No deterministic test suite proves that every model will ignore every malicious instruction embedded in text. Native touch and screen-reader behavior still require device verification.

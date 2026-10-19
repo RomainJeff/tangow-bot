@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-10-20
+
+#### Added
+
+- **Memory has a shared library on web, desktop and mobile.** Keep a message from a conversation, then browse personal, bot and Space memories with their source passage and revision history; personal memory opens from the user menu. See [Memory](docs/memory.md).
+- **A bot you choose can organize memory from its conversation on web, desktop and mobile.** Turn on its memory-management skill and describe your method in its Instructions; it proposes how to classify, import, consolidate or withdraw memories and changes nothing until you confirm.
+
+#### Changed
+
+- Recall from and saving to Serenity or Supermemory are paused, and bots no longer have save_memory and forget_memory tools; memories now live in the Memory library.
+- Facts a bot remembers or extracts during conversation compaction now stay proposals until a person accepts them, and a withdrawn or changed source keeps memories built from it out of recall.
+
 ### 2026-10-19
 
 #### Fixed
