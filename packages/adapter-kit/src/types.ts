@@ -234,6 +234,8 @@ export interface MemorySnapshot {
     path: string;
     content: string;
     revision: number;
+    /** Changes whenever a canonical document's content or access state changes. */
+    accessVersion?: number;
     updatedAt?: string;
   }>;
 }
@@ -245,6 +247,10 @@ export interface MemorySearchRequest {
 }
 
 export interface MemorySearchResult {
+  /** Canonical identity when the store can hydrate a search hit safely. */
+  documentId?: string;
+  revision?: number;
+  accessVersion?: number;
   path: string;
   snippet: string;
   score: number;
@@ -263,6 +269,17 @@ export interface MemoryCommitRequest {
   mode?: "replace" | "append";
   sourceRunId?: string;
   sourceThreadId?: string;
+  /** Stable, caller-derived identity for retry-safe proposal creation. */
+  idempotencyKey?: string;
+  /** Verifiable source passages supporting this one memory candidate. */
+  evidence?: Array<{
+    sourceKind: "message" | "thread" | "run";
+    sourceReferenceId: string;
+    sourceVersion: string;
+    startOffset: number | null;
+    endOffset: number | null;
+    excerpt: string | null;
+  }>;
 }
 
 export interface MemoryRevision {

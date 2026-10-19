@@ -38,8 +38,15 @@ import {
   MarketplaceUpdateCheckSchema,
   McpServerConfigInput,
   McpServerSchema,
+  MEMORY_CONTENT_MAX_LENGTH,
+  MemoryCollectionKindSchema,
   MemoryDocumentSchema,
+  MemoryLibraryDocumentSchema,
+  MemoryLibraryRevisionSchema,
+  MemoryLibrarySummarySchema,
+  MemoryQualificationSchema,
   MemoryScopeSchema,
+  MemoryStatusSchema,
   MeSchema,
   MessagingAgentConnectionSchema,
   MessagingChannelMembershipSchema,
@@ -429,11 +436,69 @@ export const appContract = {
     heartbeat: oc.input(botId).output(z.object({ ok: z.literal(true) })),
   },
   memory: {
+    library: {
+      list: oc
+        .input(
+          z.object({
+            collection: MemoryCollectionKindSchema.optional(),
+            botId: Id.optional(),
+            query: z.string().max(500).optional(),
+            status: MemoryStatusSchema.optional(),
+            cursor: z.string().optional(),
+            limit: z.number().int().min(1).max(100).default(30),
+          }),
+        )
+        .output(
+          z.object({
+            items: z.array(MemoryLibrarySummarySchema),
+            nextCursor: z.string().nullable(),
+            facets: z.object({
+              active: z.number().int(),
+              proposed: z.number().int(),
+              withdrawn: z.number().int(),
+            }),
+          }),
+        ),
+      get: oc.input(z.object({ documentId: Id })).output(MemoryLibraryDocumentSchema),
+      create: oc
+        .input(
+          z.object({
+            collection: MemoryCollectionKindSchema,
+            botId: Id.optional(),
+            title: z.string().max(240).optional(),
+            content: z.string().max(MEMORY_CONTENT_MAX_LENGTH),
+            qualification: MemoryQualificationSchema.optional(),
+            validFrom: IsoDate.optional(),
+            validUntil: IsoDate.optional(),
+            idempotencyKey: z.string().min(1).max(200).optional(),
+          }),
+        )
+        .output(MemoryLibraryDocumentSchema),
+      capture: oc
+        .input(
+          z.object({
+            botId: Id.optional(),
+            messageId: Id,
+            title: z.string().max(240).optional(),
+            content: z.string().max(MEMORY_CONTENT_MAX_LENGTH).optional(),
+            qualification: MemoryQualificationSchema.optional(),
+            idempotencyKey: z.string().min(1).max(200).optional(),
+          }),
+        )
+        .output(MemoryLibraryDocumentSchema),
+      history: oc.input(z.object({ documentId: Id })).output(z.array(MemoryLibraryRevisionSchema)),
+    },
     list: oc
       .input(z.object({ botId: Id.optional(), scope: z.enum(["bot", "user"]).optional() }))
       .output(z.array(MemoryDocumentSchema)),
     update: oc
-      .input(z.object({ documentId: Id, content: z.string() }))
+      .input(
+        z.object({
+          documentId: Id,
+          content: z.string(),
+          expectedRevision: z.number().int().positive(),
+        }),
+      )
       .output(MemoryDocumentSchema),
     exportMarkdown: oc.input(z.object({ botId: Id.optional() })).output(z.string()),
     providerConfig: oc.output(SpaceMemoryConfigSchema.nullable()),

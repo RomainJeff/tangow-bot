@@ -201,7 +201,13 @@ export function MemoryDocumentEditor({
     onSaving?.(true);
     setError(null);
     try {
-      onSaved(await rpc.memory.update({ documentId: doc.id, content: draft }));
+      onSaved(
+        await rpc.memory.update({
+          documentId: doc.id,
+          content: draft,
+          expectedRevision: doc.revision,
+        }),
+      );
     } catch {
       setError(t`Could not save`);
       setBusy(false);

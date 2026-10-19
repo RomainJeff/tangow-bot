@@ -892,9 +892,15 @@ importers:
       '@rakazo/adapter-kit':
         specifier: workspace:*
         version: link:../adapter-kit
+      '@rakazo/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       '@rakazo/db':
         specifier: workspace:*
         version: link:../db
+      yaml:
+        specifier: 2.9.0
+        version: 2.9.0
     devDependencies:
       typescript:
         specifier: 7.0.2
@@ -926,6 +932,9 @@ importers:
       '@rakazo/logging':
         specifier: workspace:*
         version: link:../logging
+      '@rakazo/memory':
+        specifier: workspace:*
+        version: link:../memory
       '@testcontainers/postgresql':
         specifier: 12.1.0
         version: 12.1.0

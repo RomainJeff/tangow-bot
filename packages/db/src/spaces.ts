@@ -71,6 +71,7 @@ type SpaceClient = Pick<
   | "spaceModelPreference"
   | "spaceVoicePreference"
   | "memoryDocument"
+  | "memoryCollection"
   | "notificationPreference"
   | "bot"
   | "chatGroup"
@@ -109,16 +110,10 @@ async function createSpace(prisma: SpaceClient, input: CreateSpaceInput): Promis
 
 async function createSpaceDefaults(
   prisma: SpaceClient,
-  input: { spaceId: string; userId: string; memoryContent: string },
+  input: { spaceId: string; userId: string },
 ): Promise<void> {
-  await prisma.memoryDocument.create({
-    data: {
-      spaceId: input.spaceId,
-      userId: input.userId,
-      scope: "user",
-      path: "MEMORY.md",
-      content: input.memoryContent,
-    },
+  await prisma.memoryCollection.create({
+    data: { spaceId: input.spaceId, kind: "personal", ownerUserId: input.userId },
   });
   await prisma.notificationPreference.create({
     data: {
@@ -216,7 +211,6 @@ export async function createSpaceForMember(
         await createSpaceDefaults(tx, {
           spaceId,
           userId: input.userId,
-          memoryContent: "# Space memory\n\n",
         });
         await copyProviderPreferences(tx, {
           sourceSpaceId: input.currentSpaceId,
