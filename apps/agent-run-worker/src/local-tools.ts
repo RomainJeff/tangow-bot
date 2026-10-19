@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createWriteStream } from "node:fs";
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import type { LocalToolOutput } from "@rakazo/adapter-kit";
 import { WORKER_LIMITS } from "@rakazo/adapters/runtime-worker/wire";
@@ -87,6 +87,24 @@ function modelText(
   return { text: `${head}\n\n${marker}\n\n${tail}`, truncated: true };
 }
 
+const SPOOL_FILE = /^bash-.+\.log$/;
+
+/** Makes room for one more spool file under the cap, oldest first. Other files are left alone. */
+async function pruneSpool(spoolDir: string) {
+  const names = (await readdir(spoolDir)).filter((name) => SPOOL_FILE.test(name));
+  const excess = names.length - (WORKER_LIMITS.localOutputSpoolFiles - 1);
+  if (excess <= 0) return;
+  const aged = await Promise.all(
+    names.map(async (name) => {
+      const file = path.join(spoolDir, name);
+      const info = await stat(file).catch(() => null);
+      return { file, mtimeMs: info?.mtimeMs ?? 0 };
+    }),
+  );
+  aged.sort((a, b) => a.mtimeMs - b.mtimeMs || a.file.localeCompare(b.file));
+  await Promise.all(aged.slice(0, excess).map(({ file }) => rm(file, { force: true })));
+}
+
 /** Kill the command's whole process group, forcefully after a grace period. */
 function killGroup(pid: number | undefined, exited: Promise<unknown>) {
   if (pid === undefined) return;
@@ -113,6 +131,7 @@ export async function bash(
   }
   const timeoutSeconds = typeof args.timeout === "number" && args.timeout > 0 ? args.timeout : null;
   await mkdir(spoolDir, { recursive: true });
+  await pruneSpool(spoolDir);
   const spoolPath = path.join(spoolDir, `bash-${randomUUID()}.log`);
   const capture = outputCapture(spoolPath);
   const child = spawn("bash", ["-c", command], {

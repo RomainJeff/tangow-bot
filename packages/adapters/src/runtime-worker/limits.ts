@@ -30,6 +30,11 @@ export const WORKER_LIMITS = {
   /** Per command, on the guest disk only; capture stops past it. */
   localOutputSpoolBytes: 16 * MiB,
   /**
+   * Spool files kept in the spool directory, which may sit on a persistent volume: the oldest go
+   * before a new one is written. With the per-command cap, at most 256 MiB.
+   */
+  localOutputSpoolFiles: 16,
+  /**
    * The controller re-truncates a command's text before recording it. A result object is bounded
    * by `guestFrameBytes`, like the same tool's result in process.
    */

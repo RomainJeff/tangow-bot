@@ -1,11 +1,13 @@
 import {
   mkdir,
   mkdtemp,
+  readdir,
   readFile,
   realpath,
   rm,
   stat,
   truncate,
+  utimes,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -70,6 +72,28 @@ describe("bash", () => {
     expect((await stat(output.spoolPath!)).size).toBe(16 * 1024 * 1024);
     expect(output.text.length).toBeLessThanOrEqual(12_000);
     expect(output.text).toContain("its first 16777216 bytes are in");
+  });
+
+  it("keeps the newest spool files and leaves other files of the spool directory alone", async () => {
+    const ctx = await context();
+    await mkdir(ctx.spoolDir, { recursive: true });
+    for (let index = 0; index < 16; index += 1) {
+      const file = path.join(ctx.spoolDir, `bash-old-${String(index).padStart(2, "0")}.log`);
+      await writeFile(file, "old");
+      await utimes(file, 1_000 + index, 1_000 + index);
+    }
+    await writeFile(path.join(ctx.spoolDir, "notes.txt"), "mine");
+
+    const output = await bash({ command: "seq 1 3000" }, ctx);
+    const kept = (await readdir(ctx.spoolDir)).sort();
+
+    expect(kept).toEqual(
+      [
+        ...Array.from({ length: 15 }, (_, i) => `bash-old-${String(i + 1).padStart(2, "0")}.log`),
+        path.basename(output.spoolPath!),
+        "notes.txt",
+      ].sort(),
+    );
   });
 
   it("kills the command's whole process group when the run is aborted", async () => {
