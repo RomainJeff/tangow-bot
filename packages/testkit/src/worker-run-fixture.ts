@@ -58,9 +58,11 @@ export async function startWorkerRun(options: {
   clock?: WorkerClock;
   /** Runs the bot with this runtime instead of a guest. */
   runtime?: (prisma: PrismaClient) => AgentRuntime;
+  /** Wraps the client the controller uses, to observe its queries. */
+  prisma?: (prisma: PrismaClient) => PrismaClient;
 }) {
   const database = await openPgliteDatabase();
-  const { prisma } = database;
+  const prisma = options.prisma?.(database.prisma) ?? database.prisma;
   const dir = await mkdtemp(path.join(tmpdir(), "rakazo-worker-run-"));
   const model = await startModelEmulator({ apiKey: MODEL_KEY, steps: options.steps });
   const secretStore = new EncryptedSecretStore("worker-fixture-encryption-key");
