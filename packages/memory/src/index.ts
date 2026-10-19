@@ -16,6 +16,7 @@ import { IsolationError, Prisma, withTransactionRetry } from "@rakazo/db";
 import { isMemoryRecallEligible, quotesMessage, recallableWhere } from "./access.js";
 import { findSourceMessages, memoryCollection, titleFor, withMemoryCommand } from "./shared.js";
 
+export * from "./bot-classification.js";
 export * from "./library.js";
 export * from "./okf.js";
 export { messageDigest, messageText } from "./shared.js";

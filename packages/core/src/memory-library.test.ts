@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { memoryCaptureInput, memoryLocation } from "./memory-library.js";
+import { latestAnnotationPerBot, memoryCaptureInput, memoryLocation } from "./memory-library.js";
 
 describe("memory library helpers", () => {
   it("keys a capture by bot and message", () => {
@@ -12,6 +12,15 @@ describe("memory library helpers", () => {
       messageId: "m1",
       idempotencyKey: "capture:space:m1",
     });
+  });
+
+  it("keeps the first annotation per bot", () => {
+    const items = [
+      { id: "a", bot: { id: "b1" } },
+      { id: "b", bot: { id: "b2" } },
+      { id: "c", bot: { id: "b1" } },
+    ];
+    expect(latestAnnotationPerBot(items).map((item) => item.id)).toEqual(["a", "b"]);
   });
 
   it("joins the present location parts", () => {

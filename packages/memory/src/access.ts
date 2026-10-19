@@ -67,6 +67,10 @@ export function inValidity(row: Pick<StoredMemoryRow, "validFrom" | "validUntil"
   return (!row.validFrom || row.validFrom <= now) && (!row.validUntil || row.validUntil >= now);
 }
 
+export function contentFingerprint(content: string) {
+  return fingerprint({ content });
+}
+
 type MessageProof = {
   sourceVersion: string | null;
   startOffset: number | null;
@@ -193,4 +197,33 @@ export async function checkDocumentProof(
     proof.sourceDigest === fingerprint({ id: source.id, revision, content: original.content })
     ? revision
     : null;
+}
+
+/**
+ * Whether a memory row can still feed classification: active (or proposed when allowed), in its
+ * validity window, recall-eligible, and unchanged from every expectation given.
+ */
+export async function isCurrentRow(
+  db: DependencyReader,
+  actor: Reader,
+  row: StoredMemoryRow | null,
+  expected: {
+    revision?: number;
+    collectionId?: string;
+    accessVersion?: number;
+    contentDigest?: string;
+    allowProposed?: boolean;
+  } = {},
+): Promise<boolean> {
+  if (!row) return false;
+  return (
+    (expected.revision === undefined || row.revision === expected.revision) &&
+    (expected.collectionId === undefined || row.collectionId === expected.collectionId) &&
+    (expected.accessVersion === undefined || row.accessVersion === expected.accessVersion) &&
+    (expected.contentDigest === undefined ||
+      contentFingerprint(row.content) === expected.contentDigest) &&
+    (row.status === "active" || (expected.allowProposed === true && row.status === "proposed")) &&
+    inValidity(row) &&
+    (await isMemoryRecallEligible(db, actor, row))
+  );
 }

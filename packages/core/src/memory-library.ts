@@ -10,6 +10,12 @@ export function memoryCaptureInput(
   };
 }
 
+/** Annotations arrive newest first; keep each bot's latest judgment. */
+export function latestAnnotationPerBot<T extends { bot: { id: string } }>(annotations: T[]): T[] {
+  const seen = new Set<string>();
+  return annotations.filter((item) => !seen.has(item.bot.id) && !!seen.add(item.bot.id));
+}
+
 /** "space · collection · bot" line under a memory title. */
 export function memoryLocation(...parts: (string | undefined)[]): string {
   return parts.filter(Boolean).join(" · ");

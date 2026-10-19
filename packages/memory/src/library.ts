@@ -4,6 +4,9 @@ import type { PrismaClient } from "@rakazo/db";
 import { Prisma, withTransactionRetry } from "@rakazo/db";
 import type { LibraryInput } from "./access.js";
 import { MemoryAccessError, MemoryConflictError } from "./access.js";
+import { prepareBotMethod } from "./bot-method.js";
+import type { MemoryClassifierFor } from "./classification.js";
+import { classify } from "./classification.js";
 import {
   acceptConsolidation,
   carryConsolidationEvidence,
@@ -12,6 +15,11 @@ import {
 } from "./consolidation.js";
 import type { MemoryRow, Qualification, SourceKind } from "./documents.js";
 import { MemoryDocuments, serializable, storedQualification } from "./documents.js";
+import {
+  memoryAnnotations,
+  reviewBotClassification,
+  revokeClassificationFeedback,
+} from "./feedback.js";
 import { okfMemory } from "./okf.js";
 import {
   findSourceMessages,
@@ -24,6 +32,8 @@ import {
 
 export type { LibraryInput } from "./access.js";
 export { MemoryAccessError, MemoryConflictError } from "./access.js";
+export { memoryDecisionConnection } from "./bot-method.js";
+export type { MemoryClassifierFor } from "./classification.js";
 export type { SourceKind } from "./documents.js";
 
 type CreateInput = {
@@ -69,9 +79,20 @@ const commandRetry = { retryUniqueViolation: true };
 
 /** Authorization and transitions for product memory: what a person or their bot may read and change. */
 export class MarkdownMemoryLibrary {
-  private readonly docs: MemoryDocuments;
-  constructor(private readonly prisma: PrismaClient) {
-    this.docs = new MemoryDocuments(prisma);
+  protected readonly docs: MemoryDocuments;
+  constructor(
+    protected readonly prisma: PrismaClient,
+    botId?: string,
+  ) {
+    this.docs = new MemoryDocuments(prisma, botId);
+  }
+
+  /**
+   * The library as one of the actor's bots sees it: no other bot's private collection is
+   * readable or writable, and "agent" means this bot's own collection.
+   */
+  forBot(botId: string) {
+    return new BotMemoryLibrary(this.prisma, botId);
   }
 
   async list(actor: Actor, input: LibraryInput) {
@@ -143,6 +164,16 @@ export class MarkdownMemoryLibrary {
 
   history(actor: Actor, id: string) {
     return this.docs.history(actor, id);
+  }
+
+  reviewBotClassification(actor: Actor, input: Parameters<typeof reviewBotClassification>[2]) {
+    return reviewBotClassification(this.docs, actor, input);
+  }
+  memoryAnnotations(actor: Actor, documentId: string) {
+    return memoryAnnotations(this.docs, actor, documentId);
+  }
+  revokeClassificationFeedback(actor: Actor, feedbackId: string, documentId?: string) {
+    return revokeClassificationFeedback(this.docs, actor, feedbackId, documentId);
   }
 
   async importOkf(
@@ -444,5 +475,47 @@ export class MarkdownMemoryLibrary {
         data: { status, revision: { increment: 1 }, accessVersion: { increment: 1 } },
       });
     });
+  }
+}
+
+/** One bot's view of the library, with the bot's memory method. */
+export class BotMemoryLibrary extends MarkdownMemoryLibrary {
+  constructor(
+    prisma: PrismaClient,
+    readonly botId: string,
+  ) {
+    super(prisma, botId);
+  }
+
+  /** A memory with its history and annotations, beside the bot's Instructions and latest method. */
+  async read(actor: Actor, documentId: string) {
+    const document = await this.get(actor, documentId);
+    const [bot, method, history, annotations] = await Promise.all([
+      this.prisma.bot.findUniqueOrThrow({
+        where: { id: this.botId },
+        select: { instructions: true },
+      }),
+      this.prisma.botMemoryMethod.findFirst({
+        where: { botId: this.botId },
+        orderBy: { version: "desc" },
+        select: { version: true, instructions: true, prepared: true, provider: true, model: true },
+      }),
+      this.history(actor, document.id),
+      this.memoryAnnotations(actor, document.id),
+    ]);
+    return { document, instructions: bot.instructions, method, history, annotations };
+  }
+
+  /** Suggest a classification with the bot's current method; `classifierFor` picks the model. */
+  classify(
+    actor: Actor,
+    input: { documentId: string; expectedRevision?: number },
+    classifierFor: MemoryClassifierFor,
+  ) {
+    return classify(this.docs, actor, this.botId, input, classifierFor);
+  }
+
+  prepareMethod(actor: Actor, input: Parameters<typeof prepareBotMethod>[3]) {
+    return prepareBotMethod(this.prisma, actor, this.botId, input);
   }
 }
