@@ -178,6 +178,8 @@ const MAX_PARALLEL_SUBAGENTS = 4;
 const MAX_SILENT_TOOL_CONTINUATIONS = 3;
 const SILENT_TOOL_CONTINUATION_PROMPT =
   "Continue the original task from the latest tool result. Do not stop after a tool call; use any remaining tools needed, then deliver the result.";
+const SILENCE_ALLOWED_CONTINUATION_PROMPT =
+  "Continue the original task from the latest tool result. Use any remaining tools needed, then deliver the result, or end with no reply if there is nothing to report.";
 const PRIVATE_TEXT_PROMPT =
   "Nothing you wrote reached the user: only message_user does. If that text was meant for them, send it with message_user now. Otherwise end the turn.";
 // A long task the user only follows through message_user looks frozen when the model works
@@ -413,6 +415,9 @@ export class PiAgentRuntime implements AgentRuntime {
         let toolActivityShowing = false;
         let silentToolContinuations = 0;
         let toolWorkPendingFinal = false;
+        // A run that may end without a word, and whose free text is not private scratch, can mean
+        // its empty turn: one follow-up that allows silence tells a stall from that answer.
+        const emptyFinalMayBeSilence = request.allowSilentEmpty && !request.freeTextIsPrivate;
         let messagedUser = false;
         let privateTextNudged = false;
         let toolCallsSinceContact = 0;
@@ -517,7 +522,7 @@ export class PiAgentRuntime implements AgentRuntime {
               toolWorkPendingFinal = true;
               silentToolContinuations = 0;
             } else if (toolWorkPendingFinal && !hasToolCalls && !hasToolResults) {
-              if (messageText.trim()) {
+              if (messageText.trim() || (emptyFinalMayBeSilence && silentToolContinuations > 0)) {
                 toolWorkPendingFinal = false;
                 silentToolContinuations = 0;
               } else if (
@@ -527,7 +532,9 @@ export class PiAgentRuntime implements AgentRuntime {
                 silentToolContinuations += 1;
                 agent.followUp({
                   role: "user",
-                  content: SILENT_TOOL_CONTINUATION_PROMPT,
+                  content: emptyFinalMayBeSilence
+                    ? SILENCE_ALLOWED_CONTINUATION_PROMPT
+                    : SILENT_TOOL_CONTINUATION_PROMPT,
                   timestamp: Date.now(),
                 });
               }
