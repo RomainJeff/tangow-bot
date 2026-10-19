@@ -167,7 +167,7 @@ export function ModelSettingsOverlay({
       <DialogContent
         variant="window"
         showCloseButton={false}
-        className="flex h-[760px] max-h-[calc(100%-2rem)] w-[1080px] max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[1080px]"
+        className="flex h-[760px] max-h-[calc(100%-2rem)] w-[min(1080px,calc(100%-2rem))] max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[1080px]"
       >
         {body}
       </DialogContent>

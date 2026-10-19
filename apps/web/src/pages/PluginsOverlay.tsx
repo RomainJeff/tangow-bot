@@ -159,7 +159,7 @@ export function PluginsOverlay({
       <DialogContent
         variant="window"
         showCloseButton={false}
-        className="flex h-[760px] max-h-[calc(100%-2rem)] w-[1080px] max-w-[calc(100%-2rem)] flex-row gap-0 overflow-hidden p-0 max-md:flex-col sm:max-w-[1080px]"
+        className="flex h-[760px] max-h-[calc(100%-2rem)] w-[min(1080px,calc(100%-2rem))] max-w-[calc(100%-2rem)] flex-row gap-0 overflow-hidden p-0 max-md:flex-col sm:max-w-[1080px]"
       >
         {sidebar}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
