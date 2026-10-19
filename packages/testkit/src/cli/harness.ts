@@ -112,6 +112,7 @@ async function main() {
         "packages/adapters/src/job-reconciler.postgres.test.ts",
         "packages/adapters/src/executor-run-log.postgres.test.ts",
         "packages/adapters/src/skill-lock.postgres.test.ts",
+        "packages/adapters/src/worker-lifecycle.postgres.test.ts",
       ];
       // Each app reconciles all durable work in its database, including intentionally
       // unfinished fixture runs. Clone the pristine migrated schema so one suite
