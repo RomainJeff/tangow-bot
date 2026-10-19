@@ -43,7 +43,13 @@ export function useRoster({
   const manuallyUnread = useRef(new Set<string>());
 
   const inGroup = Boolean(groupId);
-  const active = inGroup ? undefined : (bots.find((b) => b.id === botId) ?? bots[0]);
+  // The bare route (the phone's bot list) keeps the last chat open behind it, so going back
+  // to the list and into the same chat neither reloads it nor presents what it covered.
+  const lastBotId = useRef(botId);
+  if (botId) lastBotId.current = botId;
+  const active = inGroup
+    ? undefined
+    : (bots.find((b) => b.id === (botId ?? lastBotId.current)) ?? bots[0]);
   const activeGroup = groups.find((group) => group.id === groupId);
   const routeBotId = useRef<string | undefined>(botId);
   routeBotId.current = botId;
@@ -155,7 +161,7 @@ export function useRoster({
           return;
         }
         const currentBotId = routeBotId.current;
-        if (!currentBotId || !list.some((bot) => bot.id === currentBotId)) {
+        if (currentBotId ? !list.some((bot) => bot.id === currentBotId) : !phoneList()) {
           navigate(firstThreadRoute(list, groupList), { replace: true });
         }
       } finally {
@@ -206,7 +212,7 @@ export function useRoster({
           return;
         }
         const selectedBotId = bootstrap.thread?.botId ?? bootstrap.bots[0]?.id;
-        if (selectedBotId && selectedBotId !== botId) {
+        if (selectedBotId && selectedBotId !== botId && (botId || !phoneList())) {
           navigate(`/app/${selectedBotId}`, { replace: true });
         }
       })
@@ -329,3 +335,8 @@ export function useRoster({
 }
 
 export type Roster = ReturnType<typeof useRoster>;
+
+/** At phone width the bare route is the bot list's own page, so it is not redirected to a chat. */
+function phoneList(): boolean {
+  return window.matchMedia("(max-width: 767px)").matches;
+}

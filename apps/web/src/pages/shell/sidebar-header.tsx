@@ -15,7 +15,6 @@ export type SidebarHeaderProps = {
   createMenuOpen: boolean;
   setCreateMenuOpen: Dispatch<SetStateAction<boolean>>;
   bots: Bot[];
-  setMobileSidebarOpen: Dispatch<SetStateAction<boolean>>;
   setPanel: Dispatch<SetStateAction<Panel>>;
   navigate: (path: string) => void;
   setNewSpaceOpen: Dispatch<SetStateAction<boolean>>;
@@ -30,7 +29,6 @@ export function SidebarHeader({
   createMenuOpen,
   setCreateMenuOpen,
   bots,
-  setMobileSidebarOpen,
   setPanel,
   navigate,
   setNewSpaceOpen,
@@ -92,32 +90,26 @@ export function SidebarHeader({
                 bots={bots}
                 onCreateBot={() => {
                   setCreateMenuOpen(false);
-                  setMobileSidebarOpen(false);
                   setPanel("create");
                 }}
                 onOpenBot={(id) => {
                   setCreateMenuOpen(false);
-                  setMobileSidebarOpen(false);
                   navigate(`/app/${id}`);
                 }}
                 onCreateGroup={() => {
                   setCreateMenuOpen(false);
-                  setMobileSidebarOpen(false);
                   setPanel("create-group");
                 }}
                 onCreateSpace={() => {
                   setCreateMenuOpen(false);
-                  setMobileSidebarOpen(false);
                   setNewSpaceOpen(true);
                 }}
                 onShowGroupInfo={() => {
                   setCreateMenuOpen(false);
-                  setMobileSidebarOpen(false);
                   setPickerInfoTopic("group");
                 }}
                 onShowSpaceInfo={() => {
                   setCreateMenuOpen(false);
-                  setMobileSidebarOpen(false);
                   setPickerInfoTopic("space");
                 }}
               />

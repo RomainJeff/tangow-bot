@@ -36,7 +36,6 @@ export function BotsSidebar(props: BotsSidebarProps) {
     mobileSidebarOpen,
     activityMode,
     setBotsSidebarCollapsedPref,
-    setMobileSidebarOpen,
     navigate,
     query,
     setQuery,
@@ -53,13 +52,13 @@ export function BotsSidebar(props: BotsSidebarProps) {
   return (
     <>
       {/* The column: the sidebar floats 8 from the window's edges inside it, over the ambient
-          light. At phone width it is the drawer, full height against the start edge. */}
+          light. At phone width it is the bot list's own page, full screen. */}
       <aside
         data-testid="bots-sidebar"
         data-collapsed={botsSidebarCollapsed ? "true" : "false"}
         inert={botsSidebarCollapsed && !mobileSidebarOpen ? true : undefined}
-        className={`absolute inset-y-0 start-0 z-40 flex w-sidebar max-w-full shrink-0 flex-col transition-[transform,width,opacity,padding] md:relative md:z-auto md:translate-x-0 ${
-          mobileSidebarOpen ? "translate-x-0" : "-translate-x-full rtl:translate-x-full"
+        className={`absolute inset-0 z-40 flex shrink-0 flex-col transition-[width,opacity,padding] md:relative md:inset-auto md:z-auto ${
+          mobileSidebarOpen ? "" : "max-md:hidden"
         } ${
           botsSidebarCollapsed
             ? "md:w-0 md:overflow-hidden md:p-0 md:opacity-0 md:pointer-events-none"
@@ -72,9 +71,8 @@ export function BotsSidebar(props: BotsSidebarProps) {
           className={`flex min-h-0 flex-1 flex-col overflow-hidden md:rounded-pane ${
             desktopWidth
               ? "rk-glass-chrome"
-              : // The drawer sits on the page background, which Safari paints its bars in;
-                // the closed drawer's shadow would otherwise show at the window's edge.
-                `bg-background ${mobileSidebarOpen ? "shadow-sheet" : ""}`
+              : // The list sits on the page background, which Safari paints its bars in.
+                "bg-background"
           }`}
         >
           <SidebarHeader {...props} />
@@ -115,7 +113,6 @@ export function BotsSidebar(props: BotsSidebarProps) {
                 {activityMode ? (
                   <ActivityList
                     onOpenRun={(run) => {
-                      setMobileSidebarOpen(false);
                       if (run.groupId) navigate(`/app/g/${run.groupId}`);
                       else navigate(`/app/${run.botId}`);
                     }}

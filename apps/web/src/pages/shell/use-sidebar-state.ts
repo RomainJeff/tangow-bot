@@ -1,6 +1,5 @@
 import type { SearchHit } from "@rakazo/contracts";
 import { groupBotsForSidebar } from "@rakazo/core";
-import type { Dispatch, SetStateAction } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { NavigateFunction } from "react-router-dom";
 import { readActivityMode, writeActivityMode } from "../../lib/activity-mode";
@@ -36,12 +35,10 @@ export function useSidebarState({
   userId,
   roster,
   navigate,
-  setMobileSidebarOpen,
 }: {
   userId: string | undefined;
   roster: Roster;
   navigate: NavigateFunction;
-  setMobileSidebarOpen: Dispatch<SetStateAction<boolean>>;
 }) {
   const { bootstrapMe, botSections, bots, groups, spaces } = roster;
   const [archivedOpen, setArchivedOpen] = useState(false);
@@ -142,7 +139,6 @@ export function useSidebarState({
 
   const openSpaceChat = useCallback(
     (spaceId: string, path: string) => {
-      setMobileSidebarOpen(false);
       const previousSpaceId = selectedSpaceId();
       // Persist the active space (including primary) so voice/RPC headers match the chat.
       const selectionStored = selectSpace(spaceId);

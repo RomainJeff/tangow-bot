@@ -29,7 +29,7 @@ Under Reduce Transparency every material turns opaque: `chrome` takes
 
 The values live in `packages/ui-tokens/src/materials.ts` and reach CSS as
 `--material-<name>-*`, `--ambient` (phone width included),
-`--scroll-edge-blur`, `--thread-fade-*`, `--thread-under-composer` and `--veil-*`. Screens
+`--scroll-edge-blur`, `--thread-fade-*` and `--thread-under-composer`. Screens
 spend them through `rk-glass-chrome`, `rk-glass-control`, `rk-glass-menu`,
 `rk-glass-list`, `rk-scroll-edge`, `rk-thread-mask`, `rk-thread-overlap` (which sets
 `--thread-overlap` for the other two) and `rk-thread-jump`
@@ -113,10 +113,10 @@ passing under it.
   `rounded-full`, never as a block in the thread.
 - Phone width on web and iPhone screens outside the thread take the same
   chrome: round buttons and capsules on `control`, lists and groups on the
-  ambient light. The web drawer is the sidebar itself, on the page background
-  for the same reason, its selected row and search field on `group`, full
-  height against the start edge with no radius, over a veil that blurs the thread
-  6 px in the page background at 55% instead of darkening it: Safari's bars
-  stay in that colour. Under Reduce Transparency the veil is `overlay`.
+  ambient light. On web the bot list is the sidebar itself, as its own page,
+  as in the iPhone app: the bare route (`/app`) shows it full screen on the page
+  background, which Safari paints its bars in, its selected row and search
+  field on `group`. A chat opens as a navigation and the thread header's back
+  control returns to the list, so the browser's back gesture does too.
 - Desktop window: the system's opaque window; the glass blurs the app's own
   ambient light, never the desktop. A window the app draws takes radius 26.

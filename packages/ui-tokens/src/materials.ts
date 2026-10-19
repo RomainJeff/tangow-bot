@@ -69,13 +69,6 @@ export const materials = {
 export type MaterialKey = keyof typeof materials;
 
 /**
- * The phone drawer's veil: the thread blurred `blur` px under the page
- * background at `mix`%, rather than darkened, so it meets Safari's bars (painted
- * in that colour) without a line. Under Reduce Transparency it takes `overlay`.
- */
-export const veil = { mix: 55, blur: 6 } as const;
-
-/**
  * The neutral light falling from the top start corner over the whole window,
  * under the floating sidebar too, so the glass has something to blur. Phone
  * width has its own values, higher and from the corner.

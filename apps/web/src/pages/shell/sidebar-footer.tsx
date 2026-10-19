@@ -26,7 +26,6 @@ export type SidebarArchivedProps = {
   onOpenArchivedBot: (botId: string) => void;
   onRestoreBot: (botId: string) => void;
   setDeleteGroupTarget: Dispatch<SetStateAction<Group | null>>;
-  setMobileSidebarOpen: Dispatch<SetStateAction<boolean>>;
   initials: string;
   userImage: string | null;
 };
@@ -41,7 +40,6 @@ export function SidebarArchived({
   onOpenArchivedBot,
   onRestoreBot,
   setDeleteGroupTarget,
-  setMobileSidebarOpen,
   initials,
   userImage,
 }: SidebarArchivedProps) {
@@ -68,7 +66,6 @@ export function SidebarArchived({
                 type="button"
                 data-testid="archived-bot-open"
                 onClick={() => {
-                  setMobileSidebarOpen(false);
                   onOpenArchivedBot(bot.id);
                 }}
                 className="flex min-w-0 flex-1 items-center gap-2 rounded-chip text-start outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
