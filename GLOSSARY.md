@@ -33,8 +33,20 @@ _Avoid_: retrieval, injection, search (search is the library's reading feature)
 The list of memory revisions (with access version) a run, summary or reply was given. Revalidated before each model and tool call; empty for runs that predate the memory library.
 _Avoid_: context list, dependencies
 
-**Withdraw**
-Withdraw removes a memory from future recall; its history stays.
+**Method**
+A bot's classification criteria, prepared from its Instructions and approved by a person. Immutable once saved; a change creates a new method version.
+_Avoid_: taxonomy, schema, classifier
+
+**Classification**
+A label a method version suggests for one memory revision. An annotation only: it never changes content, access or lifecycle.
+_Avoid_: type, category, qualification
+
+**Feedback**
+A person's validation or correction of a classification, reused as an example for the same bot, method version and collection.
+_Avoid_: training, label (a label is the value)
+
+**Withdraw** vs **Revoke**
+Withdraw removes a memory from future recall; its history stays. Revoke stops a feedback example from being reused; its annotation and audit stay.
 _Avoid_: delete, archive, disable
 
 **History generation**
