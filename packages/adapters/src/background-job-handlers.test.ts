@@ -49,6 +49,7 @@ describe("createBackgroundJobHandlers", () => {
       runtime: {} as unknown as AgentRuntime,
       secretStore: {} as unknown as EncryptedSecretStore,
       memory: {} as unknown as MemoryStore,
+      memoryProviders: { resolve: vi.fn(async () => null) },
       messaging: {} as unknown as MessagingSurface,
     });
 
@@ -76,6 +77,7 @@ describe("createBackgroundJobHandlers", () => {
     const jobs = {} as unknown as JobPublisher;
     const secretStore = {} as unknown as EncryptedSecretStore;
     const memory = {} as unknown as MemoryStore;
+    const memoryProviders = { resolve: vi.fn(async () => null) };
     const resolveModel = vi.fn();
     const handlers = createBackgroundJobHandlers({
       executor: { resolveModel } as unknown as ReturnType<typeof createRunExecutor>,
@@ -89,6 +91,7 @@ describe("createBackgroundJobHandlers", () => {
       runtime,
       secretStore,
       memory,
+      memoryProviders,
       deploymentModelKey: "openrouter-key",
     });
 
@@ -100,6 +103,7 @@ describe("createBackgroundJobHandlers", () => {
         sessionLog,
         runtime,
         memory,
+        memoryProviders,
         deploymentModelKey: "openrouter-key",
         resolveModel,
       },
@@ -177,6 +181,7 @@ describe("createBackgroundJobHandlers", () => {
         runtime: {} as unknown as AgentRuntime,
         secretStore: {} as unknown as EncryptedSecretStore,
         memory: {} as unknown as MemoryStore,
+        memoryProviders: { resolve: vi.fn(async () => null) },
         ...(withArtifacts ? { artifacts } : {}),
       });
 

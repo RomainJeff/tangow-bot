@@ -431,7 +431,8 @@ function fixture(
       execute,
     },
     sandbox: { describe: () => ({ capabilities: { graphical: false } }) },
-    memory: { read: async () => ({ documents: [] }), search: async () => [] },
+    memory: { read: async () => ({ documents: [] }) },
+    memoryProviders: { resolve: async () => null },
     notifications: { send },
     events: {
       append: vi.fn(async (input: Row) => {

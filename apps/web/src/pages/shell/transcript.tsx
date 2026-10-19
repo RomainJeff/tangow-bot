@@ -88,7 +88,6 @@ export const Transcript = memo(function Transcript({
   onEdit,
   rewindFromItemId,
   onReact,
-  onRemember,
   onJumpToMessage,
   onOpenPeerMessages,
   memberName,
@@ -124,7 +123,6 @@ export const Transcript = memo(function Transcript({
   onEdit: (message: MessageItem) => void;
   rewindFromItemId: string | null;
   onReact: (message: MessageItem, reaction: MessageReaction) => Promise<void>;
-  onRemember?: (message: MessageItem, botId: string | undefined) => Promise<void>;
   onJumpToMessage: (messageId: string) => void;
   onOpenPeerMessages: (peer: { peerBotId: string; peerBotName: string }) => void;
   memberName?: (botId: string | undefined) => string | undefined;
@@ -232,13 +230,6 @@ export const Transcript = memo(function Transcript({
     rowOf,
     scrollRef,
   ]);
-  const remember = useMemo(
-    () =>
-      onRemember &&
-      ((message: MessageItem) =>
-        void onRemember(message, "botId" in artifactTarget ? artifactTarget.botId : undefined)),
-    [onRemember, artifactTarget],
-  );
   const workingBotName = workingBots.length === 1 ? workingBots[0]?.name : undefined;
   const workingFallback = `${
     workingBotName != null && workingBotName !== ""
@@ -569,7 +560,6 @@ export const Transcript = memo(function Transcript({
                             {messageTimeLabel(message.ts, i18n.locale)}
                           </time>
                         }
-                        onRemember={remember}
                         onReply={onReply}
                         onReact={onReact}
                         voiceReady={voiceReady}
@@ -611,7 +601,6 @@ export const Transcript = memo(function Transcript({
                     message={message}
                     previewMessageId={row.previewMessageId}
                     onEdit={onEdit}
-                    onRemember={remember}
                   />
                 ) : null}
               </div>
@@ -651,7 +640,6 @@ export const Transcript = memo(function Transcript({
         onReply={onReply}
         onEdit={onEdit}
         onReact={onReact}
-        onRemember={remember}
         voiceReady={voiceReady}
         speaking={sheetMessage !== null && speakingMessageId === sheetMessage.id}
         onSpeak={onSpeak}

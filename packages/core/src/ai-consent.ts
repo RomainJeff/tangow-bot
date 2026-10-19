@@ -1,4 +1,4 @@
-import type { AiConsentQuery, AiConsentStatus, AiDataUse, AiRecipient } from "@rakazo/contracts";
+import type { AiConsentStatus, AiDataUse, AiRecipient } from "@rakazo/contracts";
 import { AI_CONSENT_REQUIRED } from "@rakazo/contracts";
 
 /** A foreground check failed before the requested mutation was dispatched. */
@@ -38,29 +38,18 @@ export function aiDataUsesForProcedure(procedure: string, input?: unknown): AiDa
 
 export async function ensureAiDataConsent(options: {
   uses: AiDataUse[];
-  query?: AiConsentQuery;
-  status(query?: AiConsentQuery): Promise<AiConsentStatus>;
+  status(): Promise<AiConsentStatus>;
   prompt(recipient: AiRecipient, privacyUrl?: string): Promise<boolean>;
-  allow(input: {
-    scope: string;
-    version: string;
-    keys: string[];
-    query?: AiConsentQuery;
-  }): Promise<unknown>;
+  allow(input: { scope: string; version: string; keys: string[] }): Promise<unknown>;
 }) {
   if (options.uses.length === 0) return;
   try {
-    const status = await options.status(options.query);
+    const status = await options.status();
     for (const recipient of status.recipients) {
       if (recipient.allowed || !options.uses.includes(recipient.use)) continue;
       if (!(await options.prompt(recipient, status.privacyUrl)))
         throw new Error(AI_CONSENT_REQUIRED);
-      await options.allow({
-        scope: status.scope,
-        version: status.version,
-        keys: [recipient.key],
-        ...(options.query ? { query: options.query } : {}),
-      });
+      await options.allow({ scope: status.scope, version: status.version, keys: [recipient.key] });
     }
   } catch (error) {
     throw new AiConsentBlocked(error instanceof Error ? error.message : AI_CONSENT_REQUIRED);

@@ -16,9 +16,7 @@
   },
   "dependencies": {
     "@rakazo/adapter-kit": "workspace:*",
-    "@rakazo/contracts": "workspace:*",
-    "@rakazo/db": "workspace:*",
-    "yaml": "2.9.0"
+    "@rakazo/db": "workspace:*"
   },
   "devDependencies": {
     "typescript": "7.0.2",

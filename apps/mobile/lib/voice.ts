@@ -31,8 +31,7 @@ export async function speakUtterance(
   const requestContext = opts.requestContext ?? (await captureApiRequestContext());
   await ensureAiDataConsent({
     uses: ["voice"],
-    query: { uses: ["voice"] },
-    status: (query) => rpc("aiConsent/status", query, { requestContext }),
+    status: () => rpc("aiConsent/status", { uses: ["voice"] }, { requestContext }),
     prompt: promptAiConsent,
     allow: (input) => rpc("aiConsent/allow", input, { requestContext }),
   });

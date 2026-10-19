@@ -89,14 +89,8 @@ describe("ScriptedAgentRuntime executionIds", () => {
       script: [
         {
           toolCalls: [
-            {
-              name: "message_agent",
-              args: { address: "+15551111111", message: "one" },
-            },
-            {
-              name: "message_agent",
-              args: { address: "+15551111111", message: "two" },
-            },
+            { name: "message_agent", args: { address: "+15551111111", message: "one" } },
+            { name: "message_agent", args: { address: "+15551111111", message: "two" } },
           ],
           complete: true,
         },
@@ -111,28 +105,6 @@ describe("ScriptedAgentRuntime executionIds", () => {
       )
       .map((event) => event.executionId);
     expect(toolIds).toEqual(["run-1:message_agent:0", "run-1:message_agent:1"]);
-  });
-
-  it("checks authorization before each scripted model turn", async () => {
-    const runtime = new ScriptedAgentRuntime();
-    const beforeModelCall = vi.fn(async () => undefined);
-
-    for await (const _event of runtime.run({
-      botId: "bot-1",
-      threadId: "thread-1",
-      runId: "run-1",
-      prompt: "ping",
-      instructions: "",
-      history: [],
-      tools: [],
-      model: { provider: "scripted", id: "scripted" },
-      beforeModelCall,
-      script: [{ assistant: "first" }, { assistant: "second", complete: true }],
-    })) {
-      // Drain the script: the callback is asserted after both model turns.
-    }
-
-    expect(beforeModelCall).toHaveBeenCalledTimes(2);
   });
 });
 

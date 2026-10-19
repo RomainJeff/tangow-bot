@@ -11,7 +11,6 @@ import type {
   Connection,
   ConnectionCatalogItem,
   EntryId,
-  MemoryLibraryDocument,
   MessageBlock,
   Routine,
   SessionEntry,
@@ -43,7 +42,6 @@ import {
   latestActivityLabel,
   linkMentionsKey,
   linkMentionsOf,
-  memoryCaptureInput,
   mentionChipKey,
   projectThreadView,
   type RoutineItem,
@@ -1784,18 +1782,6 @@ function Thread() {
     }
   }
 
-  async function rememberMessage(messageId: EntryId) {
-    try {
-      const document = await rpc<MemoryLibraryDocument>(
-        "memory/library/capture",
-        memoryCaptureInput(messageId, botId),
-      );
-      router.push({ pathname: "/memory-detail", params: { documentId: document.id } });
-    } catch {
-      setError(t("Could not remember message"));
-    }
-  }
-
   async function removeLinkPreview(message: MobileMessage) {
     const messageId = view.rows.find((row) => row.item.id === message.id)?.previewMessageId;
     if (!messageId) return;
@@ -1865,16 +1851,6 @@ function Thread() {
                 text: t("Remove preview"),
                 icon: { ios: "eye.slash", android: "eye-off-outline" } as const,
                 onPress: () => void removeLinkPreview(message),
-              },
-            ]
-          : []),
-        ...(messageId && (message.role === "user" || message.role === "bot")
-          ? [
-              {
-                name: "remember",
-                text: t("Remember"),
-                icon: { ios: "bookmark", android: "bookmark-outline" } as const,
-                onPress: () => void rememberMessage(messageId),
               },
             ]
           : []),

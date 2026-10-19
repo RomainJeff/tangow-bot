@@ -27,7 +27,6 @@ import {
   defaultSkillAvailability,
   findSkillByName,
   isSkillVisible,
-  MEMORY_MANAGEMENT_SKILL_KEY,
   mergeBuiltinSkills,
   parseSkillMd,
   userSkillKey,
@@ -219,7 +218,8 @@ export function createAgentSkillsService(
     ]);
     const builtins = builtinSkills.map((skill) => ({
       ...skill,
-      ...access.of(skill.id),
+      availability: "all" as const,
+      visibleBotIds: access.bots,
     }));
     const users = rows.map((file) => ({ ...toAgentSkill(file), ...access.of(file.id) }));
     const entries = mergeBuiltinSkills(builtins, users);
@@ -361,10 +361,7 @@ export function createAgentSkillsService(
         bots?: Array<{ botId: string; enabled: boolean }>;
       },
     ): Promise<AgentSkillCatalogEntry> {
-      const existing =
-        input.skillId === MEMORY_MANAGEMENT_SKILL_KEY
-          ? (await builtinCatalog()).find((skill) => skill.id === input.skillId)!
-          : await owned(actor, input.skillId);
+      const existing = await owned(actor, input.skillId);
       const scope = { spaceId: actor.spaceId, userId: actor.userId };
       const skillKey = existing.id;
       const bots = input.bots ?? [];

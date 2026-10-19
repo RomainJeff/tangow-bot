@@ -1,5 +1,3 @@
-export const MEMORY_MANAGEMENT_SKILL_KEY = "builtin:memory-management";
-
 /**
  * Per-bot skill visibility (Skills v2, phase 1).
  * `skillKey` is the identity shared by SkillSetting / BotSkill rows. For user skills it is
@@ -52,7 +50,7 @@ export const SANDBOX_SKILL_MOUNTS = {
 
 /** Marketplace skills start hidden (design Q8); user skills stay visible to every bot. */
 export function defaultSkillAvailability(key: string): SkillAvailability {
-  return isMarketplaceSkillKey(key) || key === MEMORY_MANAGEMENT_SKILL_KEY ? "selected" : "all";
+  return isMarketplaceSkillKey(key) ? "selected" : "all";
 }
 
 export type SkillListEntry = {

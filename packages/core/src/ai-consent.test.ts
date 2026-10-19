@@ -71,26 +71,6 @@ describe("foreground AI consent", () => {
       keys: ["model"],
     });
   });
-  it("carries the exact bot and purpose query into the grant request", async () => {
-    const query = { botId: "bot-1", uses: ["memory-classification" as const] };
-    const allow = vi.fn();
-    await ensureAiDataConsent({
-      uses: ["memory-classification"],
-      query,
-      status: async () => ({
-        ...status,
-        recipients: [{ ...status.recipients[0]!, use: "memory-classification", key: "method-bot" }],
-      }),
-      prompt: async () => true,
-      allow,
-    });
-    expect(allow).toHaveBeenCalledExactlyOnceWith({
-      scope: status.scope,
-      version: status.version,
-      keys: ["method-bot"],
-      query,
-    });
-  });
   it("does not prompt for already granted permissions or read-only procedures", async () => {
     const prompt = vi.fn();
     await ensureAiDataConsent({

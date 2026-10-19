@@ -12,15 +12,14 @@ import { EntrySeq } from "@rakazo/contracts";
 import { escapePromptData, projectInferenceTurns } from "@rakazo/core";
 import type { Prisma, PrismaClient } from "@rakazo/db";
 import { historyGeneration } from "@rakazo/db";
-import { getLogger } from "@rakazo/logging";
-import { messageText } from "@rakazo/memory";
-import { z } from "zod";
+import { getLogger, redactSensitiveText } from "@rakazo/logging";
 import { formatCurrentTimeInstruction } from "./current-time.js";
 import { resolveDeploymentModel } from "./deployment-model.js";
-import type { CaptureExtractor, CaptureSource } from "./memory-capture.js";
-import { memoryCapture } from "./memory-capture.js";
-import type { MemoryGrant } from "./memory-context.js";
-import { loadAgentMemoryDataContext, memoryGrant } from "./memory-context.js";
+import { loadAgentMemoryContext } from "./memory-context.js";
+import type {
+  ConfiguredMemoryProvider,
+  MemoryProviderResolver,
+} from "./memory-provider-factory.js";
 
 export const DEFAULT_COMPACTION_SETTINGS = { reserveTokens: 16_384, keepRecentTokens: 20_000 };
 
@@ -337,9 +336,9 @@ const LEARNING_SYSTEM_PROMPT = `You extract durable facts from a conversation. D
 
 const LEARNING_PROMPT = `The messages above are a conversation between a user and an assistant. <durable_memory>, when present, is what the assistant already remembers.
 
-Find up to ${MAX_LEARNED_FACTS} durable facts established by the conversation that are NOT already in that memory. Durable means: preferences, decisions, stable resource identifiers, and corrections. Omit temporary tasks. Every candidate must be one independently reviewable assertion; keep its negation, conditions, exceptions, and time bounds intact. Do not combine unrelated assertions.
+List the durable facts this conversation establishes that are NOT already in that memory. Durable means: preferences of the user, decisions taken, identifiers of named resources (repository, channel, project), and corrections made to the assistant. The thread of the task in progress is NOT durable, leave it out.
 
-For every candidate, cite exactly one sourceMessageId shown in the transcript and copy an exact, contiguous quote from that message's text blocks. Never invent a message id or quote. If no exact supporting quote exists, omit the candidate. Return only JSON: {"candidates":[{"fact":"...","sourceMessageId":"...","quote":"..."}]}. Return {"candidates":[]} when there is nothing new.`;
+Output one Markdown bullet per fact ("- the fact"), each a single self-contained line, at most ${MAX_LEARNED_FACTS}. Output exactly NONE when the conversation establishes nothing new.`;
 
 type CompactionThread = {
   id: string;
@@ -348,30 +347,6 @@ type CompactionThread = {
   userId: string;
   sessionId: string;
 };
-
-const extractedCandidateSchema = z.object({
-  fact: z.string(),
-  sourceMessageId: z.string(),
-  quote: z.string(),
-});
-const extractionResponseSchema = z.object({ candidates: z.array(z.unknown()) });
-/** A malformed response throws, so the request is retried; a malformed candidate is dropped. */
-function parseCaptureCandidates(answer: string): z.infer<typeof extractedCandidateSchema>[] {
-  let parsed: unknown = null;
-  try {
-    parsed = JSON.parse(answer);
-  } catch {
-    // Prose is not JSON; it fails the schema below like any other malformed answer.
-  }
-  const response = extractionResponseSchema.safeParse(parsed);
-  if (!response.success) throw new Error("Invalid memory extraction response");
-  return response.data.candidates
-    .flatMap((candidate) => {
-      const result = extractedCandidateSchema.safeParse(candidate);
-      return result.success ? [result.data] : [];
-    })
-    .slice(0, MAX_LEARNED_FACTS);
-}
 
 /**
  * Compaction reads the whole backlog, so it is often the most expensive call in a thread.
@@ -415,40 +390,25 @@ async function recordCompactionUsage(
 
 /**
  * A second short run over a summarized transcript, asking for the durable facts the bot has not
- * been told to remember. Each validated candidate becomes a proposal with its exact source quote,
- * so preferences and corrections the structured summary would drop stay reviewable. The summary's
- * own contract stays untouched: mixing extraction into it degrades both.
+ * been told to remember. Appending them keeps preferences and corrections alive past compaction,
+ * where the structured summary would drop them within a batch or two. The summary's own contract
+ * stays untouched: mixing extraction into it degrades both.
  */
 async function learnDurableFacts(
   deps: CompactHistoryDeps,
   thread: CompactionThread,
   options: {
-    sources: CaptureSource[];
+    transcript: string;
     fromSeq: number;
     model: AgentRunRequest["model"];
     context: AdapterContext;
-    grant: MemoryGrant;
   },
-): ReturnType<CaptureExtractor> {
-  const memoryContext = await loadAgentMemoryDataContext(
-    deps.memory,
-    thread.botId,
-    options.context,
-  );
-  options.grant.add(memoryContext?.manifest.documents ?? []);
-  if (!(await options.grant.isCurrent())) {
-    throw new Error("Memory access changed before durable-fact extraction.");
-  }
-  const transcript = options.sources
-    .map(
-      (source) =>
-        `[sourceMessageId:${source.id}] ${source.type === "user.message" ? "user" : "bot"}: ${messageText(source.payload.blocks)}`,
-    )
-    .join("\n\n");
+): Promise<void> {
+  const explicitMemory = await loadAgentMemoryContext(deps.memory, thread.botId, options.context);
   // Both halves are untrusted data, escaped out of the tags they sit in, as in the summarizer.
   const prompt = [
-    `<conversation>\n${escapePromptData(transcript)}\n</conversation>`,
-    memoryContext?.content,
+    `<conversation>\n${escapePromptData(options.transcript)}\n</conversation>`,
+    explicitMemory,
     LEARNING_PROMPT,
   ]
     .filter(Boolean)
@@ -474,11 +434,6 @@ async function learnDurableFacts(
           options.model.maxTokens ?? LEARNED_FACTS_MAX_TOKENS,
         ),
       },
-      beforeModelCall: async () => {
-        if (!(await options.grant.isCurrent())) {
-          throw new Error("Memory access changed before durable-fact extraction.");
-        }
-      },
     },
     {
       operationId: `learn:${thread.id}`,
@@ -491,59 +446,43 @@ async function learnDurableFacts(
     if (event.type === "usage") await recordCompactionUsage(deps, thread, event);
     if (event.type === "done" && event.text) answer = event.text.trim();
   }
-  if (!(await options.grant.isCurrent())) {
-    throw new Error("Memory access changed before durable-fact proposal.");
+
+  // A runtime failure answers in prose ("I hit a problem: ..."), which carries no bullets and so
+  // lands on the same no-write path as a batch that taught nothing.
+  const facts = answer
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => /^[-*]\s+\S/.test(line))
+    .map((line) => redactSensitiveText(line.slice(1).trim()))
+    .slice(0, MAX_LEARNED_FACTS);
+  if (facts.length > 0) {
+    // ponytail: no semantic dedup, the run is told what is already remembered and a duplicate
+    // that slips through is one line to delete in Knowledge. Add a merge pass if they pile up.
+    await deps.memory.commit(
+      {
+        scope: "bot",
+        botId: thread.botId,
+        path: "MEMORY.md",
+        content: `## Learned ${new Date().toISOString().slice(0, 10)}\n${facts.map((fact) => `- ${fact}`).join("\n")}`,
+        mode: "append",
+        sourceThreadId: thread.id,
+      },
+      options.context,
+    );
+    await deps.prisma.$transaction((tx) =>
+      deps.sessionLog.append(tx, {
+        type: "memory.revised",
+        sessionId: thread.sessionId as SessionId,
+        botId: thread.botId,
+        payload: { facts },
+      }),
+    );
   }
-
-  // A runtime failure answers in prose ("I hit a problem: ..."), which is not JSON and so throws:
-  // the request is retried rather than recorded as a batch that taught nothing.
-  return parseCaptureCandidates(answer);
-}
-
-function compactionContext(thread: CompactionThread): AdapterContext {
-  return {
-    operationId: `history-compact:${thread.id}`,
-    traceId: `history-compact:${thread.id}`,
-    spaceId: thread.spaceId,
-    userId: thread.userId,
+  getLogger().info("history.compact.learned", {
+    threadId: thread.id,
     botId: thread.botId,
-    // Model calls carry their own timeout; the memory reads and writes around them must not
-    // inherit it.
-    signal: new AbortController().signal,
-  };
-}
-
-/**
- * Match normal run model selection when the executor provides its resolver, including the thread
- * owner's encrypted credential. Direct callers retain the deployment fallback. "scripted" means
- * nothing at all is configured.
- */
-async function resolveCompactionModel(
-  deps: CompactHistoryDeps,
-  thread: CompactionThread,
-): Promise<AgentRunRequest["model"]> {
-  if (deps.resolveModel) {
-    return deps.resolveModel({
-      userId: thread.userId,
-      spaceId: thread.spaceId,
-      botId: thread.botId,
-    });
-  }
-  if (deps.deploymentModelKey) {
-    const deploymentFallback = resolveDeploymentModel();
-    // Provider must come from the same resolver as the key, not a hardcoded one.
-    return {
-      provider: deploymentFallback.provider,
-      id: deploymentFallback.model,
-      apiKey: deps.deploymentModelKey,
-    };
-  }
-  const settings = await deps.prisma.deploymentSettings.findUnique({ where: { id: "default" } });
-  return {
-    provider: settings?.defaultModelProvider ?? "scripted",
-    id: settings?.defaultModelId ?? "scripted",
-    apiKey: undefined,
-  };
+    facts: facts.length,
+  });
 }
 
 export interface CompactHistoryDeps {
@@ -551,6 +490,7 @@ export interface CompactHistoryDeps {
   sessionLog: SessionLog<Prisma.TransactionClient>;
   runtime: AgentRuntime;
   memory: MemoryStore;
+  memoryProviders: MemoryProviderResolver;
   deploymentModelKey?: string;
   resolveModel?: (scope: {
     userId: string;
@@ -566,15 +506,11 @@ type Exchange = {
   channel: boolean;
 };
 
-function exchangesOf(
-  entries: readonly SessionEntry[],
-  selfBotId: string,
-  usable: (entry: SessionEntry) => boolean,
-): Exchange[] {
+function exchangesOf(entries: readonly SessionEntry[], selfBotId: string): Exchange[] {
   const groups: SessionEntry[][] = [];
   for (const entry of entries) {
     // An older compaction inside the window would project as a second summary turn.
-    if (entry.type === "compaction" || !usable(entry)) continue;
+    if (entry.type === "compaction") continue;
     const last = groups.at(-1);
     if (last && entry.type !== "user.message") last.push(entry);
     else groups.push([entry]);
@@ -653,7 +589,6 @@ async function summarize(
   model: AgentRunRequest["model"],
   chunk: readonly Exchange[],
   previousSummary: string | null,
-  grant: MemoryGrant,
 ): Promise<string> {
   // Same shape as pi-agent-core's `generateSummaryWithRequest`: conversation, then the previous
   // summary when one exists, then the format instructions. Both halves are untrusted data, so the
@@ -685,9 +620,6 @@ async function summarize(
       model: {
         ...model,
         maxTokens: Math.min(SUMMARY_MAX_TOKENS, model.maxTokens ?? SUMMARY_MAX_TOKENS),
-      },
-      beforeModelCall: async () => {
-        if (!(await grant.isCurrent())) throw new Error("Memory access changed before compaction.");
       },
     },
     {
@@ -743,100 +675,76 @@ export async function compactHistory(
     userId: thread.userId,
     sessionId: thread.sessionId,
   };
-  const memoryContext = compactionContext(botThread);
-  const capture = memoryCapture(deps, botThread, memoryContext);
-  const extract: CaptureExtractor = async (input) =>
-    learnDurableFacts(deps, botThread, {
-      ...input,
-      model: await resolveCompactionModel(deps, botThread),
-      context: memoryContext,
-    });
-  // An earlier capture that failed retries here, once its backoff has passed.
-  await capture.drain(extract);
-
   const sessionId = thread.sessionId as SessionId;
   let tail = await deps.sessionLog.readTail(sessionId);
   const [first] = tail;
   const previous = first?.type === "compaction" ? first : undefined;
   const uncompacted = previous ? tail.slice(1) : tail;
-
-  // Summaries and bot turns are derived artefacts. Resolve and validate every memory dependency
-  // before any of their bodies reach the summarizer: a summary or a run without a known,
-  // still-authorized manifest is left out, and the person's own turns remain usable.
-  const grant = await memoryGrant(deps.memory, thread.botId, memoryContext);
-  const previousSummary =
-    previous && grant.allows(previous.payload.memoryManifest) ? previous.payload.summary : null;
-  if (previousSummary) grant.add(previous?.payload.memoryManifest);
-  const runIds = [...new Set(uncompacted.flatMap((entry) => (entry.runId ? [entry.runId] : [])))];
-  const runs =
-    runIds.length === 0
-      ? []
-      : await deps.prisma.run.findMany({
-          where: { id: { in: runIds } },
-          select: { id: true, memoryContextManifest: true },
-        });
-  const authorizedRuns = new Map(
-    runs.flatMap((run) =>
-      grant.allows(run.memoryContextManifest) ? [[run.id, run.memoryContextManifest]] : [],
-    ),
-  );
-  const usable = (entry: SessionEntry) => !entry.runId || authorizedRuns.has(entry.runId);
-
-  const exchanges = exchangesOf(uncompacted, thread.botId, usable);
+  const exchanges = exchangesOf(uncompacted, thread.botId);
   const kept = keptCount(exchanges, keptWindowTokens(historyBudget));
   const summarized = chunksOf(exchanges.slice(0, exchanges.length - kept));
   if (summarized.length === 0) return;
   const keptFrom = uncompacted.indexOf(exchanges.at(-kept)!.entries[0]!);
   const coveredUpToSeq = EntrySeq.parse(uncompacted[keptFrom - 1]!.seq);
-  for (const entry of summarized.flat().flatMap((exchange) => exchange.entries))
-    if (entry.runId) grant.add(authorizedRuns.get(entry.runId) ?? []);
-  const summaryManifest = grant.toJSON();
 
-  // ScriptedAgentRuntime answers by echoing canned text keyed off the prompt, so summarizing with
-  // it would cover turns that are then lost. Skip instead.
-  const model = await resolveCompactionModel(deps, botThread);
+  // Match normal run model selection when the executor provides its resolver, including the
+  // thread owner's encrypted credential. Direct callers retain the deployment fallback below.
+  // "scripted" means nothing at all is configured: ScriptedAgentRuntime answers by echoing canned
+  // text keyed off the prompt, so summarizing with it would save nonsense to external memory and
+  // cover turns that are then lost from both stores. Skip instead.
+  const deploymentFallback = resolveDeploymentModel();
+  const model: AgentRunRequest["model"] = deps.resolveModel
+    ? await deps.resolveModel({
+        userId: thread.userId,
+        spaceId: thread.spaceId,
+        botId: thread.botId,
+      })
+    : deps.deploymentModelKey
+      ? {
+          // Provider must come from the same resolver as the key, not a hardcoded one.
+          provider: deploymentFallback.provider,
+          id: deploymentFallback.model,
+          apiKey: deps.deploymentModelKey,
+        }
+      : await (async () => {
+          const settings = await deps.prisma.deploymentSettings.findUnique({
+            where: { id: "default" },
+          });
+          return {
+            provider: settings?.defaultModelProvider ?? "scripted",
+            id: settings?.defaultModelId ?? "scripted",
+            apiKey: undefined,
+          };
+        })();
   if (!deps.runtime.describe().capabilities.compaction || model.provider === "scripted") {
     getLogger().info(`history.compact skipped for thread ${threadId}: no usable summarizer model`);
     return;
   }
 
   const generation = await historyGeneration(deps.prisma, sessionId);
-  let summary = await summarize(deps, botThread, model, summarized[0]!, previousSummary, grant);
+  let summary = await summarize(
+    deps,
+    botThread,
+    model,
+    summarized[0]!,
+    previous?.payload.summary ?? null,
+  );
   for (const chunk of summarized.slice(1)) {
-    summary = await summarize(deps, botThread, model, chunk, summary, grant);
+    summary = await summarize(deps, botThread, model, chunk, summary);
   }
-  if (!(await grant.isCurrent()))
-    throw new Error("Memory access changed before saving compaction.");
-
-  // A channel's content never reaches durable memory: that privacy boundary is the point of
-  // keeping channel runs memory-less. Each other chunk gets one durable capture request, written
-  // with the compaction so covering its turns cannot silently lose their facts.
-  // ponytail: one channel post skips its whole chunk. Filter per exchange if bots that are active
-  // in a channel stop learning from their own direct conversation.
-  const chunks = summarized
-    .filter((chunk) => !chunk.some((exchange) => exchange.channel))
-    .map((chunk) => ({
-      fromSeqExclusive: chunk[0]!.entries[0]!.seq - 1,
-      toSeqInclusive: chunk.at(-1)!.entries.at(-1)!.seq,
-      entries: chunk.flatMap((exchange) => exchange.entries).filter(usable),
-    }));
-  let captureKeys: string[] = [];
-
   let compaction: SessionEntry | undefined;
   for (let attempt = 0; !compaction; attempt += 1) {
     const head = tail.reduce((newest, entry) => (entry.seq > newest.seq ? entry : newest));
     try {
-      compaction = await deps.prisma.$transaction(async (tx) => {
-        const appended = await deps.sessionLog.append(tx, {
+      compaction = await deps.prisma.$transaction((tx) =>
+        deps.sessionLog.append(tx, {
           type: "compaction",
           sessionId,
           parentId: head.id,
           feedBotId: botThread.botId,
-          payload: { summary, coveredUpToSeq, memoryManifest: summaryManifest },
-        });
-        captureKeys = await capture.enqueue(tx, chunks, { generation, manifest: summaryManifest });
-        return appended;
-      });
+          payload: { summary, coveredUpToSeq },
+        }),
+      );
     } catch (error) {
       if (!(error instanceof SessionAppendError && error.reason === "stale_compaction")) {
         throw error;
@@ -850,5 +758,74 @@ export async function compactHistory(
     }
   }
 
-  await capture.drain(extract, captureKeys);
+  // Local compaction is first-party behavior and must not depend on an optional external store.
+  let semanticMemory: ConfiguredMemoryProvider | null = null;
+  try {
+    semanticMemory = await deps.memoryProviders.resolve(thread.spaceId);
+  } catch (error) {
+    getLogger().error("Failed to load semantic memory provider for history compaction", error);
+  }
+  const memoryContext = {
+    operationId: `history-compact:${threadId}`,
+    traceId: `history-compact:${threadId}`,
+    spaceId: thread.spaceId,
+    userId: thread.userId,
+    botId: thread.botId,
+    signal: new AbortController().signal,
+  };
+  if (semanticMemory) {
+    try {
+      const result = await semanticMemory.provider.save(
+        {
+          content: summary,
+          scope: "isolated",
+          botId: thread.botId,
+          source: { kind: "history", generation },
+        },
+        memoryContext,
+      );
+      if (!result.ok) {
+        getLogger().error(`Failed to save compacted semantic memory: ${result.error}`);
+      }
+    } catch (error) {
+      getLogger().error("Failed to save compacted memory", error);
+    }
+    // A clear can commit and purge while the network save above is still in flight. Purge the old
+    // generation again so that the late save cannot leave cleared conversation data behind.
+    if ((await historyGeneration(deps.prisma, sessionId)) !== generation) {
+      try {
+        const removed = await semanticMemory.provider.purgeHistory(
+          { botId: thread.botId, generations: [generation] },
+          memoryContext,
+        );
+        if (!removed.ok) {
+          getLogger().error(
+            `history.compact could not purge stale semantic memory: ${removed.error}`,
+          );
+        }
+      } catch (error) {
+        getLogger().error("history.compact could not purge stale semantic memory", error);
+      }
+    }
+  }
+
+  // A channel's content never reaches durable memory: that privacy boundary is the point of
+  // keeping channel runs memory-less.
+  // ponytail: one channel post skips its whole chunk. Filter per exchange if bots that are active
+  // in a channel stop learning from their own direct conversation.
+  for (const chunk of summarized) {
+    if (chunk.some((exchange) => exchange.channel)) continue;
+    try {
+      await learnDurableFacts(deps, botThread, {
+        transcript: transcriptOf(chunk),
+        fromSeq: chunk[0]!.entries[0]!.seq,
+        model,
+        context: memoryContext,
+      });
+    } catch (error) {
+      // The chunk is already summarized and covered: a failed extraction costs the facts of one
+      // chunk, never the compaction. No retry, the next compaction learns from its own turns.
+      getLogger().error("history.compact could not learn durable facts", error);
+    }
+  }
 }

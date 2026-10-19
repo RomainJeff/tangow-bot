@@ -103,17 +103,7 @@ function MarkdownLink({ node, href, ...props }: ComponentPropsWithoutRef<"a"> & 
   // GFM links a bare `www.` address as http; it stands for its https link, as the server keys it.
   const target = href === `http://${text}` ? (wwwLinkHref(text) ?? href) : href;
   const mention = resolvedLinkMention(useContext(LinkMentions), target, text);
-  const internal = target?.startsWith("/") && !target.startsWith("//");
-  return (
-    mention ?? (
-      <a
-        {...props}
-        href={target}
-        target={internal ? "_self" : "_blank"}
-        rel="noreferrer noopener"
-      />
-    )
-  );
+  return mention ?? <a {...props} href={target} target="_blank" rel="noreferrer noopener" />;
 }
 
 const components: Components = {

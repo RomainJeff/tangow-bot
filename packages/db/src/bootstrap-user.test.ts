@@ -25,10 +25,6 @@ function makePrisma(settings: { id: string; ownerUserId: string | null } | null)
       updateMany: vi.fn(async () => ({ count: settings && !settings.ownerUserId ? 1 : 0 })),
     },
     memoryDocument: { findFirst: vi.fn(async () => null), create: create() },
-    memoryCollection: {
-      findFirst: vi.fn(async () => null),
-      create: vi.fn(async () => ({ id: "collection-1" })),
-    },
     notificationPreference: { create: create() },
   };
   return prisma;
@@ -132,7 +128,7 @@ describe("bootstrapUserSpace", () => {
     expect(create.ownerUserId).toBeNull();
   });
 
-  it("creates the personal memory collection and notification preference in the new workspace", async () => {
+  it("creates the user memory document and notification preference in the new workspace", async () => {
     const prisma = makePrisma({ id: "default", ownerUserId: "user-1" });
     const { spaceId } = await bootstrapUserSpace(
       prisma as unknown as PrismaClient,
@@ -140,9 +136,11 @@ describe("bootstrapUserSpace", () => {
       env,
     );
 
-    expect(prisma.memoryCollection.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ spaceId, ownerUserId: "user-1" }),
-    });
+    const memoryData = prisma.memoryDocument.create.mock.calls[0]![0].data;
+    expect(memoryData.spaceId).toBe(spaceId);
+    expect(memoryData.userId).toBe("user-1");
+    expect(memoryData.scope).toBe("user");
+    expect(memoryData.path).toBe("MEMORY.md");
 
     const prefData = prisma.notificationPreference.create.mock.calls[0]![0].data;
     expect(prefData.spaceId).toBe(spaceId);
@@ -174,7 +172,6 @@ describe("bootstrapUserSpace concurrency", () => {
         findFirst: vi.fn(async () => ({ id: "mem-1" })),
         create: vi.fn(async () => ({})),
       },
-      memoryCollection: { create: vi.fn(uniqueViolation) },
       notificationPreference: { create: vi.fn(uniqueViolation) },
     };
     const result = await bootstrapUserSpace(

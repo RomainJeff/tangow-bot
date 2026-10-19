@@ -126,13 +126,8 @@ describeWithDatabase("API authorization and resource isolation", () => {
       ["computer/screenUrl", { botId: "missing-bot" }],
       ["computer/heartbeat", { botId: "missing-bot" }],
       ["memory/list", {}],
-      ["memory/update", { documentId: "missing-memory", content: "Nope", expectedRevision: 1 }],
+      ["memory/update", { documentId: "missing-memory", content: "Nope" }],
       ["memory/exportMarkdown", {}],
-      ["memory/library/list", {}],
-      ["memory/library/get", { documentId: "missing-memory" }],
-      ["memory/library/create", { collection: "personal", content: "Nope" }],
-      ["memory/library/capture", { messageId: "missing-message" }],
-      ["memory/library/history", { documentId: "missing-memory" }],
       ["routines/list", { botId: "missing-bot" }],
       ["routines/create", routineInput("missing-bot")],
       ["routines/update", { routineId: "missing-routine", name: "Nope" }],
@@ -258,14 +253,10 @@ describeWithDatabase("API authorization and resource isolation", () => {
       "connections/begin",
       connectionInput("Owner Connection"),
     );
-    const ownerCollection = await handles.prisma.memoryCollection.findFirstOrThrow({
-      where: { spaceId: ownerActor.spaceId, kind: "agent", botId: ownerBot.id },
-    });
     const ownerMemory = await handles.prisma.memoryDocument.create({
       data: {
         spaceId: ownerActor.spaceId,
         userId: ownerActor.userId,
-        collectionId: ownerCollection.id,
         botId: ownerBot.id,
         scope: "bot",
         path: "PRIVATE.md",
@@ -420,7 +411,7 @@ describeWithDatabase("API authorization and resource isolation", () => {
       ["agentSkills/get", { skillId: ownerAgentSkill.id }],
       ["agentSkills/update", { skillId: ownerAgentSkill.id, description: "Stolen" }],
       ["agentSkills/remove", { skillId: ownerAgentSkill.id }],
-      ["memory/update", { documentId: ownerMemory.id, content: "stolen", expectedRevision: 1 }],
+      ["memory/update", { documentId: ownerMemory.id, content: "stolen" }],
       ["connections/complete", { connectionId: ownerConnection.connectionId }],
     ] satisfies Array<[string, unknown]>;
     await Promise.all(

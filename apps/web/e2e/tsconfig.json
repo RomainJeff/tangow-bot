@@ -23,7 +23,6 @@
     "helpers.ts",
     "knowledge-panel.spec.ts",
     "message-grouping.spec.ts",
-    "memory-library.spec.ts",
     "message-hover-actions.spec.ts",
     "model-settings.spec.ts",
     "peer-messages.spec.ts",

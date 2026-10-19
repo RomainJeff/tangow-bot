@@ -45,27 +45,9 @@ model User {
   createdSpaces               Space[]                      @relation("SpaceCreator")
   botSecrets BotSecret[]
   agentSecrets               AgentSecret[]
-  memoryCollections          MemoryCollection[]
 
   @@unique([email])
   @@map("user")
-}
-
-model BotMemoryMethod {
-  id                String   @id @default(cuid())
-  botId             String
-  bot               Bot      @relation(fields: [botId], references: [id], onDelete: Cascade)
-  version           Int
-  instructions      String
-  prepared          Json
-  provider          String
-  model             String
-  createdAt         DateTime @default(now())
-  classificationRuns MemoryClassificationRun[]
-  classificationFeedback MemoryClassificationFeedback[]
-
-  @@unique([botId, version])
-  @@map("bot_memory_methods")
 }
 
 model Session {
@@ -189,7 +171,6 @@ model Space {
   createdByUser               User?                        @relation("SpaceCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
   createdAt                   DateTime                     @default(now())
   deletingAt                  DateTime?
-  memoryRecallEnabled         Boolean                      @default(true)
   deletionClaimId             String?
   memberships                 SpaceMember[]
   bots                        Bot[]
@@ -205,7 +186,6 @@ model Space {
   connections                 Connection[]
   capabilities                CapabilityInstall[]
   memoryDocuments             MemoryDocument[]
-  memoryCollections           MemoryCollection[]
   agentHomes                  AgentHome[]
   browserProfiles             BrowserProfile[]
   artifacts                   Artifact[]
@@ -403,7 +383,6 @@ model Bot {
   scratchpadItems   ScratchpadItem[]
   taughtSkills      TaughtSkill[]
   memoryDocuments   MemoryDocument[]
-  memoryCollections MemoryCollection[]
   agentHome         AgentHome?
   browserProfile    BrowserProfile?
   artifacts         Artifact[]
@@ -414,9 +393,6 @@ model Bot {
   skills            BotSkill[]
   groupMembers      ChatGroupMember[]
   botSecrets BotSecret[]
-  memoryMethods BotMemoryMethod[]
-  memoryClassificationRuns MemoryClassificationRun[]
-  memoryMethodDisabledAt DateTime?
 
   externalConversations ExternalConversation[]
 
@@ -507,7 +483,6 @@ model Thread {
   userId                      String
   createdAt                   DateTime   @default(now())
   nextEventSeq                Int        @default(0)
-  memoryCaptureRequests       MemoryCaptureRequest[]
   unread                      Boolean    @default(false)
   // The main session. The database fills it: a uuid default, and the threads_create_main_session
   // trigger inserts the matching sessions row, so every thread has its log from its first insert.
@@ -581,7 +556,6 @@ model Run {
   leaseFence           Int              @default(0)
   leaseExpiresAt       DateTime?
   checkpoint           String?
-  memoryContextManifest Json?
   clientNonce          String?
   sourceMessageId      String?
   sourceMessage        SessionEntry?    @relation("RunSourceMessage", fields: [sourceMessageId], references: [id], onDelete: SetNull)
@@ -884,71 +858,23 @@ model CapabilityInstall {
   @@map("capability_installs")
 }
 
-model MemoryCollection {
-  id          String   @id @default(cuid())
-  spaceId     String
-  space       Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
-  kind        String
-  ownerUserId String?
-  ownerUser   User?    @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
-  botId       String?
-  bot         Bot?     @relation(fields: [botId], references: [id], onDelete: Cascade)
-  createdAt   DateTime @default(now())
-  documents   MemoryDocument[]
-
-  @@unique([spaceId, kind, ownerUserId, botId])
-  @@index([spaceId, kind])
-  @@map("memory_collections")
-}
-
-model MemoryCommand {
-  id          String   @id @default(cuid())
-  spaceId     String
-  userId      String
-  key         String
-  fingerprint String
-  documentId  String?
-  createdAt   DateTime @default(now())
-
-  @@unique([spaceId, userId, key])
-  @@map("memory_commands")
-}
-
 model MemoryDocument {
   id        String           @id @default(cuid())
   spaceId   String
   space     Space            @relation(fields: [spaceId], references: [id], onDelete: Cascade)
-  collectionId String
-  collection MemoryCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
   userId    String
   botId     String?
   bot       Bot?             @relation(fields: [botId], references: [id], onDelete: Cascade)
   scope     String
   path      String
   content   String
-  title     String           @default("")
-  status    String           @default("proposed")
-  qualification Json         @default("{}")
-  validFrom DateTime?
-  validUntil DateTime?
-  sourceDocumentId String?
-  sourceRevision Int?
-  sourceKind String?
-  sourceReferenceId String?
-  sourceExcerpt String?
-  replacesDocumentId String?
-  accessVersion Int          @default(1)
   revision  Int              @default(1)
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
   revisions MemoryRevision[]
-  evidence  MemoryEvidence[]
-  classificationRuns MemoryClassificationRun[]
-  classificationFeedback MemoryClassificationFeedback[]
 
   @@unique([spaceId, scope, botId, path])
   @@index([spaceId, userId])
-  @@index([collectionId, status, updatedAt])
   @@map("memory_documents")
 }
 
@@ -958,136 +884,12 @@ model MemoryRevision {
   document       MemoryDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
   revision       Int
   content        String
-  title          String         @default("")
-  status         String         @default("proposed")
-  qualification  Json           @default("{}")
-  validFrom      DateTime?
-  validUntil     DateTime?
-  accessVersion  Int            @default(1)
-  actorUserId    String?
-  idempotencyKey String?
-  commandFingerprint String?
-  sourceDocumentId String?
-  sourceRevision Int?
-  sourceKind String?
-  sourceReferenceId String?
-  sourceExcerpt String?
-  replacesDocumentId String?
   sourceRunId    String?
   sourceThreadId String?
   createdAt      DateTime       @default(now())
-  evidence        MemoryEvidence[]
 
   @@unique([documentId, revision])
-  @@unique([documentId, idempotencyKey])
-  @@index([idempotencyKey, commandFingerprint])
   @@map("memory_revisions")
-}
-
-model MemoryEvidence {
-  id                String         @id @default(cuid())
-  documentId        String
-  document          MemoryDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  revision          Int
-  revisionRecord    MemoryRevision @relation(fields: [documentId, revision], references: [documentId, revision], onDelete: Cascade)
-  sourceKind        String
-  sourceRole        String?
-  sourceReferenceId String
-  sourceVersion     String
-  sourceDigest      String
-  startOffset       Int?
-  endOffset         Int?
-  excerpt           String?
-  createdAt         DateTime       @default(now())
-
-  @@unique([documentId, revision, sourceKind, sourceReferenceId, sourceVersion])
-  @@index([sourceKind, sourceReferenceId])
-  @@map("memory_evidence")
-}
-
-model MemoryCaptureRequest {
-  id                 String   @id @default(cuid())
-  idempotencyKey     String   @unique
-  threadId           String
-  thread             Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  botId              String
-  spaceId            String
-  userId             String
-  historyGeneration  Int
-  fromSeqExclusive   Int
-  toSeqInclusive    Int
-  sourceMessages     Json
-  memoryManifest     Json
-  candidates          Json?
-  status             String   @default("pending")
-  attempts           Int      @default(0)
-  lastError          String?
-  availableAt        DateTime @default(now())
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-  completedAt        DateTime?
-
-  @@index([threadId, status, createdAt])
-  @@map("memory_capture_requests")
-}
-
-model MemoryClassificationRun {
-  id             String         @id @default(cuid())
-  spaceId        String
-  userId         String
-  botId          String?
-  bot            Bot?             @relation(fields: [botId], references: [id], onDelete: SetNull)
-  methodId       String?
-  method         BotMemoryMethod? @relation(fields: [methodId], references: [id], onDelete: SetNull)
-  methodVersion  Int?
-  methodSnapshot Json?
-  documentId     String
-  document       MemoryDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  collectionId   String
-  revision       Int
-  accessVersion  Int
-  sourceDigest   String
-  candidate      Json
-  neighbors      Json
-  prediction     Json
-  examples       Json
-  abstained      Boolean        @default(false)
-  invalidResponse Boolean       @default(false)
-  createdAt      DateTime       @default(now())
-  feedback       MemoryClassificationFeedback?
-
-  @@index([spaceId, userId, createdAt])
-  @@index([documentId, createdAt])
-  @@map("memory_classification_runs")
-}
-
-model MemoryClassificationFeedback {
-  id               String                 @id @default(cuid())
-  runId            String                 @unique
-  run              MemoryClassificationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
-  spaceId          String
-  userId           String
-  botId            String?
-  methodId         String?
-  method           BotMemoryMethod? @relation(fields: [methodId], references: [id], onDelete: SetNull)
-  methodVersion    Int?
-  reviewedQuestionKeys Json @default("[]")
-  documentId       String
-  document         MemoryDocument         @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  collectionId     String
-  sourceDigest     String
-  reviewed         Json
-  prediction       Json
-  payloadFingerprint String
-  qualificationAfter Json
-  resultRevision   Int
-  createdAt        DateTime               @default(now())
-  revokedAt        DateTime?
-  revokedByUserId  String?
-
-  @@index([spaceId, userId, documentId, createdAt])
-  @@index([botId, methodVersion, collectionId, revokedAt, createdAt], map: "memory_feedback_bot_method_scope_idx")
-  @@map("memory_classification_feedback")
 }
 
 model AgentHome {
@@ -1339,7 +1141,6 @@ model SpaceDecisionConfig {
 
   @@map("space_decision_configs")
 }
-
 
 model Secret {
   id                String             @id @default(cuid())
