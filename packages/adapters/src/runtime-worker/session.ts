@@ -14,7 +14,7 @@ import {
   type WorkerIdentity,
 } from "@rakazo/adapter-kit";
 import { redactSecrets } from "@rakazo/core";
-import { redactConnectorPayload } from "../connector-safety.js";
+import { redactPayloadValue } from "../connector-safety.js";
 import { type CapabilityKey, mintCapability, verifyCapability } from "./capability.js";
 import { relayPiAiCall } from "./dialects/pi-ai.js";
 import { eventPipe } from "./event-pipe.js";
@@ -192,7 +192,7 @@ export function createSession(
     grant.resolve(
       "result" in output
         ? {
-            result: redactConnectorPayload(output.result, [
+            result: redactPayloadValue(output.result, [
               ...(request.secrets ?? []),
             ]) as typeof output.result,
           }
