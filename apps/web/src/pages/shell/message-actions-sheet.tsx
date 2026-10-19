@@ -2,7 +2,7 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import type { MessageReaction } from "@rakazo/contracts";
 import { canReactToThreadMessage, MESSAGE_REACTIONS } from "@rakazo/contracts";
 import { ActionSheet } from "@rakazo/ui-web";
-import { Copy, Link2Off, Pencil, Reply, Square, Volume2 } from "lucide-react";
+import { Bookmark, Copy, Link2Off, Pencil, Reply, Square, Volume2 } from "lucide-react";
 import type { ReactNode } from "react";
 import type { MessageItem } from "../../lib/thread-items";
 import {
@@ -24,7 +24,7 @@ interface ActionRow {
  * The touch long-press sheet for a thread message (`transcript.tsx`): quick
  * reactions, then its actions — same handlers as the hover pill
  * (`message-hover-actions.tsx`, via `./message-actions`), same order (Reply,
- * Copy, Remove preview, Speak/Stop, Edit and resend), so the two surfaces never drift.
+ * Copy, Remove preview, Speak/Stop, Remember, Edit and resend), so the two surfaces never drift.
  * Mirrors the mobile app's `MessageActionsSheet` content, built on the web's
  * own `ActionSheet` primitive instead of the native sheet host.
  */
@@ -36,6 +36,7 @@ export function MessageActionsSheet({
   onReply,
   onEdit,
   onReact,
+  onRemember,
   voiceReady,
   speaking,
   onSpeak,
@@ -47,6 +48,7 @@ export function MessageActionsSheet({
   onReply: (message: MessageItem) => void;
   onEdit: (message: MessageItem) => void;
   onReact: (message: MessageItem, reaction: MessageReaction) => Promise<void>;
+  onRemember?: (message: MessageItem) => void;
   voiceReady: boolean;
   speaking: boolean;
   onSpeak: (message: MessageItem) => void;
@@ -97,6 +99,16 @@ export function MessageActionsSheet({
                   <Volume2 size={18} strokeWidth={1.7} aria-hidden="true" />
                 ),
                 onSelect: () => onSpeak(message),
+              },
+            ]
+          : []),
+        ...(onRemember
+          ? [
+              {
+                key: "remember",
+                label: t`Remember`,
+                icon: <Bookmark size={18} strokeWidth={1.7} aria-hidden="true" />,
+                onSelect: () => onRemember(message),
               },
             ]
           : []),
