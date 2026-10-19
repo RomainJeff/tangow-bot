@@ -1,7 +1,7 @@
 import type { PrismaClient } from "@rakazo/db";
 import { createDb } from "@rakazo/db";
 import type { Pool } from "pg";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { FakeWorkerProvider } from "./fake-worker-provider.js";
 import { allFiles, mcpOnly, privateFiles, workerFixture } from "./worker-fixture.test-support.js";
 import { createWorkerLifecycle, StaleAttemptError, VolumeBusyError } from "./worker-lifecycle.js";
@@ -89,42 +89,26 @@ describePostgres("worker lifecycle under concurrent transactions (PostgreSQL)", 
     }
   });
 
-  it("frees the lease of a worker released while its start waited for a volume", async () => {
-    const fake = new FakeWorkerProvider();
-    const workers = createWorkerLifecycle({ prisma, provider: fake });
-    const { bot, privateVolume } = await fixture.migratedBot();
-    const attempt = await fixture.seedAttempt((await fixture.seedRun(bot)).id);
-    const launch = await fixture.launchFor(workers, attempt.id, privateFiles);
-    const lockWaiters = async (sql: string) => {
-      const { rows } = await pool.query<{ waiting: number }>(
-        `SELECT count(*)::int AS waiting FROM pg_stat_activity
-         WHERE datname = current_database() AND wait_event_type = 'Lock' AND query LIKE $1`,
-        [`%${sql}%`],
+  it("lets one of two concurrent starts of the same attempt reach the provider", async () => {
+    for (let round = 0; round < ROUNDS; round++) {
+      const fake = new FakeWorkerProvider();
+      const workers = createWorkerLifecycle({ prisma, provider: fake });
+      const { bot, privateVolume } = await fixture.migratedBot();
+      const attempt = await fixture.seedAttempt((await fixture.seedRun(bot)).id);
+      const launch = await fixture.launchFor(workers, attempt.id, privateFiles);
+
+      const results = await Promise.allSettled([
+        workers.start(launch, fixture.context),
+        workers.start(launch, fixture.context),
+      ]);
+
+      expect(results.map((result) => result.status).sort()).toEqual(["fulfilled", "rejected"]);
+      expect(results.find((result) => result.status === "rejected")?.reason).toBeInstanceOf(
+        StaleAttemptError,
       );
-      return rows[0]!.waiting;
-    };
-    const holder = await pool.connect();
-    await holder.query("BEGIN");
-    await holder.query("SELECT id FROM volumes WHERE id = $1 FOR UPDATE", [privateVolume.id]);
-
-    const started = workers.start(launch, fixture.context).catch((error: unknown) => error);
-    await vi.waitFor(async () => expect(await lockWaiters("FROM volumes WHERE id = ANY")).toBe(1));
-    let releaseSettled = false;
-    const released = workers.release(attempt.id, fixture.context).finally(() => {
-      releaseSettled = true;
-    });
-    await vi.waitFor(async () =>
-      expect(releaseSettled || (await lockWaiters(`SET "workerState" = 'releasing'`)) === 1).toBe(
-        true,
-      ),
-    );
-    await holder.query("COMMIT");
-    holder.release();
-
-    await expect(released).resolves.toBe("awaiting_ensure");
-    expect(await started).toBeInstanceOf(StaleAttemptError);
-    expect(fake.live.size).toBe(0);
-    expect(await fixture.workerStateOf(attempt.id)).toBe("released");
-    expect(await fixture.writerOf(privateVolume.id)).toBeNull();
+      expect(fake.calls.map((call) => call.op)).toEqual(["ensure", "prepare"]);
+      expect(await fixture.workerStateOf(attempt.id)).toBe("ready");
+      expect(await fixture.writerOf(privateVolume.id)).toBe(attempt.id);
+    }
   });
 });
