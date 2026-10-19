@@ -97,6 +97,18 @@ export function useTranscriptFollow({
     if (following.current) snapToEnd();
   }, [rows, running, snapToEnd]);
 
+  // A taller draft, or a notice or reply chip that stops the thread above the
+  // composer, shortens the thread without a new row: keep its end in view.
+  useEffect(() => {
+    const element = scrollRef.current;
+    if (!element || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      if (following.current && !autoScrolling.current) snapToEnd();
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [scrollRef, snapToEnd]);
+
   const loadOlder = useCallback(() => {
     const wasFollowing = following.current;
     // Prepend must not race the messages-driven snap-to-end follow path.

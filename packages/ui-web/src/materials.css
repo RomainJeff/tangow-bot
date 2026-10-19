@@ -49,24 +49,42 @@
     }
   }
 
+  /* The thread runs `--thread-overlap` under the composer's bar, and its end
+     padding, bottom fade and jump-to-latest button follow it. Not under a line
+     the shell sets between them (teaching in progress), nor under a notice, a
+     reply chip or the mention picker above the bar: it would show through their
+     tints, so it stops above them and fades into them. */
+  .rk-thread-overlap {
+    --thread-overlap: 0px;
+    --thread-fade-from: var(--thread-fade-bottom-rest);
+    --thread-fade-to: 0px;
+    margin-bottom: calc(-1 * var(--thread-overlap));
+  }
+
+  .rk-thread-overlap:has(+ [data-slot="composer"] > [data-slot="composer-shell"]:first-child) {
+    --thread-overlap: var(--thread-under-composer);
+    --thread-fade-from: var(--thread-fade-bottom-start);
+    --thread-fade-to: var(--thread-fade-bottom-end);
+  }
+
   /* The thread fades in under the header, so a dark bubble leaves no smear
      behind the title, and out across the composer's bar: its glass blurs the
-     thread above, and nothing shows in the gap under it. */
+     thread above, and nothing shows in the gap under it. Its end padding keeps
+     the last message 32 px above the composer. */
   .rk-thread-mask {
+    padding-bottom: calc(var(--thread-overlap, 0px) + 2rem);
     mask-image: linear-gradient(
       to bottom,
       transparent var(--thread-fade-top-start),
       #000 var(--thread-fade-top-end),
-      #000 calc(100% - var(--thread-fade-bottom-start)),
-      transparent calc(100% - var(--thread-fade-bottom-end))
+      #000 calc(100% - var(--thread-fade-from, 0px)),
+      transparent calc(100% - var(--thread-fade-to, 0px))
     );
   }
 
-  /* The thread runs under the composer's bar, but not under a line the shell
-     sets between them (teaching in progress) nor under a notice, a reply chip or
-     the mention picker above the bar: it would show through their tints. */
-  .rk-thread-overlap:has(+ [data-slot="composer"] > [data-slot="composer-shell"]:first-child) {
-    margin-bottom: calc(-1 * var(--thread-under-composer));
+  /* 16 px above the composer, whether or not the thread runs under it. */
+  .rk-thread-jump {
+    bottom: calc(var(--thread-overlap, 0px) + 1rem);
   }
 
   /* Reduce Transparency: every material turns opaque; the ambient light stays. */

@@ -210,9 +210,9 @@ export const Transcript = memo(function Transcript({
   }, [scrollRef]);
 
   return (
-    // The thread runs under the header above and 80 px under the composer below
-    // (`rk-thread-overlap`), fading out at both ends (`rk-thread-mask`): pt-21 clears
-    // the mask's top fade, and pb-28 is that overlap plus room for a card's shadow.
+    // The thread runs under the header above and under the composer below
+    // (`rk-thread-overlap`), fading out at both ends (`rk-thread-mask`, which also sets
+    // the end padding from the overlap): pt-21 clears the mask's top fade.
     <div className="rk-thread-overlap relative flex min-h-0 flex-1">
       <div
         ref={scrollRef}
@@ -221,7 +221,7 @@ export const Transcript = memo(function Transcript({
         // px-3 keeps a card's soft drop shadow (shadow-card reaches ~14px sideways and
         // ~26px down) from being clipped by this scroll container's overflow or hidden under
         // the rk-scroll scrollbar on the right.
-        className="rk-scroll rk-thread-mask flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-3 pt-21 pb-28"
+        className="rk-scroll rk-thread-mask flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-3 pt-21"
       >
         {olderCursor != null ? (
           <button

@@ -44,10 +44,28 @@ export function cssVariableName(token: keyof ColorTokens): string {
  * filling each line with as many comma-separated layers as fit: this keeps a
  * fresh `generate` byte-identical to what `biome check --write` would
  * produce, so `tokens.css` never has to be reformatted by hand. */
+/** Splits a CSS list on its top-level commas, as biome breaks it, never inside a function. */
+function splitTopLevel(value: string): string[] {
+  const layers: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+    if (char === "(") depth += 1;
+    else if (char === ")") depth -= 1;
+    else if (char === "," && depth === 0) {
+      layers.push(value.slice(start, index).trim());
+      start = index + 1;
+    }
+  }
+  layers.push(value.slice(start).trim());
+  return layers;
+}
+
 function renderDeclaration(name: string, value: string, indent = "  "): string {
   const oneLine = `${indent}${name}: ${value};`;
   if (oneLine.length <= 100) return oneLine;
-  const layers = value.split(/,\s(?![^(]*\))/);
+  const layers = splitTopLevel(value);
   const lines: string[] = [];
   let line = "";
   for (const [index, layer] of layers.entries()) {
@@ -95,6 +113,7 @@ function renderMaterialGeometryLines(): string[] {
     `  --thread-fade-top-end: ${threadFade.topEnd}px;`,
     `  --thread-fade-bottom-start: ${threadFade.bottomStart}px;`,
     `  --thread-fade-bottom-end: ${threadFade.bottomEnd}px;`,
+    `  --thread-fade-bottom-rest: ${threadFade.bottomRest}px;`,
     `  --thread-under-composer: ${threadFade.underComposer}px;`,
     `  --veil-mix: ${veil.mix}%;`,
     `  --veil-blur: ${veil.blur}px;`,
@@ -107,7 +126,7 @@ function renderMaterialGeometryLines(): string[] {
  */
 function renderNarrowAmbientBlock(): string {
   const block = (selector: string, appearance: ResolvedAppearance) => {
-    const background = (appearance === "light" ? lightTokens : darkTokens).background;
+    const background = (appearance === "light" ? lightTokens : darkTokens).background.toLowerCase();
     const value = `linear-gradient(to top, ${background} 0%, transparent ${narrowBackgroundFade}%), ${ambient.narrow[appearance]}`;
     return `  ${selector} {\n${renderDeclaration("--ambient", value, "    ")}\n  }`;
   };
