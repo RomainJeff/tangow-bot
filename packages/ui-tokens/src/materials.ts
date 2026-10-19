@@ -26,7 +26,7 @@ const overlayEdge = {
 export const materials = {
   /** The sidebar. */
   chrome: {
-    fill: { light: "rgba(255, 255, 255, 0.68)", dark: "rgba(36, 36, 40, 0.55)" },
+    fill: { light: "rgba(255, 255, 255, 0.58)", dark: "rgba(36, 36, 40, 0.45)" },
     edge: {
       light:
         "inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 0 0 1px rgba(0, 0, 0, 0.07), 0 2px 8px -2px rgba(0, 0, 0, 0.08)",
@@ -38,7 +38,7 @@ export const materials = {
   },
   /** The header's action capsule, the composer, the hover pill, round buttons. */
   control: {
-    fill: { light: "rgba(255, 255, 255, 0.6)", dark: "rgba(44, 44, 48, 0.6)" },
+    fill: { light: "rgba(255, 255, 255, 0.5)", dark: "rgba(44, 44, 48, 0.5)" },
     edge: {
       light:
         "inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 0 0 1px rgba(0, 0, 0, 0.08), 0 2px 8px -2px rgba(0, 0, 0, 0.1)",

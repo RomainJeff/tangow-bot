@@ -55,12 +55,12 @@
   --elevation-composer-focus:
     0 0 0 1px rgba(255, 255, 255, 0.16), 0 12px 28px -18px rgba(0, 0, 0, 0.8);
   --elevation-floating: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 8px 20px -10px rgba(0, 0, 0, 0.7);
-  --material-chrome-fill: rgba(36, 36, 40, 0.55);
+  --material-chrome-fill: rgba(36, 36, 40, 0.45);
   --material-chrome-edge:
     inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 1px rgba(255, 255, 255, 0.07),
     0 2px 8px -2px rgba(0, 0, 0, 0.4);
   --material-chrome-fallback: var(--sidebar);
-  --material-control-fill: rgba(44, 44, 48, 0.6);
+  --material-control-fill: rgba(44, 44, 48, 0.5);
   --material-control-edge:
     inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 0 0 1px rgba(255, 255, 255, 0.08),
     0 2px 8px -2px rgba(0, 0, 0, 0.5);
@@ -134,12 +134,12 @@
   --elevation-composer-focus:
     0 0 0 1px rgba(17, 17, 20, 0.09), 0 12px 28px -18px rgba(17, 17, 20, 0.55);
   --elevation-floating: 0 1px 2px rgba(17, 17, 20, 0.08), 0 8px 20px -10px rgba(17, 17, 20, 0.35);
-  --material-chrome-fill: rgba(255, 255, 255, 0.68);
+  --material-chrome-fill: rgba(255, 255, 255, 0.58);
   --material-chrome-edge:
     inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 0 0 1px rgba(0, 0, 0, 0.07),
     0 2px 8px -2px rgba(0, 0, 0, 0.08);
   --material-chrome-fallback: var(--sidebar);
-  --material-control-fill: rgba(255, 255, 255, 0.6);
+  --material-control-fill: rgba(255, 255, 255, 0.5);
   --material-control-edge:
     inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 0 0 1px rgba(0, 0, 0, 0.08),
     0 2px 8px -2px rgba(0, 0, 0, 0.1);

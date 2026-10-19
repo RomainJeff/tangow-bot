@@ -13,8 +13,8 @@ carries content: no bubble, card or panel is glass.
 
 | Material | Light | Dark | Blur | Use |
 | --- | --- | --- | --- | --- |
-| `chrome` | `rgba(255, 255, 255, 0.68)` | `rgba(36, 36, 40, 0.55)` | 30 px, saturate 160% | the sidebar |
-| `control` | `rgba(255, 255, 255, 0.6)` | `rgba(44, 44, 48, 0.6)` | 12 px, saturate 170% | the header's action capsule, the composer, the hover pill, round buttons |
+| `chrome` | `rgba(255, 255, 255, 0.58)` | `rgba(36, 36, 40, 0.45)` | 30 px, saturate 160% | the sidebar |
+| `control` | `rgba(255, 255, 255, 0.5)` | `rgba(44, 44, 48, 0.5)` | 12 px, saturate 170% | the header's action capsule, the composer, the hover pill, round buttons |
 | `menu` | `rgba(255, 255, 255, 0.8)` | `rgba(44, 44, 48, 0.8)` | 30 px, saturate 180% | small menus, tooltips: a step more opaque, to stay legible over thread text |
 | `list` | `rgba(250, 250, 251, 0.94)` | `rgba(40, 40, 44, 0.94)` | 40 px, saturate 180% | dense lists: the ⌘K palette, the bot drawer at phone width |
 
