@@ -487,6 +487,7 @@ model Thread {
   userId                      String
   createdAt                   DateTime   @default(now())
   nextEventSeq                Int        @default(0)
+  memoryCaptureRequests       MemoryCaptureRequest[]
   unread                      Boolean    @default(false)
   // The main session. The database fills it: a uuid default, and the threads_create_main_session
   // trigger inserts the matching sessions row, so every thread has its log from its first insert.
@@ -980,6 +981,32 @@ model MemoryEvidence {
   @@unique([documentId, revision, sourceKind, sourceReferenceId, sourceVersion])
   @@index([sourceKind, sourceReferenceId])
   @@map("memory_evidence")
+}
+
+model MemoryCaptureRequest {
+  id                 String   @id @default(cuid())
+  idempotencyKey     String   @unique
+  threadId           String
+  thread             Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  botId              String
+  spaceId            String
+  userId             String
+  historyGeneration  Int
+  fromSeqExclusive   Int
+  toSeqInclusive    Int
+  sourceMessages     Json
+  memoryManifest     Json
+  candidates          Json?
+  status             String   @default("pending")
+  attempts           Int      @default(0)
+  lastError          String?
+  availableAt        DateTime @default(now())
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  completedAt        DateTime?
+
+  @@index([threadId, status, createdAt])
+  @@map("memory_capture_requests")
 }
 
 model AgentHome {

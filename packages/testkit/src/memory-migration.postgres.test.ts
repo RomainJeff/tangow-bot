@@ -103,6 +103,14 @@ describe.skipIf(!available)("memory library upgrade", () => {
         "utf8",
       );
       await client.query(evidenceMigration);
+      const captureMigration = await readFile(
+        new URL(
+          "../../db/prisma/migrations/20261018030000_memory_capture/migration.sql",
+          import.meta.url,
+        ),
+        "utf8",
+      );
+      await client.query(captureMigration);
       const after = (
         await client.query(
           `SELECT id, "documentId", revision, content, "sourceRunId", "sourceThreadId", "createdAt" FROM "memory_revisions" ORDER BY id`,
@@ -132,6 +140,7 @@ describe.skipIf(!available)("memory library upgrade", () => {
       );
       expect(duplicate.rows).toHaveLength(0);
       expect((await client.query(`SELECT id FROM "memory_evidence"`)).rows).toHaveLength(0);
+      expect((await client.query(`SELECT id FROM "memory_capture_requests"`)).rows).toHaveLength(0);
     } finally {
       await client.query("ROLLBACK");
       client.release();
