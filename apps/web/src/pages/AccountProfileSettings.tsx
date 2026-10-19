@@ -175,7 +175,7 @@ export function ChangePasswordSection({ email }: { email?: string | null }) {
   }
 
   return (
-    <section className="rounded-xl border border-border px-4 py-4">
+    <section className="rounded-card bg-group shadow-group px-4 py-4">
       <h3 className="text-[15px] font-medium text-foreground">
         <Trans>Password</Trans>
       </h3>
@@ -250,6 +250,7 @@ function SettingsPasswordInput({
         minLength={8}
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        className="border-transparent bg-sheet dark:bg-sheet"
       />
     </Field>
   );

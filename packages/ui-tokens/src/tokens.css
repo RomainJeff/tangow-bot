@@ -306,6 +306,7 @@
   --thread-under-composer: 80px;
   --veil-mix: 55%;
   --veil-blur: 6px;
+  --overlay-blur: 20px;
 }
 
 @media (max-width: 767px) {

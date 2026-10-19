@@ -29,10 +29,11 @@ Under Reduce Transparency every material turns opaque: `chrome` takes
 
 The values live in `packages/ui-tokens/src/materials.ts` and reach CSS as
 `--material-<name>-*`, `--ambient` (phone width included),
-`--scroll-edge-blur`, `--thread-fade-*`, `--thread-under-composer` and `--veil-*`. Screens
+`--scroll-edge-blur`, `--thread-fade-*`, `--thread-under-composer`, `--veil-*` and
+`--overlay-blur`. Screens
 spend them through `rk-glass-chrome`, `rk-glass-control`, `rk-glass-menu`,
 `rk-glass-list`, `rk-scroll-edge`, `rk-thread-mask`, `rk-thread-overlap` (which sets
-`--thread-overlap` for the other two) and `rk-thread-jump`
+`--thread-overlap` for the other two), `rk-thread-jump` and `rk-veil`
 from `packages/ui-web/src/materials.css`.
 
 Panels and overlay windows are content a person reads and edits, so they are
@@ -102,11 +103,15 @@ passing under it.
   `group`. Below `lg` the panel takes the whole column on the page background,
   with no inset or radius: Safari paints its bars in that colour, so a sheet
   there would read as cut at the top and bottom.
-- Overlays (settings, Customize): an opaque `sheet` window, radius 24, on the
-  `overlay` veil with the thread blurred 20 px under it. Its navigation is an
-  inset panel like the app's sidebar: 8 from the window's edges, radius 16, on
-  `rgba(255, 255, 255, 0.75)` in light and white 5% in dark. Sections are
-  groups, as in the side panel.
+- Overlays (settings, Customize, models, memory, voice, messaging, skills,
+  integrations): an opaque `sheet` window, radius 24, on the `rk-veil`
+  (`overlay`, the thread blurred `--overlay-blur`, 20 px). `DialogContent`
+  draws every dialog this way; overlay windows pass `variant="window"`. Their
+  navigation is an inset panel like the app's sidebar: 8 from the window's
+  edges, radius 16, on `group`, the current section on `sidebarAccent`.
+  Sections are cards on `group`, as in the side panel. At phone width a window
+  takes the whole screen on the page background, like the side panel, and its
+  navigation becomes a row of tabs, the current one on `group`.
 - Menus, the account menu included, are `menu` at radius 14 with rows of 8;
   the palette is `list` at radius 20 with rows of 12.
 - A run failure sits above the composer on a 44 px `destructive` tint at 8%,
