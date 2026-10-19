@@ -11,11 +11,15 @@ import type { LaunchPlan, MountRefusal, RunNeeds, VolumeRow, WorkerLaunch } from
 import {
   attemptHoldsFence,
   authorizeMounts,
+  ensureMayBeInFlight,
   LIVE_WORKER_STATES,
+  lostSetupMove,
   planLaunch,
   supportsWorkers,
+  WORKER_ENSURE_TIMEOUT_SECONDS,
   WORKER_TTL_SECONDS,
   WORKSPACE_ROOT,
+  workerStartable,
   workerStatesInto,
   writersBlocking,
 } from "@rakazo/core";
@@ -54,6 +58,9 @@ export type HomeAdoption =
   | "volume_missing"
   | "volume_busy";
 
+/** `awaiting_ensure`: moved to releasing, but its VM may still appear, so leases stay held. */
+export type ReleaseOutcome = "released" | "awaiting_ensure" | "not_live";
+
 type PlanRow = {
   runId: string;
   botId: string;
@@ -68,6 +75,7 @@ type PlanRow = {
 };
 
 const RELEASABLE = Prisma.join([...LIVE_WORKER_STATES, "releasing"]);
+const INTO_RELEASED = Prisma.join(workerStatesInto("released"));
 
 /**
  * The only writer of attempts.worker* and volumes.writerAttemptId. A null provider keeps every
@@ -84,37 +92,60 @@ export function createWorkerLifecycle(deps: {
     return deps.provider;
   }
 
-  async function moveWorker(
+  /**
+   * Records a setup step of `start`. A move that matches no row accepts a target another call of
+   * `start` already reached with the same VM; a released worker means this call's VM is recorded
+   * nowhere, so it is destroyed here.
+   */
+  async function advance(
     attemptId: string,
-    from: readonly WorkerState[],
-    to: WorkerState,
-    providerRef?: string,
+    to: "created" | "ready",
+    providerRef: string,
+    context: AdapterContext,
   ): Promise<void> {
     const moved = await prisma.attempt.updateMany({
-      where: { id: attemptId, workerState: { in: [...from] } },
+      where: { id: attemptId, workerState: { in: workerStatesInto(to) } },
       data: { workerState: to, workerStateAt: new Date(), workerProviderRef: providerRef },
     });
-    if (moved.count !== 1) throw new StaleAttemptError(attemptId);
+    if (moved.count === 1) return;
+    const [observed] = await prisma.$queryRaw<
+      { workerState: WorkerState | null; workerProviderRef: string | null }[]
+    >`SELECT "workerState", "workerProviderRef" FROM attempts WHERE id = ${attemptId}`;
+    const outcome = lostSetupMove(to, providerRef, observed ?? null);
+    if (outcome === "reached") return;
+    if (outcome === "orphaned")
+      await requireProvider().destroy({ attemptId, providerRef }, context);
+    throw new StaleAttemptError(attemptId);
   }
 
-  async function release(attemptId: string, context: AdapterContext): Promise<void> {
+  async function release(attemptId: string, context: AdapterContext): Promise<ReleaseOutcome> {
     const provider = requireProvider();
-    const [target] = await prisma.$queryRaw<{ workerProviderRef: string | null }[]>`
-      UPDATE attempts SET "workerState" = 'releasing', "workerStateAt" = ${new Date()}
+    const now = new Date();
+    // Without a ref, workerStateAt keeps the time its last ensure may have started.
+    const [target] = await prisma.$queryRaw<
+      { workerProviderRef: string | null; workerStateAt: Date }[]
+    >`
+      UPDATE attempts SET "workerState" = 'releasing',
+        "workerStateAt" = CASE WHEN "workerProviderRef" IS NULL THEN "workerStateAt" ELSE ${now} END
       WHERE id = ${attemptId} AND "workerState" IN (${RELEASABLE})
-      RETURNING "workerProviderRef"`;
-    if (!target) return;
+      RETURNING "workerProviderRef", "workerStateAt"`;
+    if (!target) return "not_live";
+    if (ensureMayBeInFlight(target, now)) return "awaiting_ensure";
     await provider.destroy({ attemptId, providerRef: target.workerProviderRef }, context);
-    await prisma.$transaction([
-      prisma.attempt.updateMany({
-        where: { id: attemptId, workerState: { in: workerStatesInto("released") } },
-        data: { workerState: "released", workerStateAt: new Date() },
-      }),
-      prisma.volume.updateMany({
-        where: { writerAttemptId: attemptId },
-        data: { writerAttemptId: null },
-      }),
-    ]);
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`
+        UPDATE attempts SET "workerState" = 'released', "workerStateAt" = ${new Date()}
+        WHERE id = ${attemptId} AND "workerState" IN (${INTO_RELEASED})`;
+      const held = await tx.$queryRaw<{ id: string }[]>`
+        SELECT id FROM volumes WHERE "writerAttemptId" = ${attemptId} ORDER BY id FOR UPDATE`;
+      if (held.length > 0) {
+        await tx.volume.updateMany({
+          where: { id: { in: held.map((volume) => volume.id) } },
+          data: { writerAttemptId: null },
+        });
+      }
+    });
+    return "released";
   }
 
   return {
@@ -150,7 +181,7 @@ export function createWorkerLifecycle(deps: {
     /**
      * Records intent and takes every writer lease in one transaction before the provider is
      * called, then records the VM's ref before any fallible setup. Re-callable while the worker
-     * is requested or created; any failure after the intent releases the worker.
+     * is requested or created; a failure of this call's own ensure or prepare releases the worker.
      */
     async start(launch: WorkerLaunch, context: AdapterContext): Promise<StartedWorker> {
       const provider = requireProvider();
@@ -158,15 +189,15 @@ export function createWorkerLifecycle(deps: {
       const mounts = await prisma.$transaction(async (tx) => {
         const [run] = await tx.$queryRaw<{ leaseFence: number; status: string }[]>`
           SELECT "leaseFence", status FROM runs WHERE id = ${launch.runId} FOR UPDATE`;
-        const attempt = await tx.attempt.findUnique({
-          where: { id: launch.attemptId },
-          select: { runId: true, fence: true, workerState: true },
-        });
+        const [attempt] = await tx.$queryRaw<
+          { runId: string; fence: number; workerState: WorkerState | null }[]
+        >`SELECT "runId", fence, "workerState" FROM attempts WHERE id = ${launch.attemptId}
+          FOR UPDATE`;
         if (
           !run ||
           attempt?.runId !== launch.runId ||
           !attemptHoldsFence(attempt, run) ||
-          (attempt.workerState !== null && !["requested", "created"].includes(attempt.workerState))
+          !workerStartable(attempt.workerState)
         ) {
           throw new StaleAttemptError(launch.attemptId);
         }
@@ -198,7 +229,8 @@ export function createWorkerLifecycle(deps: {
             data: { writerAttemptId: launch.attemptId },
           });
         }
-        if (attempt.workerState === null) {
+        // A re-call before any ref restarts the ensure clock that release waits out.
+        if (attempt.workerState !== "created") {
           await tx.attempt.update({
             where: { id: launch.attemptId },
             data: {
@@ -217,35 +249,40 @@ export function createWorkerLifecycle(deps: {
         botId: launch.botId,
         mounts: mounts.map(({ volumeRef, path, access }) => ({ volumeRef, path, access })),
         ttlSeconds: WORKER_TTL_SECONDS,
+        ensureTimeoutSeconds: WORKER_ENSURE_TIMEOUT_SECONDS,
       };
-      try {
-        const { providerRef } = await provider.ensure(spec, context);
-        await moveWorker(launch.attemptId, ["requested", "created"], "created", providerRef);
-        await provider.prepare(providerRef, spec, context);
-        await moveWorker(launch.attemptId, workerStatesInto("ready"), "ready");
-        return {
-          providerRef,
-          start: {
-            version: 1,
-            kind: "worker.start",
-            worker: { runId: launch.runId, attemptId: launch.attemptId, fence: launch.fence },
-            workspace: {
-              cwd: mounts.find((mount) => mount.scope === "private")?.path ?? WORKSPACE_ROOT,
-              mounts: mounts.map(({ path, scope, access }) => ({ path, scope, access })),
-            },
-            computer: launch.computer.mode,
+      const ownStep = async <T>(step: () => Promise<T>): Promise<T> => {
+        try {
+          return await step();
+        } catch (error) {
+          // A destroy the provider could not confirm stays releasing for the reconciler.
+          await release(launch.attemptId, context).catch(() => undefined);
+          throw error;
+        }
+      };
+      const { providerRef } = await ownStep(() => provider.ensure(spec, context));
+      await advance(launch.attemptId, "created", providerRef, context);
+      await ownStep(() => provider.prepare(providerRef, spec, context));
+      await advance(launch.attemptId, "ready", providerRef, context);
+      return {
+        providerRef,
+        start: {
+          version: 1,
+          kind: "worker.start",
+          worker: { runId: launch.runId, attemptId: launch.attemptId, fence: launch.fence },
+          workspace: {
+            cwd: mounts.find((mount) => mount.scope === "private")?.path ?? WORKSPACE_ROOT,
+            mounts: mounts.map(({ path, scope, access }) => ({ path, scope, access })),
           },
-        };
-      } catch (error) {
-        // A destroy the provider could not confirm stays releasing for the reconciler.
-        await release(launch.attemptId, context).catch(() => undefined);
-        throw error;
-      }
+          computer: launch.computer.mode,
+        },
+      };
     },
 
     /**
      * Idempotent, and a no-op for an attempt without a worker. Writer leases free only in the
-     * transaction that records the provider's confirmed destruction. Volumes are never touched.
+     * transaction that records the provider's confirmed destruction, never while an ensure may
+     * still create the VM. Volumes are never touched.
      */
     release,
 
@@ -275,7 +312,7 @@ export function createWorkerLifecycle(deps: {
     async reconcile(
       options: { limit: number },
       context: AdapterContext,
-    ): Promise<{ released: number; failed: number }> {
+    ): Promise<{ released: number; awaitingEnsure: number; failed: number }> {
       const orphans = await prisma.$queryRaw<{ id: string }[]>`
         SELECT a.id FROM attempts a JOIN runs r ON r.id = a."runId"
         WHERE a."workerState" IN (${RELEASABLE})
@@ -283,16 +320,18 @@ export function createWorkerLifecycle(deps: {
             OR r.status NOT IN ('leased', 'running') OR r."leaseExpiresAt" < ${new Date()})
         ORDER BY a."workerStateAt", a.id
         LIMIT ${options.limit}`;
-      let released = 0;
+      const counts = { released: 0, awaitingEnsure: 0, failed: 0 };
       for (const { id } of orphans) {
         try {
-          await release(id, context);
-          released += 1;
+          const outcome = await release(id, context);
+          if (outcome === "released") counts.released += 1;
+          if (outcome === "awaiting_ensure") counts.awaitingEnsure += 1;
         } catch {
           // A provider that cannot confirm destruction keeps the lease until the next pass.
+          counts.failed += 1;
         }
       }
-      return { released, failed: orphans.length - released };
+      return counts;
     },
 
     /** Creates the volume at the provider under a name derived from its row, once. */

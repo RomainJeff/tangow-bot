@@ -15,6 +15,11 @@ export interface WorkerSpec {
   mounts: Array<{ volumeRef: string; path: string; access: VolumeAccess }>;
   /** The provider removes the VM after this long, whatever the controller does. */
   ttlSeconds: number;
+  /**
+   * `ensure` gives up creating the VM after this long. Past it, a VM absent for this attempt's tag
+   * is taken as never created and its writer leases free.
+   */
+  ensureTimeoutSeconds: number;
 }
 
 /**

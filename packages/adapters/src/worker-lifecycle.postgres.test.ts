@@ -1,9 +1,15 @@
 import type { PrismaClient } from "@rakazo/db";
 import { createDb } from "@rakazo/db";
 import type { Pool } from "pg";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { FakeWorkerProvider } from "./fake-worker-provider.js";
-import { allFiles, mcpOnly, workerFixture } from "./worker-fixture.test-support.js";
+import {
+  allFiles,
+  mcpOnly,
+  pastEnsureTimeout,
+  privateFiles,
+  workerFixture,
+} from "./worker-fixture.test-support.js";
 import { createWorkerLifecycle, StaleAttemptError, VolumeBusyError } from "./worker-lifecycle.js";
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -87,5 +93,47 @@ describePostgres("worker lifecycle under concurrent transactions (PostgreSQL)", 
         await fixture.writerOf(sharedVolume.id),
       ]).toEqual([winner, winner]);
     }
+  });
+
+  it("never leaves a lease on a worker released while its re-called start waited for a volume", async () => {
+    const fake = new FakeWorkerProvider();
+    const workers = createWorkerLifecycle({ prisma, provider: fake });
+    const { bot, privateVolume } = await fixture.migratedBot();
+    const attempt = await fixture.seedAttempt((await fixture.seedRun(bot)).id, 1, {
+      workerState: "requested",
+      workerProviderKind: "fake-worker",
+      workerStateAt: pastEnsureTimeout(),
+    });
+    const launch = await fixture.launchFor(workers, attempt.id, privateFiles);
+    const lockWaiters = async (sql: string) => {
+      const { rows } = await pool.query<{ waiting: number }>(
+        `SELECT count(*)::int AS waiting FROM pg_stat_activity
+         WHERE datname = current_database() AND wait_event_type = 'Lock' AND query LIKE $1`,
+        [`%${sql}%`],
+      );
+      return rows[0]!.waiting;
+    };
+    const holder = await pool.connect();
+    await holder.query("BEGIN");
+    await holder.query("SELECT id FROM volumes WHERE id = $1 FOR UPDATE", [privateVolume.id]);
+
+    const started = workers.start(launch, fixture.context).catch((error: unknown) => error);
+    await vi.waitFor(async () => expect(await lockWaiters("FROM volumes WHERE id = ANY")).toBe(1));
+    let releaseSettled = false;
+    const released = workers.release(attempt.id, fixture.context).finally(() => {
+      releaseSettled = true;
+    });
+    await vi.waitFor(async () =>
+      expect(releaseSettled || (await lockWaiters(`SET "workerState" = 'releasing'`)) === 1).toBe(
+        true,
+      ),
+    );
+    await holder.query("COMMIT");
+    holder.release();
+
+    await expect(released).resolves.toBe("awaiting_ensure");
+    expect(await started).toBeInstanceOf(StaleAttemptError);
+    expect(await fixture.workerStateOf(attempt.id)).toBe("releasing");
+    expect(await fixture.writerOf(privateVolume.id)).toBe(attempt.id);
   });
 });

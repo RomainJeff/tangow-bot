@@ -1,10 +1,15 @@
 import type { AdapterContext } from "@rakazo/adapter-kit";
 import type { RunNeeds, WorkerLaunch } from "@rakazo/core";
+import { WORKER_ENSURE_TIMEOUT_SECONDS } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import type { createWorkerLifecycle } from "./worker-lifecycle.js";
 
 export const mcpOnly: RunNeeds = { files: { private: null, shared: null }, computer: "none" };
 export const allFiles: RunNeeds = { files: { private: "rw", shared: "rw" }, computer: "on_use" };
+export const privateFiles: RunNeeds = { files: { private: "rw", shared: null }, computer: "none" };
+/** A worker state time from before the ensure timeout, so an absent VM counts as never created. */
+export const pastEnsureTimeout = () =>
+  new Date(Date.now() - (WORKER_ENSURE_TIMEOUT_SECONDS + 60) * 1000);
 
 /** Seeds spaces, computers, bots, runs, attempts and volumes under ids unique to this fixture. */
 export function workerFixture(prisma: PrismaClient) {
@@ -129,6 +134,14 @@ export function workerFixture(prisma: PrismaClient) {
 
     async workerStateOf(attemptId: string) {
       return (await prisma.attempt.findUniqueOrThrow({ where: { id: attemptId } })).workerState;
+    },
+
+    /** Lets the ensure timeout of a worker pass. */
+    async outliveEnsure(attemptId: string) {
+      await prisma.attempt.update({
+        where: { id: attemptId },
+        data: { workerStateAt: pastEnsureTimeout() },
+      });
     },
   };
   return fixture;

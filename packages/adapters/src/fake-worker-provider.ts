@@ -22,6 +22,9 @@ export class FakeWorkerProvider implements WorkerProvider {
   readonly calls: FakeWorkerCall[] = [];
   /** Live VMs by provider ref. */
   readonly live = new Map<string, WorkerSpec>();
+  /** Thrown by every `destroy` while set: the provider cannot confirm destruction. */
+  failDestroy: Error | null = null;
+  private ensureHold: Promise<void> | null = null;
 
   constructor(private readonly options: { readOnlyMounts?: boolean; failPrepare?: Error } = {}) {}
 
@@ -36,9 +39,22 @@ export class FakeWorkerProvider implements WorkerProvider {
 
   async ensure(spec: WorkerSpec, _context: AdapterContext): Promise<{ providerRef: string }> {
     this.calls.push({ op: "ensure", spec });
+    await this.ensureHold;
     const providerRef = `fake-worker-${spec.attemptId}`;
     this.live.set(providerRef, spec);
     return { providerRef };
+  }
+
+  /** Holds every `ensure` before its VM exists, until the returned function is called. */
+  holdEnsure(): () => void {
+    let release!: () => void;
+    this.ensureHold = new Promise((resolve) => {
+      release = resolve;
+    });
+    return () => {
+      this.ensureHold = null;
+      release();
+    };
   }
 
   async prepare(providerRef: string, _spec: WorkerSpec, _context: AdapterContext): Promise<void> {
@@ -50,6 +66,7 @@ export class FakeWorkerProvider implements WorkerProvider {
     target: { attemptId: string; providerRef: string | null },
     _context: AdapterContext,
   ): Promise<"destroyed" | "absent"> {
+    if (this.failDestroy) throw this.failDestroy;
     const ref =
       target.providerRef ??
       [...this.live].find(([, spec]) => spec.attemptId === target.attemptId)?.[0];

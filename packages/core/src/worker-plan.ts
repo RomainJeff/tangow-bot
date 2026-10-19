@@ -27,6 +27,33 @@ export function workerStatesInto(to: WorkerState): WorkerState[] {
   );
 }
 
+const SETUP_STATES = [...workerStatesInto("created"), ...workerStatesInto("ready")];
+
+/** Whether `start` may run for an attempt in this state: no worker yet, or setup not finished. */
+export function workerStartable(state: WorkerState | null): boolean {
+  return state === null || SETUP_STATES.includes(state);
+}
+
+/**
+ * What a setup step of `start` does when its move to `to` matched no row, by the worker it then
+ * reads. `reached`: another call of `start` got there with the same VM. `stale`: another actor owns
+ * teardown. `orphaned`: the worker was released, so the VM this call holds is recorded nowhere.
+ */
+export function lostSetupMove(
+  to: "created" | "ready",
+  providerRef: string,
+  observed: { workerState: WorkerState | null; workerProviderRef: string | null } | null,
+): "reached" | "stale" | "orphaned" {
+  if (observed?.workerState === "released") return "orphaned";
+  const progress = (state: WorkerState | null) =>
+    (LIVE_WORKER_STATES as readonly (WorkerState | null)[]).indexOf(state);
+  return observed &&
+    observed.workerProviderRef === providerRef &&
+    progress(observed.workerState) >= progress(to)
+    ? "reached"
+    : "stale";
+}
+
 /** Which computer kinds can move a home onto worker volumes. A new SandboxKind must declare one. */
 export const WORKER_SUPPORT = {
   e2b: "worker",
@@ -46,6 +73,23 @@ export function supportsWorkers(computerKind: string): boolean {
  * destruction was never confirmed: past it the provider reports the VM absent.
  */
 export const WORKER_TTL_SECONDS = 4 * 60 * 60;
+
+/** How long `ensure` may take to create a VM. Release waits it out before trusting `absent`. */
+export const WORKER_ENSURE_TIMEOUT_SECONDS = 15 * 60;
+
+/**
+ * A worker without a ref may still be under creation by an in-flight `ensure`, so a provider
+ * answering `absent` for its tag proves nothing until the ensure timeout has passed.
+ */
+export function ensureMayBeInFlight(
+  worker: { workerProviderRef: string | null; workerStateAt: Date },
+  now: Date,
+): boolean {
+  return (
+    worker.workerProviderRef === null &&
+    now.getTime() - worker.workerStateAt.getTime() < WORKER_ENSURE_TIMEOUT_SECONDS * 1000
+  );
+}
 
 /** What a run asks for, by slot: the run's own bot and space fill them, never a caller's id. */
 export type RunNeeds = {

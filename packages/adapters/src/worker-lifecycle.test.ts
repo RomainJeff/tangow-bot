@@ -1,9 +1,15 @@
 import type { PrismaClient } from "@rakazo/db";
 import type { PgliteDatabase } from "@rakazo/db/pglite.test-support";
 import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { FakeWorkerProvider } from "./fake-worker-provider.js";
-import { allFiles, mcpOnly, workerFixture } from "./worker-fixture.test-support.js";
+import {
+  allFiles,
+  mcpOnly,
+  pastEnsureTimeout,
+  privateFiles,
+  workerFixture,
+} from "./worker-fixture.test-support.js";
 import {
   createWorkerLifecycle,
   StaleAttemptError,
@@ -115,7 +121,10 @@ describe("worker start", () => {
         computer: "none",
       },
     });
-    expect(fake.calls[0]).toMatchObject({ op: "ensure", spec: { mounts: [], ttlSeconds: 14_400 } });
+    expect(fake.calls[0]).toMatchObject({
+      op: "ensure",
+      spec: { mounts: [], ttlSeconds: 14_400, ensureTimeoutSeconds: 900 },
+    });
     expect(await prisma.computerExecutionLease.count({ where: { computerId: computer.id } })).toBe(
       0,
     );
@@ -143,6 +152,7 @@ describe("worker start", () => {
           { volumeRef: sharedVolume.providerRef, path: "/workspace/shared", access: "rw" },
         ],
         ttlSeconds: 14_400,
+        ensureTimeoutSeconds: 900,
       },
     });
     expect(started.start.workspace).toEqual({
@@ -240,6 +250,110 @@ describe("worker start", () => {
   });
 });
 
+describe("worker ownership while start is in flight", () => {
+  async function startHeldInEnsure(needs = allFiles) {
+    const { bot, privateVolume } = await fixture.migratedBot();
+    const run = await fixture.seedRun(bot);
+    const attempt = await fixture.seedAttempt(run.id);
+    const launch = await fixture.launchFor(workers, attempt.id, needs);
+    const letEnsureFinish = fake.holdEnsure();
+    const started = workers.start(launch, fixture.context).catch((error: unknown) => error);
+    await vi.waitFor(() => expect(fake.calls.map((call) => call.op)).toEqual(["ensure"]));
+    return { run, attempt, privateVolume, launch, letEnsureFinish, started };
+  }
+
+  it("holds the leases of a worker reconciled mid-ensure until its VM is confirmed gone", async () => {
+    const { run, attempt, privateVolume, letEnsureFinish, started } = await startHeldInEnsure();
+    await prisma.run.update({ where: { id: run.id }, data: { status: "cancelled" } });
+
+    await expect(workers.reconcile({ limit: 10 }, fixture.context)).resolves.toEqual({
+      released: 0,
+      awaitingEnsure: 1,
+      failed: 0,
+    });
+    letEnsureFinish();
+    expect(await started).toBeInstanceOf(StaleAttemptError);
+    expect([...fake.live.keys()]).toEqual([`fake-worker-${attempt.id}`]);
+    expect(await fixture.writerOf(privateVolume.id)).toBe(attempt.id);
+    expect(await fixture.workerStateOf(attempt.id)).toBe("releasing");
+
+    await fixture.outliveEnsure(attempt.id);
+    await expect(workers.reconcile({ limit: 10 }, fixture.context)).resolves.toEqual({
+      released: 1,
+      awaitingEnsure: 0,
+      failed: 0,
+    });
+    expect(fake.live.size).toBe(0);
+    expect(await fixture.writerOf(privateVolume.id)).toBeNull();
+    expect(await fixture.workerStateOf(attempt.id)).toBe("released");
+  });
+
+  it("destroys the VM of an ensure that outlived its timeout and found its worker released", async () => {
+    const { attempt, privateVolume, letEnsureFinish, started } = await startHeldInEnsure();
+    await fixture.outliveEnsure(attempt.id);
+
+    await expect(workers.release(attempt.id, fixture.context)).resolves.toBe("released");
+    letEnsureFinish();
+
+    expect(await started).toBeInstanceOf(StaleAttemptError);
+    expect(fake.calls.filter((call) => call.op === "destroy")).toEqual([
+      { op: "destroy", attemptId: attempt.id, providerRef: null, result: "absent" },
+      {
+        op: "destroy",
+        attemptId: attempt.id,
+        providerRef: `fake-worker-${attempt.id}`,
+        result: "destroyed",
+      },
+    ]);
+    expect(fake.live.size).toBe(0);
+    expect(await fixture.writerOf(privateVolume.id)).toBeNull();
+    expect(await fixture.workerStateOf(attempt.id)).toBe("released");
+  });
+
+  it("gives two concurrent starts of one attempt the same VM", async () => {
+    const { attempt, launch, letEnsureFinish, started } = await startHeldInEnsure(privateFiles);
+    const again = workers.start(launch, fixture.context);
+    await vi.waitFor(() => expect(fake.calls.map((call) => call.op)).toEqual(["ensure", "ensure"]));
+    letEnsureFinish();
+
+    const [first, second] = await Promise.all([started, again]);
+
+    expect(first).toEqual(second);
+    expect(second.providerRef).toBe(`fake-worker-${attempt.id}`);
+    expect([...fake.live.keys()]).toEqual([`fake-worker-${attempt.id}`]);
+    expect(fake.calls.map((call) => call.op).sort()).toEqual([
+      "ensure",
+      "ensure",
+      "prepare",
+      "prepare",
+    ]);
+    expect(await fixture.workerStateOf(attempt.id)).toBe("ready");
+  });
+
+  it("keeps the lease of a worker the provider cannot confirm destroyed", async () => {
+    const { bot, privateVolume } = await fixture.migratedBot();
+    const attempt = await fixture.seedAttempt((await fixture.seedRun(bot)).id);
+    await workers.start(await fixture.launchFor(workers, attempt.id, allFiles), fixture.context);
+    fake.failDestroy = new Error("provider unreachable");
+
+    await expect(workers.release(attempt.id, fixture.context)).rejects.toThrow(
+      "provider unreachable",
+    );
+    expect(await fixture.workerStateOf(attempt.id)).toBe("releasing");
+    expect(await fixture.writerOf(privateVolume.id)).toBe(attempt.id);
+
+    fake.failDestroy = null;
+    await expect(workers.reconcile({ limit: 10 }, fixture.context)).resolves.toEqual({
+      released: 1,
+      awaitingEnsure: 0,
+      failed: 0,
+    });
+    expect(fake.live.size).toBe(0);
+    expect(await fixture.writerOf(privateVolume.id)).toBeNull();
+    expect(await fixture.workerStateOf(attempt.id)).toBe("released");
+  });
+});
+
 describe("worker release", () => {
   it("destroys once however often it is released, and an absent VM is released too", async () => {
     const { bot } = await fixture.migratedBot();
@@ -304,13 +418,19 @@ describe("worker release", () => {
     const requested = await fixture.seedAttempt((await fixture.seedRun(bot, expired)).id, 1, {
       workerState: "requested",
       workerProviderKind: "fake-worker",
-      workerStateAt: new Date(),
+      workerStateAt: pastEnsureTimeout(),
     });
     await prisma.volume.update({
       where: { id: privateVolume.id },
       data: { writerAttemptId: created.id },
     });
-    const spec = { runId: "run", botId: bot.id, mounts: [], ttlSeconds: 60 };
+    const spec = {
+      runId: "run",
+      botId: bot.id,
+      mounts: [],
+      ttlSeconds: 60,
+      ensureTimeoutSeconds: 60,
+    };
     fake.live.set("fake-worker-crashed", { ...spec, attemptId: created.id });
     fake.live.set("fake-worker-untracked", { ...spec, attemptId: requested.id });
     const active = await fixture.seedAttempt((await fixture.seedRun(bot)).id);
@@ -318,17 +438,18 @@ describe("worker release", () => {
 
     await expect(workers.reconcile({ limit: 10 }, fixture.context)).resolves.toEqual({
       released: 2,
+      awaitingEnsure: 0,
       failed: 0,
     });
     expect([...fake.live.keys()]).toEqual([`fake-worker-${active.id}`]);
     expect(fake.calls.filter((call) => call.op === "destroy")).toEqual([
+      { op: "destroy", attemptId: requested.id, providerRef: null, result: "destroyed" },
       {
         op: "destroy",
         attemptId: created.id,
         providerRef: "fake-worker-crashed",
         result: "destroyed",
       },
-      { op: "destroy", attemptId: requested.id, providerRef: null, result: "destroyed" },
     ]);
     expect(await fixture.writerOf(privateVolume.id)).toBeNull();
     expect(await fixture.workerStateOf(active.id)).toBe("ready");
