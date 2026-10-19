@@ -37,7 +37,7 @@ export const WorkerCancelV1Schema = z.strictObject({
 });
 export type WorkerCancelV1 = z.infer<typeof WorkerCancelV1Schema>;
 
-/** The controller's view of a worker, read from the database, never from the guest. */
+/** The controller's view of a worker, read from the database. Never on the wire. */
 export const WorkerStatusV1Schema = z.strictObject({
   version: z.literal(1),
   kind: z.literal("worker.status"),
@@ -57,21 +57,24 @@ export const WorkerEventV1Schema = z.strictObject({
 });
 export type WorkerEventV1 = z.infer<typeof WorkerEventV1Schema>;
 
-export const WorkerMessageV1Schema = z.discriminatedUnion("kind", [
+/** What the controller accepts from a guest. */
+export const GuestMessageV1Schema = WorkerEventV1Schema;
+export type GuestMessageV1 = WorkerEventV1;
+
+/** What a guest accepts from the controller. */
+export const ControllerMessageV1Schema = z.discriminatedUnion("kind", [
   WorkerStartV1Schema,
   WorkerCancelV1Schema,
-  WorkerStatusV1Schema,
-  WorkerEventV1Schema,
 ]);
-export type WorkerMessageV1 = z.infer<typeof WorkerMessageV1Schema>;
+export type ControllerMessageV1 = z.infer<typeof ControllerMessageV1Schema>;
 
-export type WorkerMessageParse =
-  | { ok: true; message: WorkerMessageV1 }
+export type WireParse<T> =
+  | { ok: true; message: T }
   | { ok: false; reason: "unsupported_version" | "invalid" };
 
 /** Never throws: a message from a newer or hostile peer is refused, not coerced. */
-export function parseWorkerMessage(json: unknown): WorkerMessageParse {
-  const parsed = WorkerMessageV1Schema.safeParse(json);
+function parseWire<T>(schema: z.ZodType<T>, json: unknown): WireParse<T> {
+  const parsed = schema.safeParse(json);
   if (parsed.success) return { ok: true, message: parsed.data };
   const version =
     typeof json === "object" && json !== null && "version" in json ? json.version : undefined;
@@ -81,11 +84,20 @@ export function parseWorkerMessage(json: unknown): WorkerMessageParse {
   };
 }
 
+export function parseGuestMessage(json: unknown): WireParse<GuestMessageV1> {
+  return parseWire(GuestMessageV1Schema, json);
+}
+
+export function parseControllerMessage(json: unknown): WireParse<ControllerMessageV1> {
+  return parseWire(ControllerMessageV1Schema, json);
+}
+
 type NoFunctions<T> = T extends (...args: never[]) => unknown
   ? never
   : T extends object
     ? { [K in keyof T]: NoFunctions<T[K]> }
     : T;
+type WireMessageV1 = GuestMessageV1 | ControllerMessageV1;
 // Fails to compile once any message field can hold a callable.
-const _wireCarriesNoCallable: WorkerMessageV1 extends NoFunctions<WorkerMessageV1> ? true : never =
+const _wireCarriesNoCallable: WireMessageV1 extends NoFunctions<WireMessageV1> ? true : never =
   true;
