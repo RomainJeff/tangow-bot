@@ -22,6 +22,151 @@
 | Home switch | `packages/adapters/src/computer-workspace.ts` | Restore and checkpoint ask `homePersistence` how a home persists. |
 | Test double | `packages/adapters/src/fake-worker-provider.ts` | Deterministic provider that records every call. |
 
+## Architecture
+
+The controller owns every decision. The worker VM runs Pi and its native tools on the mounted volumes and never sees a volume id, an owner or a host path. P1 delivers the parts drawn in solid lines. Dashed lines are wired by later slices.
+
+```mermaid
+flowchart LR
+  subgraph controller["Rakazo controller: API and worker processes"]
+    executor["Executor<br/>continueRun"]
+    reconciler["Job reconciler"]
+    lifecycle["worker-lifecycle<br/>plan · start · release<br/>status · reconcile<br/>provisionVolume · adoptVolumeHome"]
+    policy["core/worker-plan<br/>state machine · planLaunch<br/>authorizeMounts · volumeMountPath"]
+    workspace["computer-workspace<br/>homePersistence"]
+    db[("PostgreSQL<br/>runs · attempts<br/>volumes · computers")]
+    homes[("AgentHomeStore<br/>snapshots")]
+    provider[["WorkerProvider<br/>null until P3"]]
+    channel["P2 channel<br/>worker.start · worker.cancel<br/>worker.event"]
+  end
+
+  subgraph guest["Worker VM, one per attempt, hostile"]
+    pi["Pi session<br/>read · write · edit · grep · bash"]
+  end
+
+  subgraph computerVm["Computer VM"]
+    apps["Apps · browser · services"]
+  end
+
+  subgraph storage["Whole volumes"]
+    privateVolume[("Private volume<br/>one per bot")]
+    sharedVolume[("Shared volume<br/>one per space")]
+  end
+
+  executor -. "P3" .-> lifecycle
+  reconciler -. "P3" .-> lifecycle
+  lifecycle --> policy
+  lifecycle -- "locks run, attempt, volumes" --> db
+  lifecycle -- "ensure · prepare · destroy · ensureVolume" --> provider
+  workspace -- "snapshot or mounted only" --> homes
+  workspace --> db
+  provider -. "P3" .-> guest
+  lifecycle -- "start message" --> channel
+  channel -. "P2" .-> pi
+  pi -- "/workspace/bots/botId" --> privateVolume
+  pi -- "/workspace/shared" --> sharedVolume
+  apps -. "same paths, P4" .-> privateVolume
+  apps -. "same paths, P4" .-> sharedVolume
+```
+
+### Durable model
+
+Worker state lives on the existing `attempts` row: one VM serves one attempt. `volumes` is the only new table. The active fence stays `runs.leaseFence`.
+
+```mermaid
+erDiagram
+  COMPUTER |o--o{ BOT : "hosts"
+  SPACE ||--o{ BOT : contains
+  BOT ||--o| VOLUME : "private volume, kind bot_private"
+  SPACE ||--o| VOLUME : "shared volume, kind space_shared"
+  ATTEMPT |o--o{ VOLUME : "writerAttemptId, single writer"
+  RUN ||--o{ ATTEMPT : "one per claimed fence"
+  SPACE ||--o{ RUN : owns
+
+  RUN {
+    int leaseFence "active fence"
+    string status
+  }
+  ATTEMPT {
+    int fence "unique with runId"
+    string workerState "null when in process"
+    string workerProviderRef
+    datetime workerEnsureAt "ensure clock"
+  }
+  VOLUME {
+    string kind "bot_private or space_shared"
+    string providerRef "provider volume"
+    string writerAttemptId "null when free"
+  }
+  COMPUTER {
+    string homeStorage "snapshot or volumes"
+  }
+```
+
+### Worker lifecycle
+
+A null `workerState` means the attempt runs in process, which covers every historical attempt. Leases free only on the `releasing` to `released` edge, after the provider confirms the VM is gone.
+
+```mermaid
+stateDiagram-v2
+  direction LR
+  state "in process (null)" as none
+  [*] --> none
+  none --> requested: start transaction<br/>fence ok, leases taken
+  requested --> created: ensure returned a ref
+  created --> ready: prepare succeeded
+  requested --> releasing: release, supersede<br/>or reconcile
+  created --> releasing: release, supersede<br/>or reconcile
+  ready --> releasing: release, supersede<br/>or reconcile
+  releasing --> released: destroy confirmed<br/>writer leases freed
+  released --> releasing: orphan edge<br/>late ensure recorded
+  released --> [*]
+```
+
+### Start and release
+
+`start` decides ownership and takes the writer leases in one transaction, before any provider call. A `release` that meets an `ensure` still in flight keeps the leases until the VM is found and destroyed.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant Executor as Caller (executor in P3)
+  participant Lifecycle as worker-lifecycle
+  participant DB as PostgreSQL
+  participant Provider as WorkerProvider
+  participant Reconciler
+
+  Executor->>Lifecycle: plan(attemptId, needs by slot)
+  Lifecycle->>DB: one read: run, bot, computer, own volumes
+  Lifecycle-->>Executor: worker plan, in process, or refused
+
+  Executor->>Lifecycle: start(plan)
+  rect rgba(127, 127, 127, 0.12)
+    Note over Lifecycle,DB: one transaction, nothing reaches the provider before it commits
+    Lifecycle->>DB: lock run, then attempt FOR UPDATE
+    Lifecycle->>DB: check fence, refuse a second start
+    Lifecycle->>DB: older live workers of the run to releasing
+    Lifecycle->>DB: lock volumes ORDER BY id FOR UPDATE
+    Lifecycle->>DB: refuse foreign volumes, take every rw lease or none
+    Lifecycle->>DB: workerState requested, workerEnsureAt now
+  end
+  Lifecycle->>Provider: ensure(spec tagged with attemptId)
+  Provider-->>Lifecycle: providerRef
+  Lifecycle->>DB: requested to created, record providerRef
+  Lifecycle->>Provider: prepare(providerRef)
+  Lifecycle->>DB: created to ready
+  Lifecycle-->>Executor: worker.start message, paths and access only
+
+  Reconciler->>Lifecycle: reconcile, after the run lost its lease
+  Lifecycle->>DB: to releasing
+  alt no ref and ensure may still be in flight
+    Lifecycle-->>Reconciler: awaiting_ensure, leases kept
+  else ref recorded or ensure timeout passed
+    Lifecycle->>Provider: destroy every VM tagged with the attempt
+    Lifecycle->>DB: to released, free leases in id order
+  end
+```
+
 ## Identity, fence and ownership
 
 A worker belongs to one `Attempt`. The attempt id is the worker id, and one VM serves one attempt. Run id, attempt id, fence and provider reference therefore live on one row.
