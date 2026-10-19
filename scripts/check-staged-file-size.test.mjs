@@ -64,7 +64,7 @@ test("uses staged generated and vendored attributes and skips binary files", (t)
   assert.equal(check().status, 0);
 });
 
-test("ignores unchanged oversized files and deletions, but checks renamed destinations", (t) => {
+test("ignores unchanged oversized files, deletions and pure renames", (t) => {
   const { git, write, check } = repository(t);
   write("old.js", "x".repeat(20_001));
   write("deleted.js", "x".repeat(20_001));
@@ -75,7 +75,7 @@ test("ignores unchanged oversized files and deletions, but checks renamed destin
   git("rm", "deleted.js");
   assert.equal(check().status, 0);
   git("mv", "old.js", "renamed.js");
-  assert.equal(check().status, 1);
+  assert.equal(check().status, 0);
 });
 
 test("the pre-commit hook blocks a real commit", (t) => {
@@ -93,4 +93,62 @@ test("the pre-commit hook blocks a real commit", (t) => {
   const result = spawnSync("git", ["commit", "-qm", "blocked"], { cwd, encoding: "utf8" });
   assert.equal(result.status, 1);
   assert.match(result.stderr, /source.js/);
+});
+
+test("counts only staged additions in an existing large source file", (t) => {
+  const { git, write, check } = repository(t);
+  const original = "const value = 1;\n".repeat(2_000);
+  write("source.js", original);
+  git("add", ".");
+  git("-c", "core.hooksPath=/dev/null", "commit", "-qm", "fixture");
+  write("source.js", `${original}small addition\n`);
+  git("add", "source.js");
+  write("source.js", `${original}${"x".repeat(24_000)}`);
+  assert.equal(check().status, 0);
+  git("add", "source.js");
+  assert.equal(check().status, 1);
+});
+
+test("does not charge removed lines against the addition limit", (t) => {
+  const { git, write, check } = repository(t);
+  write("source.js", "x".repeat(24_000));
+  git("add", ".");
+  git("-c", "core.hooksPath=/dev/null", "commit", "-qm", "fixture");
+  write("source.js", "small replacement\n");
+  git("add", "source.js");
+  assert.equal(check().status, 0);
+});
+
+test("exempts documentation, plans and changelogs from the addition limit", (t) => {
+  const { cwd, git, write, check } = repository(t);
+  for (const path of [
+    "CHANGELOG.md",
+    "README.MD",
+    "guide.markdown",
+    "docs/design-system.md",
+    "docs/reference.html",
+    "plans/proposal.txt",
+    "nested/docs/guide.txt",
+    "nested/plans/design.json",
+  ]) {
+    mkdirSync(join(cwd, path, ".."), { recursive: true });
+    write(path, "x".repeat(24_000));
+  }
+  git("add", ".");
+  assert.equal(check().status, 0);
+});
+
+test("checks additions to a renamed source without charging existing content", (t) => {
+  const { git, write, check } = repository(t);
+  const original = "const value = 1;\n".repeat(3_000);
+  write("old.js", original);
+  git("add", ".");
+  git("-c", "core.hooksPath=/dev/null", "commit", "-qm", "fixture");
+  git("mv", "old.js", "renamed.js");
+  write("renamed.js", `${original}small addition\n`);
+  git("add", "renamed.js");
+  assert.equal(check().status, 0);
+  write("renamed.js", `${original}${"x".repeat(24_000)}\n`);
+  git("add", "renamed.js");
+  assert.equal(check().status, 1);
 });
