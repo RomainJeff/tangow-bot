@@ -16,7 +16,7 @@ carries content: no bubble, card or panel is glass.
 | `chrome` | `rgba(255, 255, 255, 0.58)` | `rgba(36, 36, 40, 0.45)` | 30 px, saturate 160% | the sidebar |
 | `control` | `rgba(255, 255, 255, 0.5)` | `rgba(44, 44, 48, 0.5)` | 12 px, saturate 170% | the header's action capsule, the composer, the hover pill, round buttons |
 | `menu` | `rgba(255, 255, 255, 0.8)` | `rgba(44, 44, 48, 0.8)` | 30 px, saturate 180% | small menus, tooltips: a step more opaque, to stay legible over thread text |
-| `list` | `rgba(250, 250, 251, 0.94)` | `rgba(40, 40, 44, 0.94)` | 40 px, saturate 180% | dense lists: the ⌘K palette, the bot drawer at phone width |
+| `list` | `rgba(250, 250, 251, 0.94)` | `rgba(40, 40, 44, 0.94)` | 40 px, saturate 180% | dense lists: the ⌘K palette |
 
 | Material | Edge, light | Edge, dark |
 | --- | --- | --- |
@@ -41,7 +41,7 @@ opaque planes, as are the parts inside a card:
 | Plane | Light | Dark | Use |
 | --- | --- | --- | --- |
 | `sheet` | `#F5F5F7`; `0 0 0 1px rgba(0, 0, 0, 0.07), 0 2px 8px -2px rgba(0, 0, 0, 0.08), 0 24px 48px -24px rgba(0, 0, 0, 0.22)` | `#232326`; `0 0 0 1px rgba(255, 255, 255, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 48px -20px rgba(0, 0, 0, 0.7)` | the side panel, the settings and Customize windows |
-| `group` | `#FFFFFF`; `0 0 0 1px rgba(0, 0, 0, 0.05)` | `#333336`; `0 0 0 1px rgba(255, 255, 255, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.04)` | a settings group on a sheet |
+| `group` | `#FFFFFF`; `0 0 0 1px rgba(0, 0, 0, 0.05)` | `#333336`; `0 0 0 1px rgba(255, 255, 255, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.04)` | a settings group or an activity day on a sheet; at phone width, the drawer's selected row and search field |
 | `well` | `#EEEEF1` | `#4E4E50` [white 9% on `surface`] | reading matter and fields inside a decision card; file and computer icons |
 
 ## Ambient
@@ -97,8 +97,11 @@ passing under it.
   separate 48 × 48 attach button, 34 above the bottom. The mic stays in it.
 - Side panel (the bot page, bot creation, group settings): floats like the
   sidebar, inset 8, radius 18, on the opaque `sheet`; the thread runs under
-  it and no line separates them. Settings stay in groups with a segmented
-  control. Activity groups by day on web, as on iPhone.
+  it and no line separates them. Settings stay in groups on `group` with a
+  segmented control. Activity groups by day on web, as on iPhone, each day a
+  `group`. Below `lg` the panel takes the whole column on the page background,
+  with no inset or radius: Safari paints its bars in that colour, so a sheet
+  there would read as cut at the top and bottom.
 - Overlays (settings, Customize): an opaque `sheet` window, radius 24, on the
   `overlay` veil with the thread blurred 20 px under it. Its navigation is an
   inset panel like the app's sidebar: 8 from the window's edges, radius 16, on
@@ -110,8 +113,9 @@ passing under it.
   `rounded-full`, never as a block in the thread.
 - Phone width on web and iPhone screens outside the thread take the same
   chrome: round buttons and capsules on `control`, lists and groups on the
-  ambient light. The web drawer is the sidebar itself, on `list`, full height
-  against the start edge with no radius, over a veil that blurs the thread
+  ambient light. The web drawer is the sidebar itself, on the page background
+  for the same reason, its selected row and search field on `group`, full
+  height against the start edge with no radius, over a veil that blurs the thread
   6 px in the page background at 55% instead of darkening it: Safari's bars
   stay in that colour. Under Reduce Transparency the veil is `overlay`.
 - Desktop window: the system's opaque window; the glass blurs the app's own

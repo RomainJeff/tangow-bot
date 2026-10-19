@@ -77,7 +77,7 @@ function KnowledgeGroup({
   return (
     <section className="flex flex-col gap-1.5" data-testid={testId}>
       <h2 className="mx-3.5 text-label text-muted-foreground">{label}</h2>
-      <Surface className="bg-background p-1.5">{children}</Surface>
+      <Surface className="border-transparent bg-group p-1.5 shadow-group">{children}</Surface>
     </section>
   );
 }

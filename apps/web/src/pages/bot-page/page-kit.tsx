@@ -61,7 +61,7 @@ export function SettingsGroup({ label, children }: { label?: ReactNode; children
   return (
     <section className="flex flex-col gap-1.5">
       {label ? <h2 className="mx-3.5 text-label text-muted-foreground">{label}</h2> : null}
-      <Surface className="overflow-hidden bg-background">
+      <Surface className="overflow-hidden border-transparent bg-group shadow-group">
         {rows.map((row, index) => (
           <Fragment key={index}>
             {index > 0 ? <div aria-hidden className="ms-3.5 h-px bg-border" /> : null}
