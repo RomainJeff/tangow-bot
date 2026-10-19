@@ -1812,7 +1812,13 @@ describe("computer replacement", () => {
       { path: "notes/keep.txt", content: new TextEncoder().encode("saved") },
       context,
     );
-    const revision = await checkpointComputerWorkspace(home, sandbox, "bot-1", first, context);
+    const revision = await checkpointComputerWorkspace(
+      home,
+      sandbox,
+      { homeKey: "bot-1", homeStorage: "snapshot", homeRevision: "empty" },
+      first,
+      context,
+    );
 
     const computerRecord = {
       id: "computer-1",

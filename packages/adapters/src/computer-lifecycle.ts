@@ -305,7 +305,7 @@ export async function provisionComputer(
       existing.kind !== ref.kind;
     if (replacement) {
       await onProgress?.("restoring");
-      await restoreComputerWorkspace(deps.home, deps.sandbox, existing.homeKey, ref, context);
+      await restoreComputerWorkspace(deps.home, deps.sandbox, existing, ref, context);
     }
     await onProgress?.("reconnecting");
     await ensureComputerWorkspaceLayout(
@@ -749,7 +749,7 @@ export async function replaceComputer(
         const revision = await checkpointComputerWorkspace(
           deps.home,
           deps.sandbox,
-          existing.homeKey,
+          existing,
           oldRef,
           context,
         );
