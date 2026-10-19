@@ -4,7 +4,10 @@
   "license": "Apache-2.0",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./runtime-worker": "./src/runtime-worker/index.ts",
+    "./runtime-worker/wire": "./src/runtime-worker/wire.ts",
+    "./runtime-worker/pi-ai": "./src/runtime-worker/dialects/pi-ai.ts"
   },
   "scripts": {
     "check": "tsc --noEmit -p tsconfig.json",

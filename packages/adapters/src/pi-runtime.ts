@@ -8,12 +8,14 @@ import {
 import {
   type Api,
   type AssistantMessage,
+  type AssistantMessageEventStream,
   clampThinkingLevel,
   type Model,
   type Models,
   type ModelThinkingLevel,
   type SimpleStreamOptions,
   type ToolCall,
+  type TranscriptContext,
   Type,
   type Usage,
 } from "@earendil-works/pi-ai";
@@ -220,20 +222,32 @@ export function maxToolCallsPerTurn(env: NodeJS.ProcessEnv = process.env): numbe
   return Math.floor(parsed);
 }
 
+/** One model call. `agentId` names the helper making it; absent for the bot itself. */
+export type PiStreamFn = (
+  model: Model<Api>,
+  context: TranscriptContext,
+  options: SimpleStreamOptions | undefined,
+  agentId: string | undefined,
+) => AssistantMessageEventStream | Promise<AssistantMessageEventStream>;
+
 export interface PiAgentRuntimeOptions {
   /** Optional trace exporter. Omit to record nothing at all. */
   traceExporter?: TraceExporter;
   /** Name this process appears under in exported traces. */
   serviceName?: string;
+  /** Replaces every model call, e.g. to relay it to the process that holds the key. */
+  streamFn?: PiStreamFn;
 }
 
 export class PiAgentRuntime implements AgentRuntime {
   private readonly traceExporter?: TraceExporter;
   private readonly serviceName?: string;
+  private readonly streamFn?: PiStreamFn;
 
   constructor(options: PiAgentRuntimeOptions = {}) {
     this.traceExporter = options.traceExporter;
     this.serviceName = options.serviceName;
+    this.streamFn = options.streamFn;
   }
 
   describe() {
@@ -320,6 +334,7 @@ export class PiAgentRuntime implements AgentRuntime {
           signal,
           depth: 0,
           pausePending: false,
+          streamFn: this.streamFn,
         };
         resumeHost = host;
         const tools = toAgentTools(toolDefs, host);
@@ -367,7 +382,13 @@ export class PiAgentRuntime implements AgentRuntime {
           sessionId: conversationSessionId(request.threadId, request.botId),
           steeringMode: "all",
           streamFn: (m, ctx, options) =>
-            models.streamSimple(m, ctx, reliableStreamOptions(m, options, request.model.maxTokens)),
+            this.streamFn
+              ? this.streamFn(m, ctx, options, undefined)
+              : models.streamSimple(
+                  m,
+                  ctx,
+                  reliableStreamOptions(m, options, request.model.maxTokens),
+                ),
           getApiKey: async () => apiKey,
           transformContext: async (messages) =>
             pruneComputerScreenshotContext(messages, request.model.maxImagesPerPrompt),
@@ -720,6 +741,30 @@ function resolveRuntimeModel(modelConfig: AgentRunRequest["model"]): {
         (modelConfig.apiKey ??
         (provider === "openrouter" ? process.env.OPENROUTER_API_KEY : undefined));
   return { provider, modelId, models, model, apiKey };
+}
+
+/**
+ * One model call as the runtime makes it, with the key this process holds: what a relay runs
+ * for a guest that has no key. Throws for a model the catalog does not know.
+ */
+export function streamRunModel(
+  config: AgentRunRequest["model"],
+  context: TranscriptContext,
+  options: { sessionId?: string; signal?: AbortSignal } = {},
+): { model: Model<Api>; stream: AssistantMessageEventStream } {
+  const selected = resolveRuntimeModel(config);
+  if (!selected.model) throw new Error(`Unknown model ${selected.provider}/${selected.modelId}`);
+  const model = modelForCompletion(selected.model, config.maxTokens);
+  const thinkingLevel = thinkingLevelFor(model, config.thinkingLevel);
+  const stream = selected.models.streamSimple(model, context, {
+    ...reliableStreamOptions(
+      model,
+      { ...options, reasoning: thinkingLevel === "off" ? undefined : thinkingLevel },
+      config.maxTokens,
+    ),
+    apiKey: selected.apiKey,
+  });
+  return { model, stream };
 }
 
 export function modelsForRequest(
@@ -1517,11 +1562,13 @@ async function runSubagent(
   const nested = new Agent({
     sessionId: conversationSessionId(host.request.threadId, host.request.botId, agentId),
     streamFn: (m, ctx, options) =>
-      selectedModel.models.streamSimple(
-        m,
-        ctx,
-        reliableStreamOptions(m, options, requestModel.maxTokens),
-      ),
+      host.streamFn
+        ? host.streamFn(m, ctx, options, agentId)
+        : selectedModel.models.streamSimple(
+            m,
+            ctx,
+            reliableStreamOptions(m, options, requestModel.maxTokens),
+          ),
     getApiKey: async () => selectedModel.apiKey,
     transformContext: async (messages) =>
       pruneComputerScreenshotContext(messages, requestModel.maxImagesPerPrompt),
@@ -2057,6 +2104,7 @@ interface ToolHost {
   signal: AbortSignal;
   depth: number;
   pausePending: boolean;
+  streamFn?: PiStreamFn;
   /** Set only when the run is traced. */
   toolTrace?: (toolCallId: string) => ToolCallTrace;
 }

@@ -698,6 +698,10 @@ model Attempt {
   workerProviderRef  String?
   workerStateAt      DateTime?
   workerEnsureAt     DateTime?
+  // How far the controller got stopping the guest (attempts_stop_phase_check). The VM is gone
+  // only once workerState is released.
+  stopPhase          String?
+  stopPhaseAt        DateTime?
   writtenVolumes     Volume[]  @relation("VolumeWriter")
 
   @@unique([runId, fence])

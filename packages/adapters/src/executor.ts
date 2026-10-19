@@ -13,6 +13,8 @@ import type {
   ConnectorCall,
   ConnectorProvider,
   JobPublisher,
+  LocalToolExecutor,
+  LocalToolOutput,
   ManagedConnectorProvider,
   MemoryStore,
   NotificationMessage,
@@ -27,6 +29,7 @@ import type {
   WebProvider,
 } from "@rakazo/adapter-kit";
 import {
+  AgentRuntimeUnavailableError,
   historyCompactJob,
   linkPreviewJob,
   routineJobKey,
@@ -1953,7 +1956,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
             .then((row) => row?.enabled ?? deploymentAutoReviewDefault());
           return autoReviewPreferencePromise;
         };
-        const tools = [...builtins, ...exposedConnectorTools];
+        const runtimeLocalTools = deps.runtime.describe().capabilities.localTools ?? [];
+        const localToolNames = new Set(runtimeLocalTools.map((tool) => tool.name));
+        const tools = [...builtins, ...exposedConnectorTools, ...runtimeLocalTools];
         const approvedEffects = await deps.prisma.externalEffect.findMany({
           where: { runId, status: "approved" },
           orderBy: APPROVED_EFFECT_REPLAY_ORDER,
@@ -2072,6 +2077,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           args: Record<string, unknown>,
           executionId: string,
           trace?: ToolCallTrace,
+          local?: Parameters<LocalToolExecutor>[3],
         ) => {
           const call = toolCall(executionId, name, args);
           if (unansweredCalls.get(executionId) !== call.payload.input) await write(call);
@@ -2086,7 +2092,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 artifactIds,
               },
             });
-          const result = await applyTool(name, args, executionId, log, trace).catch(
+          const result = await applyTool(name, args, executionId, log, trace, local).catch(
             async (error: unknown) => {
               // An aborted call stays unanswered so a resumed worker replays it.
               if (!context.signal.aborted) {
@@ -2166,6 +2172,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
           return {
             executeTool: (name, args, executionId, _route, trace) =>
               runLoggedTool(helper.log, writeHelperEntry, name, args, executionId, trace),
+            executeLocalTool: (name, args, executionId, run) =>
+              runLoggedTool(helper.log, writeHelperEntry, name, args, executionId, undefined, run),
             text: (text) =>
               inOrder(() =>
                 logEntry({
@@ -2372,6 +2380,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           executionId: string,
           callLog: RunLog,
           trace?: ToolCallTrace,
+          local?: Parameters<LocalToolExecutor>[3],
         ) => {
           context.signal.throwIfAborted();
           if (handedOff) {
@@ -2481,7 +2490,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           const nextApprovedTool = approvedEffectReplays.nextToolName();
           const nextApprovedRequest = approvedEffectReplays.nextRequest();
           const nextApprovedKey = approvedEffectReplays.nextKey();
-          const viaConnector = !BUILTIN_AGENT_TOOL_NAMES.has(name);
+          const viaConnector = !BUILTIN_AGENT_TOOL_NAMES.has(name) && !localToolNames.has(name);
           const proposed =
             !viaConnector && name === "schedule_create" ? parseProposed(args) : false;
           if (typeof proposed === "object") return proposed;
@@ -2843,13 +2852,19 @@ export function createRunExecutor(deps: ExecutorDeps) {
             from: "approved" | "intended",
           ): Promise<unknown | undefined> => {
             const claim = from === "approved" ? claimApprovedEffect : claimIntendedEffect;
-            if (await claim(deps.prisma, applied!.effect.id)) {
+            const claimed = local
+              ? await claimEffectUnderFence(deps.prisma, applied!.effect.id, from, runId, fence)
+              : await claim(deps.prisma, applied!.effect.id);
+            if (claimed) {
               claimedEffect = true;
               return undefined;
             }
             const current = await deps.prisma.externalEffect.findUnique({
               where: { id: applied!.effect.id },
             });
+            if (local && current?.status === from) {
+              throw new Error(`This attempt no longer holds the run, so ${name} did not start.`);
+            }
             if (current) {
               const retryGate = resolveDuplicateEffectGate(current, name);
               if (retryGate.action === "return") return retryGate.result;
@@ -2986,6 +3001,15 @@ export function createRunExecutor(deps: ExecutorDeps) {
               : Promise.resolve(true);
           const finish = async (result: unknown) =>
             (await persistEffectResult(result)) ? result : uncertainEffectResult(name);
+          if (local) {
+            if (!applied) throw new Error(`${name} has no effect record`);
+            // A runtime-run tool always starts from a fenced claim, approved or not.
+            if (!claimedEffect) {
+              const early = await claimOrReturn("intended");
+              if (early !== undefined) return early;
+            }
+            return finish(localToolResult(await local(context.signal)));
+          }
           if (name === "computer_observe") {
             if (heldForTakeover) {
               return { error: DESKTOP_HELD_FOR_TAKEOVER_MESSAGE };
@@ -4592,6 +4616,21 @@ export function createRunExecutor(deps: ExecutorDeps) {
                     await afterToolAnnounced(executionId);
                     return runLoggedTool(runLog, writeRunEntry, name, args, executionId, trace);
                   },
+              executeLocalTool: scripted
+                ? undefined
+                : async (name, args, executionId, run) => {
+                    await afterToolAnnounced(executionId);
+                    return runLoggedTool(
+                      runLog,
+                      writeRunEntry,
+                      name,
+                      args,
+                      executionId,
+                      undefined,
+                      run,
+                    );
+                  },
+              attempt: { id: attempt.id, fence },
               startSubagent: scripted ? undefined : startSubagent,
               resolveModel: scripted
                 ? undefined
@@ -5226,6 +5265,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
             };
           }
         } catch (error) {
+          // A guest that could not start or was lost requeues the run like a failed setup.
+          if (error instanceof AgentRuntimeUnavailableError) throw error;
           if (!terminalCheckpointComplete) {
             await workspaceCheckpoint.flush().catch(() => undefined);
           }
@@ -6625,18 +6666,28 @@ async function recordEffect(
     return { duplicate: true, effect: legacy };
   }
 
-  const effect = await deps.prisma.externalEffect.create({
-    data: {
-      spaceId: run.spaceId,
-      runId: run.id,
-      kind,
-      idempotencyKey,
-      status: "intended",
-      request: request as never,
-    },
-  });
-  consumedIds?.add(effect.id);
-  return { duplicate: false, effect };
+  try {
+    const effect = await deps.prisma.externalEffect.create({
+      data: {
+        spaceId: run.spaceId,
+        runId: run.id,
+        kind,
+        idempotencyKey,
+        status: "intended",
+        request: request as never,
+      },
+    });
+    consumedIds?.add(effect.id);
+    return { duplicate: false, effect };
+  } catch (error) {
+    // A concurrent attempt recorded the same call first: its row is the one effect.
+    if ((error as { code?: string } | null)?.code !== "P2002") throw error;
+    const effect = await deps.prisma.externalEffect.findUniqueOrThrow({
+      where: { idempotencyKey },
+    });
+    consumedIds?.add(effect.id);
+    return { duplicate: true, effect };
+  }
 }
 
 async function completeEffect(
@@ -6653,6 +6704,33 @@ async function completeEffect(
       ? (result as { details: unknown }).details
       : result;
   return completeExternalEffect(deps.prisma, effectId, expectedStatus, storedResult as never);
+}
+
+/** Claims an effect only while this attempt still holds the running run's fence. */
+async function claimEffectUnderFence(
+  prisma: PrismaClient,
+  effectId: string,
+  from: "intended" | "approved",
+  runId: string,
+  fence: number,
+): Promise<boolean> {
+  const claimed = await prisma.$executeRaw`
+    UPDATE external_effects SET status = 'executing', "updatedAt" = ${new Date()}
+    WHERE id = ${effectId} AND status = ${from}
+      AND EXISTS (
+        SELECT 1 FROM runs WHERE id = ${runId} AND "leaseFence" = ${fence} AND status = 'running'
+      )`;
+  return claimed === 1;
+}
+
+function localToolResult(output: LocalToolOutput) {
+  if (output.isError) return { error: output.text };
+  return {
+    output: output.text,
+    truncated: output.truncated,
+    totalBytes: output.totalBytes,
+    ...(output.spoolPath ? { spoolPath: output.spoolPath } : {}),
+  };
 }
 
 function uncertainEffectError(toolName: string): Error {

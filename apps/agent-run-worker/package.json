@@ -1,0 +1,22 @@
+{
+  "name": "@rakazo/agent-run-worker",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "check": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run --root ../.. apps/agent-run-worker/src"
+  },
+  "dependencies": {
+    "@rakazo/adapter-kit": "workspace:*",
+    "@rakazo/adapters": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2",
+    "vitest": "4.1.11"
+  }
+}

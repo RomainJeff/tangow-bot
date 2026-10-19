@@ -15,8 +15,11 @@ export interface ModelEmulatorRequest {
   tools?: Array<{ type: string; function: { name: string; parameters: unknown } }>;
 }
 
+/** Token counts the response reports in a final usage chunk. */
+export type ModelEmulatorUsage = { promptTokens: number; completionTokens: number };
+
 export type ModelEmulatorResponse =
-  | { type: "text"; text: string }
+  | { type: "text"; text: string; usage?: ModelEmulatorUsage }
   | {
       type: "tool";
       id: string;
@@ -24,6 +27,7 @@ export type ModelEmulatorResponse =
       arguments: Record<string, unknown>;
       /** Concatenation must equal the JSON arguments. Each fragment is a separate SSE delta. */
       argumentChunks?: string[];
+      usage?: ModelEmulatorUsage;
     }
   | { type: "error"; status: number; message: string }
   | { type: "disconnect"; text?: string }
@@ -122,6 +126,21 @@ export async function startModelEmulator(options: {
           return;
         }
         emit({}, "stop");
+      }
+      if (reply.usage) {
+        response.write(
+          `data: ${JSON.stringify({
+            id: `fixture-${stepIndex}`,
+            object: "chat.completion.chunk",
+            created: 0,
+            model: modelId,
+            choices: [],
+            usage: {
+              prompt_tokens: reply.usage.promptTokens,
+              completion_tokens: reply.usage.completionTokens,
+            },
+          })}\n\n`,
+        );
       }
       response.end("data: [DONE]\n\n");
     })().catch((error: unknown) => {
