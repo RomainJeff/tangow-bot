@@ -61,6 +61,8 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
+const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error));
+
 function cutText(text: string, maxBytes: number): string {
   if (Buffer.byteLength(text) <= maxBytes) return text;
   const marker = `\n\n[cut by the controller at ${maxBytes} bytes]`;
@@ -172,7 +174,7 @@ export function createSession(
         ),
       ]);
       if (first.granted) return { type: "tool.grant" };
-      if ("error" in first) return { type: "error", message: clean(String(first.error)) };
+      if ("error" in first) return { type: "error", message: clean(messageOf(first.error)) };
       return { type: "tool.result", output: first.output };
     }
     const execute = helper ? helper.log.executeTool : request.executeTool;
@@ -182,10 +184,7 @@ export function createSession(
     try {
       return { type: "tool.result", output: await call };
     } catch (error) {
-      return {
-        type: "error",
-        message: clean(error instanceof Error ? error.message : String(error)),
-      };
+      return { type: "error", message: clean(messageOf(error)) };
     } finally {
       open.delete(callId);
     }
