@@ -151,8 +151,11 @@ export function useSidebarState({
         window.location.assign(path);
         return;
       }
-      // Opened from the list: the chat's Back returns to it by popping this entry.
-      navigate(path, { state: { fromList: true } });
+      // Opened from the phone's bot list: the chat's Back returns to it by popping this entry.
+      navigate(
+        path,
+        window.location.pathname === "/app" ? { state: { fromList: true } } : undefined,
+      );
     },
     [bootstrapMe?.spaceId, navigate],
   );

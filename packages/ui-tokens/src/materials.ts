@@ -56,7 +56,7 @@ export const materials = {
     saturate: 180,
     fallback: "card",
   },
-  /** Dense lists: the palette, the bot drawer at phone width. */
+  /** Dense lists: the ⌘K palette. */
   list: {
     fill: { light: "rgba(250, 250, 251, 0.94)", dark: "rgba(40, 40, 44, 0.94)" },
     edge: overlayEdge,

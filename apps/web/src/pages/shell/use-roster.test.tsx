@@ -75,8 +75,9 @@ it("leaves the phone's bot list on its own page, reading no chat behind it", asy
   expect(navigate).not.toHaveBeenCalled();
   expect(rpc.threads.markRead).not.toHaveBeenCalled();
 
-  await show("B");
-  expect(rpc.threads.markRead).toHaveBeenCalledWith({ botId: "B" });
+  // Into the chat the list kept behind it: only the route changes, and the chat is read.
+  await show("A");
+  expect(rpc.threads.markRead).toHaveBeenCalledWith({ botId: "A" });
 });
 
 it("reopens the last chat, not the first bot, when the list widens to desktop", async () => {
