@@ -1,12 +1,12 @@
 # How to add a harness
 
-A harness is the agent loop that runs inside the guest VM. Pi is the only one today. This guide adds another one without changing the controller, the run channel or the session log. Read the [P2 handoff](P2-handoff.md) first: it defines the channel every harness speaks.
+A harness is the agent loop that runs inside the guest VM. Pi is the only one today. This guide adds another one without changing the controller, the run channel or the session log. Read the [P2 handoff](P2-handoff.md) first. It defines the channel every harness speaks.
 
 A harness is two things. The first is a guest adapter, which turns the harness's own loop into neutral frames. The second is a model dialect, which carries its model calls to the controller. Reuse the `pi-ai` dialect if the harness can call models through it. Add a dialect only when it cannot.
 
 ## Know what the controller already guarantees
 
-The controller treats the guest as hostile, including the harness. Your adapter never authorizes anything. It asks, and the controller decides:
+The controller treats the guest as hostile, including the harness. Your adapter never authorizes anything. It asks, and the controller decides, as this table shows.
 
 | Guarantee | Where it holds |
 | --- | --- |
@@ -50,7 +50,7 @@ Follow these rules:
 - Announce each tool with `emit({ type: "tool", ... })` before `callTool`. The executor shows the announcement and waits for it before it journals the call.
 - Never keep or ask for a key. Send every model call through `host.model`.
 - Treat a throw from `decide`, `model` or `callTool` as the end of the attempt, unless the harness can report the failure to its model. A refusal has already ended the channel.
-- Do not define guest tools in the harness. The controller places them: `GUEST_TOOLS` in `packages/adapters/src/runtime-worker/guest-input.ts`, and the guest runs them from `LOCAL_TOOLS` in `apps/agent-run-worker/src/local-tools.ts`. Every harness shares them.
+- Do not define guest tools in the harness. The controller places them with `GUEST_TOOLS` in `packages/adapters/src/runtime-worker/guest-input.ts`, and the guest runs them from `LOCAL_TOOLS` in `apps/agent-run-worker/src/local-tools.ts`. Every harness shares them.
 
 ## Declare optional capabilities
 
@@ -65,7 +65,7 @@ Resume is not a capability. A controller restart ends the attempt, and the next 
 
 ## Use a model dialect
 
-`ModelDialect` in `packages/adapter-kit/src/worker-protocol.ts` names the dialects. Only `pi-ai` exists: pi-ai's transcript goes out, and pi-ai's stream events come back. Its two halves live in `packages/adapters/src/runtime-worker/dialects/pi-ai.ts`: `piAiStreamFn` for the guest and `relayPiAiCall` for the controller.
+`ModelDialect` in `packages/adapter-kit/src/worker-protocol.ts` names the dialects. Only `pi-ai` exists. pi-ai's transcript goes out, and pi-ai's stream events come back. Its two halves live in `packages/adapters/src/runtime-worker/dialects/pi-ai.ts`: `piAiStreamFn` for the guest and `relayPiAiCall` for the controller.
 
 To add a dialect:
 
