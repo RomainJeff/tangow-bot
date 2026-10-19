@@ -1,5 +1,5 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { type WorkerIdentity, WorkerIdentitySchema } from "@rakazo/adapter-kit";
+import { sameWorker, type WorkerIdentity, WorkerIdentitySchema } from "@rakazo/adapter-kit";
 import { z } from "zod";
 import { WORKER_LIMITS } from "./limits.js";
 
@@ -73,11 +73,7 @@ export function verifyCapability(
   const claims = decodeClaims(parts.claims);
   if (!claims) return { ok: false, reason: "malformed" };
   if (now >= claims.expiresAt) return { ok: false, reason: "expired" };
-  const sameWorker =
-    claims.runId === expected.runId &&
-    claims.attemptId === expected.attemptId &&
-    claims.fence === expected.fence;
-  return sameWorker ? { ok: true } : { ok: false, reason: "identity" };
+  return sameWorker(claims, expected) ? { ok: true } : { ok: false, reason: "identity" };
 }
 
 /** The identity a capability claims, unverified: how a guest learns whom it speaks for. */

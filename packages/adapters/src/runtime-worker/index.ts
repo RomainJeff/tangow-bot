@@ -7,5 +7,5 @@ export * from "./limits.js";
 export * from "./memory-channel.js";
 export * from "./model-relay.js";
 export * from "./runtime.js";
-export { type WorkerClock, WorkerViolationError } from "./session.js";
+export type { WorkerClock } from "./session.js";
 export * from "./stop-journal.js";

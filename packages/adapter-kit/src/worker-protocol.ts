@@ -9,6 +9,10 @@ export const WorkerIdentitySchema = z.strictObject({
 });
 export type WorkerIdentity = z.infer<typeof WorkerIdentitySchema>;
 
+export function sameWorker(a: WorkerIdentity, b: WorkerIdentity): boolean {
+  return a.runId === b.runId && a.attemptId === b.attemptId && a.fence === b.fence;
+}
+
 /** What the guest learns about a mount: where and how. Never which volume, owner or host path. */
 export const GuestMountSchema = z.strictObject({
   path: z.string().startsWith("/"),
@@ -351,6 +355,16 @@ export type WorkerStatusV1 = z.infer<typeof WorkerStatusV1Schema>;
  */
 export const HarnessCapability = z.enum(["subagents", "steering"]);
 export type HarnessCapability = z.infer<typeof HarnessCapability>;
+
+/** The guest frames a harness may send only with the capability it declared. */
+export const FRAME_CAPABILITY: Readonly<Partial<Record<GuestBody["type"], HarnessCapability>>> = {
+  subagent: "subagents",
+  "subagent.open": "subagents",
+  "subagent.text": "subagents",
+  "subagent.finish": "subagents",
+  "subagent.abandon": "subagents",
+  "steering.claim": "steering",
+};
 
 /** The guest harness: which one runs the attempt, and its declared capabilities. */
 export const HarnessDeclarationSchema = z.strictObject({

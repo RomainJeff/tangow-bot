@@ -2,8 +2,8 @@ import {
   type AgentRunModel,
   type AgentRunRequest,
   AgentRuntimeUnavailableError,
+  FRAME_CAPABILITY,
   type GuestBody,
-  type HarnessCapability,
   type HarnessDeclaration,
   type LocalToolOutput,
   type ModelDialect,
@@ -28,15 +28,6 @@ import type { StopJournal } from "./stop-journal.js";
 /** The model-access dialects the controller relays. A new dialect is one entry here. */
 const RELAYS: { [D in ModelDialect]: ModelRelay<never, unknown> } = {
   "pi-ai": relayPiAiCall as ModelRelay<never, unknown>,
-};
-
-const FRAME_CAPABILITY: Partial<Record<GuestBody["type"], HarnessCapability>> = {
-  subagent: "subagents",
-  "subagent.open": "subagents",
-  "subagent.text": "subagents",
-  "subagent.finish": "subagents",
-  "subagent.abandon": "subagents",
-  "steering.claim": "steering",
 };
 
 export interface WorkerClock {

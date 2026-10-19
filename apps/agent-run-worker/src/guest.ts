@@ -1,10 +1,10 @@
 import path from "node:path";
-import type {
-  GuestBody,
-  HarnessCapability,
-  ReplyFinal,
-  WorkerIdentity,
-  WorkerStartV1,
+import {
+  FRAME_CAPABILITY,
+  type GuestBody,
+  type ReplyFinal,
+  sameWorker,
+  type WorkerStartV1,
 } from "@rakazo/adapter-kit";
 import {
   capabilityWorker,
@@ -31,18 +31,6 @@ export interface GuestOptions {
   root?: string;
   /** Stops the run like a `worker.cancel`, for the process's own termination. */
   signal?: AbortSignal;
-}
-
-const NEEDS: Partial<Record<GuestBody["type"], HarnessCapability>> = {
-  "subagent.open": "subagents",
-  "subagent.text": "subagents",
-  "subagent.finish": "subagents",
-  "subagent.abandon": "subagents",
-  "steering.claim": "steering",
-};
-
-function sameWorker(a: WorkerIdentity, b: WorkerIdentity) {
-  return a.runId === b.runId && a.attemptId === b.attemptId && a.fence === b.fence;
 }
 
 function deferred<T>() {
@@ -131,9 +119,8 @@ async function runAttempt(
   };
 
   let refused = false;
-  // A refusal ends the channel: the run stops here, whatever was waiting on it.
   const send = async (body: GuestBody, onPart?: Parameters<Outbox["request"]>[1]) => {
-    const needed = NEEDS[body.type];
+    const needed = FRAME_CAPABILITY[body.type];
     if (needed && !declared.has(needed)) throw new Error(`This harness does not offer ${needed}`);
     const reply = await outbox.request(body, onPart);
     if (reply.type !== "refused") return reply;

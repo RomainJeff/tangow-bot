@@ -1,12 +1,13 @@
-import type {
-  GuestBody,
-  RefusalReason,
-  ReplyBody,
-  ReplyFinal,
-  ReplyPart,
-  WorkerEventV1,
-  WorkerIdentity,
-  WorkerReplyV1,
+import {
+  type GuestBody,
+  type RefusalReason,
+  type ReplyBody,
+  type ReplyFinal,
+  type ReplyPart,
+  sameWorker,
+  type WorkerEventV1,
+  type WorkerIdentity,
+  type WorkerReplyV1,
 } from "@rakazo/adapter-kit";
 import { WORKER_LIMITS } from "./limits.js";
 
@@ -37,10 +38,6 @@ export interface SessionInbox {
 }
 
 type Entry = { parts: ReplyBody[]; settled: boolean };
-
-function sameWorker(a: WorkerIdentity, b: WorkerIdentity) {
-  return a.runId === b.runId && a.attemptId === b.attemptId && a.fence === b.fence;
-}
 
 export function createSessionInbox(
   worker: WorkerIdentity,
