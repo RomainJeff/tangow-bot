@@ -6,7 +6,7 @@ import type {
   MemoryDocument,
   SkillAvailability,
 } from "@rakazo/contracts";
-import { filterSkillList, parseSkillMd } from "@rakazo/core";
+import { filterSkillList, MEMORY_MANAGEMENT_SKILL_KEY, parseSkillMd } from "@rakazo/core";
 import {
   Button,
   Input,
@@ -20,6 +20,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { formatBytes } from "../components/ArtifactFileCard";
 import { downloadArtifactBytes } from "../lib/artifact-open";
 import { rpc } from "../lib/rpc";
+import { useOpenMemoryLibrary } from "../lib/use-open-memory-library";
 
 const fieldClass =
   "mt-2 w-full rounded-[11px] border border-border bg-transparent px-3.5 py-3 font-mono text-[13px] leading-relaxed text-foreground";
@@ -28,19 +29,14 @@ function rowClass(open: boolean): string {
   return `w-full rounded-[11px] px-2.5 py-2.5 text-start ${open ? "bg-muted" : "hover:bg-muted"}`;
 }
 
-/** The space's shared memory documents, mounted in the Memory settings overlay. */
+/** The space's shared memory, opened in the Memory library from the Memory settings overlay. */
 export function SpaceMemorySection() {
+  const openMemory = useOpenMemoryLibrary();
   return (
-    <div className="mt-6" data-testid="space-memory-documents">
-      <div className="mb-2 text-[12.5px] uppercase tracking-[0.08em] text-muted-foreground/80">
-        <Trans>Shared documents</Trans>
-      </div>
-      <MemoryDocumentList
-        load={() => rpc.memory.list({ scope: "user" })}
-        exportFilename="space-memory.md"
-        emptyLabel={<Trans>Nothing remembered yet</Trans>}
-        testId="space-memory-list"
-      />
+    <div data-testid="space-memory-documents">
+      <Button variant="capsuleSecondary" size="capsule" onClick={() => openMemory("space")}>
+        <Trans>Open memory</Trans>
+      </Button>
     </div>
   );
 }
@@ -472,7 +468,8 @@ export function AgentSkills({
       {!editorOpen
         ? shown.map((entry) => {
             // Builtins are always on for every agent; only the rest carry access controls.
-            const controlled = entry.source !== "builtin";
+            const controlled =
+              entry.source !== "builtin" || entry.id === MEMORY_MANAGEMENT_SKILL_KEY;
             return (
               <div
                 key={entry.id}
