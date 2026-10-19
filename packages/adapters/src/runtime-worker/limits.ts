@@ -22,8 +22,8 @@ export const WORKER_LIMITS = {
   textFlushMs: 50,
   toolArgsBytes: 256 * KiB,
   /**
-   * What a guest tool shows the model, head and tail. PiAgentRuntime shows the model at most
-   * this many characters of any tool result, so a longer text would lose its tail and its marker.
+   * What a guest tool shows the model, head and tail. The implemented harness shows the model at
+   * most this many characters of any tool result, so a longer text would lose its tail and marker.
    */
   localOutputModelChars: TOOL_RESULT_TEXT_LIMIT,
   localOutputModelLines: 2000,

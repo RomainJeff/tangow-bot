@@ -42,8 +42,8 @@ describe("readGuestFrame", () => {
       event({
         type: "model.request",
         agent: "root",
-        context: { messages: [{ role: "user", content: big }] },
-        options: {},
+        dialect: "pi-ai",
+        call: { context: { messages: [{ role: "user", content: big }] }, options: {} },
       }),
     );
     const result = readGuestFrame(

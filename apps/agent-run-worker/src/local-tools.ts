@@ -4,7 +4,7 @@ import { createWriteStream } from "node:fs";
 import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import type { LocalToolOutput } from "@rakazo/adapter-kit";
-import { WORKER_LIMITS } from "@rakazo/adapters/runtime-worker";
+import { WORKER_LIMITS } from "@rakazo/adapters/runtime-worker/wire";
 
 export interface LocalToolContext {
   cwd: string;

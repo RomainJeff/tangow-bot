@@ -11,10 +11,10 @@ import {
   memoryChannelPair,
   mintCapability,
   readGuestFrame,
-  relayModelRequest,
   verifyCapability,
 } from "@rakazo/adapters/runtime-worker";
-import { runGuest } from "@rakazo/agent-run-worker";
+import { relayPiAiCall } from "@rakazo/adapters/runtime-worker/pi-ai";
+import { HARNESSES, runGuest } from "@rakazo/agent-run-worker";
 import { afterEach, describe, expect, it } from "vitest";
 import { startModelEmulator } from "./model-emulator.js";
 
@@ -94,8 +94,11 @@ describe("a guest run with a local bash call", () => {
     const inbox = createSessionInbox(worker, async (_seq, body, part) => {
       switch (body.type) {
         case "model.request":
-          await relayModelRequest(server.model, body, (event) =>
-            part({ type: "model.event", event }),
+          await relayPiAiCall(
+            server.model,
+            body.call,
+            (event) => part({ type: "model.event", event }),
+            new AbortController().signal,
           );
           return { type: "model.end" };
         case "tool.call":
@@ -133,6 +136,7 @@ describe("a guest run with a local bash call", () => {
     const exit = await runGuest({
       channels: once(pair.guest),
       capability: mintCapability(key, worker, Date.now()),
+      harness: HARNESSES.pi!,
       spoolDir: path.join(workdir, ".spool"),
     });
     await controller;

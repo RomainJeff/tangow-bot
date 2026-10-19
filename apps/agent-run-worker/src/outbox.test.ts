@@ -81,7 +81,12 @@ describe("createOutbox", () => {
     wire(outbox);
     const parts: ReplyPart[] = [];
     const reply = outbox.request(
-      { type: "model.request", agent: "root", context: { messages: [] }, options: {} },
+      {
+        type: "model.request",
+        agent: "root",
+        dialect: "pi-ai",
+        call: { context: { messages: [] }, options: {} },
+      },
       (part) => parts.push(part),
     );
     await tick();

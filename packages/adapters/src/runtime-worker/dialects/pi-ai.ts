@@ -11,38 +11,26 @@ import {
 } from "@earendil-works/pi-ai";
 import type {
   AgentRunModel,
-  AgentRuntimeEvent,
-  GuestBody,
   GuestModel,
-  ModelEvent,
+  PiAiModelCall,
+  PiAiModelEvent,
   ReplyFinal,
   ReplyPart,
 } from "@rakazo/adapter-kit";
-import { type PiStreamFn, streamRunModel } from "../pi-runtime.js";
-import { billedPromptTokens, providerCacheTokens } from "../pi-runtime-limits.js";
+import { type PiStreamFn, streamRunModel } from "../../pi-runtime.js";
+import { billedPromptTokens, providerCacheTokens } from "../../pi-runtime-limits.js";
+import type { ModelRelay } from "../model-relay.js";
 
-export type ModelRequestBody = Extract<GuestBody, { type: "model.request" }>;
-export type RelayUsage = Extract<AgentRuntimeEvent, { type: "usage" }>;
+/**
+ * The `pi-ai` model-access dialect: pi-ai's transcript out, pi-ai's stream events back. The only
+ * module of the run channel that knows pi-ai, on both sides.
+ */
 
 /**
  * Where a guest's Pi would send its model calls. Never contacted: the guest relays every call,
  * and an OpenAI-compatible model only resolves with an endpoint set.
  */
 const RELAYED_BASE_URL = "http://relay.invalid/v1";
-
-/** What the guest may know of a model, field by field: never a key, endpoint or credential. */
-export function guestModelOf(model: AgentRunModel): GuestModel {
-  return {
-    provider: model.provider,
-    id: model.id,
-    reasoning: model.reasoning,
-    acceptsImages: model.acceptsImages,
-    maxImagesPerPrompt: model.maxImagesPerPrompt,
-    maxTokens: model.maxTokens,
-    contextWindow: model.contextWindow,
-    thinkingLevel: model.thinkingLevel,
-  };
-}
 
 /** The model a guest hands its own Pi runtime, whose calls are relayed. */
 export function relayedModel(model: GuestModel): AgentRunModel {
@@ -79,7 +67,7 @@ function failedMessage(
 // Snapshots: pi-ai keeps mutating `partial`, and a cached reply may be replayed later.
 const snapshot = (value: object) => structuredClone(value) as Record<string, unknown>;
 
-function encodeModelEvent(event: AssistantMessageEvent): ModelEvent {
+function encodeModelEvent(event: AssistantMessageEvent): PiAiModelEvent {
   switch (event.type) {
     case "start":
       return { type: "start", partial: snapshot(event.partial) };
@@ -112,23 +100,23 @@ function encodeModelEvent(event: AssistantMessageEvent): ModelEvent {
 }
 
 /**
- * Controller half: run a guest's model request with the model and key the controller holds, and
- * stream its events back. Usage is measured here, from the provider's own response.
+ * Controller half: run a guest's model call with the model and key the controller holds, and
+ * stream its events back. Usage comes from the provider's own response.
  */
-export async function relayModelRequest(
-  config: AgentRunModel,
-  request: ModelRequestBody,
-  send: (event: ModelEvent) => void,
-  signal?: AbortSignal,
-): Promise<RelayUsage | undefined> {
+export const relayPiAiCall: ModelRelay<PiAiModelCall, PiAiModelEvent> = async (
+  config,
+  call,
+  send,
+  signal,
+) => {
   let model: Model<Api> | undefined;
   try {
     // The transcript is the guest's to shape; a malformed one fails this call, nothing else.
     const context = normalizeContext({
-      messages: request.context.messages as unknown as Message[],
+      messages: call.context.messages as unknown as Message[],
     });
     const relayed = streamRunModel(config, context, {
-      sessionId: request.options.sessionId,
+      sessionId: call.options.sessionId,
       signal,
     });
     model = relayed.model;
@@ -155,7 +143,7 @@ export async function relayModelRequest(
     });
   }
   return undefined;
-}
+};
 
 /** Guest half of `encodeModelEvent`: rebuilds the growing `partial` from blocks and deltas. */
 function modelEventDecoder() {
@@ -165,7 +153,7 @@ function modelEventDecoder() {
     return partial;
   };
   // The controller is the trusted side of this channel: its events are pi-ai's own, re-sent.
-  return (event: ModelEvent): AssistantMessageEvent => {
+  return (event: PiAiModelEvent): AssistantMessageEvent => {
     switch (event.type) {
       case "start":
         partial = event.partial as unknown as AssistantMessage;
@@ -246,15 +234,17 @@ function modelEventDecoder() {
 
 /** Sends one model request and settles with its final reply; parts arrive through `onPart`. */
 export type RelayRequest = (
-  body: ModelRequestBody,
+  body: { type: "model.request"; agent: string; dialect: "pi-ai"; call: PiAiModelCall },
   onPart: (part: ReplyPart) => void,
+  /** Aborting stops the controller's upstream call too. */
+  signal?: AbortSignal,
 ) => Promise<ReplyFinal>;
 
 /**
- * Guest half: a Pi stream function that sends every model call to the controller. `agentRef`
- * maps a helper's agent id to the ref the controller gave it.
+ * Guest half: a stream function that sends every model call to the controller. `agentRef` maps a
+ * helper's agent id to the ref the controller gave it.
  */
-export function relayStreamFn(
+export function piAiStreamFn(
   request: RelayRequest,
   agentRef: (agentId: string | undefined) => string,
 ): PiStreamFn {
@@ -279,14 +269,18 @@ export function relayStreamFn(
       {
         type: "model.request",
         agent: agentRef(agentId),
-        context: {
-          messages: context.messages as unknown as ModelRequestBody["context"]["messages"],
+        dialect: "pi-ai",
+        call: {
+          context: {
+            messages: context.messages as unknown as PiAiModelCall["context"]["messages"],
+          },
+          options: options?.sessionId ? { sessionId: options.sessionId } : {},
         },
-        options: options?.sessionId ? { sessionId: options.sessionId } : {},
       },
       (part) => {
         if (part.type === "model.event") push(decode(part.event));
       },
+      options?.signal,
     )
       .then((final) =>
         fail(

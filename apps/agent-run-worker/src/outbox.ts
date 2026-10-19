@@ -7,7 +7,7 @@ import {
   type WorkerIdentity,
   type WorkerReplyV1,
 } from "@rakazo/adapter-kit";
-import { encodeMessage, WORKER_LIMITS } from "@rakazo/adapters/runtime-worker";
+import { encodeMessage, WORKER_LIMITS } from "@rakazo/adapters/runtime-worker/wire";
 
 const partTypes = new Set<string>(ReplyPartSchema.options.map((option) => option.shape.type.value));
 
@@ -17,13 +17,18 @@ function isFinal(body: ReplyBody): body is ReplyFinal {
 
 /**
  * The guest's half of the sequencing: every frame stays here, counted against the window, until
- * its final reply. A producer waits while the window is full, so Pi stalls instead of buffering.
+ * its final reply. A producer waits while the window is full, so the harness stalls instead of buffering.
  */
 export interface Outbox {
   /** Queue an informative body. Resolves once it has room, not when acknowledged. */
   post(body: GuestBody): Promise<void>;
   /** Queue a request. Resolves with its final reply; parts reach `onPart` in order, once each. */
   request(body: GuestBody, onPart?: (part: ReplyPart) => void): Promise<ReplyFinal>;
+  /** `request`, resolving first with the frame's sequence number once it is sent. */
+  send(
+    body: GuestBody,
+    onPart?: (part: ReplyPart) => void,
+  ): Promise<{ seq: number; final: Promise<ReplyFinal> }>;
   /** A new connection: every frame still waiting for its reply is resent, same sequence numbers. */
   attach(send: (frame: Uint8Array) => void): void;
   detach(): void;
@@ -44,7 +49,7 @@ type Waiter = {
   body: GuestBody;
   frame?: Uint8Array;
   onPart?: (part: ReplyPart) => void;
-  admitted(settled: { final: Promise<ReplyFinal> }): void;
+  admitted(settled: { seq: number; final: Promise<ReplyFinal> }): void;
   fail(error: Error): void;
 };
 
@@ -91,13 +96,13 @@ export function createOutbox(
           fail: reject,
         });
       });
-      waiter.admitted({ final });
+      waiter.admitted({ seq, final });
       send?.(frame);
     }
   };
 
   const enqueue = (body: GuestBody, onPart?: (part: ReplyPart) => void) =>
-    new Promise<{ final: Promise<ReplyFinal> }>((admitted, fail) => {
+    new Promise<{ seq: number; final: Promise<ReplyFinal> }>((admitted, fail) => {
       if (failure) return fail(failure);
       waiters.push({ body, onPart, admitted, fail });
       admit();
@@ -111,6 +116,7 @@ export function createOutbox(
     async request(body, onPart) {
       return await (await enqueue(body, onPart)).final;
     },
+    send: enqueue,
     attach(next) {
       send = next;
       for (const entry of entries.values()) next(entry.frame);

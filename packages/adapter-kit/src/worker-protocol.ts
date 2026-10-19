@@ -79,7 +79,7 @@ const HistoryTurnSchema = z.strictObject({
     .optional(),
 });
 
-/** Everything the guest needs to run Pi, as data: no callback, secret, key or connector route. */
+/** Everything a guest harness needs to run the attempt, as data: no callback, secret, key or route. */
 export const GuestRunInputSchema = z.strictObject({
   botId: Id,
   threadId: Id,
@@ -109,6 +109,65 @@ export const LocalToolOutputSchema = z.strictObject({
 export type LocalToolOutput = z.infer<typeof LocalToolOutputSchema>;
 
 /**
+ * Model-access dialects. A guest harness asks the controller for model calls in one dialect; the
+ * controller runs them with its own model, key and reasoning level and streams the dialect's
+ * events back. The run channel, the capability, the authorization, the request caps and the usage
+ * accounting are the same for every dialect. One is implemented: `pi-ai`, pi-ai's transcript and
+ * stream events. A dialect for an HTTP-compatible model endpoint would be a second member here and
+ * a second relay in the controller.
+ */
+export const ModelDialect = z.enum(["pi-ai"]);
+export type ModelDialect = z.infer<typeof ModelDialect>;
+
+/** A `pi-ai` model call: the transcript, tool declarations included, as the harness shaped it. */
+export const PiAiModelCallSchema = z.strictObject({
+  context: z.strictObject({
+    messages: z.array(
+      z.looseObject({ role: z.enum(["system", "user", "assistant", "toolResult"]) }),
+    ),
+  }),
+  options: z.strictObject({ sessionId: z.string().max(512).optional() }),
+});
+export type PiAiModelCall = z.infer<typeof PiAiModelCallSchema>;
+
+const ContentIndex = z.number().int().nonnegative();
+/** One event of a relayed response: pi-ai's stream event minus the growing `partial`. */
+export const PiAiModelEventSchema = z.union([
+  z.strictObject({ type: z.literal("start"), partial: JsonRecord }),
+  z.strictObject({
+    type: z.enum(["text_start", "thinking_start", "toolcall_start"]),
+    contentIndex: ContentIndex,
+    block: JsonRecord,
+  }),
+  z.strictObject({
+    type: z.enum(["text_delta", "thinking_delta", "toolcall_delta"]),
+    contentIndex: ContentIndex,
+    delta: z.string(),
+  }),
+  z.strictObject({
+    type: z.enum(["text_end", "thinking_end"]),
+    contentIndex: ContentIndex,
+    content: z.string(),
+  }),
+  z.strictObject({
+    type: z.literal("toolcall_end"),
+    contentIndex: ContentIndex,
+    toolCall: JsonRecord,
+  }),
+  z.strictObject({
+    type: z.literal("done"),
+    reason: z.enum(["stop", "length", "toolUse", "deferred"]),
+    message: JsonRecord,
+  }),
+  z.strictObject({
+    type: z.literal("error"),
+    reason: z.enum(["aborted", "error"]),
+    error: JsonRecord,
+  }),
+]);
+export type PiAiModelEvent = z.infer<typeof PiAiModelEventSchema>;
+
+/**
  * Guest to controller. `text`, `progress`, `tool` and `subagent` are informative: their reply is
  * a flow-control `ack`. Every other body asks the controller to decide or to persist, and its
  * reply is that decision. Usage, provider, connection and owner choices have no body: the
@@ -135,13 +194,11 @@ export const GuestBodySchema = z.discriminatedUnion("type", [
     type: z.literal("model.request"),
     /** `root`, or the helper ref the controller returned in `subagent.opened`. */
     agent: Id,
-    context: z.strictObject({
-      messages: z.array(
-        z.looseObject({ role: z.enum(["system", "user", "assistant", "toolResult"]) }),
-      ),
-    }),
-    options: z.strictObject({ sessionId: z.string().max(512).optional() }),
+    dialect: ModelDialect,
+    call: PiAiModelCallSchema,
   }),
+  /** Stop streaming the reply to the model request `re`. */
+  z.strictObject({ type: z.literal("model.abort"), re: Seq }),
   z.strictObject({
     type: z.literal("tool.call"),
     agent: Id,
@@ -185,46 +242,6 @@ export const GuestBodySchema = z.discriminatedUnion("type", [
 ]);
 export type GuestBody = z.infer<typeof GuestBodySchema>;
 
-const ContentIndex = z.number().int().nonnegative();
-/**
- * One event of a relayed model response, as pi-ai emits it minus the growing `partial`, which the
- * guest rebuilds: a start or end carries its content block, a delta only its text.
- */
-export const ModelEventSchema = z.union([
-  z.strictObject({ type: z.literal("start"), partial: JsonRecord }),
-  z.strictObject({
-    type: z.enum(["text_start", "thinking_start", "toolcall_start"]),
-    contentIndex: ContentIndex,
-    block: JsonRecord,
-  }),
-  z.strictObject({
-    type: z.enum(["text_delta", "thinking_delta", "toolcall_delta"]),
-    contentIndex: ContentIndex,
-    delta: z.string(),
-  }),
-  z.strictObject({
-    type: z.enum(["text_end", "thinking_end"]),
-    contentIndex: ContentIndex,
-    content: z.string(),
-  }),
-  z.strictObject({
-    type: z.literal("toolcall_end"),
-    contentIndex: ContentIndex,
-    toolCall: JsonRecord,
-  }),
-  z.strictObject({
-    type: z.literal("done"),
-    reason: z.enum(["stop", "length", "toolUse", "deferred"]),
-    message: JsonRecord,
-  }),
-  z.strictObject({
-    type: z.literal("error"),
-    reason: z.enum(["aborted", "error"]),
-    error: JsonRecord,
-  }),
-]);
-export type ModelEvent = z.infer<typeof ModelEventSchema>;
-
 /** Why the controller ended a channel. A refused request is never retried on that channel. */
 export const RefusalReason = z.enum([
   "invalid",
@@ -242,7 +259,7 @@ export type RefusalReason = z.infer<typeof RefusalReason>;
 
 /** A reply that more parts follow. */
 export const ReplyPartSchema = z.discriminatedUnion("type", [
-  z.strictObject({ type: z.literal("model.event"), event: ModelEventSchema }),
+  z.strictObject({ type: z.literal("model.event"), event: PiAiModelEventSchema }),
   /** `done` arrived while these calls were still open: the run ends only once they settle. */
   z.strictObject({ type: z.literal("end.refused"), pending: z.array(Id) }),
 ]);
@@ -325,12 +342,28 @@ export const WorkerStatusV1Schema = z.strictObject({
 });
 export type WorkerStatusV1 = z.infer<typeof WorkerStatusV1Schema>;
 
+/**
+ * What a guest harness can do beyond the core run: text, tools, questions, model calls. The
+ * controller refuses a frame that needs a capability its harness did not declare, and offers no
+ * tool that needs one.
+ */
+export const HarnessCapability = z.enum(["subagents", "steering"]);
+export type HarnessCapability = z.infer<typeof HarnessCapability>;
+
+/** The guest harness: which one runs the attempt, and its declared capabilities. */
+export const HarnessDeclarationSchema = z.strictObject({
+  name: z.string().min(1).max(64),
+  capabilities: z.array(HarnessCapability).max(HarnessCapability.options.length),
+});
+export type HarnessDeclaration = z.infer<typeof HarnessDeclarationSchema>;
+
 /** Guest to controller, first on every connection: the capability it was launched with. */
 export const WorkerHelloV1Schema = z.strictObject({
   version: z.literal(1),
   kind: z.literal("worker.hello"),
   worker: WorkerIdentitySchema,
   capability: z.string().max(1024),
+  harness: HarnessDeclarationSchema,
 });
 export type WorkerHelloV1 = z.infer<typeof WorkerHelloV1Schema>;
 

@@ -6,13 +6,8 @@ import {
   type ReplyPart,
 } from "@rakazo/adapter-kit";
 import { PiAgentRuntime } from "@rakazo/adapters";
-import {
-  guestModelOf,
-  type RelayUsage,
-  relayedModel,
-  relayModelRequest,
-  relayStreamFn,
-} from "@rakazo/adapters/runtime-worker";
+import { guestModelOf, type RelayUsage } from "@rakazo/adapters/runtime-worker";
+import { piAiStreamFn, relayedModel, relayPiAiCall } from "@rakazo/adapters/runtime-worker/pi-ai";
 import { afterEach, describe, expect, it } from "vitest";
 import { startModelEmulator } from "./model-emulator.js";
 
@@ -60,7 +55,7 @@ describe("a guest Pi run whose model calls the controller relays", () => {
 
     const frames: string[] = [];
     const usage: Array<RelayUsage | undefined> = [];
-    const relay = relayStreamFn(
+    const relay = piAiStreamFn(
       async (body, onPart) => {
         const event = JSON.stringify({
           version: 1,
@@ -74,19 +69,24 @@ describe("a guest Pi run whose model calls the controller relays", () => {
         const request = read.message.payload.body;
         if (request.type !== "model.request") throw new Error("not a model request");
         usage.push(
-          await relayModelRequest(server.model, request, (modelEvent) => {
-            const reply = JSON.stringify({
-              version: 1,
-              kind: "worker.reply",
-              worker,
-              payload: { re: 1, part: 0, body: { type: "model.event", event: modelEvent } },
-            });
-            frames.push(reply);
-            const parsed = parseControllerMessage(JSON.parse(reply));
-            if (!parsed.ok || parsed.message.kind !== "worker.reply")
-              throw new Error("unreadable reply");
-            onPart(parsed.message.payload.body as ReplyPart);
-          }),
+          await relayPiAiCall(
+            server.model,
+            request.call,
+            (modelEvent) => {
+              const reply = JSON.stringify({
+                version: 1,
+                kind: "worker.reply",
+                worker,
+                payload: { re: 1, part: 0, body: { type: "model.event", event: modelEvent } },
+              });
+              frames.push(reply);
+              const parsed = parseControllerMessage(JSON.parse(reply));
+              if (!parsed.ok || parsed.message.kind !== "worker.reply")
+                throw new Error("unreadable reply");
+              onPart(parsed.message.payload.body as ReplyPart);
+            },
+            new AbortController().signal,
+          ),
         );
         return { type: "model.end" };
       },

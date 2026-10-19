@@ -52,6 +52,13 @@ const event = (body: unknown) => ({
   worker,
   payload: { seq: 1, body },
 });
+const hello = {
+  version: 1,
+  kind: "worker.hello",
+  worker,
+  capability: "rkw1.a.b",
+  harness: { name: "pi", capabilities: ["subagents", "steering"] },
+};
 const toolCall = {
   type: "tool.call",
   agent: "root",
@@ -137,14 +144,17 @@ describe("parseControllerMessage", () => {
 describe("parseGuestMessage", () => {
   it.each([
     ["a tool call", event(toolCall)],
-    ["a hello", { version: 1, kind: "worker.hello", worker, capability: "rkw1.a.b" }],
+    ["a hello", hello],
     [
       "a model request",
       event({
         type: "model.request",
         agent: "root",
-        context: { messages: [{ role: "user", content: "hi", timestamp: 1 }] },
-        options: { sessionId: "s" },
+        dialect: "pi-ai",
+        call: {
+          context: { messages: [{ role: "user", content: "hi", timestamp: 1 }] },
+          options: { sessionId: "s" },
+        },
       }),
     ],
   ])("accepts %s as sent", (_name, message) => {
@@ -179,9 +189,17 @@ describe("parseGuestMessage", () => {
       event({
         type: "model.request",
         agent: "root",
-        context: { messages: [] },
-        options: { provider: "x" },
+        dialect: "pi-ai",
+        call: { context: { messages: [] }, options: { provider: "x" } },
       }),
+    ],
+    [
+      "a model request in an unknown dialect",
+      event({ type: "model.request", agent: "root", dialect: "other", call: {} }),
+    ],
+    [
+      "a hello declaring an unknown capability",
+      { ...hello, harness: { name: "pi", capabilities: ["shell_escape"] } },
     ],
     ["a frame numbered 0", { ...event(toolCall), payload: { seq: 0, body: toolCall } }],
   ])("refuses %s as invalid", (_name, json) => {
