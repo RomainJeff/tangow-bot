@@ -48,6 +48,9 @@ importers:
         specifier: workspace:*
         version: link:../../packages/adapters
     devDependencies:
+      e2b:
+        specifier: 2.49.1
+        version: 2.49.1
       esbuild:
         specifier: 0.28.2
         version: 0.28.2
