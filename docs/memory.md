@@ -18,9 +18,15 @@ Withdrawal excludes a memory from future recall. Previously published copies are
 
 Memory content is background data. It cannot grant a bot permissions, authorize an external action or override the product's instruction hierarchy. Access checks, lifecycle checks and revision checks remain server-side.
 
+## Recall and the memory manifest
+
+Recall reads only active memories the run is authorized to see, through the canonical library; it works locally without a hosted memory provider. Each run records a **manifest** of the memory revisions it was given. Before every model call and tool call, the run checks its manifest again; if a memory was withdrawn, edited or changed access, the run stops instead of continuing with stale context. Compacted summaries and earlier bot replies carry their own manifests and are replayed only while those are still authorized; a missing or unreadable manifest is treated as unauthorized. Runs recorded before the memory library had no governed memory dependencies, so their manifests are empty and their history replays normally.
+
 ## Existing installations
 
 The database migration preserves existing Markdown documents and their revisions. Legacy user documents remain personal; they do not become Space memories merely because the old settings screen called them "Shared documents". Documents without verifiable human activation enter the proposal list for review.
+
+Recall from the existing Serenity and Supermemory connections is paused, and saving to them is paused too: their current integration does not resolve results to canonical document revisions. Connection settings are retained, but connecting a provider does not enable recall. Existing provider-only facts are not automatically imported or treated as approved knowledge. Keep a separate provider export when available and review material before adding it to the library.
 
 Back up the database before a deployment migration and deploy the API and workers together. Do not keep an older worker running alongside the new memory lifecycle: it can still use the old automatic write path. A rollback of application binaries alone does not reverse the migration or restore old memory behavior safely.
 
@@ -30,3 +36,5 @@ Back up the database before a deployment migration and deploy the API and worker
 2. Back up the database. Apply the versioned migrations once through the deployment migration runner.
 3. Compare document and revision counts with the backup. Existing IDs, Markdown bodies and revision numbers must remain unchanged; the migration must not create Space publications from personal documents.
 4. Start the upgraded API and workers together. Verify one Personal memory and one Space publication using separate test identities, then resume incoming runs.
+
+For a controlled rollout or incident, an operator can set `Space.memoryRecallEnabled` to `false` for the affected Space. The library and its revision history remain available, but canonical reads and searches return no recall candidates. Runs revalidate their manifest before subsequent model calls and tools; disabling recall does not retract text already sent. Set the field back to `true` after verification. Do not roll back to an older worker or restore direct provider injection as a fallback.

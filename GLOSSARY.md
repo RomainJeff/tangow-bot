@@ -21,6 +21,14 @@ _Avoid_: draft, suggestion (reserved for classification), pending memory
 The citation stored with a proposal: source message, its version and the exact quoted text, checked by the server. Proves where text came from, not that it is true.
 _Avoid_: proof, source (the message itself is the source)
 
+**Recall**
+Giving a run the active, authorized memories relevant to it, from the canonical library.
+_Avoid_: retrieval, injection, search (search is the library's reading feature)
+
+**Manifest**
+The list of memory revisions (with access version) a run, summary or reply was given. Revalidated before each model and tool call; empty for runs that predate the memory library.
+_Avoid_: context list, dependencies
+
 **Withdraw**
 Withdraw removes a memory from future recall; its history stays.
 _Avoid_: delete, archive, disable
