@@ -81,7 +81,7 @@ export function GeneralSettingsPanels({
 
   return (
     <div className="space-y-5">
-      <section className="rounded-xl border border-border px-4 py-4">
+      <section className="rounded-card bg-group shadow-group px-4 py-4">
         <h3 className="text-[15px] font-medium text-foreground">
           <Trans>Account</Trans>
         </h3>
@@ -93,7 +93,7 @@ export function GeneralSettingsPanels({
       <ChangePasswordSection email={email} />
 
       {messagingEnabled && onOpenMessaging ? (
-        <section className="rounded-xl border border-border px-4 py-4">
+        <section className="rounded-card bg-group shadow-group px-4 py-4">
           <h3 className="text-[15px] font-medium text-foreground">
             <Trans>Messaging</Trans>
           </h3>
@@ -106,7 +106,7 @@ export function GeneralSettingsPanels({
         </section>
       ) : null}
 
-      <section className="rounded-xl border border-border px-4 py-4">
+      <section className="rounded-card bg-group shadow-group px-4 py-4">
         <h3 className="text-[15px] font-medium text-foreground">
           <Trans>Appearance</Trans>
         </h3>
@@ -119,7 +119,7 @@ export function GeneralSettingsPanels({
         />
       </section>
 
-      <section className="rounded-xl border border-border px-4 py-4">
+      <section className="rounded-card bg-group shadow-group px-4 py-4">
         <div className="flex items-center justify-between gap-4">
           <div>
             <h3 className="text-[15px] font-medium text-foreground">
@@ -141,14 +141,14 @@ export function GeneralSettingsPanels({
         </div>
       </section>
 
-      <section className="rounded-xl border border-border px-4 py-4">
+      <section className="rounded-card bg-group shadow-group px-4 py-4">
         <h3 className="text-[15px] font-medium text-foreground">
           <Trans>Language</Trans>
         </h3>
         <UiLocalePicker value={locale} onChange={chooseLocale} />
       </section>
 
-      <section className="rounded-xl border border-border px-4 py-4">
+      <section className="rounded-card bg-group shadow-group px-4 py-4">
         <h3 className="text-[15px] font-medium text-foreground">
           <Trans>Avatars</Trans>
         </h3>
@@ -180,12 +180,16 @@ export function GeneralSettingsPanels({
       </section>
 
       {isDeploymentOwner ? (
-        <Button variant="outline" render={<Link to="/integrations/setup" />}>
+        <Link
+          to="/integrations/setup"
+          className="flex items-center justify-between gap-4 rounded-card bg-group px-4 py-4 text-[15px] text-foreground shadow-group"
+        >
           <Trans>Server integrations</Trans>
-        </Button>
+          <span aria-hidden="true">›</span>
+        </Link>
       ) : null}
 
-      <details data-testid="advanced-settings" className="group rounded-xl border border-border">
+      <details data-testid="advanced-settings" className="group rounded-card bg-group shadow-group">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 text-[14px] text-foreground/75">
           <span>
             <span className="block text-[15px] text-foreground">
@@ -219,7 +223,7 @@ export function UsageSettingsPanel({
       ref={panelRef}
       tabIndex={-1}
       data-testid="usage-settings"
-      className="rounded-xl border border-border px-4 py-4 outline-none"
+      className="rounded-card bg-group shadow-group px-4 py-4 outline-none"
     >
       <h3 className="text-[15px] font-medium text-foreground">
         <Trans>Usage</Trans>
@@ -242,7 +246,7 @@ export function ComputerSettingsPanel() {
   return (
     <div
       data-testid="computers-setup-settings"
-      className="rounded-xl border border-border px-4 py-4"
+      className="rounded-card bg-group shadow-group px-4 py-4"
     >
       <h3 className="text-[15px] font-medium text-foreground">
         <Trans>Computers</Trans>

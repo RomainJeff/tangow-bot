@@ -68,6 +68,9 @@ export const materials = {
 
 export type MaterialKey = keyof typeof materials;
 
+/** The veil under a dialog or an overlay window: `overlay`, the thread blurred this many px. */
+export const overlayBlur = 20;
+
 /**
  * The neutral light falling from the top start corner over the whole window,
  * under the floating sidebar too, so the glass has something to blur. Phone

@@ -19,7 +19,7 @@ function CustomizeNav({
     { id: "skills" as const, label: <Trans>Skills</Trans>, Icon: Sparkles },
   ];
   return (
-    <nav className="flex w-44 shrink-0 flex-col gap-1 border-e border-border bg-muted/30 p-3 pt-7 sm:w-56">
+    <nav className="m-2 flex w-44 shrink-0 flex-col gap-1 rounded-xl bg-group p-2 pt-5 shadow-group sm:w-56">
       <div className="px-2.5 pb-4 text-2xl text-foreground">
         <Trans>Customize</Trans>
       </div>
@@ -32,8 +32,8 @@ function CustomizeNav({
           onClick={() => onSelect(id)}
           className={`flex items-center gap-2.5 rounded-[11px] px-2.5 py-2 text-start text-[14.5px] ${
             section === id
-              ? "bg-accent font-medium text-foreground"
-              : "text-foreground/80 hover:bg-accent/60"
+              ? "bg-sidebar-accent font-medium text-foreground"
+              : "text-foreground/80 hover:bg-sidebar-accent/60"
           }`}
         >
           <Icon size={15} strokeWidth={1.7} className="shrink-0" />

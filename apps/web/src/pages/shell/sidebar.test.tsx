@@ -172,7 +172,7 @@ it("reads a bot waiting on the person as Waiting for you, with its avatar at res
   expect(row.querySelector("[data-working]")?.getAttribute("data-working")).toBe("false");
 });
 
-it("floats on the chrome glass at desktop width and sits on the page as the phone drawer", () => {
+it("floats on the chrome glass at desktop width and sits on the page as the phone bot list", () => {
   const paneClass = () =>
     container.querySelector('[data-testid="bots-sidebar-pane"]')?.className.split(" ") ?? [];
   renderSidebar();

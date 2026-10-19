@@ -24,6 +24,7 @@ import {
   materials,
   narrowBackgroundFade,
   narrowMaxWidth,
+  overlayBlur,
   scrollEdgeBlur,
   threadFade,
 } from "./materials.js";
@@ -114,6 +115,7 @@ function renderMaterialGeometryLines(): string[] {
     `  --thread-fade-bottom-end: ${threadFade.bottomEnd}px;`,
     `  --thread-fade-bottom-rest: ${threadFade.bottomRest}px;`,
     `  --thread-under-composer: ${threadFade.underComposer}px;`,
+    `  --overlay-blur: ${overlayBlur}px;`,
   ];
 }
 
