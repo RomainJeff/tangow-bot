@@ -57,12 +57,9 @@ test("memory browser back and forward preserve the list; closing after reload re
   page,
 }) => {
   const { conversation } = await setup(page, "agent");
-  await page.getByTestId("open-settings-panel").click();
-  await page.getByTestId("bot-settings").getByText("Advanced", { exact: true }).click();
-  await page
-    .getByTestId("bot-knowledge")
-    .getByRole("button", { name: "Open memory", exact: true })
-    .click();
+  await page.getByTestId("user-menu-trigger").click();
+  await page.getByRole("button", { name: "Memory", exact: true }).click();
+  await page.getByRole("button", { name: "Bot", exact: true }).click();
   await page.getByRole("button", { name: "Proposals", exact: true }).click();
   await expect(page).toHaveURL(/status=proposed/);
   await page.getByRole("button", { name: "Active", exact: true }).click();
@@ -70,7 +67,7 @@ test("memory browser back and forward preserve the list; closing after reload re
   await page.getByRole("textbox", { name: "Search memories", exact: true }).fill("interview");
   await expect(page).toHaveURL(/q=interview/);
   const listUrl = page.url();
-  await page.getByRole("button", { name: "Navigation protocol", exact: true }).click();
+  await page.getByRole("button", { name: /^Navigation protocol/ }).click();
   await expect(page.getByTestId("memory-detail")).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL(listUrl);
@@ -106,7 +103,7 @@ test("memory filters do not add browser history or overwrite the next selection"
   const { conversation } = await setup(page);
   await page.getByTestId("user-menu-trigger").click();
   await page.getByRole("button", { name: "Memory", exact: true }).click();
-  await page.getByRole("button", { name: "Shared", exact: true }).click();
+  await page.getByRole("button", { name: "Space", exact: true }).click();
   await page.getByRole("button", { name: "Personal", exact: true }).click();
   await page.getByRole("button", { name: "Proposals", exact: true }).click();
   await page.getByRole("button", { name: "Active", exact: true }).click();

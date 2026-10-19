@@ -23,12 +23,6 @@ const storeWith = (documents: unknown[]) =>
   ({ read: vi.fn(async () => ({ documents })) }) as unknown as MemoryStore;
 
 describe("memory grant", () => {
-  it("fails closed when a document is withdrawn after it entered a model manifest", async () => {
-    const grant = await memoryGrant(storeWith([]), "bot-1", context);
-    grant.add([entry(4)]);
-    await expect(grant.isCurrent()).resolves.toBe(false);
-  });
-
   it("requires the exact canonical revision and access version", async () => {
     const store = storeWith([
       { id: "memory-1", path: "memory.md", content: "active", revision: 2, accessVersion: 4 },

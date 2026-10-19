@@ -4,7 +4,22 @@ import type { MemoryLibraryDocument, MemoryLibrarySummary } from "@rakazo/contra
 import { describe, expect, it } from "vitest";
 import { latestCard } from "./index.js";
 import { memoryDatabaseAvailable, useMemoryApp } from "./memory-app.js";
+import type { ModelEmulatorStep } from "./model-emulator.js";
 import { startModelEmulator } from "./model-emulator.js";
+
+// Pi nudges a plain-text final reply once, so a visible reply is message_user then text.
+const reply = (check: ModelEmulatorStep["expect"], text: string): ModelEmulatorStep[] => [
+  {
+    expect: check,
+    response: {
+      type: "tool",
+      id: randomUUID(),
+      name: "message_user",
+      arguments: { message: text },
+    },
+  },
+  { expect() {}, response: { type: "text", text } },
+];
 
 describe.skipIf(!memoryDatabaseAvailable)("offline Pi memory journey", () => {
   const app = useMemoryApp("pi-memory", () => import("../../../apps/api/src/app.ts"), {
@@ -117,18 +132,12 @@ describe.skipIf(!memoryDatabaseAvailable)("offline Pi memory journey", () => {
             arguments: { memoryId: candidateId },
           }),
         },
-        {
-          expect(request) {
-            expect(lastResult(request).suggestion).toMatchObject({
-              answers: { purpose: "guide" },
-              abstained: false,
-            });
-          },
-          response: {
-            type: "text",
-            text: "The approved correction guided the next classification.",
-          },
-        },
+        ...reply((request) => {
+          expect(lastResult(request).suggestion).toMatchObject({
+            answers: { purpose: "guide" },
+            abstained: false,
+          });
+        }, "The approved correction guided the next classification."),
       ],
     });
     try {
@@ -250,42 +259,27 @@ describe.skipIf(!memoryDatabaseAvailable)("offline Pi memory journey", () => {
             arguments: { content: marker },
           },
         },
-        {
-          expect(request) {
-            const result = request.messages.findLast((message) => message.role === "tool");
-            expect(result?.tool_call_id).toBe("remember-fixture");
-            expect(JSON.parse(String(result?.content))).toMatchObject({ ok: true });
-          },
-          response: { type: "text", text: "A memory proposal is ready." },
-        },
-        {
-          expect(request) {
-            expect(JSON.stringify(request.messages)).not.toContain(marker);
-          },
-          response: { type: "text", text: "No accepted memory." },
-        },
-        {
-          expect(request) {
-            expect(JSON.stringify(request.messages)).not.toContain(marker);
-          },
-          response: { type: "text", text: "Memory recall paused." },
-        },
-        {
-          expect(request) {
-            const system = request.messages.filter((message) => message.role === "system");
-            expect(JSON.stringify(system)).not.toContain(marker);
-            expect(
-              JSON.stringify(request.messages.filter((message) => message.role === "user")),
-            ).toContain(marker);
-          },
-          response: { type: "text", text: "Accepted memory available." },
-        },
-        {
-          expect(request) {
-            expect(JSON.stringify(request.messages)).not.toContain(marker);
-          },
-          response: { type: "text", text: "Withdrawn memory excluded." },
-        },
+        ...reply((request) => {
+          const result = request.messages.findLast((message) => message.role === "tool");
+          expect(result?.tool_call_id).toBe("remember-fixture");
+          expect(JSON.parse(String(result?.content))).toMatchObject({ ok: true });
+        }, "A memory proposal is ready."),
+        ...reply((request) => {
+          expect(JSON.stringify(request.messages)).not.toContain(marker);
+        }, "No accepted memory."),
+        ...reply((request) => {
+          expect(JSON.stringify(request.messages)).not.toContain(marker);
+        }, "Memory recall paused."),
+        ...reply((request) => {
+          const system = request.messages.filter((message) => message.role === "system");
+          expect(JSON.stringify(system)).not.toContain(marker);
+          expect(
+            JSON.stringify(request.messages.filter((message) => message.role === "user")),
+          ).toContain(marker);
+        }, "Accepted memory available."),
+        ...reply((request) => {
+          expect(JSON.stringify(request.messages)).not.toContain(marker);
+        }, "Withdrawn memory excluded."),
       ],
     });
     try {

@@ -63,7 +63,7 @@ test("logout protects bot deep links and sign-in restores the session", async ({
     page
       .locator('[data-slot="popover-content"]')
       .getByRole("button", { name: "Memory", exact: true }),
-  ).toHaveCount(0);
+  ).toBeVisible();
   await expect(
     page
       .locator('[data-slot="popover-content"]')

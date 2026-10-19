@@ -40,7 +40,7 @@ for (const viewport of [
     await page.getByTestId("settings-nav-memory").click();
     await expect(page.getByRole("textbox", { name: "Organization API key" })).not.toBeVisible();
     await page.getByRole("button", { name: "Open memory", exact: true }).click();
-    const workspace = page.getByRole("combobox", { name: "Workspace", exact: true });
+    const workspace = page.getByRole("combobox", { name: "Space", exact: true });
     await expect(workspace).toHaveValue(navigation.current.id);
     await expect(page.getByTestId("memory-list")).toContainText("Personal workspace protocol");
     await expect(page.getByTestId("memory-list")).not.toContainText("Research workspace protocol");
@@ -69,7 +69,7 @@ test("an unavailable workspace does not strand memory navigation", async ({ page
   await completeOnboarding(page);
   const conversation = page.url();
   await page.goto("/app/memory?space=unavailable-space&collection=space");
-  await expect(page.getByRole("alert")).toHaveText("Could not load workspace");
+  await expect(page.getByRole("alert")).toHaveText("Could not load space");
   await expect(page.getByTestId("memory-list")).toHaveCount(0);
   await page.getByRole("button", { name: "Back", exact: true }).click();
   await expect(page).toHaveURL(conversation);

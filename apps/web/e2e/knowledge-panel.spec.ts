@@ -1,4 +1,4 @@
-import type { MemoryDocument } from "@rakazo/contracts";
+import type { MemoryDocument, MemoryLibraryDocument } from "@rakazo/contracts";
 import {
   activeBotId,
   captureScreenshot,
@@ -29,6 +29,13 @@ test("memory and skills are readable and editable in the app", async ({ page }, 
 
   // Space-wide memory lives in the Memory library; memory-library.spec.ts covers it.
   // The bot's memory, files and skills live on the Knowledge tab of its page.
+  // A new bot starts with no memory, so give Chief one document to edit.
+  const seeded = await rpc<MemoryLibraryDocument>(page, "memory/library/create", {
+    collection: "agent",
+    botId: chiefId,
+    content: "# Chief\n\n",
+    idempotencyKey: `knowledge-${stamp}`,
+  });
   await page
     .locator("main")
     .getByRole("button", { name: /^Chief/ })
@@ -42,11 +49,11 @@ test("memory and skills are readable and editable in the app", async ({ page }, 
   const knowledge = botPage.getByTestId("bot-knowledge");
   await expect(knowledge).toBeVisible();
 
-  // Bot creation seeds MEMORY.md (`# Chief`). It opens in the wide panel with its
-  // own Save and Cancel: leaving the field saves nothing.
+  // The document opens in the wide panel with its own Save and Cancel: leaving
+  // the field saves nothing.
   const panel = page.getByTestId("side-panel");
   const botMemory = knowledge.getByTestId("bot-knowledge-memory");
-  const botMemoryRow = botMemory.getByRole("button", { name: /MEMORY\.md/ });
+  const botMemoryRow = botMemory.locator(`[data-opens="memory:${seeded.id}"]`);
   await expect(botMemoryRow).toBeVisible();
   await botMemoryRow.click();
   await expect(panel).toHaveAttribute("data-detail", "memory");
