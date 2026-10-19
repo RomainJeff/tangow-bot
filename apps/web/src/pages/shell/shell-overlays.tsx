@@ -6,7 +6,6 @@ import {
   DropdownMenuTrigger,
 } from "@rakazo/ui-web";
 import { Pencil, Trash2 } from "lucide-react";
-import type { Dispatch, SetStateAction } from "react";
 import { lazy, Suspense } from "react";
 import type { NavigateFunction } from "react-router-dom";
 import { rpc, selectedSpaceId, selectSpace } from "../../lib/rpc";
@@ -60,7 +59,6 @@ export function ShellOverlays({
   voice,
   navigate,
   runBotAction,
-  setMobileSidebarOpen,
   refreshAgentSkills,
   userName,
   initials,
@@ -74,7 +72,6 @@ export function ShellOverlays({
   voice: Voice;
   navigate: NavigateFunction;
   runBotAction: (botId: string, action: BotAction) => void;
-  setMobileSidebarOpen: Dispatch<SetStateAction<boolean>>;
   refreshAgentSkills: () => void;
   userName: string;
   initials: string;
@@ -376,7 +373,6 @@ export function ShellOverlays({
           onOpenChange={overlays.setCommandPaletteOpen}
           bots={bots}
           onSelectBot={(id) => {
-            setMobileSidebarOpen(false);
             navigate(`/app/${id}`);
           }}
         />

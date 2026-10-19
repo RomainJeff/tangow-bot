@@ -5,7 +5,7 @@ import type { NavigateFunction } from "react-router-dom";
 import { takeInitialBootstrap } from "../../lib/bootstrap";
 import { markOnce } from "../../lib/performance";
 import { rpc } from "../../lib/rpc";
-import { firstThreadRoute } from "./layout";
+import { firstThreadRoute, PHONE_MEDIA } from "./layout";
 
 /**
  * The bots, groups, sections and spaces the person can open, which one the
@@ -43,7 +43,13 @@ export function useRoster({
   const manuallyUnread = useRef(new Set<string>());
 
   const inGroup = Boolean(groupId);
-  const active = inGroup ? undefined : (bots.find((b) => b.id === botId) ?? bots[0]);
+  // The bare route (the phone's bot list) keeps the last chat open behind it, so going back
+  // to the list and into the same chat neither reloads it nor presents what it covered.
+  const lastBotId = useRef(botId);
+  if (botId) lastBotId.current = botId;
+  const active = inGroup
+    ? undefined
+    : (bots.find((b) => b.id === (botId ?? lastBotId.current)) ?? bots[0]);
   const activeGroup = groups.find((group) => group.id === groupId);
   const routeBotId = useRef<string | undefined>(botId);
   routeBotId.current = botId;
@@ -88,6 +94,8 @@ export function useRoster({
   // otherwise the auto-read below would undo the action on the next window focus.
   const markBotReadIfVisible = useCallback(
     (id: string) => {
+      // Only a chat open in the route is read: the phone's bot list keeps the last one behind it.
+      if (routeBotId.current !== id) return;
       if (manuallyUnread.current.has(id)) return;
       if (document.visibilityState === "visible" && document.hasFocus()) {
         void markBotRead(id).catch(() => undefined);
@@ -155,8 +163,14 @@ export function useRoster({
           return;
         }
         const currentBotId = routeBotId.current;
-        if (!currentBotId || !list.some((bot) => bot.id === currentBotId)) {
-          navigate(firstThreadRoute(list, groupList), { replace: true });
+        if (currentBotId ? !list.some((bot) => bot.id === currentBotId) : !phoneList()) {
+          const lastBot = currentBotId ? undefined : activeBotId.current;
+          navigate(
+            lastBot && list.some((bot) => bot.id === lastBot)
+              ? `/app/${lastBot}`
+              : firstThreadRoute(list, groupList),
+            { replace: true },
+          );
         }
       } finally {
         botsRefreshInFlight.current -= 1;
@@ -206,7 +220,7 @@ export function useRoster({
           return;
         }
         const selectedBotId = bootstrap.thread?.botId ?? bootstrap.bots[0]?.id;
-        if (selectedBotId && selectedBotId !== botId) {
+        if (selectedBotId && selectedBotId !== botId && (botId || !phoneList())) {
           navigate(`/app/${selectedBotId}`, { replace: true });
         }
       })
@@ -252,7 +266,7 @@ export function useRoster({
       window.removeEventListener("focus", markVisibleBotRead);
       document.removeEventListener("visibilitychange", markVisibleBotRead);
     };
-  }, [active?.id, markBotReadIfVisible]);
+  }, [active?.id, botId, markBotReadIfVisible]);
 
   const flushBotOrder = useCallback(async () => {
     if (savingBotOrderRef.current) return;
@@ -329,3 +343,8 @@ export function useRoster({
 }
 
 export type Roster = ReturnType<typeof useRoster>;
+
+/** At phone width the bare route is the bot list's own page, so it is not redirected to a chat. */
+function phoneList(): boolean {
+  return window.matchMedia(PHONE_MEDIA).matches;
+}

@@ -45,7 +45,7 @@ way: `sheet`, then its `group`s.
 | `ring` | `#6E6E73` | `#AEAEB2` | focus |
 | `surface` | `#FFFFFF` | `#3C3C3F` | the one elevation: the decision card |
 | `sheet` | `#F5F5F7` | `#232326` | the opaque plane of the side panel and the overlay windows |
-| `group` | `#FFFFFF` | `#333336` | a settings group or an activity day on a sheet; at phone width, the drawer's selected row and search field |
+| `group` | `#FFFFFF` | `#333336` | a settings group or an activity day on a sheet; at phone width, the bot list's search field |
 | `sidebar` | `#F5F5F7` | `#2C2C2E` | the opaque fallback of the sidebar's glass |
 | `sidebarForeground` | `#1D1D1F` | `#F5F5F7` | |
 | `sidebarAccent` | `#E6E6E9` | `#414143` | selected and hovered row |

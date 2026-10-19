@@ -65,7 +65,6 @@ function renderSidebar(overrides: Partial<ComponentProps<typeof BotsSidebar>> = 
     createMenuOpen: false,
     setCreateMenuOpen: vi.fn(),
     bots: [],
-    setMobileSidebarOpen: vi.fn(),
     setPanel: vi.fn(),
     navigate: vi.fn(),
     setNewSpaceOpen: vi.fn(),
@@ -119,7 +118,7 @@ function renderSidebar(overrides: Partial<ComponentProps<typeof BotsSidebar>> = 
   return props;
 }
 
-it("opens an archived bot's page from its row, closing the sidebar over the thread", () => {
+it("opens an archived bot's page from its row", () => {
   const props = renderSidebar();
   const row = container.querySelector<HTMLButtonElement>('[data-testid="archived-bot-open"]')!;
   expect(row.textContent).toBe("Scout");
@@ -127,7 +126,6 @@ it("opens an archived bot's page from its row, closing the sidebar over the thre
   act(() => row.click());
 
   expect(props.onOpenArchivedBot.mock.calls).toEqual([["bot-9"]]);
-  expect(props.setMobileSidebarOpen.mock.calls).toEqual([[false]]);
   expect(props.onRestoreBot).not.toHaveBeenCalled();
 });
 
@@ -174,7 +172,7 @@ it("reads a bot waiting on the person as Waiting for you, with its avatar at res
   expect(row.querySelector("[data-working]")?.getAttribute("data-working")).toBe("false");
 });
 
-it("floats on the chrome glass at desktop width and sits on the page as the phone drawer", () => {
+it("floats on the chrome glass at desktop width and sits on the page as the phone bot list", () => {
   const paneClass = () =>
     container.querySelector('[data-testid="bots-sidebar-pane"]')?.className.split(" ") ?? [];
   renderSidebar();

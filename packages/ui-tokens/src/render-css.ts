@@ -27,7 +27,6 @@ import {
   overlayBlur,
   scrollEdgeBlur,
   threadFade,
-  veil,
 } from "./materials.js";
 
 /** `cardForeground` -> `card-foreground` (no leading `--`). */
@@ -116,8 +115,6 @@ function renderMaterialGeometryLines(): string[] {
     `  --thread-fade-bottom-end: ${threadFade.bottomEnd}px;`,
     `  --thread-fade-bottom-rest: ${threadFade.bottomRest}px;`,
     `  --thread-under-composer: ${threadFade.underComposer}px;`,
-    `  --veil-mix: ${veil.mix}%;`,
-    `  --veil-blur: ${veil.blur}px;`,
     `  --overlay-blur: ${overlayBlur}px;`,
   ];
 }

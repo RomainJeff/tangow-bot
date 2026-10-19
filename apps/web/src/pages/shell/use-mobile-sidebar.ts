@@ -1,68 +1,18 @@
-import type { TouchEvent } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useMediaQuery } from "../../lib/use-media-query";
+import { PHONE_MEDIA } from "./layout";
 
-const MOBILE_SIDEBAR_SWIPE_EDGE_PX = 32;
-const MOBILE_SIDEBAR_SWIPE_DISTANCE_PX = 56;
-
-/** The phone-width drawer: open state, closed on reaching desktop, opened by an edge swipe. */
-export function useMobileSidebar() {
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  const mobileSidebarSwipeRef = useRef<{ startX: number; startY: number } | null>(null);
-
-  useEffect(() => {
-    const desktop = window.matchMedia("(min-width: 768px)");
-    function closeMobileSidebar() {
-      if (desktop.matches) setMobileSidebarOpen(false);
-    }
-    closeMobileSidebar();
-    desktop.addEventListener("change", closeMobileSidebar);
-    return () => desktop.removeEventListener("change", closeMobileSidebar);
-  }, []);
-
-  // Spread on the shell root so a swipe from the start edge anywhere opens the drawer.
-  const swipeHandlers = {
-    onTouchStartCapture(event: TouchEvent<HTMLDivElement>) {
-      if (
-        mobileSidebarOpen ||
-        event.touches.length !== 1 ||
-        window.matchMedia("(min-width: 768px)").matches
-      ) {
-        mobileSidebarSwipeRef.current = null;
-        return;
-      }
-      const touch = event.touches[0];
-      if (!touch) return;
-      const rtl = document.documentElement.getAttribute("dir") === "rtl";
-      const startsAtEdge = rtl
-        ? touch.clientX >= window.innerWidth - MOBILE_SIDEBAR_SWIPE_EDGE_PX
-        : touch.clientX <= MOBILE_SIDEBAR_SWIPE_EDGE_PX;
-      mobileSidebarSwipeRef.current = startsAtEdge
-        ? { startX: touch.clientX, startY: touch.clientY }
-        : null;
-    },
-    onTouchEndCapture(event: TouchEvent<HTMLDivElement>) {
-      const swipe = mobileSidebarSwipeRef.current;
-      mobileSidebarSwipeRef.current = null;
-      const touch = event.changedTouches[0];
-      if (
-        !swipe ||
-        !touch ||
-        mobileSidebarOpen ||
-        window.matchMedia("(min-width: 768px)").matches
-      ) {
-        return;
-      }
-      const rtl = document.documentElement.getAttribute("dir") === "rtl";
-      const horizontal = rtl ? swipe.startX - touch.clientX : touch.clientX - swipe.startX;
-      const vertical = Math.abs(touch.clientY - swipe.startY);
-      if (horizontal >= MOBILE_SIDEBAR_SWIPE_DISTANCE_PX && horizontal > vertical * 1.25) {
-        setMobileSidebarOpen(true);
-      }
-    },
-    onTouchCancelCapture() {
-      mobileSidebarSwipeRef.current = null;
-    },
-  };
-
-  return { mobileSidebarOpen, setMobileSidebarOpen, swipeHandlers };
+/**
+ * At phone width the bot list is a page of its own, as in the iPhone app: the shell's bare
+ * route (`/app`) shows it full screen, unless a side panel opened from it covers the column.
+ * Opening a chat is a navigation, so the browser's back gesture returns to the list.
+ */
+export function useMobileSidebar({
+  listRoute,
+  panelOpen,
+}: {
+  listRoute: boolean;
+  panelOpen: boolean;
+}) {
+  const phone = useMediaQuery(PHONE_MEDIA);
+  return phone && listRoute && !panelOpen;
 }

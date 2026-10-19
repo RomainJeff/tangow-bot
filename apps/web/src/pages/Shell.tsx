@@ -39,7 +39,6 @@ export function ShellPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const session = authClient.useSession();
   const userId = session.data?.user.id;
-  const { mobileSidebarOpen, setMobileSidebarOpen, swipeHandlers } = useMobileSidebar();
   const overlays = useShellOverlays(session.data?.user);
   const store = useThreadStore();
   const roster = useRoster({
@@ -49,9 +48,13 @@ export function ShellPage() {
     onBootstrapThread: store.primeFromBootstrap,
   });
   const { bots, archivedBots, active, activeGroup, inGroup, bootstrapMe, refreshBots } = roster;
-  const sidebar = useSidebarState({ userId, roster, navigate, setMobileSidebarOpen });
+  const sidebar = useSidebarState({ userId, roster, navigate });
   const panels = usePanels(roster);
   const { panel, setPanel, pageBot, pickedBotId } = panels;
+  const mobileSidebarOpen = useMobileSidebar({
+    listRoute: !botId && !groupId,
+    panelOpen: panels.panelOpen,
+  });
   const screen = useComputerScreen({ panel, roster, store });
   const [agentSkills, refreshAgentSkills] = useAgentSkillCatalog(roster.activeBotId);
   const notifications = useBrowserNotifications(roster.botsRef);
@@ -191,7 +194,6 @@ export function ShellPage() {
       data-testid="shell-root"
       data-ready={shellReady}
       className="relative flex h-full min-w-0 overflow-hidden bg-background text-foreground/90"
-      {...swipeHandlers}
     >
       <ComputerUpdateProgress
         onCompleted={() => {
@@ -201,28 +203,12 @@ export function ShellPage() {
       {bootstrapMe !== undefined ? (
         <HostComputerPrompt initialMe={bootstrapMe ?? undefined} />
       ) : null}
-      {mobileSidebarOpen ? (
-        <button
-          type="button"
-          aria-label={t`Close navigation`}
-          onClick={() => setMobileSidebarOpen(false)}
-          className="absolute inset-y-0 end-0 start-sidebar z-40 bg-overlay md:hidden"
-        />
-      ) : null}
-      {!mobileSidebarOpen ? (
-        <div
-          data-testid="mobile-sidebar-swipe-edge"
-          aria-hidden="true"
-          className="absolute bottom-20 start-0 top-16 z-20 w-8 touch-none md:hidden"
-        />
-      ) : null}
       <BotsSidebar
         {...sidebar}
         mobileSidebarOpen={mobileSidebarOpen}
         createMenuOpen={overlays.createMenuOpen}
         setCreateMenuOpen={overlays.setCreateMenuOpen}
         bots={bots}
-        setMobileSidebarOpen={setMobileSidebarOpen}
         setPanel={setPanel}
         navigate={navigate}
         setNewSpaceOpen={overlays.setNewSpaceOpen}
@@ -272,7 +258,6 @@ export function ShellPage() {
         navigate={navigate}
         userId={userId}
         mobileSidebarOpen={mobileSidebarOpen}
-        setMobileSidebarOpen={setMobileSidebarOpen}
         botsSidebarCollapsed={sidebar.botsSidebarCollapsed}
         setBotsSidebarCollapsedPref={sidebar.setBotsSidebarCollapsedPref}
         recording={Boolean(recordingSkill)}
@@ -324,7 +309,6 @@ export function ShellPage() {
         voice={voice}
         navigate={navigate}
         runBotAction={runBotAction}
-        setMobileSidebarOpen={setMobileSidebarOpen}
         refreshAgentSkills={refreshAgentSkills}
         userName={userName}
         initials={initials}

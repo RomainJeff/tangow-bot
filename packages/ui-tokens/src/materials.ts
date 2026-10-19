@@ -56,7 +56,7 @@ export const materials = {
     saturate: 180,
     fallback: "card",
   },
-  /** Dense lists: the palette, the bot drawer at phone width. */
+  /** Dense lists: the ⌘K palette. */
   list: {
     fill: { light: "rgba(250, 250, 251, 0.94)", dark: "rgba(40, 40, 44, 0.94)" },
     edge: overlayEdge,
@@ -67,13 +67,6 @@ export const materials = {
 } as const satisfies Record<string, Material>;
 
 export type MaterialKey = keyof typeof materials;
-
-/**
- * The phone drawer's veil: the thread blurred `blur` px under the page
- * background at `mix`%, rather than darkened, so it meets Safari's bars (painted
- * in that colour) without a line. Under Reduce Transparency it takes `overlay`.
- */
-export const veil = { mix: 55, blur: 6 } as const;
 
 /** The veil under a dialog or an overlay window: `overlay`, the thread blurred this many px. */
 export const overlayBlur = 20;

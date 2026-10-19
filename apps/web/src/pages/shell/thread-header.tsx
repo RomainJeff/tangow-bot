@@ -2,8 +2,9 @@ import { useLingui } from "@lingui/react/macro";
 import type { Bot, Group, ThreadSnapshot } from "@rakazo/contracts";
 import { isWorkingStatus } from "@rakazo/core";
 import { BotAvatar, Button, StackedAvatars } from "@rakazo/ui-web";
-import { Menu, Monitor, PanelLeftOpen, Phone, Settings } from "lucide-react";
+import { ChevronLeft, Monitor, PanelLeftOpen, Phone, Settings } from "lucide-react";
 import type { Dispatch, RefObject, SetStateAction } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { desktopBridge } from "../../lib/desktop";
 import { WindowChrome } from "../WindowChrome";
 import type { BotPageView, Panel } from "./layout";
@@ -14,7 +15,6 @@ const CAPSULE_BUTTON = "app-no-drag size-8 text-foreground aria-pressed:bg-accen
 
 export function ThreadHeader({
   botsSidebarCollapsed,
-  setMobileSidebarOpen,
   setBotsSidebarCollapsedPref,
   inGroup,
   active,
@@ -29,7 +29,6 @@ export function ThreadHeader({
   disabled,
 }: {
   botsSidebarCollapsed: boolean;
-  setMobileSidebarOpen: Dispatch<SetStateAction<boolean>>;
   setBotsSidebarCollapsedPref: (collapsed: boolean) => void;
   inGroup: boolean;
   active: Bot | undefined;
@@ -46,6 +45,8 @@ export function ThreadHeader({
   disabled?: boolean;
 }) {
   const { t } = useLingui();
+  const location = useLocation();
+  const navigate = useNavigate();
   const members = activeSnapshot?.members ?? activeGroup?.members ?? [];
   return (
     // No band: it overlays the thread, which fades out under the scroll edge;
@@ -59,15 +60,22 @@ export function ThreadHeader({
       <div className="flex min-w-0 items-center gap-2">
         {/* Collapsed bots sidebar: this header is the leading edge for window chrome. */}
         {botsSidebarCollapsed && desktopBridge() ? <WindowChrome /> : null}
-        {/* A plain button: the `roundIcon` variant's `bg-transparent` would beat the glass. */}
-        <button
-          type="button"
-          aria-label={t`Open navigation`}
-          onClick={() => setMobileSidebarOpen(true)}
+        {/* At phone width the bot list is its own page: back to it, as in the iPhone app.
+            A plain link: the `roundIcon` variant's `bg-transparent` would beat the glass. */}
+        <Link
+          to="/app"
+          replace
+          aria-label={t`Back`}
+          // Opened from the list: pop back to it, so the history stays list, chat.
+          onClick={(event) => {
+            if (!(location.state as { fromList?: boolean } | null)?.fromList) return;
+            event.preventDefault();
+            navigate(-1);
+          }}
           className="rk-glass-control rk-press-round app-no-drag grid size-capsule shrink-0 place-items-center rounded-full text-foreground md:hidden"
         >
-          <Menu size={18} strokeWidth={1.7} />
-        </button>
+          <ChevronLeft size={20} strokeWidth={1.8} aria-hidden className="rtl:-scale-x-100" />
+        </Link>
         {botsSidebarCollapsed ? (
           <Button
             variant="roundIcon"

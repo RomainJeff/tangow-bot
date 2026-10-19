@@ -3,7 +3,6 @@ import type { AgentSkillCatalogEntry } from "@rakazo/contracts";
 import type { ComposerMention, SkillSourceBlock } from "@rakazo/core";
 import { Button } from "@rakazo/ui-web";
 import { Plus } from "lucide-react";
-import type { Dispatch, SetStateAction } from "react";
 import { lazy, Suspense, useCallback } from "react";
 import type { NavigateFunction } from "react-router-dom";
 import { dictation } from "../../lib/dictation";
@@ -41,7 +40,6 @@ export function ShellMain({
   navigate,
   userId,
   mobileSidebarOpen,
-  setMobileSidebarOpen,
   botsSidebarCollapsed,
   setBotsSidebarCollapsedPref,
   recording,
@@ -62,7 +60,6 @@ export function ShellMain({
   navigate: NavigateFunction;
   userId: string | undefined;
   mobileSidebarOpen: boolean;
-  setMobileSidebarOpen: Dispatch<SetStateAction<boolean>>;
   botsSidebarCollapsed: boolean;
   setBotsSidebarCollapsedPref: (collapsed: boolean) => void;
   recording: boolean;
@@ -136,7 +133,6 @@ export function ShellMain({
       >
         <ThreadHeader
           botsSidebarCollapsed={botsSidebarCollapsed}
-          setMobileSidebarOpen={setMobileSidebarOpen}
           setBotsSidebarCollapsedPref={setBotsSidebarCollapsedPref}
           inGroup={inGroup}
           active={active}
