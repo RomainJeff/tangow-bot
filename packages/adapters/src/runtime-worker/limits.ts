@@ -29,7 +29,10 @@ export const WORKER_LIMITS = {
   localOutputModelLines: 2000,
   /** Per command, on the guest disk only; capture stops past it. */
   localOutputSpoolBytes: 16 * MiB,
-  /** The controller re-truncates a guest tool result before recording it. */
+  /**
+   * The controller re-truncates a command's text before recording it. A result object is bounded
+   * by `guestFrameBytes`, like the same tool's result in process.
+   */
   controllerResultBytes: 64 * KiB,
   /** Covers a cold boot. Checked once, at `worker.hello`. */
   capabilityTtlMs: 10 * 60_000,

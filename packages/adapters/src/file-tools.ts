@@ -1,5 +1,7 @@
 import type { ComputerFileEntry } from "@rakazo/adapter-kit";
 import { ATTACHMENT_MAX_BYTES } from "@rakazo/contracts";
+import { WORKSPACE_ROOT } from "@rakazo/core";
+import { displayBotWorkspacePath, resolveBotWorkspacePath } from "./computer-support.js";
 import { applyTextEdit, readLineWindow, type TextEditResult } from "./file-text.js";
 import { textContentArg } from "./tool-text.js";
 
@@ -14,6 +16,27 @@ export interface WorkspaceFiles {
   read(file: string, maxBytes: number): Promise<Uint8Array | null>;
   exists(file: string): Promise<boolean>;
   write(file: string, content: Uint8Array): Promise<void>;
+}
+
+/**
+ * Paths in a worker. Its volumes keep the Team Computer layout under `WORKSPACE_ROOT`: the bot's
+ * home is `bots/<botId>`, which is the guest's working directory whenever the run mounts its
+ * private volume, and shared work is `shared/`. A path the guest itself names, under
+ * `WORKSPACE_ROOT`, is taken as it is.
+ */
+export function workerPaths(botId: string): Pick<WorkspaceFiles, "resolve" | "display"> & {
+  root: string;
+} {
+  const virtual = (requested: string) =>
+    requested === WORKSPACE_ROOT || requested.startsWith(`${WORKSPACE_ROOT}/`)
+      ? requested.slice(WORKSPACE_ROOT.length) || "/"
+      : requested;
+  return {
+    root: WORKSPACE_ROOT,
+    resolve: (requested) => resolveBotWorkspacePath("team", botId, virtual(requested)),
+    display: (requested, stored) =>
+      displayBotWorkspacePath("team", botId, virtual(requested), stored),
+  };
 }
 
 export const FILE_TOOL_NAMES = new Set(["list_files", "read_file", "write_file", "edit_file"]);

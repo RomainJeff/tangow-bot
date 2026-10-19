@@ -5,18 +5,25 @@ import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import type { LocalToolOutput } from "@rakazo/adapter-kit";
 import { WORKER_LIMITS } from "@rakazo/adapters/runtime-worker/wire";
+import { FILE_TOOLS } from "./file-tools.js";
 
 export interface LocalToolContext {
   cwd: string;
   signal: AbortSignal;
   /** Where a tool keeps output too long for the model, on the guest disk. */
   spoolDir: string;
+  botId: string;
+  /** Prefix of every guest path the controller names. `/` in a VM. */
+  root: string;
 }
 
 export type LocalTool = (
   args: Record<string, unknown>,
   context: LocalToolContext,
 ) => Promise<LocalToolOutput>;
+
+/** What a tool that prints text reports. */
+export type CommandOutput = Extract<LocalToolOutput, { text: string }>;
 
 const KILL_GRACE_MS = 2_000;
 const MARKER_ROOM_CHARS = 256;
@@ -96,7 +103,10 @@ function killGroup(pid: number | undefined, exited: Promise<unknown>) {
 }
 
 /** Runs in the workdir as its own process group, which an abort or a timeout kills whole. */
-export const bash: LocalTool = async (args, { cwd, signal, spoolDir }) => {
+export async function bash(
+  args: Record<string, unknown>,
+  { cwd, signal, spoolDir }: LocalToolContext,
+): Promise<CommandOutput> {
   const command = typeof args.command === "string" ? args.command : "";
   if (!command.trim()) {
     return { text: "bash needs a command.", isError: true, truncated: false, totalBytes: 0 };
@@ -150,7 +160,7 @@ export const bash: LocalTool = async (args, { cwd, signal, spoolDir }) => {
     totalBytes: captured.totalBytes,
     ...(truncated ? { spoolPath } : {}),
   };
-};
+}
 
 /** Tools the controller may place in the guest, by name. */
-export const LOCAL_TOOLS: Readonly<Record<string, LocalTool>> = { bash };
+export const LOCAL_TOOLS: Readonly<Record<string, LocalTool>> = { bash, ...FILE_TOOLS };

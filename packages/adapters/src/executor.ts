@@ -423,6 +423,7 @@ const READ_ONLY_AGENT_TOOLS = new Set([
   "computer_observe",
   "list_files",
   "read_file",
+  "grep",
   "request_takeover",
   "run_subagent",
   "recall_memory",
@@ -1939,7 +1940,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
         };
         const runtimeLocalTools = deps.runtime.describe().capabilities.localTools ?? [];
         const localToolNames = new Set(runtimeLocalTools.map((tool) => tool.name));
-        const tools = [...builtins, ...exposedConnectorTools, ...runtimeLocalTools];
+        // A tool the runtime runs locally replaces the computer-backed tool of the same name.
+        const tools = [
+          ...builtins.filter((tool) => !localToolNames.has(tool.name)),
+          ...exposedConnectorTools.filter((tool) => !localToolNames.has(tool.name)),
+          ...runtimeLocalTools,
+        ];
         const approvedEffects = await deps.prisma.externalEffect.findMany({
           where: { runId, status: "approved" },
           orderBy: APPROVED_EFFECT_REPLAY_ORDER,
@@ -2983,8 +2989,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
           const finish = async (result: unknown) =>
             (await persistEffectResult(result)) ? result : uncertainEffectResult(name);
           if (local) {
-            if (!applied) throw new Error(`${name} has no effect record`);
-            // A runtime-run tool always starts from a fenced claim, approved or not.
+            // A read-only tool records no effect: the worker checked the fence before the call.
+            if (!applied) return localToolResult(await local(context.signal));
+            // A runtime-run tool that changes anything starts from a fenced claim, approved or not.
             if (!claimedEffect) {
               const early = await claimOrReturn("intended");
               if (early !== undefined) return early;
@@ -6617,6 +6624,7 @@ async function claimEffectUnderFence(
 }
 
 function localToolResult(output: LocalToolOutput) {
+  if ("result" in output) return output.result;
   if (output.isError) return { error: output.text };
   return {
     output: output.text,

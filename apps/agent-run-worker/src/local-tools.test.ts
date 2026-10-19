@@ -1,18 +1,34 @@
-import { mkdtemp, readFile, realpath, rm, stat } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  rm,
+  stat,
+  truncate,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { bash } from "./local-tools.js";
+import { bash, LOCAL_TOOLS, type LocalToolContext } from "./local-tools.js";
 
 const dirs: string[] = [];
 afterEach(async () => {
   await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
-async function context(signal = new AbortController().signal) {
-  const cwd = await mkdtemp(path.join(tmpdir(), "rakazo-guest-"));
-  dirs.push(cwd);
-  return { cwd, signal, spoolDir: path.join(cwd, ".spool") };
+/** A guest whose private volume is mounted, as its working directory, beside the shared one. */
+async function context(signal = new AbortController().signal): Promise<LocalToolContext> {
+  const root = await mkdtemp(path.join(tmpdir(), "rakazo-guest-"));
+  dirs.push(root);
+  const cwd = path.join(root, "workspace", "bots", "bot_1");
+  await mkdir(cwd, { recursive: true });
+  return { cwd, signal, spoolDir: path.join(root, "spool"), botId: "bot_1", root };
+}
+
+function tool(name: string) {
+  return LOCAL_TOOLS[name]!;
 }
 
 describe("bash", () => {
@@ -71,6 +87,200 @@ describe("bash", () => {
     expect(output).toMatchObject({ isError: true, text: "Command aborted" });
     expect(Date.now() - startedAt).toBeLessThan(2_000);
     expect(isAlive(child)).toBe(false);
+  });
+});
+
+describe("file tools", () => {
+  it("write, edit, read and list the bot's volume with the in-process paths and results", async () => {
+    const ctx = await context();
+
+    expect(await tool("write_file")({ path: "notes/todo.md", content: "one\ntwo\n" }, ctx)).toEqual(
+      {
+        result: { ok: true, path: "notes/todo.md" },
+      },
+    );
+    expect(
+      await tool("edit_file")({ path: "notes/todo.md", old_text: "two", new_text: "2" }, ctx),
+    ).toEqual({ result: { ok: true, path: "notes/todo.md", replacements: 1 } });
+    expect(await tool("read_file")({ path: "notes/todo.md" }, ctx)).toEqual({
+      result: {
+        path: "notes/todo.md",
+        content: "one\n2\n",
+        startLine: 1,
+        endLine: 2,
+        totalLines: 2,
+      },
+    });
+    expect(
+      await tool("read_file")({ path: "/workspace/bots/bot_1/notes/todo.md", limit: 1 }, ctx),
+    ).toEqual({
+      result: {
+        path: "/workspace/bots/bot_1/notes/todo.md",
+        content: "one\n",
+        startLine: 1,
+        endLine: 1,
+        totalLines: 2,
+        nextOffset: 2,
+      },
+    });
+    expect(await tool("list_files")({}, ctx)).toEqual({
+      result: { path: "", entries: [{ path: "notes", kind: "dir", size: 0 }] },
+    });
+    expect(await tool("list_files")({ path: "notes" }, ctx)).toEqual({
+      result: { path: "notes", entries: [{ path: "notes/todo.md", kind: "file", size: 6 }] },
+    });
+    expect(await readFile(path.join(ctx.cwd, "notes", "todo.md"), "utf8")).toBe("one\n2\n");
+  });
+
+  it("writes shared/ to the space's shared volume", async () => {
+    const ctx = await context();
+
+    expect(await tool("write_file")({ path: "shared/plan.md", content: "plan" }, ctx)).toEqual({
+      result: { ok: true, path: "shared/plan.md" },
+    });
+    expect(await readFile(path.join(ctx.root, "workspace", "shared", "plan.md"), "utf8")).toBe(
+      "plan",
+    );
+  });
+
+  it("returns the in-process refusals", async () => {
+    const ctx = await context();
+    await writeFile(path.join(ctx.cwd, "a.txt"), "same same");
+    await writeFile(path.join(ctx.cwd, "blob.bin"), Buffer.from([0xff, 0xfe, 0x00]));
+    await writeFile(path.join(ctx.cwd, "huge.txt"), "");
+    await truncate(path.join(ctx.cwd, "huge.txt"), 10 * 1024 * 1024 + 1);
+
+    const cases: Array<[string, Record<string, unknown>, unknown]> = [
+      [
+        "write_file",
+        { path: "a.txt", content: "new" },
+        {
+          error:
+            "file already exists; use edit_file to change part of it, or set overwrite to true to replace it whole",
+          path: "a.txt",
+        },
+      ],
+      [
+        "edit_file",
+        { path: "a.txt", old_text: "same", new_text: "x" },
+        {
+          error:
+            "old_text matches several places; include more surrounding text or set replace_all to true",
+          path: "a.txt",
+          matches: 2,
+        },
+      ],
+      [
+        "edit_file",
+        { path: "a.txt", old_text: "other", new_text: "x" },
+        {
+          error: "old_text not found; read the file again with read_file and copy the text exactly",
+          path: "a.txt",
+        },
+      ],
+      [
+        "read_file",
+        { path: "a.txt", offset: 5 },
+        {
+          error: "offset is past the end of the file; use a smaller offset",
+          path: "a.txt",
+          totalLines: 1,
+        },
+      ],
+      [
+        "read_file",
+        { path: "blob.bin" },
+        { error: "file is not UTF-8 text; use open_path to inspect it", path: "blob.bin" },
+      ],
+      [
+        "read_file",
+        { path: "huge.txt" },
+        { error: "file is too large to read; use shell", path: "huge.txt" },
+      ],
+    ];
+    for (const [name, args, result] of cases) {
+      expect(await tool(name)(args, ctx), `${name} ${JSON.stringify(args)}`).toEqual({ result });
+    }
+    expect(await readFile(path.join(ctx.cwd, "a.txt"), "utf8")).toBe("same same");
+  });
+
+  it("reports a path outside the workspace or a missing file as a failed call", async () => {
+    const ctx = await context();
+
+    expect(await tool("read_file")({ path: "../other/secret.txt" }, ctx)).toEqual({
+      text: "Path escapes the computer workspace",
+      isError: true,
+      truncated: false,
+      totalBytes: 0,
+    });
+    expect(await tool("read_file")({ path: "missing.txt" }, ctx)).toMatchObject({
+      text: expect.stringContaining("ENOENT"),
+      isError: true,
+    });
+  });
+});
+
+describe("grep", () => {
+  async function tree() {
+    const ctx = await context();
+    const files: Record<string, string | Buffer> = {
+      "b.md": "Alpha\nbeta\nalphabet\n",
+      "a/one.ts": "const alpha = 1;\n",
+      "a/deep/two.ts": "// alpha\n",
+      "image.png": Buffer.from([0x61, 0x6c, 0x70, 0x68, 0x61, 0x00]),
+      ".git/config": "alpha",
+      "node_modules/x/index.js": "alpha",
+    };
+    for (const [file, content] of Object.entries(files)) {
+      await mkdir(path.dirname(path.join(ctx.cwd, file)), { recursive: true });
+      await writeFile(path.join(ctx.cwd, file), content);
+    }
+    return ctx;
+  }
+
+  it("lists matching lines in path order, skipping binary files, .git and node_modules", async () => {
+    const ctx = await tree();
+
+    expect(await tool("grep")({ pattern: "alpha" }, ctx)).toEqual({
+      text: "a/deep/two.ts:1:// alpha\na/one.ts:1:const alpha = 1;\nb.md:3:alphabet",
+      isError: false,
+      truncated: false,
+      totalBytes: 68,
+    });
+  });
+
+  it("narrows by path, glob and case, and caps the results", async () => {
+    const ctx = await tree();
+
+    expect(
+      await tool("grep")({ pattern: "^alpha", ignore_case: true, path: "b.md" }, ctx),
+    ).toMatchObject({
+      text: "b.md:1:Alpha\nb.md:3:alphabet",
+    });
+    expect(await tool("grep")({ pattern: "alpha", glob: "*.ts" }, ctx)).toMatchObject({
+      text: "a/deep/two.ts:1:// alpha\na/one.ts:1:const alpha = 1;",
+    });
+    expect(
+      await tool("grep")({ pattern: "alpha", path: "a", glob: "deep/**/*.ts" }, ctx),
+    ).toMatchObject({
+      text: "a/deep/two.ts:1:// alpha",
+    });
+    expect(await tool("grep")({ pattern: "alpha", max_results: 1 }, ctx)).toMatchObject({
+      text: "a/deep/two.ts:1:// alpha\n\n[more matches not shown: narrow the pattern, the path or the glob]",
+      truncated: true,
+    });
+    expect(await tool("grep")({ pattern: "gamma" }, ctx)).toMatchObject({ text: "No matches." });
+  });
+
+  it("refuses an invalid regular expression", async () => {
+    const ctx = await tree();
+
+    expect(await tool("grep")({ pattern: "(" }, ctx)).toEqual({
+      text: "invalid pattern: Invalid regular expression: /(/: Unterminated group",
+      isError: true,
+      truncated: false,
+      totalBytes: 0,
+    });
   });
 });
 
