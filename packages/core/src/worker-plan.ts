@@ -17,7 +17,9 @@ const WORKER_TRANSITIONS: Record<WorkerState, readonly WorkerState[]> = {
   created: ["ready", "releasing"],
   ready: ["releasing"],
   releasing: ["released"],
-  released: [],
+  // The orphan edge: an ensure that outlived its timeout returns a VM after its worker was
+  // released, so start records it again for release and reconcile to destroy.
+  released: ["releasing"],
 };
 
 /** The states a worker may move to `to` from: the `workerState IN (...)` guard of every CAS. */
@@ -27,31 +29,19 @@ export function workerStatesInto(to: WorkerState): WorkerState[] {
   );
 }
 
-const SETUP_STATES = [...workerStatesInto("created"), ...workerStatesInto("ready")];
-
-/** Whether `start` may run for an attempt in this state: no worker yet, or setup not finished. */
-export function workerStartable(state: WorkerState | null): boolean {
-  return state === null || SETUP_STATES.includes(state);
-}
-
 /**
- * What a setup step of `start` does when its move to `to` matched no row, by the worker it then
- * reads. `reached`: another call of `start` got there with the same VM. `stale`: another actor owns
- * teardown. `orphaned`: the worker was released, so the VM this call holds is recorded nowhere.
+ * What a setup step of `start` does when its move matched no row. `start` runs once per attempt,
+ * so only teardown moved the worker. `record_ref`: releasing before any ref, so this call records
+ * its VM for release to destroy now. `reopen_orphan`: released with no ref, so no row records the
+ * VM. `stale`: the releasing actor knows the VM and owns teardown.
  */
 export function lostSetupMove(
-  to: "created" | "ready",
-  providerRef: string,
   observed: { workerState: WorkerState | null; workerProviderRef: string | null } | null,
-): "reached" | "stale" | "orphaned" {
-  if (observed?.workerState === "released") return "orphaned";
-  const progress = (state: WorkerState | null) =>
-    (LIVE_WORKER_STATES as readonly (WorkerState | null)[]).indexOf(state);
-  return observed &&
-    observed.workerProviderRef === providerRef &&
-    progress(observed.workerState) >= progress(to)
-    ? "reached"
-    : "stale";
+): "record_ref" | "reopen_orphan" | "stale" {
+  if (observed?.workerProviderRef !== null) return "stale";
+  if (observed.workerState === "releasing") return "record_ref";
+  if (observed.workerState === "released") return "reopen_orphan";
+  return "stale";
 }
 
 /** Which computer kinds can move a home onto worker volumes. A new SandboxKind must declare one. */
@@ -78,16 +68,16 @@ export const WORKER_TTL_SECONDS = 4 * 60 * 60;
 export const WORKER_ENSURE_TIMEOUT_SECONDS = 15 * 60;
 
 /**
- * A worker without a ref may still be under creation by an in-flight `ensure`, so a provider
- * answering `absent` for its tag proves nothing until the ensure timeout has passed.
+ * A worker without a ref may still be under creation by its `ensure`, started at `workerEnsureAt`,
+ * so a provider answering `absent` for its tag proves nothing until the ensure timeout has passed.
  */
 export function ensureMayBeInFlight(
-  worker: { workerProviderRef: string | null; workerStateAt: Date },
+  worker: { workerProviderRef: string | null; workerEnsureAt: Date },
   now: Date,
 ): boolean {
   return (
     worker.workerProviderRef === null &&
-    now.getTime() - worker.workerStateAt.getTime() < WORKER_ENSURE_TIMEOUT_SECONDS * 1000
+    now.getTime() - worker.workerEnsureAt.getTime() < WORKER_ENSURE_TIMEOUT_SECONDS * 1000
   );
 }
 

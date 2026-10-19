@@ -7,7 +7,7 @@ import type { createWorkerLifecycle } from "./worker-lifecycle.js";
 export const mcpOnly: RunNeeds = { files: { private: null, shared: null }, computer: "none" };
 export const allFiles: RunNeeds = { files: { private: "rw", shared: "rw" }, computer: "on_use" };
 export const privateFiles: RunNeeds = { files: { private: "rw", shared: null }, computer: "none" };
-/** A worker state time from before the ensure timeout, so an absent VM counts as never created. */
+/** An ensure start from before the ensure timeout, so an absent VM counts as never created. */
 export const pastEnsureTimeout = () =>
   new Date(Date.now() - (WORKER_ENSURE_TIMEOUT_SECONDS + 60) * 1000);
 
@@ -141,7 +141,7 @@ export function workerFixture(prisma: PrismaClient) {
     async outliveEnsure(attemptId: string) {
       await prisma.attempt.update({
         where: { id: attemptId },
-        data: { workerStateAt: pastEnsureTimeout() },
+        data: { workerEnsureAt: pastEnsureTimeout() },
       });
     },
   };

@@ -16,8 +16,8 @@ export interface WorkerSpec {
   /** The provider removes the VM after this long, whatever the controller does. */
   ttlSeconds: number;
   /**
-   * `ensure` gives up creating the VM after this long. Past it, a VM absent for this attempt's tag
-   * is taken as never created and its writer leases free.
+   * `ensure` must not create the VM later than this after it was called. Past it, a VM absent for
+   * this attempt's tag is taken as never created and its writer leases free.
    */
   ensureTimeoutSeconds: number;
 }
@@ -28,11 +28,17 @@ export interface WorkerSpec {
  */
 export interface WorkerProvider {
   describe(): AdapterDescriptor<WorkerCapabilities>;
-  /** Creates the VM tagged with `spec.attemptId`, or returns the one already tagged with it. */
+  /**
+   * Creates the VM tagged with `spec.attemptId`, called once per attempt. Must not create it after
+   * `spec.ensureTimeoutSeconds`.
+   */
   ensure(spec: WorkerSpec, context: AdapterContext): Promise<{ providerRef: string }>;
   /** Fallible setup once the ref is recorded: mounts visible, runner reachable. Idempotent. */
   prepare(providerRef: string, spec: WorkerSpec, context: AdapterContext): Promise<void>;
-  /** Without a ref, finds the VM by its attempt tag. A VM already gone is `absent`, not an error. */
+  /**
+   * Destroys every VM tagged with `attemptId`, with or without a ref. None left to destroy is
+   * `absent`, not an error.
+   */
   destroy(
     target: { attemptId: string; providerRef: string | null },
     context: AdapterContext,

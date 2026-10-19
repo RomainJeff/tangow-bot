@@ -19,14 +19,13 @@ import {
   WORKER_ENSURE_TIMEOUT_SECONDS,
   WORKER_TTL_SECONDS,
   WORKSPACE_ROOT,
-  workerStartable,
   workerStatesInto,
   writersBlocking,
 } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import { Prisma } from "@rakazo/db";
 
-/** The attempt no longer holds its run's fence, or its worker was already released. */
+/** The attempt no longer holds its run's fence, its worker was started already, or torn down. */
 export class StaleAttemptError extends Error {
   constructor(readonly attemptId: string) {
     super("Attempt no longer holds its run fence");
@@ -94,9 +93,8 @@ export function createWorkerLifecycle(deps: {
   }
 
   /**
-   * Records a setup step of `start`. A move that matches no row accepts a target another call of
-   * `start` already reached with the same VM; a released worker means this call's VM is recorded
-   * nowhere, so it is destroyed here.
+   * Records a setup step of `start`. A move that matches no row means teardown took the worker:
+   * the VM this call holds is recorded where release and reconcile will destroy it.
    */
   async function advance(
     attemptId: string,
@@ -112,24 +110,32 @@ export function createWorkerLifecycle(deps: {
     const [observed] = await prisma.$queryRaw<
       { workerState: WorkerState | null; workerProviderRef: string | null }[]
     >`SELECT "workerState", "workerProviderRef" FROM attempts WHERE id = ${attemptId}`;
-    const outcome = lostSetupMove(to, providerRef, observed ?? null);
-    if (outcome === "reached") return;
-    if (outcome === "orphaned")
-      await requireProvider().destroy({ attemptId, providerRef }, context);
+    const outcome = lostSetupMove(observed ?? null);
+    const recordRef = () => prisma.$executeRaw`
+      UPDATE attempts SET "workerProviderRef" = ${providerRef}
+      WHERE id = ${attemptId} AND "workerState" = 'releasing' AND "workerProviderRef" IS NULL`;
+    // The lease may already be free, so the row records the VM before a destroy can fail.
+    const reopenOrphan = () => prisma.$executeRaw`
+      UPDATE attempts SET "workerState" = 'releasing', "workerProviderRef" = ${providerRef},
+        "workerStateAt" = ${new Date()}
+      WHERE id = ${attemptId} AND "workerState" = 'released' AND "workerProviderRef" IS NULL`;
+    // A record_ref that lost its row found the worker released meanwhile: an orphan too.
+    const recorded =
+      (outcome === "record_ref" && (await recordRef()) === 1) ||
+      (outcome !== "stale" && (await reopenOrphan()) === 1);
+    if (recorded) await release(attemptId, context).catch(() => undefined);
     throw new StaleAttemptError(attemptId);
   }
 
   async function release(attemptId: string, context: AdapterContext): Promise<ReleaseOutcome> {
     const provider = requireProvider();
     const now = new Date();
-    // Without a ref, workerStateAt keeps the time its last ensure may have started.
     const [target] = await prisma.$queryRaw<
-      { workerProviderRef: string | null; workerStateAt: Date }[]
+      { workerProviderRef: string | null; workerEnsureAt: Date }[]
     >`
-      UPDATE attempts SET "workerState" = 'releasing',
-        "workerStateAt" = CASE WHEN "workerProviderRef" IS NULL THEN "workerStateAt" ELSE ${now} END
+      UPDATE attempts SET "workerState" = 'releasing', "workerStateAt" = ${now}
       WHERE id = ${attemptId} AND "workerState" IN (${RELEASABLE})
-      RETURNING "workerProviderRef", "workerStateAt"`;
+      RETURNING "workerProviderRef", "workerEnsureAt"`;
     if (!target) return "not_live";
     if (ensureMayBeInFlight(target, now)) return "awaiting_ensure";
     await provider.destroy({ attemptId, providerRef: target.workerProviderRef }, context);
@@ -181,8 +187,9 @@ export function createWorkerLifecycle(deps: {
 
     /**
      * Records intent and takes every writer lease in one transaction before the provider is
-     * called, then records the VM's ref before any fallible setup. Re-callable while the worker
-     * is requested or created; a failure of this call's own ensure or prepare releases the worker.
+     * called, then records the VM's ref before any fallible setup. Runs once per attempt: a
+     * controller that crashed mid-start loses its run lease, and the next claim is a new attempt.
+     * A failure of its ensure or prepare releases the worker.
      */
     async start(launch: WorkerLaunch, context: AdapterContext): Promise<StartedWorker> {
       const provider = requireProvider();
@@ -198,7 +205,7 @@ export function createWorkerLifecycle(deps: {
           !run ||
           attempt?.runId !== launch.runId ||
           !attemptHoldsFence(attempt, run) ||
-          !workerStartable(attempt.workerState)
+          attempt.workerState !== null
         ) {
           throw new StaleAttemptError(launch.attemptId);
         }
@@ -230,17 +237,16 @@ export function createWorkerLifecycle(deps: {
             data: { writerAttemptId: launch.attemptId },
           });
         }
-        // A re-call before any ref restarts the ensure clock that release waits out.
-        if (attempt.workerState !== "created") {
-          await tx.attempt.update({
-            where: { id: launch.attemptId },
-            data: {
-              workerState: "requested",
-              workerProviderKind: providerKind,
-              workerStateAt: new Date(),
-            },
-          });
-        }
+        const now = new Date();
+        await tx.attempt.update({
+          where: { id: launch.attemptId },
+          data: {
+            workerState: "requested",
+            workerProviderKind: providerKind,
+            workerStateAt: now,
+            workerEnsureAt: now,
+          },
+        });
         return authorized.mounts;
       });
 

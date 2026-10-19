@@ -67,10 +67,9 @@ export class FakeWorkerProvider implements WorkerProvider {
     _context: AdapterContext,
   ): Promise<"destroyed" | "absent"> {
     if (this.failDestroy) throw this.failDestroy;
-    const ref =
-      target.providerRef ??
-      [...this.live].find(([, spec]) => spec.attemptId === target.attemptId)?.[0];
-    const result = ref && this.live.delete(ref) ? "destroyed" : "absent";
+    const tagged = [...this.live].filter(([, spec]) => spec.attemptId === target.attemptId);
+    for (const [ref] of tagged) this.live.delete(ref);
+    const result = tagged.length > 0 ? "destroyed" : "absent";
     this.calls.push({ op: "destroy", ...target, result });
     return result;
   }

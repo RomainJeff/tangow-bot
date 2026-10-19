@@ -3,13 +3,7 @@ import { createDb } from "@rakazo/db";
 import type { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { FakeWorkerProvider } from "./fake-worker-provider.js";
-import {
-  allFiles,
-  mcpOnly,
-  pastEnsureTimeout,
-  privateFiles,
-  workerFixture,
-} from "./worker-fixture.test-support.js";
+import { allFiles, mcpOnly, privateFiles, workerFixture } from "./worker-fixture.test-support.js";
 import { createWorkerLifecycle, StaleAttemptError, VolumeBusyError } from "./worker-lifecycle.js";
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -95,15 +89,11 @@ describePostgres("worker lifecycle under concurrent transactions (PostgreSQL)", 
     }
   });
 
-  it("never leaves a lease on a worker released while its re-called start waited for a volume", async () => {
+  it("frees the lease of a worker released while its start waited for a volume", async () => {
     const fake = new FakeWorkerProvider();
     const workers = createWorkerLifecycle({ prisma, provider: fake });
     const { bot, privateVolume } = await fixture.migratedBot();
-    const attempt = await fixture.seedAttempt((await fixture.seedRun(bot)).id, 1, {
-      workerState: "requested",
-      workerProviderKind: "fake-worker",
-      workerStateAt: pastEnsureTimeout(),
-    });
+    const attempt = await fixture.seedAttempt((await fixture.seedRun(bot)).id);
     const launch = await fixture.launchFor(workers, attempt.id, privateFiles);
     const lockWaiters = async (sql: string) => {
       const { rows } = await pool.query<{ waiting: number }>(
@@ -133,7 +123,8 @@ describePostgres("worker lifecycle under concurrent transactions (PostgreSQL)", 
 
     await expect(released).resolves.toBe("awaiting_ensure");
     expect(await started).toBeInstanceOf(StaleAttemptError);
-    expect(await fixture.workerStateOf(attempt.id)).toBe("releasing");
-    expect(await fixture.writerOf(privateVolume.id)).toBe(attempt.id);
+    expect(fake.live.size).toBe(0);
+    expect(await fixture.workerStateOf(attempt.id)).toBe("released");
+    expect(await fixture.writerOf(privateVolume.id)).toBeNull();
   });
 });

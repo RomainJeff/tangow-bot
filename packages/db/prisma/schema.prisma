@@ -697,6 +697,7 @@ model Attempt {
   workerProviderKind String?
   workerProviderRef  String?
   workerStateAt      DateTime?
+  workerEnsureAt     DateTime?
   writtenVolumes     Volume[]  @relation("VolumeWriter")
 
   @@unique([runId, fence])

@@ -111,10 +111,15 @@ describe("worker schema", () => {
       "attempts_runId_live_worker_key",
       async (runId: string) => {
         const live = { workerState: "requested", workerProviderKind: "fake-worker" };
-        await fixture.seedAttempt(runId, 1, { ...live, workerStateAt: new Date() });
+        await fixture.seedAttempt(runId, 1, {
+          ...live,
+          workerStateAt: new Date(),
+          workerEnsureAt: new Date(),
+        });
         await prisma.$executeRaw`INSERT INTO attempts (id, "runId", fence, status, "workerState",
-          "workerProviderKind", "workerStateAt")
-          VALUES (${fixture.unique("attempt")}, ${runId}, 2, 'running', 'requested', 'fake-worker', now())`;
+          "workerProviderKind", "workerStateAt", "workerEnsureAt")
+          VALUES (${fixture.unique("attempt")}, ${runId}, 2, 'running', 'requested', 'fake-worker',
+            now(), now())`;
       },
     ],
     [
@@ -129,8 +134,9 @@ describe("worker schema", () => {
       "attempts_worker_shape_check",
       (runId: string) =>
         prisma.$executeRaw`INSERT INTO attempts (id, "runId", fence, status, "workerState",
-          "workerProviderKind", "workerStateAt")
-          VALUES (${fixture.unique("attempt")}, ${runId}, 1, 'running', 'created', 'fake-worker', now())`,
+          "workerProviderKind", "workerStateAt", "workerEnsureAt")
+          VALUES (${fixture.unique("attempt")}, ${runId}, 1, 'running', 'created', 'fake-worker',
+            now(), now())`,
     ],
     [
       "computers_home_storage_check",

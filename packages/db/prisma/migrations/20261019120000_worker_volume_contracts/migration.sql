@@ -6,15 +6,18 @@ ALTER TABLE "attempts" ADD COLUMN "workerState" TEXT;
 ALTER TABLE "attempts" ADD COLUMN "workerProviderKind" TEXT;
 ALTER TABLE "attempts" ADD COLUMN "workerProviderRef" TEXT;
 ALTER TABLE "attempts" ADD COLUMN "workerStateAt" TIMESTAMP(3);
+ALTER TABLE "attempts" ADD COLUMN "workerEnsureAt" TIMESTAMP(3);
 
 -- A created or ready worker always has its provider ref, so a VM can never be lost.
+-- workerEnsureAt is when the attempt's only ensure started; workerStateAt moves on every change.
 ALTER TABLE "attempts" ADD CONSTRAINT "attempts_worker_shape_check" CHECK (
     ("workerState" IS NULL AND "workerProviderKind" IS NULL AND "workerProviderRef" IS NULL
-        AND "workerStateAt" IS NULL)
+        AND "workerStateAt" IS NULL AND "workerEnsureAt" IS NULL)
     OR (
         "workerState" IN ('requested', 'created', 'ready', 'releasing', 'released')
         AND "workerProviderKind" IS NOT NULL
         AND "workerStateAt" IS NOT NULL
+        AND "workerEnsureAt" IS NOT NULL
         AND ("workerState" NOT IN ('created', 'ready') OR "workerProviderRef" IS NOT NULL)
     )
 ) NOT VALID;
