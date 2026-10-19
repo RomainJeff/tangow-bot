@@ -145,7 +145,7 @@ describe("worker and volume migrations", () => {
 
     for (const name of workerMigrations) await applyLater(name);
 
-    expect(workerMigrations).toHaveLength(5);
+    expect(workerMigrations).toHaveLength(6);
     expect(before.thread.map((entry) => entry.type)).toEqual([
       "user.message",
       "tool.call",

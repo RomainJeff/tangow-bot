@@ -1,5 +1,6 @@
 -- Worker and volume contracts. Additive: nullable columns, one defaulted column, one new table,
--- and checks every existing row already satisfies. Indexes on attempts follow, built concurrently.
+-- and checks every existing row already satisfies, added NOT VALID and validated in
+-- 20261019120005_validate_worker_checks. Indexes on attempts follow, built concurrently.
 
 ALTER TABLE "attempts" ADD COLUMN "workerState" TEXT;
 ALTER TABLE "attempts" ADD COLUMN "workerProviderKind" TEXT;
@@ -17,13 +18,11 @@ ALTER TABLE "attempts" ADD CONSTRAINT "attempts_worker_shape_check" CHECK (
         AND ("workerState" NOT IN ('created', 'ready') OR "workerProviderRef" IS NOT NULL)
     )
 ) NOT VALID;
-ALTER TABLE "attempts" VALIDATE CONSTRAINT "attempts_worker_shape_check";
 
 ALTER TABLE "computers" ADD COLUMN "homeStorage" TEXT NOT NULL DEFAULT 'snapshot';
 ALTER TABLE "computers" ADD CONSTRAINT "computers_home_storage_check" CHECK (
     "homeStorage" = 'snapshot' OR ("homeStorage" = 'volumes' AND "kind" = 'e2b')
 ) NOT VALID;
-ALTER TABLE "computers" VALIDATE CONSTRAINT "computers_home_storage_check";
 
 CREATE TABLE "volumes" (
     "id" TEXT NOT NULL,
