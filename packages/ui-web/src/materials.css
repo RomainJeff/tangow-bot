@@ -87,6 +87,12 @@
     bottom: calc(var(--thread-overlap, 0px) + 1rem);
   }
 
+  /* The veil under a dialog or an overlay window: the thread darkened and blurred. */
+  .rk-veil {
+    background: var(--overlay);
+    backdrop-filter: blur(var(--overlay-blur));
+  }
+
   /* Reduce Transparency: every material turns opaque; the ambient light stays. */
   @media (prefers-reduced-transparency: reduce) {
     .rk-glass-chrome {
@@ -110,7 +116,8 @@
     .rk-glass-control,
     .rk-glass-menu,
     .rk-glass-list,
-    .rk-scroll-edge {
+    .rk-scroll-edge,
+    .rk-veil {
       backdrop-filter: none;
     }
   }

@@ -24,6 +24,7 @@ import {
   materials,
   narrowBackgroundFade,
   narrowMaxWidth,
+  overlayBlur,
   scrollEdgeBlur,
   threadFade,
   veil,
@@ -117,6 +118,7 @@ function renderMaterialGeometryLines(): string[] {
     `  --thread-under-composer: ${threadFade.underComposer}px;`,
     `  --veil-mix: ${veil.mix}%;`,
     `  --veil-blur: ${veil.blur}px;`,
+    `  --overlay-blur: ${overlayBlur}px;`,
   ];
 }
 
