@@ -18,6 +18,7 @@ import { findSourceMessages, memoryCollection, titleFor, withMemoryCommand } fro
 
 export * from "./library.js";
 export * from "./okf.js";
+export { messageDigest, messageText } from "./shared.js";
 
 export class MarkdownMemoryStore implements MemoryStore {
   constructor(private readonly prisma: PrismaClient) {}

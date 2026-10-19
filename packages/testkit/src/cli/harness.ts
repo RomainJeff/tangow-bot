@@ -93,6 +93,7 @@ async function main() {
         "packages/testkit/src/memory-migration.postgres.test.ts",
         "packages/testkit/src/memory-library.postgres.test.ts",
         "packages/testkit/src/memory-consolidation.postgres.test.ts",
+        "packages/testkit/src/memory-capture.postgres.test.ts",
         "packages/testkit/src/pi-offline.postgres.test.ts",
         "packages/testkit/src/computer-approval.postgres.test.ts",
         "packages/testkit/src/eval-history.postgres.test.ts",
