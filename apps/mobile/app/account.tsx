@@ -276,6 +276,14 @@ export default function Account() {
           {me?.email ? <Text style={styles.email}>{me.email}</Text> : null}
           <ProfilePhoto initials={userInitials(me?.name ?? "")} />
         </View>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push("/memory?collection=personal")}
+          style={({ pressed }) => [styles.settingsButton, pressed && styles.pressed]}
+        >
+          <Text style={styles.settingsTitle}>{t("Memory")}</Text>
+          <Text style={styles.chevron}>›</Text>
+        </Pressable>
         {focus !== "usage" ? usageBlock : null}
 
         <Pressable

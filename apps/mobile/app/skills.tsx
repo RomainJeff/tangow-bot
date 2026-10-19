@@ -7,7 +7,12 @@ import type {
   SkillAvailability,
   SpaceMarketplace,
 } from "@rakazo/contracts";
-import { filterSkillList, marketplaceSkillKey, parseSkillMd } from "@rakazo/core";
+import {
+  filterSkillList,
+  MEMORY_MANAGEMENT_SKILL_KEY,
+  marketplaceSkillKey,
+  parseSkillMd,
+} from "@rakazo/core";
 import * as DocumentPicker from "expo-document-picker";
 import { File } from "expo-file-system";
 import { useEffect, useRef, useState } from "react";
@@ -22,6 +27,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Chip } from "../components/chip";
 import { type MobileBot, rpc } from "../lib/api";
 import { mobileTokens } from "../lib/appearance";
 import { useI18n } from "../lib/i18n";
@@ -424,7 +430,6 @@ function InstalledTab({
         {filters.map((entry) => (
           <Chip
             key={entry.value}
-            styles={styles}
             label={entry.label}
             on={filter === entry.value}
             onPress={() => setFilter(entry.value)}
@@ -440,7 +445,7 @@ function InstalledTab({
 
       {shown.map((entry) => {
         // Builtins are always on for every agent; only the rest carry access controls.
-        const controlled = entry.source !== "builtin";
+        const controlled = entry.source !== "builtin" || entry.id === MEMORY_MANAGEMENT_SKILL_KEY;
         return (
           <View key={entry.id} style={styles.card} testID="skill-row">
             <Pressable accessibilityRole="button" onPress={() => void openSkill(entry)}>
@@ -461,7 +466,6 @@ function InstalledTab({
                 {availabilityOptions.map((option) => (
                   <Chip
                     key={option.value}
-                    styles={styles}
                     label={option.label}
                     on={entry.availability === option.value}
                     onPress={() => setAvailability(entry, option.value)}
@@ -476,7 +480,6 @@ function InstalledTab({
                   return (
                     <Chip
                       key={bot.id}
-                      styles={styles}
                       label={bot.name}
                       on={visible}
                       onPress={() =>
@@ -491,29 +494,6 @@ function InstalledTab({
         );
       })}
     </View>
-  );
-}
-
-function Chip({
-  styles,
-  label,
-  on,
-  onPress,
-}: {
-  styles: Styles;
-  label: string;
-  on: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected: on }}
-      onPress={onPress}
-      style={[styles.chip, on && styles.chipOn]}
-    >
-      <Text style={[styles.chipLabel, on && styles.chipLabelOn]}>{label}</Text>
-    </Pressable>
   );
 }
 
@@ -820,7 +800,6 @@ function BrowseTab({
         {marketplaces.map((mkt) => (
           <Chip
             key={mkt.id}
-            styles={styles}
             label={mkt.name}
             on={mkt.id === marketplaceId}
             onPress={() => setSelectedId(mkt.id)}
@@ -991,17 +970,6 @@ function createSkillsStyles() {
     row: { flexDirection: "row", alignItems: "center", gap: 10 },
     grow: { flex: 1, gap: 3, minWidth: 0 },
     chips: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
-    chip: {
-      minHeight: 32,
-      paddingHorizontal: 12,
-      borderRadius: 16,
-      backgroundColor: native.fillPressed,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    chipOn: { backgroundColor: tokens.primary },
-    chipLabel: { color: native.secondaryLabel, fontSize: 13 },
-    chipLabelOn: { color: tokens.primaryForeground },
     checkbox: {
       width: 26,
       height: 26,
