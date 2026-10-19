@@ -239,7 +239,7 @@ export function ModelDetail({ settings }: { settings: ModelSettings }) {
           ) : null}
 
           {!isOpenAiCompatible ? (
-            <div className="mt-5 rounded-xl border border-border px-4 py-3">
+            <div className="mt-5 rounded-card bg-group shadow-group px-4 py-3">
               <div className="text-[12.5px] uppercase tracking-[0.08em] text-muted-foreground/80">
                 <Trans>Personal credential</Trans>
               </div>

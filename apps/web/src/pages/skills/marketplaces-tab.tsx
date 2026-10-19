@@ -92,7 +92,7 @@ export function MarketplacesTab({
       {marketplaces.map((mkt) => {
         const check = checks[mkt.id];
         return (
-          <div key={mkt.id} className="rounded-xl border border-border px-4 py-3">
+          <div key={mkt.id} className="rounded-card bg-group shadow-group px-4 py-3">
             <div className="flex items-center gap-4">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 text-[15px] font-medium text-foreground">

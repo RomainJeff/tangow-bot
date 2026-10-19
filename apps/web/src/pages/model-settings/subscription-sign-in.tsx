@@ -25,7 +25,7 @@ export function SubscriptionSignIn({
   return (
     <div className="mt-5">
       {oauth ? (
-        <div className="rounded-xl border border-border px-4 py-3">
+        <div className="rounded-card bg-group shadow-group px-4 py-3">
           {oauth.mode === "auth-url" ? (
             <>
               <p className="text-sm leading-[1.5] text-muted-foreground">

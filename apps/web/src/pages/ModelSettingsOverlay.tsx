@@ -75,7 +75,7 @@ export function ModelSettingsOverlay({
       )}
 
       <div
-        className={`mx-6 rounded-xl border border-border px-4 py-3 sm:mx-8 ${embedded ? "mt-4" : "mt-5"}`}
+        className={`mx-6 rounded-card bg-group shadow-group px-4 py-3 sm:mx-8 ${embedded ? "mt-4" : "mt-5"}`}
       >
         <div className="text-[12.5px] uppercase tracking-[0.08em] text-muted-foreground/80">
           <Trans>Active model</Trans>
@@ -105,7 +105,7 @@ export function ModelSettingsOverlay({
             placeholder={t`Search providers`}
             className="h-10 rounded-xl px-3.5"
           />
-          <div className="rk-scroll mt-3 max-h-[240px] overflow-y-auto rounded-xl border border-border md:min-h-0 md:max-h-none md:flex-1">
+          <div className="rk-scroll mt-3 max-h-[240px] overflow-y-auto rounded-card bg-group shadow-group md:min-h-0 md:max-h-none md:flex-1">
             {filteredGroups.length ? (
               filteredGroups.map((group) => {
                 const connected = credentials.some((entry) => entry.provider === group.id);
@@ -115,7 +115,7 @@ export function ModelSettingsOverlay({
                     type="button"
                     onClick={() => chooseProvider(group.id)}
                     className={`flex w-full items-center gap-3 border-b border-border px-3.5 py-3 text-start last:border-0 ${
-                      group.id === provider ? "bg-muted" : "hover:bg-accent"
+                      group.id === provider ? "bg-sidebar-accent" : "hover:bg-sidebar-accent/60"
                     }`}
                   >
                     <span className="min-w-0 flex-1">
@@ -165,8 +165,9 @@ export function ModelSettingsOverlay({
       }}
     >
       <DialogContent
+        variant="window"
         showCloseButton={false}
-        className="flex h-[760px] max-h-[calc(100%-2rem)] w-[1080px] max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden rounded-2xl bg-card p-0 sm:max-w-[1080px]"
+        className="flex h-[760px] max-h-[calc(100%-2rem)] w-[min(1080px,calc(100%-2rem))] max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[1080px]"
       >
         {body}
       </DialogContent>

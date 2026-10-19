@@ -157,11 +157,12 @@ export function PluginsOverlay({
       }}
     >
       <DialogContent
+        variant="window"
         showCloseButton={false}
-        className="flex h-[760px] max-h-[calc(100%-2rem)] w-[1080px] max-w-[calc(100%-2rem)] flex-row gap-0 overflow-hidden rounded-2xl bg-card p-0 sm:max-w-[1080px]"
+        className="flex h-[760px] max-h-[calc(100%-2rem)] w-[min(1080px,calc(100%-2rem))] max-w-[calc(100%-2rem)] flex-row gap-0 overflow-hidden p-0 max-md:flex-col sm:max-w-[1080px]"
       >
         {sidebar}
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <DialogHeader className="flex-row items-start justify-between px-8 pt-7">
             <DialogTitle className="text-2xl text-foreground">
               <Trans>Integrations</Trans>
@@ -245,7 +246,7 @@ export function PluginsOverlay({
                         <Trans>No integrations installed yet.</Trans>
                       </p>
                     ) : (
-                      <div className="mt-4 grid grid-cols-2 gap-2">
+                      <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
                         {installed.map((item) =>
                           // Featured already owns the connection-tile-* hit targets.
                           renderCatalogTile(item, item.name, item.logo, { tileTestId: false }),
@@ -265,7 +266,7 @@ export function PluginsOverlay({
                         {EMPTY_PLUGIN_CATALOG_MESSAGE}
                       </p>
                     ) : (
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                         {featuredTiles.map((tile) => {
                           const item = tile.item;
                           const key = item ? itemKey(item) : tile.id;
@@ -321,7 +322,7 @@ export function PluginsOverlay({
                         <Trans>All integrations</Trans>
                       </h3>
                     ) : null}
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                       {rendered.map((item) =>
                         renderCatalogTile(item, item.name, item.logo, {
                           // Avoid duplicate connection-tile-* ids while featured is also shown.
