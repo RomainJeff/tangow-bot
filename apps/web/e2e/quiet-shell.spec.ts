@@ -95,8 +95,8 @@ test("Reduce Transparency makes the glass opaque", async ({ page }) => {
 
   const pane = page.getByTestId("bots-sidebar-pane");
   const composer = page.getByTestId("composer-bar");
-  await expect(pane).toHaveCSS("background-color", "rgba(255, 255, 255, 0.68)");
-  await expect(composer).toHaveCSS("background-color", "rgba(255, 255, 255, 0.6)");
+  await expect(pane).toHaveCSS("background-color", "rgba(255, 255, 255, 0.58)");
+  await expect(composer).toHaveCSS("background-color", "rgba(255, 255, 255, 0.5)");
 
   const cdp = await page.context().newCDPSession(page);
   await cdp.send("Emulation.setEmulatedMedia", {

@@ -7,6 +7,7 @@ import {
   contrastRatio,
   darkTokens,
   lightTokens,
+  materials,
   normalizeAppearancePreference,
   persistAppearancePreference,
   resolveAppearance,
@@ -123,8 +124,8 @@ describe("tokens.css", () => {
     const [dark, light, geometry, narrow] = css.split(
       /\n\[data-theme="light"\] \{|\n:root \{|\n@media /,
     );
-    expect(dark).toContain("--material-chrome-fill: rgba(36, 36, 40, 0.55);");
-    expect(light).toContain("--material-chrome-fill: rgba(255, 255, 255, 0.68);");
+    expect(dark).toContain(`--material-chrome-fill: ${materials.chrome.fill.dark};`);
+    expect(light).toContain(`--material-chrome-fill: ${materials.chrome.fill.light};`);
     expect(light).toContain("--material-chrome-fallback: var(--sidebar);");
     expect(light).not.toContain("--material-control-blur");
     expect(geometry).toContain("--scroll-edge-blur: 20px;");
