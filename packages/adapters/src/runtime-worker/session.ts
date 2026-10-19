@@ -441,6 +441,8 @@ export function createSession(
     const guest = launched;
     await deps.stops.mark(worker.attemptId, "requested");
     const ended = guest.exited.then(() => deps.stops.mark(worker.attemptId, "process_ended"));
+    // An unconfirmed stop never awaits `ended`, so its late failure must not crash the process.
+    ended.catch(() => undefined);
     if (bound) {
       await bound.send(encodeMessage({ version: 1, kind: "worker.cancel", worker }));
     }

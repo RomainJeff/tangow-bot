@@ -11,6 +11,7 @@ import {
   WORKER_LIMITS,
   type WorkerClock,
 } from "@rakazo/adapters/runtime-worker";
+import type { StopPhase } from "@rakazo/core";
 import { stopState } from "@rakazo/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { type LocalWorkerFaults, LocalWorkerProvider } from "./local-worker-provider.js";
@@ -46,6 +47,7 @@ async function sleepingRun(
   mode: "memory" | "child",
   faults: LocalWorkerFaults,
   clock?: WorkerClock,
+  failingPhase?: StopPhase,
 ) {
   const fixture = await startWorkerRun({
     steps: [
@@ -73,6 +75,7 @@ async function sleepingRun(
     stops: {
       mark: async (attemptId, phase) => {
         marks.push(phase);
+        if (phase === failingPhase) throw new Error("The journal is unreachable");
         await journal.mark(attemptId, phase);
       },
     },
@@ -147,5 +150,24 @@ describe("stopping a guest", () => {
     const next = run.runtime.run(run.runRequest(await run.claim(2)));
     await expect(next[Symbol.asyncIterator]().next()).rejects.toThrow(AgentRuntimeUnavailableError);
     expect(run.provider.launches).toHaveLength(1);
+  });
+
+  it("survives a stop journal write that fails after the stop went unconfirmed", async () => {
+    const time = manualClock();
+    const run = await sleepingRun(
+      "memory",
+      { destroyNeverConfirms: true },
+      time.clock,
+      "process_ended",
+    );
+
+    const aborted = run.runtime.abort(run.runId);
+    const confirmWindow = WORKER_LIMITS.stopConfirmMs - WORKER_LIMITS.cancelGraceMs;
+    await vi.waitFor(() => expect(time.sleeping()).toContain(confirmWindow));
+    time.advance(confirmWindow);
+    await aborted;
+
+    expect(run.marks).toEqual(["requested", "process_ended", "unconfirmed"]);
+    expect(stopState(await run.row())).toBe("unconfirmed");
   });
 });
