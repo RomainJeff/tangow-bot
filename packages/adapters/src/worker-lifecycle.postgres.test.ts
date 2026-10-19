@@ -85,7 +85,34 @@ describePostgres("worker lifecycle under concurrent transactions (PostgreSQL)", 
       expect([
         await fixture.writerOf(privateVolume.id),
         await fixture.writerOf(sharedVolume.id),
-      ]).toEqual([winner, winner]);
+      ]).toEqual([winner, null]);
+    }
+  });
+
+  it("lets two bots of one space racing for the shared volume both write it", async () => {
+    for (let round = 0; round < ROUNDS; round++) {
+      const fake = new FakeWorkerProvider();
+      const workers = createWorkerLifecycle({ prisma, provider: fake });
+      const { computer, bot, sharedVolume } = await fixture.migratedBot();
+      const teammate = await fixture.teammateOf(computer);
+      const first = await fixture.seedAttempt((await fixture.seedRun(bot)).id);
+      const second = await fixture.seedAttempt((await fixture.seedRun(teammate.bot)).id);
+      const firstLaunch = await fixture.launchFor(workers, first.id, allFiles);
+      const secondLaunch = await fixture.launchFor(workers, second.id, allFiles);
+
+      const results = await Promise.allSettled([
+        workers.start(firstLaunch, fixture.context),
+        workers.start(secondLaunch, fixture.context),
+      ]);
+
+      expect(results.map((result) => result.status)).toEqual(["fulfilled", "fulfilled"]);
+      expect(
+        fake.calls
+          .filter((call) => call.op === "ensure")
+          .map((call) => call.spec.attemptId)
+          .sort(),
+      ).toEqual([first.id, second.id].sort());
+      expect(await fixture.writerOf(sharedVolume.id)).toBeNull();
     }
   });
 

@@ -16,6 +16,7 @@ import {
   lostSetupMove,
   planLaunch,
   supportsWorkers,
+  takesWriterLease,
   WORKER_ENSURE_TIMEOUT_SECONDS,
   WORKER_TTL_SECONDS,
   WORKSPACE_ROOT,
@@ -231,10 +232,10 @@ export function createWorkerLifecycle(deps: {
         if (!authorized.ok) throw new VolumeRefusedError(authorized.refusal);
         const busy = writersBlocking(launch.attemptId, authorized.mounts, rows);
         if (busy.length > 0) throw new VolumeBusyError(busy);
-        const writable = authorized.mounts.filter((mount) => mount.access === "rw");
-        if (writable.length > 0) {
+        const leased = authorized.mounts.filter(takesWriterLease);
+        if (leased.length > 0) {
           await tx.volume.updateMany({
-            where: { id: { in: writable.map((mount) => mount.volumeId) } },
+            where: { id: { in: leased.map((mount) => mount.volumeId) } },
             data: { writerAttemptId: launch.attemptId },
           });
         }

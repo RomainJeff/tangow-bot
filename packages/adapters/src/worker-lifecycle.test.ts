@@ -178,7 +178,7 @@ describe("worker start", () => {
     expect([
       await fixture.writerOf(privateVolume.id),
       await fixture.writerOf(sharedVolume.id),
-    ]).toEqual([attempt.id, attempt.id]);
+    ]).toEqual([attempt.id, null]);
   });
 
   it("refuses an attempt that no longer holds the run's fence before the provider", async () => {
@@ -222,7 +222,7 @@ describe("worker start", () => {
   });
 
   it("requeues a second file run of the bot until the first worker is gone", async () => {
-    const { bot, privateVolume, sharedVolume } = await fixture.migratedBot();
+    const { bot, privateVolume } = await fixture.migratedBot();
     const first = await fixture.seedAttempt((await fixture.seedRun(bot)).id);
     const second = await fixture.seedAttempt((await fixture.seedRun(bot)).id);
     await workers.start(await fixture.launchFor(workers, first.id, allFiles), fixture.context);
@@ -231,9 +231,7 @@ describe("worker start", () => {
     const busy = workers.start(secondLaunch, fixture.context);
 
     await expect(busy).rejects.toThrow(VolumeBusyError);
-    await expect(busy).rejects.toMatchObject({
-      volumeIds: [privateVolume.id, sharedVolume.id],
-    });
+    await expect(busy).rejects.toMatchObject({ volumeIds: [privateVolume.id] });
     expect(fake.calls.filter((call) => call.op === "ensure")).toHaveLength(1);
     expect(await fixture.workerStateOf(second.id)).toBeNull();
 
@@ -241,6 +239,31 @@ describe("worker start", () => {
     await expect(workers.start(secondLaunch, fixture.context)).resolves.toMatchObject({
       providerRef: `fake-worker-${second.id}`,
     });
+  });
+
+  it("lets two bots of one space write the shared volume at once", async () => {
+    const { computer, bot, sharedVolume } = await fixture.migratedBot();
+    const teammate = await fixture.teammateOf(computer);
+    const first = await fixture.seedAttempt((await fixture.seedRun(bot)).id);
+    const second = await fixture.seedAttempt((await fixture.seedRun(teammate.bot)).id);
+
+    await workers.start(await fixture.launchFor(workers, first.id, allFiles), fixture.context);
+    await workers.start(await fixture.launchFor(workers, second.id, allFiles), fixture.context);
+
+    expect(
+      fake.calls.flatMap((call) =>
+        call.op === "ensure"
+          ? [[call.spec.attemptId, call.spec.mounts.map((mount) => mount.path)]]
+          : [],
+      ),
+    ).toEqual([
+      [first.id, [`/workspace/bots/${bot.id}`, "/workspace/shared"]],
+      [second.id, [`/workspace/bots/${teammate.bot.id}`, "/workspace/shared"]],
+    ]);
+    expect([
+      await fixture.writerOf(sharedVolume.id),
+      await fixture.writerOf(teammate.privateVolume.id),
+    ]).toEqual([null, second.id]);
   });
 
   it("releases the worker and its volumes when setup fails", async () => {
@@ -308,7 +331,7 @@ describe("worker ownership while start is in flight", () => {
     letEnsureFinish();
 
     expect(await started).toBeInstanceOf(StaleAttemptError);
-    expect(atEnsureReturn).toEqual([{ live: [`fake-worker-${attempt.id}`], leases: 2 }]);
+    expect(atEnsureReturn).toEqual([{ live: [`fake-worker-${attempt.id}`], leases: 1 }]);
     expect(fake.calls.filter((call) => call.op === "destroy")).toEqual([
       {
         op: "destroy",
