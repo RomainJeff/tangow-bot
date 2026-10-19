@@ -107,14 +107,12 @@ passing under it.
   integrations): an opaque `sheet` window, radius 24, on the `rk-veil`
   (`overlay`, the thread blurred `--overlay-blur`, 20 px). `DialogContent` and
   `AlertDialogContent` draw every dialog this way; overlay windows pass
-  `variant="window"` (the models, integrations and skills windows still keep
-  their own frame until their slice). Their
+  `variant="window"`. Their
   navigation is an inset panel like the app's sidebar: 8 from the window's
   edges, radius 16, on `group`, the current section on `sidebarAccent`.
   Sections are cards on `group`, as in the side panel. At phone width a window
   takes the whole screen on the page background, like the side panel, and its
-  navigation becomes a row of tabs, the current one on `group` (Customize's
-  follows with its windows).
+  navigation becomes a row of tabs, the current one on `group`.
 - Menus, the account menu included, are `menu` at radius 14 with rows of 8;
   the palette is `list` at radius 20 with rows of 12.
 - A run failure sits above the composer on a 44 px `destructive` tint at 8%,
