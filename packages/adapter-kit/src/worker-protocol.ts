@@ -254,6 +254,8 @@ export const RefusalReason = z.enum([
   "unknown_tool",
   "revoked",
   "budget",
+  /** The frame needs a harness capability the hello did not declare. */
+  "undeclared",
 ]);
 export type RefusalReason = z.infer<typeof RefusalReason>;
 
