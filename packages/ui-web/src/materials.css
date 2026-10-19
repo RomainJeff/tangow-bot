@@ -1,0 +1,89 @@
+/* Glass on navigation and controls, never on content (docs/design-system/materials.md).
+   In `components`, like the other `rk-*` classes, so a caller's utility still wins. */
+@layer components {
+  .rk-glass-chrome {
+    background: var(--material-chrome-fill);
+    box-shadow: var(--material-chrome-edge);
+    backdrop-filter: blur(var(--material-chrome-blur)) saturate(var(--material-chrome-saturate));
+  }
+
+  /* `--glass-control-backdrop` lets a control that is hidden at rest (the hover
+     pill) take its blur only while shown. */
+  .rk-glass-control {
+    --glass-control-backdrop: blur(var(--material-control-blur))
+      saturate(var(--material-control-saturate));
+    background: var(--material-control-fill);
+    box-shadow: var(--material-control-edge);
+    backdrop-filter: var(--glass-control-backdrop);
+  }
+
+  .rk-glass-menu {
+    background: var(--material-menu-fill);
+    box-shadow: var(--material-menu-edge);
+    backdrop-filter: blur(var(--material-menu-blur)) saturate(var(--material-menu-saturate));
+  }
+
+  .rk-glass-list {
+    background: var(--material-list-fill);
+    box-shadow: var(--material-list-edge);
+    backdrop-filter: blur(var(--material-list-blur)) saturate(var(--material-list-saturate));
+  }
+
+  /* The scroll edge under the header: the page tone, blurred, fading out at 55%. */
+  .rk-scroll-edge {
+    background: linear-gradient(
+      to bottom,
+      rgb(var(--scroll-edge-tone) / 0.96) 0%,
+      rgb(var(--scroll-edge-tone) / 0.85) 55%,
+      rgb(var(--scroll-edge-tone) / 0) 100%
+    );
+    backdrop-filter: blur(var(--scroll-edge-blur));
+    mask-image: linear-gradient(to bottom, #000 55%, transparent);
+  }
+
+  /* The thread fades out under the header and the composer, so a dark bubble
+     leaves no smear behind either. */
+  .rk-thread-mask {
+    mask-image: linear-gradient(
+      to bottom,
+      transparent var(--thread-fade-top-start),
+      #000 var(--thread-fade-top-end),
+      #000 calc(100% - var(--thread-fade-bottom)),
+      transparent
+    );
+  }
+
+  /* The thread runs its bottom fade under the composer, but not under a line
+     the shell sets between them (teaching in progress): it would paint over it. */
+  .rk-thread-overlap:has(+ [data-slot="composer"]) {
+    margin-bottom: calc(-1 * var(--thread-fade-bottom));
+  }
+
+  /* Reduce Transparency: every material turns opaque; the ambient light stays. */
+  @media (prefers-reduced-transparency: reduce) {
+    .rk-glass-chrome {
+      background: var(--material-chrome-fallback);
+    }
+
+    .rk-glass-control {
+      --glass-control-backdrop: none;
+      background: var(--material-control-fallback);
+    }
+
+    .rk-glass-menu {
+      background: var(--material-menu-fallback);
+    }
+
+    .rk-glass-list {
+      background: var(--material-list-fallback);
+    }
+
+    .rk-glass-chrome,
+    .rk-glass-control,
+    .rk-glass-menu,
+    .rk-glass-list,
+    .rk-scroll-edge {
+      backdrop-filter: none;
+    }
+  }
+}

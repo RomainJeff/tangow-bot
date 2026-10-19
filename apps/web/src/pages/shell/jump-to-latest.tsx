@@ -21,7 +21,7 @@ export function JumpToLatest({ atEnd, onJump }: { atEnd: boolean; onJump: () => 
       aria-hidden={atEnd}
       tabIndex={atEnd ? -1 : 0}
       onClick={onJump}
-      className={`absolute bottom-4 left-1/2 z-20 grid h-9 w-9 -translate-x-1/2 place-items-center rounded-full border border-border bg-muted/95 text-foreground/75 shadow-floating backdrop-blur transition-[opacity,transform,background-color] duration-(--duration-hover) ease-quiet hover:bg-border motion-reduce:transition-none ${
+      className={`rk-glass-control absolute bottom-20 left-1/2 z-20 grid size-capsule -translate-x-1/2 place-items-center rounded-full text-foreground transition-[opacity,transform] duration-(--duration-hover) ease-quiet motion-reduce:transition-none ${
         atEnd ? "pointer-events-none translate-y-2 opacity-0" : "translate-y-0 opacity-100"
       }`}
     >

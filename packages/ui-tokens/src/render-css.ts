@@ -18,6 +18,15 @@ import {
   space,
   typography,
 } from "./index.js";
+import type { MaterialKey } from "./materials.js";
+import {
+  ambient,
+  materials,
+  narrowMaxWidth,
+  scrollEdgeBlur,
+  scrollEdgeTone,
+  threadFade,
+} from "./materials.js";
 
 /** `cardForeground` -> `card-foreground` (no leading `--`). */
 function kebabCase(key: string): string {
@@ -34,24 +43,24 @@ export function cssVariableName(token: keyof ColorTokens): string {
  * filling each line with as many comma-separated layers as fit: this keeps a
  * fresh `generate` byte-identical to what `biome check --write` would
  * produce, so `tokens.css` never has to be reformatted by hand. */
-function renderDeclaration(name: string, value: string): string {
-  const oneLine = `  ${name}: ${value};`;
+function renderDeclaration(name: string, value: string, indent = "  "): string {
+  const oneLine = `${indent}${name}: ${value};`;
   if (oneLine.length <= 100) return oneLine;
   const layers = value.split(/,\s(?![^(]*\))/);
   const lines: string[] = [];
   let line = "";
   for (const [index, layer] of layers.entries()) {
     const end = index === layers.length - 1 ? ";" : ",";
-    const candidate = line ? `${line} ${layer}${end}` : `    ${layer}${end}`;
+    const candidate = line ? `${line} ${layer}${end}` : `${indent}  ${layer}${end}`;
     if (line && candidate.length > 100) {
       lines.push(line);
-      line = `    ${layer}${end}`;
+      line = `${indent}  ${layer}${end}`;
     } else {
       line = candidate;
     }
   }
   lines.push(line);
-  return `  ${name}:\n${lines.join("\n")}`;
+  return `${indent}${name}:\n${lines.join("\n")}`;
 }
 
 function renderShadowLines(appearance: ResolvedAppearance): string[] {
@@ -59,6 +68,40 @@ function renderShadowLines(appearance: ResolvedAppearance): string[] {
   return (Object.keys(palette) as ShadowKey[]).map((key) =>
     renderDeclaration(`--elevation-${kebabCase(key)}`, palette[key]),
   );
+}
+
+const materialKeys = Object.keys(materials) as MaterialKey[];
+
+function renderMaterialLines(appearance: ResolvedAppearance): string[] {
+  return [
+    ...materialKeys.flatMap((key) => [
+      renderDeclaration(`--material-${key}-fill`, materials[key].fill[appearance]),
+      renderDeclaration(`--material-${key}-edge`, materials[key].edge[appearance]),
+      `  --material-${key}-fallback: var(${cssVariableName(materials[key].fallback)});`,
+    ]),
+    renderDeclaration("--ambient", ambient.desktop[appearance]),
+    `  --scroll-edge-tone: ${scrollEdgeTone[appearance]};`,
+  ];
+}
+
+function renderMaterialGeometryLines(): string[] {
+  return [
+    ...materialKeys.flatMap((key) => [
+      `  --material-${key}-blur: ${materials[key].blur}px;`,
+      `  --material-${key}-saturate: ${materials[key].saturate}%;`,
+    ]),
+    `  --scroll-edge-blur: ${scrollEdgeBlur}px;`,
+    `  --thread-fade-top-start: ${threadFade.topStart}px;`,
+    `  --thread-fade-top-end: ${threadFade.topEnd}px;`,
+    `  --thread-fade-bottom: ${threadFade.bottom}px;`,
+  ];
+}
+
+/** Phone width takes its own ambient light, higher and from the corner. */
+function renderNarrowAmbientBlock(): string {
+  const block = (selector: string, appearance: ResolvedAppearance) =>
+    `  ${selector} {\n${renderDeclaration("--ambient", ambient.narrow[appearance], "    ")}\n  }`;
+  return `@media (max-width: ${narrowMaxWidth}px) {\n${block(':root,\n  [data-theme="dark"]', "dark")}\n\n${block('[data-theme="light"]', "light")}\n}`;
 }
 
 function renderTypographyLines(): string[] {
@@ -109,7 +152,7 @@ function renderBlock(
     (token) => `  ${cssVariableName(token)}: ${palette[token].toLowerCase()};`,
   );
   lines.push(`  --radius: ${RADIUS};`);
-  lines.push(...renderShadowLines(colorScheme));
+  lines.push(...renderShadowLines(colorScheme), ...renderMaterialLines(colorScheme));
   return `${selector} {\n  color-scheme: ${colorScheme};\n${lines.join("\n")}\n}`;
 }
 
@@ -120,6 +163,7 @@ function renderThemeIndependentBlock(): string {
     ...renderRadiiLines(),
     ...renderSizeLines(),
     ...renderMotionLines(),
+    ...renderMaterialGeometryLines(),
   ];
   return `:root {\n${lines.join("\n")}\n}`;
 }
@@ -131,5 +175,6 @@ export function renderTokensCss(): string {
     renderBlock(':root,\n[data-theme="dark"]', "dark", darkTokens),
     renderBlock('[data-theme="light"]', "light", lightTokens),
     renderThemeIndependentBlock(),
+    renderNarrowAmbientBlock(),
   ].join("\n\n")}\n`;
 }
