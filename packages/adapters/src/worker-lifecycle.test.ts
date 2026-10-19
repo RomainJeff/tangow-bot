@@ -87,6 +87,19 @@ describe("worker plan", () => {
     });
   });
 
+  it.each([
+    ["private", { private: "rw", shared: null }],
+    ["shared", { private: null, shared: "rw" }],
+  ] as const)("refuses a run whose migrated home lacks its %s volume", async (slot, files) => {
+    const computer = await fixture.seedComputer(spaceA, { homeStorage: "volumes" });
+    const bot = await fixture.seedBot(spaceA, computer.id);
+    const attempt = await fixture.seedAttempt((await fixture.seedRun(bot)).id);
+
+    await expect(
+      workers.plan({ attemptId: attempt.id, needs: { files, computer: "none" } }),
+    ).resolves.toEqual({ mode: "refused", refusal: { code: "slot_volume_missing", slot } });
+  });
+
   it("refuses to plan for an attempt that lost its fence", async () => {
     const { bot } = await fixture.migratedBot();
     const run = await fixture.seedRun(bot, { leaseFence: 2 });

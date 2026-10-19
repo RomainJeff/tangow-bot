@@ -110,8 +110,11 @@ export type WorkerLaunch = {
   computer: { mode: "none" } | { mode: "on_use"; computerId: string };
 };
 
+export type VolumeSlot = "private" | "shared";
+
 export type LaunchPlan =
   | { mode: "in_process"; reason: "no_worker_provider" | "home_not_migrated" }
+  | { mode: "refused"; refusal: { code: "slot_volume_missing"; slot: VolumeSlot } }
   | WorkerLaunch;
 
 export type LaunchInputs = {
@@ -130,11 +133,16 @@ export function planLaunch(inputs: LaunchInputs, needs: RunNeeds): LaunchPlan {
   if ((privateAccess || sharedAccess) && inputs.computer?.homeStorage !== "volumes") {
     return { mode: "in_process", reason: "home_not_migrated" };
   }
+  const slots: Array<[VolumeSlot, VolumeAccess | null, string | null]> = [
+    ["private", privateAccess, inputs.privateVolumeId],
+    ["shared", sharedAccess, inputs.sharedVolumeId],
+  ];
   const volumes: VolumeGrant[] = [];
-  if (privateAccess)
-    volumes.push({ volumeId: ownVolume(inputs.privateVolumeId), access: privateAccess });
-  if (sharedAccess)
-    volumes.push({ volumeId: ownVolume(inputs.sharedVolumeId), access: sharedAccess });
+  for (const [slot, access, volumeId] of slots) {
+    if (!access) continue;
+    if (!volumeId) return { mode: "refused", refusal: { code: "slot_volume_missing", slot } };
+    volumes.push({ volumeId, access });
+  }
   return {
     mode: "worker",
     runId: inputs.runId,
@@ -148,12 +156,6 @@ export function planLaunch(inputs: LaunchInputs, needs: RunNeeds): LaunchPlan {
         ? { mode: "on_use", computerId: inputs.computer.id }
         : { mode: "none" },
   };
-}
-
-function ownVolume(volumeId: string | null): string {
-  // adoptVolumeHome refuses a home whose volumes are not all provisioned.
-  if (!volumeId) throw new Error("A migrated home is missing its volume");
-  return volumeId;
 }
 
 /** Only the attempt that claimed the run's current fence, while the run is claimed, may act. */

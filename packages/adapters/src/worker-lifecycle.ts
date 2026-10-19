@@ -55,6 +55,7 @@ export type StartedWorker = { providerRef: string; start: WorkerStartV1 };
 export type HomeAdoption =
   | "adopted"
   | "computer_kind_unsupported"
+  | "computer_active"
   | "volume_missing"
   | "volume_busy";
 
@@ -356,17 +357,36 @@ export function createWorkerLifecycle(deps: {
     /**
      * The only writer of computers.homeStorage: moves a home from snapshots to volumes once every
      * bot on the computer, and the space for a team computer, has a provisioned volume nobody
-     * writes. Called after the files were copied; stops automatic import and export for good.
+     * writes, and nothing runs on the computer. Called after the files were copied; stops
+     * automatic import and export for good.
      */
     async adoptVolumeHome(computerId: string): Promise<HomeAdoption> {
       return prisma.$transaction(async (tx) => {
         const [computer] = await tx.$queryRaw<
-          { kind: string; scope: string; spaceId: string; homeStorage: HomeStorage }[]
-        >`SELECT kind, scope, "spaceId", "homeStorage" FROM computers WHERE id = ${computerId}
-          FOR UPDATE`;
+          {
+            kind: string;
+            scope: string;
+            spaceId: string;
+            homeStorage: HomeStorage;
+            state: string;
+            controlHolder: string;
+          }[]
+        >`SELECT kind, scope, "spaceId", "homeStorage", state, "controlHolder" FROM computers
+          WHERE id = ${computerId} FOR UPDATE`;
         if (!computer) throw new Error("Computer not found");
         if (computer.homeStorage === "volumes") return "adopted";
         if (!supportsWorkers(computer.kind)) return "computer_kind_unsupported";
+        const executing = await tx.computerExecutionLease.count({
+          where: { computerId, expiresAt: { gt: new Date() } },
+        });
+        if (
+          !["stopped", "suspended"].includes(computer.state) ||
+          computer.controlHolder !== "none" ||
+          executing > 0
+        ) {
+          // A run writing to the computer's disk after the copy would lose those writes.
+          return "computer_active";
+        }
         const botIds = (await tx.bot.findMany({ where: { computerId }, select: { id: true } })).map(
           (bot) => bot.id,
         );

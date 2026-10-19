@@ -124,7 +124,8 @@ export function workerFixture(prisma: PrismaClient) {
       needs: RunNeeds,
     ): Promise<WorkerLaunch> {
       const plan = await workers.plan({ attemptId, needs });
-      if (plan.mode !== "worker") throw new Error(`expected a worker plan, got ${plan.reason}`);
+      if (plan.mode !== "worker")
+        throw new Error(`expected a worker plan, got ${JSON.stringify(plan)}`);
       return plan;
     },
 

@@ -70,6 +70,32 @@ describe("volume provisioning and home adoption", () => {
     expect(await homeStorage()).toBe("volumes");
   });
 
+  it("adopts a home only once nothing runs on its computer", async () => {
+    const computer = await fixture.seedComputer(spaceA, { scope: "dedicated" });
+    const bot = await fixture.seedBot(spaceA, computer.id);
+    await fixture.seedVolume("bot_private", spaceA, bot.id);
+    const run = await fixture.seedRun(bot);
+    const update = (data: Record<string, string>) =>
+      prisma.computer.update({ where: { id: computer.id }, data });
+    const lease = (expiresAt: Date) =>
+      prisma.computerExecutionLease.upsert({
+        where: { computerId_botId: { computerId: computer.id, botId: bot.id } },
+        create: { computerId: computer.id, botId: bot.id, runId: run.id, expiresAt },
+        update: { expiresAt },
+      });
+
+    await update({ state: "running" });
+    await expect(workers.adoptVolumeHome(computer.id)).resolves.toBe("computer_active");
+    await update({ state: "suspended", controlHolder: "user" });
+    await expect(workers.adoptVolumeHome(computer.id)).resolves.toBe("computer_active");
+    await update({ controlHolder: "none" });
+    await lease(new Date(Date.now() + 60_000));
+    await expect(workers.adoptVolumeHome(computer.id)).resolves.toBe("computer_active");
+
+    await lease(new Date(Date.now() - 60_000));
+    await expect(workers.adoptVolumeHome(computer.id)).resolves.toBe("adopted");
+  });
+
   it("never adopts a home on a computer kind without workers", async () => {
     const computer = await fixture.seedComputer(spaceA, { kind: "docker", scope: "dedicated" });
     const bot = await fixture.seedBot(spaceA, computer.id);
