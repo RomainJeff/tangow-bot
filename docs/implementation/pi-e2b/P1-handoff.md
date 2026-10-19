@@ -307,6 +307,8 @@ interface WorkerProvider {
 
 Only `e2b` declares worker support in `WORKER_SUPPORT`. Docker, Daytona, Box, desktop and fake computers keep their in-process path, and `adoptVolumeHome` refuses them with `computer_kind_unsupported`. The database check `computers_home_storage_check` allows `homeStorage = 'volumes'` only on an `e2b` computer. A new `SandboxKind` fails the build until it declares its support.
 
+To support another provider, such as Docker, follow [How to add a worker provider](adding-a-worker-provider.md).
+
 `createWorkerLifecycle({ prisma, provider: null })` answers every `plan` with `{ mode: "in_process", reason: "no_worker_provider" }` and runs no query. P3 adds the E2B worker adapter and composes it.
 
 ## Errors
