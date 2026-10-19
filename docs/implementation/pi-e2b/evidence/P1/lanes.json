@@ -1,0 +1,250 @@
+{
+  "ticket": "RomainJeff/rakazo-bot#195",
+  "tested_commit": "aac7a2608615a86b013a6cfabc7d711f7326d112",
+  "provider": "FakeWorkerProvider; no E2B VM, volume or credential",
+  "lanes": [
+    {
+      "lane": 1,
+      "scenario": "A historical run request without the new fields keeps its behavior",
+      "pass_when": "Old runs keep their behavior",
+      "evidence": [
+        {
+          "file": "packages/adapters/src/worker-lifecycle.test.ts",
+          "test": "worker plan keeps every run in process without a query when no worker provider is composed",
+          "status": "passed",
+          "database": "PGlite with every migration"
+        },
+        {
+          "file": "packages/adapters/src/computer-workspace.test.ts",
+          "test": "provider-neutral computer workspace restores a checkpoint into a replacement provider machine",
+          "status": "passed",
+          "database": "PGlite with every migration"
+        },
+        {
+          "file": "packages/adapters/src/computer-workspace.test.ts",
+          "test": "provider-neutral computer workspace checkpoints a Docker computer on the local store by revision, without copying",
+          "status": "passed",
+          "database": "PGlite with every migration"
+        },
+        {
+          "command": "pnpm test:integration",
+          "status": "passed",
+          "detail": "162 tests in 23 suites: the 159 baseline tests unchanged plus 3 new Postgres race tests"
+        }
+      ]
+    },
+    {
+      "lane": 2,
+      "scenario": "Two concurrent attempts of one run",
+      "pass_when": "Only one active attempt holds the fence",
+      "evidence": [
+        {
+          "file": "packages/adapters/src/worker-lifecycle.postgres.test.ts",
+          "test": "starts a worker only for the attempt holding the run's fence; lets one of two runs racing for the same volumes write, whatever their grant order; lets one of two concurrent starts of the same attempt reach the provider",
+          "status": "passed",
+          "database": "PostgreSQL 16 in Testcontainers via pnpm test:integration"
+        },
+        {
+          "file": "packages/adapters/src/worker-lifecycle.test.ts",
+          "test": "worker start refuses an attempt that no longer holds the run's fence before the provider",
+          "status": "passed",
+          "database": "PGlite with every migration"
+        },
+        {
+          "file": "packages/adapters/src/worker-lifecycle.test.ts",
+          "test": "worker ownership while start is in flight refuses a second start of the same attempt before the provider",
+          "status": "passed",
+          "database": "PGlite with every migration"
+        },
+        {
+          "file": "packages/adapters/src/worker-lifecycle.test.ts",
+          "test": "worker release reports a worker inactive once a newer claim takes the run's fence",
+          "status": "passed",
+          "database": "PGlite with every migration"
+        },
+        {
+          "file": "packages/adapters/src/worker-volumes.test.ts",
+          "test": "worker schema rejects a row that breaks attempts_runId_live_worker_key",
+          "status": "passed",
+          "database": "PGlite with every migration"
+        },
+        {
+          "file": "packages/adapters/src/worker-volumes.test.ts",
+          "test": "worker schema rejects a row that breaks attempts_runId_fence_key",
+          "status": "passed",
+          "database": "PGlite with every migration"
+        }
+      ]
+    },
+    {
+      "lane": 3,
+      "scenario": "Refuse a private volume that belongs to another bot",
+      "pass_when": "The request fails before any provider call",
+      "evidence": [
+        {
+          "file": "packages/adapters/src/worker-lifecycle.test.ts",
+          "test": "worker start refuses private_volume_of_other_bot before the provider",
+          "status": "passed",
+          "database": "PGlite with every migration"
+        },
+        {
+          "file": "packages/adapters/src/worker-lifecycle.test.ts",
+          "test": "worker plan refuses a run whose migrated home lacks its private volume",
+          "status": "passed",
+          "database": "PGlite with every migration"
+        }
+      ]
+    },
+    {
+      "lane": 4,
+      "scenario": "Refuse a shared volume that belongs to another space",
+      "pass_when": "The request fails before any provider call",
+      "evidence": [
+        {
+          "file": "packages/adapters/src/worker-lifecycle.test.ts",
+          "test": "worker start refuses shared_volume_of_other_space before the provider",
+          "status": "passed",
+          "database": "PGlite with every migration"
+        },
+        {
+          "file": "packages/adapters/src/worker-lifecycle.test.ts",
+          "test": "worker plan refuses a run whose migrated home lacks its shared volume",
+          "status": "passed",
+          "database": "PGlite with every migration"
+        }
+      ]
+    },
+    {
+      "lane": 5,
+      "scenario": "An MCP-only run without a computer",
+      "pass_when": "No computer lease and no user mount are required",
+      "evidence": [
+        {
+          "file": "packages/adapters/src/worker-lifecycle.test.ts",
+          "test": "worker start gives an MCP-only run a worker without a computer, mount or lease",
+          "status": "passed",
+          "database": "PGlite with every migration"
+        }
+      ]
+    },
+    {
+      "lane": 6,
+      "scenario": "Reconcile a provisioning interrupted after the provider reference was assigned",
+      "pass_when": "The provider reference finds and cleans the resource",
+      "evidence": [
+        {
+          "file": "packages/adapters/src/worker-lifecycle.test.ts",
+          "test": "worker release reconciles workers whose run lease expired, by ref or by attempt tag",
+          "status": "passed",
+          "database": "PGlite with every migration"
+        },
+        {
+          "file": "packages/adapters/src/worker-lifecycle.test.ts",
+          "test": "worker ownership while start is in flight holds the leases of a run cancelled mid-ensure until its late VM is destroyed",
+          "status": "passed",
+          "database": "PGlite with every migration"
+        },
+        {
+          "file": "packages/adapters/src/worker-lifecycle.test.ts",
+          "test": "worker ownership while start is in flight records the VM of an ensure that outlived its timeout until a destroy succeeds",
+          "status": "passed",
+          "database": "PGlite with every migration"
+        },
+        {
+          "file": "packages/adapters/src/worker-lifecycle.test.ts",
+          "test": "worker start releases the worker and its volumes when setup fails",
+          "status": "passed",
+          "database": "PGlite with every migration"
+        }
+      ]
+    },
+    {
+      "lane": 7,
+      "scenario": "Delete a worker already absent at the provider",
+      "pass_when": "The second deletion succeeds without side effect",
+      "evidence": [
+        {
+          "file": "packages/adapters/src/worker-lifecycle.test.ts",
+          "test": "worker release destroys once however often it is released, and an absent VM is released too",
+          "status": "passed",
+          "database": "PGlite with every migration"
+        },
+        {
+          "file": "packages/adapters/src/worker-lifecycle.test.ts",
+          "test": "worker ownership while start is in flight keeps the lease of a worker the provider cannot confirm destroyed",
+          "status": "passed",
+          "database": "PGlite with every migration"
+        },
+        {
+          "file": "packages/adapters/src/worker-lifecycle.test.ts",
+          "test": "worker release reaches a healthy worker behind one whose destroy fails, one worker per pass",
+          "status": "passed",
+          "database": "PGlite with every migration"
+        }
+      ]
+    },
+    {
+      "lane": 8,
+      "scenario": "Keep volumes after the run closes",
+      "pass_when": "References and persistent rows stay present",
+      "evidence": [
+        {
+          "file": "packages/adapters/src/worker-lifecycle.test.ts",
+          "test": "worker release keeps volume rows and provider refs after the run ends",
+          "status": "passed",
+          "database": "PGlite with every migration"
+        },
+        {
+          "file": "packages/adapters/src/worker-volumes.test.ts",
+          "test": "worker schema deletes a space without volumes, and refuses one that still owns a volume",
+          "status": "passed",
+          "database": "PGlite with every migration"
+        }
+      ]
+    },
+    {
+      "lane": 9,
+      "scenario": "Other adapters with the shared contracts",
+      "pass_when": "Non-E2B configurations compile and degrade explicitly",
+      "evidence": [
+        {
+          "command": "pnpm check",
+          "status": "passed",
+          "detail": "23 turbo typecheck tasks"
+        },
+        {
+          "file": "packages/adapters/src/worker-volumes.test.ts",
+          "test": "volume provisioning and home adoption never adopts a home on a computer kind without workers",
+          "status": "passed",
+          "database": "PGlite with every migration"
+        },
+        {
+          "file": "packages/adapters/src/worker-volumes.test.ts",
+          "test": "worker schema rejects a row that breaks computers_home_storage_check",
+          "status": "passed",
+          "database": "PGlite with every migration"
+        },
+        {
+          "file": "packages/adapters/src/worker-lifecycle.test.ts",
+          "test": "worker plan keeps every run in process without a query when no worker provider is composed",
+          "status": "passed",
+          "database": "PGlite with every migration"
+        }
+      ]
+    },
+    {
+      "lane": 10,
+      "scenario": "Apply the migration to a test database that holds old sessions",
+      "pass_when": "Old sessions project unchanged",
+      "evidence": [
+        {
+          "file": "packages/adapters/src/worker-migration.test.ts",
+          "test": "worker and volume migrations leave existing sessions, runs, attempts and homes as they were",
+          "status": "passed",
+          "database": "PGlite with every migration"
+        }
+      ]
+    }
+  ],
+  "limits": "These lanes prove the controller contract against a fake provider. They do not prove storage isolation, which belongs to I1."
+}
