@@ -70,19 +70,6 @@ export function ShellPage() {
     refreshRoutines,
   });
   const thread = useThreadView(store.snapshot, roster);
-  const transcriptWindow = useTranscriptWindow({
-    roster,
-    store,
-    viewRef: thread.viewRef,
-    searchParams,
-    setSearchParams,
-    refreshRoutines,
-    showBotPage: panels.showBotPage,
-  });
-  const voice = useVoice({ roster, snapshot: store.snapshot, view: thread.view, setPanel });
-  const mentionTargets = useComposerMentions(roster);
-  const activeTaughtSkills = store.taughtSkillsBotId === active?.id ? store.taughtSkills : [];
-  const recordingSkill = activeTaughtSkills.find((skill) => skill.status === "recording") ?? null;
   const activeSnapshot = thread.activeSnapshot;
   const shellReady =
     roster.initialBotsLoaded &&
@@ -90,6 +77,7 @@ export function ShellPage() {
       ? Boolean(activeGroup && activeSnapshot)
       : bots.length === 0 || Boolean(active && activeSnapshot));
 
+  // The perf marks commit before the transcript window's first scroll, as they always did.
   useLayoutEffect(() => {
     if (roster.initialBotsLoaded) {
       markOnce("rk:renderer:bots-committed");
@@ -104,6 +92,20 @@ export function ShellPage() {
       markAfterPaint("rk:renderer:shell-painted");
     }
   }, [active, roster.initialBotsLoaded, shellReady, store.snapshot?.botId]);
+
+  const transcriptWindow = useTranscriptWindow({
+    roster,
+    store,
+    viewRef: thread.viewRef,
+    searchParams,
+    setSearchParams,
+    refreshRoutines,
+    showBotPage: panels.showBotPage,
+  });
+  const voice = useVoice({ roster, snapshot: store.snapshot, view: thread.view, setPanel });
+  const mentionTargets = useComposerMentions(roster);
+  const activeTaughtSkills = store.taughtSkillsBotId === active?.id ? store.taughtSkills : [];
+  const recordingSkill = activeTaughtSkills.find((skill) => skill.status === "recording") ?? null;
 
   const draft = useComposerDraft({ roster, thread });
   const { createBot, createGroup, cancelFocusPromptFor } = useCreateChat({
