@@ -55,8 +55,23 @@ test("the phone bot list is a page that a chat opens from and returns to", async
   await expect(list).toBeHidden();
   await expect(main).toHaveJSProperty("inert", false);
 
+  // From a chat opened on the list, Back pops to it: the chat is still ahead in history.
+  await page.getByRole("link", { name: "Back" }).click();
+  await page.waitForURL(/\/app$/);
+  await expect(list).toBeVisible();
+  await page.goForward();
+  await page.waitForURL(chat);
+  await expect(list).toBeHidden();
+
   // The browser's back gesture returns to the list too.
   await page.goBack();
   await page.waitForURL(/\/app$/);
+  await expect(list).toBeVisible();
+
+  // A cold load of the bare route stays on the list, past the roster's refresh poll.
+  await page.goto("/app");
+  await expect(page.getByTestId("shell-root")).toHaveAttribute("data-ready", "true");
+  await page.waitForTimeout(3_500);
+  expect(new URL(page.url()).pathname).toBe("/app");
   await expect(list).toBeVisible();
 });

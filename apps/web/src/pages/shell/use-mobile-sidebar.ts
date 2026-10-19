@@ -1,4 +1,5 @@
 import { useMediaQuery } from "../../lib/use-media-query";
+import { PHONE_MEDIA } from "./layout";
 
 /**
  * At phone width the bot list is a page of its own, as in the iPhone app: the shell's bare
@@ -12,6 +13,6 @@ export function useMobileSidebar({
   listRoute: boolean;
   panelOpen: boolean;
 }) {
-  const phone = useMediaQuery("(max-width: 767px)");
+  const phone = useMediaQuery(PHONE_MEDIA);
   return phone && listRoute && !panelOpen;
 }

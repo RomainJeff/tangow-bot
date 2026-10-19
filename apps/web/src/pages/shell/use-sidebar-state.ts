@@ -151,7 +151,8 @@ export function useSidebarState({
         window.location.assign(path);
         return;
       }
-      navigate(path);
+      // Opened from the list: the chat's Back returns to it by popping this entry.
+      navigate(path, { state: { fromList: true } });
     },
     [bootstrapMe?.spaceId, navigate],
   );

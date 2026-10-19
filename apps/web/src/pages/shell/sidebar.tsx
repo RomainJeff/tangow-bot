@@ -47,7 +47,7 @@ export function BotsSidebar(props: BotsSidebarProps) {
   } = props;
   const { t } = useLingui();
   const searchRef = useRef<HTMLInputElement>(null);
-  // Below `md` the sidebar is the drawer, a dense list over the veil.
+  // Below `md` the sidebar is the bot list's own page, on the page background.
   const desktopWidth = useMediaQuery("(min-width: 768px)");
   return (
     <>

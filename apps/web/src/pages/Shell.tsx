@@ -53,7 +53,7 @@ export function ShellPage() {
   const { panel, setPanel, pageBot, pickedBotId } = panels;
   const mobileSidebarOpen = useMobileSidebar({
     listRoute: !botId && !groupId,
-    panelOpen: panel !== null,
+    panelOpen: panels.panelOpen,
   });
   const screen = useComputerScreen({ panel, roster, store });
   const [agentSkills, refreshAgentSkills] = useAgentSkillCatalog(roster.activeBotId);

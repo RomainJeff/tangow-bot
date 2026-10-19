@@ -4,7 +4,7 @@ import { isWorkingStatus } from "@rakazo/core";
 import { BotAvatar, Button, StackedAvatars } from "@rakazo/ui-web";
 import { ChevronLeft, Monitor, PanelLeftOpen, Phone, Settings } from "lucide-react";
 import type { Dispatch, RefObject, SetStateAction } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { desktopBridge } from "../../lib/desktop";
 import { WindowChrome } from "../WindowChrome";
 import type { BotPageView, Panel } from "./layout";
@@ -45,6 +45,8 @@ export function ThreadHeader({
   disabled?: boolean;
 }) {
   const { t } = useLingui();
+  const location = useLocation();
+  const navigate = useNavigate();
   const members = activeSnapshot?.members ?? activeGroup?.members ?? [];
   return (
     // No band: it overlays the thread, which fades out under the scroll edge;
@@ -62,10 +64,17 @@ export function ThreadHeader({
             A plain link: the `roundIcon` variant's `bg-transparent` would beat the glass. */}
         <Link
           to="/app"
+          replace
           aria-label={t`Back`}
+          // Opened from the list: pop back to it, so the history stays list, chat.
+          onClick={(event) => {
+            if (!(location.state as { fromList?: boolean } | null)?.fromList) return;
+            event.preventDefault();
+            navigate(-1);
+          }}
           className="rk-glass-control rk-press-round app-no-drag grid size-capsule shrink-0 place-items-center rounded-full text-foreground md:hidden"
         >
-          <ChevronLeft size={20} strokeWidth={1.8} />
+          <ChevronLeft size={20} strokeWidth={1.8} aria-hidden className="rtl:-scale-x-100" />
         </Link>
         {botsSidebarCollapsed ? (
           <Button

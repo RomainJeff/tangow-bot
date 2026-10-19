@@ -5,7 +5,7 @@ import type { NavigateFunction } from "react-router-dom";
 import { takeInitialBootstrap } from "../../lib/bootstrap";
 import { markOnce } from "../../lib/performance";
 import { rpc } from "../../lib/rpc";
-import { firstThreadRoute } from "./layout";
+import { firstThreadRoute, PHONE_MEDIA } from "./layout";
 
 /**
  * The bots, groups, sections and spaces the person can open, which one the
@@ -94,6 +94,8 @@ export function useRoster({
   // otherwise the auto-read below would undo the action on the next window focus.
   const markBotReadIfVisible = useCallback(
     (id: string) => {
+      // Only a chat open in the route is read: the phone's bot list keeps the last one behind it.
+      if (routeBotId.current !== id) return;
       if (manuallyUnread.current.has(id)) return;
       if (document.visibilityState === "visible" && document.hasFocus()) {
         void markBotRead(id).catch(() => undefined);
@@ -162,7 +164,13 @@ export function useRoster({
         }
         const currentBotId = routeBotId.current;
         if (currentBotId ? !list.some((bot) => bot.id === currentBotId) : !phoneList()) {
-          navigate(firstThreadRoute(list, groupList), { replace: true });
+          const lastBot = currentBotId ? undefined : activeBotId.current;
+          navigate(
+            lastBot && list.some((bot) => bot.id === lastBot)
+              ? `/app/${lastBot}`
+              : firstThreadRoute(list, groupList),
+            { replace: true },
+          );
         }
       } finally {
         botsRefreshInFlight.current -= 1;
@@ -258,7 +266,7 @@ export function useRoster({
       window.removeEventListener("focus", markVisibleBotRead);
       document.removeEventListener("visibilitychange", markVisibleBotRead);
     };
-  }, [active?.id, markBotReadIfVisible]);
+  }, [active?.id, botId, markBotReadIfVisible]);
 
   const flushBotOrder = useCallback(async () => {
     if (savingBotOrderRef.current) return;
@@ -338,5 +346,5 @@ export type Roster = ReturnType<typeof useRoster>;
 
 /** At phone width the bare route is the bot list's own page, so it is not redirected to a chat. */
 function phoneList(): boolean {
-  return window.matchMedia("(max-width: 767px)").matches;
+  return window.matchMedia(PHONE_MEDIA).matches;
 }
