@@ -79,7 +79,7 @@ erDiagram
   SPACE ||--o{ BOT : contains
   BOT ||--o| VOLUME : "private volume, kind bot_private"
   SPACE ||--o| VOLUME : "shared volume, kind space_shared"
-  ATTEMPT |o--o{ VOLUME : "writerAttemptId, single writer"
+  ATTEMPT |o--o{ VOLUME : "writerAttemptId, private volumes only"
   RUN ||--o{ ATTEMPT : "one per claimed fence"
   SPACE ||--o{ RUN : owns
 
@@ -96,7 +96,7 @@ erDiagram
   VOLUME {
     string kind "bot_private or space_shared"
     string providerRef "provider volume"
-    string writerAttemptId "null when free"
+    string writerAttemptId "null when free, always null when shared"
   }
   COMPUTER {
     string homeStorage "snapshot or volumes"
@@ -147,7 +147,7 @@ sequenceDiagram
     Lifecycle->>DB: check fence, refuse a second start
     Lifecycle->>DB: older live workers of the run to releasing
     Lifecycle->>DB: lock volumes ORDER BY id FOR UPDATE
-    Lifecycle->>DB: refuse foreign volumes, take every rw lease or none
+    Lifecycle->>DB: refuse foreign volumes, take every private rw lease or none
     Lifecycle->>DB: workerState requested, workerEnsureAt now
   end
   Lifecycle->>Provider: ensure(spec tagged with attemptId)
@@ -233,11 +233,13 @@ The `ro` right exists in the contract. `authorizeMounts` refuses it when the pro
 
 ## Writer lease
 
-`volumes.writerAttemptId` is the single writer of a writable volume. `start` takes every `rw` lease in one transaction that locks the volume rows with `ORDER BY id FOR UPDATE`. If one volume is busy, the transaction rolls back and `start` throws `VolumeBusyError`. Nothing stays held, including the supersede of older workers, and the caller requeues with the existing backoff. `release` locks the volumes it frees in the same order, after the attempt. Every transaction follows the lock order of the ownership protocol, so two of them cannot wait on each other.
+`volumes.writerAttemptId` is the single writer of a writable private volume. `takesWriterLease` is the only source of that rule: a mount takes a lease when it is `rw` and private. `start` takes every such lease in one transaction that locks the volume rows with `ORDER BY id FOR UPDATE`. If one volume is busy, the transaction rolls back and `start` throws `VolumeBusyError`. Nothing stays held, including the supersede of older workers, and the caller requeues with the existing backoff. `release` locks the volumes it frees in the same order, after the attempt. Every transaction follows the lock order of the ownership protocol, so two of them cannot wait on each other.
 
 A lease frees only in the transaction that records confirmed destruction. A run clock never frees it, because a hostile VM can keep writing after its run lease expires. A failed `ensure` keeps the lease for up to the ensure timeout, because its VM may still appear. `WorkerSpec.ttlSeconds` bounds a VM whose destruction is never confirmed: after the TTL the provider reports it `absent`, and the next `release` frees the lease. `WORKER_TTL_SECONDS` is four hours. P3 confirms or changes that value.
 
-The shared volume serializes writers across bots. While one bot's worker writes `/workspace/shared`, a second bot of the same space that needs `shared: "rw"` requeues.
+The shared volume takes no lease. Every bot of the space may write `/workspace/shared` at once, and its `writerAttemptId` stays null. The private lease exists to fence a run from its own stale attempt, because NFS has no atomic fence. Two bots of one space are both legitimate writers. Serializing them blocked every file run of the space behind one worker, including a run paused for a human.
+
+Two consequences are accepted. Concurrent writes to the same shared file follow last-write-wins, like a shared drive. A superseded or zombie VM may keep writing `/workspace/shared` until its destruction is confirmed.
 
 The computer never holds a writer lease. Manual edits on the computer are not part of any transaction with a worker.
 
@@ -387,7 +389,7 @@ The affected web selector ran the full suite, because no impact map exists. It r
 - No E2B VM, volume, NFS export or real credential was used. The lanes run against PGlite and the Testcontainers PostgreSQL harness with a fake provider. They prove the controller contract, not storage isolation. I1 owns that proof.
 - No product run uses a worker. P1 adds no executor wiring, no reconciler wiring and no composition root change.
 - A provider that breaks the ensure timeout can create a VM after `reconcile` freed its lease. Another writer can then overlap it until `start` records the orphan and destroys it. `WORKER_TTL_SECONDS` bounds that VM at the provider.
-- Deleting a run, a thread, a bot or a space cascades to its attempts. A worker that holds no lease, such as an MCP-only worker, then leaves no row, and its VM runs until the TTL. A worker that holds a lease blocks the deletion through the `RESTRICT` foreign key.
+- Deleting a run, a thread, a bot or a space cascades to its attempts. A worker that holds no lease, such as an MCP-only worker or one that writes only the shared volume, then leaves no row, and its VM runs until the TTL. A worker that holds a lease blocks the deletion through the `RESTRICT` foreign key.
 - The guest is hostile and can modify its own Pi process. Worker events do not prove what the guest did locally.
 - Space deletion, bot deletion and thread deletion are unchanged and still pass with no volume rows. They need P3's cleanup before volume rows exist.
 - There is no user interface change, so there are no captures. The web E2E selector result is in the verification receipt.

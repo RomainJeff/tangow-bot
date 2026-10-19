@@ -50,7 +50,7 @@ describe("volume provisioning and home adoption", () => {
       await fixture.seedBot(space, computer.id),
       await fixture.seedBot(space, computer.id),
     ];
-    await fixture.seedVolume("bot_private", space, ada.id);
+    const adaVolume = await fixture.seedVolume("bot_private", space, ada.id);
     const bobVolume = await fixture.seedVolume("bot_private", space, bob.id, null);
     const homeStorage = async () =>
       (await prisma.computer.findUniqueOrThrow({ where: { id: computer.id } })).homeStorage;
@@ -58,13 +58,13 @@ describe("volume provisioning and home adoption", () => {
     await expect(workers.adoptVolumeHome(computer.id)).resolves.toBe("volume_missing");
     await prisma.volume.update({ where: { id: bobVolume.id }, data: { providerRef: "bob" } });
     await expect(workers.adoptVolumeHome(computer.id)).resolves.toBe("volume_missing");
-    const shared = await fixture.seedVolume("space_shared", space, null);
+    await fixture.seedVolume("space_shared", space, null);
     const busy = await fixture.seedAttempt((await fixture.seedRun(ada)).id);
-    await prisma.volume.update({ where: { id: shared.id }, data: { writerAttemptId: busy.id } });
+    await prisma.volume.update({ where: { id: adaVolume.id }, data: { writerAttemptId: busy.id } });
     await expect(workers.adoptVolumeHome(computer.id)).resolves.toBe("volume_busy");
     expect(await homeStorage()).toBe("snapshot");
 
-    await prisma.volume.update({ where: { id: shared.id }, data: { writerAttemptId: null } });
+    await prisma.volume.update({ where: { id: adaVolume.id }, data: { writerAttemptId: null } });
     await expect(workers.adoptVolumeHome(computer.id)).resolves.toBe("adopted");
     await expect(workers.adoptVolumeHome(computer.id)).resolves.toBe("adopted");
     expect(await homeStorage()).toBe("volumes");

@@ -118,6 +118,13 @@ export function workerFixture(prisma: PrismaClient) {
       return { computer, bot, privateVolume, sharedVolume };
     },
 
+    /** A second bot on the same migrated computer, with its own private volume. */
+    async teammateOf(computer: { id: string; spaceId: string }) {
+      const bot = await fixture.seedBot(computer.spaceId, computer.id);
+      const privateVolume = await fixture.seedVolume("bot_private", computer.spaceId, bot.id);
+      return { bot, privateVolume };
+    },
+
     async launchFor(
       workers: ReturnType<typeof createWorkerLifecycle>,
       attemptId: string,
