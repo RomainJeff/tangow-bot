@@ -310,7 +310,7 @@ The receipts are in `evidence/P2/`: [verification.json](evidence/P2/verification
 
 ## Verification
 
-At the tested commit, the workspace typecheck passes 24 tasks. Lint passes with the base's 47 warnings and 1 info. The root unit suite passes 7,991 tests. The 77 P2 tests pass in 11 files. The PostgreSQL harness passes 162 tests in 23 suites with the new migration applied.
+At the tested commit, the workspace typecheck passes 24 tasks. Lint passes with the base's 47 warnings and 1 info. The root unit suite passes 7,992 tests. The 78 P2 tests pass in 11 files. The PostgreSQL harness passes all 23 suites with the new migration applied.
 
 | Lane | Proof | Result |
 | --- | --- | --- |
@@ -325,7 +325,7 @@ At the tested commit, the workspace typecheck passes 24 tasks. Lint passes with 
 | 9 | After a controller restart during an approval, nothing runs before the stored answer. | Pass |
 | 10 | A guest `done` while a call is open is held until the call settles. | Pass |
 
-This phase also adds a test that a guest's `model.abort` closes the controller's upstream call. It fails when the session ignores the abort.
+This phase also adds a test that a guest's `model.abort` closes the controller's upstream call. It fails when the session ignores the abort. A last test makes the stop journal fail after an unconfirmed stop and proves the controller survives it: without the handler, the late write was an unhandled rejection.
 
 ## Performance
 
@@ -368,9 +368,8 @@ All 120 stops were recorded as process ended and released, against the 10 s budg
 - The relay passes the guest's transcript to the provider without full validation. A malformed transcript fails only that call.
 - `model.request` accepts only the `pi-ai` call schema. A second dialect turns it into a union, as the harness guide describes.
 - `LocalWorkerProvider` always runs the Pi harness.
-- In the stop path, when destruction is not confirmed, nothing observes the later `process_ended` journal write. If that write fails, Node reports an unhandled rejection, which ends a process that runs with default settings. No test covers it.
 - PGlite's socket server keeps a connection's messages together only inside a transaction. Outside one, concurrent connections can interleave their parse and bind messages on PGlite's single session. A draft of the bench hit this as a parameter type error on the stop journal update, so PGlite tests with concurrent queries can fail for reasons PostgreSQL does not share. That PostgreSQL is unaffected is an inference from the socket server's queue code.
-- The web E2E selector was not run in this phase. No web or UI source changed.
+- The web E2E selector ran the full suite, because no impact map exists. It reports 211 passed and 11 failed, the same counts as the feature base. No web or UI source changed.
 - There is no user interface change, so there are no captures beyond the lane capture.
 
 ## Rollback
