@@ -1,0 +1,32 @@
+# Memory
+
+The memory library separates three collections: **Personal** memories, **Bot** memories belonging to one bot, and **Space** memories shared with the current Space. Terms are defined in the [glossary](../GLOSSARY.md); the main design decisions are recorded in [ADRs](adr/).
+
+## Library
+
+Every memory is a versioned Markdown document with its sources, an access scope and a lifecycle status. Space members can read Space memories and publish their own; editing and withdrawal retain the existing author and Space-owner checks. Space ownership never grants access to someone else's Personal memory, and a bot never reads another bot's collection. Publication copies only the approved text to the Space; the original remains private and subsequent edits do not propagate automatically.
+
+Every write carries the revision it was made against, so a stale edit is rejected instead of overwriting a newer one. Consolidation proposes a Markdown synthesis of two to eight active memories from one collection; acceptance can explicitly replace the sources or keep them, and replaced sources remain in history. OKF import creates a proposal: metadata claiming approval, authorship or permissions remains inert.
+
+## Proposals and withdrawal
+
+**Remember** is a human capture: the memory is active immediately, with the remembered message stored as evidence. A bot's memory tools create **proposals**. They become eligible for recall only after explicit acceptance. Editing a proposal does not accept it, and editing a withdrawn memory does not restore it.
+
+The server checks a cited message's version, exact quoted text and access before storing evidence. A user message and an assistant message retain distinct provenance; a verified citation verifies where the text came from, not whether the statement is true.
+
+Withdrawal excludes a memory from future recall. Previously published copies are independent and must be withdrawn separately if that is the intended outcome. Historical messages are not rewritten: removing a memory is different from erasing every occurrence of the same information from its original sources.
+
+Memory content is background data. It cannot grant a bot permissions, authorize an external action or override the product's instruction hierarchy. Access checks, lifecycle checks and revision checks remain server-side.
+
+## Existing installations
+
+The database migration preserves existing Markdown documents and their revisions. Legacy user documents remain personal; they do not become Space memories merely because the old settings screen called them "Shared documents". Documents without verifiable human activation enter the proposal list for review.
+
+Back up the database before a deployment migration and deploy the API and workers together. Do not keep an older worker running alongside the new memory lifecycle: it can still use the old automatic write path. A rollback of application binaries alone does not reverse the migration or restore old memory behavior safely.
+
+## Deployment sequence
+
+1. Pause incoming runs and stop old workers after their current jobs finish. Preserve pending jobs for the upgraded worker; do not let the old and new memory writers overlap.
+2. Back up the database. Apply the versioned migrations once through the deployment migration runner.
+3. Compare document and revision counts with the backup. Existing IDs, Markdown bodies and revision numbers must remain unchanged; the migration must not create Space publications from personal documents.
+4. Start the upgraded API and workers together. Verify one Personal memory and one Space publication using separate test identities, then resume incoming runs.
