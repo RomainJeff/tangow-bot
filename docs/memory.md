@@ -10,9 +10,11 @@ Every write carries the revision it was made against, so a stale edit is rejecte
 
 ## Proposals and withdrawal
 
-**Remember** is a human capture: the memory is active immediately, with the remembered message stored as evidence. A bot's memory tools create **proposals**. They become eligible for recall only after explicit acceptance. Editing a proposal does not accept it, and editing a withdrawn memory does not restore it.
+**Remember** is a human capture: the memory is active immediately, with the remembered message stored as evidence. A bot's memory tools and automatic extraction from a compacted conversation create **proposals**. They become eligible for recall only after explicit acceptance. Editing a proposal does not accept it, and editing a withdrawn memory does not restore it.
 
-The server checks a cited message's version, exact quoted text and access before storing evidence. A user message and an assistant message retain distinct provenance; a verified citation verifies where the text came from, not whether the statement is true.
+Automatic extraction produces individual candidates with a citation to the original message. The server checks the message version, exact quoted text and access before storing evidence. A user message and an assistant message retain distinct provenance; a verified citation verifies where the text came from, not whether the statement is true.
+
+Compaction records its extraction request durably with the conversation cursor and the current history generation. Failed extraction is retried with bounded backoff, and repeated candidates do not create repeated proposals. A rewind or clear that starts a new history generation, a changed source message, a withdrawn memory dependency or lost membership marks a pending request stale before it writes anything. A rejected candidate with unchanged source and content remains rejected. Short conversations that never compact are not automatically captured by this trigger; use **Remember** or the bot's memory tool when appropriate.
 
 Withdrawal excludes a memory from future recall. Previously published copies are independent and must be withdrawn separately if that is the intended outcome. Historical messages are not rewritten: removing a memory is different from erasing every occurrence of the same information from its original sources.
 
