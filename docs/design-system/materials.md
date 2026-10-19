@@ -29,9 +29,10 @@ Under Reduce Transparency every material turns opaque: `chrome` takes
 
 The values live in `packages/ui-tokens/src/materials.ts` and reach CSS as
 `--material-<name>-*`, `--ambient` (phone width included),
-`--scroll-edge-blur`, `--thread-fade-*` and `--thread-under-composer`. Screens
+`--scroll-edge-blur`, `--thread-fade-*`, `--thread-under-composer` and `--veil-*`. Screens
 spend them through `rk-glass-chrome`, `rk-glass-control`, `rk-glass-menu`,
-`rk-glass-list`, `rk-scroll-edge`, `rk-thread-mask` and `rk-thread-overlap`
+`rk-glass-list`, `rk-scroll-edge`, `rk-thread-mask`, `rk-thread-overlap` (which sets
+`--thread-overlap` for the other two) and `rk-thread-jump`
 from `packages/ui-web/src/materials.css`.
 
 Panels and overlay windows are content a person reads and edits, so they are

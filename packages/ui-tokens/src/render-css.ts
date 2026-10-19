@@ -39,11 +39,6 @@ export function cssVariableName(token: keyof ColorTokens): string {
   return `--${kebabCase(token)}`;
 }
 
-/** `biome`'s CSS formatter (100-col `lineWidth`) wraps a declaration that
- * doesn't fit on one line onto the next, indenting the value by 4 spaces and
- * filling each line with as many comma-separated layers as fit: this keeps a
- * fresh `generate` byte-identical to what `biome check --write` would
- * produce, so `tokens.css` never has to be reformatted by hand. */
 /** Splits a CSS list on its top-level commas, as biome breaks it, never inside a function. */
 function splitTopLevel(value: string): string[] {
   const layers: string[] = [];
@@ -62,6 +57,11 @@ function splitTopLevel(value: string): string[] {
   return layers;
 }
 
+/** `biome`'s CSS formatter (100-col `lineWidth`) wraps a declaration that
+ * doesn't fit on one line onto the next, indenting the value by 4 spaces and
+ * filling each line with as many comma-separated layers as fit: this keeps a
+ * fresh `generate` byte-identical to what `biome check --write` would
+ * produce, so `tokens.css` never has to be reformatted by hand. */
 function renderDeclaration(name: string, value: string, indent = "  "): string {
   const oneLine = `${indent}${name}: ${value};`;
   if (oneLine.length <= 100) return oneLine;
