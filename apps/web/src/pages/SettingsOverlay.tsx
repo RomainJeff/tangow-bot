@@ -165,7 +165,7 @@ export function SettingsOverlay({
             data-testid="settings-nav"
             aria-label={t`Settings`}
             // Beside the content, an inset panel like the app's sidebar; at phone width a row of tabs.
-            className="flex shrink-0 flex-row gap-1 overflow-x-auto px-3 py-3 md:m-2 md:w-[200px] md:flex-col md:overflow-y-auto md:rounded-2xl md:bg-group md:p-2 md:shadow-group"
+            className="flex shrink-0 flex-row gap-1 overflow-x-auto px-3 py-3 md:m-2 md:w-[200px] md:flex-col md:overflow-y-auto md:rounded-xl md:bg-group md:p-2 md:shadow-group"
           >
             {navItems.map((item) => {
               const Icon = item.icon;

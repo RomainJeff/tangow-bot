@@ -19,7 +19,7 @@ function CustomizeNav({
     { id: "skills" as const, label: <Trans>Skills</Trans>, Icon: Sparkles },
   ];
   return (
-    <nav className="m-2 flex w-44 shrink-0 flex-col gap-1 rounded-2xl bg-group p-2 pt-5 shadow-group sm:w-56">
+    <nav className="m-2 flex w-44 shrink-0 flex-col gap-1 rounded-xl bg-group p-2 pt-5 shadow-group sm:w-56">
       <div className="px-2.5 pb-4 text-2xl text-foreground">
         <Trans>Customize</Trans>
       </div>
