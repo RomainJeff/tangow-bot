@@ -12,6 +12,7 @@ loadRootEnv();
 import {
   ChatSdkMessagingSurface,
   createBackgroundJobHandlers,
+  createBotMemoryClassificationService,
   createConnectorStack,
   createJobReconciler,
   createLinkPreviewPurge,
@@ -50,7 +51,6 @@ import {
   resolveSandboxProvider,
   ScriptedAgentRuntime,
   SpaceDecisionProviderResolver,
-  SpaceMemoryProviderResolver,
 } from "@rakazo/adapters";
 import { parseSkillLearningMode, resolveEncryptionKey, resolveSupervisorToken } from "@rakazo/core";
 import {
@@ -168,8 +168,11 @@ async function main() {
   await connector.start();
   integrationSettings.warmDirectories();
   const memory = new MarkdownMemoryStore(prisma);
-  const memoryProviders = new SpaceMemoryProviderResolver(prisma, secrets);
   const decisionProviders = new SpaceDecisionProviderResolver(prisma, secrets);
+  const memoryMethodClassification = createBotMemoryClassificationService({
+    prisma,
+    decisionProviders,
+  });
   const home = new LocalAgentHomeStore(dataDir);
   const artifacts = new LocalArtifactStore(dataDir);
   const inMemoryJobs = process.env.WAKEUP_DRIVER === "memory" ? new InMemoryJobQueue() : undefined;
@@ -206,8 +209,8 @@ async function main() {
     runtime,
     sandbox,
     memory,
-    memoryProviders,
     decisionProviders,
+    classifyMemoryForBot: (request) => memoryMethodClassification.classifyForBot(request),
     home,
     artifacts,
     connector: stack.connector,
@@ -247,7 +250,6 @@ async function main() {
     runtime,
     secretStore: secrets,
     memory,
-    memoryProviders,
     deploymentModelKey,
     messaging,
     artifacts,

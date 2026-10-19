@@ -104,10 +104,11 @@ test("message hover shows a floating action pill; reply links to parent", async 
   await expect(botRow.locator('[data-slot="message-row-author"]')).toHaveCount(0);
   await expect(botRow.getByTestId("message-hover-time")).toHaveCount(1);
 
-  // The pill carries Reply/Copy directly; it has no More button at all any more.
+  // The pill carries Reply/Copy/Remember directly; it has no More button at all any more.
   await expect(botToolbar.getByRole("button", { name: "Reply" })).toBeVisible();
   await expect(botToolbar.getByRole("button", { name: "Copy" })).toBeVisible();
   await expect(botToolbar.getByRole("button", { name: "More" })).toHaveCount(0);
+  await expect(botToolbar.getByRole("button", { name: "Remember" })).toBeVisible();
   // Voice is not configured in this test, so the pill carries no Speak button.
   await expect(botToolbar.getByRole("button", { name: "Speak this reply" })).toHaveCount(0);
   await expectPillNextToBubble(
@@ -167,6 +168,7 @@ test("message hover shows a floating action pill; reply links to parent", async 
   await expect(userActions.getByTestId("message-edit")).toBeVisible();
   await expect(userActions.getByRole("button", { name: "Edit and resend" })).toBeVisible();
   await expect(userActions.getByRole("button", { name: "Copy" })).toBeVisible();
+  await expect(userActions.getByRole("button", { name: "Remember" })).toBeVisible();
   await expect(userActions.getByRole("button", { name: "Reply" })).toHaveCount(0);
   await expect(userActions.getByRole("button", { name: "React" })).toHaveCount(0);
 

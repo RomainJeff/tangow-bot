@@ -2,7 +2,7 @@ import { useLingui } from "@lingui/react/macro";
 import type { MessageReaction } from "@rakazo/contracts";
 import { canReactToThreadMessage, MESSAGE_REACTIONS } from "@rakazo/contracts";
 import { HoverPill, Popover, PopoverContent, PopoverTrigger } from "@rakazo/ui-web";
-import { Copy, Link2Off, Pencil, Reply, Smile, Square, Volume2 } from "lucide-react";
+import { Bookmark, Copy, Link2Off, Pencil, Reply, Smile, Square, Volume2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import type { MessageItem } from "../../lib/thread-items";
@@ -23,6 +23,7 @@ export function MessageHoverActions({
   previewMessageId,
   onReply,
   onReact,
+  onRemember,
   voiceReady,
   speaking,
   onSpeak,
@@ -34,6 +35,7 @@ export function MessageHoverActions({
   time?: ReactNode;
   onReply: (message: MessageItem) => void;
   onReact: (message: MessageItem, reaction: MessageReaction) => Promise<void>;
+  onRemember?: (message: MessageItem) => void;
   voiceReady: boolean;
   speaking: boolean;
   onSpeak: () => void;
@@ -126,6 +128,16 @@ export function MessageHoverActions({
             )}
           </button>
         ) : null}
+        {onRemember ? (
+          <button
+            type="button"
+            aria-label={t`Remember`}
+            onClick={() => onRemember(message)}
+            className={iconClass}
+          >
+            <Bookmark size={14} strokeWidth={1.7} />
+          </button>
+        ) : null}
       </div>
     </HoverPill>
   );
@@ -141,10 +153,12 @@ export function UserMessageActions({
   message,
   previewMessageId,
   onEdit,
+  onRemember,
 }: {
   message: MessageItem;
   previewMessageId?: string;
   onEdit: (message: MessageItem) => void;
+  onRemember?: (message: MessageItem) => void;
 }) {
   const { t } = useLingui();
   if (isLiveItem(message)) return null;
@@ -181,6 +195,16 @@ export function UserMessageActions({
           className={iconClass}
         >
           <Link2Off size={14} strokeWidth={1.7} />
+        </button>
+      ) : null}
+      {onRemember ? (
+        <button
+          type="button"
+          aria-label={t`Remember`}
+          onClick={() => onRemember(message)}
+          className={iconClass}
+        >
+          <Bookmark size={14} strokeWidth={1.7} />
         </button>
       ) : null}
     </div>

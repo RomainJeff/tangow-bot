@@ -18,7 +18,6 @@ import { performComputerUpdate } from "./computer-update.js";
 import type { createRunExecutor } from "./executor.js";
 import { compactHistory } from "./history-compaction.js";
 import { runLinkPreviewJob } from "./link-preview/job.js";
-import type { MemoryProviderResolver } from "./memory-provider-factory.js";
 import { deliverMessagingOutbound, mirrorMessagingOutbound } from "./messaging-delivery.js";
 import type { EncryptedSecretStore } from "./secrets.js";
 import { expireTaughtSkillTeaching } from "./teaching-session.js";
@@ -35,7 +34,6 @@ export function createBackgroundJobHandlers(deps: {
   runtime: AgentRuntime;
   secretStore: EncryptedSecretStore;
   memory: MemoryStore;
-  memoryProviders: MemoryProviderResolver;
   deploymentModelKey?: string;
   messaging?: MessagingSurface;
   /** Where link preview images are kept; without it `link.preview` jobs do nothing. */
@@ -106,7 +104,6 @@ export function createBackgroundJobHandlers(deps: {
           sessionLog: deps.sessionLog,
           runtime: deps.runtime,
           memory: deps.memory,
-          memoryProviders: deps.memoryProviders,
           deploymentModelKey: deps.deploymentModelKey,
           ...(deps.executor.resolveModel ? { resolveModel: deps.executor.resolveModel } : {}),
         },

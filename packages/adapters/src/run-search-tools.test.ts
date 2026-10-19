@@ -247,7 +247,6 @@ describe("search_runs authorization and archive discovery", () => {
         home: new LocalAgentHomeStore(root),
         dataDir: root,
         memory,
-        memoryProviders: { resolve: async () => null },
         secretStore: new EncryptedSecretStore("fixture-only-key"),
         jobs: new InMemoryJobQueue(),
         skillLock: createInMemorySkillLock(),

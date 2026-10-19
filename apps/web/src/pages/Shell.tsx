@@ -45,6 +45,7 @@ import {
   inferAttachmentMimeType,
   isActive,
   isRunTerminalEvent,
+  memoryCaptureInput,
   projectThreadView,
   reorderBotTo,
   resolveComposerSendPlan,
@@ -124,6 +125,7 @@ import {
 } from "../lib/transcript-scroll";
 import { speaker } from "../lib/tts";
 import { useMediaQuery } from "../lib/use-media-query";
+import { useOpenMemoryLibrary } from "../lib/use-open-memory-library";
 import type { ContextMenuPosition } from "./BotContextMenu";
 import type { CallThread } from "./CallView";
 import { memberName } from "./GroupPanel";
@@ -1929,6 +1931,20 @@ export function ShellPage() {
     },
     [t],
   );
+  const openMemory = useOpenMemoryLibrary();
+  const rememberMessage = useCallback(
+    async (message: MessageItem, botId: string | undefined) => {
+      const messageId = messageIdOf(viewRef.current, message);
+      if (!messageId) return;
+      try {
+        const document = await rpc.memory.library.capture(memoryCaptureInput(messageId, botId));
+        openMemory(botId ? "agent" : "personal", { bot: botId, memory: document.id });
+      } catch {
+        setSendError(t`Could not remember message`);
+      }
+    },
+    [openMemory, t],
+  );
   const onAttachmentPick = useCallback(
     async (files: FileList | null) => {
       const threadKey = activeGroupId.current ?? activeBotId.current;
@@ -2900,6 +2916,7 @@ export function ShellPage() {
                 onEdit={startRewind}
                 rewindFromItemId={activeRewindTarget?.id ?? null}
                 onReact={reactToMessage}
+                onRemember={rememberMessage}
                 onJumpToMessage={jumpToReplyMessage}
                 onOpenPeerMessages={(peer) => {
                   setPeerConversation(peer);

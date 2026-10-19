@@ -22,6 +22,7 @@ import {
   ChatSdkMessagingSurface,
   ComposioConnector,
   createBackgroundJobHandlers,
+  createBotMemoryClassificationService,
   createConnectorStack,
   createJobReconciler,
   createLinkPreviewPurge,
@@ -241,6 +242,10 @@ export async function createApp(
   const home = new LocalAgentHomeStore(env.dataDir);
   const artifacts = new LocalArtifactStore(env.dataDir);
   const memory = new MarkdownMemoryStore(prisma);
+  const memoryMethodClassification = createBotMemoryClassificationService({
+    prisma,
+    decisionProviders,
+  });
   const mcp = new McpConnector(
     prisma,
     secrets,
@@ -374,8 +379,8 @@ export async function createApp(
     runtime,
     sandbox,
     memory,
-    memoryProviders,
     decisionProviders,
+    classifyMemoryForBot: (request) => memoryMethodClassification.classifyForBot(request),
     home,
     artifacts,
     connector: stack.connector,
@@ -417,7 +422,6 @@ export async function createApp(
     runtime,
     secretStore: secrets,
     memory,
-    memoryProviders,
     deploymentModelKey: env.deploymentModelKey,
     messaging,
     artifacts,

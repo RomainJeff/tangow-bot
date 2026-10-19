@@ -256,8 +256,7 @@ function fixture({
     prisma,
     runtime: { describe: () => ({ capabilities: { scripted: false } }), run: runtimeRun },
     sandbox: { describe: () => ({ capabilities: { graphical: false } }) },
-    memory: { read: async () => ({ documents: [] }) },
-    memoryProviders: { resolve: async () => null },
+    memory: { read: async () => ({ documents: [] }), search: async () => [] },
     events: {
       append,
       claimSteering: vi.fn(async () => steering.splice(0)),

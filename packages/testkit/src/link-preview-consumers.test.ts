@@ -87,14 +87,21 @@ describe("no consumer of a message's blocks repeats a preview's title (CA 12, CA
       userId: "u1",
       sessionId: "session-1",
     };
+    const prisma = {
+      $transaction: async (work: (tx: unknown) => unknown) => work(prisma),
+      thread: { findUniqueOrThrow: vi.fn(async () => thread) },
+      run: { findMany: vi.fn(async () => []) },
+      memoryCaptureRequest: {
+        findFirst: vi.fn(async () => null),
+        createMany: vi.fn(),
+        findMany: vi.fn(async () => []),
+      },
+      deploymentSettings: { findUnique: vi.fn(async () => null) },
+      usageRecord: { create: vi.fn() },
+    };
     await compactHistory(
       {
-        prisma: {
-          $transaction: async (work: (tx: unknown) => unknown) => work(undefined),
-          thread: { findUniqueOrThrow: vi.fn(async () => thread) },
-          deploymentSettings: { findUnique: vi.fn(async () => null) },
-          usageRecord: { create: vi.fn() },
-        } as unknown as PrismaClient,
+        prisma: prisma as unknown as PrismaClient,
         sessionLog: {
           readTail: vi.fn(async () => conversation),
           append: vi.fn(async (_tx: unknown, draft: unknown) => draft),
@@ -107,7 +114,6 @@ describe("no consumer of a message's blocks repeats a preview's title (CA 12, CA
           read: vi.fn(async () => ({ documents: [] })),
           commit: vi.fn(),
         } as unknown as MemoryStore,
-        memoryProviders: { resolve: vi.fn(async () => null) },
         deploymentModelKey: "key",
       },
       "t1",

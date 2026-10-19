@@ -11,9 +11,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Added
 
 - **A bot's avatar on its page looks toward your mouse, on web and desktop.** The organic avatar at the top of the bot page turns its eyes toward the pointer wherever it is on the page and comes back to rest when the pointer leaves the window; it keeps its own glances while the bot works and stays still with reduced motion or on a touch screen.
+- **Memory has a shared library on web, desktop and mobile.** Keep a message from a conversation, then browse personal, bot and Space memories with their source passage and revision history; personal memory opens from the user menu. See [Memory](docs/memory.md).
+- **A bot you choose can organize memory from its conversation on web, desktop and mobile.** Turn on its memory-management skill and describe your method in its Instructions; it proposes how to classify, import, consolidate or withdraw memories and changes nothing until you confirm.
 
 #### Changed
 
+- Recall from and saving to Serenity or Supermemory are paused, and bots no longer have save_memory and forget_memory tools; memories now live in the Memory library.
+- Facts a bot remembers or extracts during conversation compaction now stay proposals until a person accepts them, and a withdrawn or changed source keeps memories built from it out of recall.
 - The model picker on web, desktop, and iPhone now includes the latest Pi catalog, including GPT-6.1 Sol and Claude 5.5 models.
 
 ### 2026-10-17

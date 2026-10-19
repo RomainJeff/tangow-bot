@@ -401,7 +401,7 @@ it("edits a memory document in the wide detail, saved only by Save, then focuses
   expect(api.memory.update).not.toHaveBeenCalled();
   await act(async () => saveButton().click());
   expect(api.memory.update.mock.calls).toEqual([
-    [{ documentId: "doc-1", content: "Prefers short answers, in French." }],
+    [{ documentId: "doc-1", content: "Prefers short answers, in French.", expectedRevision: 3 }],
   ]);
   expect(onView.mock.calls).toEqual([[{ tab: "knowledge", detail: null }]]);
 

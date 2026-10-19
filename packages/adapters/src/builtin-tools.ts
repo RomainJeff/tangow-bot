@@ -9,6 +9,7 @@ import {
 } from "@rakazo/contracts";
 import { BOT_SKILL_DESCRIPTION_MAX_LENGTH } from "@rakazo/core";
 import { z } from "zod";
+import { memoryManagementTools } from "./memory-management-tools.js";
 
 export const DELEGATION_TOOL_NAMES = new Set([
   "run_subagent",
@@ -467,7 +468,7 @@ that merely narrate internal operations.`,
   {
     name: "remember",
     description:
-      "Append a durable fact to this bot's explicit memory. Each call adds one line; nothing already stored is replaced.",
+      "Propose a durable fact for this bot. A human must accept it before recall; existing approved memories are not changed.",
     inputSchema: {
       type: "object",
       properties: {
@@ -511,23 +512,9 @@ that merely narrate internal operations.`,
     },
     readOnly: true,
   },
-  // Semantic-memory tools: exposed by selectMemoryTools() only when a
-  // A Space memory provider is configured (which hides `remember`).
-  {
-    name: "save_memory",
-    description:
-      "Store a durable fact in this bot's semantic memory (preferences, decisions, recurring context). Use for anything worth recalling in future conversations.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        content: { type: "string" },
-      },
-      required: ["content"],
-    },
-  },
   {
     name: "recall_memory",
-    description: "Semantically search this bot's durable memory for facts relevant to a query.",
+    description: "Search authorized, accepted memories for facts relevant to a query.",
     inputSchema: {
       type: "object",
       properties: {
@@ -536,22 +523,17 @@ that merely narrate internal operations.`,
       required: ["query"],
     },
   },
+  ...memoryManagementTools,
   {
-    name: "forget_memory",
+    name: "classify_memory",
     description:
-      "Forget a durable semantic memory by id (from recall citations). Providers without forget support return an error.",
+      "Create a classification suggestion for a memory using your active method. This never edits or activates the memory. Present its labels in this conversation and use review_memory_classification for human validation or corrections. Available only in your direct user chat; never use for another bot, group, messaging, or subagent context.",
     inputSchema: {
       type: "object",
       properties: {
-        id: { type: "string", description: "Memory id from a prior recall citation." },
-        entity: {
-          type: "string",
-          description:
-            "Optional entity/namespace from the recall citation when the provider scopes deletes.",
-        },
-        reason: { type: "string", description: "Optional reason recorded with the forget." },
+        memoryId: { type: "string", description: "Visible memory id to classify." },
       },
-      required: ["id"],
+      required: ["memoryId"],
     },
   },
   {
