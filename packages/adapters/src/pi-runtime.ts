@@ -325,6 +325,7 @@ export class PiAgentRuntime implements AgentRuntime {
         };
         resumeHost = host;
         const tools = toAgentTools(toolDefs, host);
+        const appNames = appNamesByAgentTool(toolDefs, tools);
         const seenSteeringIds: string[] = [];
         const initialSteering = request.claimSteering ? await request.claimSteering([]) : [];
         seenSteeringIds.push(...initialSteering.map((item) => item.id));
@@ -447,7 +448,7 @@ export class PiAgentRuntime implements AgentRuntime {
             toolActivityShowing = true;
             queue.push({
               type: "progress",
-              text: describeToolActivity(event.toolName, event.args),
+              text: describeToolActivity(event.toolName, appNames.get(event.toolName)),
               activity: true,
             });
           }
@@ -460,7 +461,7 @@ export class PiAgentRuntime implements AgentRuntime {
               if (toolActivityShowing) {
                 // Real text replaces the activity line instead of appending to it.
                 toolActivityShowing = false;
-                queue.push({ type: "progress", text: "", activity: true });
+                queue.push({ type: "progress", text: "Writing a reply", activity: true });
               }
               streamed += delta;
               queue.push({ type: "text", text: delta });
@@ -785,54 +786,60 @@ export function normalizeAgentToolName(name: string): string {
   return (normalized || FALLBACK_AGENT_TOOL_NAME).slice(0, MAX_AGENT_TOOL_NAME_LENGTH);
 }
 
+const TOOL_ACTIVITY = new Map<string, string>([
+  ["read_file", "Reading a file"],
+  ["list_files", "Skimming a folder"],
+  ["write_file", "Saving a file"],
+  ["edit_file", "Editing a file"],
+  ["attach_file", "Attaching a file"],
+  ["open_path", "Opening a file"],
+  ["shell", "Working the terminal"],
+  ["web_search", "Searching the web"],
+  ["web_fetch", "Reading a web page"],
+  ["browser_navigate", "Heading to a website"],
+  ["browser_snapshot", "Reading the page"],
+  ["browser_act", "Clicking through a site"],
+  ["browser_run", "Clicking through a site"],
+  ["computer_observe", "Glancing at the screen"],
+  ["computer_act", "Taking the mouse"],
+  ["run_subagent", "Briefing a helper"],
+  ["remember", "Tucking it into memory"],
+  ["render_plot", "Plotting a chart"],
+  ["skill_read", "Pulling up a skill"],
+  ["skill_search", "Looking up a skill"],
+  ["skill_create", "Learning a new trick"],
+  ["skill_update", "Refining a skill"],
+  ["skill_delete", "Deleting a skill"],
+  ["create_space", "Setting up a space"],
+  ["add_mcp_server", "Plugging in an app"],
+]);
+
+/**
+ * The kind of work a tool call is doing, shown live in the thread. It never carries the call's
+ * arguments: paths, commands, queries and URLs stay out of the thread.
+ */
+export function describeToolActivity(toolName: string, appName?: string): string {
+  if (appName) return `Stepping into ${appName}`;
+  return TOOL_ACTIVITY.get(toolName) ?? "Seeing to it";
+}
+
+/** Model-facing tool name to connected app display name, for the activity line. */
+function appNamesByAgentTool(
+  toolDefs: readonly ConnectorTool[],
+  tools: readonly AgentTool[],
+): ReadonlyMap<string, string> {
+  return new Map(
+    toolDefs.flatMap((tool, index) =>
+      tool.appName ? [[tools[index]!.name, tool.appName] as const] : [],
+    ),
+  );
+}
+
 /**
  * Return one valid, unique model-facing name per connector tool.
  * Existing valid names are reserved first so sanitizing a connector cannot
  * rename or shadow a builtin tool with the same valid name.
  */
-const ACTIVITY_DETAIL_LIMIT = 90;
-
-/** One human-readable line describing a tool call, shown live in the thread. */
-export function describeToolActivity(toolName: string, args: unknown): string {
-  const record = args && typeof args === "object" ? (args as Record<string, unknown>) : {};
-  const detail = (value: unknown): string => {
-    const text = sanitizeSensitiveText(String(value ?? ""))
-      .replaceAll(/\s+/g, " ")
-      .trim();
-    return text.length > ACTIVITY_DETAIL_LIMIT ? `${text.slice(0, ACTIVITY_DETAIL_LIMIT)}…` : text;
-  };
-  if (toolName === "shell") return `Running: ${detail(record.command)}`;
-  if (toolName === "read_file") return `Reading ${detail(record.path)}`;
-  if (toolName === "write_file") return `Writing ${detail(record.path)}`;
-  if (toolName === "edit_file") return `Editing ${detail(record.path)}`;
-  if (toolName === "list_files") return `Listing ${detail(record.path ?? ".")}`;
-  if (toolName === "attach_file") return `Attaching ${detail(record.path)}`;
-  if (toolName === "open_path") return `Opening ${detail(record.path)}`;
-  if (toolName === "render_plot") return "Rendering a chart";
-  if (toolName === "add_mcp_server") return `Connecting MCP server: ${detail(record.name)}`;
-  if (toolName === "computer_observe") return "Looking at the screen";
-  if (toolName === "browser_navigate")
-    return `Opening page: ${detail(redactActivityUrl(record.url))}`;
-  if (toolName === "browser_snapshot") return "Reading the page";
-  if (toolName === "browser_act" || toolName === "browser_run") return "Using the page";
-  if (toolName === "computer_act") return "Operating the computer";
-  if (toolName === "run_subagent") return `Delegating to helper: ${detail(record.name)}`;
-  if (toolName === "create_space") return `Creating space: ${detail(record.name)}`;
-  if (toolName === "remember") return "Saving a note to memory";
-  if (toolName === "web_search") return `Searching the web: ${detail(record.query)}`;
-  if (toolName === "web_fetch") return `Reading page: ${detail(redactActivityUrl(record.url))}`;
-  if (toolName === "skill_read") return `Reading skill: ${detail(record.name)}`;
-  if (toolName === "skill_search") return `Searching skills: ${detail(record.query)}`;
-  if (toolName === "skill_create") return `Creating skill: ${detail(record.name ?? "skill")}`;
-  if (toolName === "skill_update")
-    return `Updating skill: ${detail(record.name ?? record.skillId)}`;
-  if (toolName === "skill_delete")
-    return `Deleting skill: ${detail(record.name ?? record.skillId)}`;
-  const mcp = toolName.match(/^mcp__(.+?)__(.+)$/);
-  if (mcp) return `Using ${mcp[1]}: ${mcp[2]}`;
-  return `Using ${toolName}`;
-}
-
 export function normalizeAgentToolNames(tools: readonly ConnectorTool[]): string[] {
   const reservedValidNames = new Set(
     tools.filter((tool) => isProviderSafeAgentToolName(tool.name)).map((tool) => tool.name),
@@ -1521,6 +1528,8 @@ async function runSubagent(
     toolTrace: undefined,
     request: log ? { ...host.request, executeTool: log.executeTool } : host.request,
   };
+  const childTools = toAgentTools(childDefs, nestedHost);
+  const childAppNames = appNamesByAgentTool(childDefs, childTools);
   const nested = new Agent({
     sessionId: conversationSessionId(host.request.threadId, host.request.botId, agentId),
     streamFn: (m, ctx, options) =>
@@ -1543,7 +1552,7 @@ async function runSubagent(
         .join(" "),
       model: subagentModel,
       thinkingLevel: thinkingLevelFor(subagentModel, requestModel.thinkingLevel),
-      tools: toAgentTools(childDefs, nestedHost),
+      tools: childTools,
       messages: [],
     },
   });
@@ -1554,14 +1563,13 @@ async function runSubagent(
   nested.subscribe((event) => {
     if (event.type === "tool_execution_start") {
       if (host.toolCallBudget.exceeded) return;
-      const toolName = "toolName" in event && event.toolName ? String(event.toolName) : "a tool";
       host.queue.push({
         type: "subagent",
         agentId,
         name,
         task,
         status: "running",
-        progress: `using ${toolName}…`,
+        progress: describeToolActivity(event.toolName, childAppNames.get(event.toolName)),
       });
     }
     if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
@@ -1992,23 +2000,6 @@ function sanitizeSensitiveText(message: string) {
       "$1[redacted]",
     )
     .replace(/((?:auth|authorization)\s*[=:]\s*)(?!Bearer\b)[^\s"',;&]+/gi, "$1[redacted]");
-}
-
-/** Origin + path only for activity chips; drop userinfo, query, and fragment. */
-function redactActivityUrl(value: unknown): string {
-  const raw = String(value ?? "").trim();
-  if (!raw) return raw;
-  try {
-    const url = new URL(raw);
-    url.username = "";
-    url.password = "";
-    url.search = "";
-    url.hash = "";
-    return url.toString();
-  } catch {
-    // Never echo unparsed input — it may still contain userinfo/secrets.
-    return "[invalid URL]";
-  }
 }
 
 function sanitizeError(message: string) {

@@ -7,6 +7,7 @@ afterEach(() => vi.unstubAllGlobals());
 const SERVER = {
   id: "server-1",
   slug: "demo",
+  name: "Demo",
   transport: "streamable_http",
   endpoint: "https://mcp.example.test/mcp",
   secretId: null,
@@ -169,6 +170,7 @@ describe("MCP connector session cache", () => {
       if (count === 20) {
         expect(tools).toHaveLength(20);
         expect(tools[0]?.name).toMatch(/^mcp__demo__/);
+        expect(tools[0]?.appName).toBe("Demo");
       } else {
         expect(tools.map((tool) => tool.name)).toEqual([
           "mcp_search_tools",

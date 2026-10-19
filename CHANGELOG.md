@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### 2026-10-19
 
+#### Changed
+
+- While a bot works, its bubble now says what kind of thing it is doing, such as "Searching the web", "Briefing a helper" or "Stepping into Notion", instead of showing file paths, commands or search queries, on web, desktop and iPhone.
+
 #### Fixed
 
 - A routine check, or a bot in a group chat, with nothing to say after using a tool now stays silent on web, desktop, and iPhone instead of posting "I completed the tool step but could not produce a final response."
