@@ -71,7 +71,7 @@ describe("memory store contract shape", () => {
         where: {
           AND: [
             expect.objectContaining({
-              space: { memberships: { some: { userId: "user-1" } } },
+              space: { memberships: { some: { userId: "user-1" } }, memoryRecallEnabled: true },
               collection: { OR: [{ kind: "space" }, { ownerUserId: "user-1" }] },
               status: "active",
               AND: [

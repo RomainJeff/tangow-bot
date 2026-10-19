@@ -48,12 +48,13 @@ export function visibleWhere(actor: Reader, input: LibraryInput = {}, bot?: stri
   } satisfies Prisma.MemoryDocumentWhereInput;
 }
 
-/** Visible active memories in their validity window. */
+/** Visible active memories in their validity window, in a Space with recall on. */
 export function recallableWhere(actor: Reader, bot?: string): Prisma.MemoryDocumentWhereInput {
   const visible = visibleWhere(actor, { status: "active" }, bot);
   const now = new Date();
   return {
     ...visible,
+    space: { ...visible.space, memoryRecallEnabled: true },
     AND: [
       { OR: [{ validFrom: null }, { validFrom: { lte: now } }] },
       { OR: [{ validUntil: null }, { validUntil: { gte: now } }] },

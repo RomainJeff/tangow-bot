@@ -172,6 +172,7 @@ model Space {
   createdByUser               User?                        @relation("SpaceCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
   createdAt                   DateTime                     @default(now())
   deletingAt                  DateTime?
+  memoryRecallEnabled         Boolean                      @default(true)
   deletionClaimId             String?
   memberships                 SpaceMember[]
   bots                        Bot[]
@@ -559,6 +560,7 @@ model Run {
   leaseFence           Int              @default(0)
   leaseExpiresAt       DateTime?
   checkpoint           String?
+  memoryContextManifest Json?
   clientNonce          String?
   sourceMessageId      String?
   sourceMessage        SessionEntry?    @relation("RunSourceMessage", fields: [sourceMessageId], references: [id], onDelete: SetNull)

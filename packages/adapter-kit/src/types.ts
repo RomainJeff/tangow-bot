@@ -439,6 +439,12 @@ export interface AgentRunRequest {
   ) => Promise<unknown>;
   /** Called after a tool returns; implementations must not persist raw result contents. */
   onToolCompleted?: (completion: AgentToolCompletion) => Promise<void> | void;
+  /**
+   * Checks whether the data supplied to this run may still be sent to a model.
+   * Runtimes invoke it immediately before every provider request, including
+   * continuations after a tool result. Throwing cancels that request.
+   */
+  beforeModelCall?: () => Promise<void> | void;
   /** Atomically claim durable user steering at the runtime's next safe turn boundary. */
   claimSteering?: (seenIds: string[]) => Promise<AgentSteeringMessage[]>;
   /** Open the log of one `run_subagent` call: the helper runs in a session of its own. */
