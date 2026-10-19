@@ -62,9 +62,10 @@
     );
   }
 
-  /* The thread runs under the composer, but not under a line the shell sets
-     between them (teaching in progress): it would paint over it. */
-  .rk-thread-overlap:has(+ [data-slot="composer"]) {
+  /* The thread runs under the composer's bar, but not under a line the shell
+     sets between them (teaching in progress) nor under a notice, a reply chip or
+     the mention picker above the bar: it would show through their tints. */
+  .rk-thread-overlap:has(+ [data-slot="composer"] > [data-slot="composer-shell"]:first-child) {
     margin-bottom: calc(-1 * var(--thread-under-composer));
   }
 

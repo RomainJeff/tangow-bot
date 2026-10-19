@@ -19,7 +19,15 @@ import {
   typography,
 } from "./index.js";
 import type { MaterialKey } from "./materials.js";
-import { ambient, materials, narrowMaxWidth, scrollEdgeBlur, threadFade } from "./materials.js";
+import {
+  ambient,
+  materials,
+  narrowBackgroundFade,
+  narrowMaxWidth,
+  scrollEdgeBlur,
+  threadFade,
+  veil,
+} from "./materials.js";
 
 /** `cardForeground` -> `card-foreground` (no leading `--`). */
 function kebabCase(key: string): string {
@@ -88,13 +96,21 @@ function renderMaterialGeometryLines(): string[] {
     `  --thread-fade-bottom-start: ${threadFade.bottomStart}px;`,
     `  --thread-fade-bottom-end: ${threadFade.bottomEnd}px;`,
     `  --thread-under-composer: ${threadFade.underComposer}px;`,
+    `  --veil-mix: ${veil.mix}%;`,
+    `  --veil-blur: ${veil.blur}px;`,
   ];
 }
 
-/** Phone width takes its own ambient light, higher and from the corner. */
+/**
+ * Phone width takes its own ambient light, higher and from the corner, ending in
+ * the page background at the bottom edge for Safari's toolbar.
+ */
 function renderNarrowAmbientBlock(): string {
-  const block = (selector: string, appearance: ResolvedAppearance) =>
-    `  ${selector} {\n${renderDeclaration("--ambient", ambient.narrow[appearance], "    ")}\n  }`;
+  const block = (selector: string, appearance: ResolvedAppearance) => {
+    const background = (appearance === "light" ? lightTokens : darkTokens).background;
+    const value = `linear-gradient(to top, ${background} 0%, transparent ${narrowBackgroundFade}%), ${ambient.narrow[appearance]}`;
+    return `  ${selector} {\n${renderDeclaration("--ambient", value, "    ")}\n  }`;
+  };
   return `@media (max-width: ${narrowMaxWidth}px) {\n${block(':root,\n  [data-theme="dark"]', "dark")}\n\n${block('[data-theme="light"]', "light")}\n}`;
 }
 

@@ -291,21 +291,21 @@
   --thread-fade-bottom-start: 68px;
   --thread-fade-bottom-end: 20px;
   --thread-under-composer: 80px;
+  --veil-mix: 55%;
+  --veil-blur: 6px;
 }
 
 @media (max-width: 767px) {
   :root,
   [data-theme="dark"] {
     --ambient:
-      linear-gradient(to top, #161618 0%, rgba(22, 22, 24, 0) 22%),
-      radial-gradient(130% 62% at 0% 0%, #36363c 0%, rgba(54, 54, 60, 0) 100%),
-      linear-gradient(165deg, #19191c 0%, #0c0c0d 100%);
+      linear-gradient(to top, #161618 0%, transparent 22%), radial-gradient(130% 62% at 0% 0%,
+      #36363c 0%, rgba(54, 54, 60, 0) 100%), linear-gradient(165deg, #19191c 0%, #0c0c0d 100%);
   }
 
   [data-theme="light"] {
     --ambient:
-      linear-gradient(to top, #f2f2f4 0%, rgba(242, 242, 244, 0) 22%),
-      radial-gradient(130% 62% at 0% 0%, #ffffff 0%, rgba(255, 255, 255, 0) 100%),
-      linear-gradient(165deg, #f3f3f5 0%, #e2e2e7 100%);
+      linear-gradient(to top, #F2F2F4 0%, transparent 22%), radial-gradient(130% 62% at 0% 0%,
+      #ffffff 0%, rgba(255, 255, 255, 0) 100%), linear-gradient(165deg, #f3f3f5 0%, #e2e2e7 100%);
   }
 }

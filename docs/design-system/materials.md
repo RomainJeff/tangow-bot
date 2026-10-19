@@ -72,9 +72,10 @@ Content passing under the header fades out instead of meeting a band.
   so the two meet without a line. The thread is masked: transparent to 60 px
   and opaque from 84 px, so a dark bubble leaves no smear under the title.
 - Web composer: the thread runs 80 px under it (its 12 top inset, 48 bar and
-  20 bottom gap) and fades across the bar, opaque 68 px above the window's
-  edge and gone 20 px above it, so the glass blurs the thread and nothing
-  shows in the gap below.
+  20 bottom gap) and fades from the bar's top edge to 48 px below it, so the
+  glass blurs the thread and nothing shows in the gap under a one-line bar.
+  It stops above the composer instead while a notice, a reply chip or the
+  mention picker sits over the bar: it would show through their tints.
 - iPhone: the navigation bar's native scroll-edge effect. Where it is not
   available, a 124 px layer of the page tone (light `rgb(245, 245, 247)`,
   dark `rgb(20, 20, 22)`) at 0.55, 0.30 then 0, blurred 12 px, and a thread
@@ -111,6 +112,6 @@ passing under it.
   ambient light. The web drawer is the sidebar itself, on `list`, full height
   against the start edge with no radius, over a veil that blurs the thread
   6 px in the page background at 55% instead of darkening it: Safari's bars
-  stay in that colour.
+  stay in that colour. Under Reduce Transparency the veil is `overlay`.
 - Desktop window: the system's opaque window; the glass blurs the app's own
   ambient light, never the desktop. A window the app draws takes radius 26.
