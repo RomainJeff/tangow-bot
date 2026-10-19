@@ -139,7 +139,8 @@ async function main() {
         if (result.exitCode !== 0)
           throw new Error("Isolated integration database operation failed");
       };
-      const selectedSuites = e2eSpec ? suites.filter((suite) => suite === e2eSpec) : suites;
+      const selectedSuites =
+        e2eSpecs.length > 0 ? suites.filter((suite) => e2eSpecs.includes(suite)) : suites;
       if (selectedSuites.length === 0) {
         throw new Error("The requested integration spec is not registered in the harness");
       }
