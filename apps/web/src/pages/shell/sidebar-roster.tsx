@@ -232,7 +232,7 @@ export function SidebarRoster({
                     }}
                     className={`flex w-full items-center gap-2.75 rounded-row px-2.5 py-2.25 text-start ${
                       item.kind === "bot" ? "cursor-grab active:cursor-grabbing" : ""
-                    } ${selected ? "bg-sidebar-accent" : "hover:bg-sidebar-accent"}`}
+                    } ${selected ? "bg-sidebar-accent max-md:bg-group max-md:shadow-group" : "hover:bg-sidebar-accent"}`}
                     style={{
                       opacity: item.kind === "bot" && draggedBotId === item.chat.id ? 0.55 : 1,
                     }}

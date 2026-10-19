@@ -47,6 +47,10 @@ export type ColorTokens = {
   sidebarAccent: string;
   sidebarAccentForeground: string;
   surface: string;
+  /** The opaque plane of a side panel or an overlay window: content, so never glass. */
+  sheet: string;
+  /** A settings or activity group on a sheet, or on the page at phone width. */
+  group: string;
   success: string;
   warning: string;
   overlay: string;
@@ -96,6 +100,8 @@ export const darkTokens = {
   sidebarAccent: "#414143",
   sidebarAccentForeground: "#F5F5F7",
   surface: "#3C3C3F",
+  sheet: "#232326",
+  group: "#333336",
   success: "#4ECB71",
   warning: "#E9C46A",
   overlay: "rgba(4, 4, 5, 0.72)",
@@ -140,6 +146,8 @@ export const lightTokens = {
   sidebarAccent: "#E6E6E9",
   sidebarAccentForeground: "#1D1D1F",
   surface: "#FFFFFF",
+  sheet: "#F5F5F7",
+  group: "#FFFFFF",
   success: "#228B3B",
   warning: "#B7791F",
   overlay: "rgba(20, 20, 22, 0.45)",
@@ -251,6 +259,11 @@ export const lightShadows = {
   /** The composer while its field has focus: the hairline and the one drop shadow. */
   composerFocus: "0 0 0 1px rgba(17, 17, 20, 0.09), 0 12px 28px -18px rgba(17, 17, 20, 0.55)",
   floating: "0 1px 2px rgba(17, 17, 20, 0.08), 0 8px 20px -10px rgba(17, 17, 20, 0.35)",
+  /** A side panel or an overlay window lifting off the ambient light. */
+  sheet:
+    "0 0 0 1px rgba(0, 0, 0, 0.07), 0 2px 8px -2px rgba(0, 0, 0, 0.08), 0 24px 48px -24px rgba(0, 0, 0, 0.22)",
+  /** A group's hairline on its sheet. */
+  group: "0 0 0 1px rgba(0, 0, 0, 0.05)",
 } as const satisfies Record<string, string>;
 
 export type ShadowKey = keyof typeof lightShadows;
@@ -265,6 +278,9 @@ export const darkShadows = {
   // A drop shadow barely reads on a near-black page, so focus also brightens the hairline.
   composerFocus: "0 0 0 1px rgba(255, 255, 255, 0.16), 0 12px 28px -18px rgba(0, 0, 0, 0.8)",
   floating: "0 0 0 1px rgba(255, 255, 255, 0.08), 0 8px 20px -10px rgba(0, 0, 0, 0.7)",
+  sheet:
+    "0 0 0 1px rgba(255, 255, 255, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 48px -20px rgba(0, 0, 0, 0.7)",
+  group: "0 0 0 1px rgba(255, 255, 255, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.04)",
 } as const satisfies ShadowTokens;
 
 export function shadowsForAppearance(appearance: ResolvedAppearance): ShadowTokens {

@@ -146,7 +146,7 @@ export function RoutineDetail({
         dir="auto"
         className="gap-1.5"
         labelClassName="mx-3.5"
-        controlClassName="min-h-18 rounded-card border-transparent bg-background px-4 py-3 text-row-name dark:bg-background"
+        controlClassName="min-h-18 rounded-card border-transparent bg-group px-4 py-3 text-row-name shadow-group dark:bg-group"
       />
 
       <WhenToRun

@@ -174,11 +174,11 @@ it("reads a bot waiting on the person as Waiting for you, with its avatar at res
   expect(row.querySelector("[data-working]")?.getAttribute("data-working")).toBe("false");
 });
 
-it("floats on the chrome glass at desktop width and is a dense list as the phone drawer", () => {
+it("floats on the chrome glass at desktop width and sits on the page as the phone drawer", () => {
   const paneClass = () =>
     container.querySelector('[data-testid="bots-sidebar-pane"]')?.className.split(" ") ?? [];
   renderSidebar();
-  expect(paneClass()).toContain("rk-glass-list");
+  expect(paneClass()).toContain("bg-background");
 
   act(() => root.unmount());
   root = createRoot(container);
@@ -190,5 +190,5 @@ it("floats on the chrome glass at desktop width and is a dense list as the phone
   }));
   renderSidebar({ mobileSidebarOpen: false });
   expect(paneClass()).toContain("rk-glass-chrome");
-  expect(paneClass()).not.toContain("rk-glass-list");
+  expect(paneClass()).not.toContain("bg-background");
 });

@@ -72,14 +72,15 @@ export function BotsSidebar(props: BotsSidebarProps) {
           className={`flex min-h-0 flex-1 flex-col overflow-hidden md:rounded-pane ${
             desktopWidth
               ? "rk-glass-chrome"
-              : // The closed drawer's shadow would otherwise show at the window's edge.
-                `rk-glass-list ${mobileSidebarOpen ? "" : "shadow-none"}`
+              : // The drawer sits on the page background, which Safari paints its bars in;
+                // the closed drawer's shadow would otherwise show at the window's edge.
+                `bg-background ${mobileSidebarOpen ? "shadow-sheet" : ""}`
           }`}
         >
           <SidebarHeader {...props} />
           <InputGroup
             data-testid="sidebar-search"
-            className="mx-2.5 mb-2 w-auto rounded-row border-transparent bg-sidebar-accent dark:bg-sidebar-accent"
+            className="mx-2.5 mb-2 w-auto rounded-row border-transparent bg-sidebar-accent max-md:bg-group dark:bg-sidebar-accent max-md:dark:bg-group"
           >
             <InputGroupAddon>
               <Search size={16} strokeWidth={1.8} aria-hidden="true" />

@@ -210,7 +210,7 @@ export function BotActivity({
           {days.map(({ day, at, items }) => (
             <section key={day ?? "now"} className="flex flex-col not-first:pt-3">
               {day ? (
-                <h3 className="pb-1.5 ps-0.5 text-label text-muted-foreground">
+                <h3 className="mx-3.5 pb-1.5 text-label text-muted-foreground">
                   {threadTimeMarkerLabel(at, {
                     locale,
                     today: t`Today`,
@@ -219,15 +219,17 @@ export function BotActivity({
                   })}
                 </h3>
               ) : null}
-              {items.map((item) => (
-                <ActivityLine
-                  key={itemKey(item)}
-                  item={item}
-                  openRun={openRun}
-                  onOpenRoutine={onOpenRoutine}
-                  onWriteInstructions={onWriteInstructions}
-                />
-              ))}
+              <div className="flex flex-col rounded-card bg-group px-3.5 py-1 shadow-group">
+                {items.map((item) => (
+                  <ActivityLine
+                    key={itemKey(item)}
+                    item={item}
+                    openRun={openRun}
+                    onOpenRoutine={onOpenRoutine}
+                    onWriteInstructions={onWriteInstructions}
+                  />
+                ))}
+              </div>
             </section>
           ))}
           {read.next ? (
@@ -313,7 +315,7 @@ function useRunWords() {
 }
 
 /** A filled symbol draws its mark in the surface colour so it stays readable on the fill. */
-const FILLED = "[&>path]:stroke-surface";
+const FILLED = "[&>path]:stroke-group";
 
 const STATIC_LINE = "flex min-h-11 w-full items-center gap-2.5 rounded-row px-2 -mx-2 text-start";
 const LINE = `${STATIC_LINE} outline-none duration-(--duration-hover) ease-quiet hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50`;
