@@ -1,0 +1,238 @@
+import type { WorkerSpec } from "@rakazo/adapter-kit";
+import { describe, expect, it } from "vitest";
+import { E2BWorkerProvider, type E2BWorkerSandbox, type E2BWorkerSdk } from "./e2b-worker.js";
+import { encodeFrameLine } from "./runtime-worker/framing.js";
+
+type Guest = {
+  sandboxId: string;
+  command: string;
+  envs: Record<string, string>;
+  stdin: string[];
+  print(data: string): Promise<void>;
+  exit(): void;
+};
+
+/** E2B as the worker sees it: sandboxes found by metadata, mounts that name an existing volume. */
+function fakeE2B() {
+  const sandboxes = new Map<string, E2BWorkerSandbox>();
+  const volumes = new Set<string>();
+  const guests: Guest[] = [];
+  let created = 0;
+  const sdk: E2BWorkerSdk = {
+    async listSandboxes(metadata) {
+      return [...sandboxes]
+        .filter(([, sandbox]) =>
+          Object.entries(metadata).every(([key, value]) => sandbox.metadata?.[key] === value),
+        )
+        .map(([id]) => id);
+    },
+    async createSandbox(options) {
+      for (const name of Object.values(options.volumeMounts)) {
+        if (!volumes.has(name)) throw new Error(`No volume named ${name}`);
+      }
+      const id = `sbx_${++created}`;
+      sandboxes.set(id, options);
+      return id;
+    },
+    async killSandbox(id) {
+      return sandboxes.delete(id);
+    },
+    async startGuest(sandboxId, command, { envs, onStdout }) {
+      let exit = () => {};
+      const ended = new Promise<void>((resolve) => (exit = resolve));
+      const stdin: string[] = [];
+      guests.push({ sandboxId, command, envs, stdin, print: onStdout, exit });
+      return {
+        sendStdin: async (data) => void stdin.push(data),
+        closeStdin: async () => undefined,
+        wait: () => ended,
+      };
+    },
+    async listVolumes() {
+      return [...volumes];
+    },
+    async createVolume(name) {
+      volumes.add(name);
+      return name;
+    },
+  };
+  return { sdk, sandboxes, volumes, guests };
+}
+
+const config = { apiKey: "e2b-test-key", template: "rakazo-worker-pi" };
+
+function spec(mounts: WorkerSpec["mounts"], overrides: Partial<WorkerSpec> = {}): WorkerSpec {
+  return {
+    attemptId: "attempt_1",
+    runId: "run_1",
+    botId: "bot_1",
+    mounts,
+    ttlSeconds: 14_400,
+    ensureTimeoutSeconds: 900,
+    ...overrides,
+  };
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+describe("E2BWorkerProvider", () => {
+  it("creates one secure sandbox per attempt with its volumes mounted by name", async () => {
+    const e2b = fakeE2B();
+    const worker = new E2BWorkerProvider(config, e2b.sdk);
+    const bot = await worker.ensureVolume({ name: "rakazo-vol_bot" });
+    const shared = await worker.ensureVolume({ name: "rakazo-vol_shared" });
+    const attempt = spec([
+      { volumeRef: bot.providerRef, path: "/workspace/bots/bot_1", access: "rw" },
+      { volumeRef: shared.providerRef, path: "/workspace/shared", access: "rw" },
+    ]);
+
+    const first = await worker.ensure(attempt);
+    const again = await worker.ensure(attempt);
+
+    expect([first, again]).toEqual([{ providerRef: "sbx_1" }, { providerRef: "sbx_1" }]);
+    const { requestTimeoutMs, signal, ...created } = e2b.sandboxes.get("sbx_1")!;
+    expect(created).toEqual({
+      template: "rakazo-worker-pi",
+      secure: true,
+      metadata: { rakazo: "worker", attemptId: "attempt_1" },
+      envs: {
+        RAKAZO_WORKER_HARNESS: "pi",
+        RAKAZO_WORKER_SPOOL_DIR: "/workspace/bots/bot_1/.rakazo/tool-output",
+      },
+      volumeMounts: {
+        "/workspace/bots/bot_1": "rakazo-vol_bot",
+        "/workspace/shared": "rakazo-vol_shared",
+      },
+      timeoutMs: 14_400_000,
+      lifecycle: { onTimeout: "kill" },
+    });
+  });
+
+  it("leaves tool output to the guest's temporary directory without a private volume", async () => {
+    const e2b = fakeE2B();
+    const worker = new E2BWorkerProvider({ ...config, harness: "other" }, e2b.sdk);
+
+    await worker.ensure(spec([]));
+
+    const { envs, volumeMounts } = e2b.sandboxes.get("sbx_1")!;
+    expect({ envs, volumeMounts }).toEqual({
+      envs: { RAKAZO_WORKER_HARNESS: "other" },
+      volumeMounts: {},
+    });
+  });
+
+  it("creates nothing once the deadline passed while it looked for the attempt's sandbox", async () => {
+    const e2b = fakeE2B();
+    const worker = new E2BWorkerProvider(config, {
+      ...e2b.sdk,
+      listSandboxes: async (metadata) => {
+        await sleep(60);
+        return e2b.sdk.listSandboxes(metadata);
+      },
+    });
+
+    await expect(worker.ensure(spec([], { ensureTimeoutSeconds: 0.05 }))).rejects.toThrow(
+      "The worker of attempt_1 missed its deadline",
+    );
+    expect(e2b.sandboxes.size).toBe(0);
+  });
+
+  it("aborts a create still pending at the deadline", async () => {
+    const e2b = fakeE2B();
+    const worker = new E2BWorkerProvider(config, {
+      ...e2b.sdk,
+      createSandbox: ({ signal }) =>
+        new Promise((_resolve, reject) =>
+          signal?.addEventListener("abort", () => reject(new Error("create aborted"))),
+        ),
+    });
+
+    await expect(worker.ensure(spec([], { ensureTimeoutSeconds: 0.05 }))).rejects.toThrow(
+      "create aborted",
+    );
+  });
+
+  it("destroys every sandbox of the attempt, tagged or referenced, then reports none left", async () => {
+    const e2b = fakeE2B();
+    const worker = new E2BWorkerProvider(config, e2b.sdk);
+    await worker.ensure(spec([]));
+    await e2b.sdk.createSandbox({
+      ...e2b.sandboxes.get("sbx_1")!,
+      metadata: { rakazo: "worker", attemptId: "attempt_1" },
+    });
+    await worker.ensure(spec([], { attemptId: "attempt_2" }));
+
+    const destroyed = await worker.destroy({ attemptId: "attempt_1", providerRef: "sbx_1" });
+    const again = await worker.destroy({ attemptId: "attempt_1", providerRef: "sbx_1" });
+
+    expect([destroyed, again]).toEqual(["destroyed", "absent"]);
+    expect([...e2b.sandboxes.keys()]).toEqual(["sbx_3"]);
+  });
+
+  it("returns a volume's name and creates it once", async () => {
+    const e2b = fakeE2B();
+    const worker = new E2BWorkerProvider(config, e2b.sdk);
+
+    const refs = [
+      await worker.ensureVolume({ name: "rakazo-vol_1" }),
+      await worker.ensureVolume({ name: "rakazo-vol_1" }),
+    ];
+
+    expect(refs).toEqual([{ providerRef: "rakazo-vol_1" }, { providerRef: "rakazo-vol_1" }]);
+    expect([...e2b.volumes]).toEqual(["rakazo-vol_1"]);
+  });
+
+  it("carries frames both ways over the guest's stdio and ends when the command does", async () => {
+    const e2b = fakeE2B();
+    const worker = new E2BWorkerProvider(config, e2b.sdk);
+    const { connections, exited } = worker.connect(
+      { attemptId: "attempt_1", providerRef: "sbx_1" },
+      "rkw1.claims.mac",
+    );
+    const channels = connections[Symbol.asyncIterator]();
+    const channel = (await channels.next()).value!;
+    const [guest] = e2b.guests;
+    const frames = channel.frames[Symbol.asyncIterator]();
+
+    const line = encodeFrameLine(Buffer.from('{"kind":"worker.hello"}'));
+    void guest!.print(line.slice(0, 5));
+    void guest!.print(line.slice(5));
+    const hello = await frames.next();
+    await channel.send(Buffer.from('{"kind":"worker.start"}'));
+    guest!.exit();
+    await exited;
+
+    expect(guest).toMatchObject({
+      sandboxId: "sbx_1",
+      command: "node /opt/rakazo/agent-run-worker.mjs",
+      envs: { RAKAZO_WORKER_CAPABILITY: "rkw1.claims.mac" },
+    });
+    expect(Buffer.from(hello.value!).toString()).toBe('{"kind":"worker.hello"}');
+    expect(guest!.stdin.map((sent) => Buffer.from(sent, "base64").toString())).toEqual([
+      '{"kind":"worker.start"}',
+    ]);
+    expect(await frames.next()).toEqual({ done: true, value: undefined });
+    expect(await channels.next()).toEqual({ done: true, value: undefined });
+  });
+
+  it("settles a guest that could not start, with no connection", async () => {
+    const e2b = fakeE2B();
+    const worker = new E2BWorkerProvider(config, {
+      ...e2b.sdk,
+      startGuest: async () => {
+        throw new Error("sandbox not found");
+      },
+    });
+
+    const { connections, exited } = worker.connect(
+      { attemptId: "attempt_1", providerRef: "sbx_gone" },
+      "rkw1.claims.mac",
+    );
+
+    await exited;
+    expect(await connections[Symbol.asyncIterator]().next()).toEqual({
+      done: true,
+      value: undefined,
+    });
+  });
+});

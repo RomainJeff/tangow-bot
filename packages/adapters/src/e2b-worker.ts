@@ -1,0 +1,281 @@
+import type {
+  AdapterDescriptor,
+  WorkerCapabilities,
+  WorkerProvider,
+  WorkerSpec,
+} from "@rakazo/adapter-kit";
+import { volumeMountPath } from "@rakazo/core";
+import { getLogger } from "@rakazo/logging";
+import { type ConnectionOpts, Sandbox, type SandboxOpts, Volume } from "e2b";
+import { encodeFrameLine, type FrameChannel, readFrameLines } from "./runtime-worker/framing.js";
+import type { GuestConnector } from "./runtime-worker/launcher.js";
+import { WORKER_LIMITS } from "./runtime-worker/limits.js";
+
+/** Where the worker template puts the guest bundle. */
+export const E2B_WORKER_GUEST_ENTRY = "/opt/rakazo/agent-run-worker.mjs";
+
+const STDERR_TAIL_CHARS = 4096;
+
+export interface E2BWorkerConfig {
+  apiKey: string;
+  domain?: string;
+  apiUrl?: string;
+  /** The template built from `apps/agent-run-worker/template`. */
+  template: string;
+  guestEntry?: string;
+  /** The harness the guest runs, by the name it registers. */
+  harness?: string;
+}
+
+export type E2BWorkerSandbox = Pick<
+  SandboxOpts,
+  "metadata" | "envs" | "timeoutMs" | "requestTimeoutMs" | "signal"
+> & {
+  template: string;
+  secure: true;
+  volumeMounts: Record<string, string>;
+  lifecycle: { onTimeout: "kill" };
+};
+
+export interface E2BGuestCommand {
+  sendStdin(data: string): Promise<void>;
+  closeStdin(): Promise<void>;
+  /** Settles when the command ends or its stream breaks. */
+  wait(): Promise<unknown>;
+}
+
+/** The E2B calls a worker makes. Tests stand in for the vendor here. */
+export interface E2BWorkerSdk {
+  listSandboxes(metadata: Record<string, string>): Promise<string[]>;
+  createSandbox(options: E2BWorkerSandbox): Promise<string>;
+  /** False when the sandbox is already gone. */
+  killSandbox(sandboxId: string): Promise<boolean>;
+  startGuest(
+    sandboxId: string,
+    command: string,
+    options: {
+      envs: Record<string, string>;
+      onStdout(data: string): Promise<void>;
+      onStderr(data: string): void;
+    },
+  ): Promise<E2BGuestCommand>;
+  listVolumes(): Promise<string[]>;
+  createVolume(name: string): Promise<string>;
+}
+
+export function e2bWorkerSdk(connection: ConnectionOpts): E2BWorkerSdk {
+  const opened = new Map<string, Sandbox>();
+  const open = async (sandboxId: string) => {
+    const known = opened.get(sandboxId);
+    if (known) return known;
+    // Connecting sets the sandbox timeout: keep the end `ensure` gave it.
+    const { endAt } = await Sandbox.getInfo(sandboxId, connection);
+    const sandbox = await Sandbox.connect(sandboxId, {
+      ...connection,
+      timeoutMs: Math.max(endAt.getTime() - Date.now(), 1_000),
+    });
+    opened.set(sandboxId, sandbox);
+    return sandbox;
+  };
+  return {
+    async listSandboxes(metadata) {
+      const ids: string[] = [];
+      const pages = Sandbox.list({ ...connection, query: { metadata } });
+      while (pages.hasNext) ids.push(...(await pages.nextItems()).map((info) => info.sandboxId));
+      return ids;
+    },
+    async createSandbox({ template, ...options }) {
+      const sandbox = await Sandbox.create(template, { ...connection, ...options });
+      opened.set(sandbox.sandboxId, sandbox);
+      return sandbox.sandboxId;
+    },
+    killSandbox(sandboxId) {
+      opened.delete(sandboxId);
+      return Sandbox.kill(sandboxId, connection);
+    },
+    async startGuest(sandboxId, command, options) {
+      const sandbox = await open(sandboxId);
+      return sandbox.commands.run(command, {
+        ...options,
+        background: true,
+        stdin: true,
+        timeoutMs: 0,
+      });
+    },
+    async listVolumes() {
+      return (await Volume.list(connection)).map((volume) => volume.name);
+    },
+    async createVolume(name) {
+      return (await Volume.create(name, connection)).name;
+    },
+  };
+}
+
+/** Hands each stdout chunk to the reader and resolves once it took it, so a slow reader slows E2B. */
+function handoff() {
+  const queued: Array<{ chunk: string; taken: () => void }> = [];
+  let wake: (() => void) | undefined;
+  let ended = false;
+  const end = () => {
+    ended = true;
+    for (const { taken } of queued.splice(0)) taken();
+    wake?.();
+  };
+  return {
+    end,
+    push(chunk: string): Promise<void> {
+      if (ended) return Promise.resolve();
+      return new Promise<void>((taken) => {
+        queued.push({ chunk, taken });
+        wake?.();
+      });
+    },
+    async *chunks(): AsyncGenerator<string> {
+      try {
+        while (true) {
+          const next = queued.shift();
+          if (next) {
+            next.taken();
+            yield next.chunk;
+          } else if (ended) return;
+          else await new Promise<void>((resume) => (wake = resume));
+        }
+      } finally {
+        end();
+      }
+    },
+  };
+}
+
+const attemptTag = (attemptId: string) => ({ rakazo: "worker", attemptId });
+
+/**
+ * Run workers as E2B sandboxes, one per attempt, tagged with its id. The guest is the bundle the
+ * worker template installs, driven over its stdio through E2B's command API, the only route
+ * between controller and guest. Volumes are referenced by name, which is what an E2B mount takes.
+ */
+export class E2BWorkerProvider implements WorkerProvider, GuestConnector {
+  private readonly sdk: E2BWorkerSdk;
+
+  constructor(
+    private readonly config: E2BWorkerConfig,
+    sdk?: E2BWorkerSdk,
+  ) {
+    this.sdk =
+      sdk ?? e2bWorkerSdk({ apiKey: config.apiKey, domain: config.domain, apiUrl: config.apiUrl });
+  }
+
+  describe(): AdapterDescriptor<WorkerCapabilities> {
+    return {
+      id: "e2b-worker",
+      contractVersion: "1",
+      adapterVersion: "0.1.0",
+      capabilities: { readOnlyMounts: false },
+    };
+  }
+
+  async ensure(spec: WorkerSpec): Promise<{ providerRef: string }> {
+    const deadline = Date.now() + spec.ensureTimeoutSeconds * 1000;
+    const metadata = attemptTag(spec.attemptId);
+    const [existing] = await this.sdk.listSandboxes(metadata);
+    if (existing) return { providerRef: existing };
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) throw new Error(`The worker of ${spec.attemptId} missed its deadline`);
+    const privateMount = volumeMountPath({ kind: "bot_private", botId: spec.botId });
+    const providerRef = await this.sdk.createSandbox({
+      template: this.config.template,
+      secure: true,
+      metadata,
+      envs: {
+        RAKAZO_WORKER_HARNESS: this.config.harness ?? "pi",
+        ...(spec.mounts.some((mount) => mount.path === privateMount) && {
+          RAKAZO_WORKER_SPOOL_DIR: `${privateMount}/.rakazo/tool-output`,
+        }),
+      },
+      volumeMounts: Object.fromEntries(spec.mounts.map((mount) => [mount.path, mount.volumeRef])),
+      timeoutMs: spec.ttlSeconds * 1000,
+      lifecycle: { onTimeout: "kill" },
+      requestTimeoutMs: remainingMs,
+      signal: AbortSignal.timeout(remainingMs),
+    });
+    return { providerRef };
+  }
+
+  /** The sandbox runs with its mounts once created; the guest's hello is the readiness check. */
+  async prepare(): Promise<void> {}
+
+  async destroy(target: {
+    attemptId: string;
+    providerRef: string | null;
+  }): Promise<"destroyed" | "absent"> {
+    const ids = new Set(await this.sdk.listSandboxes(attemptTag(target.attemptId)));
+    if (target.providerRef) ids.add(target.providerRef);
+    const killed = await Promise.all([...ids].map((id) => this.sdk.killSandbox(id)));
+    return killed.includes(true) ? "destroyed" : "absent";
+  }
+
+  async ensureVolume(input: { name: string }): Promise<{ providerRef: string }> {
+    const names = await this.sdk.listVolumes();
+    return {
+      providerRef: names.includes(input.name)
+        ? input.name
+        : await this.sdk.createVolume(input.name),
+    };
+  }
+
+  /**
+   * One connection per attempt. Stdio is a single stream: E2B does not replay output produced while
+   * the controller was detached, and the guest never learns that its stdout was, so it would not
+   * resend. A broken stream loses the guest, and the run's next attempt starts a new one.
+   */
+  connect(
+    target: { attemptId: string; providerRef: string },
+    capability: string,
+  ): { connections: AsyncIterable<FrameChannel>; exited: Promise<void> } {
+    const stdout = handoff();
+    let stderr = "";
+    const command = this.sdk.startGuest(
+      target.providerRef,
+      `node ${this.config.guestEntry ?? E2B_WORKER_GUEST_ENTRY}`,
+      {
+        envs: { RAKAZO_WORKER_CAPABILITY: capability },
+        onStdout: (data) => stdout.push(data),
+        onStderr: (data) => {
+          stderr = (stderr + data).slice(-STDERR_TAIL_CHARS);
+        },
+      },
+    );
+    const exited = command
+      .then((guest) => guest.wait())
+      .then(
+        () => undefined,
+        (error: unknown) => {
+          getLogger().info("e2b worker guest ended with an error", {
+            attemptId: target.attemptId,
+            error,
+            stderr,
+          });
+        },
+      )
+      .finally(stdout.end);
+
+    async function* connections(): AsyncGenerator<FrameChannel> {
+      const guest = await command.catch(() => undefined);
+      if (!guest) return;
+      let sending = Promise.resolve();
+      yield {
+        frames: readFrameLines(stdout.chunks(), WORKER_LIMITS.modelRequestBytes),
+        send(frame) {
+          const line = encodeFrameLine(frame);
+          sending = sending.then(() => guest.sendStdin(line)).catch(() => undefined);
+          return sending;
+        },
+        close() {
+          stdout.end();
+          void guest.closeStdin().catch(() => undefined);
+        },
+      };
+    }
+    return { connections: connections(), exited };
+  }
+}
