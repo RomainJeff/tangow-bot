@@ -38,13 +38,13 @@ export const materials = {
   },
   /** The header's action capsule, the composer, the hover pill, round buttons. */
   control: {
-    fill: { light: "rgba(255, 255, 255, 0.72)", dark: "rgba(44, 44, 48, 0.72)" },
+    fill: { light: "rgba(255, 255, 255, 0.6)", dark: "rgba(44, 44, 48, 0.6)" },
     edge: {
       light:
         "inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 0 0 1px rgba(0, 0, 0, 0.08), 0 2px 8px -2px rgba(0, 0, 0, 0.1)",
       dark: "inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 0 0 1px rgba(255, 255, 255, 0.08), 0 2px 8px -2px rgba(0, 0, 0, 0.5)",
     },
-    blur: 24,
+    blur: 12,
     saturate: 170,
     fallback: "card",
   },
@@ -69,6 +69,13 @@ export const materials = {
 export type MaterialKey = keyof typeof materials;
 
 /**
+ * The phone drawer's veil: the thread blurred `blur` px under the page
+ * background at `mix`%, rather than darkened, so it meets Safari's bars (painted
+ * in that colour) without a line. Under Reduce Transparency it takes `overlay`.
+ */
+export const veil = { mix: 55, blur: 6 } as const;
+
+/**
  * The neutral light falling from the top start corner over the whole window,
  * under the floating sidebar too, so the glass has something to blur. Phone
  * width has its own values, higher and from the corner.
@@ -86,20 +93,34 @@ export const ambient = {
   },
 } as const satisfies Record<string, PerAppearance>;
 
+/**
+ * On the web at phone width the ambient fades into `background` over its
+ * bottom N%: Safari paints its toolbar in that colour.
+ */
+export const narrowBackgroundFade = 22;
+
 /** Widths below this take the `narrow` ambient (Tailwind's `md`). */
 export const narrowMaxWidth = 767;
-
-/** The page tone, as RGB channels, that the thread fades into under the header. */
-export const scrollEdgeTone = {
-  light: "245 245 247",
-  dark: "20 20 22",
-} as const satisfies PerAppearance;
 
 /** The scroll edge's backdrop blur under the header, in px. */
 export const scrollEdgeBlur = 20;
 
 /**
  * Where the thread fades, in px: in under the header from `topStart` to
- * `topEnd`, and out over its last `bottom` px, which run under the composer.
+ * `topEnd`. At the bottom it runs `underComposer` px under the composer, its
+ * 12 top inset, 48 bar and 20 bottom gap (the composer's `pt-3`, `min-h-12` and
+ * `pb-5`; the jump-to-latest button sits 16 above it), so its box
+ * ends 68 px below the bar's top. It fades out from `bottomStart` to
+ * `bottomEnd` px above that end: from the bar's top to 48 px below it, so the
+ * glass has the thread to blur and nothing shows in the gap under a one-line bar.
+ * Over a notice above the bar it stops at the composer and fades over its last
+ * `bottomRest` px.
  */
-export const threadFade = { topStart: 60, topEnd: 84, bottom: 64 } as const;
+export const threadFade = {
+  topStart: 60,
+  topEnd: 84,
+  bottomStart: 68,
+  bottomEnd: 20,
+  bottomRest: 24,
+  underComposer: 80,
+} as const;

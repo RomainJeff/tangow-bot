@@ -22,10 +22,11 @@ import type { MaterialKey } from "./materials.js";
 import {
   ambient,
   materials,
+  narrowBackgroundFade,
   narrowMaxWidth,
   scrollEdgeBlur,
-  scrollEdgeTone,
   threadFade,
+  veil,
 } from "./materials.js";
 
 /** `cardForeground` -> `card-foreground` (no leading `--`). */
@@ -38,6 +39,24 @@ export function cssVariableName(token: keyof ColorTokens): string {
   return `--${kebabCase(token)}`;
 }
 
+/** Splits a CSS list on its top-level commas, as biome breaks it, never inside a function. */
+function splitTopLevel(value: string): string[] {
+  const layers: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+    if (char === "(") depth += 1;
+    else if (char === ")") depth -= 1;
+    else if (char === "," && depth === 0) {
+      layers.push(value.slice(start, index).trim());
+      start = index + 1;
+    }
+  }
+  layers.push(value.slice(start).trim());
+  return layers;
+}
+
 /** `biome`'s CSS formatter (100-col `lineWidth`) wraps a declaration that
  * doesn't fit on one line onto the next, indenting the value by 4 spaces and
  * filling each line with as many comma-separated layers as fit: this keeps a
@@ -46,7 +65,7 @@ export function cssVariableName(token: keyof ColorTokens): string {
 function renderDeclaration(name: string, value: string, indent = "  "): string {
   const oneLine = `${indent}${name}: ${value};`;
   if (oneLine.length <= 100) return oneLine;
-  const layers = value.split(/,\s(?![^(]*\))/);
+  const layers = splitTopLevel(value);
   const lines: string[] = [];
   let line = "";
   for (const [index, layer] of layers.entries()) {
@@ -80,7 +99,6 @@ function renderMaterialLines(appearance: ResolvedAppearance): string[] {
       `  --material-${key}-fallback: var(${cssVariableName(materials[key].fallback)});`,
     ]),
     renderDeclaration("--ambient", ambient.desktop[appearance]),
-    `  --scroll-edge-tone: ${scrollEdgeTone[appearance]};`,
   ];
 }
 
@@ -93,14 +111,25 @@ function renderMaterialGeometryLines(): string[] {
     `  --scroll-edge-blur: ${scrollEdgeBlur}px;`,
     `  --thread-fade-top-start: ${threadFade.topStart}px;`,
     `  --thread-fade-top-end: ${threadFade.topEnd}px;`,
-    `  --thread-fade-bottom: ${threadFade.bottom}px;`,
+    `  --thread-fade-bottom-start: ${threadFade.bottomStart}px;`,
+    `  --thread-fade-bottom-end: ${threadFade.bottomEnd}px;`,
+    `  --thread-fade-bottom-rest: ${threadFade.bottomRest}px;`,
+    `  --thread-under-composer: ${threadFade.underComposer}px;`,
+    `  --veil-mix: ${veil.mix}%;`,
+    `  --veil-blur: ${veil.blur}px;`,
   ];
 }
 
-/** Phone width takes its own ambient light, higher and from the corner. */
+/**
+ * Phone width takes its own ambient light, higher and from the corner, ending in
+ * the page background at the bottom edge for Safari's toolbar.
+ */
 function renderNarrowAmbientBlock(): string {
-  const block = (selector: string, appearance: ResolvedAppearance) =>
-    `  ${selector} {\n${renderDeclaration("--ambient", ambient.narrow[appearance], "    ")}\n  }`;
+  const block = (selector: string, appearance: ResolvedAppearance) => {
+    const background = (appearance === "light" ? lightTokens : darkTokens).background.toLowerCase();
+    const value = `linear-gradient(to top, ${background} 0%, transparent ${narrowBackgroundFade}%), ${ambient.narrow[appearance]}`;
+    return `  ${selector} {\n${renderDeclaration("--ambient", value, "    ")}\n  }`;
+  };
   return `@media (max-width: ${narrowMaxWidth}px) {\n${block(':root,\n  [data-theme="dark"]', "dark")}\n\n${block('[data-theme="light"]', "light")}\n}`;
 }
 

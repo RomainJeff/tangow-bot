@@ -74,6 +74,14 @@ test("swiping inward from the mobile edge opens the bots sidebar", async ({ page
   await expect(closeNavigation).toBeVisible();
   await expect(page.getByTestId("mobile-sidebar-swipe-edge")).toHaveCount(0);
   await expect(page.getByTestId("bots-sidebar")).toContainText("Chief");
+  // The drawer runs full height against the start edge, over a veil that blurs.
+  await expect
+    .poll(async () => {
+      const box = await page.getByTestId("bots-sidebar-pane").boundingBox();
+      return box && { x: box.x, y: box.y, height: box.height };
+    })
+    .toEqual({ x: 0, y: 0, height: page.viewportSize()?.height });
+  await expect(closeNavigation).toHaveCSS("backdrop-filter", "blur(6px)");
   await captureScreenshot(page, testInfo, "mobile-sidebar-edge-swipe-open");
 });
 
