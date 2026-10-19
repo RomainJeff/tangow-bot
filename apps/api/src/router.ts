@@ -2384,6 +2384,9 @@ export function createRouter(deps: RouterDeps) {
         get: authed.memory.library.get.handler(async ({ context, input }) =>
           memoryLibraryCall(() => library.get(context.actor, input.documentId)),
         ),
+        annotations: authed.memory.library.annotations.handler(async ({ context, input }) =>
+          memoryLibraryCall(() => library.memoryAnnotations(context.actor, input.documentId)),
+        ),
         create: authed.memory.library.create.handler(async ({ context, input }) =>
           memoryLibraryCall(() => library.create(context.actor, { ...input, active: true })),
         ),

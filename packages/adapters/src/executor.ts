@@ -9,6 +9,7 @@ import type {
   AgentToolCompletion,
   ArtifactStore,
   BrowserProvider,
+  ClassifyMemoryForBot,
   ComputerRef,
   ConnectorCall,
   ConnectorProvider,
@@ -92,6 +93,7 @@ import {
   isOneShotRoutineCrons,
   isTerminal,
   isUserOpenedTrigger,
+  MEMORY_MANAGEMENT_SKILL_KEY,
   MISSING_MODEL_MESSAGE,
   MODEL_PROVIDER_NOT_CONNECTED_MESSAGE,
   messagingChannelId,
@@ -300,6 +302,15 @@ import {
   parseMcpServerToolArgs,
 } from "./mcp-server-tool.js";
 import { loadAgentMemoryDataContext, memoryGrant } from "./memory-context.js";
+import {
+  MEMORY_MANAGEMENT_TOOL_NAMES,
+  memoryManagementEnabled,
+  runMemoryManagementTool,
+} from "./memory-management-tools.js";
+import {
+  MemoryClassificationConsentRequired,
+  resolveLibraryActor,
+} from "./memory-method-classification.js";
 import { catalogContextWindow, catalogModel } from "./model-catalog.js";
 import {
   isCatalogModelChoice,
@@ -419,6 +430,8 @@ const READ_ONLY_AGENT_TOOLS = new Set([
   "request_takeover",
   "run_subagent",
   "recall_memory",
+  "memory_read",
+  "memory_search",
   "schedule_list",
   "scratchpad_list",
   "skill_read",
@@ -660,6 +673,8 @@ export interface ExecutorDeps {
   runtime: AgentRuntime;
   sandbox: SandboxProvider;
   memory: MemoryStore;
+  /** Classify one visible memory with the active bot's method; tool arguments contain only memoryId. */
+  classifyMemoryForBot?: ClassifyMemoryForBot;
   home: AgentHomeStore;
   artifacts?: ArtifactStore;
   connector?: ConnectorProvider;
@@ -1909,6 +1924,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const graphicalToolsAllowed = graphical && acceptsImages && !heldForTakeover;
         const pageBrowserAllowed =
           graphical && browser.describe().capabilities.page && !heldForTakeover;
+        const memoryManagementActiveForBot =
+          run.trigger === "user" &&
+          thread.groupId === null &&
+          !messagingChannelRun &&
+          bot.userId === run.userId &&
+          agentSkills.some((skill) => skill.id === MEMORY_MANAGEMENT_SKILL_KEY);
         const builtins = [
           ...selectBuiltinToolsForRun({
             graphicalToolsAllowed,
@@ -1919,6 +1940,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             searchRunsExposed: archiveHistory,
             browserRunAllowed: Boolean(decisionProvider),
             messageUserExposed,
+            memoryManagementActiveForBot,
           }),
           // Cross-owner agent connections only exist for chat-linked bots.
           ...(hasMessagingIdentity ? agentConnectionTools : []),
@@ -2388,6 +2410,21 @@ export function createRunExecutor(deps: ExecutorDeps) {
               error:
                 "Memory access changed during this run. Start a new turn before taking further actions.",
             };
+          }
+          if (MEMORY_MANAGEMENT_TOOL_NAMES.has(name) && JSON.stringify(args).length > 250_000)
+            return {
+              error: "Memory request is too large to review. Split it into smaller changes.",
+            };
+          if (
+            MEMORY_MANAGEMENT_TOOL_NAMES.has(name) &&
+            (!memoryManagementActiveForBot ||
+              !(await memoryManagementEnabled(
+                deps.prisma,
+                { userId: run.userId, spaceId: run.spaceId },
+                bot.id,
+              )))
+          ) {
+            return { error: "Memory management is unavailable in this run." };
           }
           if (handedOff) {
             return { error: "This stage was handed off. End the turn without more tool calls." };
@@ -4031,6 +4068,48 @@ export function createRunExecutor(deps: ExecutorDeps) {
             return pauseForSecret();
           }
           if (name === "request_takeover") return { ok: true };
+          if (name === "classify_memory") {
+            const memoryId = String(args.memoryId ?? "").trim();
+            if (!memoryId) return finish({ error: "classify_memory needs a memoryId." });
+            if (!deps.classifyMemoryForBot)
+              return finish({ error: "Memory classification is unavailable in this run." });
+            try {
+              return finish(
+                await deps.classifyMemoryForBot({
+                  actor: { userId: run.userId, spaceId: run.spaceId },
+                  botId: bot.id,
+                  memoryId,
+                }),
+              );
+            } catch (error) {
+              if (error instanceof MemoryClassificationConsentRequired)
+                return finish({
+                  error:
+                    "Allow the Decision Model in Account settings → AI data sharing, then retry. No suggestion was created.",
+                  reviewPath: error.reviewPath,
+                });
+              return finish({ error: sanitizeConnectorError(error, runSecrets) });
+            }
+          }
+          if (MEMORY_MANAGEMENT_TOOL_NAMES.has(name)) {
+            try {
+              return finish(
+                await runMemoryManagementTool(
+                  deps.prisma,
+                  await resolveLibraryActor(deps.prisma, {
+                    userId: run.userId,
+                    spaceId: run.spaceId,
+                  }),
+                  bot.id,
+                  name,
+                  args,
+                  applied?.effect.id ?? executionId,
+                ),
+              );
+            } catch (error) {
+              return finish({ error: sanitizeConnectorError(error, runSecrets) });
+            }
+          }
           if (name === "run_subagent") {
             return {
               ok: true,
@@ -5564,6 +5643,7 @@ export function selectBuiltinToolsForRun(options: {
   browserRunAllowed?: boolean;
   /** The run can address the person through message_user. */
   messageUserExposed?: boolean;
+  memoryManagementActiveForBot?: boolean;
 }) {
   return filterBuiltinToolsForRun(
     filterBuiltinToolsForThread(
@@ -5579,6 +5659,8 @@ export function selectBuiltinToolsForRun(options: {
       (tool.name !== "search_runs" || options.searchRunsExposed !== false) &&
       (tool.name !== "browser_run" || Boolean(options.browserRunAllowed)) &&
       (tool.name !== "message_user" || options.messageUserExposed !== false) &&
+      // The caller already limits memory management to a private user run.
+      (!MEMORY_MANAGEMENT_TOOL_NAMES.has(tool.name) || options.memoryManagementActiveForBot) &&
       (!options.messagingChannelRun ||
         (!["remember", "recall_memory"].includes(tool.name) &&
           !tool.name.startsWith("scratchpad_"))),

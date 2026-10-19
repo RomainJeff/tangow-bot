@@ -9,6 +9,7 @@ import {
 } from "@rakazo/contracts";
 import { BOT_SKILL_DESCRIPTION_MAX_LENGTH } from "@rakazo/core";
 import { z } from "zod";
+import { memoryManagementTools } from "./memory-management-tools.js";
 
 export const DELEGATION_TOOL_NAMES = new Set([
   "run_subagent",
@@ -520,6 +521,19 @@ that merely narrate internal operations.`,
         query: { type: "string" },
       },
       required: ["query"],
+    },
+  },
+  ...memoryManagementTools,
+  {
+    name: "classify_memory",
+    description:
+      "Create a classification suggestion for a memory using your active method. This never edits or activates the memory. Present its labels in this conversation and use review_memory_classification for human validation or corrections. Available only in your direct user chat; never use for another bot, group, messaging, or subagent context.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        memoryId: { type: "string", description: "Visible memory id to classify." },
+      },
+      required: ["memoryId"],
     },
   },
   {

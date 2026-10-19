@@ -178,6 +178,23 @@ describe("agent skills service (filesystem)", () => {
     ]);
   });
 
+  it("offers memory management disabled by default and enables only the selected bot", async () => {
+    const skills = service();
+    const skillId = "builtin:memory-management";
+    expect((await skills.list(actor)).find((item) => item.id === skillId)).toMatchObject({
+      availability: "selected",
+      visibleBotIds: [],
+    });
+    await skills.setAccess(actor, { skillId, bots: [{ botId: "bot-1", enabled: true }] });
+    expect((await skills.list(actor)).find((item) => item.id === skillId)?.visibleBotIds).toEqual([
+      "bot-1",
+    ]);
+    await skills.setAccess(actor, { skillId, bots: [{ botId: "bot-1", enabled: false }] });
+    expect((await skills.list(actor)).find((item) => item.id === skillId)?.visibleBotIds).toEqual(
+      [],
+    );
+  });
+
   it("creates, lists, renames (cascading access rows) and removes a skill", async () => {
     const skills = service();
     const created = await skills.create(actor, {

@@ -37,6 +37,7 @@ import { z } from "zod";
 import { isToolPauseResult } from "./approval-effect.js";
 import { builtinAgentTools, DELEGATION_TOOL_NAMES } from "./builtin-tools.js";
 import { DEFAULT_OPENROUTER_MODEL_ID } from "./deployment-model.js";
+import { MEMORY_MANAGEMENT_TOOL_NAMES } from "./memory-management-tools.js";
 import { piProviderId } from "./model-catalog.js";
 import {
   normalizeOpenAiToolParameters,
@@ -1508,7 +1509,10 @@ async function runSubagent(
 
   // A helper reports back to the bot that ran it, never to the user.
   const childDefs = (host.request.tools.length ? host.request.tools : builtinAgentTools).filter(
-    (tool) => !DELEGATION_TOOL_NAMES.has(tool.name) && tool.name !== "message_user",
+    (tool) =>
+      !DELEGATION_TOOL_NAMES.has(tool.name) &&
+      !MEMORY_MANAGEMENT_TOOL_NAMES.has(tool.name) &&
+      tool.name !== "message_user",
   );
   const nestedHost: ToolHost = {
     ...host,

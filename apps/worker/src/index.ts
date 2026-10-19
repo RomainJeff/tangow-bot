@@ -12,6 +12,7 @@ loadRootEnv();
 import {
   ChatSdkMessagingSurface,
   createBackgroundJobHandlers,
+  createBotMemoryClassificationService,
   createConnectorStack,
   createJobReconciler,
   createLinkPreviewPurge,
@@ -168,6 +169,10 @@ async function main() {
   integrationSettings.warmDirectories();
   const memory = new MarkdownMemoryStore(prisma);
   const decisionProviders = new SpaceDecisionProviderResolver(prisma, secrets);
+  const memoryMethodClassification = createBotMemoryClassificationService({
+    prisma,
+    decisionProviders,
+  });
   const home = new LocalAgentHomeStore(dataDir);
   const artifacts = new LocalArtifactStore(dataDir);
   const inMemoryJobs = process.env.WAKEUP_DRIVER === "memory" ? new InMemoryJobQueue() : undefined;
@@ -205,6 +210,7 @@ async function main() {
     sandbox,
     memory,
     decisionProviders,
+    classifyMemoryForBot: (request) => memoryMethodClassification.classifyForBot(request),
     home,
     artifacts,
     connector: stack.connector,

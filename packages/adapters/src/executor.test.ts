@@ -245,6 +245,29 @@ describe("run tool selection", () => {
     );
   });
 
+  it("exposes memory classification only when the run allows memory management", () => {
+    const names = (options: { active: boolean }) =>
+      selectBuiltinToolsForRun({
+        graphicalToolsAllowed: false,
+        groupId: null,
+        trigger: "user",
+        messagingChannelRun: false,
+        memoryManagementActiveForBot: options.active,
+      }).map((tool) => tool.name);
+
+    expect(names({ active: true })).toEqual(
+      expect.arrayContaining([
+        "classify_memory",
+        "memory_read",
+        "memory_search",
+        "prepare_memory_method",
+        "review_memory_classification",
+        "change_memory",
+      ]),
+    );
+    expect(names({ active: false })).not.toContain("classify_memory");
+  });
+
   it("keeps schedules in the user's language", () => {
     const tools = selectBuiltinToolsForRun({
       graphicalToolsAllowed: true,
