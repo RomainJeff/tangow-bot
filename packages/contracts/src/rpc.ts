@@ -2,6 +2,7 @@ import { eventIterator, oc } from "@orpc/contract";
 import * as z from "zod";
 import { AiConsentQuerySchema, AiConsentStatusSchema } from "./ai-consent.js";
 import { ATTACHMENT_MAX_BASE64_LENGTH, ATTACHMENT_MAX_COUNT } from "./attachments.js";
+import { MemoryMethodAnnotationSchema } from "./bot-memory-method.js";
 import {
   ActionApprovalRuleSchema,
   ActionAutoReviewSettingsSchema,
@@ -185,6 +186,7 @@ export const appContract = {
           scope: z.string(),
           version: z.string(),
           keys: z.array(z.string()).min(1).max(200),
+          query: AiConsentQuerySchema.optional(),
         }),
       )
       .output(AiConsentStatusSchema),
@@ -460,6 +462,9 @@ export const appContract = {
           }),
         ),
       get: oc.input(z.object({ documentId: Id })).output(MemoryLibraryDocumentSchema),
+      annotations: oc
+        .input(z.object({ documentId: Id }))
+        .output(z.array(MemoryMethodAnnotationSchema)),
       create: oc
         .input(
           z.object({

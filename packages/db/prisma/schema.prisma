@@ -51,6 +51,23 @@ model User {
   @@map("user")
 }
 
+model BotMemoryMethod {
+  id                String   @id @default(cuid())
+  botId             String
+  bot               Bot      @relation(fields: [botId], references: [id], onDelete: Cascade)
+  version           Int
+  instructions      String
+  prepared          Json
+  provider          String
+  model             String
+  createdAt         DateTime @default(now())
+  classificationRuns MemoryClassificationRun[]
+  classificationFeedback MemoryClassificationFeedback[]
+
+  @@unique([botId, version])
+  @@map("bot_memory_methods")
+}
+
 model Session {
   id                   String   @id
   expiresAt            DateTime
@@ -397,6 +414,9 @@ model Bot {
   skills            BotSkill[]
   groupMembers      ChatGroupMember[]
   botSecrets BotSecret[]
+  memoryMethods BotMemoryMethod[]
+  memoryClassificationRuns MemoryClassificationRun[]
+  memoryMethodDisabledAt DateTime?
 
   externalConversations ExternalConversation[]
 
@@ -923,6 +943,8 @@ model MemoryDocument {
   updatedAt DateTime         @updatedAt
   revisions MemoryRevision[]
   evidence  MemoryEvidence[]
+  classificationRuns MemoryClassificationRun[]
+  classificationFeedback MemoryClassificationFeedback[]
 
   @@unique([spaceId, scope, botId, path])
   @@index([spaceId, userId])
@@ -1007,6 +1029,65 @@ model MemoryCaptureRequest {
 
   @@index([threadId, status, createdAt])
   @@map("memory_capture_requests")
+}
+
+model MemoryClassificationRun {
+  id             String         @id @default(cuid())
+  spaceId        String
+  userId         String
+  botId          String?
+  bot            Bot?             @relation(fields: [botId], references: [id], onDelete: SetNull)
+  methodId       String?
+  method         BotMemoryMethod? @relation(fields: [methodId], references: [id], onDelete: SetNull)
+  methodVersion  Int?
+  methodSnapshot Json?
+  documentId     String
+  document       MemoryDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  collectionId   String
+  revision       Int
+  accessVersion  Int
+  sourceDigest   String
+  candidate      Json
+  neighbors      Json
+  prediction     Json
+  examples       Json
+  abstained      Boolean        @default(false)
+  invalidResponse Boolean       @default(false)
+  createdAt      DateTime       @default(now())
+  feedback       MemoryClassificationFeedback?
+
+  @@index([spaceId, userId, createdAt])
+  @@index([documentId, createdAt])
+  @@map("memory_classification_runs")
+}
+
+model MemoryClassificationFeedback {
+  id               String                 @id @default(cuid())
+  runId            String                 @unique
+  run              MemoryClassificationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  spaceId          String
+  userId           String
+  botId            String?
+  methodId         String?
+  method           BotMemoryMethod? @relation(fields: [methodId], references: [id], onDelete: SetNull)
+  methodVersion    Int?
+  reviewedQuestionKeys Json @default("[]")
+  documentId       String
+  document         MemoryDocument         @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  collectionId     String
+  sourceDigest     String
+  reviewed         Json
+  prediction       Json
+  payloadFingerprint String
+  qualificationAfter Json
+  resultRevision   Int
+  createdAt        DateTime               @default(now())
+  revokedAt        DateTime?
+  revokedByUserId  String?
+
+  @@index([spaceId, userId, documentId, createdAt])
+  @@index([botId, methodVersion, collectionId, revokedAt, createdAt], map: "memory_feedback_bot_method_scope_idx")
+  @@map("memory_classification_feedback")
 }
 
 model AgentHome {
@@ -1258,6 +1339,7 @@ model SpaceDecisionConfig {
 
   @@map("space_decision_configs")
 }
+
 
 model Secret {
   id                String             @id @default(cuid())
