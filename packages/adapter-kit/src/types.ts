@@ -4,6 +4,7 @@ import type {
   ConnectionCatalogItem,
   SandboxKind,
 } from "@rakazo/contracts";
+import type { LocalToolOutput } from "./worker-protocol.js";
 
 export interface AdapterContext {
   operationId: string;
@@ -420,12 +421,35 @@ export interface AgentRunRequest {
     /** Present only when the runtime traces this run. */
     trace?: ToolCallTrace,
   ) => Promise<unknown>;
+  /**
+   * Run a tool the runtime executes next to the model. The executor records and authorizes the
+   * call like any other, claims its effect under the run's fence, and only then calls `run` at
+   * most once; what `run` returns is the tool's output. Absent: the runtime has no local tools.
+   */
+  executeLocalTool?: LocalToolExecutor;
+  /** The attempt this run belongs to, for a runtime that binds a remote guest to it. */
+  attempt?: { id: string; fence: number };
   /** Called after a tool returns; implementations must not persist raw result contents. */
   onToolCompleted?: (completion: AgentToolCompletion) => Promise<void> | void;
   /** Atomically claim durable user steering at the runtime's next safe turn boundary. */
   claimSteering?: (seenIds: string[]) => Promise<AgentSteeringMessage[]>;
   /** Open the log of one `run_subagent` call: the helper runs in a session of its own. */
   startSubagent?: (call: SubagentCall) => Promise<SubagentLog>;
+}
+
+export type LocalToolExecutor = (
+  name: string,
+  args: Record<string, unknown>,
+  executionId: string,
+  run: (signal: AbortSignal) => Promise<LocalToolOutput>,
+) => Promise<unknown>;
+
+/** A runtime cannot start the run now, for a reason that passes: the run is requeued, not failed. */
+export class AgentRuntimeUnavailableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AgentRuntimeUnavailableError";
+  }
 }
 
 export interface SubagentCall {
@@ -440,6 +464,8 @@ export interface SubagentCall {
 export interface SubagentLog {
   /** Run one of the helper's tool calls, writing the call and its result to the helper's log. */
   executeTool: NonNullable<AgentRunRequest["executeTool"]>;
+  /** `AgentRunRequest.executeLocalTool`, for the helper's log. */
+  executeLocalTool?: LocalToolExecutor;
   /** Write a finished block of the helper's own text. */
   text(text: string): Promise<void>;
   /** Close the helper's run and leave its one trace, the `result` it returned, in the parent's log. */
@@ -540,6 +566,8 @@ export interface AgentRuntimeCapabilities {
   compaction: boolean;
   tools: boolean;
   scripted: boolean;
+  /** Tools the runtime runs next to the model, through `executeLocalTool`. Exposed with the rest. */
+  localTools?: readonly ConnectorTool[];
 }
 
 export interface VoiceInfo {
