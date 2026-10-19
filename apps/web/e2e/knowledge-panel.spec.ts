@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import type { MemoryDocument } from "@rakazo/contracts";
+import type { MemoryDocument, MemoryLibraryDocument } from "@rakazo/contracts";
 import {
   activeBotId,
   captureScreenshot,
@@ -29,13 +29,19 @@ test("memory and skills are readable and editable in the app", async ({ page }, 
     .fill(`write a file in your home called notes/result.csv that says ${fileMarker}`);
   await page.keyboard.press("Enter");
 
-  // Space-wide documents live in Settings → Memory. Open that before bot
-  // settings so the Knowledge Memory tab cannot steal this click.
+  // A new user starts with no memory, so give them one document to edit. It is
+  // listed in Settings → Memory; open that before bot settings so the Knowledge
+  // Memory tab cannot steal this click.
+  const personal = await rpc<MemoryLibraryDocument>(page, "memory/library/create", {
+    collection: "personal",
+    content: "# Memory\n\n",
+    idempotencyKey: `knowledge-personal-${stamp}`,
+  });
   await openUserSettings(page, "memory");
   await expect(page.getByLabel("Close memory settings")).toBeVisible();
   const spaceDocs = page.getByTestId("space-memory-documents");
   await expect(spaceDocs.getByText("Shared documents")).toBeVisible();
-  const memoryRow = spaceDocs.getByRole("button", { name: /MEMORY\.md/ });
+  const memoryRow = spaceDocs.locator(`[data-opens="memory:${personal.id}"]`);
   await expect(memoryRow).toBeVisible();
   await memoryRow.click();
   const docEditor = spaceDocs.locator("textarea");
@@ -73,9 +79,12 @@ test("memory and skills are readable and editable in the app", async ({ page }, 
     expect.objectContaining({ content: `# Memory\n\n${marker}\n`, revision: 2 }),
   );
   // Export must fetch fresh content and exclude the bot's private document.
-  const sharedDocument = sharedDocuments.find((doc) => doc.path === "MEMORY.md")!;
   const latestMarker = `Latest shared memory ${stamp}`;
-  await rpc(page, "memory/update", { documentId: sharedDocument.id, content: latestMarker });
+  await rpc(page, "memory/update", {
+    documentId: personal.id,
+    content: latestMarker,
+    expectedRevision: 2,
+  });
   const downloadPromise = page.waitForEvent("download");
   await spaceDocs.getByRole("button", { name: "Download as markdown" }).click();
   const download = await downloadPromise;
@@ -88,6 +97,13 @@ test("memory and skills are readable and editable in the app", async ({ page }, 
   await expect(page.getByLabel("Close memory settings")).toHaveCount(0);
 
   // The bot's memory, files and skills live on the Knowledge tab of its page.
+  // A new bot starts with no memory, so give Chief one document to edit.
+  const seeded = await rpc<MemoryLibraryDocument>(page, "memory/library/create", {
+    collection: "agent",
+    botId: chiefId,
+    content: "# Chief\n\n",
+    idempotencyKey: `knowledge-${stamp}`,
+  });
   await page
     .locator("main")
     .getByRole("button", { name: /^Chief/ })
@@ -101,11 +117,11 @@ test("memory and skills are readable and editable in the app", async ({ page }, 
   const knowledge = botPage.getByTestId("bot-knowledge");
   await expect(knowledge).toBeVisible();
 
-  // Bot creation seeds MEMORY.md (`# Chief`). It opens in the wide panel with its
-  // own Save and Cancel: leaving the field saves nothing.
+  // The document opens in the wide panel with its own Save and Cancel: leaving
+  // the field saves nothing.
   const panel = page.getByTestId("side-panel");
   const botMemory = knowledge.getByTestId("bot-knowledge-memory");
-  const botMemoryRow = botMemory.getByRole("button", { name: /MEMORY\.md/ });
+  const botMemoryRow = botMemory.locator(`[data-opens="memory:${seeded.id}"]`);
   await expect(botMemoryRow).toBeVisible();
   await botMemoryRow.click();
   await expect(panel).toHaveAttribute("data-detail", "memory");
