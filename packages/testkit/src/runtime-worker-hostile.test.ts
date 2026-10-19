@@ -18,7 +18,8 @@ import {
   readControllerFrame,
   WORKER_LIMITS,
 } from "@rakazo/adapters/runtime-worker";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, onTestFinished, vi } from "vitest";
+import { startModelEmulator } from "./model-emulator.js";
 
 /** A guest that speaks the wire by hand, so it can do what a conforming guest never would. */
 function rawGuest(channel: FrameChannel, capability: string) {
@@ -310,5 +311,53 @@ describe("a hostile guest", () => {
     });
     await expect(run.done).rejects.toThrow("The worker broke the run protocol: too_large");
     expect(results).toHaveLength(1);
+  });
+
+  it("stops the controller's upstream model call when it aborts the call", async () => {
+    const upstream = { opened: Promise.withResolvers<void>(), closed: false };
+    const server = await startModelEmulator({
+      apiKey: "controller-only-key",
+      steps: [
+        {
+          expect() {},
+          response: {
+            type: "hold",
+            text: "Thinking",
+            onOpen: () => upstream.opened.resolve(),
+            onClose: () => {
+              upstream.closed = true;
+            },
+          },
+        },
+      ],
+    });
+    onTestFinished(() => server.close());
+    const { runtime, launchedFor } = setup();
+    const run = consume(runtime.run(request("run_model_abort", { model: server.model })));
+    const launched = await launchedFor("run_model_abort");
+    const guest = rawGuest(launched.connect(), launched.capability);
+    await guest.hello();
+
+    guest.send(1, {
+      type: "model.request",
+      agent: "root",
+      dialect: "pi-ai",
+      call: { context: { messages: [{ role: "user", content: "Hi", timestamp: 0 }] }, options: {} },
+    });
+    await upstream.opened.promise;
+    expect(upstream.closed).toBe(false);
+    guest.send(2, { type: "model.abort", re: 1 });
+
+    expect(await guest.replies(2)).toEqual([{ type: "ack" }]);
+    await vi.waitFor(() => expect(upstream.closed).toBe(true));
+    const relayed = await guest.replies(1);
+    expect(relayed.at(-1)).toEqual({ type: "model.end" });
+    expect(relayed.at(-2)).toMatchObject({
+      type: "model.event",
+      event: { type: "error", reason: "aborted" },
+    });
+    await runtime.abort("run_model_abort");
+    await run.done.catch(() => undefined);
+    server.assertComplete();
   });
 });
