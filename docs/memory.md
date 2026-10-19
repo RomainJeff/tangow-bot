@@ -1,8 +1,10 @@
 # Memory
 
-The memory library separates three collections: **Personal** memories, **Bot** memories belonging to one bot, and **Space** memories shared with the current Space. Terms are defined in the [glossary](../GLOSSARY.md); the main design decisions are recorded in [ADRs](adr/).
+On web and desktop, open **Memory** from the user menu for personal memories, or from bot and Space settings for their collections. The library separates three collections: **Personal** memories, **Bot** memories belonging to one bot, and **Space** memories shared with the current Space. Terms are defined in the [glossary](../GLOSSARY.md); the main design decisions are recorded in [ADRs](adr/).
 
 ## Read and manage
+
+The library is a reading surface: search, Markdown rendering, sources, labels and revision history. It has no editing or classification form. **Remember** on a message still captures it with its source.
 
 Choose an ordinary bot to manage memory. In **Bot settings → Advanced → Skills**, enable **memory-management** for that bot. It starts unassigned. Put your categories, definitions and examples in the bot's existing **Instructions**, then ask it to apply them in its conversation. There is no separate classification settings panel and no required taxonomy.
 
