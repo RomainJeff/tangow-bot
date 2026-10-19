@@ -94,3 +94,12 @@ export const scrollEdgeTone = {
   light: "245 245 247",
   dark: "20 20 22",
 } as const satisfies PerAppearance;
+
+/** The scroll edge's backdrop blur under the header, in px. */
+export const scrollEdgeBlur = 20;
+
+/**
+ * Where the thread fades, in px: in under the header from `topStart` to
+ * `topEnd`, and out over its last `bottom` px, which run under the composer.
+ */
+export const threadFade = { topStart: 60, topEnd: 84, bottom: 64 } as const;

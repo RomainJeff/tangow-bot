@@ -307,6 +307,7 @@ export const Composer = memo(function Composer({
 
   return (
     <fieldset
+      data-slot="composer"
       aria-label={t`Message composer`}
       data-dragging={draggingFiles ? "files" : undefined}
       {...dropHandlers}

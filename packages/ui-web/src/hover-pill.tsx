@@ -29,8 +29,10 @@ export function HoverPill({ className, ...props }: HoverPillProps) {
       data-slot="hover-pill"
       className={cn(
         "rk-glass-control pointer-events-none absolute -top-3 end-3 z-10 flex items-center gap-0.5 rounded-full p-0.75 opacity-0 transition-opacity duration-(--duration-hover) ease-quiet",
+        // The blur only while shown: every message row carries a hidden pill.
+        "backdrop-filter-none group-hover:backdrop-filter-(--glass-control-backdrop)",
         "group-hover:pointer-events-auto group-hover:opacity-100",
-        "group-has-[:focus-visible]:pointer-events-auto group-has-[:focus-visible]:opacity-100",
+        "group-has-[:focus-visible]:pointer-events-auto group-has-[:focus-visible]:opacity-100 group-has-[:focus-visible]:backdrop-filter-(--glass-control-backdrop)",
         "group-data-[pill=beside]:end-auto group-data-[pill=beside]:top-(--pill-y) group-data-[pill=beside]:start-(--pill-x)",
         className,
       )}

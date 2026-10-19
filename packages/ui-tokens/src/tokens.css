@@ -287,6 +287,10 @@
   --material-menu-saturate: 180%;
   --material-list-blur: 40px;
   --material-list-saturate: 180%;
+  --scroll-edge-blur: 20px;
+  --thread-fade-top-start: 60px;
+  --thread-fade-top-end: 84px;
+  --thread-fade-bottom: 64px;
 }
 
 @media (max-width: 767px) {

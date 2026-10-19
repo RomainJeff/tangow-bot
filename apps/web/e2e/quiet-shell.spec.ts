@@ -97,7 +97,10 @@ test("Reduce Transparency makes the glass opaque", async ({ page }) => {
 
   const cdp = await page.context().newCDPSession(page);
   await cdp.send("Emulation.setEmulatedMedia", {
-    features: [{ name: "prefers-reduced-transparency", value: "reduce" }],
+    features: [
+      { name: "prefers-color-scheme", value: "light" },
+      { name: "prefers-reduced-transparency", value: "reduce" },
+    ],
   });
   await expect(pane).toHaveCSS("background-color", "rgb(245, 245, 247)");
   await expect(pane).toHaveCSS("backdrop-filter", "none");

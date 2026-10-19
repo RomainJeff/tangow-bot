@@ -28,10 +28,11 @@ Under Reduce Transparency every material turns opaque: `chrome` takes
 `sidebar`, the others take `card`. The ambient light stays.
 
 The values live in `packages/ui-tokens/src/materials.ts` and reach CSS as
-`--material-<name>-*`, `--ambient` (phone width included) and
-`--scroll-edge-tone`. Screens spend them through `rk-glass-chrome`,
-`rk-glass-control`, `rk-glass-menu`, `rk-glass-list`, `rk-scroll-edge` and
-`rk-thread-mask` from `packages/ui-web/src/materials.css`.
+`--material-<name>-*`, `--ambient` (phone width included),
+`--scroll-edge-tone`, `--scroll-edge-blur` and `--thread-fade-*`. Screens
+spend them through `rk-glass-chrome`, `rk-glass-control`, `rk-glass-menu`,
+`rk-glass-list`, `rk-scroll-edge`, `rk-thread-mask` and `rk-thread-overlap`
+from `packages/ui-web/src/materials.css`.
 
 Panels and overlay windows are content a person reads and edits, so they are
 opaque planes, as are the parts inside a card:

@@ -51,7 +51,7 @@ export function ThreadHeader({
     // No band: it overlays the thread, which fades out under the scroll edge;
     // `-mb-header` pulls the thread up under it. `pt-1.5` centres it on the
     // floating sidebar's header line.
-    <div className="app-drag relative z-20 -mb-header flex h-header shrink-0 items-center justify-between gap-2 ps-3 pe-3 pt-1.5 md:ps-5.5">
+    <div className="app-drag relative z-10 -mb-header flex h-header shrink-0 items-center justify-between gap-2 ps-3 pe-3 pt-1.5 md:ps-5.5">
       <div
         aria-hidden="true"
         className="rk-scroll-edge pointer-events-none absolute inset-x-0 top-0 -z-10 h-16"
@@ -59,15 +59,15 @@ export function ThreadHeader({
       <div className="flex min-w-0 items-center gap-2">
         {/* Collapsed bots sidebar: this header is the leading edge for window chrome. */}
         {botsSidebarCollapsed && desktopBridge() ? <WindowChrome /> : null}
-        <Button
-          variant="roundIcon"
-          size="roundIconSm"
+        {/* A plain button: the `roundIcon` variant's `bg-transparent` would beat the glass. */}
+        <button
+          type="button"
           aria-label={t`Open navigation`}
           onClick={() => setMobileSidebarOpen(true)}
-          className="rk-glass-control app-no-drag size-capsule shrink-0 text-foreground md:hidden"
+          className="rk-glass-control rk-press-round app-no-drag grid size-capsule shrink-0 place-items-center rounded-full text-foreground md:hidden"
         >
           <Menu size={18} strokeWidth={1.7} />
-        </Button>
+        </button>
         {botsSidebarCollapsed ? (
           <Button
             variant="roundIcon"

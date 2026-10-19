@@ -7,10 +7,14 @@
     backdrop-filter: blur(var(--material-chrome-blur)) saturate(var(--material-chrome-saturate));
   }
 
+  /* `--glass-control-backdrop` lets a control that is hidden at rest (the hover
+     pill) take its blur only while shown. */
   .rk-glass-control {
+    --glass-control-backdrop: blur(var(--material-control-blur))
+      saturate(var(--material-control-saturate));
     background: var(--material-control-fill);
     box-shadow: var(--material-control-edge);
-    backdrop-filter: blur(var(--material-control-blur)) saturate(var(--material-control-saturate));
+    backdrop-filter: var(--glass-control-backdrop);
   }
 
   .rk-glass-menu {
@@ -33,7 +37,7 @@
       rgb(var(--scroll-edge-tone) / 0.85) 55%,
       rgb(var(--scroll-edge-tone) / 0) 100%
     );
-    backdrop-filter: blur(20px);
+    backdrop-filter: blur(var(--scroll-edge-blur));
     mask-image: linear-gradient(to bottom, #000 55%, transparent);
   }
 
@@ -42,11 +46,17 @@
   .rk-thread-mask {
     mask-image: linear-gradient(
       to bottom,
-      transparent 60px,
-      #000 84px,
-      #000 calc(100% - 64px),
+      transparent var(--thread-fade-top-start),
+      #000 var(--thread-fade-top-end),
+      #000 calc(100% - var(--thread-fade-bottom)),
       transparent
     );
+  }
+
+  /* The thread runs its bottom fade under the composer, but not under a line
+     the shell sets between them (teaching in progress): it would paint over it. */
+  .rk-thread-overlap:has(+ [data-slot="composer"]) {
+    margin-bottom: calc(-1 * var(--thread-fade-bottom));
   }
 
   /* Reduce Transparency: every material turns opaque; the ambient light stays. */
@@ -56,6 +66,7 @@
     }
 
     .rk-glass-control {
+      --glass-control-backdrop: none;
       background: var(--material-control-fallback);
     }
 

@@ -211,9 +211,9 @@ export const Transcript = memo(function Transcript({
 
   return (
     // The thread runs under the header above and 64 px under the composer below
-    // (`-mb-16`), fading out at both ends (`rk-thread-mask`): pt-21 clears the mask's
-    // top fade, and pb-24 is that overlap plus room for a card's shadow.
-    <div className="relative -mb-16 flex min-h-0 flex-1">
+    // (`rk-thread-overlap`), fading out at both ends (`rk-thread-mask`): pt-21 clears
+    // the mask's top fade, and pb-24 is that overlap plus room for a card's shadow.
+    <div className="rk-thread-overlap relative flex min-h-0 flex-1">
       <div
         ref={scrollRef}
         data-testid="transcript"

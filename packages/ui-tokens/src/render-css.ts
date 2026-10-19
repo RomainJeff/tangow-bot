@@ -19,7 +19,14 @@ import {
   typography,
 } from "./index.js";
 import type { MaterialKey } from "./materials.js";
-import { ambient, materials, narrowMaxWidth, scrollEdgeTone } from "./materials.js";
+import {
+  ambient,
+  materials,
+  narrowMaxWidth,
+  scrollEdgeBlur,
+  scrollEdgeTone,
+  threadFade,
+} from "./materials.js";
 
 /** `cardForeground` -> `card-foreground` (no leading `--`). */
 function kebabCase(key: string): string {
@@ -78,10 +85,16 @@ function renderMaterialLines(appearance: ResolvedAppearance): string[] {
 }
 
 function renderMaterialGeometryLines(): string[] {
-  return materialKeys.flatMap((key) => [
-    `  --material-${key}-blur: ${materials[key].blur}px;`,
-    `  --material-${key}-saturate: ${materials[key].saturate}%;`,
-  ]);
+  return [
+    ...materialKeys.flatMap((key) => [
+      `  --material-${key}-blur: ${materials[key].blur}px;`,
+      `  --material-${key}-saturate: ${materials[key].saturate}%;`,
+    ]),
+    `  --scroll-edge-blur: ${scrollEdgeBlur}px;`,
+    `  --thread-fade-top-start: ${threadFade.topStart}px;`,
+    `  --thread-fade-top-end: ${threadFade.topEnd}px;`,
+    `  --thread-fade-bottom: ${threadFade.bottom}px;`,
+  ];
 }
 
 /** Phone width takes its own ambient light, higher and from the corner. */

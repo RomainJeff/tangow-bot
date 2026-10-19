@@ -88,10 +88,10 @@ describe("window chrome", () => {
   it("keeps conversation header controls clickable", () => {
     const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "../pages");
     const shell = readFileSync(path.join(root, "shell/thread-header.tsx"), "utf8");
-    expect(shell).toContain('className="app-drag relative z-20 -mb-header flex h-header shrink-0');
-    // The mobile-nav toggle is a round glass Button that stays out of the drag region.
+    expect(shell).toContain('className="app-drag relative z-10 -mb-header flex h-header shrink-0');
+    // The mobile-nav toggle is a round glass button that stays out of the drag region.
     expect(shell).toContain(
-      'className="rk-glass-control app-no-drag size-capsule shrink-0 text-foreground md:hidden"',
+      'className="rk-glass-control rk-press-round app-no-drag grid size-capsule shrink-0 place-items-center rounded-full text-foreground md:hidden"',
     );
     // The bot-name trigger stays clickable (and out of the drag region) while
     // carrying its hover affordance.
