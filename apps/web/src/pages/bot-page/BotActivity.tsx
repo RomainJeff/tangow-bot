@@ -190,7 +190,13 @@ export function BotActivity({
   const openRuns = useOpenRuns();
   const locale = i18n.locale || "en";
 
-  if (read.kind === "loading") return <LoadingRows />;
+  if (read.kind === "loading") {
+    return (
+      <div className={DAY_CARD}>
+        <LoadingRows />
+      </div>
+    );
+  }
   if (read.kind === "failed") {
     return <CouldNotLoad onRetry={retry} className="py-10 text-center text-meta" />;
   }
@@ -219,7 +225,7 @@ export function BotActivity({
                   })}
                 </h3>
               ) : null}
-              <div className="flex flex-col rounded-card bg-group px-3.5 py-1 shadow-group">
+              <div className={DAY_CARD}>
                 {items.map((item) => (
                   <ActivityLine
                     key={itemKey(item)}
@@ -236,7 +242,7 @@ export function BotActivity({
             <Button
               variant="tertiary"
               size="capsule"
-              className="-ms-3 mt-2 self-start"
+              className="ms-0.5 mt-2 self-start"
               disabled={read.earlier === "loading"}
               onClick={() => void showEarlier()}
             >
@@ -314,8 +320,11 @@ function useRunWords() {
   return { words, time, reason: copy.failureReason, routine: t`Routine` };
 }
 
-/** A filled symbol draws its mark in the surface colour so it stays readable on the fill. */
+/** A filled symbol draws its mark in the day card's colour so it stays readable on the fill. */
 const FILLED = "[&>path]:stroke-group";
+
+/** One day of activity: a `group` card, as on iPhone. */
+const DAY_CARD = "flex flex-col rounded-card bg-group px-3.5 py-1 shadow-group";
 
 const STATIC_LINE = "flex min-h-11 w-full items-center gap-2.5 rounded-row px-2 -mx-2 text-start";
 const LINE = `${STATIC_LINE} outline-none duration-(--duration-hover) ease-quiet hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50`;
@@ -457,7 +466,7 @@ function RecapText({ text }: { text: string }) {
       <ClippedPreview
         text={text}
         maxLines={8}
-        fadeFrom="from-surface"
+        fadeFrom="from-group"
         onOpen={() => setMore(true)}
         ariaLabel={t`Show more`}
       >

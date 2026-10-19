@@ -41,7 +41,7 @@ opaque planes, as are the parts inside a card:
 | Plane | Light | Dark | Use |
 | --- | --- | --- | --- |
 | `sheet` | `#F5F5F7`; `0 0 0 1px rgba(0, 0, 0, 0.07), 0 2px 8px -2px rgba(0, 0, 0, 0.08), 0 24px 48px -24px rgba(0, 0, 0, 0.22)` | `#232326`; `0 0 0 1px rgba(255, 255, 255, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 48px -20px rgba(0, 0, 0, 0.7)` | the side panel, the settings and Customize windows |
-| `group` | `#FFFFFF`; `0 0 0 1px rgba(0, 0, 0, 0.05)` | `#333336`; `0 0 0 1px rgba(255, 255, 255, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.04)` | a settings group on a sheet |
+| `group` | `#FFFFFF`; `0 0 0 1px rgba(0, 0, 0, 0.05)` | `#333336`; `0 0 0 1px rgba(255, 255, 255, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.04)` | a settings group or an activity day on a sheet; at phone width, the drawer's selected row and search field |
 | `well` | `#EEEEF1` | `#4E4E50` [white 9% on `surface`] | reading matter and fields inside a decision card; file and computer icons |
 
 ## Ambient
