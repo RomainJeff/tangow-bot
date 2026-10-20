@@ -1,5 +1,6 @@
 import type { AdapterDescriptor, WorkerCapabilities } from "@rakazo/adapter-kit";
 import { Sandbox } from "e2b";
+import { toolResult } from "../file-task.js";
 import { call, finish, liveRun } from "./run.js";
 import { context, type Lane, type Live, type ProviderWrap } from "./session.js";
 
@@ -215,12 +216,17 @@ export const laneGTimeout: Lane = {
   passWhen:
     "E2B kills the VM, the attempt ends released with its writer lease free and its bash effect never rerun, and the run completes on a new attempt",
   async run(live) {
+    let retried = "";
     const worker = await liveRun(live, {
       provider: () => live.workerProvider(SHORT_TIMEOUT_MS),
       files: { private: true, shared: false },
       steps: [
         call("nap", "bash", { command: `sleep ${(SHORT_TIMEOUT_MS / 1000) * 3}` }),
-        ...finish("Recovered after the VM was killed"),
+        // The next attempt asks for the same call; the controller must not run it again.
+        call("nap", "bash", { command: `sleep ${(SHORT_TIMEOUT_MS / 1000) * 3}` }),
+        ...finish("Recovered after the VM was killed", (request) => {
+          retried = toolResult(request);
+        }),
       ],
     });
     try {
@@ -263,6 +269,7 @@ export const laneGTimeout: Lane = {
         afterKill.writerLeasesHeld === 0 &&
         afterKill.sandboxesAlive === 0 &&
         final.status === "completed" &&
+        retried.includes("its outcome is unknown") &&
         effects.filter((effect) => effect.kind === "bash").length === 1 &&
         effects.find((effect) => effect.kind === "bash")?.status === "uncertain" &&
         final.sandboxesLeft === 0;
@@ -273,6 +280,7 @@ export const laneGTimeout: Lane = {
           firstContinue: first,
           firstAttemptEndedAfterMs: killedAfterMs,
           afterKill,
+          retriedCallResult: retried,
           final,
         },
       };

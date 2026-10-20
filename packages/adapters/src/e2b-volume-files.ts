@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { AdapterContext, PortableFile, VolumeEntry, VolumeFiles } from "@rakazo/adapter-kit";
 import { fileMode, isPortablePath } from "@rakazo/adapter-kit";
-import { type ConnectionOpts, Sandbox, SandboxNotFoundError } from "e2b";
+import { type ConnectionOpts, Sandbox, SandboxNotFoundError, TimeoutError } from "e2b";
 
 /** Where a volume-files sandbox mounts the volume it serves. */
 export const VOLUME_FILES_MOUNT = "/mnt/rakazo-volume";
@@ -63,7 +63,10 @@ export function e2bVolumeSandbox(options: {
       kill: async () => {
         await sandbox.kill();
       },
-      isGone: (error) => error instanceof SandboxNotFoundError,
+      isGone: (error) =>
+        error instanceof SandboxNotFoundError ||
+        // The SDK maps envd's 502, which a killed sandbox answers, to this timeout.
+        (error instanceof TimeoutError && error.message.includes("likely due to sandbox timeout")),
     };
   };
 }
@@ -159,6 +162,8 @@ export class E2BVolumeFiles implements VolumeFiles {
     } catch (error) {
       if (!sandbox.isGone(error)) throw error;
       if (this.sandboxes.get(volumeRef) === opening) this.sandboxes.delete(volumeRef);
+      // Not left running if it only looked gone.
+      await sandbox.kill().catch(() => undefined);
       return step(await this.sandbox(volumeRef));
     }
   }

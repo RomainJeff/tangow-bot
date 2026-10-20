@@ -161,13 +161,14 @@ describe("E2B volume files", () => {
   });
 
   it("opens a new sandbox when E2B killed the volume's sandbox, and keeps the volume's files", async () => {
-    const { files, opened, lose } = await localVolumes();
+    const { files, opened, killed, lose } = await localVolumes();
     await files.write("vol", { path: "kept.txt", content: text("kept") }, context);
 
     lose("vol");
 
     expect(new TextDecoder().decode(await files.read("vol", "kept.txt", context))).toBe("kept");
     expect(opened).toEqual(["vol", "vol"]);
+    expect(killed).toEqual(["vol"]);
   });
 
   it("waits for every sandbox's destruction, then reports the one it could not destroy", async () => {
