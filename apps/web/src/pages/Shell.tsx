@@ -865,8 +865,10 @@ export function ShellPage() {
     return snap;
   }
 
-  async function refreshComputerScreen(id: string, { force = false } = {}) {
-    if (!computerVisible.current) return null;
+  // `visible` is for a caller about to open the viewer: `computerVisible` still reads the old render.
+  async function refreshComputerScreen(id: string, { force = false, visible = false } = {}) {
+    const isVisible = () => visible || computerVisible.current;
+    if (!isVisible()) return null;
     const request = ++screenRequest.current;
     return loadComputerScreen({
       botId: id,
@@ -876,7 +878,7 @@ export function ShellPage() {
       reads: screenReads.current,
       load: () => rpc.computer.screenUrl({ botId: id }),
       isCurrent: () =>
-        request === screenRequest.current && activeBotId.current === id && computerVisible.current,
+        request === screenRequest.current && activeBotId.current === id && isVisible(),
       commit: (screen, held) => {
         setScreenUrl(screen.url);
         setComputerError(screen.error);
@@ -2519,7 +2521,7 @@ export function ShellPage() {
         force: computer?.state !== "running",
       });
       // The full viewer opens a new connection, so it waits for a URL the proxy still accepts.
-      await refreshComputerScreen(active.id);
+      await refreshComputerScreen(active.id, { visible: true });
       setComputerOpen(true);
     } catch {
       // computerError already set in bootComputer

@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-10-20
+
+#### Fixed
+
+- Opening a bot's computer screen on web and desktop now loads the screen before the viewer appears, instead of sometimes opening an empty viewer.
+
 ### 2026-10-19
 
 #### Changed
