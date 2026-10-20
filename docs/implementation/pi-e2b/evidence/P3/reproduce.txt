@@ -54,9 +54,9 @@ Lane capture
 Observed (see verification.json)
   pnpm check: 24 tasks passed.
   pnpm lint: 49 warnings and 1 info, the same as the feature base.
-  pnpm test: 8053 passed, 209 skipped.
+  pnpm test: 8059 passed, 209 skipped.
   Issue verification: 64 tests in 5 files passed. pnpm test:pi: 30 tests in 4 files passed.
-  P3 offline tests: 155 tests in 17 files passed.
+  P3 offline tests: 161 tests in 17 files passed.
   pnpm test:integration: 163 tests in 23 suites passed.
   Live lanes: 10 passed, 4 pending the composition slice (S3), no sandbox and no volume left after any lane.
   Bench, 30 rotating trials per arm, no errors: cold boot p95 1.91 s with no mount and 2.13 s with two

@@ -54,7 +54,7 @@
   "head": {
     "pnpm check": "passed, 24 tasks",
     "pnpm lint": "passed, 49 warnings and 1 info, the same as the feature base",
-    "pnpm test": "passed, 8053 tests in 615 files with 209 skipped",
+    "pnpm test": "passed, 8059 tests in 615 files with 209 skipped",
     "issue verification (pi-runtime, executor-secret-pi, computer-workspace, e2b-sandbox, sandbox-factory)": "passed, 64 tests in 5 files",
     "pnpm test:pi": "passed, 30 tests in 4 files",
     "P3 offline tests touched": "passed, 161 tests in 17 files, including the volume-files, worker provider, lifecycle and worker-plan tests",
