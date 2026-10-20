@@ -1,8 +1,8 @@
 {
   "name": "p3live-worker-pi",
   "templateId": "a38yh2o1smij7eey5aqo",
-  "buildId": "25b29ba8-35a7-4feb-b279-e03d4ed2e064",
+  "buildId": "5146de80-7a34-4fde-9177-a21d228ccfd5",
   "profile": { "cpuCount": 1, "memoryMB": 1024 },
-  "guestSha256": "a92c46e44e5093cc73b09b373c2c43f114e3d20e56fdfe3682441f535d9751e0",
+  "guestSha256": "44e31cb2ae06af200ce7b99b3d559bfc529c2ea1b38c48cee77505aac43275b8",
   "seconds": 5
 }
