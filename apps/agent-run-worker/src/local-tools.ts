@@ -88,21 +88,40 @@ function modelText(
 }
 
 const SPOOL_FILE = /^bash-.+\.log$/;
+/** Spool files of commands still running in this process: never pruned. */
+const spooling = new Set<string>();
+let pruning = Promise.resolve();
 
-/** Makes room for one more spool file under the cap, oldest first. Other files are left alone. */
-async function pruneSpool(spoolDir: string) {
-  const names = (await readdir(spoolDir)).filter((name) => SPOOL_FILE.test(name));
-  const excess = names.length - (WORKER_LIMITS.localOutputSpoolFiles - 1);
-  if (excess <= 0) return;
-  const aged = await Promise.all(
-    names.map(async (name) => {
-      const file = path.join(spoolDir, name);
-      const info = await stat(file).catch(() => null);
-      return { file, mtimeMs: info?.mtimeMs ?? 0 };
-    }),
+/**
+ * Makes room for one more spool file under the cap, oldest first, and claims its path. Calls run
+ * one at a time, so concurrent commands do not overshoot the cap. Other files are left alone.
+ */
+function claimSpool(spoolDir: string): Promise<string> {
+  const claimed = pruning.then(async () => {
+    const names = (await readdir(spoolDir)).filter((name) => SPOOL_FILE.test(name));
+    const excess = names.length - (WORKER_LIMITS.localOutputSpoolFiles - 1);
+    if (excess > 0) {
+      const aged = await Promise.all(
+        names
+          .map((name) => path.join(spoolDir, name))
+          .filter((file) => !spooling.has(file))
+          .map(async (file) => {
+            const info = await stat(file).catch(() => null);
+            return { file, mtimeMs: info?.mtimeMs ?? 0 };
+          }),
+      );
+      aged.sort((a, b) => a.mtimeMs - b.mtimeMs || a.file.localeCompare(b.file));
+      await Promise.all(aged.slice(0, excess).map(({ file }) => rm(file, { force: true })));
+    }
+    const spoolPath = path.join(spoolDir, `bash-${randomUUID()}.log`);
+    spooling.add(spoolPath);
+    return spoolPath;
+  });
+  pruning = claimed.then(
+    () => undefined,
+    () => undefined,
   );
-  aged.sort((a, b) => a.mtimeMs - b.mtimeMs || a.file.localeCompare(b.file));
-  await Promise.all(aged.slice(0, excess).map(({ file }) => rm(file, { force: true })));
+  return claimed;
 }
 
 /** Kill the command's whole process group, forcefully after a grace period. */
@@ -131,8 +150,21 @@ export async function bash(
   }
   const timeoutSeconds = typeof args.timeout === "number" && args.timeout > 0 ? args.timeout : null;
   await mkdir(spoolDir, { recursive: true });
-  await pruneSpool(spoolDir);
-  const spoolPath = path.join(spoolDir, `bash-${randomUUID()}.log`);
+  const spoolPath = await claimSpool(spoolDir);
+  try {
+    return await runCommand(command, timeoutSeconds, spoolPath, cwd, signal);
+  } finally {
+    spooling.delete(spoolPath);
+  }
+}
+
+async function runCommand(
+  command: string,
+  timeoutSeconds: number | null,
+  spoolPath: string,
+  cwd: string,
+  signal: AbortSignal,
+): Promise<CommandOutput> {
   const capture = outputCapture(spoolPath);
   const child = spawn("bash", ["-c", command], {
     cwd,

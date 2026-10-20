@@ -96,6 +96,32 @@ describe("bash", () => {
     );
   });
 
+  it("never prunes the spool file of a command still running", async () => {
+    const ctx = await context();
+    await mkdir(ctx.spoolDir, { recursive: true });
+    for (let index = 0; index < 16; index += 1) {
+      await writeFile(path.join(ctx.spoolDir, `bash-old-${index}.log`), "old");
+    }
+    const release = path.join(ctx.cwd, "release");
+    const running = bash(
+      { command: `seq 1 3000; while [ ! -e ${release} ]; do sleep 0.05; done` },
+      ctx,
+    );
+    await waitFor(() => readdir(ctx.spoolDir).then((names) => (names.length === 16 ? 1 : 0)));
+    const later = new Date(Date.now() + 60_000);
+    for (let index = 1; index < 16; index += 1) {
+      await utimes(path.join(ctx.spoolDir, `bash-old-${index}.log`), later, later);
+    }
+
+    await bash({ command: "seq 1 3000" }, ctx);
+    await writeFile(release, "");
+    const output = await running;
+
+    expect(await readFile(output.spoolPath!, "utf8")).toBe(
+      `${Array.from({ length: 3000 }, (_, i) => i + 1).join("\n")}\n`,
+    );
+  });
+
   it("kills the command's whole process group when the run is aborted", async () => {
     const abort = new AbortController();
     const ctx = await context(abort.signal);
