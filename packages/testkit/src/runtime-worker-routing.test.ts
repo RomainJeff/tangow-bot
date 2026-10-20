@@ -17,6 +17,34 @@ async function fixture(steps: ModelEmulatorStep[]) {
   return run;
 }
 
+async function takeoverFixture(steps: ModelEmulatorStep[]) {
+  let releaseRunId: string | undefined;
+  const run = await startWorkerRun({
+    steps,
+    workers: (workers) => ({
+      ...workers,
+      async plan(input) {
+        // Routing runs after the first takeover read, before the final pre-runtime check.
+        if (releaseRunId) {
+          await run.prisma.run.update({
+            where: { id: releaseRunId },
+            data: { checkpoint: "takeover" },
+          });
+          releaseRunId = undefined;
+        }
+        return workers.plan(input);
+      },
+    }),
+  });
+  cleanups.push(() => run.close());
+  return {
+    run,
+    releaseDuringRouting(runId: string) {
+      releaseRunId = runId;
+    },
+  };
+}
+
 const recap = JSON.stringify({ version: 1, results: ["Answered"], references: [] });
 const toolNames = (request: ModelEmulatorRequest) =>
   (request.tools ?? []).map((tool) => tool.function.name);
@@ -228,6 +256,78 @@ describe("where a product run executes", () => {
       );
     },
   );
+
+  it("preserves the setup budget when takeover is released after the first checkpoint read", async () => {
+    const { run, releaseDuringRouting } = await takeoverFixture(offeredShellTools([]));
+    const runId = await run.send("Hello.");
+    const prepare = vi
+      .spyOn(run.provider, "prepare")
+      .mockRejectedValueOnce(new Error("The provider is unavailable"))
+      .mockRejectedValueOnce(new Error("The provider is unavailable"));
+    for (let failure = 0; failure < 2; failure++) {
+      await expect(run.continueRun(runId)).rejects.toThrow("Run setup failed; retrying");
+    }
+    prepare.mockRestore();
+    await run.prisma.run.update({
+      where: { id: runId },
+      data: { status: "waiting_takeover" },
+    });
+    releaseDuringRouting(runId);
+    await run.continueRun(runId);
+    expect(await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).toMatchObject({
+      status: "queued",
+      checkpoint: "takeover",
+    });
+
+    await run.restart().dispose();
+    await run.continueRun(runId);
+
+    expect(await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).toMatchObject({
+      status: "completed",
+      error: null,
+    });
+    run.model.assertComplete();
+  });
+
+  it("rolls back a takeover requeue whose attempt outcome cannot be written and counts the crash", async () => {
+    const { run, releaseDuringRouting } = await takeoverFixture([]);
+    const runId = await run.send("Hello.");
+    await run.prisma.run.update({
+      where: { id: runId },
+      data: { status: "waiting_takeover" },
+    });
+    await run.prisma.$executeRaw`
+      ALTER TABLE attempts ADD CONSTRAINT reject_setup_outcome CHECK (status <> 'setup_failed')
+    `;
+    releaseDuringRouting(runId);
+
+    await expect(run.continueRun(runId)).rejects.toThrow("reject_setup_outcome");
+
+    expect(await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).toMatchObject({
+      status: "running",
+      checkpoint: "takeover",
+    });
+    expect(
+      await run.prisma.attempt.findMany({
+        where: { runId },
+        select: { status: true, error: true, finishedAt: true },
+      }),
+    ).toEqual([{ status: "setting_up", error: null, finishedAt: null }]);
+    await run.prisma.$executeRaw`ALTER TABLE attempts DROP CONSTRAINT reject_setup_outcome`;
+    await run.prisma.run.update({
+      where: { id: runId },
+      data: { leaseExpiresAt: new Date(0) },
+    });
+    await run.restart().dispose();
+    vi.spyOn(run.provider, "prepare").mockRejectedValue(new Error("The provider is unavailable"));
+    await expect(run.continueRun(runId)).rejects.toThrow("Run setup failed; retrying");
+    await run.continueRun(runId);
+    expect(await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).toMatchObject({
+      status: "failed",
+      error: expect.stringContaining("Run setup failed after 3 attempts"),
+    });
+    expect(await run.prisma.attempt.count({ where: { runId } })).toBe(3);
+  });
 
   it("counts setup attempts lost before their outcome was committed, across controller restarts", async () => {
     const run = await fixture([]);

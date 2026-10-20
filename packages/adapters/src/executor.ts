@@ -4414,7 +4414,28 @@ export function createRunExecutor(deps: ExecutorDeps) {
             )?.checkpoint,
           );
           if (releasedCheckpoint) {
-            await requeueComputerRun(deps, runId, workerId, fence, releasedCheckpoint, false);
+            const released = await deps.prisma.$transaction(async (tx) => {
+              const released = await writeComputerRunRequeue(
+                tx,
+                runId,
+                workerId,
+                fence,
+                releasedCheckpoint,
+              );
+              if (released) {
+                await tx.attempt.update({
+                  where: { id: attempt.id },
+                  data: { status: "setup_failed", error: null, finishedAt: new Date() },
+                });
+              }
+              return released;
+            });
+            if (released) {
+              await deps.jobs.enqueue({
+                ...runContinueJob(runId),
+                availableAt: new Date(Date.now() + computerRetryDelay(fence)),
+              });
+            }
             return;
           }
         }
