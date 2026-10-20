@@ -171,6 +171,8 @@ model Space {
   createdByUser               User?                        @relation("SpaceCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
   createdAt                   DateTime                     @default(now())
   deletingAt                  DateTime?
+  skillIndexAttemptStartedAt   DateTime?
+  skillIndexAttemptId          String?
   deletionClaimId             String?
   memberships                 SpaceMember[]
   bots                        Bot[]

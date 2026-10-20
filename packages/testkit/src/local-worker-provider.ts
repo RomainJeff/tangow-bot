@@ -220,6 +220,7 @@ export class LocalWorkerProvider implements WorkerProvider, GuestConnector {
         RAKAZO_WORKER_CAPABILITY: capability,
         RAKAZO_WORKER_HARNESS: "pi",
         RAKAZO_WORKER_ROOT: vm.root,
+        RAKAZO_WORKER_HOME: path.join(vm.root, "home/user"),
         RAKAZO_WORKER_SPOOL_DIR: path.join(vm.root, "tmp", "tool-output"),
       },
     });

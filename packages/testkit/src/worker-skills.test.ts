@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -178,7 +179,6 @@ it.each(["memory", "child"] as const)(
         }),
         expect.objectContaining({ name: "shared-guide", source: "shared" }),
         expect.objectContaining({ name: "new-guide", source: "bot" }),
-        expect.objectContaining({ name: "Interrogate", source: "managed" }),
       ]),
     );
     expect(indexed.some((skill) => skill.name === "unsafe")).toBe(false);
@@ -246,3 +246,79 @@ it.each(["memory", "child"] as const)(
     run.model.assertComplete();
   },
 );
+
+it.each(["storage", "ordering"])("protects the shared skill index, %s", async (scenario) => {
+  const run = await startWorkerRun({ steps: [] });
+  cleanups.push(() => run.close());
+  const older = await run.send("Older");
+  // Separate active runs, as two bots in a space can report in either order.
+  const original = await run.prisma.run.findUniqueOrThrow({ where: { id: older } });
+  const newer = "newer-skills-run";
+  await run.prisma.run.create({ data: { ...original, id: newer } });
+  for (const [id, startedAt] of [
+    [older, new Date("2026-01-01")],
+    [newer, new Date("2026-01-02")],
+  ] as const) {
+    await run.prisma.run.update({
+      where: { id },
+      data: { status: "running", leaseFence: 1, leaseExpiresAt: new Date(Date.now() + 60_000) },
+    });
+    await run.prisma.attempt.create({
+      data: { runId: id, fence: 1, status: "running", startedAt },
+    });
+  }
+  const content = buildSkillMd({
+    name: "shared-guide",
+    description: "Shared procedure",
+    body: "token-from-another-bot",
+  });
+  const report = {
+    name: "shared-guide",
+    description: "Shared procedure",
+    source: "shared" as const,
+    path: "/workspace/shared/skills/shared-guide/SKILL.md",
+    content,
+    contentHash: createHash("sha256").update(content).digest("hex"),
+    files: [],
+  };
+  const owner = (runId: string) => ({
+    spaceId: run.spaceId,
+    userId: run.userId,
+    botId: run.bot.id,
+    runId,
+    fence: 1,
+  });
+  await indexWorkerSkills(
+    run.prisma,
+    owner(older),
+    [
+      report,
+      {
+        ...report,
+        name: "managed",
+        source: "managed",
+        content: buildSkillMd({
+          name: "managed",
+          description: "Shared procedure",
+          body: "Managed",
+        }),
+        contentHash: createHash("sha256")
+          .update(
+            buildSkillMd({ name: "managed", description: "Shared procedure", body: "Managed" }),
+          )
+          .digest("hex"),
+      },
+    ],
+    ["shared", "managed"],
+    [],
+  );
+  if (scenario === "storage") {
+    expect(
+      await run.prisma.volumeSkill.findMany({ select: { source: true, content: true } }),
+    ).toEqual([{ source: "shared", content: "" }]);
+    return;
+  }
+  await indexWorkerSkills(run.prisma, owner(newer), [], ["shared"], []);
+  await indexWorkerSkills(run.prisma, owner(older), [report], ["shared"], []);
+  expect(await run.prisma.volumeSkill.count({ where: { source: "shared" } })).toBe(0);
+});

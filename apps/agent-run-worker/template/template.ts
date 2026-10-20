@@ -14,6 +14,7 @@ function base(bundle: string): TemplateBuilder {
   return (
     Template({ fileContextPath: path.dirname(bundle) })
       .fromNodeImage("24-bookworm")
+      .setEnvs({ RAKAZO_WORKER_HOME: "/home/user" })
       .aptInstall(["bash", "ca-certificates", "git", "procps"])
       .makeDir("/workspace", { user: "root" })
       // The guest runs as the sandbox user, and a run without volumes works in /workspace itself.

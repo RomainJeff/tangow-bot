@@ -82,7 +82,7 @@ async function attemptsOf(run: Awaited<ReturnType<typeof fixture>>, runId: strin
 }
 
 describe("where a product run executes", () => {
-  it("completes a computerless bot's message and reads managed skills without mounting user files", async () => {
+  it("completes a computerless bot's message without native tools or user file mounts", async () => {
     const seen: string[][] = [];
     const calls: string[] = [];
     const run = await startWorkerRun({
@@ -113,22 +113,6 @@ describe("where a product run executes", () => {
               JSON.stringify(request.messages.find((message) => message.role === "system")),
             ).not.toContain("request_takeover");
           },
-          response(request) {
-            const prompt = String(
-              request.messages.find((message) => message.role === "system")?.content,
-            );
-            const skill = prompt
-              .split("<skill>")
-              .find((part) => part.includes("<name>Interrogate</name>"));
-            const file = skill?.match(/<location>(.*?)<\/location>/)?.[1];
-            expect(file).toBeDefined();
-            return { type: "tool", id: "managed", name: "read", arguments: { path: file } };
-          },
-        },
-        {
-          expect(request) {
-            expect(JSON.stringify(request.messages)).toContain("Do not modify files");
-          },
           response: { type: "tool", id: "mcp", name: "mcp_lookup", arguments: {} },
         },
         {
@@ -150,7 +134,7 @@ describe("where a product run executes", () => {
       status: "completed",
       leaseOwner: null,
     });
-    expect(seen[0]).toEqual(expect.arrayContaining(["read", "bash"]));
+    expect(seen[0]).toEqual([]);
     expect(calls).toEqual(["mcp_lookup", "integration_lookup"]);
     expect(run.provider.launches).toHaveLength(1);
     expect(ensure).toHaveBeenCalledWith(expect.objectContaining({ mounts: [] }), expect.anything());

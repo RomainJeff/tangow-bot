@@ -705,7 +705,7 @@ async function routeRun(
             tool.name,
           ),
       ),
-      runtime.describe().capabilities.localTools ?? [],
+      needs.files.private ? (runtime.describe().capabilities.localTools ?? []) : [],
     ),
   };
 }

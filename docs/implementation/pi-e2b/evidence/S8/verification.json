@@ -8,54 +8,67 @@
       "native tools from S7",
       "loadSkills with explicit skillPaths and defaults off",
       "explicit ResourceLoader used for actual run instructions",
-      "formatSkillsForPrompt"
+      "formatSkillsForPrompt",
+      "AgentSession bound to the worker Agent with an authorized tool allowlist",
+      "SessionManager.inMemory with controller system/user/assistant/tool-result replay",
+      "in-memory ModelRuntime relay placeholder credential"
     ],
-    "not_adopted": [
-      "AgentSession",
-      "SessionManager.inMemory",
-      "coding-agent settings, compaction and retry policy"
-    ],
-    "session_requirement": "Still open; keyless P2 relay and PiAgentRuntime keep the transcript/tool projection and model access."
+    "not_adopted": ["SDK compaction, retry policy and cache warming"],
+    "session_requirement": "Adopted. The serious attempt passed the Pi and worker suites, including the standalone bundle. Real credentials stay on the controller."
   },
   "checks": {
     "pnpm check": "passed across all workspace tasks",
     "pnpm lint": "passed with 49 existing warnings and one existing configuration notice; no new warnings in touched files",
-    "pnpm test": "8,105 passed and 215 skipped",
+    "pnpm test": "8,115 passed and 215 skipped",
     "pnpm test:pi": "30 passed",
-    "pnpm test:integration": "171 passed across 24 suites on disposable PostgreSQL, including the real memory and bundled guest skill-index scenarios",
-    "pnpm test:e2e:affected": "Selected the full suite: 212 passed; exactly the 11 previously recorded main-baseline failures, no new failures.",
+    "pnpm test:integration": "173 passed across 24 suites on disposable PostgreSQL",
+    "pnpm test:e2e:affected": "Selected the full suite: 212 passed; exactly the same 11 failures as the prior recorded main-baseline set, no additional failures.",
     "worker bundle": "passed offline",
     "worker-live bundle": "passed offline; live lanes not executed"
   },
   "contracts": {
-    "convergence": "Real filesystem links, managed > bot > shared, all collisions, stale link removal and refusal to replace user entries.",
+    "convergence": "Real filesystem links, managed > bot > shared, all collisions. The discovery folder must be absent or empty. Pre-existing directories and later user symlinks are preserved by refusal; no ownership marker exists.",
     "loader": "Real Pi skill discovery from the explicit folder while ambient project/global skills, AGENTS.md, settings and extensions are present.",
     "worker": "Real executor, guest, Pi relay and emulator in memory and standalone bundle modes. Pi catalog is visible and controller skill tools are absent.",
-    "index_and_usage": "Real DB index and API list/read results, secret refusal in a supporting script, native read events, private scope, complete shared replacement and completed-run fencing. Also exercised on PostgreSQL.",
-    "migration": "Dry run, verified copy, repeated no-op, original preservation, executable mode, conflicting targets and legacy Unicode content.",
+    "index_and_usage": "Shared content is never stored or exposed by the API. Managed reports are not stored. Mounted-source validation, per-attempt use/collision caps, one complete snapshot per attempt, attempt-start ordering including empty snapshots, secret refusal and completed-run fencing.",
+    "migration": "Dry run, verified copy, repeated no-op, original preservation, executable mode and Unicode content. Reports every skipped, merged and conflicting bundle; compares full inventories, bytes and modes; independent bundles proceed.",
     "managed": "Legacy disable/override rows cannot hide managed skills and saved user collisions cannot shadow them.",
-    "ui": "Web source-specific access controls and readonly viewer; desktop and phone-width captures."
+    "ui": "Web source-specific access controls and readonly viewer; desktop and phone-width captures.",
+    "legacy": "Legacy rows remain editable beside same-name private and shared observations. No legacy row is hidden without migration provenance."
   },
   "regression_proof": {
     "worker_base": "Temporarily restored executor, generic guest and Pi adapter from b448499a2. Both real worker modes failed the new skill acceptance test because the model received the old catalog/tool behavior. Restored the implementation afterwards.",
     "visibility_base": "Temporarily restored pre-S8 managed/user precedence and visibility behavior. Both managed precedence/enablement regressions failed for the intended reason. Restored afterwards.",
-    "result": "All four selected negative controls failed; the restored implementation passes the full unit suite."
+    "result": "All four selected negative controls failed; the restored implementation passes the full unit suite.",
+    "round_1": "New owner-boundary regressions failed on c3318e191 for native-tool routing, legacy visibility, stale ownership markers, explicit worker home, unmounted reports, frame caps, shared content/managed-row storage, snapshot ordering and migration conflicts. Fixed implementations then passed the full unit suite."
   },
   "test_audit": {
     "method": "Applied the authoring gate, read the SDK implementation and existing owner/sibling tests, and reviewed the final diff.",
-    "changes": "Replaced obsolete user-shadowing and managed-disable expectations. Preserved independent filesystem, protocol/bundle, database, secret-handling, migration and public UI contracts.",
-    "seams": "Every new exported helper has a production caller. No test-only production switch or export was added."
+    "changes": "Replaced obsolete user-shadowing and managed-disable expectations. Preserved independent filesystem, protocol/bundle, database, secret-handling, migration and public UI contracts. Round 1 removes marker-rebuild expectations and managed-row storage expectations. New tests exercise filesystem preservation, process startup, hostile frames, real database state, editable API rows and operator migration output. The old-schema migration fixture now seeds spaces with SQL rather than a current-schema Prisma projection.",
+    "seams": "No test-only exports or flags. The session binding has a real coding-agent adapter caller; it keeps SDK-specific session code out of the shared runtime.",
+    "diff_lines": {
+      "production_and_tooling": {
+        "added": 306,
+        "removed": 95
+      },
+      "tests_and_support": {
+        "added": 270,
+        "removed": 38
+      }
+    }
   },
   "decisions": {
-    "secrets": "Refuse indexing known run secrets in reported metadata, SKILL.md or supporting text. Leave volume files untouched and log no offending content. The scanner checks the controller-provided live secret values; it is not a heuristic scan for unknown credentials.",
+    "secrets": "Known run-secret reports remain refused. Shared bodies are never stored, which prevents cross-bot body-secret indexing without needing every bot credential. Shared metadata, description and hash remain an untrusted observation.",
     "computer_convergence": "Deferred. Concurrent bots share one computer HOME and cannot safely rebuild one global folder with different private skill precedence. Existing managed mount and coding-agent discovery are retained.",
-    "learning": "Worker native writes reach the skill list. The controller learning nudge remains in-process only; native writes do not yet generate learning footers."
+    "learning": "Worker native writes reach the skill list. The controller learning nudge remains in-process only; native writes do not yet generate learning footers.",
+    "shared_write": "Accepted: a prompt-injected bot can plant a skill and script that other users' bots in the space load. Dedicated and team bots retain shared write access. Mitigations are deferred.",
+    "shared_index": "A mounted shared writer can report nonexistent files or empty its snapshot. Reports do not attest to filesystem truth; bounds, mount scope and attempt ordering are enforced."
   },
   "screenshots": {
     "desktop": "skills-desktop.png",
     "phone_390x844": "skills-phone.png",
     "data": "Synthetic UI fixture data only.",
-    "native_ios": "Pending; no simulator was booted."
+    "native_ios": "An iOS simulator was booted. The exact mobile screenshot command completed isolated PostgreSQL/backend setup but failed with spawn maestro ENOENT. Maestro is absent and no native app is installed in that simulator; no native capture is claimed."
   },
   "live": {
     "skills_lane": "Implemented, pending live run",
@@ -68,5 +81,12 @@
     "failed": 11,
     "passed": 212,
     "baseline_receipt": "../P3/verification.json#s6_verification.web_e2e_baseline"
+  },
+  "review_round": 1,
+  "review_base_commit": "c3318e191",
+  "home_safety": {
+    "isolation": "Every test, script and bundle invocation used fresh temporary HOME and TMPDIR directories.",
+    "backup": "Both skill directory trees were backed up before any run.",
+    "comparison": "Recursive diff with symlink dereferencing disabled returned exit 0 for both backup comparisons; no differences. The ordinary recursive comparison also returned exit 0; the relocated relative links in the Claude skills backup produce missing-target notices, which the symlink-preserving comparison avoids."
   }
 }

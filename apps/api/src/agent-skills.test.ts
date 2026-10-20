@@ -103,6 +103,37 @@ describe("agent skills service (filesystem)", () => {
       .filter((skill) => skill.source === "user")
       .map((skill) => [skill.name, skill.description, skill.availability, skill.visibleBotIds]);
 
+  it.each(["bot", "shared"])(
+    "keeps a legacy skill editable beside a same-name %s observation",
+    async (source) => {
+      const skills = service();
+      const legacy = await skills.create(actor, {
+        name: "Weekly",
+        description: "Original",
+        body: "Editable",
+      });
+      prisma.volumeSkill.findMany.mockResolvedValue([
+        {
+          id: "observation",
+          botId: "bot-1",
+          source,
+          name: "Weekly",
+          description: "Volume",
+          content: "Different content",
+          createdAt: new Date(0),
+          updatedAt: new Date(0),
+        },
+      ]);
+      expect(await skills.list(actor)).toContainEqual(
+        expect.objectContaining({ id: legacy.id, readOnly: false }),
+      );
+      await skills.update(actor, { skillId: legacy.id, body: "Updated" });
+      expect(await skills.get(actor, { skillId: legacy.id })).toMatchObject({
+        content: expect.stringContaining("Updated"),
+      });
+    },
+  );
+
   it("waits for the owner's earlier skill write before any write of its own", async () => {
     const lock = createInMemorySkillLock();
     const skills = service(lock);

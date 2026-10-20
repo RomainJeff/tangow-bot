@@ -239,17 +239,24 @@ export interface PiAgentRuntimeOptions {
   serviceName?: string;
   /** Replaces every model call, e.g. to relay it to the process that holds the key. */
   streamFn?: PiStreamFn;
+  /** Bind the worker's coding-agent session after controller history and tools are reconstructed. */
+  bindSession?: (agent: Agent) => Promise<{
+    prompt(text: string, images: ReturnType<typeof toPiImages>): Promise<void>;
+    dispose(): void;
+  }>;
 }
 
 export class PiAgentRuntime implements AgentRuntime {
   private readonly traceExporter?: TraceExporter;
   private readonly serviceName?: string;
   private readonly streamFn?: PiStreamFn;
+  private readonly bindSession?: PiAgentRuntimeOptions["bindSession"];
 
   constructor(options: PiAgentRuntimeOptions = {}) {
     this.traceExporter = options.traceExporter;
     this.serviceName = options.serviceName;
     this.streamFn = options.streamFn;
+    this.bindSession = options.bindSession;
   }
 
   describe() {
@@ -302,6 +309,9 @@ export class PiAgentRuntime implements AgentRuntime {
     const queue = createQueue();
 
     const work = (async () => {
+      let session:
+        | Awaited<ReturnType<NonNullable<PiAgentRuntimeOptions["bindSession"]>>>
+        | undefined;
       let trackedBudget: ToolCallBudget | undefined;
       let resumeHost: ToolHost | undefined;
       let traceRecorder: RunTraceRecorder | undefined;
@@ -418,6 +428,8 @@ export class PiAgentRuntime implements AgentRuntime {
             messages: history,
           },
         });
+
+        session = await this.bindSession?.(agent);
 
         const onAbort = () => {
           agent.abort();
@@ -591,7 +603,8 @@ export class PiAgentRuntime implements AgentRuntime {
           ...initialSteering.flatMap((item) => item.images ?? []),
         ]);
         try {
-          await agent.prompt(initialPrompt, images?.length ? images : undefined);
+          if (session) await session.prompt(initialPrompt, images);
+          else await agent.prompt(initialPrompt, images?.length ? images : undefined);
         } finally {
           try {
             await agent.waitForIdle();
@@ -654,6 +667,7 @@ export class PiAgentRuntime implements AgentRuntime {
         const message = sanitizeError(error instanceof Error ? error.message : String(error));
         queue.fail(new Error(message));
       } finally {
+        session?.dispose();
         queue.close();
         if (traceRecorder && this.traceExporter) {
           traceRecorder.finish(traceOutput, traceError);

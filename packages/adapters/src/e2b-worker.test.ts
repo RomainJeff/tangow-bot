@@ -146,6 +146,7 @@ describe("E2BWorkerProvider", () => {
       metadata: { rakazo: "worker", attemptId: "attempt_1" },
       envs: {
         RAKAZO_WORKER_HARNESS: "pi",
+        RAKAZO_WORKER_HOME: "/home/user",
         RAKAZO_WORKER_SPOOL_DIR: "/workspace/bots/bot_1/.rakazo/tool-output",
       },
       volumeMounts: {
@@ -189,7 +190,7 @@ describe("E2BWorkerProvider", () => {
 
     const { envs, volumeMounts } = e2b.sandboxes.get("sbx_1")!;
     expect({ envs, volumeMounts }).toEqual({
-      envs: { RAKAZO_WORKER_HARNESS: "other" },
+      envs: { RAKAZO_WORKER_HARNESS: "other", RAKAZO_WORKER_HOME: "/home/user" },
       volumeMounts: {},
     });
   });

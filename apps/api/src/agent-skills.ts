@@ -186,7 +186,7 @@ export function createAgentSkillsService(
           id,
           name: row.name,
           description: row.description,
-          content: row.content,
+          content: source === "shared" ? "" : row.content,
           source,
           readOnly: true,
           createdAt: row.createdAt.toISOString(),
@@ -261,11 +261,7 @@ export function createAgentSkillsService(
           (skill) => skill.source === "bot" || !botNames.has(skill.name.toLowerCase()),
         )
       : visibleVolumes;
-    const volumeNames = new Set(scoped.map((skill) => skill.name.toLowerCase()));
-    const entries = mergeManagedSkills(managed, [
-      ...scoped,
-      ...users.filter((skill) => !volumeNames.has(skill.name.toLowerCase())),
-    ]);
+    const entries = mergeManagedSkills(managed, [...scoped, ...users]);
     return botId ? entries.filter((entry) => entry.visibleBotIds.includes(botId)) : entries;
   }
 

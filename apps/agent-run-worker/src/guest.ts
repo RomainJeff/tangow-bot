@@ -257,6 +257,7 @@ async function runAttempt(
     let indexBytes = 0;
     let indexCount = 0;
     for (const skill of (await discoverVolumeSkills(roots)).skills) {
+      if (skill.source === "managed") continue;
       const report = await reportVolumeSkill(skill);
       const bytes = report ? Buffer.byteLength(JSON.stringify(report)) : 0;
       if (report && indexCount < 512 && indexBytes + bytes <= WORKER_LIMITS.modelRequestBytes) {

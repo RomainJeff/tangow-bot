@@ -1,19 +1,8 @@
 import { createHash } from "node:crypto";
-import {
-  lstat,
-  mkdir,
-  readdir,
-  readFile,
-  realpath,
-  rename,
-  symlink,
-  unlink,
-  writeFile,
-} from "node:fs/promises";
+import { lstat, mkdir, readdir, readFile, realpath, symlink } from "node:fs/promises";
 import path from "node:path";
 import type { SkillCollision, WorkerSkill } from "@rakazo/adapter-kit";
 import { parseSkillMd } from "@rakazo/core";
-import { z } from "zod";
 import { hasCode, skillDirName } from "./skill-store.js";
 
 export type SkillRoot = { source: WorkerSkill["source"]; path: string };
@@ -61,12 +50,11 @@ export async function discoverVolumeSkills(roots: readonly SkillRoot[]) {
   return { skills, collisions };
 }
 
-/** Replace only links this runner owns. Refuse user directories and unowned entries. */
+/** A worker starts with a fresh home. Never replace any pre-existing skill entry. */
 export async function convergeSkills(home: string, roots: readonly SkillRoot[]) {
   const discovered = await discoverVolumeSkills(roots);
   const agentsDir = path.join(home, ".agents");
   const skillsDir = path.join(agentsDir, "skills");
-  const marker = path.join(agentsDir, ".rakazo-skills.json");
   const parent = await lstat(agentsDir).catch(() => null);
   if (parent && !parent.isDirectory())
     throw new Error("Agents directory must be a plain directory");
@@ -75,25 +63,9 @@ export async function convergeSkills(home: string, roots: readonly SkillRoot[]) 
     throw error;
   });
   if (info && !info.isDirectory()) throw new Error("Skills directory must be a plain directory");
-  const markerInfo = await lstat(marker).catch(() => null);
-  if (markerInfo && !markerInfo.isFile())
-    throw new Error("Skills ownership record must be a plain file");
-  const owned = markerInfo
-    ? z.array(z.string().regex(/^[^/\\]+$/)).parse(JSON.parse(await readFile(marker, "utf8")))
-    : [];
-  const current = info ? await readdir(skillsDir) : [];
-  for (const entry of current) {
-    if (!owned.includes(entry) || !(await lstat(path.join(skillsDir, entry))).isSymbolicLink()) {
-      throw new Error("Skills convergence refuses to replace an unowned entry");
-    }
-  }
+  if (info && (await readdir(skillsDir)).length > 0)
+    throw new Error("Skills directory must be empty before convergence");
   await mkdir(skillsDir, { recursive: true });
-  const names = discovered.skills.map((skill) => skillDirName(skill.name));
-  // Record ownership before changing links so an interrupted rebuild is retryable.
-  const temporary = `${marker}.${process.pid}.tmp`;
-  await writeFile(temporary, JSON.stringify([...new Set([...owned, ...names])]));
-  await rename(temporary, marker);
-  for (const entry of current) await unlink(path.join(skillsDir, entry));
   for (const skill of discovered.skills) {
     await symlink(path.dirname(skill.path), path.join(skillsDir, skillDirName(skill.name)), "dir");
   }

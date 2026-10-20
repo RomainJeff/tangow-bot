@@ -13,6 +13,7 @@ export async function indexWorkerSkills(
   secrets: readonly string[],
 ): Promise<void> {
   const clean = skills.filter((skill) => {
+    if (skill.source === "managed" || !sources.includes(skill.source)) return false;
     const parsed = parseSkillMd(skill.content);
     if (
       "error" in parsed ||
@@ -48,18 +49,48 @@ export async function indexWorkerSkills(
       },
     });
     if (!held) return;
+    let shared = false;
+    if (sources.includes("shared")) {
+      const attempt = await tx.attempt.findUnique({
+        where: { runId_fence: { runId: owner.runId, fence: owner.fence } },
+      });
+      if (attempt) {
+        const space = await tx.space.findUniqueOrThrow({ where: { id: owner.spaceId } });
+        const previous = space.skillIndexAttemptStartedAt;
+        shared =
+          previous === null ||
+          attempt.startedAt > previous ||
+          (attempt.startedAt.getTime() === previous.getTime() &&
+            attempt.id > (space.skillIndexAttemptId ?? ""));
+        if (shared)
+          await tx.space.update({
+            where: { id: owner.spaceId },
+            data: {
+              skillIndexAttemptStartedAt: attempt.startedAt,
+              skillIndexAttemptId: attempt.id,
+            },
+          });
+      }
+    }
     await tx.volumeSkill.deleteMany({
       where: {
         OR: [
-          { botId: owner.botId, source: { in: [...sources] } },
-          ...(sources.includes("shared")
-            ? [{ source: "shared", bot: { spaceId: owner.spaceId } }]
-            : []),
+          {
+            botId: owner.botId,
+            source: { in: sources.includes("bot") ? ["bot", "managed"] : ["managed"] },
+          },
+          ...(shared ? [{ source: "shared", bot: { spaceId: owner.spaceId } }] : []),
         ],
       },
     });
     await tx.volumeSkill.createMany({
-      data: clean.map(({ files: _, ...skill }) => ({ ...skill, botId: owner.botId })),
+      data: clean
+        .filter((skill) => skill.source !== "shared" || shared)
+        .map(({ files: _, ...skill }) => ({
+          ...skill,
+          content: skill.source === "shared" ? "" : skill.content,
+          botId: owner.botId,
+        })),
       skipDuplicates: true,
     });
   });

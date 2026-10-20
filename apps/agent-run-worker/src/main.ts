@@ -1,5 +1,5 @@
 import { Console } from "node:console";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { streamChannel, WORKER_LIMITS } from "@rakazo/adapters/runtime-worker/wire";
 import { runGuest } from "./guest.js";
@@ -12,6 +12,11 @@ const capability = process.env.RAKAZO_WORKER_CAPABILITY;
 const harness = HARNESSES[process.env.RAKAZO_WORKER_HARNESS ?? "pi"];
 if (!capability || !harness) {
   console.error("RAKAZO_WORKER_CAPABILITY or RAKAZO_WORKER_HARNESS is missing or unknown");
+  process.exit(2);
+}
+const home = process.env.RAKAZO_WORKER_HOME;
+if (!home || !path.isAbsolute(home)) {
+  console.error("RAKAZO_WORKER_HOME must be an explicit absolute path");
   process.exit(2);
 }
 // Commands the run starts do not inherit it. They can still read it from this process's
@@ -32,9 +37,7 @@ const exit = await runGuest({
   harness,
   spoolDir: process.env.RAKAZO_WORKER_SPOOL_DIR ?? path.join(tmpdir(), "rakazo-tool-output"),
   root: process.env.RAKAZO_WORKER_ROOT,
-  home: process.env.RAKAZO_WORKER_ROOT
-    ? path.join(process.env.RAKAZO_WORKER_ROOT, "home/user")
-    : homedir(),
+  home,
   signal: terminated.signal,
 });
 console.error(`agent run worker: ${exit}`);

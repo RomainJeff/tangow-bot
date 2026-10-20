@@ -112,6 +112,16 @@ export function createSession(
   const relays = new Map<number, AbortController>();
   const reportedSkills: WorkerSkill[] = [];
   let reportedSkillBytes = 0;
+  let skillIndexEnded = false;
+  let skillUses = 0;
+  let skillCollisions = 0;
+  const mountedSkillSources = () =>
+    new Set<WorkerSkill["source"]>([
+      "managed",
+      ...(launched?.start.workspace.mounts.map((mount) =>
+        mount.scope === "private" ? ("bot" as const) : ("shared" as const),
+      ) ?? []),
+    ]);
   let modelRequests = 0;
   let harness: HarnessDeclaration | undefined;
   let launched: LaunchedGuest | undefined;
@@ -408,6 +418,8 @@ export function createSession(
         return finish(body, part);
       case "skills.index": {
         if (!(await launched!.holdsFence())) return revoke();
+        if (skillIndexEnded || !mountedSkillSources().has(body.skill.source))
+          return refuse("invalid");
         const bytes = Buffer.byteLength(JSON.stringify(body.skill));
         if (
           reportedSkills.length >= 512 ||
@@ -420,18 +432,31 @@ export function createSession(
       }
       case "skills.index.end":
         if (!(await launched!.holdsFence())) return revoke();
-        if (reportedSkills.some((skill) => !body.sources.includes(skill.source)))
+        if (
+          skillIndexEnded ||
+          body.sources.some((source) => !mountedSkillSources().has(source)) ||
+          reportedSkills.some((skill) => !body.sources.includes(skill.source))
+        )
           return refuse("invalid");
+        skillIndexEnded = true;
         await request.onSkillIndex?.(reportedSkills, body.sources);
         reportedSkills.length = 0;
         reportedSkillBytes = 0;
         return { type: "recorded" };
       case "skills.collision":
         if (!(await launched!.holdsFence())) return revoke();
+        if (++skillCollisions > 512) return refuse("budget");
+        if (
+          ![body.collision.kept, body.collision.ignored].every((source) =>
+            mountedSkillSources().has(source),
+          )
+        )
+          return refuse("invalid");
         await request.onSkillCollision?.({ ...body.collision, name: clean(body.collision.name) });
         return { type: "recorded" };
       case "skills.used":
         if (!(await launched!.holdsFence())) return revoke();
+        if (++skillUses > 512) return refuse("budget");
         await request.onSkillUsed?.(clean(body.name));
         return { type: "recorded" };
       case "failed":
