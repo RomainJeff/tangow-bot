@@ -88,7 +88,7 @@ A worker is destroyed only when E2B confirms it, and a writer lease frees only i
 
 | What fails | Attempt after the fault | Lease and sandbox | Run | How it ends |
 | --- | --- | --- | --- | --- |
-| The VM dies right after `ensure` | `released`, ref recorded | Freed, none left | Requeued, then completed on a new VM | The guest never says hello, the attempt is unavailable, and release finds the VM gone. |
+| The VM dies right after `ensure` | `released`, ref recorded | Freed, none left | Requeued, then completed on a new VM | The guest command cannot start, the attempt is unavailable, and release finds the VM gone. |
 | `ensure` fails after E2B created the VM | `releasing`, no ref | Lease held, VM alive | Failed | Release cannot tell an in-flight create from none, so it waits for the ensure deadline, 15 minutes. Reconcile then destroys the VM by its attempt tag and frees the lease. The lane moved the deadline into the past instead of waiting. |
 | `prepare` fails after the ref was recorded | `released`, ref recorded | Freed, none left | Failed | `start` releases its own worker at once. |
 | The controller dies after `start` | `ready`, ref recorded | Lease held, VM alive | Lease lapses | Reconcile releases it once the run's lease expires: VM destroyed, lease freed. |
@@ -111,7 +111,7 @@ The command reaches each volume through a sandbox of the worker template with on
 
 Lane h moved a synthetic team home of two bots, with files in mode 0755, 0644, 0640 and 0600. The dry run created no volume. The move adopted, and all six files matched the manifest by hash and mode on the volumes. Two computer VMs created one after the other on the same volumes saw the same hashes, and kept a file written between them. A second move answered `already_on_volumes`. A second team computer of the same space was refused with `volume_not_empty`, because the shared volume already held the first home's files. That closes the gap #224 left. A second team home cannot be copied into a shared volume that workers already write.
 
-Retention. The AgentHomeStore snapshot stays as the pre-move original, and nothing writes to it after adoption. Volumes are never deleted by a run or a move. Guest tool output stays on the private volume under `.rakazo/tool-output/`, up to `localOutputSpoolBytes` (16 MiB) per command, and nothing removes it yet.
+Retention. The AgentHomeStore snapshot stays as the pre-move original, and nothing writes to it after adoption. No run and no move deletes a volume. S3 deletes a bot's volumes with the bot, and a space's with the space. Guest tool output stays on the private volume under `.rakazo/tool-output/`, up to `localOutputSpoolBytes` (16 MiB) per command, and nothing removes it yet.
 
 Rollback. Follow #241's procedure. Stop the computer, copy back any file written on the volumes since adoption, then set `computers."homeStorage"` back to `snapshot`. Files written on the volumes after adoption and not copied back are lost. The volumes stay, and a later move onto them is refused with `volume_not_empty` until they are emptied.
 
@@ -123,6 +123,17 @@ The live lanes settled the four questions #241 left unverified.
 - **Overwrite.** A second write of a path replaces its content and leaves the mode the last write set. The move never writes a path it did not plan, so it rewrites only its own interrupted copies.
 - **A fresh volume is empty.** A new volume lists no entry, and the move found nothing foreign on the volumes it created.
 - **Guest uid.** E2B's sandbox user is uid and gid 1001 in this template, not 1000. The Node image already has a `node` user at 1000. The moved files belong to 1001. The mount does not enforce ownership against that user, which read and appended to a root-owned 0600 file. Isolation holds between volumes and VMs, not between users of one VM.
+
+## Answers for the composition slice
+
+S3 ([#243](https://github.com/RomainJeff/rakazo-bot/pull/243)) lists what only a live run can show. The lanes here already answer four of those points.
+
+- **Sandbox and command environments merge.** `RAKAZO_WORKER_SPOOL_DIR` is set on the sandbox and `RAKAZO_WORKER_CAPABILITY` on the command. In lane f the guest said hello, so it read the capability, and it spooled to the private volume, so it read the spool directory.
+- **The guest user writes the mounted volumes.** Lanes b and f wrote both volumes as the sandbox user, uid 1001.
+- **A cold boot fits the guest deadlines.** Cold boot is 2.2 s at p95 with two mounts, against `helloDeadlineMs` (30 s) and `capabilityTtlMs` (10 minutes).
+- **Reconcile releases a worker its controller lost.** Lane g released one and E2B reported the sandbox gone. Lane g calls `lifecycle.reconcile` directly, not through S3's job reconciler.
+
+The other points need S3's code: the product computer on the volumes, its home link and volume marker, `deleteVolume`, and the relay's masked transcript. They are the pending lanes.
 
 ## Live receipts
 

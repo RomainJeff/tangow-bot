@@ -2,12 +2,15 @@
   "ticket": "RomainJeff/rakazo-bot#197",
   "slice": "S5, live lanes and handoff, branch claude/pi-e2b-p3-live",
   "tested_commit": "d888acc34c3ea4ec3b8db481d0269347e9e67df6",
-  "tested_commit_note": "lanes.json comes from the bundle of the tested commit. bench.json and template.json come from 14d2a9667c3b52a4bd29af38f8928801f8697817, its parent, which differs only in the receipts' redaction pattern, outside every timed path. The commits after the tested commit change only documentation and these receipts.",
+  "tested_commit_note": "lanes.json comes from the bundle of the tested commit. bench.json and template.json come from 14d2a9667c3b52a4bd29af38f8928801f8697817, its parent, which differs only in the receipts' redaction pattern, outside every timed path. The commits after the tested commit change only documentation, these receipts, and the place of three code comments.",
   "feature_base": "ddcb4092e (feature/pi-e2b-workers with #228, #229 and #241)",
   "pending_slice": "S3, branch claude/pi-e2b-p3-compose, not merged at the tested commit",
   "infra": {
     "i1_delivery": "tangow-e2b-infra pull request #2, merge 177c1ff",
-    "i1_receipts": { "functional": "9c1b44e", "isolation": "a38c067" },
+    "i1_receipts": {
+      "functional": "9c1b44e",
+      "isolation": "a38c067"
+    },
     "infra_main_during_runs": "e17503b",
     "documentation_reference": "09f242991ada8fdab2a9ce7a1fa847671d511874"
   },
@@ -41,7 +44,11 @@
     "node": "v22.22.1",
     "load_average_during_bench": "1.5 to 2.9 from the host's other services"
   },
-  "build_machine": { "platform": "Darwin", "arch": "arm64", "node": "v24.21.0" },
+  "build_machine": {
+    "platform": "Darwin",
+    "arch": "arm64",
+    "node": "v24.21.0"
+  },
   "lockfile_sha256": "9a235217598e7ccfd668215f0198fe020a798ff029c516ea1f5febd5404256a3",
   "schema_sha256": "0d72bf87a4ff1e36cdc05c821a0eb6effe631484d512fb98678d543032b7a4e3",
   "head": {
@@ -63,14 +70,23 @@
   ],
   "perf": {
     "source": "bench.json",
-    "cold_boot_p95_ms": { "no_mounts": 1867.195, "two_mounts": 2169.947, "budget": 30000, "result": "pass" },
+    "cold_boot_p95_ms": {
+      "no_mounts": 1867.195,
+      "two_mounts": 2169.947,
+      "budget": 30000,
+      "result": "pass"
+    },
     "relay_overhead_bound_p95_ms": {
       "value": 58.6,
       "how": "relay at the controller p95 27.3 ms plus grant to result p95 31.3 ms, no mount; the second contains the echo itself, so the sum bounds a guest's overhead from above",
       "budget": 200,
       "result": "pass"
     },
-    "control_per_guest_tool_p50_ms": { "local_runner_same_host": 37.729, "e2b_no_mounts": 44.006, "e2b_two_mounts": 45.578 },
+    "control_per_guest_tool_p50_ms": {
+      "local_runner_same_host": 37.729,
+      "e2b_no_mounts": 44.006,
+      "e2b_two_mounts": 45.578
+    },
     "control_limiter": "database calls are 97 to 99 percent of the control window; PGlite SELECT 1 is 0.46 ms on this host against 0.11 ms on P2's machine",
     "postgres_control_cost": "not measured: the controller must run on the E2B host, and PostgreSQL there needs Docker under sudo, which the host rules exclude",
     "controller_rss": "1166 to 1219 MiB over 90 runs, heap 173 to 219 MiB, last ten runs +4.4 MiB; a heap snapshot comparison in an investigation run placed the growth in the in-process PGlite instances' wire-message arrays"
