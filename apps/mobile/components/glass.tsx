@@ -9,7 +9,8 @@ import { useMobileTokens, useResolvedAppearance } from "../lib/native";
 // only the very first one can show glass for a frame before turning opaque.
 let lastReduced = false;
 
-function useReduceTransparency(): boolean {
+/** Whether iOS Reduce Transparency is on: glass and the transparent bar then turn opaque. */
+export function useReduceTransparency(): boolean {
   const [reduced, setReduced] = useState(lastReduced);
   useEffect(() => {
     let live = true;
