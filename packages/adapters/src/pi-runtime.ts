@@ -239,6 +239,8 @@ export interface PiAgentRuntimeOptions {
   serviceName?: string;
   /** Replaces every model call, e.g. to relay it to the process that holds the key. */
   streamFn?: PiStreamFn;
+  /** Runtime resource instructions for helpers, separate from the bot's chat instructions. */
+  subagentInstructions?: string;
   /** Bind the worker's coding-agent session after controller history and tools are reconstructed. */
   bindSession?: (agent: Agent) => Promise<{
     prompt(text: string, images: ReturnType<typeof toPiImages>): Promise<void>;
@@ -250,12 +252,14 @@ export class PiAgentRuntime implements AgentRuntime {
   private readonly traceExporter?: TraceExporter;
   private readonly serviceName?: string;
   private readonly streamFn?: PiStreamFn;
+  private readonly subagentInstructions?: string;
   private readonly bindSession?: PiAgentRuntimeOptions["bindSession"];
 
   constructor(options: PiAgentRuntimeOptions = {}) {
     this.traceExporter = options.traceExporter;
     this.serviceName = options.serviceName;
     this.streamFn = options.streamFn;
+    this.subagentInstructions = options.subagentInstructions;
     this.bindSession = options.bindSession;
   }
 
@@ -347,6 +351,7 @@ export class PiAgentRuntime implements AgentRuntime {
           depth: 0,
           pausePending: false,
           streamFn: this.streamFn,
+          subagentInstructions: this.subagentInstructions,
         };
         resumeHost = host;
         const tools = toAgentTools(toolDefs, host);
@@ -421,7 +426,7 @@ export class PiAgentRuntime implements AgentRuntime {
             return undefined;
           },
           initialState: {
-            systemPrompt,
+            systemPrompt: this.bindSession ? "" : systemPrompt,
             model: completionModel,
             thinkingLevel,
             tools,
@@ -1612,6 +1617,7 @@ async function runSubagent(
         `You are a Rakazo subagent named "${name}".`,
         "You run inside the parent bot's turn — you are not a separate bot chat.",
         "Complete the task and return a concise result. Do not spawn bots or further subagents.",
+        host.subagentInstructions,
         extra,
       ]
         .filter(Boolean)
@@ -2107,6 +2113,7 @@ interface EventQueue {
 }
 
 interface ToolHost {
+  subagentInstructions?: string;
   queue: EventQueue;
   request: AgentRunRequest;
   models: Models;

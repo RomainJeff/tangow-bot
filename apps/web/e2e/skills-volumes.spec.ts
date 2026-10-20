@@ -19,6 +19,14 @@ test("volume skills have a read-only viewer and no per-bot access switch", async
     createdAt: "2026-10-20T00:00:00.000Z",
     updatedAt: "2026-10-20T00:00:00.000Z",
   };
+  const shared: AgentSkill = {
+    ...skill,
+    id: "volume:shared:team-review",
+    name: "team-review",
+    source: "shared",
+    description: "Review shared work before publishing.",
+    content: "",
+  };
   // The worker/database contract is covered offline; this fixture owns presentation of that contract.
   await page.route("**/rpc/agentSkills/list", (route) =>
     route.fulfill({
@@ -35,11 +43,7 @@ test("volume skills have a read-only viewer and no per-bot access switch", async
             visibleBotIds: [botId],
           },
           {
-            ...skill,
-            id: "volume:shared:team-review",
-            name: "team-review",
-            source: "shared",
-            description: "Review shared work before publishing.",
+            ...shared,
             availability: "all",
             visibleBotIds: [botId],
           },
@@ -57,12 +61,20 @@ test("volume skills have a read-only viewer and no per-bot access switch", async
   await expect(skills.getByRole("button", { name: /release-notes/ })).toBeVisible();
   await expect(skills.getByRole("button", { name: /team-review/ })).toBeVisible();
   await expect(skills.getByRole("switch")).toHaveCount(0);
-  await skills.scrollIntoViewIfNeeded();
-  await captureScreenshot(page, testInfo, "skills-volumes-desktop");
-  await page.setViewportSize({ width: 390, height: 844 });
-  await captureScreenshot(page, testInfo, "skills-volumes-phone");
   await skills.getByRole("button", { name: /release-notes/ }).click();
   const editor = page.getByTestId("bot-knowledge-skill-editor");
   await expect(editor.locator("textarea")).toHaveAttribute("readonly", "");
   await expect(editor.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
+  await editor.getByRole("button", { name: "Close", exact: true }).click();
+  await page.unroute("**/rpc/agentSkills/get");
+  await page.route("**/rpc/agentSkills/get", (route) => route.fulfill({ json: { json: shared } }));
+  await skills.getByRole("button", { name: /team-review/ }).click();
+  await expect(editor.getByText(shared.description, { exact: true })).toBeVisible();
+  await expect(
+    editor.getByText("Content lives on the shared volume.", { exact: true }),
+  ).toBeVisible();
+  await expect(editor.locator("textarea")).toHaveCount(0);
+  await captureScreenshot(page, testInfo, "skills-volumes-desktop");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await captureScreenshot(page, testInfo, "skills-volumes-phone");
 });

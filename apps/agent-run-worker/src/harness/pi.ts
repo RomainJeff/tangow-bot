@@ -1,3 +1,4 @@
+import { formatSkillsForPrompt } from "@earendil-works/pi-coding-agent";
 import type {
   AgentInputImage,
   AgentRunRequest,
@@ -45,7 +46,8 @@ export const piHarness: GuestHarness = {
   async run({ worker, run, cwd, skillsDir }, host): Promise<DoneBody> {
     const helperRefs = new Map<string, string>();
     const helperModels = new Map<string, GuestModel>();
-    const resources = piResources(cwd, skillsDir, run.instructions);
+    const canReadSkills = run.tools.some((tool) => tool.name === "read" && tool.where === "guest");
+    const resources = piResources(cwd, skillsDir, run.instructions, canReadSkills);
     const request: AgentRunRequest = {
       botId: run.botId,
       threadId: run.threadId,
@@ -120,6 +122,7 @@ export const piHarness: GuestHarness = {
     );
     const runtime = new PiAgentRuntime({
       streamFn: relay,
+      subagentInstructions: formatSkillsForPrompt(resources.getSkills().skills, "read"),
       bindSession: (agent) => piSession(agent, cwd, resources),
     });
 

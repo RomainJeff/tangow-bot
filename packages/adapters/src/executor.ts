@@ -4710,13 +4710,15 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   payload: collision,
                 });
               },
-              onSkillIndex: (skills, sources) =>
+              onSkillIndex: (skills, sources, receivedAt) =>
                 indexWorkerSkills(
                   deps.prisma,
                   { ...skillOwner, runId, fence },
                   skills,
                   sources,
                   runSecrets,
+                  deps.secretStore,
+                  receivedAt,
                 ),
               attempt: { id: attempt.id, fence },
               startSubagent: scripted ? undefined : startSubagent,

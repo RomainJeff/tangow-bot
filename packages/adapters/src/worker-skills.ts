@@ -3,6 +3,7 @@ import type { WorkerSkill } from "@rakazo/adapter-kit";
 import { containsSecret, parseSkillMd } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
+import type { EncryptedSecretStore } from "./secrets.js";
 
 /** Reports are observations by an untrusted guest. Reject secrets instead of storing masked skills. */
 export async function indexWorkerSkills(
@@ -11,7 +12,17 @@ export async function indexWorkerSkills(
   skills: readonly WorkerSkill[],
   sources: readonly WorkerSkill["source"][],
   secrets: readonly string[],
+  secretStore: Pick<EncryptedSecretStore, "load">,
+  receivedAt = new Date(),
 ): Promise<void> {
+  const sharedSecrets = sources.includes("shared")
+    ? (
+        await prisma.botSecret.findMany({
+          where: { spaceId: owner.spaceId },
+          select: { id: true, ciphertext: true },
+        })
+      ).map((row) => secretStore.load(row.ciphertext, row.id))
+    : [];
   const clean = skills.filter((skill) => {
     if (skill.source === "managed" || !sources.includes(skill.source)) return false;
     const parsed = parseSkillMd(skill.content);
@@ -22,13 +33,16 @@ export async function indexWorkerSkills(
       createHash("sha256").update(skill.content).digest("hex") !== skill.contentHash
     )
       return false;
-    const secret = [
-      skill.name,
-      skill.description,
-      skill.path,
-      skill.content,
-      ...skill.files.flatMap((file) => [file.path, file.content]),
-    ].some((text) => containsSecret(text, [...secrets]));
+    const secret =
+      (skill.source === "shared" &&
+        containsSecret([skill.name, skill.description], sharedSecrets)) ||
+      [
+        skill.name,
+        skill.description,
+        skill.path,
+        skill.content,
+        ...skill.files.flatMap((file) => [file.path, file.content]),
+      ].some((text) => containsSecret(text, [...secrets]));
     if (secret) getLogger().warn("skills.index_refused", { botId: owner.botId, reason: "secret" });
     return !secret;
   });
@@ -51,26 +65,13 @@ export async function indexWorkerSkills(
     if (!held) return;
     let shared = false;
     if (sources.includes("shared")) {
-      const attempt = await tx.attempt.findUnique({
-        where: { runId_fence: { runId: owner.runId, fence: owner.fence } },
-      });
-      if (attempt) {
-        const space = await tx.space.findUniqueOrThrow({ where: { id: owner.spaceId } });
-        const previous = space.skillIndexAttemptStartedAt;
-        shared =
-          previous === null ||
-          attempt.startedAt > previous ||
-          (attempt.startedAt.getTime() === previous.getTime() &&
-            attempt.id > (space.skillIndexAttemptId ?? ""));
-        if (shared)
-          await tx.space.update({
-            where: { id: owner.spaceId },
-            data: {
-              skillIndexAttemptStartedAt: attempt.startedAt,
-              skillIndexAttemptId: attempt.id,
-            },
-          });
-      }
+      const space = await tx.space.findUniqueOrThrow({ where: { id: owner.spaceId } });
+      shared = space.skillIndexReceivedAt === null || receivedAt >= space.skillIndexReceivedAt;
+      if (shared)
+        await tx.space.update({
+          where: { id: owner.spaceId },
+          data: { skillIndexReceivedAt: receivedAt },
+        });
     }
     await tx.volumeSkill.deleteMany({
       where: {

@@ -6,13 +6,22 @@ import {
 } from "@earendil-works/pi-coding-agent";
 
 /** No settings, extensions, context files, templates or default search paths are read. */
-export function piResources(cwd: string, skillsDir: string, instructions: string): ResourceLoader {
-  let loaded = loadSkills({
-    cwd,
-    agentDir: skillsDir,
-    skillPaths: [skillsDir],
-    includeDefaults: false,
-  });
+export function piResources(
+  cwd: string,
+  skillsDir: string,
+  instructions: string,
+  canReadSkills = true,
+): ResourceLoader {
+  const load = () =>
+    canReadSkills
+      ? loadSkills({
+          cwd,
+          agentDir: skillsDir,
+          skillPaths: [skillsDir],
+          includeDefaults: false,
+        })
+      : { skills: [], diagnostics: [] };
+  let loaded = load();
   return {
     getSkills: () => loaded,
     getExtensions: () => ({ extensions: [], errors: [], runtime: createExtensionRuntime() }),
@@ -27,12 +36,7 @@ export function piResources(cwd: string, skillsDir: string, instructions: string
       throw new Error("Worker resources are fixed for this run");
     },
     reload: async () => {
-      loaded = loadSkills({
-        cwd,
-        agentDir: skillsDir,
-        skillPaths: [skillsDir],
-        includeDefaults: false,
-      });
+      loaded = load();
     },
   };
 }

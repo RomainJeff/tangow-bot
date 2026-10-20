@@ -430,7 +430,8 @@ export function createSession(
         reportedSkillBytes += bytes;
         return { type: "recorded" };
       }
-      case "skills.index.end":
+      case "skills.index.end": {
+        const receivedAt = new Date();
         if (!(await launched!.holdsFence())) return revoke();
         if (
           skillIndexEnded ||
@@ -439,10 +440,11 @@ export function createSession(
         )
           return refuse("invalid");
         skillIndexEnded = true;
-        await request.onSkillIndex?.(reportedSkills, body.sources);
+        await request.onSkillIndex?.(reportedSkills, body.sources, receivedAt);
         reportedSkills.length = 0;
         reportedSkillBytes = 0;
         return { type: "recorded" };
+      }
       case "skills.collision":
         if (!(await launched!.holdsFence())) return revoke();
         if (++skillCollisions > 512) return refuse("budget");

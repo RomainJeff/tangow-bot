@@ -651,7 +651,14 @@ export function AgentSkillEditor({
           {skill.name}
         </div>
       ) : null}
-      {loaded ? (
+      {skill?.source === "shared" ? (
+        <div className="space-y-2 text-body" dir="auto">
+          <p>{skill.description}</p>
+          <p className="text-muted-foreground">
+            <Trans>Content lives on the shared volume.</Trans>
+          </p>
+        </div>
+      ) : loaded ? (
         <textarea
           value={draft}
           onChange={(event) => setDraft(event.target.value)}

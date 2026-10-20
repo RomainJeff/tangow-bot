@@ -1,4 +1,5 @@
 export const RU_MESSAGES: Record<string, string> = {
+  "Content lives on the shared volume.": "Содержимое хранится на общем томе.",
   "Update your server to use AI data sharing in this mobile version.":
     "Обновите сервер, чтобы использовать обмен данными с ИИ в этой версии мобильного приложения.",
   "Ask the server owner to configure this provider.":

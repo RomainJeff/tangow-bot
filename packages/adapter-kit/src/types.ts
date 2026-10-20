@@ -437,7 +437,11 @@ export interface AgentRunRequest {
    */
   executeLocalTool?: LocalToolExecutor;
   /** Fenced, untrusted guest observations; secrets are scanned by the controller. */
-  onSkillIndex?: (skills: WorkerSkill[], sources: WorkerSkill["source"][]) => Promise<void>;
+  onSkillIndex?: (
+    skills: WorkerSkill[],
+    sources: WorkerSkill["source"][],
+    receivedAt: Date,
+  ) => Promise<void>;
   onSkillCollision?: (collision: SkillCollision) => Promise<void>;
   onSkillUsed?: (name: string) => Promise<void>;
   /** The attempt this run belongs to, for a runtime that binds a remote guest to it. */
