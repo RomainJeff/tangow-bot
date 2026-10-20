@@ -1,9 +1,3 @@
-import type { ResourceLoader } from "@earendil-works/pi-coding-agent";
-import {
-  convertToLlm,
-  createExtensionRuntime,
-  SessionManager,
-} from "@earendil-works/pi-coding-agent";
 import type {
   AgentInputImage,
   AgentRunRequest,
@@ -46,9 +40,7 @@ export const piHarness: GuestHarness = {
   nativeTools: piToolManifest(),
   executeNativeTool: executePiTool,
 
-  async run({ worker, run, cwd }, host): Promise<DoneBody> {
-    const resources = controllerResources(run.instructions);
-    await resources.reload();
+  async run({ worker, run }, host): Promise<DoneBody> {
     const helperRefs = new Map<string, string>();
     const helperModels = new Map<string, GuestModel>();
     const request: AgentRunRequest = {
@@ -57,7 +49,7 @@ export const piHarness: GuestHarness = {
       runId: worker.runId,
       sourceMessageId: run.sourceMessageId,
       prompt: run.prompt,
-      instructions: resources.getSystemPrompt() ?? "",
+      instructions: run.instructions,
       history: run.history,
       currentTurnImages: decodeImages(run.images),
       tools: run.tools.map(({ name, description, inputSchema, readOnly }) => ({
@@ -123,19 +115,7 @@ export const piHarness: GuestHarness = {
         return ref;
       },
     );
-    const runtime = new PiAgentRuntime({
-      streamFn(model, context, options, agentId) {
-        // A call snapshot, never a disk session or an SDK-owned model connection.
-        const session = SessionManager.inMemory(cwd);
-        for (const message of context.messages) session.appendMessage(message);
-        return relay(
-          model,
-          { ...context, messages: convertToLlm(session.buildSessionContext().messages) },
-          options,
-          agentId,
-        );
-      },
-    });
+    const runtime = new PiAgentRuntime({ streamFn: relay });
 
     for await (const event of runtime.run(request, { signal: host.signal })) {
       switch (event.type) {
@@ -162,20 +142,3 @@ export const piHarness: GuestHarness = {
     throw new Error("The run ended without finishing");
   },
 };
-
-/** Explicit context only. No AGENTS.md, skills, settings, extensions or prompts from disk. */
-function controllerResources(instructions: string): ResourceLoader {
-  return {
-    getExtensions: () => ({ extensions: [], errors: [], runtime: createExtensionRuntime() }),
-    getSkills: () => ({ skills: [], diagnostics: [] }),
-    getPrompts: () => ({ prompts: [], diagnostics: [] }),
-    getThemes: () => ({ themes: [], diagnostics: [] }),
-    getAgentsFiles: () => ({ agentsFiles: [] }),
-    getSystemPrompt: () => instructions,
-    getSystemPromptSource: () => undefined,
-    getAppendSystemPrompt: () => [],
-    getAppendSystemPromptSources: () => [],
-    extendResources() {},
-    async reload() {},
-  };
-}

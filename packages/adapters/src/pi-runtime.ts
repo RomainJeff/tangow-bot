@@ -839,11 +839,13 @@ export function describeToolActivity(toolName: string, args: unknown): string {
       .trim();
     return text.length > ACTIVITY_DETAIL_LIMIT ? `${text.slice(0, ACTIVITY_DETAIL_LIMIT)}…` : text;
   };
-  if (toolName === "shell") return `Running: ${detail(record.command)}`;
-  if (toolName === "read_file") return `Reading ${detail(record.path)}`;
-  if (toolName === "write_file") return `Writing ${detail(record.path)}`;
-  if (toolName === "edit_file") return `Editing ${detail(record.path)}`;
-  if (toolName === "list_files") return `Listing ${detail(record.path ?? ".")}`;
+  if (toolName === "shell" || toolName === "bash") return `Running: ${detail(record.command)}`;
+  if (toolName === "read_file" || toolName === "read") return `Reading ${detail(record.path)}`;
+  if (toolName === "write_file" || toolName === "write") return `Writing ${detail(record.path)}`;
+  if (toolName === "edit_file" || toolName === "edit") return `Editing ${detail(record.path)}`;
+  if (toolName === "list_files" || toolName === "ls")
+    return `Listing ${detail(record.path ?? ".")}`;
+  if (toolName === "find") return `Finding ${detail(record.pattern)}`;
   if (toolName === "attach_file") return `Attaching ${detail(record.path)}`;
   if (toolName === "open_path") return `Opening ${detail(record.path)}`;
   if (toolName === "render_plot") return "Rendering a chart";

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { GuestTool, LocalToolOutput, WorkerStartV1 } from "@rakazo/adapter-kit";
@@ -207,18 +207,6 @@ describe("run channel conformance of the Pi harness", () => {
       where: "guest",
     });
 
-    await mkdir(path.join(root, "workspace/bots/bot_guest"), { recursive: true });
-    await writeFile(
-      path.join(root, "workspace/bots/bot_guest/AGENTS.md"),
-      "AMBIENT_CONTEXT_MARKER",
-    );
-    await mkdir(path.join(root, "workspace/bots/bot_guest/.pi/skills/ambient"), {
-      recursive: true,
-    });
-    await writeFile(
-      path.join(root, "workspace/bots/bot_guest/.pi/skills/ambient/SKILL.md"),
-      "---\nname: ambient\ndescription: ambient\n---\nAMBIENT_CONTEXT_MARKER",
-    );
     const { exit, recorded, controllerCalls } = await driveGuest({
       prompt: "Write then read a note.",
       tools: [
@@ -236,7 +224,6 @@ describe("run channel conformance of the Pi harness", () => {
         {
           expect(request) {
             expect(JSON.stringify(request.messages)).toContain("Use the tools.");
-            expect(JSON.stringify(request.messages)).not.toContain("AMBIENT_CONTEXT_MARKER");
           },
           response: {
             type: "tool",
@@ -298,7 +285,7 @@ describe("run channel conformance of the Pi harness", () => {
   it("bounds and spools a native read result before sending it over P2", async () => {
     const cwd = await mkdtemp(path.join(tmpdir(), "rakazo-native-read-"));
     cleanups.push(() => rm(cwd, { recursive: true, force: true }));
-    const content = "native-file-".repeat(3000);
+    const content = "native-file-\n".repeat(1000);
     await writeFile(path.join(cwd, "large.txt"), content);
     const { recorded, exit } = await driveGuest({
       cwd,

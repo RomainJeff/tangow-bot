@@ -7,6 +7,7 @@ import {
   realpath,
   rm,
   stat,
+  truncate,
   utimes,
   writeFile,
 } from "node:fs/promises";
@@ -171,3 +172,53 @@ function isAlive(pid: number) {
     return false;
   }
 }
+
+it.each(["read", "edit"])("refuses oversized files in %s before loading them", async (name) => {
+  const ctx = await context();
+  const file = path.join(ctx.cwd, "large.txt");
+  await writeFile(file, "original");
+  await truncate(file, 250 * 1024 + 1);
+  const output = await executePiTool(
+    name,
+    { path: "large.txt", edits: [{ oldText: "original", newText: "changed" }] },
+    "large",
+    ctx,
+  );
+  expect(output).toMatchObject({ isError: true, text: expect.stringContaining("250 KiB") });
+  expect(output).toMatchObject({ text: expect.stringContaining("bash") });
+  expect((await readFile(file)).subarray(0, 8).toString()).toBe("original");
+});
+
+it.each([1, 17])(
+  "continues native reads at the first unseen whole line from offset %i",
+  async (offset) => {
+    const ctx = await context();
+    const lines = Array.from({ length: 700 }, (_, i) => `${i + 1}: ${"x".repeat(60)}`);
+    await writeFile(path.join(ctx.cwd, "lines.txt"), lines.join("\n"));
+    const output = await executePiTool("read", { path: "lines.txt", offset }, "page", ctx);
+    if (!("text" in output)) throw new Error("Expected text");
+    const shown = output.text.split("\n").filter((line) => /^\d+: /.test(line));
+    expect(shown).toEqual(lines.slice(offset - 1, offset - 1 + shown.length));
+    const next = offset + shown.length;
+    expect(output.text).toContain(`Use offset=${next} to continue`);
+    expect(output.text.length).toBeLessThanOrEqual(12_000);
+    const continued = await executePiTool(
+      "read",
+      { path: "lines.txt", offset: next, limit: 1 },
+      "next",
+      ctx,
+    );
+    if (!("text" in continued)) throw new Error("Expected text");
+    expect(continued.text.split("\n")[0]).toBe(lines[next - 1]);
+  },
+);
+
+it.each([
+  ["seq 1 3000; exit 7", "Command exited with code 7"],
+  ["seq 1 3000; sleep 5", "Command timed out after 0.2 seconds"],
+])("keeps bash status beside the truncation marker for %s", async (command, status) => {
+  const output = await bash({ command, timeout: 0.2 }, await context());
+  expect(output.isError).toBe(true);
+  expect(output.text).toMatch(new RegExp(`\\[output truncated:[^\\n]+\\]\\n${status}`));
+  expect(output.text.length).toBeLessThanOrEqual(12_000);
+});

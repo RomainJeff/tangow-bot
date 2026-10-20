@@ -1,4 +1,5 @@
-import { rm } from "node:fs/promises";
+import { constants } from "node:fs";
+import { access, open, rm, writeFile } from "node:fs/promises";
 import type { createCodingTools } from "@earendil-works/pi-coding-agent";
 import {
   createBashTool,
@@ -9,21 +10,64 @@ import {
   createLsTool,
   createReadTool,
   createWriteTool,
+  detectSupportedImageMimeTypeFromFile,
 } from "@earendil-works/pi-coding-agent";
 import type { ConnectorTool, LocalToolOutput } from "@rakazo/adapter-kit";
 import { WORKER_LIMITS } from "@rakazo/adapters/runtime-worker/wire";
 import type { NativeToolContext } from "../harness.js";
 import { captureToolOutput } from "../tool-output.js";
 
+const MAX_FILE_BYTES = 250 * 1024;
+const READ_DESCRIPTION =
+  "Read text files and images up to 250 KiB. Text output is bounded to 12000 characters and 2000 lines. Use offset/limit to page through text; follow the returned continuation offset. For larger files or a line exceeding the output limit, use bash to inspect or edit a bounded portion.";
+
+/** Check the opened file, then bound the read too in case another process grows it. */
+async function readBoundedFile(file: string): Promise<Buffer> {
+  const handle = await open(file, "r");
+  try {
+    const tooLarge = () =>
+      new Error(
+        "File exceeds the 250 KiB read/edit limit. Use bash to inspect or edit a bounded portion.",
+      );
+    if ((await handle.stat()).size > MAX_FILE_BYTES) throw tooLarge();
+    const buffer = Buffer.alloc(MAX_FILE_BYTES + 1);
+    let length = 0;
+    while (length < buffer.length) {
+      const { bytesRead } = await handle.read(buffer, length, buffer.length - length, null);
+      if (!bytesRead) break;
+      length += bytesRead;
+    }
+    if (length > MAX_FILE_BYTES) throw tooLarge();
+    return buffer.subarray(0, length);
+  } finally {
+    await handle.close();
+  }
+}
+
 /** SDK tools, with only transport capture around the SDK's local shell operations. */
 function tools(
   cwd: string,
   operations = createLocalBashOperations(),
 ): ReturnType<typeof createCodingTools> {
+  const read = createReadTool(cwd, {
+    autoResizeImages: false,
+    operations: {
+      readFile: readBoundedFile,
+      access: (file) => access(file, constants.R_OK),
+      detectImageMimeType: detectSupportedImageMimeTypeFromFile,
+    },
+  });
+  read.description = READ_DESCRIPTION;
   return [
-    createReadTool(cwd, { autoResizeImages: false }),
+    read,
     createWriteTool(cwd),
-    createEditTool(cwd),
+    createEditTool(cwd, {
+      operations: {
+        readFile: readBoundedFile,
+        writeFile: (file, content) => writeFile(file, content),
+        access: (file) => access(file, constants.R_OK | constants.W_OK),
+      },
+    }),
     createBashTool(cwd, { operations, exposeSessionEnvironment: false }),
     createGrepTool(cwd),
     createFindTool(cwd),
@@ -98,5 +142,9 @@ export async function executePiTool(
   }
   // Keep raw bash output on the mounted volume, even though Pi also truncates its own result.
   // The SDK's structuredContent and image payloads never enter an unbounded P2 frame.
-  return capture.finish(text, isError);
+  return capture.finish(
+    text,
+    isError,
+    name === "read" && !isError ? Number(args.offset ?? 1) : undefined,
+  );
 }

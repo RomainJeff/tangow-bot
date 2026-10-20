@@ -46,6 +46,8 @@ function outputCapture(spoolPath: string) {
 function modelText(
   captured: { head: string; tail: string; totalBytes: number; spooled: number },
   spoolPath: string,
+  readOffset?: number,
+  status = "",
 ): { text: string; truncated: boolean } {
   const { localOutputModelChars: maxChars, localOutputModelLines: maxLines } = WORKER_LIMITS;
   const lines = captured.head.split("\n");
@@ -65,7 +67,16 @@ function modelText(
       ? `its first ${captured.spooled} bytes are in`
       : "it is in";
   const marker = `[output truncated: ${captured.totalBytes} bytes in total, ${kept} ${spoolPath}]`;
-  return { text: `${head}\n\n${marker}\n\n${tail}`, truncated: true };
+  if (readOffset !== undefined) {
+    const prefix = captured.head.slice(0, maxChars - MARKER_ROOM_CHARS);
+    const whole = prefix.slice(0, Math.max(0, prefix.lastIndexOf("\n")));
+    const shown = whole ? whole.split("\n").slice(0, maxLines - MARKER_ROOM_LINES) : [];
+    const continuation = shown.length
+      ? `[output truncated. Use offset=${readOffset + shown.length} to continue.]`
+      : `[Line ${readOffset} exceeds the output limit. Use bash to inspect a bounded portion of this line.]`;
+    return { text: `${shown.join("\n")}\n\n${continuation}`, truncated: true };
+  }
+  return { text: `${head}\n\n${marker}${status ? `\n${status}` : ""}\n\n${tail}`, truncated: true };
 }
 
 const SPOOL_FILE = /^bash-.+\.log$/;
@@ -116,11 +127,16 @@ export async function captureToolOutput(spoolDir: string) {
       streamed = true;
       capture.write(data);
     },
-    async finish(text: string, isError: boolean): Promise<CommandOutput> {
+    async finish(text: string, isError: boolean, readOffset?: number): Promise<CommandOutput> {
       try {
         if (!streamed) capture.write(Buffer.from(text));
         const captured = await capture.close();
-        const bounded = modelText(captured, spoolPath);
+        const status = streamed
+          ? text.match(
+              /(?:^|\n)(Command (?:exited with code \d+|timed out after [^\n]+|aborted))$/,
+            )?.[1]
+          : undefined;
+        const bounded = modelText(captured, spoolPath, readOffset, status);
         if (!bounded.truncated) await rm(spoolPath, { force: true });
         return {
           ...bounded,

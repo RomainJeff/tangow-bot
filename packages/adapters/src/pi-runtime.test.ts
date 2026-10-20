@@ -42,6 +42,17 @@ describe("describeToolActivity", () => {
     );
   });
 
+  it.each([
+    ["read", { path: "notes.md" }, "Reading notes.md"],
+    ["write", { path: "notes.md" }, "Writing notes.md"],
+    ["edit", { path: "notes.md" }, "Editing notes.md"],
+    ["bash", { command: "pwd" }, "Running: pwd"],
+    ["ls", {}, "Listing ."],
+    ["find", { pattern: "*.ts" }, "Finding *.ts"],
+  ])("describes native %s activity", (name, args, label) => {
+    expect(describeToolActivity(name, args)).toBe(label);
+  });
+
   it("names MCP server and remote tool", () => {
     expect(describeToolActivity("mcp__brex__list_expenses", {})).toBe("Using brex: list_expenses");
     expect(describeToolActivity("mcp__demo-oauth__greet", {})).toBe("Using demo-oauth: greet");

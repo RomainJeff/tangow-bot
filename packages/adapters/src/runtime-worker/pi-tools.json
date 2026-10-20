@@ -1,7 +1,7 @@
 [
   {
     "name": "read",
-    "description": "Read the contents of a file. Supports text files and images (jpg, png, gif, webp, bmp). Images are sent as attachments. For text files, output is truncated to 2000 lines or 50KB (whichever is hit first). Use offset/limit for large files. When you need the full file, continue with offset until complete.",
+    "description": "Read text files and images up to 250 KiB. Text output is bounded to 12000 characters and 2000 lines. Use offset/limit to page through text; follow the returned continuation offset. For larger files or a line exceeding the output limit, use bash to inspect or edit a bounded portion.",
     "inputSchema": {
       "type": "object",
       "required": ["path"],

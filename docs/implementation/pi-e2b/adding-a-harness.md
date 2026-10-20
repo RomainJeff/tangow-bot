@@ -12,8 +12,8 @@ The controller treats the guest as hostile, including the harness. Your adapter 
 | --- | --- |
 | The capability is checked before any database read. A capability of another attempt, an expired one, or a second connection while one is bound is refused. | `session.ts` `serve`, `capability.ts` |
 | A tool runs only if the run exposes it, and only after its `tool` announcement with the same `callId`. Any other call ends the channel with `unknown_tool`. | `session.ts` `callTool` |
-| A guest tool starts only after the executor journaled the call and claimed its effect under the run's fence. A guest of an attempt that lost its run gets `revoked`, and the database refuses the claim. | `executor.ts` `claimEffectUnderFence` |
-| A guest tool's result counts only once the controller recorded it. A result that never arrives leaves the effect `executing`, and the next claim marks it `uncertain`. It is never run again. | `session.ts` `recordLocalResult`, `executor.ts` |
+| A mutating guest tool starts only after the executor journaled the call and claimed its effect under the run's fence. A guest of an attempt that lost its run gets `revoked`, and the database refuses the claim. | `executor.ts` `claimEffectUnderFence` |
+| A mutating guest tool's result counts only once the controller recorded it. A result that never arrives leaves the effect `executing`, and the next claim marks it `uncertain`. It is never run again. Read-only inspections execute again on retries. | `session.ts` `recordLocalResult`, `executor.ts` |
 | A `done` that arrives while a call is open is held until the call settles. | `session.ts` `finish` |
 | Usage is measured on the model relay. The guest cannot report usage, provider, connection or owner: no frame carries them. | `session.ts` `relayModel` |
 | Guest text, ask text, notices and tool output are redacted against the run's live secrets. Tool output is cut to `controllerResultBytes`. | `session.ts` `clean`, `cutText` |
@@ -28,10 +28,10 @@ Create `apps/agent-run-worker/src/harness/<name>.ts`. The interface is in `apps/
 
 ```ts
 interface GuestHarness {
-	readonly declaration: HarnessDeclaration; // { name, capabilities }
+    readonly declaration: HarnessDeclaration; // { name, capabilities }
     readonly nativeTools: readonly ConnectorTool[];
     executeNativeTool(name, args, callId, context): Promise<LocalToolOutput>;
-	run(start: { worker: WorkerIdentity; run: GuestRunInput; cwd: string }, host: HarnessHost): Promise<DoneBody>;
+    run(start: { worker: WorkerIdentity; run: GuestRunInput; cwd: string }, host: HarnessHost): Promise<DoneBody>;
 }
 ```
 
