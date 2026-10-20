@@ -456,10 +456,11 @@ export const laneHomeMoveFence: Lane = {
       const src = path.join(dir, "src");
       await mkdir(src, { recursive: true });
       await writeFile(path.join(src, "notes.md"), "moved during a run\n");
-      const revision = await home.commit("worker-computer", src, context("fence"));
+      // A dedicated computer's home key is its bot's id, the private volume it moves onto.
+      const revision = await home.commit(run.bot.id, src, context("fence"));
       await prisma.computer.update({
         where: { id: computerId },
-        data: { homeStorage: "snapshot", homeRevision: revision },
+        data: { homeStorage: "snapshot", homeKey: run.bot.id, homeRevision: revision },
       });
 
       let runId: string | undefined;
