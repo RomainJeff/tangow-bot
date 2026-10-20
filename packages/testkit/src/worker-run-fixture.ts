@@ -198,6 +198,18 @@ export async function startWorkerRun(options: {
     get runtime() {
       return current.runtime;
     },
+    /**
+     * Keeps the bot's home on volumes, as an adopted E2B computer does, so a run may mount them.
+     * Only an E2B computer may, so the fake computer passes for one.
+     */
+    async homeOnVolumes() {
+      const provision = sandbox.provision.bind(sandbox);
+      sandbox.provision = async (...args) => ({ ...(await provision(...args)), kind: "e2b" });
+      await prisma.computer.update({
+        where: { id: computer.id },
+        data: { kind: "e2b", homeStorage: "volumes" },
+      });
+    },
     /** A user message that starts a queued run. */
     async send(text: string) {
       const sent = await events.sendUserMessage({

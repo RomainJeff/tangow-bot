@@ -32,9 +32,9 @@ type Guest = { exited: Promise<void>; kill(): Promise<void> };
 type Vm = { spec: WorkerSpec; root: string; guest?: Guest };
 
 const KILL_GRACE_MS = 2_000;
-const GUEST_ENTRY = fileURLToPath(
-  new URL("./main.ts", import.meta.resolve("@rakazo/agent-run-worker")),
-);
+/** The guest's source entry, resolved on use: a bundled harness has no package to resolve. */
+const guestEntry = () =>
+  fileURLToPath(new URL("./main.ts", import.meta.resolve("@rakazo/agent-run-worker")));
 
 function channelQueue() {
   const queued: FrameChannel[] = [];
@@ -199,10 +199,10 @@ export class LocalWorkerProvider implements WorkerProvider, GuestConnector {
 
   private childGuest(vm: Vm, capability: string) {
     const faults = this.options.faults ?? {};
-    const entry = this.options.entry;
-    const args = entry ? [entry] : ["--import", "tsx", GUEST_ENTRY];
+    const entry = this.options.entry ?? guestEntry();
+    const args = this.options.entry ? [entry] : ["--import", "tsx", entry];
     const child: ChildProcess = spawn(process.execPath, args, {
-      cwd: path.dirname(entry ?? GUEST_ENTRY),
+      cwd: path.dirname(entry),
       detached: true,
       stdio: ["pipe", "pipe", "ignore"],
       env: {

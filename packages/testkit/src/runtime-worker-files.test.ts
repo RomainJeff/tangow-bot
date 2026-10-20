@@ -9,49 +9,14 @@ import {
   createWorkerAgentRuntime,
 } from "@rakazo/adapters/runtime-worker";
 import { afterEach, describe, expect, it } from "vitest";
+import { fileTask } from "./file-task.js";
 import { LocalWorkerProvider } from "./local-worker-provider.js";
-import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.js";
 import { startWorkerRun } from "./worker-run-fixture.js";
 
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => {
   await Promise.all(cleanups.splice(0).map((cleanup) => cleanup()));
 });
-
-const toolResult = (request: ModelEmulatorRequest) =>
-  String(request.messages.findLast((message) => message.role === "tool")?.content);
-
-const recap = JSON.stringify({ version: 1, results: ["Edited notes.md"], references: [] });
-
-/** The same file task, step by step: what the model sees after each call is kept in `seen`. */
-function fileTask(seen: string[], atEnd: () => void): ModelEmulatorStep[] {
-  const calls: Array<[string, Record<string, unknown>]> = [
-    ["write_file", { path: "notes.md", content: "alpha\nbeta\n" }],
-    ["write_file", { path: "notes.md", content: "again" }],
-    ["edit_file", { path: "notes.md", old_text: "beta", new_text: "gamma" }],
-    ["edit_file", { path: "notes.md", old_text: "delta", new_text: "x" }],
-    ["read_file", { path: "notes.md", offset: 2 }],
-    ["list_files", {}],
-    ["message_user", { message: "Done." }],
-  ];
-  return [
-    ...calls.map(
-      ([name, args], index): ModelEmulatorStep => ({
-        expect(request) {
-          if (index > 0) seen.push(toolResult(request));
-        },
-        response: { type: "tool", id: `call-${index}`, name, arguments: args },
-      }),
-    ),
-    {
-      expect(request) {
-        seen.push(toolResult(request));
-        atEnd();
-      },
-      response: { type: "text", text: recap },
-    },
-  ];
-}
 
 async function runTask(arm: "in_process" | "worker") {
   const seen: string[] = [];
@@ -85,13 +50,7 @@ async function runTask(arm: "in_process" | "worker") {
   });
   cleanups.push(() => run.close());
   if (arm === "worker") {
-    // Only an E2B computer may keep its home on volumes, so the fake computer passes for one.
-    const provision = run.sandbox.provision.bind(run.sandbox);
-    run.sandbox.provision = async (...args) => ({ ...(await provision(...args)), kind: "e2b" });
-    await run.prisma.computer.update({
-      where: { id: run.bot.computerId! },
-      data: { kind: "e2b", homeStorage: "volumes" },
-    });
+    await run.homeOnVolumes();
     await run.prisma.volume.create({
       data: {
         kind: "bot_private",

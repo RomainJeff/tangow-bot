@@ -20,11 +20,13 @@
     "@rakazo/db": "workspace:*",
     "@rakazo/logging": "workspace:*",
     "@testcontainers/postgresql": "12.1.0",
+    "e2b": "2.49.1",
     "pngjs": "7.0.0"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",
     "@types/pngjs": "6.0.5",
+    "esbuild": "0.28.2",
     "typescript": "7.0.2",
     "vitest": "4.1.11"
   }

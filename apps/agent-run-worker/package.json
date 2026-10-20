@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./bundle": "./scripts/bundle.ts"
+    "./bundle": "./scripts/bundle.ts",
+    "./template": "./template/template.ts"
   },
   "scripts": {
     "start": "tsx src/main.ts",
