@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      /* Motion explainer, not slides: few words, huge type, everything moves. Min text size 28px. */
+      :root {
+        --bg: #100e0b; --panel: #1a1712; --line: #3a342a; --ink: #f3ede2; --muted: #b3aa9a;
+        --accent: #f0a94a; --ok: #7fd3a1; --fail: #ff8370;
+        --serif: "Newsreader", Georgia, serif; --mono: "JetBrains Mono", ui-monospace, monospace;
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); color: var(--ink); }
+      #root { position: relative; width: 100%; height: 100%; font-family: var(--serif); }
+      .scene { position: absolute; inset: 0; background: var(--bg); overflow: hidden; }
+      em { font-style: italic; color: var(--accent); }
+
+      /* background layer */
+      .glow { position: absolute; width: 1400px; height: 1400px; border-radius: 50%; left: 900px; top: -300px;
+        background: radial-gradient(circle, rgba(240,169,74,.20) 0%, rgba(240,169,74,0) 62%); }
+      .grid { position: absolute; inset: 0; opacity: .5;
+        background-image: linear-gradient(rgba(243,237,226,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(243,237,226,.05) 1px, transparent 1px);
+        background-size: 80px 80px; }
+      .ghost { position: absolute; right: 40px; bottom: 20px; font: 800 340px/1 var(--mono); letter-spacing: -.06em;
+        color: rgba(243,237,226,.065); white-space: nowrap; }
+      .bar { position: absolute; left: 0; bottom: 0; height: 8px; width: 1920px; background: var(--accent); transform-origin: left; }
+
+      .content { position: absolute; inset: 0; padding: 110px 120px; display: flex; flex-direction: column; }
+      .heading { font: 600 76px/1.05 var(--serif); letter-spacing: -.03em; max-width: 1680px; }
+
+      /* word-by-word reveal */
+      .line { display: block; overflow: hidden; padding: .04em 0 .1em; }
+      .w { display: inline-block; white-space: pre; }
+      .uline { position: absolute; left: 0; right: 0; bottom: .06em; height: .07em; background: var(--accent); transform-origin: left; }
+      .wrap-em { position: relative; display: inline-block; }
+
+      /* title */
+      .t-wrap { justify-content: center; gap: 40px; }
+      .kicker { font: 600 34px/1 var(--mono); color: var(--accent); letter-spacing: .08em; text-transform: uppercase; }
+      .t-title { font: 700 168px/.98 var(--serif); letter-spacing: -.045em; max-width: 1700px; }
+
+      /* kinetic: huge stacked lines */
+      .k-wrap { justify-content: center; gap: 10px; }
+      .k-line { font: 700 132px/1.02 var(--serif); letter-spacing: -.04em; }
+      .k-line.ok { color: var(--ok); } .k-line.fail { color: var(--fail); } .k-line.muted { color: var(--muted); }
+
+      /* number: progress ring + big label */
+      .n-wrap { flex-direction: row; align-items: center; justify-content: center; gap: 110px; }
+      .ring { position: relative; width: 560px; height: 560px; flex: none; }
+      .ring svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+      .ring .track { stroke: var(--line); } .ring .arc { stroke: var(--accent); }
+      .ring .num { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+        font: 700 210px/1 var(--serif); letter-spacing: -.05em; font-variant-numeric: tabular-nums; }
+      .ring .num small { font-size: 96px; color: var(--muted); font-weight: 300; }
+      .n-text { display: flex; flex-direction: column; gap: 34px; max-width: 900px; }
+      .n-label { font: 700 104px/1.02 var(--serif); letter-spacing: -.035em; }
+      .n-foot { font: 400 60px/1.1 var(--serif); color: var(--muted); }
+
+      /* diagram: absolute stage in frame coordinates */
+      .stage { position: absolute; inset: 0; }
+      .stage svg { position: absolute; inset: 0; width: 1920px; height: 1080px; overflow: visible; }
+      .edge { stroke: var(--line); stroke-width: 5; fill: none; stroke-linecap: round; }
+      .elabel { font: 500 28px var(--mono); fill: var(--muted); }
+      .dot { fill: var(--accent); }
+      .zone { position: absolute; border: 3px dashed var(--line); border-radius: 28px; background: rgba(26,23,18,.55); }
+      .zone .zl { position: absolute; left: 26px; top: -22px; padding: 4px 14px; background: var(--bg);
+        font: 600 30px/1 var(--mono); color: var(--muted); letter-spacing: .04em; }
+      .node { position: absolute; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px;
+        background: var(--panel); border: 3px solid var(--line); border-radius: 18px; padding: 14px 20px; text-align: center; }
+      .node.store { border-radius: 50% / 22%; }
+      .node.actor { border-radius: 999px; }
+      .node .nt { font: 600 38px/1.1 var(--mono); color: var(--ink); letter-spacing: -.02em; }
+      .node .ns { font: 400 28px/1.15 var(--mono); color: var(--muted); }
+      .tag, .msg { position: absolute; padding: 12px 22px; border: 3px solid var(--accent); border-radius: 12px; background: var(--bg);
+        font: 700 34px/1.05 var(--mono); color: var(--accent); white-space: nowrap; }
+      .msg { border-radius: 999px; background: var(--accent); color: var(--bg); }
+      .tag.ok { border-color: var(--ok); color: var(--ok); } .tag.fail { border-color: var(--fail); color: var(--fail); }
+      .msg.ok { background: var(--ok); border-color: var(--ok); } .msg.fail { background: var(--fail); border-color: var(--fail); }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="__TOTAL__" data-width="1920" data-height="1080">
+<!--CLIPS-->
+    </div>
+    <script>
+      /* STORY is injected by scripts/build.mjs: story.json + computed t0/dur/lead/voice per scene. */
+      const STORY = /*STORY*/null;
+
+      const esc = s => String(s ?? "").replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
+      // "*word*" → accent italic; every word wrapped for staggered reveals; accent words get an underline that draws in
+      const words = s => esc(s).split(/(\*[^*]+\*)/).filter(Boolean).map(part =>
+        part[0] === "*"
+          ? `<span class="wrap-em"><em>${part.slice(1, -1).split(" ").map((w, k, a) => `<span class="w">${w}${k < a.length - 1 ? " " : ""}</span>`).join("")}</em><span class="uline"></span></span>`
+          : part.split(/(?<= )/).map(w => `<span class="w">${w}</span>`).join("")).join("");
+      const COLOR = { active: "#f0a94a", ok: "#7fd3a1", fail: "#ff8370", idle: "#3a342a" };
+      const SIZE = { card: [380, 140], store: [400, 150], actor: [300, 120] };
+
+      const tl = gsap.timeline({ paused: true });
+      const total = STORY.total;
+
+      // Reveal a block built with words(): words rise out of their line mask, underlines draw after.
+      function reveal(el, t, ease = "expo.out") {
+        tl.from(el.querySelectorAll(".w"), { yPercent: 110, opacity: 0, duration: .7, ease, stagger: .07 }, t);
+        el.querySelectorAll(".uline").forEach(u => tl.from(u, { scaleX: 0, duration: .5, ease: "power3.inOut" }, t + .45));
+      }
+
+      function buildScenes() { STORY.scenes.forEach((sc, i) => {
+        const root = document.getElementById("s" + i);
+        const T = sc.t0, V = sc.t0 + sc.lead; // scene start, voice start
+        const at = f => V + f * sc.voice;      // fraction of the narration → absolute time
+        root.innerHTML = `
+          <div class="glow" data-layout-allow-overflow aria-hidden="true"></div><div class="grid" aria-hidden="true"></div><div class="ghost" data-layout-allow-overflow data-layout-allow-overlap data-layout-allow-occlusion aria-hidden="true">${esc(sc.ghost || "")}</div>
+          <div class="body"></div><div class="bar"></div>`;
+        const q = s => root.querySelector(s);
+
+        // transition in: every scene after the first crossfades + pushes over the previous one
+        if (i > 0) tl.fromTo(root, { opacity: 0 }, { opacity: 1, duration: STORY.xfade, ease: "sine.inOut" }, T);
+        tl.from(q(".body"), { scale: 1.04, duration: 1.2, ease: "power2.out" }, T);
+        // ambient decoratives (finite repeats only)
+        const amb = Math.max(1, Math.ceil(sc.dur / 4));
+        tl.fromTo(q(".glow"), { scale: .9, x: -40 }, { scale: 1.08, x: 40, duration: 2, ease: "sine.inOut", yoyo: true, repeat: amb * 2 - 1 }, T);
+        tl.fromTo(q(".ghost"), { x: 80 }, { x: -80, duration: sc.dur, ease: "none" }, T);
+        tl.fromTo(q(".bar"), { scaleX: T / total }, { scaleX: (T + sc.dur) / total, duration: sc.dur, ease: "none" }, T);
+
+        BUILD[sc.type](sc, q(".body"), { T, V, at });
+        if (sc.final) tl.to(q(".body"), { opacity: 0, y: -30, duration: .6, ease: "power1.in" }, T + sc.dur - .7);
+      }); }
+
+      const BUILD = {
+        title(sc, body, { T }) {
+          body.className = "content t-wrap";
+          body.innerHTML = `<div class="kicker">${esc(sc.kicker)}</div><h1 class="t-title">${words(sc.title)}</h1>`;
+          tl.from(body.querySelector(".kicker"), { opacity: 0, x: -60, duration: .6, ease: "power3.out" }, T + .2);
+          reveal(body.querySelector(".t-title"), T + .4);
+        },
+
+        // Huge lines, one beat each. lines: ["text", ...] or [{t, tone: ok|fail|muted}]; at[]: voice fraction per line.
+        kinetic(sc, body, { at }) {
+          body.className = "content k-wrap";
+          const ls = sc.lines.map(l => typeof l === "string" ? { t: l } : l);
+          body.innerHTML = ls.map(l => `<div class="k-line line ${l.tone || ""}"${sc.size ? ` style="font-size:${sc.size}px"` : ""}>${words(l.t)}</div>`).join("");
+          const els = body.querySelectorAll(".k-line");
+          els.forEach((el, k) => {
+            const t = at(sc.at?.[k] ?? k / ls.length);
+            reveal(el, t, k % 2 ? "back.out(1.4)" : "expo.out");
+            // earlier lines step back so the newest one owns the frame
+            for (let j = 0; j < k; j++) tl.to(els[j], { opacity: .32, duration: .4, ease: "power2.out" }, t);
+          });
+        },
+
+        // Progress ring counting up to value/of, with a big label.
+        number(sc, body, { T, at }) {
+          body.className = "content n-wrap";
+          const R = 250, C = 2 * Math.PI * R;
+          body.innerHTML = `<div class="ring"><svg viewBox="0 0 560 560"><circle class="track" cx="280" cy="280" r="${R}" fill="none" stroke-width="22"/>
+            <circle class="arc" cx="280" cy="280" r="${R}" fill="none" stroke-width="22" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C}"/></svg>
+            <div class="num"><span class="v">0</span>${sc.of ? `<small>/${sc.of}</small>` : esc(sc.suffix || "")}</div></div>
+            <div class="n-text"><div class="n-label line">${words(sc.label)}</div>${sc.foot ? `<div class="n-foot line">${words(sc.foot)}</div>` : ""}</div>`;
+          const v = body.querySelector(".v"), cnt = { v: 0 };
+          tl.from(body.querySelector(".ring"), { scale: .6, opacity: 0, duration: .8, ease: "back.out(1.6)" }, T + .2);
+          tl.to(body.querySelector(".arc"), { attr: { "stroke-dashoffset": C * (1 - sc.value / (sc.of || sc.value)) }, duration: 1.6, ease: "power3.inOut" }, at(0));
+          tl.to(cnt, { v: sc.value, duration: 1.6, ease: "power3.inOut", onUpdate: () => { v.textContent = Math.round(cnt.v); } }, at(0));
+          reveal(body.querySelector(".n-label"), at(sc.at?.[0] ?? .1));
+          if (sc.foot) reveal(body.querySelector(".n-foot"), at(sc.at?.[1] ?? .55), "power3.out");
+        },
+
+        diagram(sc, body, { T, at }) {
+          body.className = "stage";
+          const NODES = sc.nodes, EDGES = sc.edges_def;
+          const zones = sc.zones || [], show = sc.show || Object.keys(NODES), edges = sc.edges || Object.keys(EDGES);
+          const box = id => { const n = NODES[id], [w, h] = n.size || SIZE[n.kind || "card"]; return { ...n, w, h }; };
+          let html = `<div class="content"><h2 class="heading line">${words(sc.heading)}</h2></div>`;
+          zones.forEach(z => html += `<div class="zone" style="left:${z.x}px;top:${z.y}px;width:${z.w}px;height:${z.h}px"><span class="zl">${esc(z.label)}</span></div>`);
+          html += `<svg viewBox="0 0 1920 1080">${edges.map(id => `<line class="edge" data-e="${id}"/><text class="elabel" data-el="${id}"></text>`).join("")}${edges.map(id => `<circle class="dot" r="13" data-d="${id}" opacity="0"/>`).join("")}</svg>`;
+          show.forEach(id => { const n = box(id);
+            html += `<div class="node ${n.kind || "card"}" data-n="${id}" style="left:${n.x - n.w / 2}px;top:${n.y - n.h / 2}px;width:${n.w}px;height:${n.h}px"><div class="nt">${esc(n.label)}</div>${n.sub !== undefined ? `<div class="ns">${esc(n.sub)}</div>` : ""}</div>`; });
+          body.innerHTML = html;
+          const $n = id => body.querySelector("[data-n=\"" + id + "\"]");
+
+          // edge geometry: centre-to-centre line clipped to each box border
+          const clip = (n, dx, dy) => { const s = Math.min(n.w / 2 / Math.abs(dx || 1e-9), n.h / 2 / Math.abs(dy || 1e-9)); return [n.x + dx * s, n.y + dy * s]; };
+          const geo = {};
+          edges.forEach(id => {
+            const [a, b, lbl] = EDGES[id], A = box(a), B = box(b), dx = B.x - A.x, dy = B.y - A.y;
+            const p = clip(A, dx, dy), r = clip(B, -dx, -dy), len = Math.hypot(r[0] - p[0], r[1] - p[1]);
+            const line = body.querySelector("[data-e=\"" + id + "\"]");
+            line.setAttribute("x1", p[0]); line.setAttribute("y1", p[1]); line.setAttribute("x2", r[0]); line.setAttribute("y2", r[1]);
+            line.setAttribute("stroke-dasharray", len); line.setAttribute("stroke-dashoffset", len);
+            const t = body.querySelector("[data-el=\"" + id + "\"]"); t.textContent = lbl || "";
+            const horiz = Math.abs(dx) > Math.abs(dy);
+            t.setAttribute("x", (p[0] + r[0]) / 2 + (horiz ? 0 : 18)); t.setAttribute("y", (p[1] + r[1]) / 2 + (horiz ? -20 : 8));
+            t.setAttribute("text-anchor", horiz ? "middle" : "start");
+            const dot = body.querySelector("[data-d=\"" + id + "\"]"); dot.setAttribute("cx", p[0]); dot.setAttribute("cy", p[1]);
+            geo[id] = { p, r, len, line, dot };
+          });
+
+          // entrance: heading, zones, nodes, edges draw in
+          reveal(body.querySelector(".heading"), T + .2);
+          if (zones.length) tl.from(body.querySelectorAll(".zone"), { opacity: 0, scale: .94, duration: .6, ease: "power2.out", stagger: .12 }, T + .35);
+          tl.from(body.querySelectorAll(".node"), { opacity: 0, y: 40, scale: .85, duration: .55, ease: "back.out(1.7)", stagger: .08 }, T + .5);
+          edges.forEach((id, k) => {
+            tl.to(geo[id].line, { attr: { "stroke-dashoffset": 0 }, duration: .6, ease: "power2.inOut" }, T + .8 + k * .07);
+            tl.from(body.querySelector("[data-el=\"" + id + "\"]"), { opacity: 0, duration: .4, ease: "sine.out" }, T + 1.1 + k * .07);
+          });
+
+          // beats: focus nodes, pulse edges (dot or labelled message pill), swap sub-text, pin tags
+          let lit = [];
+          (sc.beats || []).forEach((bt, k) => {
+            const t = at(bt.at ?? k / sc.beats.length), tone = bt.tone || "active";
+            lit.forEach(id => tl.to($n(id), { borderColor: COLOR.idle, boxShadow: "0 0 0 0 rgba(0,0,0,0)", duration: .3, ease: "power1.out" }, t));
+            lit = [];
+            [].concat(bt.focus || []).forEach(id => {
+              tl.to($n(id), { borderColor: COLOR[tone], boxShadow: `0 0 44px 4px ${COLOR[tone]}55`, duration: .35, ease: "power2.out" }, t);
+              tl.fromTo($n(id), { scale: 1 }, { scale: 1.07, duration: .18, ease: "power1.out", yoyo: true, repeat: 1 }, t);
+              if (tone === "active") lit.push(id);
+            });
+            for (const [id, sub] of Object.entries(bt.sub || {})) {
+              const el = $n(id).querySelector(".ns");
+              tl.set(el, { textContent: sub, color: COLOR[tone] }, t + .15);
+              tl.from(el, { opacity: 0, y: 10, duration: .3, ease: "power2.out", immediateRender: false }, t + .15);
+            }
+            (bt.pulse || []).forEach(id => {
+              const g = geo[id], back = bt.back?.includes(id), [a, b] = back ? [g.r, g.p] : [g.p, g.r];
+              tl.to(g.line, { stroke: COLOR[tone], duration: .3 }, t);
+              const text = bt.msg?.[id];
+              if (text) {
+                // labelled message pill travelling along the edge
+                const m = document.createElement("div");
+                m.className = `msg ${tone === "active" ? "" : tone}`; m.textContent = text;
+                m.style.left = `${a[0]}px`; m.style.top = `${a[1]}px`; m.style.transform = "translate(-50%,-50%)";
+                body.append(m);
+                tl.fromTo(m, { opacity: 0, scale: .6 }, { opacity: 1, scale: 1, duration: .25, ease: "back.out(2)" }, t);
+                tl.to(m, { x: b[0] - a[0], y: b[1] - a[1], duration: 1.1, ease: "power2.inOut" }, t + .1);
+                tl.to(m, { opacity: 0, scale: .8, duration: .25, ease: "power1.in" }, t + 1.25);
+              } else {
+                tl.fromTo(g.dot, { attr: { cx: a[0], cy: a[1] }, opacity: 1 }, { attr: { cx: b[0], cy: b[1] }, duration: .9, ease: "power1.inOut" }, t);
+                tl.to(g.dot, { opacity: 0, duration: .2 }, t + .9);
+                g.dot.setAttribute("fill", COLOR[tone]);
+              }
+            });
+            if (bt.tag) {
+              const [txt, tTone] = Array.isArray(bt.tag) ? bt.tag : [bt.tag, tone];
+              const id = [].concat(bt.focus)[0], n = box(id), [dx, dy] = bt.tagAt || [0, -n.h / 2 - 66];
+              const tag = document.createElement("div");
+              tag.className = `tag ${tTone === "active" ? "" : tTone}`; tag.textContent = txt;
+              tag.style.left = `${n.x + dx}px`; tag.style.top = `${n.y + dy}px`; tag.style.transform = "translateX(-50%)";
+              body.append(tag);
+              tl.from(tag, { opacity: 0, y: 20, scale: .8, duration: .45, ease: "back.out(2)" }, t + .2);
+            }
+          });
+        },
+      };
+
+      buildScenes();
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>

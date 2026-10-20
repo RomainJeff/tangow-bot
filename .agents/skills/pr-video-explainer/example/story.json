@@ -1,0 +1,125 @@
+{
+  "pr": { "repo": "rakazo-bot", "num": 203, "url": "https://github.com/RomainJeff/rakazo-bot/pull/203" },
+  "voice": "am_michael",
+  "scenes": [
+    {
+      "type": "title", "ghost": "#203",
+      "kicker": "rakazo-bot · PR #203",
+      "title": "One disposable *Pi worker* per run",
+      "vo": "Pull request two oh three. Every agent run now gets its own Pi worker: a disposable E2B virtual machine."
+    },
+    {
+      "type": "diagram", "ghost": "before",
+      "heading": "Before: *one* process",
+      "zones": [{ "x": 480, "y": 290, "w": 960, "h": 620, "label": "controller" }],
+      "nodes": {
+        "user": { "kind": "actor", "x": 270, "y": 460, "label": "Slack" },
+        "loop": { "x": 720, "y": 460, "label": "agent loop" },
+        "bash": { "x": 1200, "y": 460, "label": "bash" },
+        "keys": { "x": 960, "y": 760, "label": "API keys" },
+        "model": { "kind": "actor", "x": 1660, "y": 460, "label": "LLM" }
+      },
+      "edges_def": { "u-l": ["user", "loop"], "l-b": ["loop", "bash"], "l-k": ["loop", "keys"], "b-k": ["bash", "keys"], "b-m": ["bash", "model"] },
+      "beats": [
+        { "at": 0.0, "focus": "loop", "pulse": ["u-l"], "msg": { "u-l": "message" } },
+        { "at": 0.4, "focus": "bash", "tone": "fail", "pulse": ["l-b"] },
+        { "at": 0.7, "focus": "keys", "tone": "fail", "pulse": ["b-k"], "tag": ["bash can read the keys", "fail"], "tagAt": [0, 96] }
+      ],
+      "vo": "Before, the agent loop ran inside the controller process. The agent's bash commands ran on the same machine that held the API keys."
+    },
+    {
+      "type": "diagram", "ghost": "after",
+      "heading": "After: *one VM* per attempt",
+      "zones": [
+        { "x": 110, "y": 290, "w": 820, "h": 620, "label": "controller" },
+        { "x": 1010, "y": 290, "w": 800, "h": 620, "label": "E2B VM · 1h TTL" }
+      ],
+      "nodes": {
+        "exec": { "x": 320, "y": 460, "label": "executor" },
+        "rt": { "x": 720, "y": 460, "label": "runtime" },
+        "life": { "x": 320, "y": 760, "label": "lifecycle" },
+        "guest": { "x": 1410, "y": 460, "label": "Pi worker" },
+        "tools": { "x": 1410, "y": 760, "label": "Pi tools" }
+      },
+      "edges_def": { "e-r": ["exec", "rt"], "r-g": ["rt", "guest"], "l-g": ["life", "guest"], "g-t": ["guest", "tools"] },
+      "beats": [
+        { "at": 0.0, "focus": "exec", "pulse": ["e-r"], "msg": { "e-r": "claim" } },
+        { "at": 0.25, "focus": "life", "pulse": ["l-g"], "msg": { "l-g": "spawn" } },
+        { "at": 0.5, "focus": ["rt", "guest"], "pulse": ["r-g"], "msg": { "r-g": "frames" } },
+        { "at": 0.8, "focus": "tools", "tone": "ok", "pulse": ["g-t"], "tag": ["isolated", "ok"], "tagAt": [0, 96] }
+      ],
+      "vo": "Now the executor claims the run, the lifecycle spins up an E2B VM, and the controller talks to the worker through frames over standard output. Pi's tools run isolated inside the VM."
+    },
+    {
+      "type": "diagram", "ghost": "keys",
+      "heading": "The worker *never* holds a key",
+      "zones": [
+        { "x": 110, "y": 380, "w": 500, "h": 360, "label": "VM" },
+        { "x": 720, "y": 380, "w": 500, "h": 560, "label": "controller" }
+      ],
+      "nodes": {
+        "guest": { "x": 360, "y": 560, "label": "Pi worker" },
+        "relay": { "x": 970, "y": 560, "label": "relay" },
+        "keys": { "x": 970, "y": 820, "label": "API key" },
+        "model": { "kind": "actor", "x": 1620, "y": 560, "label": "LLM" }
+      },
+      "edges_def": { "g-r": ["guest", "relay"], "r-m": ["relay", "model"], "k-r": ["keys", "relay"] },
+      "beats": [
+        { "at": 0.0, "focus": "guest", "pulse": ["g-r"], "msg": { "g-r": "request" } },
+        { "at": 0.3, "focus": "relay", "tag": "secrets masked" },
+        { "at": 0.52, "focus": ["relay", "keys"], "pulse": ["k-r", "r-m"], "msg": { "r-m": "+ key" } },
+        { "at": 0.8, "focus": "guest", "tone": "ok", "pulse": ["r-m", "g-r"], "back": ["r-m", "g-r"], "msg": { "g-r": "answer" }, "tag": ["0 keys", "ok"] }
+      ],
+      "vo": "To call the model, the worker sends a request to the controller. The relay masks the run's secrets, adds its own key, and sends the answer back. The worker never sees a key."
+    },
+    {
+      "type": "diagram", "ghost": "tool.*",
+      "heading": "Every tool call is *granted*, then *recorded*",
+      "nodes": {
+        "w": { "x": 400, "y": 520, "label": "Pi worker" },
+        "c": { "x": 1500, "y": 520, "label": "controller" },
+        "pg": { "kind": "store", "x": 1500, "y": 830, "label": "session log" }
+      },
+      "edges_def": { "w-c": ["w", "c"], "c-p": ["c", "pg"] },
+      "beats": [
+        { "at": 0.0, "focus": "w", "pulse": ["w-c"], "msg": { "w-c": "tool.call" } },
+        { "at": 0.27, "focus": "c", "tone": "ok", "pulse": ["w-c"], "back": ["w-c"], "msg": { "w-c": "grant" } },
+        { "at": 0.52, "focus": "w", "pulse": ["w-c"], "msg": { "w-c": "done" } },
+        { "at": 0.76, "focus": "pg", "tone": "ok", "pulse": ["c-p"], "msg": { "c-p": "recorded" } }
+      ],
+      "vo": "Every tool call takes four steps. The worker asks, the controller grants it, the worker runs it, and the controller records the result in the session log."
+    },
+    {
+      "type": "diagram", "ghost": "NFS",
+      "heading": "Same disk for *every* VM",
+      "nodes": {
+        "worker": { "x": 420, "y": 440, "label": "Pi worker" },
+        "computer": { "x": 1500, "y": 440, "label": "Computer VM" },
+        "priv": { "kind": "store", "x": 720, "y": 800, "label": "bot volume" },
+        "shared": { "kind": "store", "x": 1200, "y": 800, "label": "space volume" }
+      },
+      "edges_def": { "w-p": ["worker", "priv"], "w-s": ["worker", "shared"], "c-p": ["computer", "priv"], "c-s": ["computer", "shared"] },
+      "beats": [
+        { "at": 0.0, "focus": ["priv", "shared"], "tag": "NFS", "tagAt": [240, 96] },
+        { "at": 0.35, "focus": "worker", "pulse": ["w-p", "w-s"] },
+        { "at": 0.55, "focus": "computer", "pulse": ["c-p", "c-s"] },
+        { "at": 0.8, "focus": ["priv", "shared"], "tone": "ok" }
+      ],
+      "vo": "Files live on two volumes served over NFS: one for the bot, one for the space. The worker and the Computer VM mount the same ones, so nothing is lost between runs."
+    },
+    {
+      "type": "kinetic", "ghost": "cleanup",
+      "lines": ["Destroyed only when *confirmed*.", "Lost workers *reclaimed*.", "*Three* failures, then stop."],
+      "at": [0.0, 0.42, 0.72],
+      "vo": "On cleanup, a worker only counts as destroyed once E2B confirms it. A reconciler releases lost workers, and a run gives up after three setup failures."
+    },
+    {
+      "type": "number", "ghost": "draft",
+      "value": 4, "of": 7,
+      "label": "phases *shipped*",
+      "foot": "Still draft. The win is isolation, not speed.",
+      "at": [0.05, 0.5],
+      "vo": "Four of seven phases are shipped. Computer, MCP, compaction and validation are still to come, so the PR stays in draft. Pilots show no speed gain: the win is isolation."
+    }
+  ]
+}
