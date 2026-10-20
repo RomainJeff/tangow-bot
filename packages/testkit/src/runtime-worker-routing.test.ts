@@ -296,12 +296,21 @@ describe("where a product run executes", () => {
       where: { id: runId },
       data: { status: "waiting_takeover" },
     });
-    await run.prisma.$executeRaw`
-      ALTER TABLE attempts ADD CONSTRAINT reject_setup_outcome CHECK (status <> 'setup_failed')
-    `;
+    const transaction = run.prisma.$transaction.bind(run.prisma);
+    // Keep the real rollback without sending a SQL error through PGlite's socket transport.
+    const rejectOutcome = vi.spyOn(run.prisma, "$transaction").mockImplementation((work, options) =>
+      transaction(async (tx) => {
+        const update = tx.attempt.update.bind(tx.attempt);
+        vi.spyOn(tx.attempt, "update").mockImplementation((args) => {
+          if (args.data.status === "setup_failed") throw new Error("Attempt outcome unavailable");
+          return update(args);
+        });
+        return work(tx);
+      }, options),
+    );
     releaseDuringRouting(runId);
 
-    await expect(run.continueRun(runId)).rejects.toThrow("reject_setup_outcome");
+    await expect(run.continueRun(runId)).rejects.toThrow("Attempt outcome unavailable");
 
     expect(await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).toMatchObject({
       status: "running",
@@ -313,7 +322,7 @@ describe("where a product run executes", () => {
         select: { status: true, error: true, finishedAt: true },
       }),
     ).toEqual([{ status: "setting_up", error: null, finishedAt: null }]);
-    await run.prisma.$executeRaw`ALTER TABLE attempts DROP CONSTRAINT reject_setup_outcome`;
+    rejectOutcome.mockRestore();
     await run.prisma.run.update({
       where: { id: runId },
       data: { leaseExpiresAt: new Date(0) },

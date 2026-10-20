@@ -5,18 +5,19 @@
  * changes nothing; after an interruption it resumes the copy.
  *
  *   pnpm exec tsx scripts/migrate-home-to-volumes.ts --computer <id> --manifest <path>
- *     [--dry-run] [--leave-unmapped] [--uid <n> --gid <n>]
+ *     [--dry-run] [--leave-unmapped] [--template <worker template>]
  *
  * The manifest path must not exist. The record is written there once the move creates anything,
  * even if it then stops on an error, and never on a dry run.
  *
- * Reads DATABASE_URL, DATA_DIR for the AgentHomeStore, and E2B's own environment: E2B_API_KEY,
- * and E2B_DOMAIN or E2B_API_URL for a self-hosted E2B.
+ * It reaches each volume through a sandbox of the worker template that mounts it, destroyed at the
+ * end. Reads DATABASE_URL, DATA_DIR for the AgentHomeStore, and E2B's own environment:
+ * E2B_API_KEY, and E2B_DOMAIN or E2B_API_URL for a self-hosted E2B.
  */
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { parseArgs } from "node:util";
-import { E2B_GUEST_OWNER, E2BVolumeFiles } from "../packages/adapters/src/e2b-volume-files.js";
+import { E2BVolumeFiles, e2bVolumeSandbox } from "../packages/adapters/src/e2b-volume-files.js";
 import { E2BWorkerProvider } from "../packages/adapters/src/e2b-worker.js";
 import { LocalAgentHomeStore } from "../packages/adapters/src/home.js";
 import { moveHomeToVolumes } from "../packages/adapters/src/home-volume-migration.js";
@@ -30,21 +31,18 @@ function options() {
       manifest: { type: "string" },
       "dry-run": { type: "boolean", default: false },
       "leave-unmapped": { type: "boolean", default: false },
-      uid: { type: "string", default: String(E2B_GUEST_OWNER.uid) },
-      gid: { type: "string", default: String(E2B_GUEST_OWNER.gid) },
+      template: { type: "string", default: "rakazo-worker-pi" },
     },
   });
   const dryRun = values["dry-run"];
   if (!values.computer) throw new Error("--computer is required");
   if (!values.manifest && !dryRun) throw new Error("--manifest is required");
-  const [uid, gid] = [Number(values.uid), Number(values.gid)];
-  if (!Number.isInteger(uid) || !Number.isInteger(gid)) throw new Error("--uid and --gid are ids");
   return {
     computerId: values.computer,
     manifestPath: values.manifest ?? null,
     dryRun,
     leaveUnmapped: values["leave-unmapped"],
-    owner: { uid, gid },
+    template: values.template,
   };
 }
 
@@ -56,15 +54,16 @@ async function main() {
   const apiKey = process.env.E2B_API_KEY;
   if (!apiKey) throw new Error("E2B_API_KEY is not set");
   const { prisma, pool } = createDb(url);
+  const files = new E2BVolumeFiles(e2bVolumeSandbox({ template: input.template }));
   try {
-    // The SDK reads E2B_DOMAIN or E2B_API_URL itself. Volumes do not depend on the template.
-    const provider = new E2BWorkerProvider({ apiKey, template: "rakazo-worker-pi" });
+    // The SDK reads E2B_DOMAIN or E2B_API_URL itself.
+    const provider = new E2BWorkerProvider({ apiKey, template: input.template });
     const operationId = randomUUID();
     const report = await moveHomeToVolumes(
       {
         prisma,
         home: new LocalAgentHomeStore(process.env.DATA_DIR ?? "./data"),
-        files: new E2BVolumeFiles({ owner: input.owner }),
+        files,
         workers: createWorkerLifecycle({ prisma, provider }),
       },
       input,
@@ -79,6 +78,13 @@ async function main() {
     console.log(JSON.stringify(report, null, 2));
     if (report.outcome === "refused") process.exitCode = 1;
   } finally {
+    // A sandbox left behind dies at its timeout: say so, without replacing the move's report.
+    await files.close().catch((error: unknown) => {
+      console.error(
+        `Some volume sandboxes were not destroyed and stop at their one-hour timeout: ${error instanceof Error ? error.message : error}`,
+      );
+      process.exitCode = 1;
+    });
     await prisma.$disconnect();
     await pool.end();
   }

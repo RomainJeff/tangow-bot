@@ -1,7 +1,13 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { AgentRuntime, MemoryStore } from "@rakazo/adapter-kit";
+import { ANTHROPIC_MODELS } from "@earendil-works/pi-ai/providers/anthropic.models";
+import type {
+  AgentRuntime,
+  MemoryStore,
+  SandboxProvider,
+  WorkerProvider,
+} from "@rakazo/adapter-kit";
 import {
   createInMemorySkillLock,
   createRunExecutor,
@@ -27,6 +33,8 @@ import { type ModelEmulatorStep, startModelEmulator } from "./model-emulator.js"
 import { VolumeComputer } from "./volume-computer.js";
 
 const MODEL_KEY = "worker-fixture-model-key";
+/** The catalog model an Anthropic-protocol run asks for. */
+const ANTHROPIC_MODEL = ANTHROPIC_MODELS["claude-haiku-4-5"];
 const SPACE = "space-worker";
 const USER = "user-worker";
 
@@ -54,8 +62,22 @@ const emptyMemory: MemoryStore = {
  * drops the executor, the runtime and the launcher and builds new ones on the same database, as a
  * controller restart would.
  */
-export async function startWorkerRun(options: {
+export async function startWorkerRun<
+  Provider extends WorkerProvider & GuestConnector = LocalWorkerProvider,
+>(options: {
   steps: ModelEmulatorStep[];
+  /**
+   * Bills a catalog Anthropic model with a plain API key instead of a custom OpenAI-compatible
+   * connection; the catalog entry points at the emulator for the fixture's lifetime.
+   */
+  protocol?: "openai" | "anthropic";
+  /**
+   * Runs guests on this provider instead of the local runner, as the live lanes do with E2B. Its
+   * volumes are provisioned through the lifecycle.
+   */
+  provider?: () => Provider;
+  /** The bot's computer instead of the fake one on local volumes. */
+  sandbox?: SandboxProvider;
   mode?: "memory" | "child";
   /** The bundled guest a `child` mode runs instead of the source. */
   guestEntry?: string;
@@ -63,10 +85,10 @@ export async function startWorkerRun(options: {
   clock?: WorkerClock;
   /** Runs the bot with this runtime and no worker routing. */
   runtime?: (prisma: PrismaClient) => AgentRuntime;
-  /** The bot's computer: a dedicated one by default. */
-  computerScope?: "team" | "dedicated";
+  /** The bot's computer: a dedicated one by default, or none at all. */
+  computerScope?: "team" | "dedicated" | "none";
   /** Wraps how the controller reaches the guest, to observe its frames. */
-  connector?: (provider: LocalWorkerProvider) => GuestConnector;
+  connector?: (provider: Provider) => GuestConnector;
   /** Wraps the client the controller uses, to observe its queries. */
   prisma?: (prisma: PrismaClient) => PrismaClient;
   /** Wraps the executor's worker routing, to fail or race it. */
@@ -75,10 +97,22 @@ export async function startWorkerRun(options: {
   const database = await openPgliteDatabase();
   const prisma = options.prisma?.(database.prisma) ?? database.prisma;
   const dir = await mkdtemp(path.join(tmpdir(), "rakazo-worker-run-"));
-  const model = await startModelEmulator({ apiKey: MODEL_KEY, steps: options.steps });
+  const anthropic = options.protocol === "anthropic";
+  const model = await startModelEmulator({
+    apiKey: MODEL_KEY,
+    steps: options.steps,
+    ...(anthropic ? { protocol: "anthropic", modelId: ANTHROPIC_MODEL.id } : {}),
+  });
+  const anthropicUrl = ANTHROPIC_MODEL.baseUrl;
+  if (anthropic) ANTHROPIC_MODEL.baseUrl = model.baseUrl;
+  const modelProvider = anthropic ? "anthropic" : model.model.provider;
   const secretStore = new EncryptedSecretStore("worker-fixture-encryption-key");
   const sessionLog = new PostgresSessionLog(prisma);
-  const sandbox = new VolumeComputer((volumeRef) => current.provider.volumePath(volumeRef));
+  const sandbox =
+    options.sandbox ??
+    new VolumeComputer((volumeRef) =>
+      (current.provider as unknown as LocalWorkerProvider).volumePath(volumeRef),
+    );
 
   await prisma.user.create({ data: { id: USER, name: "Worker", email: "worker@rakazo.test" } });
   await prisma.organization.create({
@@ -105,30 +139,36 @@ export async function startWorkerRun(options: {
       createdAt: joined,
     },
   });
-  const computer = await prisma.computer.create({
-    data: {
-      spaceId: SPACE,
-      userId: USER,
-      scope: options.computerScope ?? "dedicated",
-      scopeKey: "worker-computer",
-      homeKey: "worker-computer",
-      kind: "e2b",
-      homeStorage: "volumes",
-    },
-  });
+  const computerScope = options.computerScope ?? "dedicated";
+  const computer =
+    computerScope === "none"
+      ? null
+      : await prisma.computer.create({
+          data: {
+            spaceId: SPACE,
+            userId: USER,
+            scope: computerScope,
+            scopeKey: "worker-computer",
+            homeKey: "worker-computer",
+            kind: "e2b",
+            homeStorage: "volumes",
+          },
+        });
   const bot = await prisma.bot.create({
     data: {
       spaceId: SPACE,
       userId: USER,
       name: "Worker",
       color: "#000000",
-      computerId: computer.id,
-      modelProvider: model.model.provider,
+      computerId: computer?.id ?? null,
+      modelProvider,
       modelId: model.model.id,
     },
   });
   const sealed = await secretStore.put(
-    JSON.stringify({ kind: "openai_compatible", baseUrl: model.baseUrl, apiKey: MODEL_KEY }),
+    anthropic
+      ? MODEL_KEY
+      : JSON.stringify({ kind: "openai_compatible", baseUrl: model.baseUrl, apiKey: MODEL_KEY }),
     {
       operationId: "fixture",
       traceId: "fixture",
@@ -141,7 +181,7 @@ export async function startWorkerRun(options: {
     data: { id: sealed.id, userId: USER, kind: "model", ciphertext: sealed.ciphertext },
   });
   const credential = await prisma.userModelCredential.create({
-    data: { userId: USER, provider: model.model.provider, label: "Fixture", secretId: sealed.id },
+    data: { userId: USER, provider: modelProvider, label: "Fixture", secretId: sealed.id },
   });
   await prisma.spaceModelPreference.create({
     data: {
@@ -152,24 +192,28 @@ export async function startWorkerRun(options: {
       isDefault: true,
     },
   });
-  await prisma.volume.createMany({
-    data: [
-      { kind: "bot_private", spaceId: SPACE, botId: bot.id, providerKind: "local-worker" },
-      { kind: "space_shared", spaceId: SPACE, providerKind: "local-worker" },
-    ].map((volume) => ({ ...volume, providerRef: volume.kind })),
-  });
+  if (!options.provider) {
+    await prisma.volume.createMany({
+      data: [
+        { kind: "bot_private", spaceId: SPACE, botId: bot.id, providerKind: "local-worker" },
+        { kind: "space_shared", spaceId: SPACE, providerKind: "local-worker" },
+      ].map((volume) => ({ ...volume, providerRef: volume.kind })),
+    });
+  }
   const thread = await prisma.thread.create({
     data: { spaceId: SPACE, userId: USER, botId: bot.id },
   });
   const events = createThreadEvents(prisma);
 
   const build = () => {
-    const provider = new LocalWorkerProvider({
-      mode: options.mode ?? "memory",
-      root: path.join(dir, "workers"),
-      faults: options.faults,
-      entry: options.guestEntry,
-    });
+    const provider =
+      options.provider?.() ??
+      (new LocalWorkerProvider({
+        mode: options.mode ?? "memory",
+        root: path.join(dir, "workers"),
+        faults: options.faults,
+        entry: options.guestEntry,
+      }) as unknown as Provider);
     const lifecycle = createWorkerLifecycle({ prisma, provider });
     const runtime: AgentRuntime = options.runtime?.(prisma) ?? new PiAgentRuntime();
     const routing = options.runtime
@@ -202,6 +246,20 @@ export async function startWorkerRun(options: {
     return { provider, lifecycle, runtime, executor };
   };
   let current = build();
+  if (options.provider) {
+    const context = {
+      operationId: "worker-fixture",
+      traceId: "worker-fixture",
+      spaceId: SPACE,
+      userId: USER,
+      signal: new AbortController().signal,
+    };
+    await current.lifecycle.ensureVolume(
+      { kind: "bot_private", spaceId: SPACE, botId: bot.id },
+      context,
+    );
+    await current.lifecycle.ensureVolume({ kind: "space_shared", spaceId: SPACE }, context);
+  }
 
   return {
     prisma,
@@ -244,8 +302,9 @@ export async function startWorkerRun(options: {
     userId: USER,
     spaceId: SPACE,
     async close() {
-      await current.provider.dispose();
+      await (current.provider as unknown as Partial<LocalWorkerProvider>).dispose?.();
       await model.close();
+      if (anthropic) ANTHROPIC_MODEL.baseUrl = anthropicUrl;
       await database.close();
       await rm(dir, { recursive: true, force: true });
     },

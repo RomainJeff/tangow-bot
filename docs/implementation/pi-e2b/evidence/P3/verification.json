@@ -1,0 +1,157 @@
+{
+  "ticket": "RomainJeff/rakazo-bot#197",
+  "slice": "S5, live lanes and handoff, branch claude/pi-e2b-p3-live",
+  "tested_commit_note": "lanes.json, bench.json and the lane capture come from one bundle of live_lanes_commit, run on the shared E2B host: all fourteen lanes, then the bench. template.json is the worker template built from ed7f8e689's source; its guest bundle's sha256 matches the bundle the lanes ran, since the guest's code did not change after it. The bench before the transcript-mask fix ran at ed7f8e689; its figures are under perf.relay_before_and_after_mask_fix. The later commits change documentation and these receipts only.",
+  "feature_base": "710705aee (feature/pi-e2b-workers with #228, #229, #241 and #243), merged into this branch at 58de581e7",
+  "infra": {
+    "i1_delivery": "the infrastructure repository's pull request #2, merge 177c1ff",
+    "i1_receipts": {
+      "functional": "9c1b44e",
+      "isolation": "a38c067"
+    },
+    "infra_main_during_runs": "e17503b",
+    "documentation_reference": "09f242991ada8fdab2a9ce7a1fa847671d511874"
+  },
+  "sdk": {
+    "pi": "@earendil-works/pi-agent-core, pi-ai, pi-telemetry and pi-coding-agent 1.3.0, unchanged",
+    "e2b": "e2b 2.49.1 in the controller, the bundle and the template build",
+    "e2b_platform": "the platform build the I1 handoff records; not read again by this slice"
+  },
+  "templates": {
+    "worker": {
+      "name": "p3live-worker-pi",
+      "source": "apps/agent-run-worker/template at live_lanes_commit, built by worker-live template; the Pi layer no longer installs ripgrep",
+      "receipt": "template.json",
+      "guest_bundle_sha256": "3c4b29734caecca8547e46905a58e6a8506c42eb81570b0d79b34467e3c6482b"
+    },
+    "computer": {
+      "name": "i1-computer",
+      "source": "I1, unchanged"
+    }
+  },
+  "vm_profiles": {
+    "worker": "1 vCPU, 1024 MiB (WORKER_PROFILE)",
+    "computer": "2 vCPU, 4096 MiB (I1's computer template)",
+    "sandbox_timeout": "1 hour, WORKER_TTL_SECONDS; a provider whose deployment allows less caps it and logs a warning"
+  },
+  "host": {
+    "where": "the single shared E2B host, controller and lanes run there from a bundle; no checkout, no .env",
+    "platform": "linux",
+    "arch": "x64",
+    "logical_cpus": 8,
+    "node": "v22.22.1",
+    "load_average_during_bench": "one-minute load average 1.0 to 2.5 from the host's other services"
+  },
+  "build_machine": {
+    "platform": "Darwin",
+    "arch": "arm64",
+    "node": "v24.21.0"
+  },
+  "lockfile_sha256": "767f6e35b7b79ea0d5ebe559eadce66263365b6ce95cd7aac49022d619deb1ff",
+  "schema_sha256": "d8b5c56832d77dbc48f469630ff4f30dd8c850d89b14e0b2a2ba6ff57efd1f5c",
+  "head": {
+    "pnpm check": "passed, 24 tasks",
+    "pnpm lint": "passed, 49 warnings and 1 info, the same as the feature base",
+    "pnpm test": "passed, 8116 tests in 618 files with 210 skipped",
+    "pnpm test:integration": "passed, 164 tests in 23 suites on Testcontainers PostgreSQL",
+    "live lanes": "14 passed, 0 pending; see lanes.json",
+    "live bench": "0 errors in 90 runs; see bench.json",
+    "pnpm test:e2e:affected": "ran the full web suite because no impact map exists: 211 passed and 11 failed, the feature base's known failures recorded in #243 (ask-card-follow, ask-card-motion, message-hover-actions, message-quote, team-computer). No web or UI source changed.",
+    "P3 offline tests touched": "passed, 77 tests in 9 files (runtime-worker suites, e2b-volume-files, e2b-worker), including the new Anthropic-protocol relay test, which hung and failed with the guest's thinking-block decoding removed"
+  },
+  "defects_found_live_and_fixed": [
+    "The worker template from #229 did not build: E2B runs build steps as the sandbox user, which cannot create /workspace or write /opt. The makeDir and the bundle copy now run as root.",
+    "Every worker create from #229 was refused with 400 'Timeout cannot be greater than 1 hours': the provider asked for the 4 hour TTL. It now asks for the lower of the TTL and maxTimeoutMs, 1 hour by default.",
+    "E2BVolumeFiles from #241 could not reach any volume: this self-hosted deployment does not serve E2B's volume content API (every call 404), and the SDK sends those calls to api.<domain> unless E2B_VOLUME_API_URL is set. It now works through a sandbox that mounts the volume. Its default owner 1000:1000 was also wrong: the sandbox user is 1001.",
+    "Review: WORKER_TTL_SECONDS said 4 hours while the provider capped the sandbox at 1. The TTL is now 1 hour, and a cap below it logs a warning.",
+    "Review: volume-file writes were not atomic. They now go through a temporary file renamed over the target, which replaces a link instead of following it and never lands inside a directory.",
+    "Review and live: a volume-file sandbox E2B killed stayed cached. Lane h found that E2B reports it as a TimeoutError mapped from envd's 502, not SandboxNotFoundError; both now evict and replace it once, after destroying the old one.",
+    "Review: close stopped at the first failed destroy, and the migration command's report could be replaced by that error. close now waits for every destroy, and the command reports a failed close on its own.",
+    "Review: /workspace was root-owned 0755 while the guest runs as uid 1001. The template hands it to the sandbox user; lane i checks the guest can write there.",
+    "Review round 2: a 502 from envd triggered a sandbox replacement, but a live sandbox behind a failing proxy answers it too, and its delayed rename could publish the retry's partial upload. Replacement now needs proof of death (SandboxNotFoundError, the SDK's 'killed or reached its end of life' TimeoutError, or a 502 with the control plane no longer listing the sandbox); each attempt stages under a new name; a dead sandbox whose destroy failed is destroyed again at close.",
+    "Review round 2: the staged file was uploaded at 0644 and chmodded after. It is now created 0600 by the guest user and the upload writes into it; lane h checked live that the upload keeps mode and inode.",
+    "Review round 2: a staged file whose placement could not start stayed on the volume. It is removed with its own 30 s deadline, also on cancellation.",
+    "Review round 3: SandboxNotFoundError and the 'killed or reached its end of life' TimeoutError can both come from a live sandbox behind a failing proxy. Every death signal now needs the control plane to no longer list the sandbox before it is replaced.",
+    "After #243 merged: lane c's fixed port 47001 was drawn by a worker's rpc.statd from the ephemeral range, which accepted the probe and never answered, so the lane hung. Its listeners now use ports below that range and each probe gives up after 3 s.",
+    "After #243 merged: the template's Pi layer installed ripgrep for a grep tool that is the guest's own JavaScript walker. The layer now installs nothing, and the rebuilt template has no rg.",
+    "#243's relay mask parsed every string and key of a relayed transcript as JSON, and each failed parse threw: 28 to 36 ms per call for 30 to 34 KB transcripts on the host, by a timing probe in the relay that was not committed. It now parses only text that opens an object, an array or a string, and prepares the secrets once per walk; masking is unchanged."
+  ],
+  "perf": {
+    "source": "bench.json",
+    "cold_boot_p95_ms": {
+      "private_mount": 2044.974,
+      "two_mounts": 2226.012,
+      "budget": 30000,
+      "result": "pass"
+    },
+    "relay_overhead_bound_p95_ms": {
+      "estimate": 72.8,
+      "how": "an estimate, not a bound: relay at the controller p95 30.3 ms plus grant to result p95 42.6 ms, private volume. The largest relay and largest round trip of the 30 trials sum to 90.6 ms with the private volume and 97.6 ms with two volumes.",
+      "observed_max_sum_ms": {
+        "private_mount": 90.6,
+        "two_mounts": 97.6
+      },
+      "budget": 200,
+      "result": "pass"
+    },
+    "control_per_guest_tool_p50_ms": {
+      "local_runner_same_host": 33.8,
+      "e2b_private_mount": 42.8,
+      "e2b_two_mounts": 43.1
+    },
+    "control_limiter": "database calls are 97 to 99 percent of the control window; PGlite SELECT 1 is 0.46 ms on this host against 0.11 ms on P2's machine",
+    "postgres_control_cost": "not measured: the controller must run on the E2B host, and PostgreSQL there needs Docker under sudo, which the host rules exclude",
+    "controller_rss": "1153 to 1206 MiB over 90 runs, heap 156 to 203 MiB, last ten runs +3.4 MiB; an earlier heap snapshot comparison placed the growth in the in-process PGlite instances' wire-message arrays",
+    "relay_before_and_after_mask_fix": {
+      "relay_at_controller_p50_p95_ms": {
+        "local_runner": {
+          "before": [54.5, 68.0],
+          "after": [13.2, 19.4]
+        },
+        "private_mount": {
+          "before": [55.5, 87.4],
+          "after": [10.0, 30.3]
+        },
+        "two_mounts": {
+          "before": [57.2, 89.5],
+          "after": [10.8, 30.9]
+        }
+      },
+      "relay_before_upstream_p50_p95_ms": {
+        "private_mount": {
+          "before": [50.4, 77.5],
+          "after": [4.3, 13.2]
+        },
+        "two_mounts": {
+          "before": [52.1, 80.2],
+          "after": [4.7, 15.6]
+        }
+      },
+      "before_commit": "ed7f8e689",
+      "after_commit": "b5c0a4609"
+    }
+  },
+  "cleanup": {
+    "per_lane": "every lane ended with 0 sandboxes and 0 volumes of its session, after its sweep",
+    "bench": "0 sandboxes and 0 volumes left",
+    "deployment_check": "before each lane and before the bench, the command found no sandbox running on the deployment; an independent census before and after each batch counted 0 sandboxes and 0 volumes on the deployment",
+    "probes": "the exploratory probes before the lanes tagged and removed their resources the same way, and each counted 0 left",
+    "kept_on_purpose": "the worker template p3live-worker-pi",
+    "heap_snapshots": "taken on the host for the RSS investigation, analysed there, then deleted; never copied off the host",
+    "host_scratch": "the scratch directory with the bundles, the runner and the census helper was removed after the last run",
+    "stuck_lane": "one earlier run of lane c hung on the rpc.statd port; it was stopped with SIGTERM, its handler swept its session, and the census then counted 0 sandboxes and 0 volumes"
+  },
+  "not_run": [
+    "Control cost on PostgreSQL across the E2B network.",
+    "A real model provider: the relay lanes used the repository's emulator.",
+    "The product computer's desktop preparation: this host has no desktop template.",
+    "deleteVolume and sweepVolumes against E2B, and the server's bound on accepted volume creates.",
+    "Electron E2E: CI only, by repository rule.",
+    "Native iOS captures: no mobile code changed."
+  ],
+  "live_lanes_commit": "b5c0a4609b926d12d6c7d6a28d7a801fcc0875f8",
+  "found_live_not_fixed": [
+    "Inherited from #38, out of P3's scope: a bot with no computer throws 'Bot has no computer' in continueRun after the run is set to 'running'. Production never settles it, and the reconciler enqueues it again forever without consuming the setup budget. Lane i saw the run stay 'running'.",
+    "runtime-worker-routing.test.ts 'rolls back a takeover requeue whose attempt outcome cannot be written and counts the crash' (from #243) fails in most runs of that file alone, with Prisma's 'No record was found for an update', on this branch's code before and after the mask fix. It passes alone and in the full suite."
+  ]
+}

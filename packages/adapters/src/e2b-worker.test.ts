@@ -94,7 +94,7 @@ function spec(mounts: WorkerSpec["mounts"], overrides: Partial<WorkerSpec> = {})
     runId: "run_1",
     botId: "bot_1",
     mounts,
-    ttlSeconds: 14_400,
+    ttlSeconds: 3_600,
     ensureDeadline: new Date(Date.now() + 900_000),
     ...overrides,
   };
@@ -152,9 +152,33 @@ describe("E2BWorkerProvider", () => {
         "/workspace/bots/bot_1": "rakazo-vol_bot",
         "/workspace/shared": "rakazo-vol_shared",
       },
-      timeoutMs: 14_400_000,
+      timeoutMs: 3_600_000,
       lifecycle: { onTimeout: "kill" },
     });
+  });
+
+  it("asks for the worker's TTL, and logs when the deployment's limit cuts it shorter", async () => {
+    const sink = createTestSink();
+    installLogger(createLogger({ service: "rakazo-worker", sinks: [sink] }));
+    const e2b = fakeE2B();
+    const roomy = new E2BWorkerProvider({ ...config, maxTimeoutMs: 86_400_000 }, e2b.sdk);
+    const capped = new E2BWorkerProvider({ ...config, maxTimeoutMs: 1_800_000 }, e2b.sdk);
+
+    await roomy.ensure(spec([], { attemptId: "attempt_long" }));
+    await capped.ensure(spec([], { attemptId: "attempt_capped" }));
+
+    expect([...e2b.sandboxes.values()].map((sandbox) => sandbox.timeoutMs)).toEqual([
+      3_600_000, 1_800_000,
+    ]);
+    expect(sink.events).toMatchObject([
+      {
+        level: "warn",
+        message: "e2b worker sandbox timeout capped below the worker TTL",
+        attemptId: "attempt_capped",
+        ttlMs: 3_600_000,
+        timeoutMs: 1_800_000,
+      },
+    ]);
   });
 
   it("leaves tool output to the guest's temporary directory without a private volume", async () => {

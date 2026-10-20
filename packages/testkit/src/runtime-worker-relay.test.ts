@@ -9,7 +9,9 @@ import { PiAgentRuntime } from "@rakazo/adapters";
 import { guestModelOf, type RelayUsage } from "@rakazo/adapters/runtime-worker";
 import { piAiStreamFn, relayedModel, relayPiAiCall } from "@rakazo/adapters/runtime-worker/pi-ai";
 import { afterEach, describe, expect, it } from "vitest";
+import { toolResult } from "./file-task.js";
 import { startModelEmulator } from "./model-emulator.js";
+import { startWorkerRun } from "./worker-run-fixture.js";
 
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => {
@@ -144,5 +146,61 @@ describe("a guest Pi run whose model calls the controller relays", () => {
       expect(frame).not.toContain(KEY);
       expect(frame).not.toContain(server.baseUrl);
     }
+  });
+});
+
+describe("a worker run on a catalog Anthropic model", () => {
+  it("completes a run on Anthropic's Messages API through the relay, across a thinking block and a tool call", async () => {
+    let listed = "";
+    const run = await startWorkerRun({
+      protocol: "anthropic",
+      steps: [
+        {
+          expect(request) {
+            expect(request.messages.at(-1)).toMatchObject({ role: "user" });
+          },
+          response: {
+            type: "tool",
+            id: "toolu_1",
+            name: "bash",
+            arguments: { command: "echo listed" },
+          },
+        },
+        {
+          expect(request) {
+            listed = toolResult(request);
+          },
+          response: {
+            type: "tool",
+            id: "toolu_2",
+            name: "message_user",
+            arguments: { message: "Done." },
+          },
+        },
+        {
+          expect() {},
+          response: {
+            type: "text",
+            thinking: "The command printed its word.",
+            text: JSON.stringify({ version: 1, results: ["Listed"], references: [] }),
+            usage: { promptTokens: 210, completionTokens: 12, cacheReadTokens: 64 },
+          },
+        },
+      ],
+    });
+    cleanups.push(() => run.close());
+
+    const runId = await run.send("List it.");
+    await run.continueRun(runId);
+
+    const row = await run.prisma.run.findUniqueOrThrow({ where: { id: runId } });
+    expect(row).toMatchObject({ status: "completed", modelProvider: "anthropic" });
+    run.model.assertComplete();
+    expect(listed).toContain("listed");
+    const usage = await run.prisma.usageRecord.findMany({ where: { runId } });
+    expect(usage.at(-1)).toMatchObject({ provider: "anthropic", outputTokens: 12 });
+    // Anthropic reports cache reads apart from input tokens; the run counts both.
+    const finished = (await run.runEntries(runId)).find((entry) => entry.type === "run.finished");
+    expect(finished?.payload).toMatchObject({ usage: { inputTokens: 210 + 64, outputTokens: 12 } });
   });
 });

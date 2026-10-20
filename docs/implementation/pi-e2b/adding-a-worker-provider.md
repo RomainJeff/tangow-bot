@@ -44,7 +44,7 @@ E2B stops sending creates a minute early and bounds the client request with the 
 
 A provisioning response that arrives after owner deletion refreshes the deletion record. Each insert or refresh takes its generation from a database sequence, which never resets on reinsertion. A sweeper clears only the generation it deleted, so concurrent sweepers cannot clear a fresh record. The sweep never discovers deletion candidates by listing the provider's volumes, so other deployments' volumes stay untouched. Records wait while no provider of their kind is configured.
 
-Respect the TTL at the provider. If the controller never confirms destruction, the TTL is the last bound on a worker that still holds a volume.
+Respect the TTL at the provider. If the controller never confirms destruction, the TTL is the last bound on a worker that still holds a volume. The TTL is one hour, the most E2B allows by default. A provider whose deployment allows less caps the worker's lifetime at that limit and logs a warning, as `E2BWorkerProvider` does with `maxTimeoutMs`.
 
 ## Enable the computer kind
 

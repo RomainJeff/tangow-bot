@@ -61,9 +61,10 @@ export function supportsWorkers(computerKind: string): boolean {
 
 /**
  * Upper bound of a worker VM's life at the provider. It frees a volume held by a worker whose
- * destruction was never confirmed: past it the provider reports the VM absent.
+ * destruction was never confirmed: past it the provider reports the VM absent. One hour is the
+ * longest sandbox timeout E2B's base plan and a default self-hosted deployment accept.
  */
-export const WORKER_TTL_SECONDS = 4 * 60 * 60;
+export const WORKER_TTL_SECONDS = 60 * 60;
 
 /** How long `ensure` may take to create a VM. Release waits it out before trusting `absent`. */
 export const WORKER_ENSURE_TIMEOUT_SECONDS = 15 * 60;

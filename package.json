@@ -33,6 +33,8 @@
     "bench:pi-sdk": "tsx packages/adapters/src/pi-sdk-bench.ts",
     "bench:worker-plan": "tsx packages/adapters/src/worker-plan-bench.ts",
     "bench:worker-channel": "tsx packages/testkit/src/runtime-worker-bench.ts",
+    "test:worker-live": "tsx packages/testkit/src/cli/worker-live.ts",
+    "test:worker-live:bundle": "tsx packages/testkit/src/cli/bundle-worker-live.ts",
     "eval:pi-sdk": "tsx packages/adapters/src/pi-live-eval.ts",
     "test:evals": "tsx packages/testkit/src/cli/evals.ts",
     "test:computer-replay": "tsx packages/testkit/src/cli/computer-replay.ts",
