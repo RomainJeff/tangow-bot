@@ -130,7 +130,7 @@ describe("where a product run executes", () => {
     expect(run.provider.launches).toEqual([]);
   });
 
-  it.each(["volumes", "ensure", "prepare"] as const)(
+  it.each(["volumes", "ensure", "prepare", "ensure-unreleased"] as const)(
     "exhausts a run's setup budget across reconciliation and a restart after %s fails",
     async (step) => {
       const run = await startWorkerRun({ steps: [] });
@@ -140,7 +140,10 @@ describe("where a product run executes", () => {
       };
       const failProvider = () => {
         if (step === "volumes") run.provider.ensureVolume = fail;
-        else run.provider[step] = fail;
+        else if (step === "ensure-unreleased") {
+          run.provider.ensure = fail;
+          run.provider.destroy = fail;
+        } else run.provider[step] = fail;
       };
       if (step === "volumes") await run.prisma.volume.deleteMany();
       failProvider();
@@ -160,7 +163,7 @@ describe("where a product run executes", () => {
           expect((await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
             "queued",
           );
-          if (step === "ensure" && attempt === 1) {
+          if ((step === "ensure" || step === "ensure-unreleased") && attempt === 1) {
             expect(await attemptsOf(run, runId)).toEqual([{ workerState: "releasing" }]);
             for (let wait = 0; wait < 4; wait++) {
               await run.continueRun(runId);
@@ -197,7 +200,9 @@ describe("where a product run executes", () => {
       await reconciler.reconcileOnce();
       expect(enqueue).not.toHaveBeenCalledWith(runContinueJob(runId));
       await run.continueRun(runId);
-      expect(await run.prisma.attempt.count({ where: { runId } })).toBe(step === "ensure" ? 7 : 3);
+      expect(await run.prisma.attempt.count({ where: { runId } })).toBe(
+        step === "ensure" || step === "ensure-unreleased" ? 7 : 3,
+      );
     },
   );
 

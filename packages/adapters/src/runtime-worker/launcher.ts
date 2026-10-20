@@ -1,7 +1,7 @@
 import type { AdapterContext, WorkerIdentity, WorkerStartV1 } from "@rakazo/adapter-kit";
-import { AgentRuntimeBusyError } from "@rakazo/adapter-kit";
+import { AgentRuntimeBusyError, AgentRuntimeUnavailableError } from "@rakazo/adapter-kit";
 import type { WorkerLaunch } from "@rakazo/core";
-import { LIVE_WORKER_STATES } from "@rakazo/core";
+import { LIVE_WORKER_STATES, workerEnsureDeadline } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import type { ReleaseOutcome, WorkerLifecycle } from "../worker-lifecycle.js";
 import { VolumeBusyError } from "../worker-lifecycle.js";
@@ -60,15 +60,25 @@ export function createLifecycleLauncher(deps: {
         runId: worker.runId,
         signal: new AbortController().signal,
       };
-      const unconfirmed = await deps.prisma.attempt.count({
+      const unconfirmed = await deps.prisma.attempt.findFirst({
         where: {
           runId: worker.runId,
           id: { not: worker.attemptId },
           workerState: { in: [...LIVE_WORKER_STATES, "releasing"] },
         },
+        orderBy: { workerEnsureAt: "asc" },
+        select: { workerEnsureAt: true },
       });
-      if (unconfirmed > 0) {
-        throw new AgentRuntimeBusyError("An earlier worker of this run is not confirmed gone");
+      if (unconfirmed) {
+        if (
+          unconfirmed.workerEnsureAt &&
+          Date.now() < workerEnsureDeadline(unconfirmed.workerEnsureAt).getTime()
+        ) {
+          throw new AgentRuntimeBusyError("An earlier worker of this run is not confirmed gone");
+        }
+        throw new AgentRuntimeUnavailableError(
+          "An earlier worker could not be released before its setup deadline",
+        );
       }
       const started = await deps.lifecycle.start(deps.launch, context).catch((error: unknown) => {
         if (error instanceof VolumeBusyError)
