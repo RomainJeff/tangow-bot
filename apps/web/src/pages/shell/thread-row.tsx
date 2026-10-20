@@ -34,8 +34,9 @@ import type {
   MessageItem,
   SessionViewTarget,
 } from "../../lib/thread-items";
+import { LinkPreviewRow } from "./block-views";
 import { FALLBACK_BOT_COLOR, threadJumpLocation } from "./layout";
-import { LinkPreviewRow, MessageView, skillLine, useLinkMentions } from "./message-view";
+import { MessageView, skillLine, useLinkMentions } from "./message-view";
 import { RoutineFailureLine } from "./routine-run-line";
 
 type PeerBot = (
