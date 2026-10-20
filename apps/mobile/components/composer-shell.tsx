@@ -21,6 +21,7 @@ import { useMobileTokens, useResolvedAppearance, useThemedStyles } from "../lib/
 import { shadowsForAppearance } from "../lib/theme";
 import type { VolumeStore } from "../lib/volume-store";
 import { useVolume } from "../lib/volume-store";
+import { GlassBackdrop } from "./glass";
 import { NativeSymbol } from "./native-symbol";
 
 export type ComposerState = "idle" | "typing" | "dictating" | "speaking";
@@ -58,7 +59,7 @@ export interface ComposerShellProps extends Omit<ViewProps, "children"> {
 }
 
 /**
- * The capsule at the bottom of the thread — the one elevation of that screen.
+ * The capsule at the bottom of the thread, on the `control` glass.
  * Mirrors `packages/ui-web/src/composer-shell.tsx`. On mobile the attach
  * bubble sits outside it (`ComposerAttachBubble`, in the row `thread.tsx`
  * builds), sharing the same rest/focus elevation.
@@ -87,6 +88,7 @@ export function ComposerShell({
       ]}
       {...props}
     >
+      <GlassBackdrop radius={radii.composer} />
       {attachments ? <View style={styles.attachmentsRow}>{attachments}</View> : null}
       <View style={[styles.fieldRow, leading ? styles.withLeading : styles.withoutLeading]}>
         {leading}
@@ -123,7 +125,7 @@ function ComposerDictationWaveform({ volume: store }: { volume?: VolumeStore }) 
 
 /**
  * The detached "+" bubble: 48×48, full round, the capsule's own
- * `surface` + rest/focus elevation. While the attach sheet is open it pivots
+ * glass and rest/focus edge. While the attach sheet is open it pivots
  * 45° into a "×" over `motion.morph`, and its label switches to "Close".
  */
 export const ComposerAttachBubble = forwardRef<
@@ -166,10 +168,10 @@ export const ComposerAttachBubble = forwardRef<
         borderRadius: radii.pill,
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: tokens.surface,
         boxShadow: focused ? shadows.composerFocus : shadows.composerRest,
       }}
     >
+      <GlassBackdrop radius={radii.pill} />
       <Animated.View style={animatedStyle}>
         <NativeSymbol ios="plus" android="add" size={20} color={tokens.foreground} />
       </Animated.View>
@@ -233,7 +235,6 @@ function createComposerShellStyles() {
     root: {
       minHeight: sizes.composerAttach,
       borderRadius: radii.composer,
-      backgroundColor: tokens.surface,
       padding: 2,
       justifyContent: "flex-end",
       boxShadow: shadows.composerRest,

@@ -27,6 +27,13 @@ carries content: no bubble, card or panel is glass.
 Under Reduce Transparency every material turns opaque: `chrome` takes
 `sidebar`, the others take `card`. The ambient light stays.
 
+iPhone draws the material natively rather than from these values:
+`GlassBackdrop` (`apps/mobile/components/glass.tsx`) fills a control or a bar
+under its content. It uses Liquid Glass (`expo-glass-effect`) on iOS 26 and
+later, and the system chrome blur (`expo-blur`) before that. Under Reduce
+Transparency, and on Android, it uses the material's opaque fallback. The
+container keeps its own radius, edge and shadow.
+
 The values live in `packages/ui-tokens/src/materials.ts` and reach CSS as
 `--material-<name>-*`, `--ambient` (phone width included),
 `--scroll-edge-blur`, `--thread-fade-*`, `--thread-under-composer` and
