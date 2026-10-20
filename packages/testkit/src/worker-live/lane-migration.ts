@@ -114,6 +114,11 @@ export const laneH: Lane = {
       }
 
       const sharedRef = refOf({ scope: "shared" });
+      // E2B kills a volume-files sandbox at its timeout; the next call must open a new one.
+      const killedSandboxes = await live.killVolumeFileSandboxes();
+      const readAfterKill = new TextDecoder().decode(
+        await files.read(sharedRef, "readme.md", context("h")),
+      );
       const probe = (content: string, mode: number) =>
         files.write(
           sharedRef,
@@ -218,6 +223,8 @@ export const laneH: Lane = {
         JSON.stringify(firstHashes) === JSON.stringify(expected) &&
         JSON.stringify(secondHashes) === JSON.stringify(expected) &&
         keptAcrossRecreate === "kept" &&
+        killedSandboxes > 0 &&
+        readAfterKill === "# Team notes\n" &&
         overwritten.content === "second" &&
         overwritten.mode === 0o600 &&
         again.outcome === "already_on_volumes" &&
@@ -237,6 +244,8 @@ export const laneH: Lane = {
           ),
           fileWrittenBetweenRecreatesKept: keptAcrossRecreate === "kept",
           mountEnforcesOwnership: ownershipEnforced === "yes",
+          volumeFileSandboxesKilled: killedSandboxes,
+          readAfterSandboxKilled: readAfterKill === "# Team notes\n",
           secondMove: again.outcome,
           secondTeamComputerOfSpace:
             secondComputer.outcome === "refused"

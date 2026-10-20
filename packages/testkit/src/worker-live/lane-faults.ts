@@ -169,6 +169,7 @@ export const laneG: Lane = {
       await worker.lifecycle.start(plan, context("g-reconcile"));
       const aliveBefore = (await live.census()).sandboxes;
       const leaseBefore = await prisma.volume.count({ where: { writerAttemptId: attempt.id } });
+      const before = await prisma.attempt.findUniqueOrThrow({ where: { id: attempt.id } });
       await prisma.run.update({
         where: { id: runId },
         data: { leaseExpiresAt: new Date(Date.now() - 1_000) },
@@ -176,6 +177,11 @@ export const laneG: Lane = {
       const reconciled = await worker.lifecycle.reconcile({ limit: 10 }, context("g-reconcile"));
       const row = await prisma.attempt.findUniqueOrThrow({ where: { id: attempt.id } });
       const record = {
+        beforeReconcile: {
+          workerState: before.workerState,
+          providerRefRecorded: Boolean(before.workerProviderRef),
+          runLeaseExpired: true,
+        },
         sandboxesAliveBeforeReconcile: aliveBefore,
         writerLeaseBeforeReconcile: leaseBefore,
         reconciled,
@@ -185,6 +191,8 @@ export const laneG: Lane = {
       };
       cases.controller_lost_after_start = record;
       pass &&=
+        before.workerState === "ready" &&
+        Boolean(before.workerProviderRef) &&
         aliveBefore === 1 &&
         leaseBefore === 1 &&
         reconciled.released === 1 &&
@@ -195,5 +203,81 @@ export const laneG: Lane = {
       await worker.close();
     }
     return { pass, observed: cases };
+  },
+};
+
+const SHORT_TIMEOUT_MS = 20_000;
+
+export const laneGTimeout: Lane = {
+  id: "g-timeout",
+  issue: "panne après provisioning (VM tuée au timeout)",
+  scenario: `A provider whose deployment allows a ${SHORT_TIMEOUT_MS / 1000} s sandbox timeout, below the worker TTL; the guest sleeps in bash past it, so E2B kills the VM mid-call`,
+  passWhen:
+    "E2B kills the VM, the attempt ends released with its writer lease free and its bash effect never rerun, and the run completes on a new attempt",
+  async run(live) {
+    const worker = await liveRun(live, {
+      provider: () => live.workerProvider(SHORT_TIMEOUT_MS),
+      files: { private: true, shared: false },
+      steps: [
+        call("nap", "bash", { command: `sleep ${(SHORT_TIMEOUT_MS / 1000) * 3}` }),
+        ...finish("Recovered after the VM was killed"),
+      ],
+    });
+    try {
+      const { prisma } = worker.run;
+      const runId = await worker.run.send("Sleep past the sandbox timeout.");
+      const started = performance.now();
+      const first = await worker.run.continueRun(runId).then(
+        () => "completed",
+        (error: unknown) => (error instanceof Error ? error.message : String(error)),
+      );
+      const killedAfterMs = Math.round(performance.now() - started);
+      const afterKill = {
+        status: await worker.status(runId),
+        attempts: (await worker.attempts(runId)).map(({ workerState, stopPhase }) => ({
+          workerState,
+          stopPhase,
+        })),
+        writerLeasesHeld: await prisma.volume.count({ where: { writerAttemptId: { not: null } } }),
+        sandboxesAlive: (await live.census()).sandboxes,
+        bashEffect: (await prisma.externalEffect.findFirst({ where: { runId, kind: "bash" } }))
+          ?.status,
+      };
+      if (afterKill.status === "queued") await worker.run.continueRun(runId);
+      const effects = await prisma.externalEffect.findMany({
+        where: { runId },
+        select: { kind: true, status: true },
+        orderBy: { createdAt: "asc" },
+      });
+      const final = {
+        status: await worker.status(runId),
+        attempts: (await worker.attempts(runId)).map(({ workerState }) => workerState),
+        effects,
+        sandboxesLeft: (await live.census()).sandboxes,
+      };
+      if (final.status === "completed") worker.run.model.assertComplete();
+      const pass =
+        afterKill.status === "queued" &&
+        afterKill.attempts.length === 1 &&
+        afterKill.attempts[0]?.workerState === "released" &&
+        afterKill.writerLeasesHeld === 0 &&
+        afterKill.sandboxesAlive === 0 &&
+        final.status === "completed" &&
+        effects.filter((effect) => effect.kind === "bash").length === 1 &&
+        effects.find((effect) => effect.kind === "bash")?.status === "uncertain" &&
+        final.sandboxesLeft === 0;
+      return {
+        pass,
+        observed: {
+          sandboxTimeoutMs: SHORT_TIMEOUT_MS,
+          firstContinue: first,
+          firstAttemptEndedAfterMs: killedAfterMs,
+          afterKill,
+          final,
+        },
+      };
+    } finally {
+      await worker.close();
+    }
   },
 };

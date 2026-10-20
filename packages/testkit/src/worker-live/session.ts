@@ -110,13 +110,15 @@ export function liveSession(config: LiveConfig) {
     config,
     connection,
     guestCommandStarts,
-    workerProvider: () =>
+    /** `maxTimeoutMs` stands for a deployment that kills sandboxes sooner. */
+    workerProvider: (maxTimeoutMs?: number) =>
       new E2BWorkerProvider(
         {
           apiKey: config.apiKey,
           apiUrl: config.apiUrl,
           domain: config.domain,
           template: config.workerTemplate,
+          maxTimeoutMs,
         },
         sdk,
       ),
@@ -138,6 +140,17 @@ export function liveSession(config: LiveConfig) {
         timeoutMs: VM_TIMEOUT_MS,
         lifecycle: { onTimeout: "kill" },
       });
+    },
+    /** Kills this session's volume-files sandboxes, as E2B does at their timeout. */
+    async killVolumeFileSandboxes() {
+      const ids: string[] = [];
+      const pages = Sandbox.list({
+        ...connection,
+        query: { metadata: { p3live: tag, rakazo: "volume-files" } },
+      });
+      while (pages.hasNext) ids.push(...(await pages.nextItems()).map((info) => info.sandboxId));
+      for (const id of ids) await Sandbox.kill(id, connection);
+      return ids.length;
     },
     async census() {
       return { sandboxes: (await ownSandboxes()).length, volumes: (await ownVolumes()).length };

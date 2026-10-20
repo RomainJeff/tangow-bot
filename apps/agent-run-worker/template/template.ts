@@ -10,10 +10,14 @@ export const WORKER_PROFILE = { cpuCount: 1, memoryMB: 1024 } as const;
  * Build steps run as the sandbox user unless they name root, and that user cannot write `/`.
  */
 function base(bundle: string): TemplateBuilder {
-  return Template({ fileContextPath: path.dirname(bundle) })
-    .fromNodeImage("24-bookworm")
-    .aptInstall(["bash", "ca-certificates", "git", "procps"])
-    .makeDir("/workspace", { user: "root" });
+  return (
+    Template({ fileContextPath: path.dirname(bundle) })
+      .fromNodeImage("24-bookworm")
+      .aptInstall(["bash", "ca-certificates", "git", "procps"])
+      .makeDir("/workspace", { user: "root" })
+      // The guest runs as the sandbox user, and a run without volumes works in /workspace itself.
+      .runCmd("chown user:user /workspace", { user: "root" })
+  );
 }
 
 /** What each harness adds to the base, by the name it registers in `HARNESSES`. */

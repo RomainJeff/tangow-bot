@@ -1,4 +1,4 @@
-import { laneG } from "./lane-faults.js";
+import { laneG, laneGTimeout } from "./lane-faults.js";
 import { laneH } from "./lane-migration.js";
 import { laneA, laneF, laneI } from "./lanes-files.js";
 import { laneD, laneE } from "./lanes-tools.js";
@@ -54,6 +54,7 @@ export const LANES: Lane[] = [
   laneE,
   laneF,
   laneG,
+  laneGTimeout,
   laneH,
   laneI,
   ...pendingLanes,
