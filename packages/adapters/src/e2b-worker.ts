@@ -6,7 +6,7 @@ import type {
 } from "@rakazo/adapter-kit";
 import { volumeMountPath } from "@rakazo/core";
 import { getLogger } from "@rakazo/logging";
-import { type ConnectionOpts, Sandbox, type SandboxOpts, Volume } from "e2b";
+import { CommandExitError, type ConnectionOpts, Sandbox, type SandboxOpts, Volume } from "e2b";
 import { encodeFrameLine, type FrameChannel, readFrameLines } from "./runtime-worker/framing.js";
 import type { GuestConnector } from "./runtime-worker/launcher.js";
 import { WORKER_LIMITS } from "./runtime-worker/limits.js";
@@ -20,7 +20,17 @@ export const E2B_WORKER_GUEST_ENTRY = "/opt/rakazo/agent-run-worker.mjs";
  */
 export const E2B_CREATE_MARGIN_MS = 60_000;
 
-const STDERR_TAIL_CHARS = 4096;
+const LOG_TEXT_CHARS = 2048;
+const UNPRINTABLE =
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: these are the characters escaped
+  /[\u0000-\u001F\u007F-\u009F\u202A-\u202E\u2066-\u2069]/g;
+
+/** Guest or vendor text as an inert log field: its end, cut, with controls and bidi marks escaped. */
+function logText(text: string): string {
+  return text
+    .slice(-LOG_TEXT_CHARS)
+    .replace(UNPRINTABLE, (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`);
+}
 
 export interface E2BWorkerConfig {
   apiKey: string;
@@ -46,8 +56,8 @@ export type E2BWorkerSandbox = Pick<
 export interface E2BGuestCommand {
   sendStdin(data: string): Promise<void>;
   closeStdin(): Promise<void>;
-  /** Settles when the command ends or its stream breaks. */
-  wait(): Promise<unknown>;
+  /** Resolves with the exit code once the command ended. Rejects when its stream broke first. */
+  wait(): Promise<number>;
 }
 
 /** The E2B calls a worker makes. Tests stand in for the vendor here. */
@@ -101,12 +111,24 @@ export function e2bWorkerSdk(connection: ConnectionOpts): E2BWorkerSdk {
     },
     async startGuest(sandboxId, command, options) {
       const sandbox = await open(sandboxId);
-      return sandbox.commands.run(command, {
+      const handle = await sandbox.commands.run(command, {
         ...options,
         background: true,
         stdin: true,
         timeoutMs: 0,
       });
+      return {
+        sendStdin: (data) => handle.sendStdin(data),
+        closeStdin: () => handle.closeStdin(),
+        wait: () =>
+          handle.wait().then(
+            (result) => result.exitCode,
+            (error: unknown) => {
+              if (error instanceof CommandExitError) return error.exitCode;
+              throw error;
+            },
+          ),
+      };
     },
     async listVolumes() {
       return (await Volume.list(connection)).map((volume) => volume.name);
@@ -162,6 +184,8 @@ const attemptTag = (attemptId: string) => ({ rakazo: "worker", attemptId });
  */
 export class E2BWorkerProvider implements WorkerProvider, GuestConnector {
   private readonly sdk: E2BWorkerSdk;
+  /** What settles each connected guest's `exited`, by sandbox, until it is seen gone. */
+  private readonly guests = new Map<string, Set<() => void>>();
 
   constructor(
     private readonly config: E2BWorkerConfig,
@@ -216,7 +240,13 @@ export class E2BWorkerProvider implements WorkerProvider, GuestConnector {
   }): Promise<"destroyed" | "absent"> {
     const ids = new Set(await this.sdk.listSandboxes(attemptTag(target.attemptId)));
     if (target.providerRef) ids.add(target.providerRef);
-    const killed = await Promise.all([...ids].map((id) => this.sdk.killSandbox(id)));
+    const killed = await Promise.all(
+      [...ids].map(async (id) => {
+        const existed = await this.sdk.killSandbox(id);
+        for (const gone of this.guests.get(id) ?? []) gone();
+        return existed;
+      }),
+    );
     return killed.includes(true) ? "destroyed" : "absent";
   }
 
@@ -232,7 +262,9 @@ export class E2BWorkerProvider implements WorkerProvider, GuestConnector {
   /**
    * One connection per attempt. Stdio is a single stream: E2B does not replay output produced while
    * the controller was detached, and the guest never learns that its stdout was, so it would not
-   * resend. A broken stream loses the guest, and the run's next attempt starts a new one.
+   * resend. A broken stream or a failed send ends the connection, and the run's next attempt starts
+   * a new guest. `exited` settles only once the command's exit was observed or a destroy confirmed
+   * the sandbox gone, since the guest may outlive a broken stream.
    */
   connect(
     target: { attemptId: string; providerRef: string },
@@ -240,6 +272,33 @@ export class E2BWorkerProvider implements WorkerProvider, GuestConnector {
   ): { connections: AsyncIterable<FrameChannel>; exited: Promise<void> } {
     const stdout = handoff();
     let stderr = "";
+    let resolveExited = () => {};
+    let isGone = false;
+    const exited = new Promise<void>((resolve) => (resolveExited = resolve));
+    const guests = this.guests.get(target.providerRef) ?? new Set();
+    this.guests.set(target.providerRef, guests);
+    const gone = () => {
+      guests.delete(gone);
+      if (guests.size === 0 && this.guests.get(target.providerRef) === guests) {
+        this.guests.delete(target.providerRef);
+      }
+      isGone = true;
+      stdout.end();
+      resolveExited();
+    };
+    guests.add(gone);
+    const lost = (error: unknown) => {
+      stdout.end();
+      // A destroyed sandbox breaks the stream too: that is no loss.
+      if (isGone) return;
+      getLogger().info("e2b worker guest connection lost", {
+        attemptId: target.attemptId,
+        errorName: error instanceof Error ? error.name : typeof error,
+        errorText: logText(error instanceof Error ? error.message : String(error)),
+        stderrTail: logText(stderr),
+      });
+    };
+
     const command = this.sdk.startGuest(
       target.providerRef,
       `node ${this.config.guestEntry ?? E2B_WORKER_GUEST_ENTRY}`,
@@ -247,39 +306,50 @@ export class E2BWorkerProvider implements WorkerProvider, GuestConnector {
         envs: { RAKAZO_WORKER_CAPABILITY: capability },
         onStdout: (data) => stdout.push(data),
         onStderr: (data) => {
-          stderr = (stderr + data).slice(-STDERR_TAIL_CHARS);
+          stderr = (stderr + data).slice(-LOG_TEXT_CHARS);
         },
       },
     );
-    const exited = command
+    command
       .then((guest) => guest.wait())
-      .then(
-        () => undefined,
-        (error: unknown) => {
-          getLogger().info("e2b worker guest ended with an error", {
+      .then((exitCode) => {
+        if (exitCode !== 0) {
+          getLogger().info("e2b worker guest exited with an error", {
             attemptId: target.attemptId,
-            error,
-            stderr,
+            exitCode,
+            stderrTail: logText(stderr),
           });
-        },
-      )
-      .finally(stdout.end);
+        }
+        gone();
+      }, lost);
 
     async function* connections(): AsyncGenerator<FrameChannel> {
       const guest = await command.catch(() => undefined);
       if (!guest) return;
       let sending = Promise.resolve();
+      let dead = false;
+      const close = () => {
+        stdout.end();
+        void guest.closeStdin().catch(() => undefined);
+      };
       yield {
         frames: readFrameLines(stdout.chunks(), WORKER_LIMITS.modelRequestBytes),
         send(frame) {
           const line = encodeFrameLine(frame);
-          sending = sending.then(() => guest.sendStdin(line)).catch(() => undefined);
+          sending = sending.then(async () => {
+            if (dead) return;
+            try {
+              await guest.sendStdin(line);
+            } catch (error) {
+              // Later frames would follow a gap, or glue onto a half-written line.
+              dead = true;
+              lost(error);
+              close();
+            }
+          });
           return sending;
         },
-        close() {
-          stdout.end();
-          void guest.closeStdin().catch(() => undefined);
-        },
+        close,
       };
     }
     return { connections: connections(), exited };
