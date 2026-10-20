@@ -201,6 +201,94 @@ export default function Home() {
   return (
     <View style={styles.screen}>
       <AmbientBackground />
+      {/* First, so assistive tech reaches the actions before the rows; zIndex keeps it over the list. */}
+      <View
+        onLayout={(event) => setTopHeight(Math.round(event.nativeEvent.layout.height))}
+        style={[styles.top, { paddingTop: Math.max(insets.top, 20) }]}
+      >
+        <View style={styles.header}>
+          {/* The avatar covers a CircleButton's fill, so it dims on press instead. */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("Account")}
+            onPress={() => router.push("/account")}
+            hitSlop={4}
+            style={({ pressed }) => pressed && styles.avatarPressed}
+          >
+            <UserAvatar initials={initials} image={userImage} size={40} fontSize={15} />
+          </Pressable>
+          <View style={styles.headerActions}>
+            <GlassBackdrop radius={22} />
+            <CircleButton
+              accessibilityLabel={t("Activity")}
+              active={activityMode}
+              accent
+              onPress={toggleActivityMode}
+            >
+              <NativeSymbol
+                ios={activityMode ? "bell.fill" : "bell"}
+                android={activityMode ? "notifications" : "notifications-outline"}
+                size={17}
+                color={activityMode ? tokens.primaryForeground : tokens.foreground}
+              />
+            </CircleButton>
+            <CircleButton
+              accessibilityLabel={t("Search")}
+              active={searching}
+              onPress={() =>
+                setSearching((open) => {
+                  if (open) setQuery("");
+                  return !open;
+                })
+              }
+            >
+              <NativeSymbol ios="magnifyingglass" android="search" size={17} />
+            </CircleButton>
+            <CircleButton
+              accessibilityLabel={t("Create")}
+              onPress={() => {
+                if (spaceActionRef.current.busy || spaceActionRef.current.recoveryId) return;
+                Alert.alert(t("Create"), undefined, [
+                  { text: t("New bot"), onPress: () => void createQuickBot() },
+                  { text: t("New group"), onPress: () => router.push("/new-group") },
+                  { text: t("New space"), onPress: () => router.push("/new-space") },
+                  { text: t("Cancel"), style: "cancel" },
+                ]);
+              }}
+            >
+              <NativeSymbol ios="plus" android="add" size={18} />
+            </CircleButton>
+          </View>
+        </View>
+
+        {searching ? (
+          <TextInput
+            autoFocus
+            value={query}
+            onChangeText={setQuery}
+            placeholder={t("Search")}
+            placeholderTextColor={tokens.mutedForeground}
+            autoCorrect={false}
+            autoCapitalize="none"
+            returnKeyType="search"
+            keyboardAppearance={appearance}
+            clearButtonMode="while-editing"
+            style={styles.searchField}
+          />
+        ) : null}
+
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {spaceRecoveryId ? (
+          <Pressable
+            accessibilityRole="button"
+            disabled={spaceBusy}
+            onPress={() => void chooseInboxSpace(spaceRecoveryId)}
+            style={styles.recoveryAction}
+          >
+            <Text style={styles.spaceTitle}>{t("Try again.")}</Text>
+          </Pressable>
+        ) : null}
+      </View>
       <FlatList<InboxItem>
         data={listData}
         keyExtractor={(item) => {
@@ -215,6 +303,8 @@ export default function Home() {
         indicatorStyle={appearance === "dark" ? "white" : "black"}
         contentContainerStyle={[styles.list, { paddingTop: topHeight }]}
         scrollIndicatorInsets={{ top: topHeight }}
+        // iOS would add the safe area on top, which `topHeight` already holds.
+        automaticallyAdjustsScrollIndicatorInsets={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -335,93 +425,6 @@ export default function Home() {
       />
       {/* The list runs under the header and fades out beneath the capsule, as the thread does. */}
       <ThreadScrollEdge height={topHeight + 24} />
-      <View
-        onLayout={(event) => setTopHeight(Math.round(event.nativeEvent.layout.height))}
-        style={[styles.top, { paddingTop: Math.max(insets.top, 20) }]}
-      >
-        <View style={styles.header}>
-          {/* The avatar covers a CircleButton's fill, so it dims on press instead. */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t("Account")}
-            onPress={() => router.push("/account")}
-            hitSlop={4}
-            style={({ pressed }) => pressed && styles.avatarPressed}
-          >
-            <UserAvatar initials={initials} image={userImage} size={40} fontSize={15} />
-          </Pressable>
-          <View style={styles.headerActions}>
-            <GlassBackdrop radius={22} />
-            <CircleButton
-              accessibilityLabel={t("Activity")}
-              active={activityMode}
-              accent
-              onPress={toggleActivityMode}
-            >
-              <NativeSymbol
-                ios={activityMode ? "bell.fill" : "bell"}
-                android={activityMode ? "notifications" : "notifications-outline"}
-                size={17}
-                color={activityMode ? tokens.primaryForeground : tokens.foreground}
-              />
-            </CircleButton>
-            <CircleButton
-              accessibilityLabel={t("Search")}
-              active={searching}
-              onPress={() =>
-                setSearching((open) => {
-                  if (open) setQuery("");
-                  return !open;
-                })
-              }
-            >
-              <NativeSymbol ios="magnifyingglass" android="search" size={17} />
-            </CircleButton>
-            <CircleButton
-              accessibilityLabel={t("Create")}
-              onPress={() => {
-                if (spaceActionRef.current.busy || spaceActionRef.current.recoveryId) return;
-                Alert.alert(t("Create"), undefined, [
-                  { text: t("New bot"), onPress: () => void createQuickBot() },
-                  { text: t("New group"), onPress: () => router.push("/new-group") },
-                  { text: t("New space"), onPress: () => router.push("/new-space") },
-                  { text: t("Cancel"), style: "cancel" },
-                ]);
-              }}
-            >
-              <NativeSymbol ios="plus" android="add" size={18} />
-            </CircleButton>
-          </View>
-        </View>
-
-        {searching ? (
-          <TextInput
-            autoFocus
-            value={query}
-            onChangeText={setQuery}
-            placeholder={t("Search")}
-            placeholderTextColor={tokens.mutedForeground}
-            autoCorrect={false}
-            autoCapitalize="none"
-            returnKeyType="search"
-            keyboardAppearance={appearance}
-            clearButtonMode="while-editing"
-            style={styles.searchField}
-          />
-        ) : null}
-
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        {spaceRecoveryId ? (
-          <Pressable
-            accessibilityRole="button"
-            disabled={spaceBusy}
-            onPress={() => void chooseInboxSpace(spaceRecoveryId)}
-            style={styles.recoveryAction}
-          >
-            <Text style={styles.spaceTitle}>{t("Try again.")}</Text>
-          </Pressable>
-        ) : null}
-      </View>
     </View>
   );
 }
