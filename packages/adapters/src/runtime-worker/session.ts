@@ -14,6 +14,7 @@ import {
   type WorkerIdentity,
 } from "@rakazo/adapter-kit";
 import { redactSecrets } from "@rakazo/core";
+import { redactPayloadValue } from "../connector-safety.js";
 import { type CapabilityKey, mintCapability, verifyCapability } from "./capability.js";
 import { relayPiAiCall } from "./dialects/pi-ai.js";
 import { eventPipe } from "./event-pipe.js";
@@ -188,11 +189,19 @@ export function createSession(
     if (!grant) return refuse("invalid");
     grants.delete(body.callId);
     const { output } = body;
-    grant.resolve({
-      ...output,
-      text: cutText(clean(output.text), WORKER_LIMITS.controllerResultBytes),
-      ...(output.spoolPath ? { spoolPath: clean(output.spoolPath) } : {}),
-    });
+    grant.resolve(
+      "result" in output
+        ? {
+            result: redactPayloadValue(output.result, [
+              ...(request.secrets ?? []),
+            ]) as typeof output.result,
+          }
+        : {
+            ...output,
+            text: cutText(clean(output.text), WORKER_LIMITS.controllerResultBytes),
+            ...(output.spoolPath ? { spoolPath: clean(output.spoolPath) } : {}),
+          },
+    );
     try {
       await open.get(body.callId);
       return { type: "tool.recorded" };

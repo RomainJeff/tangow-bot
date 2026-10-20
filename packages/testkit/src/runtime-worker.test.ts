@@ -118,13 +118,15 @@ describe("a run whose bot runs in a guest", () => {
             },
             response: {
               type: "tool",
-              id: "save",
-              name: "write_file",
-              arguments: { path: "notes.txt", content: "hi" },
+              id: "computer",
+              name: "shell",
+              arguments: { command: "echo from-computer" },
             },
           },
           {
-            expect() {},
+            expect(request) {
+              expect(toolResult(request)).toContain("from-computer");
+            },
             response: {
               type: "tool",
               id: "say",
@@ -164,17 +166,11 @@ describe("a run whose bot runs in a guest", () => {
       ).toEqual([
         "call bash",
         "result sh false",
-        "call write_file",
-        "result save false",
+        "call shell",
+        "result computer false",
         "call message_user",
         "result say false",
       ]);
-      const written = [...run.sandbox.boxes.values()].flatMap((box) =>
-        [...box.files].map(([file, { content }]) => [file, Buffer.from(content).toString()]),
-      );
-      expect(
-        written.filter(([file]) => file.endsWith("notes.txt")).map(([, text]) => text),
-      ).toEqual(["hi"]);
       expect(
         await run.prisma.attempt.findMany({
           where: { runId },
@@ -206,14 +202,14 @@ describe("a run whose bot runs in a guest", () => {
           expect() {},
           response: {
             type: "tool",
-            id: "save",
-            name: "write_file",
-            arguments: { path: "notes.txt", content: "hi" },
+            id: "computer",
+            name: "shell",
+            arguments: { command: "echo from-computer" },
           },
         },
         {
           expect(request) {
-            expect(toolResult(request)).toContain("notes.txt");
+            expect(toolResult(request)).toContain("from-computer");
           },
           response: {
             type: "tool",
@@ -225,7 +221,7 @@ describe("a run whose bot runs in a guest", () => {
         finishing[1]!,
       ],
     });
-    const writes = vi.spyOn(run.sandbox, "writeFile");
+    const commands = vi.spyOn(run.sandbox, "execute");
     const runId = await run.send("Save a note.");
     await run.continueRun(runId);
 
@@ -233,14 +229,14 @@ describe("a run whose bot runs in a guest", () => {
     expect((await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
       "completed",
     );
-    expect(writes).toHaveBeenCalledTimes(1);
+    expect(commands).toHaveBeenCalledTimes(1);
     expect(
       (await run.runEntries(runId))
         .filter((entry) => entry.type === "tool.call" || entry.type === "tool.result")
         .map((entry) => entry.type),
     ).toEqual(["tool.call", "tool.result", "tool.call", "tool.result"]);
     expect(await effects(run, runId)).toEqual([
-      { kind: "write_file", status: "completed" },
+      { kind: "shell", status: "completed" },
       { kind: "message_user", status: "completed" },
     ]);
     expect(lost).toBe(1);

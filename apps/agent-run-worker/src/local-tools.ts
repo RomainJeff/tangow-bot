@@ -1,22 +1,31 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createWriteStream } from "node:fs";
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
-import type { LocalToolOutput } from "@rakazo/adapter-kit";
+import type { GuestMount, LocalToolOutput } from "@rakazo/adapter-kit";
 import { WORKER_LIMITS } from "@rakazo/adapters/runtime-worker/wire";
+import { FILE_TOOLS } from "./file-tools.js";
 
 export interface LocalToolContext {
   cwd: string;
   signal: AbortSignal;
   /** Where a tool keeps output too long for the model, on the guest disk. */
   spoolDir: string;
+  botId: string;
+  /** Prefix of every guest path the controller names. `/` in a VM. */
+  root: string;
+  /** The volumes `worker.start` mounted: the only places a write outlives the VM. */
+  mounts: readonly GuestMount[];
 }
 
 export type LocalTool = (
   args: Record<string, unknown>,
   context: LocalToolContext,
 ) => Promise<LocalToolOutput>;
+
+/** What a tool that prints text reports. */
+export type CommandOutput = Extract<LocalToolOutput, { text: string }>;
 
 const KILL_GRACE_MS = 2_000;
 const MARKER_ROOM_CHARS = 256;
@@ -80,6 +89,43 @@ function modelText(
   return { text: `${head}\n\n${marker}\n\n${tail}`, truncated: true };
 }
 
+const SPOOL_FILE = /^bash-.+\.log$/;
+/** Spool files of commands still running in this process: never pruned. */
+const spooling = new Set<string>();
+let pruning = Promise.resolve();
+
+/**
+ * Makes room for one more spool file under the cap, oldest first, and claims its path. Calls run
+ * one at a time, so concurrent commands do not overshoot the cap. Other files are left alone.
+ */
+function claimSpool(spoolDir: string): Promise<string> {
+  const claimed = pruning.then(async () => {
+    const names = (await readdir(spoolDir)).filter((name) => SPOOL_FILE.test(name));
+    const excess = names.length - (WORKER_LIMITS.localOutputSpoolFiles - 1);
+    if (excess > 0) {
+      const aged = await Promise.all(
+        names
+          .map((name) => path.join(spoolDir, name))
+          .filter((file) => !spooling.has(file))
+          .map(async (file) => {
+            const info = await stat(file).catch(() => null);
+            return { file, mtimeMs: info?.mtimeMs ?? 0 };
+          }),
+      );
+      aged.sort((a, b) => a.mtimeMs - b.mtimeMs || a.file.localeCompare(b.file));
+      await Promise.all(aged.slice(0, excess).map(({ file }) => rm(file, { force: true })));
+    }
+    const spoolPath = path.join(spoolDir, `bash-${randomUUID()}.log`);
+    spooling.add(spoolPath);
+    return spoolPath;
+  });
+  pruning = claimed.then(
+    () => undefined,
+    () => undefined,
+  );
+  return claimed;
+}
+
 /** Kill the command's whole process group, forcefully after a grace period. */
 function killGroup(pid: number | undefined, exited: Promise<unknown>) {
   if (pid === undefined) return;
@@ -96,14 +142,31 @@ function killGroup(pid: number | undefined, exited: Promise<unknown>) {
 }
 
 /** Runs in the workdir as its own process group, which an abort or a timeout kills whole. */
-export const bash: LocalTool = async (args, { cwd, signal, spoolDir }) => {
+export async function bash(
+  args: Record<string, unknown>,
+  { cwd, signal, spoolDir }: LocalToolContext,
+): Promise<CommandOutput> {
   const command = typeof args.command === "string" ? args.command : "";
   if (!command.trim()) {
     return { text: "bash needs a command.", isError: true, truncated: false, totalBytes: 0 };
   }
   const timeoutSeconds = typeof args.timeout === "number" && args.timeout > 0 ? args.timeout : null;
   await mkdir(spoolDir, { recursive: true });
-  const spoolPath = path.join(spoolDir, `bash-${randomUUID()}.log`);
+  const spoolPath = await claimSpool(spoolDir);
+  try {
+    return await runCommand(command, timeoutSeconds, spoolPath, cwd, signal);
+  } finally {
+    spooling.delete(spoolPath);
+  }
+}
+
+async function runCommand(
+  command: string,
+  timeoutSeconds: number | null,
+  spoolPath: string,
+  cwd: string,
+  signal: AbortSignal,
+): Promise<CommandOutput> {
   const capture = outputCapture(spoolPath);
   const child = spawn("bash", ["-c", command], {
     cwd,
@@ -150,7 +213,7 @@ export const bash: LocalTool = async (args, { cwd, signal, spoolDir }) => {
     totalBytes: captured.totalBytes,
     ...(truncated ? { spoolPath } : {}),
   };
-};
+}
 
 /** Tools the controller may place in the guest, by name. */
-export const LOCAL_TOOLS: Readonly<Record<string, LocalTool>> = { bash };
+export const LOCAL_TOOLS: Readonly<Record<string, LocalTool>> = { bash, ...FILE_TOOLS };

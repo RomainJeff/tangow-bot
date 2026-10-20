@@ -1,5 +1,5 @@
 import { type ChildProcess, spawn } from "node:child_process";
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, rm, symlink } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type {
@@ -66,8 +66,9 @@ function isCancel(frame: Uint8Array) {
 
 /**
  * Workers on this machine, for tests and P3's local runs: a VM is a directory, its guest runs the
- * harness in this process (`memory`) or as a child process over stdio (`child`). Never composed in
- * production.
+ * harness in this process (`memory`) or as a child process over stdio (`child`). A volume is a
+ * directory beside the VMs, linked at its mount path and kept when the VM is destroyed. Never
+ * composed in production.
  */
 export class LocalWorkerProvider implements WorkerProvider, GuestConnector {
   /** Attempt ids whose guest was started, in order. */
@@ -99,6 +100,12 @@ export class LocalWorkerProvider implements WorkerProvider, GuestConnector {
     if (!this.vms.has(providerRef)) {
       const root = path.join(this.options.root, spec.attemptId);
       await mkdir(path.join(root, "workspace"), { recursive: true });
+      for (const mount of spec.mounts) {
+        const volume = this.volumePath(mount.volumeRef);
+        await mkdir(volume, { recursive: true });
+        await mkdir(path.dirname(path.join(root, mount.path)), { recursive: true });
+        await symlink(volume, path.join(root, mount.path));
+      }
       this.vms.set(providerRef, { spec, root });
     }
     return { providerRef };
@@ -135,8 +142,14 @@ export class LocalWorkerProvider implements WorkerProvider, GuestConnector {
     return "destroyed";
   }
 
-  async ensureVolume(): Promise<{ providerRef: string }> {
-    throw new Error("Local workers mount no volume");
+  async ensureVolume(input: { name: string }): Promise<{ providerRef: string }> {
+    await mkdir(this.volumePath(input.name), { recursive: true });
+    return { providerRef: input.name };
+  }
+
+  /** Where a volume's files are, on this machine. */
+  volumePath(volumeRef: string): string {
+    return path.join(this.options.root, "volumes", volumeRef);
   }
 
   /** Kills every guest still running, whatever the faults. */

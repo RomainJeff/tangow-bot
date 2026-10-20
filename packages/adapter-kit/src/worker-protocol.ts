@@ -101,15 +101,21 @@ export const GuestRunInputSchema = z.strictObject({
 });
 export type GuestRunInput = z.infer<typeof GuestRunInputSchema>;
 
-/** What a guest-run tool reports. `totalBytes` counts all output, including what was cut. */
-export const LocalToolOutputSchema = z.strictObject({
-  text: z.string(),
-  isError: z.boolean(),
-  truncated: z.boolean(),
-  totalBytes: z.number().int().nonnegative(),
-  /** Full output on the guest disk, when it was cut for the model. */
-  spoolPath: z.string().optional(),
-});
+/**
+ * What a guest-run tool reports: a command's output, of which `totalBytes` counts everything
+ * including what was cut, or a result object shaped like the one the in-process tool returns.
+ */
+export const LocalToolOutputSchema = z.union([
+  z.strictObject({
+    text: z.string(),
+    isError: z.boolean(),
+    truncated: z.boolean(),
+    totalBytes: z.number().int().nonnegative(),
+    /** Full output on the guest disk, when it was cut for the model. */
+    spoolPath: z.string().optional(),
+  }),
+  z.strictObject({ result: JsonRecord }),
+]);
 export type LocalToolOutput = z.infer<typeof LocalToolOutputSchema>;
 
 /**
