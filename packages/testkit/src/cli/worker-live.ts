@@ -61,11 +61,11 @@ const SECRETS = [
   os.hostname(),
 ].filter((value): value is string => Boolean(value && value.length > 2));
 
-/** Receipts name no key, endpoint, address, account, machine or local path. */
+/** Receipts name no key, endpoint, address but loopback, account, machine or local path. */
 function redact(text: string): string {
   let clean = text;
   for (const secret of SECRETS) clean = clean.replaceAll(secret, "<redacted>");
-  return clean.replace(/\b\d{1,3}(\.\d{1,3}){3}\b/g, "<ip>");
+  return clean.replace(/\b(?!127\.0\.0\.1\b)\d{1,3}(\.\d{1,3}){3}\b/g, "<ip>");
 }
 
 async function writeReceipt(file: string, value: unknown) {
