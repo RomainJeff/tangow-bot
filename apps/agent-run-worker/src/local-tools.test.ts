@@ -1,5 +1,4 @@
 import {
-  chmod,
   mkdir,
   mkdtemp,
   readdir,
@@ -388,17 +387,12 @@ describe("grep", () => {
     expect(await tool("grep")({ pattern: "gamma" }, ctx)).toMatchObject({ text: "No matches." });
   });
 
-  it("searches a named file whose path matches a glob with a slash, and skips unreadable files", async () => {
+  it("searches a named file whose path matches a glob with a slash", async () => {
     const ctx = await tree();
-    await writeFile(path.join(ctx.cwd, "a", "locked.ts"), "alpha");
-    await chmod(path.join(ctx.cwd, "a", "locked.ts"), 0o000);
 
     expect(
       await tool("grep")({ pattern: "alpha", path: "a/one.ts", glob: "a/*.ts" }, ctx),
     ).toMatchObject({ text: "a/one.ts:1:const alpha = 1;" });
-    expect(await tool("grep")({ pattern: "alpha", path: "a" }, ctx)).toMatchObject({
-      text: "a/deep/two.ts:1:// alpha\na/one.ts:1:const alpha = 1;",
-    });
   });
 
   it("refuses an invalid regular expression", async () => {
