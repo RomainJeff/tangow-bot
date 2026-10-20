@@ -17,6 +17,8 @@ const GREP_MAX_FILE_BYTES = 10 * 1024 * 1024;
 // Room for the closing note within what a guest tool shows the model.
 const GREP_TEXT_CHARS = WORKER_LIMITS.localOutputModelChars - 256;
 const GREP_SKIPPED_DIRECTORIES = new Set([".git", "node_modules"]);
+const GREP_MAX_FILES = 20_000;
+const GREP_MAX_BYTES = 256 * 1024 * 1024;
 
 /** The bot's mounted volumes, on the guest disk. */
 function guestFiles({
@@ -30,19 +32,23 @@ function guestFiles({
     real,
     async list(directory) {
       const entries = await readdir(real(directory), { withFileTypes: true });
+      // A link is listed as a file, and an entry gone since readdir is left out.
       const listed = await Promise.all(
         entries.map(async (entry) => {
           const stored = path.posix.join(directory, entry.name);
-          const info = await stat(real(stored));
-          return {
-            path: stored,
-            kind: info.isDirectory() ? ("dir" as const) : ("file" as const),
-            size: info.isDirectory() ? 0 : info.size,
-            ...(info.isFile() && info.mode & 0o100 ? { executable: true } : {}),
-          };
+          const info = await lstat(real(stored)).catch(() => null);
+          if (!info) return [];
+          return [
+            {
+              path: stored,
+              kind: info.isDirectory() ? ("dir" as const) : ("file" as const),
+              size: info.isDirectory() ? 0 : info.size,
+              ...(info.isFile() && info.mode & 0o100 ? { executable: true } : {}),
+            },
+          ];
         }),
       );
-      return listed.sort((a, b) => a.path.localeCompare(b.path));
+      return listed.flat().sort((a, b) => a.path.localeCompare(b.path));
     },
     async read(file, maxBytes) {
       if ((await stat(real(file))).size > maxBytes) return null;
@@ -91,20 +97,34 @@ function globPattern(glob: string): RegExp {
   return new RegExp(`^${source}$`);
 }
 
-/** Every regular file under `stored`, in path order, without following links. */
-async function filesUnder(files: ReturnType<typeof guestFiles>, stored: string): Promise<string[]> {
-  if (!(await lstat(files.real(stored))).isDirectory()) return [stored];
+/**
+ * Regular files under the directory `stored`, in path order, without following links: at most
+ * `GREP_MAX_FILES`, with `capped` set when there were more.
+ */
+async function filesUnder(
+  files: ReturnType<typeof guestFiles>,
+  stored: string,
+  signal: AbortSignal,
+): Promise<{ found: string[]; capped: boolean }> {
   const found: string[] = [];
+  let capped = false;
   const walk = async (directory: string) => {
-    const entries: Dirent[] = await readdir(files.real(directory), { withFileTypes: true });
+    if (signal.aborted) throw new Error("grep aborted");
+    const entries: Dirent[] = await readdir(files.real(directory), { withFileTypes: true }).catch(
+      () => [],
+    );
     for (const entry of entries) {
+      if (found.length === GREP_MAX_FILES) {
+        capped = true;
+        return;
+      }
       const child = path.posix.join(directory, entry.name);
       if (entry.isDirectory() && !GREP_SKIPPED_DIRECTORIES.has(entry.name)) await walk(child);
       else if (entry.isFile()) found.push(child);
     }
   };
   await walk(stored);
-  return found.sort();
+  return { found: found.sort(), capped };
 }
 
 /** Matching lines as `path:line:text`, in path then line order, bounded for the model. */
@@ -131,16 +151,27 @@ async function grep(
   const matcher = glob ? globPattern(glob) : null;
   const files = guestFiles(context);
   let candidates: string[];
+  let walkCapped = false;
   try {
     const stored = files.resolve(requested);
-    // A glob with a slash matches the path under the searched directory, otherwise the name.
-    candidates = (await filesUnder(files, stored)).filter(
-      (file) =>
-        !matcher ||
-        matcher.test(
-          glob!.includes("/") ? path.posix.relative(stored, file) : path.posix.basename(file),
-        ),
-    );
+    if ((await lstat(files.real(stored))).isDirectory()) {
+      const walked = await filesUnder(files, stored, context.signal);
+      walkCapped = walked.capped;
+      // A glob with a slash matches the path under the searched directory, otherwise the name.
+      candidates = walked.found.filter(
+        (file) =>
+          !matcher ||
+          matcher.test(
+            glob!.includes("/") ? path.posix.relative(stored, file) : path.posix.basename(file),
+          ),
+      );
+    } else {
+      // A named file is searched when the glob matches its name or the path as given.
+      candidates =
+        !matcher || matcher.test(path.posix.basename(stored)) || matcher.test(requested)
+          ? [stored]
+          : [];
+    }
   } catch (error) {
     return failed(error instanceof Error ? error.message : String(error));
   }
@@ -148,11 +179,23 @@ async function grep(
   const lines: string[] = [];
   let chars = 0;
   let capped = false;
+  let bytesRead = 0;
+  let readCapped = false;
   scan: for (const file of candidates) {
     if (context.signal.aborted) return failed("grep aborted");
     const real = files.real(file);
-    if ((await stat(real)).size > GREP_MAX_FILE_BYTES) continue;
-    const bytes = await readFile(real);
+    const size = await stat(real).then(
+      (info) => info.size,
+      () => null,
+    );
+    if (size === null || size > GREP_MAX_FILE_BYTES) continue;
+    if (bytesRead + size > GREP_MAX_BYTES) {
+      readCapped = true;
+      break;
+    }
+    const bytes = await readFile(real).catch(() => null);
+    if (!bytes) continue;
+    bytesRead += bytes.length;
     if (bytes.includes(0)) continue;
     const shown = files.display(requested, file);
     const content = bytes.toString("utf8").split("\n");
@@ -169,10 +212,13 @@ async function grep(
     }
   }
   const body = lines.length ? lines.join("\n") : "No matches.";
-  const text = capped
-    ? `${body}\n\n[more matches not shown: narrow the pattern, the path or the glob]`
-    : body;
-  return { text, isError: false, truncated: capped, totalBytes: Buffer.byteLength(text) };
+  const note = capped
+    ? "more matches not shown"
+    : walkCapped || readCapped
+      ? `searched only the first ${walkCapped ? `${GREP_MAX_FILES} files` : `${GREP_MAX_BYTES / 1024 / 1024} MiB`}`
+      : null;
+  const text = note ? `${body}\n\n[${note}: narrow the pattern, the path or the glob]` : body;
+  return { text, isError: false, truncated: note !== null, totalBytes: Buffer.byteLength(text) };
 }
 
 /** The guest's file tools: the in-process file tools on the mounted volumes, and grep. */

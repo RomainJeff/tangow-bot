@@ -1,4 +1,5 @@
 import {
+  chmod,
   mkdir,
   mkdtemp,
   readdir,
@@ -6,6 +7,7 @@ import {
   realpath,
   rm,
   stat,
+  symlink,
   truncate,
   utimes,
   writeFile,
@@ -254,6 +256,22 @@ describe("file tools", () => {
     expect(await readFile(path.join(ctx.cwd, "a.txt"), "utf8")).toBe("same same");
   });
 
+  it("lists a dangling link as a file instead of failing the listing", async () => {
+    const ctx = await context();
+    await writeFile(path.join(ctx.cwd, "a.txt"), "a");
+    await symlink(path.join(ctx.cwd, "gone"), path.join(ctx.cwd, "link"));
+
+    expect(await tool("list_files")({}, ctx)).toEqual({
+      result: {
+        path: "",
+        entries: [
+          { path: "a.txt", kind: "file", size: 1 },
+          { path: "link", kind: "file", size: path.join(ctx.cwd, "gone").length },
+        ],
+      },
+    });
+  });
+
   it("reports a path outside the workspace or a missing file as a failed call", async () => {
     const ctx = await context();
 
@@ -320,6 +338,19 @@ describe("grep", () => {
       truncated: true,
     });
     expect(await tool("grep")({ pattern: "gamma" }, ctx)).toMatchObject({ text: "No matches." });
+  });
+
+  it("searches a named file whose path matches a glob with a slash, and skips unreadable files", async () => {
+    const ctx = await tree();
+    await writeFile(path.join(ctx.cwd, "a", "locked.ts"), "alpha");
+    await chmod(path.join(ctx.cwd, "a", "locked.ts"), 0o000);
+
+    expect(
+      await tool("grep")({ pattern: "alpha", path: "a/one.ts", glob: "a/*.ts" }, ctx),
+    ).toMatchObject({ text: "a/one.ts:1:const alpha = 1;" });
+    expect(await tool("grep")({ pattern: "alpha", path: "a" }, ctx)).toMatchObject({
+      text: "a/deep/two.ts:1:// alpha\na/one.ts:1:const alpha = 1;",
+    });
   });
 
   it("refuses an invalid regular expression", async () => {
