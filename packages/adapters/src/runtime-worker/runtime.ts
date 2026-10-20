@@ -80,6 +80,8 @@ export function createWorkerAgentRuntime(options: {
 export interface RunWorkers {
   plan(input: { attemptId: string; needs: RunNeeds }): Promise<LaunchPlan>;
   runtime(launch: WorkerLaunch): AgentRuntime;
+  /** Creates the private volume a bot attached after its computer moved onto volumes lacks. */
+  provisionBotVolume(botId: string): Promise<void>;
 }
 
 export function createRunWorkers(deps: {
@@ -91,6 +93,16 @@ export function createRunWorkers(deps: {
   const stops = createStopJournal(deps.prisma);
   return {
     plan: (input) => deps.lifecycle.plan(input),
+    async provisionBotVolume(botId) {
+      await deps.lifecycle.provisionAttachedBotVolume(botId, {
+        operationId: `volume:${botId}`,
+        traceId: `volume:${botId}`,
+        spaceId: "",
+        userId: "",
+        botId,
+        signal: new AbortController().signal,
+      });
+    },
     runtime: (launch) =>
       createWorkerAgentRuntime({
         launcher: createLifecycleLauncher({ ...deps, launch }),

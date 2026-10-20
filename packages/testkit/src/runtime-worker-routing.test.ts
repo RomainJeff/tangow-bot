@@ -63,9 +63,27 @@ describe("where a product run executes", () => {
     expect(run.provider.launches).toEqual([]);
   });
 
-  it("fails the run of a bot whose computer moved before it had a volume", async () => {
-    const run = await fixture([]);
+  it("creates the volume of a bot attached after its computer moved, on its first run", async () => {
+    const seen: string[][] = [];
+    const run = await fixture(offeredShellTools(seen));
     await run.prisma.volume.deleteMany({ where: { kind: "bot_private" } });
+    const runId = await run.send("Hello.");
+    await run.continueRun(runId);
+
+    expect(seen).toEqual([["write_file", "grep", "bash"]]);
+    expect(
+      await run.prisma.volume.findMany({
+        where: { kind: "bot_private" },
+        select: { botId: true, providerRef: true },
+      }),
+    ).toEqual([{ botId: run.bot.id, providerRef: expect.stringMatching(/^rakazo-/) }]);
+    expect(await attemptsOf(run, runId)).toEqual([{ workerState: "released" }]);
+  });
+
+  it("fails the run of a team bot whose space has no volume", async () => {
+    const run = await startWorkerRun({ steps: [], computerScope: "team" });
+    cleanups.push(() => run.close());
+    await run.prisma.volume.deleteMany({ where: { kind: "space_shared" } });
     const runId = await run.send("Hello.");
     await run.continueRun(runId);
 
@@ -76,7 +94,7 @@ describe("where a product run executes", () => {
       }),
     ).toEqual({
       status: "failed",
-      error: "This bot has no private volume on its computer yet, so the run cannot start",
+      error: "This bot has no shared volume on its computer yet, so the run cannot start",
     });
     expect(run.provider.launches).toEqual([]);
   });
