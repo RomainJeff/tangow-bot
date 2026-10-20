@@ -770,7 +770,7 @@ function Thread() {
   useLayoutEffect(() => {
     navigation.setOptions({
       title: displayName || t("Thread"),
-      // The thread runs under the bar: iOS 26 blurs it at the edge and draws the buttons in glass.
+      // The thread runs under the bar, whose buttons take glass on iOS 26; ThreadScrollEdge keeps the title legible.
       headerTransparent: true,
       // Bot actions (bot settings, open computer, clear, archive, delete) live
       // on a long press; a short press opens the bot's page.
@@ -2343,17 +2343,6 @@ function Thread() {
           paddingHorizontal: THREAD_GUTTER,
         }}
       >
-        {error || runError ? (
-          // Below the transparent bar, not under it.
-          <View style={{ paddingTop: headerHeight }}>
-            {error ? (
-              <Text style={{ color: tokens.mutedForeground, marginTop: 12 }}>{error}</Text>
-            ) : null}
-            {runError ? (
-              <Text style={{ color: tokens.destructive, marginTop: 12 }}>{runError}</Text>
-            ) : null}
-          </View>
-        ) : null}
         <View style={{ flex: 1, position: "relative" }}>
           {showPinnedPage ? (
             <ScrollView
@@ -2365,6 +2354,7 @@ function Thread() {
                 paddingTop: headerHeight + 8,
                 paddingBottom: COMPOSER_GAP,
               }}
+              scrollIndicatorInsets={{ top: headerHeight }}
               maintainVisibleContentPosition={KEEP_VISIBLE_POSITION}
               keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
               keyboardShouldPersistTaps="handled"
@@ -2384,7 +2374,9 @@ function Thread() {
               keyExtractor={(row) => row.item.id}
               extraData={listExtraData}
               style={[{ flex: 1 }, BLEED_STYLE]}
-              // Inverted: the top padding is the thread's bottom edge, the bottom one its top, under the bar.
+              // Inverted: the top padding is the thread's bottom edge, the bottom one its top, under the
+              // bar; the scroll indicator stops below the bar too.
+              scrollIndicatorInsets={{ bottom: headerHeight }}
               contentContainerStyle={{
                 paddingHorizontal: THREAD_GUTTER,
                 paddingTop: COMPOSER_GAP,
@@ -3076,6 +3068,25 @@ function Thread() {
         ) : null}
       </KeyboardAvoidingView>
       <ThreadScrollEdge height={headerHeight + 24} />
+      {error || runError ? (
+        // Just below the transparent bar, over the thread and its edge.
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            top: headerHeight,
+            left: THREAD_GUTTER,
+            right: THREAD_GUTTER,
+          }}
+        >
+          {error ? (
+            <Text style={{ color: tokens.mutedForeground, marginTop: 12 }}>{error}</Text>
+          ) : null}
+          {runError ? (
+            <Text style={{ color: tokens.destructive, marginTop: 12 }}>{runError}</Text>
+          ) : null}
+        </View>
+      ) : null}
     </TableActionsProvider>
   );
 }
