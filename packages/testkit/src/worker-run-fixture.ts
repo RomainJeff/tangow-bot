@@ -1,6 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { ANTHROPIC_MODELS } from "@earendil-works/pi-ai/providers/anthropic.models";
 import type {
   AgentRuntime,
   MemoryStore,
@@ -32,6 +33,8 @@ import { type ModelEmulatorStep, startModelEmulator } from "./model-emulator.js"
 import { VolumeComputer } from "./volume-computer.js";
 
 const MODEL_KEY = "worker-fixture-model-key";
+/** The catalog model an Anthropic-protocol run asks for. */
+const ANTHROPIC_MODEL = ANTHROPIC_MODELS["claude-haiku-4-5"];
 const SPACE = "space-worker";
 const USER = "user-worker";
 
@@ -64,6 +67,11 @@ export async function startWorkerRun<
 >(options: {
   steps: ModelEmulatorStep[];
   /**
+   * Bills a catalog Anthropic model with a plain API key instead of a custom OpenAI-compatible
+   * connection; the catalog entry points at the emulator for the fixture's lifetime.
+   */
+  protocol?: "openai" | "anthropic";
+  /**
    * Runs guests on this provider instead of the local runner, as the live lanes do with E2B. Its
    * volumes are provisioned through the lifecycle.
    */
@@ -89,7 +97,15 @@ export async function startWorkerRun<
   const database = await openPgliteDatabase();
   const prisma = options.prisma?.(database.prisma) ?? database.prisma;
   const dir = await mkdtemp(path.join(tmpdir(), "rakazo-worker-run-"));
-  const model = await startModelEmulator({ apiKey: MODEL_KEY, steps: options.steps });
+  const anthropic = options.protocol === "anthropic";
+  const model = await startModelEmulator({
+    apiKey: MODEL_KEY,
+    steps: options.steps,
+    ...(anthropic ? { protocol: "anthropic", modelId: ANTHROPIC_MODEL.id } : {}),
+  });
+  const anthropicUrl = ANTHROPIC_MODEL.baseUrl;
+  if (anthropic) ANTHROPIC_MODEL.baseUrl = model.baseUrl;
+  const modelProvider = anthropic ? "anthropic" : model.model.provider;
   const secretStore = new EncryptedSecretStore("worker-fixture-encryption-key");
   const sessionLog = new PostgresSessionLog(prisma);
   const sandbox =
@@ -145,12 +161,14 @@ export async function startWorkerRun<
       name: "Worker",
       color: "#000000",
       computerId: computer?.id ?? null,
-      modelProvider: model.model.provider,
+      modelProvider,
       modelId: model.model.id,
     },
   });
   const sealed = await secretStore.put(
-    JSON.stringify({ kind: "openai_compatible", baseUrl: model.baseUrl, apiKey: MODEL_KEY }),
+    anthropic
+      ? MODEL_KEY
+      : JSON.stringify({ kind: "openai_compatible", baseUrl: model.baseUrl, apiKey: MODEL_KEY }),
     {
       operationId: "fixture",
       traceId: "fixture",
@@ -163,7 +181,7 @@ export async function startWorkerRun<
     data: { id: sealed.id, userId: USER, kind: "model", ciphertext: sealed.ciphertext },
   });
   const credential = await prisma.userModelCredential.create({
-    data: { userId: USER, provider: model.model.provider, label: "Fixture", secretId: sealed.id },
+    data: { userId: USER, provider: modelProvider, label: "Fixture", secretId: sealed.id },
   });
   await prisma.spaceModelPreference.create({
     data: {
@@ -286,6 +304,7 @@ export async function startWorkerRun<
     async close() {
       await (current.provider as unknown as Partial<LocalWorkerProvider>).dispose?.();
       await model.close();
+      if (anthropic) ANTHROPIC_MODEL.baseUrl = anthropicUrl;
       await database.close();
       await rm(dir, { recursive: true, force: true });
     },

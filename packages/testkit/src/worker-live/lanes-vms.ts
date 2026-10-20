@@ -1,6 +1,103 @@
+import path from "node:path";
+import { WORKSPACE_ROOT } from "@rakazo/core";
+import { Sandbox } from "e2b";
 import { toolResult } from "../file-task.js";
 import { call, finish, liveRun } from "./run.js";
-import { type Lane, POLL_INTERVAL_S, pollFor, sh } from "./session.js";
+import { COMPUTER_WORKSPACE, type Lane, POLL_INTERVAL_S, pollFor, sh } from "./session.js";
+
+/**
+ * Guest read, write, edit, grep and bash against files a computer wrote on both volumes, and
+ * writes of its own for the computer to see. `results` collects each tool's output.
+ */
+function exchangeSteps(results: Record<string, string>) {
+  return [
+    call("r1", "read_file", { path: "from-computer.txt" }),
+    call("r2", "read_file", { path: "shared/from-computer.txt" }, (request) => {
+      results.readPrivate = toolResult(request);
+    }),
+    call(
+      "w1",
+      "write_file",
+      { path: "from-worker.txt", content: "draft by the worker\n" },
+      (request) => {
+        results.readShared = toolResult(request);
+      },
+    ),
+    call(
+      "e1",
+      "edit_file",
+      { path: "from-worker.txt", old_text: "draft", new_text: "edited" },
+      (request) => {
+        results.write = toolResult(request);
+      },
+    ),
+    call("g1", "grep", { pattern: "edited|computer" }, (request) => {
+      results.edit = toolResult(request);
+    }),
+    call(
+      "b1",
+      "bash",
+      {
+        command:
+          "echo 'shared by the worker' > /workspace/shared/from-worker.txt && cat from-computer.txt",
+      },
+      (request) => {
+        results.grep = toolResult(request);
+      },
+    ),
+    ...finish("Exchanged files with the computer", (request) => {
+      results.bash = toolResult(request);
+    }),
+  ];
+}
+
+/**
+ * Writes the computer's files at `privateDir` and `sharedDir`, runs the exchange, and polls for the
+ * guest's writes from the computer.
+ */
+async function exchange(
+  worker: Awaited<ReturnType<typeof liveRun>>,
+  computer: Sandbox,
+  results: Record<string, string>,
+  privateDir: string,
+  sharedDir: string,
+) {
+  await computer.files.write(`${privateDir}/from-computer.txt`, "written by the computer\n");
+  await computer.files.write(`${sharedDir}/from-computer.txt`, "shared by the computer\n");
+  const privateSeen = pollFor(computer, `${privateDir}/from-worker.txt`, "edited by the worker");
+  const sharedSeen = pollFor(computer, `${sharedDir}/from-worker.txt`, "shared by the worker");
+  const runId = await worker.send("Exchange files with the computer.");
+  await worker.completed(runId);
+  const [mine, shared] = await Promise.all([privateSeen, sharedSeen]);
+  const grants = worker
+    .frames()
+    .filter((frame) => frame.from === "controller" && frame.type === "tool.grant");
+  /** From the grant of the guest tool that wrote, the last one before the computer saw it. */
+  const sinceGrant = (seenAt: number) =>
+    Math.round(seenAt - (grants.filter((grant) => grant.at < seenAt).at(-1)?.at ?? Number.NaN));
+  const pass =
+    (await worker.status(runId)) === "completed" &&
+    results.readPrivate?.includes("written by the computer") === true &&
+    results.readShared?.includes("shared by the computer") === true &&
+    results.edit?.includes('"replacements":1') === true &&
+    results.grep?.includes("from-worker.txt:1:edited by the worker") === true &&
+    results.grep?.includes("from-computer.txt:1:written by the computer") === true &&
+    results.bash?.includes("written by the computer") === true &&
+    mine.out.startsWith("seen") &&
+    shared.out.startsWith("seen");
+  return {
+    pass,
+    observed: {
+      guestToolResults: results,
+      computerSawPrivateWrite: mine.out,
+      computerSawSharedWrite: shared.out,
+      privateVisibleWithinMsOfGrant: sinceGrant(mine.at),
+      sharedVisibleWithinMsOfGrant: sinceGrant(shared.at),
+      pollIntervalMs: POLL_INTERVAL_S * 1000,
+      note: "Visibility times run from the controller granting the guest tool that wrote to the host seeing the computer's poller exit. They include the tool's own run and E2B's command stream, so they bound the cross-VM delay from above.",
+    },
+  };
+}
 
 export const laneB: Lane = {
   id: "b",
@@ -11,101 +108,78 @@ export const laneB: Lane = {
     "The guest reads what the computer wrote, and the computer sees by polling what the guest wrote, on both volumes",
   async run(live) {
     const results: Record<string, string> = {};
-    const worker = await liveRun(live, {
-      computer: "team",
-      steps: [
-        call("r1", "read_file", { path: "from-computer.txt" }),
-        call("r2", "read_file", { path: "shared/from-computer.txt" }, (request) => {
-          results.readPrivate = toolResult(request);
-        }),
-        call(
-          "w1",
-          "write_file",
-          { path: "from-worker.txt", content: "draft by the worker\n" },
-          (request) => {
-            results.readShared = toolResult(request);
-          },
-        ),
-        call(
-          "e1",
-          "edit_file",
-          { path: "from-worker.txt", old_text: "draft", new_text: "edited" },
-          (request) => {
-            results.write = toolResult(request);
-          },
-        ),
-        call("g1", "grep", { pattern: "edited|computer" }, (request) => {
-          results.edit = toolResult(request);
-        }),
-        call(
-          "b1",
-          "bash",
-          {
-            command:
-              "echo 'shared by the worker' > /workspace/shared/from-worker.txt && cat from-computer.txt",
-          },
-          (request) => {
-            results.grep = toolResult(request);
-          },
-        ),
-        ...finish("Exchanged files with the computer", (request) => {
-          results.bash = toolResult(request);
-        }),
-      ],
-    });
+    const worker = await liveRun(live, { computer: "team", steps: exchangeSteps(results) });
     const computer = await live.vm(worker.mounts());
     try {
-      await computer.files.write(
-        `${worker.privateMount}/from-computer.txt`,
-        "written by the computer\n",
-      );
-      await computer.files.write(
-        `${worker.sharedMount}/from-computer.txt`,
-        "shared by the computer\n",
-      );
-      const privateSeen = pollFor(
+      return await exchange(worker, computer, results, worker.privateMount, worker.sharedMount);
+    } finally {
+      await computer.kill().catch(() => false);
+      await worker.close();
+    }
+  },
+};
+
+export const laneBProductComputer: Lane = {
+  id: "b-product-computer",
+  issue: "visibilité computer dans les deux sens (computer produit)",
+  scenario:
+    "Lane b's exchange with the product's E2B computer of a team bot: a first run boots it through the executor with the volumes mounted, and the second run's guest exchanges files with it through its workspace link",
+  passWhen:
+    "The first run's computer mounts the volumes and links its workspace to their root; the second run reuses that machine; the computer sees the guest's writes and the guest sees the computer's, on both volumes",
+  async run(live) {
+    const results: Record<string, string> = {};
+    const worker = await liveRun(live, {
+      computer: "team",
+      sandbox: live.computer(),
+      steps: [...finish("Ready"), ...exchangeSteps(results)],
+    });
+    let computer: Sandbox | undefined;
+    try {
+      const machine = async () =>
+        (await worker.run.prisma.computer.findFirstOrThrow({ select: { providerRef: true } }))
+          .providerRef;
+      const ready = await worker.send("Get ready.");
+      if ((await worker.status(ready)) !== "completed")
+        throw new Error("The first run, which boots the computer, did not complete");
+      const first = await machine();
+      if (!first) throw new Error("The first run left the computer without a machine");
+      computer = await Sandbox.connect(first, live.connection);
+      const info = await Sandbox.getInfo(first, live.connection);
+      const link = await sh(computer, `readlink ${COMPUTER_WORKSPACE}`);
+      const mounted = await sh(
         computer,
-        `${worker.privateMount}/from-worker.txt`,
-        "edited by the worker",
+        `findmnt -rn -o TARGET | grep '^${WORKSPACE_ROOT}/' | sort`,
       );
-      const sharedSeen = pollFor(
+      const inComputer = (mount: string) =>
+        path.posix.join(COMPUTER_WORKSPACE, path.posix.relative(WORKSPACE_ROOT, mount));
+      const exchanged = await exchange(
+        worker,
         computer,
-        `${worker.sharedMount}/from-worker.txt`,
-        "shared by the worker",
+        results,
+        inComputer(worker.privateMount),
+        inComputer(worker.sharedMount),
       );
-      const runId = await worker.send("Exchange files with the computer.");
-      await worker.completed(runId);
-      const [mine, shared] = await Promise.all([privateSeen, sharedSeen]);
-      const grants = worker
-        .frames()
-        .filter((frame) => frame.from === "controller" && frame.type === "tool.grant");
-      /** From the grant of the guest tool that wrote, the last one before the computer saw it. */
-      const sinceGrant = (seenAt: number) =>
-        Math.round(seenAt - (grants.filter((grant) => grant.at < seenAt).at(-1)?.at ?? Number.NaN));
-      const pass =
-        (await worker.status(runId)) === "completed" &&
-        results.readPrivate?.includes("written by the computer") === true &&
-        results.readShared?.includes("shared by the computer") === true &&
-        results.edit?.includes('"replacements":1') === true &&
-        results.grep?.includes("from-worker.txt:1:edited by the worker") === true &&
-        results.grep?.includes("from-computer.txt:1:written by the computer") === true &&
-        results.bash?.includes("written by the computer") === true &&
-        mine.out.startsWith("seen") &&
-        shared.out.startsWith("seen");
+      const second = await machine();
+      const expectedMounts = [worker.privateMount, worker.sharedMount].sort().join("\n");
       return {
-        pass,
+        pass:
+          exchanged.pass &&
+          info.metadata.home === "volumes" &&
+          Boolean(info.metadata.mounts) &&
+          link === WORKSPACE_ROOT &&
+          mounted === expectedMounts &&
+          second === first,
         observed: {
-          guestToolResults: results,
-          computerSawPrivateWrite: mine.out,
-          computerSawSharedWrite: shared.out,
-          privateVisibleWithinMsOfGrant: sinceGrant(mine.at),
-          sharedVisibleWithinMsOfGrant: sinceGrant(shared.at),
-          pollIntervalMs: POLL_INTERVAL_S * 1000,
-          note: "Visibility times run from the controller granting the guest tool that wrote to the host seeing the computer's poller exit. They include the tool's own run and E2B's command stream, so they bound the cross-VM delay from above.",
+          ...exchanged.observed,
+          computerMetadataHome: info.metadata.home,
+          computerRecordsMountSet: Boolean(info.metadata.mounts),
+          workspaceLinksTo: link,
+          volumeMountsInComputer: mounted.split("\n"),
+          secondRunReusedMachine: second === first,
+          desktopPreparation: "skipped: this host has no desktop template",
         },
       };
     } finally {
-      await computer.kill().catch(() => false);
       await worker.close();
     }
   },

@@ -126,7 +126,7 @@ async function template() {
 /** One lane in this process, its record sent to the parent: a fresh process per lane keeps memory flat. */
 async function lane() {
   const selected = LANES.find((candidate) => candidate.id === values.lane);
-  if (!selected?.run) throw new Error(`No runnable lane ${values.lane}`);
+  if (!selected) throw new Error(`No lane ${values.lane}`);
   const live = session();
   const memBefore = requireHeadroom();
   const started = performance.now();
@@ -174,11 +174,6 @@ async function lanes() {
       scenario: candidate.scenario,
       passWhen: candidate.passWhen,
     };
-    if (candidate.pending || !candidate.run) {
-      records.push({ ...base, result: "pending", pending: candidate.pending });
-      console.log(`lane ${candidate.id.padEnd(20)} PENDING`);
-      continue;
-    }
     await requireIdleDeployment();
     requireHeadroom();
     const child = fork(

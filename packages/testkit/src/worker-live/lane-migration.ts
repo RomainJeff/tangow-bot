@@ -1,11 +1,18 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { createWorkerLifecycle, LocalAgentHomeStore, moveHomeToVolumes } from "@rakazo/adapters";
+import {
+  createWorkerLifecycle,
+  InMemoryJobQueue,
+  LocalAgentHomeStore,
+  moveHomeToVolumes,
+  provisionComputer,
+  replaceComputer,
+} from "@rakazo/adapters";
 import { volumeMountPath } from "@rakazo/core";
-import type { Sandbox } from "e2b";
+import { Sandbox } from "e2b";
 import { startWorkerRun } from "../worker-run-fixture.js";
-import { context, type Lane, sh, sha256 } from "./session.js";
+import { COMPUTER_WORKSPACE, context, type Lane, sh, sha256 } from "./session.js";
 
 /** A team home of two bots: shared files, each bot's files, an executable and a private key file. */
 function syntheticHome(bots: [string, string]) {
@@ -277,6 +284,127 @@ export const laneH: Lane = {
             freshVolumeEmpty: "A new volume lists no entry.",
             guestUid: `The sandbox user is uid/gid ${guestOwner.replace("\n", "/")} in this template, not 1000, and the moved files belong to ${migratedOwner}. The mount ${ownershipEnforced === "no" ? "does not enforce" : "enforces"} ownership against it: that user ${ownershipEnforced === "no" ? "read and appended to" : "could not open"} a root-owned 0600 file.`,
           },
+        },
+      };
+    } finally {
+      await files.close();
+      await run.close();
+      await rm(dir, { recursive: true, force: true });
+    }
+  },
+};
+
+export const laneHProductRecreate: Lane = {
+  id: "h-product-recreate",
+  issue: "recréation computer (produit)",
+  scenario:
+    "A team home with a snapshot moves onto real E2B volumes; the product boots its E2B computer, the computer changes a moved file, then the product recreates the computer (recover)",
+  passWhen:
+    "The recreated machine is new, mounts the volumes, and still holds the changed file: no snapshot restore wrote the old copy over the volumes",
+  async run(live) {
+    const run = await startWorkerRun({
+      steps: [],
+      computerScope: "none",
+      provider: () => live.workerProvider(),
+    });
+    const dir = await mkdtemp(path.join(tmpdir(), "rakazo-live-recreate-"));
+    const files = live.volumeFiles();
+    try {
+      const { prisma } = run;
+      const botId = `bot-recreate-${live.tag.slice(-8)}`;
+      const computer = await prisma.computer.create({
+        data: {
+          spaceId: run.spaceId,
+          userId: run.userId,
+          scope: "team",
+          scopeKey: "live-recreate-home",
+          homeKey: "live-recreate-home",
+          kind: "e2b",
+          state: "stopped",
+        },
+      });
+      await prisma.bot.create({
+        data: {
+          id: botId,
+          spaceId: run.spaceId,
+          userId: run.userId,
+          name: "recreate",
+          color: "#000000",
+          computerId: computer.id,
+        },
+      });
+      const home = new LocalAgentHomeStore(path.join(dir, "homes"));
+      const src = path.join(dir, "src");
+      await mkdir(path.join(src, "bots", botId), { recursive: true });
+      await mkdir(path.join(src, "shared"), { recursive: true });
+      await writeFile(path.join(src, "bots", botId, "notes.md"), "from the snapshot\n");
+      await writeFile(path.join(src, "shared", "readme.md"), "# Team notes\n");
+      const revision = await home.commit("live-recreate-home", src, context("h-product"));
+      await prisma.computer.update({
+        where: { id: computer.id },
+        data: { homeRevision: revision },
+      });
+      const lifecycle = createWorkerLifecycle({ prisma, provider: live.workerProvider() });
+      const moved = await moveHomeToVolumes(
+        { prisma, home, files, workers: lifecycle },
+        {
+          computerId: computer.id,
+          dryRun: false,
+          leaveUnmapped: false,
+          manifestPath: path.join(dir, "manifest.json"),
+        },
+        context("h-product"),
+      );
+      if (moved.outcome !== "adopted")
+        throw new Error(`The move ended ${moved.outcome}: ${JSON.stringify(moved)}`);
+
+      const deps = {
+        prisma,
+        sandbox: live.computer(),
+        home,
+        jobs: new InMemoryJobQueue(),
+        events: run.events,
+      };
+      const asBot = { ...context("h-product"), botId };
+      const notes = path.posix.join(COMPUTER_WORKSPACE, "bots", botId, "notes.md");
+      const first = await provisionComputer(deps, computer.id, asBot);
+      const firstVm = await Sandbox.connect(first.providerRef!, live.connection);
+      const movedNotes = await sh(firstVm, `cat ${notes}`);
+      await sh(firstVm, `echo 'changed on the volume' > ${notes}`);
+      const revisionBefore = (
+        await prisma.computer.findUniqueOrThrow({ where: { id: computer.id } })
+      ).homeRevision;
+
+      const second = await replaceComputer(deps, computer.id, "recover", asBot);
+      const secondVm = await Sandbox.connect(second.providerRef!, live.connection);
+      const info = await Sandbox.getInfo(second.providerRef!, live.connection);
+      const notesAfter = await sh(secondVm, `cat ${notes}`);
+      const firstGone = await Sandbox.getInfo(first.providerRef!, live.connection).then(
+        () => false,
+        () => true,
+      );
+      const row = await prisma.computer.findUniqueOrThrow({ where: { id: computer.id } });
+      const pass =
+        movedNotes === "from the snapshot" &&
+        second.providerRef !== first.providerRef &&
+        second.fresh === true &&
+        firstGone &&
+        info.metadata.home === "volumes" &&
+        notesAfter === "changed on the volume" &&
+        row.state === "running" &&
+        row.providerRef === second.providerRef;
+      return {
+        pass,
+        observed: {
+          move: moved.outcome,
+          firstMachineReadMovedFile: movedNotes,
+          recreatedMachineIsNew: second.providerRef !== first.providerRef && second.fresh === true,
+          firstMachineGone: firstGone,
+          recreatedMachineMetadataHome: info.metadata.home,
+          fileOnRecreatedMachine: notesAfter,
+          homeRevisionUnchangedByRecover: row.homeRevision === revisionBefore,
+          computerRow: { state: row.state, homeStorage: row.homeStorage },
+          desktopPreparation: "skipped: this host has no desktop template",
         },
       };
     } finally {

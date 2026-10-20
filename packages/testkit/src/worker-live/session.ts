@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { performance } from "node:perf_hooks";
-import type { AdapterContext, WorkerProvider } from "@rakazo/adapter-kit";
+import type { AdapterContext, SandboxProvider, WorkerProvider } from "@rakazo/adapter-kit";
 import {
   E2BSandboxProvider,
   type E2BSandboxSdk,
@@ -15,6 +15,8 @@ import type { GuestConnector } from "@rakazo/adapters/runtime-worker";
 import { type ConnectionOpts, Sandbox, Volume } from "e2b";
 
 export const MIN_MEM_AVAILABLE_MIB = 1536;
+/** Where the product's E2B computer links its workspace: the volumes' root. */
+export const COMPUTER_WORKSPACE = "/home/user/rakazo-home";
 const VM_TIMEOUT_MS = 15 * 60 * 1000;
 export const POLL_INTERVAL_S = 0.05;
 const POLL_ROUNDS = 1200;
@@ -36,9 +38,7 @@ export interface Lane {
   issue: string;
   scenario: string;
   passWhen: string;
-  /** Set while the lane needs behavior a slice not merged yet adds. */
-  pending?: string;
-  run?(live: Live): Promise<LaneResult>;
+  run(live: Live): Promise<LaneResult>;
 }
 
 export const context = (name: string): AdapterContext => ({
@@ -137,8 +137,14 @@ export function liveSession(config: LiveConfig) {
     config,
     connection,
     guestCommandStarts,
-    /** `maxTimeoutMs` stands for a deployment that kills sandboxes sooner. */
-    workerProvider: (maxTimeoutMs?: number) =>
+    /**
+     * `maxTimeoutMs` stands for a deployment that kills sandboxes sooner. `guest` replaces the
+     * template's guest with a script written into each VM before it starts, `args` after its path.
+     */
+    workerProvider: (
+      maxTimeoutMs?: number,
+      guest?: { path: string; script: string; args?: string },
+    ) =>
       new E2BWorkerProvider(
         {
           apiKey: config.apiKey,
@@ -146,10 +152,31 @@ export function liveSession(config: LiveConfig) {
           domain: config.domain,
           template: config.workerTemplate,
           maxTimeoutMs,
+          ...(guest && { guestEntry: [guest.path, guest.args].filter(Boolean).join(" ") }),
         },
-        sdk,
+        guest
+          ? {
+              ...sdk,
+              async startGuest(sandboxId, command, options) {
+                const vm = await Sandbox.connect(sandboxId, connection);
+                await vm.files.write(guest.path, guest.script);
+                return sdk.startGuest(sandboxId, command, options);
+              },
+            }
+          : sdk,
       ),
-    computer: () => new E2BSandboxProvider(config.apiKey, computerSdk),
+    /**
+     * The product's E2B computer. Its desktop preparation is skipped: it installs the desktop
+     * packages a desktop template carries, which this host's computer template lacks, and the lanes
+     * use no screen.
+     */
+    computer: (): SandboxProvider => {
+      const provider = new E2BSandboxProvider(config.apiKey, computerSdk);
+      return new Proxy(provider, {
+        get: (target, key, receiver) =>
+          key === "prepare" ? async () => {} : Reflect.get(target, key, receiver),
+      });
+    },
     volumeFiles: () =>
       new E2BVolumeFiles(
         e2bVolumeSandbox({

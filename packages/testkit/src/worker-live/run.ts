@@ -17,6 +17,8 @@ export async function liveRun(
   live: Live,
   options: {
     steps: ModelEmulatorStep[];
+    /** The model's wire protocol: a custom OpenAI-compatible connection, or Anthropic's catalog. */
+    protocol?: "openai" | "anthropic";
     computer?: "dedicated" | "team" | "none";
     /** Runs the guest on another provider than the session's E2B one. */
     provider?: () => WorkerProvider & GuestConnector;
@@ -30,6 +32,7 @@ export async function liveRun(
   const connects: number[] = [];
   const run = await startWorkerRun({
     steps: options.steps,
+    protocol: options.protocol,
     prisma: options.prisma,
     computerScope: options.computer ?? "dedicated",
     sandbox: options.sandbox,

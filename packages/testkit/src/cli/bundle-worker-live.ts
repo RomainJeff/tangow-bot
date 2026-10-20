@@ -1,6 +1,7 @@
 /**
  * Bundles the live lanes for a Node 22 host that has no checkout: one ES module beside PGlite's
- * assets and the migrations, the guest bundle the worker template copies, and the two modules
+ * assets and the migrations, the guest bundle the worker template copies, the hand-written guest
+ * the refusal lane runs in its place, and the two modules
  * the E2B SDK imports at runtime to upload template files. Two modules the lanes never call are
  * stubs: Koffi, native, loaded for macOS and Windows path checks on a Linux host, and jsdom, which
  * reads its stylesheet from beside its own sources, for web pages.
@@ -77,4 +78,9 @@ for (const name of ["glob", "tar"]) {
 }
 await cp(MIGRATIONS, path.join(OUT, "prisma", "migrations"), { recursive: true });
 await bundleGuest(path.join(OUT, "guest", "agent-run-worker.mjs"));
+await build({
+  ...common,
+  entryPoints: [fileURLToPath(new URL("../worker-live/hostile-guest.ts", import.meta.url))],
+  outfile: path.join(OUT, "guest", "hostile-guest.mjs"),
+});
 console.log(`Bundled the live lanes in ${path.relative(process.cwd(), OUT)}`);

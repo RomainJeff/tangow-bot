@@ -1,6 +1,7 @@
+import { readFileSync } from "node:fs";
 import { toolResult } from "../file-task.js";
 import type { ModelEmulatorRequest } from "../model-emulator.js";
-import { call, finish, liveRun, toolNames } from "./run.js";
+import { call, finish, liveRun, recap, toolNames } from "./run.js";
 import type { Lane } from "./session.js";
 
 export const laneD: Lane = {
@@ -129,5 +130,131 @@ export const laneE: Lane = {
     } finally {
       await worker.close();
     }
+  },
+};
+
+export const laneEAnthropic: Lane = {
+  id: "e-anthropic",
+  issue: "proxy Anthropic simulé",
+  scenario:
+    "A catalog Anthropic model billed with a plain API key, its Messages API emulated behind the controller's relay, with a thinking block and a tool call; the guest looks for the key as in e-openai",
+  passWhen:
+    "The run completes through the relay on the Anthropic protocol with the controller's key while no guest process holds it, and the tool result reaches the model",
+  async run(live) {
+    let found = "";
+    const worker = await liveRun(live, {
+      protocol: "anthropic",
+      steps: [
+        call("k1", "bash", {
+          command: `env | grep -c '${MODEL_KEY}'; cat /proc/[0-9]*/environ 2>/dev/null | tr '\\0' '\\n' | grep -c '${MODEL_KEY}'; true`,
+        }),
+        call("say", "message_user", { message: "Done." }, (request) => {
+          found = toolResult(request);
+        }),
+        {
+          expect() {},
+          response: {
+            type: "text",
+            thinking: "The key was not in the guest.",
+            text: recap("Looked for the key"),
+            usage: { promptTokens: 210, completionTokens: 12, cacheReadTokens: 64 },
+          },
+        },
+      ],
+    });
+    try {
+      const runId = await worker.send("Look for the key.");
+      await worker.completed(runId);
+      const counts = found
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean);
+      const relayed = worker.frames().filter((frame) => frame.type === "model.request").length;
+      const requests = worker.run.model.requests;
+      const usage = await worker.run.prisma.run.findUniqueOrThrow({
+        where: { id: runId },
+        select: { modelProvider: true, modelId: true },
+      });
+      return {
+        pass:
+          (await worker.status(runId)) === "completed" &&
+          counts.join(",") === "0,0" &&
+          relayed >= 3 &&
+          requests.length === 3 &&
+          usage.modelProvider === "anthropic",
+        observed: {
+          keyInGuestEnv: counts[0],
+          keyInAnyGuestProcessEnviron: counts[1],
+          modelRequestsRelayed: relayed,
+          anthropicRequestsServed: requests.length,
+          runModel: `${usage.modelProvider}/${usage.modelId}`,
+          note: "The emulator serves /v1/messages and asserts the controller's x-api-key on every call; the catalog model points at it for the run only.",
+        },
+      };
+    } finally {
+      await worker.close();
+    }
+  },
+};
+
+/** Where the refusal lane writes the hand-written guest in each worker VM. */
+const HOSTILE_GUEST = "/tmp/rakazo-hostile-guest.mjs";
+
+export const laneERefusals: Lane = {
+  id: "e-refusals",
+  issue: "refus connexion/modèle/endpoint interdits",
+  scenario:
+    "A hand-written guest in the worker VM asks the relay for a model call naming its own model, endpoint and key, and, in a second run, calls a tool the run does not expose",
+  passWhen:
+    "Each run fails as a protocol breach, the upstream model is never called, the unknown tool is refused, and the attempt's VM is released",
+  async run(live) {
+    // Beside the live bundle; the bundle step builds it from hostile-guest.ts.
+    const script = readFileSync(new URL("../guest/hostile-guest.mjs", import.meta.url), "utf8");
+    const attempt = async (request: "model_target" | "unknown_tool") => {
+      const worker = await liveRun(live, {
+        steps: [],
+        provider: () =>
+          live.workerProvider(undefined, { path: HOSTILE_GUEST, script, args: request }),
+      });
+      try {
+        const runId = await worker.send("Do the thing.");
+        const row = await worker.run.prisma.run.findUniqueOrThrow({
+          where: { id: runId },
+          select: { status: true, error: true },
+        });
+        const frames = worker.frames();
+        return {
+          status: row.status,
+          error: row.error,
+          upstreamCalls: worker.run.model.requests.length,
+          guestSent: frames
+            .filter((frame) => frame.from === "guest")
+            .map((frame) => frame.type ?? frame.kind),
+          controllerSent: frames
+            .filter((frame) => frame.from === "controller")
+            .map((frame) => frame.type ?? frame.kind),
+          attempts: await worker.attempts(runId),
+        };
+      } finally {
+        await worker.close();
+      }
+    };
+    const modelTarget = await attempt("model_target");
+    const unknownTool = await attempt("unknown_tool");
+    const released = (result: typeof modelTarget) =>
+      result.attempts.length > 0 && result.attempts.every((row) => row.workerState === "released");
+    const pass =
+      modelTarget.status === "failed" &&
+      modelTarget.error?.includes("broke the run protocol: invalid") === true &&
+      modelTarget.upstreamCalls === 0 &&
+      modelTarget.guestSent.includes("model.request") &&
+      !modelTarget.controllerSent.includes("model.event") &&
+      released(modelTarget) &&
+      unknownTool.status === "failed" &&
+      unknownTool.error?.includes("broke the run protocol: unknown_tool") === true &&
+      unknownTool.upstreamCalls === 0 &&
+      unknownTool.controllerSent.includes("refused") &&
+      released(unknownTool);
+    return { pass, observed: { modelTarget, unknownTool } };
   },
 };
