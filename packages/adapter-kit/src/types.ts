@@ -198,6 +198,8 @@ export interface ConnectorTool {
   readOnly?: boolean;
   /** In-process routing metadata. It is never exposed to the model. */
   route?: ConnectorRoute;
+  /** Display name of the connected app, for the live activity line only. Never exposed to the model. */
+  appName?: string;
 }
 
 export interface ConnectorRoute {

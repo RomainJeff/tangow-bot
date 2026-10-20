@@ -6,6 +6,7 @@ import {
   type BotSecretDestination,
   type MessageBlock,
   type ProductEvent,
+  RUN_WORK_TYPES,
 } from "@rakazo/contracts";
 import {
   ACTIVE_RUN_STATUSES,
@@ -1978,7 +1979,11 @@ export async function eventsAfter(
   });
 }
 
-/** A feed event's `runId` is only its first entry's, so the payload is matched too. */
+/**
+ * A run's progress since the newest of its entries that replaced its live line, as the client's
+ * `reduceProgressLayer` does: the tool calls and results it logs as it works keep the line on.
+ * A feed event's `runId` is only its first entry's, so each entry is matched.
+ */
 export async function progressSinceLastEntry(
   prisma: PrismaClient | Prisma.TransactionClient,
   threadId: string,
@@ -1990,8 +1995,9 @@ export async function progressSinceLastEntry(
       SELECT r.id AS "runId", COALESCE((
         SELECT max(a.seq) FROM events a
         WHERE a."threadId" = ${threadId} AND a.type = 'session.entry.appended'
-          AND (a."runId" = r.id
-            OR a.payload -> 'entries' @> jsonb_build_array(jsonb_build_object('runId', r.id)))
+          AND EXISTS (
+            SELECT 1 FROM jsonb_array_elements(a.payload -> 'entries') x
+            WHERE x ->> 'runId' = r.id AND x ->> 'type' <> ALL(${[...RUN_WORK_TYPES]}::text[]))
       ), -1) AS seq
       FROM (SELECT DISTINCT unnest(${[...runIds]}::text[]) AS id) r)
     SELECT e.id, e."spaceId", e."threadId", e."botId", e.seq, e.type, e.payload, e."runId",

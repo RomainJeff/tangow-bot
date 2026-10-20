@@ -45,8 +45,8 @@ jobs:
       - run: pnpm db:generate
         env:
           DATABASE_URL: postgres://rakazo:rakazo@127.0.0.1:5433/rakazo
-      # Bound parallel tsc runs so the typecheck fits a self-hosted runner's memory.
-      - run: pnpm check --concurrency=2
+      # One tsc at a time: two large projects checked together got killed for memory.
+      - run: pnpm check --concurrency=1
 
   test:
     name: Unit tests

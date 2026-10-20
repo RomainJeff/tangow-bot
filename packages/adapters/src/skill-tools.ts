@@ -6,19 +6,16 @@ import {
   SKILL_BUNDLE_MAX_ENTRIES,
   SKILL_DESCRIPTION_MAX_CHARS,
 } from "@rakazo/contracts";
-import type { ParsedSkillMd, SkillLearningMode } from "@rakazo/core";
+import type { ParsedSkillMd, SkillLearningMode, SkillRecord } from "@rakazo/core";
 import {
   asSkillAvailability,
   buildSkillMd,
   containsSecret,
-  defaultSkillAvailability,
   findSkillByName,
-  isMarketplaceSkillKey,
   isSkillVisible,
   mergeBuiltinSkills,
   parseSkillMd,
   SANDBOX_SKILL_MOUNTS,
-  type SkillRecord,
   searchSkills,
   userSkillKey,
   validateBotSkill,
@@ -27,7 +24,6 @@ import {
 import type { PrismaClient } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 import { loadBuiltinSkills } from "./builtin-skills.js";
-import { listMarketplaceSkills, marketplacesRoot } from "./marketplace-store.js";
 import type { SkillOwnerLock } from "./skill-lock.js";
 import type { SkillTreeFile } from "./skill-store.js";
 import {
@@ -87,11 +83,6 @@ async function builtinRecords(): Promise<Array<SkillRecord & { id: string }>> {
 
 /** The skill's folder inside the computer, derived from its id the way the mounts lay it out. */
 export function sandboxSkillDir(skill: { id: string; name: string }): string {
-  if (isMarketplaceSkillKey(skill.id)) {
-    const [marketplace, plugin, slug] = skill.id.slice("mkt:".length).split("/");
-    if (!marketplace || !plugin || !slug) throw new Error(`Malformed skill id ${skill.id}`);
-    return `${SANDBOX_SKILL_MOUNTS.marketplaces}/${marketplace}/plugins/${plugin}/skills/${slug}`;
-  }
   if (skill.id.startsWith("builtin:")) {
     return `${SANDBOX_SKILL_MOUNTS.managed}/agent/${skillDirName(skill.name)}`;
   }
@@ -107,15 +98,8 @@ export function userSkillsOpenedIn<T extends { id: string; name: string; source:
   );
 }
 
-function readOnlyError(skill: {
-  id: string;
-  source: string;
-  readOnly: boolean;
-}): string | undefined {
-  if (isMarketplaceSkillKey(skill.id)) {
-    return "Marketplace skills are read-only; edit them upstream and update the marketplace.";
-  }
-  if (skill.readOnly || skill.source !== "user") return "Builtin and plugin skills are read-only.";
+function readOnlyError(skill: { source: string; readOnly: boolean }): string | undefined {
+  if (skill.readOnly || skill.source !== "user") return "Builtin skills are read-only.";
   return undefined;
 }
 
@@ -153,14 +137,13 @@ export async function listAgentSkillRecords(
   deps: SkillToolDeps,
   owner: SkillOwner,
 ): Promise<Array<SkillRecord & { id: string }>> {
-  const [builtins, userSkills, marketplaceSkills] = await Promise.all([
+  const [builtins, userSkills] = await Promise.all([
     builtinRecords(),
     listUserSkills(userSkillsRoot(deps.dataDir, owner)),
-    listMarketplaceSkills(marketplacesRoot(deps.dataDir, owner.spaceId)),
   ]);
   // Builtins join the catalog before filtering: a user skill shadows a same-named builtin,
   // and per-bot availability applies to builtins too.
-  const records = mergeBuiltinSkills(builtins, [...userSkills, ...marketplaceSkills]);
+  const records = mergeBuiltinSkills(builtins, userSkills);
   return owner.botId ? await onlyVisibleTo(deps.prisma, owner, owner.botId, records) : records;
 }
 
@@ -180,7 +163,7 @@ async function onlyVisibleTo<T extends { id: string }>(
   const override = new Map(overrides.map((o) => [o.skillKey, o.enabled]));
   return records.filter((record) =>
     isSkillVisible({
-      availability: availability.get(record.id) ?? defaultSkillAvailability(record.id),
+      availability: availability.get(record.id) ?? "all",
       override: override.get(record.id),
     }),
   );

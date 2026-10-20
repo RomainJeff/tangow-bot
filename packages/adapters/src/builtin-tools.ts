@@ -755,8 +755,7 @@ that merely narrate internal operations.`,
   },
   {
     name: "skill_update",
-    description:
-      "Update a user-created skill by name or id. Builtin and plugin skills are read-only.",
+    description: "Update a user-created skill by name or id. Builtin skills are read-only.",
     inputSchema: {
       type: "object",
       properties: {
@@ -778,8 +777,7 @@ that merely narrate internal operations.`,
   },
   {
     name: "skill_delete",
-    description:
-      "Delete a user-created skill by name or id. Builtin and plugin skills cannot be deleted.",
+    description: "Delete a user-created skill by name or id. Builtin skills cannot be deleted.",
     inputSchema: {
       type: "object",
       properties: {

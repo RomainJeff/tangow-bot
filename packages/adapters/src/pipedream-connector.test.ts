@@ -371,6 +371,7 @@ describe("PipedreamConnector", () => {
     expect(tools).toContainEqual(
       expect.objectContaining({
         name: "notes.write",
+        appName: "Linear",
         route: expect.objectContaining({ connectorId: "pipedream", resourceId: "linear" }),
       }),
     );

@@ -12,6 +12,7 @@ import {
   supervisorRequestBodyLimit,
   waitForScreenReady,
 } from "./index.js";
+import type { ScreenAssignment } from "./supervisor-logic.js";
 import {
   assertRequestIdentity,
   attemptComputerControl,
@@ -35,7 +36,6 @@ import {
   preferComputerControl,
   releaseAssignedScreen,
   resetManagedScreensCommand,
-  type ScreenAssignment,
   sandboxCommandTimedOut,
   sandboxTimeoutCommand,
   screenReleaseStopCommand,
@@ -262,7 +262,6 @@ describe("skills binds", () => {
   it("derives read-only skills binds from ids and the translated data dir", () => {
     expect(skillsBindsFor("/data", "s1", "u1", (p) => p.replace("/data", "/var/rakazo"))).toEqual([
       "/var/rakazo/skills/user/s1/u1:/skills/user:ro",
-      "/var/rakazo/skills/marketplaces/s1:/skills/marketplaces:ro",
       "/var/rakazo/managed-skills:/managed-skills:ro",
     ]);
   });

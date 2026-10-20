@@ -1,16 +1,12 @@
 import { ORPCError } from "@orpc/server";
+import type { SkillOwnerLock, UserSkillFile } from "@rakazo/adapters";
 import {
   bundleFormat,
   isExists,
-  listMarketplaceSkills,
   listUserSkills,
   loadBuiltinSkills,
-  type MarketplaceSkillFile,
-  marketplacesRoot,
   removeUserSkill,
   renameUserSkill,
-  type SkillOwnerLock,
-  type UserSkillFile,
   userSkillsRoot,
   writeUserSkill,
   writeUserSkillBundle,
@@ -24,18 +20,16 @@ import type {
 import {
   asSkillAvailability,
   buildSkillMd,
-  defaultSkillAvailability,
   findSkillByName,
   isSkillVisible,
   mergeBuiltinSkills,
   parseSkillMd,
   userSkillKey,
 } from "@rakazo/core";
-import { IsolationError, type PrismaClient } from "@rakazo/db";
+import type { PrismaClient } from "@rakazo/db";
+import { IsolationError } from "@rakazo/db";
 
-type SkillFile = UserSkillFile | MarketplaceSkillFile;
-
-function toAgentSkill(file: SkillFile): AgentSkill {
+function toAgentSkill(file: UserSkillFile): AgentSkill {
   return {
     id: file.id,
     name: file.name,
@@ -43,18 +37,9 @@ function toAgentSkill(file: SkillFile): AgentSkill {
     content: file.content,
     source: file.source,
     readOnly: file.readOnly,
-    // ponytail: marketplace files only carry mtime; install time is not tracked.
-    createdAt: ("createdAt" in file ? file.createdAt : file.updatedAt).toISOString(),
+    createdAt: file.createdAt.toISOString(),
     updatedAt: file.updatedAt.toISOString(),
   };
-}
-
-function assertWritable(file: SkillFile): asserts file is UserSkillFile {
-  if (file.readOnly) {
-    throw new ORPCError("FORBIDDEN", {
-      message: "Marketplace skills are read-only; edit them upstream and update the marketplace.",
-    });
-  }
 }
 
 const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
@@ -144,13 +129,9 @@ export function createAgentSkillsService(
 ) {
   const root = (actor: Actor) => userSkillsRoot(dataDir, actor);
   const files = (actor: Actor) => listUserSkills(root(actor));
-  const marketplaceFiles = (actor: Actor) =>
-    listMarketplaceSkills(marketplacesRoot(dataDir, actor.spaceId));
-  const allFiles = async (actor: Actor): Promise<SkillFile[]> =>
-    (await Promise.all([files(actor), marketplaceFiles(actor)])).flat();
 
-  async function owned(actor: Actor, skillId: string): Promise<SkillFile> {
-    const file = (await allFiles(actor)).find((skill) => skill.id === skillId);
+  async function owned(actor: Actor, skillId: string): Promise<UserSkillFile> {
+    const file = (await files(actor)).find((skill) => skill.id === skillId);
     if (!file) throw new IsolationError();
     return file;
   }
@@ -196,7 +177,7 @@ export function createAgentSkillsService(
     return {
       bots: botIds,
       of(key) {
-        const skillAvailability = availability.get(key) ?? defaultSkillAvailability(key);
+        const skillAvailability = availability.get(key) ?? "all";
         return {
           availability: skillAvailability,
           visibleBotIds: botIds.filter((botId) =>
@@ -212,7 +193,7 @@ export function createAgentSkillsService(
 
   async function catalog(actor: Actor, botId?: string): Promise<Array<AgentSkill & Access>> {
     const [rows, access, builtinSkills] = await Promise.all([
-      allFiles(actor),
+      files(actor),
       accessIndex(actor),
       builtinCatalog(),
     ]);
@@ -261,7 +242,7 @@ export function createAgentSkillsService(
         return toAgentSkill(await owned(actor, input.skillId));
       }
       const name = input.name?.trim() ?? "";
-      const file = findSkillByName(await allFiles(actor), name);
+      const file = findSkillByName(await files(actor), name);
       if (file) return toAgentSkill(file);
       const builtin = findSkillByName(await builtinCatalog(), name);
       if (!builtin) throw new IsolationError();
@@ -314,7 +295,6 @@ export function createAgentSkillsService(
       },
     ): Promise<AgentSkill> {
       const existing = await owned(actor, input.skillId);
-      assertWritable(existing);
       const resolved = resolveSkillContent({ ...input, prior: existing });
       const oldKey = existing.id;
       const newKey = userSkillKey(resolved.name);
@@ -342,7 +322,6 @@ export function createAgentSkillsService(
 
     async remove(actor: Actor, skillId: string): Promise<{ ok: true }> {
       const existing = await owned(actor, skillId);
-      assertWritable(existing);
       const scope = { spaceId: actor.spaceId, userId: actor.userId };
       // File first, rows second: orphan rows are harmless, a row-less file would widen to "all".
       await removeUserSkill(root(actor), existing.name);
