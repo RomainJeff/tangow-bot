@@ -15,6 +15,12 @@ export function createHomeStyles() {
       alignItems: "center",
       justifyContent: "center",
     },
+    top: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+    },
     header: {
       flexDirection: "row",
       alignItems: "center",
@@ -56,7 +62,9 @@ export function createHomeStyles() {
       paddingVertical: 10,
       textAlignVertical: "center",
       borderRadius: 10,
-      backgroundColor: native.fill,
+      // On the ambient light, as the web's phone-width search field: the group plane and its hairline.
+      backgroundColor: tokens.group,
+      boxShadow: shadows.group,
       color: native.label,
       paddingHorizontal: 12,
       fontSize: 17,
