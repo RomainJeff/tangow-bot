@@ -14,7 +14,8 @@ if (!capability || !harness) {
   console.error("RAKAZO_WORKER_CAPABILITY or RAKAZO_WORKER_HARNESS is missing or unknown");
   process.exit(2);
 }
-// Commands the run starts do not inherit it.
+// Commands the run starts do not inherit it. They can still read it from this process's
+// /proc environ: the guest is hostile and holds it anyway, so this is hygiene, not a boundary.
 delete process.env.RAKAZO_WORKER_CAPABILITY;
 
 // Termination stops the run's tools first: each command runs in a process group of its own.
