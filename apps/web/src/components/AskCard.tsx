@@ -391,7 +391,6 @@ export function AskCard({
 
   return (
     <FramedBlock
-      className="mt-1.5"
       data-testid={secretInput ? "secret-ask-card" : undefined}
       header={header ? { ...header, dot: answered === undefined } : undefined}
       // An approval question can carry model-written text (a bot's name): never fetch an image for it.

@@ -39,7 +39,7 @@ export function ArtifactFileCard(props: ArtifactFileCardProps) {
 
   if (!markdown) {
     return (
-      <div>
+      <div className="min-w-0 max-w-full">
         <Surface className="w-link-card max-w-full overflow-hidden">
           <button
             type="button"
@@ -60,7 +60,7 @@ export function ArtifactFileCard(props: ArtifactFileCardProps) {
 
   return (
     <>
-      <div>
+      <div className="min-w-0 max-w-full">
         <Surface className="w-link-card max-w-full overflow-hidden text-start text-foreground">
           {/* One hover for the whole card: the download button sits inside it, not beside it. */}
           <div className="flex items-center duration-(--duration-hover) ease-quiet hover:bg-pressed/40">

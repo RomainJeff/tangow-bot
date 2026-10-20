@@ -155,7 +155,7 @@ export function LinkPreviewRow({
 }) {
   const image = card.image;
   return (
-    <div className={`mt-1 flex first:mt-0 ${side === "user" ? "justify-end" : "justify-start"}`}>
+    <div className={`flex w-full ${side === "user" ? "justify-end" : "justify-start"}`}>
       <LinkPreviewCard
         // The same width cap as the bubble it stands for, so the side still says who sent it.
         className={side === "user" ? "max-w-39/50" : inGroup ? "max-w-22/25" : "max-w-41/50"}

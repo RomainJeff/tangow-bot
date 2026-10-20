@@ -70,7 +70,11 @@ export function MessageRow({
             </span>
           </div>
         ) : null}
-        <div data-slot="message-row-body" className="text-body text-pretty text-foreground">
+        {/* One message's blocks keep 8 px between them: a card never touches its text. */}
+        <div
+          data-slot="message-row-body"
+          className="flex flex-col gap-2 text-body text-pretty text-foreground"
+        >
           {children}
         </div>
       </div>

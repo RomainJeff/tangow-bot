@@ -189,7 +189,7 @@ export const MessageView = memo(function MessageView({
       data-testid="reply-parent-preview"
       aria-label={t`Jump to replied message`}
       onClick={() => onJumpToMessage?.(parentJumpId)}
-      className="mb-2 block max-w-3/4 truncate rounded-card bg-muted px-3 py-2 text-start text-meta text-muted-foreground duration-(--duration-hover) ease-quiet hover:text-foreground"
+      className="block max-w-3/4 truncate rounded-card bg-muted px-3 py-2 text-start text-meta text-muted-foreground duration-(--duration-hover) ease-quiet hover:text-foreground"
       dir="auto"
     >
       {replyPreview ? previewMessageText(replyPreview) : t`Earlier message`}
