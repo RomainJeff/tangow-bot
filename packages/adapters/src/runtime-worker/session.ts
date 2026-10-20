@@ -70,6 +70,22 @@ type Helper = {
 };
 
 /**
+ * Masks secrets in a transcript's text. An image's base64 data is kept as it is: it would spend
+ * the redaction budget and come back as a bare `[redacted]` in place of the image.
+ */
+function redactTranscript(value: unknown, secrets: string[]): unknown {
+  if (Array.isArray(value)) return value.map((item) => redactTranscript(item, secrets));
+  if (value === null || typeof value !== "object") return redactPayloadValue(value, secrets);
+  const image = (value as { type?: unknown }).type === "image";
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [
+      redactSecrets(key, secrets),
+      image && key === "data" ? item : redactTranscript(item, secrets),
+    ]),
+  );
+}
+
+/**
  * One attempt's guest, from launch to confirmed stop. Lives as long as the executor's run: a
  * controller restart ends the attempt, so everything here may stay in memory.
  */
@@ -225,7 +241,7 @@ export function createSession(
     relays.set(seq, abort);
     try {
       // The guest's own tool output reaches its transcript unredacted: mask it before the provider.
-      const call = redactPayloadValue(body.call, [...(request.secrets ?? [])]);
+      const call = redactTranscript(body.call, [...(request.secrets ?? [])]);
       const usage: RelayUsage | undefined = await RELAYS[body.dialect](
         helper?.model ?? request.model,
         call as never,

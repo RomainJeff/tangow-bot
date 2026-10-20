@@ -420,6 +420,54 @@ describe("a hostile guest", () => {
     await run.done.catch(() => undefined);
   });
 
+  it("relays a large image the guest read untouched, and still masks the text beside it", async () => {
+    const seen: ModelEmulatorRequest[] = [];
+    const server = await startModelEmulator({
+      apiKey: "controller-only-key",
+      steps: [{ expect: (body) => void seen.push(body), response: { type: "text", text: "Ok." } }],
+    });
+    onTestFinished(() => server.close());
+    const secrets = ["one", "two", "three", "four", "five", "six"].map((name) => `${name}-secret`);
+    const { runtime, launchedFor } = setup();
+    const run = consume(
+      runtime.run(
+        request("run_model_image", { model: { ...server.model, acceptsImages: true }, secrets }),
+      ),
+    );
+    const launched = await launchedFor("run_model_image");
+    const guest = rawGuest(launched.connect(), launched.capability);
+    await guest.hello();
+    const image = "iVBORw0KGgo".padEnd(1.5 * 1024 * 1024, "A");
+
+    guest.send(1, {
+      type: "model.request",
+      agent: "root",
+      dialect: "pi-ai",
+      call: {
+        context: {
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: "Look: TOKEN=two-secret" },
+                { type: "image", data: image, mimeType: "image/png" },
+              ],
+              timestamp: 0,
+            },
+          ],
+        },
+        options: {},
+      },
+    });
+
+    expect((await guest.replies(1)).at(-1)).toEqual({ type: "model.end" });
+    const sent = JSON.stringify(seen[0]?.messages);
+    expect(sent).toContain("Look: TOKEN=[redacted]");
+    expect(sent).toContain(`data:image/png;base64,${image}`);
+    await runtime.abort("run_model_image");
+    await run.done.catch(() => undefined);
+  });
+
   it("stops the controller's upstream model call when it aborts the call", async () => {
     const upstream = { opened: Promise.withResolvers<void>(), closed: false };
     const server = await startModelEmulator({
