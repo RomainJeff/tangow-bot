@@ -14,7 +14,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import { destroyBot } from "./child-bots.js";
 import { provisionComputer } from "./computer-lifecycle.js";
 import { fakeE2BMachine } from "./e2b-machine.test-support.js";
-import { E2BSandboxProvider, type E2BSandboxSdk } from "./e2b-sandbox.js";
+import type { E2BSandboxSdk } from "./e2b-sandbox.js";
+import { E2BSandboxProvider } from "./e2b-sandbox.js";
 import { FakeSandboxProvider } from "./fake-sandbox.js";
 import { FakeWorkerProvider } from "./fake-worker-provider.js";
 import { LocalAgentHomeStore } from "./home.js";
@@ -56,10 +57,10 @@ describe("volume provisioning and home adoption", () => {
       await workers.provisionVolume(volume.id, fixture.context),
     ];
 
-    expect(refs).toEqual([`fake-volume-rakazo-${volume.id}`, `fake-volume-rakazo-${volume.id}`]);
+    expect(refs).toEqual([`rakazo-${volume.id}`, `rakazo-${volume.id}`]);
     expect(fake.calls).toEqual([{ op: "ensureVolume", name: `rakazo-${volume.id}` }]);
     expect((await prisma.volume.findUniqueOrThrow({ where: { id: volume.id } })).providerRef).toBe(
-      `fake-volume-rakazo-${volume.id}`,
+      `rakazo-${volume.id}`,
     );
   });
 
@@ -146,7 +147,7 @@ describe("volume provisioning and home adoption", () => {
     const bobVolume = await prisma.volume.findFirstOrThrow({ where: { botId: bob.id } });
     expect(await volumes()).toEqual([
       { botId: ada.id, providerRef: adaVolume.providerRef },
-      { botId: bob.id, providerRef: `fake-volume-rakazo-${bobVolume.id}` },
+      { botId: bob.id, providerRef: `rakazo-${bobVolume.id}` },
     ]);
     expect(fake.calls).toEqual([{ op: "ensureVolume", name: `rakazo-${bobVolume.id}` }]);
   });
@@ -256,7 +257,9 @@ describe("deleting the owner of a volume", () => {
     botId: string | null,
   ) {
     const volume = await fixture.seedVolume(kind, spaceId, botId, null);
-    return { ...volume, providerRef: await workers.provisionVolume(volume.id, fixture.context) };
+    const providerRef = await workers.provisionVolume(volume.id, fixture.context);
+    await prisma.volume.update({ where: { id: volume.id }, data: { ensureUntil: new Date(0) } });
+    return { ...volume, providerRef };
   }
 
   /** Records, for each provider volume deleted, whether a row still named it then. */
@@ -343,13 +346,13 @@ describe("deleting the owner of a volume", () => {
   it("deletes only this provider's recorded volumes, once, and clears a record already gone", async () => {
     const spaceId = await fixture.seedSpace();
     const kept = await provisioned("space_shared", spaceId, null);
-    fake.volumes.add("fake-volume-rakazo-of-another-deployment");
-    fake.volumes.add("fake-volume-rakazo-deleted");
+    fake.volumes.add("rakazo-of-another-deployment");
+    fake.volumes.add("rakazo-deleted");
     fake.volumes.add("rakazo-of-another-kind");
     await prisma.volumeDeletion.createMany({
       data: [
-        { providerKind: "fake-worker", providerRef: "fake-volume-rakazo-deleted", volumeId: "a" },
-        { providerKind: "fake-worker", providerRef: "fake-volume-rakazo-gone", volumeId: "b" },
+        { providerKind: "fake-worker", providerRef: "rakazo-deleted", volumeId: "a" },
+        { providerKind: "fake-worker", providerRef: "rakazo-gone", volumeId: "b" },
         { providerKind: "e2b", providerRef: "rakazo-of-another-kind", volumeId: "c" },
       ],
     });
@@ -359,7 +362,7 @@ describe("deleting the owner of a volume", () => {
 
     expect([...fake.volumes].sort()).toEqual([
       kept.providerRef,
-      "fake-volume-rakazo-of-another-deployment",
+      "rakazo-of-another-deployment",
       "rakazo-of-another-kind",
     ]);
     expect(await recorded()).toEqual(["rakazo-of-another-kind"]);
@@ -378,13 +381,15 @@ describe("deleting the owner of a volume", () => {
     await expect(workers.provisionVolume(volume.id, fixture.context)).rejects.toThrow(
       new VolumeRefusedError({ code: "volume_not_found", volumeId: volume.id }),
     );
-    expect(await recorded()).toEqual([`fake-volume-rakazo-${volume.id}`]);
+    expect(await recorded()).toEqual([`rakazo-${volume.id}`]);
 
+    expect(await workers.sweepVolumes(fixture.context)).toEqual({ deleted: 0, failed: 0 });
+    await prisma.volumeDeletion.updateMany({ data: { notBefore: new Date(0) } });
     expect(await workers.sweepVolumes(fixture.context)).toEqual({ deleted: 1, failed: 0 });
     expect([...fake.volumes]).toEqual([]);
   });
 
-  it("keeps the record of a volume created again while a sweep was deleting it", async () => {
+  it("keeps a fresh tombstone when two sweepers finish an earlier deletion", async () => {
     const spaceId = await fixture.seedSpace();
     const bot = await fixture.seedBot(spaceId, null);
     const volume = await fixture.seedVolume("bot_private", spaceId, bot.id, null);
@@ -395,30 +400,68 @@ describe("deleting the owner of a volume", () => {
     });
     let held = false;
     fake.ensureVolume = async (input, context) => {
+      const result = await ensureVolume(input, context);
       if (!held) {
         held = true;
         await lateEnsure;
       }
-      return ensureVolume(input, context);
+      return result;
     };
     const late = workers.provisionVolume(volume.id, fixture.context).catch(() => undefined);
     await vi.waitFor(() => expect(held).toBe(true));
     const providerRef = await workers.provisionVolume(volume.id, fixture.context);
     await prisma.$transaction((tx) => deleteOwnerVolumes(tx, { botId: bot.id }));
     const deleteVolume = fake.deleteVolume.bind(fake);
+    const pending: Array<() => void> = [];
     fake.deleteVolume = async (input, context) => {
       await deleteVolume(input, context);
-      resumeLate();
-      await late;
+      await new Promise<void>((resolve) => {
+        pending.push(resolve);
+      });
     };
+    await prisma.volumeDeletion.updateMany({ data: { notBefore: new Date(0) } });
+    const sweepA = workers.sweepVolumes(fixture.context);
+    await vi.waitFor(() => expect(pending).toHaveLength(1));
+    const sweepB = workers.sweepVolumes(fixture.context);
+    await vi.waitFor(() => expect(pending).toHaveLength(2));
+    pending[0]!();
+    await sweepA;
+    expect(await recorded()).toEqual([]);
+    resumeLate();
+    await late;
+    expect(await recorded()).toEqual([providerRef]);
+    pending[1]!();
+    await sweepB;
 
-    await workers.sweepVolumes(fixture.context);
-
-    expect([...fake.volumes]).toEqual([providerRef]);
     expect(await recorded()).toEqual([providerRef]);
     fake.deleteVolume = deleteVolume;
+    await prisma.volumeDeletion.updateMany({ data: { notBefore: new Date(0) } });
     expect(await workers.sweepVolumes(fixture.context)).toEqual({ deleted: 1, failed: 0 });
+    expect(await recorded()).toEqual([]);
+  });
+
+  it("sweeps a volume whose create response was lost before its ref was recorded", async () => {
+    const spaceId = await fixture.seedSpace();
+    const bot = await fixture.seedBot(spaceId, null);
+    const volume = await fixture.seedVolume("bot_private", spaceId, bot.id, null);
+    const ensureVolume = fake.ensureVolume.bind(fake);
+    fake.ensureVolume = async (input, context) => {
+      await ensureVolume(input, context);
+      throw new Error("The create response was lost");
+    };
+    await expect(workers.provisionVolume(volume.id, fixture.context)).rejects.toThrow(
+      "The create response was lost",
+    );
+    await prisma.$transaction((tx) => deleteOwnerVolumes(tx, { botId: bot.id }));
+
+    expect(await workers.sweepVolumes(fixture.context)).toEqual({ deleted: 0, failed: 0 });
+    expect([...fake.volumes]).toEqual([`rakazo-${volume.id}`]);
+    await prisma.volumeDeletion.updateMany({ data: { notBefore: new Date(0) } });
+    const restarted = createWorkerLifecycle({ prisma, provider: fake });
+    await restarted.sweepVolumes(fixture.context);
+
     expect([...fake.volumes]).toEqual([]);
+    expect(await recorded()).toEqual([]);
   });
 
   it("deletes an empty space with its volume rows, then its provider volume", async () => {
@@ -500,7 +543,7 @@ describe("starting a computer whose home is on volumes", () => {
       [`/workspace/bots/${bot.id}`, `/workspace/bots/${attached.id}`, "/workspace/shared"].sort(),
     );
     expect(vi.mocked(sdk.create).mock.calls[0]![0].volumeMounts).toMatchObject({
-      [`/workspace/bots/${attached.id}`]: `fake-volume-rakazo-${attachedVolume.id}`,
+      [`/workspace/bots/${attached.id}`]: `rakazo-${attachedVolume.id}`,
     });
   });
 

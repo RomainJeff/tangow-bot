@@ -251,26 +251,38 @@ export function createWorkerLifecycle(deps: {
    */
   async function provisionVolume(volumeId: string, context: AdapterContext): Promise<string> {
     const provider = requireProvider();
-    const volume = await prisma.volume.findUniqueOrThrow({
-      where: { id: volumeId },
-      select: { providerKind: true, providerRef: true },
+    const volume = await prisma.$transaction(async (tx) => {
+      const [row] = await tx.$queryRaw<
+        { providerKind: string; providerRef: string | null; ensureUntil: Date | null }[]
+      >`SELECT "providerKind", "providerRef", "ensureUntil" FROM volumes
+        WHERE id = ${volumeId} FOR UPDATE`;
+      if (!row) throw new VolumeRefusedError({ code: "volume_not_found", volumeId });
+      if (row.providerKind !== provider.describe().id) {
+        throw new VolumeRefusedError({ code: "provider_mismatch", volumeId });
+      }
+      if (row.providerRef) return { mode: "ready", providerRef: row.providerRef } as const;
+      const ensureUntil = workerEnsureDeadline(new Date());
+      const deadline =
+        row.ensureUntil && row.ensureUntil > ensureUntil ? row.ensureUntil : ensureUntil;
+      await tx.volume.update({ where: { id: volumeId }, data: { ensureUntil: deadline } });
+      return { mode: "ensure", providerKind: row.providerKind, ensureUntil: deadline } as const;
     });
-    if (volume.providerRef) return volume.providerRef;
-    if (volume.providerKind !== provider.describe().id) {
-      throw new VolumeRefusedError({ code: "provider_mismatch", volumeId });
-    }
-    const { providerRef } = await provider.ensureVolume({ name: `rakazo-${volumeId}` }, context);
+    if (volume.mode === "ready") return volume.providerRef;
+    const { providerRef } = await provider.ensureVolume(
+      { name: `rakazo-${volumeId}`, ensureDeadline: volume.ensureUntil },
+      context,
+    );
     // Locked like `deleteOwnerVolumes`, so the ref lands either on the row or in a deletion record.
     const recorded = await prisma.$transaction(async (tx) => {
       const [row] = await tx.$queryRaw<{ providerRef: string | null }[]>`
         SELECT "providerRef" FROM volumes WHERE id = ${volumeId} FOR UPDATE`;
       if (!row) {
-        // A sweep may have deleted this volume before this ensure created it again.
+        // A late response refreshes the deletion record, even if an earlier sweep cleared it.
         await tx.$executeRaw`
-          INSERT INTO volume_deletions ("providerKind", "providerRef", "volumeId")
-          VALUES (${volume.providerKind}, ${providerRef}, ${volumeId})
-          ON CONFLICT ("providerKind", "providerRef")
-          DO UPDATE SET generation = volume_deletions.generation + 1`;
+          INSERT INTO volume_deletions ("providerKind", "providerRef", "volumeId", "notBefore")
+          VALUES (${volume.providerKind}, ${providerRef}, ${volumeId}, ${volume.ensureUntil})
+          ON CONFLICT ("providerKind", "providerRef") DO UPDATE SET generation = DEFAULT,
+            "notBefore" = GREATEST(volume_deletions."notBefore", EXCLUDED."notBefore")`;
         return null;
       }
       if (row.providerRef) return row.providerRef;
@@ -516,7 +528,7 @@ export function createWorkerLifecycle(deps: {
       if (!deps.provider) return counts;
       const providerKind = deps.provider.describe().id;
       const deletions = await prisma.volumeDeletion.findMany({
-        where: { providerKind },
+        where: { providerKind, notBefore: { lte: new Date() } },
         orderBy: { createdAt: "asc" },
         take: VOLUME_SWEEP_BATCH,
         select: { providerRef: true, generation: true },

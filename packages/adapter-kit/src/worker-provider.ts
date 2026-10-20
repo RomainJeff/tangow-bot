@@ -43,11 +43,17 @@ export interface WorkerProvider {
     target: { attemptId: string; providerRef: string | null },
     context: AdapterContext,
   ): Promise<"destroyed" | "absent">;
-  /** Creates the volume named `name`, or returns the existing one. */
-  ensureVolume(input: { name: string }, context: AdapterContext): Promise<{ providerRef: string }>;
   /**
-   * Deletes the volume `ensureVolume` returned `providerRef` for, once its row is deleted. A volume
-   * already gone is not an error.
+   * Creates the volume named `name`, or returns it. Its reference must be `name`, even if the
+   * create response is lost. No create may land after `ensureDeadline`: deletion waits until then.
+   */
+  ensureVolume(
+    input: { name: string; ensureDeadline: Date },
+    context: AdapterContext,
+  ): Promise<{ providerRef: string }>;
+  /**
+   * Deletes the named volume once its row is deleted, even if ensureVolume never returned.
+   * A volume already gone is not an error.
    */
   deleteVolume(input: { providerRef: string }, context: AdapterContext): Promise<void>;
 }

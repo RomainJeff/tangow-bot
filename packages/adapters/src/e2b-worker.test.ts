@@ -1,12 +1,8 @@
 import type { WorkerSpec } from "@rakazo/adapter-kit";
 import { createLogger, createTestSink, getLogger, installLogger } from "@rakazo/logging";
-import { afterEach, describe, expect, it } from "vitest";
-import {
-  E2B_CREATE_MARGIN_MS,
-  E2BWorkerProvider,
-  type E2BWorkerSandbox,
-  type E2BWorkerSdk,
-} from "./e2b-worker.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { E2BWorkerSandbox, E2BWorkerSdk } from "./e2b-worker.js";
+import { E2B_CREATE_MARGIN_MS, E2BWorkerProvider } from "./e2b-worker.js";
 import { encodeFrameLine } from "./runtime-worker/framing.js";
 
 type Guest = {
@@ -126,8 +122,14 @@ describe("E2BWorkerProvider", () => {
   it("creates one secure sandbox per attempt with its volumes mounted by name", async () => {
     const e2b = fakeE2B();
     const worker = new E2BWorkerProvider(config, e2b.sdk);
-    const bot = await worker.ensureVolume({ name: "rakazo-vol_bot" });
-    const shared = await worker.ensureVolume({ name: "rakazo-vol_shared" });
+    const bot = await worker.ensureVolume({
+      name: "rakazo-vol_bot",
+      ensureDeadline: spec([]).ensureDeadline,
+    });
+    const shared = await worker.ensureVolume({
+      name: "rakazo-vol_shared",
+      ensureDeadline: spec([]).ensureDeadline,
+    });
     const attempt = spec([
       { volumeRef: bot.providerRef, path: "/workspace/bots/bot_1", access: "rw" },
       { volumeRef: shared.providerRef, path: "/workspace/shared", access: "rw" },
@@ -219,12 +221,34 @@ describe("E2BWorkerProvider", () => {
     const worker = new E2BWorkerProvider(config, e2b.sdk);
 
     const refs = [
-      await worker.ensureVolume({ name: "rakazo-vol_1" }),
-      await worker.ensureVolume({ name: "rakazo-vol_1" }),
+      await worker.ensureVolume({ name: "rakazo-vol_1", ensureDeadline: spec([]).ensureDeadline }),
+      await worker.ensureVolume({ name: "rakazo-vol_1", ensureDeadline: spec([]).ensureDeadline }),
     ];
 
     expect(refs).toEqual([{ providerRef: "rakazo-vol_1" }, { providerRef: "rakazo-vol_1" }]);
     expect([...e2b.volumes]).toEqual(["rakazo-vol_1"]);
+  });
+
+  it("does not create a volume after a slow lookup exhausts its create deadline", async () => {
+    const e2b = fakeE2B();
+    const input = { name: "rakazo-delayed", ...creatingFor(1_000) };
+    const now = Date.now();
+    const clock = vi.spyOn(Date, "now").mockReturnValue(now);
+    const worker = new E2BWorkerProvider(config, {
+      ...e2b.sdk,
+      async listVolumes() {
+        clock.mockReturnValue(now + 1_001);
+        return [];
+      },
+    });
+    try {
+      await expect(worker.ensureVolume(input)).rejects.toThrow(
+        "Volume creation missed its deadline",
+      );
+      expect([...e2b.volumes]).toEqual([]);
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   it("carries frames both ways over the guest's stdio and ends when the command does", async () => {

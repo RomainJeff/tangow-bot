@@ -1,4 +1,5 @@
-import { type ChildProcess, spawn } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
+import { spawn } from "node:child_process";
 import { mkdir, rm, symlink } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,14 +10,8 @@ import type {
   WorkerProvider,
   WorkerSpec,
 } from "@rakazo/adapter-kit";
-import {
-  type ChannelFaults,
-  type FrameChannel,
-  type GuestConnector,
-  memoryChannelPair,
-  streamChannel,
-  WORKER_LIMITS,
-} from "@rakazo/adapters/runtime-worker";
+import type { ChannelFaults, FrameChannel, GuestConnector } from "@rakazo/adapters/runtime-worker";
+import { memoryChannelPair, streamChannel, WORKER_LIMITS } from "@rakazo/adapters/runtime-worker";
 import { HARNESSES, runGuest } from "@rakazo/agent-run-worker";
 
 export interface LocalWorkerFaults extends ChannelFaults {
@@ -142,7 +137,12 @@ export class LocalWorkerProvider implements WorkerProvider, GuestConnector {
     return "destroyed";
   }
 
-  async ensureVolume(input: { name: string }): Promise<{ providerRef: string }> {
+  async ensureVolume(input: {
+    name: string;
+    ensureDeadline: Date;
+  }): Promise<{ providerRef: string }> {
+    if (Date.now() >= input.ensureDeadline.getTime())
+      throw new Error("Volume creation missed its deadline");
     await mkdir(this.volumePath(input.name), { recursive: true });
     return { providerRef: input.name };
   }

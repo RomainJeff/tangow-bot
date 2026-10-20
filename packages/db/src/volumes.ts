@@ -15,8 +15,8 @@ export class OwnerWorkerLiveError extends Error {
 const UNRELEASED = new Set<string>([...LIVE_WORKER_STATES, "releasing"]);
 
 /**
- * Deletes the owner's volume rows inside the owner's deletion transaction, and records each
- * provisioned one in `volume_deletions` for the sweep to delete at the provider after commit.
+ * Deletes the owner's volume rows inside the owner's deletion transaction, and records them
+ * in `volume_deletions` for the sweep to delete at the provider after commit.
  * Locks in the workers' order (the owner's runs, their workers' attempts, then the volumes by id)
  * and refuses while a worker of the owner's runs is not confirmed gone, unless its TTL has passed
  * and the provider has ended it.
@@ -55,10 +55,12 @@ export async function deleteOwnerVolumes(
     await tx.$executeRaw`
       WITH deleted AS (
         DELETE FROM volumes WHERE id = ANY(${volumes.map((volume) => volume.id)})
-        RETURNING id, "providerKind", "providerRef"
+        RETURNING id, "providerKind", "providerRef", "ensureUntil"
       )
-      INSERT INTO volume_deletions ("providerKind", "providerRef", "volumeId")
-      SELECT "providerKind", "providerRef", id FROM deleted WHERE "providerRef" IS NOT NULL
-      ON CONFLICT DO NOTHING`;
+      INSERT INTO volume_deletions ("providerKind", "providerRef", "volumeId", "notBefore")
+      SELECT "providerKind", COALESCE("providerRef", 'rakazo-' || id), id,
+        COALESCE("ensureUntil", ${now}) FROM deleted
+      ON CONFLICT ("providerKind", "providerRef") DO UPDATE SET generation = DEFAULT,
+        "notBefore" = GREATEST(volume_deletions."notBefore", EXCLUDED."notBefore")`;
   }
 }

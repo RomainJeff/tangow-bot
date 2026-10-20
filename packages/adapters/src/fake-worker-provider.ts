@@ -78,11 +78,13 @@ export class FakeWorkerProvider implements WorkerProvider {
   }
 
   async ensureVolume(
-    input: { name: string },
+    input: { name: string; ensureDeadline: Date },
     _context: AdapterContext,
   ): Promise<{ providerRef: string }> {
     this.calls.push({ op: "ensureVolume", name: input.name });
-    const providerRef = `fake-volume-${input.name}`;
+    if (Date.now() >= input.ensureDeadline.getTime())
+      throw new Error("Volume creation missed its deadline");
+    const providerRef = input.name;
     this.volumes.add(providerRef);
     return { providerRef };
   }

@@ -1001,6 +1001,7 @@ model Volume {
   bot             Bot?     @relation(fields: [botId], references: [id], onDelete: Restrict)
   providerKind    String
   providerRef     String?
+  ensureUntil     DateTime?
   writerAttemptId String?
   writerAttempt   Attempt? @relation("VolumeWriter", fields: [writerAttemptId], references: [id], onDelete: Restrict)
   createdAt       DateTime @default(now())
@@ -1016,8 +1017,9 @@ model VolumeDeletion {
   providerKind String
   providerRef  String
   volumeId     String
-  /// Bumped when the volume is created again, so a sweep that deleted the earlier one keeps it.
-  generation   Int      @default(0)
+  /// Unique across deletion and reinsertion, so an older sweep cannot clear a fresh record.
+  generation   Int      @default(dbgenerated("nextval('volume_deletion_generation_seq'::regclass)"))
+  notBefore    DateTime @default(now())
   createdAt    DateTime @default(now())
 
   @@id([providerKind, providerRef])

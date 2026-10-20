@@ -19,7 +19,7 @@ interface WorkerSpec {
 }
 ```
 
-`volumeRef` is the value your `ensureVolume` returned. `path` is `/workspace/bots/<botId>` or `/workspace/shared`. Mount each volume at exactly that path.
+`volumeRef` is the volume name passed to `ensureVolume`, which must return that same name. `path` is `/workspace/bots/<botId>` or `/workspace/shared`. Mount each volume at exactly that path.
 
 ## Implement `WorkerProvider`
 
@@ -33,10 +33,14 @@ Each method has a rule that the controller depends on for safety:
 | `ensure(spec)` | Create one worker tagged with `spec.attemptId` and return its reference. The controller calls it once per attempt. Never create the worker after `spec.ensureDeadline`, the instant the controller stops waiting for it. | Create a container with the label `rakazo.attempt=<attemptId>`, mount each volume at its `path`, and stop it after `ttlSeconds`. Cancel creation when the deadline passes. Return the container id. |
 | `prepare(ref, spec)` | Finish fallible setup after the reference is recorded. It must be idempotent. | Start the container, then wait until the mounts are visible and the runner answers. |
 | `destroy({ attemptId, providerRef })` | Remove every worker tagged with `attemptId`, with or without a reference. Return `absent` when none is left. Never treat "not found" as an error. | Remove every container with the label `rakazo.attempt=<attemptId>`, forced. Leave the volumes in place. |
-| `ensureVolume({ name })` | Create the named volume, or return the existing one. | Create the volume `name` if it is missing, and return `name`. |
-| `deleteVolume({ providerRef })` | Delete the volume `ensureVolume` returned this reference for. One already gone is not an error. | Remove the volume `providerRef` if it exists. |
+| `ensureVolume({ name, ensureDeadline })` | Create the named volume, or return it. Always return `name` as its reference. No create may land after `ensureDeadline`, even if the controller dies or loses the response. | Create the volume `name` if it is missing, and return `name`. Bound creation by the deadline, including server processing after a lost response. |
+| `deleteVolume({ providerRef })` | Delete the named volume, even if `ensureVolume` never returned. One already gone is not an error. | Remove the volume `providerRef` if it exists. |
 
-Volumes outlive every run. Deleting a bot or a space deletes its volume rows in its own transaction, and records each provisioned one in `volume_deletions`. A row deleted while `provisionVolume` was creating its volume leaves a record too. The lifecycle's `sweepVolumes` deletes exactly the recorded volumes at the provider, then their records, right after the deletion and on each reconciler pass. It never lists the provider's volumes, so a provider account shared with another deployment keeps that deployment's volumes. Records wait while no provider of their kind is configured.
+Volumes outlive every run. Before calling `ensureVolume`, the controller commits an `ensureUntil` deadline under the volume row lock. The name is always `rakazo-<volumeId>`, so a reference can be recovered without a provider response. Deleting a bot or a space deletes its volume rows and records every volume in `volume_deletions` in the same transaction, including rows with no recorded reference. The record preserves the latest provisioning deadline. Concurrent provisioners extend that deadline under the same lock.
+
+The lifecycle's `sweepVolumes` waits until that deadline before deleting the named volume and its record. This prevents a create still in flight from recreating a volume after its deletion was swept, including when the controller crashed before recording the response. Even successful provisioning may delay deletion by the remaining deadline, currently up to 15 minutes. E2B stops sending creates a minute early and bounds the request with the remaining time and an abort signal. Providers must allow for their own server's completion time.
+
+A provisioning response that arrives after owner deletion refreshes the deletion record. Each insert or refresh takes its generation from a database sequence, which never resets on reinsertion. A sweeper clears only the generation it deleted, so concurrent sweepers cannot clear a fresh record. The sweep never discovers deletion candidates by listing the provider's volumes, so other deployments' volumes stay untouched. Records wait while no provider of their kind is configured.
 
 Respect the TTL at the provider. If the controller never confirms destruction, the TTL is the last bound on a worker that still holds a volume.
 
@@ -97,5 +101,6 @@ I1 defines the equivalent proofs for E2B. Reuse its attack list: direct mounts, 
 
 - Run the worker suites with your provider in place of `FakeWorkerProvider`. `packages/adapters/src/worker-lifecycle.test.ts` shows the behavior the controller expects.
 - Test that `destroy` without a reference finds a worker by its attempt tag, and returns `absent` once nothing is left.
-- Test that `ensure` respects its deadline and that `ensureVolume` returns the same reference twice.
+- Test that `ensure` and `ensureVolume` respect their deadlines and that `ensureVolume` returns the requested name twice.
+- Lose a create response, delete the owner before recording its reference, and verify that a restarted controller waits out the provisioning deadline and deletes the volume. Race two sweepers with a delayed provisioning response and verify that an older sweep keeps a fresh deletion record.
 - Keep these tests deterministic and offline. Gate any test that needs a real Docker daemon, and list it in the harness like the other suites that need Docker.
