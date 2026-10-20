@@ -28,7 +28,7 @@
   --destructive-foreground: #ffffff;
   --border: #2d2d30;
   --outline: #3f3f42;
-  --input: #363639;
+  --input: #4a4a4d;
   --ring: #aeaeb2;
   --sidebar: #2c2c2e;
   --sidebar-foreground: #f5f5f7;
@@ -38,6 +38,7 @@
   --surface: #3c3c3f;
   --sheet: #232326;
   --group: #333336;
+  --well: #4e4e50;
   --success: #4ecb71;
   --warning: #e9c46a;
   --overlay: rgba(4, 4, 5, 0.72);
@@ -123,6 +124,7 @@
   --surface: #ffffff;
   --sheet: #f5f5f7;
   --group: #ffffff;
+  --well: #eeeef1;
   --success: #228b3b;
   --warning: #b7791f;
   --overlay: rgba(20, 20, 22, 0.45);

@@ -40,7 +40,7 @@ export function TaskCardSurface({
   const StatusIcon = state === "done" ? null : STATE_ICON[state];
   return (
     <Surface variant="outlined" className="w-full overflow-hidden">
-      <div className="flex flex-col gap-1 px-4.5 py-4">
+      <div className="flex flex-col gap-1 p-4">
         <div className="flex items-center gap-2.5">
           <FileText className="size-4.5 shrink-0 text-foreground" aria-hidden="true" />
           <span className="min-w-0 flex-1 text-row-name font-semibold text-foreground" dir="auto">
@@ -68,7 +68,7 @@ export function TaskCardSurface({
         ) : null}
       </div>
       {body ? (
-        <div className="border-t border-border px-4.5 pt-3 pb-4">
+        <div className="border-t border-border px-4 pt-3 pb-4">
           <ClippedPreview
             text={body}
             maxLines={5}

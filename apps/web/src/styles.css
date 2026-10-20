@@ -50,3 +50,17 @@ body,
     opacity: 0.3;
   }
 }
+
+/* The thread scrolls under the header's fade and the composer's glass; its
+   scrollbar stops at both. WebKit keeps a track margin only while the
+   standard scrollbar properties stay at auto. */
+@supports selector(::-webkit-scrollbar) {
+  .rk-scroll.rk-thread-mask {
+    scrollbar-width: auto;
+    scrollbar-color: auto;
+  }
+}
+.rk-scroll.rk-thread-mask::-webkit-scrollbar-track {
+  margin-top: var(--thread-fade-top-end);
+  margin-bottom: var(--thread-overlap, 0px);
+}

@@ -179,10 +179,10 @@ export function AppConnectCard({
           <img
             src={block.logo}
             alt=""
-            className="h-10 w-10 rounded-row bg-card object-contain p-1"
+            className="h-10 w-10 rounded-row bg-well object-contain p-1"
           />
         ) : (
-          <span className="grid h-10 w-10 place-items-center rounded-row bg-muted text-meta text-foreground">
+          <span className="grid h-10 w-10 place-items-center rounded-row bg-well text-meta text-foreground">
             {block.name.slice(0, 1).toUpperCase()}
           </span>
         )}
@@ -344,7 +344,7 @@ export function McpApprovalCard({
   return (
     <Surface className="max-w-[74%] p-4">
       <div className="flex items-center gap-2">
-        <span className="grid h-7 w-7 place-items-center rounded-row bg-muted text-time text-foreground">
+        <span className="grid h-7 w-7 place-items-center rounded-row bg-well text-time text-foreground">
           M
         </span>
         <span className="text-author font-medium text-foreground">

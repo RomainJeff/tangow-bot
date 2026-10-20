@@ -30,8 +30,9 @@ test("the design-system kitchen sink renders every primitive light and dark", as
   // The thread frames exactly one thing, and it is not a message.
   await expect(page.locator('[data-slot="message-row"]').first()).not.toHaveClass(/shadow-/);
   await expect(page.locator('[data-slot="framed-block"]').first()).toHaveClass(/shadow-card/);
-  // An unframed card is a fill and a hairline.
-  await expect(page.locator('[data-slot="surface"]').first()).not.toHaveClass(/shadow-/);
+  // An unframed card is the bot's paper: the bubble's edge, never the card's lift.
+  await expect(page.locator('[data-slot="surface"]').first()).toHaveClass(/shadow-bubble/);
+  await expect(page.locator('[data-slot="surface"]').first()).not.toHaveClass(/shadow-card/);
 
   // The hover pill is absent until the row is hovered or focused.
   const pill = page.locator('[data-slot="hover-pill"]').first();
@@ -62,14 +63,19 @@ test("the design-system kitchen sink renders every primitive light and dark", as
     "Always allow this tool",
     "Allow once",
   ]);
-  const decisionBox = (await decision.boundingBox())!;
-  expect(decisionButtons[2]!.right).toBeCloseTo(decisionBox.x + decisionBox.width - 14, 0);
+  // Measured against the card itself, so its 20 px inset is part of the contract.
+  const decisionBox = (await decision
+    .locator('xpath=ancestor::*[@data-slot="framed-block"][1]')
+    .boundingBox())!;
+  expect(decisionButtons[2]!.right).toBeCloseTo(decisionBox.x + decisionBox.width - 20, 0);
   expect(decisionButtons[0]!.left).toBeGreaterThan(decisionBox.x + decisionBox.width / 3);
 
   const answers = page.locator('[data-slot="framed-block-actions"][data-align="start"]').first();
-  const answersBox = (await answers.boundingBox())!;
+  const answersBox = (await answers
+    .locator('xpath=ancestor::*[@data-slot="framed-block"][1]')
+    .boundingBox())!;
   const otherAnswer = (await answers.locator("button").boundingBox())!;
-  expect(otherAnswer.x).toBeCloseTo(answersBox.x + 14, 0);
+  expect(otherAnswer.x).toBeCloseTo(answersBox.x + 20, 0);
 
   // A named stack is readable; an unnamed one is decoration.
   await expect(page.locator('[data-slot="stacked-avatars"][role="img"]').first()).toHaveAttribute(

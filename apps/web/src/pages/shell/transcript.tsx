@@ -21,7 +21,7 @@ import { MessageActionsSheet } from "./message-actions-sheet";
 import { MessageHoverActions, UserMessageActions } from "./message-hover-actions";
 import { SessionView } from "./session-view";
 import type { RowContext } from "./thread-row";
-import { RowMarker, rowChrome, ThreadRowBody } from "./thread-row";
+import { isBubbleRow, RowMarker, rowChrome, ThreadRowBody } from "./thread-row";
 import { useBubbleLongPress } from "./use-bubble-long-press";
 import { useTranscriptFollow } from "./use-transcript-follow";
 
@@ -243,12 +243,15 @@ export const Transcript = memo(function Transcript({
           const prevChrome = previous ? rowChrome(previous.item, showSteps) : undefined;
           const arrives = arrived.has(item.id);
           // 14px between groups (the container's own `gap-3.5`) narrows to 3px
-          // within a group, and to 0 between two consecutive asides or two
-          // chained routine failure lines (they stack like a log).
+          // between two bubbles of a group and 8px when a card is one of them,
+          // and to 0 between two consecutive asides or two chained routine
+          // failure lines (they stack like a log).
           const spacingClass = row.chained
             ? " -mt-3.5"
             : !row.firstOfGroup
-              ? " -mt-2.75"
+              ? isBubbleRow(item) && previous && isBubbleRow(previous.item)
+                ? " -mt-2.75"
+                : " -mt-1.5"
               : chrome === "aside" && prevChrome === "aside"
                 ? " -mt-3.5"
                 : "";

@@ -70,7 +70,11 @@ export function MessageRow({
             </span>
           </div>
         ) : null}
-        <div data-slot="message-row-body" className="text-body text-pretty text-foreground">
+        {/* One message's blocks keep 8 px between them: a card never touches its text. */}
+        <div
+          data-slot="message-row-body"
+          className="flex flex-col gap-2 text-body text-pretty text-foreground"
+        >
           {children}
         </div>
       </div>
@@ -157,7 +161,7 @@ export function MessageBubble({
       data-slot="message-row-bubble"
       // Fractions rather than arbitrary widths: 41/50 is 82%, 22/25 is 88%.
       className={cn(
-        "w-fit rounded-bubble bg-chat-bot px-3.5 py-2.5 text-foreground shadow-bubble",
+        "w-fit rounded-bubble bg-chat-bot px-4 py-3 text-foreground shadow-bubble",
         inGroup ? "max-w-22/25" : "max-w-41/50",
         className,
       )}

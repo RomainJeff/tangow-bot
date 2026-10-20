@@ -4,8 +4,8 @@ import { ChatMarkdown, LinkifiedText } from "@rakazo/chat-ui/web";
 import type { LinkPreviewCard as LinkPreviewCardBlock, MessageBlock } from "@rakazo/contracts";
 import type { LinkMentionResolver } from "@rakazo/core";
 import { previewSiteLabel, sanitizePreviewTitle } from "@rakazo/core";
-import { LinkPreviewCard, Surface } from "@rakazo/ui-web";
-import { ArrowRight, Check } from "lucide-react";
+import { cn, LinkPreviewCard, Surface } from "@rakazo/ui-web";
+import { ArrowRight, Check, Monitor } from "lucide-react";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import type { ArtifactTarget } from "../../lib/artifact-open";
@@ -60,45 +60,35 @@ export function UserText({
 /** A bot this one created, opening its thread. */
 export function ChildBotCard({
   block,
+  avatar,
   onOpenBot,
 }: {
   block: BlockOf<"child_bot">;
+  avatar: ReactNode;
   onOpenBot: (botId: string) => void;
 }) {
   const removed = block.status === "deleted" || block.status === "archived";
   return (
-    <Surface className="w-[min(340px,90%)] overflow-hidden">
+    <Surface className="w-link-card max-w-full overflow-hidden">
       <button
         type="button"
         disabled={removed}
         onClick={() => onOpenBot(block.botId)}
-        className="block w-full px-4.5 py-4 text-start disabled:opacity-60"
+        className="flex w-full items-center gap-3 px-4 py-3 text-start duration-(--duration-hover) ease-quiet enabled:hover:bg-pressed/40 disabled:opacity-60"
       >
-        <div className="flex items-center justify-between">
-          <span className="text-author font-medium text-foreground" dir="auto">
+        {avatar}
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-row-name font-semibold text-foreground" dir="auto">
             {block.name}
           </span>
-          <span
-            className={`rounded-full px-3 py-1 text-meta ${
-              removed ? "bg-destructive/15 text-destructive" : "bg-success/15 text-success"
-            }`}
-          >
-            {block.status === "archived" ? (
-              <Trans>archived</Trans>
-            ) : block.status === "deleted" ? (
-              <Trans>deleted</Trans>
-            ) : (
-              <Trans>bot</Trans>
-            )}
+          <span className="block text-meta text-muted-foreground" dir="auto">
+            {removed
+              ? block.status === "archived"
+                ? t`Archived. Chat, memory, and files kept.`
+                : t`Removed with chat, computer, and memory.`
+              : block.title || t`Opened its thread.`}
           </span>
-        </div>
-        <div className="mt-2 text-meta text-muted-foreground" dir="auto">
-          {removed
-            ? block.status === "archived"
-              ? t`Archived. Chat, memory, and files kept.`
-              : t`Removed with chat, computer, and memory.`
-            : block.title || t`Opened its thread.`}
-        </div>
+        </span>
       </button>
     </Surface>
   );
@@ -108,12 +98,12 @@ export function ChildBotCard({
 export function ResultLinesCard({ block }: { block: BlockOf<"card"> }) {
   return (
     <div className="flex justify-start">
-      <Surface className="flex flex-col gap-2 px-5 py-4">
+      <Surface className="flex flex-col gap-2 p-4">
         {block.lines.map((line) => (
-          <div key={line.k} className="flex items-baseline gap-2.5 text-meta">
-            <Check className="size-3.5 text-success" strokeWidth={2} aria-hidden />
-            <span className="font-semibold text-foreground">{line.k}</span>
-            <ArrowRight className="size-3.5 text-muted-foreground" aria-hidden />
+          <div key={line.k} className="flex items-center gap-3 text-row-name">
+            <Check className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+            <span className="font-medium text-foreground">{line.k}</span>
+            <ArrowRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
             <span>{line.v}</span>
           </div>
         ))}
@@ -124,25 +114,29 @@ export function ResultLinesCard({ block }: { block: BlockOf<"card"> }) {
 
 /** The computer's state, and what it is doing. */
 export function ComputerCard({ block }: { block: BlockOf<"computer"> }) {
+  const needsYou = block.state === "Needs you";
   return (
-    <Surface className="w-[340px] px-4.5 py-4">
-      <div className="flex items-center justify-between">
-        <span className="text-author font-medium text-foreground">
+    <Surface className="flex w-link-card max-w-full items-center gap-3 px-4 py-3">
+      <span className="grid size-9 shrink-0 place-items-center rounded-row bg-well text-foreground">
+        <Monitor className="size-4.5" aria-hidden />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="text-row-name font-semibold text-foreground">
           <Trans>Computer</Trans>
-        </span>
-        <span
-          className={
-            block.state === "Needs you"
-              ? "rounded-full bg-warning/15 px-3 py-1 text-meta text-warning"
-              : "rounded-full bg-success/15 px-3 py-1 text-meta text-success"
-          }
-        >
-          {block.state}
-        </span>
+        </div>
+        <div className="text-meta text-muted-foreground">
+          <ChatMarkdown>{block.text}</ChatMarkdown>
+        </div>
       </div>
-      <div className="my-2.5 text-meta text-muted-foreground">
-        <ChatMarkdown>{block.text}</ChatMarkdown>
-      </div>
+      <span
+        className={cn(
+          "flex shrink-0 items-center gap-1.5 text-block-header",
+          needsYou ? "text-foreground" : "text-muted-foreground",
+        )}
+      >
+        {needsYou ? <span aria-hidden className="size-1.5 rounded-full bg-foreground" /> : null}
+        {block.state}
+      </span>
     </Surface>
   );
 }
@@ -161,7 +155,7 @@ export function LinkPreviewRow({
 }) {
   const image = card.image;
   return (
-    <div className={`mt-1 flex first:mt-0 ${side === "user" ? "justify-end" : "justify-start"}`}>
+    <div className={`flex w-full ${side === "user" ? "justify-end" : "justify-start"}`}>
       <LinkPreviewCard
         // The same width cap as the bubble it stands for, so the side still says who sent it.
         className={side === "user" ? "max-w-39/50" : inGroup ? "max-w-22/25" : "max-w-41/50"}

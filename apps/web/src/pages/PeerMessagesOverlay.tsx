@@ -216,7 +216,7 @@ export function PeerMessagesOverlay({
                       ) : null}
                       <div
                         data-slot="message-row-bubble"
-                        className="w-fit max-w-22/25 rounded-bubble bg-chat-bot px-3.5 py-2.5 text-foreground shadow-bubble"
+                        className="w-fit max-w-22/25 rounded-bubble bg-chat-bot px-4 py-3 text-foreground shadow-bubble"
                         dir="auto"
                       >
                         <ChatMarkdown>{stripPeerAddressPrefix(peerMessage.text)}</ChatMarkdown>
