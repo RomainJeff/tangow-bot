@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import type { VolumeFiles, WorkerProvider } from "@rakazo/adapter-kit";
 import {
   createWorkerLifecycle,
   InMemoryJobQueue,
@@ -9,10 +10,14 @@ import {
   provisionComputer,
   replaceComputer,
 } from "@rakazo/adapters";
+import type { GuestConnector } from "@rakazo/adapters/runtime-worker";
 import { volumeMountPath } from "@rakazo/core";
 import { Sandbox } from "e2b";
+import { toolResult } from "../file-task.js";
 import { startWorkerRun } from "../worker-run-fixture.js";
-import { COMPUTER_WORKSPACE, context, type Lane, sh, sha256 } from "./session.js";
+import { call, finish } from "./run.js";
+import type { Lane } from "./session.js";
+import { COMPUTER_WORKSPACE, context, forward, sh, sha256 } from "./session.js";
 
 /** A team home of two bots: shared files, each bot's files, an executable and a private key file. */
 function syntheticHome(bots: [string, string]) {
@@ -409,6 +414,127 @@ export const laneHProductRecreate: Lane = {
       };
     } finally {
       await files.close();
+      await run.close();
+      await rm(dir, { recursive: true, force: true });
+    }
+  },
+};
+
+export const laneHomeMoveFence: Lane = {
+  id: "home-move-fence",
+  issue: "migration sans copie concurrente",
+  scenario:
+    "A dedicated home with a snapshot moves onto real E2B volumes; while the copy writes its first file, its bot's run is started",
+  passWhen:
+    "The run started during the copy stays queued with no attempt and no worker; the move adopts; the run then completes in an E2B worker that reads the moved file",
+  async run(live) {
+    let shown = "";
+    const ensured: unknown[] = [];
+    const run = await startWorkerRun({
+      steps: [
+        call("cat", "bash", { command: "cat notes.md" }),
+        ...finish("Read the moved note", (request) => {
+          shown = toolResult(request);
+        }),
+      ],
+      provider: () => {
+        const provider: WorkerProvider & GuestConnector = live.workerProvider();
+        return forward(provider, {
+          async ensure(spec, ctx) {
+            ensured.push(spec.mounts);
+            return provider.ensure(spec, ctx);
+          },
+        });
+      },
+    });
+    const dir = await mkdtemp(path.join(tmpdir(), "rakazo-live-fence-"));
+    const volumeFiles = live.volumeFiles();
+    try {
+      const { prisma } = run;
+      const computerId = run.bot.computerId!;
+      const home = new LocalAgentHomeStore(path.join(dir, "homes"));
+      const src = path.join(dir, "src");
+      await mkdir(src, { recursive: true });
+      await writeFile(path.join(src, "notes.md"), "moved during a run\n");
+      // A dedicated computer's home key is its bot's id, the private volume it moves onto.
+      const revision = await home.commit(run.bot.id, src, context("fence"));
+      await prisma.computer.update({
+        where: { id: computerId },
+        data: { homeStorage: "snapshot", homeKey: run.bot.id, homeRevision: revision },
+      });
+
+      let runId: string | undefined;
+      let duringCopy: Record<string, unknown> | undefined;
+      const files: VolumeFiles = {
+        list: (ref, ctx) => volumeFiles.list(ref, ctx),
+        read: (ref, file, ctx) => volumeFiles.read(ref, file, ctx),
+        async write(ref, file, ctx) {
+          if (!runId) {
+            runId = await run.send("Read the note.");
+            await run.continueRun(runId);
+            const computer = await prisma.computer.findUniqueOrThrow({
+              where: { id: computerId },
+            });
+            duringCopy = {
+              status: (await prisma.run.findUniqueOrThrow({ where: { id: runId } })).status,
+              attempts: await prisma.attempt.count({ where: { runId } }),
+              workersEnsured: ensured.length,
+              reserved: computer.maintenanceId?.startsWith("home-move:") ?? false,
+            };
+          }
+          return volumeFiles.write(ref, file, ctx);
+        },
+      };
+      const lifecycle = createWorkerLifecycle({ prisma, provider: live.workerProvider() });
+      const moved = await moveHomeToVolumes(
+        { prisma, home, files, workers: lifecycle },
+        {
+          computerId,
+          dryRun: false,
+          leaveUnmapped: false,
+          manifestPath: path.join(dir, "manifest.json"),
+        },
+        context("fence"),
+      );
+      if (!runId) throw new Error(`The move wrote no file: ${JSON.stringify(moved)}`);
+      const computer = await prisma.computer.findUniqueOrThrow({ where: { id: computerId } });
+      await run.continueRun(runId);
+      const after = await prisma.run.findUniqueOrThrow({ where: { id: runId } });
+      const attempts = await prisma.attempt.findMany({
+        where: { runId },
+        select: { workerState: true },
+      });
+      run.model.assertComplete();
+      const pass =
+        duringCopy?.status === "queued" &&
+        duringCopy.attempts === 0 &&
+        duringCopy.workersEnsured === 0 &&
+        duringCopy.reserved === true &&
+        moved.outcome === "adopted" &&
+        computer.homeStorage === "volumes" &&
+        computer.maintenanceId === null &&
+        after.status === "completed" &&
+        attempts.length === 1 &&
+        attempts[0]?.workerState === "released" &&
+        ensured.length === 1 &&
+        shown.includes("moved during a run");
+      return {
+        pass,
+        observed: {
+          duringCopy,
+          move: moved.outcome,
+          computerAfterMove: {
+            homeStorage: computer.homeStorage,
+            reservationReleased: computer.maintenanceId === null,
+          },
+          runAfterMove: after.status,
+          attempts,
+          workersEnsured: ensured.length,
+          workerReadMovedFile: shown.includes("moved during a run"),
+        },
+      };
+    } finally {
+      await volumeFiles.close();
       await run.close();
       await rm(dir, { recursive: true, force: true });
     }
