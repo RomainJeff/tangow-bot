@@ -20,7 +20,7 @@ import { moveHomeToVolumes } from "./home-volume-migration.js";
 import { createJobReconciler } from "./job-reconciler.js";
 import { InMemoryJobQueue } from "./wakeup.js";
 import { composeWorkers } from "./worker-composition.js";
-import { mcpOnly, workerFixture } from "./worker-fixture.test-support.js";
+import { allFiles, mcpOnly, workerFixture } from "./worker-fixture.test-support.js";
 import { createWorkerLifecycle } from "./worker-lifecycle.js";
 
 let database: PgliteDatabase;
@@ -49,8 +49,17 @@ beforeEach(async () => {
 });
 afterEach(async () => {
   vi.useRealTimers();
+  vi.restoreAllMocks();
   await rm(root, { recursive: true, force: true });
 });
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
 
 function move(
   computerId: string,
@@ -182,6 +191,105 @@ describe("moving a home from snapshots to volumes", () => {
     await workers.release(attempt.id, fixture.context);
   });
 
+  it("keeps unrelated worker launches and computer boots available during a dedicated move", async () => {
+    const { computer: sibling, bot: otherBot } = await fixture.migratedBot();
+    const source = await fixture.seedComputer(sibling.spaceId, { scope: "dedicated" });
+    const bot = await fixture.seedBot(sibling.spaceId, source.id);
+    const own = await fixture.seedAttempt((await fixture.seedRun(bot)).id);
+    const other = await fixture.seedAttempt((await fixture.seedRun(otherBot)).id);
+    const workers = createWorkerLifecycle({ prisma, provider });
+    const ownLaunch = await fixture.launchFor(workers, own.id, mcpOnly);
+    const otherLaunch = await fixture.launchFor(workers, other.id, allFiles);
+    const reservation = await workers.reserveHomeMove(source.id);
+    if (!("marker" in reservation)) throw new Error(reservation.blocker);
+    try {
+      expect(await workers.plan({ attemptId: own.id, needs: mcpOnly })).toEqual({
+        mode: "busy",
+        reason: "home_moving",
+      });
+      await expect(workers.start(ownLaunch, fixture.context)).rejects.toBeInstanceOf(
+        AgentRuntimeBusyError,
+      );
+      expect((await workers.plan({ attemptId: other.id, needs: allFiles })).mode).toBe("worker");
+      await workers.start(otherLaunch, fixture.context);
+      await provisionComputer(
+        {
+          prisma,
+          home,
+          sandbox: new (class extends FakeSandboxProvider {
+            override async provision(...args: Parameters<FakeSandboxProvider["provision"]>) {
+              return { ...(await super.provision(...args)), kind: "e2b" as const };
+            }
+          })(),
+          jobs: new InMemoryJobQueue(),
+          events: createThreadEvents(prisma),
+        },
+        sibling.id,
+        fixture.context,
+      );
+      expect(await fixture.workerStateOf(other.id)).toBe("ready");
+      expect((await prisma.computer.findUniqueOrThrow({ where: { id: sibling.id } })).state).toBe(
+        "running",
+      );
+    } finally {
+      await workers.releaseHomeMove(reservation.marker);
+    }
+  });
+
+  it("times out a hung renewal and cancels copying before the reservation can expire", async () => {
+    const { computer } = await teamHome();
+    const workers = createWorkerLifecycle({ prisma, provider });
+    const renewal = deferred<boolean>();
+    vi.spyOn(workers, "renewHomeMove").mockReturnValue(renewal.promise);
+    const reading = deferred<AbortSignal>();
+    const continueRead = deferred<void>();
+    class WaitingForRead extends MemoryVolumeFiles {
+      override async list(ref: string, context: AdapterContext) {
+        reading.resolve(context.signal);
+        await continueRead.promise;
+        return super.list(ref, context);
+      }
+    }
+    volumeFiles = new WaitingForRead();
+    vi.useFakeTimers({
+      toFake: ["setInterval", "clearInterval", "setTimeout", "clearTimeout", "performance"],
+    });
+    const result = moveHomeToVolumes(
+      { prisma, home, files: volumeFiles, workers },
+      { computerId: computer.id, dryRun: false, leaveUnmapped: false, manifestPath: null },
+      fixture.context,
+    ).catch((error: unknown) => error);
+    const signal = await reading.promise;
+    try {
+      await vi.advanceTimersByTimeAsync(20_000);
+      expect(signal.aborted).toBe(true);
+      expect(performance.now()).toBeLessThan(60_000);
+    } finally {
+      continueRead.resolve();
+      renewal.resolve(false);
+      await result;
+    }
+    expect(await result).toBeInstanceOf(Error);
+    expect(volumeFiles.volumes.size).toBe(0);
+    expect(await homeStorageOf(computer.id)).toBe("snapshot");
+  });
+
+  it("refuses the next write after its monotonic deadline even before timer callbacks run", async () => {
+    const { computer } = await teamHome();
+    let elapsed = 0;
+    vi.spyOn(performance, "now").mockImplementation(() => elapsed);
+    class PausedProcess extends MemoryVolumeFiles {
+      override async list(ref: string, context: AdapterContext) {
+        elapsed = 60_000;
+        return super.list(ref, context);
+      }
+    }
+    volumeFiles = new PausedProcess();
+    await expect(move(computer.id)).rejects.toThrow("Home move reservation expired");
+    expect(volumeFiles.volumes.size).toBe(0);
+    expect(await homeStorageOf(computer.id)).toBe("snapshot");
+  });
+
   it("automatically releases an expired reservation in reconciliation, then resumes", async () => {
     const { computer } = await teamHome();
     const workers = createWorkerLifecycle({ prisma, provider });
@@ -191,8 +299,8 @@ describe("moving a home from snapshots to volumes", () => {
       outcome: "refused",
       refusal: { code: "computer_active" },
     });
-    vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(Date.now() + 120_000);
+    await prisma.$executeRaw`UPDATE computers SET "homeMoveExpiresAt" = (now() AT TIME ZONE 'UTC') - interval '1 second'
+      WHERE "maintenanceId" = ${reservation.marker}`;
     await createJobReconciler({
       prisma,
       jobs: new InMemoryJobQueue(),
@@ -230,15 +338,17 @@ describe("moving a home from snapshots to volumes", () => {
       outcome: "refused",
       refusal: { code: "computer_active" },
     });
-    vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(Date.now() + 120_000);
+    await prisma.$executeRaw`UPDATE computers SET "homeMoveExpiresAt" = (now() AT TIME ZONE 'UTC') - interval '1 second'
+      WHERE "maintenanceId" = ${reservation.marker}`;
     expect(await workers.clearStaleHomeMove(computer.id)).toBe(true);
     expect(await workers.clearStaleHomeMove(computer.id)).toBe(false);
   });
 
   it("renews a reservation during a long copy so reconciliation cannot release the live owner", async () => {
     const { computer } = await teamHome();
-    vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
+    vi.useFakeTimers({
+      toFake: ["setInterval", "clearInterval", "setTimeout", "clearTimeout", "performance"],
+    });
     const workers = createWorkerLifecycle({ prisma, provider });
     let checked = false;
     class SlowCopy extends MemoryVolumeFiles {
@@ -246,16 +356,27 @@ describe("moving a home from snapshots to volumes", () => {
         if (!checked) {
           checked = true;
           const initial = await prisma.computer.findUniqueOrThrow({ where: { id: computer.id } });
-          expect(initial.homeMoveExpiresAt).toBeInstanceOf(Date);
           for (let tick = 0; tick < 8; tick++) {
+            await prisma.$executeRaw`UPDATE computers SET "homeMoveExpiresAt" = (now() AT TIME ZONE 'UTC') + interval '1 second'
+              WHERE "maintenanceId" = ${initial.maintenanceId}`;
+            const renewed = deferred<boolean>();
+            const renew = workers.renewHomeMove.bind(workers);
+            // Observe the real renewal after the scheduled heartbeat, not a fabricated receipt.
+            const lifecycle = vi
+              .spyOn(workers, "renewHomeMove")
+              .mockImplementation(async (marker) => {
+                const result = await renew(marker);
+                renewed.resolve(result);
+                return result;
+              });
             await vi.advanceTimersByTimeAsync(10_000);
-            // Flush the heartbeat's database writes before the reconciler reads them.
-            await prisma.computer.findUniqueOrThrow({ where: { id: computer.id } });
+            expect(await renewed.promise).toBe(true);
+            lifecycle.mockRestore();
           }
-          const renewed = await prisma.computer.findUniqueOrThrow({ where: { id: computer.id } });
-          expect(renewed.homeMoveExpiresAt!.getTime()).toBeGreaterThan(
-            initial.homeMoveExpiresAt!.getTime() + 60_000,
-          );
+          const [lease] = await prisma.$queryRaw<{ remaining: number }[]>`
+            SELECT EXTRACT(EPOCH FROM ("homeMoveExpiresAt" - (now() AT TIME ZONE 'UTC')))::float8 AS remaining
+            FROM computers WHERE id = ${computer.id}`;
+          expect(lease!.remaining).toBeGreaterThan(50);
           await workers.reconcile({ limit: 10 }, fixture.context);
           expect(await move(computer.id)).toMatchObject({
             outcome: "refused",
@@ -266,7 +387,15 @@ describe("moving a home from snapshots to volumes", () => {
       }
     }
     volumeFiles = new SlowCopy();
-    expect((await move(computer.id)).outcome).toBe("adopted");
+    expect(
+      (
+        await moveHomeToVolumes(
+          { prisma, home, files: volumeFiles, workers },
+          { computerId: computer.id, dryRun: false, leaveUnmapped: false, manifestPath: null },
+          fixture.context,
+        )
+      ).outcome,
+    ).toBe("adopted");
     expect(checked).toBe(true);
   });
 

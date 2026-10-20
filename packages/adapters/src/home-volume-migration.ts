@@ -13,6 +13,11 @@ import { fileMode, isPortablePath } from "@rakazo/adapter-kit";
 import type { PrismaClient } from "@rakazo/db";
 import { shouldSkipPortableWorkspaceFile } from "./computer-workspace.js";
 import type { HomeAdoption, VolumeOwner, WorkerLifecycle } from "./worker-lifecycle.js";
+import { HOME_MOVE_TTL_MS } from "./worker-lifecycle.js";
+
+const HOME_MOVE_RENEW_MS = 10_000;
+const HOME_MOVE_RENEW_TIMEOUT_MS = 5_000;
+const HOME_MOVE_SAFETY_MS = 5_000;
 
 /** Where a home file lands: its bot's private volume, or the space's shared volume. */
 export type HomeDestination = { scope: "private"; botId: string } | { scope: "shared" };
@@ -263,25 +268,63 @@ export async function moveHomeToVolumes(
   const { blocker, start } = await workers.inspectHomeMove(computer.id);
   if (blocker) return { outcome: "refused", refusal: { code: blocker } };
 
+  const reservationStarted = performance.now();
   const reservation = options.dryRun ? null : await workers.reserveHomeMove(computer.id);
   if (reservation && "blocker" in reservation) {
     return { outcome: "refused", refusal: { code: reservation.blocker } };
   }
   const abort = new AbortController();
   context = { ...context, signal: AbortSignal.any([context.signal, abort.signal]) };
+  let deadline = reservationStarted + HOME_MOVE_TTL_MS - HOME_MOVE_SAFETY_MS;
+  let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+  const expire = () => abort.abort(new Error("Home move reservation expired"));
+  const assertReservation = () => {
+    if (reservation && performance.now() >= deadline) expire();
+    context.signal.throwIfAborted();
+  };
+  const armDeadline = () => {
+    clearTimeout(deadlineTimer);
+    const remaining = deadline - performance.now();
+    if (remaining <= 0) expire();
+    else {
+      deadlineTimer = setTimeout(expire, remaining);
+      deadlineTimer.unref();
+    }
+  };
+  if (reservation) armDeadline();
   let pendingHeartbeat = Promise.resolve();
   const heartbeat = reservation
     ? setInterval(() => {
         pendingHeartbeat = pendingHeartbeat
           .then(async () => {
-            if (!(await workers.renewHomeMove(reservation.marker)))
-              throw new Error("Home move reservation expired");
+            assertReservation();
+            const started = performance.now();
+            let timeout: ReturnType<typeof setTimeout> | undefined;
+            try {
+              const renewed = await Promise.race([
+                workers.renewHomeMove(reservation.marker),
+                new Promise<never>((_, reject) => {
+                  timeout = setTimeout(
+                    () => reject(new Error("Home move reservation renewal timed out")),
+                    HOME_MOVE_RENEW_TIMEOUT_MS,
+                  );
+                }),
+              ]);
+              assertReservation();
+              if (!renewed) throw new Error("Home move reservation expired");
+              // Count from the request's start: time spent waiting for the database is not a lease.
+              deadline = started + HOME_MOVE_TTL_MS - HOME_MOVE_SAFETY_MS;
+              armDeadline();
+            } finally {
+              clearTimeout(timeout);
+            }
           })
           .catch((error: unknown) => abort.abort(error));
-      }, 10_000)
+      }, HOME_MOVE_RENEW_MS)
     : null;
   heartbeat?.unref();
   try {
+    assertReservation();
     const plan = await planHome(home, computer, context);
     if (plan.notCopied.length > 0 && !options.leaveUnmapped) {
       return { outcome: "refused", refusal: { code: "not_copied", entries: plan.notCopied } };
@@ -315,6 +358,7 @@ export async function moveHomeToVolumes(
 
     try {
       for (const target of targets) {
+        assertReservation();
         const existing = options.dryRun
           ? await existingVolume(prisma, computer, target.destination)
           : await workers.ensureVolume(ownerOf(computer, target.destination), context);
@@ -347,7 +391,7 @@ export async function moveHomeToVolumes(
           changed.push(source.path);
           continue;
         }
-        context.signal.throwIfAborted();
+        assertReservation();
         const pending = toWrite.get(source.path);
         if (!pending) continue;
         if (!pending.volumeRef) throw new Error(`No provisioned volume for ${source.path}`);
@@ -379,7 +423,7 @@ export async function moveHomeToVolumes(
         };
       }
 
-      context.signal.throwIfAborted();
+      assertReservation();
       const adoption = await workers.adoptVolumeHome(computer.id, start, reservation?.marker);
       if (adoption !== "adopted") {
         return { outcome: "refused", refusal: { code: adoption }, manifest: manifest() };
@@ -394,6 +438,7 @@ export async function moveHomeToVolumes(
   } finally {
     if (heartbeat) clearInterval(heartbeat);
     await pendingHeartbeat;
+    clearTimeout(deadlineTimer);
     if (reservation) await workers.releaseHomeMove(reservation.marker);
   }
 }

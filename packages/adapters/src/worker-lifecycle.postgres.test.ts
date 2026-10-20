@@ -4,7 +4,7 @@ import { AgentRuntimeBusyError } from "@rakazo/adapter-kit";
 import type { PrismaClient } from "@rakazo/db";
 import { createDb, deleteOwnerVolumes, OwnerWorkerLiveError } from "@rakazo/db";
 import type { Pool } from "pg";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { FakeWorkerProvider } from "./fake-worker-provider.js";
 import { allFiles, mcpOnly, privateFiles, workerFixture } from "./worker-fixture.test-support.js";
 import { createWorkerLifecycle, StaleAttemptError, VolumeBusyError } from "./worker-lifecycle.js";
@@ -28,6 +28,58 @@ describePostgres("worker lifecycle under concurrent transactions (PostgreSQL)", 
     await prisma.$disconnect();
     await pool.end();
   });
+
+  it.each([-120_000, 120_000])(
+    "uses the database clock with process skew %i for every reservation operation",
+    async (skew) => {
+      const { computer } = await fixture.migratedBot();
+      const workers = createWorkerLifecycle({ prisma, provider: null });
+      await prisma.computer.update({
+        where: { id: computer.id },
+        data: { homeStorage: "snapshot" },
+      });
+      const { start } = await workers.inspectHomeMove(computer.id);
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(Date.now() + skew);
+      try {
+        const reservation = await workers.reserveHomeMove(computer.id);
+        if (!("marker" in reservation)) throw new Error(reservation.blocker);
+        const [reserved] = await prisma.$queryRaw<{ remaining: number }[]>`
+          SELECT EXTRACT(EPOCH FROM ("homeMoveExpiresAt" - (now() AT TIME ZONE 'UTC')))::float8 AS remaining
+          FROM computers WHERE id = ${computer.id}`;
+        expect(reserved!.remaining).toBeGreaterThan(50);
+        expect(reserved!.remaining).toBeLessThanOrEqual(60);
+        vi.setSystemTime(Date.now() - 2 * skew);
+        expect(await workers.renewHomeMove(reservation.marker)).toBe(true);
+        const [renewed] = await prisma.$queryRaw<{ remaining: number }[]>`
+          SELECT EXTRACT(EPOCH FROM ("homeMoveExpiresAt" - (now() AT TIME ZONE 'UTC')))::float8 AS remaining
+          FROM computers WHERE id = ${computer.id}`;
+        expect(renewed!.remaining).toBeGreaterThan(50);
+        expect(renewed!.remaining).toBeLessThanOrEqual(60);
+        expect(await workers.clearStaleHomeMove(computer.id)).toBe(false);
+        await workers.reconcile({ limit: 10 }, fixture.context);
+        expect(await workers.adoptVolumeHome(computer.id, start, reservation.marker)).toBe(
+          "adopted",
+        );
+        await prisma.$executeRaw`UPDATE computers SET "homeMoveExpiresAt" = (now() AT TIME ZONE 'UTC') - interval '1 second' WHERE id = ${computer.id}`;
+        vi.setSystemTime(Date.now() - 24 * 60 * 60_000);
+        expect(await workers.renewHomeMove(reservation.marker)).toBe(false);
+        expect(await workers.adoptVolumeHome(computer.id, start, reservation.marker)).toBe(
+          "computer_active",
+        );
+        expect(await workers.clearStaleHomeMove(computer.id)).toBe(true);
+        const next = await workers.reserveHomeMove(computer.id);
+        if (!("marker" in next)) throw new Error(next.blocker);
+        await prisma.$executeRaw`UPDATE computers SET "homeMoveExpiresAt" = (now() AT TIME ZONE 'UTC') - interval '1 second' WHERE id = ${computer.id}`;
+        await workers.reconcile({ limit: 10 }, fixture.context);
+        expect(
+          (await prisma.computer.findUniqueOrThrow({ where: { id: computer.id } })).maintenanceId,
+        ).toBeNull();
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
 
   it("reports whether clear-stale-move matched an expired reservation without E2B credentials", async () => {
     const { computer } = await fixture.migratedBot();

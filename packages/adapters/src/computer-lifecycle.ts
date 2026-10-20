@@ -174,13 +174,14 @@ async function loadVolumeHome(
 /** The space lock also covers a computer added after the move reserved the existing ones. */
 async function claimComputerLifecycle(
   prisma: PrismaClient,
-  computer: { spaceId: string; homeStorage: string },
+  computer: { id: string; spaceId: string; homeStorage: string },
   args: Prisma.ComputerUpdateManyArgs,
 ) {
   if (computer.homeStorage !== "volumes") return prisma.computer.updateMany(args);
   return prisma.$transaction(async (tx) => {
     const computers = await tx.$queryRaw<{ maintenanceId: string | null }[]>`
       SELECT "maintenanceId" FROM computers WHERE "spaceId" = ${computer.spaceId}
+        AND (scope = 'team' OR id = ${computer.id})
       ORDER BY id FOR UPDATE`;
     if (computers.some((row) => row.maintenanceId?.startsWith("home-move:"))) {
       throw new ComputerBusyError();

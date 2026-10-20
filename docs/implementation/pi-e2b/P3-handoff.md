@@ -259,7 +259,9 @@ The host had 8 vCPUs with a one-minute load average of 1.0 to 2.5 during the ben
 
 ### Home move
 
-- S6 prevents new workers and computer boots during the copy with a durable maintenance reservation. Historical worker-count comparisons remain a secondary adoption check; they are no longer the copy fence.
+- S6 reserves only the source computer for a dedicated move and fences only its bots' workers and private volumes. Sibling screens, stops, execution leases, worker starts and computer boots remain available. A team move reserves every existing computer and fences worker starts and volume-home boots across the space because it copies the shared volume. Historical worker-count comparisons remain a secondary adoption check.
+- Reservation expiry and renewal use the database clock. The copy checks a local monotonic deadline before every write and adoption, five seconds before the one-minute TTL, measured from the last successful renewal's request start. A renewal taking more than five seconds cancels the copy, including through its abort signal.
+- Do not deploy during a running home move. The expiry migration gives existing markers one minute, but a pre-fix move script does not renew or check ownership before adoption. Finish or stop that script before deploying.
 - If the manifest write fails in the move's `finally`, its error replaces the move's report.
 - A move resumes between files only. A staged `.rakazo-<uuid>` file is removed when its write fails or is cancelled, and by the retry when its sandbox died. A move process that dies mid-write still leaves one beside its target, and the next move refuses it as foreign. Remove it by hand.
 - A volume-file sandbox that `close` never reached dies at its one-hour timeout. Creating one gives up after two minutes.
@@ -286,4 +288,4 @@ No live E2B, real provider, Electron E2E or native mobile capture ran for S6. No
 
 ## Rollback
 
-This slice changes no schema. To roll it back, revert its commits. The worker TTL then returns to four hours, and the template fix, the timeout cap and the volume-files rewrite return to the code from #229 and #241, which cannot build its template, create a worker or reach a volume on the self-hosted deployment. Unset `WORKER_PROVIDER` first so that no run uses a worker, then drain running workers: each ends within its TTL. The worker template `p3live-worker-pi` stays on the host until someone deletes it with `DELETE /templates/<templateId>` on the local API.
+S6 adds the nullable `computers.homeMoveExpiresAt` column. Leave that additive column in place on rollback. Do not deploy or roll back during a running home move. To roll back the runtime, revert its commits. The worker TTL then returns to four hours, and the template fix, the timeout cap and the volume-files rewrite return to the code from #229 and #241, which cannot build its template, create a worker or reach a volume on the self-hosted deployment. Unset `WORKER_PROVIDER` first so that no run uses a worker, then drain running workers: each ends within its TTL. The worker template `p3live-worker-pi` stays on the host until someone deletes it with `DELETE /templates/<templateId>` on the local API.
