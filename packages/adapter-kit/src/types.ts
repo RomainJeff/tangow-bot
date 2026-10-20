@@ -56,6 +56,8 @@ export interface PortableFile {
   path: string;
   content: Uint8Array;
   executable?: boolean;
+  /** Permission bits (`0o777`), when the source knows them. */
+  mode?: number;
 }
 
 export interface ComputerRef {

@@ -256,12 +256,22 @@ export interface JobWorkerHost {
   stop(): Promise<void>;
 }
 
+export interface HomeTreeEntry {
+  path: string;
+  kind: "file" | "dir" | "symlink" | "other";
+}
+
 export interface AgentHomeStore {
   describe(): AdapterDescriptor<{ revisions: boolean }>;
   checkout(botId: string, dest: string, context: AdapterContext): Promise<string>;
   commit(botId: string, src: string, context: AdapterContext): Promise<string>;
   restore(botId: string, revision: string, dest: string, context: AdapterContext): Promise<void>;
   exportHome(botId: string, context: AdapterContext): AsyncIterable<PortableFile>;
+  /**
+   * Every entry of the home without following symlinks, where `exportHome` follows them and
+   * yields only files.
+   */
+  listTree(botId: string, context: AdapterContext): Promise<HomeTreeEntry[]>;
   readFile(
     botId: string,
     path: string,
