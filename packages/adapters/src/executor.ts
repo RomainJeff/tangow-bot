@@ -12,6 +12,7 @@ import type {
   ComputerRef,
   ConnectorCall,
   ConnectorProvider,
+  ConnectorTool,
   JobPublisher,
   LocalToolExecutor,
   LocalToolOutput,
@@ -29,6 +30,7 @@ import type {
   WebProvider,
 } from "@rakazo/adapter-kit";
 import {
+  AgentRuntimeBusyError,
   AgentRuntimeUnavailableError,
   historyCompactJob,
   linkPreviewJob,
@@ -37,6 +39,7 @@ import {
   runContinueJob,
 } from "@rakazo/adapter-kit";
 import type {
+  ComputerMode,
   FactualRunRecap,
   MessageBlock,
   RunStatus,
@@ -60,15 +63,17 @@ import {
   SessionId,
 } from "@rakazo/contracts";
 import type {
+  ActionApprovalRule,
   CreatedRoutine,
   ProposalEffectKind,
   ProposalRefusal,
   RoutineCard,
   SkillLearningMode,
+  ToolCallDetail,
+  ToolCallStreak,
 } from "@rakazo/core";
 import {
   ACTIVE_RUN_STATUSES,
-  type ActionApprovalRule,
   appendTextSegment,
   appendToolCallSegment,
   applyJudgeDecision,
@@ -83,6 +88,7 @@ import {
   connectorKindFromToolName,
   containsSecret,
   DEFAULT_SKILL_LEARNING,
+  deriveRunNeeds,
   endsSentence,
   expandSkillReferencesInPrompt,
   formatSkillRunPrompt,
@@ -130,8 +136,6 @@ import {
   skillsReferencedInPrompt,
   skillWriteRefusal,
   spawnBotToolArgs,
-  type ToolCallDetail,
-  type ToolCallStreak,
   toolRequiresApproval,
   toolRequiresExplicitApproval,
   UNKNOWN_MODEL_MESSAGE,
@@ -147,12 +151,12 @@ import {
   stableJsonValue,
   toolEffectIdempotencyKey,
 } from "@rakazo/core/node/approval-effect-key";
+import type { CreateBotMessageInput, McpServer, PrismaClient, ThreadEvents } from "@rakazo/db";
 import {
   activeBotNames,
   appendCardStateInTransaction,
   appendRunFinishedInTransaction,
   blocksOf,
-  type CreateBotMessageInput,
   createBotMessageInTransaction,
   createSpaceForMember,
   effectiveMemoryScope,
@@ -162,14 +166,11 @@ import {
   InvalidSpaceNameError,
   isTooManyDatabaseConnections,
   loadBotMessageContext,
-  type McpServer,
   openRoutineSessionInTransaction,
   Prisma,
-  type PrismaClient,
   parseComputerMode,
   RunHistoryWriteError,
   SpaceLimitError,
-  type ThreadEvents,
   threadEventSeq,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
@@ -245,19 +246,18 @@ import {
 } from "./browser-tools.js";
 import { agentConnectionTools, builtinAgentTools } from "./builtin-tools.js";
 import { archiveSpawnedBot, spawnBot } from "./child-bots.js";
+import type { ConnectionScope, PluginConnectionRow } from "./composio-connector.js";
 import {
-  type ConnectionScope,
   collectLogIds,
   mergeConnectedPlugins,
   needsLivePluginSync,
-  type PluginConnectionRow,
   planLiveConnectionSync,
 } from "./composio-connector.js";
 import { BACKGROUND_WORK_LAUNCH, scheduleComputerSleep } from "./computer-idle.js";
+import type { ComputerExecutionLease } from "./computer-lifecycle.js";
 import {
   acquireComputerExecutionLease,
   ComputerBusyError,
-  type ComputerExecutionLease,
   holdComputerExecutionLeaseForTakeover,
   provisionComputer,
   releaseBotScreen,
@@ -268,6 +268,7 @@ import {
 import { withComputerScreenAvailability } from "./computer-screens.js";
 import {
   displayBotWorkspacePath,
+  fromVolumePath,
   resolveBotWorkspaceCwd,
   resolveBotWorkspacePath,
   teamBotWorkspaceDirectory,
@@ -329,10 +330,10 @@ import {
   serializeModelSecret,
 } from "./pi-oauth.js";
 import { resolveCompletionMaxTokens } from "./pi-runtime-limits.js";
+import type { PlotSpec } from "./plot-tool.js";
 import {
   assertPlotDataWithinLimits,
   PLOT_TOOL_GUIDE,
-  type PlotSpec,
   parsePlotData,
   plotSvgToPng,
   renderPlotSpecToSvg,
@@ -352,6 +353,7 @@ import {
   tryCompleteConnectionWithCode,
 } from "./run-secret.js";
 import { withRuntimeCleanup } from "./runtime-stream.js";
+import type { RunWorkers } from "./runtime-worker/runtime.js";
 import {
   cancelScheduleFromTool,
   createScheduleFromTool,
@@ -389,12 +391,12 @@ import {
   skillUpdateFromTool,
   userSkillsOpenedIn,
 } from "./skill-tools.js";
+import type { TakeoverResumeCheckpoint } from "./takeover-resume.js";
 import {
   continueRunClaimFence,
   DESKTOP_HELD_FOR_TAKEOVER_MESSAGE,
   refreshTakeoverContinuePlan,
   TAKEOVER_RESUME_CHECKPOINTS,
-  type TakeoverResumeCheckpoint,
   takeoverCheckpointOf,
   takeoverContinuePlan,
 } from "./takeover-resume.js";
@@ -436,6 +438,7 @@ const READ_ONLY_AGENT_TOOLS = new Set([
   "browser_snapshot",
   "list_secrets",
 ]);
+const MAX_SETUP_ATTEMPTS = 3;
 const SKILL_NUDGE_TIMEOUT_MS = 2 * 60 * 1000;
 
 const TURN_ATTACHMENT_UNAVAILABLE =
@@ -639,6 +642,56 @@ export function isProtectedComputerLifecycleCommand(command: string): boolean {
 /** Cap the roster so a large Space cannot flood the prompt. */
 const BOT_DIRECTORY_LIMIT = 40;
 
+/** The computer's shell. In a worker run the guest's bash replaces it. */
+const COMPUTER_SHELL_TOOL = "shell";
+
+/** The runtime a product run uses and the tools it exposes, or why it cannot start. */
+type RunRoute = { runtime: AgentRuntime; tools: ConnectorTool[]; refusal?: string };
+
+/** A tool the runtime runs locally replaces the computer-backed tool of the same name. */
+function withLocalTools(tools: ConnectorTool[], local: readonly ConnectorTool[]): ConnectorTool[] {
+  const names = new Set(local.map((tool) => tool.name));
+  return [...tools.filter((tool) => !names.has(tool.name)), ...local];
+}
+
+/**
+ * One worker start per attempt. A worker run keeps the computer for its explicit computer tools
+ * only: file work and commands run in the guest. Scripted runs stay in process.
+ */
+async function routeRun(
+  deps: Pick<ExecutorDeps, "runtime" | "workers">,
+  run: { attemptId: string; tools: ConnectorTool[]; computerScope: ComputerMode },
+): Promise<RunRoute> {
+  const inProcess = {
+    runtime: deps.runtime,
+    tools: withLocalTools(run.tools, deps.runtime.describe().capabilities.localTools ?? []),
+  };
+  if (!deps.workers || deps.runtime.describe().capabilities.scripted) return inProcess;
+  const needs = deriveRunNeeds({
+    guestTools: run.tools.some(
+      (tool) => FILE_TOOL_NAMES.has(tool.name) || tool.name === COMPUTER_SHELL_TOOL,
+    ),
+    computerTools: run.tools.some((tool) => REMOTE_COMPUTER_TOOLS.has(tool.name)),
+    computerScope: run.computerScope,
+  });
+  const plan = await deps.workers.plan({ attemptId: run.attemptId, needs });
+  if (plan.mode === "in_process") return inProcess;
+  if (plan.mode === "refused") {
+    return {
+      ...inProcess,
+      refusal: `This bot has no ${plan.refusal.slot} volume on its computer yet, so the run cannot start`,
+    };
+  }
+  const runtime = deps.workers.runtime(plan);
+  return {
+    runtime,
+    tools: withLocalTools(
+      run.tools.filter((tool) => tool.name !== COMPUTER_SHELL_TOOL),
+      needs.files.private ? (runtime.describe().capabilities.localTools ?? []) : [],
+    ),
+  };
+}
+
 function runtimeFallbackModel(runtime: AgentRuntime) {
   return runtime.describe().capabilities.scripted ? { provider: "scripted", id: "scripted" } : null;
 }
@@ -666,6 +719,11 @@ export interface ExecutorDeps {
   listConnectedPluginSlugs?: (scope: ConnectionScope) => Promise<string[]>;
   /** Builtin web_search / web_fetch. Defaults to keyless HTTP when omitted. */
   web?: WebProvider;
+  /**
+   * Runs a product run whose bot qualifies in a worker of its own. Every other runtime call, and
+   * every run when absent, stays on `runtime`.
+   */
+  workers?: RunWorkers;
   /** Page browser (DOM refs) on the bot computer. Defaults to the sandbox live browser when supported. */
   browser?: BrowserProvider;
   secretHttp?: RemoteTransportDependencies;
@@ -1340,6 +1398,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
       const leased = await deps.prisma.run.updateMany({
         where: {
           id: runId,
+          // An archived bot gets no new work, which is what lets deleting it wait out its workers.
+          bot: { archivedAt: null },
           ...continueRunClaimFence(run),
           OR: [
             { status: { in: ["queued", "waiting_input", "waiting_takeover"] } },
@@ -1398,7 +1458,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
       }
       const attempt = await deps.prisma.attempt
         .create({
-          data: { runId, fence, status: "running" },
+          data: { runId, fence, status: "setting_up" },
         })
         .catch(async (error) => {
           await releaseComputerExecutionLease(deps.prisma, computerLease).catch(() => undefined);
@@ -1429,12 +1489,30 @@ export function createRunExecutor(deps: ExecutorDeps) {
       }, 60_000);
       heartbeat.unref?.();
 
+      const settleStrandedCards = () =>
+        failStrandedRoutineCards(deps, {
+          spaceId: run.spaceId,
+          threadId: run.threadId,
+          botId: run.botId,
+          runId,
+        }).catch((error) => getLogger().error("stranded routine cards", error));
       const runSecrets = [...deps.secrets];
       // A skill write landed in this attempt: its line goes under the run's message at the end.
       let savedSkill = false;
       // The skill nudge's private turn, run once the run has let go of its lease and computer.
       let skillNudgeTurn: (() => Promise<void>) | undefined;
+      let setupFailures = 0;
       try {
+        setupFailures = await deps.prisma.attempt.count({
+          where: {
+            runId,
+            id: { not: attempt.id },
+            OR: [{ status: "setting_up" }, { status: "setup_failed", error: { not: null } }],
+          },
+        });
+        if (setupFailures >= MAX_SETUP_ATTEMPTS) {
+          throw new Error("Earlier run setup did not finish");
+        }
         // A follow_up's source message tells whether the user or another bot started it.
         const sourceMessage =
           (run.trigger === "messaging" || run.trigger === "follow_up") && run.sourceMessageId
@@ -1630,13 +1708,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const trustedRoutine = run.trigger === "routine" && routine?.untrustedPrompt === false;
         // Set once the run reads a message someone other than the user sent into it.
         let steeredByOthers = false;
-        const settleStrandedCards = () =>
-          failStrandedRoutineCards(deps, {
-            spaceId: run.spaceId,
-            threadId: thread.id,
-            botId: bot.id,
-            runId,
-          }).catch((error) => getLogger().error("stranded routine cards", error));
         const discoveredPromise = deps.connector
           ? deps.connector.discoverTools(context)
           : Promise.resolve([]);
@@ -1829,6 +1900,14 @@ export function createRunExecutor(deps: ExecutorDeps) {
         if (!bot.computer) throw new Error("Bot has no computer");
         const storedComputer = bot.computer;
         const computerMode = parseComputerMode(storedComputer.scope);
+        const resolveHomePath = (requested: string) =>
+          resolveBotWorkspacePath(
+            computerMode,
+            bot.id,
+            storedComputer.homeStorage === "volumes"
+              ? fromVolumePath(computerMode, bot.id, requested)
+              : requested,
+          );
         const computer = await provisionComputer(deps, storedComputer.id, context, "bot");
         screenRelease = { computer, context };
         scheduleComputerSleep(deps.jobs, storedComputer.id);
@@ -1938,14 +2017,14 @@ export function createRunExecutor(deps: ExecutorDeps) {
             .then((row) => row?.enabled ?? deploymentAutoReviewDefault());
           return autoReviewPreferencePromise;
         };
-        const runtimeLocalTools = deps.runtime.describe().capabilities.localTools ?? [];
-        const localToolNames = new Set(runtimeLocalTools.map((tool) => tool.name));
-        // A tool the runtime runs locally replaces the computer-backed tool of the same name.
-        const tools = [
-          ...builtins.filter((tool) => !localToolNames.has(tool.name)),
-          ...exposedConnectorTools.filter((tool) => !localToolNames.has(tool.name)),
-          ...runtimeLocalTools,
-        ];
+        const { runtime, tools, refusal } = await routeRun(deps, {
+          attemptId: attempt.id,
+          tools: [...builtins, ...exposedConnectorTools],
+          computerScope: computerMode,
+        });
+        const localToolNames = new Set(
+          (runtime.describe().capabilities.localTools ?? []).map((tool) => tool.name),
+        );
         const approvedEffects = await deps.prisma.externalEffect.findMany({
           where: { runId, status: "approved" },
           orderBy: APPROVED_EFFECT_REPLAY_ORDER,
@@ -2032,7 +2111,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const unansweredCalls = new Map<string, string>();
         const logEntry = (draft: SessionEntryDraft) =>
           deps.prisma.$transaction((tx) => deps.sessionLog.append(tx, draft));
-        const announcesTools = deps.runtime.describe().capabilities.streaming;
+        const announcesTools = runtime.describe().capabilities.streaming;
         const toolAnnouncements = new Map<string, ReturnType<typeof deferred>>();
         const toolAnnounced = (executionId: string) => {
           let handled = toolAnnouncements.get(executionId);
@@ -2233,7 +2312,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
         let terminalCheckpointComplete = false;
         let approvalPausePending = false;
         let handedOff = false;
-        const scripted = deps.runtime.describe().capabilities.scripted;
+        const scripted = runtime.describe().capabilities.scripted;
         const script = scripted ? inferScript(task.prompt, takeoverResume?.checkpoint) : undefined;
         // Text the model writes outside message_user is never shown: drop what accumulated
         // before a tool call so it cannot reach the final reply either.
@@ -3040,7 +3119,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               name,
               args,
               {
-                resolve: (requested) => resolveBotWorkspacePath(computerMode, bot.id, requested),
+                resolve: resolveHomePath,
                 display: (requested, stored) =>
                   displayBotWorkspacePath(computerMode, bot.id, requested, stored),
                 list: (directory) => deps.sandbox.listFiles(computer, directory, context),
@@ -3079,7 +3158,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               if (!rows && dataPath) {
                 const bytes = await deps.sandbox.readFile(
                   computer,
-                  resolveBotWorkspacePath(computerMode, bot.id, dataPath),
+                  resolveHomePath(dataPath),
                   context,
                   { maxBytes: ATTACHMENT_MAX_BYTES },
                 );
@@ -3101,7 +3180,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               workspaceCheckpoint.markDirty();
               await deps.sandbox.writeFile(
                 computer,
-                { path: resolveBotWorkspacePath(computerMode, bot.id, outPath), content: png },
+                { path: resolveHomePath(outPath), content: png },
                 context,
               );
               let attached = false;
@@ -3160,7 +3239,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             if (!deps.artifacts) {
               return finish({ error: "artifact storage unavailable", path: filePath });
             }
-            const storedPath = resolveBotWorkspacePath(computerMode, bot.id, filePath);
+            const storedPath = resolveHomePath(filePath);
             let bytes: Uint8Array;
             try {
               bytes = await deps.sandbox.readFile(computer, storedPath, context, {
@@ -3246,7 +3325,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                       kind: "open",
                       path: /^https?:\/\//i.test(requestedPath)
                         ? requestedPath
-                        : resolveBotWorkspacePath(computerMode, bot.id, requestedPath),
+                        : resolveHomePath(requestedPath),
                     },
                   ],
                   observe: true,
@@ -3502,12 +3581,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             const draftPath = typeof args.path === "string" ? args.path.trim() : "";
             const files =
               draftPath && (name === "skill_create" || name === "skill_update")
-                ? await readSkillDraft(
-                    deps.sandbox,
-                    computer,
-                    resolveBotWorkspacePath(computerMode, bot.id, draftPath),
-                    context,
-                  )
+                ? await readSkillDraft(deps.sandbox, computer, resolveHomePath(draftPath), context)
                 : undefined;
             if (files && "error" in files) return finish(files);
             const result = await runSkillTool(name, args, files);
@@ -4340,12 +4414,34 @@ export function createRunExecutor(deps: ExecutorDeps) {
             )?.checkpoint,
           );
           if (releasedCheckpoint) {
-            await requeueComputerRun(deps, runId, workerId, fence, releasedCheckpoint, false);
+            const released = await deps.prisma.$transaction(async (tx) => {
+              const released = await writeComputerRunRequeue(
+                tx,
+                runId,
+                workerId,
+                fence,
+                releasedCheckpoint,
+              );
+              if (released) {
+                await tx.attempt.update({
+                  where: { id: attempt.id },
+                  data: { status: "setup_failed", error: null, finishedAt: new Date() },
+                });
+              }
+              return released;
+            });
+            if (released) {
+              await deps.jobs.enqueue({
+                ...runContinueJob(runId),
+                availableAt: new Date(Date.now() + computerRetryDelay(fence)),
+              });
+            }
             return;
           }
         }
 
         try {
+          if (refusal) throw new Error(refusal);
           const instructions =
             buildSystemInstructions({
               botInstructions: bot.instructions || `${bot.name}: ${bot.title}\n${bot.description}`,
@@ -4490,7 +4586,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
               ? { credential: resolved.oauth, persist: resolved.persistOAuth }
               : undefined,
           };
-          const runtimeEvents = deps.runtime.run(
+          if (runtime === deps.runtime) {
+            await deps.prisma.attempt.updateMany({
+              where: { id: attempt.id, status: "setting_up" },
+              data: { status: "running" },
+            });
+          }
+          const runtimeEvents = runtime.run(
             {
               botId: bot.id,
               threadId: thread.id,
@@ -4906,7 +5008,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               await deps.sandbox.writeFile(
                 computer,
                 {
-                  path: resolveBotWorkspacePath(computerMode, bot.id, file.path),
+                  path: resolveHomePath(file.path),
                   content: new TextEncoder().encode(file.content),
                 },
                 context,
@@ -5231,7 +5333,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
         }
       } catch (setupError) {
         const computerBusy = setupError instanceof ComputerBusyError;
-        const retryForever = computerBusy || isTooManyDatabaseConnections(setupError);
+        const retryForever =
+          computerBusy ||
+          setupError instanceof AgentRuntimeBusyError ||
+          isTooManyDatabaseConnections(setupError);
         if (!computerBusy) {
           // undici collapses every network failure to "fetch failed"; the cause names the
           // host and errno, which is the only part worth paging over.
@@ -5249,24 +5354,56 @@ export function createRunExecutor(deps: ExecutorDeps) {
             ),
           );
         }
-        const released = await writeComputerRunRequeue(
-          deps,
-          runId,
-          workerId,
-          fence,
-          resumeCheckpoint,
-          heldForTakeover,
-          retryForever ? null : "Run setup failed; retrying",
-        );
-        if (released) {
-          await deps.prisma.attempt.update({
-            where: { id: attempt.id },
-            data: {
-              status: "setup_failed",
-              error: retryForever ? null : "Run setup failed; retrying",
-              finishedAt: new Date(),
-            },
+        if (!retryForever && setupFailures + 1 >= MAX_SETUP_ATTEMPTS) {
+          const message = redactSecrets(
+            `Run setup failed after ${MAX_SETUP_ATTEMPTS} attempts: ${
+              setupError instanceof Error ? setupError.message : String(setupError)
+            }`,
+            runSecrets,
+          );
+          const failed = await deps.events.finalizeRun({
+            spaceId: run.spaceId,
+            threadId: run.threadId,
+            botId: run.botId,
+            runId,
+            taskId: run.taskId,
+            attemptId: attempt.id,
+            leaseOwner: workerId,
+            leaseFence: fence,
+            outcome: "failed",
+            error: message,
           });
+          if (failed) {
+            await settleStrandedCards();
+            if (failed.continuationRunId) {
+              await deps.jobs.enqueue(runContinueJob(failed.continuationRunId));
+            }
+          }
+          return;
+        }
+        const released = await deps.prisma.$transaction(async (tx) => {
+          const released = await writeComputerRunRequeue(
+            tx,
+            runId,
+            workerId,
+            fence,
+            resumeCheckpoint,
+            heldForTakeover,
+            retryForever ? null : "Run setup failed; retrying",
+          );
+          if (released) {
+            await tx.attempt.update({
+              where: { id: attempt.id },
+              data: {
+                status: "setup_failed",
+                error: retryForever ? null : "Run setup failed; retrying",
+                finishedAt: new Date(),
+              },
+            });
+          }
+          return released;
+        });
+        if (released) {
           if (retryForever) {
             await deps.jobs.enqueue({
               ...runContinueJob(runId),
@@ -5479,6 +5616,14 @@ export const PAGE_BROWSER_TOOL_NAMES = new Set([
   "browser_snapshot",
   "browser_act",
   "browser_run",
+]);
+
+/** Tools that reach the computer even in a worker run. */
+const REMOTE_COMPUTER_TOOLS = new Set([
+  ...IMAGE_RETURNING_COMPUTER_TOOLS,
+  ...PAGE_BROWSER_TOOL_NAMES,
+  "attach_file",
+  "render_plot",
 ]);
 
 export function filterPageBrowserTools<T extends { name: string }>(
@@ -5743,7 +5888,7 @@ function computerRunRequeueData(
 }
 
 async function writeComputerRunRequeue(
-  deps: ExecutorDeps,
+  prisma: Pick<PrismaClient, "run">,
   runId: string,
   workerId: string,
   fence: number,
@@ -5763,7 +5908,7 @@ async function writeComputerRunRequeue(
     leaseOwner: null,
     leaseExpiresAt: null,
   };
-  const preserve = await deps.prisma.run.updateMany({
+  const preserve = await prisma.run.updateMany({
     where: {
       ...whereLease,
       checkpoint: { in: [...TAKEOVER_RESUME_CHECKPOINTS] },
@@ -5771,12 +5916,12 @@ async function writeComputerRunRequeue(
     data: releasedHold,
   });
   if (preserve.count === 1) return true;
-  const planned = await deps.prisma.run.updateMany({
+  const planned = await prisma.run.updateMany({
     where: { ...whereLease, checkpoint: null },
     data: computerRunRequeueData(resumeCheckpoint, error, heldForTakeover),
   });
   if (planned.count === 1) return true;
-  const retried = await deps.prisma.run.updateMany({
+  const retried = await prisma.run.updateMany({
     where: {
       ...whereLease,
       checkpoint: { in: [...TAKEOVER_RESUME_CHECKPOINTS] },
@@ -5795,7 +5940,7 @@ async function requeueComputerRun(
   heldForTakeover = false,
 ): Promise<void> {
   const released = await writeComputerRunRequeue(
-    deps,
+    deps.prisma,
     runId,
     workerId,
     fence,

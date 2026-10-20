@@ -6,13 +6,7 @@ import { performance } from "node:perf_hooks";
 import { parseArgs } from "node:util";
 import type { AgentRunRequest, AgentRuntime, LocalToolOutput } from "@rakazo/adapter-kit";
 import { createWorkerLifecycle } from "@rakazo/adapters";
-import {
-  createLifecycleLauncher,
-  createStopJournal,
-  createWorkerAgentRuntime,
-  GUEST_TOOLS,
-  WORKER_LIMITS,
-} from "@rakazo/adapters/runtime-worker";
+import { createRunWorkers, GUEST_TOOLS, WORKER_LIMITS } from "@rakazo/adapters/runtime-worker";
 import { LocalWorkerProvider } from "./local-worker-provider.js";
 import type { ModelEmulatorStep } from "./model-emulator.js";
 import {
@@ -123,27 +117,16 @@ function inProcessRuntime(samples: Window[]) {
 }
 
 async function controlArm(arm: Arm, runs: number) {
-  const dir = await mkdtemp(path.join(tmpdir(), "rakazo-worker-bench-"));
   const log = queryLog();
   const seen: Seen[] = [];
   const connects: number[] = [];
   const inProcess: Window[] = [];
-  let provider: LocalWorkerProvider | undefined;
   const fixture = await startWorkerRun({
     steps: arm === "in_process" ? [] : workerSteps(runs),
     prisma: log.wrap,
-    runtime: (prisma) => {
-      if (arm === "in_process") return inProcessRuntime(inProcess);
-      provider = new LocalWorkerProvider({ mode: arm, root: path.join(dir, "workers") });
-      return createWorkerAgentRuntime({
-        launcher: createLifecycleLauncher({
-          prisma,
-          lifecycle: createWorkerLifecycle({ prisma, provider }),
-          connector: tapConnector(provider, seen, connects),
-        }),
-        stops: createStopJournal(prisma),
-      });
-    },
+    ...(arm === "in_process"
+      ? { runtime: () => inProcessRuntime(inProcess) }
+      : { mode: arm, connector: (provider) => tapConnector(provider, seen, connects) }),
   });
 
   async function trial() {
@@ -207,9 +190,7 @@ async function controlArm(arm: Arm, runs: number) {
   return {
     trial,
     async close() {
-      await provider?.dispose();
       await fixture.close();
-      await rm(dir, { recursive: true, force: true });
     },
   };
 }
@@ -234,13 +215,10 @@ async function stopArm(config: StopConfig, runs: number) {
     root: path.join(dir, "workers"),
     faults: { guestIgnoresCancel: config.guestIgnoresCancel },
   });
-  const runtime = createWorkerAgentRuntime({
-    launcher: createLifecycleLauncher({
-      prisma,
-      lifecycle: createWorkerLifecycle({ prisma, provider }),
-      connector: provider,
-    }),
-    stops: createStopJournal(prisma),
+  const workers = createRunWorkers({
+    prisma,
+    lifecycle: createWorkerLifecycle({ prisma, provider }),
+    connector: provider,
   });
 
   async function trial() {
@@ -250,6 +228,12 @@ async function stopArm(config: StopConfig, runs: number) {
       data: { status: "running", leaseOwner: "bench", leaseFence: 1 },
     });
     const attempt = await prisma.attempt.create({ data: { runId, fence: 1, status: "running" } });
+    const launch = await workers.plan({
+      attemptId: attempt.id,
+      needs: { files: { private: null, shared: null }, computer: "none" },
+    });
+    if (launch.mode !== "worker") throw new Error(`The nap got no worker: ${launch.mode}`);
+    const runtime = workers.runtime(launch);
     let grant = () => {};
     const granted = new Promise<void>((resolve) => {
       grant = resolve;

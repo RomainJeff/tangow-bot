@@ -27,7 +27,11 @@ export const laneH: Lane = {
   passWhen:
     "The dry run creates nothing; the move adopts; every file on the volumes matches the manifest's hash and mode; recreated computers see the same files and keep a file written between them; a second move changes nothing; the second team computer's home is refused",
   async run(live) {
-    const run = await startWorkerRun({ steps: [] });
+    const run = await startWorkerRun({
+      steps: [],
+      computerScope: "none",
+      provider: () => live.workerProvider(),
+    });
     const dir = await mkdtemp(path.join(tmpdir(), "rakazo-live-home-"));
     const files = live.volumeFiles();
     try {

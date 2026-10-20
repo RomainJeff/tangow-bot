@@ -1,21 +1,27 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { AgentRuntime, MemoryStore } from "@rakazo/adapter-kit";
+import type {
+  AgentRuntime,
+  MemoryStore,
+  SandboxProvider,
+  WorkerProvider,
+} from "@rakazo/adapter-kit";
 import {
   createInMemorySkillLock,
   createRunExecutor,
   createWorkerLifecycle,
   EncryptedSecretStore,
-  FakeSandboxProvider,
   InMemoryJobQueue,
   LocalAgentHomeStore,
+  LocalArtifactStore,
+  PiAgentRuntime,
   PostgresSessionLog,
 } from "@rakazo/adapters";
 import {
-  createLifecycleLauncher,
-  createStopJournal,
-  createWorkerAgentRuntime,
+  createRunWorkers,
+  type GuestConnector,
+  type RunWorkers,
   type WorkerClock,
 } from "@rakazo/adapters/runtime-worker";
 import type { SessionEntry } from "@rakazo/contracts";
@@ -23,6 +29,7 @@ import { createThreadEvents, type PrismaClient } from "@rakazo/db";
 import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
 import { type LocalWorkerFaults, LocalWorkerProvider } from "./local-worker-provider.js";
 import { type ModelEmulatorStep, startModelEmulator } from "./model-emulator.js";
+import { VolumeComputer } from "./volume-computer.js";
 
 const MODEL_KEY = "worker-fixture-model-key";
 const SPACE = "space-worker";
@@ -47,21 +54,37 @@ const emptyMemory: MemoryStore = {
 };
 
 /**
- * The real executor on PGlite, running its bot in a local guest through the worker runtime, with
- * the model emulator behind the controller's relay. `restart` drops the executor, the runtime and
- * the launcher and builds new ones on the same database, as a controller restart would.
+ * The real executor on PGlite, with the model emulator behind the controller's relay. Its bot's
+ * home is on volumes, so a product run goes to a local guest through the worker routing. `restart`
+ * drops the executor, the runtime and the launcher and builds new ones on the same database, as a
+ * controller restart would.
  */
-export async function startWorkerRun(options: {
+export async function startWorkerRun<
+  Provider extends WorkerProvider & GuestConnector = LocalWorkerProvider,
+>(options: {
   steps: ModelEmulatorStep[];
+  /**
+   * Runs guests on this provider instead of the local runner, as the live lanes do with E2B. Its
+   * volumes are provisioned through the lifecycle.
+   */
+  provider?: () => Provider;
+  /** The bot's computer instead of the fake one on local volumes. */
+  sandbox?: SandboxProvider;
   mode?: "memory" | "child";
   /** The bundled guest a `child` mode runs instead of the source. */
   guestEntry?: string;
   faults?: LocalWorkerFaults;
   clock?: WorkerClock;
-  /** Runs the bot with this runtime instead of a guest. */
+  /** Runs the bot with this runtime and no worker routing. */
   runtime?: (prisma: PrismaClient) => AgentRuntime;
+  /** The bot's computer: a dedicated one by default, or none at all. */
+  computerScope?: "team" | "dedicated" | "none";
+  /** Wraps how the controller reaches the guest, to observe its frames. */
+  connector?: (provider: Provider) => GuestConnector;
   /** Wraps the client the controller uses, to observe its queries. */
   prisma?: (prisma: PrismaClient) => PrismaClient;
+  /** Wraps the executor's worker routing, to fail or race it. */
+  workers?: (workers: RunWorkers) => RunWorkers;
 }) {
   const database = await openPgliteDatabase();
   const prisma = options.prisma?.(database.prisma) ?? database.prisma;
@@ -69,7 +92,11 @@ export async function startWorkerRun(options: {
   const model = await startModelEmulator({ apiKey: MODEL_KEY, steps: options.steps });
   const secretStore = new EncryptedSecretStore("worker-fixture-encryption-key");
   const sessionLog = new PostgresSessionLog(prisma);
-  const sandbox = new FakeSandboxProvider();
+  const sandbox =
+    options.sandbox ??
+    new VolumeComputer((volumeRef) =>
+      (current.provider as unknown as LocalWorkerProvider).volumePath(volumeRef),
+    );
 
   await prisma.user.create({ data: { id: USER, name: "Worker", email: "worker@rakazo.test" } });
   await prisma.organization.create({
@@ -96,23 +123,28 @@ export async function startWorkerRun(options: {
       createdAt: joined,
     },
   });
-  const computer = await prisma.computer.create({
-    data: {
-      spaceId: SPACE,
-      userId: USER,
-      scope: "dedicated",
-      scopeKey: "worker-computer",
-      homeKey: "worker-computer",
-      kind: "desktop",
-    },
-  });
+  const computerScope = options.computerScope ?? "dedicated";
+  const computer =
+    computerScope === "none"
+      ? null
+      : await prisma.computer.create({
+          data: {
+            spaceId: SPACE,
+            userId: USER,
+            scope: computerScope,
+            scopeKey: "worker-computer",
+            homeKey: "worker-computer",
+            kind: "e2b",
+            homeStorage: "volumes",
+          },
+        });
   const bot = await prisma.bot.create({
     data: {
       spaceId: SPACE,
       userId: USER,
       name: "Worker",
       color: "#000000",
-      computerId: computer.id,
+      computerId: computer?.id ?? null,
       modelProvider: model.model.provider,
       modelId: model.model.id,
     },
@@ -142,29 +174,39 @@ export async function startWorkerRun(options: {
       isDefault: true,
     },
   });
+  if (!options.provider) {
+    await prisma.volume.createMany({
+      data: [
+        { kind: "bot_private", spaceId: SPACE, botId: bot.id, providerKind: "local-worker" },
+        { kind: "space_shared", spaceId: SPACE, providerKind: "local-worker" },
+      ].map((volume) => ({ ...volume, providerRef: volume.kind })),
+    });
+  }
   const thread = await prisma.thread.create({
     data: { spaceId: SPACE, userId: USER, botId: bot.id },
   });
   const events = createThreadEvents(prisma);
 
   const build = () => {
-    const provider = new LocalWorkerProvider({
-      mode: options.mode ?? "memory",
-      root: path.join(dir, "workers"),
-      faults: options.faults,
-      entry: options.guestEntry,
-    });
-    const runtime: AgentRuntime =
-      options.runtime?.(prisma) ??
-      createWorkerAgentRuntime({
-        launcher: createLifecycleLauncher({
+    const provider =
+      options.provider?.() ??
+      (new LocalWorkerProvider({
+        mode: options.mode ?? "memory",
+        root: path.join(dir, "workers"),
+        faults: options.faults,
+        entry: options.guestEntry,
+      }) as unknown as Provider);
+    const lifecycle = createWorkerLifecycle({ prisma, provider });
+    const runtime: AgentRuntime = options.runtime?.(prisma) ?? new PiAgentRuntime();
+    const routing = options.runtime
+      ? undefined
+      : createRunWorkers({
           prisma,
-          lifecycle: createWorkerLifecycle({ prisma, provider }),
-          connector: provider,
-        }),
-        stops: createStopJournal(prisma),
-        clock: options.clock,
-      });
+          lifecycle,
+          connector: options.connector?.(provider) ?? provider,
+          clock: options.clock,
+        });
+    const workers = routing && (options.workers?.(routing) ?? routing);
     const executor = createRunExecutor({
       prisma,
       sessionLog,
@@ -172,6 +214,7 @@ export async function startWorkerRun(options: {
       sandbox,
       home: new LocalAgentHomeStore(path.join(dir, "homes")),
       dataDir: path.join(dir, "data"),
+      artifacts: new LocalArtifactStore(path.join(dir, "data")),
       memory: emptyMemory,
       memoryProviders: { resolve: async () => null },
       secretStore,
@@ -180,10 +223,25 @@ export async function startWorkerRun(options: {
       skillLearning: "off",
       secrets: [],
       runtime,
+      workers,
     });
-    return { provider, runtime, executor };
+    return { provider, lifecycle, runtime, executor };
   };
   let current = build();
+  if (options.provider) {
+    const context = {
+      operationId: "worker-fixture",
+      traceId: "worker-fixture",
+      spaceId: SPACE,
+      userId: USER,
+      signal: new AbortController().signal,
+    };
+    await current.lifecycle.ensureVolume(
+      { kind: "bot_private", spaceId: SPACE, botId: bot.id },
+      context,
+    );
+    await current.lifecycle.ensureVolume({ kind: "space_shared", spaceId: SPACE }, context);
+  }
 
   return {
     prisma,
@@ -195,20 +253,8 @@ export async function startWorkerRun(options: {
     get provider() {
       return current.provider;
     },
-    get runtime() {
-      return current.runtime;
-    },
-    /**
-     * Keeps the bot's home on volumes, as an adopted E2B computer does, so a run may mount them.
-     * Only an E2B computer may, so the fake computer passes for one.
-     */
-    async homeOnVolumes() {
-      const provision = sandbox.provision.bind(sandbox);
-      sandbox.provision = async (...args) => ({ ...(await provision(...args)), kind: "e2b" });
-      await prisma.computer.update({
-        where: { id: computer.id },
-        data: { kind: "e2b", homeStorage: "volumes" },
-      });
+    get lifecycle() {
+      return current.lifecycle;
     },
     /** A user message that starts a queued run. */
     async send(text: string) {
@@ -238,7 +284,7 @@ export async function startWorkerRun(options: {
     userId: USER,
     spaceId: SPACE,
     async close() {
-      await current.provider.dispose();
+      await (current.provider as unknown as Partial<LocalWorkerProvider>).dispose?.();
       await model.close();
       await database.close();
       await rm(dir, { recursive: true, force: true });

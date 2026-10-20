@@ -1,12 +1,10 @@
-import {
-  type AdapterContext,
-  AgentRuntimeUnavailableError,
-  type WorkerIdentity,
-  type WorkerStartV1,
-} from "@rakazo/adapter-kit";
-import { LIVE_WORKER_STATES, type RunNeeds } from "@rakazo/core";
+import type { AdapterContext, WorkerIdentity, WorkerStartV1 } from "@rakazo/adapter-kit";
+import { AgentRuntimeBusyError, AgentRuntimeUnavailableError } from "@rakazo/adapter-kit";
+import type { WorkerLaunch } from "@rakazo/core";
+import { attemptHoldsFence, LIVE_WORKER_STATES, workerEnsureDeadline } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
-import { type ReleaseOutcome, VolumeBusyError, type WorkerLifecycle } from "../worker-lifecycle.js";
+import type { ReleaseOutcome, WorkerLifecycle } from "../worker-lifecycle.js";
+import { VolumeBusyError } from "../worker-lifecycle.js";
 import type { FrameChannel } from "./framing.js";
 
 /** An attempt's guest, launched and reachable. */
@@ -38,18 +36,21 @@ export interface GuestConnector {
   ): { connections: AsyncIterable<FrameChannel>; exited: Promise<void> };
 }
 
-/** A run that needs no files and no computer: what P2 launches. P3 derives needs from routing. */
-const NO_NEEDS: RunNeeds = { files: { private: null, shared: null }, computer: "none" };
-
-/** Launches through the P1 worker lifecycle, the only writer of `attempts.worker*`. */
+/**
+ * Launches the plan the executor made for this attempt through the P1 worker lifecycle, the only
+ * writer of `attempts.worker*`.
+ */
 export function createLifecycleLauncher(deps: {
   prisma: PrismaClient;
   lifecycle: WorkerLifecycle;
   connector: GuestConnector;
-  needs?: RunNeeds;
+  launch: WorkerLaunch;
 }): WorkerLauncher {
   return {
     async launch(worker, capability) {
+      if (worker.attemptId !== deps.launch.attemptId) {
+        throw new Error("This launcher holds the plan of another attempt");
+      }
       // Never bound to the run's signal: a release must run after the run was cancelled.
       const context: AdapterContext = {
         operationId: `worker:${worker.attemptId}`,
@@ -59,30 +60,66 @@ export function createLifecycleLauncher(deps: {
         runId: worker.runId,
         signal: new AbortController().signal,
       };
-      const unconfirmed = await deps.prisma.attempt.count({
+      const unconfirmed = await deps.prisma.attempt.findFirst({
         where: {
           runId: worker.runId,
           id: { not: worker.attemptId },
           workerState: { in: [...LIVE_WORKER_STATES, "releasing"] },
         },
+        orderBy: { workerEnsureAt: "asc" },
+        select: { workerEnsureAt: true },
       });
-      if (unconfirmed > 0) {
+      if (unconfirmed) {
+        if (
+          unconfirmed.workerEnsureAt &&
+          Date.now() < workerEnsureDeadline(unconfirmed.workerEnsureAt).getTime()
+        ) {
+          throw new AgentRuntimeBusyError("An earlier worker of this run is not confirmed gone");
+        }
         throw new AgentRuntimeUnavailableError(
-          "An earlier worker of this run is not confirmed gone",
+          "An earlier worker could not be released before its setup deadline",
         );
       }
-      const plan = await deps.lifecycle.plan({
-        attemptId: worker.attemptId,
-        needs: deps.needs ?? NO_NEEDS,
-      });
-      if (plan.mode !== "worker") {
-        throw new Error(
-          `This run cannot get a worker: ${plan.mode === "refused" ? plan.refusal.code : plan.reason}`,
-        );
-      }
-      const started = await deps.lifecycle.start(plan, context).catch((error: unknown) => {
-        if (error instanceof VolumeBusyError) throw new AgentRuntimeUnavailableError(error.message);
-        throw error;
+      const started = await deps.lifecycle
+        .start(deps.launch, context)
+        .catch(async (error: unknown) => {
+          if (error instanceof VolumeBusyError) {
+            const volumes = await deps.prisma.volume.findMany({
+              where: { id: { in: error.volumeIds } },
+              select: {
+                writerAttempt: {
+                  select: {
+                    fence: true,
+                    workerState: true,
+                    workerEnsureAt: true,
+                    run: { select: { leaseFence: true, status: true, leaseExpiresAt: true } },
+                  },
+                },
+              },
+            });
+            const now = Date.now();
+            const expired = volumes.some(
+              ({ writerAttempt: writer }) =>
+                writer &&
+                (!writer.workerEnsureAt ||
+                  workerEnsureDeadline(writer.workerEnsureAt).getTime() <= now) &&
+                (writer.workerState === "releasing" ||
+                  !attemptHoldsFence(writer, writer.run) ||
+                  (writer.run.leaseExpiresAt && writer.run.leaseExpiresAt.getTime() <= now)),
+            );
+            if (expired) {
+              throw new AgentRuntimeUnavailableError(
+                "A volume writer could not be released before its setup deadline",
+                { cause: error },
+              );
+            }
+            throw new AgentRuntimeBusyError(error.message, { cause: error });
+          }
+          throw error;
+        });
+      await deps.prisma.attempt.updateMany({
+        where: { id: worker.attemptId, status: "setting_up" },
+        data: { status: "running" },
       });
       const guest = deps.connector.connect(
         { attemptId: worker.attemptId, providerRef: started.providerRef },

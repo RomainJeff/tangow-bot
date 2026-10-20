@@ -12,7 +12,7 @@ export const laneB: Lane = {
   async run(live) {
     const results: Record<string, string> = {};
     const worker = await liveRun(live, {
-      files: { private: true, shared: true },
+      computer: "team",
       steps: [
         call("r1", "read_file", { path: "from-computer.txt" }),
         call("r2", "read_file", { path: "shared/from-computer.txt" }, (request) => {

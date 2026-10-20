@@ -1001,6 +1001,7 @@ model Volume {
   bot             Bot?     @relation(fields: [botId], references: [id], onDelete: Restrict)
   providerKind    String
   providerRef     String?
+  ensureUntil     DateTime?
   writerAttemptId String?
   writerAttempt   Attempt? @relation("VolumeWriter", fields: [writerAttemptId], references: [id], onDelete: Restrict)
   createdAt       DateTime @default(now())
@@ -1009,6 +1010,20 @@ model Volume {
   @@index([spaceId])
   @@index([writerAttemptId])
   @@map("volumes")
+}
+
+/// A provider volume whose row was deleted, until the volume sweep deletes it at the provider.
+model VolumeDeletion {
+  providerKind String
+  providerRef  String
+  volumeId     String
+  /// Unique across deletion and reinsertion, so an older sweep cannot clear a fresh record.
+  generation   Int      @default(dbgenerated("nextval('volume_deletion_generation_seq'::regclass)"))
+  notBefore    DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  @@id([providerKind, providerRef])
+  @@map("volume_deletions")
 }
 
 model ComputerExecutionLease {

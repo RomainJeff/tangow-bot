@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { VolumeRow } from "./worker-plan.js";
-import { authorizeMounts, volumeMountPath } from "./worker-plan.js";
+import type { VolumeGrant, VolumeRow, WorkerLaunch } from "./worker-plan.js";
+import { authorizeMounts, deriveRunNeeds, planLaunch, volumeMountPath } from "./worker-plan.js";
 
 const scope = { botId: "bot_a", spaceId: "space_a" };
 const e2b = { kind: "e2b", readOnlyMounts: false };
@@ -92,5 +92,73 @@ describe("volumeMountPath", () => {
     expect(() => volumeMountPath({ kind: "bot_private", botId })).toThrow(
       "Invalid bot id for a mount path",
     );
+  });
+});
+
+describe("the launch a run gets from its tools and its bot's computer", () => {
+  const base = {
+    runId: "run_a",
+    botId: "bot_a",
+    spaceId: "space_a",
+    attemptId: "attempt_a",
+    fence: 2,
+    privateVolumeId: "vol_private_a",
+    sharedVolumeId: "vol_shared_a",
+  };
+  const onVolumes = { id: "computer_a", homeStorage: "volumes" as const };
+  const launch = (volumes: VolumeGrant[], computer: WorkerLaunch["computer"]) => ({
+    mode: "worker",
+    runId: "run_a",
+    botId: "bot_a",
+    spaceId: "space_a",
+    attemptId: "attempt_a",
+    fence: 2,
+    volumes,
+    computer,
+  });
+  const files = { guestTools: true, computerTools: true };
+
+  it.each([
+    [
+      "a team bot works in its own volume and the space's",
+      { ...files, computerScope: "team" as const },
+      { ...base, computer: onVolumes },
+      launch(
+        [
+          { volumeId: "vol_private_a", access: "rw" },
+          { volumeId: "vol_shared_a", access: "rw" },
+        ],
+        { mode: "on_use", computerId: "computer_a" },
+      ),
+    ],
+    [
+      "a team bot whose team home is still a snapshot stays in process, shared slot included",
+      { ...files, computerScope: "team" as const },
+      { ...base, computer: { id: "computer_a", homeStorage: "snapshot" as const } },
+      { mode: "in_process", reason: "home_not_migrated" },
+    ],
+    [
+      "a dedicated bot never mounts the space volume, even once it exists",
+      { ...files, computerScope: "dedicated" as const },
+      { ...base, computer: onVolumes },
+      launch([{ volumeId: "vol_private_a", access: "rw" }], {
+        mode: "on_use",
+        computerId: "computer_a",
+      }),
+    ],
+    [
+      "a run without files or computer tools gets a worker with nothing mounted",
+      { guestTools: false, computerTools: false, computerScope: "team" as const },
+      { ...base, computer: { id: "computer_a", homeStorage: "snapshot" as const } },
+      launch([], { mode: "none" }),
+    ],
+    [
+      "a bot attached after its computer moved has no volume yet and is refused",
+      { ...files, computerScope: "team" as const },
+      { ...base, computer: onVolumes, privateVolumeId: null },
+      { mode: "refused", refusal: { code: "slot_volume_missing", slot: "private" } },
+    ],
+  ])("%s", (_name, run, inputs, expected) => {
+    expect(planLaunch(inputs, deriveRunNeeds(run))).toEqual(expected);
   });
 });

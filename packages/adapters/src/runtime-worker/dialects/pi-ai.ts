@@ -17,7 +17,7 @@ import type {
   ReplyFinal,
   ReplyPart,
 } from "@rakazo/adapter-kit";
-import { type PiStreamFn, streamRunModel } from "../../pi-runtime.js";
+import { conversationSessionId, type PiStreamFn, streamRunModel } from "../../pi-runtime.js";
 import { billedPromptTokens, providerCacheTokens } from "../../pi-runtime-limits.js";
 import type { ModelRelay } from "../model-relay.js";
 
@@ -107,7 +107,7 @@ export const relayPiAiCall: ModelRelay<PiAiModelCall, PiAiModelEvent> = async (
   config,
   call,
   send,
-  signal,
+  { signal, conversation },
 ) => {
   let model: Model<Api> | undefined;
   try {
@@ -116,7 +116,11 @@ export const relayPiAiCall: ModelRelay<PiAiModelCall, PiAiModelEvent> = async (
       messages: call.context.messages as unknown as Message[],
     });
     const relayed = streamRunModel(config, context, {
-      sessionId: call.options.sessionId,
+      sessionId: conversationSessionId(
+        conversation.threadId,
+        conversation.botId,
+        conversation.helper,
+      ),
       signal,
     });
     model = relayed.model;

@@ -1,82 +1,50 @@
-import type { WorkerProvider } from "@rakazo/adapter-kit";
-import { createWorkerLifecycle, type WorkerLifecycle } from "@rakazo/adapters";
-import {
-  createLifecycleLauncher,
-  createStopJournal,
-  createWorkerAgentRuntime,
-  type GuestConnector,
-} from "@rakazo/adapters/runtime-worker";
-import { type RunNeeds, volumeMountPath } from "@rakazo/core";
+import type { SandboxProvider, WorkerProvider } from "@rakazo/adapter-kit";
+import type { GuestConnector } from "@rakazo/adapters/runtime-worker";
+import { volumeMountPath } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "../model-emulator.js";
 import { parse, type Seen, tapConnector } from "../worker-channel-tap.js";
 import { startWorkerRun } from "../worker-run-fixture.js";
-
-import { context, type Live, type ProviderWrap } from "./session.js";
+import type { Live, ProviderWrap } from "./session.js";
 
 /**
- * The real executor on PGlite, running its bot in an E2B worker through the worker runtime, with
- * the model emulator behind the controller's relay. With `files`, the bot's home is on volumes
- * the lifecycle provisions on E2B, and the run mounts them.
+ * The real executor on PGlite with the product's worker routing: a run's tools decide what it
+ * mounts, and its bot's E2B worker runs it, with the model emulator behind the controller's relay.
+ * A dedicated computer's bot mounts its private volume, a team computer's bot also the space's
+ * shared one, and a bot without a computer mounts nothing.
  */
 export async function liveRun(
   live: Live,
   options: {
     steps: ModelEmulatorStep[];
-    files?: { private: boolean; shared: boolean };
+    computer?: "dedicated" | "team" | "none";
     /** Runs the guest on another provider than the session's E2B one. */
     provider?: () => WorkerProvider & GuestConnector;
     wrap?: ProviderWrap;
+    /** The bot's computer instead of the fake one, such as the product's E2B computer. */
+    sandbox?: SandboxProvider;
     prisma?: (prisma: PrismaClient) => PrismaClient;
   },
 ) {
   const seen: Seen[] = [];
   const connects: number[] = [];
-  const files = options.files ?? { private: false, shared: false };
-  const needs: RunNeeds = {
-    files: { private: files.private ? "rw" : null, shared: files.shared ? "rw" : null },
-    computer: "none",
-  };
-  let lifecycle: WorkerLifecycle | undefined;
   const run = await startWorkerRun({
     steps: options.steps,
     prisma: options.prisma,
-    runtime: (prisma) => {
+    computerScope: options.computer ?? "dedicated",
+    sandbox: options.sandbox,
+    provider: () => {
       const base = options.provider?.() ?? live.workerProvider();
-      const provider = options.wrap?.(base) ?? base;
-      lifecycle = createWorkerLifecycle({ prisma, provider });
-      return createWorkerAgentRuntime({
-        launcher: createLifecycleLauncher({
-          prisma,
-          lifecycle,
-          connector: tapConnector(provider, seen, connects),
-          needs,
-        }),
-        stops: createStopJournal(prisma),
-      });
+      return options.wrap?.(base) ?? base;
     },
+    connector: (provider) => tapConnector(provider, seen, connects),
   });
-  const workers = lifecycle!;
-  const volumes: { private?: string; shared?: string } = {};
-  if (files.private || files.shared) {
-    await run.homeOnVolumes();
-    if (files.private) {
-      volumes.private = (
-        await workers.ensureVolume(
-          { kind: "bot_private", spaceId: run.spaceId, botId: run.bot.id },
-          context("private"),
-        )
-      ).providerRef;
-    }
-    if (files.shared) {
-      volumes.shared = (
-        await workers.ensureVolume(
-          { kind: "space_shared", spaceId: run.spaceId },
-          context("shared"),
-        )
-      ).providerRef;
-    }
-  }
+  const rows = await run.prisma.volume.findMany({ select: { kind: true, providerRef: true } });
+  const volumes = {
+    private: rows.find((row) => row.kind === "bot_private")?.providerRef ?? undefined,
+    shared: rows.find((row) => row.kind === "space_shared")?.providerRef ?? undefined,
+  };
+  const workers = run.lifecycle;
   const privateMount = volumeMountPath({ kind: "bot_private", botId: run.bot.id });
   const sharedMount = volumeMountPath({ kind: "space_shared" });
   return {

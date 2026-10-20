@@ -1,9 +1,11 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { PiAgentRuntime } from "@rakazo/adapters";
 import { WORKER_LIMITS } from "@rakazo/adapters/runtime-worker";
 import { fileTask, toolResult } from "../file-task.js";
 import { startWorkerRun } from "../worker-run-fixture.js";
-import { call, finish, liveRun } from "./run.js";
-import { context, type Lane, sha256 } from "./session.js";
+import { call, finish, liveRun, toolNames } from "./run.js";
+import { context, type Lane, sh, sha256 } from "./session.js";
 
 export const laneA: Lane = {
   id: "a",
@@ -17,10 +19,10 @@ export const laneA: Lane = {
       let file: string | undefined;
       const run = await startWorkerRun({
         steps: fileTask(seen, () => {
-          file = [...run.sandbox.boxes.values()]
-            .map((box) => box.files.get("notes.md"))
-            .filter((stored) => stored !== undefined)
-            .map((stored) => Buffer.from(stored.content).toString())[0];
+          file = readFileSync(
+            path.join(run.provider.volumePath("bot_private"), "notes.md"),
+            "utf8",
+          );
         }),
         runtime: () => new PiAgentRuntime(),
       });
@@ -40,7 +42,6 @@ export const laneA: Lane = {
     const seen: string[] = [];
     const worker = await liveRun(live, {
       steps: fileTask(seen, () => {}),
-      files: { private: true, shared: false },
     });
     const files = live.volumeFiles();
     try {
@@ -90,7 +91,6 @@ export const laneF: Lane = {
   async run(live) {
     let shown = "";
     const worker = await liveRun(live, {
-      files: { private: true, shared: false },
       steps: [
         call("big", "bash", { command: `seq 1 ${OUTPUT_LINES}` }),
         ...finish("Printed a long output", (request) => {
@@ -151,21 +151,17 @@ export const laneF: Lane = {
 export const laneI: Lane = {
   id: "i",
   issue: "run sans fichiers/computer",
-  scenario: "A run that needs no files and no computer, as an MCP-only run",
+  scenario:
+    "A run whose bot has no computer, as an MCP-only run; then a VM of the worker template, to check the guest user can write /workspace",
   passWhen:
-    "The worker starts with no mount, its guest sees no network file system, and the run completes",
+    "The worker starts with no mount and no computer, the guest is offered no local tool, the run completes, and the sandbox user can write /workspace",
   async run(live) {
-    let shown = "";
+    let offered: string[] = [];
     const worker = await liveRun(live, {
-      steps: [
-        call("m1", "bash", {
-          command:
-            "awk '$3 ~ /^nfs/' /proc/mounts | wc -l; pwd; (echo x > /workspace/scratch.txt && echo writable) 2>/dev/null || echo read-only",
-        }),
-        ...finish("Ran without files", (request) => {
-          shown = toolResult(request);
-        }),
-      ],
+      computer: "none",
+      steps: finish("Ran without files", (request) => {
+        offered = toolNames(request);
+      }),
     });
     try {
       const runId = await worker.send("Run without files.");
@@ -181,24 +177,29 @@ export const laneI: Lane = {
             },
         )
         .find((message) => message.kind === "worker.start");
-      const lines = shown
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean);
+      const vm = await live.vm({}, live.config.workerTemplate);
+      const workspace = await sh(
+        vm,
+        "(echo x > /workspace/scratch.txt && echo writable) 2>/dev/null || echo read-only",
+      );
+      await vm.kill();
+      const localTools = offered.filter((name) =>
+        ["bash", "read_file", "write_file", "edit_file", "list_files", "grep", "shell"].includes(
+          name,
+        ),
+      );
       return {
         pass:
           (await worker.status(runId)) === "completed" &&
           JSON.stringify(start?.workspace) === JSON.stringify({ cwd: "/workspace", mounts: [] }) &&
           start?.computer === "none" &&
-          lines[0] === "0" &&
-          lines[1] === "/workspace" &&
-          lines[2] === "writable",
+          localTools.length === 0 &&
+          workspace === "writable",
         observed: {
           workspace: start?.workspace,
           computer: start?.computer,
-          nfsMountsInGuest: lines[0],
-          guestCwd: lines[1],
-          workspaceWritableByGuest: lines[2] === "writable",
+          localToolsOffered: localTools,
+          workspaceWritableBySandboxUser: workspace === "writable",
         },
       };
     } finally {

@@ -1,4 +1,5 @@
 import type { BackgroundJob, JobPublisher } from "@rakazo/adapter-kit";
+import { runContinueJob } from "@rakazo/adapter-kit";
 import type { Pool, PrismaClient, ThreadEvents } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
 import { returnBotMessageOutcome } from "./bot-messages.js";
@@ -65,6 +66,27 @@ describe("createJobReconciler", () => {
     expect(prisma.routine.findMany).toHaveBeenCalled();
     expect(prisma.computer.findMany).toHaveBeenCalled();
     expect(prisma.messagingOutbound.findFirst).toHaveBeenCalled();
+  });
+
+  it("recovers queued runs while worker teardown hangs, and stops it at its deadline", async () => {
+    const prisma = fakePrisma([{ id: "run-queued", updatedAt: new Date() }]);
+    const { jobs, enqueue } = publisher();
+    let deadline: AbortSignal | undefined;
+
+    await createJobReconciler(
+      {
+        prisma,
+        jobs,
+        reconcileWorkers: (signal) => {
+          deadline = signal;
+          return new Promise(() => undefined);
+        },
+      },
+      { workerDeadlineMs: 20 },
+    ).reconcileOnce();
+
+    expect(enqueue).toHaveBeenCalledWith(runContinueJob("run-queued"));
+    expect(deadline?.aborted).toBe(true);
   });
 
   it("restores a due pending messaging outbox drain", async () => {

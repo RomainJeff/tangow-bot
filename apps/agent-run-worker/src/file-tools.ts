@@ -185,7 +185,8 @@ async function grep(
   let walkCapped = false;
   try {
     const stored = files.resolve(requested);
-    if ((await lstat(files.real(stored))).isDirectory()) {
+    // Like grep -r, the path named follows a link; the walk below does not.
+    if ((await stat(files.real(stored))).isDirectory()) {
       const walked = await filesUnder(files, stored, context.signal);
       walkCapped = walked.capped;
       // A glob with a slash matches the path under the searched directory, otherwise the name.

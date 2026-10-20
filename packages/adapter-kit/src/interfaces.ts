@@ -91,6 +91,16 @@ export interface SandboxProvider {
       homePath: string;
       providerRef?: string;
       providerKind?: ComputerRef["kind"];
+      /**
+       * A home kept on worker volumes: mount each at its path and serve the workspace from `root`.
+       * Only a provider that supports worker volumes receives one. A machine that mounts another
+       * set is replaced, after `archive` received its files that are on no volume.
+       */
+      volumeHome?: {
+        root: string;
+        mounts: Array<{ volumeRef: string; path: string }>;
+        archive(files: AsyncIterable<PortableFile>): Promise<void>;
+      };
     },
     context: AdapterContext,
   ): Promise<ComputerRef>;

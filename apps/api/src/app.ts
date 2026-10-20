@@ -21,6 +21,7 @@ import {
   applyMessagingOutboundStatus,
   ChatSdkMessagingSurface,
   ComposioConnector,
+  composeWorkers,
   createBackgroundJobHandlers,
   createConnectorStack,
   createJobReconciler,
@@ -34,6 +35,7 @@ import {
   createSkillLineSweep,
   createTraceExporterFromEnv,
   createWebProvider,
+  createWorkerProvider,
   destroyBot,
   EmailEmulator,
   EncryptedSecretStore,
@@ -73,6 +75,7 @@ import {
   createDb,
   createPool,
   createThreadEvents,
+  deleteOwnerVolumes,
   parsePositiveInteger,
   provisionMessagingIdentity,
   requireMembership,
@@ -240,6 +243,7 @@ export async function createApp(
   const oauthLogins = new PiOAuthLogins();
   const home = new LocalAgentHomeStore(env.dataDir);
   const artifacts = new LocalArtifactStore(env.dataDir);
+  const workers = composeWorkers(prisma, createWorkerProvider(env.workerProvider));
   const memory = new MarkdownMemoryStore(prisma);
   const mcp = new McpConnector(
     prisma,
@@ -333,7 +337,14 @@ export async function createApp(
       "http://localhost:19006",
       "http://127.0.0.1:19006",
     ],
-    beforeDeleteUser: async (userId) => {
+    beforeDeleteUser: async (userId, { personalOrganizationIds }) => {
+      const context = (spaceId: string) => ({
+        operationId: `account-delete:${userId}`,
+        traceId: `account-delete:${userId}`,
+        spaceId,
+        userId,
+        signal: new AbortController().signal,
+      });
       const bots = await prisma.bot.findMany({
         where: { userId },
         select: { id: true, userId: true, spaceId: true, name: true, archivedAt: true },
@@ -341,20 +352,36 @@ export async function createApp(
       await Promise.all(
         bots.map((bot) =>
           destroyBot(
-            { prisma, sandbox, home, jobs, events, artifacts, dataDir: env.dataDir },
-            bot,
             {
-              operationId: `account-delete:${userId}`,
-              traceId: `account-delete:${userId}`,
-              spaceId: bot.spaceId,
-              userId,
-              botId: bot.id,
-              signal: new AbortController().signal,
+              prisma,
+              sandbox,
+              home,
+              jobs,
+              events,
+              artifacts,
+              dataDir: env.dataDir,
+              workerLifecycle: workers.lifecycle,
             },
+            bot,
+            { ...context(bot.spaceId), botId: bot.id },
             { deleteMemories: true },
           ),
         ),
       );
+      // Deleting those organizations deletes their spaces, which a volume row would block.
+      const spaces = await prisma.space.findMany({
+        where: { organizationId: { in: personalOrganizationIds } },
+        select: { id: true },
+      });
+      for (const { id: spaceId } of spaces) {
+        await workers.lifecycle.releaseOwnerWorkers({ spaceId }, context(spaceId));
+        await prisma.$transaction((tx) => deleteOwnerVolumes(tx, { spaceId }));
+      }
+      if (spaces.length > 0) {
+        await workers.lifecycle
+          .sweepVolumes(context(spaces[0]!.id))
+          .catch((error) => getLogger().error("volume sweep after account deletion", error));
+      }
       await rm(pushTokenPath(env.dataDir, userId), { force: true }).catch(() => undefined);
       await removeUserSkillDirs(env.dataDir, userId);
     },
@@ -372,6 +399,7 @@ export async function createApp(
     sessionLog,
     skillLock,
     runtime,
+    workers: workers.runWorkers,
     sandbox,
     memory,
     memoryProviders,
@@ -437,12 +465,14 @@ export async function createApp(
           sessionLog,
           lineOnlyMessages: env.skillLearning !== "off",
         }),
+        reconcileWorkers: workers.reconcileWorkers,
       })
     : undefined;
   reconciler?.start();
 
   const router = createRouter({
     prisma,
+    workerLifecycle: workers.lifecycle,
     skillLock,
     events,
     sessionLog,

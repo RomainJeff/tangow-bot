@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import { performance } from "node:perf_hooks";
 import type { AdapterContext, WorkerProvider } from "@rakazo/adapter-kit";
 import {
+  E2BSandboxProvider,
+  type E2BSandboxSdk,
   E2BVolumeFiles,
   E2BWorkerProvider,
   type E2BWorkerSdk,
@@ -69,8 +71,8 @@ export const sha256 = (content: Uint8Array | string) =>
   createHash("sha256").update(content).digest("hex");
 
 /**
- * One live session on an E2B deployment. Every sandbox it creates carries `p3live: <tag>` and
- * every volume a `<tag>-` name prefix, so `sweep` finds and removes all of them.
+ * One live session on an E2B deployment. Every sandbox it creates carries `p3live: <tag>`, and it
+ * records the name of every volume it creates, so `sweep` finds and removes all of them.
  */
 export function liveSession(config: LiveConfig) {
   const tag = `p3live-${randomBytes(4).toString("hex")}`;
@@ -82,6 +84,8 @@ export function liveSession(config: LiveConfig) {
   const base = e2bWorkerSdk(connection);
   /** How long each guest command took to start, from the call to E2B's handle. */
   const guestCommandStarts: number[] = [];
+  /** A provider must keep the name it was given, so volumes are tracked by name, not tagged. */
+  const volumeNames = new Set<string>();
   const sdk: E2BWorkerSdk = {
     ...base,
     async startGuest(sandboxId, command, options) {
@@ -92,7 +96,10 @@ export function liveSession(config: LiveConfig) {
     },
     createSandbox: (options) =>
       base.createSandbox({ ...options, metadata: { ...options.metadata, p3live: tag } }),
-    createVolume: (name) => base.createVolume(`${tag}-${name}`),
+    async createVolume(name, options) {
+      volumeNames.add(name);
+      return base.createVolume(name, options);
+    },
   };
 
   async function ownSandboxes(): Promise<string[]> {
@@ -102,8 +109,28 @@ export function liveSession(config: LiveConfig) {
     return ids;
   }
   async function ownVolumes() {
-    return (await Volume.list(connection)).filter((volume) => volume.name.startsWith(`${tag}-`));
+    return (await Volume.list(connection)).filter((volume) => volumeNames.has(volume.name));
   }
+  /**
+   * The product's E2B computer, through its SDK seam: this host has no desktop template, so the
+   * machine is a plain sandbox of the computer template, tagged, without the desktop layer.
+   */
+  const computerSdk: E2BSandboxSdk = {
+    create: async (options) =>
+      (await Sandbox.create(config.computerTemplate, {
+        ...connection,
+        ...options,
+        apiKey: config.apiKey,
+        metadata: { ...options.metadata, p3live: tag },
+      })) as unknown as Awaited<ReturnType<E2BSandboxSdk["create"]>>,
+    connect: async (id, options) =>
+      (await Sandbox.connect(id, { ...connection, ...options })) as unknown as Awaited<
+        ReturnType<E2BSandboxSdk["connect"]>
+      >,
+    pause: async (id, options) => {
+      await Sandbox.pause(id, { ...connection, ...options });
+    },
+  };
 
   return {
     tag,
@@ -122,6 +149,7 @@ export function liveSession(config: LiveConfig) {
         },
         sdk,
       ),
+    computer: () => new E2BSandboxProvider(config.apiKey, computerSdk),
     volumeFiles: () =>
       new E2BVolumeFiles(
         e2bVolumeSandbox({
@@ -162,7 +190,9 @@ export function liveSession(config: LiveConfig) {
       const volumes = await ownVolumes();
       for (const volume of volumes)
         await Volume.destroy(volume.volumeId, connection).catch(() => false);
-      return { killed: sandboxes.length, destroyed: volumes.length, left: await this.census() };
+      const left = await this.census();
+      if (left.volumes === 0) volumeNames.clear();
+      return { killed: sandboxes.length, destroyed: volumes.length, left };
     },
   };
 }
@@ -185,3 +215,20 @@ export async function pollFor(vm: Sandbox, file: string, marker: string) {
 export type ProviderWrap = (
   provider: WorkerProvider & GuestConnector,
 ) => WorkerProvider & GuestConnector;
+
+/** A provider that does what `provider` does, but for the methods `overrides` replaces. */
+export function forward(
+  provider: WorkerProvider & GuestConnector,
+  overrides: Partial<WorkerProvider & GuestConnector>,
+): WorkerProvider & GuestConnector {
+  return {
+    describe: () => provider.describe(),
+    ensure: (spec, ctx) => provider.ensure(spec, ctx),
+    prepare: (ref, spec, ctx) => provider.prepare(ref, spec, ctx),
+    destroy: (target, ctx) => provider.destroy(target, ctx),
+    ensureVolume: (input, ctx) => provider.ensureVolume(input, ctx),
+    deleteVolume: (input, ctx) => provider.deleteVolume(input, ctx),
+    connect: (target, capability) => provider.connect(target, capability),
+    ...overrides,
+  };
+}

@@ -5,7 +5,7 @@ import { performance } from "node:perf_hooks";
 import { LocalWorkerProvider } from "../local-worker-provider.js";
 import { quantiles, queryLog, settled } from "../worker-channel-tap.js";
 import { call, finish, liveRun } from "./run.js";
-import { type Live, type ProviderWrap, requireHeadroom } from "./session.js";
+import { forward, type Live, type ProviderWrap, requireHeadroom } from "./session.js";
 
 /** A memory series after each run, and its growth over the first and the last ten runs. */
 function series(values: number[]) {
@@ -26,7 +26,7 @@ function series(values: number[]) {
  */
 export async function benchLive(live: Live, trials: number) {
   const toolsPerRun = 5;
-  const arms = ["local_memory", "no_mounts", "two_mounts"] as const;
+  const arms = ["local_memory", "private_mount", "two_mounts"] as const;
   const localRoot = await mkdtemp(path.join(tmpdir(), "rakazo-live-bench-"));
   type Arm = (typeof arms)[number];
   const steps = () =>
@@ -47,22 +47,18 @@ export async function benchLive(live: Live, trials: number) {
   for (const arm of arms) {
     const log = queryLog();
     const ensures: number[] = [];
-    const timed: ProviderWrap = (provider) => ({
-      describe: () => provider.describe(),
-      destroy: (target, ctx) => provider.destroy(target, ctx),
-      ensureVolume: (input, ctx) => provider.ensureVolume(input, ctx),
-      connect: (target, capability) => provider.connect(target, capability),
-      prepare: (ref, spec, ctx) => provider.prepare(ref, spec, ctx),
-      async ensure(spec, ctx) {
-        ensures.push(performance.now());
-        return provider.ensure(spec, ctx);
-      },
-    });
+    const timed: ProviderWrap = (provider) =>
+      forward(provider, {
+        async ensure(spec, ctx) {
+          ensures.push(performance.now());
+          return provider.ensure(spec, ctx);
+        },
+      });
     const worker = await liveRun(live, {
       steps: steps(),
       wrap: timed,
       prisma: log.wrap,
-      files: arm === "two_mounts" ? { private: true, shared: true } : undefined,
+      computer: arm === "two_mounts" ? "team" : "dedicated",
       provider:
         arm === "local_memory"
           ? () => new LocalWorkerProvider({ mode: "memory", root: localRoot })
@@ -152,7 +148,7 @@ export async function benchLive(live: Live, trials: number) {
     }
     for (const { worker } of fixtures.values()) worker.run.model.assertComplete();
     // What one round trip to this database costs on this machine, to read the control cost by.
-    const calibration = fixtures.get("no_mounts")!.worker.run.prisma;
+    const calibration = fixtures.get("private_mount")!.worker.run.prisma;
     for (let i = 0; i < 200; i++) {
       const at = performance.now();
       await calibration.$queryRaw`SELECT 1`;

@@ -19,7 +19,7 @@ interface WorkerSpec {
 }
 ```
 
-`volumeRef` is the value your `ensureVolume` returned. `path` is `/workspace/bots/<botId>` or `/workspace/shared`. Mount each volume at exactly that path.
+`volumeRef` is the volume name passed to `ensureVolume`, which must return that same name. `path` is `/workspace/bots/<botId>` or `/workspace/shared`. Mount each volume at exactly that path.
 
 ## Implement `WorkerProvider`
 
@@ -33,9 +33,16 @@ Each method has a rule that the controller depends on for safety:
 | `ensure(spec)` | Create one worker tagged with `spec.attemptId` and return its reference. The controller calls it once per attempt. Never create the worker after `spec.ensureDeadline`, the instant the controller stops waiting for it. | Create a container with the label `rakazo.attempt=<attemptId>`, mount each volume at its `path`, and stop it after `ttlSeconds`. Cancel creation when the deadline passes. Return the container id. |
 | `prepare(ref, spec)` | Finish fallible setup after the reference is recorded. It must be idempotent. | Start the container, then wait until the mounts are visible and the runner answers. |
 | `destroy({ attemptId, providerRef })` | Remove every worker tagged with `attemptId`, with or without a reference. Return `absent` when none is left. Never treat "not found" as an error. | Remove every container with the label `rakazo.attempt=<attemptId>`, forced. Leave the volumes in place. |
-| `ensureVolume({ name })` | Create the named volume, or return the existing one. Never delete a volume. | Create the volume `name` if it is missing, and return `name`. |
+| `ensureVolume({ name, ensureDeadline })` | Create the named volume, or return it. Always return `name` as its reference. Stop submitting creates before `ensureDeadline`. Server processing must finish within the one-hour deletion grace period after it, including when the controller dies or loses the response. | Create the volume `name` if it is missing, and return `name`. Bound the request by the deadline and verify the server completion bound after a lost response. |
+| `deleteVolume({ providerRef })` | Delete the named volume, even if `ensureVolume` never returned. One already gone is not an error. | Remove the volume `providerRef` if it exists. |
 
-The interface has no method that deletes a volume, and your adapter must not add one. Volumes outlive every run. Their deletion belongs to bot and space deletion, outside the run path.
+Volumes outlive every run. Before calling `ensureVolume`, the controller commits an `ensureUntil` deadline under the volume row lock. The name is always `rakazo-<volumeId>`, so a reference can be recovered without a provider response. Deleting a bot or a space deletes its volume rows and records every volume in `volume_deletions` in the same transaction, including rows with no recorded reference. The record preserves the latest provisioning deadline. Concurrent provisioners extend that deadline under the same lock.
+
+The lifecycle's `sweepVolumes` waits until that deadline before deleting the named volume. It retains the record for one hour after the latest deadline and repeats the idempotent delete on every eligible sweep. Only a successful delete after that grace period clears the record. Even successful provisioning may delay the first deletion by the remaining deadline, currently up to 15 minutes.
+
+E2B stops sending creates a minute early and bounds the client request with the remaining time and an abort signal. Client cancellation cannot stop server processing of an accepted create, especially after the controller dies. The grace period assumes every accepted create finishes within one hour after its persisted ensure deadline. A create that finishes later, after the final successful sweep, can leak a volume. Prove this server latency bound for a new provider, or increase the shared grace period before enabling it. Cleanup also needs a running reconciler and a provider that eventually accepts deletes.
+
+A provisioning response that arrives after owner deletion refreshes the deletion record. Each insert or refresh takes its generation from a database sequence, which never resets on reinsertion. A sweeper clears only the generation it deleted, so concurrent sweepers cannot clear a fresh record. The sweep never discovers deletion candidates by listing the provider's volumes, so other deployments' volumes stay untouched. Records wait while no provider of their kind is configured.
 
 Respect the TTL at the provider. If the controller never confirms destruction, the TTL is the last bound on a worker that still holds a volume.
 
@@ -68,7 +75,9 @@ A new `SandboxKind` fails the build until it has an entry in `WORKER_SUPPORT`, s
 
 ## Compose the provider
 
-Build the provider in the composition roots, `apps/api/src/app.ts` and `apps/worker/src/index.ts`, from the existing generic configuration. Do not add a provider-specific environment variable when the connection settings can express it. Pass it to `createWorkerLifecycle({ prisma, provider })`.
+`WORKER_PROVIDER` selects the provider and `WORKER_TEMPLATE` its guest image (`rakazo-worker-pi` by default). `resolveWorkerProvider` in `packages/adapters/src/worker-composition.ts` parses them, and `createWorkerProvider` builds the adapter. Add your provider to both. Do not add a provider-specific environment variable when the provider's own SDK or the connection settings can express it: E2B reads `E2B_API_KEY`, and `E2B_DOMAIN` or `E2B_API_URL` for a self-hosted endpoint.
+
+Both composition roots, `apps/api/src/app.ts` and `apps/worker/src/index.ts`, call `composeWorkers(prisma, provider)`. It returns the lifecycle that bot and space deletion use, and, with a provider, the executor's `runWorkers` and the reconciler's `reconcileWorkers`.
 
 A deployment that composes no provider keeps every run in process. `plan` then answers `no_worker_provider` without a query.
 
@@ -94,5 +103,6 @@ I1 defines the equivalent proofs for E2B. Reuse its attack list: direct mounts, 
 
 - Run the worker suites with your provider in place of `FakeWorkerProvider`. `packages/adapters/src/worker-lifecycle.test.ts` shows the behavior the controller expects.
 - Test that `destroy` without a reference finds a worker by its attempt tag, and returns `absent` once nothing is left.
-- Test that `ensure` respects its deadline and that `ensureVolume` returns the same reference twice.
+- Test that `ensure` and `ensureVolume` respect their deadlines and that `ensureVolume` returns the requested name twice.
+- Lose a create response, delete the owner before recording its reference, and verify that a restarted controller waits out the provisioning deadline, re-deletes a create that lands during the grace period, and clears the record only after that period. Race two sweepers with a delayed provisioning response and verify that an older sweep keeps a fresh deletion record.
 - Keep these tests deterministic and offline. Gate any test that needs a real Docker daemon, and list it in the harness like the other suites that need Docker.

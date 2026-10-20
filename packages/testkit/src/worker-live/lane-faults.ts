@@ -1,8 +1,7 @@
-import type { AdapterDescriptor, WorkerCapabilities } from "@rakazo/adapter-kit";
 import { Sandbox } from "e2b";
 import { toolResult } from "../file-task.js";
 import { call, finish, liveRun } from "./run.js";
-import { context, type Lane, type Live, type ProviderWrap } from "./session.js";
+import { context, forward, type Lane, type Live, type ProviderWrap } from "./session.js";
 
 /** A provider whose ensure, or the step after it, fails the way `fault` says, once. */
 function faulty(
@@ -10,32 +9,29 @@ function faulty(
   fault: "kill_after_ensure" | "throw_after_create" | "prepare_fails",
 ): { wrap: ProviderWrap; fired: () => boolean } {
   let fired = false;
-  const wrap: ProviderWrap = (provider) => ({
-    describe: (): AdapterDescriptor<WorkerCapabilities> => provider.describe(),
-    destroy: (target, ctx) => provider.destroy(target, ctx),
-    ensureVolume: (input, ctx) => provider.ensureVolume(input, ctx),
-    connect: (target, capability) => provider.connect(target, capability),
-    async ensure(spec, ctx) {
-      const made = await provider.ensure(spec, ctx);
-      if (fired) return made;
-      if (fault === "kill_after_ensure") {
-        fired = true;
-        await Sandbox.kill(made.providerRef, live.connection);
-      }
-      if (fault === "throw_after_create") {
-        fired = true;
-        throw new Error("The controller lost the create response");
-      }
-      return made;
-    },
-    async prepare(providerRef, spec, ctx) {
-      if (fault === "prepare_fails" && !fired) {
-        fired = true;
-        throw new Error("Setup failed after the VM was created");
-      }
-      return provider.prepare(providerRef, spec, ctx);
-    },
-  });
+  const wrap: ProviderWrap = (provider) =>
+    forward(provider, {
+      async ensure(spec, ctx) {
+        const made = await provider.ensure(spec, ctx);
+        if (fired) return made;
+        if (fault === "kill_after_ensure") {
+          fired = true;
+          await Sandbox.kill(made.providerRef, live.connection);
+        }
+        if (fault === "throw_after_create") {
+          fired = true;
+          throw new Error("The controller lost the create response");
+        }
+        return made;
+      },
+      async prepare(providerRef, spec, ctx) {
+        if (fault === "prepare_fails" && !fired) {
+          fired = true;
+          throw new Error("Setup failed after the VM was created");
+        }
+        return provider.prepare(providerRef, spec, ctx);
+      },
+    });
   return { wrap, fired: () => fired };
 }
 
@@ -53,7 +49,6 @@ export const laneG: Lane = {
       const injected = faulty(live, fault);
       const worker = await liveRun(live, {
         wrap: injected.wrap,
-        files: { private: true, shared: false },
         steps: [call("ok", "bash", { command: "echo recovered" }), ...finish("Recovered")],
       });
       try {
@@ -148,7 +143,7 @@ export const laneG: Lane = {
     }
 
     // A controller that dies once its worker started: the run's lease lapses, reconcile destroys.
-    const worker = await liveRun(live, { steps: [], files: { private: true, shared: false } });
+    const worker = await liveRun(live, { steps: [] });
     try {
       const { prisma } = worker.run;
       const runId = await worker.run.send("Never run.");
@@ -219,7 +214,6 @@ export const laneGTimeout: Lane = {
     let retried = "";
     const worker = await liveRun(live, {
       provider: () => live.workerProvider(SHORT_TIMEOUT_MS),
-      files: { private: true, shared: false },
       steps: [
         call("nap", "bash", { command: `sleep ${(SHORT_TIMEOUT_MS / 1000) * 3}` }),
         // The next attempt asks for the same call; the controller must not run it again.

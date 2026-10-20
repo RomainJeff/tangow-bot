@@ -6,8 +6,10 @@ import type {
 } from "@rakazo/adapter-kit";
 import { volumeMountPath } from "@rakazo/core";
 import { getLogger } from "@rakazo/logging";
-import { CommandExitError, type ConnectionOpts, Sandbox, type SandboxOpts, Volume } from "e2b";
-import { encodeFrameLine, type FrameChannel, readFrameLines } from "./runtime-worker/framing.js";
+import type { ConnectionOpts, SandboxOpts } from "e2b";
+import { CommandExitError, Sandbox, Volume } from "e2b";
+import type { FrameChannel } from "./runtime-worker/framing.js";
+import { encodeFrameLine, readFrameLines } from "./runtime-worker/framing.js";
 import type { GuestConnector } from "./runtime-worker/launcher.js";
 import { WORKER_LIMITS } from "./runtime-worker/limits.js";
 
@@ -84,7 +86,12 @@ export interface E2BWorkerSdk {
     },
   ): Promise<E2BGuestCommand>;
   listVolumes(): Promise<string[]>;
-  createVolume(name: string): Promise<string>;
+  createVolume(
+    name: string,
+    options: Pick<ConnectionOpts, "requestTimeoutMs" | "signal">,
+  ): Promise<string>;
+  /** False when no volume has that name. */
+  destroyVolume(name: string): Promise<boolean>;
 }
 
 export function e2bWorkerSdk(connection: ConnectionOpts): E2BWorkerSdk {
@@ -141,8 +148,12 @@ export function e2bWorkerSdk(connection: ConnectionOpts): E2BWorkerSdk {
     async listVolumes() {
       return (await Volume.list(connection)).map((volume) => volume.name);
     },
-    async createVolume(name) {
-      return (await Volume.create(name, connection)).name;
+    async createVolume(name, options) {
+      return (await Volume.create(name, { ...connection, ...options })).name;
+    },
+    async destroyVolume(name) {
+      const found = (await Volume.list(connection)).find((volume) => volume.name === name);
+      return found ? Volume.destroy(found.volumeId, connection) : false;
     },
   };
 }
@@ -274,13 +285,24 @@ export class E2BWorkerProvider implements WorkerProvider, GuestConnector {
     return killed.includes(true) ? "destroyed" : "absent";
   }
 
-  async ensureVolume(input: { name: string }): Promise<{ providerRef: string }> {
+  async ensureVolume(input: {
+    name: string;
+    ensureDeadline: Date;
+  }): Promise<{ providerRef: string }> {
     const names = await this.sdk.listVolumes();
-    return {
-      providerRef: names.includes(input.name)
-        ? input.name
-        : await this.sdk.createVolume(input.name),
-    };
+    if (names.includes(input.name)) return { providerRef: input.name };
+    const remainingMs = input.ensureDeadline.getTime() - E2B_CREATE_MARGIN_MS - Date.now();
+    if (remainingMs <= 0) throw new Error("Volume creation missed its deadline");
+    await this.sdk.createVolume(input.name, {
+      requestTimeoutMs: remainingMs,
+      signal: AbortSignal.timeout(remainingMs),
+    });
+    return { providerRef: input.name };
+  }
+
+  /** The ref `ensureVolume` returns is the volume's name. */
+  async deleteVolume(input: { providerRef: string }): Promise<void> {
+    await this.sdk.destroyVolume(input.providerRef);
   }
 
   /**
