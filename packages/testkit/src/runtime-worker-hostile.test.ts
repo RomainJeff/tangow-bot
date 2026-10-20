@@ -19,7 +19,7 @@ import {
   WORKER_LIMITS,
 } from "@rakazo/adapters/runtime-worker";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
-import { startModelEmulator } from "./model-emulator.js";
+import { type ModelEmulatorRequest, startModelEmulator } from "./model-emulator.js";
 
 /** A guest that speaks the wire by hand, so it can do what a conforming guest never would. */
 function rawGuest(channel: FrameChannel, capability: string) {
@@ -329,6 +329,95 @@ describe("a hostile guest", () => {
     });
     await expect(run.done).rejects.toThrow("The worker broke the run protocol: too_large");
     expect(results).toHaveLength(2);
+  });
+
+  it("cannot name the model, connection or endpoint its model calls go to", async () => {
+    const { runtime, launchedFor } = setup();
+    const run = consume(runtime.run(request("run_model_target")));
+    const launched = await launchedFor("run_model_target");
+    const guest = rawGuest(launched.connect(), launched.capability);
+    await guest.hello();
+
+    guest.send(1, {
+      type: "model.request",
+      agent: "root",
+      dialect: "pi-ai",
+      call: {
+        context: { messages: [{ role: "user", content: "Hi", timestamp: 0 }] },
+        options: { model: "other-model", baseUrl: "https://foreign.invalid/v1", apiKey: "k" },
+      },
+    } as unknown as GuestBody);
+
+    await expect(run.done).rejects.toThrow("The worker broke the run protocol: invalid");
+    expect(guest.received.map((message) => message.kind)).toEqual(["worker.start"]);
+  });
+
+  it("reaches only the run's own model, key and endpoint, with its live secrets masked", async () => {
+    const seen: ModelEmulatorRequest[] = [];
+    const server = await startModelEmulator({
+      apiKey: "controller-only-key",
+      steps: [{ expect: (body) => void seen.push(body), response: { type: "text", text: "Ok." } }],
+    });
+    onTestFinished(() => server.close());
+    const secrets = ["hunter2-secret"];
+    const { runtime, launchedFor } = setup();
+    const run = consume(runtime.run(request("run_model_relay", { model: server.model, secrets })));
+    const launched = await launchedFor("run_model_relay");
+    const guest = rawGuest(launched.connect(), launched.capability);
+    await guest.hello();
+    secrets.push("revealed-later");
+
+    guest.send(1, {
+      type: "model.request",
+      agent: "root",
+      dialect: "pi-ai",
+      call: {
+        context: {
+          messages: [
+            { role: "user", content: "Read the env file.", timestamp: 0 },
+            {
+              role: "assistant",
+              content: [
+                { type: "toolCall", id: "c1", name: "bash", arguments: { command: "env" } },
+              ],
+              api: "anthropic-messages",
+              provider: "anthropic",
+              model: "another-model",
+              baseUrl: "https://foreign.invalid/v1",
+              headers: { authorization: "Bearer stolen" },
+              usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0 },
+              stopReason: "toolUse",
+              timestamp: 1,
+            },
+            {
+              role: "toolResult",
+              toolCallId: "c1",
+              toolName: "bash",
+              content: [{ type: "text", text: "TOKEN=hunter2-secret\nOTHER=revealed-later" }],
+              isError: false,
+              timestamp: 2,
+            },
+          ],
+        },
+        options: { sessionId: "thread-of-someone-else" },
+      },
+    });
+
+    expect((await guest.replies(1)).at(-1)).toEqual({ type: "model.end" });
+    server.assertComplete();
+    const sent = JSON.stringify(seen[0]?.messages);
+    expect(sent).toContain("TOKEN=[redacted]\\nOTHER=[redacted]");
+    expect(sent).not.toContain("hunter2-secret");
+    expect(sent).not.toContain("revealed-later");
+    expect(run.seen).toEqual([
+      expect.objectContaining({
+        type: "usage",
+        provider: "openai-compatible",
+        model: "offline-fixture",
+      }),
+    ]);
+    await runtime.abort("run_model_relay");
+    await run.done.catch(() => undefined);
   });
 
   it("stops the controller's upstream model call when it aborts the call", async () => {

@@ -85,7 +85,10 @@ describe("a guest Pi run whose model calls the controller relays", () => {
                 throw new Error("unreadable reply");
               onPart(parsed.message.payload.body as ReplyPart);
             },
-            new AbortController().signal,
+            {
+              signal: new AbortController().signal,
+              conversation: { threadId: "thread_relay", botId: "bot_relay" },
+            },
           ),
         );
         return { type: "model.end" };

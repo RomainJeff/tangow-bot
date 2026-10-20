@@ -224,11 +224,20 @@ export function createSession(
     const abort = new AbortController();
     relays.set(seq, abort);
     try {
+      // The guest's own tool output reaches its transcript unredacted: mask it before the provider.
+      const call = redactPayloadValue(body.call, [...(request.secrets ?? [])]);
       const usage: RelayUsage | undefined = await RELAYS[body.dialect](
         helper?.model ?? request.model,
-        body.call as never,
+        call as never,
         (event) => part({ type: "model.event", event } as ReplyPart),
-        abort.signal,
+        {
+          signal: abort.signal,
+          conversation: {
+            threadId: request.threadId,
+            botId: request.botId,
+            ...(helper ? { helper: body.agent } : {}),
+          },
+        },
       );
       if (usage) {
         if (helper) {
