@@ -193,7 +193,7 @@ export function ShellPage() {
     <div
       data-testid="shell-root"
       data-ready={shellReady}
-      className="relative flex h-full min-w-0 overflow-hidden bg-background text-foreground/90"
+      className="rk-ambient relative flex h-full min-w-0 overflow-hidden text-foreground/90"
     >
       <ComputerUpdateProgress
         onCompleted={() => {

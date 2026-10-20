@@ -63,10 +63,10 @@ export function useVoice({
     setCallOpen(false);
   }, [active?.id]);
 
-  // The call view sits above the side panel (z-20 inside main vs. the panel's
-  // z-30), so an open panel would otherwise paint over Mute/End call. Closing
-  // it here also makes the header button that opens it inert along with the
-  // rest of the conversation column while the call is up.
+  // The call view paints over an open side panel, which would otherwise stay
+  // focusable under it without being inert. Closing it here also makes the
+  // header button that opens it inert along with the rest of the conversation
+  // column while the call is up.
   useEffect(() => {
     if (callOpen) setPanel(null);
   }, [callOpen]);

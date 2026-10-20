@@ -33,7 +33,8 @@ The values live in `packages/ui-tokens/src/materials.ts` and reach CSS as
 `--overlay-blur`. Screens
 spend them through `rk-glass-chrome`, `rk-glass-control`, `rk-glass-menu`,
 `rk-glass-list`, `rk-scroll-edge`, `rk-thread-mask`, `rk-thread-overlap` (which sets
-`--thread-overlap` for the other two), `rk-thread-jump` and `rk-veil`
+`--thread-overlap` for the other two), `rk-thread-jump`, `rk-veil` and
+`rk-ambient` (the shell, the call and the sign-in pages)
 from `packages/ui-web/src/materials.css`.
 
 Panels and overlay windows are content a person reads and edits, so they are
@@ -114,7 +115,8 @@ passing under it.
   takes the whole screen on the page background, like the side panel, and its
   navigation becomes a row of tabs, the current one on `group`.
 - Menus, the account menu included, are `menu` at radius 14 with rows of 8;
-  the palette is `list` at radius 20 with rows of 12.
+  the palette is `list` at radius 20 with rows of 14 (`rounded-card`), the
+  selected row on `sidebarAccent`, as in menus.
 - A run failure sits above the composer on a 44 px `destructive` tint at 8%,
   `rounded-full`, never as a block in the thread.
 - Phone width on web and iPhone screens outside the thread take the same

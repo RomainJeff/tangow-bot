@@ -23,7 +23,7 @@ way: `sheet`, then its `group`s.
 | `background` | `#F2F2F4` | `#161618` | the page, under the ambient light |
 | `foreground` | `#1D1D1F` | `#F5F5F7` | ink: text, primary, chrome icons |
 | `foregroundSubtle` | `#86868B` | `#7C7C81` | passive grey: sidebar second line, placeholders (≈ 3.3:1) |
-| `card`, `popover` | `#FFFFFF` | `#2C2C2E` | popovers; the opaque fallback of a glass control |
+| `card`, `popover` | `#FFFFFF` | `#2C2C2E` | the opaque fallback of a glass control or menu |
 | `cardForeground`, `popoverForeground` | `#1D1D1F` | `#F5F5F7` | |
 | `primary` | `#1D1D1F` | `#F5F5F7` | primary capsule, Send |
 | `primaryForeground` | `#FFFFFF` | `#1D1D1F` | |
@@ -67,7 +67,8 @@ Stop contour is drawn.
 
 Status starts in ink. A success check is grey
 (`mutedForeground`), since a green check next to a green bot reads as the bot.
-`destructive` marks a failure and nothing else. "Needs you" carries the
+`destructive` marks a failure, and the controls that end or delete something
+(End call, a delete in a menu), and nothing else. "Needs you" carries the
 decision card's ink dot, never an amber pill.
 
 ## Typography
@@ -149,7 +150,7 @@ multiple of 0.25 rem: `gap-3` is 12, `gap-5` is 20, `gap-7` is 28. Never
 | `pill` | 9999 | `rounded-full` | capsules, round buttons, avatars |
 
 A radius nested inside another is concentric: inner = outer − inset, when the
-inset is 10 or less. That gives rows 8, menus 14, the palette 20 (its rows 12),
+inset is 10 or less. That gives rows 8, menus 14, the palette 20 (its rows 14),
 bubbles and the bot's paper 20, the decision card 24 (28 on iPhone), and the
 floating sidebar and side panel 18. An overlay window is 24 and its inset
 navigation panel 16 (24 − 8). Media inside a panel is 12. Settings groups are

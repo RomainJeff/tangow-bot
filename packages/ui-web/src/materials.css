@@ -87,6 +87,11 @@
     bottom: calc(var(--thread-overlap, 0px) + 1rem);
   }
 
+  /* The neutral ambient light behind the shell and the sign-in pages: the glass blurs it. */
+  .rk-ambient {
+    background: var(--ambient);
+  }
+
   /* The veil under a dialog or an overlay window: the thread darkened and blurred. */
   .rk-veil {
     background: var(--overlay);
