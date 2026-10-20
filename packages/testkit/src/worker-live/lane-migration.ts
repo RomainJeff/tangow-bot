@@ -168,6 +168,19 @@ export const laneH: Lane = {
       const guestOwner = await sh(first, "id -u; id -g");
       const shared = volumeMountPath({ kind: "space_shared" });
       const migratedOwner = await sh(first, `stat -c '%u:%g' ${shared}/readme.md`);
+      // What E2BVolumeFiles relies on: an upload into a file created 0600 keeps that mode.
+      const staging = `${shared}/.staging-probe`;
+      const stagedBefore = await sh(
+        first,
+        `set -C; umask 077; : > ${staging} && stat -c '%a %i' ${staging}`,
+      );
+      await first.files.write(staging, "staged bytes");
+      const stagedAfter = await sh(first, `stat -c '%a %i' ${staging}; cat ${staging}`);
+      await sh(first, `rm ${staging}`, "root");
+      const stagingKeptMode =
+        stagedBefore.startsWith("600 ") &&
+        stagedAfter.split("\n")[0] === stagedBefore &&
+        stagedAfter.endsWith("staged bytes");
       await sh(
         first,
         `echo probe > ${shared}/.owner-probe && chown 0:0 ${shared}/.owner-probe && chmod 600 ${shared}/.owner-probe`,
@@ -225,6 +238,7 @@ export const laneH: Lane = {
         keptAcrossRecreate === "kept" &&
         killedSandboxes > 0 &&
         readAfterKill === "# Team notes\n" &&
+        stagingKeptMode &&
         overwritten.content === "second" &&
         overwritten.mode === 0o600 &&
         again.outcome === "already_on_volumes" &&
@@ -246,6 +260,7 @@ export const laneH: Lane = {
           mountEnforcesOwnership: ownershipEnforced === "yes",
           volumeFileSandboxesKilled: killedSandboxes,
           readAfterSandboxKilled: readAfterKill === "# Team notes\n",
+          uploadIntoStagedFileKeptMode0600AndInode: stagingKeptMode,
           secondMove: again.outcome,
           secondTeamComputerOfSpace:
             secondComputer.outcome === "refused"
