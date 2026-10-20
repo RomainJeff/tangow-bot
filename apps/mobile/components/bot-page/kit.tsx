@@ -403,7 +403,7 @@ function createKitStyles() {
     // A group on the ambient light, as the web's settings groups: the group plane and its hairline.
     card: {
       backgroundColor: tokens.group,
-      borderRadius: radii.card,
+      borderRadius: radii.mobileGroup,
       boxShadow: shadows.group,
       overflow: "hidden",
     },

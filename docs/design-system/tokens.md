@@ -148,6 +148,7 @@ multiple of 0.25 rem: `gap-3` is 12, `gap-5` is 20, `gap-7` is 28. Never
 | `linkMention` | 4 | — | a link mention's icon frame (`--corner-link-mention`) |
 | `composer` | 24 | `rounded-composer` | the composer |
 | `pane` | 18 | `rounded-pane` | the floating sidebar and side panel |
+| `mobileGroup` | 22 | — | a settings group on iPhone |
 | `pill` | 9999 | `rounded-full` | capsules, round buttons, avatars |
 
 A radius nested inside another is concentric: inner = outer − inset, when the
