@@ -96,7 +96,7 @@ Every harness must pass the same tests as Pi, offline:
 - `packages/testkit/src/runtime-worker.test.ts` and `runtime-worker-stop.test.ts`, the protocol lanes. They run the real executor through `LocalWorkerProvider`, which starts `HARNESSES.pi` in memory mode and `RAKAZO_WORKER_HARNESS=pi` in child mode. Make the harness name a `LocalWorkerProvider` option, then run the lanes with yours.
 - `packages/testkit/src/runtime-worker-hostile.test.ts` tests the controller against a hand-written guest. It does not depend on the harness and needs no change.
 - `pnpm bench:worker-channel` measures the control cost per tool and the stop delay. A harness should not move the control cost, because the controller does the same work for every harness.
-- `pnpm test:worker-live` runs the P3 lanes against a real E2B deployment with the template you built. Lanes a, b, d, f and i exercise the harness: the file task against the in-process baseline, the local tools on the volumes, a disabled tool for the parent and a helper, a large output, and a run with no mount. The [P3 handoff](P3-handoff.md) explains how to run them on a host with no checkout.
+- `pnpm test:worker-live` runs the P3 lanes against a real E2B deployment with the template you built. Lanes a, b, d and f exercise the harness: the file task against the in-process baseline, the local tools on the volumes, a disabled tool for the parent and a helper, and a large output. Lane i does not reach a harness: it checks that a bot without a computer is refused before routing, and that the template's sandbox user can write `/workspace`. The [P3 handoff](P3-handoff.md) explains how to run them on a host with no checkout.
 
 ## Move a computer's files before its runs use workers
 

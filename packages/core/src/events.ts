@@ -139,66 +139,84 @@ export function progressMessageText(
 }
 
 export function redactSecrets(value: string, secrets: string[]): string {
+  return secretRedactor(secrets)(value);
+}
+
+/**
+ * Only text whose first character past whitespace opens an object, an array or a string can parse
+ * to one. Any other text either fails to parse or parses to a scalar, and both are masked as plain
+ * text, so it skips the parse and the exception a failed one throws.
+ */
+const JSON_CONTAINER_START = /^\s*[[{"]/;
+
+/**
+ * `redactSecrets` for many strings against the same secrets: the secrets and their JSON-escaped
+ * forms are prepared once. Each string still gets its own scan budget.
+ */
+export function secretRedactor(secrets: string[]): (value: string) => string {
   const active = [...new Set(secrets.filter((secret) => secret.length > 0))];
-  if (active.length === 0) return value;
+  if (active.length === 0) return (value) => value;
   const variants = [
     ...new Set(active.flatMap((secret) => [secret, JSON.stringify(secret).slice(1, -1)])),
   ];
-  let remaining = 8 * 1024 * 1024;
+  return (value) => {
+    let remaining = 8 * 1024 * 1024;
 
-  function maskLiterals(text: string): string {
-    let ends: Uint32Array | undefined;
-    for (const secret of variants) {
-      remaining -= text.length;
-      if (remaining < 0) return "[redacted]";
-      for (let at = text.indexOf(secret); at !== -1; at = text.indexOf(secret, at + 1)) {
-        remaining -= secret.length;
+    function maskLiterals(text: string): string {
+      let ends: Uint32Array | undefined;
+      for (const secret of variants) {
+        remaining -= text.length;
         if (remaining < 0) return "[redacted]";
-        ends ??= new Uint32Array(text.length);
-        ends[at] = Math.max(ends[at] ?? 0, at + secret.length);
+        for (let at = text.indexOf(secret); at !== -1; at = text.indexOf(secret, at + 1)) {
+          remaining -= secret.length;
+          if (remaining < 0) return "[redacted]";
+          ends ??= new Uint32Array(text.length);
+          ends[at] = Math.max(ends[at] ?? 0, at + secret.length);
+        }
       }
+      if (!ends) return text;
+      let result = "";
+      let copied = 0;
+      for (let at = 0; at < text.length; at++) {
+        let end = ends[at] ?? 0;
+        if (end <= at) continue;
+        result += `${text.slice(copied, at)}[redacted]`;
+        for (let next = at + 1; next < end; next++) end = Math.max(end, ends[next] ?? 0);
+        copied = end;
+        at = end - 1;
+      }
+      return result + text.slice(copied);
     }
-    if (!ends) return text;
-    let result = "";
-    let copied = 0;
-    for (let at = 0; at < text.length; at++) {
-      let end = ends[at] ?? 0;
-      if (end <= at) continue;
-      result += `${text.slice(copied, at)}[redacted]`;
-      for (let next = at + 1; next < end; next++) end = Math.max(end, ends[next] ?? 0);
-      copied = end;
-      at = end - 1;
-    }
-    return result + text.slice(copied);
-  }
 
-  function redactJson(text: string, depth: number): string {
-    remaining -= text.length;
-    if (remaining < 0 || depth > 32) {
-      remaining = -1;
-      return "[redacted]";
-    }
-    if (active.includes(text)) return "[redacted]";
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(text);
-    } catch {
+    function redactJson(text: string, depth: number): string {
+      remaining -= text.length;
+      if (remaining < 0 || depth > 32) {
+        remaining = -1;
+        return "[redacted]";
+      }
+      if (active.includes(text)) return "[redacted]";
+      if (!JSON_CONTAINER_START.test(text)) return maskLiterals(text);
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        return maskLiterals(text);
+      }
+      if (typeof parsed === "string" || (parsed !== null && typeof parsed === "object")) {
+        const safe = text.replace(/"(?:[^"\\]|\\.)*"/g, (token) => {
+          const decoded: unknown = JSON.parse(token);
+          if (typeof decoded !== "string") return token;
+          const redacted = redactJson(decoded, depth + 1);
+          return redacted === decoded ? token : JSON.stringify(redacted);
+        });
+        return maskLiterals(safe);
+      }
       return maskLiterals(text);
     }
-    if (typeof parsed === "string" || (parsed !== null && typeof parsed === "object")) {
-      const safe = text.replace(/"(?:[^"\\]|\\.)*"/g, (token) => {
-        const decoded: unknown = JSON.parse(token);
-        if (typeof decoded !== "string") return token;
-        const redacted = redactJson(decoded, depth + 1);
-        return redacted === decoded ? token : JSON.stringify(redacted);
-      });
-      return maskLiterals(safe);
-    }
-    return maskLiterals(text);
-  }
 
-  const safe = redactJson(value, 0);
-  return remaining < 0 ? "[redacted]" : safe;
+    const safe = redactJson(value, 0);
+    return remaining < 0 ? "[redacted]" : safe;
+  };
 }
 
 export function containsSecret(value: unknown, secrets: string[]): boolean {

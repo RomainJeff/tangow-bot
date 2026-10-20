@@ -69,12 +69,33 @@ async function exchange(
   const runId = await worker.send("Exchange files with the computer.");
   await worker.completed(runId);
   const [mine, shared] = await Promise.all([privateSeen, sharedSeen]);
-  const grants = worker
-    .frames()
-    .filter((frame) => frame.from === "controller" && frame.type === "tool.grant");
-  /** From the grant of the guest tool that wrote, the last one before the computer saw it. */
-  const sinceGrant = (seenAt: number) =>
-    Math.round(seenAt - (grants.filter((grant) => grant.at < seenAt).at(-1)?.at ?? Number.NaN));
+  const frames = worker.seen.map(({ at, from, frame }) => ({
+    at,
+    from,
+    message: JSON.parse(Buffer.from(frame).toString()) as {
+      payload?: { seq?: number; re?: number; body?: { type?: string; callId?: string } };
+    },
+  }));
+  /** When the controller granted the guest tool call `callId`, matched by its request's seq. */
+  const grantOf = (callId: string) => {
+    const request = frames.find(
+      ({ from, message }) =>
+        from === "guest" &&
+        message.payload?.body?.type === "tool.call" &&
+        message.payload.body.callId === callId,
+    );
+    const seq = request?.message.payload?.seq;
+    return frames.find(
+      ({ from, message }) =>
+        from === "controller" &&
+        seq !== undefined &&
+        message.payload?.re === seq &&
+        message.payload.body?.type === "tool.grant",
+    )?.at;
+  };
+  /** From the grant of the guest tool that wrote, `e1` for the private file and `b1` the shared. */
+  const sinceGrant = (seenAt: number, callId: string) =>
+    Math.round(seenAt - (grantOf(callId) ?? Number.NaN));
   const pass =
     (await worker.status(runId)) === "completed" &&
     results.readPrivate?.includes("written by the computer") === true &&
@@ -91,10 +112,10 @@ async function exchange(
       guestToolResults: results,
       computerSawPrivateWrite: mine.out,
       computerSawSharedWrite: shared.out,
-      privateVisibleWithinMsOfGrant: sinceGrant(mine.at),
-      sharedVisibleWithinMsOfGrant: sinceGrant(shared.at),
+      privateVisibleWithinMsOfGrant: sinceGrant(mine.at, "e1"),
+      sharedVisibleWithinMsOfGrant: sinceGrant(shared.at, "b1"),
       pollIntervalMs: POLL_INTERVAL_S * 1000,
-      note: "Visibility times run from the controller granting the guest tool that wrote to the host seeing the computer's poller exit. They include the tool's own run and E2B's command stream, so they bound the cross-VM delay from above.",
+      note: "Visibility times run from the controller granting the guest tool that wrote, matched by its request's seq (edit_file e1 for the private file, bash b1 for the shared one), to the host seeing the computer's poller exit. They include the tool's own run and E2B's command stream, so they bound the cross-VM delay from above.",
     },
   };
 }

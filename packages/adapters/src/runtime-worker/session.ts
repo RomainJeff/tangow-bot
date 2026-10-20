@@ -13,8 +13,8 @@ import {
   type SubagentLog,
   type WorkerIdentity,
 } from "@rakazo/adapter-kit";
-import { redactSecrets } from "@rakazo/core";
-import { redactPayloadValue } from "../connector-safety.js";
+import { redactSecrets, secretRedactor } from "@rakazo/core";
+import { redactPayloadValue, redactPayloadWith } from "../connector-safety.js";
 import { type CapabilityKey, mintCapability, verifyCapability } from "./capability.js";
 import { relayPiAiCall } from "./dialects/pi-ai.js";
 import { eventPipe } from "./event-pipe.js";
@@ -73,14 +73,14 @@ type Helper = {
  * Masks secrets in a transcript's text. An image's base64 data is kept as it is: it would spend
  * the redaction budget and come back as a bare `[redacted]` in place of the image.
  */
-function redactTranscript(value: unknown, secrets: string[]): unknown {
-  if (Array.isArray(value)) return value.map((item) => redactTranscript(item, secrets));
-  if (value === null || typeof value !== "object") return redactPayloadValue(value, secrets);
+function redactTranscript(value: unknown, redact: (text: string) => string): unknown {
+  if (Array.isArray(value)) return value.map((item) => redactTranscript(item, redact));
+  if (value === null || typeof value !== "object") return redactPayloadWith(value, redact);
   const image = (value as { type?: unknown }).type === "image";
   return Object.fromEntries(
     Object.entries(value).map(([key, item]) => [
-      redactSecrets(key, secrets),
-      image && key === "data" ? item : redactTranscript(item, secrets),
+      redact(key),
+      image && key === "data" ? item : redactTranscript(item, redact),
     ]),
   );
 }
@@ -241,7 +241,7 @@ export function createSession(
     relays.set(seq, abort);
     try {
       // The guest's own tool output reaches its transcript unredacted: mask it before the provider.
-      const call = redactTranscript(body.call, [...(request.secrets ?? [])]);
+      const call = redactTranscript(body.call, secretRedactor([...(request.secrets ?? [])]));
       const usage: RelayUsage | undefined = await RELAYS[body.dialect](
         helper?.model ?? request.model,
         call as never,

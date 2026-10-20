@@ -1,6 +1,7 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { toolResult } from "../file-task.js";
 import type { ModelEmulatorRequest } from "../model-emulator.js";
+import { HOSTILE_GUEST_BUILD } from "./hostile-guest-build.js";
 import { call, finish, liveRun, recap, toolNames } from "./run.js";
 import type { Lane } from "./session.js";
 
@@ -200,6 +201,20 @@ export const laneEAnthropic: Lane = {
 /** Where the refusal lane writes the hand-written guest in each worker VM. */
 const HOSTILE_GUEST = "/tmp/rakazo-hostile-guest.mjs";
 
+/**
+ * The hand-written guest: the copy the live bundle carries beside it, or, from source, a bundle
+ * built now. esbuild is a development dependency only, so it loads only on that path.
+ */
+async function hostileGuestScript(): Promise<string> {
+  const beside = new URL("../guest/hostile-guest.mjs", import.meta.url);
+  if (existsSync(beside)) return readFileSync(beside, "utf8");
+  const { build } = await import("esbuild");
+  const built = await build({ ...HOSTILE_GUEST_BUILD, write: false });
+  const text = built.outputFiles?.[0]?.text;
+  if (!text) throw new Error("esbuild wrote no hostile guest");
+  return text;
+}
+
 export const laneERefusals: Lane = {
   id: "e-refusals",
   issue: "refus connexion/modèle/endpoint interdits",
@@ -208,8 +223,7 @@ export const laneERefusals: Lane = {
   passWhen:
     "Each run fails as a protocol breach, the upstream model is never called, the unknown tool is refused, and the attempt's VM is released",
   async run(live) {
-    // Beside the live bundle; the bundle step builds it from hostile-guest.ts.
-    const script = readFileSync(new URL("../guest/hostile-guest.mjs", import.meta.url), "utf8");
+    const script = await hostileGuestScript();
     const attempt = async (request: "model_target" | "unknown_tool") => {
       const worker = await liveRun(live, {
         steps: [],

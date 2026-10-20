@@ -14,6 +14,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { bundleGuest } from "@rakazo/agent-run-worker/bundle";
 import { build } from "esbuild";
+import { HOSTILE_GUEST_BUILD } from "../worker-live/hostile-guest-build.js";
 
 const require = createRequire(import.meta.url);
 const OUT = fileURLToPath(new URL("../../dist/worker-live/", import.meta.url));
@@ -49,7 +50,8 @@ await build({
   ...common,
   entryPoints: [ENTRY],
   outfile: path.join(OUT, "bin", "worker-live.mjs"),
-  external: Object.keys(STUBS),
+  // The lanes load esbuild only to build the hand-written guest from source; the bundle carries it.
+  external: [...Object.keys(STUBS), "esbuild"],
 });
 for (const [name, source] of Object.entries(STUBS)) {
   const dir = path.join(OUT, "bin", "node_modules", name);
@@ -78,9 +80,5 @@ for (const name of ["glob", "tar"]) {
 }
 await cp(MIGRATIONS, path.join(OUT, "prisma", "migrations"), { recursive: true });
 await bundleGuest(path.join(OUT, "guest", "agent-run-worker.mjs"));
-await build({
-  ...common,
-  entryPoints: [fileURLToPath(new URL("../worker-live/hostile-guest.ts", import.meta.url))],
-  outfile: path.join(OUT, "guest", "hostile-guest.mjs"),
-});
+await build({ ...HOSTILE_GUEST_BUILD, outfile: path.join(OUT, "guest", "hostile-guest.mjs") });
 console.log(`Bundled the live lanes in ${path.relative(process.cwd(), OUT)}`);
