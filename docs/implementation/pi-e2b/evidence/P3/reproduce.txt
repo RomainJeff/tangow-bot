@@ -25,18 +25,25 @@ Live lanes, where the E2B API is reachable
   pnpm --filter @rakazo/agent-run-worker template:build --name <worker template>
   pnpm test:worker-live lanes --template <worker template> --computer-template <computer template> --out <dir>
   pnpm test:worker-live bench --template <worker template> --computer-template <computer template> --out <dir> --trials 30
+  DATABASE_URL=<disposable server> pnpm test:worker-live bench --template <worker template> \
+    --computer-template <computer template> --out <dir> --database postgresql --trials 15
 
 Live lanes on a host with no checkout, as these receipts were produced
   1. On the build machine: pnpm test:worker-live:bundle
      It writes packages/testkit/dist/worker-live/ (bin/worker-live.mjs for Node 22 with PGlite's assets,
-     prisma/migrations, guest/agent-run-worker.mjs, and guest/hostile-guest.mjs for lane e-refusals).
+     prisma/migrations, guest/agent-run-worker.mjs, guest/managed-skills, and guest/hostile-guest.mjs
+     for lane e-refusals).
   2. Copy that directory to a scratch directory on the host. Copy nothing else: no checkout, no .env.
   3. On the host, with the E2B environment exported to each command only (the receipts used I1's
      with-e2b.sh, which reads the team key from the stack and passes it to the command):
        node live/bin/worker-live.mjs template --guest live/guest/agent-run-worker.mjs --name <worker template>
        node --expose-gc live/bin/worker-live.mjs lanes --template <worker template> --computer-template <computer template> --out out
        node --expose-gc live/bin/worker-live.mjs bench --template <worker template> --computer-template <computer template> --out out --trials 30
-  4. Remove the scratch directory when done.
+  4. For the PostgreSQL bench, start a throwaway PostgreSQL container on the build machine, open an SSH
+     reverse tunnel from a loopback port on the host to it, and run the bench with DATABASE_URL at that
+     port and --database postgresql --trials 15. The bench creates and drops one database per arm.
+     Close the tunnel and remove the container afterwards.
+  5. Delete the worker template (DELETE /templates/<templateId> on the API) and the scratch directory.
 
 Safety rails built into the lanes
   Each lane runs in its own process, one at a time. Before each lane the command stops if any sandbox runs
@@ -45,30 +52,16 @@ Safety rails built into the lanes
   destroys everything of its session, then counts what is left. The receipts are redacted: no key,
   endpoint, address other than loopback, account, machine name or local path.
 
-Lane capture
-  media/lanes-cli.png is the lanes command's output at the tested commit, rendered with Playwright's
-  Chromium at 1280 px width.
+Video
+  media/worker-run.mp4 and media/worker-run.gif are a 32 s terminal recording of lane b at the tested
+  commit, run on the host through a small script that prints a redacted sandbox census and the lane's
+  record. Recorded with asciinema, rendered with agg, converted with ffmpeg.
 
-Historical S5 observations before S7/S6 (see verification.json)
-  pnpm check: 24 tasks passed.
-  pnpm lint: 49 warnings and 1 info, the same as the feature base.
-  pnpm test: 8116 passed, 210 skipped.
-  pnpm test:integration: 164 tests in 23 suites passed.
-  P3 offline tests: 77 tests in 9 files passed.
-  Live lanes: 14 passed, no sandbox and no volume left after any lane.
-  Bench, 30 rotating trials per arm, no errors: cold boot p95 2.04 s with the private volume and 2.23 s with
-  two volumes (budget 30 s); relay at the controller p50 10 ms and p95 30 ms with the private volume, down
-  from 56 ms and 87 ms before the transcript-mask fix; relay overhead estimated at 73 ms from two p95s, with
-  an observed maximum sum of 91 ms (budget 200 ms); control per guest tool p50 43 ms on PGlite on this
-  host, against 34 ms for P2's local runner on the same host.
-
-S6 code, live run pending
-  Rebuild the guest and worker template from the S6 code commit before measuring.
-  Lane i now requires completion with no computer, volumes or mounts.
-  Per-arm proxyOverheadDirectMs is the distribution of guest-local request-send to first-model-event
-  durations minus the matching emulator-local TTFB, with p50, p95 and max. Missing timing fails the bench.
-  To measure controller RSS on PostgreSQL over at least ten trials per arm, provide DATABASE_URL
-  with create/drop database permission and use:
-    pnpm test:worker-live bench --template <rebuilt-worker> --computer-template <computer> --out <dir> --database postgresql --trials 10
-  The controller creates one disposable migrated database per arm and removes it on close.
-  No S6 live measurement has been run; proxy_overhead_direct and rss_postgres remain pending.
+Final pass observations at the tested commit (see verification.json)
+  Live lanes: 16 passed, 0 failed, no sandbox and no volume left after any lane.
+  Bench on PGlite, 30 rotating trials per arm, no errors: cold boot p95 2.47 s with the private volume
+  and 2.56 s with two volumes (budget 30 s); direct proxy overhead per model call p50 16.3 ms, p95
+  36.8 ms, max 55.6 ms with the private volume, and p50 15.6 ms, p95 37.6 ms, max 53.4 ms with two
+  volumes (budget 200 ms at p95), over 210 timed calls per arm.
+  Bench on PostgreSQL, 15 rotating trials per arm, 45 runs, no errors: heap 181.6 to 183.5 MiB after
+  18 warmup runs, RSS settled at 456 to 460 MiB, last ten runs +1.3 MiB RSS and +0.4 MiB heap.

@@ -1,14 +1,14 @@
 # P3 native Pi in the worker and file migration handoff
 
-The live receipts describe commit `b5c0a4609b926d12d6c7d6a28d7a801fcc0875f8`, before S7. The historical harness reported fourteen passing lanes, but lane i checked refusal and left the computerless run running. S7 ([#254](https://github.com/RomainJeff/rakazo-bot/pull/254), merged at `7bbff551c`) changed the runtime, native tools and template after that live run. S6 changes routing, migration fencing and timing again. Neither revision has live E2B evidence. Rebuild the template and rerun the lanes before accepting the current runtime. The historical figures below remain evidence of their tested commit only.
+**Verdict: P3 passes live on the final feature code.** All sixteen lanes passed on the shared E2B host against commit `e14aae9aa7e95caf0338faf129354aa6a7fdfc00`, which is the feature branch at `d475675e3` with S6 ([#257](https://github.com/RomainJeff/rakazo-bot/pull/257)), S7 ([#254](https://github.com/RomainJeff/rakazo-bot/pull/254)) and S8 ([#261](https://github.com/RomainJeff/rakazo-bot/pull/261)) plus this pass's first two harness commits. The bench ran at `935a765d1`, whose only further change is the bench's own local arm; the product code and the guest bundle are identical. The worker template was rebuilt from `e14aae9`. Each lane ended with no sandbox and no volume of its session. The bench measured the direct per-call proxy overhead and the controller's RSS on PostgreSQL; both are in [Performance](#performance). The earlier receipts at `b5c0a4609` are superseded.
 
 ## Integrated references
 
-- Feature base: `feature/pi-e2b-workers` at `710705aee`. It contains P0, P1, P2, the multi-writer shared volume ([#224](https://github.com/RomainJeff/rakazo-bot/pull/224)) and the P3 slices: guest file tools ([#228](https://github.com/RomainJeff/rakazo-bot/pull/228)), the E2B provider, codec, bundle and template ([#229](https://github.com/RomainJeff/rakazo-bot/pull/229)), the home move ([#241](https://github.com/RomainJeff/rakazo-bot/pull/241)) and the composition ([#243](https://github.com/RomainJeff/rakazo-bot/pull/243)).
-- This slice: branch `claude/pi-e2b-p3-live`, merged with the feature base after #243. The tested commits are in the [verification receipt](evidence/P3/verification.json).
+- Feature base: `feature/pi-e2b-workers` at `d475675e3`. It contains P0, P1, P2, the multi-writer shared volume ([#224](https://github.com/RomainJeff/rakazo-bot/pull/224)) and every P3 slice: guest file tools ([#228](https://github.com/RomainJeff/rakazo-bot/pull/228)), the E2B provider, codec, bundle and template ([#229](https://github.com/RomainJeff/rakazo-bot/pull/229)), the home move ([#241](https://github.com/RomainJeff/rakazo-bot/pull/241)), the composition ([#243](https://github.com/RomainJeff/rakazo-bot/pull/243)), the first live pass ([#245](https://github.com/RomainJeff/rakazo-bot/pull/245)), S7 native tools ([#254](https://github.com/RomainJeff/rakazo-bot/pull/254)), S6 computerless runs and the home-move fence ([#257](https://github.com/RomainJeff/rakazo-bot/pull/257)) and S8 skills on volumes ([#261](https://github.com/RomainJeff/rakazo-bot/pull/261)).
+- This pass: branch `claude/pi-e2b-p3-live-final`. The tested commit and the receipts are in the [verification receipt](evidence/P3/verification.json).
 - Predecessor handoffs: [P0](P0-handoff.md), [P1](P1-handoff.md), [P2](P2-handoff.md). Infrastructure: I1, delivered in the infrastructure repository's pull request #2 (merge `177c1ff`), with its receipts at `9c1b44e` (functional) and `a38c067` (isolation). Its main branch was at `e17503b` during the runs.
 - SDKs: pi-agent-core, pi-ai, pi-telemetry and pi-coding-agent 1.3.0, unchanged. The E2B SDK is `e2b@2.49.1` in the application. The E2B platform build is the one the I1 handoff records. This slice did not read it again.
-- Templates: the worker template `p3live-worker-pi`, built from `apps/agent-run-worker/template` at the tested commit, and I1's `i1-computer` for the computer VMs. Both stay on the host.
+- Templates: the experimental worker template `p3live-worker-pi`, built from `apps/agent-run-worker/template` at the tested commit and deleted after the pass, and I1's `i1-computer` for the computer VMs.
 
 ## What P3 adds, by layer
 
@@ -21,7 +21,7 @@ The live receipts describe commit `b5c0a4609b926d12d6c7d6a28d7a801fcc0875f8`, be
 | Home move | #241, S5 | `packages/adapters/src/home-volume-migration.ts`, `e2b-volume-files.ts`, `scripts/migrate-home-to-volumes.ts` | `moveHomeToVolumes`: plan, copy, verify by hash and mode, adopt. `E2BVolumeFiles` reaches each volume through a sandbox that mounts it. It stages each file 0600 beside its target and renames it over the target, and it replaces a sandbox only once the control plane no longer lists it. |
 | Lifecycle | #241, #243 | `packages/adapters/src/worker-lifecycle.ts`, `packages/db/src/volumes.ts` | `ensureVolume` with an `ensureUntil` deadline, `provisionAttachedBotVolume`, `inspectHomeMove`, `adoptVolumeHome`, owner deletion with volume tombstones, and `sweepVolumes`. |
 | Composition | #243 | `packages/adapters/src/worker-composition.ts`, `executor.ts`, `e2b-sandbox.ts`, `runtime-worker/session.ts`, `apps/api/src/app.ts`, `apps/worker/src/index.ts` | `composeWorkers` in both roots. The executor routes a run by `deriveRunNeeds` and owns the setup retry budget. The reconciler releases lost workers and sweeps deleted volumes. The E2B computer mounts the volumes and links its workspace to their root. The relay masks the transcript and runs every call with the controller's model, key and session. |
-| Live lanes | S5 | `packages/testkit/src/worker-live/`, `cli/worker-live.ts`, `cli/bundle-worker-live.ts` | `pnpm test:worker-live` and `pnpm test:worker-live:bundle`. |
+| Live lanes | S5, S6, S8, final pass | `packages/testkit/src/worker-live/`, `cli/worker-live.ts`, `cli/bundle-worker-live.ts` | `pnpm test:worker-live` and `pnpm test:worker-live:bundle`. Sixteen lanes and the bench. |
 
 ## Architecture
 
@@ -69,7 +69,7 @@ The guest starts as `node /opt/rakazo/agent-run-worker.mjs`. `RAKAZO_WORKER_CAPA
 
 ## Tool selection and helpers
 
-The executor routes each run by its tools. `deriveRunNeeds` mounts both the private and shared volumes read-write when the run has a file tool or the computer's `shell`, for both dedicated and team computers. A worker run hides `shell`: the guest's `bash` replaces it. A bot without a computer is offered no computer or file tools. MCP, integration and `message_user` calls can complete in process or in a worker with no mounts. An attached file that needs a computer fails through the fenced finalizer with a clear error. Lane i now requires completion with no computer, volumes or mounts; its revised live run is pending.
+The executor routes each run by its tools. `deriveRunNeeds` mounts both the private and shared volumes read-write when the run has a file tool or the computer's `shell`, for both dedicated and team computers. A worker run hides `shell`: the guest's `bash` replaces it. A bot without a computer is offered no computer or file tools. MCP, integration and `message_user` calls can complete in process or in a worker with no mounts. An attached file that needs a computer fails through the fenced finalizer with a clear error. Lane i proved the computerless case live: an MCP tool served by the controller ran once, its result reached the model, and the run completed with no computer, no volume and an empty mount list.
 
 The controller puts every tool of the run in `worker.start` with its place. When `needs.files.private` is set, the Pi adapter offers the SDK's native `read`, `write`, `edit`, `bash`, `grep`, `find` and `ls` at the mounted working directory. Otherwise it offers no native tools, including no `read` or `bash`, and no skills catalog is sent to the model. The controller uses the SDK-free `runtime-worker/pi-tools.json` manifest, generated by `pnpm --filter @rakazo/agent-run-worker tools:manifest`; the bundle build rejects a stale manifest. Worker runs remove `list_files`, `read_file`, `write_file`, `edit_file` and `shell`. The in-process path keeps them.
 
@@ -91,7 +91,7 @@ For Pi these are the seven coding-agent tools above. Rakazo stops maintaining th
 
 The worker uses pi-coding-agent's native tool factories and an `AgentSession` bound to the `PiAgentRuntime` Agent, relayed through P2 pi-ai. `PiAgentRuntime` reconstructs controller history and retains Rakazo's tool policy, context pruning, approvals, helpers, steering and recaps. The coding-agent session owns its in-memory transcript projection and explicit resources. Model keys and provider connections stay on the controller.
 
-S7 updates live lanes a, b and f without running E2B. Lane a compares final file content against the in-process baseline; native names, overwrite behavior and result formats may differ. The historical receipts below do not validate S7. Rebuild the worker bundle and template before rerunning these lanes.
+Lanes a, b and f ran the native tools live. Lane a compares the final file content against the in-process baseline, since native names, overwrite behavior and result formats differ. Pi's `write`, `edit`, `read` and `ls` produced `alpha\ngamma\n` on the volume, the same file as in process.
 
 ## S8 skills on volumes
 
@@ -136,7 +136,7 @@ The computer's existing `/managed-skills` read-only bind is retained. Full home 
 
 ### Acceptance and live limits
 
-Offline tests run the real guest and Pi relay against the model emulator, both in memory and from the standalone bundle. They cover convergence, precedence, collisions, explicit loading, absence of controller skill tools/catalog, DB/UI indexing, native reads, secret refusal, idempotent migration and managed-skill enablement. The convergence regression also protects pre-existing directories and later user symlinks. The `skills` worker-live lane seeds bot/shared files, checks all three sources, executes a script, creates a skill and checks it on the next run. Live lanes and the rebuilt template's live behavior remain pending. No live E2B or Electron E2E runs are part of S8. The feature's single changelog entry belongs to its last slice.
+Offline tests run the real guest and Pi relay against the model emulator, both in memory and from the standalone bundle. They cover convergence, precedence, collisions, explicit loading, absence of controller skill tools/catalog, DB/UI indexing, native reads, secret refusal, idempotent migration and managed-skill enablement. The convergence regression also protects pre-existing directories and later user symlinks. The `skills` lane passed live on the rebuilt template. A computer VM seeded a bot skill with a script and a shared skill on the volumes. The first run's Pi catalog listed the managed `Interrogate` skill, `bot-live` and `shared-live`, with no `skill_read` tool. Native `read` loaded the bot skill, native `bash` ran its script and printed its marker, and native `write` created `created-live`. The controller recorded one `agent.skill.used` event and indexed `created-live` as a bot skill. The second run's catalog listed `created-live`. The feature's single changelog entry belongs to its last slice.
 
 ## Model relay and capabilities
 
@@ -173,6 +173,10 @@ P2's stop contract is unchanged: `worker.cancel`, a grace of `cancelGraceMs`, th
 
 Move one computer's home at a time, with the source computer stopped. A team move also requires no live worker in its space; a dedicated move permits unrelated running computers and workers. S6 reserves the space's existing computers with a durable `home-move:` maintenance marker before planning or copying files. Worker planning and start refuse it as busy, as do computer boots. A computer on volumes added during the copy checks the same space lock when claiming boot or replacement. Busy run retries consume no setup budget and leave no attempt row when no worker was started. Completion, refusal and exceptions release the reservation in `finally`.
 
+Lane home-move-fence proved the fence live. A run of the moving computer's bot started while the copy wrote its first file. It stayed queued with no attempt and no worker. The move adopted and released its reservation, and the same run then completed in one E2B worker whose `bash` read the moved file.
+
+**Operator note: deploy only between home moves.** A move script from before S6 neither renews its reservation nor checks ownership before adoption, and a deploy restarts the controller under a running move. Finish or stop every move before deploying, and start new moves only on the deployed code.
+
 The marker identifies the move owner and has a one-minute expiry, renewed every ten seconds throughout planning and copying. Reconciliation automatically releases expired reservations, including when no worker provider is configured. The script can also release an expired reservation with `--computer <id> --clear-stale-move`, without E2B credentials; it reports when nothing matched. An expired owner cannot renew or adopt. Rerun the move with a fresh manifest path to resume after recovery.
 
 1. Run `pnpm exec tsx scripts/migrate-home-to-volumes.ts --computer <id> --dry-run --template <worker template>`. The dry run creates nothing and prints the plan with any refusal.
@@ -201,24 +205,24 @@ Lane h moved a synthetic team home of two bots, with files in mode 0755, 0644, 0
 
 | Point | Result |
 | --- | --- |
-| A worker and a computer mount the same volumes and see each other's writes, both ways | Proven with the product computer, lane b-product-computer. The computer saw the guest's private write 55 ms and its shared write 29 ms after the controller granted the tool that wrote it, matched by its request's seq, and the guest read both files the computer wrote. |
+| A worker and a computer mount the same volumes and see each other's writes, both ways | Proven with the product computer, lane b-product-computer. The computer saw the guest's private write 35 ms and its shared write 31 ms after the controller granted the tool that wrote it, matched by its request's seq, and the guest read both files the computer wrote. |
 | The workspace link works on a fresh sandbox | Proven. `/home/user/rakazo-home` links to `/workspace`, and the lane wrote and polled through it. |
 | `getInfo().metadata` carries the home marker and the mounts digest; a matching machine is reused | Proven. The metadata has `home: "volumes"` and a digest, and the second run reused the first run's machine. A machine with another set of volumes was not tried live. |
 | `Volume.list` and `Volume.destroy` delete a volume by name | Not run through `deleteVolume` or `sweepVolumes`. Each lane's sweep listed and destroyed its volumes by name with the same two calls. |
 | Accepted volume creates finish within one hour after the ensure deadline | Not measured. A client cannot observe the server's bound. |
 | The relay keeps streaming, tool calls, thinking, usage and cache accounting | Proven against the emulator on both protocols, not against a real provider. |
 | The guest user can write the mounted volumes; sandbox and command environments merge | Proven by lanes b and f: the guest wrote both volumes as uid 1001, read its capability from the command and its spool directory from the sandbox. |
-| A cold boot fits `helloDeadlineMs` and `capabilityTtlMs` | Proven: 2.1 s at p95 with two mounts, against 30 s and 10 minutes. Control cost on PostgreSQL was not measured. |
+| A cold boot fits `helloDeadlineMs` and `capabilityTtlMs` | Proven: 2.56 s at p95 with two mounts, against 30 s and 10 minutes. |
 | The reconciler releases a lost worker, and the sandbox is gone at E2B | Proven for a controller lost after start, through `lifecycle.reconcile` (lane g). The `unconfirmed` stop path was not driven live. |
 
 ## Live receipts
 
-Receipts are in `evidence/P3/`: [verification.json](evidence/P3/verification.json), [lanes.json](evidence/P3/lanes.json), [bench.json](evidence/P3/bench.json), [template.json](evidence/P3/template.json), [reproduce.txt](evidence/P3/reproduce.txt) and the [lane capture](evidence/P3/media/lanes-cli.png). Every lane ran in its own process on the shared E2B host, one at a time, after a check that no sandbox ran on the deployment and that the host had at least 1,536 MiB available. Every lane ended with no sandbox and no volume of its session left.
+Receipts are in `evidence/P3/`: [verification.json](evidence/P3/verification.json), [lanes.json](evidence/P3/lanes.json), [bench.json](evidence/P3/bench.json), [bench-postgresql.json](evidence/P3/bench-postgresql.json), [template.json](evidence/P3/template.json), [reproduce.txt](evidence/P3/reproduce.txt) and the worker run video of lane b ([MP4](evidence/P3/media/worker-run.mp4), [GIF](evidence/P3/media/worker-run.gif)). Every lane ran in its own process on the shared E2B host, one at a time, after a check that no sandbox ran on the deployment and that the host had at least 1,536 MiB available. Every lane ended with no sandbox and no volume of its session left.
 
 | Lane | Issue item | Result | Observed |
 | --- | --- | --- | --- |
-| a | File task identical to the baseline | Pass | `notes.md` read from the volume after the VM was destroyed is `alpha\ngamma\n`, as in process. The model saw the same seven results, and the log holds the same results. |
-| b | Local tools and two-way visibility | Pass | The guest read both files a computer-template VM wrote, wrote and edited its own, and grep found both. The VM's poller saw the private write 50 ms and the shared write 46 ms after the controller granted the tool that wrote it. |
+| a | File task identical to the baseline | Pass | `notes.md` read from the volume after the VM was destroyed is `alpha\ngamma\n`, as in process, written by Pi's native `write`, `edit`, `read` and `ls`. |
+| b | Local tools and two-way visibility | Pass | Native `read` returned both files a computer-template VM wrote, `write` and `edit` changed the guest's own, and `grep` and `bash` found both. The VM's poller saw the private write 87 ms and the shared write 71 ms after the controller granted the tool that wrote it, with a 50 ms poll. |
 | b-product-computer | Visibility with the product's E2B computer | Pass | See [What #243 asked the live slice to prove](#what-243-asked-the-live-slice-to-prove). |
 | c | Distinct PID namespace and localhost | Pass | Each listener answered on 127.0.0.1 in its own VM and was refused from the other. Neither VM listed the other's process. The kernels' boot ids differ. |
 | d | Disabled tool for parent and helper | Pass | See [Tool selection and helpers](#tool-selection-and-helpers). |
@@ -230,40 +234,39 @@ Receipts are in `evidence/P3/`: [verification.json](evidence/P3/verification.jso
 | g-timeout | VM killed at its sandbox timeout | Pass | See [Cleanup states](#cleanup-states). |
 | h | Move with hashes and computer recreation | Pass | See [Home move, retention and rollback](#home-move-retention-and-rollback). |
 | h-product-recreate | Recreating the product's computer after a move | Pass | See [Home move, retention and rollback](#home-move-retention-and-rollback). |
-| i | Run with no files and no computer | Historical acceptance gap; revised lane pending | The old lane passed its refusal predicate while leaving the run running. S6 now requires completed `message_user`, no computer or volumes, and an empty worker mount list. |
+| home-move-fence | Move without a concurrent copy | Pass | See [Home move, retention and rollback](#home-move-retention-and-rollback). |
+| i | Run with no files and no computer | Pass | See [Tool selection and helpers](#tool-selection-and-helpers). |
+| skills | Skills on volumes | Pass | See [S8 skills on volumes](#s8-skills-on-volumes). |
 
 The two product-computer lanes skip the computer's desktop preparation. This host has no desktop template, and preparing one installs the desktop packages, which the lanes do not use.
 
 ## Performance
 
-These are historical S5 results, before S7 and S6. Direct proxy overhead and PostgreSQL RSS acceptance remain pending.
-
-Lane j ran 30 trials of three arms, rotating which arm went first: P2's local runner in memory on the same host, an E2B worker of a dedicated computer's bot, which mounts its private volume, and an E2B worker of a team computer's bot, which also mounts the shared volume. Each run makes five `bash` calls, a `message_user` and the recap, through the real executor on PGlite. There were no errors in the 90 runs. All numbers are absolute. The figures below are p50 and p95. The full distributions are in [bench.json](evidence/P3/bench.json).
+Lane j ran 30 trials of three arms on PGlite, rotating which arm went first: P2's local runner in memory on the same host, an E2B worker of a dedicated computer's bot, which mounts its private volume, and an E2B worker of a team computer's bot, which also mounts the shared volume. Each run makes five `bash` calls, a `message_user` and the recap, through the real executor. There were no errors in the 90 runs. All numbers are absolute, at p50 and p95. The full distributions are in [bench.json](evidence/P3/bench.json).
 
 | Measure | Local runner | E2B, private volume | E2B, two volumes | Budget |
 | --- | --- | --- | --- | --- |
-| Cold boot, create to hello | | 1.75 s, 2.04 s | 1.86 s, 2.23 s | Under 30 s |
-| Sandbox create | | 343 ms, 362 ms | 354 ms, 384 ms | |
-| Guest boot, command start to hello | | 1.39 s, 1.72 s | 1.50 s, 1.86 s | |
-| Warm run, hello to accepted end | 472 ms, 495 ms | 953 ms, 1.18 s | 1.02 s, 1.25 s | |
-| Control per guest tool | 34 ms, 42 ms | 43 ms, 57 ms | 43 ms, 60 ms | |
-| Relay at the controller, request to end | 13 ms, 19 ms | 10 ms, 30 ms | 11 ms, 31 ms | |
-| Relay before the upstream received the call | 6 ms, 9 ms | 4 ms, 13 ms | 5 ms, 16 ms | |
-| Grant to result, one round trip and `echo` | 20 ms, 21 ms | 24 ms, 43 ms | 25 ms, 48 ms | |
+| Cold boot, create to hello | | 2.17 s, 2.47 s | 2.14 s, 2.56 s | Under 30 s |
+| Sandbox create | | 367 ms, 388 ms | 370 ms, 390 ms | |
+| Guest boot, command start to hello | | 1.81 s, 2.08 s | 1.78 s, 2.18 s | |
+| Warm run, hello to accepted end | 552 ms, 597 ms | 1.15 s, 1.34 s | 1.16 s, 1.35 s | |
+| Direct proxy overhead per model call | 5.9 ms, 10.7 ms | 16.3 ms, 36.8 ms | 15.6 ms, 37.6 ms | Under 200 ms at p95 |
+| Control per guest tool | 35 ms, 44 ms | 45 ms, 55 ms | 44 ms, 55 ms | |
+| Grant to result, one round trip and `echo` | 24 ms, 25 ms | 23 ms, 38 ms | 23 ms, 41 ms | |
 
-**Cold boot passes its budget by a factor of 13 at p95.** The guest boot bounds it. In a fresh VM, `node -e 0` took 0.70 s and loading the 7.6 MB guest bundle 0.88 s, against 0.03 s and 0.54 s once the page cache was warm. That profile is one VM of five runs per command. Mounting volumes adds about 270 ms to the create: an earlier run of this bench measured 79 ms with no mount, which matches I1's 65 ms against 350 ms.
+**The proxy passes its budget by a factor of five at p95.** The direct overhead is timed per call in the guest, from sending the `model.request` frame to receiving the first model event, minus the emulator's own time to first byte for that call. Every one of the 210 model calls per arm (30 runs of seven calls) carried a guest timing, so no call was estimated. The maximum was 55.6 ms with the private volume and 53.4 ms with two volumes. The E2B arms add about 10 ms at p50 over the local runner. The controller's share before the upstream call is under 5 ms at p50 in every arm, so this pass infers that the rest is the frames' transit through E2B's command stream, both ways, and did not trace it.
 
-The historical relay estimate does not establish the 200 ms p95 budget. It added two separate distributions and did not time individual guest calls. S6 records the guest-local elapsed time from sending each model request frame to receiving its first model event. The bench subtracts the matching emulator's own time to first byte, then reports p50, p95 and max of those differences per arm as `proxyOverheadDirectMs`. Missing guest timings fail the bench rather than falling back to an estimate. `perf.proxy_overhead_direct` in the verification receipt is an explicit pending placeholder with no invented values.
+**Cold boot passes its budget by a factor of twelve at p95.** The guest boot bounds it. It grew from 1.39 s to 1.81 s at p50 since the S5 run. Over the same span the guest bundle grew from 7.6 MB to 10.5 MB with the native tools, the coding-agent session and the skills loader; this pass infers the link and did not profile it. Sandbox create with mounts stays near 370 ms.
 
-**The transcript mask was most of the relay, and this slice cut it.** #243 masks the run's secrets in every relayed transcript. Before this slice's fix, the same bench measured the relay at 56 ms at p50 and 87 ms at p95 with the private volume, 50 ms of it before the emulator received the call. A timing probe in the relay, run on the host and not committed, put 28 to 36 ms of each call in the mask for transcripts of 30 to 34 KB with three secrets. The mask tried to parse every string and every key as JSON, and each failed parse threw. It now parses only text whose first character past whitespace opens an object, an array or a string, the only texts that can parse to one, and it prepares the secrets' escaped forms once per walk. Masking is unchanged. The relay is now 10 ms at p50 and 30 ms at p95, back to its 9 ms and 29 ms before #243, and the local runner's warm run went back from 801 ms to 472 ms.
+**Control per tool is the database, not the network.** Database calls take 99 to 100 percent of the control window, 17 queries at p50. A `SELECT 1` to PGlite takes 0.47 ms on this host.
 
-**Control per tool is PGlite on this host, not the network.** The control window is controller-side only, from `tool.call` read to `tool.grant` sent plus `tool.done` read to `tool.recorded` sent. Database calls take 97 to 99 percent of it, 17 queries at p50, as in P2. A `SELECT 1` round trip to PGlite takes 0.46 ms on this host against 0.11 ms on the machine of P2's numbers, four times slower, so P2's 6.0 ms becomes the local runner's 34 ms here. E2B adds 9 ms at p50 to the same window. This slice infers that the extra time is the frames' arrival through E2B's command stream interleaving with the window's queries, and did not trace it.
+**The controller on PostgreSQL shows no durable growth.** The bench ran again with `--database postgresql`: 15 rotating trials of the three arms, 45 runs in one controller process, each arm on its own disposable migrated database, with no errors. The database was a throwaway PostgreSQL 17 container on the build machine, reached from the host through an SSH tunnel, because the host rules exclude Docker there. With a garbage collection before each sample, the JS heap rose from 177 to 187 MiB over the first 18 runs, then held between 181.6 and 183.5 MiB for the remaining 27, and grew 0.4 MiB over the last ten runs. RSS rose from 413 to 460 MiB during warmup, fell back to 420 MiB when the heap compacted, and settled at 456 to 460 MiB; it grew 1.3 MiB over the last ten runs. On PGlite, by contrast, the heap grew about 0.5 MiB per run for all 90 runs, from 166 to 215 MiB, which matches the earlier finding that PGlite's in-process wire messages, not the controller, account for that growth. The receipt is [bench-postgresql.json](evidence/P3/bench-postgresql.json).
 
-**Control cost on PostgreSQL was not measured.** The controller has to run on the E2B host, whose API listens there only. PostgreSQL there needs Docker under sudo, which the rules for the shared host exclude. P2's estimate still stands, about 17 network round trips per tool on PostgreSQL.
+The PostgreSQL run's latencies measure the tunnel, not the product: a `SELECT 1` took 26.7 ms at p50 through it, so control per tool rose to about 700 ms for 17 queries. The direct proxy overhead stayed under budget there too, 39.4 ms at p95 with the private volume and 40.3 ms with two volumes.
 
-**The controller grew 53 MiB of RSS over 90 runs, and the growth traces to its test database.** RSS went from 1,153 to 1,206 MiB with a garbage collection before each sample, and the JS heap from 156 to 203 MiB. A heap snapshot comparison in an earlier investigation run found the growth in arrays of PostgreSQL wire messages held by the in-process PGlite instances, about the number of protocol messages those runs exchanged. This points to the test database, but does not prove the PostgreSQL RSS result. S6 adds `--database postgresql`, using `DATABASE_URL` and at least ten rotating trials, with a disposable migrated database per arm. `perf.rss_postgres` is pending with no measured values. Over the last ten runs, RSS grew 3.4 MiB and the heap 4.3 MiB. Each lane runs in its own process for the same reason, since one process grew about 200 MiB per lane.
+**Cold boot follow-up.** A preloaded-process snapshot, a template snapshot of Node with the whole guest already loaded and waiting for its capability, measured about 0.46 s p50 from create to hello with mounts, against about 2.1 s today, in a probe outside the product controller. [#262](https://github.com/RomainJeff/rakazo-bot/issues/262) carries it as successor work.
 
-The host had 8 vCPUs with a one-minute load average of 1.0 to 2.5 during the bench, from the host's other services. The arms rotated, so each saw the same load.
+The host had 8 vCPUs with a one-minute load average of 0.5 to 2.3 during the runs, from the host's other services. The arms rotated, so each saw the same load.
 
 ## Limits
 
@@ -271,7 +274,6 @@ The host had 8 vCPUs with a one-minute load average of 1.0 to 2.5 during the ben
 - Every native text result is bounded to 12,000 characters and 2,000 lines for P2. Longer results are spooled under the configured output directory, at most 16 MiB per file and 16 retained files. Bash capture counts all raw bytes and preserves the output up to that cap on the private volume, including after VM destruction. Pi's internal temporary bash copy is separately capped and removed on successful tool completion. Other tools may apply the SDK's own pagination or truncation before the P2 bound; their spool contains the SDK result, not necessarily the entire source file.
 - Native `read` forwards an image when its complete result fits the 64 KiB controller result budget. Larger image results are serialized and spooled as bounded text. Automatic SDK image resizing is disabled to keep the standalone bundle independent of native image libraries.
 - SDK bash temporary output created on abort or timeout may remain until VM destruction. It is not the durable spool.
-- The revised live native-tool lanes remain pending. No E2B VM was created for S7.
 
 
 ### Attention
@@ -287,7 +289,6 @@ The host had 8 vCPUs with a one-minute load average of 1.0 to 2.5 during the ben
 - A create whose answer was lost keeps its writer lease and its VM until the ensure deadline, 15 minutes, then reconcile destroys it. Until then, the run's retries are busy waits.
 - A provider error that never clears, a bad key for instance, ends the run only through the setup budget, after three failures.
 - A guest call whose result was lost stays `executing` when the next attempt never asks for it again, even after the run completes. It becomes `uncertain` only when a later attempt claims the same call.
-- The computerless-running defect observed by historical lane i is fixed offline in S6. Its revised live completion lane remains pending.
 
 ### Volume deletion
 
@@ -306,7 +307,7 @@ The host had 8 vCPUs with a one-minute load average of 1.0 to 2.5 during the ben
 
 - S6 reserves only the source computer for a dedicated move and fences only its bots' workers and private volumes. Sibling screens, stops, execution leases, worker starts and computer boots remain available. A team move reserves every existing computer and fences worker starts and volume-home boots across the space because it copies the shared volume. Historical worker-count comparisons remain a secondary adoption check.
 - Reservation expiry and renewal use the database clock. The copy checks a local monotonic deadline before every write and adoption, five seconds before the one-minute TTL, measured from the last successful renewal's request start. A renewal taking more than five seconds cancels the copy, including through its abort signal.
-- Do not deploy during a running home move. The expiry migration gives existing markers one minute, but a pre-fix move script does not renew or check ownership before adoption. Finish or stop that script before deploying.
+- Deploy only between home moves; see the operator note in [Home move, retention and rollback](#home-move-retention-and-rollback). The expiry migration gives existing markers one minute.
 - If the manifest write fails in the move's `finally`, its error replaces the move's report.
 - A move resumes between files only. A staged `.rakazo-<uuid>` file is removed when its write fails or is cancelled, and by the retry when its sandbox died. A move process that dies mid-write still leaves one beside its target, and the next move refuses it as foreign. Remove it by hand.
 - A volume-file sandbox that `close` never reached dies at its one-hour timeout. Creating one gives up after two minutes.
@@ -314,23 +315,24 @@ The host had 8 vCPUs with a one-minute load average of 1.0 to 2.5 during the ben
 
 ### Measurement
 
-- The guest bundle loads in about 1.5 s on a cold VM. Warming the page cache in the template snapshot or a Node compile cache could cut it. Neither was tried.
-- The lanes run the controller on PGlite. Control cost on PostgreSQL across the E2B network is not measured.
+- The guest boots in about 1.8 s on a cold VM. The preloaded-process snapshot of [#262](https://github.com/RomainJeff/rakazo-bot/issues/262) is the measured candidate to cut it.
+- The PostgreSQL bench reached its database through a tunnel to a disposable container off the host, so its control cost includes that link's round trips and does not stand for a production database next to the controller. It proves the RSS result, not a control latency.
+- The relay lanes and the bench used the repository's model emulator, not a real provider.
 - The live bundle replaces two modules the lanes never call with stubs: Koffi, a native module the home store loads only on macOS and Windows, and jsdom, which reads its stylesheet from beside its own sources.
-- The web E2E selector result is in the verification receipt. There is no user interface change, so the only capture is the lane capture.
+- The web E2E selector result is in the verification receipt. There is no user interface change, so the capture is the terminal video of lane b.
 
 ## Entry conditions for successors
 
 - **P4** exposes the remote tools: `computer_*`, `browser_*` and `computer.exec` stay controller tools, and every ordinary file or shell action stays local in the worker. It decides how computer tools return images, because a controller tool's output reaches the guest as JSON, and where a team computer keeps its browser profiles, which a replacement archives but does not restore.
 - **P5** rebuilds a session from the durable history in `worker.start` and never from the worker's disk. The spool under `.rakazo/tool-output/` is a convenience, not the truth of a run. It reads `effectPhase` and never reruns an `uncertain` effect, and it starts no writer before `stopState` says `destroyed`. It uses the same template and launch path, and adds nothing to the guest for resume.
-- **P6** starts from the measured profiles: worker 1 vCPU and 1024 MiB, computer 2 vCPU and 4096 MiB, cold boot p95 2.1 s with two mounts. It measures control cost on PostgreSQL, decides how to keep a run alive past the sandbox timeout, decides on a worker egress policy, and repeats the lanes under concurrent runs on one host.
+- **P6** starts from the measured profiles: worker 1 vCPU and 1024 MiB, computer 2 vCPU and 4096 MiB, cold boot p95 2.56 s with two mounts, and the cold-boot candidate of [#262](https://github.com/RomainJeff/rakazo-bot/issues/262). It measures control cost on a PostgreSQL next to the controller, decides how to keep a run alive past the sandbox timeout, decides on a worker egress policy, and repeats the lanes under concurrent runs on one host.
 
 ## S6 offline acceptance follow-up
 
 S6 tests the real executor, local Pi guest, emulator and database offline. It covers computerless MCP/integration calls, missing-computer finalization, busy retries without budget charge, a launch attempted during a copy, automatic expiry recovery, live-copy renewal, honest operator recovery output, and guest-local model timing. PostgreSQL integration additionally races worker start against move reservation and exercises the disposable PostgreSQL bench fixture. Exact verification outcomes and the main web E2E comparison are in `s6_verification` in the [verification receipt](evidence/P3/verification.json).
 
-No live E2B, real provider, Electron E2E or native mobile capture ran for S6. No frontend code changed. The revised live lanes, including screenshots, direct proxy budget and PostgreSQL RSS are pending. The changelog entry remains with the final feature slice under the feature-branch convention.
+The final live pass ran S6's behaviour on E2B: lane i, lane home-move-fence, the direct proxy timing and the PostgreSQL bench. The changelog entry remains with the final feature slice under the feature-branch convention.
 
 ## Rollback
 
-S6 adds the nullable `computers.homeMoveExpiresAt` column. Leave that additive column in place on rollback. Do not deploy or roll back during a running home move. To roll back the runtime, revert its commits. The worker TTL then returns to four hours, and the template fix, the timeout cap and the volume-files rewrite return to the code from #229 and #241, which cannot build its template, create a worker or reach a volume on the self-hosted deployment. Unset `WORKER_PROVIDER` first so that no run uses a worker, then drain running workers: each ends within its TTL. The worker template `p3live-worker-pi` stays on the host until someone deletes it with `DELETE /templates/<templateId>` on the local API.
+S6 adds the nullable `computers.homeMoveExpiresAt` column. Leave that additive column in place on rollback. Do not deploy or roll back during a running home move. To roll back the runtime, revert its commits. The worker TTL then returns to four hours, and the template fix, the timeout cap and the volume-files rewrite return to the code from #229 and #241, which cannot build its template, create a worker or reach a volume on the self-hosted deployment. Unset `WORKER_PROVIDER` first so that no run uses a worker, then drain running workers: each ends within its TTL. The experimental worker template `p3live-worker-pi` was deleted from the host after the final live pass; a deployment builds its own template under its own name.

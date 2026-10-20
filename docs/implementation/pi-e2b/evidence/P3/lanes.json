@@ -1,20 +1,27 @@
 {
   "tag": "p3live-<session>",
-  "startedAt": "2026-10-20T14:40:08.553Z",
+  "startedAt": "2026-10-20T21:51:02.958Z",
   "workerTemplate": "p3live-worker-pi",
   "computerTemplate": "i1-computer",
   "lanes": [
     {
       "lane": "a",
       "issue": "tâche fichier identique à baseline",
-      "scenario": "#228's file task (write, refused overwrite, edit, missed edit, read, list) in process and in a real E2B worker on its private volume",
-      "passWhen": "The same final file and the same model-visible tool results in both arms",
+      "scenario": "A file task through the in-process tools and Pi native write, edit, read and ls in an E2B worker on its private volume",
+      "passWhen": "The same final file content in both arms; tool names and result formats may differ",
       "result": "pass",
       "observed": {
         "inProcessFile": "alpha\ngamma\n",
         "workerFileReadFromVolumeAfterDestroy": "alpha\ngamma\n",
-        "sameModelVisibleResults": true,
-        "sameLoggedResults": true,
+        "nativeToolResults": [
+          "Successfully wrote to notes.md",
+          "Successfully replaced 1 block(s) in notes.md.",
+          "Could not find the exact text in notes.md. The old text must match exactly including all whitespace and newlines.",
+          "gamma\n",
+          ".rakazo/\nnotes.md",
+          "{\"ok\":true}"
+        ],
+        "loggedResultCount": 6,
         "workerAttempts": [
           {
             "workerState": "released",
@@ -22,12 +29,12 @@
           }
         ]
       },
-      "seconds": 11.5,
+      "seconds": 11.6,
       "memAvailableMiB": {
-        "before": 3096,
-        "after": 2452
+        "before": 3021,
+        "after": 2468
       },
-      "controllerRssMiB": 922,
+      "controllerRssMiB": 939,
       "cleanup": {
         "killed": 0,
         "destroyed": 2,
@@ -45,26 +52,26 @@
       "result": "pass",
       "observed": {
         "guestToolResults": {
-          "readPrivate": "{\"path\":\"from-computer.txt\",\"content\":\"written by the computer\\n\",\"startLine\":1,\"endLine\":1,\"totalLines\":1}",
-          "readShared": "{\"path\":\"shared/from-computer.txt\",\"content\":\"shared by the computer\\n\",\"startLine\":1,\"endLine\":1,\"totalLines\":1}",
-          "write": "{\"ok\":true,\"path\":\"from-worker.txt\"}",
-          "edit": "{\"ok\":true,\"path\":\"from-worker.txt\",\"replacements\":1}",
-          "grep": "from-computer.txt:1:written by the computer\nfrom-worker.txt:1:edited by the worker",
-          "bash": "written by the computer"
+          "readPrivate": "written by the computer\n",
+          "readShared": "shared by the computer\n",
+          "write": "Successfully wrote to from-worker.txt",
+          "edit": "Successfully replaced 1 block(s) in from-worker.txt.",
+          "grep": "from-computer.txt:1: written by the computer\nfrom-worker.txt:1: edited by the worker",
+          "bash": "written by the computer\n"
         },
-        "computerSawPrivateWrite": "seen 57",
-        "computerSawSharedWrite": "seen 62",
-        "privateVisibleWithinMsOfGrant": 50,
-        "sharedVisibleWithinMsOfGrant": 46,
+        "computerSawPrivateWrite": "seen 66",
+        "computerSawSharedWrite": "seen 75",
+        "privateVisibleWithinMsOfGrant": 87,
+        "sharedVisibleWithinMsOfGrant": 71,
         "pollIntervalMs": 50,
-        "note": "Visibility times run from the controller granting the guest tool that wrote, matched by its request's seq (edit_file e1 for the private file, bash b1 for the shared one), to the host seeing the computer's poller exit. They include the tool's own run and E2B's command stream, so they bound the cross-VM delay from above."
+        "note": "Visibility times run from the controller granting the guest tool that wrote, matched by its request's seq (edit e1 for the private file, bash b1 for the shared one), to the host seeing the computer's poller exit. They include the tool's own run and E2B's command stream, so they bound the cross-VM delay from above."
       },
-      "seconds": 7.8,
+      "seconds": 8.6,
       "memAvailableMiB": {
-        "before": 3147,
-        "after": 2360
+        "before": 3157,
+        "after": 2413
       },
-      "controllerRssMiB": 952,
+      "controllerRssMiB": 970,
       "cleanup": {
         "killed": 0,
         "destroyed": 2,
@@ -82,35 +89,35 @@
       "result": "pass",
       "observed": {
         "guestToolResults": {
-          "readPrivate": "{\"path\":\"from-computer.txt\",\"content\":\"written by the computer\\n\",\"startLine\":1,\"endLine\":1,\"totalLines\":1}",
-          "readShared": "{\"path\":\"shared/from-computer.txt\",\"content\":\"shared by the computer\\n\",\"startLine\":1,\"endLine\":1,\"totalLines\":1}",
-          "write": "{\"ok\":true,\"path\":\"from-worker.txt\"}",
-          "edit": "{\"ok\":true,\"path\":\"from-worker.txt\",\"replacements\":1}",
-          "grep": "from-computer.txt:1:written by the computer\nfrom-worker.txt:1:edited by the worker",
-          "bash": "written by the computer"
+          "readPrivate": "written by the computer\n",
+          "readShared": "shared by the computer\n",
+          "write": "Successfully wrote to from-worker.txt",
+          "edit": "Successfully replaced 1 block(s) in from-worker.txt.",
+          "grep": "from-computer.txt:1: written by the computer\nfrom-worker.txt:1: edited by the worker",
+          "bash": "written by the computer\n"
         },
-        "computerSawPrivateWrite": "seen 47",
-        "computerSawSharedWrite": "seen 51",
-        "privateVisibleWithinMsOfGrant": 55,
-        "sharedVisibleWithinMsOfGrant": 29,
+        "computerSawPrivateWrite": "seen 58",
+        "computerSawSharedWrite": "seen 66",
+        "privateVisibleWithinMsOfGrant": 35,
+        "sharedVisibleWithinMsOfGrant": 31,
         "pollIntervalMs": 50,
-        "note": "Visibility times run from the controller granting the guest tool that wrote, matched by its request's seq (edit_file e1 for the private file, bash b1 for the shared one), to the host seeing the computer's poller exit. They include the tool's own run and E2B's command stream, so they bound the cross-VM delay from above.",
+        "note": "Visibility times run from the controller granting the guest tool that wrote, matched by its request's seq (edit e1 for the private file, bash b1 for the shared one), to the host seeing the computer's poller exit. They include the tool's own run and E2B's command stream, so they bound the cross-VM delay from above.",
         "computerMetadataHome": "volumes",
         "computerRecordsMountSet": true,
         "workspaceLinksTo": "/workspace",
         "volumeMountsInComputer": [
-          "/workspace/bots/cmvgsiykx00019shczmd6pt5o",
+          "/workspace/bots/cmvh7x53o0001pxhcbenvu260",
           "/workspace/shared"
         ],
         "secondRunReusedMachine": true,
         "desktopPreparation": "skipped: this host has no desktop template"
       },
-      "seconds": 10.5,
+      "seconds": 11.7,
       "memAvailableMiB": {
-        "before": 3053,
-        "after": 2343
+        "before": 3088,
+        "after": 2462
       },
-      "controllerRssMiB": 950,
+      "controllerRssMiB": 948,
       "cleanup": {
         "killed": 1,
         "destroyed": 2,
@@ -137,12 +144,12 @@
         "workerListenerListedInComputer": "no",
         "bootIdsDiffer": true
       },
-      "seconds": 14.5,
+      "seconds": 15,
       "memAvailableMiB": {
-        "before": 3018,
-        "after": 2599
+        "before": 3144,
+        "after": 2616
       },
-      "controllerRssMiB": 757,
+      "controllerRssMiB": 741,
       "cleanup": {
         "killed": 0,
         "destroyed": 2,
@@ -161,19 +168,21 @@
       "observed": {
         "parentOffersComputerAct": false,
         "helperOffersComputerAct": false,
-        "helperToolCount": 34,
+        "helperToolCount": 30,
         "parentResult": "Tool computer_act not found",
         "helperResult": "Tool computer_act not found",
-        "toolCallsAtController": ["message_user"],
+        "toolCallsAtController": [
+          "message_user"
+        ],
         "computerActEffects": 0,
         "note": "The guest's Pi answers a call of a tool it was not given without asking the controller. A guest that asks anyway is refused with unknown_tool, which runtime-worker-hostile.test.ts proves offline."
       },
       "seconds": 7.2,
       "memAvailableMiB": {
         "before": 3129,
-        "after": 2490
+        "after": 2388
       },
-      "controllerRssMiB": 868,
+      "controllerRssMiB": 963,
       "cleanup": {
         "killed": 0,
         "destroyed": 2,
@@ -195,12 +204,12 @@
         "modelRequestsRelayed": 3,
         "note": "The model emulator asserts the controller's bearer key on every call, so each relayed call carried it."
       },
-      "seconds": 6.7,
+      "seconds": 7,
       "memAvailableMiB": {
-        "before": 3129,
-        "after": 2514
+        "before": 3061,
+        "after": 2477
       },
-      "controllerRssMiB": 862,
+      "controllerRssMiB": 905,
       "cleanup": {
         "killed": 0,
         "destroyed": 2,
@@ -224,12 +233,12 @@
         "runModel": "anthropic/claude-haiku-4-5",
         "note": "The emulator serves /v1/messages and asserts the controller's x-api-key on every call; the catalog model points at it for the run only."
       },
-      "seconds": 6.5,
+      "seconds": 7.5,
       "memAvailableMiB": {
-        "before": 3135,
-        "after": 2269
+        "before": 3122,
+        "after": 2343
       },
-      "controllerRssMiB": 964,
+      "controllerRssMiB": 963,
       "cleanup": {
         "killed": 0,
         "destroyed": 2,
@@ -250,13 +259,18 @@
           "status": "failed",
           "error": "The worker broke the run protocol: invalid",
           "upstreamCalls": 0,
-          "guestSent": ["worker.hello", "model.request"],
-          "controllerSent": ["worker.start"],
+          "guestSent": [
+            "worker.hello",
+            "model.request"
+          ],
+          "controllerSent": [
+            "worker.start"
+          ],
           "attempts": [
             {
               "workerState": "released",
               "stopPhase": "process_ended",
-              "workerProviderRef": "igyrm83pwwc37pijzxydd"
+              "workerProviderRef": "ix89croyw2vbz1nn2ek3h"
             }
           ]
         },
@@ -264,23 +278,29 @@
           "status": "failed",
           "error": "The worker broke the run protocol: unknown_tool",
           "upstreamCalls": 0,
-          "guestSent": ["worker.hello", "tool"],
-          "controllerSent": ["worker.start", "refused"],
+          "guestSent": [
+            "worker.hello",
+            "tool"
+          ],
+          "controllerSent": [
+            "worker.start",
+            "refused"
+          ],
           "attempts": [
             {
               "workerState": "released",
               "stopPhase": "process_ended",
-              "workerProviderRef": "iksa5k5cg5o0l7btiasqu"
+              "workerProviderRef": "i9rfirm5ibftd6wwd8dvx"
             }
           ]
         }
       },
-      "seconds": 10.2,
+      "seconds": 10.8,
       "memAvailableMiB": {
-        "before": 2857,
-        "after": 2240
+        "before": 3043,
+        "after": 2233
       },
-      "controllerRssMiB": 1104,
+      "controllerRssMiB": 1169,
       "cleanup": {
         "killed": 0,
         "destroyed": 4,
@@ -303,16 +323,18 @@
         "workerReleased": true,
         "workerSandboxes": 1,
         "sandboxesAliveWhenRead": 0,
-        "spoolFiles": [".rakazo/tool-output/<id>"],
+        "spoolFiles": [
+          ".rakazo/tool-output/<id>"
+        ],
         "spoolBytesReadAfterDestroy": 6188895,
         "spoolMatchesOutput": true
       },
-      "seconds": 9,
+      "seconds": 9.6,
       "memAvailableMiB": {
-        "before": 3125,
-        "after": 2580
+        "before": 3038,
+        "after": 2598
       },
-      "controllerRssMiB": 753,
+      "controllerRssMiB": 741,
       "cleanup": {
         "killed": 0,
         "destroyed": 2,
@@ -429,12 +451,12 @@
           "sandboxesLeft": 0
         }
       },
-      "seconds": 25.5,
+      "seconds": 27.8,
       "memAvailableMiB": {
-        "before": 3095,
-        "after": 1711
+        "before": 3105,
+        "after": 1764
       },
-      "controllerRssMiB": 1617,
+      "controllerRssMiB": 1577,
       "cleanup": {
         "killed": 0,
         "destroyed": 8,
@@ -453,7 +475,7 @@
       "observed": {
         "sandboxTimeoutMs": 20000,
         "firstContinue": "Run setup failed; retrying",
-        "firstAttemptEndedAfterMs": 22798,
+        "firstAttemptEndedAfterMs": 22856,
         "afterKill": {
           "status": "queued",
           "attempts": [
@@ -469,7 +491,10 @@
         "retriedCallResult": "{\"error\":\"The earlier bash execution was interrupted, so its outcome is unknown. It was not replayed to avoid a duplicate side effect. Verify the destination before proposing another action.\",\"uncertain\":true}",
         "final": {
           "status": "completed",
-          "attempts": ["released", "released"],
+          "attempts": [
+            "released",
+            "released"
+          ],
           "effects": [
             {
               "kind": "bash",
@@ -483,12 +508,12 @@
           "sandboxesLeft": 0
         }
       },
-      "seconds": 28.9,
+      "seconds": 30,
       "memAvailableMiB": {
-        "before": 3089,
-        "after": 2635
+        "before": 3083,
+        "after": 2617
       },
-      "controllerRssMiB": 679,
+      "controllerRssMiB": 756,
       "cleanup": {
         "killed": 0,
         "destroyed": 2,
@@ -509,9 +534,16 @@
         "volumesCreatedByDryRun": 0,
         "move": "adopted",
         "manifestFiles": 6,
-        "manifestVolumes": ["private", "private", "shared"],
+        "manifestVolumes": [
+          "private",
+          "private",
+          "shared"
+        ],
         "filesVerifiedByHashAndMode": 6,
-        "recreatedComputersSeeSameHashes": [true, true],
+        "recreatedComputersSeeSameHashes": [
+          true,
+          true
+        ],
         "fileWrittenBetweenRecreatesKept": true,
         "mountEnforcesOwnership": false,
         "volumeFileSandboxesKilled": 3,
@@ -526,15 +558,15 @@
           "guestUid": "The sandbox user is uid/gid 1001/1001 in this template, not 1000, and the moved files belong to 1001:1001. The mount does not enforce ownership against it: that user read and appended to a root-owned 0600 file."
         }
       },
-      "seconds": 10.6,
+      "seconds": 10,
       "memAvailableMiB": {
-        "before": 3103,
-        "after": 2408
+        "before": 3084,
+        "after": 2440
       },
-      "controllerRssMiB": 909,
+      "controllerRssMiB": 900,
       "cleanup": {
         "killed": 0,
-        "destroyed": 4,
+        "destroyed": 3,
         "left": {
           "sandboxes": 0,
           "volumes": 0
@@ -561,15 +593,57 @@
         },
         "desktopPreparation": "skipped: this host has no desktop template"
       },
-      "seconds": 7.3,
+      "seconds": 6.8,
       "memAvailableMiB": {
-        "before": 3050,
-        "after": 2281
+        "before": 3064,
+        "after": 2335
       },
-      "controllerRssMiB": 946,
+      "controllerRssMiB": 960,
       "cleanup": {
         "killed": 1,
-        "destroyed": 3,
+        "destroyed": 2,
+        "left": {
+          "sandboxes": 0,
+          "volumes": 0
+        }
+      }
+    },
+    {
+      "lane": "home-move-fence",
+      "issue": "migration sans copie concurrente",
+      "scenario": "A dedicated home with a snapshot moves onto real E2B volumes; while the copy writes its first file, its bot's run is started",
+      "passWhen": "The run started during the copy stays queued with no attempt and no worker; the move adopts; the run then completes in an E2B worker that reads the moved file",
+      "result": "pass",
+      "observed": {
+        "duringCopy": {
+          "status": "queued",
+          "attempts": 0,
+          "workersEnsured": 0,
+          "reserved": true
+        },
+        "move": "adopted",
+        "computerAfterMove": {
+          "homeStorage": "volumes",
+          "reservationReleased": true
+        },
+        "runAfterMove": "completed",
+        "attempts": [
+          {
+            "workerState": "released"
+          }
+        ],
+        "workersEnsured": 1,
+        "workerReadMovedFile": true
+      },
+      "seconds": 8.5,
+      "memAvailableMiB": {
+        "before": 2980,
+        "after": 2321
+      },
+      "controllerRssMiB": 950,
+      "cleanup": {
+        "killed": 0,
+        "destroyed": 2,
         "left": {
           "sandboxes": 0,
           "volumes": 0
@@ -578,24 +652,62 @@
     },
     {
       "lane": "i",
-      "issue": "run sans fichiers/computer",
-      "scenario": "A run whose bot has no computer; then a VM of the worker template, to check the guest user can write /workspace",
-      "passWhen": "The executor refuses the run before it routes it, with no attempt reaching a worker and no sandbox created; the sandbox user can write /workspace",
+      "issue": "run sans computer ni fichiers utilisateur",
+      "scenario": "A computerless bot calls an MCP tool served by the controller, then message_user, through a worker with no mounts",
+      "passWhen": "The run completes, the MCP tool ran once on the controller, no computer or volume is created, and worker.start grants no mounts",
       "result": "pass",
       "observed": {
-        "continueThrew": "Bot has no computer",
-        "runStatusAfter": "running",
-        "attemptsWithAWorker": 0,
-        "sandboxesCreated": 0,
-        "workspaceWritableBySandboxUser": true,
-        "note": "Every bot run needs a computer, and a bot with one is always offered the file tools, so the executor never derives a worker run without files: deriveRunNeeds' no-file case is covered offline."
+        "status": "completed",
+        "mcpCalls": [
+          "mcp_lookup"
+        ],
+        "mcpResultReachedModel": true,
+        "computers": 0,
+        "volumes": 0,
+        "mounts": [
+          []
+        ],
+        "workerAttempts": [
+          "released"
+        ]
       },
-      "seconds": 4,
+      "seconds": 6.6,
       "memAvailableMiB": {
-        "before": 2987,
-        "after": 2298
+        "before": 3009,
+        "after": 2405
       },
-      "controllerRssMiB": 911,
+      "controllerRssMiB": 961,
+      "cleanup": {
+        "killed": 0,
+        "destroyed": 0,
+        "left": {
+          "sandboxes": 0,
+          "volumes": 0
+        }
+      }
+    },
+    {
+      "lane": "skills",
+      "issue": "skills on volumes",
+      "scenario": "Managed, bot and shared skills load through Pi; a native read and a skill script run; a bot-created skill is available on the next run",
+      "passWhen": "Both runs complete, all three sources are in the Pi catalog without skill_read, the script prints its marker, native usage and the new skill reach the controller, and the next run loads that skill",
+      "result": "pass",
+      "observed": {
+        "managed": true,
+        "bot": true,
+        "shared": true,
+        "nativeOnly": true,
+        "script": true,
+        "nextRun": true,
+        "indexed": true,
+        "nativeUses": 1
+      },
+      "seconds": 11.3,
+      "memAvailableMiB": {
+        "before": 3109,
+        "after": 2369
+      },
+      "controllerRssMiB": 973,
       "cleanup": {
         "killed": 0,
         "destroyed": 2,

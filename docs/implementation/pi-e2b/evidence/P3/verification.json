@@ -1,8 +1,9 @@
 {
   "ticket": "RomainJeff/rakazo-bot#197",
-  "slice": "S5 historical live evidence, S7 native tools and S6 acceptance follow-up",
-  "tested_commit_note": "lanes.json, bench.json and the lane capture are historical evidence from live_lanes_commit b5c0a4609b926d12d6c7d6a28d7a801fcc0875f8. template.json records the ed7f8e689 template; its guest bundle matched that historical run. S7 (#254, merged at 7bbff551c) subsequently changed runtime, native tools, guest bundle and template code. S6 changes runtime routing, migration fencing and model timing again. Neither S7 nor S6 has been run against live E2B. The historical hashes, fourteen reported lane passes and performance figures do not verify the current runtime; historical lane i proved refusal rather than required computerless completion. A rebuilt template and rerun are pending.",
-  "feature_base": "710705aee (feature/pi-e2b-workers with #228, #229, #241 and #243), merged into this branch at 58de581e7",
+  "slice": "P3 final live pass: every lane, the bench with direct proxy timing, and the controller on PostgreSQL, on the final feature code",
+  "tested_commit": "935a765d140c85dc449a0952035dcf29259cf979",
+  "tested_commit_note": "The lanes ran at e14aae9aa7e95caf0338faf129354aa6a7fdfc00 and the bench at 935a765d140c85dc449a0952035dcf29259cf979. The only change between them is the bench's local arm and LocalWorkerProvider's managed-skills option, both test support; apps/, packages/adapters and packages/core are identical, and the guest bundle hash did not change. The worker template was built from e14aae9 and served both. This receipt is a later documentation commit.",
+  "feature_base": "d475675e3 (feature/pi-e2b-workers with every P3 slice: #228, #229, #241, #243, #245, #254, #257, #261)",
   "infra": {
     "i1_delivery": "the infrastructure repository's pull request #2, merge 177c1ff",
     "i1_receipts": {
@@ -15,14 +16,16 @@
   "sdk": {
     "pi": "@earendil-works/pi-agent-core, pi-ai, pi-telemetry and pi-coding-agent 1.3.0, unchanged",
     "e2b": "e2b 2.49.1 in the controller, the bundle and the template build",
-    "e2b_platform": "the platform build the I1 handoff records; not read again by this slice"
+    "e2b_platform": "the platform build the I1 handoff records; not read again by this pass"
   },
   "templates": {
     "worker": {
       "name": "p3live-worker-pi",
-      "source": "apps/agent-run-worker/template at live_lanes_commit, built by worker-live template; the Pi layer no longer installs ripgrep",
+      "source": "apps/agent-run-worker/template at e14aae9, built by worker-live template from the live bundle",
       "receipt": "template.json",
-      "guest_bundle_sha256": "3c4b29734caecca8547e46905a58e6a8506c42eb81570b0d79b34467e3c6482b"
+      "guest_bundle_sha256": "f9df3cf91e321220a522e3b5aa6d7c36a802db86f1d0de0d8cfe9ae91b2ff58e",
+      "guest_bundle_bytes": 10507614,
+      "deleted_after_pass": true
     },
     "computer": {
       "name": "i1-computer",
@@ -35,21 +38,157 @@
     "sandbox_timeout": "1 hour, WORKER_TTL_SECONDS; a provider whose deployment allows less caps it and logs a warning"
   },
   "host": {
-    "where": "the single shared E2B host, controller and lanes run there from a bundle; no checkout, no .env",
+    "where": "the single shared E2B host; the controller and lanes ran there from a bundle, with no checkout and no .env",
     "platform": "linux",
     "arch": "x64",
     "logical_cpus": 8,
     "node": "v22.22.1",
-    "load_average_during_bench": "one-minute load average 1.0 to 2.5 from the host's other services"
+    "mem_available_mib_floor": 1536,
+    "load_average_one_minute": "0.5 to 2.3 during the runs, from the host's other services"
   },
   "build_machine": {
     "platform": "Darwin",
-    "arch": "arm64",
-    "node": "v24.21.0"
+    "arch": "arm64"
   },
-  "lockfile_sha256": "767f6e35b7b79ea0d5ebe559eadce66263365b6ce95cd7aac49022d619deb1ff",
-  "schema_sha256": "d8b5c56832d77dbc48f469630ff4f30dd8c850d89b14e0b2a2ba6ff57efd1f5c",
-  "defects_found_live_and_fixed": [
+  "lockfile_sha256": "ed60dbddf22d720ff25386235da63227ff22c49b443175cd7671b19496798a48",
+  "schema_sha256": "0ba00fa68d1e77d86d67d96df5c2a50b66bd584bae0efe5eab5b538ed05012dd",
+  "lanes": {
+    "source": "lanes.json",
+    "passed": 16,
+    "failed": 0,
+    "results": {
+      "a": "pass",
+      "b": "pass",
+      "b-product-computer": "pass",
+      "c": "pass",
+      "d": "pass",
+      "e-openai": "pass",
+      "e-anthropic": "pass",
+      "e-refusals": "pass",
+      "f": "pass",
+      "g": "pass",
+      "g-timeout": "pass",
+      "h": "pass",
+      "h-product-recreate": "pass",
+      "home-move-fence": "pass",
+      "i": "pass",
+      "skills": "pass"
+    },
+    "one_process_per_lane": true,
+    "left_after_each_lane": "0 sandboxes, 0 volumes of the session"
+  },
+  "perf": {
+    "source": [
+      "bench.json",
+      "bench-postgresql.json"
+    ],
+    "trials_per_arm": 30,
+    "errors": 0,
+    "cold_boot_p95_ms": {
+      "private_mount": 2467.525,
+      "two_mounts": 2563.844,
+      "budget": 30000,
+      "result": "pass"
+    },
+    "proxy_overhead_direct": {
+      "status": "measured",
+      "definition": "Per model call, the guest-local time from sending the model.request frame to receiving the first model event, minus the emulator-local time from that call's arrival to its first byte.",
+      "budget_p95_ms": 200,
+      "calls_per_arm": 210,
+      "per_arm_ms": {
+        "local_memory": {
+          "p50": 5.883,
+          "p95": 10.693,
+          "max": 53.516
+        },
+        "private_mount": {
+          "p50": 16.255,
+          "p95": 36.844,
+          "max": 55.616
+        },
+        "two_mounts": {
+          "p50": 15.62,
+          "p95": 37.565,
+          "max": 53.427
+        }
+      },
+      "result": "pass",
+      "limiter": "inferred, not traced: the controller's share before the upstream call is under 5 ms at p50 in every arm; the E2B arms' extra 10 ms at p50 over the local runner is the frames' transit through E2B's command stream"
+    },
+    "control_per_guest_tool_p50_ms": {
+      "local_memory": 35.34,
+      "private_mount": 45.025,
+      "two_mounts": 43.688
+    },
+    "control_limiter": "database calls are 99 to 100 percent of the control window, 17 queries at p50; PGlite SELECT 1 is 0.47 ms at p50 on this host",
+    "rss_pglite": {
+      "runs": 90,
+      "rss_mib": [
+        1170.7,
+        1226.5
+      ],
+      "heap_mib": [
+        166.1,
+        214.9
+      ],
+      "last_ten_growth_mib": {
+        "rss": 4.4,
+        "heap": 3.8
+      },
+      "note": "the heap grows about 0.5 MiB per run throughout; the earlier heap-snapshot comparison placed it in PGlite's in-process wire messages"
+    },
+    "rss_postgres": {
+      "status": "measured",
+      "command": "pnpm test:worker-live bench --template <worker> --computer-template <computer> --out <dir> --database postgresql --trials 15",
+      "database": "a disposable PostgreSQL 17 container on the build machine, reached from the host through an SSH reverse tunnel; one migrated database per arm, created and dropped by the bench; none was left after the run",
+      "runs": 45,
+      "errors": 0,
+      "rss_mib": {
+        "first": 413.2,
+        "max": 459.6,
+        "last": 459.6,
+        "last_ten_growth": 1.3
+      },
+      "heap_mib": {
+        "first": 177,
+        "after_warmup_range": [
+          181.6,
+          183.5
+        ],
+        "last": 183.5,
+        "last_ten_growth": 0.4
+      },
+      "result": "no durable growth: after 18 warmup runs the heap stays between 181.6 and 183.5 MiB, and RSS settles at 456 to 460 MiB",
+      "latency_caveat": "SELECT 1 through the tunnel is 26.7 ms at p50, so this run's control and warm-run times measure the tunnel, not a production database",
+      "proxy_overhead_direct_p95_ms": {
+        "local_memory": 26.059,
+        "private_mount": 39.35,
+        "two_mounts": 40.286
+      }
+    }
+  },
+  "cleanup": {
+    "per_lane": "every lane ended with 0 sandboxes and 0 volumes of its session, after its sweep",
+    "bench": "0 sandboxes and 0 volumes left after each bench run",
+    "census": "an independent census before and after each batch (lanes, PGlite bench, PostgreSQL bench, the recorded lane) counted 0 sandboxes and 0 volumes on the deployment",
+    "template": "p3live-worker-pi deleted with DELETE /templates/<templateId> on the local API (204); the final census lists only base, i1-worker and i1-computer",
+    "host_scratch": "the scratch directory with the bundle, runner logs and helpers was removed, and the helper scripts placed beside I1's probes were deleted",
+    "postgres": "the reverse tunnel was closed and the disposable container stopped and removed"
+  },
+  "media": {
+    "video": "media/worker-run.mp4",
+    "gif": "media/worker-run.gif",
+    "seconds": 31.65,
+    "content": "lane b recorded live: census before, worker and computer VMs starting, Pi's native read, write, edit, grep and bash results, the computer seeing the worker's writes, the pass line, census after",
+    "redaction": "every frame checked; no host, address, key, account or path"
+  },
+  "defects_found_in_final_pass": [
+    "Harness: lane i asserted completion with message_user only; it now calls an MCP tool served by the controller and checks its result reached the model.",
+    "Harness: no lane drove the S6 home-move fence live; lane home-move-fence starts a run during a real move's copy.",
+    "Harness: the bench's local arm failed setup in the live bundle, since S8's LocalWorkerProvider copies the repository's skills/agent, which the bundle does not carry. It now passes the bundled copy.",
+    "No product defect was found."
+  ],
+  "defects_found_live_and_fixed_s5": [
     "The worker template from #229 did not build: E2B runs build steps as the sandbox user, which cannot create /workspace or write /opt. The makeDir and the bundle copy now run as root.",
     "Every worker create from #229 was refused with 400 'Timeout cannot be greater than 1 hours': the provider asked for the 4 hour TTL. It now asks for the lower of the TTL and maxTimeoutMs, 1 hour by default.",
     "E2BVolumeFiles from #241 could not reach any volume: this self-hosted deployment does not serve E2B's volume content API (every call 404), and the SDK sends those calls to api.<domain> unless E2B_VOLUME_API_URL is set. It now works through a sandbox that mounts the volume. Its default owner 1000:1000 was also wrong: the sandbox user is 1001.",
@@ -66,206 +205,88 @@
     "After #243 merged: the template's Pi layer installed ripgrep for a grep tool that is the guest's own JavaScript walker. The layer now installs nothing, and the rebuilt template has no rg.",
     "#243's relay mask parsed every string and key of a relayed transcript as JSON, and each failed parse threw: 28 to 36 ms per call for 30 to 34 KB transcripts on the host, by a timing probe in the relay that was not committed. It now parses only text that opens an object, an array or a string, and prepares the secrets once per walk; masking is unchanged."
   ],
-  "perf": {
-    "source": "bench.json",
-    "cold_boot_p95_ms": {
-      "private_mount": 2044.974,
-      "two_mounts": 2226.012,
-      "budget": 30000,
-      "result": "pass"
-    },
-    "relay_overhead_bound_p95_ms": {
-      "estimate": 72.8,
-      "how": "an estimate, not a bound: relay at the controller p95 30.3 ms plus grant to result p95 42.6 ms, private volume. The largest relay and largest round trip of the 30 trials sum to 90.6 ms with the private volume and 97.6 ms with two volumes.",
-      "observed_max_sum_ms": {
-        "private_mount": 90.6,
-        "two_mounts": 97.6
-      },
-      "budget": 200,
-      "result": "historical estimate only; direct per-call acceptance pending"
-    },
-    "control_per_guest_tool_p50_ms": {
-      "local_runner_same_host": 33.8,
-      "e2b_private_mount": 42.8,
-      "e2b_two_mounts": 43.1
-    },
-    "control_limiter": "database calls are 97 to 99 percent of the control window; PGlite SELECT 1 is 0.46 ms on this host against 0.11 ms on P2's machine",
-    "postgres_control_cost": "not measured: the controller must run on the E2B host, and PostgreSQL there needs Docker under sudo, which the host rules exclude",
-    "controller_rss": "1153 to 1206 MiB over 90 runs, heap 156 to 203 MiB, last ten runs +3.4 MiB; an earlier heap snapshot comparison placed the growth in the in-process PGlite instances' wire-message arrays",
-    "relay_before_and_after_mask_fix": {
-      "relay_at_controller_p50_p95_ms": {
-        "local_runner": {
-          "before": [54.5, 68.0],
-          "after": [13.2, 19.4]
-        },
-        "private_mount": {
-          "before": [55.5, 87.4],
-          "after": [10.0, 30.3]
-        },
-        "two_mounts": {
-          "before": [57.2, 89.5],
-          "after": [10.8, 30.9]
-        }
-      },
-      "relay_before_upstream_p50_p95_ms": {
-        "private_mount": {
-          "before": [50.4, 77.5],
-          "after": [4.3, 13.2]
-        },
-        "two_mounts": {
-          "before": [52.1, 80.2],
-          "after": [4.7, 15.6]
-        }
-      },
-      "before_commit": "ed7f8e689",
-      "after_commit": "b5c0a4609"
-    },
-    "proxy_overhead_direct": {
-      "status": "pending_live_run",
-      "definition": "Guest-local request-frame-send to first-model-event duration minus the same call emulator-local request-arrival to first-byte duration. Compute p50, p95 and max from individual differences per arm. No cross-machine timestamps are subtracted.",
-      "budget_p95_ms": 200,
-      "per_arm": null,
-      "note": "Code added in S6. Rebuild the guest template before measuring; an absent timing fails the bench. Historical sums of quantiles are not direct evidence."
-    },
-    "rss_postgres": {
-      "status": "pending_live_run",
-      "command": "pnpm test:worker-live bench --template <rebuilt-worker> --computer-template <computer> --out <receipt-dir> --database postgresql --trials 10",
-      "database": "DATABASE_URL, with permission to create and drop disposable databases; each arm uses an isolated migrated database and removes it on close.",
-      "rss_mib": null,
-      "heap_mib": null,
-      "runs": null,
-      "note": "Code only. No PostgreSQL live bench or RSS acceptance claim was made."
-    }
-  },
-  "cleanup": {
-    "per_lane": "every lane ended with 0 sandboxes and 0 volumes of its session, after its sweep",
-    "bench": "0 sandboxes and 0 volumes left",
-    "deployment_check": "before each lane and before the bench, the command found no sandbox running on the deployment; an independent census before and after each batch counted 0 sandboxes and 0 volumes on the deployment",
-    "probes": "the exploratory probes before the lanes tagged and removed their resources the same way, and each counted 0 left",
-    "kept_on_purpose": "the worker template p3live-worker-pi",
-    "heap_snapshots": "taken on the host for the RSS investigation, analysed there, then deleted; never copied off the host",
-    "host_scratch": "the scratch directory with the bundles, the runner and the census helper was removed after the last run",
-    "stuck_lane": "one earlier run of lane c hung on the rpc.statd port; it was stopped with SIGTERM, its handler swept its session, and the census then counted 0 sandboxes and 0 volumes"
-  },
-  "not_run": [
-    "Control cost on PostgreSQL across the E2B network.",
-    "A real model provider: the relay lanes used the repository's emulator.",
-    "The product computer's desktop preparation: this host has no desktop template.",
-    "deleteVolume and sweepVolumes against E2B, and the server's bound on accepted volume creates.",
-    "Electron E2E: CI only, by repository rule.",
-    "Native iOS captures: no mobile code changed.",
-    "S7/S6 live lanes, rebuilt-template verification, direct proxy budget and PostgreSQL RSS over ten or more trials."
-  ],
-  "live_lanes_commit": "b5c0a4609b926d12d6c7d6a28d7a801fcc0875f8",
   "found_live_not_fixed": [
     "runtime-worker-routing.test.ts 'rolls back a takeover requeue whose attempt outcome cannot be written and counts the crash' (from #243) fails in most runs of that file alone, with Prisma's 'No record was found for an update', on this branch's code before and after the mask fix. It passes alone and in the full suite."
   ],
-  "s5_verification": {
+  "not_run": [
+    "A real model provider: the relay lanes and the bench used the repository's emulator.",
+    "Control cost on a PostgreSQL next to the controller: the PostgreSQL bench crossed a tunnel.",
+    "The product computer's desktop preparation: this host has no desktop template.",
+    "deleteVolume and sweepVolumes against E2B, and the server's bound on accepted volume creates.",
+    "Electron E2E: CI only, by repository rule.",
+    "Native iOS captures: no mobile code changed."
+  ],
+  "checks": {
+    "environment": "every local command ran with a fresh temporary HOME and TMPDIR",
     "pnpm check": "passed, 24 tasks",
-    "pnpm lint": "passed, 49 warnings and 1 info, the same as the feature base",
-    "pnpm test": "passed, 8116 tests in 618 files with 210 skipped",
-    "pnpm test:integration": "passed, 164 tests in 23 suites on Testcontainers PostgreSQL",
-    "live lanes": "14 passed, 0 pending; see lanes.json",
-    "live bench": "0 errors in 90 runs; see bench.json",
-    "pnpm test:e2e:affected": "Historical run: 211 passed and 11 failed. The main baseline comparison is recorded separately in s6_verification.web_e2e_baseline.",
-    "P3 offline tests touched": "passed, 77 tests in 9 files (runtime-worker suites, e2b-volume-files, e2b-worker), including the new Anthropic-protocol relay test, which hung and failed with the guest's thinking-block decoding removed"
+    "pnpm lint": "passed, 49 warnings and 1 info, the same counts as the feature base; none in the touched files",
+    "pnpm test": "passed, 8119 tests in 621 files, 215 skipped",
+    "pnpm test:e2e:affected": "selected the full web suite (no readable impact map): 212 passed and 11 failed, exactly the eleven failures listed in web_e2e_baseline, which also fail on main",
+    "pnpm test:worker-live:bundle": "passed; this bundle produced the template and every live run",
+    "test_audit": "applied the authoring gate to lane i and the home-move-fence lane; both guard a live-only risk (E2B transport, a real move's reservation and adoption) the offline routing tests cannot reach, and need no production seam"
   },
-  "s6_verification": {
-    "base_commit": "7bbff551c",
-    "live_lanes": "pending; no live E2B run in S6",
-    "regression_proof": "On the pre-fix executor and lifecycle, both computerless cases throw Bot has no computer and the during-copy plan returns worker rather than busy. The pre-fix guest emits no latency diagnostics. All four selected regressions were observed failing for these intended reasons.",
-    "checks": {
-      "pnpm check": "passed, 24 tasks",
-      "pnpm lint": "passed, 49 warnings and 1 info, same counts as the feature base; no new warnings in touched files",
-      "pnpm test": "passed, 8131 tests in 619 files, 212 skipped",
-      "pnpm test:integration": "passed, 166 tests in 23 suites on Docker PostgreSQL",
-      "pnpm test:e2e:affected": "completed with exit 1: selected full web suite because no readable impact map exists; 211 passed and exactly the 11 failures independently reproduced on origin/main. No new failures.",
-      "focused_acceptance": "passed, 105 tests in five files",
-      "test_audit": "Applied the authoring gate and reviewed changed tests. Removed the obsolete during-copy-worker-completed case, replaced with busy plan/start prevention. Kept executor finalization, fencing, durable recovery, guest diagnostic and direct per-call measurement contracts. No test-only production export was added.",
-      "pnpm test:worker-live:bundle": "passed offline; no E2B template was built or deployed and no E2B resource was created"
-    },
-    "web_e2e_baseline": {
-      "status": "completed",
-      "main_commit": "edd77fdfd735cc649bbcc8e116f2a4112f6ae139",
-      "command": "pnpm test:e2e --spec=e2e/ask-card-follow.spec.ts,e2e/ask-card-motion.spec.ts,e2e/message-hover-actions.spec.ts,e2e/message-quote.spec.ts,e2e/team-computer.spec.ts",
-      "runner": "Repository web E2E runner, fake sandbox, scripted runtime, Docker PostgreSQL, Chromium. Temporary detached origin/main worktree.",
-      "passed": 10,
-      "failed": 11,
-      "accepted_baseline": true,
-      "scope": "All eleven requested failing cases reproduce on main. Acceptance applies only to this named set, not other failures.",
-      "failures": [
-        {
-          "spec": "e2e/ask-card-follow.spec.ts",
-          "test": "answering a card at the end of the thread keeps following the end, without a jump (390, answer after 0 ms)"
-        },
-        {
-          "spec": "e2e/ask-card-follow.spec.ts",
-          "test": "answering a card at the end of the thread keeps following the end, without a jump (390, answer after 300 ms)"
-        },
-        {
-          "spec": "e2e/ask-card-follow.spec.ts",
-          "test": "answering a card at the end of the thread keeps following the end, without a jump (1440, answer after 0 ms)"
-        },
-        {
-          "spec": "e2e/ask-card-follow.spec.ts",
-          "test": "answering a card at the end of the thread keeps following the end, without a jump (1440, answer after 300 ms)"
-        },
-        {
-          "spec": "e2e/ask-card-motion.spec.ts",
-          "test": "the answer flies to its bubble while the card folds, in one movement (CA5, 1440, long thread)"
-        },
-        {
-          "spec": "e2e/ask-card-motion.spec.ts",
-          "test": "a stack's Send folds the card while the answers rise into their bubble, in one movement (CA5, stack)"
-        },
-        {
-          "spec": "e2e/ask-card-motion.spec.ts",
-          "test": "a stack moves on in place: kept lines stay, the card is never blank, its foot stays in view (CA5, stack)"
-        },
-        {
-          "spec": "e2e/message-hover-actions.spec.ts",
-          "test": "a send after a search jump lands on the latest messages"
-        },
-        {
-          "spec": "e2e/message-quote.spec.ts",
-          "test": "selecting a text span quotes it into a reply"
-        },
-        {
-          "spec": "e2e/team-computer.spec.ts",
-          "test": "Team Computer gives bots a home folder plus shared space while Private stays isolated"
-        },
-        {
-          "spec": "e2e/team-computer.spec.ts",
-          "test": "user control leaves another Team bot's screen available"
-        }
-      ],
-      "temporary_worktree": "removed after the comparison",
-      "branch_comparison": {
-        "tested_code_commit": "c6ab1d2b170397bf45bd3a86a0091cab457910af",
-        "passed": 211,
-        "failed": 11,
-        "new_failures": 0,
-        "failure_set_matches_main": true
-      }
-    },
-    "tested_code_commit": "c6ab1d2b170397bf45bd3a86a0091cab457910af",
-    "runtime_fix_commit": "7d58b023411916501f0e42f2b2496f479e997d56",
-    "tested_commit_note": "Offline check, lint, unit and Docker integration commands ran against these code changes. This receipt is a later documentation-only commit. Live receipts still describe live_lanes_commit, before S7 and S6.",
-    "surface_evidence": "No frontend or mobile code changed. Shared executor behavior is covered offline for all clients. Revised live lane captures are pending because this slice did not run live E2B. Electron E2E was not run, by repository rule.",
-    "offline_guest_bundle": {
-      "code_commit": "c6ab1d2b170397bf45bd3a86a0091cab457910af",
-      "sha256": "4ae4b06817b469c3eaff56be677ff3b5386fc1c98e54e77d9312f385bf6264ac",
-      "live_template": "pending rebuild and live verification"
-    },
-    "test_audit_diff_lines": {
-      "production_and_tooling": {
-        "added": 533,
-        "removed": 291
+  "web_e2e_baseline": {
+    "status": "completed",
+    "main_commit": "edd77fdfd735cc649bbcc8e116f2a4112f6ae139",
+    "command": "pnpm test:e2e --spec=e2e/ask-card-follow.spec.ts,e2e/ask-card-motion.spec.ts,e2e/message-hover-actions.spec.ts,e2e/message-quote.spec.ts,e2e/team-computer.spec.ts",
+    "runner": "Repository web E2E runner, fake sandbox, scripted runtime, Docker PostgreSQL, Chromium. Temporary detached origin/main worktree.",
+    "passed": 10,
+    "failed": 11,
+    "accepted_baseline": true,
+    "scope": "All eleven requested failing cases reproduce on main. Acceptance applies only to this named set, not other failures.",
+    "failures": [
+      {
+        "spec": "e2e/ask-card-follow.spec.ts",
+        "test": "answering a card at the end of the thread keeps following the end, without a jump (390, answer after 0 ms)"
       },
-      "tests_and_test_support": {
-        "added": 335,
-        "removed": 34
+      {
+        "spec": "e2e/ask-card-follow.spec.ts",
+        "test": "answering a card at the end of the thread keeps following the end, without a jump (390, answer after 300 ms)"
+      },
+      {
+        "spec": "e2e/ask-card-follow.spec.ts",
+        "test": "answering a card at the end of the thread keeps following the end, without a jump (1440, answer after 0 ms)"
+      },
+      {
+        "spec": "e2e/ask-card-follow.spec.ts",
+        "test": "answering a card at the end of the thread keeps following the end, without a jump (1440, answer after 300 ms)"
+      },
+      {
+        "spec": "e2e/ask-card-motion.spec.ts",
+        "test": "the answer flies to its bubble while the card folds, in one movement (CA5, 1440, long thread)"
+      },
+      {
+        "spec": "e2e/ask-card-motion.spec.ts",
+        "test": "a stack's Send folds the card while the answers rise into their bubble, in one movement (CA5, stack)"
+      },
+      {
+        "spec": "e2e/ask-card-motion.spec.ts",
+        "test": "a stack moves on in place: kept lines stay, the card is never blank, its foot stays in view (CA5, stack)"
+      },
+      {
+        "spec": "e2e/message-hover-actions.spec.ts",
+        "test": "a send after a search jump lands on the latest messages"
+      },
+      {
+        "spec": "e2e/message-quote.spec.ts",
+        "test": "selecting a text span quotes it into a reply"
+      },
+      {
+        "spec": "e2e/team-computer.spec.ts",
+        "test": "Team Computer gives bots a home folder plus shared space while Private stays isolated"
+      },
+      {
+        "spec": "e2e/team-computer.spec.ts",
+        "test": "user control leaves another Team bot's screen available"
       }
+    ],
+    "temporary_worktree": "removed after the comparison",
+    "branch_comparison": {
+      "tested_code_commit": "c6ab1d2b170397bf45bd3a86a0091cab457910af",
+      "passed": 211,
+      "failed": 11,
+      "new_failures": 0,
+      "failure_set_matches_main": true
     }
   }
 }
