@@ -17,19 +17,22 @@ const CREATE_TIMEOUT_MS = 2 * 60 * 1000;
 const CLEANUP_TIMEOUT_MS = 30 * 1000;
 
 /**
- * Whether `error` proves the sandbox is gone. The SDK reports a dead sandbox three ways:
- * `SandboxNotFoundError`; a `TimeoutError` saying it was killed, after its own health probe; and
- * a `TimeoutError` for envd's 502, which a live sandbox behind a failing proxy can also answer,
- * so `exists` asks the control plane before that one counts.
+ * Whether `error` proves the sandbox is gone. The SDK reports a dead sandbox as
+ * `SandboxNotFoundError` or as a `TimeoutError` that says it was killed or timed out, but it also
+ * raises those for a live sandbox behind a failing proxy, from a 502 on its health check or an
+ * unavailable connection. So an error only suggests death, and `exists`, the control plane,
+ * decides.
  */
 export async function isSandboxGone(
   error: unknown,
   exists: () => Promise<boolean>,
 ): Promise<boolean> {
-  if (error instanceof SandboxNotFoundError) return true;
-  if (!(error instanceof TimeoutError)) return false;
-  if (error.message.includes("killed or reached its end of life")) return true;
-  if (!error.message.includes("likely due to sandbox timeout")) return false;
+  const suggestsDeath =
+    error instanceof SandboxNotFoundError ||
+    (error instanceof TimeoutError &&
+      (error.message.includes("killed or reached its end of life") ||
+        error.message.includes("likely due to sandbox timeout")));
+  if (!suggestsDeath) return false;
   return !(await exists().catch(() => true));
 }
 

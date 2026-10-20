@@ -238,8 +238,8 @@ describe("E2B volume files", () => {
   });
 
   it("retries a write on a new sandbox, under a new staged name, when E2B killed the first mid-call", async () => {
-    const { files, opened, dirs, uploads, fail } = await localVolumes();
-    fail("vol", { op: "write", error: killedInFlight });
+    const { files, opened, dirs, uploads, unlist, fail } = await localVolumes();
+    fail("vol", { op: "write", before: () => unlist("vol"), error: killedInFlight });
 
     await files.write("vol", { path: "kept.txt", content: text("kept") }, context);
 
@@ -248,37 +248,59 @@ describe("E2B volume files", () => {
     expect(await readdir(dirs.get("vol")!)).toEqual(["kept.txt"]);
   });
 
-  it.each([
-    ["a missing sandbox", () => new SandboxNotFoundError("Sandbox vol#1 not found"), true],
-    ["a 502 once the control plane no longer lists it", unreachable, false],
-  ])("replaces the sandbox on %s", async (_name, error, stillListed) => {
-    const { files, opened, killed, unlist, fail } = await localVolumes();
-    await files.write("vol", { path: "kept.txt", content: text("kept") }, context);
-    if (!stillListed) unlist("vol");
-    fail("vol", { op: "read", error });
+  it("fails an upload whose connection dropped, without a second sandbox, while the control plane still lists the first", async () => {
+    const { files, opened, dirs, fail } = await localVolumes();
+    fail("vol", { op: "write", error: killedInFlight });
 
-    expect(new TextDecoder().decode(await files.read("vol", "kept.txt", context))).toBe("kept");
-    expect(opened).toEqual(["vol", "vol"]);
-    expect(killed).toEqual(["vol#1"]);
-  });
+    await expect(
+      files.write("vol", { path: "kept.txt", content: text("kept") }, context),
+    ).rejects.toThrow("killed or reached its end of life");
 
-  it("keeps the sandbox, and fails the call, on a 502 while the control plane still lists it", async () => {
-    const { files, opened, killed, fail } = await localVolumes();
-    await files.write("vol", { path: "kept.txt", content: text("kept") }, context);
-    fail("vol", { op: "read", error: unreachable });
-
-    await expect(files.read("vol", "kept.txt", context)).rejects.toThrow(TimeoutError);
-    expect(new TextDecoder().decode(await files.read("vol", "kept.txt", context))).toBe("kept");
     expect(opened).toEqual(["vol"]);
-
-    await files.close();
-    expect(killed).toEqual(["vol#1"]);
+    expect(await readdir(dirs.get("vol")!)).toEqual([]);
   });
+
+  const deathSignals = [
+    ["a missing sandbox", () => new SandboxNotFoundError("Sandbox vol#1 not found")],
+    ["a 502", unreachable],
+    ["a sandbox reported killed mid-request", killedInFlight],
+  ] as const;
+
+  it.each(deathSignals)(
+    "replaces the sandbox on %s once the control plane no longer lists it",
+    async (_name, error) => {
+      const { files, opened, killed, unlist, fail } = await localVolumes();
+      await files.write("vol", { path: "kept.txt", content: text("kept") }, context);
+      unlist("vol");
+      fail("vol", { op: "read", error });
+
+      expect(new TextDecoder().decode(await files.read("vol", "kept.txt", context))).toBe("kept");
+      expect(opened).toEqual(["vol", "vol"]);
+      expect(killed).toEqual(["vol#1"]);
+    },
+  );
+
+  it.each(deathSignals)(
+    "keeps the sandbox, and fails the call, on %s while the control plane still lists it",
+    async (_name, error) => {
+      const { files, opened, killed, fail } = await localVolumes();
+      await files.write("vol", { path: "kept.txt", content: text("kept") }, context);
+      fail("vol", { op: "read", error });
+
+      await expect(files.read("vol", "kept.txt", context)).rejects.toThrow();
+      expect(new TextDecoder().decode(await files.read("vol", "kept.txt", context))).toBe("kept");
+      expect(opened).toEqual(["vol"]);
+
+      await files.close();
+      expect(killed).toEqual(["vol#1"]);
+    },
+  );
 
   it("destroys at close a dead sandbox whose first destroy failed", async () => {
-    const { files, killed, failingKills, fail } = await localVolumes();
+    const { files, killed, failingKills, unlist, fail } = await localVolumes();
     await files.write("vol", { path: "kept.txt", content: text("kept") }, context);
     failingKills.add("vol#1");
+    unlist("vol");
     fail("vol", { op: "read", error: killedInFlight });
 
     await files.read("vol", "kept.txt", context);
