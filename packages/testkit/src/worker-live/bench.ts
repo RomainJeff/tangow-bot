@@ -23,14 +23,15 @@ function series(values: number[]) {
 
 /**
  * Lane j: `trials` runs of five bash calls in each of three arms: P2's local runner in memory on
- * this machine, an E2B worker of a dedicated computer's bot, which mounts its private volume, and
- * one of a team computer's bot, which also mounts the shared one, rotating which arm goes first. Timed at the
+ * this machine, an E2B worker of a dedicated computer's bot, and one of a team computer's bot,
+ * rotating which arm goes first. Both E2B arms mount the bot's private and the space's shared
+ * volume, since every guest tool needs both. Timed at the
  * controller's side of the channel as P2's bench does. Cold boot is the provider's create plus
  * the guest's start, to its hello; the warm run is hello to the accepted end.
  */
 export async function benchLive(live: Live, trials: number, databaseUrl?: string) {
   const toolsPerRun = 5;
-  const arms = ["local_memory", "private_mount", "two_mounts"] as const;
+  const arms = ["local_memory", "dedicated_computer", "team_computer"] as const;
   const localRoot = await mkdtemp(path.join(tmpdir(), "rakazo-live-bench-"));
   // The live bundle carries the managed skills beside it; from source the provider's default applies.
   const beside = new URL("../guest/managed-skills/agent", import.meta.url);
@@ -101,7 +102,7 @@ export async function benchLive(live: Live, trials: number, databaseUrl?: string
         databaseUrl,
         wrap: timed,
         prisma: log.wrap,
-        computer: arm === "two_mounts" ? "team" : "dedicated",
+        computer: arm === "team_computer" ? "team" : "dedicated",
         provider:
           arm === "local_memory"
             ? () => new LocalWorkerProvider({ mode: "memory", root: localRoot, managedSkills })
@@ -185,7 +186,7 @@ export async function benchLive(live: Live, trials: number, databaseUrl?: string
     }
     for (const { worker } of fixtures.values()) worker.run.model.assertComplete();
     // What one round trip to this database costs on this machine, to read the control cost by.
-    const calibration = fixtures.get("private_mount")!.worker.run.prisma;
+    const calibration = fixtures.get("dedicated_computer")!.worker.run.prisma;
     for (let i = 0; i < 200; i++) {
       const at = performance.now();
       await calibration.$queryRaw`SELECT 1`;

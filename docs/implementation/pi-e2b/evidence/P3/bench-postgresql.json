@@ -15,6 +15,12 @@
   "trials": 15,
   "toolsPerRun": 5,
   "order": "each trial runs every arm, rotating which goes first",
+  "armMounts": {
+    "local_memory": "P2's local runner in memory; private and shared folders on the host disk",
+    "dedicated_computer": "E2B worker of a dedicated computer's bot; mounts the bot's private volume and the space's shared volume",
+    "team_computer": "E2B worker of a team computer's bot; mounts the bot's private volume and the space's shared volume"
+  },
+  "armLabelsNote": "The E2B arms were recorded as private_mount and two_mounts. Since S8 deriveRunNeeds asks for both the private and the shared slot for any guest tool, and planLaunch refuses a run whose slot has no volume, so every completed run of both arms mounted both volumes. The arms differ by the computer's scope only; they were relabelled after the run, with no number changed.",
   "errors": 0,
   "arms": {
     "local_memory": {
@@ -76,7 +82,7 @@
         "max": 22.698
       }
     },
-    "private_mount": {
+    "dedicated_computer": {
       "coldBootMs": {
         "count": 15,
         "p50": 2513.126,
@@ -163,7 +169,7 @@
         "max": 85.924
       }
     },
-    "two_mounts": {
+    "team_computer": {
       "coldBootMs": {
         "count": 15,
         "p50": 2213.304,

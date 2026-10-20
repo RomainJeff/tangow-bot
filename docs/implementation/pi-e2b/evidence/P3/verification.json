@@ -82,8 +82,8 @@
     "trials_per_arm": 30,
     "errors": 0,
     "cold_boot_p95_ms": {
-      "private_mount": 2467.525,
-      "two_mounts": 2563.844,
+      "dedicated_computer": 2467.525,
+      "team_computer": 2563.844,
       "budget": 30000,
       "result": "pass"
     },
@@ -98,12 +98,12 @@
           "p95": 10.693,
           "max": 53.516
         },
-        "private_mount": {
+        "dedicated_computer": {
           "p50": 16.255,
           "p95": 36.844,
           "max": 55.616
         },
-        "two_mounts": {
+        "team_computer": {
           "p50": 15.62,
           "p95": 37.565,
           "max": 53.427
@@ -114,8 +114,8 @@
     },
     "control_per_guest_tool_p50_ms": {
       "local_memory": 35.34,
-      "private_mount": 45.025,
-      "two_mounts": 43.688
+      "dedicated_computer": 45.025,
+      "team_computer": 43.688
     },
     "control_limiter": "database calls are 99 to 100 percent of the control window, 17 queries at p50; PGlite SELECT 1 is 0.47 ms at p50 on this host",
     "rss_pglite": {
@@ -150,10 +150,16 @@
       "latency_caveat": "SELECT 1 through the tunnel is 26.7 ms at p50, so this run's control and warm-run times measure the tunnel, not a production database",
       "proxy_overhead_direct_p95_ms": {
         "local_memory": 26.059,
-        "private_mount": 39.35,
-        "two_mounts": 40.286
+        "dedicated_computer": 39.35,
+        "team_computer": 40.286
       }
-    }
+    },
+    "arm_mounts": {
+      "local_memory": "P2's local runner in memory; private and shared folders on the host disk",
+      "dedicated_computer": "E2B worker of a dedicated computer's bot; mounts the bot's private volume and the space's shared volume",
+      "team_computer": "E2B worker of a team computer's bot; mounts the bot's private volume and the space's shared volume"
+    },
+    "arm_labels_note": "The E2B arms were recorded as private_mount and two_mounts. Since S8 deriveRunNeeds asks for both the private and the shared slot for any guest tool, and planLaunch refuses a run whose slot has no volume, so every completed run of both arms mounted both volumes. The arms differ by the computer's scope only; they were relabelled after the run, with no number changed."
   },
   "cleanup": {
     "per_lane": "every lane ended with 0 sandboxes and 0 volumes of its session, after its sweep",
@@ -166,9 +172,13 @@
   "media": {
     "video": "media/worker-run.mp4",
     "gif": "media/worker-run.gif",
-    "seconds": 31.65,
     "content": "lane b recorded live: census before, worker and computer VMs starting, Pi's native read, write, edit, grep and bash results, the computer seeing the worker's writes, the pass line, census after",
-    "redaction": "every frame checked; no host, address, key, account or path"
+    "redaction": "every distinct frame checked in both files; each frame is a prefix of the last, which holds no host, address, key, account or path",
+    "duration_seconds_ffprobe": {
+      "mp4": 31.72,
+      "gif": 31.65
+    },
+    "encoding": "GIF rendered by agg from the asciinema recording; the MP4 re-encoded from the GIF's 14 frames, each held for its own duration at a fixed 25 fps, so both run the same timeline (the first MP4 dropped the last frame's 6 s hold and ran 26 s)"
   },
   "defects_found_in_final_pass": [
     "Harness: lane i asserted completion with message_user only; it now calls an MCP tool served by the controller and checks its result reached the model.",

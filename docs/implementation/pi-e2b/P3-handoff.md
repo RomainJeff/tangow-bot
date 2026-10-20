@@ -212,7 +212,7 @@ Lane h moved a synthetic team home of two bots, with files in mode 0755, 0644, 0
 | Accepted volume creates finish within one hour after the ensure deadline | Not measured. A client cannot observe the server's bound. |
 | The relay keeps streaming, tool calls, thinking, usage and cache accounting | Proven against the emulator on both protocols, not against a real provider. |
 | The guest user can write the mounted volumes; sandbox and command environments merge | Proven by lanes b and f: the guest wrote both volumes as uid 1001, read its capability from the command and its spool directory from the sandbox. |
-| A cold boot fits `helloDeadlineMs` and `capabilityTtlMs` | Proven: 2.56 s at p95 with two mounts, against 30 s and 10 minutes. |
+| A cold boot fits `helloDeadlineMs` and `capabilityTtlMs` | Proven: 2.56 s at p95 with both volumes mounted, against 30 s and 10 minutes. |
 | The reconciler releases a lost worker, and the sandbox is gone at E2B | Proven for a controller lost after start, through `lifecycle.reconcile` (lane g). The `unconfirmed` stop path was not driven live. |
 
 ## Live receipts
@@ -242,9 +242,9 @@ The two product-computer lanes skip the computer's desktop preparation. This hos
 
 ## Performance
 
-Lane j ran 30 trials of three arms on PGlite, rotating which arm went first: P2's local runner in memory on the same host, an E2B worker of a dedicated computer's bot, which mounts its private volume, and an E2B worker of a team computer's bot, which also mounts the shared volume. Each run makes five `bash` calls, a `message_user` and the recap, through the real executor. There were no errors in the 90 runs. All numbers are absolute, at p50 and p95. The full distributions are in [bench.json](evidence/P3/bench.json).
+Lane j ran 30 trials of three arms on PGlite, rotating which arm went first: P2's local runner in memory on the same host, an E2B worker of a dedicated computer's bot, and an E2B worker of a team computer's bot. Both E2B arms mount the bot's private volume and the space's shared volume: since S8, `deriveRunNeeds` asks for both slots for any guest tool, and `planLaunch` refuses a run whose slot has no volume, so every completed run mounted both. The two E2B arms differ only by the computer's scope. The receipts first named them `private_mount` and `two_mounts`; they are relabelled `dedicated_computer` and `team_computer`, with no number changed. Each run makes five `bash` calls, a `message_user` and the recap, through the real executor. There were no errors in the 90 runs. All numbers are absolute, at p50 and p95. The full distributions are in [bench.json](evidence/P3/bench.json).
 
-| Measure | Local runner | E2B, private volume | E2B, two volumes | Budget |
+| Measure | Local runner | E2B, dedicated computer | E2B, team computer | Budget |
 | --- | --- | --- | --- | --- |
 | Cold boot, create to hello | | 2.17 s, 2.47 s | 2.14 s, 2.56 s | Under 30 s |
 | Sandbox create | | 367 ms, 388 ms | 370 ms, 390 ms | |
@@ -254,15 +254,15 @@ Lane j ran 30 trials of three arms on PGlite, rotating which arm went first: P2'
 | Control per guest tool | 35 ms, 44 ms | 45 ms, 55 ms | 44 ms, 55 ms | |
 | Grant to result, one round trip and `echo` | 24 ms, 25 ms | 23 ms, 38 ms | 23 ms, 41 ms | |
 
-**The proxy passes its budget by a factor of five at p95.** The direct overhead is timed per call in the guest, from sending the `model.request` frame to receiving the first model event, minus the emulator's own time to first byte for that call. Every one of the 210 model calls per arm (30 runs of seven calls) carried a guest timing, so no call was estimated. The maximum was 55.6 ms with the private volume and 53.4 ms with two volumes. The E2B arms add about 10 ms at p50 over the local runner. The controller's share before the upstream call is under 5 ms at p50 in every arm, so this pass infers that the rest is the frames' transit through E2B's command stream, both ways, and did not trace it.
+**The proxy passes its budget by a factor of five at p95.** The direct overhead is timed per call in the guest, from sending the `model.request` frame to receiving the first model event, minus the emulator's own time to first byte for that call. Every one of the 210 model calls per arm (30 runs of seven calls) carried a guest timing, so no call was estimated. The maximum was 55.6 ms for the dedicated computer's worker and 53.4 ms for the team computer's. The E2B arms add about 10 ms at p50 over the local runner. The controller's share before the upstream call is under 5 ms at p50 in every arm, so this pass infers that the rest is the frames' transit through E2B's command stream, both ways, and did not trace it.
 
-**Cold boot passes its budget by a factor of twelve at p95.** The guest boot bounds it. It grew from 1.39 s to 1.81 s at p50 since the S5 run. Over the same span the guest bundle grew from 7.6 MB to 10.5 MB with the native tools, the coding-agent session and the skills loader; this pass infers the link and did not profile it. Sandbox create with mounts stays near 370 ms.
+**Cold boot passes its budget by a factor of twelve at p95.** The guest boot bounds it. It grew from 1.39 s at p50 in the S5 run, whose dedicated arm mounted only the private volume, to 1.81 s. Over the same span the guest bundle grew from 7.6 MB to 10.5 MB with the native tools, the coding-agent session and the skills loader; this pass infers the link and did not profile it. Sandbox create with mounts stays near 370 ms.
 
 **Control per tool is the database, not the network.** Database calls take 99 to 100 percent of the control window, 17 queries at p50. A `SELECT 1` to PGlite takes 0.47 ms on this host.
 
 **The controller on PostgreSQL shows no durable growth.** The bench ran again with `--database postgresql`: 15 rotating trials of the three arms, 45 runs in one controller process, each arm on its own disposable migrated database, with no errors. The database was a throwaway PostgreSQL 17 container on the build machine, reached from the host through an SSH tunnel, because the host rules exclude Docker there. With a garbage collection before each sample, the JS heap rose from 177 to 187 MiB over the first 18 runs, then held between 181.6 and 183.5 MiB for the remaining 27, and grew 0.4 MiB over the last ten runs. RSS rose from 413 to 460 MiB during warmup, fell back to 420 MiB when the heap compacted, and settled at 456 to 460 MiB; it grew 1.3 MiB over the last ten runs. On PGlite, by contrast, the heap grew about 0.5 MiB per run for all 90 runs, from 166 to 215 MiB, which matches the earlier finding that PGlite's in-process wire messages, not the controller, account for that growth. The receipt is [bench-postgresql.json](evidence/P3/bench-postgresql.json).
 
-The PostgreSQL run's latencies measure the tunnel, not the product: a `SELECT 1` took 26.7 ms at p50 through it, so control per tool rose to about 700 ms for 17 queries. The direct proxy overhead stayed under budget there too, 39.4 ms at p95 with the private volume and 40.3 ms with two volumes.
+The PostgreSQL run's latencies measure the tunnel, not the product: a `SELECT 1` took 26.7 ms at p50 through it, so control per tool rose to about 700 ms for 17 queries. The direct proxy overhead stayed under budget there too, 39.4 ms at p95 for the dedicated computer's worker and 40.3 ms for the team computer's.
 
 **Cold boot follow-up.** A preloaded-process snapshot, a template snapshot of Node with the whole guest already loaded and waiting for its capability, measured about 0.46 s p50 from create to hello with mounts, against about 2.1 s today, in a probe outside the product controller. [#262](https://github.com/RomainJeff/rakazo-bot/issues/262) carries it as successor work.
 
@@ -325,7 +325,7 @@ The host had 8 vCPUs with a one-minute load average of 0.5 to 2.3 during the run
 
 - **P4** exposes the remote tools: `computer_*`, `browser_*` and `computer.exec` stay controller tools, and every ordinary file or shell action stays local in the worker. It decides how computer tools return images, because a controller tool's output reaches the guest as JSON, and where a team computer keeps its browser profiles, which a replacement archives but does not restore.
 - **P5** rebuilds a session from the durable history in `worker.start` and never from the worker's disk. The spool under `.rakazo/tool-output/` is a convenience, not the truth of a run. It reads `effectPhase` and never reruns an `uncertain` effect, and it starts no writer before `stopState` says `destroyed`. It uses the same template and launch path, and adds nothing to the guest for resume.
-- **P6** starts from the measured profiles: worker 1 vCPU and 1024 MiB, computer 2 vCPU and 4096 MiB, cold boot p95 2.56 s with two mounts, and the cold-boot candidate of [#262](https://github.com/RomainJeff/rakazo-bot/issues/262). It measures control cost on a PostgreSQL next to the controller, decides how to keep a run alive past the sandbox timeout, decides on a worker egress policy, and repeats the lanes under concurrent runs on one host.
+- **P6** starts from the measured profiles: worker 1 vCPU and 1024 MiB, computer 2 vCPU and 4096 MiB, cold boot p95 2.56 s with both volumes mounted, and the cold-boot candidate of [#262](https://github.com/RomainJeff/rakazo-bot/issues/262). It measures control cost on a PostgreSQL next to the controller, decides how to keep a run alive past the sandbox timeout, decides on a worker egress policy, and repeats the lanes under concurrent runs on one host.
 
 ## S6 offline acceptance follow-up
 
