@@ -34,9 +34,10 @@ Each method has a rule that the controller depends on for safety:
 | `prepare(ref, spec)` | Finish fallible setup after the reference is recorded. It must be idempotent. | Start the container, then wait until the mounts are visible and the runner answers. |
 | `destroy({ attemptId, providerRef })` | Remove every worker tagged with `attemptId`, with or without a reference. Return `absent` when none is left. Never treat "not found" as an error. | Remove every container with the label `rakazo.attempt=<attemptId>`, forced. Leave the volumes in place. |
 | `ensureVolume({ name })` | Create the named volume, or return the existing one. | Create the volume `name` if it is missing, and return `name`. |
-| `deleteVolume({ volumeRef })` | Delete the volume. One already gone is not an error. | Remove the volume `volumeRef` if it exists. |
+| `listVolumes()` | Return the name of every volume the provider holds. | List the volumes and return their names. |
+| `deleteVolume({ name })` | Delete the named volume. One already gone is not an error. | Remove the volume `name` if it exists. |
 
-Volumes outlive every run. Only bot and space deletion call `deleteVolume`, through the lifecycle's `retireOwner`, after every worker of the owner is confirmed gone.
+Volumes outlive every run. Deleting a bot or a space deletes its volume rows in its own transaction. The lifecycle's `sweepVolumes` then deletes the provider volumes named `rakazo-<volumeId>` whose row is gone, right after the deletion and on each reconciler pass. It never deletes a volume whose row exists. It also treats every `rakazo-` volume without a row in this database as an orphan, so two deployments must not share one provider account.
 
 Respect the TTL at the provider. If the controller never confirms destruction, the TTL is the last bound on a worker that still holds a volume.
 
