@@ -89,6 +89,12 @@ export const ambient = {
   },
 } as const satisfies Record<string, PerAppearance>;
 
+/** The narrow ambient's last stop: what a fade at the bottom of the iPhone thread fades into. */
+export const ambientFloor = {
+  light: "#e2e2e7",
+  dark: "#0c0c0d",
+} as const satisfies PerAppearance;
+
 /**
  * On the web at phone width the ambient fades into `background` over its
  * bottom N%: Safari paints its toolbar in that colour.

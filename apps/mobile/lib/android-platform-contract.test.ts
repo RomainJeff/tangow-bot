@@ -26,7 +26,9 @@ describe("Android mobile platform contract", () => {
     expect(thread).toContain("KeyboardAvoidingView");
     expect(thread).toContain('behavior="height"');
     expect(thread).toContain("useHeaderHeight");
-    expect(thread).toContain("keyboardVerticalOffset={headerHeight}");
+    // The bar is transparent, so the thread starts at the top of the window: no header offset.
+    expect(thread).toContain("headerTransparent: true");
+    expect(thread).not.toContain("keyboardVerticalOffset");
     expect(thread).not.toContain("automaticOffset");
     expect(thread).not.toContain("KeyboardStickyView");
     expect(thread).toContain("useSafeAreaInsets");

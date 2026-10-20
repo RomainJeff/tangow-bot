@@ -87,11 +87,13 @@ Content passing under the header fades out instead of meeting a band.
   glass blurs the thread and nothing shows in the gap under a one-line bar.
   It stops above the composer instead while a notice, a reply chip or the
   mention picker sits over the bar: it would show through their tints.
-- iPhone: the navigation bar's native scroll-edge effect. Where it is not
-  available, a 124 px layer of the page tone (light `rgb(245, 245, 247)`,
-  dark `rgb(20, 20, 22)`) at 0.55, 0.30 then 0, blurred 12 px, and a thread
-  mask transparent to 60 px, opaque from 124 px, fading between 100 and 28 px
-  above the bottom.
+- iPhone: the bar is transparent. Its back and action buttons take Liquid
+  Glass natively on iOS 26. The native scroll-edge effect does not reach
+  the thread's inverted list, so `ThreadScrollEdge`
+  (`apps/mobile/components/ambient-background.tsx`) lays `background` at 0.96,
+  0.85 then 0 over the bar's height plus 24 pt, as on web at phone width.
+  The thread sits on the narrow ambient. Its fade into the composer row ends
+  on `ambientFloor`, the ambient's last stop.
 
 Do: strengthen the edge until the title stays legible over a user bubble
 passing under it.
