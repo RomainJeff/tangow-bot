@@ -6,7 +6,7 @@
  *   worker-live template --guest <agent-run-worker.mjs> --name <template>
  *   worker-live lanes --template <worker> --computer-template <computer> --out <dir> [--lanes a,b]
  *     Each lane runs in a child process: worker-live lane --lane <id> --template ...
- *   worker-live bench --template <worker> --computer-template <computer> --out <dir> [--trials 30]
+ *   worker-live bench --template <worker> --computer-template <computer> --out <dir> [--trials 30] [--database postgresql]
  */
 import { fork } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -17,7 +17,8 @@ import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { parseArgs } from "node:util";
 import { WORKER_PROFILE, workerTemplate } from "@rakazo/agent-run-worker/template";
-import { type ConnectionOpts, Sandbox, Template } from "e2b";
+import type { ConnectionOpts } from "e2b";
+import { Sandbox, Template } from "e2b";
 import {
   benchLive,
   LANES,
@@ -38,6 +39,7 @@ const { values } = parseArgs({
     out: { type: "string" },
     lanes: { type: "string" },
     lane: { type: "string" },
+    database: { type: "string", default: "pglite" },
     trials: { type: "string", default: "30" },
   },
 });
@@ -52,6 +54,7 @@ const connection: ConnectionOpts = {
 
 const SECRETS = [
   apiKey,
+  process.env.DATABASE_URL,
   process.env.E2B_API_URL,
   process.env.E2B_SANDBOX_URL,
   process.env.E2B_VOLUME_API_URL,
@@ -218,7 +221,14 @@ async function bench() {
   const live = session();
   const memBefore = requireHeadroom();
   try {
-    const result = await benchLive(live, trials);
+    const database = values.database;
+    if (database !== "pglite" && database !== "postgresql")
+      throw new Error("--database must be pglite or postgresql");
+    const databaseUrl = database === "postgresql" ? process.env.DATABASE_URL : undefined;
+    if (database === "postgresql" && (!databaseUrl || trials < 10)) {
+      throw new Error("PostgreSQL bench needs DATABASE_URL and at least 10 trials");
+    }
+    const result = await benchLive(live, trials, databaseUrl);
     const cleanup = await live.sweep();
     await writeReceipt(path.join(values.out!, "bench.json"), {
       generatedAt: new Date().toISOString(),

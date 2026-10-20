@@ -983,6 +983,7 @@ model Computer {
   bots                    Bot[]
   executionLeases         ComputerExecutionLease[]
   maintenanceId           String?
+  homeMoveExpiresAt       DateTime?
   updates                 ComputerUpdate[]
 
   @@index([spaceId, scope])

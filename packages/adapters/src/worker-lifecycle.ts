@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type {
   AdapterContext,
   WorkerProvider,
@@ -5,7 +6,7 @@ import type {
   WorkerStartV1,
   WorkerStatusV1,
 } from "@rakazo/adapter-kit";
-import { AgentRuntimeUnavailableError } from "@rakazo/adapter-kit";
+import { AgentRuntimeBusyError, AgentRuntimeUnavailableError } from "@rakazo/adapter-kit";
 import type { HomeStorage } from "@rakazo/contracts";
 import { WorkerState } from "@rakazo/contracts";
 import type { LaunchPlan, MountRefusal, RunNeeds, VolumeRow, WorkerLaunch } from "@rakazo/core";
@@ -94,11 +95,15 @@ type PlanRow = {
   homeStorage: HomeStorage | null;
   privateVolumeId: string | null;
   sharedVolumeId: string | null;
+  homeMoving: boolean;
 };
 
 const RELEASABLE = Prisma.join([...LIVE_WORKER_STATES, "releasing"]);
 const VOLUME_SWEEP_BATCH = 10;
 const VOLUME_CREATE_GRACE_MS = 60 * 60_000;
+export const HOME_MOVE_TTL_MS = 60_000;
+// Prisma timestamps store UTC without a timezone, regardless of the database session timezone.
+const HOME_MOVE_NOW = Prisma.sql`(now() AT TIME ZONE 'UTC')`;
 const INTO_RELEASED = Prisma.join(workerStatesInto("released"));
 
 type HomeComputer = {
@@ -166,6 +171,36 @@ async function readHomeComputer(db: Db, computerId: string, lock: boolean) {
     WHERE id = ${computerId} ${lock ? Prisma.sql`FOR UPDATE` : Prisma.empty}`;
   if (!computer) throw new Error("Computer not found");
   return computer;
+}
+
+/** Shared by inspection and reservation so a dry run checks the same admission rules. */
+async function inspectHomeMove(db: Db, computerId: string, lock: boolean) {
+  const source = await readHomeComputer(db, computerId, false);
+  const computers = await db.$queryRaw<
+    Array<HomeComputer & { id: string; maintenanceId: string | null }>
+  >`
+    SELECT id, kind, scope, "spaceId", "homeStorage", "homeRevision", state,
+      "controlHolder", "maintenanceId" FROM computers
+    WHERE "spaceId" = ${source.spaceId} ORDER BY id ${lock ? Prisma.sql`FOR UPDATE` : Prisma.empty}`;
+  const computer = computers.find((row) => row.id === computerId);
+  if (!computer) throw new Error("Computer not found");
+  const workers = await spaceWorkers(db, computer.spaceId);
+  const start = { homeRevision: computer.homeRevision, spaceWorkers: workers.total };
+  let blocker: HomeMoveBlocker | null = computers.some(
+    (row) =>
+      Boolean(row.maintenanceId) &&
+      (computer.scope === "team" ||
+        row.id === computerId ||
+        (row.scope === "team" && row.maintenanceId?.startsWith("home-move:"))),
+  )
+    ? "computer_active"
+    : await computerBlocker(db, computerId, computer);
+  if (!blocker) {
+    const { team, volumes } = await homeVolumes(db, computerId, computer, lock);
+    if (volumes.some((volume) => volume.writerAttemptId)) blocker = "volume_busy";
+    else if (team && workers.live > 0) blocker = "space_worker_live";
+  }
+  return { blocker, start, computer };
 }
 
 /**
@@ -316,6 +351,9 @@ export function createWorkerLifecycle(deps: {
       const [row] = await prisma.$queryRaw<PlanRow[]>`
         SELECT r.id AS "runId", r."botId", r."spaceId", a.fence, r."leaseFence", r.status,
           c.id AS "computerId", c."homeStorage",
+          EXISTS (SELECT 1 FROM computers moving WHERE moving."spaceId" = r."spaceId"
+            AND moving."maintenanceId" LIKE 'home-move:%'
+            AND (moving.scope = 'team' OR moving.id = b."computerId")) AS "homeMoving",
           (SELECT v.id FROM volumes v WHERE v.kind = 'bot_private' AND v."botId" = r."botId")
             AS "privateVolumeId",
           (SELECT v.id FROM volumes v WHERE v.kind = 'space_shared' AND v."spaceId" = r."spaceId")
@@ -349,6 +387,13 @@ export function createWorkerLifecycle(deps: {
       const provider = requireProvider();
       const { id: providerKind, capabilities } = provider.describe();
       const { mounts, ensureAt } = await prisma.$transaction(async (tx) => {
+        const computers = await tx.$queryRaw<{ maintenanceId: string | null }[]>`
+          SELECT "maintenanceId" FROM computers WHERE "spaceId" = ${launch.spaceId}
+            AND (scope = 'team' OR id = (SELECT "computerId" FROM bots WHERE id = ${launch.botId}))
+          ORDER BY id FOR UPDATE`;
+        if (computers.some((computer) => computer.maintenanceId?.startsWith("home-move:"))) {
+          throw new AgentRuntimeBusyError("Computer home is moving");
+        }
         const [run] = await tx.$queryRaw<{ leaseFence: number; status: string }[]>`
           SELECT "leaseFence", status FROM runs WHERE id = ${launch.runId} FOR UPDATE`;
         const [attempt] = await tx.$queryRaw<
@@ -478,6 +523,9 @@ export function createWorkerLifecycle(deps: {
       options: { limit: number },
       context: AdapterContext,
     ): Promise<{ released: number; awaitingEnsure: number; failed: number }> {
+      await prisma.$executeRaw`
+        UPDATE computers SET "maintenanceId" = NULL, "homeMoveExpiresAt" = NULL, "updatedAt" = ${HOME_MOVE_NOW}
+        WHERE "maintenanceId" LIKE 'home-move:%' AND "homeMoveExpiresAt" <= ${HOME_MOVE_NOW}`;
       const orphans = await prisma.$queryRaw<{ id: string }[]>`
         SELECT a.id FROM attempts a JOIN runs r ON r.id = a."runId"
         WHERE a."workerState" IN (${RELEASABLE})
@@ -591,6 +639,49 @@ export function createWorkerLifecycle(deps: {
       }
     },
 
+    /** Reserves the source, or the space for a team home that also copies its shared volume. */
+    async reserveHomeMove(
+      computerId: string,
+    ): Promise<{ marker: string } | { blocker: HomeMoveBlocker }> {
+      return prisma.$transaction(async (tx) => {
+        const { blocker, computer } = await inspectHomeMove(tx, computerId, true);
+        if (blocker) return { blocker };
+        const marker = `home-move:${computerId}:${randomUUID()}`;
+        await tx.$executeRaw`
+          UPDATE computers SET "maintenanceId" = ${marker}, "updatedAt" = ${HOME_MOVE_NOW},
+            "homeMoveExpiresAt" = ${HOME_MOVE_NOW} + ${HOME_MOVE_TTL_MS} * interval '1 millisecond'
+          WHERE "spaceId" = ${computer.spaceId} AND (${computer.scope === "team"} OR id = ${computerId})`;
+        return { marker };
+      });
+    },
+
+    async releaseHomeMove(marker: string): Promise<void> {
+      await prisma.computer.updateMany({
+        where: { maintenanceId: marker },
+        data: { maintenanceId: null, homeMoveExpiresAt: null },
+      });
+    },
+
+    /** An expired owner cannot renew or adopt, even if reconciliation has not run yet. */
+    async renewHomeMove(marker: string): Promise<boolean> {
+      const renewed = await prisma.$executeRaw`
+        UPDATE computers SET "updatedAt" = ${HOME_MOVE_NOW},
+          "homeMoveExpiresAt" = ${HOME_MOVE_NOW} + ${HOME_MOVE_TTL_MS} * interval '1 millisecond'
+        WHERE "maintenanceId" = ${marker} AND "homeMoveExpiresAt" > ${HOME_MOVE_NOW}`;
+      return renewed > 0;
+    },
+
+    /** Clears only an expired reservation owned by this source computer. */
+    async clearStaleHomeMove(computerId: string): Promise<boolean> {
+      const computer = await prisma.computer.findUniqueOrThrow({ where: { id: computerId } });
+      const marker = computer.maintenanceId;
+      if (!marker?.startsWith(`home-move:${computerId}:`)) return false;
+      const cleared = await prisma.$executeRaw`
+        UPDATE computers SET "maintenanceId" = NULL, "homeMoveExpiresAt" = NULL, "updatedAt" = ${HOME_MOVE_NOW}
+        WHERE "maintenanceId" = ${marker} AND "homeMoveExpiresAt" <= ${HOME_MOVE_NOW}`;
+      return cleared > 0;
+    },
+
     /**
      * What would stop the home moving onto volumes now, and the start that adoption checks
      * against, without locking or writing anything.
@@ -598,16 +689,8 @@ export function createWorkerLifecycle(deps: {
     async inspectHomeMove(
       computerId: string,
     ): Promise<{ blocker: HomeMoveBlocker | null; start: HomeMoveStart }> {
-      const computer = await readHomeComputer(prisma, computerId, false);
-      const workers = await spaceWorkers(prisma, computer.spaceId);
-      const start = { homeRevision: computer.homeRevision, spaceWorkers: workers.total };
-      const blocker = await computerBlocker(prisma, computerId, computer);
-      if (blocker) return { blocker, start };
-      const { team, volumes } = await homeVolumes(prisma, computerId, computer, false);
-      if (volumes.some((volume) => volume.writerAttemptId))
-        return { blocker: "volume_busy", start };
-      if (team && workers.live > 0) return { blocker: "space_worker_live", start };
-      return { blocker: null, start };
+      const { blocker, start } = await inspectHomeMove(prisma, computerId, false);
+      return { blocker, start };
     },
 
     /**
@@ -617,9 +700,19 @@ export function createWorkerLifecycle(deps: {
      * still write the shared volume. Called after the files were copied, with the start taken
      * before the copy; stops automatic import and export for good.
      */
-    async adoptVolumeHome(computerId: string, start: HomeMoveStart): Promise<HomeAdoption> {
+    async adoptVolumeHome(
+      computerId: string,
+      start: HomeMoveStart,
+      marker?: string,
+    ): Promise<HomeAdoption> {
       return prisma.$transaction(async (tx) => {
         const computer = await readHomeComputer(tx, computerId, true);
+        if (marker) {
+          const [owner] = await tx.$queryRaw<{ id: string }[]>`
+            SELECT id FROM computers WHERE id = ${computerId}
+              AND "maintenanceId" = ${marker} AND "homeMoveExpiresAt" > ${HOME_MOVE_NOW}`;
+          if (!owner) return "computer_active";
+        }
         if (computer.homeStorage === "volumes") return "adopted";
         // A checkpoint during the copy wrote files the copy may not hold.
         if (computer.homeRevision !== start.homeRevision) return "home_revised";

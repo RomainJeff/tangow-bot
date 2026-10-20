@@ -25,8 +25,12 @@ export async function migrationNames(): Promise<string[]> {
     .sort();
 }
 
+export async function migrationSql(name: string): Promise<string> {
+  return readFile(new URL(`${name}/migration.sql`, MIGRATIONS), "utf8");
+}
+
 export async function applyMigration(pglite: PGlite, name: string): Promise<void> {
-  await pglite.exec(await readFile(new URL(`${name}/migration.sql`, MIGRATIONS), "utf8"));
+  await pglite.exec(await migrationSql(name));
 }
 
 export async function openPgliteDatabase(

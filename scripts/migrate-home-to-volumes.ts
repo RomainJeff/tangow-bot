@@ -7,6 +7,8 @@
  *   pnpm exec tsx scripts/migrate-home-to-volumes.ts --computer <id> --manifest <path>
  *     [--dry-run] [--leave-unmapped] [--template <worker template>]
  *
+ *   Clear an expired move reservation with --clear-stale-move, without E2B credentials.
+ *
  * The manifest path must not exist. The record is written there once the move creates anything,
  * even if it then stops on an error, and never on a dry run.
  *
@@ -29,6 +31,7 @@ function options() {
     options: {
       computer: { type: "string" },
       manifest: { type: "string" },
+      "clear-stale-move": { type: "boolean", default: false },
       "dry-run": { type: "boolean", default: false },
       "leave-unmapped": { type: "boolean", default: false },
       template: { type: "string", default: "rakazo-worker-pi" },
@@ -36,8 +39,10 @@ function options() {
   });
   const dryRun = values["dry-run"];
   if (!values.computer) throw new Error("--computer is required");
-  if (!values.manifest && !dryRun) throw new Error("--manifest is required");
+  if (!values.manifest && !dryRun && !values["clear-stale-move"])
+    throw new Error("--manifest is required");
   return {
+    clearStaleMove: values["clear-stale-move"],
     computerId: values.computer,
     manifestPath: values.manifest ?? null,
     dryRun,
@@ -51,20 +56,32 @@ async function main() {
   if (!process.env.DATABASE_URL && existsSync(".env")) process.loadEnvFile(".env");
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL is not set");
-  const apiKey = process.env.E2B_API_KEY;
-  if (!apiKey) throw new Error("E2B_API_KEY is not set");
   const { prisma, pool } = createDb(url);
   const files = new E2BVolumeFiles(e2bVolumeSandbox({ template: input.template }));
   try {
+    if (input.clearStaleMove) {
+      const cleared = await createWorkerLifecycle({ prisma, provider: null }).clearStaleHomeMove(
+        input.computerId,
+      );
+      console.log(
+        cleared
+          ? "Expired home move reservation cleared; rerun the move to resume."
+          : "No expired home move reservation matched.",
+      );
+      return;
+    }
+    const apiKey = process.env.E2B_API_KEY;
+    if (!apiKey) throw new Error("E2B_API_KEY is not set");
     // The SDK reads E2B_DOMAIN or E2B_API_URL itself.
     const provider = new E2BWorkerProvider({ apiKey, template: input.template });
+    const workers = createWorkerLifecycle({ prisma, provider });
     const operationId = randomUUID();
     const report = await moveHomeToVolumes(
       {
         prisma,
         home: new LocalAgentHomeStore(process.env.DATA_DIR ?? "./data"),
         files,
-        workers: createWorkerLifecycle({ prisma, provider }),
+        workers,
       },
       input,
       {

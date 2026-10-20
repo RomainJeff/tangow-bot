@@ -1,12 +1,12 @@
-import {
-  type GuestBody,
-  type ReplyBody,
-  type ReplyFinal,
-  type ReplyPart,
-  ReplyPartSchema,
-  type WorkerIdentity,
-  type WorkerReplyV1,
+import type {
+  GuestBody,
+  ReplyBody,
+  ReplyFinal,
+  ReplyPart,
+  WorkerIdentity,
+  WorkerReplyV1,
 } from "@rakazo/adapter-kit";
+import { ReplyPartSchema } from "@rakazo/adapter-kit";
 import { encodeMessage, WORKER_LIMITS } from "@rakazo/adapters/runtime-worker/wire";
 
 const partTypes = new Set<string>(ReplyPartSchema.options.map((option) => option.shape.type.value));
@@ -28,7 +28,7 @@ export interface Outbox {
   send(
     body: GuestBody,
     onPart?: (part: ReplyPart) => void,
-  ): Promise<{ seq: number; final: Promise<ReplyFinal> }>;
+  ): Promise<{ seq: number; sentAt: number; final: Promise<ReplyFinal> }>;
   /** A new connection: every frame still waiting for its reply is resent, same sequence numbers. */
   attach(send: (frame: Uint8Array) => void): void;
   detach(): void;
@@ -49,7 +49,7 @@ type Waiter = {
   body: GuestBody;
   frame?: Uint8Array;
   onPart?: (part: ReplyPart) => void;
-  admitted(settled: { seq: number; final: Promise<ReplyFinal> }): void;
+  admitted(settled: { seq: number; sentAt: number; final: Promise<ReplyFinal> }): void;
   fail(error: Error): void;
 };
 
@@ -96,13 +96,13 @@ export function createOutbox(
           fail: reject,
         });
       });
-      waiter.admitted({ seq, final });
+      waiter.admitted({ seq, sentAt: performance.now(), final });
       send?.(frame);
     }
   };
 
   const enqueue = (body: GuestBody, onPart?: (part: ReplyPart) => void) =>
-    new Promise<{ seq: number; final: Promise<ReplyFinal> }>((admitted, fail) => {
+    new Promise<{ seq: number; sentAt: number; final: Promise<ReplyFinal> }>((admitted, fail) => {
       if (failure) return fail(failure);
       waiters.push({ body, onPart, admitted, fail });
       admit();

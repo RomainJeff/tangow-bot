@@ -1,20 +1,16 @@
 import path from "node:path";
-import {
-  FRAME_CAPABILITY,
-  type GuestBody,
-  type ReplyFinal,
-  sameWorker,
-  type WorkerStartV1,
-} from "@rakazo/adapter-kit";
+import type { GuestBody, ReplyFinal, WorkerStartV1 } from "@rakazo/adapter-kit";
+import { FRAME_CAPABILITY, sameWorker } from "@rakazo/adapter-kit";
+import type { FrameChannel } from "@rakazo/adapters/runtime-worker/wire";
 import {
   capabilityWorker,
   encodeMessage,
-  type FrameChannel,
   readControllerFrame,
   WORKER_LIMITS,
 } from "@rakazo/adapters/runtime-worker/wire";
 import type { GuestHarness, HarnessHost, InformativeBody } from "./harness.js";
-import { createOutbox, type Outbox } from "./outbox.js";
+import type { Outbox } from "./outbox.js";
+import { createOutbox } from "./outbox.js";
 
 /** How the guest's run ended. Only `done` and `paused` are a controller's normal stop. */
 export type GuestExit = "done" | "paused" | "cancelled" | "disconnected" | "refused";
@@ -169,7 +165,20 @@ async function runAttempt(
       return decide(body, expected);
     },
     async model(body, onPart, abort) {
-      const { seq, final } = await outbox.send(body, onPart);
+      let firstEvent = true;
+      const sent = outbox.send(body, (part) => {
+        if (part.type === "model.event" && firstEvent) {
+          firstEvent = false;
+          const firstEventAt = performance.now();
+          void sent
+            .then(({ seq, sentAt }) =>
+              outbox.post({ type: "model.latency", re: seq, firstEventMs: firstEventAt - sentAt }),
+            )
+            .catch(() => undefined);
+        }
+        onPart(part);
+      });
+      const { seq, final } = await sent;
       const onAbort = () =>
         void outbox.request({ type: "model.abort", re: seq }).catch(() => undefined);
       abort?.addEventListener("abort", onAbort, { once: true });

@@ -13,6 +13,11 @@ import { fileMode, isPortablePath } from "@rakazo/adapter-kit";
 import type { PrismaClient } from "@rakazo/db";
 import { shouldSkipPortableWorkspaceFile } from "./computer-workspace.js";
 import type { HomeAdoption, VolumeOwner, WorkerLifecycle } from "./worker-lifecycle.js";
+import { HOME_MOVE_TTL_MS } from "./worker-lifecycle.js";
+
+const HOME_MOVE_RENEW_MS = 10_000;
+const HOME_MOVE_RENEW_TIMEOUT_MS = 5_000;
+const HOME_MOVE_SAFETY_MS = 5_000;
 
 /** Where a home file lands: its bot's private volume, or the space's shared volume. */
 export type HomeDestination = { scope: "private"; botId: string } | { scope: "shared" };
@@ -263,112 +268,178 @@ export async function moveHomeToVolumes(
   const { blocker, start } = await workers.inspectHomeMove(computer.id);
   if (blocker) return { outcome: "refused", refusal: { code: blocker } };
 
-  const plan = await planHome(home, computer, context);
-  if (plan.notCopied.length > 0 && !options.leaveUnmapped) {
-    return { outcome: "refused", refusal: { code: "not_copied", entries: plan.notCopied } };
+  const reservationStarted = performance.now();
+  const reservation = options.dryRun ? null : await workers.reserveHomeMove(computer.id);
+  if (reservation && "blocker" in reservation) {
+    return { outcome: "refused", refusal: { code: reservation.blocker } };
   }
-
-  const targets: TargetVolume[] = destinationsOf(computer, plan.planned).map((destination) => ({
-    destination,
-    volumeId: null,
-    providerRef: null,
-    files: plan.planned.filter((file) => sameDestination(file.destination, destination)),
-  }));
-  let adoptedAt: string | null = null;
-  const manifest = (): HomeManifest => ({
-    version: 1,
-    computerId: computer.id,
-    homeKey: computer.homeKey,
-    scope: computer.scope,
-    homeRevision: start.homeRevision,
-    startedAt,
-    adoptedAt,
-    volumes: targets.map(({ destination, volumeId, providerRef }) => ({
-      destination,
-      volumeId,
-      providerRef,
-    })),
-    files: targets.flatMap((target) =>
-      target.files.map((file) => ({ ...file, volumeId: target.volumeId })),
-    ),
-    notCopied: plan.notCopied,
-  });
-
+  const abort = new AbortController();
+  context = { ...context, signal: AbortSignal.any([context.signal, abort.signal]) };
+  let deadline = reservationStarted + HOME_MOVE_TTL_MS - HOME_MOVE_SAFETY_MS;
+  let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+  const expire = () => abort.abort(new Error("Home move reservation expired"));
+  const assertReservation = () => {
+    if (reservation && performance.now() >= deadline) expire();
+    context.signal.throwIfAborted();
+  };
+  const armDeadline = () => {
+    clearTimeout(deadlineTimer);
+    const remaining = deadline - performance.now();
+    if (remaining <= 0) expire();
+    else {
+      deadlineTimer = setTimeout(expire, remaining);
+      deadlineTimer.unref();
+    }
+  };
+  if (reservation) armDeadline();
+  let pendingHeartbeat = Promise.resolve();
+  const heartbeat = reservation
+    ? setInterval(() => {
+        pendingHeartbeat = pendingHeartbeat
+          .then(async () => {
+            assertReservation();
+            const started = performance.now();
+            let timeout: ReturnType<typeof setTimeout> | undefined;
+            try {
+              const renewed = await Promise.race([
+                workers.renewHomeMove(reservation.marker),
+                new Promise<never>((_, reject) => {
+                  timeout = setTimeout(
+                    () => reject(new Error("Home move reservation renewal timed out")),
+                    HOME_MOVE_RENEW_TIMEOUT_MS,
+                  );
+                }),
+              ]);
+              assertReservation();
+              if (!renewed) throw new Error("Home move reservation expired");
+              // Count from the request's start: time spent waiting for the database is not a lease.
+              deadline = started + HOME_MOVE_TTL_MS - HOME_MOVE_SAFETY_MS;
+              armDeadline();
+            } finally {
+              clearTimeout(timeout);
+            }
+          })
+          .catch((error: unknown) => abort.abort(error));
+      }, HOME_MOVE_RENEW_MS)
+    : null;
+  heartbeat?.unref();
   try {
-    for (const target of targets) {
-      const existing = options.dryRun
-        ? await existingVolume(prisma, computer, target.destination)
-        : await workers.ensureVolume(ownerOf(computer, target.destination), context);
-      target.volumeId = existing?.volumeId ?? null;
-      target.providerRef = existing?.providerRef ?? null;
+    assertReservation();
+    const plan = await planHome(home, computer, context);
+    if (plan.notCopied.length > 0 && !options.leaveUnmapped) {
+      return { outcome: "refused", refusal: { code: "not_copied", entries: plan.notCopied } };
     }
-    const before = await inspectTargets(files, targets, context);
-    const occupied = before.filter((volume) => volume.foreign.length > 0);
-    if (occupied.length > 0) {
-      return {
-        outcome: "refused",
-        refusal: { code: "volume_not_empty", volumes: occupied.map(conflictOf) },
-        manifest: manifest(),
-      };
-    }
-    if (options.dryRun) return { outcome: "planned", manifest: manifest() };
 
-    const toWrite = new Map(
-      before.flatMap(({ target, missing }) =>
-        missing.map((file) => [file.homePath, { file, volumeRef: target.providerRef }] as const),
+    const targets: TargetVolume[] = destinationsOf(computer, plan.planned).map((destination) => ({
+      destination,
+      volumeId: null,
+      providerRef: null,
+      files: plan.planned.filter((file) => sameDestination(file.destination, destination)),
+    }));
+    let adoptedAt: string | null = null;
+    const manifest = (): HomeManifest => ({
+      version: 1,
+      computerId: computer.id,
+      homeKey: computer.homeKey,
+      scope: computer.scope,
+      homeRevision: start.homeRevision,
+      startedAt,
+      adoptedAt,
+      volumes: targets.map(({ destination, volumeId, providerRef }) => ({
+        destination,
+        volumeId,
+        providerRef,
+      })),
+      files: targets.flatMap((target) =>
+        target.files.map((file) => ({ ...file, volumeId: target.volumeId })),
       ),
-    );
-    // Every file is compared with the plan, not only those still to write, so a resumed move
-    // never adopts copies of a home that changed since an earlier run wrote them.
-    const changed: string[] = [];
-    const seen = new Set<string>();
-    for await (const source of homeFiles(home, computer.homeKey, plan.links, context)) {
-      seen.add(source.path);
-      if (plan.exported.get(source.path) !== source.fingerprint) {
-        changed.push(source.path);
-        continue;
+      notCopied: plan.notCopied,
+    });
+
+    try {
+      for (const target of targets) {
+        assertReservation();
+        const existing = options.dryRun
+          ? await existingVolume(prisma, computer, target.destination)
+          : await workers.ensureVolume(ownerOf(computer, target.destination), context);
+        target.volumeId = existing?.volumeId ?? null;
+        target.providerRef = existing?.providerRef ?? null;
       }
-      const pending = toWrite.get(source.path);
-      if (!pending) continue;
-      if (!pending.volumeRef) throw new Error(`No provisioned volume for ${source.path}`);
-      const { volumePath, mode } = pending.file;
-      await files.write(
-        pending.volumeRef,
-        { path: volumePath, content: source.content, mode },
-        context,
+      const before = await inspectTargets(files, targets, context);
+      const occupied = before.filter((volume) => volume.foreign.length > 0);
+      if (occupied.length > 0) {
+        return {
+          outcome: "refused",
+          refusal: { code: "volume_not_empty", volumes: occupied.map(conflictOf) },
+          manifest: manifest(),
+        };
+      }
+      if (options.dryRun) return { outcome: "planned", manifest: manifest() };
+
+      const toWrite = new Map(
+        before.flatMap(({ target, missing }) =>
+          missing.map((file) => [file.homePath, { file, volumeRef: target.providerRef }] as const),
+        ),
       );
-    }
-    changed.push(...[...plan.exported.keys()].filter((path) => !seen.has(path)));
-    if (changed.length > 0) {
-      return {
-        outcome: "refused",
-        refusal: { code: "home_changed", paths: changed.sort() },
-        manifest: manifest(),
-      };
-    }
+      // Every file is compared with the plan, not only those still to write, so a resumed move
+      // never adopts copies of a home that changed since an earlier run wrote them.
+      const changed: string[] = [];
+      const seen = new Set<string>();
+      for await (const source of homeFiles(home, computer.homeKey, plan.links, context)) {
+        seen.add(source.path);
+        if (plan.exported.get(source.path) !== source.fingerprint) {
+          changed.push(source.path);
+          continue;
+        }
+        assertReservation();
+        const pending = toWrite.get(source.path);
+        if (!pending) continue;
+        if (!pending.volumeRef) throw new Error(`No provisioned volume for ${source.path}`);
+        const { volumePath, mode } = pending.file;
+        await files.write(
+          pending.volumeRef,
+          { path: volumePath, content: source.content, mode },
+          context,
+        );
+      }
+      changed.push(...[...plan.exported.keys()].filter((path) => !seen.has(path)));
+      if (changed.length > 0) {
+        return {
+          outcome: "refused",
+          refusal: { code: "home_changed", paths: changed.sort() },
+          manifest: manifest(),
+        };
+      }
 
-    const after = await inspectTargets(files, targets, context);
-    const mismatched = after.filter(
-      (volume) => volume.foreign.length > 0 || volume.missing.length > 0,
-    );
-    if (mismatched.length > 0) {
-      return {
-        outcome: "refused",
-        refusal: { code: "copy_mismatch", volumes: mismatched.map(conflictOf) },
-        manifest: manifest(),
-      };
-    }
+      const after = await inspectTargets(files, targets, context);
+      const mismatched = after.filter(
+        (volume) => volume.foreign.length > 0 || volume.missing.length > 0,
+      );
+      if (mismatched.length > 0) {
+        return {
+          outcome: "refused",
+          refusal: { code: "copy_mismatch", volumes: mismatched.map(conflictOf) },
+          manifest: manifest(),
+        };
+      }
 
-    const adoption = await workers.adoptVolumeHome(computer.id, start);
-    if (adoption !== "adopted") {
-      return { outcome: "refused", refusal: { code: adoption }, manifest: manifest() };
+      assertReservation();
+      const adoption = await workers.adoptVolumeHome(computer.id, start, reservation?.marker);
+      if (adoption !== "adopted") {
+        return { outcome: "refused", refusal: { code: adoption }, manifest: manifest() };
+      }
+      adoptedAt = new Date().toISOString();
+      return { outcome: "adopted", manifest: manifest() };
+    } finally {
+      if (manifestPath) {
+        await writeFile(manifestPath, `${JSON.stringify(manifest(), null, 2)}\n`, { flag: "wx" });
+      }
     }
-    adoptedAt = new Date().toISOString();
-    return { outcome: "adopted", manifest: manifest() };
   } finally {
-    if (manifestPath) {
-      await writeFile(manifestPath, `${JSON.stringify(manifest(), null, 2)}\n`, { flag: "wx" });
-    }
+    if (heartbeat) clearInterval(heartbeat);
+    await pendingHeartbeat;
+    clearTimeout(deadlineTimer);
+    if (reservation) await workers.releaseHomeMove(reservation.marker);
   }
 }
 
