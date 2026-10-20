@@ -53,6 +53,13 @@ export interface BotBubbleProps extends PressableProps {
   mono?: boolean;
 }
 
+/** A bot bubble's cap. Mono: 82% of the thread. Group: 88% of the column right of the avatar. */
+export function useBubbleMaxWidth(mono: boolean): number {
+  const { width } = useWindowDimensions();
+  const column = width - THREAD_GUTTER * 2 - (mono ? 0 : sizes.message + AVATAR_GAP);
+  return Math.floor(column * (mono ? 0.82 : 0.88));
+}
+
 /**
  * What a bot said: a `chatBot` bubble that fits its content. Mirrors
  * `MessageBubble` in `packages/ui-web/src/message-row.tsx`. The cap is a
@@ -62,10 +69,7 @@ export interface BotBubbleProps extends PressableProps {
  */
 export function BotBubble({ mono = false, meta, style, children, ...props }: BotBubbleProps) {
   const styles = useThemedStyles(createBotBubbleStyles);
-  const { width } = useWindowDimensions();
-  // Mono: 82% of the thread. Group: 88% of the column right of the avatar.
-  const column = width - THREAD_GUTTER * 2 - (mono ? 0 : sizes.message + AVATAR_GAP);
-  const maxWidth = Math.floor(column * (mono ? 0.82 : 0.88));
+  const maxWidth = useBubbleMaxWidth(mono);
   return (
     <View>
       <View style={styles.row}>

@@ -15,6 +15,7 @@ import { useThemedStyles } from "../lib/native";
 import { shadowsForAppearance } from "../lib/theme";
 import { nativeTextStyle } from "../lib/typography";
 import { AnsweredCheck } from "./answered-check";
+import { useBubbleMaxWidth } from "./bot-bubble";
 
 export interface FramedBlockHeader {
   /** Who is asking, already translated by the caller. */
@@ -72,6 +73,9 @@ export function FramedBlock({
   const styles = useThemedStyles(createFramedBlockStyles);
   const tokens = mobileTokens();
   const reducedMotion = useChatReducedMotion();
+  // Settled, the card is a bubble and caps like one. The single-bot cap: in a group it lands
+  // within a few points of the bubble's, without threading the thread's mode through every card.
+  const settledMaxWidth = useBubbleMaxWidth(true);
 
   const phase: FramedBlockPhase = answered ? "answered" : "open";
   const phaseRef = useRef<FramedBlockPhase | null>(null);
@@ -93,7 +97,11 @@ export function FramedBlock({
       // Only the render that settles the card animates its height; any other
       // size change (a pending label, a new line of text) stays instant.
       layout={didTransition ? LinearTransition.duration(collapseMs) : undefined}
-      style={[styles.root, answered ? styles.rootSettled : undefined, style]}
+      style={[
+        styles.root,
+        answered ? [styles.rootSettled, { maxWidth: settledMaxWidth }] : undefined,
+        style,
+      ]}
       {...props}
     >
       {header ? (
@@ -129,12 +137,12 @@ export function FramedBlock({
             answered
           )}
         </Animated.View>
-      ) : (
+      ) : children || actions ? (
         <Animated.View exiting={FadeOut.duration(collapseMs)} style={styles.open}>
           {children ? <View style={styles.body}>{children}</View> : null}
           {actions ? <View style={styles.actions}>{actions}</View> : null}
         </Animated.View>
-      )}
+      ) : null}
     </Animated.View>
   );
 }
@@ -193,6 +201,7 @@ function createFramedBlockStyles() {
       gap: 6,
     },
     answeredText: {
+      flexShrink: 1,
       color: tokens.mutedForeground,
       ...nativeTextStyle("meta"),
     },
