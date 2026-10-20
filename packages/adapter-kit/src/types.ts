@@ -453,8 +453,8 @@ export type LocalToolExecutor = (
 
 /** A runtime cannot start the run now, for a reason that passes: the run is requeued, not failed. */
 export class AgentRuntimeUnavailableError extends Error {
-  constructor(message: string) {
-    super(message);
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = "AgentRuntimeUnavailableError";
   }
 }

@@ -5,6 +5,7 @@ import type {
   WorkerStartV1,
   WorkerStatusV1,
 } from "@rakazo/adapter-kit";
+import { AgentRuntimeUnavailableError } from "@rakazo/adapter-kit";
 import type { HomeStorage } from "@rakazo/contracts";
 import { WorkerState } from "@rakazo/contracts";
 import type { LaunchPlan, MountRefusal, RunNeeds, VolumeRow, WorkerLaunch } from "@rakazo/core";
@@ -398,13 +399,17 @@ export function createWorkerLifecycle(deps: {
         ttlSeconds: WORKER_TTL_SECONDS,
         ensureDeadline: workerEnsureDeadline(ensureAt),
       };
+      // A provider failure passes or exhausts the run's retries; a refusal is thrown before this.
       const ownStep = async <T>(step: () => Promise<T>): Promise<T> => {
         try {
           return await step();
         } catch (error) {
           // A destroy the provider could not confirm stays releasing for the reconciler.
           await release(launch.attemptId, context).catch(() => undefined);
-          throw error;
+          throw new AgentRuntimeUnavailableError(
+            `The worker provider failed: ${error instanceof Error ? error.message : String(error)}`,
+            { cause: error },
+          );
         }
       };
       const { providerRef } = await ownStep(() => provider.ensure(spec, context));

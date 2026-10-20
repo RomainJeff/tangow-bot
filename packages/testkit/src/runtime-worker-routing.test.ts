@@ -151,6 +151,25 @@ describe("where a product run executes", () => {
     ).toEqual({ status: "queued", error: "Run setup failed; retrying" });
   });
 
+  it("requeues a run whose worker the provider failed to create, leaving the worker to release", async () => {
+    const run = await fixture([]);
+    run.provider.ensure = async () => {
+      throw new Error("E2B answered 503");
+    };
+    const runId = await run.send("Hello.");
+
+    await expect(run.continueRun(runId)).rejects.toThrow("Run setup failed; retrying");
+
+    expect(
+      await run.prisma.run.findUniqueOrThrow({
+        where: { id: runId },
+        select: { status: true, error: true },
+      }),
+    ).toEqual({ status: "queued", error: "Run setup failed; retrying" });
+    // A failed ensure may still create the VM until its deadline, so the reconciler releases it.
+    expect(await attemptsOf(run, runId)).toEqual([{ workerState: "releasing" }]);
+  });
+
   it("never claims a run of a bot that is being deleted", async () => {
     const run = await fixture([]);
     const runId = await run.send("Hello.");
