@@ -1271,6 +1271,7 @@ description: Prepare standup notes
         findUniqueOrThrow: vi.fn(async () => ({ scope: "private", state: "running" })),
       },
       attempt: {
+        count: vi.fn(async () => 0),
         create: vi.fn(async () => ({ id: "attempt-1" })),
         updateMany: vi.fn(async () => ({ count: 1 })),
       },

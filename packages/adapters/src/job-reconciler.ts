@@ -14,6 +14,7 @@ import { scheduleComputerControlExpiry } from "./computer-control.js";
 
 const DEFAULT_INTERVAL_MS = 30_000;
 const DEFAULT_BATCH_SIZE = 100;
+const WORKER_DEADLINE_MS = 20_000;
 const ROUTINE_LOOKAHEAD_MS = 60_000;
 const CONTROL_LOOKAHEAD_MS = 60_000;
 // Two keys give Rakazo's lock a namespace without relying on a hash that might collide
@@ -107,11 +108,34 @@ export function createJobReconciler(
     reconcileComputerUpdates?: () => Promise<void>;
     purgeLinkPreviews?: () => Promise<void>;
     sweepSkillLines?: () => Promise<void>;
+    /**
+     * Releases workers whose run moved on, including stops never confirmed, and deletes the
+     * provider volumes of deleted rows. Stops early once `signal` aborts.
+     */
+    reconcileWorkers?: (signal: AbortSignal) => Promise<void>;
   },
-  options: { intervalMs?: number; batchSize?: number } = {},
+  options: { intervalMs?: number; batchSize?: number; workerDeadlineMs?: number } = {},
 ) {
   const intervalMs = options.intervalMs ?? DEFAULT_INTERVAL_MS;
   const batchSize = options.batchSize ?? DEFAULT_BATCH_SIZE;
+  const workerDeadlineMs = options.workerDeadlineMs ?? WORKER_DEADLINE_MS;
+  let workerPass: Promise<void> | undefined;
+  // Worker teardown waits on a provider: it runs beside run and routine recovery, never ahead of
+  // it, and a tick stops waiting for it at its deadline.
+  const reconcileWorkers = async () => {
+    if (!deps.reconcileWorkers) return;
+    const deadline = AbortSignal.timeout(workerDeadlineMs);
+    workerPass ??= deps
+      .reconcileWorkers(deadline)
+      .catch((error) => getLogger().error("worker reconciliation", error))
+      .finally(() => {
+        workerPass = undefined;
+      });
+    await Promise.race([
+      workerPass,
+      new Promise<void>((resolve) => deadline.addEventListener("abort", () => resolve())),
+    ]);
+  };
   let timer: ReturnType<typeof setInterval> | undefined;
   let reconciling: Promise<void> | undefined;
   let runCursor: Cursor | undefined;
@@ -124,6 +148,7 @@ export function createJobReconciler(
     reconciling = (async () => {
       if (deps.leadership && !(await deps.leadership.tryAcquire())) return;
 
+      const workers = reconcileWorkers();
       const auxiliary = await Promise.allSettled(
         [deps.reconcileComputerUpdates, deps.purgeLinkPreviews, deps.sweepSkillLines].map(
           async (reconcile) => reconcile?.(),
@@ -340,6 +365,7 @@ export function createJobReconciler(
           ? { at: lastControl.controlLeaseExpiresAt, id: lastControl.id }
           : undefined;
       if (!controlCursor) controlScanDeadline = undefined;
+      await workers;
     })().finally(() => {
       reconciling = undefined;
     });

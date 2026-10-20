@@ -4,10 +4,16 @@ import type {
   AgentHomeStore,
   ComputerRef,
   JobPublisher,
+  PortableFile,
   SandboxProvider,
 } from "@rakazo/adapter-kit";
-import type { ComputerUpdate } from "@rakazo/contracts";
-import { ACTIVE_RUN_STATUSES, parseScreenLeaseId, screenLeaseId } from "@rakazo/core";
+import { type ComputerUpdate, VolumeKind } from "@rakazo/contracts";
+import {
+  ACTIVE_RUN_STATUSES,
+  computerVolumeHome,
+  parseScreenLeaseId,
+  screenLeaseId,
+} from "@rakazo/core";
 import {
   expireComputerExecutionLeases,
   type PrismaClient,
@@ -21,12 +27,14 @@ import {
 } from "./computer-control.js";
 import { toComputerRef } from "./computer-support.js";
 import {
+  archiveDiscardedWorkspace,
   checkpointComputerWorkspace,
   ensureComputerWorkspaceLayout,
   restoreComputerWorkspace,
 } from "./computer-workspace.js";
 import { resolveAgentHomePath } from "./home.js";
 import { marketplacesRoot } from "./marketplace-store.js";
+import type { RunWorkers } from "./runtime-worker/runtime.js";
 import { userSkillsRoot } from "./skill-store.js";
 
 type ComputerUpdateProgress = (
@@ -144,6 +152,28 @@ export class ComputerBusyError extends Error {
 
 export { toComputerRef } from "./computer-support.js";
 
+async function loadVolumeHome(
+  prisma: PrismaClient,
+  computer: { id: string; scope: string; spaceId: string },
+) {
+  const scope = parseComputerMode(computer.scope);
+  const team = scope === "team";
+  const volumes = await prisma.volume.findMany({
+    where: {
+      OR: [
+        { kind: "bot_private", bot: { computerId: computer.id } },
+        ...(team ? [{ kind: "space_shared", spaceId: computer.spaceId }] : []),
+      ],
+    },
+    select: { kind: true, botId: true, providerRef: true },
+    orderBy: { id: "asc" },
+  });
+  return computerVolumeHome(
+    scope,
+    volumes.map((volume) => ({ ...volume, kind: VolumeKind.parse(volume.kind) })),
+  );
+}
+
 export async function provisionComputer(
   deps: {
     prisma: PrismaClient;
@@ -152,6 +182,8 @@ export async function provisionComputer(
     jobs: JobPublisher;
     events: ThreadEvents;
     dataDir?: string;
+    /** Creates the volumes a home on volumes lacks, before its machine mounts them. */
+    workers?: Pick<RunWorkers, "provisionHomeVolumes">;
   },
   computerId: string,
   context: AdapterContext,
@@ -243,6 +275,11 @@ export async function provisionComputer(
     throw new ComputerBusyError();
   }
 
+  // A bot attached after the move has no volume yet: one the machine never mounted would leave
+  // its computer writing to local disk while its workers see the volume.
+  if (existing.homeStorage === "volumes") {
+    await deps.workers?.provisionHomeVolumes(computerId, context);
+  }
   const reconnecting =
     Boolean(existing.providerRef) &&
     (existing.state === "running" || existing.state === "suspending");
@@ -293,6 +330,21 @@ export async function provisionComputer(
         homePath,
         providerRef: existing.providerRef ?? undefined,
         providerKind: existing.kind as ComputerRef["kind"],
+        ...(existing.homeStorage === "volumes"
+          ? {
+              volumeHome: {
+                ...(await loadVolumeHome(deps.prisma, existing)),
+                archive: (files: AsyncIterable<PortableFile>) =>
+                  archiveDiscardedWorkspace(
+                    deps.home,
+                    existing,
+                    existing.providerRef ?? "unknown",
+                    files,
+                    context,
+                  ),
+              },
+            }
+          : {}),
       },
       context,
     );

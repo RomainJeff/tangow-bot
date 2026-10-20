@@ -67,6 +67,11 @@ export interface ComputerRef {
   providerRef: string;
   /** True when the provider created an empty replacement rather than reconnecting existing state. */
   fresh?: boolean;
+  /**
+   * On a machine whose home is on volumes, the workspace directories on a volume ("" for all of
+   * it). Files written anywhere else would be lost with the machine, so writes there are refused.
+   */
+  writableRoots?: string[];
 }
 
 export interface CommandRequest {
@@ -446,11 +451,19 @@ export type LocalToolExecutor = (
   run: (signal: AbortSignal) => Promise<LocalToolOutput>,
 ) => Promise<unknown>;
 
-/** A runtime cannot start the run now, for a reason that passes: the run is requeued, not failed. */
+/** A runtime could not start or was lost. The executor retries within its setup budget. */
 export class AgentRuntimeUnavailableError extends Error {
-  constructor(message: string) {
-    super(message);
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = "AgentRuntimeUnavailableError";
+  }
+}
+
+/** Another attempt still owns resources the runtime needs. Waiting does not consume setup retries. */
+export class AgentRuntimeBusyError extends AgentRuntimeUnavailableError {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "AgentRuntimeBusyError";
   }
 }
 

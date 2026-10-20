@@ -76,7 +76,10 @@ async function driveGuest(options: {
           server.model,
           body.call,
           (event) => part({ type: "model.event", event }),
-          new AbortController().signal,
+          {
+            signal: new AbortController().signal,
+            conversation: { threadId: "thread_guest", botId: "bot_guest" },
+          },
         );
         return { type: "model.end" };
       case "tool.call":

@@ -5,7 +5,7 @@ import { applyMigration, migrationNames, openPgliteDatabase } from "@rakazo/db/p
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PostgresSessionLog } from "./session-log/postgres.js";
 
-const isWorkerMigration = (name: string) => name.startsWith("20261019120");
+const isWorkerMigration = (name: string) => name >= "20261019120000";
 const USER = "user_migration";
 const SPACE = "space_migration";
 
@@ -145,7 +145,6 @@ describe("worker and volume migrations", () => {
 
     for (const name of workerMigrations) await applyLater(name);
 
-    expect(workerMigrations).toHaveLength(6);
     expect(before.thread.map((entry) => entry.type)).toEqual([
       "user.message",
       "tool.call",

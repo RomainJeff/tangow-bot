@@ -150,21 +150,31 @@ async function sleepingRun<P extends WorkerProvider & GuestConnector>(
   });
   const marks: string[] = [];
   const journal = createStopJournal(fixture.prisma);
-  const runtime = createWorkerAgentRuntime({
-    launcher: createLifecycleLauncher({
-      prisma: fixture.prisma,
-      lifecycle: createWorkerLifecycle({ prisma: fixture.prisma, provider }),
-      connector: provider,
-    }),
-    stops: {
-      mark: async (attemptId, phase) => {
-        marks.push(phase);
-        if (phase === failingPhase) throw new Error("The journal is unreachable");
-        await journal.mark(attemptId, phase);
+  const lifecycle = createWorkerLifecycle({ prisma: fixture.prisma, provider });
+  /** The runtime the executor would bind to this attempt's plan: no files, no computer. */
+  const runtimeFor = async (attempt: { id: string }) => {
+    const launch = await lifecycle.plan({
+      attemptId: attempt.id,
+      needs: { files: { private: null, shared: null }, computer: "none" },
+    });
+    if (launch.mode !== "worker") throw new Error(`No worker plan: ${launch.mode}`);
+    return createWorkerAgentRuntime({
+      launcher: createLifecycleLauncher({
+        prisma: fixture.prisma,
+        lifecycle,
+        connector: provider,
+        launch,
+      }),
+      stops: {
+        mark: async (attemptId, phase) => {
+          marks.push(phase);
+          if (phase === failingPhase) throw new Error("The journal is unreachable");
+          await journal.mark(attemptId, phase);
+        },
       },
-    },
-    clock,
-  });
+      clock,
+    });
+  };
   const runId = await fixture.send("Take a nap.");
   const claim = async (fence: number) => {
     await fixture.prisma.run.update({
@@ -191,6 +201,7 @@ async function sleepingRun<P extends WorkerProvider & GuestConnector>(
     },
   });
   const attempt = await claim(1);
+  const runtime = await runtimeFor(attempt);
   const events = (async () => {
     for await (const _event of runtime.run(runRequest(attempt))) {
     }
@@ -201,7 +212,7 @@ async function sleepingRun<P extends WorkerProvider & GuestConnector>(
       where: { id: attempt.id },
       select: { workerState: true, stopPhase: true },
     });
-  return { fixture, provider, runtime, runId, marks, events, row, claim, runRequest };
+  return { fixture, provider, runtime, runtimeFor, runId, marks, events, row, claim, runRequest };
 }
 
 describe("stopping a guest", () => {
@@ -246,7 +257,8 @@ describe("stopping a guest", () => {
     expect(await run.row()).toEqual({ workerState: "releasing", stopPhase: "unconfirmed" });
     expect(stopState(await run.row())).toBe("unconfirmed");
 
-    const next = run.runtime.run(run.runRequest(await run.claim(2)));
+    const second = await run.claim(2);
+    const next = (await run.runtimeFor(second)).run(run.runRequest(second));
     await expect(next[Symbol.asyncIterator]().next()).rejects.toThrow(AgentRuntimeUnavailableError);
     expect(run.provider.launches).toHaveLength(1);
   });

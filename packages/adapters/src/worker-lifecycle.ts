@@ -5,6 +5,7 @@ import type {
   WorkerStartV1,
   WorkerStatusV1,
 } from "@rakazo/adapter-kit";
+import { AgentRuntimeUnavailableError } from "@rakazo/adapter-kit";
 import type { HomeStorage } from "@rakazo/contracts";
 import { WorkerState } from "@rakazo/contracts";
 import type { LaunchPlan, MountRefusal, RunNeeds, VolumeRow, WorkerLaunch } from "@rakazo/core";
@@ -23,7 +24,7 @@ import {
   workerStatesInto,
   writersBlocking,
 } from "@rakazo/core";
-import type { PrismaClient } from "@rakazo/db";
+import type { PrismaClient, VolumeOwnerRef } from "@rakazo/db";
 import { Prisma } from "@rakazo/db";
 
 /** The attempt no longer holds its run's fence, its worker was started already, or torn down. */
@@ -96,6 +97,8 @@ type PlanRow = {
 };
 
 const RELEASABLE = Prisma.join([...LIVE_WORKER_STATES, "releasing"]);
+const VOLUME_SWEEP_BATCH = 10;
+const VOLUME_CREATE_GRACE_MS = 60 * 60_000;
 const INTO_RELEASED = Prisma.join(workerStatesInto("released"));
 
 type HomeComputer = {
@@ -243,23 +246,52 @@ export function createWorkerLifecycle(deps: {
     return "released";
   }
 
-  /** Creates the volume at the provider under a name derived from its row, once. */
+  /**
+   * Creates the volume at the provider under a name derived from its row, once. A row deleted
+   * while the provider created it leaves a deletion record, as the owner's deletion would have.
+   */
   async function provisionVolume(volumeId: string, context: AdapterContext): Promise<string> {
     const provider = requireProvider();
-    const volume = await prisma.volume.findUniqueOrThrow({
-      where: { id: volumeId },
-      select: { providerKind: true, providerRef: true },
+    const volume = await prisma.$transaction(async (tx) => {
+      const [row] = await tx.$queryRaw<
+        { providerKind: string; providerRef: string | null; ensureUntil: Date | null }[]
+      >`SELECT "providerKind", "providerRef", "ensureUntil" FROM volumes
+        WHERE id = ${volumeId} FOR UPDATE`;
+      if (!row) throw new VolumeRefusedError({ code: "volume_not_found", volumeId });
+      if (row.providerKind !== provider.describe().id) {
+        throw new VolumeRefusedError({ code: "provider_mismatch", volumeId });
+      }
+      if (row.providerRef) return { mode: "ready", providerRef: row.providerRef } as const;
+      const ensureUntil = workerEnsureDeadline(new Date());
+      const deadline =
+        row.ensureUntil && row.ensureUntil > ensureUntil ? row.ensureUntil : ensureUntil;
+      await tx.volume.update({ where: { id: volumeId }, data: { ensureUntil: deadline } });
+      return { mode: "ensure", providerKind: row.providerKind, ensureUntil: deadline } as const;
     });
-    if (volume.providerRef) return volume.providerRef;
-    if (volume.providerKind !== provider.describe().id) {
-      throw new VolumeRefusedError({ code: "provider_mismatch", volumeId });
-    }
-    const { providerRef } = await provider.ensureVolume({ name: `rakazo-${volumeId}` }, context);
-    await prisma.volume.updateMany({
-      where: { id: volumeId, providerRef: null },
-      data: { providerRef },
+    if (volume.mode === "ready") return volume.providerRef;
+    const { providerRef } = await provider.ensureVolume(
+      { name: `rakazo-${volumeId}`, ensureDeadline: volume.ensureUntil },
+      context,
+    );
+    // Locked like `deleteOwnerVolumes`, so the ref lands either on the row or in a deletion record.
+    const recorded = await prisma.$transaction(async (tx) => {
+      const [row] = await tx.$queryRaw<{ providerRef: string | null }[]>`
+        SELECT "providerRef" FROM volumes WHERE id = ${volumeId} FOR UPDATE`;
+      if (!row) {
+        // A late response refreshes the deletion record, even if an earlier sweep cleared it.
+        await tx.$executeRaw`
+          INSERT INTO volume_deletions ("providerKind", "providerRef", "volumeId", "notBefore")
+          VALUES (${volume.providerKind}, ${providerRef}, ${volumeId}, ${volume.ensureUntil})
+          ON CONFLICT ("providerKind", "providerRef") DO UPDATE SET generation = DEFAULT,
+            "notBefore" = GREATEST(volume_deletions."notBefore", EXCLUDED."notBefore")`;
+        return null;
+      }
+      if (row.providerRef) return row.providerRef;
+      await tx.volume.update({ where: { id: volumeId }, data: { providerRef } });
+      return providerRef;
     });
-    return providerRef;
+    if (!recorded) throw new VolumeRefusedError({ code: "volume_not_found", volumeId });
+    return recorded;
   }
 
   async function ensureVolume(owner: VolumeOwner, context: AdapterContext): Promise<EnsuredVolume> {
@@ -380,13 +412,17 @@ export function createWorkerLifecycle(deps: {
         ttlSeconds: WORKER_TTL_SECONDS,
         ensureDeadline: workerEnsureDeadline(ensureAt),
       };
+      // A provider failure passes or exhausts the run's retries; a refusal is thrown before this.
       const ownStep = async <T>(step: () => Promise<T>): Promise<T> => {
         try {
           return await step();
         } catch (error) {
           // A destroy the provider could not confirm stays releasing for the reconciler.
           await release(launch.attemptId, context).catch(() => undefined);
-          throw error;
+          throw new AgentRuntimeUnavailableError(
+            `The worker provider failed: ${error instanceof Error ? error.message : String(error)}`,
+            { cause: error },
+          );
         }
       };
       const { providerRef } = await ownStep(() => provider.ensure(spec, context));
@@ -451,6 +487,7 @@ export function createWorkerLifecycle(deps: {
         LIMIT ${options.limit}`;
       const counts = { released: 0, awaitingEnsure: 0, failed: 0 };
       for (const { id } of orphans) {
+        if (context.signal.aborted) break;
         try {
           const outcome = await release(id, context);
           if (outcome === "released") counts.released += 1;
@@ -463,25 +500,95 @@ export function createWorkerLifecycle(deps: {
       return counts;
     },
 
+    /**
+     * Before a bot or a space is deleted, once it can get no new work: destroys every worker of
+     * its runs and returns how many there were. A worker whose ensure may still be in flight stays
+     * releasing, and the owner's deletion transaction refuses it (`deleteOwnerVolumes`). Without a
+     * provider there is nothing to destroy.
+     */
+    async releaseOwnerWorkers(owner: VolumeOwnerRef, context: AdapterContext): Promise<number> {
+      if (!deps.provider) return 0;
+      const ownedBy =
+        "botId" in owner
+          ? Prisma.sql`r."botId" = ${owner.botId}`
+          : Prisma.sql`r."spaceId" = ${owner.spaceId}`;
+      const live = await prisma.$queryRaw<{ id: string }[]>`
+        SELECT a.id FROM attempts a JOIN runs r ON r.id = a."runId"
+        WHERE a."workerState" IN (${RELEASABLE}) AND ${ownedBy}`;
+      for (const { id } of live) await release(id, context);
+      return live.length;
+    },
+
+    /**
+     * Deletes at the provider a few volumes this database recorded as deleted, oldest first, and
+     * then their records after the server-create grace period. Repeated deletes during that
+     * period catch accepted creates whose client timed out. Only a recorded volume is ever
+     * deleted, so a provider account shared
+     * with another deployment is safe. Idempotent; records of another provider kind wait for it.
+     */
+    async sweepVolumes(context: AdapterContext): Promise<{ deleted: number; failed: number }> {
+      const counts = { deleted: 0, failed: 0 };
+      if (!deps.provider) return counts;
+      const providerKind = deps.provider.describe().id;
+      const now = new Date();
+      const deletions = await prisma.volumeDeletion.findMany({
+        where: { providerKind, notBefore: { lte: now } },
+        orderBy: { createdAt: "asc" },
+        take: VOLUME_SWEEP_BATCH,
+        select: { providerRef: true, generation: true, notBefore: true },
+      });
+      for (const { providerRef, generation, notBefore } of deletions) {
+        if (context.signal.aborted) break;
+        try {
+          await deps.provider.deleteVolume({ providerRef }, context);
+          if (now.getTime() >= notBefore.getTime() + VOLUME_CREATE_GRACE_MS) {
+            await prisma.volumeDeletion.deleteMany({
+              where: { providerKind, providerRef, generation },
+            });
+          }
+          counts.deleted += 1;
+        } catch {
+          counts.failed += 1;
+        }
+      }
+      return counts;
+    },
+
     provisionVolume,
 
     /** Creates the owner's volume row unless it exists, then provisions it. */
     ensureVolume,
 
     /**
-     * Creates and provisions the private volume of a bot attached to a computer whose home is on
-     * volumes, as a bot attached after adoption needs. Null while the home is still a snapshot.
+     * Creates and provisions the private volume of every bot on a computer whose home is on
+     * volumes, archived ones included, as a bot attached after the move needs before the computer
+     * mounts it. Nothing while the home is still a snapshot.
      */
-    async provisionAttachedBotVolume(
-      botId: string,
-      context: AdapterContext,
-    ): Promise<EnsuredVolume | null> {
-      const bot = await prisma.bot.findUniqueOrThrow({
-        where: { id: botId },
-        select: { spaceId: true, computer: { select: { homeStorage: true } } },
+    async provisionHomeVolumes(computerId: string, context: AdapterContext): Promise<void> {
+      const computer = await prisma.computer.findUniqueOrThrow({
+        where: { id: computerId },
+        select: { spaceId: true, homeStorage: true, bots: { select: { id: true } } },
       });
-      if (bot.computer?.homeStorage !== "volumes") return null;
-      return ensureVolume({ kind: "bot_private", spaceId: bot.spaceId, botId }, context);
+      if (computer.homeStorage !== "volumes") return;
+      const provisioned = new Set(
+        (
+          await prisma.volume.findMany({
+            where: {
+              kind: "bot_private",
+              botId: { in: computer.bots.map((bot) => bot.id) },
+              providerRef: { not: null },
+            },
+            select: { botId: true },
+          })
+        ).map((volume) => volume.botId),
+      );
+      for (const bot of computer.bots) {
+        if (provisioned.has(bot.id)) continue;
+        await ensureVolume(
+          { kind: "bot_private", spaceId: computer.spaceId, botId: bot.id },
+          context,
+        );
+      }
     },
 
     /**

@@ -1,9 +1,14 @@
+import { spawnSync } from "node:child_process";
+import { mkdir, mkdtemp, readFile, readlink, rm, symlink, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { Sandbox, SandboxNotFoundError, TimeoutError } from "@e2b/desktop";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, onTestFinished, vi } from "vitest";
 import { shouldSkipPortableWorkspaceFile } from "./computer-workspace.js";
+import { fakeE2BMachine } from "./e2b-machine.test-support.js";
 import type { E2BSandboxSdk } from "./e2b-sandbox.js";
-import { E2BSandboxProvider, isSandboxGoneError } from "./e2b-sandbox.js";
+import { E2BSandboxProvider, isSandboxGoneError, linkWorkspaceCommand } from "./e2b-sandbox.js";
 import { desktopCommandResponder } from "./linux-desktop.test-support.js";
 
 const context = {
@@ -307,6 +312,158 @@ describe("E2B computer backend", () => {
 
     expect(command.mock.calls.every(([value]) => value.includes("apt-get"))).toBe(true);
     expect(desktop.launch).not.toHaveBeenCalled();
+  });
+
+  describe("a computer whose home is on volumes", () => {
+    const teamHome = (mounts: Array<[string, string]>) => ({
+      root: "/workspace",
+      mounts: mounts.map(([path, volumeRef]) => ({ path, volumeRef })),
+    });
+    const ada: [string, string] = ["/workspace/bots/bot_a", "rakazo-vol_a"];
+    const bob: [string, string] = ["/workspace/bots/bot_b", "rakazo-vol_b"];
+    const shared: [string, string] = ["/workspace/shared", "rakazo-vol_shared"];
+
+    async function provisionOver(
+      existing: ReturnType<typeof fakeE2BMachine> | null,
+      volumeHome: ReturnType<typeof teamHome>,
+    ) {
+      const replacement = fakeE2BMachine("replacement", {});
+      const sdk = {
+        create: vi.fn(async () => replacement.sandbox),
+        connect: vi.fn(async () => {
+          if (!existing) throw new SandboxNotFoundError("sandbox gone not found");
+          return existing.sandbox;
+        }),
+        pause: vi.fn(),
+      } as unknown as E2BSandboxSdk;
+      const provider = new E2BSandboxProvider("test-key", sdk);
+      const archived: string[] = [];
+      const computer = await provider.provision(
+        {
+          botId: "team-home",
+          homePath: "/unused",
+          ...(existing ? { providerRef: existing.sandbox.sandboxId, providerKind: "e2b" } : {}),
+          volumeHome: {
+            ...volumeHome,
+            archive: async (files) => {
+              for await (const file of files) archived.push(file.path);
+            },
+          },
+        },
+        context,
+      );
+      return { provider, computer, sdk, archived, replacement };
+    }
+
+    it("mounts its volumes at the workers' paths and records which", async () => {
+      const first = await provisionOver(null, teamHome([ada, shared]));
+      const created = vi.mocked(first.sdk.create).mock.calls[0]![0];
+
+      expect(created.volumeMounts).toEqual({
+        "/workspace/bots/bot_a": "rakazo-vol_a",
+        "/workspace/shared": "rakazo-vol_shared",
+      });
+      expect(created.metadata).toMatchObject({ botId: "team-home", home: "volumes" });
+      const sameSet = fakeE2BMachine("same", {}, created.metadata);
+      const reused = await provisionOver(sameSet, teamHome([shared, ada]));
+      expect(reused.computer.providerRef).toBe("same");
+      expect(sameSet.killed).toBe(false);
+    });
+
+    it("archives every file of a machine created before its home moved, then replaces it", async () => {
+      const before = fakeE2BMachine("before", { "notes.md": "late edit", "bots/bot_a/a.txt": "a" });
+
+      const { computer, archived } = await provisionOver(before, teamHome([ada, shared]));
+
+      expect(computer.providerRef).toBe("replacement");
+      expect(before.killed).toBe(true);
+      expect(archived.sort()).toEqual(["bots/bot_a/a.txt", "notes.md"]);
+    });
+
+    it("archives the root files of a machine with other volumes, not its volumes, then replaces it", async () => {
+      const first = await provisionOver(null, teamHome([ada, shared]));
+      const created = vi.mocked(first.sdk.create).mock.calls[0]![0];
+      const older = fakeE2BMachine(
+        "older",
+        { "root.txt": "on disk", "bots/bot_a/a.txt": "a", "shared/s.txt": "s" },
+        created.metadata,
+      );
+
+      const { computer, archived } = await provisionOver(older, teamHome([ada, bob, shared]));
+
+      expect(computer.providerRef).toBe("replacement");
+      expect(older.killed).toBe(true);
+      expect(archived).toEqual(["root.txt"]);
+    });
+
+    it("keeps a machine whose files could not be archived", async () => {
+      const before = fakeE2BMachine("before", { "notes.md": "late edit" });
+      vi.spyOn(before.sandbox.files, "read").mockRejectedValue(new Error("read failed"));
+
+      await expect(provisionOver(before, teamHome([ada, shared]))).rejects.toThrow("read failed");
+      expect(before.killed).toBe(false);
+    });
+
+    it("refuses a computer write that would land on no volume", async () => {
+      const { provider, computer, replacement } = await provisionOver(
+        null,
+        teamHome([ada, shared]),
+      );
+      const write = (file: string) =>
+        provider.writeFile(
+          computer,
+          { path: file, content: new TextEncoder().encode("x") },
+          context,
+        );
+
+      await write("bots/bot_a/notes.md");
+      await write("shared/team.md");
+      await expect(write("notes.md")).rejects.toThrow("notes.md is on no mounted volume");
+      await expect(write("bots/bot_b/notes.md")).rejects.toThrow("on no mounted volume");
+      expect([...replacement.files.keys()].sort()).toEqual([
+        "/home/user/rakazo-home/bots/bot_a/notes.md",
+        "/home/user/rakazo-home/shared/team.md",
+      ]);
+    });
+  });
+
+  describe("linking the workspace to its volumes", () => {
+    async function link(prepare: (at: string) => Promise<void>) {
+      const dir = await mkdtemp(path.join(tmpdir(), "rakazo-link-"));
+      onTestFinished(() => rm(dir, { recursive: true, force: true }));
+      const [target, at] = [path.join(dir, "workspace"), path.join(dir, "rakazo-home")];
+      await mkdir(target);
+      await prepare(at);
+      const result = spawnSync("bash", ["-c", linkWorkspaceCommand(target, at)], {
+        encoding: "utf8",
+      });
+      const linked = await readlink(at).catch(() => null);
+      return { code: result.status, stderr: result.stderr, linked, target, at };
+    }
+
+    it.each([
+      ["nothing there", async () => undefined],
+      ["an empty directory", (at: string) => mkdir(at)],
+      ["an older link", (at: string) => symlink("/elsewhere", at)],
+    ])("links in place of %s", async (_name, prepare) => {
+      const result = await link(prepare);
+
+      expect({ code: result.code, linked: result.linked }).toEqual({
+        code: 0,
+        linked: result.target,
+      });
+    });
+
+    it("fails, and keeps the files, when the path is a directory with files in it", async () => {
+      const result = await link(async (at) => {
+        await mkdir(at);
+        await writeFile(path.join(at, "kept.txt"), "kept");
+      });
+
+      expect(result.code).toBe(1);
+      expect(result.stderr).toContain("has files in it");
+      expect(await readFile(path.join(result.at, "kept.txt"), "utf8")).toBe("kept");
+    });
   });
 
   it("opens http(s) URLs through the named browser launcher", async () => {

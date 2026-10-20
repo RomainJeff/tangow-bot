@@ -1,5 +1,5 @@
 import type { PrismaClient } from "@rakazo/db";
-import { createDb } from "@rakazo/db";
+import { createDb, deleteOwnerVolumes, OwnerWorkerLiveError } from "@rakazo/db";
 import type { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { FakeWorkerProvider } from "./fake-worker-provider.js";
@@ -136,6 +136,37 @@ describePostgres("worker lifecycle under concurrent transactions (PostgreSQL)", 
       expect(fake.calls.map((call) => call.op)).toEqual(["ensure", "prepare"]);
       expect(await fixture.workerStateOf(attempt.id)).toBe("ready");
       expect(await fixture.writerOf(privateVolume.id)).toBe(attempt.id);
+    }
+  });
+
+  it("lets a start racing its bot's deletion either block the deletion or never start", async () => {
+    for (let round = 0; round < ROUNDS; round++) {
+      const fake = new FakeWorkerProvider();
+      const workers = createWorkerLifecycle({ prisma, provider: fake });
+      const { bot, privateVolume } = await fixture.migratedBot();
+      const attempt = await fixture.seedAttempt((await fixture.seedRun(bot)).id);
+      const launch = await fixture.launchFor(workers, attempt.id, allFiles);
+
+      const [started, deleted] = await Promise.allSettled([
+        workers.start(launch, fixture.context),
+        prisma.$transaction(async (tx) => {
+          await tx.$queryRaw`SELECT id FROM bots WHERE id = ${bot.id} FOR UPDATE`;
+          await deleteOwnerVolumes(tx, { botId: bot.id });
+          await tx.bot.delete({ where: { id: bot.id } });
+        }),
+      ]);
+
+      if (started.status === "fulfilled") {
+        expect(deleted).toMatchObject({
+          status: "rejected",
+          reason: expect.any(OwnerWorkerLiveError),
+        });
+        expect(await fixture.writerOf(privateVolume.id)).toBe(attempt.id);
+      } else {
+        expect(started.reason).toBeInstanceOf(StaleAttemptError);
+        expect(deleted.status).toBe("fulfilled");
+        expect(fake.calls).toEqual([]);
+      }
     }
   });
 });

@@ -97,7 +97,7 @@ async function volumeContents() {
 
 async function volumeRef(where: { botId: string } | { spaceId: string; kind: "space_shared" }) {
   const volume = await prisma.volume.findFirstOrThrow({ where });
-  return `fake-volume-rakazo-${volume.id}`;
+  return `rakazo-${volume.id}`;
 }
 
 async function homeStorageOf(computerId: string) {
@@ -141,7 +141,7 @@ describe("moving a home from snapshots to volumes", () => {
     expect(report.outcome === "adopted" && report.manifest.files).toContainEqual({
       homePath: `bots/${ada.id}/notes.md`,
       destination: { scope: "private", botId: ada.id },
-      volumeId: ada_.replace("fake-volume-rakazo-", ""),
+      volumeId: ada_.replace("rakazo-", ""),
       volumePath: "notes.md",
       size: 9,
       sha256: sha("ada notes"),

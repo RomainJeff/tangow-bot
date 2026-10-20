@@ -7,15 +7,16 @@ import {
   createRunExecutor,
   createWorkerLifecycle,
   EncryptedSecretStore,
-  FakeSandboxProvider,
   InMemoryJobQueue,
   LocalAgentHomeStore,
+  LocalArtifactStore,
+  PiAgentRuntime,
   PostgresSessionLog,
 } from "@rakazo/adapters";
 import {
-  createLifecycleLauncher,
-  createStopJournal,
-  createWorkerAgentRuntime,
+  createRunWorkers,
+  type GuestConnector,
+  type RunWorkers,
   type WorkerClock,
 } from "@rakazo/adapters/runtime-worker";
 import type { SessionEntry } from "@rakazo/contracts";
@@ -23,6 +24,7 @@ import { createThreadEvents, type PrismaClient } from "@rakazo/db";
 import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
 import { type LocalWorkerFaults, LocalWorkerProvider } from "./local-worker-provider.js";
 import { type ModelEmulatorStep, startModelEmulator } from "./model-emulator.js";
+import { VolumeComputer } from "./volume-computer.js";
 
 const MODEL_KEY = "worker-fixture-model-key";
 const SPACE = "space-worker";
@@ -47,9 +49,10 @@ const emptyMemory: MemoryStore = {
 };
 
 /**
- * The real executor on PGlite, running its bot in a local guest through the worker runtime, with
- * the model emulator behind the controller's relay. `restart` drops the executor, the runtime and
- * the launcher and builds new ones on the same database, as a controller restart would.
+ * The real executor on PGlite, with the model emulator behind the controller's relay. Its bot's
+ * home is on volumes, so a product run goes to a local guest through the worker routing. `restart`
+ * drops the executor, the runtime and the launcher and builds new ones on the same database, as a
+ * controller restart would.
  */
 export async function startWorkerRun(options: {
   steps: ModelEmulatorStep[];
@@ -58,10 +61,16 @@ export async function startWorkerRun(options: {
   guestEntry?: string;
   faults?: LocalWorkerFaults;
   clock?: WorkerClock;
-  /** Runs the bot with this runtime instead of a guest. */
+  /** Runs the bot with this runtime and no worker routing. */
   runtime?: (prisma: PrismaClient) => AgentRuntime;
+  /** The bot's computer: a dedicated one by default. */
+  computerScope?: "team" | "dedicated";
+  /** Wraps how the controller reaches the guest, to observe its frames. */
+  connector?: (provider: LocalWorkerProvider) => GuestConnector;
   /** Wraps the client the controller uses, to observe its queries. */
   prisma?: (prisma: PrismaClient) => PrismaClient;
+  /** Wraps the executor's worker routing, to fail or race it. */
+  workers?: (workers: RunWorkers) => RunWorkers;
 }) {
   const database = await openPgliteDatabase();
   const prisma = options.prisma?.(database.prisma) ?? database.prisma;
@@ -69,7 +78,7 @@ export async function startWorkerRun(options: {
   const model = await startModelEmulator({ apiKey: MODEL_KEY, steps: options.steps });
   const secretStore = new EncryptedSecretStore("worker-fixture-encryption-key");
   const sessionLog = new PostgresSessionLog(prisma);
-  const sandbox = new FakeSandboxProvider();
+  const sandbox = new VolumeComputer((volumeRef) => current.provider.volumePath(volumeRef));
 
   await prisma.user.create({ data: { id: USER, name: "Worker", email: "worker@rakazo.test" } });
   await prisma.organization.create({
@@ -100,10 +109,11 @@ export async function startWorkerRun(options: {
     data: {
       spaceId: SPACE,
       userId: USER,
-      scope: "dedicated",
+      scope: options.computerScope ?? "dedicated",
       scopeKey: "worker-computer",
       homeKey: "worker-computer",
-      kind: "desktop",
+      kind: "e2b",
+      homeStorage: "volumes",
     },
   });
   const bot = await prisma.bot.create({
@@ -142,6 +152,12 @@ export async function startWorkerRun(options: {
       isDefault: true,
     },
   });
+  await prisma.volume.createMany({
+    data: [
+      { kind: "bot_private", spaceId: SPACE, botId: bot.id, providerKind: "local-worker" },
+      { kind: "space_shared", spaceId: SPACE, providerKind: "local-worker" },
+    ].map((volume) => ({ ...volume, providerRef: volume.kind })),
+  });
   const thread = await prisma.thread.create({
     data: { spaceId: SPACE, userId: USER, botId: bot.id },
   });
@@ -154,17 +170,17 @@ export async function startWorkerRun(options: {
       faults: options.faults,
       entry: options.guestEntry,
     });
-    const runtime: AgentRuntime =
-      options.runtime?.(prisma) ??
-      createWorkerAgentRuntime({
-        launcher: createLifecycleLauncher({
+    const lifecycle = createWorkerLifecycle({ prisma, provider });
+    const runtime: AgentRuntime = options.runtime?.(prisma) ?? new PiAgentRuntime();
+    const routing = options.runtime
+      ? undefined
+      : createRunWorkers({
           prisma,
-          lifecycle: createWorkerLifecycle({ prisma, provider }),
-          connector: provider,
-        }),
-        stops: createStopJournal(prisma),
-        clock: options.clock,
-      });
+          lifecycle,
+          connector: options.connector?.(provider) ?? provider,
+          clock: options.clock,
+        });
+    const workers = routing && (options.workers?.(routing) ?? routing);
     const executor = createRunExecutor({
       prisma,
       sessionLog,
@@ -172,6 +188,7 @@ export async function startWorkerRun(options: {
       sandbox,
       home: new LocalAgentHomeStore(path.join(dir, "homes")),
       dataDir: path.join(dir, "data"),
+      artifacts: new LocalArtifactStore(path.join(dir, "data")),
       memory: emptyMemory,
       memoryProviders: { resolve: async () => null },
       secretStore,
@@ -180,8 +197,9 @@ export async function startWorkerRun(options: {
       skillLearning: "off",
       secrets: [],
       runtime,
+      workers,
     });
-    return { provider, runtime, executor };
+    return { provider, lifecycle, runtime, executor };
   };
   let current = build();
 
@@ -195,8 +213,8 @@ export async function startWorkerRun(options: {
     get provider() {
       return current.provider;
     },
-    get runtime() {
-      return current.runtime;
+    get lifecycle() {
+      return current.lifecycle;
     },
     /** A user message that starts a queued run. */
     async send(text: string) {

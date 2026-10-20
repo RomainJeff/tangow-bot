@@ -24,7 +24,7 @@ export interface WorkerSpec {
 
 /**
  * Temporary run workers, separate from computers: a worker has no screen and an MCP-only run needs
- * one without a computer. There is deliberately no way to delete a volume here.
+ * one without a computer. Volumes outlive every run: only deleting their bot or space deletes them.
  */
 export interface WorkerProvider {
   describe(): AdapterDescriptor<WorkerCapabilities>;
@@ -43,6 +43,19 @@ export interface WorkerProvider {
     target: { attemptId: string; providerRef: string | null },
     context: AdapterContext,
   ): Promise<"destroyed" | "absent">;
-  /** Creates the volume named `name`, or returns the existing one. */
-  ensureVolume(input: { name: string }, context: AdapterContext): Promise<{ providerRef: string }>;
+  /**
+   * Creates the volume named `name`, or returns it. Its reference must be `name`, even if the
+   * create response is lost. Stop submitting creates before `ensureDeadline`. The deletion sweep
+   * retains intent for one hour afterwards to catch server completion after a timeout or crash.
+   * Server-side creation must finish within that grace period.
+   */
+  ensureVolume(
+    input: { name: string; ensureDeadline: Date },
+    context: AdapterContext,
+  ): Promise<{ providerRef: string }>;
+  /**
+   * Deletes the named volume once its row is deleted, even if ensureVolume never returned.
+   * A volume already gone is not an error.
+   */
+  deleteVolume(input: { providerRef: string }, context: AdapterContext): Promise<void>;
 }
