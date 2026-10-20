@@ -78,6 +78,8 @@ export class LocalWorkerProvider implements WorkerProvider, GuestConnector {
       faults?: LocalWorkerFaults;
       /** A bundled guest for `child` mode, run by plain `node`. Default: the source, through tsx. */
       entry?: string;
+      /** The baked managed skills a VM gets. Default: the repository's `skills/agent`. */
+      managedSkills?: string;
     },
   ) {}
 
@@ -96,7 +98,8 @@ export class LocalWorkerProvider implements WorkerProvider, GuestConnector {
       const root = path.join(this.options.root, spec.attemptId);
       await mkdir(path.join(root, "workspace"), { recursive: true });
       await cp(
-        fileURLToPath(new URL("../../../skills/agent", import.meta.url)),
+        this.options.managedSkills ??
+          fileURLToPath(new URL("../../../skills/agent", import.meta.url)),
         path.join(root, "managed-skills", "agent"),
         { recursive: true },
       );

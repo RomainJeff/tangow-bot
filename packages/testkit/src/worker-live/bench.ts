@@ -1,7 +1,9 @@
+import { existsSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
+import { fileURLToPath } from "node:url";
 import { LocalWorkerProvider } from "../local-worker-provider.js";
 import { quantiles, queryLog, settled } from "../worker-channel-tap.js";
 import { directProxyOverheads } from "./measurements.js";
@@ -30,6 +32,9 @@ export async function benchLive(live: Live, trials: number, databaseUrl?: string
   const toolsPerRun = 5;
   const arms = ["local_memory", "private_mount", "two_mounts"] as const;
   const localRoot = await mkdtemp(path.join(tmpdir(), "rakazo-live-bench-"));
+  // The live bundle carries the managed skills beside it; from source the provider's default applies.
+  const beside = new URL("../guest/managed-skills/agent", import.meta.url);
+  const managedSkills = existsSync(beside) ? fileURLToPath(beside) : undefined;
   type Arm = (typeof arms)[number];
   const steps = () =>
     Array.from({ length: trials }, () => [
@@ -99,7 +104,7 @@ export async function benchLive(live: Live, trials: number, databaseUrl?: string
         computer: arm === "two_mounts" ? "team" : "dedicated",
         provider:
           arm === "local_memory"
-            ? () => new LocalWorkerProvider({ mode: "memory", root: localRoot })
+            ? () => new LocalWorkerProvider({ mode: "memory", root: localRoot, managedSkills })
             : undefined,
       });
       fixtures.set(arm, { worker, log, ensures });
@@ -118,7 +123,13 @@ export async function benchLive(live: Live, trials: number, databaseUrl?: string
         log.queries.length = 0;
         const runId = await worker.run.send("Run the commands.");
         const started = performance.now();
-        await worker.run.continueRun(runId);
+        await worker.run.continueRun(runId).catch(async (error: unknown) => {
+          const attempts = await worker.run.prisma.attempt.findMany({
+            where: { runId },
+            select: { status: true, workerState: true, error: true },
+          });
+          throw new Error(`${arm}, trial ${trial}: ${String(error)}; ${JSON.stringify(attempts)}`);
+        });
         const runMs = performance.now() - started;
         const frames = worker.frames();
         const hello = frames.find((frame) => frame.kind === "worker.hello")!;
