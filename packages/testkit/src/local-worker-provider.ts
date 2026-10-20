@@ -217,6 +217,8 @@ export class LocalWorkerProvider implements WorkerProvider, GuestConnector {
       if (child.exitCode !== null || child.signalCode !== null) resolve();
       child.once("exit", () => resolve());
     });
+    // A frame written after the guest exited fails with EPIPE; a channel drops it, as on a cut socket.
+    child.stdin!.on("error", () => undefined);
     const stdio = streamChannel(child.stdout!, child.stdin!, WORKER_LIMITS.modelRequestBytes);
     const channel: FrameChannel = {
       frames: stdio.frames,
