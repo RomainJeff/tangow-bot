@@ -15,6 +15,7 @@ import {
   computerScopeKey,
   createRepos,
   createThreadMessageInTransaction,
+  deleteOwnerVolumes,
   expireComputerExecutionLeases,
   logCancelledRunsInTransaction,
   withTransactionRetry,
@@ -196,7 +197,7 @@ type BotLifecycleDeps = {
   events: ThreadEvents;
   dataDir?: string;
   artifacts?: ArtifactStore;
-  workerLifecycle?: Pick<WorkerLifecycle, "retireOwner">;
+  workerLifecycle?: Pick<WorkerLifecycle, "releaseOwnerWorkers" | "sweepVolumes">;
 };
 
 type LifecycleBot = {
@@ -340,20 +341,30 @@ export async function destroyBot(
   context: AdapterContext,
   options: { deleteMemories: boolean },
 ) {
-  const [dedicated, activeRuns, routines] = await Promise.all([
+  const [dedicated, routines] = await Promise.all([
     deps.prisma.computer.findUnique({
       where: { scopeKey: computerScopeKey("dedicated", bot.spaceId, bot.id) },
     }),
-    deps.prisma.run.findMany({
-      where: { botId: bot.id, status: { in: [...ACTIVE_RUN_STATUSES] } },
-      select: { id: true },
-    }),
     deps.prisma.routine.findMany({ where: { botId: bot.id }, select: { id: true } }),
   ]);
-  const runIds = activeRuns.map((run) => run.id);
-  await deps.prisma.run.updateMany({
-    where: { id: { in: runIds } },
-    data: { status: "cancelled", completedAt: new Date() },
+  // No new work first: an archived bot's runs are never claimed and its routines stop, so no
+  // worker can start after its workers are released below.
+  const activeRuns = await deps.prisma.$transaction(async (tx) => {
+    const now = new Date();
+    await tx.bot.update({ where: { id: bot.id }, data: { archivedAt: bot.archivedAt ?? now } });
+    await tx.routine.updateMany({
+      where: { botId: bot.id },
+      data: { active: false, nextRunAt: null },
+    });
+    const runs = await tx.run.findMany({
+      where: { botId: bot.id, status: { in: [...ACTIVE_RUN_STATUSES] } },
+      select: { id: true },
+    });
+    await tx.run.updateMany({
+      where: { id: { in: runs.map((run) => run.id) }, status: { in: [...ACTIVE_RUN_STATUSES] } },
+      data: { status: "cancelled", completedAt: now },
+    });
+    return runs;
   });
   await Promise.allSettled([
     ...activeRuns.map((run) => deps.jobs.cancel(runJobKey(run.id))),
@@ -363,8 +374,7 @@ export async function destroyBot(
   if (dedicated?.providerRef) {
     await deps.sandbox.destroy(toComputerRef(dedicated), context).catch(() => undefined);
   }
-  // The volume is the bot's home, deleted with it as a dedicated home is.
-  const volumeIds = (await deps.workerLifecycle?.retireOwner({ botId: bot.id }, context)) ?? [];
+  await deps.workerLifecycle?.releaseOwnerWorkers({ botId: bot.id }, context);
   const deletion = await withTransactionRetry(() =>
     deps.prisma.$transaction(async (tx) => {
       const locked = await tx.$queryRaw<Array<{ id: string; webhookSecretId: string | null }>>`
@@ -374,6 +384,8 @@ export async function destroyBot(
         FOR UPDATE
       `;
       const webhookSecretId = locked[0]?.webhookSecretId ?? bot.webhookSecretId ?? null;
+      // The volume is the bot's home, deleted with it as a dedicated home is.
+      await deleteOwnerVolumes(tx, { botId: bot.id });
       const botArtifacts = await tx.artifact.findMany({
         where: { botId: bot.id, groupId: null, spaceId: bot.spaceId },
         select: { storageKey: true },
@@ -410,9 +422,6 @@ export async function destroyBot(
           memoriesPreserved: !options.deleteMemories,
         },
       });
-      if (volumeIds.length > 0) {
-        await tx.volume.deleteMany({ where: { id: { in: volumeIds } } });
-      }
       await tx.bot.delete({ where: { id: bot.id } });
       if (webhookSecretId) {
         await tx.secret.deleteMany({
@@ -429,6 +438,9 @@ export async function destroyBot(
       };
     }),
   );
+  await deps.workerLifecycle
+    ?.sweepVolumes(context)
+    .catch((error) => getLogger().error("volume sweep after bot deletion", error));
   await Promise.allSettled(
     deletion.cancelledGroupRuns.map((run) => deps.jobs.cancel(runJobKey(run.id))),
   );

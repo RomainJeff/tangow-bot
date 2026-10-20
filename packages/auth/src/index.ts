@@ -21,7 +21,11 @@ export interface AuthEnv {
   extraOrigins?: string[];
   email?: TransactionalEmailProvider;
   onEmailError?: (error: unknown) => void;
-  beforeDeleteUser?: (userId: string) => Promise<void>;
+  /** Runs before the user is deleted with the organizations only they belong to, and their spaces. */
+  beforeDeleteUser?: (
+    userId: string,
+    removed: { personalOrganizationIds: string[] },
+  ) => Promise<void>;
 }
 
 export async function resolveSignupPolicy(
@@ -113,7 +117,6 @@ export function createAuth(prisma: PrismaClient, env: AuthEnv) {
       deleteUser: {
         enabled: true,
         beforeDelete: async (user) => {
-          await env.beforeDeleteUser?.(user.id);
           const memberships = await prisma.member.findMany({
             where: { userId: user.id },
             select: {
@@ -126,6 +129,7 @@ export function createAuth(prisma: PrismaClient, env: AuthEnv) {
               organization.members.every((member) => member.userId === user.id),
             )
             .map(({ organizationId }) => organizationId);
+          await env.beforeDeleteUser?.(user.id, { personalOrganizationIds });
 
           await prisma.$transaction([
             prisma.deploymentSettings.updateMany({

@@ -265,8 +265,12 @@ export class E2BWorkerProvider implements WorkerProvider, GuestConnector {
     };
   }
 
-  async deleteVolume(input: { volumeRef: string }): Promise<void> {
-    await this.sdk.destroyVolume(input.volumeRef);
+  listVolumes(): Promise<string[]> {
+    return this.sdk.listVolumes();
+  }
+
+  async deleteVolume(input: { name: string }): Promise<void> {
+    await this.sdk.destroyVolume(input.name);
   }
 
   /**

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Prisma, type PrismaClient } from "./client.js";
 import { IsolationError } from "./scope.js";
 import { withTransactionRetry } from "./transaction-retry.js";
+import { deleteOwnerVolumes } from "./volumes.js";
 
 /** Per member, per organization: one person cannot fan out unbounded boundaries. */
 const MAX_SPACES_PER_MEMBER = 32;
@@ -435,10 +436,7 @@ export async function releaseSpaceDeletionClaim(
  * remaining). */
 export async function deleteEmptySpaceForMember(
   prisma: PrismaClient,
-  input: ClaimedSpaceDeleteInput & {
-    /** The space's volumes, already deleted at their provider. */
-    volumeIds?: string[];
-  },
+  input: ClaimedSpaceDeleteInput,
 ): Promise<{ id: string }> {
   return withTransactionRetry(() =>
     prisma.$transaction(
@@ -450,11 +448,7 @@ export async function deleteEmptySpaceForMember(
         });
         if (!claim) throw new SpaceDeletionInProgressError();
         const planned = await assertEmptySpaceDeletable(tx, input);
-        if (input.volumeIds?.length) {
-          await tx.volume.deleteMany({
-            where: { id: { in: input.volumeIds }, spaceId: input.spaceId },
-          });
-        }
+        await deleteOwnerVolumes(tx, { spaceId: input.spaceId });
         await tx.space.delete({ where: { id: input.spaceId } });
         if (input.spaceId !== input.currentSpaceId) {
           return { id: input.currentSpaceId };

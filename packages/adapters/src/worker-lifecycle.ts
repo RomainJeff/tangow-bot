@@ -23,7 +23,7 @@ import {
   workerStatesInto,
   writersBlocking,
 } from "@rakazo/core";
-import type { PrismaClient } from "@rakazo/db";
+import type { PrismaClient, VolumeOwnerRef } from "@rakazo/db";
 import { Prisma } from "@rakazo/db";
 
 /** The attempt no longer holds its run's fence, its worker was started already, or torn down. */
@@ -96,6 +96,9 @@ type PlanRow = {
 };
 
 const RELEASABLE = Prisma.join([...LIVE_WORKER_STATES, "releasing"]);
+/** A provider volume is named after its row, so a name whose row is gone marks an orphan. */
+const VOLUME_NAME_PREFIX = "rakazo-";
+const VOLUME_SWEEP_BATCH = 10;
 const INTO_RELEASED = Prisma.join(workerStatesInto("released"));
 
 type HomeComputer = {
@@ -254,7 +257,10 @@ export function createWorkerLifecycle(deps: {
     if (volume.providerKind !== provider.describe().id) {
       throw new VolumeRefusedError({ code: "provider_mismatch", volumeId });
     }
-    const { providerRef } = await provider.ensureVolume({ name: `rakazo-${volumeId}` }, context);
+    const { providerRef } = await provider.ensureVolume(
+      { name: `${VOLUME_NAME_PREFIX}${volumeId}` },
+      context,
+    );
     await prisma.volume.updateMany({
       where: { id: volumeId, providerRef: null },
       data: { providerRef },
@@ -451,6 +457,7 @@ export function createWorkerLifecycle(deps: {
         LIMIT ${options.limit}`;
       const counts = { released: 0, awaitingEnsure: 0, failed: 0 };
       for (const { id } of orphans) {
+        if (context.signal.aborted) break;
         try {
           const outcome = await release(id, context);
           if (outcome === "released") counts.released += 1;
@@ -464,14 +471,13 @@ export function createWorkerLifecycle(deps: {
     },
 
     /**
-     * Before a bot or a space is deleted: destroys every worker of its runs, then its volumes at
-     * the provider. Returns the volume rows the caller deletes with the owner. Throws while a
-     * worker is not confirmed gone, so no volume is deleted under a VM that may still write it.
+     * Before a bot or a space is deleted, once it can get no new work: destroys every worker of
+     * its runs and returns how many there were. A worker whose ensure may still be in flight stays
+     * releasing, and the owner's deletion transaction refuses it (`deleteOwnerVolumes`). Without a
+     * provider there is nothing to destroy.
      */
-    async retireOwner(
-      owner: { botId: string } | { spaceId: string },
-      context: AdapterContext,
-    ): Promise<string[]> {
+    async releaseOwnerWorkers(owner: VolumeOwnerRef, context: AdapterContext): Promise<number> {
+      if (!deps.provider) return 0;
       const ownedBy =
         "botId" in owner
           ? Prisma.sql`r."botId" = ${owner.botId}`
@@ -479,22 +485,43 @@ export function createWorkerLifecycle(deps: {
       const live = await prisma.$queryRaw<{ id: string }[]>`
         SELECT a.id FROM attempts a JOIN runs r ON r.id = a."runId"
         WHERE a."workerState" IN (${RELEASABLE}) AND ${ownedBy}`;
-      for (const { id } of live) {
-        if ((await release(id, context)) === "awaiting_ensure") {
-          throw new Error("A worker of this owner may still be starting; try again shortly");
+      for (const { id } of live) await release(id, context);
+      return live.length;
+    },
+
+    /**
+     * Deletes a few provider volumes whose row is gone: those of a deleted owner, and one
+     * provisioned while its row was being deleted. A volume whose row exists is never touched.
+     * Idempotent, and nothing without a provider.
+     */
+    async sweepVolumes(context: AdapterContext): Promise<{ deleted: number; failed: number }> {
+      const counts = { deleted: 0, failed: 0 };
+      if (!deps.provider) return counts;
+      const named = (await deps.provider.listVolumes(context)).flatMap((name) =>
+        name.startsWith(VOLUME_NAME_PREFIX)
+          ? [{ name, id: name.slice(VOLUME_NAME_PREFIX.length) }]
+          : [],
+      );
+      const kept = new Set(
+        (
+          await prisma.volume.findMany({
+            where: { id: { in: named.map((volume) => volume.id) } },
+            select: { id: true },
+          })
+        ).map((volume) => volume.id),
+      );
+      for (const { name } of named
+        .filter((volume) => !kept.has(volume.id))
+        .slice(0, VOLUME_SWEEP_BATCH)) {
+        if (context.signal.aborted) break;
+        try {
+          await deps.provider.deleteVolume({ name }, context);
+          counts.deleted += 1;
+        } catch {
+          counts.failed += 1;
         }
       }
-      const volumes = await prisma.volume.findMany({
-        where:
-          "botId" in owner
-            ? { kind: "bot_private", botId: owner.botId }
-            : { kind: "space_shared", spaceId: owner.spaceId },
-        select: { id: true, providerRef: true },
-      });
-      for (const { providerRef } of volumes) {
-        if (providerRef) await requireProvider().deleteVolume({ volumeRef: providerRef }, context);
-      }
-      return volumes.map((volume) => volume.id);
+      return counts;
     },
 
     provisionVolume,

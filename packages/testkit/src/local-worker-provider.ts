@@ -1,5 +1,5 @@
 import { type ChildProcess, spawn } from "node:child_process";
-import { mkdir, rm, symlink } from "node:fs/promises";
+import { mkdir, readdir, rm, symlink } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type {
@@ -147,8 +147,12 @@ export class LocalWorkerProvider implements WorkerProvider, GuestConnector {
     return { providerRef: input.name };
   }
 
-  async deleteVolume(input: { volumeRef: string }): Promise<void> {
-    await rm(this.volumePath(input.volumeRef), { recursive: true, force: true });
+  async listVolumes(): Promise<string[]> {
+    return readdir(path.join(this.options.root, "volumes")).catch(() => []);
+  }
+
+  async deleteVolume(input: { name: string }): Promise<void> {
+    await rm(this.volumePath(input.name), { recursive: true, force: true });
   }
 
   /** Where a volume's files are, on this machine. */

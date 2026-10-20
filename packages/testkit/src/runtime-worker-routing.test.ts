@@ -151,6 +151,21 @@ describe("where a product run executes", () => {
     ).toEqual({ status: "queued", error: "Run setup failed; retrying" });
   });
 
+  it("never claims a run of a bot that is being deleted", async () => {
+    const run = await fixture([]);
+    const runId = await run.send("Hello.");
+    await run.prisma.bot.update({ where: { id: run.bot.id }, data: { archivedAt: new Date() } });
+    const claim = { select: { status: true, leaseFence: true } } as const;
+    const queued = await run.prisma.run.findUniqueOrThrow({ where: { id: runId }, ...claim });
+
+    await run.continueRun(runId);
+
+    expect(await run.prisma.run.findUniqueOrThrow({ where: { id: runId }, ...claim })).toEqual(
+      queued,
+    );
+    expect(await attemptsOf(run, runId)).toEqual([]);
+  });
+
   it("asks the auto-review judge of a worker run in process", async () => {
     const run = await fixture([
       {

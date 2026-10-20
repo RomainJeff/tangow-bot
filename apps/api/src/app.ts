@@ -75,6 +75,7 @@ import {
   createDb,
   createPool,
   createThreadEvents,
+  deleteOwnerVolumes,
   parsePositiveInteger,
   provisionMessagingIdentity,
   requireMembership,
@@ -336,7 +337,14 @@ export async function createApp(
       "http://localhost:19006",
       "http://127.0.0.1:19006",
     ],
-    beforeDeleteUser: async (userId) => {
+    beforeDeleteUser: async (userId, { personalOrganizationIds }) => {
+      const context = (spaceId: string) => ({
+        operationId: `account-delete:${userId}`,
+        traceId: `account-delete:${userId}`,
+        spaceId,
+        userId,
+        signal: new AbortController().signal,
+      });
       const bots = await prisma.bot.findMany({
         where: { userId },
         select: { id: true, userId: true, spaceId: true, name: true, archivedAt: true },
@@ -355,18 +363,25 @@ export async function createApp(
               workerLifecycle: workers.lifecycle,
             },
             bot,
-            {
-              operationId: `account-delete:${userId}`,
-              traceId: `account-delete:${userId}`,
-              spaceId: bot.spaceId,
-              userId,
-              botId: bot.id,
-              signal: new AbortController().signal,
-            },
+            { ...context(bot.spaceId), botId: bot.id },
             { deleteMemories: true },
           ),
         ),
       );
+      // Deleting those organizations deletes their spaces, which a volume row would block.
+      const spaces = await prisma.space.findMany({
+        where: { organizationId: { in: personalOrganizationIds } },
+        select: { id: true },
+      });
+      for (const { id: spaceId } of spaces) {
+        await workers.lifecycle.releaseOwnerWorkers({ spaceId }, context(spaceId));
+        await prisma.$transaction((tx) => deleteOwnerVolumes(tx, { spaceId }));
+      }
+      if (spaces.length > 0) {
+        await workers.lifecycle
+          .sweepVolumes(context(spaces[0]!.id))
+          .catch((error) => getLogger().error("volume sweep after account deletion", error));
+      }
       await rm(pushTokenPath(env.dataDir, userId), { force: true }).catch(() => undefined);
       await removeUserSkillDirs(env.dataDir, userId);
     },

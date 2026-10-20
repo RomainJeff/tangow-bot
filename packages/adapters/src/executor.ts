@@ -1400,6 +1400,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
       const leased = await deps.prisma.run.updateMany({
         where: {
           id: runId,
+          // An archived bot gets no new work, which is what lets deleting it wait out its workers.
+          bot: { archivedAt: null },
           ...continueRunClaimFence(run),
           OR: [
             { status: { in: ["queued", "waiting_input", "waiting_takeover"] } },
