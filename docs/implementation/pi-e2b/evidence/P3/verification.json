@@ -97,8 +97,9 @@
     "bench": "0 sandboxes and 0 volumes left",
     "deployment_check": "before each lane and before the bench, the command found no sandbox running on the deployment",
     "probes": "the exploratory probes before the lanes tagged and removed their resources the same way, and each counted 0 left",
-    "kept_on_purpose": "the worker template p3live-worker-pi, for the S3 lanes; the scratch directory on the host is removed after the S3 lanes",
-    "heap_snapshots": "taken on the host for the RSS investigation, analysed there, then deleted; never copied off the host"
+    "kept_on_purpose": "the worker template p3live-worker-pi, for the S3 lanes",
+    "heap_snapshots": "taken on the host for the RSS investigation, analysed there, then deleted; never copied off the host",
+    "host_scratch": "the scratch directory with the bundle and the runner was removed after the runs; a final census found 0 sandboxes on the deployment and 0 volumes named p3live-"
   },
   "not_run": [
     "The four S3 lanes: Anthropic-protocol relay, relay refusals, the product's E2B computer on the volumes, recreating the product's computer after a move.",
