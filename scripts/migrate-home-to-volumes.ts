@@ -1,18 +1,20 @@
 /**
  * Moves one stopped computer's home from AgentHomeStore snapshots onto its E2B volumes, verifies
- * every file by hash, then adopts the volumes. It refuses rather than write over anything, and
- * the AgentHomeStore copy stays as the original. Running it again after success changes nothing;
- * after an interruption it resumes the copy.
+ * every file by hash and mode, then adopts the volumes. It refuses rather than write over
+ * anything, and the AgentHomeStore copy stays as the original. Running it again after success
+ * changes nothing; after an interruption it resumes the copy.
  *
  *   pnpm exec tsx scripts/migrate-home-to-volumes.ts --computer <id> --manifest <path>
  *     [--dry-run] [--leave-unmapped] [--uid <n> --gid <n>]
+ *
+ * The manifest path must not exist. The record is written there once the move creates anything,
+ * even if it then stops on an error, and never on a dry run.
  *
  * Reads DATABASE_URL, DATA_DIR for the AgentHomeStore, and E2B's own environment: E2B_API_KEY,
  * and E2B_DOMAIN or E2B_API_URL for a self-hosted E2B.
  */
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
-import { writeFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { E2B_GUEST_OWNER, E2BVolumeFiles } from "../packages/adapters/src/e2b-volume-files.js";
 import { E2BWorkerProvider } from "../packages/adapters/src/e2b-worker.js";
@@ -39,7 +41,7 @@ function options() {
   if (!Number.isInteger(uid) || !Number.isInteger(gid)) throw new Error("--uid and --gid are ids");
   return {
     computerId: values.computer,
-    manifest: values.manifest,
+    manifestPath: values.manifest ?? null,
     dryRun,
     leaveUnmapped: values["leave-unmapped"],
     owner: { uid, gid },
@@ -74,9 +76,6 @@ async function main() {
         signal: new AbortController().signal,
       },
     );
-    if (report.outcome !== "planned" && "manifest" in report && report.manifest && input.manifest) {
-      await writeFile(input.manifest, `${JSON.stringify(report.manifest, null, 2)}\n`);
-    }
     console.log(JSON.stringify(report, null, 2));
     if (report.outcome === "refused") process.exitCode = 1;
   } finally {
