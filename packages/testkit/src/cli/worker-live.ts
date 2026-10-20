@@ -5,8 +5,10 @@
  *
  *   worker-live template --guest <agent-run-worker.mjs> --name <template>
  *   worker-live lanes --template <worker> --computer-template <computer> --out <dir> [--lanes a,b]
+ *     Each lane runs in a child process: worker-live lane --lane <id> --template ...
  *   worker-live bench --template <worker> --computer-template <computer> --out <dir> [--trials 30]
  */
+import { fork } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
@@ -19,7 +21,6 @@ import { type ConnectionOpts, Sandbox, Template } from "e2b";
 import {
   benchLive,
   LANES,
-  type Live,
   liveSession,
   memAvailableMiB,
   requireHeadroom,
@@ -36,6 +37,7 @@ const { values } = parseArgs({
     "computer-template": { type: "string" },
     out: { type: "string" },
     lanes: { type: "string" },
+    lane: { type: "string" },
     trials: { type: "string", default: "30" },
   },
 });
@@ -71,21 +73,17 @@ async function writeReceipt(file: string, value: unknown) {
   await writeFile(file, `${redact(JSON.stringify(value, null, 2))}\n`);
 }
 
-/** Sandboxes on the deployment that this session did not create. */
-async function foreignSandboxes(live: Live): Promise<number> {
+/** Stops unless the deployment runs no sandbox: between lanes, any sandbox is someone else's. */
+async function requireIdleDeployment() {
   const pages = Sandbox.list({ ...connection });
-  let foreign = 0;
-  while (pages.hasNext) {
-    for (const info of await pages.nextItems()) {
-      if (info.metadata?.p3live !== live.tag) foreign += 1;
-    }
-  }
-  return foreign;
+  let running = 0;
+  while (pages.hasNext) running += (await pages.nextItems()).length;
+  if (running > 0) throw new Error(`${running} sandboxes run on the deployment; stopping`);
 }
 
 function session() {
-  if (!values.template || !values["computer-template"] || !values.out) {
-    throw new Error("--template, --computer-template and --out are required");
+  if (!values.template || !values["computer-template"]) {
+    throw new Error("--template and --computer-template are required");
   }
   const live = liveSession({
     ...connection,
@@ -125,9 +123,41 @@ async function template() {
   );
 }
 
-async function lanes() {
+/** One lane in this process, its record sent to the parent: a fresh process per lane keeps memory flat. */
+async function lane() {
+  const selected = LANES.find((candidate) => candidate.id === values.lane);
+  if (!selected?.run) throw new Error(`No runnable lane ${values.lane}`);
   const live = session();
-  const selected = values.lanes?.split(",") ?? LANES.map((lane) => lane.id);
+  const memBefore = requireHeadroom();
+  const started = performance.now();
+  let outcome: { result: "pass" | "fail"; observed?: Record<string, unknown>; error?: string };
+  try {
+    const { pass, observed } = await selected.run(live);
+    outcome = { result: pass ? "pass" : "fail", observed };
+  } catch (error) {
+    outcome = {
+      result: "fail",
+      error: error instanceof Error ? (error.stack ?? error.message).slice(0, 2000) : String(error),
+    };
+  }
+  const seconds = Math.round((performance.now() - started) / 100) / 10;
+  const controllerRssMiB = Math.round(process.memoryUsage().rss / 1024 / 1024);
+  const cleanup = await live.sweep();
+  const record = {
+    ...outcome,
+    seconds,
+    memAvailableMiB: { before: memBefore, after: memAvailableMiB() },
+    controllerRssMiB,
+    cleanup,
+  };
+  await new Promise<void>((resolve) => process.send!(record, () => resolve()));
+}
+
+async function lanes() {
+  if (!values.template || !values["computer-template"] || !values.out) {
+    throw new Error("--template, --computer-template and --out are required");
+  }
+  const selected = values.lanes?.split(",") ?? LANES.map((candidate) => candidate.id);
   const records: unknown[] = [];
   const startedAt = new Date().toISOString();
   const receipt = () => ({
@@ -137,59 +167,60 @@ async function lanes() {
     computerTemplate: values["computer-template"],
     lanes: records,
   });
-  for (const lane of LANES.filter((candidate) => selected.includes(candidate.id))) {
+  for (const candidate of LANES.filter((entry) => selected.includes(entry.id))) {
     const base = {
-      lane: lane.id,
-      issue: lane.issue,
-      scenario: lane.scenario,
-      passWhen: lane.passWhen,
+      lane: candidate.id,
+      issue: candidate.issue,
+      scenario: candidate.scenario,
+      passWhen: candidate.passWhen,
     };
-    if (lane.pending || !lane.run) {
-      records.push({ ...base, result: "pending", pending: lane.pending });
-      console.log(`lane ${lane.id.padEnd(20)} PENDING`);
+    if (candidate.pending || !candidate.run) {
+      records.push({ ...base, result: "pending", pending: candidate.pending });
+      console.log(`lane ${candidate.id.padEnd(20)} PENDING`);
       continue;
     }
-    const foreign = await foreignSandboxes(live);
-    if (foreign > 0)
-      throw new Error(`${foreign} sandboxes on the deployment are not this session's; stopping`);
-    const memBefore = requireHeadroom();
-    const started = performance.now();
-    let outcome: { result: "pass" | "fail"; observed?: Record<string, unknown>; error?: string };
-    try {
-      const { pass, observed } = await lane.run(live);
-      outcome = { result: pass ? "pass" : "fail", observed };
-    } catch (error) {
-      outcome = {
-        result: "fail",
-        error:
-          error instanceof Error ? (error.stack ?? error.message).slice(0, 2000) : String(error),
-      };
-    }
-    const seconds = Math.round((performance.now() - started) / 100) / 10;
-    const cleanup = await live.sweep();
-    records.push({
-      ...base,
-      ...outcome,
-      seconds,
-      memAvailableMiB: { before: memBefore, after: memAvailableMiB() },
-      cleanup,
-    });
-    await writeReceipt(path.join(values.out!, "lanes.json"), receipt());
+    await requireIdleDeployment();
+    requireHeadroom();
+    const child = fork(
+      process.argv[1]!,
+      [
+        "lane",
+        "--lane",
+        candidate.id,
+        "--template",
+        values.template,
+        "--computer-template",
+        values["computer-template"],
+      ],
+      { execArgv: process.execArgv },
+    );
+    const [record, code] = await Promise.all([
+      new Promise<Record<string, unknown> | undefined>((resolve) => {
+        child.once("message", (message) => resolve(message as Record<string, unknown>));
+        child.once("exit", () => resolve(undefined));
+      }),
+      new Promise<number | null>((resolve) => child.once("exit", resolve)),
+    ]);
+    if (!record)
+      throw new Error(`Lane ${candidate.id} ended with code ${code} and no record; stopping`);
+    records.push({ ...base, ...record });
+    await writeReceipt(path.join(values.out, "lanes.json"), receipt());
+    const cleanup = record.cleanup as { left: { sandboxes: number; volumes: number } };
     console.log(
-      `lane ${lane.id.padEnd(20)} ${outcome.result.toUpperCase().padEnd(7)} ${String(seconds).padStart(6)} s   left ${cleanup.left.sandboxes} sandboxes, ${cleanup.left.volumes} volumes`,
+      `lane ${candidate.id.padEnd(20)} ${String(record.result).toUpperCase().padEnd(7)} ${String(record.seconds).padStart(6)} s   rss ${record.controllerRssMiB} MiB   left ${cleanup.left.sandboxes} sandboxes, ${cleanup.left.volumes} volumes`,
     );
   }
-  await writeReceipt(path.join(values.out!, "lanes.json"), receipt());
+  await writeReceipt(path.join(values.out, "lanes.json"), receipt());
 }
 
 async function bench() {
-  const live = session();
+  if (!values.out) throw new Error("--out is required");
   const trials = Number(values.trials);
-  if (!Number.isInteger(trials) || trials < 1)
+  if (!Number.isInteger(trials) || trials < 1) {
     throw new Error("--trials must be a positive integer");
-  const foreign = await foreignSandboxes(live);
-  if (foreign > 0)
-    throw new Error(`${foreign} sandboxes on the deployment are not this session's; stopping`);
+  }
+  await requireIdleDeployment();
+  const live = session();
   const memBefore = requireHeadroom();
   try {
     const result = await benchLive(live, trials);
@@ -214,7 +245,7 @@ async function bench() {
   }
 }
 
-const commands: Record<string, () => Promise<void>> = { template, lanes, bench };
+const commands: Record<string, () => Promise<void>> = { template, lanes, lane, bench };
 const run = command ? commands[command] : undefined;
 if (!run) throw new Error(`usage: worker-live <${Object.keys(commands).join("|")}> [options]`);
 await run();
