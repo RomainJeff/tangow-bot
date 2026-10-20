@@ -4,6 +4,7 @@ import path from "node:path";
 import { ANTHROPIC_MODELS } from "@earendil-works/pi-ai/providers/anthropic.models";
 import type {
   AgentRuntime,
+  ConnectorProvider,
   MemoryStore,
   SandboxProvider,
   WorkerProvider,
@@ -19,17 +20,16 @@ import {
   PiAgentRuntime,
   PostgresSessionLog,
 } from "@rakazo/adapters";
-import {
-  createRunWorkers,
-  type GuestConnector,
-  type RunWorkers,
-  type WorkerClock,
-} from "@rakazo/adapters/runtime-worker";
+import type { GuestConnector, RunWorkers, WorkerClock } from "@rakazo/adapters/runtime-worker";
+import { createRunWorkers } from "@rakazo/adapters/runtime-worker";
 import type { SessionEntry } from "@rakazo/contracts";
-import { createThreadEvents, type PrismaClient } from "@rakazo/db";
+import type { PrismaClient } from "@rakazo/db";
+import { createThreadEvents } from "@rakazo/db";
 import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
-import { type LocalWorkerFaults, LocalWorkerProvider } from "./local-worker-provider.js";
-import { type ModelEmulatorStep, startModelEmulator } from "./model-emulator.js";
+import type { LocalWorkerFaults } from "./local-worker-provider.js";
+import { LocalWorkerProvider } from "./local-worker-provider.js";
+import type { ModelEmulatorStep } from "./model-emulator.js";
+import { startModelEmulator } from "./model-emulator.js";
 import { VolumeComputer } from "./volume-computer.js";
 
 const MODEL_KEY = "worker-fixture-model-key";
@@ -66,6 +66,7 @@ export async function startWorkerRun<
   Provider extends WorkerProvider & GuestConnector = LocalWorkerProvider,
 >(options: {
   steps: ModelEmulatorStep[];
+  tools?: ConnectorProvider;
   /**
    * Bills a catalog Anthropic model with a plain API key instead of a custom OpenAI-compatible
    * connection; the catalog entry points at the emulator for the fixture's lifetime.
@@ -192,7 +193,7 @@ export async function startWorkerRun<
       isDefault: true,
     },
   });
-  if (!options.provider) {
+  if (!options.provider && computer) {
     await prisma.volume.createMany({
       data: [
         { kind: "bot_private", spaceId: SPACE, botId: bot.id, providerKind: "local-worker" },
@@ -240,13 +241,14 @@ export async function startWorkerRun<
       skillLock: createInMemorySkillLock(),
       skillLearning: "off",
       secrets: [],
+      connector: options.tools,
       runtime,
       workers,
     });
     return { provider, lifecycle, runtime, executor };
   };
   let current = build();
-  if (options.provider) {
+  if (options.provider && computer) {
     const context = {
       operationId: "worker-fixture",
       traceId: "worker-fixture",

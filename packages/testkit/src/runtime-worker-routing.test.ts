@@ -82,6 +82,109 @@ async function attemptsOf(run: Awaited<ReturnType<typeof fixture>>, runId: strin
 }
 
 describe("where a product run executes", () => {
+  it("completes a computerless bot's message through a worker with no mounts or file tools", async () => {
+    const seen: string[][] = [];
+    const calls: string[] = [];
+    const run = await startWorkerRun({
+      computerScope: "none",
+      tools: {
+        describe: () => ({
+          id: "fixture",
+          contractVersion: "1",
+          adapterVersion: "1",
+          capabilities: { discover: true, oauth: false, secretsBrokered: true },
+        }),
+        discoverTools: async () =>
+          ["mcp_lookup", "integration_lookup"].map((name) => ({
+            name,
+            description: "Lookup",
+            inputSchema: { type: "object", properties: {} },
+            readOnly: true,
+          })),
+        async *execute(call) {
+          calls.push(call.tool);
+          yield { type: "result", data: { found: call.tool } };
+        },
+      },
+      steps: [
+        { expect() {}, response: { type: "tool", id: "mcp", name: "mcp_lookup", arguments: {} } },
+        {
+          expect(request) {
+            expect(JSON.stringify(request.messages)).toContain("mcp_lookup");
+          },
+          response: { type: "tool", id: "integration", name: "integration_lookup", arguments: {} },
+        },
+        ...offeredShellTools(seen),
+      ],
+    });
+    cleanups.push(() => run.close());
+    const ensure = vi.spyOn(run.provider, "ensure");
+    const runId = await run.send("Hello.");
+    await run.continueRun(runId);
+
+    run.model.assertComplete();
+    expect(await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).toMatchObject({
+      status: "completed",
+      leaseOwner: null,
+    });
+    expect(seen).toEqual([[]]);
+    expect(calls).toEqual(["mcp_lookup", "integration_lookup"]);
+    expect(run.provider.launches).toHaveLength(1);
+    expect(ensure).toHaveBeenCalledWith(expect.objectContaining({ mounts: [] }), expect.anything());
+    expect(await run.prisma.computer.count()).toBe(0);
+    expect(await attemptsOf(run, runId)).toEqual([{ workerState: "released" }]);
+  });
+
+  it("fails a computerless run needing an attached file through the fenced finalizer", async () => {
+    const run = await startWorkerRun({ computerScope: "none", steps: [] });
+    cleanups.push(() => run.close());
+    const sent = await run.events.sendUserMessage({
+      spaceId: run.spaceId,
+      userId: run.userId,
+      botId: run.bot.id,
+      threadId: run.thread.id,
+      blocks: [
+        {
+          kind: "file",
+          artifactId: "missing-file",
+          name: "input.txt",
+          mimeType: "text/plain",
+          size: 1,
+        },
+      ],
+      prompt: "Read the file.",
+      trigger: "user",
+    });
+    const runId = sent.runId!;
+    await run.continueRun(runId);
+    expect(await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).toMatchObject({
+      status: "failed",
+      leaseOwner: null,
+      error: "Run setup failed: This run needs a computer, but the bot has none",
+    });
+    expect(await attemptsOf(run, runId)).toEqual([{ workerState: null }]);
+    expect(run.provider.launches).toEqual([]);
+  });
+
+  it("requeues during a home move without charging setup budget, then completes after release", async () => {
+    const run = await fixture(offeredShellTools([]));
+    const reservation = await run.lifecycle.reserveHomeMove(run.bot.computerId!);
+    if (!("marker" in reservation)) throw new Error(reservation.blocker);
+    const runId = await run.send("Hello.");
+    await run.continueRun(runId);
+    expect(await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).toMatchObject({
+      status: "queued",
+      error: null,
+    });
+    expect(await run.prisma.attempt.count({ where: { runId } })).toBe(0);
+    await run.lifecycle.releaseHomeMove(reservation.marker);
+    await run.continueRun(runId);
+    run.model.assertComplete();
+    expect(await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).toMatchObject({
+      status: "completed",
+    });
+  });
+
   it("runs a bot whose home is on volumes in its guest, with bash and grep in place of the computer shell", async () => {
     const seen: string[][] = [];
     const run = await fixture(offeredShellTools(seen));

@@ -1,3 +1,4 @@
+import { AgentRuntimeBusyError } from "@rakazo/adapter-kit";
 import type { PrismaClient } from "@rakazo/db";
 import { createDb, deleteOwnerVolumes, OwnerWorkerLiveError } from "@rakazo/db";
 import type { Pool } from "pg";
@@ -24,6 +25,33 @@ describePostgres("worker lifecycle under concurrent transactions (PostgreSQL)", 
   afterAll(async () => {
     await prisma.$disconnect();
     await pool.end();
+  });
+
+  it("serializes a home move reservation against a worker already planned in the space", async () => {
+    for (let round = 0; round < ROUNDS; round++) {
+      const provider = new FakeWorkerProvider();
+      const workers = createWorkerLifecycle({ prisma, provider });
+      const { computer, bot } = await fixture.migratedBot();
+      const attempt = await fixture.seedAttempt((await fixture.seedRun(bot)).id);
+      const launch = await fixture.launchFor(workers, attempt.id, mcpOnly);
+      const [started, reservation] = await Promise.allSettled([
+        workers.start(launch, fixture.context),
+        workers.reserveHomeMove(computer.id),
+      ]);
+      if (reservation.status !== "fulfilled") throw reservation.reason;
+      if ("marker" in reservation.value) {
+        expect(started).toMatchObject({
+          status: "rejected",
+          reason: expect.any(AgentRuntimeBusyError),
+        });
+        expect(provider.calls.filter((call) => call.op === "ensure")).toEqual([]);
+        await workers.releaseHomeMove(reservation.value.marker);
+      } else {
+        expect(reservation.value.blocker).toBe("space_worker_live");
+        expect(started.status).toBe("fulfilled");
+        await workers.release(attempt.id, fixture.context);
+      }
+    }
   });
 
   it("starts a worker only for the attempt holding the run's fence", async () => {

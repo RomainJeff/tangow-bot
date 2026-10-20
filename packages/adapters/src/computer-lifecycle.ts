@@ -7,19 +7,16 @@ import type {
   PortableFile,
   SandboxProvider,
 } from "@rakazo/adapter-kit";
-import { type ComputerUpdate, VolumeKind } from "@rakazo/contracts";
+import type { ComputerUpdate } from "@rakazo/contracts";
+import { VolumeKind } from "@rakazo/contracts";
 import {
   ACTIVE_RUN_STATUSES,
   computerVolumeHome,
   parseScreenLeaseId,
   screenLeaseId,
 } from "@rakazo/core";
-import {
-  expireComputerExecutionLeases,
-  type PrismaClient,
-  parseComputerMode,
-  type ThreadEvents,
-} from "@rakazo/db";
+import type { Prisma, PrismaClient, ThreadEvents } from "@rakazo/db";
+import { expireComputerExecutionLeases, parseComputerMode } from "@rakazo/db";
 import {
   clearInactiveUserComputerControl,
   expireComputerControl,
@@ -174,6 +171,24 @@ async function loadVolumeHome(
   );
 }
 
+/** The space lock also covers a computer added after the move reserved the existing ones. */
+async function claimComputerLifecycle(
+  prisma: PrismaClient,
+  computer: { spaceId: string; homeStorage: string },
+  args: Prisma.ComputerUpdateManyArgs,
+) {
+  if (computer.homeStorage !== "volumes") return prisma.computer.updateMany(args);
+  return prisma.$transaction(async (tx) => {
+    const computers = await tx.$queryRaw<{ maintenanceId: string | null }[]>`
+      SELECT "maintenanceId" FROM computers WHERE "spaceId" = ${computer.spaceId}
+      ORDER BY id FOR UPDATE`;
+    if (computers.some((row) => row.maintenanceId?.startsWith("home-move:"))) {
+      throw new ComputerBusyError();
+    }
+    return tx.computer.updateMany(args);
+  });
+}
+
 export async function provisionComputer(
   deps: {
     prisma: PrismaClient;
@@ -311,7 +326,7 @@ export async function provisionComputer(
   // worker that observed the same stamp could also claim and provision.
   const observedStamp = reclaimStamp ?? suspendStamp ?? existing.updatedAt;
   const claimStamp = new Date(Math.max(Date.now(), observedStamp.getTime() + 1));
-  const claimed = await deps.prisma.computer.updateMany({
+  const claimed = await claimComputerLifecycle(deps.prisma, existing, {
     where: {
       id: computerId,
       ...claimWhere,
@@ -756,7 +771,7 @@ export async function replaceComputer(
   const previousState = existing.state;
   const now = new Date();
   const claimStamp = new Date(Math.max(now.getTime(), existing.updatedAt.getTime() + 1));
-  const claimed = await deps.prisma.computer.updateMany({
+  const claimed = await claimComputerLifecycle(deps.prisma, existing, {
     where: {
       id: computerId,
       state: previousState,

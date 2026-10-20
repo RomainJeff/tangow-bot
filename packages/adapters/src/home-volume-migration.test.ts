@@ -3,10 +3,13 @@ import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { AdapterContext, PortableFile } from "@rakazo/adapter-kit";
+import { AgentRuntimeBusyError } from "@rakazo/adapter-kit";
 import type { PrismaClient } from "@rakazo/db";
+import { createThreadEvents } from "@rakazo/db";
 import type { PgliteDatabase } from "@rakazo/db/pglite.test-support";
 import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { ComputerBusyError, provisionComputer } from "./computer-lifecycle.js";
 import { checkpointComputerWorkspace, restoreComputerWorkspace } from "./computer-workspace.js";
 import { FakeSandboxProvider } from "./fake-sandbox.js";
 import { MemoryVolumeFiles } from "./fake-volume-files.js";
@@ -14,6 +17,7 @@ import { FakeWorkerProvider } from "./fake-worker-provider.js";
 import { LocalAgentHomeStore } from "./home.js";
 import type { HomeMoveOptions } from "./home-volume-migration.js";
 import { moveHomeToVolumes } from "./home-volume-migration.js";
+import { InMemoryJobQueue } from "./wakeup.js";
 import { mcpOnly, workerFixture } from "./worker-fixture.test-support.js";
 import { createWorkerLifecycle } from "./worker-lifecycle.js";
 
@@ -124,6 +128,65 @@ async function teamHome() {
 }
 
 describe("moving a home from snapshots to volumes", () => {
+  it("blocks planning and a previously planned worker during a copy, then adopts and releases the fence", async () => {
+    const { spaceId, computer } = await teamHome();
+    const bot = await fixture.seedBot(spaceId, null);
+    const attempt = await fixture.seedAttempt((await fixture.seedRun(bot)).id);
+    const workers = createWorkerLifecycle({ prisma, provider });
+    const launch = await fixture.launchFor(workers, attempt.id, mcpOnly);
+    let checked = false;
+    class LaunchDuringCopy extends MemoryVolumeFiles {
+      override async write(ref: string, file: PortableFile, context: AdapterContext) {
+        if (!checked) {
+          checked = true;
+          expect(await workers.plan({ attemptId: attempt.id, needs: mcpOnly })).toEqual({
+            mode: "busy",
+            reason: "home_moving",
+          });
+          await expect(workers.start(launch, fixture.context)).rejects.toBeInstanceOf(
+            AgentRuntimeBusyError,
+          );
+          const added = await fixture.seedComputer(spaceId, { homeStorage: "volumes" });
+          for (const target of [computer, added])
+            await expect(
+              provisionComputer(
+                {
+                  prisma,
+                  home,
+                  sandbox: new FakeSandboxProvider(),
+                  jobs: new InMemoryJobQueue(),
+                  events: createThreadEvents(prisma),
+                },
+                target.id,
+                fixture.context,
+              ),
+            ).rejects.toBeInstanceOf(ComputerBusyError);
+        }
+        return super.write(ref, file, context);
+      }
+    }
+    volumeFiles = new LaunchDuringCopy();
+    expect((await move(computer.id)).outcome).toBe("adopted");
+    expect(checked).toBe(true);
+    expect(await prisma.computer.findUniqueOrThrow({ where: { id: computer.id } })).toMatchObject({
+      homeStorage: "volumes",
+      maintenanceId: null,
+    });
+    await workers.start(launch, fixture.context);
+    expect(await fixture.workerStateOf(attempt.id)).toBe("ready");
+    await workers.release(attempt.id, fixture.context);
+  });
+
+  it("keeps an interrupted reservation durable until the operator releases it, then resumes", async () => {
+    const { computer } = await teamHome();
+    const workers = createWorkerLifecycle({ prisma, provider });
+    const reservation = await workers.reserveHomeMove(computer.id);
+    if (!("marker" in reservation)) throw new Error(reservation.blocker);
+    expect((await move(computer.id)).outcome).toBe("refused");
+    await createWorkerLifecycle({ prisma, provider }).clearStaleHomeMove(computer.id);
+    expect((await move(computer.id)).outcome).toBe("adopted");
+  });
+
   it("copies a team home into each bot's private volume and the shared volume, and nowhere else", async () => {
     const { spaceId, computer, ada, bob } = await teamHome();
 
@@ -350,25 +413,14 @@ describe("moving a home from snapshots to volumes", () => {
         });
       },
     ],
-    [
-      "a worker of the space starts and finishes",
-      "space_worker_ran",
-      async (_: string, spaceId: string) => {
-        const otherBot = await fixture.seedBot(spaceId, null);
-        const attempt = await fixture.seedAttempt((await fixture.seedRun(otherBot)).id);
-        const workers = createWorkerLifecycle({ prisma, provider });
-        await workers.start(await fixture.launchFor(workers, attempt.id, mcpOnly), fixture.context);
-        await workers.release(attempt.id, fixture.context);
-      },
-    ],
   ])("does not adopt when %s during the copy", async (_, code, during) => {
-    const { spaceId, computer } = await teamHome();
+    const { computer } = await teamHome();
     class SomethingHappensDuringCopy extends MemoryVolumeFiles {
       private happened = false;
       override async write(ref: string, file: PortableFile, context: AdapterContext) {
         if (!this.happened) {
           this.happened = true;
-          await during(computer.id, spaceId);
+          await during(computer.id);
         }
         return super.write(ref, file, context);
       }

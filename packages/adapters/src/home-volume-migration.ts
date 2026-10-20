@@ -263,112 +263,120 @@ export async function moveHomeToVolumes(
   const { blocker, start } = await workers.inspectHomeMove(computer.id);
   if (blocker) return { outcome: "refused", refusal: { code: blocker } };
 
-  const plan = await planHome(home, computer, context);
-  if (plan.notCopied.length > 0 && !options.leaveUnmapped) {
-    return { outcome: "refused", refusal: { code: "not_copied", entries: plan.notCopied } };
+  const reservation = options.dryRun ? null : await workers.reserveHomeMove(computer.id);
+  if (reservation && "blocker" in reservation) {
+    return { outcome: "refused", refusal: { code: reservation.blocker } };
   }
-
-  const targets: TargetVolume[] = destinationsOf(computer, plan.planned).map((destination) => ({
-    destination,
-    volumeId: null,
-    providerRef: null,
-    files: plan.planned.filter((file) => sameDestination(file.destination, destination)),
-  }));
-  let adoptedAt: string | null = null;
-  const manifest = (): HomeManifest => ({
-    version: 1,
-    computerId: computer.id,
-    homeKey: computer.homeKey,
-    scope: computer.scope,
-    homeRevision: start.homeRevision,
-    startedAt,
-    adoptedAt,
-    volumes: targets.map(({ destination, volumeId, providerRef }) => ({
-      destination,
-      volumeId,
-      providerRef,
-    })),
-    files: targets.flatMap((target) =>
-      target.files.map((file) => ({ ...file, volumeId: target.volumeId })),
-    ),
-    notCopied: plan.notCopied,
-  });
-
   try {
-    for (const target of targets) {
-      const existing = options.dryRun
-        ? await existingVolume(prisma, computer, target.destination)
-        : await workers.ensureVolume(ownerOf(computer, target.destination), context);
-      target.volumeId = existing?.volumeId ?? null;
-      target.providerRef = existing?.providerRef ?? null;
+    const plan = await planHome(home, computer, context);
+    if (plan.notCopied.length > 0 && !options.leaveUnmapped) {
+      return { outcome: "refused", refusal: { code: "not_copied", entries: plan.notCopied } };
     }
-    const before = await inspectTargets(files, targets, context);
-    const occupied = before.filter((volume) => volume.foreign.length > 0);
-    if (occupied.length > 0) {
-      return {
-        outcome: "refused",
-        refusal: { code: "volume_not_empty", volumes: occupied.map(conflictOf) },
-        manifest: manifest(),
-      };
-    }
-    if (options.dryRun) return { outcome: "planned", manifest: manifest() };
 
-    const toWrite = new Map(
-      before.flatMap(({ target, missing }) =>
-        missing.map((file) => [file.homePath, { file, volumeRef: target.providerRef }] as const),
+    const targets: TargetVolume[] = destinationsOf(computer, plan.planned).map((destination) => ({
+      destination,
+      volumeId: null,
+      providerRef: null,
+      files: plan.planned.filter((file) => sameDestination(file.destination, destination)),
+    }));
+    let adoptedAt: string | null = null;
+    const manifest = (): HomeManifest => ({
+      version: 1,
+      computerId: computer.id,
+      homeKey: computer.homeKey,
+      scope: computer.scope,
+      homeRevision: start.homeRevision,
+      startedAt,
+      adoptedAt,
+      volumes: targets.map(({ destination, volumeId, providerRef }) => ({
+        destination,
+        volumeId,
+        providerRef,
+      })),
+      files: targets.flatMap((target) =>
+        target.files.map((file) => ({ ...file, volumeId: target.volumeId })),
       ),
-    );
-    // Every file is compared with the plan, not only those still to write, so a resumed move
-    // never adopts copies of a home that changed since an earlier run wrote them.
-    const changed: string[] = [];
-    const seen = new Set<string>();
-    for await (const source of homeFiles(home, computer.homeKey, plan.links, context)) {
-      seen.add(source.path);
-      if (plan.exported.get(source.path) !== source.fingerprint) {
-        changed.push(source.path);
-        continue;
+      notCopied: plan.notCopied,
+    });
+
+    try {
+      for (const target of targets) {
+        const existing = options.dryRun
+          ? await existingVolume(prisma, computer, target.destination)
+          : await workers.ensureVolume(ownerOf(computer, target.destination), context);
+        target.volumeId = existing?.volumeId ?? null;
+        target.providerRef = existing?.providerRef ?? null;
       }
-      const pending = toWrite.get(source.path);
-      if (!pending) continue;
-      if (!pending.volumeRef) throw new Error(`No provisioned volume for ${source.path}`);
-      const { volumePath, mode } = pending.file;
-      await files.write(
-        pending.volumeRef,
-        { path: volumePath, content: source.content, mode },
-        context,
+      const before = await inspectTargets(files, targets, context);
+      const occupied = before.filter((volume) => volume.foreign.length > 0);
+      if (occupied.length > 0) {
+        return {
+          outcome: "refused",
+          refusal: { code: "volume_not_empty", volumes: occupied.map(conflictOf) },
+          manifest: manifest(),
+        };
+      }
+      if (options.dryRun) return { outcome: "planned", manifest: manifest() };
+
+      const toWrite = new Map(
+        before.flatMap(({ target, missing }) =>
+          missing.map((file) => [file.homePath, { file, volumeRef: target.providerRef }] as const),
+        ),
       );
-    }
-    changed.push(...[...plan.exported.keys()].filter((path) => !seen.has(path)));
-    if (changed.length > 0) {
-      return {
-        outcome: "refused",
-        refusal: { code: "home_changed", paths: changed.sort() },
-        manifest: manifest(),
-      };
-    }
+      // Every file is compared with the plan, not only those still to write, so a resumed move
+      // never adopts copies of a home that changed since an earlier run wrote them.
+      const changed: string[] = [];
+      const seen = new Set<string>();
+      for await (const source of homeFiles(home, computer.homeKey, plan.links, context)) {
+        seen.add(source.path);
+        if (plan.exported.get(source.path) !== source.fingerprint) {
+          changed.push(source.path);
+          continue;
+        }
+        const pending = toWrite.get(source.path);
+        if (!pending) continue;
+        if (!pending.volumeRef) throw new Error(`No provisioned volume for ${source.path}`);
+        const { volumePath, mode } = pending.file;
+        await files.write(
+          pending.volumeRef,
+          { path: volumePath, content: source.content, mode },
+          context,
+        );
+      }
+      changed.push(...[...plan.exported.keys()].filter((path) => !seen.has(path)));
+      if (changed.length > 0) {
+        return {
+          outcome: "refused",
+          refusal: { code: "home_changed", paths: changed.sort() },
+          manifest: manifest(),
+        };
+      }
 
-    const after = await inspectTargets(files, targets, context);
-    const mismatched = after.filter(
-      (volume) => volume.foreign.length > 0 || volume.missing.length > 0,
-    );
-    if (mismatched.length > 0) {
-      return {
-        outcome: "refused",
-        refusal: { code: "copy_mismatch", volumes: mismatched.map(conflictOf) },
-        manifest: manifest(),
-      };
-    }
+      const after = await inspectTargets(files, targets, context);
+      const mismatched = after.filter(
+        (volume) => volume.foreign.length > 0 || volume.missing.length > 0,
+      );
+      if (mismatched.length > 0) {
+        return {
+          outcome: "refused",
+          refusal: { code: "copy_mismatch", volumes: mismatched.map(conflictOf) },
+          manifest: manifest(),
+        };
+      }
 
-    const adoption = await workers.adoptVolumeHome(computer.id, start);
-    if (adoption !== "adopted") {
-      return { outcome: "refused", refusal: { code: adoption }, manifest: manifest() };
+      const adoption = await workers.adoptVolumeHome(computer.id, start);
+      if (adoption !== "adopted") {
+        return { outcome: "refused", refusal: { code: adoption }, manifest: manifest() };
+      }
+      adoptedAt = new Date().toISOString();
+      return { outcome: "adopted", manifest: manifest() };
+    } finally {
+      if (manifestPath) {
+        await writeFile(manifestPath, `${JSON.stringify(manifest(), null, 2)}\n`, { flag: "wx" });
+      }
     }
-    adoptedAt = new Date().toISOString();
-    return { outcome: "adopted", manifest: manifest() };
   } finally {
-    if (manifestPath) {
-      await writeFile(manifestPath, `${JSON.stringify(manifest(), null, 2)}\n`, { flag: "wx" });
-    }
+    if (reservation) await workers.releaseHomeMove(reservation.marker);
   }
 }
 

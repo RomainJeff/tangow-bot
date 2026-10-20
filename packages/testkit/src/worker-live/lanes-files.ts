@@ -5,7 +5,8 @@ import { WORKER_LIMITS } from "@rakazo/adapters/runtime-worker";
 import { fileTask, nativeFileTask, toolResult } from "../file-task.js";
 import { startWorkerRun } from "../worker-run-fixture.js";
 import { call, finish, liveRun } from "./run.js";
-import { context, type Lane, sh, sha256 } from "./session.js";
+import type { Lane } from "./session.js";
+import { context, forward, sha256 } from "./session.js";
 
 export const laneA: Lane = {
   id: "a",
@@ -145,47 +146,35 @@ export const laneF: Lane = {
 
 export const laneI: Lane = {
   id: "i",
-  issue: "run sans fichiers/computer",
-  scenario:
-    "A run whose bot has no computer; then a VM of the worker template, to check the guest user can write /workspace",
+  issue: "run sans computer ni fichiers utilisateur",
+  scenario: "A computerless bot completes message_user through a worker with no mounts",
   passWhen:
-    "The executor refuses the run before it routes it, with no attempt reaching a worker and no sandbox created; the sandbox user can write /workspace",
+    "The run completes, no computer or volume is created, and worker.start grants no mounts",
   async run(live) {
-    const worker = await liveRun(live, { computer: "none", steps: [] });
+    const mounts: unknown[] = [];
+    const worker = await liveRun(live, {
+      computer: "none",
+      steps: finish("Answered without a computer"),
+      wrap: (provider) =>
+        forward(provider, {
+          async ensure(spec, ctx) {
+            mounts.push(spec.mounts);
+            return provider.ensure(spec, ctx);
+          },
+        }),
+    });
     try {
-      const before = await live.census();
-      const runId = await worker.run.send("Run without a computer.");
-      const refusal = await worker.run.continueRun(runId).then(
-        () => null,
-        (error: unknown) => (error instanceof Error ? error.message : String(error)),
-      );
-      const row = await worker.run.prisma.run.findUniqueOrThrow({
-        where: { id: runId },
-        select: { status: true },
-      });
-      const attempts = await worker.attempts(runId);
-      const after = await live.census();
-      const vm = await live.vm({}, live.config.workerTemplate);
-      const workspace = await sh(
-        vm,
-        "(echo x > /workspace/scratch.txt && echo writable) 2>/dev/null || echo read-only",
-      );
-      await vm.kill();
+      const runId = await worker.send("Answer without a computer.");
+      await worker.completed(runId);
+      const computers = await worker.run.prisma.computer.count();
+      const volumes = await worker.run.prisma.volume.count();
       return {
         pass:
-          refusal === "Bot has no computer" &&
-          attempts.every((attempt) => !attempt.workerProviderRef && !attempt.workerState) &&
-          after.sandboxes === before.sandboxes &&
-          worker.connects.length === 0 &&
-          workspace === "writable",
-        observed: {
-          continueThrew: refusal,
-          runStatusAfter: row.status,
-          attemptsWithAWorker: attempts.filter((attempt) => attempt.workerState).length,
-          sandboxesCreated: after.sandboxes - before.sandboxes,
-          workspaceWritableBySandboxUser: workspace === "writable",
-          note: "Every bot run needs a computer, and a bot with one is always offered the file tools, so the executor never derives a worker run without files: deriveRunNeeds' no-file case is covered offline.",
-        },
+          computers === 0 &&
+          volumes === 0 &&
+          mounts.length === 1 &&
+          JSON.stringify(mounts[0]) === "[]",
+        observed: { status: await worker.status(runId), computers, volumes, mounts },
       };
     } finally {
       await worker.close();

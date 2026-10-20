@@ -5,6 +5,7 @@
  * changes nothing; after an interruption it resumes the copy.
  *
  *   pnpm exec tsx scripts/migrate-home-to-volumes.ts --computer <id> --manifest <path>
+ *   After stopping an interrupted move process, release its reservation with --clear-stale-move.
  *     [--dry-run] [--leave-unmapped] [--template <worker template>]
  *
  * The manifest path must not exist. The record is written there once the move creates anything,
@@ -29,6 +30,7 @@ function options() {
     options: {
       computer: { type: "string" },
       manifest: { type: "string" },
+      "clear-stale-move": { type: "boolean", default: false },
       "dry-run": { type: "boolean", default: false },
       "leave-unmapped": { type: "boolean", default: false },
       template: { type: "string", default: "rakazo-worker-pi" },
@@ -36,8 +38,10 @@ function options() {
   });
   const dryRun = values["dry-run"];
   if (!values.computer) throw new Error("--computer is required");
-  if (!values.manifest && !dryRun) throw new Error("--manifest is required");
+  if (!values.manifest && !dryRun && !values["clear-stale-move"])
+    throw new Error("--manifest is required");
   return {
+    clearStaleMove: values["clear-stale-move"],
     computerId: values.computer,
     manifestPath: values.manifest ?? null,
     dryRun,
@@ -58,13 +62,19 @@ async function main() {
   try {
     // The SDK reads E2B_DOMAIN or E2B_API_URL itself.
     const provider = new E2BWorkerProvider({ apiKey, template: input.template });
+    const workers = createWorkerLifecycle({ prisma, provider });
+    if (input.clearStaleMove) {
+      await workers.clearStaleHomeMove(input.computerId);
+      console.log("Interrupted home move reservation cleared; rerun the move to resume.");
+      return;
+    }
     const operationId = randomUUID();
     const report = await moveHomeToVolumes(
       {
         prisma,
         home: new LocalAgentHomeStore(process.env.DATA_DIR ?? "./data"),
         files,
-        workers: createWorkerLifecycle({ prisma, provider }),
+        workers,
       },
       input,
       {
