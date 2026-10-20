@@ -1,4 +1,9 @@
-import { resolveDeploymentModel, resolveSandboxProvider } from "@rakazo/adapters";
+import type { WorkerProviderConfig } from "@rakazo/adapters";
+import {
+  resolveDeploymentModel,
+  resolveSandboxProvider,
+  resolveWorkerProvider,
+} from "@rakazo/adapters";
 import type { SkillLearningMode } from "@rakazo/core";
 import {
   parseSkillLearningMode,
@@ -34,6 +39,8 @@ export interface AppEnv {
   agentRuntime: string;
   deploymentModelKey: string | undefined;
   e2bApiKey: string | undefined;
+  /** WORKER_PROVIDER and WORKER_TEMPLATE: null keeps every run in process. */
+  workerProvider: WorkerProviderConfig | null;
   daytonaApiKey: string | undefined;
   daytonaApiUrl: string | undefined;
   daytonaTarget: string | undefined;
@@ -119,6 +126,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     // Provider, model and key resolve together: see resolveDeploymentModel.
     deploymentModelKey: deploymentModel.key,
     e2bApiKey: source.E2B_API_KEY,
+    workerProvider: resolveWorkerProvider(source),
     daytonaApiKey: source.DAYTONA_API_KEY,
     daytonaApiUrl: source.DAYTONA_API_URL,
     daytonaTarget: source.DAYTONA_TARGET,

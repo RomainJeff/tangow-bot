@@ -21,6 +21,7 @@ import {
   applyMessagingOutboundStatus,
   ChatSdkMessagingSurface,
   ComposioConnector,
+  composeWorkers,
   createBackgroundJobHandlers,
   createConnectorStack,
   createJobReconciler,
@@ -34,6 +35,7 @@ import {
   createSkillLineSweep,
   createTraceExporterFromEnv,
   createWebProvider,
+  createWorkerProvider,
   destroyBot,
   EmailEmulator,
   EncryptedSecretStore,
@@ -240,6 +242,7 @@ export async function createApp(
   const oauthLogins = new PiOAuthLogins();
   const home = new LocalAgentHomeStore(env.dataDir);
   const artifacts = new LocalArtifactStore(env.dataDir);
+  const workers = composeWorkers(prisma, createWorkerProvider(env.workerProvider));
   const memory = new MarkdownMemoryStore(prisma);
   const mcp = new McpConnector(
     prisma,
@@ -341,7 +344,16 @@ export async function createApp(
       await Promise.all(
         bots.map((bot) =>
           destroyBot(
-            { prisma, sandbox, home, jobs, events, artifacts, dataDir: env.dataDir },
+            {
+              prisma,
+              sandbox,
+              home,
+              jobs,
+              events,
+              artifacts,
+              dataDir: env.dataDir,
+              workerLifecycle: workers.lifecycle,
+            },
             bot,
             {
               operationId: `account-delete:${userId}`,
@@ -372,6 +384,7 @@ export async function createApp(
     sessionLog,
     skillLock,
     runtime,
+    workers: workers.runWorkers,
     sandbox,
     memory,
     memoryProviders,
@@ -437,12 +450,14 @@ export async function createApp(
           sessionLog,
           lineOnlyMessages: env.skillLearning !== "off",
         }),
+        reconcileWorkers: workers.reconcileWorkers,
       })
     : undefined;
   reconciler?.start();
 
   const router = createRouter({
     prisma,
+    workerLifecycle: workers.lifecycle,
     skillLock,
     events,
     sessionLog,
