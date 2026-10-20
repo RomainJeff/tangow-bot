@@ -1,4 +1,4 @@
-import type { AgentRuntime } from "@rakazo/adapter-kit";
+import type { AdapterContext, AgentRuntime } from "@rakazo/adapter-kit";
 import type { LaunchPlan, RunNeeds, WorkerLaunch } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import type { WorkerLifecycle } from "../worker-lifecycle.js";
@@ -80,8 +80,8 @@ export function createWorkerAgentRuntime(options: {
 export interface RunWorkers {
   plan(input: { attemptId: string; needs: RunNeeds }): Promise<LaunchPlan>;
   runtime(launch: WorkerLaunch): AgentRuntime;
-  /** Creates the private volume a bot attached after its computer moved onto volumes lacks. */
-  provisionBotVolume(botId: string): Promise<void>;
+  /** Creates the volumes a computer whose home is on volumes lacks, before it mounts them. */
+  provisionHomeVolumes(computerId: string, context: AdapterContext): Promise<void>;
 }
 
 export function createRunWorkers(deps: {
@@ -93,16 +93,8 @@ export function createRunWorkers(deps: {
   const stops = createStopJournal(deps.prisma);
   return {
     plan: (input) => deps.lifecycle.plan(input),
-    async provisionBotVolume(botId) {
-      await deps.lifecycle.provisionAttachedBotVolume(botId, {
-        operationId: `volume:${botId}`,
-        traceId: `volume:${botId}`,
-        spaceId: "",
-        userId: "",
-        botId,
-        signal: new AbortController().signal,
-      });
-    },
+    provisionHomeVolumes: (computerId, context) =>
+      deps.lifecycle.provisionHomeVolumes(computerId, context),
     runtime: (launch) =>
       createWorkerAgentRuntime({
         launcher: createLifecycleLauncher({ ...deps, launch }),

@@ -662,7 +662,7 @@ function withLocalTools(tools: ConnectorTool[], local: readonly ConnectorTool[])
  */
 async function routeRun(
   deps: Pick<ExecutorDeps, "runtime" | "workers">,
-  run: { attemptId: string; botId: string; tools: ConnectorTool[]; computerScope: ComputerMode },
+  run: { attemptId: string; tools: ConnectorTool[]; computerScope: ComputerMode },
 ): Promise<RunRoute> {
   const inProcess = {
     runtime: deps.runtime,
@@ -676,12 +676,7 @@ async function routeRun(
     computerTools: run.tools.some((tool) => REMOTE_COMPUTER_TOOLS.has(tool.name)),
     computerScope: run.computerScope,
   });
-  let plan = await deps.workers.plan({ attemptId: run.attemptId, needs });
-  if (plan.mode === "refused" && plan.refusal.slot === "private") {
-    // A bot attached after its computer moved has no volume yet: its first run creates it.
-    await deps.workers.provisionBotVolume(run.botId);
-    plan = await deps.workers.plan({ attemptId: run.attemptId, needs });
-  }
+  const plan = await deps.workers.plan({ attemptId: run.attemptId, needs });
   if (plan.mode === "in_process") return inProcess;
   if (plan.mode === "refused") {
     return {
@@ -2013,7 +2008,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
         };
         const { runtime, tools, refusal } = await routeRun(deps, {
           attemptId: attempt.id,
-          botId: bot.id,
           tools: [...builtins, ...exposedConnectorTools],
           computerScope: computerMode,
         });

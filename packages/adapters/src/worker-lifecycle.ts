@@ -503,19 +503,35 @@ export function createWorkerLifecycle(deps: {
     ensureVolume,
 
     /**
-     * Creates and provisions the private volume of a bot attached to a computer whose home is on
-     * volumes, as a bot attached after adoption needs. Null while the home is still a snapshot.
+     * Creates and provisions the private volume of every bot on a computer whose home is on
+     * volumes, archived ones included, as a bot attached after the move needs before the computer
+     * mounts it. Nothing while the home is still a snapshot.
      */
-    async provisionAttachedBotVolume(
-      botId: string,
-      context: AdapterContext,
-    ): Promise<EnsuredVolume | null> {
-      const bot = await prisma.bot.findUniqueOrThrow({
-        where: { id: botId },
-        select: { spaceId: true, computer: { select: { homeStorage: true } } },
+    async provisionHomeVolumes(computerId: string, context: AdapterContext): Promise<void> {
+      const computer = await prisma.computer.findUniqueOrThrow({
+        where: { id: computerId },
+        select: { spaceId: true, homeStorage: true, bots: { select: { id: true } } },
       });
-      if (bot.computer?.homeStorage !== "volumes") return null;
-      return ensureVolume({ kind: "bot_private", spaceId: bot.spaceId, botId }, context);
+      if (computer.homeStorage !== "volumes") return;
+      const provisioned = new Set(
+        (
+          await prisma.volume.findMany({
+            where: {
+              kind: "bot_private",
+              botId: { in: computer.bots.map((bot) => bot.id) },
+              providerRef: { not: null },
+            },
+            select: { botId: true },
+          })
+        ).map((volume) => volume.botId),
+      );
+      for (const bot of computer.bots) {
+        if (provisioned.has(bot.id)) continue;
+        await ensureVolume(
+          { kind: "bot_private", spaceId: computer.spaceId, botId: bot.id },
+          context,
+        );
+      }
     },
 
     /**

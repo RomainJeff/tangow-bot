@@ -98,6 +98,30 @@ export async function ensureComputerWorkspaceLayout(
   }
 }
 
+/**
+ * Keeps the files of a machine about to be discarded under a key of their own: they may be newer
+ * than the live home or its volumes, which they must never overwrite.
+ */
+export async function archiveDiscardedWorkspace(
+  home: AgentHomeStore,
+  record: { homeKey: string },
+  machineRef: string,
+  files: AsyncIterable<PortableFile>,
+  context: AdapterContext,
+): Promise<void> {
+  const staging = await mkdtemp(path.join(tmpdir(), "rakazo-discarded-"));
+  try {
+    let kept = 0;
+    for await (const file of files) {
+      await writePortableFile(staging, file);
+      kept += 1;
+    }
+    if (kept > 0) await home.commit(`${record.homeKey}.discarded-${machineRef}`, staging, context);
+  } finally {
+    await rm(staging, { recursive: true, force: true });
+  }
+}
+
 export async function checkpointComputerWorkspace(
   home: AgentHomeStore,
   sandbox: SandboxProvider,

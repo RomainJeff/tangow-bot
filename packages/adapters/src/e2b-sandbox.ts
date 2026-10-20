@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import path from "node:path";
 import { type CommandResult, Sandbox, TimeoutError } from "@e2b/desktop";
 import type {
   AdapterContext,
@@ -14,7 +16,7 @@ import type {
   ScreenRequest,
   ScreenSession,
 } from "@rakazo/adapter-kit";
-import { boundedSandboxCommandTimeoutMs, type VolumeHome } from "@rakazo/core";
+import { boundedSandboxCommandTimeoutMs, underVolumeMounts, type VolumeHome } from "@rakazo/core";
 import { sandboxIdleMs } from "./computer-idle.js";
 import { normalizeWorkspacePath, shellQuote, workspacePath } from "./computer-support.js";
 import {
@@ -32,14 +34,36 @@ export interface E2BSandboxSdk {
   pause(id: string, options: { apiKey: string }): Promise<void>;
 }
 
-/** Marks a computer created with its home's volumes mounted. */
-const VOLUME_HOME = { home: "volumes" } as const;
+/**
+ * The set of volumes a computer mounts, as recorded in its metadata: part of its identity, since a
+ * running machine cannot mount another volume. A machine created before its home moved has none.
+ */
+function mountSet(volumeHome: VolumeHome): string {
+  const mounts = volumeHome.mounts.map((mount) => [mount.path, mount.volumeRef]).sort();
+  return createHash("sha256")
+    .update(JSON.stringify({ root: volumeHome.root, mounts }))
+    .digest("hex");
+}
+
+/** The workspace directories on a volume, relative to the workspace ("" for all of it). */
+function writableRoots(volumeHome: VolumeHome): string[] {
+  return volumeHome.mounts.flatMap((mount) => {
+    if (volumeHome.root === mount.path || volumeHome.root.startsWith(`${mount.path}/`)) return [""];
+    return mount.path.startsWith(`${volumeHome.root}/`)
+      ? [mount.path.slice(volumeHome.root.length + 1)]
+      : [];
+  });
+}
 
 export function e2bCreateOptions(botId: string, apiKey: string, volumeHome?: VolumeHome) {
   return {
     apiKey,
     timeoutMs: sandboxIdleMs(),
-    metadata: { botId, rakazo: "computer", ...(volumeHome ? VOLUME_HOME : {}) },
+    metadata: {
+      botId,
+      rakazo: "computer",
+      ...(volumeHome ? { home: "volumes", mounts: mountSet(volumeHome) } : {}),
+    },
     resolution: [1280, 800] as [number, number],
     lifecycle: { onTimeout: "pause" as const, autoResume: false },
     ...(volumeHome && {
@@ -48,6 +72,22 @@ export function e2bCreateOptions(botId: string, apiKey: string, volumeHome?: Vol
       ),
     }),
   };
+}
+
+/**
+ * Points `link` at `target`. `ln -sfn` would nest the link inside a real directory and succeed, so
+ * an empty directory is removed first, a directory with files in it fails, and the result is read
+ * back.
+ */
+export function linkWorkspaceCommand(target: string, link: string): string {
+  const [to, at] = [shellQuote(target), shellQuote(link)];
+  return [
+    `if [ -L ${at} ]; then rm -f ${at}`,
+    `elif [ -d ${at} ]; then rmdir ${at} 2>/dev/null || { echo ${shellQuote(`${link} has files in it, so it cannot link to ${target}`)} >&2; exit 1; }`,
+    `elif [ -e ${at} ]; then echo ${shellQuote(`${link} is a file, so it cannot link to ${target}`)} >&2; exit 1; fi`,
+    `ln -s ${to} ${at}`,
+    `[ "$(readlink ${at})" = ${to} ] || { echo ${shellQuote(`${link} does not link to ${target}`)} >&2; exit 1; }`,
+  ].join("\n");
 }
 
 // How the E2B SDK words a sandbox that no longer exists. It does not always say "not found":
@@ -153,44 +193,54 @@ export class E2BSandboxProvider implements SandboxProvider {
 
   async provision(
     request: Parameters<SandboxProvider["provision"]>[0],
-    _context: AdapterContext,
+    context: AdapterContext,
   ): Promise<ComputerRef> {
+    const volumeHome = request.volumeHome;
+    const onVolumes = volumeHome ? { writableRoots: writableRoots(volumeHome) } : {};
     if (request.providerRef && request.providerKind === "e2b") {
       try {
-        const desktop = await this.box({
+        const machine: ComputerRef = {
           id: request.providerRef,
           providerRef: request.providerRef,
           kind: "e2b",
           botId: request.botId,
-        });
-        // A home moved onto volumes while its machine was stopped: that machine mounts none, and
-        // its disk holds the copy the move left behind.
-        if (request.volumeHome && (await desktop.getInfo()).metadata.home !== VOLUME_HOME.home) {
-          this.forget(desktop.sandboxId);
-          await desktop.kill();
-        } else {
+        };
+        const desktop = await this.box(machine);
+        const metadata = volumeHome ? (await desktop.getInfo()).metadata : {};
+        if (!volumeHome || metadata.mounts === mountSet(volumeHome)) {
           return {
             id: desktop.sandboxId,
             botId: request.botId,
             kind: "e2b",
             providerRef: desktop.sandboxId,
             fresh: false,
+            ...onVolumes,
           };
         }
+        // Created before its home moved, or with another set of volumes: what it holds off the
+        // volumes may be newer than any copy, so it is archived before the machine goes.
+        await volumeHome.archive(
+          this.filesOffVolumes(
+            machine,
+            desktop,
+            metadata.home === "volumes" ? volumeHome.root : null,
+            context,
+          ),
+        );
+        this.forget(desktop.sandboxId);
+        await desktop.kill();
       } catch (error) {
         this.boxes.delete(request.providerRef);
         // A transport failure says nothing about the workspace still on the server.
         if (!isSandboxGoneError(error)) throw error;
       }
     }
-    const desktop = await this.sdk.create(
-      e2bCreateOptions(request.botId, this.apiKey, request.volumeHome),
-    );
-    if (request.volumeHome) {
+    const desktop = await this.sdk.create(e2bCreateOptions(request.botId, this.apiKey, volumeHome));
+    if (volumeHome) {
       // The workspace is the volumes' own root, so a file has the same path here as in a worker.
       const linked = await this.runSetupCommand(
         desktop,
-        `ln -sfn ${shellQuote(request.volumeHome.root)} ${shellQuote(E2B_WORKSPACE)}`,
+        linkWorkspaceCommand(volumeHome.root, E2B_WORKSPACE),
       );
       if (linked.exitCode !== 0) {
         await desktop.kill().catch(() => undefined);
@@ -205,12 +255,30 @@ export class E2BSandboxProvider implements SandboxProvider {
       kind: "e2b",
       providerRef: desktop.sandboxId,
       fresh: true,
+      ...onVolumes,
     };
+  }
+
+  /**
+   * A discarded machine's workspace files on no volume: all of them on a machine created before
+   * its home moved (`root` null), else those outside the mount points under the volumes' root.
+   */
+  private async *filesOffVolumes(
+    machine: ComputerRef,
+    desktop: Sandbox,
+    root: string | null,
+    context: AdapterContext,
+  ): AsyncIterable<PortableFile> {
+    await this.desktops.stopBrowsers(machine, context);
+    yield* walkE2BWorkspace(desktop, "", context, (relative) =>
+      root === null ? true : !underVolumeMounts(path.posix.join(root, relative)),
+    );
   }
 
   async prepare(computer: ComputerRef, _context: AdapterContext): Promise<void> {
     const desktop = await this.box(computer);
-    if (computer.fresh) await desktop.files.makeDir(E2B_WORKSPACE);
+    // On volumes the workspace is a link provision made: a directory there would break it.
+    if (computer.fresh && !computer.writableRoots) await desktop.files.makeDir(E2B_WORKSPACE);
     const result = await this.runSetupCommand(desktop, PREPARE_LINUX_DESKTOP, _context.signal);
     if (result.exitCode !== 0)
       throw new Error(result.stderr || "could not prepare computer desktop tools");
@@ -323,6 +391,16 @@ export class E2BSandboxProvider implements SandboxProvider {
   }
 
   async writeFile(computer: ComputerRef, file: PortableFile, context: AdapterContext) {
+    const roots = computer.writableRoots;
+    const relative = normalizeWorkspacePath(file.path);
+    if (
+      roots &&
+      !roots.some((root) => !root || relative === root || relative.startsWith(`${root}/`))
+    ) {
+      throw new Error(
+        `${file.path} is on no mounted volume, so it would be lost when this computer is replaced; write under ${roots.join(", ") || "a mounted volume"}`,
+      );
+    }
     const desktop = await this.box(computer);
     await writeE2BFiles(desktop, [file], context);
   }
@@ -469,6 +547,7 @@ async function* walkE2BWorkspace(
   desktop: Sandbox,
   directory: string,
   context: AdapterContext,
+  keep: (relative: string) => boolean = () => true,
 ): AsyncIterable<PortableFile> {
   const entries = await desktop.files.list(workspacePath(E2B_WORKSPACE, directory), {
     signal: context.signal,
@@ -477,7 +556,7 @@ async function* walkE2BWorkspace(
   const directories: string[] = [];
   for (const entry of entries) {
     const relative = normalizeWorkspacePath(directory ? `${directory}/${entry.name}` : entry.name);
-    if (shouldSkipPortableWorkspaceFile(relative)) continue;
+    if (shouldSkipPortableWorkspaceFile(relative) || !keep(relative)) continue;
     if (entry.type === "dir") directories.push(relative);
     else if (entry.type === "file") files.push({ relative, mode: entry.mode });
   }
@@ -501,7 +580,7 @@ async function* walkE2BWorkspace(
       if (file) yield file;
     }
   }
-  for (const relative of directories) yield* walkE2BWorkspace(desktop, relative, context);
+  for (const relative of directories) yield* walkE2BWorkspace(desktop, relative, context, keep);
 }
 
 function e2bCwd(cwd: string | undefined): string {

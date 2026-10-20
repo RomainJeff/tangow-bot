@@ -1,4 +1,6 @@
+import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import path from "node:path";
 import type { PrismaClient } from "@rakazo/db";
 import {
   claimEmptySpaceDeletionForMember,
@@ -9,6 +11,9 @@ import type { PgliteDatabase } from "@rakazo/db/pglite.test-support";
 import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { destroyBot } from "./child-bots.js";
+import { provisionComputer } from "./computer-lifecycle.js";
+import { fakeE2BMachine } from "./e2b-machine.test-support.js";
+import { E2BSandboxProvider, type E2BSandboxSdk } from "./e2b-sandbox.js";
 import { FakeSandboxProvider } from "./fake-sandbox.js";
 import { FakeWorkerProvider } from "./fake-worker-provider.js";
 import { LocalAgentHomeStore } from "./home.js";
@@ -117,23 +122,32 @@ describe("volume provisioning and home adoption", () => {
     await expect(adopt(computer.id)).resolves.toBe("adopted");
   });
 
-  it("provisions the private volume of a bot attached once its computer's home is on volumes", async () => {
+  it("provisions the volume of every bot on a computer once its home is on volumes", async () => {
     const computer = await fixture.seedComputer(spaceA);
-    const bot = await fixture.seedBot(spaceA, computer.id);
+    const [ada, bob] = [
+      await fixture.seedBot(spaceA, computer.id),
+      await fixture.seedBot(spaceA, computer.id),
+    ];
+    const adaVolume = await fixture.seedVolume("bot_private", spaceA, ada.id);
+    const volumes = () =>
+      prisma.volume.findMany({
+        where: { botId: { in: [ada.id, bob.id] } },
+        select: { botId: true, providerRef: true },
+        orderBy: { createdAt: "asc" },
+      });
 
-    const beforeAdoption = await workers.provisionAttachedBotVolume(bot.id, fixture.context);
+    await workers.provisionHomeVolumes(computer.id, fixture.context);
+    expect(await volumes()).toEqual([{ botId: ada.id, providerRef: adaVolume.providerRef }]);
     await prisma.computer.update({ where: { id: computer.id }, data: { homeStorage: "volumes" } });
-    const attached = await workers.provisionAttachedBotVolume(bot.id, fixture.context);
-    const again = await workers.provisionAttachedBotVolume(bot.id, fixture.context);
+    await workers.provisionHomeVolumes(computer.id, fixture.context);
+    await workers.provisionHomeVolumes(computer.id, fixture.context);
 
-    const volume = await prisma.volume.findFirstOrThrow({ where: { botId: bot.id } });
-    expect(beforeAdoption).toBeNull();
-    expect(attached).toEqual({
-      volumeId: volume.id,
-      providerRef: `fake-volume-rakazo-${volume.id}`,
-    });
-    expect(again).toEqual(attached);
-    expect(volume.kind).toBe("bot_private");
+    const bobVolume = await prisma.volume.findFirstOrThrow({ where: { botId: bob.id } });
+    expect(await volumes()).toEqual([
+      { botId: ada.id, providerRef: adaVolume.providerRef },
+      { botId: bob.id, providerRef: `fake-volume-rakazo-${bobVolume.id}` },
+    ]);
+    expect(fake.calls).toEqual([{ op: "ensureVolume", name: `rakazo-${bobVolume.id}` }]);
   });
 
   it("never adopts a home on a computer kind without workers", async () => {
@@ -305,5 +319,74 @@ describe("deleting the owner of a volume", () => {
 
     expect(fake.calls).toEqual([{ op: "deleteVolume", volumeRef: shared.providerRef }]);
     expect(await prisma.space.count({ where: { id: emptied } })).toBe(0);
+  });
+});
+
+describe("starting a computer whose home is on volumes", () => {
+  async function start(
+    computer: { id: string },
+    botId: string,
+    machines: { existing?: ReturnType<typeof fakeE2BMachine> },
+  ) {
+    const replacement = fakeE2BMachine("replacement");
+    const sdk = {
+      create: vi.fn(async () => replacement.sandbox),
+      connect: vi.fn(async () => machines.existing!.sandbox),
+      pause: vi.fn(),
+    } as unknown as E2BSandboxSdk;
+    const home = new LocalAgentHomeStore(await mkdtemp(path.join(tmpdir(), "rakazo-homes-")));
+    await provisionComputer(
+      {
+        prisma,
+        sandbox: new E2BSandboxProvider("e2b-key", sdk),
+        home,
+        jobs: new InMemoryJobQueue(),
+        events: createThreadEvents(prisma),
+        workers: {
+          provisionHomeVolumes: (id, context) => workers.provisionHomeVolumes(id, context),
+        },
+      },
+      computer.id,
+      { ...fixture.context, botId },
+      "bot",
+    );
+    return { sdk, home };
+  }
+
+  it("mounts the volume of a bot attached after the move", async () => {
+    const { computer, bot } = await fixture.migratedBot();
+    const attached = await fixture.seedBot(computer.spaceId, computer.id);
+
+    const { sdk } = await start(computer, attached.id, {});
+
+    const attachedVolume = await prisma.volume.findFirstOrThrow({ where: { botId: attached.id } });
+    expect(Object.keys(vi.mocked(sdk.create).mock.calls[0]![0].volumeMounts ?? {}).sort()).toEqual(
+      [`/workspace/bots/${bot.id}`, `/workspace/bots/${attached.id}`, "/workspace/shared"].sort(),
+    );
+    expect(vi.mocked(sdk.create).mock.calls[0]![0].volumeMounts).toMatchObject({
+      [`/workspace/bots/${attached.id}`]: `fake-volume-rakazo-${attachedVolume.id}`,
+    });
+  });
+
+  it("archives the files of the machine it replaces under a key of their own", async () => {
+    const { computer, bot } = await fixture.migratedBot();
+    await prisma.computer.update({
+      where: { id: computer.id },
+      data: { providerRef: "before-move", state: "stopped" },
+    });
+    const existing = fakeE2BMachine("before-move", { "notes.md": "edited after the export" });
+
+    const { home } = await start(computer, bot.id, { existing });
+
+    const archived = [];
+    for await (const file of home.exportHome(
+      `${computer.homeKey}.discarded-before-move`,
+      fixture.context,
+    )) {
+      archived.push([file.path, new TextDecoder().decode(file.content)]);
+    }
+    expect(archived).toEqual([["notes.md", "edited after the export"]]);
+    expect(await home.list(computer.homeKey, "", fixture.context)).toEqual([]);
+    expect(existing.killed).toBe(true);
   });
 });

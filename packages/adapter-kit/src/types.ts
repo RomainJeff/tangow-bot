@@ -67,6 +67,11 @@ export interface ComputerRef {
   providerRef: string;
   /** True when the provider created an empty replacement rather than reconnecting existing state. */
   fresh?: boolean;
+  /**
+   * On a machine whose home is on volumes, the workspace directories on a volume ("" for all of
+   * it). Files written anywhere else would be lost with the machine, so writes there are refused.
+   */
+  writableRoots?: string[];
 }
 
 export interface CommandRequest {

@@ -192,6 +192,13 @@ export function volumeMountPath(
   return `${WORKSPACE_ROOT}/bots/${owner.botId}`;
 }
 
+/** Whether a path is at or under the places volumes mount: `/workspace/shared` and `/workspace/bots`. */
+export function underVolumeMounts(absolute: string): boolean {
+  return [volumeMountPath({ kind: "space_shared" }), `${WORKSPACE_ROOT}/bots`].some(
+    (root) => absolute === root || absolute.startsWith(`${root}/`),
+  );
+}
+
 /** How a computer whose home is on volumes mounts them, and where its workspace starts. */
 export type VolumeHome = { root: string; mounts: Array<{ volumeRef: string; path: string }> };
 

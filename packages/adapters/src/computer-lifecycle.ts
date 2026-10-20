@@ -4,6 +4,7 @@ import type {
   AgentHomeStore,
   ComputerRef,
   JobPublisher,
+  PortableFile,
   SandboxProvider,
 } from "@rakazo/adapter-kit";
 import { type ComputerUpdate, VolumeKind } from "@rakazo/contracts";
@@ -27,10 +28,12 @@ import {
 import { toComputerRef } from "./computer-support.js";
 import {
   checkpointComputerWorkspace,
+  archiveDiscardedWorkspace,
   ensureComputerWorkspaceLayout,
   restoreComputerWorkspace,
 } from "./computer-workspace.js";
 import { resolveAgentHomePath } from "./home.js";
+import type { RunWorkers } from "./runtime-worker/runtime.js";
 import { marketplacesRoot } from "./marketplace-store.js";
 import { userSkillsRoot } from "./skill-store.js";
 
@@ -179,6 +182,8 @@ export async function provisionComputer(
     jobs: JobPublisher;
     events: ThreadEvents;
     dataDir?: string;
+    /** Creates the volumes a home on volumes lacks, before its machine mounts them. */
+    workers?: Pick<RunWorkers, "provisionHomeVolumes">;
   },
   computerId: string,
   context: AdapterContext,
@@ -270,6 +275,11 @@ export async function provisionComputer(
     throw new ComputerBusyError();
   }
 
+  // A bot attached after the move has no volume yet: one the machine never mounted would leave
+  // its computer writing to local disk while its workers see the volume.
+  if (existing.homeStorage === "volumes") {
+    await deps.workers?.provisionHomeVolumes(computerId, context);
+  }
   const reconnecting =
     Boolean(existing.providerRef) &&
     (existing.state === "running" || existing.state === "suspending");
@@ -321,7 +331,19 @@ export async function provisionComputer(
         providerRef: existing.providerRef ?? undefined,
         providerKind: existing.kind as ComputerRef["kind"],
         ...(existing.homeStorage === "volumes"
-          ? { volumeHome: await loadVolumeHome(deps.prisma, existing) }
+          ? {
+              volumeHome: {
+                ...(await loadVolumeHome(deps.prisma, existing)),
+                archive: (files: AsyncIterable<PortableFile>) =>
+                  archiveDiscardedWorkspace(
+                    deps.home,
+                    existing,
+                    existing.providerRef ?? "unknown",
+                    files,
+                    context,
+                  ),
+              },
+            }
           : {}),
       },
       context,
