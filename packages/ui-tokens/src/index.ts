@@ -94,7 +94,7 @@ export const darkTokens = {
   destructiveForeground: "#FFFFFF",
   border: "#2D2D30",
   outline: "#3F3F42",
-  input: "#363639",
+  input: "#4A4A4D",
   ring: "#AEAEB2",
   sidebar: "#2C2C2E",
   sidebarForeground: "#F5F5F7",

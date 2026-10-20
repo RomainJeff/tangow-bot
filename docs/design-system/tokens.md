@@ -41,7 +41,7 @@ way: `sheet`, then its `group`s.
 | `accentForeground` | `#1D1D1F` | `#F5F5F7` | |
 | `border`, `sidebarBorder` | `#E3E3E6` | `#2D2D30` | hairline of blocks and groups |
 | `outline` | `#D2D2D6` | `#3F3F42` | the outlined task card's edge, stronger than `border` |
-| `input` | `#D8D8DC` | `#363639` | field edge |
+| `input` | `#D8D8DC` | `#4A4A4D` | field edge, switch track; reads on `group` and `sheet` in dark |
 | `ring` | `#6E6E73` | `#AEAEB2` | focus |
 | `surface` | `#FFFFFF` | `#3C3C3F` | the one elevation: the decision card |
 | `sheet` | `#F5F5F7` | `#232326` | the opaque plane of the side panel and the overlay windows |

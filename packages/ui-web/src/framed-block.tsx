@@ -63,7 +63,7 @@ export function FramedBlock({
         "flex flex-col overflow-hidden",
         // Answered, the card drops back onto the bot's paper and gives the thread its elevation back.
         answered
-          ? "gap-1.5 rounded-bubble bg-chat-bot px-4 py-3 shadow-settled"
+          ? "w-fit max-w-41/50 gap-1 rounded-bubble bg-chat-bot px-4 py-3 shadow-settled"
           : "gap-2 rounded-block bg-surface p-5 shadow-card",
         className,
       )}
@@ -82,7 +82,7 @@ export function FramedBlock({
       ) : null}
       <div
         data-slot="framed-block-question"
-        className={cn("text-foreground", answered ? "text-body font-semibold" : "text-question")}
+        className={cn("text-foreground", answered ? "text-body font-medium" : "text-question")}
       >
         {question}
       </div>

@@ -61,26 +61,29 @@ export function ArtifactFileCard(props: ArtifactFileCardProps) {
   return (
     <>
       <div>
-        <Surface className="flex w-link-card max-w-full items-center overflow-hidden text-start text-foreground">
-          <button
-            ref={previewButton}
-            type="button"
-            aria-label={t`Preview ${props.name}`}
-            onClick={() => setPreviewOpen(true)}
-            className="flex min-w-0 flex-1 items-center gap-3 py-3 ps-4 pe-2 text-start duration-(--duration-hover) ease-quiet hover:bg-pressed/40"
-          >
-            <FileTile />
-            <FileName name={props.name} detail={formatBytes(props.size)} />
-          </button>
-          <button
-            type="button"
-            aria-label={t`Download ${props.name}`}
-            title={t`Download ${props.name}`}
-            onClick={() => void startDownload()}
-            className="me-4 grid size-8 shrink-0 place-items-center rounded-full bg-secondary text-secondary-foreground duration-(--duration-hover) ease-quiet hover:opacity-85"
-          >
-            <Download className="size-4" aria-hidden />
-          </button>
+        <Surface className="w-link-card max-w-full overflow-hidden text-start text-foreground">
+          {/* One hover for the whole card: the download button sits inside it, not beside it. */}
+          <div className="flex items-center duration-(--duration-hover) ease-quiet hover:bg-pressed/40">
+            <button
+              ref={previewButton}
+              type="button"
+              aria-label={t`Preview ${props.name}`}
+              onClick={() => setPreviewOpen(true)}
+              className="flex min-w-0 flex-1 items-center gap-3 py-3 ps-4 pe-2 text-start"
+            >
+              <FileTile />
+              <FileName name={props.name} detail={formatBytes(props.size)} />
+            </button>
+            <button
+              type="button"
+              aria-label={t`Download ${props.name}`}
+              title={t`Download ${props.name}`}
+              onClick={() => void startDownload()}
+              className="me-4 grid size-8 shrink-0 place-items-center rounded-full bg-secondary text-secondary-foreground duration-(--duration-hover) ease-quiet hover:opacity-85"
+            >
+              <Download className="size-4" aria-hidden />
+            </button>
+          </div>
         </Surface>
         {downloadError ? <DownloadError message={downloadError} /> : null}
       </div>

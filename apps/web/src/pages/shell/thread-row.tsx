@@ -1,7 +1,7 @@
 import { i18n } from "@lingui/core";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { ChatMarkdown, truncateMarkdownForRender } from "@rakazo/chat-ui/web";
-import type { ThreadItem } from "@rakazo/contracts";
+import type { MessageBlock, ThreadItem } from "@rakazo/contracts";
 import { isLinkPreviewCard } from "@rakazo/contracts";
 import type { RoutineItem, SkillSourceBlock, ThreadRow, WaitingCard } from "@rakazo/core";
 import {
@@ -61,6 +61,22 @@ export type RowContext = {
   onOpenSkill?: (skill: SkillSourceBlock) => void;
   messageOfEntry: (entryId: string) => MessageItem | undefined;
 };
+
+/** Kinds drawn inside a bubble, or as a line under it: anything else in a row is a card. */
+const BUBBLE_KINDS = new Set<MessageBlock["kind"]>([
+  "text",
+  "meta",
+  "progress",
+  "steps",
+  "skill_source",
+  "link_mention",
+  "reasoning",
+]);
+
+/** Only bubbles: such rows stack 3 px apart in a group, a card keeps 8 px from its neighbours. */
+export function isBubbleRow(item: ThreadItem): boolean {
+  return item.kind === "message" && item.blocks.every((block) => BUBBLE_KINDS.has(block.kind));
+}
 
 export function rowChrome(item: ThreadItem, showSteps: boolean): "row" | "aside" {
   if (item.kind === "message") {
