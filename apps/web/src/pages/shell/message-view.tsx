@@ -47,7 +47,6 @@ import {
 } from "./block-views";
 import { FALLBACK_BOT_COLOR } from "./layout";
 import { messageLinkPreview } from "./message-actions";
-
 import {
   AppConnectCard,
   ArtifactImage,
@@ -78,7 +77,6 @@ export function useLinkMentions(
   }, [mentionsKey, artifactTarget]);
 }
 
-/** A preview card under the bubble it stands for, aligned to its edge and capped to its width. */
 export function previewMessageText(message: { blocks: readonly MessageBlock[] }): string {
   const text = message.blocks
     .map((block) => (block.kind === "text" || block.kind === "channel_message" ? block.text : ""))

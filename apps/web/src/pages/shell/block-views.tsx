@@ -147,6 +147,7 @@ export function ComputerCard({ block }: { block: BlockOf<"computer"> }) {
   );
 }
 
+/** A preview card under the bubble it stands for, aligned to its edge and capped to its width. */
 export function LinkPreviewRow({
   card,
   artifactTarget,
