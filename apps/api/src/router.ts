@@ -494,7 +494,6 @@ export interface RouterDeps {
   auth: Auth;
   jobs: JobPublisher;
   sandbox: SandboxProvider;
-  /** Destroys the workers and volumes of a bot or space before it is deleted. */
   workerLifecycle?: Pick<WorkerLifecycle, "retireOwner">;
   memory: MemoryStore;
   memoryProviders: MemoryProviderResolver;

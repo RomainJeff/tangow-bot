@@ -149,7 +149,6 @@ export class ComputerBusyError extends Error {
 
 export { toComputerRef } from "./computer-support.js";
 
-/** The volumes of every bot on the computer, and the space's for a team computer. */
 async function loadVolumeHome(
   prisma: PrismaClient,
   computer: { id: string; scope: string; spaceId: string },

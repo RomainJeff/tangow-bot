@@ -30,7 +30,6 @@ export class VolumeComputer extends ManagedSandboxEmulator {
     return ref;
   }
 
-  /** Where a workspace path of a volume-home computer lives on this machine. */
   private onVolume(computer: ComputerRef, relative: string): string | undefined {
     const home = this.homes.get(computer.id);
     if (!home) return undefined;

@@ -196,7 +196,6 @@ type BotLifecycleDeps = {
   events: ThreadEvents;
   dataDir?: string;
   artifacts?: ArtifactStore;
-  /** Destroys the bot's workers and its volume before the bot goes. */
   workerLifecycle?: Pick<WorkerLifecycle, "retireOwner">;
 };
 

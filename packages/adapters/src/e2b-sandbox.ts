@@ -14,7 +14,7 @@ import type {
   ScreenRequest,
   ScreenSession,
 } from "@rakazo/adapter-kit";
-import { boundedSandboxCommandTimeoutMs } from "@rakazo/core";
+import { boundedSandboxCommandTimeoutMs, type VolumeHome } from "@rakazo/core";
 import { sandboxIdleMs } from "./computer-idle.js";
 import { normalizeWorkspacePath, shellQuote, workspacePath } from "./computer-support.js";
 import {
@@ -31,8 +31,6 @@ export interface E2BSandboxSdk {
   connect(id: string, options: { apiKey: string; timeoutMs: number }): Promise<Sandbox>;
   pause(id: string, options: { apiKey: string }): Promise<void>;
 }
-
-type VolumeHome = NonNullable<Parameters<SandboxProvider["provision"]>[0]["volumeHome"]>;
 
 /** Marks a computer created with its home's volumes mounted. */
 const VOLUME_HOME = { home: "volumes" } as const;
