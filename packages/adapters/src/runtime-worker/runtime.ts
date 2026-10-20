@@ -1,9 +1,12 @@
 import type { AgentRuntime } from "@rakazo/adapter-kit";
+import type { LaunchPlan, RunNeeds, WorkerLaunch } from "@rakazo/core";
+import type { PrismaClient } from "@rakazo/db";
+import type { WorkerLifecycle } from "../worker-lifecycle.js";
 import { createCapabilityKey } from "./capability.js";
 import { GUEST_TOOLS } from "./guest-input.js";
-import type { WorkerLauncher } from "./launcher.js";
+import { createLifecycleLauncher, type GuestConnector, type WorkerLauncher } from "./launcher.js";
 import { createSession, type WorkerClock } from "./session.js";
-import type { StopJournal } from "./stop-journal.js";
+import { createStopJournal, type StopJournal } from "./stop-journal.js";
 
 const realClock: WorkerClock = {
   sleep: (ms) =>
@@ -70,5 +73,29 @@ export function createWorkerAgentRuntime(options: {
         if (sessions.get(request.runId) === session) sessions.delete(request.runId);
       }
     },
+  };
+}
+
+/** What the executor needs to run a product run in a worker: a plan, then a runtime bound to it. */
+export interface RunWorkers {
+  plan(input: { attemptId: string; needs: RunNeeds }): Promise<LaunchPlan>;
+  runtime(launch: WorkerLaunch): AgentRuntime;
+}
+
+export function createRunWorkers(deps: {
+  prisma: PrismaClient;
+  lifecycle: WorkerLifecycle;
+  connector: GuestConnector;
+  clock?: WorkerClock;
+}): RunWorkers {
+  const stops = createStopJournal(deps.prisma);
+  return {
+    plan: (input) => deps.lifecycle.plan(input),
+    runtime: (launch) =>
+      createWorkerAgentRuntime({
+        launcher: createLifecycleLauncher({ ...deps, launch }),
+        stops,
+        clock: deps.clock,
+      }),
   };
 }

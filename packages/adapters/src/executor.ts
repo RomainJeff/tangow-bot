@@ -12,6 +12,7 @@ import type {
   ComputerRef,
   ConnectorCall,
   ConnectorProvider,
+  ConnectorTool,
   JobPublisher,
   LocalToolExecutor,
   LocalToolOutput,
@@ -37,6 +38,7 @@ import {
   runContinueJob,
 } from "@rakazo/adapter-kit";
 import type {
+  ComputerMode,
   FactualRunRecap,
   MessageBlock,
   RunStatus,
@@ -83,6 +85,7 @@ import {
   connectorKindFromToolName,
   containsSecret,
   DEFAULT_SKILL_LEARNING,
+  deriveRunNeeds,
   endsSentence,
   expandSkillReferencesInPrompt,
   formatSkillRunPrompt,
@@ -352,6 +355,7 @@ import {
   tryCompleteConnectionWithCode,
 } from "./run-secret.js";
 import { withRuntimeCleanup } from "./runtime-stream.js";
+import type { RunWorkers } from "./runtime-worker/runtime.js";
 import {
   cancelScheduleFromTool,
   createScheduleFromTool,
@@ -639,6 +643,56 @@ export function isProtectedComputerLifecycleCommand(command: string): boolean {
 /** Cap the roster so a large Space cannot flood the prompt. */
 const BOT_DIRECTORY_LIMIT = 40;
 
+/** The computer's shell. In a worker run the guest's bash replaces it. */
+const COMPUTER_SHELL_TOOL = "shell";
+
+/** The runtime a product run uses and the tools it exposes, or why it cannot start. */
+type RunRoute = { runtime: AgentRuntime; tools: ConnectorTool[]; refusal?: string };
+
+/** A tool the runtime runs locally replaces the computer-backed tool of the same name. */
+function withLocalTools(tools: ConnectorTool[], local: readonly ConnectorTool[]): ConnectorTool[] {
+  const names = new Set(local.map((tool) => tool.name));
+  return [...tools.filter((tool) => !names.has(tool.name)), ...local];
+}
+
+/**
+ * One plan per attempt. A worker run keeps the computer for its explicit computer tools only:
+ * file work and commands run in the guest. Scripted runs stay in process.
+ */
+async function routeRun(
+  deps: Pick<ExecutorDeps, "runtime" | "workers">,
+  run: { attemptId: string; tools: ConnectorTool[]; computerScope: ComputerMode },
+): Promise<RunRoute> {
+  const inProcess = {
+    runtime: deps.runtime,
+    tools: withLocalTools(run.tools, deps.runtime.describe().capabilities.localTools ?? []),
+  };
+  if (!deps.workers || deps.runtime.describe().capabilities.scripted) return inProcess;
+  const needs = deriveRunNeeds({
+    guestTools: run.tools.some(
+      (tool) => FILE_TOOL_NAMES.has(tool.name) || tool.name === COMPUTER_SHELL_TOOL,
+    ),
+    computerTools: run.tools.some((tool) => REMOTE_COMPUTER_TOOLS.has(tool.name)),
+    computerScope: run.computerScope,
+  });
+  const plan = await deps.workers.plan({ attemptId: run.attemptId, needs });
+  if (plan.mode === "in_process") return inProcess;
+  if (plan.mode === "refused") {
+    return {
+      ...inProcess,
+      refusal: `This bot has no ${plan.refusal.slot} volume on its computer yet, so the run cannot start`,
+    };
+  }
+  const runtime = deps.workers.runtime(plan);
+  return {
+    runtime,
+    tools: withLocalTools(
+      run.tools.filter((tool) => tool.name !== COMPUTER_SHELL_TOOL),
+      needs.files.private ? (runtime.describe().capabilities.localTools ?? []) : [],
+    ),
+  };
+}
+
 function runtimeFallbackModel(runtime: AgentRuntime) {
   return runtime.describe().capabilities.scripted ? { provider: "scripted", id: "scripted" } : null;
 }
@@ -666,6 +720,11 @@ export interface ExecutorDeps {
   listConnectedPluginSlugs?: (scope: ConnectionScope) => Promise<string[]>;
   /** Builtin web_search / web_fetch. Defaults to keyless HTTP when omitted. */
   web?: WebProvider;
+  /**
+   * Runs a product run whose bot qualifies in a worker of its own. Every other runtime call, and
+   * every run when absent, stays on `runtime`.
+   */
+  workers?: RunWorkers;
   /** Page browser (DOM refs) on the bot computer. Defaults to the sandbox live browser when supported. */
   browser?: BrowserProvider;
   secretHttp?: RemoteTransportDependencies;
@@ -1938,14 +1997,14 @@ export function createRunExecutor(deps: ExecutorDeps) {
             .then((row) => row?.enabled ?? deploymentAutoReviewDefault());
           return autoReviewPreferencePromise;
         };
-        const runtimeLocalTools = deps.runtime.describe().capabilities.localTools ?? [];
-        const localToolNames = new Set(runtimeLocalTools.map((tool) => tool.name));
-        // A tool the runtime runs locally replaces the computer-backed tool of the same name.
-        const tools = [
-          ...builtins.filter((tool) => !localToolNames.has(tool.name)),
-          ...exposedConnectorTools.filter((tool) => !localToolNames.has(tool.name)),
-          ...runtimeLocalTools,
-        ];
+        const { runtime, tools, refusal } = await routeRun(deps, {
+          attemptId: attempt.id,
+          tools: [...builtins, ...exposedConnectorTools],
+          computerScope: computerMode,
+        });
+        const localToolNames = new Set(
+          (runtime.describe().capabilities.localTools ?? []).map((tool) => tool.name),
+        );
         const approvedEffects = await deps.prisma.externalEffect.findMany({
           where: { runId, status: "approved" },
           orderBy: APPROVED_EFFECT_REPLAY_ORDER,
@@ -2032,7 +2091,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const unansweredCalls = new Map<string, string>();
         const logEntry = (draft: SessionEntryDraft) =>
           deps.prisma.$transaction((tx) => deps.sessionLog.append(tx, draft));
-        const announcesTools = deps.runtime.describe().capabilities.streaming;
+        const announcesTools = runtime.describe().capabilities.streaming;
         const toolAnnouncements = new Map<string, ReturnType<typeof deferred>>();
         const toolAnnounced = (executionId: string) => {
           let handled = toolAnnouncements.get(executionId);
@@ -2233,7 +2292,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
         let terminalCheckpointComplete = false;
         let approvalPausePending = false;
         let handedOff = false;
-        const scripted = deps.runtime.describe().capabilities.scripted;
+        const scripted = runtime.describe().capabilities.scripted;
         const script = scripted ? inferScript(task.prompt, takeoverResume?.checkpoint) : undefined;
         // Text the model writes outside message_user is never shown: drop what accumulated
         // before a tool call so it cannot reach the final reply either.
@@ -4346,6 +4405,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
         }
 
         try {
+          if (refusal) throw new Error(refusal);
           const instructions =
             buildSystemInstructions({
               botInstructions: bot.instructions || `${bot.name}: ${bot.title}\n${bot.description}`,
@@ -4490,7 +4550,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               ? { credential: resolved.oauth, persist: resolved.persistOAuth }
               : undefined,
           };
-          const runtimeEvents = deps.runtime.run(
+          const runtimeEvents = runtime.run(
             {
               botId: bot.id,
               threadId: thread.id,
@@ -5479,6 +5539,14 @@ export const PAGE_BROWSER_TOOL_NAMES = new Set([
   "browser_snapshot",
   "browser_act",
   "browser_run",
+]);
+
+/** Tools that reach the computer even in a worker run. */
+const REMOTE_COMPUTER_TOOLS = new Set([
+  ...IMAGE_RETURNING_COMPUTER_TOOLS,
+  ...PAGE_BROWSER_TOOL_NAMES,
+  "attach_file",
+  "render_plot",
 ]);
 
 export function filterPageBrowserTools<T extends { name: string }>(

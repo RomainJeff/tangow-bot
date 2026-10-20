@@ -4,7 +4,8 @@ import {
   type WorkerIdentity,
   type WorkerStartV1,
 } from "@rakazo/adapter-kit";
-import { LIVE_WORKER_STATES, type RunNeeds } from "@rakazo/core";
+import type { WorkerLaunch } from "@rakazo/core";
+import { LIVE_WORKER_STATES } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import { type ReleaseOutcome, VolumeBusyError, type WorkerLifecycle } from "../worker-lifecycle.js";
 import type { FrameChannel } from "./framing.js";
@@ -38,18 +39,21 @@ export interface GuestConnector {
   ): { connections: AsyncIterable<FrameChannel>; exited: Promise<void> };
 }
 
-/** A run that needs no files and no computer: what P2 launches. P3 derives needs from routing. */
-const NO_NEEDS: RunNeeds = { files: { private: null, shared: null }, computer: "none" };
-
-/** Launches through the P1 worker lifecycle, the only writer of `attempts.worker*`. */
+/**
+ * Launches the plan the executor made for this attempt through the P1 worker lifecycle, the only
+ * writer of `attempts.worker*`.
+ */
 export function createLifecycleLauncher(deps: {
   prisma: PrismaClient;
   lifecycle: WorkerLifecycle;
   connector: GuestConnector;
-  needs?: RunNeeds;
+  launch: WorkerLaunch;
 }): WorkerLauncher {
   return {
     async launch(worker, capability) {
+      if (worker.attemptId !== deps.launch.attemptId) {
+        throw new Error("This launcher holds the plan of another attempt");
+      }
       // Never bound to the run's signal: a release must run after the run was cancelled.
       const context: AdapterContext = {
         operationId: `worker:${worker.attemptId}`,
@@ -71,16 +75,7 @@ export function createLifecycleLauncher(deps: {
           "An earlier worker of this run is not confirmed gone",
         );
       }
-      const plan = await deps.lifecycle.plan({
-        attemptId: worker.attemptId,
-        needs: deps.needs ?? NO_NEEDS,
-      });
-      if (plan.mode !== "worker") {
-        throw new Error(
-          `This run cannot get a worker: ${plan.mode === "refused" ? plan.refusal.code : plan.reason}`,
-        );
-      }
-      const started = await deps.lifecycle.start(plan, context).catch((error: unknown) => {
+      const started = await deps.lifecycle.start(deps.launch, context).catch((error: unknown) => {
         if (error instanceof VolumeBusyError) throw new AgentRuntimeUnavailableError(error.message);
         throw error;
       });

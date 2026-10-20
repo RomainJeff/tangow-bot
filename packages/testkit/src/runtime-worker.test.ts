@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { type FrameSummary, GUEST_TOOLS } from "@rakazo/adapters/runtime-worker";
 import { bundleGuest } from "@rakazo/agent-run-worker/bundle";
-import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { latestCard } from "./index.js";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.js";
 import { startWorkerRun } from "./worker-run-fixture.js";
@@ -118,14 +118,14 @@ describe("a run whose bot runs in a guest", () => {
             },
             response: {
               type: "tool",
-              id: "computer",
-              name: "shell",
-              arguments: { command: "echo from-computer" },
+              id: "controller",
+              name: "scratchpad_add",
+              arguments: { title: "from-controller" },
             },
           },
           {
             expect(request) {
-              expect(toolResult(request)).toContain("from-computer");
+              expect(toolResult(request)).toContain("from-controller");
             },
             response: {
               type: "tool",
@@ -166,8 +166,8 @@ describe("a run whose bot runs in a guest", () => {
       ).toEqual([
         "call bash",
         "result sh false",
-        "call shell",
-        "result computer false",
+        "call scratchpad_add",
+        "result controller false",
         "call message_user",
         "result say false",
       ]);
@@ -202,14 +202,14 @@ describe("a run whose bot runs in a guest", () => {
           expect() {},
           response: {
             type: "tool",
-            id: "computer",
-            name: "shell",
-            arguments: { command: "echo from-computer" },
+            id: "controller",
+            name: "scratchpad_add",
+            arguments: { title: "from-controller" },
           },
         },
         {
           expect(request) {
-            expect(toolResult(request)).toContain("from-computer");
+            expect(toolResult(request)).toContain("from-controller");
           },
           response: {
             type: "tool",
@@ -221,7 +221,6 @@ describe("a run whose bot runs in a guest", () => {
         finishing[1]!,
       ],
     });
-    const commands = vi.spyOn(run.sandbox, "execute");
     const runId = await run.send("Save a note.");
     await run.continueRun(runId);
 
@@ -229,14 +228,14 @@ describe("a run whose bot runs in a guest", () => {
     expect((await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
       "completed",
     );
-    expect(commands).toHaveBeenCalledTimes(1);
+    expect(await run.prisma.scratchpadItem.count()).toBe(1);
     expect(
       (await run.runEntries(runId))
         .filter((entry) => entry.type === "tool.call" || entry.type === "tool.result")
         .map((entry) => entry.type),
     ).toEqual(["tool.call", "tool.result", "tool.call", "tool.result"]);
     expect(await effects(run, runId)).toEqual([
-      { kind: "shell", status: "completed" },
+      { kind: "scratchpad_add", status: "completed" },
       { kind: "message_user", status: "completed" },
     ]);
     expect(lost).toBe(1);
