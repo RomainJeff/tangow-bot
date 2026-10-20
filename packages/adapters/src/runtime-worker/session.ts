@@ -19,7 +19,7 @@ import { type CapabilityKey, mintCapability, verifyCapability } from "./capabili
 import { relayPiAiCall } from "./dialects/pi-ai.js";
 import { eventPipe } from "./event-pipe.js";
 import { encodeMessage, type FrameChannel, readGuestFrame } from "./framing.js";
-import { base64Images, GUEST_TOOL_NAMES, guestRunInput } from "./guest-input.js";
+import { base64Images, guestRunInput, nativeToolsForHarness } from "./guest-input.js";
 import { createSessionInbox, type SessionInbox } from "./inbox.js";
 import type { LaunchedGuest, WorkerLauncher } from "./launcher.js";
 import { WORKER_LIMITS } from "./limits.js";
@@ -159,7 +159,7 @@ export function createSession(
     announced.delete(callId);
     const helper = helperOf(agent);
     if (agent !== "root" && !helper) return refuse("invalid");
-    if (GUEST_TOOL_NAMES.has(name)) {
+    if (harness && nativeToolsForHarness(harness.name).some((tool) => tool.name === name)) {
       const executeLocal = helper ? helper.log.executeLocalTool : request.executeLocalTool;
       if (!executeLocal) return { type: "error", message: `${name} is unavailable here` };
       const granted = deferred<void>();

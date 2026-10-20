@@ -22,8 +22,11 @@ function base(bundle: string): TemplateBuilder {
 
 /** What each harness adds to the base, by the name it registers in `HARNESSES`. */
 const HARNESS_LAYERS: Readonly<Record<string, (template: TemplateBuilder) => TemplateBuilder>> = {
-  // Pi's file tools and grep are the guest bundle's own JavaScript: nothing beyond the base.
-  pi: (template) => template,
+  // Pi's native grep and find use rg and fd. Debian names the fd binary fdfind.
+  pi: (template) =>
+    template
+      .aptInstall(["ripgrep", "fd-find"])
+      .runCmd("ln -s /usr/bin/fdfind /usr/local/bin/fd", { user: "root" }),
 };
 
 export function workerTemplate(harness: string, bundle: string): TemplateBuilder {

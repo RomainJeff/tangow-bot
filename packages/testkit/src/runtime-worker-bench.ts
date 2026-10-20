@@ -6,7 +6,11 @@ import { performance } from "node:perf_hooks";
 import { parseArgs } from "node:util";
 import type { AgentRunRequest, AgentRuntime, LocalToolOutput } from "@rakazo/adapter-kit";
 import { createWorkerLifecycle } from "@rakazo/adapters";
-import { createRunWorkers, GUEST_TOOLS, WORKER_LIMITS } from "@rakazo/adapters/runtime-worker";
+import {
+  createRunWorkers,
+  WORKER_LIMITS,
+  WORKER_NATIVE_TOOLS,
+} from "@rakazo/adapters/runtime-worker";
 import { LocalWorkerProvider } from "./local-worker-provider.js";
 import type { ModelEmulatorStep } from "./model-emulator.js";
 import {
@@ -86,7 +90,7 @@ function inProcessRuntime(samples: Window[]) {
         compaction: false,
         tools: true,
         scripted: false,
-        localTools: GUEST_TOOLS,
+        localTools: WORKER_NATIVE_TOOLS,
       },
     }),
     abort: async () => {},
@@ -245,7 +249,7 @@ async function stopArm(config: StopConfig, runs: number) {
       prompt: "Take a nap.",
       instructions: "Use bash.",
       history: [],
-      tools: [...GUEST_TOOLS],
+      tools: [...WORKER_NATIVE_TOOLS],
       model: fixture.model.model,
       attempt: { id: attempt.id, fence: 1 },
       executeTool: async () => "unused",

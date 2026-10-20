@@ -1,33 +1,12 @@
-import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createWriteStream } from "node:fs";
 import { mkdir, readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
-import type { GuestMount, LocalToolOutput } from "@rakazo/adapter-kit";
+import type { LocalToolOutput } from "@rakazo/adapter-kit";
 import { WORKER_LIMITS } from "@rakazo/adapters/runtime-worker/wire";
-import { FILE_TOOLS } from "./file-tools.js";
 
-export interface LocalToolContext {
-  cwd: string;
-  signal: AbortSignal;
-  /** Where a tool keeps output too long for the model, on the guest disk. */
-  spoolDir: string;
-  botId: string;
-  /** Prefix of every guest path the controller names. `/` in a VM. */
-  root: string;
-  /** The volumes `worker.start` mounted: the only places a write outlives the VM. */
-  mounts: readonly GuestMount[];
-}
-
-export type LocalTool = (
-  args: Record<string, unknown>,
-  context: LocalToolContext,
-) => Promise<LocalToolOutput>;
-
-/** What a tool that prints text reports. */
 export type CommandOutput = Extract<LocalToolOutput, { text: string }>;
 
-const KILL_GRACE_MS = 2_000;
 const MARKER_ROOM_CHARS = 256;
 const MARKER_ROOM_LINES = 4;
 // Enough raw bytes for either half of the model text, whatever the encoding.
@@ -126,94 +105,39 @@ function claimSpool(spoolDir: string): Promise<string> {
   return claimed;
 }
 
-/** Kill the command's whole process group, forcefully after a grace period. */
-function killGroup(pid: number | undefined, exited: Promise<unknown>) {
-  if (pid === undefined) return;
-  const signal = (name: NodeJS.Signals) => {
-    try {
-      process.kill(-pid, name);
-    } catch {
-      // The group is already gone.
-    }
-  };
-  signal("SIGTERM");
-  const force = setTimeout(() => signal("SIGKILL"), KILL_GRACE_MS);
-  void exited.finally(() => clearTimeout(force));
-}
-
-/** Runs in the workdir as its own process group, which an abort or a timeout kills whole. */
-export async function bash(
-  args: Record<string, unknown>,
-  { cwd, signal, spoolDir }: LocalToolContext,
-): Promise<CommandOutput> {
-  const command = typeof args.command === "string" ? args.command : "";
-  if (!command.trim()) {
-    return { text: "bash needs a command.", isError: true, truncated: false, totalBytes: 0 };
-  }
-  const timeoutSeconds = typeof args.timeout === "number" && args.timeout > 0 ? args.timeout : null;
+/** Claim bounded storage before a native call, then finish its P2 result. */
+export async function captureToolOutput(spoolDir: string) {
   await mkdir(spoolDir, { recursive: true });
   const spoolPath = await claimSpool(spoolDir);
-  try {
-    return await runCommand(command, timeoutSeconds, spoolPath, cwd, signal);
-  } finally {
-    spooling.delete(spoolPath);
-  }
-}
-
-async function runCommand(
-  command: string,
-  timeoutSeconds: number | null,
-  spoolPath: string,
-  cwd: string,
-  signal: AbortSignal,
-): Promise<CommandOutput> {
   const capture = outputCapture(spoolPath);
-  const child = spawn("bash", ["-c", command], {
-    cwd,
-    detached: true,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  child.stdout.on("data", capture.write);
-  child.stderr.on("data", capture.write);
-  const exited = new Promise<{ code: number | null; error?: Error }>((resolve) => {
-    child.once("error", (error) => resolve({ code: null, error }));
-    child.once("close", (code) => resolve({ code }));
-  });
-  let stopped: "aborted" | "timeout" | null = null;
-  const stop = (reason: "aborted" | "timeout") => {
-    stopped ??= reason;
-    killGroup(child.pid, exited);
-  };
-  const onAbort = () => stop("aborted");
-  if (signal.aborted) onAbort();
-  signal.addEventListener("abort", onAbort, { once: true });
-  const timer = timeoutSeconds ? setTimeout(() => stop("timeout"), timeoutSeconds * 1000) : null;
-  const exit = await exited;
-  signal.removeEventListener("abort", onAbort);
-  if (timer) clearTimeout(timer);
-
-  const captured = await capture.close();
-  const { text, truncated } = modelText(captured, spoolPath);
-  if (!truncated) await rm(spoolPath, { force: true });
-  const ending =
-    stopped === "aborted"
-      ? "Command aborted"
-      : stopped === "timeout"
-        ? `Command timed out after ${timeoutSeconds} seconds`
-        : exit.error
-          ? `Command could not start: ${exit.error.message}`
-          : exit.code !== 0
-            ? `Command exited with code ${exit.code}`
-            : null;
-  const body = text.replace(/\n$/, "") || (ending ? "" : "(no output)");
+  let streamed = false;
   return {
-    text: ending ? `${body}${body ? "\n\n" : ""}${ending}` : body,
-    isError: ending !== null,
-    truncated,
-    totalBytes: captured.totalBytes,
-    ...(truncated ? { spoolPath } : {}),
+    write(data: Buffer) {
+      streamed = true;
+      capture.write(data);
+    },
+    async finish(text: string, isError: boolean): Promise<CommandOutput> {
+      try {
+        if (!streamed) capture.write(Buffer.from(text));
+        const captured = await capture.close();
+        const bounded = modelText(captured, spoolPath);
+        if (!bounded.truncated) await rm(spoolPath, { force: true });
+        return {
+          ...bounded,
+          // Preserve the native tool's status text when its raw stream fits.
+          text:
+            !bounded.truncated &&
+            text.length <= WORKER_LIMITS.localOutputModelChars &&
+            text.split("\n").length <= WORKER_LIMITS.localOutputModelLines
+              ? text
+              : bounded.text.replace(/\n$/, ""),
+          isError,
+          totalBytes: captured.totalBytes,
+          ...(bounded.truncated ? { spoolPath } : {}),
+        };
+      } finally {
+        spooling.delete(spoolPath);
+      }
+    },
   };
 }
-
-/** Tools the controller may place in the guest, by name. */
-export const LOCAL_TOOLS: Readonly<Record<string, LocalTool>> = { bash, ...FILE_TOOLS };

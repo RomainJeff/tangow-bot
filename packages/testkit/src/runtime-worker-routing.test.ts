@@ -49,7 +49,20 @@ const recap = JSON.stringify({ version: 1, results: ["Answered"], references: []
 const toolNames = (request: ModelEmulatorRequest) =>
   (request.tools ?? []).map((tool) => tool.function.name);
 const shellTools = (request: ModelEmulatorRequest) =>
-  toolNames(request).filter((name) => ["shell", "bash", "grep", "write_file"].includes(name));
+  toolNames(request).filter((name) =>
+    [
+      "shell",
+      "bash",
+      "grep",
+      "write_file",
+      "read_file",
+      "read",
+      "write",
+      "edit",
+      "find",
+      "ls",
+    ].includes(name),
+  );
 
 /** Notes which shell tools the first model call offered, then ends the run. */
 function offeredShellTools(seen: string[][]): ModelEmulatorStep[] {
@@ -75,8 +88,115 @@ describe("where a product run executes", () => {
     const runId = await run.send("Hello.");
     await run.continueRun(runId);
 
-    expect(seen).toEqual([["write_file", "grep", "bash"]]);
+    expect(seen).toEqual([["read", "write", "edit", "bash", "grep", "find", "ls"]]);
     expect(await attemptsOf(run, runId)).toEqual([{ workerState: "released" }]);
+  });
+
+  it("omits disabled native tools for the parent and its helper without removing controller tools", async () => {
+    const seen: string[][] = [];
+    const steps: ModelEmulatorStep[] = [
+      {
+        expect(request) {
+          seen.push(toolNames(request));
+        },
+        response: {
+          type: "tool",
+          id: "p-write",
+          name: "write",
+          arguments: { path: "blocked.txt", content: "blocked" },
+        },
+      },
+      {
+        expect(request) {
+          expect(JSON.stringify(request.messages.at(-1))).toContain("not found");
+        },
+        response: {
+          type: "tool",
+          id: "p-bash",
+          name: "bash",
+          arguments: { command: "echo blocked" },
+        },
+      },
+      {
+        expect(request) {
+          expect(JSON.stringify(request.messages.at(-1))).toContain("not found");
+        },
+        response: {
+          type: "tool",
+          id: "helper",
+          name: "run_subagent",
+          arguments: { name: "helper", task: "Try disabled tools" },
+        },
+      },
+      {
+        expect(request) {
+          seen.push(toolNames(request));
+        },
+        response: {
+          type: "tool",
+          id: "h-write",
+          name: "write",
+          arguments: { path: "blocked.txt", content: "blocked" },
+        },
+      },
+      {
+        expect(request) {
+          expect(JSON.stringify(request.messages.at(-1))).toContain("not found");
+        },
+        response: {
+          type: "tool",
+          id: "h-bash",
+          name: "bash",
+          arguments: { command: "echo blocked" },
+        },
+      },
+      {
+        expect(request) {
+          expect(JSON.stringify(request.messages.at(-1))).toContain("not found");
+        },
+        response: { type: "text", text: "Disabled." },
+      },
+      ...offeredShellTools([]),
+    ];
+    const run = await startWorkerRun({
+      steps,
+      workers: (workers) => ({
+        ...workers,
+        runtime(launch) {
+          const runtime = workers.runtime(launch);
+          return {
+            ...runtime,
+            describe() {
+              const descriptor = runtime.describe();
+              return {
+                ...descriptor,
+                capabilities: {
+                  ...descriptor.capabilities,
+                  localTools: descriptor.capabilities.localTools?.filter(
+                    (tool) => !["write", "bash"].includes(tool.name),
+                  ),
+                },
+              };
+            },
+          };
+        },
+      }),
+    });
+    cleanups.push(() => run.close());
+    const runId = await run.send("Try disabled native tools.");
+    await run.continueRun(runId);
+    run.model.assertComplete();
+    expect(seen).toHaveLength(2);
+    for (const names of seen) {
+      expect(names).toContain("read");
+      expect(names).not.toContain("read_file");
+      expect(names).not.toContain("write");
+      expect(names).not.toContain("bash");
+    }
+    expect(seen[0]).toContain("message_user");
+    expect(
+      await run.prisma.externalEffect.count({ where: { runId, kind: { in: ["write", "bash"] } } }),
+    ).toBe(0);
   });
 
   it("keeps a bot whose home is still a snapshot in process, with the computer shell", async () => {
@@ -89,7 +209,7 @@ describe("where a product run executes", () => {
     const runId = await run.send("Hello.");
     await run.continueRun(runId);
 
-    expect(seen).toEqual([["write_file", "shell"]]);
+    expect(seen).toEqual([["read_file", "write_file", "shell"]]);
     expect(await attemptsOf(run, runId)).toEqual([{ workerState: null }]);
     expect(run.provider.launches).toEqual([]);
   });
@@ -101,7 +221,7 @@ describe("where a product run executes", () => {
     const runId = await run.send("Hello.");
     await run.continueRun(runId);
 
-    expect(seen).toEqual([["write_file", "grep", "bash"]]);
+    expect(seen).toEqual([["read", "write", "edit", "bash", "grep", "find", "ls"]]);
     expect(
       await run.prisma.volume.findMany({
         where: { kind: "bot_private" },

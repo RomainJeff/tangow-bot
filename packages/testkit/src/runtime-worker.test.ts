@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { FrameSummary } from "@rakazo/adapters/runtime-worker";
-import { GUEST_TOOLS } from "@rakazo/adapters/runtime-worker";
+import { WORKER_NATIVE_TOOLS } from "@rakazo/adapters/runtime-worker";
 import { bundleGuest } from "@rakazo/agent-run-worker/bundle";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { latestCard } from "./index.js";
@@ -352,7 +352,7 @@ describe("a run whose bot runs in a guest", () => {
             compaction: false,
             tools: true,
             scripted: false,
-            localTools: GUEST_TOOLS,
+            localTools: WORKER_NATIVE_TOOLS,
           },
         }),
         abort: async () => {},

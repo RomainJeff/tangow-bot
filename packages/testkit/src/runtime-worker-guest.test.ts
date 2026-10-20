@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { GuestTool, LocalToolOutput, WorkerStartV1 } from "@rakazo/adapter-kit";
@@ -66,7 +66,10 @@ async function driveGuest(options: {
       model: guestModelOf(server.model),
     },
   };
-  const guestTools = new Set(options.tools.map((tool) => tool.name));
+  const guestTools = new Set(
+    options.tools.filter((tool) => tool.where === "guest").map((tool) => tool.name),
+  );
+  const controllerCalls: string[] = [];
   const recorded: LocalToolOutput[] = [];
   const frames: Array<{ type: string; bytes: number }> = [];
   const inbox = createSessionInbox(worker, async (_seq, body, part) => {
@@ -83,9 +86,9 @@ async function driveGuest(options: {
         );
         return { type: "model.end" };
       case "tool.call":
-        return guestTools.has(body.name)
-          ? { type: "tool.grant" }
-          : { type: "refused", reason: "unknown_tool" };
+        if (guestTools.has(body.name)) return { type: "tool.grant" };
+        controllerCalls.push(body.name);
+        return { type: "tool.result", output: { controller: body.name } };
       case "steering.claim":
         return { type: "steering", messages: [] };
       case "tool.done":
@@ -123,7 +126,7 @@ async function driveGuest(options: {
   });
   await controller;
   server.assertComplete();
-  return { exit, recorded, frames };
+  return { exit, recorded, frames, controllerCalls };
 }
 
 const bashTool: GuestTool = {
@@ -194,7 +197,7 @@ describe("run channel conformance of the Pi harness", () => {
     ]);
   });
 
-  it("runs a file tool on the guest's volume and shows the model its result object", async () => {
+  it("runs native writes on the mounted root and keeps Rakazo tools on the controller", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "rakazo-guest-run-"));
     cleanups.push(() => rm(root, { recursive: true, force: true }));
     const fileTool = (name: string): GuestTool => ({
@@ -204,39 +207,80 @@ describe("run channel conformance of the Pi harness", () => {
       where: "guest",
     });
 
-    const { exit, recorded } = await driveGuest({
+    await mkdir(path.join(root, "workspace/bots/bot_guest"), { recursive: true });
+    await writeFile(
+      path.join(root, "workspace/bots/bot_guest/AGENTS.md"),
+      "AMBIENT_CONTEXT_MARKER",
+    );
+    await mkdir(path.join(root, "workspace/bots/bot_guest/.pi/skills/ambient"), {
+      recursive: true,
+    });
+    await writeFile(
+      path.join(root, "workspace/bots/bot_guest/.pi/skills/ambient/SKILL.md"),
+      "---\nname: ambient\ndescription: ambient\n---\nAMBIENT_CONTEXT_MARKER",
+    );
+    const { exit, recorded, controllerCalls } = await driveGuest({
       prompt: "Write then read a note.",
-      tools: [fileTool("write_file"), fileTool("read_file")],
+      tools: [
+        fileTool("write"),
+        fileTool("read"),
+        ...["computer", "message_user"].map((name) => ({
+          ...fileTool(name),
+          where: "controller" as const,
+        })),
+      ],
       cwd: "/workspace/bots/bot_guest",
       root,
       spoolDir: path.join(root, "spool"),
       steps: [
         {
-          expect() {},
+          expect(request) {
+            expect(JSON.stringify(request.messages)).toContain("Use the tools.");
+            expect(JSON.stringify(request.messages)).not.toContain("AMBIENT_CONTEXT_MARKER");
+          },
           response: {
             type: "tool",
             id: "write-1",
-            name: "write_file",
+            name: "write",
             arguments: { path: "note.md", content: "hello\n" },
           },
         },
         {
           expect(request) {
             const result = request.messages.findLast((message) => message.role === "tool");
-            expect(result?.content).toBe('{"ok":true,"path":"note.md"}');
+            expect(result?.content).toContain("Successfully wrote");
           },
           response: {
             type: "tool",
             id: "read-1",
-            name: "read_file",
+            name: "read",
             arguments: { path: "note.md" },
           },
         },
         {
           expect(request) {
             const result = request.messages.findLast((message) => message.role === "tool");
-            expect(result?.content).toBe(
-              '{"path":"note.md","content":"hello\\n","startLine":1,"endLine":1,"totalLines":1}',
+            expect(result?.content).toBe("hello\n");
+          },
+          response: { type: "tool", id: "computer-1", name: "computer", arguments: {} },
+        },
+        {
+          expect(request) {
+            expect(request.messages.findLast((message) => message.role === "tool")?.content).toBe(
+              '{"controller":"computer"}',
+            );
+          },
+          response: {
+            type: "tool",
+            id: "message-1",
+            name: "message_user",
+            arguments: { message: "Done." },
+          },
+        },
+        {
+          expect(request) {
+            expect(request.messages.findLast((message) => message.role === "tool")?.content).toBe(
+              '{"controller":"message_user"}',
             );
           },
           response: { type: "text", text: "Done." },
@@ -245,14 +289,59 @@ describe("run channel conformance of the Pi harness", () => {
     });
 
     expect(exit).toBe("done");
-    expect(recorded).toEqual([
-      { result: { ok: true, path: "note.md" } },
-      {
-        result: { path: "note.md", content: "hello\n", startLine: 1, endLine: 1, totalLines: 1 },
-      },
-    ]);
+    expect(recorded).toHaveLength(2);
+    expect(controllerCalls).toEqual(["computer", "message_user"]);
     expect(await readFile(path.join(root, "workspace/bots/bot_guest/note.md"), "utf8")).toBe(
       "hello\n",
     );
+  });
+  it("bounds and spools a native read result before sending it over P2", async () => {
+    const cwd = await mkdtemp(path.join(tmpdir(), "rakazo-native-read-"));
+    cleanups.push(() => rm(cwd, { recursive: true, force: true }));
+    const content = "native-file-".repeat(3000);
+    await writeFile(path.join(cwd, "large.txt"), content);
+    const { recorded, exit } = await driveGuest({
+      cwd,
+      spoolDir: path.join(cwd, "spool"),
+      prompt: "Read large.txt.",
+      tools: [
+        {
+          name: "read",
+          description: "Read",
+          inputSchema: {
+            type: "object",
+            properties: { path: { type: "string" } },
+            required: ["path"],
+          },
+          where: "guest",
+        },
+      ],
+      steps: [
+        {
+          expect() {},
+          response: {
+            type: "tool",
+            id: "large-read",
+            name: "read",
+            arguments: { path: "large.txt" },
+          },
+        },
+        {
+          expect(request) {
+            const text = String(
+              request.messages.findLast((message) => message.role === "tool")?.content,
+            );
+            expect(text).toContain("output truncated");
+            expect(text.length).toBeLessThanOrEqual(12000);
+          },
+          response: { type: "text", text: "Read." },
+        },
+      ],
+    });
+    expect(exit).toBe("done");
+    const output = recorded[0];
+    if (!output || !("text" in output)) throw new Error("Missing native read result");
+    expect(output.truncated).toBe(true);
+    expect(await readFile(output.spoolPath!, "utf8")).toBe(content);
   });
 });

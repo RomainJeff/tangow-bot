@@ -686,7 +686,9 @@ async function routeRun(
   return {
     runtime,
     tools: withLocalTools(
-      run.tools.filter((tool) => tool.name !== COMPUTER_SHELL_TOOL),
+      run.tools.filter(
+        (tool) => tool.name !== COMPUTER_SHELL_TOOL && !FILE_TOOL_NAMES.has(tool.name),
+      ),
       needs.files.private ? (runtime.describe().capabilities.localTools ?? []) : [],
     ),
   };

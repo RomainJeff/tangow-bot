@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { PiAgentRuntime } from "@rakazo/adapters";
 import { afterEach, describe, expect, it } from "vitest";
-import { fileTask, toolResult } from "./file-task.js";
+import { fileTask, nativeFileTask, toolResult } from "./file-task.js";
+import type { ModelEmulatorStep } from "./model-emulator.js";
 import { startWorkerRun } from "./worker-run-fixture.js";
 
 const cleanups: Array<() => Promise<void>> = [];
@@ -16,7 +17,7 @@ async function runTask(arm: "in_process" | "worker") {
   const seen: string[] = [];
   let file: string | undefined;
   const run = await startWorkerRun({
-    steps: fileTask(seen, () => {
+    steps: (arm === "worker" ? nativeFileTask : fileTask)(seen, () => {
       file = readFileSync(path.join(run.provider.volumePath("bot_private"), "notes.md"), "utf8");
     }),
     ...(arm === "in_process" ? { runtime: () => new PiAgentRuntime() } : {}),
@@ -32,7 +33,7 @@ async function runTask(arm: "in_process" | "worker") {
 }
 
 describe("a file task in a worker", () => {
-  it("leaves the same file and shows the model the same results as in process", async () => {
+  it("leaves the same final file as in process through the native tool contracts", async () => {
     const inProcess = await runTask("in_process");
     const worker = await runTask("worker");
 
@@ -47,8 +48,11 @@ describe("a file task in a worker", () => {
       expect.stringContaining('"ok":true'),
     ]);
     expect(worker.file).toBe(inProcess.file);
-    expect(worker.seen).toEqual(inProcess.seen);
-    expect(worker.results).toEqual(inProcess.results);
+    expect(worker.seen[0]).toContain("Successfully wrote");
+    expect(worker.seen[1]).toContain("Successfully replaced");
+    expect(worker.seen[2]).toContain("Could not find");
+    expect(worker.seen[3]).toContain("gamma");
+    expect(worker.seen[4]).toContain("notes.md");
   });
 });
 
@@ -97,8 +101,8 @@ describe("a product run in a worker", () => {
             },
           },
         },
-        step("write_file", () => ({ path: "shared/team.txt", content: "team\n" })),
-        step("edit_file", () => ({ path: "notes.md", old_text: "alpha", new_text: "beta" })),
+        step("write", () => ({ path: "../../shared/team.txt", content: "team\n" })),
+        step("edit", () => ({ path: "notes.md", edits: [{ oldText: "alpha", newText: "beta" }] })),
         step("grep", () => ({ pattern: "be.a" })),
         step("attach_file", () => ({ path: `/workspace/bots/${run.bot.id}/notes.md` })),
         step("message_user", () => ({ message: "Done." })),
@@ -113,12 +117,10 @@ describe("a product run in a worker", () => {
     await run.continueRun(runId);
     run.model.assertComplete();
 
-    expect(seen.slice(0, 4)).toEqual([
-      "written on the computer",
-      '{"ok":true,"path":"shared/team.txt"}',
-      '{"ok":true,"path":"notes.md","replacements":1}',
-      "notes.md:1:beta",
-    ]);
+    expect(seen[0]).toBe("written on the computer");
+    expect(seen[1]).toContain("Successfully wrote");
+    expect(seen[2]).toContain("Successfully replaced");
+    expect(seen[3]).toContain("notes.md:1: beta");
     expect(JSON.parse(seen[4]!)).toMatchObject({
       ok: true,
       path: `/workspace/bots/${run.bot.id}/notes.md`,

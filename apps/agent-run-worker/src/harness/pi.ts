@@ -1,3 +1,9 @@
+import type { ResourceLoader } from "@earendil-works/pi-coding-agent";
+import {
+  convertToLlm,
+  createExtensionRuntime,
+  SessionManager,
+} from "@earendil-works/pi-coding-agent";
 import type {
   AgentInputImage,
   AgentRunRequest,
@@ -8,6 +14,7 @@ import type {
 import { PiAgentRuntime } from "@rakazo/adapters/pi-runtime";
 import { piAiStreamFn, relayedModel } from "@rakazo/adapters/runtime-worker/pi-ai";
 import type { DoneBody, GuestHarness, HarnessHost } from "../harness.js";
+import { executePiTool, piToolManifest } from "./pi-tools.js";
 
 function decodeImages(images: GuestImage[] | undefined): AgentInputImage[] {
   return (images ?? []).map((image) => ({ ...image, data: Buffer.from(image.data, "base64") }));
@@ -36,7 +43,12 @@ function toolCaller(host: HarnessHost, agent: string): NonNullable<AgentRunReque
 export const piHarness: GuestHarness = {
   declaration: { name: "pi", capabilities: ["subagents", "steering"] },
 
-  async run({ worker, run }, host): Promise<DoneBody> {
+  nativeTools: piToolManifest(),
+  executeNativeTool: executePiTool,
+
+  async run({ worker, run, cwd }, host): Promise<DoneBody> {
+    const resources = controllerResources(run.instructions);
+    await resources.reload();
     const helperRefs = new Map<string, string>();
     const helperModels = new Map<string, GuestModel>();
     const request: AgentRunRequest = {
@@ -45,7 +57,7 @@ export const piHarness: GuestHarness = {
       runId: worker.runId,
       sourceMessageId: run.sourceMessageId,
       prompt: run.prompt,
-      instructions: run.instructions,
+      instructions: resources.getSystemPrompt() ?? "",
       history: run.history,
       currentTurnImages: decodeImages(run.images),
       tools: run.tools.map(({ name, description, inputSchema, readOnly }) => ({
@@ -102,16 +114,27 @@ export const piHarness: GuestHarness = {
       },
     };
 
+    const relay = piAiStreamFn(
+      (body, onPart, signal) => host.model(body, onPart, signal),
+      (agentId) => {
+        if (agentId === undefined) return "root";
+        const ref = helperRefs.get(agentId);
+        if (!ref) throw new Error(`No helper ${agentId} was opened`);
+        return ref;
+      },
+    );
     const runtime = new PiAgentRuntime({
-      streamFn: piAiStreamFn(
-        (body, onPart, signal) => host.model(body, onPart, signal),
-        (agentId) => {
-          if (agentId === undefined) return "root";
-          const ref = helperRefs.get(agentId);
-          if (!ref) throw new Error(`No helper ${agentId} was opened`);
-          return ref;
-        },
-      ),
+      streamFn(model, context, options, agentId) {
+        // A call snapshot, never a disk session or an SDK-owned model connection.
+        const session = SessionManager.inMemory(cwd);
+        for (const message of context.messages) session.appendMessage(message);
+        return relay(
+          model,
+          { ...context, messages: convertToLlm(session.buildSessionContext().messages) },
+          options,
+          agentId,
+        );
+      },
     });
 
     for await (const event of runtime.run(request, { signal: host.signal })) {
@@ -139,3 +162,20 @@ export const piHarness: GuestHarness = {
     throw new Error("The run ended without finishing");
   },
 };
+
+/** Explicit context only. No AGENTS.md, skills, settings, extensions or prompts from disk. */
+function controllerResources(instructions: string): ResourceLoader {
+  return {
+    getExtensions: () => ({ extensions: [], errors: [], runtime: createExtensionRuntime() }),
+    getSkills: () => ({ skills: [], diagnostics: [] }),
+    getPrompts: () => ({ prompts: [], diagnostics: [] }),
+    getThemes: () => ({ themes: [], diagnostics: [] }),
+    getAgentsFiles: () => ({ agentsFiles: [] }),
+    getSystemPrompt: () => instructions,
+    getSystemPromptSource: () => undefined,
+    getAppendSystemPrompt: () => [],
+    getAppendSystemPromptSources: () => [],
+    extendResources() {},
+    async reload() {},
+  };
+}
