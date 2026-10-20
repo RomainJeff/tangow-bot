@@ -1,3 +1,4 @@
+import { formatSkillsForPrompt } from "@earendil-works/pi-coding-agent";
 import type {
   AgentInputImage,
   AgentRunRequest,
@@ -8,6 +9,8 @@ import type {
 import { PiAgentRuntime } from "@rakazo/adapters/pi-runtime";
 import { piAiStreamFn, relayedModel } from "@rakazo/adapters/runtime-worker/pi-ai";
 import type { DoneBody, GuestHarness, HarnessHost } from "../harness.js";
+import { piResources, piSkillInstructions } from "./pi-resources.js";
+import { piSession } from "./pi-session.js";
 import { executePiTool, piToolManifest } from "./pi-tools.js";
 
 function decodeImages(images: GuestImage[] | undefined): AgentInputImage[] {
@@ -40,16 +43,18 @@ export const piHarness: GuestHarness = {
   nativeTools: piToolManifest(),
   executeNativeTool: executePiTool,
 
-  async run({ worker, run }, host): Promise<DoneBody> {
+  async run({ worker, run, cwd, skillsDir }, host): Promise<DoneBody> {
     const helperRefs = new Map<string, string>();
     const helperModels = new Map<string, GuestModel>();
+    const canReadSkills = run.tools.some((tool) => tool.name === "read" && tool.where === "guest");
+    const resources = piResources(cwd, skillsDir, run.instructions, canReadSkills);
     const request: AgentRunRequest = {
       botId: run.botId,
       threadId: run.threadId,
       runId: worker.runId,
       sourceMessageId: run.sourceMessageId,
       prompt: run.prompt,
-      instructions: run.instructions,
+      instructions: piSkillInstructions(resources),
       history: run.history,
       currentTurnImages: decodeImages(run.images),
       tools: run.tools.map(({ name, description, inputSchema, readOnly }) => ({
@@ -115,7 +120,11 @@ export const piHarness: GuestHarness = {
         return ref;
       },
     );
-    const runtime = new PiAgentRuntime({ streamFn: relay });
+    const runtime = new PiAgentRuntime({
+      streamFn: relay,
+      subagentInstructions: formatSkillsForPrompt(resources.getSkills().skills, "read"),
+      bindSession: (agent) => piSession(agent, cwd, resources),
+    });
 
     for await (const event of runtime.run(request, { signal: host.signal })) {
       switch (event.type) {

@@ -6,7 +6,7 @@ import {
   extractRoutineSkillMentions,
   findSkillByName,
   formatSkillsCatalogInstruction,
-  mergeBuiltinSkills,
+  mergeManagedSkills,
   parseSkillMd,
   searchSkills,
   skillsReferencedInPrompt,
@@ -32,15 +32,15 @@ describe("built-in skill merging", () => {
       source: "user" as const,
       readOnly: false,
     };
-    const skills = mergeBuiltinSkills<typeof builtin | typeof saved>([builtin], [saved]);
-    expect(skills).toEqual([saved]);
-    expect(findSkillByName(skills, " INTERROGATE ")).toBe(saved);
+    const skills = mergeManagedSkills<typeof builtin | typeof saved>([builtin], [saved]);
+    expect(skills).toEqual([builtin]);
+    expect(findSkillByName(skills, " INTERROGATE ")).toBe(builtin);
     for (const prompt of ["/Interrogate\nreview this", "Use @Interrogate to review this"]) {
-      expect(expandSkillReferencesInPrompt(prompt, skills)).toContain("Saved instructions");
-      expect(expandSkillReferencesInPrompt(prompt, skills)).not.toContain("Builtin instructions");
+      expect(expandSkillReferencesInPrompt(prompt, skills)).toContain("Builtin instructions");
+      expect(expandSkillReferencesInPrompt(prompt, skills)).not.toContain("Saved instructions");
       expect(expandSkillReferencesInPrompt(prompt, skills)).not.toContain("@Interrogate");
     }
-    expect(mergeBuiltinSkills([builtin], [])).toEqual([builtin]);
+    expect(mergeManagedSkills([builtin], [])).toEqual([builtin]);
   });
 });
 

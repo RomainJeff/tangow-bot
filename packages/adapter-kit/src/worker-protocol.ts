@@ -183,6 +183,25 @@ export type PiAiModelEvent = z.infer<typeof PiAiModelEventSchema>;
  * reply is that decision. Usage, provider, connection and owner choices have no body: the
  * controller measures or decides them.
  */
+export const WorkerSkillSchema = z.strictObject({
+  name: z.string().min(1).max(80),
+  description: z.string().min(1).max(1024),
+  source: z.enum(["managed", "bot", "shared"]),
+  path: z.string().max(4096),
+  contentHash: z.string().regex(/^[a-f0-9]{64}$/),
+  content: z.string().max(100_000),
+  files: z
+    .array(z.strictObject({ path: z.string().max(4096), content: z.string().max(100_000) }))
+    .max(128),
+});
+export type WorkerSkill = z.infer<typeof WorkerSkillSchema>;
+export const SkillCollisionSchema = z.strictObject({
+  name: z.string().max(80),
+  kept: z.enum(["managed", "bot", "shared"]),
+  ignored: z.enum(["managed", "bot", "shared"]),
+});
+export type SkillCollision = z.infer<typeof SkillCollisionSchema>;
+
 export const GuestBodySchema = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("text"), text: z.string() }),
   z.strictObject({
@@ -253,6 +272,13 @@ export const GuestBodySchema = z.discriminatedUnion("type", [
     text: z.string().optional(),
     privateFinalText: z.string().optional(),
     runtimeNotice: z.string().optional(),
+  }),
+  z.strictObject({ type: z.literal("skills.index"), skill: WorkerSkillSchema }),
+  z.strictObject({ type: z.literal("skills.collision"), collision: SkillCollisionSchema }),
+  z.strictObject({ type: z.literal("skills.used"), name: z.string().min(1).max(80) }),
+  z.strictObject({
+    type: z.literal("skills.index.end"),
+    sources: z.array(z.enum(["managed", "bot", "shared"])).max(3),
   }),
   z.strictObject({ type: z.literal("failed"), message: z.string() }),
 ]);

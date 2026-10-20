@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { GuestTool, LocalToolOutput, WorkerStartV1 } from "@rakazo/adapter-kit";
@@ -96,6 +96,11 @@ async function driveGuest(options: {
       case "tool.done":
         recorded.push(body.output);
         return { type: "tool.recorded" };
+      case "skills.index":
+      case "skills.index.end":
+      case "skills.collision":
+      case "skills.used":
+        return { type: "recorded" };
       case "done":
         return { type: "stop", reason: "done" };
       default:
@@ -127,6 +132,7 @@ async function driveGuest(options: {
     harness: HARNESSES.pi!,
     spoolDir: options.spoolDir,
     root: options.root,
+    home: path.join(options.root ?? options.cwd, ".guest-home"),
   });
   await controller;
   server.assertComplete();
@@ -145,6 +151,48 @@ const bashTool: GuestTool = {
 };
 
 describe("run channel conformance of the Pi harness", () => {
+  it.each([true, false])(
+    "sends instructions once and offers the skills catalog only with read, read=%s",
+    async (read) => {
+      const root = await mkdtemp(path.join(tmpdir(), "rakazo-prompt-"));
+      cleanups.push(() => rm(root, { recursive: true, force: true }));
+      const managed = path.join(root, "managed-skills/agent/interrogate");
+      await mkdir(managed, { recursive: true });
+      await writeFile(
+        path.join(managed, "SKILL.md"),
+        "---\nname: Interrogate\ndescription: Review work\n---\nRead the changes.\n",
+      );
+      const { exit } = await driveGuest({
+        cwd: "/workspace/bots/bot_guest",
+        root,
+        spoolDir: path.join(root, "spool"),
+        prompt: "Reply briefly.",
+        tools: read
+          ? [{ name: "read", description: "Read", inputSchema: { type: "object" }, where: "guest" }]
+          : [],
+        steps: [
+          {
+            async expect(request) {
+              await writeFile(path.join(root, "model-request.json"), JSON.stringify(request));
+              const systems = request.messages.filter((message) => message.role === "system");
+              expect(systems).toHaveLength(1);
+              const prompt = String(systems[0]?.content);
+              if (!read) {
+                expect(prompt).not.toContain("<available_skills>");
+                expect(prompt).not.toContain("Use the read tool");
+              }
+              expect(prompt.split("Use the tools.")).toHaveLength(2);
+              expect(prompt.split("<available_skills>")).toHaveLength(read ? 2 : 1);
+              expect(prompt.split("<name>Interrogate</name>")).toHaveLength(read ? 2 : 1);
+            },
+            response: { type: "text", text: "Done." },
+          },
+        ],
+      });
+      expect(exit).toBe("done");
+    },
+  );
+
   it("bounds a 5 MiB output for the model and the wire, and keeps it on the guest disk", async () => {
     const workdir = await mkdtemp(path.join(tmpdir(), "rakazo-guest-run-"));
     cleanups.push(() => rm(workdir, { recursive: true, force: true }));

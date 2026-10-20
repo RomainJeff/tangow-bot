@@ -31,7 +31,7 @@ interface GuestHarness {
     readonly declaration: HarnessDeclaration; // { name, capabilities }
     readonly nativeTools: readonly ConnectorTool[];
     executeNativeTool(name, args, callId, context): Promise<LocalToolOutput>;
-    run(start: { worker: WorkerIdentity; run: GuestRunInput; cwd: string }, host: HarnessHost): Promise<DoneBody>;
+    run(start: { worker: WorkerIdentity; run: GuestRunInput; cwd: string; skillsDir: string }, host: HarnessHost): Promise<DoneBody>;
 }
 ```
 
@@ -52,10 +52,10 @@ Follow these rules:
 - Announce each tool with `emit({ type: "tool", ... })` before `callTool`. The executor shows the announcement and waits for it before it journals the call.
 - Never keep or ask for a key. Send every model call through `host.model`.
 - Treat a throw from `decide`, `model` or `callTool` as the end of the attempt, unless the harness can report the failure to its model. A refusal has already ended the channel.
-- Bring the harness's native file and shell tools. Declare their names, descriptions and JSON schemas in `nativeTools`, and implement `executeNativeTool` using the SDK's real factories with `context.cwd`. Keep SDK imports inside `harness/`. The generic guest calls this method only after the P2 grant and records its result before continuing. The adapter must use `captureToolOutput` for bounded text and volume spooling.
+- Bring the harness's native file and shell tools. Declare their names, descriptions and JSON schemas in `nativeTools`, and implement `executeNativeTool` using the SDK's real factories with `context.cwd`. Keep SDK imports inside `harness/`. The generic guest calls this method only after the P2 grant and records its result before continuing. A successful native `read` of SKILL.md also reports skill usage. The adapter must use `captureToolOutput` for bounded text and volume spooling.
 - Give the controller an SDK-free per-harness manifest and register it in `nativeToolsForHarness`. Pi generates `runtime-worker/pi-tools.json` from its tool factories. The bundle build checks it against the installed SDK. A second harness must also select its manifest in the runtime's `localTools` descriptor before the executor routes a run.
 - Keep all Rakazo-specific tools on the controller, including computer, browser, memory, messages, MCP, integrations and routines. Do not remove them when adding native tools. Honor the selected list in `worker.start`; a missing tool must stay missing for both parent and helper. Removing a name does not remove what a remaining bash tool can do.
-- Load no ambient context. Pi uses controller-provided instructions only, with no AGENTS.md, skills or settings discovery. An in-memory coding-agent session with an explicit resource loader is deferred to the skills slice; see the [session decision](P3-handoff.md#s7-decision-and-session-context).
+- Point the harness's skill loader only at `start.skillsDir`, the VM home's `~/.agents/skills/`. The generic runner has already converged managed, bot and shared sources in that precedence order and reported name collisions. Disable default skill paths and ambient AGENTS.md, settings, extensions and other context discovery. Pi uses an explicit `ResourceLoader` and `loadSkills({ skillPaths: [skillsDir], includeDefaults: false })`, then the SDK's skill catalog formatter. The controller supplies the rest of the context. Native read and bash tools consume the files. See the [S8 session limitation](P3-handoff.md#sdk-adoption-and-remaining-session-work) before adopting an SDK session: Pi's AgentSession and in-memory SessionManager are not yet in use.
 
 ## Declare optional capabilities
 
@@ -101,7 +101,7 @@ Every harness must pass the same tests as Pi, offline:
 - `packages/testkit/src/runtime-worker.test.ts` and `runtime-worker-stop.test.ts`, the protocol lanes. They run the real executor through `LocalWorkerProvider`, which starts `HARNESSES.pi` in memory mode and `RAKAZO_WORKER_HARNESS=pi` in child mode. Make the harness name a `LocalWorkerProvider` option, then run the lanes with yours.
 - `packages/testkit/src/runtime-worker-hostile.test.ts` tests the controller against a hand-written guest. It does not depend on the harness and needs no change.
 - `pnpm bench:worker-channel` measures the control cost per tool and the stop delay. A harness should not move the control cost, because the controller does the same work for every harness.
-- `pnpm test:worker-live` runs the P3 lanes against a real E2B deployment with the template you built. Lanes a, b, d and f exercise the harness: the file task against the in-process baseline, the local tools on the volumes, a disabled tool for the parent and a helper, and a large output. Lane i does not reach a harness: it checks that a bot without a computer is refused before routing, and that the template's sandbox user can write `/workspace`. The [P3 handoff](P3-handoff.md) explains how to run them on a host with no checkout.
+- `pnpm test:worker-live` runs the P3 lanes against a real E2B deployment with the template you built. Lanes a, b, d and f exercise the harness: the file task against the in-process baseline, the local tools on the volumes, a disabled tool for the parent and a helper, and a large output. Lane i does not reach a harness: it checks that a bot without a computer is refused before routing, and that the template's sandbox user can write `/workspace`. The `skills` lane checks all three skill sources, a script and a newly created skill on the next run. The [P3 handoff](P3-handoff.md) explains how to run them on a host with no checkout.
 
 ## Move a computer's files before its runs use workers
 

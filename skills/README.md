@@ -1,25 +1,43 @@
 # Managed skills
 
-Skills versioned in this repository, shipped with the `app` image and mounted read-only in every
-Docker computer under `/managed-skills`. They add to the skills a user writes or imports. Each skill
-is a directory with a `SKILL.md` (frontmatter `name` + `description`, then the body) and optional
-`scripts/` and `references/`.
+Skills versioned here are managed skills. They are always enabled and cannot be disabled per bot.
+Each directory contains SKILL.md with frontmatter `name` and `description`, plus optional `scripts/`
+and `references/`.
 
-The family name says who reads the skill.
-
-| Family | Directory | Reader | At runtime |
+| Family | Directory | Reader | Runtime |
 | --- | --- | --- | --- |
-| `agent` | `skills/agent/<dir>/` | The bot's harness (Pi, in the worker) | Listed in the prompt catalog as `builtin:<name>`, body loaded with `skill_read`. Files under `/managed-skills/agent/<dir>/` for Pi's `shell` tool. Not wired to coding agents. |
-| `computer` | `skills/computer/<dir>/` | Coding agents running on the computer (OpenCode today) | `/managed-skills/computer` symlinked into the coding agent's global skills directory. Absent from Pi's catalog. |
+| `agent` | `skills/agent/<dir>/` | Bot harness | Baked root-owned and read-only at `/managed-skills/agent` in worker templates; also mounted at that path in Docker computers. |
+| `computer` | `skills/computer/<dir>/` | Coding agents on the computer | Existing read-only `/managed-skills/computer` mount and OpenCode startup link. |
 
-Where a new skill goes: if it guides **the bot** (how to talk to the user, delegate, use its Rakazo
-tools), it is an `agent` skill. If it guides **a coding agent inside a repository** (tests, PRs,
-debugging), it is a `computer` skill.
+Put bot workflow guidance in `agent`. Put repository coding guidance in `computer`. Managed agent
+skill directory names must equal `skillDirName(name)`, the normalized URL-encoded name. Keep the
+family small because every skill adds a catalog line on every run. Existing `builtin:` ids remain
+stable for clients; they do not allow per-bot disable settings to hide managed skills.
 
-Rules for `agent` skills:
+Workers converge three sources into `~/.agents/skills/`, one symlink per name:
 
-- The directory name must be the skill's key, `skillDirName(name)` (lower-cased, URL-encoded);
-  a skill whose directory does not match is ignored with a warning.
-- The `name` in the frontmatter is the id users see (`builtin:<name>`); renaming it loses the
-  per-bot visibility settings attached to the old id.
-- Keep the family small: every `agent` skill costs one catalog line on every turn of every bot.
+1. Managed skills at `/managed-skills/agent`.
+2. Bot skills at `/workspace/bots/<botId>/skills/`, on the private volume.
+3. Shared skills at `/workspace/shared/skills/`, on the space's shared volume.
+
+The first source wins a name collision. The guest logs it and reports it to the controller.
+Location decides visibility for volume skills; there are no per-bot switches. Native file tools
+write skills in their source folder, and the next run rebuilds the links and catalog. The runner
+requires an explicit VM home and only replaces links in its own ownership record. It refuses to
+replace user directories or unowned entries.
+
+Pi loads only that folder with pi-coding-agent's `loadSkills`, defaults off, through an explicit
+ResourceLoader. Its SDK catalog replaces the controller catalog in worker prompts. Native `read`
+loads SKILL.md and native `bash` executes scripts. The in-process path retains its existing
+skill tools and user store, with managed skills always enabled.
+
+At run end, a bounded file report updates the controller's DB index and skills screen. The
+controller refuses to index reported skills containing a known run secret, including in scripts;
+it leaves volume files untouched. Linked, binary or oversized bundles are not indexed. The
+[handoff](../docs/implementation/pi-e2b/P3-handoff.md#s8-skills-on-volumes) documents bounds, session
+limits, migration and computer convergence limitations.
+
+Existing user skills can be copied, without deleting originals, by
+`scripts/migrate-skills-to-volumes.ts --space <space-id>`. Stop writers first. Conflicting targets
+are refused and identical copies are unchanged on retry. All migrated skills go to shared/skills
+so every bot in the space retains them. Marketplace files are outside this migration.

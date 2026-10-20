@@ -516,3 +516,63 @@ describe("a hostile guest", () => {
     server.assertComplete();
   });
 });
+
+describe("untrusted skill reports", () => {
+  it.each(["skills.index.end", "skills.index"] as const)(
+    "rejects an unmounted shared source in %s",
+    async (type) => {
+      const setupRun = setup();
+      const onSkillIndex = vi.fn();
+      const run = consume(setupRun.runtime.run(request("unmounted", { onSkillIndex })));
+      const launch = await setupRun.launchedFor("unmounted");
+      const guest = rawGuest(launch.connect(), launch.capability);
+      await guest.hello();
+      guest.send(
+        1,
+        type === "skills.index.end"
+          ? { type, sources: ["shared"] }
+          : {
+              type,
+              skill: {
+                source: "shared",
+                name: "fake",
+                description: "Fake",
+                path: "/workspace/shared/skills/fake/SKILL.md",
+                content: "fake",
+                contentHash: "0".repeat(64),
+                files: [],
+              },
+            },
+      );
+      expect(await guest.replies(1)).toEqual([{ type: "refused", reason: "invalid" }]);
+      await expect(run.done).rejects.toThrow("invalid");
+      expect(onSkillIndex).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(["skills.used", "skills.collision"] as const)(
+    "bounds %s events over the entire attempt",
+    async (type) => {
+      const setupRun = setup();
+      const record = vi.fn();
+      const run = consume(
+        setupRun.runtime.run(request(type, { onSkillUsed: record, onSkillCollision: record })),
+      );
+      const launch = await setupRun.launchedFor(type);
+      const guest = rawGuest(launch.connect(), launch.capability);
+      await guest.hello();
+      const body: GuestBody =
+        type === "skills.used"
+          ? { type, name: "guide" }
+          : { type, collision: { name: "guide", kept: "managed", ignored: "managed" } };
+      for (let seq = 1; seq <= 513; seq++) {
+        guest.send(seq, body);
+        expect(await guest.replies(seq)).toEqual([
+          seq === 513 ? { type: "refused", reason: "budget" } : { type: "recorded" },
+        ]);
+      }
+      await expect(run.done).rejects.toThrow("budget");
+      expect(record).toHaveBeenCalledTimes(512);
+    },
+  );
+});

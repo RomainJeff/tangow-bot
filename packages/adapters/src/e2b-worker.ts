@@ -237,6 +237,7 @@ export class E2BWorkerProvider implements WorkerProvider, GuestConnector {
       metadata,
       envs: {
         RAKAZO_WORKER_HARNESS: this.config.harness ?? "pi",
+        RAKAZO_WORKER_HOME: "/home/user",
         ...(spec.mounts.some((mount) => mount.path === privateMount) && {
           RAKAZO_WORKER_SPOOL_DIR: `${privateMount}/.rakazo/tool-output`,
         }),

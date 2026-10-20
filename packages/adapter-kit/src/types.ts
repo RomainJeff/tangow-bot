@@ -4,7 +4,7 @@ import type {
   ConnectionCatalogItem,
   SandboxKind,
 } from "@rakazo/contracts";
-import type { LocalToolOutput } from "./worker-protocol.js";
+import type { LocalToolOutput, SkillCollision, WorkerSkill } from "./worker-protocol.js";
 
 export interface AdapterContext {
   operationId: string;
@@ -436,6 +436,14 @@ export interface AgentRunRequest {
    * most once; what `run` returns is the tool's output. Absent: the runtime has no local tools.
    */
   executeLocalTool?: LocalToolExecutor;
+  /** Fenced, untrusted guest observations; secrets are scanned by the controller. */
+  onSkillIndex?: (
+    skills: WorkerSkill[],
+    sources: WorkerSkill["source"][],
+    receivedAt: Date,
+  ) => Promise<void>;
+  onSkillCollision?: (collision: SkillCollision) => Promise<void>;
+  onSkillUsed?: (name: string) => Promise<void>;
   /** The attempt this run belongs to, for a runtime that binds a remote guest to it. */
   attempt?: { id: string; fence: number };
   /** Called after a tool returns; implementations must not persist raw result contents. */

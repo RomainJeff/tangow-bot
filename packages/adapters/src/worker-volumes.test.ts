@@ -149,7 +149,13 @@ describe("volume provisioning and home adoption", () => {
       { botId: ada.id, providerRef: adaVolume.providerRef },
       { botId: bob.id, providerRef: `rakazo-${bobVolume.id}` },
     ]);
-    expect(fake.calls).toEqual([{ op: "ensureVolume", name: `rakazo-${bobVolume.id}` }]);
+    const shared = await prisma.volume.findFirstOrThrow({
+      where: { kind: "space_shared", spaceId: spaceA },
+    });
+    expect(fake.calls).toEqual([
+      { op: "ensureVolume", name: `rakazo-${shared.id}` },
+      { op: "ensureVolume", name: `rakazo-${bobVolume.id}` },
+    ]);
   });
 
   it("never adopts a home on a computer kind without workers", async () => {

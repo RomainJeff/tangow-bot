@@ -1,3 +1,5 @@
+import { cp, mkdir, rm } from "node:fs/promises";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { WORKER_NATIVE_TOOLS } from "@rakazo/adapters/runtime-worker";
 import { build } from "esbuild";
@@ -11,6 +13,12 @@ export async function bundleGuest(outfile = GUEST_BUNDLE): Promise<string> {
   if (JSON.stringify(WORKER_NATIVE_TOOLS) !== JSON.stringify(piToolManifest())) {
     throw new Error("Pi tool manifest is stale. Run the worker tools:manifest script.");
   }
+  const managed = path.join(path.dirname(outfile), "managed-skills", "agent");
+  await rm(managed, { recursive: true, force: true });
+  await mkdir(path.dirname(managed), { recursive: true });
+  await cp(fileURLToPath(new URL("../../../skills/agent", import.meta.url)), managed, {
+    recursive: true,
+  });
   await build({
     entryPoints: [ENTRY],
     outfile,

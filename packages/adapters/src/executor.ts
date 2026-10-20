@@ -418,6 +418,7 @@ import {
 import { createWebProvider } from "./web-provider-factory.js";
 import { withAbort } from "./web-ssrf.js";
 import { webFetchFromTool, webSearchFromTool } from "./web-tools.js";
+import { indexWorkerSkills } from "./worker-skills.js";
 
 const modelCredentialLocks = new Map<string, Promise<void>>();
 const READ_ONLY_AGENT_TOOLS = new Set([
@@ -697,7 +698,12 @@ async function routeRun(
     runtime,
     tools: withLocalTools(
       run.tools.filter(
-        (tool) => tool.name !== COMPUTER_SHELL_TOOL && !FILE_TOOL_NAMES.has(tool.name),
+        (tool) =>
+          tool.name !== COMPUTER_SHELL_TOOL &&
+          !FILE_TOOL_NAMES.has(tool.name) &&
+          !["skill_read", "skill_search", "skill_create", "skill_update", "skill_delete"].includes(
+            tool.name,
+          ),
       ),
       needs.files.private ? (runtime.describe().capabilities.localTools ?? []) : [],
     ),
@@ -2379,7 +2385,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const skillOwner = { spaceId: run.spaceId, userId: run.userId, botId: run.botId };
         /** What the skill-learning nudge reads back: the skills this run followed, in order. */
         const recordSkillUse = async (skillName: string, via: string) => {
-          if (learning === "off") return;
+          if (learning === "off" && via !== "read") return;
           await deps.events
             .append({
               spaceId: run.spaceId,
@@ -4376,7 +4382,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   "\n",
                 )}\nWhen the user asks to run a taught skill by name, follow that skill's playbook exactly. The full playbook is included in the user task when they invoke it.`
             : undefined;
-        const agentSkillsCatalog = formatSkillsCatalogInstruction(agentSkills, learning);
+        const workerSkills = runtime.describe().id === "worker";
+        const agentSkillsCatalog = workerSkills
+          ? undefined
+          : formatSkillsCatalogInstruction(agentSkills, learning);
         // ponytail: only docker mounts these; harmless hint elsewhere.
         const agentSkillsLine = agentSkillsCatalog
           ? `${agentSkillsCatalog}\nSkill files (scripts/, references/) are mounted read-only in the sandbox; skill_read returns the skill's folder as dir.`
@@ -4387,10 +4396,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
         );
         const taskPrompt = expandSkillReferencesInPrompt(
           [task.prompt, attachedFilesPrompt, missingImagesInstruction].filter(Boolean).join("\n\n"),
-          agentSkills,
+          workerSkills ? [] : agentSkills,
           sandboxSkillDir,
         );
-        for (const { skill, via } of skillsReferencedInPrompt(task.prompt, agentSkills)) {
+        for (const { skill, via } of skillsReferencedInPrompt(
+          task.prompt,
+          workerSkills ? [] : agentSkills,
+        )) {
           await recordSkillUse(skill.name, via);
         }
         const invokedSkill = savedSkills.find((skill) =>
@@ -4686,6 +4698,28 @@ export function createRunExecutor(deps: ExecutorDeps) {
                       run,
                     );
                   },
+              onSkillUsed: (name) => recordSkillUse(name, "read"),
+              onSkillCollision: async (collision) => {
+                getLogger().warn("skills.name_collision", collision);
+                await deps.events.append({
+                  spaceId: run.spaceId,
+                  threadId: thread.id,
+                  botId: bot.id,
+                  runId,
+                  type: "agent.skill.collision",
+                  payload: collision,
+                });
+              },
+              onSkillIndex: (skills, sources, receivedAt) =>
+                indexWorkerSkills(
+                  deps.prisma,
+                  { ...skillOwner, runId, fence },
+                  skills,
+                  sources,
+                  runSecrets,
+                  deps.secretStore,
+                  receivedAt,
+                ),
               attempt: { id: attempt.id, fence },
               startSubagent: scripted ? undefined : startSubagent,
               resolveModel: scripted
@@ -5153,7 +5187,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               : null;
           // Decided and marked while the run still holds its lease: a resumed run reads the mark.
           const skillNudge: SkillNudgeDecision | undefined =
-            learning === "off"
+            learning === "off" || workerSkills
               ? undefined
               : await decideSkillNudge(deps, learning, {
                   run: { ...run, threadId: thread.id },

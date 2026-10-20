@@ -1,0 +1,98 @@
+import { createHash } from "node:crypto";
+import type { WorkerSkill } from "@rakazo/adapter-kit";
+import { containsSecret, parseSkillMd } from "@rakazo/core";
+import type { PrismaClient } from "@rakazo/db";
+import { getLogger } from "@rakazo/logging";
+import type { EncryptedSecretStore } from "./secrets.js";
+
+/** Reports are observations by an untrusted guest. Reject secrets instead of storing masked skills. */
+export async function indexWorkerSkills(
+  prisma: PrismaClient,
+  owner: { spaceId: string; userId: string; botId: string; runId: string; fence: number },
+  skills: readonly WorkerSkill[],
+  sources: readonly WorkerSkill["source"][],
+  secrets: readonly string[],
+  secretStore: Pick<EncryptedSecretStore, "load">,
+  receivedAt = new Date(),
+): Promise<void> {
+  const sharedSecrets = sources.includes("shared")
+    ? (
+        await prisma.botSecret.findMany({
+          where: { spaceId: owner.spaceId },
+          select: { id: true, ciphertext: true },
+        })
+      ).map((row) => secretStore.load(row.ciphertext, row.id))
+    : [];
+  const clean = skills.filter((skill) => {
+    if (skill.source === "managed" || !sources.includes(skill.source)) return false;
+    const parsed = parseSkillMd(skill.content);
+    if (
+      "error" in parsed ||
+      parsed.name !== skill.name ||
+      parsed.description !== skill.description ||
+      createHash("sha256").update(skill.content).digest("hex") !== skill.contentHash
+    )
+      return false;
+    const secret =
+      (skill.source === "shared" &&
+        containsSecret([skill.name, skill.description], sharedSecrets)) ||
+      [
+        skill.name,
+        skill.description,
+        skill.path,
+        skill.content,
+        ...skill.files.flatMap((file) => [file.path, file.content]),
+      ].some((text) => containsSecret(text, [...secrets]));
+    if (secret) getLogger().warn("skills.index_refused", { botId: owner.botId, reason: "secret" });
+    return !secret;
+  });
+  await prisma.$transaction(async (tx) => {
+    if (sources.includes("shared")) {
+      await tx.$queryRaw`SELECT id FROM spaces WHERE id = ${owner.spaceId} FOR UPDATE`;
+    }
+    // Same run lock as cancellation and completion. A stale report never replaces the index.
+    await tx.$queryRaw`SELECT id FROM runs WHERE id = ${owner.runId} FOR UPDATE`;
+    const held = await tx.run.findFirst({
+      where: {
+        id: owner.runId,
+        botId: owner.botId,
+        spaceId: owner.spaceId,
+        leaseFence: owner.fence,
+        leaseExpiresAt: { gt: new Date() },
+        status: { in: ["leased", "running"] },
+      },
+    });
+    if (!held) return;
+    let shared = false;
+    if (sources.includes("shared")) {
+      const space = await tx.space.findUniqueOrThrow({ where: { id: owner.spaceId } });
+      shared = space.skillIndexReceivedAt === null || receivedAt >= space.skillIndexReceivedAt;
+      if (shared)
+        await tx.space.update({
+          where: { id: owner.spaceId },
+          data: { skillIndexReceivedAt: receivedAt },
+        });
+    }
+    await tx.volumeSkill.deleteMany({
+      where: {
+        OR: [
+          {
+            botId: owner.botId,
+            source: { in: sources.includes("bot") ? ["bot", "managed"] : ["managed"] },
+          },
+          ...(shared ? [{ source: "shared", bot: { spaceId: owner.spaceId } }] : []),
+        ],
+      },
+    });
+    await tx.volumeSkill.createMany({
+      data: clean
+        .filter((skill) => skill.source !== "shared" || shared)
+        .map(({ files: _, ...skill }) => ({
+          ...skill,
+          content: skill.source === "shared" ? "" : skill.content,
+          botId: owner.botId,
+        })),
+      skipDuplicates: true,
+    });
+  });
+}

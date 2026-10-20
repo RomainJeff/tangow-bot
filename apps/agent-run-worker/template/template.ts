@@ -1,6 +1,7 @@
 import path from "node:path";
 import { E2B_WORKER_GUEST_ENTRY } from "@rakazo/adapters/e2b-worker";
-import { Template, type TemplateBuilder } from "e2b";
+import type { TemplateBuilder } from "e2b";
+import { Template } from "e2b";
 
 /** The worker VM's starting profile: whole vCPUs, to be measured before it is trusted. */
 export const WORKER_PROFILE = { cpuCount: 1, memoryMB: 1024 } as const;
@@ -13,6 +14,7 @@ function base(bundle: string): TemplateBuilder {
   return (
     Template({ fileContextPath: path.dirname(bundle) })
       .fromNodeImage("24-bookworm")
+      .setEnvs({ RAKAZO_WORKER_HOME: "/home/user" })
       .aptInstall(["bash", "ca-certificates", "git", "procps"])
       .makeDir("/workspace", { user: "root" })
       // The guest runs as the sandbox user, and a run without volumes works in /workspace itself.
@@ -30,5 +32,8 @@ export function workerTemplate(harness: string, bundle: string): TemplateBuilder
   const layer = HARNESS_LAYERS[harness];
   if (!layer) throw new Error(`No worker template layer for the harness "${harness}"`);
   // The bundle changes most often, so it comes last and keeps the layers above cached.
-  return layer(base(bundle)).copy(path.basename(bundle), E2B_WORKER_GUEST_ENTRY, { user: "root" });
+  return layer(base(bundle))
+    .copy("managed-skills", "/managed-skills", { user: "root" })
+    .runCmd("chown -R root:root /managed-skills && chmod -R a-w /managed-skills", { user: "root" })
+    .copy(path.basename(bundle), E2B_WORKER_GUEST_ENTRY, { user: "root" });
 }

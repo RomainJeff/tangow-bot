@@ -1,6 +1,6 @@
 import type { ChildProcess } from "node:child_process";
 import { spawn } from "node:child_process";
-import { mkdir, rm, symlink } from "node:fs/promises";
+import { cp, mkdir, rm, symlink } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type {
@@ -95,6 +95,11 @@ export class LocalWorkerProvider implements WorkerProvider, GuestConnector {
     if (!this.vms.has(providerRef)) {
       const root = path.join(this.options.root, spec.attemptId);
       await mkdir(path.join(root, "workspace"), { recursive: true });
+      await cp(
+        fileURLToPath(new URL("../../../skills/agent", import.meta.url)),
+        path.join(root, "managed-skills", "agent"),
+        { recursive: true },
+      );
       for (const mount of spec.mounts) {
         const volume = this.volumePath(mount.volumeRef);
         await mkdir(volume, { recursive: true });
@@ -186,6 +191,7 @@ export class LocalWorkerProvider implements WorkerProvider, GuestConnector {
       harness: HARNESSES.pi!,
       spoolDir: path.join(vm.root, "tmp", "tool-output"),
       root: vm.root,
+      home: path.join(vm.root, "home/user"),
     }).then(
       () => controllerSide.end(),
       () => controllerSide.end(),
@@ -214,6 +220,7 @@ export class LocalWorkerProvider implements WorkerProvider, GuestConnector {
         RAKAZO_WORKER_CAPABILITY: capability,
         RAKAZO_WORKER_HARNESS: "pi",
         RAKAZO_WORKER_ROOT: vm.root,
+        RAKAZO_WORKER_HOME: path.join(vm.root, "home/user"),
         RAKAZO_WORKER_SPOOL_DIR: path.join(vm.root, "tmp", "tool-output"),
       },
     });

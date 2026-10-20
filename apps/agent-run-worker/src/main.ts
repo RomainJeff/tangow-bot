@@ -14,6 +14,11 @@ if (!capability || !harness) {
   console.error("RAKAZO_WORKER_CAPABILITY or RAKAZO_WORKER_HARNESS is missing or unknown");
   process.exit(2);
 }
+const home = process.env.RAKAZO_WORKER_HOME;
+if (!home || !path.isAbsolute(home)) {
+  console.error("RAKAZO_WORKER_HOME must be an explicit absolute path");
+  process.exit(2);
+}
 // Commands the run starts do not inherit it. They can still read it from this process's
 // /proc environ: the guest is hostile and holds it anyway, so this is hygiene, not a boundary.
 delete process.env.RAKAZO_WORKER_CAPABILITY;
@@ -32,6 +37,7 @@ const exit = await runGuest({
   harness,
   spoolDir: process.env.RAKAZO_WORKER_SPOOL_DIR ?? path.join(tmpdir(), "rakazo-tool-output"),
   root: process.env.RAKAZO_WORKER_ROOT,
+  home,
   signal: terminated.signal,
 });
 console.error(`agent run worker: ${exit}`);

@@ -32,7 +32,8 @@ async function seedExistingDeployment() {
   await prisma.organization.create({
     data: { id: "org_migration", name: "M", slug: "org-migration", createdAt: new Date() },
   });
-  await prisma.space.create({ data: { id: SPACE, organizationId: "org_migration", name: "M" } });
+  await prisma.$executeRaw`INSERT INTO spaces (id, "organizationId", name)
+    VALUES (${SPACE}, 'org_migration', 'M')`;
   for (const [id, scope, kind] of [
     ["computer_team", "team", "e2b"],
     ["computer_dedicated", "dedicated", "docker"],

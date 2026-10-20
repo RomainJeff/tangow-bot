@@ -171,6 +171,7 @@ model Space {
   createdByUser               User?                        @relation("SpaceCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
   createdAt                   DateTime                     @default(now())
   deletingAt                  DateTime?
+  skillIndexReceivedAt         DateTime?
   deletionClaimId             String?
   memberships                 SpaceMember[]
   bots                        Bot[]
@@ -392,6 +393,7 @@ model Bot {
   steeringMessages  SteeringMessage[]
   mcpServers        BotMcpServer[]
   skills            BotSkill[]
+  volumeSkills      VolumeSkill[]
   groupMembers      ChatGroupMember[]
   botSecrets BotSecret[]
 
@@ -1517,4 +1519,22 @@ model IntegrationProviderConfig {
   updatedAt  DateTime @updatedAt
 
   @@map("integration_provider_configs")
+}
+
+/// Last complete skill observation from a bot's worker. Files stay on volumes.
+model VolumeSkill {
+  id          String   @id @default(cuid())
+  botId       String
+  bot         Bot      @relation(fields: [botId], references: [id], onDelete: Cascade)
+  source      String
+  name        String
+  description String
+  path        String
+  content     String
+  contentHash String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([botId, source, name])
+  @@map("volume_skills")
 }

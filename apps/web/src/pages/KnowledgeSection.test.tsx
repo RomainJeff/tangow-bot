@@ -49,7 +49,30 @@ vi.mock("@rakazo/ui-web", () => {
   };
 });
 
-import { AgentFiles, AgentSkills, MemoryDocumentList } from "./KnowledgeSection";
+import { AgentFiles, AgentSkillEditor, AgentSkills, MemoryDocumentList } from "./KnowledgeSection";
+
+it("shows shared skill metadata and its volume location instead of an empty editor", async () => {
+  api.get.mockResolvedValueOnce({
+    id: "volume:shared:team-review",
+    name: "team-review",
+    description: "Review shared work before publishing.",
+    content: "",
+    source: "shared",
+    readOnly: true,
+  });
+  const view = await mount(
+    <AgentSkillEditor skillId="volume:shared:team-review" onDone={() => {}} />,
+  );
+  try {
+    expect(view.container.textContent).toContain("Review shared work before publishing.");
+    expect(view.container.textContent).toContain("Content lives on the shared volume.");
+    expect(view.container.querySelector("textarea")).toBeNull();
+    expect(view.container.textContent).not.toContain("Save");
+  } finally {
+    await view.unmount();
+    api.get.mockClear();
+  }
+});
 
 async function mount(node: ReactNode) {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);

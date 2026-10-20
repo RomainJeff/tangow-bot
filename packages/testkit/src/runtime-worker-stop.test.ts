@@ -20,7 +20,8 @@ import { HARNESSES, runGuest } from "@rakazo/agent-run-worker";
 import type { StopPhase } from "@rakazo/core";
 import { stopState } from "@rakazo/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { type LocalWorkerFaults, LocalWorkerProvider } from "./local-worker-provider.js";
+import type { LocalWorkerFaults } from "./local-worker-provider.js";
+import { LocalWorkerProvider } from "./local-worker-provider.js";
 import { startWorkerRun } from "./worker-run-fixture.js";
 
 const cleanups: Array<() => Promise<void>> = [];
@@ -95,6 +96,7 @@ function e2bIgnoringCancel(root: string): Worker<E2BWorkerProvider> {
         harness: HARNESSES.pi!,
         spoolDir: path.join(root, "tmp", "tool-output"),
         root,
+        home: path.join(root, "home/user"),
         signal: terminated.signal,
       });
       guests.push({
