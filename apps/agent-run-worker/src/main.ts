@@ -1,5 +1,5 @@
 import { Console } from "node:console";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { streamChannel, WORKER_LIMITS } from "@rakazo/adapters/runtime-worker/wire";
 import { runGuest } from "./guest.js";
@@ -32,6 +32,9 @@ const exit = await runGuest({
   harness,
   spoolDir: process.env.RAKAZO_WORKER_SPOOL_DIR ?? path.join(tmpdir(), "rakazo-tool-output"),
   root: process.env.RAKAZO_WORKER_ROOT,
+  home: process.env.RAKAZO_WORKER_ROOT
+    ? path.join(process.env.RAKAZO_WORKER_ROOT, "home/user")
+    : homedir(),
   signal: terminated.signal,
 });
 console.error(`agent run worker: ${exit}`);

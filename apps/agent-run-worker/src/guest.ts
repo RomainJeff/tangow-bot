@@ -8,6 +8,13 @@ import {
   readControllerFrame,
   WORKER_LIMITS,
 } from "@rakazo/adapters/runtime-worker/wire";
+import type { SkillRoot } from "@rakazo/adapters/volume-skills";
+import {
+  convergeSkills,
+  discoverVolumeSkills,
+  reportVolumeSkill,
+  skillReadName,
+} from "@rakazo/adapters/volume-skills";
 import type { GuestHarness, HarnessHost, InformativeBody } from "./harness.js";
 import type { Outbox } from "./outbox.js";
 import { createOutbox } from "./outbox.js";
@@ -22,6 +29,8 @@ export interface GuestOptions {
   harness: GuestHarness;
   /** Where tools keep output too long for the model. */
   spoolDir: string;
+  /** Explicit VM home. Never infer the controller or test runner's home. */
+  home: string;
   /** Prefix of every guest path the controller names. `/` in a VM. */
   root?: string;
   /** Stops the run like a `worker.cancel`, for the process's own termination. */
@@ -102,6 +111,14 @@ async function runAttempt(
   const { run, worker, workspace } = start;
   const signal = cancel.signal;
   const cwd = path.join(options.root ?? "/", workspace.cwd);
+  const rooted = (value: string) => path.join(options.root ?? "/", value);
+  const roots: SkillRoot[] = [{ source: "managed", path: rooted("/managed-skills/agent") }];
+  for (const mount of workspace.mounts)
+    roots.push({
+      source: mount.scope === "private" ? "bot" : "shared",
+      path: path.join(rooted(mount.path), "skills"),
+    });
+  const home = options.home;
   const declared = new Set(options.harness.declaration.capabilities);
   const placement = new Map(run.tools.map((tool) => [tool.name, tool.where]));
   const announcements = new Map<string, ReturnType<typeof deferred<void>>>();
@@ -218,12 +235,44 @@ async function runAttempt(
             totalBytes: 0,
           };
       await decide({ type: "tool.done", callId, output }, "tool.recorded");
+      if (name === "read" && !("isError" in output && output.isError)) {
+        const name = await skillReadName(cwd, args.path);
+        if (name) await decide({ type: "skills.used", name }, "recorded");
+      }
       return { placement: "guest", output };
     },
   };
 
   try {
-    const done = await options.harness.run({ worker, run, cwd }, host);
+    const converged = await convergeSkills(home, roots);
+    for (const collision of converged.collisions) {
+      console.warn("skills.name_collision", collision);
+      await decide({ type: "skills.collision", collision }, "recorded");
+    }
+    const done = await options.harness.run(
+      { worker, run, cwd, skillsDir: converged.skillsDir },
+      host,
+    );
+    // Rediscover so skills written by native tools during this run appear in the controller.
+    let indexBytes = 0;
+    let indexCount = 0;
+    for (const skill of (await discoverVolumeSkills(roots)).skills) {
+      const report = await reportVolumeSkill(skill);
+      const bytes = report ? Buffer.byteLength(JSON.stringify(report)) : 0;
+      if (report && indexCount < 512 && indexBytes + bytes <= WORKER_LIMITS.modelRequestBytes) {
+        await decide({ type: "skills.index", skill: report }, "recorded");
+        indexCount++;
+        indexBytes += bytes;
+      } else
+        console.warn("skills.index_skipped", {
+          source: skill.source,
+          reason: "unsupported_bundle",
+        });
+    }
+    await decide(
+      { type: "skills.index.end", sources: roots.map((root) => root.source) },
+      "recorded",
+    );
     await flushText();
     return (await decide(done, "stop")).reason;
   } catch (error) {

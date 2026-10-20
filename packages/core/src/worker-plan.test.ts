@@ -138,13 +138,19 @@ describe("the launch a run gets from its tools and its bot's computer", () => {
       { mode: "in_process", reason: "home_not_migrated" },
     ],
     [
-      "a dedicated bot never mounts the space volume, even once it exists",
+      "a dedicated bot mounts shared skills alongside its private files",
       { ...files, computerScope: "dedicated" as const },
       { ...base, computer: onVolumes },
-      launch([{ volumeId: "vol_private_a", access: "rw" }], {
-        mode: "on_use",
-        computerId: "computer_a",
-      }),
+      launch(
+        [
+          { volumeId: "vol_private_a", access: "rw" },
+          { volumeId: "vol_shared_a", access: "rw" },
+        ],
+        {
+          mode: "on_use",
+          computerId: "computer_a",
+        },
+      ),
     ],
     [
       "a run without files or computer tools gets a worker with nothing mounted",

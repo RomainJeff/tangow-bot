@@ -1,0 +1,72 @@
+{
+  "slice": "S8: skills on volumes, loaded by the harness",
+  "base_commit": "b448499a2",
+  "tested_tree": "The implementation in the commit containing this receipt; see the PR head for its SHA.",
+  "sdk": {
+    "version": "pi-coding-agent 1.3.0",
+    "adopted": [
+      "native tools from S7",
+      "loadSkills with explicit skillPaths and defaults off",
+      "explicit ResourceLoader used for actual run instructions",
+      "formatSkillsForPrompt"
+    ],
+    "not_adopted": [
+      "AgentSession",
+      "SessionManager.inMemory",
+      "coding-agent settings, compaction and retry policy"
+    ],
+    "session_requirement": "Still open; keyless P2 relay and PiAgentRuntime keep the transcript/tool projection and model access."
+  },
+  "checks": {
+    "pnpm check": "passed across all workspace tasks",
+    "pnpm lint": "passed with 49 existing warnings and one existing configuration notice; no new warnings in touched files",
+    "pnpm test": "8,105 passed and 215 skipped",
+    "pnpm test:pi": "30 passed",
+    "pnpm test:integration": "171 passed across 24 suites on disposable PostgreSQL, including the real memory and bundled guest skill-index scenarios",
+    "pnpm test:e2e:affected": "Selected the full suite: 212 passed; exactly the 11 previously recorded main-baseline failures, no new failures.",
+    "worker bundle": "passed offline",
+    "worker-live bundle": "passed offline; live lanes not executed"
+  },
+  "contracts": {
+    "convergence": "Real filesystem links, managed > bot > shared, all collisions, stale link removal and refusal to replace user entries.",
+    "loader": "Real Pi skill discovery from the explicit folder while ambient project/global skills, AGENTS.md, settings and extensions are present.",
+    "worker": "Real executor, guest, Pi relay and emulator in memory and standalone bundle modes. Pi catalog is visible and controller skill tools are absent.",
+    "index_and_usage": "Real DB index and API list/read results, secret refusal in a supporting script, native read events, private scope, complete shared replacement and completed-run fencing. Also exercised on PostgreSQL.",
+    "migration": "Dry run, verified copy, repeated no-op, original preservation, executable mode, conflicting targets and legacy Unicode content.",
+    "managed": "Legacy disable/override rows cannot hide managed skills and saved user collisions cannot shadow them.",
+    "ui": "Web source-specific access controls and readonly viewer; desktop and phone-width captures."
+  },
+  "regression_proof": {
+    "worker_base": "Temporarily restored executor, generic guest and Pi adapter from b448499a2. Both real worker modes failed the new skill acceptance test because the model received the old catalog/tool behavior. Restored the implementation afterwards.",
+    "visibility_base": "Temporarily restored pre-S8 managed/user precedence and visibility behavior. Both managed precedence/enablement regressions failed for the intended reason. Restored afterwards.",
+    "result": "All four selected negative controls failed; the restored implementation passes the full unit suite."
+  },
+  "test_audit": {
+    "method": "Applied the authoring gate, read the SDK implementation and existing owner/sibling tests, and reviewed the final diff.",
+    "changes": "Replaced obsolete user-shadowing and managed-disable expectations. Preserved independent filesystem, protocol/bundle, database, secret-handling, migration and public UI contracts.",
+    "seams": "Every new exported helper has a production caller. No test-only production switch or export was added."
+  },
+  "decisions": {
+    "secrets": "Refuse indexing known run secrets in reported metadata, SKILL.md or supporting text. Leave volume files untouched and log no offending content. The scanner checks the controller-provided live secret values; it is not a heuristic scan for unknown credentials.",
+    "computer_convergence": "Deferred. Concurrent bots share one computer HOME and cannot safely rebuild one global folder with different private skill precedence. Existing managed mount and coding-agent discovery are retained.",
+    "learning": "Worker native writes reach the skill list. The controller learning nudge remains in-process only; native writes do not yet generate learning footers."
+  },
+  "screenshots": {
+    "desktop": "skills-desktop.png",
+    "phone_390x844": "skills-phone.png",
+    "data": "Synthetic UI fixture data only.",
+    "native_ios": "Pending; no simulator was booted."
+  },
+  "live": {
+    "skills_lane": "Implemented, pending live run",
+    "e2b": "No live E2B resource created",
+    "electron_e2e": "Not run"
+  },
+  "changelog": "Deferred to the final feature slice as required.",
+  "web_baseline": {
+    "failure_set_matches_recorded_main": true,
+    "failed": 11,
+    "passed": 212,
+    "baseline_receipt": "../P3/verification.json#s6_verification.web_e2e_baseline"
+  }
+}

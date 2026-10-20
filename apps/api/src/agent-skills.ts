@@ -4,7 +4,7 @@ import {
   bundleFormat,
   isExists,
   listUserSkills,
-  loadBuiltinSkills,
+  loadManagedSkills,
   removeUserSkill,
   renameUserSkill,
   userSkillsRoot,
@@ -22,7 +22,7 @@ import {
   buildSkillMd,
   findSkillByName,
   isSkillVisible,
-  mergeBuiltinSkills,
+  mergeManagedSkills,
   parseSkillMd,
   userSkillKey,
 } from "@rakazo/core";
@@ -44,8 +44,8 @@ function toAgentSkill(file: UserSkillFile): AgentSkill {
 
 const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
-async function builtinCatalog(): Promise<AgentSkill[]> {
-  return (await loadBuiltinSkills()).map((skill) => ({
+async function managedCatalog(): Promise<AgentSkill[]> {
+  return (await loadManagedSkills()).map((skill) => ({
     id: `builtin:${skill.name}`,
     name: skill.name,
     description: skill.description,
@@ -139,7 +139,7 @@ export function createAgentSkillsService(
   async function assertNameFree(existing: UserSkillFile[], name: string, exceptId?: string) {
     const clash =
       existing.some((s) => s.id !== exceptId && sameName(s.name, name)) ||
-      (await builtinCatalog()).some((s) => sameName(s.name, name));
+      (await managedCatalog()).some((s) => sameName(s.name, name));
     if (clash) {
       throw new ORPCError("CONFLICT", { message: "A skill with that name already exists." });
     }
@@ -153,6 +153,50 @@ export function createAgentSkillsService(
   }
 
   type Access = Pick<AgentSkillCatalogEntry, "availability" | "visibleBotIds">;
+
+  async function volumeCatalog(
+    actor: Actor,
+    botIds: string[],
+    botId?: string,
+  ): Promise<Array<AgentSkill & Access>> {
+    const rows = await prisma.volumeSkill.findMany({
+      where: {
+        bot: { spaceId: actor.spaceId },
+        OR: [
+          { source: "shared" },
+          {
+            source: "bot",
+            botId: botId ? { in: botIds.filter((id) => id === botId) } : { in: botIds },
+          },
+        ],
+      },
+      orderBy: { updatedAt: "desc" },
+    });
+    const seen = new Set<string>();
+    return rows.flatMap((row): Array<AgentSkill & Access> => {
+      const source = row.source === "bot" ? "bot" : "shared";
+      const id =
+        source === "bot"
+          ? `volume:bot:${row.botId}:${row.name.toLowerCase()}`
+          : `volume:shared:${row.name.toLowerCase()}`;
+      if (seen.has(id)) return [];
+      seen.add(id);
+      return [
+        {
+          id,
+          name: row.name,
+          description: row.description,
+          content: row.content,
+          source,
+          readOnly: true,
+          createdAt: row.createdAt.toISOString(),
+          updatedAt: row.updatedAt.toISOString(),
+          availability: source === "bot" ? "selected" : "all",
+          visibleBotIds: source === "bot" ? [row.botId] : botIds,
+        },
+      ];
+    });
+  }
 
   /** Resolve availability + visible bots for every skill of the owner in 3 queries. */
   async function accessIndex(actor: Actor): Promise<{
@@ -192,18 +236,36 @@ export function createAgentSkillsService(
   }
 
   async function catalog(actor: Actor, botId?: string): Promise<Array<AgentSkill & Access>> {
-    const [rows, access, builtinSkills] = await Promise.all([
+    const [rows, access, managedSkills] = await Promise.all([
       files(actor),
       accessIndex(actor),
-      builtinCatalog(),
+      managedCatalog(),
     ]);
-    const builtins = builtinSkills.map((skill) => ({
+    const managed = managedSkills.map((skill) => ({
       ...skill,
       availability: "all" as const,
       visibleBotIds: access.bots,
     }));
     const users = rows.map((file) => ({ ...toAgentSkill(file), ...access.of(file.id) }));
-    const entries = mergeBuiltinSkills(builtins, users);
+    const volumes = await volumeCatalog(actor, access.bots, botId);
+    const visibleVolumes = botId
+      ? volumes.filter((skill) => skill.visibleBotIds.includes(botId))
+      : volumes;
+    const botNames = new Set(
+      visibleVolumes
+        .filter((skill) => skill.source === "bot")
+        .map((skill) => skill.name.toLowerCase()),
+    );
+    const scoped = botId
+      ? visibleVolumes.filter(
+          (skill) => skill.source === "bot" || !botNames.has(skill.name.toLowerCase()),
+        )
+      : visibleVolumes;
+    const volumeNames = new Set(scoped.map((skill) => skill.name.toLowerCase()));
+    const entries = mergeManagedSkills(managed, [
+      ...scoped,
+      ...users.filter((skill) => !volumeNames.has(skill.name.toLowerCase())),
+    ]);
     return botId ? entries.filter((entry) => entry.visibleBotIds.includes(botId)) : entries;
   }
 
@@ -233,8 +295,13 @@ export function createAgentSkillsService(
     },
 
     async get(actor: Actor, input: { skillId?: string; name?: string }): Promise<AgentSkill> {
+      if (input.skillId?.startsWith("volume:")) {
+        const skill = (await catalog(actor)).find((entry) => entry.id === input.skillId);
+        if (!skill) throw new IsolationError();
+        return skill;
+      }
       if (input.skillId?.startsWith("builtin:")) {
-        const builtin = (await builtinCatalog()).find((skill) => skill.id === input.skillId);
+        const builtin = (await managedCatalog()).find((skill) => skill.id === input.skillId);
         if (!builtin) throw new IsolationError();
         return builtin;
       }
@@ -242,11 +309,9 @@ export function createAgentSkillsService(
         return toAgentSkill(await owned(actor, input.skillId));
       }
       const name = input.name?.trim() ?? "";
-      const file = findSkillByName(await files(actor), name);
-      if (file) return toAgentSkill(file);
-      const builtin = findSkillByName(await builtinCatalog(), name);
-      if (!builtin) throw new IsolationError();
-      return builtin;
+      const skill = findSkillByName(await catalog(actor), name);
+      if (!skill) throw new IsolationError();
+      return skill;
     },
 
     create,

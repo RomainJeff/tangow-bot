@@ -70,6 +70,7 @@ describe("agent skills service (filesystem)", () => {
   let prisma: {
     $transaction: ReturnType<typeof vi.fn>;
     bot: { findMany: ReturnType<typeof vi.fn> };
+    volumeSkill: { findMany: ReturnType<typeof vi.fn> };
     skillSetting: ReturnType<typeof table>;
     botSkill: ReturnType<typeof table>;
   };
@@ -85,6 +86,7 @@ describe("agent skills service (filesystem)", () => {
           ),
         ),
       },
+      volumeSkill: { findMany: vi.fn(async () => []) },
       skillSetting: table([]),
       botSkill: table([]),
     };

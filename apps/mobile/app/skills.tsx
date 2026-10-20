@@ -368,7 +368,7 @@ function SkillCatalog({
 
       {shown.map((entry) => {
         // Builtins are always on for every agent; only the rest carry access controls.
-        const controlled = entry.source !== "builtin";
+        const controlled = entry.source === "user";
         return (
           <View key={entry.id} style={styles.card} testID="skill-row">
             <Pressable accessibilityRole="button" onPress={() => void openSkill(entry)}>

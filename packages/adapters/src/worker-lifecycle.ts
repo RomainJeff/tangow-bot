@@ -618,6 +618,7 @@ export function createWorkerLifecycle(deps: {
         select: { spaceId: true, homeStorage: true, bots: { select: { id: true } } },
       });
       if (computer.homeStorage !== "volumes") return;
+      await ensureVolume({ kind: "space_shared", spaceId: computer.spaceId }, context);
       const provisioned = new Set(
         (
           await prisma.volume.findMany({

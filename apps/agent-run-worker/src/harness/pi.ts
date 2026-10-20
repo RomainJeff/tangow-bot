@@ -8,6 +8,7 @@ import type {
 import { PiAgentRuntime } from "@rakazo/adapters/pi-runtime";
 import { piAiStreamFn, relayedModel } from "@rakazo/adapters/runtime-worker/pi-ai";
 import type { DoneBody, GuestHarness, HarnessHost } from "../harness.js";
+import { piResources, piSkillInstructions } from "./pi-resources.js";
 import { executePiTool, piToolManifest } from "./pi-tools.js";
 
 function decodeImages(images: GuestImage[] | undefined): AgentInputImage[] {
@@ -40,7 +41,7 @@ export const piHarness: GuestHarness = {
   nativeTools: piToolManifest(),
   executeNativeTool: executePiTool,
 
-  async run({ worker, run }, host): Promise<DoneBody> {
+  async run({ worker, run, cwd, skillsDir }, host): Promise<DoneBody> {
     const helperRefs = new Map<string, string>();
     const helperModels = new Map<string, GuestModel>();
     const request: AgentRunRequest = {
@@ -49,7 +50,7 @@ export const piHarness: GuestHarness = {
       runId: worker.runId,
       sourceMessageId: run.sourceMessageId,
       prompt: run.prompt,
-      instructions: run.instructions,
+      instructions: piSkillInstructions(piResources(cwd, skillsDir, run.instructions)),
       history: run.history,
       currentTurnImages: decodeImages(run.images),
       tools: run.tools.map(({ name, description, inputSchema, readOnly }) => ({

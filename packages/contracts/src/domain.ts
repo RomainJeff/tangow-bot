@@ -505,7 +505,7 @@ export const TaughtSkillSchema = z.object({
 });
 export type TaughtSkill = z.infer<typeof TaughtSkillSchema>;
 
-export const AgentSkillSourceSchema = z.enum(["user", "builtin"]);
+export const AgentSkillSourceSchema = z.enum(["user", "builtin", "bot", "shared"]);
 export type AgentSkillSource = z.infer<typeof AgentSkillSourceSchema>;
 
 export const SkillAvailabilitySchema = z.enum(["disabled", "all", "selected"]);

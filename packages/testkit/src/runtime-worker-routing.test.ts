@@ -82,7 +82,7 @@ async function attemptsOf(run: Awaited<ReturnType<typeof fixture>>, runId: strin
 }
 
 describe("where a product run executes", () => {
-  it("completes a computerless bot's message through a worker with no mounts or file tools", async () => {
+  it("completes a computerless bot's message and reads managed skills without mounting user files", async () => {
     const seen: string[][] = [];
     const calls: string[] = [];
     const run = await startWorkerRun({
@@ -113,6 +113,22 @@ describe("where a product run executes", () => {
               JSON.stringify(request.messages.find((message) => message.role === "system")),
             ).not.toContain("request_takeover");
           },
+          response(request) {
+            const prompt = String(
+              request.messages.find((message) => message.role === "system")?.content,
+            );
+            const skill = prompt
+              .split("<skill>")
+              .find((part) => part.includes("<name>Interrogate</name>"));
+            const file = skill?.match(/<location>(.*?)<\/location>/)?.[1];
+            expect(file).toBeDefined();
+            return { type: "tool", id: "managed", name: "read", arguments: { path: file } };
+          },
+        },
+        {
+          expect(request) {
+            expect(JSON.stringify(request.messages)).toContain("Do not modify files");
+          },
           response: { type: "tool", id: "mcp", name: "mcp_lookup", arguments: {} },
         },
         {
@@ -134,7 +150,7 @@ describe("where a product run executes", () => {
       status: "completed",
       leaseOwner: null,
     });
-    expect(seen).toEqual([[]]);
+    expect(seen[0]).toEqual(expect.arrayContaining(["read", "bash"]));
     expect(calls).toEqual(["mcp_lookup", "integration_lookup"]);
     expect(run.provider.launches).toHaveLength(1);
     expect(ensure).toHaveBeenCalledWith(expect.objectContaining({ mounts: [] }), expect.anything());
@@ -323,23 +339,21 @@ describe("where a product run executes", () => {
     expect(await attemptsOf(run, runId)).toEqual([{ workerState: "released" }]);
   });
 
-  it("fails the run of a team bot whose space has no volume", async () => {
-    const run = await startWorkerRun({ steps: [], computerScope: "team" });
+  it("provisions missing shared skills before routing a team bot", async () => {
+    const seen: string[][] = [];
+    const run = await startWorkerRun({ steps: offeredShellTools(seen), computerScope: "team" });
     cleanups.push(() => run.close());
     await run.prisma.volume.deleteMany({ where: { kind: "space_shared" } });
     const runId = await run.send("Hello.");
     await run.continueRun(runId);
-
+    run.model.assertComplete();
+    expect((await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
+      "completed",
+    );
     expect(
-      await run.prisma.run.findUniqueOrThrow({
-        where: { id: runId },
-        select: { status: true, error: true },
-      }),
-    ).toEqual({
-      status: "failed",
-      error: "This bot has no shared volume on its computer yet, so the run cannot start",
-    });
-    expect(run.provider.launches).toEqual([]);
+      await run.prisma.volume.findFirst({ where: { kind: "space_shared", spaceId: run.spaceId } }),
+    ).toMatchObject({ providerRef: expect.any(String) });
+    expect(run.provider.launches).toHaveLength(1);
   });
 
   it("stops quietly when a newer attempt took the run before it was routed", async () => {

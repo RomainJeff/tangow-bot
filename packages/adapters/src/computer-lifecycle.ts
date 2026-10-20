@@ -153,12 +153,11 @@ async function loadVolumeHome(
   computer: { id: string; scope: string; spaceId: string },
 ) {
   const scope = parseComputerMode(computer.scope);
-  const team = scope === "team";
   const volumes = await prisma.volume.findMany({
     where: {
       OR: [
         { kind: "bot_private", bot: { computerId: computer.id } },
-        ...(team ? [{ kind: "space_shared", spaceId: computer.spaceId }] : []),
+        { kind: "space_shared", spaceId: computer.spaceId },
       ],
     },
     select: { kind: true, botId: true, providerRef: true },

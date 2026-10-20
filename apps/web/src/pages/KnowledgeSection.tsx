@@ -16,7 +16,8 @@ import {
   Switch,
 } from "@rakazo/ui-web";
 import { Check } from "lucide-react";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatBytes } from "../components/ArtifactFileCard";
 import { downloadArtifactBytes } from "../lib/artifact-open";
 import { rpc } from "../lib/rpc";
@@ -465,8 +466,8 @@ export function AgentSkills({
       ) : null}
       {!editorOpen
         ? shown.map((entry) => {
-            // Builtins are always on for every agent; only the rest carry access controls.
-            const controlled = entry.source !== "builtin";
+            // Volume skills use their location; only legacy controller skills carry access controls.
+            const controlled = entry.source === "user";
             return (
               <div
                 key={entry.id}

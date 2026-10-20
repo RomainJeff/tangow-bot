@@ -96,8 +96,8 @@ export type RunNeeds = {
 
 /**
  * What a run asks of a worker. Any tool the guest runs works on the bot's home, so it needs the
- * private slot; only a bot of the team computer also works in the space's shared one, so a
- * dedicated bot never mounts a shared volume another computer's home is still being moved into.
+ * private slot and the space's shared slot, which also holds shared skills. A team home move
+ * fences starts across the space while it copies shared files.
  * Whether the home is on volumes at all is `planLaunch`'s call.
  */
 export function deriveRunNeeds(run: {
@@ -107,7 +107,7 @@ export function deriveRunNeeds(run: {
 }): RunNeeds {
   const files = run.guestTools ? "rw" : null;
   return {
-    files: { private: files, shared: run.computerScope === "team" ? files : null },
+    files: { private: files, shared: files },
     computer: run.computerTools && run.computerScope ? "on_use" : "none",
   };
 }

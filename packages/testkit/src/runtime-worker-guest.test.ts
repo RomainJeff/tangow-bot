@@ -96,6 +96,11 @@ async function driveGuest(options: {
       case "tool.done":
         recorded.push(body.output);
         return { type: "tool.recorded" };
+      case "skills.index":
+      case "skills.index.end":
+      case "skills.collision":
+      case "skills.used":
+        return { type: "recorded" };
       case "done":
         return { type: "stop", reason: "done" };
       default:
@@ -127,6 +132,7 @@ async function driveGuest(options: {
     harness: HARNESSES.pi!,
     spoolDir: options.spoolDir,
     root: options.root,
+    home: path.join(options.root ?? options.cwd, ".guest-home"),
   });
   await controller;
   server.assertComplete();
