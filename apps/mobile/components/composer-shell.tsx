@@ -27,6 +27,7 @@ import { NativeSymbol } from "./native-symbol";
 export type ComposerState = "idle" | "typing" | "dictating" | "speaking";
 
 const BAR_DELAYS_MS = [0, 140, 280, 420];
+const DICTATION_OUTLINE = 1.5;
 
 export interface ComposerShellProps extends Omit<ViewProps, "children"> {
   /** A mention chip, or the avatar of the bot that is speaking. */
@@ -88,7 +89,8 @@ export function ComposerShell({
       ]}
       {...props}
     >
-      <GlassBackdrop radius={radii.composer} />
+      {/* Inside dictation's outline, the glass follows the border's inner curve. */}
+      <GlassBackdrop radius={dictating ? radii.composer - DICTATION_OUTLINE : radii.composer} />
       {attachments ? <View style={styles.attachmentsRow}>{attachments}</View> : null}
       <View style={[styles.fieldRow, leading ? styles.withLeading : styles.withoutLeading]}>
         {leading}
@@ -171,7 +173,7 @@ export const ComposerAttachBubble = forwardRef<
         boxShadow: focused ? shadows.composerFocus : shadows.composerRest,
       }}
     >
-      <GlassBackdrop radius={radii.pill} />
+      <GlassBackdrop radius={sizes.composerAttach / 2} />
       <Animated.View style={animatedStyle}>
         <NativeSymbol ios="plus" android="add" size={20} color={tokens.foreground} />
       </Animated.View>
@@ -243,7 +245,7 @@ function createComposerShellStyles() {
       boxShadow: shadows.composerFocus,
     },
     dictating: {
-      borderWidth: 1.5,
+      borderWidth: DICTATION_OUTLINE,
       borderColor: tokens.foreground,
       boxShadow: shadows.composerFocus,
     },

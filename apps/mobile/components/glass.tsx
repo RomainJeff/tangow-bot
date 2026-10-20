@@ -1,24 +1,24 @@
-import { type MaterialKey, materials } from "@rakazo/ui-tokens";
+import { materials } from "@rakazo/ui-tokens";
 import { BlurView } from "expo-blur";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { useEffect, useState } from "react";
 import { AccessibilityInfo, Platform, StyleSheet, View } from "react-native";
 import { useMobileTokens, useResolvedAppearance } from "../lib/native";
 
-/** Glass on navigation and controls only: the `chrome` and `control` materials. */
-export type GlassMaterial = Extract<MaterialKey, "chrome" | "control">;
+// The setting can only be read asynchronously: the last value read seeds every later mount, so
+// only the very first one can show glass for a frame before turning opaque.
+let lastReduced = false;
 
 function useReduceTransparency(): boolean {
-  const [reduced, setReduced] = useState(false);
+  const [reduced, setReduced] = useState(lastReduced);
   useEffect(() => {
     let live = true;
-    void AccessibilityInfo.isReduceTransparencyEnabled().then((enabled) => {
+    const update = (enabled: boolean) => {
+      lastReduced = enabled;
       if (live) setReduced(enabled);
-    });
-    const subscription = AccessibilityInfo.addEventListener(
-      "reduceTransparencyChanged",
-      setReduced,
-    );
+    };
+    void AccessibilityInfo.isReduceTransparencyEnabled().then(update);
+    const subscription = AccessibilityInfo.addEventListener("reduceTransparencyChanged", update);
     return () => {
       live = false;
       subscription.remove();
@@ -28,28 +28,20 @@ function useReduceTransparency(): boolean {
 }
 
 /**
- * The material behind a control or a bar, drawn under its content: Liquid Glass on iOS 26 and
+ * The `control` material behind a control, drawn under its content: Liquid Glass on iOS 26 and
  * later, the system chrome blur before that, and the material's opaque fallback under Reduce
  * Transparency and on Android. The container keeps its own layout, edge and shadow; this fills
  * it at the given radius.
  */
-export function GlassBackdrop({
-  material = "control",
-  radius,
-}: {
-  material?: GlassMaterial;
-  radius: number;
-}) {
+export function GlassBackdrop({ radius }: { radius: number }) {
+  const material = materials.control;
   const tokens = useMobileTokens();
   const appearance = useResolvedAppearance();
   const reduced = useReduceTransparency();
   const shape = [StyleSheet.absoluteFill, { borderRadius: radius }];
   if (Platform.OS !== "ios" || reduced) {
     return (
-      <View
-        pointerEvents="none"
-        style={[shape, { backgroundColor: tokens[materials[material].fallback] }]}
-      />
+      <View pointerEvents="none" style={[shape, { backgroundColor: tokens[material.fallback] }]} />
     );
   }
   if (isLiquidGlassAvailable()) {
@@ -58,7 +50,7 @@ export function GlassBackdrop({
       <GlassView
         pointerEvents="none"
         colorScheme={appearance}
-        tintColor={materials[material].fill[appearance]}
+        tintColor={material.fill[appearance]}
         style={shape}
       />
     );
