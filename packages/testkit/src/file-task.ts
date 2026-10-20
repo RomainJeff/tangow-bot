@@ -39,3 +39,32 @@ export function fileTask(seen: string[], atEnd: () => void): ModelEmulatorStep[]
     },
   ];
 }
+
+/** The same final file task through Pi's native tool contracts. */
+export function nativeFileTask(seen: string[], atEnd: () => void): ModelEmulatorStep[] {
+  const calls: Array<[string, Record<string, unknown>]> = [
+    ["write", { path: "notes.md", content: "alpha\nbeta\n" }],
+    ["edit", { path: "notes.md", edits: [{ oldText: "beta", newText: "gamma" }] }],
+    ["edit", { path: "notes.md", edits: [{ oldText: "delta", newText: "x" }] }],
+    ["read", { path: "notes.md", offset: 2 }],
+    ["ls", {}],
+    ["message_user", { message: "Done." }],
+  ];
+  return [
+    ...calls.map(
+      ([name, args], index): ModelEmulatorStep => ({
+        expect(request) {
+          if (index > 0) seen.push(toolResult(request));
+        },
+        response: { type: "tool", id: `call-${index}`, name, arguments: args },
+      }),
+    ),
+    {
+      expect(request) {
+        seen.push(toolResult(request));
+        atEnd();
+      },
+      response: { type: "text", text: recap },
+    },
+  ];
+}

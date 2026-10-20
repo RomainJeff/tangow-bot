@@ -1,6 +1,6 @@
 # P3 native Pi in the worker and file migration handoff
 
-**Verdict. With `WORKER_PROVIDER=e2b`, a run of a bot whose home is on volumes runs its Pi in a real E2B worker. Its file tools and bash work on the bot's volumes, and the product's E2B computer on the same volumes sees every write. All fourteen live lanes pass on the shared E2B host, and no lane left a sandbox or a volume behind.** The live lanes found three defects in the slices before the composition, and this slice fixes them: the worker template did not build, every worker create was refused, and the home move could not reach a volume on a self-hosted E2B. After the composition merged, the lanes measured a new cost on every relayed model call: masking the transcript took 28 to 36 ms for a 30 to 34 KB transcript on this host. This slice makes the mask skip parses that cannot succeed, and the relay is back to 10 ms at p50. See [Performance](#performance).
+**Historical P3 live verdict, before S7. With `WORKER_PROVIDER=e2b`, a run of a bot whose home is on volumes runs its Pi in a real E2B worker. Its file tools and bash work on the bot's volumes, and the product's E2B computer on the same volumes sees every write. All fourteen live lanes pass on the shared E2B host, and no lane left a sandbox or a volume behind.** The live lanes found three defects in the slices before the composition, and this slice fixes them: the worker template did not build, every worker create was refused, and the home move could not reach a volume on a self-hosted E2B. After the composition merged, the lanes measured a new cost on every relayed model call: masking the transcript took 28 to 36 ms for a 30 to 34 KB transcript on this host. This slice makes the mask skip parses that cannot succeed, and the relay is back to 10 ms at p50. See [Performance](#performance).
 
 ## Integrated references
 
@@ -14,10 +14,10 @@
 
 | Layer | Slice | Files | Content |
 | --- | --- | --- | --- |
-| Guest tools | #228 | `apps/agent-run-worker/src/file-tools.ts`, `local-tools.ts`, `packages/adapters/src/file-tools.ts` | `list_files`, `read_file`, `write_file`, `edit_file` and `grep` run in the guest on its mounts, beside P2's `bash`, with the same results the model sees in process. `grep` is a JavaScript walker of the guest's own. |
+| Guest tools | #228, replaced by S7 | `apps/agent-run-worker/src/harness/pi-tools.ts`, `tool-output.ts`, `runtime-worker/pi-tools.json` | Pi coding-agent 1.3.0 supplies native `read`, `write`, `edit`, `bash`, `grep`, `find` and `ls`. P2 still grants and records each local effect. The in-process tools keep their existing contracts. |
 | Provider | #229, #243, S5 | `packages/adapters/src/e2b-worker.ts` | `E2BWorkerProvider` implements `WorkerProvider` and `GuestConnector`. One `secure` sandbox per attempt, tagged `{ rakazo: "worker", attemptId }`, volumes mounted by name, created and deleted by name. The sandbox timeout is the worker TTL, `WORKER_TTL_SECONDS`, one hour. Where a deployment allows less (`maxTimeoutMs`), the provider caps it and logs a warning. |
 | Codec | #229 | `packages/adapters/src/runtime-worker/framing.ts` | `encodeFrameLine` and `readFrameLines`: one base64 line per frame on stdio, replacing P2's 4-byte length prefix. E2B delivers command output through a text decoder, and base64 survives it. |
-| Template | #229, S5 | `apps/agent-run-worker/template/template.ts`, `build.ts`, `scripts/bundle.ts` | Node 24 base with bash, git, procps and CA certificates, and the guest bundle at `/opt/rakazo/agent-run-worker.mjs`. The Pi layer adds nothing: every Pi tool is in the bundle. Root steps run as root, and `/workspace` belongs to the sandbox user. `WORKER_PROFILE` is 1 vCPU and 1024 MiB. |
+| Template | #229, S5 | `apps/agent-run-worker/template/template.ts`, `build.ts`, `scripts/bundle.ts` | Node 24 base with bash, git, procps and CA certificates, and the guest bundle at `/opt/rakazo/agent-run-worker.mjs`. The Pi layer installs ripgrep and fd-find, with an fd symlink for Debian. Root steps run as root, and `/workspace` belongs to the sandbox user. `WORKER_PROFILE` is 1 vCPU and 1024 MiB. |
 | Home move | #241, S5 | `packages/adapters/src/home-volume-migration.ts`, `e2b-volume-files.ts`, `scripts/migrate-home-to-volumes.ts` | `moveHomeToVolumes`: plan, copy, verify by hash and mode, adopt. `E2BVolumeFiles` reaches each volume through a sandbox that mounts it. It stages each file 0600 beside its target and renames it over the target, and it replaces a sandbox only once the control plane no longer lists it. |
 | Lifecycle | #241, #243 | `packages/adapters/src/worker-lifecycle.ts`, `packages/db/src/volumes.ts` | `ensureVolume` with an `ensureUntil` deadline, `provisionAttachedBotVolume`, `inspectHomeMove`, `adoptVolumeHome`, owner deletion with volume tombstones, and `sweepVolumes`. |
 | Composition | #243 | `packages/adapters/src/worker-composition.ts`, `executor.ts`, `e2b-sandbox.ts`, `runtime-worker/session.ts`, `apps/api/src/app.ts`, `apps/worker/src/index.ts` | `composeWorkers` in both roots. The executor routes a run by `deriveRunNeeds` and owns the setup retry budget. The reconciler releases lost workers and sweeps deleted volumes. The E2B computer mounts the volumes and links its workspace to their root. The relay masks the transcript and runs every call with the controller's model, key and session. |
@@ -71,11 +71,29 @@ The guest starts as `node /opt/rakazo/agent-run-worker.mjs`. `RAKAZO_WORKER_CAPA
 
 The executor routes each run by its tools. `deriveRunNeeds` mounts the private volume when the run has a file tool or the computer's `shell`, and the space's shared volume only for a team computer's bot. A worker run hides `shell`: the guest's `bash` replaces it. Every bot run needs a computer, so a bot without one fails with `Bot has no computer` before routing, and no worker starts (lane i).
 
-The controller puts every tool of the run in `worker.start` with its place. The guest runs six tools itself: `list_files`, `read_file`, `write_file`, `edit_file`, `grep` and `bash`. Every other tool is a `tool.call` the controller runs.
+The controller puts every tool of the run in `worker.start` with its place. The Pi adapter installs the SDK's native `read`, `write`, `edit`, `bash`, `grep`, `find` and `ls` at the mounted working directory. The controller uses the SDK-free `runtime-worker/pi-tools.json` manifest, generated by `pnpm --filter @rakazo/agent-run-worker tools:manifest`; the bundle build rejects a stale manifest. Worker runs remove `list_files`, `read_file`, `write_file`, `edit_file` and `shell`. The in-process path keeps them.
 
-A tool missing from the run is missing from the guest's Pi. Lane d gives a run whose model cannot see images, so `computer_act` is not one of its tools. Neither the parent's nor the helper's tool list offered it, each call returned `Tool computer_act not found` to its model, and no call of it reached the controller. A guest that asks for it anyway gets `unknown_tool`, and the controller ends the run (lane e-refusals).
+Rakazo-specific tools, including computer and browser operations, memory, `message_user`, MCP, integrations and routines, stay on the controller. Native calls still announce `tool`, request `tool.call`, wait for `tool.grant`, send `tool.done`, and wait for `tool.recorded`. Fenced effect claims for mutating tools, journal entries and controller-side redaction still apply. Both the parent and helpers inherit the run's tools. Native read-only flags come from the controller manifest, so inspections execute again on retries and do not require webhook side-effect approval.
 
-A helper gets the run's tools minus `message_user` and the delegation tools in `DELEGATION_TOOL_NAMES`: `run_subagent`, `spawn_bot`, `archive_bot`, `delete_bot`, `handoff_to_bot` and `message_bot`. Removing a tool name does not remove a capability `bash` still has. A run without `write_file` can still write a file with `bash`.
+Read and edit reject files larger than 250 KiB before loading them; use bash for bounded processing of larger files. Native reads keep a whole-line head and continue at the first unseen line within the 12000-character model budget. Truncated bash output keeps the exit or timeout status beside its truncation marker.
+
+Native contracts differ from the old tools. `write` replaces existing files. `edit` takes an `edits` array with `oldText` and `newText`. Paths are ordinary VM paths: relative paths start in the bot's private mount, and shared files are at `/workspace/shared`. There is no custom workspace path resolver or volume-only write guard.
+
+There is no product setting to disable individual native tools. Helpers inherit the run's native tools and controller tools minus `message_user` and `DELEGATION_TOOL_NAMES`. Lane d exercises the product's model capability filter: `computer_act` is absent for a model without vision, for both the parent and helper. A guest requesting an unexposed tool is refused with `unknown_tool` (lane e-refusals).
+
+## S7 decision and session context
+
+The maintainer decision replaces P3's original tool choice:
+
+> "In the worker VM, generic file and shell tools must be the harness's NATIVE tools."
+
+For Pi these are the seven coding-agent tools above. Rakazo stops maintaining their worker implementations. Everything Rakazo-specific remains a controller tool, and the in-process path stays unchanged.
+
+Today the adapter uses pi-coding-agent's native tool factories and `PiAgentRuntime` (pi-agent-core), relayed through P2 pi-ai. `PiAgentRuntime` owns the transcript, context pruning, loop, approvals, helpers, steering and recaps. The relay receives its converted messages directly. No coding-agent session or resource loader is used.
+
+Adopting pi-coding-agent's `AgentSession` with an in-memory session and an explicit `ResourceLoader` that loads skills from volume paths is deferred to the planned skills slice. The issue's "session mémoire et resource loader explicite" requirement is not met by this slice. Model keys and provider connections remain on the controller.
+
+S7 updates live lanes a, b and f without running E2B. Lane a compares final file content against the in-process baseline; native names, overwrite behavior and result formats may differ. The historical receipts below do not validate S7. Rebuild the worker bundle and template before rerunning these lanes.
 
 ## Model relay and capabilities
 
@@ -201,6 +219,13 @@ Lane j ran 30 trials of three arms, rotating which arm went first: P2's local ru
 The host had 8 vCPUs with a one-minute load average of 1.0 to 2.5 during the bench, from the host's other services. The arms rotated, so each saw the same load.
 
 ## Limits
+
+- Native tools are not confined to the mounted volumes. The former file-tool "writes refused off the volumes" guard is removed, consistent with bash's existing ability to write elsewhere. Only volume writes outlive the VM.
+- Every native text result is bounded to 12,000 characters and 2,000 lines for P2. Longer results are spooled under the configured output directory, at most 16 MiB per file and 16 retained files. Bash capture counts all raw bytes and preserves the output up to that cap on the private volume, including after VM destruction. Pi's internal temporary bash copy is separately capped and removed on successful tool completion. Other tools may apply the SDK's own pagination or truncation before the P2 bound; their spool contains the SDK result, not necessarily the entire source file.
+- Native `read` forwards an image when its complete result fits the 64 KiB controller result budget. Larger image results are serialized and spooled as bounded text. Automatic SDK image resizing is disabled to keep the standalone bundle independent of native image libraries.
+- SDK bash temporary output created on abort or timeout may remain until VM destruction. It is not the durable spool.
+- The revised live native-tool lanes remain pending. No E2B VM was created for S7.
+
 
 ### Attention
 

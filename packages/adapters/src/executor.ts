@@ -686,7 +686,9 @@ async function routeRun(
   return {
     runtime,
     tools: withLocalTools(
-      run.tools.filter((tool) => tool.name !== COMPUTER_SHELL_TOOL),
+      run.tools.filter(
+        (tool) => tool.name !== COMPUTER_SHELL_TOOL && !FILE_TOOL_NAMES.has(tool.name),
+      ),
       needs.files.private ? (runtime.describe().capabilities.localTools ?? []) : [],
     ),
   };
@@ -2022,8 +2024,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
           tools: [...builtins, ...exposedConnectorTools],
           computerScope: computerMode,
         });
-        const localToolNames = new Set(
-          (runtime.describe().capabilities.localTools ?? []).map((tool) => tool.name),
+        const localTools = new Map(
+          (runtime.describe().capabilities.localTools ?? []).map((tool) => [tool.name, tool]),
         );
         const approvedEffects = await deps.prisma.externalEffect.findMany({
           where: { runId, status: "approved" },
@@ -2039,9 +2041,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
               ? `You have a persistent computer filesystem and shell. ${MODEL_CANNOT_SEE_MESSAGE} Desktop observe and act tools are unavailable until a vision-capable model is selected. Use the file tools and shell.`
               : "You have a persistent sandbox filesystem and shell. This backend does not provide model-visible graphical control, so use the file tools and shell.";
         const workspaceInstruction =
-          computerMode === "team"
-            ? `Your Team Computer home is ${teamBotWorkspaceDirectory(bot.id)}. Relative file paths and shell working directories start there. Put intentionally shared work under shared/. Other bots' folders are visible under bots/; treat them as their working areas.`
-            : "This entire computer workspace is your private home. Relative file paths and shell working directories start at its root.";
+          runtime.describe().id === "worker"
+            ? `Your private home is /workspace/bots/${bot.id}. Relative file paths and shell working directories start there.${computerMode === "team" ? " Put intentionally shared work under /workspace/shared." : ""}`
+            : computerMode === "team"
+              ? `Your Team Computer home is ${teamBotWorkspaceDirectory(bot.id)}. Relative file paths and shell working directories start there. Put intentionally shared work under shared/. Other bots' folders are visible under bots/; treat them as their working areas.`
+              : "This entire computer workspace is your private home. Relative file paths and shell working directories start at its root.";
 
         let assembled = "";
         let currentTextSegment = "";
@@ -2460,7 +2464,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             if (!("error" in normalized)) args = spawnBotToolArgs(normalized);
           }
           if (name === "schedule_create") args = scheduleCreateArgs(args);
-          if (name === "read_file" || name === "shell") {
+          if (name === "read_file" || name === "shell" || name === "read" || name === "bash") {
             const reach = String(args.path ?? args.command ?? "");
             for (const skill of userSkillsOpenedIn(reach, agentSkills)) {
               await recordSkillUse(skill.name, "file");
@@ -2556,7 +2560,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           const nextApprovedTool = approvedEffectReplays.nextToolName();
           const nextApprovedRequest = approvedEffectReplays.nextRequest();
           const nextApprovedKey = approvedEffectReplays.nextKey();
-          const viaConnector = !BUILTIN_AGENT_TOOL_NAMES.has(name) && !localToolNames.has(name);
+          const viaConnector = !BUILTIN_AGENT_TOOL_NAMES.has(name) && !localTools.has(name);
           const proposed =
             !viaConnector && name === "schedule_create" ? parseProposed(args) : false;
           if (typeof proposed === "object") return proposed;
@@ -2682,6 +2686,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             run,
             name,
             viaConnector,
+            localTools.get(name),
           );
           const requiresApprovalByDefault =
             proposal || requiresUnattendedApproval || toolRequiresApproval(name, viaConnector);
@@ -2786,17 +2791,18 @@ export function createRunExecutor(deps: ExecutorDeps) {
             if (refusal) return "error" in refusal ? refusal : refusal.result;
           }
           // Connector read-only hints must not bypass approval, review, or replay decisions.
-          const applied = READ_ONLY_AGENT_TOOLS.has(name)
-            ? undefined
-            : await recordEffect(
-                deps,
-                run,
-                replayEffectToolName,
-                effectKey,
-                effectRequest,
-                executionId,
-                consumedEffectIds,
-              );
+          const applied =
+            (localTools.get(name)?.readOnly ?? READ_ONLY_AGENT_TOOLS.has(name))
+              ? undefined
+              : await recordEffect(
+                  deps,
+                  run,
+                  replayEffectToolName,
+                  effectKey,
+                  effectRequest,
+                  executionId,
+                  consumedEffectIds,
+                );
           if (name === "spawn_bot" && applied && !applied.duplicate) {
             const lost = await spawnBotRaceLoss(deps, run, applied.effect.id);
             if (lost) return lost;

@@ -1833,22 +1833,35 @@ describe("the skill nudge at the end of an exchange", () => {
     );
   });
 
-  it("counts a skill as followed when forced with /Name or when its folder is read, and skips a failed run", async () => {
-    await writeCoffee();
-    const f = fixture({ skillLearning: "on", taskPrompt: "/Coffee\nA flat white" });
-    // The fixture has no computer, so the shell call itself fails the run.
-    await f.play(
-      [[{ name: "shell", args: { command: "python /skills/user/coffee/scripts/pay.py" } }]],
-      "worker-1",
-      "failed",
-    );
-    expect(f.eventsOf("agent.skill.used")).toEqual([
-      { name: "Coffee", via: "forced" },
-      { name: "Coffee", via: "file" },
-    ]);
-    expect(f.requests()).toHaveLength(1);
-    expect(f.eventsOf("agent.skill.nudge")).toEqual([]);
-  });
+  it.each(["shell", "bash", "read"])(
+    "counts forced and file-opened skills through %s",
+    async (name) => {
+      await writeCoffee();
+      const f = fixture({ skillLearning: "on", taskPrompt: "/Coffee\nA flat white" });
+      // The legacy shell fails without a computer; native names have no connector here.
+      await f.play(
+        [
+          [
+            {
+              name,
+              args:
+                name === "read"
+                  ? { path: "/skills/user/coffee/SKILL.md" }
+                  : { command: "python /skills/user/coffee/scripts/pay.py" },
+            },
+          ],
+        ],
+        "worker-1",
+        name === "shell" ? "failed" : "ok",
+      );
+      expect(f.eventsOf("agent.skill.used")).toEqual([
+        { name: "Coffee", via: "forced" },
+        { name: "Coffee", via: "file" },
+      ]);
+      expect(f.requests()).toHaveLength(1);
+      if (name === "shell") expect(f.eventsOf("agent.skill.nudge")).toEqual([]);
+    },
+  );
 
   it("does not run again for a run whose earlier attempt was already nudged", async () => {
     const f = fixture({

@@ -8,6 +8,7 @@ import type {
 import { PiAgentRuntime } from "@rakazo/adapters/pi-runtime";
 import { piAiStreamFn, relayedModel } from "@rakazo/adapters/runtime-worker/pi-ai";
 import type { DoneBody, GuestHarness, HarnessHost } from "../harness.js";
+import { executePiTool, piToolManifest } from "./pi-tools.js";
 
 function decodeImages(images: GuestImage[] | undefined): AgentInputImage[] {
   return (images ?? []).map((image) => ({ ...image, data: Buffer.from(image.data, "base64") }));
@@ -35,6 +36,9 @@ function toolCaller(host: HarnessHost, agent: string): NonNullable<AgentRunReque
 /** The Pi harness: the controller's own PiAgentRuntime policy, with every callback a frame. */
 export const piHarness: GuestHarness = {
   declaration: { name: "pi", capabilities: ["subagents", "steering"] },
+
+  nativeTools: piToolManifest(),
+  executeNativeTool: executePiTool,
 
   async run({ worker, run }, host): Promise<DoneBody> {
     const helperRefs = new Map<string, string>();
@@ -102,17 +106,16 @@ export const piHarness: GuestHarness = {
       },
     };
 
-    const runtime = new PiAgentRuntime({
-      streamFn: piAiStreamFn(
-        (body, onPart, signal) => host.model(body, onPart, signal),
-        (agentId) => {
-          if (agentId === undefined) return "root";
-          const ref = helperRefs.get(agentId);
-          if (!ref) throw new Error(`No helper ${agentId} was opened`);
-          return ref;
-        },
-      ),
-    });
+    const relay = piAiStreamFn(
+      (body, onPart, signal) => host.model(body, onPart, signal),
+      (agentId) => {
+        if (agentId === undefined) return "root";
+        const ref = helperRefs.get(agentId);
+        if (!ref) throw new Error(`No helper ${agentId} was opened`);
+        return ref;
+      },
+    );
+    const runtime = new PiAgentRuntime({ streamFn: relay });
 
     for await (const event of runtime.run(request, { signal: host.signal })) {
       switch (event.type) {

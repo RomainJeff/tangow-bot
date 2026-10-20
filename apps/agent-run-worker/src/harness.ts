@@ -1,4 +1,5 @@
 import type {
+  ConnectorTool,
   GuestBody,
   GuestRunInput,
   HarnessDeclaration,
@@ -48,12 +49,28 @@ export interface HarnessHost {
   ): Promise<ToolCallOutcome>;
 }
 
+export interface NativeToolContext {
+  cwd: string;
+  spoolDir: string;
+  signal: AbortSignal;
+}
+
 /**
  * An agent harness the guest can run. It turns its own loop into neutral frames through the host
  * and holds no key: its model calls go through `host.model`. One is implemented, in `harness/`.
  */
 export interface GuestHarness {
   readonly declaration: HarnessDeclaration;
+  readonly nativeTools: readonly ConnectorTool[];
+  executeNativeTool(
+    name: string,
+    args: Record<string, unknown>,
+    callId: string,
+    context: NativeToolContext,
+  ): Promise<LocalToolOutput>;
   /** Runs the attempt; resolves with its final words, which the controller decides to accept. */
-  run(start: { worker: WorkerIdentity; run: GuestRunInput }, host: HarnessHost): Promise<DoneBody>;
+  run(
+    start: { worker: WorkerIdentity; run: GuestRunInput; cwd: string },
+    host: HarnessHost,
+  ): Promise<DoneBody>;
 }

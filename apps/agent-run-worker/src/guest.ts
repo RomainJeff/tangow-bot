@@ -14,7 +14,6 @@ import {
   WORKER_LIMITS,
 } from "@rakazo/adapters/runtime-worker/wire";
 import type { GuestHarness, HarnessHost, InformativeBody } from "./harness.js";
-import { LOCAL_TOOLS } from "./local-tools.js";
 import { createOutbox, type Outbox } from "./outbox.js";
 
 /** How the guest's run ended. Only `done` and `paused` are a controller's normal stop. */
@@ -194,15 +193,14 @@ async function runAttempt(
       if (reply.type !== "tool.grant") {
         throw new Error(reply.type === "error" ? reply.message : `Unexpected reply ${reply.type}`);
       }
-      const tool = placement.get(name) === "guest" ? LOCAL_TOOLS[name] : undefined;
+      const tool =
+        placement.get(name) === "guest" &&
+        options.harness.nativeTools.some((tool) => tool.name === name);
       const output = tool
-        ? await tool(args, {
+        ? await options.harness.executeNativeTool(name, args, callId, {
             cwd,
             signal,
             spoolDir: options.spoolDir,
-            botId: run.botId,
-            root: options.root ?? "/",
-            mounts: workspace.mounts,
           })
         : {
             text: `${name} cannot run in this worker.`,
@@ -216,7 +214,7 @@ async function runAttempt(
   };
 
   try {
-    const done = await options.harness.run({ worker, run }, host);
+    const done = await options.harness.run({ worker, run, cwd }, host);
     await flushText();
     return (await decide(done, "stop")).reason;
   } catch (error) {

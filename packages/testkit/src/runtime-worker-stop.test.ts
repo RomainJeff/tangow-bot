@@ -12,9 +12,9 @@ import {
   createStopJournal,
   createWorkerAgentRuntime,
   encodeFrameLine,
-  GUEST_TOOLS,
   readFrameLines,
   WORKER_LIMITS,
+  WORKER_NATIVE_TOOLS,
 } from "@rakazo/adapters/runtime-worker";
 import { HARNESSES, runGuest } from "@rakazo/agent-run-worker";
 import type { StopPhase } from "@rakazo/core";
@@ -191,7 +191,7 @@ async function sleepingRun<P extends WorkerProvider & GuestConnector>(
     prompt: "Take a nap.",
     instructions: "Use bash.",
     history: [],
-    tools: [...GUEST_TOOLS],
+    tools: [...WORKER_NATIVE_TOOLS],
     model: fixture.model.model,
     attempt,
     executeTool: async () => "unused",

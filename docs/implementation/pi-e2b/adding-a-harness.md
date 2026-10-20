@@ -12,8 +12,8 @@ The controller treats the guest as hostile, including the harness. Your adapter 
 | --- | --- |
 | The capability is checked before any database read. A capability of another attempt, an expired one, or a second connection while one is bound is refused. | `session.ts` `serve`, `capability.ts` |
 | A tool runs only if the run exposes it, and only after its `tool` announcement with the same `callId`. Any other call ends the channel with `unknown_tool`. | `session.ts` `callTool` |
-| A guest tool starts only after the executor journaled the call and claimed its effect under the run's fence. A guest of an attempt that lost its run gets `revoked`, and the database refuses the claim. | `executor.ts` `claimEffectUnderFence` |
-| A guest tool's result counts only once the controller recorded it. A result that never arrives leaves the effect `executing`, and the next claim marks it `uncertain`. It is never run again. | `session.ts` `recordLocalResult`, `executor.ts` |
+| A mutating guest tool starts only after the executor journaled the call and claimed its effect under the run's fence. A guest of an attempt that lost its run gets `revoked`, and the database refuses the claim. | `executor.ts` `claimEffectUnderFence` |
+| A mutating guest tool's result counts only once the controller recorded it. A result that never arrives leaves the effect `executing`, and the next claim marks it `uncertain`. It is never run again. Read-only inspections execute again on retries. | `session.ts` `recordLocalResult`, `executor.ts` |
 | A `done` that arrives while a call is open is held until the call settles. | `session.ts` `finish` |
 | Usage is measured on the model relay. The guest cannot report usage, provider, connection or owner: no frame carries them. | `session.ts` `relayModel` |
 | Guest text, ask text, notices and tool output are redacted against the run's live secrets. Tool output is cut to `controllerResultBytes`. | `session.ts` `clean`, `cutText` |
@@ -28,8 +28,10 @@ Create `apps/agent-run-worker/src/harness/<name>.ts`. The interface is in `apps/
 
 ```ts
 interface GuestHarness {
-	readonly declaration: HarnessDeclaration; // { name, capabilities }
-	run(start: { worker: WorkerIdentity; run: GuestRunInput }, host: HarnessHost): Promise<DoneBody>;
+    readonly declaration: HarnessDeclaration; // { name, capabilities }
+    readonly nativeTools: readonly ConnectorTool[];
+    executeNativeTool(name, args, callId, context): Promise<LocalToolOutput>;
+    run(start: { worker: WorkerIdentity; run: GuestRunInput; cwd: string }, host: HarnessHost): Promise<DoneBody>;
 }
 ```
 
@@ -50,7 +52,10 @@ Follow these rules:
 - Announce each tool with `emit({ type: "tool", ... })` before `callTool`. The executor shows the announcement and waits for it before it journals the call.
 - Never keep or ask for a key. Send every model call through `host.model`.
 - Treat a throw from `decide`, `model` or `callTool` as the end of the attempt, unless the harness can report the failure to its model. A refusal has already ended the channel.
-- Do not define guest tools in the harness. The controller places them with `GUEST_TOOLS` in `packages/adapters/src/runtime-worker/guest-input.ts`, and the guest runs them from `LOCAL_TOOLS` in `apps/agent-run-worker/src/local-tools.ts`. Every harness shares them.
+- Bring the harness's native file and shell tools. Declare their names, descriptions and JSON schemas in `nativeTools`, and implement `executeNativeTool` using the SDK's real factories with `context.cwd`. Keep SDK imports inside `harness/`. The generic guest calls this method only after the P2 grant and records its result before continuing. The adapter must use `captureToolOutput` for bounded text and volume spooling.
+- Give the controller an SDK-free per-harness manifest and register it in `nativeToolsForHarness`. Pi generates `runtime-worker/pi-tools.json` from its tool factories. The bundle build checks it against the installed SDK. A second harness must also select its manifest in the runtime's `localTools` descriptor before the executor routes a run.
+- Keep all Rakazo-specific tools on the controller, including computer, browser, memory, messages, MCP, integrations and routines. Do not remove them when adding native tools. Honor the selected list in `worker.start`; a missing tool must stay missing for both parent and helper. Removing a name does not remove what a remaining bash tool can do.
+- Load no ambient context. Pi uses controller-provided instructions only, with no AGENTS.md, skills or settings discovery. An in-memory coding-agent session with an explicit resource loader is deferred to the skills slice; see the [session decision](P3-handoff.md#s7-decision-and-session-context).
 
 ## Declare optional capabilities
 
@@ -81,12 +86,12 @@ The capability, the request count cap (`modelRequestsPerAttempt`), the frame cap
 1. Register the adapter in `HARNESSES` in `apps/agent-run-worker/src/harness/index.ts`, under the name it declares.
 2. Select it with `RAKAZO_WORKER_HARNESS=<name>`. The default is `pi`. The guest entry point is `apps/agent-run-worker/src/main.ts`, and it also reads `RAKAZO_WORKER_CAPABILITY`, `RAKAZO_WORKER_ROOT` and `RAKAZO_WORKER_SPOOL_DIR`. It deletes the capability from its environment, so the commands a run starts do not inherit it.
 3. Add the harness's SDK packages to both `noRestrictedImports` overrides in `biome.json`. The first override covers the generic guest code, which is everything under `apps/agent-run-worker/src/` except `harness/`. The second covers the controller's channel code, which is everything under `packages/adapters/src/runtime-worker/` except `dialects/`. `pnpm lint` then fails if an SDK import leaks outside `harness/` or `dialects/`.
-4. Add the harness's layer to `HARNESS_LAYERS` in `apps/agent-run-worker/template/template.ts`, under the same name. The common base gives Node 24, bash, git, procps, CA certificates and `/workspace`. The layer adds only what the harness's own tools need outside the bundle. Pi's layer adds nothing: its file tools and `grep` are JavaScript in the guest bundle. The guest bundle, one ES module built by `pnpm --filter @rakazo/agent-run-worker bundle`, carries every registered harness and is copied last. E2B runs each build step as the sandbox user unless the step passes `{ user: "root" }`, and that user cannot write `/`, `/opt` or `/usr`. Pass it to any step that installs outside the user's home. The template needs no NFS client: E2B mounts the volumes itself.
+4. Add the harness's layer to `HARNESS_LAYERS` in `apps/agent-run-worker/template/template.ts`, under the same name. The common base gives Node 24, bash, git, procps, CA certificates and `/workspace`. The layer adds only what the harness's own tools need outside the bundle. Pi's layer installs ripgrep and fd-find, because the native grep and find tools invoke them; Pi finds Debian's `fdfind` binary itself. The guest bundle, one ES module built by `pnpm --filter @rakazo/agent-run-worker bundle`, carries every registered harness and is copied last. E2B runs each build step as the sandbox user unless the step passes `{ user: "root" }`, and that user cannot write `/`, `/opt` or `/usr`. Pass it to any step that installs outside the user's home. The template needs no NFS client: E2B mounts the volumes itself.
 5. Build the template with `pnpm --filter @rakazo/agent-run-worker template:build --harness <name>`. It bundles the guest, then builds `rakazo-worker-<name>` with `WORKER_PROFILE`, 1 vCPU and 1024 MiB. The E2B SDK reads `E2B_API_KEY`, and `E2B_API_URL` or `E2B_DOMAIN` for a self-hosted E2B, from the environment. Pass `--name` to choose another template name. The build uploads the template's files to a port a self-hosted deployment may expose on its own host only. In that case, run the build on that host.
 
 The controller reaches the guest only through its stdio, which E2B relays through its command API. Each frame is one base64 line (`encodeFrameLine`, `readFrameLines` in `packages/adapters/src/runtime-worker/framing.ts`), because E2B hands command output through a text decoder that would corrupt raw bytes. P2's 4-byte length prefix is gone. A harness never writes to stdout. `main.ts` sends `console` to stderr, and a stray stdout line ends the attempt as an invalid frame.
 
-Keep the generic files free of harness names. `guest.ts`, `outbox.ts`, `local-tools.ts` and `main.ts` must not change for a new harness, except for the entry in `HARNESSES`.
+Keep the generic files free of harness names. `guest.ts`, `outbox.ts`, `tool-output.ts` and `main.ts` must not change for a new harness, except for the entry in `HARNESSES`.
 
 ## Pass the conformance tests
 
@@ -100,6 +105,6 @@ Every harness must pass the same tests as Pi, offline:
 
 ## Move a computer's files before its runs use workers
 
-A worker reads and writes the bot's private volume and the space's shared volume, never the computer's AgentHomeStore snapshot. A run that needs files stays in process until its computer's home moved onto volumes (`home_not_migrated`). The move is the same for every harness. `scripts/migrate-home-to-volumes.ts` plans, copies, verifies every file by hash and mode, then adopts. It reaches each volume through a sandbox of the worker template, so the template must have Node, as the base gives. The [P3 handoff](P3-handoff.md) gives the procedure, the retention and the rollback.
+A worker uses its mounted private and shared volumes for persistent files, rather than the computer's AgentHomeStore snapshot. Native tools can also access the VM's temporary filesystem. A run that needs files stays in process until its computer's home moved onto volumes (`home_not_migrated`). The move is the same for every harness. `scripts/migrate-home-to-volumes.ts` plans, copies, verifies every file by hash and mode, then adopts. It reaches each volume through a sandbox of the worker template, so the template must have Node, as the base gives. The [P3 handoff](P3-handoff.md) gives the procedure, the retention and the rollback.
 
 Run `pnpm lint` to prove the import rule holds.

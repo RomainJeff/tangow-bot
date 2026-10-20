@@ -12,11 +12,11 @@ import {
   createWorkerAgentRuntime,
   encodeMessage,
   type FrameChannel,
-  GUEST_TOOLS,
   type LaunchedGuest,
   memoryChannelPair,
   readControllerFrame,
   WORKER_LIMITS,
+  WORKER_NATIVE_TOOLS,
 } from "@rakazo/adapters/runtime-worker";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
 import { type ModelEmulatorRequest, startModelEmulator } from "./model-emulator.js";
@@ -136,7 +136,7 @@ function request(runId: string, overrides: Partial<AgentRunRequest> = {}): Agent
     prompt: "Do the thing.",
     instructions: "Be brief.",
     history: [],
-    tools: [...GUEST_TOOLS],
+    tools: [...WORKER_NATIVE_TOOLS],
     model: { provider: "openai-compatible", id: "unused", apiKey: "controller-only-key" },
     attempt: { id: `${runId}-attempt`, fence: 1 },
     secrets: ["hunter2-secret"],

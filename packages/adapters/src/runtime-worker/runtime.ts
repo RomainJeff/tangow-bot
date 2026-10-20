@@ -3,7 +3,7 @@ import type { LaunchPlan, RunNeeds, WorkerLaunch } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import type { WorkerLifecycle } from "../worker-lifecycle.js";
 import { createCapabilityKey } from "./capability.js";
-import { GUEST_TOOLS } from "./guest-input.js";
+import { WORKER_NATIVE_TOOLS } from "./guest-input.js";
 import { createLifecycleLauncher, type GuestConnector, type WorkerLauncher } from "./launcher.js";
 import { createSession, type WorkerClock } from "./session.js";
 import { createStopJournal, type StopJournal } from "./stop-journal.js";
@@ -44,7 +44,7 @@ export function createWorkerAgentRuntime(options: {
           compaction: true,
           tools: true,
           scripted: false,
-          localTools: GUEST_TOOLS,
+          localTools: WORKER_NATIVE_TOOLS,
         },
       };
     },

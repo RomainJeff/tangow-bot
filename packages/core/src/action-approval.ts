@@ -117,11 +117,12 @@ export function unattendedTriggerToolRequiresApproval(
   run: { trigger: string; requireToolApproval: boolean },
   toolName: string,
   viaConnector: boolean,
+  localTool?: { readOnly?: boolean },
 ): boolean {
   if (run.trigger !== "webhook" || !run.requireToolApproval) return false;
   return viaConnector
     ? connectorToolRequiresApproval(toolName)
-    : !UNATTENDED_SAFE_BUILTIN_TOOLS.has(toolName);
+    : !(localTool?.readOnly ?? UNATTENDED_SAFE_BUILTIN_TOOLS.has(toolName));
 }
 
 function categoryMatches(category: string, toolName: string, connectorKind: string): boolean {

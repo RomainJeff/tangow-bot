@@ -49,7 +49,20 @@ const recap = JSON.stringify({ version: 1, results: ["Answered"], references: []
 const toolNames = (request: ModelEmulatorRequest) =>
   (request.tools ?? []).map((tool) => tool.function.name);
 const shellTools = (request: ModelEmulatorRequest) =>
-  toolNames(request).filter((name) => ["shell", "bash", "grep", "write_file"].includes(name));
+  toolNames(request).filter((name) =>
+    [
+      "shell",
+      "bash",
+      "grep",
+      "write_file",
+      "read_file",
+      "read",
+      "write",
+      "edit",
+      "find",
+      "ls",
+    ].includes(name),
+  );
 
 /** Notes which shell tools the first model call offered, then ends the run. */
 function offeredShellTools(seen: string[][]): ModelEmulatorStep[] {
@@ -75,7 +88,7 @@ describe("where a product run executes", () => {
     const runId = await run.send("Hello.");
     await run.continueRun(runId);
 
-    expect(seen).toEqual([["write_file", "grep", "bash"]]);
+    expect(seen).toEqual([["read", "write", "edit", "bash", "grep", "find", "ls"]]);
     expect(await attemptsOf(run, runId)).toEqual([{ workerState: "released" }]);
   });
 
@@ -89,7 +102,7 @@ describe("where a product run executes", () => {
     const runId = await run.send("Hello.");
     await run.continueRun(runId);
 
-    expect(seen).toEqual([["write_file", "shell"]]);
+    expect(seen).toEqual([["read_file", "write_file", "shell"]]);
     expect(await attemptsOf(run, runId)).toEqual([{ workerState: null }]);
     expect(run.provider.launches).toEqual([]);
   });
@@ -101,7 +114,7 @@ describe("where a product run executes", () => {
     const runId = await run.send("Hello.");
     await run.continueRun(runId);
 
-    expect(seen).toEqual([["write_file", "grep", "bash"]]);
+    expect(seen).toEqual([["read", "write", "edit", "bash", "grep", "find", "ls"]]);
     expect(
       await run.prisma.volume.findMany({
         where: { kind: "bot_private" },
