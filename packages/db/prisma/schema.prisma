@@ -1011,6 +1011,19 @@ model Volume {
   @@map("volumes")
 }
 
+/// A provider volume whose row was deleted, until the volume sweep deletes it at the provider.
+model VolumeDeletion {
+  providerKind String
+  providerRef  String
+  volumeId     String
+  /// Bumped when the volume is created again, so a sweep that deleted the earlier one keeps it.
+  generation   Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  @@id([providerKind, providerRef])
+  @@map("volume_deletions")
+}
+
 model ComputerExecutionLease {
   id         String   @id @default(cuid())
   computerId String

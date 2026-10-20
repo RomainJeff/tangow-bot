@@ -109,8 +109,8 @@ export function createJobReconciler(
     purgeLinkPreviews?: () => Promise<void>;
     sweepSkillLines?: () => Promise<void>;
     /**
-     * Releases workers whose run moved on, including stops never confirmed, and sweeps orphan
-     * volumes. Stops early once `signal` aborts.
+     * Releases workers whose run moved on, including stops never confirmed, and deletes the
+     * provider volumes of deleted rows. Stops early once `signal` aborts.
      */
     reconcileWorkers?: (signal: AbortSignal) => Promise<void>;
   },

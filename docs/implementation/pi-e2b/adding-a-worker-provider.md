@@ -34,10 +34,9 @@ Each method has a rule that the controller depends on for safety:
 | `prepare(ref, spec)` | Finish fallible setup after the reference is recorded. It must be idempotent. | Start the container, then wait until the mounts are visible and the runner answers. |
 | `destroy({ attemptId, providerRef })` | Remove every worker tagged with `attemptId`, with or without a reference. Return `absent` when none is left. Never treat "not found" as an error. | Remove every container with the label `rakazo.attempt=<attemptId>`, forced. Leave the volumes in place. |
 | `ensureVolume({ name })` | Create the named volume, or return the existing one. | Create the volume `name` if it is missing, and return `name`. |
-| `listVolumes()` | Return the name of every volume the provider holds. | List the volumes and return their names. |
-| `deleteVolume({ name })` | Delete the named volume. One already gone is not an error. | Remove the volume `name` if it exists. |
+| `deleteVolume({ providerRef })` | Delete the volume `ensureVolume` returned this reference for. One already gone is not an error. | Remove the volume `providerRef` if it exists. |
 
-Volumes outlive every run. Deleting a bot or a space deletes its volume rows in its own transaction. The lifecycle's `sweepVolumes` then deletes the provider volumes named `rakazo-<volumeId>` whose row is gone, right after the deletion and on each reconciler pass. It never deletes a volume whose row exists. It also treats every `rakazo-` volume without a row in this database as an orphan, so two deployments must not share one provider account.
+Volumes outlive every run. Deleting a bot or a space deletes its volume rows in its own transaction, and records each provisioned one in `volume_deletions`. A row deleted while `provisionVolume` was creating its volume leaves a record too. The lifecycle's `sweepVolumes` deletes exactly the recorded volumes at the provider, then their records, right after the deletion and on each reconciler pass. It never lists the provider's volumes, so a provider account shared with another deployment keeps that deployment's volumes. Records wait while no provider of their kind is configured.
 
 Respect the TTL at the provider. If the controller never confirms destruction, the TTL is the last bound on a worker that still holds a volume.
 

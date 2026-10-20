@@ -45,11 +45,9 @@ export interface WorkerProvider {
   ): Promise<"destroyed" | "absent">;
   /** Creates the volume named `name`, or returns the existing one. */
   ensureVolume(input: { name: string }, context: AdapterContext): Promise<{ providerRef: string }>;
-  /** The names of every volume the provider holds. */
-  listVolumes(context: AdapterContext): Promise<string[]>;
   /**
-   * Deletes the named volume, once no row of its deleted owner names it. A volume already gone is
-   * not an error.
+   * Deletes the volume `ensureVolume` returned `providerRef` for, once its row is deleted. A volume
+   * already gone is not an error.
    */
-  deleteVolume(input: { name: string }, context: AdapterContext): Promise<void>;
+  deleteVolume(input: { providerRef: string }, context: AdapterContext): Promise<void>;
 }

@@ -16,14 +16,14 @@ export type FakeWorkerCall =
       result: "destroyed" | "absent";
     }
   | { op: "ensureVolume"; name: string }
-  | { op: "deleteVolume"; name: string };
+  | { op: "deleteVolume"; providerRef: string };
 
 /** Deterministic in-memory workers. Records every call; tests may delete from `live`. */
 export class FakeWorkerProvider implements WorkerProvider {
   readonly calls: FakeWorkerCall[] = [];
   /** Live VMs by provider ref. */
   readonly live = new Map<string, WorkerSpec>();
-  /** Volume names the provider holds. */
+  /** Refs of the volumes the provider holds. */
   readonly volumes = new Set<string>();
   /** Thrown by every `destroy` while set: the provider cannot confirm destruction. */
   failDestroy: Error | null = null;
@@ -82,16 +82,13 @@ export class FakeWorkerProvider implements WorkerProvider {
     _context: AdapterContext,
   ): Promise<{ providerRef: string }> {
     this.calls.push({ op: "ensureVolume", name: input.name });
-    this.volumes.add(input.name);
-    return { providerRef: `fake-volume-${input.name}` };
+    const providerRef = `fake-volume-${input.name}`;
+    this.volumes.add(providerRef);
+    return { providerRef };
   }
 
-  async listVolumes(_context: AdapterContext): Promise<string[]> {
-    return [...this.volumes];
-  }
-
-  async deleteVolume(input: { name: string }, _context: AdapterContext): Promise<void> {
-    this.calls.push({ op: "deleteVolume", name: input.name });
-    this.volumes.delete(input.name);
+  async deleteVolume(input: { providerRef: string }, _context: AdapterContext): Promise<void> {
+    this.calls.push({ op: "deleteVolume", providerRef: input.providerRef });
+    this.volumes.delete(input.providerRef);
   }
 }

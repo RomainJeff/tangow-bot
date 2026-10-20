@@ -96,8 +96,6 @@ type PlanRow = {
 };
 
 const RELEASABLE = Prisma.join([...LIVE_WORKER_STATES, "releasing"]);
-/** A provider volume is named after its row, so a name whose row is gone marks an orphan. */
-const VOLUME_NAME_PREFIX = "rakazo-";
 const VOLUME_SWEEP_BATCH = 10;
 const INTO_RELEASED = Prisma.join(workerStatesInto("released"));
 
@@ -246,7 +244,10 @@ export function createWorkerLifecycle(deps: {
     return "released";
   }
 
-  /** Creates the volume at the provider under a name derived from its row, once. */
+  /**
+   * Creates the volume at the provider under a name derived from its row, once. A row deleted
+   * while the provider created it leaves a deletion record, as the owner's deletion would have.
+   */
   async function provisionVolume(volumeId: string, context: AdapterContext): Promise<string> {
     const provider = requireProvider();
     const volume = await prisma.volume.findUniqueOrThrow({
@@ -257,15 +258,26 @@ export function createWorkerLifecycle(deps: {
     if (volume.providerKind !== provider.describe().id) {
       throw new VolumeRefusedError({ code: "provider_mismatch", volumeId });
     }
-    const { providerRef } = await provider.ensureVolume(
-      { name: `${VOLUME_NAME_PREFIX}${volumeId}` },
-      context,
-    );
-    await prisma.volume.updateMany({
-      where: { id: volumeId, providerRef: null },
-      data: { providerRef },
+    const { providerRef } = await provider.ensureVolume({ name: `rakazo-${volumeId}` }, context);
+    // Locked like `deleteOwnerVolumes`, so the ref lands either on the row or in a deletion record.
+    const recorded = await prisma.$transaction(async (tx) => {
+      const [row] = await tx.$queryRaw<{ providerRef: string | null }[]>`
+        SELECT "providerRef" FROM volumes WHERE id = ${volumeId} FOR UPDATE`;
+      if (!row) {
+        // A sweep may have deleted this volume before this ensure created it again.
+        await tx.$executeRaw`
+          INSERT INTO volume_deletions ("providerKind", "providerRef", "volumeId")
+          VALUES (${volume.providerKind}, ${providerRef}, ${volumeId})
+          ON CONFLICT ("providerKind", "providerRef")
+          DO UPDATE SET generation = volume_deletions.generation + 1`;
+        return null;
+      }
+      if (row.providerRef) return row.providerRef;
+      await tx.volume.update({ where: { id: volumeId }, data: { providerRef } });
+      return providerRef;
     });
-    return providerRef;
+    if (!recorded) throw new VolumeRefusedError({ code: "volume_not_found", volumeId });
+    return recorded;
   }
 
   async function ensureVolume(owner: VolumeOwner, context: AdapterContext): Promise<EnsuredVolume> {
@@ -490,32 +502,27 @@ export function createWorkerLifecycle(deps: {
     },
 
     /**
-     * Deletes a few provider volumes whose row is gone: those of a deleted owner, and one
-     * provisioned while its row was being deleted. A volume whose row exists is never touched.
-     * Idempotent, and nothing without a provider.
+     * Deletes at the provider a few volumes this database recorded as deleted, oldest first, and
+     * then their records. Only a recorded volume is ever deleted, so a provider account shared
+     * with another deployment is safe. Idempotent; records of another provider kind wait for it.
      */
     async sweepVolumes(context: AdapterContext): Promise<{ deleted: number; failed: number }> {
       const counts = { deleted: 0, failed: 0 };
       if (!deps.provider) return counts;
-      const named = (await deps.provider.listVolumes(context)).flatMap((name) =>
-        name.startsWith(VOLUME_NAME_PREFIX)
-          ? [{ name, id: name.slice(VOLUME_NAME_PREFIX.length) }]
-          : [],
-      );
-      const kept = new Set(
-        (
-          await prisma.volume.findMany({
-            where: { id: { in: named.map((volume) => volume.id) } },
-            select: { id: true },
-          })
-        ).map((volume) => volume.id),
-      );
-      for (const { name } of named
-        .filter((volume) => !kept.has(volume.id))
-        .slice(0, VOLUME_SWEEP_BATCH)) {
+      const providerKind = deps.provider.describe().id;
+      const deletions = await prisma.volumeDeletion.findMany({
+        where: { providerKind },
+        orderBy: { createdAt: "asc" },
+        take: VOLUME_SWEEP_BATCH,
+        select: { providerRef: true, generation: true },
+      });
+      for (const { providerRef, generation } of deletions) {
         if (context.signal.aborted) break;
         try {
-          await deps.provider.deleteVolume({ name }, context);
+          await deps.provider.deleteVolume({ providerRef }, context);
+          await prisma.volumeDeletion.deleteMany({
+            where: { providerKind, providerRef, generation },
+          });
           counts.deleted += 1;
         } catch {
           counts.failed += 1;

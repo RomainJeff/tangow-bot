@@ -15,10 +15,11 @@ export class OwnerWorkerLiveError extends Error {
 const UNRELEASED = new Set<string>([...LIVE_WORKER_STATES, "releasing"]);
 
 /**
- * Deletes the owner's volume rows inside the owner's deletion transaction, never their provider
- * volumes: those are swept once no row names them. Locks in the workers' order (the owner's runs,
- * their workers' attempts, then the volumes by id) and refuses while a worker of the owner's runs
- * is not confirmed gone, unless its TTL has passed and the provider has ended it.
+ * Deletes the owner's volume rows inside the owner's deletion transaction, and records each
+ * provisioned one in `volume_deletions` for the sweep to delete at the provider after commit.
+ * Locks in the workers' order (the owner's runs, their workers' attempts, then the volumes by id)
+ * and refuses while a worker of the owner's runs is not confirmed gone, unless its TTL has passed
+ * and the provider has ended it.
  */
 export async function deleteOwnerVolumes(
   tx: Prisma.TransactionClient,
@@ -51,6 +52,13 @@ export async function deleteOwnerVolumes(
     throw new OwnerWorkerLiveError();
   }
   if (volumes.length > 0) {
-    await tx.$executeRaw`DELETE FROM volumes WHERE id = ANY(${volumes.map((volume) => volume.id)})`;
+    await tx.$executeRaw`
+      WITH deleted AS (
+        DELETE FROM volumes WHERE id = ANY(${volumes.map((volume) => volume.id)})
+        RETURNING id, "providerKind", "providerRef"
+      )
+      INSERT INTO volume_deletions ("providerKind", "providerRef", "volumeId")
+      SELECT "providerKind", "providerRef", id FROM deleted WHERE "providerRef" IS NOT NULL
+      ON CONFLICT DO NOTHING`;
   }
 }
