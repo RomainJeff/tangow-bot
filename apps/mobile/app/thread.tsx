@@ -1757,6 +1757,12 @@ function Thread() {
     });
   }
 
+  // The composer floats over the thread's end: when it grows, keep the latest message above it,
+  // as the typing bubble does (the list otherwise holds its visible position).
+  useEffect(() => {
+    performScroll(scrollBehavior.current.onTailChanged());
+  }, [composerHeight]);
+
   contentChanged.current = () => {
     const blocked = Boolean(
       jumpScrollTarget.current ||
