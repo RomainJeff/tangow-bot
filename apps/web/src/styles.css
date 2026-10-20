@@ -14,17 +14,6 @@ body,
   font-family: var(--font-sans);
 }
 
-/* Shell.tsx is over the staged file-size limit, so its shell root's `bg-background`
-   is overridden here until it is split: the ambient light fills the whole window. */
-[data-testid="shell-root"] {
-  background: var(--ambient);
-}
-
-/* Same reason: `main` drops its `bg-background` so the ambient shows through the thread. */
-[data-testid="shell-root"] > main {
-  background: transparent;
-}
-
 .rk-scroll::-webkit-scrollbar {
   width: 6px;
 }

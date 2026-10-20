@@ -99,13 +99,14 @@ export function ShellMain({
       // the header and thread column reflow into what is left, so the header
       // button and the composer stay reachable. Narrower than that the panel
       // covers the thread instead, and closes with Escape or its X.
-      className={`relative flex min-w-0 flex-1 flex-col bg-background ${
+      className={`relative flex min-w-0 flex-1 flex-col ${
         panelOpen ? (panelSize === "wide" ? "lg:pe-panel xl:pe-panel-wide" : "lg:pe-panel") : ""
       }`}
     >
       {callOpen && active ? (
         <Suspense fallback={null}>
-          <div className="absolute inset-0 z-20 flex flex-col bg-background">
+          {/* Above the composer (z-30), so it never hides Mute and End call. */}
+          <div className="rk-ambient absolute inset-0 z-40 flex flex-col">
             <CallView
               botId={active.id}
               botName={active.name}
