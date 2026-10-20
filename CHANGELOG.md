@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - When a bot asks for your approval or a question partway through a step, it now stops its other actions in that step, and its helpers, until you answer instead of carrying on, on web, desktop and iPhone.
 - On iPhone, the composer goes back to one line after you send a long message, instead of staying tall and empty.
+- On web and desktop, switching between Integrations and Skills in Customize no longer makes the window blink and reload; a section you already opened keeps its search.
 
 ### 2026-10-20
 
