@@ -1,9 +1,9 @@
 # Managed skills
 
 Skills versioned in this repository, shipped with the `app` image and mounted read-only in every
-Docker computer under `/managed-skills`. They add to the skills a user writes and installs from
-marketplaces. Each skill is a directory with a `SKILL.md` (frontmatter `name` + `description`,
-then the body) and optional `scripts/` and `references/`.
+Docker computer under `/managed-skills`. They add to the skills a user writes or imports. Each skill
+is a directory with a `SKILL.md` (frontmatter `name` + `description`, then the body) and optional
+`scripts/` and `references/`.
 
 The family name says who reads the skill.
 

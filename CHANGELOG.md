@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-10-20
+
+#### Reverted
+
+- Skill marketplaces can no longer be added or used from the Skills screen on web, desktop and mobile; your own skills and Rakazo's built-in skills are unchanged.
+
+### 2026-10-19
+
+#### Changed
+
+- While a bot works, its bubble now says what kind of thing it is doing, such as "Searching the web", "Briefing a helper" or "Stepping into Notion", instead of showing file paths, commands or search queries, on web, desktop and iPhone.
+
+#### Fixed
+
+- A routine check, or a bot in a group chat, with nothing to say after using a tool now stays silent on web, desktop, and iPhone instead of posting "I completed the tool step but could not produce a final response."
+- While a bot works, its bubble again names the tool it is using, such as "Reading src/app.ts", instead of only saying that it is working, on web, desktop and iPhone.
+
 ### 2026-10-18
 
 #### Added

@@ -1789,7 +1789,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
         // A peer's delivery decides on its own whether the turn may end without a word.
         const allowSilentEmpty = peerMessage
           ? botMessageAllowsSilence(peerMessage.intent, peerMessage.repliesToRequest)
-          : freeTextIsPrivate;
+          : freeTextIsPrivate || routineRun;
         const emptyResponseText = peerMessage
           ? peerMessage.intent === "result" ||
             peerMessage.intent === "status" ||

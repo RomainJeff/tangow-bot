@@ -16,7 +16,8 @@ import { SERVICE_NAMES } from "@rakazo/logging";
 import { createRootLogger } from "@rakazo/logging/axiom";
 import { requestLogging } from "@rakazo/logging/hono";
 import Docker from "dockerode";
-import { Hono, type MiddlewareHandler } from "hono";
+import type { MiddlewareHandler } from "hono";
+import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
 import {
@@ -49,6 +50,7 @@ import {
 } from "./computer-spec.js";
 import { assertComputerHomeWritable } from "./home-ownership.js";
 import { syncManagedSkills } from "./managed-skills.js";
+import type { ScreenAssignment } from "./supervisor-logic.js";
 import {
   assertRequestIdentity,
   attemptComputerControl,
@@ -70,7 +72,6 @@ import {
   preferComputerControl,
   releaseAssignedScreen,
   resetManagedScreensCommand,
-  type ScreenAssignment,
   sandboxCommandTimedOut,
   sandboxTimeoutCommand,
   screenReleaseStopCommand,
@@ -163,7 +164,6 @@ export function skillsBindsFor(
 ): string[] {
   return [
     `${translate(path.join(dataDir, "skills", "user", spaceId, userId))}:${SANDBOX_SKILL_MOUNTS.user}:ro`,
-    `${translate(path.join(dataDir, "skills", "marketplaces", spaceId))}:${SANDBOX_SKILL_MOUNTS.marketplaces}:ro`,
     `${translate(path.join(dataDir, "managed-skills"))}:${SANDBOX_SKILL_MOUNTS.managed}:ro`,
   ];
 }

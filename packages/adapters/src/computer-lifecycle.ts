@@ -30,7 +30,6 @@ import {
   restoreComputerWorkspace,
 } from "./computer-workspace.js";
 import { resolveAgentHomePath } from "./home.js";
-import { marketplacesRoot } from "./marketplace-store.js";
 import type { RunWorkers } from "./runtime-worker/runtime.js";
 import { userSkillsRoot } from "./skill-store.js";
 
@@ -221,7 +220,6 @@ export async function provisionComputer(
   // Docker would create missing bind sources as root; create them as the worker user first.
   if (deps.dataDir) {
     await mkdir(userSkillsRoot(deps.dataDir, context), { recursive: true });
-    await mkdir(marketplacesRoot(deps.dataDir, context.spaceId), { recursive: true });
   }
 
   // If we first observe abandoned "booting", remember that stamp before waiting. A concurrent
