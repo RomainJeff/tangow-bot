@@ -15,7 +15,8 @@ export type FakeWorkerCall =
       providerRef: string | null;
       result: "destroyed" | "absent";
     }
-  | { op: "ensureVolume"; name: string };
+  | { op: "ensureVolume"; name: string }
+  | { op: "deleteVolume"; volumeRef: string };
 
 /** Deterministic in-memory workers. Records every call; tests may delete from `live`. */
 export class FakeWorkerProvider implements WorkerProvider {
@@ -80,5 +81,9 @@ export class FakeWorkerProvider implements WorkerProvider {
   ): Promise<{ providerRef: string }> {
     this.calls.push({ op: "ensureVolume", name: input.name });
     return { providerRef: `fake-volume-${input.name}` };
+  }
+
+  async deleteVolume(input: { volumeRef: string }, _context: AdapterContext): Promise<void> {
+    this.calls.push({ op: "deleteVolume", volumeRef: input.volumeRef });
   }
 }

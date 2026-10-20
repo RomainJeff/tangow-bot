@@ -24,7 +24,7 @@ export interface WorkerSpec {
 
 /**
  * Temporary run workers, separate from computers: a worker has no screen and an MCP-only run needs
- * one without a computer. There is deliberately no way to delete a volume here.
+ * one without a computer. Volumes outlive every run: only deleting their bot or space deletes them.
  */
 export interface WorkerProvider {
   describe(): AdapterDescriptor<WorkerCapabilities>;
@@ -45,4 +45,9 @@ export interface WorkerProvider {
   ): Promise<"destroyed" | "absent">;
   /** Creates the volume named `name`, or returns the existing one. */
   ensureVolume(input: { name: string }, context: AdapterContext): Promise<{ providerRef: string }>;
+  /**
+   * Deletes a volume once its owner is deleted and no worker mounts it. A volume already gone is
+   * not an error.
+   */
+  deleteVolume(input: { volumeRef: string }, context: AdapterContext): Promise<void>;
 }

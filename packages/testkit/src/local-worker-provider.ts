@@ -147,6 +147,10 @@ export class LocalWorkerProvider implements WorkerProvider, GuestConnector {
     return { providerRef: input.name };
   }
 
+  async deleteVolume(input: { volumeRef: string }): Promise<void> {
+    await rm(this.volumePath(input.volumeRef), { recursive: true, force: true });
+  }
+
   /** Where a volume's files are, on this machine. */
   volumePath(volumeRef: string): string {
     return path.join(this.options.root, "volumes", volumeRef);

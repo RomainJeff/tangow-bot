@@ -33,9 +33,10 @@ Each method has a rule that the controller depends on for safety:
 | `ensure(spec)` | Create one worker tagged with `spec.attemptId` and return its reference. The controller calls it once per attempt. Never create the worker after `spec.ensureDeadline`, the instant the controller stops waiting for it. | Create a container with the label `rakazo.attempt=<attemptId>`, mount each volume at its `path`, and stop it after `ttlSeconds`. Cancel creation when the deadline passes. Return the container id. |
 | `prepare(ref, spec)` | Finish fallible setup after the reference is recorded. It must be idempotent. | Start the container, then wait until the mounts are visible and the runner answers. |
 | `destroy({ attemptId, providerRef })` | Remove every worker tagged with `attemptId`, with or without a reference. Return `absent` when none is left. Never treat "not found" as an error. | Remove every container with the label `rakazo.attempt=<attemptId>`, forced. Leave the volumes in place. |
-| `ensureVolume({ name })` | Create the named volume, or return the existing one. Never delete a volume. | Create the volume `name` if it is missing, and return `name`. |
+| `ensureVolume({ name })` | Create the named volume, or return the existing one. | Create the volume `name` if it is missing, and return `name`. |
+| `deleteVolume({ volumeRef })` | Delete the volume. One already gone is not an error. | Remove the volume `volumeRef` if it exists. |
 
-The interface has no method that deletes a volume, and your adapter must not add one. Volumes outlive every run. Their deletion belongs to bot and space deletion, outside the run path.
+Volumes outlive every run. Only bot and space deletion call `deleteVolume`, through the lifecycle's `retireOwner`, after every worker of the owner is confirmed gone.
 
 Respect the TTL at the provider. If the controller never confirms destruction, the TTL is the last bound on a worker that still holds a volume.
 

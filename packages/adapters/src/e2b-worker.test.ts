@@ -83,6 +83,9 @@ function fakeE2B() {
       volumes.add(name);
       return name;
     },
+    async destroyVolume(name) {
+      return volumes.delete(name);
+    },
   };
   return { sdk, sandboxes, volumes, guests };
 }

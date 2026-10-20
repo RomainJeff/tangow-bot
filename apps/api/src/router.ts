@@ -28,6 +28,7 @@ import type {
   PiOAuthLogins,
   RemoteConnectorDependencies,
   SkillOwnerLock,
+  WorkerLifecycle,
 } from "@rakazo/adapters";
 import {
   acquireComputerExecutionLease,
@@ -493,6 +494,8 @@ export interface RouterDeps {
   auth: Auth;
   jobs: JobPublisher;
   sandbox: SandboxProvider;
+  /** Destroys the workers and volumes of a bot or space before it is deleted. */
+  workerLifecycle?: Pick<WorkerLifecycle, "retireOwner">;
   memory: MemoryStore;
   memoryProviders: MemoryProviderResolver;
   home: AgentHomeStore;
@@ -727,12 +730,20 @@ export function createRouter(deps: RouterDeps) {
             });
           }
           await assertClaim();
+          claimReleasable = false;
+          const volumeIds =
+            (await deps.workerLifecycle?.retireOwner({ spaceId: input.spaceId }, adapterContext)) ??
+            [];
+          await assertClaim();
           claimActive = false;
           if (claimRenewal) {
             clearInterval(claimRenewal);
             claimRenewal = null;
           }
-          const fallback = await deleteEmptySpaceForMember(deps.prisma, claimedInput);
+          const fallback = await deleteEmptySpaceForMember(deps.prisma, {
+            ...claimedInput,
+            volumeIds,
+          });
           return { ok: true as const, activeSpaceId: fallback.id };
         } catch (error) {
           if (context.signal?.aborted) claimReleasable = false;
@@ -1312,6 +1323,7 @@ export function createRouter(deps: RouterDeps) {
             events: deps.events,
             artifacts: deps.artifacts,
             dataDir: deps.dataDir,
+            workerLifecycle: deps.workerLifecycle,
           },
           bot,
           {

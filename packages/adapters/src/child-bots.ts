@@ -24,6 +24,7 @@ import { releaseBotScreen } from "./computer-lifecycle.js";
 import { toComputerRef } from "./computer-support.js";
 import { checkpointAndRecordComputerWorkspace } from "./computer-workspace.js";
 import { resolveAgentHomePath } from "./home.js";
+import type { WorkerLifecycle } from "./worker-lifecycle.js";
 
 export function confirmSpawnedBotName(confirmName: string, botName: string) {
   if (confirmName !== botName) {
@@ -195,6 +196,8 @@ type BotLifecycleDeps = {
   events: ThreadEvents;
   dataDir?: string;
   artifacts?: ArtifactStore;
+  /** Destroys the bot's workers and its volume before the bot goes. */
+  workerLifecycle?: Pick<WorkerLifecycle, "retireOwner">;
 };
 
 type LifecycleBot = {
@@ -361,6 +364,8 @@ export async function destroyBot(
   if (dedicated?.providerRef) {
     await deps.sandbox.destroy(toComputerRef(dedicated), context).catch(() => undefined);
   }
+  // The volume is the bot's home, deleted with it as a dedicated home is.
+  const volumeIds = (await deps.workerLifecycle?.retireOwner({ botId: bot.id }, context)) ?? [];
   const deletion = await withTransactionRetry(() =>
     deps.prisma.$transaction(async (tx) => {
       const locked = await tx.$queryRaw<Array<{ id: string; webhookSecretId: string | null }>>`
@@ -406,6 +411,9 @@ export async function destroyBot(
           memoriesPreserved: !options.deleteMemories,
         },
       });
+      if (volumeIds.length > 0) {
+        await tx.volume.deleteMany({ where: { id: { in: volumeIds } } });
+      }
       await tx.bot.delete({ where: { id: bot.id } });
       if (webhookSecretId) {
         await tx.secret.deleteMany({

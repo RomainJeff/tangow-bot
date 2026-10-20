@@ -77,6 +77,8 @@ export interface E2BWorkerSdk {
   ): Promise<E2BGuestCommand>;
   listVolumes(): Promise<string[]>;
   createVolume(name: string): Promise<string>;
+  /** False when no volume has that name. */
+  destroyVolume(name: string): Promise<boolean>;
 }
 
 export function e2bWorkerSdk(connection: ConnectionOpts): E2BWorkerSdk {
@@ -135,6 +137,10 @@ export function e2bWorkerSdk(connection: ConnectionOpts): E2BWorkerSdk {
     },
     async createVolume(name) {
       return (await Volume.create(name, connection)).name;
+    },
+    async destroyVolume(name) {
+      const found = (await Volume.list(connection)).find((volume) => volume.name === name);
+      return found ? Volume.destroy(found.volumeId, connection) : false;
     },
   };
 }
@@ -257,6 +263,10 @@ export class E2BWorkerProvider implements WorkerProvider, GuestConnector {
         ? input.name
         : await this.sdk.createVolume(input.name),
     };
+  }
+
+  async deleteVolume(input: { volumeRef: string }): Promise<void> {
+    await this.sdk.destroyVolume(input.volumeRef);
   }
 
   /**

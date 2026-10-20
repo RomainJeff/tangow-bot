@@ -343,6 +343,40 @@ export function createWorkerLifecycle(deps: {
       return counts;
     },
 
+    /**
+     * Before a bot or a space is deleted: destroys every worker of its runs, then its volumes at
+     * the provider. Returns the volume rows the caller deletes with the owner. Throws while a
+     * worker is not confirmed gone, so no volume is deleted under a VM that may still write it.
+     */
+    async retireOwner(
+      owner: { botId: string } | { spaceId: string },
+      context: AdapterContext,
+    ): Promise<string[]> {
+      const ownedBy =
+        "botId" in owner
+          ? Prisma.sql`r."botId" = ${owner.botId}`
+          : Prisma.sql`r."spaceId" = ${owner.spaceId}`;
+      const live = await prisma.$queryRaw<{ id: string }[]>`
+        SELECT a.id FROM attempts a JOIN runs r ON r.id = a."runId"
+        WHERE a."workerState" IN (${RELEASABLE}) AND ${ownedBy}`;
+      for (const { id } of live) {
+        if ((await release(id, context)) === "awaiting_ensure") {
+          throw new Error("A worker of this owner may still be starting; try again shortly");
+        }
+      }
+      const volumes = await prisma.volume.findMany({
+        where:
+          "botId" in owner
+            ? { kind: "bot_private", botId: owner.botId }
+            : { kind: "space_shared", spaceId: owner.spaceId },
+        select: { id: true, providerRef: true },
+      });
+      for (const { providerRef } of volumes) {
+        if (providerRef) await requireProvider().deleteVolume({ volumeRef: providerRef }, context);
+      }
+      return volumes.map((volume) => volume.id);
+    },
+
     /** Creates the volume at the provider under a name derived from its row, once. */
     async provisionVolume(volumeId: string, context: AdapterContext): Promise<string> {
       const provider = requireProvider();
