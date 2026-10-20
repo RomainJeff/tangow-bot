@@ -1,8 +1,8 @@
 {
   "ticket": "RomainJeff/rakazo-bot#197",
   "slice": "S5, live lanes and handoff, branch claude/pi-e2b-p3-live",
-  "tested_commit": "bd60276bf394ce9d685f0fb9b311ee8ecdc45237",
-  "tested_commit_note": "lanes.json, bench.json and template.json all come from the bundle of the tested commit, after the review fixes. The commits after it change only documentation and these receipts.",
+  "tested_commit": "0b5c3a2ce374326e239780c2fe00f88d305dd890",
+  "tested_commit_note": "lanes.json comes from the bundle of the tested commit, after both review rounds. bench.json and template.json come from bd60276bf394ce9d685f0fb9b311ee8ecdc45237: the commits between change only how the controller reaches volume files, outside every timed path, and the guest bundle's sha256 is the same. The commits after the tested commit change only documentation and these receipts.",
   "feature_base": "ddcb4092e (feature/pi-e2b-workers with #228, #229 and #241)",
   "pending_slice": "S3, branch claude/pi-e2b-p3-compose, not merged at the tested commit",
   "infra": {
@@ -57,7 +57,7 @@
     "pnpm test": "passed, 8053 tests in 615 files with 209 skipped",
     "issue verification (pi-runtime, executor-secret-pi, computer-workspace, e2b-sandbox, sandbox-factory)": "passed, 64 tests in 5 files",
     "pnpm test:pi": "passed, 30 tests in 4 files",
-    "P3 offline tests touched": "passed, 155 tests in 17 files, including the volume-files, worker provider, lifecycle and worker-plan tests",
+    "P3 offline tests touched": "passed, 161 tests in 17 files, including the volume-files, worker provider, lifecycle and worker-plan tests",
     "pnpm test:integration": "passed, 163 tests in 23 suites on Testcontainers PostgreSQL",
     "migration script typecheck": "passed with a temporary tsconfig on the base config; a planted type error failed it",
     "live lanes": "10 passed, 4 pending S3; see lanes.json",
@@ -72,7 +72,10 @@
     "Review: volume-file writes were not atomic. They now go through a temporary file renamed over the target, which replaces a link instead of following it and never lands inside a directory.",
     "Review and live: a volume-file sandbox E2B killed stayed cached. Lane h found that E2B reports it as a TimeoutError mapped from envd's 502, not SandboxNotFoundError; both now evict and replace it once, after destroying the old one.",
     "Review: close stopped at the first failed destroy, and the migration command's report could be replaced by that error. close now waits for every destroy, and the command reports a failed close on its own.",
-    "Review: /workspace was root-owned 0755 while the guest runs as uid 1001. The template hands it to the sandbox user; lane i checks the guest can write there."
+    "Review: /workspace was root-owned 0755 while the guest runs as uid 1001. The template hands it to the sandbox user; lane i checks the guest can write there.",
+    "Review round 2: a 502 from envd triggered a sandbox replacement, but a live sandbox behind a failing proxy answers it too, and its delayed rename could publish the retry's partial upload. Replacement now needs proof of death (SandboxNotFoundError, the SDK's 'killed or reached its end of life' TimeoutError, or a 502 with the control plane no longer listing the sandbox); each attempt stages under a new name; a dead sandbox whose destroy failed is destroyed again at close.",
+    "Review round 2: the staged file was uploaded at 0644 and chmodded after. It is now created 0600 by the guest user and the upload writes into it; lane h checked live that the upload keeps mode and inode.",
+    "Review round 2: a staged file whose placement could not start stayed on the volume. It is removed with its own 30 s deadline, also on cancellation."
   ],
   "perf": {
     "source": "bench.json",

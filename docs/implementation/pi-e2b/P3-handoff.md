@@ -19,7 +19,7 @@
 | Provider | #229, S5 | `packages/adapters/src/e2b-worker.ts` | `E2BWorkerProvider` implements `WorkerProvider` and `GuestConnector`. One `secure` sandbox per attempt, tagged `{ rakazo: "worker", attemptId }`, volumes mounted by name. The sandbox timeout is the worker TTL, `WORKER_TTL_SECONDS`, one hour since S5. Where a deployment allows less (`maxTimeoutMs`), the provider caps it and logs a warning. |
 | Codec | #229 | `packages/adapters/src/runtime-worker/framing.ts` | `encodeFrameLine` and `readFrameLines`: one base64 line per frame on stdio, replacing P2's 4-byte length prefix. E2B delivers command output through a text decoder, and base64 survives it. |
 | Template | #229, S5 | `apps/agent-run-worker/template/template.ts`, `build.ts`, `scripts/bundle.ts` | Node 24 base with bash, git, procps and CA certificates, a Pi layer with ripgrep, and the guest bundle at `/opt/rakazo/agent-run-worker.mjs`. Root steps run as root, and `/workspace` belongs to the sandbox user (S5). `WORKER_PROFILE` is 1 vCPU and 1024 MiB. |
-| Home move | #241, S5 | `packages/adapters/src/home-volume-migration.ts`, `e2b-volume-files.ts`, `scripts/migrate-home-to-volumes.ts` | `moveHomeToVolumes`: plan, copy, verify by hash and mode, adopt. `E2BVolumeFiles` reaches each volume through a sandbox that mounts it, writes through a temporary file renamed over the target, and replaces a sandbox E2B killed (S5). |
+| Home move | #241, S5 | `packages/adapters/src/home-volume-migration.ts`, `e2b-volume-files.ts`, `scripts/migrate-home-to-volumes.ts` | `moveHomeToVolumes`: plan, copy, verify by hash and mode, adopt. `E2BVolumeFiles` reaches each volume through a sandbox that mounts it. It stages each file 0600 beside its target and renames it over the target, and it replaces a sandbox only once E2B proves it dead (S5). |
 | Lifecycle | #241 | `packages/adapters/src/worker-lifecycle.ts` | `ensureVolume`, `provisionAttachedBotVolume`, `inspectHomeMove`, and `adoptVolumeHome` with the `space_worker_live` and `space_worker_ran` refusals. |
 | Composition | S3, pending | composition roots, executor routing | Not in this handoff's commit. |
 | Live lanes | S5 | `packages/testkit/src/worker-live/`, `cli/worker-live.ts`, `cli/bundle-worker-live.ts` | `pnpm test:worker-live` and `pnpm test:worker-live:bundle`. |
@@ -107,7 +107,7 @@ Move one computer's home at a time, with the computer stopped and no worker of i
 3. Keep the manifest. It lists each file's home path, volume, volume path, size, sha256 and mode.
 4. Recreate the computer. After adoption, nothing imports the snapshot over the volumes or exports them back. The product computer that mounts the volumes is S3's.
 
-The command reaches each volume through a sandbox of the worker template with only that volume mounted, and destroys those sandboxes when it ends. It reads `DATABASE_URL`, `DATA_DIR`, and E2B's standard environment.
+The command reaches each volume through a sandbox of the worker template with only that volume mounted, and destroys those sandboxes when it ends. Each file is created 0600 by the guest user, filled, given its mode, then renamed over its target; lane h checked live that an upload into a file created 0600 keeps that mode and inode. A sandbox that fails a call is replaced only on `SandboxNotFoundError`, on the SDK's "killed or reached its end of life" error, or on envd's 502 once the control plane no longer lists it. Lane h killed its three volume-file sandboxes and the next read went through a new one. It reads `DATABASE_URL`, `DATA_DIR`, and E2B's standard environment.
 
 Lane h moved a synthetic team home of two bots, with files in mode 0755, 0644, 0640 and 0600. The dry run created no volume. The move adopted, and all six files matched the manifest by hash and mode on the volumes. Two computer VMs created one after the other on the same volumes saw the same hashes, and kept a file written between them. A second move answered `already_on_volumes`. A second team computer of the same space was refused with `volume_not_empty`, because the shared volume already held the first home's files. That closes the gap #224 left. A second team home cannot be copied into a shared volume that workers already write.
 
@@ -142,7 +142,7 @@ Receipts are in `evidence/P3/`: [verification.json](evidence/P3/verification.jso
 | Lane | Issue item | Result | Observed |
 | --- | --- | --- | --- |
 | a | File task identical to the baseline | Pass | `notes.md` read from the volume after the VM was destroyed is `alpha\ngamma\n`, as in process. The model saw the same seven results, and the log holds the same results. |
-| b | Local tools and two-way visibility | Pass | The guest read both files the computer wrote, wrote and edited its own, and grep found both. The computer's poller saw the private write 48 ms and the shared write 53 ms after the controller granted the writing tool. |
+| b | Local tools and two-way visibility | Pass | The guest read both files the computer wrote, wrote and edited its own, and grep found both. The computer's poller saw the private write 67 ms and the shared write 75 ms after the controller granted the writing tool. |
 | c | Distinct PID namespace and localhost | Pass | Each listener answered on 127.0.0.1 in its own VM and was refused from the other. Neither VM listed the other's process. The kernels' boot ids differ. |
 | d | Disabled tool for parent and helper | Pass | See [Tool selection and helpers](#tool-selection-and-helpers). |
 | e-openai | OpenAI-protocol relay | Pass | Three calls relayed with the controller's key. No guest process held it. |
@@ -197,7 +197,7 @@ The host had 8 vCPUs with a load average between 1.4 and 2.0 during the bench, f
 - A secret that straddles a page boundary of a guest file read is not redacted. The model transcript the guest builds is not redacted by the relay. S3 owns that.
 - The home move counts the space's workers to detect one that ran during the copy. Deleting a thread or a bot during the copy lowers that count and could hide such a worker.
 - If the manifest write fails in the move's `finally`, its error replaces the move's report.
-- A move resumes between files only. A write interrupted before its rename leaves a `.rakazo-<uuid>` file beside its target, which the next move refuses as foreign. Remove it by hand.
+- A move resumes between files only. A staged `.rakazo-<uuid>` file is removed when its write fails or is cancelled, and by the retry when its sandbox died. A move process that dies mid-write still leaves one beside its target, and the next move refuses it as foreign. Remove it by hand.
 - A volume-file sandbox that `close` never reached dies at its one-hour timeout. Creating one gives up after two minutes.
 - A shared file overwritten before adoption is not recovered. Adoption is refused in that case.
 - Guest tool output on the private volume is never cleaned up.
