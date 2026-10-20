@@ -71,6 +71,9 @@ export type MaterialKey = keyof typeof materials;
 /** The veil under a dialog or an overlay window: `overlay`, the thread blurred this many px. */
 export const overlayBlur = 20;
 
+const NARROW_FLOOR_LIGHT = "#e2e2e7";
+const NARROW_FLOOR_DARK = "#0c0c0d";
+
 /**
  * The neutral light falling from the top start corner over the whole window,
  * under the floating sidebar too, so the glass has something to blur. Phone
@@ -83,11 +86,16 @@ export const ambient = {
     dark: "radial-gradient(110% 85% at 34% 0%, #303035 0%, rgba(48, 48, 53, 0) 62%), linear-gradient(165deg, #1e1e21 0%, #0d0d0e 100%)",
   },
   narrow: {
-    light:
-      "radial-gradient(130% 62% at 0% 0%, #ffffff 0%, rgba(255, 255, 255, 0) 100%), linear-gradient(165deg, #f3f3f5 0%, #e2e2e7 100%)",
-    dark: "radial-gradient(130% 62% at 0% 0%, #36363c 0%, rgba(54, 54, 60, 0) 100%), linear-gradient(165deg, #19191c 0%, #0c0c0d 100%)",
+    light: `radial-gradient(130% 62% at 0% 0%, #ffffff 0%, rgba(255, 255, 255, 0) 100%), linear-gradient(165deg, #f3f3f5 0%, ${NARROW_FLOOR_LIGHT} 100%)`,
+    dark: `radial-gradient(130% 62% at 0% 0%, #36363c 0%, rgba(54, 54, 60, 0) 100%), linear-gradient(165deg, #19191c 0%, ${NARROW_FLOOR_DARK} 100%)`,
   },
 } as const satisfies Record<string, PerAppearance>;
+
+/** The narrow ambient's last stop: what a fade at the bottom of the iPhone thread fades into. */
+export const ambientFloor = {
+  light: NARROW_FLOOR_LIGHT,
+  dark: NARROW_FLOOR_DARK,
+} as const satisfies PerAppearance;
 
 /**
  * On the web at phone width the ambient fades into `background` over its
