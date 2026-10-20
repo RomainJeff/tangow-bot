@@ -171,12 +171,8 @@ import {
   serializeSpaceDecisionConfig,
 } from "./decision-provider-config.js";
 import { searchIntegrationCatalog } from "./integration-catalog.js";
-import {
-  type LinkPreviewApiDeps,
-  previewLinkForComposer,
-  removeMessageLinkPreview,
-} from "./link-preview.js";
-import { createMarketplacesService } from "./marketplaces.js";
+import type { LinkPreviewApiDeps } from "./link-preview.js";
+import { previewLinkForComposer, removeMessageLinkPreview } from "./link-preview.js";
 import { buildMcpUpdateMaterial } from "./mcp-material.js";
 import {
   disconnectMemoryProvider,
@@ -191,7 +187,8 @@ import {
   promptFocus,
   startOnboarding,
 } from "./onboarding.js";
-import { lastRunsByRoutine, listSpaceRuns, NO_LAST_RUN, type RoutineLastRun } from "./runs.js";
+import type { RoutineLastRun } from "./runs.js";
+import { lastRunsByRoutine, listSpaceRuns, NO_LAST_RUN } from "./runs.js";
 import { addScreenProxyCapability } from "./screen-proxy.js";
 import { querySpaceSearch } from "./search.js";
 import { withSerializableRetry } from "./serializable-retry.js";
@@ -210,6 +207,7 @@ import {
   threadSessionId,
   withoutHiddenPeerRuns,
 } from "./thread-message-pages.js";
+import type { ThreadTarget } from "./thread-target.js";
 import {
   enqueueLinkPreview,
   reactToThreadMessage,
@@ -218,7 +216,6 @@ import {
   sendThreadMessage,
   setThreadUnreadState,
   stopThreadRuns,
-  type ThreadTarget,
   threadHead,
   threadSnapshot,
 } from "./thread-target.js";
@@ -574,7 +571,6 @@ export function createRouter(deps: RouterDeps) {
     dataDir: deps.dataDir,
   });
   const agentSkills = createAgentSkillsService(deps.prisma, deps.dataDir, deps.skillLock);
-  const marketplaces = createMarketplacesService({ prisma: deps.prisma, dataDir: deps.dataDir });
 
   const authed = os.use(async ({ context, next }) => {
     if (!context.actor) throw new ORPCError("UNAUTHORIZED");
@@ -2738,33 +2734,7 @@ export function createRouter(deps: RouterDeps) {
       ),
     },
     marketplaces: {
-      list: authed.marketplaces.list.handler(async ({ context }) =>
-        marketplaces.list(context.actor),
-      ),
-      add: authed.marketplaces.add.handler(async ({ context, input }) =>
-        marketplaces.add(context.actor, input),
-      ),
-      remove: authed.marketplaces.remove.handler(async ({ context, input }) =>
-        marketplaces.remove(context.actor, input.marketplaceId),
-      ),
-      plugins: authed.marketplaces.plugins.handler(async ({ context, input }) =>
-        marketplaces.plugins(context.actor, input.marketplaceId),
-      ),
-      installPlugin: authed.marketplaces.installPlugin.handler(async ({ context, input }) =>
-        marketplaces.installPlugin(context.actor, input.marketplaceId, input.plugin),
-      ),
-      installPlugins: authed.marketplaces.installPlugins.handler(async ({ context, input }) =>
-        marketplaces.installPlugins(context.actor, input.marketplaceId, input.plugins),
-      ),
-      removePlugin: authed.marketplaces.removePlugin.handler(async ({ context, input }) =>
-        marketplaces.removePlugin(context.actor, input.marketplaceId, input.plugin),
-      ),
-      checkUpdate: authed.marketplaces.checkUpdate.handler(async ({ context, input }) =>
-        marketplaces.checkUpdate(context.actor, input.marketplaceId),
-      ),
-      applyUpdate: authed.marketplaces.applyUpdate.handler(async ({ context, input }) =>
-        marketplaces.applyUpdate(context.actor, input.marketplaceId, input.commit),
-      ),
+      list: authed.marketplaces.list.handler(async () => []),
     },
     capabilities: {
       list: authed.capabilities.list.handler(async ({ context }) => {

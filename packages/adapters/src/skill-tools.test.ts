@@ -23,14 +23,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BUILTIN_SKILLS_ROOT, loadBuiltinSkills } from "./builtin-skills.js";
 import { agentConnectionTools, builtinAgentTools } from "./builtin-tools.js";
 import { FakeSandboxProvider } from "./fake-sandbox.js";
-import { marketplacesRoot } from "./marketplace-store.js";
 import { createInMemorySkillLock } from "./skill-lock.js";
 import { listUserSkills, skillDirName, userSkillsRoot } from "./skill-store.js";
+import type { SkillToolDeps } from "./skill-tools.js";
 import {
   listAgentSkillRecords,
   readSkillDraft,
   SKILL_TOOL_NAMES,
-  type SkillToolDeps,
   skillCreateFromTool,
   skillDeleteFromTool,
   skillReadFromTool,
@@ -321,9 +320,9 @@ describe("skill tools", () => {
         name: "Interrogate",
         description: "hijack",
       }),
-    ).toEqual({ error: "Builtin and plugin skills are read-only." });
+    ).toEqual({ error: "Builtin skills are read-only." });
     expect(await skillDeleteFromTool(deps, owner, { name: "Interrogate" })).toEqual({
-      error: "Builtin and plugin skills are read-only.",
+      error: "Builtin skills are read-only.",
     });
   });
 
@@ -463,7 +462,7 @@ describe("skill tools", () => {
         "When a skill matches the user's request, call skill_read for that name and follow it immediately. Prefer matching skills over improvising multi-step recipes.",
         "Users can force a skill with /Name in the composer. Routines may mention a skill as @Name — that loads the skill at fire time.",
         "Create a skill with skill_create when a multi-step task is worth repeating (or when asked); read the Skill-authoring skill first. After creating or updating one, mention /Name so the user can open it.",
-        "Only skill_update / skill_delete user-created skills (not builtin or plugin).",
+        "Only skill_update / skill_delete user-created skills (not builtin).",
       ].join("\n"),
     );
     expect(guide.content).not.toMatch(/mention \/|announce/i);
@@ -612,17 +611,10 @@ describe("skill tools", () => {
   });
 
   it("returns each skill's folder as the computer mounts it", async () => {
-    const mkt = path.join(marketplacesRoot(dataDir, owner.spaceId), "acme", "plugins", "writer");
-    await mkdir(path.join(mkt, "skills", "blog"), { recursive: true });
-    await writeFile(
-      path.join(mkt, "skills", "blog", "SKILL.md"),
-      buildSkillMd({ name: "Blog", description: "Write posts", body: "" }),
-    );
     await seed("Daily standup", "d");
     // Same data dir → mount table as the supervisor's skillsBindsFor.
     const mounts: Array<[string, string]> = [
       [SANDBOX_SKILL_MOUNTS.user, userSkillsRoot(dataDir, owner)],
-      [SANDBOX_SKILL_MOUNTS.marketplaces, marketplacesRoot(dataDir, owner.spaceId)],
       [`${SANDBOX_SKILL_MOUNTS.managed}/agent`, BUILTIN_SKILLS_ROOT],
     ];
     const onHost = (dir: string) => {
@@ -633,63 +625,12 @@ describe("skill tools", () => {
 
     for (const [input, dir] of [
       [{ name: "Daily standup" }, "/skills/user/daily%20standup"],
-      [{ skillId: "mkt:acme/writer/blog" }, "/skills/marketplaces/acme/plugins/writer/skills/blog"],
       [{ name: "Interrogate" }, "/managed-skills/agent/interrogate"],
     ] as const) {
       const read = await skillReadFromTool(deps, owner, input);
       expect(read.dir).toBe(dir);
       await expect(stat(path.join(onHost(dir), "SKILL.md"))).resolves.toBeTruthy();
     }
-  });
-
-  it("exposes marketplace skills as read-only plugin skills hidden until a bot enables them", async () => {
-    const dir = path.join(
-      marketplacesRoot(dataDir, owner.spaceId),
-      "acme",
-      "plugins",
-      "writer",
-      "skills",
-      "blog",
-    );
-    await mkdir(dir, { recursive: true });
-    await writeFile(
-      path.join(dir, "SKILL.md"),
-      buildSkillMd({ name: "Blog", description: "Write posts", body: "Outline first." }),
-    );
-    await seed("Mine", "d");
-    const mktId = "mkt:acme/writer/blog";
-    const ids = async (scope: typeof owner & { botId?: string }) =>
-      (await listAgentSkillRecords(deps, scope))
-        .map((r) => r.id)
-        .filter((id) => !id.startsWith("builtin:"));
-
-    // No SkillSetting: user skill defaults to "all", marketplace skill to "selected".
-    expect(await ids({ ...owner, botId: "botA" })).toEqual(["user:mine"]);
-    expect(await ids(owner)).toEqual(["user:mine", mktId]);
-
-    await prisma.botSkill.upsert({
-      where: { botId_skillKey: { botId: "botA", skillKey: mktId } },
-      create: { ...owner, botId: "botA", skillKey: mktId, enabled: true },
-      update: {},
-    });
-    const forA = await listAgentSkillRecords(deps, { ...owner, botId: "botA" });
-    expect(forA.find((r) => r.id === mktId)).toMatchObject({
-      name: "Blog",
-      source: "plugin",
-      readOnly: true,
-    });
-    expect(await ids({ ...owner, botId: "botB" })).toEqual(["user:mine"]);
-
-    const read = await skillReadFromTool(deps, { ...owner, botId: "botA" }, { skillId: mktId });
-    expect(read).toMatchObject({ name: "Blog", source: "plugin", readOnly: true });
-    expect(String(read.content)).toContain("Outline first.");
-
-    const readOnly = { error: expect.stringContaining("read-only") };
-    expect(await skillUpdateFromTool(deps, owner, [], { skillId: mktId, body: "x" })).toEqual(
-      readOnly,
-    );
-    expect(await skillDeleteFromTool(deps, owner, { skillId: mktId })).toEqual(readOnly);
-    expect(await ids(owner)).toEqual(["user:mine", mktId]);
   });
 
   describe("a skill a bot writes", () => {
@@ -982,7 +923,7 @@ describe("skill drafts", () => {
           name: "Interrogate",
           files: draft,
         }),
-      ).toEqual({ error: "Builtin and plugin skills are read-only." });
+      ).toEqual({ error: "Builtin skills are read-only." });
       expect(
         await readdir(path.join(userSkillsRoot(dataDir, creator), "deploy", "scripts")),
       ).toEqual(["run.sh"]);

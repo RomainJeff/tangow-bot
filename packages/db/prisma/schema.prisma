@@ -801,8 +801,8 @@ model TaughtSkill {
   @@map("taught_skills")
 }
 
-/// Skills v2 phase 3: a GitHub plugin marketplace added to a space. The row is the lock
-/// (url / ref / pinned commit / installed plugins); the plugin files live on the filesystem.
+/// Unused marketplace data is kept until the plugins redesign.
+/// Keep this table and DATA_DIR/skills/marketplaces files; no destructive migration.
 model SpaceMarketplace {
   id               String   @id @default(cuid())
   spaceId          String

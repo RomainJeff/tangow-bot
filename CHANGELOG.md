@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-10-20
+
+#### Reverted
+
+- Skill marketplaces can no longer be added or used from the Skills screen on web, desktop and mobile; your own skills and Rakazo's built-in skills are unchanged.
+
 ### 2026-10-19
 
 #### Changed
