@@ -405,7 +405,7 @@ export function QuestionCard({
         consequence={block.detail}
         actions={actions}
       >
-        <View style={[styles.tiles, !actions && styles.tilesFoot]}>
+        <View style={styles.tiles}>
           {question.options.map((option) => {
             const chosen = selected.includes(option.id);
             const fill = filled?.kind === "option" && filled.optionId === option.id;

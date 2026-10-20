@@ -238,6 +238,8 @@ export const radii = {
   card: 14,
   draft: 16,
   block: 24,
+  /** The decision card on iPhone: wider padding, so a rounder corner than `block`. */
+  mobileBlock: 28,
   bubble: 20,
   /** A link mention's 16 px site icon or fallback tile. */
   linkMention: 4,
