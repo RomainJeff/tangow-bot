@@ -91,6 +91,11 @@ export interface SandboxProvider {
       homePath: string;
       providerRef?: string;
       providerKind?: ComputerRef["kind"];
+      /**
+       * A home kept on worker volumes: mount each at its path and serve the workspace from `root`.
+       * Only a provider that supports worker volumes receives one.
+       */
+      volumeHome?: { root: string; mounts: Array<{ volumeRef: string; path: string }> };
     },
     context: AdapterContext,
   ): Promise<ComputerRef>;

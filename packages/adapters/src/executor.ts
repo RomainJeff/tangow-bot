@@ -271,6 +271,7 @@ import {
 import { withComputerScreenAvailability } from "./computer-screens.js";
 import {
   displayBotWorkspacePath,
+  fromVolumePath,
   resolveBotWorkspaceCwd,
   resolveBotWorkspacePath,
   teamBotWorkspaceDirectory,
@@ -1888,6 +1889,14 @@ export function createRunExecutor(deps: ExecutorDeps) {
         if (!bot.computer) throw new Error("Bot has no computer");
         const storedComputer = bot.computer;
         const computerMode = parseComputerMode(storedComputer.scope);
+        const resolveHomePath = (requested: string) =>
+          resolveBotWorkspacePath(
+            computerMode,
+            bot.id,
+            storedComputer.homeStorage === "volumes"
+              ? fromVolumePath(computerMode, bot.id, requested)
+              : requested,
+          );
         const computer = await provisionComputer(deps, storedComputer.id, context, "bot");
         screenRelease = { computer, context };
         scheduleComputerSleep(deps.jobs, storedComputer.id);
@@ -3099,7 +3108,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               name,
               args,
               {
-                resolve: (requested) => resolveBotWorkspacePath(computerMode, bot.id, requested),
+                resolve: resolveHomePath,
                 display: (requested, stored) =>
                   displayBotWorkspacePath(computerMode, bot.id, requested, stored),
                 list: (directory) => deps.sandbox.listFiles(computer, directory, context),
@@ -3138,7 +3147,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               if (!rows && dataPath) {
                 const bytes = await deps.sandbox.readFile(
                   computer,
-                  resolveBotWorkspacePath(computerMode, bot.id, dataPath),
+                  resolveHomePath(dataPath),
                   context,
                   { maxBytes: ATTACHMENT_MAX_BYTES },
                 );
@@ -3160,7 +3169,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               workspaceCheckpoint.markDirty();
               await deps.sandbox.writeFile(
                 computer,
-                { path: resolveBotWorkspacePath(computerMode, bot.id, outPath), content: png },
+                { path: resolveHomePath(outPath), content: png },
                 context,
               );
               let attached = false;
@@ -3219,7 +3228,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             if (!deps.artifacts) {
               return finish({ error: "artifact storage unavailable", path: filePath });
             }
-            const storedPath = resolveBotWorkspacePath(computerMode, bot.id, filePath);
+            const storedPath = resolveHomePath(filePath);
             let bytes: Uint8Array;
             try {
               bytes = await deps.sandbox.readFile(computer, storedPath, context, {
@@ -3305,7 +3314,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                       kind: "open",
                       path: /^https?:\/\//i.test(requestedPath)
                         ? requestedPath
-                        : resolveBotWorkspacePath(computerMode, bot.id, requestedPath),
+                        : resolveHomePath(requestedPath),
                     },
                   ],
                   observe: true,
@@ -3561,12 +3570,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             const draftPath = typeof args.path === "string" ? args.path.trim() : "";
             const files =
               draftPath && (name === "skill_create" || name === "skill_update")
-                ? await readSkillDraft(
-                    deps.sandbox,
-                    computer,
-                    resolveBotWorkspacePath(computerMode, bot.id, draftPath),
-                    context,
-                  )
+                ? await readSkillDraft(deps.sandbox, computer, resolveHomePath(draftPath), context)
                 : undefined;
             if (files && "error" in files) return finish(files);
             const result = await runSkillTool(name, args, files);
@@ -4966,7 +4970,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               await deps.sandbox.writeFile(
                 computer,
                 {
-                  path: resolveBotWorkspacePath(computerMode, bot.id, file.path),
+                  path: resolveHomePath(file.path),
                   content: new TextEncoder().encode(file.content),
                 },
                 context,

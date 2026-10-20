@@ -6,8 +6,13 @@ import type {
   JobPublisher,
   SandboxProvider,
 } from "@rakazo/adapter-kit";
-import type { ComputerUpdate } from "@rakazo/contracts";
-import { ACTIVE_RUN_STATUSES, parseScreenLeaseId, screenLeaseId } from "@rakazo/core";
+import { type ComputerUpdate, VolumeKind } from "@rakazo/contracts";
+import {
+  ACTIVE_RUN_STATUSES,
+  computerVolumeHome,
+  parseScreenLeaseId,
+  screenLeaseId,
+} from "@rakazo/core";
 import {
   expireComputerExecutionLeases,
   type PrismaClient,
@@ -143,6 +148,29 @@ export class ComputerBusyError extends Error {
 }
 
 export { toComputerRef } from "./computer-support.js";
+
+/** The volumes of every bot on the computer, and the space's for a team computer. */
+async function loadVolumeHome(
+  prisma: PrismaClient,
+  computer: { id: string; scope: string; spaceId: string },
+) {
+  const scope = parseComputerMode(computer.scope);
+  const team = scope === "team";
+  const volumes = await prisma.volume.findMany({
+    where: {
+      OR: [
+        { kind: "bot_private", bot: { computerId: computer.id } },
+        ...(team ? [{ kind: "space_shared", spaceId: computer.spaceId }] : []),
+      ],
+    },
+    select: { kind: true, botId: true, providerRef: true },
+    orderBy: { id: "asc" },
+  });
+  return computerVolumeHome(
+    scope,
+    volumes.map((volume) => ({ ...volume, kind: VolumeKind.parse(volume.kind) })),
+  );
+}
 
 export async function provisionComputer(
   deps: {
@@ -293,6 +321,9 @@ export async function provisionComputer(
         homePath,
         providerRef: existing.providerRef ?? undefined,
         providerKind: existing.kind as ComputerRef["kind"],
+        ...(existing.homeStorage === "volumes"
+          ? { volumeHome: await loadVolumeHome(deps.prisma, existing) }
+          : {}),
       },
       context,
     );

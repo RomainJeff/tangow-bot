@@ -309,6 +309,90 @@ describe("E2B computer backend", () => {
     expect(desktop.launch).not.toHaveBeenCalled();
   });
 
+  it("creates a computer whose home is on volumes with them mounted at the workers' paths", async () => {
+    const commands: string[] = [];
+    const desktop = {
+      sandboxId: "volume-home",
+      commands: {
+        run: vi.fn(async (value: string) => {
+          commands.push(value);
+          return { stdout: "", stderr: "", exitCode: 0 };
+        }),
+      },
+    } as unknown as Sandbox;
+    const sdk: E2BSandboxSdk = {
+      create: vi.fn(async () => desktop),
+      connect: vi.fn(),
+      pause: vi.fn(),
+    };
+    const provider = new E2BSandboxProvider("test-key", sdk);
+
+    await provider.provision(
+      {
+        botId: "team-home",
+        homePath: "/unused",
+        volumeHome: {
+          root: "/workspace",
+          mounts: [
+            { volumeRef: "rakazo-vol_a", path: "/workspace/bots/bot_a" },
+            { volumeRef: "rakazo-vol_shared", path: "/workspace/shared" },
+          ],
+        },
+      },
+      context,
+    );
+
+    expect(sdk.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: { botId: "team-home", rakazo: "computer", home: "volumes" },
+        volumeMounts: {
+          "/workspace/bots/bot_a": "rakazo-vol_a",
+          "/workspace/shared": "rakazo-vol_shared",
+        },
+      }),
+    );
+    expect(commands).toEqual([
+      `bash -c 'ln -sfn '"'"'/workspace'"'"' '"'"'/home/user/rakazo-home'"'"''`,
+    ]);
+  });
+
+  it.each([
+    ["replaces a machine created before its home moved onto volumes", {}, "replacement"],
+    ["reuses a machine created with its volumes", { home: "volumes" }, "existing"],
+  ])("%s", async (_name, metadata, expected) => {
+    const existing = {
+      sandboxId: "existing",
+      getInfo: vi.fn(async () => ({ metadata })),
+      kill: vi.fn(async () => true),
+    } as unknown as Sandbox;
+    const replacement = {
+      sandboxId: "replacement",
+      commands: { run: vi.fn(async () => ({ stdout: "", stderr: "", exitCode: 0 })) },
+    } as unknown as Sandbox;
+    const sdk: E2BSandboxSdk = {
+      create: vi.fn(async () => replacement),
+      connect: vi.fn(async () => existing),
+      pause: vi.fn(),
+    };
+    const provider = new E2BSandboxProvider("test-key", sdk);
+
+    const computer = await provider.provision(
+      {
+        botId: "bot_a",
+        homePath: "/unused",
+        providerRef: "existing",
+        providerKind: "e2b",
+        volumeHome: {
+          root: "/workspace/bots/bot_a",
+          mounts: [{ volumeRef: "rakazo-vol_a", path: "/workspace/bots/bot_a" }],
+        },
+      },
+      context,
+    );
+
+    expect(computer.providerRef).toBe(expected);
+  });
+
   it("opens http(s) URLs through the named browser launcher", async () => {
     const respond = desktopCommandResponder();
     const command = vi.fn(

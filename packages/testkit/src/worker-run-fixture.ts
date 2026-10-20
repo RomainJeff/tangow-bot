@@ -9,7 +9,7 @@ import {
   EncryptedSecretStore,
   InMemoryJobQueue,
   LocalAgentHomeStore,
-  ManagedSandboxEmulator,
+  LocalArtifactStore,
   PiAgentRuntime,
   PostgresSessionLog,
 } from "@rakazo/adapters";
@@ -23,6 +23,7 @@ import { createThreadEvents, type PrismaClient } from "@rakazo/db";
 import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
 import { type LocalWorkerFaults, LocalWorkerProvider } from "./local-worker-provider.js";
 import { type ModelEmulatorStep, startModelEmulator } from "./model-emulator.js";
+import { VolumeComputer } from "./volume-computer.js";
 
 const MODEL_KEY = "worker-fixture-model-key";
 const SPACE = "space-worker";
@@ -74,7 +75,7 @@ export async function startWorkerRun(options: {
   const model = await startModelEmulator({ apiKey: MODEL_KEY, steps: options.steps });
   const secretStore = new EncryptedSecretStore("worker-fixture-encryption-key");
   const sessionLog = new PostgresSessionLog(prisma);
-  const sandbox = new ManagedSandboxEmulator();
+  const sandbox = new VolumeComputer((volumeRef) => current.provider.volumePath(volumeRef));
 
   await prisma.user.create({ data: { id: USER, name: "Worker", email: "worker@rakazo.test" } });
   await prisma.organization.create({
@@ -183,6 +184,7 @@ export async function startWorkerRun(options: {
       sandbox,
       home: new LocalAgentHomeStore(path.join(dir, "homes")),
       dataDir: path.join(dir, "data"),
+      artifacts: new LocalArtifactStore(path.join(dir, "data")),
       memory: emptyMemory,
       memoryProviders: { resolve: async () => null },
       secretStore,

@@ -32,13 +32,23 @@ export interface E2BSandboxSdk {
   pause(id: string, options: { apiKey: string }): Promise<void>;
 }
 
-export function e2bCreateOptions(botId: string, apiKey: string) {
+type VolumeHome = NonNullable<Parameters<SandboxProvider["provision"]>[0]["volumeHome"]>;
+
+/** Marks a computer created with its home's volumes mounted. */
+const VOLUME_HOME = { home: "volumes" } as const;
+
+export function e2bCreateOptions(botId: string, apiKey: string, volumeHome?: VolumeHome) {
   return {
     apiKey,
     timeoutMs: sandboxIdleMs(),
-    metadata: { botId, rakazo: "computer" },
+    metadata: { botId, rakazo: "computer", ...(volumeHome ? VOLUME_HOME : {}) },
     resolution: [1280, 800] as [number, number],
     lifecycle: { onTimeout: "pause" as const, autoResume: false },
+    ...(volumeHome && {
+      volumeMounts: Object.fromEntries(
+        volumeHome.mounts.map((mount) => [mount.path, mount.volumeRef]),
+      ),
+    }),
   };
 }
 
@@ -144,12 +154,7 @@ export class E2BSandboxProvider implements SandboxProvider {
   }
 
   async provision(
-    request: {
-      botId: string;
-      homePath: string;
-      providerRef?: string;
-      providerKind?: ComputerRef["kind"];
-    },
+    request: Parameters<SandboxProvider["provision"]>[0],
     _context: AdapterContext,
   ): Promise<ComputerRef> {
     if (request.providerRef && request.providerKind === "e2b") {
@@ -160,20 +165,40 @@ export class E2BSandboxProvider implements SandboxProvider {
           kind: "e2b",
           botId: request.botId,
         });
-        return {
-          id: desktop.sandboxId,
-          botId: request.botId,
-          kind: "e2b",
-          providerRef: desktop.sandboxId,
-          fresh: false,
-        };
+        // A home moved onto volumes while its machine was stopped: that machine mounts none, and
+        // its disk holds the copy the move left behind.
+        if (request.volumeHome && (await desktop.getInfo()).metadata.home !== VOLUME_HOME.home) {
+          this.forget(desktop.sandboxId);
+          await desktop.kill();
+        } else {
+          return {
+            id: desktop.sandboxId,
+            botId: request.botId,
+            kind: "e2b",
+            providerRef: desktop.sandboxId,
+            fresh: false,
+          };
+        }
       } catch (error) {
         this.boxes.delete(request.providerRef);
         // A transport failure says nothing about the workspace still on the server.
         if (!isSandboxGoneError(error)) throw error;
       }
     }
-    const desktop = await this.sdk.create(e2bCreateOptions(request.botId, this.apiKey));
+    const desktop = await this.sdk.create(
+      e2bCreateOptions(request.botId, this.apiKey, request.volumeHome),
+    );
+    if (request.volumeHome) {
+      // The workspace is the volumes' own root, so a file has the same path here as in a worker.
+      const linked = await this.runSetupCommand(
+        desktop,
+        `ln -sfn ${shellQuote(request.volumeHome.root)} ${shellQuote(E2B_WORKSPACE)}`,
+      );
+      if (linked.exitCode !== 0) {
+        await desktop.kill().catch(() => undefined);
+        throw new Error(linked.stderr || "could not link the computer workspace to its volumes");
+      }
+    }
     this.boxes.set(desktop.sandboxId, desktop);
     this.lastTouchedAt.set(desktop.sandboxId, Date.now());
     return {

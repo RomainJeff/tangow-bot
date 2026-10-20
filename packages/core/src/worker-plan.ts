@@ -192,6 +192,36 @@ export function volumeMountPath(
   return `${WORKSPACE_ROOT}/bots/${owner.botId}`;
 }
 
+/** How a computer whose home is on volumes mounts them, and where its workspace starts. */
+export type VolumeHome = { root: string; mounts: Array<{ volumeRef: string; path: string }> };
+
+/**
+ * A computer mounts its home's volumes at the paths every worker uses, so a file has one absolute
+ * path in every VM. A team computer's workspace is the team root; a dedicated one's is its bot's
+ * home, the same place a guest's relative paths land.
+ */
+export function computerVolumeHome(
+  scope: ComputerMode,
+  volumes: ReadonlyArray<Pick<VolumeRow, "kind" | "botId" | "providerRef">>,
+): VolumeHome {
+  const mounts = volumes.flatMap((volume) =>
+    volume.providerRef
+      ? [
+          {
+            volumeRef: volume.providerRef,
+            path: volumeMountPath(
+              volume.kind === "bot_private"
+                ? { kind: volume.kind, botId: volume.botId ?? "" }
+                : { kind: volume.kind },
+            ),
+          },
+        ]
+      : [],
+  );
+  const home = mounts.find((mount) => mount.path !== volumeMountPath({ kind: "space_shared" }));
+  return { root: scope === "team" ? WORKSPACE_ROOT : (home?.path ?? WORKSPACE_ROOT), mounts };
+}
+
 export type VolumeRow = {
   id: string;
   kind: VolumeKind;
