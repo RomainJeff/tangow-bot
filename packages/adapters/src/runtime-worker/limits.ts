@@ -34,11 +34,13 @@ export const WORKER_LIMITS = {
    * before a new one is written. With the per-command cap, at most 256 MiB.
    */
   localOutputSpoolFiles: 16,
-  /**
-   * The controller re-truncates a command's text before recording it. A result object is bounded
-   * by `guestFrameBytes`, like the same tool's result in process.
-   */
+  /** The controller re-truncates a command's text before recording it. */
   controllerResultBytes: 64 * KiB,
+  /**
+   * A guest tool's result object, serialized. A larger one is returned to the model as an error
+   * instead, so it never reaches `guestFrameBytes`, which would end the run.
+   */
+  localResultBytes: 512 * KiB,
   /** Covers a cold boot. Checked once, at `worker.hello`. */
   capabilityTtlMs: 10 * 60_000,
   helloDeadlineMs: 30_000,

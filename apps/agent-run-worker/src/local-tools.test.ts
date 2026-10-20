@@ -256,6 +256,19 @@ describe("file tools", () => {
     expect(await readFile(path.join(ctx.cwd, "a.txt"), "utf8")).toBe("same same");
   });
 
+  it("returns a result too large for the channel as an error the model sees", async () => {
+    const ctx = await context();
+    await writeFile(path.join(ctx.cwd, "control.txt"), "\u0001".repeat(200_000));
+
+    expect(await tool("read_file")({ path: "control.txt" }, ctx)).toEqual({
+      result: {
+        error:
+          "the result is too large to return (1200076 bytes); read fewer lines with offset and limit, or list a subdirectory",
+        path: "control.txt",
+      },
+    });
+  });
+
   it("lists a dangling link as a file instead of failing the listing", async () => {
     const ctx = await context();
     await writeFile(path.join(ctx.cwd, "a.txt"), "a");

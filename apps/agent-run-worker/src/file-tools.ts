@@ -73,7 +73,15 @@ function failed(text: string): CommandOutput {
 function fileTool(name: string): LocalTool {
   return async (args, context) => {
     try {
-      return { result: await runFileTool(name, args, guestFiles(context)) };
+      const result = await runFileTool(name, args, guestFiles(context));
+      const bytes = Buffer.byteLength(JSON.stringify(result));
+      if (bytes <= WORKER_LIMITS.localResultBytes) return { result };
+      return {
+        result: {
+          error: `the result is too large to return (${bytes} bytes); read fewer lines with offset and limit, or list a subdirectory`,
+          path: String(args.path ?? ""),
+        },
+      };
     } catch (error) {
       return failed(error instanceof Error ? error.message : String(error));
     }
