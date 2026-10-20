@@ -6,7 +6,7 @@
   "feature_base": "ddcb4092e (feature/pi-e2b-workers with #228, #229 and #241)",
   "pending_slice": "S3, branch claude/pi-e2b-p3-compose, not merged at the tested commit",
   "infra": {
-    "i1_delivery": "tangow-e2b-infra pull request #2, merge 177c1ff",
+    "i1_delivery": "the infrastructure repository's pull request #2, merge 177c1ff",
     "i1_receipts": {
       "functional": "9c1b44e",
       "isolation": "a38c067"
