@@ -1,0 +1,64 @@
+P3 reproduction sheet
+
+Requirements: Node 24 and pnpm 9.15.0 on the build machine, Docker for the PostgreSQL harness. The live
+lanes need an E2B deployment with I1's volumes and its computer template, an API key for it, and Node 22
+or later where they run. No model key: the model is the repository's emulator on loopback.
+Start from a clean checkout of the P3 slice.
+
+Setup
+  pnpm install --frozen-lockfile
+  pnpm db:generate
+
+Checks
+  pnpm check
+  pnpm lint
+
+The issue's verification commands
+  pnpm exec vitest run packages/adapters/src/pi-runtime.test.ts packages/adapters/src/executor-secret-pi.test.ts packages/adapters/src/computer-workspace.test.ts packages/adapters/src/e2b-sandbox.test.ts packages/adapters/src/sandbox-factory.test.ts
+  pnpm test:pi
+  pnpm test:integration
+
+The P3 offline tests this slice touches
+  pnpm exec vitest run packages/adapters/src/e2b-volume-files.test.ts packages/adapters/src/e2b-worker.test.ts packages/adapters/src/home-volume-migration.test.ts packages/testkit/src/runtime-worker packages/adapters/src/runtime-worker apps/agent-run-worker/src
+
+Live lanes, where the E2B API is reachable
+  Export the E2B environment to the command only: E2B_API_KEY, and E2B_API_URL with E2B_SANDBOX_URL,
+  or E2B_DOMAIN.
+  pnpm --filter @rakazo/agent-run-worker template:build --name <worker template>
+  pnpm test:worker-live lanes --template <worker template> --computer-template <computer template> --out <dir>
+  pnpm test:worker-live bench --template <worker template> --computer-template <computer template> --out <dir> --trials 30
+
+Live lanes on a host with no checkout, as these receipts were produced
+  1. On the build machine: pnpm test:worker-live:bundle
+     It writes packages/testkit/dist/worker-live/ (bin/worker-live.mjs for Node 22 with PGlite's assets,
+     prisma/migrations, guest/agent-run-worker.mjs).
+  2. Copy that directory to a scratch directory on the host. Copy nothing else: no checkout, no .env.
+  3. On the host, with the E2B environment exported to each command only (the receipts used I1's
+     with-e2b.sh, which reads the team key from the stack and passes it to the command):
+       node live/bin/worker-live.mjs template --guest live/guest/agent-run-worker.mjs --name <worker template>
+       node --expose-gc live/bin/worker-live.mjs lanes --template <worker template> --computer-template <computer template> --out out
+       node --expose-gc live/bin/worker-live.mjs bench --template <worker template> --computer-template <computer template> --out out --trials 30
+  4. Remove the scratch directory when done.
+
+Safety rails built into the lanes
+  Each lane runs in its own process, one at a time. Before each lane the command stops if any sandbox runs
+  on the deployment or if the host's MemAvailable is under 1,536 MiB. Every sandbox carries the
+  session's p3live tag and every volume its name prefix. Each lane ends with a sweep that kills and
+  destroys everything of its session, then counts what is left. The receipts are redacted: no key,
+  endpoint, address other than loopback, account, machine name or local path.
+
+Lane capture
+  media/lanes-cli.png is the lanes command's output at the tested commit, rendered with Playwright's
+  Chromium at 1280 px width.
+
+Observed (see verification.json)
+  pnpm check: 24 tasks passed.
+  pnpm lint: 49 warnings and 1 info, the same as the feature base.
+  pnpm test: 8049 passed, 209 skipped.
+  Issue verification: 64 tests in 5 files passed. pnpm test:pi: 30 tests in 4 files passed.
+  P3 offline tests: 107 tests in 14 files passed.
+  pnpm test:integration: 163 tests in 23 suites passed.
+  Live lanes: 9 passed, 4 pending the composition slice (S3), no sandbox and no volume left after any lane.
+  Bench, 30 rotating trials per arm, no errors: cold boot p95 1.87 s with no mount and 2.17 s with two
+  mounts (budget 30 s); relay overhead bound p95 58 ms (budget 200 ms); control per guest tool p50 44 ms
+  on PGlite on this host, against 38 ms for P2's local runner on the same host.

@@ -21,3 +21,7 @@ The application baseline is `a34028112d43c75cb6e13d0b121d843015696de0`. The infr
 ## P2
 
 [Issue #196](https://github.com/RomainJeff/rakazo-bot/issues/196) defines the worker channel, its journal and the stop contract. The [P2 handoff](P2-handoff.md) gives the protocol and its examples, the capability, sequencing and acknowledgement, the effect and stop states, the limits, the crash and retry matrix, and the local test runner that P3 and P5 consume. The channel does not depend on a harness. Pi is the only one implemented, and [How to add a harness](adding-a-harness.md) explains how to add another.
+
+## P3
+
+[Issue #197](https://github.com/RomainJeff/rakazo-bot/issues/197) runs Pi natively in the worker and moves computer homes onto volumes. Its slices add the guest file tools ([#228](https://github.com/RomainJeff/rakazo-bot/pull/228)), the E2B worker provider, stdio codec, guest bundle and template ([#229](https://github.com/RomainJeff/rakazo-bot/pull/229)), the home move ([#241](https://github.com/RomainJeff/rakazo-bot/pull/241)), the composition (S3) and the live lanes. The [P3 handoff](P3-handoff.md) gives the launch path, tool selection and helpers, the model relay, the cleanup states, the move, retention and rollback procedure, the live receipts on the shared E2B host and the measured profiles that P4, P5 and P6 consume. `pnpm test:worker-live` runs the lanes against an E2B deployment.

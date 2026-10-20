@@ -1,0 +1,92 @@
+{
+  "ticket": "RomainJeff/rakazo-bot#197",
+  "slice": "S5, live lanes and handoff, branch claude/pi-e2b-p3-live",
+  "tested_commit": "d888acc34c3ea4ec3b8db481d0269347e9e67df6",
+  "tested_commit_note": "lanes.json comes from the bundle of the tested commit. bench.json and template.json come from 14d2a9667c3b52a4bd29af38f8928801f8697817, its parent, which differs only in the receipts' redaction pattern, outside every timed path. The commits after the tested commit change only documentation and these receipts.",
+  "feature_base": "ddcb4092e (feature/pi-e2b-workers with #228, #229 and #241)",
+  "pending_slice": "S3, branch claude/pi-e2b-p3-compose, not merged at the tested commit",
+  "infra": {
+    "i1_delivery": "tangow-e2b-infra pull request #2, merge 177c1ff",
+    "i1_receipts": { "functional": "9c1b44e", "isolation": "a38c067" },
+    "infra_main_during_runs": "e17503b",
+    "documentation_reference": "09f242991ada8fdab2a9ce7a1fa847671d511874"
+  },
+  "sdk": {
+    "pi": "@earendil-works/pi-agent-core, pi-ai, pi-telemetry and pi-coding-agent 1.3.0, unchanged",
+    "e2b": "e2b 2.49.1 in the controller, the bundle and the template build",
+    "e2b_platform": "the platform build the I1 handoff records; not read again by this slice"
+  },
+  "templates": {
+    "worker": {
+      "name": "p3live-worker-pi",
+      "source": "apps/agent-run-worker/template at the tested commit, built by worker-live template",
+      "receipt": "template.json",
+      "guest_bundle_sha256": "a92c46e44e5093cc73b09b373c2c43f114e3d20e56fdfe3682441f535d9751e0"
+    },
+    "computer": {
+      "name": "i1-computer",
+      "source": "I1, unchanged"
+    }
+  },
+  "vm_profiles": {
+    "worker": "1 vCPU, 1024 MiB (WORKER_PROFILE)",
+    "computer": "2 vCPU, 4096 MiB (I1's computer template)",
+    "sandbox_timeout": "1 hour, the lower of the 4 hour worker TTL and the deployment's limit"
+  },
+  "host": {
+    "where": "the single shared E2B host, controller and lanes run there from a bundle; no checkout, no .env",
+    "platform": "linux",
+    "arch": "x64",
+    "logical_cpus": 8,
+    "node": "v22.22.1",
+    "load_average_during_bench": "1.5 to 2.9 from the host's other services"
+  },
+  "build_machine": { "platform": "Darwin", "arch": "arm64", "node": "v24.21.0" },
+  "lockfile_sha256": "9a235217598e7ccfd668215f0198fe020a798ff029c516ea1f5febd5404256a3",
+  "schema_sha256": "0d72bf87a4ff1e36cdc05c821a0eb6effe631484d512fb98678d543032b7a4e3",
+  "head": {
+    "pnpm check": "passed, 24 tasks",
+    "pnpm lint": "passed, 49 warnings and 1 info, the same as the feature base",
+    "pnpm test": "passed, 8049 tests in 615 files with 209 skipped",
+    "issue verification (pi-runtime, executor-secret-pi, computer-workspace, e2b-sandbox, sandbox-factory)": "passed, 64 tests in 5 files",
+    "pnpm test:pi": "passed, 30 tests in 4 files",
+    "P3 offline tests touched": "passed, 107 tests in 14 files",
+    "pnpm test:integration": "passed, 163 tests in 23 suites on Testcontainers PostgreSQL",
+    "migration script typecheck": "passed with a temporary tsconfig on the base config; a planted type error failed it",
+    "live lanes": "9 passed, 4 pending S3; see lanes.json",
+    "live bench": "0 errors in 90 runs; see bench.json"
+  },
+  "defects_found_live_and_fixed": [
+    "The worker template from #229 did not build: E2B runs build steps as the sandbox user, which cannot create /workspace or write /opt. The makeDir and the bundle copy now run as root.",
+    "Every worker create from #229 was refused with 400 'Timeout cannot be greater than 1 hours': the provider asked for the 4 hour TTL. It now asks for the lower of the TTL and maxTimeoutMs, 1 hour by default.",
+    "E2BVolumeFiles from #241 could not reach any volume: this self-hosted deployment does not serve E2B's volume content API (every call 404), and the SDK sends those calls to api.<domain> unless E2B_VOLUME_API_URL is set. It now works through a sandbox that mounts the volume. Its default owner 1000:1000 was also wrong: the sandbox user is 1001."
+  ],
+  "perf": {
+    "source": "bench.json",
+    "cold_boot_p95_ms": { "no_mounts": 1867.195, "two_mounts": 2169.947, "budget": 30000, "result": "pass" },
+    "relay_overhead_bound_p95_ms": {
+      "value": 58.6,
+      "how": "relay at the controller p95 27.3 ms plus grant to result p95 31.3 ms, no mount; the second contains the echo itself, so the sum bounds a guest's overhead from above",
+      "budget": 200,
+      "result": "pass"
+    },
+    "control_per_guest_tool_p50_ms": { "local_runner_same_host": 37.729, "e2b_no_mounts": 44.006, "e2b_two_mounts": 45.578 },
+    "control_limiter": "database calls are 97 to 99 percent of the control window; PGlite SELECT 1 is 0.46 ms on this host against 0.11 ms on P2's machine",
+    "postgres_control_cost": "not measured: the controller must run on the E2B host, and PostgreSQL there needs Docker under sudo, which the host rules exclude",
+    "controller_rss": "1166 to 1219 MiB over 90 runs, heap 173 to 219 MiB, last ten runs +4.4 MiB; a heap snapshot comparison in an investigation run placed the growth in the in-process PGlite instances' wire-message arrays"
+  },
+  "cleanup": {
+    "per_lane": "every lane ended with 0 sandboxes and 0 volumes of its session, after its sweep",
+    "bench": "0 sandboxes and 0 volumes left",
+    "deployment_check": "before each lane and before the bench, the command found no sandbox running on the deployment",
+    "probes": "the exploratory probes before the lanes tagged and removed their resources the same way, and each counted 0 left",
+    "kept_on_purpose": "the worker template p3live-worker-pi, for the S3 lanes; the scratch directory on the host is removed after the S3 lanes",
+    "heap_snapshots": "taken on the host for the RSS investigation, analysed there, then deleted; never copied off the host"
+  },
+  "not_run": [
+    "The four S3 lanes: Anthropic-protocol relay, relay refusals, the product's E2B computer on the volumes, recreating the product's computer after a move.",
+    "Control cost on PostgreSQL across the E2B network.",
+    "Electron E2E: CI only, by repository rule.",
+    "Native iOS captures: no mobile code changed."
+  ]
+}
