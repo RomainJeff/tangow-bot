@@ -1,16 +1,22 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { type AgentRunRequest, AgentRuntimeUnavailableError } from "@rakazo/adapter-kit";
-import { createWorkerLifecycle } from "@rakazo/adapters";
+import { PassThrough } from "node:stream";
+import type { AgentRunRequest, WorkerProvider } from "@rakazo/adapter-kit";
+import { AgentRuntimeUnavailableError } from "@rakazo/adapter-kit";
+import type { E2BWorkerSdk } from "@rakazo/adapters";
+import { createWorkerLifecycle, E2BWorkerProvider } from "@rakazo/adapters";
+import type { GuestConnector, WorkerClock } from "@rakazo/adapters/runtime-worker";
 import {
   createLifecycleLauncher,
   createStopJournal,
   createWorkerAgentRuntime,
+  encodeFrameLine,
   GUEST_TOOLS,
+  readFrameLines,
   WORKER_LIMITS,
-  type WorkerClock,
 } from "@rakazo/adapters/runtime-worker";
+import { HARNESSES, runGuest } from "@rakazo/agent-run-worker";
 import type { StopPhase } from "@rakazo/core";
 import { stopState } from "@rakazo/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -42,10 +48,88 @@ function manualClock() {
   };
 }
 
+type Worker<P> = { provider: P; dispose(): Promise<void> };
+
+function local(mode: "memory" | "child", faults: LocalWorkerFaults) {
+  return (root: string): Worker<LocalWorkerProvider> => {
+    const provider = new LocalWorkerProvider({ mode, root, faults });
+    return { provider, dispose: () => provider.dispose() };
+  };
+}
+
+/**
+ * E2B's command API in front of an in-process guest that ignores its cancel. Its stdio is text, and
+ * killing the sandbox breaks the command's stream without an exit code, as a lost VM does.
+ */
+function e2bIgnoringCancel(root: string): Worker<E2BWorkerProvider> {
+  const sandboxes = new Map<string, Record<string, string>>();
+  const guests: Array<{ kill(): void; exited: Promise<unknown> }> = [];
+  const sdk: E2BWorkerSdk = {
+    listSandboxes: async (metadata) =>
+      [...sandboxes]
+        .filter(([, tags]) => Object.entries(metadata).every(([key, value]) => tags[key] === value))
+        .map(([id]) => id),
+    createSandbox: async (options) => {
+      const id = `sbx_${sandboxes.size + 1}`;
+      sandboxes.set(id, options.metadata ?? {});
+      return id;
+    },
+    killSandbox: async (id) => {
+      for (const guest of guests) guest.kill();
+      return sandboxes.delete(id);
+    },
+    async startGuest(_id, _command, { envs, onStdout }) {
+      const stdin = new PassThrough({ encoding: "utf8" });
+      const terminated = new AbortController();
+      const stream = Promise.withResolvers<number>();
+      async function* channels() {
+        yield {
+          frames: readFrameLines(stdin, WORKER_LIMITS.controllerFrameBytes),
+          send: (frame: Uint8Array) => onStdout(encodeFrameLine(frame)),
+          close: () => stdin.end(),
+        };
+      }
+      const exited = runGuest({
+        channels: channels(),
+        capability: envs.RAKAZO_WORKER_CAPABILITY!,
+        harness: HARNESSES.pi!,
+        spoolDir: path.join(root, "tmp", "tool-output"),
+        root,
+        signal: terminated.signal,
+      });
+      guests.push({
+        exited,
+        kill() {
+          terminated.abort();
+          stdin.end();
+          stream.reject(new Error("stream reset"));
+        },
+      });
+      return {
+        sendStdin: async (line) => {
+          if (stdin.writableEnded) throw new Error("stdin closed");
+          const kind = JSON.parse(Buffer.from(line, "base64").toString()).kind;
+          if (kind !== "worker.cancel") stdin.write(line);
+        },
+        closeStdin: async () => void stdin.end(),
+        wait: () => stream.promise,
+      };
+    },
+    listVolumes: async () => [],
+    createVolume: async (name) => name,
+  };
+  return {
+    provider: new E2BWorkerProvider({ apiKey: "e2b-test-key", template: "rakazo-worker-pi" }, sdk),
+    async dispose() {
+      for (const guest of guests) guest.kill();
+      await Promise.allSettled(guests.map((guest) => guest.exited));
+    },
+  };
+}
+
 /** A running run whose bot sleeps in a guest bash call, driven through the runtime alone. */
-async function sleepingRun(
-  mode: "memory" | "child",
-  faults: LocalWorkerFaults,
+async function sleepingRun<P extends WorkerProvider & GuestConnector>(
+  worker: (root: string) => Worker<P>,
   clock?: WorkerClock,
   failingPhase?: StopPhase,
 ) {
@@ -59,9 +143,9 @@ async function sleepingRun(
   });
   cleanups.push(() => fixture.close());
   const root = await mkdtemp(path.join(tmpdir(), "rakazo-worker-stop-"));
-  const provider = new LocalWorkerProvider({ mode, root, faults });
+  const { provider, dispose } = worker(root);
   cleanups.push(async () => {
-    await provider.dispose();
+    await dispose();
     await rm(root, { recursive: true, force: true });
   });
   const marks: string[] = [];
@@ -122,7 +206,7 @@ async function sleepingRun(
 
 describe("stopping a guest", () => {
   it("destroys a guest that ignores its cancel within the stop budget", async () => {
-    const run = await sleepingRun("child", { guestIgnoresCancel: true });
+    const run = await sleepingRun(local("child", { guestIgnoresCancel: true }));
     const startedAt = Date.now();
 
     await run.runtime.abort(run.runId);
@@ -133,9 +217,24 @@ describe("stopping a guest", () => {
     expect(await run.events).toEqual(new Error("The run was cancelled"));
   });
 
+  it("confirms the stop of an E2B guest whose stream breaks before it is seen exiting", async () => {
+    const time = manualClock();
+    const run = await sleepingRun(e2bIgnoringCancel, time.clock);
+
+    const aborted = run.runtime.abort(run.runId);
+    await vi.waitFor(() => expect(time.sleeping()).toContain(WORKER_LIMITS.cancelGraceMs));
+    expect(run.marks).toEqual(["requested"]);
+    time.advance(WORKER_LIMITS.cancelGraceMs);
+    await aborted;
+
+    expect(run.marks).toEqual(["requested", "process_ended"]);
+    expect(stopState(await run.row())).toBe("destroyed");
+    expect(await run.events).toEqual(new Error("The run was cancelled"));
+  });
+
   it("records an unconfirmed stop, never a destroyed one, and starts no other guest", async () => {
     const time = manualClock();
-    const run = await sleepingRun("memory", { destroyNeverConfirms: true }, time.clock);
+    const run = await sleepingRun(local("memory", { destroyNeverConfirms: true }), time.clock);
 
     const aborted = run.runtime.abort(run.runId);
     const confirmWindow = WORKER_LIMITS.stopConfirmMs - WORKER_LIMITS.cancelGraceMs;
@@ -155,8 +254,7 @@ describe("stopping a guest", () => {
   it("survives a stop journal write that fails after the stop went unconfirmed", async () => {
     const time = manualClock();
     const run = await sleepingRun(
-      "memory",
-      { destroyNeverConfirms: true },
+      local("memory", { destroyNeverConfirms: true }),
       time.clock,
       "process_ended",
     );

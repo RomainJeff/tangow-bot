@@ -5,7 +5,7 @@ import type {
   GuestModel,
   SubagentLog,
 } from "@rakazo/adapter-kit";
-import { PiAgentRuntime } from "@rakazo/adapters";
+import { PiAgentRuntime } from "@rakazo/adapters/pi-runtime";
 import { piAiStreamFn, relayedModel } from "@rakazo/adapters/runtime-worker/pi-ai";
 import type { DoneBody, GuestHarness, HarnessHost } from "../harness.js";
 

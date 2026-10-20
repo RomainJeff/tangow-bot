@@ -2,7 +2,8 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { type FrameSummary, GUEST_TOOLS } from "@rakazo/adapters/runtime-worker";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { bundleGuest } from "@rakazo/agent-run-worker/bundle";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { latestCard } from "./index.js";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.js";
 import { startWorkerRun } from "./worker-run-fixture.js";
@@ -49,6 +50,18 @@ async function attempts(run: WorkerRun, runId: string) {
   });
 }
 
+let bundled: Promise<string> | undefined;
+/** The guest bundle, in a directory with no node_modules above it. */
+function guestBundle() {
+  bundled ??= mkdtemp(path.join(tmpdir(), "rakazo-guest-bundle-")).then((dir) =>
+    bundleGuest(path.join(dir, "agent-run-worker.mjs")),
+  );
+  return bundled;
+}
+afterAll(async () => {
+  if (bundled) await rm(path.dirname(await bundled), { recursive: true, force: true });
+});
+
 const recap = JSON.stringify({ version: 1, results: ["Wrote notes.txt"], references: [] });
 
 /** A file outside every worker, so it shows what all of a run's guests did. */
@@ -81,86 +94,97 @@ const finishing: ModelEmulatorStep[] = [
 ];
 
 describe("a run whose bot runs in a guest", () => {
-  it("runs text, a guest tool, a controller tool and the recap, and logs them once", async () => {
-    const run = await fixture({
-      steps: [
-        {
-          expect() {},
-          response: {
-            type: "tool",
-            id: "sh",
-            name: "bash",
-            arguments: { command: "echo from-guest" },
+  it.each([
+    ["in memory", async () => ({})],
+    ["from its bundle", async () => ({ mode: "child" as const, guestEntry: await guestBundle() })],
+  ])(
+    "runs text, a guest tool, a controller tool and the recap, and logs them once, %s",
+    async (_guest, guest) => {
+      const run = await fixture({
+        ...(await guest()),
+        steps: [
+          {
+            expect() {},
+            response: {
+              type: "tool",
+              id: "sh",
+              name: "bash",
+              arguments: { command: "echo from-guest" },
+            },
           },
-        },
-        {
-          expect(request) {
-            expect(toolResult(request)).toContain("from-guest");
+          {
+            expect(request) {
+              expect(toolResult(request)).toContain("from-guest");
+            },
+            response: {
+              type: "tool",
+              id: "computer",
+              name: "shell",
+              arguments: { command: "echo from-computer" },
+            },
           },
-          response: {
-            type: "tool",
-            id: "computer",
-            name: "shell",
-            arguments: { command: "echo from-computer" },
+          {
+            expect(request) {
+              expect(toolResult(request)).toContain("from-computer");
+            },
+            response: {
+              type: "tool",
+              id: "say",
+              name: "message_user",
+              arguments: { message: "Saved." },
+            },
           },
-        },
-        {
-          expect(request) {
-            expect(toolResult(request)).toContain("from-computer");
+          {
+            expect() {},
+            response: {
+              type: "text",
+              text: recap,
+              usage: { promptTokens: 30, completionTokens: 5 },
+            },
           },
-          response: {
-            type: "tool",
-            id: "say",
-            name: "message_user",
-            arguments: { message: "Saved." },
-          },
-        },
-        {
-          expect() {},
-          response: { type: "text", text: recap, usage: { promptTokens: 30, completionTokens: 5 } },
-        },
-      ],
-    });
-    const runId = await run.send("Save a note.");
-    await run.continueRun(runId);
+        ],
+      });
+      const runId = await run.send("Save a note.");
+      await run.continueRun(runId);
 
-    run.model.assertComplete();
-    expect(
-      await run.prisma.run.findUniqueOrThrow({
-        where: { id: runId },
-        select: { status: true, error: true },
-      }),
-    ).toEqual({ status: "completed", error: null });
-    const entries = await run.runEntries(runId);
-    expect(
-      entries
-        .filter((entry) => entry.type === "tool.call" || entry.type === "tool.result")
-        .map((entry) =>
-          entry.type === "tool.call"
-            ? `call ${entry.payload.name}`
-            : `result ${entry.payload.callId} ${entry.payload.isError}`,
-        ),
-    ).toEqual([
-      "call bash",
-      "result sh false",
-      "call shell",
-      "result computer false",
-      "call message_user",
-      "result say false",
-    ]);
-    expect(
-      await run.prisma.attempt.findMany({
-        where: { runId },
-        select: { workerState: true, stopPhase: true },
-      }),
-    ).toEqual([{ workerState: "released", stopPhase: "process_ended" }]);
-    expect(
-      await run.prisma.usageRecord.aggregate({
-        where: { runId },
-        _sum: { inputTokens: true, outputTokens: true },
-      }),
-    ).toEqual({ _sum: { inputTokens: 30, outputTokens: 5 } });
-  });
+      run.model.assertComplete();
+      expect(
+        await run.prisma.run.findUniqueOrThrow({
+          where: { id: runId },
+          select: { status: true, error: true },
+        }),
+      ).toEqual({ status: "completed", error: null });
+      const entries = await run.runEntries(runId);
+      expect(
+        entries
+          .filter((entry) => entry.type === "tool.call" || entry.type === "tool.result")
+          .map((entry) =>
+            entry.type === "tool.call"
+              ? `call ${entry.payload.name}`
+              : `result ${entry.payload.callId} ${entry.payload.isError}`,
+          ),
+      ).toEqual([
+        "call bash",
+        "result sh false",
+        "call shell",
+        "result computer false",
+        "call message_user",
+        "result say false",
+      ]);
+      expect(
+        await run.prisma.attempt.findMany({
+          where: { runId },
+          select: { workerState: true, stopPhase: true },
+        }),
+      ).toEqual([{ workerState: "released", stopPhase: "process_ended" }]);
+      expect(
+        await run.prisma.usageRecord.aggregate({
+          where: { runId },
+          _sum: { inputTokens: true, outputTokens: true },
+        }),
+      ).toEqual({ _sum: { inputTokens: 30, outputTokens: 5 } });
+    },
+  );
 
   it("answers a request resent after a lost reply from its first decision, writing once", async () => {
     let lost = 0;

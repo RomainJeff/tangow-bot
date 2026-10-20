@@ -4,10 +4,13 @@
   "license": "Apache-2.0",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./bundle": "./scripts/bundle.ts"
   },
   "scripts": {
     "start": "tsx src/main.ts",
+    "bundle": "tsx scripts/bundle.ts",
+    "template:build": "tsx template/build.ts",
     "check": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run --root ../.. apps/agent-run-worker/src"
   },
@@ -16,6 +19,8 @@
     "@rakazo/adapters": "workspace:*"
   },
   "devDependencies": {
+    "e2b": "2.49.1",
+    "esbuild": "0.28.2",
     "typescript": "7.0.2",
     "vitest": "4.1.11"
   }

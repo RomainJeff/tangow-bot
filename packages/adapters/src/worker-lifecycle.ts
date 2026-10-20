@@ -17,9 +17,9 @@ import {
   planLaunch,
   supportsWorkers,
   takesWriterLease,
-  WORKER_ENSURE_TIMEOUT_SECONDS,
   WORKER_TTL_SECONDS,
   WORKSPACE_ROOT,
+  workerEnsureDeadline,
   workerStatesInto,
   writersBlocking,
 } from "@rakazo/core";
@@ -196,7 +196,7 @@ export function createWorkerLifecycle(deps: {
     async start(launch: WorkerLaunch, context: AdapterContext): Promise<StartedWorker> {
       const provider = requireProvider();
       const { id: providerKind, capabilities } = provider.describe();
-      const mounts = await prisma.$transaction(async (tx) => {
+      const { mounts, ensureAt } = await prisma.$transaction(async (tx) => {
         const [run] = await tx.$queryRaw<{ leaseFence: number; status: string }[]>`
           SELECT "leaseFence", status FROM runs WHERE id = ${launch.runId} FOR UPDATE`;
         const [attempt] = await tx.$queryRaw<
@@ -249,7 +249,7 @@ export function createWorkerLifecycle(deps: {
             workerEnsureAt: now,
           },
         });
-        return authorized.mounts;
+        return { mounts: authorized.mounts, ensureAt: now };
       });
 
       const spec: WorkerSpec = {
@@ -258,7 +258,7 @@ export function createWorkerLifecycle(deps: {
         botId: launch.botId,
         mounts: mounts.map(({ volumeRef, path, access }) => ({ volumeRef, path, access })),
         ttlSeconds: WORKER_TTL_SECONDS,
-        ensureTimeoutSeconds: WORKER_ENSURE_TIMEOUT_SECONDS,
+        ensureDeadline: workerEnsureDeadline(ensureAt),
       };
       const ownStep = async <T>(step: () => Promise<T>): Promise<T> => {
         try {

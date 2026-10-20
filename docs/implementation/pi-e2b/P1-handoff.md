@@ -211,7 +211,7 @@ Four actors can move the same attempt: its `start`, `release`, `reconcile`, and 
 1. Every transaction locks in one order: the run row, then the attempt row with `FOR UPDATE`, then volume rows in ascending id. `start` checks the attempt state only after it holds the attempt lock.
 2. An attempt has exactly one `start`. The start transaction requires a null worker state, so a second call throws `StaleAttemptError` before any provider call. A controller that crashes during `start` loses its run lease, and the next claim gets a new fence and a new attempt.
 3. `start` releases the worker only when its own `ensure` or `prepare` fails.
-4. A provider that answers `absent` for a worker without a reference proves nothing while its `ensure` may still create the VM. `release` then moves the worker to `releasing`, keeps its leases and returns `awaiting_ensure` (`ensureMayBeInFlight`, read from `workerEnsureAt`). After `WORKER_ENSURE_TIMEOUT_SECONDS` (15 minutes), the next `reconcile` destroys by attempt tag and frees the leases. `WorkerSpec.ensureTimeoutSeconds` forbids the provider to create the VM after that time.
+4. A provider that answers `absent` for a worker without a reference proves nothing while its `ensure` may still create the VM. `release` then moves the worker to `releasing`, keeps its leases and returns `awaiting_ensure` (`ensureMayBeInFlight`, read from `workerEnsureAt`). After `WORKER_ENSURE_TIMEOUT_SECONDS` (15 minutes), the next `reconcile` destroys by attempt tag and frees the leases. `WorkerSpec.ensureDeadline`, `workerEnsureAt` plus that timeout, forbids the provider to create the VM after that instant.
 5. When `start` cannot record its VM because another actor moved the attempt, it hands the VM to that actor. A `releasing` worker without a reference gets the reference, and `release` destroys it at once. A `released` worker takes the orphan edge back to `releasing` with the reference, then `start` tries `release`. If that destroy fails, `reconcile` finds the row.
 
 A `release` that runs while the start transaction is still open sees no worker yet and returns `not_live`, and that `start` goes on to `ready`. `reconcile` releases that worker on its next pass, because its run no longer holds the lease. P3 must not treat `not_live` as proof that no VM exists.
@@ -302,7 +302,7 @@ interface WorkerProvider {
 ```
 
 - `ensure` creates the VM tagged with `spec.attemptId`, or returns the VM already tagged with it.
-- `ensure` must not create the VM after `spec.ensureTimeoutSeconds`.
+- `ensure` must not create the VM after `spec.ensureDeadline`.
 - `destroy` removes every VM tagged with the attempt, with or without a reference. A VM already gone returns `absent`, not an error.
 - `ensureVolume` creates the named volume or returns the existing one.
 - The interface has no method that deletes a volume. Ending a run cannot delete one.

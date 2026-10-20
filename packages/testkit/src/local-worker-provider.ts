@@ -81,6 +81,8 @@ export class LocalWorkerProvider implements WorkerProvider, GuestConnector {
       /** Each VM gets a directory under it; the guest sees it as `/`. */
       root: string;
       faults?: LocalWorkerFaults;
+      /** A bundled guest for `child` mode, run by plain `node`. Default: the source, through tsx. */
+      entry?: string;
     },
   ) {}
 
@@ -197,8 +199,10 @@ export class LocalWorkerProvider implements WorkerProvider, GuestConnector {
 
   private childGuest(vm: Vm, capability: string) {
     const faults = this.options.faults ?? {};
-    const child: ChildProcess = spawn(process.execPath, ["--import", "tsx", GUEST_ENTRY], {
-      cwd: path.dirname(GUEST_ENTRY),
+    const entry = this.options.entry;
+    const args = entry ? [entry] : ["--import", "tsx", GUEST_ENTRY];
+    const child: ChildProcess = spawn(process.execPath, args, {
+      cwd: path.dirname(entry ?? GUEST_ENTRY),
       detached: true,
       stdio: ["pipe", "pipe", "ignore"],
       env: {
