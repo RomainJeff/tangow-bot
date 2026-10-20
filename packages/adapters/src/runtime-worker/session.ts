@@ -1,29 +1,32 @@
-import {
-  type AgentRunModel,
-  type AgentRunRequest,
-  AgentRuntimeUnavailableError,
-  FRAME_CAPABILITY,
-  type GuestBody,
-  type HarnessDeclaration,
-  type LocalToolOutput,
-  type ModelDialect,
-  type RefusalReason,
-  type ReplyFinal,
-  type ReplyPart,
-  type SubagentLog,
-  type WorkerIdentity,
+import type {
+  AgentRunModel,
+  AgentRunRequest,
+  GuestBody,
+  HarnessDeclaration,
+  LocalToolOutput,
+  ModelDialect,
+  RefusalReason,
+  ReplyFinal,
+  ReplyPart,
+  SubagentLog,
+  WorkerIdentity,
 } from "@rakazo/adapter-kit";
+import { AgentRuntimeUnavailableError, FRAME_CAPABILITY } from "@rakazo/adapter-kit";
 import { redactSecrets, secretRedactor } from "@rakazo/core";
 import { redactPayloadValue, redactPayloadWith } from "../connector-safety.js";
-import { type CapabilityKey, mintCapability, verifyCapability } from "./capability.js";
+import type { CapabilityKey } from "./capability.js";
+import { mintCapability, verifyCapability } from "./capability.js";
 import { relayPiAiCall } from "./dialects/pi-ai.js";
 import { eventPipe } from "./event-pipe.js";
-import { encodeMessage, type FrameChannel, readGuestFrame } from "./framing.js";
+import type { FrameChannel } from "./framing.js";
+import { encodeMessage, readGuestFrame } from "./framing.js";
 import { base64Images, guestRunInput, nativeToolsForHarness } from "./guest-input.js";
-import { createSessionInbox, type SessionInbox } from "./inbox.js";
+import type { SessionInbox } from "./inbox.js";
+import { createSessionInbox } from "./inbox.js";
 import type { LaunchedGuest, WorkerLauncher } from "./launcher.js";
 import { WORKER_LIMITS } from "./limits.js";
-import { guestModelOf, type ModelRelay, type RelayUsage } from "./model-relay.js";
+import type { ModelRelay, RelayUsage } from "./model-relay.js";
+import { guestModelOf } from "./model-relay.js";
 import type { StopJournal } from "./stop-journal.js";
 
 /** The model-access dialects the controller relays. A new dialect is one entry here. */
@@ -331,6 +334,9 @@ export function createSession(
         return { type: "ack" };
       case "model.request":
         return relayModel(seq, body, part);
+      case "model.latency":
+        // Guest diagnostics never authorize work or affect the run's outcome.
+        return { type: "ack" };
       case "model.abort":
         relays.get(body.re)?.abort();
         return { type: "ack" };

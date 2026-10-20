@@ -85,13 +85,18 @@ export type Parsed = {
   seq?: number;
   re?: number;
   type?: string;
+  modelLatency?: { re: number; firstEventMs: number };
 };
 
 export function parse(seen: Seen[]): Parsed[] {
   return seen.map(({ at, from, frame }) => {
     const message = JSON.parse(Buffer.from(frame).toString()) as {
       kind: string;
-      payload?: { seq?: number; re?: number; body?: { type?: string } };
+      payload?: {
+        seq?: number;
+        re?: number;
+        body?: { type?: string; re?: number; firstEventMs?: number };
+      };
     };
     return {
       at,
@@ -100,6 +105,16 @@ export function parse(seen: Seen[]): Parsed[] {
       seq: message.payload?.seq,
       re: message.payload?.re,
       type: message.payload?.body?.type,
+      ...(message.payload?.body?.type === "model.latency" &&
+      typeof message.payload.body.re === "number" &&
+      typeof message.payload.body.firstEventMs === "number"
+        ? {
+            modelLatency: {
+              re: message.payload.body.re,
+              firstEventMs: message.payload.body.firstEventMs,
+            },
+          }
+        : {}),
     };
   });
 }

@@ -3,7 +3,8 @@ import type { GuestConnector } from "@rakazo/adapters/runtime-worker";
 import { volumeMountPath } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "../model-emulator.js";
-import { parse, type Seen, tapConnector } from "../worker-channel-tap.js";
+import type { Seen } from "../worker-channel-tap.js";
+import { parse, tapConnector } from "../worker-channel-tap.js";
 import { startWorkerRun } from "../worker-run-fixture.js";
 import type { Live, ProviderWrap } from "./session.js";
 
@@ -17,6 +18,7 @@ export async function liveRun(
   live: Live,
   options: {
     steps: ModelEmulatorStep[];
+    databaseUrl?: string;
     /** The model's wire protocol: a custom OpenAI-compatible connection, or Anthropic's catalog. */
     protocol?: "openai" | "anthropic";
     computer?: "dedicated" | "team" | "none";
@@ -32,6 +34,7 @@ export async function liveRun(
   const connects: number[] = [];
   const run = await startWorkerRun({
     steps: options.steps,
+    databaseUrl: options.databaseUrl,
     protocol: options.protocol,
     prisma: options.prisma,
     computerScope: options.computer ?? "dedicated",

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { createServer, type ServerResponse } from "node:http";
+import type { ServerResponse } from "node:http";
+import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { performance } from "node:perf_hooks";
 import type { AgentRunRequest } from "@rakazo/adapter-kit";
@@ -68,12 +69,15 @@ export async function startModelEmulator(options: {
   const modelId = options.modelId ?? "offline-fixture";
   const requests: ModelEmulatorRequest[] = [];
   /** When each request arrived and when its response finished, on `performance.now()`. */
-  const served: Array<{ received: number; answered: number }> = [];
+  const served: Array<{ received: number; firstByte: number; answered: number }> = [];
   const failures: Error[] = [];
   let stepIndex = 0;
   const server = createServer((request, response) => {
     const received = performance.now();
-    response.once("finish", () => served.push({ received, answered: performance.now() }));
+    let firstByte = received;
+    response.once("finish", () =>
+      served.push({ received, firstByte, answered: performance.now() }),
+    );
     void (async () => {
       assert.equal(request.method, "POST", "Expected a model POST request");
       if (anthropic) {
@@ -110,6 +114,7 @@ export async function startModelEmulator(options: {
         assert.equal(reply.argumentChunks.join(""), JSON.stringify(reply.arguments));
       }
       response.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
+      firstByte = performance.now();
       response.flushHeaders();
       if (anthropic) {
         await streamAnthropic(response, reply, modelId);

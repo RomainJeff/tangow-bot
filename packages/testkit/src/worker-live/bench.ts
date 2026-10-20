@@ -4,8 +4,10 @@ import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { LocalWorkerProvider } from "../local-worker-provider.js";
 import { quantiles, queryLog, settled } from "../worker-channel-tap.js";
+import { directProxyOverheads } from "./measurements.js";
 import { call, finish, liveRun } from "./run.js";
-import { forward, type Live, type ProviderWrap, requireHeadroom } from "./session.js";
+import type { Live, ProviderWrap } from "./session.js";
+import { forward, requireHeadroom } from "./session.js";
 
 /** A memory series after each run, and its growth over the first and the last ten runs. */
 function series(values: number[]) {
@@ -24,7 +26,7 @@ function series(values: number[]) {
  * controller's side of the channel as P2's bench does. Cold boot is the provider's create plus
  * the guest's start, to its hello; the warm run is hello to the accepted end.
  */
-export async function benchLive(live: Live, trials: number) {
+export async function benchLive(live: Live, trials: number, databaseUrl?: string) {
   const toolsPerRun = 5;
   const arms = ["local_memory", "private_mount", "two_mounts"] as const;
   const localRoot = await mkdtemp(path.join(tmpdir(), "rakazo-live-bench-"));
@@ -44,28 +46,6 @@ export async function benchLive(live: Live, trials: number) {
       ensures: number[];
     }
   >();
-  for (const arm of arms) {
-    const log = queryLog();
-    const ensures: number[] = [];
-    const timed: ProviderWrap = (provider) =>
-      forward(provider, {
-        async ensure(spec, ctx) {
-          ensures.push(performance.now());
-          return provider.ensure(spec, ctx);
-        },
-      });
-    const worker = await liveRun(live, {
-      steps: steps(),
-      wrap: timed,
-      prisma: log.wrap,
-      computer: arm === "two_mounts" ? "team" : "dedicated",
-      provider:
-        arm === "local_memory"
-          ? () => new LocalWorkerProvider({ mode: "memory", root: localRoot })
-          : undefined,
-    });
-    fixtures.set(arm, { worker, log, ensures });
-  }
   const samples: Array<Record<string, number | boolean | string>> = [];
   const perTool = new Map<
     Arm,
@@ -74,6 +54,7 @@ export async function benchLive(live: Live, trials: number) {
       queries: number[];
       queryMs: number[];
       relay: number[];
+      proxyOverheadDirect: number[];
       /** The part of each relay before the emulator received the call, and after it answered. */
       relayBeforeUpstream: number[];
       relayAfterUpstream: number[];
@@ -87,6 +68,7 @@ export async function benchLive(live: Live, trials: number) {
         queries: [],
         queryMs: [],
         relay: [],
+        proxyOverheadDirect: [],
         relayBeforeUpstream: [],
         relayAfterUpstream: [],
         grantToDone: [],
@@ -99,6 +81,29 @@ export async function benchLive(live: Live, trials: number) {
   const selectOneMs: number[] = [];
   const gc = (globalThis as { gc?: () => void }).gc;
   try {
+    for (const arm of arms) {
+      const log = queryLog();
+      const ensures: number[] = [];
+      const timed: ProviderWrap = (provider) =>
+        forward(provider, {
+          async ensure(spec, ctx) {
+            ensures.push(performance.now());
+            return provider.ensure(spec, ctx);
+          },
+        });
+      const worker = await liveRun(live, {
+        steps: steps(),
+        databaseUrl,
+        wrap: timed,
+        prisma: log.wrap,
+        computer: arm === "two_mounts" ? "team" : "dedicated",
+        provider:
+          arm === "local_memory"
+            ? () => new LocalWorkerProvider({ mode: "memory", root: localRoot })
+            : undefined,
+      });
+      fixtures.set(arm, { worker, log, ensures });
+    }
     for (let trial = 0; trial < trials; trial++) {
       for (const arm of arms.map((_, index) => arms[(index + trial) % arms.length]!)) {
         const { worker, log, ensures } = fixtures.get(arm)!;
@@ -129,6 +134,7 @@ export async function benchLive(live: Live, trials: number) {
           tools.queries.push(before.count + after.count);
           tools.queryMs.push(before.ms + after.ms);
         }
+        tools.proxyOverheadDirect.push(...directProxyOverheads(frames, worker.run.model.served));
         for (const [index, model] of settled(frames, "model.request", "model.end").entries()) {
           tools.relay.push(model.to - model.from);
           const upstream = worker.run.model.served[index];
@@ -186,6 +192,7 @@ export async function benchLive(live: Live, trials: number) {
     return Math.round((tools.queryMs.reduce((sum, ms) => sum + ms, 0) / total) * 100) / 100;
   };
   return {
+    database: databaseUrl ? "postgresql" : "pglite",
     trials,
     toolsPerRun,
     order: "each trial runs every arm, rotating which goes first",
@@ -204,6 +211,7 @@ export async function benchLive(live: Live, trials: number) {
           controlPerToolMs: quantiles(perTool.get(arm)!.control),
           queriesPerTool: quantiles(perTool.get(arm)!.queries),
           queryShareOfControl: share(arm),
+          proxyOverheadDirectMs: quantiles(perTool.get(arm)!.proxyOverheadDirect),
           relayControllerMs: quantiles(perTool.get(arm)!.relay),
           relayBeforeUpstreamMs: quantiles(perTool.get(arm)!.relayBeforeUpstream),
           relayAfterUpstreamMs: quantiles(perTool.get(arm)!.relayAfterUpstream),
@@ -211,7 +219,7 @@ export async function benchLive(live: Live, trials: number) {
         },
       ]),
     ),
-    pgliteSelectOneMs: quantiles(selectOneMs),
+    databaseSelectOneMs: quantiles(selectOneMs),
     controlMedianByTrialMs: samples.map(
       (sample) => Math.round(Number(sample.controlMedianMs) * 10) / 10,
     ),

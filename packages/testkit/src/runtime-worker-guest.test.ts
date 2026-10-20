@@ -2,11 +2,11 @@ import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { GuestTool, LocalToolOutput, WorkerStartV1 } from "@rakazo/adapter-kit";
+import type { FrameChannel } from "@rakazo/adapters/runtime-worker";
 import {
   createCapabilityKey,
   createSessionInbox,
   encodeMessage,
-  type FrameChannel,
   guestModelOf,
   memoryChannelPair,
   mintCapability,
@@ -16,7 +16,8 @@ import {
 import { relayPiAiCall } from "@rakazo/adapters/runtime-worker/pi-ai";
 import { HARNESSES, runGuest } from "@rakazo/agent-run-worker";
 import { afterEach, describe, expect, it } from "vitest";
-import { type ModelEmulatorStep, startModelEmulator } from "./model-emulator.js";
+import type { ModelEmulatorStep } from "./model-emulator.js";
+import { startModelEmulator } from "./model-emulator.js";
 
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => {
@@ -72,6 +73,7 @@ async function driveGuest(options: {
   const controllerCalls: string[] = [];
   const recorded: LocalToolOutput[] = [];
   const frames: Array<{ type: string; bytes: number }> = [];
+  const latencies: Array<{ re: number; firstEventMs: number }> = [];
   const inbox = createSessionInbox(worker, async (_seq, body, part) => {
     switch (body.type) {
       case "model.request":
@@ -113,6 +115,8 @@ async function driveGuest(options: {
         continue;
       }
       frames.push({ type: read.message.payload.body.type, bytes: frame.byteLength });
+      const body = read.message.payload.body;
+      if (body.type === "model.latency") latencies.push(body);
       expect(inbox.accept(read.message)).toEqual({ ok: true });
     }
   })();
@@ -126,7 +130,7 @@ async function driveGuest(options: {
   });
   await controller;
   server.assertComplete();
-  return { exit, recorded, frames, controllerCalls };
+  return { exit, recorded, frames, controllerCalls, latencies };
 }
 
 const bashTool: GuestTool = {
@@ -145,7 +149,7 @@ describe("run channel conformance of the Pi harness", () => {
     const workdir = await mkdtemp(path.join(tmpdir(), "rakazo-guest-run-"));
     cleanups.push(() => rm(workdir, { recursive: true, force: true }));
 
-    const { exit, recorded, frames } = await driveGuest({
+    const { exit, recorded, frames, latencies } = await driveGuest({
       prompt: "Print 5 MiB.",
       tools: [bashTool],
       cwd: workdir,
@@ -174,6 +178,11 @@ describe("run channel conformance of the Pi harness", () => {
     });
 
     expect(exit).toBe("done");
+    expect(latencies).toHaveLength(2);
+    expect(
+      latencies.every((sample) => Number.isFinite(sample.firstEventMs) && sample.firstEventMs >= 0),
+    ).toBe(true);
+    expect(new Set(latencies.map((sample) => sample.re)).size).toBe(2);
     expect(recorded).toEqual([
       {
         text: expect.stringContaining(`[output truncated: ${FIVE_MIB} bytes in total, it is in `),

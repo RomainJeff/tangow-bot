@@ -207,6 +207,12 @@ export const GuestBodySchema = z.discriminatedUnion("type", [
     dialect: ModelDialect,
     call: PiAiModelCallSchema,
   }),
+  /** Guest-local duration, never a cross-machine timestamp. Diagnostic only. */
+  z.strictObject({
+    type: z.literal("model.latency"),
+    re: Seq,
+    firstEventMs: z.number().finite().nonnegative(),
+  }),
   /** Stop streaming the reply to the model request `re`. */
   z.strictObject({ type: z.literal("model.abort"), re: Seq }),
   z.strictObject({

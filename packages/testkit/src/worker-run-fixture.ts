@@ -31,6 +31,7 @@ import { LocalWorkerProvider } from "./local-worker-provider.js";
 import type { ModelEmulatorStep } from "./model-emulator.js";
 import { startModelEmulator } from "./model-emulator.js";
 import { VolumeComputer } from "./volume-computer.js";
+import { openBenchPostgres } from "./worker-live/database.js";
 
 const MODEL_KEY = "worker-fixture-model-key";
 /** The catalog model an Anthropic-protocol run asks for. */
@@ -66,6 +67,7 @@ export async function startWorkerRun<
   Provider extends WorkerProvider & GuestConnector = LocalWorkerProvider,
 >(options: {
   steps: ModelEmulatorStep[];
+  databaseUrl?: string;
   tools?: ConnectorProvider;
   /**
    * Bills a catalog Anthropic model with a plain API key instead of a custom OpenAI-compatible
@@ -95,7 +97,9 @@ export async function startWorkerRun<
   /** Wraps the executor's worker routing, to fail or race it. */
   workers?: (workers: RunWorkers) => RunWorkers;
 }) {
-  const database = await openPgliteDatabase();
+  const database = options.databaseUrl
+    ? await openBenchPostgres(options.databaseUrl)
+    : await openPgliteDatabase();
   const prisma = options.prisma?.(database.prisma) ?? database.prisma;
   const dir = await mkdtemp(path.join(tmpdir(), "rakazo-worker-run-"));
   const anthropic = options.protocol === "anthropic";
