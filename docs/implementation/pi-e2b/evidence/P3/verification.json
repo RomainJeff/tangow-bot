@@ -1,8 +1,7 @@
 {
   "ticket": "RomainJeff/rakazo-bot#197",
   "slice": "S5, live lanes and handoff, branch claude/pi-e2b-p3-live",
-  "tested_commit": "0b5c3a2ce374326e239780c2fe00f88d305dd890",
-  "tested_commit_note": "lanes.json comes from the bundle of the tested commit, after both review rounds. bench.json and template.json come from bd60276bf394ce9d685f0fb9b311ee8ecdc45237: the commits between change only how the controller reaches volume files, outside every timed path, and the guest bundle's sha256 is the same. The commits after the tested commit change only documentation and these receipts.",
+  "tested_commit_note": "lanes.json comes from the bundle of live_lanes_commit. bench.json and template.json come from bd60276bf394ce9d685f0fb9b311ee8ecdc45237; the commits between it and live_lanes_commit change only how the controller reaches volume files, outside every timed path, and the guest bundle's sha256 is the same. Two code commits follow live_lanes_commit and were verified offline only: 891ce66e8 makes the local test runner ignore an EPIPE on a child guest's stdin, and offline_verification_commit makes a volume-file sandbox count as dead only once the control plane no longer lists it. Neither changes the success path the lanes exercise. The other later commits change documentation and these receipts.",
   "feature_base": "ddcb4092e (feature/pi-e2b-workers with #228, #229 and #241)",
   "pending_slice": "S3, branch claude/pi-e2b-p3-compose, not merged at the tested commit",
   "infra": {
@@ -54,10 +53,10 @@
   "head": {
     "pnpm check": "passed, 24 tasks",
     "pnpm lint": "passed, 49 warnings and 1 info, the same as the feature base",
-    "pnpm test": "passed, 8059 tests in 615 files with 209 skipped",
+    "pnpm test": "passed, 8063 tests in 615 files with 209 skipped; one earlier run timed out the file parity test at 30 s on a machine with a load average of 34, and it passed alone in 8 s and in the full rerun",
     "issue verification (pi-runtime, executor-secret-pi, computer-workspace, e2b-sandbox, sandbox-factory)": "passed, 64 tests in 5 files",
     "pnpm test:pi": "passed, 30 tests in 4 files",
-    "P3 offline tests touched": "passed, 161 tests in 17 files, including the volume-files, worker provider, lifecycle and worker-plan tests",
+    "P3 offline tests touched": "passed, 165 tests in 17 files, including the volume-files, worker provider, lifecycle and worker-plan tests",
     "pnpm test:integration": "passed, 163 tests in 23 suites on Testcontainers PostgreSQL",
     "migration script typecheck": "passed with a temporary tsconfig on the base config; a planted type error failed it",
     "live lanes": "10 passed, 4 pending S3; see lanes.json",
@@ -75,7 +74,8 @@
     "Review: /workspace was root-owned 0755 while the guest runs as uid 1001. The template hands it to the sandbox user; lane i checks the guest can write there.",
     "Review round 2: a 502 from envd triggered a sandbox replacement, but a live sandbox behind a failing proxy answers it too, and its delayed rename could publish the retry's partial upload. Replacement now needs proof of death (SandboxNotFoundError, the SDK's 'killed or reached its end of life' TimeoutError, or a 502 with the control plane no longer listing the sandbox); each attempt stages under a new name; a dead sandbox whose destroy failed is destroyed again at close.",
     "Review round 2: the staged file was uploaded at 0644 and chmodded after. It is now created 0600 by the guest user and the upload writes into it; lane h checked live that the upload keeps mode and inode.",
-    "Review round 2: a staged file whose placement could not start stayed on the volume. It is removed with its own 30 s deadline, also on cancellation."
+    "Review round 2: a staged file whose placement could not start stayed on the volume. It is removed with its own 30 s deadline, also on cancellation.",
+    "Review round 3: SandboxNotFoundError and the 'killed or reached its end of life' TimeoutError can both come from a live sandbox behind a failing proxy. Every death signal now needs the control plane to no longer list the sandbox before it is replaced."
   ],
   "perf": {
     "source": "bench.json",
@@ -114,5 +114,7 @@
     "Control cost on PostgreSQL across the E2B network.",
     "Electron E2E: CI only, by repository rule.",
     "Native iOS captures: no mobile code changed."
-  ]
+  ],
+  "live_lanes_commit": "0b5c3a2ce374326e239780c2fe00f88d305dd890",
+  "offline_verification_commit": "acf956f3529eb7334b5934c3bc733e73f5b1c7c3"
 }
