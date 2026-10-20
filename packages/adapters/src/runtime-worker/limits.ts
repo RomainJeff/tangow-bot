@@ -29,8 +29,18 @@ export const WORKER_LIMITS = {
   localOutputModelLines: 2000,
   /** Per command, on the guest disk only; capture stops past it. */
   localOutputSpoolBytes: 16 * MiB,
-  /** The controller re-truncates a guest tool result before recording it. */
+  /**
+   * Spool files kept in the spool directory, which may sit on a persistent volume: the oldest go
+   * before a new one is written. With the per-command cap, at most 256 MiB.
+   */
+  localOutputSpoolFiles: 16,
+  /** The controller re-truncates a command's text before recording it. */
   controllerResultBytes: 64 * KiB,
+  /**
+   * A guest tool's result object, serialized. A larger one is returned to the model as an error
+   * instead, so it never reaches `guestFrameBytes`, which would end the run.
+   */
+  localResultBytes: 512 * KiB,
   /** Covers a cold boot. Checked once, at `worker.hello`. */
   capabilityTtlMs: 10 * 60_000,
   helloDeadlineMs: 30_000,

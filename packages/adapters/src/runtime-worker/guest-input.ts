@@ -5,10 +5,35 @@ import type {
   HarnessCapability,
   HarnessDeclaration,
 } from "@rakazo/adapter-kit";
+import { builtinAgentTools } from "../builtin-tools.js";
+import { FILE_TOOL_NAMES } from "../file-tools.js";
 import { guestModelOf } from "./model-relay.js";
 
-/** Tools the controller places in the guest: they run there after a fenced grant. */
+/**
+ * Tools the controller places in the guest: they run there after a fenced grant. The file tools
+ * keep the definitions of the in-process tools they replace.
+ */
 export const GUEST_TOOLS: readonly ConnectorTool[] = [
+  ...builtinAgentTools.filter((tool) => FILE_TOOL_NAMES.has(tool.name)),
+  {
+    name: "grep",
+    description:
+      "Search file contents in this bot's home for a JavaScript regular expression. Returns path:line:text for each matching line, sorted by path, skipping binary files, .git and node_modules.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        pattern: { type: "string" },
+        path: { type: "string", description: "File or directory to search. Defaults to the home." },
+        glob: {
+          type: "string",
+          description: 'Only files matching it, e.g. "*.md" or "src/**/*.ts".',
+        },
+        ignore_case: { type: "boolean" },
+        max_results: { type: "number", description: "Matching lines to return, 100 by default." },
+      },
+      required: ["pattern"],
+    },
+  },
   {
     name: "bash",
     description:

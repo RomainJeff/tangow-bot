@@ -40,7 +40,8 @@ export function redactConnectorPayload(value: unknown, secrets: string[]): unkno
   }
 }
 
-function redactPayloadValue(value: unknown, secrets: string[]): unknown {
+/** Masks secrets in a value that is already plain JSON, such as a parsed frame. */
+export function redactPayloadValue(value: unknown, secrets: string[]): unknown {
   if (typeof value === "string") return redactSecrets(value, secrets);
   if (Array.isArray(value)) return value.map((item) => redactPayloadValue(item, secrets));
   if (value === null || typeof value === "number" || typeof value === "boolean") {
