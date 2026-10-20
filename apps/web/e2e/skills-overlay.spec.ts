@@ -20,8 +20,12 @@ test("skills overlay: tabs, marketplace URL validation, installed skills", async
   });
 
   await page.getByTestId("open-customize").click();
-  await page.getByTestId("customize-nav-skills").click();
   const overlay = page.getByRole("dialog");
+  await expect(overlay.getByRole("heading", { name: "Integrations" })).toBeVisible();
+  // Switching sections keeps the same dialog element: no close-and-reopen flash.
+  await overlay.evaluate((dialog) => dialog.setAttribute("data-e2e-mark", "kept"));
+  await page.getByTestId("customize-nav-skills").click();
+  await expect(overlay).toHaveAttribute("data-e2e-mark", "kept");
   await expect(overlay.getByRole("heading", { name: "Skills" })).toBeVisible();
   await expect(page.getByTestId("skills-tab-installed")).toBeVisible();
   await expect(page.getByTestId("skills-tab-marketplaces")).toBeVisible();
@@ -51,6 +55,13 @@ test("skills overlay: tabs, marketplace URL validation, installed skills", async
   // Browse without a marketplace points back to the Marketplaces tab.
   await page.getByTestId("skills-tab-browse").click();
   await expect(overlay.getByText("Add a marketplace first.")).toBeVisible();
+
+  // Back to Integrations: still the same dialog, already loaded.
+  await page.getByTestId("customize-nav-integrations").click();
+  await expect(overlay.getByRole("heading", { name: "Integrations" })).toBeVisible();
+  await expect(overlay).toHaveAttribute("data-e2e-mark", "kept");
+  await expect(overlay.getByText("Loading integrations…")).toHaveCount(0);
+  await page.getByTestId("customize-nav-skills").click();
 
   await overlay.getByLabel("Close skills").click();
   await expect(overlay).toHaveCount(0);
