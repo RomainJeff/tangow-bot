@@ -147,14 +147,42 @@ export const laneF: Lane = {
 export const laneI: Lane = {
   id: "i",
   issue: "run sans computer ni fichiers utilisateur",
-  scenario: "A computerless bot completes message_user through a worker with no mounts",
+  scenario:
+    "A computerless bot calls an MCP tool served by the controller, then message_user, through a worker with no mounts",
   passWhen:
-    "The run completes, no computer or volume is created, and worker.start grants no mounts",
+    "The run completes, the MCP tool ran once on the controller, no computer or volume is created, and worker.start grants no mounts",
   async run(live) {
     const mounts: unknown[] = [];
+    const calls: string[] = [];
+    let mcpResult = "";
     const worker = await liveRun(live, {
       computer: "none",
-      steps: finish("Answered without a computer"),
+      tools: {
+        describe: () => ({
+          id: "worker-live-mcp",
+          contractVersion: "1",
+          adapterVersion: "1",
+          capabilities: { discover: true, oauth: false, secretsBrokered: true },
+        }),
+        discoverTools: async () => [
+          {
+            name: "mcp_lookup",
+            description: "Look up a record",
+            inputSchema: { type: "object", properties: {} },
+            readOnly: true,
+          },
+        ],
+        async *execute(request) {
+          calls.push(request.tool);
+          yield { type: "result", data: { found: "record-42" } };
+        },
+      },
+      steps: [
+        call("mcp", "mcp_lookup", {}),
+        ...finish("Answered without a computer", (request) => {
+          mcpResult = toolResult(request);
+        }),
+      ],
       wrap: (provider) =>
         forward(provider, {
           async ensure(spec, ctx) {
@@ -164,17 +192,29 @@ export const laneI: Lane = {
         }),
     });
     try {
-      const runId = await worker.send("Answer without a computer.");
+      const runId = await worker.send("Look up the record without a computer.");
       await worker.completed(runId);
       const computers = await worker.run.prisma.computer.count();
       const volumes = await worker.run.prisma.volume.count();
+      const attempts = await worker.attempts(runId);
       return {
         pass:
+          calls.length === 1 &&
+          mcpResult.includes("record-42") &&
           computers === 0 &&
           volumes === 0 &&
           mounts.length === 1 &&
-          JSON.stringify(mounts[0]) === "[]",
-        observed: { status: await worker.status(runId), computers, volumes, mounts },
+          JSON.stringify(mounts[0]) === "[]" &&
+          attempts.every((attempt) => attempt.workerState === "released"),
+        observed: {
+          status: await worker.status(runId),
+          mcpCalls: calls,
+          mcpResultReachedModel: mcpResult.includes("record-42"),
+          computers,
+          volumes,
+          mounts,
+          workerAttempts: attempts.map(({ workerState }) => workerState),
+        },
       };
     } finally {
       await worker.close();

@@ -1,4 +1,4 @@
-import type { SandboxProvider, WorkerProvider } from "@rakazo/adapter-kit";
+import type { ConnectorProvider, SandboxProvider, WorkerProvider } from "@rakazo/adapter-kit";
 import type { GuestConnector } from "@rakazo/adapters/runtime-worker";
 import { volumeMountPath } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
@@ -22,6 +22,8 @@ export async function liveRun(
     /** The model's wire protocol: a custom OpenAI-compatible connection, or Anthropic's catalog. */
     protocol?: "openai" | "anthropic";
     computer?: "dedicated" | "team" | "none";
+    /** MCP and integration tools, served by the controller. */
+    tools?: ConnectorProvider;
     /** Runs the guest on another provider than the session's E2B one. */
     provider?: () => WorkerProvider & GuestConnector;
     wrap?: ProviderWrap;
@@ -36,6 +38,7 @@ export async function liveRun(
     steps: options.steps,
     databaseUrl: options.databaseUrl,
     protocol: options.protocol,
+    tools: options.tools,
     prisma: options.prisma,
     computerScope: options.computer ?? "dedicated",
     sandbox: options.sandbox,
