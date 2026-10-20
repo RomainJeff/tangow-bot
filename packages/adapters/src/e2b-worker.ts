@@ -231,15 +231,28 @@ export class E2BWorkerProvider implements WorkerProvider, GuestConnector {
         }),
       },
       volumeMounts: Object.fromEntries(spec.mounts.map((mount) => [mount.path, mount.volumeRef])),
-      timeoutMs: Math.min(
-        spec.ttlSeconds * 1000,
-        this.config.maxTimeoutMs ?? E2B_DEFAULT_MAX_TIMEOUT_MS,
-      ),
+      timeoutMs: this.sandboxTimeoutMs(spec),
       lifecycle: { onTimeout: "kill" },
       requestTimeoutMs: remainingMs,
       signal: AbortSignal.timeout(remainingMs),
     });
     return { providerRef };
+  }
+
+  /**
+   * The worker's TTL, or the deployment's limit when that is lower: then the VM dies before the
+   * TTL the lifecycle counts on, so the cap is logged.
+   */
+  private sandboxTimeoutMs(spec: WorkerSpec): number {
+    const ttlMs = spec.ttlSeconds * 1000;
+    const limitMs = this.config.maxTimeoutMs ?? E2B_DEFAULT_MAX_TIMEOUT_MS;
+    if (ttlMs <= limitMs) return ttlMs;
+    getLogger().warn("e2b worker sandbox timeout capped below the worker TTL", {
+      attemptId: spec.attemptId,
+      ttlMs,
+      timeoutMs: limitMs,
+    });
+    return limitMs;
   }
 
   /** The sandbox runs with its mounts once created; the guest's hello is the readiness check. */

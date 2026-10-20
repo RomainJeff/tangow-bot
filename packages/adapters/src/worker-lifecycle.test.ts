@@ -136,7 +136,7 @@ describe("worker start", () => {
     });
     expect(fake.calls[0]).toMatchObject({
       op: "ensure",
-      spec: { mounts: [], ttlSeconds: 14_400 },
+      spec: { mounts: [], ttlSeconds: 3_600 },
     });
     expect(await prisma.computerExecutionLease.count({ where: { computerId: computer.id } })).toBe(
       0,
@@ -168,7 +168,7 @@ describe("worker start", () => {
           { volumeRef: privateVolume.providerRef, path: `/workspace/bots/${bot.id}`, access: "rw" },
           { volumeRef: sharedVolume.providerRef, path: "/workspace/shared", access: "rw" },
         ],
-        ttlSeconds: 14_400,
+        ttlSeconds: 3_600,
         ensureDeadline: new Date(workerEnsureAt!.getTime() + 900_000),
       },
     });
