@@ -2368,6 +2368,7 @@ function Thread() {
                 paddingBottom: composerHeight,
               }}
               scrollIndicatorInsets={{ top: underBar, bottom: composerHeight }}
+              automaticallyAdjustsScrollIndicatorInsets={false}
               maintainVisibleContentPosition={KEEP_VISIBLE_POSITION}
               keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
               keyboardShouldPersistTaps="handled"
@@ -2390,6 +2391,9 @@ function Thread() {
               // Inverted: the top padding is the thread's bottom edge, the bottom one its top, under the
               // bar; the scroll indicator stops below the bar too.
               scrollIndicatorInsets={{ top: composerHeight, bottom: underBar }}
+              // iOS would add the safe area on top of these, and on the inverted list its top lands
+              // at the visual bottom: the indicator stopped well above the composer.
+              automaticallyAdjustsScrollIndicatorInsets={false}
               contentContainerStyle={{
                 paddingHorizontal: THREAD_GUTTER,
                 paddingTop: composerHeight,
@@ -2691,9 +2695,9 @@ function Thread() {
           <View
             style={{
               marginTop: COMPOSER_GAP,
-              // 16 pt from the screen's edges, as the system's own bottom bars:
-              // the row already sits at the thread's 14 pt gutter.
-              marginHorizontal: 2,
+              // 20 pt from the screen's edges: off the bubbles' 14 pt edge, so the
+              // composer reads as its own control rather than continuing their line.
+              marginHorizontal: 6,
               flexDirection: "row",
               alignItems: "flex-end",
               gap: 8,
