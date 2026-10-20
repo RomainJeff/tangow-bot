@@ -29,14 +29,9 @@ const APPROVAL_REQUIRED_BUILTIN_TOOLS = new Set([
   "archive_bot",
   "secret_request",
   "forget_secret",
+  "forget_memory",
 ]);
-const EXPLICIT_APPROVAL_BUILTIN_TOOLS = new Set([
-  "create_space",
-  "spawn_bot",
-  "prepare_memory_method",
-  "review_memory_classification",
-  "change_memory",
-]);
+const EXPLICIT_APPROVAL_BUILTIN_TOOLS = new Set(["create_space", "spawn_bot"]);
 
 const UNATTENDED_SAFE_BUILTIN_TOOLS = new Set([
   "search_runs",

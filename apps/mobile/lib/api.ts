@@ -612,8 +612,12 @@ export async function rpc<T>(
     options.requestContext ?? (uses.length ? await captureApiRequestContext() : undefined);
   await ensureAiDataConsent({
     uses,
-    query: { uses, ...aiConsentTarget(body) },
-    status: (query) => rpc("aiConsent/status", query, { requestContext: consentContext }),
+    status: () =>
+      rpc(
+        "aiConsent/status",
+        { uses, ...aiConsentTarget(body) },
+        { requestContext: consentContext },
+      ),
     prompt: promptAiConsent,
     allow: (input) => rpc("aiConsent/allow", input, { requestContext: consentContext }),
   });

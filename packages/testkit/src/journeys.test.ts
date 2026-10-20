@@ -22,7 +22,6 @@ import {
   createThreadMessage,
   RunHistoryWriteError,
 } from "@rakazo/db";
-import { MarkdownMemoryLibrary } from "@rakazo/memory";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { createApp } from "../../../apps/api/src/app.ts";
 import { sessionCookieHeader, threadMessages } from "./index.js";
@@ -402,29 +401,10 @@ describeJourneys("required product journeys", () => {
       path: "notes/result.txt",
     });
     expect(persisted.content).toContain("isolation-ok");
-    const proposals = await rpc<{ items: Array<{ id: string; revision: number }> }>(
-      app,
-      ada,
-      "memory/library/list",
-      { collection: "agent", botId: coder.id, status: "proposed" },
-    );
-    const proposedDocuments = await Promise.all(
-      proposals.items.map((item) =>
-        rpc<{ id: string; content: string; revision: number; status: string }>(
-          app,
-          ada,
-          "memory/library/get",
-          { documentId: item.id },
-        ),
-      ),
-    );
-    const preference = proposedDocuments.find((document) =>
-      document.content.toLowerCase().includes("rust"),
-    );
-    expect(preference?.status).toBe("proposed");
-    expect(
-      await new MarkdownMemoryLibrary(prisma).accept(adaMe, preference!.id, preference!.revision),
-    ).toMatchObject({ status: "active", content: preference!.content });
+    const coderMem = await rpc<Array<{ content: string }>>(app, ada, "memory/list", {
+      botId: coder.id,
+    });
+    expect(coderMem.some((m) => m.content.toLowerCase().includes("rust"))).toBe(true);
     const dedicated = await rpc<Bot>(app, ada, "bots/setComputer", {
       botId: coder.id,
       mode: "dedicated",
@@ -459,9 +439,11 @@ describeJourneys("required product journeys", () => {
       bot.id,
       "write a file in your home called notes/result.txt that says kept-after-clear",
     );
-    await rpc(app, cookie, "memory/library/create", {
-      collection: "agent",
+    const memories = await rpc<Array<{ id: string }>>(app, cookie, "memory/list", {
       botId: bot.id,
+    });
+    await rpc(app, cookie, "memory/update", {
+      documentId: memories[0]!.id,
       content: "# Keeper\n\nRemember this after clearing.",
     });
     const routine = await rpc<{ id: string }>(app, cookie, "routines/create", {
@@ -1572,38 +1554,13 @@ describeJourneys("required product journeys", () => {
       instructions: "",
       notifyOnFinish: true,
     });
-    const goneRecord = await prisma.bot.findUniqueOrThrow({ where: { id: gone.id } });
-    const goneCollection = await prisma.memoryCollection.findFirstOrThrow({
-      where: { spaceId: goneRecord.spaceId, kind: "agent", botId: gone.id },
+    const goneMemory = await prisma.memoryDocument.findFirstOrThrow({ where: { botId: gone.id } });
+    const forgetMemory = await prisma.memoryDocument.findFirstOrThrow({
+      where: { botId: forget.id },
     });
-    const forgetCollection = await prisma.memoryCollection.findFirstOrThrow({
-      where: { spaceId: goneRecord.spaceId, kind: "agent", botId: forget.id },
-    });
-    const goneMemory = await prisma.memoryDocument.create({
-      data: {
-        spaceId: goneRecord.spaceId,
-        userId: goneRecord.userId,
-        collectionId: goneCollection.id,
-        botId: gone.id,
-        scope: "bot",
-        path: "important.md",
-        title: "important",
-        content: "important retained context",
-        status: "active",
-      },
-    });
-    const forgetMemory = await prisma.memoryDocument.create({
-      data: {
-        spaceId: goneRecord.spaceId,
-        userId: goneRecord.userId,
-        collectionId: forgetCollection.id,
-        botId: forget.id,
-        scope: "bot",
-        path: "forget.md",
-        title: "forget",
-        content: "forgettable",
-        status: "active",
-      },
+    await prisma.memoryDocument.update({
+      where: { id: goneMemory.id },
+      data: { content: "important retained context" },
     });
     await sendAndWait(
       app,

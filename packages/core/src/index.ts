@@ -34,7 +34,6 @@ export * from "./http-response.js";
 export * from "./launch-choreography.js";
 export * from "./link-preview.js";
 export * from "./mcp.js";
-export * from "./memory-library.js";
 export * from "./message-grouping.js";
 export * from "./message-reactions.js";
 export * from "./message-visibility.js";

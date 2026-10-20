@@ -19,18 +19,6 @@ export type SessionId = z.infer<typeof SessionId>;
 export const EntrySeq = z.number().int().nonnegative().brand<"EntrySeq">();
 export type EntrySeq = z.infer<typeof EntrySeq>;
 
-/** One canonical memory revision a run or a summary was given as context. */
-export const MemoryManifestEntry = z.object({
-  documentId: z.string(),
-  revision: z.number(),
-  accessVersion: z.number().optional(),
-  scope: z.enum(["bot", "user"]),
-  path: z.string(),
-  reason: z.enum(["local_lexical_match", "recent_authorized"]),
-  excerptBytes: z.number(),
-});
-export type MemoryManifestEntry = z.infer<typeof MemoryManifestEntry>;
-
 export const RunSearchHit = z.object({
   runId: Id,
   sessionId: SessionId,
@@ -366,11 +354,6 @@ const EntryShapes = z.discriminatedUnion("type", [
        * the compaction keeps word for word, so a reader of the tail walks back to it.
        */
       coveredUpToSeq: EntrySeq,
-      /**
-       * The canonical memory revisions the summary was derived from. A reader drops the summary
-       * when it is missing or one of them is no longer authorized.
-       */
-      memoryManifest: z.array(MemoryManifestEntry).optional(),
     }),
   ),
   z.object({

@@ -78,11 +78,7 @@ export default function BotMemoryScreen() {
     setBusy(true);
     setFailed(null);
     try {
-      await rpc<MemoryDocument>("memory/update", {
-        documentId: doc.id,
-        content: draft,
-        expectedRevision: doc.revision,
-      });
+      await rpc<MemoryDocument>("memory/update", { documentId: doc.id, content: draft });
       // Only this sheet may close: a back after it is gone would pop the bot page.
       if (mounted.current) router.back();
     } catch (error) {

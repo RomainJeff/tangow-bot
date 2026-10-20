@@ -389,17 +389,12 @@ export async function destroyBot(
       if (!options.deleteMemories) {
         const directory = archivedMemoryDirectory(bot.name, bot.id);
         await tx.$executeRaw`
-          UPDATE "memory_documents" AS document
+          UPDATE "memory_documents"
           SET "botId" = NULL,
-              "collectionId" = personal.id,
               "scope" = 'user',
-              "path" = ${directory} || '/' || document."path",
+              "path" = ${directory} || '/' || "path",
               "updatedAt" = CURRENT_TIMESTAMP
-          FROM "memory_collections" AS personal
-          WHERE document."botId" = ${bot.id}
-            AND personal."spaceId" = ${bot.spaceId}
-            AND personal.kind = 'personal'
-            AND personal."ownerUserId" = ${bot.userId ?? context.userId}
+          WHERE "botId" = ${bot.id}
         `;
       }
       await tx.botDeletion.create({

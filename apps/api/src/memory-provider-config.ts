@@ -25,19 +25,13 @@ export interface MemoryProviderConfigDeps {
   ) => ReturnType<typeof prepareMemoryProviderConnection>;
 }
 
-export function isSpaceOwnerRole(role: string | undefined): boolean {
-  return Boolean(role?.split(",").some((entry) => entry.trim() === "owner"));
-}
-
-export async function requireSpaceOwner(
-  db: PrismaClient | Prisma.TransactionClient,
-  actor: Actor,
-): Promise<void> {
-  const member = await db.spaceMember.findUnique({
+export async function requireSpaceOwner(prisma: PrismaClient, actor: Actor): Promise<void> {
+  const member = await prisma.spaceMember.findUnique({
     where: { spaceId_userId: { spaceId: actor.spaceId, userId: actor.userId } },
     select: { role: true },
   });
-  if (!isSpaceOwnerRole(member?.role)) throw new ORPCError("FORBIDDEN");
+  const roles = member?.role.split(",").map((role) => role.trim());
+  if (!roles?.includes("owner")) throw new ORPCError("FORBIDDEN");
 }
 
 export async function persistMemoryProviderConfig(

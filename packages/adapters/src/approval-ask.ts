@@ -1,17 +1,6 @@
 import type { MessageBlock } from "@rakazo/contracts";
 import type { RoutineCard } from "@rakazo/core";
-import {
-  redactSecrets,
-  routineCardBlock,
-  spawnBotApprovalBlock,
-  toolRequiresExplicitApproval,
-} from "@rakazo/core";
-
-const MEMORY_APPROVAL_TOOLS = new Set([
-  "prepare_memory_method",
-  "review_memory_classification",
-  "change_memory",
-]);
+import { redactSecrets, routineCardBlock, spawnBotApprovalBlock } from "@rakazo/core";
 
 const MAX_APPROVAL_SUMMARY_LENGTH = 500;
 const MAX_APPROVAL_DETAIL_LENGTH = 4_000;
@@ -45,11 +34,7 @@ export function buildApprovalAskBlock(
       ),
       MAX_APPROVAL_SUMMARY_LENGTH,
     ),
-    detail: safeDetail
-      ? MEMORY_APPROVAL_TOOLS.has(toolName)
-        ? safeDetail
-        : truncate(safeDetail, MAX_APPROVAL_DETAIL_LENGTH)
-      : undefined,
+    detail: safeDetail ? truncate(safeDetail, MAX_APPROVAL_DETAIL_LENGTH) : undefined,
     status: "pending",
     actions:
       toolName === "create_space"
@@ -57,23 +42,15 @@ export function buildApprovalAskBlock(
             { id: "allow", label: "Create space", outcome: "created" },
             { id: "deny", label: "Cancel", outcome: "cancelled" },
           ]
-        : toolRequiresExplicitApproval(toolName)
-          ? [
-              { id: "allow", label: "Allow once" },
-              { id: "deny", label: "Deny" },
-            ]
-          : [
-              { id: "allow", label: "Allow once" },
-              { id: "always", label: "Always allow this tool" },
-              { id: "deny", label: "Deny" },
-            ],
+        : [
+            { id: "allow", label: "Allow once" },
+            { id: "always", label: "Always allow this tool" },
+            { id: "deny", label: "Deny" },
+          ],
   };
 }
 
 function describeApprovalAction(toolName: string, args: Record<string, unknown>): string {
-  if (toolName === "prepare_memory_method") return "saving classification criteria";
-  if (toolName === "review_memory_classification") return "validating classification";
-  if (toolName === "change_memory") return `${String(args.action ?? "change")} memory`;
   if (toolName === "destination.write") {
     const collection = args.collection ? String(args.collection) : "records";
     const title = args.title ? ` "${String(args.title)}"` : "";
@@ -96,7 +73,6 @@ function formatApprovalDetail(
   args: Record<string, unknown>,
   reviewReason?: string,
 ): string | undefined {
-  if (MEMORY_APPROVAL_TOOLS.has(toolName)) return JSON.stringify(args, null, 2);
   const lines: string[] = [];
   if (reviewReason?.trim()) {
     lines.push(reviewReason.trim().replace(/\u2014|\u2013/g, "-"));

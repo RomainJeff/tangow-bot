@@ -37,7 +37,6 @@ import { z } from "zod";
 import { isToolPauseResult } from "./approval-effect.js";
 import { builtinAgentTools, DELEGATION_TOOL_NAMES } from "./builtin-tools.js";
 import { DEFAULT_OPENROUTER_MODEL_ID } from "./deployment-model.js";
-import { MEMORY_MANAGEMENT_TOOL_NAMES } from "./memory-management-tools.js";
 import { piProviderId } from "./model-catalog.js";
 import {
   normalizeOpenAiToolParameters,
@@ -369,7 +368,8 @@ export class PiAgentRuntime implements AgentRuntime {
         agent = new Agent({
           sessionId: conversationSessionId(request.threadId, request.botId),
           steeringMode: "all",
-          streamFn: checkedStream(request, models, request.model.maxTokens),
+          streamFn: (m, ctx, options) =>
+            models.streamSimple(m, ctx, reliableStreamOptions(m, options, request.model.maxTokens)),
           getApiKey: async () => apiKey,
           transformContext: async (messages) =>
             pruneComputerScreenshotContext(messages, request.model.maxImagesPerPrompt),
@@ -1509,10 +1509,7 @@ async function runSubagent(
 
   // A helper reports back to the bot that ran it, never to the user.
   const childDefs = (host.request.tools.length ? host.request.tools : builtinAgentTools).filter(
-    (tool) =>
-      !DELEGATION_TOOL_NAMES.has(tool.name) &&
-      !MEMORY_MANAGEMENT_TOOL_NAMES.has(tool.name) &&
-      tool.name !== "message_user",
+    (tool) => !DELEGATION_TOOL_NAMES.has(tool.name) && tool.name !== "message_user",
   );
   const nestedHost: ToolHost = {
     ...host,
@@ -1526,7 +1523,12 @@ async function runSubagent(
   };
   const nested = new Agent({
     sessionId: conversationSessionId(host.request.threadId, host.request.botId, agentId),
-    streamFn: checkedStream(host.request, selectedModel.models, requestModel.maxTokens),
+    streamFn: (m, ctx, options) =>
+      selectedModel.models.streamSimple(
+        m,
+        ctx,
+        reliableStreamOptions(m, options, requestModel.maxTokens),
+      ),
     getApiKey: async () => selectedModel.apiKey,
     transformContext: async (messages) =>
       pruneComputerScreenshotContext(messages, requestModel.maxImagesPerPrompt),
@@ -2185,18 +2187,6 @@ function createQueue(): EventQueue {
         });
       }
     },
-  };
-}
-
-/** Streams one provider request once the run confirms its data may still reach a model. */
-function checkedStream(
-  request: Pick<AgentRunRequest, "beforeModelCall">,
-  models: Models,
-  maxTokens: number | undefined,
-) {
-  return async (...[model, context, options]: Parameters<Models["streamSimple"]>) => {
-    await request.beforeModelCall?.();
-    return models.streamSimple(model, context, reliableStreamOptions(model, options, maxTokens));
   };
 }
 

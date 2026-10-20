@@ -201,6 +201,7 @@ function fixture(overrides: RunOverrides = {}, runId = "run-1") {
       commit: memoryCommit,
       exportMarkdown: async function* () {},
     },
+    memoryProviders: { resolve: async () => null },
     events: { append: vi.fn(async () => undefined), pauseRunForInput, finalizeRun },
     jobs: { enqueue: vi.fn(async () => undefined) },
     secrets: [],

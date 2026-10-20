@@ -27,14 +27,6 @@ describePostgres("memory commits (PostgreSQL)", () => {
       await prisma.$disconnect();
       await db.pool.end();
     };
-    const createdAt = new Date();
-    await prisma.user.create({
-      data: {
-        id: context.userId,
-        name: "Memory Commit User",
-        email: "memory-commit-user@rakazo.test",
-      },
-    });
     await prisma.organization.create({
       data: {
         id: context.spaceId,
@@ -57,51 +49,12 @@ describePostgres("memory commits (PostgreSQL)", () => {
         },
       },
     });
-    await prisma.member.create({
-      data: {
-        id: "memory-commit-member",
-        organizationId: context.spaceId,
-        userId: context.userId,
-        role: "owner",
-        createdAt,
-      },
-    });
-    await prisma.spaceMember.create({
-      data: {
-        id: "memory-commit-space-member",
-        spaceId: context.spaceId,
-        organizationId: context.spaceId,
-        userId: context.userId,
-        role: "owner",
-        createdAt,
-      },
-    });
-    await prisma.thread.create({
-      data: {
-        id: "memory-commit-thread",
-        spaceId: context.spaceId,
-        botId: "memory-commit-bot",
-        userId: context.userId,
-      },
-    });
-    await prisma.memoryCollection.createMany({
-      data: [
-        { spaceId: context.spaceId, kind: "personal", ownerUserId: context.userId },
-        {
-          spaceId: context.spaceId,
-          kind: "agent",
-          ownerUserId: context.userId,
-          botId: "memory-commit-bot",
-        },
-      ],
-    });
   });
 
   afterAll(async () => {
     if (!prisma) return;
     try {
       await prisma.organization.deleteMany({ where: { id: context.spaceId } });
-      await prisma.user.deleteMany({ where: { id: context.userId } });
     } finally {
       await close();
     }
@@ -112,133 +65,223 @@ describePostgres("memory commits (PostgreSQL)", () => {
       scope: "user",
       path,
       content,
-      sourceThreadId: "memory-commit-thread",
+      sourceRunId: `run-${content}`,
+      sourceThreadId: `thread-${content}`,
     };
   }
 
-  it("creates a proposed document without modifying an approved document", async () => {
-    const collection = await prisma.memoryCollection.findFirstOrThrow({
-      where: { spaceId: context.spaceId, kind: "personal", ownerUserId: context.userId },
+  async function document(path: string) {
+    return prisma.memoryDocument.findFirstOrThrow({
+      where: { spaceId: context.spaceId, path },
+      include: { revisions: { orderBy: { revision: "asc" } } },
     });
-    const approved = await prisma.memoryDocument.create({
-      data: {
-        spaceId: context.spaceId,
-        userId: context.userId,
-        collectionId: collection.id,
-        scope: "user",
-        path: "MEMORY.md",
-        title: "Approved fact",
-        content: "approved fact",
-        status: "active",
-      },
+  }
+
+  it.each(["user", "bot"] as const)(
+    "retries overlapping %s saves with fresh revisions and matching history",
+    async (scope) => {
+      const path = `concurrent-${scope}.md`;
+      const write = (content: string): MemoryCommitRequest => ({
+        ...request(path, content),
+        scope,
+        botId: scope === "bot" ? "memory-commit-bot" : undefined,
+      });
+      const initial = await store.commit(write("initial"), context);
+      let reads = 0;
+      let release!: () => void;
+      const bothRead = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const concurrentStore = new MarkdownMemoryStore(
+        prisma.$extends({
+          query: {
+            memoryDocument: {
+              async findFirst({ args, query }) {
+                const result = await query(args);
+                reads += 1;
+                // Both first attempts see revision 1 before either can write.
+                if (reads === 2) release();
+                if (reads <= 2) await bothRead;
+                return result;
+              },
+            },
+          },
+        }) as PrismaClient,
+      );
+
+      const results = await Promise.allSettled([
+        concurrentStore.commit(write("first"), context),
+        concurrentStore.commit(write("second"), context),
+      ]);
+
+      expect(results.map((result) => result.status)).toEqual(["fulfilled", "fulfilled"]);
+      expect(reads).toBe(3);
+      const saved = results.flatMap((result) =>
+        result.status === "fulfilled" ? [result.value] : [],
+      );
+      expect(saved.map((result) => result.revision).sort()).toEqual([2, 3]);
+      const current = await document(path);
+      expect(current.revision).toBe(3);
+      expect(current.content).toBe(saved.find((result) => result.revision === 3)!.content);
+      expect(current.revisions).toHaveLength(3);
+      for (const result of [initial, ...saved]) {
+        expect(
+          current.revisions.find((revision) => revision.revision === result.revision),
+        ).toMatchObject({
+          documentId: result.id,
+          revision: result.revision,
+          content: result.content,
+          sourceRunId: `run-${result.content}`,
+          sourceThreadId: `thread-${result.content}`,
+        });
+      }
+    },
+  );
+
+  it("keeps both facts when two appends overlap on the same document", async () => {
+    const path = "concurrent-append.md";
+    const append = (content: string): MemoryCommitRequest => ({
+      ...request(path, content),
+      content: `- ${content}`,
+      mode: "append",
     });
-
-    const proposed = await store.commit(request("MEMORY.md", "runtime fact"), context);
-
-    expect(proposed.id).not.toBe(approved.id);
-    expect(
-      await prisma.memoryDocument.findUniqueOrThrow({ where: { id: approved.id } }),
-    ).toMatchObject({
-      content: "approved fact",
-      status: "active",
-      revision: 1,
+    await store.commit(append("initial"), context);
+    let reads = 0;
+    let release!: () => void;
+    const bothRead = new Promise<void>((resolve) => {
+      release = resolve;
     });
-    expect(
-      await prisma.memoryDocument.findUniqueOrThrow({ where: { id: proposed.id } }),
-    ).toMatchObject({
-      status: "proposed",
-      revision: 1,
-      content: "runtime fact",
-      sourceKind: "thread",
-      sourceReferenceId: "memory-commit-thread",
-    });
-    expect(
-      await prisma.memoryRevision.findFirstOrThrow({
-        where: { documentId: proposed.id, revision: 1 },
-      }),
-    ).toMatchObject({
-      content: "runtime fact",
-      sourceRunId: null,
-      sourceThreadId: "memory-commit-thread",
-      sourceKind: "thread",
-      sourceReferenceId: "memory-commit-thread",
-      status: "proposed",
-    });
-  });
-
-  it("deduplicates concurrent retries of the same runtime command", async () => {
-    const command = request("retry.md", "same runtime fact");
-    const [first, second] = await Promise.all([
-      store.commit(command, context),
-      store.commit(command, context),
-    ]);
-
-    expect(second).toEqual(first);
-    expect(
-      await prisma.memoryDocument.count({
-        where: { spaceId: context.spaceId, content: "same runtime fact" },
-      }),
-    ).toBe(1);
-  });
-
-  it("rejects runtime commits from a non-member", async () => {
-    await expect(
-      store.commit(request("forbidden.md", "must not be stored"), {
-        ...context,
-        operationId: "non-member-operation",
-        userId: "memory-commit-outsider",
-      }),
-    ).rejects.toMatchObject({ name: "IsolationError" });
-    expect(
-      await prisma.memoryDocument.findFirst({
-        where: { spaceId: context.spaceId, content: "must not be stored" },
-      }),
-    ).toBeNull();
-  });
-
-  it("rolls back a rejected revision write and permits a retry", async () => {
-    const command = request("rejected.md", "retry after rollback");
-    let inserts = 0;
-    const rejectingStore = new MarkdownMemoryStore(
+    const concurrentStore = new MarkdownMemoryStore(
       prisma.$extends({
         query: {
-          memoryRevision: {
-            async create({ args, query }) {
-              inserts += 1;
-              return query({
-                ...args,
-                data: { ...args.data, document: undefined, documentId: "missing-document" },
-              });
+          memoryDocument: {
+            async findFirst({ args, query }) {
+              const result = await query(args);
+              reads += 1;
+              // Both first attempts see revision 1 before either can write.
+              if (reads === 2) release();
+              if (reads <= 2) await bothRead;
+              return result;
             },
           },
         },
       }) as PrismaClient,
     );
 
-    await expect(rejectingStore.commit(command, context)).rejects.toMatchObject({ code: "P2003" });
-    expect(inserts).toBe(1);
-    expect(
-      await prisma.memoryDocument.findFirst({
-        where: { spaceId: context.spaceId, content: command.content },
-      }),
-    ).toBeNull();
+    const results = await Promise.allSettled([
+      concurrentStore.commit(append("first"), context),
+      concurrentStore.commit(append("second"), context),
+    ]);
 
-    const retried = await store.commit(command, context);
-    expect(retried.content).toBe(command.content);
-    expect(await prisma.memoryRevision.count({ where: { documentId: retried.id } })).toBe(1);
+    expect(results.map((result) => result.status)).toEqual(["fulfilled", "fulfilled"]);
+    // The loser re-reads the winner's document instead of overwriting it.
+    expect(reads).toBe(3);
+    const current = await document(path);
+    expect(current.revision).toBe(3);
+    expect(current.content.split("\n").sort()).toEqual(["- first", "- initial", "- second"]);
+    expect(current.content.startsWith("- initial\n")).toBe(true);
+    expect(current.revisions.map((revision) => revision.content)).toEqual([
+      "- initial",
+      expect.stringMatching(/^- initial\n- (first|second)$/),
+      current.content,
+    ]);
   });
 
-  it("requires a bot owned by the runtime actor", async () => {
-    await expect(
-      store.commit(
-        { ...request("forged-bot.md", "must not be stored"), scope: "bot", botId: "forged-bot" },
-        context,
-      ),
-    ).rejects.toMatchObject({ name: "IsolationError" });
-    expect(
-      await prisma.memoryDocument.findFirst({
-        where: { spaceId: context.spaceId, content: "must not be stored" },
-      }),
-    ).toBeNull();
+  it.each([false, true])(
+    "rolls back a rejected history insert and permits a caller retry (existing: %s)",
+    async (existing) => {
+      const path = `rejected-${existing}.md`;
+      if (existing) await store.commit(request(path, "initial"), context);
+      const before = await prisma.memoryDocument.findMany({
+        where: { spaceId: context.spaceId, path },
+        include: { revisions: true },
+      });
+      let inserts = 0;
+      const rejectingStore = new MarkdownMemoryStore(
+        prisma.$extends({
+          query: {
+            memoryRevision: {
+              async create({ args, query }) {
+                inserts += 1;
+                // Make PostgreSQL reject the history row after the document write.
+                return query({
+                  ...args,
+                  data: {
+                    ...args.data,
+                    document: undefined,
+                    documentId: "missing-memory-document",
+                  },
+                });
+              },
+            },
+          },
+        }) as PrismaClient,
+      );
+
+      await expect(rejectingStore.commit(request(path, "rejected"), context)).rejects.toMatchObject(
+        {
+          code: "P2003",
+        },
+      );
+      expect(inserts).toBe(1);
+      expect(
+        await prisma.memoryDocument.findMany({
+          where: { spaceId: context.spaceId, path },
+          include: { revisions: true },
+        }),
+      ).toEqual(before);
+
+      const retried = await store.commit(request(path, "rejected"), context);
+      expect(retried.revision).toBe(existing ? 2 : 1);
+      const current = await document(path);
+      expect(current.revisions).toHaveLength(retried.revision);
+      expect(current.revisions.at(-1)).toMatchObject({
+        revision: retried.revision,
+        content: retried.content,
+      });
+    },
+  );
+
+  it("bounds conflict retries, preserves only committed saves, and allows a later retry", async () => {
+    const path = "exhausted.md";
+    await store.commit(request(path, "initial"), context);
+    let attempts = 0;
+    const conflictingStore = new MarkdownMemoryStore(
+      prisma.$extends({
+        query: {
+          memoryDocument: {
+            async findFirst({ args, query }) {
+              const result = await query(args);
+              attempts += 1;
+              // Invalidate every attempted snapshot with a separate committed save.
+              await store.commit(request(path, `winner-${attempts}`), context);
+              return result;
+            },
+          },
+        },
+      }) as PrismaClient,
+    );
+
+    await expect(conflictingStore.commit(request(path, "rejected"), context)).rejects.toMatchObject(
+      {
+        code: "P2034",
+      },
+    );
+    expect(attempts).toBe(3);
+    const current = await document(path);
+    expect(current).toMatchObject({ revision: 4, content: "winner-3" });
+    expect(current.revisions.map(({ revision, content }) => ({ revision, content }))).toEqual([
+      { revision: 1, content: "initial" },
+      { revision: 2, content: "winner-1" },
+      { revision: 3, content: "winner-2" },
+      { revision: 4, content: "winner-3" },
+    ]);
+
+    const retried = await store.commit(request(path, "rejected"), context);
+    expect(retried.revision).toBe(5);
+    const afterRetry = await document(path);
+    expect(afterRetry).toMatchObject({ revision: 5, content: "rejected" });
+    expect(afterRetry.revisions).toHaveLength(5);
+    expect(afterRetry.revisions.at(-1)).toMatchObject({ revision: 5, content: "rejected" });
   });
 });

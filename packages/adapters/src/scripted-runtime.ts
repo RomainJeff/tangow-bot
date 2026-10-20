@@ -64,11 +64,6 @@ export class ScriptedAgentRuntime implements AgentRuntime {
           yield { type: "done", text: "stopped" };
           return;
         }
-        await request.beforeModelCall?.();
-        if (signal.aborted || controller.signal.aborted) {
-          yield { type: "done", text: "stopped" };
-          return;
-        }
         if (turn.assistant) {
           yield { type: "progress", text: "working…", activity: true };
           if (sendsReply && index > lastInterrupt) {

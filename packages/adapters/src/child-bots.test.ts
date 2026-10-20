@@ -324,8 +324,6 @@ describe("destroyBot", () => {
     expect(executeRaw.mock.calls[0]?.slice(1)).toEqual([
       "Archived bots/Researcher (bot-1)",
       "bot-1",
-      "workspace-1",
-      "user-1",
     ]);
     expect(createDeletion).toHaveBeenCalledWith({
       data: {

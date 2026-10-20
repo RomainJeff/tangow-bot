@@ -3,7 +3,6 @@ import type { Bot } from "@rakazo/contracts";
 import type { ComponentProps, ReactNode } from "react";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 vi.mock("@lingui/react/macro", () => {
@@ -116,13 +115,7 @@ function renderSidebar(overrides: Partial<ComponentProps<typeof BotsSidebar>> = 
     setUsage: vi.fn(),
     botsSidebarEdgeDragRef: { current: null },
   } satisfies ComponentProps<typeof BotsSidebar>;
-  act(() =>
-    root.render(
-      <MemoryRouter>
-        <BotsSidebar {...props} {...overrides} />
-      </MemoryRouter>,
-    ),
-  );
+  act(() => root.render(<BotsSidebar {...props} {...overrides} />));
   return props;
 }
 

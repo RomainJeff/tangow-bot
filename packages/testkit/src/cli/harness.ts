@@ -90,14 +90,7 @@ async function main() {
 
     if (integration) {
       const suites = [
-        "packages/testkit/src/memory-migration.postgres.test.ts",
-        "packages/testkit/src/memory-library.postgres.test.ts",
-        "packages/testkit/src/memory-consolidation.postgres.test.ts",
-        "packages/testkit/src/bot-memory-methods.postgres.test.ts",
-        "packages/testkit/src/bot-memory-feedback.postgres.test.ts",
-        "packages/testkit/src/memory-capture.postgres.test.ts",
         "packages/testkit/src/pi-offline.postgres.test.ts",
-        "packages/testkit/src/pi-offline-memory.postgres.test.ts",
         "packages/testkit/src/computer-approval.postgres.test.ts",
         "packages/testkit/src/eval-history.postgres.test.ts",
         "packages/testkit/src/eval-customer-support.postgres.test.ts",
@@ -139,12 +132,7 @@ async function main() {
         if (result.exitCode !== 0)
           throw new Error("Isolated integration database operation failed");
       };
-      const selectedSuites =
-        e2eSpecs.length > 0 ? suites.filter((suite) => e2eSpecs.includes(suite)) : suites;
-      if (selectedSuites.length === 0) {
-        throw new Error("The requested integration spec is not registered in the harness");
-      }
-      for (const [index, suite] of selectedSuites.entries()) {
+      for (const [index, suite] of suites.entries()) {
         const database = `integration_${index}`;
         await databaseCommand(`CREATE DATABASE "${database}" TEMPLATE "${template}"`);
         const suiteUrl = new URL(databaseUrl);
