@@ -46,6 +46,7 @@ export * from "./expo-push.js";
 export * from "./fake-browser.js";
 export * from "./fake-decision.js";
 export * from "./fake-sandbox.js";
+export * from "./fake-volume-files.js";
 export * from "./fake-web.js";
 export * from "./fake-worker-provider.js";
 export * from "./fish-audio-voice.js";
