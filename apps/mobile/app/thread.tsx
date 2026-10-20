@@ -342,7 +342,9 @@ const COMPOSER_GAP = 16;
 /** The thread column's side margin. The thread draws into it too, for the same shadow. */
 const THREAD_GUTTER = 14;
 /** Where the thread draws past its column, and the room it gives back inside. */
-const BLEED_STYLE = { marginHorizontal: -THREAD_GUTTER, marginBottom: -COMPOSER_GAP };
+const BLEED_STYLE = { marginHorizontal: -THREAD_GUTTER };
+/** The composer row's height before its first layout: one line, the home indicator below. */
+const COMPOSER_ROW_ESTIMATE = 100;
 
 export default function ThreadRoute() {
   const tokens = useMobileTokens();
@@ -411,7 +413,10 @@ function Thread() {
   const router = useRouter();
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
+  // The composer floats over the thread's end; the thread keeps its last message above it.
+  const [composerHeight, setComposerHeight] = useState(COMPOSER_ROW_ESTIMATE);
   const keyboardVisible = useKeyboardState((state) => state.isVisible);
+  const composerBottomInset = keyboardVisible ? 8 : Math.max(insets.bottom + 8, 20);
   const { botId, groupId, name, messageId } = useLocalSearchParams<{
     botId?: string;
     groupId?: string;
@@ -772,6 +777,7 @@ function Thread() {
       title: displayName || t("Thread"),
       // The thread runs under the bar, whose buttons take glass on iOS 26; ThreadScrollEdge keeps the title legible.
       headerTransparent: true,
+      headerStyle: { backgroundColor: "transparent" },
       // Bot actions (bot settings, open computer, clear, archive, delete) live
       // on a long press; a short press opens the bot's page.
       headerTitle: () => (
@@ -2352,9 +2358,9 @@ function Thread() {
               contentContainerStyle={{
                 paddingHorizontal: THREAD_GUTTER,
                 paddingTop: headerHeight + 8,
-                paddingBottom: COMPOSER_GAP,
+                paddingBottom: composerHeight,
               }}
-              scrollIndicatorInsets={{ top: headerHeight }}
+              scrollIndicatorInsets={{ top: headerHeight, bottom: composerHeight }}
               maintainVisibleContentPosition={KEEP_VISIBLE_POSITION}
               keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
               keyboardShouldPersistTaps="handled"
@@ -2376,10 +2382,10 @@ function Thread() {
               style={[{ flex: 1 }, BLEED_STYLE]}
               // Inverted: the top padding is the thread's bottom edge, the bottom one its top, under the
               // bar; the scroll indicator stops below the bar too.
-              scrollIndicatorInsets={{ bottom: headerHeight }}
+              scrollIndicatorInsets={{ top: composerHeight, bottom: headerHeight }}
               contentContainerStyle={{
                 paddingHorizontal: THREAD_GUTTER,
-                paddingTop: COMPOSER_GAP,
+                paddingTop: composerHeight,
                 paddingBottom: headerHeight + 8,
               }}
               maintainVisibleContentPosition={KEEP_VISIBLE_POSITION}
@@ -2415,26 +2421,6 @@ function Thread() {
               renderItem={({ item, index }) => renderRow(item, { previous: liveRows[index + 1] })}
             />
           )}
-          <View
-            pointerEvents="none"
-            style={{
-              position: "absolute",
-              left: -THREAD_GUTTER,
-              right: -THREAD_GUTTER,
-              bottom: -COMPOSER_GAP,
-              height: COMPOSER_GAP,
-            }}
-          >
-            <Svg width="100%" height={COMPOSER_GAP}>
-              <Defs>
-                <LinearGradient id="composer-gap-fade" x1="0" y1="0" x2="0" y2="1">
-                  <Stop offset="0" stopColor={ambientFloor[colorScheme]} stopOpacity={0} />
-                  <Stop offset="1" stopColor={ambientFloor[colorScheme]} stopOpacity={1} />
-                </LinearGradient>
-              </Defs>
-              <Rect width="100%" height={COMPOSER_GAP} fill="url(#composer-gap-fade)" />
-            </Svg>
-          </View>
           {!showPinnedPage && threadScrollState.detached ? (
             <Pressable
               accessibilityRole="button"
@@ -2449,7 +2435,7 @@ function Thread() {
                 position: "absolute",
                 left: "50%",
                 marginLeft: -21,
-                bottom: 12,
+                bottom: composerHeight + 12,
                 width: 42,
                 height: 42,
                 borderRadius: 21,
@@ -2484,15 +2470,33 @@ function Thread() {
           ) : null}
         </View>
         <View
+          onLayout={(event) => setComposerHeight(Math.round(event.nativeEvent.layout.height))}
           style={{
+            // Floats over the thread's end, so the bubbles pass under the composer's glass.
+            position: "absolute",
+            left: THREAD_GUTTER,
+            right: THREAD_GUTTER,
+            bottom: 0,
             // Keyboard covers the nav bar / home indicator, so the safe-area
             // inset would render as dead space between composer and keyboard.
             // 8 px above the keyboard when it's open, 8 px above the
             // safe area otherwise (floored so devices without a safe-area inset,
             // e.g. Android's 3-button nav, still keep a little breathing room).
-            paddingBottom: keyboardVisible ? 8 : Math.max(insets.bottom + 8, 20),
+            paddingBottom: composerBottomInset,
           }}
         >
+          {/* Under the bar, the thread fades into the ambient: nothing reads in that gap. */}
+          <View
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              left: -THREAD_GUTTER,
+              right: -THREAD_GUTTER,
+              bottom: 0,
+              height: composerBottomInset + 12,
+              experimental_backgroundImage: `linear-gradient(to bottom, ${hexWithAlpha(ambientFloor[colorScheme], 0)} 0%, ${hexWithAlpha(ambientFloor[colorScheme], 0.95)} 70%)`,
+            }}
+          />
           {replyTarget ? (
             // 7g: rises in on every appearance — the action sheet's "Reply" and
             // a bubble swipe past the threshold both just set `replyTarget`.
@@ -3067,7 +3071,7 @@ function Thread() {
           <TablePreview table={tablePreview} onClose={() => setTablePreview(null)} />
         ) : null}
       </KeyboardAvoidingView>
-      <ThreadScrollEdge height={headerHeight + 24} />
+      <ThreadScrollEdge height={headerHeight + 40} />
       {error || runError ? (
         // Just below the transparent bar, over the thread and its edge.
         <View
