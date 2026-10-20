@@ -5,8 +5,8 @@ export function isToolActivityBlock(block: MessageBlock): boolean {
   return block.kind === "steps" || (block.kind === "progress" && block.activity === true);
 }
 
-/** The tool activity line a run is on right now — `Reading src/app.ts`,
-    `Running: pnpm test` — for the working-state label. Undefined when the run
+/** The tool activity line a run is on right now — `Reading a file`,
+    `Writing a reply` — for the working-state label. Undefined when the run
     is between tools, or when it is narrating text the transcript already shows.
     Read from the live layer: a live row holding only that line draws nothing,
     so the transcript's rows never carry it. */
