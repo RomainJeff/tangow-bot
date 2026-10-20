@@ -1,7 +1,7 @@
 import { parseArgs } from "node:util";
 import { defaultBuildLogger, Template } from "e2b";
 import { bundleGuest } from "../scripts/bundle.js";
-import { workerTemplate } from "./template.js";
+import { WORKER_PROFILE, workerTemplate } from "./template.js";
 
 const { values } = parseArgs({
   options: { harness: { type: "string", default: "pi" }, name: { type: "string" } },
@@ -12,6 +12,6 @@ const bundle = await bundleGuest();
 const built = await Template.build(
   workerTemplate(harness, bundle),
   values.name ?? `rakazo-worker-${harness}`,
-  { cpuCount: 1, memoryMB: 1024, onBuildLogs: defaultBuildLogger() },
+  { ...WORKER_PROFILE, onBuildLogs: defaultBuildLogger() },
 );
 console.log(`Built the worker template ${built.name}`);
