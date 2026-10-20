@@ -116,6 +116,7 @@ import { ComposerLinkPreview } from "../components/composer-link-preview";
 import { ComposerAttachBubble, ComposerShell } from "../components/composer-shell";
 import { DictationPreview } from "../components/dictation-preview";
 import { FramedBlock } from "../components/framed-block";
+import { useReduceTransparency } from "../components/glass";
 import { GroupAvatar } from "../components/group-avatar";
 import { HandoffDivider, Interstitial } from "../components/interstitial";
 import { LinkMentionIcon } from "../components/link-mention-icon";
@@ -417,6 +418,9 @@ function Thread() {
   const [composerHeight, setComposerHeight] = useState(COMPOSER_ROW_ESTIMATE);
   const keyboardVisible = useKeyboardState((state) => state.isVisible);
   const composerBottomInset = keyboardVisible ? 8 : Math.max(insets.bottom + 8, 20);
+  const barTransparent = !useReduceTransparency();
+  // What of the thread's top sits under the bar.
+  const underBar = barTransparent ? headerHeight : 0;
   const { botId, groupId, name, messageId } = useLocalSearchParams<{
     botId?: string;
     groupId?: string;
@@ -776,8 +780,9 @@ function Thread() {
     navigation.setOptions({
       title: displayName || t("Thread"),
       // The thread runs under the bar, whose buttons take glass on iOS 26; ThreadScrollEdge keeps the title legible.
-      headerTransparent: true,
-      headerStyle: { backgroundColor: "transparent" },
+      // Under Reduce Transparency the bar stays opaque: iOS hides a thread laid under a transparent one.
+      headerTransparent: barTransparent,
+      headerStyle: { backgroundColor: barTransparent ? "transparent" : tokens.background },
       // Bot actions (bot settings, open computer, clear, archive, delete) live
       // on a long press; a short press opens the bot's page.
       headerTitle: () => (
@@ -866,6 +871,7 @@ function Thread() {
         ),
     });
   }, [
+    barTransparent,
     botId,
     currentBot,
     currentBotStatus,
@@ -2344,6 +2350,7 @@ function Thread() {
       <AmbientBackground />
       <KeyboardAvoidingView
         behavior="height"
+        keyboardVerticalOffset={headerHeight - underBar}
         style={{
           flex: 1,
           paddingHorizontal: THREAD_GUTTER,
@@ -2357,10 +2364,10 @@ function Thread() {
               style={[{ flex: 1 }, BLEED_STYLE]}
               contentContainerStyle={{
                 paddingHorizontal: THREAD_GUTTER,
-                paddingTop: headerHeight + 8,
+                paddingTop: underBar + 8,
                 paddingBottom: composerHeight,
               }}
-              scrollIndicatorInsets={{ top: headerHeight, bottom: composerHeight }}
+              scrollIndicatorInsets={{ top: underBar, bottom: composerHeight }}
               maintainVisibleContentPosition={KEEP_VISIBLE_POSITION}
               keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
               keyboardShouldPersistTaps="handled"
@@ -2382,11 +2389,11 @@ function Thread() {
               style={[{ flex: 1 }, BLEED_STYLE]}
               // Inverted: the top padding is the thread's bottom edge, the bottom one its top, under the
               // bar; the scroll indicator stops below the bar too.
-              scrollIndicatorInsets={{ top: composerHeight, bottom: headerHeight }}
+              scrollIndicatorInsets={{ top: composerHeight, bottom: underBar }}
               contentContainerStyle={{
                 paddingHorizontal: THREAD_GUTTER,
                 paddingTop: composerHeight,
-                paddingBottom: headerHeight + 8,
+                paddingBottom: underBar + 8,
               }}
               maintainVisibleContentPosition={KEEP_VISIBLE_POSITION}
               scrollEventThrottle={16}
@@ -2684,10 +2691,9 @@ function Thread() {
           <View
             style={{
               marginTop: COMPOSER_GAP,
-              // 12 px side margins — the screen already gives the thread
-              // column 20 px (`paddingHorizontal` above), so this row claims
-              // back 8 of those to land on 12.
-              marginHorizontal: -8,
+              // 16 pt from the screen's edges, as the system's own bottom bars:
+              // the row already sits at the thread's 14 pt gutter.
+              marginHorizontal: 2,
               flexDirection: "row",
               alignItems: "flex-end",
               gap: 8,
@@ -3071,14 +3077,14 @@ function Thread() {
           <TablePreview table={tablePreview} onClose={() => setTablePreview(null)} />
         ) : null}
       </KeyboardAvoidingView>
-      <ThreadScrollEdge height={headerHeight + 40} />
+      {barTransparent ? <ThreadScrollEdge height={headerHeight + 40} /> : null}
       {error || runError ? (
         // Just below the transparent bar, over the thread and its edge.
         <View
           pointerEvents="none"
           style={{
             position: "absolute",
-            top: headerHeight,
+            top: underBar,
             left: THREAD_GUTTER,
             right: THREAD_GUTTER,
           }}
