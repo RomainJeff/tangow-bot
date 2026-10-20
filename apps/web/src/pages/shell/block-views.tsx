@@ -69,7 +69,7 @@ export function ChildBotCard({
 }) {
   const removed = block.status === "deleted" || block.status === "archived";
   return (
-    <Surface className="w-[min(340px,90%)] overflow-hidden">
+    <Surface className="w-link-card max-w-full overflow-hidden">
       <button
         type="button"
         disabled={removed}
@@ -116,18 +116,18 @@ export function ResultLinesCard({ block }: { block: BlockOf<"card"> }) {
 export function ComputerCard({ block }: { block: BlockOf<"computer"> }) {
   const needsYou = block.state === "Needs you";
   return (
-    <Surface className="flex w-[340px] max-w-full items-center gap-3 px-4 py-3">
+    <Surface className="flex w-link-card max-w-full items-center gap-3 px-4 py-3">
       <span className="grid size-9 shrink-0 place-items-center rounded-row bg-well text-foreground">
         <Monitor className="size-4.5" aria-hidden />
       </span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-row-name font-semibold text-foreground">
+      <div className="min-w-0 flex-1">
+        <div className="text-row-name font-semibold text-foreground">
           <Trans>Computer</Trans>
-        </span>
-        <span className="block text-meta text-muted-foreground">
+        </div>
+        <div className="text-meta text-muted-foreground">
           <ChatMarkdown>{block.text}</ChatMarkdown>
-        </span>
-      </span>
+        </div>
+      </div>
       <span
         className={cn(
           "flex shrink-0 items-center gap-1.5 text-block-header",

@@ -63,14 +63,19 @@ test("the design-system kitchen sink renders every primitive light and dark", as
     "Always allow this tool",
     "Allow once",
   ]);
-  const decisionBox = (await decision.boundingBox())!;
-  expect(decisionButtons[2]!.right).toBeCloseTo(decisionBox.x + decisionBox.width, 0);
+  // Measured against the card itself, so its 20 px inset is part of the contract.
+  const decisionBox = (await decision
+    .locator('xpath=ancestor::*[@data-slot="framed-block"][1]')
+    .boundingBox())!;
+  expect(decisionButtons[2]!.right).toBeCloseTo(decisionBox.x + decisionBox.width - 20, 0);
   expect(decisionButtons[0]!.left).toBeGreaterThan(decisionBox.x + decisionBox.width / 3);
 
   const answers = page.locator('[data-slot="framed-block-actions"][data-align="start"]').first();
-  const answersBox = (await answers.boundingBox())!;
+  const answersBox = (await answers
+    .locator('xpath=ancestor::*[@data-slot="framed-block"][1]')
+    .boundingBox())!;
   const otherAnswer = (await answers.locator("button").boundingBox())!;
-  expect(otherAnswer.x).toBeCloseTo(answersBox.x, 0);
+  expect(otherAnswer.x).toBeCloseTo(answersBox.x + 20, 0);
 
   // A named stack is readable; an unnamed one is decoration.
   await expect(page.locator('[data-slot="stacked-avatars"][role="img"]').first()).toHaveAttribute(

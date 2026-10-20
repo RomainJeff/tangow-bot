@@ -20,9 +20,9 @@ test("a routine the bot proposes shows what it creates, decides on the right, an
   const actions = pending.locator('[data-slot="framed-block-actions"][data-align="end"]');
   const labels = await actions.locator("button").allTextContents();
   expect(labels).toEqual(["Not now", "Create routine"]);
-  const box = (await actions.boundingBox())!;
+  const box = (await pending.locator('[data-slot="framed-block"]').boundingBox())!;
   const create = (await actions.getByRole("button", { name: "Create routine" }).boundingBox())!;
-  expect(create.x + create.width).toBeCloseTo(box.x + box.width, 0);
+  expect(create.x + create.width).toBeCloseTo(box.x + box.width - 20, 0);
 
   const created = page.getByTestId("routine-proposal-created");
   await expect(

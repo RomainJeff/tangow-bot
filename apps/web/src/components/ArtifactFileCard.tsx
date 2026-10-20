@@ -40,7 +40,7 @@ export function ArtifactFileCard(props: ArtifactFileCardProps) {
   if (!markdown) {
     return (
       <div>
-        <Surface className="w-[min(360px,100%)] overflow-hidden">
+        <Surface className="w-link-card max-w-full overflow-hidden">
           <button
             type="button"
             onClick={() => void startDownload()}
@@ -61,7 +61,7 @@ export function ArtifactFileCard(props: ArtifactFileCardProps) {
   return (
     <>
       <div>
-        <Surface className="flex w-[min(360px,100%)] items-center overflow-hidden text-start text-foreground">
+        <Surface className="flex w-link-card max-w-full items-center overflow-hidden text-start text-foreground">
           <button
             ref={previewButton}
             type="button"
