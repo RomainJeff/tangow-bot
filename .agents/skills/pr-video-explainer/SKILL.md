@@ -24,7 +24,7 @@ If something is missing, stop and offer to install it.
 3. **Write `story.json`** in a directory **outside this repo** (default `~/pr-video-explainers/<repo>/pr-<num>/`; never commit videos, audio or story files here). See schema below. Typical arc:
    `title` hook → `diagram` before → `diagram` after → `diagram` zooms on the key protocol (with `msg` pills) → `kinetic` invariants/edge cases → `number` status (final).
 4. **Build**: `node .agents/skills/pr-video-explainer/scripts/build.mjs <dir>`. TTS per scene is cached by text hash, so only edited scenes are re-voiced.
-5. **Check**: in `<dir>`, `$HF lint` and `$HF check`. 0 errors is the bar. Known OK noise: `timeline_track_too_dense`, contrast on `.ghost` watermark, `content_overlap` info during crossfades.
+5. **Check**: in `<dir>`, `$HF lint` and `$HF check`. 0 errors is the bar. Known OK noise: `timeline_track_too_dense`, `content_overlap` info during crossfades.
 6. **Look**: `$HF snapshot --at <t0+dur*.85 per scene> --no-end -o /tmp/<x> --describe false`, read `contact-sheet.jpg`. Fix overlaps, clipped labels, empty scenes by editing coordinates in story.json and rebuilding.
 7. **Render**: `$HF render -o pr-<num>.mp4`, then `open` it for the user. Offer `/publish-site`; never publish without explicit consent.
 
@@ -40,6 +40,7 @@ This is a motion graphic, not a deck. Always:
 - **≤ ~6 words on screen at a time.** The voice carries the detail; the screen carries one word-level idea.
 - **Show, don't list.** Explain with diagrams, moving `msg` pills, focus/glow, count-ups. No bullet lists, no code blocks, no paragraphs, no captions.
 - Every scene moves: something enters, travels, lights up or counts while the voice speaks.
+- **Clean look:** white background, black/grey ink, one blue accent. Accent only on the one word that carries the claim (`*word*`), at most 1–2 per scene. Red (`fail`) only for a real problem. Never accent for decoration.
 - Heading = short claim with one `*accent*` word ("The worker *never* holds a key").
 
 ## Voiceover rules
@@ -56,11 +57,11 @@ This is a motion graphic, not a deck. Always:
   "pr": { "repo": "rakazo-bot", "num": 203, "url": "…" },
   "voice": "am_michael",        // English Kokoro voice (default)
   "speed": 1.0, "lead": 0.6, "tail": 0.7, "xfade": 0.5,  // optional timing (s)
-  "scenes": [ /* each: type, ghost (watermark word), vo, min? (min seconds) */ ]
+  "scenes": [ /* each: type, vo, min? (min seconds) */ ]
 }
 ```
 
-`*word*` in any heading/title/line/label renders as accent italic with a drawn underline. Words reveal one by one.
+`*word*` in any heading/title/line/label renders in the accent colour. Words reveal one by one.
 
 | type | fields |
 |---|---|
@@ -79,7 +80,7 @@ Coordinates are frame pixels (1920×1080). Usable area: y 300–960 (heading abo
 - `nodes`: `id → {x,y,label,sub?,kind?,size?}`; x/y = centre. `kind`: `card` 380×140 (default), `store` 400×150 (DB/volume), `actor` 300×120 pill (user, LLM, external). Labels 38 px mono (~23 px/char): keep labels ≤ 14 chars, else `size:[w,h]`. No `sub` paragraphs: one or two words max.
 - `edges_def`: `id → [from, to, label?]`; `edges`: which to draw. Lines are clipped to box borders automatically.
 - `beats`: timed on the voiceover, `at` = fraction 0–1 of the narration.
-  - `focus`: node id or list → glow + bump. `tone`: `active` (amber, default) | `ok` | `fail`; ok/fail stay lit.
+  - `focus`: node id or list → glow + bump. `tone`: `active` (ink, default) | `ok` (ink, stays lit) | `fail` (red, stays lit).
   - `pulse`: edge ids → a dot travels along the edge; `back`: subset traveling in reverse.
   - `msg`: `{edgeId: "text"}` → a labelled pill travels along the edge (the request/answer itself). Prefer this over static labels. 1–2 words.
   - `sub`: `{nodeId: "new subtext"}` swaps a node's subline.
@@ -89,6 +90,6 @@ Layout tips: keep ≥ 60 px between nodes; horizontal flows read best; max ~5 no
 
 ## Files
 
-- `template/index.html`: composition (palette, fonts Newsreader + JetBrains Mono, scene builders). Edit it for style changes, never the generated `index.html`.
+- `template/index.html`: composition (white monochrome palette + one accent, fonts Inter + JetBrains Mono, scene builders). Edit it for style changes, never the generated `index.html`.
 - `scripts/build.mjs`: story.json → `assets/vo-*.wav` + `index.html` + `hyperframes.json`.
 - Example: `example/story.json` (PR #203).
