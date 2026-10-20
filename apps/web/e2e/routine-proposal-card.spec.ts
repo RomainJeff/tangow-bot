@@ -22,7 +22,7 @@ test("a routine the bot proposes shows what it creates, decides on the right, an
   expect(labels).toEqual(["Not now", "Create routine"]);
   const box = (await actions.boundingBox())!;
   const create = (await actions.getByRole("button", { name: "Create routine" }).boundingBox())!;
-  expect(create.x + create.width).toBeCloseTo(box.x + box.width - 14, 0);
+  expect(create.x + create.width).toBeCloseTo(box.x + box.width, 0);
 
   const created = page.getByTestId("routine-proposal-created");
   await expect(

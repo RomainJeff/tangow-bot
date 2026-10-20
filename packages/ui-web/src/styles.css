@@ -47,6 +47,7 @@
   --color-surface: var(--surface);
   --color-sheet: var(--sheet);
   --color-group: var(--group);
+  --color-well: var(--well);
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-overlay: var(--overlay);

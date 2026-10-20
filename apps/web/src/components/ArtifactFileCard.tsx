@@ -40,16 +40,17 @@ export function ArtifactFileCard(props: ArtifactFileCardProps) {
   if (!markdown) {
     return (
       <div>
-        <Surface className="overflow-hidden">
+        <Surface className="w-[min(360px,100%)] overflow-hidden">
           <button
             type="button"
             onClick={() => void startDownload()}
-            className="block w-full px-4 py-3 text-start text-sm text-foreground hover:bg-accent"
+            className="flex w-full items-center gap-3 px-4 py-3 text-start text-foreground duration-(--duration-hover) ease-quiet hover:bg-pressed/40"
           >
-            <div className="font-medium">{props.name}</div>
-            <div className="mt-1 text-meta text-muted-foreground">
-              {props.mimeType} · {formatBytes(props.size)}
-            </div>
+            <FileTile />
+            <FileName name={props.name} detail={`${props.mimeType} · ${formatBytes(props.size)}`} />
+            <span className="grid size-8 shrink-0 place-items-center rounded-full bg-secondary text-secondary-foreground">
+              <Download className="size-4" aria-hidden />
+            </span>
           </button>
         </Surface>
         {downloadError ? <DownloadError message={downloadError} /> : null}
@@ -60,32 +61,25 @@ export function ArtifactFileCard(props: ArtifactFileCardProps) {
   return (
     <>
       <div>
-        <Surface className="flex min-w-[280px] overflow-hidden text-start text-foreground">
+        <Surface className="flex w-[min(360px,100%)] items-center overflow-hidden text-start text-foreground">
           <button
             ref={previewButton}
             type="button"
             aria-label={t`Preview ${props.name}`}
             onClick={() => setPreviewOpen(true)}
-            className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-start hover:bg-accent"
+            className="flex min-w-0 flex-1 items-center gap-3 py-3 ps-4 pe-2 text-start duration-(--duration-hover) ease-quiet hover:bg-pressed/40"
           >
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[10px] bg-muted text-foreground">
-              <FileText size={21} strokeWidth={1.8} />
-            </span>
-            <span className="min-w-0">
-              <span className="block truncate text-sm font-medium">{props.name}</span>
-              <span className="mt-0.5 block text-meta text-muted-foreground">
-                {formatBytes(props.size)}
-              </span>
-            </span>
+            <FileTile />
+            <FileName name={props.name} detail={formatBytes(props.size)} />
           </button>
           <button
             type="button"
             aria-label={t`Download ${props.name}`}
             title={t`Download ${props.name}`}
             onClick={() => void startDownload()}
-            className="grid w-14 shrink-0 place-items-center border-s border-border text-muted-foreground hover:bg-accent hover:text-foreground"
+            className="me-4 grid size-8 shrink-0 place-items-center rounded-full bg-secondary text-secondary-foreground duration-(--duration-hover) ease-quiet hover:opacity-85"
           >
-            <Download size={19} strokeWidth={1.8} />
+            <Download className="size-4" aria-hidden />
           </button>
         </Surface>
         {downloadError ? <DownloadError message={downloadError} /> : null}
@@ -225,4 +219,22 @@ export function formatBytes(size: number) {
     }).format(value);
   if (size < 1024 * 1024) return t`${format(size / 1024)} KB`;
   return t`${format(size / (1024 * 1024))} MB`;
+}
+
+/** The file's icon, in a well like every icon on the bot's paper. */
+function FileTile() {
+  return (
+    <span className="grid size-10 shrink-0 place-items-center rounded-row bg-well text-foreground">
+      <FileText className="size-4.5" aria-hidden />
+    </span>
+  );
+}
+
+function FileName({ name, detail }: { name: string; detail: string }) {
+  return (
+    <span className="min-w-0 flex-1">
+      <span className="block truncate text-row-name font-medium">{name}</span>
+      <span className="block text-meta text-muted-foreground">{detail}</span>
+    </span>
+  );
 }

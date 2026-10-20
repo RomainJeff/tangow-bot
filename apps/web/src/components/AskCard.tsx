@@ -12,7 +12,7 @@ import {
   spawnBotEdits,
   spawnBotReadOnlyDetail,
 } from "@rakazo/core";
-import { Button, FramedBlock, Input, Surface, Textarea } from "@rakazo/ui-web";
+import { Button, FramedBlock, Input, Textarea } from "@rakazo/ui-web";
 import { ChevronRight, Repeat } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 import { Fragment, useId, useState } from "react";
@@ -21,7 +21,9 @@ import { approvalActionLabel } from "../lib/approval-labels";
 import { QuestionCard } from "./ask/QuestionCard";
 
 const DETAIL_CLASS =
-  "max-h-72 overflow-auto rounded-card bg-muted px-3.5 py-3 font-mono text-mono whitespace-pre-wrap break-words text-muted-foreground";
+  "max-h-72 overflow-auto rounded-card bg-well px-4 py-3 font-mono text-mono whitespace-pre-wrap break-words text-muted-foreground";
+// A field inside the card sits in its well, not on a second card.
+const FIELD_CLASS = "rounded-card border-border bg-well px-3 dark:bg-well";
 
 export type AskBlock = Extract<ThreadMessage["blocks"][number], { kind: "ask" }>;
 export type SpawnBotCardEdits = NonNullable<ReturnType<typeof spawnBotEdits>>;
@@ -81,7 +83,10 @@ function RoutineSettled({ block, botId }: { block: AskBlock; botId?: string }) {
 /** What a routine card creates, as plain text: the name, when it runs, what it does. */
 function RoutinePreview({ routine }: { routine: NonNullable<AskBlock["routine"]> }) {
   return (
-    <Surface data-testid="routine-preview" className="flex flex-col gap-1 px-3.5 py-3">
+    <div
+      data-testid="routine-preview"
+      className="flex flex-col gap-1 rounded-card bg-well px-4 py-3"
+    >
       <span className="flex items-center gap-1.5 text-label text-foreground">
         <Repeat className="size-3.5 shrink-0" aria-hidden />
         <span className="min-w-0 break-words">{routine.name}</span>
@@ -93,7 +98,7 @@ function RoutinePreview({ routine }: { routine: NonNullable<AskBlock["routine"]>
       {routine.notify ? (
         <span className="mt-1 text-meta text-muted-foreground">{t`Notifies you each run`}</span>
       ) : null}
-    </Surface>
+    </div>
   );
 }
 
@@ -125,7 +130,7 @@ function AnswerInput({
 }: Omit<ComponentProps<typeof Input>, "onKeyDown"> & { onSubmit?: () => void }) {
   return (
     <Input
-      className={`rounded-card border-outline bg-surface text-body ${className ?? ""}`.trim()}
+      className={`h-11 ${FIELD_CLASS} text-body ${className ?? ""}`.trim()}
       onKeyDown={
         onSubmit
           ? (event) => {
@@ -321,6 +326,7 @@ export function AskCard({
               </label>
               <Input
                 id={`${fieldId}-name`}
+                className={`h-11 ${FIELD_CLASS}`}
                 autoFocus
                 autoComplete="off"
                 maxLength={BOT_NAME_MAX_LENGTH}
@@ -339,7 +345,7 @@ export function AskCard({
               </label>
               <Textarea
                 id={`${fieldId}-instructions`}
-                className="max-h-72 overflow-auto"
+                className={`max-h-72 overflow-auto ${FIELD_CLASS}`}
                 maxLength={SPAWN_BOT_INSTRUCTIONS_MAX_LENGTH}
                 disabled={submitting}
                 aria-invalid={invalid.instructions ? true : undefined}
@@ -402,11 +408,15 @@ export function AskCard({
       answered={answered}
       actions={actions}
     >
-      {children}
-      {error && !botEditing ? (
-        <p role="alert" className="text-meta text-destructive">
-          {error}
-        </p>
+      {children || (error && !botEditing) ? (
+        <>
+          {children}
+          {error && !botEditing ? (
+            <p role="alert" className="text-meta text-destructive">
+              {error}
+            </p>
+          ) : null}
+        </>
       ) : null}
     </FramedBlock>
   );

@@ -458,7 +458,7 @@ function NoteLine({
     return (
       <MessageMeta
         lines={[skillLine({ kind: "skill_source", skillId, name, change }, false, onOpenSkill)]}
-        className="px-3.5"
+        className="px-4"
       />
     );
   }

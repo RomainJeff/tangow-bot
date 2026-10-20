@@ -286,7 +286,7 @@ export function QuestionCard({
         ref={group}
         aria-labelledby={questionId}
         disabled={busy}
-        className={cn("flex min-w-0 flex-col gap-2", !actions && "pb-3.5")}
+        className="flex min-w-0 flex-col gap-2"
       >
         {question.options.map((option) => (
           <OptionTile

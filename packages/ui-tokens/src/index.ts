@@ -51,6 +51,8 @@ export type ColorTokens = {
   sheet: string;
   /** A settings or activity group on a sheet, or on the page at phone width. */
   group: string;
+  /** Reading matter and fields inside a decision card; a file's or the computer's icon tile. */
+  well: string;
   success: string;
   warning: string;
   overlay: string;
@@ -102,6 +104,7 @@ export const darkTokens = {
   surface: "#3C3C3F",
   sheet: "#232326",
   group: "#333336",
+  well: "#4E4E50",
   success: "#4ECB71",
   warning: "#E9C46A",
   overlay: "rgba(4, 4, 5, 0.72)",
@@ -148,6 +151,7 @@ export const lightTokens = {
   surface: "#FFFFFF",
   sheet: "#F5F5F7",
   group: "#FFFFFF",
+  well: "#EEEEF1",
   success: "#228B3B",
   warning: "#B7791F",
   overlay: "rgba(20, 20, 22, 0.45)",

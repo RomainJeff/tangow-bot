@@ -189,7 +189,7 @@ export const MessageView = memo(function MessageView({
       data-testid="reply-parent-preview"
       aria-label={t`Jump to replied message`}
       onClick={() => onJumpToMessage?.(parentJumpId)}
-      className="mb-2 block max-w-3/4 truncate rounded-card border border-border bg-background px-3 py-2 text-start text-meta text-muted-foreground duration-(--duration-hover) ease-quiet hover:text-foreground"
+      className="mb-2 block max-w-3/4 truncate rounded-card bg-muted px-3 py-2 text-start text-meta text-muted-foreground duration-(--duration-hover) ease-quiet hover:text-foreground"
       dir="auto"
     >
       {replyPreview ? previewMessageText(replyPreview) : t`Earlier message`}
@@ -298,7 +298,7 @@ export const MessageView = memo(function MessageView({
         )}
         {previewView()}
         {lastBubble < 0 && skillLines.length > 0 ? (
-          <MessageMeta lines={skillLines} className="px-3.5" />
+          <MessageMeta lines={skillLines} className="px-4" />
         ) : null}
       </>,
     );
@@ -370,11 +370,18 @@ export const MessageView = memo(function MessageView({
         );
       }
       if (block.kind === "child_bot") {
-        return <ChildBotCard key={i} block={block} onOpenBot={onOpenBot} />;
+        return (
+          <ChildBotCard
+            key={i}
+            block={block}
+            avatar={<BotAvatar {...avatarOf(block.botId)} size={36} />}
+            onOpenBot={onOpenBot}
+          />
+        );
       }
       if (block.kind === "skill_source") {
         return skillLineBubble < 0 && i === firstSkillBlock ? (
-          <MessageMeta key={i} lines={skillLines} className="px-3.5" />
+          <MessageMeta key={i} lines={skillLines} className="px-4" />
         ) : null;
       }
       if (block.kind === "choice") {

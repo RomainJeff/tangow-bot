@@ -46,6 +46,7 @@ way: `sheet`, then its `group`s.
 | `surface` | `#FFFFFF` | `#3C3C3F` | the one elevation: the decision card |
 | `sheet` | `#F5F5F7` | `#232326` | the opaque plane of the side panel and the overlay windows |
 | `group` | `#FFFFFF` | `#333336` | a settings group or an activity day on a sheet; at phone width, the bot list's search field |
+| `well` | `#EEEEF1` | `#4E4E50` | reading matter and fields inside a decision card; a file's or the computer's icon tile |
 | `sidebar` | `#F5F5F7` | `#2C2C2E` | the opaque fallback of the sidebar's glass |
 | `sidebarForeground` | `#1D1D1F` | `#F5F5F7` | |
 | `sidebarAccent` | `#E6E6E9` | `#414143` | selected and hovered row |
