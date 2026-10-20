@@ -20,11 +20,12 @@ import {
   Text,
   View,
 } from "react-native";
-import { mobileTokens } from "../../lib/appearance";
+import { mobileTokens, resolveMobileAppearance } from "../../lib/appearance";
 import { dateLocaleForUi, useI18n } from "../../lib/i18n";
 import { useMobileTokens, useResolvedAppearance, useThemedStyles } from "../../lib/native";
 import { claimSaveAnnouncement } from "../../lib/save-announce";
 import type { ReadState } from "../../lib/shared-read";
+import { shadowsForAppearance } from "../../lib/theme";
 import { nativeTextStyle } from "../../lib/typography";
 import { NativeSymbol } from "../native-symbol";
 
@@ -383,6 +384,7 @@ export function useFocusedRead<T>(load: () => Promise<T>, deps: unknown[]) {
 
 function createKitStyles() {
   const tokens = mobileTokens();
+  const shadows = shadowsForAppearance(resolveMobileAppearance());
   return StyleSheet.create({
     group: { gap: 8 },
     groupHead: {
@@ -396,15 +398,13 @@ function createKitStyles() {
       flexShrink: 1,
       color: tokens.mutedForeground,
       ...nativeTextStyle("label", { size: 13 }),
-      letterSpacing: 0.4,
-      textTransform: "uppercase",
     },
     groupAction: { color: tokens.mutedForeground, ...nativeTextStyle("meta", { size: 14 }) },
+    // A group on the ambient light, as the web's settings groups: the group plane and its hairline.
     card: {
-      backgroundColor: tokens.surface,
+      backgroundColor: tokens.group,
       borderRadius: radii.card,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: tokens.border,
+      boxShadow: shadows.group,
       overflow: "hidden",
     },
     hairline: {
