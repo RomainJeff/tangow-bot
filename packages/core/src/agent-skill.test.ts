@@ -349,7 +349,7 @@ describe("skill prompt helpers", () => {
     ];
     const off = formatSkillsCatalogInstruction(entries, "off")!;
     expect(off).toContain(
-      "After creating or updating one, mention /Name so the user can open it.\nOnly skill_update / skill_delete user-created skills (not builtin or plugin).",
+      "After creating or updating one, mention /Name so the user can open it.\nOnly skill_update / skill_delete user-created skills (not builtin).",
     );
     for (const mode of ["shadow", "on"] as const) {
       const learning = formatSkillsCatalogInstruction(entries, mode)!;
