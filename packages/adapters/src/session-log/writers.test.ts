@@ -2179,6 +2179,42 @@ describe("session log writers", () => {
       ]);
     });
 
+    it("replays an open run's tool line past the call and result it logged", async () => {
+      const { prisma } = database;
+      const owner = await seedBot(prisma, "Hopper");
+      const run = await seedRun(prisma, owner.bot.id, owner.threadId);
+      const write = writerOf(prisma, run);
+
+      await write({
+        type: "assistant.text",
+        payload: { blocks: [{ kind: "text", text: "Let me look." }] },
+      });
+      await prisma.$transaction((tx) =>
+        appendEventInTransaction(tx, {
+          spaceId: SPACE,
+          threadId: owner.threadId,
+          botId: owner.bot.id,
+          type: "thread.progress",
+          runId: run.id,
+          payload: { text: "Reading src/app.ts", activity: true },
+        }),
+      );
+      await write({
+        type: "tool.call",
+        payload: { callId: "call_1", name: "read", input: '{"path":"src/app.ts"}' },
+      });
+      await write({
+        type: "tool.result",
+        payload: { callId: "call_1", output: "…", isError: false, artifactIds: [] },
+      });
+
+      const replayed = await progressSinceLastEntry(prisma, owner.threadId, [run.id]);
+
+      expect(replayed.map(({ payload }) => payload)).toEqual([
+        { text: "Reading src/app.ts", activity: true },
+      ]);
+    });
+
     it("replays a run's progress since its entry rode in a feed event another run's entry led", async () => {
       const { prisma } = database;
       const owner = await seedBot(prisma, "Noether");
