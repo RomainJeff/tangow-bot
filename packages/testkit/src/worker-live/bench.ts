@@ -19,8 +19,8 @@ function series(values: number[]) {
 
 /**
  * Lane j: `trials` runs of five bash calls in each of three arms: P2's local runner in memory on
- * this machine, an E2B worker with no mount, and one with the private and shared volumes,
- * rotating which arm goes first. Timed at the
+ * this machine, an E2B worker of a dedicated computer's bot, which mounts its private volume, and
+ * one of a team computer's bot, which also mounts the shared one, rotating which arm goes first. Timed at the
  * controller's side of the channel as P2's bench does. Cold boot is the provider's create plus
  * the guest's start, to its hello; the warm run is hello to the accepted end.
  */
@@ -74,10 +74,24 @@ export async function benchLive(live: Live, trials: number) {
       queries: number[];
       queryMs: number[];
       relay: number[];
+      /** The part of each relay before the emulator received the call, and after it answered. */
+      relayBeforeUpstream: number[];
+      relayAfterUpstream: number[];
       grantToDone: number[];
     }
   >(
-    arms.map((arm) => [arm, { control: [], queries: [], queryMs: [], relay: [], grantToDone: [] }]),
+    arms.map((arm) => [
+      arm,
+      {
+        control: [],
+        queries: [],
+        queryMs: [],
+        relay: [],
+        relayBeforeUpstream: [],
+        relayAfterUpstream: [],
+        grantToDone: [],
+      },
+    ]),
   );
   const rss: number[] = [];
   const heap: number[] = [];
@@ -95,6 +109,7 @@ export async function benchLive(live: Live, trials: number) {
         live.guestCommandStarts.length = 0;
         // The fixture's own records of earlier trials would read as controller growth.
         worker.run.model.requests.length = 0;
+        worker.run.model.served.length = 0;
         log.queries.length = 0;
         const runId = await worker.run.send("Run the commands.");
         const started = performance.now();
@@ -114,8 +129,13 @@ export async function benchLive(live: Live, trials: number) {
           tools.queries.push(before.count + after.count);
           tools.queryMs.push(before.ms + after.ms);
         }
-        for (const model of settled(frames, "model.request", "model.end")) {
+        for (const [index, model] of settled(frames, "model.request", "model.end").entries()) {
           tools.relay.push(model.to - model.from);
+          const upstream = worker.run.model.served[index];
+          if (upstream) {
+            tools.relayBeforeUpstream.push(upstream.received - model.from);
+            tools.relayAfterUpstream.push(model.to - upstream.answered);
+          }
         }
         for (const grant of grants) {
           const done = frames.find(
@@ -185,6 +205,8 @@ export async function benchLive(live: Live, trials: number) {
           queriesPerTool: quantiles(perTool.get(arm)!.queries),
           queryShareOfControl: share(arm),
           relayControllerMs: quantiles(perTool.get(arm)!.relay),
+          relayBeforeUpstreamMs: quantiles(perTool.get(arm)!.relayBeforeUpstream),
+          relayAfterUpstreamMs: quantiles(perTool.get(arm)!.relayAfterUpstream),
           grantToDoneMs: quantiles(perTool.get(arm)!.grantToDone),
         },
       ]),

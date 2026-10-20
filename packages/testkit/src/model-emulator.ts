@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createServer, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
+import { performance } from "node:perf_hooks";
 import type { AgentRunRequest } from "@rakazo/adapter-kit";
 
 export interface ModelEmulatorRequest {
@@ -66,9 +67,13 @@ export async function startModelEmulator(options: {
   const anthropic = options.protocol === "anthropic";
   const modelId = options.modelId ?? "offline-fixture";
   const requests: ModelEmulatorRequest[] = [];
+  /** When each request arrived and when its response finished, on `performance.now()`. */
+  const served: Array<{ received: number; answered: number }> = [];
   const failures: Error[] = [];
   let stepIndex = 0;
   const server = createServer((request, response) => {
+    const received = performance.now();
+    response.once("finish", () => served.push({ received, answered: performance.now() }));
     void (async () => {
       assert.equal(request.method, "POST", "Expected a model POST request");
       if (anthropic) {
@@ -193,6 +198,7 @@ export async function startModelEmulator(options: {
     baseUrl,
     model,
     requests,
+    served,
     assertComplete() {
       if (failures.length)
         throw new AggregateError(failures, failures.map((error) => error.message).join("\n"));
