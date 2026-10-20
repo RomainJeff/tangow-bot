@@ -1782,7 +1782,7 @@ async function finalizeRunOnce(
         id: input.attemptId,
         runId: input.runId,
         fence: input.leaseFence,
-        status: "running",
+        status: { in: ["setting_up", "running"] },
       },
       data: {
         status: input.outcome,

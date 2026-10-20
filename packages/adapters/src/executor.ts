@@ -1458,7 +1458,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
       }
       const attempt = await deps.prisma.attempt
         .create({
-          data: { runId, fence, status: "running" },
+          data: { runId, fence, status: "setting_up" },
         })
         .catch(async (error) => {
           await releaseComputerExecutionLease(deps.prisma, computerLease).catch(() => undefined);
@@ -1501,7 +1501,18 @@ export function createRunExecutor(deps: ExecutorDeps) {
       let savedSkill = false;
       // The skill nudge's private turn, run once the run has let go of its lease and computer.
       let skillNudgeTurn: (() => Promise<void>) | undefined;
+      let setupFailures = 0;
       try {
+        setupFailures = await deps.prisma.attempt.count({
+          where: {
+            runId,
+            id: { not: attempt.id },
+            OR: [{ status: "setting_up" }, { status: "setup_failed", error: { not: null } }],
+          },
+        });
+        if (setupFailures >= MAX_SETUP_ATTEMPTS) {
+          throw new Error("Earlier run setup did not finish");
+        }
         // A follow_up's source message tells whether the user or another bot started it.
         const sourceMessage =
           (run.trigger === "messaging" || run.trigger === "follow_up") && run.sourceMessageId
@@ -4554,6 +4565,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
               ? { credential: resolved.oauth, persist: resolved.persistOAuth }
               : undefined,
           };
+          if (runtime === deps.runtime) {
+            await deps.prisma.attempt.updateMany({
+              where: { id: attempt.id, status: "setting_up" },
+              data: { status: "running" },
+            });
+          }
           const runtimeEvents = runtime.run(
             {
               botId: bot.id,
@@ -5316,11 +5333,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
             ),
           );
         }
-        const setupFailures = retryForever
-          ? 0
-          : await deps.prisma.attempt.count({
-              where: { runId, status: "setup_failed", error: { not: null } },
-            });
         if (!retryForever && setupFailures + 1 >= MAX_SETUP_ATTEMPTS) {
           const message = redactSecrets(
             `Run setup failed after ${MAX_SETUP_ATTEMPTS} attempts: ${

@@ -486,7 +486,7 @@ describe("destroyBot", () => {
       },
     });
     expect(cancelAttempts).toHaveBeenCalledWith({
-      where: { runId: { in: ["group-run"] }, status: "running" },
+      where: expect.objectContaining({ runId: { in: ["group-run"] } }),
       data: { status: "cancelled", finishedAt: expect.any(Date) },
     });
     expect(cancelTasks).toHaveBeenCalledWith({

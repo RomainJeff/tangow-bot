@@ -45,7 +45,9 @@ export interface WorkerProvider {
   ): Promise<"destroyed" | "absent">;
   /**
    * Creates the volume named `name`, or returns it. Its reference must be `name`, even if the
-   * create response is lost. No create may land after `ensureDeadline`: deletion waits until then.
+   * create response is lost. Stop submitting creates before `ensureDeadline`. The deletion sweep
+   * retains intent for one hour afterwards to catch server completion after a timeout or crash.
+   * Server-side creation must finish within that grace period.
    */
   ensureVolume(
     input: { name: string; ensureDeadline: Date },

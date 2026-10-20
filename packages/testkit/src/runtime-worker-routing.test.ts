@@ -7,6 +7,7 @@ import { startWorkerRun } from "./worker-run-fixture.js";
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => {
   vi.unstubAllEnvs();
+  vi.restoreAllMocks();
   await Promise.all(cleanups.splice(0).map((cleanup) => cleanup()));
 });
 
@@ -130,7 +131,7 @@ describe("where a product run executes", () => {
     expect(run.provider.launches).toEqual([]);
   });
 
-  it.each(["volumes", "ensure", "prepare", "ensure-unreleased"] as const)(
+  it.each(["volumes", "ensure", "prepare", "ensure-unreleased", "other-run-unreleased"] as const)(
     "exhausts a run's setup budget across reconciliation and a restart after %s fails",
     async (step) => {
       const run = await startWorkerRun({ steps: [] });
@@ -140,14 +141,34 @@ describe("where a product run executes", () => {
       };
       const failProvider = () => {
         if (step === "volumes") run.provider.ensureVolume = fail;
-        else if (step === "ensure-unreleased") {
+        else if (step === "ensure-unreleased" || step === "other-run-unreleased") {
           run.provider.ensure = fail;
           run.provider.destroy = fail;
         } else run.provider[step] = fail;
       };
       if (step === "volumes") await run.prisma.volume.deleteMany();
       failProvider();
+      if (step === "other-run-unreleased") {
+        const earlier = await run.send("Earlier run.");
+        await expect(run.continueRun(earlier)).rejects.toThrow("Run setup failed; retrying");
+        await run.prisma.run.update({
+          where: { id: earlier },
+          data: { status: "failed", completedAt: new Date() },
+        });
+      }
       const runId = await run.send("Hello.");
+      if (step === "other-run-unreleased") {
+        for (let wait = 0; wait < 4; wait++) {
+          await run.continueRun(runId);
+          expect((await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
+            "queued",
+          );
+        }
+        await run.prisma.attempt.updateMany({
+          where: { workerState: "releasing" },
+          data: { workerEnsureAt: new Date(0) },
+        });
+      }
       const enqueue = vi.fn(async () => undefined);
       const reconciler = createJobReconciler({
         prisma: run.prisma,
@@ -201,10 +222,50 @@ describe("where a product run executes", () => {
       expect(enqueue).not.toHaveBeenCalledWith(runContinueJob(runId));
       await run.continueRun(runId);
       expect(await run.prisma.attempt.count({ where: { runId } })).toBe(
-        step === "ensure" || step === "ensure-unreleased" ? 7 : 3,
+        step === "ensure" || step === "ensure-unreleased" || step === "other-run-unreleased"
+          ? 7
+          : 3,
       );
     },
   );
+
+  it("counts setup attempts lost before their outcome was committed, across controller restarts", async () => {
+    const run = await fixture([]);
+    await run.prisma.volume.deleteMany();
+    const runId = await run.send("Hello.");
+    const enqueue = vi.fn(async () => undefined);
+    const reconciler = createJobReconciler({
+      prisma: run.prisma,
+      jobs: { enqueue, cancel: async () => undefined, close: async () => undefined },
+    });
+    for (let crash = 0; crash < 3; crash++) {
+      run.provider.ensureVolume = async () => {
+        // Lose the transaction that would record the outcome and requeue the run.
+        vi.spyOn(run.prisma, "$transaction").mockRejectedValueOnce(new Error("Controller stopped"));
+        throw new Error("The provider is unavailable");
+      };
+      await expect(run.continueRun(runId)).rejects.toThrow("Controller stopped");
+      vi.restoreAllMocks();
+      await run.prisma.run.update({
+        where: { id: runId },
+        data: { leaseExpiresAt: new Date(0) },
+      });
+      enqueue.mockClear();
+      await reconciler.reconcileOnce();
+      expect(enqueue).toHaveBeenCalledWith(runContinueJob(runId));
+      await run.restart().dispose();
+    }
+    const create = vi
+      .spyOn(run.provider, "ensureVolume")
+      .mockRejectedValue(new Error("The provider is unavailable"));
+    await run.continueRun(runId);
+
+    expect(await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).toMatchObject({
+      status: "failed",
+      error: expect.stringContaining("Run setup failed after 3 attempts"),
+    });
+    expect(create).not.toHaveBeenCalled();
+  });
 
   it("never claims a run of a bot that is being deleted", async () => {
     const run = await fixture([]);

@@ -351,8 +351,18 @@ describe("deleting the owner of a volume", () => {
     fake.volumes.add("rakazo-of-another-kind");
     await prisma.volumeDeletion.createMany({
       data: [
-        { providerKind: "fake-worker", providerRef: "rakazo-deleted", volumeId: "a" },
-        { providerKind: "fake-worker", providerRef: "rakazo-gone", volumeId: "b" },
+        {
+          providerKind: "fake-worker",
+          providerRef: "rakazo-deleted",
+          volumeId: "a",
+          notBefore: new Date(0),
+        },
+        {
+          providerKind: "fake-worker",
+          providerRef: "rakazo-gone",
+          volumeId: "b",
+          notBefore: new Date(0),
+        },
         { providerKind: "e2b", providerRef: "rakazo-of-another-kind", volumeId: "c" },
       ],
     });
@@ -440,13 +450,11 @@ describe("deleting the owner of a volume", () => {
     expect(await recorded()).toEqual([]);
   });
 
-  it("sweeps a volume whose create response was lost before its ref was recorded", async () => {
+  it("keeps deleting through the grace period when an accepted create lands after its deadline", async () => {
     const spaceId = await fixture.seedSpace();
     const bot = await fixture.seedBot(spaceId, null);
     const volume = await fixture.seedVolume("bot_private", spaceId, bot.id, null);
-    const ensureVolume = fake.ensureVolume.bind(fake);
-    fake.ensureVolume = async (input, context) => {
-      await ensureVolume(input, context);
+    fake.ensureVolume = async () => {
       throw new Error("The create response was lost");
     };
     await expect(workers.provisionVolume(volume.id, fixture.context)).rejects.toThrow(
@@ -455,11 +463,22 @@ describe("deleting the owner of a volume", () => {
     await prisma.$transaction((tx) => deleteOwnerVolumes(tx, { botId: bot.id }));
 
     expect(await workers.sweepVolumes(fixture.context)).toEqual({ deleted: 0, failed: 0 });
-    expect([...fake.volumes]).toEqual([`rakazo-${volume.id}`]);
-    await prisma.volumeDeletion.updateMany({ data: { notBefore: new Date(0) } });
+    // The deadline has passed, but an accepted create may still finish on the server.
+    const deadline = new Date(Date.now() - 30 * 60_000);
+    await prisma.volumeDeletion.updateMany({ data: { notBefore: deadline } });
     const restarted = createWorkerLifecycle({ prisma, provider: fake });
+    expect(await restarted.sweepVolumes(fixture.context)).toEqual({ deleted: 1, failed: 0 });
+    expect(await recorded()).toEqual([`rakazo-${volume.id}`]);
+    fake.volumes.add(`rakazo-${volume.id}`);
     await restarted.sweepVolumes(fixture.context);
+    expect([...fake.volumes]).toEqual([]);
+    expect(await recorded()).toEqual([`rakazo-${volume.id}`]);
 
+    await prisma.volumeDeletion.updateMany({
+      data: { notBefore: new Date(Date.now() - 61 * 60_000) },
+    });
+    fake.volumes.add(`rakazo-${volume.id}`);
+    await restarted.sweepVolumes(fixture.context);
     expect([...fake.volumes]).toEqual([]);
     expect(await recorded()).toEqual([]);
   });

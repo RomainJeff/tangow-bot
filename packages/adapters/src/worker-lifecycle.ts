@@ -98,6 +98,7 @@ type PlanRow = {
 
 const RELEASABLE = Prisma.join([...LIVE_WORKER_STATES, "releasing"]);
 const VOLUME_SWEEP_BATCH = 10;
+const VOLUME_CREATE_GRACE_MS = 60 * 60_000;
 const INTO_RELEASED = Prisma.join(workerStatesInto("released"));
 
 type HomeComputer = {
@@ -520,26 +521,31 @@ export function createWorkerLifecycle(deps: {
 
     /**
      * Deletes at the provider a few volumes this database recorded as deleted, oldest first, and
-     * then their records. Only a recorded volume is ever deleted, so a provider account shared
+     * then their records after the server-create grace period. Repeated deletes during that
+     * period catch accepted creates whose client timed out. Only a recorded volume is ever
+     * deleted, so a provider account shared
      * with another deployment is safe. Idempotent; records of another provider kind wait for it.
      */
     async sweepVolumes(context: AdapterContext): Promise<{ deleted: number; failed: number }> {
       const counts = { deleted: 0, failed: 0 };
       if (!deps.provider) return counts;
       const providerKind = deps.provider.describe().id;
+      const now = new Date();
       const deletions = await prisma.volumeDeletion.findMany({
-        where: { providerKind, notBefore: { lte: new Date() } },
+        where: { providerKind, notBefore: { lte: now } },
         orderBy: { createdAt: "asc" },
         take: VOLUME_SWEEP_BATCH,
-        select: { providerRef: true, generation: true },
+        select: { providerRef: true, generation: true, notBefore: true },
       });
-      for (const { providerRef, generation } of deletions) {
+      for (const { providerRef, generation, notBefore } of deletions) {
         if (context.signal.aborted) break;
         try {
           await deps.provider.deleteVolume({ providerRef }, context);
-          await prisma.volumeDeletion.deleteMany({
-            where: { providerKind, providerRef, generation },
-          });
+          if (now.getTime() >= notBefore.getTime() + VOLUME_CREATE_GRACE_MS) {
+            await prisma.volumeDeletion.deleteMany({
+              where: { providerKind, providerRef, generation },
+            });
+          }
           counts.deleted += 1;
         } catch {
           counts.failed += 1;
