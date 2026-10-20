@@ -1,4 +1,5 @@
 import type {
+  ComputerMode,
   HomeStorage,
   SandboxKind,
   VolumeAccess,
@@ -91,6 +92,24 @@ export type RunNeeds = {
   files: { private: VolumeAccess | null; shared: VolumeAccess | null };
   computer: "none" | "on_use";
 };
+
+/**
+ * What a run asks of a worker. Any tool the guest runs works on the bot's home, so it needs the
+ * private slot; only a bot of the team computer also works in the space's shared one, so a
+ * dedicated bot never mounts a shared volume another computer's home is still being moved into.
+ * Whether the home is on volumes at all is `planLaunch`'s call.
+ */
+export function deriveRunNeeds(run: {
+  guestTools: boolean;
+  computerTools: boolean;
+  computerScope: ComputerMode | null;
+}): RunNeeds {
+  const files = run.guestTools ? "rw" : null;
+  return {
+    files: { private: files, shared: run.computerScope === "team" ? files : null },
+    computer: run.computerTools && run.computerScope ? "on_use" : "none",
+  };
+}
 
 export type VolumeGrant = { volumeId: string; access: VolumeAccess };
 
