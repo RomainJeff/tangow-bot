@@ -1,6 +1,7 @@
 import { ambient } from "@rakazo/ui-tokens";
 import { StyleSheet, View } from "react-native";
 import { useMobileTokens, useResolvedAppearance } from "../lib/native";
+import { hexWithAlpha } from "../lib/stop-contour-math";
 
 /** The grey ambient light behind the thread, so the glass on top has something to blur. */
 export function AmbientBackground() {
@@ -14,12 +15,6 @@ export function AmbientBackground() {
       ]}
     />
   );
-}
-
-/** `#RRGGBB` at `alpha`, for a gradient stop. */
-function withAlpha(hex: string, alpha: number) {
-  const value = Number.parseInt(hex.slice(1, 7), 16);
-  return `rgba(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}, ${alpha})`;
 }
 
 /**
@@ -37,7 +32,7 @@ export function ThreadScrollEdge({ height }: { height: number }) {
         left: 0,
         right: 0,
         height,
-        experimental_backgroundImage: `linear-gradient(to bottom, ${withAlpha(tokens.background, 0.96)} 0%, ${withAlpha(tokens.background, 0.85)} 55%, ${withAlpha(tokens.background, 0)} 100%)`,
+        experimental_backgroundImage: `linear-gradient(to bottom, ${hexWithAlpha(tokens.background, 0.96)} 0%, ${hexWithAlpha(tokens.background, 0.85)} 55%, ${hexWithAlpha(tokens.background, 0)} 100%)`,
       }}
     />
   );
