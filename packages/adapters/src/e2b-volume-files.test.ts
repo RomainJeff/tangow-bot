@@ -1,69 +1,42 @@
-import { describe, expect, it, vi } from "vitest";
-import { E2BVolumeFiles } from "./e2b-volume-files.js";
+import { execFile } from "node:child_process";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { promisify } from "node:util";
+import { afterEach, describe, expect, it } from "vitest";
+import { E2BVolumeFiles, VOLUME_FILES_MOUNT, type VolumeSandbox } from "./e2b-volume-files.js";
 
-type Written = { path: string; uid?: number; gid?: number; mode?: number };
-
-const volume = vi.hoisted(() => {
-  const entries = new Map<
-    string,
-    { type: "file" | "directory"; mode: number; content?: Uint8Array }
-  >();
-  const writes: Written[] = [];
-  const named = [{ volumeId: "vol-1", name: "rakazo-volume_1" }];
-  return { entries, writes, named };
+const run = promisify(execFile);
+const roots: string[] = [];
+afterEach(async () => {
+  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
-vi.mock("@e2b/desktop", () => {
-  const stat = (path: string) => {
-    const entry = volume.entries.get(path);
-    if (!entry) throw new Error(`missing ${path}`);
-    return { name: path.split("/").at(-1), path, type: entry.type, mode: entry.mode };
-  };
-  const remote = {
-    async list(directory: string) {
-      const prefix = directory === "/" ? "/" : `${directory}/`;
-      return [...volume.entries.keys()]
-        .filter((path) => path.startsWith(prefix) && !path.slice(prefix.length).includes("/"))
-        .map(stat);
-    },
-    async makeDir(path: string, opts: { uid: number; gid: number; mode: number }) {
-      volume.writes.push({ path, uid: opts.uid, gid: opts.gid, mode: opts.mode });
-      volume.entries.set(path, { type: "directory", mode: 0o40000 | opts.mode });
-      return stat(path);
-    },
-    async writeFile(
-      path: string,
-      data: ArrayBuffer,
-      opts: { uid: number; gid: number; mode: number },
-    ) {
-      volume.writes.push({ path, uid: opts.uid, gid: opts.gid, mode: opts.mode });
-      volume.entries.set(path, {
-        type: "file",
-        mode: 0o100000 | opts.mode,
-        content: new Uint8Array(data),
-      });
-      return stat(path);
-    },
-    async readFile(path: string) {
-      return volume.entries.get(path)?.content ?? new Uint8Array();
-    },
-  };
-  return {
-    VolumeFileType: {
-      FILE: "file",
-      DIRECTORY: "directory",
-      SYMLINK: "symlink",
-      UNKNOWN: "unknown",
-    },
-    Volume: {
-      list: async () => volume.named,
-      connect: async (volumeId: string) => {
-        if (volumeId !== "vol-1") throw new Error(`unknown volume ${volumeId}`);
-        return remote;
+/** A sandbox whose mount is a directory here: its commands run in this machine's shell. */
+async function localVolumes() {
+  const opened: string[] = [];
+  const killed: string[] = [];
+  const dirs = new Map<string, string>();
+  const open = async (volumeRef: string): Promise<VolumeSandbox> => {
+    opened.push(volumeRef);
+    const dir = await mkdtemp(path.join(tmpdir(), "rakazo-volume-"));
+    roots.push(dir);
+    dirs.set(volumeRef, dir);
+    const local = (guestPath: string) => guestPath.replaceAll(VOLUME_FILES_MOUNT, dir);
+    return {
+      run: async (command) => (await run("bash", ["-c", local(command)])).stdout,
+      async write(guestPath, content) {
+        await mkdir(path.dirname(local(guestPath)), { recursive: true });
+        await writeFile(local(guestPath), content);
       },
-    },
+      read: async (guestPath) => new Uint8Array(await readFile(local(guestPath))),
+      kill: async () => {
+        killed.push(volumeRef);
+      },
+    };
   };
-});
+  return { files: new E2BVolumeFiles(open), opened, killed, dirs };
+}
 
 const context = {
   operationId: "e2b-volume-test",
@@ -72,71 +45,66 @@ const context = {
   userId: "user",
   signal: new AbortController().signal,
 };
+const text = (value: string) => new TextEncoder().encode(value);
 
 describe("E2B volume files", () => {
-  it("writes files owned by the guest user under created parents, and lists them back by relative path", async () => {
-    const files = new E2BVolumeFiles({ owner: { uid: 1001, gid: 1002 } });
+  it("writes files with their mode through one sandbox per volume, lists and reads them back", async () => {
+    const { files, opened, killed, dirs } = await localVolumes();
 
     await files.write(
-      "rakazo-volume_1",
-      { path: "bin/tools/run.sh", content: new TextEncoder().encode("echo"), executable: true },
+      "vol-a",
+      { path: "bin/tools/run.sh", content: text("echo"), executable: true },
       context,
     );
-    await files.write(
-      "rakazo-volume_1",
-      { path: "bin/notes.md", content: new TextEncoder().encode("hi") },
-      context,
-    );
-    await files.write(
-      "rakazo-volume_1",
-      { path: "bin/secret", content: new TextEncoder().encode("key"), mode: 0o600 },
-      context,
-    );
+    await files.write("vol-a", { path: "bin/it's notes.md", content: text("hi") }, context);
+    await files.write("vol-a", { path: "bin/secret", content: text("key"), mode: 0o600 }, context);
+    await files.write("vol-b", { path: "a.txt", content: text("b") }, context);
+    await files.write("vol-a", { path: "bin/secret", content: text("new"), mode: 0o640 }, context);
 
-    expect(volume.writes).toEqual([
-      { path: "/bin", uid: 1001, gid: 1002, mode: 0o755 },
-      { path: "/bin/tools", uid: 1001, gid: 1002, mode: 0o755 },
-      { path: "/bin/tools/run.sh", uid: 1001, gid: 1002, mode: 0o755 },
-      { path: "/bin/notes.md", uid: 1001, gid: 1002, mode: 0o644 },
-      { path: "/bin/secret", uid: 1001, gid: 1002, mode: 0o600 },
-    ]);
-    expect(await files.list("rakazo-volume_1", context)).toEqual([
+    expect(
+      (await files.list("vol-a", context)).sort((a, b) => a.path.localeCompare(b.path)),
+    ).toEqual([
       { path: "bin", kind: "dir", mode: 0o755 },
+      { path: "bin/it's notes.md", kind: "file", mode: 0o644 },
+      { path: "bin/secret", kind: "file", mode: 0o640 },
       { path: "bin/tools", kind: "dir", mode: 0o755 },
       { path: "bin/tools/run.sh", kind: "file", mode: 0o755 },
-      { path: "bin/notes.md", kind: "file", mode: 0o644 },
-      { path: "bin/secret", kind: "file", mode: 0o600 },
     ]);
-    expect(
-      new TextDecoder().decode(await files.read("rakazo-volume_1", "bin/notes.md", context)),
-    ).toBe("hi");
+    expect(new TextDecoder().decode(await files.read("vol-a", "bin/secret", context))).toBe("new");
+    expect((await stat(path.join(dirs.get("vol-b")!, "a.txt"))).mode & 0o777).toBe(0o644);
+    expect(opened).toEqual(["vol-a", "vol-b"]);
+
+    await files.close();
+    expect(killed.sort()).toEqual(["vol-a", "vol-b"]);
   });
 
-  it("refuses a volume name that E2B does not know or knows twice", async () => {
-    volume.named.push({ volumeId: "vol-2", name: "rakazo-twice" });
-    volume.named.push({ volumeId: "vol-3", name: "rakazo-twice" });
+  it("lists a link and a fifo as other entries without following them", async () => {
+    const { files, dirs } = await localVolumes();
+    await files.write("vol", { path: "real/file.txt", content: text("x") }, context);
+    const dir = dirs.get("vol")!;
+    await run("bash", ["-c", `ln -s real ${dir}/link && mkfifo ${dir}/pipe`]);
 
-    await expect(new E2BVolumeFiles().list("rakazo-missing", context)).rejects.toThrow(
-      "0 E2B volumes are named rakazo-missing, expected exactly one",
-    );
-    await expect(new E2BVolumeFiles().list("rakazo-twice", context)).rejects.toThrow(
-      "2 E2B volumes are named rakazo-twice, expected exactly one",
-    );
+    const entries = await files.list("vol", context);
+
+    expect(
+      entries
+        .filter((entry) => entry.kind === "other")
+        .map((entry) => entry.path)
+        .sort(),
+    ).toEqual(["link", "pipe"]);
+    expect(entries.some((entry) => entry.path.startsWith("link/"))).toBe(false);
   });
 
   it.each(["../escape", "a//b", "a/./b", "a\\b", "/abs", "a/"])(
-    "refuses to write or read the path %j",
-    async (path) => {
-      const files = new E2BVolumeFiles();
-      const before = volume.writes.length;
+    "refuses to write or read the path %j before opening a sandbox",
+    async (badPath) => {
+      const { files, opened } = await localVolumes();
 
       await expect(
-        files.write("rakazo-volume_1", { path, content: new Uint8Array() }, context),
+        files.write("vol", { path: badPath, content: new Uint8Array() }, context),
       ).rejects.toThrow("Refusing the volume path");
-      await expect(files.read("rakazo-volume_1", path, context)).rejects.toThrow(
-        "Refusing the volume path",
-      );
-      expect(volume.writes.length).toBe(before);
+      await expect(files.read("vol", badPath, context)).rejects.toThrow("Refusing the volume path");
+      expect(opened).toEqual([]);
     },
   );
 });

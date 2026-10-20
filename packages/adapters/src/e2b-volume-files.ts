@@ -1,101 +1,126 @@
-import type { ConnectionOpts } from "@e2b/desktop";
-import { Volume, VolumeFileType } from "@e2b/desktop";
 import type { AdapterContext, PortableFile, VolumeEntry, VolumeFiles } from "@rakazo/adapter-kit";
 import { fileMode, isPortablePath } from "@rakazo/adapter-kit";
+import { type ConnectionOpts, Sandbox } from "e2b";
 
-export type GuestOwner = { uid: number; gid: number };
+/** Where a volume-files sandbox mounts the volume it serves. */
+export const VOLUME_FILES_MOUNT = "/mnt/rakazo-volume";
+
+const SANDBOX_TIMEOUT_MS = 60 * 60 * 1000;
+
+/** One sandbox that mounts one volume at `VOLUME_FILES_MOUNT`. Tests stand in for the vendor here. */
+export interface VolumeSandbox {
+  /** Runs a shell command as root and returns its stdout. Rejects on a non-zero exit. */
+  run(command: string, signal: AbortSignal): Promise<string>;
+  /** Writes as the guest user, creating missing parent directories, replacing a file. */
+  write(path: string, content: Uint8Array, signal: AbortSignal): Promise<void>;
+  read(path: string, signal: AbortSignal): Promise<Uint8Array>;
+  kill(): Promise<void>;
+}
+
+export type OpenVolumeSandbox = (volumeRef: string) => Promise<VolumeSandbox>;
 
 /**
- * E2B runs sandbox commands as `user` (`defaultUsername` in e2b@2.49.1), and the SDK does not
- * state its uid. 1000 is the usual id of the first user of an image: confirm it in the worker
- * template before a real migration.
+ * Boots a sandbox of `template` with only the volume mounted. It reaches the files through the
+ * same mount a run uses, which every E2B deployment serves, where the volume content API is
+ * missing on a self-hosted one.
  */
-export const E2B_GUEST_OWNER: GuestOwner = { uid: 1000, gid: 1000 };
+export function e2bVolumeSandbox(options: {
+  template: string;
+  connection?: ConnectionOpts;
+  /** Tags each sandbox, beside `rakazo: "volume-files"`. */
+  metadata?: Record<string, string>;
+}): OpenVolumeSandbox {
+  return async (volumeRef) => {
+    const sandbox = await Sandbox.create(options.template, {
+      ...options.connection,
+      secure: true,
+      metadata: { ...options.metadata, rakazo: "volume-files" },
+      volumeMounts: { [VOLUME_FILES_MOUNT]: volumeRef },
+      timeoutMs: SANDBOX_TIMEOUT_MS,
+      lifecycle: { onTimeout: "kill" },
+    });
+    return {
+      async run(command, signal) {
+        const result = await sandbox.commands.run(command, { user: "root", timeoutMs: 0, signal });
+        return result.stdout;
+      },
+      async write(path, content, signal) {
+        const copy = content.slice();
+        await sandbox.files.write(path, copy.buffer, { signal });
+      },
+      read: (path, signal) => sandbox.files.read(path, { format: "bytes", signal }),
+      kill: async () => {
+        await sandbox.kill();
+      },
+    };
+  };
+}
+
+/** Prints every entry under its argument as JSON `VolumeEntry`s, without following links. */
+const LIST_ENTRIES = [
+  'const fs = require("fs"), root = process.argv[1], entries = [];',
+  "const walk = (dir) => {",
+  "  for (const name of fs.readdirSync(root + dir)) {",
+  '    const path = dir ? dir.slice(1) + "/" + name : name, info = fs.lstatSync(root + "/" + path);',
+  '    const kind = info.isDirectory() ? "dir" : info.isFile() ? "file" : "other";',
+  "    entries.push({ path, kind, mode: info.mode & 0o777 });",
+  '    if (kind === "dir") walk("/" + path);',
+  "  }",
+  "};",
+  'walk("");',
+  "process.stdout.write(JSON.stringify(entries));",
+].join("\n");
+
+/** A single-quoted shell word. */
+const quoted = (text: string) => `'${text.replaceAll("'", `'\\''`)}'`;
 
 /**
- * E2B volumes by the name the E2B worker provider records as their provider reference. The SDK
- * reads its credentials and endpoint from its standard environment unless `connection` says
- * otherwise.
+ * Whole E2B volumes, by the name the E2B worker provider records as their provider reference,
+ * each through a sandbox that mounts it. `close` destroys those sandboxes.
  */
 export class E2BVolumeFiles implements VolumeFiles {
-  private readonly handles = new Map<string, Promise<Volume>>();
-  private readonly directories = new Map<string, Set<string>>();
-  private readonly owner: GuestOwner;
+  private readonly sandboxes = new Map<string, Promise<VolumeSandbox>>();
 
-  constructor(private readonly options: { owner?: GuestOwner; connection?: ConnectionOpts } = {}) {
-    this.owner = options.owner ?? E2B_GUEST_OWNER;
-  }
+  constructor(private readonly open: OpenVolumeSandbox) {}
 
   async list(volumeRef: string, context: AdapterContext): Promise<VolumeEntry[]> {
-    const volume = await this.volume(volumeRef);
-    const entries: VolumeEntry[] = [];
-    const walk = async (directory: string): Promise<void> => {
-      for (const stat of await volume.list(`/${directory}`, { signal: context.signal })) {
-        const path = directory ? `${directory}/${stat.name}` : stat.name;
-        const kind =
-          stat.type === VolumeFileType.DIRECTORY
-            ? "dir"
-            : stat.type === VolumeFileType.FILE
-              ? "file"
-              : "other";
-        entries.push({ path, kind, mode: stat.mode & 0o777 });
-        if (kind === "dir") await walk(path);
-      }
-    };
-    await walk("");
-    return entries;
+    const sandbox = await this.sandbox(volumeRef);
+    const listing = await sandbox.run(
+      `node -e ${quoted(LIST_ENTRIES)} ${VOLUME_FILES_MOUNT}`,
+      context.signal,
+    );
+    return JSON.parse(listing) as VolumeEntry[];
   }
 
   async write(volumeRef: string, file: PortableFile, context: AdapterContext): Promise<void> {
-    portablePath(file.path);
-    const volume = await this.volume(volumeRef);
-    const made = this.directories.get(volumeRef) ?? new Set<string>();
-    this.directories.set(volumeRef, made);
-    const segments = file.path.split("/");
-    for (let depth = 1; depth < segments.length; depth += 1) {
-      const directory = segments.slice(0, depth).join("/");
-      if (made.has(directory)) continue;
-      await volume.makeDir(`/${directory}`, {
-        ...this.owner,
-        mode: 0o755,
-        force: true,
-        signal: context.signal,
-      });
-      made.add(directory);
-    }
-    await volume.writeFile(`/${file.path}`, file.content.slice().buffer, {
-      ...this.owner,
-      mode: fileMode(file),
-      signal: context.signal,
-    });
+    const target = volumePath(file.path);
+    const sandbox = await this.sandbox(volumeRef);
+    await sandbox.write(target, file.content, context.signal);
+    await sandbox.run(`chmod ${fileMode(file).toString(8)} ${quoted(target)}`, context.signal);
   }
 
   async read(volumeRef: string, path: string, context: AdapterContext): Promise<Uint8Array> {
-    portablePath(path);
-    const volume = await this.volume(volumeRef);
-    return volume.readFile(`/${path}`, { format: "bytes", signal: context.signal });
+    const target = volumePath(path);
+    return (await this.sandbox(volumeRef)).read(target, context.signal);
   }
 
-  private volume(name: string): Promise<Volume> {
-    const known = this.handles.get(name);
+  async close(): Promise<void> {
+    const opened = [...this.sandboxes.values()];
+    this.sandboxes.clear();
+    await Promise.all(opened.map(async (sandbox) => (await sandbox.catch(() => null))?.kill()));
+  }
+
+  private sandbox(volumeRef: string): Promise<VolumeSandbox> {
+    const known = this.sandboxes.get(volumeRef);
     if (known) return known;
-    const connecting = connectByName(name, this.options.connection);
-    this.handles.set(name, connecting);
-    connecting.catch(() => this.handles.delete(name));
-    return connecting;
+    const opening = this.open(volumeRef);
+    this.sandboxes.set(volumeRef, opening);
+    opening.catch(() => this.sandboxes.delete(volumeRef));
+    return opening;
   }
 }
 
-function portablePath(path: string): void {
+function volumePath(path: string): string {
   if (!isPortablePath(path)) throw new Error(`Refusing the volume path ${JSON.stringify(path)}`);
-}
-
-/** E2B does not keep names unique, and its volume list (e2b@2.49.1) is one unpaginated page. */
-async function connectByName(name: string, connection: ConnectionOpts | undefined) {
-  const named = (await Volume.list(connection)).filter((volume) => volume.name === name);
-  const [found] = named;
-  if (!found || named.length > 1) {
-    throw new Error(`${named.length} E2B volumes are named ${name}, expected exactly one`);
-  }
-  return Volume.connect(found.volumeId, connection);
+  return `${VOLUME_FILES_MOUNT}/${path}`;
 }
