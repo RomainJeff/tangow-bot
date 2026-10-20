@@ -1,3 +1,5 @@
+import { runContinueJob } from "@rakazo/adapter-kit";
+import { createJobReconciler } from "@rakazo/adapters";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.js";
 import { startWorkerRun } from "./worker-run-fixture.js";
@@ -128,47 +130,76 @@ describe("where a product run executes", () => {
     expect(run.provider.launches).toEqual([]);
   });
 
-  it("requeues a run whose computer volumes could not be created", async () => {
-    const run = await startWorkerRun({
-      steps: [],
-      workers: (workers) => ({
-        ...workers,
-        provisionHomeVolumes: async () => {
-          throw new Error("The volume provider is unavailable");
-        },
-      }),
-    });
-    cleanups.push(() => run.close());
-    const runId = await run.send("Hello.");
+  it.each(["volumes", "ensure", "prepare"] as const)(
+    "exhausts a run's setup budget across reconciliation and a restart after %s fails",
+    async (step) => {
+      const run = await startWorkerRun({ steps: [] });
+      cleanups.push(() => run.close());
+      const fail = async () => {
+        throw new Error("The provider is unavailable");
+      };
+      const failProvider = () => {
+        if (step === "volumes") run.provider.ensureVolume = fail;
+        else run.provider[step] = fail;
+      };
+      if (step === "volumes") await run.prisma.volume.deleteMany();
+      failProvider();
+      const runId = await run.send("Hello.");
+      const enqueue = vi.fn(async () => undefined);
+      const reconciler = createJobReconciler({
+        prisma: run.prisma,
+        jobs: { enqueue, cancel: async () => undefined, close: async () => undefined },
+      });
 
-    await expect(run.continueRun(runId)).rejects.toThrow("Run setup failed; retrying");
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        enqueue.mockClear();
+        await reconciler.reconcileOnce();
+        expect(enqueue).toHaveBeenCalledWith(runContinueJob(runId));
+        if (attempt < 3) {
+          await expect(run.continueRun(runId)).rejects.toThrow("Run setup failed; retrying");
+          expect((await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
+            "queued",
+          );
+          if (step === "ensure" && attempt === 1) {
+            expect(await attemptsOf(run, runId)).toEqual([{ workerState: "releasing" }]);
+            for (let wait = 0; wait < 4; wait++) {
+              await run.continueRun(runId);
+              expect(
+                (await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status,
+              ).toBe("queued");
+            }
+          }
+          // A failed ensure keeps its writer lease until its create deadline has passed.
+          await run.prisma.attempt.updateMany({
+            where: { runId, workerState: { not: null } },
+            data: { workerEnsureAt: new Date(0) },
+          });
+          const context = {
+            operationId: "retry-test",
+            traceId: "retry-test",
+            spaceId: run.spaceId,
+            userId: run.userId,
+            signal: new AbortController().signal,
+          };
+          await run.lifecycle.reconcile({ limit: 10 }, context);
+          await run.restart().dispose();
+          failProvider();
+        } else {
+          await run.continueRun(runId);
+        }
+      }
 
-    expect(
-      await run.prisma.run.findUniqueOrThrow({
-        where: { id: runId },
-        select: { status: true, error: true },
-      }),
-    ).toEqual({ status: "queued", error: "Run setup failed; retrying" });
-  });
-
-  it("requeues a run whose worker the provider failed to create, leaving the worker to release", async () => {
-    const run = await fixture([]);
-    run.provider.ensure = async () => {
-      throw new Error("E2B answered 503");
-    };
-    const runId = await run.send("Hello.");
-
-    await expect(run.continueRun(runId)).rejects.toThrow("Run setup failed; retrying");
-
-    expect(
-      await run.prisma.run.findUniqueOrThrow({
-        where: { id: runId },
-        select: { status: true, error: true },
-      }),
-    ).toEqual({ status: "queued", error: "Run setup failed; retrying" });
-    // A failed ensure may still create the VM until its deadline, so the reconciler releases it.
-    expect(await attemptsOf(run, runId)).toEqual([{ workerState: "releasing" }]);
-  });
+      expect(await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).toMatchObject({
+        status: "failed",
+        error: expect.stringContaining("Run setup failed after 3 attempts"),
+      });
+      enqueue.mockClear();
+      await reconciler.reconcileOnce();
+      expect(enqueue).not.toHaveBeenCalledWith(runContinueJob(runId));
+      await run.continueRun(runId);
+      expect(await run.prisma.attempt.count({ where: { runId } })).toBe(step === "ensure" ? 7 : 3);
+    },
+  );
 
   it("never claims a run of a bot that is being deleted", async () => {
     const run = await fixture([]);

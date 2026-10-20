@@ -1,7 +1,8 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { type FrameSummary, GUEST_TOOLS } from "@rakazo/adapters/runtime-worker";
+import type { FrameSummary } from "@rakazo/adapters/runtime-worker";
+import { GUEST_TOOLS } from "@rakazo/adapters/runtime-worker";
 import { bundleGuest } from "@rakazo/agent-run-worker/bundle";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { latestCard } from "./index.js";
@@ -327,7 +328,7 @@ describe("a run whose bot runs in a guest", () => {
       where: { id: runId },
       data: { leaseExpiresAt: new Date(Date.now() - 1_000) },
     });
-    await expect(run.continueRun(runId)).rejects.toThrow("Run setup failed; retrying");
+    await run.continueRun(runId);
     expect(run.provider.launches).toHaveLength(1);
     held.resolve();
     await first;

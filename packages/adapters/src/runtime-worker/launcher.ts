@@ -1,13 +1,10 @@
-import {
-  type AdapterContext,
-  AgentRuntimeUnavailableError,
-  type WorkerIdentity,
-  type WorkerStartV1,
-} from "@rakazo/adapter-kit";
+import type { AdapterContext, WorkerIdentity, WorkerStartV1 } from "@rakazo/adapter-kit";
+import { AgentRuntimeBusyError } from "@rakazo/adapter-kit";
 import type { WorkerLaunch } from "@rakazo/core";
 import { LIVE_WORKER_STATES } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
-import { type ReleaseOutcome, VolumeBusyError, type WorkerLifecycle } from "../worker-lifecycle.js";
+import type { ReleaseOutcome, WorkerLifecycle } from "../worker-lifecycle.js";
+import { VolumeBusyError } from "../worker-lifecycle.js";
 import type { FrameChannel } from "./framing.js";
 
 /** An attempt's guest, launched and reachable. */
@@ -71,12 +68,11 @@ export function createLifecycleLauncher(deps: {
         },
       });
       if (unconfirmed > 0) {
-        throw new AgentRuntimeUnavailableError(
-          "An earlier worker of this run is not confirmed gone",
-        );
+        throw new AgentRuntimeBusyError("An earlier worker of this run is not confirmed gone");
       }
       const started = await deps.lifecycle.start(deps.launch, context).catch((error: unknown) => {
-        if (error instanceof VolumeBusyError) throw new AgentRuntimeUnavailableError(error.message);
+        if (error instanceof VolumeBusyError)
+          throw new AgentRuntimeBusyError(error.message, { cause: error });
         throw error;
       });
       const guest = deps.connector.connect(

@@ -30,6 +30,7 @@ import type {
   WebProvider,
 } from "@rakazo/adapter-kit";
 import {
+  AgentRuntimeBusyError,
   AgentRuntimeUnavailableError,
   historyCompactJob,
   linkPreviewJob,
@@ -62,15 +63,17 @@ import {
   SessionId,
 } from "@rakazo/contracts";
 import type {
+  ActionApprovalRule,
   CreatedRoutine,
   ProposalEffectKind,
   ProposalRefusal,
   RoutineCard,
   SkillLearningMode,
+  ToolCallDetail,
+  ToolCallStreak,
 } from "@rakazo/core";
 import {
   ACTIVE_RUN_STATUSES,
-  type ActionApprovalRule,
   appendTextSegment,
   appendToolCallSegment,
   applyJudgeDecision,
@@ -133,8 +136,6 @@ import {
   skillsReferencedInPrompt,
   skillWriteRefusal,
   spawnBotToolArgs,
-  type ToolCallDetail,
-  type ToolCallStreak,
   toolRequiresApproval,
   toolRequiresExplicitApproval,
   UNKNOWN_MODEL_MESSAGE,
@@ -150,12 +151,12 @@ import {
   stableJsonValue,
   toolEffectIdempotencyKey,
 } from "@rakazo/core/node/approval-effect-key";
+import type { CreateBotMessageInput, McpServer, PrismaClient, ThreadEvents } from "@rakazo/db";
 import {
   activeBotNames,
   appendCardStateInTransaction,
   appendRunFinishedInTransaction,
   blocksOf,
-  type CreateBotMessageInput,
   createBotMessageInTransaction,
   createSpaceForMember,
   effectiveMemoryScope,
@@ -165,14 +166,11 @@ import {
   InvalidSpaceNameError,
   isTooManyDatabaseConnections,
   loadBotMessageContext,
-  type McpServer,
   openRoutineSessionInTransaction,
   Prisma,
-  type PrismaClient,
   parseComputerMode,
   RunHistoryWriteError,
   SpaceLimitError,
-  type ThreadEvents,
   threadEventSeq,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
@@ -248,19 +246,18 @@ import {
 } from "./browser-tools.js";
 import { agentConnectionTools, builtinAgentTools } from "./builtin-tools.js";
 import { archiveSpawnedBot, spawnBot } from "./child-bots.js";
+import type { ConnectionScope, PluginConnectionRow } from "./composio-connector.js";
 import {
-  type ConnectionScope,
   collectLogIds,
   mergeConnectedPlugins,
   needsLivePluginSync,
-  type PluginConnectionRow,
   planLiveConnectionSync,
 } from "./composio-connector.js";
 import { BACKGROUND_WORK_LAUNCH, scheduleComputerSleep } from "./computer-idle.js";
+import type { ComputerExecutionLease } from "./computer-lifecycle.js";
 import {
   acquireComputerExecutionLease,
   ComputerBusyError,
-  type ComputerExecutionLease,
   holdComputerExecutionLeaseForTakeover,
   provisionComputer,
   releaseBotScreen,
@@ -333,10 +330,10 @@ import {
   serializeModelSecret,
 } from "./pi-oauth.js";
 import { resolveCompletionMaxTokens } from "./pi-runtime-limits.js";
+import type { PlotSpec } from "./plot-tool.js";
 import {
   assertPlotDataWithinLimits,
   PLOT_TOOL_GUIDE,
-  type PlotSpec,
   parsePlotData,
   plotSvgToPng,
   renderPlotSpecToSvg,
@@ -394,12 +391,12 @@ import {
   skillUpdateFromTool,
   userSkillsOpenedIn,
 } from "./skill-tools.js";
+import type { TakeoverResumeCheckpoint } from "./takeover-resume.js";
 import {
   continueRunClaimFence,
   DESKTOP_HELD_FOR_TAKEOVER_MESSAGE,
   refreshTakeoverContinuePlan,
   TAKEOVER_RESUME_CHECKPOINTS,
-  type TakeoverResumeCheckpoint,
   takeoverCheckpointOf,
   takeoverContinuePlan,
 } from "./takeover-resume.js";
@@ -441,6 +438,7 @@ const READ_ONLY_AGENT_TOOLS = new Set([
   "browser_snapshot",
   "list_secrets",
 ]);
+const MAX_SETUP_ATTEMPTS = 3;
 const SKILL_NUDGE_TIMEOUT_MS = 2 * 60 * 1000;
 
 const TURN_ATTACHMENT_UNAVAILABLE =
@@ -1491,6 +1489,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
       }, 60_000);
       heartbeat.unref?.();
 
+      const settleStrandedCards = () =>
+        failStrandedRoutineCards(deps, {
+          spaceId: run.spaceId,
+          threadId: run.threadId,
+          botId: run.botId,
+          runId,
+        }).catch((error) => getLogger().error("stranded routine cards", error));
       const runSecrets = [...deps.secrets];
       // A skill write landed in this attempt: its line goes under the run's message at the end.
       let savedSkill = false;
@@ -1692,13 +1697,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const trustedRoutine = run.trigger === "routine" && routine?.untrustedPrompt === false;
         // Set once the run reads a message someone other than the user sent into it.
         let steeredByOthers = false;
-        const settleStrandedCards = () =>
-          failStrandedRoutineCards(deps, {
-            spaceId: run.spaceId,
-            threadId: thread.id,
-            botId: bot.id,
-            runId,
-          }).catch((error) => getLogger().error("stranded routine cards", error));
         const discoveredPromise = deps.connector
           ? deps.connector.discoverTools(context)
           : Promise.resolve([]);
@@ -5297,7 +5295,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
         }
       } catch (setupError) {
         const computerBusy = setupError instanceof ComputerBusyError;
-        const retryForever = computerBusy || isTooManyDatabaseConnections(setupError);
+        const retryForever =
+          computerBusy ||
+          setupError instanceof AgentRuntimeBusyError ||
+          isTooManyDatabaseConnections(setupError);
         if (!computerBusy) {
           // undici collapses every network failure to "fetch failed"; the cause names the
           // host and errno, which is the only part worth paging over.
@@ -5315,24 +5316,61 @@ export function createRunExecutor(deps: ExecutorDeps) {
             ),
           );
         }
-        const released = await writeComputerRunRequeue(
-          deps,
-          runId,
-          workerId,
-          fence,
-          resumeCheckpoint,
-          heldForTakeover,
-          retryForever ? null : "Run setup failed; retrying",
-        );
-        if (released) {
-          await deps.prisma.attempt.update({
-            where: { id: attempt.id },
-            data: {
-              status: "setup_failed",
-              error: retryForever ? null : "Run setup failed; retrying",
-              finishedAt: new Date(),
-            },
+        const setupFailures = retryForever
+          ? 0
+          : await deps.prisma.attempt.count({
+              where: { runId, status: "setup_failed", error: { not: null } },
+            });
+        if (!retryForever && setupFailures + 1 >= MAX_SETUP_ATTEMPTS) {
+          const message = redactSecrets(
+            `Run setup failed after ${MAX_SETUP_ATTEMPTS} attempts: ${
+              setupError instanceof Error ? setupError.message : String(setupError)
+            }`,
+            runSecrets,
+          );
+          const failed = await deps.events.finalizeRun({
+            spaceId: run.spaceId,
+            threadId: run.threadId,
+            botId: run.botId,
+            runId,
+            taskId: run.taskId,
+            attemptId: attempt.id,
+            leaseOwner: workerId,
+            leaseFence: fence,
+            outcome: "failed",
+            error: message,
           });
+          if (failed) {
+            await settleStrandedCards();
+            if (failed.continuationRunId) {
+              await deps.jobs.enqueue(runContinueJob(failed.continuationRunId));
+            }
+          }
+          return;
+        }
+        const released = await deps.prisma.$transaction(async (tx) => {
+          const released = await writeComputerRunRequeue(
+            tx,
+            runId,
+            workerId,
+            fence,
+            resumeCheckpoint,
+            heldForTakeover,
+            retryForever ? null : "Run setup failed; retrying",
+          );
+          if (released) {
+            await tx.attempt.update({
+              where: { id: attempt.id },
+              data: {
+                status: "setup_failed",
+                error: retryForever ? null : "Run setup failed; retrying",
+                finishedAt: new Date(),
+              },
+            });
+          }
+          return released;
+        });
+        if (released) {
           if (retryForever) {
             await deps.jobs.enqueue({
               ...runContinueJob(runId),
@@ -5817,7 +5855,7 @@ function computerRunRequeueData(
 }
 
 async function writeComputerRunRequeue(
-  deps: ExecutorDeps,
+  prisma: Pick<PrismaClient, "run">,
   runId: string,
   workerId: string,
   fence: number,
@@ -5837,7 +5875,7 @@ async function writeComputerRunRequeue(
     leaseOwner: null,
     leaseExpiresAt: null,
   };
-  const preserve = await deps.prisma.run.updateMany({
+  const preserve = await prisma.run.updateMany({
     where: {
       ...whereLease,
       checkpoint: { in: [...TAKEOVER_RESUME_CHECKPOINTS] },
@@ -5845,12 +5883,12 @@ async function writeComputerRunRequeue(
     data: releasedHold,
   });
   if (preserve.count === 1) return true;
-  const planned = await deps.prisma.run.updateMany({
+  const planned = await prisma.run.updateMany({
     where: { ...whereLease, checkpoint: null },
     data: computerRunRequeueData(resumeCheckpoint, error, heldForTakeover),
   });
   if (planned.count === 1) return true;
-  const retried = await deps.prisma.run.updateMany({
+  const retried = await prisma.run.updateMany({
     where: {
       ...whereLease,
       checkpoint: { in: [...TAKEOVER_RESUME_CHECKPOINTS] },
@@ -5869,7 +5907,7 @@ async function requeueComputerRun(
   heldForTakeover = false,
 ): Promise<void> {
   const released = await writeComputerRunRequeue(
-    deps,
+    deps.prisma,
     runId,
     workerId,
     fence,

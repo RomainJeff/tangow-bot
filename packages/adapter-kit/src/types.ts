@@ -451,11 +451,19 @@ export type LocalToolExecutor = (
   run: (signal: AbortSignal) => Promise<LocalToolOutput>,
 ) => Promise<unknown>;
 
-/** A runtime cannot start the run now, for a reason that passes: the run is requeued, not failed. */
+/** A runtime could not start or was lost. The executor retries within its setup budget. */
 export class AgentRuntimeUnavailableError extends Error {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
     this.name = "AgentRuntimeUnavailableError";
+  }
+}
+
+/** Another attempt still owns resources the runtime needs. Waiting does not consume setup retries. */
+export class AgentRuntimeBusyError extends AgentRuntimeUnavailableError {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "AgentRuntimeBusyError";
   }
 }
 
