@@ -78,10 +78,7 @@
     "left_after_each_lane": "0 sandboxes, 0 volumes of the session"
   },
   "perf": {
-    "source": [
-      "bench.json",
-      "bench-postgresql.json"
-    ],
+    "source": ["bench.json", "bench-postgresql.json"],
     "trials_per_arm": 30,
     "errors": 0,
     "cold_boot_p95_ms": {
@@ -123,14 +120,8 @@
     "control_limiter": "database calls are 99 to 100 percent of the control window, 17 queries at p50; PGlite SELECT 1 is 0.47 ms at p50 on this host",
     "rss_pglite": {
       "runs": 90,
-      "rss_mib": [
-        1170.7,
-        1226.5
-      ],
-      "heap_mib": [
-        166.1,
-        214.9
-      ],
+      "rss_mib": [1170.7, 1226.5],
+      "heap_mib": [166.1, 214.9],
       "last_ten_growth_mib": {
         "rss": 4.4,
         "heap": 3.8
@@ -151,10 +142,7 @@
       },
       "heap_mib": {
         "first": 177,
-        "after_warmup_range": [
-          181.6,
-          183.5
-        ],
+        "after_warmup_range": [181.6, 183.5],
         "last": 183.5,
         "last_ten_growth": 0.4
       },
