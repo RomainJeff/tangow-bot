@@ -61,7 +61,7 @@ import {
   truncateSlashDescription,
   unshownRunReport,
 } from "@rakazo/core";
-import { botAccentOn, motion, radii, sizes } from "@rakazo/ui-tokens";
+import { ambientFloor, botAccentOn, motion, radii, sizes } from "@rakazo/ui-tokens";
 import * as Clipboard from "expo-clipboard";
 import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useHeaderHeight } from "expo-router/react-navigation";
@@ -105,6 +105,7 @@ import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import { AppConnectCard } from "../components/AppConnectCard";
 import { AskActions, CapsuleButton } from "../components/AskActions";
 import { AgentSteps } from "../components/agent-steps";
+import { AmbientBackground, ThreadScrollEdge } from "../components/ambient-background";
 import { AnimatedMessageBubble, MessageArrival } from "../components/animated-message-bubble";
 import { BotAvatar } from "../components/bot-avatar";
 import type { BotBubbleMeta } from "../components/bot-bubble";
@@ -769,6 +770,8 @@ function Thread() {
   useLayoutEffect(() => {
     navigation.setOptions({
       title: displayName || t("Thread"),
+      // The thread runs under the bar: iOS 26 blurs it at the edge and draws the buttons in glass.
+      headerTransparent: true,
       // Bot actions (bot settings, open computer, clear, archive, delete) live
       // on a long press; a short press opens the bot's page.
       headerTitle: () => (
@@ -2332,29 +2335,34 @@ function Thread() {
 
   return (
     <TableActionsProvider value={tableActions}>
+      <AmbientBackground />
       <KeyboardAvoidingView
         behavior="height"
-        keyboardVerticalOffset={headerHeight}
         style={{
           flex: 1,
-          backgroundColor: tokens.background,
           paddingHorizontal: THREAD_GUTTER,
         }}
       >
-        {error ? (
-          <Text style={{ color: tokens.mutedForeground, marginTop: 12 }}>{error}</Text>
-        ) : null}
-        {runError ? (
-          <Text style={{ color: tokens.destructive, marginTop: 12 }}>{runError}</Text>
+        {error || runError ? (
+          // Below the transparent bar, not under it.
+          <View style={{ paddingTop: headerHeight }}>
+            {error ? (
+              <Text style={{ color: tokens.mutedForeground, marginTop: 12 }}>{error}</Text>
+            ) : null}
+            {runError ? (
+              <Text style={{ color: tokens.destructive, marginTop: 12 }}>{runError}</Text>
+            ) : null}
+          </View>
         ) : null}
         <View style={{ flex: 1, position: "relative" }}>
           {showPinnedPage ? (
             <ScrollView
               key={jumpScrollTarget.current ?? pinnedTarget?.messageId ?? threadKey}
               ref={pinnedScroll}
-              style={[{ flex: 1, marginTop: 8 }, BLEED_STYLE]}
+              style={[{ flex: 1 }, BLEED_STYLE]}
               contentContainerStyle={{
                 paddingHorizontal: THREAD_GUTTER,
+                paddingTop: headerHeight + 8,
                 paddingBottom: COMPOSER_GAP,
               }}
               maintainVisibleContentPosition={KEEP_VISIBLE_POSITION}
@@ -2375,9 +2383,13 @@ function Thread() {
               inverted
               keyExtractor={(row) => row.item.id}
               extraData={listExtraData}
-              style={[{ flex: 1, marginTop: 8 }, BLEED_STYLE]}
-              // Inverted: the top padding is the thread's bottom edge.
-              contentContainerStyle={{ paddingHorizontal: THREAD_GUTTER, paddingTop: COMPOSER_GAP }}
+              style={[{ flex: 1 }, BLEED_STYLE]}
+              // Inverted: the top padding is the thread's bottom edge, the bottom one its top, under the bar.
+              contentContainerStyle={{
+                paddingHorizontal: THREAD_GUTTER,
+                paddingTop: COMPOSER_GAP,
+                paddingBottom: headerHeight + 8,
+              }}
               maintainVisibleContentPosition={KEEP_VISIBLE_POSITION}
               scrollEventThrottle={16}
               // dragging the thread down dismisses the keyboard following the
@@ -2424,8 +2436,8 @@ function Thread() {
             <Svg width="100%" height={COMPOSER_GAP}>
               <Defs>
                 <LinearGradient id="composer-gap-fade" x1="0" y1="0" x2="0" y2="1">
-                  <Stop offset="0" stopColor={tokens.background} stopOpacity={0} />
-                  <Stop offset="1" stopColor={tokens.background} stopOpacity={1} />
+                  <Stop offset="0" stopColor={ambientFloor[colorScheme]} stopOpacity={0} />
+                  <Stop offset="1" stopColor={ambientFloor[colorScheme]} stopOpacity={1} />
                 </LinearGradient>
               </Defs>
               <Rect width="100%" height={COMPOSER_GAP} fill="url(#composer-gap-fade)" />
@@ -3063,6 +3075,7 @@ function Thread() {
           <TablePreview table={tablePreview} onClose={() => setTablePreview(null)} />
         ) : null}
       </KeyboardAvoidingView>
+      <ThreadScrollEdge height={headerHeight + 24} />
     </TableActionsProvider>
   );
 }
