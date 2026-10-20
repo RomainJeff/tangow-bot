@@ -41,7 +41,7 @@ export const laneG: Lane = {
   scenario:
     "Three faults right after the VM exists: the VM is killed after ensure, ensure fails after the create landed, setup fails after the ref was recorded; then a controller that dies after start, cleaned up by reconcile",
   passWhen:
-    "A recorded ref is destroyed at once and its lease freed; a create whose answer was lost keeps its lease until reconcile destroys it by tag after the ensure deadline; a lost guest retries to completion; no sandbox is left",
+    "A recorded ref is destroyed at once and its lease freed; a create whose answer was lost keeps its lease until reconcile destroys it by tag after the ensure deadline; every faulted run completes, a failed setup through a requeue under the run's setup budget; no sandbox is left",
   async run(live) {
     const cases: Record<string, unknown> = {};
     let pass = true;
@@ -63,12 +63,9 @@ export const laneG: Lane = {
           where: { writerAttemptId: { not: null } },
         });
         const aliveAfterFault = (await live.census()).sandboxes;
-        if (statusAfterFault === "queued") {
-          await worker.run.continueRun(runId);
-          await worker.completed(runId);
-        }
         // A create whose answer was lost may still land, so release leaves it to reconcile after
-        // the ensure deadline. Move that deadline into the past instead of waiting it out.
+        // the ensure deadline, and its writer lease holds the next attempt off until then. Move
+        // that deadline into the past instead of waiting it out.
         let afterEnsureDeadline: Record<string, unknown> | undefined;
         if (fault === "throw_after_create") {
           await worker.run.prisma.attempt.updateMany({
@@ -85,6 +82,13 @@ export const laneG: Lane = {
             sandboxesAlive: (await live.census()).sandboxes,
           };
         }
+        // A failed setup requeues the run under its budget of three; the retry runs it.
+        let retries = 0;
+        while ((await worker.status(runId)) === "queued" && retries < 3) {
+          retries += 1;
+          await worker.run.continueRun(runId);
+        }
+        await worker.completed(runId);
         const attempts = await worker.attempts(runId);
         const record = {
           faultFired: injected.fired(),
@@ -97,29 +101,18 @@ export const laneG: Lane = {
           writerLeasesHeldAfterFault: leases,
           sandboxesAliveAfterFault: aliveAfterFault,
           ...(afterEnsureDeadline && { afterEnsureDeadline }),
+          retries,
           finalStatus: await worker.status(runId),
           attempts: attempts.map(({ workerState, stopPhase }) => ({ workerState, stopPhase })),
           sandboxesLeft: (await live.census()).sandboxes,
         };
         cases[fault] = record;
-        // Only a lost guest makes the runtime unavailable: the launcher passes an error from
-        // ensure or prepare through, and the run fails.
+        // Every fault ends in a completed run: a lost guest retries within its attempt, and an
+        // error from ensure or prepare requeues the run under its setup budget.
         const expected = {
-          kill_after_ensure: {
-            state: "released",
-            ref: true,
-            leases: 0,
-            alive: 0,
-            status: "completed",
-          },
-          throw_after_create: {
-            state: "releasing",
-            ref: false,
-            leases: 1,
-            alive: 1,
-            status: "failed",
-          },
-          prepare_fails: { state: "released", ref: true, leases: 0, alive: 0, status: "failed" },
+          kill_after_ensure: { state: "released", ref: true, leases: 0, alive: 0 },
+          throw_after_create: { state: "releasing", ref: false, leases: 1, alive: 1 },
+          prepare_fails: { state: "released", ref: true, leases: 0, alive: 0 },
         }[fault];
         pass &&=
           record.faultFired &&
@@ -127,7 +120,7 @@ export const laneG: Lane = {
           record.faultedAttempt.providerRefRecorded === expected.ref &&
           leases === expected.leases &&
           aliveAfterFault === expected.alive &&
-          record.finalStatus === expected.status &&
+          record.finalStatus === "completed" &&
           record.sandboxesLeft === 0 &&
           (fault !== "throw_after_create" ||
             JSON.stringify(afterEnsureDeadline) ===

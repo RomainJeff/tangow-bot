@@ -4,7 +4,7 @@ import { PiAgentRuntime } from "@rakazo/adapters";
 import { WORKER_LIMITS } from "@rakazo/adapters/runtime-worker";
 import { fileTask, toolResult } from "../file-task.js";
 import { startWorkerRun } from "../worker-run-fixture.js";
-import { call, finish, liveRun, toolNames } from "./run.js";
+import { call, finish, liveRun } from "./run.js";
 import { context, type Lane, sh, sha256 } from "./session.js";
 
 export const laneA: Lane = {
@@ -152,54 +152,44 @@ export const laneI: Lane = {
   id: "i",
   issue: "run sans fichiers/computer",
   scenario:
-    "A run whose bot has no computer, as an MCP-only run; then a VM of the worker template, to check the guest user can write /workspace",
+    "A run whose bot has no computer; then a VM of the worker template, to check the guest user can write /workspace",
   passWhen:
-    "The worker starts with no mount and no computer, the guest is offered no local tool, the run completes, and the sandbox user can write /workspace",
+    "The executor refuses the run before it routes it, with no attempt reaching a worker and no sandbox created; the sandbox user can write /workspace",
   async run(live) {
-    let offered: string[] = [];
-    const worker = await liveRun(live, {
-      computer: "none",
-      steps: finish("Ran without files", (request) => {
-        offered = toolNames(request);
-      }),
-    });
+    const worker = await liveRun(live, { computer: "none", steps: [] });
     try {
-      const runId = await worker.send("Run without files.");
-      await worker.completed(runId);
-      const start = worker.seen
-        .filter((frame) => frame.from === "controller")
-        .map(
-          (frame) =>
-            JSON.parse(Buffer.from(frame.frame).toString()) as {
-              kind: string;
-              workspace?: unknown;
-              computer?: string;
-            },
-        )
-        .find((message) => message.kind === "worker.start");
+      const before = await live.census();
+      const runId = await worker.run.send("Run without a computer.");
+      const refusal = await worker.run.continueRun(runId).then(
+        () => null,
+        (error: unknown) => (error instanceof Error ? error.message : String(error)),
+      );
+      const row = await worker.run.prisma.run.findUniqueOrThrow({
+        where: { id: runId },
+        select: { status: true },
+      });
+      const attempts = await worker.attempts(runId);
+      const after = await live.census();
       const vm = await live.vm({}, live.config.workerTemplate);
       const workspace = await sh(
         vm,
         "(echo x > /workspace/scratch.txt && echo writable) 2>/dev/null || echo read-only",
       );
       await vm.kill();
-      const localTools = offered.filter((name) =>
-        ["bash", "read_file", "write_file", "edit_file", "list_files", "grep", "shell"].includes(
-          name,
-        ),
-      );
       return {
         pass:
-          (await worker.status(runId)) === "completed" &&
-          JSON.stringify(start?.workspace) === JSON.stringify({ cwd: "/workspace", mounts: [] }) &&
-          start?.computer === "none" &&
-          localTools.length === 0 &&
+          refusal === "Bot has no computer" &&
+          attempts.every((attempt) => !attempt.workerProviderRef && !attempt.workerState) &&
+          after.sandboxes === before.sandboxes &&
+          worker.connects.length === 0 &&
           workspace === "writable",
         observed: {
-          workspace: start?.workspace,
-          computer: start?.computer,
-          localToolsOffered: localTools,
+          continueThrew: refusal,
+          runStatusAfter: row.status,
+          attemptsWithAWorker: attempts.filter((attempt) => attempt.workerState).length,
+          sandboxesCreated: after.sandboxes - before.sandboxes,
           workspaceWritableBySandboxUser: workspace === "writable",
+          note: "Every bot run needs a computer, and a bot with one is always offered the file tools, so the executor never derives a worker run without files: deriveRunNeeds' no-file case is covered offline.",
         },
       };
     } finally {
