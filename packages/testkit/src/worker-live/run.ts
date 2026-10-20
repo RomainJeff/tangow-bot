@@ -1,5 +1,5 @@
 import type { SandboxProvider, WorkerProvider } from "@rakazo/adapter-kit";
-import type { GuestConnector } from "@rakazo/adapters/runtime-worker";
+import type { GuestConnector, RunWorkers } from "@rakazo/adapters/runtime-worker";
 import { volumeMountPath } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "../model-emulator.js";
@@ -17,6 +17,7 @@ export async function liveRun(
   live: Live,
   options: {
     steps: ModelEmulatorStep[];
+    workers?: (workers: RunWorkers) => RunWorkers;
     /** The model's wire protocol: a custom OpenAI-compatible connection, or Anthropic's catalog. */
     protocol?: "openai" | "anthropic";
     computer?: "dedicated" | "team" | "none";
@@ -32,6 +33,7 @@ export async function liveRun(
   const connects: number[] = [];
   const run = await startWorkerRun({
     steps: options.steps,
+    workers: options.workers,
     protocol: options.protocol,
     prisma: options.prisma,
     computerScope: options.computer ?? "dedicated",

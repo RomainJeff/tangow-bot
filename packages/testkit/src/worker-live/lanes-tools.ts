@@ -8,8 +8,7 @@ import type { Lane } from "./session.js";
 export const laneD: Lane = {
   id: "d",
   issue: "outil désactivé parent/helper",
-  scenario:
-    "A run whose model cannot see images, so computer_act is not one of its tools; the parent and a helper each call it",
+  scenario: "A run disables native write and bash; the parent and a helper each try both tools",
   passWhen:
     "Neither the parent's nor the helper's tool list offers it, each call returns an error to its model, and no call of it reaches the controller",
   async run(live) {
@@ -17,22 +16,49 @@ export const laneD: Lane = {
     const isHelper = (request: ModelEmulatorRequest) =>
       JSON.stringify(request.messages[0]?.content ?? "").includes("Rakazo subagent");
     const worker = await liveRun(live, {
+      workers: (workers) => ({
+        ...workers,
+        runtime(launch) {
+          const runtime = workers.runtime(launch);
+          return {
+            ...runtime,
+            describe() {
+              const descriptor = runtime.describe();
+              return {
+                ...descriptor,
+                capabilities: {
+                  ...descriptor.capabilities,
+                  localTools: descriptor.capabilities.localTools?.filter(
+                    (tool) => !["write", "bash"].includes(tool.name),
+                  ),
+                },
+              };
+            },
+          };
+        },
+      }),
       steps: [
-        call("p1", "computer_act", { action: "click", x: 1, y: 1 }, (request) => {
+        call("p1", "write", { path: "disabled.txt", content: "forbidden" }, (request) => {
           seen.parentTools = toolNames(request);
         }),
-        call("p2", "run_subagent", { name: "helper", task: "Click the screen." }, (request) => {
+        call("p-bash", "bash", { command: "echo forbidden" }, (request) => {
           seen.parentResult = toolResult(request);
         }),
-        call("h1", "computer_act", { action: "click", x: 1, y: 1 }, (request) => {
+        call("p2", "run_subagent", { name: "helper", task: "Try write and bash." }, (request) => {
+          seen.parentBashResult = toolResult(request);
+        }),
+        call("h1", "write", { path: "disabled.txt", content: "forbidden" }, (request) => {
           seen.helperIsHelper = isHelper(request);
           seen.helperTools = toolNames(request);
         }),
+        call("h-bash", "bash", { command: "echo forbidden" }, (request) => {
+          seen.helperResult = toolResult(request);
+        }),
         {
           expect(request) {
-            seen.helperResult = toolResult(request);
+            seen.helperBashResult = toolResult(request);
           },
-          response: { type: "text", text: "The click tool is not available." },
+          response: { type: "text", text: "The native tools are disabled." },
         },
         ...finish("Tried a disabled tool", (request) => {
           seen.parentAfterHelper = toolResult(request);
@@ -40,7 +66,7 @@ export const laneD: Lane = {
       ],
     });
     try {
-      const runId = await worker.send("Click the screen.");
+      const runId = await worker.send("Try the disabled native tools.");
       await worker.completed(runId);
       const calledAtController = worker.seen
         .filter((frame) => frame.from === "guest")
@@ -53,31 +79,40 @@ export const laneD: Lane = {
         .filter((message) => message.payload?.body?.type === "tool.call")
         .map((message) => message.payload?.body?.name);
       const effects = await worker.run.prisma.externalEffect.findMany({
-        where: { runId, kind: "computer_act" },
+        where: { runId, kind: { in: ["write", "bash"] } },
       });
       const parentTools = seen.parentTools as string[];
       const helperTools = seen.helperTools as string[];
       const pass =
         (await worker.status(runId)) === "completed" &&
         parentTools.includes("run_subagent") &&
-        !parentTools.includes("computer_act") &&
+        parentTools.includes("read") &&
+        !parentTools.includes("write") &&
+        !parentTools.includes("bash") &&
         seen.helperIsHelper === true &&
         helperTools.length > 0 &&
-        !helperTools.includes("computer_act") &&
+        helperTools.includes("read") &&
+        !helperTools.includes("write") &&
+        !helperTools.includes("bash") &&
         String(seen.parentResult).toLowerCase().includes("not found") &&
         String(seen.helperResult).toLowerCase().includes("not found") &&
-        !calledAtController.includes("computer_act") &&
-        effects.length === 0;
+        !calledAtController.includes("write") &&
+        !calledAtController.includes("bash") &&
+        effects.length === 0 &&
+        String(seen.parentBashResult).toLowerCase().includes("not found") &&
+        String(seen.helperBashResult).toLowerCase().includes("not found");
       return {
         pass,
         observed: {
-          parentOffersComputerAct: parentTools.includes("computer_act"),
-          helperOffersComputerAct: helperTools.includes("computer_act"),
+          parentOffersWrite: parentTools.includes("write"),
+          parentOffersBash: parentTools.includes("bash"),
+          helperOffersWrite: helperTools.includes("write"),
+          helperOffersBash: helperTools.includes("bash"),
           helperToolCount: helperTools.length,
           parentResult: seen.parentResult,
           helperResult: seen.helperResult,
           toolCallsAtController: calledAtController,
-          computerActEffects: effects.length,
+          disabledToolEffects: effects.length,
           note: "The guest's Pi answers a call of a tool it was not given without asking the controller. A guest that asks anyway is refused with unknown_tool, which runtime-worker-hostile.test.ts proves offline.",
         },
       };

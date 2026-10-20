@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { PiAgentRuntime } from "@rakazo/adapters";
 import { WORKER_LIMITS } from "@rakazo/adapters/runtime-worker";
-import { fileTask, toolResult } from "../file-task.js";
+import { fileTask, nativeFileTask, toolResult } from "../file-task.js";
 import { startWorkerRun } from "../worker-run-fixture.js";
 import { call, finish, liveRun } from "./run.js";
 import { context, type Lane, sh, sha256 } from "./session.js";
@@ -11,8 +11,8 @@ export const laneA: Lane = {
   id: "a",
   issue: "tâche fichier identique à baseline",
   scenario:
-    "#228's file task (write, refused overwrite, edit, missed edit, read, list) in process and in a real E2B worker on its private volume",
-  passWhen: "The same final file and the same model-visible tool results in both arms",
+    "A file task through the in-process tools and Pi native write, edit, read and ls in an E2B worker on its private volume",
+  passWhen: "The same final file content in both arms; tool names and result formats may differ",
   async run(live) {
     const inProcess = await (async () => {
       const seen: string[] = [];
@@ -41,7 +41,7 @@ export const laneA: Lane = {
 
     const seen: string[] = [];
     const worker = await liveRun(live, {
-      steps: fileTask(seen, () => {}),
+      steps: nativeFileTask(seen, () => {}),
     });
     const files = live.volumeFiles();
     try {
@@ -52,21 +52,16 @@ export const laneA: Lane = {
       const file = new TextDecoder().decode(
         await files.read(worker.volumes.private!, "notes.md", context("a")),
       );
-      const sameSeen = JSON.stringify(seen) === JSON.stringify(inProcess.seen);
-      const sameResults = JSON.stringify(results) === JSON.stringify(inProcess.results);
       return {
         pass:
           (await worker.status(runId)) === "completed" &&
           inProcess.file === "alpha\ngamma\n" &&
-          file === inProcess.file &&
-          sameSeen &&
-          sameResults,
+          file === inProcess.file,
         observed: {
           inProcessFile: inProcess.file,
           workerFileReadFromVolumeAfterDestroy: file,
-          sameModelVisibleResults: sameSeen,
-          sameLoggedResults: sameResults,
-          ...(sameSeen ? {} : { inProcessSeen: inProcess.seen, workerSeen: seen }),
+          nativeToolResults: seen,
+          loggedResultCount: results.length,
           workerAttempts: attempts.map(({ workerState, stopPhase }) => ({
             workerState,
             stopPhase,
@@ -122,7 +117,7 @@ export const laneF: Lane = {
         (await worker.status(runId)) === "completed" &&
         attempts.every((attempt) => attempt.workerState === "released") &&
         sandboxesLeft === 0 &&
-        shown.length <= WORKER_LIMITS.localOutputModelChars + 512 &&
+        shown.length <= WORKER_LIMITS.localOutputModelChars &&
         loggedBytes <= WORKER_LIMITS.controllerResultBytes &&
         spool.length === 1 &&
         content.byteLength === Buffer.byteLength(expected) &&

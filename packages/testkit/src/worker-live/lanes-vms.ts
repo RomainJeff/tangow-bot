@@ -11,13 +11,13 @@ import { COMPUTER_WORKSPACE, type Lane, POLL_INTERVAL_S, pollFor, sh } from "./s
  */
 function exchangeSteps(results: Record<string, string>) {
   return [
-    call("r1", "read_file", { path: "from-computer.txt" }),
-    call("r2", "read_file", { path: "shared/from-computer.txt" }, (request) => {
+    call("r1", "read", { path: "from-computer.txt" }),
+    call("r2", "read", { path: "/workspace/shared/from-computer.txt" }, (request) => {
       results.readPrivate = toolResult(request);
     }),
     call(
       "w1",
-      "write_file",
+      "write",
       { path: "from-worker.txt", content: "draft by the worker\n" },
       (request) => {
         results.readShared = toolResult(request);
@@ -25,8 +25,8 @@ function exchangeSteps(results: Record<string, string>) {
     ),
     call(
       "e1",
-      "edit_file",
-      { path: "from-worker.txt", old_text: "draft", new_text: "edited" },
+      "edit",
+      { path: "from-worker.txt", edits: [{ oldText: "draft", newText: "edited" }] },
       (request) => {
         results.write = toolResult(request);
       },
@@ -100,9 +100,9 @@ async function exchange(
     (await worker.status(runId)) === "completed" &&
     results.readPrivate?.includes("written by the computer") === true &&
     results.readShared?.includes("shared by the computer") === true &&
-    results.edit?.includes('"replacements":1') === true &&
-    results.grep?.includes("from-worker.txt:1:edited by the worker") === true &&
-    results.grep?.includes("from-computer.txt:1:written by the computer") === true &&
+    results.edit?.includes("Successfully replaced") === true &&
+    results.grep?.includes("from-worker.txt:1: edited by the worker") === true &&
+    results.grep?.includes("from-computer.txt:1: written by the computer") === true &&
     results.bash?.includes("written by the computer") === true &&
     mine.out.startsWith("seen") &&
     shared.out.startsWith("seen");
@@ -115,7 +115,7 @@ async function exchange(
       privateVisibleWithinMsOfGrant: sinceGrant(mine.at, "e1"),
       sharedVisibleWithinMsOfGrant: sinceGrant(shared.at, "b1"),
       pollIntervalMs: POLL_INTERVAL_S * 1000,
-      note: "Visibility times run from the controller granting the guest tool that wrote, matched by its request's seq (edit_file e1 for the private file, bash b1 for the shared one), to the host seeing the computer's poller exit. They include the tool's own run and E2B's command stream, so they bound the cross-VM delay from above.",
+      note: "Visibility times run from the controller granting the guest tool that wrote, matched by its request's seq (edit e1 for the private file, bash b1 for the shared one), to the host seeing the computer's poller exit. They include the tool's own run and E2B's command stream, so they bound the cross-VM delay from above.",
     },
   };
 }
