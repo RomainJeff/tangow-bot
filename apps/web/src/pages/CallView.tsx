@@ -421,7 +421,7 @@ export function CallView({
           size="call"
           aria-label={t`End call`}
           onClick={hangUp}
-          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          className="bg-destructive text-destructive-foreground"
         >
           <PhoneOff aria-hidden="true" />
         </Button>
