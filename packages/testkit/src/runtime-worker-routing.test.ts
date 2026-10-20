@@ -99,6 +99,58 @@ describe("where a product run executes", () => {
     expect(run.provider.launches).toEqual([]);
   });
 
+  it("stops quietly when a newer attempt took the run before it was routed", async () => {
+    let fencedRunId = "";
+    const run = await startWorkerRun({
+      steps: [],
+      workers: (workers) => ({
+        ...workers,
+        async plan(input) {
+          await run.prisma.run.update({
+            where: { id: fencedRunId },
+            data: { leaseFence: { increment: 1 } },
+          });
+          return workers.plan(input);
+        },
+      }),
+    });
+    cleanups.push(() => run.close());
+    fencedRunId = await run.send("Hello.");
+
+    await run.continueRun(fencedRunId);
+
+    expect(
+      await run.prisma.run.findUniqueOrThrow({
+        where: { id: fencedRunId },
+        select: { status: true, error: true },
+      }),
+    ).toEqual({ status: "running", error: null });
+    expect(run.provider.launches).toEqual([]);
+  });
+
+  it("requeues a run whose computer volumes could not be created", async () => {
+    const run = await startWorkerRun({
+      steps: [],
+      workers: (workers) => ({
+        ...workers,
+        provisionHomeVolumes: async () => {
+          throw new Error("The volume provider is unavailable");
+        },
+      }),
+    });
+    cleanups.push(() => run.close());
+    const runId = await run.send("Hello.");
+
+    await expect(run.continueRun(runId)).rejects.toThrow("Run setup failed; retrying");
+
+    expect(
+      await run.prisma.run.findUniqueOrThrow({
+        where: { id: runId },
+        select: { status: true, error: true },
+      }),
+    ).toEqual({ status: "queued", error: "Run setup failed; retrying" });
+  });
+
   it("asks the auto-review judge of a worker run in process", async () => {
     const run = await fixture([
       {

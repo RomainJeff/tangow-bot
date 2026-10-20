@@ -16,6 +16,7 @@ import {
 import {
   createRunWorkers,
   type GuestConnector,
+  type RunWorkers,
   type WorkerClock,
 } from "@rakazo/adapters/runtime-worker";
 import type { SessionEntry } from "@rakazo/contracts";
@@ -68,6 +69,8 @@ export async function startWorkerRun(options: {
   connector?: (provider: LocalWorkerProvider) => GuestConnector;
   /** Wraps the client the controller uses, to observe its queries. */
   prisma?: (prisma: PrismaClient) => PrismaClient;
+  /** Wraps the executor's worker routing, to fail or race it. */
+  workers?: (workers: RunWorkers) => RunWorkers;
 }) {
   const database = await openPgliteDatabase();
   const prisma = options.prisma?.(database.prisma) ?? database.prisma;
@@ -169,7 +172,7 @@ export async function startWorkerRun(options: {
     });
     const lifecycle = createWorkerLifecycle({ prisma, provider });
     const runtime: AgentRuntime = options.runtime?.(prisma) ?? new PiAgentRuntime();
-    const workers = options.runtime
+    const routing = options.runtime
       ? undefined
       : createRunWorkers({
           prisma,
@@ -177,6 +180,7 @@ export async function startWorkerRun(options: {
           connector: options.connector?.(provider) ?? provider,
           clock: options.clock,
         });
+    const workers = routing && (options.workers?.(routing) ?? routing);
     const executor = createRunExecutor({
       prisma,
       sessionLog,
