@@ -175,6 +175,7 @@ import {
 import { botMessageCard } from "../lib/bot-message-card";
 import { noteBotRunEnded } from "../lib/bot-page-state";
 import { CHAT_MOTION, useChatReducedMotion } from "../lib/chat-motion";
+import { COMPOSER_SHRINK_GRACE_MS, composerFieldStuckTall } from "../lib/composer-field";
 import { cancelFocusPrompt, focusPromptThreadActive } from "../lib/focus-prompt";
 import { commitHaptic, selectionHaptic, sendHaptic, successHaptic } from "../lib/haptics";
 import { dateLocaleForUi, t, useI18n } from "../lib/i18n";
@@ -485,6 +486,11 @@ function Thread() {
   const [attachSheetOpen, setAttachSheetOpen] = useState(false);
   const attachBubbleRef = useRef<View>(null);
   const textInputRef = useRef<TextInput>(null);
+  // iOS keeps a multiline field tall when a programmatic clear empties it:
+  // watch its height and rebuild it (`composerFieldKey`) if it is stuck.
+  const composerFieldHeight = useRef<number | null>(null);
+  const refocusComposerField = useRef(false);
+  const [composerFieldKey, setComposerFieldKey] = useState(0);
   const [replyTarget, setReplyTarget] = useState<ReplyTarget | null>(null);
   const [rewindTarget, setRewindTarget] = useState<MobileMessage | null>(null);
   // ponytail: artifact ids ride along invisibly — mobile has no attachment chips to restore into.
@@ -1228,6 +1234,23 @@ function Thread() {
     setAttachmentNotice(null);
     setError(null);
   }, [threadKey]);
+
+  useEffect(() => {
+    if (Platform.OS !== "ios" || draft !== "") return;
+    const timer = setTimeout(() => {
+      if (!composerFieldStuckTall(draft, composerFieldHeight.current)) return;
+      refocusComposerField.current = textInputRef.current?.isFocused() ?? false;
+      setComposerFieldKey((key) => key + 1);
+    }, COMPOSER_SHRINK_GRACE_MS);
+    return () => clearTimeout(timer);
+  }, [draft]);
+
+  // Once the rebuilt field has mounted, put the keyboard back if it was up.
+  useEffect(() => {
+    if (!refocusComposerField.current) return;
+    refocusComposerField.current = false;
+    textInputRef.current?.focus();
+  }, [composerFieldKey]);
 
   function cancelRewind() {
     setRewindTarget(null);
@@ -2939,8 +2962,12 @@ function Thread() {
                 />
               ) : (
                 <TextInput
+                  key={composerFieldKey}
                   ref={textInputRef}
                   value={draft}
+                  onLayout={(event) => {
+                    composerFieldHeight.current = event.nativeEvent.layout.height;
+                  }}
                   onChangeText={updateDraft}
                   accessibilityLabel={composerName(t, displayName, answerName)}
                   onKeyPress={(event) => {

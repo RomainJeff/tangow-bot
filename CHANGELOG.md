@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-10-20
+
+#### Fixed
+
+- On iPhone, the message field shrinks back to one line after you send a long message instead of staying tall and empty.
+
 ### 2026-10-19
 
 #### Changed
