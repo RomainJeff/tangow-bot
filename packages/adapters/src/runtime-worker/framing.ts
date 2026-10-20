@@ -11,6 +11,7 @@ import { WORKER_LIMITS } from "./limits.js";
 
 /** One connection: ordered whole frames, no retransmission of its own. A reconnect is a new channel. */
 export interface FrameChannel {
+  /** Never rejects. A frame sent once the connection is lost is dropped, as on a cut socket. */
   send(frame: Uint8Array): Promise<void>;
   /** Ends when the connection does. */
   frames: AsyncIterable<Uint8Array>;
@@ -36,7 +37,7 @@ export function encodeFrameLine(frame: Uint8Array): string {
   return `${Buffer.from(frame.buffer, frame.byteOffset, frame.byteLength).toString("base64")}\n`;
 }
 
-/** Split a stream of frame lines into frames. An oversized line throws before it ends. */
+/** Split a stream of frame lines into frames. A blank line is no frame. An oversized line throws before it ends. */
 export async function* readFrameLines(
   chunks: AsyncIterable<Uint8Array | string>,
   maxBytes: number,
@@ -54,7 +55,8 @@ export async function* readFrameLines(
     for (let end = text.indexOf("\n"); end !== -1; end = text.indexOf("\n", start)) {
       grow(end - start);
       parts.push(text.slice(start, end));
-      yield Buffer.from(parts.join(""), "base64");
+      const line = parts.join("").trim();
+      if (line) yield Buffer.from(line, "base64");
       parts = [];
       length = 0;
       start = end + 1;

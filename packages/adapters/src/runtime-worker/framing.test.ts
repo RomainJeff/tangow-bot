@@ -27,10 +27,16 @@ const event = (body: unknown) =>
 
 describe("readFrameLines", () => {
   it("rebuilds binary frames that crossed a text decoder in arbitrary chunks", async () => {
-    const frames = [Buffer.from([0xff, 0x00, 0xc3]), Buffer.from("é ✓"), Buffer.alloc(0)];
+    const frames = [Buffer.from([0xff, 0x00, 0xc3]), Buffer.from("é ✓")];
     const stream = Buffer.from(frames.map(encodeFrameLine).join(""));
 
     expect(await collect(decodedAsText(stream, [1, 5, 6]), 16)).toEqual(frames);
+  });
+
+  it("skips blank lines between frames", async () => {
+    const frame = Buffer.from("{}");
+
+    expect(await collect(["\n", " \r\n", encodeFrameLine(frame), "\r\n"], 16)).toEqual([frame]);
   });
 
   it("refuses an oversized line before it ends", async () => {
