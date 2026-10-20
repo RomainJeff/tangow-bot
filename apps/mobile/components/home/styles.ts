@@ -181,18 +181,5 @@ export function createHomeStyles() {
     activityGap: {
       paddingTop: 16,
     },
-    groupAvatar: {
-      width: 48,
-      height: 48,
-      borderRadius: 24,
-      backgroundColor: native.fill,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    groupAvatarLabel: {
-      color: native.secondaryLabel,
-      fontSize: 16,
-      fontWeight: "600",
-    },
   });
 }
