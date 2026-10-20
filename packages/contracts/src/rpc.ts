@@ -610,6 +610,10 @@ export const appContract = {
       )
       .output(AgentSkillCatalogEntrySchema),
   },
+  /** Removed feature. Kept so installed mobile builds that still call it get an empty list. */
+  marketplaces: {
+    list: oc.input(z.object({})).output(z.array(z.never())),
+  },
   capabilities: {
     list: oc.output(z.array(CapabilityInstallSchema)),
     catalogSearch: oc

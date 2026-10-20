@@ -2733,6 +2733,9 @@ export function createRouter(deps: RouterDeps) {
         agentSkills.setAccess(context.actor, input),
       ),
     },
+    marketplaces: {
+      list: authed.marketplaces.list.handler(async () => []),
+    },
     capabilities: {
       list: authed.capabilities.list.handler(async ({ context }) => {
         const rows = await deps.prisma.capabilityInstall.findMany({
