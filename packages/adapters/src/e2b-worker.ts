@@ -20,6 +20,12 @@ export const E2B_WORKER_GUEST_ENTRY = "/opt/rakazo/agent-run-worker.mjs";
  */
 export const E2B_CREATE_MARGIN_MS = 60_000;
 
+/**
+ * The longest sandbox timeout E2B accepts by default: its base plan, and a self-hosted deployment
+ * left at its default, refuse a create that asks for more. A worker outliving it is killed.
+ */
+export const E2B_DEFAULT_MAX_TIMEOUT_MS = 60 * 60 * 1000;
+
 const LOG_TEXT_CHARS = 2048;
 const UNPRINTABLE =
   // biome-ignore lint/suspicious/noControlCharactersInRegex: these are the characters escaped
@@ -41,6 +47,8 @@ export interface E2BWorkerConfig {
   guestEntry?: string;
   /** The harness the guest runs, by the name it registers. */
   harness?: string;
+  /** The deployment's sandbox timeout limit. Default `E2B_DEFAULT_MAX_TIMEOUT_MS`. */
+  maxTimeoutMs?: number;
 }
 
 export type E2BWorkerSandbox = Pick<
@@ -223,7 +231,10 @@ export class E2BWorkerProvider implements WorkerProvider, GuestConnector {
         }),
       },
       volumeMounts: Object.fromEntries(spec.mounts.map((mount) => [mount.path, mount.volumeRef])),
-      timeoutMs: spec.ttlSeconds * 1000,
+      timeoutMs: Math.min(
+        spec.ttlSeconds * 1000,
+        this.config.maxTimeoutMs ?? E2B_DEFAULT_MAX_TIMEOUT_MS,
+      ),
       lifecycle: { onTimeout: "kill" },
       requestTimeoutMs: remainingMs,
       signal: AbortSignal.timeout(remainingMs),

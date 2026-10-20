@@ -147,9 +147,22 @@ describe("E2BWorkerProvider", () => {
         "/workspace/bots/bot_1": "rakazo-vol_bot",
         "/workspace/shared": "rakazo-vol_shared",
       },
-      timeoutMs: 14_400_000,
+      timeoutMs: 3_600_000,
       lifecycle: { onTimeout: "kill" },
     });
+  });
+
+  it("asks for the worker's TTL, or the deployment's timeout limit when that is lower", async () => {
+    const e2b = fakeE2B();
+    const roomy = new E2BWorkerProvider({ ...config, maxTimeoutMs: 86_400_000 }, e2b.sdk);
+    const capped = new E2BWorkerProvider({ ...config, maxTimeoutMs: 7_200_000 }, e2b.sdk);
+
+    await roomy.ensure(spec([], { attemptId: "attempt_long" }));
+    await capped.ensure(spec([], { attemptId: "attempt_capped" }));
+
+    expect([...e2b.sandboxes.values()].map((sandbox) => sandbox.timeoutMs)).toEqual([
+      14_400_000, 7_200_000,
+    ]);
   });
 
   it("leaves tool output to the guest's temporary directory without a private volume", async () => {
