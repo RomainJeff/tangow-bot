@@ -2,7 +2,7 @@ import { writeFileSync } from "node:fs";
 import { activeBotId, completeOnboarding, rpc, signup } from "./helpers";
 import type { Page } from "./test";
 import { expect, test } from "./test";
-import { threadEntries } from "./thread-log";
+import { finishedRuns, threadEntries } from "./thread-log";
 
 type Rect = { x: number; y: number; width: number; height: number };
 type Frame = {
@@ -34,12 +34,9 @@ async function openCard(page: Page, name: string, history = 0, { prompt, ready }
     await page.getByPlaceholder(/Message/).fill(`note ${turn} for the motion check`);
     await page.keyboard.press("Enter");
     await expect
-      .poll(
-        async () =>
-          (await threadEntries(page, { botId })).filter((entry) => entry.type === "run.finished")
-            .length,
-        { timeout: 60_000 },
-      )
+      .poll(async () => finishedRuns(await threadEntries(page, { botId })).length, {
+        timeout: 60_000,
+      })
       .toBe(turn);
   }
   await page.getByPlaceholder(/Message/).fill(prompt);
