@@ -45,6 +45,7 @@ import {
   inferAttachmentMimeType,
   isActive,
   isRunTerminalEvent,
+  latestTakeoverItemId,
   projectThreadView,
   reorderBotTo,
   resolveComposerSendPlan,
@@ -1607,6 +1608,14 @@ export function ShellPage() {
   const activeReplyTarget = replyTarget && rowIndexOf.has(replyTarget.id) ? replyTarget : null;
   const activeRewindTarget = rewindTarget && rowIndexOf.has(rewindTarget.id) ? rewindTarget : null;
   const currentRuns = useMemo(() => activeThreadRuns(activeSnapshot), [activeSnapshot]);
+  const takeoverItemId = useMemo(
+    () =>
+      latestTakeoverItemId(
+        view.rows.map((row) => row.item),
+        currentRuns,
+      ),
+    [view, currentRuns],
+  );
   const workingRuns = currentRuns.filter((run) => isWorking(run, view));
   const transcriptRunning = workingRuns.length > 0;
   const composerRunning = currentRuns.some((run) => isActive(run.status));
@@ -1757,6 +1766,10 @@ export function ShellPage() {
   loadOlderMessagesRef.current = loadOlderMessages;
   const jumpToMessageRef = useRef(jumpToMessage);
   jumpToMessageRef.current = jumpToMessage;
+  // The Needs you card can outlive a render, so it calls the latest openComputer through a ref.
+  const openComputerRef = useRef(openComputer);
+  openComputerRef.current = openComputer;
+  const openComputerFromThread = useCallback(() => void openComputerRef.current(), []);
 
   const mentionBotsKey = useMemo(
     () => bots.map((bot) => `${bot.id}:${bot.name}`).join(","),
@@ -2890,6 +2903,8 @@ export function ShellPage() {
                 olderCursor={activeSnapshot?.olderCursor ?? null}
                 loadingOlder={loadingOlder}
                 viewerUserId={userId}
+                takeoverItemId={takeoverItemId}
+                onOpenComputer={openComputerFromThread}
                 running={transcriptRunning}
                 workingBots={workingBots}
                 workingStartedAt={workingStartedAt}

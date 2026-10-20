@@ -17,6 +17,7 @@ import {
 import type { MessageRowMeta, StackedAvatarItem } from "@rakazo/ui-web";
 import {
   BotAvatar,
+  Button,
   cn,
   Interstitial,
   LinkPreviewCard,
@@ -27,7 +28,7 @@ import {
   Surface,
   UserBubble,
 } from "@rakazo/ui-web";
-import { ArrowRight, BookOpen, Check, Clock } from "lucide-react";
+import { ArrowRight, BookOpen, Check, Clock, Maximize2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { memo, useMemo, useRef, useState } from "react";
 import "../../components/ai/beautiful-ui.css";
@@ -192,6 +193,7 @@ export const MessageView = memo(function MessageView({
   showAuthor,
   showAvatar,
   onAnswer,
+  onOpenComputer,
   onOpenBot,
   speakerName,
   memberName,
@@ -224,6 +226,8 @@ export const MessageView = memo(function MessageView({
    * (`isLastOfGroup`). Always false in a mono thread. */
   showAvatar: boolean;
   onAnswer?: (text: string, edits?: SpawnBotCardEdits) => Promise<void>;
+  /** Set only on the live "Needs you" card: opens the bot's screen. */
+  onOpenComputer?: () => void;
   onOpenBot: (botId: string) => void;
   speakerName?: string;
   memberName?: (botId: string | undefined) => string | undefined;
@@ -635,6 +639,17 @@ export const MessageView = memo(function MessageView({
             <div className="my-2.5 text-meta text-muted-foreground">
               <ChatMarkdown>{block.text}</ChatMarkdown>
             </div>
+            {onOpenComputer && block.state === "Needs you" ? (
+              <Button
+                variant="capsule"
+                size="capsule"
+                data-testid="takeover-open-computer"
+                onClick={onOpenComputer}
+              >
+                <Maximize2 size={15} strokeWidth={1.9} aria-hidden />
+                <Trans>Open</Trans>
+              </Button>
+            ) : null}
           </Surface>
         );
       }

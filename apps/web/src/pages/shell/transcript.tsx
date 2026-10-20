@@ -78,6 +78,8 @@ export const Transcript = memo(function Transcript({
   olderCursor,
   loadingOlder,
   viewerUserId,
+  takeoverItemId,
+  onOpenComputer,
   running,
   workingBots,
   workingStartedAt,
@@ -112,6 +114,9 @@ export const Transcript = memo(function Transcript({
   olderCursor: string | null;
   loadingOlder: boolean;
   viewerUserId?: string;
+  /** The live "Needs you" computer card, which opens the bot's screen in one click. */
+  takeoverItemId?: string | null;
+  onOpenComputer?: () => void;
   running: boolean;
   workingBots: GroupAvatarMember[];
   /** Epoch ms the earliest working run started; undefined ticks from mount. */
@@ -176,6 +181,8 @@ export const Transcript = memo(function Transcript({
     return {
       artifactTarget,
       inGroup,
+      takeoverItemId,
+      onOpenComputer,
       viewerUserId,
       waiting,
       onAnswer,
@@ -216,6 +223,8 @@ export const Transcript = memo(function Transcript({
     inGroup,
     viewerUserId,
     waiting,
+    takeoverItemId,
+    onOpenComputer,
     onAnswer,
     memberName,
     peerBot,

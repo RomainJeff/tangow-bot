@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-10-20
+
+#### Changed
+
+- A bot's Needs you card now has an Open button that opens its screen in one click on web and desktop, instead of going through the computer panel and its hover preview.
+
 ### 2026-10-19
 
 #### Changed
