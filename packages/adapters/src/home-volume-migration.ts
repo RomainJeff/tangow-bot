@@ -12,12 +12,7 @@ import type {
 import { fileMode, isPortablePath } from "@rakazo/adapter-kit";
 import type { PrismaClient } from "@rakazo/db";
 import { shouldSkipPortableWorkspaceFile } from "./computer-workspace.js";
-import type {
-  HomeAdoption,
-  HomeMoveBlocker,
-  VolumeOwner,
-  WorkerLifecycle,
-} from "./worker-lifecycle.js";
+import type { HomeAdoption, VolumeOwner, WorkerLifecycle } from "./worker-lifecycle.js";
 
 /** Where a home file lands: its bot's private volume, or the space's shared volume. */
 export type HomeDestination = { scope: "private"; botId: string } | { scope: "shared" };
@@ -199,13 +194,13 @@ async function planHome(
   const destinationKey = (file: HomeFile) =>
     `${file.destination.scope === "private" ? file.destination.botId : ""}/${file.volumePath}`;
   const bound = new Map<string, number>();
-  for (const file of mapped)
-    bound.set(destinationKey(file), (bound.get(destinationKey(file)) ?? 0) + 1);
-  const planned = mapped.filter((file) => bound.get(destinationKey(file)) === 1);
   for (const file of mapped) {
-    if (bound.get(destinationKey(file)) !== 1) {
-      notCopied.push({ homePath: file.homePath, kind: "duplicate" });
-    }
+    bound.set(destinationKey(file), (bound.get(destinationKey(file)) ?? 0) + 1);
+  }
+  const planned: HomeFile[] = [];
+  for (const file of mapped) {
+    if (bound.get(destinationKey(file)) === 1) planned.push(file);
+    else notCopied.push({ homePath: file.homePath, kind: "duplicate" });
   }
   for (const entry of tree) {
     if (entry.kind === "file" && !exported.has(entry.path)) {
