@@ -285,13 +285,17 @@ describe("destroyBot", () => {
     const prisma = {
       bot: {
         findUnique: vi.fn(),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
       computer: { findUnique: vi.fn().mockResolvedValue(null) },
       run: {
         findMany: vi.fn().mockResolvedValue([]),
         updateMany: vi.fn().mockResolvedValue({ count: 0 }),
       },
-      routine: { findMany: vi.fn().mockResolvedValue([]) },
+      routine: {
+        findMany: vi.fn().mockResolvedValue([]),
+        updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
       $transaction: transaction,
     } as unknown as PrismaClient;
 
@@ -427,9 +431,13 @@ describe("destroyBot", () => {
         findMany: vi.fn().mockResolvedValue([]),
         updateMany: vi.fn().mockResolvedValue({ count: 0 }),
       },
-      routine: { findMany: vi.fn().mockResolvedValue([]) },
+      routine: {
+        findMany: vi.fn().mockResolvedValue([]),
+        updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
       artifact: { findMany: vi.fn().mockResolvedValue([]) },
       bot: {
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
         update: vi.fn().mockResolvedValue({
           spaceId: "workspace-1",
           thread: { id: "thread-2" },
@@ -520,13 +528,17 @@ describe("destroyBot", () => {
     const prisma = {
       bot: {
         findUnique: vi.fn(),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
       computer: { findUnique: vi.fn().mockResolvedValue(null) },
       run: {
         findMany: vi.fn().mockResolvedValue([]),
         updateMany: vi.fn().mockResolvedValue({ count: 0 }),
       },
-      routine: { findMany: vi.fn().mockResolvedValue([]) },
+      routine: {
+        findMany: vi.fn().mockResolvedValue([]),
+        updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
       artifact: { findMany: vi.fn().mockResolvedValue([]) },
       $transaction: transaction,
     } as unknown as PrismaClient;
@@ -563,12 +575,16 @@ describe("destroyBot", () => {
     const finalError = new Error("second attempt reached");
     const transaction = vi.fn().mockRejectedValueOnce(conflict).mockRejectedValueOnce(finalError);
     const prisma = {
+      bot: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
       computer: { findUnique: vi.fn().mockResolvedValue(null) },
       run: {
         findMany: vi.fn().mockResolvedValue([]),
         updateMany: vi.fn().mockResolvedValue({ count: 0 }),
       },
-      routine: { findMany: vi.fn().mockResolvedValue([]) },
+      routine: {
+        findMany: vi.fn().mockResolvedValue([]),
+        updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
       artifact: { findMany: vi.fn().mockResolvedValue([]) },
       $transaction: transaction,
     } as unknown as PrismaClient;

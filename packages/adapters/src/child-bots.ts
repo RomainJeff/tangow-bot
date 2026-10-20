@@ -349,22 +349,21 @@ export async function destroyBot(
   ]);
   // No new work first: an archived bot's runs are never claimed and its routines stop, so no
   // worker can start after its workers are released below.
-  const activeRuns = await deps.prisma.$transaction(async (tx) => {
-    const now = new Date();
-    await tx.bot.update({ where: { id: bot.id }, data: { archivedAt: bot.archivedAt ?? now } });
-    await tx.routine.updateMany({
-      where: { botId: bot.id },
-      data: { active: false, nextRunAt: null },
-    });
-    const runs = await tx.run.findMany({
-      where: { botId: bot.id, status: { in: [...ACTIVE_RUN_STATUSES] } },
-      select: { id: true },
-    });
-    await tx.run.updateMany({
-      where: { id: { in: runs.map((run) => run.id) }, status: { in: [...ACTIVE_RUN_STATUSES] } },
-      data: { status: "cancelled", completedAt: now },
-    });
-    return runs;
+  await deps.prisma.bot.updateMany({
+    where: { id: bot.id, archivedAt: null },
+    data: { archivedAt: new Date() },
+  });
+  await deps.prisma.routine.updateMany({
+    where: { botId: bot.id },
+    data: { active: false, nextRunAt: null },
+  });
+  const activeRuns = await deps.prisma.run.findMany({
+    where: { botId: bot.id, status: { in: [...ACTIVE_RUN_STATUSES] } },
+    select: { id: true },
+  });
+  await deps.prisma.run.updateMany({
+    where: { id: { in: activeRuns.map((run) => run.id) } },
+    data: { status: "cancelled", completedAt: new Date() },
   });
   await Promise.allSettled([
     ...activeRuns.map((run) => deps.jobs.cancel(runJobKey(run.id))),

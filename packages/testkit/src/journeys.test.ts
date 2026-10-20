@@ -1704,7 +1704,12 @@ describeJourneys("required product journeys", () => {
     });
     await prisma.volume.createMany({
       data: [
-        { kind: "space_shared", spaceId: me.spaceId, providerKind: "e2b", providerRef: "shared" },
+        {
+          kind: "space_shared",
+          spaceId: me.spaceId,
+          providerKind: "e2b",
+          providerRef: `shared-${stamp}`,
+        },
         { kind: "bot_private", spaceId: me.spaceId, botId: bot.id, providerKind: "e2b" },
       ],
     });
