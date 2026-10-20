@@ -27,14 +27,14 @@ import {
 } from "./computer-control.js";
 import { toComputerRef } from "./computer-support.js";
 import {
-  checkpointComputerWorkspace,
   archiveDiscardedWorkspace,
+  checkpointComputerWorkspace,
   ensureComputerWorkspaceLayout,
   restoreComputerWorkspace,
 } from "./computer-workspace.js";
 import { resolveAgentHomePath } from "./home.js";
-import type { RunWorkers } from "./runtime-worker/runtime.js";
 import { marketplacesRoot } from "./marketplace-store.js";
+import type { RunWorkers } from "./runtime-worker/runtime.js";
 import { userSkillsRoot } from "./skill-store.js";
 
 type ComputerUpdateProgress = (
