@@ -158,7 +158,10 @@ export const laneI: Lane = {
     let shown = "";
     const worker = await liveRun(live, {
       steps: [
-        call("m1", "bash", { command: "awk '$3 ~ /^nfs/' /proc/mounts | wc -l; pwd" }),
+        call("m1", "bash", {
+          command:
+            "awk '$3 ~ /^nfs/' /proc/mounts | wc -l; pwd; (echo x > /workspace/scratch.txt && echo writable) 2>/dev/null || echo read-only",
+        }),
         ...finish("Ran without files", (request) => {
           shown = toolResult(request);
         }),
@@ -188,12 +191,14 @@ export const laneI: Lane = {
           JSON.stringify(start?.workspace) === JSON.stringify({ cwd: "/workspace", mounts: [] }) &&
           start?.computer === "none" &&
           lines[0] === "0" &&
-          lines[1] === "/workspace",
+          lines[1] === "/workspace" &&
+          lines[2] === "writable",
         observed: {
           workspace: start?.workspace,
           computer: start?.computer,
           nfsMountsInGuest: lines[0],
           guestCwd: lines[1],
+          workspaceWritableByGuest: lines[2] === "writable",
         },
       };
     } finally {
