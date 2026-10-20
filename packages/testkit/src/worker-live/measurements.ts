@@ -5,9 +5,13 @@ export function directProxyOverheads(
   frames: Parsed[],
   served: Array<{ received: number; firstByte: number }>,
 ): number[] {
-  const requests = frames.filter(
-    (frame) => frame.from === "guest" && frame.type === "model.request",
-  );
+  const seen = new Set<number | undefined>();
+  const requests = frames.filter((frame) => {
+    if (frame.from !== "guest" || frame.type !== "model.request" || seen.has(frame.seq))
+      return false;
+    seen.add(frame.seq);
+    return true;
+  });
   return requests.map((request, index) => {
     const latency = frames.find(
       (frame) => frame.from === "guest" && frame.modelLatency?.re === request.seq,

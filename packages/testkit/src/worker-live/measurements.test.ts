@@ -31,6 +31,18 @@ describe("direct per-call proxy overhead", () => {
     ).toEqual([12, 35]);
   });
 
+  it("counts replayed request frames once after a reconnect", () => {
+    expect(
+      directProxyOverheads(
+        [frames[0]!, frames[0]!, ...frames.slice(1)],
+        [
+          { received: 1000, firstByte: 1012 },
+          { received: 2000, firstByte: 2040 },
+        ],
+      ),
+    ).toEqual([12, 35]);
+  });
+
   it("refuses an incomplete measurement instead of reporting a passing aggregate estimate", () => {
     expect(() =>
       directProxyOverheads(frames.slice(0, 2), [{ received: 1000, firstByte: 1012 }]),

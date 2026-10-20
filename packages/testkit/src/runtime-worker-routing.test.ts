@@ -107,7 +107,14 @@ describe("where a product run executes", () => {
         },
       },
       steps: [
-        { expect() {}, response: { type: "tool", id: "mcp", name: "mcp_lookup", arguments: {} } },
+        {
+          expect(request) {
+            expect(
+              JSON.stringify(request.messages.find((message) => message.role === "system")),
+            ).not.toContain("request_takeover");
+          },
+          response: { type: "tool", id: "mcp", name: "mcp_lookup", arguments: {} },
+        },
         {
           expect(request) {
             expect(JSON.stringify(request.messages)).toContain("mcp_lookup");
@@ -183,6 +190,95 @@ describe("where a product run executes", () => {
     expect(await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).toMatchObject({
       status: "completed",
     });
+  });
+
+  it("requeues a computerless bot's busy plan without attempts, model calls or in-process fallback", async () => {
+    const run = await startWorkerRun({ computerScope: "none", steps: offeredShellTools([]) });
+    cleanups.push(() => run.close());
+    const computer = await run.prisma.computer.create({
+      data: {
+        spaceId: run.spaceId,
+        userId: run.userId,
+        scope: "team",
+        scopeKey: "move-source",
+        homeKey: "move-source",
+        kind: "e2b",
+      },
+    });
+    const reservation = await run.lifecycle.reserveHomeMove(computer.id);
+    if (!("marker" in reservation)) throw new Error(reservation.blocker);
+    const runId = await run.send("Hello.");
+    for (let retry = 0; retry < 4; retry++) {
+      await run.continueRun(runId);
+      expect(await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).toMatchObject({
+        status: "queued",
+        error: null,
+      });
+      expect(await run.prisma.attempt.count({ where: { runId } })).toBe(0);
+      expect(run.model.requests).toEqual([]);
+      expect(run.provider.launches).toEqual([]);
+    }
+    await run.lifecycle.releaseHomeMove(reservation.marker);
+    await run.continueRun(runId);
+    run.model.assertComplete();
+    expect((await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
+      "completed",
+    );
+    expect(run.provider.launches).toHaveLength(1);
+  });
+
+  it("degrades a file steered to a computerless bot to attachment unavailable and completes", async () => {
+    const run = await startWorkerRun({
+      computerScope: "none",
+      steps: [
+        {
+          async expect() {
+            await run.events.sendUserMessage({
+              spaceId: run.spaceId,
+              userId: run.userId,
+              botId: run.bot.id,
+              threadId: run.thread.id,
+              blocks: [
+                {
+                  kind: "file",
+                  artifactId: "steered-file",
+                  name: "notes.txt",
+                  mimeType: "text/plain",
+                  size: 1,
+                },
+              ],
+              prompt: "Also read this.",
+              trigger: "user",
+            });
+          },
+          response: {
+            type: "tool",
+            id: "say",
+            name: "message_user",
+            arguments: { message: "Working." },
+          },
+        },
+        {
+          expect(request) {
+            expect(JSON.stringify(request.messages)).toContain("unavailable");
+          },
+          response: {
+            type: "tool",
+            id: "finish",
+            name: "message_user",
+            arguments: { message: "File unavailable." },
+          },
+        },
+        { expect() {}, response: { type: "text", text: recap } },
+      ],
+    });
+    cleanups.push(() => run.close());
+    const runId = await run.send("Hello.");
+    await run.continueRun(runId);
+    run.model.assertComplete();
+    expect((await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
+      "completed",
+    );
   });
 
   it("runs a bot whose home is on volumes in its guest, with bash and grep in place of the computer shell", async () => {
@@ -365,11 +461,7 @@ describe("where a product run executes", () => {
       await reconciler.reconcileOnce();
       expect(enqueue).not.toHaveBeenCalledWith(runContinueJob(runId));
       await run.continueRun(runId);
-      expect(await run.prisma.attempt.count({ where: { runId } })).toBe(
-        step === "ensure" || step === "ensure-unreleased" || step === "other-run-unreleased"
-          ? 7
-          : 3,
-      );
+      expect(await run.prisma.attempt.count({ where: { runId } })).toBe(3);
     },
   );
 

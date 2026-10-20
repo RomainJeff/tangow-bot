@@ -8,7 +8,7 @@ import type { PrismaClient } from "@rakazo/db";
 import { createThreadEvents } from "@rakazo/db";
 import type { PgliteDatabase } from "@rakazo/db/pglite.test-support";
 import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { ComputerBusyError, provisionComputer } from "./computer-lifecycle.js";
 import { checkpointComputerWorkspace, restoreComputerWorkspace } from "./computer-workspace.js";
 import { FakeSandboxProvider } from "./fake-sandbox.js";
@@ -17,7 +17,9 @@ import { FakeWorkerProvider } from "./fake-worker-provider.js";
 import { LocalAgentHomeStore } from "./home.js";
 import type { HomeMoveOptions } from "./home-volume-migration.js";
 import { moveHomeToVolumes } from "./home-volume-migration.js";
+import { createJobReconciler } from "./job-reconciler.js";
 import { InMemoryJobQueue } from "./wakeup.js";
+import { composeWorkers } from "./worker-composition.js";
 import { mcpOnly, workerFixture } from "./worker-fixture.test-support.js";
 import { createWorkerLifecycle } from "./worker-lifecycle.js";
 
@@ -45,7 +47,10 @@ beforeEach(async () => {
   volumeFiles = new MemoryVolumeFiles();
   provider = new FakeWorkerProvider();
 });
-afterEach(() => rm(root, { recursive: true, force: true }));
+afterEach(async () => {
+  vi.useRealTimers();
+  await rm(root, { recursive: true, force: true });
+});
 
 function move(
   computerId: string,
@@ -177,14 +182,92 @@ describe("moving a home from snapshots to volumes", () => {
     await workers.release(attempt.id, fixture.context);
   });
 
-  it("keeps an interrupted reservation durable until the operator releases it, then resumes", async () => {
+  it("automatically releases an expired reservation in reconciliation, then resumes", async () => {
     const { computer } = await teamHome();
     const workers = createWorkerLifecycle({ prisma, provider });
     const reservation = await workers.reserveHomeMove(computer.id);
     if (!("marker" in reservation)) throw new Error(reservation.blocker);
-    expect((await move(computer.id)).outcome).toBe("refused");
-    await createWorkerLifecycle({ prisma, provider }).clearStaleHomeMove(computer.id);
+    expect(await move(computer.id)).toMatchObject({
+      outcome: "refused",
+      refusal: { code: "computer_active" },
+    });
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.now() + 120_000);
+    await createJobReconciler({
+      prisma,
+      jobs: new InMemoryJobQueue(),
+      reconcileWorkers: composeWorkers(prisma, null).reconcileWorkers,
+    }).reconcileOnce();
     expect((await move(computer.id)).outcome).toBe("adopted");
+  });
+
+  it("dry-run and copy both refuse a sibling's maintenance reservation without changing it", async () => {
+    const { spaceId, computer } = await teamHome();
+    const sibling = await fixture.seedComputer(spaceId);
+    await prisma.computer.update({
+      where: { id: sibling.id },
+      data: { maintenanceId: "another-maintenance" },
+    });
+    for (const dryRun of [true, false]) {
+      expect(await move(computer.id, { dryRun })).toMatchObject({
+        outcome: "refused",
+        refusal: { code: "computer_active" },
+      });
+    }
+    expect(
+      (await prisma.computer.findUniqueOrThrow({ where: { id: sibling.id } })).maintenanceId,
+    ).toBe("another-maintenance");
+  });
+
+  it("does not clear a live reservation or claim to clear an unmatched one", async () => {
+    const { computer } = await teamHome();
+    const workers = createWorkerLifecycle({ prisma, provider });
+    expect(await workers.clearStaleHomeMove(computer.id)).toBe(false);
+    const reservation = await workers.reserveHomeMove(computer.id);
+    if (!("marker" in reservation)) throw new Error(reservation.blocker);
+    expect(await workers.clearStaleHomeMove(computer.id)).toBe(false);
+    expect(await move(computer.id)).toMatchObject({
+      outcome: "refused",
+      refusal: { code: "computer_active" },
+    });
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.now() + 120_000);
+    expect(await workers.clearStaleHomeMove(computer.id)).toBe(true);
+    expect(await workers.clearStaleHomeMove(computer.id)).toBe(false);
+  });
+
+  it("renews a reservation during a long copy so reconciliation cannot release the live owner", async () => {
+    const { computer } = await teamHome();
+    vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
+    const workers = createWorkerLifecycle({ prisma, provider });
+    let checked = false;
+    class SlowCopy extends MemoryVolumeFiles {
+      override async write(ref: string, file: PortableFile, context: AdapterContext) {
+        if (!checked) {
+          checked = true;
+          const initial = await prisma.computer.findUniqueOrThrow({ where: { id: computer.id } });
+          expect(initial.homeMoveExpiresAt).toBeInstanceOf(Date);
+          for (let tick = 0; tick < 8; tick++) {
+            await vi.advanceTimersByTimeAsync(10_000);
+            // Flush the heartbeat's database writes before the reconciler reads them.
+            await prisma.computer.findUniqueOrThrow({ where: { id: computer.id } });
+          }
+          const renewed = await prisma.computer.findUniqueOrThrow({ where: { id: computer.id } });
+          expect(renewed.homeMoveExpiresAt!.getTime()).toBeGreaterThan(
+            initial.homeMoveExpiresAt!.getTime() + 60_000,
+          );
+          await workers.reconcile({ limit: 10 }, fixture.context);
+          expect(await move(computer.id)).toMatchObject({
+            outcome: "refused",
+            refusal: { code: "computer_active" },
+          });
+        }
+        return super.write(ref, file, context);
+      }
+    }
+    volumeFiles = new SlowCopy();
+    expect((await move(computer.id)).outcome).toBe("adopted");
+    expect(checked).toBe(true);
   });
 
   it("copies a team home into each bot's private volume and the shared volume, and nowhere else", async () => {
@@ -213,33 +296,53 @@ describe("moving a home from snapshots to volumes", () => {
     expect(await homeStorageOf(computer.id)).toBe("volumes");
   });
 
-  it("copies a dedicated home whole into its bot's private volume, with no shared volume", async () => {
-    const spaceId = await fixture.seedSpace();
-    const bot = await fixture.seedBot(spaceId, null);
-    const computer = await prisma.computer.create({
-      data: {
-        spaceId,
-        userId: fixture.userId,
-        scope: "dedicated",
-        scopeKey: `bot:${bot.id}`,
-        homeKey: bot.id,
-        kind: "e2b",
-      },
-    });
-    await prisma.bot.update({ where: { id: bot.id }, data: { computerId: computer.id } });
-    await seedHome(bot.id, { "docs/a.md": "alpha", "shared/b.md": "not the space's" });
+  it.each(["none", "desktop", "running", "worker"])(
+    "copies a dedicated home despite a %s sibling, with no shared volume",
+    async (sibling) => {
+      const spaceId = await fixture.seedSpace();
+      const bot = await fixture.seedBot(spaceId, null);
+      const computer = await prisma.computer.create({
+        data: {
+          spaceId,
+          userId: fixture.userId,
+          scope: "dedicated",
+          scopeKey: `bot:${bot.id}`,
+          homeKey: bot.id,
+          kind: "e2b",
+        },
+      });
+      await prisma.bot.update({ where: { id: bot.id }, data: { computerId: computer.id } });
+      await seedHome(bot.id, { "docs/a.md": "alpha", "shared/b.md": "not the space's" });
+      if (sibling !== "none") {
+        const other = await fixture.seedComputer(spaceId, {
+          kind: sibling === "desktop" ? "desktop" : "e2b",
+        });
+        if (sibling === "running")
+          await prisma.computer.update({ where: { id: other.id }, data: { state: "running" } });
+        if (sibling === "worker") {
+          const otherBot = await fixture.seedBot(spaceId, other.id);
+          await fixture.seedAttempt((await fixture.seedRun(otherBot)).id, 1, {
+            workerState: "ready",
+            workerProviderKind: "fake-worker",
+            workerProviderRef: fixture.unique("vm"),
+            workerStateAt: new Date(),
+            workerEnsureAt: new Date(),
+          });
+        }
+      }
 
-    const report = await move(computer.id);
+      const report = await move(computer.id);
 
-    expect(report.outcome).toBe("adopted");
-    expect(await volumeContents()).toEqual({
-      [await volumeRef({ botId: bot.id })]: {
-        "docs/a.md": "alpha",
-        "shared/b.md": "not the space's",
-      },
-    });
-    expect(await prisma.volume.count({ where: { spaceId, kind: "space_shared" } })).toBe(0);
-  });
+      expect(report.outcome).toBe("adopted");
+      expect(await volumeContents()).toEqual({
+        [await volumeRef({ botId: bot.id })]: {
+          "docs/a.md": "alpha",
+          "shared/b.md": "not the space's",
+        },
+      });
+      expect(await prisma.volume.count({ where: { spaceId, kind: "space_shared" } })).toBe(0);
+    },
+  );
 
   it("refuses a home holding what no volume receives, unless told to leave it in the original", async () => {
     const { spaceId, computer, ada, bob } = await teamHome();

@@ -267,6 +267,20 @@ export async function moveHomeToVolumes(
   if (reservation && "blocker" in reservation) {
     return { outcome: "refused", refusal: { code: reservation.blocker } };
   }
+  const abort = new AbortController();
+  context = { ...context, signal: AbortSignal.any([context.signal, abort.signal]) };
+  let pendingHeartbeat = Promise.resolve();
+  const heartbeat = reservation
+    ? setInterval(() => {
+        pendingHeartbeat = pendingHeartbeat
+          .then(async () => {
+            if (!(await workers.renewHomeMove(reservation.marker)))
+              throw new Error("Home move reservation expired");
+          })
+          .catch((error: unknown) => abort.abort(error));
+      }, 10_000)
+    : null;
+  heartbeat?.unref();
   try {
     const plan = await planHome(home, computer, context);
     if (plan.notCopied.length > 0 && !options.leaveUnmapped) {
@@ -333,6 +347,7 @@ export async function moveHomeToVolumes(
           changed.push(source.path);
           continue;
         }
+        context.signal.throwIfAborted();
         const pending = toWrite.get(source.path);
         if (!pending) continue;
         if (!pending.volumeRef) throw new Error(`No provisioned volume for ${source.path}`);
@@ -364,7 +379,8 @@ export async function moveHomeToVolumes(
         };
       }
 
-      const adoption = await workers.adoptVolumeHome(computer.id, start);
+      context.signal.throwIfAborted();
+      const adoption = await workers.adoptVolumeHome(computer.id, start, reservation?.marker);
       if (adoption !== "adopted") {
         return { outcome: "refused", refusal: { code: adoption }, manifest: manifest() };
       }
@@ -376,6 +392,8 @@ export async function moveHomeToVolumes(
       }
     }
   } finally {
+    if (heartbeat) clearInterval(heartbeat);
+    await pendingHeartbeat;
     if (reservation) await workers.releaseHomeMove(reservation.marker);
   }
 }

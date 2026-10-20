@@ -1,3 +1,5 @@
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { AgentRuntimeBusyError } from "@rakazo/adapter-kit";
 import type { PrismaClient } from "@rakazo/db";
 import { createDb, deleteOwnerVolumes, OwnerWorkerLiveError } from "@rakazo/db";
@@ -25,6 +27,39 @@ describePostgres("worker lifecycle under concurrent transactions (PostgreSQL)", 
   afterAll(async () => {
     await prisma.$disconnect();
     await pool.end();
+  });
+
+  it("reports whether clear-stale-move matched an expired reservation without E2B credentials", async () => {
+    const { computer } = await fixture.migratedBot();
+    const workers = createWorkerLifecycle({ prisma, provider: null });
+    const clear = async () => {
+      const env: NodeJS.ProcessEnv = { ...process.env, DATABASE_URL: databaseUrl };
+      delete env.E2B_API_KEY;
+      return (
+        await promisify(execFile)(
+          process.execPath,
+          [
+            "--import",
+            "tsx",
+            "scripts/migrate-home-to-volumes.ts",
+            "--computer",
+            computer.id,
+            "--clear-stale-move",
+          ],
+          { env },
+        )
+      ).stdout.trim();
+    };
+    expect(await clear()).toBe("No expired home move reservation matched.");
+    const reservation = await workers.reserveHomeMove(computer.id);
+    if (!("marker" in reservation)) throw new Error(reservation.blocker);
+    expect(await clear()).toBe("No expired home move reservation matched.");
+    await prisma.computer.updateMany({
+      where: { maintenanceId: reservation.marker },
+      data: { homeMoveExpiresAt: new Date(0) },
+    });
+    expect(await clear()).toBe("Expired home move reservation cleared; rerun the move to resume.");
+    expect(await clear()).toBe("No expired home move reservation matched.");
   });
 
   it("serializes a home move reservation against a worker already planned in the space", async () => {

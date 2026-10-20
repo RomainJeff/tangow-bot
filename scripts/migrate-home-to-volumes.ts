@@ -5,8 +5,9 @@
  * changes nothing; after an interruption it resumes the copy.
  *
  *   pnpm exec tsx scripts/migrate-home-to-volumes.ts --computer <id> --manifest <path>
- *   After stopping an interrupted move process, release its reservation with --clear-stale-move.
  *     [--dry-run] [--leave-unmapped] [--template <worker template>]
+ *
+ *   Clear an expired move reservation with --clear-stale-move, without E2B credentials.
  *
  * The manifest path must not exist. The record is written there once the move creates anything,
  * even if it then stops on an error, and never on a dry run.
@@ -55,19 +56,25 @@ async function main() {
   if (!process.env.DATABASE_URL && existsSync(".env")) process.loadEnvFile(".env");
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL is not set");
-  const apiKey = process.env.E2B_API_KEY;
-  if (!apiKey) throw new Error("E2B_API_KEY is not set");
   const { prisma, pool } = createDb(url);
   const files = new E2BVolumeFiles(e2bVolumeSandbox({ template: input.template }));
   try {
+    if (input.clearStaleMove) {
+      const cleared = await createWorkerLifecycle({ prisma, provider: null }).clearStaleHomeMove(
+        input.computerId,
+      );
+      console.log(
+        cleared
+          ? "Expired home move reservation cleared; rerun the move to resume."
+          : "No expired home move reservation matched.",
+      );
+      return;
+    }
+    const apiKey = process.env.E2B_API_KEY;
+    if (!apiKey) throw new Error("E2B_API_KEY is not set");
     // The SDK reads E2B_DOMAIN or E2B_API_URL itself.
     const provider = new E2BWorkerProvider({ apiKey, template: input.template });
     const workers = createWorkerLifecycle({ prisma, provider });
-    if (input.clearStaleMove) {
-      await workers.clearStaleHomeMove(input.computerId);
-      console.log("Interrupted home move reservation cleared; rerun the move to resume.");
-      return;
-    }
     const operationId = randomUUID();
     const report = await moveHomeToVolumes(
       {

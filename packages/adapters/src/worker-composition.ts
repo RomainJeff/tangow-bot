@@ -37,18 +37,17 @@ export function createWorkerProvider(
 }
 
 /**
- * The worker lifecycle every deployment has, for owner deletion, and, with a provider, the
- * executor's run routing and the reconciler step that releases orphan workers.
+ * Every deployment reconciles expired home moves. A provider also enables worker routing,
+ * orphan worker release and volume deletion.
  */
 export function composeWorkers(
   prisma: PrismaClient,
   provider: (WorkerProvider & GuestConnector) | null,
 ) {
   const lifecycle = createWorkerLifecycle({ prisma, provider });
-  if (!provider) return { lifecycle };
   return {
     lifecycle,
-    runWorkers: createRunWorkers({ prisma, lifecycle, connector: provider }),
+    runWorkers: provider ? createRunWorkers({ prisma, lifecycle, connector: provider }) : undefined,
     async reconcileWorkers(signal: AbortSignal) {
       const context = {
         operationId: "workers.reconcile",
