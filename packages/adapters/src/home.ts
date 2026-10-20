@@ -12,7 +12,12 @@ import {
   writeFile,
 } from "node:fs/promises";
 import path from "node:path";
-import type { AdapterContext, AgentHomeStore, PortableFile } from "@rakazo/adapter-kit";
+import type {
+  AdapterContext,
+  AgentHomeStore,
+  HomeTreeEntry,
+  PortableFile,
+} from "@rakazo/adapter-kit";
 import { fileHandlePath } from "./file-handle-path.js";
 
 export class LocalAgentHomeStore implements AgentHomeStore {
@@ -99,6 +104,30 @@ export class LocalAgentHomeStore implements AgentHomeStore {
     await mkdir(dir, { recursive: true });
     const root = await realpath(dir);
     yield* walkFiles(root, root);
+  }
+
+  async listTree(botId: string, _context: AdapterContext): Promise<HomeTreeEntry[]> {
+    await this.waitForBotWrite(botId);
+    await this.recoverInterruptedCommit(botId);
+    const entries: HomeTreeEntry[] = [];
+    const walk = async (directory: string, prefix: string): Promise<void> => {
+      for (const entry of await readdir(directory, { withFileTypes: true })) {
+        const portablePath = path.posix.join(prefix, entry.name);
+        const kind = entry.isSymbolicLink()
+          ? "symlink"
+          : entry.isDirectory()
+            ? "dir"
+            : entry.isFile()
+              ? "file"
+              : "other";
+        entries.push({ path: portablePath, kind });
+        if (kind === "dir") await walk(path.join(directory, entry.name), portablePath);
+      }
+    };
+    const dir = this.botDir(botId);
+    await mkdir(dir, { recursive: true });
+    await walk(await realpath(dir), "");
+    return entries;
   }
 
   async readFile(
@@ -362,6 +391,7 @@ async function* walkFiles(
         path: portablePath,
         content: new Uint8Array(content),
         executable: Boolean(mode & 0o100),
+        mode: mode & 0o777,
       };
     }
   }
