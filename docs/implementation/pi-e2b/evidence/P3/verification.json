@@ -1,7 +1,7 @@
 {
   "ticket": "RomainJeff/rakazo-bot#197",
   "slice": "S5, live lanes and handoff, branch claude/pi-e2b-p3-live",
-  "tested_commit_note": "lanes.json, bench.json and the lane capture come from one bundle of live_lanes_commit, run on the shared E2B host: all fourteen lanes, then the bench. template.json is the worker template built from that commit's source; its guest bundle's sha256 matches the bundle the lanes ran. The later commits change documentation and these receipts only.",
+  "tested_commit_note": "lanes.json, bench.json and the lane capture come from one bundle of live_lanes_commit, run on the shared E2B host: all fourteen lanes, then the bench. template.json is the worker template built from ed7f8e689's source; its guest bundle's sha256 matches the bundle the lanes ran, since the guest's code did not change after it. The bench before the transcript-mask fix ran at ed7f8e689; its figures are under perf.relay_before_and_after_mask_fix. The later commits change documentation and these receipts only.",
   "feature_base": "710705aee (feature/pi-e2b-workers with #228, #229, #241 and #243), merged into this branch at 58de581e7",
   "infra": {
     "i1_delivery": "the infrastructure repository's pull request #2, merge 177c1ff",
@@ -40,7 +40,7 @@
     "arch": "x64",
     "logical_cpus": 8,
     "node": "v22.22.1",
-    "load_average_during_bench": "one-minute load average 2.1 to 2.6 from the host's other services"
+    "load_average_during_bench": "one-minute load average 1.0 to 2.5 from the host's other services"
   },
   "build_machine": {
     "platform": "Darwin",
@@ -73,36 +73,63 @@
     "Review round 2: a staged file whose placement could not start stayed on the volume. It is removed with its own 30 s deadline, also on cancellation.",
     "Review round 3: SandboxNotFoundError and the 'killed or reached its end of life' TimeoutError can both come from a live sandbox behind a failing proxy. Every death signal now needs the control plane to no longer list the sandbox before it is replaced.",
     "After #243 merged: lane c's fixed port 47001 was drawn by a worker's rpc.statd from the ephemeral range, which accepted the probe and never answered, so the lane hung. Its listeners now use ports below that range and each probe gives up after 3 s.",
-    "After #243 merged: the template's Pi layer installed ripgrep for a grep tool that is the guest's own JavaScript walker. The layer now installs nothing, and the rebuilt template has no rg."
+    "After #243 merged: the template's Pi layer installed ripgrep for a grep tool that is the guest's own JavaScript walker. The layer now installs nothing, and the rebuilt template has no rg.",
+    "#243's relay mask parsed every string and key of a relayed transcript as JSON, and each failed parse threw: 28 to 36 ms per call for 30 to 34 KB transcripts on the host, by a timing probe in the relay that was not committed. It now parses only text that opens an object, an array or a string, and prepares the secrets once per walk; masking is unchanged."
   ],
   "perf": {
     "source": "bench.json",
     "cold_boot_p95_ms": {
-      "private_mount": 2058.485,
-      "two_mounts": 2134.404,
+      "private_mount": 2044.974,
+      "two_mounts": 2226.012,
       "budget": 30000,
       "result": "pass"
     },
     "relay_overhead_bound_p95_ms": {
-      "value": 140.7,
-      "how": "relay at the controller p95 87.4 ms plus grant to result p95 53.3 ms, private volume; the second contains the echo itself, so the sum bounds a guest's overhead from above",
+      "estimate": 72.8,
+      "how": "an estimate, not a bound: relay at the controller p95 30.3 ms plus grant to result p95 42.6 ms, private volume. The largest relay and largest round trip of the 30 trials sum to 90.6 ms with the private volume and 97.6 ms with two volumes.",
+      "observed_max_sum_ms": {
+        "private_mount": 90.6,
+        "two_mounts": 97.6
+      },
       "budget": 200,
       "result": "pass"
     },
-    "relay_before_upstream_p50_ms": {
-      "local_runner": 46.8,
-      "private_mount": 50.4,
-      "two_mounts": 52.1,
-      "cause": "the transcript mask, 28 to 36 ms per call by a timing probe on the host"
-    },
     "control_per_guest_tool_p50_ms": {
-      "local_runner_same_host": 36.0,
-      "e2b_private_mount": 43.2,
-      "e2b_two_mounts": 43.2
+      "local_runner_same_host": 33.8,
+      "e2b_private_mount": 42.8,
+      "e2b_two_mounts": 43.1
     },
     "control_limiter": "database calls are 97 to 99 percent of the control window; PGlite SELECT 1 is 0.46 ms on this host against 0.11 ms on P2's machine",
     "postgres_control_cost": "not measured: the controller must run on the E2B host, and PostgreSQL there needs Docker under sudo, which the host rules exclude",
-    "controller_rss": "1211 to 1274 MiB over 90 runs, heap 174 to 220 MiB, last ten runs +6.7 MiB; an earlier heap snapshot comparison placed the growth in the in-process PGlite instances' wire-message arrays"
+    "controller_rss": "1153 to 1206 MiB over 90 runs, heap 156 to 203 MiB, last ten runs +3.4 MiB; an earlier heap snapshot comparison placed the growth in the in-process PGlite instances' wire-message arrays",
+    "relay_before_and_after_mask_fix": {
+      "relay_at_controller_p50_p95_ms": {
+        "local_runner": {
+          "before": [54.5, 68.0],
+          "after": [13.2, 19.4]
+        },
+        "private_mount": {
+          "before": [55.5, 87.4],
+          "after": [10.0, 30.3]
+        },
+        "two_mounts": {
+          "before": [57.2, 89.5],
+          "after": [10.8, 30.9]
+        }
+      },
+      "relay_before_upstream_p50_p95_ms": {
+        "private_mount": {
+          "before": [50.4, 77.5],
+          "after": [4.3, 13.2]
+        },
+        "two_mounts": {
+          "before": [52.1, 80.2],
+          "after": [4.7, 15.6]
+        }
+      },
+      "before_commit": "ed7f8e689",
+      "after_commit": "b5c0a4609"
+    }
   },
   "cleanup": {
     "per_lane": "every lane ended with 0 sandboxes and 0 volumes of its session, after its sweep",
@@ -122,9 +149,9 @@
     "Electron E2E: CI only, by repository rule.",
     "Native iOS captures: no mobile code changed."
   ],
-  "live_lanes_commit": "ed7f8e68901e603bd98ca63cd23c5c938fd48ed3",
+  "live_lanes_commit": "b5c0a4609b926d12d6c7d6a28d7a801fcc0875f8",
   "found_live_not_fixed": [
-    "#243's relay masks the transcript on every model call. A timing probe in the relay on the host put 28 to 36 ms of each call in the mask for transcripts of 30 to 34 KB with three secrets. The relay's controller time went from 9 ms to 56 ms at p50 for an E2B worker; the overhead bound, 140 ms at p95, still fits the 200 ms budget.",
-    "A bot without a computer is refused with 'Bot has no computer' by an exception out of continueRun before routing; in the lanes' harness the run stayed 'running'. How the job runner settles it was not checked."
+    "Inherited from #38, out of P3's scope: a bot with no computer throws 'Bot has no computer' in continueRun after the run is set to 'running'. Production never settles it, and the reconciler enqueues it again forever without consuming the setup budget. Lane i saw the run stay 'running'.",
+    "runtime-worker-routing.test.ts 'rolls back a takeover requeue whose attempt outcome cannot be written and counts the crash' (from #243) fails in most runs of that file alone, with Prisma's 'No record was found for an update', on this branch's code before and after the mask fix. It passes alone and in the full suite."
   ]
 }

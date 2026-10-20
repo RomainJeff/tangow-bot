@@ -1,6 +1,6 @@
 # P3 native Pi in the worker and file migration handoff
 
-**Verdict. With `WORKER_PROVIDER=e2b`, a run of a bot whose home is on volumes runs its Pi in a real E2B worker. Its file tools and bash work on the bot's volumes, and the product's E2B computer on the same volumes sees every write. All fourteen live lanes pass on the shared E2B host, and no lane left a sandbox or a volume behind.** The live lanes found three defects in the slices before the composition, and this slice fixes them: the worker template did not build, every worker create was refused, and the home move could not reach a volume on a self-hosted E2B. After the composition merged, the lanes measured a new cost on every relayed model call: masking the transcript takes 28 to 36 ms for a 30 to 34 KB transcript on this host. The relay still fits its budget. See [Performance](#performance).
+**Verdict. With `WORKER_PROVIDER=e2b`, a run of a bot whose home is on volumes runs its Pi in a real E2B worker. Its file tools and bash work on the bot's volumes, and the product's E2B computer on the same volumes sees every write. All fourteen live lanes pass on the shared E2B host, and no lane left a sandbox or a volume behind.** The live lanes found three defects in the slices before the composition, and this slice fixes them: the worker template did not build, every worker create was refused, and the home move could not reach a volume on a self-hosted E2B. After the composition merged, the lanes measured a new cost on every relayed model call: masking the transcript took 28 to 36 ms for a 30 to 34 KB transcript on this host. This slice makes the mask skip parses that cannot succeed, and the relay is back to 10 ms at p50. See [Performance](#performance).
 
 ## Integrated references
 
@@ -138,7 +138,7 @@ Lane h moved a synthetic team home of two bots, with files in mode 0755, 0644, 0
 
 | Point | Result |
 | --- | --- |
-| A worker and a computer mount the same volumes and see each other's writes, both ways | Proven with the product computer, lane b-product-computer. The computer saw the guest's private write 27 ms and its shared write 76 ms after the controller granted the writing tool, and the guest read both files the computer wrote. |
+| A worker and a computer mount the same volumes and see each other's writes, both ways | Proven with the product computer, lane b-product-computer. The computer saw the guest's private write 55 ms and its shared write 29 ms after the controller granted the tool that wrote it, matched by its request's seq, and the guest read both files the computer wrote. |
 | The workspace link works on a fresh sandbox | Proven. `/home/user/rakazo-home` links to `/workspace`, and the lane wrote and polled through it. |
 | `getInfo().metadata` carries the home marker and the mounts digest; a matching machine is reused | Proven. The metadata has `home: "volumes"` and a digest, and the second run reused the first run's machine. A machine with another set of volumes was not tried live. |
 | `Volume.list` and `Volume.destroy` delete a volume by name | Not run through `deleteVolume` or `sweepVolumes`. Each lane's sweep listed and destroyed its volumes by name with the same two calls. |
@@ -155,7 +155,7 @@ Receipts are in `evidence/P3/`: [verification.json](evidence/P3/verification.jso
 | Lane | Issue item | Result | Observed |
 | --- | --- | --- | --- |
 | a | File task identical to the baseline | Pass | `notes.md` read from the volume after the VM was destroyed is `alpha\ngamma\n`, as in process. The model saw the same seven results, and the log holds the same results. |
-| b | Local tools and two-way visibility | Pass | The guest read both files a computer-template VM wrote, wrote and edited its own, and grep found both. The VM's poller saw the private write 47 ms and the shared write 52 ms after the controller granted the writing tool. |
+| b | Local tools and two-way visibility | Pass | The guest read both files a computer-template VM wrote, wrote and edited its own, and grep found both. The VM's poller saw the private write 50 ms and the shared write 46 ms after the controller granted the tool that wrote it. |
 | b-product-computer | Visibility with the product's E2B computer | Pass | See [What #243 asked the live slice to prove](#what-243-asked-the-live-slice-to-prove). |
 | c | Distinct PID namespace and localhost | Pass | Each listener answered on 127.0.0.1 in its own VM and was refused from the other. Neither VM listed the other's process. The kernels' boot ids differ. |
 | d | Disabled tool for parent and helper | Pass | See [Tool selection and helpers](#tool-selection-and-helpers). |
@@ -177,26 +177,28 @@ Lane j ran 30 trials of three arms, rotating which arm went first: P2's local ru
 
 | Measure | Local runner | E2B, private volume | E2B, two volumes | Budget |
 | --- | --- | --- | --- | --- |
-| Cold boot, create to hello | | 1.92 s, 2.06 s | 1.85 s, 2.13 s | Under 30 s |
-| Sandbox create | | 343 ms, 366 ms | 355 ms, 380 ms | |
-| Guest boot, command start to hello | | 1.57 s, 1.73 s | 1.50 s, 1.77 s | |
-| Warm run, hello to accepted end | 801 ms, 882 ms | 1.37 s, 1.54 s | 1.40 s, 1.49 s | |
-| Control per guest tool | 36 ms, 42 ms | 43 ms, 61 ms | 43 ms, 60 ms | |
-| Relay at the controller, request to end | 54 ms, 68 ms | 56 ms, 87 ms | 57 ms, 89 ms | |
-| Relay before the upstream received the call | 47 ms, 59 ms | 50 ms, 78 ms | 52 ms, 80 ms | |
-| Grant to result, one round trip and `echo` | 25 ms, 28 ms | 29 ms, 53 ms | 29 ms, 53 ms | |
+| Cold boot, create to hello | | 1.75 s, 2.04 s | 1.86 s, 2.23 s | Under 30 s |
+| Sandbox create | | 343 ms, 362 ms | 354 ms, 384 ms | |
+| Guest boot, command start to hello | | 1.39 s, 1.72 s | 1.50 s, 1.86 s | |
+| Warm run, hello to accepted end | 472 ms, 495 ms | 953 ms, 1.18 s | 1.02 s, 1.25 s | |
+| Control per guest tool | 34 ms, 42 ms | 43 ms, 57 ms | 43 ms, 60 ms | |
+| Relay at the controller, request to end | 13 ms, 19 ms | 10 ms, 30 ms | 11 ms, 31 ms | |
+| Relay before the upstream received the call | 6 ms, 9 ms | 4 ms, 13 ms | 5 ms, 16 ms | |
+| Grant to result, one round trip and `echo` | 20 ms, 21 ms | 24 ms, 43 ms | 25 ms, 48 ms | |
 
-**Cold boot passes its budget by a factor of 14 at p95.** The guest boot bounds it. In a fresh VM, `node -e 0` took 0.70 s and loading the 7.6 MB guest bundle 0.88 s, against 0.03 s and 0.54 s once the page cache was warm. That profile is one VM of five runs per command. Mounting volumes adds about 270 ms to the create: an earlier run of this bench measured 79 ms with no mount, which matches I1's 65 ms against 350 ms.
+**Cold boot passes its budget by a factor of 13 at p95.** The guest boot bounds it. In a fresh VM, `node -e 0` took 0.70 s and loading the 7.6 MB guest bundle 0.88 s, against 0.03 s and 0.54 s once the page cache was warm. That profile is one VM of five runs per command. Mounting volumes adds about 270 ms to the create: an earlier run of this bench measured 79 ms with no mount, which matches I1's 65 ms against 350 ms.
 
-**The relay overhead passes its 200 ms budget, and the transcript mask is most of it.** A guest's model call costs the controller-side relay plus one channel round trip. The p95 sum is 87 ms plus 53 ms, 140 ms, with the private volume. The grant-to-result time also contains the `echo` itself, so it bounds the round trip from above. Before #243 the relay of an E2B worker took 9 ms at p50 and 29 ms at p95. Now 47 to 52 ms of it passes before the emulator receives the call. A timing probe in the relay, run on the host and not committed, put 28 to 36 ms of that in the transcript mask for transcripts of 30 to 34 KB with three secrets, and 0.4 to 0.7 ms in building the provider stream. The mask parses every string of the transcript as JSON and every key too, and each failed parse throws. The bench's thread grows a little with every run, so its transcripts grow over the trials. This slice infers, without measuring longer transcripts, that the mask's cost grows with the transcript. The local runner pays it too, which is why its warm run went from 485 ms to 801 ms.
+**The relay overhead fits its 200 ms budget.** A guest's model call costs the controller-side relay plus one channel round trip. Adding the two p95s, 30 ms and 43 ms with the private volume, estimates it at 73 ms; a sum of two p95s is not itself a p95. The largest relay and the largest round trip of all 30 trials sum to 91 ms with the private volume and 98 ms with two, so no observed call could have cost more. The grant-to-result time also contains the `echo` itself, so it overstates the round trip.
 
-**Control per tool is PGlite on this host, not the network.** The control window is controller-side only, from `tool.call` read to `tool.grant` sent plus `tool.done` read to `tool.recorded` sent. Database calls take 97 to 99 percent of it, 17 queries at p50, as in P2. A `SELECT 1` round trip to PGlite takes 0.46 ms on this host against 0.11 ms on the machine of P2's numbers, four times slower, so P2's 6.0 ms becomes the local runner's 36 ms here. E2B adds 7 ms at p50 to the same window. This slice infers that the extra time is the frames' arrival through E2B's command stream interleaving with the window's queries, and did not trace it.
+**The transcript mask was most of the relay, and this slice cut it.** #243 masks the run's secrets in every relayed transcript. Before this slice's fix, the same bench measured the relay at 56 ms at p50 and 87 ms at p95 with the private volume, 50 ms of it before the emulator received the call. A timing probe in the relay, run on the host and not committed, put 28 to 36 ms of each call in the mask for transcripts of 30 to 34 KB with three secrets. The mask tried to parse every string and every key as JSON, and each failed parse threw. It now parses only text whose first character past whitespace opens an object, an array or a string, the only texts that can parse to one, and it prepares the secrets' escaped forms once per walk. Masking is unchanged. The relay is now 10 ms at p50 and 30 ms at p95, back to its 9 ms and 29 ms before #243, and the local runner's warm run went back from 801 ms to 472 ms.
+
+**Control per tool is PGlite on this host, not the network.** The control window is controller-side only, from `tool.call` read to `tool.grant` sent plus `tool.done` read to `tool.recorded` sent. Database calls take 97 to 99 percent of it, 17 queries at p50, as in P2. A `SELECT 1` round trip to PGlite takes 0.46 ms on this host against 0.11 ms on the machine of P2's numbers, four times slower, so P2's 6.0 ms becomes the local runner's 34 ms here. E2B adds 9 ms at p50 to the same window. This slice infers that the extra time is the frames' arrival through E2B's command stream interleaving with the window's queries, and did not trace it.
 
 **Control cost on PostgreSQL was not measured.** The controller has to run on the E2B host, whose API listens there only. PostgreSQL there needs Docker under sudo, which the rules for the shared host exclude. P2's estimate still stands, about 17 network round trips per tool on PostgreSQL.
 
-**The controller grew 62 MiB of RSS over 90 runs, and the growth traces to its test database.** RSS went from 1,211 to 1,274 MiB with a garbage collection before each sample, and the JS heap from 174 to 220 MiB. A heap snapshot comparison in an earlier investigation run found the growth in arrays of PostgreSQL wire messages held by the in-process PGlite instances, about the number of protocol messages those runs exchanged. A controller on PostgreSQL does not hold them. Over the last ten runs, RSS grew 6.7 MiB and the heap 4.1 MiB. Each lane runs in its own process for the same reason, since one process grew about 200 MiB per lane.
+**The controller grew 53 MiB of RSS over 90 runs, and the growth traces to its test database.** RSS went from 1,153 to 1,206 MiB with a garbage collection before each sample, and the JS heap from 156 to 203 MiB. A heap snapshot comparison in an earlier investigation run found the growth in arrays of PostgreSQL wire messages held by the in-process PGlite instances, about the number of protocol messages those runs exchanged. A controller on PostgreSQL does not hold them. Over the last ten runs, RSS grew 3.4 MiB and the heap 4.3 MiB. Each lane runs in its own process for the same reason, since one process grew about 200 MiB per lane.
 
-The host had 8 vCPUs with a one-minute load average of 2.1 to 2.6 during the bench, from the host's other services. The arms rotated, so each saw the same load.
+The host had 8 vCPUs with a one-minute load average of 1.0 to 2.5 during the bench, from the host's other services. The arms rotated, so each saw the same load.
 
 ## Limits
 
@@ -204,7 +206,6 @@ The host had 8 vCPUs with a one-minute load average of 2.1 to 2.6 during the ben
 
 - **Worker VMs have no egress firewall.** `E2BWorkerProvider` asks for no network restriction, and the guest network is open. Guest code, including a Pi that `bash` modified, can send any file of its mounts anywhere. No key is in the guest, but the bot's and the space's files are.
 - The guest is hostile, including its Pi. Worker frames are not a tamper-proof audit of what the guest did on its mounts. On the shared volume, the sandbox user read and appended to a root-owned 0600 file, so do not count on uids inside one VM to protect files.
-- The relay's transcript mask costs 28 to 36 ms per model call at 30 to 34 KB on this host, and likely more on longer transcripts. See [Performance](#performance).
 
 ### Lifetimes and retries
 
@@ -212,7 +213,7 @@ The host had 8 vCPUs with a one-minute load average of 2.1 to 2.6 during the ben
 - A create whose answer was lost keeps its writer lease and its VM until the ensure deadline, 15 minutes, then reconcile destroys it. Until then, the run's retries are busy waits.
 - A provider error that never clears, a bad key for instance, ends the run only through the setup budget, after three failures.
 - A guest call whose result was lost stays `executing` when the next attempt never asks for it again, even after the run completes. It becomes `uncertain` only when a later attempt claims the same call.
-- A bot without a computer fails before routing. In the lanes' harness, the run stayed `running` after that refusal. This slice did not check how the job runner settles it.
+- Inherited, on main since #38 and out of P3's scope: a bot with no computer throws `Bot has no computer` in `continueRun` (`packages/adapters/src/executor.ts`, the lease target check) after the run is set to `running`. Production never settles that run, and the reconciler enqueues it again forever without consuming the setup budget. Lane i saw the run stay `running`.
 
 ### Volume deletion
 
@@ -246,7 +247,7 @@ The host had 8 vCPUs with a one-minute load average of 2.1 to 2.6 during the ben
 
 - **P4** exposes the remote tools: `computer_*`, `browser_*` and `computer.exec` stay controller tools, and every ordinary file or shell action stays local in the worker. It decides how computer tools return images, because a controller tool's output reaches the guest as JSON, and where a team computer keeps its browser profiles, which a replacement archives but does not restore.
 - **P5** rebuilds a session from the durable history in `worker.start` and never from the worker's disk. The spool under `.rakazo/tool-output/` is a convenience, not the truth of a run. It reads `effectPhase` and never reruns an `uncertain` effect, and it starts no writer before `stopState` says `destroyed`. It uses the same template and launch path, and adds nothing to the guest for resume.
-- **P6** starts from the measured profiles: worker 1 vCPU and 1024 MiB, computer 2 vCPU and 4096 MiB, cold boot p95 2.1 s with two mounts. It measures control cost on PostgreSQL, decides how to keep a run alive past the sandbox timeout, decides on a worker egress policy, makes the transcript mask cheaper, and repeats the lanes under concurrent runs on one host.
+- **P6** starts from the measured profiles: worker 1 vCPU and 1024 MiB, computer 2 vCPU and 4096 MiB, cold boot p95 2.1 s with two mounts. It measures control cost on PostgreSQL, decides how to keep a run alive past the sandbox timeout, decides on a worker egress policy, and repeats the lanes under concurrent runs on one host.
 
 ## Rollback
 

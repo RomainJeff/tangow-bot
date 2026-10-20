@@ -1,6 +1,6 @@
 {
   "tag": "p3live-<session>",
-  "startedAt": "2026-10-20T13:40:43.237Z",
+  "startedAt": "2026-10-20T14:40:08.553Z",
   "workerTemplate": "p3live-worker-pi",
   "computerTemplate": "i1-computer",
   "lanes": [
@@ -22,12 +22,12 @@
           }
         ]
       },
-      "seconds": 11.2,
+      "seconds": 11.5,
       "memAvailableMiB": {
-        "before": 3128,
-        "after": 2195
+        "before": 3096,
+        "after": 2452
       },
-      "controllerRssMiB": 980,
+      "controllerRssMiB": 922,
       "cleanup": {
         "killed": 0,
         "destroyed": 2,
@@ -52,19 +52,19 @@
           "grep": "from-computer.txt:1:written by the computer\nfrom-worker.txt:1:edited by the worker",
           "bash": "written by the computer"
         },
-        "computerSawPrivateWrite": "seen 58",
-        "computerSawSharedWrite": "seen 64",
-        "privateVisibleWithinMsOfGrant": 47,
-        "sharedVisibleWithinMsOfGrant": 52,
+        "computerSawPrivateWrite": "seen 57",
+        "computerSawSharedWrite": "seen 62",
+        "privateVisibleWithinMsOfGrant": 50,
+        "sharedVisibleWithinMsOfGrant": 46,
         "pollIntervalMs": 50,
-        "note": "Visibility times run from the controller granting the guest tool that wrote to the host seeing the computer's poller exit. They include the tool's own run and E2B's command stream, so they bound the cross-VM delay from above."
+        "note": "Visibility times run from the controller granting the guest tool that wrote, matched by its request's seq (edit_file e1 for the private file, bash b1 for the shared one), to the host seeing the computer's poller exit. They include the tool's own run and E2B's command stream, so they bound the cross-VM delay from above."
       },
-      "seconds": 8.2,
+      "seconds": 7.8,
       "memAvailableMiB": {
-        "before": 2883,
-        "after": 2334
+        "before": 3147,
+        "after": 2360
       },
-      "controllerRssMiB": 982,
+      "controllerRssMiB": 952,
       "cleanup": {
         "killed": 0,
         "destroyed": 2,
@@ -89,28 +89,28 @@
           "grep": "from-computer.txt:1:written by the computer\nfrom-worker.txt:1:edited by the worker",
           "bash": "written by the computer"
         },
-        "computerSawPrivateWrite": "seen 50",
-        "computerSawSharedWrite": "seen 57",
-        "privateVisibleWithinMsOfGrant": 27,
-        "sharedVisibleWithinMsOfGrant": 76,
+        "computerSawPrivateWrite": "seen 47",
+        "computerSawSharedWrite": "seen 51",
+        "privateVisibleWithinMsOfGrant": 55,
+        "sharedVisibleWithinMsOfGrant": 29,
         "pollIntervalMs": 50,
-        "note": "Visibility times run from the controller granting the guest tool that wrote to the host seeing the computer's poller exit. They include the tool's own run and E2B's command stream, so they bound the cross-VM delay from above.",
+        "note": "Visibility times run from the controller granting the guest tool that wrote, matched by its request's seq (edit_file e1 for the private file, bash b1 for the shared one), to the host seeing the computer's poller exit. They include the tool's own run and E2B's command stream, so they bound the cross-VM delay from above.",
         "computerMetadataHome": "volumes",
         "computerRecordsMountSet": true,
         "workspaceLinksTo": "/workspace",
         "volumeMountsInComputer": [
-          "/workspace/bots/cmvgqejjw0001xdhcsw3ultr2",
+          "/workspace/bots/cmvgsiykx00019shczmd6pt5o",
           "/workspace/shared"
         ],
         "secondRunReusedMachine": true,
         "desktopPreparation": "skipped: this host has no desktop template"
       },
-      "seconds": 10.7,
+      "seconds": 10.5,
       "memAvailableMiB": {
-        "before": 3057,
-        "after": 2385
+        "before": 3053,
+        "after": 2343
       },
-      "controllerRssMiB": 938,
+      "controllerRssMiB": 950,
       "cleanup": {
         "killed": 1,
         "destroyed": 2,
@@ -137,12 +137,12 @@
         "workerListenerListedInComputer": "no",
         "bootIdsDiffer": true
       },
-      "seconds": 14.6,
+      "seconds": 14.5,
       "memAvailableMiB": {
-        "before": 3090,
-        "after": 2596
+        "before": 3018,
+        "after": 2599
       },
-      "controllerRssMiB": 721,
+      "controllerRssMiB": 757,
       "cleanup": {
         "killed": 0,
         "destroyed": 2,
@@ -170,10 +170,10 @@
       },
       "seconds": 7.2,
       "memAvailableMiB": {
-        "before": 3096,
-        "after": 2389
+        "before": 3129,
+        "after": 2490
       },
-      "controllerRssMiB": 964,
+      "controllerRssMiB": 868,
       "cleanup": {
         "killed": 0,
         "destroyed": 2,
@@ -195,12 +195,12 @@
         "modelRequestsRelayed": 3,
         "note": "The model emulator asserts the controller's bearer key on every call, so each relayed call carried it."
       },
-      "seconds": 6.9,
+      "seconds": 6.7,
       "memAvailableMiB": {
-        "before": 3127,
-        "after": 2423
+        "before": 3129,
+        "after": 2514
       },
-      "controllerRssMiB": 923,
+      "controllerRssMiB": 862,
       "cleanup": {
         "killed": 0,
         "destroyed": 2,
@@ -224,12 +224,12 @@
         "runModel": "anthropic/claude-haiku-4-5",
         "note": "The emulator serves /v1/messages and asserts the controller's x-api-key on every call; the catalog model points at it for the run only."
       },
-      "seconds": 6.9,
+      "seconds": 6.5,
       "memAvailableMiB": {
-        "before": 3100,
-        "after": 2403
+        "before": 3135,
+        "after": 2269
       },
-      "controllerRssMiB": 938,
+      "controllerRssMiB": 964,
       "cleanup": {
         "killed": 0,
         "destroyed": 2,
@@ -256,7 +256,7 @@
             {
               "workerState": "released",
               "stopPhase": "process_ended",
-              "workerProviderRef": "ideiiqh8vnqwdigyn09kw"
+              "workerProviderRef": "igyrm83pwwc37pijzxydd"
             }
           ]
         },
@@ -270,17 +270,17 @@
             {
               "workerState": "released",
               "stopPhase": "process_ended",
-              "workerProviderRef": "idnon09agjto3f6uuh5x5"
+              "workerProviderRef": "iksa5k5cg5o0l7btiasqu"
             }
           ]
         }
       },
-      "seconds": 10.6,
+      "seconds": 10.2,
       "memAvailableMiB": {
-        "before": 3137,
-        "after": 2181
+        "before": 2857,
+        "after": 2240
       },
-      "controllerRssMiB": 1161,
+      "controllerRssMiB": 1104,
       "cleanup": {
         "killed": 0,
         "destroyed": 4,
@@ -309,10 +309,10 @@
       },
       "seconds": 9,
       "memAvailableMiB": {
-        "before": 3131,
-        "after": 2621
+        "before": 3125,
+        "after": 2580
       },
-      "controllerRssMiB": 780,
+      "controllerRssMiB": 753,
       "cleanup": {
         "killed": 0,
         "destroyed": 2,
@@ -429,12 +429,12 @@
           "sandboxesLeft": 0
         }
       },
-      "seconds": 25.8,
+      "seconds": 25.5,
       "memAvailableMiB": {
-        "before": 3153,
-        "after": 1712
+        "before": 3095,
+        "after": 1711
       },
-      "controllerRssMiB": 1635,
+      "controllerRssMiB": 1617,
       "cleanup": {
         "killed": 0,
         "destroyed": 8,
@@ -453,7 +453,7 @@
       "observed": {
         "sandboxTimeoutMs": 20000,
         "firstContinue": "Run setup failed; retrying",
-        "firstAttemptEndedAfterMs": 22751,
+        "firstAttemptEndedAfterMs": 22798,
         "afterKill": {
           "status": "queued",
           "attempts": [
@@ -483,12 +483,12 @@
           "sandboxesLeft": 0
         }
       },
-      "seconds": 29.7,
+      "seconds": 28.9,
       "memAvailableMiB": {
-        "before": 2976,
-        "after": 2607
+        "before": 3089,
+        "after": 2635
       },
-      "controllerRssMiB": 739,
+      "controllerRssMiB": 679,
       "cleanup": {
         "killed": 0,
         "destroyed": 2,
@@ -526,12 +526,12 @@
           "guestUid": "The sandbox user is uid/gid 1001/1001 in this template, not 1000, and the moved files belong to 1001:1001. The mount does not enforce ownership against it: that user read and appended to a root-owned 0600 file."
         }
       },
-      "seconds": 11.5,
+      "seconds": 10.6,
       "memAvailableMiB": {
-        "before": 3071,
-        "after": 2359
+        "before": 3103,
+        "after": 2408
       },
-      "controllerRssMiB": 948,
+      "controllerRssMiB": 909,
       "cleanup": {
         "killed": 0,
         "destroyed": 4,
@@ -561,12 +561,12 @@
         },
         "desktopPreparation": "skipped: this host has no desktop template"
       },
-      "seconds": 7.2,
+      "seconds": 7.3,
       "memAvailableMiB": {
-        "before": 3008,
-        "after": 2292
+        "before": 3050,
+        "after": 2281
       },
-      "controllerRssMiB": 903,
+      "controllerRssMiB": 946,
       "cleanup": {
         "killed": 1,
         "destroyed": 3,
@@ -592,10 +592,10 @@
       },
       "seconds": 4,
       "memAvailableMiB": {
-        "before": 3040,
+        "before": 2987,
         "after": 2298
       },
-      "controllerRssMiB": 948,
+      "controllerRssMiB": 911,
       "cleanup": {
         "killed": 0,
         "destroyed": 2,

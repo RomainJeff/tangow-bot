@@ -56,7 +56,8 @@ Observed (see verification.json)
   pnpm test:integration: 164 tests in 23 suites passed.
   P3 offline tests: 77 tests in 9 files passed.
   Live lanes: 14 passed, no sandbox and no volume left after any lane.
-  Bench, 30 rotating trials per arm, no errors: cold boot p95 2.06 s with the private volume and 2.13 s with
-  two volumes (budget 30 s); relay overhead bound p95 141 ms (budget 200 ms), of which the transcript mask
-  is 28 to 36 ms per call; control per guest tool p50 43 ms on PGlite on this host, against 36 ms for P2's
-  local runner on the same host.
+  Bench, 30 rotating trials per arm, no errors: cold boot p95 2.04 s with the private volume and 2.23 s with
+  two volumes (budget 30 s); relay at the controller p50 10 ms and p95 30 ms with the private volume, down
+  from 56 ms and 87 ms before the transcript-mask fix; relay overhead estimated at 73 ms from two p95s, with
+  an observed maximum sum of 91 ms (budget 200 ms); control per guest tool p50 43 ms on PGlite on this
+  host, against 34 ms for P2's local runner on the same host.
