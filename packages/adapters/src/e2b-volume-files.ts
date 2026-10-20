@@ -1,11 +1,18 @@
+import { randomUUID } from "node:crypto";
 import type { AdapterContext, PortableFile, VolumeEntry, VolumeFiles } from "@rakazo/adapter-kit";
 import { fileMode, isPortablePath } from "@rakazo/adapter-kit";
-import { type ConnectionOpts, Sandbox } from "e2b";
+import { type ConnectionOpts, Sandbox, SandboxNotFoundError } from "e2b";
 
 /** Where a volume-files sandbox mounts the volume it serves. */
 export const VOLUME_FILES_MOUNT = "/mnt/rakazo-volume";
 
+/**
+ * How long a volume-files sandbox lives at most. A sandbox `close` never reached, for example after
+ * a crash, is killed by E2B after this.
+ */
 const SANDBOX_TIMEOUT_MS = 60 * 60 * 1000;
+/** How long creating a volume-files sandbox may take before the call gives up. */
+const CREATE_TIMEOUT_MS = 2 * 60 * 1000;
 
 /** One sandbox that mounts one volume at `VOLUME_FILES_MOUNT`. Tests stand in for the vendor here. */
 export interface VolumeSandbox {
@@ -15,6 +22,8 @@ export interface VolumeSandbox {
   write(path: string, content: Uint8Array, signal: AbortSignal): Promise<void>;
   read(path: string, signal: AbortSignal): Promise<Uint8Array>;
   kill(): Promise<void>;
+  /** Whether `error` means the sandbox no longer exists, so a new one must be opened. */
+  isGone(error: unknown): boolean;
 }
 
 export type OpenVolumeSandbox = (volumeRef: string) => Promise<VolumeSandbox>;
@@ -38,6 +47,8 @@ export function e2bVolumeSandbox(options: {
       volumeMounts: { [VOLUME_FILES_MOUNT]: volumeRef },
       timeoutMs: SANDBOX_TIMEOUT_MS,
       lifecycle: { onTimeout: "kill" },
+      requestTimeoutMs: CREATE_TIMEOUT_MS,
+      signal: AbortSignal.timeout(CREATE_TIMEOUT_MS),
     });
     return {
       async run(command, signal) {
@@ -52,6 +63,7 @@ export function e2bVolumeSandbox(options: {
       kill: async () => {
         await sandbox.kill();
       },
+      isGone: (error) => error instanceof SandboxNotFoundError,
     };
   };
 }
@@ -71,6 +83,18 @@ const LIST_ENTRIES = [
   "process.stdout.write(JSON.stringify(entries));",
 ].join("\n");
 
+/** Gives a written temporary file its mode, then renames it over its target, never into a directory. */
+const PLACE_FILE = [
+  'const fs = require("fs"), [temporary, target, mode] = process.argv.slice(1);',
+  "try {",
+  "  fs.chmodSync(temporary, Number.parseInt(mode, 8));",
+  "  fs.renameSync(temporary, target);",
+  "} catch (error) {",
+  "  fs.rmSync(temporary, { force: true });",
+  "  throw error;",
+  "}",
+].join("\n");
+
 /** A single-quoted shell word. */
 const quoted = (text: string) => `'${text.replaceAll("'", `'\\''`)}'`;
 
@@ -84,30 +108,59 @@ export class E2BVolumeFiles implements VolumeFiles {
   constructor(private readonly open: OpenVolumeSandbox) {}
 
   async list(volumeRef: string, context: AdapterContext): Promise<VolumeEntry[]> {
-    const sandbox = await this.sandbox(volumeRef);
-    const listing = await sandbox.run(
-      `node -e ${quoted(LIST_ENTRIES)} ${VOLUME_FILES_MOUNT}`,
-      context.signal,
+    const listing = await this.withSandbox(volumeRef, (sandbox) =>
+      sandbox.run(`node -e ${quoted(LIST_ENTRIES)} ${VOLUME_FILES_MOUNT}`, context.signal),
     );
     return JSON.parse(listing) as VolumeEntry[];
   }
 
+  /**
+   * Writes beside the target, sets the mode, then renames over it, so the target never holds part
+   * of the file or a wider mode, and a link at the target is replaced rather than followed.
+   */
   async write(volumeRef: string, file: PortableFile, context: AdapterContext): Promise<void> {
     const target = volumePath(file.path);
-    const sandbox = await this.sandbox(volumeRef);
-    await sandbox.write(target, file.content, context.signal);
-    await sandbox.run(`chmod ${fileMode(file).toString(8)} ${quoted(target)}`, context.signal);
+    const temporary = `${target.slice(0, target.lastIndexOf("/") + 1)}.rakazo-${randomUUID()}`;
+    const mode = fileMode(file).toString(8);
+    await this.withSandbox(volumeRef, async (sandbox) => {
+      await sandbox.write(temporary, file.content, context.signal);
+      await sandbox.run(
+        `node -e ${quoted(PLACE_FILE)} ${quoted(temporary)} ${quoted(target)} ${mode}`,
+        context.signal,
+      );
+    });
   }
 
   async read(volumeRef: string, path: string, context: AdapterContext): Promise<Uint8Array> {
     const target = volumePath(path);
-    return (await this.sandbox(volumeRef)).read(target, context.signal);
+    return this.withSandbox(volumeRef, (sandbox) => sandbox.read(target, context.signal));
   }
 
+  /** Destroys every sandbox opened, and reports the first failure once all were tried. */
   async close(): Promise<void> {
     const opened = [...this.sandboxes.values()];
     this.sandboxes.clear();
-    await Promise.all(opened.map(async (sandbox) => (await sandbox.catch(() => null))?.kill()));
+    const results = await Promise.allSettled(
+      opened.map(async (sandbox) => (await sandbox.catch(() => null))?.kill()),
+    );
+    const failed = results.find((result) => result.status === "rejected");
+    if (failed) throw failed.reason;
+  }
+
+  /** Runs `step` on the volume's sandbox, once more on a new sandbox if the first one is gone. */
+  private async withSandbox<T>(
+    volumeRef: string,
+    step: (sandbox: VolumeSandbox) => Promise<T>,
+  ): Promise<T> {
+    const opening = this.sandbox(volumeRef);
+    const sandbox = await opening;
+    try {
+      return await step(sandbox);
+    } catch (error) {
+      if (!sandbox.isGone(error)) throw error;
+      if (this.sandboxes.get(volumeRef) === opening) this.sandboxes.delete(volumeRef);
+      return step(await this.sandbox(volumeRef));
+    }
   }
 
   private sandbox(volumeRef: string): Promise<VolumeSandbox> {

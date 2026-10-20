@@ -78,7 +78,13 @@ async function main() {
     console.log(JSON.stringify(report, null, 2));
     if (report.outcome === "refused") process.exitCode = 1;
   } finally {
-    await files.close();
+    // A sandbox left behind dies at its timeout: say so, without replacing the move's report.
+    await files.close().catch((error: unknown) => {
+      console.error(
+        `Some volume sandboxes were not destroyed and stop at their one-hour timeout: ${error instanceof Error ? error.message : error}`,
+      );
+      process.exitCode = 1;
+    });
     await prisma.$disconnect();
     await pool.end();
   }
