@@ -5,7 +5,7 @@ import type {
   GuestModel,
   SubagentLog,
 } from "@rakazo/adapter-kit";
-import { PiAgentRuntime } from "@rakazo/adapters";
+import { PiAgentRuntime } from "@rakazo/adapters/pi-runtime";
 import { piAiStreamFn, relayedModel } from "@rakazo/adapters/runtime-worker/pi-ai";
 import type { DoneBody, GuestHarness, HarnessHost } from "../harness.js";
 
@@ -18,6 +18,7 @@ function toolCaller(host: HarnessHost, agent: string): NonNullable<AgentRunReque
     const outcome = await host.callTool(agent, name, args, executionId);
     if (outcome.placement === "controller") return outcome.output;
     const { output } = outcome;
+    if ("result" in output) return output.result;
     if (output.isError) throw new Error(output.text);
     return {
       kind: "agent_tool_result",

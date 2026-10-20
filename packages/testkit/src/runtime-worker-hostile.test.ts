@@ -264,12 +264,14 @@ describe("a hostile guest", () => {
     ]);
   });
 
-  it("gets its tool output cut and redacted, and a frame over the limit ends the run", async () => {
+  it("gets its tool output cut and redacted with the run's current secrets, and a frame over the limit ends the run", async () => {
     const { runtime, launchedFor } = setup();
     const results: LocalToolOutput[] = [];
+    const secrets = ["hunter2-secret"];
     const run = consume(
       runtime.run(
         request("run_big", {
+          secrets,
           executeLocalTool: async (_name, _args, _id, start) => {
             results.push(await start(new AbortController().signal));
             return "recorded";
@@ -301,16 +303,32 @@ describe("a hostile guest", () => {
       ),
     ).toBe(true);
 
-    guest.send(4, bash("huge"));
-    guest.send(5, callBash("huge"));
+    secrets.push("revealed-later");
+    guest.send(4, bash("object"));
+    guest.send(5, callBash("object"));
     await guest.replies(5);
     guest.send(6, {
+      type: "tool.done",
+      callId: "object",
+      output: {
+        result: { content: "hunter2-secret and revealed-later", lines: ["hunter2-secret"] },
+      },
+    });
+    expect(await guest.replies(6)).toEqual([{ type: "tool.recorded" }]);
+    expect(results[1]).toEqual({
+      result: { content: "[redacted] and [redacted]", lines: ["[redacted]"] },
+    });
+
+    guest.send(7, bash("huge"));
+    guest.send(8, callBash("huge"));
+    await guest.replies(8);
+    guest.send(9, {
       type: "tool.done",
       callId: "huge",
       output: output("y".repeat(2 * 1024 * 1024)),
     });
     await expect(run.done).rejects.toThrow("The worker broke the run protocol: too_large");
-    expect(results).toHaveLength(1);
+    expect(results).toHaveLength(2);
   });
 
   it("stops the controller's upstream model call when it aborts the call", async () => {

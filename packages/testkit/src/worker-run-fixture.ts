@@ -54,6 +54,8 @@ const emptyMemory: MemoryStore = {
 export async function startWorkerRun(options: {
   steps: ModelEmulatorStep[];
   mode?: "memory" | "child";
+  /** The bundled guest a `child` mode runs instead of the source. */
+  guestEntry?: string;
   faults?: LocalWorkerFaults;
   clock?: WorkerClock;
   /** Runs the bot with this runtime instead of a guest. */
@@ -150,6 +152,7 @@ export async function startWorkerRun(options: {
       mode: options.mode ?? "memory",
       root: path.join(dir, "workers"),
       faults: options.faults,
+      entry: options.guestEntry,
     });
     const runtime: AgentRuntime =
       options.runtime?.(prisma) ??

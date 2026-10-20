@@ -15,7 +15,7 @@ interface WorkerSpec {
 	botId: string;
 	mounts: Array<{ volumeRef: string; path: string; access: "rw" | "ro" }>;
 	ttlSeconds: number;
-	ensureTimeoutSeconds: number;
+	ensureDeadline: Date;
 }
 ```
 
@@ -30,7 +30,7 @@ Each method has a rule that the controller depends on for safety:
 | Method | Rule | Docker example |
 | --- | --- | --- |
 | `describe()` | Report `readOnlyMounts` truthfully. If the provider cannot enforce a read-only mount, report `false`, and the controller refuses `ro` grants. | Bind mounts and named volumes accept `:ro`, so report `true`. |
-| `ensure(spec)` | Create one worker tagged with `spec.attemptId` and return its reference. The controller calls it once per attempt. Never create the worker later than `spec.ensureTimeoutSeconds` after the call. | Create a container with the label `rakazo.attempt=<attemptId>`, mount each volume at its `path`, and stop it after `ttlSeconds`. Cancel creation when the deadline passes. Return the container id. |
+| `ensure(spec)` | Create one worker tagged with `spec.attemptId` and return its reference. The controller calls it once per attempt. Never create the worker after `spec.ensureDeadline`, the instant the controller stops waiting for it. | Create a container with the label `rakazo.attempt=<attemptId>`, mount each volume at its `path`, and stop it after `ttlSeconds`. Cancel creation when the deadline passes. Return the container id. |
 | `prepare(ref, spec)` | Finish fallible setup after the reference is recorded. It must be idempotent. | Start the container, then wait until the mounts are visible and the runner answers. |
 | `destroy({ attemptId, providerRef })` | Remove every worker tagged with `attemptId`, with or without a reference. Return `absent` when none is left. Never treat "not found" as an error. | Remove every container with the label `rakazo.attempt=<attemptId>`, forced. Leave the volumes in place. |
 | `ensureVolume({ name })` | Create the named volume, or return the existing one. Never delete a volume. | Create the volume `name` if it is missing, and return `name`. |

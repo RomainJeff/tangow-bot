@@ -196,7 +196,14 @@ async function runAttempt(
       }
       const tool = placement.get(name) === "guest" ? LOCAL_TOOLS[name] : undefined;
       const output = tool
-        ? await tool(args, { cwd, signal, spoolDir: options.spoolDir })
+        ? await tool(args, {
+            cwd,
+            signal,
+            spoolDir: options.spoolDir,
+            botId: run.botId,
+            root: options.root ?? "/",
+            mounts: workspace.mounts,
+          })
         : {
             text: `${name} cannot run in this worker.`,
             isError: true,

@@ -67,9 +67,14 @@ export const WORKER_TTL_SECONDS = 4 * 60 * 60;
 /** How long `ensure` may take to create a VM. Release waits it out before trusting `absent`. */
 export const WORKER_ENSURE_TIMEOUT_SECONDS = 15 * 60;
 
+/** When an `ensure` started at `workerEnsureAt` must have stopped creating its VM. */
+export function workerEnsureDeadline(workerEnsureAt: Date): Date {
+  return new Date(workerEnsureAt.getTime() + WORKER_ENSURE_TIMEOUT_SECONDS * 1000);
+}
+
 /**
  * A worker without a ref may still be under creation by its `ensure`, started at `workerEnsureAt`,
- * so a provider answering `absent` for its tag proves nothing until the ensure timeout has passed.
+ * so a provider answering `absent` for its tag proves nothing until the ensure deadline has passed.
  */
 export function ensureMayBeInFlight(
   worker: { workerProviderRef: string | null; workerEnsureAt: Date },
@@ -77,7 +82,7 @@ export function ensureMayBeInFlight(
 ): boolean {
   return (
     worker.workerProviderRef === null &&
-    now.getTime() - worker.workerEnsureAt.getTime() < WORKER_ENSURE_TIMEOUT_SECONDS * 1000
+    now.getTime() < workerEnsureDeadline(worker.workerEnsureAt).getTime()
   );
 }
 
