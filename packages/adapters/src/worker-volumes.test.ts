@@ -26,6 +26,10 @@ beforeEach(() => {
   workers = createWorkerLifecycle({ prisma, provider: fake });
 });
 
+async function adopt(computerId: string) {
+  return workers.adoptVolumeHome(computerId, (await workers.inspectHomeMove(computerId)).start);
+}
+
 describe("volume provisioning and home adoption", () => {
   it("creates a volume at the provider once and records its ref", async () => {
     const bot = await fixture.seedBot(spaceA, null);
@@ -55,25 +59,25 @@ describe("volume provisioning and home adoption", () => {
     const homeStorage = async () =>
       (await prisma.computer.findUniqueOrThrow({ where: { id: computer.id } })).homeStorage;
 
-    await expect(workers.adoptVolumeHome(computer.id)).resolves.toBe("volume_missing");
+    await expect(adopt(computer.id)).resolves.toBe("volume_missing");
     await prisma.volume.update({ where: { id: bobVolume.id }, data: { providerRef: "bob" } });
-    await expect(workers.adoptVolumeHome(computer.id)).resolves.toBe("volume_missing");
+    await expect(adopt(computer.id)).resolves.toBe("volume_missing");
     await fixture.seedVolume("space_shared", space, null);
     const busy = await fixture.seedAttempt((await fixture.seedRun(ada)).id);
     await prisma.volume.update({ where: { id: adaVolume.id }, data: { writerAttemptId: busy.id } });
-    await expect(workers.adoptVolumeHome(computer.id)).resolves.toBe("volume_busy");
+    await expect(adopt(computer.id)).resolves.toBe("volume_busy");
     expect(await homeStorage()).toBe("snapshot");
 
     await prisma.volume.update({ where: { id: adaVolume.id }, data: { writerAttemptId: null } });
     const dedicatedBot = await fixture.seedBot(space, null);
     const elsewhere = await fixture.seedAttempt((await fixture.seedRun(dedicatedBot)).id);
     await workers.start(await fixture.launchFor(workers, elsewhere.id, mcpOnly), fixture.context);
-    await expect(workers.adoptVolumeHome(computer.id)).resolves.toBe("space_worker_live");
+    await expect(adopt(computer.id)).resolves.toBe("space_worker_live");
     expect(await homeStorage()).toBe("snapshot");
 
     await workers.release(elsewhere.id, fixture.context);
-    await expect(workers.adoptVolumeHome(computer.id)).resolves.toBe("adopted");
-    await expect(workers.adoptVolumeHome(computer.id)).resolves.toBe("adopted");
+    await expect(adopt(computer.id)).resolves.toBe("adopted");
+    await expect(adopt(computer.id)).resolves.toBe("adopted");
     expect(await homeStorage()).toBe("volumes");
   });
 
@@ -92,15 +96,15 @@ describe("volume provisioning and home adoption", () => {
       });
 
     await update({ state: "running" });
-    await expect(workers.adoptVolumeHome(computer.id)).resolves.toBe("computer_active");
+    await expect(adopt(computer.id)).resolves.toBe("computer_active");
     await update({ state: "suspended", controlHolder: "user" });
-    await expect(workers.adoptVolumeHome(computer.id)).resolves.toBe("computer_active");
+    await expect(adopt(computer.id)).resolves.toBe("computer_active");
     await update({ controlHolder: "none" });
     await lease(new Date(Date.now() + 60_000));
-    await expect(workers.adoptVolumeHome(computer.id)).resolves.toBe("computer_active");
+    await expect(adopt(computer.id)).resolves.toBe("computer_active");
 
     await lease(new Date(Date.now() - 60_000));
-    await expect(workers.adoptVolumeHome(computer.id)).resolves.toBe("adopted");
+    await expect(adopt(computer.id)).resolves.toBe("adopted");
   });
 
   it("provisions the private volume of a bot attached once its computer's home is on volumes", async () => {
@@ -127,7 +131,7 @@ describe("volume provisioning and home adoption", () => {
     const bot = await fixture.seedBot(spaceA, computer.id);
     await fixture.seedVolume("bot_private", spaceA, bot.id);
 
-    await expect(workers.adoptVolumeHome(computer.id)).resolves.toBe("computer_kind_unsupported");
+    await expect(adopt(computer.id)).resolves.toBe("computer_kind_unsupported");
   });
 });
 

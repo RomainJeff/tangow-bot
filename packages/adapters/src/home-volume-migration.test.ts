@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { AdapterContext, PortableFile } from "@rakazo/adapter-kit";
@@ -50,18 +50,22 @@ function move(
 ) {
   return moveHomeToVolumes(
     { prisma, home, files, workers: createWorkerLifecycle({ prisma, provider }) },
-    { computerId, dryRun: false, leaveUnmapped: false, ...options },
+    { computerId, dryRun: false, leaveUnmapped: false, manifestPath: null, ...options },
     fixture.context,
   );
 }
 
-async function seedHome(homeKey: string, files: Record<string, string>, executable: string[] = []) {
+async function seedHome(
+  homeKey: string,
+  files: Record<string, string>,
+  modes: Record<string, number> = {},
+) {
   const staging = await mkdtemp(path.join(tmpdir(), "rakazo-home-seed-"));
   try {
     for (const [file, content] of Object.entries(files)) {
       const target = path.join(staging, file);
       await mkdir(path.dirname(target), { recursive: true });
-      await writeFile(target, content, { mode: executable.includes(file) ? 0o755 : 0o644 });
+      await writeFile(target, content, { mode: modes[file] ?? 0o644 });
     }
     await home.commit(homeKey, staging, fixture.context);
   } finally {
@@ -77,14 +81,14 @@ async function homeFiles(homeKey: string) {
   return files;
 }
 
-/** Each volume's files as `path: content`, or `path: content (x)` when executable. */
+/** Each volume's files as `path: content`, followed by the mode when it is not 0644. */
 async function volumeContents() {
   const contents: Record<string, Record<string, string>> = {};
   for (const [ref, files] of volumeFiles.volumes) {
     contents[ref] = Object.fromEntries(
       [...files].map(([file, stored]) => [
         file,
-        `${new TextDecoder().decode(stored.content)}${stored.executable ? " (x)" : ""}`,
+        `${new TextDecoder().decode(stored.content)}${stored.mode === 0o644 ? "" : ` (${stored.mode.toString(8)})`}`,
       ]),
     );
   }
@@ -114,7 +118,7 @@ async function teamHome() {
       "shared/plan.md": "the plan",
       ".browser-profiles/chromium/Cache/blob": "cache",
     },
-    [`bots/${bob.id}/bin/run.sh`],
+    { [`bots/${ada.id}/notes.md`]: 0o600, [`bots/${bob.id}/bin/run.sh`]: 0o755 },
   );
   return { spaceId, computer, ada, bob };
 }
@@ -130,8 +134,8 @@ describe("moving a home from snapshots to volumes", () => {
     const shared = await volumeRef({ spaceId, kind: "space_shared" });
     expect(report.outcome).toBe("adopted");
     expect(await volumeContents()).toEqual({
-      [ada_]: { "notes.md": "ada notes" },
-      [bob_]: { "bin/run.sh": "echo bob (x)" },
+      [ada_]: { "notes.md": "ada notes (600)" },
+      [bob_]: { "bin/run.sh": "echo bob (755)" },
       [shared]: { "plan.md": "the plan" },
     });
     expect(report.outcome === "adopted" && report.manifest.files).toContainEqual({
@@ -141,7 +145,7 @@ describe("moving a home from snapshots to volumes", () => {
       volumePath: "notes.md",
       size: 9,
       sha256: sha("ada notes"),
-      executable: false,
+      mode: 0o600,
     });
     expect(await homeStorageOf(computer.id)).toBe("volumes");
   });
@@ -174,28 +178,68 @@ describe("moving a home from snapshots to volumes", () => {
     expect(await prisma.volume.count({ where: { spaceId, kind: "space_shared" } })).toBe(0);
   });
 
-  it("refuses a team home holding files outside its bots and shared folder, unless told to leave them", async () => {
-    const { spaceId, computer, ada } = await teamHome();
+  it("refuses a home holding what no volume receives, unless told to leave it in the original", async () => {
+    const { spaceId, computer, ada, bob } = await teamHome();
     const detached = await fixture.seedBot(spaceId, null);
     await home.writeFile(computer.homeKey, `bots/${detached.id}/diary.md`, "x", fixture.context);
     await home.writeFile(computer.homeKey, "stray.txt", "y", fixture.context);
+    const homeDir = home.pathFor(computer.homeKey);
+    await symlink("plan.md", path.join(homeDir, "shared/link.md"));
+    await mkdir(path.join(homeDir, `bots/${ada.id}/empty`));
 
     const refused = await move(computer.id);
     const createdBeforeLeave = await prisma.volume.count({ where: { spaceId } });
     const left = await move(computer.id, { leaveUnmapped: true });
 
+    const notCopied = [
+      { homePath: `bots/${ada.id}/empty`, kind: "empty_dir" },
+      { homePath: `bots/${detached.id}/diary.md`, kind: "unmapped" },
+      { homePath: "shared/link.md", kind: "symlink" },
+      { homePath: "stray.txt", kind: "unmapped" },
+    ];
     expect(refused).toEqual({
       outcome: "refused",
-      refusal: { code: "unmapped_files", paths: [`bots/${detached.id}/diary.md`, "stray.txt"] },
+      refusal: { code: "not_copied", entries: notCopied },
     });
     expect(createdBeforeLeave).toBe(0);
-    expect(left.outcome === "adopted" && left.manifest.leftInHome).toEqual([
-      `bots/${detached.id}/diary.md`,
-      "stray.txt",
-    ]);
-    expect(Object.keys((await volumeContents())[await volumeRef({ botId: ada.id })] ?? {})).toEqual(
-      ["notes.md"],
-    );
+    expect(left.outcome === "adopted" && left.manifest.notCopied).toEqual(notCopied);
+    expect(await volumeContents()).toEqual({
+      [await volumeRef({ botId: ada.id })]: { "notes.md": "ada notes (600)" },
+      [await volumeRef({ botId: bob.id })]: { "bin/run.sh": "echo bob (755)" },
+      [await volumeRef({ spaceId, kind: "space_shared" })]: { "plan.md": "the plan" },
+    });
+  });
+
+  it("refuses paths a volume cannot hold, files bound for one volume path, and files the export missed", async () => {
+    const { computer, ada } = await teamHome();
+    class OddHomeStore extends LocalAgentHomeStore {
+      override async *exportHome(botId: string, context: AdapterContext) {
+        for await (const file of super.exportHome(botId, context)) {
+          if (file.path === "shared/plan.md") continue;
+          yield file;
+          if (file.path === `bots/${ada.id}/notes.md`) yield { ...file };
+        }
+        yield { path: "shared/../escape.md", content: text.encode("out") };
+        yield { path: "shared/back\\slash.md", content: text.encode("odd") };
+      }
+    }
+    home = new OddHomeStore(root);
+
+    const report = await move(computer.id);
+
+    expect(report).toEqual({
+      outcome: "refused",
+      refusal: {
+        code: "not_copied",
+        entries: [
+          { homePath: `bots/${ada.id}/notes.md`, kind: "duplicate" },
+          { homePath: `bots/${ada.id}/notes.md`, kind: "duplicate" },
+          { homePath: "shared/../escape.md", kind: "invalid_path" },
+          { homePath: "shared/back\\slash.md", kind: "invalid_path" },
+          { homePath: "shared/plan.md", kind: "not_exported" },
+        ],
+      },
+    });
   });
 
   it("refuses a shared volume a worker already wrote, before writing anything", async () => {
@@ -229,14 +273,25 @@ describe("moving a home from snapshots to volumes", () => {
     expect(await homeStorageOf(computer.id)).toBe("snapshot");
   });
 
-  it("does not adopt when a copied file reads back with another hash", async () => {
+  it.each([
+    [
+      "another hash",
+      (file: PortableFile) => ({ ...file, content: file.content.slice(0, -1) }),
+      [["notes.md"], ["bin/run.sh"], ["plan.md"]],
+    ],
+    [
+      "a wider mode",
+      (file: PortableFile) => ({ ...file, mode: 0o644 }),
+      [["notes.md"], ["bin/run.sh"]],
+    ],
+  ])("does not adopt when a copied file reads back with %s", async (_, alter, foreign) => {
     const { computer } = await teamHome();
-    class TruncatingVolumeFiles extends MemoryVolumeFiles {
+    class AlteringVolumeFiles extends MemoryVolumeFiles {
       override write(ref: string, file: PortableFile, context: AdapterContext) {
-        return super.write(ref, { ...file, content: file.content.slice(0, -1) }, context);
+        return super.write(ref, alter(file), context);
       }
     }
-    volumeFiles = new TruncatingVolumeFiles();
+    volumeFiles = new AlteringVolumeFiles();
 
     const report = await move(computer.id);
 
@@ -245,7 +300,84 @@ describe("moving a home from snapshots to volumes", () => {
       report.outcome === "refused" &&
         report.refusal.code === "copy_mismatch" &&
         report.refusal.volumes.map((volume) => volume.foreign),
-    ).toEqual([["notes.md"], ["bin/run.sh"], ["plan.md"]]);
+    ).toEqual(foreign);
+    expect(await homeStorageOf(computer.id)).toBe("snapshot");
+  });
+
+  it("refuses a resumed copy when the home changed after it was planned, even files already copied", async () => {
+    const { computer, ada } = await teamHome();
+    class LostBeforeVerify extends MemoryVolumeFiles {
+      override async list(ref: string, context: AdapterContext) {
+        if (this.volumes.size > 0) throw new Error("connection lost");
+        return super.list(ref, context);
+      }
+    }
+    const interrupted = new LostBeforeVerify();
+    await expect(move(computer.id, {}, interrupted)).rejects.toThrow("connection lost");
+    const homeDir = home.pathFor(computer.homeKey);
+    class ChangingHomeAfterPlan extends MemoryVolumeFiles {
+      private changed = false;
+      override async list(ref: string, context: AdapterContext) {
+        if (!this.changed) {
+          this.changed = true;
+          await writeFile(path.join(homeDir, `bots/${ada.id}/notes.md`), "newer notes");
+          await writeFile(path.join(homeDir, `bots/${ada.id}/added.md`), "added");
+          await rm(path.join(homeDir, "shared/plan.md"));
+        }
+        return super.list(ref, context);
+      }
+    }
+    volumeFiles = new ChangingHomeAfterPlan();
+    for (const [ref, files] of interrupted.volumes) volumeFiles.volumes.set(ref, files);
+
+    const report = await move(computer.id);
+
+    expect(report.outcome === "refused" && report.refusal).toEqual({
+      code: "home_changed",
+      paths: [`bots/${ada.id}/added.md`, `bots/${ada.id}/notes.md`, "shared/plan.md"],
+    });
+    expect(await homeStorageOf(computer.id)).toBe("snapshot");
+  });
+
+  it.each([
+    [
+      "a checkpoint gives the home a new revision",
+      "home_revised",
+      async (computerId: string) => {
+        await prisma.computer.update({
+          where: { id: computerId },
+          data: { homeRevision: "rev-during-copy" },
+        });
+      },
+    ],
+    [
+      "a worker of the space starts and finishes",
+      "space_worker_ran",
+      async (_: string, spaceId: string) => {
+        const otherBot = await fixture.seedBot(spaceId, null);
+        const attempt = await fixture.seedAttempt((await fixture.seedRun(otherBot)).id);
+        const workers = createWorkerLifecycle({ prisma, provider });
+        await workers.start(await fixture.launchFor(workers, attempt.id, mcpOnly), fixture.context);
+        await workers.release(attempt.id, fixture.context);
+      },
+    ],
+  ])("does not adopt when %s during the copy", async (_, code, during) => {
+    const { spaceId, computer } = await teamHome();
+    class SomethingHappensDuringCopy extends MemoryVolumeFiles {
+      private happened = false;
+      override async write(ref: string, file: PortableFile, context: AdapterContext) {
+        if (!this.happened) {
+          this.happened = true;
+          await during(computer.id, spaceId);
+        }
+        return super.write(ref, file, context);
+      }
+    }
+    volumeFiles = new SomethingHappensDuringCopy();
+
+    const report = await move(computer.id);
+
+    expect(report.outcome === "refused" && report.refusal).toEqual({ code });
     expect(await homeStorageOf(computer.id)).toBe("snapshot");
   });
 
@@ -264,8 +396,9 @@ describe("moving a home from snapshots to volumes", () => {
 
   it("plans a dry run without creating, writing or adopting anything", async () => {
     const { spaceId, computer, ada } = await teamHome();
+    const manifestPath = path.join(root, "dry-run.json");
 
-    const report = await move(computer.id, { dryRun: true });
+    const report = await move(computer.id, { dryRun: true, manifestPath });
 
     expect(
       report.outcome === "planned" && report.manifest.files.map((file) => file.homePath),
@@ -279,6 +412,17 @@ describe("moving a home from snapshots to volumes", () => {
     expect(provider.calls).toEqual([]);
     expect(volumeFiles.volumes.size).toBe(0);
     expect(await homeStorageOf(computer.id)).toBe("snapshot");
+    await expect(readFile(manifestPath)).rejects.toThrow("ENOENT");
+  });
+
+  it("refuses a manifest path that already exists before creating anything", async () => {
+    const { spaceId, computer } = await teamHome();
+    const manifestPath = path.join(root, "taken.json");
+    await writeFile(manifestPath, "an earlier record");
+
+    await expect(move(computer.id, { manifestPath })).rejects.toThrow("already exists");
+    expect(await prisma.volume.count({ where: { spaceId } })).toBe(0);
+    expect(await readFile(manifestPath, "utf8")).toBe("an earlier record");
   });
 
   it("resumes a copy interrupted midway, and does nothing once adopted", async () => {
@@ -292,11 +436,26 @@ describe("moving a home from snapshots to volumes", () => {
     }
     const interrupted = new FailingAfterOneWrite();
 
-    await expect(move(computer.id, {}, interrupted)).rejects.toThrow("connection lost");
+    const interruptedRecord = path.join(root, "first.json");
+    const resumedRecord = path.join(root, "second.json");
+    await expect(
+      move(computer.id, { manifestPath: interruptedRecord }, interrupted),
+    ).rejects.toThrow("connection lost");
     for (const [ref, files] of interrupted.volumes) volumeFiles.volumes.set(ref, files);
-    const resumed = await move(computer.id);
+    const resumed = await move(computer.id, { manifestPath: resumedRecord });
     const again = await move(computer.id);
 
+    const record = async (file: string) =>
+      JSON.parse(await readFile(file, "utf8")) as { adoptedAt: string | null; volumes: unknown[] };
+    expect(await record(interruptedRecord)).toMatchObject({
+      adoptedAt: null,
+      volumes: [
+        { volumeId: expect.any(String) },
+        { volumeId: expect.any(String) },
+        { volumeId: expect.any(String) },
+      ],
+    });
+    expect((await record(resumedRecord)).adoptedAt).toEqual(expect.any(String));
     expect(resumed.outcome).toBe("adopted");
     expect(
       Object.values(await volumeContents())

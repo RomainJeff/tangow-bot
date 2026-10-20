@@ -1,5 +1,15 @@
 import { createHash } from "node:crypto";
-import type { AdapterContext, AgentHomeStore, VolumeEntry, VolumeFiles } from "@rakazo/adapter-kit";
+import { constants } from "node:fs";
+import { access, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
+import type {
+  AdapterContext,
+  AgentHomeStore,
+  PortableFile,
+  VolumeEntry,
+  VolumeFiles,
+} from "@rakazo/adapter-kit";
+import { fileMode, isPortablePath } from "@rakazo/adapter-kit";
 import type { PrismaClient } from "@rakazo/db";
 import { shouldSkipPortableWorkspaceFile } from "./computer-workspace.js";
 import type {
@@ -18,7 +28,26 @@ export type HomeFile = {
   volumePath: string;
   size: number;
   sha256: string;
-  executable: boolean;
+  /** Permission bits (`0o777`). */
+  mode: number;
+};
+
+/**
+ * Why a home entry stays only in the AgentHomeStore original: outside every destination, a path
+ * a volume cannot hold, one of several files bound for the same volume path, an entry that is not
+ * a regular file or a directory with something in it, or a file the export did not yield (it
+ * walks a symlinked directory once, under the link's name).
+ */
+export type NotCopied = {
+  homePath: string;
+  kind:
+    | "unmapped"
+    | "invalid_path"
+    | "duplicate"
+    | "symlink"
+    | "empty_dir"
+    | "special"
+    | "not_exported";
 };
 
 export type ManifestVolume = {
@@ -38,8 +67,7 @@ export type HomeManifest = {
   adoptedAt: string | null;
   volumes: ManifestVolume[];
   files: Array<HomeFile & { volumeId: string | null }>;
-  /** Files outside every destination, kept only in the AgentHomeStore original. */
-  leftInHome: string[];
+  notCopied: NotCopied[];
 };
 
 /** What a target volume holds that the move did not plan, and which planned files it lacks. */
@@ -51,8 +79,8 @@ export type VolumeConflict = {
 };
 
 export type HomeMoveRefusal =
-  | { code: HomeMoveBlocker | "volume_missing" }
-  | { code: "unmapped_files"; paths: string[] }
+  | { code: Exclude<HomeAdoption, "adopted"> }
+  | { code: "not_copied"; entries: NotCopied[] }
   | { code: "volume_not_empty"; volumes: VolumeConflict[] }
   | { code: "home_changed"; paths: string[] }
   | { code: "copy_mismatch"; volumes: VolumeConflict[] };
@@ -67,8 +95,13 @@ export type HomeMoveOptions = {
   computerId: string;
   /** Plans and checks without creating, writing or adopting anything. */
   dryRun: boolean;
-  /** Leaves files outside every destination in the original instead of refusing. */
+  /** Leaves every entry it cannot copy in the original instead of refusing. */
   leaveUnmapped: boolean;
+  /**
+   * Where the manifest is written once the move creates anything, even when it stops on an
+   * error. Must not exist yet. Ignored on a dry run.
+   */
+  manifestPath: string | null;
 };
 
 type HomeComputer = {
@@ -76,12 +109,19 @@ type HomeComputer = {
   scope: "team" | "dedicated";
   spaceId: string;
   homeKey: string;
-  homeRevision: string;
   homeStorage: string;
   botIds: Set<string>;
 };
 
 type TargetVolume = ManifestVolume & { files: HomeFile[] };
+
+type HomePlan = {
+  planned: HomeFile[];
+  notCopied: NotCopied[];
+  /** Content and mode of every file the export yielded, to compare the copy's export with. */
+  exported: Map<string, string>;
+  links: string[];
+};
 
 /**
  * Maps a home path to its volume. A team home holds `shared/` and `bots/<botId>/` for each bot on
@@ -105,6 +145,77 @@ function homeDestination(
   return null;
 }
 
+/** The home's files, without browser caches and without what the export read through a symlink. */
+async function* homeFiles(
+  home: AgentHomeStore,
+  homeKey: string,
+  links: string[],
+  context: AdapterContext,
+): AsyncIterable<PortableFile & { fingerprint: string; sha256: string }> {
+  for await (const file of home.exportHome(homeKey, context)) {
+    if (shouldSkipPortableWorkspaceFile(file.path)) continue;
+    if (links.some((link) => file.path === link || file.path.startsWith(`${link}/`))) continue;
+    const hash = sha256(file.content);
+    yield { ...file, sha256: hash, fingerprint: `${hash} ${fileMode(file).toString(8)}` };
+  }
+}
+
+async function planHome(
+  home: AgentHomeStore,
+  computer: HomeComputer,
+  context: AdapterContext,
+): Promise<HomePlan> {
+  const everything = await home.listTree(computer.homeKey, context);
+  // A directory holding only skipped caches is not empty: those caches are meant to go.
+  const parents = new Set(everything.flatMap((entry) => ancestors(entry.path)));
+  const tree = everything.filter((entry) => !shouldSkipPortableWorkspaceFile(entry.path));
+  const links = tree.filter((entry) => entry.kind === "symlink").map((entry) => entry.path);
+  const notCopied = tree.flatMap((entry): NotCopied[] => {
+    if (entry.kind === "symlink") return [{ homePath: entry.path, kind: "symlink" }];
+    if (entry.kind === "other") return [{ homePath: entry.path, kind: "special" }];
+    if (entry.kind === "dir" && !parents.has(entry.path)) {
+      return [{ homePath: entry.path, kind: "empty_dir" }];
+    }
+    return [];
+  });
+
+  const exported = new Map<string, string>();
+  const mapped: HomeFile[] = [];
+  for await (const file of homeFiles(home, computer.homeKey, links, context)) {
+    exported.set(file.path, file.fingerprint);
+    const valid = isPortablePath(file.path);
+    const target = valid ? homeDestination(computer, file.path) : null;
+    if (!target) notCopied.push({ homePath: file.path, kind: valid ? "unmapped" : "invalid_path" });
+    else {
+      mapped.push({
+        ...target,
+        homePath: file.path,
+        size: file.content.byteLength,
+        sha256: file.sha256,
+        mode: fileMode(file),
+      });
+    }
+  }
+  const destinationKey = (file: HomeFile) =>
+    `${file.destination.scope === "private" ? file.destination.botId : ""}/${file.volumePath}`;
+  const bound = new Map<string, number>();
+  for (const file of mapped)
+    bound.set(destinationKey(file), (bound.get(destinationKey(file)) ?? 0) + 1);
+  const planned = mapped.filter((file) => bound.get(destinationKey(file)) === 1);
+  for (const file of mapped) {
+    if (bound.get(destinationKey(file)) !== 1) {
+      notCopied.push({ homePath: file.homePath, kind: "duplicate" });
+    }
+  }
+  for (const entry of tree) {
+    if (entry.kind === "file" && !exported.has(entry.path)) {
+      notCopied.push({ homePath: entry.path, kind: "not_exported" });
+    }
+  }
+  notCopied.sort((a, b) => a.homePath.localeCompare(b.homePath));
+  return { planned, notCopied, exported, links };
+}
+
 /**
  * What already sits on a target volume, against what the move plans for it. A file the move
  * planned with the same content and mode is not foreign, so a move interrupted mid-copy resumes.
@@ -126,7 +237,7 @@ function compareVolume(
         : entry.kind === "file" &&
           file !== undefined &&
           hashes.get(entry.path) === file.sha256 &&
-          entry.executable === file.executable;
+          entry.mode === file.mode;
     if (ours && entry.kind === "file") present.add(entry.path);
     if (!ours) foreign.push(entry.path);
   }
@@ -136,7 +247,7 @@ function compareVolume(
 /**
  * Moves one computer's home from AgentHomeStore snapshots onto its bots' private volumes and the
  * space's shared volume, then adopts it. Never writes over a file it did not plan, verifies every
- * copied file by hash before adopting, and leaves the AgentHomeStore copy untouched.
+ * copied file by hash and mode before adopting, and leaves the AgentHomeStore copy untouched.
  */
 export async function moveHomeToVolumes(
   deps: {
@@ -149,44 +260,32 @@ export async function moveHomeToVolumes(
   context: AdapterContext,
 ): Promise<HomeMoveReport> {
   const { prisma, home, files, workers } = deps;
+  const manifestPath = options.dryRun ? null : options.manifestPath;
+  if (manifestPath) await assertManifestFree(manifestPath);
   const startedAt = new Date().toISOString();
   const computer = await readComputer(prisma, options.computerId);
   if (computer.homeStorage === "volumes") return { outcome: "already_on_volumes" };
-  const blocker = await workers.homeMoveBlocker(computer.id);
+  const { blocker, start } = await workers.inspectHomeMove(computer.id);
   if (blocker) return { outcome: "refused", refusal: { code: blocker } };
 
-  const planned: HomeFile[] = [];
-  const unmapped: string[] = [];
-  for await (const file of home.exportHome(computer.homeKey, context)) {
-    if (shouldSkipPortableWorkspaceFile(file.path)) continue;
-    const target = homeDestination(computer, file.path);
-    if (!target) unmapped.push(file.path);
-    else {
-      planned.push({
-        ...target,
-        homePath: file.path,
-        size: file.content.byteLength,
-        sha256: sha256(file.content),
-        executable: Boolean(file.executable),
-      });
-    }
-  }
-  if (unmapped.length > 0 && !options.leaveUnmapped) {
-    return { outcome: "refused", refusal: { code: "unmapped_files", paths: unmapped.sort() } };
+  const plan = await planHome(home, computer, context);
+  if (plan.notCopied.length > 0 && !options.leaveUnmapped) {
+    return { outcome: "refused", refusal: { code: "not_copied", entries: plan.notCopied } };
   }
 
-  const targets: TargetVolume[] = destinationsOf(computer, planned).map((destination) => ({
+  const targets: TargetVolume[] = destinationsOf(computer, plan.planned).map((destination) => ({
     destination,
     volumeId: null,
     providerRef: null,
-    files: planned.filter((file) => sameDestination(file.destination, destination)),
+    files: plan.planned.filter((file) => sameDestination(file.destination, destination)),
   }));
-  const manifest = (adoptedAt: string | null): HomeManifest => ({
+  let adoptedAt: string | null = null;
+  const manifest = (): HomeManifest => ({
     version: 1,
     computerId: computer.id,
     homeKey: computer.homeKey,
     scope: computer.scope,
-    homeRevision: computer.homeRevision,
+    homeRevision: start.homeRevision,
     startedAt,
     adoptedAt,
     volumes: targets.map(({ destination, volumeId, providerRef }) => ({
@@ -197,75 +296,94 @@ export async function moveHomeToVolumes(
     files: targets.flatMap((target) =>
       target.files.map((file) => ({ ...file, volumeId: target.volumeId })),
     ),
-    leftInHome: unmapped.sort(),
+    notCopied: plan.notCopied,
   });
 
-  for (const target of targets) {
-    const existing = options.dryRun
-      ? await existingVolume(prisma, computer, target.destination)
-      : await workers.ensureVolume(ownerOf(computer, target.destination), context);
-    target.volumeId = existing?.volumeId ?? null;
-    target.providerRef = existing?.providerRef ?? null;
-  }
-  const before = await inspectTargets(files, targets, context);
-  const occupied = before.filter((volume) => volume.foreign.length > 0);
-  if (occupied.length > 0) {
-    return {
-      outcome: "refused",
-      refusal: { code: "volume_not_empty", volumes: occupied.map(conflictOf) },
-      manifest: manifest(null),
-    };
-  }
-  if (options.dryRun) return { outcome: "planned", manifest: manifest(null) };
-
-  const toWrite = new Map(
-    before.flatMap(({ target, missing }) =>
-      missing.map((file) => [file.homePath, { file, volumeRef: target.providerRef }] as const),
-    ),
-  );
-  const changed: string[] = [];
-  for await (const source of home.exportHome(computer.homeKey, context)) {
-    const pending = toWrite.get(source.path);
-    if (!pending) continue;
-    toWrite.delete(source.path);
-    if (sha256(source.content) !== pending.file.sha256) {
-      changed.push(source.path);
-      continue;
+  try {
+    for (const target of targets) {
+      const existing = options.dryRun
+        ? await existingVolume(prisma, computer, target.destination)
+        : await workers.ensureVolume(ownerOf(computer, target.destination), context);
+      target.volumeId = existing?.volumeId ?? null;
+      target.providerRef = existing?.providerRef ?? null;
     }
-    const { volumePath, executable } = pending.file;
-    if (!pending.volumeRef) throw new Error(`No provisioned volume for ${source.path}`);
-    await files.write(
-      pending.volumeRef,
-      { path: volumePath, content: source.content, executable },
-      context,
+    const before = await inspectTargets(files, targets, context);
+    const occupied = before.filter((volume) => volume.foreign.length > 0);
+    if (occupied.length > 0) {
+      return {
+        outcome: "refused",
+        refusal: { code: "volume_not_empty", volumes: occupied.map(conflictOf) },
+        manifest: manifest(),
+      };
+    }
+    if (options.dryRun) return { outcome: "planned", manifest: manifest() };
+
+    const toWrite = new Map(
+      before.flatMap(({ target, missing }) =>
+        missing.map((file) => [file.homePath, { file, volumeRef: target.providerRef }] as const),
+      ),
     );
-  }
-  changed.push(...toWrite.keys());
-  if (changed.length > 0) {
-    return {
-      outcome: "refused",
-      refusal: { code: "home_changed", paths: changed.sort() },
-      manifest: manifest(null),
-    };
-  }
+    // Every file is compared with the plan, not only those still to write, so a resumed move
+    // never adopts copies of a home that changed since an earlier run wrote them.
+    const changed: string[] = [];
+    const seen = new Set<string>();
+    for await (const source of homeFiles(home, computer.homeKey, plan.links, context)) {
+      seen.add(source.path);
+      if (plan.exported.get(source.path) !== source.fingerprint) {
+        changed.push(source.path);
+        continue;
+      }
+      const pending = toWrite.get(source.path);
+      if (!pending) continue;
+      if (!pending.volumeRef) throw new Error(`No provisioned volume for ${source.path}`);
+      const { volumePath, mode } = pending.file;
+      await files.write(
+        pending.volumeRef,
+        { path: volumePath, content: source.content, mode },
+        context,
+      );
+    }
+    changed.push(...[...plan.exported.keys()].filter((path) => !seen.has(path)));
+    if (changed.length > 0) {
+      return {
+        outcome: "refused",
+        refusal: { code: "home_changed", paths: changed.sort() },
+        manifest: manifest(),
+      };
+    }
 
-  const after = await inspectTargets(files, targets, context);
-  const mismatched = after.filter(
-    (volume) => volume.foreign.length > 0 || volume.missing.length > 0,
+    const after = await inspectTargets(files, targets, context);
+    const mismatched = after.filter(
+      (volume) => volume.foreign.length > 0 || volume.missing.length > 0,
+    );
+    if (mismatched.length > 0) {
+      return {
+        outcome: "refused",
+        refusal: { code: "copy_mismatch", volumes: mismatched.map(conflictOf) },
+        manifest: manifest(),
+      };
+    }
+
+    const adoption = await workers.adoptVolumeHome(computer.id, start);
+    if (adoption !== "adopted") {
+      return { outcome: "refused", refusal: { code: adoption }, manifest: manifest() };
+    }
+    adoptedAt = new Date().toISOString();
+    return { outcome: "adopted", manifest: manifest() };
+  } finally {
+    if (manifestPath) {
+      await writeFile(manifestPath, `${JSON.stringify(manifest(), null, 2)}\n`, { flag: "wx" });
+    }
+  }
+}
+
+async function assertManifestFree(path: string): Promise<void> {
+  await access(dirname(path), constants.W_OK);
+  const exists = await access(path).then(
+    () => true,
+    () => false,
   );
-  if (mismatched.length > 0) {
-    return {
-      outcome: "refused",
-      refusal: { code: "copy_mismatch", volumes: mismatched.map(conflictOf) },
-      manifest: manifest(null),
-    };
-  }
-
-  const adoption: HomeAdoption = await workers.adoptVolumeHome(computer.id);
-  if (adoption !== "adopted") {
-    return { outcome: "refused", refusal: { code: adoption }, manifest: manifest(null) };
-  }
-  return { outcome: "adopted", manifest: manifest(new Date().toISOString()) };
+  if (exists) throw new Error(`The manifest ${path} already exists`);
 }
 
 async function readComputer(prisma: PrismaClient, computerId: string): Promise<HomeComputer> {
@@ -276,7 +394,6 @@ async function readComputer(prisma: PrismaClient, computerId: string): Promise<H
       scope: true,
       spaceId: true,
       homeKey: true,
-      homeRevision: true,
       homeStorage: true,
       bots: { select: { id: true } },
     },

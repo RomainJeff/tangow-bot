@@ -1,6 +1,7 @@
 import type { ConnectionOpts } from "@e2b/desktop";
 import { Volume, VolumeFileType } from "@e2b/desktop";
 import type { AdapterContext, PortableFile, VolumeEntry, VolumeFiles } from "@rakazo/adapter-kit";
+import { fileMode, isPortablePath } from "@rakazo/adapter-kit";
 
 export type GuestOwner = { uid: number; gid: number };
 
@@ -37,7 +38,7 @@ export class E2BVolumeFiles implements VolumeFiles {
             : stat.type === VolumeFileType.FILE
               ? "file"
               : "other";
-        entries.push({ path, kind, executable: kind === "file" && Boolean(stat.mode & 0o100) });
+        entries.push({ path, kind, mode: stat.mode & 0o777 });
         if (kind === "dir") await walk(path);
       }
     };
@@ -46,6 +47,7 @@ export class E2BVolumeFiles implements VolumeFiles {
   }
 
   async write(volumeRef: string, file: PortableFile, context: AdapterContext): Promise<void> {
+    portablePath(file.path);
     const volume = await this.volume(volumeRef);
     const made = this.directories.get(volumeRef) ?? new Set<string>();
     this.directories.set(volumeRef, made);
@@ -63,12 +65,13 @@ export class E2BVolumeFiles implements VolumeFiles {
     }
     await volume.writeFile(`/${file.path}`, file.content.slice().buffer, {
       ...this.owner,
-      mode: file.executable ? 0o755 : 0o644,
+      mode: fileMode(file),
       signal: context.signal,
     });
   }
 
   async read(volumeRef: string, path: string, context: AdapterContext): Promise<Uint8Array> {
+    portablePath(path);
     const volume = await this.volume(volumeRef);
     return volume.readFile(`/${path}`, { format: "bytes", signal: context.signal });
   }
@@ -83,8 +86,16 @@ export class E2BVolumeFiles implements VolumeFiles {
   }
 }
 
+function portablePath(path: string): void {
+  if (!isPortablePath(path)) throw new Error(`Refusing the volume path ${JSON.stringify(path)}`);
+}
+
+/** E2B does not keep names unique, and its volume list (e2b@2.49.1) is one unpaginated page. */
 async function connectByName(name: string, connection: ConnectionOpts | undefined) {
-  const found = (await Volume.list(connection)).find((volume) => volume.name === name);
-  if (!found) throw new Error(`No E2B volume is named ${name}`);
+  const named = (await Volume.list(connection)).filter((volume) => volume.name === name);
+  const [found] = named;
+  if (!found || named.length > 1) {
+    throw new Error(`${named.length} E2B volumes are named ${name}, expected exactly one`);
+  }
   return Volume.connect(found.volumeId, connection);
 }

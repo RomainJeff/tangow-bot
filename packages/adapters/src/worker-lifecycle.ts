@@ -60,7 +60,18 @@ export type HomeMoveBlocker =
   | "volume_busy"
   | "space_worker_live";
 
-export type HomeAdoption = "adopted" | "volume_missing" | HomeMoveBlocker;
+/**
+ * What a home move saw when it started. Adoption refuses once the home has a new revision, or once
+ * a worker of the space has appeared, since that worker may have written the shared volume.
+ */
+export type HomeMoveStart = { homeRevision: string; spaceWorkers: number };
+
+export type HomeAdoption =
+  | "adopted"
+  | "volume_missing"
+  | "home_revised"
+  | "space_worker_ran"
+  | HomeMoveBlocker;
 
 export type VolumeOwner =
   | { kind: "bot_private"; spaceId: string; botId: string }
@@ -92,6 +103,7 @@ type HomeComputer = {
   scope: string;
   spaceId: string;
   homeStorage: HomeStorage;
+  homeRevision: string;
   state: string;
   controlHolder: string;
 };
@@ -116,13 +128,17 @@ async function computerBlocker(
 
 /**
  * Any worker of the space that may still run can write its shared volume, which takes no writer
- * lease, so a team home must not be copied or adopted under it.
+ * lease, so a team home must not be copied or adopted under it. `total` counts every attempt of
+ * the space that ever had a worker: workerState is never cleared, so it only grows, and comparing
+ * it needs no clock.
  */
-async function spaceWorkersLive(db: Db, spaceId: string): Promise<boolean> {
-  const [live] = await db.$queryRaw<{ count: number }[]>`
-    SELECT count(*)::int AS count FROM attempts a JOIN runs r ON r.id = a."runId"
-    WHERE r."spaceId" = ${spaceId} AND a."workerState" IN (${RELEASABLE})`;
-  return (live?.count ?? 0) > 0;
+async function spaceWorkers(db: Db, spaceId: string): Promise<{ live: number; total: number }> {
+  const [counts] = await db.$queryRaw<{ live: number; total: number }[]>`
+    SELECT count(*) FILTER (WHERE a."workerState" IN (${RELEASABLE}))::int AS live,
+      count(a."workerState")::int AS total
+    FROM attempts a JOIN runs r ON r.id = a."runId"
+    WHERE r."spaceId" = ${spaceId}`;
+  return counts ?? { live: 0, total: 0 };
 }
 
 /** Every bot on the computer, archived included, and the space for a team computer. */
@@ -142,7 +158,8 @@ async function homeVolumes(db: Db, computerId: string, computer: HomeComputer, l
 
 async function readHomeComputer(db: Db, computerId: string, lock: boolean) {
   const [computer] = await db.$queryRaw<HomeComputer[]>`
-    SELECT kind, scope, "spaceId", "homeStorage", state, "controlHolder" FROM computers
+    SELECT kind, scope, "spaceId", "homeStorage", "homeRevision", state, "controlHolder"
+    FROM computers
     WHERE id = ${computerId} ${lock ? Prisma.sql`FOR UPDATE` : Prisma.empty}`;
   if (!computer) throw new Error("Computer not found");
   return computer;
@@ -467,28 +484,38 @@ export function createWorkerLifecycle(deps: {
       return ensureVolume({ kind: "bot_private", spaceId: bot.spaceId, botId }, context);
     },
 
-    /** What would stop the home moving onto volumes now, without locking or writing anything. */
-    async homeMoveBlocker(computerId: string): Promise<HomeMoveBlocker | null> {
+    /**
+     * What would stop the home moving onto volumes now, and the start that adoption checks
+     * against, without locking or writing anything.
+     */
+    async inspectHomeMove(
+      computerId: string,
+    ): Promise<{ blocker: HomeMoveBlocker | null; start: HomeMoveStart }> {
       const computer = await readHomeComputer(prisma, computerId, false);
+      const workers = await spaceWorkers(prisma, computer.spaceId);
+      const start = { homeRevision: computer.homeRevision, spaceWorkers: workers.total };
       const blocker = await computerBlocker(prisma, computerId, computer);
-      if (blocker) return blocker;
+      if (blocker) return { blocker, start };
       const { team, volumes } = await homeVolumes(prisma, computerId, computer, false);
-      if (volumes.some((volume) => volume.writerAttemptId)) return "volume_busy";
-      if (team && (await spaceWorkersLive(prisma, computer.spaceId))) return "space_worker_live";
-      return null;
+      if (volumes.some((volume) => volume.writerAttemptId))
+        return { blocker: "volume_busy", start };
+      if (team && workers.live > 0) return { blocker: "space_worker_live", start };
+      return { blocker: null, start };
     },
 
     /**
      * The only writer of computers.homeStorage: moves a home from snapshots to volumes once every
      * bot on the computer, and the space for a team computer, has a provisioned volume nobody
      * writes, nothing runs on the computer, and for a team computer no worker of the space may
-     * still write the shared volume. Called after the files were copied; stops automatic import
-     * and export for good.
+     * still write the shared volume. Called after the files were copied, with the start taken
+     * before the copy; stops automatic import and export for good.
      */
-    async adoptVolumeHome(computerId: string): Promise<HomeAdoption> {
+    async adoptVolumeHome(computerId: string, start: HomeMoveStart): Promise<HomeAdoption> {
       return prisma.$transaction(async (tx) => {
         const computer = await readHomeComputer(tx, computerId, true);
         if (computer.homeStorage === "volumes") return "adopted";
+        // A checkpoint during the copy wrote files the copy may not hold.
+        if (computer.homeRevision !== start.homeRevision) return "home_revised";
         const blocker = await computerBlocker(tx, computerId, computer);
         if (blocker) return blocker;
         const { botIds, team, volumes } = await homeVolumes(tx, computerId, computer, true);
@@ -499,7 +526,11 @@ export function createWorkerLifecycle(deps: {
         if (missing) return "volume_missing";
         if (volumes.some((volume) => volume.writerAttemptId)) return "volume_busy";
         // Read after the volume locks, so a start that locked the shared volume first is seen.
-        if (team && (await spaceWorkersLive(tx, computer.spaceId))) return "space_worker_live";
+        if (team) {
+          const workers = await spaceWorkers(tx, computer.spaceId);
+          if (workers.live > 0) return "space_worker_live";
+          if (workers.total !== start.spaceWorkers) return "space_worker_ran";
+        }
         await tx.computer.update({ where: { id: computerId }, data: { homeStorage: "volumes" } });
         return "adopted";
       });

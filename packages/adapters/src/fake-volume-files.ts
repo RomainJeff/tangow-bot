@@ -1,6 +1,7 @@
 import type { AdapterContext, PortableFile, VolumeEntry, VolumeFiles } from "@rakazo/adapter-kit";
+import { fileMode } from "@rakazo/adapter-kit";
 
-type StoredFile = { content: Uint8Array; executable: boolean };
+type StoredFile = { content: Uint8Array; mode: number };
 
 /** In-memory files of the volumes a `FakeWorkerProvider` names, keyed by provider ref. */
 export class MemoryVolumeFiles implements VolumeFiles {
@@ -17,18 +18,14 @@ export class MemoryVolumeFiles implements VolumeFiles {
       ),
     );
     return [
-      ...[...directories].map((path) => ({ path, kind: "dir" as const, executable: false })),
-      ...[...files].map(([path, file]) => ({
-        path,
-        kind: "file" as const,
-        executable: file.executable,
-      })),
+      ...[...directories].map((path) => ({ path, kind: "dir" as const, mode: 0o755 })),
+      ...[...files].map(([path, file]) => ({ path, kind: "file" as const, mode: file.mode })),
     ].sort((a, b) => a.path.localeCompare(b.path));
   }
 
   async write(volumeRef: string, file: PortableFile, _context: AdapterContext): Promise<void> {
     const files = this.volumes.get(volumeRef) ?? new Map<string, StoredFile>();
-    files.set(file.path, { content: file.content.slice(), executable: Boolean(file.executable) });
+    files.set(file.path, { content: file.content.slice(), mode: fileMode(file) });
     this.volumes.set(volumeRef, files);
   }
 

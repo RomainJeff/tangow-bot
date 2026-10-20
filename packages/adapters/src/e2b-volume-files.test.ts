@@ -9,7 +9,8 @@ const volume = vi.hoisted(() => {
     { type: "file" | "directory"; mode: number; content?: Uint8Array }
   >();
   const writes: Written[] = [];
-  return { entries, writes };
+  const named = [{ volumeId: "vol-1", name: "rakazo-volume_1" }];
+  return { entries, writes, named };
 });
 
 vi.mock("@e2b/desktop", () => {
@@ -55,7 +56,7 @@ vi.mock("@e2b/desktop", () => {
       UNKNOWN: "unknown",
     },
     Volume: {
-      list: async () => [{ volumeId: "vol-1", name: "rakazo-volume_1" }],
+      list: async () => volume.named,
       connect: async (volumeId: string) => {
         if (volumeId !== "vol-1") throw new Error(`unknown volume ${volumeId}`);
         return remote;
@@ -86,27 +87,56 @@ describe("E2B volume files", () => {
       { path: "bin/notes.md", content: new TextEncoder().encode("hi") },
       context,
     );
+    await files.write(
+      "rakazo-volume_1",
+      { path: "bin/secret", content: new TextEncoder().encode("key"), mode: 0o600 },
+      context,
+    );
 
     expect(volume.writes).toEqual([
       { path: "/bin", uid: 1001, gid: 1002, mode: 0o755 },
       { path: "/bin/tools", uid: 1001, gid: 1002, mode: 0o755 },
       { path: "/bin/tools/run.sh", uid: 1001, gid: 1002, mode: 0o755 },
       { path: "/bin/notes.md", uid: 1001, gid: 1002, mode: 0o644 },
+      { path: "/bin/secret", uid: 1001, gid: 1002, mode: 0o600 },
     ]);
     expect(await files.list("rakazo-volume_1", context)).toEqual([
-      { path: "bin", kind: "dir", executable: false },
-      { path: "bin/tools", kind: "dir", executable: false },
-      { path: "bin/tools/run.sh", kind: "file", executable: true },
-      { path: "bin/notes.md", kind: "file", executable: false },
+      { path: "bin", kind: "dir", mode: 0o755 },
+      { path: "bin/tools", kind: "dir", mode: 0o755 },
+      { path: "bin/tools/run.sh", kind: "file", mode: 0o755 },
+      { path: "bin/notes.md", kind: "file", mode: 0o644 },
+      { path: "bin/secret", kind: "file", mode: 0o600 },
     ]);
     expect(
       new TextDecoder().decode(await files.read("rakazo-volume_1", "bin/notes.md", context)),
     ).toBe("hi");
   });
 
-  it("refuses a volume name E2B does not know", async () => {
+  it("refuses a volume name that E2B does not know or knows twice", async () => {
+    volume.named.push({ volumeId: "vol-2", name: "rakazo-twice" });
+    volume.named.push({ volumeId: "vol-3", name: "rakazo-twice" });
+
     await expect(new E2BVolumeFiles().list("rakazo-missing", context)).rejects.toThrow(
-      "No E2B volume is named rakazo-missing",
+      "0 E2B volumes are named rakazo-missing, expected exactly one",
+    );
+    await expect(new E2BVolumeFiles().list("rakazo-twice", context)).rejects.toThrow(
+      "2 E2B volumes are named rakazo-twice, expected exactly one",
     );
   });
+
+  it.each(["../escape", "a//b", "a/./b", "a\\b", "/abs", "a/"])(
+    "refuses to write or read the path %j",
+    async (path) => {
+      const files = new E2BVolumeFiles();
+      const before = volume.writes.length;
+
+      await expect(
+        files.write("rakazo-volume_1", { path, content: new Uint8Array() }, context),
+      ).rejects.toThrow("Refusing the volume path");
+      await expect(files.read("rakazo-volume_1", path, context)).rejects.toThrow(
+        "Refusing the volume path",
+      );
+      expect(volume.writes.length).toBe(before);
+    },
+  );
 });
