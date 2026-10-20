@@ -148,7 +148,6 @@ export const laneF: Lane = {
   },
 };
 
-/** A provider whose ensure, or the step after it, fails the way `fault` says, once. */
 export const laneI: Lane = {
   id: "i",
   issue: "run sans fichiers/computer",

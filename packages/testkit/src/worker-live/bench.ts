@@ -7,6 +7,7 @@ import { quantiles, queryLog, settled } from "../worker-channel-tap.js";
 import { call, finish, liveRun } from "./run.js";
 import { type Live, type ProviderWrap, requireHeadroom } from "./session.js";
 
+/** A memory series after each run, and its growth over the first and the last ten runs. */
 function series(values: number[]) {
   const round = (value: number) => Math.round(value * 10) / 10;
   return {

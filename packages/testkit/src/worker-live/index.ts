@@ -58,5 +58,3 @@ export const LANES: Lane[] = [
   laneI,
   ...pendingLanes,
 ];
-
-/** A memory series after each run, and its growth over the first and the last ten runs. */

@@ -3,6 +3,7 @@ import { Sandbox } from "e2b";
 import { call, finish, liveRun } from "./run.js";
 import { context, type Lane, type Live, type ProviderWrap } from "./session.js";
 
+/** A provider whose ensure, or the step after it, fails the way `fault` says, once. */
 function faulty(
   live: Live,
   fault: "kill_after_ensure" | "throw_after_create" | "prepare_fails",
@@ -196,5 +197,3 @@ export const laneG: Lane = {
     return { pass, observed: cases };
   },
 };
-
-/** A team home of two bots: shared files, each bot's files, an executable and a private key file. */

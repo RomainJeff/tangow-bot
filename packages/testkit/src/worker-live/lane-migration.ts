@@ -7,6 +7,7 @@ import type { Sandbox } from "e2b";
 import { startWorkerRun } from "../worker-run-fixture.js";
 import { context, type Lane, sh, sha256 } from "./session.js";
 
+/** A team home of two bots: shared files, each bot's files, an executable and a private key file. */
 function syntheticHome(bots: [string, string]) {
   return [
     { path: "shared/readme.md", content: "# Team notes\n", mode: 0o644 },
