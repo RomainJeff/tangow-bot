@@ -1,6 +1,6 @@
 {
   "tag": "p3live-<session>",
-  "startedAt": "2026-10-20T11:29:07.623Z",
+  "startedAt": "2026-10-20T13:40:43.237Z",
   "workerTemplate": "p3live-worker-pi",
   "computerTemplate": "i1-computer",
   "lanes": [
@@ -22,15 +22,15 @@
           }
         ]
       },
-      "seconds": 11.8,
+      "seconds": 11.2,
       "memAvailableMiB": {
-        "before": 3156,
-        "after": 2435
+        "before": 3128,
+        "after": 2195
       },
-      "controllerRssMiB": 924,
+      "controllerRssMiB": 980,
       "cleanup": {
         "killed": 0,
-        "destroyed": 1,
+        "destroyed": 2,
         "left": {
           "sandboxes": 0,
           "volumes": 0
@@ -52,21 +52,67 @@
           "grep": "from-computer.txt:1:written by the computer\nfrom-worker.txt:1:edited by the worker",
           "bash": "written by the computer"
         },
-        "computerSawPrivateWrite": "seen 57",
-        "computerSawSharedWrite": "seen 62",
-        "privateVisibleWithinMsOfGrant": 67,
-        "sharedVisibleWithinMsOfGrant": 75,
+        "computerSawPrivateWrite": "seen 58",
+        "computerSawSharedWrite": "seen 64",
+        "privateVisibleWithinMsOfGrant": 47,
+        "sharedVisibleWithinMsOfGrant": 52,
         "pollIntervalMs": 50,
         "note": "Visibility times run from the controller granting the guest tool that wrote to the host seeing the computer's poller exit. They include the tool's own run and E2B's command stream, so they bound the cross-VM delay from above."
       },
-      "seconds": 7.9,
+      "seconds": 8.2,
       "memAvailableMiB": {
-        "before": 3116,
-        "after": 2446
+        "before": 2883,
+        "after": 2334
       },
-      "controllerRssMiB": 928,
+      "controllerRssMiB": 982,
       "cleanup": {
         "killed": 0,
+        "destroyed": 2,
+        "left": {
+          "sandboxes": 0,
+          "volumes": 0
+        }
+      }
+    },
+    {
+      "lane": "b-product-computer",
+      "issue": "visibilité computer dans les deux sens (computer produit)",
+      "scenario": "Lane b's exchange with the product's E2B computer of a team bot: a first run boots it through the executor with the volumes mounted, and the second run's guest exchanges files with it through its workspace link",
+      "passWhen": "The first run's computer mounts the volumes and links its workspace to their root; the second run reuses that machine; the computer sees the guest's writes and the guest sees the computer's, on both volumes",
+      "result": "pass",
+      "observed": {
+        "guestToolResults": {
+          "readPrivate": "{\"path\":\"from-computer.txt\",\"content\":\"written by the computer\\n\",\"startLine\":1,\"endLine\":1,\"totalLines\":1}",
+          "readShared": "{\"path\":\"shared/from-computer.txt\",\"content\":\"shared by the computer\\n\",\"startLine\":1,\"endLine\":1,\"totalLines\":1}",
+          "write": "{\"ok\":true,\"path\":\"from-worker.txt\"}",
+          "edit": "{\"ok\":true,\"path\":\"from-worker.txt\",\"replacements\":1}",
+          "grep": "from-computer.txt:1:written by the computer\nfrom-worker.txt:1:edited by the worker",
+          "bash": "written by the computer"
+        },
+        "computerSawPrivateWrite": "seen 50",
+        "computerSawSharedWrite": "seen 57",
+        "privateVisibleWithinMsOfGrant": 27,
+        "sharedVisibleWithinMsOfGrant": 76,
+        "pollIntervalMs": 50,
+        "note": "Visibility times run from the controller granting the guest tool that wrote to the host seeing the computer's poller exit. They include the tool's own run and E2B's command stream, so they bound the cross-VM delay from above.",
+        "computerMetadataHome": "volumes",
+        "computerRecordsMountSet": true,
+        "workspaceLinksTo": "/workspace",
+        "volumeMountsInComputer": [
+          "/workspace/bots/cmvgqejjw0001xdhcsw3ultr2",
+          "/workspace/shared"
+        ],
+        "secondRunReusedMachine": true,
+        "desktopPreparation": "skipped: this host has no desktop template"
+      },
+      "seconds": 10.7,
+      "memAvailableMiB": {
+        "before": 3057,
+        "after": 2385
+      },
+      "controllerRssMiB": 938,
+      "cleanup": {
+        "killed": 1,
         "destroyed": 2,
         "left": {
           "sandboxes": 0,
@@ -91,15 +137,15 @@
         "workerListenerListedInComputer": "no",
         "bootIdsDiffer": true
       },
-      "seconds": 14.4,
+      "seconds": 14.6,
       "memAvailableMiB": {
-        "before": 2927,
-        "after": 2607
+        "before": 3090,
+        "after": 2596
       },
-      "controllerRssMiB": 754,
+      "controllerRssMiB": 721,
       "cleanup": {
         "killed": 0,
-        "destroyed": 0,
+        "destroyed": 2,
         "left": {
           "sandboxes": 0,
           "volumes": 0
@@ -115,22 +161,22 @@
       "observed": {
         "parentOffersComputerAct": false,
         "helperOffersComputerAct": false,
-        "helperToolCount": 38,
+        "helperToolCount": 34,
         "parentResult": "Tool computer_act not found",
         "helperResult": "Tool computer_act not found",
         "toolCallsAtController": ["message_user"],
         "computerActEffects": 0,
         "note": "The guest's Pi answers a call of a tool it was not given without asking the controller. A guest that asks anyway is refused with unknown_tool, which runtime-worker-hostile.test.ts proves offline."
       },
-      "seconds": 6.5,
+      "seconds": 7.2,
       "memAvailableMiB": {
-        "before": 3124,
-        "after": 2348
+        "before": 3096,
+        "after": 2389
       },
-      "controllerRssMiB": 1039,
+      "controllerRssMiB": 964,
       "cleanup": {
         "killed": 0,
-        "destroyed": 0,
+        "destroyed": 2,
         "left": {
           "sandboxes": 0,
           "volumes": 0
@@ -149,15 +195,95 @@
         "modelRequestsRelayed": 3,
         "note": "The model emulator asserts the controller's bearer key on every call, so each relayed call carried it."
       },
-      "seconds": 6.5,
+      "seconds": 6.9,
       "memAvailableMiB": {
-        "before": 3117,
-        "after": 2393
+        "before": 3127,
+        "after": 2423
       },
-      "controllerRssMiB": 971,
+      "controllerRssMiB": 923,
       "cleanup": {
         "killed": 0,
-        "destroyed": 0,
+        "destroyed": 2,
+        "left": {
+          "sandboxes": 0,
+          "volumes": 0
+        }
+      }
+    },
+    {
+      "lane": "e-anthropic",
+      "issue": "proxy Anthropic simulé",
+      "scenario": "A catalog Anthropic model billed with a plain API key, its Messages API emulated behind the controller's relay, with a thinking block and a tool call; the guest looks for the key as in e-openai",
+      "passWhen": "The run completes through the relay on the Anthropic protocol with the controller's key while no guest process holds it, and the tool result reaches the model",
+      "result": "pass",
+      "observed": {
+        "keyInGuestEnv": "0",
+        "keyInAnyGuestProcessEnviron": "0",
+        "modelRequestsRelayed": 3,
+        "anthropicRequestsServed": 3,
+        "runModel": "anthropic/claude-haiku-4-5",
+        "note": "The emulator serves /v1/messages and asserts the controller's x-api-key on every call; the catalog model points at it for the run only."
+      },
+      "seconds": 6.9,
+      "memAvailableMiB": {
+        "before": 3100,
+        "after": 2403
+      },
+      "controllerRssMiB": 938,
+      "cleanup": {
+        "killed": 0,
+        "destroyed": 2,
+        "left": {
+          "sandboxes": 0,
+          "volumes": 0
+        }
+      }
+    },
+    {
+      "lane": "e-refusals",
+      "issue": "refus connexion/modèle/endpoint interdits",
+      "scenario": "A hand-written guest in the worker VM asks the relay for a model call naming its own model, endpoint and key, and, in a second run, calls a tool the run does not expose",
+      "passWhen": "Each run fails as a protocol breach, the upstream model is never called, the unknown tool is refused, and the attempt's VM is released",
+      "result": "pass",
+      "observed": {
+        "modelTarget": {
+          "status": "failed",
+          "error": "The worker broke the run protocol: invalid",
+          "upstreamCalls": 0,
+          "guestSent": ["worker.hello", "model.request"],
+          "controllerSent": ["worker.start"],
+          "attempts": [
+            {
+              "workerState": "released",
+              "stopPhase": "process_ended",
+              "workerProviderRef": "ideiiqh8vnqwdigyn09kw"
+            }
+          ]
+        },
+        "unknownTool": {
+          "status": "failed",
+          "error": "The worker broke the run protocol: unknown_tool",
+          "upstreamCalls": 0,
+          "guestSent": ["worker.hello", "tool"],
+          "controllerSent": ["worker.start", "refused"],
+          "attempts": [
+            {
+              "workerState": "released",
+              "stopPhase": "process_ended",
+              "workerProviderRef": "idnon09agjto3f6uuh5x5"
+            }
+          ]
+        }
+      },
+      "seconds": 10.6,
+      "memAvailableMiB": {
+        "before": 3137,
+        "after": 2181
+      },
+      "controllerRssMiB": 1161,
+      "cleanup": {
+        "killed": 0,
+        "destroyed": 4,
         "left": {
           "sandboxes": 0,
           "volumes": 0
@@ -181,15 +307,15 @@
         "spoolBytesReadAfterDestroy": 6188895,
         "spoolMatchesOutput": true
       },
-      "seconds": 9.1,
+      "seconds": 9,
       "memAvailableMiB": {
-        "before": 3098,
-        "after": 2368
+        "before": 3131,
+        "after": 2621
       },
-      "controllerRssMiB": 993,
+      "controllerRssMiB": 780,
       "cleanup": {
         "killed": 0,
-        "destroyed": 1,
+        "destroyed": 2,
         "left": {
           "sandboxes": 0,
           "volumes": 0
@@ -200,7 +326,7 @@
       "lane": "g",
       "issue": "panne après provisioning",
       "scenario": "Three faults right after the VM exists: the VM is killed after ensure, ensure fails after the create landed, setup fails after the ref was recorded; then a controller that dies after start, cleaned up by reconcile",
-      "passWhen": "A recorded ref is destroyed at once and its lease freed; a create whose answer was lost keeps its lease until reconcile destroys it by tag after the ensure deadline; a lost guest retries to completion; no sandbox is left",
+      "passWhen": "A recorded ref is destroyed at once and its lease freed; a create whose answer was lost keeps its lease until reconcile destroys it by tag after the ensure deadline; every faulted run completes, a failed setup through a requeue under the run's setup budget; no sandbox is left",
       "result": "pass",
       "observed": {
         "kill_after_ensure": {
@@ -213,6 +339,7 @@
           },
           "writerLeasesHeldAfterFault": 0,
           "sandboxesAliveAfterFault": 0,
+          "retries": 1,
           "finalStatus": "completed",
           "attempts": [
             {
@@ -228,8 +355,8 @@
         },
         "throw_after_create": {
           "faultFired": true,
-          "firstContinue": "completed",
-          "statusAfterFault": "failed",
+          "firstContinue": "Run setup failed; retrying",
+          "statusAfterFault": "queued",
           "faultedAttempt": {
             "workerState": "releasing",
             "providerRefRecorded": false
@@ -246,30 +373,40 @@
             "writerLeasesHeld": 0,
             "sandboxesAlive": 0
           },
-          "finalStatus": "failed",
+          "retries": 1,
+          "finalStatus": "completed",
           "attempts": [
             {
               "workerState": "released",
               "stopPhase": null
+            },
+            {
+              "workerState": "released",
+              "stopPhase": "process_ended"
             }
           ],
           "sandboxesLeft": 0
         },
         "prepare_fails": {
           "faultFired": true,
-          "firstContinue": "completed",
-          "statusAfterFault": "failed",
+          "firstContinue": "Run setup failed; retrying",
+          "statusAfterFault": "queued",
           "faultedAttempt": {
             "workerState": "released",
             "providerRefRecorded": true
           },
           "writerLeasesHeldAfterFault": 0,
           "sandboxesAliveAfterFault": 0,
-          "finalStatus": "failed",
+          "retries": 1,
+          "finalStatus": "completed",
           "attempts": [
             {
               "workerState": "released",
               "stopPhase": null
+            },
+            {
+              "workerState": "released",
+              "stopPhase": "process_ended"
             }
           ],
           "sandboxesLeft": 0
@@ -292,15 +429,15 @@
           "sandboxesLeft": 0
         }
       },
-      "seconds": 20.6,
+      "seconds": 25.8,
       "memAvailableMiB": {
-        "before": 3127,
-        "after": 1932
+        "before": 3153,
+        "after": 1712
       },
-      "controllerRssMiB": 1370,
+      "controllerRssMiB": 1635,
       "cleanup": {
         "killed": 0,
-        "destroyed": 4,
+        "destroyed": 8,
         "left": {
           "sandboxes": 0,
           "volumes": 0
@@ -316,7 +453,7 @@
       "observed": {
         "sandboxTimeoutMs": 20000,
         "firstContinue": "Run setup failed; retrying",
-        "firstAttemptEndedAfterMs": 22761,
+        "firstAttemptEndedAfterMs": 22751,
         "afterKill": {
           "status": "queued",
           "attempts": [
@@ -346,15 +483,15 @@
           "sandboxesLeft": 0
         }
       },
-      "seconds": 29,
+      "seconds": 29.7,
       "memAvailableMiB": {
-        "before": 3079,
-        "after": 2545
+        "before": 2976,
+        "after": 2607
       },
-      "controllerRssMiB": 787,
+      "controllerRssMiB": 739,
       "cleanup": {
         "killed": 0,
-        "destroyed": 1,
+        "destroyed": 2,
         "left": {
           "sandboxes": 0,
           "volumes": 0
@@ -389,14 +526,49 @@
           "guestUid": "The sandbox user is uid/gid 1001/1001 in this template, not 1000, and the moved files belong to 1001:1001. The mount does not enforce ownership against it: that user read and appended to a root-owned 0600 file."
         }
       },
-      "seconds": 10.9,
+      "seconds": 11.5,
       "memAvailableMiB": {
-        "before": 3116,
-        "after": 2348
+        "before": 3071,
+        "after": 2359
       },
-      "controllerRssMiB": 962,
+      "controllerRssMiB": 948,
       "cleanup": {
         "killed": 0,
+        "destroyed": 4,
+        "left": {
+          "sandboxes": 0,
+          "volumes": 0
+        }
+      }
+    },
+    {
+      "lane": "h-product-recreate",
+      "issue": "recréation computer (produit)",
+      "scenario": "A team home with a snapshot moves onto real E2B volumes; the product boots its E2B computer, the computer changes a moved file, then the product recreates the computer (recover)",
+      "passWhen": "The recreated machine is new, mounts the volumes, and still holds the changed file: no snapshot restore wrote the old copy over the volumes",
+      "result": "pass",
+      "observed": {
+        "move": "adopted",
+        "firstMachineReadMovedFile": "from the snapshot",
+        "recreatedMachineIsNew": true,
+        "firstMachineGone": true,
+        "recreatedMachineMetadataHome": "volumes",
+        "fileOnRecreatedMachine": "changed on the volume",
+        "homeRevisionUnchangedByRecover": true,
+        "computerRow": {
+          "state": "running",
+          "homeStorage": "volumes"
+        },
+        "desktopPreparation": "skipped: this host has no desktop template"
+      },
+      "seconds": 7.2,
+      "memAvailableMiB": {
+        "before": 3008,
+        "after": 2292
+      },
+      "controllerRssMiB": 903,
+      "cleanup": {
+        "killed": 1,
         "destroyed": 3,
         "left": {
           "sandboxes": 0,
@@ -407,65 +579,31 @@
     {
       "lane": "i",
       "issue": "run sans fichiers/computer",
-      "scenario": "A run that needs no files and no computer, as an MCP-only run",
-      "passWhen": "The worker starts with no mount, its guest sees no network file system, and the run completes",
+      "scenario": "A run whose bot has no computer; then a VM of the worker template, to check the guest user can write /workspace",
+      "passWhen": "The executor refuses the run before it routes it, with no attempt reaching a worker and no sandbox created; the sandbox user can write /workspace",
       "result": "pass",
       "observed": {
-        "workspace": {
-          "cwd": "/workspace",
-          "mounts": []
-        },
-        "computer": "none",
-        "nfsMountsInGuest": "0",
-        "guestCwd": "/workspace",
-        "workspaceWritableByGuest": true
+        "continueThrew": "Bot has no computer",
+        "runStatusAfter": "running",
+        "attemptsWithAWorker": 0,
+        "sandboxesCreated": 0,
+        "workspaceWritableBySandboxUser": true,
+        "note": "Every bot run needs a computer, and a bot with one is always offered the file tools, so the executor never derives a worker run without files: deriveRunNeeds' no-file case is covered offline."
       },
-      "seconds": 6.4,
+      "seconds": 4,
       "memAvailableMiB": {
-        "before": 3067,
-        "after": 2466
+        "before": 3040,
+        "after": 2298
       },
-      "controllerRssMiB": 916,
+      "controllerRssMiB": 948,
       "cleanup": {
         "killed": 0,
-        "destroyed": 0,
+        "destroyed": 2,
         "left": {
           "sandboxes": 0,
           "volumes": 0
         }
       }
-    },
-    {
-      "lane": "e-anthropic",
-      "issue": "proxy Anthropic simulé",
-      "scenario": "An Anthropic-protocol model behind the relay",
-      "passWhen": "The relay streams an Anthropic-protocol model with the controller's key",
-      "result": "pending",
-      "pending": "The model emulator speaks only OpenAI chat completions, and only an openai_compatible connection takes a base URL; the relay authorization slice (S3) owns the connection side."
-    },
-    {
-      "lane": "e-refusals",
-      "issue": "refus connexion/modèle/endpoint interdits",
-      "scenario": "A guest model request for a connection, model or endpoint the run does not grant",
-      "passWhen": "The controller refuses it and the upstream is never called",
-      "result": "pending",
-      "pending": "Model relay authorization lands with S3."
-    },
-    {
-      "lane": "b-product-computer",
-      "issue": "visibilité computer dans les deux sens (computer produit)",
-      "scenario": "The same exchange with the product's E2B computer mounting the volumes",
-      "passWhen": "The product computer sees the guest's writes and the guest sees the computer's",
-      "result": "pending",
-      "pending": "The E2B computer's volume mounts land with S3."
-    },
-    {
-      "lane": "h-product-recreate",
-      "issue": "recréation computer (produit)",
-      "scenario": "Recreate the product's E2B computer of an adopted home",
-      "passWhen": "No snapshot restore writes over the volumes",
-      "result": "pending",
-      "pending": "The E2B computer's volume mounts and restore switch land with S3."
     }
   ]
 }

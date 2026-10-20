@@ -150,7 +150,7 @@ describe("a guest Pi run whose model calls the controller relays", () => {
 });
 
 describe("a worker run on a catalog Anthropic model", () => {
-  it("streams Anthropic's Messages API through the relay, thinking and tool calls included", async () => {
+  it("completes a run on Anthropic's Messages API through the relay, across a thinking block and a tool call", async () => {
     let listed = "";
     const run = await startWorkerRun({
       protocol: "anthropic",

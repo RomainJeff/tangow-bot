@@ -13,13 +13,11 @@ Checks
   pnpm check
   pnpm lint
 
-The issue's verification commands
-  pnpm exec vitest run packages/adapters/src/pi-runtime.test.ts packages/adapters/src/executor-secret-pi.test.ts packages/adapters/src/computer-workspace.test.ts packages/adapters/src/e2b-sandbox.test.ts packages/adapters/src/sandbox-factory.test.ts
-  pnpm test:pi
-  pnpm test:integration
-
 The P3 offline tests this slice touches
-  pnpm exec vitest run packages/adapters/src/e2b-volume-files.test.ts packages/adapters/src/e2b-worker.test.ts packages/adapters/src/home-volume-migration.test.ts packages/testkit/src/runtime-worker packages/adapters/src/runtime-worker apps/agent-run-worker/src
+  pnpm exec vitest run packages/testkit/src/runtime-worker packages/adapters/src/e2b-volume-files.test.ts packages/adapters/src/e2b-worker.test.ts
+
+Integration
+  pnpm test:integration
 
 Live lanes, where the E2B API is reachable
   Export the E2B environment to the command only: E2B_API_KEY, and E2B_API_URL with E2B_SANDBOX_URL,
@@ -31,7 +29,7 @@ Live lanes, where the E2B API is reachable
 Live lanes on a host with no checkout, as these receipts were produced
   1. On the build machine: pnpm test:worker-live:bundle
      It writes packages/testkit/dist/worker-live/ (bin/worker-live.mjs for Node 22 with PGlite's assets,
-     prisma/migrations, guest/agent-run-worker.mjs).
+     prisma/migrations, guest/agent-run-worker.mjs, and guest/hostile-guest.mjs for lane e-refusals).
   2. Copy that directory to a scratch directory on the host. Copy nothing else: no checkout, no .env.
   3. On the host, with the E2B environment exported to each command only (the receipts used I1's
      with-e2b.sh, which reads the team key from the stack and passes it to the command):
@@ -43,7 +41,7 @@ Live lanes on a host with no checkout, as these receipts were produced
 Safety rails built into the lanes
   Each lane runs in its own process, one at a time. Before each lane the command stops if any sandbox runs
   on the deployment or if the host's MemAvailable is under 1,536 MiB. Every sandbox carries the
-  session's p3live tag and every volume its name prefix. Each lane ends with a sweep that kills and
+  session's p3live tag, and the session records the name of every volume it creates. Each lane ends with a sweep that kills and
   destroys everything of its session, then counts what is left. The receipts are redacted: no key,
   endpoint, address other than loopback, account, machine name or local path.
 
@@ -54,11 +52,11 @@ Lane capture
 Observed (see verification.json)
   pnpm check: 24 tasks passed.
   pnpm lint: 49 warnings and 1 info, the same as the feature base.
-  pnpm test: 8063 passed, 209 skipped.
-  Issue verification: 64 tests in 5 files passed. pnpm test:pi: 30 tests in 4 files passed.
-  P3 offline tests: 165 tests in 17 files passed.
-  pnpm test:integration: 163 tests in 23 suites passed.
-  Live lanes: 10 passed, 4 pending the composition slice (S3), no sandbox and no volume left after any lane.
-  Bench, 30 rotating trials per arm, no errors: cold boot p95 1.91 s with no mount and 2.13 s with two
-  mounts (budget 30 s); relay overhead bound p95 58 ms (budget 200 ms); control per guest tool p50 45 ms
-  on PGlite on this host, against 37 ms for P2's local runner on the same host.
+  pnpm test: 8116 passed, 210 skipped.
+  pnpm test:integration: 164 tests in 23 suites passed.
+  P3 offline tests: 77 tests in 9 files passed.
+  Live lanes: 14 passed, no sandbox and no volume left after any lane.
+  Bench, 30 rotating trials per arm, no errors: cold boot p95 2.06 s with the private volume and 2.13 s with
+  two volumes (budget 30 s); relay overhead bound p95 141 ms (budget 200 ms), of which the transcript mask
+  is 28 to 36 ms per call; control per guest tool p50 43 ms on PGlite on this host, against 36 ms for P2's
+  local runner on the same host.
