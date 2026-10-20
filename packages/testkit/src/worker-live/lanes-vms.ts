@@ -185,6 +185,13 @@ export const laneBProductComputer: Lane = {
   },
 };
 
+/**
+ * Below Linux's ephemeral range, which the VMs' own daemons draw from: rpc.statd once held lane c's
+ * earlier 47001 in a worker.
+ */
+const COMPUTER_PORT = 7101;
+const WORKER_PORT = 7102;
+
 export const laneC: Lane = {
   id: "c",
   issue: "PID et localhost distincts",
@@ -195,19 +202,20 @@ export const laneC: Lane = {
   async run(live) {
     const listener = (title: string, port: number, reply: string) =>
       `node -e "process.title='${title}'; require('net').createServer((s) => s.end('${reply}')).listen(${port}, '127.0.0.1')"`;
+    // Bounded, so a port some daemon of the VM holds reads as silent instead of hanging the lane.
     const probe = (port: number) =>
-      `(exec 3<>/dev/tcp/127.0.0.1/${port} && head -c 16 <&3) 2>/dev/null || echo refused`;
+      `r=$(timeout 3 bash -c 'exec 3<>/dev/tcp/127.0.0.1/${port} && head -c 16 <&3' 2>/dev/null); c=$?; if [ $c -eq 124 ]; then echo silent; elif [ -n "$r" ]; then echo "$r"; else echo refused; fi`;
     const out: Record<string, string> = {};
     const worker = await liveRun(live, {
       steps: [
         call("c1", "bash", {
           command: [
             "cat /proc/sys/kernel/random/boot_id",
-            `echo "probe:$(${probe(47001)})"`,
+            `echo "probe:$(${probe(COMPUTER_PORT)})"`,
             "echo \"listed:$(pgrep -f '[p]3live-listener-c' || echo none)\"",
-            `(setsid nohup ${listener("p3live-listener-w", 47002, "worker")} >/dev/null 2>&1 &)`,
+            `(setsid nohup ${listener("p3live-listener-w", WORKER_PORT, "worker")} >/dev/null 2>&1 &)`,
             "sleep 1",
-            `echo "self:$(${probe(47002)})"`,
+            `echo "self:$(${probe(WORKER_PORT)})"`,
             "echo \"own:$(pgrep -f '[p]3live-listener-w' >/dev/null && echo yes || echo no)\"",
           ].join("\n"),
         }),
@@ -219,13 +227,13 @@ export const laneC: Lane = {
     });
     const computer = await live.vm({});
     try {
-      await computer.commands.run(listener("p3live-listener-c", 47001, "computer"), {
+      await computer.commands.run(listener("p3live-listener-c", COMPUTER_PORT, "computer"), {
         background: true,
         timeoutMs: 0,
       });
       await sh(computer, "sleep 1");
       const computerBoot = await sh(computer, "cat /proc/sys/kernel/random/boot_id");
-      const computerSelf = await sh(computer, probe(47001));
+      const computerSelf = await sh(computer, probe(COMPUTER_PORT));
       const computerOwn = await sh(
         computer,
         "pgrep -f '[p]3live-listener-c' >/dev/null && echo yes || echo no",
@@ -242,7 +250,7 @@ export const laneC: Lane = {
       for (let i = 0; i < 300 && grants() < 2; i++)
         await new Promise((resolve) => setTimeout(resolve, 100));
       if (grants() >= 2) {
-        fromComputer = await sh(computer, probe(47002));
+        fromComputer = await sh(computer, probe(WORKER_PORT));
         listedInComputer = await sh(computer, "pgrep -f '[p]3live-listener-w' || echo none");
       }
       await running;
