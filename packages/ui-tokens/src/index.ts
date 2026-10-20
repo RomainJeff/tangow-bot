@@ -244,6 +244,8 @@ export const radii = {
   composer: 24,
   /** The floating sidebar and side panel: 26 − the 8 they float from the window's edge. */
   pane: 18,
+  /** A settings group on iPhone: the bot page's groups. */
+  mobileGroup: 22,
   pill: 9999,
 } as const satisfies Record<string, number>;
 
