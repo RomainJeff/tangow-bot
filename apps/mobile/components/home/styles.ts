@@ -1,14 +1,15 @@
 import { StyleSheet } from "react-native";
-import { mobileTokens } from "../../lib/appearance";
+import { mobileTokens, resolveMobileAppearance } from "../../lib/appearance";
 import { native } from "../../lib/native";
+import { shadowsForAppearance } from "../../lib/theme";
 import { nativeTextStyle } from "../../lib/typography";
 
 export function createHomeStyles() {
   const tokens = mobileTokens();
+  const shadows = shadowsForAppearance(resolveMobileAppearance());
   return StyleSheet.create({
     screen: {
       flex: 1,
-      backgroundColor: native.page,
     },
     centered: {
       alignItems: "center",
@@ -22,16 +23,19 @@ export function createHomeStyles() {
       paddingTop: 8,
       paddingBottom: 10,
     },
+    // One glass capsule holds the actions, as the system groups bar buttons.
     headerActions: {
       flexDirection: "row",
       alignItems: "center",
-      gap: 12,
+      height: 44,
+      paddingHorizontal: 2,
+      borderRadius: 22,
+      boxShadow: shadows.composerRest,
     },
     circleButton: {
       width: 40,
       height: 40,
       borderRadius: 20,
-      backgroundColor: native.fillPressed,
       alignItems: "center",
       justifyContent: "center",
       overflow: "hidden",

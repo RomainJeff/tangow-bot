@@ -12,7 +12,9 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { AmbientBackground } from "../components/ambient-background";
 import { BotOrganizeSheet } from "../components/bot-organize-sheet";
+import { GlassBackdrop } from "../components/glass";
 import { CircleButton } from "../components/home/circle-button";
 import { ActivitySection, BotRow, GroupRow, SearchRow } from "../components/home/rows";
 import { createHomeStyles } from "../components/home/styles";
@@ -196,6 +198,7 @@ export default function Home() {
 
   return (
     <View style={[styles.screen, { paddingTop: Math.max(insets.top, 20) }]}>
+      <AmbientBackground />
       <View style={styles.header}>
         {/* The avatar covers a CircleButton's fill, so it dims on press instead. */}
         <Pressable
@@ -208,6 +211,7 @@ export default function Home() {
           <UserAvatar initials={initials} image={userImage} size={40} fontSize={15} />
         </Pressable>
         <View style={styles.headerActions}>
+          <GlassBackdrop radius={22} />
           <CircleButton
             accessibilityLabel={t("Activity")}
             active={activityMode}
