@@ -136,7 +136,7 @@ describe("worker start", () => {
     });
     expect(fake.calls[0]).toMatchObject({
       op: "ensure",
-      spec: { mounts: [], ttlSeconds: 14_400, ensureTimeoutSeconds: 900 },
+      spec: { mounts: [], ttlSeconds: 14_400 },
     });
     expect(await prisma.computerExecutionLease.count({ where: { computerId: computer.id } })).toBe(
       0,
@@ -153,6 +153,10 @@ describe("worker start", () => {
       await fixture.launchFor(workers, attempt.id, allFiles),
       fixture.context,
     );
+    const { workerEnsureAt } = await prisma.attempt.findUniqueOrThrow({
+      where: { id: attempt.id },
+      select: { workerEnsureAt: true },
+    });
 
     expect(fake.calls[0]).toEqual({
       op: "ensure",
@@ -165,7 +169,7 @@ describe("worker start", () => {
           { volumeRef: sharedVolume.providerRef, path: "/workspace/shared", access: "rw" },
         ],
         ttlSeconds: 14_400,
-        ensureTimeoutSeconds: 900,
+        ensureDeadline: new Date(workerEnsureAt!.getTime() + 900_000),
       },
     });
     expect(started.start.workspace).toEqual({
@@ -475,7 +479,7 @@ describe("worker release", () => {
       botId: bot.id,
       mounts: [],
       ttlSeconds: 60,
-      ensureTimeoutSeconds: 60,
+      ensureDeadline: new Date(),
     };
     fake.live.set("fake-worker-crashed", { ...spec, attemptId: created.id });
     fake.live.set("fake-worker-untracked", { ...spec, attemptId: requested.id });

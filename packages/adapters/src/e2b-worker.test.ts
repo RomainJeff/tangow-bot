@@ -1,6 +1,11 @@
 import type { WorkerSpec } from "@rakazo/adapter-kit";
 import { describe, expect, it } from "vitest";
-import { E2BWorkerProvider, type E2BWorkerSandbox, type E2BWorkerSdk } from "./e2b-worker.js";
+import {
+  E2B_CREATE_MARGIN_MS,
+  E2BWorkerProvider,
+  type E2BWorkerSandbox,
+  type E2BWorkerSdk,
+} from "./e2b-worker.js";
 import { encodeFrameLine } from "./runtime-worker/framing.js";
 
 type Guest = {
@@ -68,12 +73,16 @@ function spec(mounts: WorkerSpec["mounts"], overrides: Partial<WorkerSpec> = {})
     botId: "bot_1",
     mounts,
     ttlSeconds: 14_400,
-    ensureTimeoutSeconds: 900,
+    ensureDeadline: new Date(Date.now() + 900_000),
     ...overrides,
   };
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+/** A deadline that leaves `ms` of creating time once the provider's margin is taken. */
+const creatingFor = (ms: number) => ({
+  ensureDeadline: new Date(Date.now() + E2B_CREATE_MARGIN_MS + ms),
+});
 
 describe("E2BWorkerProvider", () => {
   it("creates one secure sandbox per attempt with its volumes mounted by name", async () => {
@@ -131,7 +140,7 @@ describe("E2BWorkerProvider", () => {
       },
     });
 
-    await expect(worker.ensure(spec([], { ensureTimeoutSeconds: 0.05 }))).rejects.toThrow(
+    await expect(worker.ensure(spec([], creatingFor(50)))).rejects.toThrow(
       "The worker of attempt_1 missed its deadline",
     );
     expect(e2b.sandboxes.size).toBe(0);
@@ -147,9 +156,7 @@ describe("E2BWorkerProvider", () => {
         ),
     });
 
-    await expect(worker.ensure(spec([], { ensureTimeoutSeconds: 0.05 }))).rejects.toThrow(
-      "create aborted",
-    );
+    await expect(worker.ensure(spec([], creatingFor(50)))).rejects.toThrow("create aborted");
   });
 
   it("destroys every sandbox of the attempt, tagged or referenced, then reports none left", async () => {

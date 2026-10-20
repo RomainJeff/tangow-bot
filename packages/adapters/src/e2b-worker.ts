@@ -14,6 +14,12 @@ import { WORKER_LIMITS } from "./runtime-worker/limits.js";
 /** Where the worker template puts the guest bundle. */
 export const E2B_WORKER_GUEST_ENTRY = "/opt/rakazo/agent-run-worker.mjs";
 
+/**
+ * `ensure` stops creating this long before the shared ensure deadline, so a create the server
+ * accepted lands and is tagged before a release trusts `absent`.
+ */
+export const E2B_CREATE_MARGIN_MS = 60_000;
+
 const STDERR_TAIL_CHARS = 4096;
 
 export interface E2BWorkerConfig {
@@ -175,7 +181,7 @@ export class E2BWorkerProvider implements WorkerProvider, GuestConnector {
   }
 
   async ensure(spec: WorkerSpec): Promise<{ providerRef: string }> {
-    const deadline = Date.now() + spec.ensureTimeoutSeconds * 1000;
+    const deadline = spec.ensureDeadline.getTime() - E2B_CREATE_MARGIN_MS;
     const metadata = attemptTag(spec.attemptId);
     const [existing] = await this.sdk.listSandboxes(metadata);
     if (existing) return { providerRef: existing };
