@@ -18,8 +18,8 @@ export function AmbientBackground() {
 }
 
 /**
- * The page tone fading out under the transparent bar, as on web at phone width: the title stays
- * legible over any bubble. The native scroll-edge effect does not reach the thread's inverted list.
+ * The page tone fading out under the transparent bar: dense under the title, so it stays legible
+ * over any bubble, then a long soft edge rather than a line. The native scroll-edge effect does not reach the thread's inverted list.
  */
 export function ThreadScrollEdge({ height }: { height: number }) {
   const tokens = useMobileTokens();
@@ -32,7 +32,7 @@ export function ThreadScrollEdge({ height }: { height: number }) {
         left: 0,
         right: 0,
         height,
-        experimental_backgroundImage: `linear-gradient(to bottom, ${hexWithAlpha(tokens.background, 0.96)} 0%, ${hexWithAlpha(tokens.background, 0.85)} 55%, ${hexWithAlpha(tokens.background, 0)} 100%)`,
+        experimental_backgroundImage: `linear-gradient(to bottom, ${hexWithAlpha(tokens.background, 0.96)} 0%, ${hexWithAlpha(tokens.background, 0.9)} 65%, ${hexWithAlpha(tokens.background, 0)} 100%)`,
       }}
     />
   );
