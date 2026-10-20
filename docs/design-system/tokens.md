@@ -143,7 +143,8 @@ multiple of 0.25 rem: `gap-3` is 12, `gap-5` is 20, `gap-7` is 28. Never
 | `row` | 8 | `rounded-row` | sidebar rows, menu rows, buttons |
 | `card` | 14 | `rounded-card` | option tiles, wells, fields in a card, menus |
 | `draft` | 16 | — | shared draft (wave 2) |
-| `block` | 24 | `rounded-block` | the decision card (28 on iPhone) |
+| `block` | 24 | `rounded-block` | the decision card |
+| `mobileBlock` | 28 | — | the decision card on iPhone |
 | `bubble` | 20 | `rounded-bubble` | every message bubble, bot and user, and everything on the bot's paper |
 | `linkMention` | 4 | — | a link mention's icon frame (`--corner-link-mention`) |
 | `composer` | 24 | `rounded-composer` | the composer |

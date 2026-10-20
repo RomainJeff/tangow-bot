@@ -193,7 +193,6 @@ export function createStyles() {
     lineLabel: { flexShrink: 0, maxWidth: "50%" },
     lineValue: { flex: 1, color: tokens.foreground },
     tiles: { gap: 8 },
-    tilesFoot: { paddingBottom: 14 },
     tile: {
       flexDirection: "row",
       alignItems: "center",
@@ -222,7 +221,7 @@ export function createStyles() {
     cloneText: { position: "absolute", top: 0, bottom: 0, left: 0, justifyContent: "center" },
     cloneBubble: { alignSelf: "flex-start", maxWidth: "100%" },
     settled: { gap: 14 },
-    settledLine: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 14 },
+    settledLine: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 16 },
     settledText: nativeTextStyle("meta", { size: 14 }),
     shrink: { flexShrink: 1 },
   });
