@@ -61,7 +61,8 @@
     "pnpm test:integration": "passed, 163 tests in 23 suites on Testcontainers PostgreSQL",
     "migration script typecheck": "passed with a temporary tsconfig on the base config; a planted type error failed it",
     "live lanes": "9 passed, 4 pending S3; see lanes.json",
-    "live bench": "0 errors in 90 runs; see bench.json"
+    "live bench": "0 errors in 90 runs; see bench.json",
+    "pnpm test:e2e:affected": "ran the full web suite because no impact map exists: 211 passed and 11 failed, the feature base's counts and its known failures (ask-card follow and motion, message hover actions, message quote, Team Computer). No web or UI source changed."
   },
   "defects_found_live_and_fixed": [
     "The worker template from #229 did not build: E2B runs build steps as the sandbox user, which cannot create /workspace or write /opt. The makeDir and the bundle copy now run as root.",
