@@ -50,7 +50,10 @@ async function driveGuest(options: {
     version: 1,
     kind: "worker.start",
     worker,
-    workspace: { cwd: options.cwd, mounts: [] },
+    workspace: {
+      cwd: options.cwd,
+      mounts: [{ path: options.cwd, scope: "private", access: "rw" }],
+    },
     computer: "none",
     run: {
       botId: "bot_guest",

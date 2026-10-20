@@ -19,12 +19,13 @@ const GREP_TEXT_CHARS = WORKER_LIMITS.localOutputModelChars - 256;
 const GREP_SKIPPED_DIRECTORIES = new Set([".git", "node_modules"]);
 const GREP_MAX_FILES = 20_000;
 const GREP_MAX_BYTES = 256 * 1024 * 1024;
+const WRITING_TOOLS = new Set(["write_file", "edit_file"]);
 
 /** The bot's mounted volumes, on the guest disk. */
 function guestFiles({
   botId,
   root,
-}: LocalToolContext): WorkspaceFiles & { real(stored: string): string } {
+}: LocalToolContext): WorkspaceFiles & { root: string; real(stored: string): string } {
   const paths = workerPaths(botId);
   const real = (stored: string) => path.join(root, paths.root, stored);
   return {
@@ -70,10 +71,32 @@ function failed(text: string): CommandOutput {
   return { text, isError: true, truncated: false, totalBytes: 0 };
 }
 
+/**
+ * Whether a write lands on a volume that outlives the VM. Anything else under the workspace is the
+ * VM's own disk, lost when it is destroyed. Reads stay permissive: they only see that same disk,
+ * which bash reads anyway, and listing the workspace root shows the mounts.
+ */
+function writableMount(mounts: LocalToolContext["mounts"], target: string): string | null {
+  const mount = mounts.find(
+    (candidate) => target === candidate.path || target.startsWith(`${candidate.path}/`),
+  );
+  if (!mount) {
+    const mounted = mounts.map((candidate) => candidate.path).join(", ") || "none";
+    return `${target} is not on a mounted volume, so it would be lost when this run ends; write under a mounted volume (${mounted})`;
+  }
+  return mount.access === "rw" ? null : `${mount.path} is mounted read-only`;
+}
+
 function fileTool(name: string): LocalTool {
   return async (args, context) => {
     try {
-      const result = await runFileTool(name, args, guestFiles(context));
+      const files = guestFiles(context);
+      if (WRITING_TOOLS.has(name)) {
+        const target = path.posix.join(files.root, files.resolve(String(args.path ?? "")));
+        const refusal = writableMount(context.mounts, target);
+        if (refusal) return { result: { error: refusal, path: String(args.path ?? "") } };
+      }
+      const result = await runFileTool(name, args, files);
       const bytes = Buffer.byteLength(JSON.stringify(result));
       if (bytes <= WORKER_LIMITS.localResultBytes) return { result };
       return {

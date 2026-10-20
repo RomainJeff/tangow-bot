@@ -202,6 +202,7 @@ async function runAttempt(
             spoolDir: options.spoolDir,
             botId: run.botId,
             root: options.root ?? "/",
+            mounts: workspace.mounts,
           })
         : {
             text: `${name} cannot run in this worker.`,

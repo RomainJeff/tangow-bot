@@ -63,10 +63,7 @@ async function runTask(arm: "in_process" | "worker") {
     steps: fileTask(seen, () => {
       file =
         arm === "worker"
-          ? readFileSync(
-              path.join(root, provider!.launches[0]!, "workspace/bots", run.bot.id, "notes.md"),
-              "utf8",
-            )
+          ? readFileSync(path.join(provider!.volumePath("private"), "notes.md"), "utf8")
           : [...run.sandbox.boxes.values()]
               .map((box) => box.files.get("notes.md"))
               .filter((stored) => stored !== undefined)
@@ -80,12 +77,31 @@ async function runTask(arm: "in_process" | "worker") {
           prisma,
           lifecycle: createWorkerLifecycle({ prisma, provider }),
           connector: provider,
+          needs: { files: { private: "rw", shared: null }, computer: "none" },
         }),
         stops: createStopJournal(prisma),
       });
     },
   });
   cleanups.push(() => run.close());
+  if (arm === "worker") {
+    // Only an E2B computer may keep its home on volumes, so the fake computer passes for one.
+    const provision = run.sandbox.provision.bind(run.sandbox);
+    run.sandbox.provision = async (...args) => ({ ...(await provision(...args)), kind: "e2b" });
+    await run.prisma.computer.update({
+      where: { id: run.bot.computerId! },
+      data: { kind: "e2b", homeStorage: "volumes" },
+    });
+    await run.prisma.volume.create({
+      data: {
+        kind: "bot_private",
+        spaceId: run.bot.spaceId,
+        botId: run.bot.id,
+        providerKind: "local-worker",
+        providerRef: "private",
+      },
+    });
+  }
   const runId = await run.send("Write, edit, read and list a note.");
   await run.continueRun(runId);
   run.model.assertComplete();

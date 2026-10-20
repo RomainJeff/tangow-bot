@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createWriteStream } from "node:fs";
 import { mkdir, readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
-import type { LocalToolOutput } from "@rakazo/adapter-kit";
+import type { GuestMount, LocalToolOutput } from "@rakazo/adapter-kit";
 import { WORKER_LIMITS } from "@rakazo/adapters/runtime-worker/wire";
 import { FILE_TOOLS } from "./file-tools.js";
 
@@ -15,6 +15,8 @@ export interface LocalToolContext {
   botId: string;
   /** Prefix of every guest path the controller names. `/` in a VM. */
   root: string;
+  /** The volumes `worker.start` mounted: the only places a write outlives the VM. */
+  mounts: readonly GuestMount[];
 }
 
 export type LocalTool = (

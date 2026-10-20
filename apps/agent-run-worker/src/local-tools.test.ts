@@ -28,7 +28,17 @@ async function context(signal = new AbortController().signal): Promise<LocalTool
   dirs.push(root);
   const cwd = path.join(root, "workspace", "bots", "bot_1");
   await mkdir(cwd, { recursive: true });
-  return { cwd, signal, spoolDir: path.join(root, "spool"), botId: "bot_1", root };
+  return {
+    cwd,
+    signal,
+    spoolDir: path.join(root, "spool"),
+    botId: "bot_1",
+    root,
+    mounts: [
+      { path: "/workspace/bots/bot_1", scope: "private", access: "rw" },
+      { path: "/workspace/shared", scope: "shared", access: "rw" },
+    ],
+  };
 }
 
 function tool(name: string) {
@@ -254,6 +264,31 @@ describe("file tools", () => {
       expect(await tool(name)(args, ctx), `${name} ${JSON.stringify(args)}`).toEqual({ result });
     }
     expect(await readFile(path.join(ctx.cwd, "a.txt"), "utf8")).toBe("same same");
+  });
+
+  it("refuses a write that is not on a writable mounted volume", async () => {
+    const ctx = {
+      ...(await context()),
+      mounts: [
+        { path: "/workspace/bots/bot_1", scope: "private" as const, access: "rw" as const },
+        { path: "/workspace/shared", scope: "shared" as const, access: "ro" as const },
+      ],
+    };
+    const lost = (target: string) =>
+      `${target} is not on a mounted volume, so it would be lost when this run ends; write under a mounted volume (/workspace/bots/bot_1, /workspace/shared)`;
+
+    expect(await tool("write_file")({ path: "/workspace/notes/a.md", content: "x" }, ctx)).toEqual({
+      result: { error: lost("/workspace/notes/a.md"), path: "/workspace/notes/a.md" },
+    });
+    expect(await tool("write_file")({ path: "bots/bot_2/a.md", content: "x" }, ctx)).toEqual({
+      result: { error: lost("/workspace/bots/bot_2/a.md"), path: "bots/bot_2/a.md" },
+    });
+    expect(
+      await tool("edit_file")({ path: "shared/plan.md", old_text: "a", new_text: "b" }, ctx),
+    ).toEqual({
+      result: { error: "/workspace/shared is mounted read-only", path: "shared/plan.md" },
+    });
+    expect(await readdir(path.join(ctx.root, "workspace"))).toEqual(["bots"]);
   });
 
   it("returns a result too large for the channel as an error the model sees", async () => {
