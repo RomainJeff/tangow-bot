@@ -10,7 +10,7 @@ export type WorkerProviderConfig = { kind: "e2b"; apiKey: string; template: stri
 
 /** The template `apps/agent-run-worker/template` builds for the default harness. */
 const DEFAULT_WORKER_TEMPLATE = "rakazo-worker-pi";
-const RECONCILE_BATCH = 100;
+const RECONCILE_BATCH = 10;
 
 /**
  * `WORKER_PROVIDER` selects a worker provider, `WORKER_TEMPLATE` its guest image. E2B reads its
@@ -49,18 +49,18 @@ export function composeWorkers(
   return {
     lifecycle,
     runWorkers: createRunWorkers({ prisma, lifecycle, connector: provider }),
-    async reconcileWorkers() {
-      const counts = await lifecycle.reconcile(
-        { limit: RECONCILE_BATCH },
-        {
-          operationId: "workers.reconcile",
-          traceId: "workers.reconcile",
-          spaceId: "",
-          userId: "",
-          signal: new AbortController().signal,
-        },
-      );
+    async reconcileWorkers(signal: AbortSignal) {
+      const context = {
+        operationId: "workers.reconcile",
+        traceId: "workers.reconcile",
+        spaceId: "",
+        userId: "",
+        signal,
+      };
+      const counts = await lifecycle.reconcile({ limit: RECONCILE_BATCH }, context);
       if (counts.failed > 0) getLogger().error("worker reconciliation", counts);
+      const swept = await lifecycle.sweepVolumes(context);
+      if (swept.failed > 0) getLogger().error("volume sweep", swept);
     },
   };
 }
