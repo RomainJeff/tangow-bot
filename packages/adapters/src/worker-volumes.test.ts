@@ -3,7 +3,7 @@ import type { PgliteDatabase } from "@rakazo/db/pglite.test-support";
 import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { FakeWorkerProvider } from "./fake-worker-provider.js";
-import { workerFixture } from "./worker-fixture.test-support.js";
+import { mcpOnly, workerFixture } from "./worker-fixture.test-support.js";
 import { createWorkerLifecycle } from "./worker-lifecycle.js";
 
 let database: PgliteDatabase;
@@ -65,6 +65,13 @@ describe("volume provisioning and home adoption", () => {
     expect(await homeStorage()).toBe("snapshot");
 
     await prisma.volume.update({ where: { id: adaVolume.id }, data: { writerAttemptId: null } });
+    const dedicatedBot = await fixture.seedBot(space, null);
+    const elsewhere = await fixture.seedAttempt((await fixture.seedRun(dedicatedBot)).id);
+    await workers.start(await fixture.launchFor(workers, elsewhere.id, mcpOnly), fixture.context);
+    await expect(workers.adoptVolumeHome(computer.id)).resolves.toBe("space_worker_live");
+    expect(await homeStorage()).toBe("snapshot");
+
+    await workers.release(elsewhere.id, fixture.context);
     await expect(workers.adoptVolumeHome(computer.id)).resolves.toBe("adopted");
     await expect(workers.adoptVolumeHome(computer.id)).resolves.toBe("adopted");
     expect(await homeStorage()).toBe("volumes");
@@ -94,6 +101,25 @@ describe("volume provisioning and home adoption", () => {
 
     await lease(new Date(Date.now() - 60_000));
     await expect(workers.adoptVolumeHome(computer.id)).resolves.toBe("adopted");
+  });
+
+  it("provisions the private volume of a bot attached once its computer's home is on volumes", async () => {
+    const computer = await fixture.seedComputer(spaceA);
+    const bot = await fixture.seedBot(spaceA, computer.id);
+
+    const beforeAdoption = await workers.provisionAttachedBotVolume(bot.id, fixture.context);
+    await prisma.computer.update({ where: { id: computer.id }, data: { homeStorage: "volumes" } });
+    const attached = await workers.provisionAttachedBotVolume(bot.id, fixture.context);
+    const again = await workers.provisionAttachedBotVolume(bot.id, fixture.context);
+
+    const volume = await prisma.volume.findFirstOrThrow({ where: { botId: bot.id } });
+    expect(beforeAdoption).toBeNull();
+    expect(attached).toEqual({
+      volumeId: volume.id,
+      providerRef: `fake-volume-rakazo-${volume.id}`,
+    });
+    expect(again).toEqual(attached);
+    expect(volume.kind).toBe("bot_private");
   });
 
   it("never adopts a home on a computer kind without workers", async () => {
