@@ -142,7 +142,7 @@ describe("a skill line under a bot's message", () => {
     expect(container.querySelector('[data-slot="message-row-bubble"]')).toBeNull();
     expect(lines().map((line) => line.textContent)).toEqual(["Skill learned · Invoices"]);
     const wrapper = lines()[0]?.parentElement;
-    expect(wrapper?.className).toContain("px-3.5");
+    expect(wrapper?.className).toContain("px-4");
     expect(container.innerHTML).not.toContain("justify-center");
   });
 

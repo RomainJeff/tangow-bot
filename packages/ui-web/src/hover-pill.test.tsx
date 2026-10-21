@@ -20,6 +20,10 @@ describe("HoverPill", () => {
     expect(html).toContain("group-hover:pointer-events-auto");
     // Keyboard focus only: a clicked button keeps focus, and must not pin it.
     expect(html).toContain("group-has-[:focus-visible]:opacity-100");
+    // The glass blurs only while shown, not on every row's hidden pill.
+    expect(html).toContain("backdrop-filter-none");
+    expect(html).toContain("group-hover:backdrop-filter-(--glass-control-backdrop)");
+    expect(html).toContain("group-has-[:focus-visible]:backdrop-filter-(--glass-control-backdrop)");
     expect(html).not.toContain("group-focus-within");
     expect(html).not.toContain("pointer-fine");
     expect(html).not.toContain("pointer-coarse");
@@ -33,8 +37,7 @@ describe("HoverPill", () => {
     expect(html).toContain("z-10");
     expect(html).toContain("end-3");
     expect(html).toContain("rounded-full");
-    expect(html).toContain("bg-surface");
-    expect(html).toContain("shadow-floating");
+    expect(html).toContain("rk-glass-control");
     expect(html).not.toContain("right-");
   });
 

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { type TypographyKey, typography } from "@rakazo/ui-tokens";
+import { type MaterialKey, materials, type TypographyKey, typography } from "@rakazo/ui-tokens";
 import { describe, expect, it } from "vitest";
 import { MAPPED_RADIUS_KEYS, MAPPED_SIZE_KEYS } from "./lib/utils.js";
 
@@ -55,6 +55,25 @@ describe("ui-web theme CSS matches the ui-tokens source", () => {
     ]) {
       expect(layer, rule).toContain(rule);
     }
+  });
+
+  describe("materials", () => {
+    const materialsCss = readFileSync(
+      resolve(dirname(fileURLToPath(import.meta.url)), "materials.css"),
+      "utf8",
+    );
+    const layer = blockAfter(materialsCss, "@layer components {");
+    const reduced = blockAfter(materialsCss, "@media (prefers-reduced-transparency: reduce) {");
+
+    it("turns every material into its opaque fallback under Reduce Transparency", () => {
+      const unblurred = reduced.slice(reduced.lastIndexOf("}", reduced.indexOf("backdrop-filter")));
+      for (const key of Object.keys(materials) as MaterialKey[]) {
+        expect(layer, key).toContain(`.rk-glass-${key} {`);
+        expect(reduced, key).toContain(`background: var(--material-${key}-fallback);`);
+        expect(unblurred, key).toContain(`.rk-glass-${key}`);
+      }
+      expect(unblurred).toContain("backdrop-filter: none;");
+    });
   });
 
   describe("reduced motion", () => {

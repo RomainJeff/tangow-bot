@@ -4,7 +4,7 @@ import { ingestPiAi, projectPiAi } from "./pi-ai-history.js";
 
 const MODEL = { api: "openai-completions", provider: "openai", id: "gpt-test" } as const;
 const PROMPT = { role: "user", content: "Tidy my notes.", timestamp: 1 };
-const same = (text: string) => text;
+const tools = { controllerTools: ["remember"], nativeTools: ["bash"] };
 
 describe("canonical history and a native Pi session", () => {
   it("projects controller tools under their MCP names and ingests back to the same turns", () => {
@@ -44,16 +44,12 @@ describe("canonical history and a native Pi session", () => {
       ),
     ).toEqual(["bash", "mcp__rakazo__remember", "result:bash", "result:mcp__rakazo__remember"]);
     expect(
-      ingestPiAi(
-        [PROMPT, ...projected],
-        [{ name: "remember", output: "Saved." }],
-        ["remember"],
-        same,
-      ),
-    ).toEqual({
-      entries: history.map((turn) => ({ kind: "turn", turn })),
-      unverifiedCalls: 0,
-    });
+      ingestPiAi([PROMPT, ...projected], {
+        ...tools,
+        answers: [{ callId: "controller-1", name: "remember", output: "Saved." }],
+        clean: (text) => text,
+      }).entries,
+    ).toEqual(history.map((turn) => ({ kind: "turn", turn })));
   });
 
   it("keeps the controller's answer over the transcript's and counts calls it never answered", () => {
@@ -80,9 +76,11 @@ describe("canonical history and a native Pi session", () => {
     ];
 
     expect(
-      ingestPiAi(transcript, [{ name: "remember", output: "Saved." }], ["remember"], (text) =>
-        text.toUpperCase(),
-      ),
+      ingestPiAi(transcript, {
+        ...tools,
+        answers: [{ callId: "controller-1", name: "remember", output: "Saved." }],
+        clean: (text) => text.toUpperCase(),
+      }),
     ).toEqual({
       entries: [
         {
@@ -103,6 +101,19 @@ describe("canonical history and a native Pi session", () => {
           },
         },
         { kind: "summary", summary: "READ THE NOTES.", tokensBefore: 12000 },
+      ],
+      steps: [
+        { kind: "controller", turn: 0, callId: "controller-1", name: "remember" },
+        {
+          kind: "call",
+          turn: 0,
+          callId: "c3",
+          name: "bash",
+          args: { command: "cat notes.md" },
+          output: "- MILK",
+          isError: false,
+        },
+        { kind: "summary", turn: 1, summary: "READ THE NOTES.", tokensBefore: 12000 },
       ],
       unverifiedCalls: 1,
     });

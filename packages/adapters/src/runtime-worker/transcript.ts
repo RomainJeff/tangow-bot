@@ -2,11 +2,10 @@ import type {
   AgentRuntimeEvent,
   ConnectorTool,
   GuestBody,
-  HarnessTranscriptEntry,
   ModelDialect,
   ReplyFinal,
 } from "@rakazo/adapter-kit";
-import type { ControllerCallRecord, IngestResult } from "./dialects/pi-ai-history.js";
+import type { ControllerCallRecord } from "./dialects/pi-ai-history.js";
 import { ingestPiAi } from "./dialects/pi-ai-history.js";
 import { nativeToolsForHarness } from "./guest-input.js";
 
@@ -29,62 +28,44 @@ function outputText(output: unknown): string {
   return typeof output === "string" ? output : JSON.stringify(output ?? null);
 }
 
-function harnessEntries(
-  { entries }: IngestResult,
-  controllerTools: ReadonlySet<string>,
-): HarnessTranscriptEntry[] {
-  return entries.flatMap((entry): HarnessTranscriptEntry[] => {
-    if (entry.kind === "summary") return [entry];
-    return (entry.turn.parts ?? []).flatMap((part) =>
-      part.type === "toolCalls"
-        ? part.calls
-            .filter((call) => !controllerTools.has(call.name))
-            .map((call) => ({
-              kind: "call" as const,
-              callId: call.id,
-              name: call.name,
-              args: call.args,
-              output: call.output,
-            }))
-        : [],
-    );
-  });
-}
-
 /**
- * The controller's half of a native harness's transcript. It keeps what it answered each tool
- * call of the attempt's root agent, and ingests the one transcript against that record, so a
- * result the harness claims for a controller tool never replaces the controller's.
+ * The controller's half of a native harness's transcripts. It keeps what it answered each tool
+ * call of the attempt, per agent, and ingests each agent's one transcript against that record,
+ * so a result the harness claims for a controller tool never replaces the controller's.
  */
 export function transcriptIngest(clean: (text: string) => string) {
-  const answers: ControllerCallRecord[] = [];
-  let ingested = false;
+  const answers = new Map<string, ControllerCallRecord[]>();
+  const ingested = new Set<string>();
+  const record = (call: ToolCall, output: string) => {
+    const agent = answers.get(call.agent) ?? [];
+    agent.push({ callId: call.callId, name: call.name, output });
+    answers.set(call.agent, agent);
+  };
   return {
     answered(call: ToolCall, reply: ReplyFinal): ReplyFinal {
-      if (call.agent !== "root") return reply;
-      if (reply.type === "tool.result") {
-        answers.push({ name: call.name, output: clean(outputText(reply.output)) });
-      } else if (reply.type === "error") {
-        answers.push({ name: call.name, output: reply.message });
-      }
+      if (reply.type === "tool.result") record(call, clean(outputText(reply.output)));
+      else if (reply.type === "error") record(call, reply.message);
       return reply;
     },
-    /** The event for the attempt's transcript, or nothing for a second one. */
+    /** The event for an agent's transcript, or nothing for its second one. */
     ingest(
+      agent: string,
       body: Transcript,
       tools: readonly ConnectorTool[],
       harness: string,
     ): TranscriptEvent | undefined {
-      if (ingested) return undefined;
-      ingested = true;
-      const native = new Set(nativeToolsForHarness(harness).map((tool) => tool.name));
-      const controllerTools = tools.map((tool) => tool.name).filter((name) => !native.has(name));
-      const result = INGEST[body.dialect](body.messages, answers, controllerTools, clean);
-      return {
-        type: "transcript",
-        entries: harnessEntries(result, new Set(controllerTools)),
-        unverifiedCalls: result.unverifiedCalls,
-      };
+      if (ingested.has(agent)) return undefined;
+      ingested.add(agent);
+      const nativeTools = nativeToolsForHarness(harness).map((tool) => tool.name);
+      const result = INGEST[body.dialect](body.messages, {
+        answers: answers.get(agent) ?? [],
+        controllerTools: tools
+          .map((tool) => tool.name)
+          .filter((name) => !nativeTools.includes(name)),
+        nativeTools,
+        clean,
+      });
+      return { type: "transcript", entries: result.steps, unverifiedCalls: result.unverifiedCalls };
     },
   };
 }

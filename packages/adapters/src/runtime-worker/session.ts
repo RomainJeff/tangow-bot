@@ -469,9 +469,15 @@ export function createSession(
         fail(new Error(clean(body.message)));
         return { type: "stop", reason: "cancelled" };
       case "transcript": {
-        const ingested = transcript.ingest(body, request.tools, harness!.name);
+        if (!(await launched!.holdsFence())) return revoke();
+        const agent = body.agent ?? "root";
+        const helper = helperOf(agent);
+        if (agent !== "root" && !helper) return refuse("invalid");
+        const ingested = transcript.ingest(agent, body, request.tools, harness!.name);
         if (!ingested) return refuse("invalid");
-        await events.push(ingested);
+        if (!helper) await events.push(ingested);
+        else if (helper.log.transcript) await helper.log.transcript(ingested);
+        else return { type: "error", message: "This helper keeps no transcript" };
         return { type: "recorded" };
       }
     }
