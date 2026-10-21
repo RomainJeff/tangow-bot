@@ -23,9 +23,12 @@ function base(bundle: string): TemplateBuilder {
 }
 
 /** What each harness adds to the base, by the name it registers in `HARNESSES`. */
+// Pi accepts Debian's fdfind binary for native find.
+const piLayer = (template: TemplateBuilder) => template.aptInstall(["ripgrep", "fd-find"]);
+
 const HARNESS_LAYERS: Readonly<Record<string, (template: TemplateBuilder) => TemplateBuilder>> = {
-  // Pi accepts Debian's fdfind binary for native find.
-  pi: (template) => template.aptInstall(["ripgrep", "fd-find"]),
+  pi: piLayer,
+  "pi-native": piLayer,
 };
 
 export function workerTemplate(harness: string, bundle: string): TemplateBuilder {

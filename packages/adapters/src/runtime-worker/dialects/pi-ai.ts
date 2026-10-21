@@ -1,3 +1,8 @@
+import type {
+  AssistantMessageEventStream,
+  SimpleStreamOptions,
+  TranscriptContext,
+} from "@earendil-works/pi-ai";
 import {
   type Api,
   type AssistantMessage,
@@ -299,3 +304,12 @@ export function piAiStreamFn(
     return stream;
   };
 }
+
+/** The relay as a Pi provider's stream: every call of a native Pi session, compaction included. */
+export function piAiProviderStream(request: RelayRequest) {
+  const stream = piAiStreamFn(request, () => "root");
+  return (model: Model<Api>, context: TranscriptContext, options?: SimpleStreamOptions) =>
+    stream(model, context, options, undefined) as AssistantMessageEventStream;
+}
+
+export * from "./pi-ai-history.js";

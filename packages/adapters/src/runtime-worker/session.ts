@@ -464,6 +464,8 @@ export function createSession(
       case "failed":
         fail(new Error(clean(body.message)));
         return { type: "stop", reason: "cancelled" };
+      case "transcript":
+        return { type: "recorded" };
     }
   }
 
