@@ -47,6 +47,10 @@ export const WORKER_LIMITS = {
   cancelGraceMs: 2_000,
   stopConfirmMs: 10_000,
   modelRequestsPerAttempt: 400,
+  /** Billed prompt tokens, including cache reads/writes, plus completions across all agents. */
+  modelTokensPerAttempt: 2_000_000,
+  /** Controller tool calls across the root and its helpers, including native authorizations. */
+  toolCallsPerAttempt: 2_000,
   /** Model requests a paused attempt may still make to close its turn; later ones are turned away. */
   pausedModelRequests: 2,
   /** Tool calls a paused attempt may still make, each answered without running. */

@@ -14,6 +14,7 @@ import type {
 } from "@rakazo/adapter-kit";
 import { AgentRuntimeUnavailableError, FRAME_CAPABILITY } from "@rakazo/adapter-kit";
 import { redactSecrets, secretRedactor } from "@rakazo/core";
+import { getLogger } from "@rakazo/logging";
 import { isToolPauseResult } from "../approval-effect.js";
 import { redactPayloadValue, redactPayloadWith } from "../connector-safety.js";
 import type { CapabilityKey } from "./capability.js";
@@ -29,6 +30,7 @@ import type { LaunchedGuest, WorkerLauncher } from "./launcher.js";
 import { WORKER_LIMITS } from "./limits.js";
 import type { ModelRelay, RelayUsage } from "./model-relay.js";
 import { guestModelOf } from "./model-relay.js";
+import { measureRelayPrefix } from "./relay-measurements.js";
 import type { StopJournal } from "./stop-journal.js";
 
 /** The model-access dialects the controller relays. A new dialect is one entry here. */
@@ -139,6 +141,8 @@ export function createSession(
       ) ?? []),
     ]);
   let modelRequests = 0;
+  let modelTokens = 0;
+  let toolCalls = 0;
   /**
    * Set once a tool paused the run or the harness asked the user: from then on the attempt may
    * only conclude, whatever its harness does.
@@ -306,16 +310,28 @@ export function createSession(
     if (!(await launched!.holdsFence())) return revoke();
     modelRequests += 1;
     if (modelRequests > WORKER_LIMITS.modelRequestsPerAttempt) return refuse("budget");
+    if (modelTokens >= WORKER_LIMITS.modelTokensPerAttempt) return refuse("budget");
     const helper = helperOf(body.agent);
     if (body.agent !== "root" && !helper) return refuse("invalid");
     const turnedAway = paused && pausedModelRequest(paused);
     if (turnedAway) return turnedAway;
     const abort = new AbortController();
     relays.set(seq, abort);
+    let usage: RelayUsage | undefined;
+    let prefix: ReturnType<typeof measureRelayPrefix> | undefined;
     try {
       // The guest's own tool output reaches its transcript unredacted: mask it before the provider.
       const call = redactTranscript(body.call, secretRedactor([...(request.secrets ?? [])]));
-      const usage: RelayUsage | undefined = await RELAYS[body.dialect](
+      // Measurements describe the same redacted transcript the provider receives.
+      prefix = measureRelayPrefix(
+        {
+          threadId: request.threadId,
+          botId: request.botId,
+          helper: helper ? body.agent : undefined,
+        },
+        call as typeof body.call,
+      );
+      usage = await RELAYS[body.dialect](
         helper?.model ?? request.model,
         call as never,
         (event) => part({ type: "model.event", event } as ReplyPart),
@@ -329,14 +345,41 @@ export function createSession(
         },
       );
       if (usage) {
+        modelTokens += usage.inputTokens + usage.outputTokens;
+        if (modelTokens >= WORKER_LIMITS.modelTokensPerAttempt) {
+          for (const [pending, relay] of relays) {
+            if (pending !== seq) relay.abort();
+          }
+        }
         if (helper) {
           helper.usage.inputTokens += usage.inputTokens;
           helper.usage.outputTokens += usage.outputTokens;
         }
         await events.push(usage);
       }
-      return { type: "model.end" };
+      return modelTokens >= WORKER_LIMITS.modelTokensPerAttempt
+        ? refuse("budget")
+        : { type: "model.end" };
     } finally {
+      getLogger().info("agent.worker.model_request", {
+        runId: request.runId,
+        attemptId: worker.attemptId,
+        threadId: request.threadId,
+        botId: request.botId,
+        requestSeq: seq,
+        agent: helper ? body.agent : "root",
+        provider: usage?.provider ?? (helper?.model ?? request.model).provider,
+        model: usage?.model ?? (helper?.model ?? request.model).id,
+        modelRequests,
+        toolCalls,
+        modelTokens,
+        usageReported: usage !== undefined,
+        inputTokens: usage?.inputTokens,
+        cacheReadTokens: usage?.cacheReadTokens,
+        cacheWriteTokens: usage?.cacheWriteTokens,
+        outputTokens: usage?.outputTokens,
+        ...prefix,
+      });
       relays.delete(seq);
     }
   }
@@ -418,6 +461,7 @@ export function createSession(
       case "tool.call":
         // The executor checks its lease only between events: a guest must not outrun it.
         if (!(await launched!.holdsFence())) return revoke();
+        if (++toolCalls > WORKER_LIMITS.toolCallsPerAttempt) return refuse("budget");
         return callTool(body);
       case "tool.done":
         return recordLocalResult(body);
