@@ -88,20 +88,23 @@ describe("window chrome", () => {
   it("keeps conversation header controls clickable", () => {
     const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "../pages");
     const shell = readFileSync(path.join(root, "shell/thread-header.tsx"), "utf8");
-    expect(shell).toContain('className="app-drag flex h-header shrink-0 items-center');
-    // The mobile-nav toggle is a roundIcon Button that stays out of the drag region.
-    expect(shell).toContain('className="app-no-drag shrink-0 md:hidden"');
+    expect(shell).toContain('className="app-drag relative z-10 -mb-header flex h-header shrink-0');
+    // The mobile-nav toggle is a round glass button that stays out of the drag region.
+    expect(shell).toContain(
+      'className="rk-glass-control rk-press-round app-no-drag grid size-capsule shrink-0 place-items-center rounded-full text-foreground md:hidden"',
+    );
     // The bot-name trigger stays clickable (and out of the drag region) while
     // carrying its hover affordance.
     expect(shell).toContain(
       'className="app-no-drag -mx-2 flex min-w-0 items-center gap-3 rounded-lg px-2 py-1 transition-colors hover:bg-muted"',
     );
-    // One computer button and one settings button, each out of the drag region.
+    // One computer button and one settings button in the capsule, each out of the drag region.
+    expect(shell).toContain('const CAPSULE_BUTTON = "app-no-drag ');
     expect(shell.match(/data-testid="open-computer-panel"/g)).toHaveLength(1);
     expect(shell.match(/data-testid="open-settings-panel"/g)).toHaveLength(1);
     // No `<` in between: both attributes belong to the same element.
-    expect(shell).toMatch(/data-testid="open-computer-panel"[^<]*?className="app-no-drag"/);
-    expect(shell).toMatch(/data-testid="open-settings-panel"[^<]*?className="app-no-drag"/);
+    expect(shell).toMatch(/data-testid="open-computer-panel"[^<]*?className=\{CAPSULE_BUTTON\}/);
+    expect(shell).toMatch(/data-testid="open-settings-panel"[^<]*?className=\{CAPSULE_BUTTON\}/);
   });
 
   it("moves window chrome into the conversation header when the bots sidebar is collapsed", () => {

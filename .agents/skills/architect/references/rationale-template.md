@@ -18,6 +18,10 @@ The prose that ships alongside the type sketch. One page. Sentence-case headings
 
 *Filled in by [arena](../../arena/SKILL.md). Records which candidate became the base and why, what was adapted from each of the others, and what was rejected and why.*
 
+## Independent implementation
+
+*For multi-unit work, name each unit's outcome, write paths, shared contracts, start / verify / land dependencies and independent check, per separate-before-serializing-shared-state. Identify shared edits and their owner, the first common prerequisite, and what can proceed while a unit remains busy. Explain why the chosen shape needs less coordination than the alternatives. For a small coupled change, omit this section.*
+
 ## Tradeoffs accepted
 
 *One bullet per tradeoff the chosen shape makes. Form: "we accept X in exchange for Y." Name anything a future reader might mistake for an oversight, including things that look like premature optimization or premature simplification.*

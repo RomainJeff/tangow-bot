@@ -1,7 +1,7 @@
 import { t } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
-import { ChatMarkdown, LinkifiedText } from "@rakazo/chat-ui/web";
-import type { LinkPreviewCard as LinkPreviewCardBlock, MessageBlock } from "@rakazo/contracts";
+import { ChatMarkdown } from "@rakazo/chat-ui/web";
+import type { MessageBlock } from "@rakazo/contracts";
 import type { LinkMentionResolver, SkillSourceBlock } from "@rakazo/core";
 import {
   isLinkOnlyMessage,
@@ -9,8 +9,6 @@ import {
   linkMentionsKey,
   linkMentionsOf,
   narrationSegments,
-  previewSiteLabel,
-  sanitizePreviewTitle,
   skillSourcesOf,
   textWithoutPreviewedLinkLine,
 } from "@rakazo/core";
@@ -19,17 +17,15 @@ import {
   BotAvatar,
   cn,
   Interstitial,
-  LinkPreviewCard,
   MessageBubble,
   MessageMeta,
   MessageRow,
   StackedAvatars,
-  Surface,
   UserBubble,
 } from "@rakazo/ui-web";
-import { ArrowRight, BookOpen, Check, Clock } from "lucide-react";
+import { BookOpen, Clock } from "lucide-react";
 import type { ReactNode } from "react";
-import { memo, useMemo, useRef, useState } from "react";
+import { memo, useMemo, useRef } from "react";
 import "../../components/ai/beautiful-ui.css";
 import { AgentSteps } from "../../components/AgentSteps";
 import { ArtifactFileCard } from "../../components/ArtifactFileCard";
@@ -42,54 +38,21 @@ import { hasRenderableBlock, isHiddenActivityBlock } from "../../lib/message-blo
 import { messageProviderLabel } from "../../lib/messaging";
 import type { MessageItem } from "../../lib/thread-items";
 import { botIdOf } from "../../lib/thread-items";
+import {
+  ChildBotCard,
+  ComputerCard,
+  LinkPreviewRow,
+  ResultLinesCard,
+  UserText,
+} from "./block-views";
 import { FALLBACK_BOT_COLOR } from "./layout";
 import { messageLinkPreview } from "./message-actions";
-
-const USER_TEXT_FOLD_LINES = 20;
-
-/** A long user message folds after 20 lines behind a fade until "Show more" is clicked. */
-function UserText({ text, mentions }: { text: string; mentions?: LinkMentionResolver<ReactNode> }) {
-  const [expanded, setExpanded] = useState(false);
-  // ponytail: counts newlines, not wrapped lines; a 20-line max-height hides the rest either way.
-  const foldable = text.split("\n").length > USER_TEXT_FOLD_LINES;
-  if (!foldable) return <LinkifiedText text={text} mentions={mentions} />;
-  return (
-    <>
-      <div
-        data-testid="message-user-text"
-        data-folded={!expanded}
-        className={
-          expanded
-            ? undefined
-            : "relative max-h-[calc(20*var(--type-body-leading)*var(--type-body-size))] overflow-hidden"
-        }
-      >
-        <LinkifiedText text={text} mentions={mentions} />
-        {expanded ? null : (
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-linear-to-t from-chat-user to-transparent"
-          />
-        )}
-      </div>
-      <button
-        type="button"
-        onClick={() => setExpanded((open) => !open)}
-        className="mt-1.5 text-meta font-medium text-chat-user-foreground/70 duration-(--duration-hover) ease-quiet hover:text-chat-user-foreground"
-      >
-        {expanded ? <Trans>Show less</Trans> : <Trans>Show more</Trans>}
-      </button>
-    </>
-  );
-}
-
 import {
   AppConnectCard,
   ArtifactImage,
   ChartBlockView,
   ChoiceCard,
   LinkMentionIcon,
-  LinkPreviewImage,
   McpApprovalCard,
 } from "./message-cards";
 
@@ -112,43 +75,6 @@ export function useLinkMentions(
       }
     );
   }, [mentionsKey, artifactTarget]);
-}
-
-/** A preview card under the bubble it stands for, aligned to its edge and capped to its width. */
-export function LinkPreviewRow({
-  card,
-  artifactTarget,
-  side,
-  inGroup,
-}: {
-  card: LinkPreviewCardBlock;
-  artifactTarget: ArtifactTarget;
-  side: "user" | "bot";
-  inGroup: boolean;
-}) {
-  const image = card.image;
-  return (
-    <div className={`mt-1 flex first:mt-0 ${side === "user" ? "justify-end" : "justify-start"}`}>
-      <LinkPreviewCard
-        // The same width cap as the bubble it stands for, so the side still says who sent it.
-        className={side === "user" ? "max-w-39/50" : inGroup ? "max-w-22/25" : "max-w-41/50"}
-        href={card.url}
-        site={previewSiteLabel(card.url)}
-        title={card.title ? sanitizePreviewTitle(card.title) : undefined}
-        format={card.format}
-        imageRatio={image ? image.width / image.height : undefined}
-        image={
-          image ? (
-            <LinkPreviewImage
-              target={artifactTarget}
-              artifactId={image.artifactId}
-              fit={image.fit}
-            />
-          ) : undefined
-        }
-      />
-    </div>
-  );
 }
 
 export function previewMessageText(message: { blocks: readonly MessageBlock[] }): string {
@@ -263,7 +189,7 @@ export const MessageView = memo(function MessageView({
       data-testid="reply-parent-preview"
       aria-label={t`Jump to replied message`}
       onClick={() => onJumpToMessage?.(parentJumpId)}
-      className="mb-2 block max-w-3/4 truncate rounded-card border border-border bg-background px-3 py-2 text-start text-meta text-muted-foreground duration-(--duration-hover) ease-quiet hover:text-foreground"
+      className="block max-w-3/4 truncate rounded-card bg-muted px-3 py-2 text-start text-meta text-muted-foreground duration-(--duration-hover) ease-quiet hover:text-foreground"
       dir="auto"
     >
       {replyPreview ? previewMessageText(replyPreview) : t`Earlier message`}
@@ -372,7 +298,7 @@ export const MessageView = memo(function MessageView({
         )}
         {previewView()}
         {lastBubble < 0 && skillLines.length > 0 ? (
-          <MessageMeta lines={skillLines} className="px-3.5" />
+          <MessageMeta lines={skillLines} className="px-4" />
         ) : null}
       </>,
     );
@@ -444,47 +370,18 @@ export const MessageView = memo(function MessageView({
         );
       }
       if (block.kind === "child_bot") {
-        const removed = block.status === "deleted" || block.status === "archived";
         return (
-          <Surface key={i} className="w-[min(340px,90%)] overflow-hidden">
-            <button
-              type="button"
-              disabled={removed}
-              onClick={() => onOpenBot(block.botId)}
-              className="block w-full px-4.5 py-4 text-start disabled:opacity-60"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-author font-medium text-foreground" dir="auto">
-                  {block.name}
-                </span>
-                <span
-                  className={`rounded-full px-3 py-1 text-meta ${
-                    removed ? "bg-destructive/15 text-destructive" : "bg-success/15 text-success"
-                  }`}
-                >
-                  {block.status === "archived" ? (
-                    <Trans>archived</Trans>
-                  ) : block.status === "deleted" ? (
-                    <Trans>deleted</Trans>
-                  ) : (
-                    <Trans>bot</Trans>
-                  )}
-                </span>
-              </div>
-              <div className="mt-2 text-meta text-muted-foreground" dir="auto">
-                {removed
-                  ? block.status === "archived"
-                    ? t`Archived. Chat, memory, and files kept.`
-                    : t`Removed with chat, computer, and memory.`
-                  : block.title || t`Opened its thread.`}
-              </div>
-            </button>
-          </Surface>
+          <ChildBotCard
+            key={i}
+            block={block}
+            avatar={<BotAvatar {...avatarOf(block.botId)} size={36} />}
+            onOpenBot={onOpenBot}
+          />
         );
       }
       if (block.kind === "skill_source") {
         return skillLineBubble < 0 && i === firstSkillBlock ? (
-          <MessageMeta key={i} lines={skillLines} className="px-3.5" />
+          <MessageMeta key={i} lines={skillLines} className="px-4" />
         ) : null;
       }
       if (block.kind === "choice") {
@@ -580,20 +477,7 @@ export const MessageView = memo(function MessageView({
         );
       }
       if (block.kind === "card") {
-        return (
-          <div key={i} className="flex justify-start">
-            <Surface className="flex flex-col gap-2 px-5 py-4">
-              {block.lines.map((line) => (
-                <div key={line.k} className="flex items-baseline gap-2.5 text-meta">
-                  <Check className="size-3.5 text-success" strokeWidth={2} aria-hidden />
-                  <span className="font-semibold text-foreground">{line.k}</span>
-                  <ArrowRight className="size-3.5 text-muted-foreground" aria-hidden />
-                  <span>{line.v}</span>
-                </div>
-              ))}
-            </Surface>
-          </div>
-        );
+        return <ResultLinesCard key={i} block={block} />;
       }
       if (block.kind === "ask") {
         return (
@@ -616,27 +500,7 @@ export const MessageView = memo(function MessageView({
         );
       }
       if (block.kind === "computer") {
-        return (
-          <Surface key={i} className="w-[340px] px-4.5 py-4">
-            <div className="flex items-center justify-between">
-              <span className="text-author font-medium text-foreground">
-                <Trans>Computer</Trans>
-              </span>
-              <span
-                className={
-                  block.state === "Needs you"
-                    ? "rounded-full bg-warning/15 px-3 py-1 text-meta text-warning"
-                    : "rounded-full bg-success/15 px-3 py-1 text-meta text-success"
-                }
-              >
-                {block.state}
-              </span>
-            </div>
-            <div className="my-2.5 text-meta text-muted-foreground">
-              <ChatMarkdown>{block.text}</ChatMarkdown>
-            </div>
-          </Surface>
-        );
+        return <ComputerCard key={i} block={block} />;
       }
       return null;
     })

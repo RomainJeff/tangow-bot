@@ -63,10 +63,10 @@ describe("MessageRow", () => {
     expect(html).not.toContain('data-slot="message-row-author"');
   });
 
-  it("draws a muted bubble that fits its content, 82% in mono and 88% in a group", () => {
+  it("draws a chatBot bubble that fits its content, 82% in mono and 88% in a group", () => {
     const mono = renderToString(<MessageBubble>hi</MessageBubble>);
     expect(mono).toContain('data-slot="message-row-bubble"');
-    expect(mono).toContain("bg-muted");
+    expect(mono).toContain("bg-chat-bot");
     expect(mono).toContain("rounded-bubble");
     expect(mono).toContain("w-fit");
     expect(mono).toContain("max-w-41/50");

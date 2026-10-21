@@ -12,7 +12,7 @@ describe("desktop window chrome", () => {
     const opts = browserWindowOptions("darwin");
     expect(opts.frame).toBe(true);
     expect(opts.titleBarStyle).toBe("hiddenInset");
-    expect(opts.trafficLightPosition).toEqual({ x: 16, y: 21 });
+    expect(opts.trafficLightPosition).toEqual({ x: 26, y: 24 });
   });
 
   it("is frameless on Windows and Linux so in-app buttons control the window", () => {
