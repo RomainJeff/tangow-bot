@@ -86,7 +86,7 @@ export {
   type StackedAvatarsProps,
 } from "./stacked-avatars.js";
 export { StopContour, type StopContourProps } from "./stop-contour.js";
-export { Surface, type SurfaceProps, type SurfaceRadius } from "./surface.js";
+export { Surface, type SurfaceProps } from "./surface.js";
 export { TextSettingField, type TextSettingFieldProps } from "./text-setting-field.js";
 export { useElapsed } from "./use-elapsed.js";
 export { UserAvatar, type UserAvatarProps } from "./user-avatar.js";

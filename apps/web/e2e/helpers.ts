@@ -29,7 +29,9 @@ export async function completeOnboarding(page: Page, testInfo?: TestInfo) {
   // Optional Server integrations step (needsSetup). Skip when shown, then the
   // first bot is created automatically — land in Chief's chat with no form.
   const integrations = page.getByRole("heading", { name: "Server integrations", exact: true });
-  const chief = page.getByText("Chief").first();
+  // Visible only: at phone width the roster is its own page, so its "Chief" row
+  // is hidden behind the chat and the header carries the name instead.
+  const chief = page.getByText("Chief").filter({ visible: true }).first();
   await integrations.or(chief).or(page.getByText("Opening chat…")).waitFor({ timeout: 20_000 });
   if ((await chief.isVisible().catch(() => false)) && page.url().includes("/app")) {
     if (testInfo) {
@@ -43,7 +45,7 @@ export async function completeOnboarding(page: Page, testInfo?: TestInfo) {
     await page.getByRole("button", { name: "Skip", exact: true }).click();
   }
   await page.waitForURL(/\/app\//, { timeout: 20_000 });
-  await expect(page.getByText("Chief").first()).toBeVisible();
+  await expect(chief).toBeVisible();
   if (testInfo) {
     await captureScreenshot(page, testInfo, "03-create-first-bot");
     await captureScreenshot(page, testInfo, "06-onboarding-complete");

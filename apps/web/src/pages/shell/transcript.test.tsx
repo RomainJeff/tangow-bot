@@ -148,6 +148,36 @@ describe("the transcript", () => {
     expect(document.body.textContent).not.toContain("Needs input");
   });
 
+  it("keeps the end in view when the thread shortens while following, not after a jump", async () => {
+    const observers: Array<() => void> = [];
+    const resized = () => {
+      for (const callback of observers) callback();
+    };
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(callback: () => void) {
+          observers.push(callback);
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
+    const following = { current: true };
+    const snaps = vi.fn();
+    Element.prototype.scrollTo = snaps;
+    await renderThread(9, { followingRef: following });
+    snaps.mockClear();
+    act(() => resized());
+    expect(snaps).toHaveBeenCalledTimes(1);
+
+    const preview = document.querySelector<HTMLElement>('[data-testid="reply-parent-preview"]');
+    await act(async () => preview?.click());
+    snaps.mockClear();
+    act(() => resized());
+    expect(snaps).not.toHaveBeenCalled();
+  });
+
   it("holds a jump to a reply's parent against the next row, then follows a scroll back down", async () => {
     const following = { current: true };
     const scrollRef = createRef<HTMLDivElement>();

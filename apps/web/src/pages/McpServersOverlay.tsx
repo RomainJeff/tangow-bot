@@ -247,8 +247,9 @@ export function McpServersOverlay({ onClose }: { onClose: () => void }) {
       }}
     >
       <DialogContent
+        variant="window"
         showCloseButton={false}
-        className="flex max-h-[calc(100%-2rem)] w-[960px] max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden rounded-2xl bg-card p-0 sm:max-w-[960px]"
+        className="flex max-h-[calc(100%-2rem)] w-[min(960px,calc(100%-2rem))] max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[960px]"
       >
         <DialogHeader className="flex-row items-center justify-between border-b border-border px-6 py-5">
           <DialogTitle className="text-xl text-foreground">
@@ -336,7 +337,7 @@ export function McpServersOverlay({ onClose }: { onClose: () => void }) {
                     />
                   </Field>
                 )}
-                <details className="group rounded-xl border border-border">
+                <details className="group rounded-card bg-group shadow-group">
                   <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2.5 text-sm text-foreground">
                     <span>
                       <Trans>Advanced</Trans>

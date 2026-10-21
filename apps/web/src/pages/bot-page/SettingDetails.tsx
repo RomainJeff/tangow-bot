@@ -64,7 +64,7 @@ export function TextDetail({
       dir="auto"
       data-testid={instructions ? "bot-instructions" : "bot-description"}
       className="min-h-0 flex-1 gap-3 px-6 pt-1 pb-4"
-      controlClassName="min-h-0 flex-1 resize-none rounded-block border-transparent bg-background px-5 py-4.5 text-question field-sizing-fixed md:text-question dark:bg-background"
+      controlClassName="min-h-0 flex-1 resize-none rounded-block border-transparent bg-group px-5 py-4.5 text-question shadow-group field-sizing-fixed md:text-question dark:bg-group"
     />
   );
 }
