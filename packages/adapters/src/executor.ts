@@ -253,18 +253,8 @@ import {
   needsLivePluginSync,
   planLiveConnectionSync,
 } from "./composio-connector.js";
-import { BACKGROUND_WORK_LAUNCH, scheduleComputerSleep } from "./computer-idle.js";
-import type { ComputerExecutionLease } from "./computer-lifecycle.js";
-import {
-  acquireComputerExecutionLease,
-  ComputerBusyError,
-  holdComputerExecutionLeaseForTakeover,
-  provisionComputer,
-  releaseBotScreen,
-  releaseComputerExecutionLease,
-  renewComputerExecutionLease,
-  screenLeaseIdForRun,
-} from "./computer-lifecycle.js";
+import { BACKGROUND_WORK_LAUNCH } from "./computer-idle.js";
+import { ComputerBusyError, screenLeaseIdForRun } from "./computer-lifecycle.js";
 import { withComputerScreenAvailability } from "./computer-screens.js";
 import {
   displayBotWorkspacePath,
@@ -341,6 +331,8 @@ import {
 } from "./plot-tool.js";
 import type { RemoteTransportDependencies } from "./remote-mcp.js";
 import { loadReplyContext } from "./reply-context.js";
+import type { RunComputer } from "./run-computer.js";
+import { createRunComputer } from "./run-computer.js";
 import { searchRunsFromTool } from "./run-search-tools.js";
 import {
   commitConsumedRunSecret,
@@ -646,6 +638,9 @@ const BOT_DIRECTORY_LIMIT = 40;
 /** The computer's shell. In a worker run the guest's bash replaces it. */
 const COMPUTER_SHELL_TOOL = "shell";
 
+const COMPUTER_BUSY_MESSAGE =
+  "The computer is busy with another run or starting up. Continue without it or try again later.";
+
 class RunComputerRequiredError extends Error {
   constructor() {
     super("This run needs a computer, but the bot has none");
@@ -667,7 +662,13 @@ function withLocalTools(tools: ConnectorTool[], local: readonly ConnectorTool[])
  */
 async function routeRun(
   deps: Pick<ExecutorDeps, "runtime" | "workers">,
-  run: { attemptId: string; tools: ConnectorTool[]; computerScope: ComputerMode | null },
+  run: {
+    attemptId: string;
+    tools: ConnectorTool[];
+    computerId: string | null;
+    computerScope: ComputerMode | null;
+  },
+  context: AdapterContext,
 ): Promise<RunRoute> {
   const inProcess = {
     runtime: deps.runtime,
@@ -684,6 +685,10 @@ async function routeRun(
     computerTools: run.tools.some((tool) => REMOTE_COMPUTER_TOOLS.has(tool.name)),
     computerScope: run.computerScope,
   });
+  // A bot attached after its computer moved has no volume until something creates it.
+  if (run.computerId && needs.files.private) {
+    await deps.workers.provisionHomeVolumes(run.computerId, context);
+  }
   const plan = await deps.workers.plan({ attemptId: run.attemptId, needs });
   if (plan.mode === "in_process") return inProcess;
   if (plan.mode === "busy") throw new AgentRuntimeBusyError("Computer home is moving");
@@ -1453,47 +1458,28 @@ export function createRunExecutor(deps: ExecutorDeps) {
         data: { status: "running", startedAt: current.startedAt ?? new Date() },
       });
       if (started.count !== 1) return;
-      const leaseTarget = await deps.prisma.bot.findUniqueOrThrow({
+      const { computerSwitching } = await deps.prisma.bot.findUniqueOrThrow({
         where: { id: run.botId },
-        select: { computerId: true, computerSwitching: true },
+        select: { computerSwitching: true },
       });
-      if (leaseTarget.computerSwitching) {
+      if (computerSwitching) {
         await requeueComputerRun(deps, runId, workerId, fence, resumeCheckpoint, heldForTakeover);
         return;
       }
-      let computerLease: ComputerExecutionLease | null = null;
-      try {
-        if (leaseTarget.computerId)
-          computerLease = await acquireComputerExecutionLease(deps.prisma, {
-            computerId: leaseTarget.computerId,
-            runId,
-            botId: run.botId,
-            resumeHeldLease,
-          });
-      } catch (error) {
-        if (!(error instanceof ComputerBusyError)) throw error;
-        await requeueComputerRun(deps, runId, workerId, fence, resumeCheckpoint, heldForTakeover);
-        return;
-      }
-      const attempt = await deps.prisma.attempt
-        .create({
-          data: { runId, fence, status: "setting_up" },
-        })
-        .catch(async (error) => {
-          await releaseComputerExecutionLease(deps.prisma, computerLease).catch(() => undefined);
-          throw error;
-        });
+      const attempt = await deps.prisma.attempt.create({
+        data: { runId, fence, status: "setting_up" },
+      });
 
       let leaseValid = true;
       let lastLeaseCheckAt = 0;
       let retainComputerLease = false;
-      let screenRelease: { computer: ComputerRef; context: AdapterContext } | undefined;
+      let runComputer: RunComputer | undefined;
       let runAbortController: AbortController | null = null;
       let detachShutdown: (() => void) | undefined;
       const heartbeat = setInterval(() => {
         void Promise.all([
           renewRunLease(deps, runId, workerId, fence),
-          renewComputerExecutionLease(deps.prisma, computerLease),
+          runComputer?.renew() ?? true,
         ])
           .then(([runRenewed, computerRenewed]) => {
             if (!runRenewed || !computerRenewed) {
@@ -1668,7 +1654,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           userId: run.userId,
           botId: bot.id,
           runId,
-          screenLeaseId: screenLeaseIdForRun(computerLease, runId, fence),
+          screenLeaseId: screenLeaseIdForRun(null, runId, fence),
           signal: runAbortController.signal,
           connectedConnections: connectedPlugins.map((row) => ({
             id: row.id,
@@ -1930,44 +1916,33 @@ export function createRunExecutor(deps: ExecutorDeps) {
               ? fromVolumePath(computerMode ?? "dedicated", bot.id, requested)
               : requested,
           );
-        const computer = storedComputer
-          ? await provisionComputer(deps, storedComputer.id, context, "bot")
-          : null;
+        runComputer = storedComputer
+          ? createRunComputer(deps, {
+              computerId: storedComputer.id,
+              runId,
+              botId: bot.id,
+              fence,
+              resumeHeldLease,
+              context,
+            })
+          : undefined;
+        const useComputer = () =>
+          runComputer?.use() ?? Promise.reject(new RunComputerRequiredError());
         const requireComputer = () => {
+          const computer = runComputer?.current();
           if (!computer) throw new RunComputerRequiredError();
           return computer;
         };
-        if (computer && storedComputer) {
-          screenRelease = { computer, context };
-          scheduleComputerSleep(deps.jobs, storedComputer.id);
-        }
         const workspaceCheckpoint = createRunWorkspaceCheckpoint(async () => {
+          const computer = runComputer?.current();
           if (storedComputer && computer) {
             await checkpointRunComputerWorkspace(deps, storedComputer, computer, context);
           }
         });
-        let currentTurnFiles: Awaited<ReturnType<typeof materializeCurrentTurnFiles>>;
-        try {
-          currentTurnFiles =
-            deps.artifacts && turnBlocks?.some((block) => block.kind === "file")
-              ? await materializeCurrentTurnFiles(
-                  { prisma: deps.prisma, artifacts: deps.artifacts, sandbox: deps.sandbox },
-                  turnBlocks,
-                  {
-                    context,
-                    computer: requireComputer(),
-                    computerMode: computerMode ?? "dedicated",
-                    markWorkspaceDirty: workspaceCheckpoint.markDirty,
-                  },
-                )
-              : [];
-        } catch (error) {
-          await workspaceCheckpoint.flush().catch(() => undefined);
-          throw error;
-        }
-        const attachedFilesPrompt = currentTurnFilesInstruction(currentTurnFiles);
         const graphical = Boolean(
-          computer && computer.kind !== "desktop" && deps.sandbox.describe().capabilities.graphical,
+          storedComputer &&
+            storedComputer.kind !== "desktop" &&
+            deps.sandbox.describe().capabilities.graphical,
         );
         // Gate on the model this run will actually call — the pair written to the run row
         // above. Deriving it a second time here dropped the deployment fallback, so a
@@ -2051,11 +2026,39 @@ export function createRunExecutor(deps: ExecutorDeps) {
             .then((row) => row?.enabled ?? deploymentAutoReviewDefault());
           return autoReviewPreferencePromise;
         };
-        const { runtime, tools, refusal } = await routeRun(deps, {
-          attemptId: attempt.id,
-          tools: [...builtins, ...exposedConnectorTools],
-          computerScope: computerMode,
-        });
+        const { runtime, tools, refusal } = await routeRun(
+          deps,
+          {
+            attemptId: attempt.id,
+            tools: [...builtins, ...exposedConnectorTools],
+            computerId: storedComputer?.id ?? null,
+            computerScope: computerMode,
+          },
+          context,
+        );
+        // A worker does file work and commands itself, so its computer starts on first use. A run
+        // back from a takeover takes its held lease now, so that its end lets the lease go.
+        if (!refusal && (runtime === deps.runtime || resumeHeldLease)) await runComputer?.use();
+        let currentTurnFiles: Awaited<ReturnType<typeof materializeCurrentTurnFiles>>;
+        try {
+          currentTurnFiles =
+            deps.artifacts && turnBlocks?.some((block) => block.kind === "file")
+              ? await materializeCurrentTurnFiles(
+                  { prisma: deps.prisma, artifacts: deps.artifacts, sandbox: deps.sandbox },
+                  turnBlocks,
+                  {
+                    context,
+                    computer: await useComputer(),
+                    computerMode: computerMode ?? "dedicated",
+                    markWorkspaceDirty: workspaceCheckpoint.markDirty,
+                  },
+                )
+              : [];
+        } catch (error) {
+          await workspaceCheckpoint.flush().catch(() => undefined);
+          throw error;
+        }
+        const attachedFilesPrompt = currentTurnFilesInstruction(currentTurnFiles);
         const localTools = new Map(
           (runtime.describe().capabilities.localTools ?? []).map((tool) => [tool.name, tool]),
         );
@@ -3117,6 +3120,25 @@ export function createRunExecutor(deps: ExecutorDeps) {
               if (early !== undefined) return early;
             }
             return finish(localToolResult(await local(context.signal)));
+          }
+          if (REMOTE_COMPUTER_TOOLS.has(name) && runComputer) {
+            try {
+              await runComputer.use();
+            } catch (error) {
+              if (context.signal.aborted) throw error;
+              if (!(error instanceof ComputerBusyError)) {
+                getLogger().error(
+                  "run computer start failed",
+                  redactSecrets(error instanceof Error ? error.message : String(error), runSecrets),
+                );
+              }
+              return finish({
+                error:
+                  error instanceof ComputerBusyError
+                    ? COMPUTER_BUSY_MESSAGE
+                    : "The computer could not start. Continue without it or try again later.",
+              });
+            }
           }
           if (name === "computer_observe") {
             if (heldForTakeover) {
@@ -4759,7 +4781,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                           await settleSteeringAttachmentLoads(
                             loadCurrentTurnImages(deps, item.blocks, context),
                             artifacts && item.blocks?.some((block) => block.kind === "file")
-                              ? Promise.resolve().then(() =>
+                              ? Promise.resolve().then(async () =>
                                   materializeCurrentTurnFiles(
                                     {
                                       prisma: deps.prisma,
@@ -4769,7 +4791,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                                     item.blocks,
                                     {
                                       context,
-                                      computer: requireComputer(),
+                                      computer: await useComputer(),
                                       computerMode: computerMode ?? "dedicated",
                                       markWorkspaceDirty: workspaceCheckpoint.markDirty,
                                     },
@@ -4913,11 +4935,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
               if (!(await renewRunLease(deps, runId, workerId, fence))) return;
               const safeReason = redactSecrets(event.reason, runSecrets);
               dropMidTurnNarration();
+              await useComputer();
               await publishMessage(deps, run, [
                 { kind: "computer", state: "Needs you", text: safeReason },
               ]);
               await workspaceCheckpoint.flush();
-              if (!(await holdComputerExecutionLeaseForTakeover(deps.prisma, computerLease))) {
+              if (!(await runComputer?.holdForTakeover())) {
                 throw new Error("Computer lease expired before takeover");
               }
               const paused = await deps.events.pauseRunForTakeover({
@@ -5518,12 +5541,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
       } finally {
         detachShutdown?.();
         clearInterval(heartbeat);
-        if (!retainComputerLease) {
-          if (screenRelease) {
-            await releaseBotScreen(deps, screenRelease.computer, screenRelease.context);
-          }
-          await releaseComputerExecutionLease(deps.prisma, computerLease).catch(() => undefined);
-        }
+        if (!retainComputerLease) await runComputer?.release();
         await deps.prisma.attempt
           .updateMany({
             where: { id: attempt.id, status: "running" },

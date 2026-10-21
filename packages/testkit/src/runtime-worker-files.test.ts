@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import type { ComputerRef } from "@rakazo/adapter-kit";
 import { PiAgentRuntime } from "@rakazo/adapters";
 import { WORKER_NATIVE_TOOLS } from "@rakazo/adapters/runtime-worker";
 import { HARNESSES } from "@rakazo/agent-run-worker";
@@ -62,12 +63,7 @@ describe("a product run in a worker", () => {
   it("shares the bot's and the space's files with the computer, both ways", async () => {
     const seen: string[] = [];
     let run: Awaited<ReturnType<typeof startWorkerRun>>;
-    const computer = {
-      id: "fake-worker-computer",
-      botId: "worker-computer",
-      kind: "e2b" as const,
-      providerRef: "fake-worker-computer",
-    };
+    let computer: ComputerRef;
     const context = {
       operationId: "files",
       traceId: "files",
@@ -119,6 +115,7 @@ describe("a product run in a worker", () => {
       ],
     });
     cleanups.push(() => run.close());
+    computer = await run.startComputer();
     const runId = await run.send("Work on the notes.");
     await run.continueRun(runId);
     run.model.assertComplete();

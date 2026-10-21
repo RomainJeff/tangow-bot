@@ -19,6 +19,7 @@ import {
   LocalArtifactStore,
   PiAgentRuntime,
   PostgresSessionLog,
+  provisionComputer,
 } from "@rakazo/adapters";
 import type { GuestConnector, RunWorkers, WorkerClock } from "@rakazo/adapters/runtime-worker";
 import { createRunWorkers } from "@rakazo/adapters/runtime-worker";
@@ -295,6 +296,29 @@ export async function startWorkerRun<
     },
     continueRun(runId: string) {
       return current.executor.continueRun(runId, "worker-fixture");
+    },
+    /** Starts the bot's computer the way a person opening it does, outside any run. */
+    startComputer() {
+      if (!computer) throw new Error("The bot has no computer");
+      return provisionComputer(
+        {
+          prisma,
+          sandbox,
+          events,
+          home: new LocalAgentHomeStore(path.join(dir, "homes")),
+          dataDir: path.join(dir, "data"),
+          jobs: new InMemoryJobQueue(),
+          workers: current.lifecycle,
+        },
+        computer.id,
+        {
+          operationId: "worker-fixture-computer",
+          traceId: "worker-fixture-computer",
+          spaceId: SPACE,
+          userId: USER,
+          signal: new AbortController().signal,
+        },
+      );
     },
     /** Builds a new controller on the same database; the old one's guests are left as they are. */
     restart() {
