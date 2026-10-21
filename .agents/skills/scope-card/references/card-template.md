@@ -207,8 +207,13 @@ Remove the blocks that do not apply to the type (see Variants). Replace every `<
 	- **Parité** — <…>
 	- **Provider-neutral** — <…>
 	**Découpage**
-	1. <PR 1> · <ampleur>
-	2. <PR 2> · <ampleur>
+	1. <PR 1: outcome and size>
+		- **Write scope** — <allowed and excluded paths; unresolved paths marked as open questions>
+		- **Contracts** — <existing contracts consumed; shared changes and their proposed owner, or none>
+		- **Dependencies** — start: <artifact or decision, or none>; verify: <artifact or decision, or none>; land: <PR or decision, or none>
+		- **Verification** — <independent check; integrated check still needed before delivery>
+	<Repeat per PR for multi-PR work; for a single coupled change, keep one outcome and its verification.>
+	<For multi-PR work, add **Parallel work**: what can proceed if one unit stays busy for 24 hours; common prerequisite if nothing can.>
 ---
 ### 🖼 Maquettes
 <suggested_markdown de l'upload PNG>

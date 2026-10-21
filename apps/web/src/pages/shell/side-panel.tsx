@@ -1,4 +1,3 @@
-import { t } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
 import type {
   Bot,
@@ -13,14 +12,10 @@ import type {
   ThreadSnapshot,
 } from "@rakazo/contracts";
 import { BotAvatar, Button } from "@rakazo/ui-web";
-import { Maximize2, X } from "lucide-react";
+import { X } from "lucide-react";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { useCallback } from "react";
 import { ComputerMaintenanceActions } from "../../components/ComputerMaintenanceActions";
-import {
-  ComputersUnavailableHint,
-  computersAreUnavailable,
-} from "../../components/ComputersUnavailableHint";
 import { TeachCaptureOverlay } from "../../components/teach/TeachCaptureOverlay";
 import { TeachComputerOverlayControl } from "../../components/teach/TeachComputerOverlay";
 import { TeachRecordingChrome, TeachStopButton } from "../../components/teach/TeachRecordingChrome";
@@ -32,6 +27,7 @@ import { CreateGroupForm, GroupSettings } from "../GroupPanel";
 import { WindowChrome } from "../WindowChrome";
 import type { BotCommands } from "./bot-commands";
 import { CreateBotForm } from "./bot-panel";
+import { ComputerPreview, computerLabel, DesktopKindEmptyState } from "./computer-preview";
 import type { BotPageView, Panel, PanelSize } from "./layout";
 import { firstThreadRoute, panelIsOpen } from "./layout";
 import { usePanelEscape } from "./panel-escape";
@@ -131,179 +127,117 @@ export function SidePanel({
       data-panel={panel ?? "closed"}
       data-detail={panel === "bot" ? botPage.detail?.kind : undefined}
       data-size={size}
-      className={`absolute inset-y-0 end-0 z-30 flex min-h-0 shrink-0 flex-col overflow-hidden bg-surface ${
+      // At phone and tablet width the panel takes the whole column on the page background,
+      // which Safari paints its bars in; beside the thread it floats as a sheet, like the sidebar.
+      className={`absolute inset-y-0 end-0 z-30 flex min-h-0 shrink-0 flex-col ${
         open
-          ? `w-full border-s border-border shadow-card ${size === "wide" ? "lg:w-panel-wide" : "lg:w-panel"}`
-          : "pointer-events-none w-0"
+          ? `w-full bg-background lg:bg-transparent lg:p-2 ${size === "wide" ? "lg:w-panel-wide" : "lg:w-panel"}`
+          : "pointer-events-none w-0 overflow-hidden"
       }`}
     >
       {open ? (
-        panel === "bot" && pageBot ? (
-          <BotPage
-            key={pageBot.id}
-            bot={pageBot}
-            userId={userId}
-            routines={pageBot.id === active?.id ? activeRoutines : null}
-            memoryProviderConfigured={memoryProviderConfig != null}
-            view={botPage}
-            onView={onBotPage}
-            onClose={() => setPanel(null)}
-            commands={commands}
-            messagingProviders={messagingProviders}
-          />
-        ) : (
-          <>
-            <div className="flex shrink-0 items-center justify-end px-5 pt-4 pb-3">
-              <div className="flex gap-1">
-                {active &&
-                panel === "computer" &&
-                !computerOpen &&
-                computerPanelNeedsMaintenance(computer?.state, booting) ? (
-                  <ComputerMaintenanceActions
-                    botId={active.id}
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:rounded-pane lg:bg-sheet lg:shadow-sheet">
+          {panel === "bot" && pageBot ? (
+            <BotPage
+              key={pageBot.id}
+              bot={pageBot}
+              userId={userId}
+              routines={pageBot.id === active?.id ? activeRoutines : null}
+              memoryProviderConfigured={memoryProviderConfig != null}
+              view={botPage}
+              onView={onBotPage}
+              onClose={() => setPanel(null)}
+              commands={commands}
+              messagingProviders={messagingProviders}
+            />
+          ) : (
+            <>
+              <div className="flex shrink-0 items-center justify-end px-5 pt-4 pb-3">
+                <div className="flex gap-1">
+                  {active &&
+                  panel === "computer" &&
+                  !computerOpen &&
+                  computerPanelNeedsMaintenance(computer?.state, booting) ? (
+                    <ComputerMaintenanceActions
+                      botId={active.id}
+                      computer={computer}
+                      onChanged={async () => {
+                        await refreshThread(active.id);
+                      }}
+                    />
+                  ) : null}
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={t`Close panel`}
+                    onClick={() => setPanel(null)}
+                  >
+                    <X size={16} strokeWidth={1.8} />
+                  </Button>
+                </div>
+              </div>
+              <div className="rk-scroll min-h-0 w-full flex-1 overflow-y-auto px-5 pb-4">
+                {panel === "computer" && active ? (
+                  <ComputerPreview
+                    bot={active}
                     computer={computer}
-                    onChanged={async () => {
-                      await refreshThread(active.id);
+                    computerOpen={computerOpen}
+                    booting={booting}
+                    bootstrapMe={bootstrapMe}
+                    embeddedScreenUrl={embeddedScreenUrl}
+                    computerScreenError={computerScreenError}
+                    screenLink={screenLink}
+                    openComputer={openComputer}
+                  />
+                ) : null}
+                {panel === "create-group" ? (
+                  <CreateGroupForm
+                    bots={bots}
+                    onCancel={() => setPanel(null)}
+                    onCreate={(input) => createGroup(input)}
+                  />
+                ) : null}
+                {panel === "group-settings" && activeGroup ? (
+                  <GroupSettings
+                    key={activeGroup.id}
+                    group={activeGroup}
+                    bots={bots}
+                    onSave={async (input) => {
+                      const updated = await rpc.groups.update({
+                        groupId: activeGroup.id,
+                        ...input,
+                      });
+                      setGroups((current) =>
+                        current.map((group) => (group.id === updated.id ? updated : group)),
+                      );
+                      setPanel(null);
+                      await Promise.all([refreshBots(), refreshGroupThread(activeGroup.id)]).catch(
+                        () => undefined,
+                      );
+                    }}
+                    onRemove={async () => {
+                      await rpc.groups.remove({ groupId: activeGroup.id });
+                      const remainingGroups = groups.filter((group) => group.id !== activeGroup.id);
+                      setGroups(remainingGroups);
+                      setPanel(null);
+                      navigate(firstThreadRoute(bots, remainingGroups), { replace: true });
+                      await refreshBots().catch(() => undefined);
                     }}
                   />
                 ) : null}
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={t`Close panel`}
-                  onClick={() => setPanel(null)}
-                >
-                  <X size={16} strokeWidth={1.8} />
-                </Button>
+                {panel === "create" ? (
+                  <CreateBotForm
+                    onCancel={() => setPanel(null)}
+                    onCreate={(input) => createBot(input)}
+                  />
+                ) : null}
               </div>
-            </div>
-            <div className="rk-scroll min-h-0 w-full flex-1 overflow-y-auto px-5 pb-4">
-              {panel === "computer" && active ? (
-                <div>
-                  <div
-                    data-testid="computer-preview"
-                    className="group relative aspect-[16/10] overflow-hidden rounded-card bg-background"
-                  >
-                    {computerOpen ? (
-                      <div className="grid h-full place-items-center text-meta text-muted-foreground/80">
-                        <Trans>Open in full window</Trans>
-                      </div>
-                    ) : computer?.kind === "desktop" ? (
-                      <DesktopKindEmptyState className="grid h-full place-items-center px-6 text-center text-meta text-muted-foreground/80" />
-                    ) : computer?.state === "running" &&
-                      embeddedScreenUrl &&
-                      !computerScreenError ? (
-                      <ScreenFrame
-                        url={embeddedScreenUrl}
-                        title={t`Bot screen preview`}
-                        allow="clipboard-read; clipboard-write"
-                        interactive={false}
-                        handlers={screenLink}
-                      />
-                    ) : (
-                      <div className="grid h-full place-items-center px-6 text-center text-meta text-muted-foreground/80">
-                        {computerScreenError ??
-                          (computersAreUnavailable(bootstrapMe?.sandboxProvider) ? (
-                            <ComputersUnavailableHint />
-                          ) : (
-                            computerPlaceholder(
-                              computer?.state,
-                              booting,
-                              computerLabel(computer?.mode, active.name),
-                            )
-                          ))}
-                      </div>
-                    )}
-                    {!computerScreenError ? (
-                      <button
-                        type="button"
-                        data-testid="computer-preview-open"
-                        className="absolute inset-0 flex cursor-pointer items-center justify-center bg-overlay/40 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-                        aria-label={t`Open`}
-                        onClick={() => void openComputer()}
-                      >
-                        <span className="inline-flex items-center gap-2 rounded-full bg-overlay px-3.5 py-2 text-capsule text-foreground shadow-floating">
-                          <Maximize2 size={15} strokeWidth={1.9} aria-hidden />
-                          <Trans>Open</Trans>
-                        </span>
-                      </button>
-                    ) : null}
-                  </div>
-                  <p className="mt-2 truncate text-reasoning text-muted-foreground" dir="auto">
-                    {t`${active.name}'s screen`}
-                  </p>
-                </div>
-              ) : null}
-              {panel === "create-group" ? (
-                <CreateGroupForm
-                  bots={bots}
-                  onCancel={() => setPanel(null)}
-                  onCreate={(input) => createGroup(input)}
-                />
-              ) : null}
-              {panel === "group-settings" && activeGroup ? (
-                <GroupSettings
-                  key={activeGroup.id}
-                  group={activeGroup}
-                  bots={bots}
-                  onSave={async (input) => {
-                    const updated = await rpc.groups.update({ groupId: activeGroup.id, ...input });
-                    setGroups((current) =>
-                      current.map((group) => (group.id === updated.id ? updated : group)),
-                    );
-                    setPanel(null);
-                    await Promise.all([refreshBots(), refreshGroupThread(activeGroup.id)]).catch(
-                      () => undefined,
-                    );
-                  }}
-                  onRemove={async () => {
-                    await rpc.groups.remove({ groupId: activeGroup.id });
-                    const remainingGroups = groups.filter((group) => group.id !== activeGroup.id);
-                    setGroups(remainingGroups);
-                    setPanel(null);
-                    navigate(firstThreadRoute(bots, remainingGroups), { replace: true });
-                    await refreshBots().catch(() => undefined);
-                  }}
-                />
-              ) : null}
-              {panel === "create" ? (
-                <CreateBotForm
-                  onCancel={() => setPanel(null)}
-                  onCreate={(input) => createBot(input)}
-                />
-              ) : null}
-            </div>
-          </>
-        )
+            </>
+          )}
+        </div>
       ) : null}
     </aside>
   );
-}
-
-function DesktopKindEmptyState({ className }: { className?: string }) {
-  return (
-    <div className={className}>
-      <Trans>
-        This bot runs on this computer, not a Linux desktop. Shell and files use your home folder.
-      </Trans>
-    </div>
-  );
-}
-
-function computerPlaceholder(
-  state: ComputerStatus["state"] | undefined,
-  booting: boolean,
-  label: string,
-) {
-  if (state === "booting" || booting) return t`Booting live desktop…`;
-  if (state === "running") return label;
-  if (state === "suspended") return t`Computer is asleep. Open it to wake.`;
-  if (state === "error") return t`Computer failed to boot`;
-  return t`Computer is stopped`;
-}
-
-function computerLabel(mode: ComputerStatus["mode"] | undefined, botName: string) {
-  return mode === "dedicated" ? t`${botName}’s computer` : t`Team Computer`;
 }
 
 export function ComputerOverlay({

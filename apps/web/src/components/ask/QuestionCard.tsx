@@ -130,7 +130,7 @@ export function QuestionCard({
 
   const shell = (body: ReactNode, onKeyDown?: (event: KeyboardEvent<HTMLDivElement>) => void) => (
     // biome-ignore lint/a11y/noStaticElementInteractions: digit shortcuts only while focus is inside the card
-    <div ref={card} data-slot="question-card" className="relative mt-1.5" onKeyDown={onKeyDown}>
+    <div ref={card} data-slot="question-card" className="relative" onKeyDown={onKeyDown}>
       <div
         ref={layer}
         aria-hidden
@@ -286,7 +286,7 @@ export function QuestionCard({
         ref={group}
         aria-labelledby={questionId}
         disabled={busy}
-        className={cn("flex min-w-0 flex-col gap-2", !actions && "pb-3.5")}
+        className="flex min-w-0 flex-col gap-2"
       >
         {question.options.map((option) => (
           <OptionTile
