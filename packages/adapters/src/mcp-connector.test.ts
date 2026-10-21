@@ -587,6 +587,50 @@ describe("MCP connector session cache", () => {
     await connector.close();
   });
 
+  it("refuses a call once the assignment is gone and reconnects after a revision bump", async () => {
+    const state = { failNext: false, initializations: 0, calls: [] as string[] };
+    vi.stubGlobal("fetch", mcpFetch(state));
+    const findMany = vi.fn().mockResolvedValue([ASSIGNMENT]);
+    const findFirst = vi.fn().mockResolvedValue(ASSIGNMENT);
+    const connector = new McpConnector(
+      { botMcpServer: { findMany, findFirst } } as never,
+      {} as never,
+      { network: TEST_NETWORK },
+    );
+    const context = {
+      spaceId: "w1",
+      userId: "u1",
+      botId: "bot-1",
+      signal: new AbortController().signal,
+    } as never;
+    const call = {
+      tool: "mcp__demo__echo",
+      args: {},
+      route: { connectorId: "mcp", resourceId: "server-1", toolName: "echo" },
+    } as never;
+    const run = async () => {
+      const events: unknown[] = [];
+      for await (const event of connector.execute(call, context)) events.push(event);
+      return events;
+    };
+
+    await connector.discoverTools(context);
+    expect(await run()).toMatchObject([{ type: "result" }]);
+    expect(state.calls).toEqual(["echo"]);
+
+    findFirst.mockResolvedValue(null);
+    expect(await run()).toEqual([
+      { type: "error", message: "MCP tool is not assigned to this bot" },
+    ]);
+    expect(state.calls).toEqual(["echo"]);
+
+    const bumped = { ...ASSIGNMENT, server: { ...SERVER, revision: 2 } };
+    findFirst.mockResolvedValue(bumped);
+    expect(await run()).toMatchObject([{ type: "result" }]);
+    expect(state.initializations).toBe(2);
+    await connector.close();
+  });
+
   it("does not reuse one session across workspaces", async () => {
     const state = { failNext: false, initializations: 0 };
     vi.stubGlobal("fetch", mcpFetch(state));
