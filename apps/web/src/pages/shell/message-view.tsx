@@ -118,6 +118,7 @@ export const MessageView = memo(function MessageView({
   showAuthor,
   showAvatar,
   onAnswer,
+  onOpenComputer,
   onOpenBot,
   speakerName,
   memberName,
@@ -150,6 +151,8 @@ export const MessageView = memo(function MessageView({
    * (`isLastOfGroup`). Always false in a mono thread. */
   showAvatar: boolean;
   onAnswer?: (text: string, edits?: SpawnBotCardEdits) => Promise<void>;
+  /** Set only on the live "Needs you" card: opens the bot's screen. */
+  onOpenComputer?: () => void;
   onOpenBot: (botId: string) => void;
   speakerName?: string;
   memberName?: (botId: string | undefined) => string | undefined;
@@ -500,7 +503,7 @@ export const MessageView = memo(function MessageView({
         );
       }
       if (block.kind === "computer") {
-        return <ComputerCard key={i} block={block} />;
+        return <ComputerCard key={i} block={block} onOpen={onOpenComputer} />;
       }
       return null;
     })
