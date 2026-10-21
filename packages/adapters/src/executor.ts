@@ -81,6 +81,7 @@ import {
   containsSecret,
   DEFAULT_SKILL_LEARNING,
   endsSentence,
+  escapePromptData,
   expandSkillReferencesInPrompt,
   formatSkillRunPrompt,
   formatSkillsCatalogInstruction,
@@ -4360,9 +4361,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
         // What changes between turns goes in the turn prompt, so the instructions, the tool schemas
         // and the history before this turn stay byte-identical and the provider can cache them.
         const clock = formatCurrentTimeInstruction();
+        const promptSecrets = runSecrets.flatMap((secret) => [secret, escapePromptData(secret)]);
         const turnHead = [
-          memoryContext ? redactSecrets(memoryContext, runSecrets) : undefined,
-          scratchpadContext ? redactSecrets(scratchpadContext, runSecrets) : undefined,
+          memoryContext ? redactSecrets(memoryContext, promptSecrets) : undefined,
+          scratchpadContext ? redactSecrets(scratchpadContext, promptSecrets) : undefined,
         ];
         const turnTail = [
           replyContext,
@@ -4375,7 +4377,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const summary = summaryTurn
           ? { ...summaryTurn, content: redactSecrets(summaryTurn.content, runSecrets) }
           : undefined;
-        const recall = recalledMemory ? redactSecrets(recalledMemory, runSecrets) : undefined;
+        const recall = recalledMemory ? redactSecrets(recalledMemory, promptSecrets) : undefined;
         // Without a roster a bot only knows the bots it spawned itself.
         const botDirectory = thread.groupId
           ? undefined

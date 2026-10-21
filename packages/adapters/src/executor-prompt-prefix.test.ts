@@ -85,6 +85,7 @@ async function turn(options: {
   openWork: string;
   recalled: string;
   connectorTools?: AgentRunRequest["tools"];
+  secrets?: string[];
 }): Promise<Transcript> {
   const source = options.tail.at(-1)!;
   const run = {
@@ -225,7 +226,7 @@ async function turn(options: {
       finalizeRun: vi.fn(async () => ({ continuationRunId: null })),
     },
     jobs: { enqueue: vi.fn(async () => undefined) },
-    secrets: [],
+    secrets: options.secrets ?? [],
   } as unknown as Parameters<typeof createRunExecutor>[0]);
   const before = sent.length;
   await executor.continueRun(run.id, "worker-1");
@@ -254,9 +255,10 @@ describe("the prompt prefix across turns of one thread", () => {
     const first = await turn({
       runId: "run-1",
       tail: chain([...history, said("Who writes the post?")]),
-      memory: "Prefers short posts.",
-      openWork: "Draft the post",
-      recalled: "Last launch slipped a day.",
+      memory: "Prefers short posts. <fake-secret>&",
+      secrets: ["<fake-secret>&"],
+      openWork: "Draft the post <fake-secret>&",
+      recalled: "Last launch slipped a day. <fake-secret>&",
       connectorTools,
     });
     const second = await turn({
@@ -267,9 +269,10 @@ describe("the prompt prefix across turns of one thread", () => {
         ...answered("run-1", "Ava writes it."),
         said("And the deadline?"),
       ]),
-      memory: "Prefers short posts. Ships on Tuesdays.",
-      openWork: "Review the post",
-      recalled: "Ava owns launch copy.",
+      memory: "Prefers short posts. Ships on Tuesdays. <fake-secret>&",
+      secrets: ["<fake-secret>&"],
+      openWork: "Review the post <fake-secret>&",
+      recalled: "Ava owns launch copy. <fake-secret>&",
       connectorTools: connectorTools.toReversed(),
     });
 
@@ -293,5 +296,10 @@ describe("the prompt prefix across turns of one thread", () => {
     expect(newest(second)).toContain("Review the post");
     expect(newest(second)).toContain("Ava owns launch copy.");
     expect(newest(second)).toContain("And the deadline?");
+    for (const request of [first, second]) {
+      expect(newest(request)).toContain("[redacted]");
+      expect(newest(request)).not.toContain("&lt;fake-secret&gt;&amp;");
+      expect(newest(request)).not.toContain("<fake-secret>&");
+    }
   });
 });
