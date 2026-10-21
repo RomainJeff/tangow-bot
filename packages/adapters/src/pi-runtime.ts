@@ -374,6 +374,7 @@ export class PiAgentRuntime implements AgentRuntime {
           getApiKey: async () => apiKey,
           transformContext: async (messages) =>
             pruneComputerScreenshotContext(messages, request.model.maxImagesPerPrompt),
+          finishTurn: async () => (host.pausePending ? { action: "end" } : undefined),
           prepareNextTurnWithContext: async () => {
             if (!request.claimSteering) return undefined;
             const steering = await request.claimSteering([...seenSteeringIds]);
@@ -579,12 +580,12 @@ export class PiAgentRuntime implements AgentRuntime {
           }
         }
 
-        // Budget abort stops the agent underneath the model, which leaves
+        // Budget and pause aborts stop the agent underneath the model, which can leave
         // errorMessage set. Treat that as a soft stop so the turn still ends
         // with a durable assistant message instead of a failed run.
         const budgetExceeded = host.toolCallBudget.exceeded;
         const error = agent.state.errorMessage;
-        if (error && !budgetExceeded) {
+        if (error && !budgetExceeded && !host.pausePending) {
           throw new Error(sanitizeProviderError(model.provider, error));
         }
         if (budgetExceeded) {
@@ -1131,6 +1132,7 @@ function toAgentTool(tool: ConnectorTool, host: ToolHost, exposedName: string): 
     label: tool.name,
     description: tool.description,
     parameters: parametersFor(tool),
+    ...(tool.name === "run_subagent" ? {} : { executionMode: "sequential" as const }),
     prepareArguments: (args: unknown) => {
       const raw = args && typeof args === "object" ? (args as Record<string, unknown>) : {};
       if (tool.name === "destination.write") {
@@ -1364,6 +1366,7 @@ function toAgentTool(tool: ConnectorTool, host: ToolHost, exposedName: string): 
             details: { error: "no executor" },
           };
         })();
+        if (host.pausePending) host.abortTurn();
         return boundAgentToolResult(result as AgentToolResult<unknown>);
       } catch (error) {
         failure = error;
@@ -1541,6 +1544,7 @@ async function runSubagent(
     getApiKey: async () => selectedModel.apiKey,
     transformContext: async (messages) =>
       pruneComputerScreenshotContext(messages, requestModel.maxImagesPerPrompt),
+    finishTurn: async () => (nestedHost.pausePending ? { action: "end" } : undefined),
     initialState: {
       systemPrompt: [
         `You are a Rakazo subagent named "${name}".`,
