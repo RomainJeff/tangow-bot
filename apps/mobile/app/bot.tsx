@@ -2,6 +2,7 @@ import { routineFailing } from "@rakazo/core";
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useRef, useState, useSyncExternalStore } from "react";
 import { Keyboard, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { AmbientBackground } from "../components/ambient-background";
 import { ActivityTab, useOpenRun } from "../components/bot-page/activity-tab";
 import { BotHero, BotTabs } from "../components/bot-page/hero";
 import { LoadFailed } from "../components/bot-page/kit";
@@ -20,7 +21,7 @@ import { botRunEpoch, subscribeBotRunEnds } from "../lib/bot-page-state";
 import type { BotTab } from "../lib/bot-tab";
 import { useI18n } from "../lib/i18n";
 import { presentMessageActionSheet } from "../lib/message-action-sheet";
-import { useMobileTokens, useResolvedAppearance } from "../lib/native";
+import { useResolvedAppearance } from "../lib/native";
 
 /**
  * The bot's page, pushed from its thread: who it is at the top, then Activity, Routines, Knowledge
@@ -31,7 +32,6 @@ export default function BotPageScreen() {
   const { t } = useI18n();
   const router = useRouter();
   const openRun = useOpenRun();
-  const tokens = useMobileTokens();
   const colorScheme = useResolvedAppearance();
   const page = useBotPageContext(botId);
   const [readFailed, setReadFailed] = useState(false);
@@ -98,6 +98,9 @@ export default function BotPageScreen() {
     <>
       <Stack.Screen
         options={{
+          // The page runs under the bar on the ambient light; iOS 26 blurs it at the edge.
+          headerTransparent: true,
+          headerStyle: { backgroundColor: "transparent" },
           headerRight: () =>
             page && !page.readOnly ? (
               <Pressable
@@ -111,9 +114,11 @@ export default function BotPageScreen() {
             ) : null,
         }}
       />
+      <AmbientBackground />
       <ScrollView
         ref={scroll}
-        style={{ flex: 1, backgroundColor: tokens.background }}
+        style={{ flex: 1 }}
+        contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ paddingBottom: 48 }}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
