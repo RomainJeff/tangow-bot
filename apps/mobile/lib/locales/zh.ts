@@ -372,6 +372,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Notification settings": "通知设置",
   "Notifications silenced": "通知已静音",
   "notifications silenced": "通知已静音",
+  Open: "打开",
   "Open computer": "打开电脑",
   "Open computer →": "打开电脑 →",
   "OpenAI-compatible server URL": "OpenAI 兼容服务器地址",

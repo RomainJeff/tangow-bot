@@ -46,6 +46,7 @@ export function ShellMain({
   mentionTargets,
   agentSkills,
   refreshAgentSkills,
+  onOpenComputer,
 }: {
   roster: Roster;
   store: ThreadStore;
@@ -66,6 +67,8 @@ export function ShellMain({
   mentionTargets: ComposerMention[];
   agentSkills: AgentSkillCatalogEntry[];
   refreshAgentSkills: () => void;
+  /** Opens the bot's screen from its live Needs you card. */
+  onOpenComputer: () => void;
 }) {
   const { active, activeGroup, groupId, inGroup, initialBotsLoaded, refreshBots } = roster;
   const { panel, setPanel, pickedBotId, showBotPage, panelOpen, panelSize } = panels;
@@ -182,6 +185,8 @@ export function ShellMain({
               olderCursor={activeSnapshot?.olderCursor ?? null}
               loadingOlder={transcriptWindow.loadingOlder}
               viewerUserId={userId}
+              takeoverItemId={thread.takeoverItemId}
+              onOpenComputer={onOpenComputer}
               running={thread.transcriptRunning}
               workingBots={thread.workingBots}
               workingStartedAt={thread.workingStartedAt}
