@@ -8,12 +8,8 @@ import type {
 } from "@rakazo/adapter-kit";
 import type { ComputerUpdate } from "@rakazo/contracts";
 import { ACTIVE_RUN_STATUSES, parseScreenLeaseId, screenLeaseId } from "@rakazo/core";
-import {
-  expireComputerExecutionLeases,
-  type PrismaClient,
-  parseComputerMode,
-  type ThreadEvents,
-} from "@rakazo/db";
+import type { PrismaClient, ThreadEvents } from "@rakazo/db";
+import { expireComputerExecutionLeases, parseComputerMode } from "@rakazo/db";
 import {
   clearInactiveUserComputerControl,
   expireComputerControl,
@@ -26,7 +22,6 @@ import {
   restoreComputerWorkspace,
 } from "./computer-workspace.js";
 import { resolveAgentHomePath } from "./home.js";
-import { marketplacesRoot } from "./marketplace-store.js";
 import { userSkillsRoot } from "./skill-store.js";
 
 type ComputerUpdateProgress = (
@@ -173,7 +168,6 @@ export async function provisionComputer(
   // Docker would create missing bind sources as root; create them as the worker user first.
   if (deps.dataDir) {
     await mkdir(userSkillsRoot(deps.dataDir, context), { recursive: true });
-    await mkdir(marketplacesRoot(deps.dataDir, context.spaceId), { recursive: true });
   }
 
   // If we first observe abandoned "booting", remember that stamp before waiting. A concurrent

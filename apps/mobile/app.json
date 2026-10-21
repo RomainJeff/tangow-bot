@@ -15,10 +15,10 @@
           "image": "./assets/splash-icon.png",
           "imageWidth": 96,
           "resizeMode": "contain",
-          "backgroundColor": "#FBFBF9",
+          "backgroundColor": "#F2F2F4",
           "dark": {
             "image": "./assets/splash-icon-dark.png",
-            "backgroundColor": "#0C0C0E"
+            "backgroundColor": "#161618"
           }
         }
       ],

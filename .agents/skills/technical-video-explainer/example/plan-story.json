@@ -1,0 +1,206 @@
+{
+  "source": {
+    "kind": "plan",
+    "ref": "docs/plans/2026-10-16-check-in-nudge.md"
+  },
+  "voice": "af_heart",
+  "speed": 1.05,
+  "scenes": [
+    {
+      "type": "title",
+      "kicker": "rakazo-bot · Plan",
+      "title": "A nudge after *thirty* tools",
+      "vo": "This plan fixes silent runs. When a bot chains tools without a word, the person only sees an activity line."
+    },
+    {
+      "type": "diagram",
+      "heading": "Count *tool calls*, not turns",
+      "nodes": {
+        "user": {
+          "kind": "actor",
+          "x": 270,
+          "y": 620,
+          "label": "person"
+        },
+        "loop": {
+          "x": 820,
+          "y": 620,
+          "label": "Pi loop"
+        },
+        "tools": {
+          "x": 1480,
+          "y": 450,
+          "label": "tools"
+        },
+        "count": {
+          "x": 1480,
+          "y": 800,
+          "label": "counter",
+          "sub": "0"
+        }
+      },
+      "edges_def": {
+        "l-u": [
+          "loop",
+          "user"
+        ],
+        "l-t": [
+          "loop",
+          "tools"
+        ],
+        "t-c": [
+          "tools",
+          "count"
+        ]
+      },
+      "beats": [
+        {
+          "at": 0.0,
+          "focus": "tools",
+          "pulse": [
+            "l-t"
+          ],
+          "msg": {
+            "l-t": "tool call"
+          }
+        },
+        {
+          "at": 0.25,
+          "focus": "count",
+          "pulse": [
+            "t-c"
+          ],
+          "sub": {
+            "count": "12"
+          }
+        },
+        {
+          "at": 0.6,
+          "focus": "user",
+          "tone": "ok",
+          "pulse": [
+            "l-u"
+          ],
+          "msg": {
+            "l-u": "update"
+          }
+        },
+        {
+          "at": 0.8,
+          "focus": "count",
+          "sub": {
+            "count": "0"
+          },
+          "tag": "reset"
+        }
+      ],
+      "vo": "Each finished tool call bumps a counter. Any contact with the person, a message or a question, resets it to zero."
+    },
+    {
+      "type": "diagram",
+      "heading": "At 30, *steer* the model",
+      "nodes": {
+        "count": {
+          "x": 330,
+          "y": 520,
+          "label": "counter",
+          "sub": "30"
+        },
+        "steer": {
+          "x": 940,
+          "y": 520,
+          "label": "steer queue"
+        },
+        "model": {
+          "kind": "actor",
+          "x": 1560,
+          "y": 520,
+          "label": "LLM"
+        },
+        "user": {
+          "kind": "actor",
+          "x": 1560,
+          "y": 830,
+          "label": "person"
+        }
+      },
+      "edges_def": {
+        "c-s": [
+          "count",
+          "steer"
+        ],
+        "s-m": [
+          "steer",
+          "model"
+        ],
+        "m-u": [
+          "model",
+          "user"
+        ]
+      },
+      "beats": [
+        {
+          "at": 0.0,
+          "focus": "count",
+          "tone": "fail",
+          "pulse": [
+            "c-s"
+          ],
+          "msg": {
+            "c-s": "note"
+          }
+        },
+        {
+          "at": 0.4,
+          "focus": "model",
+          "pulse": [
+            "s-m"
+          ],
+          "msg": {
+            "s-m": "check in"
+          }
+        },
+        {
+          "at": 0.72,
+          "focus": "user",
+          "tone": "ok",
+          "pulse": [
+            "m-u"
+          ],
+          "msg": {
+            "m-u": "progress"
+          }
+        }
+      ],
+      "vo": "At thirty calls, the harness queues an internal note. The model reads it after the turn, and sends the person a short progress update."
+    },
+    {
+      "type": "kinetic",
+      "lines": [
+        {
+          "t": "Force the tool?",
+          "tone": "muted"
+        },
+        "Not every *provider*.",
+        "A steer works *everywhere*."
+      ],
+      "at": [
+        0.0,
+        0.3,
+        0.62
+      ],
+      "vo": "Why not force the tool choice? Not every provider supports it. A steer works on any compatible model."
+    },
+    {
+      "type": "number",
+      "value": 30,
+      "label": "tool calls, then a *nudge*",
+      "foot": "Person-started runs only. Tuned later from traces.",
+      "at": [
+        0.05,
+        0.5
+      ],
+      "vo": "Only runs started by a person get it. Thirty is a starting point, and traces will tell if it should move."
+    }
+  ]
+}

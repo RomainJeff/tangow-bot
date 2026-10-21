@@ -230,10 +230,10 @@ function Kitchen() {
       </Section>
 
       <Section title="surfaces">
-        <Surface as="section" className="p-3 text-meta text-muted-foreground">
-          An unframed card: one fill, one hairline, no shadow.
+        <Surface as="section" className="p-4 text-meta text-muted-foreground">
+          An unframed card: the bot's paper, never lifted.
         </Surface>
-        <Surface radius="block" className="p-3 font-mono text-mono text-foreground">
+        <Surface variant="outlined" className="p-4 font-mono text-mono text-foreground">
           pnpm --filter @rakazo/ui-tokens generate
         </Surface>
       </Section>

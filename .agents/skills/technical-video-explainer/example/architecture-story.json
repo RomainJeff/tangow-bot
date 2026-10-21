@@ -1,0 +1,295 @@
+{
+  "source": {
+    "kind": "architecture",
+    "ref": "docs/computer-runtime.md"
+  },
+  "voice": "af_heart",
+  "speed": 1.05,
+  "scenes": [
+    {
+      "type": "title",
+      "kicker": "rakazo-bot · Architecture",
+      "title": "Agent and computer, *apart*",
+      "vo": "Rakazo keeps the agent and its computer apart. The agent thinks in one place, and acts on a machine somewhere else."
+    },
+    {
+      "type": "diagram",
+      "heading": "Pi never runs *in* the sandbox",
+      "zones": [
+        {
+          "x": 110,
+          "y": 290,
+          "w": 880,
+          "h": 620,
+          "label": "Rakazo API"
+        },
+        {
+          "x": 1070,
+          "y": 290,
+          "w": 740,
+          "h": 620,
+          "label": "sandbox"
+        }
+      ],
+      "nodes": {
+        "pi": {
+          "x": 320,
+          "y": 450,
+          "label": "Pi agent"
+        },
+        "tools": {
+          "x": 770,
+          "y": 450,
+          "label": "tools"
+        },
+        "prov": {
+          "x": 770,
+          "y": 780,
+          "label": "provider",
+          "sub": "one contract"
+        },
+        "desk": {
+          "x": 1440,
+          "y": 450,
+          "label": "desktop"
+        },
+        "ws": {
+          "kind": "store",
+          "x": 1440,
+          "y": 780,
+          "label": "workspace"
+        }
+      },
+      "edges_def": {
+        "p-t": [
+          "pi",
+          "tools"
+        ],
+        "t-v": [
+          "tools",
+          "prov"
+        ],
+        "v-d": [
+          "prov",
+          "desk"
+        ],
+        "d-w": [
+          "desk",
+          "ws"
+        ]
+      },
+      "beats": [
+        {
+          "at": 0.0,
+          "focus": "pi",
+          "pulse": [
+            "p-t"
+          ],
+          "msg": {
+            "p-t": "click"
+          }
+        },
+        {
+          "at": 0.35,
+          "focus": "prov",
+          "pulse": [
+            "t-v"
+          ]
+        },
+        {
+          "at": 0.6,
+          "focus": "desk",
+          "tone": "ok",
+          "pulse": [
+            "v-d"
+          ],
+          "msg": {
+            "v-d": "action"
+          }
+        },
+        {
+          "at": 0.85,
+          "focus": "ws",
+          "pulse": [
+            "d-w"
+          ]
+        }
+      ],
+      "vo": "Pi runs inside the Rakazo process and calls ordinary tools. Every tool goes through one boundary, the sandbox provider, which drives a Linux desktop."
+    },
+    {
+      "type": "diagram",
+      "heading": "*One* contract, many backends",
+      "nodes": {
+        "prov": {
+          "x": 560,
+          "y": 620,
+          "label": "provider"
+        },
+        "docker": {
+          "kind": "actor",
+          "x": 1460,
+          "y": 390,
+          "label": "Docker"
+        },
+        "e2b": {
+          "kind": "actor",
+          "x": 1460,
+          "y": 620,
+          "label": "E2B"
+        },
+        "other": {
+          "kind": "actor",
+          "x": 1460,
+          "y": 850,
+          "label": "Daytona · Box",
+          "size": [
+            400,
+            120
+          ]
+        }
+      },
+      "edges_def": {
+        "p-d": [
+          "prov",
+          "docker"
+        ],
+        "p-e": [
+          "prov",
+          "e2b"
+        ],
+        "p-o": [
+          "prov",
+          "other"
+        ]
+      },
+      "beats": [
+        {
+          "at": 0.0,
+          "focus": "prov",
+          "tag": "lifecycle · desktop · shell · files",
+          "tagAt": [
+            0,
+            96
+          ]
+        },
+        {
+          "at": 0.4,
+          "focus": [
+            "docker",
+            "e2b",
+            "other"
+          ],
+          "pulse": [
+            "p-d",
+            "p-e",
+            "p-o"
+          ]
+        },
+        {
+          "at": 0.75,
+          "focus": "prov",
+          "tone": "ok"
+        }
+      ],
+      "vo": "Docker, E2B, Daytona and Box implement the same contract: lifecycle, desktop, commands and files. Swapping vendors never touches the agent."
+    },
+    {
+      "type": "diagram",
+      "heading": "The *workspace* survives",
+      "zones": [
+        {
+          "x": 110,
+          "y": 330,
+          "w": 700,
+          "h": 620,
+          "label": "any machine"
+        },
+        {
+          "x": 1110,
+          "y": 330,
+          "w": 700,
+          "h": 620,
+          "label": "Rakazo-owned"
+        }
+      ],
+      "nodes": {
+        "ws": {
+          "kind": "store",
+          "x": 460,
+          "y": 500,
+          "label": "workspace"
+        },
+        "vm": {
+          "x": 460,
+          "y": 810,
+          "label": "new machine"
+        },
+        "home": {
+          "kind": "store",
+          "x": 1460,
+          "y": 640,
+          "label": "home store"
+        }
+      },
+      "edges_def": {
+        "w-h": [
+          "ws",
+          "home"
+        ],
+        "h-v": [
+          "home",
+          "vm"
+        ]
+      },
+      "beats": [
+        {
+          "at": 0.0,
+          "focus": "ws",
+          "pulse": [
+            "w-h"
+          ],
+          "msg": {
+            "w-h": "checkpoint"
+          }
+        },
+        {
+          "at": 0.3,
+          "focus": "home",
+          "tone": "ok",
+          "tag": "run end · stop · idle"
+        },
+        {
+          "at": 0.65,
+          "focus": "vm",
+          "tone": "ok",
+          "pulse": [
+            "h-v"
+          ],
+          "msg": {
+            "h-v": "restore"
+          }
+        }
+      ],
+      "vo": "At the end of a run, on stop, or when idle, the workspace is checkpointed into Rakazo's own store. A new machine, even on another provider, restores it first."
+    },
+    {
+      "type": "kinetic",
+      "lines": [
+        "The *container* is the boundary.",
+        {
+          "t": "Need isolation?",
+          "tone": "muted"
+        },
+        "Use *another computer*."
+      ],
+      "at": [
+        0.0,
+        0.5,
+        0.7
+      ],
+      "vo": "The guarantee is simple: the computer container is the security boundary. When work needs isolation, it gets its own computer.",
+      "size": 104
+    }
+  ]
+}

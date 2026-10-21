@@ -20,7 +20,8 @@ function windowChrome(platform: NodeJS.Platform) {
     autoHideMenuBar: true,
     frame: mac,
     titleBarStyle: mac ? ("hiddenInset" as const) : undefined,
-    trafficLightPosition: mac ? { x: 16, y: 16 } : undefined,
+    // On the floating sidebar's header line, as in desktop-new.
+    trafficLightPosition: mac ? { x: 26, y: 24 } : undefined,
   };
 }
 

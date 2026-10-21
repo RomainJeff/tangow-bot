@@ -55,6 +55,9 @@ describe("FramedBlock", () => {
 
     expect(html).toContain('data-answered="true"');
     expect(html).toContain('data-slot="framed-block-answered"');
+    // Back on the bot's paper: the thread's one elevation is free again.
+    expect(html).toContain("shadow-settled");
+    expect(html).not.toContain("shadow-card");
     expect(html).toContain("text-meta");
     expect(html).not.toContain('data-slot="framed-block-actions"');
     expect(html).not.toContain('data-slot="framed-block-body"');
