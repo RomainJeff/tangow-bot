@@ -2,7 +2,7 @@ import { i18n } from "@lingui/core";
 import { useLingui } from "@lingui/react/macro";
 import type { MessageReaction, ThreadItem } from "@rakazo/contracts";
 import type { SkillSourceBlock, ThreadView } from "@rakazo/core";
-import { isToolActivityBlock, latestActivityLabel } from "@rakazo/core";
+import { isToolActivityBlock } from "@rakazo/core";
 import type { GroupAvatarMember } from "@rakazo/ui-web";
 import { cn } from "@rakazo/ui-web";
 import type { RefObject } from "react";
@@ -196,7 +196,7 @@ export const Transcript = memo(function Transcript({
   }…`;
   // One bot only: an activity line names one bot's tool, so it would mislabel a group.
   const workingLabel =
-    (workingBots.length === 1 ? latestActivityLabel(messages) : undefined) ?? workingFallback;
+    (workingBots.length === 1 ? view.activityLabel : undefined) ?? workingFallback;
 
   // Keyboard focus reveals a row's pill too, so it is placed on focus as on hover.
   useEffect(() => {

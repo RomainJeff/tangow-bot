@@ -1215,6 +1215,16 @@ describe("interactive executor sessions with durable history", () => {
     },
   );
 
+  it("posts nothing for a top-level bot's routine run that ends without a word", async () => {
+    const { finalized } = await fixture({
+      run: { trigger: "routine", routineId: "routine-1", createdAt: new Date() },
+      runtime: async function* () {
+        yield { type: "done" };
+      },
+    }).execute();
+    expect(finalized).toMatchObject({ outcome: "completed", blocks: [], result: "" });
+  });
+
   it("publishes a trusted recovery notice for a child bot's queued human follow-up", async () => {
     const c = await conversation();
     await fixture({

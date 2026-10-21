@@ -40,10 +40,8 @@ describe("tool activity", () => {
   });
 });
 
-const liveRun = (blocks: MessageBlock[]) => [
-  { id: "m1", blocks: [{ kind: "text" as const, text: "Sure." }] },
-  { id: "progress:run-1", blocks },
-];
+const liveRun = (blocks: MessageBlock[]) =>
+  new Map([["run-1", { botId: "bot-1", ts: "2026-10-19T09:00:00.000Z", blocks }]]);
 
 describe("latestActivityLabel", () => {
   it("reads the tool line the run is on", () => {
@@ -61,8 +59,6 @@ describe("latestActivityLabel", () => {
   });
 
   it("stays undefined without a live run", () => {
-    expect(
-      latestActivityLabel([{ id: "m1", blocks: [{ kind: "text", text: "Done." }] }]),
-    ).toBeUndefined();
+    expect(latestActivityLabel(new Map())).toBeUndefined();
   });
 });
