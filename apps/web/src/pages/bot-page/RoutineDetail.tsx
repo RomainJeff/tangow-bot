@@ -146,7 +146,7 @@ export function RoutineDetail({
         dir="auto"
         className="gap-1.5"
         labelClassName="mx-3.5"
-        controlClassName="min-h-18 rounded-card border-transparent bg-background px-4 py-3 text-row-name dark:bg-background"
+        controlClassName="min-h-18 rounded-card border-transparent bg-group px-4 py-3 text-row-name shadow-group dark:bg-group"
       />
 
       <WhenToRun
@@ -204,16 +204,14 @@ export function RoutineDetail({
             {runError}
           </p>
         ) : null}
-        <div className="px-3.5">
-          <BotActivity
-            botId={bot.id}
-            routineId={routine.id}
-            commands={{
-              activityEpoch: commands.activityEpoch + testRuns,
-              openRun: commands.openRun,
-            }}
-          />
-        </div>
+        <BotActivity
+          botId={bot.id}
+          routineId={routine.id}
+          commands={{
+            activityEpoch: commands.activityEpoch + testRuns,
+            openRun: commands.openRun,
+          }}
+        />
       </section>
 
       <div className="flex justify-end">

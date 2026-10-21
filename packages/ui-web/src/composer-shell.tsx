@@ -28,7 +28,7 @@ export interface ComposerShellProps extends Omit<ComponentPropsWithoutRef<"div">
   dictationConfirm?: ReactNode;
 }
 
-/** The capsule at the bottom of the thread — the one elevation of the screen. */
+/** The glass capsule floating over the bottom of the thread; its field's focus lifts it. */
 export const ComposerShell = forwardRef<HTMLDivElement, ComposerShellProps>(function ComposerShell(
   {
     attach,
@@ -51,10 +51,10 @@ export const ComposerShell = forwardRef<HTMLDivElement, ComposerShellProps>(func
       data-slot="composer-shell"
       data-state={state}
       className={cn(
-        "flex min-h-12 flex-col justify-end gap-1.5 rounded-composer bg-surface p-1.75 motion-safe:transition-shadow motion-safe:duration-(--duration-hover) motion-safe:ease-quiet",
+        "rk-glass-control flex min-h-12 flex-col justify-end gap-1.5 rounded-composer p-1.75 motion-safe:transition-shadow motion-safe:duration-(--duration-hover) motion-safe:ease-quiet",
         dictating
           ? "shadow-none ring-2 ring-inset ring-foreground"
-          : "shadow-composer-rest focus-within:shadow-composer-focus",
+          : "focus-within:shadow-composer-focus",
         className,
       )}
       {...props}

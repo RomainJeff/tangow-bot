@@ -1,7 +1,7 @@
 import { useLingui } from "@lingui/react/macro";
 import { isApprovalAskBlock, isSecretAskBlock, narrateTool, speechFromBlocks } from "@rakazo/core";
 import { BotAvatar, Button, useElapsed } from "@rakazo/ui-web";
-import { Mic, MicOff, Square } from "lucide-react";
+import { Mic, MicOff, PhoneOff } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { approvalActionLabel } from "../lib/approval-labels";
 import { desktopBridge } from "../lib/desktop";
@@ -421,8 +421,9 @@ export function CallView({
           size="call"
           aria-label={t`End call`}
           onClick={hangUp}
+          className="bg-destructive text-destructive-foreground"
         >
-          <Square aria-hidden="true" />
+          <PhoneOff aria-hidden="true" />
         </Button>
       </div>
     </div>

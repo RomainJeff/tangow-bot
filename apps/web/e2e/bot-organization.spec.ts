@@ -283,7 +283,7 @@ test("group chats share every context-menu action", async ({ page }, testInfo) =
   await expect(sidebar.getByText("Archived", { exact: true })).toBeVisible();
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole("button", { name: "Open navigation" }).click();
+  await page.getByRole("link", { name: "Back" }).click();
   await group.click({ button: "right" });
   await captureScreenshot(page, testInfo, "group-context-menu-mobile");
   await page.keyboard.press("Escape");

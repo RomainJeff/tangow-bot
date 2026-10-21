@@ -26,7 +26,9 @@ describe("Android mobile platform contract", () => {
     expect(thread).toContain("KeyboardAvoidingView");
     expect(thread).toContain('behavior="height"');
     expect(thread).toContain("useHeaderHeight");
-    expect(thread).toContain("keyboardVerticalOffset={headerHeight}");
+    // Under a transparent bar the thread starts at the top of the window: the header offset only
+    // applies while the bar is opaque.
+    expect(thread).toContain("keyboardVerticalOffset={headerHeight - underBar}");
     expect(thread).not.toContain("automaticOffset");
     expect(thread).not.toContain("KeyboardStickyView");
     expect(thread).toContain("useSafeAreaInsets");
@@ -209,13 +211,13 @@ describe("Android mobile platform contract", () => {
   });
 
   it("shows agent notification silence in the menu, inbox avatar, and DM header only", () => {
-    const index = readFileSync(resolve(mobileRoot, "app/index.tsx"), "utf8");
+    const inboxRows = readFileSync(resolve(mobileRoot, "components/home/rows.tsx"), "utf8");
     const thread = readFileSync(resolve(mobileRoot, "app/thread.tsx"), "utf8");
     const avatar = readFileSync(resolve(mobileRoot, "components/bot-avatar.tsx"), "utf8");
     const menu = readFileSync(resolve(mobileRoot, "components/bot-organize-sheet.tsx"), "utf8");
     expect(menu).toContain("Silence notifications");
     expect(menu).toContain("Resume notifications");
-    expect(index).toContain("muted={!bot.notifyOnFinish}");
+    expect(inboxRows).toContain("muted={!bot.notifyOnFinish}");
     expect(thread).toContain("muted={!currentBot.notifyOnFinish}");
     expect(avatar).toContain('accessibilityLabel={t("Notifications silenced")}');
     expect(avatar).toContain('android="notifications-off"');

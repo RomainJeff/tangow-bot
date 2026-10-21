@@ -12,6 +12,11 @@ export async function threadEntries(
   return (await rpc<{ entries: ThreadEntry[] }>(page, "threads/messages", target)).entries;
 }
 
+/** Interactive runs end with `run.recap` in the thread; their `run.finished` stays in the child session. */
+export function finishedRuns(entries: readonly ThreadEntry[]) {
+  return entries.filter((entry) => entry.type === "run.recap");
+}
+
 export function blocksOf(entries: readonly ThreadEntry[]): MessageBlock[] {
   return entries.flatMap((entry): MessageBlock[] => {
     switch (entry.type) {
