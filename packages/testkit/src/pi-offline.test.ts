@@ -25,6 +25,39 @@ const writeTool: ConnectorTool = {
   },
 };
 
+const publishTool: ConnectorTool = {
+  name: "publish_note",
+  description: "Publish a note to the connected workspace",
+  inputSchema: {
+    type: "object",
+    properties: { title: { type: "string" } },
+    required: ["title"],
+  },
+};
+
+const subagentTool: ConnectorTool = {
+  name: "run_subagent",
+  description: "Run a helper",
+  inputSchema: {
+    type: "object",
+    properties: { name: { type: "string" }, task: { type: "string" } },
+    required: ["name", "task"],
+  },
+};
+
+function pausingPublish(calls: string[]): AgentRunRequest["executeTool"] {
+  return async (name) => {
+    calls.push(name);
+    if (name !== "publish_note") return { path: "notes.txt", bytes: 5 };
+    return {
+      kind: "agent_tool_result",
+      content: [{ type: "text", text: "Waiting for approval." }],
+      details: { approval: "paused" },
+      terminate: true,
+    };
+  };
+}
+
 function runRequest(
   model: AgentRunRequest["model"],
   overrides: Partial<AgentRunRequest> = {},
@@ -248,6 +281,77 @@ describe("real Pi against an offline model HTTP endpoint", () => {
     server.assertComplete();
     expect(calls).toBe(1);
     expect(events.at(-1)).toEqual({ type: "done", text: "The file could not be saved." });
+  });
+
+  const publishCall = { id: "publish", name: "publish_note", arguments: { title: "Plan" } };
+  const writeCall = {
+    id: "write",
+    name: "write_file",
+    arguments: { path: "notes.txt", content: "hello" },
+  };
+
+  it.each([
+    ["before", publishCall, writeCall, ["publish_note"]],
+    ["after", writeCall, publishCall, ["write_file", "publish_note"]],
+  ])(
+    "stops a tool batch at an approval pause with a local write %s it, without another inference",
+    async (_order, first, sibling, expected) => {
+      const calls: string[] = [];
+      const server = await startModelEmulator({
+        steps: [{ expect() {}, response: { type: "tool", ...first, siblings: [sibling] } }],
+      });
+      cleanups.push(() => server.close());
+      const events = await collect(
+        new PiAgentRuntime().run(
+          runRequest(server.model, {
+            tools: [writeTool, publishTool],
+            executeTool: pausingPublish(calls),
+          }),
+        ),
+      );
+      server.assertComplete();
+      expect(server.requests).toHaveLength(1);
+      expect(calls).toEqual(expected);
+      expect(events.at(-1)).toEqual({ type: "done" });
+    },
+  );
+
+  it("ends a helper at its approval pause, and its parent with it", async () => {
+    const calls: string[] = [];
+    const server = await startModelEmulator({
+      steps: [
+        {
+          expect() {},
+          response: {
+            type: "tool",
+            id: "helper",
+            name: "run_subagent",
+            arguments: { name: "helper", task: "Save and publish the plan." },
+          },
+        },
+        {
+          expect() {},
+          response: { type: "tool", ...writeCall, siblings: [publishCall] },
+        },
+      ],
+    });
+    cleanups.push(() => server.close());
+    const events = await collect(
+      new PiAgentRuntime().run(
+        runRequest(server.model, {
+          tools: [writeTool, publishTool, subagentTool],
+          executeTool: pausingPublish(calls),
+        }),
+      ),
+    );
+    server.assertComplete();
+    expect(server.requests).toHaveLength(2);
+    expect(calls).toEqual(["write_file", "publish_note"]);
+    expect(events.filter((event) => event.type === "subagent").at(-1)).toMatchObject({
+      status: "completed",
+      result: "Waiting for approval.",
+    });
+    expect(events.at(-1)).toEqual({ type: "done" });
   });
 
   it("propagates a provider rejection without dispatching tools or emitting done", async () => {
