@@ -113,8 +113,6 @@ describe("the pi-native harness through the controller", () => {
               system.indexOf("operating inside pi"),
             );
             expect(system).not.toContain("never sent to a native harness");
-            expect(system).not.toContain("<docs>");
-            expect(system).not.toContain("PI_*");
             expect((request.tools ?? []).map((tool) => tool.function.name).sort()).toEqual([
               "bash",
               "read",
@@ -163,7 +161,7 @@ describe("the pi-native harness through the controller", () => {
           : { type: "text", text: "Done." },
     };
     const history: AgentRunRequest["history"] = [];
-    for (let turn = 0; turn < 10; turn += 1) {
+    for (let turn = 0; turn < 20; turn += 1) {
       history.push({ role: "user", content: `Note ${turn}: ${"x".repeat(8_000)}` });
       history.push({ role: "assistant", content: `Kept note ${turn}.` });
     }
@@ -171,7 +169,7 @@ describe("the pi-native harness through the controller", () => {
     const { exit, requests } = await nativeRun(
       [step, step],
       { history },
-      { contextWindow: 16_000 },
+      { contextWindow: 48_000 },
     );
 
     expect(exit).toBe("done");

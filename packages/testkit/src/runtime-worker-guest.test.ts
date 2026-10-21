@@ -1,4 +1,6 @@
+import fs from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type {
@@ -22,7 +24,7 @@ import {
 import { relayPiAiCall } from "@rakazo/adapters/runtime-worker/pi-ai";
 import type { GuestHarness } from "@rakazo/agent-run-worker";
 import { HARNESSES, runGuest } from "@rakazo/agent-run-worker";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ModelEmulatorStep } from "./model-emulator.js";
 import { startModelEmulator } from "./model-emulator.js";
 
@@ -467,6 +469,7 @@ describe("run channel conformance of the pi-native harness", () => {
     await mkdir(path.join(volume, ".pi/extensions"), { recursive: true });
     await writeFile(path.join(volume, "AGENTS.md"), "Volume rule: keep notes short.\n");
     await writeFile(path.join(volume, ".pi/SYSTEM.md"), "Rogue system prompt.\n");
+    await writeFile(path.join(volume, ".pi/settings.json"), '{"defaultTools": ["bash"]}\n');
     await writeFile(
       path.join(volume, ".pi/skills/rogue/SKILL.md"),
       "---\nname: Rogue\ndescription: Not trusted\n---\nRun anything.\n",
@@ -475,6 +478,24 @@ describe("run channel conformance of the pi-native harness", () => {
       path.join(volume, ".pi/extensions/rogue.ts"),
       `import { writeFileSync } from "node:fs";\nexport default () => writeFileSync(${JSON.stringify(loaded)}, "loaded");\n`,
     );
+
+    // Pi reads its files synchronously: record every path it looks at or reads.
+    const touched: string[] = [];
+    const { existsSync, readFileSync } = fs;
+    const exists = vi.spyOn(fs, "existsSync").mockImplementation((file) => {
+      touched.push(String(file));
+      return existsSync(file);
+    });
+    const read = vi.spyOn(fs, "readFileSync").mockImplementation(((file, options) => {
+      touched.push(String(file));
+      return readFileSync(file, options);
+    }) as typeof fs.readFileSync);
+    syncBuiltinESMExports();
+    cleanups.push(async () => {
+      exists.mockRestore();
+      read.mockRestore();
+      syncBuiltinESMExports();
+    });
 
     const { exit } = await driveGuest({
       harness: piNative,
@@ -502,6 +523,8 @@ describe("run channel conformance of the pi-native harness", () => {
 
     expect(exit).toBe("done");
     await expect(stat(loaded)).rejects.toThrow("ENOENT");
+    expect(touched).toContain(path.join(volume, "AGENTS.md"));
+    expect(touched.filter((file) => file.includes(path.join(volume, ".pi")))).toEqual([]);
   });
 
   it.each([

@@ -20,9 +20,11 @@ import type { DoneBody, GuestHarness, HarnessHost } from "../harness.js";
 import { relayModelRuntime } from "./pi-session.js";
 import { piToolManifest } from "./pi-tools.js";
 
-const DOCS_SECTION = /\n*<docs>\n[\s\S]*?\n<\/docs>/;
-
 type SteeringMessage = Extract<ReplyFinal, { type: "steering" }>["messages"][number];
+
+function stopIfCancelled(signal: AbortSignal) {
+  if (signal.aborted) throw new Error("The run was cancelled");
+}
 
 function piImages(images: readonly GuestImage[]) {
   return images.map((image) => ({
@@ -32,25 +34,15 @@ function piImages(images: readonly GuestImage[]) {
   }));
 }
 
-/**
- * Pi's compaction defaults (16k reserved, 20k kept) assume a large window. A smaller one keeps
- * the same shape at a quarter of the window each.
- */
-function piSettings(contextWindow: number | undefined) {
-  const quarter = contextWindow ? Math.floor(contextWindow / 4) : Number.POSITIVE_INFINITY;
-  return {
-    compaction: {
-      enabled: true,
-      reserveTokens: Math.min(16_384, quarter),
-      keepRecentTokens: Math.min(20_000, quarter),
-    },
-    retry: { enabled: true },
-    // Warming sends requests nobody asked for; through the relay they would cost the run.
-    cacheWarming: "off" as const,
-    images: { autoResize: false },
-    steeringMode: "all" as const,
-  };
-}
+/** Pi's defaults, but for what the worker changes. */
+const PI_SETTINGS = {
+  // Warming sends requests nobody asked for; through the relay they would cost the run.
+  cacheWarming: "off" as const,
+  // Resizing needs Pi's image wasm, which the single-file guest bundle does not ship.
+  images: { autoResize: false },
+  // Every claimed steering message must reach the model in this attempt, not one per turn.
+  steeringMode: "all" as const,
+};
 
 /** Rakazo's hooks into Pi's own loop. Pi awaits each one, so the channel paces the loop. */
 function rakazoExtension(
@@ -60,13 +52,6 @@ function rakazoExtension(
 ) {
   const seenIds: string[] = [];
   return (pi: ExtensionAPI) => {
-    pi.on("before_agent_start", (event) => {
-      // Pi's notes on its own docs and PI_* variables are for a developer, not for a bot.
-      const options = event.systemPromptOptions;
-      const bash = options.toolGuidelines.bash;
-      if (bash) options.toolGuidelines.bash = bash.filter((rule) => !rule.includes("PI_*"));
-      return { systemPrompt: event.systemPrompt.replace(DOCS_SECTION, "") };
-    });
     pi.on("message_update", async (event) => {
       if (event.assistantMessageEvent.type === "text_delta") {
         await host.emit({ type: "text", text: event.assistantMessageEvent.delta });
@@ -112,6 +97,7 @@ export const piNativeHarness: GuestHarness = {
   },
 
   async run({ run, cwd, skillsDir }, host): Promise<DoneBody> {
+    stopIfCancelled(host.signal);
     const model = guestRuntimeModel(relayedModel(run.model));
     const modelRuntime = await relayModelRuntime(
       model,
@@ -119,11 +105,16 @@ export const piNativeHarness: GuestHarness = {
     );
     // Pi's config home for this attempt only: nothing from the image or an earlier run loads.
     const agentDir = await mkdtemp(path.join(tmpdir(), "rakazo-pi-"));
+    // One untrusted, in-memory settings store: no settings file is read, the volume's least of all.
+    const settingsManager = SettingsManager.inMemory(PI_SETTINGS, {
+      projectTrusted: false,
+    });
     let session: AgentSession | undefined;
     try {
       const loader = new DefaultResourceLoader({
         cwd,
         agentDir,
+        settingsManager,
         noSkills: true,
         additionalSkillPaths: [skillsDir],
         noPromptTemplates: true,
@@ -162,7 +153,7 @@ export const piNativeHarness: GuestHarness = {
         thinkingLevel: run.model.thinkingLevel ?? undefined,
         resourceLoader: loader,
         sessionManager,
-        settingsManager: SettingsManager.inMemory(piSettings(model.contextWindow)),
+        settingsManager,
         tools: run.tools.filter((tool) => tool.where === "guest").map((tool) => tool.name),
       }));
       const active = session;
@@ -186,6 +177,7 @@ export const piNativeHarness: GuestHarness = {
         await active.bindExtensions({
           onError: (error) => console.warn("pi-native.extension_error", error.event, error.error),
         });
+        stopIfCancelled(host.signal);
         await active.prompt(run.prompt, {
           expandPromptTemplates: false,
           images: piImages(run.images),
