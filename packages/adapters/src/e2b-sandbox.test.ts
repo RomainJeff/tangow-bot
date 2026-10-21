@@ -410,7 +410,13 @@ describe("E2B computer backend", () => {
         teamHome([ada, shared]),
       );
       const run = vi.spyOn(replacement.sandbox.commands, "run");
-      for (const cwd of [undefined, "bots/bot_a", "/workspace/shared", "/workspace/bots/bot_a"]) {
+      for (const cwd of [
+        undefined,
+        "bots/bot_a",
+        "/workspace/shared",
+        "/workspace/bots/bot_a",
+        "/workspace//shared/",
+      ]) {
         for await (const _ of provider.execute(computer, { argv: ["pwd"], cwd }, context));
       }
 
@@ -419,20 +425,23 @@ describe("E2B computer backend", () => {
         "/home/user/rakazo-home/bots/bot_a",
         "/workspace/shared",
         "/workspace/bots/bot_a",
+        "/workspace/shared",
       ]);
     });
 
-    it.each(["/workspace/shared/../../tmp", "/workspace/bots/bot_a/../../../etc"])(
-      "refuses to run a command at %s, which climbs out of the volumes",
-      async (cwd) => {
-        const { provider, computer } = await provisionOver(null, teamHome([ada, shared]));
-        const command = async () => {
-          for await (const _ of provider.execute(computer, { argv: ["pwd"], cwd }, context));
-        };
+    it.each([
+      "/workspace/shared/../../tmp",
+      "/workspace/bots/bot_a/../../../etc",
+      "/workspace/bots/bot_a/../bot_b",
+      "/workspace/shared/..\\bots/bot_b",
+    ])("refuses to run a command at %s, which climbs out of the volumes", async (cwd) => {
+      const { provider, computer } = await provisionOver(null, teamHome([ada, shared]));
+      const command = async () => {
+        for await (const _ of provider.execute(computer, { argv: ["pwd"], cwd }, context));
+      };
 
-        await expect(command()).rejects.toThrow("Path escapes the computer workspace");
-      },
-    );
+      await expect(command()).rejects.toThrow("Path escapes the computer workspace");
+    });
 
     it("refuses a computer write that would land on no volume", async () => {
       const { provider, computer, replacement } = await provisionOver(

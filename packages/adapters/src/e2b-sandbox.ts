@@ -585,8 +585,9 @@ async function* walkE2BWorkspace(
 
 /** A worker's path is a real one on a computer that mounts its volumes. */
 function e2bCwd(computer: ComputerRef, cwd: string | undefined): string {
-  if (computer.writableRoots && cwd && underVolumeMounts(cwd)) {
-    return `/${normalizeWorkspacePath(cwd)}`;
+  if (computer.writableRoots && cwd?.startsWith("/")) {
+    const absolute = `/${normalizeWorkspacePath(cwd)}`;
+    if (underVolumeMounts(absolute)) return absolute;
   }
   if (
     !cwd ||

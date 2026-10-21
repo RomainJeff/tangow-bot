@@ -463,7 +463,7 @@ describe("computer_exec", () => {
     ]);
     vi.spyOn(bot.run.sandbox, "execute").mockImplementation(async function* () {
       yield { type: "stdout", data: "\u0001".repeat(1536 * 1024) };
-      yield { type: "stderr", data: "done\n" };
+      yield { type: "stderr", data: "\u0002".repeat(1536 * 1024) };
       yield { type: "exit", code: 0 };
     });
     const runId = await bot.start();
@@ -474,10 +474,14 @@ describe("computer_exec", () => {
     });
     expect(effect.result).toEqual({
       code: 0,
-      stdout: `${"\u0001".repeat(65536)}\n\n[output cut at 65536 of 1572864 bytes]`,
-      stderr: "done\n",
+      stdout: `${"\u0001".repeat(12000)}…`,
+      stderr: `${"\u0002".repeat(12000)}…`,
     });
+    expect(Buffer.byteLength(JSON.stringify(effect.result))).toBeLessThan(8 * 1024 * 1024);
     expect(shown.startsWith(`{"stdout":"${"\\u0001".repeat(100)}`)).toBe(true);
+    expect((await bot.run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
+      "completed",
+    );
   });
 
   it("refuses a command that could stop the desktop, as shell does", async () => {
