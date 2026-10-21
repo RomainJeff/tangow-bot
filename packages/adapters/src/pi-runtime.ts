@@ -1326,6 +1326,14 @@ function toAgentTool(tool: ConnectorTool, host: ToolHost, exposedName: string): 
       try {
         result = await (async () => {
           if (tool.name === "request_takeover") {
+            // The executor starts the computer the person takes over, or says why it cannot.
+            const ready = await host.request.executeTool?.(tool.name, args, executionId);
+            if (ready && typeof ready === "object" && "error" in ready) {
+              return {
+                content: [{ type: "text", text: summarizeToolResult(ready) }],
+                details: ready,
+              };
+            }
             host.pausePending = true;
             host.queue.push({
               type: "takeover",

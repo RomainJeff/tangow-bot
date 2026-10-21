@@ -304,6 +304,9 @@ describe("where a product run executes", () => {
     expect(seen).toEqual([["read_file", "write_file", "shell"]]);
     expect(await attemptsOf(run, runId)).toEqual([{ workerState: null }]);
     expect(run.provider.launches).toEqual([]);
+    expect(
+      (await run.prisma.computer.findUniqueOrThrow({ where: { id: run.bot.computerId! } })).state,
+    ).toBe("running");
   });
 
   it("creates the volume of a bot attached after its computer moved, on its first run", async () => {

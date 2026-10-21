@@ -1,4 +1,5 @@
 import { mkdir } from "node:fs/promises";
+import { setTimeout as delay } from "node:timers/promises";
 import type {
   AdapterContext,
   AgentHomeStore,
@@ -139,8 +140,9 @@ async function hasLiveForeignRunLease(
   return live !== null;
 }
 
+/** `transition`: someone else's fresh start or suspend, which ends on its own. */
 export class ComputerBusyError extends Error {
-  constructor() {
+  constructor(readonly reason: "held" | "transition" = "held") {
     super("Computer is busy");
     this.name = "ComputerBusyError";
   }
@@ -244,7 +246,7 @@ export async function provisionComputer(
   // journeys previously hung createApp stop() while continueRun sat in that wait against a
   // wedged mid-boot row left by an earlier suite.
   if (existing.state === "booting" && reclaimStamp !== null && !bootClaimIsStale) {
-    throw new ComputerBusyError();
+    throw new ComputerBusyError("transition");
   }
   if (
     existing.state === "booting" &&
@@ -266,12 +268,14 @@ export async function provisionComputer(
     !staleSuspending &&
     !["running", "stopped", "suspended", "error", "booting"].includes(existing.state)
   ) {
-    throw new ComputerBusyError();
+    throw new ComputerBusyError(
+      existing.state === "suspending" && !suspendClaimIsStale ? "transition" : "held",
+    );
   }
   // Waited for suspending (or similar) and landed on booting we never stamped: another
   // caller owns that boot. Do not adopt its updatedAt / previousRef and double-provision.
   if (existing.state === "booting" && reclaimStamp === null) {
-    throw new ComputerBusyError();
+    throw new ComputerBusyError("transition");
   }
   // We came to reclaim abandoned booting; if another caller already activated, do not fall
   // through into reconnect (that would provision again under their providerRef).
@@ -468,6 +472,27 @@ async function waitForComputerReady(
   return prisma.computer.findUniqueOrThrow({ where: { id: computerId } });
 }
 
+/**
+ * Waits while someone else starts or suspends the computer, for as long as their claim stays
+ * live, and not at all while maintenance holds it.
+ */
+export async function waitOutComputerTransition(
+  prisma: PrismaClient,
+  computerId: string,
+  signal: AbortSignal,
+): Promise<void> {
+  const deadline = Date.now() + BOOT_CLAIM_STALE_MS;
+  while (Date.now() < deadline) {
+    signal.throwIfAborted();
+    const { state, maintenanceId } = await prisma.computer.findUniqueOrThrow({
+      where: { id: computerId },
+      select: { state: true, maintenanceId: true },
+    });
+    if (maintenanceId || (state !== "booting" && state !== "suspending")) return;
+    await delay(BOOT_WAIT_MS, undefined, { signal });
+  }
+}
+
 async function rollbackProvisionedComputer(
   sandbox: SandboxProvider,
   computer: ComputerRef,
@@ -521,7 +546,7 @@ export async function acquireComputerExecutionLease(
   if (computer.maintenanceId && computer.maintenanceId !== input.runId)
     throw new ComputerBusyError();
   if (computer.scope !== "team") return null;
-  if (isLiveSuspending(computer)) throw new ComputerBusyError();
+  if (isLiveSuspending(computer)) throw new ComputerBusyError("transition");
   const now = new Date();
   const expiresAt = new Date(now.getTime() + EXECUTION_LEASE_MS);
   const [reclaimed] = await prisma.computerExecutionLease.updateManyAndReturn({
@@ -582,7 +607,9 @@ async function validateAcquiredComputerLease(
   )
     return lease;
   await releaseComputerExecutionLease(prisma, lease);
-  throw new ComputerBusyError();
+  throw new ComputerBusyError(
+    computer.maintenanceId && computer.maintenanceId !== lease.runId ? "held" : "transition",
+  );
 }
 
 export async function renewComputerExecutionLease(
