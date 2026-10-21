@@ -7,7 +7,8 @@ shopt -s nullglob
 
 SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SELF="$SKILL_DIR/scripts/oc"
-JOBS="$HOME/oc-jobs"
+JOBS="${OC_JOBS_DIR:-$HOME/oc-jobs}"
+[[ "$JOBS" == /* ]] || { echo "error: OC_JOBS_DIR must be absolute" >&2; exit 1; }
 MAX_RUNNING=3
 STALL_MINUTES=10
 

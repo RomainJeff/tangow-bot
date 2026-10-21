@@ -62,7 +62,7 @@ Why: customers ask support for invoices by email today; this lets them get it th
 "can you add a button to download the invoice as PDF on the order page?"
 
 ## Context
-- Repository: /home/rakazo/shop, base branch main
+- Repository: /workspace/bots/<id>/shop, base branch main
 - The order page is the one at /orders/<id>
 - Imitate the existing "Print" button on the same page for placement and style
 
@@ -92,7 +92,7 @@ Why: mobile users are locked out; this blocks most customers.
 "people say they can't log in on the phone, it just reloads"
 
 ## Context
-- Repository: /home/rakazo/app, base branch main
+- Repository: /workspace/bots/<id>/app, base branch main
 - Symptom: on a phone-sized screen, entering a valid email and password and tapping "Log in" reloads the login page instead of opening the dashboard. Desktop works.
 
 ## Done when

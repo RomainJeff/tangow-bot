@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { chmod, mkdir, mkdtemp, readFile, rm, utimes, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, realpath, rm, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -32,7 +32,9 @@ echo '{"type":"step_finish","part":{"cost":0.25,"tokens":{"input":1000,"output":
 
 describe.skipIf(missingTools.length > 0)("delegate-to-opencode oc script", () => {
   let root: string;
+  let home: string;
   let repo: string;
+  let jobs: string;
   let env: NodeJS.ProcessEnv;
 
   const oc = (...args: string[]) => {
@@ -59,19 +61,23 @@ describe.skipIf(missingTools.length > 0)("delegate-to-opencode oc script", () =>
   };
 
   beforeAll(async () => {
-    root = await mkdtemp(path.join(os.tmpdir(), "oc-test-"));
+    root = await realpath(await mkdtemp(path.join(os.tmpdir(), "oc-test-")));
+    home = path.join(root, "home");
+    await mkdir(home);
     const bin = path.join(root, "bin");
     await mkdir(bin);
     await writeFile(path.join(bin, "opencode"), FAKE_OPENCODE);
     await chmod(path.join(bin, "opencode"), 0o755);
     env = {
       PATH: `${bin}:${process.env.PATH}`,
-      HOME: root,
+      HOME: home,
       GIT_AUTHOR_NAME: "t",
       GIT_AUTHOR_EMAIL: "t@t",
       GIT_COMMITTER_NAME: "t",
       GIT_COMMITTER_EMAIL: "t@t",
     };
+    jobs = path.join(root, "workspace", "bots", "bot-test", "oc-jobs");
+    env.OC_JOBS_DIR = jobs;
     repo = path.join(root, "repo");
     await mkdir(repo);
     for (const args of [
@@ -99,9 +105,18 @@ describe.skipIf(missingTools.length > 0)("delegate-to-opencode oc script", () =>
   it("runs a job on its own branch, reports, and continues the same session", async () => {
     const id = await start("Add a footer.");
     await waitFor(id, "done");
+    expect(
+      execFileSync("git", ["rev-parse", "--show-toplevel"], {
+        cwd: path.join(jobs, id, "repo"),
+        env,
+      })
+        .toString()
+        .trim(),
+    ).toBe(path.join(jobs, id, "repo"));
+    await writeFile(path.join(jobs, id, "REPORT.md"), "Volume-backed report");
     const result = oc("result", id);
     expect(result).toContain(`branch=oc/${id}`);
-    expect(result).toContain("all done");
+    expect(result).toContain("Volume-backed report");
     expect(result).toContain("fake change");
     const detail = oc("status", id, "--detail");
     expect(detail).toContain(
@@ -110,17 +125,15 @@ describe.skipIf(missingTools.length > 0)("delegate-to-opencode oc script", () =>
     expect(detail).toContain("[in_progress] Write the footer");
     expect(detail).toContain("bash (failed): Run the tests");
     expect(detail).toContain("text: all done");
-    expect(await readFile(path.join(root, "oc-jobs", id, "prompt.md"), "utf8")).toContain(
-      "Do not push",
-    );
+    expect(await readFile(path.join(jobs, id, "prompt.md"), "utf8")).toContain("Do not push");
 
     expect(oc("send", id, await brief("followup", "Fix criterion 2."))).toBe(`ok id=${id}`);
     await waitFor(id, "done");
-    expect(await readFile(path.join(root, "calls"), "utf8")).toContain("-s ses_fake");
+    expect(await readFile(path.join(home, "calls"), "utf8")).toContain("-s ses_fake");
 
     expect(oc("review", id)).toBe(`id=${id}-review`);
     await waitFor(`${id}-review`, "done");
-    expect(await readFile(path.join(root, "calls"), "utf8")).toContain("--agent readonly");
+    expect(await readFile(path.join(home, "calls"), "utf8")).toContain("--agent readonly");
 
     expect(oc("clean", id)).toBe(`ok kept_branch=oc/${id}`);
     expect(
@@ -141,12 +154,28 @@ describe.skipIf(missingTools.length > 0)("delegate-to-opencode oc script", () =>
     );
 
     const old = new Date(Date.now() - 20 * 60_000);
-    await utimes(path.join(root, "oc-jobs", stalled, "log"), old, old);
+    await utimes(path.join(jobs, stalled, "log"), old, old);
     expect(oc("status", stalled)).toContain("state=stalled");
 
     expect(oc("clean", stopped)).toContain("is running");
     expect(oc("stop", stopped)).toBe("stopped");
     expect(oc("status", stopped)).toContain("state=stopped");
+  });
+
+  it("keeps the legacy home location and rejects relative job roots", async () => {
+    const configured = env.OC_JOBS_DIR;
+    delete env.OC_JOBS_DIR;
+    try {
+      const id = await start("Legacy home job");
+      await waitFor(id, "done");
+      expect(oc("result", id)).toContain("all done");
+      expect(await readFile(path.join(home, "oc-jobs", id, "root"), "utf8")).toBe(`${repo}\n`);
+      expect(oc("clean", id)).toBe(`ok kept_branch=oc/${id}`);
+      env.OC_JOBS_DIR = "relative/jobs";
+      expect(oc("status")).toContain("OC_JOBS_DIR must be absolute");
+    } finally {
+      env.OC_JOBS_DIR = configured;
+    }
   });
 
   it("rejects job ids that are not plain names", () => {
