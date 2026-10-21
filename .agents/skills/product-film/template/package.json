@@ -1,0 +1,9 @@
+{
+  "name": "product-film",
+  "private": true,
+  "description": "A product film in one studio: the template of .agents/skills/product-film. Render with the HyperFrames CLI.",
+  "dependencies": {
+    "gsap": "3.14.2",
+    "three": "0.181.2"
+  }
+}
