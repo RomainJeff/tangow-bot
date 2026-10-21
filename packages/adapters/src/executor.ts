@@ -264,7 +264,7 @@ import {
   teamBotWorkspaceDirectory,
   workspaceFileExists,
 } from "./computer-support.js";
-import { observationToolResult, parseComputerActions } from "./computer-tools.js";
+import { observationToolResult, parseComputerActions, screenPath } from "./computer-tools.js";
 import { checkpointRunComputerWorkspace } from "./computer-workspace.js";
 import { redactConnectorPayload, sanitizeConnectorError } from "./connector-safety.js";
 import { formatCurrentTimeInstruction } from "./current-time.js";
@@ -2388,11 +2388,25 @@ export function createRunExecutor(deps: ExecutorDeps) {
           if (extracted.text.trim()) droppedNarration = true;
           assembled = "";
         };
-        const formatObservation = (
+        const screensByPath =
+          runtime.describe().capabilities.screensByPath === true &&
+          storedComputer?.homeStorage === "volumes";
+        const formatObservation = async (
           observation: Awaited<ReturnType<SandboxProvider["observe"]>>,
           note?: string,
         ) => {
-          const result = observationToolResult(observation, note, lastComputerFrameId);
+          const savedAt =
+            screensByPath && observation.frameId !== lastComputerFrameId
+              ? screenPath(observation)
+              : undefined;
+          if (savedAt) {
+            await deps.sandbox.writeFile(
+              requireComputer(),
+              { path: resolveHomePath(savedAt), content: observation.image },
+              context,
+            );
+          }
+          const result = observationToolResult(observation, note, lastComputerFrameId, savedAt);
           lastComputerFrameId = observation.frameId;
           return result;
         };

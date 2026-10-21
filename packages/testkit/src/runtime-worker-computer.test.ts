@@ -1,6 +1,8 @@
 import type { ConnectorProvider } from "@rakazo/adapter-kit";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.js";
+import type { Seen } from "./worker-channel-tap.js";
+import { tapConnector } from "./worker-channel-tap.js";
 import { startWorkerRun } from "./worker-run-fixture.js";
 
 const cleanups: Array<() => Promise<void>> = [];
@@ -347,5 +349,56 @@ describe("a worker run's computer", () => {
       "failed",
     );
     expect(await bot.leases()).toEqual([{ runId, held: false }]);
+  });
+});
+
+describe("a worker run's screens by path", () => {
+  it("saves the screen on the bot's volume, where the guest reads it, and keeps the image off the run channel", async () => {
+    const seen: Seen[] = [];
+    const results: Record<string, unknown> = {};
+    const read = { type: "tool" as const, id: "see", name: "read", arguments: { path: "" } };
+    const run = await startWorkerRun({
+      steps: [
+        {
+          expect() {},
+          response: { type: "tool", id: "look", name: "computer_observe", arguments: {} },
+        },
+        {
+          expect(request) {
+            results.look = toolResults(request).look;
+            read.arguments.path = /Screen saved at (\S+)\. /.exec(String(results.look))?.[1] ?? "";
+          },
+          response: read,
+        },
+        {
+          expect(request) {
+            results.see = toolResults(request).see;
+          },
+          response: finish[0]!.response,
+        },
+        finish[1]!,
+      ],
+      computerScope: "team",
+      protocol: "anthropic",
+      screensByPath: true,
+      connector: (provider) => tapConnector(provider, seen, []),
+    });
+    cleanups.push(() => run.close());
+    const runId = await run.send("Hello.");
+    await run.continueRun(runId);
+    run.model.assertComplete();
+
+    const screens = "\\.rakazo/screens/";
+    expect(String(results.look)).toMatch(
+      new RegExp(
+        `^computer observed\\n\\{"frameId":"[^"]+",.*"width":\\d+,"height":\\d+.*"path":"${screens}[\\w.-]+\\.png"\\}\\nScreen saved at ${screens}[\\w.-]+\\.png\\. Read it to see it\\.$`,
+      ),
+    );
+    expect(String(results.see)).toContain("image/png");
+    const fromController = seen
+      .filter(({ from }) => from === "controller")
+      .map(({ frame }) => Buffer.from(frame).toString());
+    expect(fromController.some((frame) => frame.includes("Screen saved at"))).toBe(true);
+    expect(fromController.filter((frame) => frame.includes('"type":"image"'))).toEqual([]);
   });
 });

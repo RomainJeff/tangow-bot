@@ -57,10 +57,18 @@ export function parseComputerActions(value: unknown): ComputerAction[] {
   return actions;
 }
 
+/** Where a screen is saved in the bot's home, which its own file tool reads relative paths from. */
+export function screenPath(observation: ComputerObservation): string {
+  const name = observation.frameId.replace(/[^\w.-]/g, "_");
+  return `.rakazo/screens/${name}.${observation.mimeType === "image/png" ? "png" : "jpg"}`;
+}
+
+/** `savedAt`: the screen is a file there, so the result names it instead of carrying the image. */
 export function observationToolResult(
   observation: ComputerObservation,
   note = "computer observed",
   previousFrameId?: string,
+  savedAt?: string,
 ): AgentToolExecutionResult {
   const details = {
     frameId: observation.frameId,
@@ -69,6 +77,7 @@ export function observationToolResult(
     height: observation.height,
     cursor: observation.cursor,
     activeWindow: observation.activeWindow,
+    ...(savedAt ? { path: savedAt } : {}),
   };
   const unchanged = previousFrameId === observation.frameId;
   return {
@@ -76,9 +85,9 @@ export function observationToolResult(
     content: [
       {
         type: "text",
-        text: `${note}${unchanged ? " (screen unchanged)" : ""}\n${JSON.stringify(details)}`,
+        text: `${note}${unchanged ? " (screen unchanged)" : ""}\n${JSON.stringify(details)}${savedAt && !unchanged ? `\nScreen saved at ${savedAt}. Read it to see it.` : ""}`,
       },
-      ...(unchanged
+      ...(unchanged || savedAt
         ? []
         : [
             {
