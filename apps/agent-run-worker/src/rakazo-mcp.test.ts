@@ -1,0 +1,267 @@
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
+import type { GuestTool } from "@rakazo/adapter-kit";
+import { afterEach, describe, expect, it } from "vitest";
+import type { HarnessHost, InformativeBody } from "./harness.js";
+import { rakazoMcpServer, rakazoMcpTools } from "./rakazo-mcp.js";
+
+const cleanups: Array<() => Promise<unknown>> = [];
+afterEach(async () => {
+  await Promise.all(cleanups.splice(0).map((cleanup) => cleanup()));
+});
+
+const PNG =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+const object = { type: "object", properties: {} };
+const controller = (name: string, extra: Partial<GuestTool> = {}): GuestTool => ({
+  name,
+  description: `${name} tool`,
+  inputSchema: object,
+  where: "controller",
+  ...extra,
+});
+const PRODUCT_TOOLS: GuestTool[] = [
+  { ...controller("read"), where: "guest" },
+  { ...controller("bash"), where: "guest" },
+  controller("remember"),
+  controller("schedule_create"),
+  controller("computer_observe", { readOnly: true }),
+];
+/** A connector catalog of 30 tools sent with its fallback, as the controller sends a large one. */
+const CATALOG_TOOLS: GuestTool[] = [
+  controller("mcp_search_tools", { catalog: "fallback", readOnly: true }),
+  controller("mcp_load_tool", { catalog: "fallback", readOnly: true }),
+  controller("mcp_execute_tool", { catalog: "fallback" }),
+  ...Array.from({ length: 30 }, (_, index) =>
+    controller(`mcp__demo__tool_${String(index).padStart(2, "0")}`, {
+      inputSchema: { type: "object", properties: { value: { type: "string" } } },
+      catalog: { via: "mcp_execute_tool", id: `srv-demo:tool_${index}` },
+    }),
+  ),
+];
+
+/** A controller that answers every call with `answer`, recording what reached it. */
+function fakeHost(answer: (name: string, args: Record<string, unknown>) => unknown) {
+  const announced: InformativeBody[] = [];
+  const calls: Array<{ name: string; args: Record<string, unknown>; callId: string }> = [];
+  const host: HarnessHost = {
+    signal: new AbortController().signal,
+    emit: async (body) => {
+      announced.push(body);
+    },
+    decide: async () => {
+      throw new Error("Unexpected decision");
+    },
+    model: async () => {
+      throw new Error("Unexpected model call");
+    },
+    callTool: async (_agent, name, args, callId) => {
+      calls.push({ name, args, callId });
+      return { placement: "controller", output: await answer(name, args) };
+    },
+  };
+  return { host, announced, calls };
+}
+
+async function connect(
+  tools: GuestTool[],
+  host: HarnessHost,
+  options = { nativeToolSearch: false },
+) {
+  const screensDir = await mkdtemp(path.join(tmpdir(), "rakazo-mcp-screens-"));
+  const server = rakazoMcpServer(tools, host, screensDir, options);
+  const [clientEnd, serverEnd] = InMemoryTransport.createLinkedPair();
+  serverEnd.onmessage = (message) => void server.send(message as never);
+  server.onMessage((message) => void serverEnd.send(message as JSONRPCMessage));
+  await serverEnd.start();
+  const client = new Client({ name: "test-harness", version: "1" });
+  await client.connect(clientEnd);
+  cleanups.push(
+    () => client.close(),
+    () => rm(screensDir, { recursive: true, force: true }),
+  );
+  return { client, screensDir };
+}
+
+describe("the Rakazo MCP server", () => {
+  it("lists only controller tools and relays a call to the controller and back", async () => {
+    const { host, announced, calls } = fakeHost((name, args) =>
+      name === "remember" ? { ok: true, saved: args.content } : "Reminder set for 9:00.",
+    );
+    const { client } = await connect(PRODUCT_TOOLS, host);
+
+    const { tools } = await client.listTools();
+    expect(tools.map((tool) => tool.name)).toEqual([
+      "remember",
+      "schedule_create",
+      "computer_observe",
+    ]);
+    expect(tools[2]!.annotations).toEqual({ readOnlyHint: true });
+
+    const remembered = await client.callTool({
+      name: "remember",
+      arguments: { content: "Prefers tea" },
+    });
+    const scheduled = await client.callTool({
+      name: "schedule_create",
+      arguments: { at: "09:00" },
+    });
+
+    expect(remembered).toEqual({
+      content: [{ type: "text", text: '{"ok":true,"saved":"Prefers tea"}' }],
+      isError: false,
+    });
+    expect(scheduled).toEqual({
+      content: [{ type: "text", text: "Reminder set for 9:00." }],
+      isError: false,
+    });
+    expect(calls.map(({ name, args }) => ({ name, args }))).toEqual([
+      { name: "remember", args: { content: "Prefers tea" } },
+      { name: "schedule_create", args: { at: "09:00" } },
+    ]);
+    expect(announced).toEqual(
+      calls.map(({ name, args, callId }) => ({ type: "tool", name, args, executionId: callId })),
+    );
+  });
+
+  it("returns a controller refusal as a tool error and an unknown tool as a protocol error", async () => {
+    const { host, calls } = fakeHost(() => {
+      throw new Error("The action was declined");
+    });
+    const { client } = await connect(PRODUCT_TOOLS, host);
+
+    expect(await client.callTool({ name: "schedule_create", arguments: {} })).toEqual({
+      content: [{ type: "text", text: "The action was declined" }],
+      isError: true,
+    });
+    await expect(client.callTool({ name: "bash", arguments: {} })).rejects.toThrow(
+      "Unknown tool bash",
+    );
+    expect(calls.map(({ name }) => name)).toEqual(["schedule_create"]);
+  });
+
+  it("passes a screen saved by path as text, with no image", async () => {
+    const saved = "Screen saved at /workspace/bots/b1/.rakazo/screens/f7.png. Read it to see it.";
+    const { host } = fakeHost(() => ({
+      kind: "agent_tool_result",
+      content: [
+        {
+          type: "text",
+          text: `computer observed\n{"frameId":"f7","width":1280,"height":800}\n${saved}`,
+        },
+      ],
+    }));
+    const { client } = await connect(PRODUCT_TOOLS, host);
+
+    expect(await client.callTool({ name: "computer_observe", arguments: {} })).toEqual({
+      content: [
+        {
+          type: "text",
+          text: `computer observed\n{"frameId":"f7","width":1280,"height":800}\n${saved}`,
+        },
+      ],
+      isError: false,
+    });
+  });
+
+  it("returns an image the controller still sends, and saves it under a name the result gives", async () => {
+    const { host, calls } = fakeHost(() => ({
+      kind: "agent_tool_result",
+      content: [
+        { type: "text", text: "computer observed" },
+        { type: "image", data: PNG, mimeType: "image/png" },
+      ],
+    }));
+    const { client, screensDir } = await connect(PRODUCT_TOOLS, host);
+
+    const result = await client.callTool({ name: "computer_observe", arguments: {} });
+
+    const file = path.join(screensDir, `${calls[0]!.callId}-1.png`);
+    expect(result).toEqual({
+      content: [
+        { type: "text", text: "computer observed" },
+        { type: "image", data: PNG, mimeType: "image/png" },
+        { type: "text", text: `Screenshot saved at ${file}. Read it to see it again.` },
+      ],
+      isError: false,
+    });
+    expect((await readFile(file)).toString("base64")).toBe(PNG);
+  });
+});
+
+describe("a large connector catalog through the Rakazo MCP server", () => {
+  it("defers every catalog tool for a harness with native tool search and runs one once on the controller", async () => {
+    const { host, announced, calls } = fakeHost(() => "tool-ran");
+    const { client } = await connect([...PRODUCT_TOOLS, ...CATALOG_TOOLS], host, {
+      nativeToolSearch: true,
+    });
+
+    const listed = rakazoMcpTools([...PRODUCT_TOOLS, ...CATALOG_TOOLS], true);
+    expect(listed.filter((tool) => tool.exposure === "direct").map((tool) => tool.name)).toEqual([
+      "remember",
+      "schedule_create",
+      "computer_observe",
+    ]);
+    expect(listed.filter((tool) => tool.exposure === "deferred")).toHaveLength(30);
+    const { tools } = await client.listTools();
+    expect(tools.map((tool) => tool.name)).not.toContain("mcp_search_tools");
+
+    const result = await client.callTool({
+      name: "mcp__demo__tool_29",
+      arguments: { value: "x" },
+    });
+
+    expect(result).toEqual({ content: [{ type: "text", text: "tool-ran" }], isError: false });
+    expect(calls.map(({ name, args }) => ({ name, args }))).toEqual([
+      { name: "mcp_execute_tool", args: { id: "srv-demo:tool_29", arguments: { value: "x" } } },
+    ]);
+    expect(announced).toEqual([
+      {
+        type: "tool",
+        name: "mcp_execute_tool",
+        args: { id: "srv-demo:tool_29", arguments: { value: "x" } },
+        executionId: calls[0]!.callId,
+      },
+    ]);
+  });
+
+  it("returns the controller's refusal when the tool was revoked after discovery", async () => {
+    const { host } = fakeHost(() => {
+      throw new Error("Tool is unknown or not authorized for this bot");
+    });
+    const { client } = await connect(CATALOG_TOOLS, host, { nativeToolSearch: true });
+
+    expect(
+      await client.callTool({ name: "mcp__demo__tool_03", arguments: { value: "x" } }),
+    ).toEqual({
+      content: [{ type: "text", text: "Tool is unknown or not authorized for this bot" }],
+      isError: true,
+    });
+  });
+
+  it("gives a harness without native tool search the search, load and execute tools only", async () => {
+    const { host, calls } = fakeHost((_name, args) => ({
+      tools: [{ id: "srv-demo:tool_29" }],
+      args,
+    }));
+    const { client } = await connect(CATALOG_TOOLS, host);
+
+    const { tools } = await client.listTools();
+    expect(tools.map((tool) => tool.name)).toEqual([
+      "mcp_search_tools",
+      "mcp_load_tool",
+      "mcp_execute_tool",
+    ]);
+    await expect(
+      client.callTool({ name: "mcp__demo__tool_29", arguments: { value: "x" } }),
+    ).rejects.toThrow("Unknown tool mcp__demo__tool_29");
+    await client.callTool({ name: "mcp_search_tools", arguments: { query: "tool 29" } });
+    expect(calls.map(({ name, args }) => ({ name, args }))).toEqual([
+      { name: "mcp_search_tools", args: { query: "tool 29" } },
+    ]);
+  });
+});
