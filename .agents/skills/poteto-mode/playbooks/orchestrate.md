@@ -38,6 +38,9 @@ Your prompts to agents are your only product, and a sloppy brief compounds into 
 ```
 GOAL         one sentence, the outcome, executable by a stranger with no chat access
 SCOPE        paths this unit may write; paths it may not; its exclusive worktree or branch
+CONTRACTS    agreed shared contracts consumed; changes owned by this unit, or none
+DEPENDENCIES artifacts or decisions needed to start / verify / land, separately; none where absent
+RUNTIME      ports, databases, data directories, browsers or simulators: isolated or serialized
 CONTEXT      pointers to files and PRs; upstream reports pasted in full when this unit
              depends on them, because workers cannot see siblings
 ACCEPTANCE   checkable criteria, one per line
@@ -54,6 +57,8 @@ Size the brief to the unit. A one-command unit gets the template collapsed to a 
 A sub-coordinator brief adds its track boundary and unit list, its spawn budget with the remote default and the local exception list, the drain protocol, and the rollup format (per child: name, status, PR, head SHA, verdict, one line, plus track status and frontier delta).
 
 A dependency is a context relay, not just ordering. Undeclared upstream context makes the worker guess. Missing fields are a refuse-to-spawn condition. Audit one sampled worker brief per sub-coordinator per wave, concurrently with the wave it samples, never as a gate in front of it. A failing brief stops that track and fixes the sub-coordinator's instructions, not just the worker, because brief quality decays late in a run. Never resume-chain a brief. Respawn fresh with consolidated scope.
+
+Apply the decomposition check in **principle-separate-before-serializing-shared-state** before dispatch. Workers report a required shared-contract or cross-scope change, with affected units, before making it; they continue independent work. The coordinator resolves ownership and updates affected briefs. A review or human decision blocks only its dependents; start other ready units while it is pending.
 
 #### Steps
 

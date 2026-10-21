@@ -38,6 +38,8 @@ Screen every candidate against [`references/design-red-flags.md`](references/des
 
 Compare viable candidates on interface depth. Prefer the design that hides more complexity behind a smaller, simpler public surface. A rich interface can keep call chains short by concentrating capability instead of scattering it across layers.
 
+For multi-unit work, also compare independent implementation and verification using **principle-separate-before-serializing-shared-state**. At comparable simplicity, prefer fewer shared edits and blocking decisions. Reuse existing contracts; do not add interfaces or layers solely to enable more workers. Record the boundaries in the rationale's "Independent implementation" section.
+
 Arena returns one synthesized design package. The synthesis decision populates the rationale's "Synthesis decision" section.
 
 ## Phase C: Agree (opt-in)
