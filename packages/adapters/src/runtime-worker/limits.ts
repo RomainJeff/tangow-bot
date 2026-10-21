@@ -47,4 +47,10 @@ export const WORKER_LIMITS = {
   cancelGraceMs: 2_000,
   stopConfirmMs: 10_000,
   modelRequestsPerAttempt: 400,
+  /** Model requests a paused attempt may still make to close its turn; later ones are turned away. */
+  pausedModelRequests: 2,
+  /** Tool calls a paused attempt may still make, each answered without running. */
+  pausedToolCalls: 32,
+  /** A paused attempt that does not conclude ends after this long. */
+  pausedGraceMs: 60_000,
 } as const;
