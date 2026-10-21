@@ -29,7 +29,7 @@ function rawGuest(channel: FrameChannel, capability: string) {
   const worker = capabilityWorker(capability)!;
   const received: ControllerMessageV1[] = [];
   const replies = new Map<number, ReplyBody[]>();
-  let notify = () => {};
+  const waiting = new Set<() => void>();
   const closed = (async () => {
     for await (const frame of channel.frames) {
       const read = readControllerFrame(frame);
@@ -39,14 +39,15 @@ function rawGuest(channel: FrameChannel, capability: string) {
         const { re, body } = read.message.payload;
         replies.set(re, [...(replies.get(re) ?? []), body]);
       }
-      notify();
+      for (const resume of waiting) resume();
+      waiting.clear();
     }
   })();
   const until = async <T>(check: () => T | undefined): Promise<T> => {
     while (true) {
       const found = check();
       if (found !== undefined) return found;
-      await new Promise<void>((resume) => (notify = resume));
+      await new Promise<void>((resume) => waiting.add(resume));
     }
   };
   return {
@@ -84,7 +85,7 @@ function rawGuest(channel: FrameChannel, capability: string) {
 
 /** Hands every launch to the test: it opens the guest's connections itself. */
 function manualLauncher() {
-  const fence = { held: true };
+  const fence: { standing: "executing" | "paused" | "lost" } = { standing: "executing" };
   const launched = new Map<string, { capability: string; connect(): FrameChannel }>();
   const waiting = new Map<string, () => void>();
   return {
@@ -120,7 +121,8 @@ function manualLauncher() {
           })(),
           exited: Promise.resolve(),
           release: async () => "released",
-          holdsFence: async () => fence.held,
+          holdsFence: async () => fence.standing === "executing",
+          ownsFence: async () => fence.standing !== "lost",
         };
       },
     },
@@ -659,6 +661,125 @@ describe("the controller's pause guard, against a hostile harness", () => {
     expect(executeTool).not.toHaveBeenCalled();
   });
 
+  it("does not grant a native call whose authorization ends after the pause", async () => {
+    const authorized = Promise.withResolvers<void>();
+    const started = Promise.withResolvers<string>();
+    const { runtime, launchedFor } = setup();
+    const { run, ask } = await startGuest(runtime, launchedFor, "run_late_grant", {
+      executeLocalTool: async (_name, _args, _id, start) => {
+        await authorized.promise;
+        return start(new AbortController().signal).then(
+          () => started.resolve("started"),
+          (error: Error) => started.resolve(error.message),
+        );
+      },
+    });
+    await ask(bash("late"));
+    const reply = ask(callBash("late"));
+    expect(await ask({ type: "ask", text: "Which address?" })).toEqual({ type: "recorded" });
+    authorized.resolve();
+
+    expect(await reply).toEqual(notRun);
+    expect(await started.promise).toBe("This run is paused until the user answers.");
+    expect(await ask({ type: "done" })).toEqual({ type: "stop", reason: "paused" });
+    await run.done;
+  });
+
+  it("pauses when a native call's authorization pauses the run", async () => {
+    const executeTool = vi.fn(async () => "saved");
+    const { runtime, launchedFor } = setup();
+    const { run, ask } = await startGuest(runtime, launchedFor, "run_native_pause", {
+      executeTool,
+      executeLocalTool: async () => PAUSED,
+    });
+    await ask(bash("native"));
+    expect(await ask(callBash("native"))).toEqual({ type: "tool.result", output: PAUSED });
+
+    await ask(announce("remember", "after"));
+    expect(await ask(call("remember", "after"))).toEqual(notRun);
+    expect(await ask({ type: "text", text: "Ran it anyway!" })).toEqual({ type: "ack" });
+    expect(await ask({ type: "done" })).toEqual({ type: "stop", reason: "paused" });
+
+    await run.done;
+    expect(run.seen).toEqual([
+      { type: "tool", name: "bash", args: { command: "true" }, executionId: "native" },
+    ]);
+    expect(executeTool).not.toHaveBeenCalled();
+  });
+
+  it("pauses on a helper's pausing call, keeps its text out of the log after, and still closes it", async () => {
+    const texts: string[] = [];
+    const results: string[] = [];
+    const { runtime, launchedFor } = setup();
+    const { run, ask } = await startGuest(runtime, launchedFor, "run_helper", {
+      executeTool: vi.fn(async () => "saved"),
+      resolveModel: async () => request("run_helper").model,
+      startSubagent: async () => ({
+        executeTool: async () => PAUSED,
+        text: async (text) => void texts.push(text),
+        finish: async (outcome) => void results.push(outcome.result),
+        abandon: async () => undefined,
+      }),
+    });
+    expect(
+      await ask({
+        type: "subagent.open",
+        callId: "helper",
+        name: "helper",
+        task: "Look around.",
+        args: {},
+        model: { provider: "openai-compatible", id: "unused" },
+      }),
+    ).toMatchObject({ type: "subagent.opened", agent: "helper:1" });
+    await ask({ type: "subagent.text", agent: "helper:1", text: "Looking." });
+    await ask(announce("send_email", "helper-send"));
+    expect(
+      await ask({ ...call("send_email", "helper-send"), agent: "helper:1" } as GuestBody),
+    ).toEqual({ type: "tool.result", output: PAUSED });
+    await ask(announce("remember", "root-after"));
+    expect(await ask(call("remember", "root-after"))).toEqual(notRun);
+
+    expect(await ask({ type: "subagent.text", agent: "helper:1", text: "Sent it!" })).toEqual({
+      type: "recorded",
+    });
+    expect(
+      await ask({
+        type: "subagent.finish",
+        agent: "helper:1",
+        status: "completed",
+        result: "Done.",
+      }),
+    ).toEqual({ type: "recorded" });
+    expect(texts).toEqual(["Looking."]);
+    expect(results).toEqual(["Done."]);
+    await ask({ type: "done" });
+    await run.done;
+  });
+
+  it("lets a paused attempt that still owns its run conclude, and refuses it once superseded", async () => {
+    const server = await startModelEmulator({
+      apiKey: "controller-only-key",
+      steps: [{ expect() {}, response: { type: "text", text: "Waiting for your approval." } }],
+    });
+    onTestFinished(() => server.close());
+    const { runtime, launchedFor, fence } = setup();
+    const { run, ask } = await startGuest(runtime, launchedFor, "run_paused_fence", {
+      executeTool: async () => PAUSED,
+      model: server.model,
+    });
+    await pauseOnTool(ask);
+    fence.standing = "paused";
+
+    expect(await ask(modelRequest)).toEqual({ type: "model.end" });
+    await ask(announce("remember", "after"));
+    expect(await ask(call("remember", "after"))).toEqual(notRun);
+
+    fence.standing = "lost";
+    expect(await ask(modelRequest)).toEqual({ type: "refused", reason: "revoked" });
+    await expect(run.done).rejects.toThrow("This attempt no longer holds the run");
+    server.assertComplete();
+  });
+
   it("relays two model requests so the harness can close its turn, then turns it away, then stops it", async () => {
     const server = await startModelEmulator({
       apiKey: "controller-only-key",
@@ -731,7 +852,7 @@ describe("the controller's pause guard, against a hostile harness", () => {
     });
     expect(await ask(modelRequest)).toEqual({ type: "model.end" });
 
-    fence.held = false;
+    fence.standing = "lost";
     expect(await ask(modelRequest)).toEqual({ type: "refused", reason: "revoked" });
     await expect(run.done).rejects.toThrow("This attempt no longer holds the run");
     server.assertComplete();

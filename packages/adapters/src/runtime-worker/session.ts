@@ -219,6 +219,9 @@ export function createSession(
     return endPaused();
   };
 
+  /** Once paused, the attempt concludes on a run waiting for the user; never once superseded. */
+  const fenceHeld = () => (paused ? launched!.ownsFence() : launched!.holdsFence());
+
   const helperOf = (agent: string) => (agent === "root" ? undefined : helpers.get(agent));
 
   async function callTool(body: Extract<GuestBody, { type: "tool.call" }>): Promise<ReplyFinal> {
@@ -235,7 +238,13 @@ export function createSession(
       const executeLocal = helper ? helper.log.executeLocalTool : request.executeLocalTool;
       if (!executeLocal) return { type: "error", message: `${name} is unavailable here` };
       const granted = deferred<void>();
+      let denied = false;
       const call = executeLocal(name, args, callId, () => {
+        // Authorization can outlast the pause: the guest must not start the call then.
+        if (paused) {
+          denied = true;
+          return Promise.reject(new Error(PAUSED_MESSAGE));
+        }
         const output = deferred<LocalToolOutput>();
         grants.set(callId, output);
         granted.resolve();
@@ -254,7 +263,9 @@ export function createSession(
         ),
       ]);
       if (first.granted) return { type: "tool.grant" };
+      if (denied) return { type: "tool.result", output: PAUSED_TOOL_RESULT };
       if ("error" in first) return { type: "error", message: clean(messageOf(first.error)) };
+      if (isToolPauseResult(first.output)) pause();
       return { type: "tool.result", output: first.output };
     }
     const execute = helper ? helper.log.executeTool : request.executeTool;
@@ -307,7 +318,7 @@ export function createSession(
     body: Extract<GuestBody, { type: "model.request" }>,
     part: (body: ReplyPart) => void,
   ): Promise<ReplyFinal> {
-    if (!(await launched!.holdsFence())) return revoke();
+    if (!(await fenceHeld())) return revoke();
     modelRequests += 1;
     if (modelRequests > WORKER_LIMITS.modelRequestsPerAttempt) return refuse("budget");
     if (modelTokens >= WORKER_LIMITS.modelTokensPerAttempt) return refuse("budget");
@@ -460,7 +471,7 @@ export function createSession(
         return { type: "ack" };
       case "tool.call":
         // The executor checks its lease only between events: a guest must not outrun it.
-        if (!(await launched!.holdsFence())) return revoke();
+        if (!(await fenceHeld())) return revoke();
         if (++toolCalls > WORKER_LIMITS.toolCallsPerAttempt) return refuse("budget");
         return callTool(body);
       case "tool.done":
@@ -501,8 +512,9 @@ export function createSession(
       case "subagent.abandon": {
         const helper = helperOf(body.agent);
         if (!helper) return refuse("invalid");
-        if (body.type === "subagent.text") await helper.log.text(body.text);
-        else if (body.type === "subagent.abandon") await helper.log.abandon(body.result);
+        if (body.type === "subagent.text") {
+          if (!paused) await helper.log.text(body.text);
+        } else if (body.type === "subagent.abandon") await helper.log.abandon(body.result);
         else {
           await helper.log.finish({
             status: body.status,
@@ -529,7 +541,7 @@ export function createSession(
       case "done":
         return finish(body, part);
       case "skills.index": {
-        if (!(await launched!.holdsFence())) return revoke();
+        if (!(await fenceHeld())) return revoke();
         if (skillIndexEnded || !mountedSkillSources().has(body.skill.source))
           return refuse("invalid");
         const bytes = Buffer.byteLength(JSON.stringify(body.skill));
@@ -544,7 +556,7 @@ export function createSession(
       }
       case "skills.index.end": {
         const receivedAt = new Date();
-        if (!(await launched!.holdsFence())) return revoke();
+        if (!(await fenceHeld())) return revoke();
         if (
           skillIndexEnded ||
           body.sources.some((source) => !mountedSkillSources().has(source)) ||
@@ -558,7 +570,7 @@ export function createSession(
         return { type: "recorded" };
       }
       case "skills.collision":
-        if (!(await launched!.holdsFence())) return revoke();
+        if (!(await fenceHeld())) return revoke();
         if (++skillCollisions > 512) return refuse("budget");
         if (
           ![body.collision.kept, body.collision.ignored].every((source) =>
@@ -569,7 +581,7 @@ export function createSession(
         await request.onSkillCollision?.({ ...body.collision, name: clean(body.collision.name) });
         return { type: "recorded" };
       case "skills.used":
-        if (!(await launched!.holdsFence())) return revoke();
+        if (!(await fenceHeld())) return revoke();
         if (++skillUses > 512) return refuse("budget");
         await request.onSkillUsed?.(clean(body.name));
         return { type: "recorded" };
