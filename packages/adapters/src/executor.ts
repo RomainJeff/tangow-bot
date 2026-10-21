@@ -206,6 +206,7 @@ import {
   claimIntendedEffect,
   completeExternalEffect,
   createApprovedEffectReplayQueue,
+  inputPausedToolResult,
   isToolPauseResult,
   parseCatalogApprovalTarget,
   replaceCompletedExternalEffectResult,
@@ -214,6 +215,7 @@ import {
   settleUncertainEffect,
   uncertainEffectResult,
 } from "./approval-effect.js";
+import { askUserCard } from "./ask-user.js";
 import {
   autoReviewTimeoutMs,
   buildAutoReviewPrompt,
@@ -2204,9 +2206,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
           trace?: ToolCallTrace,
           local?: Parameters<LocalToolExecutor>[3],
         ) => {
-          const takeoverRefused =
-            name === "request_takeover" ? await computerUnavailable(name) : undefined;
-          if (name === "request_takeover" && !takeoverRefused) return { ok: true };
+          // A served pause writes nothing to the tool log: the card is its record.
+          const refused =
+            name === "ask_user" || name === "request_takeover"
+              ? await servePausingTool(name, args)
+              : undefined;
+          if (isToolPauseResult(refused)) return refused;
           const call = toolCall(executionId, name, args);
           if (unansweredCalls.get(executionId) !== call.payload.input) await write(call);
           unansweredCalls.delete(executionId);
@@ -2221,7 +2226,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               },
             });
           const result =
-            takeoverRefused ??
+            refused ??
             (await applyTool(name, args, executionId, log, trace, local).catch(
               async (error: unknown) => {
                 // An aborted call stays unanswered so a resumed worker replays it.
@@ -2405,6 +2410,133 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const pauseForSecret = () => {
           approvalPausePending = true;
           return secretPausedToolResult();
+        };
+
+        /** A run pauses for input once, whether a runtime event or a served tool call asks first. */
+        let inputPause: Promise<boolean> | undefined;
+        const pauseOnce = (pause: () => Promise<boolean>) => (inputPause ??= pause());
+        const pauseForAsk = (event: Extract<AgentRuntimeEvent, { type: "ask" }>) =>
+          pauseOnce(async () => {
+            if (!(await renewRunLease(deps, runId, workerId, fence))) return false;
+            const safeText = redactSecrets(event.text, runSecrets);
+            const safeDetail = event.detail
+              ? redactSecrets(event.detail, runSecrets)
+              : event.detail;
+            const safeActions = event.actions?.map((action) => ({
+              id: action.id,
+              label: redactSecrets(action.label, runSecrets),
+            }));
+            const safeQuestions = event.questions?.map((question) => ({
+              ...question,
+              question: redactSecrets(question.question, runSecrets),
+              ...(question.header ? { header: redactSecrets(question.header, runSecrets) } : {}),
+              ...(question.options
+                ? {
+                    options: question.options.map((option) => ({
+                      ...option,
+                      label: redactSecrets(option.label, runSecrets),
+                      ...(option.description
+                        ? { description: redactSecrets(option.description, runSecrets) }
+                        : {}),
+                    })),
+                  }
+                : {}),
+            }));
+            await workspaceCheckpoint.flush();
+            const paused = await deps.events.pauseRunForInput({
+              spaceId: run.spaceId,
+              threadId: run.threadId,
+              botId: run.botId,
+              runId,
+              attemptId: attempt.id,
+              leaseOwner: workerId,
+              leaseFence: fence,
+              blocks: [
+                {
+                  kind: "ask",
+                  text: safeText,
+                  detail: safeDetail,
+                  status: "pending",
+                  ...(safeActions ? { actions: safeActions } : {}),
+                  ...(safeQuestions ? { questions: safeQuestions } : {}),
+                },
+              ],
+              // Keep unredacted labels on the run for resume; message blocks stay redacted.
+              offeredActions: event.actions,
+            });
+            if (!paused) return false;
+            await notifyRun(deps, run, {
+              kind: "help",
+              title: `${bot.name} needs an answer`,
+              body: safeText,
+              botId: bot.id,
+              threadId: thread.id,
+            });
+            return true;
+          });
+        const pauseForTakeover = (reason: string) =>
+          pauseOnce(async () => {
+            if (!(await renewRunLease(deps, runId, workerId, fence))) return false;
+            const safeReason = redactSecrets(reason, runSecrets);
+            dropMidTurnNarration();
+            await useComputer();
+            await publishMessage(deps, run, [
+              { kind: "computer", state: "Needs you", text: safeReason },
+            ]);
+            await workspaceCheckpoint.flush();
+            if (!(await runComputer?.holdForTakeover())) {
+              throw new Error("Computer lease expired before takeover");
+            }
+            const paused = await deps.events.pauseRunForTakeover({
+              spaceId: run.spaceId,
+              threadId: run.threadId,
+              botId: run.botId,
+              runId,
+              attemptId: attempt.id,
+              leaseOwner: workerId,
+              leaseFence: fence,
+              reason: safeReason,
+              computerId: requireStoredComputer().id,
+            });
+            if (!paused) return false;
+            retainComputerLease = true;
+            await notifyRun(deps, run, {
+              kind: "takeover",
+              title: `${bot.name} needs you on the screen`,
+              body: safeReason,
+              botId: bot.id,
+              threadId: thread.id,
+            });
+            return true;
+          });
+        /**
+         * For a harness that leaves ask_user and request_takeover to the controller. A runtime that
+         * pauses on its own still sends its ask or takeover event next, which the loop then drops.
+         */
+        const servePausingTool = async (
+          name: "ask_user" | "request_takeover",
+          args: Record<string, unknown>,
+        ) => {
+          let paused: Promise<boolean>;
+          let reply: ReturnType<typeof inputPausedToolResult>;
+          if (name === "request_takeover") {
+            const refused = await computerUnavailable(name);
+            if (refused) return refused;
+            paused = pauseForTakeover(String(args.reason ?? "I need you on the screen."));
+            reply = inputPausedToolResult("takeover", "Takeover requested.");
+          } else {
+            let ask: ReturnType<typeof askUserCard>;
+            try {
+              ask = askUserCard(args);
+            } catch (error) {
+              return { error: error instanceof Error ? error.message : String(error) };
+            }
+            paused = pauseForAsk(ask.card);
+            reply = inputPausedToolResult("ask", ask.reply);
+          }
+          if (await paused) approvalPausePending = true;
+          else leaseValid = false;
+          return reply;
         };
 
         const skillOwner = { spaceId: run.spaceId, userId: run.userId, botId: run.botId };
@@ -4881,94 +5013,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 });
               }
             } else if (event.type === "ask") {
-              if (!(await renewRunLease(deps, runId, workerId, fence))) return;
-              const safeText = redactSecrets(event.text, runSecrets);
-              const safeDetail = event.detail
-                ? redactSecrets(event.detail, runSecrets)
-                : event.detail;
-              const safeActions = event.actions?.map((action) => ({
-                id: action.id,
-                label: redactSecrets(action.label, runSecrets),
-              }));
-              const safeQuestions = event.questions?.map((question) => ({
-                ...question,
-                question: redactSecrets(question.question, runSecrets),
-                ...(question.header ? { header: redactSecrets(question.header, runSecrets) } : {}),
-                ...(question.options
-                  ? {
-                      options: question.options.map((option) => ({
-                        ...option,
-                        label: redactSecrets(option.label, runSecrets),
-                        ...(option.description
-                          ? { description: redactSecrets(option.description, runSecrets) }
-                          : {}),
-                      })),
-                    }
-                  : {}),
-              }));
-              await workspaceCheckpoint.flush();
-              const paused = await deps.events.pauseRunForInput({
-                spaceId: run.spaceId,
-                threadId: run.threadId,
-                botId: run.botId,
-                runId,
-                attemptId: attempt.id,
-                leaseOwner: workerId,
-                leaseFence: fence,
-                blocks: [
-                  {
-                    kind: "ask",
-                    text: safeText,
-                    detail: safeDetail,
-                    status: "pending",
-                    ...(safeActions ? { actions: safeActions } : {}),
-                    ...(safeQuestions ? { questions: safeQuestions } : {}),
-                  },
-                ],
-                // Keep unredacted labels on the run for resume; message blocks stay redacted.
-                offeredActions: event.actions,
-              });
-              if (!paused) return;
-              await notifyRun(deps, run, {
-                kind: "help",
-                title: `${bot.name} needs an answer`,
-                body: safeText,
-                botId: bot.id,
-                threadId: thread.id,
-              });
+              await pauseForAsk(event);
               return;
             } else if (event.type === "takeover") {
-              if (!(await renewRunLease(deps, runId, workerId, fence))) return;
-              const safeReason = redactSecrets(event.reason, runSecrets);
-              dropMidTurnNarration();
-              await useComputer();
-              await publishMessage(deps, run, [
-                { kind: "computer", state: "Needs you", text: safeReason },
-              ]);
-              await workspaceCheckpoint.flush();
-              if (!(await runComputer?.holdForTakeover())) {
-                throw new Error("Computer lease expired before takeover");
-              }
-              const paused = await deps.events.pauseRunForTakeover({
-                spaceId: run.spaceId,
-                threadId: run.threadId,
-                botId: run.botId,
-                runId,
-                attemptId: attempt.id,
-                leaseOwner: workerId,
-                leaseFence: fence,
-                reason: safeReason,
-                computerId: requireStoredComputer().id,
-              });
-              if (!paused) return;
-              retainComputerLease = true;
-              await notifyRun(deps, run, {
-                kind: "takeover",
-                title: `${bot.name} needs you on the screen`,
-                body: safeReason,
-                botId: bot.id,
-                threadId: thread.id,
-              });
+              await pauseForTakeover(event.reason);
               return;
             } else if (event.type === "tool") {
               dropMidTurnNarration();
