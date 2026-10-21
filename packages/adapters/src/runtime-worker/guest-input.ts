@@ -2,9 +2,11 @@ import type {
   AgentRunRequest,
   ConnectorTool,
   GuestRunInput,
+  GuestTool,
   HarnessCapability,
   HarnessDeclaration,
 } from "@rakazo/adapter-kit";
+import { isLazyCatalogControlRoute } from "../lazy-tool-catalog.js";
 import { guestModelOf } from "./model-relay.js";
 import piTools from "./pi-tools.json" with { type: "json" };
 
@@ -17,6 +19,40 @@ export function nativeToolsForHarness(name: string): readonly ConnectorTool[] {
 
 /** The tools a harness uses only through a capability it declares. */
 const TOOL_CAPABILITY: Readonly<Record<string, HarnessCapability>> = { run_subagent: "subagents" };
+
+/** Catalog entries past it stay behind their fallback tools, so `worker.start` keeps its frame cap. */
+export const CATALOG_ENTRIES_MAX_BYTES = 2 * 1024 * 1024;
+
+/**
+ * Each lazy catalog's tools, for a harness with native tool search, and the connectors whose
+ * catalogs were sent: their search, load and execute tools become the fallback.
+ */
+function deferredCatalog(offered: readonly ConnectorTool[]) {
+  const taken = new Set(offered.map((tool) => tool.name));
+  const entries: GuestTool[] = [];
+  const sent = new Set<string>();
+  let bytes = 0;
+  for (const tool of offered) {
+    if (!tool.catalog?.length || !tool.route) continue;
+    const catalog = tool.catalog
+      .filter((entry) => !taken.has(entry.tool.name))
+      .map(({ id, tool: { name, description, inputSchema, readOnly } }) => ({
+        name,
+        description,
+        inputSchema,
+        ...(readOnly === undefined ? {} : { readOnly }),
+        where: "controller" as const,
+        catalog: { via: tool.name, id },
+      }));
+    const size = Buffer.byteLength(JSON.stringify(catalog));
+    if (bytes + size > CATALOG_ENTRIES_MAX_BYTES) continue;
+    bytes += size;
+    for (const entry of catalog) taken.add(entry.name);
+    entries.push(...catalog);
+    sent.add(tool.route.connectorId);
+  }
+  return { entries, sent };
+}
 
 export function base64Images(images: AgentRunRequest["currentTurnImages"]) {
   return (images ?? []).map((image) => ({
@@ -35,6 +71,7 @@ export function guestRunInput(
     const needed = TOOL_CAPABILITY[tool.name];
     return !needed || harness.capabilities.includes(needed);
   });
+  const catalog = deferredCatalog(offered);
   return {
     botId: request.botId,
     threadId: request.threadId,
@@ -48,13 +85,19 @@ export function guestRunInput(
       ...(turn.parts ? { parts: turn.parts } : {}),
     })),
     images: base64Images(request.currentTurnImages),
-    tools: offered.map(({ name, description, inputSchema, readOnly }) => ({
-      name,
-      description,
-      inputSchema,
-      ...(readOnly === undefined ? {} : { readOnly }),
-      where: nativeNames.has(name) ? "guest" : "controller",
-    })),
+    tools: [
+      ...offered.map(({ name, description, inputSchema, readOnly, route }) => ({
+        name,
+        description,
+        inputSchema,
+        ...(readOnly === undefined ? {} : { readOnly }),
+        where: nativeNames.has(name) ? ("guest" as const) : ("controller" as const),
+        ...(route && isLazyCatalogControlRoute(route) && catalog.sent.has(route.connectorId)
+          ? { catalog: "fallback" as const }
+          : {}),
+      })),
+      ...catalog.entries,
+    ],
     model: guestModelOf(request.model),
     allowSilentEmpty: request.allowSilentEmpty,
     freeTextIsPrivate: request.freeTextIsPrivate,
