@@ -42,6 +42,8 @@ For multi-unit work, also compare independent implementation and verification us
 
 Arena returns one synthesized design package. The synthesis decision populates the rationale's "Synthesis decision" section.
 
+Before presenting or implementing the complete design package, run **founding-engineer** per the independent plan-review protocol in **principle-laziness-protocol**. Return its report and the plan owner's disposition alongside the design. A candidate runner supplies its proposal to the parent; only the parent dispatches this review of the synthesized package.
+
 ## Phase C: Agree (opt-in)
 
 Default: proceed directly to implementation with the synthesized design. No human checkpoint.

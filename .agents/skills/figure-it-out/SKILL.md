@@ -31,6 +31,8 @@ Decompose into atomic, independently-landable units. Sequence riskiest-unknown-f
 - Decide what fans out using the decomposition check in **principle-separate-before-serializing-shared-state**. Record each unit's start / verify / land dependencies, write scope, contracts and independent check. Resolve shared writes and runtime resources before dispatch. Keep small coupled units together.
 - Write the designed phase list down. That list is what the human reviews.
 
+Before presenting or executing the complete workflow, run **founding-engineer** per the independent plan-review protocol in **principle-laziness-protocol**. Reuse an earlier review only when it covers the complete workflow with unchanged scope and architecture.
+
 Then execute the design. Add its steps to the todolist as concrete items, after the Phase C entry and before Phase D. Run each under the Phase C loop discipline, and weave the Phase D log through them, a row as each step lands, rather than saving the whole trail for the end.
 
 ## Phase C: Run the loop
