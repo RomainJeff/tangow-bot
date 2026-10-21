@@ -84,7 +84,9 @@ function rawGuest(channel: FrameChannel, capability: string) {
 
 /** Hands every launch to the test: it opens the guest's connections itself. */
 function manualLauncher() {
-  const fence: { standing: "executing" | "paused" | "lost" } = { standing: "executing" };
+  const fence: { standing: "executing" | "paused" | "lost"; lookup?: Promise<void> } = {
+    standing: "executing",
+  };
   const launched = new Map<string, { capability: string; connect(): FrameChannel }>();
   const waiting = new Map<string, () => void>();
   return {
@@ -120,7 +122,10 @@ function manualLauncher() {
           })(),
           exited: Promise.resolve(),
           release: async () => "released",
-          holdsFence: async () => fence.standing === "executing",
+          holdsFence: async () => {
+            await fence.lookup;
+            return fence.standing === "executing";
+          },
           ownsFence: async () => fence.standing !== "lost",
         };
       },
@@ -706,6 +711,39 @@ describe("the controller's pause guard, against a hostile harness", () => {
     expect(executeTool).not.toHaveBeenCalled();
   });
 
+  it("pauses on a helper's native authorization that pauses the run", async () => {
+    const { runtime, launchedFor } = setup();
+    const { run, ask } = await startGuest(runtime, launchedFor, "run_helper_native", {
+      executeTool: vi.fn(async () => "saved"),
+      resolveModel: async () => request("run_helper_native").model,
+      startSubagent: async () => ({
+        executeTool: async () => "unused",
+        executeLocalTool: async () => PAUSED,
+        text: async () => undefined,
+        finish: async () => undefined,
+        abandon: async () => undefined,
+      }),
+    });
+    await ask({
+      type: "subagent.open",
+      callId: "helper",
+      name: "helper",
+      task: "Look around.",
+      args: {},
+      model: { provider: "openai-compatible", id: "unused" },
+    });
+    await ask(bash("helper-bash"));
+    expect(await ask({ ...callBash("helper-bash"), agent: "helper:1" } as GuestBody)).toEqual({
+      type: "tool.result",
+      output: PAUSED,
+    });
+
+    await ask(announce("remember", "root-after"));
+    expect(await ask(call("remember", "root-after"))).toEqual(notRun);
+    expect(await ask({ type: "done" })).toEqual({ type: "stop", reason: "paused" });
+    await run.done;
+  });
+
   it("pauses on a helper's pausing call, keeps its text out of the log after, and still closes it", async () => {
     const texts: string[] = [];
     const results: string[] = [];
@@ -753,6 +791,33 @@ describe("the controller's pause guard, against a hostile harness", () => {
     expect(results).toEqual(["Done."]);
     await ask({ type: "done" });
     await run.done;
+  });
+
+  it("keeps the frames whose fence lookup outlasted the pause", async () => {
+    const server = await startModelEmulator({
+      apiKey: "controller-only-key",
+      steps: [{ expect() {}, response: { type: "text", text: "Waiting for your answer." } }],
+    });
+    onTestFinished(() => server.close());
+    const { runtime, launchedFor, fence } = setup();
+    const { run, ask } = await startGuest(runtime, launchedFor, "run_slow_fence", {
+      executeTool: async () => "saved",
+      model: server.model,
+    });
+    await ask(announce("remember", "late"));
+    const lookup = Promise.withResolvers<void>();
+    fence.lookup = lookup.promise;
+    const relayed = ask(modelRequest);
+    const answered = ask(call("remember", "late"));
+    expect(await ask({ type: "ask", text: "Which address?" })).toEqual({ type: "recorded" });
+    fence.standing = "paused";
+    lookup.resolve();
+
+    expect(await relayed).toEqual({ type: "model.end" });
+    expect(await answered).toEqual(notRun);
+    expect(await ask({ type: "done" })).toEqual({ type: "stop", reason: "paused" });
+    await run.done;
+    server.assertComplete();
   });
 
   it("lets a paused attempt that still owns its run conclude, and refuses it once superseded", async () => {
