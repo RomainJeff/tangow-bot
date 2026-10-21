@@ -1920,6 +1920,30 @@ export function createRunExecutor(deps: ExecutorDeps) {
           storedComputer && runComputer
             ? runComputer.use(context)
             : Promise.reject(new RunComputerRequiredError());
+        const computerUnavailable = async (
+          name: string,
+        ): Promise<{ error: string } | undefined> => {
+          if (!REMOTE_COMPUTER_TOOLS.has(name) || !runComputer) return undefined;
+          try {
+            await useComputer();
+            return undefined;
+          } catch (error) {
+            if (context.signal.aborted) throw error;
+            if (error instanceof ComputerBusyError) {
+              return {
+                error:
+                  "The computer is busy with another run or starting up. Continue without it or try again later.",
+              };
+            }
+            getLogger().error(
+              "run computer start failed",
+              redactSecrets(error instanceof Error ? error.message : String(error), runSecrets),
+            );
+            return {
+              error: "The computer could not start. Continue without it or try again later.",
+            };
+          }
+        };
         const requireComputer = () => {
           const computer = runComputer?.current();
           if (!computer) throw new RunComputerRequiredError();
@@ -2180,6 +2204,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
           trace?: ToolCallTrace,
           local?: Parameters<LocalToolExecutor>[3],
         ) => {
+          const takeoverRefused =
+            name === "request_takeover" ? await computerUnavailable(name) : undefined;
+          if (name === "request_takeover" && !takeoverRefused) return { ok: true };
           const call = toolCall(executionId, name, args);
           if (unansweredCalls.get(executionId) !== call.payload.input) await write(call);
           unansweredCalls.delete(executionId);
@@ -2193,15 +2220,17 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 artifactIds,
               },
             });
-          const result = await applyTool(name, args, executionId, log, trace, local).catch(
-            async (error: unknown) => {
-              // An aborted call stays unanswered so a resumed worker replays it.
-              if (!context.signal.aborted) {
-                await answer(error instanceof Error ? error.message : String(error), true, []);
-              }
-              throw error;
-            },
-          );
+          const result =
+            takeoverRefused ??
+            (await applyTool(name, args, executionId, log, trace, local).catch(
+              async (error: unknown) => {
+                // An aborted call stays unanswered so a resumed worker replays it.
+                if (!context.signal.aborted) {
+                  await answer(error instanceof Error ? error.message : String(error), true, []);
+                }
+                throw error;
+              },
+            ));
           recordToolOutput(executionId, result);
           if (!isToolPauseResult(result)) {
             await answer(result, isFailedToolResult(result), toolArtifactIds(result));
@@ -2951,35 +2980,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
           const bypassApproval = gateDecision === "allow" && requiresApprovalByDefault;
           let claimedEffect = false;
 
-          // A computer call starts the computer at the last moment before it takes effect: after any
-          // approval, before its effect is claimed, so a busy reply leaves the effect to run later.
-          const computerUnavailable = async (): Promise<{ error: string } | undefined> => {
-            if (!REMOTE_COMPUTER_TOOLS.has(name) || !runComputer) return undefined;
-            try {
-              await useComputer();
-              return undefined;
-            } catch (error) {
-              if (context.signal.aborted) throw error;
-              if (error instanceof ComputerBusyError) {
-                return {
-                  error:
-                    "The computer is busy with another run or starting up. Continue without it or try again later.",
-                };
-              }
-              getLogger().error(
-                "run computer start failed",
-                redactSecrets(error instanceof Error ? error.message : String(error), runSecrets),
-              );
-              return {
-                error: "The computer could not start. Continue without it or try again later.",
-              };
-            }
-          };
-
           const claimOrReturn = async (
             from: "approved" | "intended",
           ): Promise<unknown | undefined> => {
-            const unavailable = await computerUnavailable();
+            const unavailable = await computerUnavailable(name);
             if (unavailable) return unavailable;
             const claim = from === "approved" ? claimApprovedEffect : claimIntendedEffect;
             const claimed = local
@@ -3141,7 +3145,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             }
             return finish(localToolResult(await local(context.signal)));
           }
-          const unavailable = await computerUnavailable();
+          const unavailable = await computerUnavailable(name);
           if (unavailable) return unavailable;
           if (name === "computer_observe") {
             if (heldForTakeover) {
@@ -4064,7 +4068,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
             });
             return pauseForSecret();
           }
-          if (name === "request_takeover") return { ok: true };
           if (name === "run_subagent") {
             return {
               ok: true,

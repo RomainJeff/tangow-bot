@@ -75,7 +75,8 @@ export function createRunComputer(
       try {
         return await provision(acquiring, context);
       } catch (error) {
-        if (!waitOutTransition || !(error instanceof ComputerBusyError)) throw error;
+        const transient = error instanceof ComputerBusyError && error.reason === "transition";
+        if (!waitOutTransition || !transient) throw error;
         await waitOutComputerTransition(deps.prisma, run.computerId, context.signal);
         return await provision(acquiring, context);
       }

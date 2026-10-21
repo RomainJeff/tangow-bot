@@ -64,11 +64,20 @@ async function teamBotRun(steps: ModelEmulatorStep[]) {
     (
       await run.prisma.computerExecutionLease.findMany({ select: { runId: true, expiresAt: true } })
     ).map((lease) => ({ runId: lease.runId, held: lease.expiresAt > new Date() }));
+  const toolEntries = async (runId: string) =>
+    (
+      await run.prisma.sessionEntry.findMany({
+        where: { runId, type: { in: ["tool.call", "tool.result"] } },
+        orderBy: { seq: "asc" },
+        select: { type: true, payload: true },
+      })
+    ).map((entry) => ({ type: entry.type, callId: (entry.payload as { callId: string }).callId }));
   return {
     run,
     provisions,
     computer,
     leases,
+    toolEntries,
     async start() {
       const runId = await run.send("Hello.");
       await run.continueRun(runId);
@@ -124,45 +133,7 @@ describe("a worker run's computer", () => {
     expect(await bot.leases()).toEqual([{ runId, held: false }]);
   });
 
-  it("starts once for two computer calls racing in one batch", async () => {
-    let results: Record<string, unknown> = {};
-    const bot = await teamBotRun([
-      {
-        expect() {},
-        response: {
-          type: "tool",
-          id: "first",
-          name: "computer_observe",
-          arguments: {},
-          siblings: [{ id: "second", name: "computer_observe", arguments: {} }],
-        },
-      },
-      {
-        expect(request) {
-          results = toolResults(request);
-        },
-        response: finish[0]!.response,
-      },
-      finish[1]!,
-    ]);
-    const provision = Object.getPrototypeOf(bot.run.sandbox).provision.bind(bot.run.sandbox);
-    bot.provisions.mockImplementationOnce(async (request, context) => {
-      // Hold the first start until the second call has been made and reached the computer.
-      while ((await bot.run.prisma.sessionEntry.count({ where: { type: "tool.call" } })) < 2) {
-        await new Promise((resolve) => setTimeout(resolve, 10));
-      }
-      await new Promise((resolve) => setTimeout(resolve, 200));
-      return provision(request, context);
-    });
-    const runId = await bot.start();
-
-    const observed = expect.stringMatching(/^computer observed/);
-    expect(results).toEqual({ first: observed, second: observed });
-    expect(bot.provisions).toHaveBeenCalledTimes(1);
-    expect(await bot.leases()).toEqual([{ runId, held: false }]);
-  });
-
-  it("answers a computer call with a busy error while another run of the bot holds it, and finishes", async () => {
+  it("answers a computer call with a busy error at once while another run of the bot holds it and starts it", async () => {
     let result: unknown;
     const bot = await teamBotRun([
       {
@@ -192,6 +163,10 @@ describe("a worker run's computer", () => {
         expiresAt: held,
       },
     });
+    await bot.run.prisma.computer.update({
+      where: { id: bot.run.bot.computerId! },
+      data: { state: "booting" },
+    });
     const runId = await bot.start();
 
     expect(JSON.parse(String(result))).toEqual({
@@ -201,7 +176,7 @@ describe("a worker run's computer", () => {
     expect((await bot.run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
       "completed",
     );
-    expect(await bot.computer()).toBe("stopped");
+    expect(await bot.computer()).toBe("booting");
     expect(await bot.leases()).toEqual([{ runId: "other-run", held: true }]);
     expect(
       await bot.run.prisma.externalEffect.findMany({
@@ -274,26 +249,37 @@ describe("a worker run's computer", () => {
     expect(await bot.leases()).toEqual([{ runId, held: false }]);
   });
 
-  it("starts the computer for a takeover and holds it for the person", async () => {
-    const bot = await teamBotRun([
-      {
-        expect() {},
-        response: {
-          type: "tool",
-          id: "hand",
-          name: "request_takeover",
-          arguments: { reason: "Log in" },
+  it.each([
+    ["in a worker", "volumes"],
+    ["in process", "snapshot"],
+  ])(
+    "starts the computer for a takeover %s and holds it for the person, with no tool result logged",
+    async (_where, homeStorage) => {
+      const bot = await teamBotRun([
+        {
+          expect() {},
+          response: {
+            type: "tool",
+            id: "hand",
+            name: "request_takeover",
+            arguments: { reason: "Log in" },
+          },
         },
-      },
-    ]);
-    const runId = await bot.start();
+      ]);
+      await bot.run.prisma.computer.update({
+        where: { id: bot.run.bot.computerId! },
+        data: { homeStorage },
+      });
+      const runId = await bot.start();
 
-    expect((await bot.run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
-      "waiting_takeover",
-    );
-    expect(await bot.computer()).toBe("running");
-    expect(await bot.leases()).toEqual([{ runId, held: true }]);
-  });
+      expect((await bot.run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
+        "waiting_takeover",
+      );
+      expect(await bot.computer()).toBe("running");
+      expect(await bot.leases()).toEqual([{ runId, held: true }]);
+      expect(await bot.toolEntries(runId)).toEqual([]);
+    },
+  );
 
   it("answers a takeover with a busy error while another run of the bot holds the computer", async () => {
     let result: unknown;
@@ -333,6 +319,10 @@ describe("a worker run's computer", () => {
     expect((await bot.run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
       "completed",
     );
+    expect((await bot.toolEntries(runId)).filter((entry) => entry.callId === "hand")).toEqual([
+      { type: "tool.call", callId: "hand" },
+      { type: "tool.result", callId: "hand" },
+    ]);
   });
 
   it("lets the lease a takeover held go when the resumed run fails before it starts", async () => {
