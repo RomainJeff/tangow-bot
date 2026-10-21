@@ -169,6 +169,86 @@ describe("the Rakazo MCP server", () => {
   });
 });
 
+describe("a connector result through the Rakazo MCP server", () => {
+  const CONNECTOR_TOOLS: GuestTool[] = [
+    controller("mcp__charts__render", {
+      inputSchema: {
+        type: "object",
+        properties: { value: { type: "string" } },
+        required: ["value"],
+      },
+    }),
+  ];
+
+  it("refuses arguments its schema rejects before the controller sees the call", async () => {
+    const { host, announced, calls } = fakeHost(() => "rendered");
+    const { client } = await connect(CONNECTOR_TOOLS, host);
+
+    const result = await client.callTool({ name: "mcp__charts__render", arguments: { value: 3 } });
+
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result.content)).toContain("Tool arguments are invalid");
+    expect(calls).toEqual([]);
+    expect(announced).toEqual([]);
+  });
+
+  it("reports a refusal the controller returns as a tool error", async () => {
+    const { host } = fakeHost(() => ({ error: "MCP tool is not assigned to this bot" }));
+    const { client } = await connect(CONNECTOR_TOOLS, host);
+
+    expect(
+      await client.callTool({ name: "mcp__charts__render", arguments: { value: "x" } }),
+    ).toEqual({
+      content: [{ type: "text", text: "MCP tool is not assigned to this bot" }],
+      isError: true,
+    });
+  });
+
+  it("keeps a connector's MCP content, its images and its error flag", async () => {
+    const { host, calls } = fakeHost(() => ({
+      content: [
+        { type: "text", text: "Chart failed halfway" },
+        { type: "image", data: PNG, mimeType: "image/png" },
+        { type: "resource_link", uri: "https://example.test/chart", name: "chart" },
+      ],
+      isError: true,
+    }));
+    const { client, screensDir } = await connect(CONNECTOR_TOOLS, host);
+
+    const result = await client.callTool({
+      name: "mcp__charts__render",
+      arguments: { value: "x" },
+    });
+
+    const file = path.join(screensDir, `${calls[0]!.callId}-1.png`);
+    expect(result).toEqual({
+      content: [
+        { type: "text", text: "Chart failed halfway" },
+        { type: "image", data: PNG, mimeType: "image/png" },
+        { type: "resource_link", uri: "https://example.test/chart", name: "chart" },
+        { type: "text", text: `Screenshot saved at ${file}. Read it to see it again.` },
+      ],
+      isError: true,
+    });
+    expect((await readFile(file)).toString("base64")).toBe(PNG);
+  });
+
+  it("cuts a long result to the model's tool result budget, with a marker", async () => {
+    const { host } = fakeHost(() => "a".repeat(20_000));
+    const { client } = await connect(CONNECTOR_TOOLS, host);
+
+    const result = await client.callTool({
+      name: "mcp__charts__render",
+      arguments: { value: "x" },
+    });
+
+    expect(result).toEqual({
+      content: [{ type: "text", text: `${"a".repeat(12_000)}…` }],
+      isError: false,
+    });
+  });
+});
+
 describe("a large connector catalog through the Rakazo MCP server", () => {
   it("defers every catalog tool for a harness with native tool search and runs one once on the controller", async () => {
     const { host, announced, calls } = fakeHost(() => "tool-ran");

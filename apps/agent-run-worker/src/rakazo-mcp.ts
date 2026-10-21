@@ -2,6 +2,10 @@ import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { GuestTool } from "@rakazo/adapter-kit";
+import {
+  assertConnectorToolArgs,
+  clipToolResultContent,
+} from "@rakazo/adapters/runtime-worker/wire";
 import type { HarnessHost } from "./harness.js";
 
 type JsonRpcId = string | number;
@@ -60,45 +64,48 @@ export function rakazoMcpTools(
     }));
 }
 
-type McpContent =
-  | { type: "text"; text: string }
-  | { type: "image"; data: string; mimeType: string };
+type McpBlock = { type: string; [key: string]: unknown };
+
+const isBlock = (value: unknown): value is McpBlock =>
+  typeof (value as { type?: unknown } | null)?.type === "string";
 
 /**
- * A controller tool's output as MCP content. An image the tool still returns is also written to
- * `screensDir` and named in the result: the relay keeps only the newest images in the model's
- * context, and the harness reads an older screen from its file.
+ * A controller tool's output as one envelope. Rakazo tools return `agent_tool_result` content,
+ * connectors an MCP result, and a refused or failed call `{ error }`.
  */
-async function mcpContent(
-  output: unknown,
-  screensDir: string,
-  callId: string,
-): Promise<McpContent[]> {
-  if (typeof output === "string") return [{ type: "text", text: output }];
-  const result = output as { kind?: unknown; content?: unknown } | null;
-  if (result?.kind !== "agent_tool_result" || !Array.isArray(result.content)) {
-    return [{ type: "text", text: JSON.stringify(output) ?? "" }];
+function resultBlocks(output: unknown): { blocks: McpBlock[]; isError: boolean } {
+  if (typeof output === "string")
+    return { blocks: [{ type: "text", text: output }], isError: false };
+  const result = output as { content?: unknown; isError?: unknown; error?: unknown } | null;
+  if (typeof result?.error === "string" && result.error) {
+    return { blocks: [{ type: "text", text: result.error }], isError: true };
   }
-  const content: McpContent[] = [];
-  let images = 0;
-  for (const block of result.content as Array<Record<string, unknown>>) {
-    if (block.type === "text") {
-      content.push({ type: "text", text: String(block.text ?? "") });
-      continue;
-    }
-    if (block.type !== "image") {
-      content.push({ type: "text", text: JSON.stringify(block) });
-      continue;
-    }
+  if (Array.isArray(result?.content) && result.content.every(isBlock)) {
+    return { blocks: result.content, isError: result.isError === true };
+  }
+  return { blocks: [{ type: "text", text: JSON.stringify(output) ?? "" }], isError: false };
+}
+
+/**
+ * A controller tool's result for the model, its text within the tool result budget. An image is
+ * also written to `screensDir` and named in the result: the relay keeps only the newest images in
+ * the model's context, and the harness reads an older screen from its file.
+ */
+async function mcpResult(output: unknown, screensDir: string, callId: string) {
+  const { blocks, isError } = resultBlocks(output);
+  const saved: McpBlock[] = [];
+  for (const block of blocks) {
+    if (block.type !== "image") continue;
     const mimeType = String(block.mimeType);
-    const data = String(block.data);
-    const file = path.join(screensDir, `${callId}-${++images}.${mimeType.split("/")[1] ?? "png"}`);
+    const file = path.join(
+      screensDir,
+      `${callId}-${saved.length + 1}.${mimeType.split("/")[1] ?? "png"}`,
+    );
     await mkdir(screensDir, { recursive: true });
-    await writeFile(file, Buffer.from(data, "base64"));
-    content.push({ type: "image", data, mimeType });
-    content.push({ type: "text", text: `Screenshot saved at ${file}. Read it to see it again.` });
+    await writeFile(file, Buffer.from(String(block.data), "base64"));
+    saved.push({ type: "text", text: `Screenshot saved at ${file}. Read it to see it again.` });
   }
-  return content;
+  return { content: [...clipToolResultContent(blocks), ...saved], isError };
 }
 
 class McpError extends Error {
@@ -141,15 +148,19 @@ export function rakazoMcpServer(
   async function call(params: { name?: unknown; arguments?: unknown }) {
     const tool = byName.get(String(params.name ?? ""));
     if (!tool) throw new McpError(-32602, `Unknown tool ${String(params.name)}`);
-    const args = (params.arguments ?? {}) as Record<string, unknown>;
-    const [name, relayed] = tool.catalog
-      ? [tool.catalog.via, { id: tool.catalog.id, arguments: args }]
-      : [tool.name, args];
+    const args = params.arguments ?? {};
     const callId = `mcp-${randomUUID()}`;
     try {
+      if (typeof args !== "object" || args === null || Array.isArray(args)) {
+        throw new Error("Tool arguments must be an object");
+      }
+      assertConnectorToolArgs(tool.inputSchema, args as Record<string, unknown>);
+      const [name, relayed] = tool.catalog
+        ? [tool.catalog.via, { id: tool.catalog.id, arguments: args }]
+        : [tool.name, args as Record<string, unknown>];
       await host.emit({ type: "tool", name, args: relayed, executionId: callId });
       const outcome = await host.callTool("root", name, relayed, callId);
-      return { content: await mcpContent(outcome.output, screensDir, callId), isError: false };
+      return await mcpResult(outcome.output, screensDir, callId);
     } catch (error) {
       const text = error instanceof Error ? error.message : String(error);
       return { content: [{ type: "text", text }], isError: true };
