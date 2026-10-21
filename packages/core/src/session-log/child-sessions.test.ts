@@ -56,4 +56,44 @@ describe("sessionOriginOf", () => {
       .map(sessionOriginOf);
     expect(origins).toEqual([null, { sessionId: "ses_scout", kind: "subagent", name: "scout" }]);
   });
+
+  it("leaves the bot's reply from its own run session unnamed, but names a routine's", () => {
+    const reply = (runId: string, originSessionId: string, text: string) => ({
+      botId: "bot_ada",
+      runId,
+      type: "assistant.text",
+      payload: { toPerson: true, originSessionId, blocks: [{ kind: "text", text }] },
+    });
+    const chain = linkEntries("own", [
+      {
+        type: "user.message",
+        payload: { blocks: [{ kind: "text", text: "How is Accor?" }], source: "app" },
+      },
+      {
+        botId: "bot_ada",
+        runId: "run_reply",
+        type: "run.opened",
+        payload: { sessionId: "ses_reply" },
+      },
+      reply("run_reply", "ses_reply", "Accor held 45."),
+      {
+        botId: "bot_ada",
+        runId: "run_digest",
+        type: "routine.started",
+        payload: {
+          sessionId: "ses_digest",
+          routineId: "rtn_digest",
+          name: "Digest",
+          trigger: "routine",
+          scheduledAt: "2026-10-10T09:00:00.000Z",
+          model,
+        },
+      },
+      reply("run_digest", "ses_digest", "Three new invoices"),
+    ]);
+    const origins = projectThreadItems(chain)
+      .filter((item) => item.kind === "message" && item.role === "bot")
+      .map(sessionOriginOf);
+    expect(origins).toEqual([null, { sessionId: "ses_digest", kind: "routine", name: "Digest" }]);
+  });
 });
