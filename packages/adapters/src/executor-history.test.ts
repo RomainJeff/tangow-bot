@@ -387,30 +387,37 @@ describe("the history a run reads from its session log", () => {
   );
 
   it.each([
-    { model: { provider: "openai", id: "gpt-4o" }, recallChars: 245_000 },
-    { model: { provider: "local", id: "capacity-local" }, recallChars: 100_000 },
-    { model: { provider: "scripted", id: "scripted" }, recallChars: 245_000 },
-    { model: { provider: "openai", id: "gpt-4o" }, recallChars: 230_000 },
+    { model: { provider: "openai", id: "gpt-4o" }, recallChars: 245_000, olderChars: 0 },
+    { model: { provider: "local", id: "capacity-local" }, recallChars: 100_000, olderChars: 0 },
+    { model: { provider: "scripted", id: "scripted" }, recallChars: 245_000, olderChars: 0 },
+    { model: { provider: "openai", id: "gpt-4o" }, recallChars: 230_000, olderChars: 0 },
+    { model: { provider: "openai", id: "gpt-4o" }, recallChars: 120_000, olderChars: 200_000 },
+    { model: { provider: "scripted", id: "scripted" }, recallChars: 120_000, olderChars: 200_000 },
   ])(
     "bounds combined historical blocks before admitting finished turns, $model.id/$recallChars",
-    async ({ model, recallChars }) => {
+    async ({ model, recallChars, olderChars }) => {
       const summary = `Summary survives. ${"s".repeat(20_000)}`;
       const tail = chain(1, [
         { type: "compaction", payload: { summary, coveredUpToSeq: 0 } },
+        ...(olderChars ? [said("h".repeat(olderChars))] : []),
         said("Recent question"),
         started,
         replied("Recent answer"),
       ]);
       const f = fixture({ tail, model });
+      const memories = [{ memory: "r".repeat(recallChars), score: 0.9 }];
       f.recall.mockResolvedValue({
         ok: true,
-        value: [{ memory: "r".repeat(recallChars), score: 0.9 }],
+        value: memories,
       });
       const { runtimeRun, finalized } = await f.execute();
       expect(finalized).toMatchObject({ outcome: "completed" });
       expect(runtimeRun.mock.calls).toHaveLength(1);
       const request = runtimeRun.mock.calls[0]![0];
-      expect(estimateHistoryTokens(request.history)).toBeLessThanOrEqual(60_000);
+      const recalled = formatRecalledMemory(memories);
+      if (olderChars) expect(request.prompt).toContain(recalled);
+      const recallTokens = request.prompt.includes(recalled) ? estimateTextTokens(recalled) : 0;
+      expect(estimateHistoryTokens(request.history) + recallTokens).toBeLessThanOrEqual(60_000);
       expect(request.history[0]!.content).toContain("Summary survives.");
       expect(request.history.map((turn) => turn.content)).toContain("Recent question");
       expect(request.history.map((turn) => turn.content)).toContain("Recent answer");

@@ -4474,9 +4474,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
           };
           const historicalContext =
             summary && fits(estimateHistoryMessageTokens(summary)) ? [summary] : [];
-          const prompt = turnPrompt(
-            recall && fits(estimateTextTokens(recall)) ? recall : undefined,
-          );
+          const admittedRecall = recall && fits(estimateTextTokens(recall)) ? recall : undefined;
+          const prompt = turnPrompt(admittedRecall);
           const promptTokens = instructionTokens + toolSchemaTokens + estimateTextTokens(prompt);
           const historicalContextTokens = estimateHistoryTokens(historicalContext);
           const nonHistoryTokens = promptTokens + historicalContextTokens;
@@ -4490,7 +4489,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
             nonHistoryTokens: fixedTokens,
             messageWindowSize: HISTORY_COUNT_WINDOW,
             policy,
-            historicalContextTokens,
+            historicalContextTokens:
+              historicalContextTokens + estimateTextTokens(admittedRecall ?? ""),
             protectToolExchange: false,
           });
           historyMs += performance.now() - windowStartedAt;
