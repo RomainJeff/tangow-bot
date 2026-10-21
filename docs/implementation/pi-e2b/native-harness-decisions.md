@@ -11,13 +11,13 @@ The harness owns only the loop of one attempt. The controller owns everything th
 | History and truth | Controller | The guest is untrusted. The controller journal wins over a native transcript, which is only an input to ingest. |
 | Compaction between runs | Controller | It defines the projected prefix, so the prompt cache. |
 | Compaction inside an attempt | Harness | Needed to survive long computer-use attempts. Its summary is ingested as untrusted data. |
-| Prompt preamble | Harness | Tuned for its own loop and tools. |
+| System prompt | Harness base, controller addendum | The harness keeps its native system prompt, tuned for its own loop and tools. The controller appends a generated Rakazo addendum: identity, bot instructions, text policy, and the tool names as the adapter exposes them. |
 | Identity and bot instructions | Controller | Product identity must not depend on the harness. |
 | Text policy (narration, `message_user`) | Controller | What a person sees is product behavior. |
 | Steering | Shared | The controller decides what and when; the harness inserts it between turns. Optional capability. |
-| Sub-agents | Controller | A controller tool starts a child attempt with its own projected context, budget, trace and approvals. Harness-internal sub-agents are tolerated only as an internal detail whose model calls go through the relay, never as a product feature. |
+| Sub-agents | Controller | The controller launches every sub-agent as a child attempt with its own projected context, budget, trace and approvals. The harness's own sub-agent launching is not used. |
 | Budget (requests, tokens) | Controller | Usage is only measurable at the relay. |
-| Approvals and takeover | Controller | The controller approves one exact action, runs it and appends the canonical result. |
+| Approvals and takeover | Controller | A controller tool call that needs approval gets a "pending" reply and is not executed. The controller's pause guard keeps the run paused: further tool calls are answered without running, with a bounded grace for model requests. Once approved, the controller executes the exact action and appends its canonical result. A native guest tool may still run during the grace, see the follow-up decisions. |
 | Screenshots and image context | Controller | Pruned at the relay, for every tool result that carries an image, including the harness's native file read. |
 | Memory | Controller | Outlives the harness and spans bots. |
 | Skills | Shared | The controller converges sources; the harness loads them natively. |
