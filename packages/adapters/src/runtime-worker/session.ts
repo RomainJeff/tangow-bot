@@ -29,6 +29,7 @@ import { WORKER_LIMITS } from "./limits.js";
 import type { ModelRelay, RelayUsage } from "./model-relay.js";
 import { guestModelOf } from "./model-relay.js";
 import type { StopJournal } from "./stop-journal.js";
+import { transcriptIngest } from "./transcript.js";
 
 /** The model-access dialects the controller relays. A new dialect is one entry here. */
 const RELAYS: { [D in ModelDialect]: ModelRelay<never, unknown> } = {
@@ -130,6 +131,9 @@ export function createSession(
   let finished = false;
 
   const clean = (text: string) => redactSecrets(text, [...(request.secrets ?? [])]);
+  const transcript = transcriptIngest((text) =>
+    cutText(clean(text), WORKER_LIMITS.controllerResultBytes),
+  );
 
   const fail = (error: Error) => {
     events.end(error);
@@ -356,7 +360,7 @@ export function createSession(
       case "tool.call":
         // The executor checks its lease only between events: a guest must not outrun it.
         if (!(await launched!.holdsFence())) return revoke();
-        return callTool(body);
+        return transcript.answered(body, await callTool(body));
       case "tool.done":
         return recordLocalResult(body);
       case "steering.claim": {
@@ -464,6 +468,12 @@ export function createSession(
       case "failed":
         fail(new Error(clean(body.message)));
         return { type: "stop", reason: "cancelled" };
+      case "transcript": {
+        const ingested = transcript.ingest(body, request.tools, harness!.name);
+        if (!ingested) return refuse("invalid");
+        await events.push(ingested);
+        return { type: "recorded" };
+      }
     }
   }
 

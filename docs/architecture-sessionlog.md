@@ -57,6 +57,7 @@ In the Model column, `context` means one short line in the model's history. A Th
 | `compaction` | yes | yes | A summary of older turns |
 | `rewind`, `clear` | no | yes | A cut of the chain |
 | `harness.session` | no | no | A harness's session id |
+| `harness.summary` | no | no | A compaction summary a harness with its own loop wrote inside one attempt |
 
 In a top-level bot's own conversation, its closing free text is not logged, since only what it sends with `message_user` reaches the person. A routine run, a helper, a sub-bot and a delegated run have their final reply as their output, and it is logged.
 

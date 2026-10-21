@@ -541,6 +541,15 @@ export interface ScriptedTurn {
   complete?: boolean;
 }
 
+/**
+ * One step of a harness with its own loop, as the controller ingested it from the attempt's
+ * transcript: a call of the harness's own tools, with the result the harness reported, or a
+ * summary its compaction wrote.
+ */
+export type HarnessTranscriptEntry =
+  | { kind: "call"; callId: string; name: string; args: Record<string, unknown>; output: string }
+  | { kind: "summary"; summary: string; tokensBefore: number };
+
 export type AgentRuntimeEvent =
   | { type: "text"; text: string }
   | {
@@ -569,6 +578,13 @@ export type AgentRuntimeEvent =
       cacheWriteTokens?: number;
     }
   | { type: "checkpoint"; blob: string }
+  | {
+      type: "transcript";
+      /** What the harness did that the controller did not run, in transcript order. */
+      entries: HarnessTranscriptEntry[];
+      /** Calls of controller tools the transcript claims that the controller never answered. */
+      unverifiedCalls: number;
+    }
   | {
       type: "subagent";
       agentId: string;

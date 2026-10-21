@@ -1119,6 +1119,87 @@ describe("interactive executor sessions with durable history", () => {
     ]);
   });
 
+  it("logs a native harness's own calls as the run's steps, and its summary for the trace only", async () => {
+    const c = await conversation();
+    const secret = "hunter2-secret";
+    await fixture({
+      database: c.prisma,
+      run: c.run,
+      secrets: [secret],
+      runtime: async function* () {
+        yield {
+          type: "transcript",
+          entries: [
+            {
+              kind: "call",
+              callId: "bash-1",
+              name: "bash",
+              args: { command: `grep ${secret} notes.md` },
+              output: `notes.md: ${secret}`,
+            },
+            { kind: "summary", summary: `Searched notes.md for ${secret}.`, tokensBefore: 9000 },
+          ],
+          unverifiedCalls: 0,
+        };
+        yield { type: "done", text: "Found it." };
+      },
+    }).request();
+    const logged = await c.log.readRun(c.run.id);
+
+    expect(
+      logged
+        .filter((entry) => entry.type !== "run.started" && entry.type !== "run.recap")
+        .map(({ type, payload }) => ({ type, payload })),
+    ).toEqual([
+      {
+        type: "tool.call",
+        payload: {
+          callId: "bash-1",
+          name: "bash",
+          input: '{\n  "command": "grep [redacted] notes.md"\n}',
+        },
+      },
+      {
+        type: "tool.result",
+        payload: {
+          callId: "bash-1",
+          output: "notes.md: [redacted]",
+          isError: false,
+          artifactIds: [],
+        },
+      },
+      {
+        type: "harness.summary",
+        payload: { summary: "Searched notes.md for [redacted].", tokensBefore: 9000 },
+      },
+      expect.objectContaining({ type: "run.finished" }),
+    ]);
+    expect(
+      projectThreadItems(logged).flatMap((item) =>
+        item.kind === "message" && item.role === "bot" ? item.blocks : [],
+      ),
+    ).toEqual([
+      {
+        kind: "steps",
+        steps: [
+          {
+            label: "Bash",
+            count: 1,
+            calls: [
+              {
+                name: "bash",
+                input: '{\n  "command": "grep [redacted] notes.md"\n}',
+                output: "notes.md: [redacted]",
+                id: "bash-1",
+              },
+            ],
+          },
+        ],
+        durationMs: expect.any(Number),
+      },
+    ]);
+  });
+
   it.each(["routine", "bot_message", "follow_up"] as const)(
     "keeps %s final output private and returns delegated results to the parent",
     async (trigger) => {

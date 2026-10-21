@@ -5088,6 +5088,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
               }
             } else if (event.type === "usage") {
               await recordRunUsage(deps, { ...run, botId: bot.id, runId }, event);
+            } else if (event.type === "transcript") {
+              await logHarnessTranscript(deps, runLog, event, runSecrets);
             } else if (event.type === "done") {
               runtimeNotice = event.runtimeNotice;
               if (recapRequested) {
@@ -6117,6 +6119,63 @@ function safeStringifyToolPayload(value: unknown, secrets: string[]): string {
 }
 
 type RunLog = { sessionId: SessionId; runId: string; botId: string };
+
+/**
+ * What a harness with its own loop did outside the controller, logged as its run's work: each
+ * call of the harness's own tools with the result the harness reported, and each summary its
+ * compaction wrote. The controller's own calls are already in the log as it answered them.
+ */
+async function logHarnessTranscript(
+  deps: Pick<ExecutorDeps, "prisma" | "sessionLog">,
+  log: RunLog,
+  event: Extract<AgentRuntimeEvent, { type: "transcript" }>,
+  secrets: string[],
+) {
+  if (event.unverifiedCalls > 0) {
+    getLogger().warn("harness transcript claims controller calls it never got", {
+      runId: log.runId,
+      unverifiedCalls: event.unverifiedCalls,
+    });
+  }
+  for (const entry of event.entries) {
+    const drafts: SessionEntryDraft[] =
+      entry.kind === "summary"
+        ? [
+            {
+              ...log,
+              type: "harness.summary",
+              payload: {
+                summary: redactSecrets(entry.summary, secrets),
+                tokensBefore: entry.tokensBefore,
+              },
+            },
+          ]
+        : [
+            {
+              ...log,
+              type: "tool.call",
+              payload: {
+                callId: entry.callId,
+                name: entry.name,
+                input: describeToolPayload(entry.args, secrets),
+              },
+            },
+            {
+              ...log,
+              type: "tool.result",
+              payload: {
+                callId: entry.callId,
+                output: describeToolPayload(entry.output, secrets),
+                isError: false,
+                artifactIds: [],
+              },
+            },
+          ];
+    await deps.prisma.$transaction(async (tx) => {
+      for (const draft of drafts) await deps.sessionLog.append(tx, draft);
+    });
+  }
+}
 
 type ToolLogEntry =
   | { type: "tool.call"; payload: SessionEntryOf<"tool.call">["payload"] }

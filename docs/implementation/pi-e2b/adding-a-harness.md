@@ -65,6 +65,9 @@ A harness declares what it supports in `declaration.capabilities`. The core run 
 | --- | --- | --- |
 | `subagents` | `subagent`, `subagent.open`, `subagent.text`, `subagent.finish`, `subagent.abandon` | The controller does not offer `run_subagent`, and refuses those frames with `undeclared`. |
 | `steering` | `steering.claim` | The attempt receives no steering. User messages sent during the run stay unclaimed, as with a runtime that never calls `claimSteering`. |
+| `native-loop` | `transcript` | The harness runs no loop of its own, so every tool call goes through the controller and nothing needs ingesting. |
+
+A `native-loop` harness sends one `transcript` before `done`: what the attempt added to its native session, in its model dialect. `runtime-worker/transcript.ts` ingests it against what the controller answered each `tool.call` of the attempt. The executor then logs each call of the harness's own tools as a `tool.call` and its `tool.result`, which the thread shows as steps, and each compaction summary as a `harness.summary` that no history reads. A result the transcript claims for a controller tool is never logged: the controller's own answer is already in the log, and a call it never answered is only counted.
 
 Resume is not a capability. A controller restart ends the attempt, and the next attempt starts a new guest from the durable history in `worker.start`. A harness never resumes its own state across attempts. The same holds on E2B. A lost stdio stream ends the attempt, a sandbox that outlives its timeout is killed, and in both cases the next attempt boots a new VM from the history. Files the run wrote on its mounted volumes are still there. Output the guest spooled under `<private mount>/.rakazo/tool-output/` is too, but it is a convenience for the model, not part of the run's history.
 

@@ -142,7 +142,8 @@ export const piHarness: GuestHarness = {
           return event;
         case "usage":
         case "checkpoint":
-          // The controller measures usage on the relay; checkpoints have no consumer.
+        case "transcript":
+          // The controller measures usage on the relay; the in-process runtime keeps no native session.
           break;
         default:
           event satisfies never;
