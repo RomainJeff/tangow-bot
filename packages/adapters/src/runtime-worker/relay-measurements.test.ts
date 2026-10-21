@@ -1,6 +1,6 @@
 import type { PiAiModelCall } from "@rakazo/adapter-kit";
 import { describe, expect, it } from "vitest";
-import { measureRelayPrefix } from "./relay-measurements.js";
+import { clearRelayPrefixes, measureRelayPrefix } from "./relay-measurements.js";
 
 const call: PiAiModelCall = {
   context: {
@@ -19,7 +19,7 @@ const call: PiAiModelCall = {
 
 describe("relay prefix measurements", () => {
   it("measures identical requests and the exact byte where history diverges without exporting content", () => {
-    const conversation = { threadId: "prefix", botId: "bot" };
+    const conversation = { threadId: "prefix", botId: "bot", attemptId: "attempt" };
     const first = measureRelayPrefix(conversation, call);
     const samePrompt = structuredClone(call);
     samePrompt.context.messages[1]!.timestamp = 99;
@@ -53,7 +53,7 @@ describe("relay prefix measurements", () => {
   it.each(["system", "tools", "recall", "image"] as const)(
     "identifies a changed %s section",
     (section) => {
-      const conversation = { threadId: `section-${section}`, botId: "bot" };
+      const conversation = { threadId: `section-${section}`, botId: "bot", attemptId: "attempt" };
       const before = structuredClone(call);
       const after = structuredClone(call);
       if (section === "system") after.context.messages[0]!.content = "Other";
@@ -69,12 +69,12 @@ describe("relay prefix measurements", () => {
         ];
       }
       measureRelayPrefix(conversation, before);
-      expect(measureRelayPrefix(conversation, after).firstDivergingSection).toBe(section);
+      expect(measureRelayPrefix(conversation, after)?.firstDivergingSection).toBe(section);
     },
   );
 
   it("recognizes the controller's recalled-memory history block", () => {
-    const conversation = { threadId: "recalled", botId: "bot" };
+    const conversation = { threadId: "recalled", botId: "bot", attemptId: "attempt" };
     measureRelayPrefix(conversation, {
       context: {
         messages: [
@@ -91,17 +91,42 @@ describe("relay prefix measurements", () => {
       },
       options: {},
     });
-    expect(changed.firstDivergingSection).toBe("recall");
+    expect(changed?.firstDivergingSection).toBe("recall");
+  });
+
+  it("skips an oversized or malformed measurement without retaining a stale predecessor", () => {
+    const conversation = { threadId: "oversized", botId: "bot", attemptId: "attempt" };
+    measureRelayPrefix(conversation, call);
+    const large: PiAiModelCall = {
+      context: { messages: [{ role: "user", content: "x".repeat(2 * 1024 * 1024) }] },
+      options: {},
+    };
+    expect(measureRelayPrefix(conversation, large)).toBeNull();
+    expect(measureRelayPrefix(conversation, call)?.previousRequest).toBe(false);
+    const malformed = structuredClone(call);
+    malformed.context.messages[0]!.content = 1n;
+    expect(measureRelayPrefix(conversation, malformed)).toBeNull();
+  });
+
+  it("isolates helper attempts and clears their prompts while preserving root continuity", () => {
+    const root = { threadId: "lifecycle", botId: "bot", attemptId: "attempt" };
+    const helper = { ...root, helper: "helper:1", attemptId: "a" };
+    measureRelayPrefix(root, call);
+    measureRelayPrefix(helper, call);
+    expect(measureRelayPrefix({ ...helper, attemptId: "b" }, call)?.previousRequest).toBe(false);
+    clearRelayPrefixes("a");
+    expect(measureRelayPrefix(helper, call)?.previousRequest).toBe(false);
+    expect(measureRelayPrefix(root, call)?.previousRequest).toBe(true);
   });
 
   it("separates threads, bots and helpers", () => {
-    const conversation = { threadId: "isolation", botId: "bot" };
+    const conversation = { threadId: "isolation", botId: "bot", attemptId: "attempt" };
     measureRelayPrefix(conversation, call);
     for (const other of [
       { ...conversation, threadId: "other" },
       { ...conversation, botId: "other" },
       { ...conversation, helper: "helper:1" },
     ])
-      expect(measureRelayPrefix(other, call).previousRequest).toBe(false);
+      expect(measureRelayPrefix(other, call)?.previousRequest).toBe(false);
   });
 });

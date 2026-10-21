@@ -2,23 +2,52 @@ import type { PiAiModelCall } from "@rakazo/adapter-kit";
 import type { RelayConversation } from "./model-relay.js";
 
 type Section = "system" | "tools" | "recall" | "history" | "image";
-type Prompt = { bytes: Buffer; sections: { end: number; section: Section }[] };
+type Prompt = { attemptId?: string; bytes: Buffer; sections: { end: number; section: Section }[] };
 
 // Only the last prompt per conversation stays in process, within a bounded cache. Never exported.
 const previous = new Map<string, Prompt>();
 const MAX_BYTES = 32 * 1024 * 1024;
 const MAX_CONVERSATIONS = 128;
+const MAX_PROMPT_BYTES = 1024 * 1024;
 let retainedBytes = 0;
 
 /** UTF-8 bytes of a canonical transcript, not provider wire bytes or an estimated token count. */
-export function measureRelayPrefix(conversation: RelayConversation, call: PiAiModelCall) {
-  const pieces: Buffer[] = [];
+export function measureRelayPrefix(
+  conversation: RelayConversation & { attemptId: string },
+  call: PiAiModelCall,
+) {
+  const key = JSON.stringify([
+    conversation.threadId,
+    conversation.botId,
+    conversation.helper ?? "root",
+    conversation.helper ? conversation.attemptId : undefined,
+  ]);
+  try {
+    return measure(key, conversation.helper ? conversation.attemptId : undefined, call);
+  } catch {
+    const prior = previous.get(key);
+    if (prior) retainedBytes -= prior.bytes.length;
+    previous.delete(key);
+    return null;
+  }
+}
+
+export function clearRelayPrefixes(attemptId: string) {
+  for (const [key, prompt] of previous) {
+    if (prompt.attemptId !== attemptId) continue;
+    previous.delete(key);
+    retainedBytes -= prompt.bytes.length;
+  }
+}
+
+function measure(key: string, attemptId: string | undefined, call: PiAiModelCall) {
+  const pieces: string[] = [];
   const sections: Prompt["sections"] = [];
   let bytes = 0;
   const append = (text: string, section: Section) => {
-    const piece = Buffer.from(text);
-    pieces.push(piece);
-    bytes += piece.length;
+    bytes += Buffer.byteLength(text);
+    if (bytes > MAX_PROMPT_BYTES) throw new Error("Prefix measurement exceeds its byte cap");
+    pieces.push(text);
     const last = sections.at(-1);
     if (last?.section === section) last.end = bytes;
     else sections.push({ end: bytes, section });
@@ -56,7 +85,10 @@ export function measureRelayPrefix(conversation: RelayConversation, call: PiAiMo
     const section =
       message.role === "system"
         ? "system"
-        : typeof message.content === "string" && message.content.includes("<recalled_memory>")
+        : message.role === "user" &&
+            typeof message.content === "string" &&
+            message.content.startsWith("Memory recalled") &&
+            message.content.includes("<recalled_memory>")
           ? "recall"
           : "history";
     if (index) append(",", section);
@@ -79,12 +111,7 @@ export function measureRelayPrefix(conversation: RelayConversation, call: PiAiMo
     );
   });
   append("]", "history");
-  const current: Prompt = { bytes: Buffer.concat(pieces), sections };
-  const key = JSON.stringify([
-    conversation.threadId,
-    conversation.botId,
-    conversation.helper ?? "root",
-  ]);
+  const current: Prompt = { attemptId, bytes: Buffer.from(pieces.join("")), sections };
   const prior = previous.get(key);
   let commonPrefixBytes = 0;
   if (prior) {

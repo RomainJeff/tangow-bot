@@ -1,3 +1,5 @@
+import type { AgentRunModel } from "@rakazo/adapter-kit";
+import { DEFAULT_MODEL_MAX_TOKENS, MAX_MODEL_CONTEXT_WINDOW } from "@rakazo/contracts";
 import { TOOL_RESULT_TEXT_LIMIT } from "../pi-runtime-limits.js";
 
 const KiB = 1024;
@@ -47,8 +49,6 @@ export const WORKER_LIMITS = {
   cancelGraceMs: 2_000,
   stopConfirmMs: 10_000,
   modelRequestsPerAttempt: 400,
-  /** Billed prompt tokens, including cache reads/writes, plus completions across all agents. */
-  modelTokensPerAttempt: 2_000_000,
   /** Controller tool calls across the root and its helpers, including native authorizations. */
   toolCallsPerAttempt: 2_000,
   /** Model requests a paused attempt may still make to close its turn; later ones are turned away. */
@@ -58,3 +58,15 @@ export const WORKER_LIMITS = {
   /** A paused attempt that does not conclude ends after this long. */
   pausedGraceMs: 60_000,
 } as const;
+
+/**
+ * No provider-neutral cache price exists. Allow a full prompt plus its output on all 400 calls:
+ * attempt tokens = modelTokensPerRequest(model) * modelRequestsPerAttempt. When context metadata
+ * is absent, the shared maximum avoids cutting catalog models short. This is a runaway guard.
+ */
+export function modelTokensPerRequest(model: AgentRunModel): number {
+  return (
+    (model.contextWindow ?? MAX_MODEL_CONTEXT_WINDOW) +
+    (model.maxTokens ?? DEFAULT_MODEL_MAX_TOKENS)
+  );
+}

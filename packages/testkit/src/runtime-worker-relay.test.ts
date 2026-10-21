@@ -1,12 +1,10 @@
-import {
-  type AgentRunRequest,
-  type AgentRuntimeEvent,
-  parseControllerMessage,
-  parseGuestMessage,
-  type ReplyPart,
-} from "@rakazo/adapter-kit";
+import { createServer } from "node:http";
+import { ANTHROPIC_MODELS } from "@earendil-works/pi-ai/providers/anthropic.models";
+import type { AgentRunRequest, AgentRuntimeEvent, ReplyPart } from "@rakazo/adapter-kit";
+import { parseControllerMessage, parseGuestMessage } from "@rakazo/adapter-kit";
 import { PiAgentRuntime } from "@rakazo/adapters";
-import { guestModelOf, type RelayUsage } from "@rakazo/adapters/runtime-worker";
+import type { RelayUsage } from "@rakazo/adapters/runtime-worker";
+import { guestModelOf } from "@rakazo/adapters/runtime-worker";
 import { piAiStreamFn, relayedModel, relayPiAiCall } from "@rakazo/adapters/runtime-worker/pi-ai";
 import { afterEach, describe, expect, it } from "vitest";
 import { toolResult } from "./file-task.js";
@@ -203,4 +201,84 @@ describe("a worker run on a catalog Anthropic model", () => {
     const finished = (await run.runEntries(runId)).find((entry) => entry.type === "run.finished");
     expect(finished?.payload).toMatchObject({ usage: { inputTokens: 210 + 64, outputTokens: 12 } });
   });
+});
+
+describe("partial relay usage", () => {
+  it.each(["disconnect", "abort", "closed channel"] as const)(
+    "counts provider usage after %s",
+    async (failure) => {
+      const controller = new AbortController();
+      const server = createServer((request, response) => {
+        request.resume();
+        response.writeHead(200, { "content-type": "text/event-stream" });
+        const emit = (event: Record<string, unknown>) =>
+          response.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
+        emit({
+          type: "message_start",
+          message: {
+            id: "partial",
+            type: "message",
+            role: "assistant",
+            model: "claude-haiku-4-5",
+            content: [],
+            stop_reason: null,
+            usage: {
+              input_tokens: 120,
+              output_tokens: 0,
+              cache_read_input_tokens: 40,
+              cache_creation_input_tokens: 0,
+            },
+          },
+        });
+        emit({ type: "content_block_start", index: 0, content_block: { type: "text", text: "" } });
+        emit({
+          type: "content_block_delta",
+          index: 0,
+          delta: { type: "text_delta", text: "Partial." },
+        });
+        if (failure === "disconnect") response.write(": close\n\n", () => response.destroy());
+      });
+      await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+      cleanups.push(async () => {
+        controller.abort();
+        server.closeAllConnections();
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+      });
+      const address = server.address();
+      if (!address || typeof address === "string") throw new Error("Missing emulator port");
+      const catalogModel = ANTHROPIC_MODELS["claude-haiku-4-5"];
+      const originalBaseUrl = catalogModel.baseUrl;
+      catalogModel.baseUrl = `http://127.0.0.1:${address.port}`;
+      cleanups.push(async () => {
+        catalogModel.baseUrl = originalBaseUrl;
+      });
+      const events: string[] = [];
+      let channelClosed = false;
+      const usage = await relayPiAiCall(
+        { provider: "anthropic", id: catalogModel.id, apiKey: "local" },
+        { context: { messages: [{ role: "user", content: "Continue." }] }, options: {} },
+        (event) => {
+          if (channelClosed) throw new Error("Closed guest channel");
+          events.push(event.type);
+          if (event.type !== "text_delta" || failure === "disconnect") return;
+          controller.abort();
+          if (failure === "closed channel") {
+            channelClosed = true;
+            throw new Error("Closed guest channel");
+          }
+        },
+        { signal: controller.signal, conversation: { threadId: "partial", botId: "bot" } },
+      );
+      expect(events).toContain("text_delta");
+      expect(usage).toEqual({
+        type: "usage",
+        inputTokens: 160,
+        outputTokens: 0,
+        cacheReadTokens: 40,
+        cacheWriteTokens: 0,
+        provider: "anthropic",
+        model: catalogModel.id,
+      });
+    },
+  );
 });
