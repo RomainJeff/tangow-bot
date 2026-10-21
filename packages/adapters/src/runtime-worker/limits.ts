@@ -41,6 +41,8 @@ export const WORKER_LIMITS = {
    * instead, so it never reaches `guestFrameBytes`, which would end the run.
    */
   localResultBytes: 512 * KiB,
+  /** A helper's model requests, counted apart from its parent's and within the attempt's. */
+  modelRequestsPerHelper: 100,
   /** Covers a cold boot. Checked once, at `worker.hello`. */
   capabilityTtlMs: 10 * 60_000,
   helloDeadlineMs: 30_000,

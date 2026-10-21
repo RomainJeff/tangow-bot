@@ -321,6 +321,11 @@ export const ReplyPartSchema = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("model.event"), event: PiAiModelEventSchema }),
   /** `done` arrived while these calls were still open: the run ends only once they settle. */
   z.strictObject({ type: z.literal("end.refused"), pending: z.array(Id) }),
+  /**
+   * On a `run_subagent` call from a `native-loop` harness: run this helper as a session of its own,
+   * its frames named `agent`, until `subagent.finish`. The call settles with the helper's result.
+   */
+  z.strictObject({ type: z.literal("subagent.start"), agent: Id, run: GuestRunInputSchema }),
 ]);
 export type ReplyPart = z.infer<typeof ReplyPartSchema>;
 

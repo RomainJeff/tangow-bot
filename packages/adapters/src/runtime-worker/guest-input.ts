@@ -1,10 +1,12 @@
 import type {
+  AgentRunModel,
   AgentRunRequest,
   ConnectorTool,
   GuestRunInput,
   HarnessCapability,
   HarnessDeclaration,
 } from "@rakazo/adapter-kit";
+import { isHelperTool } from "../builtin-tools.js";
 import { guestModelOf } from "./model-relay.js";
 import piTools from "./pi-tools.json" with { type: "json" };
 
@@ -60,5 +62,24 @@ export function guestRunInput(
     freeTextIsPrivate: request.freeTextIsPrivate,
     runRecap: request.runRecap,
     emptyResponseText: request.emptyResponseText,
+  };
+}
+
+export function helperRunInput(
+  request: AgentRunRequest,
+  harness: HarnessDeclaration,
+  helper: { task: string; instructions: string; model: AgentRunModel },
+): GuestRunInput {
+  const parent = guestRunInput({ ...request, history: [], currentTurnImages: [] }, harness);
+  return {
+    botId: parent.botId,
+    threadId: parent.threadId,
+    sourceMessageId: parent.sourceMessageId,
+    prompt: helper.task,
+    instructions: helper.instructions,
+    history: [],
+    images: [],
+    tools: parent.tools.filter((tool) => isHelperTool(tool.name)),
+    model: guestModelOf(helper.model),
   };
 }

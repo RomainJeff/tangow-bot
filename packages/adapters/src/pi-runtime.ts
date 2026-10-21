@@ -37,7 +37,13 @@ import { redactSecrets } from "@rakazo/core";
 import { getLogger, redactSensitiveText } from "@rakazo/logging";
 import { z } from "zod";
 import { isToolPauseResult } from "./approval-effect.js";
-import { builtinAgentTools, DELEGATION_TOOL_NAMES } from "./builtin-tools.js";
+import {
+  builtinAgentTools,
+  helperCallOf,
+  helperInstructions,
+  helperModel,
+  isHelperTool,
+} from "./builtin-tools.js";
 import { DEFAULT_OPENROUTER_MODEL_ID } from "./deployment-model.js";
 import { piProviderId } from "./model-catalog.js";
 import {
@@ -1484,11 +1490,7 @@ async function executeSubagent(host: ToolHost, executionId: string, args: Record
   if (host.depth > 0) return "Subagents cannot nest further.";
   await host.subagentGate.acquire();
   const agentId = executionId;
-  const name =
-    String(args.name ?? "helper")
-      .trim()
-      .slice(0, 80) || "helper";
-  const task = String(args.task ?? "").trim();
+  const { name, task, provider: requestedProvider, modelId: requestedModelId } = helperCallOf(args);
   try {
     host.queue.push({
       type: "subagent",
@@ -1498,8 +1500,6 @@ async function executeSubagent(host: ToolHost, executionId: string, args: Record
       status: "running",
       progress: "starting…",
     });
-    const requestedProvider = String(args.model_provider ?? "").trim();
-    const requestedModelId = String(args.model_id ?? "").trim();
     const usage = { inputTokens: 0, outputTokens: 0 };
     let log: SubagentLog | undefined;
     let outcome: SubagentOutcome;
@@ -1576,20 +1576,10 @@ async function runSubagent(
   },
 ): Promise<SubagentOutcome> {
   const { agentId, name, task, args, log, usage } = call;
-  const extra = args.instructions ? String(args.instructions).trim() : "";
-  const requestedProvider = String(args.model_provider ?? "").trim();
-  const requestedModelId = String(args.model_id ?? "").trim();
-  let requestModel = host.request.model;
+  const helper = helperCallOf(args);
+  let requestModel: AgentRunRequest["model"];
   try {
-    if (Boolean(requestedProvider) !== Boolean(requestedModelId)) {
-      throw new Error("model_provider and model_id must both be set");
-    }
-    if (requestedProvider && requestedModelId) {
-      if (!host.request.resolveModel) {
-        throw new Error("Per-call subagent model selection is unavailable");
-      }
-      requestModel = await host.request.resolveModel(requestedProvider, requestedModelId);
-    }
+    requestModel = await helperModel(host.request, helper);
   } catch (error) {
     return subagentFailed(sanitizeError(error instanceof Error ? error.message : String(error)));
   }
@@ -1600,9 +1590,8 @@ async function runSubagent(
   }
   const subagentModel = modelForCompletion(selectedModel.model, requestModel.maxTokens);
 
-  // A helper reports back to the bot that ran it, never to the user.
   const childDefs = (host.request.tools.length ? host.request.tools : builtinAgentTools).filter(
-    (tool) => !DELEGATION_TOOL_NAMES.has(tool.name) && tool.name !== "message_user",
+    (tool) => isHelperTool(tool.name),
   );
   const nestedHost: ToolHost = {
     ...host,
@@ -1635,15 +1624,7 @@ async function runSubagent(
       pruneComputerScreenshotContext(messages, requestModel.maxImagesPerPrompt),
     finishTurn: async () => (nestedHost.pausePending ? { action: "end" } : undefined),
     initialState: {
-      systemPrompt: [
-        `You are a Rakazo subagent named "${name}".`,
-        "You run inside the parent bot's turn — you are not a separate bot chat.",
-        "Complete the task and return a concise result. Do not spawn bots or further subagents.",
-        host.subagentInstructions,
-        extra,
-      ]
-        .filter(Boolean)
-        .join(" "),
+      systemPrompt: helperInstructions(name, host.subagentInstructions, helper.instructions),
       model: subagentModel,
       thinkingLevel: thinkingLevelFor(subagentModel, requestModel.thinkingLevel),
       tools: childTools,

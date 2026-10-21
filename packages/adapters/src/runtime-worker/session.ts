@@ -14,6 +14,8 @@ import type {
 } from "@rakazo/adapter-kit";
 import { AgentRuntimeUnavailableError, FRAME_CAPABILITY } from "@rakazo/adapter-kit";
 import { redactSecrets, secretRedactor } from "@rakazo/core";
+import { isToolPauseResult } from "../approval-effect.js";
+import { helperCallOf, helperInstructions, helperModel, isHelperTool } from "../builtin-tools.js";
 import { redactPayloadValue, redactPayloadWith } from "../connector-safety.js";
 import type { CapabilityKey } from "./capability.js";
 import { mintCapability, verifyCapability } from "./capability.js";
@@ -21,7 +23,12 @@ import { relayPiAiCall } from "./dialects/pi-ai.js";
 import { eventPipe } from "./event-pipe.js";
 import type { FrameChannel } from "./framing.js";
 import { encodeMessage, readGuestFrame } from "./framing.js";
-import { base64Images, guestRunInput, nativeToolsForHarness } from "./guest-input.js";
+import {
+  base64Images,
+  guestRunInput,
+  helperRunInput,
+  nativeToolsForHarness,
+} from "./guest-input.js";
 import type { SessionInbox } from "./inbox.js";
 import { createSessionInbox } from "./inbox.js";
 import type { LaunchedGuest, WorkerLauncher } from "./launcher.js";
@@ -72,6 +79,9 @@ type Helper = {
   log: SubagentLog;
   model: AgentRunModel;
   usage: { inputTokens: number; outputTokens: number };
+  modelRequests: number;
+  /** A helper the controller started for a `run_subagent` call settles that call when it ends. */
+  ended?: (outcome: { status: "completed" | "failed"; result: string }) => void;
 };
 
 /**
@@ -170,7 +180,88 @@ export function createSession(
 
   const helperOf = (agent: string) => (agent === "root" ? undefined : helpers.get(agent));
 
-  async function callTool(body: Extract<GuestBody, { type: "tool.call" }>): Promise<ReplyFinal> {
+  const runsOwnLoop = () => Boolean(harness?.capabilities.includes("native-loop"));
+
+  /**
+   * A harness with its own loop never launches helpers itself: the controller opens the helper,
+   * projects its session and holds the parent's call until the helper ends. A pause the helper
+   * hit is the parent's result, so the parent pauses too.
+   */
+  async function runHelper(
+    body: Extract<GuestBody, { type: "tool.call" }>,
+    part: (body: ReplyPart) => void,
+  ): Promise<ReplyFinal> {
+    const call = helperCallOf(body.args);
+    let opened: { log: SubagentLog; model: AgentRunModel };
+    try {
+      if (!request.startSubagent) throw new Error("Helpers are unavailable in this run");
+      const model = await helperModel(request, call);
+      const log = await request.startSubagent({
+        callId: body.callId,
+        name: call.name,
+        task: call.task,
+        args: body.args,
+        model: call.provider
+          ? { provider: call.provider, id: call.modelId }
+          : { provider: request.model.provider, id: request.model.id },
+      });
+      opened = { log, model };
+    } catch (error) {
+      return { type: "error", message: clean(messageOf(error)) };
+    }
+    let paused: unknown;
+    const outcome = new Promise<{ status: "completed" | "failed"; result: string }>((ended) => {
+      const agent = `helper:${helpers.size + 1}`;
+      helpers.set(agent, {
+        log: {
+          ...opened.log,
+          executeTool: async (...args) => {
+            const output = await opened.log.executeTool(...args);
+            if (isToolPauseResult(output)) paused ??= output;
+            return output;
+          },
+        },
+        model: opened.model,
+        usage: { inputTokens: 0, outputTokens: 0 },
+        modelRequests: 0,
+        ended,
+      });
+      part({
+        type: "subagent.start",
+        agent,
+        run: helperRunInput(request, harness!, {
+          task: call.task || "Complete the delegated task.",
+          instructions: helperInstructions(call.name, call.instructions),
+          model: opened.model,
+        }),
+      });
+    });
+    open.set(body.callId, outcome);
+    try {
+      const { status, result } = await outcome;
+      const text = cutText(clean(result), WORKER_LIMITS.controllerResultBytes);
+      return {
+        type: "tool.result",
+        output: paused ?? (status === "completed" ? text : `Subagent failed: ${text}`),
+      };
+    } finally {
+      open.delete(body.callId);
+    }
+  }
+
+  const helperOverBudget = (agent: string): ReplyFinal | undefined => {
+    const helper = helperOf(agent);
+    if (!helper || ++helper.modelRequests <= WORKER_LIMITS.modelRequestsPerHelper) return undefined;
+    return {
+      type: "error",
+      message: `This helper used its ${WORKER_LIMITS.modelRequestsPerHelper} model requests`,
+    };
+  };
+
+  async function callTool(
+    body: Extract<GuestBody, { type: "tool.call" }>,
+    part: (body: ReplyPart) => void,
+  ): Promise<ReplyFinal> {
     const { agent, callId, name, args } = body;
     if (!allowed(name) || announced.get(callId) !== name) return refuse("unknown_tool");
     if (Buffer.byteLength(JSON.stringify(args)) > WORKER_LIMITS.toolArgsBytes) {
@@ -205,6 +296,8 @@ export function createSession(
       if ("error" in first) return { type: "error", message: clean(messageOf(first.error)) };
       return { type: "tool.result", output: first.output };
     }
+    if (helper && !isHelperTool(name)) return refuse("unknown_tool");
+    if (name === "run_subagent" && runsOwnLoop()) return runHelper(body, part);
     const execute = helper ? helper.log.executeTool : request.executeTool;
     if (!execute) return { type: "error", message: `${name} is unavailable here` };
     const call = execute(name, args, callId, tools.get(name)?.route);
@@ -350,7 +443,7 @@ export function createSession(
         });
         return { type: "ack" };
       case "model.request":
-        return relayModel(seq, body, part);
+        return helperOverBudget(body.agent) ?? relayModel(seq, body, part);
       case "model.latency":
         // Guest diagnostics never authorize work or affect the run's outcome.
         return { type: "ack" };
@@ -360,7 +453,7 @@ export function createSession(
       case "tool.call":
         // The executor checks its lease only between events: a guest must not outrun it.
         if (!(await launched!.holdsFence())) return revoke();
-        return transcript.answered(body, await callTool(body));
+        return transcript.answered(body, await callTool(body, part));
       case "tool.done":
         return recordLocalResult(body);
       case "steering.claim": {
@@ -380,6 +473,7 @@ export function createSession(
         if (!request.startSubagent || !request.resolveModel) {
           return { type: "error", message: "Helpers are unavailable in this run" };
         }
+        if (runsOwnLoop()) return refuse("invalid");
         const model = await request.resolveModel(body.model.provider, body.model.id);
         const log = await request.startSubagent({
           callId: body.callId,
@@ -389,7 +483,12 @@ export function createSession(
           model: body.model,
         });
         const agent = `helper:${helpers.size + 1}`;
-        helpers.set(agent, { log, model, usage: { inputTokens: 0, outputTokens: 0 } });
+        helpers.set(agent, {
+          log,
+          model,
+          usage: { inputTokens: 0, outputTokens: 0 },
+          modelRequests: 0,
+        });
         return { type: "subagent.opened", agent, model: guestModelOf(model) };
       }
       case "subagent.text":
@@ -398,13 +497,16 @@ export function createSession(
         const helper = helperOf(body.agent);
         if (!helper) return refuse("invalid");
         if (body.type === "subagent.text") await helper.log.text(body.text);
-        else if (body.type === "subagent.abandon") await helper.log.abandon(body.result);
-        else {
+        else if (body.type === "subagent.abandon") {
+          await helper.log.abandon(body.result);
+          helper.ended?.({ status: "failed", result: body.result });
+        } else {
           await helper.log.finish({
             status: body.status,
             result: body.result,
             usage: helper.usage,
           });
+          helper.ended?.({ status: body.status, result: body.result });
         }
         return { type: "recorded" };
       }
