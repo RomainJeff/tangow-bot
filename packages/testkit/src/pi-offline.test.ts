@@ -7,7 +7,12 @@ import { PiAgentRuntime } from "@rakazo/adapters";
 import { SessionEntrySchema } from "@rakazo/contracts";
 import { projectInferenceTurns } from "@rakazo/core";
 import { afterEach, describe, expect, it } from "vitest";
-import { type ModelEmulatorRequest, startModelEmulator } from "./model-emulator.js";
+import {
+  type ModelEmulatorRequest,
+  type ModelEmulatorResponse,
+  type ModelEmulatorStep,
+  startModelEmulator,
+} from "./model-emulator.js";
 
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => {
@@ -350,6 +355,152 @@ describe("real Pi against an offline model HTTP endpoint", () => {
     expect(events.filter((event) => event.type === "subagent").at(-1)).toMatchObject({
       status: "completed",
       result: "Waiting for approval.",
+    });
+    expect(events.at(-1)).toEqual({ type: "done" });
+  });
+
+  const helperCall = (index: number, task: string) => ({
+    id: `helper-${index}`,
+    name: "run_subagent",
+    arguments: { name: `helper-${index}`, task },
+  });
+  const helperReplies = (
+    count: number,
+    reply: (task: string) => ModelEmulatorResponse,
+  ): ModelEmulatorStep[] =>
+    Array.from({ length: count }, () => ({
+      expect() {},
+      response: (request) => reply(JSON.stringify(request.messages.at(-1)?.content)),
+    }));
+  const helperOutcomes = (events: AgentRuntimeEvent[]) =>
+    Object.fromEntries(
+      events.flatMap((event) =>
+        event.type === "subagent" && event.status !== "running"
+          ? [[event.agentId, `${event.status}: ${event.result}`]]
+          : [],
+      ),
+    );
+  const stoppedHelper = "completed: Stopped: the run is waiting for the user.";
+
+  it("stops running and queued helpers without inference once one helper pauses", async () => {
+    const calls: string[] = [];
+    let holding = 0;
+    let siblingsHeld = () => {};
+    const held = new Promise<void>((resolve) => {
+      siblingsHeld = resolve;
+    });
+    const [first, ...siblings] = [
+      helperCall(1, "Publish the plan."),
+      helperCall(2, "Wait."),
+      helperCall(3, "Wait."),
+      helperCall(4, "Wait."),
+      helperCall(5, "Save the notes."),
+    ];
+    const server = await startModelEmulator({
+      steps: [
+        { expect() {}, response: { type: "tool", ...first!, siblings } },
+        ...helperReplies(4, (task) => {
+          if (task.includes("Publish")) return { type: "tool", ...publishCall };
+          if (task.includes("Wait")) {
+            return {
+              type: "hold",
+              onOpen: () => {
+                holding += 1;
+                if (holding === 3) siblingsHeld();
+              },
+            };
+          }
+          return { type: "tool", ...writeCall };
+        }),
+      ],
+    });
+    cleanups.push(() => server.close());
+    const publish = pausingPublish(calls)!;
+    const executeTool: AgentRunRequest["executeTool"] = async (name, args, executionId) => {
+      if (name === "publish_note") await held;
+      return publish(name, args, executionId);
+    };
+    const events = await collect(
+      new PiAgentRuntime().run(
+        runRequest(server.model, {
+          tools: [writeTool, publishTool, subagentTool],
+          executeTool,
+          startSubagent: async () => {
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            return {
+              executeTool,
+              text: async () => {},
+              finish: async () => {},
+              abandon: async () => {},
+            };
+          },
+        }),
+      ),
+    );
+    server.assertComplete();
+    expect(calls).toEqual(["publish_note"]);
+    expect(helperOutcomes(events)).toEqual({
+      "helper-1": "completed: Waiting for approval.",
+      "helper-2": stoppedHelper,
+      "helper-3": stoppedHelper,
+      "helper-4": stoppedHelper,
+      "helper-5": stoppedHelper,
+    });
+    expect(events.at(-1)).toEqual({ type: "done" });
+  });
+
+  it("stops a sibling helper's later calls and inference at another helper's pause", async () => {
+    const calls: string[] = [];
+    let writing = () => {};
+    const writeStarted = new Promise<void>((resolve) => {
+      writing = resolve;
+    });
+    let pause = () => {};
+    const paused = new Promise<void>((resolve) => {
+      pause = resolve;
+    });
+    const server = await startModelEmulator({
+      steps: [
+        {
+          expect() {},
+          response: {
+            type: "tool",
+            ...helperCall(1, "Publish the plan."),
+            siblings: [helperCall(2, "Save the notes.")],
+          },
+        },
+        ...helperReplies(2, (task) =>
+          task.includes("Publish")
+            ? { type: "tool", ...publishCall }
+            : { type: "tool", ...writeCall, siblings: [{ ...writeCall, id: "write-again" }] },
+        ),
+      ],
+    });
+    cleanups.push(() => server.close());
+    const publish = pausingPublish(calls)!;
+    const events = await collect(
+      new PiAgentRuntime().run(
+        runRequest(server.model, {
+          tools: [writeTool, publishTool, subagentTool],
+          executeTool: async (name, args, executionId) => {
+            if (name === "publish_note") await writeStarted;
+            else {
+              writing();
+              await paused;
+            }
+            return publish(name, args, executionId);
+          },
+          onToolCompleted: (completion) => {
+            if (completion.paused) pause();
+          },
+        }),
+      ),
+    );
+    server.assertComplete();
+    expect(calls.sort()).toEqual(["publish_note", "write_file"]);
+    expect(helperOutcomes(events)).toEqual({
+      "helper-1": "completed: Waiting for approval.",
+      "helper-2": stoppedHelper,
     });
     expect(events.at(-1)).toEqual({ type: "done" });
   });
