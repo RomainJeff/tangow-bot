@@ -1,6 +1,6 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import type { MemoryDocument } from "@rakazo/contracts";
-import { NativeSelect, NativeSelectOption, SaveMeta, SettingRow, Surface } from "@rakazo/ui-web";
+import { NativeSelect, NativeSelectOption, SaveMeta, SettingRow } from "@rakazo/ui-web";
 import { type ReactNode, useEffect, useState } from "react";
 import { rpc } from "../../lib/rpc";
 import {
@@ -77,7 +77,7 @@ function KnowledgeGroup({
   return (
     <section className="flex flex-col gap-1.5" data-testid={testId}>
       <h2 className="mx-3.5 text-label text-muted-foreground">{label}</h2>
-      <Surface className="bg-background p-1.5">{children}</Surface>
+      <div className="rounded-card bg-group p-1.5 shadow-group">{children}</div>
     </section>
   );
 }

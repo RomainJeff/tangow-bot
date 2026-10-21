@@ -133,12 +133,12 @@ test("the thread reads as names, prose and asides", async ({ page }, testInfo) =
   await expect(revenue).toHaveCSS("text-align", "end");
   await expect(prose.locator("td").first()).toHaveCSS("text-align", "start");
 
-  // The reply is set in the Quiet mono family wherever it shows figures.
+  // The reply is set in the system mono family wherever it shows figures.
   expect(
     await page.evaluate(() =>
       getComputedStyle(document.documentElement).getPropertyValue("--font-mono"),
     ),
-  ).toContain("Geist Mono");
+  ).toContain("ui-monospace");
 
   // What the person said keeps its bubble and its line breaks.
   const userBubble = transcript.getByTestId("message-user-bubble");

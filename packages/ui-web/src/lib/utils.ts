@@ -15,6 +15,7 @@ export const MAPPED_RADIUS_KEYS = [
   "card",
   "block",
   "bubble",
+  "pane",
 ] as const satisfies readonly RadiusKey[];
 
 /** Sizes mapped to `--spacing-*` in `styles.css`, so `size-composer-icon` resolves. */
