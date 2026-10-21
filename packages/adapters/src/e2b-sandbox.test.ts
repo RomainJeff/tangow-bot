@@ -422,6 +422,18 @@ describe("E2B computer backend", () => {
       ]);
     });
 
+    it.each(["/workspace/shared/../../tmp", "/workspace/bots/bot_a/../../../etc"])(
+      "refuses to run a command at %s, which climbs out of the volumes",
+      async (cwd) => {
+        const { provider, computer } = await provisionOver(null, teamHome([ada, shared]));
+        const command = async () => {
+          for await (const _ of provider.execute(computer, { argv: ["pwd"], cwd }, context));
+        };
+
+        await expect(command()).rejects.toThrow("Path escapes the computer workspace");
+      },
+    );
+
     it("refuses a computer write that would land on no volume", async () => {
       const { provider, computer, replacement } = await provisionOver(
         null,

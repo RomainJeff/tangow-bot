@@ -441,6 +441,45 @@ describe("computer_exec", () => {
     },
   );
 
+  it("cuts an output too long for the worker channel, and the run goes on", async () => {
+    let shown = "";
+    const bot = await botRun([
+      {
+        expect() {},
+        response: {
+          type: "tool",
+          id: "long",
+          name: "computer_exec",
+          arguments: { command: "dump" },
+        },
+      },
+      {
+        expect(request) {
+          shown = String(toolResults(request).long);
+        },
+        response: finish[0]!.response,
+      },
+      finish[1]!,
+    ]);
+    vi.spyOn(bot.run.sandbox, "execute").mockImplementation(async function* () {
+      yield { type: "stdout", data: "\u0001".repeat(1536 * 1024) };
+      yield { type: "stderr", data: "done\n" };
+      yield { type: "exit", code: 0 };
+    });
+    const runId = await bot.start();
+
+    const effect = await bot.run.prisma.externalEffect.findFirstOrThrow({
+      where: { runId, kind: "computer_exec" },
+      select: { result: true },
+    });
+    expect(effect.result).toEqual({
+      code: 0,
+      stdout: `${"\u0001".repeat(65536)}\n\n[output cut at 65536 of 1572864 bytes]`,
+      stderr: "done\n",
+    });
+    expect(shown.startsWith(`{"stdout":"${"\\u0001".repeat(100)}`)).toBe(true);
+  });
+
   it("refuses a command that could stop the desktop, as shell does", async () => {
     let result: unknown;
     const bot = await botRun([

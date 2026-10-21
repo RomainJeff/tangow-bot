@@ -349,6 +349,7 @@ import {
   tryCompleteConnectionWithCode,
 } from "./run-secret.js";
 import { withRuntimeCleanup } from "./runtime-stream.js";
+import { WORKER_LIMITS } from "./runtime-worker/limits.js";
 import type { RunWorkers } from "./runtime-worker/runtime.js";
 import {
   cancelScheduleFromTool,
@@ -3405,7 +3406,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
               agentEnvironment,
               context,
             );
-            return finish(redactAgentCommandResult(result, runSecrets));
+            const redacted = redactAgentCommandResult(result, runSecrets);
+            return finish({
+              ...redacted,
+              stdout: boundedCommandText(redacted.stdout),
+              stderr: boundedCommandText(redacted.stderr),
+            });
           }
           if (name === "open_path") {
             if (heldForTakeover) {
@@ -6937,6 +6943,14 @@ function uncertainEffectError(toolName: string): Error {
   return new Error(
     `tool ${toolName} has an earlier execution with an uncertain outcome; it may already have completed, so verify the destination before retrying`,
   );
+}
+
+/** A command's output, cut to what the controller records and a worker reply can carry. */
+function boundedCommandText(text: string): string {
+  const limit = WORKER_LIMITS.controllerResultBytes;
+  const bytes = Buffer.from(text);
+  if (bytes.byteLength <= limit) return text;
+  return `${bytes.subarray(0, limit).toString()}\n\n[output cut at ${limit} of ${bytes.byteLength} bytes]`;
 }
 
 async function runSandboxCommand(
