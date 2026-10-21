@@ -111,7 +111,9 @@ export function ingestPiAi(
   );
   const records = new Map<string, ControllerCallRecord[]>();
   for (const record of controllerCalls) {
-    records.set(record.name, [...(records.get(record.name) ?? []), record]);
+    const named = records.get(record.name) ?? [];
+    named.push(record);
+    records.set(record.name, named);
   }
   const entries: CanonicalEntry[] = [];
   const harnessCalls = new Map<string, ToolCalls[number]>();
