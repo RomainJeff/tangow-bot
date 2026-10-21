@@ -1,5 +1,15 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { chmod, mkdir, mkdtemp, readFile, realpath, rm, utimes, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  rm,
+  symlink,
+  utimes,
+  writeFile,
+} from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -16,6 +26,7 @@ const missingTools = ["bash", "git", "jq", "setsid"].filter(
 // Brief keywords drive the fake: SLOW keeps the job running, FAIL exits 1.
 const FAKE_OPENCODE = `#!/usr/bin/env bash
 echo "$*" >> "$HOME/calls"
+if [ "$1" = auth ] && [ "$2" = login ]; then echo "https://example.test/device Enter code: FAKE-CODE"; exit 0; fi
 if [ "$1" = auth ]; then echo "\${FAKE_AUTH:-0 credentials}"; exit 0; fi
 dir=""; prev=""
 for a in "$@"; do [ "$prev" = --dir ] && dir=$a; prev=$a; done
@@ -38,7 +49,7 @@ describe.skipIf(missingTools.length > 0)("delegate-to-opencode oc script", () =>
   let env: NodeJS.ProcessEnv;
 
   const oc = (...args: string[]) => {
-    const result = spawnSync("bash", [OC, ...args], { env, encoding: "utf8" });
+    const result = spawnSync("bash", [OC, ...args], { cwd: root, env, encoding: "utf8" });
     return `${result.stdout}${result.stderr}`.trim();
   };
   const brief = async (name: string, body: string) => {
@@ -61,7 +72,9 @@ describe.skipIf(missingTools.length > 0)("delegate-to-opencode oc script", () =>
   };
 
   beforeAll(async () => {
-    root = await realpath(await mkdtemp(path.join(os.tmpdir(), "oc-test-")));
+    const fixtureParent = process.env.OC_TEST_VOLUMES === "1" ? "/workspace/bots" : os.tmpdir();
+    await mkdir(fixtureParent, { recursive: true });
+    root = await realpath(await mkdtemp(path.join(fixtureParent, "oc-test-")));
     home = path.join(root, "home");
     await mkdir(home);
     const bin = path.join(root, "bin");
@@ -71,13 +84,15 @@ describe.skipIf(missingTools.length > 0)("delegate-to-opencode oc script", () =>
     env = {
       PATH: `${bin}:${process.env.PATH}`,
       HOME: home,
+      OC_BOT_ID: path.basename(root),
       GIT_AUTHOR_NAME: "t",
       GIT_AUTHOR_EMAIL: "t@t",
       GIT_COMMITTER_NAME: "t",
       GIT_COMMITTER_EMAIL: "t@t",
     };
-    jobs = path.join(root, "workspace", "bots", "bot-test", "oc-jobs");
-    env.OC_JOBS_DIR = jobs;
+    jobs =
+      process.env.OC_TEST_VOLUMES === "1" ? path.join(root, "oc-jobs") : path.join(home, "oc-jobs");
+    if (process.env.OC_TEST_VOLUMES === "1") env.OC_JOBS_DIR = jobs;
     repo = path.join(root, "repo");
     await mkdir(repo);
     for (const args of [
@@ -141,6 +156,88 @@ describe.skipIf(missingTools.length > 0)("delegate-to-opencode oc script", () =>
     ).toContain(`oc/${id}`);
   });
 
+  it("rejects relative, traversing, other-bot and symlink paths before starting a job", async () => {
+    const file = await brief("validation", "Do nothing.");
+    await symlink("/tmp", path.join(root, "outside"));
+    await symlink(repo, path.join(root, "repo-link"));
+    const configured = env.OC_JOBS_DIR;
+    const botRoot = process.env.OC_TEST_VOLUMES === "1" ? root : "/workspace/bots/oc-test";
+    const configuredBot = env.OC_BOT_ID;
+    env.OC_BOT_ID = path.basename(botRoot);
+    env.OC_JOBS_DIR = `${botRoot}/oc-jobs`;
+    try {
+      for (const invalid of [
+        "repo",
+        `${root}/../repo`,
+        "/home/rakazo/repo",
+        "/workspace/bots/other/repo",
+        `${root}/outside/repo`,
+      ]) {
+        expect(oc("start", "--repo", invalid, "--brief", file)).toContain("error: --repo");
+      }
+      for (const invalid of [
+        "brief.md",
+        `${root}/../brief.md`,
+        "/workspace/bots/other/brief.md",
+        `${root}/outside/brief.md`,
+      ]) {
+        expect(oc("start", "--repo", `${botRoot}/repo`, "--brief", invalid)).toContain(
+          "error: --brief",
+        );
+      }
+      for (const invalid of [
+        "jobs",
+        `${root}/../oc-jobs`,
+        "/tmp/oc-jobs",
+        "/workspace/shared/oc-jobs",
+        "/workspace/bots/other/oc-jobs",
+        `${root}/outside/oc-jobs`,
+      ]) {
+        env.OC_JOBS_DIR = invalid;
+        expect(oc("status")).toContain("error: OC_JOBS_DIR");
+      }
+    } finally {
+      env.OC_BOT_ID = configuredBot;
+      if (configured === undefined) delete env.OC_JOBS_DIR;
+      else env.OC_JOBS_DIR = configured;
+    }
+  });
+
+  it.skipIf(process.env.OC_TEST_VOLUMES !== "1")(
+    "resolves volume symlinks and accepts a shared repository",
+    async () => {
+      const file = await brief("symlink", "Do nothing.");
+      expect(oc("start", "--repo", path.join(root, "outside/repo"), "--brief", file)).toContain(
+        "error: --repo",
+      );
+      const out = oc("start", "--repo", path.join(root, "repo-link"), "--brief", file);
+      const id = /^id=(\S+)/.exec(out)?.[1];
+      if (!id) throw new Error(out);
+      await waitFor(id, "done");
+      expect(oc("clean", id)).toBe(`ok kept_branch=oc/${id}`);
+      await mkdir("/workspace/shared", { recursive: true });
+      const shared = await mkdtemp("/workspace/shared/oc-test-");
+      try {
+        execFileSync("git", ["clone", "-q", repo, shared], { env });
+        const sharedOut = oc("start", "--repo", shared, "--brief", file);
+        const sharedId = /^id=(\S+)/.exec(sharedOut)?.[1];
+        if (!sharedId) throw new Error(sharedOut);
+        await waitFor(sharedId, "done");
+        expect(oc("clean", sharedId)).toBe(`ok kept_branch=oc/${sharedId}`);
+      } finally {
+        await rm(shared, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it("keeps device login scratch in the computer home", async () => {
+    expect(oc("login", "openai")).toContain("code=FAKE-CODE");
+    expect(await readFile(path.join(home, ".local/state/rakazo/oc-login/log"), "utf8")).toContain(
+      "FAKE-CODE",
+    );
+    await expect(readFile(path.join(jobs, ".login/log"))).rejects.toThrow();
+  });
+
   it("marks failures, stalls, and refuses a fourth running job", async () => {
     const failed = await start("FAIL please");
     await waitFor(failed, "failed");
@@ -174,7 +271,8 @@ describe.skipIf(missingTools.length > 0)("delegate-to-opencode oc script", () =>
       env.OC_JOBS_DIR = "relative/jobs";
       expect(oc("status")).toContain("OC_JOBS_DIR must be absolute");
     } finally {
-      env.OC_JOBS_DIR = configured;
+      if (configured === undefined) delete env.OC_JOBS_DIR;
+      else env.OC_JOBS_DIR = configured;
     }
   });
 

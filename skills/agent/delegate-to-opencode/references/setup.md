@@ -1,8 +1,8 @@
 # Setup: getting OpenCode ready
 
-Goal: the user never opens the computer. Do as much as you can yourself, give them one simple action at a time, and run `oc doctor` again after each step.
+Goal: the user never opens the computer. Do as much as you can yourself, give them one simple action at a time, and run `<oc> doctor` again after each step.
 
-## `oc doctor` states
+## `<oc> doctor` states
 
 | Output | Meaning | What you do |
 |---|---|---|
@@ -18,8 +18,8 @@ Run all setup commands on the computer through `computer_exec` in worker runs, o
 
 Ask which account the user has, in plain words: "To write code I need an AI account. Do you have ChatGPT Plus or Pro, or GitHub Copilot?" Then:
 
-- ChatGPT Plus/Pro: `bash <dir>/scripts/oc login openai`
-- GitHub Copilot: `bash <dir>/scripts/oc login copilot`
+- ChatGPT Plus/Pro: `<oc> login openai`
+- GitHub Copilot: `<oc> login copilot`
 
 The command prints `url=` and `code=`. Send them to the user:
 
@@ -27,7 +27,7 @@ The command prints `url=` and `code=`. Send them to the user:
 > Type this code: <code>
 > Sign in, approve, and tell me when it says it's done. The code expires in 15 minutes.
 
-When they say done, run `oc doctor`. Still `no_credentials`: run `oc login` again for a fresh code and ask them to retry; after two failures, use takeover. `state=login_failed`: retry once, then takeover.
+When they say done, run `<oc> doctor`. Still `no_credentials`: run `<oc> login` again for a fresh code and ask them to retry; after two failures, use takeover. `state=login_failed`: retry once, then takeover.
 
 Anthropic (Claude) accounts have no sign-in by code: the key must be typed on the computer, so use takeover.
 
@@ -41,7 +41,7 @@ Use `request_takeover` with a reason a non-developer understands, then give exac
 > 3. Pick your provider with the arrow keys, press Enter, and follow what it asks (paste your key if it asks for one).
 > 4. Tell me when it's done.
 
-Then run `oc doctor` again. Never ask them to paste a key in chat; if they do anyway, tell them to revoke it and create a new one.
+Then run `<oc> doctor` again. Never ask them to paste a key in chat; if they do anyway, tell them to revoke it and create a new one.
 
 ## GitHub (private repositories and pull requests)
 

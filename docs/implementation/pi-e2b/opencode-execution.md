@@ -29,13 +29,28 @@ naming, so callers use the offered tools without constructing an MCP prefix.
 | New P4 job files | `/workspace/bots/<id>/oc-jobs/<job>/` | Same mounted directory, including `repo/`, `REPORT.md`, logs and metadata |
 | OpenCode process, credentials and sessions | None | Computer process and home-local OpenCode state |
 
-Set `OC_JOBS_DIR=/workspace/bots/<id>/oc-jobs` on every helper invocation, using
+Set `OC_BOT_ID=<id> OC_JOBS_DIR=/workspace/bots/<id>/oc-jobs` on every helper invocation, using
 `computer_exec` with `cwd=/workspace/bots/<id>`. Invoke
 `/managed-skills/agent/delegate-to-opencode/scripts/oc` there, rather than a
 worker-home skill symlink. Create the brief with the worker's native `write` and
 pass its absolute volume path to `oc start`. Do not use `/home/rakazo` for a
 repository, brief or new P4 job directory. Existing computer-only callers keep
 `$HOME/oc-jobs` when they omit the override; do not silently move those jobs.
+
+Team computers mount the private volumes of every attached bot, plus the shared
+volume (`computerVolumeHome` in `packages/core/src/worker-plan.ts`). A mount is
+therefore not a per-bot isolation boundary. The helper requires `OC_BOT_ID` to match the bot in
+`/workspace/bots/<id>/oc-jobs` and restricts resolved
+repository, brief and follow-up paths to that bot's directory or
+`/workspace/shared`. It rejects relative paths, `..` segments and symlink escapes.
+The caller supplies the bot id; it is not an authorization credential. Controller
+computer access remains the authorization boundary. Legacy calls without the
+override retain computer-local paths and jobs.
+
+In-process bots use `write_file` with `briefs/<name>.md`. The executor maps that
+relative path into the bot's private directory on dedicated and team computers.
+Pass `/workspace/bots/<id>/briefs/<name>.md` to the helper. Login scratch stays
+under `$HOME/.local/state/rakazo/oc-login`, outside the shared job volume.
 
 All lifecycle commands must use the same job directory and computer. The volume
 preserves files, not a portable running process or session. After a worker turn

@@ -51,7 +51,7 @@ under their own naming.
 
 OpenCode stays on the computer for P4. Invoke the managed helper there at
 `/managed-skills/agent/delegate-to-opencode/scripts/oc`, with
-`OC_JOBS_DIR=/workspace/bots/<botId>/oc-jobs` on every call. Briefs, job worktrees
+`OC_BOT_ID=<botId> OC_JOBS_DIR=/workspace/bots/<botId>/oc-jobs` on every call. Briefs, job worktrees
 and reports then share volume paths with the worker. OpenCode loads computer
 skills, while the worker loads agent skills. The [execution decision and N13 live
 lane](../docs/implementation/pi-e2b/opencode-execution.md) describe the boundary

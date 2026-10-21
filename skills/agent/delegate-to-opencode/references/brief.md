@@ -44,7 +44,7 @@ The script adds the delivery footer (own-the-task skill, report path, push or no
 - **Bugs: reproduce first.** Describe the exact symptom (what the user does, what they see, what they expected) and ask for a test that reproduces the bug before the fix.
 - **Vague or large tasks: two stages.** Start a `--plan` job first. Summarise its plan to the user in plain words, get a yes, then start the build job with the plan pasted in Context.
 - **Effort.** `--effort high` for hard work (intermittent bugs, changes across many parts); default otherwise.
-- **Follow-ups (`oc send`) restate only the gap**: "Criterion 2 is not met: on mobile the button is hidden. The rest is good, keep it as is."
+- **Follow-ups (`<oc> send`) restate only the gap**: "Criterion 2 is not met: on mobile the button is hidden. The rest is good, keep it as is."
 - **Pull requests only on request.** Without `--push` the agent commits on its own branch and pushes nothing.
 
 ## Example 1: small UI feature
@@ -122,7 +122,7 @@ Why: the user finds the site slow; we want the biggest wins first, not a rewrite
 "the site is slow, can you make it faster?"
 
 ## Context
-- Repository: /home/rakazo/site, base branch main
+- Repository: /workspace/bots/<id>/site, base branch main
 
 ## Done when
 1. Pages measured on a running local copy, with load times.
