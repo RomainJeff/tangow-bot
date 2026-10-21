@@ -149,6 +149,59 @@ describe("a guest Pi run whose model calls the controller relays", () => {
   });
 });
 
+describe("a relayed model call that carries tool-result images", () => {
+  it("reaches the model with only the images the model's image budget allows", async () => {
+    const pixel =
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+    const sentImages: number[] = [];
+    const server = await startModelEmulator({
+      steps: [
+        {
+          expect(request) {
+            sentImages.push(
+              JSON.stringify(request.messages).split('"type":"image_url"').length - 1,
+            );
+          },
+          response: { type: "text", text: "Done." },
+        },
+      ],
+    });
+    cleanups.push(() => server.close());
+    const turns = ["computer_screenshot", "read", "computer_screenshot"].flatMap(
+      (toolName, index) => [
+        {
+          role: "assistant",
+          content: [{ type: "toolCall", id: `call-${index}`, name: toolName, arguments: {} }],
+          stopReason: "toolUse",
+        },
+        {
+          role: "toolResult",
+          toolCallId: `call-${index}`,
+          toolName,
+          content: [{ type: "image", data: pixel, mimeType: "image/png" }],
+          isError: false,
+        },
+      ],
+    );
+
+    await relayPiAiCall(
+      { ...server.model, acceptsImages: true, maxImagesPerPrompt: 1 },
+      {
+        context: { messages: [{ role: "user", content: "Check the page" }, ...turns] },
+        options: {},
+      },
+      () => {},
+      {
+        signal: new AbortController().signal,
+        conversation: { threadId: "thread_relay", botId: "bot_relay" },
+      },
+    );
+
+    server.assertComplete();
+    expect(sentImages).toEqual([1]);
+  });
+});
+
 describe("a worker run on a catalog Anthropic model", () => {
   it("completes a run on Anthropic's Messages API through the relay, across a thinking block and a tool call", async () => {
     let listed = "";
