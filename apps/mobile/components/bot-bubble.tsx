@@ -10,7 +10,7 @@ import Animated, {
   withDelay,
   withTiming,
 } from "react-native-reanimated";
-import { mobileTokens } from "../lib/appearance";
+import { mobileTokens, resolveMobileAppearance } from "../lib/appearance";
 import { CHAT_MOTION, useChatReducedMotion } from "../lib/chat-motion";
 import { commitHaptic } from "../lib/haptics";
 import { useThemedStyles } from "../lib/native";
@@ -20,6 +20,7 @@ import {
   PROOF_LINE_GAP,
   proofLineHitSlop,
 } from "../lib/proof-lines";
+import { shadowsForAppearance } from "../lib/theme";
 import { nativeTextStyle } from "../lib/typography";
 import { NativeSymbol } from "./native-symbol";
 
@@ -52,8 +53,15 @@ export interface BotBubbleProps extends PressableProps {
   mono?: boolean;
 }
 
+/** A bot bubble's cap. Mono: 82% of the thread. Group: 88% of the column right of the avatar. */
+export function useBubbleMaxWidth(mono: boolean): number {
+  const { width } = useWindowDimensions();
+  const column = width - THREAD_GUTTER * 2 - (mono ? 0 : sizes.message + AVATAR_GAP);
+  return Math.floor(column * (mono ? 0.82 : 0.88));
+}
+
 /**
- * What a bot said: a `muted` bubble that fits its content. Mirrors
+ * What a bot said: a `chatBot` bubble that fits its content. Mirrors
  * `MessageBubble` in `packages/ui-web/src/message-row.tsx`. The cap is a
  * number, not a percentage: a bubble that fits its content has no definite
  * width for percentages to resolve against, so Yoga would measure wrapped
@@ -61,10 +69,7 @@ export interface BotBubbleProps extends PressableProps {
  */
 export function BotBubble({ mono = false, meta, style, children, ...props }: BotBubbleProps) {
   const styles = useThemedStyles(createBotBubbleStyles);
-  const { width } = useWindowDimensions();
-  // Mono: 82% of the thread. Group: 88% of the column right of the avatar.
-  const column = width - THREAD_GUTTER * 2 - (mono ? 0 : sizes.message + AVATAR_GAP);
-  const maxWidth = Math.floor(column * (mono ? 0.82 : 0.88));
+  const maxWidth = useBubbleMaxWidth(mono);
   return (
     <View>
       <View style={styles.row}>
@@ -177,12 +182,13 @@ function createBotBubbleStyles() {
     bubble: {
       flexShrink: 1,
       borderRadius: radii.bubble,
-      backgroundColor: tokens.muted,
-      paddingHorizontal: 14,
-      paddingVertical: 10,
+      backgroundColor: tokens.chatBot,
+      boxShadow: shadowsForAppearance(resolveMobileAppearance()).bubble,
+      paddingHorizontal: 16,
+      paddingVertical: 11,
     },
     under: {
-      paddingHorizontal: 14,
+      paddingHorizontal: 16,
     },
     lines: {
       gap: PROOF_LINE_GAP,

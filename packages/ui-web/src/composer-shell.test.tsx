@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { ComposerShell } from "./composer-shell.js";
 
 describe("ComposerShell", () => {
-  it("is a capsule with the composer elevation, bottom-aligned, at least 48px tall", () => {
+  it("is a glass capsule, bottom-aligned, at least 48px tall", () => {
     const html = renderToString(
       <ComposerShell trailing={<button type="button" aria-label="Send" />}>
         <textarea aria-label="Message Maya" />
@@ -13,13 +13,12 @@ describe("ComposerShell", () => {
     expect(html).toContain('data-slot="composer-shell"');
     expect(html).toContain('data-state="idle"');
     expect(html).toContain("rounded-composer");
-    expect(html).toContain("bg-surface");
-    expect(html).toContain("shadow-composer-rest");
+    expect(html).toContain("rk-glass-control");
     expect(html).toContain("min-h-12");
     expect(html).toContain("items-end");
   });
 
-  it("rests on a hairline and lifts to the focus elevation while its field has focus", () => {
+  it("rests on the glass edge and lifts to the focus elevation while its field has focus", () => {
     const html = renderToString(
       <ComposerShell trailing={<button type="button" aria-label="Send" />}>
         <textarea aria-label="Message Maya" />
@@ -83,7 +82,8 @@ describe("ComposerShell", () => {
 
     expect(html).toContain('data-state="dictating"');
     expect(html).toContain("ring-foreground");
-    expect(html).not.toContain("shadow-composer-rest");
+    expect(html).toContain("shadow-none");
+    expect(html).not.toContain("focus-within:shadow-composer-focus");
   });
 
   it("uses a token-backed ring width, no arbitrary Tailwind value", () => {

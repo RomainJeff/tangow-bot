@@ -6,11 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-### 2026-10-20
+### 2026-10-21
+
+#### Changed
+
+- Rakazo takes a softer grey look on web, desktop and iPhone: a faint ambient light behind glass navigation and composer, cards on the bot's paper that settle into the conversation once answered, and solid fallbacks when Reduce Transparency is on.
 
 #### Fixed
 
 - Opening a bot's computer screen on web and desktop now loads the screen before the viewer appears, instead of sometimes opening an empty viewer.
+- When a bot asks for your approval or a question partway through a step, it now stops its other actions in that step, and its helpers, until you answer instead of carrying on, on web, desktop and iPhone.
+- On iPhone, the composer goes back to one line after you send a long message, instead of staying tall and empty.
+
+### 2026-10-20
+
+#### Reverted
+
+- Skill marketplaces can no longer be added or used from the Skills screen on web, desktop and mobile; your own skills and Rakazo's built-in skills are unchanged.
 
 ### 2026-10-19
 

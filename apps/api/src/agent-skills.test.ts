@@ -1,16 +1,16 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import type { SkillOwnerLock } from "@rakazo/adapters";
 import {
   createInMemorySkillLock,
   listUserSkills,
-  marketplacesRoot,
-  type SkillOwnerLock,
   skillCreateFromTool,
   userSkillsRoot,
 } from "@rakazo/adapters";
 import { buildSkillMd } from "@rakazo/core";
-import { IsolationError, type PrismaClient } from "@rakazo/db";
+import type { PrismaClient } from "@rakazo/db";
+import { IsolationError } from "@rakazo/db";
 import { create as tarCreate } from "tar";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ZipFile } from "yazl";
@@ -402,51 +402,5 @@ describe("agent skills service (filesystem)", () => {
     // Re-enabling to "all" restores everyone; the stale include row is harmless.
     const restored = await skills.setAccess(actor, { skillId: created.id, availability: "all" });
     expect(restored.visibleBotIds).toEqual(["bot-1", "bot-2"]);
-  });
-
-  it("lists, reads and scopes marketplace skills but refuses to edit them", async () => {
-    const dir = path.join(
-      marketplacesRoot(dataDir, "ws-1"),
-      "acme",
-      "plugins",
-      "writer",
-      "skills",
-      "blog",
-    );
-    await mkdir(dir, { recursive: true });
-    await writeFile(
-      path.join(dir, "SKILL.md"),
-      buildSkillMd({ name: "Blog", description: "Write posts", body: "Outline first." }),
-    );
-    const skills = service();
-    const mktId = "mkt:acme/writer/blog";
-
-    expect((await skills.list(actor)).find((s) => s.id === mktId)).toMatchObject({
-      name: "Blog",
-      source: "plugin",
-      readOnly: true,
-      availability: "selected",
-      visibleBotIds: [],
-    });
-
-    const access = await skills.setAccess(actor, {
-      skillId: mktId,
-      bots: [{ botId: "bot-1", enabled: true }],
-    });
-    expect(access.visibleBotIds).toEqual(["bot-1"]);
-    expect((await skills.list(actor, { botId: "bot-1" })).map((s) => s.id)).toContain(mktId);
-    expect((await skills.list(actor, { botId: "bot-2" })).map((s) => s.id)).not.toContain(mktId);
-
-    const got = await skills.get(actor, { skillId: mktId });
-    expect(got.content).toContain("Outline first.");
-    expect(await skills.get(actor, { name: "blog" })).toMatchObject({ id: mktId });
-
-    await expect(skills.update(actor, { skillId: mktId, body: "x" })).rejects.toMatchObject({
-      code: "FORBIDDEN",
-    });
-    await expect(skills.remove(actor, mktId)).rejects.toMatchObject({ code: "FORBIDDEN" });
-
-    const otherSpace = { spaceId: "ws-2", userId: "user-1" } as never;
-    await expect(skills.get(otherSpace, { skillId: mktId })).rejects.toBeInstanceOf(IsolationError);
   });
 });

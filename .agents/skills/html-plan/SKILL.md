@@ -126,6 +126,7 @@ These are not STE and stay as they are: the words of the user in a `doc-quote`, 
 1. **Read first.** Find the entrypoints, records and screens the change touches. Note exact paths, lines and the user's words.
 2. **Write the level-1 claims** and read them aloud. Fix them before anything else.
 3. **Add the how and where claims, then the exhibits, then the decisions.** Read `references/blocks.md` for syntax. Save the page where the project keeps docs, or in a scratch folder.
+   Before handover, run **founding-engineer** on the complete plan per **principle-laziness-protocol**. Return the report and the plan owner's disposition alongside the page; the reviewer does not edit it. Reuse a prior review of unchanged scope and architecture.
 4. **Pack.** `node <skill dir>/runtime/pack.mjs plan.html --root <repo>`. It reports errors and warnings by line or claim number. Fix them. It writes `plan.packed.html`, one file that works offline.
 5. **Look at it** in a browser if you can: closed, with each claim open, and at each decision (the “to answer” button goes to them). Check that mockups are not clipped and arrows do not cross labels.
 6. **Hand it over** (next section) with one line: “Four decisions. The defaults are what I would build.”

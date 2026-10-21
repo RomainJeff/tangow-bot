@@ -233,14 +233,14 @@ test("memory and skills are readable and editable in the app", async ({ page }, 
   await reopenKnowledge();
   await expect(skillCard).toHaveCount(1);
 
-  // A provider-owned skill uses the same viewer without mutation controls. The
+  // A built-in skill uses the same viewer without mutation controls. The
   // editor reads the skill as it mounts, so every read answers read-only until unrouted.
   await page.route("**/rpc/agentSkills/get", async (route) => {
     const response = await route.fetch();
     const body = await response.json();
     await route.fulfill({
       response,
-      json: { ...body, json: { ...body.json, readOnly: true, source: "plugin" } },
+      json: { ...body, json: { ...body.json, readOnly: true, source: "builtin" } },
     });
   });
   await skillRow.click();
