@@ -143,9 +143,8 @@ export function LinkPreviewCard({
       ) : (
         <Surface
           className={cn(
-            "overflow-hidden transition-colors duration-(--duration-hover) ease-quiet group-hover/link-card:border-outline",
-            format === "compact" && "flex items-center gap-2.5 py-2 pe-3",
-            format === "compact" && "ps-2",
+            "overflow-hidden transition-shadow duration-(--duration-hover) ease-quiet group-hover/link-card:ring-1 group-hover/link-card:ring-outline",
+            format === "compact" && "flex items-center gap-3 py-2 ps-2 pe-4",
           )}
         >
           {format === "large" ? (
@@ -156,14 +155,14 @@ export function LinkPreviewCard({
               >
                 {image}
               </div>
-              <div className="px-3 py-2.5">
+              <div className="px-4 py-3">
                 {titleLine}
                 <Site>{site}</Site>
               </div>
             </>
           ) : (
             <>
-              <div className="relative size-link-thumb shrink-0 overflow-hidden rounded-chip bg-secondary">
+              <div className="relative size-link-thumb shrink-0 overflow-hidden rounded-card bg-secondary">
                 {image ?? <LinkPreviewInitial>{previewSiteInitial(href)}</LinkPreviewInitial>}
               </div>
               <div className="min-w-0">

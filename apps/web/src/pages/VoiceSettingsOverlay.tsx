@@ -185,7 +185,7 @@ export function VoiceSettingsOverlay({
           <div className="mb-3 text-[13.5px] text-muted-foreground">
             <Trans>Providers</Trans>
           </div>
-          <div className="rk-scroll overflow-y-auto rounded-xl border border-border">
+          <div className="rk-scroll overflow-y-auto rounded-card bg-group shadow-group">
             {catalog.map((entry) => {
               const connected = credentials.some((cred) => cred.provider === entry.id);
               return (
@@ -346,10 +346,11 @@ export function VoiceSettingsOverlay({
       }}
     >
       <DialogContent
+        variant="window"
         data-testid="voice-settings"
         aria-describedby={undefined}
         showCloseButton={false}
-        className="flex h-[min(680px,calc(100%-2rem))] w-[920px] flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:h-[min(680px,calc(100%-5rem))] sm:max-w-[calc(100%-5rem)]"
+        className="flex h-[min(680px,calc(100%-2rem))] w-[920px] flex-col gap-0 overflow-hidden p-0 sm:h-[min(680px,calc(100%-5rem))] sm:max-w-[calc(100%-5rem)]"
       >
         {body}
       </DialogContent>

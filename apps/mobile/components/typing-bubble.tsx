@@ -1,8 +1,9 @@
 import { radii } from "@rakazo/ui-tokens";
 import { memo } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
-import { mobileTokens } from "../lib/appearance";
+import { mobileTokens, resolveMobileAppearance } from "../lib/appearance";
 import { useThemedStyles } from "../lib/native";
+import { shadowsForAppearance } from "../lib/theme";
 import { nativeTextStyle } from "../lib/typography";
 import { PulseDot } from "./pulse-dot";
 import { ShimmerText } from "./shimmer-text";
@@ -71,7 +72,8 @@ function createTypingBubbleStyles() {
       paddingHorizontal: 16,
       overflow: "hidden",
       borderRadius: radii.bubble,
-      backgroundColor: tokens.muted,
+      backgroundColor: tokens.chatBot,
+      boxShadow: shadowsForAppearance(resolveMobileAppearance()).bubble,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",

@@ -146,6 +146,7 @@ export function SettingsOverlay({
       }}
     >
       <DialogContent
+        variant="window"
         ref={panelRef}
         data-testid="user-settings"
         data-settings-section={section}
@@ -153,7 +154,7 @@ export function SettingsOverlay({
         initialFocus={() =>
           section === "usage" ? (usageRef.current ?? panelRef.current) : panelRef.current
         }
-        className={`flex max-h-[calc(100%-2rem)] flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:max-h-[calc(100%-5rem)] ${
+        className={`max-h-[calc(100%-2rem)] sm:max-h-[calc(100%-5rem)] ${
           widePane
             ? "h-[min(760px,calc(100%-2rem))] w-[min(1080px,calc(100%-2rem))] sm:max-w-[1080px]"
             : "h-[min(720px,calc(100%-2rem))] w-[min(920px,calc(100%-2rem))] sm:max-w-[920px]"
@@ -163,7 +164,8 @@ export function SettingsOverlay({
           <nav
             data-testid="settings-nav"
             aria-label={t`Settings`}
-            className="flex shrink-0 flex-row gap-1 overflow-x-auto border-b border-border px-3 py-3 md:w-[200px] md:flex-col md:overflow-y-auto md:border-b-0 md:border-e md:px-3 md:py-4"
+            // Beside the content, an inset panel like the app's sidebar; at phone width a row of tabs.
+            className="flex shrink-0 flex-row gap-1 overflow-x-auto px-3 py-3 md:m-2 md:w-[200px] md:flex-col md:overflow-y-auto md:rounded-xl md:bg-group md:p-2 md:shadow-group"
           >
             {navItems.map((item) => {
               const Icon = item.icon;
@@ -178,8 +180,8 @@ export function SettingsOverlay({
                   onClick={() => setSection(item.id)}
                   className={`flex shrink-0 items-center gap-2.5 rounded-lg px-2.5 py-2 text-start text-[13.5px] transition-colors disabled:pointer-events-none disabled:opacity-50 ${
                     active
-                      ? "bg-muted text-foreground"
-                      : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                      ? "bg-sidebar-accent text-foreground max-md:bg-group max-md:shadow-group"
+                      : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground"
                   }`}
                 >
                   <Icon className="size-4 shrink-0" strokeWidth={1.75} />

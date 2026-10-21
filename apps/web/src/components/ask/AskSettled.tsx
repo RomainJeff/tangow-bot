@@ -17,7 +17,7 @@ export function AskSettled({ view, className }: { view: AskSettledView; classNam
   const Icon = view.kind === "answered" ? Check : CircleStop;
   return (
     <div data-testid="ask-settled" className={cn("flex flex-col gap-3.5", className)}>
-      <p className="flex min-w-0 items-center gap-2 px-3.5 text-meta text-muted-foreground">
+      <p className="flex min-w-0 items-center gap-1.5 px-4 text-meta text-muted-foreground">
         <Icon aria-hidden className="size-3.5 shrink-0" />
         <span dir="auto" className="min-w-0 truncate">
           {view.line}
