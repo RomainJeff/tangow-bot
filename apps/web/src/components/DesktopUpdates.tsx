@@ -134,7 +134,7 @@ export function DesktopUpdateSection() {
   return (
     <section
       data-testid="desktop-update-settings"
-      className="mt-5 rounded-xl border border-border px-4 py-4"
+      className="mt-5 rounded-card bg-group shadow-group px-4 py-4"
     >
       <h3 className="text-[15px] font-medium text-foreground">
         <Trans>Desktop app</Trans>

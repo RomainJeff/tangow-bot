@@ -115,6 +115,9 @@ export function panelIsOpen(
 /** Identity colour for bots the roster no longer knows about. */
 export const FALLBACK_BOT_COLOR = "#85858A";
 
+/** Below Tailwind's `md`: the phone layout, where the bot list is its own page. */
+export const PHONE_MEDIA = "(max-width: 767px)";
+
 export function firstThreadRoute(
   bots: readonly Pick<Bot, "id">[],
   groups: readonly Pick<Group, "id">[],

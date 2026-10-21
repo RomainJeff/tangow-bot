@@ -40,7 +40,7 @@ describe("Button — Quiet variants", () => {
         Tuesday
       </Button>,
     );
-    expect(quickReply).toContain("border-outline");
+    expect(quickReply).toContain("border-option-ring");
     expect(quickReply).toContain("h-quick-reply");
   });
 

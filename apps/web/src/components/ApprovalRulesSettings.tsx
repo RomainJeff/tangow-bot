@@ -167,7 +167,7 @@ export function ApprovalRulesSettings() {
           {rules.map((rule) => (
             <li
               key={rule.id}
-              className="flex items-center justify-between gap-3 rounded-lg border border-border px-3.5 py-2"
+              className="flex items-center justify-between gap-3 rounded-lg border border-input px-3.5 py-2"
             >
               <span className="text-[13.5px] text-foreground/75">{describeRule(rule)}</span>
               <Button

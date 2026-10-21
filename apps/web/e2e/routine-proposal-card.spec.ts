@@ -20,9 +20,9 @@ test("a routine the bot proposes shows what it creates, decides on the right, an
   const actions = pending.locator('[data-slot="framed-block-actions"][data-align="end"]');
   const labels = await actions.locator("button").allTextContents();
   expect(labels).toEqual(["Not now", "Create routine"]);
-  const box = (await actions.boundingBox())!;
+  const box = (await pending.locator('[data-slot="framed-block"]').boundingBox())!;
   const create = (await actions.getByRole("button", { name: "Create routine" }).boundingBox())!;
-  expect(create.x + create.width).toBeCloseTo(box.x + box.width - 14, 0);
+  expect(create.x + create.width).toBeCloseTo(box.x + box.width - 20, 0);
 
   const created = page.getByTestId("routine-proposal-created");
   await expect(
@@ -39,6 +39,6 @@ test("a routine the bot proposes shows what it creates, decides on the right, an
   await testInfo.attach("routine-proposal-card", { contentType: "image/png", path: shot });
   await captureScreenshot(page, testInfo, "routine-proposal-light");
   await page.evaluate(() => document.documentElement.setAttribute("data-theme", "dark"));
-  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(12, 12, 14)");
+  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(22, 22, 24)");
   await captureScreenshot(page, testInfo, "routine-proposal-dark");
 });
