@@ -114,15 +114,11 @@ describe("graphical computer spec", () => {
       botId: "abc",
       spaceId: "ws",
       homePath: "/var/rakazo/homes/abc",
-      skillsBinds: [
-        "/var/rakazo/skills/user/s/u:/skills/user:ro",
-        "/var/rakazo/skills/marketplaces/s:/skills/marketplaces:ro",
-      ],
+      skillsBinds: ["/var/rakazo/skills/user/s/u:/skills/user:ro"],
     });
     expect(options.HostConfig.Binds).toEqual([
       "/var/rakazo/homes/abc:/home/rakazo",
       "/var/rakazo/skills/user/s/u:/skills/user:ro",
-      "/var/rakazo/skills/marketplaces/s:/skills/marketplaces:ro",
     ]);
   });
 

@@ -170,6 +170,18 @@ A light sweep across a label that is still being written, as the `rk-shimmer`
 class. Ported from beautifului.dev
 (github.com/TurboKach/ai-native-react-components, MIT © 2026 Turbo).
 
+## BotAvatar — followPointer
+
+`followPointer` lets the organic avatar look toward a fine pointer (a mouse)
+anywhere on the page: the pointer's position against the avatar's own box
+(`pointerLook` in `@rakazo/core`, zero at the centre, ±1 at the edges, held
+beyond) is mapped onto the range the working glances already use (yaw ±26°,
+pitch -8° to 18°) and eased by the engine's `LOOK_MORPH`. It returns to rest
+when the pointer leaves the window. A working bot keeps its own glances and no
+listener is attached then; under reduced motion or on a touch screen none is
+attached either; the robot avatar ignores it. Only the avatar at the top of the
+bot page sets it, never a sidebar row.
+
 ## SettingRow
 
 One line of a settings list: `text-row-name` label, an optional `text-row-status`

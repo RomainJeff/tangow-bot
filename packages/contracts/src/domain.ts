@@ -505,7 +505,7 @@ export const TaughtSkillSchema = z.object({
 });
 export type TaughtSkill = z.infer<typeof TaughtSkillSchema>;
 
-export const AgentSkillSourceSchema = z.enum(["user", "builtin", "plugin"]);
+export const AgentSkillSourceSchema = z.enum(["user", "builtin"]);
 export type AgentSkillSource = z.infer<typeof AgentSkillSourceSchema>;
 
 export const SkillAvailabilitySchema = z.enum(["disabled", "all", "selected"]);
@@ -590,47 +590,6 @@ export const ImportAgentSkillInput = z.object({
     .min(1)
     .max(Math.ceil(SKILL_BUNDLE_MAX_BYTES / 3) * 4),
 });
-
-/** Skills v2 phase 3: a GitHub marketplace added to a space; the row is the lock (design Q3). */
-export const SpaceMarketplaceSchema = z.object({
-  id: Id,
-  name: z.string(),
-  url: z.string(),
-  ref: z.string(),
-  commit: z.string(),
-  installedPlugins: z.array(z.string()),
-  /** Phase 4: how the repository is read. Drives UI wording only. */
-  kind: z.enum(["marketplace", "skills"]),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-});
-export type SpaceMarketplace = z.infer<typeof SpaceMarketplaceSchema>;
-
-export const MarketplacePluginSchema = z.object({
-  name: z.string(),
-  description: z.string().optional(),
-  /** False when the manifest source is not a relative path inside the repository (design Q6). */
-  supported: z.boolean(),
-  installed: z.boolean(),
-});
-export type MarketplacePlugin = z.infer<typeof MarketplacePluginSchema>;
-
-export const MarketplaceFileChangeSchema = z.object({
-  path: z.string(),
-  status: z.enum(["added", "removed", "modified"]),
-  sizeBefore: z.number().optional(),
-  sizeAfter: z.number().optional(),
-  before: z.string().optional(),
-  after: z.string().optional(),
-});
-export type MarketplaceFileChange = z.infer<typeof MarketplaceFileChangeSchema>;
-
-export const MarketplaceUpdateCheckSchema = z.object({
-  commit: z.string(),
-  upToDate: z.boolean(),
-  changes: z.array(MarketplaceFileChangeSchema),
-});
-export type MarketplaceUpdateCheck = z.infer<typeof MarketplaceUpdateCheckSchema>;
 
 export const MemoryDocumentSchema = z.object({
   id: Id,

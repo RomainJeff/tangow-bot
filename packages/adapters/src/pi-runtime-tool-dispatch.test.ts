@@ -23,6 +23,7 @@ const fakeAgentState = vi.hoisted(() => ({
   closing: "",
   turns: [] as string[][],
   emitFinalAfterFollowUp: true,
+  followUpReply: "The final answer.",
   abortCount: 0,
   tools: [] as Array<{
     name: string;
@@ -164,7 +165,7 @@ vi.mock("@earendil-works/pi-agent-core", () => ({
           toolResults: [],
         });
         if (fakeAgentState.followUpMessages.length > 0 && fakeAgentState.emitFinalAfterFollowUp) {
-          const text = "The final answer.";
+          const text = fakeAgentState.followUpReply;
           this.emit({
             type: "message_update",
             assistantMessageEvent: { type: "text_delta", delta: text },
@@ -390,6 +391,7 @@ describe("Pi connector tool dispatch", () => {
     fakeAgentState.followUpMessages = [];
     fakeAgentState.turns = [];
     fakeAgentState.emitFinalAfterFollowUp = true;
+    fakeAgentState.followUpReply = "The final answer.";
     fakeAgentState.initialMessages = [];
     fakeAgentState.promptInputs = [];
     fakeAgentState.promptImages = [];
@@ -680,13 +682,69 @@ describe("Pi connector tool dispatch", () => {
       events.push(event);
     }
 
-    expect(events).toContainEqual({
-      type: "progress",
-      text: "Using destination_write",
-      activity: true,
-    });
+    expect(events).toContainEqual({ type: "progress", text: "Seeing to it", activity: true });
     expect(events).not.toContainEqual({ type: "text", text: "I finished the work." });
     expect(events.at(-1)).toEqual({ type: "done" });
+  });
+
+  async function progressLines(tools: ConnectorTool[]): Promise<unknown[]> {
+    const events: unknown[] = [];
+    for await (const event of new PiAgentRuntime().run(
+      {
+        botId: "b",
+        threadId: "t",
+        runId: "activity",
+        prompt: "do the work",
+        instructions: "Use the tools.",
+        history: [],
+        tools,
+        model: { provider: "test", id: "dispatch-test-model" },
+        executeTool: vi.fn(async () => ({ ok: true })),
+      },
+      { signal: new AbortController().signal },
+    )) {
+      events.push(event);
+    }
+    return events.filter(
+      (event) => (event as { type: string; activity?: boolean }).activity === true,
+    );
+  }
+
+  it("shows the kind of work and never the call's arguments", async () => {
+    const command = "cat ~/private/plan.md | grep budget";
+    fakeAgentState.invoke = { name: "shell", args: { command } };
+
+    const lines = await progressLines([shellTool]);
+
+    expect(lines).toEqual([{ type: "progress", text: "Working the terminal", activity: true }]);
+    expect(JSON.stringify(lines)).not.toContain("plan.md");
+  });
+
+  it("names the connected app for its tools", async () => {
+    fakeAgentState.invoke = { name: "mcp__notion-work__search_pages", args: { query: "Q3 plan" } };
+
+    const lines = await progressLines([
+      {
+        name: "mcp__notion-work__search_pages",
+        description: "Search pages",
+        inputSchema: { type: "object", properties: { query: { type: "string" } } },
+        appName: "Notion",
+      },
+    ]);
+
+    expect(lines).toEqual([{ type: "progress", text: "Stepping into Notion", activity: true }]);
+  });
+
+  it("says the bot is writing once text follows its tools", async () => {
+    fakeAgentState.mode = "silent-continuation";
+    fakeAgentState.followUpReply = "The final answer.";
+
+    const lines = await progressLines([destinationTool]);
+
+    expect(lines).toEqual([
+      { type: "progress", text: "Seeing to it", activity: true },
+      { type: "progress", text: "Writing a reply", activity: true },
+    ]);
   });
 
   it("continues after narration is followed by a silent tool result turn", async () => {
@@ -983,6 +1041,73 @@ describe("Pi connector tool dispatch", () => {
         "I completed the tool step but could not produce a final response. Please ask me to continue.",
     });
   });
+
+  it.each([
+    {
+      when: "allows silence and the model then ends with no reply",
+      freeTextIsPrivate: false,
+      reply: "",
+      prompt:
+        "Continue the original task from the latest tool result. Use any remaining tools needed, then deliver the result, or end with no reply if there is nothing to report.",
+      runtimeNotice: undefined,
+    },
+    {
+      when: "allows silence and the model then answers",
+      freeTextIsPrivate: false,
+      reply: "The final answer.",
+      prompt:
+        "Continue the original task from the latest tool result. Use any remaining tools needed, then deliver the result, or end with no reply if there is nothing to report.",
+      runtimeNotice: undefined,
+    },
+    {
+      when: "keeps the stalled-step notice when free text is private",
+      freeTextIsPrivate: true,
+      reply: undefined,
+      prompt:
+        "Continue the original task from the latest tool result. Do not stop after a tool call; use any remaining tools needed, then deliver the result.",
+      runtimeNotice:
+        "I completed the tool step but could not produce a final response. Please ask me to continue.",
+    },
+  ])(
+    "follows an empty turn after tool work once: $when",
+    async ({ freeTextIsPrivate, reply, prompt, runtimeNotice }) => {
+      fakeAgentState.mode = "silent-continuation";
+      fakeAgentState.emitFinalAfterFollowUp = reply !== undefined;
+      fakeAgentState.followUpReply = reply ?? "";
+      const events: Array<Record<string, unknown>> = [];
+
+      for await (const event of new PiAgentRuntime().run(
+        {
+          botId: "b",
+          threadId: "t",
+          runId: "silent-after-tools",
+          prompt: "check the calendars and stay silent if nothing needs attention",
+          instructions: "Send nothing when a check finds nothing.",
+          history: [],
+          tools: [destinationTool],
+          model: { provider: "test", id: "dispatch-test-model" },
+          allowSilentEmpty: true,
+          freeTextIsPrivate,
+          executeTool: vi.fn(async () => ({ ok: true })),
+        },
+        {
+          operationId: "silent-after-tools",
+          traceId: "silent-after-tools",
+          spaceId: "w",
+          userId: "u",
+          signal: new AbortController().signal,
+        },
+      )) {
+        events.push(event as Record<string, unknown>);
+      }
+
+      expect(fakeAgentState.followUpMessages).toEqual([
+        expect.objectContaining({ role: "user", content: prompt }),
+      ]);
+      expect(events.at(-1)?.runtimeNotice).toBe(runtimeNotice);
+      if (reply) expect(events).toContainEqual({ type: "text", text: reply });
+    },
+  );
 
   it("keeps FYI bot-message wakes silent when the model produces nothing", async () => {
     fakeAgentState.mode = "empty";

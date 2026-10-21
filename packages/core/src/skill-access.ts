@@ -32,26 +32,11 @@ export function isSkillVisible(input: {
 /** Skill versions an earlier build kept under the data dir; account deletion still removes them. */
 export const SKILL_HISTORY_DIR = "skill-history";
 
-/** Marketplace skills (phase 3): `mkt:<marketplace>/<plugin>/<slug>`, all three already lowercase. */
-export function marketplaceSkillKey(marketplace: string, plugin: string, slug: string): string {
-  return `mkt:${marketplace}/${plugin}/${slug}`;
-}
-
-export function isMarketplaceSkillKey(key: string): boolean {
-  return key.startsWith("mkt:");
-}
-
 /** Where the computer mounts skill files read-only; the supervisor binds and skill_read agree. */
 export const SANDBOX_SKILL_MOUNTS = {
   user: "/skills/user",
-  marketplaces: "/skills/marketplaces",
   managed: "/managed-skills",
 } as const;
-
-/** Marketplace skills start hidden (design Q8); user skills stay visible to every bot. */
-export function defaultSkillAvailability(key: string): SkillAvailability {
-  return isMarketplaceSkillKey(key) ? "selected" : "all";
-}
 
 export type SkillListEntry = {
   name: string;

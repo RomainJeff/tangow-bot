@@ -25,10 +25,12 @@ import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { createGunzip } from "node:zlib";
 import { SKILL_BUNDLE_MAX_BYTES, SKILL_BUNDLE_MAX_ENTRIES } from "@rakazo/contracts";
-import { parseSkillMd, SKILL_HISTORY_DIR, type SkillRecord, userSkillKey } from "@rakazo/core";
+import type { SkillRecord } from "@rakazo/core";
+import { parseSkillMd, SKILL_HISTORY_DIR, userSkillKey } from "@rakazo/core";
 import { getLogger } from "@rakazo/logging";
 import { extract as tarExtract } from "tar";
-import { type Entry, fromBuffer, type ZipFile } from "yauzl";
+import type { Entry, ZipFile } from "yauzl";
+import { fromBuffer } from "yauzl";
 
 export type UserSkillFile = SkillRecord & {
   id: string;
@@ -183,8 +185,8 @@ export async function renameUserSkill(
 
 /**
  * Imports a `.skill` bundle: a gzip tar or zip with SKILL.md at its root (or inside a single
- * top-level directory) plus any extra files (scripts/, references/, ...). Same hardening as the
- * marketplace tarball: files and directories only, byte cap.
+ * top-level directory) plus any extra files (scripts/, references/, ...). Only files and
+ * directories are allowed, with entry and byte caps.
  */
 export async function writeUserSkillBundle(
   root: string,
@@ -405,7 +407,7 @@ async function extractZipEntry(
   cap: () => Transform,
 ): Promise<void> {
   // yauzl's own validateFileName already rejects "..", absolute paths and backslashes; resolving
-  // the target again is the belt-and-braces check the marketplace extractor keeps.
+  // the target again also checks that it stays inside the bundle root.
   // ponytail: path depth and name length are unguarded here as on the tar side — the entry and
   // byte caps bound the damage; add a depth check if a real bundle ever needs one.
   const root = path.resolve(out);

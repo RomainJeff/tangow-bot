@@ -8,7 +8,8 @@ import type {
   JobPublisher,
   SandboxProvider,
 } from "@rakazo/adapter-kit";
-import { clearThread, type PrismaClient, type ThreadEvents } from "@rakazo/db";
+import type { PrismaClient, ThreadEvents } from "@rakazo/db";
+import { clearThread } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
 import {
   acquireComputerExecutionLease,
@@ -103,9 +104,9 @@ describe("computer provisioning", () => {
         ),
       ).rejects.toThrow("Computer is busy");
       // Skills bind sources are created before provision so Docker never creates them as root.
-      for (const dir of ["skills/user/workspace-1/user-1", "skills/marketplaces/workspace-1"]) {
-        expect((await stat(path.join(dataDir, dir))).isDirectory()).toBe(true);
-      }
+      expect((await stat(path.join(dataDir, "skills/user/workspace-1/user-1"))).isDirectory()).toBe(
+        true,
+      );
       expect(releaseScreen).toHaveBeenCalledOnce();
       expect(stop).toHaveBeenCalledOnce();
       expect(prisma.computer.updateMany).toHaveBeenNthCalledWith(

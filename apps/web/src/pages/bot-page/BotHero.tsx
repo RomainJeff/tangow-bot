@@ -130,6 +130,7 @@ function AppearancePicker({
           shapeSeed={shapeSeed}
           size={80}
           status={bot.status}
+          followPointer
         />
         {disabled ? null : (
           <span

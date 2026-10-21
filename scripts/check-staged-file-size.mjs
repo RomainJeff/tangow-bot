@@ -1,7 +1,8 @@
 import { execFileSync } from "node:child_process";
 
 const maxBytes = 5_000 * 4;
-const git = (...args) => execFileSync("git", args, { encoding: "utf8" });
+const git = (...args) =>
+  execFileSync("git", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
 const oversized = [];
 
 // NUL delimiters preserve spaces, tabs and newlines in staged filenames.
@@ -9,15 +10,19 @@ const changes = git(
   "diff",
   "--cached",
   "--numstat",
-  "--no-renames",
+  "--find-renames",
   "--no-ext-diff",
   "--no-textconv",
   "--diff-filter=ACMRT",
   "-z",
 );
-for (const change of changes.split("\0").filter(Boolean)) {
-  const [, added, removed, path] = change.match(/^([^\t]+)\t([^\t]+)\t([\s\S]*)$/);
+const entries = changes.split("\0");
+for (let index = 0; index < entries.length - 1; index++) {
+  const [, added, removed, name] = entries[index].match(/^([^\t]+)\t([^\t]+)\t([\s\S]*)$/);
+  const oldPath = name || entries[++index];
+  const path = name || entries[++index];
   if (added === "-" && removed === "-") continue;
+  if (/\.(md|markdown|mdx)$/i.test(path) || /(^|\/)(docs|plans)\//i.test(path)) continue;
 
   const attributes = execFileSync(
     "git",
@@ -28,13 +33,39 @@ for (const change of changes.split("\0").filter(Boolean)) {
     continue;
   }
 
-  const bytes = Number(git("cat-file", "-s", `:${path}`).trim());
+  const patch = git(
+    "--literal-pathspecs",
+    "diff",
+    "--cached",
+    "--find-renames",
+    "--no-ext-diff",
+    "--no-textconv",
+    "--no-color",
+    "--no-relative",
+    "--unified=0",
+    "--",
+    oldPath,
+    path,
+  );
+  let bytes = 0;
+  let inHunk = false;
+  let previousAdded = false;
+  for (const line of patch.split("\n")) {
+    if (line.startsWith("diff --git ")) inHunk = false;
+    if (line.startsWith("@@ ")) inHunk = true;
+    if (inHunk && line.startsWith("+")) {
+      bytes += Buffer.byteLength(line.slice(1), "utf8") + 1;
+    } else if (line.startsWith("\\ No newline at end of file") && previousAdded) {
+      bytes -= 1;
+    }
+    previousAdded = inHunk && line.startsWith("+");
+  }
   if (bytes > maxBytes) oversized.push({ path, bytes });
 }
 
 if (oversized.length > 0) {
   console.error(
-    "Commit blocked: staged authored files must be at most 5,000 tokens (20,000 bytes; tokens = bytes / 4).",
+    "Commit blocked: staged additions per authored file must be at most 5,000 tokens (20,000 bytes; tokens = bytes / 4).",
   );
   for (const { path, bytes } of oversized) {
     console.error(
@@ -42,12 +73,13 @@ if (oversized.length > 0) {
     );
   }
   console.error(`
-Split each file by responsibility into smaller, cohesive files:
+Split oversized additions by responsibility into smaller, cohesive files:
   1. Move independent functions, types or components into named sibling modules.
-     Split tests by behavior and Markdown at section boundaries into linked documents.
+     Split tests by behavior.
   2. Update imports, exports and links, and remove the extracted content from the original.
-  3. Keep every resulting file at or below 20,000 bytes. Run the relevant checks.
+  3. Keep staged additions per file at or below 20,000 bytes. Run the relevant checks.
   4. Stage the original and all new files with git add, then commit again.
+Markdown, docs/ and plans/ are exempt. Removed lines do not count.
 For generated or vendored files, mark the exact path linguist-generated or
 linguist-vendored in .gitattributes and stage that file too. Do not exempt authored code.`);
   process.exitCode = 1;

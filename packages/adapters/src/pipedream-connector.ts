@@ -151,14 +151,15 @@ export class PipedreamConnector implements ManagedConnectorProvider {
   }
 
   async discoverTools(context: AdapterContext): Promise<ConnectorTool[]> {
-    const apps =
-      context.connectedConnections
-        ?.filter((connection) => connection.connectorId === "pipedream")
-        .map((connection) => connection.externalId) ?? [];
-    if (apps.length === 0) return [];
+    const appNames = new Map<string, string>();
+    for (const connection of context.connectedConnections ?? []) {
+      if (connection.connectorId !== "pipedream" || appNames.has(connection.externalId)) continue;
+      appNames.set(connection.externalId, connection.displayName);
+    }
+    if (appNames.size === 0) return [];
     const token = await this.token();
     const groups = await Promise.all(
-      [...new Set(apps)].slice(0, 20).map(async (app) => {
+      [...appNames].slice(0, 20).map(async ([app, appName]) => {
         const tools = await listRemoteMcpTools({
           endpoint: MCP_ENDPOINT,
           headers: this.mcpHeaders(context, app, token),
@@ -168,6 +169,7 @@ export class PipedreamConnector implements ManagedConnectorProvider {
         });
         return tools.map((tool) => ({
           ...tool,
+          appName,
           route: { connectorId: "pipedream", resourceId: app, toolName: tool.name },
         }));
       }),
