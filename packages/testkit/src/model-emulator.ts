@@ -40,6 +40,8 @@ export type ModelEmulatorResponse =
       arguments: Record<string, unknown>;
       /** Concatenation must equal the JSON arguments. Each fragment is a separate SSE delta. */
       argumentChunks?: string[];
+      /** Further calls the same assistant turn makes, after this one. */
+      siblings?: Array<{ id: string; name: string; arguments: Record<string, unknown> }>;
       usage?: ModelEmulatorUsage;
     }
   | { type: "error"; status: number; message: string }
@@ -145,6 +147,18 @@ export async function startModelEmulator(options: {
         });
         for (const fragment of reply.argumentChunks ?? [JSON.stringify(reply.arguments)]) {
           emit({ tool_calls: [{ index: 0, function: { arguments: fragment } }] });
+        }
+        for (const [offset, sibling] of (reply.siblings ?? []).entries()) {
+          emit({
+            tool_calls: [
+              {
+                index: offset + 1,
+                id: sibling.id,
+                type: "function",
+                function: { name: sibling.name, arguments: JSON.stringify(sibling.arguments) },
+              },
+            ],
+          });
         }
         emit({}, "tool_calls");
       } else {
@@ -323,6 +337,11 @@ async function streamAnthropic(
         partial_json,
       })),
     );
+    for (const sibling of reply.siblings ?? []) {
+      block({ type: "tool_use", id: sibling.id, name: sibling.name, input: {} }, [
+        { type: "input_json_delta", partial_json: JSON.stringify(sibling.arguments) },
+      ]);
+    }
   } else if (reply.type === "text") {
     block({ type: "text", text: "" }, [{ type: "text_delta", text: reply.text }]);
   } else {
