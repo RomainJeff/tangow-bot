@@ -3659,7 +3659,7 @@ const MessageBubble = memo(function MessageBubble({
           paddingHorizontal: 14,
           paddingVertical: 12,
           gap: 8,
-          ...(message.role === "user" ? { backgroundColor: tokens.chatUser } : null),
+          ...(message.role === "user" ? { backgroundColor: tokens.chatUser, boxShadow: [] } : null),
         }}
       >
         {replyQuote(message, replyPreview) ? (
@@ -4685,7 +4685,7 @@ function TaskCard({
               >
                 <ClippedPreview
                   maxHeight={TASK_PREVIEW_HEIGHT}
-                  fadeColor={pressed ? tokens.secondary : tokens.surface}
+                  fadeColor={pressed ? tokens.secondary : tokens.chatBot}
                   onOpen={() => open?.()}
                   accessibilityLabel={title}
                 >

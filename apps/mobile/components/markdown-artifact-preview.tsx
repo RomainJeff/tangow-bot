@@ -11,7 +11,6 @@ import { useI18n } from "../lib/i18n";
 import { useResolvedAppearance } from "../lib/native";
 import { nativeTextStyle } from "../lib/typography";
 import { NativeSymbol } from "./native-symbol";
-import { Surface } from "./surface";
 
 export type MarkdownArtifactPreviewTarget = {
   artifactId: string;
@@ -118,11 +117,9 @@ export function MarkdownArtifactPreview({
               {t("Loading preview…")}
             </Text>
           ) : state.status === "error" ? (
-            <Surface style={{ borderColor: tokens.destructive, padding: 14 }}>
-              <Text style={{ color: tokens.destructive, ...nativeTextStyle("body") }}>
-                {state.message}
-              </Text>
-            </Surface>
+            <Text style={{ color: tokens.destructive, ...nativeTextStyle("body") }}>
+              {state.message}
+            </Text>
           ) : (
             <ChatMarkdown palette={tokens} colorScheme={colorScheme}>
               {state.markdown}

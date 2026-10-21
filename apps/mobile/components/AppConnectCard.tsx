@@ -93,8 +93,8 @@ export function AppConnectCard({
           style={{
             width: 40,
             height: 40,
-            borderRadius: radii.chip,
-            backgroundColor: tokens.muted,
+            borderRadius: radii.row,
+            backgroundColor: tokens.well,
             alignItems: "center",
             justifyContent: "center",
           }}

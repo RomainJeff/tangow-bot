@@ -42,6 +42,9 @@ export interface LinkPreviewCardProps {
 
 type ImageState = { uri?: string; failed: boolean };
 
+/** A compact card's inset around its thumbnail, whose corner stays concentric with the card's. */
+const THUMB_INSET = 8;
+
 /**
  * A preview's image (a card's picture, a mention's icon) comes from the artifact the server
  * stored, read through the thread like any attachment: the phone never requests the linked site.
@@ -215,7 +218,7 @@ export function LinkPreviewCard({
               {card.format === "large" ? (
                 <>
                   {picture(imageHeight)}
-                  <View style={{ gap: 2, paddingHorizontal: 12, paddingVertical: 10 }}>
+                  <View style={{ gap: 2, paddingHorizontal: 16, paddingVertical: 12 }}>
                     {title}
                     {siteLine}
                   </View>
@@ -225,14 +228,17 @@ export function LinkPreviewCard({
                   style={{
                     flexDirection: "row",
                     alignItems: "center",
-                    gap: 10,
-                    paddingVertical: 8,
-                    paddingStart: 8,
-                    paddingEnd: 12,
+                    gap: 12,
+                    paddingVertical: THUMB_INSET,
+                    paddingStart: THUMB_INSET,
+                    paddingEnd: 16,
                   }}
                 >
                   <View style={{ width: sizes.linkThumb }}>
-                    {picture(undefined, { borderRadius: radii.chip, overflow: "hidden" })}
+                    {picture(undefined, {
+                      borderRadius: radii.bubble - THUMB_INSET,
+                      overflow: "hidden",
+                    })}
                   </View>
                   <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
                     {title}
