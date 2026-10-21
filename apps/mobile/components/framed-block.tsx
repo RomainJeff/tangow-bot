@@ -15,6 +15,7 @@ import { useThemedStyles } from "../lib/native";
 import { shadowsForAppearance } from "../lib/theme";
 import { nativeTextStyle } from "../lib/typography";
 import { AnsweredCheck } from "./answered-check";
+import { useBubbleMaxWidth } from "./bot-bubble";
 
 export interface FramedBlockHeader {
   /** Who is asking, already translated by the caller. */
@@ -72,6 +73,9 @@ export function FramedBlock({
   const styles = useThemedStyles(createFramedBlockStyles);
   const tokens = mobileTokens();
   const reducedMotion = useChatReducedMotion();
+  // Settled, the card is a bubble and caps like one. The single-bot cap: in a group it lands
+  // within a few points of the bubble's, without threading the thread's mode through every card.
+  const settledMaxWidth = useBubbleMaxWidth(true);
 
   const phase: FramedBlockPhase = answered ? "answered" : "open";
   const phaseRef = useRef<FramedBlockPhase | null>(null);
@@ -93,7 +97,11 @@ export function FramedBlock({
       // Only the render that settles the card animates its height; any other
       // size change (a pending label, a new line of text) stays instant.
       layout={didTransition ? LinearTransition.duration(collapseMs) : undefined}
-      style={[styles.root, answered ? styles.rootSettled : undefined, style]}
+      style={[
+        styles.root,
+        answered ? [styles.rootSettled, { maxWidth: settledMaxWidth }] : undefined,
+        style,
+      ]}
       {...props}
     >
       {header ? (
@@ -104,9 +112,9 @@ export function FramedBlock({
           </Text>
         </View>
       ) : null}
-      {lead ? <View style={styles.lead}>{lead}</View> : null}
+      {lead ? <View>{lead}</View> : null}
       {question ? (
-        <Text style={[styles.question, header || lead ? undefined : styles.questionNoHeader]}>
+        <Text style={[styles.question, answered ? styles.questionSettled : undefined]}>
           {question}
         </Text>
       ) : null}
@@ -120,7 +128,7 @@ export function FramedBlock({
                 )
               : undefined
           }
-          style={[styles.answered, { flexDirection: "row", alignItems: "center", gap: 6 }]}
+          style={styles.answered}
         >
           <AnsweredCheck color={tokens.foreground} animate={didTransition && !reducedMotion} />
           {typeof answered === "string" ? (
@@ -129,36 +137,43 @@ export function FramedBlock({
             answered
           )}
         </Animated.View>
-      ) : (
-        <Animated.View exiting={FadeOut.duration(collapseMs)}>
+      ) : children || actions ? (
+        <Animated.View exiting={FadeOut.duration(collapseMs)} style={styles.open}>
           {children ? <View style={styles.body}>{children}</View> : null}
           {actions ? <View style={styles.actions}>{actions}</View> : null}
         </Animated.View>
-      )}
+      ) : null}
     </Animated.View>
   );
 }
 
 function createFramedBlockStyles() {
   const tokens = mobileTokens();
+  const shadows = shadowsForAppearance(resolveMobileAppearance());
   return StyleSheet.create({
     // `card` carries its own 1px ring, so no separate hairline border.
     root: {
       overflow: "hidden",
-      borderRadius: radii.block,
+      gap: 8,
+      padding: 20,
+      borderRadius: radii.mobileBlock,
       backgroundColor: tokens.surface,
-      boxShadow: shadowsForAppearance(resolveMobileAppearance()).card,
+      boxShadow: shadows.card,
     },
-    // Answered: the drop goes, the hairline stays — the thread keeps one elevation.
+    // Answered, the card drops back onto the bot's paper and gives the thread its elevation back.
     rootSettled: {
-      boxShadow: shadowsForAppearance(resolveMobileAppearance()).settled,
+      alignSelf: "flex-start",
+      gap: 4,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      borderRadius: radii.bubble,
+      backgroundColor: tokens.chatBot,
+      boxShadow: shadows.settled,
     },
     header: {
       flexDirection: "row",
       alignItems: "center",
       gap: 8,
-      paddingHorizontal: 14,
-      paddingTop: 12,
     },
     dot: {
       width: 6,
@@ -171,43 +186,31 @@ function createFramedBlockStyles() {
       color: tokens.mutedForeground,
       ...nativeTextStyle("blockHeader"),
     },
-    lead: {
-      paddingHorizontal: 14,
-      paddingTop: 12,
-    },
     question: {
-      paddingHorizontal: 14,
-      paddingTop: 8,
       color: tokens.foreground,
       ...nativeTextStyle("question"),
     },
-    // Matches the header's own paddingTop: with no header, the question opens
-    // the card at the same spot the header would have.
-    questionNoHeader: {
-      paddingTop: 12,
-    },
+    questionSettled: nativeTextStyle("body", { weight: 500 }),
     consequence: {
-      paddingHorizontal: 14,
-      paddingTop: 6,
       color: tokens.mutedForeground,
       ...nativeTextStyle("meta"),
     },
     answered: {
-      paddingHorizontal: 14,
-      paddingVertical: 12,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
     },
     answeredText: {
+      flexShrink: 1,
       color: tokens.mutedForeground,
       ...nativeTextStyle("meta"),
     },
-    body: {
-      paddingHorizontal: 14,
-      paddingTop: 12,
-    },
+    open: { gap: 8 },
+    body: { paddingTop: 4 },
     actions: {
       flexDirection: "column",
       gap: 8,
-      padding: 14,
+      paddingTop: 8,
     },
   });
 }

@@ -60,8 +60,11 @@ export function FramedBlock({
       data-slot="framed-block"
       data-answered={answered ? "true" : undefined}
       className={cn(
-        "overflow-hidden rounded-block bg-surface",
-        answered ? "shadow-settled" : "shadow-card",
+        "flex flex-col overflow-hidden",
+        // Answered, the card drops back onto the bot's paper and gives the thread its elevation back.
+        answered
+          ? "w-fit max-w-41/50 gap-1 rounded-bubble bg-chat-bot px-4 py-3 shadow-settled"
+          : "gap-2 rounded-block bg-surface p-5 shadow-card",
         className,
       )}
       {...props}
@@ -69,7 +72,7 @@ export function FramedBlock({
       {header ? (
         <div
           data-slot="framed-block-header"
-          className="flex items-center gap-2 px-3.5 pt-3 text-block-header text-muted-foreground"
+          className="flex items-center gap-2 text-block-header text-muted-foreground"
         >
           {header.dot ? (
             <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-foreground" />
@@ -79,29 +82,23 @@ export function FramedBlock({
       ) : null}
       <div
         data-slot="framed-block-question"
-        className={cn("px-3.5 text-question text-foreground", header ? "pt-2" : "pt-3")}
+        className={cn("text-foreground", answered ? "text-body font-medium" : "text-question")}
       >
         {question}
       </div>
       {consequence ? (
-        <div
-          data-slot="framed-block-consequence"
-          className="px-3.5 pt-1.5 text-meta text-muted-foreground"
-        >
+        <div data-slot="framed-block-consequence" className="text-meta text-muted-foreground">
           {consequence}
         </div>
       ) : null}
       {answered ? (
-        <div
-          data-slot="framed-block-answered"
-          className="px-3.5 py-3 text-meta text-muted-foreground"
-        >
+        <div data-slot="framed-block-answered" className="text-meta text-muted-foreground">
           {answered}
         </div>
       ) : (
         <>
           {children ? (
-            <div data-slot="framed-block-body" className="px-3.5 pt-3">
+            <div data-slot="framed-block-body" className="pt-1">
               {children}
             </div>
           ) : null}
@@ -109,7 +106,7 @@ export function FramedBlock({
             <div
               data-slot="framed-block-actions"
               data-align={actionsAlign}
-              className={cn("flex flex-wrap gap-2 p-3.5", ACTIONS_ALIGN_CLASS[actionsAlign])}
+              className={cn("flex flex-wrap gap-2 pt-2", ACTIONS_ALIGN_CLASS[actionsAlign])}
             >
               {actions}
             </div>

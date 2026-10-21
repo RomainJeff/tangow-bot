@@ -110,7 +110,7 @@ export function PeerMessagesOverlay({
       <DialogContent
         data-testid="peer-conversation-view"
         showCloseButton={false}
-        className="inset-0 top-0 left-0 flex h-full w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 rounded-none bg-background p-0 text-foreground ring-0 sm:max-w-none"
+        className="inset-0 top-0 left-0 flex h-full w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 rounded-none bg-background p-0 text-foreground shadow-none sm:max-w-none"
       >
         <div className="app-drag flex items-center justify-between gap-4 border-b border-sidebar-border px-[18px] py-3.5">
           <div className="app-no-drag flex min-w-0 flex-1 items-center gap-3">
@@ -216,7 +216,7 @@ export function PeerMessagesOverlay({
                       ) : null}
                       <div
                         data-slot="message-row-bubble"
-                        className="w-fit max-w-22/25 rounded-bubble bg-muted px-3.5 py-2.5 text-foreground"
+                        className="w-fit max-w-22/25 rounded-bubble bg-chat-bot px-4 py-3 text-foreground shadow-bubble"
                         dir="auto"
                       >
                         <ChatMarkdown>{stripPeerAddressPrefix(peerMessage.text)}</ChatMarkdown>

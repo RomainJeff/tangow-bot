@@ -17,7 +17,7 @@ const HF = process.env.HF || readdirSync(npx).map(d => join(npx, d, "node_module
 if (!HF) throw new Error("hyperframes CLI not found: run `npx hyperframes --version` once or set HF=");
 const env = { ...process.env, HYPERFRAMES_PYTHON: process.env.HYPERFRAMES_PYTHON || join(homedir(), ".cache/hyperframes/kokoro-venv/bin/python") };
 
-const voice = story.voice || "am_michael", speed = story.speed || 1.0;
+const voice = story.voice || "af_heart", speed = story.speed || 1.0;
 const LEAD = story.lead ?? 0.6, TAIL = story.tail ?? 0.7, XFADE = story.xfade ?? 0.5;
 
 mkdirSync(join(dir, "assets"), { recursive: true });

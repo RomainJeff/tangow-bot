@@ -2,7 +2,7 @@ import { writeFileSync } from "node:fs";
 import { activeBotId, completeOnboarding, rpc, signup } from "./helpers";
 import type { Page } from "./test";
 import { expect, test } from "./test";
-import { threadEntries } from "./thread-log";
+import { finishedRuns, threadEntries } from "./thread-log";
 
 type Frame = {
   t: number;
@@ -27,12 +27,9 @@ async function openCard(page: Page, name: string) {
     await page.getByPlaceholder(/Message/).fill(`note ${turn} for the follow check`);
     await page.keyboard.press("Enter");
     await expect
-      .poll(
-        async () =>
-          (await threadEntries(page, { botId })).filter((entry) => entry.type === "run.finished")
-            .length,
-        { timeout: 60_000 },
-      )
+      .poll(async () => finishedRuns(await threadEntries(page, { botId })).length, {
+        timeout: 60_000,
+      })
       .toBe(turn);
   }
   await page.getByPlaceholder(/Message/).fill("pick from these cities with tappable choices");
@@ -120,10 +117,7 @@ for (const viewport of [
       await seoul.click();
       await expect
         .poll(
-          async () =>
-            (await threadEntries(page, { botId: activeBotId(page) })).filter(
-              (entry) => entry.type === "run.finished",
-            ).length,
+          async () => finishedRuns(await threadEntries(page, { botId: activeBotId(page) })).length,
           { timeout: 60_000 },
         )
         .toBe(4);
