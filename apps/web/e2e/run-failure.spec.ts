@@ -63,12 +63,23 @@ test("a covered run error is not remembered until it is presented", async ({ pag
   await signup(page, `covered-run-failure-${stamp}@rakazo.test`, "password12", "Covered Failure");
   await completeOnboarding(page);
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForURL(/\/app\/[^/]+$/);
+  const chat = page.url();
+  const list = page.getByTestId("bots-sidebar");
+  // At phone width the bot list is its own page and covers the chat behind it.
+  async function showList() {
+    await page.getByRole("link", { name: "Back" }).click();
+    await expect(list).toBeVisible();
+  }
+  async function showChat() {
+    await list.getByRole("button", { name: /Chief/ }).first().click();
+    await page.waitForURL(chat);
+  }
 
   await page.getByPlaceholder(/^Message /).fill("fail this run");
   const sendButton = await page.getByRole("button", { name: "Send", exact: true }).elementHandle();
   if (!sendButton) throw new Error("Send button not found");
-  await page.getByRole("button", { name: "Open navigation" }).click();
-  await expect(page.getByRole("button", { name: "Close navigation" })).toBeVisible();
+  await showList();
   await expect(page.locator("main")).toHaveAttribute("aria-hidden", "true");
   await expect(page.locator("main")).toHaveJSProperty("inert", true);
   await sendButton.evaluate((button) => (button as HTMLButtonElement).click());
@@ -77,7 +88,7 @@ test("a covered run error is not remembered until it is presented", async ({ pag
   await expect(error).toContainText("Scripted run failure", { timeout: 30_000 });
   expect(await isPresented(error)).toBe(false);
   await captureScreenshot(page, testInfo, "run-error-covered-by-mobile-navigation");
-  await page.reload();
+  await page.goto(chat);
   await expect(page.getByTestId("shell-root")).toHaveAttribute("data-ready", "true");
   await expect(error).toBeVisible();
   expect(await isPresented(error)).toBe(true);
@@ -93,20 +104,24 @@ test("a covered run error is not remembered until it is presented", async ({ pag
     .getByRole("button", { name: "Send", exact: true })
     .elementHandle();
   if (!nextSendButton) throw new Error("Send button not found");
-  await page.getByRole("button", { name: "Open navigation" }).click();
+  await showList();
   await nextSendButton.evaluate((button) => (button as HTMLButtonElement).click());
   await expect(error).toContainText("Scripted run failure", { timeout: 30_000 });
 
-  await page.getByRole("button", { name: "Close navigation" }).click();
+  await showChat();
   await expect.poll(() => isPresented(error)).toBe(true);
   await expect.poll(() => seenRunErrorCount(page)).toBe(recordedErrorCount + 1);
-  await captureScreenshot(page, testInfo, "covered-run-error-presented-after-drawer-close");
+  await captureScreenshot(
+    page,
+    testInfo,
+    "covered-run-error-presented-after-returning-to-the-chat",
+  );
 
   await page.reload();
   await expect(page.getByTestId("shell-root")).toHaveAttribute("data-ready", "true");
   await expect(error).toBeHidden();
 
-  await page.getByRole("button", { name: "Open navigation" }).click();
+  await showList();
   await expect(page.locator("main")).toHaveJSProperty("inert", true);
   await page.setViewportSize({ width: 1280, height: 720 });
   await expect(page.locator("main")).not.toHaveAttribute("aria-hidden", "true");

@@ -5,7 +5,7 @@ import { LinkPreviewCard, LinkPreviewPicture } from "./link-preview-card.js";
 const PICTURE = <div data-testid="picture" />;
 
 describe("LinkPreviewCard", () => {
-  it("is one link named after its title and site, on a hairline surface without a shadow", () => {
+  it("is one link named after its title and site, on the bot's paper without a lift", () => {
     const html = renderToString(
       <LinkPreviewCard
         format="compact"
@@ -23,10 +23,8 @@ describe("LinkPreviewCard", () => {
     expect(html).toContain("w-link-card");
     expect(html).toContain("max-w-full");
     expect(html).toContain("animate-arrive");
-    expect(html).toContain("bg-surface");
-    expect(html).toContain("border-border");
-    expect(html).toContain("group-hover/link-card:border-outline");
-    expect(html).not.toContain("shadow-");
+    expect(html).toContain('data-slot="surface"');
+    expect(html).not.toContain("shadow-card");
     expect(html).not.toContain("<button");
   });
 
@@ -50,7 +48,6 @@ describe("LinkPreviewCard", () => {
     );
 
     expect(withPicture).toContain("size-link-thumb");
-    expect(withPicture).toContain("rounded-chip");
     expect(withPicture).toContain("bg-secondary");
     expect(withPicture).toContain("line-clamp-2");
     expect(withPicture).toContain('dir="auto"');
@@ -123,7 +120,7 @@ describe("LinkPreviewCard", () => {
     expect(html).toContain("rounded-bubble");
     expect(html).toContain("max-h-link-photo-max");
     expect(html).toContain("aspect-ratio:2");
-    expect(html).not.toContain("bg-surface");
+    expect(html).not.toContain('data-slot="surface"');
     expect(html).not.toContain("line-clamp-2");
     expect(html.indexOf('data-testid="picture"')).toBeLessThan(
       html.indexOf('<bdi dir="ltr">images'),

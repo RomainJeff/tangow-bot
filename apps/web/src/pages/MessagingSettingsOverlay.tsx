@@ -89,9 +89,10 @@ export function MessagingSettingsOverlay({ onClose }: { onClose: () => void }) {
       }}
     >
       <DialogContent
+        variant="window"
         data-testid="messaging-settings"
         showCloseButton={false}
-        className="rk-scroll block max-h-[calc(100%-2rem)] w-[640px] overflow-y-auto rounded-2xl p-6 sm:max-h-[calc(100%-5rem)] sm:max-w-[calc(100%-5rem)] sm:p-8"
+        className="rk-scroll block max-h-[calc(100%-2rem)] w-[640px] overflow-y-auto p-6 sm:max-h-[calc(100%-5rem)] sm:max-w-[calc(100%-5rem)] sm:p-8"
       >
         <div className="flex items-start justify-between gap-6">
           <DialogTitle className="text-2xl font-medium text-foreground">
@@ -107,7 +108,7 @@ export function MessagingSettingsOverlay({ onClose }: { onClose: () => void }) {
 
         {error ? <p className="mt-4 text-[13px] text-destructive">{error}</p> : null}
 
-        <section className="mt-8 rounded-xl border border-border px-4 py-4">
+        <section className="mt-8 rounded-card bg-group shadow-group px-4 py-4">
           <h3 className="text-[15px] font-medium text-foreground">
             <Trans>Chat apps</Trans>
           </h3>
@@ -185,7 +186,7 @@ export function MessagingSettingsOverlay({ onClose }: { onClose: () => void }) {
           ) : null}
         </section>
 
-        <section className="mt-5 rounded-xl border border-border px-4 py-4">
+        <section className="mt-5 rounded-card bg-group shadow-group px-4 py-4">
           <h3 className="text-[15px] font-medium text-foreground">
             <Trans>Channels</Trans>
           </h3>
@@ -256,7 +257,7 @@ export function MessagingSettingsOverlay({ onClose }: { onClose: () => void }) {
           )}
         </section>
 
-        <section className="mt-5 rounded-xl border border-border px-4 py-4">
+        <section className="mt-5 rounded-card bg-group shadow-group px-4 py-4">
           <h3 className="text-[15px] font-medium text-foreground">
             <Trans>Agent connections</Trans>
           </h3>
@@ -331,7 +332,7 @@ export function MessagingSettingsOverlay({ onClose }: { onClose: () => void }) {
           )}
         </section>
 
-        <section className="mt-5 rounded-xl border border-border px-4 py-4">
+        <section className="mt-5 rounded-card bg-group shadow-group px-4 py-4">
           <h3 className="text-[15px] font-medium text-foreground">
             <Trans>Team conversations</Trans>
           </h3>

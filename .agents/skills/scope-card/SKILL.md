@@ -160,6 +160,10 @@ Duplicate, already shipped or in progress → write a minimal `## Scoping` secti
 
 This thread writes: problem, users affected, scope in and out, **observable** acceptance criteria, edge cases (empty, loading, error, concurrency), i18n impact, size, PR breakdown, a suggested process weight (trivial fix / visible UI change / touches untrusted input, tools, sandbox, secrets or auth, so security review required / new capability), risks (security, parity, provider neutrality when a vendor is involved), open questions.
 
+For a multi-PR breakdown, apply **principle-separate-before-serializing-shared-state**, including its decomposition check. Fill the per-unit fields in the card template from the code scout's evidence; label unresolved paths or contracts as open questions for architecture to resolve before dispatch. State which units can proceed during a long-running unit. Keep a small coupled change as one PR. Scoping proposes the boundaries; it does not create child tickets or assign workers.
+
+When the synthesis contains an implementation plan or multi-ticket breakdown, run **founding-engineer** on that complete proposal per **principle-laziness-protocol** before publishing it. Give the reviewer the card request and scout evidence; it does not write to Notion. Include its findings and the plan owner's disposition in the "Risques et découpage" details and return the review alongside the verdict.
+
 ### 6. Writing to Notion
 
 Read `references/card-template.md` and compose the section following its layout **and its writing rules**: the verdict and À trancher must read without knowing the code (no jargon, one idea per sentence, what the user experiences then what we propose). Re-read those two blocks as an outsider before writing.

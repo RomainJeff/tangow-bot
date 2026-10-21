@@ -14,3 +14,11 @@ When concurrent actors might share mutable state, first ask whether they need th
 1. **Identify shared mutable state** (files both read and write, branches both push to, APIs both define and consume).
 2. **Default: eliminate the shared write target.** Ask: do these actors need one canonical object, or are they publishing independent facts? Give each actor its own owned file, key, branch, or state directory, and merge only at the read/reporting boundary. Two workers writing their own `lastX` field into one `state.json` is still shared mutation. `indexer-state.json` + `metrics-state.json` is not.
 3. **Only when one shared write target is a real invariant, serialize access structurally** (lockfiles, sequential phases, single-writer actor, or atomic compare-and-swap). Treat "we need a lock" as a design smell to check, not as the default answer.
+
+## Decomposing work
+
+For multi-unit work, record each unit's outcome, allowed and excluded write paths, shared contracts, dependencies to **start / verify / land**, and independent verification. Name the artifact or decision each dependency supplies. A landing dependency alone does not prevent implementation against an agreed contract; fixtures prove local behavior, and the integrated flow still needs verification before delivery.
+
+Ask: if one unit remains busy for 24 hours, which others can proceed? If none can, identify the common decision or change and isolate that prerequisite where possible. Keep small coupled changes together; do not split by technical layer or add interfaces merely to increase the worker count. Reuse existing contracts.
+
+Before dispatch, resolve overlapping writes by separating targets or assigning one writer and an integration order. Give concurrent workers separate worktrees and identify runtime resources to isolate or serialize: ports, databases, data directories, browsers and simulators. A worktree alone does not isolate these resources.

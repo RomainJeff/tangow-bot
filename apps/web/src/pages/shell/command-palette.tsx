@@ -93,7 +93,7 @@ export function CommandPalette({
     >
       <Command
         shouldFilter={false}
-        className="rounded-xl! bg-popover"
+        className="rk-glass-list rounded-bubble"
         data-testid="command-palette"
       >
         <CommandInput
@@ -120,7 +120,7 @@ export function CommandPalette({
                     onSelectBot(bot.id);
                     onOpenChange(false);
                   }}
-                  className="items-center gap-3 rounded-xl! px-2.5 py-2.5"
+                  className="items-center gap-3 px-2.5 py-2.5"
                 >
                   <BotAvatar color={bot.color} identity={bot.id} size={32} status={bot.status} />
                   <div className="min-w-0 flex-1">
