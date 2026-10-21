@@ -1462,6 +1462,12 @@ function toAgentTool(tool: ConnectorTool, host: ToolHost, exposedName: string): 
 
 type SubagentOutcome = { status: "completed" | "failed"; result: string; toolResult: string };
 
+const stoppedForPause: SubagentOutcome = {
+  status: "completed",
+  result: "Stopped: the run is waiting for the user.",
+  toolResult: "Stopped: the run is waiting for the user.",
+};
+
 function subagentFailed(message: string): SubagentOutcome {
   return { status: "failed", result: message, toolResult: `Subagent failed: ${message}` };
 }
@@ -1599,6 +1605,10 @@ async function runSubagent(
     // Nested tool calls have no span of their own in the run trace.
     toolTrace: undefined,
     request: log ? { ...host.request, executeTool: log.executeTool } : host.request,
+    abortTurn: () => {
+      if (nestedHost.pausePending) host.pausePending = true;
+      host.abortTurn();
+    },
   };
   const childTools = toAgentTools(childDefs, nestedHost);
   const childAppNames = appNamesByAgentTool(childDefs, childTools);
@@ -1687,6 +1697,7 @@ async function runSubagent(
 
   try {
     if (host.signal.aborted) return { status: "failed", result: "stopped", toolResult: "stopped" };
+    if (host.pausePending) return stoppedForPause;
     const onAbort = () => nested.abort();
     host.signal.addEventListener("abort", onAbort);
     try {
@@ -1696,11 +1707,9 @@ async function runSubagent(
         await nested.waitForIdle();
       } finally {
         host.signal.removeEventListener("abort", onAbort);
-        // nestedHost is a shallow copy; ask_user / request_takeover set pause
-        // only on the child. Copy it up before the parent releases the budget.
-        if (nestedHost.pausePending) host.pausePending = true;
       }
     }
+    if (host.pausePending && !nestedHost.pausePending) return stoppedForPause;
     // Shared-budget abort leaves errorMessage on the nested agent; surface it as a
     // completed stop rather than a failed subagent chip.
     const budgetExceeded = host.toolCallBudget.exceeded;
