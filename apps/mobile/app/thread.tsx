@@ -1230,7 +1230,7 @@ function Thread() {
 
   useEffect(() => {
     setPendingAttachments((current) => attachmentsForThread(current, threadKey));
-    setDraft("");
+    clearDraft();
     setMentionQuery(null);
     setSlashQuery(null);
     setSelectedSkill(null);
@@ -1264,6 +1264,13 @@ function Thread() {
     );
   }
 
+  // An iOS multiline field set to "" from JS keeps the height of its last text, so a
+  // long message left the composer tall after sending; clearing it natively shrinks it.
+  function clearDraft() {
+    setDraft("");
+    textInputRef.current?.clear();
+  }
+
   function updateDraft(value: string) {
     setDraft(value);
     const match = /(?:^|\s)@([\w-]*)$/.exec(value);
@@ -1284,7 +1291,7 @@ function Thread() {
 
   function insertSkill(skill: AgentSkillCatalogEntry) {
     setSelectedSkill(skill);
-    setDraft("");
+    clearDraft();
     setSlashQuery(null);
   }
 
@@ -1338,7 +1345,7 @@ function Thread() {
   }
 
   function runSlashAction(action: SlashActionId) {
-    setDraft("");
+    clearDraft();
     setSlashQuery(null);
     if (action === "chat-settings") {
       if (inGroup && groupId) {
@@ -1412,7 +1419,7 @@ function Thread() {
       setPendingAttachments((current) =>
         current.filter((attachment) => attachment.threadKey !== originThreadKey),
       );
-      setDraft("");
+      clearDraft();
       setMentionQuery(null);
       setSlashQuery(null);
       setSelectedSkill(null);
