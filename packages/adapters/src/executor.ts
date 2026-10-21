@@ -2412,11 +2412,31 @@ export function createRunExecutor(deps: ExecutorDeps) {
           return secretPausedToolResult();
         };
 
-        /** A run pauses for input once, whether a runtime event or a served tool call asks first. */
-        let inputPause: Promise<boolean> | undefined;
-        const pauseOnce = (pause: () => Promise<boolean>) => (inputPause ??= pause());
+        type InputPauseRequest = Extract<AgentRuntimeEvent, { type: "ask" | "takeover" }>;
+        type InputPauseStatus = "paused" | "revoked";
+        let inputPause: { key: string; result: Promise<InputPauseStatus> } | undefined;
+        const pauseKey = (event: InputPauseRequest) =>
+          toolEffectIdempotencyKey(runId, event.type, event);
+        const pauseOnce = async (
+          event: InputPauseRequest,
+          pause: () => Promise<boolean>,
+        ): Promise<InputPauseStatus | "conflict"> => {
+          const key = pauseKey(event);
+          if (inputPause) return inputPause.key === key ? inputPause.result : "conflict";
+          const result: Promise<InputPauseStatus> = pause().then((paused) =>
+            paused ? "paused" : "revoked",
+          );
+          const pending = { key, result };
+          inputPause = pending;
+          try {
+            return await result;
+          } catch (error) {
+            if (inputPause === pending) inputPause = undefined;
+            throw error;
+          }
+        };
         const pauseForAsk = (event: Extract<AgentRuntimeEvent, { type: "ask" }>) =>
-          pauseOnce(async () => {
+          pauseOnce(event, async () => {
             if (!(await renewRunLease(deps, runId, workerId, fence))) return false;
             const safeText = redactSecrets(event.text, runSecrets);
             const safeDetail = event.detail
@@ -2475,18 +2495,18 @@ export function createRunExecutor(deps: ExecutorDeps) {
             return true;
           });
         const pauseForTakeover = (reason: string) =>
-          pauseOnce(async () => {
+          pauseOnce({ type: "takeover", reason }, async () => {
             if (!(await renewRunLease(deps, runId, workerId, fence))) return false;
             const safeReason = redactSecrets(reason, runSecrets);
             dropMidTurnNarration();
             await useComputer();
-            await publishMessage(deps, run, [
-              { kind: "computer", state: "Needs you", text: safeReason },
-            ]);
             await workspaceCheckpoint.flush();
             if (!(await runComputer?.holdForTakeover())) {
               throw new Error("Computer lease expired before takeover");
             }
+            await publishMessage(deps, run, [
+              { kind: "computer", state: "Needs you", text: safeReason },
+            ]);
             const paused = await deps.events.pauseRunForTakeover({
               spaceId: run.spaceId,
               threadId: run.threadId,
@@ -2517,12 +2537,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
           name: "ask_user" | "request_takeover",
           args: Record<string, unknown>,
         ) => {
-          let paused: Promise<boolean>;
+          let event: InputPauseRequest;
           let reply: ReturnType<typeof inputPausedToolResult>;
           if (name === "request_takeover") {
-            const refused = await computerUnavailable(name);
-            if (refused) return refused;
-            paused = pauseForTakeover(String(args.reason ?? "I need you on the screen."));
+            event = {
+              type: "takeover",
+              reason: String(args.reason ?? "I need you on the screen."),
+            };
             reply = inputPausedToolResult("takeover", "Takeover requested.");
           } else {
             let ask: ReturnType<typeof askUserCard>;
@@ -2531,10 +2552,20 @@ export function createRunExecutor(deps: ExecutorDeps) {
             } catch (error) {
               return { error: error instanceof Error ? error.message : String(error) };
             }
-            paused = pauseForAsk(ask.card);
+            event = ask.card;
             reply = inputPausedToolResult("ask", ask.reply);
           }
-          if (await paused) approvalPausePending = true;
+          const waiting = { error: "Already waiting on the user." };
+          if (inputPause && inputPause.key !== pauseKey(event)) return waiting;
+          if (event.type === "takeover") {
+            const refused = await computerUnavailable(name);
+            if (refused) return refused;
+          }
+          const paused = await (event.type === "ask"
+            ? pauseForAsk(event)
+            : pauseForTakeover(event.reason));
+          if (paused === "conflict") return waiting;
+          if (paused === "paused") approvalPausePending = true;
           else leaseValid = false;
           return reply;
         };

@@ -68,6 +68,59 @@ const credential = {
 };
 
 describe("pausing tools a worker harness leaves to the controller", () => {
+  it("pauses the parent once for a helper's ask and closes the helper's run and task", async () => {
+    let reply: unknown;
+    const harness: GuestHarness = {
+      ...handGuest([]).harness,
+      declaration: { name: "hand", capabilities: ["subagents"] },
+      async run({ run }, host) {
+        const args = { name: "Planner", task: "Choose a city" };
+        await host.emit({ type: "tool", name: "run_subagent", args, executionId: "helper" });
+        const helper = await host.decide(
+          {
+            type: "subagent.open",
+            callId: "helper",
+            ...args,
+            args,
+            model: { provider: run.model.provider, id: run.model.id },
+          },
+          "subagent.opened",
+        );
+        await host.emit({ type: "tool", name: "ask_user", args: city, executionId: "question" });
+        const outcome = await host.callTool(helper.agent, "ask_user", city, "question");
+        reply = outcome.placement === "controller" ? outcome.output : outcome;
+        await host.decide(
+          {
+            type: "subagent.finish",
+            agent: helper.agent,
+            status: "completed",
+            result: "Stopped: the run is waiting for the user.",
+          },
+          "recorded",
+        );
+        return { type: "done" };
+      },
+    };
+    const run = await startWorkerRun({ steps: [], computerScope: "team", harness });
+    cleanups.push(() => run.close());
+    const runId = await run.send("Plan my trip.");
+    await run.continueRun(runId);
+
+    expect(reply).toMatchObject({ details: { ask: "paused" }, terminate: true });
+    expect(await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).toMatchObject({
+      status: "waiting_input",
+    });
+    expect(
+      (await run.runEntries(runId)).filter((entry) => entry.type === "assistant.ask"),
+    ).toHaveLength(1);
+    expect(
+      await run.prisma.run.findMany({
+        where: { parentRunId: runId },
+        select: { status: true, task: { select: { status: true } } },
+      }),
+    ).toEqual([{ status: "completed", task: { status: "completed" } }]);
+  });
+
   it("refuses a malformed ask_user, pauses once on a valid one, and resumes with the choice", async () => {
     const g = await guestRun([
       [
