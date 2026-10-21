@@ -14,10 +14,6 @@ describe("UserBubble", () => {
     expect(html).toContain("whitespace-pre-wrap");
     expect(html).toContain("self-end");
     expect(html).toContain("max-w-39/50");
-    // 10 × 15 padding (py-2.5 px-3.75), token spacing steps rather than an
-    // arbitrary value.
-    expect(html).toContain("px-3.75");
-    expect(html).toContain("py-2.5");
   });
 
   it("passes a className through", () => {

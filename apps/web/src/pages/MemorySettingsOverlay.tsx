@@ -186,7 +186,7 @@ export function MemorySettingsOverlay({
             <Trans>Loading memory settings…</Trans>
           </p>
         ) : config ? (
-          <div className="rounded-xl border border-border px-4 py-3">
+          <div className="rounded-card bg-group shadow-group px-4 py-3">
             <div className="text-[12.5px] uppercase tracking-[0.08em] text-muted-foreground/80">
               <Trans>Connected</Trans>
             </div>
@@ -271,8 +271,9 @@ export function MemorySettingsOverlay({
       }}
     >
       <DialogContent
+        variant="window"
         showCloseButton={false}
-        className="flex max-h-[min(760px,calc(100%-2rem))] w-[560px] flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:max-h-[min(760px,calc(100%-5rem))] sm:max-w-[calc(100%-5rem)]"
+        className="flex max-h-[min(760px,calc(100%-2rem))] w-[560px] flex-col gap-0 overflow-hidden p-0 sm:max-h-[min(760px,calc(100%-5rem))] sm:max-w-[calc(100%-5rem)]"
       >
         {body}
       </DialogContent>

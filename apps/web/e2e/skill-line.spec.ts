@@ -19,7 +19,7 @@ test("a skill line sits under the bot's message, opens the skill, and cannot be 
   // Under the text, at the bubble's left, and still at rest: this is history, not news.
   const bubbleBox = (await learned.locator('[data-slot="message-row-bubble"]').boundingBox())!;
   const lineBox = (await line.boundingBox())!;
-  expect(lineBox.x).toBeCloseTo(bubbleBox.x + 14, 0);
+  expect(lineBox.x).toBeCloseTo(bubbleBox.x + 16, 0);
   await expect(line).toHaveCSS("animation-name", "none");
 
   // Several skills, one line each, in the order the run changed them.
@@ -54,7 +54,7 @@ test("a skill line sits under the bot's message, opens the skill, and cannot be 
   await expect(alone.locator('[data-slot="message-row-bubble"]')).toHaveCount(0);
   const aloneBox = (await alone.getByRole("link").boundingBox())!;
   const columnBox = (await alone.boundingBox())!;
-  expect(aloneBox.x).toBeCloseTo(columnBox.x + 14, 0);
+  expect(aloneBox.x).toBeCloseTo(columnBox.x + 16, 0);
 
   // The bot writing the same words in its text gets neither the icon nor a button.
   const lookalike = page.locator('[data-message-id="lookalike"]');
@@ -88,6 +88,6 @@ test("a skill line sits under the bot's message, opens the skill, and cannot be 
 
   await captureScreenshot(page, testInfo, "skill-line-light");
   await page.evaluate(() => document.documentElement.setAttribute("data-theme", "dark"));
-  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(12, 12, 14)");
+  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(22, 22, 24)");
   await captureScreenshot(page, testInfo, "skill-line-dark");
 });

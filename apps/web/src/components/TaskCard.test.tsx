@@ -27,7 +27,7 @@ describe("TaskCard", () => {
     );
 
     expect(html).toContain("Status check");
-    expect(html).toContain("border-outline");
+    expect(html).toContain('data-variant="outlined"');
     expect(html).not.toContain("Running");
     expect(html).not.toContain("Failed");
     expect(html).not.toContain("Cancelled");
