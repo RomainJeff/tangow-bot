@@ -394,7 +394,7 @@ describe("the history a run reads from its session log", () => {
     { model: { provider: "openai", id: "gpt-4o" }, recallChars: 120_000, olderChars: 200_000 },
     { model: { provider: "scripted", id: "scripted" }, recallChars: 120_000, olderChars: 200_000 },
   ])(
-    "bounds combined historical blocks before admitting finished turns, $model.id/$recallChars",
+    "bounds recall and summary without displacing finished turns, $model.id/$recallChars",
     async ({ model, recallChars, olderChars }) => {
       const summary = `Summary survives. ${"s".repeat(20_000)}`;
       const tail = chain(1, [
@@ -415,7 +415,7 @@ describe("the history a run reads from its session log", () => {
       expect(runtimeRun.mock.calls).toHaveLength(1);
       const request = runtimeRun.mock.calls[0]![0];
       const recalled = formatRecalledMemory(memories);
-      if (olderChars) expect(request.prompt).toContain(recalled);
+      if (olderChars) expect(request.prompt).not.toContain(recalled);
       const recallTokens = request.prompt.includes(recalled) ? estimateTextTokens(recalled) : 0;
       expect(estimateHistoryTokens(request.history) + recallTokens).toBeLessThanOrEqual(60_000);
       expect(request.history[0]!.content).toContain("Summary survives.");
@@ -432,6 +432,26 @@ describe("the history a run reads from its session log", () => {
       }
     },
   );
+
+  it("keeps the same finished-history prefix when recall grows or cannot fit", async () => {
+    const tail = chain(
+      0,
+      Array.from({ length: 30 }, (_, index) => said(`History ${index}: ${"h".repeat(10_000)}`)),
+    );
+    const histories = [];
+    for (const recallChars of [1, 8_000, 120_000, 245_000]) {
+      const f = fixture({ tail, model: { provider: "openai", id: "gpt-4o" } });
+      f.recall.mockResolvedValue({
+        ok: true,
+        value: [{ memory: "r".repeat(recallChars), score: 0.9 }],
+      });
+      const request = await f.request();
+      expect(request.history.length).toBeGreaterThan(0);
+      expect(request.history.length).toBeLessThan(30);
+      histories.push(request.history.map((turn) => turn.id));
+    }
+    for (const history of histories.slice(1)) expect(history).toEqual(histories[0]);
+  });
 
   it("rejects oversized active tool state instead of silently forgetting its effects", async () => {
     const own = { botId: BOT, runId: RUN };
@@ -822,9 +842,9 @@ describe("the history a run reads from its session log", () => {
 
   it("starts a thread that never compacts at the same entry while new turns arrive", async () => {
     const oldest: unknown[] = [];
-    for (const entries of [260, 280, 300, 301]) {
+    for (const entries of [2, 260, 280, 300, 301]) {
       const tail = chain(
-        0,
+        entries === 2 ? 17 : 0,
         Array.from({ length: entries }, (_, index) => said(`message ${index}`)),
       );
       const f = fixture({ tail });
@@ -833,7 +853,13 @@ describe("the history a run reads from its session log", () => {
       );
       oldest.push((await f.history())[0]?.content);
     }
-    expect(oldest).toEqual(["message 100", "message 100", "message 100", "message 150"]);
+    expect(oldest).toEqual([
+      "message 0",
+      "message 100",
+      "message 100",
+      "message 100",
+      "message 150",
+    ]);
   });
 
   it("compacts past half the history budget of the run's model, and hands that budget to the job", async () => {

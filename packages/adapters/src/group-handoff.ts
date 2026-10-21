@@ -203,7 +203,7 @@ export async function loadGroupContext(
         include: {
           bot: { select: { id: true, name: true, title: true, description: true } },
         },
-        orderBy: { createdAt: "asc" },
+        orderBy: [{ createdAt: "asc" }, { botId: "asc" }],
       },
     },
   });

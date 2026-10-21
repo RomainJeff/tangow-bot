@@ -1,7 +1,7 @@
 import type { Message } from "@earendil-works/pi-ai";
 import { createAssistantMessageEventStream, fauxAssistantMessage } from "@earendil-works/pi-ai";
 import type * as PiProviders from "@earendil-works/pi-ai/providers/all";
-import type { SemanticMemoryRecallRequest } from "@rakazo/adapter-kit";
+import type { AgentRunRequest, SemanticMemoryRecallRequest } from "@rakazo/adapter-kit";
 import type { SessionEntry } from "@rakazo/contracts";
 import { SessionEntrySchema } from "@rakazo/contracts";
 import { describe, expect, it, vi } from "vitest";
@@ -84,6 +84,7 @@ async function turn(options: {
   memory: string;
   openWork: string;
   recalled: string;
+  connectorTools?: AgentRunRequest["tools"];
 }): Promise<Transcript> {
   const source = options.tail.at(-1)!;
   const run = {
@@ -183,6 +184,7 @@ async function turn(options: {
     skillLearning: "off",
     prisma,
     runtime: new PiAgentRuntime(),
+    connector: { discoverTools: async () => options.connectorTools ?? [] },
     sandbox: { describe: () => ({ capabilities: { graphical: false } }) },
     memory: {
       read: async ({ scope }: { scope: string }) => ({
@@ -244,12 +246,18 @@ const newest = (sent: Transcript) => JSON.stringify(sent.messages.at(-1));
 describe("the prompt prefix across turns of one thread", () => {
   it("stays byte-identical up to the new turn while memory, open work and recall change", async () => {
     const history = [said("Plan the launch."), ...answered("run-0", "Launch is Tuesday.")];
+    const connectorTools = ["z_lookup", "a_lookup"].map((name) => ({
+      name,
+      description: "Look up a record.",
+      inputSchema: { type: "object", properties: {} },
+    }));
     const first = await turn({
       runId: "run-1",
       tail: chain([...history, said("Who writes the post?")]),
       memory: "Prefers short posts.",
       openWork: "Draft the post",
       recalled: "Last launch slipped a day.",
+      connectorTools,
     });
     const second = await turn({
       runId: "run-2",
@@ -262,6 +270,7 @@ describe("the prompt prefix across turns of one thread", () => {
       memory: "Prefers short posts. Ships on Tuesdays.",
       openWork: "Review the post",
       recalled: "Ava owns launch copy.",
+      connectorTools: connectorTools.toReversed(),
     });
 
     expect(second.messages.map((message) => message.role)).toEqual([
@@ -273,6 +282,8 @@ describe("the prompt prefix across turns of one thread", () => {
       "user",
     ]);
     expect(first.messages).toHaveLength(4);
+    const declaredTools = first.messages.find((message) => message.role === "system")?.toolsAdded;
+    expect(declaredTools?.slice(-2).map((tool) => tool.name)).toEqual(["a_lookup", "z_lookup"]);
     expect(leading(second, 3)).toBe(leading(first, 3));
     expect(second.messages[3]).toMatchObject({ content: "Who writes the post?" });
     expect(newest(first)).toContain("Prefers short posts.");
