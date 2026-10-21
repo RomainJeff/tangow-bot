@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-10-22
+
+#### Fixed
+
+- On iPhone, messages that arrive while the app is busy no longer stay invisible, leaving an empty gap where they belong in the conversation.
+
 ### 2026-10-21
 
 #### Changed

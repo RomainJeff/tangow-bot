@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { useEffect } from "react";
 import type { ViewProps } from "react-native";
 import { StyleSheet } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -12,7 +11,7 @@ import Animated, {
   withSpring,
   withTiming,
 } from "react-native-reanimated";
-import { CHAT_MOTION, useChatReducedMotion } from "../lib/chat-motion";
+import { CHAT_MOTION, entrance, useChatReducedMotion } from "../lib/chat-motion";
 import { commitHaptic } from "../lib/haptics";
 import {
   hasCrossedSwipeReplyThreshold,
@@ -60,60 +59,12 @@ export function AnimatedMessageBubble({
   children,
 }: AnimatedMessageBubbleProps) {
   const reducedMotion = useChatReducedMotion();
+  const entering = isNew ? arrivalEntrance(variant, enterDelayMs, reducedMotion) : undefined;
 
-  const opacity = useSharedValue(isNew ? 0 : 1);
-  const translateY = useSharedValue(
-    isNew && variant === "bot" ? CHAT_MOTION.botEnterTranslateY : 0,
-  );
-  const enterTranslateY = useSharedValue(
-    isNew && variant === "user" ? CHAT_MOTION.userEnterTranslateY : 0,
-  );
-  const enterScale = useSharedValue(
-    isNew && variant === "user" ? CHAT_MOTION.userEnterScaleFrom : 1,
-  );
   const pressScale = useSharedValue(1);
   const swipeX = useSharedValue(0);
   const iconScale = useSharedValue(0);
   const previousRawDx = useSharedValue(0);
-
-  // Entrance, once, at mount — `isNew`/`variant` are fixed for this row's
-  // lifetime (a new arrival always mounts a fresh component instance, keyed
-  // by message id).
-  useEffect(() => {
-    if (!isNew) return;
-    if (reducedMotion) {
-      opacity.value = withDelay(
-        enterDelayMs,
-        withTiming(1, { duration: CHAT_MOTION.reducedFadeMs }),
-      );
-      return;
-    }
-    if (variant === "bot") {
-      opacity.value = withDelay(
-        enterDelayMs,
-        withTiming(1, { duration: CHAT_MOTION.botEnterMs, easing: CHAT_MOTION.botEnterEasing }),
-      );
-      translateY.value = withDelay(
-        enterDelayMs,
-        withTiming(0, { duration: CHAT_MOTION.botEnterMs, easing: CHAT_MOTION.botEnterEasing }),
-      );
-    } else {
-      opacity.value = withTiming(1, { duration: CHAT_MOTION.botEnterMs });
-      enterTranslateY.value = withSpring(0, CHAT_MOTION.userEnterSpring);
-      enterScale.value = withSpring(1, CHAT_MOTION.userEnterSpring);
-    }
-  }, []);
-
-  const entranceStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    transform:
-      variant === "bot"
-        ? [{ translateY: reducedMotion ? 0 : translateY.value }]
-        : [
-            { translateY: reducedMotion ? 0 : enterTranslateY.value },
-            { scale: reducedMotion ? 1 : enterScale.value },
-          ],
-  }));
 
   const pressStyle = useAnimatedStyle(() => ({
     transform: [{ scale: pressScale.value }, { translateX: swipeX.value }],
@@ -196,7 +147,7 @@ export function AnimatedMessageBubble({
   return (
     <GestureDetector gesture={gesture}>
       <Animated.View
-        style={entranceStyle}
+        entering={entering}
         accessibilityActions={accessibilityActions}
         onAccessibilityAction={onAccessibilityAction}
       >
@@ -237,28 +188,36 @@ export function MessageArrival({
   children: ReactNode;
 }) {
   const reducedMotion = useChatReducedMotion();
-  const opacity = useSharedValue(isNew ? 0 : 1);
-  const translateY = useSharedValue(isNew ? CHAT_MOTION.botEnterTranslateY : 0);
+  const entering = isNew ? arrivalEntrance("bot", enterDelayMs, reducedMotion) : undefined;
+  return <Animated.View entering={entering}>{children}</Animated.View>;
+}
 
-  useEffect(() => {
-    if (!isNew) return;
-    if (reducedMotion) {
-      opacity.value = withDelay(
-        enterDelayMs,
-        withTiming(1, { duration: CHAT_MOTION.reducedFadeMs }),
-      );
-      translateY.value = 0;
-      return;
-    }
-    const timing = { duration: CHAT_MOTION.botEnterMs, easing: CHAT_MOTION.botEnterEasing };
-    opacity.value = withDelay(enterDelayMs, withTiming(1, timing));
-    translateY.value = withDelay(enterDelayMs, withTiming(0, timing));
-  }, []);
-
-  const style = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    transform: [{ translateY: translateY.value }],
-  }));
-
-  return <Animated.View style={style}>{children}</Animated.View>;
+/** 7a (a sent bubble pops up) and 7b (a bot's message fades and rises); a plain fade under reduced motion. */
+function arrivalEntrance(
+  variant: AnimatedMessageBubbleVariant,
+  delayMs: number,
+  reducedMotion: boolean,
+) {
+  if (reducedMotion) {
+    return entrance({
+      from: { opacity: 0 },
+      timing: { duration: CHAT_MOTION.reducedFadeMs },
+      delayMs,
+    });
+  }
+  return variant === "bot"
+    ? entrance({
+        from: { opacity: 0, translateY: CHAT_MOTION.botEnterTranslateY },
+        timing: { duration: CHAT_MOTION.botEnterMs, easing: CHAT_MOTION.botEnterEasing },
+        delayMs,
+      })
+    : entrance({
+        from: {
+          opacity: 0,
+          translateY: CHAT_MOTION.userEnterTranslateY,
+          scale: CHAT_MOTION.userEnterScaleFrom,
+        },
+        timing: { duration: CHAT_MOTION.botEnterMs },
+        spring: CHAT_MOTION.userEnterSpring,
+      });
 }

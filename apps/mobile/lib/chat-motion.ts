@@ -1,8 +1,18 @@
+import type {
+  EasingFunction,
+  EasingFunctionFactory,
+  EntryExitAnimationFunction,
+  LayoutAnimation,
+  WithSpringConfig,
+} from "react-native-reanimated";
 import {
   Easing,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
+  withDelay,
+  withSpring,
+  withTiming,
 } from "react-native-reanimated";
 
 /**
@@ -74,6 +84,43 @@ export const CHAT_MOTION = {
  * hook directly, so the choice never drifts component to component. */
 export function useChatReducedMotion(): boolean {
   return useReducedMotion();
+}
+
+export interface Entrance {
+  /** Where the view starts; each value eases to its rest (opacity 1, no offset, scale 1). */
+  from: { opacity?: number; translateY?: number; scale?: number };
+  timing: { duration: number; easing?: EasingFunction | EasingFunctionFactory };
+  /** Transforms follow this spring instead of `timing` (the sent bubble's pop). */
+  spring?: WithSpringConfig;
+  delayMs?: number;
+}
+
+/**
+ * An arrival as a Reanimated `entering` animation, so React's own style stays
+ * at rest. An animated style starting at opacity 0 put that first frame in
+ * React's props: Reanimated hands the settled value back to React only if the
+ * JS thread collects it within about a second, and a busy thread missed it, so
+ * the next render of the row hid the message for good while it kept its space.
+ */
+export function entrance({
+  from,
+  timing,
+  spring,
+  delayMs = 0,
+}: Entrance): EntryExitAnimationFunction {
+  const { opacity = 1, translateY = 0, scale = 1 } = from;
+  return (): LayoutAnimation => {
+    "worklet";
+    const move = (to: number) =>
+      withDelay(delayMs, spring ? withSpring(to, spring) : withTiming(to, timing));
+    return {
+      initialValues: { opacity, transform: [{ translateY }, { scale }] },
+      animations: {
+        opacity: withDelay(delayMs, withTiming(1, timing)),
+        transform: [{ translateY: move(0) }, { scale: move(1) }],
+      },
+    };
+  };
 }
 
 /** A shared `{ transform: [{ scale }] }` animated style, for anything that

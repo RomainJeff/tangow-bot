@@ -4,14 +4,9 @@ import type { ComponentProps } from "react";
 import { useEffect } from "react";
 import type { PressableProps } from "react-native";
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withDelay,
-  withTiming,
-} from "react-native-reanimated";
+import Animated from "react-native-reanimated";
 import { mobileTokens, resolveMobileAppearance } from "../lib/appearance";
-import { CHAT_MOTION, useChatReducedMotion } from "../lib/chat-motion";
+import { CHAT_MOTION, entrance, useChatReducedMotion } from "../lib/chat-motion";
 import { commitHaptic } from "../lib/haptics";
 import { useThemedStyles } from "../lib/native";
 import {
@@ -124,27 +119,22 @@ function MetaLine({ line, hitSlop }: { line: BotBubbleMeta; hitSlop: number }) {
   const tokens = mobileTokens();
   const reducedMotion = useChatReducedMotion();
   const live = Boolean(line.live);
-  const opacity = useSharedValue(live ? 0 : 1);
-  const rise = useSharedValue(live && !reducedMotion ? LINE_RISE_PX : 0);
-  const pop = useSharedValue(live && !reducedMotion ? PROOF_ICON_POP_FROM : 1);
-  useEffect(() => {
-    if (!live) return;
-    const timing = { duration: motion.arrive, easing: CHAT_MOTION.botEnterEasing };
-    if (reducedMotion) {
-      opacity.value = withTiming(1, { duration: CHAT_MOTION.reducedFadeMs });
-      return;
-    }
-    opacity.value = withDelay(PROOF_LINE_DELAY_MS, withTiming(1, timing));
-    rise.value = withDelay(PROOF_LINE_DELAY_MS, withTiming(0, timing));
-    pop.value = withDelay(PROOF_LINE_DELAY_MS, withTiming(1, timing));
-  }, []);
-  const lineStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    transform: [{ translateY: rise.value }],
-  }));
-  const iconStyle = useAnimatedStyle(() => ({ transform: [{ scale: pop.value }] }));
+  const timing = { duration: motion.arrive, easing: CHAT_MOTION.botEnterEasing };
+  const lineEntering = !live
+    ? undefined
+    : reducedMotion
+      ? entrance({ from: { opacity: 0 }, timing: { duration: CHAT_MOTION.reducedFadeMs } })
+      : entrance({
+          from: { opacity: 0, translateY: LINE_RISE_PX },
+          timing,
+          delayMs: PROOF_LINE_DELAY_MS,
+        });
+  const iconEntering =
+    live && !reducedMotion
+      ? entrance({ from: { scale: PROOF_ICON_POP_FROM }, timing, delayMs: PROOF_LINE_DELAY_MS })
+      : undefined;
   return (
-    <Animated.View style={lineStyle}>
+    <Animated.View entering={lineEntering}>
       <Pressable
         accessibilityRole={line.onPress ? "link" : undefined}
         accessibilityLabel={line.label}
@@ -152,7 +142,11 @@ function MetaLine({ line, hitSlop }: { line: BotBubbleMeta; hitSlop: number }) {
         onPress={line.onPress}
         style={styles.meta}
       >
-        <Animated.View accessibilityElementsHidden importantForAccessibility="no" style={iconStyle}>
+        <Animated.View
+          accessibilityElementsHidden
+          importantForAccessibility="no"
+          entering={iconEntering}
+        >
           <NativeSymbol
             ios={line.icon.ios}
             android={line.icon.android}
