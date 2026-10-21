@@ -1,0 +1,192 @@
+{
+  "source": {
+    "kind": "pr",
+    "ref": "rakazo-bot#258",
+    "url": "https://github.com/RomainJeff/rakazo-bot/pull/258"
+  },
+  "voice": "af_heart",
+  "speed": 1.05,
+  "scenes": [
+    {
+      "type": "title",
+      "kicker": "rakazo-bot · PR #258",
+      "title": "Skills, *without* the marketplace",
+      "vo": "Pull request two fifty eight removes the skills marketplace. Skills now come from two places only."
+    },
+    {
+      "type": "diagram",
+      "heading": "Before: *three* sources",
+      "nodes": {
+        "gh": {
+          "kind": "actor",
+          "x": 270,
+          "y": 450,
+          "label": "GitHub"
+        },
+        "mk": {
+          "x": 800,
+          "y": 450,
+          "label": "marketplace"
+        },
+        "user": {
+          "kind": "store",
+          "x": 800,
+          "y": 790,
+          "label": "your skills"
+        },
+        "bot": {
+          "x": 1500,
+          "y": 790,
+          "label": "bot"
+        },
+        "pc": {
+          "x": 1500,
+          "y": 450,
+          "label": "computer"
+        }
+      },
+      "edges_def": {
+        "g-m": [
+          "gh",
+          "mk"
+        ],
+        "m-b": [
+          "mk",
+          "bot"
+        ],
+        "m-c": [
+          "mk",
+          "pc"
+        ],
+        "u-b": [
+          "user",
+          "bot"
+        ]
+      },
+      "beats": [
+        {
+          "at": 0.0,
+          "focus": "mk",
+          "pulse": [
+            "g-m"
+          ],
+          "msg": {
+            "g-m": "repo"
+          }
+        },
+        {
+          "at": 0.45,
+          "focus": [
+            "bot",
+            "pc"
+          ],
+          "pulse": [
+            "m-b",
+            "m-c"
+          ],
+          "msg": {
+            "m-c": "mount"
+          }
+        },
+        {
+          "at": 0.75,
+          "focus": "mk",
+          "tone": "fail",
+          "tag": [
+            "keep in sync",
+            "fail"
+          ]
+        }
+      ],
+      "vo": "Marketplaces pulled whole GitHub repositories into a separate skills system. Bots and computers each had to mount it and keep it in sync."
+    },
+    {
+      "type": "diagram",
+      "heading": "After: *two* sources",
+      "nodes": {
+        "user": {
+          "kind": "store",
+          "x": 620,
+          "y": 450,
+          "label": "your skills"
+        },
+        "core": {
+          "kind": "store",
+          "x": 620,
+          "y": 790,
+          "label": "built-in"
+        },
+        "bot": {
+          "x": 1400,
+          "y": 620,
+          "label": "bot"
+        }
+      },
+      "edges_def": {
+        "u-b": [
+          "user",
+          "bot"
+        ],
+        "c-b": [
+          "core",
+          "bot"
+        ]
+      },
+      "beats": [
+        {
+          "at": 0.0,
+          "focus": [
+            "user",
+            "core"
+          ],
+          "pulse": [
+            "u-b",
+            "c-b"
+          ]
+        },
+        {
+          "at": 0.55,
+          "focus": "bot",
+          "tone": "ok",
+          "tag": [
+            "web · desktop · mobile",
+            "ok"
+          ],
+          "tagAt": [
+            0,
+            96
+          ]
+        }
+      ],
+      "vo": "Now a bot sees your own skills and Rakazo's built-in ones. The catalog opens directly, on web, desktop and mobile."
+    },
+    {
+      "type": "kinetic",
+      "lines": [
+        "Old data *kept*.",
+        "Old apps get *empty list*.",
+        {
+          "t": "Plugins, later.",
+          "tone": "muted"
+        }
+      ],
+      "at": [
+        0.0,
+        0.35,
+        0.75
+      ],
+      "vo": "Nothing is deleted from the database. Installed mobile apps still call the old route and get an empty list. Plugins will likely take its place later."
+    },
+    {
+      "type": "number",
+      "value": 4871,
+      "label": "lines *removed*",
+      "foot": "Net, across 46 files.",
+      "at": [
+        0.05,
+        0.5
+      ],
+      "vo": "Net, almost five thousand lines are gone."
+    }
+  ]
+}
