@@ -1,4 +1,5 @@
 import { mkdir } from "node:fs/promises";
+import { setTimeout as delay } from "node:timers/promises";
 import type {
   AdapterContext,
   AgentHomeStore,
@@ -466,6 +467,27 @@ async function waitForComputerReady(
     await new Promise((resolve) => setTimeout(resolve, BOOT_WAIT_MS));
   }
   return prisma.computer.findUniqueOrThrow({ where: { id: computerId } });
+}
+
+/**
+ * Waits while someone else starts or suspends the computer, for as long as their claim stays
+ * live, and not at all while maintenance holds it.
+ */
+export async function waitOutComputerTransition(
+  prisma: PrismaClient,
+  computerId: string,
+  signal: AbortSignal,
+): Promise<void> {
+  const deadline = Date.now() + BOOT_CLAIM_STALE_MS;
+  while (Date.now() < deadline) {
+    signal.throwIfAborted();
+    const { state, maintenanceId } = await prisma.computer.findUniqueOrThrow({
+      where: { id: computerId },
+      select: { state: true, maintenanceId: true },
+    });
+    if (maintenanceId || (state !== "booting" && state !== "suspending")) return;
+    await delay(BOOT_WAIT_MS, undefined, { signal });
+  }
 }
 
 async function rollbackProvisionedComputer(

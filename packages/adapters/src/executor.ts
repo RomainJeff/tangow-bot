@@ -331,7 +331,6 @@ import {
 } from "./plot-tool.js";
 import type { RemoteTransportDependencies } from "./remote-mcp.js";
 import { loadReplyContext } from "./reply-context.js";
-import type { RunComputer } from "./run-computer.js";
 import { createRunComputer } from "./run-computer.js";
 import { searchRunsFromTool } from "./run-search-tools.js";
 import {
@@ -638,9 +637,6 @@ const BOT_DIRECTORY_LIMIT = 40;
 /** The computer's shell. In a worker run the guest's bash replaces it. */
 const COMPUTER_SHELL_TOOL = "shell";
 
-const COMPUTER_BUSY_MESSAGE =
-  "The computer is busy with another run or starting up. Continue without it or try again later.";
-
 class RunComputerRequiredError extends Error {
   constructor() {
     super("This run needs a computer, but the bot has none");
@@ -685,11 +681,12 @@ async function routeRun(
     computerTools: run.tools.some((tool) => REMOTE_COMPUTER_TOOLS.has(tool.name)),
     computerScope: run.computerScope,
   });
+  let plan = await deps.workers.plan({ attemptId: run.attemptId, needs });
   // A bot attached after its computer moved has no volume until something creates it.
-  if (run.computerId && needs.files.private) {
+  if (plan.mode === "refused" && run.computerId) {
     await deps.workers.provisionHomeVolumes(run.computerId, context);
+    plan = await deps.workers.plan({ attemptId: run.attemptId, needs });
   }
-  const plan = await deps.workers.plan({ attemptId: run.attemptId, needs });
   if (plan.mode === "in_process") return inProcess;
   if (plan.mode === "busy") throw new AgentRuntimeBusyError("Computer home is moving");
   if (plan.mode === "refused") {
@@ -1458,9 +1455,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
         data: { status: "running", startedAt: current.startedAt ?? new Date() },
       });
       if (started.count !== 1) return;
-      const { computerSwitching } = await deps.prisma.bot.findUniqueOrThrow({
+      const { computerId, computerSwitching } = await deps.prisma.bot.findUniqueOrThrow({
         where: { id: run.botId },
-        select: { computerSwitching: true },
+        select: { computerId: true, computerSwitching: true },
       });
       if (computerSwitching) {
         await requeueComputerRun(deps, runId, workerId, fence, resumeCheckpoint, heldForTakeover);
@@ -1473,7 +1470,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
       let leaseValid = true;
       let lastLeaseCheckAt = 0;
       let retainComputerLease = false;
-      let runComputer: RunComputer | undefined;
+      const runComputer = computerId
+        ? createRunComputer(deps, { computerId, runId, botId: run.botId, fence, resumeHeldLease })
+        : undefined;
       let runAbortController: AbortController | null = null;
       let detachShutdown: (() => void) | undefined;
       const heartbeat = setInterval(() => {
@@ -1508,6 +1507,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
       let skillNudgeTurn: (() => Promise<void>) | undefined;
       let setupFailures = 0;
       try {
+        if (resumeHeldLease) await runComputer?.holdLease();
         setupFailures = await deps.prisma.attempt.count({
           where: {
             runId,
@@ -1916,18 +1916,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
               ? fromVolumePath(computerMode ?? "dedicated", bot.id, requested)
               : requested,
           );
-        runComputer = storedComputer
-          ? createRunComputer(deps, {
-              computerId: storedComputer.id,
-              runId,
-              botId: bot.id,
-              fence,
-              resumeHeldLease,
-              context,
-            })
-          : undefined;
         const useComputer = () =>
-          runComputer?.use() ?? Promise.reject(new RunComputerRequiredError());
+          storedComputer && runComputer
+            ? runComputer.use(context)
+            : Promise.reject(new RunComputerRequiredError());
         const requireComputer = () => {
           const computer = runComputer?.current();
           if (!computer) throw new RunComputerRequiredError();
@@ -2036,9 +2028,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
           },
           context,
         );
-        // A worker does file work and commands itself, so its computer starts on first use. A run
-        // back from a takeover takes its held lease now, so that its end lets the lease go.
-        if (!refusal && (runtime === deps.runtime || resumeHeldLease)) await runComputer?.use();
+        // A worker does file work and commands itself, so its computer starts on first use.
+        if (!refusal && runtime === deps.runtime && storedComputer) {
+          await runComputer?.start(context);
+        }
         let currentTurnFiles: Awaited<ReturnType<typeof materializeCurrentTurnFiles>>;
         try {
           currentTurnFiles =
@@ -2958,9 +2951,36 @@ export function createRunExecutor(deps: ExecutorDeps) {
           const bypassApproval = gateDecision === "allow" && requiresApprovalByDefault;
           let claimedEffect = false;
 
+          // A computer call starts the computer at the last moment before it takes effect: after any
+          // approval, before its effect is claimed, so a busy reply leaves the effect to run later.
+          const computerUnavailable = async (): Promise<{ error: string } | undefined> => {
+            if (!REMOTE_COMPUTER_TOOLS.has(name) || !runComputer) return undefined;
+            try {
+              await useComputer();
+              return undefined;
+            } catch (error) {
+              if (context.signal.aborted) throw error;
+              if (error instanceof ComputerBusyError) {
+                return {
+                  error:
+                    "The computer is busy with another run or starting up. Continue without it or try again later.",
+                };
+              }
+              getLogger().error(
+                "run computer start failed",
+                redactSecrets(error instanceof Error ? error.message : String(error), runSecrets),
+              );
+              return {
+                error: "The computer could not start. Continue without it or try again later.",
+              };
+            }
+          };
+
           const claimOrReturn = async (
             from: "approved" | "intended",
           ): Promise<unknown | undefined> => {
+            const unavailable = await computerUnavailable();
+            if (unavailable) return unavailable;
             const claim = from === "approved" ? claimApprovedEffect : claimIntendedEffect;
             const claimed = local
               ? await claimEffectUnderFence(deps.prisma, applied!.effect.id, from, runId, fence)
@@ -3121,25 +3141,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
             }
             return finish(localToolResult(await local(context.signal)));
           }
-          if (REMOTE_COMPUTER_TOOLS.has(name) && runComputer) {
-            try {
-              await runComputer.use();
-            } catch (error) {
-              if (context.signal.aborted) throw error;
-              if (!(error instanceof ComputerBusyError)) {
-                getLogger().error(
-                  "run computer start failed",
-                  redactSecrets(error instanceof Error ? error.message : String(error), runSecrets),
-                );
-              }
-              return finish({
-                error:
-                  error instanceof ComputerBusyError
-                    ? COMPUTER_BUSY_MESSAGE
-                    : "The computer could not start. Continue without it or try again later.",
-              });
-            }
-          }
+          const unavailable = await computerUnavailable();
+          if (unavailable) return unavailable;
           if (name === "computer_observe") {
             if (heldForTakeover) {
               return { error: DESKTOP_HELD_FOR_TAKEOVER_MESSAGE };
