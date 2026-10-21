@@ -1,13 +1,13 @@
 import type { MessageBlock } from "@rakazo/contracts";
 import { radii, sizes } from "@rakazo/ui-tokens";
 import { StyleSheet, Text, View, type ViewProps } from "react-native";
-import { mobileTokens, resolveMobileAppearance } from "../lib/appearance";
+import { mobileTokens } from "../lib/appearance";
 import { useI18n } from "../lib/i18n";
 import { useThemedStyles } from "../lib/native";
-import { shadowsForAppearance } from "../lib/theme";
 import { nativeTextStyle } from "../lib/typography";
 import { CapsuleButton } from "./AskActions";
 import { NativeSymbol } from "./native-symbol";
+import { Surface } from "./surface";
 
 /**
  * The computer's state, and what it is doing, on the bot's paper. `onOpen` is set only on the
@@ -28,7 +28,7 @@ export function ComputerCard({
   const styles = useThemedStyles(createStyles);
   const needsYou = block.state === "Needs you";
   return (
-    <View style={styles.card}>
+    <Surface style={styles.card}>
       <View style={styles.tile}>
         <NativeSymbol ios="desktopcomputer" android="desktop-outline" size={18} />
       </View>
@@ -61,7 +61,7 @@ export function ComputerCard({
           <Text style={needsYou ? styles.stateLive : styles.stateQuiet}>{block.state}</Text>
         </View>
       )}
-    </View>
+    </Surface>
   );
 }
 
@@ -76,9 +76,6 @@ function createStyles() {
       maxWidth: sizes.linkCard,
       paddingHorizontal: 16,
       paddingVertical: 12,
-      borderRadius: radii.bubble,
-      backgroundColor: tokens.chatBot,
-      boxShadow: shadowsForAppearance(resolveMobileAppearance()).bubble,
     },
     tile: {
       width: 36,
