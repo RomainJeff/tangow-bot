@@ -2415,8 +2415,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
         type InputPauseRequest = Extract<AgentRuntimeEvent, { type: "ask" | "takeover" }>;
         type InputPauseStatus = "paused" | "revoked";
         let inputPause: { key: string; result: Promise<InputPauseStatus> } | undefined;
-        const pauseKey = (event: InputPauseRequest) =>
-          toolEffectIdempotencyKey(runId, event.type, event);
+        const pauseKey = (event: InputPauseRequest) => {
+          const wireEvent: unknown = JSON.parse(JSON.stringify(event));
+          return stableJsonValue(wireEvent);
+        };
         const pauseOnce = async (
           event: InputPauseRequest,
           pause: () => Promise<boolean>,

@@ -1,5 +1,5 @@
 import type { AgentRunRequest } from "@rakazo/adapter-kit";
-import { PiAgentRuntime } from "@rakazo/adapters";
+import { PiAgentRuntime, ScriptedAgentRuntime } from "@rakazo/adapters";
 import type { PrismaClient } from "@rakazo/db";
 import { afterEach, expect, it } from "vitest";
 import { startWorkerRun } from "./worker-run-fixture.js";
@@ -33,6 +33,24 @@ async function controllerRun(
 }
 
 const city = { question: "Which city?", options: ["Paris", "Lyon"] };
+
+it("pauses a scripted ask with absent optional card fields", async () => {
+  const run = await startWorkerRun({
+    steps: [],
+    computerScope: "none",
+    runtime: () => new ScriptedAgentRuntime(),
+  });
+  cleanups.push(() => run.close());
+  const runId = await run.send("Ask me which city to use.");
+  await run.continueRun(runId);
+
+  expect(await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).toMatchObject({
+    status: "waiting_input",
+    error: null,
+  });
+  const card = (await run.runEntries(runId)).find((entry) => entry.type === "assistant.ask");
+  expect(card).toMatchObject({ payload: { block: { text: "Which city should I use?" } } });
+});
 
 it.each([
   { name: "ask_user", args: { question: "Which day?", options: ["Monday", "Tuesday"] } },
