@@ -216,7 +216,12 @@ export function createSession(
   };
 
   /** Once paused, the attempt concludes on a run waiting for the user; never once superseded. */
-  const fenceHeld = () => (paused ? launched!.ownsFence() : launched!.holdsFence());
+  const fenceHeld = async () => {
+    if (paused) return launched!.ownsFence();
+    if (await launched!.holdsFence()) return true;
+    // The pause can latch during the lookup and move the run to wait on the user.
+    return paused ? launched!.ownsFence() : false;
+  };
 
   const helperOf = (agent: string) => (agent === "root" ? undefined : helpers.get(agent));
 
