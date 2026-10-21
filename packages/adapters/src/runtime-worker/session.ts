@@ -497,16 +497,14 @@ export function createSession(
         const helper = helperOf(body.agent);
         if (!helper) return refuse("invalid");
         if (body.type === "subagent.text") await helper.log.text(body.text);
-        else if (body.type === "subagent.abandon") {
-          await helper.log.abandon(body.result);
-          helper.ended?.({ status: "failed", result: body.result });
-        } else {
-          await helper.log.finish({
-            status: body.status,
-            result: body.result,
-            usage: helper.usage,
-          });
-          helper.ended?.({ status: body.status, result: body.result });
+        else {
+          const status = body.type === "subagent.finish" ? body.status : "failed";
+          try {
+            if (body.type === "subagent.abandon") await helper.log.abandon(body.result);
+            else await helper.log.finish({ status, result: body.result, usage: helper.usage });
+          } finally {
+            helper.ended?.({ status, result: body.result });
+          }
         }
         return { type: "recorded" };
       }
