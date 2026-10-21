@@ -408,8 +408,11 @@ export class PiAgentRuntime implements AgentRuntime {
                   reliableStreamOptions(m, options, request.model.maxTokens),
                 ),
           getApiKey: async () => apiKey,
-          transformContext: async (messages) =>
-            pruneComputerScreenshotContext(messages, request.model.maxImagesPerPrompt),
+          // A relayed call is pruned by the relay, which needs the whole history to evict in blocks.
+          transformContext: this.streamFn
+            ? undefined
+            : async (messages) =>
+                pruneComputerScreenshotContext(messages, request.model.maxImagesPerPrompt),
           finishTurn: async () => (host.pausePending ? { action: "end" } : undefined),
           prepareNextTurnWithContext: async () => {
             if (!request.claimSteering) return undefined;
@@ -1631,8 +1634,10 @@ async function runSubagent(
             reliableStreamOptions(m, options, requestModel.maxTokens),
           ),
     getApiKey: async () => selectedModel.apiKey,
-    transformContext: async (messages) =>
-      pruneComputerScreenshotContext(messages, requestModel.maxImagesPerPrompt),
+    transformContext: host.streamFn
+      ? undefined
+      : async (messages) =>
+          pruneComputerScreenshotContext(messages, requestModel.maxImagesPerPrompt),
     finishTurn: async () => (nestedHost.pausePending ? { action: "end" } : undefined),
     initialState: {
       systemPrompt: [

@@ -1,3 +1,4 @@
+import type { AgentToolExecutionResult } from "@rakazo/adapter-kit";
 import {
   type AgentRunRequest,
   type AgentRuntimeEvent,
@@ -5,11 +6,12 @@ import {
   parseGuestMessage,
   type ReplyPart,
 } from "@rakazo/adapter-kit";
-import { PiAgentRuntime } from "@rakazo/adapters";
+import { computerObservation, observationToolResult, PiAgentRuntime } from "@rakazo/adapters";
 import { guestModelOf, type RelayUsage } from "@rakazo/adapters/runtime-worker";
 import { piAiStreamFn, relayedModel, relayPiAiCall } from "@rakazo/adapters/runtime-worker/pi-ai";
 import { afterEach, describe, expect, it } from "vitest";
 import { toolResult } from "./file-task.js";
+import type { ModelEmulatorRequest } from "./model-emulator.js";
 import { startModelEmulator } from "./model-emulator.js";
 import { startWorkerRun } from "./worker-run-fixture.js";
 
@@ -149,56 +151,102 @@ describe("a guest Pi run whose model calls the controller relays", () => {
   });
 });
 
-describe("a relayed model call that carries tool-result images", () => {
-  it("reaches the model with only the images the model's image budget allows", async () => {
-    const pixel =
-      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
-    const sentImages: number[] = [];
+describe("a guest run whose tool results carry images", () => {
+  async function imagesPerCall(
+    maxImagesPerPrompt: number,
+    toolName: string,
+    result: (call: number) => AgentToolExecutionResult,
+    calls: number,
+  ) {
+    const sent: string[][] = [];
+    const record = (request: ModelEmulatorRequest) =>
+      sent.push(
+        [...JSON.stringify(request.messages).matchAll(/data:image\/png;base64,([^"]+)/g)].map(
+          (match) => Buffer.from(match[1] ?? "", "base64").toString(),
+        ),
+      );
     const server = await startModelEmulator({
       steps: [
-        {
-          expect(request) {
-            sentImages.push(
-              JSON.stringify(request.messages).split('"type":"image_url"').length - 1,
-            );
-          },
-          response: { type: "text", text: "Done." },
-        },
+        ...Array.from({ length: calls }, (_, index) => ({
+          expect: record,
+          response: { type: "tool" as const, id: `call-${index}`, name: toolName, arguments: {} },
+        })),
+        { expect: record, response: { type: "text", text: "Done." } },
       ],
     });
     cleanups.push(() => server.close());
-    const turns = ["computer_screenshot", "read", "computer_screenshot"].flatMap(
-      (toolName, index) => [
+    const config = { ...server.model, acceptsImages: true, maxImagesPerPrompt };
+    const relay = piAiStreamFn(
+      async (body, onPart) => {
+        await relayPiAiCall(config, body.call, (event) => onPart({ type: "model.event", event }), {
+          signal: new AbortController().signal,
+          conversation: { threadId: "thread_relay", botId: "bot_relay" },
+        });
+        return { type: "model.end" };
+      },
+      () => "root",
+    );
+    let call = 0;
+    const events: AgentRuntimeEvent[] = [];
+    for await (const event of new PiAgentRuntime({ streamFn: relay }).run({
+      botId: "bot_relay",
+      threadId: "thread_relay",
+      runId: worker.runId,
+      prompt: "Check the page",
+      history: [],
+      tools: [{ name: toolName, description: toolName, inputSchema: { type: "object" } }],
+      model: relayedModel(guestModelOf(config)),
+      executeTool: async () => {
+        call += 1;
+        return result(call);
+      },
+    })) {
+      events.push(event);
+    }
+    server.assertComplete();
+    expect(events.at(-1)).toEqual({ type: "done", text: "Done." });
+    return sent;
+  }
+
+  it("keeps the guest's whole screenshot history so the relay evicts the oldest a block at a time", async () => {
+    const screenshot = (call: number) =>
+      observationToolResult(
+        computerObservation(Buffer.from(`frame-${call}`), {
+          mimeType: "image/png",
+          width: 1,
+          height: 1,
+        }),
+      );
+    expect(await imagesPerCall(3, "computer_observe", screenshot, 7)).toEqual([
+      [],
+      ["frame-1"],
+      ["frame-1", "frame-2"],
+      ["frame-1", "frame-2", "frame-3"],
+      ["frame-4"],
+      ["frame-4", "frame-5"],
+      ["frame-4", "frame-5", "frame-6"],
+      ["frame-7"],
+    ]);
+  });
+
+  it("prunes native image reads beyond the model's budget instead of failing the run", async () => {
+    const read = (call: number): AgentToolExecutionResult => ({
+      kind: "agent_tool_result",
+      content: [
+        { type: "text", text: "Read image file [image/png]" },
         {
-          role: "assistant",
-          content: [{ type: "toolCall", id: `call-${index}`, name: toolName, arguments: {} }],
-          stopReason: "toolUse",
-        },
-        {
-          role: "toolResult",
-          toolCallId: `call-${index}`,
-          toolName,
-          content: [{ type: "image", data: pixel, mimeType: "image/png" }],
-          isError: false,
+          type: "image",
+          data: Buffer.from(`file-${call}`).toString("base64"),
+          mimeType: "image/png",
         },
       ],
-    );
-
-    await relayPiAiCall(
-      { ...server.model, acceptsImages: true, maxImagesPerPrompt: 1 },
-      {
-        context: { messages: [{ role: "user", content: "Check the page" }, ...turns] },
-        options: {},
-      },
-      () => {},
-      {
-        signal: new AbortController().signal,
-        conversation: { threadId: "thread_relay", botId: "bot_relay" },
-      },
-    );
-
-    server.assertComplete();
-    expect(sentImages).toEqual([1]);
+    });
+    expect(await imagesPerCall(2, "read", read, 3)).toEqual([
+      [],
+      ["file-1"],
+      ["file-1", "file-2"],
+      ["file-3"],
+    ]);
   });
 });
 

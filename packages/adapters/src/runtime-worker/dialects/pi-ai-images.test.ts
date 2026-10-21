@@ -60,4 +60,19 @@ describe("prunePiAiImages", () => {
       [{ type: "text", text: "Screen" }, image("frame-2")],
     ]);
   });
+
+  it("leaves room in the model's budget for the images the user attached", () => {
+    const transcript = [
+      { role: "user", content: [{ type: "text", text: "Match this" }, image("mockup")] },
+      ...toolTurn("shot-1", "computer_screenshot", "Screen", "frame-1"),
+      ...toolTurn("shot-2", "computer_screenshot", "Screen", "frame-2"),
+    ];
+    expect(JSON.stringify(prunePiAiImages(transcript, 2)).match(/mockup|frame-\d/g)).toEqual([
+      "mockup",
+      "frame-2",
+    ]);
+    expect(() => prunePiAiImages(transcript, 0)).toThrow(
+      "The configured model image limit is 0, but the prompt contains 1 attached images.",
+    );
+  });
 });
