@@ -2,7 +2,7 @@ import { writeFileSync } from "node:fs";
 import { activeBotId, completeOnboarding, rpc, signup } from "./helpers";
 import type { Page } from "./test";
 import { expect, test } from "./test";
-import { threadEntries } from "./thread-log";
+import { finishedRuns, threadEntries } from "./thread-log";
 
 type Rect = { x: number; y: number; width: number; height: number };
 type Frame = {
@@ -34,12 +34,9 @@ async function openCard(page: Page, name: string, history = 0, { prompt, ready }
     await page.getByPlaceholder(/Message/).fill(`note ${turn} for the motion check`);
     await page.keyboard.press("Enter");
     await expect
-      .poll(
-        async () =>
-          (await threadEntries(page, { botId })).filter((entry) => entry.type === "run.finished")
-            .length,
-        { timeout: 60_000 },
-      )
+      .poll(async () => finishedRuns(await threadEntries(page, { botId })).length, {
+        timeout: 60_000,
+      })
       .toBe(turn);
   }
   await page.getByPlaceholder(/Message/).fill(prompt);
@@ -504,9 +501,16 @@ test("a stack moves on in place: kept lines stay, the card is never blank, its f
 
   for (const frames of [first, second, third]) {
     expect(frames.length).toBeGreaterThan(10);
-    // The thread above moves on the spring or not at all: no frame jumps.
+    // The thread above moves on the spring or not at all: no frame jumps. A step is measured
+    // per 60 Hz frame elapsed, so a frame the browser drops does not count as a jump.
     const travel = Math.abs(frames.at(-1)!.above - frames[0]!.above);
-    const steps = frames.slice(1).map((f, i) => Math.abs(f.above - frames[i]!.above));
+    const steps = frames
+      .slice(1)
+      .map(
+        (f, i) =>
+          Math.abs(f.above - frames[i]!.above) /
+          Math.max(1, Math.round((f.t - frames[i]!.t) / (1000 / 60))),
+      );
     expect(Math.max(...steps)).toBeLessThanOrEqual(travel * 0.2 + 1);
     // Never a blank card: what leaves and what arrives overlap.
     expect(Math.min(...frames.map((f) => Math.max(f.ghost, f.incoming)))).toBeGreaterThan(0.4);

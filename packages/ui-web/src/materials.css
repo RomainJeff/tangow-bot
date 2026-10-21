@@ -1,0 +1,129 @@
+/* Glass on navigation and controls, never on content (docs/design-system/materials.md).
+   In `components`, like the other `rk-*` classes, so a caller's utility still wins. */
+@layer components {
+  .rk-glass-chrome {
+    background: var(--material-chrome-fill);
+    box-shadow: var(--material-chrome-edge);
+    backdrop-filter: blur(var(--material-chrome-blur)) saturate(var(--material-chrome-saturate));
+  }
+
+  /* `--glass-control-backdrop` lets a control that is hidden at rest (the hover
+     pill) take its blur only while shown. */
+  .rk-glass-control {
+    --glass-control-backdrop: blur(var(--material-control-blur))
+      saturate(var(--material-control-saturate));
+    background: var(--material-control-fill);
+    box-shadow: var(--material-control-edge);
+    backdrop-filter: var(--glass-control-backdrop);
+  }
+
+  .rk-glass-menu {
+    background: var(--material-menu-fill);
+    box-shadow: var(--material-menu-edge);
+    backdrop-filter: blur(var(--material-menu-blur)) saturate(var(--material-menu-saturate));
+  }
+
+  .rk-glass-list {
+    background: var(--material-list-fill);
+    box-shadow: var(--material-list-edge);
+    backdrop-filter: blur(var(--material-list-blur)) saturate(var(--material-list-saturate));
+  }
+
+  /* The scroll edge under the header: the page background, blurred, fading out
+     at 55%. Phone width only: Safari paints its status bar in that colour, so
+     the two meet without a line. Beside the sidebar it only blurs, as a tint
+     would stop at the column's edge against the ambient light. */
+  .rk-scroll-edge {
+    backdrop-filter: blur(var(--scroll-edge-blur));
+    mask-image: linear-gradient(to bottom, #000 55%, transparent);
+  }
+
+  @media (width < 48rem) {
+    .rk-scroll-edge {
+      background: linear-gradient(
+        to bottom,
+        color-mix(in srgb, var(--background) 96%, transparent) 0%,
+        color-mix(in srgb, var(--background) 85%, transparent) 55%,
+        transparent 100%
+      );
+    }
+  }
+
+  /* The thread runs `--thread-overlap` under the composer's bar, and its end
+     padding, bottom fade and jump-to-latest button follow it. Not under a line
+     the shell sets between them (teaching in progress), nor under a notice, a
+     reply chip or the mention picker above the bar: it would show through their
+     tints, so it stops above them and fades into them. */
+  .rk-thread-overlap {
+    --thread-overlap: 0px;
+    --thread-fade-from: var(--thread-fade-bottom-rest);
+    --thread-fade-to: 0px;
+    margin-bottom: calc(-1 * var(--thread-overlap));
+  }
+
+  .rk-thread-overlap:has(+ [data-slot="composer"] > [data-slot="composer-shell"]:first-child) {
+    --thread-overlap: var(--thread-under-composer);
+    --thread-fade-from: var(--thread-fade-bottom-start);
+    --thread-fade-to: var(--thread-fade-bottom-end);
+  }
+
+  /* The thread fades in under the header, so a dark bubble leaves no smear
+     behind the title, and out across the composer's bar: its glass blurs the
+     thread above, and nothing shows in the gap under it. Its end padding keeps
+     the last message 32 px above the composer. */
+  .rk-thread-mask {
+    padding-bottom: calc(var(--thread-overlap, 0px) + 2rem);
+    mask-image: linear-gradient(
+      to bottom,
+      transparent var(--thread-fade-top-start),
+      #000 var(--thread-fade-top-end),
+      #000 calc(100% - var(--thread-fade-from, 0px)),
+      transparent calc(100% - var(--thread-fade-to, 0px))
+    );
+  }
+
+  /* 16 px above the composer, whether or not the thread runs under it. */
+  .rk-thread-jump {
+    bottom: calc(var(--thread-overlap, 0px) + 1rem);
+  }
+
+  /* The neutral ambient light behind the shell and the sign-in pages: the glass blurs it. */
+  .rk-ambient {
+    background: var(--ambient);
+  }
+
+  /* The veil under a dialog or an overlay window: the thread darkened and blurred. */
+  .rk-veil {
+    background: var(--overlay);
+    backdrop-filter: blur(var(--overlay-blur));
+  }
+
+  /* Reduce Transparency: every material turns opaque; the ambient light stays. */
+  @media (prefers-reduced-transparency: reduce) {
+    .rk-glass-chrome {
+      background: var(--material-chrome-fallback);
+    }
+
+    .rk-glass-control {
+      --glass-control-backdrop: none;
+      background: var(--material-control-fallback);
+    }
+
+    .rk-glass-menu {
+      background: var(--material-menu-fallback);
+    }
+
+    .rk-glass-list {
+      background: var(--material-list-fallback);
+    }
+
+    .rk-glass-chrome,
+    .rk-glass-control,
+    .rk-glass-menu,
+    .rk-glass-list,
+    .rk-scroll-edge,
+    .rk-veil {
+      backdrop-filter: none;
+    }
+  }
+}
