@@ -42,6 +42,6 @@ test("a routine the user asked for shows a settled card that opens on when it ru
   await testInfo.attach("routine-updated-card", { contentType: "image/png", path: updatedShot });
   await captureScreenshot(page, testInfo, "routine-confirmation-light");
   await page.evaluate(() => document.documentElement.setAttribute("data-theme", "dark"));
-  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(12, 12, 14)");
+  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(22, 22, 24)");
   await captureScreenshot(page, testInfo, "routine-confirmation-dark");
 });

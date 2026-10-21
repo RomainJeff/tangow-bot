@@ -15,10 +15,11 @@ import {
 import { ImageIcon, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { SuccessPop } from "../../components/ai/primitives";
-import { type ArtifactTarget, decodeArtifactBase64 } from "../../lib/artifact-open";
+import type { ArtifactTarget } from "../../lib/artifact-open";
 import { chartViewport } from "../../lib/chart-viewport";
 import { connectMcpOauth } from "../../lib/mcp-connect";
 import { rpc } from "../../lib/rpc";
+import { useArtifactImageSrc } from "./use-artifact-image-src";
 
 export function ChoiceCard({
   botId,
@@ -178,10 +179,10 @@ export function AppConnectCard({
           <img
             src={block.logo}
             alt=""
-            className="h-10 w-10 rounded-row bg-card object-contain p-1"
+            className="h-10 w-10 rounded-row bg-well object-contain p-1"
           />
         ) : (
-          <span className="grid h-10 w-10 place-items-center rounded-row bg-muted text-meta text-foreground">
+          <span className="grid h-10 w-10 place-items-center rounded-row bg-well text-meta text-foreground">
             {block.name.slice(0, 1).toUpperCase()}
           </span>
         )}
@@ -343,7 +344,7 @@ export function McpApprovalCard({
   return (
     <Surface className="max-w-[74%] p-4">
       <div className="flex items-center gap-2">
-        <span className="grid h-7 w-7 place-items-center rounded-row bg-muted text-time text-foreground">
+        <span className="grid h-7 w-7 place-items-center rounded-row bg-well text-time text-foreground">
           M
         </span>
         <span className="text-author font-medium text-foreground">
@@ -455,78 +456,6 @@ export function ChartBlockView({
   );
 }
 
-/**
- * Loads an image artifact of the thread as an object URL, once its container nears the viewport.
- * `failed` turns true when the artifact cannot be read, or when an image given `onImageError`
- * cannot decode it, so a caller can draw its fallback.
- */
-function useArtifactImageSrc<Container extends HTMLElement = HTMLDivElement>(
-  target: ArtifactTarget,
-  artifactId: string,
-) {
-  const [src, setSrc] = useState<string | null>(null);
-  const [failed, setFailed] = useState(false);
-  const [visible, setVisible] = useState(false);
-  const container = useRef<Container>(null);
-  const targetBotId = "botId" in target ? target.botId : undefined;
-  const targetGroupId = "groupId" in target ? target.groupId : undefined;
-
-  useEffect(() => {
-    const element = container.current;
-    if (!element || typeof IntersectionObserver === "undefined") {
-      setVisible(true);
-      return;
-    }
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          setVisible(true);
-          observer.disconnect();
-        }
-      },
-      { rootMargin: "320px" },
-    );
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    if (!visible) return;
-    let cancelled = false;
-    let objectUrl: string | null = null;
-    setSrc(null);
-    setFailed(false);
-    void rpc.artifacts
-      .get(
-        targetBotId
-          ? { botId: targetBotId, artifactId }
-          : { groupId: targetGroupId ?? "", artifactId },
-      )
-      .then((artifact) => {
-        const bytes = decodeArtifactBase64(artifact.contentBase64);
-        objectUrl = URL.createObjectURL(
-          new Blob([new Uint8Array(bytes)], { type: artifact.mimeType }),
-        );
-        if (cancelled) URL.revokeObjectURL(objectUrl);
-        else setSrc(objectUrl);
-      })
-      .catch(() => {
-        if (!cancelled) setFailed(true);
-      });
-    return () => {
-      cancelled = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [artifactId, targetBotId, targetGroupId, visible]);
-
-  return { container, src, failed, onImageError: () => setFailed(true) };
-}
-
-/**
- * The picture of a link preview card, read from the thread's artifacts like an attached image:
- * never a remote URL. Fills the card's frame; a tile with the image glyph stands in when the
- * artifact cannot be read.
- */
 export function LinkPreviewImage({
   target,
   artifactId,
@@ -603,7 +532,7 @@ export function ArtifactImage({
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogContent
             showCloseButton={false}
-            className="w-auto max-w-none bg-transparent p-0 ring-0 sm:max-w-none"
+            className="w-auto max-w-none bg-transparent p-0 shadow-none sm:max-w-none"
           >
             <DialogTitle className="sr-only">{name}</DialogTitle>
             <DialogClose

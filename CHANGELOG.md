@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### 2026-10-21
 
+#### Changed
+
+- Rakazo takes a softer grey look on web, desktop and iPhone: a faint ambient light behind glass navigation and composer, cards on the bot's paper that settle into the conversation once answered, and solid fallbacks when Reduce Transparency is on.
+
 #### Fixed
 
 - When a bot asks for your approval or a question partway through a step, it now stops its other actions in that step, and its helpers, until you answer instead of carrying on, on web, desktop and iPhone.
