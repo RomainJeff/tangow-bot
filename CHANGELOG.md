@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Changed
 
 - Rakazo takes a softer grey look on web, desktop and iPhone: a faint ambient light behind glass navigation and composer, cards on the bot's paper that settle into the conversation once answered, and solid fallbacks when Reduce Transparency is on.
+- A bot's follow-up turns in the same conversation cost less with model providers that cache prompts, because its instructions and the earlier conversation now reach the model unchanged from one turn to the next.
 
 #### Fixed
 

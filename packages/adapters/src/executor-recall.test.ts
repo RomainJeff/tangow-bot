@@ -5,11 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
 import { createRunExecutor } from "./executor.js";
 import type * as HistoryCompactionModule from "./history-compaction.js";
-import {
-  estimateHistoryTokens,
-  estimateTextTokens,
-  estimateToolSchemaTokens,
-} from "./history-compaction.js";
+import { estimateTextTokens, estimateToolSchemaTokens } from "./history-compaction.js";
 import { recordingSessionLog } from "./session-log/recording.test-support.js";
 
 vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
@@ -175,15 +171,15 @@ describe("automatic semantic recall", () => {
     expect(request.limit).toBeGreaterThan(0);
 
     const [runtimeRequest] = f.runtimeRun.mock.calls[0]! as unknown as [AgentRunRequest];
-    const recalledBlock = runtimeRequest.history?.find((entry) =>
-      entry.content.includes("<recalled_memory>"),
+    expect(runtimeRequest.history).toEqual([]);
+    expect(runtimeRequest.prompt).toContain(
+      "<recalled_memory>\n- Ava decided to ship behind a feature flag.\n</recalled_memory>\n\nWhat did Ava decide?",
     );
-    expect(recalledBlock?.content).toContain("Ava decided to ship behind a feature flag.");
   });
 
-  it("charges the turn prompt and the recalled-memory block to the history budget", async () => {
-    // A long task prompt and a recalled memory are exactly the run this used to get wrong: both
-    // ride into the request outside the window `selectHistoryWindow` chooses from.
+  it("charges the turn prompt with its recalled-memory block to the history budget", async () => {
+    // A long task prompt carrying a recalled memory is exactly the run this used to get wrong: it
+    // rides into the request outside the window `selectHistoryWindow` chooses from.
     const f = fixture({
       taskPrompt: `What did Ava decide?\n\n${"Quoted reply line.\n".repeat(400)}`,
     });
@@ -194,10 +190,8 @@ describe("automatic semantic recall", () => {
       await f.run();
 
       const [request] = f.runtimeRun.mock.calls[0]! as unknown as [AgentRunRequest];
-      // The thread has no messages, so everything handed over as history is historical context.
-      expect(request.history.map((entry) => entry.content)).toEqual([
-        expect.stringContaining("<recalled_memory>"),
-      ]);
+      expect(request.history).toEqual([]);
+      expect(request.prompt).toContain("<recalled_memory>");
       const logged = sink.events.find((event: LogEvent) => event.message === "agent.run.context") as
         | (LogEvent & { nonHistoryTokens?: number })
         | undefined;
@@ -205,11 +199,8 @@ describe("automatic semantic recall", () => {
       const instructionTokens = estimateTextTokens(request.instructions);
       const toolSchemaTokens = estimateToolSchemaTokens(request.tools);
       const promptTokens = estimateTextTokens(request.prompt);
-      const historicalContextTokens = estimateHistoryTokens(request.history);
       expect(promptTokens).toBeGreaterThan(500);
-      expect(historicalContextTokens).toBeGreaterThan(0);
-      const nonHistoryTokens =
-        instructionTokens + toolSchemaTokens + promptTokens + historicalContextTokens;
+      const nonHistoryTokens = instructionTokens + toolSchemaTokens + promptTokens;
 
       // The budget the window is sized against is the whole non-window cost, not just the
       // instructions plus the tool schemas.

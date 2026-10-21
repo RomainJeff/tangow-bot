@@ -125,11 +125,26 @@ describe("selectHistoryWindow", () => {
     expect(historyBudgetTokens(200_000, 2_000, "channel")).toBe(181_616);
   });
 
-  it("retains exactly 60,000 estimated tokens on a large model", () => {
-    const history = Array.from({ length: 8 }, () => [user(9_999), assistant(1)]).flat();
-    const window = selectHistoryWindow({ history, contextWindow: 200_000, messageWindowSize: 2 });
-    expect(window).toEqual({ messages: history.slice(-12), mode: "tokens" });
-    expect(estimateHistoryTokens(window.messages)).toBe(60_000);
+  it("moves the first kept message in steps as turns arrive, not one exchange per turn", () => {
+    const firstKept = (exchanges: number) => {
+      const history = Array.from({ length: exchanges }, () => [user(999), assistant(1)]).flat();
+      const window = selectHistoryWindow({
+        history,
+        contextWindow: 200_000,
+        messageWindowSize: 200,
+      });
+      expect(estimateHistoryTokens(window.messages)).toBeLessThanOrEqual(60_000);
+      return (history.length - window.messages.length) / 2;
+    };
+    expect([60, 61, 62, 68, 69].map(firstKept)).toEqual([0, 9, 9, 9, 17]);
+
+    const counted = (messages: number) =>
+      selectHistoryWindow({
+        history: Array.from({ length: messages }, () => user(1)),
+        contextWindow: undefined,
+        messageWindowSize: 8,
+      }).messages.length;
+    expect([8, 9, 10, 11, 12].map(counted)).toEqual([8, 7, 8, 7, 8]);
   });
 
   it("uses the smaller measured capacity and starts at a user boundary when one fits", () => {
