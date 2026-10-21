@@ -294,7 +294,7 @@ export class E2BSandboxProvider implements SandboxProvider {
     const timeoutMs = boundedSandboxCommandTimeoutMs(request.timeoutMs);
     try {
       const result = await desktop.commands.run(cmd, {
-        cwd: e2bCwd(request.cwd),
+        cwd: e2bCwd(computer, request.cwd),
         envs: request.env,
         signal: context.signal,
         timeoutMs,
@@ -583,7 +583,9 @@ async function* walkE2BWorkspace(
   for (const relative of directories) yield* walkE2BWorkspace(desktop, relative, context, keep);
 }
 
-function e2bCwd(cwd: string | undefined): string {
+/** A worker's path is a real one on a computer that mounts its volumes. */
+function e2bCwd(computer: ComputerRef, cwd: string | undefined): string {
+  if (computer.writableRoots && cwd && underVolumeMounts(cwd)) return cwd;
   if (
     !cwd ||
     cwd === "." ||

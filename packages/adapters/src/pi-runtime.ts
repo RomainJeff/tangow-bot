@@ -37,7 +37,11 @@ import { redactSecrets } from "@rakazo/core";
 import { getLogger, redactSensitiveText } from "@rakazo/logging";
 import { z } from "zod";
 import { isToolPauseResult } from "./approval-effect.js";
-import { builtinAgentTools, DELEGATION_TOOL_NAMES } from "./builtin-tools.js";
+import {
+  builtinAgentTools,
+  COMPUTER_COMMAND_TOOLS,
+  DELEGATION_TOOL_NAMES,
+} from "./builtin-tools.js";
 import { DEFAULT_OPENROUTER_MODEL_ID } from "./deployment-model.js";
 import { piProviderId } from "./model-catalog.js";
 import {
@@ -864,6 +868,7 @@ const TOOL_ACTIVITY = new Map<string, string>([
   ["attach_file", "Attaching a file"],
   ["open_path", "Opening a file"],
   ["shell", "Working the terminal"],
+  ["computer_exec", "Working the terminal"],
   ["web_search", "Searching the web"],
   ["web_fetch", "Reading a web page"],
   ["browser_navigate", "Heading to a website"],
@@ -1271,7 +1276,7 @@ function toAgentTool(tool: ConnectorTool, host: ToolHost, exposedName: string): 
           uri: raw.uri ? String(raw.uri) : "",
         };
       }
-      if (tool.name === "shell") {
+      if (COMPUTER_COMMAND_TOOLS.has(tool.name)) {
         return {
           command: String(raw.command ?? ""),
           // The executor chooses the bot-scoped default, including Team workspaces.
@@ -1818,7 +1823,7 @@ function builtinParameters(tool: ConnectorTool) {
   if (tool.name === "remember") {
     return Type.Object({ content: Type.String(), path: Type.String() });
   }
-  if (tool.name === "shell") {
+  if (COMPUTER_COMMAND_TOOLS.has(tool.name)) {
     return Type.Object({
       command: Type.String(),
       cwd: Type.Optional(Type.String()),

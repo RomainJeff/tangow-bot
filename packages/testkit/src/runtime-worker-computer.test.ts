@@ -1,3 +1,5 @@
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import type { ConnectorProvider } from "@rakazo/adapter-kit";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.js";
@@ -43,11 +45,14 @@ const toolResults = (request: ModelEmulatorRequest) =>
       .map((message) => [message.tool_call_id, message.content]),
   );
 
-/** A worker run of a bot on a team computer, with a vision model so it may observe the screen. */
-async function teamBotRun(steps: ModelEmulatorStep[]) {
+/** A worker run of a bot, on a team computer by default, with a vision model that sees the screen. */
+async function botRun(
+  steps: ModelEmulatorStep[],
+  computerScope: "team" | "dedicated" | "none" = "team",
+) {
   const run = await startWorkerRun({
     steps,
-    computerScope: "team",
+    computerScope,
     protocol: "anthropic",
     tools: lookup,
   });
@@ -89,7 +94,7 @@ async function teamBotRun(steps: ModelEmulatorStep[]) {
 
 describe("a worker run's computer", () => {
   it("stays asleep, with no lease taken, through a run that only calls an MCP tool", async () => {
-    const bot = await teamBotRun([
+    const bot = await botRun([
       {
         expect() {},
         response: { type: "tool", id: "mcp", name: "mcp_lookup", arguments: {} },
@@ -108,7 +113,7 @@ describe("a worker run's computer", () => {
 
   it("starts at the first computer call, holds the lease through the run and lets it go at the end", async () => {
     const seen: Array<{ computer: string; leases: unknown }> = [];
-    const bot = await teamBotRun([
+    const bot = await botRun([
       {
         async expect() {
           seen.push({ computer: await bot.computer(), leases: await bot.leases() });
@@ -135,7 +140,7 @@ describe("a worker run's computer", () => {
 
   it("answers a computer call with a busy error at once while another run of the bot holds it and starts it", async () => {
     let result: unknown;
-    const bot = await teamBotRun([
+    const bot = await botRun([
       {
         expect() {},
         response: {
@@ -188,7 +193,7 @@ describe("a worker run's computer", () => {
 
   it("waits out a start someone else began and then answers the call", async () => {
     let result: unknown;
-    const bot = await teamBotRun([
+    const bot = await botRun([
       {
         expect() {},
         response: { type: "tool", id: "look", name: "computer_observe", arguments: {} },
@@ -220,7 +225,7 @@ describe("a worker run's computer", () => {
 
   it("answers a failed start with an error and starts on the next call", async () => {
     let results: Record<string, unknown> = {};
-    const bot = await teamBotRun([
+    const bot = await botRun([
       {
         expect() {},
         response: { type: "tool", id: "first", name: "computer_observe", arguments: {} },
@@ -255,7 +260,7 @@ describe("a worker run's computer", () => {
   ])(
     "starts the computer for a takeover %s and holds it for the person, with no tool result logged",
     async (_where, homeStorage) => {
-      const bot = await teamBotRun([
+      const bot = await botRun([
         {
           expect() {},
           response: {
@@ -283,7 +288,7 @@ describe("a worker run's computer", () => {
 
   it("answers a takeover with a busy error while another run of the bot holds the computer", async () => {
     let result: unknown;
-    const bot = await teamBotRun([
+    const bot = await botRun([
       {
         expect() {},
         response: {
@@ -326,7 +331,7 @@ describe("a worker run's computer", () => {
   });
 
   it("lets the lease a takeover held go when the resumed run fails before it starts", async () => {
-    const bot = await teamBotRun([]);
+    const bot = await botRun([]);
     const runId = await bot.run.send("Hello.");
     await bot.run.prisma.run.update({ where: { id: runId }, data: { checkpoint: "takeover" } });
     await bot.run.prisma.computerExecutionLease.create({
@@ -348,4 +353,150 @@ describe("a worker run's computer", () => {
     );
     expect(await bot.leases()).toEqual([{ runId, held: false }]);
   });
+});
+
+describe("computer_exec", () => {
+  const terminals = (request: ModelEmulatorRequest) =>
+    (request.tools ?? [])
+      .map((tool) => tool.function.name)
+      .filter((name) => ["bash", "shell", "computer_exec"].includes(name))
+      .sort();
+
+  it.each([
+    ["a worker run with a computer", "team", "volumes", ["bash", "computer_exec"]],
+    ["a run in process", "team", "snapshot", ["shell"]],
+    ["a run without a computer", "none", null, []],
+  ] as const)("is offered to %s", async (_run, scope, homeStorage, offered) => {
+    let tools: string[] = [];
+    const bot = await botRun(
+      [
+        {
+          expect(request) {
+            tools = terminals(request);
+          },
+          response: finish[0]!.response,
+        },
+        finish[1]!,
+      ],
+      scope,
+    );
+    if (homeStorage) {
+      await bot.run.prisma.computer.update({
+        where: { id: bot.run.bot.computerId! },
+        data: { homeStorage },
+      });
+    }
+    await bot.start();
+
+    expect(tools).toEqual(offered);
+  });
+
+  it.each([
+    ["team", true],
+    ["dedicated", false],
+  ] as const)(
+    "runs on the %s computer, from the bot's home, and starts it at that call",
+    async (scope, leased) => {
+      const worker = createServer((_request, response) => response.end("served by the worker"));
+      await new Promise<void>((resolve) => worker.listen(0, "127.0.0.1", resolve));
+      cleanups.push(() => new Promise((resolve) => worker.close(() => resolve())));
+      const command = `curl -s http://localhost:${(worker.address() as AddressInfo).port}`;
+      const seen: Array<{ computer: string; leases: unknown }> = [];
+      let results: Record<string, unknown> = {};
+      const bot = await botRun(
+        [
+          {
+            expect() {},
+            response: { type: "tool", id: "here", name: "bash", arguments: { command } },
+          },
+          {
+            async expect() {
+              seen.push({ computer: await bot.computer(), leases: await bot.leases() });
+            },
+            response: { type: "tool", id: "there", name: "computer_exec", arguments: { command } },
+          },
+          {
+            async expect(request) {
+              seen.push({ computer: await bot.computer(), leases: await bot.leases() });
+              results = toolResults(request);
+            },
+            response: finish[0]!.response,
+          },
+          finish[1]!,
+        ],
+        scope,
+      );
+      const runId = await bot.start();
+
+      expect(results.here).toBe("served by the worker");
+      expect(JSON.parse(String(results.there))).toEqual({
+        code: 0,
+        stdout: `computer ran ${command} in /workspace/bots/${bot.run.bot.id}\n`,
+        stderr: "",
+      });
+      expect(seen).toEqual([
+        { computer: "stopped", leases: [] },
+        { computer: "running", leases: leased ? [{ runId, held: true }] : [] },
+      ]);
+    },
+  );
+
+  it("refuses a command that could stop the desktop, as shell does", async () => {
+    let result: unknown;
+    const bot = await botRun([
+      {
+        expect() {},
+        response: {
+          type: "tool",
+          id: "kill",
+          name: "computer_exec",
+          arguments: { command: "pkill chromium" },
+        },
+      },
+      {
+        expect(request) {
+          result = toolResults(request).kill;
+        },
+        response: finish[0]!.response,
+      },
+      finish[1]!,
+    ]);
+    await bot.start();
+
+    expect(JSON.parse(String(result))).toEqual({
+      error:
+        "This command was not run: the desktop-protection guard detected a protected command or shell syntax it cannot inspect. Shell access is still available. For ordinary repository work, use direct commands with explicit paths, without sourcing or command substitution. Do not stop or restart browser/desktop processes.",
+    });
+  });
+});
+
+it("hands a screenshot to the guest's model as an image", async () => {
+  const bot = await botRun([
+    {
+      expect() {},
+      response: { type: "tool", id: "look", name: "computer_observe", arguments: {} },
+    },
+    ...finish,
+  ]);
+  await bot.start();
+
+  const sent = bot.run.model.rawRequests[1] as {
+    messages: Array<{
+      content: string | Array<{ type: string; tool_use_id?: string; content?: unknown }>;
+    }>;
+  };
+  const screenshot = sent.messages
+    .flatMap((message) => (typeof message.content === "string" ? [] : message.content))
+    .find((block) => block.tool_use_id === "look");
+  expect(screenshot?.content).toEqual([
+    { type: "text", text: expect.stringMatching(/^computer observed/) },
+    {
+      type: "image",
+      source: {
+        type: "base64",
+        media_type: "image/png",
+        data: expect.stringMatching(/^iVBORw0KGgo/),
+      },
+    },
+  ]);
 });

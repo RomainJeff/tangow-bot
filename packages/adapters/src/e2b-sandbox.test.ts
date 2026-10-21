@@ -404,6 +404,24 @@ describe("E2B computer backend", () => {
       expect(before.killed).toBe(false);
     });
 
+    it("runs a command at a worker's path as is, and any other directory in its workspace", async () => {
+      const { provider, computer, replacement } = await provisionOver(
+        null,
+        teamHome([ada, shared]),
+      );
+      const run = vi.spyOn(replacement.sandbox.commands, "run");
+      for (const cwd of [undefined, "bots/bot_a", "/workspace/shared", "/workspace/bots/bot_a"]) {
+        for await (const _ of provider.execute(computer, { argv: ["pwd"], cwd }, context));
+      }
+
+      expect(run.mock.calls.map(([, options]) => options?.cwd)).toEqual([
+        "/home/user/rakazo-home",
+        "/home/user/rakazo-home/bots/bot_a",
+        "/workspace/shared",
+        "/workspace/bots/bot_a",
+      ]);
+    });
+
     it("refuses a computer write that would land on no volume", async () => {
       const { provider, computer, replacement } = await provisionOver(
         null,
