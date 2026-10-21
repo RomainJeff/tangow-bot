@@ -69,7 +69,7 @@ type McpContent =
  * `screensDir` and named in the result: the relay keeps only the newest images in the model's
  * context, and the harness reads an older screen from its file.
  */
-export async function mcpContent(
+async function mcpContent(
   output: unknown,
   screensDir: string,
   callId: string,

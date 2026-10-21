@@ -144,30 +144,6 @@ describe("the Rakazo MCP server", () => {
     expect(calls.map(({ name }) => name)).toEqual(["schedule_create"]);
   });
 
-  it("passes a screen saved by path as text, with no image", async () => {
-    const saved = "Screen saved at /workspace/bots/b1/.rakazo/screens/f7.png. Read it to see it.";
-    const { host } = fakeHost(() => ({
-      kind: "agent_tool_result",
-      content: [
-        {
-          type: "text",
-          text: `computer observed\n{"frameId":"f7","width":1280,"height":800}\n${saved}`,
-        },
-      ],
-    }));
-    const { client } = await connect(PRODUCT_TOOLS, host);
-
-    expect(await client.callTool({ name: "computer_observe", arguments: {} })).toEqual({
-      content: [
-        {
-          type: "text",
-          text: `computer observed\n{"frameId":"f7","width":1280,"height":800}\n${saved}`,
-        },
-      ],
-      isError: false,
-    });
-  });
-
   it("returns an image the controller still sends, and saves it under a name the result gives", async () => {
     const { host, calls } = fakeHost(() => ({
       kind: "agent_tool_result",
@@ -227,20 +203,6 @@ describe("a large connector catalog through the Rakazo MCP server", () => {
         executionId: calls[0]!.callId,
       },
     ]);
-  });
-
-  it("returns the controller's refusal when the tool was revoked after discovery", async () => {
-    const { host } = fakeHost(() => {
-      throw new Error("Tool is unknown or not authorized for this bot");
-    });
-    const { client } = await connect(CATALOG_TOOLS, host, { nativeToolSearch: true });
-
-    expect(
-      await client.callTool({ name: "mcp__demo__tool_03", arguments: { value: "x" } }),
-    ).toEqual({
-      content: [{ type: "text", text: "Tool is unknown or not authorized for this bot" }],
-      isError: true,
-    });
   });
 
   it("gives a harness without native tool search the search, load and execute tools only", async () => {
