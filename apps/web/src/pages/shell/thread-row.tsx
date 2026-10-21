@@ -126,18 +126,20 @@ export function ThreadRowBody({
   showAvatar: boolean;
   arrivesLive: boolean;
 }) {
-  const { t } = useLingui();
   const { item } = row;
   const body = itemBody(item, row, context, { chrome, showAuthor, showAvatar, arrivesLive });
   const origin = sessionOriginOf(item);
   if (!origin) return body;
-  const title = origin.name ?? (origin.kind === "routine" ? t`Routine` : t`subagent`);
   return (
     <>
       <OriginLabel
-        title={title}
+        title={origin.name}
         onOpen={() =>
-          context.onOpenSession({ kind: "session", sessionId: origin.sessionId, title })
+          context.onOpenSession({
+            kind: "session",
+            sessionId: origin.sessionId,
+            title: origin.name,
+          })
         }
       />
       {body}
