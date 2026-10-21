@@ -1,5 +1,13 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import { Puzzle, Sparkles } from "lucide-react";
+import {
+  Button,
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@rakazo/ui-web";
+import { Puzzle, Sparkles, X } from "lucide-react";
 import { useState } from "react";
 import { PluginsOverlay } from "./PluginsOverlay";
 import { SkillsOverlay } from "./SkillsOverlay";
@@ -50,7 +58,8 @@ function CustomizeNav({
 
 /**
  * Single entry point for the space-level panels the sidebar used to open one by
- * one. Each section keeps its own dialog shell and renders the shared rail.
+ * one. One dialog hosts every section so switching never closes and reopens it;
+ * a visited section stays mounted so coming back neither reloads nor resets it.
  */
 export function CustomizeOverlay({
   activeBotId,
@@ -63,24 +72,58 @@ export function CustomizeOverlay({
   onOpenMcp?: () => void;
   onSkillsChanged?: () => void;
 }) {
+  const { t } = useLingui();
   const [section, setSection] = useState<CustomizeSection>("integrations");
-  // ponytail: switching sections remounts the dialog, which also resets the
-  // section's own state. Hoist state into here if that ever gets annoying.
-  const nav = <CustomizeNav section={section} onSelect={setSection} />;
+  const [skillsVisited, setSkillsVisited] = useState(false);
+  const sectionClass = (id: CustomizeSection) =>
+    section === id ? "flex min-h-0 flex-1 flex-col" : "hidden";
 
-  return section === "integrations" ? (
-    <PluginsOverlay
-      sidebar={nav}
-      activeBotId={activeBotId}
-      onClose={onClose}
-      onOpenMcp={onOpenMcp}
-    />
-  ) : (
-    <SkillsOverlay
-      sidebar={nav}
-      botId={activeBotId}
-      onClose={onClose}
-      onSkillsChanged={onSkillsChanged}
-    />
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent
+        variant="window"
+        showCloseButton={false}
+        className="flex h-[760px] max-h-[calc(100%-2rem)] w-[min(1080px,calc(100%-2rem))] max-w-[calc(100%-2rem)] flex-row gap-0 overflow-hidden p-0 max-md:flex-col sm:max-w-[1080px]"
+      >
+        <CustomizeNav
+          section={section}
+          onSelect={(next) => {
+            setSection(next);
+            if (next === "skills") setSkillsVisited(true);
+          }}
+        />
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <DialogHeader className="flex-row items-start justify-between px-8 pt-7">
+            <DialogTitle className="text-2xl text-foreground">
+              {section === "integrations" ? <Trans>Integrations</Trans> : <Trans>Skills</Trans>}
+            </DialogTitle>
+            <DialogClose
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={section === "integrations" ? t`Close integrations` : t`Close skills`}
+                />
+              }
+            >
+              <X />
+            </DialogClose>
+          </DialogHeader>
+          <div className={sectionClass("integrations")}>
+            <PluginsOverlay activeBotId={activeBotId} onOpenMcp={onOpenMcp} />
+          </div>
+          {skillsVisited ? (
+            <div className={sectionClass("skills")}>
+              <SkillsOverlay botId={activeBotId} onSkillsChanged={onSkillsChanged} />
+            </div>
+          ) : null}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
