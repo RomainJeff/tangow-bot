@@ -40,8 +40,8 @@ export type ModelEmulatorResponse =
       arguments: Record<string, unknown>;
       /** Concatenation must equal the JSON arguments. Each fragment is a separate SSE delta. */
       argumentChunks?: string[];
-      /** More calls in the same reply, which the runtime runs as one batch. */
-      also?: Array<{ id: string; name: string; arguments: Record<string, unknown> }>;
+      /** Further calls the same assistant turn makes, after this one. */
+      siblings?: Array<{ id: string; name: string; arguments: Record<string, unknown> }>;
       usage?: ModelEmulatorUsage;
     }
   | { type: "error"; status: number; message: string }
@@ -148,14 +148,14 @@ export async function startModelEmulator(options: {
         for (const fragment of reply.argumentChunks ?? [JSON.stringify(reply.arguments)]) {
           emit({ tool_calls: [{ index: 0, function: { arguments: fragment } }] });
         }
-        for (const [offset, call] of (reply.also ?? []).entries()) {
+        for (const [offset, sibling] of (reply.siblings ?? []).entries()) {
           emit({
             tool_calls: [
               {
                 index: offset + 1,
-                id: call.id,
+                id: sibling.id,
                 type: "function",
-                function: { name: call.name, arguments: JSON.stringify(call.arguments) },
+                function: { name: sibling.name, arguments: JSON.stringify(sibling.arguments) },
               },
             ],
           });
@@ -337,9 +337,9 @@ async function streamAnthropic(
         partial_json,
       })),
     );
-    for (const call of reply.also ?? []) {
-      block({ type: "tool_use", id: call.id, name: call.name, input: {} }, [
-        { type: "input_json_delta", partial_json: JSON.stringify(call.arguments) },
+    for (const sibling of reply.siblings ?? []) {
+      block({ type: "tool_use", id: sibling.id, name: sibling.name, input: {} }, [
+        { type: "input_json_delta", partial_json: JSON.stringify(sibling.arguments) },
       ]);
     }
   } else if (reply.type === "text") {

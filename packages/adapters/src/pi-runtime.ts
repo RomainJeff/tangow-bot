@@ -410,6 +410,7 @@ export class PiAgentRuntime implements AgentRuntime {
           getApiKey: async () => apiKey,
           transformContext: async (messages) =>
             pruneComputerScreenshotContext(messages, request.model.maxImagesPerPrompt),
+          finishTurn: async () => (host.pausePending ? { action: "end" } : undefined),
           prepareNextTurnWithContext: async () => {
             if (!request.claimSteering) return undefined;
             const steering = await request.claimSteering([...seenSteeringIds]);
@@ -618,12 +619,12 @@ export class PiAgentRuntime implements AgentRuntime {
           }
         }
 
-        // Budget abort stops the agent underneath the model, which leaves
+        // Budget and pause aborts stop the agent underneath the model, which can leave
         // errorMessage set. Treat that as a soft stop so the turn still ends
         // with a durable assistant message instead of a failed run.
         const budgetExceeded = host.toolCallBudget.exceeded;
         const error = agent.state.errorMessage;
-        if (error && !budgetExceeded) {
+        if (error && !budgetExceeded && !host.pausePending) {
           throw new Error(sanitizeProviderError(model.provider, error));
         }
         if (budgetExceeded) {
@@ -1200,6 +1201,7 @@ function toAgentTool(tool: ConnectorTool, host: ToolHost, exposedName: string): 
     label: tool.name,
     description: tool.description,
     parameters: parametersFor(tool),
+    ...(tool.name === "run_subagent" ? {} : { executionMode: "sequential" as const }),
     prepareArguments: (args: unknown) => {
       const raw = args && typeof args === "object" ? (args as Record<string, unknown>) : {};
       if (tool.name === "destination.write") {
@@ -1441,6 +1443,7 @@ function toAgentTool(tool: ConnectorTool, host: ToolHost, exposedName: string): 
             details: { error: "no executor" },
           };
         })();
+        if (host.pausePending) host.abortTurn();
         return boundAgentToolResult(result as AgentToolResult<unknown>);
       } catch (error) {
         failure = error;
@@ -1466,6 +1469,12 @@ function toAgentTool(tool: ConnectorTool, host: ToolHost, exposedName: string): 
 }
 
 type SubagentOutcome = { status: "completed" | "failed"; result: string; toolResult: string };
+
+const stoppedForPause: SubagentOutcome = {
+  status: "completed",
+  result: "Stopped: the run is waiting for the user.",
+  toolResult: "Stopped: the run is waiting for the user.",
+};
 
 function subagentFailed(message: string): SubagentOutcome {
   return { status: "failed", result: message, toolResult: `Subagent failed: ${message}` };
@@ -1604,6 +1613,10 @@ async function runSubagent(
     // Nested tool calls have no span of their own in the run trace.
     toolTrace: undefined,
     request: log ? { ...host.request, executeTool: log.executeTool } : host.request,
+    abortTurn: () => {
+      if (nestedHost.pausePending) host.pausePending = true;
+      host.abortTurn();
+    },
   };
   const childTools = toAgentTools(childDefs, nestedHost);
   const childAppNames = appNamesByAgentTool(childDefs, childTools);
@@ -1620,6 +1633,7 @@ async function runSubagent(
     getApiKey: async () => selectedModel.apiKey,
     transformContext: async (messages) =>
       pruneComputerScreenshotContext(messages, requestModel.maxImagesPerPrompt),
+    finishTurn: async () => (nestedHost.pausePending ? { action: "end" } : undefined),
     initialState: {
       systemPrompt: [
         `You are a Rakazo subagent named "${name}".`,
@@ -1691,6 +1705,7 @@ async function runSubagent(
 
   try {
     if (host.signal.aborted) return { status: "failed", result: "stopped", toolResult: "stopped" };
+    if (host.pausePending) return stoppedForPause;
     const onAbort = () => nested.abort();
     host.signal.addEventListener("abort", onAbort);
     try {
@@ -1700,11 +1715,9 @@ async function runSubagent(
         await nested.waitForIdle();
       } finally {
         host.signal.removeEventListener("abort", onAbort);
-        // nestedHost is a shallow copy; ask_user / request_takeover set pause
-        // only on the child. Copy it up before the parent releases the budget.
-        if (nestedHost.pausePending) host.pausePending = true;
       }
     }
+    if (host.pausePending && !nestedHost.pausePending) return stoppedForPause;
     // Shared-budget abort leaves errorMessage on the nested agent; surface it as a
     // completed stop rather than a failed subagent chip.
     const budgetExceeded = host.toolCallBudget.exceeded;

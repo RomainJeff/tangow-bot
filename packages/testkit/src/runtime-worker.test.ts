@@ -70,17 +70,14 @@ async function probe() {
   const dir = await mkdtemp(path.join(tmpdir(), "rakazo-worker-probe-"));
   cleanups.push(() => rm(dir, { recursive: true, force: true }));
   const file = path.join(dir, "probe.txt");
+  const command = `echo ran >> ${file}`;
   const step = (expectations: ModelEmulatorStep["expect"] = () => {}): ModelEmulatorStep => ({
     expect: expectations,
-    response: {
-      type: "tool",
-      id: "probe",
-      name: "bash",
-      arguments: { command: `echo ran >> ${file}` },
-    },
+    response: { type: "tool", id: "probe", name: "bash", arguments: { command } },
   });
   return {
     step,
+    command,
     lines: async () => (await readFile(file, "utf8").catch(() => "")).split("\n").filter(Boolean),
   };
 }
@@ -436,4 +433,88 @@ describe("a run whose bot runs in a guest", () => {
     ]);
     expect(before.launches).toHaveLength(1);
   });
+
+  it.each([
+    ["before", ["publish_note", "bash"], []],
+    ["after", ["bash", "publish_note"], ["ran"]],
+  ])(
+    "stops a guest's tool batch at a connector approval with a native command %s it",
+    async (_order, batch, probeLines) => {
+      const probed = await probe();
+      const published: string[] = [];
+      const publish = { id: "publish", name: "publish_note", arguments: { title: "Plan" } };
+      const calls = batch.map((name) =>
+        name === "bash" ? { id: "probe", name, arguments: { command: probed.command } } : publish,
+      );
+      let replayed: ModelEmulatorRequest["messages"] = [];
+      const run = await fixture({
+        tools: {
+          describe: () => ({
+            id: "fixture",
+            contractVersion: "1",
+            adapterVersion: "1",
+            capabilities: { discover: true, oauth: false, secretsBrokered: true },
+          }),
+          discoverTools: async () => [
+            {
+              name: "publish_note",
+              description: "Publish a note",
+              inputSchema: { type: "object", properties: { title: { type: "string" } } },
+            },
+          ],
+          async *execute(call) {
+            published.push(call.tool);
+            yield { type: "result", data: { published: true } };
+          },
+        },
+        steps: [
+          { expect() {}, response: { type: "tool", ...calls[0]!, siblings: calls.slice(1) } },
+          {
+            expect(request) {
+              replayed = request.messages;
+            },
+            response: { type: "tool", ...publish },
+          },
+          ...finishing,
+        ],
+      });
+      await run.prisma.actionApprovalRule.create({
+        data: {
+          spaceId: run.spaceId,
+          createdByUserId: run.userId,
+          effect: "require_approval",
+          matchKind: "tool",
+          matchValue: "publish_note",
+        },
+      });
+      const runId = await run.send("Publish the plan.");
+      await run.continueRun(runId);
+
+      expect(run.model.requests).toHaveLength(1);
+      expect((await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
+        "waiting_input",
+      );
+      expect(published).toEqual([]);
+      expect(await probed.lines()).toEqual(probeLines);
+
+      const card = await latestCard(run.prisma, runId);
+      await run.events.answerRunInput({
+        spaceId: run.spaceId,
+        threadId: run.thread.id,
+        runId,
+        messageId: card.id,
+        answeredByUserId: run.userId,
+        answer: "allow",
+      });
+      await run.continueRun(runId);
+
+      run.model.assertComplete();
+      expect(JSON.stringify(replayed).includes(probed.command)).toBe(probeLines.length > 0);
+      expect(published).toEqual(["publish_note"]);
+      expect(await probed.lines()).toEqual(probeLines);
+      expect((await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
+        "completed",
+      );
+    },
+  );
 });

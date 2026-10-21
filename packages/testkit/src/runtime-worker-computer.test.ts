@@ -134,7 +134,7 @@ describe("a worker run's computer", () => {
           id: "first",
           name: "computer_observe",
           arguments: {},
-          also: [{ id: "second", name: "computer_observe", arguments: {} }],
+          siblings: [{ id: "second", name: "computer_observe", arguments: {} }],
         },
       },
       {
