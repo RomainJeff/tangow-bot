@@ -10,8 +10,9 @@ import { clearSpaceSelection } from "../lib/rpc";
 type AuthMode = "in" | "up" | "forgot";
 type PasswordResetCapabilities = { passwordReset: boolean; resetUrl: string | null };
 
-const fieldClass = "mt-2 h-12 rounded-xl px-4 text-base md:text-base";
-const submitClass = "mt-3 h-12 w-full rounded-xl text-base";
+const fieldClass =
+  "mt-2 h-12 rounded-xl border-transparent bg-group px-4 text-base shadow-group md:text-base dark:bg-group";
+const submitClass = "mt-3 h-12 w-full rounded-full text-base";
 const AUTH_CAPABILITIES_TIMEOUT_MS = 8_000;
 const MAX_AUTH_CAPABILITIES_RESPONSE_BYTES = 64 * 1024;
 
@@ -337,9 +338,9 @@ function AuthFrame({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-full items-center justify-center bg-background px-6 py-16 text-foreground">
+    <div className="rk-ambient flex min-h-full items-center justify-center px-6 py-16 text-foreground">
       <form onSubmit={onSubmit} className="flex w-[460px] flex-col items-center">
-        <div className="flex h-[74px] w-[74px] items-center justify-center gap-[11px] rounded-full bg-muted">
+        <div className="flex h-[74px] w-[74px] items-center justify-center gap-[11px] rounded-full bg-group shadow-group">
           <span className="h-5 w-[9px] rounded-full bg-primary" />
           <span className="h-5 w-[9px] rounded-full bg-primary" />
         </div>

@@ -79,6 +79,7 @@ import {
   applyJudgeDecision,
   approvedReplayCall,
   assertTransition,
+  attemptOwnsFence,
   avatarIdentitySeed,
   BOT_DELEGATION_GUIDANCE,
   BOT_OFFER_DEDICATED_BOT,
@@ -206,6 +207,7 @@ import {
   claimIntendedEffect,
   completeExternalEffect,
   createApprovedEffectReplayQueue,
+  inputPausedToolResult,
   isToolPauseResult,
   parseCatalogApprovalTarget,
   replaceCompletedExternalEffectResult,
@@ -214,6 +216,7 @@ import {
   settleUncertainEffect,
   uncertainEffectResult,
 } from "./approval-effect.js";
+import { askUserCard } from "./ask-user.js";
 import {
   autoReviewTimeoutMs,
   buildAutoReviewPrompt,
@@ -2204,9 +2207,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
           trace?: ToolCallTrace,
           local?: Parameters<LocalToolExecutor>[3],
         ) => {
-          const takeoverRefused =
-            name === "request_takeover" ? await computerUnavailable(name) : undefined;
-          if (name === "request_takeover" && !takeoverRefused) return { ok: true };
+          // A served pause writes nothing to the tool log: the card is its record.
+          const refused =
+            name === "ask_user" || name === "request_takeover"
+              ? await servePausingTool(name, args)
+              : undefined;
+          if (isToolPauseResult(refused)) return refused;
           const call = toolCall(executionId, name, args);
           if (unansweredCalls.get(executionId) !== call.payload.input) await write(call);
           unansweredCalls.delete(executionId);
@@ -2221,7 +2227,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               },
             });
           const result =
-            takeoverRefused ??
+            refused ??
             (await applyTool(name, args, executionId, log, trace, local).catch(
               async (error: unknown) => {
                 // An aborted call stays unanswered so a resumed worker replays it.
@@ -2357,6 +2363,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   if (!(error instanceof RunHistoryWriteError)) throw error;
                 }
               }),
+            transcript: (event) =>
+              inOrder(() =>
+                logHarnessTranscript(deps, helper.log, { runId, fence }, event, runSecrets),
+              ),
             abandon: (result) =>
               inOrder(() =>
                 writeRunEntry({
@@ -2405,6 +2415,166 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const pauseForSecret = () => {
           approvalPausePending = true;
           return secretPausedToolResult();
+        };
+
+        type InputPauseRequest = Extract<AgentRuntimeEvent, { type: "ask" | "takeover" }>;
+        type InputPauseStatus = "paused" | "revoked";
+        let inputPause: { key: string; result: Promise<InputPauseStatus> } | undefined;
+        const pauseKey = (event: InputPauseRequest) => {
+          const wireEvent: unknown = JSON.parse(JSON.stringify(event));
+          return stableJsonValue(wireEvent);
+        };
+        const pauseOnce = async (
+          event: InputPauseRequest,
+          pause: () => Promise<boolean>,
+        ): Promise<InputPauseStatus | "conflict"> => {
+          const key = pauseKey(event);
+          if (inputPause) return inputPause.key === key ? inputPause.result : "conflict";
+          const result: Promise<InputPauseStatus> = pause().then((paused) =>
+            paused ? "paused" : "revoked",
+          );
+          const pending = { key, result };
+          inputPause = pending;
+          try {
+            return await result;
+          } catch (error) {
+            if (inputPause === pending) inputPause = undefined;
+            throw error;
+          }
+        };
+        const pauseForAsk = (event: Extract<AgentRuntimeEvent, { type: "ask" }>) =>
+          pauseOnce(event, async () => {
+            if (!(await renewRunLease(deps, runId, workerId, fence))) return false;
+            const safeText = redactSecrets(event.text, runSecrets);
+            const safeDetail = event.detail
+              ? redactSecrets(event.detail, runSecrets)
+              : event.detail;
+            const safeActions = event.actions?.map((action) => ({
+              id: action.id,
+              label: redactSecrets(action.label, runSecrets),
+            }));
+            const safeQuestions = event.questions?.map((question) => ({
+              ...question,
+              question: redactSecrets(question.question, runSecrets),
+              ...(question.header ? { header: redactSecrets(question.header, runSecrets) } : {}),
+              ...(question.options
+                ? {
+                    options: question.options.map((option) => ({
+                      ...option,
+                      label: redactSecrets(option.label, runSecrets),
+                      ...(option.description
+                        ? { description: redactSecrets(option.description, runSecrets) }
+                        : {}),
+                    })),
+                  }
+                : {}),
+            }));
+            await workspaceCheckpoint.flush();
+            const paused = await deps.events.pauseRunForInput({
+              spaceId: run.spaceId,
+              threadId: run.threadId,
+              botId: run.botId,
+              runId,
+              attemptId: attempt.id,
+              leaseOwner: workerId,
+              leaseFence: fence,
+              blocks: [
+                {
+                  kind: "ask",
+                  text: safeText,
+                  detail: safeDetail,
+                  status: "pending",
+                  ...(safeActions ? { actions: safeActions } : {}),
+                  ...(safeQuestions ? { questions: safeQuestions } : {}),
+                },
+              ],
+              // Keep unredacted labels on the run for resume; message blocks stay redacted.
+              offeredActions: event.actions,
+            });
+            if (!paused) return false;
+            await notifyRun(deps, run, {
+              kind: "help",
+              title: `${bot.name} needs an answer`,
+              body: safeText,
+              botId: bot.id,
+              threadId: thread.id,
+            });
+            return true;
+          });
+        const pauseForTakeover = (reason: string) =>
+          pauseOnce({ type: "takeover", reason }, async () => {
+            if (!(await renewRunLease(deps, runId, workerId, fence))) return false;
+            const safeReason = redactSecrets(reason, runSecrets);
+            dropMidTurnNarration();
+            await useComputer();
+            await workspaceCheckpoint.flush();
+            if (!(await runComputer?.holdForTakeover())) {
+              throw new Error("Computer lease expired before takeover");
+            }
+            await publishMessage(deps, run, [
+              { kind: "computer", state: "Needs you", text: safeReason },
+            ]);
+            const paused = await deps.events.pauseRunForTakeover({
+              spaceId: run.spaceId,
+              threadId: run.threadId,
+              botId: run.botId,
+              runId,
+              attemptId: attempt.id,
+              leaseOwner: workerId,
+              leaseFence: fence,
+              reason: safeReason,
+              computerId: requireStoredComputer().id,
+            });
+            if (!paused) return false;
+            retainComputerLease = true;
+            await notifyRun(deps, run, {
+              kind: "takeover",
+              title: `${bot.name} needs you on the screen`,
+              body: safeReason,
+              botId: bot.id,
+              threadId: thread.id,
+            });
+            return true;
+          });
+        /**
+         * For a harness that leaves ask_user and request_takeover to the controller. A runtime that
+         * pauses on its own still sends its ask or takeover event next, which the loop then drops.
+         */
+        const servePausingTool = async (
+          name: "ask_user" | "request_takeover",
+          args: Record<string, unknown>,
+        ) => {
+          let event: InputPauseRequest;
+          let reply: ReturnType<typeof inputPausedToolResult>;
+          if (name === "request_takeover") {
+            event = {
+              type: "takeover",
+              reason: String(args.reason ?? "I need you on the screen."),
+            };
+            reply = inputPausedToolResult("takeover", "Takeover requested.");
+          } else {
+            let ask: ReturnType<typeof askUserCard>;
+            try {
+              ask = askUserCard(args);
+            } catch (error) {
+              return { error: error instanceof Error ? error.message : String(error) };
+            }
+            event = ask.card;
+            reply = inputPausedToolResult("ask", ask.reply);
+          }
+          const waiting = { error: "Already waiting on the user." };
+          if (inputPause && inputPause.key !== pauseKey(event)) return waiting;
+          if (event.type === "takeover") {
+            const refused = await computerUnavailable(name);
+            if (refused) return refused;
+          }
+          const paused = await (event.type === "ask"
+            ? pauseForAsk(event)
+            : pauseForTakeover(event.reason));
+          if (paused === "conflict") return waiting;
+          if (paused === "paused") approvalPausePending = true;
+          else leaseValid = false;
+          return reply;
         };
 
         const skillOwner = { spaceId: run.spaceId, userId: run.userId, botId: run.botId };
@@ -4832,7 +5002,16 @@ export function createRunExecutor(deps: ExecutorDeps) {
             context,
           );
           for await (const event of withRuntimeCleanup(runtimeEvents, runAbortController)) {
-            if (approvalPausePending) return;
+            if (approvalPausePending) {
+              // A paused worker attempt concludes under the session's guard, and its harness's
+              // last transcript is still the run's: wait for it instead of cutting the guest off.
+              if (event.type === "transcript") {
+                await logHarnessTranscript(deps, runLog, { runId, fence }, event, runSecrets);
+              }
+              const concluded = event.type === "transcript" || event.type === "done";
+              if (concluded || runtime.describe().id !== "worker") return;
+              continue;
+            }
             if (!leaseValid) return;
             const now = Date.now();
             if (now - lastLeaseCheckAt >= 1_000) {
@@ -4881,94 +5060,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 });
               }
             } else if (event.type === "ask") {
-              if (!(await renewRunLease(deps, runId, workerId, fence))) return;
-              const safeText = redactSecrets(event.text, runSecrets);
-              const safeDetail = event.detail
-                ? redactSecrets(event.detail, runSecrets)
-                : event.detail;
-              const safeActions = event.actions?.map((action) => ({
-                id: action.id,
-                label: redactSecrets(action.label, runSecrets),
-              }));
-              const safeQuestions = event.questions?.map((question) => ({
-                ...question,
-                question: redactSecrets(question.question, runSecrets),
-                ...(question.header ? { header: redactSecrets(question.header, runSecrets) } : {}),
-                ...(question.options
-                  ? {
-                      options: question.options.map((option) => ({
-                        ...option,
-                        label: redactSecrets(option.label, runSecrets),
-                        ...(option.description
-                          ? { description: redactSecrets(option.description, runSecrets) }
-                          : {}),
-                      })),
-                    }
-                  : {}),
-              }));
-              await workspaceCheckpoint.flush();
-              const paused = await deps.events.pauseRunForInput({
-                spaceId: run.spaceId,
-                threadId: run.threadId,
-                botId: run.botId,
-                runId,
-                attemptId: attempt.id,
-                leaseOwner: workerId,
-                leaseFence: fence,
-                blocks: [
-                  {
-                    kind: "ask",
-                    text: safeText,
-                    detail: safeDetail,
-                    status: "pending",
-                    ...(safeActions ? { actions: safeActions } : {}),
-                    ...(safeQuestions ? { questions: safeQuestions } : {}),
-                  },
-                ],
-                // Keep unredacted labels on the run for resume; message blocks stay redacted.
-                offeredActions: event.actions,
-              });
-              if (!paused) return;
-              await notifyRun(deps, run, {
-                kind: "help",
-                title: `${bot.name} needs an answer`,
-                body: safeText,
-                botId: bot.id,
-                threadId: thread.id,
-              });
+              await pauseForAsk(event);
               return;
             } else if (event.type === "takeover") {
-              if (!(await renewRunLease(deps, runId, workerId, fence))) return;
-              const safeReason = redactSecrets(event.reason, runSecrets);
-              dropMidTurnNarration();
-              await useComputer();
-              await publishMessage(deps, run, [
-                { kind: "computer", state: "Needs you", text: safeReason },
-              ]);
-              await workspaceCheckpoint.flush();
-              if (!(await runComputer?.holdForTakeover())) {
-                throw new Error("Computer lease expired before takeover");
-              }
-              const paused = await deps.events.pauseRunForTakeover({
-                spaceId: run.spaceId,
-                threadId: run.threadId,
-                botId: run.botId,
-                runId,
-                attemptId: attempt.id,
-                leaseOwner: workerId,
-                leaseFence: fence,
-                reason: safeReason,
-                computerId: requireStoredComputer().id,
-              });
-              if (!paused) return;
-              retainComputerLease = true;
-              await notifyRun(deps, run, {
-                kind: "takeover",
-                title: `${bot.name} needs you on the screen`,
-                body: safeReason,
-                botId: bot.id,
-                threadId: thread.id,
-              });
+              await pauseForTakeover(event.reason);
               return;
             } else if (event.type === "tool") {
               dropMidTurnNarration();
@@ -5089,7 +5184,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             } else if (event.type === "usage") {
               await recordRunUsage(deps, { ...run, botId: bot.id, runId }, event);
             } else if (event.type === "transcript") {
-              await logHarnessTranscript(deps, runLog, event, runSecrets);
+              await logHarnessTranscript(deps, runLog, { runId, fence }, event, runSecrets);
             } else if (event.type === "done") {
               runtimeNotice = event.runtimeNotice;
               if (recapRequested) {
@@ -6123,11 +6218,14 @@ type RunLog = { sessionId: SessionId; runId: string; botId: string };
 /**
  * What a harness with its own loop did outside the controller, logged as its run's work: each
  * call of the harness's own tools with the result the harness reported, and each summary its
- * compaction wrote. The controller's own calls are already in the log as it answered them.
+ * compaction wrote. The controller's own calls are already in the log as it answered them, so a
+ * step is dated just before the next of them the transcript references: the run then reads in
+ * the order the attempt worked. All of it lands while the attempt still owns its run, or none.
  */
 async function logHarnessTranscript(
   deps: Pick<ExecutorDeps, "prisma" | "sessionLog">,
   log: RunLog,
+  lease: { runId: string; fence: number },
   event: Extract<AgentRuntimeEvent, { type: "transcript" }>,
   secrets: string[],
 ) {
@@ -6137,44 +6235,85 @@ async function logHarnessTranscript(
       unverifiedCalls: event.unverifiedCalls,
     });
   }
-  for (const entry of event.entries) {
-    const drafts: SessionEntryDraft[] =
-      entry.kind === "summary"
-        ? [
-            {
-              ...log,
-              type: "harness.summary",
-              payload: {
-                summary: redactSecrets(entry.summary, secrets),
-                tokensBefore: entry.tokensBefore,
-              },
-            },
-          ]
-        : [
-            {
-              ...log,
-              type: "tool.call",
-              payload: {
-                callId: entry.callId,
-                name: entry.name,
-                input: describeToolPayload(entry.args, secrets),
-              },
-            },
-            {
-              ...log,
-              type: "tool.result",
-              payload: {
-                callId: entry.callId,
-                output: describeToolPayload(entry.output, secrets),
-                isError: false,
-                artifactIds: [],
-              },
-            },
-          ];
-    await deps.prisma.$transaction(async (tx) => {
-      for (const draft of drafts) await deps.sessionLog.append(tx, draft);
-    });
-  }
+  if (!event.entries.some((entry) => entry.kind === "call" || entry.kind === "summary")) return;
+  await deps.prisma.$transaction(
+    async (tx) => {
+      const [run] = await tx.$queryRaw<Array<{ leaseFence: number; status: string }>>`
+        SELECT "leaseFence", status FROM runs WHERE id = ${lease.runId} FOR NO KEY UPDATE`;
+      if (!run || !attemptOwnsFence(lease, run)) return;
+      const logged = await tx.sessionEntry.findMany({
+        where: {
+          sessionId: log.sessionId,
+          runId: log.runId,
+          type: { in: ["tool.call", "tool.result"] },
+        },
+        orderBy: { seq: "asc" },
+        select: { type: true, payload: true, createdAt: true },
+      });
+      const calledAt = new Map<string, Date>();
+      const answeredAt = new Map<string, Date>();
+      for (const entry of logged) {
+        const { callId } = entry.payload as { callId: string };
+        (entry.type === "tool.call" ? calledAt : answeredAt).set(callId, entry.createdAt);
+      }
+      let previous: Date | undefined;
+      let next: Date | undefined;
+      const before: (Date | undefined)[] = [];
+      for (const entry of event.entries.toReversed()) {
+        if (entry.kind === "controller") next = calledAt.get(entry.callId) ?? next;
+        before.unshift(next);
+      }
+      for (const [index, entry] of event.entries.entries()) {
+        if (entry.kind === "text") continue;
+        if (entry.kind === "controller") {
+          previous = answeredAt.get(entry.callId) ?? calledAt.get(entry.callId) ?? previous;
+          continue;
+        }
+        const bound = before[index];
+        const at = bound
+          ? new Date(Math.max(previous?.getTime() ?? 0, bound.getTime() - 1)).toISOString()
+          : undefined;
+        const drafts: SessionEntryDraft[] =
+          entry.kind === "summary"
+            ? [
+                {
+                  ...log,
+                  ts: at,
+                  type: "harness.summary",
+                  payload: {
+                    summary: redactSecrets(entry.summary, secrets),
+                    tokensBefore: entry.tokensBefore,
+                  },
+                },
+              ]
+            : [
+                {
+                  ...log,
+                  ts: at,
+                  type: "tool.call",
+                  payload: {
+                    callId: entry.callId,
+                    name: entry.name,
+                    input: describeToolPayload(entry.args, secrets),
+                  },
+                },
+                {
+                  ...log,
+                  ts: at,
+                  type: "tool.result",
+                  payload: {
+                    callId: entry.callId,
+                    output: describeToolPayload(entry.output, secrets),
+                    isError: entry.isError,
+                    artifactIds: [],
+                  },
+                },
+              ];
+        for (const draft of drafts) await deps.sessionLog.append(tx, draft);
+      }
+    },
+    { timeout: 60_000 },
+  );
 }
 
 type ToolLogEntry =

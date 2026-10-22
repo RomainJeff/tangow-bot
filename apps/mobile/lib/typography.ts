@@ -18,8 +18,8 @@ function trackingEm(tracking: string): number {
 /**
  * Builds a native `Text` style from a shared typography token. A few surfaces
  * carry a documented mobile-only delta (design contract §1.2, §3.7 — message
- * `body` is 16/1.5 instead of the shared 16.5/1.58, the thread `title` is
- * 17/600 instead of 19/1.2/500): pass `size`/`leading`/`weight` to override
+ * `body` is 17/22 instead of the shared 16/24, the thread `title` is
+ * 17/22 instead of 15/20): pass `size`/`leading`/`weight` to override
  * just those numbers while the rest of the token (tracking) still applies.
  */
 export function nativeTextStyle(

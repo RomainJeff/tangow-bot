@@ -1,5 +1,5 @@
 import type { Api, Message, Model } from "@earendil-works/pi-ai";
-import type { AgentRunRequest } from "@rakazo/adapter-kit";
+import type { AgentRunRequest, HarnessTranscriptEntry } from "@rakazo/adapter-kit";
 import type { AgentHistoryTurn, AgentHistoryTurnPart } from "@rakazo/contracts";
 import * as z from "zod";
 import { toHistory } from "../../pi-runtime.js";
@@ -48,7 +48,7 @@ export function projectPiAi(
 }
 
 /** What the controller answered one call of a controller tool, in call order. */
-export type ControllerCallRecord = { name: string; output: string };
+export type ControllerCallRecord = { callId: string; name: string; output: string };
 
 export type CanonicalEntry =
   | { kind: "turn"; turn: AgentHistoryTurn }
@@ -56,8 +56,19 @@ export type CanonicalEntry =
 
 export interface IngestResult {
   entries: CanonicalEntry[];
-  /** Calls of controller tools the transcript claims that the controller never answered. */
+  steps: HarnessTranscriptEntry[];
+  /** Calls of anything but the harness's own tools that the controller never answered. */
   unverifiedCalls: number;
+}
+
+export interface IngestOptions {
+  answers: readonly ControllerCallRecord[];
+  /** The tools the controller offered the attempt, under their own names. */
+  controllerTools: readonly string[];
+  /** The tools the harness runs itself, from its manifest. Only these are ever its own. */
+  nativeTools: readonly string[];
+  /** Redacts and bounds every string kept from the transcript. */
+  clean: (text: string) => string;
 }
 
 const Block = z.looseObject({ type: z.string() });
@@ -72,7 +83,12 @@ const ToolCallBlock = z.object({
 const TranscriptMessage = z.discriminatedUnion("role", [
   z.looseObject({ role: z.literal("user"), content: Content }),
   z.looseObject({ role: z.literal("assistant"), content: z.array(Block) }),
-  z.looseObject({ role: z.literal("toolResult"), toolCallId: z.string(), content: Content }),
+  z.looseObject({
+    role: z.literal("toolResult"),
+    toolCallId: z.string(),
+    content: Content,
+    isError: z.boolean().optional(),
+  }),
   z.looseObject({
     role: z.literal("compactionSummary"),
     summary: z.string(),
@@ -91,35 +107,34 @@ function textOf(content: z.infer<typeof Content>): string {
 }
 
 /**
- * The canonical entries of what an attempt added to its native session. Its first user message
- * is the run's own prompt, already canonical; a message or block canonical history has no place
- * for, such as the harness's thinking, is left out. A controller tool's output always comes from the
- * controller's record, never from the transcript, whether the harness named the tool the way its
- * MCP client does or bare. `clean` redacts and bounds every string kept from the transcript.
+ * The canonical entries of what an attempt added to its native session, and its steps in order.
+ * Its first user message is the run's own prompt, already canonical; a message or block canonical
+ * history has no place for, such as the harness's thinking, is left out. Only a tool of the
+ * harness's manifest is its own: any other call takes its output from the controller's answers,
+ * never from the transcript, and one the controller never answered is counted, whatever its name.
  */
 export function ingestPiAi(
   messages: readonly unknown[],
-  controllerCalls: readonly ControllerCallRecord[],
-  controllerTools: readonly string[],
-  clean: (text: string) => string,
+  { answers, controllerTools, nativeTools, clean }: IngestOptions,
 ): IngestResult {
-  const controllerName = new Map(
-    controllerTools.flatMap((name) => [
-      [piMcpToolName(name), name],
-      [name, name],
-    ]),
-  );
+  const native = new Set(nativeTools);
+  const controllerName = new Map(controllerTools.map((name) => [piMcpToolName(name), name]));
   const records = new Map<string, ControllerCallRecord[]>();
-  for (const record of controllerCalls) {
+  for (const record of answers) {
     const named = records.get(record.name) ?? [];
     named.push(record);
     records.set(record.name, named);
   }
   const entries: CanonicalEntry[] = [];
-  const harnessCalls = new Map<string, ToolCalls[number]>();
+  const steps: HarnessTranscriptEntry[] = [];
+  const ownCalls = new Map<
+    string,
+    { call: ToolCalls[number]; step: Extract<HarnessTranscriptEntry, { kind: "call" }> }
+  >();
   let parts: AgentHistoryTurnPart[] = [];
   let unverifiedCalls = 0;
   let promptSeen = false;
+  let turn = 0;
   const flush = () => {
     if (parts.length === 0) return;
     const content = parts.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n\n");
@@ -148,44 +163,62 @@ export function ingestPiAi(
         for (const block of message.content) {
           const text = TextBlock.safeParse(block);
           if (text.success) {
-            if (text.data.text) parts.push({ type: "text", text: clean(text.data.text) });
+            if (!text.data.text) continue;
+            const kept = clean(text.data.text);
+            parts.push({ type: "text", text: kept });
+            steps.push({ kind: "text", turn, text: kept });
             continue;
           }
-          const call = ToolCallBlock.safeParse(block);
-          if (!call.success) continue;
-          const { id, name, arguments: args } = call.data;
-          const controller = controllerName.get(name);
-          if (controller === undefined) {
-            const harnessCall = { id, name, args, output: "" };
-            harnessCalls.set(id, harnessCall);
-            calls.push(harnessCall);
+          const parsedCall = ToolCallBlock.safeParse(block);
+          if (!parsedCall.success) continue;
+          const { id, name, arguments: args } = parsedCall.data;
+          if (native.has(name)) {
+            const call = { id, name, args, output: "" };
+            const step = {
+              kind: "call" as const,
+              turn,
+              callId: id,
+              name,
+              args,
+              output: "",
+              isError: false,
+            };
+            ownCalls.set(id, { call, step });
+            steps.push(step);
+            calls.push(call);
             continue;
           }
+          const controller = controllerName.get(name) ?? name;
           const record = records.get(controller)?.shift();
-          if (!record) unverifiedCalls += 1;
+          if (record)
+            steps.push({ kind: "controller", turn, callId: record.callId, name: controller });
+          else unverifiedCalls += 1;
           calls.push({ id, name: controller, args, output: record?.output ?? "" });
         }
         if (calls.length > 0) parts.push({ type: "toolCalls", calls });
+        turn += 1;
         continue;
       }
       case "toolResult": {
         // The harness's own tools run in the VM, which is their boundary; a result it reports
-        // for a controller tool answers nothing.
-        const call = harnessCalls.get(message.toolCallId);
-        if (call) call.output = clean(textOf(message.content));
-        harnessCalls.delete(message.toolCallId);
+        // for any other call answers nothing.
+        const own = ownCalls.get(message.toolCallId);
+        ownCalls.delete(message.toolCallId);
+        if (!own) continue;
+        own.call.output = clean(textOf(message.content));
+        own.step.output = own.call.output;
+        own.step.isError = message.isError === true;
         continue;
       }
-      case "compactionSummary":
+      case "compactionSummary": {
         flush();
-        entries.push({
-          kind: "summary",
-          summary: clean(message.summary),
-          tokensBefore: message.tokensBefore,
-        });
+        const summary = clean(message.summary);
+        entries.push({ kind: "summary", summary, tokensBefore: message.tokensBefore });
+        steps.push({ kind: "summary", turn, summary, tokensBefore: message.tokensBefore });
         continue;
+      }
     }
   }
   flush();
-  return { entries, unverifiedCalls };
+  return { entries, steps, unverifiedCalls };
 }

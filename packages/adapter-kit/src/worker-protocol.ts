@@ -288,6 +288,8 @@ export const GuestBodySchema = z.discriminatedUnion("type", [
    */
   z.strictObject({
     type: z.literal("transcript"),
+    /** The session it reports: the root's when left out, else a helper the controller opened. */
+    agent: Id.optional(),
     dialect: ModelDialect,
     messages: z.array(z.looseObject({ role: z.string().min(1).max(64) })).max(4096),
     /** The system prompt the harness says it sent. The controller traces the relayed one too. */

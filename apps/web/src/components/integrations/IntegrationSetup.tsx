@@ -134,7 +134,7 @@ export function IntegrationSetup({
       {serverSetup ? (
         <fieldset
           aria-label={t`Integration options`}
-          className="overflow-hidden rounded-xl border border-border"
+          className="overflow-hidden rounded-card bg-group shadow-group"
         >
           {choices
             .filter(({ id }) => !managedOnly || id === "composio" || id === "pipedream")
