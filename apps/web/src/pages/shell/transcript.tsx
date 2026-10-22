@@ -2,25 +2,11 @@ import { i18n } from "@lingui/core";
 import { useLingui } from "@lingui/react/macro";
 import type { MessageReaction, ThreadItem } from "@rakazo/contracts";
 import type { SkillSourceBlock, ThreadView } from "@rakazo/core";
-import { isToolActivityBlock, latestActivityLabel } from "@rakazo/core";
+import { isToolActivityBlock } from "@rakazo/core";
 import type { GroupAvatarMember } from "@rakazo/ui-web";
 import { cn } from "@rakazo/ui-web";
-import { ArrowDown } from "lucide-react";
-import type {
-  MouseEvent as ReactMouseEvent,
-  PointerEvent as ReactPointerEvent,
-  RefObject,
-} from "react";
-import {
-  Fragment,
-  memo,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import type { RefObject } from "react";
+import { Fragment, memo, useEffect, useMemo, useRef, useState } from "react";
 import type { SpawnBotCardEdits } from "../../components/AskCard";
 import { ActiveBotGlyph } from "../../components/ai/CollaborationMarker";
 import { useDisplayAgentSteps } from "../../lib/agent-steps-pref";
@@ -28,31 +14,16 @@ import type { ArtifactTarget } from "../../lib/artifact-open";
 import { messageTimeLabel } from "../../lib/message-time";
 import type { CardAnswerTarget, MessageItem, SessionViewTarget } from "../../lib/thread-items";
 import { isLiveItem } from "../../lib/thread-items";
-import {
-  arrivedAfterMount,
-  transcriptEnd,
-  transcriptIsNearEnd,
-  transcriptMovedDown,
-} from "../../lib/transcript-scroll";
+import { arrivedAfterMount } from "../../lib/transcript-scroll";
 import { placeHoverPill } from "./hover-pill-placement";
+import { JumpToLatest } from "./jump-to-latest";
 import { MessageActionsSheet } from "./message-actions-sheet";
 import { MessageHoverActions, UserMessageActions } from "./message-hover-actions";
 import { SessionView } from "./session-view";
 import type { RowContext } from "./thread-row";
-import { RowMarker, rowChrome, ThreadRowBody } from "./thread-row";
-
-/** B1: hold this long on a touch bubble to open its action sheet. */
-/** How long a jump to a message holds off following the end while its smooth scroll gets going. */
-const JUMP_SETTLE_MS = 1500;
-const LONG_PRESS_MS = 450;
-/** The bubble settles (scale 0.96) this far into the hold, before the sheet opens. */
-const LONG_PRESS_SQUASH_MS = 150;
-/** More than this many px of movement during the hold cancels it — a scroll, not a press. */
-const LONG_PRESS_MOVE_TOLERANCE_PX = 10;
-/** A long press starts on the bubble itself, not its controls (a link still starts one — B3). */
-const LONG_PRESS_BUBBLE_SELECTOR = '[data-slot="message-row-bubble"],[data-slot="user-bubble"]';
-const LONG_PRESS_EXCLUDED_SELECTOR =
-  'button,[role="button"],[role="menuitem"],input,textarea,[contenteditable="true"],select';
+import { isBubbleRow, RowMarker, rowChrome, ThreadRowBody } from "./thread-row";
+import { useBubbleLongPress } from "./use-bubble-long-press";
+import { useTranscriptFollow } from "./use-transcript-follow";
 
 /** An approval card takes the actions of the bot message it was on main, keyed by its own entry. */
 function actionTarget(item: ThreadItem): MessageItem | null {
@@ -78,6 +49,8 @@ export const Transcript = memo(function Transcript({
   olderCursor,
   loadingOlder,
   viewerUserId,
+  takeoverItemId,
+  onOpenComputer,
   running,
   workingBots,
   workingStartedAt,
@@ -112,6 +85,9 @@ export const Transcript = memo(function Transcript({
   olderCursor: string | null;
   loadingOlder: boolean;
   viewerUserId?: string;
+  /** The live "Needs you" computer card, which opens the bot's screen in one click. */
+  takeoverItemId?: string | null;
+  onOpenComputer?: () => void;
   running: boolean;
   workingBots: GroupAvatarMember[];
   /** Epoch ms the earliest working run started; undefined ticks from mount. */
@@ -137,22 +113,27 @@ export const Transcript = memo(function Transcript({
 }) {
   const { t } = useLingui();
   const showSteps = useDisplayAgentSteps();
-  const [atEnd, setAtEnd] = useState(true);
-  const following = followingRef;
-  const mounted = useRef(false);
-  if (!mounted.current) {
-    mounted.current = true;
-    following.current = true;
-  }
-  const autoScrolling = useRef(false);
-  const jumpedAt = useRef(Number.NEGATIVE_INFINITY);
-  const jumpSettleTimer = useRef<number | undefined>(undefined);
-  const lastScrollTop = useRef<number | null>(null);
-  const press = useRef<{ top: number; following: boolean } | null>(null);
-  const autoScrollTimer = useRef<number | undefined>(undefined);
-  const jumpButtonRef = useRef<HTMLButtonElement>(null);
   const [sessionTarget, setSessionTarget] = useState<SessionViewTarget | null>(null);
   const { rows, waiting, rowOf } = view;
+  const { atEnd, jumpToMessage, jumpToLatest, loadOlder, scrollerHandlers } = useTranscriptFollow({
+    scrollRef,
+    followingRef,
+    rows,
+    running,
+    rowOf,
+    onLoadOlder,
+    onJumpToMessage,
+  });
+  const {
+    pressingMessageId,
+    sheetMessage,
+    sheetOpen,
+    setSheetOpen,
+    onBubblePointerDown,
+    onBubblePointerMove,
+    onBubblePointerEnd,
+    onRowClickCapture,
+  } = useBubbleLongPress(scrollRef);
   const messages = useMemo(
     () => rows.flatMap((row) => (row.item.kind === "message" ? [row.item] : [])),
     [rows],
@@ -176,6 +157,8 @@ export const Transcript = memo(function Transcript({
     return {
       artifactTarget,
       inGroup,
+      takeoverItemId,
+      onOpenComputer,
       viewerUserId,
       waiting,
       onAnswer,
@@ -184,24 +167,7 @@ export const Transcript = memo(function Transcript({
       onOpenBot,
       onOpenPeerMessages,
       onOpenSession: setSessionTarget,
-      // A jump the person asked for leaves the end, so the next streamed row must not pull back.
-      onJumpToMessage: (messageId) => {
-        following.current = false;
-        jumpedAt.current = performance.now();
-        onJumpToMessage(messageId);
-        window.clearTimeout(jumpSettleTimer.current);
-        // A jump to a row already on the last screen never scrolls down: follow again once it settles there.
-        jumpSettleTimer.current = window.setTimeout(() => {
-          const element = scrollRef.current;
-          if (!element) return;
-          const nearEnd = transcriptIsNearEnd(element);
-          setAtEnd(nearEnd);
-          const rowId = rowOf.get(messageId) ?? messageId;
-          if (nearEnd && element.querySelector(`[data-message-id="${CSS.escape(rowId)}"]`)) {
-            following.current = true;
-          }
-        }, JUMP_SETTLE_MS);
-      },
+      onJumpToMessage: jumpToMessage,
       onRefresh,
       onBotChanged,
       onAddRoutine,
@@ -216,19 +182,20 @@ export const Transcript = memo(function Transcript({
     inGroup,
     viewerUserId,
     waiting,
+    takeoverItemId,
+    onOpenComputer,
     onAnswer,
     memberName,
     peerBot,
     onOpenBot,
     onOpenPeerMessages,
-    onJumpToMessage,
+    jumpToMessage,
     onRefresh,
     onBotChanged,
     onAddRoutine,
     onOpenSkill,
     messages,
     rowOf,
-    scrollRef,
   ]);
   const workingBotName = workingBots.length === 1 ? workingBots[0]?.name : undefined;
   const workingFallback = `${
@@ -238,178 +205,8 @@ export const Transcript = memo(function Transcript({
   }…`;
   // One bot only: an activity line names one bot's tool, so it would mislabel a group.
   const workingLabel =
-    (workingBots.length === 1 ? latestActivityLabel(messages) : undefined) ?? workingFallback;
+    (workingBots.length === 1 ? view.activityLabel : undefined) ?? workingFallback;
 
-  const snapToEnd = useCallback(() => {
-    const element = scrollRef.current;
-    if (!element) return;
-    following.current = true;
-    autoScrolling.current = false;
-    setAtEnd(true);
-    element.scrollTo({ top: transcriptEnd(element), behavior: "auto" });
-  }, [scrollRef]);
-
-  const jumpToLatest = useCallback(() => {
-    const element = scrollRef.current;
-    if (!element) return;
-    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    following.current = true;
-    autoScrolling.current = !reducedMotion;
-    setAtEnd(true);
-    element.scrollTo({
-      top: element.scrollHeight,
-      behavior: reducedMotion ? "auto" : "smooth",
-    });
-    window.clearTimeout(autoScrollTimer.current);
-    // Fallback only: onScroll clears autoScrolling once near-end is reached.
-    autoScrollTimer.current = window.setTimeout(
-      () => {
-        autoScrolling.current = false;
-      },
-      reducedMotion ? 0 : 2_000,
-    );
-  }, [scrollRef]);
-
-  useLayoutEffect(() => {
-    if (following.current) snapToEnd();
-  }, [rows, running, snapToEnd]);
-
-  useLayoutEffect(() => {
-    const button = jumpButtonRef.current;
-    if (atEnd && button && document.activeElement === button) {
-      button.blur();
-    }
-  }, [atEnd]);
-
-  const loadOlder = useCallback(() => {
-    const wasFollowing = following.current;
-    // Prepend must not race the messages-driven snap-to-end follow path.
-    following.current = false;
-    autoScrolling.current = false;
-    const pending = onLoadOlder();
-    if (!pending) return;
-    return Promise.resolve(pending).catch((error) => {
-      const element = scrollRef.current;
-      if (wasFollowing && element && transcriptIsNearEnd(element)) {
-        following.current = true;
-        setAtEnd(true);
-      }
-      throw error;
-    });
-  }, [onLoadOlder, scrollRef]);
-
-  useEffect(
-    () => () => {
-      window.clearTimeout(autoScrollTimer.current);
-      window.clearTimeout(jumpSettleTimer.current);
-    },
-    [],
-  );
-
-  // B1-B4: a touch long press on a message bubble opens its action sheet —
-  // the pill itself never appears on touch (no hover to reveal it with;
-  // mouse and keyboard keep the existing hover/focus pill, untouched below).
-  const [pressingMessageId, setPressingMessageId] = useState<string | null>(null);
-  const [sheetMessage, setSheetMessage] = useState<MessageItem | null>(null);
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const pressStart = useRef<{ id: string; pointerId: number; x: number; y: number } | null>(null);
-  const squashTimer = useRef<number | undefined>(undefined);
-  const openTimer = useRef<number | undefined>(undefined);
-  // Set once the hold opens the sheet, so the click the browser still fires
-  // once the finger lifts (even over a link) is swallowed instead of acting.
-  const suppressClickForId = useRef<string | null>(null);
-
-  const clearPressTimers = useCallback(() => {
-    window.clearTimeout(squashTimer.current);
-    window.clearTimeout(openTimer.current);
-    squashTimer.current = undefined;
-    openTimer.current = undefined;
-  }, []);
-
-  const cancelPress = useCallback(() => {
-    clearPressTimers();
-    pressStart.current = null;
-    setPressingMessageId(null);
-  }, [clearPressTimers]);
-
-  const onBubblePointerDown = useCallback(
-    (event: ReactPointerEvent<HTMLDivElement>, message: MessageItem) => {
-      // A second finger never starts, resets or cancels the first one's press.
-      if (pressStart.current && pressStart.current.pointerId !== event.pointerId) {
-        cancelPress();
-        return;
-      }
-      // Each new touch starts fresh: a suppression left over from a previous
-      // long press must never swallow an unrelated, later, genuine tap.
-      suppressClickForId.current = null;
-      if (event.pointerType !== "touch") return;
-      // A message still being written has no actions yet (as on hover).
-      if (isLiveItem(message)) return;
-      const target = event.target as HTMLElement | null;
-      if (target?.closest(LONG_PRESS_EXCLUDED_SELECTOR)) return;
-      if (!target?.closest(LONG_PRESS_BUBBLE_SELECTOR)) return;
-      clearPressTimers();
-      pressStart.current = {
-        id: message.id,
-        pointerId: event.pointerId,
-        x: event.clientX,
-        y: event.clientY,
-      };
-      squashTimer.current = window.setTimeout(() => {
-        setPressingMessageId(message.id);
-      }, LONG_PRESS_SQUASH_MS);
-      openTimer.current = window.setTimeout(() => {
-        pressStart.current = null;
-        setPressingMessageId(null);
-        suppressClickForId.current = message.id;
-        setSheetMessage(message);
-        setSheetOpen(true);
-        navigator.vibrate?.(10);
-      }, LONG_PRESS_MS);
-    },
-    [clearPressTimers, cancelPress],
-  );
-
-  const onBubblePointerEnd = useCallback(
-    (event: ReactPointerEvent<HTMLDivElement>) => {
-      if (pressStart.current && pressStart.current.pointerId !== event.pointerId) return;
-      cancelPress();
-    },
-    [cancelPress],
-  );
-
-  const onBubblePointerMove = useCallback(
-    (event: ReactPointerEvent<HTMLDivElement>) => {
-      const start = pressStart.current;
-      if (!start || start.pointerId !== event.pointerId) return;
-      if (
-        Math.hypot(event.clientX - start.x, event.clientY - start.y) > LONG_PRESS_MOVE_TOLERANCE_PX
-      ) {
-        cancelPress();
-      }
-    },
-    [cancelPress],
-  );
-
-  // A link's click follows the pointerup that ended the long press that
-  // opened the sheet for it (B3): swallow that one click so it never navigates.
-  const onRowClickCapture = useCallback(
-    (event: ReactMouseEvent<HTMLDivElement>, messageId: string) => {
-      if (suppressClickForId.current !== messageId) return;
-      suppressClickForId.current = null;
-      event.preventDefault();
-      event.stopPropagation();
-    },
-    [],
-  );
-
-  useEffect(() => cancelPress, [cancelPress]);
-  // A real scroll gesture, wherever it starts, is never a long press.
-  useEffect(() => {
-    const scroller = scrollRef.current;
-    scroller?.addEventListener("scroll", cancelPress, { passive: true });
-    return () => scroller?.removeEventListener("scroll", cancelPress);
-  }, [cancelPress, scrollRef]);
   // Keyboard focus reveals a row's pill too, so it is placed on focus as on hover.
   useEffect(() => {
     const scroller = scrollRef.current;
@@ -422,61 +219,18 @@ export const Transcript = memo(function Transcript({
   }, [scrollRef]);
 
   return (
-    <div className="relative flex min-h-0 flex-1">
+    // The thread runs under the header above and under the composer below
+    // (`rk-thread-overlap`), fading out at both ends (`rk-thread-mask`, which also sets
+    // the end padding from the overlap): pt-21 clears the mask's top fade.
+    <div className="rk-thread-overlap relative flex min-h-0 flex-1">
       <div
         ref={scrollRef}
         data-testid="transcript"
-        onPointerDown={(event) => {
-          press.current = { top: event.currentTarget.scrollTop, following: following.current };
-          lastScrollTop.current = event.currentTarget.scrollTop;
-          autoScrolling.current = false;
-          following.current = false;
-        }}
-        onPointerUp={(event) => {
-          // A press that left the list where it was is a tap on a row (a card's choice), not a
-          // hand on the scroll: the view keeps following the end it followed.
-          if (press.current?.following && event.currentTarget.scrollTop === press.current.top) {
-            following.current = true;
-          }
-          press.current = null;
-        }}
-        onTouchStart={(event) => {
-          lastScrollTop.current = event.currentTarget.scrollTop;
-          autoScrolling.current = false;
-          following.current = false;
-        }}
-        onWheel={(event) => {
-          if (event.deltaY < 0) {
-            lastScrollTop.current = event.currentTarget.scrollTop;
-            autoScrolling.current = false;
-            following.current = false;
-          }
-        }}
-        onScroll={(event) => {
-          const scrolledDown = transcriptMovedDown(
-            lastScrollTop.current,
-            event.currentTarget.scrollTop,
-          );
-          lastScrollTop.current = event.currentTarget.scrollTop;
-          const nearEnd = transcriptIsNearEnd(event.currentTarget);
-          setAtEnd(nearEnd);
-          if (nearEnd) {
-            // While a jump's smooth scroll starts, a row landing at the end must not resume following.
-            if (scrolledDown && performance.now() - jumpedAt.current > JUMP_SETTLE_MS) {
-              following.current = true;
-            }
-            if (autoScrolling.current) {
-              autoScrolling.current = false;
-              window.clearTimeout(autoScrollTimer.current);
-            }
-          } else if (!autoScrolling.current) {
-            following.current = false;
-          }
-        }}
-        // px-3 / pb-8 keep a card's soft drop shadow (shadow-card reaches ~14px sideways and
+        {...scrollerHandlers}
+        // px-3 keeps a card's soft drop shadow (shadow-card reaches ~14px sideways and
         // ~26px down) from being clipped by this scroll container's overflow or hidden under
         // the rk-scroll scrollbar on the right.
-        className="rk-scroll flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-3 pt-5 pb-8 md:pt-6"
+        className="rk-scroll rk-thread-mask flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-3 pt-21"
       >
         {olderCursor != null ? (
           <button
@@ -498,12 +252,15 @@ export const Transcript = memo(function Transcript({
           const prevChrome = previous ? rowChrome(previous.item, showSteps) : undefined;
           const arrives = arrived.has(item.id);
           // 14px between groups (the container's own `gap-3.5`) narrows to 3px
-          // within a group, and to 0 between two consecutive asides or two
-          // chained routine failure lines (they stack like a log).
+          // between two bubbles of a group and 8px when a card is one of them,
+          // and to 0 between two consecutive asides or two chained routine
+          // failure lines (they stack like a log).
           const spacingClass = row.chained
             ? " -mt-3.5"
             : !row.firstOfGroup
-              ? " -mt-2.75"
+              ? isBubbleRow(item) && previous && isBubbleRow(previous.item)
+                ? " -mt-2.75"
+                : " -mt-1.5"
               : chrome === "aside" && prevChrome === "aside"
                 ? " -mt-3.5"
                 : "";
@@ -619,19 +376,7 @@ export const Transcript = memo(function Transcript({
           <ActiveBotGlyph bots={workingBots} label={workingLabel} startedAt={workingStartedAt} />
         ) : null}
       </div>
-      <button
-        ref={jumpButtonRef}
-        type="button"
-        aria-label={t`Jump to latest`}
-        aria-hidden={atEnd}
-        tabIndex={atEnd ? -1 : 0}
-        onClick={jumpToLatest}
-        className={`absolute bottom-4 left-1/2 z-20 grid h-9 w-9 -translate-x-1/2 place-items-center rounded-full border border-border bg-muted/95 text-foreground/75 shadow-floating backdrop-blur transition-[opacity,transform,background-color] duration-(--duration-hover) ease-quiet hover:bg-border motion-reduce:transition-none ${
-          atEnd ? "pointer-events-none translate-y-2 opacity-0" : "translate-y-0 opacity-100"
-        }`}
-      >
-        <ArrowDown size={17} strokeWidth={1.8} />
-      </button>
+      <JumpToLatest atEnd={atEnd} onJump={jumpToLatest} />
       <MessageActionsSheet
         message={sheetMessage}
         previewMessageId={rows.find((row) => row.item.id === sheetMessage?.id)?.previewMessageId}

@@ -6,11 +6,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-10-21
+
+#### Changed
+
+- A bot's Needs you card now has an Open button that opens its screen in one click, on web and desktop instead of going through the computer panel and its hover preview, and on iPhone as a Computer card instead of a plain message.
+- Rakazo takes a softer grey look on web, desktop and iPhone: a faint ambient light behind glass navigation and composer, cards on the bot's paper that settle into the conversation once answered, and solid fallbacks when Reduce Transparency is on.
+
+#### Fixed
+
+- Opening a bot's computer screen on web and desktop now loads the screen before the viewer appears, instead of sometimes opening an empty viewer.
+- When a bot asks for your approval or a question partway through a step, it now stops its other actions in that step, and its helpers, until you answer instead of carrying on, on web, desktop and iPhone.
+- On iPhone, the composer goes back to one line after you send a long message, instead of staying tall and empty.
+- On web and desktop, switching between Integrations and Skills in Customize no longer makes the window blink and reload; a section you already opened keeps its search.
+
+### 2026-10-20
+
+#### Reverted
+
+- Skill marketplaces can no longer be added or used from the Skills screen on web, desktop and mobile; your own skills and Rakazo's built-in skills are unchanged.
+
 ### 2026-10-19
+
+#### Changed
+
+- While a bot works, its bubble now says what kind of thing it is doing, such as "Searching the web", "Briefing a helper" or "Stepping into Notion", instead of showing file paths, commands or search queries, on web, desktop and iPhone.
 
 #### Fixed
 
 - A routine check, or a bot in a group chat, with nothing to say after using a tool now stays silent on web, desktop, and iPhone instead of posting "I completed the tool step but could not produce a final response."
+- While a bot works, its bubble again names the tool it is using, such as "Reading src/app.ts", instead of only saying that it is working, on web, desktop and iPhone.
 
 ### 2026-10-18
 

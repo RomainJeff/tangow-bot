@@ -287,6 +287,14 @@ export function advance(card: HTMLElement | null, apply: () => boolean, still: b
   ghost.inert = true;
   ghost.ariaHidden = "true";
   ghost.className = "pointer-events-none absolute inset-x-0 top-0";
+  // The block lays its parts out (padding, gap), so the picture of them takes the same layout.
+  const layout = getComputedStyle(block);
+  Object.assign(ghost.style, {
+    display: layout.display,
+    flexDirection: layout.flexDirection,
+    gap: layout.gap,
+    padding: layout.padding,
+  });
   for (const child of block.children) ghost.append(child.cloneNode(true));
   const clones = ghost.querySelectorAll<HTMLElement>(KEPT);
   const copies = new Map([...kept.keys()].map((el, index) => [el, clones[index]]));

@@ -7,7 +7,12 @@ import type {
   ThreadEntryOf,
   ThreadItem,
 } from "@rakazo/contracts";
-import { CARD_STATE_TYPES, isLinkPreviewCard, ThreadEntrySchema } from "@rakazo/contracts";
+import {
+  CARD_STATE_TYPES,
+  isLinkPreviewCard,
+  isRunWork,
+  ThreadEntrySchema,
+} from "@rakazo/contracts";
 import { isRunTerminalEvent, progressMessageId, reduceLiveMessageBlocks } from "../events.js";
 import { computeItemGroups } from "../message-grouping.js";
 import type { ItemReactions } from "../message-reactions.js";
@@ -15,6 +20,7 @@ import { foldItemReactions } from "../message-reactions.js";
 import type { RoutineRole } from "../routine-roles.js";
 import { routineRoles } from "../routine-roles.js";
 import { isSameLocalDay, showsTimeMarker } from "../thread-time-markers.js";
+import { latestActivityLabel } from "../tool-activity.js";
 import type { WaitingCard } from "./project-ui.js";
 import { projectThread } from "./project-ui.js";
 
@@ -32,6 +38,8 @@ export type ThreadRow = {
 
 export type ThreadView = {
   rows: ThreadRow[];
+  /** The tool the newest live run is on, which no row shows. */
+  activityLabel: string | undefined;
   waiting: WaitingCard | null;
   rowOf: ReadonlyMap<string, EntryId>;
 };
@@ -139,7 +147,12 @@ export function projectThreadView(
     const rowId = hostOf.get(itemId) ?? itemId;
     if (shown.has(rowId)) rowOf.set(entryId, rowId);
   }
-  return { rows, waiting: projected.waiting, rowOf };
+  return {
+    rows,
+    activityLabel: latestActivityLabel(options.progress ?? new Map()),
+    waiting: projected.waiting,
+    rowOf,
+  };
 }
 
 /** A card stored in the message's own blocks, not added by a `link.preview` entry. */
@@ -297,7 +310,9 @@ export function reduceProgressLayer(layer: ProgressLayer, event: ProductEvent): 
   }
   const ended =
     event.type === "session.entry.appended"
-      ? appendedEntries(event).flatMap((entry) => (entry.runId ? [entry.runId] : []))
+      ? appendedEntries(event).flatMap((entry) =>
+          entry.runId && !isRunWork(entry) ? [entry.runId] : [],
+        )
       : isRunTerminalEvent(event) && event.runId
         ? [event.runId]
         : [];

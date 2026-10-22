@@ -1,7 +1,7 @@
 import { i18n } from "@lingui/core";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { ChatMarkdown, truncateMarkdownForRender } from "@rakazo/chat-ui/web";
-import type { ThreadItem } from "@rakazo/contracts";
+import type { MessageBlock, ThreadItem } from "@rakazo/contracts";
 import { isLinkPreviewCard } from "@rakazo/contracts";
 import type { RoutineItem, SkillSourceBlock, ThreadRow, WaitingCard } from "@rakazo/core";
 import {
@@ -34,8 +34,9 @@ import type {
   MessageItem,
   SessionViewTarget,
 } from "../../lib/thread-items";
+import { LinkPreviewRow } from "./block-views";
 import { FALLBACK_BOT_COLOR, threadJumpLocation } from "./layout";
-import { LinkPreviewRow, MessageView, skillLine, useLinkMentions } from "./message-view";
+import { MessageView, skillLine, useLinkMentions } from "./message-view";
 import { RoutineFailureLine } from "./routine-run-line";
 
 type PeerBot = (
@@ -47,6 +48,9 @@ export type RowContext = {
   inGroup: boolean;
   viewerUserId?: string;
   waiting: WaitingCard | null;
+  /** The item whose computer card is live and opens the bot's screen. */
+  takeoverItemId?: string | null;
+  onOpenComputer?: () => void;
   onAnswer?: (target: CardAnswerTarget, text: string, edits?: SpawnBotCardEdits) => Promise<void>;
   memberName?: (botId: string | undefined) => string | undefined;
   peerBot: PeerBot;
@@ -60,6 +64,22 @@ export type RowContext = {
   onOpenSkill?: (skill: SkillSourceBlock) => void;
   messageOfEntry: (entryId: string) => MessageItem | undefined;
 };
+
+/** Kinds drawn inside a bubble, or as a line under it: anything else in a row is a card. */
+const BUBBLE_KINDS = new Set<MessageBlock["kind"]>([
+  "text",
+  "meta",
+  "progress",
+  "steps",
+  "skill_source",
+  "link_mention",
+  "reasoning",
+]);
+
+/** Only bubbles: such rows stack 3 px apart in a group, a card keeps 8 px from its neighbours. */
+export function isBubbleRow(item: ThreadItem): boolean {
+  return item.kind === "message" && item.blocks.every((block) => BUBBLE_KINDS.has(block.kind));
+}
 
 export function rowChrome(item: ThreadItem, showSteps: boolean): "row" | "aside" {
   if (item.kind === "message") {
@@ -207,6 +227,7 @@ function MessageRowView({
               onAnswer({ runId: waiting.runId, messageId: waiting.entryId }, text, edits)
           : undefined
       }
+      onOpenComputer={context.takeoverItemId === item.id ? context.onOpenComputer : undefined}
       onOpenBot={context.onOpenBot}
       speakerName={
         chrome !== "row" || item.role !== "bot" ? undefined : context.memberName?.(item.botId)
@@ -457,7 +478,7 @@ function NoteLine({
     return (
       <MessageMeta
         lines={[skillLine({ kind: "skill_source", skillId, name, change }, false, onOpenSkill)]}
-        className="px-3.5"
+        className="px-4"
       />
     );
   }

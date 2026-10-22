@@ -682,13 +682,69 @@ describe("Pi connector tool dispatch", () => {
       events.push(event);
     }
 
-    expect(events).toContainEqual({
-      type: "progress",
-      text: "Using destination_write",
-      activity: true,
-    });
+    expect(events).toContainEqual({ type: "progress", text: "Seeing to it", activity: true });
     expect(events).not.toContainEqual({ type: "text", text: "I finished the work." });
     expect(events.at(-1)).toEqual({ type: "done" });
+  });
+
+  async function progressLines(tools: ConnectorTool[]): Promise<unknown[]> {
+    const events: unknown[] = [];
+    for await (const event of new PiAgentRuntime().run(
+      {
+        botId: "b",
+        threadId: "t",
+        runId: "activity",
+        prompt: "do the work",
+        instructions: "Use the tools.",
+        history: [],
+        tools,
+        model: { provider: "test", id: "dispatch-test-model" },
+        executeTool: vi.fn(async () => ({ ok: true })),
+      },
+      { signal: new AbortController().signal },
+    )) {
+      events.push(event);
+    }
+    return events.filter(
+      (event) => (event as { type: string; activity?: boolean }).activity === true,
+    );
+  }
+
+  it("shows the kind of work and never the call's arguments", async () => {
+    const command = "cat ~/private/plan.md | grep budget";
+    fakeAgentState.invoke = { name: "shell", args: { command } };
+
+    const lines = await progressLines([shellTool]);
+
+    expect(lines).toEqual([{ type: "progress", text: "Working the terminal", activity: true }]);
+    expect(JSON.stringify(lines)).not.toContain("plan.md");
+  });
+
+  it("names the connected app for its tools", async () => {
+    fakeAgentState.invoke = { name: "mcp__notion-work__search_pages", args: { query: "Q3 plan" } };
+
+    const lines = await progressLines([
+      {
+        name: "mcp__notion-work__search_pages",
+        description: "Search pages",
+        inputSchema: { type: "object", properties: { query: { type: "string" } } },
+        appName: "Notion",
+      },
+    ]);
+
+    expect(lines).toEqual([{ type: "progress", text: "Stepping into Notion", activity: true }]);
+  });
+
+  it("says the bot is writing once text follows its tools", async () => {
+    fakeAgentState.mode = "silent-continuation";
+    fakeAgentState.followUpReply = "The final answer.";
+
+    const lines = await progressLines([destinationTool]);
+
+    expect(lines).toEqual([
+      { type: "progress", text: "Seeing to it", activity: true },
+      { type: "progress", text: "Writing a reply", activity: true },
+    ]);
   });
 
   it("continues after narration is followed by a silent tool result turn", async () => {

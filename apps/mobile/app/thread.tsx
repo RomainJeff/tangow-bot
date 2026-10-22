@@ -39,7 +39,7 @@ import {
   isRunTerminalEvent,
   isSecretAskBlock,
   isWorkingStatus,
-  latestActivityLabel,
+  latestTakeoverItemId,
   linkMentionsKey,
   linkMentionsOf,
   mentionChipKey,
@@ -61,7 +61,7 @@ import {
   truncateSlashDescription,
   unshownRunReport,
 } from "@rakazo/core";
-import { botAccentOn, motion, radii, sizes } from "@rakazo/ui-tokens";
+import { ambientFloor, botAccentOn, motion, radii, sizes } from "@rakazo/ui-tokens";
 import * as Clipboard from "expo-clipboard";
 import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useHeaderHeight } from "expo-router/react-navigation";
@@ -105,6 +105,7 @@ import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import { AppConnectCard } from "../components/AppConnectCard";
 import { AskActions, CapsuleButton } from "../components/AskActions";
 import { AgentSteps } from "../components/agent-steps";
+import { AmbientBackground, ThreadScrollEdge } from "../components/ambient-background";
 import { AnimatedMessageBubble, MessageArrival } from "../components/animated-message-bubble";
 import { BotAvatar } from "../components/bot-avatar";
 import type { BotBubbleMeta } from "../components/bot-bubble";
@@ -113,8 +114,10 @@ import { BuzzingAvatar } from "../components/buzzing-avatar";
 import { ComposerAttachment } from "../components/composer-attachment";
 import { ComposerLinkPreview } from "../components/composer-link-preview";
 import { ComposerAttachBubble, ComposerShell } from "../components/composer-shell";
+import { ComputerCard } from "../components/computer-card";
 import { DictationPreview } from "../components/dictation-preview";
 import { FramedBlock } from "../components/framed-block";
+import { useReduceTransparency } from "../components/glass";
 import { GroupAvatar } from "../components/group-avatar";
 import { HandoffDivider, Interstitial } from "../components/interstitial";
 import { LinkMentionIcon } from "../components/link-mention-icon";
@@ -243,6 +246,7 @@ type MessageChrome = "row" | "aside";
 const CARD_ONLY_BLOCK_KINDS = new Set<string>([
   "ask",
   "channel_message",
+  "computer",
   "meta",
   "child_bot",
   "image",
@@ -341,7 +345,9 @@ const COMPOSER_GAP = 16;
 /** The thread column's side margin. The thread draws into it too, for the same shadow. */
 const THREAD_GUTTER = 14;
 /** Where the thread draws past its column, and the room it gives back inside. */
-const BLEED_STYLE = { marginHorizontal: -THREAD_GUTTER, marginBottom: -COMPOSER_GAP };
+const BLEED_STYLE = { marginHorizontal: -THREAD_GUTTER };
+/** The composer row's height before its first layout: one line, the home indicator below. */
+const COMPOSER_ROW_ESTIMATE = 100;
 
 export default function ThreadRoute() {
   const tokens = useMobileTokens();
@@ -410,7 +416,13 @@ function Thread() {
   const router = useRouter();
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
+  // The composer floats over the thread's end; the thread keeps its last message above it.
+  const [composerHeight, setComposerHeight] = useState(COMPOSER_ROW_ESTIMATE);
   const keyboardVisible = useKeyboardState((state) => state.isVisible);
+  const composerBottomInset = keyboardVisible ? 8 : Math.max(insets.bottom + 8, 20);
+  const barTransparent = !useReduceTransparency();
+  // What of the thread's top sits under the bar.
+  const underBar = barTransparent ? headerHeight : 0;
   const { botId, groupId, name, messageId } = useLocalSearchParams<{
     botId?: string;
     groupId?: string;
@@ -591,10 +603,19 @@ function Thread() {
   );
   const hasLiveProgress = liveItems.length > 0;
   // One bot only: an activity line names one bot's tool, so it would mislabel a group.
-  const activityLabel = latestActivityLabel(liveItems);
+  const activityLabel = view.activityLabel;
   const threadRuns = useMemo(
     () => snap?.activeRuns ?? (snap?.run ? [snap.run] : []),
     [snap?.activeRuns, snap?.run],
+  );
+  // Liveness comes from the run, never from the card's own state.
+  const takeoverItemId = useMemo(
+    () =>
+      latestTakeoverItemId(
+        view.rows.map((row) => row.item),
+        threadRuns,
+      ),
+    [view.rows, threadRuns],
   );
   const busyRuns = useMemo(
     () => threadRuns.filter((run) => isWorkingStatus(run.status)),
@@ -769,6 +790,10 @@ function Thread() {
   useLayoutEffect(() => {
     navigation.setOptions({
       title: displayName || t("Thread"),
+      // The thread runs under the bar, whose buttons take glass on iOS 26; ThreadScrollEdge keeps the title legible.
+      // Under Reduce Transparency the bar stays opaque: iOS hides a thread laid under a transparent one.
+      headerTransparent: barTransparent,
+      headerStyle: { backgroundColor: barTransparent ? "transparent" : tokens.background },
       // Bot actions (bot settings, open computer, clear, archive, delete) live
       // on a long press; a short press opens the bot's page.
       headerTitle: () => (
@@ -857,6 +882,7 @@ function Thread() {
         ),
     });
   }, [
+    barTransparent,
     botId,
     currentBot,
     currentBotStatus,
@@ -1216,7 +1242,7 @@ function Thread() {
 
   useEffect(() => {
     setPendingAttachments((current) => attachmentsForThread(current, threadKey));
-    setDraft("");
+    clearDraft();
     setMentionQuery(null);
     setSlashQuery(null);
     setSelectedSkill(null);
@@ -1250,6 +1276,13 @@ function Thread() {
     );
   }
 
+  // An iOS multiline field set to "" from JS keeps the height of its last text, so a
+  // long message left the composer tall after sending; clearing it natively shrinks it.
+  function clearDraft() {
+    setDraft("");
+    textInputRef.current?.clear();
+  }
+
   function updateDraft(value: string) {
     setDraft(value);
     const match = /(?:^|\s)@([\w-]*)$/.exec(value);
@@ -1270,7 +1303,7 @@ function Thread() {
 
   function insertSkill(skill: AgentSkillCatalogEntry) {
     setSelectedSkill(skill);
-    setDraft("");
+    clearDraft();
     setSlashQuery(null);
   }
 
@@ -1324,7 +1357,7 @@ function Thread() {
   }
 
   function runSlashAction(action: SlashActionId) {
-    setDraft("");
+    clearDraft();
     setSlashQuery(null);
     if (action === "chat-settings") {
       if (inGroup && groupId) {
@@ -1398,7 +1431,7 @@ function Thread() {
       setPendingAttachments((current) =>
         current.filter((attachment) => attachment.threadKey !== originThreadKey),
       );
-      setDraft("");
+      clearDraft();
       setMentionQuery(null);
       setSlashQuery(null);
       setSelectedSkill(null);
@@ -1615,6 +1648,18 @@ function Thread() {
       }),
     [router],
   );
+  const openComputerFromCard = useCallback(
+    (id: string) =>
+      router.push({
+        pathname: "/computer",
+        params: {
+          botId: id,
+          name:
+            snap?.members?.find((member) => member.botId === id)?.name ?? displayName ?? t("Bot"),
+        },
+      }),
+    [router, snap?.members, displayName, t],
+  );
 
   const speak = useCallback(
     (message: MobileMessage) =>
@@ -1741,6 +1786,12 @@ function Thread() {
       animated: action === "smooth" && !reducedMotion,
     });
   }
+
+  // The composer floats over the thread's end: when it grows, keep the latest message above it,
+  // as the typing bubble does (the list otherwise holds its visible position).
+  useEffect(() => {
+    performScroll(scrollBehavior.current.onTailChanged());
+  }, [composerHeight]);
 
   contentChanged.current = () => {
     const blocked = Boolean(
@@ -2085,9 +2136,11 @@ function Thread() {
         message={message}
         replyPreview={replyPreviewNode}
         canAnswer={message.id === answerableAskMessageId}
+        takeoverLive={message.id === takeoverItemId}
         viewerUserId={viewerUserId}
         onAnswer={answerMessage}
         onOpenBot={openBot}
+        onOpenComputer={openComputerFromCard}
         onPreviewMarkdown={setMarkdownPreview}
         actionProps={actionProps}
         isNew={isNew}
@@ -2332,31 +2385,28 @@ function Thread() {
 
   return (
     <TableActionsProvider value={tableActions}>
+      <AmbientBackground />
       <KeyboardAvoidingView
         behavior="height"
-        keyboardVerticalOffset={headerHeight}
+        keyboardVerticalOffset={headerHeight - underBar}
         style={{
           flex: 1,
-          backgroundColor: tokens.background,
           paddingHorizontal: THREAD_GUTTER,
         }}
       >
-        {error ? (
-          <Text style={{ color: tokens.mutedForeground, marginTop: 12 }}>{error}</Text>
-        ) : null}
-        {runError ? (
-          <Text style={{ color: tokens.destructive, marginTop: 12 }}>{runError}</Text>
-        ) : null}
         <View style={{ flex: 1, position: "relative" }}>
           {showPinnedPage ? (
             <ScrollView
               key={jumpScrollTarget.current ?? pinnedTarget?.messageId ?? threadKey}
               ref={pinnedScroll}
-              style={[{ flex: 1, marginTop: 8 }, BLEED_STYLE]}
+              style={[{ flex: 1 }, BLEED_STYLE]}
               contentContainerStyle={{
                 paddingHorizontal: THREAD_GUTTER,
-                paddingBottom: COMPOSER_GAP,
+                paddingTop: underBar + 8,
+                paddingBottom: composerHeight,
               }}
+              scrollIndicatorInsets={{ top: underBar, bottom: composerHeight }}
+              automaticallyAdjustsScrollIndicatorInsets={false}
               maintainVisibleContentPosition={KEEP_VISIBLE_POSITION}
               keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
               keyboardShouldPersistTaps="handled"
@@ -2375,9 +2425,18 @@ function Thread() {
               inverted
               keyExtractor={(row) => row.item.id}
               extraData={listExtraData}
-              style={[{ flex: 1, marginTop: 8 }, BLEED_STYLE]}
-              // Inverted: the top padding is the thread's bottom edge.
-              contentContainerStyle={{ paddingHorizontal: THREAD_GUTTER, paddingTop: COMPOSER_GAP }}
+              style={[{ flex: 1 }, BLEED_STYLE]}
+              // Inverted: the top padding is the thread's bottom edge, the bottom one its top, under the
+              // bar; the scroll indicator stops below the bar too.
+              scrollIndicatorInsets={{ top: composerHeight, bottom: underBar }}
+              // iOS would add the safe area on top of these, and on the inverted list its top lands
+              // at the visual bottom: the indicator stopped well above the composer.
+              automaticallyAdjustsScrollIndicatorInsets={false}
+              contentContainerStyle={{
+                paddingHorizontal: THREAD_GUTTER,
+                paddingTop: composerHeight,
+                paddingBottom: underBar + 8,
+              }}
               maintainVisibleContentPosition={KEEP_VISIBLE_POSITION}
               scrollEventThrottle={16}
               // dragging the thread down dismisses the keyboard following the
@@ -2411,26 +2470,6 @@ function Thread() {
               renderItem={({ item, index }) => renderRow(item, { previous: liveRows[index + 1] })}
             />
           )}
-          <View
-            pointerEvents="none"
-            style={{
-              position: "absolute",
-              left: -THREAD_GUTTER,
-              right: -THREAD_GUTTER,
-              bottom: -COMPOSER_GAP,
-              height: COMPOSER_GAP,
-            }}
-          >
-            <Svg width="100%" height={COMPOSER_GAP}>
-              <Defs>
-                <LinearGradient id="composer-gap-fade" x1="0" y1="0" x2="0" y2="1">
-                  <Stop offset="0" stopColor={tokens.background} stopOpacity={0} />
-                  <Stop offset="1" stopColor={tokens.background} stopOpacity={1} />
-                </LinearGradient>
-              </Defs>
-              <Rect width="100%" height={COMPOSER_GAP} fill="url(#composer-gap-fade)" />
-            </Svg>
-          </View>
           {!showPinnedPage && threadScrollState.detached ? (
             <Pressable
               accessibilityRole="button"
@@ -2445,7 +2484,7 @@ function Thread() {
                 position: "absolute",
                 left: "50%",
                 marginLeft: -21,
-                bottom: 12,
+                bottom: composerHeight + 12,
                 width: 42,
                 height: 42,
                 borderRadius: 21,
@@ -2480,15 +2519,33 @@ function Thread() {
           ) : null}
         </View>
         <View
+          onLayout={(event) => setComposerHeight(Math.round(event.nativeEvent.layout.height))}
           style={{
+            // Floats over the thread's end, so the bubbles pass under the composer's glass.
+            position: "absolute",
+            left: THREAD_GUTTER,
+            right: THREAD_GUTTER,
+            bottom: 0,
             // Keyboard covers the nav bar / home indicator, so the safe-area
             // inset would render as dead space between composer and keyboard.
             // 8 px above the keyboard when it's open, 8 px above the
             // safe area otherwise (floored so devices without a safe-area inset,
             // e.g. Android's 3-button nav, still keep a little breathing room).
-            paddingBottom: keyboardVisible ? 8 : Math.max(insets.bottom + 8, 20),
+            paddingBottom: composerBottomInset,
           }}
         >
+          {/* Under the bar, the thread fades into the ambient: nothing reads in that gap. */}
+          <View
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              left: -THREAD_GUTTER,
+              right: -THREAD_GUTTER,
+              bottom: 0,
+              height: composerBottomInset + 12,
+              experimental_backgroundImage: `linear-gradient(to bottom, ${hexWithAlpha(ambientFloor[colorScheme], 0)} 0%, ${hexWithAlpha(ambientFloor[colorScheme], 0.95)} 70%)`,
+            }}
+          />
           {replyTarget ? (
             // 7g: rises in on every appearance — the action sheet's "Reply" and
             // a bubble swipe past the threshold both just set `replyTarget`.
@@ -2676,10 +2733,9 @@ function Thread() {
           <View
             style={{
               marginTop: COMPOSER_GAP,
-              // 12 px side margins — the screen already gives the thread
-              // column 20 px (`paddingHorizontal` above), so this row claims
-              // back 8 of those to land on 12.
-              marginHorizontal: -8,
+              // 20 pt from the screen's edges: off the bubbles' 14 pt edge, so the
+              // composer reads as its own control rather than continuing their line.
+              marginHorizontal: 6,
               flexDirection: "row",
               alignItems: "flex-end",
               gap: 8,
@@ -3063,6 +3119,26 @@ function Thread() {
           <TablePreview table={tablePreview} onClose={() => setTablePreview(null)} />
         ) : null}
       </KeyboardAvoidingView>
+      {barTransparent ? <ThreadScrollEdge height={headerHeight + 40} /> : null}
+      {error || runError ? (
+        // Just below the transparent bar, over the thread and its edge.
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            top: underBar,
+            left: THREAD_GUTTER,
+            right: THREAD_GUTTER,
+          }}
+        >
+          {error ? (
+            <Text style={{ color: tokens.mutedForeground, marginTop: 12 }}>{error}</Text>
+          ) : null}
+          {runError ? (
+            <Text style={{ color: tokens.destructive, marginTop: 12 }}>{runError}</Text>
+          ) : null}
+        </View>
+      ) : null}
     </TableActionsProvider>
   );
 }
@@ -3319,9 +3395,11 @@ const MessageBubble = memo(function MessageBubble({
   message,
   replyPreview,
   canAnswer,
+  takeoverLive,
   viewerUserId,
   onAnswer,
   onOpenBot,
+  onOpenComputer,
   onPreviewMarkdown,
   actionProps,
   isNew,
@@ -3332,9 +3410,12 @@ const MessageBubble = memo(function MessageBubble({
   message: MobileMessage;
   replyPreview?: MobileMessage;
   canAnswer: boolean;
+  /** This message is the computer card of a run still waiting for the user's screen. */
+  takeoverLive?: boolean;
   viewerUserId?: string;
   onAnswer: (message: MobileMessage, answer: string, edits?: SpawnBotEdits) => Promise<void>;
   onOpenBot: (botId: string, name: string) => void;
+  onOpenComputer?: (botId: string) => void;
   onPreviewMarkdown: (target: MarkdownArtifactPreviewTarget) => void;
   actionProps: MessageActionProps;
   isNew: boolean;
@@ -3375,6 +3456,19 @@ const MessageBubble = memo(function MessageBubble({
     ) : (
       card
     );
+  const computerBlock = message.blocks.find(
+    (block): block is Extract<MessageBlock, { kind: "computer" }> => block.kind === "computer",
+  );
+  if (computerBlock) {
+    return withSkillLines(
+      <ComputerCard
+        block={computerBlock}
+        onOpen={takeoverLive && onOpenComputer ? () => onOpenComputer(cardBotId) : undefined}
+        accessibilityActions={actionProps.accessibilityActions}
+        onAccessibilityAction={actionProps.onAccessibilityAction}
+      />,
+    );
+  }
   const appConnectBlocks = message.blocks.filter(
     (block): block is Extract<MessageBlock, { kind: "app_connect" }> =>
       block.kind === "app_connect",

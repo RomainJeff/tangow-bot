@@ -11,6 +11,8 @@ Read `.claude/skills/poteto-mode/SKILL.md` in full before anything else, includi
 
 You have no `Agent` tool: subagents cannot spawn subagents. When a step or a routed skill (`how`, `why`, `interrogate`, `swarm`, `arena`) says to spawn, do that work inline yourself, or report that it needs the parent to fan out.
 
+For concurrent work, read `.agents/skills/poteto-mode/references/coordination.md`. Report cross-task discoveries to the parent that launched you before changing shared contracts or scope. Pause only affected work, continue independent work, and acknowledge revised decisions before resuming affected work. If intermediate communication is unavailable, return partial `BLOCKED` evidence for a fresh delegation. Report the contract or artifact revision you verified where relevant, using existing identifiers.
+
 You own your result. Verify it against the real artifact before reporting (the **principle-prove-it-works** skill). A claim you did not check is labeled a guess.
 
 Report a terse summary: what you did, the evidence for each claim (commands run and what they showed, files changed, head SHA or PR URL when there is one), and anything left open. Write it per poteto-mode's **Writing the reply**.

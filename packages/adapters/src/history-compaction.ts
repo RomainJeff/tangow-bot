@@ -125,6 +125,9 @@ export interface HistoryWindow<T> {
  * Unknown models also apply the count limit, but cannot guarantee model context capacity.
  * The caller must separate active-run context using run identity. Without that identity, a newest
  * exchange containing tool replay is conservatively indivisible, so truncation fails explicitly.
+ *
+ * A cut drops a quarter of the budget or the count at a time rather than one message per turn, so
+ * the window's first message, and the provider's cached prefix behind it, holds for many turns.
  */
 export function selectHistoryWindow<T extends SizedHistoryMessage & { role: string }>(options: {
   history: T[];
@@ -144,8 +147,12 @@ export function selectHistoryWindow<T extends SizedHistoryMessage & { role: stri
     options.nonHistoryTokens,
     options.policy,
   );
+  const countExcess = history.length - Math.max(0, options.messageWindowSize);
+  const countStep = Math.max(1, Math.floor(options.messageWindowSize / 4));
+  const steppedCountStart =
+    countExcess > 0 ? Math.min(history.length, Math.ceil(countExcess / countStep) * countStep) : 0;
   if (channel && capacity === undefined) {
-    return { messages: history.slice(-options.messageWindowSize), mode: "count" };
+    return { messages: history.slice(steppedCountStart), mode: "count" };
   }
   const budget = channel
     ? (capacity ?? HISTORY_TOKEN_CEILING)
@@ -154,16 +161,13 @@ export function selectHistoryWindow<T extends SizedHistoryMessage & { role: stri
         Math.max(0, HISTORY_TOKEN_CEILING - (options.historicalContextTokens ?? 0)),
       );
   const mode = capacity === undefined ? "count" : "tokens";
-  const countStart =
-    capacity === undefined
-      ? Math.max(0, history.length - Math.max(0, options.messageWindowSize))
-      : 0;
+  const countStart = capacity === undefined ? steppedCountStart : 0;
+  const tokens = history.map(estimateHistoryMessageTokens);
   let used = 0;
   let start = history.length;
   for (let index = history.length - 1; index >= countStart; index -= 1) {
-    const tokens = estimateHistoryMessageTokens(history[index]!);
-    if (used + tokens > budget && (!channel || start < history.length)) break;
-    used += tokens;
+    if (used + tokens[index]! > budget && (!channel || start < history.length)) break;
+    used += tokens[index]!;
     start = index;
   }
   const newestUser = history.findLastIndex((message) => message.role === "user");
@@ -178,6 +182,16 @@ export function selectHistoryWindow<T extends SizedHistoryMessage & { role: stri
   ) {
     throw new Error("History budget cannot preserve the newest tool exchange");
   }
+  // A power of two, so a budget that moves by a few tokens between turns keeps the same step.
+  const tokenStep = 2 ** Math.floor(Math.log2(Math.max(1, budget / 4)));
+  let dropped = 0;
+  for (let index = countStart; index < start; index += 1) dropped += tokens[index]!;
+  const dropTarget = Math.ceil(dropped / tokenStep) * tokenStep;
+  let stepped = start;
+  for (; stepped < history.length && dropped < dropTarget; stepped += 1) {
+    dropped += tokens[stepped]!;
+  }
+  start = Math.min(stepped, Math.max(start, newestUser));
   for (let index = start; index < history.length; index += 1) {
     if (history[index]!.role === "user") return { messages: history.slice(index), mode };
   }

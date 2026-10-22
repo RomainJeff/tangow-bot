@@ -5,6 +5,9 @@ const webPort = Number(process.env.WEB_PORT ?? 5173);
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://127.0.0.1:${webPort}`;
 const realSandbox = isRealSandboxProvider();
 const boxSandbox = process.env.SANDBOX_PROVIDER === "box";
+const record =
+  process.env.E2E_RECORD === "1" ||
+  (process.env.E2E_RECORD === undefined && Boolean(process.env.CI));
 const reporters = [
   ...(process.env.CI ? ([["github"]] as const) : []),
   ["list"] as const,
@@ -21,9 +24,9 @@ export default defineConfig({
   reporter: reporters,
   use: {
     baseURL,
-    trace: "retain-on-failure",
+    trace: record ? "retain-on-failure" : "off",
     screenshot: "only-on-failure",
-    video: "retain-on-failure",
+    video: record ? "retain-on-failure" : "off",
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {

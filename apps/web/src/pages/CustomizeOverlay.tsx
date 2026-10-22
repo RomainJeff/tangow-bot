@@ -1,5 +1,13 @@
-import { Trans } from "@lingui/react/macro";
-import { Puzzle, Sparkles } from "lucide-react";
+import { Trans, useLingui } from "@lingui/react/macro";
+import {
+  Button,
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@rakazo/ui-web";
+import { Puzzle, Sparkles, X } from "lucide-react";
 import { useState } from "react";
 import { PluginsOverlay } from "./PluginsOverlay";
 import { SkillsOverlay } from "./SkillsOverlay";
@@ -14,13 +22,17 @@ function CustomizeNav({
   section: CustomizeSection;
   onSelect: (section: CustomizeSection) => void;
 }) {
+  const { t } = useLingui();
   const items = [
     { id: "integrations" as const, label: <Trans>Integrations</Trans>, Icon: Puzzle },
     { id: "skills" as const, label: <Trans>Skills</Trans>, Icon: Sparkles },
   ];
   return (
-    <nav className="flex w-44 shrink-0 flex-col gap-1 border-e border-border bg-muted/30 p-3 pt-7 sm:w-56">
-      <div className="px-2.5 pb-4 text-2xl text-foreground">
+    <nav
+      aria-label={t`Customize`}
+      className="flex shrink-0 flex-row gap-1 overflow-x-auto px-3 py-3 md:m-2 md:w-56 md:flex-col md:rounded-xl md:bg-group md:p-2 md:pt-5 md:shadow-group"
+    >
+      <div className="hidden px-2.5 pb-4 text-2xl text-foreground md:block">
         <Trans>Customize</Trans>
       </div>
       {items.map(({ id, label, Icon }) => (
@@ -30,10 +42,10 @@ function CustomizeNav({
           data-testid={`customize-nav-${id}`}
           aria-current={section === id ? "page" : undefined}
           onClick={() => onSelect(id)}
-          className={`flex items-center gap-2.5 rounded-[11px] px-2.5 py-2 text-start text-[14.5px] ${
+          className={`flex shrink-0 items-center gap-2.5 rounded-[11px] px-2.5 py-2 text-start text-[14.5px] ${
             section === id
-              ? "bg-accent font-medium text-foreground"
-              : "text-foreground/80 hover:bg-accent/60"
+              ? "bg-sidebar-accent font-medium text-foreground max-md:bg-group max-md:shadow-group"
+              : "text-foreground/80 hover:bg-sidebar-accent/60"
           }`}
         >
           <Icon size={15} strokeWidth={1.7} className="shrink-0" />
@@ -46,7 +58,8 @@ function CustomizeNav({
 
 /**
  * Single entry point for the space-level panels the sidebar used to open one by
- * one. Each section keeps its own dialog shell and renders the shared rail.
+ * one. One dialog hosts every section so switching never closes and reopens it;
+ * a visited section stays mounted so coming back neither reloads nor resets it.
  */
 export function CustomizeOverlay({
   activeBotId,
@@ -59,24 +72,58 @@ export function CustomizeOverlay({
   onOpenMcp?: () => void;
   onSkillsChanged?: () => void;
 }) {
+  const { t } = useLingui();
   const [section, setSection] = useState<CustomizeSection>("integrations");
-  // ponytail: switching sections remounts the dialog, which also resets the
-  // section's own state. Hoist state into here if that ever gets annoying.
-  const nav = <CustomizeNav section={section} onSelect={setSection} />;
+  const [skillsVisited, setSkillsVisited] = useState(false);
+  const sectionClass = (id: CustomizeSection) =>
+    section === id ? "flex min-h-0 flex-1 flex-col" : "hidden";
 
-  return section === "integrations" ? (
-    <PluginsOverlay
-      sidebar={nav}
-      activeBotId={activeBotId}
-      onClose={onClose}
-      onOpenMcp={onOpenMcp}
-    />
-  ) : (
-    <SkillsOverlay
-      sidebar={nav}
-      botId={activeBotId}
-      onClose={onClose}
-      onSkillsChanged={onSkillsChanged}
-    />
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent
+        variant="window"
+        showCloseButton={false}
+        className="flex h-[760px] max-h-[calc(100%-2rem)] w-[min(1080px,calc(100%-2rem))] max-w-[calc(100%-2rem)] flex-row gap-0 overflow-hidden p-0 max-md:flex-col sm:max-w-[1080px]"
+      >
+        <CustomizeNav
+          section={section}
+          onSelect={(next) => {
+            setSection(next);
+            if (next === "skills") setSkillsVisited(true);
+          }}
+        />
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <DialogHeader className="flex-row items-start justify-between px-8 pt-7">
+            <DialogTitle className="text-2xl text-foreground">
+              {section === "integrations" ? <Trans>Integrations</Trans> : <Trans>Skills</Trans>}
+            </DialogTitle>
+            <DialogClose
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={section === "integrations" ? t`Close integrations` : t`Close skills`}
+                />
+              }
+            >
+              <X />
+            </DialogClose>
+          </DialogHeader>
+          <div className={sectionClass("integrations")}>
+            <PluginsOverlay activeBotId={activeBotId} onOpenMcp={onOpenMcp} />
+          </div>
+          {skillsVisited ? (
+            <div className={sectionClass("skills")}>
+              <SkillsOverlay botId={activeBotId} onSkillsChanged={onSkillsChanged} />
+            </div>
+          ) : null}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
