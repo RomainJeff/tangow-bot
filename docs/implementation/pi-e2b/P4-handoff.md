@@ -1,6 +1,6 @@
 # P4 N13 handoff
 
-N13 is incomplete. This draft prepares the native default and records the live results and blockers. It does not close P4 or make the feature ready to merge.
+N13 is incomplete. NFS locking and product Chrome now pass on a private corrected computer template. This draft records the tested scope and remaining gates; it does not close P4 or promote production defaults.
 
 ## Implementation
 
@@ -79,16 +79,29 @@ Export, import and replacement archival enumerate existing private profile direc
 
 Independent final review blocked initial source `792a7c04dee8f88a3b94c1fd825ba43d99ed71f8`: its dedicated alias pass removed tracking before the canonical pass could find Chrome. A bounded actual-Chrome probe also proved canonical startup could create a duplicate for the same profile inode. Root accepted the independently reviewed shared-owner correction above. The temporary E2B process selector was deleted; fresh independent final review accepted `17046afe` with no material findings and closed P1.
 
-The [offline correction proof](evidence/P4/browser-profile-correction.json) records the final source and bundle hashes, real generated E2B/LinuxDesktop commands executed as UID/GID 1000, old-location permission failure, two stable isolated bot profiles, actual process quiescing, unchanged root ownership/mode, portable export/archive behavior and checks. This is offline Linux permission and adapter proof. The corrected source has not run against E2B. Root accepted the corrected source and owns the next retained-template runtime authorization after checks.
+The [offline correction proof](evidence/P4/browser-profile-correction.json) records the final source and bundle hashes, real generated E2B/LinuxDesktop commands executed as UID/GID 1000, old-location permission failure, two stable isolated bot profiles, actual process quiescing, unchanged root ownership/mode, portable export/archive behavior and checks. This is offline Linux permission and adapter proof. That receipt predates the later E2B runs. The private NFS/Chrome candidate below tests the subsequent browser source `9084cb142cf91117fcadf5eb497bea69a745826c`.
 
 Final-source local validation passed 94 focused tests in seven files, including actual Chrome in team, dedicated and historical-alias layouts, plus 174 PostgreSQL integration tests. All 23 non-mobile workspace check tasks passed; the full check failed only on the explicitly waived Expo notification patch mismatch. Lint and the runner/guest bundle passed. Affected web E2E selected the full suite: 216 passed, the five accepted baseline failures remained, and the floating hover-action Copy click timed out. That one extra test passed alone in 8.9 seconds under a new lock after integration finished. The full run remains non-green. Computer-update and mention-picker had no extra failure on this source. Superseded `792a7c04` remains blocked historical evidence, including its different computer-update timeout.
 
 Test audit removed one redundant direct filtering-helper inventory in favor of actual export/archive results. The shared generated-command test rejects another directory with the same basename while stopping a hinted process through an alias. It adds no private predicate export or production test seam. No Electron E2E ran, dependencies were unchanged, and the changelog remains with P6.
 
+## NFS locking and Chrome candidate
+
+The [candidate receipt](evidence/P4/nfs-chrome-candidate.json) records automatic initial mounts and product Chrome on source `9084cb142cf91117fcadf5eb497bea69a745826c`. The tested runtime patch adds `nolock` to the existing envd NFSv3 mount options. The proxy has no remote lock manager; the previous configuration left Chrome's file-lock requests waiting for RPC completion. The [compressed runtime patch](evidence/P4/envd-nfs-local-locks.patch.gz) includes an executable mount-boundary regression and the capability documentation. [Upstream issue 3619](https://github.com/e2b-dev/runtime/issues/3619) reports the same omission; the open report is not a maintainer endorsement.
+
+One private candidate template contains the reviewed binary. Its installed and running envd hashes matched the built artifact, and its first volume mount reported `nolock` and `local_lock=all` without a manual remount. Distinct native processes demonstrated lock acquisition, prompt conflict denial, unlock, and subsequent acquisition within that VM.
+
+Normal product browser navigation, snapshot, fill, click, and capture passed. Full product release closed Chrome; reopening the same persistent profile retained the synthetic cookie and origin local storage. The check endpoint only read those values and the seed endpoint ran once. [The reopened product capture](evidence/P4/nfs-chrome-reopened-product.png) shows both values. This proves synthetic persistence, not authenticated-login continuity, model vision, or the remaining native-MCP approval and takeover flows.
+
+Advisory locks are local to each VM. Concurrent database or browser-profile writers across VMs are unsupported; worker and computer leases do not enforce profile-filesystem exclusion. The profile remains on its persistent private volume.
+
+The candidate build used an isolated image reference with unchanged canonical bytes. The original host envd bytes and metadata were restored after the build. Its one test computer and volume were independently confirmed absent, and the owned registry, tunnel, tag, and scratch were removed. The successful candidate remains private for the remaining N13 tests; the original ready template is unchanged. Production defaults, aliases, and artifact delivery are not promoted by this proof.
+
 ## Remaining work
 
 - Finish final evidence and CI review. Independent final review accepted source `17046afe246df98253acee7710b151c47f2fca10` and closed the dedicated-alias P1. The earlier compaction read proof remains pinned to `a554f2875cbccdbbd2b13032597138684bef04f1`.
-- After source review, rerun the corrected dynamic desktop against the retained owned ready E2B template, then run the real app/browser form, submission approval, takeover, screen-path read-once/cleanup, and OpenCode job/path/auth lanes. Canonical build, actual prepare, identity and mount coherence already passed on the historical source; the remaining gates are unverified. No extra screenshot VM is part of the preparation.
+- Use the validated private candidate for the remaining integrated native-MCP browser, submission approval, takeover, screen-path read-once/cleanup, and OpenCode job/path/auth lanes. Direct product Chrome form, capture, and release/reopen persistence now pass. The native GUI app and remaining integrated gates are unverified. No extra screenshot VM is required.
+- Prepare production artifact delivery and computer-template promotion for P6. The private candidate does not change production defaults.
 - Keep the computerless Go proof separate from the remaining computer parity and OpenCode job/auth gates.
 - Capture the applicable product flows through the approved screenshot workflow once they run. Unrelated web or phone screens were not substituted. No native mobile screen changed, and no Electron E2E ran.
 

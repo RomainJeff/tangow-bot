@@ -1,0 +1,98 @@
+{
+  "status": "passed_private_candidate",
+  "rakazoSource": "9084cb142cf91117fcadf5eb497bea69a745826c",
+  "runtimeBase": "7546658b6c311571e4f1e203ba8398a50e86f95e",
+  "runtimeFix": "c7f5fbfa6d9f0a2289964a8b8a3c1522390c09cc",
+  "envdSha256": "6c1571283e05159f9ea7bed08ac8e0c962afae578ac67385a8184e10632fb9fe",
+  "automaticInitialMount": {
+    "installedEnvdHashMatches": true,
+    "runningEnvdHashMatches": true,
+    "nfsVersion": 3,
+    "nolock": true,
+    "local_lock": "all",
+    "manualRemount": false
+  },
+  "nativeLocks": {
+    "sameVmDistinctProcesses": true,
+    "conflictingNonblockingLockErrno": "EAGAIN",
+    "acquiresAfterUnlock": true,
+    "crossVmExclusionProved": false
+  },
+  "product": {
+    "normalProviderAndLinuxDesktop": true,
+    "navigateSnapshotFillClick": true,
+    "fullReleaseAndSameProfileReopen": true,
+    "persistentCookie": "synthetic-cookie",
+    "originLocalStorage": "synthetic-origin",
+    "seedCount": 1,
+    "checkOnlyReads": true,
+    "authenticatedLoginContinuityProved": false
+  },
+  "validation": {
+    "regressionFailsBeforeFix": true,
+    "regressionAndNfsSiblingsRace": "pass",
+    "fullApiRace": "pass",
+    "goVet": "pass",
+    "independentCodeReview": "ready",
+    "rakazoDocumentationAffectedWeb": "full suite selected; exactly five accepted baseline failures; no additional failures"
+  },
+  "resources": {
+    "builds": 1,
+    "computerVms": 1,
+    "privateVolumes": 1,
+    "vmIndependentlyAbsent": true,
+    "volumeIndependentlyAbsent": true,
+    "ownedTransportAndScratchRemoved": true,
+    "successfulPrivateCandidateRetained": true,
+    "originalTemplateUnchanged": true,
+    "originalHostArtifactRestored": true
+  },
+  "scope": {
+    "productionDefaultsChanged": false,
+    "aliasesChanged": false,
+    "serviceRestarted": false,
+    "newNfsServer": false,
+    "modelCalls": 0,
+    "fullN13Complete": false
+  },
+  "limitations": [
+    "Advisory locks are VM-local. Concurrent database writers across VMs are unsupported.",
+    "The deployed builder source revision remains unconfirmed; candidate bytes and initial mount were verified at runtime.",
+    "Cache isolation follows the unique FROM reference and observed distinct key; it is not a source attestation.",
+    "Synthetic cookie and origin persistence does not prove authenticated-login continuity."
+  ],
+  "priorAttempts": [
+    {
+      "stage": "manual mount verifier",
+      "result": "stopped before Chrome because kernel output omitted noacl; assertion corrected, requested mount options unchanged"
+    },
+    {
+      "stage": "first candidate build",
+      "result": "terminal image-pull failure with loopback connection refused; host restored, failed candidate removed, no runtime VM or volume"
+    },
+    {
+      "stage": "successful candidate preparation",
+      "result": "registry-readiness and receipt-permission errors corrected before another build or VM; original failures retained privately"
+    }
+  ],
+  "captures": {
+    "submitted-product": {
+      "path": "nfs-chrome-submitted-product.png",
+      "sha256": "78bb253d9498d0330422fdb0db30115b48233a63bc22b02c4c42276cb5ff7431",
+      "width": 1280,
+      "height": 800
+    },
+    "reopened-product": {
+      "path": "nfs-chrome-reopened-product.png",
+      "sha256": "ed4d37b92302fda914ad722157eee140e89b2e4707f38c342e4283d2d61cf825",
+      "width": 1280,
+      "height": 800
+    }
+  },
+  "runtimePatch": {
+    "path": "envd-nfs-local-locks.patch.gz",
+    "sha256": "7ba8e188109434b80b274a52984629c9a522d341372421b9619c2325367406ef",
+    "uncompressedSha256": "ee0d72e297d7eca12f779f0e6be0d39a746ddf170a56fc1e34db44a260485b05",
+    "format": "gzip-compressed unified diff against runtimeBase"
+  }
+}
