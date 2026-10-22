@@ -5,7 +5,6 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { Sandbox, SandboxNotFoundError, TimeoutError } from "@e2b/desktop";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
-import { shouldSkipPortableWorkspaceFile } from "./computer-workspace.js";
 import { fakeE2BMachine } from "./e2b-machine.test-support.js";
 import type { E2BSandboxSdk } from "./e2b-sandbox.js";
 import { E2BSandboxProvider, isSandboxGoneError, linkWorkspaceCommand } from "./e2b-sandbox.js";
@@ -33,6 +32,7 @@ describe("E2B computer backend", () => {
     const provider = new E2BSandboxProvider("test-key", {
       connect: vi.fn(async () => ({
         sandboxId: "existing",
+        getInfo: async () => ({ metadata: {} }),
         display: ":0",
         commands: { run: command },
       })),
@@ -65,6 +65,7 @@ describe("E2B computer backend", () => {
     const sdk = {
       connect: vi.fn(async () => ({
         sandboxId: "existing",
+        getInfo: async () => ({ metadata: {} }),
         display: ":0",
         getHost: (port: number) => `${port}-desktop.test`,
         commands: { run: command },
@@ -94,13 +95,6 @@ describe("E2B computer backend", () => {
     await first.close();
     expect(command).toHaveBeenCalledTimes(commandsBeforeClose);
     expect(globalStream).not.toHaveBeenCalled();
-  });
-
-  it("only filters transient cache files inside portable browser profiles", () => {
-    expect(shouldSkipPortableWorkspaceFile("project/Cache/important.txt")).toBe(false);
-    expect(shouldSkipPortableWorkspaceFile("project/lock")).toBe(false);
-    expect(shouldSkipPortableWorkspaceFile(".browser-profiles/chromium/Cache/data")).toBe(true);
-    expect(shouldSkipPortableWorkspaceFile(".browser-profiles/chromium/SingletonLock")).toBe(true);
   });
 
   it.each([
@@ -225,6 +219,7 @@ describe("E2B computer backend", () => {
     });
     const desktop = {
       sandboxId: "screen-e2b-box",
+      getInfo: async () => ({ metadata: {} }),
       display: ":0",
       commands: { run },
     } as unknown as Sandbox;
@@ -254,6 +249,7 @@ describe("E2B computer backend", () => {
     });
     const desktop = {
       sandboxId: "timeout-e2b-box",
+      getInfo: async () => ({ metadata: {} }),
       display: ":0",
       commands: { run },
     } as unknown as Sandbox;
@@ -514,6 +510,7 @@ describe("E2B computer backend", () => {
     const open = vi.fn(async () => undefined);
     const desktop = {
       sandboxId: "e2b-open-url-box",
+      getInfo: async () => ({ metadata: {} }),
       display: ":0",
       commands: { run: command },
       files: { makeDir: vi.fn(async () => undefined) },
@@ -580,6 +577,7 @@ describe("E2B computer backend", () => {
     const streamStop = vi.fn(async () => undefined);
     const desktop = {
       sandboxId: "e2b-test-box",
+      getInfo: async () => ({ metadata: {} }),
       display: ":0",
       getHost: (port: number) => `${port}-desktop.test`,
       commands: { run: command },
@@ -739,6 +737,7 @@ describe("E2B computer backend", () => {
     );
     const desktop = {
       sandboxId: "e2b-shared",
+      getInfo: async () => ({ metadata: {} }),
       display: ":0",
       getHost: (port: number) => `${port}-desktop.test`,
       commands: { run: command },

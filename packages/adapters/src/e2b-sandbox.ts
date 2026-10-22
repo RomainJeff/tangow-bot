@@ -16,8 +16,16 @@ import type {
   ScreenRequest,
   ScreenSession,
 } from "@rakazo/adapter-kit";
-import { boundedSandboxCommandTimeoutMs, underVolumeMounts, type VolumeHome } from "@rakazo/core";
+import {
+  boundedSandboxCommandTimeoutMs,
+  underVolumeMounts,
+  type VolumeHome,
+  volumeMountPath,
+  WORKSPACE_ROOT,
+} from "@rakazo/core";
+import { stopAllDesktopBrowsersCommand } from "@rakazo/core/node/desktop-runtime";
 import { sandboxIdleMs } from "./computer-idle.js";
+import { ComputerScreenUnavailableError } from "./computer-screens.js";
 import { normalizeWorkspacePath, shellQuote, workspacePath } from "./computer-support.js";
 import {
   PORTABLE_TRANSFER_BATCH_BYTES,
@@ -26,7 +34,13 @@ import {
 import { LinuxDesktop, PREPARE_LINUX_DESKTOP } from "./linux-desktop.js";
 
 const E2B_WORKSPACE = "/home/user/rakazo-home";
-const E2B_BROWSER_PROFILES = `${E2B_WORKSPACE}/.browser-profiles`;
+const E2B_DESKTOP_ENV = {
+  homeDir: "/home/user",
+  workspaceDir: E2B_WORKSPACE,
+  browserProfilesDir: `${E2B_WORKSPACE}/.browser-profiles`,
+  displayStart: 20,
+  portStart: 6100,
+};
 
 export interface E2BSandboxSdk {
   create(options: ReturnType<typeof e2bCreateOptions>): Promise<Sandbox>;
@@ -114,13 +128,17 @@ function errorMessage(error: unknown): string {
 
 export class E2BSandboxProvider implements SandboxProvider {
   private readonly desktops = new LinuxDesktop({
-    environment: async () => ({
-      homeDir: "/home/user",
-      workspaceDir: E2B_WORKSPACE,
-      browserProfilesDir: E2B_BROWSER_PROFILES,
-      displayStart: 20,
-      portStart: 6100,
-    }),
+    environment: async (computer, context) => {
+      const onVolumes =
+        computer.writableRoots !== undefined ||
+        (await (await this.box(computer)).getInfo()).metadata.home === "volumes";
+      if (!onVolumes) return E2B_DESKTOP_ENV;
+      if (!context.botId) throw new ComputerScreenUnavailableError();
+      return {
+        ...E2B_DESKTOP_ENV,
+        browserProfilesDir: `${volumeMountPath({ kind: "bot_private", botId: context.botId })}/.browser-profiles`,
+      };
+    },
     run: async (computer, command, context) => {
       const result = await this.runSetupCommand(await this.box(computer), command, context.signal);
       return { code: result.exitCode, stdout: result.stdout, stderr: result.stderr };
@@ -259,6 +277,26 @@ export class E2BSandboxProvider implements SandboxProvider {
     };
   }
 
+  private async stopBrowsers(computer: ComputerRef, context: AdapterContext) {
+    const profiles = "RAKAZO_INTERNAL_PROFILES";
+    const stop = stopAllDesktopBrowsersCommand({
+      ...E2B_DESKTOP_ENV,
+      browserProfilesDir: profiles,
+    }).replaceAll(shellQuote(profiles), '"$1"');
+    const result = await this.runSetupCommand(
+      await this.box(computer),
+      [
+        "set -eu",
+        `for profiles in ${shellQuote(E2B_DESKTOP_ENV.browserProfilesDir)} ${shellQuote(WORKSPACE_ROOT)}/bots/*/.browser-profiles; do`,
+        '  [ -d "$profiles" ] || continue',
+        `  bash -eu -c ${shellQuote(stop)} desktop "$profiles"`,
+        "done",
+      ].join("\n"),
+      context.signal,
+    );
+    if (result.exitCode !== 0) throw new Error(result.stderr || "computer browsers failed to stop");
+  }
+
   /**
    * A discarded machine's workspace files on no volume: all of them on a machine created before
    * its home moved (`root` null), else those outside the mount points under the volumes' root.
@@ -269,7 +307,7 @@ export class E2BSandboxProvider implements SandboxProvider {
     root: string | null,
     context: AdapterContext,
   ): AsyncIterable<PortableFile> {
-    await this.desktops.stopBrowsers(machine, context);
+    await this.stopBrowsers(machine, context);
     yield* walkE2BWorkspace(desktop, "", context, (relative) =>
       root === null ? true : !underVolumeMounts(path.posix.join(root, relative)),
     );
@@ -410,7 +448,7 @@ export class E2BSandboxProvider implements SandboxProvider {
     context: AdapterContext,
   ): AsyncIterable<PortableFile> {
     const desktop = await this.box(computer);
-    await this.desktops.stopBrowsers(computer, context);
+    await this.stopBrowsers(computer, context);
     yield* walkE2BWorkspace(desktop, "", context);
   }
 
@@ -420,7 +458,7 @@ export class E2BSandboxProvider implements SandboxProvider {
     context: AdapterContext,
   ): Promise<void> {
     const desktop = await this.box(computer);
-    await this.desktops.stopBrowsers(computer, context);
+    await this.stopBrowsers(computer, context);
     let batch: PortableFile[] = [];
     let batchBytes = 0;
     const flush = async () => {
