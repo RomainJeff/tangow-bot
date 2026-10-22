@@ -195,7 +195,7 @@ const USER_CONTACT_TOOLS = new Set([
 ]);
 const checkInPrompt = (toolCalls: number) =>
   `Harness note, not from the user: you have made ${toolCalls} tool calls since the user last heard from you. Send them a short progress update with message_user (what you found, what is next), then continue.`;
-const DEFAULT_COMPUTER_SCREENSHOTS_TO_KEEP = 2;
+export const DEFAULT_COMPUTER_SCREENSHOTS_TO_KEEP = 2;
 // Reasoning-capable models must not start at "off": for OpenRouter, pi-ai maps
 // that to reasoning.effort "none", which 400s on endpoints that mandate
 // reasoning (e.g. google/gemini-3.7-flash). Keep a real level when model.reasoning
@@ -408,8 +408,11 @@ export class PiAgentRuntime implements AgentRuntime {
                   reliableStreamOptions(m, options, request.model.maxTokens),
                 ),
           getApiKey: async () => apiKey,
-          transformContext: async (messages) =>
-            pruneComputerScreenshotContext(messages, request.model.maxImagesPerPrompt),
+          // A relayed call is pruned by the relay, which needs the whole history to evict in blocks.
+          transformContext: this.streamFn
+            ? undefined
+            : async (messages) =>
+                pruneComputerScreenshotContext(messages, request.model.maxImagesPerPrompt),
           finishTurn: async () => (host.pausePending ? { action: "end" } : undefined),
           prepareNextTurnWithContext: async () => {
             if (!request.claimSteering) return undefined;
@@ -1631,8 +1634,10 @@ async function runSubagent(
             reliableStreamOptions(m, options, requestModel.maxTokens),
           ),
     getApiKey: async () => selectedModel.apiKey,
-    transformContext: async (messages) =>
-      pruneComputerScreenshotContext(messages, requestModel.maxImagesPerPrompt),
+    transformContext: host.streamFn
+      ? undefined
+      : async (messages) =>
+          pruneComputerScreenshotContext(messages, requestModel.maxImagesPerPrompt),
     finishTurn: async () => (nestedHost.pausePending ? { action: "end" } : undefined),
     initialState: {
       systemPrompt: [
