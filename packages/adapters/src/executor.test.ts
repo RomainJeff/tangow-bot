@@ -13,6 +13,7 @@ import type { PrismaClient } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
 import {
   appendToolCompletionAudit,
+  buildHarnessAddendum,
   buildSystemInstructions,
   CHAT_VOICE_INSTRUCTIONS,
   createRunExecutor,
@@ -1731,6 +1732,18 @@ describe("buildSystemInstructions", () => {
 
   it("keeps the clock out of the system prefix", () => {
     expect(buildSystemInstructions(parts)).not.toContain("Current date and time");
+  });
+
+  it("gives a harness with its own prompt the bot's guidance without credentials or helpers", () => {
+    const instructions = buildSystemInstructions(parts);
+    const addendum = buildHarnessAddendum(parts);
+    expect(addendum).toContain("Ada: research bot");
+    expect(addendum).toContain("This entire computer workspace is your private home.");
+    expect(addendum).toContain("<memory>fact</memory>");
+    expect(instructions).toContain("Environment: linux");
+    expect(addendum).not.toContain("Environment: linux");
+    expect(instructions).toContain("run_subagent");
+    expect(addendum).not.toContain("subagent");
   });
 
   it("is byte-identical across runs when memory, scratchpad and directory are unchanged", () => {

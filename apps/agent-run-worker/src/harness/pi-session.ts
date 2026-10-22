@@ -1,4 +1,4 @@
-import type { ResourceLoader } from "@earendil-works/pi-coding-agent";
+import type { ProviderConfig, ResourceLoader } from "@earendil-works/pi-coding-agent";
 import {
   AgentSession,
   ModelRuntime,
@@ -8,11 +8,13 @@ import {
 import type { PiAgentRuntimeOptions } from "@rakazo/adapters/pi-runtime";
 
 type Agent = Parameters<NonNullable<PiAgentRuntimeOptions["bindSession"]>>[0];
+type RelayStream = NonNullable<ProviderConfig["streamSimple"]>;
 
-/** Session state comes only from the controller. No credentials or resources come from disk. */
-export async function piSession(agent: Agent, cwd: string, resources: ResourceLoader) {
-  const model = agent.state.model;
-  if (!model) throw new Error("The relay model is missing");
+/** Pi's model runtime with a placeholder key: the controller's relay holds the real one. */
+export async function relayModelRuntime(
+  model: Parameters<RelayStream>[0],
+  streamSimple?: RelayStream,
+) {
   const modelRuntime = await ModelRuntime.create({
     credentials: {
       read: async (provider) =>
@@ -33,7 +35,16 @@ export async function piSession(agent: Agent, cwd: string, resources: ResourceLo
     baseUrl: "http://relay.invalid/v1",
     api: model.api,
     models: [model],
+    ...(streamSimple ? { streamSimple } : {}),
   });
+  return modelRuntime;
+}
+
+/** Session state comes only from the controller. No credentials or resources come from disk. */
+export async function piSession(agent: Agent, cwd: string, resources: ResourceLoader) {
+  const model = agent.state.model;
+  if (!model) throw new Error("The relay model is missing");
+  const modelRuntime = await relayModelRuntime(model);
   const sessionManager = SessionManager.inMemory(cwd);
   for (const message of agent.state.messages) {
     if (

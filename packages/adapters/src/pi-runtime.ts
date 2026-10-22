@@ -711,6 +711,14 @@ export function streamRunModel(
   return { model, stream };
 }
 
+/** The catalog model a guest names for its own runtime. Its calls go through the relay. */
+export function guestRuntimeModel(config: AgentRunRequest["model"]): Model<Api> {
+  const selected = resolveRuntimeModel(config);
+  if (!selected.model) throw new Error(`Unknown model ${selected.provider}/${selected.modelId}`);
+  const model = modelForCompletion(selected.model, config.maxTokens);
+  return config.contextWindow ? { ...model, contextWindow: config.contextWindow } : model;
+}
+
 export function modelsForRequest(
   request: Pick<AgentRunRequest, "model">,
   provider: string,

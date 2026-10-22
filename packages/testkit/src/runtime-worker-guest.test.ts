@@ -1,7 +1,15 @@
+import fs from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { GuestTool, LocalToolOutput, WorkerStartV1 } from "@rakazo/adapter-kit";
+import type {
+  GuestBody,
+  GuestTool,
+  LocalToolOutput,
+  ReplyFinal,
+  WorkerStartV1,
+} from "@rakazo/adapter-kit";
 import type { FrameChannel } from "@rakazo/adapters/runtime-worker";
 import {
   createCapabilityKey,
@@ -14,8 +22,9 @@ import {
   verifyCapability,
 } from "@rakazo/adapters/runtime-worker";
 import { relayPiAiCall } from "@rakazo/adapters/runtime-worker/pi-ai";
+import type { GuestHarness } from "@rakazo/agent-run-worker";
 import { HARNESSES, runGuest } from "@rakazo/agent-run-worker";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ModelEmulatorStep } from "./model-emulator.js";
 import { startModelEmulator } from "./model-emulator.js";
 
@@ -32,8 +41,9 @@ async function* once(channel: FrameChannel) {
 }
 
 /**
- * Runs the Pi harness in a real guest against a session inbox that grants every guest tool and
- * relays model calls to the emulator. Returns what the controller recorded and the frames it read.
+ * Runs a harness (Pi by default) in a real guest against a session inbox that grants every guest
+ * tool and relays model calls to the emulator, unless `reply` answers a frame first. Returns what
+ * the controller recorded and the frames it read.
  */
 async function driveGuest(options: {
   steps: ModelEmulatorStep[];
@@ -42,6 +52,8 @@ async function driveGuest(options: {
   cwd: string;
   root?: string;
   spoolDir: string;
+  harness?: GuestHarness;
+  reply?: (body: GuestBody) => ReplyFinal | undefined;
 }) {
   const server = await startModelEmulator({ steps: options.steps });
   cleanups.push(() => server.close());
@@ -72,9 +84,11 @@ async function driveGuest(options: {
   );
   const controllerCalls: string[] = [];
   const recorded: LocalToolOutput[] = [];
-  const frames: Array<{ type: string; bytes: number }> = [];
+  const frames: Array<{ type: string; bytes: number; body: GuestBody }> = [];
   const latencies: Array<{ re: number; firstEventMs: number }> = [];
   const inbox = createSessionInbox(worker, async (_seq, body, part) => {
+    const replied = options.reply?.(body);
+    if (replied) return replied;
     switch (body.type) {
       case "model.request":
         await relayPiAiCall(
@@ -100,6 +114,7 @@ async function driveGuest(options: {
       case "skills.index.end":
       case "skills.collision":
       case "skills.used":
+      case "transcript":
         return { type: "recorded" };
       case "done":
         return { type: "stop", reason: "done" };
@@ -119,8 +134,8 @@ async function driveGuest(options: {
         await pair.controller.send(encodeMessage(start));
         continue;
       }
-      frames.push({ type: read.message.payload.body.type, bytes: frame.byteLength });
       const body = read.message.payload.body;
+      frames.push({ type: body.type, bytes: frame.byteLength, body });
       if (body.type === "model.latency") latencies.push(body);
       expect(inbox.accept(read.message)).toEqual({ ok: true });
     }
@@ -129,7 +144,7 @@ async function driveGuest(options: {
   const exit = await runGuest({
     channels: once(pair.guest),
     capability: mintCapability(key, worker, Date.now()),
-    harness: HARNESSES.pi!,
+    harness: options.harness ?? HARNESSES.pi!,
     spoolDir: options.spoolDir,
     root: options.root,
     home: path.join(options.root ?? options.cwd, ".guest-home"),
@@ -388,4 +403,156 @@ describe("run channel conformance of the Pi harness", () => {
     expect(output.truncated).toBe(true);
     expect(await readFile(output.spoolPath!, "utf8")).toBe(content);
   });
+});
+
+describe("run channel conformance of the pi-native harness", () => {
+  const piNative = HARNESSES["pi-native"]!;
+  const guestRoot = async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "rakazo-pi-native-"));
+    cleanups.push(() => rm(root, { recursive: true, force: true }));
+    await mkdir(path.join(root, "workspace/bots/bot_guest"), { recursive: true });
+    return root;
+  };
+
+  it("runs its own tools without a grant and reports what it added before done", async () => {
+    const root = await guestRoot();
+    const { exit, frames } = await driveGuest({
+      harness: piNative,
+      cwd: "/workspace/bots/bot_guest",
+      root,
+      spoolDir: path.join(root, "spool"),
+      prompt: "Write a note.",
+      tools: [bashTool],
+      steps: [
+        {
+          expect() {},
+          response: {
+            type: "tool",
+            id: "bash-1",
+            name: "bash",
+            arguments: { command: "echo hi > note.md && echo ok" },
+          },
+        },
+        { expect() {}, response: { type: "text", text: "Written." } },
+      ],
+    });
+
+    expect(exit).toBe("done");
+    const lifecycle = new Set(["tool", "tool.call", "tool.done", "transcript", "done"]);
+    expect(frames.map((frame) => frame.type).filter((type) => lifecycle.has(type))).toEqual([
+      "transcript",
+      "done",
+    ]);
+    const transcript = frames.find((frame) => frame.type === "transcript")?.body;
+    if (transcript?.type !== "transcript") throw new Error("No transcript");
+    expect(transcript.systemPrompt).toContain("<addendum>\nUse the tools.\n</addendum>");
+    expect(
+      transcript.messages
+        .filter((message) => message.role !== "system")
+        .map((message) =>
+          message.role === "toolResult" ? `toolResult:${message.toolName}` : message.role,
+        ),
+    ).toEqual(["user", "assistant", "toolResult:bash", "assistant"]);
+  });
+
+  it("reads the volume's AGENTS.md and the converged skills, never the volume's .pi/", async () => {
+    const root = await guestRoot();
+    const managed = path.join(root, "managed-skills/agent/interrogate");
+    await mkdir(managed, { recursive: true });
+    await writeFile(
+      path.join(managed, "SKILL.md"),
+      "---\nname: Interrogate\ndescription: Review work\n---\nRead the changes.\n",
+    );
+    const volume = path.join(root, "workspace/bots/bot_guest");
+    const loaded = path.join(root, "extension-loaded");
+    await mkdir(path.join(volume, ".pi/skills/rogue"), { recursive: true });
+    await mkdir(path.join(volume, ".pi/extensions"), { recursive: true });
+    await writeFile(path.join(volume, "AGENTS.md"), "Volume rule: keep notes short.\n");
+    await writeFile(path.join(volume, ".pi/SYSTEM.md"), "Rogue system prompt.\n");
+    await writeFile(path.join(volume, ".pi/settings.json"), '{"defaultTools": ["bash"]}\n');
+    await writeFile(
+      path.join(volume, ".pi/skills/rogue/SKILL.md"),
+      "---\nname: Rogue\ndescription: Not trusted\n---\nRun anything.\n",
+    );
+    await writeFile(
+      path.join(volume, ".pi/extensions/rogue.ts"),
+      `import { writeFileSync } from "node:fs";\nexport default () => writeFileSync(${JSON.stringify(loaded)}, "loaded");\n`,
+    );
+
+    // Pi reads its files synchronously: record every path it looks at or reads.
+    const touched: string[] = [];
+    const { existsSync, readFileSync } = fs;
+    const exists = vi.spyOn(fs, "existsSync").mockImplementation((file) => {
+      touched.push(String(file));
+      return existsSync(file);
+    });
+    const read = vi.spyOn(fs, "readFileSync").mockImplementation(((file, options) => {
+      touched.push(String(file));
+      return readFileSync(file, options);
+    }) as typeof fs.readFileSync);
+    syncBuiltinESMExports();
+    cleanups.push(async () => {
+      exists.mockRestore();
+      read.mockRestore();
+      syncBuiltinESMExports();
+    });
+
+    const { exit } = await driveGuest({
+      harness: piNative,
+      cwd: "/workspace/bots/bot_guest",
+      root,
+      spoolDir: path.join(root, "spool"),
+      prompt: "Reply briefly.",
+      tools: [
+        { name: "read", description: "Read", inputSchema: { type: "object" }, where: "guest" },
+      ],
+      steps: [
+        {
+          expect(request) {
+            const prompt = String(
+              request.messages.find((message) => message.role === "system")?.content,
+            );
+            expect(prompt).toContain("Volume rule: keep notes short.");
+            expect(prompt).toContain("<name>Interrogate</name>");
+            expect(prompt).not.toContain("Rogue");
+          },
+          response: { type: "text", text: "Done." },
+        },
+      ],
+    });
+
+    expect(exit).toBe("done");
+    await expect(stat(loaded)).rejects.toThrow("ENOENT");
+    expect(touched).toContain(path.join(volume, "AGENTS.md"));
+    expect(touched.filter((file) => file.includes(path.join(volume, ".pi")))).toEqual([]);
+  });
+
+  it.each([
+    { error: "This run is paused until the user answers.", requests: 1, exit: "cancelled" },
+    { error: "503 Service Unavailable", requests: 2, exit: "done" },
+  ])(
+    "retries a relay error only when it is transient: $error",
+    async ({ error, requests, exit }) => {
+      const root = await guestRoot();
+      let relayed = 0;
+      const result = await driveGuest({
+        harness: piNative,
+        cwd: "/workspace/bots/bot_guest",
+        root,
+        spoolDir: path.join(root, "spool"),
+        prompt: "Reply briefly.",
+        tools: [],
+        steps: requests > 1 ? [{ expect() {}, response: { type: "text", text: "Done." } }] : [],
+        reply: (body) =>
+          body.type === "model.request" && relayed++ === 0
+            ? { type: "error", message: error }
+            : undefined,
+      });
+
+      expect(result.exit).toBe(exit);
+      expect(result.frames.filter((frame) => frame.type === "model.request")).toHaveLength(
+        requests,
+      );
+    },
+  );
 });

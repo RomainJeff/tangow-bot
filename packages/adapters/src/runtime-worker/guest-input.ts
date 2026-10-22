@@ -81,7 +81,10 @@ export function workerStart(
     threadId: request.threadId,
     sourceMessageId: request.sourceMessageId,
     prompt: request.prompt,
-    instructions: request.instructions,
+    // A harness with its own loop keeps its own prompt: Rakazo's part is appended to it.
+    instructions: harness.capabilities.includes("native-loop")
+      ? (request.harnessAddendum ?? request.instructions)
+      : request.instructions,
     history: request.history.map((turn) => ({
       ...(turn.id ? { id: turn.id } : {}),
       role: turn.role,
