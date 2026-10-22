@@ -4793,6 +4793,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   : {};
               if (effect.status !== "approved") {
                 await deps.prisma.$transaction(async (tx) => {
+                  await tx.$queryRaw`SELECT id FROM threads WHERE id = ${thread.id} FOR UPDATE`;
                   if (!(await renewRunLease({ prisma: tx }, runId, workerId, fence))) {
                     throw new Error("This attempt no longer holds the run.");
                   }
@@ -5924,7 +5925,7 @@ async function notifyRun(
 }
 
 async function renewRunLease(
-  deps: { prisma: Pick<Prisma.TransactionClient, "run"> },
+  deps: { prisma: Pick<PrismaClient, "run"> },
   runId: string,
   workerId: string,
   fence: number,
