@@ -42,7 +42,7 @@ import {
 
 export interface DesktopExecutionOptions {
   input: string;
-  timeoutMs: number;
+  deadline: number;
   maxOutputBytes: number;
 }
 
@@ -199,7 +199,7 @@ export class LinuxDesktop {
           timeoutMs,
         ),
         boundedContext,
-        { input: `${DESKTOP_OPERATION_PERMIT}\n`, timeoutMs, maxOutputBytes: 512 * 1024 },
+        { input: `${DESKTOP_OPERATION_PERMIT}\n`, deadline, maxOutputBytes: 512 * 1024 },
       );
       inputDispatched = result.inputDispatched === true;
       signal.throwIfAborted();

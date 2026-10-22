@@ -570,21 +570,23 @@ export class E2BSandboxProvider implements SandboxProvider {
     };
     try {
       operationSignal.throwIfAborted();
+      const timeoutMs = Math.max(1, options.deadline - Date.now());
       handle = await desktop.commands.run(command, {
         background: true,
         stdin: true,
         signal: operationSignal,
-        timeoutMs: options.timeoutMs,
-        requestTimeoutMs: options.timeoutMs,
+        timeoutMs,
+        requestTimeoutMs: timeoutMs,
         onStdout: (chunk) => collect(chunk, "stdout"),
         onStderr: (chunk) => collect(chunk, "stderr"),
       });
       operationSignal.throwIfAborted();
+      if (Date.now() >= options.deadline) throw new Error("page browser operation timed out");
       // A failed send may still have delivered the permit. Never send it twice.
       inputDispatched = true;
       await handle.sendStdin(options.input, {
         signal: operationSignal,
-        requestTimeoutMs: options.timeoutMs,
+        requestTimeoutMs: Math.max(1, options.deadline - Date.now()),
       });
       const result = await handle.wait();
       operationSignal.throwIfAborted();

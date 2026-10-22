@@ -1,7 +1,7 @@
 import type { CommandHandle, CommandStartOpts } from "@e2b/desktop";
 import { CommandExitError } from "@e2b/desktop";
 import type { PageBrowserCommand } from "@rakazo/adapter-kit";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, onTestFinished, vi } from "vitest";
 import { fakeE2BMachine } from "./e2b-machine.test-support.js";
 import type { E2BSandboxSdk } from "./e2b-sandbox.js";
 import { E2BSandboxProvider } from "./e2b-sandbox.js";
@@ -68,7 +68,14 @@ function fixture(
   }) as typeof machine.sandbox.commands.run;
   machine.sandbox.commands.kill = vi.fn(async () => true);
   const sdk = { connect: async () => machine.sandbox } as unknown as E2BSandboxSdk;
-  return { provider: new E2BSandboxProvider("test-key", sdk), handle, machine };
+  return {
+    provider: new E2BSandboxProvider("test-key", sdk),
+    handle,
+    machine,
+    get signal() {
+      return execution?.signal;
+    },
+  };
 }
 
 describe("E2B page browser transport boundary", () => {
@@ -138,6 +145,28 @@ describe("E2B page browser transport boundary", () => {
     controller.abort();
     await expect(pending).rejects.toThrow();
     expect(f.handle.sendStdin).not.toHaveBeenCalled();
+  });
+
+  it("refuses a late handle before the abort timer fires, then cleans it without a permit", async () => {
+    const now = Date.now();
+    const clock = vi.spyOn(Date, "now");
+    onTestFinished(() => clock.mockRestore());
+    const f = fixture({
+      output: JSON.stringify({ ...snapshot, completed: 2 }),
+      start: () => clock.mockReturnValue(now + 26_000),
+    });
+    const result = await f.provider.pageBrowser(computer, act, context);
+    expect(f.signal?.aborted).toBe(false);
+    expect(f.handle.sendStdin).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      ok: false,
+      uncertain: false,
+    });
+    expect(f.handle.closeStdin).toHaveBeenCalledTimes(1);
+    expect(f.machine.sandbox.commands.kill).toHaveBeenCalledWith(
+      123,
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
   });
 
   it("cleans a handle acquired after cancellation without permitting it", async () => {
