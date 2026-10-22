@@ -28,6 +28,7 @@ import {
   estimateToolSchemaTokens,
   formatRecalledMemory,
 } from "./history-compaction.js";
+import { transcriptIngest } from "./runtime-worker/transcript.js";
 import { PostgresSessionLog } from "./session-log/postgres.js";
 import { recordingSessionLog } from "./session-log/recording.test-support.js";
 
@@ -1010,6 +1011,178 @@ describe("interactive executor sessions with durable history", () => {
       parent: () => log.readTail(SessionIdSchema.parse(thread.sessionId)),
     };
   }
+
+  it.each([
+    {
+      emptyTurns: 1,
+      expected:
+        "I completed the tool step but could not produce a final response. Please ask me to continue.",
+      privateText: false,
+    },
+    {
+      emptyTurns: 2,
+      expected:
+        "I completed the tool step but could not produce a final response. Please ask me to continue.",
+      privateText: true,
+    },
+    { emptyTurns: 2, expected: "", privateText: false },
+    { emptyTurns: 2, expected: "The final answer.", final: "The final answer.<|eos|>" },
+  ])(
+    "replays native tool work with $emptyTurns empty turns and final $final",
+    async ({ emptyTurns, expected, final, privateText }) => {
+      const c = await conversation();
+      const routine = await c.prisma.routine.create({
+        data: {
+          spaceId: "space-1",
+          userId: "user-1",
+          botId: BOT,
+          threadId: c.thread.id,
+          name: "Check",
+          prompt: "Check",
+          crons: [],
+        },
+      });
+      const run = privateText
+        ? c.run
+        : await c.prisma.run.update({
+            where: { id: c.run.id },
+            data: { trigger: "routine", routineId: routine.id },
+          });
+      await fixture({
+        database: c.prisma,
+        run,
+        runtime: async function* (request) {
+          const ingest = transcriptIngest((text) => text);
+          yield { type: "text", text: "Private work" };
+          yield ingest.ingest(
+            "root",
+            {
+              type: "transcript",
+              dialect: "pi-ai",
+              messages: [
+                {
+                  role: "assistant",
+                  content: [
+                    { type: "text", text: "Private work" },
+                    {
+                      type: "toolCall",
+                      id: "native-read",
+                      name: "read",
+                      arguments: { path: "notes.txt" },
+                    },
+                  ],
+                },
+                { role: "toolResult", toolCallId: "native-read", content: "nothing to report" },
+                ...Array.from({ length: emptyTurns }, (_, index) => ({
+                  role: "assistant",
+                  content: index === 0 ? [] : [{ type: "text", text: "" }],
+                })),
+                ...(final ? [{ role: "assistant", content: [{ type: "text", text: final }] }] : []),
+              ],
+            },
+            request.tools,
+            "pi-native",
+          )!;
+          yield { type: "done", text: "Private work" };
+        },
+      }).request();
+      const parent = await c.parent();
+      if (privateText) {
+        expect(
+          projectThreadItems(parent).flatMap((item) =>
+            item.kind === "message" && item.role === "bot"
+              ? item.blocks.flatMap((block) => (block.kind === "text" ? [block.text] : []))
+              : [],
+          ),
+        ).toEqual([expected]);
+      } else {
+        expect(
+          parent
+            .filter((entry) => entry.type === "routine.finished")
+            .map((entry) => entry.payload.result),
+        ).toEqual([expected]);
+      }
+      const logged = await c.log.readRun(run.id);
+      expect(
+        logged
+          .filter((entry) => entry.type === "assistant.text")
+          .flatMap((entry) =>
+            entry.payload.blocks.flatMap((block) => (block.kind === "text" ? [block.text] : [])),
+          ),
+      ).toEqual(expected ? [expected] : []);
+      expect(JSON.stringify(logged)).not.toContain("Private work");
+    },
+  );
+
+  it.each([false, true])(
+    "keeps native recap private and clears it after an empty final, empty=%s",
+    async (empty) => {
+      const c = await conversation();
+      const recap = JSON.stringify({ version: 1, results: ["Found the answer"], references: [] });
+      await fixture({
+        database: c.prisma,
+        run: c.run,
+        runtime: async function* (request) {
+          const ingest = transcriptIngest((text) => text);
+          const args = { message: "The answer is 42." };
+          const output = await request.executeTool!("message_user", args, "say");
+          ingest.answered(
+            { type: "tool.call", agent: "root", callId: "say", name: "message_user", args },
+            { type: "tool.result", output },
+          );
+          yield ingest.ingest(
+            "root",
+            {
+              type: "transcript",
+              dialect: "pi-ai",
+              messages: [
+                {
+                  role: "assistant",
+                  content: [
+                    { type: "text", text: "Private work" },
+                    {
+                      type: "toolCall",
+                      id: "guest-say",
+                      name: "mcp__rakazo__message_user",
+                      arguments: args,
+                    },
+                  ],
+                },
+                { role: "assistant", content: [{ type: "text", text: recap }] },
+                ...(empty ? [{ role: "assistant", content: [] }] : []),
+              ],
+            },
+            request.tools,
+            "pi-native",
+          )!;
+          yield { type: "done", text: recap, privateFinalText: recap };
+        },
+      }).request();
+      const parent = await c.parent();
+      expect(
+        projectThreadItems(parent).filter((item) => item.kind === "message" && item.role === "bot"),
+      ).toEqual([
+        expect.objectContaining({ blocks: [{ kind: "text", text: "The answer is 42." }] }),
+      ]);
+      expect(
+        parent.filter((entry) => entry.type === "run.recap").map((entry) => entry.payload.recap),
+      ).toEqual([
+        empty
+          ? { state: "missing", reason: "absent" }
+          : {
+              state: "available",
+              facts: { version: 1, results: ["Found the answer"], references: [] },
+            },
+      ]);
+      const trace = await c.log.readRun(c.run.id);
+      expect(
+        trace
+          .filter((entry) => entry.type === "assistant.text")
+          .map((entry) => entry.payload.blocks),
+      ).toEqual([[{ kind: "text", text: "The answer is 42." }]]);
+      expect(JSON.stringify(trace)).not.toContain("Private work");
+    },
+  );
 
   it.each(["user", "follow_up"] as const)(
     "publishes a direct child bot's %s answer while its final words stay private",
