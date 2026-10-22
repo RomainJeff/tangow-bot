@@ -116,15 +116,15 @@ export const piNativeHarness: GuestHarness = {
     let session: AgentSession | undefined;
     try {
       const controllerTools = run.tools.filter((tool) => tool.where === "controller");
-      const catalogNames = new Map(
-        controllerTools.flatMap((tool) =>
-          typeof tool.catalog === "object"
-            ? [
-                [
-                  `mcp__rakazo__${tool.name}`.replace(/[^A-Za-z0-9_]/g, "_"),
-                  `mcp__rakazo__${tool.catalog.via}`.replace(/[^A-Za-z0-9_]/g, "_"),
-                ],
-              ]
+      const assignedNames = new Map<string, string>();
+      const controllerNames = new Map<string, string>();
+      const listed = rakazoMcpTools(controllerTools, true);
+      const byLabel = new Map(listed.map((tool) => [`rakazo/${tool.name}`, tool]));
+      const projected = projectPiAi(run.history, run.prompt, model, [], run.sourceMessageId);
+      const replayCalls = new Set(
+        projected.flatMap((message) =>
+          message.role === "assistant"
+            ? message.content.flatMap((block) => (block.type === "toolCall" ? [block.id] : []))
             : [],
         ),
       );
@@ -138,30 +138,73 @@ export const piNativeHarness: GuestHarness = {
         noThemes: true,
         extensionFactories: [
           createToolSearchExtension(),
-          createMcpExtension({
-            loadConfig: () => ({
-              servers: [
-                {
-                  name: "rakazo",
-                  source: "rakazo",
-                  scope: "extension",
-                  config: {
-                    command: "rakazo-in-process",
-                    exposure: "direct",
-                    toolExposure: Object.fromEntries(
-                      rakazoMcpTools(controllerTools, true).map((tool) => [
-                        tool.name,
-                        tool.exposure,
-                      ]),
-                    ),
+          (pi) =>
+            createMcpExtension({
+              loadConfig: () => ({
+                servers: [
+                  {
+                    name: "rakazo",
+                    source: "rakazo",
+                    scope: "extension",
+                    config: {
+                      command: "rakazo-in-process",
+                      exposure: "direct",
+                      toolExposure: Object.fromEntries(
+                        listed.map((tool) => [tool.name, tool.exposure]),
+                      ),
+                    },
                   },
-                },
-              ],
-              errors: [],
-              autoEnableCodemode: false,
+                ],
+                errors: [],
+                autoEnableCodemode: false,
+              }),
+              createTransport: () => rakazoMcpTransport(controllerTools, host, cwd),
+            })({
+              ...pi,
+              registerTool(definition) {
+                // Pi assigns names before registration; the label retains the MCP server/tool identity.
+                const tool = byLabel.get(definition.label);
+                if (tool) {
+                  assignedNames.set(tool.name, definition.name);
+                  controllerNames.set(definition.name, tool.catalog?.via ?? tool.name);
+                }
+                pi.registerTool(definition);
+              },
             }),
-            createTransport: () => rakazoMcpTransport(controllerTools, host, cwd),
-          }),
+          (pi) => {
+            pi.on("context", (event) => {
+              const messages = structuredClone(event.messages);
+              const resultNames = new Map<string, string>();
+              for (const message of messages) {
+                if (message.role === "assistant") {
+                  for (const block of message.content) {
+                    if (block.type !== "toolCall" || !replayCalls.has(block.id)) continue;
+                    const catalog = listed.find(
+                      (tool) =>
+                        tool.catalog?.via === block.name && tool.catalog.id === block.arguments.id,
+                    );
+                    const assigned = assignedNames.get(catalog?.name ?? block.name);
+                    if (!assigned) continue;
+                    block.name = assigned;
+                    if (
+                      catalog &&
+                      typeof block.arguments.arguments === "object" &&
+                      block.arguments.arguments !== null &&
+                      !Array.isArray(block.arguments.arguments)
+                    ) {
+                      block.arguments = Object.fromEntries(
+                        Object.entries(block.arguments.arguments),
+                      );
+                    }
+                    resultNames.set(block.id, assigned);
+                  }
+                } else if (message.role === "toolResult") {
+                  message.toolName = resultNames.get(message.toolCallId) ?? message.toolName;
+                }
+              }
+              return { messages };
+            });
+          },
           rakazoExtension(host, cwd, (message) =>
             session?.agent.steer({
               role: "user",
@@ -176,13 +219,7 @@ export const piNativeHarness: GuestHarness = {
       await loader.reload({ resolveProjectTrust: async () => false });
 
       const sessionManager = SessionManager.inMemory(cwd);
-      for (const message of projectPiAi(
-        run.history,
-        run.prompt,
-        model,
-        controllerTools.map((tool) => tool.name),
-        run.sourceMessageId,
-      )) {
+      for (const message of projected) {
         sessionManager.appendMessage(message);
       }
 
@@ -213,10 +250,10 @@ export const piNativeHarness: GuestHarness = {
           if (message.role === "assistant") {
             for (const block of message.content) {
               if (block.type === "toolCall")
-                block.name = catalogNames.get(block.name) ?? block.name;
+                block.name = controllerNames.get(block.name) ?? block.name;
             }
           } else if (message.role === "toolResult") {
-            message.toolName = catalogNames.get(message.toolName) ?? message.toolName;
+            message.toolName = controllerNames.get(message.toolName) ?? message.toolName;
           }
           added.push(message as (typeof added)[number]);
         } else if (event.type === "compaction_end" && event.result) {

@@ -244,6 +244,154 @@ describe("the pi-native harness through the controller", () => {
     });
   });
 
+  it.each(
+    (
+      [
+        ["short", "publish_note", "lookup_note"],
+        ["long", `publish_${"note_".repeat(16)}`, "lookup_note"],
+        ["collision", "notes.write", "notes_write"],
+        ["reverse collision", "notes_write", "notes.write"],
+      ] as const
+    ).flatMap(([label, name, other]) => [
+      { label, name, other, deferred: true },
+      { label, name, other, deferred: false },
+    ]),
+  )(
+    "preserves controller identity and replay for $label MCP names, deferred=$deferred",
+    async ({ name, other, deferred }) => {
+      const executeTool = vi.fn(async () => "published-on-controller");
+      let assigned = "";
+      const schema = { type: "object", properties: { title: { type: "string" } } };
+      const tools: AgentRunRequest["tools"] = deferred
+        ? [
+            {
+              name: "mcp_execute_tool",
+              description: "Execute a connector tool",
+              inputSchema: schema,
+              route: { connectorId: "notes", toolName: "__catalog_execute" },
+              catalog: [name, other, ...Array.from({ length: 28 }, (_, i) => `lookup_${i}`)].map(
+                (tool, i) => ({
+                  id: i === 0 ? "notes:target" : `notes:${i}`,
+                  tool: { name: tool, description: tool, inputSchema: schema },
+                }),
+              ),
+            },
+          ]
+        : [name, other].map((tool) => ({
+            name: tool,
+            description: tool,
+            inputSchema: schema,
+            route: { connectorId: "notes", toolName: tool },
+          }));
+      const canonicalName = deferred ? "mcp_execute_tool" : name;
+      const args = (title: string) =>
+        deferred ? { id: "notes:target", arguments: { title } } : { title };
+      const { seen } = await nativeRun(
+        [
+          ...(deferred
+            ? [
+                {
+                  expect(request: ModelEmulatorRequest) {
+                    expect(
+                      request.tools?.some((tool) => tool.function.name === "tool_search"),
+                    ).toBe(true);
+                  },
+                  response: {
+                    type: "tool" as const,
+                    id: "search",
+                    name: "tool_search",
+                    arguments: { query: name, limit: 10 },
+                  },
+                },
+              ]
+            : []),
+          {
+            expect(request) {
+              const loaded = request.tools?.map((tool) => tool.function.name) ?? [];
+              assigned = loaded.find((tool) => tool.startsWith("mcp__rakazo__")) ?? "";
+              expect(assigned).toBeTruthy();
+            },
+            response: () => ({
+              type: "tool",
+              id: "publish",
+              name: assigned,
+              arguments: { title: "Plan" },
+            }),
+          },
+          { expect() {}, response: { type: "text", text: "Done." } },
+        ],
+        {
+          tools,
+          executeTool,
+        },
+      );
+      expect(executeTool).toHaveBeenCalledTimes(1);
+      expect(executeTool.mock.calls[0]?.slice(0, 2)).toEqual([canonicalName, args("Plan")]);
+      expect(seen.find((event) => event.type === "transcript")).toMatchObject({
+        unverifiedCalls: 0,
+        entries: expect.arrayContaining([
+          {
+            kind: "controller",
+            turn: deferred ? 1 : 0,
+            callId: expect.any(String),
+            name: canonicalName,
+          },
+        ]),
+      });
+      await nativeRun(
+        [
+          {
+            expect(request) {
+              const replay = request.messages.flatMap((message) => message.tool_calls ?? []);
+              expect(replay).toEqual([
+                {
+                  id: "prior",
+                  type: "function",
+                  function: {
+                    name: assigned,
+                    arguments: JSON.stringify({ title: "Earlier" }),
+                  },
+                },
+              ]);
+              expect(
+                request.messages.find((message) => message.tool_call_id === "prior"),
+              ).toMatchObject({
+                role: "tool",
+                content: "previous-result",
+              });
+            },
+            response: { type: "text", text: "Already done." },
+          },
+        ],
+        {
+          tools,
+          executeTool,
+          history: [
+            { role: "user", content: "Publish earlier." },
+            {
+              role: "assistant",
+              content: "",
+              parts: [
+                {
+                  type: "toolCalls",
+                  calls: [
+                    {
+                      id: "prior",
+                      name: canonicalName,
+                      args: args("Earlier"),
+                      output: "previous-result",
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      );
+      expect(executeTool).toHaveBeenCalledTimes(1);
+    },
+  );
+
   it("compacts with Pi's own compaction, whose summary request goes through the relay", async () => {
     const isSummary = (request: ModelEmulatorRequest) => systemOf(request).includes("summar");
     const kinds: string[] = [];
