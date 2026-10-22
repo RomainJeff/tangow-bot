@@ -150,7 +150,7 @@ export function useComputerControl({
         force: computer?.state !== "running",
       });
       // The full viewer opens a new connection, so it waits for a URL the proxy still accepts.
-      await refreshComputerScreen(active.id);
+      await refreshComputerScreen(active.id, { visible: true });
       setComputerOpen(true);
     } catch {
       // computerError already set in bootComputer

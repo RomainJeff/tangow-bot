@@ -1,6 +1,12 @@
 import type { Run } from "@rakazo/contracts";
 import type { ThreadView } from "@rakazo/core";
-import { answersPendingQuestion, drawsNothing, isActive, projectThreadView } from "@rakazo/core";
+import {
+  answersPendingQuestion,
+  drawsNothing,
+  isActive,
+  latestTakeoverItemId,
+  projectThreadView,
+} from "@rakazo/core";
 import type { GroupAvatarMember } from "@rakazo/ui-web";
 import { useCallback, useMemo, useRef } from "react";
 import { useDisplayAgentSteps } from "../../lib/agent-steps-pref";
@@ -57,6 +63,14 @@ export function useThreadView(snapshot: ThreadState | null, roster: Roster) {
     [view.rows],
   );
   const currentRuns = useMemo(() => activeThreadRuns(activeSnapshot), [activeSnapshot]);
+  const takeoverItemId = useMemo(
+    () =>
+      latestTakeoverItemId(
+        view.rows.map((row) => row.item),
+        currentRuns,
+      ),
+    [view.rows, currentRuns],
+  );
   const workingRuns = currentRuns.filter((run) => isWorking(run, view));
   const transcriptRunning = workingRuns.length > 0;
   const composerRunning = currentRuns.some((run) => isActive(run.status));
@@ -150,6 +164,7 @@ export function useThreadView(snapshot: ThreadState | null, roster: Roster) {
     rowIndexOf,
     transcriptRunning,
     composerRunning,
+    takeoverItemId,
     recentWriting,
     callThread,
     transcriptArtifactTarget,

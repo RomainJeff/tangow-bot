@@ -4,7 +4,7 @@ import { ChatMarkdown, LinkifiedText } from "@rakazo/chat-ui/web";
 import type { LinkPreviewCard as LinkPreviewCardBlock, MessageBlock } from "@rakazo/contracts";
 import type { LinkMentionResolver } from "@rakazo/core";
 import { previewSiteLabel, sanitizePreviewTitle } from "@rakazo/core";
-import { cn, LinkPreviewCard, Surface } from "@rakazo/ui-web";
+import { Button, cn, LinkPreviewCard, Surface } from "@rakazo/ui-web";
 import { ArrowRight, Check, Monitor } from "lucide-react";
 import type { ReactNode } from "react";
 import { useState } from "react";
@@ -112,8 +112,14 @@ export function ResultLinesCard({ block }: { block: BlockOf<"card"> }) {
   );
 }
 
-/** The computer's state, and what it is doing. */
-export function ComputerCard({ block }: { block: BlockOf<"computer"> }) {
+/** The computer's state, and what it is doing. `onOpen` is set only on the live Needs you card. */
+export function ComputerCard({
+  block,
+  onOpen,
+}: {
+  block: BlockOf<"computer">;
+  onOpen?: () => void;
+}) {
   const needsYou = block.state === "Needs you";
   return (
     <Surface className="flex w-link-card max-w-full items-center gap-3 px-4 py-3">
@@ -128,15 +134,28 @@ export function ComputerCard({ block }: { block: BlockOf<"computer"> }) {
           <ChatMarkdown>{block.text}</ChatMarkdown>
         </div>
       </div>
-      <span
-        className={cn(
-          "flex shrink-0 items-center gap-1.5 text-block-header",
-          needsYou ? "text-foreground" : "text-muted-foreground",
-        )}
-      >
-        {needsYou ? <span aria-hidden className="size-1.5 rounded-full bg-foreground" /> : null}
-        {block.state}
-      </span>
+      {onOpen && needsYou ? (
+        <Button
+          type="button"
+          variant="capsule"
+          size="capsule"
+          className="shrink-0"
+          data-testid="takeover-open-computer"
+          onClick={onOpen}
+        >
+          <Trans>Open</Trans>
+        </Button>
+      ) : (
+        <span
+          className={cn(
+            "flex shrink-0 items-center gap-1.5 text-block-header",
+            needsYou ? "text-foreground" : "text-muted-foreground",
+          )}
+        >
+          {needsYou ? <span aria-hidden className="size-1.5 rounded-full bg-foreground" /> : null}
+          {block.state}
+        </span>
+      )}
     </Surface>
   );
 }

@@ -8,11 +8,13 @@ Three rules carry the rest.
 
 - Completions are queue events, not interrupts.
 - Every spawn and every resume carries the standing orders verbatim.
-- The brief is the product. A vague brief fails quietly, because a worker cannot ask you a question.
+- The brief is the product. A worker needs enough context to act and a defined channel for reporting discoveries.
+
+Apply [the coordination protocol](../references/coordination.md) throughout the program. The launching coordinator resolves cross-task discoveries, relays decisions and tracks acknowledgement before invalidating active work. Include the protocol in remote briefs.
 
 #### Roles and placement
 
-- **Coordinator (this chat).** Local. Frames, authors briefs, drains the inbox, owns the human report, makes judgment calls. It never authors or edits code. Conflicted merges, restacks, and code changes are always tasks. Mechanically landing a verified unit (fast-forward or clean cherry-pick of a worker's commit, then push) is bookkeeping the coordinator may do itself on repos where local git is cheap. Queueing finished work behind an idle stacker is how a deadline harvests nothing. The loop is agentic end to end. Agents are spawned, resumed, and drained only through the Agent tool. State reads and writes go through `scripts/orch/orch.ts` at drain points, one command in and one line out. The CLI never spawns, waits, or wakes anything.
+- **Coordinator (this chat).** Local. Frames, authors briefs, drains the inbox, owns the human report, makes judgment calls. It never authors or edits code. Conflicted merges, restacks, and code changes are always tasks. Mechanically landing a verified unit (fast-forward or clean cherry-pick of a worker's commit, then push) is bookkeeping the coordinator may do itself on repos where local git is cheap. Queueing finished work behind an idle stacker is how a deadline harvests nothing. The loop is agentic end to end. Manage agents through the host's supported delegation tools; Agent-tool names and arguments below are examples, not a required transport. State reads and writes go through `scripts/orch/orch.ts` at drain points, one command in and one line out. The CLI never spawns, waits, or wakes anything.
 - **Sub-coordinator.** Always local, durable, one per track, and only when the program exceeds what one coordinator's drains can manage. A track the coordinator can drain itself needs no middle layer. Each nested layer re-pays a full orientation preamble, and a blocking sub-coordinator hides its children while the parent idles. Owns its track's units and boards, authors its workers' briefs, spawns its own workers and verifiers (nesting works to depth 3, and a nested spawn has the full Agent schema including `isolation`). Rolls up aggregates at wave boundaries. Never forwards raw child reports. Cap in-flight children at what one drain can process, roughly ten, as a rolling window. Never as blocking batches, which cost the slowest child of every batch.
 - **Worker / verifier.** Always `isolation: "remote"` (falling back to `isolation: "worktree"` where remote is unavailable) unless the task needs this machine: live runtime verification through the **run** skill or browser tools. Reading local transcripts under `~/.claude/projects/<slug>/`. Simulators and local IDE state. Auth that exists only here. Remote agents cannot read the local store, so their briefs inline what they need or point at repo paths. Prefer fewer, broader workers. One writer per worktree or branch (principle-separate-before-serializing-shared-state). Run a unit's verifier on a different model family from its worker.
 
@@ -41,6 +43,7 @@ SCOPE        paths this unit may write; paths it may not; its exclusive worktree
 CONTRACTS    agreed shared contracts consumed; changes owned by this unit, or none
 DEPENDENCIES artifacts or decisions needed to start / verify / land, separately; none where absent
 RUNTIME      ports, databases, data directories, browsers or simulators: isolated or serialized
+COORDINATION launching parent, reporting channel, current contract/artifact revisions; protocol included for remote workers
 CONTEXT      pointers to files and PRs; upstream reports pasted in full when this unit
              depends on them, because workers cannot see siblings
 ACCEPTANCE   checkable criteria, one per line
@@ -58,7 +61,7 @@ A sub-coordinator brief adds its track boundary and unit list, its spawn budget 
 
 A dependency is a context relay, not just ordering. Undeclared upstream context makes the worker guess. Missing fields are a refuse-to-spawn condition. Audit one sampled worker brief per sub-coordinator per wave, concurrently with the wave it samples, never as a gate in front of it. A failing brief stops that track and fixes the sub-coordinator's instructions, not just the worker, because brief quality decays late in a run. Never resume-chain a brief. Respawn fresh with consolidated scope.
 
-Apply the decomposition check in **principle-separate-before-serializing-shared-state** before dispatch. Workers report a required shared-contract or cross-scope change, with affected units, before making it; they continue independent work. The coordinator resolves ownership and updates affected briefs. A review or human decision blocks only its dependents; start other ready units while it is pending.
+Apply the decomposition check in **principle-separate-before-serializing-shared-state** before dispatch. Use the coordination protocol for shared-contract or cross-scope changes, including affected-worker acknowledgement and terminal-only fallback. A review or human decision blocks only its dependents; start other ready units while it is pending.
 
 #### Steps
 
@@ -75,6 +78,7 @@ Apply the decomposition check in **principle-separate-before-serializing-shared-
 #### Queue and drain
 
 - On a completion notification, run `orch inbox push <agent> <unit> <status> [--report PATH]` and return to what you were doing. Never deep-review inline. A completion that needs review becomes a verifier unit. Never review a diff inside a drain.
+- Cross-task invalidations use the coordination protocol rather than waiting for all terminal reports. Finish the current atomic operation safely, then hold affected work and resolve the event before further affected dispatch or integration. Track decisions and outstanding acknowledgements in existing briefs, units and decision records; no additional store is needed.
 - Drain in batches at four points: the end of a critical section, a track rollup, a frontier watcher wake (arm it via the loop skill, with a long heartbeat fallback), and before a human report. Begin each batch with `orch inbox drain`. Arrivals during a drain wait for the next one.
 - Critical sections you finish first: authoring a brief, a stack operation, a conflict decision, writing a gate, updating ledger or frontier.
 - Each drain classifies every pointer (landed, needs-verify, failed, zombie, noise), writes the resulting rows through `orch unit add`, `orch unit set`, and `orch ledger record`, runs `orch status`, then spawns the next wave in one message.

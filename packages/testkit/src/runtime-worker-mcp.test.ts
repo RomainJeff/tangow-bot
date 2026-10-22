@@ -263,9 +263,9 @@ describe("lazy MCP through a worker run", () => {
     const started = workerStartTools(seen) as Array<{ name: string; catalog?: unknown }>;
     const mcpTools = started.filter((tool) => tool.catalog === "fallback");
     expect(mcpTools).toEqual([
-      expect.objectContaining({ name: "mcp_search_tools", where: "controller" }),
-      expect.objectContaining({ name: "mcp_load_tool", where: "controller" }),
       expect.objectContaining({ name: "mcp_execute_tool", where: "controller" }),
+      expect.objectContaining({ name: "mcp_load_tool", where: "controller" }),
+      expect.objectContaining({ name: "mcp_search_tools", where: "controller" }),
     ]);
     // For a harness with native tool search; the Rakazo loop declares only the fallback above.
     const entries = started.filter((tool) => typeof tool.catalog === "object");

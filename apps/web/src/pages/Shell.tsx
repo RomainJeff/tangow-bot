@@ -127,6 +127,10 @@ export function ShellPage() {
     cancelFocusPromptFor,
   });
   const control = useComputerControl({ panel, roster, store, screen, sync });
+  // The transcript is memoized, so its Needs you card calls the latest openComputer through a ref.
+  const openComputerRef = useRef(control.openComputer);
+  openComputerRef.current = control.openComputer;
+  const openComputerFromThread = useCallback(() => void openComputerRef.current(), []);
 
   const userName = session.data?.user.name ?? t`You`;
   const initials = userName
@@ -264,6 +268,7 @@ export function ShellPage() {
         mentionTargets={mentionTargets}
         agentSkills={agentSkills}
         refreshAgentSkills={refreshAgentSkills}
+        onOpenComputer={openComputerFromThread}
       />
 
       <SidePanel
