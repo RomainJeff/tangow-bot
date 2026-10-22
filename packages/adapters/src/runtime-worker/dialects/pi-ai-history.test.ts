@@ -4,10 +4,10 @@ import { ingestPiAi, projectPiAi } from "./pi-ai-history.js";
 
 const MODEL = { api: "openai-completions", provider: "openai", id: "gpt-test" } as const;
 const PROMPT = { role: "user", content: "Tidy my notes.", timestamp: 1 };
-const tools = { controllerTools: ["remember"], nativeTools: ["bash"] };
+const tools = { nativeTools: ["bash"] };
 
 describe("canonical history and a native Pi session", () => {
-  it("projects controller tools under their MCP names and ingests back to the same turns", () => {
+  it("preserves canonical tool names through projection and ingestion", () => {
     const history: AgentHistoryTurn[] = [
       { role: "user", content: "Where are my notes?" },
       {
@@ -32,7 +32,7 @@ describe("canonical history and a native Pi session", () => {
       },
     ];
 
-    const projected = projectPiAi(history, PROMPT.content, MODEL, ["remember"]);
+    const projected = projectPiAi(history, PROMPT.content, MODEL);
 
     expect(
       projected.flatMap((message) =>
@@ -42,7 +42,7 @@ describe("canonical history and a native Pi session", () => {
             ? [`result:${message.toolName}`]
             : [],
       ),
-    ).toEqual(["bash", "mcp__rakazo__remember", "result:bash", "result:mcp__rakazo__remember"]);
+    ).toEqual(["bash", "remember", "result:bash", "result:remember"]);
     expect(
       ingestPiAi([PROMPT, ...projected], {
         ...tools,
@@ -59,7 +59,7 @@ describe("canonical history and a native Pi session", () => {
         role: "assistant",
         content: [
           { type: "thinking", thinking: "Save it, then mail it." },
-          { type: "toolCall", id: "c1", name: "mcp__rakazo__remember", arguments: { text: "x" } },
+          { type: "toolCall", id: "c1", name: "remember", arguments: { text: "x" } },
           { type: "toolCall", id: "c2", name: "remember", arguments: { text: "y" } },
           { type: "toolCall", id: "c3", name: "bash", arguments: { command: "cat notes.md" } },
         ],

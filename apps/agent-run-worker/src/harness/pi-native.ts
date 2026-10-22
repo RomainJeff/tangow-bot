@@ -121,7 +121,7 @@ export const piNativeHarness: GuestHarness = {
       const controllerNames = new Map<string, string>();
       const listed = rakazoMcpTools(controllerTools, true);
       const byLabel = new Map(listed.map((tool) => [`rakazo/${tool.name}`, tool]));
-      const projected = projectPiAi(run.history, run.prompt, model, [], run.sourceMessageId);
+      const projected = projectPiAi(run.history, run.prompt, model, run.sourceMessageId);
       const replayCalls = new Set(
         projected.flatMap((message) =>
           message.role === "assistant"

@@ -40,8 +40,8 @@ const transcript: GuestBody = {
       role: "assistant",
       content: [
         { type: "text", text: `Checking with ${SECRET}.` },
-        { type: "toolCall", id: "c1", name: "mcp__rakazo__remember", arguments: { text: "x" } },
-        { type: "toolCall", id: "c2", name: "mcp__rakazo__remember", arguments: { text: "y" } },
+        { type: "toolCall", id: "c1", name: "remember", arguments: { text: "x" } },
+        { type: "toolCall", id: "c2", name: "remember", arguments: { text: "y" } },
         { type: "toolCall", id: "c3", name: "bash", arguments: { command: "cat notes.md" } },
         { type: "toolCall", id: "c4", name: "ask_user", arguments: { question: "Delete?" } },
         { type: "toolCall", id: "c5", name: "mcp__rakazo__delete_all", arguments: {} },

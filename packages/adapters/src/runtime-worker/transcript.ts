@@ -1,10 +1,4 @@
-import type {
-  AgentRuntimeEvent,
-  ConnectorTool,
-  GuestBody,
-  ModelDialect,
-  ReplyFinal,
-} from "@rakazo/adapter-kit";
+import type { AgentRuntimeEvent, GuestBody, ModelDialect, ReplyFinal } from "@rakazo/adapter-kit";
 import type { ControllerCallRecord } from "./dialects/pi-ai-history.js";
 import { ingestPiAi } from "./dialects/pi-ai-history.js";
 import { nativeToolsForHarness } from "./guest-input.js";
@@ -48,20 +42,12 @@ export function transcriptIngest(clean: (text: string) => string) {
       return reply;
     },
     /** The event for an agent's transcript, or nothing for its second one. */
-    ingest(
-      agent: string,
-      body: Transcript,
-      tools: readonly ConnectorTool[],
-      harness: string,
-    ): TranscriptEvent | undefined {
+    ingest(agent: string, body: Transcript, harness: string): TranscriptEvent | undefined {
       if (ingested.has(agent)) return undefined;
       ingested.add(agent);
       const nativeTools = nativeToolsForHarness(harness).map((tool) => tool.name);
       const result = INGEST[body.dialect](body.messages, {
         answers: answers.get(agent) ?? [],
-        controllerTools: tools
-          .map((tool) => tool.name)
-          .filter((name) => !nativeTools.includes(name)),
         nativeTools,
         clean,
       });

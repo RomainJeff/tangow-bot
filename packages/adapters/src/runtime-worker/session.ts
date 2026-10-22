@@ -779,12 +779,7 @@ export function createSession(
         const agent = body.agent ?? "root";
         const helper = helperOf(agent);
         if (agent !== "root" && !helper) return refuse("invalid");
-        const ingested = transcript.ingest(
-          agent,
-          body,
-          request.tools,
-          launched!.expectedHarness.name,
-        );
+        const ingested = transcript.ingest(agent, body, launched!.expectedHarness.name);
         if (!ingested) return refuse("invalid");
         if (!helper) {
           rootTranscriptAccepted = true;

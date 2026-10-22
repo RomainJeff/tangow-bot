@@ -1228,7 +1228,7 @@ describe("interactive executor sessions with durable history", () => {
       await fixture({
         database: c.prisma,
         run,
-        runtime: async function* (request) {
+        runtime: async function* () {
           const ingest = transcriptIngest((text) => text);
           yield { type: "text", text: "Private work" };
           yield ingest.ingest(
@@ -1257,7 +1257,6 @@ describe("interactive executor sessions with durable history", () => {
                 ...(final ? [{ role: "assistant", content: [{ type: "text", text: final }] }] : []),
               ],
             },
-            request.tools,
             "pi-native",
           )!;
           yield {
@@ -1333,7 +1332,7 @@ describe("interactive executor sessions with durable history", () => {
                           {
                             type: "toolCall",
                             id: "guest-say",
-                            name: "mcp__rakazo__message_user",
+                            name: "message_user",
                             arguments: args,
                           },
                         ]
@@ -1344,7 +1343,6 @@ describe("interactive executor sessions with durable history", () => {
                 ...(empty ? [{ role: "assistant", content: [] }] : []),
               ],
             },
-            request.tools,
             "pi-native",
           )!;
           yield {

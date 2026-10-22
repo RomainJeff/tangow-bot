@@ -245,8 +245,8 @@ describe("the pi-native harness through the controller", () => {
     });
   });
 
-  it.each(
-    (
+  it.each([
+    ...(
       [
         ["short", "publish_note", "lookup_note"],
         ["long", `publish_${"note_".repeat(16)}`, "lookup_note"],
@@ -254,12 +254,21 @@ describe("the pi-native harness through the controller", () => {
         ["reverse collision", "notes_write", "notes.write"],
       ] as const
     ).flatMap(([label, name, other]) => [
-      { label, name, other, deferred: true },
-      { label, name, other, deferred: false },
+      { label, name, other, deferred: true, reverseCatalog: false },
+      { label, name, other, deferred: false, reverseCatalog: false },
     ]),
-  )(
+    ...[false, true].flatMap((reverseCatalog) =>
+      ["mcp__rakazo__remember", "remember"].map((name) => ({
+        label: `canonical alias overlap ${name}, reversed=${reverseCatalog}`,
+        name,
+        other: name === "remember" ? "mcp__rakazo__remember" : "remember",
+        deferred: false,
+        reverseCatalog,
+      })),
+    ),
+  ])(
     "preserves controller identity and replay for $label MCP names, deferred=$deferred",
-    async ({ name, other, deferred }) => {
+    async ({ name, other, deferred, reverseCatalog }) => {
       const executeTool = vi.fn(async () => "published-on-controller");
       let assigned = "";
       const schema = { type: "object", properties: { title: { type: "string" } } };
@@ -284,6 +293,7 @@ describe("the pi-native harness through the controller", () => {
             inputSchema: schema,
             route: { connectorId: "notes", toolName: tool },
           }));
+      if (reverseCatalog) tools.reverse();
       const canonicalName = deferred ? "mcp_execute_tool" : name;
       const args = (title: string) =>
         deferred ? { id: "notes:target", arguments: { title } } : { title };
@@ -309,7 +319,12 @@ describe("the pi-native harness through the controller", () => {
           {
             expect(request) {
               const loaded = request.tools?.map((tool) => tool.function.name) ?? [];
-              assigned = loaded.find((tool) => tool.startsWith("mcp__rakazo__")) ?? "";
+              assigned =
+                loaded.find((tool) =>
+                  ["remember", "mcp__rakazo__remember"].includes(name)
+                    ? tool === `mcp__rakazo__${name}`
+                    : tool.startsWith("mcp__rakazo__"),
+                ) ?? "";
               expect(assigned).toBeTruthy();
             },
             response: () => ({
@@ -328,17 +343,18 @@ describe("the pi-native harness through the controller", () => {
       );
       expect(executeTool).toHaveBeenCalledTimes(1);
       expect(executeTool.mock.calls[0]?.slice(0, 2)).toEqual([canonicalName, args("Plan")]);
-      expect(seen.find((event) => event.type === "transcript")).toMatchObject({
-        unverifiedCalls: 0,
-        entries: expect.arrayContaining([
-          {
-            kind: "controller",
-            turn: deferred ? 1 : 0,
-            callId: expect.any(String),
-            name: canonicalName,
-          },
-        ]),
-      });
+      const announced = seen.find((event) => event.type === "tool" && event.name === canonicalName);
+      expect(announced).toMatchObject({ type: "tool", args: args("Plan") });
+      const transcript = seen.find((event) => event.type === "transcript");
+      expect(transcript?.unverifiedCalls).toBe(0);
+      expect(transcript?.entries.filter((entry) => entry.kind === "controller")).toEqual([
+        {
+          kind: "controller",
+          turn: deferred ? 1 : 0,
+          callId: announced?.type === "tool" ? announced.executionId : undefined,
+          name: canonicalName,
+        },
+      ]);
       await nativeRun(
         [
           {
