@@ -1,14 +1,13 @@
-import {
-  type Api,
-  type AssistantMessage,
-  type AssistantMessageEvent,
-  createAssistantMessageEventStream,
-  type Message,
-  type Model,
-  normalizeContext,
-  type TextContent,
-  type ThinkingContent,
+import type {
+  Api,
+  AssistantMessage,
+  AssistantMessageEvent,
+  Message,
+  Model,
+  TextContent,
+  ThinkingContent,
 } from "@earendil-works/pi-ai";
+import { createAssistantMessageEventStream, normalizeContext } from "@earendil-works/pi-ai";
 import type {
   AgentRunModel,
   GuestModel,
@@ -17,9 +16,10 @@ import type {
   ReplyFinal,
   ReplyPart,
 } from "@rakazo/adapter-kit";
-import { conversationSessionId, type PiStreamFn, streamRunModel } from "../../pi-runtime.js";
+import type { PiStreamFn } from "../../pi-runtime.js";
+import { conversationSessionId, streamRunModel } from "../../pi-runtime.js";
 import { billedPromptTokens, providerCacheTokens } from "../../pi-runtime-limits.js";
-import type { ModelRelay } from "../model-relay.js";
+import type { ModelRelay, RelayUsage } from "../model-relay.js";
 import { prunePiAiImages } from "./pi-ai-images.js";
 
 /**
@@ -111,6 +111,26 @@ export const relayPiAiCall: ModelRelay<PiAiModelCall, PiAiModelEvent> = async (
   { signal, conversation },
 ) => {
   let model: Model<Api> | undefined;
+  let usage: RelayUsage | undefined;
+  const observe = (reported: AssistantMessage["usage"], terminal = false) => {
+    const tokens = billedPromptTokens(reported);
+    if (!terminal && tokens.inputTokens === 0 && tokens.outputTokens === 0) return;
+    const cache = providerCacheTokens(reported);
+    usage = {
+      ...usage,
+      type: "usage",
+      inputTokens: Math.max(usage?.inputTokens ?? 0, tokens.inputTokens),
+      outputTokens: Math.max(usage?.outputTokens ?? 0, tokens.outputTokens),
+      ...(cache.cacheReadTokens === undefined
+        ? {}
+        : { cacheReadTokens: Math.max(usage?.cacheReadTokens ?? 0, cache.cacheReadTokens) }),
+      ...(cache.cacheWriteTokens === undefined
+        ? {}
+        : { cacheWriteTokens: Math.max(usage?.cacheWriteTokens ?? 0, cache.cacheWriteTokens) }),
+      provider: model?.provider ?? config.provider,
+      model: model?.id ?? config.id,
+    };
+  };
   try {
     // The transcript is the guest's to shape; a malformed one fails this call, nothing else.
     const context = normalizeContext({
@@ -129,28 +149,26 @@ export const relayPiAiCall: ModelRelay<PiAiModelCall, PiAiModelEvent> = async (
     });
     model = relayed.model;
     for await (const event of relayed.stream) {
+      if ("partial" in event) observe(event.partial.usage);
+      if (event.type === "done") observe(event.message.usage, true);
+      if (event.type === "error") observe(event.error.usage, true);
       send(encodeModelEvent(event));
-      if (event.type === "done" || event.type === "error") {
-        const { usage } = event.type === "done" ? event.message : event.error;
-        return {
-          type: "usage",
-          ...billedPromptTokens(usage),
-          ...providerCacheTokens(usage),
-          provider: relayed.model.provider,
-          model: relayed.model.id,
-        };
-      }
+      if (event.type === "done" || event.type === "error") return usage;
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const target = model ?? { api: "unknown", provider: config.provider, id: config.id };
-    send({
-      type: "error",
-      reason: "error",
-      error: snapshot(failedMessage(target, "error", message)),
-    });
+    try {
+      send({
+        type: "error",
+        reason: "error",
+        error: snapshot(failedMessage(target, "error", message)),
+      });
+    } catch {
+      // A closed guest channel cannot receive the failure, but its spend still counts.
+    }
   }
-  return undefined;
+  return usage;
 };
 
 /** Guest half of `encodeModelEvent`: rebuilds the growing `partial` from blocks and deltas. */
