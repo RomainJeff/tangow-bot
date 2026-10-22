@@ -202,8 +202,6 @@ import {
   catalogApprovalRequest,
   catalogExecuteToolName,
   catalogIdForRoute,
-  claimApprovedEffect,
-  claimIntendedEffect,
   completeExternalEffect,
   createApprovedEffectReplayQueue,
   inputPausedToolResult,
@@ -2097,7 +2095,20 @@ export function createRunExecutor(deps: ExecutorDeps) {
         // runtime, and a tool the guest runs itself, still replay an approval through the model.
         const settlesApprovals = runtime !== deps.runtime;
         const answeredEffects = await deps.prisma.externalEffect.findMany({
-          where: { runId, status: settlesApprovals ? { in: ["approved", "denied"] } : "approved" },
+          where: {
+            runId,
+            ...(settlesApprovals
+              ? {
+                  OR: [
+                    { status: { in: ["approved", "denied"] } },
+                    {
+                      status: { in: ["executing", "completed", "uncertain"] },
+                      OR: [{ answeredAt: { not: null } }, { kind: "request_secret" }],
+                    },
+                  ],
+                }
+              : { status: "approved" }),
+          },
           orderBy: APPROVED_EFFECT_REPLAY_ORDER,
           select: {
             id: true,
@@ -2108,22 +2119,26 @@ export function createRunExecutor(deps: ExecutorDeps) {
             idempotencyKey: true,
           },
         });
+        const priorApprovalEntries = settlesApprovals ? await deps.sessionLog.readRun(runId) : [];
         const loggedResults = new Set(
-          answeredEffects.some((effect) => effect.status === "denied")
-            ? (await deps.sessionLog.readRun(runId)).flatMap((entry) =>
-                entry.type === "tool.result" ? [entry.payload.callId] : [],
-              )
-            : [],
+          priorApprovalEntries.flatMap((entry) =>
+            entry.type === "tool.result" ? [entry.payload.callId] : [],
+          ),
+        );
+        const loggedCalls = new Set(
+          priorApprovalEntries.flatMap((entry) =>
+            entry.type === "tool.call" ? [entry.payload.callId] : [],
+          ),
         );
         const settledEffects = answeredEffects.filter(
           (effect) =>
             settlesApprovals &&
-            (effect.status === "denied"
-              ? !loggedResults.has(effect.id)
-              : !localTools.has(effect.kind)),
+            !loggedResults.has(effect.id) &&
+            (effect.status === "denied" || !localTools.has(effect.kind)),
         );
         const replayedEffects = answeredEffects.filter(
-          (effect) => effect.status === "approved" && !settledEffects.includes(effect),
+          (effect) =>
+            effect.status === "approved" && (!settlesApprovals || localTools.has(effect.kind)),
         );
         const approvedEffectReplays = createApprovedEffectReplayQueue(
           [...settledEffects, ...replayedEffects].filter((effect) => effect.status === "approved"),
@@ -3201,18 +3216,25 @@ export function createRunExecutor(deps: ExecutorDeps) {
           ): Promise<unknown | undefined> => {
             const unavailable = await computerUnavailable(name);
             if (unavailable) return unavailable;
-            const claim = from === "approved" ? claimApprovedEffect : claimIntendedEffect;
-            const claimed = local
-              ? await claimEffectUnderFence(deps.prisma, applied!.effect.id, from, runId, fence)
-              : await claim(deps.prisma, applied!.effect.id);
-            if (claimed) {
+            const claimed = await claimEffectUnderFence(
+              deps.prisma,
+              applied!.effect.id,
+              from,
+              runId,
+              workerId,
+              fence,
+            );
+            if (claimed === "revoked") {
+              throw new Error(`This attempt no longer holds the run, so ${name} did not start.`);
+            }
+            if (claimed === "claimed") {
               claimedEffect = true;
               return undefined;
             }
             const current = await deps.prisma.externalEffect.findUnique({
               where: { id: applied!.effect.id },
             });
-            if (local && current?.status === from) {
+            if (current?.status === from) {
               throw new Error(`This attempt no longer holds the run, so ${name} did not start.`);
             }
             if (current) {
@@ -4753,6 +4775,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
         try {
           if (refusal) throw new Error(refusal);
           if (settledEffects.length > 0) {
+            if (!(await renewRunLease(deps, runId, workerId, fence))) return;
             // The approved request takes the guarded path a model's call takes, so it runs only
             // under the effect's claim; the effect's id as call id lets a later attempt find it.
             const settled: SessionEntry[] = [];
@@ -4768,27 +4791,47 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 call.args && typeof call.args === "object" && !Array.isArray(call.args)
                   ? (call.args as Record<string, unknown>)
                   : {};
-              if (effect.status === "denied") {
-                const refusal = resolveDuplicateEffectGate(effect, call.tool);
-                if (refusal.action !== "return") continue;
-                const drafts: ToolLogEntry[] = [
-                  toolCall(effect.id, call.tool, args),
-                  {
-                    type: "tool.result",
-                    payload: {
-                      callId: effect.id,
-                      output: describeToolPayload(refusal.result, runSecrets),
-                      isError: isFailedToolResult(refusal.result),
-                      artifactIds: [],
-                    },
-                  },
-                ];
+              if (effect.status !== "approved") {
                 await deps.prisma.$transaction(async (tx) => {
-                  for (const draft of drafts) {
-                    settled.push(await deps.sessionLog.append(tx, { ...runLog, ...draft }));
+                  if (!(await renewRunLease({ prisma: tx }, runId, workerId, fence))) {
+                    throw new Error("This attempt no longer holds the run.");
                   }
+                  const current = await tx.externalEffect.findUniqueOrThrow({
+                    where: { id: effect.id },
+                  });
+                  const gate = resolveDuplicateEffectGate(current, call.tool);
+                  const result =
+                    gate.action === "uncertain"
+                      ? await settleUncertainEffect(tx, effect.id, call.tool)
+                      : gate.action === "return"
+                        ? gate.result
+                        : undefined;
+                  if (result === undefined) return;
+                  if (!loggedCalls.has(effect.id)) {
+                    settled.push(
+                      await deps.sessionLog.append(tx, {
+                        ...runLog,
+                        ...toolCall(effect.id, call.tool, args),
+                      }),
+                    );
+                  }
+                  settled.push(
+                    await deps.sessionLog.append(tx, {
+                      ...runLog,
+                      type: "tool.result",
+                      payload: {
+                        callId: effect.id,
+                        output: describeToolPayload(result, runSecrets),
+                        isError: isFailedToolResult(result),
+                        artifactIds: [],
+                      },
+                    }),
+                  );
                 });
                 continue;
+              }
+              if (loggedCalls.has(effect.id)) {
+                unansweredCalls.set(effect.id, toolCall(effect.id, call.tool, args).payload.input);
               }
               const result = await runLoggedTool(runLog, write, call.tool, args, effect.id);
               if (approvalPausePending) return;
@@ -4796,7 +4839,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 // A guard refused the request before it ran, as for a revoked connection: the
                 // approval is spent, so no later call can run it.
                 approvedEffectReplays.take(effect.kind);
-                await completeExternalEffect(deps.prisma, effect.id, "approved", result);
+                await deps.prisma.$transaction(async (tx) => {
+                  if (!(await renewRunLease({ prisma: tx }, runId, workerId, fence))) {
+                    throw new Error("This attempt no longer holds the run.");
+                  }
+                  await completeExternalEffect(tx, effect.id, "approved", result);
+                });
               }
             }
             ({ uncompactedHistory, activeHistory, finishedHistory } = projectHistory([
@@ -7182,15 +7230,19 @@ async function claimEffectUnderFence(
   effectId: string,
   from: "intended" | "approved",
   runId: string,
+  workerId: string,
   fence: number,
-): Promise<boolean> {
-  const claimed = await prisma.$executeRaw`
-    UPDATE external_effects SET status = 'executing', "updatedAt" = ${new Date()}
-    WHERE id = ${effectId} AND status = ${from}
-      AND EXISTS (
-        SELECT 1 FROM runs WHERE id = ${runId} AND "leaseFence" = ${fence} AND status = 'running'
-      )`;
-  return claimed === 1;
+): Promise<"revoked" | "claimed" | "duplicate"> {
+  return prisma.$transaction(async (tx) => {
+    // Lock the run before reserving the effect so cancellation or reassignment cannot
+    // commit between the ownership check and the reservation.
+    if (!(await renewRunLease({ prisma: tx }, runId, workerId, fence))) return "revoked";
+    const claimed = await tx.externalEffect.updateMany({
+      where: { id: effectId, runId, status: from },
+      data: { status: "executing" },
+    });
+    return claimed.count === 1 ? "claimed" : "duplicate";
+  });
 }
 
 function localToolResult(output: LocalToolOutput) {

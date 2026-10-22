@@ -1,5 +1,5 @@
 import type { ConnectorProvider } from "@rakazo/adapter-kit";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { latestCard } from "./index.js";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.js";
 import { startWorkerRun } from "./worker-run-fixture.js";
@@ -8,6 +8,7 @@ type WorkerRun = Awaited<ReturnType<typeof startWorkerRun>>;
 
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => {
+  vi.restoreAllMocks();
   await Promise.all(cleanups.splice(0).map((cleanup) => cleanup()));
 });
 
@@ -156,7 +157,20 @@ describe("an approval answered for a run in a guest", () => {
       started();
       yield* await new Promise<never>(() => {});
     };
-    const run = await fixture([publish("Plan"), ...finishing], notes.tools);
+    let resumed: ModelEmulatorRequest | undefined;
+    const run = await fixture(
+      [
+        publish("Plan"),
+        {
+          expect(request) {
+            resumed = request;
+          },
+          response: finishing[0]!.response,
+        },
+        finishing[1]!,
+      ],
+      notes.tools,
+    );
     const runId = await run.send("Publish the plan.");
     await run.continueRun(runId);
     await answer(run, runId, "allow");
@@ -173,6 +187,95 @@ describe("an approval answered for a run in a guest", () => {
     run.model.assertComplete();
     expect(await statusOf(run, runId)).toBe("completed");
     expect(notes.published).toEqual([{ title: "Plan" }]);
+    expect(ranBefore(resumed)).toContain('"uncertain": true');
+    expect(ranBefore(resumed)).toContain("It was not replayed to avoid a duplicate side effect.");
+  });
+
+  it.each(["cancelled", "superseded"])(
+    "does not execute an approval after the attempt is %s",
+    async (lost) => {
+      const notes = notesConnector();
+      const run = await fixture([publish("Plan")], notes.tools);
+      const runId = await run.send("Publish the plan.");
+      await run.continueRun(runId);
+      await answer(run, runId, "allow");
+      const append = run.events.append.bind(run.events);
+      const reconciliation = vi.spyOn(run.events, "append").mockImplementation(async (input) => {
+        const result = await append(input);
+        if (input.type === "effect.reconciled") {
+          reconciliation.mockRestore();
+          await run.prisma.run.update({
+            where: { id: runId },
+            data:
+              lost === "cancelled"
+                ? { status: "cancelled" }
+                : { leaseFence: { increment: 1 }, leaseOwner: "replacement-worker" },
+          });
+        }
+        return result;
+      });
+      await run.continueRun(runId).catch(() => undefined);
+      expect(notes.published).toEqual([]);
+      expect(
+        await run.prisma.externalEffect.findFirstOrThrow({
+          where: { runId, kind: "publish_note" },
+        }),
+      ).toMatchObject({ status: "approved" });
+    },
+  );
+
+  it("recovers a saved outcome when the controller stopped before writing the tool result", async () => {
+    const notes = notesConnector();
+    let resumed: ModelEmulatorRequest | undefined;
+    const run = await fixture(
+      [
+        publish("Plan"),
+        {
+          expect(request) {
+            resumed = request;
+          },
+          response: finishing[0]!.response,
+        },
+        finishing[1]!,
+      ],
+      notes.tools,
+    );
+    const runId = await run.send("Publish the plan.");
+    await run.continueRun(runId);
+    await answer(run, runId, "allow");
+    let saved!: () => void;
+    const completed = new Promise<void>((resolve) => {
+      saved = resolve;
+    });
+    const update = run.prisma.externalEffect.updateMany.bind(run.prisma.externalEffect);
+    const crash = vi
+      .spyOn(run.prisma.externalEffect, "updateMany")
+      .mockImplementation(async (args) => {
+        const result = await update(args);
+        if (args.data.status === "completed") {
+          saved();
+          return new Promise<never>(() => {});
+        }
+        return result;
+      });
+    void run.continueRun(runId);
+    await completed;
+    crash.mockRestore();
+    const effect = await run.prisma.externalEffect.findFirstOrThrow({
+      where: { runId, kind: "publish_note" },
+    });
+    expect(effect.status).toBe("completed");
+    expect(await resultsOf(run, runId, effect.id)).toEqual([]);
+    run.restart();
+    await run.prisma.run.update({
+      where: { id: runId },
+      data: { leaseExpiresAt: new Date(Date.now() - 60_000) },
+    });
+    await run.continueRun(runId);
+    run.model.assertComplete();
+    expect(notes.published).toEqual([{ title: "Plan" }]);
+    expect(ranBefore(resumed)).toContain('result: { "published": "Plan" }');
+    expect(await resultsOf(run, runId, effect.id)).toEqual(['{\n  "published": "Plan"\n}']);
   });
 
   it("runs nothing for a denied call and gives the model the refusal once", async () => {
