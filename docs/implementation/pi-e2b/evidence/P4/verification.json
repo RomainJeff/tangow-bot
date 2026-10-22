@@ -42,7 +42,8 @@
     "mcpOnly": {
       "computersCreated": 0,
       "volumesCreated": 0
-    }
+    },
+    "scope": "Historical batch at the original implementation SHA, not the follow-up source SHA"
   },
   "cleanup": {
     "scope": "Instrumented final batch and video rerun only; earlier exploratory lanes also reported zero final census",
@@ -74,8 +75,6 @@
     "performanceImprovementClaim": false
   },
   "remaining": [
-    "Native large-output durability",
-    "Timeout termination/recovery on existing E2B deployment",
     "E2B canonical computer parity boot, real product prepare and screen-path/read-once/cleanup",
     "Real app/browser form, submission approval and takeover",
     "OpenCode job placement, paths and authentication on E2B",
@@ -90,5 +89,49 @@
     "infrastructureDeployment": false,
     "applicationDeployment": false,
     "featureOrMainMerge": false
+  },
+  "outputTimeoutFollowup": {
+    "testedSourceSha": "9c8d15f3dbe07a12c5bbfe36c64e2612c20cbc40",
+    "guestSha256": "b3ace799b31495b1dcdd446864e18c639814cdd204e1937f763e9f0f7b983c3f",
+    "receipt": "output-timeout-lanes.json",
+    "live": {
+      "passed": 2,
+      "failed": 0,
+      "lanes": ["f", "g-timeout"],
+      "allLaneCleanupZero": true
+    },
+    "offline": {
+      "focusedWorkerTests": 65,
+      "files": 6,
+      "pnpm check": "24 tasks passed",
+      "pnpm lint": "passed with existing warnings",
+      "pnpm test:worker-live:bundle": "passed",
+      "pnpm test:integration": {
+        "passed": 174,
+        "serialized": true
+      },
+      "pnpm test:e2e:affected": {
+        "passed": 217,
+        "failed": 5,
+        "limits": "Supplied baseline failures only; search-jump remains unverified"
+      },
+      "negativeControls": {
+        "output": "Old code exposed 14,132 model characters, above 12,000",
+        "uploadTimeout": "Restoring the old connect serialized 300 seconds instead of at most 18"
+      },
+      "testAudit": "Owner-boundary regressions run actual Pi shells and the installed E2B SDK. Lifecycle read, failure, timeout, cancellation and concurrent-helper cases protect distinct observable outcomes; no production test seams added."
+    },
+    "cleanup": {
+      "sandboxesCreated": 5,
+      "sandboxesDeleted": 4,
+      "sandboxesAbsentAfterTimeout": 1,
+      "volumesCreated": 4,
+      "volumesDeleted": 4,
+      "left": {
+        "sandboxes": 0,
+        "volumes": 0
+      }
+    },
+    "limits": "This follow-up does not revalidate earlier lanes on the new source SHA. It uses a local model protocol fixture, with no real-model intelligence claim."
   }
 }

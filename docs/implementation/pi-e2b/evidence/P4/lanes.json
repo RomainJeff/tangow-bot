@@ -723,5 +723,15 @@
   "testedImplementationSha": "ff827ef7eb472bc19863705a8b4dee33b487930e",
   "infrastructureChange": "none; existing templates; per-owned-VM guest upload",
   "resourceJournal": "Private only; resource IDs omitted from public evidence",
-  "status": "partial; not N13 acceptance"
+  "status": "partial; not N13 acceptance",
+  "testedSourceSha": "ff827ef7eb472bc19863705a8b4dee33b487930e",
+  "scope": "Historical 15/17 batch; follow-up results are recorded separately at their tested source SHA",
+  "followups": [
+    {
+      "receipt": "output-timeout-lanes.json",
+      "testedSourceSha": "9c8d15f3dbe07a12c5bbfe36c64e2612c20cbc40",
+      "passed": ["f", "g-timeout"],
+      "failed": []
+    }
+  ]
 }
