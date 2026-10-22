@@ -1,0 +1,94 @@
+{
+  "status": "partial draft; N13 acceptance blocked",
+  "testedImplementationSha": "ff827ef7eb472bc19863705a8b4dee33b487930e",
+  "guestSha256": "73c00166fdfb617926929026568395e71423e745968c0dcbdaad7960329b9ba0",
+  "model": "local protocol emulator; no real-model intelligence claim",
+  "offline": {
+    "pnpm check": "24 tasks passed",
+    "pnpm lint": "passed with existing warnings",
+    "pnpm test:worker-live:bundle": "passed",
+    "workerSuite": {
+      "files": 21,
+      "passed": 260
+    },
+    "defaultNegativeControl": {
+      "failedWithLegacyDefaults": 2,
+      "passedAfterRestore": 23
+    },
+    "pnpm test:integration": {
+      "passed": 174,
+      "exitCode": 0,
+      "database": "disposable PostgreSQL",
+      "serialized": true
+    },
+    "pnpm test:e2e:affected": {
+      "first": {
+        "passed": 217,
+        "failed": 5
+      },
+      "final": {
+        "passed": 216,
+        "failed": 6
+      },
+      "limits": "Five supplied baseline failures plus approval-button alignment geometry; explicitly excluded from investigation. Search-jump remains unverified."
+    },
+    "testAudit": "Existing default/stop contracts retained; live helper adds actual E2B lifecycle proof without production seams"
+  },
+  "live": {
+    "passed": 15,
+    "failed": 2,
+    "failedLanes": ["f", "g-timeout"],
+    "allLaneCleanupZero": true,
+    "mcpOnly": {
+      "computersCreated": 0,
+      "volumesCreated": 0
+    }
+  },
+  "cleanup": {
+    "scope": "Instrumented final batch and video rerun only; earlier exploratory lanes also reported zero final census",
+    "sandboxesCreated": 48,
+    "sandboxesDeleted": 48,
+    "volumesCreated": 43,
+    "volumesDeleted": 43,
+    "left": {
+      "sandboxes": 0,
+      "volumes": 0
+    },
+    "resourceIds": "Private handoff only",
+    "offlineContainersRemoved": 5,
+    "offlineVolumesRemoved": 1,
+    "localImagesRetainedForParent": 2
+  },
+  "media": {
+    "video": "media/native-runtime.mp4",
+    "seconds": 45.56,
+    "poster": "media/native-runtime.png",
+    "recordedLanes": ["b", "c", "native-helper-approval"],
+    "receipts": "video-lanes.json",
+    "note": "Actual E2B CLI recording. Product browser/app screenshots remain unverified."
+  },
+  "measurements": {
+    "initialProviderTokens": null,
+    "mcpScreenActionLatency": null,
+    "mcpOnlyComputerWakeCount": 0,
+    "performanceImprovementClaim": false
+  },
+  "remaining": [
+    "Native large-output durability",
+    "Timeout termination/recovery on existing E2B deployment",
+    "E2B canonical computer parity boot, real product prepare and screen-path/read-once/cleanup",
+    "Real app/browser form, submission approval and takeover",
+    "OpenCode job placement, paths and authentication on E2B",
+    "Forced compaction and large/deferred MCP catalog, revocation and secret scenarios on E2B",
+    "Authorized generic real-model connection reference and corresponding real-model run",
+    "Applicable product screenshots"
+  ],
+  "externalChanges": {
+    "registryPublication": false,
+    "imageImport": false,
+    "sharedTemplateBuild": false,
+    "infrastructureDeployment": false,
+    "applicationDeployment": false,
+    "featureOrMainMerge": false
+  }
+}
