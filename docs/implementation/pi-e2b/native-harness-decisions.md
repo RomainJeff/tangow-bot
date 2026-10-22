@@ -59,6 +59,8 @@ Rakazo tools reach the harness through an MCP facade named `rakazo`. The facade 
 - **Egress.** Worker egress stays open for now. Filtering through an allowlist proxy is tracked in the infrastructure repository.
 - **Native loop.** The native loop is the target architecture. The A/B in P5 measures it but does not gate it. The in-process path will move to the same architecture on the Docker worker provider later.
 
+- **OpenCode.** OpenCode stays on the computer for P4; see the [execution decision](opencode-execution.md).
+
 ## P5 measurements
 
 At the relay, per model request: input, cache read, cache write and output tokens; the length of the prefix shared with the previous request of the same thread and bot; and the first divergent section (system, tools, recall, history, image).
