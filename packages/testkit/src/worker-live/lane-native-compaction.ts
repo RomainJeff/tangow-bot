@@ -30,7 +30,7 @@ export const laneNativeCompaction: Lane = {
       if (prefix) assert.ok(current === prefix, "N8 prefix changed before compaction");
       prefix = current;
     };
-    const filling: ModelEmulatorStep[] = Array.from({ length: 6 }, (_, index) => ({
+    const filling: ModelEmulatorStep[] = Array.from({ length: 9 }, (_, index) => ({
       expect(request) {
         inspectPrefix(request);
         assert.ok(JSON.stringify(request.messages).includes("approved-controller-outcome"));
@@ -197,7 +197,7 @@ export const laneNativeCompaction: Lane = {
           results.filter((result) => result.payload.callId === call.payload.callId).length,
           1,
         );
-      assert.equal(calls.filter((entry) => entry.payload.name === "bash").length, 7);
+      assert.equal(calls.filter((entry) => entry.payload.name === "bash").length, 10);
       assert.ok(
         results.some((entry) => entry.payload.output.includes("approved-controller-outcome")),
       );
@@ -245,7 +245,7 @@ export const laneNativeCompaction: Lane = {
           replayedCanonicalHistory,
           approvedEffects: effects,
           canonicalToolPairs: calls.length,
-          canonicalNativeCalls: 7,
+          canonicalNativeCalls: 10,
           summaries: summaries.map((entry) => ({ tokensBefore: entry.payload.tokensBefore })),
           volumeWriteAndRead: true,
           prefixStableBeforeCompaction: true,
