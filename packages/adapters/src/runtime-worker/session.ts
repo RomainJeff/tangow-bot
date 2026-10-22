@@ -155,6 +155,7 @@ export function createSession(
    */
   let paused: { toolCalls: number; modelRequests: number } | undefined;
   let harness: HarnessDeclaration | undefined;
+  let rootTranscriptAccepted = false;
   let launched: LaunchedGuest | undefined;
   let bound: FrameChannel | undefined;
   let stopping: Promise<void> | undefined;
@@ -439,6 +440,15 @@ export function createSession(
       while (open.size > 0) await Promise.allSettled([...open.values()]);
     }
     if (paused) return endPaused();
+    // Native completion must never reach the executor's legacy guest-text fallback.
+    if (
+      (harness?.name === "pi-native" || harness?.capabilities.includes("native-loop")) &&
+      !rootTranscriptAccepted
+    ) {
+      finished = true;
+      violation("invalid");
+      return { type: "refused", reason: "invalid" } as const;
+    }
     finished = true;
     const done = events.push({
       type: "done",
@@ -630,8 +640,10 @@ export function createSession(
         if (agent !== "root" && !helper) return refuse("invalid");
         const ingested = transcript.ingest(agent, body, request.tools, harness!.name);
         if (!ingested) return refuse("invalid");
-        if (!helper) await events.push(ingested);
-        else if (helper.log.transcript) await helper.log.transcript(ingested);
+        if (!helper) {
+          rootTranscriptAccepted = true;
+          await events.push(ingested);
+        } else if (helper.log.transcript) await helper.log.transcript(ingested);
         else return { type: "error", message: "This helper keeps no transcript" };
         return { type: "recorded" };
       }

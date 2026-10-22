@@ -6,13 +6,13 @@ import type {
   ReplyBody,
   WorkerIdentity,
 } from "@rakazo/adapter-kit";
-import type { FrameChannel, LaunchedGuest } from "@rakazo/adapters/runtime-worker";
+import type { FrameChannel, LaunchedGuest } from "./index.js";
 import {
   capabilityWorker,
   encodeMessage,
   memoryChannelPair,
   readControllerFrame,
-} from "@rakazo/adapters/runtime-worker";
+} from "./index.js";
 
 /** A guest that speaks the wire by hand, so it can do what a conforming guest never would. */
 export function rawGuest(

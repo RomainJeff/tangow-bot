@@ -1,6 +1,7 @@
 import type {
   AgentRunRequest,
   AgentRuntimeEvent,
+  GuestBody,
   SemanticMemoryRecallRequest,
   SessionLog,
 } from "@rakazo/adapter-kit";
@@ -28,6 +29,8 @@ import {
   estimateToolSchemaTokens,
   formatRecalledMemory,
 } from "./history-compaction.js";
+import { manualLauncher, rawGuest, stillClock } from "./runtime-worker/raw-guest.test-support.js";
+import { createWorkerAgentRuntime } from "./runtime-worker/runtime.js";
 import { transcriptIngest } from "./runtime-worker/transcript.js";
 import { PostgresSessionLog } from "./session-log/postgres.js";
 import { recordingSessionLog } from "./session-log/recording.test-support.js";
@@ -1011,6 +1014,132 @@ describe("interactive executor sessions with durable history", () => {
       parent: () => log.readTail(SessionIdSchema.parse(thread.sessionId)),
     };
   }
+
+  it.each(["text", "runtimeNotice", "privateFinalText"] as const)(
+    "preserves non-native Pi completion with %s and no transcript",
+    async (field) => {
+      const c = await conversation();
+      const content =
+        field === "privateFinalText"
+          ? JSON.stringify({ version: 1, results: ["Completed"], references: [] })
+          : "Legacy Pi completion";
+      await fixture({
+        database: c.prisma,
+        run: c.run,
+        runtime: async function* (request) {
+          const launcher = manualLauncher();
+          const runtime = createWorkerAgentRuntime({
+            launcher: launcher.launcher,
+            stops: { mark: async () => undefined },
+            clock: stillClock,
+          });
+          const guestTask = (async () => {
+            const launched = await launcher.launchedFor(request.runId);
+            const guest = rawGuest(launched.connect(), launched.capability);
+            await guest.hello();
+            guest.send(1, { type: "done", [field]: content });
+          })();
+          yield* runtime.run({
+            ...request,
+            attempt: request.attempt ?? { id: "raw-attempt", fence: 1 },
+          });
+          await guestTask;
+        },
+      }).request();
+      expect(await c.prisma.run.findUniqueOrThrow({ where: { id: c.run.id } })).toMatchObject({
+        status: "completed",
+      });
+      const parent = await c.parent();
+      expect(
+        (await c.log.readRun(c.run.id))
+          .filter((entry) => entry.type === "assistant.text")
+          .map((entry) => entry.payload.blocks),
+      ).toEqual(field === "runtimeNotice" ? [[{ kind: "text", text: content }]] : []);
+      expect(
+        parent.filter((entry) => entry.type === "run.recap").map((entry) => entry.payload.recap),
+      ).toEqual([
+        field === "privateFinalText"
+          ? { state: "available", facts: { version: 1, results: ["Completed"], references: [] } }
+          : { state: "missing", reason: field === "text" ? "invalid" : "absent" },
+      ]);
+    },
+  );
+
+  it.each(["missing", "empty", "present", "rejected", "late", "duplicate"] as const)(
+    "enforces native completion policy through a raw worker with %s transcript",
+    async (transcriptCase) => {
+      const c = await conversation();
+      const marker = "GUEST_PRIVATE_NOTICE_MUST_NOT_PUBLISH";
+      await fixture({
+        database: c.prisma,
+        run: c.run,
+        runtime: async function* (request) {
+          const launcher = manualLauncher();
+          const runtime = createWorkerAgentRuntime({
+            launcher: launcher.launcher,
+            stops: { mark: async () => undefined },
+            clock: stillClock,
+          });
+          const guestTask = (async () => {
+            const launched = await launcher.launchedFor(request.runId);
+            const guest = rawGuest(launched.connect(), launched.capability, {
+              name: "pi-native",
+              capabilities: ["native-loop"],
+            });
+            await guest.hello();
+            let seq = 1;
+            const transcript = {
+              type: "transcript",
+              dialect: "pi-ai",
+              messages:
+                transcriptCase === "empty"
+                  ? []
+                  : [
+                      {
+                        role: "assistant",
+                        content: [{ type: "text", text: "PRIVATE_MODEL_PROSE" }],
+                      },
+                    ],
+            } satisfies Extract<GuestBody, { type: "transcript" }>;
+            if (
+              transcriptCase === "empty" ||
+              transcriptCase === "present" ||
+              transcriptCase === "duplicate"
+            ) {
+              guest.send(seq, transcript);
+              expect(await guest.replies(seq++)).toEqual([{ type: "recorded" }]);
+            }
+            if (transcriptCase === "rejected") {
+              guest.send(seq++, { ...transcript, agent: "unknown-helper" });
+            } else if (transcriptCase === "duplicate") {
+              guest.send(seq++, transcript);
+            }
+            guest.send(seq++, {
+              type: "done",
+              text: marker,
+              privateFinalText: marker,
+              runtimeNotice: marker,
+            });
+            if (transcriptCase === "late") guest.send(seq++, transcript);
+          })();
+          yield* runtime.run({
+            ...request,
+            attempt: request.attempt ?? { id: "raw-attempt", fence: 1 },
+          });
+          await guestTask;
+        },
+      }).request();
+      const parent = await c.parent();
+      const trace = await c.log.readRun(c.run.id);
+      expect(JSON.stringify([...parent, ...trace])).not.toContain(marker);
+      expect(JSON.stringify([...parent, ...trace])).not.toContain("PRIVATE_MODEL_PROSE");
+      expect(trace.filter((entry) => entry.type === "assistant.text")).toEqual([]);
+      expect(parent.filter((entry) => entry.type === "run.recap")).toHaveLength(1);
+      expect(await c.prisma.run.findUniqueOrThrow({ where: { id: c.run.id } })).toMatchObject({
+        status: ["empty", "present", "duplicate"].includes(transcriptCase) ? "completed" : "failed",
+      });
+    },
+  );
 
   it.each([
     {

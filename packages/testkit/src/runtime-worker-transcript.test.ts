@@ -1,7 +1,12 @@
 import type { AgentRunRequest, AgentRuntimeEvent, GuestBody } from "@rakazo/adapter-kit";
 import { createWorkerAgentRuntime } from "@rakazo/adapters/runtime-worker";
 import { describe, expect, it } from "vitest";
-import { consume, manualLauncher, rawGuest, stillClock } from "./worker-raw-guest.js";
+import {
+  consume,
+  manualLauncher,
+  rawGuest,
+  stillClock,
+} from "../../adapters/src/runtime-worker/raw-guest.test-support.js";
 
 const SECRET = "hunter2-secret";
 const REMEMBER = {
