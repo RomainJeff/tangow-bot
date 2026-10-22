@@ -4,5 +4,6 @@ export * from "./registry.js";
 export * from "./session-log.js";
 export * from "./types.js";
 export * from "./volume-files.js";
+export * from "./worker-harnesses.js";
 export * from "./worker-protocol.js";
 export * from "./worker-provider.js";

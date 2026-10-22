@@ -186,6 +186,7 @@ import {
   formatAgentEnvironmentInstruction,
   redactAgentCommandResult,
 } from "./agent-environment.js";
+import { nativeTranscriptText } from "./agent-text-policy.js";
 import { buildApprovalAskBlock } from "./approval-ask.js";
 import {
   approvalPausedToolResult,
@@ -5065,6 +5066,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               data: { status: "running" },
             });
           }
+          let nativeText: ReturnType<typeof nativeTranscriptText> | undefined;
           const runtimeEvents = runtime.run(
             {
               botId: bot.id,
@@ -5395,11 +5397,22 @@ export function createRunExecutor(deps: ExecutorDeps) {
               await recordRunUsage(deps, { ...run, botId: bot.id, runId }, event);
             } else if (event.type === "transcript") {
               await logHarnessTranscript(deps, runLog, { runId, fence }, event, runSecrets);
+              nativeText = nativeTranscriptText(event.entries, {
+                allowSilentEmpty: allowSilentEmpty || messagingChannelRun,
+                freeTextIsPrivate: freeTextIsPrivate && !messagingChannelRun,
+                runRecap: recapRequested,
+                emptyResponseText,
+              });
+              dropMidTurnNarration();
+              assembled = nativeText.text;
+              currentTextSegment = nativeText.text;
+              tryFlushPendingTools();
             } else if (event.type === "done") {
-              runtimeNotice = event.runtimeNotice;
+              const terminal = nativeText ?? event;
+              runtimeNotice = terminal.runtimeNotice;
               if (recapRequested) {
                 runRecap = parseRunRecap(
-                  event.privateFinalText ?? (runtimeNotice ? undefined : event.text),
+                  terminal.privateFinalText ?? (runtimeNotice ? undefined : terminal.text),
                 );
                 if (runRecap.state === "available") {
                   const facts = FactualRunRecapFactsSchema.safeParse({
@@ -5415,13 +5428,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
                     : { state: "missing", reason: "invalid" };
                 }
               }
-              if (!assembled && event.text) {
+              if (!assembled && terminal.text) {
                 if (publishedMidTurnUserMessage || droppedNarration) {
                   // done.text is cumulative: restoring it would bring back the narration
                   // already dropped. Post-tool finals are streamed into assembled.
                 } else {
-                  assembled = event.text;
-                  currentTextSegment += event.text;
+                  assembled = terminal.text;
+                  currentTextSegment += terminal.text;
                 }
               }
             }

@@ -182,15 +182,27 @@ describe("E2BWorkerProvider", () => {
     ]);
   });
 
+  it.each(["other", "pi-native-unknown", ""])(
+    "rejects unknown selected harness %s before launching",
+    (harness) => {
+      const e2b = fakeE2B();
+      expect(() => new E2BWorkerProvider({ ...config, harness }, e2b.sdk)).toThrow(
+        "Unknown worker harness",
+      );
+      expect(e2b.sandboxes.size).toBe(0);
+      expect(e2b.guests).toEqual([]);
+    },
+  );
+
   it("leaves tool output to the guest's temporary directory without a private volume", async () => {
     const e2b = fakeE2B();
-    const worker = new E2BWorkerProvider({ ...config, harness: "other" }, e2b.sdk);
+    const worker = new E2BWorkerProvider({ ...config, harness: "pi-native" }, e2b.sdk);
 
     await worker.ensure(spec([]));
 
     const { envs, volumeMounts } = e2b.sandboxes.get("sbx_1")!;
     expect({ envs, volumeMounts }).toEqual({
-      envs: { RAKAZO_WORKER_HARNESS: "other", RAKAZO_WORKER_HOME: "/home/user" },
+      envs: { RAKAZO_WORKER_HARNESS: "pi-native", RAKAZO_WORKER_HOME: "/home/user" },
       volumeMounts: {},
     });
   });

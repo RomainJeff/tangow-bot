@@ -1,4 +1,9 @@
-import type { AdapterContext, WorkerIdentity, WorkerStartV1 } from "@rakazo/adapter-kit";
+import type {
+  AdapterContext,
+  HarnessDeclaration,
+  WorkerIdentity,
+  WorkerStartV1,
+} from "@rakazo/adapter-kit";
 import { AgentRuntimeBusyError, AgentRuntimeUnavailableError } from "@rakazo/adapter-kit";
 import type { WorkerLaunch } from "@rakazo/core";
 import { attemptHoldsFence, LIVE_WORKER_STATES, workerEnsureDeadline } from "@rakazo/core";
@@ -9,6 +14,7 @@ import type { FrameChannel } from "./framing.js";
 
 /** An attempt's guest, launched and reachable. */
 export interface LaunchedGuest {
+  expectedHarness: HarnessDeclaration;
   start: Omit<WorkerStartV1, "run">;
   /** One per connection the guest opens, in order. Ends when the guest can no longer connect. */
   connections: AsyncIterable<FrameChannel>;
@@ -35,7 +41,11 @@ export interface GuestConnector {
   connect(
     target: { attemptId: string; providerRef: string },
     capability: string,
-  ): { connections: AsyncIterable<FrameChannel>; exited: Promise<void> };
+  ): {
+    expectedHarness: HarnessDeclaration;
+    connections: AsyncIterable<FrameChannel>;
+    exited: Promise<void>;
+  };
 }
 
 /**

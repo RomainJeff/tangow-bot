@@ -58,6 +58,7 @@ async function nativeRun(
         });
         exits.push(exit);
         return {
+          expectedHarness: HARNESSES["pi-native"]!.declaration,
           start: {
             version: 1,
             kind: "worker.start",

@@ -2,7 +2,6 @@ import type {
   AgentRunModel,
   AgentRunRequest,
   GuestBody,
-  HarnessDeclaration,
   LocalToolOutput,
   ModelDialect,
   RefusalReason,
@@ -170,7 +169,8 @@ export function createSession(
    * only conclude, whatever its harness does.
    */
   let paused: { toolCalls: number; modelRequests: number } | undefined;
-  let harness: HarnessDeclaration | undefined;
+  let helloReceived = false;
+  let rootTranscriptAccepted = false;
   let launched: LaunchedGuest | undefined;
   let bound: FrameChannel | undefined;
   let stopping: Promise<void> | undefined;
@@ -209,7 +209,7 @@ export function createSession(
 
   const declared = (body: GuestBody) => {
     const needed = FRAME_CAPABILITY[body.type];
-    return !needed || Boolean(harness?.capabilities.includes(needed));
+    return !needed || launched!.expectedHarness.capabilities.includes(needed);
   };
 
   const allowed = (name: string) => tools.has(name);
@@ -266,7 +266,7 @@ export function createSession(
 
   const helperOf = (agent: string) => (agent === "root" ? undefined : helpers.get(agent));
 
-  const runsOwnLoop = () => Boolean(harness?.capabilities.includes("native-loop"));
+  const runsOwnLoop = () => launched!.expectedHarness.capabilities.includes("native-loop");
 
   let helpersStarted = 0;
   let helpersRunning = 0;
@@ -347,7 +347,7 @@ export function createSession(
         part({
           type: "subagent.start",
           agent,
-          run: helperRunInput(launched!.start, request, harness!, {
+          run: helperRunInput(launched!.start, request, launched!.expectedHarness, {
             task: call.task || "Complete the delegated task.",
             instructions: helperInstructions(call.name, call.instructions),
             model: helper.model,
@@ -387,7 +387,7 @@ export function createSession(
     const helper = helperOf(agent);
     if (agent !== "root" && !helper) return refuse("invalid");
     if (paused) return pausedToolCall(paused);
-    if (harness && nativeToolsForHarness(harness.name).some((tool) => tool.name === name)) {
+    if (nativeToolsForHarness(launched!.expectedHarness.name).some((tool) => tool.name === name)) {
       const executeLocal = helper ? helper.log.executeLocalTool : request.executeLocalTool;
       if (!executeLocal) return { type: "error", message: `${name} is unavailable here` };
       const granted = deferred<void>();
@@ -581,6 +581,12 @@ export function createSession(
       while (open.size > 0) await Promise.allSettled([...open.values()]);
     }
     if (paused) return endPaused();
+    // Native completion must never reach the executor's legacy guest-text fallback.
+    if (runsOwnLoop() && !rootTranscriptAccepted) {
+      finished = true;
+      violation("invalid");
+      return { type: "refused", reason: "invalid" } as const;
+    }
     finished = true;
     const done = events.push({
       type: "done",
@@ -773,10 +779,17 @@ export function createSession(
         const agent = body.agent ?? "root";
         const helper = helperOf(agent);
         if (agent !== "root" && !helper) return refuse("invalid");
-        const ingested = transcript.ingest(agent, body, request.tools, harness!.name);
+        const ingested = transcript.ingest(
+          agent,
+          body,
+          request.tools,
+          launched!.expectedHarness.name,
+        );
         if (!ingested) return refuse("invalid");
-        if (!helper) await events.push(ingested);
-        else if (helper.log.transcript) await helper.log.transcript(ingested);
+        if (!helper) {
+          rootTranscriptAccepted = true;
+          await events.push(ingested);
+        } else if (helper.log.transcript) await helper.log.transcript(ingested);
         else return { type: "error", message: "This helper keeps no transcript" };
         return { type: "recorded" };
       }
@@ -799,13 +812,22 @@ export function createSession(
           if (!verdict.ok) {
             return violation(verdict.reason === "identity" ? "identity" : "capability", channel);
           }
+          const expected = launched!.expectedHarness;
+          if (
+            message.harness.name !== expected.name ||
+            message.harness.capabilities.length !== expected.capabilities.length ||
+            !expected.capabilities.every((capability) =>
+              message.harness.capabilities.includes(capability),
+            )
+          )
+            return violation("undeclared", channel);
           // Single use: one bound connection at a time, and none once the stop began.
           if (bound || stopping) return channel.close();
           accepted = true;
           bound = channel;
-          harness ??= message.harness;
+          helloReceived = true;
           helloSettled.resolve();
-          await channel.send(encodeMessage(workerStart(launched!.start, request, harness)));
+          await channel.send(encodeMessage(workerStart(launched!.start, request, expected)));
           inbox.attach((reply) => void channel.send(encodeMessage(reply)));
           continue;
         }
@@ -828,7 +850,7 @@ export function createSession(
     const serving: Promise<void>[] = [];
     void Promise.race([deps.clock.sleep(WORKER_LIMITS.helloDeadlineMs), helloSettled.promise]).then(
       () => {
-        if (!harness && !stopping)
+        if (!helloReceived && !stopping)
           fail(new AgentRuntimeUnavailableError("The worker did not say hello in time"));
       },
     );
