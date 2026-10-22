@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { GuestTool } from "@rakazo/adapter-kit";
 import {
@@ -111,18 +111,13 @@ function screenHints(files: string[], screensDir: string): McpBlock[] {
   return lines.map((text) => ({ type: "text", text }));
 }
 
-async function mcpResult(output: unknown, screensDir: string, callId: string) {
+async function mcpResult(output: unknown, screensDir: string) {
   const { blocks, isError } = resultBlocks(output);
   const files: string[] = [];
   for (const block of blocks) {
     if (block.type !== "image") continue;
-    const mimeType = String(block.mimeType);
-    const file = path.join(
-      screensDir,
-      `${callId}-${files.length + 1}.${mimeType.split("/")[1] ?? "png"}`,
-    );
-    await mkdir(screensDir, { recursive: true });
-    await writeFile(file, Buffer.from(String(block.data), "base64"));
+    const file = path.join(screensDir, `.rakazo-screen-${randomUUID()}.png`);
+    await writeFile(file, Buffer.from(String(block.data), "base64"), { flag: "wx" });
     files.push(file);
   }
   const hints = screenHints(files, screensDir);
@@ -188,7 +183,7 @@ export function rakazoMcpServer(
         : [tool.name, args as Record<string, unknown>];
       await host.emit({ type: "tool", name, args: relayed, executionId: callId });
       const outcome = await host.callTool("root", name, relayed, callId);
-      return await mcpResult(outcome.output, screensDir, callId);
+      return await mcpResult(outcome.output, screensDir);
     } catch (error) {
       const text = error instanceof Error ? error.message : String(error);
       return { content: clipToolResultContent([{ type: "text", text }]), isError: true };

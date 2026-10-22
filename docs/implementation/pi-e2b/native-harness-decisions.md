@@ -66,3 +66,33 @@ Rakazo tools reach the harness through an MCP facade named `rakazo`. The facade 
 At the relay, per model request: input, cache read, cache write and output tokens; the length of the prefix shared with the previous request of the same thread and bot; and the first divergent section (system, tools, recall, history, image).
 
 Run them on at least one provider with explicit caching and one with automatic caching, on short chained exchanges at several gaps around the cache TTL, on the computer and browser tasks of the A/B protocol, on an approval resumed at short and long delays, and on a forced compaction. A persistent native session is only reconsidered if it beats the stable projection by at least 15% in priced tokens without losing success rate.
+
+## Native Pi MCP integration
+
+The native Pi session loads its MCP and tool-search extensions explicitly. The
+`rakazo` server uses only the in-memory facade over the controller channel.
+Ordinary product tools are direct; connector catalog entries are deferred until
+Pi's `tool_search` loads them. Catalog aliases are normalized to their controller
+execution tool in the final transcript, whose results still come from the
+controller journal. Harnesses without native search retain search/load/execute.
+
+Screen files use `.rakazo-screen-<random UUID>.png` directly at the private bot
+home root. The controller chooses the name; tool arguments cannot choose a screen
+write path. Hybrid images use exclusive file creation at the same root. Native
+`read` detects the image format from its bytes. Attempt teardown unlinks matching
+files and symlinks after the harness has finished, including its final transcript
+and pause grace. It leaves directories and other home files alone. The private
+volume writer lease must remain held until the guest exits; N13 still verifies
+that the real mount root cannot be replaced.
+
+Cleanup is best effort on normal completion and graceful cancellation. An unlink
+failure is diagnosed without replacing the primary run outcome. Abrupt termination
+can prevent guest cleanup and leave rare residual screenshot files on the private
+volume. This accepted limitation does not block P4. Screenshots remain written by
+the computer; no dedicated helper VM or new cleanup infrastructure is required.
+
+Offline coverage uses actual Pi sessions and the MCP adapter for deferred
+discovery, controller invocation, approval resume after restart, connection
+revocation, secret redaction, image reads, and MCP-only runs without a computer
+lease. The guest lifecycle owns success, cancellation and failure cleanup tests.
+Canonical native/controller replay ordering remains the accepted D9 limitation.

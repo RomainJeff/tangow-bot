@@ -12,39 +12,14 @@ import { toHistory } from "../../pi-runtime.js";
 
 type ToolCalls = Extract<AgentHistoryTurnPart, { type: "toolCalls" }>["calls"];
 
-/** The MCP server a native harness reaches Rakazo's controller tools through. */
-export const RAKAZO_MCP_SERVER = "rakazo";
-
-/** The name Pi's MCP client gives a tool of the Rakazo server. */
-export function piMcpToolName(name: string): string {
-  return `mcp__${RAKAZO_MCP_SERVER}__${name}`.replace(/[^A-Za-z0-9_]/g, "_");
-}
-
-/**
- * The session a native Pi resumes from: the canonical turns as pi-ai messages, with every
- * controller tool under the name the harness's MCP client gives it.
- */
+/** Canonical names stay intact here; the guest maps them to Pi's actual assigned names. */
 export function projectPiAi(
   history: AgentRunRequest["history"],
   prompt: string,
   model: Pick<Model<Api>, "api" | "provider" | "id">,
-  controllerTools: readonly string[],
   sourceMessageId?: string | null,
 ): Message[] {
-  const controller = new Set(controllerTools);
-  const rename = (name: string) => (controller.has(name) ? piMcpToolName(name) : name);
-  return toHistory(history, prompt, model, sourceMessageId).map((message): Message => {
-    if (message.role === "assistant") {
-      return {
-        ...message,
-        content: message.content.map((block) =>
-          block.type === "toolCall" ? { ...block, name: rename(block.name) } : block,
-        ),
-      };
-    }
-    if (message.role === "toolResult") return { ...message, toolName: rename(message.toolName) };
-    return message as Message;
-  });
+  return toHistory(history, prompt, model, sourceMessageId) as Message[];
 }
 
 /** What the controller answered one call of a controller tool, in call order. */
@@ -63,8 +38,6 @@ export interface IngestResult {
 
 export interface IngestOptions {
   answers: readonly ControllerCallRecord[];
-  /** The tools the controller offered the attempt, under their own names. */
-  controllerTools: readonly string[];
   /** The tools the harness runs itself, from its manifest. Only these are ever its own. */
   nativeTools: readonly string[];
   /** Redacts and bounds every string kept from the transcript. */
@@ -112,13 +85,13 @@ function textOf(content: z.infer<typeof Content>): string {
  * history has no place for, such as the harness's thinking, is left out. Only a tool of the
  * harness's manifest is its own: any other call takes its output from the controller's answers,
  * never from the transcript, and one the controller never answered is counted, whatever its name.
+ * Controller names are already canonical at the guest boundary and must not be treated as aliases.
  */
 export function ingestPiAi(
   messages: readonly unknown[],
-  { answers, controllerTools, nativeTools, clean }: IngestOptions,
+  { answers, nativeTools, clean }: IngestOptions,
 ): IngestResult {
   const native = new Set(nativeTools);
-  const controllerName = new Map(controllerTools.map((name) => [piMcpToolName(name), name]));
   const records = new Map<string, ControllerCallRecord[]>();
   for (const record of answers) {
     const named = records.get(record.name) ?? [];
@@ -189,12 +162,10 @@ export function ingestPiAi(
             calls.push(call);
             continue;
           }
-          const controller = controllerName.get(name) ?? name;
-          const record = records.get(controller)?.shift();
-          if (record)
-            steps.push({ kind: "controller", turn, callId: record.callId, name: controller });
+          const record = records.get(name)?.shift();
+          if (record) steps.push({ kind: "controller", turn, callId: record.callId, name });
           else unverifiedCalls += 1;
-          calls.push({ id, name: controller, args, output: record?.output ?? "" });
+          calls.push({ id, name, args, output: record?.output ?? "" });
         }
         if (steps.length === firstStep) steps.push({ kind: "text", turn, text: "" });
         if (calls.length > 0) parts.push({ type: "toolCalls", calls });

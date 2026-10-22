@@ -1,3 +1,4 @@
+import { readdir, unlink } from "node:fs/promises";
 import path from "node:path";
 import type { GuestBody, ReplyFinal, WorkerStartV1 } from "@rakazo/adapter-kit";
 import { FRAME_CAPABILITY, sameWorker } from "@rakazo/adapter-kit";
@@ -285,5 +286,24 @@ async function runAttempt(
     return stop?.reason ?? (link.lost ? "disconnected" : "cancelled");
   } finally {
     clearTimeout(flushTimer);
+    const reportCleanupError = (error: NodeJS.ErrnoException) => {
+      if (error.code !== "ENOENT") console.warn("screens.cleanup_failed", { code: error.code });
+    };
+    // The root is the private volume mount, not a guest-replaceable subdirectory.
+    const entries = await readdir(cwd, { withFileTypes: true }).catch(
+      (error: NodeJS.ErrnoException) => {
+        reportCleanupError(error);
+        return [];
+      },
+    );
+    for (const entry of entries) {
+      const name = entry.name;
+      if (
+        !entry.isDirectory() &&
+        /^\.rakazo-screen-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\.png$/.test(name)
+      ) {
+        await unlink(path.join(cwd, name)).catch(reportCleanupError);
+      }
+    }
   }
 }

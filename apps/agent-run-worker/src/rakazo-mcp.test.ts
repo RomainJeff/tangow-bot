@@ -145,7 +145,7 @@ describe("the Rakazo MCP server", () => {
   });
 
   it("returns an image the controller still sends, and saves it under a name the result gives", async () => {
-    const { host, calls } = fakeHost(() => ({
+    const { host } = fakeHost(() => ({
       kind: "agent_tool_result",
       content: [
         { type: "text", text: "computer observed" },
@@ -156,7 +156,9 @@ describe("the Rakazo MCP server", () => {
 
     const result = await client.callTool({ name: "computer_observe", arguments: {} });
 
-    const file = path.join(screensDir, `${calls[0]!.callId}-1.png`);
+    const [name] = await readdir(screensDir);
+    expect(name).toMatch(/^\.rakazo-screen-[0-9a-f-]{36}\.png$/);
+    const file = path.join(screensDir, name!);
     expect(result).toEqual({
       content: [
         { type: "text", text: "computer observed" },
@@ -205,7 +207,7 @@ describe("a connector result through the Rakazo MCP server", () => {
   });
 
   it("keeps a connector's MCP content, its images and its error flag", async () => {
-    const { host, calls } = fakeHost(() => ({
+    const { host } = fakeHost(() => ({
       content: [
         { type: "text", text: "Chart failed halfway" },
         { type: "image", data: PNG, mimeType: "image/png" },
@@ -220,7 +222,9 @@ describe("a connector result through the Rakazo MCP server", () => {
       arguments: { value: "x" },
     });
 
-    const file = path.join(screensDir, `${calls[0]!.callId}-1.png`);
+    const [name] = await readdir(screensDir);
+    expect(name).toMatch(/^\.rakazo-screen-[0-9a-f-]{36}\.png$/);
+    const file = path.join(screensDir, name!);
     expect(result).toEqual({
       content: [
         { type: "text", text: "Chart failed halfway" },
@@ -265,7 +269,9 @@ describe("a long result with an image through the Rakazo MCP server", () => {
       .map((block) => block.text!);
     expect(texts.join("").length).toBeLessThanOrEqual(12_000);
     expect(texts[0]).toMatch(/^a+\n\[\d+ more characters cut\]$/);
-    expect(texts[1]).toMatch(/^Screenshot saved at .+-1\.png\. Read it to see it again\.$/);
+    expect(texts[1]).toMatch(
+      /^Screenshot saved at .+\.rakazo-screen-[0-9a-f-]{36}\.png\. Read it to see it again\.$/,
+    );
   });
 
   it("counts the screens past the budget in one line instead of naming each", async () => {

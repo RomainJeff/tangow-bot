@@ -4,6 +4,8 @@ import path from "node:path";
 import type { AgentSession, ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
   createAgentSession,
+  createMcpExtension,
+  createToolSearchExtension,
   DefaultResourceLoader,
   SessionManager,
   SettingsManager,
@@ -18,8 +20,10 @@ import {
 } from "@rakazo/adapters/runtime-worker/pi-ai";
 import { skillReadName } from "@rakazo/adapters/volume-skills";
 import type { DoneBody, GuestHarness, HarnessHost } from "../harness.js";
+import { rakazoMcpTools } from "../rakazo-mcp.js";
 import { relayModelRuntime } from "./pi-session.js";
 import { piToolManifest } from "./pi-tools.js";
+import { rakazoMcpTransport } from "./rakazo-mcp.js";
 
 type SteeringMessage = Extract<ReplyFinal, { type: "steering" }>["messages"][number];
 
@@ -112,6 +116,19 @@ export const piNativeHarness: GuestHarness = {
     });
     let session: AgentSession | undefined;
     try {
+      const controllerTools = run.tools.filter((tool) => tool.where === "controller");
+      const assignedNames = new Map<string, string>();
+      const controllerNames = new Map<string, string>();
+      const listed = rakazoMcpTools(controllerTools, true);
+      const byLabel = new Map(listed.map((tool) => [`rakazo/${tool.name}`, tool]));
+      const projected = projectPiAi(run.history, run.prompt, model, run.sourceMessageId);
+      const replayCalls = new Set(
+        projected.flatMap((message) =>
+          message.role === "assistant"
+            ? message.content.flatMap((block) => (block.type === "toolCall" ? [block.id] : []))
+            : [],
+        ),
+      );
       const loader = new DefaultResourceLoader({
         cwd,
         agentDir,
@@ -121,6 +138,74 @@ export const piNativeHarness: GuestHarness = {
         noPromptTemplates: true,
         noThemes: true,
         extensionFactories: [
+          createToolSearchExtension(),
+          (pi) =>
+            createMcpExtension({
+              loadConfig: () => ({
+                servers: [
+                  {
+                    name: "rakazo",
+                    source: "rakazo",
+                    scope: "extension",
+                    config: {
+                      command: "rakazo-in-process",
+                      exposure: "direct",
+                      toolExposure: Object.fromEntries(
+                        listed.map((tool) => [tool.name, tool.exposure]),
+                      ),
+                    },
+                  },
+                ],
+                errors: [],
+                autoEnableCodemode: false,
+              }),
+              createTransport: () => rakazoMcpTransport(controllerTools, host, cwd),
+            })({
+              ...pi,
+              registerTool(definition) {
+                // Pi assigns names before registration; the label retains the MCP server/tool identity.
+                const tool = byLabel.get(definition.label);
+                if (tool) {
+                  assignedNames.set(tool.name, definition.name);
+                  controllerNames.set(definition.name, tool.catalog?.via ?? tool.name);
+                }
+                pi.registerTool(definition);
+              },
+            }),
+          (pi) => {
+            pi.on("context", (event) => {
+              const messages = structuredClone(event.messages);
+              const resultNames = new Map<string, string>();
+              for (const message of messages) {
+                if (message.role === "assistant") {
+                  for (const block of message.content) {
+                    if (block.type !== "toolCall" || !replayCalls.has(block.id)) continue;
+                    const catalog = listed.find(
+                      (tool) =>
+                        tool.catalog?.via === block.name && tool.catalog.id === block.arguments.id,
+                    );
+                    const assigned = assignedNames.get(catalog?.name ?? block.name);
+                    if (!assigned) continue;
+                    block.name = assigned;
+                    if (
+                      catalog &&
+                      typeof block.arguments.arguments === "object" &&
+                      block.arguments.arguments !== null &&
+                      !Array.isArray(block.arguments.arguments)
+                    ) {
+                      block.arguments = Object.fromEntries(
+                        Object.entries(block.arguments.arguments),
+                      );
+                    }
+                    resultNames.set(block.id, assigned);
+                  }
+                } else if (message.role === "toolResult") {
+                  message.toolName = resultNames.get(message.toolCallId) ?? message.toolName;
+                }
+              }
+              return { messages };
+            });
+          },
           rakazoExtension(host, cwd, (message) =>
             session?.agent.steer({
               role: "user",
@@ -135,14 +220,7 @@ export const piNativeHarness: GuestHarness = {
       await loader.reload({ resolveProjectTrust: async () => false });
 
       const sessionManager = SessionManager.inMemory(cwd);
-      const controllerTools = run.tools.filter((tool) => tool.where === "controller");
-      for (const message of projectPiAi(
-        run.history,
-        run.prompt,
-        model,
-        controllerTools.map((tool) => tool.name),
-        run.sourceMessageId,
-      )) {
+      for (const message of projected) {
         sessionManager.appendMessage(message);
       }
 
@@ -155,7 +233,13 @@ export const piNativeHarness: GuestHarness = {
         resourceLoader: loader,
         sessionManager,
         settingsManager,
-        tools: run.tools.filter((tool) => tool.where === "guest").map((tool) => tool.name),
+        tools: [
+          ...run.tools.filter((tool) => tool.where === "guest").map((tool) => tool.name),
+          "mcp__rakazo__*",
+          ...(controllerTools.some((tool) => typeof tool.catalog === "object")
+            ? ["tool_search"]
+            : []),
+        ],
       }));
       const active = session;
 
@@ -163,7 +247,16 @@ export const piNativeHarness: GuestHarness = {
       const added: Array<{ role: string } & Record<string, unknown>> = [];
       const unsubscribe = active.subscribe((event) => {
         if (event.type === "message_end") {
-          added.push(structuredClone(event.message) as (typeof added)[number]);
+          const message = structuredClone(event.message);
+          if (message.role === "assistant") {
+            for (const block of message.content) {
+              if (block.type === "toolCall")
+                block.name = controllerNames.get(block.name) ?? block.name;
+            }
+          } else if (message.role === "toolResult") {
+            message.toolName = controllerNames.get(message.toolName) ?? message.toolName;
+          }
+          added.push(message as (typeof added)[number]);
         } else if (event.type === "compaction_end" && event.result) {
           added.push({
             role: "compactionSummary",
