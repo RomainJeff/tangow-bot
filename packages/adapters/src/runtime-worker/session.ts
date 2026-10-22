@@ -14,6 +14,7 @@ import type {
 } from "@rakazo/adapter-kit";
 import { AgentRuntimeUnavailableError, FRAME_CAPABILITY } from "@rakazo/adapter-kit";
 import { redactSecrets, secretRedactor } from "@rakazo/core";
+import { isToolPauseResult } from "../approval-effect.js";
 import { redactPayloadValue, redactPayloadWith } from "../connector-safety.js";
 import type { CapabilityKey } from "./capability.js";
 import { mintCapability, verifyCapability } from "./capability.js";
@@ -34,6 +35,21 @@ import type { StopJournal } from "./stop-journal.js";
 const RELAYS: { [D in ModelDialect]: ModelRelay<never, unknown> } = {
   "pi-ai": relayPiAiCall as ModelRelay<never, unknown>,
 };
+
+const PAUSED_TOOL_RESULT = {
+  kind: "agent_tool_result",
+  content: [
+    {
+      type: "text",
+      text: "Not run: this run is paused until the user answers. Do not retry it; end your turn.",
+    },
+  ],
+  details: { paused: true },
+};
+
+const PAUSED_MESSAGE = "This run is paused until the user answers.";
+
+const PAUSED_MODEL_REFUSALS = 2;
 
 export interface WorkerClock {
   sleep(ms: number): Promise<void>;
@@ -123,6 +139,11 @@ export function createSession(
       ) ?? []),
     ]);
   let modelRequests = 0;
+  /**
+   * Set once a tool paused the run or the harness asked the user: from then on the attempt may
+   * only conclude, whatever its harness does.
+   */
+  let paused: { toolCalls: number; modelRequests: number } | undefined;
   let harness: HarnessDeclaration | undefined;
   let launched: LaunchedGuest | undefined;
   let bound: FrameChannel | undefined;
@@ -164,6 +185,44 @@ export function createSession(
 
   const allowed = (name: string) => tools.has(name);
 
+  const endPaused = (): ReplyFinal => {
+    if (!finished) {
+      finished = true;
+      events.end();
+    }
+    return { type: "stop", reason: "paused" };
+  };
+
+  const pause = () => {
+    if (paused) return;
+    paused = { toolCalls: 0, modelRequests: 0 };
+    void deps.clock.sleep(WORKER_LIMITS.pausedGraceMs).then(endPaused);
+  };
+
+  /** No call runs after the pause, but each still gets a result so the harness's turn stays whole. */
+  const pausedToolCall = (state: NonNullable<typeof paused>): ReplyFinal =>
+    ++state.toolCalls > WORKER_LIMITS.pausedToolCalls
+      ? endPaused()
+      : { type: "tool.result", output: PAUSED_TOOL_RESULT };
+
+  /** A few model requests let the harness close its turn; one that keeps asking is stopped. */
+  const pausedModelRequest = (state: NonNullable<typeof paused>): ReplyFinal | undefined => {
+    state.modelRequests += 1;
+    if (state.modelRequests <= WORKER_LIMITS.pausedModelRequests) return undefined;
+    if (state.modelRequests <= WORKER_LIMITS.pausedModelRequests + PAUSED_MODEL_REFUSALS) {
+      return { type: "error", message: PAUSED_MESSAGE };
+    }
+    return endPaused();
+  };
+
+  /** Once paused, the attempt concludes on a run waiting for the user; never once superseded. */
+  const fenceHeld = async () => {
+    if (paused) return launched!.ownsFence();
+    if (await launched!.holdsFence()) return true;
+    // The pause can latch during the lookup and move the run to wait on the user.
+    return paused ? launched!.ownsFence() : false;
+  };
+
   const helperOf = (agent: string) => (agent === "root" ? undefined : helpers.get(agent));
 
   async function callTool(body: Extract<GuestBody, { type: "tool.call" }>): Promise<ReplyFinal> {
@@ -175,11 +234,18 @@ export function createSession(
     announced.delete(callId);
     const helper = helperOf(agent);
     if (agent !== "root" && !helper) return refuse("invalid");
+    if (paused) return pausedToolCall(paused);
     if (harness && nativeToolsForHarness(harness.name).some((tool) => tool.name === name)) {
       const executeLocal = helper ? helper.log.executeLocalTool : request.executeLocalTool;
       if (!executeLocal) return { type: "error", message: `${name} is unavailable here` };
       const granted = deferred<void>();
+      let denied = false;
       const call = executeLocal(name, args, callId, () => {
+        // Authorization can outlast the pause: the guest must not start the call then.
+        if (paused) {
+          denied = true;
+          return Promise.reject(new Error(PAUSED_MESSAGE));
+        }
         const output = deferred<LocalToolOutput>();
         grants.set(callId, output);
         granted.resolve();
@@ -198,7 +264,9 @@ export function createSession(
         ),
       ]);
       if (first.granted) return { type: "tool.grant" };
+      if (denied) return { type: "tool.result", output: PAUSED_TOOL_RESULT };
       if ("error" in first) return { type: "error", message: clean(messageOf(first.error)) };
+      if (isToolPauseResult(first.output)) pause();
       return { type: "tool.result", output: first.output };
     }
     const execute = helper ? helper.log.executeTool : request.executeTool;
@@ -206,7 +274,9 @@ export function createSession(
     const call = execute(name, args, callId, tools.get(name)?.route);
     open.set(callId, call);
     try {
-      return { type: "tool.result", output: await call };
+      const output = await call;
+      if (isToolPauseResult(output)) pause();
+      return { type: "tool.result", output };
     } catch (error) {
       return { type: "error", message: clean(messageOf(error)) };
     } finally {
@@ -249,10 +319,13 @@ export function createSession(
     body: Extract<GuestBody, { type: "model.request" }>,
     part: (body: ReplyPart) => void,
   ): Promise<ReplyFinal> {
+    if (!(await fenceHeld())) return revoke();
     modelRequests += 1;
     if (modelRequests > WORKER_LIMITS.modelRequestsPerAttempt) return refuse("budget");
     const helper = helperOf(body.agent);
     if (body.agent !== "root" && !helper) return refuse("invalid");
+    const turnedAway = paused && pausedModelRequest(paused);
+    if (turnedAway) return turnedAway;
     const abort = new AbortController();
     relays.set(seq, abort);
     try {
@@ -293,6 +366,7 @@ export function createSession(
       part({ type: "end.refused", pending: [...open.keys()] });
       while (open.size > 0) await Promise.allSettled([...open.values()]);
     }
+    if (paused) return endPaused();
     finished = true;
     const done = events.push({
       type: "done",
@@ -315,9 +389,11 @@ export function createSession(
     if (!declared(body)) return refuse("undeclared");
     switch (body.type) {
       case "text":
+        if (paused) return { type: "ack" };
         await events.push({ type: "text", text: clean(body.text) });
         return { type: "ack" };
       case "progress":
+        if (paused) return { type: "ack" };
         await events.push({
           type: "progress",
           text: clean(body.text),
@@ -330,6 +406,7 @@ export function createSession(
           return refuse("too_large");
         }
         announced.set(body.executionId, body.name);
+        if (paused) return { type: "ack" };
         await events.push({
           type: "tool",
           name: body.name,
@@ -338,6 +415,7 @@ export function createSession(
         });
         return { type: "ack" };
       case "subagent":
+        if (paused) return { type: "ack" };
         await events.push({
           ...body,
           task: clean(body.task),
@@ -355,11 +433,12 @@ export function createSession(
         return { type: "ack" };
       case "tool.call":
         // The executor checks its lease only between events: a guest must not outrun it.
-        if (!(await launched!.holdsFence())) return revoke();
+        if (!(await fenceHeld())) return revoke();
         return callTool(body);
       case "tool.done":
         return recordLocalResult(body);
       case "steering.claim": {
+        if (paused) return { type: "steering", messages: [] };
         const messages = (await request.claimSteering?.(body.seenIds)) ?? [];
         return {
           type: "steering",
@@ -373,6 +452,7 @@ export function createSession(
         };
       }
       case "subagent.open": {
+        if (paused) return { type: "error", message: PAUSED_MESSAGE };
         if (!request.startSubagent || !request.resolveModel) {
           return { type: "error", message: "Helpers are unavailable in this run" };
         }
@@ -393,8 +473,9 @@ export function createSession(
       case "subagent.abandon": {
         const helper = helperOf(body.agent);
         if (!helper) return refuse("invalid");
-        if (body.type === "subagent.text") await helper.log.text(body.text);
-        else if (body.type === "subagent.abandon") await helper.log.abandon(body.result);
+        if (body.type === "subagent.text") {
+          if (!paused) await helper.log.text(body.text);
+        } else if (body.type === "subagent.abandon") await helper.log.abandon(body.result);
         else {
           await helper.log.finish({
             status: body.status,
@@ -405,6 +486,8 @@ export function createSession(
         return { type: "recorded" };
       }
       case "ask":
+        if (paused) return { type: "recorded" };
+        pause();
         await events.push({
           ...body,
           text: clean(body.text),
@@ -412,12 +495,14 @@ export function createSession(
         });
         return { type: "recorded" };
       case "takeover":
+        if (paused) return { type: "recorded" };
+        pause();
         await events.push({ type: "takeover", reason: clean(body.reason) });
         return { type: "recorded" };
       case "done":
         return finish(body, part);
       case "skills.index": {
-        if (!(await launched!.holdsFence())) return revoke();
+        if (!(await fenceHeld())) return revoke();
         if (skillIndexEnded || !mountedSkillSources().has(body.skill.source))
           return refuse("invalid");
         const bytes = Buffer.byteLength(JSON.stringify(body.skill));
@@ -432,7 +517,7 @@ export function createSession(
       }
       case "skills.index.end": {
         const receivedAt = new Date();
-        if (!(await launched!.holdsFence())) return revoke();
+        if (!(await fenceHeld())) return revoke();
         if (
           skillIndexEnded ||
           body.sources.some((source) => !mountedSkillSources().has(source)) ||
@@ -446,7 +531,7 @@ export function createSession(
         return { type: "recorded" };
       }
       case "skills.collision":
-        if (!(await launched!.holdsFence())) return revoke();
+        if (!(await fenceHeld())) return revoke();
         if (++skillCollisions > 512) return refuse("budget");
         if (
           ![body.collision.kept, body.collision.ignored].every((source) =>
@@ -457,11 +542,12 @@ export function createSession(
         await request.onSkillCollision?.({ ...body.collision, name: clean(body.collision.name) });
         return { type: "recorded" };
       case "skills.used":
-        if (!(await launched!.holdsFence())) return revoke();
+        if (!(await fenceHeld())) return revoke();
         if (++skillUses > 512) return refuse("budget");
         await request.onSkillUsed?.(clean(body.name));
         return { type: "recorded" };
       case "failed":
+        if (paused) return endPaused();
         fail(new Error(clean(body.message)));
         return { type: "stop", reason: "cancelled" };
     }
