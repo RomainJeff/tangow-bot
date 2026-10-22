@@ -402,6 +402,34 @@ describe("worker ownership while start is in flight", () => {
   });
 });
 
+describe("worker fence", () => {
+  it("keeps a run paused on the user its attempt's without letting it act, and drops a superseded attempt", async () => {
+    const { bot } = await fixture.migratedBot();
+    const run = await fixture.seedRun(bot, { leaseFence: 2, status: "running" });
+    const superseded = await fixture.seedAttempt(run.id, 1);
+    const current = await fixture.seedAttempt(run.id, 2);
+    await workers.start(await fixture.launchFor(workers, current.id, mcpOnly), fixture.context);
+    const standing: Record<string, [boolean, boolean]> = {};
+    for (const status of ["running", "waiting_input", "waiting_takeover", "cancelled"]) {
+      await prisma.run.update({ where: { id: run.id }, data: { status } });
+      standing[status] = [
+        (await workers.status(current.id))?.active === true,
+        await workers.ownsFence(current.id),
+      ];
+    }
+    expect(standing).toEqual({
+      running: [true, true],
+      waiting_input: [false, true],
+      waiting_takeover: [false, true],
+      cancelled: [false, false],
+    });
+
+    await prisma.run.update({ where: { id: run.id }, data: { status: "waiting_input" } });
+    expect(await workers.ownsFence(superseded.id)).toBe(false);
+    await workers.release(current.id, fixture.context);
+  });
+});
+
 describe("worker release", () => {
   it("destroys once however often it is released, and an absent VM is released too", async () => {
     const { bot } = await fixture.migratedBot();

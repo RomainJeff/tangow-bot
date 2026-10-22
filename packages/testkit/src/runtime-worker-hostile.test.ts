@@ -1,3 +1,5 @@
+import { createAssistantMessageEventStream } from "@earendil-works/pi-ai";
+import { ANTHROPIC_MODELS } from "@earendil-works/pi-ai/providers/anthropic.models";
 import type {
   AgentRunRequest,
   AgentRuntimeEvent,
@@ -7,26 +9,28 @@ import type {
   ReplyBody,
   WorkerIdentity,
 } from "@rakazo/adapter-kit";
+import type { FrameChannel, LaunchedGuest, WorkerClock } from "@rakazo/adapters/runtime-worker";
 import {
   capabilityWorker,
   createWorkerAgentRuntime,
   encodeMessage,
-  type FrameChannel,
-  type LaunchedGuest,
   memoryChannelPair,
   readControllerFrame,
   WORKER_LIMITS,
   WORKER_NATIVE_TOOLS,
 } from "@rakazo/adapters/runtime-worker";
+import { createLogger, createTestSink, getLogger, installLogger } from "@rakazo/logging";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
-import { type ModelEmulatorRequest, startModelEmulator } from "./model-emulator.js";
+import * as piRuntime from "../../adapters/src/pi-runtime.js";
+import type { ModelEmulatorRequest } from "./model-emulator.js";
+import { startModelEmulator } from "./model-emulator.js";
 
 /** A guest that speaks the wire by hand, so it can do what a conforming guest never would. */
 function rawGuest(channel: FrameChannel, capability: string) {
   const worker = capabilityWorker(capability)!;
   const received: ControllerMessageV1[] = [];
   const replies = new Map<number, ReplyBody[]>();
-  let notify = () => {};
+  const waiting = new Set<() => void>();
   const closed = (async () => {
     for await (const frame of channel.frames) {
       const read = readControllerFrame(frame);
@@ -36,14 +40,15 @@ function rawGuest(channel: FrameChannel, capability: string) {
         const { re, body } = read.message.payload;
         replies.set(re, [...(replies.get(re) ?? []), body]);
       }
-      notify();
+      for (const resume of waiting) resume();
+      waiting.clear();
     }
   })();
   const until = async <T>(check: () => T | undefined): Promise<T> => {
     while (true) {
       const found = check();
       if (found !== undefined) return found;
-      await new Promise<void>((resume) => (notify = resume));
+      await new Promise<void>((resume) => waiting.add(resume));
     }
   };
   return {
@@ -81,9 +86,13 @@ function rawGuest(channel: FrameChannel, capability: string) {
 
 /** Hands every launch to the test: it opens the guest's connections itself. */
 function manualLauncher() {
+  const fence: { standing: "executing" | "paused" | "lost"; lookup?: Promise<void> } = {
+    standing: "executing",
+  };
   const launched = new Map<string, { capability: string; connect(): FrameChannel }>();
   const waiting = new Map<string, () => void>();
   return {
+    fence,
     launcher: {
       async launch(worker: WorkerIdentity, capability: string): Promise<LaunchedGuest> {
         const queue: FrameChannel[] = [];
@@ -115,7 +124,14 @@ function manualLauncher() {
           })(),
           exited: Promise.resolve(),
           release: async () => "released",
-          holdsFence: async () => true,
+          holdsFence: async () => {
+            await fence.lookup;
+            return fence.standing === "executing";
+          },
+          ownsFence: async () => {
+            await fence.lookup;
+            return fence.standing !== "lost";
+          },
         };
       },
     },
@@ -153,15 +169,15 @@ function consume(events: AsyncIterable<AgentRuntimeEvent>) {
   return { seen, done };
 }
 
-function setup() {
+function setup(clock: WorkerClock = stillClock) {
   const manual = manualLauncher();
   const marks: string[] = [];
   const runtime = createWorkerAgentRuntime({
     launcher: manual.launcher,
     stops: { mark: async (_attemptId, phase) => void marks.push(phase) },
-    clock: stillClock,
+    clock,
   });
-  return { runtime, marks, launchedFor: manual.launchedFor };
+  return { runtime, marks, launchedFor: manual.launchedFor, fence: manual.fence };
 }
 
 const bash = (callId: string): GuestBody => ({
@@ -514,6 +530,697 @@ describe("a hostile guest", () => {
     await runtime.abort("run_model_abort");
     await run.done.catch(() => undefined);
     server.assertComplete();
+  });
+});
+
+const PAUSED = {
+  kind: "agent_tool_result",
+  content: [{ type: "text", text: "Waiting for approval." }],
+  details: { approval: "paused" },
+  terminate: true,
+};
+const pausedTools = [
+  ...WORKER_NATIVE_TOOLS,
+  ...["remember", "send_email"].map((name) => ({
+    name,
+    description: name,
+    inputSchema: { type: "object", properties: {} },
+  })),
+];
+const announce = (name: string, callId: string): GuestBody => ({
+  type: "tool",
+  name,
+  args: {},
+  executionId: callId,
+});
+const call = (name: string, callId: string): GuestBody => ({
+  type: "tool.call",
+  agent: "root",
+  callId,
+  name,
+  args: {},
+});
+const modelRequest: GuestBody = {
+  type: "model.request",
+  agent: "root",
+  dialect: "pi-ai",
+  call: { context: { messages: [{ role: "user", content: "Go on.", timestamp: 0 }] }, options: {} },
+};
+const notRun = {
+  type: "tool.result",
+  output: expect.objectContaining({ details: { paused: true } }),
+};
+
+async function startGuest(
+  runtime: ReturnType<typeof setup>["runtime"],
+  launchedFor: ReturnType<typeof setup>["launchedFor"],
+  runId: string,
+  overrides: Partial<AgentRunRequest>,
+) {
+  const run = consume(runtime.run(request(runId, { tools: pausedTools, ...overrides })));
+  const launched = await launchedFor(runId);
+  const guest = rawGuest(launched.connect(), launched.capability);
+  await guest.hello();
+  let seq = 0;
+  const ask = async (body: GuestBody) => {
+    guest.send(++seq, body);
+    return (await guest.replies(seq)).at(-1);
+  };
+  return { run, ask };
+}
+
+async function pauseOnTool(ask: (body: GuestBody) => Promise<ReplyBody | undefined>) {
+  await ask(announce("send_email", "pause"));
+  expect(await ask(call("send_email", "pause"))).toEqual({ type: "tool.result", output: PAUSED });
+}
+
+describe("the controller's pause guard, against a hostile harness", () => {
+  it("answers every call after a pause without running it, and drops what the harness still says", async () => {
+    const executeTool = vi.fn(async (name: string) => (name === "send_email" ? PAUSED : "saved"));
+    const claimSteering = vi.fn(async () => [{ id: "s1", messageId: "m1", text: "Also this." }]);
+    const { runtime, launchedFor } = setup();
+    const { run, ask } = await startGuest(runtime, launchedFor, "run_calls", {
+      executeTool,
+      claimSteering,
+      startSubagent: vi.fn(),
+      resolveModel: vi.fn(),
+    });
+    await pauseOnTool(ask);
+
+    for (const callId of ["after1", "after2"]) {
+      expect(await ask(announce("remember", callId))).toEqual({ type: "ack" });
+      expect(await ask(call("remember", callId))).toEqual(notRun);
+    }
+    expect(await ask({ type: "text", text: "Sent it anyway!" })).toEqual({ type: "ack" });
+    expect(await ask({ type: "progress", text: "Sending more" })).toEqual({ type: "ack" });
+    expect(
+      await ask({
+        type: "subagent",
+        agentId: "helper",
+        name: "helper",
+        task: "Send it again.",
+        status: "running",
+      }),
+    ).toEqual({ type: "ack" });
+    expect(await ask({ type: "ask", text: "Send it twice?" })).toEqual({ type: "recorded" });
+    expect(await ask({ type: "takeover", reason: "Log in for me." })).toEqual({
+      type: "recorded",
+    });
+    expect(await ask({ type: "steering.claim", seenIds: [] })).toEqual({
+      type: "steering",
+      messages: [],
+    });
+    expect(
+      await ask({
+        type: "subagent.open",
+        callId: "helper",
+        name: "helper",
+        task: "Send it again.",
+        args: {},
+        model: { provider: "openai-compatible", id: "unused" },
+      }),
+    ).toEqual({ type: "error", message: "This run is paused until the user answers." });
+    expect(await ask({ type: "done", text: "All sent!" })).toEqual({
+      type: "stop",
+      reason: "paused",
+    });
+
+    await run.done;
+    expect(run.seen).toEqual([
+      { type: "tool", name: "send_email", args: {}, executionId: "pause" },
+    ]);
+    expect(executeTool.mock.calls.map(([name]) => name)).toEqual(["send_email"]);
+  });
+
+  it("pauses on a question to the user, and stops a harness that keeps calling tools", async () => {
+    const executeTool = vi.fn(async () => "saved");
+    const { runtime, launchedFor } = setup();
+    const { run, ask } = await startGuest(runtime, launchedFor, "run_ask", { executeTool });
+    expect(await ask({ type: "ask", text: "Which address?" })).toEqual({ type: "recorded" });
+
+    for (let index = 1; index <= WORKER_LIMITS.pausedToolCalls; index += 1) {
+      await ask(announce("remember", `c${index}`));
+      expect(await ask(call("remember", `c${index}`))).toEqual(notRun);
+    }
+    await ask(announce("remember", "over"));
+    expect(await ask(call("remember", "over"))).toEqual({ type: "stop", reason: "paused" });
+
+    await run.done;
+    expect(run.seen).toEqual([{ type: "ask", text: "Which address?" }]);
+    expect(executeTool).not.toHaveBeenCalled();
+  });
+
+  it("does not grant a native call whose authorization ends after the pause", async () => {
+    const authorized = Promise.withResolvers<void>();
+    const started = Promise.withResolvers<string>();
+    const { runtime, launchedFor } = setup();
+    const { run, ask } = await startGuest(runtime, launchedFor, "run_late_grant", {
+      executeLocalTool: async (_name, _args, _id, start) => {
+        await authorized.promise;
+        return start(new AbortController().signal).then(
+          () => started.resolve("started"),
+          (error: Error) => started.resolve(error.message),
+        );
+      },
+    });
+    await ask(bash("late"));
+    const reply = ask(callBash("late"));
+    expect(await ask({ type: "ask", text: "Which address?" })).toEqual({ type: "recorded" });
+    authorized.resolve();
+
+    expect(await reply).toEqual(notRun);
+    expect(await started.promise).toBe("This run is paused until the user answers.");
+    expect(await ask({ type: "done" })).toEqual({ type: "stop", reason: "paused" });
+    await run.done;
+  });
+
+  it("pauses when a native call's authorization pauses the run", async () => {
+    const executeTool = vi.fn(async () => "saved");
+    const { runtime, launchedFor } = setup();
+    const { run, ask } = await startGuest(runtime, launchedFor, "run_native_pause", {
+      executeTool,
+      executeLocalTool: async () => PAUSED,
+    });
+    await ask(bash("native"));
+    expect(await ask(callBash("native"))).toEqual({ type: "tool.result", output: PAUSED });
+
+    await ask(announce("remember", "after"));
+    expect(await ask(call("remember", "after"))).toEqual(notRun);
+    expect(await ask({ type: "text", text: "Ran it anyway!" })).toEqual({ type: "ack" });
+    expect(await ask({ type: "done" })).toEqual({ type: "stop", reason: "paused" });
+
+    await run.done;
+    expect(run.seen).toEqual([
+      { type: "tool", name: "bash", args: { command: "true" }, executionId: "native" },
+    ]);
+    expect(executeTool).not.toHaveBeenCalled();
+  });
+
+  it("pauses on a helper's native authorization that pauses the run", async () => {
+    const { runtime, launchedFor } = setup();
+    const { run, ask } = await startGuest(runtime, launchedFor, "run_helper_native", {
+      executeTool: vi.fn(async () => "saved"),
+      resolveModel: async () => request("run_helper_native").model,
+      startSubagent: async () => ({
+        executeTool: async () => "unused",
+        executeLocalTool: async () => PAUSED,
+        text: async () => undefined,
+        finish: async () => undefined,
+        abandon: async () => undefined,
+      }),
+    });
+    await ask({
+      type: "subagent.open",
+      callId: "helper",
+      name: "helper",
+      task: "Look around.",
+      args: {},
+      model: { provider: "openai-compatible", id: "unused" },
+    });
+    await ask(bash("helper-bash"));
+    expect(await ask({ ...callBash("helper-bash"), agent: "helper:1" } as GuestBody)).toEqual({
+      type: "tool.result",
+      output: PAUSED,
+    });
+
+    await ask(announce("remember", "root-after"));
+    expect(await ask(call("remember", "root-after"))).toEqual(notRun);
+    expect(await ask({ type: "done" })).toEqual({ type: "stop", reason: "paused" });
+    await run.done;
+  });
+
+  it("pauses on a helper's pausing call, keeps its text out of the log after, and still closes it", async () => {
+    const texts: string[] = [];
+    const results: string[] = [];
+    const { runtime, launchedFor } = setup();
+    const { run, ask } = await startGuest(runtime, launchedFor, "run_helper", {
+      executeTool: vi.fn(async () => "saved"),
+      resolveModel: async () => request("run_helper").model,
+      startSubagent: async () => ({
+        executeTool: async () => PAUSED,
+        text: async (text) => void texts.push(text),
+        finish: async (outcome) => void results.push(outcome.result),
+        abandon: async () => undefined,
+      }),
+    });
+    expect(
+      await ask({
+        type: "subagent.open",
+        callId: "helper",
+        name: "helper",
+        task: "Look around.",
+        args: {},
+        model: { provider: "openai-compatible", id: "unused" },
+      }),
+    ).toMatchObject({ type: "subagent.opened", agent: "helper:1" });
+    await ask({ type: "subagent.text", agent: "helper:1", text: "Looking." });
+    await ask(announce("send_email", "helper-send"));
+    expect(
+      await ask({ ...call("send_email", "helper-send"), agent: "helper:1" } as GuestBody),
+    ).toEqual({ type: "tool.result", output: PAUSED });
+    await ask(announce("remember", "root-after"));
+    expect(await ask(call("remember", "root-after"))).toEqual(notRun);
+
+    expect(await ask({ type: "subagent.text", agent: "helper:1", text: "Sent it!" })).toEqual({
+      type: "recorded",
+    });
+    expect(
+      await ask({
+        type: "subagent.finish",
+        agent: "helper:1",
+        status: "completed",
+        result: "Done.",
+      }),
+    ).toEqual({ type: "recorded" });
+    expect(texts).toEqual(["Looking."]);
+    expect(results).toEqual(["Done."]);
+    await ask({ type: "done" });
+    await run.done;
+  });
+
+  it("keeps the frames whose fence lookup outlasted the pause", async () => {
+    const server = await startModelEmulator({
+      apiKey: "controller-only-key",
+      steps: [{ expect() {}, response: { type: "text", text: "Waiting for your answer." } }],
+    });
+    onTestFinished(() => server.close());
+    const { runtime, launchedFor, fence } = setup();
+    const { run, ask } = await startGuest(runtime, launchedFor, "run_slow_fence", {
+      executeTool: async () => "saved",
+      model: server.model,
+    });
+    await ask(announce("remember", "late"));
+    const lookup = Promise.withResolvers<void>();
+    fence.lookup = lookup.promise;
+    const relayed = ask(modelRequest);
+    const answered = ask(call("remember", "late"));
+    expect(await ask({ type: "ask", text: "Which address?" })).toEqual({ type: "recorded" });
+    fence.standing = "paused";
+    lookup.resolve();
+
+    expect(await relayed).toEqual({ type: "model.end" });
+    expect(await answered).toEqual(notRun);
+    expect(await ask({ type: "done" })).toEqual({ type: "stop", reason: "paused" });
+    await run.done;
+    server.assertComplete();
+  });
+
+  it("lets a paused attempt that still owns its run conclude, and refuses it once superseded", async () => {
+    const server = await startModelEmulator({
+      apiKey: "controller-only-key",
+      steps: [{ expect() {}, response: { type: "text", text: "Waiting for your approval." } }],
+    });
+    onTestFinished(() => server.close());
+    const { runtime, launchedFor, fence } = setup();
+    const { run, ask } = await startGuest(runtime, launchedFor, "run_paused_fence", {
+      executeTool: async () => PAUSED,
+      model: server.model,
+    });
+    await pauseOnTool(ask);
+    fence.standing = "paused";
+
+    expect(await ask(modelRequest)).toEqual({ type: "model.end" });
+    await ask(announce("remember", "after"));
+    expect(await ask(call("remember", "after"))).toEqual(notRun);
+
+    fence.standing = "lost";
+    expect(await ask(modelRequest)).toEqual({ type: "refused", reason: "revoked" });
+    await expect(run.done).rejects.toThrow("This attempt no longer holds the run");
+    server.assertComplete();
+  });
+
+  it("relays two model requests so the harness can close its turn, then turns it away, then stops it", async () => {
+    const server = await startModelEmulator({
+      apiKey: "controller-only-key",
+      steps: [
+        { expect() {}, response: { type: "text", text: "Waiting for your approval." } },
+        { expect() {}, response: { type: "text", text: "Still waiting." } },
+      ],
+    });
+    onTestFinished(() => server.close());
+    const { runtime, launchedFor } = setup();
+    const { run, ask } = await startGuest(runtime, launchedFor, "run_model", {
+      executeTool: async () => PAUSED,
+      model: server.model,
+    });
+    await pauseOnTool(ask);
+
+    expect(await ask(modelRequest)).toEqual({ type: "model.end" });
+    expect(await ask(modelRequest)).toEqual({ type: "model.end" });
+    const turnedAway = { type: "error", message: "This run is paused until the user answers." };
+    expect(await ask(modelRequest)).toEqual(turnedAway);
+    expect(await ask(modelRequest)).toEqual(turnedAway);
+    expect(await ask(modelRequest)).toEqual({ type: "stop", reason: "paused" });
+
+    await run.done;
+    server.assertComplete();
+    expect(run.seen.filter((event) => event.type === "usage")).toHaveLength(2);
+  });
+
+  it("ends paused, not failed, when the harness fails its turn after the pause", async () => {
+    const { runtime, launchedFor } = setup();
+    const { run, ask } = await startGuest(runtime, launchedFor, "run_failed", {
+      executeTool: async () => PAUSED,
+    });
+    await pauseOnTool(ask);
+    expect(await ask({ type: "failed", message: "The model relay refused" })).toEqual({
+      type: "stop",
+      reason: "paused",
+    });
+    await expect(run.done).resolves.toBeUndefined();
+  });
+
+  it("ends a paused attempt that goes silent at the deadline", async () => {
+    const sleeps = new Map<number, () => void>();
+    const clock: WorkerClock = {
+      sleep: (ms) => new Promise<void>((resume) => sleeps.set(ms, resume)),
+    };
+    const { runtime, launchedFor } = setup(clock);
+    const { run, ask } = await startGuest(runtime, launchedFor, "run_silent", {
+      executeTool: async () => PAUSED,
+    });
+    await pauseOnTool(ask);
+    let ended = false;
+    void run.done.then(() => (ended = true));
+    await new Promise((resume) => setTimeout(resume, 20));
+    expect(ended).toBe(false);
+
+    sleeps.get(WORKER_LIMITS.pausedGraceMs)!();
+    await expect(run.done).resolves.toBeUndefined();
+  });
+
+  it("starts no model request whose fence lookup outlasted the pause's deadline", async () => {
+    const server = await startModelEmulator({ apiKey: "controller-only-key", steps: [] });
+    onTestFinished(() => server.close());
+    const sleeps = new Map<number, () => void>();
+    const clock: WorkerClock = {
+      sleep: (ms) => new Promise<void>((resume) => sleeps.set(ms, resume)),
+    };
+    const { runtime, launchedFor, fence } = setup(clock);
+    const { run, ask } = await startGuest(runtime, launchedFor, "run_late_lookup", {
+      executeTool: async () => PAUSED,
+      model: server.model,
+    });
+    await pauseOnTool(ask);
+    fence.standing = "paused";
+    const lookup = Promise.withResolvers<void>();
+    fence.lookup = lookup.promise;
+    void ask(modelRequest);
+    await new Promise((resume) => setTimeout(resume, 20));
+
+    sleeps.get(WORKER_LIMITS.pausedGraceMs)!();
+    await run.done;
+    lookup.resolve();
+    await new Promise((resume) => setTimeout(resume, 200));
+
+    expect(server.requests).toEqual([]);
+  });
+
+  it.each(["stop", "pause deadline"] as const)(
+    "starts no relay when %s lands after the fence check but before its caller resumes",
+    async (ending) => {
+      const stream = createAssistantMessageEventStream();
+      const signals: AbortSignal[] = [];
+      const relay = vi
+        .spyOn(piRuntime, "streamRunModel")
+        .mockImplementation((_config, _context, options) => {
+          if (options?.signal) signals.push(options.signal);
+          return { model: ANTHROPIC_MODELS["claude-haiku-4-5"], stream };
+        });
+      onTestFinished(() => {
+        stream.end();
+        relay.mockRestore();
+      });
+      const sleeps = new Map<number, () => void>();
+      const { runtime, launchedFor, fence } = setup({
+        sleep: (ms) => new Promise<void>((resume) => sleeps.set(ms, resume)),
+      });
+      const runId = "run_continuation_gap";
+      const { run, ask } = await startGuest(runtime, launchedFor, runId, {});
+      onTestFinished(() => runtime.abort(runId));
+      if (ending === "pause deadline") {
+        await ask({ type: "ask", text: "Which address?" });
+        fence.standing = "paused";
+      }
+      const ended = Promise.withResolvers<void>();
+      const standing = fence.standing;
+      let checked = false;
+      Object.defineProperty(fence, "standing", {
+        get() {
+          if (!checked) {
+            checked = true;
+            // End between fenceHeld's resolution and its caller. The clock adds its own microtask.
+            queueMicrotask(() => {
+              if (ending === "stop") {
+                queueMicrotask(() => void runtime.abort(runId).then(ended.resolve));
+              } else {
+                sleeps.get(WORKER_LIMITS.pausedGraceMs)!();
+                ended.resolve();
+              }
+            });
+          }
+          return standing;
+        },
+      });
+
+      void ask(modelRequest);
+      await ended.promise;
+      await run.done.catch(() => undefined);
+      await new Promise<void>((resume) => setImmediate(resume));
+
+      expect(checked).toBe(true);
+      expect(signals.filter((signal) => !signal.aborted)).toEqual([]);
+      expect(relay).not.toHaveBeenCalled();
+    },
+  );
+
+  it("relays no model request once the attempt lost its run", async () => {
+    const server = await startModelEmulator({
+      apiKey: "controller-only-key",
+      steps: [{ expect() {}, response: { type: "text", text: "Ok." } }],
+    });
+    onTestFinished(() => server.close());
+    const { runtime, launchedFor, fence } = setup();
+    const { run, ask } = await startGuest(runtime, launchedFor, "run_fence", {
+      model: server.model,
+    });
+    expect(await ask(modelRequest)).toEqual({ type: "model.end" });
+
+    fence.standing = "lost";
+    expect(await ask(modelRequest)).toEqual({ type: "refused", reason: "revoked" });
+    await expect(run.done).rejects.toThrow("This attempt no longer holds the run");
+    server.assertComplete();
+  });
+
+  it("stops a looping guest at the billed token budget and records content-free counters", async () => {
+    const sink = createTestSink();
+    const logger = getLogger();
+    installLogger(createLogger({ service: "test", sinks: [sink] }));
+    onTestFinished(() => installLogger(logger));
+    const catalogModel = ANTHROPIC_MODELS["claude-haiku-4-5"];
+    const server = await startModelEmulator({
+      modelId: catalogModel.id,
+      apiKey: "controller-only-key",
+      protocol: "anthropic",
+      steps: [
+        {
+          expect() {},
+          response: {
+            type: "text",
+            text: "Again.",
+            usage: {
+              promptTokens: 100_000_000,
+              cacheReadTokens: 100_000_000,
+              completionTokens: 10_000_000,
+            },
+          },
+        },
+        {
+          expect() {},
+          response: {
+            type: "text",
+            text: "Again.",
+            usage: {
+              promptTokens: 100_000_000,
+              cacheReadTokens: 100_000_000,
+              completionTokens: 10_000_000,
+            },
+          },
+        },
+      ],
+    });
+    onTestFinished(() => server.close());
+    const originalBaseUrl = catalogModel.baseUrl;
+    catalogModel.baseUrl = server.baseUrl;
+    onTestFinished(() => {
+      catalogModel.baseUrl = originalBaseUrl;
+    });
+    const { runtime, launchedFor } = setup();
+    const { run, ask } = await startGuest(runtime, launchedFor, "token-budget", {
+      model: { ...server.model, provider: "anthropic", contextWindow: 1_000_000 },
+    });
+    await ask(announce("remember", "saved"));
+    await ask(call("remember", "saved"));
+    expect(await ask(modelRequest)).toEqual({ type: "model.end" });
+    expect(await ask(modelRequest)).toEqual({ type: "refused", reason: "budget" });
+    await expect(run.done).rejects.toThrow("The worker broke the run protocol: budget");
+    server.assertComplete();
+    expect(run.seen.filter((event) => event.type === "usage")).toHaveLength(2);
+    const measurements = sink.events.filter(
+      (event) => event.message === "agent.worker.model_request",
+    );
+    expect(measurements).toHaveLength(2);
+    expect(measurements[1]).toMatchObject({
+      inputTokens: 200_000_000,
+      cacheReadTokens: 100_000_000,
+      cacheWriteTokens: 0,
+      outputTokens: 10_000_000,
+      modelTokens: 420_000_000,
+      modelRequests: 2,
+      toolCalls: 1,
+      previousRequest: true,
+      firstDivergingSection: null,
+    });
+    const recorded = JSON.stringify(measurements);
+    for (const content of ["Go on.", "Again.", "controller-only-key"])
+      expect(recorded).not.toContain(content);
+  });
+
+  it("allows 400 cached full-context requests and lets a paused attempt at every cap conclude", async () => {
+    const catalogModel = ANTHROPIC_MODELS["claude-haiku-4-5"];
+    const server = await startModelEmulator({
+      modelId: catalogModel.id,
+      apiKey: "controller-only-key",
+      protocol: "anthropic",
+      steps: Array.from({ length: 402 }, () => ({
+        expect() {},
+        response: {
+          type: "text" as const,
+          text: "Closing.",
+          usage: { promptTokens: 0, cacheReadTokens: 100_000, completionTokens: 1_000 },
+        },
+      })),
+    });
+    onTestFinished(() => server.close());
+    const originalBaseUrl = catalogModel.baseUrl;
+    catalogModel.baseUrl = server.baseUrl;
+    onTestFinished(() => {
+      catalogModel.baseUrl = originalBaseUrl;
+    });
+    const executeTool = vi.fn(async (name: string) => (name === "send_email" ? PAUSED : "saved"));
+    const { runtime, launchedFor } = setup();
+    const { run, ask } = await startGuest(runtime, launchedFor, "paused-budget", {
+      executeTool,
+      model: { ...server.model, provider: "anthropic", contextWindow: 100_000, maxTokens: 1_000 },
+    });
+    for (let index = 0; index < 400; index++) {
+      expect(await ask(modelRequest)).toEqual({ type: "model.end" });
+    }
+    for (let index = 1; index < WORKER_LIMITS.toolCallsPerAttempt; index++) {
+      await ask(announce("remember", `saved-${index}`));
+      await ask(call("remember", `saved-${index}`));
+    }
+    await pauseOnTool(ask);
+    for (let index = 0; index < 2; index++) {
+      expect(await ask(modelRequest)).toEqual({ type: "model.end" });
+      await ask(announce("remember", `paused-${index}`));
+      expect(await ask(call("remember", `paused-${index}`))).toEqual(notRun);
+    }
+    expect(await ask(modelRequest)).toEqual({
+      type: "error",
+      message: "This run is paused until the user answers.",
+    });
+    expect(await ask({ type: "done" })).toEqual({ type: "stop", reason: "paused" });
+    await run.done;
+    expect(executeTool).toHaveBeenCalledTimes(2_000);
+    expect(run.seen.filter((event) => event.type === "usage")).toHaveLength(402);
+    server.assertComplete();
+  });
+
+  it("reserves the last model allowance before a concurrent helper can spend it", async () => {
+    const opened = Promise.withResolvers<void>();
+    const closed = Promise.withResolvers<void>();
+    const server = await startModelEmulator({
+      apiKey: "controller-only-key",
+      steps: [
+        {
+          expect() {},
+          response: {
+            type: "text",
+            text: "Again.",
+            usage: { promptTokens: 438_900, completionTokens: 0 },
+          },
+        },
+        {
+          expect() {},
+          response: {
+            type: "hold",
+            text: "Waiting.",
+            onOpen: opened.resolve,
+            onClose: closed.resolve,
+          },
+        },
+      ],
+    });
+    onTestFinished(() => server.close());
+    const model = { ...server.model, contextWindow: 1_000, maxTokens: 100 };
+    const { runtime, launchedFor } = setup();
+    const { run, ask } = await startGuest(runtime, launchedFor, "concurrent-budget", {
+      model,
+      resolveModel: async () => model,
+      startSubagent: async () => ({
+        executeTool: async () => "saved",
+        text: async () => {},
+        finish: async () => {},
+        abandon: async () => {},
+      }),
+    });
+    await ask({
+      type: "subagent.open",
+      callId: "helper",
+      name: "helper",
+      task: "Help.",
+      args: {},
+      model: { provider: model.provider, id: model.id },
+    });
+    expect(await ask(modelRequest)).toEqual({ type: "model.end" });
+    void ask(modelRequest);
+    await opened.promise;
+    expect(await ask({ ...modelRequest, agent: "helper:1" })).toEqual({
+      type: "refused",
+      reason: "budget",
+    });
+    await expect(run.done).rejects.toThrow("budget");
+    await closed.promise;
+    server.assertComplete();
+  });
+
+  it("bounds controller tool calls over the whole attempt before executing the excess call", async () => {
+    const executeTool = vi.fn(async () => "saved");
+    const { runtime, launchedFor } = setup();
+    const { run, ask } = await startGuest(runtime, launchedFor, "tool-budget", { executeTool });
+    for (let sent = 0; sent < WORKER_LIMITS.toolCallsPerAttempt; sent += 1) {
+      await ask(announce("remember", `c${sent}`));
+      expect(await ask(call("remember", `c${sent}`))).toEqual({
+        type: "tool.result",
+        output: "saved",
+      });
+    }
+    await ask(announce("remember", "excess"));
+    expect(await ask(call("remember", "excess"))).toEqual({ type: "refused", reason: "budget" });
+    await expect(run.done).rejects.toThrow("The worker broke the run protocol: budget");
+    expect(executeTool).toHaveBeenCalledTimes(WORKER_LIMITS.toolCallsPerAttempt);
+  });
+
+  it("refuses the model request past the attempt's budget and ends the run", async () => {
+    // An unknown model fails at the relay at once: each request is cheap and offline.
+    const { runtime, launchedFor } = setup();
+    const { run, ask } = await startGuest(runtime, launchedFor, "run_budget", {});
+    for (let sent = 0; sent < WORKER_LIMITS.modelRequestsPerAttempt; sent += 1) {
+      expect(await ask(modelRequest)).toEqual({ type: "model.end" });
+    }
+    expect(await ask(modelRequest)).toEqual({ type: "refused", reason: "budget" });
+    await expect(run.done).rejects.toThrow("The worker broke the run protocol: budget");
   });
 });
 
