@@ -1,4 +1,5 @@
 import { queryObjects } from "node:v8";
+import { ANTHROPIC_MODELS } from "@earendil-works/pi-ai/providers/anthropic.models";
 import type {
   AgentRunRequest,
   AgentRuntimeEvent,
@@ -8,20 +9,20 @@ import type {
   ReplyBody,
   WorkerIdentity,
 } from "@rakazo/adapter-kit";
-import type { WorkerClock } from "@rakazo/adapters/runtime-worker";
+import type { FrameChannel, LaunchedGuest, WorkerClock } from "@rakazo/adapters/runtime-worker";
 import {
   capabilityWorker,
   createWorkerAgentRuntime,
   encodeMessage,
-  type FrameChannel,
-  type LaunchedGuest,
   memoryChannelPair,
   readControllerFrame,
   WORKER_LIMITS,
   WORKER_NATIVE_TOOLS,
 } from "@rakazo/adapters/runtime-worker";
+import { createLogger, createTestSink, getLogger, installLogger } from "@rakazo/logging";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
-import { type ModelEmulatorRequest, startModelEmulator } from "./model-emulator.js";
+import type { ModelEmulatorRequest } from "./model-emulator.js";
+import { startModelEmulator } from "./model-emulator.js";
 
 /** A guest that speaks the wire by hand, so it can do what a conforming guest never would. */
 function rawGuest(channel: FrameChannel, capability: string) {
@@ -920,6 +921,206 @@ describe("the controller's pause guard, against a hostile harness", () => {
     expect(await ask(modelRequest)).toEqual({ type: "refused", reason: "revoked" });
     await expect(run.done).rejects.toThrow("This attempt no longer holds the run");
     server.assertComplete();
+  });
+
+  it("stops a looping guest at the billed token budget and records content-free counters", async () => {
+    const sink = createTestSink();
+    const logger = getLogger();
+    installLogger(createLogger({ service: "test", sinks: [sink] }));
+    onTestFinished(() => installLogger(logger));
+    const catalogModel = ANTHROPIC_MODELS["claude-haiku-4-5"];
+    const server = await startModelEmulator({
+      modelId: catalogModel.id,
+      apiKey: "controller-only-key",
+      protocol: "anthropic",
+      steps: [
+        {
+          expect() {},
+          response: {
+            type: "text",
+            text: "Again.",
+            usage: {
+              promptTokens: 100_000_000,
+              cacheReadTokens: 100_000_000,
+              completionTokens: 10_000_000,
+            },
+          },
+        },
+        {
+          expect() {},
+          response: {
+            type: "text",
+            text: "Again.",
+            usage: {
+              promptTokens: 100_000_000,
+              cacheReadTokens: 100_000_000,
+              completionTokens: 10_000_000,
+            },
+          },
+        },
+      ],
+    });
+    onTestFinished(() => server.close());
+    const originalBaseUrl = catalogModel.baseUrl;
+    catalogModel.baseUrl = server.baseUrl;
+    onTestFinished(() => {
+      catalogModel.baseUrl = originalBaseUrl;
+    });
+    const { runtime, launchedFor } = setup();
+    const { run, ask } = await startGuest(runtime, launchedFor, "token-budget", {
+      model: { ...server.model, provider: "anthropic", contextWindow: 1_000_000 },
+    });
+    await ask(announce("remember", "saved"));
+    await ask(call("remember", "saved"));
+    expect(await ask(modelRequest)).toEqual({ type: "model.end" });
+    expect(await ask(modelRequest)).toEqual({ type: "refused", reason: "budget" });
+    await expect(run.done).rejects.toThrow("The worker broke the run protocol: budget");
+    server.assertComplete();
+    expect(run.seen.filter((event) => event.type === "usage")).toHaveLength(2);
+    const measurements = sink.events.filter(
+      (event) => event.message === "agent.worker.model_request",
+    );
+    expect(measurements).toHaveLength(2);
+    expect(measurements[1]).toMatchObject({
+      inputTokens: 200_000_000,
+      cacheReadTokens: 100_000_000,
+      cacheWriteTokens: 0,
+      outputTokens: 10_000_000,
+      modelTokens: 420_000_000,
+      modelRequests: 2,
+      toolCalls: 1,
+      previousRequest: true,
+      firstDivergingSection: null,
+    });
+    const recorded = JSON.stringify(measurements);
+    for (const content of ["Go on.", "Again.", "controller-only-key"])
+      expect(recorded).not.toContain(content);
+  });
+
+  it("allows 400 cached full-context requests and lets a paused attempt at every cap conclude", async () => {
+    const catalogModel = ANTHROPIC_MODELS["claude-haiku-4-5"];
+    const server = await startModelEmulator({
+      modelId: catalogModel.id,
+      apiKey: "controller-only-key",
+      protocol: "anthropic",
+      steps: Array.from({ length: 402 }, () => ({
+        expect() {},
+        response: {
+          type: "text" as const,
+          text: "Closing.",
+          usage: { promptTokens: 0, cacheReadTokens: 100_000, completionTokens: 1_000 },
+        },
+      })),
+    });
+    onTestFinished(() => server.close());
+    const originalBaseUrl = catalogModel.baseUrl;
+    catalogModel.baseUrl = server.baseUrl;
+    onTestFinished(() => {
+      catalogModel.baseUrl = originalBaseUrl;
+    });
+    const executeTool = vi.fn(async (name: string) => (name === "send_email" ? PAUSED : "saved"));
+    const { runtime, launchedFor } = setup();
+    const { run, ask } = await startGuest(runtime, launchedFor, "paused-budget", {
+      executeTool,
+      model: { ...server.model, provider: "anthropic", contextWindow: 100_000, maxTokens: 1_000 },
+    });
+    for (let index = 0; index < 400; index++) {
+      expect(await ask(modelRequest)).toEqual({ type: "model.end" });
+    }
+    for (let index = 1; index < WORKER_LIMITS.toolCallsPerAttempt; index++) {
+      await ask(announce("remember", `saved-${index}`));
+      await ask(call("remember", `saved-${index}`));
+    }
+    await pauseOnTool(ask);
+    for (let index = 0; index < 2; index++) {
+      expect(await ask(modelRequest)).toEqual({ type: "model.end" });
+      await ask(announce("remember", `paused-${index}`));
+      expect(await ask(call("remember", `paused-${index}`))).toEqual(notRun);
+    }
+    expect(await ask(modelRequest)).toEqual({
+      type: "error",
+      message: "This run is paused until the user answers.",
+    });
+    expect(await ask({ type: "done" })).toEqual({ type: "stop", reason: "paused" });
+    await run.done;
+    expect(executeTool).toHaveBeenCalledTimes(2_000);
+    expect(run.seen.filter((event) => event.type === "usage")).toHaveLength(402);
+    server.assertComplete();
+  });
+
+  it("reserves the last model allowance before a concurrent helper can spend it", async () => {
+    const opened = Promise.withResolvers<void>();
+    const closed = Promise.withResolvers<void>();
+    const server = await startModelEmulator({
+      apiKey: "controller-only-key",
+      steps: [
+        {
+          expect() {},
+          response: {
+            type: "text",
+            text: "Again.",
+            usage: { promptTokens: 438_900, completionTokens: 0 },
+          },
+        },
+        {
+          expect() {},
+          response: {
+            type: "hold",
+            text: "Waiting.",
+            onOpen: opened.resolve,
+            onClose: closed.resolve,
+          },
+        },
+      ],
+    });
+    onTestFinished(() => server.close());
+    const model = { ...server.model, contextWindow: 1_000, maxTokens: 100 };
+    const { runtime, launchedFor } = setup();
+    const { run, ask } = await startGuest(runtime, launchedFor, "concurrent-budget", {
+      model,
+      resolveModel: async () => model,
+      startSubagent: async () => ({
+        executeTool: async () => "saved",
+        text: async () => {},
+        finish: async () => {},
+        abandon: async () => {},
+      }),
+    });
+    await ask({
+      type: "subagent.open",
+      callId: "helper",
+      name: "helper",
+      task: "Help.",
+      args: {},
+      model: { provider: model.provider, id: model.id },
+    });
+    expect(await ask(modelRequest)).toEqual({ type: "model.end" });
+    void ask(modelRequest);
+    await opened.promise;
+    expect(await ask({ ...modelRequest, agent: "helper:1" })).toEqual({
+      type: "refused",
+      reason: "budget",
+    });
+    await expect(run.done).rejects.toThrow("budget");
+    await closed.promise;
+    server.assertComplete();
+  });
+
+  it("bounds controller tool calls over the whole attempt before executing the excess call", async () => {
+    const executeTool = vi.fn(async () => "saved");
+    const { runtime, launchedFor } = setup();
+    const { run, ask } = await startGuest(runtime, launchedFor, "tool-budget", { executeTool });
+    for (let sent = 0; sent < WORKER_LIMITS.toolCallsPerAttempt; sent += 1) {
+      await ask(announce("remember", `c${sent}`));
+      expect(await ask(call("remember", `c${sent}`))).toEqual({
+        type: "tool.result",
+        output: "saved",
+      });
+    }
+    await ask(announce("remember", "excess"));
+    expect(await ask(call("remember", "excess"))).toEqual({ type: "refused", reason: "budget" });
+    await expect(run.done).rejects.toThrow("The worker broke the run protocol: budget");
+    expect(executeTool).toHaveBeenCalledTimes(WORKER_LIMITS.toolCallsPerAttempt);
   });
 
   it("refuses the model request past the attempt's budget and ends the run", async () => {
