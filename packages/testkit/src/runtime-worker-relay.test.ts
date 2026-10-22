@@ -1,15 +1,19 @@
-import {
-  type AgentRunRequest,
-  type AgentRuntimeEvent,
-  parseControllerMessage,
-  parseGuestMessage,
-  type ReplyPart,
+import { createServer } from "node:http";
+import { ANTHROPIC_MODELS } from "@earendil-works/pi-ai/providers/anthropic.models";
+import type {
+  AgentRunRequest,
+  AgentRuntimeEvent,
+  AgentToolExecutionResult,
+  ReplyPart,
 } from "@rakazo/adapter-kit";
-import { PiAgentRuntime } from "@rakazo/adapters";
-import { guestModelOf, type RelayUsage } from "@rakazo/adapters/runtime-worker";
+import { parseControllerMessage, parseGuestMessage } from "@rakazo/adapter-kit";
+import { computerObservation, observationToolResult, PiAgentRuntime } from "@rakazo/adapters";
+import type { RelayUsage } from "@rakazo/adapters/runtime-worker";
+import { guestModelOf } from "@rakazo/adapters/runtime-worker";
 import { piAiStreamFn, relayedModel, relayPiAiCall } from "@rakazo/adapters/runtime-worker/pi-ai";
 import { afterEach, describe, expect, it } from "vitest";
 import { toolResult } from "./file-task.js";
+import type { ModelEmulatorRequest } from "./model-emulator.js";
 import { startModelEmulator } from "./model-emulator.js";
 import { startWorkerRun } from "./worker-run-fixture.js";
 
@@ -149,6 +153,159 @@ describe("a guest Pi run whose model calls the controller relays", () => {
   });
 });
 
+describe("a guest run whose tool results carry images", () => {
+  async function imagesPerCall(
+    agent: "root" | "helper",
+    maxImagesPerPrompt: number,
+    toolName: string,
+    result: (call: number) => AgentToolExecutionResult,
+    calls: number,
+  ) {
+    const sent: string[][] = [];
+    const record = (request: ModelEmulatorRequest) =>
+      sent.push(
+        [...JSON.stringify(request.messages).matchAll(/data:image\/png;base64,([^"]+)/g)].map(
+          (match) => Buffer.from(match[1] ?? "", "base64").toString(),
+        ),
+      );
+    const server = await startModelEmulator({
+      steps: [
+        ...(agent === "helper"
+          ? [
+              {
+                expect() {},
+                response: {
+                  type: "tool" as const,
+                  id: "helper",
+                  name: "run_subagent",
+                  arguments: { name: "helper", task: "Check the page" },
+                },
+              },
+            ]
+          : []),
+        ...Array.from({ length: calls }, (_, index) => ({
+          expect: record,
+          response: { type: "tool" as const, id: `call-${index}`, name: toolName, arguments: {} },
+        })),
+        { expect: record, response: { type: "text", text: "Done." } },
+        ...(agent === "helper"
+          ? [
+              {
+                expect(request: ModelEmulatorRequest) {
+                  expect(request.messages.at(-1)).toMatchObject({
+                    role: "tool",
+                    content: "Done.",
+                  });
+                },
+                response: { type: "text" as const, text: "Done." },
+              },
+            ]
+          : []),
+      ],
+    });
+    cleanups.push(() => server.close());
+    const config = { ...server.model, acceptsImages: true, maxImagesPerPrompt };
+    const relay = piAiStreamFn(
+      async (body, onPart) => {
+        await relayPiAiCall(config, body.call, (event) => onPart({ type: "model.event", event }), {
+          signal: new AbortController().signal,
+          conversation: { threadId: "thread_relay", botId: "bot_relay" },
+        });
+        return { type: "model.end" };
+      },
+      () => "root",
+    );
+    let call = 0;
+    const events: AgentRuntimeEvent[] = [];
+    for await (const event of new PiAgentRuntime({ streamFn: relay }).run({
+      botId: "bot_relay",
+      threadId: "thread_relay",
+      runId: worker.runId,
+      prompt: "Check the page",
+      history: [],
+      tools: [
+        { name: toolName, description: toolName, inputSchema: { type: "object" } },
+        ...(agent === "helper"
+          ? [
+              {
+                name: "run_subagent",
+                description: "Run a helper",
+                inputSchema: {
+                  type: "object",
+                  properties: { name: { type: "string" }, task: { type: "string" } },
+                  required: ["name", "task"],
+                },
+              },
+            ]
+          : []),
+      ],
+      model: relayedModel(guestModelOf(config)),
+      executeTool: async () => {
+        call += 1;
+        return result(call);
+      },
+    })) {
+      events.push(event);
+    }
+    if (agent === "helper") {
+      expect(events.filter((event) => event.type === "subagent").at(-1)).toMatchObject({
+        status: "completed",
+        result: "Done.",
+      });
+    }
+    server.assertComplete();
+    expect(events.at(-1)).toEqual({ type: "done", text: "Done." });
+    return sent;
+  }
+
+  it.each(["root", "helper"] as const)(
+    "keeps the %s guest's whole screenshot history so the relay evicts the oldest a block at a time",
+    async (agent) => {
+      const screenshot = (call: number) =>
+        observationToolResult(
+          computerObservation(Buffer.from(`frame-${call}`), {
+            mimeType: "image/png",
+            width: 1,
+            height: 1,
+          }),
+        );
+      expect(await imagesPerCall(agent, 3, "computer_observe", screenshot, 7)).toEqual([
+        [],
+        ["frame-1"],
+        ["frame-1", "frame-2"],
+        ["frame-1", "frame-2", "frame-3"],
+        ["frame-4"],
+        ["frame-4", "frame-5"],
+        ["frame-4", "frame-5", "frame-6"],
+        ["frame-7"],
+      ]);
+    },
+  );
+
+  it.each(["root", "helper"] as const)(
+    "prunes %s native image reads beyond the model's budget instead of failing the run",
+    async (agent) => {
+      const read = (call: number): AgentToolExecutionResult => ({
+        kind: "agent_tool_result",
+        content: [
+          { type: "text", text: "Read image file [image/png]" },
+          {
+            type: "image",
+            data: Buffer.from(`file-${call}`).toString("base64"),
+            mimeType: "image/png",
+          },
+        ],
+      });
+      expect(await imagesPerCall(agent, 2, "read", read, 3)).toEqual([
+        [],
+        ["file-1"],
+        ["file-1", "file-2"],
+        ["file-3"],
+      ]);
+    },
+  );
+});
+
 describe("a worker run on a catalog Anthropic model", () => {
   it("completes a run on Anthropic's Messages API through the relay, across a thinking block and a tool call", async () => {
     let listed = "";
@@ -203,4 +360,84 @@ describe("a worker run on a catalog Anthropic model", () => {
     const finished = (await run.runEntries(runId)).find((entry) => entry.type === "run.finished");
     expect(finished?.payload).toMatchObject({ usage: { inputTokens: 210 + 64, outputTokens: 12 } });
   });
+});
+
+describe("partial relay usage", () => {
+  it.each(["disconnect", "abort", "closed channel"] as const)(
+    "counts provider usage after %s",
+    async (failure) => {
+      const controller = new AbortController();
+      const server = createServer((request, response) => {
+        request.resume();
+        response.writeHead(200, { "content-type": "text/event-stream" });
+        const emit = (event: Record<string, unknown>) =>
+          response.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
+        emit({
+          type: "message_start",
+          message: {
+            id: "partial",
+            type: "message",
+            role: "assistant",
+            model: "claude-haiku-4-5",
+            content: [],
+            stop_reason: null,
+            usage: {
+              input_tokens: 120,
+              output_tokens: 0,
+              cache_read_input_tokens: 40,
+              cache_creation_input_tokens: 0,
+            },
+          },
+        });
+        emit({ type: "content_block_start", index: 0, content_block: { type: "text", text: "" } });
+        emit({
+          type: "content_block_delta",
+          index: 0,
+          delta: { type: "text_delta", text: "Partial." },
+        });
+        if (failure === "disconnect") response.write(": close\n\n", () => response.destroy());
+      });
+      await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+      cleanups.push(async () => {
+        controller.abort();
+        server.closeAllConnections();
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+      });
+      const address = server.address();
+      if (!address || typeof address === "string") throw new Error("Missing emulator port");
+      const catalogModel = ANTHROPIC_MODELS["claude-haiku-4-5"];
+      const originalBaseUrl = catalogModel.baseUrl;
+      catalogModel.baseUrl = `http://127.0.0.1:${address.port}`;
+      cleanups.push(async () => {
+        catalogModel.baseUrl = originalBaseUrl;
+      });
+      const events: string[] = [];
+      let channelClosed = false;
+      const usage = await relayPiAiCall(
+        { provider: "anthropic", id: catalogModel.id, apiKey: "local" },
+        { context: { messages: [{ role: "user", content: "Continue." }] }, options: {} },
+        (event) => {
+          if (channelClosed) throw new Error("Closed guest channel");
+          events.push(event.type);
+          if (event.type !== "text_delta" || failure === "disconnect") return;
+          controller.abort();
+          if (failure === "closed channel") {
+            channelClosed = true;
+            throw new Error("Closed guest channel");
+          }
+        },
+        { signal: controller.signal, conversation: { threadId: "partial", botId: "bot" } },
+      );
+      expect(events).toContain("text_delta");
+      expect(usage).toEqual({
+        type: "usage",
+        inputTokens: 160,
+        outputTokens: 0,
+        cacheReadTokens: 40,
+        cacheWriteTokens: 0,
+        provider: "anthropic",
+        model: catalogModel.id,
+      });
+    },
+  );
 });

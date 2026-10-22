@@ -22,6 +22,7 @@
     "@rakazo/adapters": "workspace:*"
   },
   "devDependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
     "e2b": "2.49.1",
     "esbuild": "0.28.2",
     "typescript": "7.0.2",

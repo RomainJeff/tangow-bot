@@ -23,6 +23,7 @@ import {
 } from "@rakazo/adapters";
 import type { GuestConnector, RunWorkers, WorkerClock } from "@rakazo/adapters/runtime-worker";
 import { createRunWorkers } from "@rakazo/adapters/runtime-worker";
+import type { GuestHarness } from "@rakazo/agent-run-worker";
 import type { SessionEntry } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
 import { createThreadEvents } from "@rakazo/db";
@@ -83,6 +84,8 @@ export async function startWorkerRun<
   /** The bot's computer instead of the fake one on local volumes. */
   sandbox?: SandboxProvider;
   mode?: "memory" | "child";
+  /** The harness a `memory` guest runs instead of Pi. */
+  harness?: GuestHarness;
   /** The bundled guest a `child` mode runs instead of the source. */
   guestEntry?: string;
   faults?: LocalWorkerFaults;
@@ -97,6 +100,8 @@ export async function startWorkerRun<
   prisma?: (prisma: PrismaClient) => PrismaClient;
   /** Wraps the executor's worker routing, to fail or race it. */
   workers?: (workers: RunWorkers) => RunWorkers;
+  /** The guest reads screens from the bot's home instead of getting them in tool results. */
+  screensByPath?: boolean;
 }) {
   const database = options.databaseUrl
     ? await openBenchPostgres(options.databaseUrl)
@@ -219,6 +224,7 @@ export async function startWorkerRun<
         root: path.join(dir, "workers"),
         faults: options.faults,
         entry: options.guestEntry,
+        harness: options.harness,
       }) as unknown as Provider);
     const lifecycle = createWorkerLifecycle({ prisma, provider });
     const runtime: AgentRuntime = options.runtime?.(prisma) ?? new PiAgentRuntime();
@@ -229,6 +235,7 @@ export async function startWorkerRun<
           lifecycle,
           connector: options.connector?.(provider) ?? provider,
           clock: options.clock,
+          screensByPath: options.screensByPath,
         });
     const workers = routing && (options.workers?.(routing) ?? routing);
     const executor = createRunExecutor({

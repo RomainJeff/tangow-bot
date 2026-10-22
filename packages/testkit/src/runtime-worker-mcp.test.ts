@@ -248,7 +248,7 @@ function workerStartTools(seen: Seen[]) {
 describe("lazy MCP through a worker run", () => {
   it("searches, loads and executes on the controller once, with a small initial tool set", async () => {
     const outcome: { executed?: string } = {};
-    const { run, mcp, seen } = await mcpRun({ steps: lazySteps(outcome) });
+    const { run, mcp, seen, server } = await mcpRun({ steps: lazySteps(outcome) });
     const runId = await run.send("Use the demo server.");
     await run.continueRun(runId);
 
@@ -260,15 +260,24 @@ describe("lazy MCP through a worker run", () => {
     expect(outcome.executed).toContain("tool-ran");
 
     const initial = JSON.stringify(workerStartTools(seen));
-    const mcpTools = (workerStartTools(seen) as Array<{ name: string; where: string }>).filter(
-      (tool) => tool.name.startsWith("mcp"),
-    );
+    const started = workerStartTools(seen) as Array<{ name: string; catalog?: unknown }>;
+    const mcpTools = started.filter((tool) => tool.catalog === "fallback");
     expect(mcpTools).toEqual([
       expect.objectContaining({ name: "mcp_search_tools", where: "controller" }),
       expect.objectContaining({ name: "mcp_load_tool", where: "controller" }),
       expect.objectContaining({ name: "mcp_execute_tool", where: "controller" }),
     ]);
-    expect(initial).not.toContain("schema-marker");
+    // For a harness with native tool search; the Rakazo loop declares only the fallback above.
+    const entries = started.filter((tool) => typeof tool.catalog === "object");
+    expect(entries).toHaveLength(30);
+    expect(entries[29]).toEqual(
+      expect.objectContaining({
+        name: "mcp__demo__tool_29",
+        where: "controller",
+        catalog: { via: "mcp_execute_tool", id: `${server.id}:tool_29` },
+      }),
+    );
+    expect(JSON.stringify(entries[29])).toContain("schema-marker-29");
     const bytes = Buffer.byteLength(JSON.stringify(mcpTools));
     console.log(
       `initial MCP tool definitions for 30 tools: ${bytes} bytes, about ${Math.ceil(bytes / 4)} tokens (bytes / 4, as history-compaction estimates); all worker.start tools: ${Buffer.byteLength(initial)} bytes`,
