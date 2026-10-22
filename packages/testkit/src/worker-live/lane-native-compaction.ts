@@ -117,7 +117,11 @@ export const laneNativeCompaction: Lane = {
         ...finish(
           "approved-controller-outcome n13-history-anchor, compacted privately",
           (request) => {
-            assert.ok(JSON.stringify(request.messages).includes("volume-effect"));
+            const readResults = request.messages.filter(
+              (message) => message.role === "tool" && message.tool_call_id === "volume-read",
+            );
+            assert.equal(readResults.length, 1);
+            assert.equal(readResults[0]?.content, "volume-effect\n");
             assert.equal(effects, 1);
           },
         ),
@@ -192,6 +196,12 @@ export const laneNativeCompaction: Lane = {
       assert.ok(summaries[0] && summaries[0].payload.tokensBefore > 0);
       const calls = entries.filter((entry) => entry.type === "tool.call");
       const results = entries.filter((entry) => entry.type === "tool.result");
+      const readCall = calls.find((entry) => entry.payload.callId === "volume-read");
+      assert.ok(readCall, "Missing volume-read call");
+      const readResult = results.find((entry) => entry.payload.callId === readCall.payload.callId);
+      assert.ok(readResult, "Missing volume-read result");
+      assert.equal(readResult.payload.isError, false);
+      assert.equal(readResult.payload.output, "volume-effect\n");
       for (const call of calls)
         assert.equal(
           results.filter((result) => result.payload.callId === call.payload.callId).length,
