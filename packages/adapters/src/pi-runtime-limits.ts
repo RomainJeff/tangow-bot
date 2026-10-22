@@ -7,6 +7,8 @@ export const MODEL_STREAM_MAX_RETRIES = 1;
 
 export const TOOL_RESULT_TEXT_LIMIT = 12_000;
 
+export const MAX_PARALLEL_SUBAGENTS = 4;
+
 const cutNotice = (omitted: number) => `\n[${omitted} more characters cut]`;
 
 /** At most `chars` characters, backing up one rather than split a surrogate pair. */
