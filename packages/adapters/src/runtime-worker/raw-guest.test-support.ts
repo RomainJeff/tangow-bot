@@ -6,6 +6,7 @@ import type {
   ReplyBody,
   WorkerIdentity,
 } from "@rakazo/adapter-kit";
+import { ReplyPartSchema } from "@rakazo/adapter-kit";
 import type { FrameChannel, LaunchedGuest } from "./index.js";
 import {
   capabilityWorker,
@@ -67,9 +68,7 @@ export function rawGuest(
     replies(seq: number, count = Infinity) {
       return until(() => {
         const bodies = replies.get(seq) ?? [];
-        const settled = bodies.some(
-          (body) => body.type !== "model.event" && body.type !== "end.refused",
-        );
+        const settled = bodies.some((body) => !ReplyPartSchema.safeParse(body).success);
         return settled || bodies.length >= count ? bodies : undefined;
       });
     },

@@ -1,4 +1,5 @@
 import type {
+  AgentRunModel,
   AgentRunRequest,
   ConnectorTool,
   GuestRunInput,
@@ -7,6 +8,7 @@ import type {
   HarnessDeclaration,
   WorkerStartV1,
 } from "@rakazo/adapter-kit";
+import { isHelperTool } from "../builtin-tools.js";
 import { isLazyCatalogControlRoute } from "../lazy-tool-catalog.js";
 import { encodeMessage } from "./framing.js";
 import { WORKER_LIMITS } from "./limits.js";
@@ -81,7 +83,10 @@ export function workerStart(
     threadId: request.threadId,
     sourceMessageId: request.sourceMessageId,
     prompt: request.prompt,
-    instructions: request.instructions,
+    // A harness with its own loop keeps its own prompt: Rakazo's part is appended to it.
+    instructions: harness.capabilities.includes("native-loop")
+      ? (request.harnessAddendum ?? request.instructions)
+      : request.instructions,
     history: request.history.map((turn) => ({
       ...(turn.id ? { id: turn.id } : {}),
       role: turn.role,
@@ -133,4 +138,33 @@ export function workerStart(
     message = start(sent);
   }
   return message;
+}
+
+export function helperRunInput(
+  envelope: Omit<WorkerStartV1, "run">,
+  request: AgentRunRequest,
+  harness: HarnessDeclaration,
+  helper: { task: string; instructions: string; model: AgentRunModel },
+): GuestRunInput {
+  const parent = workerStart(
+    envelope,
+    {
+      ...request,
+      history: [],
+      currentTurnImages: [],
+      tools: request.tools.filter((tool) => isHelperTool(tool.name)),
+    },
+    harness,
+  ).run;
+  return {
+    botId: parent.botId,
+    threadId: parent.threadId,
+    sourceMessageId: parent.sourceMessageId,
+    prompt: helper.task,
+    instructions: helper.instructions,
+    history: [],
+    images: [],
+    tools: parent.tools.filter((tool) => isHelperTool(tool.name)),
+    model: guestModelOf(helper.model),
+  };
 }

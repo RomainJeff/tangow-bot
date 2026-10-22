@@ -16,6 +16,13 @@ import { AgentRuntimeUnavailableError, FRAME_CAPABILITY } from "@rakazo/adapter-
 import { redactSecrets, secretRedactor } from "@rakazo/core";
 import { getLogger } from "@rakazo/logging";
 import { isToolPauseResult } from "../approval-effect.js";
+import {
+  HELPER_STOPPED_FOR_PAUSE,
+  helperCallOf,
+  helperInstructions,
+  helperModel,
+  isHelperTool,
+} from "../builtin-tools.js";
 import { redactPayloadValue, redactPayloadWith } from "../connector-safety.js";
 import type { CapabilityKey } from "./capability.js";
 import { mintCapability, verifyCapability } from "./capability.js";
@@ -23,7 +30,7 @@ import { relayPiAiCall } from "./dialects/pi-ai.js";
 import { eventPipe } from "./event-pipe.js";
 import type { FrameChannel } from "./framing.js";
 import { encodeMessage, readGuestFrame } from "./framing.js";
-import { base64Images, nativeToolsForHarness, workerStart } from "./guest-input.js";
+import { base64Images, helperRunInput, nativeToolsForHarness, workerStart } from "./guest-input.js";
 import type { SessionInbox } from "./inbox.js";
 import { createSessionInbox } from "./inbox.js";
 import type { LaunchedGuest, WorkerLauncher } from "./launcher.js";
@@ -86,10 +93,19 @@ function cutText(text: string, maxBytes: number): string {
     .toString()}${marker}`;
 }
 
+type HelperOutcome = { status: "completed" | "failed"; result: string };
+
 type Helper = {
   log: SubagentLog;
   model: AgentRunModel;
   usage: { inputTokens: number; outputTokens: number };
+  modelRequests: number;
+  /** The outcome its log persisted. A helper closes once; later closes keep that outcome. */
+  closed?: Promise<HelperOutcome>;
+  /** A pause settles the parent before the helper finishes its audit. */
+  pausedOutcome?: HelperOutcome;
+  /** A helper the controller started settles its parent's `run_subagent` call. */
+  settle?: (outcome: HelperOutcome) => void;
 };
 
 /**
@@ -210,6 +226,11 @@ export function createSession(
   const pause = () => {
     if (paused) return;
     paused = { toolCalls: 0, modelRequests: 0 };
+    for (const helper of helpers.values()) {
+      if (helper.closed || !helper.settle) continue;
+      helper.pausedOutcome = { status: "completed", result: HELPER_STOPPED_FOR_PAUSE };
+      helper.settle?.(helper.pausedOutcome);
+    }
     void Promise.race([deps.clock.sleep(WORKER_LIMITS.pausedGraceMs), stopped.promise]).then(() => {
       if (!stopping) endPaused();
     });
@@ -246,7 +267,118 @@ export function createSession(
 
   const helperOf = (agent: string) => (agent === "root" ? undefined : helpers.get(agent));
 
-  async function callTool(body: Extract<GuestBody, { type: "tool.call" }>): Promise<ReplyFinal> {
+  const runsOwnLoop = () => Boolean(harness?.capabilities.includes("native-loop"));
+
+  let helpersStarted = 0;
+  let helpersRunning = 0;
+
+  /** Finalizes the audit once. Paused parents already have their stop result. */
+  const closeHelper = (helper: Helper, outcome: HelperOutcome, abandoned = false) => {
+    helper.closed ??= (async () => {
+      outcome = helper.pausedOutcome ?? outcome;
+      try {
+        await helper.log.finish({ ...outcome, usage: helper.usage });
+        if (abandoned) await helper.log.abandon(outcome.result);
+        return outcome;
+      } catch (error) {
+        const failed = { status: "failed" as const, result: clean(messageOf(error)) };
+        await helper.log.abandon(failed.result).catch(() => undefined);
+        return failed;
+      }
+    })().then((persisted) => {
+      helper.settle?.(persisted);
+      return persisted;
+    });
+    return helper.closed;
+  };
+
+  /**
+   * A harness with its own loop never launches helpers itself: the controller opens the helper,
+   * projects its session and holds the parent's call until the helper closes or the run pauses.
+   * A pause settles the parent at once while the helper can still send its final transcript.
+   */
+  async function runHelper(
+    body: Extract<GuestBody, { type: "tool.call" }>,
+    part: (body: ReplyPart) => void,
+  ): Promise<ReplyFinal> {
+    if (helpersRunning >= WORKER_LIMITS.helpersInParallel) {
+      return { type: "error", message: "Wait for a running helper to finish first" };
+    }
+    if (helpersStarted >= WORKER_LIMITS.helpersPerAttempt) {
+      return {
+        type: "error",
+        message: `This run already started its ${WORKER_LIMITS.helpersPerAttempt} helpers`,
+      };
+    }
+    helpersStarted += 1;
+    helpersRunning += 1;
+    try {
+      const call = helperCallOf(body.args);
+      let helper: Helper;
+      try {
+        if (!request.startSubagent) throw new Error("Helpers are unavailable in this run");
+        const model = await helperModel(request, call);
+        if (!live()) return { type: "error", message: "The worker stopped" };
+        if (paused) return pausedToolCall(paused);
+        const log = await request.startSubagent({
+          callId: body.callId,
+          name: call.name,
+          task: call.task,
+          args: body.args,
+          model: call.provider
+            ? { provider: call.provider, id: call.modelId }
+            : { provider: request.model.provider, id: request.model.id },
+        });
+        helper = { log, model, usage: { inputTokens: 0, outputTokens: 0 }, modelRequests: 0 };
+      } catch (error) {
+        return { type: "error", message: clean(messageOf(error)) };
+      }
+      if (!live()) {
+        await closeHelper(helper, { status: "failed", result: "The worker stopped" });
+        return { type: "error", message: "The worker stopped" };
+      }
+      const settled = new Promise<HelperOutcome>((settle) => {
+        helper.settle = settle;
+      });
+      if (paused) {
+        await closeHelper(helper, { status: "completed", result: HELPER_STOPPED_FOR_PAUSE });
+      } else {
+        const agent = `helper:${helpers.size + 1}`;
+        helpers.set(agent, helper);
+        part({
+          type: "subagent.start",
+          agent,
+          run: helperRunInput(launched!.start, request, harness!, {
+            task: call.task || "Complete the delegated task.",
+            instructions: helperInstructions(call.name, call.instructions),
+            model: helper.model,
+          }),
+        });
+      }
+      const { status, result } = await settled;
+      const text = cutText(clean(result), WORKER_LIMITS.controllerResultBytes);
+      return {
+        type: "tool.result",
+        output: status === "completed" ? text : `Subagent failed: ${text}`,
+      };
+    } finally {
+      helpersRunning -= 1;
+    }
+  }
+
+  const helperOverBudget = (agent: string): ReplyFinal | undefined => {
+    const helper = helperOf(agent);
+    if (!helper || ++helper.modelRequests <= WORKER_LIMITS.modelRequestsPerHelper) return undefined;
+    return {
+      type: "error",
+      message: `This helper used its ${WORKER_LIMITS.modelRequestsPerHelper} model requests`,
+    };
+  };
+
+  async function callTool(
+    body: Extract<GuestBody, { type: "tool.call" }>,
+    part: (body: ReplyPart) => void,
+  ): Promise<ReplyFinal> {
     const { agent, callId, name, args } = body;
     if (!allowed(name) || announced.get(callId) !== name) return refuse("unknown_tool");
     if (Buffer.byteLength(JSON.stringify(args)) > WORKER_LIMITS.toolArgsBytes) {
@@ -289,6 +421,16 @@ export function createSession(
       if ("error" in first) return { type: "error", message: clean(messageOf(first.error)) };
       if (isToolPauseResult(first.output)) pause();
       return { type: "tool.result", output: first.output };
+    }
+    if (helper && !isHelperTool(name)) return refuse("unknown_tool");
+    if (name === "run_subagent" && runsOwnLoop()) {
+      const run = runHelper(body, part);
+      open.set(callId, run);
+      try {
+        return await run;
+      } finally {
+        open.delete(callId);
+      }
     }
     const execute = helper ? helper.log.executeTool : request.executeTool;
     if (!execute) return { type: "error", message: `${name} is unavailable here` };
@@ -506,7 +648,7 @@ export function createSession(
         });
         return { type: "ack" };
       case "model.request":
-        return relayModel(seq, body, part);
+        return helperOverBudget(body.agent) ?? relayModel(seq, body, part);
       case "model.latency":
         // Guest diagnostics never authorize work or affect the run's outcome.
         return { type: "ack" };
@@ -517,7 +659,7 @@ export function createSession(
         // The executor checks its lease only between events: a guest must not outrun it.
         if (!(await fenceHeld()) || !live()) return revoke();
         if (!paused && ++toolCalls > WORKER_LIMITS.toolCallsPerAttempt) return refuse("budget");
-        return transcript.answered(body, await callTool(body));
+        return transcript.answered(body, await callTool(body, part));
       case "tool.done":
         return recordLocalResult(body);
       case "steering.claim": {
@@ -535,6 +677,7 @@ export function createSession(
         };
       }
       case "subagent.open": {
+        if (runsOwnLoop()) return refuse("invalid");
         if (paused) return { type: "error", message: PAUSED_MESSAGE };
         if (!request.startSubagent || !request.resolveModel) {
           return { type: "error", message: "Helpers are unavailable in this run" };
@@ -548,7 +691,12 @@ export function createSession(
           model: body.model,
         });
         const agent = `helper:${helpers.size + 1}`;
-        helpers.set(agent, { log, model, usage: { inputTokens: 0, outputTokens: 0 } });
+        helpers.set(agent, {
+          log,
+          model,
+          usage: { inputTokens: 0, outputTokens: 0 },
+          modelRequests: 0,
+        });
         return { type: "subagent.opened", agent, model: guestModelOf(model) };
       }
       case "subagent.text":
@@ -558,13 +706,10 @@ export function createSession(
         if (!helper) return refuse("invalid");
         if (body.type === "subagent.text") {
           if (!paused) await helper.log.text(body.text);
-        } else if (body.type === "subagent.abandon") await helper.log.abandon(body.result);
-        else {
-          await helper.log.finish({
-            status: body.status,
-            result: body.result,
-            usage: helper.usage,
-          });
+        } else if (body.type === "subagent.abandon") {
+          await closeHelper(helper, { status: "failed", result: body.result }, true);
+        } else {
+          await closeHelper(helper, { status: body.status, result: body.result });
         }
         return { type: "recorded" };
       }
@@ -720,7 +865,15 @@ export function createSession(
     };
     if (!signal || signal.aborted) rejectGrants();
     else signal.addEventListener("abort", rejectGrants, { once: true });
-    if (!launched) return;
+    const helpersClosed = Promise.all(
+      [...helpers.values()].map((helper) =>
+        closeHelper(helper, { status: "failed", result: "The worker stopped" }),
+      ),
+    );
+    if (!launched) {
+      await helpersClosed;
+      return;
+    }
     const guest = launched;
     await deps.stops.mark(worker.attemptId, "requested");
     const ended = guest.exited.then(() => deps.stops.mark(worker.attemptId, "process_ended"));
@@ -741,6 +894,7 @@ export function createSession(
     if (confirmed) await ended;
     else await deps.stops.mark(worker.attemptId, "unconfirmed");
     bound?.close();
+    await helpersClosed;
   }
 
   return {

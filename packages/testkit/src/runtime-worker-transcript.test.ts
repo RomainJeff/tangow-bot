@@ -143,7 +143,7 @@ describe("a native harness's transcript", () => {
     const run = consume(
       runtime.run(
         request({
-          resolveModel: async () => request({}).model,
+          tools: [REMEMBER, { ...REMEMBER, name: "run_subagent" }],
           startSubagent: async () => ({
             executeTool: async () => "unused",
             text: async () => undefined,
@@ -160,15 +160,15 @@ describe("a native harness's transcript", () => {
       capabilities: ["native-loop", "subagents"],
     });
     await guest.hello();
-    guest.send(1, {
-      type: "subagent.open",
+    guest.send(1, { type: "tool", name: "run_subagent", args: {}, executionId: "helper-call" });
+    guest.send(2, {
+      type: "tool.call",
+      agent: "root",
       callId: "helper-call",
-      name: "Reader",
-      task: "Read the notes.",
-      args: {},
-      model: { provider: "openai-compatible", id: "unused" },
+      name: "run_subagent",
+      args: { name: "Reader", task: "Read the notes." },
     });
-    expect((await guest.replies(1)).at(-1)).toMatchObject({ agent: "helper:1" });
+    expect((await guest.replies(2, 1))[0]).toMatchObject({ agent: "helper:1" });
 
     const helperTranscript: GuestBody = {
       type: "transcript",
@@ -183,10 +183,10 @@ describe("a native harness's transcript", () => {
         { role: "toolResult", toolCallId: "h1", content: "- milk" },
       ],
     };
-    guest.send(2, helperTranscript);
-    expect(await guest.replies(2)).toEqual([{ type: "recorded" }]);
-    guest.send(3, { ...helperTranscript, agent: "helper:2" });
-    expect(await guest.replies(3)).toEqual([{ type: "refused", reason: "invalid" }]);
+    guest.send(3, helperTranscript);
+    expect(await guest.replies(3)).toEqual([{ type: "recorded" }]);
+    guest.send(4, { ...helperTranscript, agent: "helper:2" });
+    expect(await guest.replies(4)).toEqual([{ type: "refused", reason: "invalid" }]);
     await expect(run.done).rejects.toThrow("The worker broke the run protocol: invalid");
 
     expect({ logged, root: run.seen.filter((event) => event.type === "transcript") }).toEqual({

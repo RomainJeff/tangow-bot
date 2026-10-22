@@ -400,6 +400,8 @@ export interface AgentRunRequest {
   sourceMessageId?: string | null;
   prompt: string;
   instructions: string;
+  /** For a harness that keeps its own system prompt: what Rakazo appends to it instead. */
+  harnessAddendum?: string;
   history: AgentHistoryTurn[];
   currentTurnImages?: AgentInputImage[];
   tools: ConnectorTool[];
