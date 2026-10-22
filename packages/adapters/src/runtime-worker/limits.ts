@@ -63,6 +63,7 @@ export const WORKER_LIMITS = {
  * No provider-neutral cache price exists. Allow a full prompt plus its output on all 400 calls:
  * attempt tokens = modelTokensPerRequest(model) * modelRequestsPerAttempt. When context metadata
  * is absent, the shared maximum avoids cutting catalog models short. This is a runaway guard.
+ * Controller-side history compaction is billed separately and deliberately outside the attempt budget.
  */
 export function modelTokensPerRequest(model: AgentRunModel): number {
   return (

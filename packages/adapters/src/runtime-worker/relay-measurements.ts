@@ -82,6 +82,7 @@ function measure(key: string, attemptId: string | undefined, call: PiAiModelCall
   };
   append("[", "system");
   call.context.messages.forEach((message, index) => {
+    // Recall section detection is a metric-only heuristic.
     const section =
       message.role === "system"
         ? "system"

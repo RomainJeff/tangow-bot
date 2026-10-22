@@ -48,7 +48,8 @@ vi.mock("./pi-openai-compatible-provider.js", () => ({
   registerOpenAiCompatibleRuntime: (models: unknown) => models,
 }));
 
-import { normalizeAskQuestions, PiAgentRuntime } from "./pi-runtime.js";
+import { normalizeAskQuestions } from "./ask-user.js";
+import { PiAgentRuntime } from "./pi-runtime.js";
 
 const askTool: ConnectorTool = {
   name: "ask_user",
