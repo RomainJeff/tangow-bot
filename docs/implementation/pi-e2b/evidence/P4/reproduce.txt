@@ -1,6 +1,8 @@
 N13 partial reproduction
 
-Tested implementation: ff827ef7eb472bc19863705a8b4dee33b487930e.
+Final integrated runtime source: 5ecfcbc9186b5dab3acaa52c333433750fc07d0b.
+Guest SHA-256: b3ace799b31495b1dcdd446864e18c639814cdd204e1937f763e9f0f7b983c3f.
+Runner SHA-256: aee878d916b1fcb9c9097cf3224b89bfdff35f83f4ca186ef887d97b8f85c523.
 Build and run with the repository's pinned Node/pnpm and a temporary HOME for worker tests.
 
 Offline
@@ -35,8 +37,15 @@ The model endpoint is a local protocol fixture, not a real model connection.
 
 Each lane runs in a fresh child process. The runner refuses a non-idle deployment, tags owned
 sandboxes, tracks owned volumes, sweeps only its own resources, then records the remaining count.
-The final run replayed all sixteen P3 lanes plus native-helper-approval: fifteen passed, two failed.
-The failed large-output and timeout lanes remain acceptance blockers. See lanes.json.
+The final integrated run replayed all nineteen registered lanes, including native-helper-approval,
+native-catalog and native-compaction: nineteen passed. See integrated-runtime-lanes.json.
+The first integrated run passed eighteen and failed the compaction fixture; bounded output reduced
+its history below the SDK split boundary. Nine bounded results restored the intended input.
+lanes.json records the historical original fifteen-of-seventeen run. output-timeout-lanes.json
+records the historical two-lane fix validation; neither substitutes for the final batch.
+Catalog/MCP and model responses are explicit protocol fixtures. Compaction is Pi overflow recovery
+with one controlled overflow, low synthetic usage and two summary responses, not threshold-only
+compaction or model intelligence. The later replay checks canonical rather than harness history.
 
 Video
   The actual E2B b,c,native-helper-approval run was recorded with asciinema v2 format, rendered

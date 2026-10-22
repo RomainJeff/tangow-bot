@@ -4,7 +4,7 @@ N13 is incomplete. This draft prepares the native default and records the live r
 
 ## Implementation
 
-The implementation commit is `ff827ef7eb472bc19863705a8b4dee33b487930e`, based on feature commit `87efaddcff198b87df5189df45fb0e316e49ae5f`. The output/timeout follow-up source is `9c8d15f3dbe07a12c5bbfe36c64e2612c20cbc40`. Other intervening commits add evidence only.
+The implementation commit is `ff827ef7eb472bc19863705a8b4dee33b487930e`, based on feature commit `87efaddcff198b87df5189df45fb0e316e49ae5f`. The output/timeout follow-up source is `9c8d15f3dbe07a12c5bbfe36c64e2612c20cbc40`. The final integrated runtime source is `5ecfcbc9186b5dab3acaa52c333433750fc07d0b`. It includes a normal merge of the two native lane files and registers them in the existing runner. Subsequent changes add evidence only.
 
 E2B workers now select `pi-native` by default. Repository composition selects `rakazo-worker-pi-native` and enables screen paths. Guest startup and the template builder use the same default. Explicit adapter harness selection still supports `pi`. No shared template was built or published, and this change was not deployed.
 
@@ -13,6 +13,18 @@ The existing P3 runner accepts `--harness` and `--guest`. The latter uploads the
 The additional helper lane runs a real native Pi helper in its parent's E2B worker. It checks separate context, one persisted child, an approval with no early effect, controller restart, concurrent resumes, one approved effect, and released attempts. The local model protocol fixture determines the actions. These runs prove runtime and transport behavior, not model intelligence.
 
 ## Verification
+
+The latest [integrated runtime batch](evidence/P4/integrated-runtime-lanes.json) passed all 19 registered lanes in one run on `5ecfcbc9186b5dab3acaa52c333433750fc07d0b`. The guest SHA-256 is `b3ace799b31495b1dcdd446864e18c639814cdd204e1937f763e9f0f7b983c3f`; the runner SHA-256 is `aee878d916b1fcb9c9097cf3224b89bfdff35f83f4ca186ef887d97b8f85c523`. Both remote hashes match the local build. Source stayed fixed throughout validation. This is runtime proof with protocol fixtures, without desktop preparation or a real-model intelligence claim.
+
+The catalog lane covers direct and deferred 30-tool schemas, long/colliding SDK names, one approved effect, revoked authority, and redaction of a synthetic controller secret from worker frames, model requests and canonical history. It creates no computer. The compaction lane exercises actual Pi overflow recovery through the relay using low synthetic usage and one controlled overflow response. Two synthetic summary responses lead to a compacted retry; a later attempt uses canonical history rather than the harness summary. This does not prove threshold-only compaction or model intelligence.
+
+The first integrated batch at `c5cbedc0e9f238d70e878a1c9dcef9ffdc2a02f2` passed 18 lanes and failed compaction. Bounded bash output had reduced six fixture results below Pi’s retained-tail split boundary, so it made one summary request instead of two. The failure reproduced offline with actual Pi. Nine bounded results restore the intended split-turn input, with the original approval, pairing, summary and replay assertions intact. The final batch passed all 19 lanes after that fixture-only correction.
+
+Final-source checks passed 48 focused tests, all 24 typecheck tasks, lint with existing warnings, the bundle and 174 PostgreSQL integration tests. Affected web E2E ran the full suite: 216 passed and six failed. Five are the supplied baseline failures; the additional computer-update menu click timed out after becoming unstable and detached, then passed alone in 10.1 seconds under a new lock. Search-jump remains unverified. Integration and E2E each held their lock for one run per acquisition.
+
+All 19 final lanes ended with zero owned resources. Independent API checks confirmed all 51 created sandboxes absent (50 deleted, one expired) and all 41 volumes deleted. The first failed batch independently confirmed 50 sandboxes absent and 41 volumes deleted. Both owned remote scratch directories were removed. Resource IDs remain private. The earlier receipts and video below retain their original SHA and scope.
+
+Historical verification before native-lane integration:
 
 - The worker, native history, approval, prefix, computer and E2B adapter tests passed: 260 tests in 21 files. The stop fixture explicitly selects its Pi guest rather than inheriting the new native default.
 - The existing default-selection tests failed twice when the legacy defaults were restored, then passed all 23 cases after restoration.
@@ -43,14 +55,13 @@ The accepted review corrections rename both user and primary group while preserv
 
 Offline Docker checks passed for identity/home/cache, the workspace link, unchanged synthetic mounted-file ownership, actual desktop readiness and capture, app/tool versions and managed skills. They do not prove E2B boot. Parity lanes must use real `E2BSandboxProvider.prepare` through `--prepare-computer`; plain P3 fixtures that skip preparation are explicitly not parity evidence. E2B keeps its `/home/user/rakazo-home` link and dynamic display 20/port 6100 mapping alongside canonical display 1/port 6080.
 
-No authorized image publication/import route was established. The remaining external action is to make the exact immutable canonical image accessible to the builder and build a new E2B computer template from the reviewed source. Publication, import, template creation and infrastructure deployment have not run.
+A separate owner is validating an authorized temporary test template from the exact canonical image through the existing SSH loopback transport. This runtime batch does not use that template or claim its parity results. No shared template or infrastructure change belongs to this unit.
 
 ## Remaining work
 
-- Revalidate the final integrated source SHA after the independent catalog/compaction lane commit arrives. Its owner works in a separate checkout and owns only the new lane files. The initial independent review covered `5597938` only.
+- Obtain parent independent review of the final integrated source and evidence. Earlier reviews covered `5597938` and `066c4c2d` only; neither substitutes for this final review.
 - Boot and validate the parity computer on E2B, then run the real app/browser form, submission approval, takeover, screen-path read-once/cleanup, and OpenCode job/path/auth lanes. No extra screenshot VM is part of the preparation.
-- Run forced compaction and large/deferred MCP catalog, revocation and secret scenarios on E2B. Existing offline tests do not substitute for those live receipts.
-- Obtain an authorized generic model connection setup reference before claiming real-model validation. Current live receipts use the local protocol emulator.
+- Resolve the generic credential reference for the selected OpenCode Go model connection, then validate it. Current live receipts use the local protocol emulator.
 - Capture the applicable product flows through the approved screenshot workflow once they run. Unrelated web or phone screens were not substituted. No native mobile screen changed, and no Electron E2E ran.
 
 Normal screen cleanup remains best effort for the exact root `.rakazo-screen-<uuid>.png` namespace. Rare leftovers after abrupt termination are accepted. The stricter admission/runtime/NFS requirements remain abandoned.

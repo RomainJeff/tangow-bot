@@ -1,19 +1,17 @@
 {
   "status": "partial draft; N13 acceptance blocked",
-  "testedImplementationSha": "ff827ef7eb472bc19863705a8b4dee33b487930e",
-  "guestSha256": "73c00166fdfb617926929026568395e71423e745968c0dcbdaad7960329b9ba0",
+  "testedImplementationSha": "5ecfcbc9186b5dab3acaa52c333433750fc07d0b",
+  "guestSha256": "b3ace799b31495b1dcdd446864e18c639814cdd204e1937f763e9f0f7b983c3f",
   "model": "local protocol emulator; no real-model intelligence claim",
   "offline": {
     "pnpm check": "24 tasks passed",
-    "pnpm lint": "passed with existing warnings",
-    "pnpm test:worker-live:bundle": "passed",
-    "workerSuite": {
-      "files": 21,
-      "passed": 260
-    },
-    "defaultNegativeControl": {
-      "failedWithLegacyDefaults": 2,
-      "passedAfterRestore": 23
+    "pnpm lint": "passed with 49 existing warnings and 2 informational diagnostics",
+    "pnpm test:worker-live:bundle": "passed; remote runner and guest hashes match the local artifacts",
+    "focusedWorkerSuite": {
+      "files": 4,
+      "passed": 48,
+      "temporaryHome": true,
+      "maxWorkers": 2
     },
     "pnpm test:integration": {
       "passed": 174,
@@ -22,43 +20,45 @@
       "serialized": true
     },
     "pnpm test:e2e:affected": {
-      "first": {
-        "passed": 217,
-        "failed": 5
+      "passed": 216,
+      "failed": 6,
+      "baselineFailures": 5,
+      "additionalFailure": "computer-update menu click timed out after the element became unstable and detached",
+      "isolatedRerun": {
+        "spec": "computer-update.spec.ts",
+        "passed": 1,
+        "seconds": 10.1
       },
-      "final": {
-        "passed": 216,
-        "failed": 6
-      },
-      "limits": "Five supplied baseline failures plus approval-button alignment geometry; explicitly excluded from investigation. Search-jump remains unverified."
+      "limits": "Five supplied baseline failures remain; search-jump is unverified. The full run is not green. One affected run and one isolated rerun each held the E2E lock separately."
     },
-    "testAudit": "Existing default/stop contracts retained; live helper adds actual E2B lifecycle proof without production seams"
+    "testAudit": "Catalog authority, assigned names, deferred schemas, revocation and secret redaction protect the E2B transport boundary. Compaction exercises actual Pi overflow recovery and canonical history after resume. The integrated six-result fixture failed live and offline after bounded output reduced its history; nine bounded results restore split-turn compaction without weakening assertions. No production seam or runtime change was added."
   },
   "live": {
-    "passed": 15,
-    "failed": 2,
-    "failedLanes": ["f", "g-timeout"],
+    "receipt": "integrated-runtime-lanes.json",
+    "passed": 19,
+    "failed": 0,
     "allLaneCleanupZero": true,
     "mcpOnly": {
       "computersCreated": 0,
       "volumesCreated": 0
     },
-    "scope": "Historical batch at the original implementation SHA, not the follow-up source SHA"
+    "scope": "One complete batch of all 19 registered lanes on the tested implementation SHA; not a combination of earlier runs",
+    "limits": "Real Pi, controller, E2B runtime, mounts and effects with local model and MCP protocol fixtures. Plain computer preparation is skipped; no desktop parity or real-model intelligence claim."
   },
   "cleanup": {
-    "scope": "Instrumented final batch and video rerun only; earlier exploratory lanes also reported zero final census",
-    "sandboxesCreated": 48,
-    "sandboxesDeleted": 48,
-    "volumesCreated": 43,
-    "volumesDeleted": 43,
+    "checkedAt": "2026-10-22T15:57:01.984Z",
+    "sandboxesCreated": 51,
+    "sandboxesDeleted": 50,
+    "sandboxesAbsentAfterTimeout": 1,
+    "volumesCreated": 41,
+    "volumesDeleted": 41,
     "left": {
       "sandboxes": 0,
       "volumes": 0
     },
+    "scope": "Final integrated 19-lane batch only",
     "resourceIds": "Private handoff only",
-    "offlineContainersRemoved": 5,
-    "offlineVolumesRemoved": 1,
-    "localImagesRetainedForParent": 2
+    "remoteScratchRemoved": true
   },
   "media": {
     "video": "media/native-runtime.mp4",
@@ -66,7 +66,7 @@
     "poster": "media/native-runtime.png",
     "recordedLanes": ["b", "c", "native-helper-approval"],
     "receipts": "video-lanes.json",
-    "note": "Actual E2B CLI recording. Product browser/app screenshots remain unverified."
+    "note": "Historical E2B CLI recording at its original source SHA; not the final integrated batch. Product browser/app screenshots remain unverified."
   },
   "measurements": {
     "initialProviderTokens": null,
@@ -78,8 +78,7 @@
     "E2B canonical computer parity boot, real product prepare and screen-path/read-once/cleanup",
     "Real app/browser form, submission approval and takeover",
     "OpenCode job placement, paths and authentication on E2B",
-    "Forced compaction and large/deferred MCP catalog, revocation and secret scenarios on E2B",
-    "Authorized generic real-model connection reference and corresponding real-model run",
+    "Generic credential reference for the selected OpenCode Go connection and corresponding real-model run",
     "Applicable product screenshots"
   ],
   "externalChanges": {
@@ -133,5 +132,94 @@
       }
     },
     "limits": "This follow-up does not revalidate earlier lanes on the new source SHA. It uses a local model protocol fixture, with no real-model intelligence claim."
+  },
+  "historicalInitialBatch": {
+    "testedImplementationSha": "ff827ef7eb472bc19863705a8b4dee33b487930e",
+    "guestSha256": "73c00166fdfb617926929026568395e71423e745968c0dcbdaad7960329b9ba0",
+    "offline": {
+      "pnpm check": "24 tasks passed",
+      "pnpm lint": "passed with existing warnings",
+      "pnpm test:worker-live:bundle": "passed",
+      "workerSuite": {
+        "files": 21,
+        "passed": 260
+      },
+      "defaultNegativeControl": {
+        "failedWithLegacyDefaults": 2,
+        "passedAfterRestore": 23
+      },
+      "pnpm test:integration": {
+        "passed": 174,
+        "exitCode": 0,
+        "database": "disposable PostgreSQL",
+        "serialized": true
+      },
+      "pnpm test:e2e:affected": {
+        "first": {
+          "passed": 217,
+          "failed": 5
+        },
+        "final": {
+          "passed": 216,
+          "failed": 6
+        },
+        "limits": "Five supplied baseline failures plus approval-button alignment geometry; explicitly excluded from investigation. Search-jump remains unverified."
+      },
+      "testAudit": "Existing default/stop contracts retained; live helper adds actual E2B lifecycle proof without production seams"
+    },
+    "live": {
+      "passed": 15,
+      "failed": 2,
+      "failedLanes": ["f", "g-timeout"],
+      "allLaneCleanupZero": true,
+      "mcpOnly": {
+        "computersCreated": 0,
+        "volumesCreated": 0
+      },
+      "scope": "Historical batch at the original implementation SHA, not the follow-up source SHA"
+    },
+    "cleanup": {
+      "scope": "Instrumented final batch and video rerun only; earlier exploratory lanes also reported zero final census",
+      "sandboxesCreated": 48,
+      "sandboxesDeleted": 48,
+      "volumesCreated": 43,
+      "volumesDeleted": 43,
+      "left": {
+        "sandboxes": 0,
+        "volumes": 0
+      },
+      "resourceIds": "Private handoff only",
+      "offlineContainersRemoved": 5,
+      "offlineVolumesRemoved": 1,
+      "localImagesRetainedForParent": 2
+    }
+  },
+  "runnerSha256": "aee878d916b1fcb9c9097cf3224b89bfdff35f83f4ca186ef887d97b8f85c523",
+  "integrationCorrection": {
+    "initialSourceSha": "c5cbedc0e9f238d70e878a1c9dcef9ffdc2a02f2",
+    "initialRunnerSha256": "09d69028863898d52545621cccbea60dbd77106213174e36440bf9a91cc150aa",
+    "passed": 18,
+    "failed": 1,
+    "failedLane": "native-compaction",
+    "failure": "The second expected summary request had tools; bounded native output left six results below the SDK retained-tail split boundary. Reproduced offline with actual Pi.",
+    "change": "Nine bounded bash results exercise split-turn compaction; the two-summary, canonical-pair, approval and replay assertions remain intact.",
+    "offlineAfterCorrection": {
+      "summaryRequests": 2,
+      "canonicalNativeCalls": 10,
+      "canonicalToolPairs": 13
+    },
+    "initialCleanup": {
+      "checkedAt": "2026-10-22T15:49:42.839Z",
+      "sandboxesCreated": 50,
+      "sandboxesDeleted": 49,
+      "sandboxesAbsentAfterTimeout": 1,
+      "volumesCreated": 41,
+      "volumesDeleted": 41,
+      "left": {
+        "sandboxes": 0,
+        "volumes": 0
+      }
+    },
+    "remoteScratchRemoved": true
   }
 }
