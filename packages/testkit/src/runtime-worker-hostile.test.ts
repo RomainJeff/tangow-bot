@@ -1002,7 +1002,7 @@ class RunResources {
   }
 }
 
-async function closeResourceRun(hello: boolean) {
+async function closeResourceRun(outcome: "completed" | "cancelled" | "paused") {
   const { launcher, launchedFor } = manualLauncher();
   const runtime = createWorkerAgentRuntime({
     launcher,
@@ -1013,25 +1013,29 @@ async function closeResourceRun(hello: boolean) {
     runtime.run(request("cleanup", { executeTool: resources.execute.bind(resources) })),
   );
   const launched = await launchedFor("cleanup");
-  if (hello) {
+  if (outcome !== "cancelled") {
     const guest = rawGuest(launched.connect(), launched.capability);
     await guest.hello();
-    guest.send(1, { type: "done" });
+    if (outcome === "paused") {
+      guest.send(1, { type: "takeover", reason: "Log in." });
+      await guest.replies(1);
+    }
+    guest.send(outcome === "paused" ? 2 : 1, { type: "done" });
     await run.done;
   } else {
     await runtime.abort("cleanup");
-    const outcome = await run.done.then(
+    const cancellation = await run.done.then(
       () => "completed",
       (error: unknown) => String(error),
     );
-    expect(outcome).toBe("Error: The run was cancelled");
+    expect(cancellation).toBe("Error: The run was cancelled");
   }
 }
 
-it.each([true, false])(
-  "releases run resources before the hello deadline after stopping, hello received: %s",
-  async (hello) => {
-    await closeResourceRun(hello);
+it.each(["completed", "cancelled", "paused"] as const)(
+  "releases resources when the run is %s, before its deadlines expire",
+  async (outcome) => {
+    await closeResourceRun(outcome);
     await new Promise<void>((resolve) => setImmediate(resolve));
 
     expect(queryObjects(RunResources)).toBe(0);

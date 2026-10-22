@@ -121,6 +121,7 @@ export function createSession(
   };
   const events = eventPipe();
   const helloSettled = deferred<void>();
+  const stopped = deferred<void>();
   const tools = new Map(request.tools.map((tool) => [tool.name, tool]));
   const announced = new Map<string, string>();
   const open = new Map<string, Promise<unknown>>();
@@ -197,7 +198,9 @@ export function createSession(
   const pause = () => {
     if (paused) return;
     paused = { toolCalls: 0, modelRequests: 0 };
-    void deps.clock.sleep(WORKER_LIMITS.pausedGraceMs).then(endPaused);
+    void Promise.race([deps.clock.sleep(WORKER_LIMITS.pausedGraceMs), stopped.promise]).then(() => {
+      if (!stopping) endPaused();
+    });
   };
 
   /** No call runs after the pause, but each still gets a result so the harness's turn stays whole. */
@@ -616,6 +619,7 @@ export function createSession(
   }
 
   async function stop(signal: AbortSignal | undefined) {
+    stopped.resolve();
     helloSettled.resolve();
     inbox.revoke();
     for (const relay of relays.values()) relay.abort();
