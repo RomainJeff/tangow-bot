@@ -7,7 +7,7 @@ and `references/`.
 | Family | Directory | Reader | Runtime |
 | --- | --- | --- | --- |
 | `agent` | `skills/agent/<dir>/` | Bot harness | Baked root-owned and read-only at `/managed-skills/agent` in worker templates; also mounted at that path in Docker computers. |
-| `computer` | `skills/computer/<dir>/` | Coding agents on the computer | Existing read-only `/managed-skills/computer` mount and OpenCode startup link. |
+| `computer` | `skills/computer/<dir>/` | Coding agents on the computer | Computer only: read-only `/managed-skills/computer` mount and OpenCode startup link at `~/.config/opencode/skills`. |
 
 Put bot workflow guidance in `agent`. Put repository coding guidance in `computer`. Managed agent
 skill directory names must equal `skillDirName(name)`, the normalized URL-encoded name. Keep the
@@ -41,3 +41,18 @@ Existing user skills can be copied, without deleting originals, by
 `scripts/migrate-skills-to-volumes.ts --space <space-id>`. Stop writers first. Conflicting targets
 are refused and identical copies are unchanged on retry. All migrated skills go to shared/skills
 so every bot in the space retains them. Marketplace files are outside this migration.
+
+## Coding work by environment
+
+Worker native file tools and `bash` operate on `/workspace/bots/<botId>` and
+`/workspace/shared`. Apps, browser and computer-local services use Rakazo computer
+and browser tools; commands use `computer_exec`. Harnesses expose Rakazo tools
+under their own naming.
+
+OpenCode stays on the computer for P4. Invoke the managed helper there at
+`/managed-skills/agent/delegate-to-opencode/scripts/oc`, with
+`OC_BOT_ID=<botId> OC_JOBS_DIR=/workspace/bots/<botId>/oc-jobs` on every call. Briefs, job worktrees
+and reports then share volume paths with the worker. OpenCode loads computer
+skills, while the worker loads agent skills. The [execution decision and N13 live
+lane](../docs/implementation/pi-e2b/opencode-execution.md) describe the boundary
+and its recovery limits.
