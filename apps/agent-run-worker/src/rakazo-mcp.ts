@@ -92,23 +92,46 @@ function resultBlocks(output: unknown): { blocks: McpBlock[]; isError: boolean }
  * also written to `screensDir` and named in the result: the relay keeps only the newest images in
  * the model's context, and the harness reads an older screen from its file.
  */
+/**
+ * Names for the screens saved from one result, within the text budget: once they no longer fit,
+ * one line counts the rest.
+ */
+function screenHints(files: string[], screensDir: string): McpBlock[] {
+  const more = (count: number) => `[${count} more screenshots saved in ${screensDir}]`;
+  const lines: string[] = [];
+  let used = 0;
+  for (const [index, file] of files.entries()) {
+    const line = `Screenshot saved at ${file}. Read it to see it again.`;
+    const after = files.length - index - 1;
+    if (used + line.length + (after > 0 ? more(after).length : 0) > TOOL_RESULT_TEXT_LIMIT) break;
+    lines.push(line);
+    used += line.length;
+  }
+  if (lines.length < files.length) lines.push(more(files.length - lines.length));
+  return lines.map((text) => ({ type: "text", text }));
+}
+
 async function mcpResult(output: unknown, screensDir: string, callId: string) {
   const { blocks, isError } = resultBlocks(output);
-  const saved: McpBlock[] = [];
+  const files: string[] = [];
   for (const block of blocks) {
     if (block.type !== "image") continue;
     const mimeType = String(block.mimeType);
     const file = path.join(
       screensDir,
-      `${callId}-${saved.length + 1}.${mimeType.split("/")[1] ?? "png"}`,
+      `${callId}-${files.length + 1}.${mimeType.split("/")[1] ?? "png"}`,
     );
     await mkdir(screensDir, { recursive: true });
     await writeFile(file, Buffer.from(String(block.data), "base64"));
-    saved.push({ type: "text", text: `Screenshot saved at ${file}. Read it to see it again.` });
+    files.push(file);
   }
-  const hints = saved.reduce((sum, hint) => sum + String(hint.text).length, 0);
+  const hints = screenHints(files, screensDir);
+  const hintChars = hints.reduce((sum, hint) => sum + String(hint.text).length, 0);
   return {
-    content: [...clipToolResultContent(blocks, TOOL_RESULT_TEXT_LIMIT - hints), ...saved],
+    content: [
+      ...clipToolResultContent(blocks, Math.max(0, TOOL_RESULT_TEXT_LIMIT - hintChars)),
+      ...hints,
+    ],
     isError,
   };
 }

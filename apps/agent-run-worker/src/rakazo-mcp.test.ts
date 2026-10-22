@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -266,6 +266,27 @@ describe("a long result with an image through the Rakazo MCP server", () => {
     expect(texts.join("").length).toBeLessThanOrEqual(12_000);
     expect(texts[0]).toMatch(/^a+\n\[\d+ more characters cut\]$/);
     expect(texts[1]).toMatch(/^Screenshot saved at .+-1\.png\. Read it to see it again\.$/);
+  });
+
+  it("counts the screens past the budget in one line instead of naming each", async () => {
+    const { host } = fakeHost(() => ({
+      content: [
+        { type: "text", text: "a".repeat(12_000) },
+        ...Array.from({ length: 150 }, () => ({ type: "image", data: PNG, mimeType: "image/png" })),
+      ],
+    }));
+    const { client, screensDir } = await connect(PRODUCT_TOOLS, host);
+
+    const result = await client.callTool({ name: "computer_observe", arguments: {} });
+
+    const texts = (result.content as Array<{ type: string; text?: string }>)
+      .filter((block) => block.type === "text")
+      .map((block) => block.text!);
+    expect(texts.join("").length).toBeLessThanOrEqual(12_000);
+    const named = texts.filter((text) => text.startsWith("Screenshot saved at ")).length;
+    expect(named).toBeGreaterThan(0);
+    expect(texts.at(-1)).toBe(`[${150 - named} more screenshots saved in ${screensDir}]`);
+    expect(await readdir(screensDir)).toHaveLength(150);
   });
 });
 
