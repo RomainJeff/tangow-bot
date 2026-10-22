@@ -62,7 +62,7 @@ const transcript: GuestBody = {
 
 describe("a native harness's transcript", () => {
   it("reaches the run as the harness's own work only, redacted and bounded", async () => {
-    const launcher = manualLauncher();
+    const launcher = manualLauncher({ name: "pi-native", capabilities: ["native-loop"] });
     const runtime = createWorkerAgentRuntime({
       launcher: launcher.launcher,
       stops: { mark: async () => undefined },
@@ -133,7 +133,10 @@ describe("a native harness's transcript", () => {
   });
 
   it("goes to the helper's log when a helper's session sent it", async () => {
-    const launcher = manualLauncher();
+    const launcher = manualLauncher({
+      name: "pi-native",
+      capabilities: ["native-loop", "subagents"],
+    });
     const runtime = createWorkerAgentRuntime({
       launcher: launcher.launcher,
       stops: { mark: async () => undefined },
@@ -212,7 +215,7 @@ describe("a native harness's transcript", () => {
   });
 
   it("is refused from an attempt that lost its run", async () => {
-    const launcher = manualLauncher();
+    const launcher = manualLauncher({ name: "pi-native", capabilities: ["native-loop"] });
     const runtime = createWorkerAgentRuntime({
       launcher: launcher.launcher,
       stops: { mark: async () => undefined },
@@ -234,7 +237,7 @@ describe("a native harness's transcript", () => {
   });
 
   it("is taken from an attempt whose run waits on the user", async () => {
-    const launcher = manualLauncher();
+    const launcher = manualLauncher({ name: "pi-native", capabilities: ["native-loop"] });
     const runtime = createWorkerAgentRuntime({
       launcher: launcher.launcher,
       stops: { mark: async () => undefined },

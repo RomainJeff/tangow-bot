@@ -47,7 +47,10 @@ function helperRun(
   const startCalled = new Promise<void>((resolve) => {
     calledStart = resolve;
   });
-  const launcher = manualLauncher();
+  const launcher = manualLauncher({
+    name: "pi-native",
+    capabilities: ["native-loop", "subagents"],
+  });
   const runtime = createWorkerAgentRuntime({
     launcher: launcher.launcher,
     stops: { mark: async () => undefined },

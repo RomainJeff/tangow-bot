@@ -6,6 +6,7 @@ import type {
   GuestModel,
   SubagentLog,
 } from "@rakazo/adapter-kit";
+import { PI_HARNESS } from "@rakazo/adapter-kit";
 import { PiAgentRuntime } from "@rakazo/adapters/pi-runtime";
 import { piAiStreamFn, relayedModel } from "@rakazo/adapters/runtime-worker/pi-ai";
 import type { DoneBody, GuestHarness, HarnessHost } from "../harness.js";
@@ -38,7 +39,7 @@ function toolCaller(host: HarnessHost, agent: string): NonNullable<AgentRunReque
 
 /** The Pi harness: the controller's own PiAgentRuntime policy, with every callback a frame. */
 export const piHarness: GuestHarness = {
-  declaration: { name: "pi", capabilities: ["subagents", "steering"] },
+  declaration: PI_HARNESS,
 
   nativeTools: piToolManifest(),
   executeNativeTool: executePiTool,

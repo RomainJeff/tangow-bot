@@ -1,9 +1,11 @@
 import type {
   AdapterDescriptor,
+  HarnessDeclaration,
   WorkerCapabilities,
   WorkerProvider,
   WorkerSpec,
 } from "@rakazo/adapter-kit";
+import { workerHarness } from "@rakazo/adapter-kit";
 import { volumeMountPath } from "@rakazo/core";
 import { getLogger } from "@rakazo/logging";
 import type { ConnectionOpts, SandboxOpts } from "e2b";
@@ -203,6 +205,7 @@ const attemptTag = (attemptId: string) => ({ rakazo: "worker", attemptId });
  */
 export class E2BWorkerProvider implements WorkerProvider, GuestConnector {
   private readonly sdk: E2BWorkerSdk;
+  private readonly expectedHarness: HarnessDeclaration;
   /** What settles each connected guest's `exited`, by sandbox, until it is seen gone. */
   private readonly guests = new Map<string, Set<() => void>>();
 
@@ -210,6 +213,7 @@ export class E2BWorkerProvider implements WorkerProvider, GuestConnector {
     private readonly config: E2BWorkerConfig,
     sdk?: E2BWorkerSdk,
   ) {
+    this.expectedHarness = workerHarness(config.harness ?? "pi");
     this.sdk =
       sdk ?? e2bWorkerSdk({ apiKey: config.apiKey, domain: config.domain, apiUrl: config.apiUrl });
   }
@@ -236,7 +240,7 @@ export class E2BWorkerProvider implements WorkerProvider, GuestConnector {
       secure: true,
       metadata,
       envs: {
-        RAKAZO_WORKER_HARNESS: this.config.harness ?? "pi",
+        RAKAZO_WORKER_HARNESS: this.expectedHarness.name,
         RAKAZO_WORKER_HOME: "/home/user",
         ...(spec.mounts.some((mount) => mount.path === privateMount) && {
           RAKAZO_WORKER_SPOOL_DIR: `${privateMount}/.rakazo/tool-output`,
@@ -316,7 +320,7 @@ export class E2BWorkerProvider implements WorkerProvider, GuestConnector {
   connect(
     target: { attemptId: string; providerRef: string },
     capability: string,
-  ): { connections: AsyncIterable<FrameChannel>; exited: Promise<void> } {
+  ): ReturnType<GuestConnector["connect"]> {
     const stdout = handoff();
     let stderr = "";
     let resolveExited = () => {};
@@ -399,6 +403,6 @@ export class E2BWorkerProvider implements WorkerProvider, GuestConnector {
         close,
       };
     }
-    return { connections: connections(), exited };
+    return { expectedHarness: this.expectedHarness, connections: connections(), exited };
   }
 }

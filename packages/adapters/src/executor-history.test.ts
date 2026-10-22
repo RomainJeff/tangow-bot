@@ -1074,7 +1074,7 @@ describe("interactive executor sessions with durable history", () => {
         database: c.prisma,
         run: c.run,
         runtime: async function* (request) {
-          const launcher = manualLauncher();
+          const launcher = manualLauncher({ name: "pi-native", capabilities: ["native-loop"] });
           const runtime = createWorkerAgentRuntime({
             launcher: launcher.launcher,
             stops: { mark: async () => undefined },

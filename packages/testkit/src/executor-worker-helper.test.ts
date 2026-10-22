@@ -12,7 +12,10 @@ afterEach(async () => {
 });
 
 async function pausedHelper() {
-  const launcher = manualLauncher();
+  const launcher = manualLauncher({
+    name: "pi-native",
+    capabilities: ["native-loop", "subagents"],
+  });
   const sleeps = new Map<number, () => void>();
   const runtime = createWorkerAgentRuntime({
     launcher: launcher.launcher,
