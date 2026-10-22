@@ -1,6 +1,6 @@
 import { readdir, unlink } from "node:fs/promises";
 import path from "node:path";
-import type { GuestBody, ReplyFinal, WorkerStartV1 } from "@rakazo/adapter-kit";
+import type { GuestBody, ReplyFinal, ReplyPart, WorkerStartV1 } from "@rakazo/adapter-kit";
 import { FRAME_CAPABILITY, sameWorker } from "@rakazo/adapter-kit";
 import type { FrameChannel } from "@rakazo/adapters/runtime-worker/wire";
 import {
@@ -161,6 +161,50 @@ async function runAttempt(
     return outbox.post(body);
   };
 
+  let skillsDir: string;
+  const helpers = new Set<{ cancel: AbortController; done: Promise<void> }>();
+  const startHelper = (part: Extract<ReplyPart, { type: "subagent.start" }>) => {
+    const childCancel = new AbortController();
+    const abort = () => childCancel.abort();
+    signal.addEventListener("abort", abort, { once: true });
+    if (signal.aborted) abort();
+    const child = {
+      cancel: childCancel,
+      done: (async () => {
+        try {
+          const result = await options.harness.run(
+            { worker, run: part.run, cwd, skillsDir, agent: part.agent },
+            { ...host, signal: childCancel.signal },
+          );
+          await decide(
+            {
+              type: "subagent.finish",
+              agent: part.agent,
+              status: "completed",
+              result: result.text ?? "",
+            },
+            "recorded",
+          );
+        } catch (error) {
+          await decide(
+            {
+              type: "subagent.finish",
+              agent: part.agent,
+              status: "failed",
+              result: error instanceof Error ? error.message : String(error),
+            },
+            "recorded",
+          ).catch(() => undefined);
+        } finally {
+          signal.removeEventListener("abort", abort);
+        }
+      })(),
+    };
+    helpers.add(child);
+    void child.done.then(() => helpers.delete(child));
+    return child;
+  };
+
   const host: HarnessHost = {
     signal,
     async emit(body: InformativeBody) {
@@ -200,6 +244,7 @@ async function runAttempt(
       const onAbort = () =>
         void outbox.request({ type: "model.abort", re: seq }).catch(() => undefined);
       abort?.addEventListener("abort", onAbort, { once: true });
+      if (abort?.aborted) onAbort();
       try {
         const reply = await final;
         if (reply.type === "refused") {
@@ -215,7 +260,10 @@ async function runAttempt(
     async callTool(agent, name, args, callId) {
       await announcement(callId).promise;
       announcements.delete(callId);
-      const reply = await send({ type: "tool.call", agent, callId, name, args });
+      let helper: ReturnType<typeof startHelper> | undefined;
+      const reply = await send({ type: "tool.call", agent, callId, name, args }, (part) => {
+        if (part.type === "subagent.start" && !helper) helper = startHelper(part);
+      }).finally(() => helper?.cancel.abort());
       if (reply.type === "tool.result") return { placement: "controller", output: reply.output };
       if (reply.type !== "tool.grant") {
         throw new Error(reply.type === "error" ? reply.message : `Unexpected reply ${reply.type}`);
@@ -246,6 +294,7 @@ async function runAttempt(
 
   try {
     const converged = await convergeSkills(home, roots);
+    skillsDir = converged.skillsDir;
     for (const collision of converged.collisions) {
       console.warn("skills.name_collision", collision);
       await decide({ type: "skills.collision", collision }, "recorded");
@@ -254,6 +303,15 @@ async function runAttempt(
       { worker, run, cwd, skillsDir: converged.skillsDir },
       host,
     );
+    if (helpers.size > 0) {
+      let timer: NodeJS.Timeout | undefined;
+      await Promise.race([
+        Promise.allSettled([...helpers].map((helper) => helper.done)),
+        new Promise<void>((resolve) => {
+          timer = setTimeout(resolve, WORKER_LIMITS.cancelGraceMs);
+        }),
+      ]).finally(() => clearTimeout(timer));
+    }
     // Rediscover so skills written by native tools during this run appear in the controller.
     let indexBytes = 0;
     let indexCount = 0;
@@ -286,6 +344,7 @@ async function runAttempt(
     return stop?.reason ?? (link.lost ? "disconnected" : "cancelled");
   } finally {
     clearTimeout(flushTimer);
+    for (const helper of helpers) helper.cancel.abort();
     const reportCleanupError = (error: NodeJS.ErrnoException) => {
       if (error.code !== "ENOENT") console.warn("screens.cleanup_failed", { code: error.code });
     };

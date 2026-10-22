@@ -1,5 +1,6 @@
 import { createWorkerAgentRuntime, WORKER_LIMITS } from "@rakazo/adapters/runtime-worker";
-import { afterEach, expect, it } from "vitest";
+import { HARNESSES } from "@rakazo/agent-run-worker";
+import { afterEach, expect, it, vi } from "vitest";
 import {
   manualLauncher,
   rawGuest,
@@ -136,3 +137,86 @@ it.each(["done", "finish", "abandon", "grace", "cancel"] as const)(
     ).toHaveLength(1);
   },
 );
+
+it("runs native Pi helpers in separate persisted sessions and resumes the parent without replaying them", async () => {
+  const run = await startWorkerRun({
+    harness: HARNESSES["pi-native"],
+    computerScope: "team",
+    steps: [
+      {
+        expect() {},
+        response: {
+          type: "tool",
+          id: "helper",
+          name: "mcp__rakazo__run_subagent",
+          arguments: { name: "Planner", task: "Choose a city" },
+        },
+      },
+      {
+        expect(request) {
+          const tools = request.tools?.map((tool) => tool.function.name) ?? [];
+          expect(tools).not.toContain("mcp__rakazo__run_subagent");
+          expect(tools).not.toContain("mcp__rakazo__message_user");
+        },
+        response: {
+          type: "tool",
+          id: "question",
+          name: "mcp__rakazo__ask_user",
+          arguments: { question: "Which city?", options: ["Paris", "Lyon"] },
+        },
+      },
+      { expect() {}, response: { type: "text", text: "Waiting privately." } },
+      {
+        expect(request) {
+          expect(JSON.stringify(request.messages)).toContain("Paris");
+        },
+        response: { type: "text", text: "Resumed privately." },
+      },
+    ],
+  });
+  cleanups.push(() => run.close());
+  const provision = vi.spyOn(run.sandbox, "provision");
+  const runId = await run.send("Plan my trip.");
+  await run.continueRun(runId);
+  const parent = await run.prisma.run.findUniqueOrThrow({ where: { id: runId } });
+  expect(parent.status).toBe("waiting_input");
+  const [helper] = await run.prisma.run.findMany({
+    where: { parentRunId: runId },
+    include: { session: true, task: true },
+  });
+  expect(helper).toMatchObject({
+    status: "completed",
+    task: { status: "completed" },
+    session: { kind: "subagent", parentSessionId: parent.sessionId },
+  });
+  expect(helper?.sessionId).not.toBe(parent.sessionId);
+  const entries = await run.runEntries(runId);
+  const cards = entries.filter((entry) => entry.type === "assistant.ask");
+  expect(cards).toHaveLength(1);
+  expect(entries.filter((entry) => entry.type === "subagent")).toMatchObject([
+    { payload: { sessionId: helper?.sessionId, status: "completed" } },
+  ]);
+  expect(
+    (await run.runEntries(helper!.id)).filter((entry) => entry.type === "run.finished"),
+  ).toHaveLength(1);
+  expect(
+    await run.events.answerRunInput({
+      spaceId: run.spaceId,
+      threadId: run.thread.id,
+      runId,
+      messageId: cards[0]!.id,
+      answeredByUserId: run.userId,
+      answer: "choice-1",
+    }),
+  ).toBe(true);
+  await run.continueRun(runId);
+  run.model.assertComplete();
+  expect((await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
+    "completed",
+  );
+  expect(await run.prisma.run.count({ where: { parentRunId: runId } })).toBe(1);
+  expect(
+    (await run.runEntries(runId)).filter((entry) => entry.type === "assistant.ask"),
+  ).toHaveLength(1);
+  expect(provision).not.toHaveBeenCalled();
+});

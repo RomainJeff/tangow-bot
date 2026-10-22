@@ -70,7 +70,14 @@ export interface GuestHarness {
   ): Promise<LocalToolOutput>;
   /** Runs the attempt; resolves with its final words, which the controller decides to accept. */
   run(
-    start: { worker: WorkerIdentity; run: GuestRunInput; cwd: string; skillsDir: string },
+    start: {
+      worker: WorkerIdentity;
+      run: GuestRunInput;
+      cwd: string;
+      skillsDir: string;
+      /** Controller-assigned helper ref; omitted for the root session. */
+      agent?: string;
+    },
     host: HarnessHost,
   ): Promise<DoneBody>;
 }

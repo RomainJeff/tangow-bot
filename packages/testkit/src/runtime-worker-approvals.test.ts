@@ -118,16 +118,30 @@ async function resultsOf(run: WorkerRun, runId: string, callId: string) {
 
 describe("an approval answered for a run in a guest", () => {
   it.each([
-    ["right away", false, false],
-    ["after the controller restarted", true, false],
-    ["in native Pi after the controller restarted", true, true],
+    ["right away", false, false, false],
+    ["after the controller restarted", true, false, false],
+    ["in native Pi after the controller restarted", true, true, false],
+    ["from a native helper after the controller restarted", true, true, true],
   ])(
     "runs the approved call once at the controller and hands its result to the model, resumed %s",
-    async (_delay, restart, native) => {
+    async (_delay, restart, native, helper) => {
       const notes = notesConnector();
       let resumed: ModelEmulatorRequest | undefined;
       const run = await fixture(
         [
+          ...(helper
+            ? [
+                {
+                  expect() {},
+                  response: {
+                    type: "tool" as const,
+                    id: "delegate",
+                    name: "run_subagent",
+                    arguments: { name: "Publisher", task: "Publish the plan." },
+                  },
+                },
+              ]
+            : []),
           publish("Plan"),
           {
             expect(request) {
@@ -144,6 +158,14 @@ describe("an approval answered for a run in a guest", () => {
       await run.continueRun(runId);
       expect(await statusOf(run, runId)).toBe("waiting_input");
       expect(notes.published).toEqual([]);
+      if (helper) {
+        expect(
+          await run.prisma.run.findMany({
+            where: { parentRunId: runId },
+            select: { status: true },
+          }),
+        ).toEqual([{ status: "completed" }]);
+      }
 
       await answer(run, runId, "allow");
       if (restart) run.restart();
@@ -153,6 +175,7 @@ describe("an approval answered for a run in a guest", () => {
       run.model.assertComplete();
       expect(await statusOf(run, runId)).toBe("completed");
       expect(notes.published).toEqual([{ title: "Plan" }]);
+      if (helper) expect(await run.prisma.run.count({ where: { parentRunId: runId } })).toBe(1);
       const effect = await run.prisma.externalEffect.findFirstOrThrow({
         where: { runId, kind: "publish_note" },
       });

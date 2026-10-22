@@ -5,6 +5,7 @@ import type {
   AgentRunRequest,
   AgentRuntimeEvent,
   AgentSteeringMessage,
+  SubagentLog,
   WorkerIdentity,
 } from "@rakazo/adapter-kit";
 import type { LaunchedGuest, WorkerClock } from "@rakazo/adapters/runtime-worker";
@@ -35,6 +36,7 @@ async function nativeRun(
   steps: ModelEmulatorStep[],
   overrides: Partial<AgentRunRequest> = {},
   modelPatch: Partial<AgentRunRequest["model"]> = {},
+  signal?: AbortSignal,
 ) {
   const server = await startModelEmulator({ steps, apiKey: "controller-only-key" });
   onTestFinished(() => server.close());
@@ -84,25 +86,36 @@ async function nativeRun(
   });
   const seen: AgentRuntimeEvent[] = [];
   try {
-    for await (const event of runtime.run({
-      botId: "bot",
-      threadId: "thread",
-      runId: "run_native",
-      prompt: "Draft a note.",
-      instructions: "Instructions for Rakazo's own loop, never sent to a native harness.",
-      harnessAddendum: "You are Ada, the user's bot.",
-      history: [],
-      tools: WORKER_NATIVE_TOOLS.filter((tool) => ["read", "bash"].includes(tool.name)),
-      model: { ...server.model, ...modelPatch },
-      attempt: { id: "run_native-attempt", fence: 1 },
-      ...overrides,
-    })) {
+    for await (const event of runtime.run(
+      {
+        botId: "bot",
+        threadId: "thread",
+        runId: "run_native",
+        prompt: "Draft a note.",
+        instructions: "Instructions for Rakazo's own loop, never sent to a native harness.",
+        harnessAddendum: "You are Ada, the user's bot.",
+        history: [],
+        tools: WORKER_NATIVE_TOOLS.filter((tool) => ["read", "bash"].includes(tool.name)),
+        model: { ...server.model, ...modelPatch },
+        attempt: { id: "run_native-attempt", fence: 1 },
+        ...overrides,
+      },
+      signal
+        ? {
+            operationId: "native-test",
+            traceId: "native-test",
+            spaceId: "space",
+            userId: "user",
+            signal,
+          }
+        : undefined,
+    )) {
       seen.push(event);
     }
   } finally {
     server.assertComplete();
   }
-  return { seen, exit: await exits[0], root, requests: server.requests };
+  return { seen, exit: await exits[0], root, requests: server.requests, launches: exits.length };
 }
 
 describe("the pi-native harness through the controller", () => {
@@ -406,6 +419,315 @@ describe("the pi-native harness through the controller", () => {
         },
       );
       expect(executeTool).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(["completed", "unsaved", "paused"] as const)(
+    "runs a real native helper in its own session and settles its parent: %s",
+    async (outcome) => {
+      const transcripts: Parameters<NonNullable<SubagentLog["transcript"]>>[0][] = [];
+      const finished: Parameters<SubagentLog["finish"]>[0][] = [];
+      const abandoned: string[] = [];
+      const childText: string[] = [];
+      const helperTool = vi.fn(async () =>
+        outcome === "paused"
+          ? {
+              kind: "agent_tool_result",
+              content: [{ type: "text", text: "Waiting for approval." }],
+              details: { approval: "paused" },
+              terminate: true,
+            }
+          : "child-only-result",
+      );
+      const executeTool = vi.fn(async () => "wrong-parent-handler");
+      const startSubagent = vi.fn<NonNullable<AgentRunRequest["startSubagent"]>>(async () => ({
+        executeTool: helperTool,
+        text: async (text) => {
+          childText.push(text);
+        },
+        transcript: async (event) => {
+          transcripts.push(event);
+        },
+        finish: async (result) => {
+          if (outcome === "unsaved") throw new Error("history unavailable");
+          finished.push(result);
+        },
+        abandon: async (result) => {
+          abandoned.push(result);
+        },
+      }));
+      const tool = (name: string) => ({
+        name,
+        description: name,
+        inputSchema: { type: "object", properties: {} },
+      });
+      const { seen, exit, launches } = await nativeRun(
+        [
+          {
+            expect(request) {
+              expect(JSON.stringify(request.messages)).toContain("parent-private-context");
+              expect(request.tools?.map((tool) => tool.function.name)).toContain(
+                "mcp__rakazo__run_subagent",
+              );
+            },
+            response: {
+              type: "tool",
+              id: "delegate",
+              name: "mcp__rakazo__run_subagent",
+              arguments: { name: "scout", task: "Find the child note." },
+            },
+          },
+          {
+            expect(request) {
+              const context = JSON.stringify(request.messages);
+              expect(context).toContain("Find the child note.");
+              expect(context).not.toContain("parent-private-context");
+              expect(context).not.toContain("Draft a note.");
+              expect(systemOf(request)).toContain('named "scout"');
+              expect(request.tools?.map((tool) => tool.function.name)).toEqual([
+                "mcp__rakazo__remember",
+              ]);
+            },
+            response: { type: "tool", id: "save", name: "mcp__rakazo__remember", arguments: {} },
+          },
+          ...(outcome === "paused"
+            ? []
+            : [
+                {
+                  expect(request: ModelEmulatorRequest) {
+                    expect(JSON.stringify(request.messages)).toContain("child-only-result");
+                  },
+                  response: { type: "text" as const, text: "Found the child note." },
+                },
+              ]),
+          {
+            expect(request) {
+              const context = JSON.stringify(request.messages);
+              expect(context).toContain(
+                outcome === "completed"
+                  ? "Found the child note."
+                  : outcome === "unsaved"
+                    ? "Subagent failed: history unavailable"
+                    : "Stopped: the run is waiting for the user.",
+              );
+              expect(context).not.toContain("child-only-result");
+              expect(context).not.toContain('"name":"mcp__rakazo__remember"');
+            },
+            response: { type: "text", text: "Parent finished." },
+          },
+        ],
+        {
+          tools: [tool("run_subagent"), tool("remember"), tool("message_user")],
+          history: [{ role: "user", content: "parent-private-context" }],
+          executeTool,
+          startSubagent,
+        },
+      );
+      expect(launches).toBe(1);
+      expect(exit).toBe(outcome === "paused" ? "paused" : "done");
+      expect(startSubagent).toHaveBeenCalledTimes(1);
+      expect(helperTool).toHaveBeenCalledTimes(1);
+      expect(executeTool).not.toHaveBeenCalled();
+      expect(transcripts).toHaveLength(1);
+      expect(transcripts[0]).toMatchObject({
+        unverifiedCalls: 0,
+        entries: expect.arrayContaining([
+          { kind: "controller", turn: 0, callId: expect.any(String), name: "remember" },
+        ]),
+      });
+      expect(
+        seen
+          .filter((event) => event.type === "text")
+          .map((event) => event.text)
+          .join(""),
+      ).not.toContain("Found the child note.");
+      expect(seen.find((event) => event.type === "transcript")).toMatchObject({
+        unverifiedCalls: 0,
+        entries: expect.arrayContaining([
+          { kind: "controller", turn: 0, callId: expect.any(String), name: "run_subagent" },
+        ]),
+      });
+      if (outcome === "unsaved") expect(abandoned).toEqual(["history unavailable"]);
+      else
+        expect(finished).toEqual([
+          expect.objectContaining({
+            status: "completed",
+            result:
+              outcome === "paused"
+                ? "Stopped: the run is waiting for the user."
+                : "Found the child note.",
+            usage: { inputTokens: expect.any(Number), outputTokens: expect.any(Number) },
+          }),
+        ]);
+      if (outcome === "completed") expect(childText.join("")).toBe("Found the child note.");
+    },
+  );
+
+  it.each(["completed", "paused", "cancelled"] as const)(
+    "keeps concurrent native helpers separate on %s",
+    async (mode) => {
+      const paused = mode === "paused";
+      const cancelled = mode === "cancelled";
+      const cancel = new AbortController();
+      let held = 0;
+      let closed = 0;
+      let opened = () => {};
+      const slowOpened = new Promise<void>((resolve) => {
+        opened = resolve;
+      });
+      let slowClosed = false;
+      const logs = new Map<
+        string,
+        {
+          text: string;
+          transcripts: Parameters<NonNullable<SubagentLog["transcript"]>>[0][];
+          finished: Parameters<SubagentLog["finish"]>[0][];
+        }
+      >();
+      const startSubagent: NonNullable<AgentRunRequest["startSubagent"]> = async (call) => {
+        const log = {
+          text: "",
+          transcripts: [] as Parameters<NonNullable<SubagentLog["transcript"]>>[0][],
+          finished: [] as Parameters<SubagentLog["finish"]>[0][],
+        };
+        logs.set(call.name, log);
+        return {
+          executeTool: async () => ({
+            kind: "agent_tool_result",
+            content: [{ type: "text", text: "Waiting." }],
+            details: { approval: "paused" },
+            terminate: true,
+          }),
+          text: async (text) => {
+            log.text += text;
+          },
+          transcript: async (event) => {
+            log.transcripts.push(event);
+          },
+          finish: async (outcome) => {
+            log.finished.push(outcome);
+          },
+          abandon: async () => {},
+        };
+      };
+      const childStep: ModelEmulatorStep = {
+        async expect(request) {
+          const text = JSON.stringify(request.messages);
+          expect(text.includes("slow-task") !== text.includes("peer-task")).toBe(true);
+          if (paused && text.includes("peer-task")) await slowOpened;
+        },
+        response(request) {
+          const slow = JSON.stringify(request.messages).includes("slow-task");
+          if (cancelled)
+            return {
+              type: "hold",
+              onOpen: () => {
+                held += 1;
+                if (held === 2) setImmediate(() => cancel.abort());
+              },
+              onClose: () => {
+                closed += 1;
+              },
+            };
+          if (!paused) return { type: "text", text: slow ? "slow-result" : "peer-result" };
+          return slow
+            ? {
+                type: "hold",
+                onOpen: opened,
+                onClose: () => {
+                  slowClosed = true;
+                },
+              }
+            : { type: "tool", id: "pause", name: "mcp__rakazo__remember", arguments: {} };
+        },
+      };
+      const pending = nativeRun(
+        [
+          {
+            expect() {},
+            response: {
+              type: "tool",
+              id: "slow",
+              name: "mcp__rakazo__run_subagent",
+              arguments: { name: "slow", task: "slow-task" },
+              siblings: [
+                {
+                  id: "peer",
+                  name: "mcp__rakazo__run_subagent",
+                  arguments: { name: "peer", task: "peer-task" },
+                },
+              ],
+            },
+          },
+          childStep,
+          childStep,
+          ...(cancelled
+            ? []
+            : [
+                {
+                  expect(request) {
+                    const text = JSON.stringify(request.messages);
+                    expect(text).toContain(
+                      paused ? "Stopped: the run is waiting for the user." : "slow-result",
+                    );
+                    if (!paused) expect(text).toContain("peer-result");
+                  },
+                  response: { type: "text", text: "Parent closed." },
+                } satisfies ModelEmulatorStep,
+              ]),
+        ],
+        {
+          tools: ["run_subagent", "remember"].map((name) => ({
+            name,
+            description: name,
+            inputSchema: { type: "object", properties: {} },
+          })),
+          startSubagent,
+        },
+        {},
+        cancel.signal,
+      );
+      if (cancelled) {
+        await expect(pending).rejects.toThrow("The run was cancelled");
+        await expect.poll(() => closed).toBe(2);
+        expect([...logs.keys()].sort()).toEqual(["peer", "slow"]);
+        for (const log of logs.values()) {
+          expect(log.text).toBe("");
+          expect(log.finished).toEqual([
+            expect.objectContaining({ status: "failed", result: "The worker stopped" }),
+          ]);
+        }
+        return;
+      }
+      const { exit, launches, seen } = await pending;
+      expect(launches).toBe(1);
+      expect(exit).toBe(paused ? "paused" : "done");
+      expect([...logs.keys()].sort()).toEqual(["peer", "slow"]);
+      for (const log of logs.values()) {
+        expect(log.transcripts).toHaveLength(1);
+        expect(log.transcripts[0]?.unverifiedCalls).toBe(0);
+        expect(log.finished).toHaveLength(1);
+      }
+      if (paused) {
+        await expect.poll(() => slowClosed).toBe(true);
+        expect(
+          logs
+            .get("slow")
+            ?.transcripts[0]?.entries.flatMap((entry) =>
+              entry.kind === "text" ? [entry.text] : [],
+            )
+            .join(""),
+        ).toBe("");
+      } else {
+        expect(logs.get("slow")?.text).toBe("slow-result");
+        expect(logs.get("peer")?.text).toBe("peer-result");
+      }
+      expect(
+        seen
+          .filter((event) => event.type === "text")
+          .map((event) => event.text)
+          .join(""),
+      ).toBe(paused ? "" : "Parent closed.");
     },
   );
 
