@@ -213,7 +213,7 @@ export class E2BWorkerProvider implements WorkerProvider, GuestConnector {
     private readonly config: E2BWorkerConfig,
     sdk?: E2BWorkerSdk,
   ) {
-    this.expectedHarness = workerHarness(config.harness ?? "pi");
+    this.expectedHarness = workerHarness(config.harness ?? "pi-native");
     this.sdk =
       sdk ?? e2bWorkerSdk({ apiKey: config.apiKey, domain: config.domain, apiUrl: config.apiUrl });
   }

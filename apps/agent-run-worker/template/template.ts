@@ -36,6 +36,7 @@ export function workerTemplate(harness: string, bundle: string): TemplateBuilder
   if (!layer) throw new Error(`No worker template layer for the harness "${harness}"`);
   // The bundle changes most often, so it comes last and keeps the layers above cached.
   return layer(base(bundle))
+    .setEnvs({ RAKAZO_WORKER_HARNESS: harness })
     .copy("managed-skills", "/managed-skills", { user: "root" })
     .runCmd("chown -R root:root /managed-skills && chmod -R a-w /managed-skills", { user: "root" })
     .copy(path.basename(bundle), E2B_WORKER_GUEST_ENTRY, { user: "root" });

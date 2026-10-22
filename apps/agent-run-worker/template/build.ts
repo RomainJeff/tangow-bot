@@ -4,7 +4,7 @@ import { bundleGuest } from "../scripts/bundle.js";
 import { WORKER_PROFILE, workerTemplate } from "./template.js";
 
 const { values } = parseArgs({
-  options: { harness: { type: "string", default: "pi" }, name: { type: "string" } },
+  options: { harness: { type: "string", default: "pi-native" }, name: { type: "string" } },
 });
 const harness = values.harness;
 const bundle = await bundleGuest();

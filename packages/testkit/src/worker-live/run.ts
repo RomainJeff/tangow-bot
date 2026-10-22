@@ -35,7 +35,18 @@ export async function liveRun(
   const seen: Seen[] = [];
   const connects: number[] = [];
   const run = await startWorkerRun({
-    steps: options.steps,
+    steps: options.steps.map((step) => ({
+      ...step,
+      response(request) {
+        const reply = typeof step.response === "function" ? step.response(request) : step.response;
+        if (reply.type !== "tool") return reply;
+        const assigned = request.tools?.find(
+          (tool) => tool.function.name === `mcp__rakazo__${reply.name}`,
+        );
+        return assigned ? { ...reply, name: assigned.function.name } : reply;
+      },
+    })),
+    screensByPath: live.config.harness !== "pi",
     databaseUrl: options.databaseUrl,
     protocol: options.protocol,
     tools: options.tools,
@@ -134,4 +145,4 @@ export const finish = (
   { expect() {}, response: { type: "text", text: recap(what) } },
 ];
 export const toolNames = (request: ModelEmulatorRequest) =>
-  (request.tools ?? []).map((tool) => tool.function.name);
+  (request.tools ?? []).map((tool) => tool.function.name.replace(/^mcp__rakazo__/, ""));

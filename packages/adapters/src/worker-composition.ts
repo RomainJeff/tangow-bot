@@ -9,7 +9,7 @@ import { createWorkerLifecycle } from "./worker-lifecycle.js";
 export type WorkerProviderConfig = { kind: "e2b"; apiKey: string; template: string };
 
 /** The template `apps/agent-run-worker/template` builds for the default harness. */
-const DEFAULT_WORKER_TEMPLATE = "rakazo-worker-pi";
+const DEFAULT_WORKER_TEMPLATE = "rakazo-worker-pi-native";
 const RECONCILE_BATCH = 10;
 
 /**
@@ -47,7 +47,9 @@ export function composeWorkers(
   const lifecycle = createWorkerLifecycle({ prisma, provider });
   return {
     lifecycle,
-    runWorkers: provider ? createRunWorkers({ prisma, lifecycle, connector: provider }) : undefined,
+    runWorkers: provider
+      ? createRunWorkers({ prisma, lifecycle, connector: provider, screensByPath: true })
+      : undefined,
     async reconcileWorkers(signal: AbortSignal) {
       const context = {
         operationId: "workers.reconcile",

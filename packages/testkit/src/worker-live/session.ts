@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
+import path from "node:path";
 import { performance } from "node:perf_hooks";
 import type { AdapterContext, SandboxProvider, WorkerProvider } from "@rakazo/adapter-kit";
 import {
@@ -27,6 +28,10 @@ export interface LiveConfig {
   domain?: string;
   /** The worker template built from `apps/agent-run-worker/template`. */
   workerTemplate: string;
+  harness?: string;
+  /** Upload a local bundle to each owned worker instead of publishing a template. */
+  guestBundle?: string;
+  prepareComputer?: boolean;
   /** A template for the second VM that mounts the same volumes, as the computer does. */
   computerTemplate: string;
 }
@@ -144,13 +149,17 @@ export function liveSession(config: LiveConfig) {
     workerProvider: (
       maxTimeoutMs?: number,
       guest?: { path: string; script: string; args?: string },
-    ) =>
-      new E2BWorkerProvider(
+    ) => {
+      guest ??= config.guestBundle
+        ? { path: "/tmp/rakazo-n13-guest.mjs", script: readFileSync(config.guestBundle, "utf8") }
+        : undefined;
+      return new E2BWorkerProvider(
         {
           apiKey: config.apiKey,
           apiUrl: config.apiUrl,
           domain: config.domain,
           template: config.workerTemplate,
+          harness: config.harness ?? "pi-native",
           maxTimeoutMs,
           ...(guest && { guestEntry: [guest.path, guest.args].filter(Boolean).join(" ") }),
         },
@@ -159,12 +168,26 @@ export function liveSession(config: LiveConfig) {
               ...sdk,
               async startGuest(sandboxId, command, options) {
                 const vm = await Sandbox.connect(sandboxId, connection);
+                if (config.guestBundle) {
+                  const archive = readFileSync(
+                    path.join(path.dirname(config.guestBundle), "managed-skills.tar"),
+                  );
+                  await vm.files.write(
+                    "/tmp/rakazo-managed-skills.tar",
+                    new Uint8Array(archive).buffer,
+                  );
+                  await vm.commands.run(
+                    "mkdir -p /managed-skills && tar -xf /tmp/rakazo-managed-skills.tar -C /managed-skills && chmod -R a-w /managed-skills",
+                    { user: "root" },
+                  );
+                }
                 await vm.files.write(guest.path, guest.script);
                 return sdk.startGuest(sandboxId, command, options);
               },
             }
           : sdk,
-      ),
+      );
+    },
     /**
      * The product's E2B computer. Its desktop preparation is skipped: it installs the desktop
      * packages a desktop template carries, which this host's computer template lacks, and the lanes
@@ -172,6 +195,7 @@ export function liveSession(config: LiveConfig) {
      */
     computer: (): SandboxProvider => {
       const provider = new E2BSandboxProvider(config.apiKey, computerSdk);
+      if (config.prepareComputer) return provider;
       return new Proxy(provider, {
         get: (target, key, receiver) =>
           key === "prepare" ? async () => {} : Reflect.get(target, key, receiver),

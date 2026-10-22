@@ -45,8 +45,18 @@ function exchangeSteps(results: Record<string, string>) {
         results.grep = toolResult(request);
       },
     ),
+    call(
+      "mount-root",
+      "bash",
+      {
+        command: `node -e 'const fs=require("fs"), cp=require("child_process"), root=process.cwd(); const target=cp.execFileSync("findmnt",["-rn","-T",root,"-o","TARGET"]).toString().trim(); let rejectionCode=null; try { fs.renameSync(root,root+".n13-replaced"); fs.renameSync(root+".n13-replaced",root); } catch(e) { rejectionCode=e.code; } console.log(JSON.stringify({mountRoot:target===root,replacementRejected:["EBUSY","EACCES","EPERM"].includes(rejectionCode),rejectionCode}));'`,
+      },
+      (request) => {
+        results.bash = toolResult(request);
+      },
+    ),
     ...finish("Exchanged files with the computer", (request) => {
-      results.bash = toolResult(request);
+      results.mountRoot = toolResult(request);
     }),
   ];
 }
@@ -104,6 +114,8 @@ async function exchange(
     results.grep?.includes("from-worker.txt:1: edited by the worker") === true &&
     results.grep?.includes("from-computer.txt:1: written by the computer") === true &&
     results.bash?.includes("written by the computer") === true &&
+    results.mountRoot?.includes('"mountRoot":true') === true &&
+    results.mountRoot?.includes('"replacementRejected":true') === true &&
     mine.out.startsWith("seen") &&
     shared.out.startsWith("seen");
   return {
@@ -115,7 +127,7 @@ async function exchange(
       privateVisibleWithinMsOfGrant: sinceGrant(mine.at, "e1"),
       sharedVisibleWithinMsOfGrant: sinceGrant(shared.at, "b1"),
       pollIntervalMs: POLL_INTERVAL_S * 1000,
-      note: "Visibility times run from the controller granting the guest tool that wrote, matched by its request's seq (edit e1 for the private file, bash b1 for the shared one), to the host seeing the computer's poller exit. They include the tool's own run and E2B's command stream, so they bound the cross-VM delay from above.",
+      note: "Null grant timings mean the harness uses native tools without P2 grants. When present, visibility times run from the controller granting the guest tool that wrote, matched by its request's seq (edit e1 for the private file, bash b1 for the shared one), to the host seeing the computer's poller exit. They include the tool's own run and E2B's command stream, so they bound the cross-VM delay from above.",
     },
   };
 }
@@ -162,6 +174,7 @@ export const laneBProductComputer: Lane = {
       const ready = await worker.send("Get ready.");
       if ((await worker.status(ready)) !== "completed")
         throw new Error("The first run, which boots the computer, did not complete");
+      await worker.run.startComputer();
       const first = await machine();
       if (!first) throw new Error("The first run left the computer without a machine");
       computer = await Sandbox.connect(first, live.connection);
@@ -197,7 +210,9 @@ export const laneBProductComputer: Lane = {
           workspaceLinksTo: link,
           volumeMountsInComputer: mounted.split("\n"),
           secondRunReusedMachine: second === first,
-          desktopPreparation: "skipped: this host has no desktop template",
+          desktopPreparation: live.config.prepareComputer
+            ? "product E2BSandboxProvider.prepare"
+            : "skipped for plain P3 fixture; not parity evidence",
         },
       };
     } finally {
@@ -227,28 +242,33 @@ export const laneC: Lane = {
     const probe = (port: number) =>
       `r=$(timeout 3 bash -c 'exec 3<>/dev/tcp/127.0.0.1/${port} && head -c 16 <&3' 2>/dev/null); c=$?; if [ $c -eq 124 ]; then echo silent; elif [ -n "$r" ]; then echo "$r"; else echo refused; fi`;
     const out: Record<string, string> = {};
+    let markListenerReady = () => {};
+    const listenerReady = new Promise<void>((resolve) => {
+      markListenerReady = resolve;
+    });
     const worker = await liveRun(live, {
       steps: [
         call("c1", "bash", {
           command: [
             "cat /proc/sys/kernel/random/boot_id",
             `echo "probe:$(${probe(COMPUTER_PORT)})"`,
-            "echo \"listed:$(pgrep -f '[p]3live-listener-c' || echo none)\"",
-            `(setsid nohup ${listener("p3live-listener-w", WORKER_PORT, "worker")} >/dev/null 2>&1 &)`,
+            'echo "listed:$(pgrep -x n13-listen-c || echo none)"',
+            `(setsid nohup ${listener("n13-listen-w", WORKER_PORT, "worker")} >/dev/null 2>&1 &)`,
             "sleep 1",
             `echo "self:$(${probe(WORKER_PORT)})"`,
-            "echo \"own:$(pgrep -f '[p]3live-listener-w' >/dev/null && echo yes || echo no)\"",
+            'echo "own:$(pgrep -x n13-listen-w >/dev/null && echo yes || echo no)"',
           ].join("\n"),
         }),
         call("c2", "bash", { command: "sleep 5; echo listening" }, (request) => {
           out.worker = toolResult(request);
+          markListenerReady();
         }),
         ...finish("Probed localhost"),
       ],
     });
     const computer = await live.vm({});
     try {
-      await computer.commands.run(listener("p3live-listener-c", COMPUTER_PORT, "computer"), {
+      await computer.commands.run(listener("n13-listen-c", COMPUTER_PORT, "computer"), {
         background: true,
         timeoutMs: 0,
       });
@@ -257,22 +277,16 @@ export const laneC: Lane = {
       const computerSelf = await sh(computer, probe(COMPUTER_PORT));
       const computerOwn = await sh(
         computer,
-        "pgrep -f '[p]3live-listener-c' >/dev/null && echo yes || echo no",
+        "pgrep -x n13-listen-c >/dev/null && echo yes || echo no",
       );
       let fromComputer = "";
       let listedInComputer = "";
       const runId = await worker.run.send("Probe localhost.");
       const running = worker.run.continueRun(runId);
-      const grants = () =>
-        worker
-          .frames()
-          .filter((frame) => frame.from === "controller" && frame.type === "tool.grant").length;
-      // The worker's listener is up while its second command sleeps.
-      for (let i = 0; i < 300 && grants() < 2; i++)
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      if (grants() >= 2) {
+      await Promise.race([listenerReady, running]);
+      if (out.worker) {
         fromComputer = await sh(computer, probe(WORKER_PORT));
-        listedInComputer = await sh(computer, "pgrep -f '[p]3live-listener-w' || echo none");
+        listedInComputer = await sh(computer, "pgrep -x n13-listen-w || echo none");
       }
       await running;
       await worker.completed(runId);
