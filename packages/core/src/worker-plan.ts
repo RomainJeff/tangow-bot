@@ -184,6 +184,18 @@ export function attemptHoldsFence(
   return attempt.fence === run.leaseFence && (run.status === "leased" || run.status === "running");
 }
 
+/** A run paused on the user stays its attempt's: the attempt may conclude its turn, not act. */
+export function attemptOwnsFence(
+  attempt: { fence: number },
+  run: { leaseFence: number; status: string },
+): boolean {
+  return (
+    attemptHoldsFence(attempt, run) ||
+    (attempt.fence === run.leaseFence &&
+      (run.status === "waiting_input" || run.status === "waiting_takeover"))
+  );
+}
+
 export const WORKSPACE_ROOT = "/workspace";
 const PATH_SEGMENT = /^[A-Za-z0-9_-]{1,64}$/;
 
