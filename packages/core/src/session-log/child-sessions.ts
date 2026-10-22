@@ -18,12 +18,12 @@ export function originSessionIdOf(entry: ThreadEntry): SessionId | undefined {
   return "originSessionId" in entry.payload ? entry.payload.originSessionId : undefined;
 }
 
-type ItemOrigin = NonNullable<Extract<ThreadItem, { origin?: unknown }>["origin"]>;
-export type SessionOrigin = Exclude<ItemOrigin, { entryId: unknown }>;
+export type SessionOrigin = { sessionId: SessionId; kind: ChildSession["kind"]; name: string };
 
+// An unnamed origin is the bot's own run session, or a routine whose start is on an older page: no label.
 export function sessionOriginOf(item: ThreadItem): SessionOrigin | null {
   const origin = "origin" in item ? item.origin : undefined;
-  if (!origin || "entryId" in origin) return null;
+  if (!origin || "entryId" in origin || !origin.kind || !origin.name) return null;
   if (item.kind === "botMessage" && origin.kind === "routine") return null;
-  return origin;
+  return { sessionId: origin.sessionId, kind: origin.kind, name: origin.name };
 }

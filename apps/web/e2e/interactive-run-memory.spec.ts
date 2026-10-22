@@ -33,6 +33,7 @@ test("internal run memory stays out of chat and a cancelled recap retires its qu
       payload: {
         toPerson: true,
         midTurn: true,
+        originSessionId: "memory-internal-session",
         blocks: [{ kind: "text", text: "The regional report is ready for review." }],
       },
     },
@@ -43,6 +44,7 @@ test("internal run memory stays out of chat and a cancelled recap retires its qu
       botId,
       runId: "memory-run",
       payload: {
+        originSessionId: "memory-internal-session",
         block: { kind: "ask", text: "Which region should I send first?", status: "pending" },
       },
     },
@@ -91,6 +93,7 @@ test("internal run memory stays out of chat and a cancelled recap retires its qu
     await expect(page.getByRole("textbox", { name: "Answer", exact: true })).toBeVisible();
     await expect(composer).toHaveAttribute("placeholder", "Answer Chief…");
     await expect(transcript.locator('[data-message-id="memory-opened"]')).toHaveCount(0);
+    await expect(transcript.getByTestId("item-origin")).toHaveCount(0);
 
     drafts.push(recap);
     await page.reload({ waitUntil: "domcontentloaded" });
