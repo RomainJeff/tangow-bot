@@ -24,6 +24,8 @@ export function createWorkerAgentRuntime(options: {
   launcher: WorkerLauncher;
   stops: StopJournal;
   clock?: WorkerClock;
+  /** The guest harness reads screens from the bot's home with its own file tool. */
+  screensByPath?: boolean;
 }): AgentRuntime {
   const key = createCapabilityKey();
   const sessions = new Map<string, ReturnType<typeof createSession>>();
@@ -45,6 +47,7 @@ export function createWorkerAgentRuntime(options: {
           tools: true,
           scripted: false,
           localTools: WORKER_NATIVE_TOOLS,
+          screensByPath: options.screensByPath ?? false,
         },
       };
     },
@@ -89,6 +92,7 @@ export function createRunWorkers(deps: {
   lifecycle: WorkerLifecycle;
   connector: GuestConnector;
   clock?: WorkerClock;
+  screensByPath?: boolean;
 }): RunWorkers {
   const stops = createStopJournal(deps.prisma);
   return {
@@ -100,6 +104,7 @@ export function createRunWorkers(deps: {
         launcher: createLifecycleLauncher({ ...deps, launch }),
         stops,
         clock: deps.clock,
+        screensByPath: deps.screensByPath,
       }),
   };
 }

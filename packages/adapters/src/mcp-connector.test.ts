@@ -135,7 +135,13 @@ describe("MCP connector session cache", () => {
       "mcp_load_tool",
       "mcp_execute_tool",
     ]);
-    expect(JSON.stringify(tools)).not.toContain("schema-marker");
+    const declared = tools.map(({ name, description, inputSchema }) => ({
+      name,
+      description,
+      inputSchema,
+    }));
+    expect(JSON.stringify(declared)).not.toContain("schema-marker");
+    expect(tools[2]!.catalog?.map((entry) => entry.tool.name)).toHaveLength(30);
     await connector.close();
   });
 

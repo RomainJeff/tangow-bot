@@ -18,6 +18,8 @@ export interface LaunchedGuest {
   release(): Promise<ReleaseOutcome>;
   /** Whether the attempt still holds its running run's fence. */
   holdsFence(): Promise<boolean>;
+  /** Whether the run is still this attempt's, running or paused on the user. */
+  ownsFence(): Promise<boolean>;
 }
 
 export interface WorkerLauncher {
@@ -130,6 +132,7 @@ export function createLifecycleLauncher(deps: {
         ...guest,
         release: () => deps.lifecycle.release(worker.attemptId, context),
         holdsFence: async () => (await deps.lifecycle.status(worker.attemptId))?.active === true,
+        ownsFence: () => deps.lifecycle.ownsFence(worker.attemptId),
       };
     },
   };

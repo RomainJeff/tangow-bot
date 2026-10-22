@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type {
   AgentToolExecutionResult,
   ComputerAction,
@@ -57,10 +58,21 @@ export function parseComputerActions(value: unknown): ComputerAction[] {
   return actions;
 }
 
+/**
+ * Where a screen is saved: a new file at the root of the bot's home, the volume's mount point,
+ * under a name nobody can guess. The guest writes to that volume too, so a directory there could be
+ * a link to another bot's files; the root and a name that does not exist yet cannot.
+ */
+export function screenPath(observation: ComputerObservation): string {
+  return `.rakazo-screen-${randomUUID()}.${observation.mimeType === "image/png" ? "png" : "jpg"}`;
+}
+
+/** `savedAt`: the screen is a file there, so the result names it instead of carrying the image. */
 export function observationToolResult(
   observation: ComputerObservation,
   note = "computer observed",
   previousFrameId?: string,
+  savedAt?: string,
 ): AgentToolExecutionResult {
   const details = {
     frameId: observation.frameId,
@@ -69,6 +81,7 @@ export function observationToolResult(
     height: observation.height,
     cursor: observation.cursor,
     activeWindow: observation.activeWindow,
+    ...(savedAt ? { path: savedAt } : {}),
   };
   const unchanged = previousFrameId === observation.frameId;
   return {
@@ -76,9 +89,9 @@ export function observationToolResult(
     content: [
       {
         type: "text",
-        text: `${note}${unchanged ? " (screen unchanged)" : ""}\n${JSON.stringify(details)}`,
+        text: `${note}${unchanged ? " (screen unchanged)" : ""}\n${JSON.stringify(details)}${savedAt && !unchanged ? `\nScreen saved at ${savedAt}. Read it to see it.` : ""}`,
       },
-      ...(unchanged
+      ...(unchanged || savedAt
         ? []
         : [
             {

@@ -438,7 +438,7 @@ describe("a run whose bot runs in a guest", () => {
     ["before", ["publish_note", "bash"], []],
     ["after", ["bash", "publish_note"], ["ran"]],
   ])(
-    "stops a guest's tool batch at a connector approval with a native command %s it",
+    "stops a guest's tool batch at a connector approval with a native command %s it, then runs the approved call at the controller",
     async (_order, batch, probeLines) => {
       const probed = await probe();
       const published: string[] = [];
@@ -446,7 +446,7 @@ describe("a run whose bot runs in a guest", () => {
       const calls = batch.map((name) =>
         name === "bash" ? { id: "probe", name, arguments: { command: probed.command } } : publish,
       );
-      let replayed: ModelEmulatorRequest["messages"] = [];
+      let resumed: ModelEmulatorRequest["messages"] = [];
       const run = await fixture({
         tools: {
           describe: () => ({
@@ -471,11 +471,11 @@ describe("a run whose bot runs in a guest", () => {
           { expect() {}, response: { type: "tool", ...calls[0]!, siblings: calls.slice(1) } },
           {
             expect(request) {
-              replayed = request.messages;
+              resumed = request.messages;
             },
-            response: { type: "tool", ...publish },
+            response: finishing[0]!.response,
           },
-          ...finishing,
+          finishing[1]!,
         ],
       });
       await run.prisma.actionApprovalRule.create({
@@ -509,7 +509,7 @@ describe("a run whose bot runs in a guest", () => {
       await run.continueRun(runId);
 
       run.model.assertComplete();
-      expect(JSON.stringify(replayed).includes(probed.command)).toBe(probeLines.length > 0);
+      expect(JSON.stringify(resumed).includes(probed.command)).toBe(probeLines.length > 0);
       expect(published).toEqual(["publish_note"]);
       expect(await probed.lines()).toEqual(probeLines);
       expect((await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
