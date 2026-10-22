@@ -146,13 +146,14 @@ describe("bash", () => {
     const running = bash({ command: `sleep 30 & echo $! > ${pidFile}; wait` }, ctx);
     await waitFor(() => readFile(pidFile, "utf8").then(Number, () => 0));
     const child = Number(await readFile(pidFile, "utf8"));
+    expect(await isAlive(child)).toBe(true);
     const startedAt = Date.now();
     abort.abort();
     const output = await running;
 
     expect(output).toMatchObject({ isError: true, text: "Command aborted" });
     expect(Date.now() - startedAt).toBeLessThan(2_000);
-    expect(isAlive(child)).toBe(false);
+    expect(await isAlive(child)).toBe(false);
   });
 });
 
@@ -164,12 +165,22 @@ async function waitFor(read: () => Promise<number>) {
   throw new Error("timed out");
 }
 
-function isAlive(pid: number) {
+async function isAlive(pid: number) {
   try {
     process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
+    if (process.platform !== "linux") return true;
+    // Signal 0 also succeeds for killed children awaiting reaping on Linux.
+    const stat = await readFile(`/proc/${pid}/stat`, "utf8");
+    const state = stat[stat.lastIndexOf(")") + 2];
+    return state !== "Z" && state !== "X";
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      "code" in error &&
+      (error.code === "ESRCH" || error.code === "ENOENT")
+    )
+      return false;
+    throw error;
   }
 }
 
