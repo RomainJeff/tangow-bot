@@ -7,6 +7,8 @@ export const MODEL_STREAM_MAX_RETRIES = 1;
 
 export const TOOL_RESULT_TEXT_LIMIT = 12_000;
 
+export const MAX_PARALLEL_SUBAGENTS = 4;
+
 export function clipToolResultText(text: string, limit: number = TOOL_RESULT_TEXT_LIMIT): string {
   return text.length > limit ? `${text.slice(0, limit)}…` : text;
 }

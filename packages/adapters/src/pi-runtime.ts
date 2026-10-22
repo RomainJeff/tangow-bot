@@ -39,6 +39,7 @@ import { isToolPauseResult } from "./approval-effect.js";
 import { askUserCard } from "./ask-user.js";
 import {
   builtinAgentTools,
+  HELPER_STOPPED_FOR_PAUSE,
   helperCallOf,
   helperInstructions,
   helperModel,
@@ -62,6 +63,7 @@ import {
   billedPromptTokens,
   clipToolResultContent,
   clipToolResultText,
+  MAX_PARALLEL_SUBAGENTS,
   MODEL_STREAM_MAX_RETRIES,
   MODEL_STREAM_TIMEOUT_MS,
   providerCacheTokens,
@@ -88,7 +90,6 @@ function catalogModels(): Models {
   catalogModelsCache ??= registerOpenAiCompatibleCatalog(registerLocalProvider(builtinModels()));
   return catalogModelsCache;
 }
-const MAX_PARALLEL_SUBAGENTS = 4;
 // Some OpenAI-compatible models return EOS immediately after a tool result
 // instead of taking another assistant turn. A bounded internal follow-up keeps
 // that provider quirk from making a long task look complete after one step.
@@ -1349,8 +1350,8 @@ type SubagentOutcome = { status: "completed" | "failed"; result: string; toolRes
 
 const stoppedForPause: SubagentOutcome = {
   status: "completed",
-  result: "Stopped: the run is waiting for the user.",
-  toolResult: "Stopped: the run is waiting for the user.",
+  result: HELPER_STOPPED_FOR_PAUSE,
+  toolResult: HELPER_STOPPED_FOR_PAUSE,
 };
 
 function subagentFailed(message: string): SubagentOutcome {
