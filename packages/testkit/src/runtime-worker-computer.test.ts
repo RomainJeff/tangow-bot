@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { queryObjects } from "node:v8";
 import type { ConnectorProvider } from "@rakazo/adapter-kit";
+import { HARNESSES } from "@rakazo/agent-run-worker";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.js";
 import { VolumeComputer } from "./volume-computer.js";
@@ -62,9 +63,19 @@ const toolResults = (request: ModelEmulatorRequest) =>
 async function botRun(
   steps: ModelEmulatorStep[],
   computerScope: "team" | "dedicated" | "none" = "team",
+  native = false,
 ) {
   const run = await startWorkerRun({
-    steps,
+    steps: native
+      ? steps.map((step) => ({
+          ...step,
+          response:
+            typeof step.response !== "function" && step.response.type === "tool"
+              ? { ...step.response, name: `mcp__rakazo__${step.response.name}` }
+              : step.response,
+        }))
+      : steps,
+    ...(native ? { harness: HARNESSES["pi-native"]! } : {}),
     computerScope,
     protocol: "anthropic",
     tools: lookup,
@@ -106,23 +117,30 @@ async function botRun(
 }
 
 describe("a worker run's computer", () => {
-  it("stays asleep, with no lease taken, through a run that only calls an MCP tool", async () => {
-    const bot = await botRun([
-      {
-        expect() {},
-        response: { type: "tool", id: "mcp", name: "mcp_lookup", arguments: {} },
-      },
-      ...finish,
-    ]);
-    const runId = await bot.start();
+  it.each([false, true])(
+    "stays asleep without a lease through MCP only calls (native=%s)",
+    async (native) => {
+      const bot = await botRun(
+        [
+          {
+            expect() {},
+            response: { type: "tool", id: "mcp", name: "mcp_lookup", arguments: {} },
+          },
+          ...finish,
+        ],
+        "team",
+        native,
+      );
+      const runId = await bot.start();
 
-    expect((await bot.run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
-      "completed",
-    );
-    expect(bot.run.provider.launches).toHaveLength(1);
-    expect(await bot.computer()).toBe("stopped");
-    expect(await bot.leases()).toEqual([]);
-  });
+      expect((await bot.run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
+        "completed",
+      );
+      expect(bot.run.provider.launches).toHaveLength(1);
+      expect(await bot.computer()).toBe("stopped");
+      expect(await bot.leases()).toEqual([]);
+    },
+  );
 
   it("starts at the first computer call, holds the lease through the run and lets it go at the end", async () => {
     const seen: Array<{ computer: string; leases: unknown }> = [];
@@ -369,69 +387,100 @@ describe("a worker run's computer", () => {
 });
 
 describe("a worker run's screens by path", () => {
-  it("saves the screen on the bot's volume, never through a link the guest made, and keeps the image off the run channel", async () => {
-    const seen: Seen[] = [];
-    const results: Record<string, unknown> = {};
-    const read = { type: "tool" as const, id: "see", name: "read", arguments: { path: "" } };
-    // Stands for another bot's folder that the guest links from its own volume.
-    const elsewhere = await mkdtemp(path.join(tmpdir(), "rakazo-other-bot-"));
-    cleanups.push(() => rm(elsewhere, { recursive: true, force: true }));
-    const run = await startWorkerRun({
-      steps: [
-        {
-          expect() {},
-          response: {
-            type: "tool",
-            id: "link",
-            name: "bash",
-            arguments: {
-              command: `mkdir -p .rakazo && ln -s ${elsewhere} .rakazo/screens && ln -s ${elsewhere} screens`,
+  it.each([false, true])(
+    "saves a screen for native read without following links or sending image blobs (native=%s)",
+    async (native) => {
+      const seen: Seen[] = [];
+      const results: Record<string, unknown> = {};
+      const read = { type: "tool" as const, id: "see", name: "read", arguments: { path: "" } };
+      // Stands for another bot's folder that the guest links from its own volume.
+      const elsewhere = await mkdtemp(path.join(tmpdir(), "rakazo-other-bot-"));
+      cleanups.push(() => rm(elsewhere, { recursive: true, force: true }));
+      const run = await startWorkerRun({
+        ...(native ? { harness: HARNESSES["pi-native"]! } : {}),
+        steps: [
+          {
+            expect() {},
+            response: {
+              type: "tool",
+              id: "link",
+              name: "bash",
+              arguments: {
+                command: `mkdir -p .rakazo && ln -s ${elsewhere} .rakazo/screens && ln -s ${elsewhere} screens`,
+              },
             },
           },
-        },
-        {
-          expect() {},
-          response: { type: "tool", id: "look", name: "computer_observe", arguments: {} },
-        },
-        {
-          expect(request) {
-            results.look = toolResults(request).look;
-            read.arguments.path = /Screen saved at (\S+)\. /.exec(String(results.look))?.[1] ?? "";
+          {
+            expect() {},
+            response: {
+              type: "tool",
+              id: "look",
+              name: native ? "mcp__rakazo__computer_observe" : "computer_observe",
+              arguments: {},
+            },
           },
-          response: read,
-        },
-        {
-          expect(request) {
-            results.see = toolResults(request).see;
+          {
+            expect(request) {
+              results.look = toolResults(request).look;
+              read.arguments.path =
+                /Screen saved at (\S+)\. /.exec(String(results.look))?.[1] ?? "";
+            },
+            response: read,
           },
-          response: finish[0]!.response,
-        },
-        finish[1]!,
-      ],
-      computerScope: "team",
-      protocol: "anthropic",
-      screensByPath: true,
-      connector: (provider) => tapConnector(provider, seen, []),
-    });
-    cleanups.push(() => run.close());
-    const runId = await run.send("Hello.");
-    await run.continueRun(runId);
-    run.model.assertComplete();
+          {
+            expect(request) {
+              results.see = toolResults(request).see;
+            },
+            response: native
+              ? {
+                  type: "tool",
+                  id: "say",
+                  name: "mcp__rakazo__message_user",
+                  arguments: { message: "Done." },
+                }
+              : finish[0]!.response,
+          },
+          finish[1]!,
+        ],
+        computerScope: "team",
+        protocol: "anthropic",
+        screensByPath: true,
+        connector: (provider) => tapConnector(provider, seen, []),
+      });
+      cleanups.push(() => run.close());
+      const runId = await run.send("Hello.");
+      await run.continueRun(runId);
+      run.model.assertComplete();
 
-    expect(await readdir(elsewhere)).toEqual([]);
-    const screen = "\\.rakazo-screen-[\\w-]{36}\\.png";
-    expect(String(results.look)).toMatch(
-      new RegExp(
-        `^computer observed\\n\\{"frameId":"[^"]+",.*"width":\\d+,"height":\\d+.*"path":"${screen}"\\}\\nScreen saved at ${screen}\\. Read it to see it\\.$`,
-      ),
-    );
-    expect(String(results.see)).toContain("image/png");
-    const fromController = seen
-      .filter(({ from }) => from === "controller")
-      .map(({ frame }) => Buffer.from(frame).toString());
-    expect(fromController.some((frame) => frame.includes("Screen saved at"))).toBe(true);
-    expect(fromController.filter((frame) => frame.includes('"type":"image"'))).toEqual([]);
-  });
+      expect(await readdir(elsewhere)).toEqual([]);
+      const screen = "\\.rakazo-screen-[\\w-]{36}\\.png";
+      expect(String(results.look)).toMatch(
+        new RegExp(
+          `^computer observed\\n\\{"frameId":"[^"]+",.*"width":\\d+,"height":\\d+.*"path":"${screen}"\\}\\nScreen saved at ${screen}\\. Read it to see it\\.$`,
+        ),
+      );
+      expect(String(results.see)).toContain("image/png");
+      expect(JSON.stringify(run.model.rawRequests[2]).match(/"type":"image"/g) ?? []).toHaveLength(
+        0,
+      );
+      expect(JSON.stringify(run.model.rawRequests[3]).match(/"type":"image"/g) ?? []).toHaveLength(
+        1,
+      );
+      const volume = await run.prisma.volume.findFirstOrThrow({
+        where: { botId: run.bot.id, kind: "bot_private" },
+      });
+      expect(
+        (await readdir(run.provider.volumePath(volume.providerRef!))).filter((name) =>
+          name.startsWith(".rakazo-screen-"),
+        ),
+      ).toEqual([]);
+      const fromController = seen
+        .filter(({ from }) => from === "controller")
+        .map(({ frame }) => Buffer.from(frame).toString());
+      expect(fromController.some((frame) => frame.includes("Screen saved at"))).toBe(true);
+      expect(fromController.filter((frame) => frame.includes('"type":"image"'))).toEqual([]);
+    },
+  );
 });
 
 describe("computer_exec", () => {

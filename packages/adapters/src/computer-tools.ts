@@ -63,8 +63,8 @@ export function parseComputerActions(value: unknown): ComputerAction[] {
  * under a name nobody can guess. The guest writes to that volume too, so a directory there could be
  * a link to another bot's files; the root and a name that does not exist yet cannot.
  */
-export function screenPath(observation: ComputerObservation): string {
-  return `.rakazo-screen-${randomUUID()}.${observation.mimeType === "image/png" ? "png" : "jpg"}`;
+export function screenPath(): string {
+  return `.rakazo-screen-${randomUUID()}.png`;
 }
 
 /** `savedAt`: the screen is a file there, so the result names it instead of carrying the image. */

@@ -82,22 +82,25 @@ async function nativeRun(
     clock: stillClock,
   });
   const seen: AgentRuntimeEvent[] = [];
-  for await (const event of runtime.run({
-    botId: "bot",
-    threadId: "thread",
-    runId: "run_native",
-    prompt: "Draft a note.",
-    instructions: "Instructions for Rakazo's own loop, never sent to a native harness.",
-    harnessAddendum: "You are Ada, the user's bot.",
-    history: [],
-    tools: WORKER_NATIVE_TOOLS.filter((tool) => ["read", "bash"].includes(tool.name)),
-    model: { ...server.model, ...modelPatch },
-    attempt: { id: "run_native-attempt", fence: 1 },
-    ...overrides,
-  })) {
-    seen.push(event);
+  try {
+    for await (const event of runtime.run({
+      botId: "bot",
+      threadId: "thread",
+      runId: "run_native",
+      prompt: "Draft a note.",
+      instructions: "Instructions for Rakazo's own loop, never sent to a native harness.",
+      harnessAddendum: "You are Ada, the user's bot.",
+      history: [],
+      tools: WORKER_NATIVE_TOOLS.filter((tool) => ["read", "bash"].includes(tool.name)),
+      model: { ...server.model, ...modelPatch },
+      attempt: { id: "run_native-attempt", fence: 1 },
+      ...overrides,
+    })) {
+      seen.push(event);
+    }
+  } finally {
+    server.assertComplete();
   }
-  server.assertComplete();
   return { seen, exit: await exits[0], root, requests: server.requests };
 }
 
@@ -165,6 +168,80 @@ describe("the pi-native harness through the controller", () => {
       unverifiedCalls: 0,
     });
     expect(seen.at(-1)).toEqual({ type: "done", text: "Drafted." });
+  });
+
+  it("discovers a deferred connector with Pi tool_search and invokes it through the real MCP adapter", async () => {
+    const executeTool = vi.fn(
+      async (_name: string, _args: Record<string, unknown>) => "published-on-controller",
+    );
+    const schema = { type: "object", properties: { title: { type: "string" } } };
+    const { seen } = await nativeRun(
+      [
+        {
+          expect(request) {
+            const names = request.tools?.map((tool) => tool.function.name) ?? [];
+            expect(names).toContain("tool_search");
+            expect(names).not.toContain("mcp__rakazo__publish_note");
+          },
+          response: {
+            type: "tool",
+            id: "search",
+            name: "tool_search",
+            arguments: { query: "publish_note", limit: 1 },
+          },
+        },
+        {
+          expect(request) {
+            expect(request.tools?.map((tool) => tool.function.name)).toContain(
+              "mcp__rakazo__publish_note",
+            );
+          },
+          response: {
+            type: "tool",
+            id: "publish",
+            name: "mcp__rakazo__publish_note",
+            arguments: { title: "Plan" },
+          },
+        },
+        {
+          expect(request) {
+            expect(JSON.stringify(request.messages)).toContain("published-on-controller");
+          },
+          response: { type: "text", text: "Done." },
+        },
+      ],
+      {
+        tools: [
+          {
+            name: "mcp_execute_tool",
+            description: "Execute a connector tool",
+            inputSchema: schema,
+            route: { connectorId: "notes", toolName: "__catalog_execute" },
+            catalog: Array.from({ length: 30 }, (_, index) => ({
+              id: `notes:${index}`,
+              tool: {
+                name: index === 29 ? "publish_note" : `lookup_${index}`,
+                description: index === 29 ? "Publish a note" : "Lookup",
+                inputSchema: schema,
+              },
+            })),
+          },
+        ],
+        executeTool,
+      },
+    );
+    expect(executeTool).toHaveBeenCalledTimes(1);
+    expect(executeTool.mock.calls[0]?.[0]).toBe("mcp_execute_tool");
+    expect(executeTool.mock.calls[0]?.[1]).toEqual({
+      id: "notes:29",
+      arguments: { title: "Plan" },
+    });
+    expect(seen.find((event) => event.type === "transcript")).toMatchObject({
+      unverifiedCalls: 0,
+      entries: expect.arrayContaining([
+        { kind: "controller", turn: 1, callId: expect.any(String), name: "mcp_execute_tool" },
+      ]),
+    });
   });
 
   it("compacts with Pi's own compaction, whose summary request goes through the relay", async () => {

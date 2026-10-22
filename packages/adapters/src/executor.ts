@@ -1172,6 +1172,7 @@ export function buildSystemInstructions(parts: SystemInstructionParts): string {
 export function buildHarnessAddendum(parts: SystemInstructionParts): string {
   return [
     "You are not a general coding assistant here: you are the bot described below, working for its user. Your own tools do the work in your workspace. When anything below differs from the guidance above, follow what is below.",
+    "Call Rakazo tools as mcp__rakazo__<name>. Use tool_search for deferred connectors, or the offered search/load/execute tools. Use native read, write, edit and bash for workspace files and commands.",
     buildSystemInstructions({
       ...parts,
       agentEnvironmentInstruction: undefined,
@@ -2499,9 +2500,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           note?: string,
         ) => {
           const savedAt =
-            screensByPath && observation.frameId !== lastComputerFrameId
-              ? screenPath(observation)
-              : undefined;
+            screensByPath && observation.frameId !== lastComputerFrameId ? screenPath() : undefined;
           if (savedAt) {
             await deps.sandbox.writeFile(
               requireComputer(),

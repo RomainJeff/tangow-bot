@@ -1,4 +1,5 @@
 import type { ConnectorProvider } from "@rakazo/adapter-kit";
+import { HARNESSES } from "@rakazo/agent-run-worker";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { latestCard } from "./index.js";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.js";
@@ -62,8 +63,23 @@ const publish = (title: string, id = "publish"): ModelEmulatorStep => ({
 const ranBefore = (request: ModelEmulatorRequest | undefined) =>
   String(request?.messages.at(-2)?.content);
 
-async function fixture(steps: ModelEmulatorStep[], tools: ConnectorProvider) {
-  const run = await startWorkerRun({ steps, tools });
+function nativeSteps(steps: ModelEmulatorStep[]): ModelEmulatorStep[] {
+  return steps.flatMap((step) => {
+    const response = step.response;
+    if (typeof response === "function" || response.type !== "tool") return [step];
+    const mapped = { ...step, response: { ...response, name: `mcp__rakazo__${response.name}` } };
+    return ["publish_note", "request_secret"].includes(response.name)
+      ? [mapped, { expect() {}, response: { type: "text", text: "Waiting." } }]
+      : [mapped];
+  });
+}
+
+async function fixture(steps: ModelEmulatorStep[], tools: ConnectorProvider, native = false) {
+  const run = await startWorkerRun({
+    steps: native ? nativeSteps(steps) : steps,
+    tools,
+    ...(native ? { harness: HARNESSES["pi-native"]! } : {}),
+  });
   cleanups.push(() => run.close());
   await run.prisma.actionApprovalRule.create({
     data: {
@@ -102,11 +118,12 @@ async function resultsOf(run: WorkerRun, runId: string, callId: string) {
 
 describe("an approval answered for a run in a guest", () => {
   it.each([
-    ["right away", false],
-    ["after the controller restarted", true],
+    ["right away", false, false],
+    ["after the controller restarted", true, false],
+    ["in native Pi after the controller restarted", true, true],
   ])(
     "runs the approved call once at the controller and hands its result to the model, resumed %s",
-    async (_delay, restart) => {
+    async (_delay, restart, native) => {
       const notes = notesConnector();
       let resumed: ModelEmulatorRequest | undefined;
       const run = await fixture(
@@ -121,6 +138,7 @@ describe("an approval answered for a run in a guest", () => {
           finishing[1]!,
         ],
         notes.tools,
+        native,
       );
       const runId = await run.send("Publish the plan.");
       await run.continueRun(runId);
@@ -322,84 +340,92 @@ describe("an approval answered for a run in a guest", () => {
     ]);
   });
 
-  it("runs nothing when the connection was revoked before the run resumed", async () => {
-    const notes = notesConnector();
-    let resumed: ModelEmulatorRequest | undefined;
-    const run = await fixture(
-      [
-        publish("Plan"),
-        {
-          expect(request) {
-            resumed = request;
+  it.each([false, true])(
+    "runs nothing when the connection was revoked before resume (native=%s)",
+    async (native) => {
+      const notes = notesConnector();
+      let resumed: ModelEmulatorRequest | undefined;
+      const run = await fixture(
+        [
+          publish("Plan"),
+          {
+            expect(request) {
+              resumed = request;
+            },
+            response: finishing[0]!.response,
           },
-          response: finishing[0]!.response,
-        },
-        finishing[1]!,
-      ],
-      notes.tools,
-    );
-    const runId = await run.send("Publish the plan.");
-    await run.continueRun(runId);
-    await answer(run, runId, "allow");
-    notes.state.connected = false;
-    await run.continueRun(runId);
+          finishing[1]!,
+        ],
+        notes.tools,
+        native,
+      );
+      const runId = await run.send("Publish the plan.");
+      await run.continueRun(runId);
+      await answer(run, runId, "allow");
+      notes.state.connected = false;
+      await run.continueRun(runId);
 
-    run.model.assertComplete();
-    expect(await statusOf(run, runId)).toBe("completed");
-    expect(notes.published).toEqual([]);
-    const effect = await run.prisma.externalEffect.findFirstOrThrow({
-      where: { runId, kind: "publish_note" },
-    });
-    expect({ status: effect.status, result: effect.result }).toEqual({
-      status: "completed",
-      result: { error: "Approved request publish_note was for a different connector resource." },
-    });
-    expect(ranBefore(resumed)).toContain(
-      'result: { "error": "Approved request publish_note was for a different connector resource." }',
-    );
-  });
+      run.model.assertComplete();
+      expect(await statusOf(run, runId)).toBe("completed");
+      expect(notes.published).toEqual([]);
+      const effect = await run.prisma.externalEffect.findFirstOrThrow({
+        where: { runId, kind: "publish_note" },
+      });
+      expect({ status: effect.status, result: effect.result }).toEqual({
+        status: "completed",
+        result: { error: "Approved request publish_note was for a different connector resource." },
+      });
+      expect(ranBefore(resumed)).toContain(
+        'result: { "error": "Approved request publish_note was for a different connector resource." }',
+      );
+    },
+  );
 
-  it("saves a requested secret at the controller and hands the model the saved credential", async () => {
-    const secret = "fixture-reusable-key";
-    const requested = {
-      label: "API key",
-      purpose: "api_key",
-      credential: {
-        name: "example_api",
-        origin: "https://api.example.test",
-        auth: { type: "bearer" },
-      },
-    };
-    let resumed: ModelEmulatorRequest | undefined;
-    const run = await startWorkerRun({
-      steps: [
-        {
-          expect() {},
-          response: { type: "tool", id: "ask", name: "request_secret", arguments: requested },
+  it.each([false, true])(
+    "saves a secret at the controller without exposing it (native=%s)",
+    async (native) => {
+      const secret = "fixture-reusable-key";
+      const requested = {
+        label: "API key",
+        purpose: "api_key",
+        credential: {
+          name: "example_api",
+          origin: "https://api.example.test",
+          auth: { type: "bearer" },
         },
-        {
-          expect(request) {
-            resumed = request;
+      };
+      let resumed: ModelEmulatorRequest | undefined;
+      const run = await startWorkerRun({
+        ...(native ? { harness: HARNESSES["pi-native"]! } : {}),
+        steps: (native ? nativeSteps : (steps: ModelEmulatorStep[]) => steps)([
+          {
+            expect() {},
+            response: { type: "tool", id: "ask", name: "request_secret", arguments: requested },
           },
-          response: finishing[0]!.response,
-        },
-        finishing[1]!,
-      ],
-    });
-    cleanups.push(() => run.close());
-    const runId = await run.send("Save my API key.");
-    await run.continueRun(runId);
-    expect(await statusOf(run, runId)).toBe("waiting_input");
-    await answer(run, runId, secret);
-    await run.continueRun(runId);
+          {
+            expect(request) {
+              resumed = request;
+            },
+            response: finishing[0]!.response,
+          },
+          finishing[1]!,
+        ]),
+      });
+      cleanups.push(() => run.close());
+      const runId = await run.send("Save my API key.");
+      await run.continueRun(runId);
+      expect(await statusOf(run, runId)).toBe("waiting_input");
+      await answer(run, runId, secret);
+      await run.continueRun(runId);
 
-    run.model.assertComplete();
-    expect(await statusOf(run, runId)).toBe("completed");
-    const effect = await run.prisma.externalEffect.findFirstOrThrow({
-      where: { runId, kind: "request_secret" },
-    });
-    expect(effect.status).toBe("completed");
-    expect(ranBefore(resumed)).toContain('"saved": true');
-    expect(JSON.stringify(run.model.requests)).not.toContain(secret);
-  });
+      run.model.assertComplete();
+      expect(await statusOf(run, runId)).toBe("completed");
+      const effect = await run.prisma.externalEffect.findFirstOrThrow({
+        where: { runId, kind: "request_secret" },
+      });
+      expect(effect.status).toBe("completed");
+      expect(ranBefore(resumed)).toContain('"saved": true');
+      expect(JSON.stringify(run.model.requests)).not.toContain(secret);
+    },
+  );
 });

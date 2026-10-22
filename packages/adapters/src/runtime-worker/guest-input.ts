@@ -17,7 +17,21 @@ import piTools from "./pi-tools.json" with { type: "json" };
 export const WORKER_NATIVE_TOOLS: readonly ConnectorTool[] = piTools;
 
 export function nativeToolsForHarness(name: string): readonly ConnectorTool[] {
-  return name === "pi" || name === "pi-native" ? WORKER_NATIVE_TOOLS : [];
+  if (name === "pi-native")
+    return [
+      ...WORKER_NATIVE_TOOLS,
+      {
+        name: "tool_search",
+        description: "Discover deferred tools",
+        readOnly: true,
+        inputSchema: {
+          type: "object",
+          properties: { query: { type: "string" }, limit: { type: "number" } },
+          required: ["query"],
+        },
+      },
+    ];
+  return name === "pi" ? WORKER_NATIVE_TOOLS : [];
 }
 
 /** The tools a harness uses only through a capability it declares. */

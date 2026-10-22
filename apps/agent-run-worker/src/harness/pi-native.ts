@@ -4,6 +4,8 @@ import path from "node:path";
 import type { AgentSession, ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
   createAgentSession,
+  createMcpExtension,
+  createToolSearchExtension,
   DefaultResourceLoader,
   SessionManager,
   SettingsManager,
@@ -17,8 +19,10 @@ import {
 } from "@rakazo/adapters/runtime-worker/pi-ai";
 import { skillReadName } from "@rakazo/adapters/volume-skills";
 import type { DoneBody, GuestHarness, HarnessHost } from "../harness.js";
+import { rakazoMcpTools } from "../rakazo-mcp.js";
 import { relayModelRuntime } from "./pi-session.js";
 import { piToolManifest } from "./pi-tools.js";
+import { rakazoMcpTransport } from "./rakazo-mcp.js";
 
 type SteeringMessage = Extract<ReplyFinal, { type: "steering" }>["messages"][number];
 
@@ -111,6 +115,19 @@ export const piNativeHarness: GuestHarness = {
     });
     let session: AgentSession | undefined;
     try {
+      const controllerTools = run.tools.filter((tool) => tool.where === "controller");
+      const catalogNames = new Map(
+        controllerTools.flatMap((tool) =>
+          typeof tool.catalog === "object"
+            ? [
+                [
+                  `mcp__rakazo__${tool.name}`.replace(/[^A-Za-z0-9_]/g, "_"),
+                  `mcp__rakazo__${tool.catalog.via}`.replace(/[^A-Za-z0-9_]/g, "_"),
+                ],
+              ]
+            : [],
+        ),
+      );
       const loader = new DefaultResourceLoader({
         cwd,
         agentDir,
@@ -120,6 +137,31 @@ export const piNativeHarness: GuestHarness = {
         noPromptTemplates: true,
         noThemes: true,
         extensionFactories: [
+          createToolSearchExtension(),
+          createMcpExtension({
+            loadConfig: () => ({
+              servers: [
+                {
+                  name: "rakazo",
+                  source: "rakazo",
+                  scope: "extension",
+                  config: {
+                    command: "rakazo-in-process",
+                    exposure: "direct",
+                    toolExposure: Object.fromEntries(
+                      rakazoMcpTools(controllerTools, true).map((tool) => [
+                        tool.name,
+                        tool.exposure,
+                      ]),
+                    ),
+                  },
+                },
+              ],
+              errors: [],
+              autoEnableCodemode: false,
+            }),
+            createTransport: () => rakazoMcpTransport(controllerTools, host, cwd),
+          }),
           rakazoExtension(host, cwd, (message) =>
             session?.agent.steer({
               role: "user",
@@ -134,7 +176,6 @@ export const piNativeHarness: GuestHarness = {
       await loader.reload({ resolveProjectTrust: async () => false });
 
       const sessionManager = SessionManager.inMemory(cwd);
-      const controllerTools = run.tools.filter((tool) => tool.where === "controller");
       for (const message of projectPiAi(
         run.history,
         run.prompt,
@@ -154,7 +195,13 @@ export const piNativeHarness: GuestHarness = {
         resourceLoader: loader,
         sessionManager,
         settingsManager,
-        tools: run.tools.filter((tool) => tool.where === "guest").map((tool) => tool.name),
+        tools: [
+          ...run.tools.filter((tool) => tool.where === "guest").map((tool) => tool.name),
+          "mcp__rakazo__*",
+          ...(controllerTools.some((tool) => typeof tool.catalog === "object")
+            ? ["tool_search"]
+            : []),
+        ],
       }));
       const active = session;
 
@@ -162,7 +209,16 @@ export const piNativeHarness: GuestHarness = {
       const added: Array<{ role: string } & Record<string, unknown>> = [];
       const unsubscribe = active.subscribe((event) => {
         if (event.type === "message_end") {
-          added.push(structuredClone(event.message) as (typeof added)[number]);
+          const message = structuredClone(event.message);
+          if (message.role === "assistant") {
+            for (const block of message.content) {
+              if (block.type === "toolCall")
+                block.name = catalogNames.get(block.name) ?? block.name;
+            }
+          } else if (message.role === "toolResult") {
+            message.toolName = catalogNames.get(message.toolName) ?? message.toolName;
+          }
+          added.push(message as (typeof added)[number]);
         } else if (event.type === "compaction_end" && event.result) {
           added.push({
             role: "compactionSummary",
