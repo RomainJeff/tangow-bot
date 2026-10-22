@@ -78,7 +78,8 @@ export function rawGuest(
 
 /** Hands every launch to the test: it opens the guest's connections itself. */
 export function manualLauncher() {
-  const fence = { held: true };
+  /** `held`: the attempt may act; `owned`: the run is still its own, possibly waiting on the user. */
+  const fence = { held: true, owned: true };
   const launched = new Map<string, { capability: string; connect(): FrameChannel }>();
   const waiting = new Map<string, () => void>();
   return {
@@ -115,6 +116,7 @@ export function manualLauncher() {
           exited: Promise.resolve(),
           release: async () => "released",
           holdsFence: async () => fence.held,
+          ownsFence: async () => fence.owned,
         };
       },
     },

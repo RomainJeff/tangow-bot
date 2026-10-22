@@ -221,11 +221,32 @@ describe("a native harness's transcript", () => {
     });
     await guest.hello();
 
-    launcher.fence.held = false;
+    Object.assign(launcher.fence, { held: false, owned: false });
     guest.send(1, transcript);
     expect(await guest.replies(1)).toEqual([{ type: "refused", reason: "revoked" }]);
     await expect(run.done).rejects.toThrow("This attempt no longer holds the run");
     expect(run.seen).toEqual([]);
+  });
+
+  it("is taken from an attempt whose run waits on the user", async () => {
+    const launcher = manualLauncher();
+    const runtime = createWorkerAgentRuntime({
+      launcher: launcher.launcher,
+      stops: { mark: async () => undefined },
+      clock: stillClock,
+    });
+    const run = consume(runtime.run(request({})));
+    const launched = await launcher.launchedFor("run_native");
+    const guest = rawGuest(launched.connect(), launched.capability, {
+      name: "pi-native",
+      capabilities: ["native-loop"],
+    });
+    await guest.hello();
+
+    launcher.fence.held = false;
+    guest.send(1, transcript);
+    expect(await guest.replies(1)).toEqual([{ type: "recorded" }]);
+    expect(run.seen.map((event) => event.type)).toEqual(["transcript"]);
   });
 
   it("is refused from a harness that runs no loop of its own", async () => {
