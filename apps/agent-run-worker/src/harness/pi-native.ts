@@ -53,16 +53,20 @@ const PI_SETTINGS = {
 function rakazoExtension(
   host: HarnessHost,
   cwd: string,
+  agent: string,
   steer: (message: SteeringMessage) => void,
 ) {
   const seenIds: string[] = [];
   return (pi: ExtensionAPI) => {
     pi.on("message_update", async (event) => {
       if (event.assistantMessageEvent.type === "text_delta") {
-        await host.emit({ type: "text", text: event.assistantMessageEvent.delta });
+        const text = event.assistantMessageEvent.delta;
+        if (agent === "root") await host.emit({ type: "text", text });
+        else await host.decide({ type: "subagent.text", agent, text }, "recorded");
       }
     });
     pi.on("tool_execution_start", async (event) => {
+      if (agent !== "root") return;
       const args = JSON.stringify(event.args ?? {});
       await host.emit({
         type: "progress",
@@ -77,7 +81,7 @@ function rakazoExtension(
     });
     pi.on("turn_end", async (event) => {
       // Only a turn the loop goes on from: a claimed message must reach the model in this attempt.
-      if (event.toolResults.length === 0) return;
+      if (agent !== "root" || event.toolResults.length === 0) return;
       const reply = await host.decide(
         { type: "steering.claim", seenIds: [...seenIds] },
         "steering",
@@ -101,12 +105,12 @@ export const piNativeHarness: GuestHarness = {
     throw new Error("pi-native runs its own tools");
   },
 
-  async run({ run, cwd, skillsDir }, host): Promise<DoneBody> {
+  async run({ run, cwd, skillsDir, agent = "root" }, host): Promise<DoneBody> {
     stopIfCancelled(host.signal);
     const model = guestRuntimeModel(relayedModel(run.model));
     const modelRuntime = await relayModelRuntime(
       model,
-      piAiProviderStream((body, onPart, signal) => host.model(body, onPart, signal)),
+      piAiProviderStream((body, onPart, signal) => host.model({ ...body, agent }, onPart, signal)),
     );
     // Pi's config home for this attempt only: nothing from the image or an earlier run loads.
     const agentDir = await mkdtemp(path.join(tmpdir(), "rakazo-pi-"));
@@ -159,7 +163,16 @@ export const piNativeHarness: GuestHarness = {
                 errors: [],
                 autoEnableCodemode: false,
               }),
-              createTransport: () => rakazoMcpTransport(controllerTools, host, cwd),
+              createTransport: () =>
+                rakazoMcpTransport(
+                  controllerTools,
+                  {
+                    ...host,
+                    callTool: (_agent, name, args, callId) =>
+                      host.callTool(agent, name, args, callId),
+                  },
+                  cwd,
+                ),
             })({
               ...pi,
               registerTool(definition) {
@@ -206,7 +219,7 @@ export const piNativeHarness: GuestHarness = {
               return { messages };
             });
           },
-          rakazoExtension(host, cwd, (message) =>
+          rakazoExtension(host, cwd, agent, (message) =>
             session?.agent.steer({
               role: "user",
               content: [{ type: "text", text: message.text }, ...piImages(message.images ?? [])],
@@ -279,16 +292,19 @@ export const piNativeHarness: GuestHarness = {
       } finally {
         host.signal.removeEventListener("abort", abort);
         unsubscribe();
+        if (!host.signal.aborted || added.length > 0)
+          await host.decide(
+            {
+              type: "transcript",
+              agent,
+              dialect: "pi-ai",
+              messages: added,
+              systemPrompt: active.systemPrompt,
+            },
+            "recorded",
+          );
       }
-      await host.decide(
-        {
-          type: "transcript",
-          dialect: "pi-ai",
-          messages: added,
-          systemPrompt: active.systemPrompt,
-        },
-        "recorded",
-      );
+      stopIfCancelled(host.signal);
       const last = added.findLast((message) => message.role === "assistant");
       if (last?.stopReason === "error") {
         throw new Error(String(last.errorMessage ?? "The model call failed"));

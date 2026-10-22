@@ -27,10 +27,16 @@ const run: GuestRunInput = {
   model: { provider: "openai-compatible", id: "offline-fixture" },
 };
 
-it.each([
-  ["before it starts", (cancel: AbortController) => cancel.abort()],
-  ["while it sets up", (cancel: AbortController) => setImmediate(() => cancel.abort())],
-])("makes no model call when the run is cancelled %s", async (_when, cancelRun) => {
+it.each(
+  (
+    [
+      ["before it starts", (cancel: AbortController) => cancel.abort()],
+      ["while it sets up", (cancel: AbortController) => setImmediate(() => cancel.abort())],
+    ] as const
+  ).flatMap(([when, cancelRun]) =>
+    ["root", "helper:1"].map((agent) => ({ when, cancelRun, agent })),
+  ),
+)("makes no model call when $agent is cancelled $when", async ({ cancelRun, agent }) => {
   const cancel = new AbortController();
   const requests: unknown[] = [];
   const host: HarnessHost = {
@@ -54,6 +60,7 @@ it.each([
       {
         worker: { runId: "run", attemptId: "attempt", fence: 1 },
         run,
+        agent,
         cwd: dir,
         skillsDir: path.join(dir, "skills"),
       },

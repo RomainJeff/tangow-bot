@@ -7,7 +7,7 @@ export const PI_HARNESS: HarnessDeclaration = {
 
 export const PI_NATIVE_HARNESS: HarnessDeclaration = {
   name: "pi-native",
-  capabilities: ["native-loop", "steering"],
+  capabilities: ["native-loop", "steering", "subagents"],
 };
 
 /** Resolve the controller's selected harness without loading a guest implementation. */

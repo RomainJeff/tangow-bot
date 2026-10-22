@@ -77,7 +77,7 @@ it.each([
     const runId = await run.send("Review this privately.");
     await run.continueRun(runId);
     expect(nativeTranscriptSeen).toBe(
-      hello.name === "pi-native" && hello.capabilities.length === 2,
+      hello.name === "pi-native" && hello.capabilities.length === 3,
     );
     expect(run.model.requests).toHaveLength(nativeTranscriptSeen ? 1 : 0);
     const entries = await run.runEntries(runId);
