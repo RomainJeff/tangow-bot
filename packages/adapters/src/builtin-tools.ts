@@ -1,4 +1,4 @@
-import type { ConnectorTool } from "@rakazo/adapter-kit";
+import type { AgentRunRequest, ConnectorTool } from "@rakazo/adapter-kit";
 import {
   BotSecretDestination,
   BotSecretName,
@@ -18,6 +18,48 @@ export const DELEGATION_TOOL_NAMES = new Set([
   "handoff_to_bot",
   "message_bot",
 ]);
+
+/** A helper reports to the bot that ran it, never to the user, and delegates nothing further. */
+export const isHelperTool = (name: string) =>
+  !DELEGATION_TOOL_NAMES.has(name) && name !== "message_user";
+
+export function helperCallOf(args: Record<string, unknown>) {
+  return {
+    name:
+      String(args.name ?? "helper")
+        .trim()
+        .slice(0, 80) || "helper",
+    task: String(args.task ?? "").trim(),
+    instructions: args.instructions ? String(args.instructions).trim() : "",
+    provider: String(args.model_provider ?? "").trim(),
+    modelId: String(args.model_id ?? "").trim(),
+  };
+}
+
+export async function helperModel(
+  request: Pick<AgentRunRequest, "model" | "resolveModel">,
+  call: ReturnType<typeof helperCallOf>,
+): Promise<AgentRunRequest["model"]> {
+  if (Boolean(call.provider) !== Boolean(call.modelId)) {
+    throw new Error("model_provider and model_id must both be set");
+  }
+  if (!call.provider) return request.model;
+  if (!request.resolveModel) throw new Error("Per-call subagent model selection is unavailable");
+  return request.resolveModel(call.provider, call.modelId);
+}
+
+export const HELPER_STOPPED_FOR_PAUSE = "Stopped: the run is waiting for the user.";
+
+export function helperInstructions(name: string, ...extra: Array<string | undefined>) {
+  return [
+    `You are a Rakazo subagent named "${name}".`,
+    "You run inside the parent bot's turn — you are not a separate bot chat.",
+    "Complete the task and return a concise result. Do not spawn bots or further subagents.",
+    ...extra,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
 
 export const builtinAgentTools: ConnectorTool[] = [
   {

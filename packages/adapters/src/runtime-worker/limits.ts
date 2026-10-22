@@ -1,6 +1,6 @@
 import type { AgentRunModel } from "@rakazo/adapter-kit";
 import { DEFAULT_MODEL_MAX_TOKENS, MAX_MODEL_CONTEXT_WINDOW } from "@rakazo/contracts";
-import { TOOL_RESULT_TEXT_LIMIT } from "../pi-runtime-limits.js";
+import { MAX_PARALLEL_SUBAGENTS, TOOL_RESULT_TEXT_LIMIT } from "../pi-runtime-limits.js";
 
 const KiB = 1024;
 const MiB = 1024 * KiB;
@@ -43,6 +43,11 @@ export const WORKER_LIMITS = {
    * instead, so it never reaches `guestFrameBytes`, which would end the run.
    */
   localResultBytes: 512 * KiB,
+  /** A helper's model requests, counted apart from its parent's and within the attempt's. */
+  modelRequestsPerHelper: 100,
+  /** Helpers the controller runs at once for a harness with its own loop, as the in-process runtime. */
+  helpersInParallel: MAX_PARALLEL_SUBAGENTS,
+  helpersPerAttempt: 16,
   /** Covers a cold boot. Checked once, at `worker.hello`. */
   capabilityTtlMs: 10 * 60_000,
   helloDeadlineMs: 30_000,
