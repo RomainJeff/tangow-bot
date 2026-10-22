@@ -85,12 +85,11 @@ and pause grace. It leaves directories and other home files alone. The private
 volume writer lease must remain held until the guest exits; N13 still verifies
 that the real mount root cannot be replaced.
 
-Abrupt VM destruction is an unresolved retention blocker. Guest cleanup cannot
-run after a forced kill; the current worker release path destroys the VM and then
-frees the volume writer lease without a controller file-cleanup operation. The
-volume-files contract has no unlink operation. Completing this guarantee needs a
-coordinated cleanup boundary while ownership is still held; this slice does not
-change that shared contract.
+Cleanup is best effort on normal completion and graceful cancellation. An unlink
+failure is diagnosed without replacing the primary run outcome. Abrupt termination
+can prevent guest cleanup and leave rare residual screenshot files on the private
+volume. This accepted limitation does not block P4. Screenshots remain written by
+the computer; no dedicated helper VM or new cleanup infrastructure is required.
 
 Offline coverage uses actual Pi sessions and the MCP adapter for deferred
 discovery, controller invocation, approval resume after restart, connection

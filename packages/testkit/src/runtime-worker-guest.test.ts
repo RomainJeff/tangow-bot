@@ -426,6 +426,9 @@ describe("run channel conformance of the pi-native harness", () => {
       await writeFile(target, "unrelated");
       const screen = ".rakazo-screen-00000000-0000-4000-8000-000000000001.png";
       const link = ".rakazo-screen-00000000-0000-4000-8000-000000000002.png";
+      const directory = ".rakazo-screen-00000000-0000-4000-8000-000000000003.png";
+      await mkdir(path.join(cwd, directory));
+      await writeFile(path.join(cwd, directory, screen), "nested capture");
       await writeFile(path.join(cwd, "keep.txt"), "home note");
       await writeFile(path.join(cwd, ".rakazo-screen-not-a-uuid.png"), "unrelated");
       const harness: GuestHarness = {
@@ -464,8 +467,60 @@ describe("run channel conformance of the pi-native harness", () => {
         reply: (body) =>
           body.type === "failed" ? { type: "stop", reason: "cancelled" } : undefined,
       });
-      expect((await readdir(cwd)).sort()).toEqual([".rakazo-screen-not-a-uuid.png", "keep.txt"]);
+      expect((await readdir(cwd)).sort()).toEqual([
+        directory,
+        ".rakazo-screen-not-a-uuid.png",
+        "keep.txt",
+      ]);
+      expect(await readFile(path.join(cwd, directory, screen), "utf8")).toBe("nested capture");
       expect(await readFile(target, "utf8")).toBe("unrelated");
+    },
+  );
+
+  it.each([false, true])(
+    "preserves the run outcome when screenshot unlink fails, failed=%s",
+    async (failed) => {
+      const root = await guestRoot();
+      const cwd = path.join(root, "workspace/bots/bot_guest");
+      const screen = path.join(cwd, ".rakazo-screen-00000000-0000-4000-8000-000000000001.png");
+      await writeFile(screen, "capture");
+      const unlink = fs.promises.unlink;
+      const remove = vi.spyOn(fs.promises, "unlink").mockImplementation(async (file) => {
+        if (file === screen)
+          throw Object.assign(new Error("fixture unlink denied"), { code: "EACCES" });
+        await unlink(file);
+      });
+      const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      syncBuiltinESMExports();
+      try {
+        const { exit, frames } = await driveGuest({
+          harness: {
+            ...piNative,
+            async run() {
+              if (failed) throw new Error("primary run failure");
+              return { type: "done" };
+            },
+          },
+          cwd: "/workspace/bots/bot_guest",
+          root,
+          spoolDir: path.join(root, "spool"),
+          prompt: "Finish.",
+          tools: [],
+          steps: [],
+          reply: (body) =>
+            body.type === "failed" ? { type: "stop", reason: "cancelled" } : undefined,
+        });
+        expect(exit).toBe(failed ? "cancelled" : "done");
+        expect(
+          frames.filter((frame) => frame.type === "failed").map((frame) => frame.body),
+        ).toEqual(failed ? [{ type: "failed", message: "primary run failure" }] : []);
+        expect(await readFile(screen, "utf8")).toBe("capture");
+        expect(warning).toHaveBeenCalledWith("screens.cleanup_failed", { code: "EACCES" });
+      } finally {
+        remove.mockRestore();
+        warning.mockRestore();
+        syncBuiltinESMExports();
+      }
     },
   );
 
