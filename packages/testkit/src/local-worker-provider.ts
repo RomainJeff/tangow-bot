@@ -12,6 +12,7 @@ import type {
 } from "@rakazo/adapter-kit";
 import type { ChannelFaults, FrameChannel, GuestConnector } from "@rakazo/adapters/runtime-worker";
 import { memoryChannelPair, streamChannel, WORKER_LIMITS } from "@rakazo/adapters/runtime-worker";
+import type { GuestHarness } from "@rakazo/agent-run-worker";
 import { HARNESSES, runGuest } from "@rakazo/agent-run-worker";
 
 export interface LocalWorkerFaults extends ChannelFaults {
@@ -80,6 +81,8 @@ export class LocalWorkerProvider implements WorkerProvider, GuestConnector {
       entry?: string;
       /** The baked managed skills a VM gets. Default: the repository's `skills/agent`. */
       managedSkills?: string;
+      /** The harness a `memory` guest runs. Default: Pi. */
+      harness?: GuestHarness;
     },
   ) {}
 
@@ -191,7 +194,7 @@ export class LocalWorkerProvider implements WorkerProvider, GuestConnector {
     const exited = runGuest({
       channels: guestSide(),
       capability,
-      harness: HARNESSES.pi!,
+      harness: this.options.harness ?? HARNESSES.pi!,
       spoolDir: path.join(vm.root, "tmp", "tool-output"),
       root: vm.root,
       home: path.join(vm.root, "home/user"),
