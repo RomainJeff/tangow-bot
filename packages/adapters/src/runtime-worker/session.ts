@@ -32,6 +32,7 @@ import type { ModelRelay, RelayUsage } from "./model-relay.js";
 import { guestModelOf } from "./model-relay.js";
 import { clearRelayPrefixes, measureRelayPrefix } from "./relay-measurements.js";
 import type { StopJournal } from "./stop-journal.js";
+import { transcriptIngest } from "./transcript.js";
 
 /** The model-access dialects the controller relays. A new dialect is one entry here. */
 const RELAYS: { [D in ModelDialect]: ModelRelay<never, unknown> } = {
@@ -160,6 +161,9 @@ export function createSession(
   let finished = false;
 
   const clean = (text: string) => redactSecrets(text, [...(request.secrets ?? [])]);
+  const transcript = transcriptIngest((text) =>
+    cutText(clean(text), WORKER_LIMITS.controllerResultBytes),
+  );
 
   const fail = (error: Error) => {
     events.end(error);
@@ -226,13 +230,18 @@ export function createSession(
     return endPaused();
   };
 
+  /** Check in the caller after awaiting a fence lookup: shutdown can run before it resumes. */
+  const live = () => !finished && !stopping;
+
   /** Once paused, the attempt concludes on a run waiting for the user; never once superseded. */
   const fenceHeld = async () => {
-    if (paused) return launched!.ownsFence();
-    if (await launched!.holdsFence()) return true;
+    if (paused) return (await launched!.ownsFence()) && live();
+    if (await launched!.holdsFence()) return live();
     // The pause can latch during the lookup and move the run to wait on the user.
-    return paused ? launched!.ownsFence() : false;
+    return paused ? (await launched!.ownsFence()) && live() : false;
   };
+
+  const fenceOwned = async () => (await launched!.ownsFence()) && live();
 
   const helperOf = (agent: string) => (agent === "root" ? undefined : helpers.get(agent));
 
@@ -330,7 +339,7 @@ export function createSession(
     body: Extract<GuestBody, { type: "model.request" }>,
     part: (body: ReplyPart) => void,
   ): Promise<ReplyFinal> {
-    if (!(await fenceHeld())) return revoke();
+    if (!(await fenceHeld()) || !live()) return revoke();
     const helper = helperOf(body.agent);
     if (body.agent !== "root" && !helper) return refuse("invalid");
     const turnedAway = paused && pausedModelRequest(paused);
@@ -496,9 +505,9 @@ export function createSession(
         return { type: "ack" };
       case "tool.call":
         // The executor checks its lease only between events: a guest must not outrun it.
-        if (!(await fenceHeld())) return revoke();
+        if (!(await fenceHeld()) || !live()) return revoke();
         if (!paused && ++toolCalls > WORKER_LIMITS.toolCallsPerAttempt) return refuse("budget");
-        return callTool(body);
+        return transcript.answered(body, await callTool(body));
       case "tool.done":
         return recordLocalResult(body);
       case "steering.claim": {
@@ -566,7 +575,7 @@ export function createSession(
       case "done":
         return finish(body, part);
       case "skills.index": {
-        if (!(await fenceHeld())) return revoke();
+        if (!(await fenceHeld()) || !live()) return revoke();
         if (skillIndexEnded || !mountedSkillSources().has(body.skill.source))
           return refuse("invalid");
         const bytes = Buffer.byteLength(JSON.stringify(body.skill));
@@ -581,7 +590,7 @@ export function createSession(
       }
       case "skills.index.end": {
         const receivedAt = new Date();
-        if (!(await fenceHeld())) return revoke();
+        if (!(await fenceHeld()) || !live()) return revoke();
         if (
           skillIndexEnded ||
           body.sources.some((source) => !mountedSkillSources().has(source)) ||
@@ -595,7 +604,7 @@ export function createSession(
         return { type: "recorded" };
       }
       case "skills.collision":
-        if (!(await fenceHeld())) return revoke();
+        if (!(await fenceHeld()) || !live()) return revoke();
         if (++skillCollisions > 512) return refuse("budget");
         if (
           ![body.collision.kept, body.collision.ignored].every((source) =>
@@ -606,7 +615,7 @@ export function createSession(
         await request.onSkillCollision?.({ ...body.collision, name: clean(body.collision.name) });
         return { type: "recorded" };
       case "skills.used":
-        if (!(await fenceHeld())) return revoke();
+        if (!(await fenceHeld()) || !live()) return revoke();
         if (++skillUses > 512) return refuse("budget");
         await request.onSkillUsed?.(clean(body.name));
         return { type: "recorded" };
@@ -614,6 +623,18 @@ export function createSession(
         if (paused) return endPaused();
         fail(new Error(clean(body.message)));
         return { type: "stop", reason: "cancelled" };
+      case "transcript": {
+        if (!(await fenceOwned()) || !live()) return revoke();
+        const agent = body.agent ?? "root";
+        const helper = helperOf(agent);
+        if (agent !== "root" && !helper) return refuse("invalid");
+        const ingested = transcript.ingest(agent, body, request.tools, harness!.name);
+        if (!ingested) return refuse("invalid");
+        if (!helper) await events.push(ingested);
+        else if (helper.log.transcript) await helper.log.transcript(ingested);
+        else return { type: "error", message: "This helper keeps no transcript" };
+        return { type: "recorded" };
+      }
     }
   }
 

@@ -292,6 +292,23 @@ export const GuestBodySchema = z.discriminatedUnion("type", [
     sources: z.array(z.enum(["managed", "bot", "shared"])).max(3),
   }),
   z.strictObject({ type: z.literal("failed"), message: z.string() }),
+  /**
+   * A harness that runs its own loop reports what the attempt added to its native session, in its
+   * model-access dialect, once before `done`. The controller ingests it into canonical history; it
+   * never trusts the results the harness claims for controller tools.
+   */
+  z.strictObject({
+    type: z.literal("transcript"),
+    /** The session it reports: the root's when left out, else a helper the controller opened. */
+    agent: Id.optional(),
+    dialect: ModelDialect,
+    messages: z.array(z.looseObject({ role: z.string().min(1).max(64) })).max(4096),
+    /** The system prompt the harness says it sent. The controller traces the relayed one too. */
+    systemPrompt: z
+      .string()
+      .max(256 * 1024)
+      .optional(),
+  }),
 ]);
 export type GuestBody = z.infer<typeof GuestBodySchema>;
 
@@ -402,7 +419,8 @@ export type WorkerStatusV1 = z.infer<typeof WorkerStatusV1Schema>;
  * controller refuses a frame that needs a capability its harness did not declare, and offers no
  * tool that needs one.
  */
-export const HarnessCapability = z.enum(["subagents", "steering"]);
+/** `native-loop`: the harness runs its own loop, prompt and tools, and reports a transcript. */
+export const HarnessCapability = z.enum(["subagents", "steering", "native-loop"]);
 export type HarnessCapability = z.infer<typeof HarnessCapability>;
 
 /** The guest frames a harness may send only with the capability it declared. */
@@ -413,6 +431,7 @@ export const FRAME_CAPABILITY: Readonly<Partial<Record<GuestBody["type"], Harnes
   "subagent.finish": "subagents",
   "subagent.abandon": "subagents",
   "steering.claim": "steering",
+  transcript: "native-loop",
 };
 
 /** The guest harness: which one runs the attempt, and its declared capabilities. */

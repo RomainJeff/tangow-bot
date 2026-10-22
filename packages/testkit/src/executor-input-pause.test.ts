@@ -114,3 +114,47 @@ it("retries a takeover after its first pause loses the computer lease", async ()
   );
   expect(cards).toEqual([{ kind: "computer", state: "Needs you", text: "Log in" }]);
 });
+
+it("logs the final transcript of an attempt whose run now waits on the user", async () => {
+  const run = await startWorkerRun({
+    steps: [],
+    computerScope: "none",
+    protocol: "anthropic",
+    runtime: () => ({
+      describe: () => ({
+        ...new PiAgentRuntime().describe(),
+        capabilities: { scripted: false, streaming: false },
+      }),
+      abort: async () => {},
+      async *run(request) {
+        await request.executeTool!("ask_user", city, "ask-1");
+        yield {
+          type: "transcript",
+          entries: [
+            {
+              kind: "call",
+              turn: 0,
+              callId: "bash-1",
+              name: "bash",
+              args: { command: "ls" },
+              output: "notes.md",
+              isError: false,
+            },
+          ],
+          unverifiedCalls: 0,
+        };
+        yield { type: "done" };
+      },
+    }),
+  });
+  cleanups.push(() => run.close());
+  const runId = await run.send("Plan my trip.");
+  await run.continueRun(runId);
+
+  expect({
+    status: (await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status,
+    calls: (await run.runEntries(runId)).flatMap((entry) =>
+      entry.type === "tool.call" ? [entry.payload.name] : [],
+    ),
+  }).toEqual({ status: "waiting_input", calls: ["bash"] });
+});

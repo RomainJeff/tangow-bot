@@ -79,6 +79,7 @@ import {
   applyJudgeDecision,
   approvedReplayCall,
   assertTransition,
+  attemptOwnsFence,
   avatarIdentitySeed,
   BOT_DELEGATION_GUIDANCE,
   BOT_OFFER_DEDICATED_BOT,
@@ -2377,6 +2378,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   if (!(error instanceof RunHistoryWriteError)) throw error;
                 }
               }),
+            transcript: (event) =>
+              inOrder(() =>
+                logHarnessTranscript(deps, helper.log, { runId, fence }, event, runSecrets),
+              ),
             abandon: (result) =>
               inOrder(() =>
                 writeRunEntry({
@@ -5036,7 +5041,16 @@ export function createRunExecutor(deps: ExecutorDeps) {
             context,
           );
           for await (const event of withRuntimeCleanup(runtimeEvents, runAbortController)) {
-            if (approvalPausePending) return;
+            if (approvalPausePending) {
+              // A paused worker attempt concludes under the session's guard, and its harness's
+              // last transcript is still the run's: wait for it instead of cutting the guest off.
+              if (event.type === "transcript") {
+                await logHarnessTranscript(deps, runLog, { runId, fence }, event, runSecrets);
+              }
+              const concluded = event.type === "transcript" || event.type === "done";
+              if (concluded || runtime.describe().id !== "worker") return;
+              continue;
+            }
             if (!leaseValid) return;
             const now = Date.now();
             if (now - lastLeaseCheckAt >= 1_000) {
@@ -5208,6 +5222,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
               }
             } else if (event.type === "usage") {
               await recordRunUsage(deps, { ...run, botId: bot.id, runId }, event);
+            } else if (event.type === "transcript") {
+              await logHarnessTranscript(deps, runLog, { runId, fence }, event, runSecrets);
             } else if (event.type === "done") {
               runtimeNotice = event.runtimeNotice;
               if (recapRequested) {
@@ -6238,6 +6254,110 @@ function safeStringifyToolPayload(value: unknown, secrets: string[]): string {
 }
 
 type RunLog = { sessionId: SessionId; runId: string; botId: string };
+
+/**
+ * What a harness with its own loop did outside the controller, logged as its run's work: each
+ * call of the harness's own tools with the result the harness reported, and each summary its
+ * compaction wrote. The controller's own calls are already in the log as it answered them, so a
+ * step is dated just before the next of them the transcript references: the run then reads in
+ * the order the attempt worked. All of it lands while the attempt still owns its run, or none.
+ */
+async function logHarnessTranscript(
+  deps: Pick<ExecutorDeps, "prisma" | "sessionLog">,
+  log: RunLog,
+  lease: { runId: string; fence: number },
+  event: Extract<AgentRuntimeEvent, { type: "transcript" }>,
+  secrets: string[],
+) {
+  if (event.unverifiedCalls > 0) {
+    getLogger().warn("harness transcript claims controller calls it never got", {
+      runId: log.runId,
+      unverifiedCalls: event.unverifiedCalls,
+    });
+  }
+  if (!event.entries.some((entry) => entry.kind === "call" || entry.kind === "summary")) return;
+  await deps.prisma.$transaction(
+    async (tx) => {
+      // Thread, then run, then session, the order cancellation and every append take them.
+      await tx.$queryRaw`
+        SELECT id FROM threads WHERE id = (SELECT "threadId" FROM runs WHERE id = ${lease.runId}) FOR UPDATE`;
+      const [run] = await tx.$queryRaw<Array<{ leaseFence: number; status: string }>>`
+        SELECT "leaseFence", status FROM runs WHERE id = ${lease.runId} FOR NO KEY UPDATE`;
+      if (!run || !attemptOwnsFence(lease, run)) return;
+      const logged = await tx.sessionEntry.findMany({
+        where: {
+          sessionId: log.sessionId,
+          runId: log.runId,
+          type: { in: ["tool.call", "tool.result"] },
+        },
+        orderBy: { seq: "asc" },
+        select: { type: true, payload: true, createdAt: true },
+      });
+      const calledAt = new Map<string, Date>();
+      const answeredAt = new Map<string, Date>();
+      for (const entry of logged) {
+        const { callId } = entry.payload as { callId: string };
+        (entry.type === "tool.call" ? calledAt : answeredAt).set(callId, entry.createdAt);
+      }
+      let previous: Date | undefined;
+      let next: Date | undefined;
+      const before: (Date | undefined)[] = [];
+      for (const entry of event.entries.toReversed()) {
+        if (entry.kind === "controller") next = calledAt.get(entry.callId) ?? next;
+        before.unshift(next);
+      }
+      for (const [index, entry] of event.entries.entries()) {
+        if (entry.kind === "text") continue;
+        if (entry.kind === "controller") {
+          previous = answeredAt.get(entry.callId) ?? calledAt.get(entry.callId) ?? previous;
+          continue;
+        }
+        const bound = before[index];
+        const at = bound
+          ? new Date(Math.max(previous?.getTime() ?? 0, bound.getTime() - 1)).toISOString()
+          : undefined;
+        const drafts: SessionEntryDraft[] =
+          entry.kind === "summary"
+            ? [
+                {
+                  ...log,
+                  ts: at,
+                  type: "harness.summary",
+                  payload: {
+                    summary: redactSecrets(entry.summary, secrets),
+                    tokensBefore: entry.tokensBefore,
+                  },
+                },
+              ]
+            : [
+                {
+                  ...log,
+                  ts: at,
+                  type: "tool.call",
+                  payload: {
+                    callId: entry.callId,
+                    name: entry.name,
+                    input: describeToolPayload(entry.args, secrets),
+                  },
+                },
+                {
+                  ...log,
+                  ts: at,
+                  type: "tool.result",
+                  payload: {
+                    callId: entry.callId,
+                    output: describeToolPayload(entry.output, secrets),
+                    isError: entry.isError,
+                    artifactIds: [],
+                  },
+                },
+              ];
+        for (const draft of drafts) await deps.sessionLog.append(tx, draft);
+      }
+    },
+    { timeout: 60_000 },
+  );
+}
 
 type ToolLogEntry =
   | { type: "tool.call"; payload: SessionEntryOf<"tool.call">["payload"] }

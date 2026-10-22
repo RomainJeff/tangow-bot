@@ -503,6 +503,11 @@ export interface SubagentLog {
   }): Promise<void>;
   /** Answer the parent's call with `result` as an error when `finish` cannot close the log. */
   abandon(result: string): Promise<void>;
+  /**
+   * Log what the helper's native session did, as the root run's `transcript` event does. Only
+   * the controller's log has it: a guest's in-process helpers keep no native session.
+   */
+  transcript?(event: Extract<AgentRuntimeEvent, { type: "transcript" }>): Promise<void>;
 }
 
 /**
@@ -543,6 +548,28 @@ export interface ScriptedTurn {
   complete?: boolean;
 }
 
+/**
+ * One step of a harness with its own loop, in the order of the attempt's transcript. `turn` counts
+ * the attempt's model responses from 0; a summary takes the index of the turn after it. A `call`
+ * is one of the harness's own tools, with the result the harness reported. A `controller` call is
+ * only a reference to the call the controller answered, under the `callId` its log holds: its
+ * content is the controller's, never the transcript's. A call the controller never answered is
+ * not listed, only counted.
+ */
+export type HarnessTranscriptEntry =
+  | { kind: "text"; turn: number; text: string }
+  | {
+      kind: "call";
+      turn: number;
+      callId: string;
+      name: string;
+      args: Record<string, unknown>;
+      output: string;
+      isError: boolean;
+    }
+  | { kind: "controller"; turn: number; callId: string; name: string }
+  | { kind: "summary"; turn: number; summary: string; tokensBefore: number };
+
 export type AgentRuntimeEvent =
   | { type: "text"; text: string }
   | {
@@ -571,6 +598,12 @@ export type AgentRuntimeEvent =
       cacheWriteTokens?: number;
     }
   | { type: "checkpoint"; blob: string }
+  | {
+      type: "transcript";
+      entries: HarnessTranscriptEntry[];
+      /** Calls of controller tools the transcript claims that the controller never answered. */
+      unverifiedCalls: number;
+    }
   | {
       type: "subagent";
       agentId: string;

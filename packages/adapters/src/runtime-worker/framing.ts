@@ -110,7 +110,11 @@ export function readGuestFrame(frame: Uint8Array): FrameRead<GuestMessageV1> {
   if (
     read.ok &&
     frame.byteLength > WORKER_LIMITS.guestFrameBytes &&
-    !(read.message.kind === "worker.event" && read.message.payload.body.type === "model.request")
+    !(
+      read.message.kind === "worker.event" &&
+      (read.message.payload.body.type === "model.request" ||
+        read.message.payload.body.type === "transcript")
+    )
   ) {
     return { ok: false, reason: "too_large" };
   }
