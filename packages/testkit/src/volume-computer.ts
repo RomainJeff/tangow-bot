@@ -2,13 +2,16 @@ import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type {
   AdapterContext,
+  CommandRequest,
   ComputerFileEntry,
   ComputerRef,
   PortableFile,
+  ProcessEvent,
   SandboxProvider,
 } from "@rakazo/adapter-kit";
 import { ManagedSandboxEmulator } from "@rakazo/adapters";
 import type { VolumeHome } from "@rakazo/core";
+import { underVolumeMounts } from "@rakazo/core";
 
 /**
  * The fake E2B computer, whose files live on the volumes it was provisioned with when its home is
@@ -39,6 +42,20 @@ export class VolumeComputer extends ManagedSandboxEmulator {
     );
     if (!mount) throw new Error(`${absolute} is on no mounted volume`);
     return path.join(this.volumeDir(mount.volumeRef), absolute.slice(mount.path.length));
+  }
+
+  /** Answers a command with where it ran on the computer instead of running it. */
+  override async *execute(
+    computer: ComputerRef,
+    request: CommandRequest,
+    context: AdapterContext,
+  ): AsyncIterable<ProcessEvent> {
+    const home = this.homes.get(computer.id);
+    if (!home) return yield* super.execute(computer, request, context);
+    const cwd = request.cwd ?? "";
+    const directory = underVolumeMounts(cwd) ? cwd : path.posix.join(home.root, cwd);
+    yield { type: "stdout", data: `computer ran ${request.argv.at(-1)} in ${directory}\n` };
+    yield { type: "exit", code: 0 };
   }
 
   override async listFiles(

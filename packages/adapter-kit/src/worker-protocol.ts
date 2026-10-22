@@ -56,6 +56,17 @@ const GuestToolSchema = z.strictObject({
   inputSchema: JsonRecord,
   readOnly: z.boolean().optional(),
   where: ToolPlacement,
+  /**
+   * A large connector catalog. `fallback` marks the tools that search, load and run it by id, for a
+   * harness without native tool search. An entry is one of its tools: a harness with native tool
+   * search declares it once found, and runs it as `via` with `{ id, arguments }`.
+   */
+  catalog: z
+    .union([
+      z.literal("fallback"),
+      z.strictObject({ via: z.string().min(1), id: z.string().min(1) }),
+    ])
+    .optional(),
 });
 export type GuestTool = z.infer<typeof GuestToolSchema>;
 
@@ -288,6 +299,8 @@ export const GuestBodySchema = z.discriminatedUnion("type", [
    */
   z.strictObject({
     type: z.literal("transcript"),
+    /** The session it reports: the root's when left out, else a helper the controller opened. */
+    agent: Id.optional(),
     dialect: ModelDialect,
     messages: z.array(z.looseObject({ role: z.string().min(1).max(64) })).max(4096),
     /** The system prompt the harness says it sent. The controller traces the relayed one too. */

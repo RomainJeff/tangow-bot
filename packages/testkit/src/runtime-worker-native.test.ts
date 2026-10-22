@@ -74,6 +74,7 @@ async function nativeRun(
           exited: exit.then(() => undefined),
           release: async () => "released",
           holdsFence: async () => true,
+          ownsFence: async () => true,
         };
       },
     },
@@ -147,6 +148,22 @@ describe("the pi-native harness through the controller", () => {
         activity: true,
       },
     ]);
+    expect(seen.find((event) => event.type === "transcript")).toEqual({
+      type: "transcript",
+      entries: [
+        {
+          kind: "call",
+          turn: 0,
+          callId: "b1",
+          name: "bash",
+          args: { command: "echo drafted > note.txt && echo ok" },
+          output: "ok\n",
+          isError: false,
+        },
+        { kind: "text", turn: 1, text: "Drafted." },
+      ],
+      unverifiedCalls: 0,
+    });
     expect(seen.at(-1)).toEqual({ type: "done", text: "Drafted." });
   });
 
@@ -166,7 +183,7 @@ describe("the pi-native harness through the controller", () => {
       history.push({ role: "assistant", content: `Kept note ${turn}.` });
     }
 
-    const { exit, requests } = await nativeRun(
+    const { exit, requests, seen } = await nativeRun(
       [step, step],
       { history },
       { contextWindow: 48_000 },
@@ -174,6 +191,19 @@ describe("the pi-native harness through the controller", () => {
 
     expect(exit).toBe("done");
     expect(kinds).toEqual(["summary", "turn"]);
+    expect(seen.find((event) => event.type === "transcript")).toMatchObject({
+      type: "transcript",
+      entries: [
+        {
+          kind: "summary",
+          turn: 0,
+          summary: "## Goal\nKeep the notes.\n## Progress\n- [x] Read them",
+          tokensBefore: expect.any(Number),
+        },
+        { kind: "text", turn: 0, text: "Done." },
+      ],
+      unverifiedCalls: 0,
+    });
     const turn = JSON.stringify(requests.at(-1)?.messages);
     expect(turn).toContain("Keep the notes.");
     expect(turn).not.toContain("Note 0:");

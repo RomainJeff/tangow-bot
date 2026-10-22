@@ -1119,6 +1119,150 @@ describe("interactive executor sessions with durable history", () => {
     ]);
   });
 
+  it("logs a native harness's own calls among the controller's, in the order the attempt worked", async () => {
+    const c = await conversation();
+    const secret = "hunter2-secret";
+    await fixture({
+      database: c.prisma,
+      run: c.run,
+      secrets: [secret],
+      sandbox: {
+        listFiles: async () => {
+          throw new Error("Path escapes the computer workspace");
+        },
+      },
+      runtime: async function* (request) {
+        await request.executeTool!("list_files", { path: "/" }, "ls-1").catch(() => {});
+        yield {
+          type: "transcript",
+          entries: [
+            { kind: "text", turn: 0, text: "Looking first." },
+            {
+              kind: "call",
+              turn: 0,
+              callId: "bash-1",
+              name: "bash",
+              args: { command: `grep ${secret} notes.md` },
+              output: `notes.md: ${secret}`,
+              isError: false,
+            },
+            { kind: "controller", turn: 0, callId: "ls-1", name: "list_files" },
+            {
+              kind: "call",
+              turn: 1,
+              callId: "bash-2",
+              name: "bash",
+              args: { command: "false" },
+              output: "exit 1",
+              isError: true,
+            },
+            {
+              kind: "summary",
+              turn: 2,
+              summary: `Searched notes.md for ${secret}.`,
+              tokensBefore: 9000,
+            },
+          ],
+          unverifiedCalls: 0,
+        };
+        yield { type: "done", text: "Found it." };
+      },
+    }).request();
+    const logged = await c.log.readRun(c.run.id);
+
+    expect(
+      logged
+        .filter((entry) => entry.type.startsWith("tool.") || entry.type === "harness.summary")
+        .map(({ type, payload }) => ({ type, payload })),
+    ).toEqual([
+      {
+        type: "tool.call",
+        payload: {
+          callId: "bash-1",
+          name: "bash",
+          input: '{\n  "command": "grep [redacted] notes.md"\n}',
+        },
+      },
+      {
+        type: "tool.result",
+        payload: {
+          callId: "bash-1",
+          output: "notes.md: [redacted]",
+          isError: false,
+          artifactIds: [],
+        },
+      },
+      {
+        type: "tool.call",
+        payload: { callId: "ls-1", name: "list_files", input: '{\n  "path": "/"\n}' },
+      },
+      {
+        type: "tool.result",
+        payload: {
+          callId: "ls-1",
+          output: "Path escapes the computer workspace",
+          isError: true,
+          artifactIds: [],
+        },
+      },
+      {
+        type: "tool.call",
+        payload: { callId: "bash-2", name: "bash", input: '{\n  "command": "false"\n}' },
+      },
+      {
+        type: "tool.result",
+        payload: { callId: "bash-2", output: "exit 1", isError: true, artifactIds: [] },
+      },
+      {
+        type: "harness.summary",
+        payload: { summary: "Searched notes.md for [redacted].", tokensBefore: 9000 },
+      },
+    ]);
+    expect(
+      projectThreadItems(logged).flatMap((item) =>
+        item.kind === "message" && item.role === "bot"
+          ? item.blocks.flatMap((block) =>
+              block.kind === "steps" ? block.steps.map((step) => step.label) : [],
+            )
+          : [],
+      ),
+    ).toEqual(["Bash", "List files", "Bash"]);
+  });
+
+  it("logs nothing of a transcript once another worker holds the run", async () => {
+    const c = await conversation();
+    await fixture({
+      database: c.prisma,
+      run: c.run,
+      runtime: async function* () {
+        yield { type: "text", text: "" };
+        await c.prisma.run.update({
+          where: { id: c.run.id },
+          data: { leaseOwner: "worker-2", leaseFence: { increment: 1 } },
+        });
+        yield {
+          type: "transcript",
+          entries: [
+            {
+              kind: "call",
+              turn: 0,
+              callId: "bash-1",
+              name: "bash",
+              args: { command: "ls" },
+              output: "late",
+              isError: false,
+            },
+          ],
+          unverifiedCalls: 0,
+        };
+      },
+    }).request();
+
+    expect(
+      (await c.log.readRun(c.run.id)).filter((entry) => entry.type.startsWith("tool.")),
+    ).toEqual([]);
+  });
+
   it.each(["routine", "bot_message", "follow_up"] as const)(
     "keeps %s final output private and returns delegated results to the parent",
     async (trigger) => {

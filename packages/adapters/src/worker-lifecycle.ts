@@ -12,6 +12,7 @@ import { WorkerState } from "@rakazo/contracts";
 import type { LaunchPlan, MountRefusal, RunNeeds, VolumeRow, WorkerLaunch } from "@rakazo/core";
 import {
   attemptHoldsFence,
+  attemptOwnsFence,
   authorizeMounts,
   ensureMayBeInFlight,
   LIVE_WORKER_STATES,
@@ -516,6 +517,14 @@ export function createWorkerLifecycle(deps: {
         providerRef: attempt.workerProviderRef,
         active: attemptHoldsFence(attempt, attempt.run),
       };
+    },
+
+    async ownsFence(attemptId: string): Promise<boolean> {
+      const attempt = await prisma.attempt.findUnique({
+        where: { id: attemptId },
+        select: { fence: true, run: { select: { leaseFence: true, status: true } } },
+      });
+      return Boolean(attempt && attemptOwnsFence(attempt, attempt.run));
     },
 
     /** Releases up to `limit` unreleased workers whose attempt no longer holds its run, oldest first. */

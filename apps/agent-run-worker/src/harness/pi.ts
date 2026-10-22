@@ -57,12 +57,15 @@ export const piHarness: GuestHarness = {
       instructions: piSkillInstructions(resources),
       history: run.history,
       currentTurnImages: decodeImages(run.images),
-      tools: run.tools.map(({ name, description, inputSchema, readOnly }) => ({
-        name,
-        description,
-        inputSchema,
-        readOnly,
-      })),
+      // The Rakazo loop has no native tool search: it reaches a large catalog through its fallback.
+      tools: run.tools
+        .filter((tool) => typeof tool.catalog !== "object")
+        .map(({ name, description, inputSchema, readOnly }) => ({
+          name,
+          description,
+          inputSchema,
+          readOnly,
+        })),
       model: relayedModel(run.model),
       allowSilentEmpty: run.allowSilentEmpty,
       freeTextIsPrivate: run.freeTextIsPrivate,
@@ -142,7 +145,8 @@ export const piHarness: GuestHarness = {
           return event;
         case "usage":
         case "checkpoint":
-          // The controller measures usage on the relay; checkpoints have no consumer.
+        case "transcript":
+          // The controller measures usage on the relay; the in-process runtime keeps no native session.
           break;
         default:
           event satisfies never;
