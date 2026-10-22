@@ -13,6 +13,8 @@ loadRootEnv();
 const integration = process.argv.includes("--integration");
 const e2e = process.argv.includes("--e2e");
 const impact = process.argv.includes("--impact");
+const ui = process.argv.includes("--ui");
+const record = process.argv.includes("--record") || Boolean(process.env.CI);
 const sandboxArg = process.argv.find((arg) => arg.startsWith("--sandbox="));
 const specArg = process.argv.find((arg) => arg.startsWith("--spec="));
 const grepArg = process.argv.find((arg) => arg.startsWith("--grep="));
@@ -27,6 +29,14 @@ if (Number(integration) + Number(e2e) !== 1) {
 }
 if (impact && (!e2e || e2eSpecs.length > 0 || e2eGrep)) {
   throw new Error("--impact records the whole e2e suite; pass it with --e2e only");
+}
+if (
+  ui &&
+  (!e2e || impact || process.env.CI || sandboxProvider !== "fake" || agentRuntime !== "scripted")
+) {
+  throw new Error(
+    "--ui requires local e2e with the fake sandbox and scripted runtime, without --impact",
+  );
 }
 if (!["fake", "e2b", "daytona", "box"].includes(sandboxProvider)) {
   throw new Error('Sandbox must be "fake", "e2b", "daytona", or "box"');
@@ -236,12 +246,14 @@ async function main() {
             "test",
             ...e2eSpecs,
             ...(e2eGrep ? ["--grep", e2eGrep] : []),
+            ...(ui ? ["--ui"] : []),
             // One test at a time so the API coverage belongs to the test that ran.
             ...(impact ? ["--workers=1"] : []),
           ],
           {
             ...process.env,
             CI: "1",
+            E2E_RECORD: record ? "1" : "0",
             // Pin English so e2e selectors match source messages regardless of runner locale.
             VITE_DEFAULT_UI_LOCALE: "en",
           },

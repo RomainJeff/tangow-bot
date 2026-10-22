@@ -63,6 +63,7 @@ export * from "./session-log/jsonl.js";
 export * from "./session-log/project-inference.js";
 export * from "./session-log/project-thread-view.js";
 export * from "./session-log/project-ui.js";
+export * from "./session-log/takeover-card.js";
 export * from "./signup-policy.js";
 export * from "./skill-access.js";
 export * from "./skill-learning.js";

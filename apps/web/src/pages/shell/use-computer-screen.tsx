@@ -94,8 +94,10 @@ export function useComputerScreen({
   const screenReads = useRef(new Map<string, Promise<HeldScreenUrl>>());
   const computerStatusRequest = useRef(0);
 
-  async function refreshComputerScreen(id: string, { force = false } = {}) {
-    if (!computerVisible.current) return null;
+  // `visible` is for a caller about to open the viewer: `computerVisible` still reads the old render.
+  async function refreshComputerScreen(id: string, { force = false, visible = false } = {}) {
+    const isVisible = () => visible || computerVisible.current;
+    if (!isVisible()) return null;
     const request = ++screenRequest.current;
     return loadComputerScreen({
       botId: id,
@@ -105,7 +107,7 @@ export function useComputerScreen({
       reads: screenReads.current,
       load: () => rpc.computer.screenUrl({ botId: id }),
       isCurrent: () =>
-        request === screenRequest.current && activeBotId.current === id && computerVisible.current,
+        request === screenRequest.current && activeBotId.current === id && isVisible(),
       commit: (screen, held) => {
         setScreenUrl(screen.url);
         setComputerError(screen.error);
