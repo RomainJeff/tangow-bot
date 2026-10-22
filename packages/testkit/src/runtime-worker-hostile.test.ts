@@ -1,3 +1,4 @@
+import { queryObjects } from "node:v8";
 import type {
   AgentRunRequest,
   AgentRuntimeEvent,
@@ -575,4 +576,65 @@ describe("untrusted skill reports", () => {
       expect(record).toHaveBeenCalledTimes(512);
     },
   );
+});
+
+class RunResources {
+  readonly result = "ok";
+
+  async execute() {
+    return this.result;
+  }
+}
+
+async function closeResourceRun(hello: boolean) {
+  const { launcher, launchedFor } = manualLauncher();
+  const runtime = createWorkerAgentRuntime({
+    launcher,
+    stops: { mark: async () => undefined },
+  });
+  const resources = new RunResources();
+  const run = consume(
+    runtime.run(request("cleanup", { executeTool: resources.execute.bind(resources) })),
+  );
+  const launched = await launchedFor("cleanup");
+  if (hello) {
+    const guest = rawGuest(launched.connect(), launched.capability);
+    await guest.hello();
+    guest.send(1, { type: "done" });
+    await run.done;
+  } else {
+    await runtime.abort("cleanup");
+    const outcome = await run.done.then(
+      () => "completed",
+      (error: unknown) => String(error),
+    );
+    expect(outcome).toBe("Error: The run was cancelled");
+  }
+}
+
+it.each([true, false])(
+  "releases run resources before the hello deadline after stopping, hello received: %s",
+  async (hello) => {
+    await closeResourceRun(hello);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    expect(queryObjects(RunResources)).toBe(0);
+  },
+);
+
+it("fails a guest that never says hello when the hello deadline expires", async () => {
+  const { launcher, launchedFor } = manualLauncher();
+  const deadline = Promise.withResolvers<void>();
+  const runtime = createWorkerAgentRuntime({
+    launcher,
+    stops: { mark: async () => undefined },
+    clock: {
+      sleep: (ms) => (ms === WORKER_LIMITS.helloDeadlineMs ? deadline.promise : Promise.resolve()),
+    },
+  });
+  const run = consume(runtime.run(request("silent")));
+  await launchedFor("silent");
+  deadline.resolve();
+
+  await expect(run.done).rejects.toThrow("The worker did not say hello in time");
 });

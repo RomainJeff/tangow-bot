@@ -104,6 +104,7 @@ export function createSession(
     fence: request.attempt.fence,
   };
   const events = eventPipe();
+  const helloSettled = deferred<void>();
   const tools = new Map(request.tools.map((tool) => [tool.name, tool]));
   const announced = new Map<string, string>();
   const open = new Map<string, Promise<unknown>>();
@@ -488,6 +489,7 @@ export function createSession(
           accepted = true;
           bound = channel;
           harness ??= message.harness;
+          helloSettled.resolve();
           await channel.send(
             encodeMessage({
               ...launched!.start,
@@ -514,9 +516,12 @@ export function createSession(
 
   async function connect(guest: LaunchedGuest) {
     const serving: Promise<void>[] = [];
-    void deps.clock.sleep(WORKER_LIMITS.helloDeadlineMs).then(() => {
-      if (!harness) fail(new AgentRuntimeUnavailableError("The worker did not say hello in time"));
-    });
+    void Promise.race([deps.clock.sleep(WORKER_LIMITS.helloDeadlineMs), helloSettled.promise]).then(
+      () => {
+        if (!harness && !stopping)
+          fail(new AgentRuntimeUnavailableError("The worker did not say hello in time"));
+      },
+    );
     for await (const channel of guest.connections) serving.push(serve(channel));
     await Promise.all(serving);
     if (!finished && !stopping) {
@@ -525,6 +530,7 @@ export function createSession(
   }
 
   async function stop(signal: AbortSignal | undefined) {
+    helloSettled.resolve();
     inbox.revoke();
     for (const relay of relays.values()) relay.abort();
     events.drain();
@@ -551,7 +557,7 @@ export function createSession(
     );
     const confirmed = await Promise.race([
       released,
-      deps.clock.sleep(WORKER_LIMITS.stopConfirmMs - WORKER_LIMITS.cancelGraceMs).then(() => false),
+      deps.clock.sleep(WORKER_LIMITS.stopConfirmMs - WORKER_LIMITS.cancelGraceMs),
     ]);
     if (confirmed) await ended;
     else await deps.stops.mark(worker.attemptId, "unconfirmed");

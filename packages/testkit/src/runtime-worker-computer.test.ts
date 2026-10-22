@@ -1,14 +1,22 @@
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
+import { queryObjects } from "node:v8";
 import type { ConnectorProvider } from "@rakazo/adapter-kit";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.js";
+import { VolumeComputer } from "./volume-computer.js";
 import { startWorkerRun } from "./worker-run-fixture.js";
 
+const provisionComputer = VolumeComputer.prototype.provision;
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => {
+  vi.resetAllMocks();
   vi.restoreAllMocks();
   await Promise.all(cleanups.splice(0).map((cleanup) => cleanup()));
+});
+
+afterAll(() => {
+  expect(queryObjects(VolumeComputer)).toBe(0);
 });
 
 const recap = JSON.stringify({ version: 1, results: ["Answered"], references: [] });
@@ -57,7 +65,7 @@ async function botRun(
     tools: lookup,
   });
   cleanups.push(() => run.close());
-  const provisions = vi.spyOn(run.sandbox, "provision");
+  const provisions = vi.spyOn(VolumeComputer.prototype, "provision");
   const computer = async () =>
     (
       await run.prisma.computer.findUniqueOrThrow({
@@ -206,7 +214,7 @@ describe("a worker run's computer", () => {
       },
       finish[1]!,
     ]);
-    const provision = Object.getPrototypeOf(bot.run.sandbox).provision.bind(bot.run.sandbox);
+    const provision = provisionComputer.bind(bot.run.sandbox);
     bot.provisions.mockImplementationOnce(async (request, context) => {
       // The person's start is still booting when the bot's call reaches the computer.
       while ((await bot.run.prisma.sessionEntry.count({ where: { type: "tool.call" } })) < 1) {
@@ -461,7 +469,7 @@ describe("computer_exec", () => {
       },
       finish[1]!,
     ]);
-    vi.spyOn(bot.run.sandbox, "execute").mockImplementation(async function* () {
+    vi.spyOn(VolumeComputer.prototype, "execute").mockImplementation(async function* () {
       yield { type: "stdout", data: "\u0001".repeat(1536 * 1024) };
       yield { type: "stderr", data: "\u0002".repeat(1536 * 1024) };
       yield { type: "exit", code: 0 };
