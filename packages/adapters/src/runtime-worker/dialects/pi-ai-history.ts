@@ -159,6 +159,7 @@ export function ingestPiAi(
         });
         continue;
       case "assistant": {
+        const firstStep = steps.length;
         const calls: ToolCalls = [];
         for (const block of message.content) {
           const text = TextBlock.safeParse(block);
@@ -195,6 +196,7 @@ export function ingestPiAi(
           else unverifiedCalls += 1;
           calls.push({ id, name: controller, args, output: record?.output ?? "" });
         }
+        if (steps.length === firstStep) steps.push({ kind: "text", turn, text: "" });
         if (calls.length > 0) parts.push({ type: "toolCalls", calls });
         turn += 1;
         continue;

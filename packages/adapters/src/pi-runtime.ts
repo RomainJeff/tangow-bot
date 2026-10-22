@@ -35,6 +35,11 @@ import type {
 import { redactSecrets } from "@rakazo/core";
 import { getLogger, redactSensitiveText } from "@rakazo/logging";
 import { z } from "zod";
+import {
+  createAgentTextPolicy,
+  stripFakeToolCalls,
+  stripModelControlTokens,
+} from "./agent-text-policy.js";
 import { isToolPauseResult } from "./approval-effect.js";
 import { askUserCard } from "./ask-user.js";
 import {
@@ -72,7 +77,9 @@ import {
 } from "./pi-runtime-limits.js";
 import { textContentArg } from "./tool-text.js";
 import type { TraceExporter } from "./trace-export.js";
-import { TOOL_FINAL_RESPONSE_FALLBACK, toolCallBudgetNotice } from "./user-progress.js";
+import { toolCallBudgetNotice } from "./user-progress.js";
+
+export { stripFakeToolCalls, stripModelControlTokens } from "./agent-text-policy.js";
 
 const running = new Map<string, { controller: AbortController; work: Promise<void> }>();
 interface ToolCallBudget {
@@ -91,27 +98,6 @@ function catalogModels(): Models {
   catalogModelsCache ??= registerOpenAiCompatibleCatalog(registerLocalProvider(builtinModels()));
   return catalogModelsCache;
 }
-// Some OpenAI-compatible models return EOS immediately after a tool result
-// instead of taking another assistant turn. A bounded internal follow-up keeps
-// that provider quirk from making a long task look complete after one step.
-const MAX_SILENT_TOOL_CONTINUATIONS = 3;
-const SILENT_TOOL_CONTINUATION_PROMPT =
-  "Continue the original task from the latest tool result. Do not stop after a tool call; use any remaining tools needed, then deliver the result.";
-const SILENCE_ALLOWED_CONTINUATION_PROMPT =
-  "Continue the original task from the latest tool result. Use any remaining tools needed, then deliver the result, or end with no reply if there is nothing to report.";
-const PRIVATE_TEXT_PROMPT =
-  "Nothing you wrote reached the user: only message_user does. If that text was meant for them, send it with message_user now. Otherwise end the turn.";
-// A long task the user only follows through message_user looks frozen when the model works
-// for many steps without reporting, so it is reminded to check in.
-const CHECK_IN_AFTER_TOOL_CALLS = 30;
-const USER_CONTACT_TOOLS = new Set([
-  "message_user",
-  "ask_user",
-  "request_secret",
-  "request_takeover",
-]);
-const checkInPrompt = (toolCalls: number) =>
-  `Harness note, not from the user: you have made ${toolCalls} tool calls since the user last heard from you. Send them a short progress update with message_user (what you found, what is next), then continue.`;
 export const DEFAULT_COMPUTER_SCREENSHOTS_TO_KEEP = 2;
 // Reasoning-capable models must not start at "off": for OpenRouter, pi-ai maps
 // that to reasoning.effort "none", which 400s on endpoints that mandate
@@ -369,18 +355,10 @@ export class PiAgentRuntime implements AgentRuntime {
         signal.addEventListener("abort", onAbort);
 
         let streamed = "";
-        let privateFinalText: string | undefined;
         let runtimeNotice: string | undefined;
         let toolCalls = 0;
         let toolActivityShowing = false;
-        let silentToolContinuations = 0;
-        let toolWorkPendingFinal = false;
-        // A run that may end without a word, and whose free text is not private scratch, can mean
-        // its empty turn: one follow-up that allows silence tells a stall from that answer.
-        const emptyFinalMayBeSilence = request.allowSilentEmpty && !request.freeTextIsPrivate;
-        let messagedUser = false;
-        let privateTextNudged = false;
-        let toolCallsSinceContact = 0;
+        const textPolicy = createAgentTextPolicy(request);
         agent.subscribe(async (event) => {
           if (event.type === "message_end") {
             traceRecorder?.message(event.message);
@@ -435,71 +413,18 @@ export class PiAgentRuntime implements AgentRuntime {
                     part.type === "toolCall" ? [part.name] : [],
                   )
                 : [];
-            const hasToolCalls = toolCallNames.length > 0;
-            if (request.runRecap) privateFinalText = hasToolCalls ? undefined : messageText;
-            const hasToolResults = event.toolResults.length > 0;
-            // An update sent before more tool work did not deliver what that work found.
-            if (hasToolCalls) messagedUser = toolCallNames.includes("message_user");
-            if (request.freeTextIsPrivate) {
-              toolCallsSinceContact = toolCallNames.some((name) => USER_CONTACT_TOOLS.has(name))
-                ? 0
-                : toolCallsSinceContact + toolCallNames.length;
-              if (toolCallsSinceContact >= CHECK_IN_AFTER_TOOL_CALLS && !host.pausePending) {
-                agent.steer({
-                  role: "user",
-                  content: checkInPrompt(toolCallsSinceContact),
-                  timestamp: Date.now(),
-                });
-                toolCallsSinceContact = 0;
-              }
-            }
-            if (
-              request.freeTextIsPrivate &&
-              !hasToolCalls &&
-              messageText.trim() &&
-              !messagedUser &&
-              !privateTextNudged &&
-              !host.pausePending
-            ) {
-              privateTextNudged = true;
-              agent.followUp({
-                role: "user",
-                content: PRIVATE_TEXT_PROMPT,
-                timestamp: Date.now(),
-              });
-            }
-
-            // Text in a turn that also contains a tool call is narration, not a final
-            // response. Keep the run alive until a later text-only turn answers the user,
-            // or a turn that only messages the user, which already delivered the answer.
-            if (
-              toolCallNames.length > 0 &&
-              toolCallNames.every((name) => name === "message_user")
-            ) {
-              toolWorkPendingFinal = false;
-              silentToolContinuations = 0;
-            } else if (hasToolCalls && hasToolResults && !host.pausePending) {
-              toolWorkPendingFinal = true;
-              silentToolContinuations = 0;
-            } else if (toolWorkPendingFinal && !hasToolCalls && !hasToolResults) {
-              if (messageText.trim() || (emptyFinalMayBeSilence && silentToolContinuations > 0)) {
-                toolWorkPendingFinal = false;
-                silentToolContinuations = 0;
-              } else if (
-                !host.pausePending &&
-                silentToolContinuations < MAX_SILENT_TOOL_CONTINUATIONS
-              ) {
-                silentToolContinuations += 1;
-                agent.followUp({
-                  role: "user",
-                  content: emptyFinalMayBeSilence
-                    ? SILENCE_ALLOWED_CONTINUATION_PROMPT
-                    : SILENT_TOOL_CONTINUATION_PROMPT,
-                  timestamp: Date.now(),
-                });
-              }
-            }
+            const prompts = textPolicy.turn({
+              messageText,
+              toolCallNames,
+              hasToolResults: event.toolResults.length > 0,
+              paused: host.pausePending,
+            });
+            for (const content of prompts.steer)
+              agent.steer({ role: "user", content, timestamp: Date.now() });
+            for (const content of prompts.followUp)
+              agent.followUp({ role: "user", content, timestamp: Date.now() });
           }
+
           if (event.type === "message_end" && event.message.role === "assistant") {
             const text = assistantText(event.message);
             if (text && !streamed) {
@@ -547,6 +472,13 @@ export class PiAgentRuntime implements AgentRuntime {
         if (error && !budgetExceeded && !host.pausePending) {
           throw new Error(sanitizeProviderError(model.provider, error));
         }
+        const lastMessage = agent.state.messages.at(-1);
+        const final = textPolicy.finish({
+          streamed,
+          fallback: lastMessage?.role === "assistant" ? assistantText(lastMessage) : "",
+          toolCalls,
+          paused: host.pausePending,
+        });
         if (budgetExceeded) {
           const budgetMessage = toolCallBudgetExceededMessage(host.toolCallBudget.limit);
           runtimeNotice = budgetMessage;
@@ -558,34 +490,17 @@ export class PiAgentRuntime implements AgentRuntime {
             queue.push({ type: "text", text: budgetMessage });
             streamed = budgetMessage;
           }
-        } else if (!host.pausePending && toolWorkPendingFinal) {
-          // Discard cumulative pre-tool narration from the terminal payload and make the
-          // missing final response visible to the user instead of silently completing.
-          streamed = TOOL_FINAL_RESPONSE_FALLBACK;
-          runtimeNotice = streamed;
-          queue.push({ type: "text", text: streamed });
-        } else if (!streamed.trim() && !host.pausePending) {
-          streamed = "";
-          const lastMessage = agent.state.messages.at(-1);
-          const fallback = lastMessage?.role === "assistant" ? assistantText(lastMessage) : "";
-          if (fallback.trim()) {
-            queue.push({ type: "text", text: fallback });
-            streamed = fallback;
-          } else if (toolWorkPendingFinal) {
-            // A tool-bearing run must never finish with only a progress/narration message.
-            streamed = TOOL_FINAL_RESPONSE_FALLBACK;
-            runtimeNotice = streamed;
-            queue.push({ type: "text", text: streamed });
-          } else if (toolCalls === 0 && !request.allowSilentEmpty) {
-            streamed = request.emptyResponseText?.trim() || "No response. Try again.";
-            queue.push({ type: "text", text: streamed });
-          }
+        } else {
+          if (final.runtimeNotice || (final.text !== streamed && final.text))
+            queue.push({ type: "text", text: final.text });
+          streamed = final.text;
+          runtimeNotice = final.runtimeNotice;
         }
         traceOutput = streamed;
         queue.push({
           type: "done",
           ...(streamed.trim() ? { text: streamed } : {}),
-          ...(request.runRecap ? { privateFinalText: privateFinalText ?? "" } : {}),
+          ...(request.runRecap ? { privateFinalText: final.privateFinalText ?? "" } : {}),
           ...(runtimeNotice ? { runtimeNotice } : {}),
         });
       } catch (error) {
@@ -897,48 +812,6 @@ function sealAssistantTurnMarkers(content: string): string {
   return content
     .replaceAll(ASSISTANT_TURN_OPEN, "&lt;assistant_turn&gt;")
     .replaceAll(ASSISTANT_TURN_CLOSE, "&lt;/assistant_turn&gt;");
-}
-
-const FAKE_TOOL_CALL_START = /\[tool \w+\(/g;
-const FAKE_TOOL_CALL_ONLY = "(earlier reply omitted: it was malformed)";
-
-/**
- * Replies stored before tool calls were replayed as real turns can contain the
- * old `[tool name(args) → output]` trace written as text. Replayed as-is they
- * teach the model to keep writing calls instead of making them, so each span is
- * cut, bracket-balanced and JSON-string aware; an unclosed span runs to the end.
- */
-export function stripFakeToolCalls(content: string): string {
-  let result = "";
-  let cursor = 0;
-  let stripped = false;
-  for (const match of content.matchAll(FAKE_TOOL_CALL_START)) {
-    if (match.index < cursor) continue;
-    let end = content.length;
-    let depth = 0;
-    let inString = false;
-    for (let i = match.index; i < content.length; i += 1) {
-      const char = content[i];
-      if (inString) {
-        if (char === "\\") i += 1;
-        else if (char === '"') inString = false;
-      } else if (char === '"') inString = true;
-      else if (char === "[" || char === "(" || char === "{") depth += 1;
-      else if (char === "]" || char === ")" || char === "}") {
-        depth -= 1;
-        if (depth === 0) {
-          end = i + 1;
-          break;
-        }
-      }
-    }
-    result += content.slice(cursor, match.index);
-    cursor = end;
-    stripped = true;
-  }
-  if (!stripped) return content;
-  const cleaned = (result + content.slice(cursor)).replace(/\n{3,}/g, "\n\n").trim();
-  return cleaned || FAKE_TOOL_CALL_ONLY;
 }
 
 /**
@@ -1915,19 +1788,6 @@ function boundAgentToolResult<T>(result: AgentToolResult<T>): AgentToolResult<T>
     ...result,
     content: clipToolResultContent(result.content),
   };
-}
-
-/**
- * Remove model control / special tokens that leak into assistant text. Some models and
- * OpenAI-compatible proxies surface their end-of-turn or role markers as literal text —
- * `<|eos|>`, `<|eot_id|>`, `<|im_end|>`, `<|end_of_turn|>`, `<|assistant|>`, ... — instead of
- * treating them as stop tokens. They must never reach the thread. Matches the `<|token|>` shape
- * generically (no spaces inside) so it is robust across whatever model the user picks, without
- * touching ordinary prose. Exported for tests.
- */
-export function stripModelControlTokens(text: string): string {
-  if (!text.includes("<|")) return text;
-  return text.replace(/<\|[^\s|>]{1,64}\|>/g, "");
 }
 
 function assistantText(message: unknown): string {

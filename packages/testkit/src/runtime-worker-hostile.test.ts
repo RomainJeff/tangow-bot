@@ -109,6 +109,7 @@ function manualLauncher() {
         });
         waiting.get(worker.runId)?.();
         return {
+          expectedHarness: { name: "pi", capabilities: ["subagents", "steering"] },
           start: {
             version: 1,
             kind: "worker.start",

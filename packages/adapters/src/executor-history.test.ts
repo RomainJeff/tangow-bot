@@ -1,6 +1,7 @@
 import type {
   AgentRunRequest,
   AgentRuntimeEvent,
+  GuestBody,
   SemanticMemoryRecallRequest,
   SessionLog,
 } from "@rakazo/adapter-kit";
@@ -28,6 +29,9 @@ import {
   estimateToolSchemaTokens,
   formatRecalledMemory,
 } from "./history-compaction.js";
+import { manualLauncher, rawGuest, stillClock } from "./runtime-worker/raw-guest.test-support.js";
+import { createWorkerAgentRuntime } from "./runtime-worker/runtime.js";
+import { transcriptIngest } from "./runtime-worker/transcript.js";
 import { PostgresSessionLog } from "./session-log/postgres.js";
 import { recordingSessionLog } from "./session-log/recording.test-support.js";
 
@@ -1010,6 +1014,329 @@ describe("interactive executor sessions with durable history", () => {
       parent: () => log.readTail(SessionIdSchema.parse(thread.sessionId)),
     };
   }
+
+  it.each(["text", "runtimeNotice", "privateFinalText"] as const)(
+    "preserves non-native Pi completion with %s and no transcript",
+    async (field) => {
+      const c = await conversation();
+      const content =
+        field === "privateFinalText"
+          ? JSON.stringify({ version: 1, results: ["Completed"], references: [] })
+          : "Legacy Pi completion";
+      await fixture({
+        database: c.prisma,
+        run: c.run,
+        runtime: async function* (request) {
+          const launcher = manualLauncher();
+          const runtime = createWorkerAgentRuntime({
+            launcher: launcher.launcher,
+            stops: { mark: async () => undefined },
+            clock: stillClock,
+          });
+          const guestTask = (async () => {
+            const launched = await launcher.launchedFor(request.runId);
+            const guest = rawGuest(launched.connect(), launched.capability);
+            await guest.hello();
+            guest.send(1, { type: "done", [field]: content });
+          })();
+          yield* runtime.run({
+            ...request,
+            attempt: request.attempt ?? { id: "raw-attempt", fence: 1 },
+          });
+          await guestTask;
+        },
+      }).request();
+      expect(await c.prisma.run.findUniqueOrThrow({ where: { id: c.run.id } })).toMatchObject({
+        status: "completed",
+      });
+      const parent = await c.parent();
+      expect(
+        (await c.log.readRun(c.run.id))
+          .filter((entry) => entry.type === "assistant.text")
+          .map((entry) => entry.payload.blocks),
+      ).toEqual(field === "runtimeNotice" ? [[{ kind: "text", text: content }]] : []);
+      expect(
+        parent.filter((entry) => entry.type === "run.recap").map((entry) => entry.payload.recap),
+      ).toEqual([
+        field === "privateFinalText"
+          ? { state: "available", facts: { version: 1, results: ["Completed"], references: [] } }
+          : { state: "missing", reason: field === "text" ? "invalid" : "absent" },
+      ]);
+    },
+  );
+
+  it.each(["missing", "empty", "present", "rejected", "late", "duplicate"] as const)(
+    "enforces native completion policy through a raw worker with %s transcript",
+    async (transcriptCase) => {
+      const c = await conversation();
+      const marker = "GUEST_PRIVATE_NOTICE_MUST_NOT_PUBLISH";
+      await fixture({
+        database: c.prisma,
+        run: c.run,
+        runtime: async function* (request) {
+          const launcher = manualLauncher({ name: "pi-native", capabilities: ["native-loop"] });
+          const runtime = createWorkerAgentRuntime({
+            launcher: launcher.launcher,
+            stops: { mark: async () => undefined },
+            clock: stillClock,
+          });
+          const guestTask = (async () => {
+            const launched = await launcher.launchedFor(request.runId);
+            const guest = rawGuest(launched.connect(), launched.capability, {
+              name: "pi-native",
+              capabilities: ["native-loop"],
+            });
+            await guest.hello();
+            let seq = 1;
+            const transcript = {
+              type: "transcript",
+              dialect: "pi-ai",
+              messages:
+                transcriptCase === "empty"
+                  ? []
+                  : [
+                      {
+                        role: "assistant",
+                        content: [{ type: "text", text: "PRIVATE_MODEL_PROSE" }],
+                      },
+                    ],
+            } satisfies Extract<GuestBody, { type: "transcript" }>;
+            if (
+              transcriptCase === "empty" ||
+              transcriptCase === "present" ||
+              transcriptCase === "duplicate"
+            ) {
+              guest.send(seq, transcript);
+              expect(await guest.replies(seq++)).toEqual([{ type: "recorded" }]);
+            }
+            if (transcriptCase === "rejected") {
+              guest.send(seq++, { ...transcript, agent: "unknown-helper" });
+            } else if (transcriptCase === "duplicate") {
+              guest.send(seq++, transcript);
+            }
+            guest.send(seq++, {
+              type: "done",
+              text: marker,
+              privateFinalText: marker,
+              runtimeNotice: marker,
+            });
+            if (transcriptCase === "late") guest.send(seq++, transcript);
+          })();
+          yield* runtime.run({
+            ...request,
+            attempt: request.attempt ?? { id: "raw-attempt", fence: 1 },
+          });
+          await guestTask;
+        },
+      }).request();
+      const parent = await c.parent();
+      const trace = await c.log.readRun(c.run.id);
+      expect(JSON.stringify([...parent, ...trace])).not.toContain(marker);
+      expect(JSON.stringify([...parent, ...trace])).not.toContain("PRIVATE_MODEL_PROSE");
+      expect(trace.filter((entry) => entry.type === "assistant.text")).toEqual([]);
+      expect(parent.filter((entry) => entry.type === "run.recap")).toHaveLength(1);
+      expect(await c.prisma.run.findUniqueOrThrow({ where: { id: c.run.id } })).toMatchObject({
+        status: ["empty", "present", "duplicate"].includes(transcriptCase) ? "completed" : "failed",
+      });
+    },
+  );
+
+  it.each([
+    {
+      emptyTurns: 1,
+      expected:
+        "I completed the tool step but could not produce a final response. Please ask me to continue.",
+      privateText: false,
+    },
+    {
+      emptyTurns: 2,
+      expected:
+        "I completed the tool step but could not produce a final response. Please ask me to continue.",
+      privateText: true,
+    },
+    { emptyTurns: 2, expected: "", privateText: false },
+    { emptyTurns: 2, expected: "The final answer.", final: "The final answer.<|eos|>" },
+  ])(
+    "replays native tool work with $emptyTurns empty turns and final $final",
+    async ({ emptyTurns, expected, final, privateText }) => {
+      const c = await conversation();
+      const routine = await c.prisma.routine.create({
+        data: {
+          spaceId: "space-1",
+          userId: "user-1",
+          botId: BOT,
+          threadId: c.thread.id,
+          name: "Check",
+          prompt: "Check",
+          crons: [],
+        },
+      });
+      const run = privateText
+        ? c.run
+        : await c.prisma.run.update({
+            where: { id: c.run.id },
+            data: { trigger: "routine", routineId: routine.id },
+          });
+      await fixture({
+        database: c.prisma,
+        run,
+        runtime: async function* (request) {
+          const ingest = transcriptIngest((text) => text);
+          yield { type: "text", text: "Private work" };
+          yield ingest.ingest(
+            "root",
+            {
+              type: "transcript",
+              dialect: "pi-ai",
+              messages: [
+                {
+                  role: "assistant",
+                  content: [
+                    { type: "text", text: "Private work" },
+                    {
+                      type: "toolCall",
+                      id: "native-read",
+                      name: "read",
+                      arguments: { path: "notes.txt" },
+                    },
+                  ],
+                },
+                { role: "toolResult", toolCallId: "native-read", content: "nothing to report" },
+                ...Array.from({ length: emptyTurns }, (_, index) => ({
+                  role: "assistant",
+                  content: index === 0 ? [] : [{ type: "text", text: "" }],
+                })),
+                ...(final ? [{ role: "assistant", content: [{ type: "text", text: final }] }] : []),
+              ],
+            },
+            request.tools,
+            "pi-native",
+          )!;
+          yield {
+            type: "done",
+            text: "Private work",
+            runtimeNotice: "GUEST_PRIVATE_NOTICE_MUST_NOT_PUBLISH",
+          };
+        },
+      }).request();
+      const parent = await c.parent();
+      if (privateText) {
+        expect(
+          projectThreadItems(parent).flatMap((item) =>
+            item.kind === "message" && item.role === "bot"
+              ? item.blocks.flatMap((block) => (block.kind === "text" ? [block.text] : []))
+              : [],
+          ),
+        ).toEqual([expected]);
+      } else {
+        expect(
+          parent
+            .filter((entry) => entry.type === "routine.finished")
+            .map((entry) => entry.payload.result),
+        ).toEqual([expected]);
+      }
+      const logged = await c.log.readRun(run.id);
+      expect(
+        logged
+          .filter((entry) => entry.type === "assistant.text")
+          .flatMap((entry) =>
+            entry.payload.blocks.flatMap((block) => (block.kind === "text" ? [block.text] : [])),
+          ),
+      ).toEqual(expected ? [expected] : []);
+      expect(JSON.stringify(logged)).not.toContain("Private work");
+    },
+  );
+
+  it.each([
+    { empty: false, messageUser: false },
+    { empty: true, messageUser: false },
+    { empty: false, messageUser: true },
+    { empty: true, messageUser: true },
+  ])(
+    "keeps native recap and guest notice private, empty=$empty, messageUser=$messageUser",
+    async ({ empty, messageUser }) => {
+      const c = await conversation();
+      const recap = JSON.stringify({ version: 1, results: ["Found the answer"], references: [] });
+      await fixture({
+        database: c.prisma,
+        run: c.run,
+        runtime: async function* (request) {
+          const ingest = transcriptIngest((text) => text);
+          const args = { message: "The answer is 42." };
+          if (messageUser) {
+            const output = await request.executeTool!("message_user", args, "say");
+            ingest.answered(
+              { type: "tool.call", agent: "root", callId: "say", name: "message_user", args },
+              { type: "tool.result", output },
+            );
+          }
+          yield ingest.ingest(
+            "root",
+            {
+              type: "transcript",
+              dialect: "pi-ai",
+              messages: [
+                {
+                  role: "assistant",
+                  content: [
+                    { type: "text", text: "Private work" },
+                    ...(messageUser
+                      ? [
+                          {
+                            type: "toolCall",
+                            id: "guest-say",
+                            name: "mcp__rakazo__message_user",
+                            arguments: args,
+                          },
+                        ]
+                      : []),
+                  ],
+                },
+                { role: "assistant", content: [{ type: "text", text: recap }] },
+                ...(empty ? [{ role: "assistant", content: [] }] : []),
+              ],
+            },
+            request.tools,
+            "pi-native",
+          )!;
+          yield {
+            type: "done",
+            text: recap,
+            privateFinalText: recap,
+            runtimeNotice: "GUEST_PRIVATE_NOTICE_MUST_NOT_PUBLISH",
+          };
+        },
+      }).request();
+      const parent = await c.parent();
+      expect(
+        projectThreadItems(parent).filter((item) => item.kind === "message" && item.role === "bot"),
+      ).toEqual(
+        messageUser
+          ? [expect.objectContaining({ blocks: [{ kind: "text", text: "The answer is 42." }] })]
+          : [],
+      );
+      expect(
+        parent.filter((entry) => entry.type === "run.recap").map((entry) => entry.payload.recap),
+      ).toEqual([
+        empty
+          ? { state: "missing", reason: "absent" }
+          : {
+              state: "available",
+              facts: { version: 1, results: ["Found the answer"], references: [] },
+            },
+      ]);
+      const trace = await c.log.readRun(c.run.id);
+      expect(
+        trace
+          .filter((entry) => entry.type === "assistant.text")
+          .map((entry) => entry.payload.blocks),
+      ).toEqual(messageUser ? [[{ kind: "text", text: "The answer is 42." }]] : []);
+      expect(JSON.stringify(trace)).not.toContain("Private work");
+      expect(JSON.stringify([...parent, ...trace])).not.toContain(
+        "GUEST_PRIVATE_NOTICE_MUST_NOT_PUBLISH",
+      );
+    },
+  );
 
   it.each(["user", "follow_up"] as const)(
     "publishes a direct child bot's %s answer while its final words stay private",

@@ -69,6 +69,7 @@ export function tapConnector(
       connects.push(performance.now());
       const guest = connector.connect(target, capability);
       return {
+        expectedHarness: guest.expectedHarness,
         exited: guest.exited,
         connections: (async function* () {
           for await (const channel of guest.connections) yield tap(channel);

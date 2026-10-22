@@ -1,6 +1,9 @@
 import { createWorkerAgentRuntime, WORKER_LIMITS } from "@rakazo/adapters/runtime-worker";
 import { afterEach, expect, it } from "vitest";
-import { manualLauncher, rawGuest } from "./worker-raw-guest.js";
+import {
+  manualLauncher,
+  rawGuest,
+} from "../../adapters/src/runtime-worker/raw-guest.test-support.js";
 import { startWorkerRun } from "./worker-run-fixture.js";
 
 const cleanups: Array<() => Promise<void>> = [];
@@ -9,7 +12,10 @@ afterEach(async () => {
 });
 
 async function pausedHelper() {
-  const launcher = manualLauncher();
+  const launcher = manualLauncher({
+    name: "pi-native",
+    capabilities: ["native-loop", "subagents"],
+  });
   const sleeps = new Map<number, () => void>();
   const runtime = createWorkerAgentRuntime({
     launcher: launcher.launcher,

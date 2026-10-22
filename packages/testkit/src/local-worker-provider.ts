@@ -69,6 +69,7 @@ function isCancel(frame: Uint8Array) {
 export class LocalWorkerProvider implements WorkerProvider, GuestConnector {
   /** Attempt ids whose guest was started, in order. */
   readonly launches: string[] = [];
+  private readonly harness: GuestHarness;
   private readonly vms = new Map<string, Vm>();
 
   constructor(
@@ -84,7 +85,9 @@ export class LocalWorkerProvider implements WorkerProvider, GuestConnector {
       /** The harness a `memory` guest runs. Default: Pi. */
       harness?: GuestHarness;
     },
-  ) {}
+  ) {
+    this.harness = options.harness ?? HARNESSES.pi!;
+  }
 
   describe(): AdapterDescriptor<WorkerCapabilities> {
     return {
@@ -122,7 +125,7 @@ export class LocalWorkerProvider implements WorkerProvider, GuestConnector {
   connect(
     target: { attemptId: string; providerRef: string },
     capability: string,
-  ): { connections: AsyncIterable<FrameChannel>; exited: Promise<void> } {
+  ): ReturnType<GuestConnector["connect"]> {
     const vm = this.vms.get(target.providerRef);
     if (!vm) throw new Error(`No local worker ${target.providerRef}`);
     this.launches.push(target.attemptId);
@@ -131,7 +134,7 @@ export class LocalWorkerProvider implements WorkerProvider, GuestConnector {
         ? this.memoryGuest(vm, capability)
         : this.childGuest(vm, capability);
     vm.guest = guest;
-    return { connections, exited: guest.exited };
+    return { expectedHarness: this.harness.declaration, connections, exited: guest.exited };
   }
 
   async destroy(
@@ -194,7 +197,7 @@ export class LocalWorkerProvider implements WorkerProvider, GuestConnector {
     const exited = runGuest({
       channels: guestSide(),
       capability,
-      harness: this.options.harness ?? HARNESSES.pi!,
+      harness: this.harness,
       spoolDir: path.join(vm.root, "tmp", "tool-output"),
       root: vm.root,
       home: path.join(vm.root, "home/user"),
@@ -224,7 +227,7 @@ export class LocalWorkerProvider implements WorkerProvider, GuestConnector {
       env: {
         ...process.env,
         RAKAZO_WORKER_CAPABILITY: capability,
-        RAKAZO_WORKER_HARNESS: "pi",
+        RAKAZO_WORKER_HARNESS: this.harness.declaration.name,
         RAKAZO_WORKER_ROOT: vm.root,
         RAKAZO_WORKER_HOME: path.join(vm.root, "home/user"),
         RAKAZO_WORKER_SPOOL_DIR: path.join(vm.root, "tmp", "tool-output"),

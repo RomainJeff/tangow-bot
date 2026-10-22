@@ -11,6 +11,7 @@ import {
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import type { GuestImage, ReplyFinal } from "@rakazo/adapter-kit";
+import { PI_NATIVE_HARNESS } from "@rakazo/adapter-kit";
 import { guestRuntimeModel } from "@rakazo/adapters/pi-runtime";
 import {
   piAiProviderStream,
@@ -94,7 +95,7 @@ function rakazoExtension(
  * and shell tools run here without a grant. Every model call goes through the controller's relay.
  */
 export const piNativeHarness: GuestHarness = {
-  declaration: { name: "pi-native", capabilities: ["native-loop", "steering"] },
+  declaration: PI_NATIVE_HARNESS,
   nativeTools: piToolManifest(),
   async executeNativeTool() {
     throw new Error("pi-native runs its own tools");

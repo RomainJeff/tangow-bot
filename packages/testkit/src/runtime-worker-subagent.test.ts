@@ -7,8 +7,13 @@ import type {
 } from "@rakazo/adapter-kit";
 import { createWorkerAgentRuntime, WORKER_LIMITS } from "@rakazo/adapters/runtime-worker";
 import { describe, expect, it, onTestFinished } from "vitest";
+import {
+  consume,
+  manualLauncher,
+  rawGuest,
+  stillClock,
+} from "../../adapters/src/runtime-worker/raw-guest.test-support.js";
 import { startModelEmulator } from "./model-emulator.js";
-import { consume, manualLauncher, rawGuest, stillClock } from "./worker-raw-guest.js";
 
 const tool = (name: string): ConnectorTool => ({
   name,
@@ -42,7 +47,10 @@ function helperRun(
   const startCalled = new Promise<void>((resolve) => {
     calledStart = resolve;
   });
-  const launcher = manualLauncher();
+  const launcher = manualLauncher({
+    name: "pi-native",
+    capabilities: ["native-loop", "subagents"],
+  });
   const runtime = createWorkerAgentRuntime({
     launcher: launcher.launcher,
     stops: { mark: async () => undefined },
@@ -304,7 +312,9 @@ describe("a helper the controller starts for a harness with its own loop", () =>
     expect(await guest.replies(3, 1)).toEqual([{ type: "end.refused", pending: ["h1"] }]);
     open();
     await guest.replies(2, 1);
-    guest.send(4, finish("helper:1", "Found 3 notes."));
+    guest.send(4, { type: "transcript", dialect: "pi-ai", messages: [] });
+    expect(await guest.replies(4)).toEqual([{ type: "recorded" }]);
+    guest.send(5, finish("helper:1", "Found 3 notes."));
     expect((await guest.replies(2)).at(-1)).toEqual({
       type: "tool.result",
       output: "Found 3 notes.",
