@@ -5380,8 +5380,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
               currentTextSegment = nativeText.text;
               tryFlushPendingTools();
             } else if (event.type === "done") {
-              const terminal = nativeText ? { ...event, ...nativeText } : event;
-              runtimeNotice = event.runtimeNotice ?? terminal.runtimeNotice;
+              const terminal = nativeText ?? event;
+              runtimeNotice = terminal.runtimeNotice;
               if (recapRequested) {
                 runRecap = parseRunRecap(
                   terminal.privateFinalText ?? (runtimeNotice ? undefined : terminal.text),

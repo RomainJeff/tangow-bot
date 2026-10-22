@@ -1083,7 +1083,11 @@ describe("interactive executor sessions with durable history", () => {
             request.tools,
             "pi-native",
           )!;
-          yield { type: "done", text: "Private work" };
+          yield {
+            type: "done",
+            text: "Private work",
+            runtimeNotice: "GUEST_PRIVATE_NOTICE_MUST_NOT_PUBLISH",
+          };
         },
       }).request();
       const parent = await c.parent();
@@ -1114,9 +1118,14 @@ describe("interactive executor sessions with durable history", () => {
     },
   );
 
-  it.each([false, true])(
-    "keeps native recap private and clears it after an empty final, empty=%s",
-    async (empty) => {
+  it.each([
+    { empty: false, messageUser: false },
+    { empty: true, messageUser: false },
+    { empty: false, messageUser: true },
+    { empty: true, messageUser: true },
+  ])(
+    "keeps native recap and guest notice private, empty=$empty, messageUser=$messageUser",
+    async ({ empty, messageUser }) => {
       const c = await conversation();
       const recap = JSON.stringify({ version: 1, results: ["Found the answer"], references: [] });
       await fixture({
@@ -1125,11 +1134,13 @@ describe("interactive executor sessions with durable history", () => {
         runtime: async function* (request) {
           const ingest = transcriptIngest((text) => text);
           const args = { message: "The answer is 42." };
-          const output = await request.executeTool!("message_user", args, "say");
-          ingest.answered(
-            { type: "tool.call", agent: "root", callId: "say", name: "message_user", args },
-            { type: "tool.result", output },
-          );
+          if (messageUser) {
+            const output = await request.executeTool!("message_user", args, "say");
+            ingest.answered(
+              { type: "tool.call", agent: "root", callId: "say", name: "message_user", args },
+              { type: "tool.result", output },
+            );
+          }
           yield ingest.ingest(
             "root",
             {
@@ -1140,12 +1151,16 @@ describe("interactive executor sessions with durable history", () => {
                   role: "assistant",
                   content: [
                     { type: "text", text: "Private work" },
-                    {
-                      type: "toolCall",
-                      id: "guest-say",
-                      name: "mcp__rakazo__message_user",
-                      arguments: args,
-                    },
+                    ...(messageUser
+                      ? [
+                          {
+                            type: "toolCall",
+                            id: "guest-say",
+                            name: "mcp__rakazo__message_user",
+                            arguments: args,
+                          },
+                        ]
+                      : []),
                   ],
                 },
                 { role: "assistant", content: [{ type: "text", text: recap }] },
@@ -1155,15 +1170,22 @@ describe("interactive executor sessions with durable history", () => {
             request.tools,
             "pi-native",
           )!;
-          yield { type: "done", text: recap, privateFinalText: recap };
+          yield {
+            type: "done",
+            text: recap,
+            privateFinalText: recap,
+            runtimeNotice: "GUEST_PRIVATE_NOTICE_MUST_NOT_PUBLISH",
+          };
         },
       }).request();
       const parent = await c.parent();
       expect(
         projectThreadItems(parent).filter((item) => item.kind === "message" && item.role === "bot"),
-      ).toEqual([
-        expect.objectContaining({ blocks: [{ kind: "text", text: "The answer is 42." }] }),
-      ]);
+      ).toEqual(
+        messageUser
+          ? [expect.objectContaining({ blocks: [{ kind: "text", text: "The answer is 42." }] })]
+          : [],
+      );
       expect(
         parent.filter((entry) => entry.type === "run.recap").map((entry) => entry.payload.recap),
       ).toEqual([
@@ -1179,8 +1201,11 @@ describe("interactive executor sessions with durable history", () => {
         trace
           .filter((entry) => entry.type === "assistant.text")
           .map((entry) => entry.payload.blocks),
-      ).toEqual([[{ kind: "text", text: "The answer is 42." }]]);
+      ).toEqual(messageUser ? [[{ kind: "text", text: "The answer is 42." }]] : []);
       expect(JSON.stringify(trace)).not.toContain("Private work");
+      expect(JSON.stringify([...parent, ...trace])).not.toContain(
+        "GUEST_PRIVATE_NOTICE_MUST_NOT_PUBLISH",
+      );
     },
   );
 
