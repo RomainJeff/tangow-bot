@@ -79,10 +79,12 @@ describe("resolveCompletionMaxTokens", () => {
 });
 
 describe("clipToolResultText", () => {
-  it("bounds oversized tool output for the in-turn transcript", () => {
-    const text = "x".repeat(TOOL_RESULT_TEXT_LIMIT + 50);
+  it.each([
+    { kind: "plain text", text: "x".repeat(TOOL_RESULT_TEXT_LIMIT + 50), ending: "x…" },
+    { kind: "a split surrogate pair", text: `a${"😀".repeat(7000)}`, ending: "�…" },
+  ])("bounds $kind output for the in-turn transcript", ({ text, ending }) => {
     const clipped = clipToolResultText(text);
-    expect(clipped.endsWith("…")).toBe(true);
+    expect(clipped.endsWith(ending)).toBe(true);
     expect(clipped.length).toBe(TOOL_RESULT_TEXT_LIMIT + 1);
   });
 });
