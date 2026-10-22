@@ -14,6 +14,7 @@ import type {
 } from "@rakazo/adapter-kit";
 import { AgentRuntimeUnavailableError, FRAME_CAPABILITY } from "@rakazo/adapter-kit";
 import { redactSecrets, secretRedactor } from "@rakazo/core";
+import { getLogger } from "@rakazo/logging";
 import { isToolPauseResult } from "../approval-effect.js";
 import { helperCallOf, helperInstructions, helperModel, isHelperTool } from "../builtin-tools.js";
 import { redactPayloadValue, redactPayloadWith } from "../connector-safety.js";
@@ -32,9 +33,10 @@ import {
 import type { SessionInbox } from "./inbox.js";
 import { createSessionInbox } from "./inbox.js";
 import type { LaunchedGuest, WorkerLauncher } from "./launcher.js";
-import { WORKER_LIMITS } from "./limits.js";
+import { modelTokensPerRequest, WORKER_LIMITS } from "./limits.js";
 import type { ModelRelay, RelayUsage } from "./model-relay.js";
 import { guestModelOf } from "./model-relay.js";
+import { clearRelayPrefixes, measureRelayPrefix } from "./relay-measurements.js";
 import type { StopJournal } from "./stop-journal.js";
 import { transcriptIngest } from "./transcript.js";
 
@@ -149,6 +151,11 @@ export function createSession(
       ) ?? []),
     ]);
   let modelRequests = 0;
+  let modelTokens = 0;
+  let reservedModelTokens = 0;
+  let modelTokenLimit =
+    modelTokensPerRequest(request.model) * WORKER_LIMITS.modelRequestsPerAttempt;
+  let toolCalls = 0;
   /**
    * Set once a tool paused the run or the harness asked the user: from then on the attempt may
    * only conclude, whatever its harness does.
@@ -416,19 +423,44 @@ export function createSession(
     part: (body: ReplyPart) => void,
   ): Promise<ReplyFinal> {
     if (!(await fenceHeld())) return revoke();
-    modelRequests += 1;
-    if (modelRequests > WORKER_LIMITS.modelRequestsPerAttempt) return refuse("budget");
     const helper = helperOf(body.agent);
     if (body.agent !== "root" && !helper) return refuse("invalid");
     const turnedAway = paused && pausedModelRequest(paused);
     if (turnedAway) return turnedAway;
+    const model = helper?.model ?? request.model;
+    const reservation = modelTokensPerRequest(model);
+    modelTokenLimit = Math.max(
+      modelTokenLimit,
+      reservation * WORKER_LIMITS.modelRequestsPerAttempt,
+    );
+    modelRequests += 1;
+    if (!paused) {
+      if (modelRequests > WORKER_LIMITS.modelRequestsPerAttempt) return refuse("budget");
+      if (modelTokens + reservedModelTokens + reservation > modelTokenLimit)
+        return refuse("budget");
+    }
+    // Reserve a full prompt and completion before starting upstream. Concurrent helpers cannot
+    // all spend the same remainder. Only provider usage exceeding its model's bounds can overshoot.
+    reservedModelTokens += reservation;
     const abort = new AbortController();
     relays.set(seq, abort);
+    let usage: RelayUsage | undefined;
+    let prefix: ReturnType<typeof measureRelayPrefix> = null;
     try {
       // The guest's own tool output reaches its transcript unredacted: mask it before the provider.
       const call = redactTranscript(body.call, secretRedactor([...(request.secrets ?? [])]));
-      const usage: RelayUsage | undefined = await RELAYS[body.dialect](
-        helper?.model ?? request.model,
+      // Measurements describe the same redacted transcript the provider receives.
+      prefix = measureRelayPrefix(
+        {
+          threadId: request.threadId,
+          botId: request.botId,
+          helper: helper ? body.agent : undefined,
+          attemptId: worker.attemptId,
+        },
+        call as typeof body.call,
+      );
+      usage = await RELAYS[body.dialect](
+        model,
         call as never,
         (event) => part({ type: "model.event", event } as ReplyPart),
         {
@@ -441,16 +473,44 @@ export function createSession(
         },
       );
       if (usage) {
+        modelTokens += usage.inputTokens + usage.outputTokens;
+        if (!paused && modelTokens > modelTokenLimit) {
+          for (const [pending, relay] of relays) {
+            if (pending !== seq) relay.abort();
+          }
+        }
         if (helper) {
           helper.usage.inputTokens += usage.inputTokens;
           helper.usage.outputTokens += usage.outputTokens;
         }
-        await events.push(usage);
       }
-      return { type: "model.end" };
     } finally {
+      reservedModelTokens -= reservation;
+      abort.abort();
       relays.delete(seq);
+      getLogger().info("agent.worker.model_request", {
+        runId: request.runId,
+        attemptId: worker.attemptId,
+        threadId: request.threadId,
+        botId: request.botId,
+        requestSeq: seq,
+        agent: helper ? body.agent : "root",
+        provider: usage?.provider ?? (helper?.model ?? request.model).provider,
+        model: usage?.model ?? (helper?.model ?? request.model).id,
+        modelRequests,
+        toolCalls,
+        modelTokens,
+        modelTokenLimit,
+        usageReported: usage !== undefined,
+        inputTokens: usage?.inputTokens,
+        cacheReadTokens: usage?.cacheReadTokens,
+        cacheWriteTokens: usage?.cacheWriteTokens,
+        outputTokens: usage?.outputTokens,
+        ...prefix,
+      });
     }
+    if (usage) await events.push(usage);
+    return !paused && modelTokens > modelTokenLimit ? refuse("budget") : { type: "model.end" };
   }
 
   async function finish(
@@ -530,6 +590,7 @@ export function createSession(
       case "tool.call":
         // The executor checks its lease only between events: a guest must not outrun it.
         if (!(await fenceHeld())) return revoke();
+        if (!paused && ++toolCalls > WORKER_LIMITS.toolCallsPerAttempt) return refuse("budget");
         return transcript.answered(body, await callTool(body, part));
       case "tool.done":
         return recordLocalResult(body);
@@ -727,6 +788,7 @@ export function createSession(
 
   async function stop(signal: AbortSignal | undefined) {
     inbox.revoke();
+    clearRelayPrefixes(worker.attemptId);
     for (const relay of relays.values()) relay.abort();
     events.drain();
     // The executor stops writing results only once it saw its signal abort.
