@@ -976,6 +976,23 @@ that merely narrate internal operations.`,
   },
 ];
 
+/** The computer's shell in a worker run, named apart from the worker's own bash. */
+export const computerExecTool: ConnectorTool = {
+  name: "computer_exec",
+  description:
+    "Run a command on this bot's computer, where its apps, browser and services run. bash runs on a separate machine with its own localhost: use computer_exec when a command needs the computer, and bash for file and code work. /workspace paths are the same on both. cwd defaults to your home.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      command: { type: "string" },
+      cwd: { type: "string" },
+    },
+    required: ["command"],
+  },
+};
+
+export const COMPUTER_COMMAND_TOOLS = new Set(["shell", computerExecTool.name]);
+
 /** Agent-connection tools, exposed only when the messaging surface is enabled. */
 export const agentConnectionTools: ConnectorTool[] = [
   {

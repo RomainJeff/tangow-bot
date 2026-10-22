@@ -30,12 +30,7 @@ import { relayPiAiCall } from "./dialects/pi-ai.js";
 import { eventPipe } from "./event-pipe.js";
 import type { FrameChannel } from "./framing.js";
 import { encodeMessage, readGuestFrame } from "./framing.js";
-import {
-  base64Images,
-  guestRunInput,
-  helperRunInput,
-  nativeToolsForHarness,
-} from "./guest-input.js";
+import { base64Images, helperRunInput, nativeToolsForHarness, workerStart } from "./guest-input.js";
 import type { SessionInbox } from "./inbox.js";
 import { createSessionInbox } from "./inbox.js";
 import type { LaunchedGuest, WorkerLauncher } from "./launcher.js";
@@ -142,6 +137,8 @@ export function createSession(
     fence: request.attempt.fence,
   };
   const events = eventPipe();
+  const helloSettled = deferred<void>();
+  const stopped = deferred<void>();
   const tools = new Map(request.tools.map((tool) => [tool.name, tool]));
   const announced = new Map<string, string>();
   const open = new Map<string, Promise<unknown>>();
@@ -228,7 +225,9 @@ export function createSession(
     if (paused) return;
     paused = { toolCalls: 0, modelRequests: 0 };
     pauseLatched.resolve();
-    void deps.clock.sleep(WORKER_LIMITS.pausedGraceMs).then(endPaused);
+    void Promise.race([deps.clock.sleep(WORKER_LIMITS.pausedGraceMs), stopped.promise]).then(() => {
+      if (!stopping) endPaused();
+    });
   };
 
   /** No call runs after the pause, but each still gets a result so the harness's turn stays whole. */
@@ -247,13 +246,18 @@ export function createSession(
     return endPaused();
   };
 
+  /** Check in the caller after awaiting a fence lookup: shutdown can run before it resumes. */
+  const live = () => !finished && !stopping;
+
   /** Once paused, the attempt concludes on a run waiting for the user; never once superseded. */
   const fenceHeld = async () => {
-    if (paused) return launched!.ownsFence();
-    if (await launched!.holdsFence()) return true;
+    if (paused) return (await launched!.ownsFence()) && live();
+    if (await launched!.holdsFence()) return live();
     // The pause can latch during the lookup and move the run to wait on the user.
-    return paused ? launched!.ownsFence() : false;
+    return paused ? (await launched!.ownsFence()) && live() : false;
   };
+
+  const fenceOwned = async () => (await launched!.ownsFence()) && live();
 
   const helperOf = (agent: string) => (agent === "root" ? undefined : helpers.get(agent));
 
@@ -338,7 +342,7 @@ export function createSession(
         part({
           type: "subagent.start",
           agent,
-          run: helperRunInput(request, harness!, {
+          run: helperRunInput(launched!.start, request, harness!, {
             task: call.task || "Complete the delegated task.",
             instructions: helperInstructions(call.name, call.instructions),
             model: helper.model,
@@ -472,7 +476,7 @@ export function createSession(
     body: Extract<GuestBody, { type: "model.request" }>,
     part: (body: ReplyPart) => void,
   ): Promise<ReplyFinal> {
-    if (!(await fenceHeld())) return revoke();
+    if (!(await fenceHeld()) || !live()) return revoke();
     const helper = helperOf(body.agent);
     if (body.agent !== "root" && !helper) return refuse("invalid");
     const turnedAway = paused && pausedModelRequest(paused);
@@ -536,7 +540,6 @@ export function createSession(
       }
     } finally {
       reservedModelTokens -= reservation;
-      abort.abort();
       relays.delete(seq);
       getLogger().info("agent.worker.model_request", {
         runId: request.runId,
@@ -639,7 +642,7 @@ export function createSession(
         return { type: "ack" };
       case "tool.call":
         // The executor checks its lease only between events: a guest must not outrun it.
-        if (!(await fenceHeld())) return revoke();
+        if (!(await fenceHeld()) || !live()) return revoke();
         if (!paused && ++toolCalls > WORKER_LIMITS.toolCallsPerAttempt) return refuse("budget");
         return transcript.answered(body, await callTool(body, part));
       case "tool.done":
@@ -712,7 +715,7 @@ export function createSession(
       case "done":
         return finish(body, part);
       case "skills.index": {
-        if (!(await fenceHeld())) return revoke();
+        if (!(await fenceHeld()) || !live()) return revoke();
         if (skillIndexEnded || !mountedSkillSources().has(body.skill.source))
           return refuse("invalid");
         const bytes = Buffer.byteLength(JSON.stringify(body.skill));
@@ -727,7 +730,7 @@ export function createSession(
       }
       case "skills.index.end": {
         const receivedAt = new Date();
-        if (!(await fenceHeld())) return revoke();
+        if (!(await fenceHeld()) || !live()) return revoke();
         if (
           skillIndexEnded ||
           body.sources.some((source) => !mountedSkillSources().has(source)) ||
@@ -741,7 +744,7 @@ export function createSession(
         return { type: "recorded" };
       }
       case "skills.collision":
-        if (!(await fenceHeld())) return revoke();
+        if (!(await fenceHeld()) || !live()) return revoke();
         if (++skillCollisions > 512) return refuse("budget");
         if (
           ![body.collision.kept, body.collision.ignored].every((source) =>
@@ -752,7 +755,7 @@ export function createSession(
         await request.onSkillCollision?.({ ...body.collision, name: clean(body.collision.name) });
         return { type: "recorded" };
       case "skills.used":
-        if (!(await fenceHeld())) return revoke();
+        if (!(await fenceHeld()) || !live()) return revoke();
         if (++skillUses > 512) return refuse("budget");
         await request.onSkillUsed?.(clean(body.name));
         return { type: "recorded" };
@@ -761,7 +764,7 @@ export function createSession(
         fail(new Error(clean(body.message)));
         return { type: "stop", reason: "cancelled" };
       case "transcript": {
-        if (!(await launched!.ownsFence())) return revoke();
+        if (!(await fenceOwned()) || !live()) return revoke();
         const agent = body.agent ?? "root";
         const helper = helperOf(agent);
         if (agent !== "root" && !helper) return refuse("invalid");
@@ -796,12 +799,8 @@ export function createSession(
           accepted = true;
           bound = channel;
           harness ??= message.harness;
-          await channel.send(
-            encodeMessage({
-              ...launched!.start,
-              run: guestRunInput(request, harness),
-            }),
-          );
+          helloSettled.resolve();
+          await channel.send(encodeMessage(workerStart(launched!.start, request, harness)));
           inbox.attach((reply) => void channel.send(encodeMessage(reply)));
           continue;
         }
@@ -822,9 +821,12 @@ export function createSession(
 
   async function connect(guest: LaunchedGuest) {
     const serving: Promise<void>[] = [];
-    void deps.clock.sleep(WORKER_LIMITS.helloDeadlineMs).then(() => {
-      if (!harness) fail(new AgentRuntimeUnavailableError("The worker did not say hello in time"));
-    });
+    void Promise.race([deps.clock.sleep(WORKER_LIMITS.helloDeadlineMs), helloSettled.promise]).then(
+      () => {
+        if (!harness && !stopping)
+          fail(new AgentRuntimeUnavailableError("The worker did not say hello in time"));
+      },
+    );
     for await (const channel of guest.connections) serving.push(serve(channel));
     await Promise.all(serving);
     if (!finished && !stopping) {
@@ -833,6 +835,8 @@ export function createSession(
   }
 
   async function stop(signal: AbortSignal | undefined) {
+    stopped.resolve();
+    helloSettled.resolve();
     inbox.revoke();
     clearRelayPrefixes(worker.attemptId);
     for (const relay of relays.values()) relay.abort();
@@ -864,7 +868,7 @@ export function createSession(
     );
     const confirmed = await Promise.race([
       released,
-      deps.clock.sleep(WORKER_LIMITS.stopConfirmMs - WORKER_LIMITS.cancelGraceMs).then(() => false),
+      deps.clock.sleep(WORKER_LIMITS.stopConfirmMs - WORKER_LIMITS.cancelGraceMs),
     ]);
     if (confirmed) await ended;
     else await deps.stops.mark(worker.attemptId, "unconfirmed");

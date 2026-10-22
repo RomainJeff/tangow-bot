@@ -103,6 +103,7 @@ export function lazyCatalogTools(
         required: ["id", "arguments"],
       },
       route: { connectorId, toolName: CATALOG_EXECUTE },
+      catalog: entries,
     },
   ];
 }

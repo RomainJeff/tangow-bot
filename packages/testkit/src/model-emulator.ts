@@ -70,6 +70,8 @@ export async function startModelEmulator(options: {
   const anthropic = options.protocol === "anthropic";
   const modelId = options.modelId ?? "offline-fixture";
   const requests: ModelEmulatorRequest[] = [];
+  /** The request bodies as sent, before the Anthropic protocol's are read as chat requests. */
+  const rawRequests: unknown[] = [];
   /** When each request arrived and when its response finished, on `performance.now()`. */
   const served: Array<{ received: number; firstByte: number; answered: number }> = [];
   const failures: Error[] = [];
@@ -98,6 +100,7 @@ export async function startModelEmulator(options: {
         chunks.push(Buffer.from(chunk));
       }
       const raw = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      rawRequests.push(raw);
       const body = anthropic ? fromAnthropic(raw) : (raw as ModelEmulatorRequest);
       requests.push(body);
       assert.equal(body.model, modelId, "Model routing changed");
@@ -217,6 +220,7 @@ export async function startModelEmulator(options: {
     baseUrl,
     model,
     requests,
+    rawRequests,
     served,
     assertComplete() {
       if (failures.length)

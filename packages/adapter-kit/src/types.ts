@@ -200,6 +200,8 @@ export interface ConnectorTool {
   route?: ConnectorRoute;
   /** Display name of the connected app, for the live activity line only. Never exposed to the model. */
   appName?: string;
+  /** On a lazy catalog's execute tool: the tools it runs by id. Never exposed to the model. */
+  catalog?: ReadonlyArray<{ id: string; tool: ConnectorTool }>;
 }
 
 export interface ConnectorRoute {
@@ -626,6 +628,11 @@ export interface AgentRuntimeCapabilities {
   scripted: boolean;
   /** Tools the runtime runs next to the model, through `executeLocalTool`. Exposed with the rest. */
   localTools?: readonly ConnectorTool[];
+  /**
+   * The model reads screens from the bot's home with its own file tool, so a screen tool saves the
+   * image there and returns its path instead of the image.
+   */
+  screensByPath?: boolean;
 }
 
 export interface VoiceInfo {
