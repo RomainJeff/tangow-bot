@@ -467,17 +467,47 @@ export function interactiveScreenCommand(
 const REGISTRY = "/tmp/rakazo/desktop-assignments";
 const TOKEN_PLACEHOLDER = "RAKAZO_INTERNAL_VIEW_TOKEN";
 
-function registryLockCommand(screenId: string) {
+function registryLockCommand(screenId: string, waitSeconds = 120) {
   return [
     "set -eu",
     `dir=${shellQuote(REGISTRY)}`,
     'mkdir -p "$dir"',
     `exec 8>"$dir/${browserKeyForScreen(screenId)}.lifecycle-lock"`,
-    "flock -w 120 8",
+    `flock -w ${waitSeconds} 8`,
     'exec 9>"$dir/.lock"',
-    "flock -w 120 9",
+    `flock -w ${waitSeconds} 9`,
     `slot="$dir/${browserKeyForScreen(screenId)}.slot"`,
   ];
+}
+
+export const DESKTOP_OPERATION_PERMIT = "RAKAZO_DESKTOP_OPERATION";
+
+/** Recheck the admitted lease under the lifecycle lock and retain it through execution. */
+export function managedDesktopOperationCommand(
+  screenId: string,
+  leaseId: string | undefined,
+  env: DesktopEnvironment,
+  argv: string[],
+  timeoutMs: number,
+) {
+  const seconds = Math.max(0.001, timeoutMs / 1000);
+  const operation = [
+    "set -eu",
+    `IFS= read -r -t ${seconds} permit || exit 124`,
+    `[ "$permit" = ${shellQuote(DESKTOP_OPERATION_PERMIT)} ] || exit 75`,
+    ...registryLockCommand(screenId, seconds),
+    '[ -f "$slot" ] || exit 75',
+    `current=$(sed -n "2p" "$slot")`,
+    `[ "$current" = ${shellQuote(leaseId ?? "")} ] || exit 75`,
+    'index=$(sed -n "1p" "$slot")',
+    'set -- "$index"',
+    ...layoutVariables(undefined, env),
+    "flock -u 9; exec 9>&-",
+    `export DISPLAY=":$desktop_display" RAKAZO_CDP_PORT="$desktop_debug" HOME=${shellQuote(env.homeDir)} RAKAZO_BROWSER_WATCH_STDIN=1`,
+    `exec ${argv.map(shellQuote).join(" ")}`,
+  ].join("\n");
+  // timeout owns a process group. Killing only its PID would leave the operation alive.
+  return `exec timeout --signal=KILL ${seconds}s bash -eu -c ${shellQuote(operation)}`;
 }
 
 function acceptLeaseCommand(leaseId?: string, release = false) {

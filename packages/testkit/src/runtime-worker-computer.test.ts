@@ -4,9 +4,14 @@ import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { queryObjects } from "node:v8";
+import type { CommandHandle, CommandStartOpts } from "@e2b/desktop";
 import type { ConnectorProvider } from "@rakazo/adapter-kit";
+import { E2BSandboxProvider } from "@rakazo/adapters";
 import { HARNESSES } from "@rakazo/agent-run-worker";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
+import { fakeE2BMachine } from "../../adapters/src/e2b-machine.test-support.js";
+import type { E2BSandboxSdk } from "../../adapters/src/e2b-sandbox.js";
+import { desktopCommandResponder } from "../../adapters/src/linux-desktop.test-support.js";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.js";
 import { VolumeComputer } from "./volume-computer.js";
 import type { Seen } from "./worker-channel-tap.js";
@@ -117,6 +122,81 @@ async function botRun(
 }
 
 describe("a worker run's computer", () => {
+  it("discovers and calls production E2B page tools through the executor and native MCP", async () => {
+    const machine = fakeE2BMachine("machine");
+    const respond = desktopCommandResponder();
+    let dispatched = 0;
+    machine.sandbox.commands.run = (async (command: string, options?: CommandStartOpts) => {
+      if (!options?.background) return respond(command) ?? { exitCode: 0, stdout: "", stderr: "" };
+      return {
+        pid: 123,
+        sendStdin: async () => {
+          dispatched++;
+        },
+        closeStdin: async () => undefined,
+        disconnect: async () => undefined,
+        wait: async () => {
+          const stdout = JSON.stringify({
+            ok: true,
+            url: "http://fixture.test",
+            title: "E2B native page",
+            tree: "Native browser reached",
+            elements: [],
+          });
+          await options.onStdout?.(stdout);
+          return { exitCode: 0, stdout, stderr: "" };
+        },
+      } as unknown as CommandHandle;
+    }) as typeof machine.sandbox.commands.run;
+    const sdk = {
+      connect: async () => machine.sandbox,
+      create: async () => machine.sandbox,
+    } as unknown as E2BSandboxSdk;
+    let result: unknown;
+    const run = await startWorkerRun({
+      sandbox: new E2BSandboxProvider("test-key", sdk),
+      harness: HARNESSES["pi-native"]!,
+      protocol: "anthropic",
+      computerScope: "team",
+      steps: [
+        {
+          expect(request) {
+            const names = request.tools?.map((tool) => tool.function.name) ?? [];
+            expect(names).toContain("mcp__rakazo__browser_snapshot");
+            expect(names).not.toContain("mcp__rakazo__browser_run");
+          },
+          response: {
+            type: "tool",
+            id: "page",
+            name: "mcp__rakazo__browser_snapshot",
+            arguments: {},
+          },
+        },
+        {
+          expect(request) {
+            result = toolResults(request).page;
+          },
+          response: {
+            type: "tool",
+            id: "say",
+            name: "mcp__rakazo__message_user",
+            arguments: { message: "Done." },
+          },
+        },
+        finish[1]!,
+      ],
+    });
+    cleanups.push(() => run.close());
+    const runId = await run.send("Inspect the browser.");
+    await run.continueRun(runId);
+    run.model.assertComplete();
+    expect((await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
+      "completed",
+    );
+    expect(String(result)).toContain("Native browser reached");
+    expect(dispatched).toBe(1);
+  });
+
   it.each([false, true])(
     "stays asleep without a lease through MCP only calls (native=%s)",
     async (native) => {

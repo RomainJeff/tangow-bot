@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
-import { type CommandResult, Sandbox, TimeoutError } from "@e2b/desktop";
+import type { CommandHandle, CommandResult } from "@e2b/desktop";
+import { CommandExitError, Sandbox, TimeoutError } from "@e2b/desktop";
 import type {
   AdapterContext,
   CommandRequest,
@@ -10,6 +11,8 @@ import type {
   ComputerObservation,
   ComputerRef,
   ControlLeaseRef,
+  PageBrowserCommand,
+  PageBrowserResult,
   PortableFile,
   ProcessEvent,
   SandboxProvider,
@@ -31,6 +34,7 @@ import {
   PORTABLE_TRANSFER_BATCH_BYTES,
   shouldSkipPortableWorkspaceFile,
 } from "./computer-workspace.js";
+import type { DesktopExecutionOptions } from "./linux-desktop.js";
 import { LinuxDesktop, PREPARE_LINUX_DESKTOP } from "./linux-desktop.js";
 
 const E2B_WORKSPACE = "/home/user/rakazo-home";
@@ -139,8 +143,10 @@ export class E2BSandboxProvider implements SandboxProvider {
         browserProfilesDir: `${volumeMountPath({ kind: "bot_private", botId: context.botId })}/.browser-profiles`,
       };
     },
-    run: async (computer, command, context) => {
-      const result = await this.runSetupCommand(await this.box(computer), command, context.signal);
+    run: async (computer, command, context, options) => {
+      const desktop = await this.box(computer);
+      if (options) return this.runDesktopOperation(desktop, command, context.signal, options);
+      const result = await this.runSetupCommand(desktop, command, context.signal);
       return { code: result.exitCode, stdout: result.stdout, stderr: result.stderr };
     },
     screenUrl: async (computer, port) =>
@@ -383,6 +389,14 @@ export class E2BSandboxProvider implements SandboxProvider {
     return this.desktops.act(computer, request, context);
   }
 
+  async pageBrowser(
+    computer: ComputerRef,
+    request: PageBrowserCommand,
+    context: AdapterContext,
+  ): Promise<PageBrowserResult> {
+    return this.desktops.pageBrowser(computer, request, context);
+  }
+
   async listFiles(
     computer: ComputerRef,
     directory: string,
@@ -528,6 +542,86 @@ export class E2BSandboxProvider implements SandboxProvider {
     this.boxes.delete(id);
     this.connections.delete(id);
     this.lastTouchedAt.delete(id);
+  }
+
+  private async runDesktopOperation(
+    desktop: Sandbox,
+    command: string,
+    signal: AbortSignal,
+    options: DesktopExecutionOptions,
+  ) {
+    let handle: CommandHandle | undefined;
+    let inputDispatched = false;
+    let bytes = 0;
+    let stdout = "";
+    let stderr = "";
+    let finished = false;
+    const bounded = new AbortController();
+    const operationSignal = AbortSignal.any([signal, bounded.signal]);
+    const collect = (chunk: string, output: "stdout" | "stderr") => {
+      bytes += Buffer.byteLength(chunk);
+      if (bytes > options.maxOutputBytes) {
+        const error = new Error("page browser output exceeds limit");
+        bounded.abort(error);
+        throw error;
+      }
+      if (output === "stdout") stdout += chunk;
+      else stderr += chunk;
+    };
+    try {
+      operationSignal.throwIfAborted();
+      handle = await desktop.commands.run(command, {
+        background: true,
+        stdin: true,
+        signal: operationSignal,
+        timeoutMs: options.timeoutMs,
+        requestTimeoutMs: options.timeoutMs,
+        onStdout: (chunk) => collect(chunk, "stdout"),
+        onStderr: (chunk) => collect(chunk, "stderr"),
+      });
+      operationSignal.throwIfAborted();
+      // A failed send may still have delivered the permit. Never send it twice.
+      inputDispatched = true;
+      await handle.sendStdin(options.input, {
+        signal: operationSignal,
+        requestTimeoutMs: options.timeoutMs,
+      });
+      const result = await handle.wait();
+      operationSignal.throwIfAborted();
+      finished = true;
+      return { code: result.exitCode, stdout, stderr, inputDispatched };
+    } catch (error) {
+      return {
+        code: error instanceof CommandExitError ? error.exitCode : 1,
+        stdout,
+        stderr: stderr || errorMessage(error),
+        inputDispatched,
+      };
+    } finally {
+      if (handle) {
+        // EOF stops the helper; a fresh group signal also covers a shell waiting for a lock.
+        // SDK kill is PID-only, so it must never be the first way we stop timeout.
+        const cleanupSignal = AbortSignal.timeout(3000);
+        await Promise.allSettled([
+          handle.closeStdin({ signal: cleanupSignal, requestTimeoutMs: 1000 }),
+          ...(!finished
+            ? [
+                desktop.commands.run(`kill -KILL -- -${handle.pid}`, {
+                  signal: cleanupSignal,
+                  requestTimeoutMs: 2000,
+                  timeoutMs: 2000,
+                }),
+              ]
+            : []),
+        ]);
+        // If group cleanup cannot reach an armed operation, retain its remote watchdog.
+        if (!inputDispatched)
+          await desktop.commands
+            .kill(handle.pid, { signal: cleanupSignal, requestTimeoutMs: 1000 })
+            .catch(() => undefined);
+        await handle.disconnect().catch(() => undefined);
+      }
+    }
   }
 
   /** Apply the deployment timeout (SDK default is 60s) and return failed results instead of throwing. */
