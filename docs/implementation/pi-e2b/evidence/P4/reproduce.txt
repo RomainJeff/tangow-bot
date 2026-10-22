@@ -63,3 +63,17 @@ Computer parity preparation
   untouched synthetic mounted-file ownership/modes, original startup/assets/capture/app binaries,
   read-only skills, product preparation with ImageMagick, and coexistence of canonical and dynamic
   desktop displays. No E2B parity boot, browser form, takeover or OpenCode job/auth proof is implied.
+
+Compaction read-proof follow-up
+  Source a554f2875cbccdbbd2b13032597138684bef04f1 changes the lane assertion only.
+  Guest SHA-256 remains b3ace799b31495b1dcdd446864e18c639814cdd204e1937f763e9f0f7b983c3f.
+  Runner SHA-256 is 6bd670202686622e7cdac8f3ae4df67df21d3f7e237115c506c847bf594493c9.
+  Rebuild with pnpm test:worker-live:bundle and run the same authorized live command above
+  with --lanes native-compaction. Do not combine this targeted receipt with the historical
+  batch as a new 19-lane result. Require exact paired volume-read output and isError false.
+  Actual-Pi local controls replace only the read command with wrong output, a missing file,
+  or correct output followed by exit 1. All three pass the old assertion and fail the new one;
+  the unchanged real read passes. No public credential or resource journal is required.
+  compaction-read-proof.json records the targeted receipt and independent zero-resource census.
+  go-real-model.json records separate historical real-model computerless proof and its failed
+  first limiter attempt. It is not desktop, vision, native-file or OpenCode computer proof.

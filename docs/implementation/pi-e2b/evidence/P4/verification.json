@@ -78,7 +78,6 @@
     "E2B canonical computer parity boot, real product prepare and screen-path/read-once/cleanup",
     "Real app/browser form, submission approval and takeover",
     "OpenCode job placement, paths and authentication on E2B",
-    "Generic credential reference for the selected OpenCode Go connection and corresponding real-model run",
     "Applicable product screenshots"
   ],
   "externalChanges": {
@@ -221,5 +220,90 @@
       }
     },
     "remoteScratchRemoved": true
+  },
+  "compactionReadProofFollowup": {
+    "testedSourceSha": "a554f2875cbccdbbd2b13032597138684bef04f1",
+    "receipt": "compaction-read-proof.json",
+    "live": {
+      "passed": 1,
+      "failed": 0,
+      "lanes": ["native-compaction"]
+    },
+    "negativeControls": "Wrong read output, missing read exit 1, and correct output exit 1 all pass the old assertion and fail the strengthened assertion through actual Pi. Real read passes.",
+    "productionChanges": false,
+    "guestUnchanged": true,
+    "cleanup": {
+      "checkedAt": "2026-10-22T16:19:51.262Z",
+      "sandboxesCreated": 3,
+      "sandboxesDeleted": 3,
+      "sandboxesAbsentAfterTimeout": 0,
+      "volumesCreated": 2,
+      "volumesDeleted": 2,
+      "left": {
+        "sandboxes": 0,
+        "volumes": 0
+      }
+    },
+    "remoteScratchRemoved": true,
+    "offline": {
+      "pnpm check": "24 tasks passed",
+      "pnpm lint": "passed with existing 49 warnings and 2 informational diagnostics",
+      "pnpm test:worker-live:bundle": "passed",
+      "testAudit": "Paired literal output and success protect actual read execution after compaction. The old marker search accepted three actual-Pi negative controls; the strengthened check rejects them. No production seam or duplicate checked-in test added.",
+      "pnpm test:e2e:affected": {
+        "passed": 215,
+        "failed": 7,
+        "baselineFailures": 5,
+        "additionalFailures": [
+          "mention-picker-keyboard: expected selected mention chip did not appear",
+          "computer-update: update menu click timed out"
+        ],
+        "limits": "Full suite selected because no readable impact map. Five accepted baseline failures remain. Both extra timeouts passed in a separate two-spec run under a fresh lock. The original full run is not green. No unrelated test edits.",
+        "isolatedRerun": {
+          "specs": ["mention-picker-keyboard.spec.ts", "computer-update.spec.ts"],
+          "passed": 2,
+          "failed": 0,
+          "separateLockAcquisition": true
+        }
+      }
+    },
+    "limits": "Only native-compaction rerun on this source. Historical 19-lane batch remains pinned to its original source. Local model protocol fixture; no desktop parity or real-model intelligence claim.",
+    "independentReview": "Root reviewed the full lane, assertion delta, actual-Pi negative failures and positive, live receipt and independent cleanup census. READY for the assertion source; no further code edit requested.",
+    "historicalChecks": "The prior 174 PostgreSQL integration tests and 48 focused tests remain historical; no product code changed and those suites were not repeated for this assertion-only follow-up."
+  },
+  "realModelFollowup": {
+    "receipt": "go-real-model.json",
+    "testedSourceSha": "066c4c2d7d8d41e9610cbaec8ab3c7fd13ef2c5a",
+    "status": "PASS_WITH_LIMITS",
+    "scope": "Actual OpenCode Go model with computerless E2B native worker and controller-owned synthetic MCP task. Three successful model requests, one lookup effect.",
+    "initialFailure": {
+      "status": "FAIL",
+      "modelHTTPStatus": 400,
+      "reason": "Private request limiter lost Headers object entries, so Go rejected the missing session ID. Fixed in private transport wrapper before second worker. No fixture effect.",
+      "usage": {
+        "inputTokens": 0,
+        "outputTokens": 0
+      },
+      "cleanupLeft": {
+        "sandboxes": 0,
+        "volumes": 0
+      }
+    },
+    "cleanup": {
+      "ownedWorkerVMsCreated": 2,
+      "ownedWorkerVMsReleased": 2,
+      "volumesCreated": 0,
+      "left": {
+        "sandboxes": 0,
+        "volumes": 0
+      },
+      "remoteScratchRemoved": true
+    },
+    "limits": [
+      "Computerless controlled MCP lookup only; no native file or bash tools exercised.",
+      "No screenshot, vision, desktop parity, OpenCode computer job, helper, approval, queued-chat or full integration validation.",
+      "N13 remains incomplete pending remaining desktop and other planned lanes.",
+      "One canary and two workers. No extra model selection, subscriptions, infrastructure mutation, shared build or tracked edit."
+    ]
   }
 }

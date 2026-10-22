@@ -1,0 +1,159 @@
+{
+  "schemaVersion": 1,
+  "sourceSHA": "066c4c2d7d8d41e9610cbaec8ab3c7fd13ef2c5a",
+  "status": "PASS_WITH_LIMITS",
+  "provider": "opencode-go",
+  "model": "gpt-6-luna",
+  "protocol": "openai-responses",
+  "endpoint": "https://opencode.ai/inference/go/v1/responses",
+  "officialReferences": [
+    "https://opencode.ai/v2/docs/console/go/",
+    "https://opencode.ai/inference/go/v1/models"
+  ],
+  "endpointFinding": "Installed endpoint worked. Official current docs list /inference/go/openai/v1/responses; no endpoint override was used.",
+  "capabilities": {
+    "catalogInputs": ["text", "image"],
+    "officialModelListHTTPStatus": 200,
+    "officialModelListContainsChosenModel": true,
+    "authenticatedText": true,
+    "imagesTested": false
+  },
+  "canary": {
+    "endpoint": "https://opencode.ai/inference/go/v1/responses",
+    "httpStatus": 200,
+    "finish": "stop",
+    "parsedAnswer": "N13_GO_OK",
+    "pass": true,
+    "usage": {
+      "input": 22,
+      "output": 19,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "reasoning": 9,
+      "totalTokens": 41,
+      "cost": {
+        "input": 2.2e-6,
+        "output": 9.499999999999999e-6,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 1.17e-5
+      }
+    }
+  },
+  "worker": {
+    "status": "PASS",
+    "harness": "pi-native",
+    "controller": "production executor, E2BWorkerProvider, native runtime and model relay; private existing fixture adapted to real model with no emulator",
+    "modelHTTPStatuses": [200, 200, 200],
+    "requestedOutputTokenCapPerCall": 1024,
+    "modelCallLimit": 6,
+    "requestInputCharacterCounts": [11204, 11533, 11901],
+    "deadlineMs": 180000,
+    "fixture": "Controller-owned synthetic inventory lookup, not a public MCP service",
+    "exactEffects": [
+      {
+        "tool": "lookup_fixture",
+        "args": {
+          "label": "notebook"
+        },
+        "result": {
+          "item": "amber beads",
+          "count": 37
+        }
+      }
+    ],
+    "answer": "The exact label **notebook** returned item **amber beads**, count **37**.",
+    "usage": {
+      "inputTokens": 17180,
+      "outputTokens": 98
+    },
+    "canonicalEventTypes": [
+      "run.started",
+      "tool.call",
+      "tool.result",
+      "tool.call",
+      "assistant.text",
+      "tool.result",
+      "run.recap",
+      "run.finished"
+    ],
+    "workerFrameTypes": {
+      "worker.hello": 1,
+      "worker.start": 1,
+      "model.request": 3,
+      "model.event": 68,
+      "model.latency": 3,
+      "ack": 8,
+      "model.end": 3,
+      "progress": 2,
+      "tool": 2,
+      "tool.call": 2,
+      "tool.result": 2,
+      "steering.claim": 2,
+      "steering": 2,
+      "text": 1,
+      "transcript": 1,
+      "recorded": 2,
+      "skills.index.end": 1,
+      "done": 1,
+      "stop": 1,
+      "worker.cancel": 1
+    },
+    "attemptState": "released",
+    "stopPhase": "process_ended",
+    "computersCreated": 0,
+    "volumesCreated": 0
+  },
+  "firstWorkerAttempt": {
+    "status": "FAIL",
+    "modelHTTPStatus": 400,
+    "reason": "Private request limiter lost Headers object entries, so Go rejected the missing session ID. Fixed in private transport wrapper before second worker. No fixture effect.",
+    "usage": {
+      "inputTokens": 0,
+      "outputTokens": 0
+    },
+    "cleanupLeft": {
+      "sandboxes": 0,
+      "volumes": 0
+    }
+  },
+  "security": {
+    "exactCredentialAbsentFromAllCapturedWorkerFrames": true,
+    "credentialAbsentFromCanonicalLog": true,
+    "providerEndpointAbsentFromWorkerStart": true,
+    "providerKeyDeliveredOnlyToControllerProcessStdin": true,
+    "providerKeyNeverWrittenToRemoteFile": true,
+    "providerKeyNeverSentToWorkerOrComputer": true,
+    "providerKeyNotInScriptConfigReceiptOrPrompt": true,
+    "credentialReferencePreserved": true,
+    "newPersistedCredentialCopies": 0,
+    "controllerDatabase": "in-memory PGlite"
+  },
+  "cleanup": {
+    "ownedWorkerVMsCreated": 2,
+    "ownedWorkerVMsReleased": 2,
+    "volumesCreated": 0,
+    "left": {
+      "sandboxes": 0,
+      "volumes": 0
+    },
+    "remoteScratchRemoved": true
+  },
+  "bundleSHA256": {
+    "controller/worker.mjs": "c34f9d88461aeb5c834192e8fc1c4f54a7400ddfaef676a07f7f67393feedc26",
+    "guest/agent-run-worker.mjs": "4be993f41fc03850aee914c08034b7a9eb91588c58d23fcb9a6b268100aa8304",
+    "guest/managed-skills.tar": "eb60c0b0cea12dbf725054f117cec7d03ccc63a50e3f952e4ecdd2e86b8f6a82"
+  },
+  "testAudit": {
+    "behavior": "An actual selected model uses a tool through the production E2B relay and returns its hidden fixture result.",
+    "credibleFailure": "Authentication, session routing, model tool choice or controller tool transport fails.",
+    "coverageGap": "Emulator lanes cannot establish provider/model behavior.",
+    "newProductionSeam": false
+  },
+  "limits": [
+    "Computerless controlled MCP lookup only; no native file or bash tools exercised.",
+    "No screenshot, vision, desktop parity, OpenCode computer job, helper, approval, queued-chat or full integration validation.",
+    "N13 remains incomplete pending remaining desktop and other planned lanes.",
+    "One canary and two workers. No extra model selection, subscriptions, infrastructure mutation, shared build or tracked edit."
+  ]
+}

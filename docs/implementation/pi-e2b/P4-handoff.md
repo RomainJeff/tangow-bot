@@ -4,7 +4,7 @@ N13 is incomplete. This draft prepares the native default and records the live r
 
 ## Implementation
 
-The implementation commit is `ff827ef7eb472bc19863705a8b4dee33b487930e`, based on feature commit `87efaddcff198b87df5189df45fb0e316e49ae5f`. The output/timeout follow-up source is `9c8d15f3dbe07a12c5bbfe36c64e2612c20cbc40`. The final integrated runtime source is `5ecfcbc9186b5dab3acaa52c333433750fc07d0b`. It includes a normal merge of the two native lane files and registers them in the existing runner. Subsequent changes add evidence only.
+The implementation commit is `ff827ef7eb472bc19863705a8b4dee33b487930e`, based on feature commit `87efaddcff198b87df5189df45fb0e316e49ae5f`. The output/timeout follow-up source is `9c8d15f3dbe07a12c5bbfe36c64e2612c20cbc40`. The final integrated runtime source is `5ecfcbc9186b5dab3acaa52c333433750fc07d0b`. It includes a normal merge of the two native lane files and registers them in the existing runner. A later assertion-only source, `a554f2875cbccdbbd2b13032597138684bef04f1`, strengthens compaction read proof without changing the guest or product code.
 
 E2B workers now select `pi-native` by default. Repository composition selects `rakazo-worker-pi-native` and enables screen paths. Guest startup and the template builder use the same default. Explicit adapter harness selection still supports `pi`. No shared template was built or published, and this change was not deployed.
 
@@ -14,7 +14,7 @@ The additional helper lane runs a real native Pi helper in its parent's E2B work
 
 ## Verification
 
-The latest [integrated runtime batch](evidence/P4/integrated-runtime-lanes.json) passed all 19 registered lanes in one run on `5ecfcbc9186b5dab3acaa52c333433750fc07d0b`. The guest SHA-256 is `b3ace799b31495b1dcdd446864e18c639814cdd204e1937f763e9f0f7b983c3f`; the runner SHA-256 is `aee878d916b1fcb9c9097cf3224b89bfdff35f83f4ca186ef887d97b8f85c523`. Both remote hashes match the local build. Source stayed fixed throughout validation. This is runtime proof with protocol fixtures, without desktop preparation or a real-model intelligence claim.
+The historical [integrated runtime batch](evidence/P4/integrated-runtime-lanes.json) passed all 19 registered lanes in one run on `5ecfcbc9186b5dab3acaa52c333433750fc07d0b`. The guest SHA-256 is `b3ace799b31495b1dcdd446864e18c639814cdd204e1937f763e9f0f7b983c3f`; the runner SHA-256 is `aee878d916b1fcb9c9097cf3224b89bfdff35f83f4ca186ef887d97b8f85c523`. Both remote hashes match the local build. Source stayed fixed throughout validation. This is runtime proof with protocol fixtures, without desktop preparation or a real-model intelligence claim.
 
 The catalog lane covers direct and deferred 30-tool schemas, long/colliding SDK names, one approved effect, revoked authority, and redaction of a synthetic controller secret from worker frames, model requests and canonical history. It creates no computer. The compaction lane exercises actual Pi overflow recovery through the relay using low synthetic usage and one controlled overflow response. Two synthetic summary responses lead to a compacted retry; a later attempt uses canonical history rather than the harness summary. This does not prove threshold-only compaction or model intelligence.
 
@@ -45,6 +45,18 @@ The timeout failure came from the validation upload wrapper. An omitted SDK `tim
 
 Follow-up verification passed 65 focused tests, all 24 typecheck tasks, lint with existing warnings, the bundle and 174 integration tests. Affected web E2E passed 217 with the five supplied baseline failures; search-jump remains unverified. Test audit retained the lifecycle, status, concurrency and serialization regressions as distinct behavior contracts. The two live lanes created five owned sandboxes and four volumes. Four sandboxes were deleted and the timed-out fifth was confirmed absent; all four volumes were deleted. Both final owned censuses were zero.
 
+## Compaction read proof follow-up
+
+The [targeted read-proof receipt](evidence/P4/compaction-read-proof.json) tests source `a554f2875cbccdbbd2b13032597138684bef04f1`. The prior whole-history marker search could match the write command before any read. It accepted wrong read output, a missing file with exit 1, and correct output followed by exit 1 through actual Pi. All three controls fail the strengthened exact result assertion, and the real read passes. The model request must contain the result paired to `volume-read` with exact `"volume-effect\n"` content; the canonical paired result must also have that exact output and `isError: false`.
+
+Only the actual E2B compaction lane was rerun on this source, and it passed. The guest remains `b3ace799b31495b1dcdd446864e18c639814cdd204e1937f763e9f0f7b983c3f`; the runner is `6bd670202686622e7cdac8f3ae4df67df21d3f7e237115c506c847bf594493c9`. Independent API checks confirmed all three created sandboxes and two volumes deleted, with zero remaining. The owned remote scratch directory was removed. The earlier 19-lane batch remains historical and does not establish the stronger read assertion. No production code changed.
+
+All 24 typecheck tasks, lint with existing warnings and the live bundle passed for the assertion source. Affected web E2E selected the full suite because the impact map was unreadable: 215 passed, the five accepted baseline failures remained, and mention-picker plus computer-update timed out. Both extra specs passed in a separate two-spec run under a fresh lock. The original full run is not green. Root independently accepted the assertion source after reviewing the controls and cleanup. The earlier 174 integration and 48 focused results remain historical and were not rerun for this assertion-only change.
+
+## Real-model computerless task
+
+The [OpenCode Go receipt](evidence/P4/go-real-model.json) records an actual `gpt-6-luna` computerless E2B MCP task at source `066c4c2d7d8d41e9610cbaec8ab3c7fd13ef2c5a`. Three model requests returned HTTP 200, one synthetic inventory lookup executed, and the model answered with its result. The first worker attempt failed because the private limiter dropped Headers entries and omitted the session ID. It performed no effect; the corrected private transport then passed. Both owned workers were released, no computers or volumes were created, and remote scratch was removed. The credential stayed controller-only. This proves neither desktop/vision nor native-file tools nor OpenCode computer jobs.
+
 ## Computer parity
 
 The required base is [the canonical computer Dockerfile](../../../infra/sandboxes/computer/Dockerfile), including its apps, browser, capture/page helpers, developer tools, OpenCode and original assets. The I1 computer definition is a plain Node VM. Its tracked source and build workflow exist in the infrastructure I1 worktree under `templates/`; their SDK is older than the application's SDK.
@@ -59,9 +71,9 @@ A separate owner is validating an authorized temporary test template from the ex
 
 ## Remaining work
 
-- Obtain parent independent review of the final integrated source and evidence. Earlier reviews covered `5597938` and `066c4c2d` only; neither substitutes for this final review.
+- Finish parent review of the final evidence and CI. Root independently reviewed the complete lane, assertion delta, actual-Pi controls and targeted E2B cleanup and accepted source `a554f2875cbccdbbd2b13032597138684bef04f1` as closing the r3 proof gap.
 - Boot and validate the parity computer on E2B, then run the real app/browser form, submission approval, takeover, screen-path read-once/cleanup, and OpenCode job/path/auth lanes. No extra screenshot VM is part of the preparation.
-- Resolve the generic credential reference for the selected OpenCode Go model connection, then validate it. Current live receipts use the local protocol emulator.
+- Keep the computerless Go proof separate from the remaining computer parity and OpenCode job/auth gates.
 - Capture the applicable product flows through the approved screenshot workflow once they run. Unrelated web or phone screens were not substituted. No native mobile screen changed, and no Electron E2E ran.
 
 Normal screen cleanup remains best effort for the exact root `.rakazo-screen-<uuid>.png` namespace. Rare leftovers after abrupt termination are accepted. The stricter admission/runtime/NFS requirements remain abandoned.
