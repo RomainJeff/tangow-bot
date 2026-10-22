@@ -89,6 +89,7 @@ export function liveSession(config: LiveConfig) {
   const base = e2bWorkerSdk(connection);
   /** How long each guest command took to start, from the call to E2B's handle. */
   const guestCommandStarts: number[] = [];
+  const guestUploadDeadlines: Array<{ before: string; after: string; timeoutMs: number }> = [];
   /** A provider must keep the name it was given, so volumes are tracked by name, not tagged. */
   const volumeNames = new Set<string>();
   const sdk: E2BWorkerSdk = {
@@ -142,6 +143,7 @@ export function liveSession(config: LiveConfig) {
     config,
     connection,
     guestCommandStarts,
+    guestUploadDeadlines,
     /**
      * `maxTimeoutMs` stands for a deployment that kills sandboxes sooner. `guest` replaces the
      * template's guest with a script written into each VM before it starts, `args` after its path.
@@ -167,7 +169,15 @@ export function liveSession(config: LiveConfig) {
           ? {
               ...sdk,
               async startGuest(sandboxId, command, options) {
-                const vm = await Sandbox.connect(sandboxId, connection);
+                const { endAt } = await Sandbox.getInfo(sandboxId, connection);
+                const timeoutMs = Math.max(endAt.getTime() - Date.now(), 1_000);
+                const vm = await Sandbox.connect(sandboxId, { ...connection, timeoutMs });
+                const after = await Sandbox.getInfo(sandboxId, connection);
+                guestUploadDeadlines.push({
+                  before: endAt.toISOString(),
+                  after: after.endAt.toISOString(),
+                  timeoutMs,
+                });
                 if (config.guestBundle) {
                   const archive = readFileSync(
                     path.join(path.dirname(config.guestBundle), "managed-skills.tar"),

@@ -205,12 +205,21 @@ export const laneGTimeout: Lane = {
     "E2B kills the VM, the attempt ends released with its writer lease free and its bash effect never rerun, and the run completes on a new attempt",
   async run(live) {
     let retried = "";
+    const native = live.config.harness !== "pi";
     const worker = await liveRun(live, {
       provider: () => live.workerProvider(SHORT_TIMEOUT_MS),
       steps: [
-        call("nap", "bash", { command: `sleep ${(SHORT_TIMEOUT_MS / 1000) * 3}` }),
-        // The next attempt asks for the same call; the controller must not run it again.
-        call("nap", "bash", { command: `sleep ${(SHORT_TIMEOUT_MS / 1000) * 3}` }),
+        call("nap", "bash", {
+          command: native
+            ? `printf 'started\\n' >> timeout-started; sleep ${(SHORT_TIMEOUT_MS / 1000) * 3}; printf 'completed\\n' >> timeout-completed`
+            : `sleep ${(SHORT_TIMEOUT_MS / 1000) * 3}`,
+        }),
+        // Legacy controller bash deduplicates. Native recovery explicitly inspects, never replays.
+        call("nap", "bash", {
+          command: native
+            ? "cat timeout-started; if test -e timeout-completed; then cat timeout-completed; fi; printf 'recovered\\n'"
+            : `sleep ${(SHORT_TIMEOUT_MS / 1000) * 3}`,
+        }),
         ...finish("Recovered after the VM was killed", (request) => {
           retried = toolResult(request);
         }),
@@ -242,6 +251,22 @@ export const laneGTimeout: Lane = {
         select: { kind: true, status: true },
         orderBy: { createdAt: "asc" },
       });
+      let markers: { started: string; completed: boolean } | undefined;
+      if (native) {
+        const files = live.volumeFiles();
+        try {
+          markers = {
+            started: new TextDecoder().decode(
+              await files.read(worker.volumes.private!, "timeout-started", context("g-timeout")),
+            ),
+            completed: (await files.list(worker.volumes.private!, context("g-timeout"))).some(
+              (entry) => entry.path === "timeout-completed",
+            ),
+          };
+        } finally {
+          await files.close();
+        }
+      }
       const final = {
         status: await worker.status(runId),
         attempts: (await worker.attempts(runId)).map(({ workerState }) => workerState),
@@ -256,9 +281,21 @@ export const laneGTimeout: Lane = {
         afterKill.writerLeasesHeld === 0 &&
         afterKill.sandboxesAlive === 0 &&
         final.status === "completed" &&
-        retried.includes("its outcome is unknown") &&
-        effects.filter((effect) => effect.kind === "bash").length === 1 &&
-        effects.find((effect) => effect.kind === "bash")?.status === "uncertain" &&
+        final.attempts.length === 2 &&
+        (native
+          ? markers?.started === "started\n" &&
+            !markers.completed &&
+            retried.includes("recovered") &&
+            final.attempts.every((state) => state === "released") &&
+            live.guestUploadDeadlines.length === 2 &&
+            live.guestUploadDeadlines.every(
+              (deadline) =>
+                deadline.timeoutMs <= SHORT_TIMEOUT_MS &&
+                Date.parse(deadline.after) - Date.parse(deadline.before) <= 1_000,
+            )
+          : retried.includes("its outcome is unknown") &&
+            effects.filter((effect) => effect.kind === "bash").length === 1 &&
+            effects.find((effect) => effect.kind === "bash")?.status === "uncertain") &&
         final.sandboxesLeft === 0;
       return {
         pass,
@@ -268,6 +305,8 @@ export const laneGTimeout: Lane = {
           firstAttemptEndedAfterMs: killedAfterMs,
           afterKill,
           retriedCallResult: retried,
+          nativeMarkers: markers,
+          guestUploadDeadlines: live.guestUploadDeadlines,
           final,
         },
       };

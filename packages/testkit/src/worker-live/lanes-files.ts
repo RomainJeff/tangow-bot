@@ -105,11 +105,15 @@ export const laneF: Lane = {
       const logged = (await worker.run.runEntries(runId)).find(
         (entry) => entry.type === "tool.result" && entry.payload.callId === "big",
       );
+      const reportedPath = /it is in ([^\]\n]+)/.exec(shown)?.[1];
       const loggedBytes = Buffer.byteLength(
         JSON.stringify(logged?.type === "tool.result" ? logged.payload.output : ""),
       );
       const spool = (await files.list(worker.volumes.private!, context("f"))).filter(
-        (entry) => entry.kind === "file" && entry.path.startsWith(".rakazo/tool-output/"),
+        (entry) =>
+          entry.kind === "file" &&
+          (entry.path.startsWith(".rakazo/tool-output/") ||
+            /^\.rakazo-bash-[0-9a-f-]+\.log$/.test(entry.path)),
       );
       const content = spool[0]
         ? await files.read(worker.volumes.private!, spool[0].path, context("f"))
@@ -121,6 +125,7 @@ export const laneF: Lane = {
         shown.length <= WORKER_LIMITS.localOutputModelChars &&
         loggedBytes <= WORKER_LIMITS.controllerResultBytes &&
         spool.length === 1 &&
+        reportedPath === `${worker.privateMount}/${spool[0]?.path}` &&
         content.byteLength === Buffer.byteLength(expected) &&
         sha256(content) === sha256(expected);
       return {
@@ -132,6 +137,8 @@ export const laneF: Lane = {
           workerReleased: attempts.every((attempt) => attempt.workerState === "released"),
           workerSandboxes: providerRefs.length,
           sandboxesAliveWhenRead: sandboxesLeft,
+          reportedPathMatchesStoredFile:
+            reportedPath === `${worker.privateMount}/${spool[0]?.path}`,
           spoolFiles: spool.map((entry) => entry.path.replace(/[^/]+$/, "<id>")),
           spoolBytesReadAfterDestroy: content.byteLength,
           spoolMatchesOutput: sha256(content) === sha256(expected),

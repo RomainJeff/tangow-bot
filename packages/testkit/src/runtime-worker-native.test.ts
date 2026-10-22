@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type {
@@ -37,10 +37,11 @@ async function nativeRun(
   overrides: Partial<AgentRunRequest> = {},
   modelPatch: Partial<AgentRunRequest["model"]> = {},
   signal?: AbortSignal,
+  fixtureRoot?: string,
 ) {
   const server = await startModelEmulator({ steps, apiKey: "controller-only-key" });
   onTestFinished(() => server.close());
-  const root = await mkdtemp(path.join(tmpdir(), "rakazo-native-run-"));
+  const root = fixtureRoot ?? (await mkdtemp(path.join(tmpdir(), "rakazo-native-run-")));
   onTestFinished(() => rm(root, { recursive: true, force: true }));
   await mkdir(path.join(root, "workspace/bots/bot"), { recursive: true });
   const exits: Array<Promise<string>> = [];
@@ -119,6 +120,219 @@ async function nativeRun(
 }
 
 describe("the pi-native harness through the controller", () => {
+  it.each([
+    { status: "success", suffix: "", isError: false },
+    { status: "failure", suffix: "; exit 7", isError: true },
+    { status: "timeout", suffix: "; sleep 30", isError: true },
+  ])(
+    "keeps literal bash output after $status for a later native read",
+    async ({ status, suffix, isError }) => {
+      const expected = Array.from({ length: 900_000 }, (_, i) => `${i + 1}\n`).join("");
+      let shown = "";
+      const first = await nativeRun([
+        {
+          expect() {},
+          response: {
+            type: "tool",
+            id: "long",
+            name: "bash",
+            arguments: {
+              command: `ln -s /tmp .rakazo; seq 1 900000${suffix}`,
+              ...(status === "timeout" ? { timeout: 0.2 } : {}),
+            },
+          },
+        },
+        {
+          expect(request) {
+            shown = String(
+              request.messages.findLast((message) => message.role === "tool")?.content,
+            );
+            expect(shown.length).toBeLessThanOrEqual(12_000);
+          },
+          response: { type: "text", text: "Saved." },
+        },
+      ]);
+      expect(first.exit).toBe("done");
+      const entry = first.seen
+        .flatMap((event) => (event.type === "transcript" ? event.entries : []))
+        .find((entry) => entry.kind === "call" && entry.name === "bash");
+      expect(entry).toMatchObject({ isError });
+      if (status === "failure") expect(shown).toContain("Command exited with code 7");
+      if (status === "timeout") expect(shown).toContain("Command timed out after 0.2 seconds");
+      const outputPath = /it is in ([^\]\n]+)/.exec(shown)?.[1];
+      expect(outputPath).toBeTruthy();
+      expect(path.dirname(outputPath!)).toBe(path.join(first.root, "workspace/bots/bot"));
+      expect(await readFile(outputPath!, "utf8")).toBe(expected);
+      await rm(path.join(first.root, "spool"), { recursive: true, force: true });
+      await rm(path.join(first.root, "home"), { recursive: true, force: true });
+      const next = await nativeRun([
+        {
+          expect() {},
+          response: {
+            type: "tool",
+            id: "read",
+            name: "read",
+            arguments: { path: outputPath!, offset: 899_999, limit: 2 },
+          },
+        },
+        {
+          expect(request) {
+            expect(
+              String(request.messages.findLast((message) => message.role === "tool")?.content),
+            ).toContain("899999\n900000");
+          },
+          response: { type: "text", text: "Read." },
+        },
+      ]);
+      expect(next.exit).toBe("done");
+    },
+  );
+
+  it("retains the complete stream when native bash is cancelled", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "rakazo-native-cancel-"));
+    const volume = path.join(root, "workspace/bots/bot");
+    const cancel = new AbortController();
+    const pending = nativeRun(
+      [
+        {
+          expect() {},
+          response: {
+            type: "tool",
+            id: "cancel",
+            name: "bash",
+            arguments: { command: "seq 1 900000; touch ready; sleep 30" },
+          },
+        },
+      ],
+      {},
+      {},
+      cancel.signal,
+      root,
+    );
+    const rejected = expect(pending).rejects.toThrow("cancelled");
+    const expected = Array.from({ length: 900_000 }, (_, i) => `${i + 1}\n`).join("");
+    await expect
+      .poll(async () => {
+        const files = await readdir(volume).catch(() => []);
+        const spool = files.find((file) => file.startsWith(".rakazo-bash-"));
+        return spool ? (await readFile(path.join(volume, spool))).byteLength : 0;
+      })
+      .toBe(Buffer.byteLength(expected));
+    cancel.abort();
+    await rejected;
+    const spool = (await readdir(volume)).find((file) => file.startsWith(".rakazo-bash-"));
+    expect(await readFile(path.join(volume, spool!), "utf8")).toBe(expected);
+  });
+
+  it("keeps concurrent native helpers' retained output separate on the same mount", async () => {
+    let arrivals = 0;
+    let release = () => {};
+    const ready = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const paths: string[] = [];
+    const child: ModelEmulatorStep = {
+      async expect() {
+        if (++arrivals === 2) release();
+        await ready;
+      },
+      response(request) {
+        const peer = JSON.stringify(request.messages).includes("peer-task");
+        return {
+          type: "tool",
+          id: peer ? "peer-bash" : "slow-bash",
+          name: "bash",
+          arguments: { command: peer ? "seq 4001 8000" : "seq 1 4000" },
+        };
+      },
+    };
+    const finishChild: ModelEmulatorStep = {
+      expect(request) {
+        const text = String(
+          request.messages.findLast((message) => message.role === "tool")?.content,
+        );
+        const file = /it is in ([^\]\n]+)/.exec(text)?.[1];
+        expect(file).toBeTruthy();
+        paths.push(file!);
+      },
+      response: { type: "text", text: "Child saved." },
+    };
+    const result = await nativeRun(
+      [
+        {
+          expect() {},
+          response: {
+            type: "tool",
+            id: "one",
+            name: "mcp__rakazo__run_subagent",
+            arguments: { name: "slow", task: "slow-task" },
+            siblings: [
+              {
+                id: "two",
+                name: "mcp__rakazo__run_subagent",
+                arguments: { name: "peer", task: "peer-task" },
+              },
+            ],
+          },
+        },
+        child,
+        child,
+        finishChild,
+        finishChild,
+        { expect() {}, response: { type: "text", text: "Done." } },
+      ],
+      {
+        tools: [
+          "run_subagent",
+          ...WORKER_NATIVE_TOOLS.filter((tool) => ["bash", "read"].includes(tool.name)),
+        ].map((tool) =>
+          typeof tool === "string"
+            ? { name: tool, description: tool, inputSchema: { type: "object", properties: {} } }
+            : tool,
+        ),
+        startSubagent: async () => ({
+          executeTool: async () => "unused",
+          finish: async () => {},
+          abandon: async () => {},
+          transcript: async () => {},
+        }),
+      },
+    );
+    expect(result.exit).toBe("done");
+    expect(new Set(paths).size).toBe(2);
+    expect(
+      paths.every((file) => path.dirname(file) === path.join(result.root, "workspace/bots/bot")),
+    ).toBe(true);
+    const outputs = await Promise.all(paths.map((file) => readFile(file, "utf8")));
+    expect(outputs.sort()).toEqual([
+      Array.from({ length: 4000 }, (_, i) => `${i + 1}\n`).join(""),
+      Array.from({ length: 4000 }, (_, i) => `${i + 4001}\n`).join(""),
+    ]);
+  });
+
+  it("does not retain output files for ordinary native bash text", async () => {
+    const result = await nativeRun([
+      {
+        expect() {},
+        response: {
+          type: "tool",
+          id: "short",
+          name: "bash",
+          arguments: { command: "printf 'hello\\n'" },
+        },
+      },
+      {
+        expect(request) {
+          expect(request.messages.findLast((message) => message.role === "tool")?.content).toBe(
+            "hello\n",
+          );
+        },
+        response: { type: "text", text: "Done." },
+      },
+    ]);
+    expect(await readdir(path.join(result.root, "workspace/bots/bot"))).toEqual([]);
+  });
+
   it("keeps Pi's prompt with the Rakazo addendum, and runs its file tools on the volume without a grant", async () => {
     const executeLocalTool = vi.fn();
     const { seen, exit, root } = await nativeRun(

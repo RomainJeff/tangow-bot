@@ -119,6 +119,10 @@ async function runAttempt(
       source: mount.scope === "private" ? "bot" : "shared",
       path: path.join(rooted(mount.path), "skills"),
     });
+  const outputRoot = workspace.mounts.find(
+    (mount) => mount.scope === "private" && mount.access === "rw",
+  )?.path;
+  const nativeOutput = outputRoot ? { outputRoot: rooted(outputRoot) } : {};
   const home = options.home;
   const declared = new Set(options.harness.declaration.capabilities);
   const placement = new Map(run.tools.map((tool) => [tool.name, tool.where]));
@@ -173,7 +177,7 @@ async function runAttempt(
       done: (async () => {
         try {
           const result = await options.harness.run(
-            { worker, run: part.run, cwd, skillsDir, agent: part.agent },
+            { worker, run: part.run, cwd, skillsDir, agent: part.agent, ...nativeOutput },
             { ...host, signal: childCancel.signal },
           );
           await decide(
@@ -300,7 +304,7 @@ async function runAttempt(
       await decide({ type: "skills.collision", collision }, "recorded");
     }
     const done = await options.harness.run(
-      { worker, run, cwd, skillsDir: converged.skillsDir },
+      { worker, run, cwd, skillsDir: converged.skillsDir, ...nativeOutput },
       host,
     );
     if (helpers.size > 0) {

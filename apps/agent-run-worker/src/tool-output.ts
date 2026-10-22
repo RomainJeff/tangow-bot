@@ -14,7 +14,7 @@ const KEEP_BYTES = WORKER_LIMITS.localOutputModelChars * 4;
 
 /** Everything a command prints: counted in full, spooled up to a cap, head and tail kept in memory. */
 function outputCapture(spoolPath: string) {
-  const spool = createWriteStream(spoolPath);
+  const spool = createWriteStream(spoolPath, { flags: "wx", mode: 0o600 });
   let head = Buffer.alloc(0);
   let tail = Buffer.alloc(0);
   let totalBytes = 0;
@@ -80,6 +80,8 @@ function modelText(
 }
 
 const SPOOL_FILE = /^bash-.+\.log$/;
+const NATIVE_SPOOL_FILE = /^\.rakazo-bash-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\.log$/;
+type SpoolPrefix = "bash" | ".rakazo-bash";
 /** Spool files of commands still running in this process: never pruned. */
 const spooling = new Set<string>();
 let pruning = Promise.resolve();
@@ -88,9 +90,10 @@ let pruning = Promise.resolve();
  * Makes room for one more spool file under the cap, oldest first, and claims its path. Calls run
  * one at a time, so concurrent commands do not overshoot the cap. Other files are left alone.
  */
-function claimSpool(spoolDir: string): Promise<string> {
+function claimSpool(spoolDir: string, prefix: SpoolPrefix): Promise<string> {
   const claimed = pruning.then(async () => {
-    const names = (await readdir(spoolDir)).filter((name) => SPOOL_FILE.test(name));
+    const pattern = prefix === "bash" ? SPOOL_FILE : NATIVE_SPOOL_FILE;
+    const names = (await readdir(spoolDir)).filter((name) => pattern.test(name));
     const excess = names.length - (WORKER_LIMITS.localOutputSpoolFiles - 1);
     if (excess > 0) {
       const aged = await Promise.all(
@@ -105,7 +108,7 @@ function claimSpool(spoolDir: string): Promise<string> {
       aged.sort((a, b) => a.mtimeMs - b.mtimeMs || a.file.localeCompare(b.file));
       await Promise.all(aged.slice(0, excess).map(({ file }) => rm(file, { force: true })));
     }
-    const spoolPath = path.join(spoolDir, `bash-${randomUUID()}.log`);
+    const spoolPath = path.join(spoolDir, `${prefix}-${randomUUID()}.log`);
     spooling.add(spoolPath);
     return spoolPath;
   });
@@ -117,9 +120,9 @@ function claimSpool(spoolDir: string): Promise<string> {
 }
 
 /** Claim bounded storage before a native call, then finish its P2 result. */
-export async function captureToolOutput(spoolDir: string) {
+export async function captureToolOutput(spoolDir: string, prefix: SpoolPrefix = "bash") {
   await mkdir(spoolDir, { recursive: true });
-  const spoolPath = await claimSpool(spoolDir);
+  const spoolPath = await claimSpool(spoolDir, prefix);
   const capture = outputCapture(spoolPath);
   let streamed = false;
   return {
