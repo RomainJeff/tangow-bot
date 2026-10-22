@@ -99,7 +99,14 @@ function browserRunningFunction(profile: string, pidFile: string) {
     '  for pid in "$tracked" "${lock##*-}"; do',
     `    case "$pid" in ''|0|*[!0-9]*) continue ;; esac`,
     `    kill -0 "$pid" 2>/dev/null || continue`,
-    `    tr '\\0' '\\n' <"/proc/$pid/cmdline" 2>/dev/null | grep -Fx -- ${shellQuote(`--user-data-dir=${profile}`)} >/dev/null || continue`,
+    "    profile_match=0",
+    "    while IFS= read -r -d '' arg; do",
+    '      [[ "$arg" == --user-data-dir=* ]] || continue',
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: generated shell parameter expansion
+    "      candidate=${arg#--user-data-dir=}",
+    `      if [ "$candidate" = ${shellQuote(profile)} ] || { [ -d "$candidate" ] && [ -d ${shellQuote(profile)} ] && [ "$candidate" -ef ${shellQuote(profile)} ]; }; then profile_match=1; break; fi`,
+    '    done 2>/dev/null <"/proc/$pid/cmdline" || continue',
+    '    [ "$profile_match" -eq 1 ] || continue',
     `    printf %s "$pid" >${pidFile}`,
     "    return 0",
     "  done",
@@ -179,9 +186,10 @@ function stopBrowserProfileCommand(profile: string, pidFile: string) {
 /** Quiesce managed profiles before a full workspace export; orchestration excludes active peers. */
 export function stopAllDesktopBrowsersCommand(env = DEFAULT_DESKTOP_ENV) {
   const placeholder = "RAKAZO_INTERNAL_PROFILE";
-  const stop = stopBrowserProfileCommand(placeholder, '"$pid_file"')
-    .replaceAll(shellQuote(`--user-data-dir=${placeholder}`), '"--user-data-dir=$profile"')
-    .replaceAll(shellQuote(placeholder), '"$profile"');
+  const stop = stopBrowserProfileCommand(placeholder, '"$pid_file"').replaceAll(
+    shellQuote(placeholder),
+    '"$profile"',
+  );
   return [
     "set -eu",
     "failed=0",

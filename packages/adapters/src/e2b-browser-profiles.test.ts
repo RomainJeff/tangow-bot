@@ -190,9 +190,13 @@ it.each(["export", "import", "archive"])(
 );
 
 // Uses the existing offline computer image opt-in; no provider credentials or network.
-it.skipIf(process.env.VERIFY_DOCKER_TEAM_SCREENS !== "1")(
-  "runs the generated E2B desktop as UID/GID 1000 with a protected workspace",
-  async () => {
+it.skipIf(process.env.VERIFY_DOCKER_TEAM_SCREENS !== "1").each([
+  { mode: "team", target: "/workspace", home: "volumes" },
+  { mode: "dedicated", target: "/workspace/bots/bot_a", home: "volumes" },
+  { mode: "historical alias", target: "/workspace/bots/bot_a", home: "snapshot" },
+])(
+  "runs and quiesces the generated $mode E2B desktop as UID/GID 1000 with a protected workspace",
+  async ({ target, home }) => {
     const name = `rakazo-e2b-profiles-${randomUUID()}`;
     const docker = (...args: string[]) =>
       execFileSync("docker", args, { encoding: "utf8", timeout: 120_000 });
@@ -215,7 +219,7 @@ it.skipIf(process.env.VERIFY_DOCKER_TEAM_SCREENS !== "1")(
           "mkdir -p /home/user /workspace/bots/bot_a /workspace/bots/bot_b /workspace/shared",
           "chown 1000:1000 /home/user /workspace/bots/bot_a /workspace/bots/bot_b /workspace/shared",
           "chown 0:0 /workspace /workspace/bots; chmod 755 /workspace /workspace/bots",
-          "ln -s /workspace /home/user/rakazo-home",
+          `ln -s ${shellQuote(target)} /home/user/rakazo-home`,
           "exec sleep infinity",
         ].join("\n"),
       );
@@ -234,7 +238,7 @@ it.skipIf(process.env.VERIFY_DOCKER_TEAM_SCREENS !== "1")(
           throw new Error(error instanceof Error ? error.message : String(error));
         }
       };
-      const machine = fakeE2BMachine("machine", {}, { home: "volumes", botId: "team-space" });
+      const machine = fakeE2BMachine("machine", {}, { home, botId: "team-space" });
       machine.sandbox.commands.run = vi.fn(run) as unknown as typeof machine.sandbox.commands.run;
       const provider = new E2BSandboxProvider("test-key", sdkFor(machine));
       for (const botId of ["bot_a", "bot_b", "bot_a"]) {
@@ -262,21 +266,23 @@ it.skipIf(process.env.VERIFY_DOCKER_TEAM_SCREENS !== "1")(
           ),
         ),
       ).toBe(true);
-      const old = spawnSync(
-        "docker",
-        [
-          "exec",
-          "-u",
-          "1000:1000",
-          name,
-          "mkdir",
-          "-p",
-          "/home/user/rakazo-home/.browser-profiles",
-        ],
-        { encoding: "utf8" },
-      );
-      expect(old.status).not.toBe(0);
-      expect(old.stderr).toContain("Permission denied");
+      if (target === "/workspace") {
+        const old = spawnSync(
+          "docker",
+          [
+            "exec",
+            "-u",
+            "1000:1000",
+            name,
+            "mkdir",
+            "-p",
+            "/home/user/rakazo-home/.browser-profiles",
+          ],
+          { encoding: "utf8" },
+        );
+        expect(old.status).not.toBe(0);
+        expect(old.stderr).toContain("Permission denied");
+      }
       for (const profile of profiles)
         docker(
           "exec",
@@ -287,10 +293,45 @@ it.skipIf(process.env.VERIFY_DOCKER_TEAM_SCREENS !== "1")(
           "-c",
           `printf saved >${shellQuote(profile)}/proof`,
         );
+      if (home === "snapshot") {
+        const mainPids = () =>
+          docker("exec", name, "ps", "-eo", "pid=,args=")
+            .split("\n")
+            .filter((line) => line.includes("--user-data-dir=") && !line.includes("--type="))
+            .map((line) => line.trim().split(/\s+/)[0]);
+        const tracking = () =>
+          docker("exec", name, "bash", "-c", "cat /tmp/rakazo/browser-pid-* | sort");
+        const identity = () => docker("exec", name, "stat", "-Lc", "%d:%i", ...profiles);
+        const pids = mainPids();
+        const tracked = tracking();
+        const inodes = identity();
+        expect(pids).toHaveLength(2);
+        const canonical = new E2BSandboxProvider("test-key", sdkFor(machine));
+        await canonical.observe(
+          { ...computer, writableRoots: [""] },
+          { ...context, botId: "bot_a" },
+        );
+        expect(mainPids()).toEqual(pids);
+        expect(tracking()).toBe(tracked);
+        expect(identity()).toBe(inodes);
+      }
       await provider.importWorkspace(computer, (async function* () {})(), context);
-      expect(docker("exec", name, "ps", "-eo", "args")).not.toContain(
-        "--user-data-dir=/workspace/bots/",
-      );
+      expect(docker("exec", name, "ps", "-eo", "args")).not.toContain("--user-data-dir=");
+      expect(
+        docker(
+          "exec",
+          name,
+          "find",
+          "/tmp/rakazo",
+          "-maxdepth",
+          "1",
+          "-name",
+          "browser-pid-*",
+          "-type",
+          "f",
+          "-print",
+        ).trim(),
+      ).toBe("");
       for (const profile of profiles) {
         expect(docker("exec", name, "cat", `${profile}/proof`)).toBe("saved");
         const lock = spawnSync("docker", ["exec", name, "test", "-e", `${profile}/SingletonLock`]);
