@@ -1,4 +1,5 @@
 import type { AdapterContext, MemorySnapshot, MemoryStore } from "@rakazo/adapter-kit";
+import { escapePromptData } from "@rakazo/core";
 
 const MAX_AGENT_MEMORY_BYTES = 32 * 1024;
 
@@ -39,16 +40,17 @@ export async function loadAgentMemoryContext(
   const sections: string[] = [];
   let remainingBytes = maxBytes - fixedBytes;
   for (const document of documents) {
-    const heading = `${sections.length === 0 ? "" : "\n\n"}## ${document.scope}: ${document.path} (revision ${document.revision})\n`;
+    const heading = `${sections.length === 0 ? "" : "\n\n"}## ${document.scope}: ${escapePromptData(document.path)} (revision ${document.revision})\n`;
     const headingBytes = byteLength(heading);
     if (headingBytes > remainingBytes) break;
     sections.push(heading);
     remainingBytes -= headingBytes;
 
-    const content = truncateUtf8(document.content, remainingBytes);
+    const escapedContent = escapePromptData(document.content);
+    const content = truncateUtf8(escapedContent, remainingBytes);
     sections.push(content);
     remainingBytes -= byteLength(content);
-    if (content !== document.content) break;
+    if (content !== escapedContent) break;
   }
 
   return `${preamble}${sections.join("")}${closing}`;
