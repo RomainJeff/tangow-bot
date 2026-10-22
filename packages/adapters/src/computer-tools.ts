@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type {
   AgentToolExecutionResult,
   ComputerAction,
@@ -57,10 +58,13 @@ export function parseComputerActions(value: unknown): ComputerAction[] {
   return actions;
 }
 
-/** Where a screen is saved in the bot's home, which its own file tool reads relative paths from. */
+/**
+ * Where a screen is saved: a new file at the root of the bot's home, the volume's mount point,
+ * under a name nobody can guess. The guest writes to that volume too, so a directory there could be
+ * a link to another bot's files; the root and a name that does not exist yet cannot.
+ */
 export function screenPath(observation: ComputerObservation): string {
-  const name = observation.frameId.replace(/[^\w.-]/g, "_");
-  return `.rakazo/screens/${name}.${observation.mimeType === "image/png" ? "png" : "jpg"}`;
+  return `.rakazo-screen-${randomUUID()}.${observation.mimeType === "image/png" ? "png" : "jpg"}`;
 }
 
 /** `savedAt`: the screen is a file there, so the result names it instead of carrying the image. */

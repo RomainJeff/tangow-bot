@@ -1,3 +1,6 @@
+import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import type { ConnectorProvider } from "@rakazo/adapter-kit";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.js";
@@ -353,12 +356,26 @@ describe("a worker run's computer", () => {
 });
 
 describe("a worker run's screens by path", () => {
-  it("saves the screen on the bot's volume, where the guest reads it, and keeps the image off the run channel", async () => {
+  it("saves the screen on the bot's volume, never through a link the guest made, and keeps the image off the run channel", async () => {
     const seen: Seen[] = [];
     const results: Record<string, unknown> = {};
     const read = { type: "tool" as const, id: "see", name: "read", arguments: { path: "" } };
+    // Stands for another bot's folder that the guest links from its own volume.
+    const elsewhere = await mkdtemp(path.join(tmpdir(), "rakazo-other-bot-"));
+    cleanups.push(() => rm(elsewhere, { recursive: true, force: true }));
     const run = await startWorkerRun({
       steps: [
+        {
+          expect() {},
+          response: {
+            type: "tool",
+            id: "link",
+            name: "bash",
+            arguments: {
+              command: `mkdir -p .rakazo && ln -s ${elsewhere} .rakazo/screens && ln -s ${elsewhere} screens`,
+            },
+          },
+        },
         {
           expect() {},
           response: { type: "tool", id: "look", name: "computer_observe", arguments: {} },
@@ -388,10 +405,11 @@ describe("a worker run's screens by path", () => {
     await run.continueRun(runId);
     run.model.assertComplete();
 
-    const screens = "\\.rakazo/screens/";
+    expect(await readdir(elsewhere)).toEqual([]);
+    const screen = "\\.rakazo-screen-[\\w-]{36}\\.png";
     expect(String(results.look)).toMatch(
       new RegExp(
-        `^computer observed\\n\\{"frameId":"[^"]+",.*"width":\\d+,"height":\\d+.*"path":"${screens}[\\w.-]+\\.png"\\}\\nScreen saved at ${screens}[\\w.-]+\\.png\\. Read it to see it\\.$`,
+        `^computer observed\\n\\{"frameId":"[^"]+",.*"width":\\d+,"height":\\d+.*"path":"${screen}"\\}\\nScreen saved at ${screen}\\. Read it to see it\\.$`,
       ),
     );
     expect(String(results.see)).toContain("image/png");
