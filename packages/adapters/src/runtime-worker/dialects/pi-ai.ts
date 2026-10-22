@@ -25,6 +25,7 @@ import type {
 import { conversationSessionId, type PiStreamFn, streamRunModel } from "../../pi-runtime.js";
 import { billedPromptTokens, providerCacheTokens } from "../../pi-runtime-limits.js";
 import type { ModelRelay } from "../model-relay.js";
+import { prunePiAiImages } from "./pi-ai-images.js";
 
 /**
  * The `pi-ai` model-access dialect: pi-ai's transcript out, pi-ai's stream events back. The only
@@ -118,7 +119,10 @@ export const relayPiAiCall: ModelRelay<PiAiModelCall, PiAiModelEvent> = async (
   try {
     // The transcript is the guest's to shape; a malformed one fails this call, nothing else.
     const context = normalizeContext({
-      messages: call.context.messages as unknown as Message[],
+      messages: prunePiAiImages(
+        call.context.messages,
+        config.maxImagesPerPrompt,
+      ) as unknown as Message[],
     });
     const relayed = streamRunModel(config, context, {
       sessionId: conversationSessionId(
