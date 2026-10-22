@@ -12,6 +12,7 @@ import type {
 import {
   createInMemorySkillLock,
   createRunExecutor,
+  createRunSecretWriter,
   createWorkerLifecycle,
   EncryptedSecretStore,
   InMemoryJobQueue,
@@ -214,7 +215,9 @@ export async function startWorkerRun<
   const thread = await prisma.thread.create({
     data: { spaceId: SPACE, userId: USER, botId: bot.id },
   });
-  const events = createThreadEvents(prisma);
+  const events = createThreadEvents(prisma, undefined, {
+    runSecretWriter: createRunSecretWriter(secretStore),
+  });
 
   const build = () => {
     const provider =
