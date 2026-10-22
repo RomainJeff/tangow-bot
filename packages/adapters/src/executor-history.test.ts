@@ -1236,7 +1236,10 @@ describe("interactive executor sessions with durable history", () => {
       run: c.run,
       runtime: async function* () {
         yield { type: "text", text: "" };
-        await c.prisma.run.update({ where: { id: c.run.id }, data: { leaseOwner: "worker-2" } });
+        await c.prisma.run.update({
+          where: { id: c.run.id },
+          data: { leaseOwner: "worker-2", leaseFence: { increment: 1 } },
+        });
         yield {
           type: "transcript",
           entries: [

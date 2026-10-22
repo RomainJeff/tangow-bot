@@ -79,6 +79,7 @@ import {
   applyJudgeDecision,
   approvedReplayCall,
   assertTransition,
+  attemptOwnsFence,
   avatarIdentitySeed,
   BOT_DELEGATION_GUIDANCE,
   BOT_OFFER_DEDICATED_BOT,
@@ -2364,13 +2365,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               }),
             transcript: (event) =>
               inOrder(() =>
-                logHarnessTranscript(
-                  deps,
-                  helper.log,
-                  { runId, workerId, fence },
-                  event,
-                  runSecrets,
-                ),
+                logHarnessTranscript(deps, helper.log, { runId, fence }, event, runSecrets),
               ),
             abandon: (result) =>
               inOrder(() =>
@@ -5007,7 +5002,16 @@ export function createRunExecutor(deps: ExecutorDeps) {
             context,
           );
           for await (const event of withRuntimeCleanup(runtimeEvents, runAbortController)) {
-            if (approvalPausePending) return;
+            if (approvalPausePending) {
+              // A paused worker attempt concludes under the session's guard, and its harness's
+              // last transcript is still the run's: wait for it instead of cutting the guest off.
+              if (event.type === "transcript") {
+                await logHarnessTranscript(deps, runLog, { runId, fence }, event, runSecrets);
+              }
+              const concluded = event.type === "transcript" || event.type === "done";
+              if (concluded || runtime.describe().id !== "worker") return;
+              continue;
+            }
             if (!leaseValid) return;
             const now = Date.now();
             if (now - lastLeaseCheckAt >= 1_000) {
@@ -5180,13 +5184,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             } else if (event.type === "usage") {
               await recordRunUsage(deps, { ...run, botId: bot.id, runId }, event);
             } else if (event.type === "transcript") {
-              await logHarnessTranscript(
-                deps,
-                runLog,
-                { runId, workerId, fence },
-                event,
-                runSecrets,
-              );
+              await logHarnessTranscript(deps, runLog, { runId, fence }, event, runSecrets);
             } else if (event.type === "done") {
               runtimeNotice = event.runtimeNotice;
               if (recapRequested) {
@@ -5782,7 +5780,7 @@ async function notifyRun(
 }
 
 async function renewRunLease(
-  deps: { prisma: Pick<Prisma.TransactionClient, "run"> },
+  deps: ExecutorDeps,
   runId: string,
   workerId: string,
   fence: number,
@@ -6222,12 +6220,12 @@ type RunLog = { sessionId: SessionId; runId: string; botId: string };
  * call of the harness's own tools with the result the harness reported, and each summary its
  * compaction wrote. The controller's own calls are already in the log as it answered them, so a
  * step is dated just before the next of them the transcript references: the run then reads in
- * the order the attempt worked. All of it lands under the lease of the attempt's run, or none.
+ * the order the attempt worked. All of it lands while the attempt still owns its run, or none.
  */
 async function logHarnessTranscript(
   deps: Pick<ExecutorDeps, "prisma" | "sessionLog">,
   log: RunLog,
-  lease: { runId: string; workerId: string; fence: number },
+  lease: { runId: string; fence: number },
   event: Extract<AgentRuntimeEvent, { type: "transcript" }>,
   secrets: string[],
 ) {
@@ -6240,7 +6238,9 @@ async function logHarnessTranscript(
   if (!event.entries.some((entry) => entry.kind === "call" || entry.kind === "summary")) return;
   await deps.prisma.$transaction(
     async (tx) => {
-      if (!(await renewRunLease({ prisma: tx }, lease.runId, lease.workerId, lease.fence))) return;
+      const [run] = await tx.$queryRaw<Array<{ leaseFence: number; status: string }>>`
+        SELECT "leaseFence", status FROM runs WHERE id = ${lease.runId} FOR NO KEY UPDATE`;
+      if (!run || !attemptOwnsFence(lease, run)) return;
       const logged = await tx.sessionEntry.findMany({
         where: {
           sessionId: log.sessionId,
