@@ -7,40 +7,60 @@ export const MODEL_STREAM_MAX_RETRIES = 1;
 
 export const TOOL_RESULT_TEXT_LIMIT = 12_000;
 
+const cutNotice = (omitted: number) => `\n[${omitted} more characters cut]`;
+
+/** A prefix that never ends in half a surrogate pair. */
+const head = (text: string, chars: number) => Buffer.from(text.slice(0, chars)).toString();
+
+/** Text kept from `total` characters so the kept text and its notice fit `limit` together. */
+const keptChars = (total: number, limit: number) => Math.max(0, limit - cutNotice(total).length);
+
+/** Kept text and notice fit `limit`, so clipping clipped text changes nothing. */
 export function clipToolResultText(text: string, limit: number = TOOL_RESULT_TEXT_LIMIT): string {
-  return text.length > limit ? `${text.slice(0, limit)}…` : text;
+  if (text.length <= limit) return text;
+  const kept = keptChars(text.length, limit);
+  return `${head(text, kept)}${cutNotice(text.length - kept)}`;
 }
 
+const isTextPart = (part: unknown): part is { type: "text"; text: unknown } =>
+  Boolean(part) &&
+  typeof part === "object" &&
+  (part as { type?: unknown }).type === "text" &&
+  "text" in (part as object);
+
 /**
- * Share one remaining character budget across all text parts.
- * Later text is omitted once the aggregate limit is exhausted; non-text parts stay.
+ * Share one character budget across all text parts. Later text is omitted once it is spent, and
+ * the last text kept says how much; non-text parts stay.
  */
 export function clipToolResultContent<T>(
   content: T[],
   limit: number = TOOL_RESULT_TEXT_LIMIT,
 ): T[] {
-  let remaining = limit;
+  const total = content.reduce(
+    (sum, part) => sum + (isTextPart(part) ? String(part.text).length : 0),
+    0,
+  );
+  if (total <= limit) return content;
+  let remaining = keptChars(total, limit);
+  let lastText = -1;
   const clipped: T[] = [];
   for (const part of content) {
-    if (
-      !part ||
-      typeof part !== "object" ||
-      !("type" in part) ||
-      (part as { type?: unknown }).type !== "text" ||
-      !("text" in part)
-    ) {
+    if (!isTextPart(part)) {
       clipped.push(part);
       continue;
     }
-    if (remaining <= 0) continue;
-    const text = String((part as { text: unknown }).text);
-    if (text.length <= remaining) {
-      clipped.push(part);
-      remaining -= text.length;
-      continue;
-    }
-    clipped.push({ ...part, text: clipToolResultText(text, remaining) });
-    remaining = 0;
+    const text = String(part.text);
+    const kept = text.length <= remaining ? text : head(text, remaining);
+    remaining -= kept.length;
+    if (!kept && text) continue;
+    lastText = clipped.length;
+    clipped.push(kept === text ? part : { ...part, text: kept });
+  }
+  const shown = keptChars(total, limit) - remaining;
+  const notice = cutNotice(total - shown);
+  if (lastText >= 0) {
+    const part = clipped[lastText] as T & { text: string };
+    clipped[lastText] = { ...part, text: `${part.text}${notice}` };
   }
   return clipped;
 }

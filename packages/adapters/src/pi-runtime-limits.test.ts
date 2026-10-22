@@ -79,36 +79,37 @@ describe("resolveCompletionMaxTokens", () => {
 });
 
 describe("clipToolResultText", () => {
-  it("bounds oversized tool output for the in-turn transcript", () => {
+  it("bounds oversized tool output, notice included, and says how much it cut", () => {
     const text = "x".repeat(TOOL_RESULT_TEXT_LIMIT + 50);
     const clipped = clipToolResultText(text);
-    expect(clipped.endsWith("…")).toBe(true);
-    expect(clipped.length).toBe(TOOL_RESULT_TEXT_LIMIT + 1);
+    expect(clipped).toBe(`${"x".repeat(11_972)}\n[78 more characters cut]`);
+    expect(clipToolResultText(clipped)).toBe(clipped);
   });
 });
 
 describe("clipToolResultContent", () => {
   it("shares one character budget across all text parts and leaves images", () => {
-    const first = "a".repeat(TOOL_RESULT_TEXT_LIMIT - 10);
-    const second = "b".repeat(40);
     const image = { type: "image" as const, data: "iVBORw0KGgo=", mimeType: "image/png" as const };
     const clipped = clipToolResultContent([
-      { type: "text" as const, text: first },
+      { type: "text" as const, text: "a".repeat(11_900) },
       image,
-      { type: "text" as const, text: second },
+      { type: "text" as const, text: "b".repeat(100) },
       { type: "text" as const, text: "later omitted" },
     ]);
-    expect(clipped).toHaveLength(3);
-    expect(clipped[0]).toEqual({ type: "text", text: first });
-    expect(clipped[1]).toEqual(image);
-    const overflow = clipped[2] as { type: "text"; text: string };
-    expect(overflow.type).toBe("text");
-    expect(overflow.text.endsWith("…")).toBe(true);
-    expect(overflow.text.startsWith("b")).toBe(true);
-    expect(overflow.text.length).toBe(11);
-    const textChars = clipped
-      .filter((part) => part.type === "text")
-      .reduce((sum, part) => sum + part.text.replace(/…$/, "").length, 0);
-    expect(textChars).toBe(TOOL_RESULT_TEXT_LIMIT);
+    expect(clipped).toEqual([
+      { type: "text", text: "a".repeat(11_900) },
+      image,
+      { type: "text", text: `${"b".repeat(72)}\n[41 more characters cut]` },
+    ]);
+    expect(clipToolResultContent(clipped)).toEqual(clipped);
+  });
+
+  it("marks text dropped right after a part that used the whole budget", () => {
+    expect(
+      clipToolResultContent([
+        { type: "text" as const, text: "a".repeat(TOOL_RESULT_TEXT_LIMIT) },
+        { type: "text" as const, text: "dropped" },
+      ]),
+    ).toEqual([{ type: "text", text: `${"a".repeat(11_972)}\n[35 more characters cut]` }]);
   });
 });

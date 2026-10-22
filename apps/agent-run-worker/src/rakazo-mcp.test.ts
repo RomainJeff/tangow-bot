@@ -233,19 +233,18 @@ describe("a connector result through the Rakazo MCP server", () => {
     expect((await readFile(file)).toString("base64")).toBe(PNG);
   });
 
-  it("cuts a long result to the model's tool result budget, with a marker", async () => {
-    const { host } = fakeHost(() => "a".repeat(20_000));
+  it("cuts a long result or error to the model's tool result budget, saying so", async () => {
+    let answer: () => unknown = () => "a".repeat(20_000);
+    const { host } = fakeHost(() => answer());
     const { client } = await connect(CONNECTOR_TOOLS, host);
+    const call = () => client.callTool({ name: "mcp__charts__render", arguments: { value: "x" } });
+    const cut = `${"a".repeat(11_972)}\n[8028 more characters cut]`;
 
-    const result = await client.callTool({
-      name: "mcp__charts__render",
-      arguments: { value: "x" },
-    });
-
-    expect(result).toEqual({
-      content: [{ type: "text", text: `${"a".repeat(12_000)}…` }],
-      isError: false,
-    });
+    expect(await call()).toEqual({ content: [{ type: "text", text: cut }], isError: false });
+    answer = () => {
+      throw new Error("a".repeat(20_000));
+    };
+    expect(await call()).toEqual({ content: [{ type: "text", text: cut }], isError: true });
   });
 });
 

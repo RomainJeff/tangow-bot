@@ -163,7 +163,7 @@ export function rakazoMcpServer(
       return await mcpResult(outcome.output, screensDir, callId);
     } catch (error) {
       const text = error instanceof Error ? error.message : String(error);
-      return { content: [{ type: "text", text }], isError: true };
+      return { content: clipToolResultContent([{ type: "text", text }]), isError: true };
     }
   }
 
