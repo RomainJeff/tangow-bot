@@ -226,7 +226,7 @@ export function createSession(
     return endPaused();
   };
 
-  /** An attempt that concluded or began to stop while a lookup was in flight starts nothing. */
+  /** Check in the caller after awaiting a fence lookup: shutdown can run before it resumes. */
   const live = () => !finished && !stopping;
 
   /** Once paused, the attempt concludes on a run waiting for the user; never once superseded. */
@@ -335,7 +335,7 @@ export function createSession(
     body: Extract<GuestBody, { type: "model.request" }>,
     part: (body: ReplyPart) => void,
   ): Promise<ReplyFinal> {
-    if (!(await fenceHeld())) return revoke();
+    if (!(await fenceHeld()) || !live()) return revoke();
     const helper = helperOf(body.agent);
     if (body.agent !== "root" && !helper) return refuse("invalid");
     const turnedAway = paused && pausedModelRequest(paused);
@@ -502,7 +502,7 @@ export function createSession(
         return { type: "ack" };
       case "tool.call":
         // The executor checks its lease only between events: a guest must not outrun it.
-        if (!(await fenceHeld())) return revoke();
+        if (!(await fenceHeld()) || !live()) return revoke();
         if (!paused && ++toolCalls > WORKER_LIMITS.toolCallsPerAttempt) return refuse("budget");
         return transcript.answered(body, await callTool(body));
       case "tool.done":
@@ -572,7 +572,7 @@ export function createSession(
       case "done":
         return finish(body, part);
       case "skills.index": {
-        if (!(await fenceHeld())) return revoke();
+        if (!(await fenceHeld()) || !live()) return revoke();
         if (skillIndexEnded || !mountedSkillSources().has(body.skill.source))
           return refuse("invalid");
         const bytes = Buffer.byteLength(JSON.stringify(body.skill));
@@ -587,7 +587,7 @@ export function createSession(
       }
       case "skills.index.end": {
         const receivedAt = new Date();
-        if (!(await fenceHeld())) return revoke();
+        if (!(await fenceHeld()) || !live()) return revoke();
         if (
           skillIndexEnded ||
           body.sources.some((source) => !mountedSkillSources().has(source)) ||
@@ -601,7 +601,7 @@ export function createSession(
         return { type: "recorded" };
       }
       case "skills.collision":
-        if (!(await fenceHeld())) return revoke();
+        if (!(await fenceHeld()) || !live()) return revoke();
         if (++skillCollisions > 512) return refuse("budget");
         if (
           ![body.collision.kept, body.collision.ignored].every((source) =>
@@ -612,7 +612,7 @@ export function createSession(
         await request.onSkillCollision?.({ ...body.collision, name: clean(body.collision.name) });
         return { type: "recorded" };
       case "skills.used":
-        if (!(await fenceHeld())) return revoke();
+        if (!(await fenceHeld()) || !live()) return revoke();
         if (++skillUses > 512) return refuse("budget");
         await request.onSkillUsed?.(clean(body.name));
         return { type: "recorded" };
@@ -621,7 +621,7 @@ export function createSession(
         fail(new Error(clean(body.message)));
         return { type: "stop", reason: "cancelled" };
       case "transcript": {
-        if (!(await fenceOwned())) return revoke();
+        if (!(await fenceOwned()) || !live()) return revoke();
         const agent = body.agent ?? "root";
         const helper = helperOf(agent);
         if (agent !== "root" && !helper) return refuse("invalid");

@@ -1,3 +1,4 @@
+import { createAssistantMessageEventStream } from "@earendil-works/pi-ai";
 import { ANTHROPIC_MODELS } from "@earendil-works/pi-ai/providers/anthropic.models";
 import type {
   AgentRunRequest,
@@ -20,6 +21,7 @@ import {
 } from "@rakazo/adapters/runtime-worker";
 import { createLogger, createTestSink, getLogger, installLogger } from "@rakazo/logging";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
+import * as piRuntime from "../../adapters/src/pi-runtime.js";
 import type { ModelEmulatorRequest } from "./model-emulator.js";
 import { startModelEmulator } from "./model-emulator.js";
 
@@ -933,6 +935,64 @@ describe("the controller's pause guard, against a hostile harness", () => {
 
     expect(server.requests).toEqual([]);
   });
+
+  it.each(["stop", "pause deadline"] as const)(
+    "starts no relay when %s lands after the fence check but before its caller resumes",
+    async (ending) => {
+      const stream = createAssistantMessageEventStream();
+      const signals: AbortSignal[] = [];
+      const relay = vi
+        .spyOn(piRuntime, "streamRunModel")
+        .mockImplementation((_config, _context, options) => {
+          if (options?.signal) signals.push(options.signal);
+          return { model: ANTHROPIC_MODELS["claude-haiku-4-5"], stream };
+        });
+      onTestFinished(() => {
+        stream.end();
+        relay.mockRestore();
+      });
+      const sleeps = new Map<number, () => void>();
+      const { runtime, launchedFor, fence } = setup({
+        sleep: (ms) => new Promise<void>((resume) => sleeps.set(ms, resume)),
+      });
+      const runId = "run_continuation_gap";
+      const { run, ask } = await startGuest(runtime, launchedFor, runId, {});
+      onTestFinished(() => runtime.abort(runId));
+      if (ending === "pause deadline") {
+        await ask({ type: "ask", text: "Which address?" });
+        fence.standing = "paused";
+      }
+      const ended = Promise.withResolvers<void>();
+      const standing = fence.standing;
+      let checked = false;
+      Object.defineProperty(fence, "standing", {
+        get() {
+          if (!checked) {
+            checked = true;
+            // End between fenceHeld's resolution and its caller. The clock adds its own microtask.
+            queueMicrotask(() => {
+              if (ending === "stop") {
+                queueMicrotask(() => void runtime.abort(runId).then(ended.resolve));
+              } else {
+                sleeps.get(WORKER_LIMITS.pausedGraceMs)!();
+                ended.resolve();
+              }
+            });
+          }
+          return standing;
+        },
+      });
+
+      void ask(modelRequest);
+      await ended.promise;
+      await run.done.catch(() => undefined);
+      await new Promise<void>((resume) => setImmediate(resume));
+
+      expect(checked).toBe(true);
+      expect(signals.filter((signal) => !signal.aborted)).toEqual([]);
+      expect(relay).not.toHaveBeenCalled();
+    },
+  );
 
   it("relays no model request once the attempt lost its run", async () => {
     const server = await startModelEmulator({
