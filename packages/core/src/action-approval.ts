@@ -13,6 +13,7 @@ const APPROVAL_EXEMPT_TOOLS = new Set([
   "write_file",
   "edit_file",
   "shell",
+  "computer_exec",
   "open_path",
   "launch_app",
   "remember",
