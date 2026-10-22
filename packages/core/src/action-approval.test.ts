@@ -109,7 +109,14 @@ describe("unattendedTriggerToolRequiresApproval", () => {
   const webhook = { trigger: "webhook", requireToolApproval: true };
 
   it("forces approval for webhook-triggered local side effects", () => {
-    for (const name of ["shell", "write_file", "browser_act", "browser_run", "computer_act"]) {
+    for (const name of [
+      "shell",
+      "computer_exec",
+      "write_file",
+      "browser_act",
+      "browser_run",
+      "computer_act",
+    ]) {
       expect(unattendedTriggerToolRequiresApproval(webhook, name, false)).toBe(true);
     }
   });

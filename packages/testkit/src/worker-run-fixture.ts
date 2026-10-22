@@ -100,6 +100,8 @@ export async function startWorkerRun<
   prisma?: (prisma: PrismaClient) => PrismaClient;
   /** Wraps the executor's worker routing, to fail or race it. */
   workers?: (workers: RunWorkers) => RunWorkers;
+  /** The guest reads screens from the bot's home instead of getting them in tool results. */
+  screensByPath?: boolean;
 }) {
   const database = options.databaseUrl
     ? await openBenchPostgres(options.databaseUrl)
@@ -233,6 +235,7 @@ export async function startWorkerRun<
           lifecycle,
           connector: options.connector?.(provider) ?? provider,
           clock: options.clock,
+          screensByPath: options.screensByPath,
         });
     const workers = routing && (options.workers?.(routing) ?? routing);
     const executor = createRunExecutor({
