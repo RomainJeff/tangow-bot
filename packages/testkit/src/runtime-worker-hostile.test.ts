@@ -126,7 +126,10 @@ function manualLauncher() {
             await fence.lookup;
             return fence.standing === "executing";
           },
-          ownsFence: async () => fence.standing !== "lost",
+          ownsFence: async () => {
+            await fence.lookup;
+            return fence.standing !== "lost";
+          },
         };
       },
     },
@@ -902,6 +905,33 @@ describe("the controller's pause guard, against a hostile harness", () => {
 
     sleeps.get(WORKER_LIMITS.pausedGraceMs)!();
     await expect(run.done).resolves.toBeUndefined();
+  });
+
+  it("starts no model request whose fence lookup outlasted the pause's deadline", async () => {
+    const server = await startModelEmulator({ apiKey: "controller-only-key", steps: [] });
+    onTestFinished(() => server.close());
+    const sleeps = new Map<number, () => void>();
+    const clock: WorkerClock = {
+      sleep: (ms) => new Promise<void>((resume) => sleeps.set(ms, resume)),
+    };
+    const { runtime, launchedFor, fence } = setup(clock);
+    const { run, ask } = await startGuest(runtime, launchedFor, "run_late_lookup", {
+      executeTool: async () => PAUSED,
+      model: server.model,
+    });
+    await pauseOnTool(ask);
+    fence.standing = "paused";
+    const lookup = Promise.withResolvers<void>();
+    fence.lookup = lookup.promise;
+    void ask(modelRequest);
+    await new Promise((resume) => setTimeout(resume, 20));
+
+    sleeps.get(WORKER_LIMITS.pausedGraceMs)!();
+    await run.done;
+    lookup.resolve();
+    await new Promise((resume) => setTimeout(resume, 200));
+
+    expect(server.requests).toEqual([]);
   });
 
   it("relays no model request once the attempt lost its run", async () => {

@@ -6238,6 +6238,9 @@ async function logHarnessTranscript(
   if (!event.entries.some((entry) => entry.kind === "call" || entry.kind === "summary")) return;
   await deps.prisma.$transaction(
     async (tx) => {
+      // Thread, then run, then session, the order cancellation and every append take them.
+      await tx.$queryRaw`
+        SELECT id FROM threads WHERE id = (SELECT "threadId" FROM runs WHERE id = ${lease.runId}) FOR UPDATE`;
       const [run] = await tx.$queryRaw<Array<{ leaseFence: number; status: string }>>`
         SELECT "leaseFence", status FROM runs WHERE id = ${lease.runId} FOR NO KEY UPDATE`;
       if (!run || !attemptOwnsFence(lease, run)) return;

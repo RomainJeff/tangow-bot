@@ -226,13 +226,18 @@ export function createSession(
     return endPaused();
   };
 
+  /** An attempt that concluded or began to stop while a lookup was in flight starts nothing. */
+  const live = () => !finished && !stopping;
+
   /** Once paused, the attempt concludes on a run waiting for the user; never once superseded. */
   const fenceHeld = async () => {
-    if (paused) return launched!.ownsFence();
-    if (await launched!.holdsFence()) return true;
+    if (paused) return (await launched!.ownsFence()) && live();
+    if (await launched!.holdsFence()) return live();
     // The pause can latch during the lookup and move the run to wait on the user.
-    return paused ? launched!.ownsFence() : false;
+    return paused ? (await launched!.ownsFence()) && live() : false;
   };
+
+  const fenceOwned = async () => (await launched!.ownsFence()) && live();
 
   const helperOf = (agent: string) => (agent === "root" ? undefined : helpers.get(agent));
 
@@ -616,7 +621,7 @@ export function createSession(
         fail(new Error(clean(body.message)));
         return { type: "stop", reason: "cancelled" };
       case "transcript": {
-        if (!(await launched!.ownsFence())) return revoke();
+        if (!(await fenceOwned())) return revoke();
         const agent = body.agent ?? "root";
         const helper = helperOf(agent);
         if (agent !== "root" && !helper) return refuse("invalid");
