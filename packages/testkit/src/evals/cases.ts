@@ -120,6 +120,7 @@ const CUSTOMER_FALLBACK_TOOLS = new Set([
   "open_path",
   "launch_app",
   "shell",
+  "computer_exec",
 ]);
 
 export const EVAL_CASES: EvalCase[] = [

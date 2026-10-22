@@ -1,3 +1,4 @@
+import { queryObjects } from "node:v8";
 import { ANTHROPIC_MODELS } from "@earendil-works/pi-ai/providers/anthropic.models";
 import type {
   AgentRunRequest,
@@ -1192,4 +1193,69 @@ describe("untrusted skill reports", () => {
       expect(record).toHaveBeenCalledTimes(512);
     },
   );
+});
+
+class RunResources {
+  readonly result = "ok";
+
+  async execute() {
+    return this.result;
+  }
+}
+
+async function closeResourceRun(outcome: "completed" | "cancelled" | "paused") {
+  const { launcher, launchedFor } = manualLauncher();
+  const runtime = createWorkerAgentRuntime({
+    launcher,
+    stops: { mark: async () => undefined },
+  });
+  const resources = new RunResources();
+  const run = consume(
+    runtime.run(request("cleanup", { executeTool: resources.execute.bind(resources) })),
+  );
+  const launched = await launchedFor("cleanup");
+  if (outcome !== "cancelled") {
+    const guest = rawGuest(launched.connect(), launched.capability);
+    await guest.hello();
+    if (outcome === "paused") {
+      guest.send(1, { type: "takeover", reason: "Log in." });
+      await guest.replies(1);
+    }
+    guest.send(outcome === "paused" ? 2 : 1, { type: "done" });
+    await run.done;
+  } else {
+    await runtime.abort("cleanup");
+    const cancellation = await run.done.then(
+      () => "completed",
+      (error: unknown) => String(error),
+    );
+    expect(cancellation).toBe("Error: The run was cancelled");
+  }
+}
+
+it.each(["completed", "cancelled", "paused"] as const)(
+  "releases resources when the run is %s, before its deadlines expire",
+  async (outcome) => {
+    await closeResourceRun(outcome);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    expect(queryObjects(RunResources)).toBe(0);
+  },
+);
+
+it("fails a guest that never says hello when the hello deadline expires", async () => {
+  const { launcher, launchedFor } = manualLauncher();
+  const deadline = Promise.withResolvers<void>();
+  const runtime = createWorkerAgentRuntime({
+    launcher,
+    stops: { mark: async () => undefined },
+    clock: {
+      sleep: (ms) => (ms === WORKER_LIMITS.helloDeadlineMs ? deadline.promise : Promise.resolve()),
+    },
+  });
+  const run = consume(runtime.run(request("silent")));
+  await launchedFor("silent");
+  deadline.resolve();
+
+  await expect(run.done).rejects.toThrow("The worker did not say hello in time");
 });
