@@ -18,8 +18,12 @@ test("skills overlay: user and built-in skills, search, desktop and phone", asyn
   });
 
   await page.getByTestId("open-customize").click();
-  await page.getByTestId("customize-nav-skills").click();
   const overlay = page.getByRole("dialog");
+  await expect(overlay.getByRole("heading", { name: "Integrations", exact: true })).toBeVisible();
+  // Switching sections keeps the same dialog element: no close-and-reopen flash.
+  await overlay.evaluate((dialog) => dialog.setAttribute("data-e2e-mark", "kept"));
+  await page.getByTestId("customize-nav-skills").click();
+  await expect(overlay).toHaveAttribute("data-e2e-mark", "kept");
   await expect(overlay.getByRole("heading", { name: "Skills" })).toBeVisible();
   await expect(overlay.getByRole("tab")).toHaveCount(0);
   await expect(overlay.getByRole("button", { name: /Interrogate/ })).toBeVisible();
@@ -34,6 +38,13 @@ test("skills overlay: user and built-in skills, search, desktop and phone", asyn
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(overlay.getByRole("button", { name: /Daily standup/ })).toBeVisible();
   await captureScreenshot(page, testInfo, "91-skills-phone");
+
+  // Back to Integrations: still the same dialog, already loaded.
+  await page.getByTestId("customize-nav-integrations").click();
+  await expect(overlay.getByRole("heading", { name: "Integrations", exact: true })).toBeVisible();
+  await expect(overlay).toHaveAttribute("data-e2e-mark", "kept");
+  await expect(overlay.getByText("Loading integrations…")).toHaveCount(0);
+  await page.getByTestId("customize-nav-skills").click();
 
   await overlay.getByLabel("Close skills").click();
   await expect(overlay).toHaveCount(0);

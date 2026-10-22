@@ -48,6 +48,9 @@ export type RowContext = {
   inGroup: boolean;
   viewerUserId?: string;
   waiting: WaitingCard | null;
+  /** The item whose computer card is live and opens the bot's screen. */
+  takeoverItemId?: string | null;
+  onOpenComputer?: () => void;
   onAnswer?: (target: CardAnswerTarget, text: string, edits?: SpawnBotCardEdits) => Promise<void>;
   memberName?: (botId: string | undefined) => string | undefined;
   peerBot: PeerBot;
@@ -224,6 +227,7 @@ function MessageRowView({
               onAnswer({ runId: waiting.runId, messageId: waiting.entryId }, text, edits)
           : undefined
       }
+      onOpenComputer={context.takeoverItemId === item.id ? context.onOpenComputer : undefined}
       onOpenBot={context.onOpenBot}
       speakerName={
         chrome !== "row" || item.role !== "bot" ? undefined : context.memberName?.(item.botId)

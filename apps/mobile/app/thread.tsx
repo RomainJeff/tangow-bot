@@ -39,6 +39,7 @@ import {
   isRunTerminalEvent,
   isSecretAskBlock,
   isWorkingStatus,
+  latestTakeoverItemId,
   linkMentionsKey,
   linkMentionsOf,
   mentionChipKey,
@@ -113,6 +114,7 @@ import { BuzzingAvatar } from "../components/buzzing-avatar";
 import { ComposerAttachment } from "../components/composer-attachment";
 import { ComposerLinkPreview } from "../components/composer-link-preview";
 import { ComposerAttachBubble, ComposerShell } from "../components/composer-shell";
+import { ComputerCard } from "../components/computer-card";
 import { DictationPreview } from "../components/dictation-preview";
 import { FramedBlock } from "../components/framed-block";
 import { useReduceTransparency } from "../components/glass";
@@ -244,6 +246,7 @@ type MessageChrome = "row" | "aside";
 const CARD_ONLY_BLOCK_KINDS = new Set<string>([
   "ask",
   "channel_message",
+  "computer",
   "meta",
   "child_bot",
   "image",
@@ -604,6 +607,15 @@ function Thread() {
   const threadRuns = useMemo(
     () => snap?.activeRuns ?? (snap?.run ? [snap.run] : []),
     [snap?.activeRuns, snap?.run],
+  );
+  // Liveness comes from the run, never from the card's own state.
+  const takeoverItemId = useMemo(
+    () =>
+      latestTakeoverItemId(
+        view.rows.map((row) => row.item),
+        threadRuns,
+      ),
+    [view.rows, threadRuns],
   );
   const busyRuns = useMemo(
     () => threadRuns.filter((run) => isWorkingStatus(run.status)),
@@ -1636,6 +1648,18 @@ function Thread() {
       }),
     [router],
   );
+  const openComputerFromCard = useCallback(
+    (id: string) =>
+      router.push({
+        pathname: "/computer",
+        params: {
+          botId: id,
+          name:
+            snap?.members?.find((member) => member.botId === id)?.name ?? displayName ?? t("Bot"),
+        },
+      }),
+    [router, snap?.members, displayName, t],
+  );
 
   const speak = useCallback(
     (message: MobileMessage) =>
@@ -2112,9 +2136,11 @@ function Thread() {
         message={message}
         replyPreview={replyPreviewNode}
         canAnswer={message.id === answerableAskMessageId}
+        takeoverLive={message.id === takeoverItemId}
         viewerUserId={viewerUserId}
         onAnswer={answerMessage}
         onOpenBot={openBot}
+        onOpenComputer={openComputerFromCard}
         onPreviewMarkdown={setMarkdownPreview}
         actionProps={actionProps}
         isNew={isNew}
@@ -3369,9 +3395,11 @@ const MessageBubble = memo(function MessageBubble({
   message,
   replyPreview,
   canAnswer,
+  takeoverLive,
   viewerUserId,
   onAnswer,
   onOpenBot,
+  onOpenComputer,
   onPreviewMarkdown,
   actionProps,
   isNew,
@@ -3382,9 +3410,12 @@ const MessageBubble = memo(function MessageBubble({
   message: MobileMessage;
   replyPreview?: MobileMessage;
   canAnswer: boolean;
+  /** This message is the computer card of a run still waiting for the user's screen. */
+  takeoverLive?: boolean;
   viewerUserId?: string;
   onAnswer: (message: MobileMessage, answer: string, edits?: SpawnBotEdits) => Promise<void>;
   onOpenBot: (botId: string, name: string) => void;
+  onOpenComputer?: (botId: string) => void;
   onPreviewMarkdown: (target: MarkdownArtifactPreviewTarget) => void;
   actionProps: MessageActionProps;
   isNew: boolean;
@@ -3425,6 +3456,19 @@ const MessageBubble = memo(function MessageBubble({
     ) : (
       card
     );
+  const computerBlock = message.blocks.find(
+    (block): block is Extract<MessageBlock, { kind: "computer" }> => block.kind === "computer",
+  );
+  if (computerBlock) {
+    return withSkillLines(
+      <ComputerCard
+        block={computerBlock}
+        onOpen={takeoverLive && onOpenComputer ? () => onOpenComputer(cardBotId) : undefined}
+        accessibilityActions={actionProps.accessibilityActions}
+        onAccessibilityAction={actionProps.onAccessibilityAction}
+      />,
+    );
+  }
   const appConnectBlocks = message.blocks.filter(
     (block): block is Extract<MessageBlock, { kind: "app_connect" }> =>
       block.kind === "app_connect",

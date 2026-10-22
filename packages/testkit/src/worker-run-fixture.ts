@@ -70,6 +70,8 @@ export async function startWorkerRun<
   Provider extends WorkerProvider & GuestConnector = LocalWorkerProvider,
 >(options: {
   steps: ModelEmulatorStep[];
+  memory?: MemoryStore;
+  memoryProviders?: Parameters<typeof createRunExecutor>[0]["memoryProviders"];
   databaseUrl?: string;
   tools?: ConnectorProvider;
   /**
@@ -249,8 +251,8 @@ export async function startWorkerRun<
       home: new LocalAgentHomeStore(path.join(dir, "homes")),
       dataDir: path.join(dir, "data"),
       artifacts: new LocalArtifactStore(path.join(dir, "data")),
-      memory: emptyMemory,
-      memoryProviders: { resolve: async () => null },
+      memory: options.memory ?? emptyMemory,
+      memoryProviders: options.memoryProviders ?? { resolve: async () => null },
       secretStore,
       jobs: new InMemoryJobQueue(),
       skillLock: createInMemorySkillLock(),
