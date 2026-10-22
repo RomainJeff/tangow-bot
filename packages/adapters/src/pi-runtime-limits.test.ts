@@ -112,4 +112,12 @@ describe("clipToolResultContent", () => {
       ]),
     ).toEqual([{ type: "text", text: `${"a".repeat(11_972)}\n[35 more characters cut]` }]);
   });
+
+  it("backs up rather than split an emoji at the cut", () => {
+    const text = `${"a".repeat(11_971)}😀${"z".repeat(100)}`;
+    expect(clipToolResultContent([{ type: "text" as const, text }])).toEqual([
+      { type: "text", text: `${"a".repeat(11_971)}\n[102 more characters cut]` },
+    ]);
+    expect(clipToolResultText(text)).toBe(`${"a".repeat(11_971)}\n[102 more characters cut]`);
+  });
 });

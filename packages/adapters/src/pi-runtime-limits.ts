@@ -9,8 +9,11 @@ export const TOOL_RESULT_TEXT_LIMIT = 12_000;
 
 const cutNotice = (omitted: number) => `\n[${omitted} more characters cut]`;
 
-/** A prefix that never ends in half a surrogate pair. */
-const head = (text: string, chars: number) => Buffer.from(text.slice(0, chars)).toString();
+/** At most `chars` characters, backing up one rather than split a surrogate pair. */
+function head(text: string, chars: number): string {
+  const last = text.charCodeAt(chars - 1);
+  return text.slice(0, last >= 0xd800 && last <= 0xdbff ? chars - 1 : chars);
+}
 
 /** Text kept from `total` characters so the kept text and its notice fit `limit` together. */
 const keptChars = (total: number, limit: number) => Math.max(0, limit - cutNotice(total).length);
@@ -18,8 +21,8 @@ const keptChars = (total: number, limit: number) => Math.max(0, limit - cutNotic
 /** Kept text and notice fit `limit`, so clipping clipped text changes nothing. */
 export function clipToolResultText(text: string, limit: number = TOOL_RESULT_TEXT_LIMIT): string {
   if (text.length <= limit) return text;
-  const kept = keptChars(text.length, limit);
-  return `${head(text, kept)}${cutNotice(text.length - kept)}`;
+  const kept = head(text, keptChars(text.length, limit));
+  return `${kept}${cutNotice(text.length - kept.length)}`;
 }
 
 const isTextPart = (part: unknown): part is { type: "text"; text: unknown } =>
@@ -42,6 +45,7 @@ export function clipToolResultContent<T>(
   );
   if (total <= limit) return content;
   let remaining = keptChars(total, limit);
+  let shown = 0;
   let lastText = -1;
   const clipped: T[] = [];
   for (const part of content) {
@@ -51,12 +55,12 @@ export function clipToolResultContent<T>(
     }
     const text = String(part.text);
     const kept = text.length <= remaining ? text : head(text, remaining);
-    remaining -= kept.length;
+    remaining = kept === text ? remaining - kept.length : 0;
+    shown += kept.length;
     if (!kept && text) continue;
     lastText = clipped.length;
     clipped.push(kept === text ? part : { ...part, text: kept });
   }
-  const shown = keptChars(total, limit) - remaining;
   const notice = cutNotice(total - shown);
   if (lastText >= 0) {
     const part = clipped[lastText] as T & { text: string };

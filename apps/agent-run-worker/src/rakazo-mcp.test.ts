@@ -248,6 +248,27 @@ describe("a connector result through the Rakazo MCP server", () => {
   });
 });
 
+describe("a long result with an image through the Rakazo MCP server", () => {
+  it("keeps the saved screen's name within the text budget", async () => {
+    const { host } = fakeHost(() => ({
+      content: [
+        { type: "text", text: "a".repeat(12_000) },
+        { type: "image", data: PNG, mimeType: "image/png" },
+      ],
+    }));
+    const { client } = await connect(PRODUCT_TOOLS, host);
+
+    const result = await client.callTool({ name: "computer_observe", arguments: {} });
+
+    const texts = (result.content as Array<{ type: string; text?: string }>)
+      .filter((block) => block.type === "text")
+      .map((block) => block.text!);
+    expect(texts.join("").length).toBeLessThanOrEqual(12_000);
+    expect(texts[0]).toMatch(/^a+\n\[\d+ more characters cut\]$/);
+    expect(texts[1]).toMatch(/^Screenshot saved at .+-1\.png\. Read it to see it again\.$/);
+  });
+});
+
 describe("a large connector catalog through the Rakazo MCP server", () => {
   it("defers every catalog tool for a harness with native tool search and runs one once on the controller", async () => {
     const { host, announced, calls } = fakeHost(() => "tool-ran");

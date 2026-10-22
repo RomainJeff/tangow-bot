@@ -5,6 +5,7 @@ import type { GuestTool } from "@rakazo/adapter-kit";
 import {
   assertConnectorToolArgs,
   clipToolResultContent,
+  TOOL_RESULT_TEXT_LIMIT,
 } from "@rakazo/adapters/runtime-worker/wire";
 import type { HarnessHost } from "./harness.js";
 
@@ -105,7 +106,11 @@ async function mcpResult(output: unknown, screensDir: string, callId: string) {
     await writeFile(file, Buffer.from(String(block.data), "base64"));
     saved.push({ type: "text", text: `Screenshot saved at ${file}. Read it to see it again.` });
   }
-  return { content: [...clipToolResultContent(blocks), ...saved], isError };
+  const hints = saved.reduce((sum, hint) => sum + String(hint.text).length, 0);
+  return {
+    content: [...clipToolResultContent(blocks, TOOL_RESULT_TEXT_LIMIT - hints), ...saved],
+    isError,
+  };
 }
 
 class McpError extends Error {

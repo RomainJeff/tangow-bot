@@ -22,7 +22,7 @@ import { relayPiAiCall } from "./dialects/pi-ai.js";
 import { eventPipe } from "./event-pipe.js";
 import type { FrameChannel } from "./framing.js";
 import { encodeMessage, readGuestFrame } from "./framing.js";
-import { base64Images, guestRunInput, nativeToolsForHarness } from "./guest-input.js";
+import { base64Images, nativeToolsForHarness, workerStart } from "./guest-input.js";
 import type { SessionInbox } from "./inbox.js";
 import { createSessionInbox } from "./inbox.js";
 import type { LaunchedGuest, WorkerLauncher } from "./launcher.js";
@@ -574,12 +574,7 @@ export function createSession(
           accepted = true;
           bound = channel;
           harness ??= message.harness;
-          await channel.send(
-            encodeMessage({
-              ...launched!.start,
-              run: guestRunInput(request, harness),
-            }),
-          );
+          await channel.send(encodeMessage(workerStart(launched!.start, request, harness)));
           inbox.attach((reply) => void channel.send(encodeMessage(reply)));
           continue;
         }
