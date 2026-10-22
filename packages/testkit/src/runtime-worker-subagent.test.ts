@@ -192,6 +192,15 @@ describe("a helper the controller starts for a harness with its own loop", () =>
       type: "tool.result",
       output: "Stopped: the run is waiting for the user.",
     });
+    expect(run.finished).toEqual([]);
+    callHelper(guest, 5, "h2");
+    expect((await guest.replies(6)).at(-1)).toMatchObject({
+      type: "tool.result",
+      output: { details: { paused: true } },
+    });
+    expect(run.opened.map(({ callId }) => callId)).toEqual(["h1"]);
+    guest.send(7, { type: "done" });
+    await run.run.done;
     expect(run.finished).toEqual([
       {
         status: "completed",
@@ -199,12 +208,6 @@ describe("a helper the controller starts for a harness with its own loop", () =>
         usage: { inputTokens: 0, outputTokens: 0 },
       },
     ]);
-    callHelper(guest, 5, "h2");
-    expect((await guest.replies(6)).at(-1)).toMatchObject({
-      type: "tool.result",
-      output: { details: { paused: true } },
-    });
-    expect(run.opened.map(({ callId }) => callId)).toEqual(["h1"]);
   });
 
   it("caps the helper's model requests apart from its parent's", async () => {
