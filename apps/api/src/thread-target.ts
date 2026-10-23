@@ -1096,11 +1096,11 @@ export async function stopThreadRuns(
   actor: Actor,
   target: ThreadTarget,
 ) {
-  const { runIds, computers, leases, heldRunIds } = await deps.prisma.$transaction(async (tx) => {
+  const { runIds, computers, leases, heldRuns } = await deps.prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM threads WHERE id = ${target.threadId} FOR UPDATE`;
     const active = await tx.run.findMany({
       where: { threadId: target.threadId, status: { in: [...ACTIVE_RUN_STATUSES] } },
-      select: { id: true, checkpoint: true },
+      select: { id: true, botId: true, checkpoint: true },
     });
     const ids = active.map((run) => run.id);
     await logCancelledRunsInTransaction(tx, ids, actor.userId);
@@ -1148,9 +1148,10 @@ export async function stopThreadRuns(
       runIds: ids,
       computers,
       leases,
-      heldRunIds: new Set(
-        active.filter((run) => browserApprovalCheckpointOf(run.checkpoint)).map((run) => run.id),
-      ),
+      heldRuns: active.flatMap((run) => {
+        const hold = browserApprovalCheckpointOf(run.checkpoint);
+        return hold ? [{ id: run.id, botId: run.botId, hold }] : [];
+      }),
     };
   });
   // Keep the DB lease until after teardown so a replacement run cannot claim the
@@ -1194,6 +1195,22 @@ export async function stopThreadRuns(
       lease: null,
     });
   }
+  const heldRunIds = new Set(heldRuns.map((run) => run.id));
+  await Promise.all(
+    heldRuns.map(({ id: runId, botId, hold }) =>
+      cancelComputerRunWork(deps.sandbox, hold.computer, hold.computerId, runId, {
+        operationId: "stop",
+        traceId: "stop",
+        spaceId: actor.spaceId,
+        userId: actor.userId,
+        botId,
+        runId,
+        screenLeaseId: hold.screenLeaseId,
+        cancelRunWork: true,
+        signal: new AbortController().signal,
+      }),
+    ),
+  );
   await Promise.all(
     teardownTargets.map(async ({ computer, botId, runId, lease }) => {
       if (heldRunIds.has(runId) || !computer.providerRef) return;

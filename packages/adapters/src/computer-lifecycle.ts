@@ -618,17 +618,25 @@ export async function renewComputerExecutionLease(
 ): Promise<boolean> {
   if (!lease) return true;
   const now = new Date();
+  const expiresAt = new Date(now.getTime() + EXECUTION_LEASE_MS);
+  const owner = {
+    computerId: lease.computerId,
+    botId: lease.botId,
+    runId: lease.runId,
+    fence: lease.fence,
+  };
+  // A heartbeat admitted before a pause may reach the database after the longer hold commits.
   const renewed = await prisma.computerExecutionLease.updateMany({
-    where: {
-      computerId: lease.computerId,
-      botId: lease.botId,
-      runId: lease.runId,
-      fence: lease.fence,
-      expiresAt: { gt: now },
-    },
-    data: { expiresAt: new Date(now.getTime() + EXECUTION_LEASE_MS) },
+    where: { ...owner, expiresAt: { gt: now, lt: expiresAt } },
+    data: { expiresAt },
   });
-  return renewed.count === 1;
+  if (renewed.count === 1) return true;
+  return Boolean(
+    await prisma.computerExecutionLease.findFirst({
+      where: { ...owner, expiresAt: { gte: expiresAt } },
+      select: { computerId: true },
+    }),
+  );
 }
 
 export async function holdComputerExecutionLeaseForTakeover(

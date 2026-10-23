@@ -476,6 +476,7 @@ function idleHarness(
     updatedAt: new Date("2026-01-01T00:00:00.000Z"),
   };
   const prisma = {
+    $queryRaw: vi.fn().mockResolvedValue([]),
     computer: {
       findUnique: vi.fn(async () => ({ ...computer })),
       updateMany: vi.fn(async (args) => {

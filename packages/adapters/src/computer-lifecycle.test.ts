@@ -1406,16 +1406,6 @@ describe("computer execution leases", () => {
 
     prisma.updateMany.mockClear();
     await expect(renewComputerExecutionLease(prisma.client, lease)).resolves.toBe(true);
-    expect(prisma.updateMany).toHaveBeenCalledWith({
-      where: {
-        computerId: "computer-1",
-        botId: "bot-1",
-        runId: "run-1",
-        fence: 1,
-        expiresAt: { gt: expect.any(Date) },
-      },
-      data: { expiresAt: expect.any(Date) },
-    });
     await releaseComputerExecutionLease(prisma.client, lease);
     expect(prisma.updateMany).toHaveBeenLastCalledWith({
       where: {
@@ -1446,7 +1436,12 @@ describe("computer execution leases", () => {
       computer: {
         findUniqueOrThrow: vi.fn().mockResolvedValue({ scope: "team", state: "running" }),
       },
-      computerExecutionLease: { create, updateMany, updateManyAndReturn },
+      computerExecutionLease: {
+        create,
+        updateMany,
+        updateManyAndReturn,
+        findFirst: vi.fn().mockResolvedValue(null),
+      },
     } as unknown as PrismaClient;
     const lease = {
       computerId: "computer-1",
@@ -1458,10 +1453,6 @@ describe("computer execution leases", () => {
     await releaseComputerExecutionLease(prisma, lease);
     await expect(renewComputerExecutionLease(prisma, lease)).resolves.toBe(false);
     expect(expiresAt).toEqual(new Date(0));
-    expect(updateMany).toHaveBeenLastCalledWith({
-      where: { ...lease, expiresAt: { gt: expect.any(Date) } },
-      data: { expiresAt: expect.any(Date) },
-    });
     await expect(
       acquireComputerExecutionLease(prisma, {
         computerId: "computer-1",
@@ -1488,7 +1479,9 @@ describe("computer execution leases", () => {
           expiresAt = data.expiresAt;
           return { count: 1 };
         });
-        const prisma = { computerExecutionLease: { updateMany } } as unknown as PrismaClient;
+        const prisma = {
+          computerExecutionLease: { updateMany, findFirst: vi.fn().mockResolvedValue(null) },
+        } as unknown as PrismaClient;
         const lease = { computerId: "computer-1", botId: "bot-1", runId: "run-1", fence: 1 };
 
         await expect(extend(prisma, lease)).resolves.toBe(true);

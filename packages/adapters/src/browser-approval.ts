@@ -5,6 +5,7 @@ import {
   BROWSER_APPROVAL_CHECKPOINT_PREFIX,
   browserApprovalCheckpointOf,
   cancelRunsInTransaction,
+  Prisma,
 } from "@rakazo/db";
 import { hasActiveComputerControl } from "./computer-control.js";
 import { releaseBotScreen } from "./computer-lifecycle.js";
@@ -50,6 +51,7 @@ export async function releaseBrowserApprovalScreen(
         (!owner || run.leaseOwner !== owner.workerId || run.leaseFence !== owner.fence)
       )
         return false;
+      await tx.$queryRaw`SELECT id FROM computers WHERE id = ${hold.computerId} FOR UPDATE`;
       const computer = await tx.computer.findUnique({ where: { id: hold.computerId } });
       if (computer?.controlBotId === run.botId && hasActiveComputerControl(computer)) return false;
       // Hold the run lock through teardown when retiring a checkpoint before another pause.
@@ -104,36 +106,53 @@ export async function recoverBrowserApprovalScreens(
   deps: CleanupDeps & { jobs?: JobPublisher },
   filter: { computerId?: string; runIds?: string[] } = {},
 ) {
-  const runs = await deps.prisma.run.findMany({
-    where: {
-      checkpoint: { startsWith: BROWSER_APPROVAL_CHECKPOINT_PREFIX },
-      ...(filter.runIds ? { id: { in: filter.runIds } } : {}),
-    },
-  });
-  for (const candidate of runs) {
-    const hold = browserApprovalCheckpointOf(candidate.checkpoint);
-    if (!hold || (filter.computerId && hold.computerId !== filter.computerId)) continue;
-    const checkpoint = candidate.checkpoint;
-    if (!checkpoint) continue;
-    const terminal = await deps.prisma.$transaction(async (tx) => {
-      // Same thread -> run lock order as pause, claim, Stop, Clear and Rewind.
-      await tx.$queryRaw`SELECT id FROM threads WHERE id = ${candidate.threadId} FOR UPDATE`;
-      await tx.$queryRaw`SELECT id FROM runs WHERE id = ${candidate.id} FOR UPDATE`;
-      const run = await tx.run.findUniqueOrThrow({ where: { id: candidate.id } });
-      if (run.checkpoint !== checkpoint) return false;
-      if (["completed", "failed", "cancelled"].includes(run.status)) return true;
-      if (run.leaseExpiresAt && run.leaseExpiresAt.getTime() > Date.now()) return false;
-      if (hold.deadline > Date.now()) return false;
-      await cancelRunsInTransaction(tx, [run], new Date());
-      return true;
+  if (filter.runIds?.length === 0) return;
+  let cursor = "";
+  for (;;) {
+    // Parse only valid JSON, and match the captured top-level coordinate, even after bot moves.
+    const ids = await deps.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT id FROM runs
+      WHERE starts_with(checkpoint, ${BROWSER_APPROVAL_CHECKPOINT_PREFIX})
+        AND id > ${cursor}
+        ${filter.runIds ? Prisma.sql`AND id IN (${Prisma.join(filter.runIds)})` : Prisma.empty}
+        ${
+          filter.computerId
+            ? Prisma.sql`AND CASE WHEN checkpoint IS JSON OBJECT
+          THEN checkpoint::jsonb ->> 'computerId' END = ${filter.computerId}`
+            : Prisma.empty
+        }
+      ORDER BY id LIMIT 50`);
+    if (ids.length === 0) return;
+    cursor = ids[ids.length - 1]!.id;
+    const runs = await deps.prisma.run.findMany({
+      where: { id: { in: ids.map(({ id }) => id) } },
     });
-    if (terminal && (await releaseBrowserApprovalScreen(deps, candidate.id, checkpoint))) continue;
-    if (deps.jobs)
-      await scheduleBrowserApprovalCleanup(
-        deps.jobs,
-        candidate.id,
-        hold,
-        new Date(Math.max(hold.deadline, Date.now() + 30_000)),
-      );
+    for (const candidate of runs) {
+      const hold = browserApprovalCheckpointOf(candidate.checkpoint);
+      if (!hold || (filter.computerId && hold.computerId !== filter.computerId)) continue;
+      const checkpoint = candidate.checkpoint;
+      if (!checkpoint) continue;
+      const terminal = await deps.prisma.$transaction(async (tx) => {
+        // Same thread -> run lock order as pause, claim, Stop, Clear and Rewind.
+        await tx.$queryRaw`SELECT id FROM threads WHERE id = ${candidate.threadId} FOR UPDATE`;
+        await tx.$queryRaw`SELECT id FROM runs WHERE id = ${candidate.id} FOR UPDATE`;
+        const run = await tx.run.findUniqueOrThrow({ where: { id: candidate.id } });
+        if (run.checkpoint !== checkpoint) return false;
+        if (["completed", "failed", "cancelled"].includes(run.status)) return true;
+        if (run.leaseExpiresAt && run.leaseExpiresAt.getTime() > Date.now()) return false;
+        if (hold.deadline > Date.now()) return false;
+        await cancelRunsInTransaction(tx, [run], new Date());
+        return true;
+      });
+      if (terminal && (await releaseBrowserApprovalScreen(deps, candidate.id, checkpoint)))
+        continue;
+      if (deps.jobs)
+        await scheduleBrowserApprovalCleanup(
+          deps.jobs,
+          candidate.id,
+          hold,
+          new Date(Math.max(hold.deadline, Date.now() + 30_000)),
+        );
+    }
   }
 }

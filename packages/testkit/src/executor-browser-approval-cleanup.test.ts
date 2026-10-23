@@ -1,4 +1,9 @@
-import type { AdapterContext, ComputerRef, PageBrowserCommand } from "@rakazo/adapter-kit";
+import type {
+  AdapterContext,
+  ComputerRef,
+  PageBrowserCommand,
+  SandboxProvider,
+} from "@rakazo/adapter-kit";
 import {
   InMemoryJobQueue,
   ManagedSandboxEmulator,
@@ -7,8 +12,13 @@ import {
 } from "@rakazo/adapters";
 import { browserApprovalCheckpointOf } from "@rakazo/db";
 import { afterEach, expect, it, vi } from "vitest";
+import type { RouterDeps } from "../../../apps/api/src/router.js";
+import { createRouter } from "../../../apps/api/src/router.js";
 import { stopThreadRuns } from "../../../apps/api/src/thread-target.js";
 import { releaseBrowserApprovalScreen } from "../../adapters/src/browser-approval.js";
+import { BACKGROUND_WORK_LAUNCH } from "../../adapters/src/computer-idle.js";
+import { renewComputerExecutionLease } from "../../adapters/src/computer-lifecycle.js";
+import { dockerE2BMachine } from "../../adapters/src/e2b-machine.test-support.js";
 import { latestCard } from "./index.js";
 import { startWorkerRun } from "./worker-run-fixture.js";
 
@@ -18,13 +28,28 @@ afterEach(async () => {
   for (const close of cleanups.splice(0).reverse()) await close();
 });
 
-async function pausedBrowser(scope: "team" | "dedicated") {
+async function pausedBrowser(
+  scope: "team" | "dedicated",
+  options: {
+    databaseUrl?: string;
+    beforeApproval?: (
+      computer: ComputerRef,
+      context: AdapterContext,
+      computerId: string,
+    ) => Promise<void>;
+    execute?: SandboxProvider["execute"];
+    resumed?: () => Promise<void>;
+    releasing?: () => Promise<void>;
+  } = {},
+) {
   let effects = 0;
   const releases: AdapterContext[] = [];
   const state = { failSetup: false, failRelease: false, pauseAfterApproval: false };
   class Computer extends ManagedSandboxEmulator {
     async pageBrowser(computer: ComputerRef, request: PageBrowserCommand, context: AdapterContext) {
       await this.connectScreen(computer, {}, context);
+      if (request.command === "snapshot")
+        await options.beforeApproval?.(computer, context, run.bot.computerId!);
       if (request.command === "act") effects++;
       return {
         ok: true,
@@ -37,14 +62,17 @@ async function pausedBrowser(scope: "team" | "dedicated") {
     }
     override async releaseScreen(computer: ComputerRef, context: AdapterContext) {
       releases.push(context);
+      await options.releasing?.();
       if (state.failRelease) throw new Error("Synthetic release failure");
       await super.releaseScreen(computer, context);
     }
   }
   const sandbox = new Computer();
+  if (options.execute) sandbox.execute = options.execute;
   let calls = 0;
   const run = await startWorkerRun({
     steps: [],
+    databaseUrl: options.databaseUrl,
     computerScope: scope,
     sandbox,
     memoryProviders: {
@@ -70,6 +98,7 @@ async function pausedBrowser(scope: "team" | "dedicated") {
             "act",
           );
         } else {
+          await options.resumed?.();
           await request.executeTool!(
             "browser_act",
             { actions: [{ kind: "click", ref: "original-node" }] },
@@ -301,3 +330,257 @@ it("retires the browser checkpoint before a resumed choice overwrites it", async
   expect(JSON.parse(paused.checkpoint!).kind).toBe("choice_ask_v1");
   expect(fixture.releases).toHaveLength(1);
 });
+
+it("keeps the approval deadline when an already-started heartbeat arrives after pause", async () => {
+  const fixture = await pausedBrowser("team");
+  const lease = fixture.hold.lease!;
+  // Recreate a heartbeat admitted just before the pause, delayed on its database request.
+  await fixture.run.prisma.computerExecutionLease.updateMany({
+    where: lease,
+    data: { expiresAt: new Date(Date.now() + 60_000) },
+  });
+  const entered = Promise.withResolvers<void>();
+  const resume = Promise.withResolvers<void>();
+  const update = fixture.run.prisma.computerExecutionLease.updateMany.bind(
+    fixture.run.prisma.computerExecutionLease,
+  );
+  const delayed = vi
+    .spyOn(fixture.run.prisma.computerExecutionLease, "updateMany")
+    .mockImplementationOnce(async (...args) => {
+      entered.resolve();
+      await resume.promise;
+      return update(...args);
+    });
+  const heartbeat = renewComputerExecutionLease(fixture.run.prisma, lease);
+  await entered.promise;
+  await update({ where: lease, data: { expiresAt: new Date(fixture.hold.deadline) } });
+  resume.resolve();
+  expect(await heartbeat).toBe(true);
+  delayed.mockRestore();
+  const retained = await fixture.run.prisma.computerExecutionLease.findFirstOrThrow({
+    where: lease,
+  });
+  expect(retained.expiresAt.getTime()).toBe(fixture.hold.deadline);
+  expect(
+    await renewComputerExecutionLease(fixture.run.prisma, { ...lease, fence: lease.fence + 1 }),
+  ).toBe(false);
+  expect(
+    await renewComputerExecutionLease(fixture.run.prisma, { ...lease, runId: "superseded-run" }),
+  ).toBe(false);
+  await update({ where: lease, data: { expiresAt: new Date(0) } });
+  expect(await renewComputerExecutionLease(fixture.run.prisma, lease)).toBe(false);
+  expect(
+    (await fixture.run.prisma.computerExecutionLease.findFirstOrThrow({ where: lease })).expiresAt,
+  ).toEqual(new Date(0));
+});
+
+it.skipIf(process.env.VERIFY_DOCKER_TEAM_SCREENS !== "1")(
+  "Stop kills pre-approval background work during an active continuation",
+  async () => {
+    const machine = await dockerE2BMachine(
+      process.env.COMPUTER_TEST_IMAGE ?? "rakazo/computer:local",
+    );
+    cleanups.push(() => machine.close());
+    const entered = Promise.withResolvers<void>();
+    const resume = Promise.withResolvers<void>();
+    const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
+    const fixture = await pausedBrowser("team", {
+      beforeApproval: async (_computer, context, computerId) => {
+        const argv = [
+          "bash",
+          "-c",
+          BACKGROUND_WORK_LAUNCH,
+          "launch",
+          computerId,
+          context.runId!,
+          "test",
+          "echo $$ >/tmp/approval-background.pid; exec sleep 300",
+        ];
+        expect(
+          (
+            await machine.exec(
+              `${argv.map(quote).join(" ")} >/tmp/approval-background.log 2>&1 </dev/null &`,
+            )
+          ).exitCode,
+        ).toBe(0);
+      },
+      execute: async function* (_computer, request) {
+        const result = await machine.exec(request.argv.map(quote).join(" "));
+        yield { type: "exit", code: result.exitCode };
+      },
+      resumed: async () => {
+        entered.resolve();
+        await resume.promise;
+      },
+    });
+    expect(await fixture.answer("allow")).toBe(true);
+    const continuation = fixture.run.continueRun(fixture.id);
+    await entered.promise;
+    try {
+      expect((await machine.exec("kill -0 $(cat /tmp/approval-background.pid)")).exitCode).toBe(0);
+      await stopThreadRuns(
+        fixture.deps,
+        { spaceId: fixture.run.spaceId, userId: fixture.run.userId },
+        {
+          kind: "bot",
+          botId: fixture.run.bot.id,
+          threadId: fixture.run.thread.id,
+          bot: fixture.run.bot,
+        },
+      );
+      expect(
+        (
+          await machine.exec(
+            "test ! -d /proc/$(cat /tmp/approval-background.pid) || test \"$(awk '{print $3}' /proc/$(cat /tmp/approval-background.pid)/stat)\" = Z",
+          )
+        ).exitCode,
+      ).toBe(0);
+    } finally {
+      resume.resolve();
+      await continuation;
+    }
+    await fixture.expectReleased();
+  },
+);
+
+it("recovers only the captured computer in bounded pages after its bot changes computers", async () => {
+  const fixture = await pausedBrowser("dedicated");
+  const { prisma } = fixture.run;
+  const original = await prisma.run.findUniqueOrThrow({ where: { id: fixture.id } });
+  await prisma.bot.update({ where: { id: fixture.run.bot.id }, data: { computerId: null } });
+  await prisma.run.update({ where: { id: fixture.id }, data: { status: "cancelled" } });
+  const unrelated = JSON.stringify({
+    ...fixture.hold,
+    computerId: 'other"\\computer',
+    effectId: fixture.hold.computerId,
+  });
+  const rows = Array.from({ length: 121 }, (_, index) => ({
+    ...original,
+    id: `recovery-${String(index).padStart(3, "0")}`,
+    status: "cancelled",
+    checkpoint: index < 61 ? fixture.checkpoint : unrelated,
+  }));
+  await prisma.run.createMany({ data: rows });
+  await prisma.run.create({
+    data: {
+      ...original,
+      id: "malformed-checkpoint",
+      status: "cancelled",
+      checkpoint: '{"kind":"browser_approval_v1",broken',
+    },
+  });
+  const fetched: Array<{ id: string; checkpoint: string | null }> = [];
+  const find = prisma.run.findMany.bind(prisma.run);
+  vi.spyOn(prisma.run, "findMany").mockImplementation(async (...args) => {
+    const page = await find(...args);
+    expect(page.length).toBeLessThanOrEqual(50);
+    fetched.push(...page);
+    return page;
+  });
+  await recoverBrowserApprovalScreens(fixture.deps, { computerId: fixture.hold.computerId });
+  expect(fetched).toHaveLength(62);
+  expect(
+    fetched.every(
+      (run) => browserApprovalCheckpointOf(run.checkpoint)?.computerId === fixture.hold.computerId,
+    ),
+  ).toBe(true);
+  expect(
+    await prisma.run.count({ where: { id: { startsWith: "recovery-" }, checkpoint: null } }),
+  ).toBe(61);
+  expect(await prisma.run.count({ where: { checkpoint: unrelated } })).toBe(60);
+  expect(fixture.releases).toHaveLength(62);
+  await fixture.expectReleased();
+});
+
+it.skipIf(process.env.VERIFY_DATABASE !== "1" || !process.env.DATABASE_URL)(
+  "serializes group approval teardown with a personal-thread user grant on the same computer",
+  async () => {
+    const entered = Promise.withResolvers<void>();
+    const finish = Promise.withResolvers<void>();
+    const fixture = await pausedBrowser("team", {
+      databaseUrl: process.env.DATABASE_URL,
+      releasing: async () => {
+        entered.resolve();
+        await finish.promise;
+      },
+    });
+    const { prisma } = fixture.run;
+    const group = await prisma.chatGroup.create({
+      data: {
+        spaceId: fixture.run.spaceId,
+        userId: fixture.run.userId,
+        name: "Approval team",
+      },
+    });
+    const thread = await prisma.thread.create({
+      data: {
+        spaceId: fixture.run.spaceId,
+        userId: fixture.run.userId,
+        groupId: group.id,
+      },
+    });
+    await prisma.run.update({
+      where: { id: fixture.id },
+      data: { threadId: thread.id, status: "cancelled" },
+    });
+    await prisma.computerExecutionLease.updateMany({
+      where: fixture.hold.lease!,
+      data: { expiresAt: new Date(0) },
+    });
+    const router = createRouter({
+      ...fixture.deps,
+      env: { sandboxProvider: "fake" },
+    } as unknown as RouterDeps);
+    const release = recoverBrowserApprovalScreens(fixture.deps, { runIds: [fixture.id] });
+    await entered.promise;
+    let granted = false;
+    const procedure = router.computer.takeover;
+    const grant = Promise.resolve(
+      procedure["~orpc"].handler({
+        context: {
+          actor: {
+            spaceId: fixture.run.spaceId,
+            userId: fixture.run.userId,
+            email: "worker@rakazo.test",
+            isDeploymentOwner: true,
+          },
+        },
+        input: { botId: fixture.run.bot.id },
+        path: ["computer", "takeover"],
+        procedure,
+        lastEventId: undefined,
+        errors: {},
+      }),
+    ).then((result) => {
+      granted = true;
+      return result;
+    });
+    void grant.catch(() => undefined);
+    try {
+      await expect
+        .poll(
+          async () => {
+            if (granted) return "granted before teardown";
+            const blocked = await prisma.$queryRaw<Array<{ count: bigint }>>`
+          SELECT count(*) FROM pg_stat_activity WHERE datname = current_database()
+          AND wait_event_type = 'Lock' AND query LIKE '%UPDATE%computers%'`;
+            return Number(blocked[0]!.count) > 0 ? "waiting for teardown" : "not yet waiting";
+          },
+          { timeout: 2_000, interval: 20 },
+        )
+        .toBe("waiting for teardown");
+    } finally {
+      finish.resolve();
+      await release;
+    }
+    const result = await grant;
+    expect(result.leaseId).toEqual(expect.any(String));
+    expect(
+      await prisma.computer.findUniqueOrThrow({ where: { id: fixture.hold.computerId } }),
+    ).toMatchObject({ controlHolder: "user", controlBotId: fixture.run.bot.id });
+    expect(fixture.releases).toHaveLength(1);
+    expect(
+      (await prisma.run.findUniqueOrThrow({ where: { id: fixture.id } })).checkpoint,
+    ).toBeNull();
+  },
+);
