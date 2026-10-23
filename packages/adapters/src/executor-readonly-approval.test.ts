@@ -1,5 +1,6 @@
 import type { AgentRunRequest, ConnectorCall, ConnectorTool } from "@rakazo/adapter-kit";
 import type { ActionApprovalRule } from "@rakazo/core";
+import { DISMISSED_EFFECT_RESULT } from "@rakazo/core";
 import { approvalEffectKey, toolEffectIdempotencyKey } from "@rakazo/core/node/approval-effect-key";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { isApprovalPausedResult } from "./approval-effect.js";
@@ -32,6 +33,7 @@ type Effect = {
   result?: unknown;
   reviewDecision?: string;
   runId?: string;
+  answeredAt?: Date;
 };
 
 function fixture({
@@ -55,6 +57,10 @@ function fixture({
   };
   const effects: Effect[] = [];
   const results: unknown[] = [];
+  const prompts: string[] = [];
+  const pauses: Date[] = [];
+  let clock = 0;
+  const tick = () => new Date(++clock);
   const run = {
     id: "run-1",
     botId: "bot-1",
@@ -72,10 +78,23 @@ function fixture({
       async ({
         where,
       }: {
-        where?: { id?: string; runId?: string; status?: string; kind?: string };
+        where?: {
+          id?: string;
+          runId?: string;
+          status?: string;
+          kind?: string;
+          answeredAt?: { gte: Date };
+          result?: unknown;
+        };
       } = {}) =>
         effects.filter((effect) => {
           if (where?.status && effect.status !== where.status) return false;
+          if (
+            where?.answeredAt &&
+            !(effect.answeredAt && effect.answeredAt >= where.answeredAt.gte)
+          )
+            return false;
+          if (where?.result && effect.result != null) return false;
           if (where?.kind && effect.kind !== where.kind) return false;
           if (where?.runId && effect.runId && effect.runId !== where.runId) return false;
           if (where?.id && effect.id !== where.id) return false;
@@ -133,6 +152,9 @@ function fixture({
     },
     attempt: {
       create: vi.fn(async () => ({ id: "attempt-1" })),
+      findFirst: vi.fn(async () =>
+        pauses.length ? { finishedAt: pauses[pauses.length - 1] } : null,
+      ),
       update: vi.fn(),
       updateMany: vi.fn(async () => ({ count: 1 })),
     },
@@ -160,6 +182,7 @@ function fixture({
   };
   const pauseRunForInput = vi.fn(async () => {
     run.status = "waiting_input";
+    pauses.push(tick());
     return true;
   });
   const finalizeRun = vi.fn(async () => ({ continuationRunId: null }));
@@ -168,6 +191,7 @@ function fixture({
   });
   let calls = [{ args: { id: "item-1" }, executionId: "call-1" }];
   const runtimeRun = vi.fn(async function* (request: AgentRunRequest) {
+    prompts.push(request.prompt);
     for (const call of calls) {
       const result = await request.executeTool!(
         catalog ? "demo_execute_tool" : name,
@@ -209,10 +233,14 @@ function fixture({
   return {
     effects,
     results,
+    prompts,
     execute,
     pauseRunForInput,
     setCalls(next: typeof calls) {
       calls = next;
+    },
+    answer(index: number, status: "approved" | "denied", result?: unknown) {
+      Object.assign(effects[index]!, { status, answeredAt: tick(), result });
     },
     async run() {
       run.status = "queued";
@@ -243,6 +271,40 @@ describe("connector read-only metadata and approval enforcement", () => {
       expect(runAutoReviewJudge).not.toHaveBeenCalled();
     },
   );
+
+  it("tells the resumed run about the denial it resumes for, once", async () => {
+    const f = fixture({
+      rules: [{ effect: "require_approval", matchKind: "tool", matchValue: "demo_get_item" }],
+    });
+    await f.run();
+    f.answer(0, "denied");
+    f.setCalls([{ args: { id: "item-2" }, executionId: "call-2" }]);
+    await f.run();
+    expect(f.prompts[1]).toContain("the user declined");
+    expect(f.prompts[1]).toContain('demo_get_item: {"id":"item-1"}');
+
+    f.answer(1, "approved");
+    f.setCalls([{ args: { id: "item-2" }, executionId: "call-3" }]);
+    await f.run();
+    expect(f.prompts[2]).toContain('demo_get_item: {"id":"item-2"}');
+    expect(f.prompts[2]).not.toContain("the user declined");
+    expect(f.execute).toHaveBeenCalledOnce();
+    expect(f.results.at(-1)).toEqual({ item: "item-2" });
+  });
+
+  it("does not report a denial for a card put away by a typed reply", async () => {
+    const f = fixture({
+      rules: [{ effect: "require_approval", matchKind: "tool", matchValue: "demo_get_item" }],
+    });
+    await f.run();
+    f.answer(0, "denied", DISMISSED_EFFECT_RESULT);
+    f.setCalls([]);
+    await f.run();
+    expect(f.prompts[1]).not.toContain("the user declined");
+    f.answer(0, "denied");
+    await f.run();
+    expect(f.prompts[2]).toContain("the user declined");
+  });
 
   describe.each([false, true])("catalog = %s", (catalog) => {
     it.each(["tool", "connector"] as const)(
