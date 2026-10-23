@@ -183,13 +183,27 @@ function stopBrowserProfileCommand(profile: string, pidFile: string) {
   ].join("\n");
 }
 
+export type DesktopProfileCommands = (profile: string) => { ensure: string; release: string };
+
 /** Quiesce managed profiles before a full workspace export; orchestration excludes active peers. */
-export function stopAllDesktopBrowsersCommand(env = DEFAULT_DESKTOP_ENV) {
+export function stopAllDesktopBrowsersCommand(
+  env = DEFAULT_DESKTOP_ENV,
+  profileCommands?: DesktopProfileCommands,
+) {
   const placeholder = "RAKAZO_INTERNAL_PROFILE";
-  const stop = stopBrowserProfileCommand(placeholder, '"$pid_file"').replaceAll(
-    shellQuote(placeholder),
-    '"$profile"',
-  );
+  const stop = [
+    ...(profileCommands
+      ? [
+          "mkdir -p /tmp/rakazo/desktop-assignments",
+          'exec 8>"/tmp/rakazo/desktop-assignments/$hash.lifecycle-lock"',
+          "flock -w 120 8",
+        ]
+      : []),
+    stopBrowserProfileCommand(placeholder, '"$pid_file"'),
+    profileCommands?.(placeholder).release ?? "",
+  ]
+    .join("\n")
+    .replaceAll(shellQuote(placeholder), '"$profile"');
   return [
     "set -eu",
     "failed=0",
@@ -198,7 +212,7 @@ export function stopAllDesktopBrowsersCommand(env = DEFAULT_DESKTOP_ENV) {
     // biome-ignore lint/suspicious/noTemplateCurlyInString: shell parameter expansion
     "  hash=${profile##*chromium-bot-}",
     '  pid_file="/tmp/rakazo/browser-pid-$hash"',
-    `  bash -eu -c ${shellQuote(`profile=$1; pid_file=$2;\n${stop}`)} desktop "$profile" "$pid_file" || failed=1`,
+    `  bash -eu -c ${shellQuote(`profile=$1; pid_file=$2; hash=$3;\n${stop}`)} desktop "$profile" "$pid_file" "$hash" || failed=1`,
     "done",
     '[ "$failed" -eq 0 ] || exit 1',
   ].join("\n");
@@ -532,6 +546,7 @@ export function managedDesktopCommand(
   leaseId: string | undefined,
   env: DesktopEnvironment,
   viewToken: string,
+  profileCommands?: DesktopProfileCommands,
 ) {
   return [
     ...registryLockCommand(screenId),
@@ -562,6 +577,7 @@ print(index)
     'printf "%s\\n%s\\n%s\\n" "$index" "$incoming" "$view_token" >"$slot.next"',
     'mv "$slot.next" "$slot"',
     "flock -u 9; exec 9>&-",
+    profileCommands?.(browserProfilePathForScreen(screenId, env)).ensure ?? "",
     `bash -eu -c ${shellQuote(renderEnsureScreenCommand(undefined, screenId, TOKEN_PLACEHOLDER, env).replace(shellQuote(TOKEN_PLACEHOLDER), '"$2"'))} desktop "$index" "$view_token"`,
     'printf "RAKAZO_DESKTOP=%s:%s\\n" "$index" "$view_token"',
   ].join("\n");
@@ -572,6 +588,7 @@ export function releaseDesktopCommand(
   screenId: string,
   leaseId: string | undefined,
   env: DesktopEnvironment,
+  profileCommands?: DesktopProfileCommands,
 ) {
   return [
     ...registryLockCommand(screenId),
@@ -580,6 +597,7 @@ export function releaseDesktopCommand(
     'index=$(sed -n "1p" "$slot")',
     "flock -u 9; exec 9>&-",
     `bash -eu -c ${shellQuote(renderStopExtraScreenCommand(undefined, screenId, env))} desktop "$index"`,
+    profileCommands?.(browserProfilePathForScreen(screenId, env)).release ?? "",
     'exec 9>"$dir/.lock"; flock -w 120 9',
     'rm -f "$slot"',
     'printf "RAKAZO_DESKTOP_RELEASED=%s\\n" "$index"',

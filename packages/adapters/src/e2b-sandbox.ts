@@ -34,6 +34,7 @@ import {
   PORTABLE_TRANSFER_BATCH_BYTES,
   shouldSkipPortableWorkspaceFile,
 } from "./computer-workspace.js";
+import { e2bBrowserMetricsCommands } from "./e2b-browser-metrics.js";
 import type { DesktopExecutionOptions } from "./linux-desktop.js";
 import { LinuxDesktop, PREPARE_LINUX_DESKTOP } from "./linux-desktop.js";
 
@@ -132,6 +133,7 @@ function errorMessage(error: unknown): string {
 
 export class E2BSandboxProvider implements SandboxProvider {
   private readonly desktops = new LinuxDesktop({
+    profileCommands: e2bBrowserMetricsCommands,
     environment: async (computer, context) => {
       const onVolumes =
         computer.writableRoots !== undefined ||
@@ -285,10 +287,13 @@ export class E2BSandboxProvider implements SandboxProvider {
 
   private async stopBrowsers(computer: ComputerRef, context: AdapterContext) {
     const profiles = "RAKAZO_INTERNAL_PROFILES";
-    const stop = stopAllDesktopBrowsersCommand({
-      ...E2B_DESKTOP_ENV,
-      browserProfilesDir: profiles,
-    }).replaceAll(shellQuote(profiles), '"$1"');
+    const stop = stopAllDesktopBrowsersCommand(
+      {
+        ...E2B_DESKTOP_ENV,
+        browserProfilesDir: profiles,
+      },
+      e2bBrowserMetricsCommands,
+    ).replaceAll(shellQuote(profiles), '"$1"');
     const result = await this.runSetupCommand(
       await this.box(computer),
       [

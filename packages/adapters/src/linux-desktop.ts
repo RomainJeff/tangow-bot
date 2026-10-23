@@ -10,7 +10,7 @@ import type {
   ScreenRequest,
   ScreenSession,
 } from "@rakazo/adapter-kit";
-import type { DesktopEnvironment } from "@rakazo/core/node/desktop-runtime";
+import type { DesktopEnvironment, DesktopProfileCommands } from "@rakazo/core/node/desktop-runtime";
 import {
   BROWSER_APPLICATIONS,
   browserLauncherPath,
@@ -47,6 +47,7 @@ export interface DesktopExecutionOptions {
 }
 
 export interface LinuxDesktopHost {
+  profileCommands?: DesktopProfileCommands;
   environment(computer: ComputerRef, context: AdapterContext): Promise<DesktopEnvironment>;
   run(
     computer: ComputerRef,
@@ -100,7 +101,13 @@ export class LinuxDesktop {
     const key = screenSessionKey(context);
     const output = await this.run(
       computer,
-      managedDesktopCommand(key, context.screenLeaseId, env, randomUUID()),
+      managedDesktopCommand(
+        key,
+        context.screenLeaseId,
+        env,
+        randomUUID(),
+        this.host.profileCommands,
+      ),
       context,
     );
     const match = output.match(/RAKAZO_DESKTOP=(\d+):([a-zA-Z0-9_-]+)/);
@@ -292,7 +299,11 @@ export class LinuxDesktop {
 
   async stopBrowsers(computer: ComputerRef, context: AdapterContext) {
     const env = await this.host.environment(computer, context);
-    await this.run(computer, stopAllDesktopBrowsersCommand(env), context);
+    await this.run(
+      computer,
+      stopAllDesktopBrowsersCommand(env, this.host.profileCommands),
+      context,
+    );
   }
 
   async releaseScreen(computer: ComputerRef, context: AdapterContext) {
@@ -300,7 +311,12 @@ export class LinuxDesktop {
     // A stale release is a successful no-op. All other errors must retain the slot for retry.
     const result = await this.host.run(
       computer,
-      releaseDesktopCommand(screenSessionKey(context), context.screenLeaseId, env),
+      releaseDesktopCommand(
+        screenSessionKey(context),
+        context.screenLeaseId,
+        env,
+        this.host.profileCommands,
+      ),
       context,
     );
     if (result.code !== 0 && result.code !== 75)

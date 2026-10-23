@@ -243,9 +243,15 @@ describe("E2B computer backend", () => {
     expect(run.mock.calls[0]?.[1]?.timeoutMs).toBeGreaterThan(60_000);
   });
 
-  it("surfaces a setup timeout without treating it as a missing sandbox", async () => {
+  it.each([
+    new TimeoutError("the operation timed out"),
+    Object.assign(new Error("command failed"), {
+      name: "CommandExitError",
+      result: { exitCode: 1, stdout: "", stderr: "browser metrics: unexpected metrics mount" },
+    }),
+  ])("surfaces setup failure without replacing the sandbox (%s)", async (failure) => {
     const run = vi.fn(async () => {
-      throw new TimeoutError("the operation timed out");
+      throw failure;
     });
     const desktop = {
       sandboxId: "timeout-e2b-box",
@@ -270,6 +276,7 @@ describe("E2B computer backend", () => {
     await expect(provider.connectScreen(computer, { view: "stream" }, context)).rejects.toThrow(
       Error,
     );
+    expect(sdk.create).not.toHaveBeenCalled();
   });
 
   it("prepares a reused computer idempotently", async () => {
@@ -562,7 +569,7 @@ describe("E2B computer backend", () => {
     const command = vi.fn(async (value: string, _options?: Record<string, unknown>) => {
       const response = respond(value);
       if (response) return response;
-      if (value.includes("hang")) {
+      if (value.includes("'hang'")) {
         throw new TimeoutError("command timed out");
       }
       return {

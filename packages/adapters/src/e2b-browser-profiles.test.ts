@@ -133,7 +133,7 @@ it.each(["export", "import", "archive"])(
         [
           "-eu",
           "-c",
-          command
+          `flock() { :; }; sudo() { [ "$5" = release ]; [ ! -e "$6/SingletonCookie" ]; printf '%s\\n' "$6" >>${shellQuote(path.join(root, "cleanups"))}; }; export -f flock sudo;\n${command}`
             .replaceAll("/home/user/rakazo-home", root)
             .replaceAll("/workspace", root)
             .replaceAll("/tmp/rakazo", `${root}/runtime`),
@@ -141,6 +141,9 @@ it.each(["export", "import", "archive"])(
         { encoding: "utf8" },
       );
       if (result.status !== 0) throw new Error(result.stderr);
+      expect((await readFile(path.join(root, "cleanups"), "utf8")).trim().split("\n")).toEqual(
+        profiles.map((profile) => path.join(root, profile)),
+      );
       for (const profile of profiles) {
         await expect(readFile(path.join(root, profile, "SingletonCookie"))).rejects.toMatchObject({
           code: "ENOENT",
