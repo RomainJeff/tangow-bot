@@ -1,4 +1,4 @@
-import type { MessageBlock } from "@rakazo/contracts";
+import type { AskDraft, MessageBlock } from "@rakazo/contracts";
 import type { RoutineCard } from "@rakazo/core";
 import { redactSecrets, routineCardBlock, spawnBotApprovalBlock } from "@rakazo/core";
 import type { ConnectorAction } from "./connector-actions.js";
@@ -18,6 +18,10 @@ export function buildApprovalAskBlock(
     runUserId?: string;
     /** What a batch call runs: the card shows these instead of the wrapper. */
     actions?: ConnectorAction[];
+    /** A mail to send: shown in full, sent or discarded, no "always". */
+    draft?: AskDraft;
+    /** A possible send the card cannot read field by field: every argument shows, no "always". */
+    unreadable?: boolean;
   },
 ): MessageBlock {
   // spawn_bot and schedule_create arguments are redacted before they become the effect request,
@@ -28,7 +32,14 @@ export function buildApprovalAskBlock(
   const summary = actions
     ? actions.map((action) => describeApprovalAction(action.toolName, action.args)).join(", ")
     : describeApprovalAction(toolName, args);
-  const detail = formatApprovalDetail(toolName, args, options?.reviewReason, actions);
+  const draft = options?.draft && redactDraft(options.draft, secrets);
+  const detail = formatApprovalDetail(
+    toolName,
+    args,
+    options?.reviewReason,
+    actions,
+    options?.unreadable,
+  );
   const safeDetail = detail ? redactSecrets(detail, secrets) : undefined;
   return {
     kind: "ask",
@@ -40,10 +51,18 @@ export function buildApprovalAskBlock(
       ),
       MAX_APPROVAL_SUMMARY_LENGTH,
     ),
-    detail: safeDetail ? truncate(safeDetail, MAX_APPROVAL_DETAIL_LENGTH) : undefined,
+    detail: draft
+      ? draftDetail(draft)
+      : safeDetail
+        ? truncate(safeDetail, MAX_APPROVAL_DETAIL_LENGTH)
+        : undefined,
     status: "pending",
-    actions:
-      toolName === "create_space"
+    actions: draft
+      ? [
+          { id: "allow", label: "Send" },
+          { id: "deny", label: "Discard" },
+        ]
+      : toolName === "create_space"
         ? [
             { id: "allow", label: "Create space", outcome: "created" },
             { id: "deny", label: "Cancel", outcome: "cancelled" },
@@ -51,10 +70,34 @@ export function buildApprovalAskBlock(
         : [
             { id: "allow", label: "Allow once" },
             // "Always" would allow the batch wrapper, so every future batch, not the action shown.
-            ...(actions ? [] : [{ id: "always", label: "Always allow this tool" }]),
+            ...(actions || options?.unreadable
+              ? []
+              : [{ id: "always", label: "Always allow this tool" }]),
             { id: "deny", label: "Deny" },
           ],
+    ...(draft ? { draft } : {}),
   };
+}
+
+function redactDraft(draft: AskDraft, secrets: string[]): AskDraft {
+  return {
+    ...draft,
+    subject: draft.subject === undefined ? undefined : redactSecrets(draft.subject, secrets),
+    body: redactSecrets(draft.body, secrets),
+  };
+}
+
+function draftDetail(draft: AskDraft): string {
+  const lines = (["to", "cc", "bcc"] as const).flatMap((role) => {
+    const addresses = draft.recipients.filter((recipient) => recipient.role === role);
+    return addresses.length
+      ? [`${role}: ${addresses.map((recipient) => recipient.address).join(", ")}`]
+      : [];
+  });
+  // Continuation lines are indented so a line written inside the mail cannot pass for a header.
+  if (draft.subject) lines.push(`subject: ${draft.subject.replaceAll("\n", "\n  ")}`);
+  lines.push("body:", `  ${draft.body.replaceAll("\n", "\n  ")}`);
+  return lines.join("\n");
 }
 
 function describeApprovalAction(toolName: string, args: Record<string, unknown>): string {
@@ -80,6 +123,7 @@ function formatApprovalDetail(
   args: Record<string, unknown>,
   reviewReason?: string,
   actions?: ConnectorAction[],
+  everyArgument = false,
 ): string | undefined {
   const lines: string[] = [];
   if (reviewReason?.trim()) {
@@ -95,7 +139,7 @@ function formatApprovalDetail(
       lines.push(action.toolName, ...argLines(action.args).map((line) => `  ${line}`));
     }
   } else {
-    lines.push(...argLines(actions?.[0]?.args ?? args));
+    lines.push(...argLines(actions?.[0]?.args ?? args, everyArgument));
   }
   if (lines.length === 0) return undefined;
   return lines.join("\n");
@@ -103,7 +147,12 @@ function formatApprovalDetail(
 
 const DETAIL_LABELS: Record<string, string> = { recipient_email: "to" };
 
-function argLines(args: Record<string, unknown>): string[] {
+function argLines(args: Record<string, unknown>, everyArgument = false): string[] {
+  if (everyArgument) {
+    return Object.entries(args).map(
+      ([key, value]) => `${key}: ${typeof value === "string" ? value : JSON.stringify(value)}`,
+    );
+  }
   const lines: string[] = [];
   for (const key of ["collection", "title", "to", "recipient_email", "subject", "amount", "body"]) {
     const value = args[key];
