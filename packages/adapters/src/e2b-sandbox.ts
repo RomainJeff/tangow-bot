@@ -131,6 +131,12 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/** A self-hosted proxy reached on a local `*.localhost` domain serves plain HTTP. */
+export function e2bScreenUrl(host: string): string {
+  const scheme = /^([^.:]+\.)*localhost(:\d+)?$/.test(host) ? "http" : "https";
+  return `${scheme}://${host}/vnc.html`;
+}
+
 export class E2BSandboxProvider implements SandboxProvider {
   private readonly desktops = new LinuxDesktop({
     profileCommands: e2bBrowserMetricsCommands,
@@ -151,8 +157,7 @@ export class E2BSandboxProvider implements SandboxProvider {
       const result = await this.runSetupCommand(desktop, command, context.signal);
       return { code: result.exitCode, stdout: result.stdout, stderr: result.stderr };
     },
-    screenUrl: async (computer, port) =>
-      `https://${(await this.box(computer)).getHost(port)}/vnc.html`,
+    screenUrl: async (computer, port) => e2bScreenUrl((await this.box(computer)).getHost(port)),
   });
   private readonly boxes = new Map<string, Sandbox>();
   private readonly connections = new Map<string, Promise<Sandbox>>();

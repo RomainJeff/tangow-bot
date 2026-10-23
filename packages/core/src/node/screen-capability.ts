@@ -161,6 +161,8 @@ function remoteTargetPath(target: URL, requestedPath: string) {
 function isAllowedTargetName(hostname: string) {
   return (
     hostname === "localhost" ||
+    // RFC 6761 reserves *.localhost for loopback, e.g. a self-hosted E2B proxy forwarded locally.
+    /^[a-z0-9-]+(?:\.[a-z0-9-]+)*\.localhost$/i.test(hostname) ||
     hostname === "127.0.0.1" ||
     hostname === "::1" ||
     /^10\.(?:\d{1,3}\.){2}\d{1,3}$/.test(hostname) ||

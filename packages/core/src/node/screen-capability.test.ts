@@ -156,10 +156,17 @@ describe("sealed screen capabilities", () => {
         ?.target.interactive,
     ).toBe(true);
   });
-  it.each(["http://public.example:49152/embed.html", "http://127.0.0.1:80/embed.html"])(
-    "rejects disallowed local target %s",
-    (url) => {
-      expect(openScreenCapability(path(url), "fake-secret", 101)).toBeNull();
-    },
-  );
+  it("accepts a loopback *.localhost target", () => {
+    expect(
+      openScreenCapability(path("http://6080-sbx.localhost:13002/vnc.html"), "fake-secret", 101)
+        ?.target.hostname,
+    ).toBe("6080-sbx.localhost");
+  });
+  it.each([
+    "http://public.example:49152/embed.html",
+    "http://127.0.0.1:80/embed.html",
+    "http://localhost.example.com:49152/embed.html",
+  ])("rejects disallowed local target %s", (url) => {
+    expect(openScreenCapability(path(url), "fake-secret", 101)).toBeNull();
+  });
 });

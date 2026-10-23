@@ -7,7 +7,12 @@ import { Sandbox, SandboxNotFoundError, TimeoutError } from "@e2b/desktop";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
 import { fakeE2BMachine } from "./e2b-machine.test-support.js";
 import type { E2BSandboxSdk } from "./e2b-sandbox.js";
-import { E2BSandboxProvider, isSandboxGoneError, linkWorkspaceCommand } from "./e2b-sandbox.js";
+import {
+  E2BSandboxProvider,
+  e2bScreenUrl,
+  isSandboxGoneError,
+  linkWorkspaceCommand,
+} from "./e2b-sandbox.js";
 import { desktopCommandResponder } from "./linux-desktop.test-support.js";
 
 const context = {
@@ -964,3 +969,15 @@ describe("sandbox-gone detection", () => {
 function _unwrapSetupCommand(command: string): string {
   return command.startsWith("bash -c '") ? command.slice(9, -1).replaceAll(`'"'"'`, "'") : command;
 }
+
+describe("e2bScreenUrl", () => {
+  it("uses HTTP only for a local *.localhost proxy", () => {
+    expect(e2bScreenUrl("6080-sbx.localhost:13002")).toBe(
+      "http://6080-sbx.localhost:13002/vnc.html",
+    );
+    expect(e2bScreenUrl("6080-sbx.e2b.app")).toBe("https://6080-sbx.e2b.app/vnc.html");
+    expect(e2bScreenUrl("6080-sbx.localhost.example.com")).toBe(
+      "https://6080-sbx.localhost.example.com/vnc.html",
+    );
+  });
+});
