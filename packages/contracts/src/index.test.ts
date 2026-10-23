@@ -510,6 +510,21 @@ describe("editable Create bot card contract", () => {
   });
 });
 
+describe("outbound draft card contract", () => {
+  const ask = { kind: "ask", text: "Review before sending", status: "pending" } as const;
+  const draft = {
+    app: { name: "Gmail", logo: null },
+    recipients: [{ role: "to", address: "a@example.com" }],
+    subject: "Hi",
+    body: "Hello",
+  } as const;
+
+  it("keeps a draft it can read, and keeps the card without a draft it cannot", () => {
+    expect(MessageBlock.parse({ ...ask, draft })).toEqual({ ...ask, draft });
+    expect(MessageBlock.parse({ ...ask, draft: { ...draft, recipients: [] } })).toEqual(ask);
+  });
+});
+
 describe("question card options", () => {
   const question = { id: "q1", question: "Which fridge?" };
 
