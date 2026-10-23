@@ -125,9 +125,14 @@ const GMAIL_TOOLS: ConnectorTool[] = [
         to: { type: "string", description: "Alias for recipient_email" },
         subject: { type: "string" },
         body: { type: "string" },
+        extra_recipients: { type: "array", items: { type: "string" } },
         cc: { type: "array", items: { type: "string" } },
         bcc: { type: "array", items: { type: "string" } },
         is_html: { type: "boolean" },
+        attachment: { type: "object" },
+        include_signature: { type: "boolean" },
+        from_email: { type: "string" },
+        user_id: { type: "string" },
       },
       required: ["subject"],
     },
@@ -159,7 +164,100 @@ const GMAIL_TOOLS: ConnectorTool[] = [
       },
     },
   },
+  {
+    name: "GMAIL_REPLY_TO_THREAD",
+    description: "Reply to a Gmail thread",
+    inputSchema: {
+      type: "object",
+      properties: {
+        thread_id: { type: "string" },
+        recipient_email: { type: "string" },
+        extra_recipients: { type: "array", items: { type: "string" } },
+        cc: { type: "array", items: { type: "string" } },
+        bcc: { type: "array", items: { type: "string" } },
+        message_body: { type: "string" },
+        is_html: { type: "boolean" },
+        attachment: { type: "object" },
+        user_id: { type: "string" },
+        include_signature: { type: "boolean" },
+      },
+      required: ["thread_id"],
+    },
+  },
+  {
+    name: "GMAIL_SEND_DRAFT",
+    description: "Send a saved Gmail draft",
+    inputSchema: {
+      type: "object",
+      properties: { draft_id: { type: "string" } },
+      required: ["draft_id"],
+    },
+  },
+  {
+    name: "GMAIL_FORWARD_MESSAGE",
+    description: "Forward a Gmail message",
+    inputSchema: {
+      type: "object",
+      properties: {
+        message_id: { type: "string" },
+        recipients: { type: "array", items: { type: "string" } },
+        cc: { type: "array", items: { type: "string" } },
+        bcc: { type: "array", items: { type: "string" } },
+        additional_text: { type: "string" },
+      },
+      required: ["message_id", "recipients"],
+    },
+  },
 ];
+
+// Field names from Composio's Outlook toolkit docs (2026-10).
+const OUTLOOK_TOOLS: ConnectorTool[] = [
+  {
+    name: "OUTLOOK_SEND_EMAIL",
+    description: "Send an email through the connected Outlook account",
+    inputSchema: {
+      type: "object",
+      properties: {
+        to: { type: "string" },
+        to_name: { type: "string" },
+        subject: { type: "string" },
+        body: { type: "string" },
+        is_html: { type: "boolean" },
+        cc_emails: { type: "array", items: { type: "string" } },
+        bcc_emails: { type: "array", items: { type: "string" } },
+        attachment: { type: "string" },
+        from_address: { type: "string" },
+        user_id: { type: "string" },
+        save_to_sent_items: { type: "boolean" },
+      },
+      required: ["to", "subject", "body"],
+    },
+  },
+];
+
+const BATCH_TOOL: ConnectorTool = {
+  name: "COMPOSIO_MULTI_EXECUTE_TOOL",
+  description: "Run several connected-app actions in one call",
+  inputSchema: {
+    type: "object",
+    properties: {
+      tools: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            tool_slug: { type: "string" },
+            account: { type: "string" },
+            arguments: { type: "object" },
+          },
+          required: ["tool_slug"],
+        },
+      },
+      thought: { type: "string" },
+    },
+    required: ["tools"],
+  },
+};
 
 function asString(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
@@ -329,6 +427,43 @@ function findAccountIndex(refs: readonly string[], connectionRef: string): numbe
   return refs.findIndex((ref) => ref === connectionRef || ref.startsWith(`${connectionRef}:`));
 }
 
+function nextIds(mailbox: Mailbox): { messageId: string; threadId: string } {
+  const seq = mailbox.nextMessageSeq++;
+  const hex = (0x18c5f5e0 + seq).toString(16);
+  return { messageId: hex, threadId: hex };
+}
+
+function sendMessage(
+  mailbox: Mailbox,
+  fields: { to: string; subject: string; body: string; threadId?: string },
+): MailMessage {
+  const ids = nextIds(mailbox);
+  const message: MailMessage = {
+    messageId: ids.messageId,
+    threadId: fields.threadId ?? ids.threadId,
+    subject: fields.subject || "(no subject)",
+    sender: "me@example.test",
+    to: fields.to,
+    snippet: fields.body.slice(0, 120),
+    messageText: fields.body,
+    labelIds: ["SENT"],
+    internalDate: String(Date.UTC(2024, 5, 1, 15, 0, 0) + mailbox.nextMessageSeq * 1000),
+  };
+  mailbox.messages.push(message);
+  return message;
+}
+
+function sentResult(message: MailMessage): Record<string, unknown> {
+  return {
+    successful: true,
+    data: {
+      messageId: message.messageId,
+      threadId: message.threadId,
+      labelIds: [...message.labelIds],
+    },
+  };
+}
+
 /** Deterministic, offline Composio catalog and connection emulator for product tests. */
 export class ComposioEmulator implements ComposioProvider {
   private readonly connectedByEntity = new Map<string, string[]>();
@@ -387,11 +522,13 @@ export class ComposioEmulator implements ComposioProvider {
       [];
     const tools: ConnectorTool[] = [];
     for (const slug of new Set(connected)) {
-      if (slug === "GMAIL") this.ensureMailbox(composioEntityId(context));
+      if (slug === "GMAIL" || slug === "OUTLOOK") this.ensureMailbox(composioEntityId(context));
       const toolkitTools =
         slug === "GMAIL"
           ? GMAIL_TOOLS
-          : slug === "GITHUB"
+          : slug === "OUTLOOK"
+            ? OUTLOOK_TOOLS
+            : slug === "GITHUB"
             ? githubReleaseTools()
             : [thinEmulatedTool(slug)];
       tools.push(
@@ -409,19 +546,62 @@ export class ComposioEmulator implements ComposioProvider {
         })),
       );
     }
+    if (tools.length > 0) tools.push(BATCH_TOOL);
     return tools;
   }
 
   async *execute(call: ConnectorCall, context: AdapterContext): AsyncIterable<ConnectorEvent> {
     const args = call.args ?? {};
-    const result = call.tool.startsWith("GMAIL_")
-      ? this.executeGmail(call.tool, args, composioEntityId(context))
-      : (RELEASE_WATCH_GITHUB_TOOL_NAMES as readonly string[]).includes(call.tool) ||
-          call.tool === "GITHUB_EMULATED_ACTION"
-        ? this.executeGithub(call.tool, args)
-        : { ok: true, tool: call.tool, args };
+    const result =
+      call.tool === BATCH_TOOL.name
+        ? this.executeBatch(args, context)
+        : this.executeAction(call.tool, args, context);
     this.executions.push({ userId: context.userId, tool: call.tool, args });
     yield { type: "result", data: result };
+  }
+
+  private executeAction(
+    tool: string,
+    args: Record<string, unknown>,
+    context: AdapterContext,
+  ): Record<string, unknown> {
+    const entityId = composioEntityId(context);
+    if (tool.startsWith("GMAIL_")) return this.executeGmail(tool, args, entityId);
+    if (tool === "OUTLOOK_SEND_EMAIL") {
+      sendMessage(this.ensureMailbox(entityId), {
+        to: asString(args.to),
+        subject: asString(args.subject),
+        body: asString(args.body),
+      });
+      // Microsoft Graph accepts a send without returning the message.
+      return { successful: true, data: {} };
+    }
+    if (
+      (RELEASE_WATCH_GITHUB_TOOL_NAMES as readonly string[]).includes(tool) ||
+      tool === "GITHUB_EMULATED_ACTION"
+    ) {
+      return this.executeGithub(tool, args);
+    }
+    return { ok: true, tool, args };
+  }
+
+  /** Composio's batch: one response per action, in order, under `data.results`. */
+  private executeBatch(
+    args: Record<string, unknown>,
+    context: AdapterContext,
+  ): Record<string, unknown> {
+    const items = Array.isArray(args.tools) ? (args.tools as Record<string, unknown>[]) : [];
+    const results = items.map((item, index) => {
+      const tool = asString(item.tool_slug);
+      const itemArgs = (item.arguments ?? {}) as Record<string, unknown>;
+      return { response: this.executeAction(tool, itemArgs, context), tool_slug: tool, index };
+    });
+    const errorCount = results.filter((result) => result.response.successful === false).length;
+    return {
+      successful: errorCount === 0,
+      data: { results, success_count: results.length - errorCount, error_count: errorCount },
+      error: null,
+    };
   }
 
   async begin(
@@ -522,12 +702,6 @@ export class ComposioEmulator implements ComposioProvider {
     const seeded = seedMailbox();
     this.mailboxesByEntity.set(entityId, seeded);
     return seeded;
-  }
-
-  private nextIds(mailbox: Mailbox): { messageId: string; threadId: string } {
-    const seq = mailbox.nextMessageSeq++;
-    const hex = (0x18c5f5e0 + seq).toString(16);
-    return { messageId: hex, threadId: hex };
   }
 
   private executeGmail(
@@ -638,34 +812,56 @@ export class ComposioEmulator implements ComposioProvider {
             data: null,
           };
         }
-        const ids = this.nextIds(mailbox);
-        const message: MailMessage = {
-          messageId: ids.messageId,
-          threadId: ids.threadId,
-          subject: subject || "(no subject)",
-          sender: "me@example.test",
-          to: recipient,
-          snippet: body.slice(0, 120),
-          messageText: body,
-          labelIds: ["SENT"],
-          internalDate: String(Date.UTC(2024, 5, 1, 15, 0, 0) + mailbox.nextMessageSeq * 1000),
-        };
-        mailbox.messages.push(message);
-        return {
-          successful: true,
-          data: {
-            messageId: message.messageId,
-            threadId: message.threadId,
-            labelIds: [...message.labelIds],
-          },
-        };
+        return sentResult(sendMessage(mailbox, { to: recipient, subject, body }));
+      }
+      case "GMAIL_REPLY_TO_THREAD": {
+        const threadId = asString(args.thread_id);
+        const original = mailbox.messages.find((message) => message.threadId === threadId);
+        if (!original) {
+          return { successful: false, error: `Thread not found: ${threadId}`, data: null };
+        }
+        return sentResult(
+          sendMessage(mailbox, {
+            to: asString(args.recipient_email) || original.sender,
+            subject: `Re: ${original.subject}`,
+            body: asString(args.message_body),
+            threadId,
+          }),
+        );
+      }
+      case "GMAIL_SEND_DRAFT": {
+        const draftId = asString(args.draft_id);
+        const draft = mailbox.drafts.find((item) => item.draftId === draftId);
+        const message = mailbox.messages.find((item) => item.messageId === draft?.messageId);
+        if (!draft || !message) {
+          return { successful: false, error: `Draft not found: ${draftId}`, data: null };
+        }
+        mailbox.drafts = mailbox.drafts.filter((item) => item !== draft);
+        message.labelIds = ["SENT"];
+        return sentResult(message);
+      }
+      case "GMAIL_FORWARD_MESSAGE": {
+        const messageId = asString(args.message_id);
+        const original = mailbox.messages.find((message) => message.messageId === messageId);
+        if (!original) {
+          return { successful: false, error: `Message not found: ${messageId}`, data: null };
+        }
+        return sentResult(
+          sendMessage(mailbox, {
+            to: asStringArray(args.recipients).join(", "),
+            subject: `Fwd: ${original.subject}`,
+            body: [asString(args.additional_text), original.messageText]
+              .filter(Boolean)
+              .join("\n\n"),
+          }),
+        );
       }
       case "GMAIL_CREATE_EMAIL_DRAFT": {
         const recipient = asString(args.recipient_email);
         const subject = asString(args.subject);
         const body = asString(args.body);
         const replyThreadId = asString(args.thread_id);
-        const ids = this.nextIds(mailbox);
+        const ids = nextIds(mailbox);
         const threadId =
           replyThreadId && mailbox.messages.some((message) => message.threadId === replyThreadId)
             ? replyThreadId
