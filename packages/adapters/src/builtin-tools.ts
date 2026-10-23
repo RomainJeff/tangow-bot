@@ -81,7 +81,15 @@ export const builtinAgentTools: ConnectorTool[] = [
     name: "computer_observe",
     description:
       "Capture the current screen of this bot's computer. Returns frame metadata and an image. Observe before coordinate-based actions and whenever another actor may have changed the desktop.",
-    inputSchema: { type: "object", properties: {} },
+    inputSchema: {
+      type: "object",
+      properties: {
+        attach: {
+          type: "boolean",
+          description: "Also post this screenshot to the chat for the user (default false).",
+        },
+      },
+    },
   },
   {
     name: "computer_act",

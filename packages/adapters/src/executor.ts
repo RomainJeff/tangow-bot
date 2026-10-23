@@ -3574,9 +3574,26 @@ export function createRunExecutor(deps: ExecutorDeps) {
             if (await getActiveTeachingSession(deps.prisma, run.spaceId, run.botId)) {
               return { error: "Teaching is in progress. Stop teaching before using the computer." };
             }
-            return computerScreenToolResult(async () =>
-              formatObservation(await deps.sandbox.observe(requireComputer(), context)),
-            );
+            return computerScreenToolResult(async () => {
+              const observation = await deps.sandbox.observe(requireComputer(), context);
+              if (args.attach !== true || !deps.artifacts) return formatObservation(observation);
+              const extension = observation.mimeType === "image/jpeg" ? "jpg" : "png";
+              const attached = await attachWorkspaceFileToThread(
+                { prisma: deps.prisma, artifacts: deps.artifacts },
+                {
+                  spaceId: run.spaceId,
+                  userId: run.userId,
+                  botId: bot.id,
+                  groupId: thread.groupId ?? undefined,
+                  runId: run.id,
+                  filePath: `screen-${observation.frameId.slice(0, 12)}.${extension}`,
+                  bytes: observation.image,
+                  operationId: executionId,
+                },
+              );
+              await publishMessage(deps, run, [attached.block], { toPerson: true });
+              return formatObservation(observation, "screenshot posted to the chat");
+            });
           }
           if (name === "computer_act") {
             if (heldForTakeover) {
