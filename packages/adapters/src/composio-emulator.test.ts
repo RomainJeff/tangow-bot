@@ -117,6 +117,68 @@ describe("ComposioEmulator", () => {
     expect(emulator.mailboxFor(composioEntityId(context))).toBeUndefined();
   });
 
+  it("runs a batch of sends and reports each action in order", async () => {
+    const emulator = new ComposioEmulator();
+    await emulator.begin({ provider: "GMAIL", redirectUrl: "http://example.test" }, context);
+
+    const events = await collectResults(emulator, "COMPOSIO_MULTI_EXECUTE_TOOL", {
+      tools: [
+        {
+          tool_slug: "GMAIL_REPLY_TO_THREAD",
+          account: "gmail_test",
+          arguments: { thread_id: "18c5f5d1a2b3c4d6", message_body: "On it." },
+        },
+        {
+          tool_slug: "OUTLOOK_SEND_EMAIL",
+          arguments: { to: "b@example.test", subject: "Hi", body: "Hello" },
+        },
+        { tool_slug: "GMAIL_SEND_DRAFT", arguments: { draft_id: "missing" } },
+      ],
+    });
+
+    expect(events).toEqual([
+      {
+        type: "result",
+        data: {
+          successful: false,
+          data: {
+            results: [
+              {
+                response: {
+                  successful: true,
+                  data: { messageId: "18c5f5e1", threadId: "18c5f5d1a2b3c4d6", labelIds: ["SENT"] },
+                },
+                tool_slug: "GMAIL_REPLY_TO_THREAD",
+                index: 0,
+              },
+              {
+                response: { successful: true, data: {} },
+                tool_slug: "OUTLOOK_SEND_EMAIL",
+                index: 1,
+              },
+              {
+                response: { successful: false, error: "Draft not found: missing", data: null },
+                tool_slug: "GMAIL_SEND_DRAFT",
+                index: 2,
+              },
+            ],
+            success_count: 2,
+            error_count: 1,
+          },
+          error: null,
+        },
+      },
+    ]);
+    const sent = emulator
+      .mailboxFor(composioEntityId(context))
+      ?.messages.slice(-2)
+      .map((message) => [message.to, message.subject, message.messageText]);
+    expect(sent).toEqual([
+      ["teammate@example.test", "Re: Quarterly planning notes", "On it."],
+      ["b@example.test", "Hi", "Hello"],
+    ]);
+  });
+
   it("accepts BCC-only Gmail send recipients", async () => {
     const emulator = new ComposioEmulator();
     await emulator.begin({ provider: "GMAIL", redirectUrl: "http://example.test" }, context);
@@ -174,7 +236,11 @@ describe("ComposioEmulator", () => {
       "GMAIL_SEND_EMAIL",
       "GMAIL_CREATE_EMAIL_DRAFT",
       "GMAIL_LIST_LABELS",
+      "GMAIL_REPLY_TO_THREAD",
+      "GMAIL_SEND_DRAFT",
+      "GMAIL_FORWARD_MESSAGE",
       "SLACK_EMULATED_ACTION",
+      "COMPOSIO_MULTI_EXECUTE_TOOL",
     ]);
     expect(tools.find((tool) => tool.name === "GMAIL_SEND_EMAIL")?.inputSchema).toMatchObject({
       type: "object",
@@ -279,7 +345,11 @@ describe("ComposioEmulator", () => {
     };
 
     const tools = await emulator.discoverTools(connectedContext);
-    expect(tools.map((tool) => tool.name)).toEqual(["GITHUB_LIST_RELEASES", "GITHUB_GET_RELEASE"]);
+    expect(tools.map((tool) => tool.name)).toEqual([
+      "GITHUB_LIST_RELEASES",
+      "GITHUB_GET_RELEASE",
+      "COMPOSIO_MULTI_EXECUTE_TOOL",
+    ]);
     expect(tools.map((tool) => tool.name)).not.toContain("GITHUB_EMULATED_ACTION");
 
     const events = [];
