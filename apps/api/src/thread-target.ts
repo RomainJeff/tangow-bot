@@ -3,6 +3,7 @@ import type { JobPublisher, SandboxProvider, SessionLog } from "@rakazo/adapter-
 import { linkPreviewJob, runContinueJob } from "@rakazo/adapter-kit";
 import {
   cancelComputerRunWork,
+  recoverBrowserApprovalScreens,
   releaseBotScreen,
   screenLeaseIdForRun,
   toComputerRef,
@@ -28,6 +29,7 @@ import {
 } from "@rakazo/core";
 import {
   blocksOf,
+  browserApprovalCheckpointOf,
   conversationRunFilter,
   createGroupRepos,
   createRepos,
@@ -1094,11 +1096,11 @@ export async function stopThreadRuns(
   actor: Actor,
   target: ThreadTarget,
 ) {
-  const { runIds, computers, leases } = await deps.prisma.$transaction(async (tx) => {
+  const { runIds, computers, leases, heldRunIds } = await deps.prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM threads WHERE id = ${target.threadId} FOR UPDATE`;
     const active = await tx.run.findMany({
       where: { threadId: target.threadId, status: { in: [...ACTIVE_RUN_STATUSES] } },
-      select: { id: true },
+      select: { id: true, checkpoint: true },
     });
     const ids = active.map((run) => run.id);
     await logCancelledRunsInTransaction(tx, ids, actor.userId);
@@ -1142,7 +1144,14 @@ export async function stopThreadRuns(
           },
         })
       : [];
-    return { runIds: ids, computers, leases };
+    return {
+      runIds: ids,
+      computers,
+      leases,
+      heldRunIds: new Set(
+        active.filter((run) => browserApprovalCheckpointOf(run.checkpoint)).map((run) => run.id),
+      ),
+    };
   });
   // Keep the DB lease until after teardown so a replacement run cannot claim the
   // screen while we still need the cancelled run's screenLeaseId to release it.
@@ -1187,7 +1196,7 @@ export async function stopThreadRuns(
   }
   await Promise.all(
     teardownTargets.map(async ({ computer, botId, runId, lease }) => {
-      if (!computer.providerRef) return;
+      if (heldRunIds.has(runId) || !computer.providerRef) return;
       const context = {
         operationId: "stop",
         traceId: "stop",
@@ -1204,6 +1213,7 @@ export async function stopThreadRuns(
       await releaseBotScreen(deps, ref, context);
     }),
   );
+  await recoverBrowserApprovalScreens(deps, { runIds });
   await expireComputerExecutionLeases(deps.prisma, { runId: { in: runIds } });
   await deps.prisma.computer.updateMany({
     where: { executionRunId: { in: runIds } },

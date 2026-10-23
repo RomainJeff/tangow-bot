@@ -1,4 +1,5 @@
 import type { AdapterContext, ComputerRef } from "@rakazo/adapter-kit";
+import type { BrowserApprovalCheckpoint } from "@rakazo/db";
 import { scheduleComputerSleep } from "./computer-idle.js";
 import type { ComputerExecutionLease } from "./computer-lifecycle.js";
 import {
@@ -44,9 +45,28 @@ export function createRunComputer(
     botId: string;
     fence: number;
     resumeHeldLease: boolean;
+    approvalHold?: BrowserApprovalCheckpoint | null;
+    spaceId: string;
+    userId: string;
   },
 ) {
-  let state: RunComputerState = { phase: "idle", lease: null };
+  let state: RunComputerState = run.approvalHold
+    ? {
+        phase: "ready",
+        lease: run.approvalHold.lease,
+        computer: run.approvalHold.computer,
+        context: {
+          operationId: run.runId,
+          traceId: run.runId,
+          botId: run.botId,
+          runId: run.runId,
+          spaceId: run.spaceId,
+          userId: run.userId,
+          screenLeaseId: run.approvalHold.screenLeaseId,
+          signal: new AbortController().signal,
+        },
+      }
+    : { phase: "idle", lease: null };
   const lease = () => (state.phase === "released" ? null : state.lease);
   const acquireLease = () =>
     acquireComputerExecutionLease(deps.prisma, {
@@ -89,7 +109,11 @@ export function createRunComputer(
   }
 
   function acquire(context: AdapterContext, waitOutTransition: boolean): Promise<ComputerRef> {
-    if (state.phase === "ready") return Promise.resolve(state.computer);
+    if (state.phase === "ready") {
+      context.screenLeaseId = state.context.screenLeaseId;
+      state.context = context;
+      return Promise.resolve(state.computer);
+    }
     if (state.phase === "acquiring") return state.ready;
     if (state.phase === "released") {
       return Promise.reject(new Error("The run has let go of its computer"));
@@ -113,6 +137,22 @@ export function createRunComputer(
     use: (context: AdapterContext) => acquire(context, true),
     current(): ComputerRef | null {
       return state.phase === "ready" ? state.computer : null;
+    },
+    releasedApprovalHold() {
+      state = { phase: "idle", lease: null };
+    },
+    approvalCheckpoint(effectId: string, deadline: number): BrowserApprovalCheckpoint | null {
+      if (state.phase !== "ready" || !state.context.screenLeaseId) return null;
+      return {
+        kind: "browser_approval_v1",
+        effectId,
+        computerId: run.computerId,
+        computer: state.computer,
+        screenLeaseId: state.context.screenLeaseId,
+        lease: state.lease,
+        runFence: run.fence,
+        deadline,
+      };
     },
     async renew(): Promise<boolean> {
       const held = lease();

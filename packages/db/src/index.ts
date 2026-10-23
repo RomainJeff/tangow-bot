@@ -2,6 +2,7 @@ export * from "./backfill-session-log.js";
 export * from "./bootstrap-user.js";
 export * from "./bot-message-context.js";
 export * from "./bot-names.js";
+export * from "./browser-approval-checkpoint.js";
 export * from "./cancel-runs.js";
 export * from "./client.js";
 export * from "./computers.js";

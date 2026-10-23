@@ -673,22 +673,22 @@ export async function releaseComputerExecutionLease(
  */
 export async function releaseBotScreen(
   deps: {
-    prisma: PrismaClient;
+    prisma: Pick<PrismaClient, "bot">;
     sandbox: Pick<SandboxProvider, "releaseScreen">;
-    events: Pick<ThreadEvents, "append">;
+    events?: Pick<ThreadEvents, "append">;
   },
   computer: ComputerRef,
   context: AdapterContext,
-): Promise<void> {
-  if (!deps.sandbox.releaseScreen) return;
+): Promise<boolean> {
+  if (!deps.sandbox.releaseScreen) return false;
   try {
     await deps.sandbox.releaseScreen(computer, context);
   } catch {
     // A failed release keeps the slot and its token.
-    return;
+    return false;
   }
   const botId = context.botId;
-  if (!botId) return;
+  if (!botId) return true;
   const bot = await deps.prisma.bot
     .update({
       where: { id: botId },
@@ -700,7 +700,7 @@ export async function releaseBotScreen(
       },
     })
     .catch(() => null);
-  if (!bot?.thread || !bot.computer) return;
+  if (!bot?.thread || !bot.computer || !deps.events) return true;
   await deps.events
     .append({
       spaceId: bot.spaceId,
@@ -710,6 +710,7 @@ export async function releaseBotScreen(
       payload: { status: bot.computer.state },
     })
     .catch(() => undefined);
+  return true;
 }
 
 function isUniqueConstraintError(error: unknown) {

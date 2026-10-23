@@ -65,6 +65,7 @@ import {
   probeOpenAiCompatibleModels,
   provisionComputer,
   queueComputerUpdate,
+  recoverBrowserApprovalScreens,
   releaseBotScreen,
   releaseComputerExecutionLease,
   replaceComputer,
@@ -1576,6 +1577,7 @@ export function createRouter(deps: RouterDeps) {
         await Promise.all(
           cancelledRunIds.map((runId) => deps.jobs.cancel(runJobKey(runId)).catch(() => undefined)),
         );
+        await recoverBrowserApprovalScreens(deps, { runIds: cancelledRunIds });
         await purgeCompactedHistoryMemory(
           deps,
           context.actor,
@@ -1611,6 +1613,7 @@ export function createRouter(deps: RouterDeps) {
             deps.jobs.cancel(runJobKey(runId)).catch(() => undefined),
           ),
         );
+        await recoverBrowserApprovalScreens(deps, { runIds: rewound.cancelledRunIds });
         if (rewound.historyGeneration !== undefined) {
           await purgeCompactedHistoryMemory(
             deps,
