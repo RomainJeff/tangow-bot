@@ -6,6 +6,8 @@ export type OutboundAction = { toolName: string; args: Record<string, unknown> }
 export type OutboundRecipient = { role: "to" | "cc" | "bcc"; address: string };
 
 export type OutboundDraft = {
+  /** The app that sends, as approval rules name it. */
+  connectorKind: string;
   recipients: OutboundRecipient[];
   subject?: string;
   body: string;
@@ -26,7 +28,7 @@ export type OutboundCall =
   | { kind: "classic" }
   | { kind: "refuse"; error: string };
 
-export const OUTBOUND_DRAFT_MAX_LENGTH = 20_000;
+const OUTBOUND_DRAFT_MAX_LENGTH = 20_000;
 
 type FieldRole =
   | OutboundRecipient["role"]
@@ -121,10 +123,11 @@ function readOutbound(action: OutboundAction, connectorKinds: string[]): Outboun
     unexplained: false,
   };
   const args = readValue(action.args, undefined, reading) as Record<string, unknown>;
+  const connectorKind = connectorKindFromToolName(action.toolName, connectorKinds);
   const mail =
     reading.addressed ||
     words.some((word) => word.endsWith("mail")) ||
-    isEmailConnectorKind(connectorKindFromToolName(action.toolName, connectorKinds));
+    isEmailConnectorKind(connectorKind);
   if (!mail) return { kind: "none" };
   const [body] = reading.texts;
   if (
@@ -141,6 +144,7 @@ function readOutbound(action: OutboundAction, connectorKinds: string[]): Outboun
   return {
     kind: "draft",
     draft: {
+      connectorKind,
       recipients: reading.recipients,
       subject: reading.subjects[0],
       body,

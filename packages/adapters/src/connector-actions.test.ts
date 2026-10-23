@@ -16,29 +16,44 @@ const send = {
 
 describe("connectorCallActions", () => {
   it.each([
-    ["COMPOSIO_MULTI_EXECUTE_TOOL", [send]],
-    ["mcp__composio__COMPOSIO_MULTI_EXECUTE_TOOL", [send]],
-    ["mcp__composio__COMPOSIO_MULTI_EXECUTE_TOOL", JSON.stringify([send])],
-  ])("unwraps a %s batch", (toolName, tools) => {
-    expect(connectorCallActions(toolName, { tools, thought: "Send it" })).toEqual([
-      { toolName: "GMAIL_SEND_EMAIL", args: send.arguments },
-    ]);
+    ["COMPOSIO_MULTI_EXECUTE_TOOL", [send], false],
+    ["mcp__composio__COMPOSIO_MULTI_EXECUTE_TOOL", [send], false],
+    ["mcp__composio__COMPOSIO_MULTI_EXECUTE_TOOL", JSON.stringify([send]), true],
+    ["resource-1:COMPOSIO_MULTI_EXECUTE_TOOL", [send], false],
+    ["resource-1:COMPOSIO%5FMULTI%5FEXECUTE%5FTOOL", [send], false],
+    [" composio_multi_execute_tool ", [send], false],
+  ])("unwraps a %s batch", (toolName, tools, serialized) => {
+    expect(connectorCallActions(toolName, { tools, thought: "Send it" })).toEqual({
+      kind: "actions",
+      actions: [{ toolName: "GMAIL_SEND_EMAIL", args: send.arguments }],
+      serialized,
+    });
   });
 
   it("keeps every action of a batch in order", () => {
     const fetch = { tool_slug: "GMAIL_FETCH_EMAILS" };
-    expect(connectorCallActions("COMPOSIO_MULTI_EXECUTE_TOOL", { tools: [fetch, send] })).toEqual([
-      { toolName: "GMAIL_FETCH_EMAILS", args: {} },
-      { toolName: "GMAIL_SEND_EMAIL", args: send.arguments },
-    ]);
+    expect(connectorCallActions("COMPOSIO_MULTI_EXECUTE_TOOL", { tools: [fetch, send] })).toEqual({
+      kind: "actions",
+      actions: [
+        { toolName: "GMAIL_FETCH_EMAILS", args: {} },
+        { toolName: "GMAIL_SEND_EMAIL", args: send.arguments },
+      ],
+      serialized: false,
+    });
+  });
+
+  it("leaves a tool that is not a batch to itself", () => {
+    expect(connectorCallActions("GMAIL_SEND_EMAIL", { tools: [send] })).toBeUndefined();
+    expect(connectorCallActions("COMPOSIO_SEARCH_TOOLS", { queries: [] })).toBeUndefined();
   });
 
   it.each([
-    ["a tool that is not a batch", "GMAIL_SEND_EMAIL", { tools: [send] }],
-    ["an empty batch", "COMPOSIO_MULTI_EXECUTE_TOOL", { tools: [] }],
-    ["an unparseable batch", "COMPOSIO_MULTI_EXECUTE_TOOL", { tools: "[" }],
-    ["an item without a slug", "COMPOSIO_MULTI_EXECUTE_TOOL", { tools: [send, { arguments: {} }] }],
-  ])("leaves %s to the wrapper", (_, toolName, args) => {
-    expect(connectorCallActions(toolName, args)).toBeUndefined();
+    ["an empty batch", { tools: [] }],
+    ["a batch without tools", { thought: "Send it" }],
+    ["an unparseable batch", { tools: "[" }],
+    ["an item without a slug", { tools: [send, { arguments: {} }] }],
+    ["an item whose arguments are not an object", { tools: [{ ...send, arguments: "x" }] }],
+  ])("marks %s as unreadable", (_, args) => {
+    expect(connectorCallActions("COMPOSIO_MULTI_EXECUTE_TOOL", args)).toEqual({ kind: "opaque" });
   });
 });
