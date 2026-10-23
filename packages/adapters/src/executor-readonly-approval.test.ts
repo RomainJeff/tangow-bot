@@ -46,13 +46,14 @@ function fixture({
     properties: { id: { type: "string" } },
     required: ["id"],
   } as Record<string, unknown>,
+  routeToolName = undefined as string | undefined,
 } = {}) {
   const tool: ConnectorTool = {
     name,
     description: "Read an item",
     readOnly: true,
     inputSchema,
-    route: { connectorId: "demo", resourceId: "resource-1", toolName: name },
+    route: { connectorId: "demo", resourceId: "resource-1", toolName: routeToolName ?? name },
   };
   const effects: Effect[] = [];
   const results: unknown[] = [];
@@ -501,6 +502,19 @@ describe("connector read-only metadata and approval enforcement", () => {
         rules: [emailRule, { effect: "always_allow", matchKind: "tool", matchValue: name }],
       });
       f.setCalls([{ args: batch("GMAIL_FETCH_EMAILS", "GMAIL_SEND_EMAIL"), executionId: "c1" }]);
+      await f.run();
+      expect(f.execute).not.toHaveBeenCalled();
+      expect(f.pauseRunForInput).toHaveBeenCalledOnce();
+    });
+
+    it("asks for a send inside a batch whose tool was renamed to stay unique", async () => {
+      const f = fixture({
+        name: "installed__install-2__COMPOSIO_MULTI_EXECUTE_TOOL",
+        routeToolName: "COMPOSIO_MULTI_EXECUTE_TOOL",
+        inputSchema,
+        rules: [emailRule],
+      });
+      f.setCalls([{ args: batch("GMAIL_SEND_EMAIL"), executionId: "c1" }]);
       await f.run();
       expect(f.execute).not.toHaveBeenCalled();
       expect(f.pauseRunForInput).toHaveBeenCalledOnce();

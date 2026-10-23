@@ -2618,7 +2618,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
           const connectorKind = connectorKindFromToolName(name, pluginProviders);
           // A batch is judged by what it runs: any inner action a rule asks for asks, otherwise
           // the wrapper's own rules apply, so an old "always allow" on the wrapper still holds.
-          const innerActions = viaConnector ? connectorCallActions(name, args) : undefined;
+          // The route keeps the server's own tool name; `name` may carry a uniquifying prefix.
+          const innerActions = viaConnector
+            ? connectorCallActions(connectorCall.route?.toolName ?? name, args)
+            : undefined;
           const approvalRules = requiresMandatoryApproval ? [] : await loadApprovalRules();
           const approvalResolved = requiresMandatoryApproval
             ? { decision: "ask" as const, source: "default" as const, matchingRules: [] }
