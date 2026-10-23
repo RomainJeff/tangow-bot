@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-10-24
+
+#### Fixed
+
+- After you deny an approval card, the bot now tells you it did not do the action instead of asking you to approve it again, on web, desktop and iPhone.
+
 ### 2026-10-21
 
 #### Changed

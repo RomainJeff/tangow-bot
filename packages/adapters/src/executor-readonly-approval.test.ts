@@ -78,22 +78,10 @@ function fixture({
       async ({
         where,
       }: {
-        where?: {
-          id?: string;
-          runId?: string;
-          status?: string;
-          kind?: string;
-          answeredAt?: { gte: Date };
-          result?: unknown;
-        };
+        where?: { id?: string; runId?: string; status?: string; kind?: string; result?: unknown };
       } = {}) =>
         effects.filter((effect) => {
           if (where?.status && effect.status !== where.status) return false;
-          if (
-            where?.answeredAt &&
-            !(effect.answeredAt && effect.answeredAt >= where.answeredAt.gte)
-          )
-            return false;
           if (where?.result && effect.result != null) return false;
           if (where?.kind && effect.kind !== where.kind) return false;
           if (where?.runId && effect.runId && effect.runId !== where.runId) return false;
