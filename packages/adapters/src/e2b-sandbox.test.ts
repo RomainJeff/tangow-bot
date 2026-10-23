@@ -973,11 +973,11 @@ function _unwrapSetupCommand(command: string): string {
 describe("e2bScreenUrl", () => {
   it("uses HTTP only for a local *.localhost proxy", () => {
     expect(e2bScreenUrl("6080-sbx.localhost:13002")).toBe(
-      "http://6080-sbx.localhost:13002/vnc.html",
+      "http://6080-sbx.localhost:13002/embed.html",
     );
-    expect(e2bScreenUrl("6080-sbx.e2b.app")).toBe("https://6080-sbx.e2b.app/vnc.html");
+    expect(e2bScreenUrl("6080-sbx.e2b.app")).toBe("https://6080-sbx.e2b.app/embed.html");
     expect(e2bScreenUrl("6080-sbx.localhost.example.com")).toBe(
-      "https://6080-sbx.localhost.example.com/vnc.html",
+      "https://6080-sbx.localhost.example.com/embed.html",
     );
   });
 });
