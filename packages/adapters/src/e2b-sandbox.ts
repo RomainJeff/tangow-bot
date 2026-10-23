@@ -132,7 +132,7 @@ function errorMessage(error: unknown): string {
 }
 
 /** A self-hosted proxy reached on a local `*.localhost` domain serves plain HTTP. */
-export function e2bScreenUrl(host: string): string {
+function e2bScreenUrl(host: string): string {
   const scheme = /^([^.:]+\.)*localhost(:\d+)?$/.test(host) ? "http" : "https";
   return `${scheme}://${host}/embed.html`;
 }

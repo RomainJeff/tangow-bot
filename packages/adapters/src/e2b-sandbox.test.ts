@@ -7,12 +7,7 @@ import { Sandbox, SandboxNotFoundError, TimeoutError } from "@e2b/desktop";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
 import { fakeE2BMachine } from "./e2b-machine.test-support.js";
 import type { E2BSandboxSdk } from "./e2b-sandbox.js";
-import {
-  E2BSandboxProvider,
-  e2bScreenUrl,
-  isSandboxGoneError,
-  linkWorkspaceCommand,
-} from "./e2b-sandbox.js";
+import { E2BSandboxProvider, isSandboxGoneError, linkWorkspaceCommand } from "./e2b-sandbox.js";
 import { desktopCommandResponder } from "./linux-desktop.test-support.js";
 
 const context = {
@@ -56,6 +51,37 @@ describe("E2B computer backend", () => {
       expect.stringContaining("expired-control-token"),
       expect.objectContaining({ signal: context.signal }),
     );
+  });
+
+  it.each([
+    ["6080-sbx.localhost:13002", "http:"],
+    ["6080-sbx.e2b.app", "https:"],
+    ["6080-sbx.localhost.example.com", "https:"],
+  ])("serves the screen embed page from %s over %s", async (host, protocol) => {
+    const sdk = {
+      connect: vi.fn(async () => ({
+        sandboxId: "existing",
+        getInfo: async () => ({ metadata: {} }),
+        display: ":0",
+        getHost: () => host,
+        commands: {
+          run: vi.fn(async () => ({ stdout: "RAKAZO_DESKTOP=0:key\n", stderr: "", exitCode: 0 })),
+        },
+      })),
+    } as unknown as E2BSandboxSdk;
+    const computer = {
+      id: "existing",
+      providerRef: "existing",
+      kind: "e2b" as const,
+      botId: "bot",
+    };
+    const screen = await new E2BSandboxProvider("test-key", sdk).connectScreen(
+      computer,
+      { view: "stream" },
+      context,
+    );
+    const url = new URL(screen.url!);
+    expect([url.protocol, url.host, url.pathname]).toEqual([protocol, host, "/embed.html"]);
   });
 
   it("reconnects concurrent primary viewers without using the SDK's global VNC lifecycle", async () => {
@@ -969,15 +995,3 @@ describe("sandbox-gone detection", () => {
 function _unwrapSetupCommand(command: string): string {
   return command.startsWith("bash -c '") ? command.slice(9, -1).replaceAll(`'"'"'`, "'") : command;
 }
-
-describe("e2bScreenUrl", () => {
-  it("uses HTTP only for a local *.localhost proxy", () => {
-    expect(e2bScreenUrl("6080-sbx.localhost:13002")).toBe(
-      "http://6080-sbx.localhost:13002/embed.html",
-    );
-    expect(e2bScreenUrl("6080-sbx.e2b.app")).toBe("https://6080-sbx.e2b.app/embed.html");
-    expect(e2bScreenUrl("6080-sbx.localhost.example.com")).toBe(
-      "https://6080-sbx.localhost.example.com/embed.html",
-    );
-  });
-});

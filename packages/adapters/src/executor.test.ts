@@ -1064,11 +1064,11 @@ description: Prepare standup notes
   it("restores a takeover checkpoint when a switching computer requeues the run", async () => {
     const updateMany = vi.fn(
       async (args: {
-        where: { checkpoint?: string | null | { in: string[] } };
+        where: { checkpoint?: string | null; OR?: Array<{ checkpoint: { in?: string[] } }> };
         data: { status?: string; checkpoint?: string | null };
       }) => {
         if (args.data.status === "leased" || args.data.status === "running") return { count: 1 };
-        if (args.where.checkpoint && typeof args.where.checkpoint === "object") return { count: 0 };
+        if (args.where.OR) return { count: 0 };
         return { count: 1 };
       },
     );
@@ -1114,7 +1114,7 @@ description: Prepare standup notes
     let checkpoint: string | null = null;
     const updateMany = vi.fn(
       async (args: {
-        where: { checkpoint?: string | null | { in: string[] } };
+        where: { checkpoint?: string | null; OR?: Array<{ checkpoint: { in?: string[] } }> };
         data: { status?: string; checkpoint?: string | null };
       }) => {
         if (args.data.status === "leased") {
@@ -1125,8 +1125,11 @@ description: Prepare standup notes
           checkpoint = "takeover";
           return { count: 1 };
         }
-        if (args.where.checkpoint && typeof args.where.checkpoint === "object") {
-          return { count: args.where.checkpoint.in.includes(checkpoint ?? "") ? 1 : 0 };
+        if (args.where.OR) {
+          const held = args.where.OR.some((match) =>
+            match.checkpoint.in?.includes(checkpoint ?? ""),
+          );
+          return { count: held ? 1 : 0 };
         }
         return { count: args.where.checkpoint === null && checkpoint === null ? 1 : 0 };
       },
@@ -1162,7 +1165,7 @@ description: Prepare standup notes
     expect(updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          checkpoint: { in: ["takeover", "takeover-skipped"] },
+          OR: expect.arrayContaining([{ checkpoint: { in: ["takeover", "takeover-skipped"] } }]),
         }),
         data: expect.objectContaining({ status: "queued" }),
       }),
@@ -1180,11 +1183,11 @@ description: Prepare standup notes
   it("returns a held takeover to waiting_takeover when the computer is switching", async () => {
     const updateMany = vi.fn(
       async (args: {
-        where: { checkpoint?: string | null | { in: string[] } };
+        where: { checkpoint?: string | null; OR?: Array<{ checkpoint: { in?: string[] } }> };
         data: { status?: string; checkpoint?: string | null };
       }) => {
         if (args.data.status === "leased" || args.data.status === "running") return { count: 1 };
-        if (args.where.checkpoint && typeof args.where.checkpoint === "object") return { count: 0 };
+        if (args.where.OR) return { count: 0 };
         return { count: 1 };
       },
     );
