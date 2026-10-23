@@ -10,6 +10,7 @@ import type {
   RealtimeFanout,
   SandboxProvider,
   TransactionalEmailProvider,
+  WorkerProvider,
 } from "@rakazo/adapter-kit";
 import type {
   ComposioProvider,
@@ -68,6 +69,7 @@ import {
   SpaceMemoryProviderResolver,
   toTeamChatInbound,
 } from "@rakazo/adapters";
+import type { GuestConnector } from "@rakazo/adapters/runtime-worker";
 import { blockedAuthPaths, createAuth } from "@rakazo/auth";
 import { signupPolicyFromEnv } from "@rakazo/core";
 import type { Pool, PrismaClient } from "@rakazo/db";
@@ -135,6 +137,7 @@ export async function createApp(
     prisma?: PrismaClient;
     realtime?: RealtimeFanout;
     sandbox?: SandboxProvider;
+    workers?: WorkerProvider & GuestConnector;
     composio?: ComposioProvider;
     pipedream?: ManagedConnectorProvider;
     messaging?: MessagingSurface;
@@ -147,6 +150,7 @@ export async function createApp(
     prisma: prismaOverride,
     realtime: realtimeOverride,
     sandbox: sandboxOverride,
+    workers: workersOverride,
     composio: composioOverride,
     pipedream: pipedreamOverride,
     messaging: messagingOverride,
@@ -243,7 +247,10 @@ export async function createApp(
   const oauthLogins = new PiOAuthLogins();
   const home = new LocalAgentHomeStore(env.dataDir);
   const artifacts = new LocalArtifactStore(env.dataDir);
-  const workers = composeWorkers(prisma, createWorkerProvider(env.workerProvider));
+  const workers = composeWorkers(
+    prisma,
+    workersOverride ?? createWorkerProvider(env.workerProvider),
+  );
   const memory = new MarkdownMemoryStore(prisma);
   const mcp = new McpConnector(
     prisma,
