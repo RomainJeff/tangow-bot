@@ -273,6 +273,7 @@ import {
 } from "./computer-support.js";
 import { observationToolResult, parseComputerActions } from "./computer-tools.js";
 import { checkpointRunComputerWorkspace } from "./computer-workspace.js";
+import { connectorCallActions } from "./connector-actions.js";
 import { redactConnectorPayload, sanitizeConnectorError } from "./connector-safety.js";
 import { formatCurrentTimeInstruction } from "./current-time.js";
 import type { DecisionProviderResolver } from "./decision-provider-factory.js";
@@ -2613,17 +2614,24 @@ export function createRunExecutor(deps: ExecutorDeps) {
             proposal || requiresUnattendedApproval || toolRequiresApproval(name, viaConnector);
           const requiresMandatoryApproval =
             proposal || requiresUnattendedApproval || toolRequiresExplicitApproval(name);
-          const connectorKind = connectorKindFromToolName(
-            name,
-            connectedPlugins.map((plugin) => plugin.provider),
-          );
+          const pluginProviders = connectedPlugins.map((plugin) => plugin.provider);
+          const connectorKind = connectorKindFromToolName(name, pluginProviders);
+          // A batch is judged by what it runs: any inner action a rule asks for asks, otherwise
+          // the wrapper's own rules apply, so an old "always allow" on the wrapper still holds.
+          const innerActions = viaConnector ? connectorCallActions(name, args) : undefined;
+          const approvalRules = requiresMandatoryApproval ? [] : await loadApprovalRules();
           const approvalResolved = requiresMandatoryApproval
             ? { decision: "ask" as const, source: "default" as const, matchingRules: [] }
-            : resolveActionApprovalDetail({
-                toolName: name,
-                connectorKind,
-                rules: await loadApprovalRules(),
-              });
+            : (innerActions
+                ?.map((action) =>
+                  resolveActionApprovalDetail({
+                    toolName: action.toolName,
+                    connectorKind: connectorKindFromToolName(action.toolName, pluginProviders),
+                    rules: approvalRules,
+                  }),
+                )
+                .find((resolved) => resolved.decision === "ask") ??
+              resolveActionApprovalDetail({ toolName: name, connectorKind, rules: approvalRules }));
           const autoReviewPref = requiresMandatoryApproval
             ? false
             : await loadAutoReviewPreference();
@@ -2880,6 +2888,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   reviewReason,
                   routineCard,
                   runUserId: run.userId,
+                  actions: innerActions,
                 }),
               ],
               effect: {

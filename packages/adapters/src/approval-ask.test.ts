@@ -179,4 +179,30 @@ describe("buildApprovalAskBlock", () => {
       expect(block.detail).toBe("Instructions:\n  count 1 [redacted]");
     });
   });
+
+  it("shows each action of a batch and offers no always-allow for the wrapper", () => {
+    const block = buildApprovalAskBlock(
+      "effect-1",
+      "mcp__composio__COMPOSIO_MULTI_EXECUTE_TOOL",
+      { tools: [] },
+      [],
+      {
+        actions: [
+          { toolName: "GMAIL_FETCH_EMAILS", args: { query: "is:unread" } },
+          {
+            toolName: "GMAIL_SEND_EMAIL",
+            args: { recipient_email: "person@example.test", subject: "Hi" },
+          },
+        ],
+      },
+    );
+    expect(block).toMatchObject({
+      text: "Review before GMAIL_FETCH_EMAILS, GMAIL_SEND_EMAIL → person@example.test",
+      detail: "GMAIL_FETCH_EMAILS\nGMAIL_SEND_EMAIL\n  to: person@example.test\n  subject: Hi",
+      actions: [
+        { id: "allow", label: "Allow once" },
+        { id: "deny", label: "Deny" },
+      ],
+    });
+  });
 });
