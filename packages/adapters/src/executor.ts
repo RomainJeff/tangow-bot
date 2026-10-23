@@ -67,6 +67,7 @@ import {
 import type {
   ActionApprovalRule,
   CreatedRoutine,
+  OutboundCall,
   ProposalEffectKind,
   ProposalRefusal,
   RoutineCard,
@@ -342,6 +343,7 @@ import {
   modelAcceptsImageInput,
   modelIdSupportsImages,
 } from "./model-vision.js";
+import { isStoredDraft, outboundAskDraft, readConnectorOutbound } from "./outbound-gate.js";
 import { toOAuthCredential } from "./pi-credentials.js";
 import {
   parseModelSecret,
@@ -3342,18 +3344,26 @@ export function createRunExecutor(deps: ExecutorDeps) {
             viaConnector,
             localTools.get(name),
           );
-          const requiresApprovalByDefault =
-            proposal || requiresUnattendedApproval || toolRequiresApproval(name, viaConnector);
-          const requiresMandatoryApproval =
-            proposal || requiresUnattendedApproval || toolRequiresExplicitApproval(name);
           const pluginProviders = connectedPlugins.map((plugin) => plugin.provider);
           const connectorKind = connectorKindFromToolName(name, pluginProviders);
           // A batch is judged by what it runs: any inner action a rule asks for asks, otherwise
           // the wrapper's own rules apply, so an old "always allow" on the wrapper still holds.
           // The route keeps the server's own tool name; `name` may carry a uniquifying prefix.
-          const innerActions = viaConnector
-            ? connectorCallActions(connectorCall.route?.toolName ?? name, args)
-            : undefined;
+          const ownToolName = connectorCall.route?.toolName ?? name;
+          const contained = viaConnector ? connectorCallActions(ownToolName, args) : undefined;
+          const innerActions = contained?.kind === "actions" ? contained.actions : undefined;
+          // A mail always shows to its owner: no rule, review or trusted trigger lets it leave.
+          const outbound: OutboundCall = viaConnector
+            ? readConnectorOutbound(ownToolName, args, contained, pluginProviders)
+            : { kind: "none" };
+          if (outbound.kind === "refuse") return { error: outbound.error };
+          const requiresApprovalByDefault =
+            proposal || requiresUnattendedApproval || toolRequiresApproval(name, viaConnector);
+          const requiresMandatoryApproval =
+            proposal ||
+            requiresUnattendedApproval ||
+            toolRequiresExplicitApproval(name) ||
+            outbound.kind !== "none";
           const approvalRules = requiresMandatoryApproval ? [] : await loadApprovalRules();
           const approvalResolved = requiresMandatoryApproval
             ? { decision: "ask" as const, source: "default" as const, matchingRules: [] }
@@ -3460,6 +3470,23 @@ export function createRunExecutor(deps: ExecutorDeps) {
               effectKey,
             });
             if (refusal) return "error" in refusal ? refusal : refusal.result;
+          }
+          if (outbound.kind === "draft" && !approvedReplayConsumed) {
+            const waiting = await deps.prisma.externalEffect.findMany({
+              where: {
+                status: "intended",
+                runId: { not: runId },
+                run: { threadId: thread.id, botId: bot.id, status: "waiting_input" },
+              },
+              select: { kind: true, request: true },
+            });
+            if (
+              waiting.some((effect) =>
+                isStoredDraft(effect, CATALOG_APPROVAL_TOOL, pluginProviders),
+              )
+            ) {
+              return { error: "A draft is already waiting for the user." };
+            }
           }
           // Connector read-only hints must not bypass approval, review, or replay decisions.
           const applied =
@@ -3649,6 +3676,17 @@ export function createRunExecutor(deps: ExecutorDeps) {
               }
             }
             if (!browserApprovalCheckpoint) await retireApprovalHold();
+            const draft =
+              outbound.kind === "draft"
+                ? await outboundAskDraft(outbound.draft, {
+                    connections: connectedPlugins,
+                    catalog: (connectorId) =>
+                      deps.connectors
+                        ?.managed(connectorId)
+                        ?.catalog(context, outbound.draft.connectorKind),
+                    toolAppName: exposedConnectorTools.find((tool) => tool.name === name)?.appName,
+                  })
+                : undefined;
             const paused = await deps.events.pauseRunForInput({
               spaceId: run.spaceId,
               threadId: run.threadId,
@@ -3663,6 +3701,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   routineCard,
                   runUserId: run.userId,
                   actions: innerActions,
+                  draft,
+                  unreadable: outbound.kind === "classic",
                 }),
               ],
               effect: {

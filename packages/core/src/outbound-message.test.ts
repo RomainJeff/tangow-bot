@@ -23,6 +23,7 @@ describe("readOutboundCall", () => {
     expect(readOutboundCall([tracedSend])).toEqual({
       kind: "draft",
       draft: {
+        connectorKind: "gmail",
         recipients: [{ role: "to", address: "someone@example.com" }],
         subject: "Test Chief",
         body: "Hello from Chief.",

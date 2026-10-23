@@ -80,12 +80,20 @@ function fixture({
       async ({
         where,
       }: {
-        where?: { id?: string; runId?: string; status?: string; kind?: string };
+        where?: {
+          id?: string;
+          runId?: string | { not: string };
+          status?: string;
+          kind?: string;
+        };
       } = {}) =>
         effects.filter((effect) => {
           if (where?.status && effect.status !== where.status) return false;
           if (where?.kind && effect.kind !== where.kind) return false;
-          if (where?.runId && effect.runId && effect.runId !== where.runId) return false;
+          if (typeof where?.runId === "object" && effect.runId === where.runId.not) return false;
+          if (typeof where?.runId === "string" && effect.runId && effect.runId !== where.runId) {
+            return false;
+          }
           if (where?.id && effect.id !== where.id) return false;
           return true;
         }),
@@ -501,23 +509,23 @@ describe("connector read-only metadata and approval enforcement", () => {
       properties: { tools: { type: "array" }, thought: { type: "string" } },
       required: ["tools"],
     };
-    const emailRule: ActionApprovalRule = {
+    const purchaseRule: ActionApprovalRule = {
       effect: "require_approval",
       matchKind: "category",
-      matchValue: "email",
+      matchValue: "purchase",
     };
-    const batch = (...slugs: string[]) => ({
-      tools: slugs.map((tool_slug) => ({
-        tool_slug,
-        account: "gmail_test",
-        arguments: { recipient_email: "someone@example.com", subject: "Hi", body: "Hello" },
-      })),
-      thought: "Send it",
-    });
+    const charge = { tool_slug: "STRIPE_CREATE_CHARGE", arguments: { amount: 10 } };
+    const read = { tool_slug: "GMAIL_FETCH_EMAILS", arguments: {} };
+    const mail = {
+      tool_slug: "GMAIL_SEND_EMAIL",
+      account: "gmail_test",
+      arguments: { recipient_email: "someone@example.com", subject: "Hi", body: "Hello" },
+    };
+    const batch = (...tools: object[]) => ({ tools, thought: "Do it" });
 
-    it.each([false, true])("asks for a send inside a batch (catalog = %s)", async (catalog) => {
-      const f = fixture({ name, catalog, inputSchema, rules: [emailRule] });
-      f.setCalls([{ args: batch("GMAIL_SEND_EMAIL"), executionId: "c1" }]);
+    it.each([false, true])("asks for a charge inside a batch (catalog = %s)", async (catalog) => {
+      const f = fixture({ name, catalog, inputSchema, rules: [purchaseRule] });
+      f.setCalls([{ args: batch(charge), executionId: "c1" }]);
       await f.run();
       expect(f.execute).not.toHaveBeenCalled();
       expect(f.pauseRunForInput).toHaveBeenCalledWith(
@@ -525,61 +533,241 @@ describe("connector read-only metadata and approval enforcement", () => {
           blocks: [
             expect.objectContaining({
               kind: "ask",
-              text: "Review before GMAIL_SEND_EMAIL → someone@example.com",
-              detail: "to: someone@example.com\nsubject: Hi\nbody: Hello",
+              text: "Review before STRIPE_CREATE_CHARGE → 10",
+              detail: "amount: 10",
             }),
           ],
         }),
       );
     });
 
-    it("lets a send inside a batch ask over an always-allow on the wrapper", async () => {
+    it("lets a charge inside a batch ask over an always-allow on the wrapper", async () => {
       const f = fixture({
         name,
         catalog: true,
         inputSchema,
-        rules: [emailRule, { effect: "always_allow", matchKind: "tool", matchValue: name }],
+        rules: [purchaseRule, { effect: "always_allow", matchKind: "tool", matchValue: name }],
       });
-      f.setCalls([{ args: batch("GMAIL_FETCH_EMAILS", "GMAIL_SEND_EMAIL"), executionId: "c1" }]);
+      f.setCalls([{ args: batch(read, charge), executionId: "c1" }]);
       await f.run();
       expect(f.execute).not.toHaveBeenCalled();
       expect(f.pauseRunForInput).toHaveBeenCalledOnce();
     });
 
-    it("asks for a send inside a batch whose tool was renamed to stay unique", async () => {
+    it("asks for a charge inside a batch whose tool was renamed to stay unique", async () => {
       const f = fixture({
         name: "installed__install-2__COMPOSIO_MULTI_EXECUTE_TOOL",
         routeToolName: "COMPOSIO_MULTI_EXECUTE_TOOL",
         inputSchema,
-        rules: [emailRule],
+        rules: [purchaseRule],
       });
-      f.setCalls([{ args: batch("GMAIL_SEND_EMAIL"), executionId: "c1" }]);
+      f.setCalls([{ args: batch(charge), executionId: "c1" }]);
       await f.run();
       expect(f.execute).not.toHaveBeenCalled();
       expect(f.pauseRunForInput).toHaveBeenCalledOnce();
     });
 
     it("runs a batch of reads under the same rule", async () => {
-      const f = fixture({ name, catalog: true, inputSchema, rules: [emailRule] });
-      f.setCalls([{ args: batch("GMAIL_FETCH_EMAILS"), executionId: "c1" }]);
+      const f = fixture({ name, catalog: true, inputSchema, rules: [purchaseRule] });
+      f.setCalls([{ args: batch(read), executionId: "c1" }]);
       await f.run();
       expect(f.execute).toHaveBeenCalledOnce();
       expect(f.pauseRunForInput).not.toHaveBeenCalled();
     });
 
-    it("replays the approved batch once", async () => {
-      const f = fixture({ name, catalog: true, inputSchema, rules: [emailRule] });
-      f.setCalls([{ args: batch("GMAIL_SEND_EMAIL"), executionId: "c1" }]);
+    it("sends an approved mail draft by replaying the batch once", async () => {
+      const f = fixture({ name, catalog: true, inputSchema });
+      f.setCalls([{ args: batch(mail), executionId: "c1" }]);
       await f.run();
       f.effects[0]!.status = "approved";
-      f.setCalls([{ args: batch("GMAIL_SEND_EMAIL"), executionId: "c2" }]);
+      f.setCalls([{ args: batch(mail), executionId: "c2" }]);
       await f.run();
       expect(f.execute).toHaveBeenCalledOnce();
       expect(f.execute).toHaveBeenCalledWith(
-        expect.objectContaining({ args: batch("GMAIL_SEND_EMAIL") }),
+        expect.objectContaining({ args: batch(mail) }),
         expect.anything(),
       );
       expect(f.effects[0]!.status).toBe("completed");
+    });
+  });
+
+  describe("outbound mail", () => {
+    const inputSchema = {
+      type: "object",
+      properties: {
+        to: { type: "string" },
+        recipient_email: { type: "string" },
+        cc: { type: "array", items: { type: "string" } },
+        subject: { type: "string" },
+        body: { type: "string" },
+        notes: { type: "string" },
+        is_html: { type: "boolean" },
+        include_signature: { type: "boolean" },
+      },
+    };
+    const send = {
+      recipient_email: "someone@example.com",
+      cc: ["copy@example.com"],
+      subject: "Test Chief",
+      body: "Hello from Chief.",
+      is_html: false,
+      include_signature: false,
+    };
+    const draftCard = {
+      kind: "ask",
+      actions: [
+        { id: "allow", label: "Send" },
+        { id: "deny", label: "Discard" },
+      ],
+      draft: {
+        app: { name: "Gmail", logo: null },
+        recipients: [
+          { role: "to", address: "someone@example.com" },
+          { role: "cc", address: "copy@example.com" },
+        ],
+        subject: "Test Chief",
+        body: "Hello from Chief.",
+      },
+    };
+    const classicActions = [
+      { id: "allow", label: "Allow once" },
+      { id: "deny", label: "Deny" },
+    ];
+    const always = (matchKind: "tool" | "connector" | "category", matchValue: string) => [
+      { effect: "always_allow" as const, matchKind, matchValue },
+    ];
+
+    it.each([
+      ["no rule", {}],
+      ["an always-allow rule on the tool", { rules: always("tool", "GMAIL_SEND_EMAIL") }],
+      ["an always-allow rule on the connector", { rules: always("connector", "gmail") }],
+      ["an always-allow rule on email", { rules: always("category", "email") }],
+      ["Auto Review on", { autoReview: true }],
+      ["a webhook routine trusted to act", { trigger: "webhook", requireToolApproval: false }],
+      ["the catalog wrapper", { catalog: true }],
+    ])("pauses a mail send on a draft under %s", async (_, options) => {
+      const f = fixture({ name: "GMAIL_SEND_EMAIL", inputSchema, ...options });
+      f.setCalls([{ args: send, executionId: "c1" }]);
+      await f.run();
+      expect(f.execute).not.toHaveBeenCalled();
+      expect(runAutoReviewJudge).not.toHaveBeenCalled();
+      expect(f.pauseRunForInput).toHaveBeenCalledWith(
+        expect.objectContaining({ blocks: [expect.objectContaining(draftCard)] }),
+      );
+    });
+
+    it("pauses the traced send inside a Composio batch on a draft", async () => {
+      const f = fixture({
+        name: "mcp__composio__COMPOSIO_MULTI_EXECUTE_TOOL",
+        catalog: true,
+        inputSchema: { type: "object", properties: { tools: { type: "array" } } },
+        rules: always("tool", "mcp__composio__COMPOSIO_MULTI_EXECUTE_TOOL"),
+      });
+      f.setCalls([
+        {
+          args: {
+            tools: [{ tool_slug: "GMAIL_SEND_EMAIL", account: "gmail_test", arguments: send }],
+            thought: "Send the test mail",
+          },
+          executionId: "c1",
+        },
+      ]);
+      await f.run();
+      expect(f.execute).not.toHaveBeenCalled();
+      expect(f.pauseRunForInput).toHaveBeenCalledWith(
+        expect.objectContaining({ blocks: [expect.objectContaining(draftCard)] }),
+      );
+    });
+
+    it("shows a send it cannot read on the plain card, every argument shown, never always", async () => {
+      const f = fixture({
+        name: "GMAIL_SEND_EMAIL",
+        inputSchema,
+        rules: always("tool", "GMAIL_SEND_EMAIL"),
+      });
+      f.setCalls([
+        { args: { to: "a@example.com", body: "Hi", notes: "evil@example.com" }, executionId: "c1" },
+      ]);
+      await f.run();
+      expect(f.execute).not.toHaveBeenCalled();
+      expect(f.pauseRunForInput).toHaveBeenCalledWith(
+        expect.objectContaining({
+          blocks: [
+            expect.objectContaining({
+              detail: "to: a@example.com\nbody: Hi\nnotes: evil@example.com",
+              actions: classicActions,
+            }),
+          ],
+        }),
+      );
+    });
+
+    it("asks for a batch it cannot read even with no rule", async () => {
+      const f = fixture({
+        name: "mcp__composio__COMPOSIO_MULTI_EXECUTE_TOOL",
+        inputSchema: { type: "object", properties: { tools: {} } },
+      });
+      f.setCalls([{ args: { tools: "[not json" }, executionId: "c1" }]);
+      await f.run();
+      expect(f.execute).not.toHaveBeenCalled();
+      expect(f.pauseRunForInput).toHaveBeenCalledWith(
+        expect.objectContaining({
+          blocks: [
+            expect.objectContaining({ detail: "tools: [not json", actions: classicActions }),
+          ],
+        }),
+      );
+    });
+
+    it("refuses a batch that sends among other actions before anything is recorded", async () => {
+      const f = fixture({
+        name: "mcp__composio__COMPOSIO_MULTI_EXECUTE_TOOL",
+        inputSchema: { type: "object", properties: { tools: { type: "array" } } },
+      });
+      f.setCalls([
+        {
+          args: {
+            tools: [
+              { tool_slug: "GMAIL_FETCH_EMAILS", arguments: {} },
+              { tool_slug: "GMAIL_SEND_EMAIL", arguments: send },
+            ],
+          },
+          executionId: "c1",
+        },
+      ]);
+      await f.run();
+      expect(f.results).toEqual([{ error: "Send this message on its own." }]);
+      expect(f.effects).toEqual([]);
+      expect(f.execute).not.toHaveBeenCalled();
+      expect(f.pauseRunForInput).not.toHaveBeenCalled();
+    });
+
+    it("refuses a second draft while one from this bot waits in the thread", async () => {
+      const f = fixture({ name: "GMAIL_SEND_EMAIL", inputSchema });
+      f.effects.push({
+        id: "waiting",
+        kind: "GMAIL_SEND_EMAIL",
+        idempotencyKey: "waiting-key",
+        status: "intended",
+        request: { recipient_email: "first@example.com", body: "First" },
+        runId: "run-0",
+      });
+      f.setCalls([{ args: send, executionId: "c1" }]);
+      await f.run();
+      expect(f.results).toEqual([{ error: "A draft is already waiting for the user." }]);
+      expect(f.effects.map((effect) => effect.id)).toEqual(["waiting"]);
+      expect(f.pauseRunForInput).not.toHaveBeenCalled();
+    });
+
+    it("leaves a send that is not mail to the usual gate", async () => {
+      const f = fixture({
+        name: "TWILIO_SEND_SMS",
+        inputSchema: { type: "object", properties: { to: {}, body: {} } },
+      });
+      f.setCalls([{ args: { to: "+15555550100", body: "Hi" }, executionId: "c1" }]);
+      await f.run();
+      expect(f.execute).toHaveBeenCalledOnce();
+      expect(f.pauseRunForInput).not.toHaveBeenCalled();
     });
   });
 });
