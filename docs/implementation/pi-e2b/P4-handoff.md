@@ -1,6 +1,39 @@
 # P4 N13 handoff
 
-N13 is incomplete. NFS locking and product Chrome now pass on a private corrected computer template. This draft records the tested scope and remaining gates; it does not close P4 or promote production defaults.
+N13 is complete for its live scope on the self-hosted E2B host. The lanes ran at source `51bb95ef0165e1d9d6f0cedf027c75ae657e0240`; the only later commit updates tests and stops exporting one test-only helper. OpenCode computer jobs were taken out of N13 by the maintainer, and production artifact delivery stays with P6. This handoff does not promote production defaults.
+
+## Final N13 run
+
+All 19 registered lanes passed in one batch with `pi-native` at source `51bb95ef0165e1d9d6f0cedf027c75ae657e0240`, recorded in [final-lanes.json](evidence/P4/final-lanes.json). The guest was built from that source (SHA-256 `488332bcc53854fc9b3550cfe7d59e10f786d5d358c92be9d27f7df93dbfcf86`) and uploaded into each owned worker. Computers ran real `E2BSandboxProvider.prepare` on the validated private computer template. Every lane ended with zero owned sandboxes and volumes; the deployment listed no sandbox afterwards and the remote scratch was removed. The lanes use the local model protocol fixture, so they prove runtime behavior, not model intelligence.
+
+Browser continuity passed on E2B, recorded in [browser-continuity.json](evidence/P4/browser-continuity.json):
+
+- **Pause and resume.** One computer on two volumes was paused by a genuine E2B timeout and reconnected. After resume, the product page ran in the original Chrome process with the same NFS profile mount, BrowserMetrics tmpfs mount, durable file descriptor and memory mapping. Form, cookie and localStorage survived, and so did a later release and reopen. This ran on a private diagnostic runtime candidate; the original backend and envd were restored and verified afterwards.
+- **Computer replacement.** Product export/import and core `replaceComputer` moved the computer to a new VM on the same two volumes, with at most one computer at a time. This ran on the original backend.
+- **Earlier failures.** Earlier attempts that stopped on fixture errors or an unexplained guest refusal are not counted as passes.
+
+A real model now drives the remote computer from the product chat, shown in [the 48-second recording](evidence/P4/media/chat-e2b.mp4), [desktop](evidence/P4/media/chat-e2b-desktop.png) and [phone](evidence/P4/media/chat-e2b-phone.png) captures. The flow used the normal API, UI, account and model connection, an E2B worker and the bot's dedicated E2B computer. The bot ran shell commands, browsed and posted screenshots of public pages into the thread; the last run provisioned a fresh computer. The "subagent" label above the bot's messages comes from a projection bug already fixed on `main` (`6d0aee5`); it reaches this feature with the next merge of `main`.
+
+Three product fixes came out of that flow:
+
+- `computer_observe` takes `attach`, which posts the captured frame to the chat and tells the model it was sent. Before, a bot asked for a screenshot could only fall back to shell capture commands, which fail.
+- E2B screens use plain HTTP for a `*.localhost` proxy domain, and the screen proxy accepts `*.localhost` targets as loopback (RFC 6761). Public and look-alike names stay rejected.
+- E2B screens load Rakazo's `embed.html` page, as the Docker computer does. noVNC's `vnc.html` reads `localStorage`, which the sandboxed screen frame denies.
+
+Through the product's screen proxy, the remote screen page loads and its VNC socket returns the RFB banner. Interactive takeover control from the UI was not checked.
+
+Reference measurements from these real runs, not pass criteria:
+
+| Tool | Calls | p50 | p90 |
+| --- | --- | --- | --- |
+| `computer_observe` | 5 | 0.79 s | 1.42 s |
+| `computer_act` (with settle wait) | 4 | 4.87 s | 5.84 s |
+| `browser_navigate` | 3 | 1.61 s | 4.02 s |
+| `shell` | 10 | 0.10 s | 0.15 s |
+
+A computer run's input totals ranged from 36,366 tokens for one shell command to 173,578 for a run with several screen actions. The MCP-only lane made its MCP call with zero computers and zero volumes.
+
+Five unit tests failed on this branch before the final run. Their mocks predated the browser-approval recovery queries from `7e9d411`; they now answer the current queries and keep their assertions.
 
 ## Implementation
 
@@ -99,11 +132,10 @@ The candidate build used an isolated image reference with unchanged canonical by
 
 ## Remaining work
 
-- Finish final evidence and CI review. Independent final review accepted source `17046afe246df98253acee7710b151c47f2fca10` and closed the dedicated-alias P1. The earlier compaction read proof remains pinned to `a554f2875cbccdbbd2b13032597138684bef04f1`.
-- Use the validated private candidate for the remaining integrated native-MCP browser, submission approval, takeover, screen-path read-once/cleanup, and OpenCode job/path/auth lanes. Direct product Chrome form, capture, and release/reopen persistence now pass. The native GUI app and remaining integrated gates are unverified. No extra screenshot VM is required.
-- Prepare production artifact delivery and computer-template promotion for P6. The private candidate does not change production defaults.
-- Keep the computerless Go proof separate from the remaining computer parity and OpenCode job/auth gates.
-- Capture the applicable product flows through the approved screenshot workflow once they run. Unrelated web or phone screens were not substituted. No native mobile screen changed, and no Electron E2E ran.
+- Check interactive takeover control from the UI on E2B. Viewing works through the screen proxy.
+- OpenCode computer jobs, their path and their auth were taken out of N13 by the maintainer.
+- Prepare production artifact delivery and computer-template promotion in P6. The private candidate template does not change production defaults.
+- Merge `main` into the feature branch, which brings the session-origin label fix.
 
 Normal screen cleanup remains best effort for the exact root `.rakazo-screen-<uuid>.png` namespace. Rare leftovers after abrupt termination are accepted. The stricter admission/runtime/NFS requirements remain abandoned.
 
