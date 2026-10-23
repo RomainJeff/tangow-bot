@@ -70,12 +70,16 @@ with (state / '.lock').open('a') as lock:
         parent_stat, target_stat = profile.stat(), target.stat()
         return [parent_stat.st_dev, parent_stat.st_ino, target_stat.st_dev, target_stat.st_ino, exact[0][0][0], parent_mount[0]]
 
+    uid, gid = int(os.environ['SUDO_UID']), int(os.environ['SUDO_GID'])
     saved = json.loads(receipt.read_text()) if receipt.exists() else None
     if exact:
         fields, fs = exact[0]
         options = set(fields[5].split(',')) | set(fs[2].split(','))
         if fs[:2] != ['tmpfs', 'rakazo-browser-metrics'] or not {'nosuid', 'nodev', 'noexec', 'size=65536k', 'nr_inodes=1024'} <= options:
             refuse('unexpected metrics mount')
+        target_stat = target.stat()
+        if (target_stat.st_uid, target_stat.st_gid, target_stat.st_mode & 0o7777) != (uid, gid, 0o700):
+            refuse('unexpected metrics owner or mode')
         if saved != identity(): refuse('metrics or durable profile identity changed')
         device = target.stat().st_dev
         expected_device = '%02x:%02x' % (os.major(device), os.minor(device))
@@ -97,7 +101,6 @@ with (state / '.lock').open('a') as lock:
     admitted = max(len(list(state.glob('*.json'))), sum(fs[:2] == ['tmpfs', 'rakazo-browser-metrics'] for _, fs in mounts))
     if admitted >= limit: refuse('metrics capacity exhausted')
     # Create durable directories as the browser user, never as the privileged mounter.
-    uid, gid = int(os.environ['SUDO_UID']), int(os.environ['SUDO_GID'])
     previous_uid, previous_gid = os.geteuid(), os.getegid()
     try:
         os.setegid(gid)
@@ -107,8 +110,7 @@ with (state / '.lock').open('a') as lock:
     finally:
         os.seteuid(previous_uid)
         os.setegid(previous_gid)
-    owner = profile.stat()
-    subprocess.run(['mount', '-t', 'tmpfs', '-o', 'size=64m,nr_inodes=1024,nosuid,nodev,noexec,mode=0700,uid=%d,gid=%d' % (owner.st_uid, owner.st_gid), 'rakazo-browser-metrics', str(target)], check=True, timeout=10)
+    subprocess.run(['mount', '-t', 'tmpfs', '-o', 'size=64m,nr_inodes=1024,nosuid,nodev,noexec,mode=0700,uid=%d,gid=%d' % (uid, gid), 'rakazo-browser-metrics', str(target)], check=True, timeout=10)
     # Read the kernel's mount ID after mounting. Never reuse a mount merely by path.
     for line in pathlib.Path('/proc/self/mountinfo').read_text().splitlines():
         left, right = line.split(' - ')

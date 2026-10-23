@@ -40,12 +40,27 @@ if hasattr(P(), '_accessor'): patches.append(patch.object(accessor, 'symlink', s
 for item in patches: item.start()
 P('/proc/self').mkdir(parents=True)
 P('/proc/meminfo').write_text('MemTotal:       1048576 kB\n')
-if scenario == 'new-profile': profile.parents[1].mkdir(parents=True)
+if scenario in ('new-profile', 'profile-owner-differs'): profile.parents[1].mkdir(parents=True)
 else: profile.mkdir(parents=True)
 mountinfo = P('/proc/self/mountinfo')
 base = '10 1 0:10 / /workspace/bots/bot rw - nfs server:/volume rw\n'
 mountinfo.write_text(base)
 commands = []
+original_stat = P.stat
+incompatible_target = False
+
+def reported_stat(value, *args, **kwargs):
+    result = original_stat(value, *args, **kwargs)
+    fields = list(result)
+    if value == profile and scenario == 'profile-owner-differs':
+        fields[4], fields[5] = result.st_uid + 1, result.st_gid + 1
+    if value == target and incompatible_target:
+        if scenario == 'reuse-wrong-uid': fields[4] += 1
+        if scenario == 'reuse-wrong-gid': fields[5] += 1
+        if scenario == 'reuse-wrong-mode': fields[0] = (fields[0] & ~0o7777) | 0o755
+    return os.stat_result(fields)
+
+patch.object(P, 'stat', reported_stat).start()
 
 def kernel(argv, **kwargs):
     commands.append(argv[0])
@@ -54,6 +69,7 @@ def kernel(argv, **kwargs):
         assert set(argv[4].split(',')) == {'size=64m', 'nr_inodes=1024', 'nosuid', 'nodev', 'noexec', 'mode=0700', 'uid=' + str(os.geteuid()), 'gid=' + str(os.getegid())}
         assert argv[5:] == ['rakazo-browser-metrics', str(target)]
         if scenario == 'mount-fails': raise RuntimeError('mount unsupported')
+        os.chmod(mapped(target), 0o700)
         mountinfo.write_text(base + '11 10 0:11 / ' + str(target) + ' rw,nosuid,nodev,noexec - tmpfs rakazo-browser-metrics rw,size=65536k,nr_inodes=1024\n')
     elif argv[0] == 'umount':
         assert argv == ['umount', '--', str(target)]
@@ -90,8 +106,9 @@ with patch.object(subprocess, 'run', kernel):
     if scenario == 'unknown-mount':
         target.mkdir()
         mountinfo.write_text(base + '11 10 0:11 / ' + str(target) + ' rw - tmpfs other rw\n')
-    if scenario in ('reuse-release', 'parent-remount', 'mapping-changed', 'unmount-fails', 'release-active', 'missing-mount', 'live-reuse'):
+    if scenario in ('reuse-release', 'parent-remount', 'mapping-changed', 'unmount-fails', 'release-active', 'missing-mount', 'live-reuse', 'reuse-wrong-uid', 'reuse-wrong-gid', 'reuse-wrong-mode'):
         assert attempt() == 'ok'
+        incompatible_target = True
         if scenario == 'parent-remount': mountinfo.write_text(mountinfo.read_text().replace('10 1 ', '12 1 '))
         if scenario == 'mapping-changed':
             P('/proc/123').mkdir()
@@ -129,6 +146,10 @@ it.each([
   ["live-reuse", "ok", ["mount"], 1],
   ["admission-full", "browser metrics: metrics capacity exhausted", [], 2],
   ["new-profile", "ok", ["mount"], 1],
+  ["profile-owner-differs", "ok", ["mount"], 1],
+  ["reuse-wrong-uid", "browser metrics: unexpected metrics owner or mode", ["mount"], 1],
+  ["reuse-wrong-gid", "browser metrics: unexpected metrics owner or mode", ["mount"], 1],
+  ["reuse-wrong-mode", "browser metrics: unexpected metrics owner or mode", ["mount"], 1],
   ["reuse-release", "ok", ["mount", "umount"], 0],
   ["bad-path", "browser metrics: unexpected managed profile", [], 0],
   ["mount-fails", "mount unsupported", ["mount"], 0],
