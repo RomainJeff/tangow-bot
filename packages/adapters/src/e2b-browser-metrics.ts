@@ -60,7 +60,7 @@ with (state / '.lock').open('a') as lock:
             for line in (process / 'maps').read_text().splitlines():
                 fields = line.split(None, 5)
                 if len(fields) == 6 and fields[5].startswith(str(target) + '/'):
-                    mappings.append((fields[3], int(fields[4])))
+                    mappings.append((fields[3], int(fields[4]), fields[5].endswith(' (deleted)')))
         except (FileNotFoundError, ProcessLookupError):
             continue
     if operation == 'release' and (owners or mappings):
@@ -80,7 +80,7 @@ with (state / '.lock').open('a') as lock:
         device = target.stat().st_dev
         expected_device = '%02x:%02x' % (os.major(device), os.minor(device))
         inodes = {entry.stat().st_ino for entry in target.iterdir() if entry.is_file()}
-        if any(dev != expected_device or inode not in inodes for dev, inode in mappings):
+        if any(dev != expected_device or inode <= 0 or (not deleted and inode not in inodes) for dev, inode, deleted in mappings):
             refuse('live metrics mapping changed')
         if operation == 'ensure': sys.exit(0)
         subprocess.run(['umount', '--', str(target)], check=True, timeout=10)

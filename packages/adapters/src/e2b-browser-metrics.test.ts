@@ -112,6 +112,11 @@ with patch.object(subprocess, 'run', kernel):
             P('/proc/123/maps').write_text('')
             sys.argv[1] = 'release'
         result = attempt()
+        if scenario == 'live-reuse':
+            assert result == 'ok'
+            active.unlink()
+            P('/proc/123/maps').write_text(P('/proc/123/maps').read_text().rstrip('\n') + ' (deleted)\n')
+            result = attempt()
         if scenario in ('reuse-release', 'unmount-fails'):
             sys.argv[1] = 'release'
             result = attempt()
