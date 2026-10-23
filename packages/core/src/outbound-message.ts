@@ -1,0 +1,207 @@
+import { connectorKindFromToolName, isEmailConnectorKind } from "./action-approval.js";
+
+/** One tool invocation a connector call performs, in the connector's own naming. */
+export type OutboundAction = { toolName: string; args: Record<string, unknown> };
+
+export type OutboundRecipient = { role: "to" | "cc" | "bcc"; address: string };
+
+export type OutboundDraft = {
+  recipients: OutboundRecipient[];
+  subject?: string;
+  body: string;
+  /** The sending account, when the call names it by address. */
+  account?: string;
+  /** The action's arguments with HTML and signature off: what leaves is what the card shows. */
+  args: Record<string, unknown>;
+};
+
+/**
+ * How a connector call that may send a message is gated. `draft` is a mail whose every
+ * argument is explained; `classic` looks like a send the reader cannot fully show; `none` is
+ * not a mail send and keeps today's gate.
+ */
+export type OutboundCall =
+  | { kind: "none" }
+  | { kind: "draft"; draft: OutboundDraft }
+  | { kind: "classic" }
+  | { kind: "refuse"; error: string };
+
+export const OUTBOUND_DRAFT_MAX_LENGTH = 20_000;
+
+type FieldRole =
+  | OutboundRecipient["role"]
+  | "text"
+  | "subject"
+  | "sender"
+  | "flag"
+  | "attachment"
+  | "inert";
+
+/** Argument names, lowercased without `_` or `-`. A connector with new names adds a line here. */
+const FIELD_ROLES: Record<string, FieldRole> = {
+  to: "to",
+  recipient: "to",
+  recipients: "to",
+  recipientemail: "to",
+  extrarecipients: "to",
+  toemail: "to",
+  torecipients: "to",
+  cc: "cc",
+  ccemails: "cc",
+  ccrecipients: "cc",
+  bcc: "bcc",
+  bccemails: "bcc",
+  bccrecipients: "bcc",
+  body: "text",
+  messagebody: "text",
+  message: "text",
+  text: "text",
+  content: "text",
+  subject: "subject",
+  from: "sender",
+  fromemail: "sender",
+  fromaddress: "sender",
+  sender: "sender",
+  userid: "sender",
+  account: "sender",
+  ishtml: "flag",
+  html: "flag",
+  includesignature: "flag",
+  signature: "flag",
+  attachment: "attachment",
+  attachments: "attachment",
+  file: "attachment",
+  files: "attachment",
+  threadid: "inert",
+  messageid: "inert",
+  thought: "inert",
+};
+
+const INHERITED_ROLES = new Set<FieldRole | undefined>([
+  "to",
+  "cc",
+  "bcc",
+  "sender",
+  "attachment",
+  "inert",
+]);
+const SEND_VERBS = new Set(["send", "reply", "forward"]);
+const ADDRESS = /^[^\s@<>"',;:]+@[^\s@<>"',;:]+\.[^\s@<>"',;:]+$/;
+const ADDRESS_INSIDE = /[^\s@<>"',;:]+@[^\s@<>"',;:]+\.[^\s@<>"',;:]+/;
+
+type Reading = {
+  recipients: OutboundRecipient[];
+  texts: string[];
+  subjects: string[];
+  senders: string[];
+  addressed: boolean;
+  unexplained: boolean;
+};
+
+/** Reads a whole connector call: a batch that sends must send alone. */
+export function readOutboundCall(
+  actions: readonly OutboundAction[],
+  connectorKinds: string[] = [],
+): OutboundCall {
+  const reads = actions.map((action) => readOutbound(action, connectorKinds));
+  if (reads.every((read) => read.kind === "none")) return { kind: "none" };
+  if (reads.length > 1) return { kind: "refuse", error: "Send this message on its own." };
+  return reads[0]!;
+}
+
+function readOutbound(action: OutboundAction, connectorKinds: string[]): OutboundCall {
+  const words = toolWords(action.toolName);
+  if (!words.some((word) => SEND_VERBS.has(word))) return { kind: "none" };
+  const reading: Reading = {
+    recipients: [],
+    texts: [],
+    subjects: [],
+    senders: [],
+    addressed: false,
+    unexplained: false,
+  };
+  const args = readValue(action.args, undefined, reading) as Record<string, unknown>;
+  const mail =
+    reading.addressed ||
+    words.some((word) => word.endsWith("mail")) ||
+    isEmailConnectorKind(connectorKindFromToolName(action.toolName, connectorKinds));
+  if (!mail) return { kind: "none" };
+  const [body] = reading.texts;
+  if (
+    words.includes("forward") ||
+    reading.unexplained ||
+    body === undefined ||
+    reading.texts.length > 1 ||
+    reading.subjects.length > 1 ||
+    body.length > OUTBOUND_DRAFT_MAX_LENGTH ||
+    !reading.recipients.some((recipient) => recipient.role === "to")
+  ) {
+    return { kind: "classic" };
+  }
+  return {
+    kind: "draft",
+    draft: {
+      recipients: reading.recipients,
+      subject: reading.subjects[0],
+      body,
+      account: reading.senders.find((sender) => ADDRESS.test(sender)),
+      args,
+    },
+  };
+}
+
+function toolWords(toolName: string): string[] {
+  return toolName
+    .replace(/^mcp__.+?__/, "")
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/);
+}
+
+function readValue(value: unknown, role: FieldRole | undefined, reading: Reading): unknown {
+  if (role === "flag") {
+    if (typeof value === "boolean") return false;
+    if (value != null) reading.unexplained = true;
+    return value;
+  }
+  if (Array.isArray(value)) return value.map((item) => readValue(item, role, reading));
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, child]) => [
+        key,
+        readValue(child, INHERITED_ROLES.has(role) ? role : FIELD_ROLES[fieldKey(key)], reading),
+      ]),
+    );
+  }
+  if (typeof value === "string" && value.trim()) readString(value, role, reading);
+  return value;
+}
+
+function readString(value: string, role: FieldRole | undefined, reading: Reading): void {
+  switch (role) {
+    case "to":
+    case "cc":
+    case "bcc":
+      reading.addressed ||= ADDRESS_INSIDE.test(value);
+      if (ADDRESS.test(value.trim())) reading.recipients.push({ role, address: value.trim() });
+      else reading.unexplained = true;
+      return;
+    case "text":
+      reading.texts.push(value);
+      return;
+    case "subject":
+      reading.subjects.push(value);
+      return;
+    case "sender":
+      reading.senders.push(value);
+      return;
+    case "inert":
+      return;
+    default:
+      reading.unexplained = true;
+  }
+}
+
+function fieldKey(key: string): string {
+  return key.toLowerCase().replace(/[-_\s]/g, "");
+}
