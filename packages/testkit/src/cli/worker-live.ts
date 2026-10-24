@@ -7,15 +7,25 @@
  *   worker-live lanes --template <worker> --computer-template <computer> --out <dir> [--lanes a,b]
  *     Each lane runs in a child process: worker-live lane --lane <id> --template ...
  *   worker-live bench --template <worker> --computer-template <computer> --out <dir> [--trials 30] [--database postgresql]
+ *   worker-live measure --template <worker> --computer-template <computer> --out <dir> [--trials 30]
+ *     [--provider opencode-go] [--models 'glm-*-flash,gpt-*-luna'] [--gaps 10s,2m,5m,10m]
+ *     [--approval-delays 10s,6m] [--scenarios chain,computer,approval,compaction]
+ *     [--worker local [--in-flight 10]] [--computer-label <what the receipt calls the computer template>]
+ *     Token and cache measurements against a real model. RAKAZO_MODEL_KEY_FILE names a file
+ *     outside any git work tree that holds the provider key. `--worker local` runs the guests in
+ *     this process instead of E2B, for scenarios without a computer.
+ *   worker-live measure-summary --in <receipt> --out <receipt>
+ *     Recomputes a measurement receipt's method and summary from its own threads.
  */
-import { fork } from "node:child_process";
+import { execFileSync, fork } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { parseArgs } from "node:util";
+import type { Api } from "@earendil-works/pi-ai";
 import { WORKER_PROFILE, workerTemplate } from "@rakazo/agent-run-worker/template";
 import type { ConnectionOpts } from "e2b";
 import { Sandbox, Template } from "e2b";
@@ -26,6 +36,14 @@ import {
   memAvailableMiB,
   requireHeadroom,
 } from "../worker-live/index.js";
+import type { MeasuredModel, ScenarioId, ThreadRecord } from "../worker-live/measure.js";
+import {
+  measureTokens,
+  resolveModels,
+  SCENARIOS,
+  stableLocalWorkers,
+} from "../worker-live/measure.js";
+import { measureReceipt } from "../worker-live/measure-receipt.js";
 
 const [command, ...rest] = process.argv.slice(2);
 const { values } = parseArgs({
@@ -42,11 +60,21 @@ const { values } = parseArgs({
     lane: { type: "string" },
     database: { type: "string", default: "pglite" },
     trials: { type: "string", default: "30" },
+    provider: { type: "string", default: "opencode-go" },
+    models: { type: "string", default: "glm-*-flash,gpt-*-luna" },
+    gaps: { type: "string", default: "10s,2m,5m,10m" },
+    "approval-delays": { type: "string", default: "10s,6m" },
+    scenarios: { type: "string", default: SCENARIOS.join(",") },
+    worker: { type: "string", default: "e2b" },
+    "computer-label": { type: "string", default: "private computer template" },
+    "in-flight": { type: "string" },
+    in: { type: "string" },
   },
 });
 
+const local = command === "measure" && values.worker === "local";
 const apiKey = process.env.E2B_API_KEY;
-if (!apiKey) throw new Error("E2B_API_KEY is not set");
+if (!apiKey && !local && command !== "measure-summary") throw new Error("E2B_API_KEY is not set");
 const connection: ConnectionOpts = {
   apiKey,
   apiUrl: process.env.E2B_API_URL,
@@ -266,7 +294,179 @@ async function bench() {
   }
 }
 
-const commands: Record<string, () => Promise<void>> = { template, lanes, lane, bench };
+/** `90s`, `2m` or `1h` in milliseconds. */
+function durations(list: string): number[] {
+  const units = { ms: 1, s: 1_000, m: 60_000, h: 3_600_000 };
+  return list.split(",").map((entry) => {
+    const match = /^(\d+(?:\.\d+)?)(ms|s|m|h)$/.exec(entry.trim());
+    if (!match) throw new Error(`${entry} is not a duration such as 30s or 5m`);
+    return Number(match[1]) * units[match[2] as keyof typeof units];
+  });
+}
+
+/** The provider key, from a private file kept outside every git work tree. */
+function modelKey(): string {
+  const file = process.env.RAKAZO_MODEL_KEY_FILE;
+  if (!file) throw new Error("RAKAZO_MODEL_KEY_FILE must name the file that holds the model key");
+  let tracked = false;
+  try {
+    execFileSync("git", ["-C", path.dirname(path.resolve(file)), "rev-parse"], { stdio: "ignore" });
+    tracked = true;
+  } catch {}
+  if (tracked) throw new Error("RAKAZO_MODEL_KEY_FILE must be outside any git work tree");
+  const key = readFileSync(file, "utf8").trim();
+  if (key.length < 8) throw new Error("The model key file holds no key");
+  SECRETS.push(key, path.resolve(file));
+  return key;
+}
+
+async function measure() {
+  if (!values.out) throw new Error("--out is required");
+  const trials = Number(values.trials);
+  if (!Number.isInteger(trials) || trials < 1)
+    throw new Error("--trials must be a positive integer");
+  const scenarios = values.scenarios.split(",") as ScenarioId[];
+  for (const scenario of scenarios)
+    if (!SCENARIOS.includes(scenario)) throw new Error(`No scenario ${scenario}`);
+  const protocol = {
+    scenarios,
+    trials,
+    gapsMs: durations(values.gaps),
+    approvalDelaysMs: durations(values["approval-delays"]),
+  };
+  if (local && scenarios.includes("computer"))
+    throw new Error("The computer scenario needs E2B; drop it with --scenarios");
+  const inFlight = values["in-flight"] === undefined ? undefined : Number(values["in-flight"]);
+  if (inFlight !== undefined && (!local || !Number.isInteger(inFlight) || inFlight < 1))
+    throw new Error("--in-flight takes a positive integer, with --worker local only");
+  const apiKey = modelKey();
+  const models = resolveModels(values.provider, values.models.split(","));
+  const shortest = Math.min(...protocol.gapsMs);
+  const waits =
+    (scenarios.includes("chain") ? protocol.gapsMs.reduce((sum, gap) => sum + gap, 0) : 0) +
+    (scenarios.includes("computer") ? shortest : 0) +
+    (scenarios.includes("compaction") ? shortest : 0) +
+    (scenarios.includes("approval")
+      ? protocol.approvalDelaysMs.reduce((sum, delay) => sum + delay, 0)
+      : 0);
+  console.log(
+    `${models.map((model) => model.id).join(", ")}: ${trials} trials; waits alone take ${Math.round((waits * Math.ceil(trials / (inFlight ?? 1)) * (local ? 1 : models.length)) / 60_000)} min`,
+  );
+  if (!local) await requireIdleDeployment();
+  const live = local ? undefined : session();
+  const localRoot = local ? await mkdtemp(path.join(os.tmpdir(), "rakazo-measure-")) : undefined;
+  const startedAt = new Date().toISOString();
+  const threads: ThreadRecord[] = [];
+  let written = Promise.resolve();
+  const write = (status: "complete" | "partial") =>
+    (written = written.then(() =>
+      writeReceipt(
+        path.join(values.out!, "token-cache.json"),
+        measureReceipt(
+          {
+            schemaVersion: 1,
+            status,
+            startedAt,
+            generatedAt: new Date().toISOString(),
+            harness: values.harness,
+            worker: local
+              ? "local memory guests in the controller process, one stable directory per thread"
+              : "E2B worker VMs",
+            guestSha256: values.guest
+              ? createHash("sha256").update(readFileSync(values.guest)).digest("hex")
+              : null,
+            workerTemplate: values.template,
+            computerTemplate: values["computer-template"],
+            desktopPreparation: values["prepare-computer"]
+              ? "product E2BSandboxProvider.prepare"
+              : "skipped",
+            provider: values.provider,
+            models: models.map(({ id, api, baseUrl, cost }) => ({
+              id,
+              api,
+              catalogBaseUrl: baseUrl,
+              catalogCostPerMillion: cost,
+            })),
+            protocol: { ...protocol, comparable: trials >= 30 },
+            order: inFlight
+              ? `every model at once; per model, the scenarios in turn with up to ${inFlight} trials in flight, each on a fresh controller and thread whose tool catalog carries its own nonce`
+              : "scenarios in turn; each trial runs every model on a fresh controller and thread, rotating which goes first; one thread at a time, its resources swept before the next",
+            latency: inFlight
+              ? "trials overlapped: restore and append timings are not comparable"
+              : "serial: one thread at a time",
+          },
+          threads,
+          models,
+          local ? {} : { [values["computer-template"]!]: values["computer-label"] },
+        ),
+      ),
+    ));
+  try {
+    await measureTokens({
+      models,
+      protocol,
+      upstream: { apiKey },
+      provider: live
+        ? () => live.workerProvider()
+        : () => stableLocalWorkers(mkdtempSync(path.join(localRoot!, "thread-"))).provider,
+      sandbox: live && (() => live.computer()),
+      cleanup: live && (async () => (await live.sweep()).left),
+      ...(inFlight ? { inFlight } : {}),
+      onThread: async (thread) => {
+        threads.push(thread);
+        await write("partial");
+        console.log(
+          `${thread.scenario.padEnd(10)} ${thread.model.padEnd(24)} trial ${thread.trial}   ${thread.turns.map((turn) => turn.status).join(",")}${thread.left ? `   left ${thread.left.sandboxes} sandboxes, ${thread.left.volumes} volumes` : ""}`,
+        );
+      },
+    });
+    await write("complete");
+  } finally {
+    if (live) console.error(redact(JSON.stringify(await live.sweep())));
+    if (localRoot) await rm(localRoot, { recursive: true, force: true });
+  }
+}
+
+/** Recomputes a receipt's method and summary from its own threads, with this source. */
+async function measureSummary() {
+  if (!values.in || !values.out) throw new Error("--in and --out are required");
+  const { threads, models, ...fields } = JSON.parse(readFileSync(values.in, "utf8")) as {
+    threads: ThreadRecord[];
+    models: Array<{
+      id: string;
+      api: Api;
+      catalogBaseUrl: string;
+      catalogCostPerMillion: MeasuredModel["cost"];
+    }>;
+    provider: string;
+  } & Record<string, unknown>;
+  delete fields.method;
+  delete fields.summary;
+  await writeReceipt(
+    values.out,
+    measureReceipt(
+      { ...fields, models },
+      threads,
+      models.map((model) => ({
+        provider: fields.provider,
+        id: model.id,
+        api: model.api,
+        baseUrl: model.catalogBaseUrl,
+        cost: model.catalogCostPerMillion,
+      })),
+      {},
+    ),
+  );
+}
+
+const commands: Record<string, () => Promise<void>> = {
+  template,
+  lanes,
+  lane,
+  bench,
+  measure,
+  "measure-summary": measureSummary,
+};
 const run = command ? commands[command] : undefined;
 if (!run) throw new Error(`usage: worker-live <${Object.keys(commands).join("|")}> [options]`);
 await run();

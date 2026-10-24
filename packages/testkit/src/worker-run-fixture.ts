@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { ANTHROPIC_MODELS } from "@earendil-works/pi-ai/providers/anthropic.models";
+import { builtinModels } from "@earendil-works/pi-ai/providers/all";
 import type {
   AgentRuntime,
   ConnectorProvider,
@@ -10,6 +10,7 @@ import type {
   WorkerProvider,
 } from "@rakazo/adapter-kit";
 import {
+  createBackgroundJobHandlers,
   createInMemorySkillLock,
   createRunExecutor,
   createRunSecretWriter,
@@ -37,8 +38,6 @@ import { VolumeComputer } from "./volume-computer.js";
 import { openBenchPostgres } from "./worker-live/database.js";
 
 const MODEL_KEY = "worker-fixture-model-key";
-/** The catalog model an Anthropic-protocol run asks for. */
-const ANTHROPIC_MODEL = ANTHROPIC_MODELS["claude-haiku-4-5"];
 const SPACE = "space-worker";
 const USER = "user-worker";
 
@@ -80,6 +79,11 @@ export async function startWorkerRun<
    */
   protocol?: "openai" | "anthropic";
   /**
+   * Bills this catalog model with a plain API key. Without `apiKey` its catalog entry points at
+   * the emulator for the fixture's lifetime; with one, the provider itself answers.
+   */
+  catalogModel?: { provider: string; id: string; apiKey?: string };
+  /**
    * Runs guests on this provider instead of the local runner, as the live lanes do with E2B. Its
    * volumes are provisioned through the lifecycle.
    */
@@ -111,15 +115,24 @@ export async function startWorkerRun<
     : await openPgliteDatabase();
   const prisma = options.prisma?.(database.prisma) ?? database.prisma;
   const dir = await mkdtemp(path.join(tmpdir(), "rakazo-worker-run-"));
-  const anthropic = options.protocol === "anthropic";
+  const catalog =
+    options.catalogModel ??
+    (options.protocol === "anthropic"
+      ? { provider: "anthropic", id: "claude-haiku-4-5", apiKey: undefined }
+      : undefined);
+  const entry = catalog && builtinModels().getModel(catalog.provider, catalog.id);
+  if (catalog && !entry) throw new Error(`No catalog model ${catalog.provider}/${catalog.id}`);
   const model = await startModelEmulator({
     apiKey: MODEL_KEY,
     steps: options.steps,
-    ...(anthropic ? { protocol: "anthropic", modelId: ANTHROPIC_MODEL.id } : {}),
+    ...(entry
+      ? { protocol: entry.api === "anthropic-messages" ? "anthropic" : "openai", modelId: entry.id }
+      : {}),
   });
-  const anthropicUrl = ANTHROPIC_MODEL.baseUrl;
-  if (anthropic) ANTHROPIC_MODEL.baseUrl = model.baseUrl;
-  const modelProvider = anthropic ? "anthropic" : model.model.provider;
+  const catalogUrl = entry?.baseUrl;
+  const emulated = entry && catalog.apiKey === undefined;
+  if (emulated) entry.baseUrl = model.baseUrl;
+  const modelProvider = catalog?.provider ?? model.model.provider;
   const secretStore = new EncryptedSecretStore("worker-fixture-encryption-key");
   const sessionLog = new PostgresSessionLog(prisma);
   const sandbox =
@@ -180,8 +193,8 @@ export async function startWorkerRun<
     },
   });
   const sealed = await secretStore.put(
-    anthropic
-      ? MODEL_KEY
+    catalog
+      ? (catalog.apiKey ?? MODEL_KEY)
       : JSON.stringify({ kind: "openai_compatible", baseUrl: model.baseUrl, apiKey: MODEL_KEY }),
     {
       operationId: "fixture",
@@ -332,6 +345,23 @@ export async function startWorkerRun<
         },
       );
     },
+    /** Runs the thread's history compaction job now, keeping about a quarter of `historyBudget`. */
+    compactHistory(historyBudget: number) {
+      return createBackgroundJobHandlers({
+        executor: current.executor,
+        prisma,
+        sessionLog,
+        sandbox,
+        home: new LocalAgentHomeStore(path.join(dir, "homes")),
+        jobs: new InMemoryJobQueue(),
+        events,
+        workerId: "worker-fixture",
+        runtime: current.runtime,
+        secretStore,
+        memory: options.memory ?? emptyMemory,
+        memoryProviders: options.memoryProviders ?? { resolve: async () => null },
+      })["history.compact"]({ threadId: thread.id, historyBudget });
+    },
     /** Builds a new controller on the same database; the old one's guests are left as they are. */
     restart() {
       const old = current;
@@ -346,7 +376,7 @@ export async function startWorkerRun<
     async close() {
       await (current.provider as unknown as Partial<LocalWorkerProvider>).dispose?.();
       await model.close();
-      if (anthropic) ANTHROPIC_MODEL.baseUrl = anthropicUrl;
+      if (emulated) entry.baseUrl = catalogUrl!;
       await database.close();
       await rm(dir, { recursive: true, force: true });
     },

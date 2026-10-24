@@ -21,7 +21,7 @@ export interface ModelEmulatorRequest {
 export type ModelEmulatorUsage = {
   promptTokens: number;
   completionTokens: number;
-  /** Prompt tokens read from the provider's cache; only the Anthropic protocol reports them. */
+  /** Prompt tokens read from the provider's cache. */
   cacheReadTokens?: number;
 };
 
@@ -190,6 +190,9 @@ export async function startModelEmulator(options: {
             usage: {
               prompt_tokens: reply.usage.promptTokens,
               completion_tokens: reply.usage.completionTokens,
+              ...(reply.usage.cacheReadTokens === undefined
+                ? {}
+                : { prompt_tokens_details: { cached_tokens: reply.usage.cacheReadTokens } }),
             },
           })}\n\n`,
         );

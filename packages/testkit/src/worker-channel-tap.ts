@@ -126,7 +126,11 @@ export function settled(frames: Parsed[], request: string, reply: string) {
     if (frame.from !== "guest" || frame.type !== request) return [];
     const answer = frames.find(
       (candidate) =>
-        candidate.from === "controller" && candidate.re === frame.seq && candidate.type === reply,
+        candidate.from === "controller" &&
+        candidate.re === frame.seq &&
+        candidate.type === reply &&
+        // A later connection numbers its frames from the start again.
+        candidate.at >= frame.at,
     );
     return answer ? [{ from: frame.at, to: answer.at }] : [];
   });
