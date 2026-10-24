@@ -10,7 +10,7 @@ chat/API -> one Pi agent session -> Rakazo computer tools -> SandboxProvider -> 
 SandboxProvider workspace <-> AgentHomeStore <-> Rakazo-owned DATA_DIR
 ```
 
-Pi runs in the Rakazo API/worker process. It is not installed in, or executed by, E2B. The built-in tools are ordinary Pi tools, not Claude- or MCP-specific tools, so any model exposed through Pi can call them. Screen operation still requires a model that can accept image tool results and reason about screenshots.
+Pi runs in the Rakazo API/worker process. On E2B, a bot whose home is on volumes instead runs Pi in a temporary worker VM for each run; Rakazo tools and model keys stay in the Rakazo process (see [E2B workers](self-host-e2b-workers.md)). The built-in tools are ordinary Pi tools, not Claude- or MCP-specific tools, so any model exposed through Pi can call them. Screen operation still requires a model that can accept image tool results and reason about screenshots.
 
 ## Computer contract
 
@@ -59,11 +59,13 @@ The Docker computer image ships `git`, GitHub CLI (`gh`), Node.js LTS with npm a
 
 [OpenCode](https://opencode.ai) is installed in the image (version pinned in `infra/sandboxes/computer/Dockerfile`). Run `opencode auth login` in the computer's terminal once; the token lives in `~/.local/share/opencode/` in the persistent home and is excluded from `backup-prod.sh` archives. Skills versioned in the repository's `skills/` directory are mounted read-only at `/managed-skills`; `start.sh` links `/managed-skills/computer` to `~/.config/opencode/skills` so OpenCode loads the `computer` family (see `skills/README.md`).
 
-To let a bot use GitHub, store a token as the `GH_TOKEN` agent secret. It reaches every shell command, `gh` reads it, and git uses `gh` as its credential helper for `https://github.com`, so `git clone` and `git push` over HTTPS work without per-repository setup. On a Team Computer every bot in the workspace shares that token; prefer a fine-grained token scoped to the repositories the bots need. E2B uses its provider's default image and does not include this tooling yet.
+To let a bot use GitHub, store a token as the `GH_TOKEN` agent secret. It reaches every shell command, `gh` reads it, and git uses `gh` as its credential helper for `https://github.com`, so `git clone` and `git push` over HTTPS work without per-repository setup. On a Team Computer every bot in the workspace shares that token; prefer a fine-grained token scoped to the repositories the bots need. The E2B computer template is built from the same image, so it includes this tooling.
 
 ## Persistence
 
 The portable computer workspace is the durable boundary. E2B uses `/home/user/rakazo-home`; Docker and local providers expose the equivalent home. Browser profiles are rooted under `.browser-profiles` in that workspace on E2B. Rakazo checkpoints transferred workspaces into `AgentHomeStore` at run completion or failure, before explicit stop, and before idle suspension. Docker mounts the Rakazo-owned home directly and only advances its revision marker at those boundaries. New or replacement machines import the latest stored workspace before use.
+
+An E2B computer whose home is on volumes skips this checkpoint. Its bots' folders live on each bot's private E2B volume and the shared folder on the space's volume, and the computer and the run workers mount the same volumes. New E2B spaces start on volumes; existing homes move once, as [E2B workers](self-host-e2b-workers.md) describes.
 
 `LocalAgentHomeStore` currently keeps the latest workspace under `DATA_DIR/homes/<computer-home-key>` and checkpoint metadata separately under `DATA_DIR/home-revisions`. Replacements are staged before the current copy is swapped, and checkpoints are serialized per computer. This implementation is latest-only rather than an immutable revision archive. Production deployments must put `DATA_DIR` on a Rakazo-owned persistent volume, encrypt that volume at rest, and include it in off-host backups. The storage interface is deliberately independent of E2B so an object-store-backed implementation can replace the local volume without changing agent tools or sandbox providers.
 

@@ -31,7 +31,8 @@ run `bash install-images.sh`. Flags may be combined in either order: `--prepare-
 `SANDBOX_PROVIDER` defaults to `docker`. The images Compose file runs a sandbox supervisor
 (from the app image, on the internal network only) and pulls `ghcr.io/elie222/rakazo/computer`.
 Signup and local Docker computers work without an E2B account. For remote computers, set
-`SANDBOX_PROVIDER=e2b` and add `E2B_API_KEY`. The published-images
+`SANDBOX_PROVIDER=e2b`, add `E2B_API_KEY`, and build the templates described in
+[E2B workers](./self-host-e2b-workers.md). The published-images
 Compose stack requires `SANDBOX_SUPERVISOR_TOKEN` for every provider; leave it empty and `compose up` fails closed.
 
 Optional: set `OPENROUTER_API_KEY` or connect a model in the UI after signup.
@@ -329,8 +330,8 @@ The Electron desktop app is a client of the same API. Docker and E2B still apply
   Compose stack. Workspace bots share a persistent Team Computer by default; Private computers are
   optional. Keep the supervisor private, as the included Compose files do.
 - **E2B** runs bot computers away from the Rakazo host and is a good choice for public or multi-user
-  production deployments. Rakazo checkpoints the portable workspace and browser-profile directory to
-  `DATA_DIR`; the E2B disk is a runtime cache, not the durable source of truth.
+  production deployments. Each bot run works in its own E2B worker VM, and bot homes live on E2B
+  volumes. Set it up with [E2B workers](./self-host-e2b-workers.md).
 - **Desktop provider** / **This Mac** runs commands on the API/worker host. Docker stays the default.
   The Electron app asks once; if you choose This Mac, bots can use working directories under your home
   folder. Do not enable it on a public or shared service. macOS does not show its own permission
