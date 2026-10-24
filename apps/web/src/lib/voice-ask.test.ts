@@ -124,3 +124,27 @@ describe("a routine proposal on a call", () => {
     expect(spokenAskAnswer(proposal, "oui")).toBeNull();
   });
 });
+
+describe("a mail draft on a call", () => {
+  const draft = {
+    kind: "ask",
+    approvalEffectId: "effect-2",
+    text: "Send this email?",
+    status: "pending",
+    actions: [
+      { id: "allow", label: "Send" },
+      { id: "deny", label: "Discard" },
+    ],
+    draft: {
+      app: { name: "Mail", logo: null },
+      recipients: [{ role: "to", address: "bo@example.com" }],
+      body: "Thursday instead?",
+    },
+  } as const satisfies AskBlock;
+
+  it("can only be discarded by voice: a spoken yes never sends the bot's text", () => {
+    expect(callAskActions(draft)).toEqual([{ id: "deny", label: "Discard" }]);
+    expect(spokenAskAnswer(draft, "yes")).toBeNull();
+    expect(spokenAskAnswer(draft, "no")).toBe("deny");
+  });
+});
