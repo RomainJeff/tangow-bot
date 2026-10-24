@@ -184,6 +184,8 @@ for (const width of [1440, 390]) {
       });
       return { taskId: "draft-task", runId: RUN, seq: 99 };
     });
+    // The Undo window is timed: the spec moves the page's clock past it instead of waiting.
+    await page.clock.install();
     await showThread(page, drafts, { run: null });
 
     const draftCard = page.getByTestId("draft-card");
@@ -260,9 +262,14 @@ for (const width of [1440, 390]) {
     await expect(draftCard).toHaveText("Discarded · Undo");
     await draftCard.getByRole("button", { name: "Undo", exact: true }).click();
     await expect(button("Send")).toBeVisible();
+    await page.clock.fastForward(6_000);
+    await expect(button("Send")).toBeVisible();
+    expect(answered.body).toBeUndefined();
     onAnswer = () => drafts.push(resolved(botId, "draft-denied", 12, "denied"));
     await button("Discard").click();
-    await expect(draftCard).toHaveText("Discarded", { timeout: 10_000 });
+    await expect(draftCard).toHaveText("Discarded · Undo");
+    await page.clock.fastForward(5_000);
+    await expect(draftCard).toHaveText("Discarded");
     expect(answered.body).toMatchObject({ messageId: "draft-card", answer: "deny" });
 
     // Typing to the bot while the draft waits replaces it and carries the edited text.
