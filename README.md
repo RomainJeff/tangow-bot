@@ -54,7 +54,8 @@ It preserves an existing `.env` when rerun.
 
 Open [http://127.0.0.1:5173](http://127.0.0.1:5173), create an account, and connect a model.
 Local Docker computers are on by default. For remote computers, set `SANDBOX_PROVIDER=e2b` with
-`E2B_API_KEY`.
+`E2B_API_KEY`. On E2B, each run works in its own isolated VM: see
+[E2B workers](./docs/self-host-e2b-workers.md).
 
 Default image tag is `edge` (main builds, `linux/amd64` + `linux/arm64`). Details and tags:
 [self-hosting guide](./docs/self-host.md#published-images-no-checkout).
@@ -211,6 +212,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for the development workflow and test m
 - [Architecture](./ARCHITECTURE.md)
 - [Self-hosting](./docs/self-host.md)
 - [Self-host secrets](./docs/self-host-secrets.md)
+- [Self-host E2B workers](./docs/self-host-e2b-workers.md)
 - [Computer runtime and isolation](./docs/computer-runtime.md)
 - [Mobile releases](./docs/mobile-release.md)
 - [Rebuilding the mobile and desktop clients](./docs/shipping-clients.md)
