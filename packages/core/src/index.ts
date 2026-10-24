@@ -42,6 +42,7 @@ export * from "./messaging-prompts.js";
 export * from "./model-oauth.js";
 export * from "./model-probe.js";
 export * from "./model-providers.js";
+export * from "./outbound-draft.js";
 export * from "./outbound-message.js";
 export * from "./peer-messages.js";
 export * from "./plain-text.js";

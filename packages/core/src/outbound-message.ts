@@ -1,4 +1,6 @@
 import { connectorKindFromToolName, isEmailConnectorKind } from "./action-approval.js";
+import type { DraftPath } from "./outbound-draft.js";
+import { draftTextError } from "./outbound-draft.js";
 
 /** One tool invocation a connector call performs, in the connector's own naming. */
 export type OutboundAction = { toolName: string; args: Record<string, unknown> };
@@ -15,6 +17,8 @@ export type OutboundDraft = {
   account?: string;
   /** The action's arguments with HTML and signature off: what leaves is what the card shows. */
   args: Record<string, unknown>;
+  /** Where the body sits in `args`. */
+  textPath: DraftPath;
 };
 
 /**
@@ -28,7 +32,6 @@ export type OutboundCall =
   | { kind: "classic" }
   | { kind: "refuse"; error: string };
 
-const OUTBOUND_DRAFT_MAX_LENGTH = 20_000;
 const OUTBOUND_SUBJECT_MAX_LENGTH = 1_000;
 /** What the card can show whole: recipients are never cut, so a longer list is refused. */
 const OUTBOUND_RECIPIENTS_MAX_LENGTH = 4_000;
@@ -168,15 +171,13 @@ function readOutbound(action: OutboundAction, connectorKinds: string[]): Outboun
       error: "Too many recipients to show the user. Send to fewer people at a time.",
     };
   }
-  const [body] = reading.texts;
+  const texts = textLeaves(args);
   if (
     words.includes("forward") ||
     reading.unexplained ||
-    body === undefined ||
-    reading.texts.length > 1 ||
+    texts.length !== 1 ||
     reading.subjects.length > 1 ||
     reading.subjects.some((subject) => subject.length > OUTBOUND_SUBJECT_MAX_LENGTH) ||
-    body.length > OUTBOUND_DRAFT_MAX_LENGTH ||
     !reading.recipients.some((recipient) => recipient.role === "to")
   ) {
     if (reading.buried) {
@@ -184,6 +185,9 @@ function readOutbound(action: OutboundAction, connectorKinds: string[]): Outboun
     }
     return cardFitsArguments(action.args) ? { kind: "classic" } : REFUSE_UNSHOWABLE;
   }
+  const [{ path: textPath, value: body }] = texts as [{ path: DraftPath; value: string }];
+  const error = draftTextError(body);
+  if (error) return { kind: "refuse", error };
   return {
     kind: "draft",
     draft: {
@@ -193,6 +197,7 @@ function readOutbound(action: OutboundAction, connectorKinds: string[]): Outboun
       body,
       account: reading.sender,
       args,
+      textPath,
     },
   };
 }
@@ -315,6 +320,27 @@ function serializedLength(value: unknown): number {
   } catch {
     return Number.POSITIVE_INFINITY;
   }
+}
+
+/** Every string the reader takes as the body, blank ones included, with where it sits. */
+function textLeaves(
+  value: unknown,
+  role?: FieldRole,
+  path: DraftPath = [],
+): Array<{ path: DraftPath; value: string }> {
+  if (role === "flag") return [];
+  if (Array.isArray(value)) {
+    return value.flatMap((item, index) => textLeaves(item, role, [...path, index]));
+  }
+  if (value && typeof value === "object") {
+    return Object.entries(value).flatMap(([key, child]) =>
+      textLeaves(child, INHERITED_ROLES.has(role) ? role : FIELD_ROLES[fieldKey(key)], [
+        ...path,
+        key,
+      ]),
+    );
+  }
+  return role === "text" && typeof value === "string" ? [{ path, value }] : [];
 }
 
 function fieldKey(key: string): string {

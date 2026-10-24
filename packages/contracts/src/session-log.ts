@@ -310,6 +310,8 @@ const EntryShapes = z.discriminatedUnion("type", [
       routineId: Id.optional(),
       change: z.enum(["created", "updated"]).optional(),
       failed: z.literal(true).optional(),
+      /** A mail draft left: when, and whether the user changed its text. */
+      sent: z.object({ at: z.string(), edited: z.boolean() }).optional(),
     }),
   ),
   /**

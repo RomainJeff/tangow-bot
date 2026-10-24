@@ -1,6 +1,7 @@
+import { askDraftState } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
 import { fixtureChain, linkEntries } from "./fixtures/read-fixture.js";
-import { projectThreadItems } from "./project-ui.js";
+import { projectThread, projectThreadItems } from "./project-ui.js";
 
 const model = { provider: "emulator", id: "emulator-1" };
 const at = (second: number) => `2026-10-10T09:00:${String(second).padStart(2, "0")}.000Z`;
@@ -1318,5 +1319,83 @@ describe("projectThreadItems", () => {
         ],
       },
     ]);
+  });
+});
+
+describe("a mail draft card", () => {
+  const draft = {
+    app: { name: "Gmail", logo: null },
+    recipients: [{ role: "to", address: "someone@example.com" }],
+    body: "Hello from Chief.",
+  };
+  const card = {
+    kind: "ask",
+    text: "Review before GMAIL_SEND_EMAIL",
+    approvalEffectId: "effect_1",
+    status: "pending",
+    actions: [
+      { id: "allow", label: "Send" },
+      { id: "deny", label: "Discard" },
+    ],
+    draft,
+  };
+  const run = { botId: "bot_ada", runId: "run_mail" };
+  const requested = (block: object) => ({
+    ...run,
+    type: "effect.requested",
+    payload: { effectId: "effect_1", effectKind: "GMAIL_SEND_EMAIL", proposal: {}, card: block },
+  });
+  const sent = {
+    ...run,
+    type: "effect.resolved",
+    payload: { effectId: "effect_1", decision: "approved", answerId: "allow" },
+  };
+  const edited = { ...draft, body: "Hello, edited." };
+  const chain = linkEntries("d", [
+    requested(card),
+    {
+      ...run,
+      type: "effect.edited",
+      payload: {
+        effectId: "effect_1",
+        proposal: {},
+        card: { ...card, status: "answered", answer: "allow", draft: edited },
+      },
+    },
+    sent,
+    requested({ ...card, draft: { ...edited, failure: { reason: "Invalid recipient" } } }),
+    sent,
+    {
+      type: "effect.applied",
+      payload: { target: "d-3", sent: { at: "2026-10-10T09:00:06.000Z", edited: true } },
+    },
+  ]);
+  const cardsOf = (count: number) => {
+    const projected = projectThread(chain.slice(0, count));
+    const effects = projected.items.flatMap((item) => (item.kind === "effect" ? [item] : []));
+    return {
+      states: effects.map((item) => item.card && askDraftState(item.card)),
+      bodies: effects.map((item) => item.card?.draft?.body),
+      waiting: projected.waiting,
+    };
+  };
+
+  it("stays one card from Send to Not sent to Sent, waiting on its newest request", () => {
+    expect(cardsOf(1)).toEqual({
+      states: ["pending"],
+      bodies: ["Hello from Chief."],
+      waiting: { itemId: "d-0", entryId: "d-0", runId: "run_mail" },
+    });
+    expect(cardsOf(3)).toMatchObject({
+      states: ["sending"],
+      bodies: ["Hello, edited."],
+      waiting: null,
+    });
+    expect(cardsOf(4)).toEqual({
+      states: ["not_sent"],
+      bodies: ["Hello, edited."],
+      waiting: { itemId: "d-0", entryId: "d-3", runId: "run_mail" },
+    });
+    expect(cardsOf(6)).toEqual({ states: ["sent"], bodies: ["Hello, edited."], waiting: null });
   });
 });
