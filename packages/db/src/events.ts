@@ -1555,16 +1555,19 @@ export async function dismissProposalWithTextInTransaction(
       ? withValueAt(effect.request, draft.path, input.draft.text)
       : effect.request;
   if (replacing && request === undefined) return { outcome: "keep" };
+  const replaced: DraftRecord | undefined = replacing
+    ? { path: draft.path, proposed: draft.proposed, state: "replaced" }
+    : undefined;
   const dismissed = await tx.externalEffect.updateMany({
-    where: replacing
+    where: replaced
       ? { id: effect.id, status: "intended" }
       : { id: effect.id, status: "intended", kind: { in: [...DISMISSABLE_EFFECT_KINDS] } },
-    data: replacing
+    data: replaced
       ? {
           status: "denied",
           answeredAt: new Date(),
           request: request as Prisma.InputJsonValue,
-          draft: { path: draft.path, proposed: draft.proposed, state: "replaced" },
+          draft: replaced,
         }
       : { status: "denied", answeredAt: new Date(), result: DISMISSED_EFFECT_RESULT },
   });
@@ -1590,14 +1593,11 @@ export async function dismissProposalWithTextInTransaction(
     payload: { effectId: effect.id, decision: "denied", dismissed: true },
   });
   // What the bot reads beside the typed message, which the caller steers into the run.
-  const context = replacing
-    ? replacedDraftContext({
-        status: "denied",
-        request,
-        draft: { path: draft.path, proposed: draft.proposed, state: "replaced" },
-      })
-    : undefined;
-  return { outcome: "dismissed", status: "queued", ...(context ? { context } : {}) };
+  return {
+    outcome: "dismissed",
+    status: "queued",
+    ...(replaced ? { context: replacedDraftContext(replaced, request) } : {}),
+  };
 }
 
 export async function pauseRunForInput(

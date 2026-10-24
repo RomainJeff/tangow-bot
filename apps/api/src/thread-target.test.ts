@@ -2723,7 +2723,7 @@ describe("sendThreadMessage while a proposal card waits", () => {
     expect(tx.steeringMessage.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         runId: "run-waiting",
-        context: expect.stringContaining('"draft":{"body":"Hello, edited.","editedByUser":true}'),
+        context: expect.stringContaining('{"body":"Hello, edited.","editedByUser":true}'),
       }),
     });
   });
@@ -2820,7 +2820,7 @@ describe("sendThreadMessage while a proposal card waits", () => {
       data: expect.objectContaining({
         botId: "bot-1",
         runId: "run-waiting",
-        context: expect.stringContaining('"draft":{"body":"Hello, edited.","editedByUser":true}'),
+        context: expect.stringContaining('{"body":"Hello, edited.","editedByUser":true}'),
       }),
     });
   });
