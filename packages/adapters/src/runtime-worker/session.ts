@@ -625,6 +625,7 @@ export function createSession(
         if (Buffer.byteLength(JSON.stringify(body.args)) > WORKER_LIMITS.toolArgsBytes) {
           return refuse("too_large");
         }
+        if (!transcript.claim(body.executionId)) return refuse("invalid");
         announced.set(body.executionId, body.name);
         if (paused) return { type: "ack" };
         await events.push({
@@ -644,6 +645,7 @@ export function createSession(
         });
         return { type: "ack" };
       case "model.request":
+        transcript.requested(body.agent);
         return helperOverBudget(body.agent) ?? relayModel(seq, body, part);
       case "model.latency":
         // Guest diagnostics never authorize work or affect the run's outcome.
@@ -778,8 +780,9 @@ export function createSession(
         if (!(await fenceOwned()) || !live()) return revoke();
         const agent = body.agent ?? "root";
         const helper = helperOf(agent);
-        if (agent !== "root" && !helper) return refuse("invalid");
+        if ((agent !== "root" && !helper) || helper?.closed) return refuse("invalid");
         const ingested = transcript.ingest(agent, body, launched!.expectedHarness.name);
+        if (typeof ingested === "string") return refuse(ingested);
         if (!helper) {
           rootTranscriptAccepted = true;
           await events.push(ingested);

@@ -35,7 +35,6 @@ import {
   AgentRuntimeUnavailableError,
   historyCompactJob,
   linkPreviewJob,
-  PI_NATIVE_HARNESS,
   routineJobKey,
   routineWakeupJob,
   runContinueJob,
@@ -363,7 +362,6 @@ import {
   tryCompleteConnectionWithCode,
 } from "./run-secret.js";
 import { withRuntimeCleanup } from "./runtime-stream.js";
-import { nativeToolsForHarness } from "./runtime-worker/guest-input.js";
 import type { RunWorkers } from "./runtime-worker/runtime.js";
 import {
   cancelScheduleFromTool,
@@ -6677,6 +6675,7 @@ async function logHarnessTranscript(
               callId: entry.callId,
               name: entry.name,
               input: describeToolPayload(entry.args, secrets),
+              native: true,
             },
           },
         ];
@@ -6733,10 +6732,6 @@ async function whileAttemptOwnsRun(
   );
 }
 
-const HARNESS_NATIVE_TOOLS: ReadonlySet<string> = new Set(
-  nativeToolsForHarness(PI_NATIVE_HARNESS.name).map((tool) => tool.name),
-);
-
 /**
  * A harness's own call whose attempt ended before it reported a result: the attempt died with it
  * running, so nobody knows what it did. Before a later attempt reads the run's history, each one
@@ -6749,26 +6744,25 @@ async function closeInterruptedNativeCalls(
   lease: { runId: string; fence: number },
 ) {
   await whileAttemptOwnsRun(deps, lease, async (tx) => {
-    const logged = await tx.sessionEntry.findMany({
-      where: {
-        sessionId: log.sessionId,
-        runId: log.runId,
-        type: { in: ["tool.call", "tool.result"] },
-      },
-      orderBy: { seq: "asc" },
-      select: { type: true, payload: true },
-    });
+    const logged = await tx.$queryRaw<
+      Array<{ type: string; callId: string; name: string; native: boolean }>
+    >`
+      SELECT type, payload->>'callId' AS "callId", payload->>'name' AS name,
+        coalesce((payload->'native')::boolean, false) AS native
+      FROM session_entries
+      WHERE "sessionId" = ${log.sessionId} AND "runId" = ${log.runId}
+        AND type IN ('tool.call', 'tool.result')
+      ORDER BY seq`;
     // A result answers the latest earlier call of its id still open, as the history reads it.
-    const open = new Map<string, string[]>();
-    for (const entry of logged) {
-      const { callId, name } = entry.payload as { callId: string; name: string };
-      const names = open.get(callId) ?? [];
-      if (entry.type === "tool.call") names.push(name);
-      else names.pop();
-      open.set(callId, names);
+    const open = new Map<string, Array<{ name: string; native: boolean }>>();
+    for (const { type, callId, name, native } of logged) {
+      const calls = open.get(callId) ?? [];
+      if (type === "tool.call") calls.push({ name, native });
+      else calls.pop();
+      open.set(callId, calls);
     }
-    for (const [callId, names] of open) {
-      for (const name of names.filter((name) => HARNESS_NATIVE_TOOLS.has(name))) {
+    for (const [callId, calls] of open) {
+      for (const { name } of calls.filter((call) => call.native)) {
         await deps.sessionLog.append(tx, {
           ...log,
           type: "tool.result",

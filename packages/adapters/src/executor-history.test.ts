@@ -49,6 +49,21 @@ beforeAll(() => {
 });
 afterAll(() => vi.unstubAllEnvs());
 
+/** The transcript event the session builds, after the model requests that produced it. */
+function nativeTranscript(
+  ingest: ReturnType<typeof transcriptIngest>,
+  messages: Extract<GuestBody, { type: "transcript" }>["messages"],
+) {
+  for (const _ of messages) ingest.requested("root");
+  const event = ingest.ingest(
+    "root",
+    { type: "transcript", dialect: "pi-ai", messages },
+    "pi-native",
+  );
+  if (typeof event === "string") throw new Error(event);
+  return event;
+}
+
 const RUN = "run-1";
 const BOT = "bot-1";
 const remembered = [{ memory: "Ava decided to ship behind a feature flag.", score: 0.9 }];
@@ -229,6 +244,7 @@ function fixture(
       thread: db.thread,
       routine: db.routine,
       sessionEntry: db.sessionEntry,
+      usageRecord: db.usageRecord,
       $transaction: db.$transaction.bind(db),
       $queryRaw: db.$queryRaw.bind(db),
     });
@@ -1150,6 +1166,18 @@ describe("interactive executor sessions with durable history", () => {
                       },
                     ],
             } satisfies Extract<GuestBody, { type: "transcript" }>;
+            // Each reported response needs a model request the controller relayed.
+            const responses =
+              transcriptCase === "duplicate" ? 2 : transcriptCase === "present" ? 1 : 0;
+            for (let i = 0; i < responses; i++) {
+              guest.send(seq, {
+                type: "model.request",
+                agent: "root",
+                dialect: "pi-ai",
+                call: { context: { messages: [] }, options: {} },
+              });
+              expect((await guest.replies(seq++)).at(-1)).toEqual({ type: "model.end" });
+            }
             if (
               transcriptCase === "empty" ||
               transcriptCase === "present" ||
@@ -1230,36 +1258,30 @@ describe("interactive executor sessions with durable history", () => {
         database: c.prisma,
         run,
         runtime: async function* () {
-          const ingest = transcriptIngest((text) => text);
           yield { type: "text", text: "Private work" };
-          yield ingest.ingest(
-            "root",
-            {
-              type: "transcript",
-              dialect: "pi-ai",
-              messages: [
-                {
-                  role: "assistant",
-                  content: [
-                    { type: "text", text: "Private work" },
-                    {
-                      type: "toolCall",
-                      id: "native-read",
-                      name: "read",
-                      arguments: { path: "notes.txt" },
-                    },
-                  ],
-                },
-                { role: "toolResult", toolCallId: "native-read", content: "nothing to report" },
-                ...Array.from({ length: emptyTurns }, (_, index) => ({
-                  role: "assistant",
-                  content: index === 0 ? [] : [{ type: "text", text: "" }],
-                })),
-                ...(final ? [{ role: "assistant", content: [{ type: "text", text: final }] }] : []),
-              ],
-            },
-            "pi-native",
-          )!;
+          yield nativeTranscript(
+            transcriptIngest((text) => text),
+            [
+              {
+                role: "assistant",
+                content: [
+                  { type: "text", text: "Private work" },
+                  {
+                    type: "toolCall",
+                    id: "native-read",
+                    name: "read",
+                    arguments: { path: "notes.txt" },
+                  },
+                ],
+              },
+              { role: "toolResult", toolCallId: "native-read", content: "nothing to report" },
+              ...Array.from({ length: emptyTurns }, (_, index) => ({
+                role: "assistant",
+                content: index === 0 ? [] : [{ type: "text", text: "" }],
+              })),
+              ...(final ? [{ role: "assistant", content: [{ type: "text", text: final }] }] : []),
+            ],
+          );
           yield {
             type: "done",
             text: "Private work",
@@ -1295,6 +1317,32 @@ describe("interactive executor sessions with durable history", () => {
     },
   );
 
+  it("closes only a harness's own call an earlier attempt cut, not a controller tool of its name", async () => {
+    const c = await conversation();
+    const call = (callId: string, native?: true) =>
+      c.prisma.$transaction((tx) =>
+        c.log.append(tx, {
+          sessionId: c.run.sessionId as SessionId,
+          botId: BOT,
+          runId: c.run.id,
+          type: "tool.call",
+          payload: { callId, name: "read", input: "{}", ...(native ? { native } : {}) },
+        }),
+      );
+    await call("harness-read", true);
+    await call("connector-read");
+    const run = await c.prisma.run.update({ where: { id: c.run.id }, data: { leaseFence: 1 } });
+    await fixture({ database: c.prisma, run }).request();
+
+    expect(
+      (await c.log.readRun(run.id)).flatMap((entry) =>
+        entry.type === "tool.result" ? [`${entry.payload.callId}: ${entry.payload.output}`] : [],
+      ),
+    ).toEqual([
+      "harness-read: The read call was interrupted, so its outcome is unknown. It was not replayed; check the state before retrying.",
+    ]);
+  });
+
   it.each([
     { empty: false, messageUser: false },
     { empty: true, messageUser: false },
@@ -1318,34 +1366,26 @@ describe("interactive executor sessions with durable history", () => {
               { type: "tool.result", output },
             );
           }
-          yield ingest.ingest(
-            "root",
+          yield nativeTranscript(ingest, [
             {
-              type: "transcript",
-              dialect: "pi-ai",
-              messages: [
-                {
-                  role: "assistant",
-                  content: [
-                    { type: "text", text: "Private work" },
-                    ...(messageUser
-                      ? [
-                          {
-                            type: "toolCall",
-                            id: "guest-say",
-                            name: "message_user",
-                            arguments: args,
-                          },
-                        ]
-                      : []),
-                  ],
-                },
-                { role: "assistant", content: [{ type: "text", text: recap }] },
-                ...(empty ? [{ role: "assistant", content: [] }] : []),
+              role: "assistant",
+              content: [
+                { type: "text", text: "Private work" },
+                ...(messageUser
+                  ? [
+                      {
+                        type: "toolCall",
+                        id: "guest-say",
+                        name: "message_user",
+                        arguments: args,
+                      },
+                    ]
+                  : []),
               ],
             },
-            "pi-native",
-          )!;
+            { role: "assistant", content: [{ type: "text", text: recap }] },
+            ...(empty ? [{ role: "assistant", content: [] }] : []),
+          ]);
           yield {
             type: "done",
             text: recap,
@@ -1551,6 +1591,7 @@ describe("interactive executor sessions with durable history", () => {
           callId: "bash-1",
           name: "bash",
           input: '{\n  "command": "grep [redacted] notes.md"\n}',
+          native: true,
         },
       },
       {
@@ -1577,7 +1618,12 @@ describe("interactive executor sessions with durable history", () => {
       },
       {
         type: "tool.call",
-        payload: { callId: "bash-2", name: "bash", input: '{\n  "command": "false"\n}' },
+        payload: {
+          callId: "bash-2",
+          name: "bash",
+          input: '{\n  "command": "false"\n}',
+          native: true,
+        },
       },
       {
         type: "tool.result",

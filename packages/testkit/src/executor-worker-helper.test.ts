@@ -74,6 +74,13 @@ async function pausedHelper() {
 it("persists the helper's native call and result after its parent has paused and settled", async () => {
   const { run, runId, helper, guest, continued } = await pausedHelper();
   guest.send(5, {
+    type: "model.request",
+    agent: "helper:1",
+    dialect: "pi-ai",
+    call: { context: { messages: [] }, options: {} },
+  });
+  expect((await guest.replies(5)).at(-1)).toEqual({ type: "model.end" });
+  guest.send(6, {
     type: "transcript",
     agent: "helper:1",
     dialect: "pi-ai",
@@ -87,8 +94,8 @@ it("persists the helper's native call and result after its parent has paused and
       { role: "toolResult", toolCallId: "read-1", content: "Paris notes", isError: false },
     ],
   });
-  expect(await guest.replies(5)).toEqual([{ type: "recorded" }]);
-  guest.send(6, { type: "done" });
+  expect(await guest.replies(6)).toEqual([{ type: "recorded" }]);
+  guest.send(7, { type: "done" });
   await continued;
   expect(
     (await run.runEntries(helper.id)).filter(
