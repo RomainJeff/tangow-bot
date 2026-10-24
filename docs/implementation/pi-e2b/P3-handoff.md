@@ -57,9 +57,9 @@ The worker and the computer are separate VMs with separate kernels. They share f
 
 ## Run a worker
 
-1. Build the worker template under the name the deployment will use: `pnpm --filter @rakazo/agent-run-worker template:build --name rakazo-worker-pi`. The build uploads the template's files to a port that a self-hosted deployment may expose on its own host only. In that case, build on that host.
-2. Set `WORKER_PROVIDER=e2b` with E2B's standard environment: `E2B_API_KEY`, and `E2B_API_URL` with `E2B_SANDBOX_URL`, or `E2B_DOMAIN`. Set `WORKER_TEMPLATE` only for another template name. Both the API and the job worker read them.
-3. Move each computer's home onto volumes, as in [Home move, retention and rollback](#home-move-retention-and-rollback). A bot whose home is still a snapshot keeps running in process.
+1. Build the worker template under the name the deployment will use: `pnpm --filter @rakazo/agent-run-worker template:build --name rakazo-worker-pi-native`. The build uploads the template's files to a port that a self-hosted deployment may expose on its own host only. In that case, build on that host.
+2. Set `SANDBOX_PROVIDER=e2b` with E2B's standard environment: `E2B_API_KEY`, and `E2B_API_URL` with `E2B_SANDBOX_URL`, or `E2B_DOMAIN`. Runs then go to E2B workers. Set `WORKER_TEMPLATE` only for another template name. Both the API and the job worker read them.
+3. A new computer starts on volumes. Move each existing computer's home onto volumes once, as in [Home move, retention and rollback](#home-move-retention-and-rollback). A bot whose home is still a snapshot keeps running in process.
 
 To check a deployment, run the lanes: `pnpm test:worker-live lanes --template <worker template> --computer-template <computer template> --out <dir>`, with `--lanes a,b` to pick lanes, and the bench: `pnpm test:worker-live bench --template <worker template> --computer-template <computer template> --out <dir> --trials 30`.
 
@@ -335,4 +335,4 @@ The final live pass ran S6's behaviour on E2B: lane i, lane home-move-fence, the
 
 ## Rollback
 
-S6 adds the nullable `computers.homeMoveExpiresAt` column. Leave that additive column in place on rollback. Do not deploy or roll back during a running home move. To roll back the runtime, revert its commits. The worker TTL then returns to four hours, and the template fix, the timeout cap and the volume-files rewrite return to the code from #229 and #241, which cannot build its template, create a worker or reach a volume on the self-hosted deployment. Unset `WORKER_PROVIDER` first so that no run uses a worker, then drain running workers: each ends within its TTL. The experimental worker template `p3live-worker-pi` was deleted from the host after the final live pass; a deployment builds its own template under its own name.
+S6 adds the nullable `computers.homeMoveExpiresAt` column. Leave that additive column in place on rollback. Do not deploy or roll back during a running home move. To roll back the runtime, revert its commits. The worker TTL then returns to four hours, and the template fix, the timeout cap and the volume-files rewrite return to the code from #229 and #241, which cannot build its template, create a worker or reach a volume on the self-hosted deployment. Drain running workers first: each ends within its TTL. The experimental worker template `p3live-worker-pi` was deleted from the host after the final live pass; a deployment builds its own template under its own name.

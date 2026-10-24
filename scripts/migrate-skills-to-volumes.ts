@@ -9,7 +9,7 @@ import { createDb } from "../packages/db/src/client.js";
 const { values } = parseArgs({
   options: {
     space: { type: "string" },
-    template: { type: "string", default: "rakazo-worker-pi" },
+    template: { type: "string", default: "rakazo-worker-pi-native" },
     "dry-run": { type: "boolean", default: false },
   },
 });

@@ -39,7 +39,7 @@ export interface AppEnv {
   agentRuntime: string;
   deploymentModelKey: string | undefined;
   e2bApiKey: string | undefined;
-  /** WORKER_PROVIDER and WORKER_TEMPLATE: null keeps every run in process. */
+  /** E2B workers on an E2B deployment; null keeps every run in process. */
   workerProvider: WorkerProviderConfig | null;
   daytonaApiKey: string | undefined;
   daytonaApiUrl: string | undefined;
