@@ -1533,17 +1533,19 @@ export async function dismissProposalWithTextInTransaction(
   });
   if (!effect) return { outcome: "keep" };
   const draft = readDraft(effect.status, effect.draft);
-  const replacing = draft?.state === "pending";
-  // A text is only ever for the very draft card it was edited on, still waiting.
-  if (input.draft && (!replacing || !waiting || input.draft.messageId !== card.entryId)) {
-    return { outcome: "keep" };
-  }
-  if (!replacing && !DISMISSABLE_EFFECT_KINDS.has(effect.kind)) return { outcome: "keep" };
+  if (!draft && !DISMISSABLE_EFFECT_KINDS.has(effect.kind)) return { outcome: "keep" };
+  // A tap answered the card first: the reply steers its run, and a draft's text is moot.
   if (!waiting) {
     return STEERABLE_AFTER_ANSWER.has(run.status)
       ? { outcome: "settled", status: run.status }
       : { outcome: "keep" };
   }
+  const replacing = draft?.state === "pending";
+  // A text is only ever for the very draft card it was edited on.
+  if (input.draft && (!replacing || input.draft.messageId !== card.entryId)) {
+    return { outcome: "keep" };
+  }
+  if (draft && !replacing) return { outcome: "keep" };
   const request =
     replacing && input.draft
       ? withValueAt(effect.request, draft.path, input.draft.text)

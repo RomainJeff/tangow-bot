@@ -2728,6 +2728,29 @@ describe("sendThreadMessage while a proposal card waits", () => {
     });
   });
 
+  it("steers the reply and drops the draft's text when a Send resumed the run first", async () => {
+    const tx = proposalTx({
+      runStatus: "queued",
+      effect: {
+        ...mailDraft,
+        status: "approved",
+        draft: { ...mailDraft.draft, state: "approved" },
+      },
+    });
+    await expect(
+      send(tx, { messageId: "card-msg", text: "Hello, edited." }),
+    ).resolves.toMatchObject({ runIds: ["run-waiting"] });
+    expect(tx.externalEffect.updateMany).not.toHaveBeenCalled();
+    expect(tx.steeringMessage.create).toHaveBeenCalledWith({
+      data: {
+        messageId: sentMessages()[0]!.id,
+        botId: "bot-1",
+        userId: "user-1",
+        runId: "run-waiting",
+      },
+    });
+  });
+
   it("refuses a draft's text sent over a card that is not a draft, sending nothing", async () => {
     const tx = proposalTx();
     await expect(send(tx, { messageId: "card-msg", text: "Hello" })).rejects.toMatchObject({

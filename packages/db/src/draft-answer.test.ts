@@ -355,6 +355,16 @@ describe("writing to the bot while a mail draft waits", () => {
     });
   });
 
+  it("lets a Send that came first win, the typed message steering the run it resumed", async () => {
+    const w = await waiting();
+    await expect(w.answer({ edits: { text: "Sent as is." } })).resolves.toBe(true);
+    await expect(
+      w.typed({ draft: { messageId: w.messageId, text: "Edited after." } }),
+    ).resolves.toEqual({ outcome: "settled", status: "queued" });
+    const { effect } = await w.state();
+    expect([effect.status, effect.request]).toEqual(["approved", request("Sent as is.")]);
+  });
+
   it("leaves a Send on the replaced card nothing to answer", async () => {
     const w = await waiting();
     await w.typed({ draft: { messageId: w.messageId, text: "Hello, edited." } });
