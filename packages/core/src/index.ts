@@ -26,6 +26,7 @@ export * from "./computer-screen-url.js";
 export * from "./computer-updates.js";
 export * from "./cron.js";
 export * from "./dictation-language.js";
+export * from "./draft-card-view.js";
 export * from "./events.js";
 export * from "./featured-connectors.js";
 export * from "./field-save.js";
