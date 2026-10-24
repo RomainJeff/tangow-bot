@@ -89,7 +89,9 @@ export function computerTemplate(imageDigest: string): ReturnType<TemplateBuilde
     .runCmd(RECONCILE_ACCOUNT, { user: "root" })
     .copy("skills/agent", "/managed-skills/agent", { user: "root" })
     .copy("skills/computer", "/managed-skills/computer", { user: "root" })
-    .runCmd("chown -R root:root /managed-skills && chmod -R a-w /managed-skills", { user: "root" })
+    .runCmd("chown -R root:root /managed-skills && chmod -R a+rX,a-w /managed-skills", {
+      user: "root",
+    })
     .setEnvs({ HOME: "/home/user", DISPLAY: ":1", OPENCODE_DISABLE_AUTOUPDATE: "1" })
     .setUser("user")
     .setWorkdir("/home/user")

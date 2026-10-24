@@ -203,6 +203,29 @@ async function main() {
     ],
     buildEnv,
   );
+  console.log("Checking E2B access from API and worker containers...");
+  for (const service of ["api", "worker"]) {
+    run(
+      "docker",
+      [
+        ...oldCompose,
+        "exec",
+        "-T",
+        ...Object.keys(connection).flatMap((name) => ["-e", name]),
+        service,
+        "pnpm",
+        "--filter",
+        "@rakazo/adapters",
+        "exec",
+        "node",
+        "--input-type=module",
+        "-e",
+        'import { Volume } from "e2b"; await Volume.list({ requestTimeoutMs: 10000 });',
+      ],
+      buildEnv,
+      15000,
+    );
+  }
   console.log("Building lightweight Pi worker template...");
   run(
     "pnpm",

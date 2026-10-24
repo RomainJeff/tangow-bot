@@ -45,7 +45,8 @@ if (name === 'git') {
  if (args[0] === 'image') console.log('registry.example.com/computer@sha256:'+'c'.repeat(64));
  if (args.includes('up') && process.env.FAIL_START && fs.existsSync('.env.e2b.compose.json')) process.exit(1);
  if (args.includes('logs')) console.log('worker ready');
- if (args.includes('exec') && !args.includes('ps')) {
+ if (args.includes('@rakazo/adapters') && process.env.FAIL_CONTAINER_CONNECT) process.exit(1);
+ if (args.includes('exec') && !args.includes('ps') && !args.includes('@rakazo/adapters')) {
    global.fetch = async () => ({ ok: true, json: async () => ({ok:true,sandbox:process.env.FAIL_HEALTH?'docker':'e2b',revision:'${sha}'}) });
    eval('(async () => {' + args.at(-1) + '})()').catch(() => process.exit(1));
  }
@@ -285,4 +286,15 @@ test("startup failures restore application configuration", { concurrency: true }
       },
     ),
   ]);
+});
+
+test("unreachable E2B from the application containers refuses before template publication", (t) => {
+  const f = fixture(t);
+  const result = f.invoke([], { FAIL_CONTAINER_CONNECT: "1" });
+  assert.notEqual(result.status, 0);
+  assert.equal(
+    f.calls().some((c) => c.includes("template:build") || c.includes("push") || c.includes("up")),
+    false,
+  );
+  assert.equal(existsSync(path.join(f.root, ".env.e2b.compose.json")), false);
 });

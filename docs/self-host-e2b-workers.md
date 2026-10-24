@@ -52,7 +52,8 @@ The lightweight `rakazo-worker-pi-native` template uses its own Node-based build
 registry argument is used only for the desktop computer image and its `desktop` template.
 `WORKER_TEMPLATE` selects a different worker template name when set.
 
-The script checks E2B volume API access, publishes the templates and writes
+The script checks E2B volume API access from the host and both application containers before any
+build, publishes the templates and writes
 `.env.e2b.compose.json` with file mode `0600`. This private file contains the credentials, is ignored
 by Git, and leaves the existing `.env` unchanged. Keep it with the deployment configuration and
 protect it like `.env`. Do not paste its contents into issues, commits or logs.
