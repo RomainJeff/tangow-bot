@@ -41,6 +41,14 @@ type AskBlock = Extract<MessageBlock, { kind: "ask" }>;
 const ROLES = ["to", "cc", "bcc"] as const;
 const LOGO_SIZE = 20;
 const AVATAR_SIZE = 24;
+// Undo is one line of meta text: the slop grows its target to a 48 pt action's height.
+const UNDO_LINE = nativeTextStyle("meta").lineHeight;
+const UNDO_HIT_SLOP = {
+  top: (sizes.mobileAction - UNDO_LINE) / 2,
+  bottom: (sizes.mobileAction - UNDO_LINE) / 2,
+  left: 8,
+  right: 16,
+};
 
 /** The app's catalog logo, or its first letter when it has none or it fails to load. */
 export function AppLogo({ app }: { app: AskDraft["app"] }) {
@@ -144,6 +152,7 @@ function RoundAction({
  * `apps/web/src/components/DraftCard.tsx`.
  */
 export function DraftCard({
+  threadKey,
   block,
   draft,
   messageId,
@@ -152,6 +161,7 @@ export function DraftCard({
   onAnswer,
   onReconnect,
 }: {
+  threadKey: string;
   block: AskBlock;
   draft: AskDraft;
   /** The card's thread item: its edits are kept under it. */
@@ -267,12 +277,12 @@ export function DraftCard({
     const state =
       view.kind === "discarded" ? (
         view.undo ? (
-          <Text style={styles.answeredText}>
-            {t("Discarded")} ·{" "}
-            <Text accessibilityRole="button" onPress={undo} style={styles.undo}>
-              {t("Undo")}
-            </Text>
-          </Text>
+          <View style={styles.discarded}>
+            <Text style={styles.answeredText}>{t("Discarded")} ·</Text>
+            <Pressable accessibilityRole="button" hitSlop={UNDO_HIT_SLOP} onPress={undo}>
+              <Text style={[styles.answeredText, styles.undo]}>{t("Undo")}</Text>
+            </Pressable>
+          </View>
         ) : (
           t("Discarded")
         )
@@ -379,9 +389,9 @@ export function DraftCard({
         <Sender owner={draft.owner} own={own}>
           <Pressable
             accessibilityRole={editable ? "button" : undefined}
-            accessibilityLabel={editable ? t("Edit message") : undefined}
+            accessibilityHint={editable ? t("Edit message") : undefined}
             disabled={!editable}
-            onPress={() => openDraftEdit(router, { messageId, draft })}
+            onPress={() => openDraftEdit(router, { threadKey, messageId, draft })}
             style={styles.well}
           >
             <Text style={[styles.body, view.sending ? styles.frozen : undefined]}>{text}</Text>
@@ -446,12 +456,13 @@ function createStyles() {
     },
     error: { color: tokens.destructive },
     answeredText: { color: tokens.mutedForeground, ...nativeTextStyle("meta") },
+    discarded: { flexDirection: "row", alignItems: "center", gap: 4 },
     undo: {
       color: tokens.foreground,
       textDecorationLine: "underline",
       textDecorationColor: tokens.border,
     },
-    actionRow: { flexDirection: "row", justifyContent: "flex-end", gap: 8 },
+    actionRow: { flexDirection: "row", gap: 8 },
     round: {
       width: sizes.mobileAction,
       height: sizes.mobileAction,

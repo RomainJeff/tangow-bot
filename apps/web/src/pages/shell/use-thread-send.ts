@@ -1,8 +1,9 @@
 import { useLingui } from "@lingui/react/macro";
 import type { MessageReaction } from "@rakazo/contracts";
-import type { ComposerMention, ComposerPageHead, ThreadView } from "@rakazo/core";
+import type { ComposerMention, ComposerPageHead } from "@rakazo/core";
 import {
   attachmentsForThread,
+  editedWaitingDraft,
   inferAttachmentMimeType,
   resolveComposerSendPlan,
 } from "@rakazo/core";
@@ -20,7 +21,7 @@ import type { Roster } from "./use-roster";
 import type { ThreadStore } from "./use-thread-store";
 import type { ThreadSync } from "./use-thread-sync";
 import type { ThreadViewState } from "./use-thread-view";
-import { messageIdOf, waitingAsk } from "./use-thread-view";
+import { messageIdOf } from "./use-thread-view";
 
 function newClientNonce(): string {
   const webCrypto = globalThis.crypto;
@@ -41,19 +42,6 @@ function readFileAsBase64(file: File): Promise<string> {
     reader.onerror = () => reject(reader.error ?? new Error("Failed to read file"));
     reader.readAsDataURL(file);
   });
-}
-
-/**
- * The mail draft the thread waits on, when the person edited it: a message sent now replaces the
- * draft, and the bot reads the text as they left it.
- */
-function editedWaitingDraft(view: ThreadView) {
-  const ask = waitingAsk(view);
-  const itemId = view.waiting?.itemId;
-  const text = itemId === undefined ? undefined : draftEdits.get(itemId);
-  if (!ask?.block.draft || itemId === undefined || text === undefined) return undefined;
-  if (text === ask.block.draft.body) return undefined;
-  return { itemId, draft: { messageId: ask.target.messageId, text } };
 }
 
 /** What the person sends into the open thread: messages, answers, reactions, stop. */
@@ -223,7 +211,9 @@ export function useThreadSend({
           );
         }
         const clientNonce = newClientNonce();
-        replaced = reroutedToGroup ? undefined : editedWaitingDraft(viewRef.current);
+        replaced = reroutedToGroup
+          ? undefined
+          : editedWaitingDraft(viewRef.current, (itemId) => draftEdits.get(itemId));
         if (groupTarget) {
           await rpc.threads.send({
             groupId: groupTarget,

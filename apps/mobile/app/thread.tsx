@@ -34,6 +34,7 @@ import {
   type ComposerMention,
   canEditSpawnBotCard,
   drawsNothing,
+  editedWaitingDraft,
   failureSinceLabel,
   isApprovalAskBlock,
   isAsideOnlyMessage,
@@ -61,6 +62,7 @@ import {
   threadTimeMarkerLabel,
   truncateSlashDescription,
   unshownRunReport,
+  waitingAnswerTarget,
 } from "@rakazo/core";
 import { ambientFloor, botAccentOn, motion, radii, sizes } from "@rakazo/ui-tokens";
 import * as Clipboard from "expo-clipboard";
@@ -180,7 +182,7 @@ import { noteBotRunEnded } from "../lib/bot-page-state";
 import { CHAT_MOTION } from "../lib/chat-motion";
 import { useDebugMode } from "../lib/debug-mode";
 import type { CardEdits } from "../lib/draft-edit";
-import { dropDraftEdit, replacedDraft, syncDraftEdit } from "../lib/draft-edit";
+import { draftEdit, dropDraftEdit, syncDraftEdit } from "../lib/draft-edit";
 import { cancelFocusPrompt, focusPromptThreadActive } from "../lib/focus-prompt";
 import { commitHaptic, selectionHaptic, sendHaptic, successHaptic } from "../lib/haptics";
 import { dateLocaleForUi, t, useI18n } from "../lib/i18n";
@@ -1504,7 +1506,7 @@ function Thread() {
         rewindApplied = true;
       }
       const clientNonce = newClientNonce();
-      const replaced = reroutedToGroup ? undefined : replacedDraft(view);
+      const replaced = reroutedToGroup ? undefined : editedWaitingDraft(view, draftEdit);
       await rpc(
         "threads/send",
         groupTarget
@@ -1639,12 +1641,10 @@ function Thread() {
     },
     [botId, groupId],
   );
-  // A draft that did not leave is asked again under a new entry: the answer names the latest one.
   const answerMessage = useCallback(
     async (item: { id: string }, answer: string, edits?: CardEdits) => {
-      const card = waitingRef.current;
-      if (card?.itemId !== item.id) return;
-      await answerCard({ runId: card.runId, entryId: card.entryId }, answer, edits);
+      const target = waitingAnswerTarget(waitingRef.current, item.id);
+      if (target) await answerCard(target, answer, edits);
     },
     [answerCard],
   );
@@ -1732,8 +1732,8 @@ function Thread() {
   // The edit sheet lives only while its card can still be answered.
   useEffect(() => {
     syncSpawnBotEdit(answerableAskMessageId);
-    syncDraftEdit(answerableAskMessageId);
-  }, [answerableAskMessageId]);
+    if (threadKey) syncDraftEdit(threadKey, answerableAskMessageId);
+  }, [threadKey, answerableAskMessageId]);
   // Only the run's owner may edit a Create bot card; until this loads, nobody gets Edit.
   const [viewerUserId, setViewerUserId] = useState<string>();
   useEffect(() => {
@@ -3656,6 +3656,7 @@ const MessageBubble = memo(function MessageBubble({
     return (
       <View style={{ gap: 8, width: "100%" }}>
         <ApprovalCard
+          threadKey={groupId ?? botId}
           block={askBlock}
           cardId={message.id}
           cardBotId={cardBotId}
@@ -3865,6 +3866,7 @@ const MessageBubble = memo(function MessageBubble({
 });
 
 function ApprovalCard({
+  threadKey,
   block,
   cardId,
   cardBotId,
@@ -3873,6 +3875,8 @@ function ApprovalCard({
   actionProps,
   onAnswer,
 }: {
+  /** The thread the card shows in: a draft's Edit message sheet belongs to it. */
+  threadKey: string;
   block: Extract<MessageBlock, { kind: "ask" }>;
   cardId: string;
   cardBotId: string;
@@ -3888,6 +3892,7 @@ function ApprovalCard({
     return (
       <DraftCard
         key={cardId}
+        threadKey={threadKey}
         block={block}
         draft={block.draft}
         messageId={cardId}
@@ -4139,6 +4144,7 @@ const ItemRow = memo(function ItemRow({
         if (!card) return null;
         return (
           <ApprovalCard
+            threadKey={groupId ?? botId}
             block={card}
             cardId={item.id}
             cardBotId={item.botId ?? botId}

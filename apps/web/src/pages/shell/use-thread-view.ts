@@ -6,6 +6,7 @@ import {
   isActive,
   latestTakeoverItemId,
   projectThreadView,
+  waitingAskBlock,
 } from "@rakazo/core";
 import type { GroupAvatarMember } from "@rakazo/ui-web";
 import { useCallback, useMemo, useRef } from "react";
@@ -40,18 +41,10 @@ export function waitingAsk(
   view: ThreadView,
 ): { block: AskBlock; target: Omit<CardAnswerTarget, "thread"> } | null {
   const waiting = view.waiting;
-  if (!waiting) return null;
-  const item = view.rows.find((row) => row.item.id === waiting.itemId)?.item;
-  const block =
-    item?.kind === "message"
-      ? item.blocks.find(
-          (candidate): candidate is AskBlock =>
-            candidate.kind === "ask" && candidate.status !== "answered",
-        )
-      : item?.kind === "effect"
-        ? item.card
-        : undefined;
-  return block ? { block, target: { runId: waiting.runId, messageId: waiting.entryId } } : null;
+  const block = waitingAskBlock(view);
+  return waiting && block
+    ? { block, target: { runId: waiting.runId, messageId: waiting.entryId } }
+    : null;
 }
 
 /** What the open thread's snapshot shows: its rows, who is working, and who a send answers. */
