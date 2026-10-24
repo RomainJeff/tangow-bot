@@ -56,7 +56,8 @@ pill, the call view.
 The only framed element of the thread: a decision or a question the bot cannot
 settle alone.
 
-Props: `header?: { who, dot?, icon?, status? }`, `question`, `consequence?`,
+Props: `header?: { who, dot?, icon?, status? }`, `question?` (left out only on
+an answered block whose answer says it all on one line), `consequence?`,
 `children?`, `actions?`, `actionsAlign?: "end" | "start"` (default `end`),
 `answered?`.
 Anatomy: `bg-surface rounded-block shadow-card` (radius 28 on iPhone),
