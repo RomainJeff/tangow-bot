@@ -120,8 +120,30 @@ export const AskDraft = z.object({
   recipients: z.array(z.object({ role: z.enum(["to", "cc", "bcc"]), address: z.string() })).min(1),
   subject: z.string().optional(),
   body: z.string(),
+  /** Why the last Send did not go out; `disconnected` when the app needs reconnecting. */
+  failure: z.object({ reason: z.string(), disconnected: z.literal(true).optional() }).optional(),
+  /** When it left, and whether the user changed the bot's text first. */
+  sent: z.object({ at: z.string(), edited: z.boolean() }).optional(),
 });
 export type AskDraft = z.infer<typeof AskDraft>;
+
+/** The longest message body a draft card sends. */
+export const ASK_DRAFT_TEXT_MAX_LENGTH = 20_000;
+
+export type AskDraftState = "pending" | "sending" | "sent" | "not_sent" | "discarded";
+
+/** Where a draft card stands, read from the card alone. */
+export function askDraftState(card: {
+  status?: "pending" | "answered";
+  answer?: string;
+  failed?: true;
+  draft?: Pick<AskDraft, "failure" | "sent">;
+}): AskDraftState {
+  if (card.status !== "answered") return card.draft?.failure ? "not_sent" : "pending";
+  if (card.answer !== "allow") return "discarded";
+  if (card.draft?.sent) return "sent";
+  return card.failed ? "not_sent" : "sending";
+}
 
 export const AskBlock = z.object({
   kind: z.literal("ask"),

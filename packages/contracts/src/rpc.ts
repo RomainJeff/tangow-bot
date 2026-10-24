@@ -78,7 +78,7 @@ import {
   VoiceInfoSchema,
   VoiceStatusSchema,
 } from "./domain.js";
-import { ASK_ANSWER_MAX_LENGTH, ProductEventSchema } from "./events.js";
+import { ASK_ANSWER_MAX_LENGTH, ASK_DRAFT_TEXT_MAX_LENGTH, ProductEventSchema } from "./events.js";
 import { Id, IsoDate } from "./ids.js";
 import {
   IntegrationProviderConfigSchema,
@@ -376,6 +376,8 @@ export const appContract = {
             .object({
               name: z.string().max(200).optional(),
               instructions: z.string().max(4000).optional(),
+              /** A mail draft's body as the user sends it. */
+              text: z.string().max(ASK_DRAFT_TEXT_MAX_LENGTH).optional(),
             })
             .strict()
             .optional(),
