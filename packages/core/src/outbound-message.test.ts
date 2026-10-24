@@ -68,6 +68,19 @@ describe("readOutboundCall", () => {
     ]);
   });
 
+  it.each([
+    ["send_message", { to_address: "a@example.com", body: "Hi" }],
+    ["send_message", { toAddress: "a@example.com", body: "Hi" }],
+    ["send_message", { to_addresses: ["a@example.com"], body: "Hi" }],
+    ["send_message", { recipient_address: "a@example.com", body: "Hi" }],
+    ["send_message", { send_to: "a@example.com", body: "Hi" }],
+    ["send_message", { email_address: "a@example.com", body: "Hi" }],
+    ["SENDMAIL", { to: "a@example.com", body: "Hi" }],
+    ["mcp__acme__sendEmail", { to: "a@example.com", body: "Hi" }],
+  ])("drafts %s with %j", (toolName, args) => {
+    expect(summary(read(toolName, args))).toBe("draft to:a@example.com | - | Hi | -");
+  });
+
   it("drafts a reply that names its recipient and shows no subject", () => {
     expect(
       summary(
@@ -189,6 +202,16 @@ describe("readOutboundCall", () => {
 
   it.each([
     ["a text message", "TWILIO_SEND_SMS", { to: "+15555550100", body: "Hi" }],
+    [
+      "a text message with a to_address field",
+      "send_sms",
+      { to_address: "+15555550100", body: "Hi" },
+    ],
+    [
+      "an e-signature request",
+      "DOCUSIGN_SEND_ENVELOPE",
+      { signers: [{ email: "a@example.com", name: "A" }], subject: "Please sign" },
+    ],
     ["a chat message", "SLACK_SEND_MESSAGE", { channel: "C0123", text: "Hi" }],
     ["a mail read", "GMAIL_FETCH_EMAILS", { query: "from:a@example.com" }],
     ["a saved draft", "GMAIL_CREATE_EMAIL_DRAFT", { recipient_email: "a@example.com", body: "Hi" }],
