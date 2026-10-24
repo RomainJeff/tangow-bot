@@ -12,7 +12,7 @@ Browser continuity passed on E2B, recorded in [browser-continuity.json](evidence
 - **Computer replacement.** Product export/import and core `replaceComputer` moved the computer to a new VM on the same two volumes, with at most one computer at a time. This ran on the original backend.
 - **Earlier failures.** Earlier attempts that stopped on fixture errors or an unexplained guest refusal are not counted as passes.
 
-A real model now drives the remote computer from the product chat, shown in [the 48-second recording](evidence/P4/media/chat-e2b.mp4), [desktop](evidence/P4/media/chat-e2b-desktop.png) and [phone](evidence/P4/media/chat-e2b-phone.png) captures. The flow used the normal API, UI, account and model connection, an E2B worker and the bot's dedicated E2B computer. The bot ran shell commands, browsed and posted screenshots of public pages into the thread; the last run provisioned a fresh computer. The "subagent" label above the bot's messages comes from a projection bug already fixed on `main` (`6d0aee5`); it reaches this feature with the next merge of `main`.
+A real model now drives the remote computer from the product chat, shown in [the 48-second recording](evidence/P4/media/chat-e2b.mp4), [desktop](evidence/P4/media/chat-e2b-desktop.png) and [phone](evidence/P4/media/chat-e2b-phone.png) captures. The flow used the normal API, UI, account and model connection, an E2B worker and the bot's dedicated E2B computer. The bot ran shell commands, browsed and posted screenshots of public pages into the thread; the last run provisioned a fresh computer. The "subagent" label that appeared above the bot's messages came from a projection bug fixed on `main` in `6d0aee5`; that fix is cherry-picked onto this slice.
 
 Three product fixes came out of that flow:
 
@@ -20,7 +20,7 @@ Three product fixes came out of that flow:
 - E2B screens use plain HTTP for a `*.localhost` proxy domain, and the screen proxy accepts `*.localhost` targets as loopback (RFC 6761). Public and look-alike names stay rejected.
 - E2B screens load Rakazo's `embed.html` page, as the Docker computer does. noVNC's `vnc.html` reads `localStorage`, which the sandboxed screen frame denies.
 
-Through the product's screen proxy, the remote screen page loads and its VNC socket returns the RFB banner. Interactive takeover control from the UI was not checked.
+Through the product's screen proxy, the remote screen page loads and its VNC socket returns the RFB banner. Interactive takeover control from the UI was confirmed by the maintainer.
 
 Reference measurements from these real runs, not pass criteria:
 
@@ -132,10 +132,8 @@ The candidate build used an isolated image reference with unchanged canonical by
 
 ## Remaining work
 
-- Check interactive takeover control from the UI on E2B. Viewing works through the screen proxy.
 - OpenCode computer jobs, their path and their auth were taken out of N13 by the maintainer.
 - Prepare production artifact delivery and computer-template promotion in P6. The private candidate template does not change production defaults.
-- Merge `main` into the feature branch, which brings the session-origin label fix.
 
 Normal screen cleanup remains best effort for the exact root `.rakazo-screen-<uuid>.png` namespace. Rare leftovers after abrupt termination are accepted. The stricter admission/runtime/NFS requirements remain abandoned.
 
