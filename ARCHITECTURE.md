@@ -9,7 +9,7 @@ Read more in [Session log architecture](./docs/architecture-sessionlog.md).
 
 ## Computer runtime
 
-A bot works on a computer kept apart from the agent runtime, which runs in the API and worker process and reaches the computer through its tools. `SandboxProvider` in [`interfaces.ts`](./packages/adapter-kit/src/interfaces.ts) is the provider boundary, and [`sandbox-factory.ts`](./packages/adapters/src/sandbox-factory.ts) picks a backend such as Docker, E2B, Daytona or Box from `SANDBOX_PROVIDER`.
+A bot works on a computer kept apart from the agent runtime, which runs in the API and worker process and reaches the computer through its tools. `SandboxProvider` in [`interfaces.ts`](./packages/adapter-kit/src/interfaces.ts) is the provider boundary, and [`sandbox-factory.ts`](./packages/adapters/src/sandbox-factory.ts) picks a backend such as Docker or E2B from `SANDBOX_PROVIDER`.
 Read more in [Computer runtime](./docs/computer-runtime.md).
 
 ## Reusable credentials

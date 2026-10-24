@@ -4,7 +4,6 @@ import { isRealSandboxProvider } from "./e2e/helpers";
 const webPort = Number(process.env.WEB_PORT ?? 5173);
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://127.0.0.1:${webPort}`;
 const realSandbox = isRealSandboxProvider();
-const boxSandbox = process.env.SANDBOX_PROVIDER === "box";
 const record =
   process.env.E2E_RECORD === "1" ||
   (process.env.E2E_RECORD === undefined && Boolean(process.env.CI));
@@ -19,8 +18,8 @@ export default defineConfig({
   forbidOnly: Boolean(process.env.CI),
   fullyParallel: false,
   workers: realSandbox ? 1 : undefined,
-  timeout: boxSandbox ? 600_000 : realSandbox ? 300_000 : 120_000,
-  expect: { timeout: boxSandbox ? 300_000 : realSandbox ? 90_000 : 20_000 },
+  timeout: realSandbox ? 300_000 : 120_000,
+  expect: { timeout: realSandbox ? 90_000 : 20_000 },
   reporter: reporters,
   use: {
     baseURL,

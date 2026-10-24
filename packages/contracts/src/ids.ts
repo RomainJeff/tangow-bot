@@ -85,5 +85,5 @@ export const ThinkingLevelSchema = z.enum([
 ]);
 export type ThinkingLevel = z.infer<typeof ThinkingLevelSchema>;
 
-export const SandboxKind = z.enum(["docker", "e2b", "daytona", "box", "desktop", "fake"]);
+export const SandboxKind = z.enum(["docker", "e2b", "desktop", "fake"]);
 export type SandboxKind = z.infer<typeof SandboxKind>;

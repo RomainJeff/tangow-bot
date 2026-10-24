@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Changed
 
 - On iPhone, menus open from the button you tapped as native iOS menus without the extra Cancel row, and deleting a skill now asks for confirmation on every phone.
+- Daytona and Box are no longer supported as computer providers: a self-hosted server set to `SANDBOX_PROVIDER=daytona` or `box` now refuses to start until you switch to `docker` or `e2b` ([upgrade notes](docs/self-host-sandbox-providers.md#remote-provider)).
 
 #### Fixed
 

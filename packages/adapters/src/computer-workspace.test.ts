@@ -116,7 +116,7 @@ describe("Team run checkpoints", () => {
       checkpointRunComputerWorkspace(
         deps as never,
         { id: "team", homeKey: "team", scope: "team" },
-        { id: "remote", providerRef: "remote", kind: "box", botId: "team" },
+        { id: "remote", providerRef: "remote", kind: "e2b", botId: "team" },
         { ...context, botId: "writer", screenLeaseId: "run-a:2" },
       ),
     ).rejects.toThrow("export failed");
