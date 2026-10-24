@@ -54,13 +54,19 @@ const draft = {
 
 let seeded = 0;
 
-/** A run waiting on one approval card: a mail draft, or a Create bot card. */
+const masked = (value: string) => value.replace("sk-live-123", "[redacted]");
+
 /** The proposal the executor logs: the request with run secrets masked. */
 const proposal = (body: string, subject = "Hello") => ({
-  request: request(body, subject.replace("sk-live-123", "[redacted]")),
+  request: request(masked(body), masked(subject)),
 });
 
-async function waiting(kind: "draft" | "spawn_bot" = "draft", subject = "Hello") {
+/** A run waiting on one approval card: a mail draft, or a Create bot card. */
+async function waiting(
+  kind: "draft" | "spawn_bot" = "draft",
+  subject = "Hello",
+  body = "Hello from Chief.",
+) {
   seeded += 1;
   const bot = await prisma.bot.create({
     data: { spaceId: SPACE, userId: OWNER, name: `Bot ${seeded}`, color: "#00C46A" },
@@ -98,8 +104,8 @@ async function waiting(kind: "draft" | "spawn_bot" = "draft", subject = "Hello")
             kind: "COMPOSIO_MULTI_EXECUTE_TOOL",
             idempotencyKey: `key-${seeded}`,
             status: "intended",
-            request: request("Hello from Chief.", subject),
-            draft: { state: "pending", path: BODY_PATH, proposed: "Hello from Chief." },
+            request: request(body, subject),
+            draft: { state: "pending", path: BODY_PATH, proposed: body },
           }
         : {
             spaceId: SPACE,
@@ -130,7 +136,7 @@ async function waiting(kind: "draft" | "spawn_bot" = "draft", subject = "Hello")
       payload: {
         effectId: effect.id,
         effectKind: effect.kind,
-        proposal: kind === "draft" ? proposal("Hello from Chief.", subject) : {},
+        proposal: kind === "draft" ? proposal(body, subject) : {},
         card,
       },
     }),
@@ -194,14 +200,17 @@ describe("answering a mail draft card", () => {
   });
 
   it("logs the edit on the masked proposal, never the request's secrets", async () => {
-    const w = await waiting("draft", "Token sk-live-123");
+    const w = await waiting("draft", "Token sk-live-123", "Your key is sk-live-123.");
     await expect(w.answer({ edits: { text: "Hello, edited." } })).resolves.toBe(true);
-    const { entries } = await w.state();
+    const { entries, audit } = await w.state();
     expect(entries[0]).toMatchObject({
       type: "effect.edited",
       payload: { proposal: proposal("Hello, edited.", "Token sk-live-123") },
     });
-    expect(JSON.stringify(entries)).not.toContain("sk-live-123");
+    expect(audit.map((event) => event.payload)).toEqual([
+      expect.objectContaining({ proposed: "Your key is [redacted].", approved: "Hello, edited." }),
+    ]);
+    expect(JSON.stringify([entries, audit])).not.toContain("sk-live-123");
   });
 
   it("sends the bot's text as it is when the user did not edit it", async () => {
