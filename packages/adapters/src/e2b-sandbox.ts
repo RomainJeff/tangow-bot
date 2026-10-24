@@ -83,7 +83,9 @@ const RESTORE_BROWSER_PROFILES = [
 ].join("\n");
 
 export interface E2BSandboxSdk {
-  create(options: ReturnType<typeof e2bCreateOptions>): Promise<Sandbox>;
+  create(
+    options: ReturnType<typeof e2bCreateOptions> & { metadata: Record<string, string> },
+  ): Promise<Sandbox>;
   connect(id: string, options: { apiKey: string; timeoutMs: number }): Promise<Sandbox>;
   pause(id: string, options: { apiKey: string }): Promise<void>;
 }
