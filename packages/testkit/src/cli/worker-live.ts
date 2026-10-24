@@ -15,7 +15,7 @@
  *     outside any git work tree that holds the provider key. `--worker local` runs the guests in
  *     this process instead of E2B, for scenarios without a computer.
  *   worker-live accept --template <worker> --computer-template <computer> --out <dir>
- *     [--models 'glm-*-flash'] [--tasks code,app,browser,mcp] [--prepare-computer]
+ *     --models 'glm-*-flash' [--tasks code,app,browser,mcp] [--prepare-computer]
  *     The four journeys of #200 against one real model, each in its own thread: a cold and a warm
  *     run of the task, then a run cancelled during a native bash. Same key file as `measure`.
  *   worker-live measure-summary --in <receipt> --out <receipt>

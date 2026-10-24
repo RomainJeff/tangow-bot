@@ -257,10 +257,14 @@ export async function acceptTasks(options: {
           const runId = await run.send(prompt);
           const running = run.continueRun(runId);
           let stopMs: number | undefined;
+          let cancelledDuringTool: boolean | undefined;
           if (cancel) {
             const deadline = Date.now() + 120_000;
-            while (Date.now() < deadline && !(await toolStarted(run, runId)))
-              await new Promise((resolve) => setTimeout(resolve, 250));
+            cancelledDuringTool = false;
+            while (Date.now() < deadline && !cancelledDuringTool) {
+              cancelledDuringTool = await toolStarted(run, runId);
+              if (!cancelledDuringTool) await sleep(250);
+            }
             const { taskId } = await run.prisma.run.findUniqueOrThrow({ where: { id: runId } });
             const cancelledAt = performance.now();
             await run.prisma.$transaction((tx) =>
@@ -311,7 +315,7 @@ export async function acceptTasks(options: {
               firstModelEventMs:
                 firstEventAt === undefined ? null : Math.round(firstEventAt - startedAt),
               runMs,
-              ...(stopMs === undefined ? {} : { stopAfterCancelMs: stopMs }),
+              ...(stopMs === undefined ? {} : { stopAfterCancelMs: stopMs, cancelledDuringTool }),
               workerDestroy: destroys.slice(fromDestroy),
               workersLeftAfterRun: workersLeft,
               usage: {
@@ -344,7 +348,9 @@ export async function acceptTasks(options: {
         record.samples = samples;
         record.abort = { ...aborted.sample, prompt: journey.abort };
         record.pass =
-          checks.every((check) => check.pass === true) && aborted.sample.status === "cancelled";
+          checks.every((check) => check.pass === true) &&
+          aborted.sample.status === "cancelled" &&
+          aborted.sample.cancelledDuringTool === true;
         if (journey.computer !== "none") {
           const { providerRef } = await run.prisma.computer.findFirstOrThrow({
             select: { providerRef: true },
