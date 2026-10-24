@@ -47,6 +47,8 @@ const twMerge = extendTailwindMerge({
       ease: ["quiet"],
       animate: ["arrive", "pivot"],
     },
+    // `ring-selected` is a width token: filed as a colour, it would lose to `ring-foreground`.
+    classGroups: { "ring-w": [{ ring: ["selected"] }] },
   },
 });
 
