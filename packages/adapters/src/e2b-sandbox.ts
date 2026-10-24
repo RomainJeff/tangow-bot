@@ -23,7 +23,6 @@ import {
   boundedSandboxCommandTimeoutMs,
   underVolumeMounts,
   type VolumeHome,
-  volumeMountPath,
   WORKSPACE_ROOT,
 } from "@rakazo/core";
 import { stopAllDesktopBrowsersCommand } from "@rakazo/core/node/desktop-runtime";
@@ -33,8 +32,9 @@ import { normalizeWorkspacePath, shellQuote, workspacePath } from "./computer-su
 import {
   PORTABLE_TRANSFER_BATCH_BYTES,
   shouldSkipPortableWorkspaceFile,
+  skippedBrowserProfileDirectories,
+  skippedBrowserProfileFiles,
 } from "./computer-workspace.js";
-import { e2bBrowserMetricsCommands } from "./e2b-browser-metrics.js";
 import type { DesktopExecutionOptions } from "./linux-desktop.js";
 import { LinuxDesktop, PREPARE_LINUX_DESKTOP } from "./linux-desktop.js";
 
@@ -46,6 +46,41 @@ const E2B_DESKTOP_ENV = {
   displayStart: 20,
   portStart: 6100,
 };
+/**
+ * On volumes each bot's Chrome profile stays on the machine's own disk: the volumes are NFS, which
+ * Chrome's file locks cannot use. A pause keeps the disk; a replacement archives the profile to
+ * the bot's private volume first, and a new machine restores it.
+ */
+const E2B_LOCAL_PROFILES = "/home/user/.browser-profiles";
+const PROFILE_ARCHIVE = ".rakazo/browser-profiles.tgz";
+
+function saveBrowserProfilesCommand(): string {
+  const excludes = [...skippedBrowserProfileDirectories, ...skippedBrowserProfileFiles]
+    .map((name) => `--exclude=${shellQuote(name)}`)
+    .join(" ");
+  return [
+    "set -eu",
+    `for profiles in ${shellQuote(E2B_LOCAL_PROFILES)}/*; do`,
+    '  [ -d "$profiles" ] || continue',
+    `  volume=${shellQuote(WORKSPACE_ROOT)}/bots/"$(basename "$profiles")"`,
+    '  [ -d "$volume" ] || continue',
+    `  archive="$volume"/${PROFILE_ARCHIVE}`,
+    '  mkdir -p "$(dirname "$archive")"',
+    `  tar -C "$profiles" ${excludes} -czf "$archive.tmp" .`,
+    '  mv -f "$archive.tmp" "$archive"',
+    "done",
+  ].join("\n");
+}
+
+const RESTORE_BROWSER_PROFILES = [
+  "set -eu",
+  `for archive in ${shellQuote(WORKSPACE_ROOT)}/bots/*/${PROFILE_ARCHIVE}; do`,
+  '  [ -f "$archive" ] || continue',
+  `  profiles=${shellQuote(E2B_LOCAL_PROFILES)}/"$(basename "$(dirname "$(dirname "$archive")")")"`,
+  '  mkdir -p "$profiles"',
+  '  tar -C "$profiles" -xzf "$archive"',
+  "done",
+].join("\n");
 
 export interface E2BSandboxSdk {
   create(options: ReturnType<typeof e2bCreateOptions>): Promise<Sandbox>;
@@ -139,7 +174,6 @@ function e2bScreenUrl(host: string): string {
 
 export class E2BSandboxProvider implements SandboxProvider {
   private readonly desktops = new LinuxDesktop({
-    profileCommands: e2bBrowserMetricsCommands,
     environment: async (computer, context) => {
       const onVolumes =
         computer.writableRoots !== undefined ||
@@ -148,7 +182,7 @@ export class E2BSandboxProvider implements SandboxProvider {
       if (!context.botId) throw new ComputerScreenUnavailableError();
       return {
         ...E2B_DESKTOP_ENV,
-        browserProfilesDir: `${volumeMountPath({ kind: "bot_private", botId: context.botId })}/.browser-profiles`,
+        browserProfilesDir: `${E2B_LOCAL_PROFILES}/${context.botId}`,
       };
     },
     run: async (computer, command, context, options) => {
@@ -250,6 +284,7 @@ export class E2BSandboxProvider implements SandboxProvider {
         }
         // Created before its home moved, or with another set of volumes: what it holds off the
         // volumes may be newer than any copy, so it is archived before the machine goes.
+        if (metadata.home === "volumes") await this.preserveBeforeReplace(machine, context);
         await volumeHome.archive(
           this.filesOffVolumes(
             machine,
@@ -277,6 +312,11 @@ export class E2BSandboxProvider implements SandboxProvider {
         await desktop.kill().catch(() => undefined);
         throw new Error(linked.stderr || "could not link the computer workspace to its volumes");
       }
+      const restored = await this.runSetupCommand(desktop, RESTORE_BROWSER_PROFILES);
+      if (restored.exitCode !== 0) {
+        await desktop.kill().catch(() => undefined);
+        throw new Error(restored.stderr || "could not restore the computer's browser profiles");
+      }
     }
     this.boxes.set(desktop.sandboxId, desktop);
     this.lastTouchedAt.set(desktop.sandboxId, Date.now());
@@ -292,18 +332,15 @@ export class E2BSandboxProvider implements SandboxProvider {
 
   private async stopBrowsers(computer: ComputerRef, context: AdapterContext) {
     const profiles = "RAKAZO_INTERNAL_PROFILES";
-    const stop = stopAllDesktopBrowsersCommand(
-      {
-        ...E2B_DESKTOP_ENV,
-        browserProfilesDir: profiles,
-      },
-      e2bBrowserMetricsCommands,
-    ).replaceAll(shellQuote(profiles), '"$1"');
+    const stop = stopAllDesktopBrowsersCommand({
+      ...E2B_DESKTOP_ENV,
+      browserProfilesDir: profiles,
+    }).replaceAll(shellQuote(profiles), '"$1"');
     const result = await this.runSetupCommand(
       await this.box(computer),
       [
         "set -eu",
-        `for profiles in ${shellQuote(E2B_DESKTOP_ENV.browserProfilesDir)} ${shellQuote(WORKSPACE_ROOT)}/bots/*/.browser-profiles; do`,
+        `for profiles in ${shellQuote(E2B_DESKTOP_ENV.browserProfilesDir)} ${shellQuote(E2B_LOCAL_PROFILES)}/*; do`,
         '  [ -d "$profiles" ] || continue',
         `  bash -eu -c ${shellQuote(stop)} desktop "$profiles"`,
         "done",
@@ -527,6 +564,17 @@ export class E2BSandboxProvider implements SandboxProvider {
 
   async releaseScreen(computer: ComputerRef, context: AdapterContext): Promise<void> {
     return this.desktops.releaseScreen(computer, context);
+  }
+
+  async preserveBeforeReplace(computer: ComputerRef, context: AdapterContext): Promise<void> {
+    await this.stopBrowsers(computer, context);
+    const saved = await this.runSetupCommand(
+      await this.box(computer),
+      saveBrowserProfilesCommand(),
+      context.signal,
+    );
+    if (saved.exitCode !== 0)
+      throw new Error(saved.stderr || "could not save the computer's browser profiles");
   }
 
   async stop(computer: ComputerRef, _context: AdapterContext): Promise<void> {

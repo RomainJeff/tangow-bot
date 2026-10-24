@@ -39,19 +39,19 @@ it.each([
     home: "volumes",
     homeKey: "team-space",
     writableRoots: undefined,
-    root: "/workspace/bots/bot_a",
+    root: "/home/user/.browser-profiles/bot_a",
   },
   {
     home: "volumes",
     homeKey: "bot_a",
     writableRoots: ["bots/bot_a", "shared"],
-    root: "/workspace/bots/bot_a",
+    root: "/home/user/.browser-profiles/bot_a",
   },
   {
     home: "snapshot",
     homeKey: "team-space",
     writableRoots: undefined,
-    root: "/home/user/rakazo-home",
+    root: "/home/user/rakazo-home/.browser-profiles",
   },
 ])(
   "keeps stable isolated profiles for $home / $homeKey",
@@ -81,14 +81,13 @@ it.each([
       return result.stdout;
     };
     const first = await profileFor(new E2BSandboxProvider("test-key", sdkFor(machine)), "bot_a");
-    expect(first).toMatch(new RegExp(`^${root}/\\.browser-profiles/chromium-bot-[a-f0-9]{32}$`));
+    expect(first).toMatch(new RegExp(`^${root.replaceAll(".", "\\.")}/chromium-bot-[a-f0-9]{32}$`));
     expect(await profileFor(new E2BSandboxProvider("test-key", sdkFor(machine)), "bot_a")).toBe(
       first,
     );
     const second = await profileFor(new E2BSandboxProvider("test-key", sdkFor(machine)), "bot_b");
     expect(second).not.toBe(first);
-    if (home === "volumes")
-      expect(second).toMatch(/^\/workspace\/bots\/bot_b\/\.browser-profiles\//);
+    if (home === "volumes") expect(second).toMatch(/^\/home\/user\/\.browser-profiles\/bot_b\//);
   },
 );
 
@@ -105,26 +104,29 @@ it("refuses a volume screen without a bot context instead of writing into the ho
 });
 
 it.each(["export", "import", "archive"])(
-  "quiesces all private and legacy profiles before %s without a bot context",
+  "quiesces all local and legacy profiles before %s without a bot context",
   async (operation) => {
     const root = await mkdtemp(path.join(tmpdir(), "e2b-profile-stop-"));
+    const local = await mkdtemp(path.join(tmpdir(), "e2b-profile-local-"));
     onTestFinished(() => rm(root, { recursive: true, force: true }));
+    onTestFinished(() => rm(local, { recursive: true, force: true }));
+    const legacy = ".browser-profiles/chromium-bot-legacy";
     const profiles = [
-      ".browser-profiles/chromium-bot-legacy",
-      "bots/bot_a/.browser-profiles/chromium-bot-a",
-      "bots/bot_b/.browser-profiles/chromium-bot-b",
+      path.join(root, legacy),
+      path.join(local, "bot_a/chromium-bot-a"),
+      path.join(local, "bot_b/chromium-bot-b"),
     ];
     const files: Record<string, string> = {
       "project/Cache/keep": "project",
       "project/lock": "keep",
+      [`${legacy}/Default/Cookies`]: "saved",
+      [`${legacy}/Cache/transient`]: "cache",
+      [`${legacy}/SingletonLock`]: "lock",
     };
     for (const profile of profiles) {
-      await mkdir(path.join(root, profile, "Default"), { recursive: true });
-      await symlink("absent-99999999", path.join(root, profile, "SingletonLock"));
-      await writeFile(path.join(root, profile, "SingletonCookie"), "stale");
-      files[`${profile}/Default/Cookies`] = "saved";
-      files[`${profile}/Cache/transient`] = "cache";
-      files[`${profile}/SingletonLock`] = "lock";
+      await mkdir(path.join(profile, "Default"), { recursive: true });
+      await symlink("absent-99999999", path.join(profile, "SingletonLock"));
+      await writeFile(path.join(profile, "SingletonCookie"), "stale");
     }
     const machine = fakeE2BMachine("machine", files, { home: "volumes", botId: "team-space" });
     machine.sandbox.commands.run = vi.fn(async (command: string) => {
@@ -133,19 +135,17 @@ it.each(["export", "import", "archive"])(
         [
           "-eu",
           "-c",
-          `flock() { :; }; sudo() { [ "$5" = release ]; [ ! -e "$6/SingletonCookie" ]; printf '%s\\n' "$6" >>${shellQuote(path.join(root, "cleanups"))}; }; export -f flock sudo;\n${command}`
+          `flock() { :; }; export -f flock;\n${command}`
             .replaceAll("/home/user/rakazo-home", root)
+            .replaceAll("/home/user/.browser-profiles", local)
             .replaceAll("/workspace", root)
             .replaceAll("/tmp/rakazo", `${root}/runtime`),
         ],
         { encoding: "utf8" },
       );
       if (result.status !== 0) throw new Error(result.stderr);
-      expect((await readFile(path.join(root, "cleanups"), "utf8")).trim().split("\n")).toEqual(
-        profiles.map((profile) => path.join(root, profile)),
-      );
       for (const profile of profiles) {
-        await expect(readFile(path.join(root, profile, "SingletonCookie"))).rejects.toMatchObject({
+        await expect(readFile(path.join(profile, "SingletonCookie"))).rejects.toMatchObject({
           code: "ENOENT",
         });
       }
@@ -178,13 +178,7 @@ it.each(["export", "import", "archive"])(
     expect(machine.sandbox.commands.run).toHaveBeenCalled();
     if (operation !== "import") {
       expect(exported.map((file) => file.path).sort()).toEqual([
-        ".browser-profiles/chromium-bot-legacy/Default/Cookies",
-        ...(operation === "export"
-          ? [
-              "bots/bot_a/.browser-profiles/chromium-bot-a/Default/Cookies",
-              "bots/bot_b/.browser-profiles/chromium-bot-b/Default/Cookies",
-            ]
-          : []),
+        `${legacy}/Default/Cookies`,
         "project/Cache/keep",
         "project/lock",
       ]);
@@ -254,6 +248,7 @@ it.skipIf(process.env.VERIFY_DOCKER_TEAM_SCREENS !== "1").each([
         name,
         "find",
         "/workspace/bots",
+        "/home/user",
         "-name",
         "chromium-bot-*",
         "-type",
@@ -264,9 +259,13 @@ it.skipIf(process.env.VERIFY_DOCKER_TEAM_SCREENS !== "1").each([
       expect(profiles).toHaveLength(2);
       expect(
         profiles.every((profile) =>
-          /^\/workspace\/bots\/bot_[ab]\/\.browser-profiles\/chromium-bot-[a-f0-9]{32}$/.test(
-            profile,
-          ),
+          home === "volumes"
+            ? /^\/home\/user\/\.browser-profiles\/bot_[ab]\/chromium-bot-[a-f0-9]{32}$/.test(
+                profile,
+              )
+            : /^\/workspace\/bots\/bot_a\/\.browser-profiles\/chromium-bot-[a-f0-9]{32}$/.test(
+                profile,
+              ),
         ),
       ).toBe(true);
       if (target === "/workspace") {

@@ -1,5 +1,6 @@
 packages:
   - "apps/*"
   - "packages/*"
+  - "infra/sandboxes/computer/e2b"
   - "infra/sandboxes/supervisor"
   - "infra/updater"

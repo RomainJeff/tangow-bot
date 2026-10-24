@@ -376,6 +376,12 @@ export const laneHProductRecreate: Lane = {
       const firstVm = await Sandbox.connect(first.providerRef!, live.connection);
       const movedNotes = await sh(firstVm, `cat ${notes}`);
       await sh(firstVm, `echo 'changed on the volume' > ${notes}`);
+      // A Chrome profile lives on the machine's own disk; a replacement carries it over.
+      const profile = `/home/user/.browser-profiles/${botId}/chromium-bot-live`;
+      await sh(
+        firstVm,
+        `mkdir -p ${profile}/Cache && echo kept > ${profile}/Cookies && touch ${profile}/SingletonLock ${profile}/Cache/data`,
+      );
       const revisionBefore = (
         await prisma.computer.findUniqueOrThrow({ where: { id: computer.id } })
       ).homeRevision;
@@ -384,6 +390,10 @@ export const laneHProductRecreate: Lane = {
       const secondVm = await Sandbox.connect(second.providerRef!, live.connection);
       const info = await Sandbox.getInfo(second.providerRef!, live.connection);
       const notesAfter = await sh(secondVm, `cat ${notes}`);
+      const profileAfter = await sh(
+        secondVm,
+        `cat ${profile}/Cookies; ls -A ${profile} | tr '\\n' ' '; stat -c %u ${profile}/Cookies`,
+      );
       const firstGone = await Sandbox.getInfo(first.providerRef!, live.connection).then(
         () => false,
         () => true,
@@ -396,6 +406,7 @@ export const laneHProductRecreate: Lane = {
         firstGone &&
         info.metadata.home === "volumes" &&
         notesAfter === "changed on the volume" &&
+        profileAfter === "kept\nCookies 1000" &&
         row.state === "running" &&
         row.providerRef === second.providerRef;
       return {
@@ -407,6 +418,7 @@ export const laneHProductRecreate: Lane = {
           firstMachineGone: firstGone,
           recreatedMachineMetadataHome: info.metadata.home,
           fileOnRecreatedMachine: notesAfter,
+          browserProfileOnRecreatedMachine: profileAfter,
           homeRevisionUnchangedByRecover: row.homeRevision === revisionBefore,
           computerRow: { state: row.state, homeStorage: row.homeStorage },
           desktopPreparation: "skipped: this host has no desktop template",

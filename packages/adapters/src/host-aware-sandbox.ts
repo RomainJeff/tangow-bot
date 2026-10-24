@@ -172,6 +172,10 @@ export class HostAwareSandbox implements SandboxProvider {
     return this.route(computer).releaseScreen?.(computer, context) ?? Promise.resolve();
   }
 
+  preserveBeforeReplace(computer: ComputerRef, context: AdapterContext) {
+    return this.route(computer).preserveBeforeReplace?.(computer, context) ?? Promise.resolve();
+  }
+
   setScreenControl(
     computer: ComputerRef,
     interactive: boolean,
