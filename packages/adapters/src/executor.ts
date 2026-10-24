@@ -4508,15 +4508,14 @@ export function createRunExecutor(deps: ExecutorDeps) {
             const after = await deps.prisma.externalEffect.findUnique({
               where: { id: effect.id },
             });
-            const read = "result" in outcome ? readSendResult(outcome.result) : undefined;
-            // Still approved: a replay guard refused it before anything was sent.
+            // Still approved: a replay guard refused it before anything was sent. Its words are
+            // internal, so the card gives a plain reason.
             if (after?.status === "approved") {
-              await reRequestDraft(after, draft, (app) => ({
-                reason: (read?.kind === "not_sent" && read.reason) || `${app} did not send it.`,
-              }));
+              await reRequestDraft(after, draft, (app) => ({ reason: `${app} did not send it.` }));
               return undefined;
             }
             if (after?.status !== "executing") continue;
+            const read = "result" in outcome ? readSendResult(outcome.result) : undefined;
             if (read?.kind !== "sent") {
               await reRequestDraft(
                 after,

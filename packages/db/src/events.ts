@@ -989,8 +989,9 @@ export async function answerRunInputInTransaction(
           source: "card",
         },
       });
-    // Edits only make sense on a Create bot approval, answered "allow" by the run's owner. Checked
-    // before any other branch and before any name is read, so the refusal reveals nothing.
+    // Edits only apply to an approval card (a Create bot card or a mail draft), answered "allow"
+    // by the run's owner. Checked before any other branch and before any name is read, so the
+    // refusal reveals nothing.
     if (input.edits) {
       if (pendingAsk.questions?.length || !isApprovalAskBlock(pendingAsk)) {
         throw new InvalidAnswerError("Only a Create bot card can be edited");
