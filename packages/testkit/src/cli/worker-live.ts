@@ -341,7 +341,7 @@ async function measure() {
       ? protocol.approvalDelaysMs.reduce((sum, delay) => sum + delay, 0)
       : 0);
   console.log(
-    `${models.map((model) => model.id).join(", ")}: ${trials} trials; waits alone take ${Math.round((waits * trials * models.length) / 60_000)} min`,
+    `${models.map((model) => model.id).join(", ")}: ${trials} trials; waits alone take ${Math.round((waits * trials * (local ? 1 : models.length)) / 60_000)} min`,
   );
   if (!local) await requireIdleDeployment();
   const live = local ? undefined : session();
