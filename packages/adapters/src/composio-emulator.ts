@@ -464,11 +464,14 @@ function sentResult(message: MailMessage): Record<string, unknown> {
   };
 }
 
+export type EmulatedFault = { kind: "fail"; error: string } | { kind: "timeout" };
+
 /** Deterministic, offline Composio catalog and connection emulator for product tests. */
 export class ComposioEmulator implements ComposioProvider {
   private readonly connectedByEntity = new Map<string, string[]>();
   private readonly mailboxesByEntity = new Map<string, Mailbox>();
   private githubReleases: EmulatedGithubRelease[] = [...DEFAULT_RAKAZO_EMULATED_RELEASES];
+  private readonly faults = new Map<string, EmulatedFault>();
   private nextAccountSeq = 0;
   readonly executions: Array<{
     userId: string;
@@ -544,15 +547,43 @@ export class ComposioEmulator implements ComposioProvider {
 
   async *execute(call: ConnectorCall, context: AdapterContext): AsyncIterable<ConnectorEvent> {
     const args = call.args ?? {};
-    const result =
-      call.tool === BATCH_TOOL.name
-        ? this.executeBatch(args, context)
-        : this.executeAction(call.tool, args, context);
+    let result: Record<string, unknown>;
+    try {
+      result =
+        call.tool === BATCH_TOOL.name
+          ? this.executeBatch(args, context)
+          : this.executeAction(call.tool, args, context);
+    } catch (error) {
+      // ComposioConnector reports every thrown error, a timeout included, as an error event.
+      yield { type: "error", message: error instanceof Error ? error.message : String(error) };
+      return;
+    }
     this.executions.push({ userId: context.userId, tool: call.tool, args });
     yield { type: "result", data: result };
   }
 
+  /**
+   * Test helper: the next call of `tool` fails the way Composio reports a failed action, or does
+   * its work and then times out, which the caller only sees as an error.
+   */
+  failNext(tool: string, fault: EmulatedFault): void {
+    this.faults.set(tool, fault);
+  }
+
   private executeAction(
+    tool: string,
+    args: Record<string, unknown>,
+    context: AdapterContext,
+  ): Record<string, unknown> {
+    const fault = this.faults.get(tool);
+    this.faults.delete(tool);
+    if (fault?.kind === "fail") return { successful: false, error: fault.error, data: null };
+    const result = this.performAction(tool, args, context);
+    if (fault?.kind === "timeout") throw new Error(`${tool} timed out`);
+    return result;
+  }
+
+  private performAction(
     tool: string,
     args: Record<string, unknown>,
     context: AdapterContext,

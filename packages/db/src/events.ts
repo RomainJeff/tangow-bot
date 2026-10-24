@@ -8,20 +8,26 @@ import {
   type ProductEvent,
   RUN_WORK_TYPES,
 } from "@rakazo/contracts";
+import type { DraftRecord } from "@rakazo/core";
 import {
   ACTIVE_RUN_STATUSES,
+  askDraftDetail,
   blocksToAgentHistoryText,
   DISMISSABLE_EFFECT_KINDS,
   DISMISSED_EFFECT_RESULT,
+  draftTextError,
   isApprovalAskBlock,
   isSecretAskBlock,
   messagingChannelId,
   normalizeSpawnBotArgs,
+  readDraft,
   runStartedByUser,
   sanitizeJsonValue,
   spawnBotApprovalBlock,
   spawnBotToolArgs,
   validateSpawnBotArgs,
+  valueAt,
+  withValueAt,
 } from "@rakazo/core";
 import { approvalEffectKey } from "@rakazo/core/node/approval-effect-key";
 import { getLogger } from "@rakazo/logging";
@@ -185,8 +191,11 @@ export interface PauseRunForInput {
    * (not in message blocks) so clients still see redacted labels.
    */
   offeredActions?: Array<{ id: string; label: string }>;
-  /** The effect an approval card asks about; its proposal is already redacted. */
-  effect?: { id: string; kind: string; proposal: Record<string, unknown> };
+  /**
+   * The effect an approval card asks about; its proposal is already redacted. `reopen` asks again
+   * about a draft that did not leave, in the same transaction that parks the run on it.
+   */
+  effect?: { id: string; kind: string; proposal: Record<string, unknown>; reopen?: DraftRecord };
   /** The logged tool call the run pauses on, which gets its one result here, naming the pause. */
   pausedCall?: { sessionId: string; botId: string; runId: string; callId: string; output: string };
 }
@@ -247,8 +256,8 @@ export interface AnswerRunInput {
   messageId: string;
   answeredByUserId: string;
   answer: string;
-  /** Changes to a Create bot card, applied with "allow" by the run's owner only. */
-  edits?: { name?: string; instructions?: string };
+  /** Changes to a Create bot card or a mail draft, applied with "allow" by the run's owner only. */
+  edits?: { name?: string; instructions?: string; text?: string };
 }
 
 export interface SendUserMessageInput {
@@ -878,6 +887,64 @@ async function planSpawnBotEdit(
   return { proposed, approved, key, card: { text, detail, spawnBot } };
 }
 
+type AskCard = Extract<MessageBlock, { kind: "ask" }>;
+
+/**
+ * What answering a draft card writes: Send approves the request with the user's text in place of
+ * the bot's, Discard denies it. The key never changes, so the bot's own call finds the effect.
+ */
+function planDraftAnswer(
+  effect: { request: unknown },
+  { path, proposed }: DraftRecord,
+  input: Pick<AnswerRunInput, "answer" | "edits">,
+  card: AskCard,
+  shownProposal: unknown,
+) {
+  if (input.edits?.name !== undefined || input.edits?.instructions !== undefined) {
+    throw new InvalidAnswerError("Only the message text can be edited");
+  }
+  if (input.answer !== "allow") {
+    return { data: { status: "denied", draft: { path, proposed, state: "discarded" } } };
+  }
+  const current = valueAt(effect.request, path);
+  const text = input.edits?.text ?? (typeof current === "string" ? current : "");
+  const invalid = draftTextError(text);
+  if (invalid) throw new InvalidAnswerError(invalid);
+  const request = withValueAt(effect.request, path, text);
+  if (request === undefined) throw new InvalidAnswerError("This draft can no longer be edited");
+  const shown = card.draft && { ...card.draft, body: text, failure: undefined };
+  return {
+    data: { status: "approved", request, draft: { path, proposed, state: "approved" } },
+    edit:
+      text === current
+        ? undefined
+        : {
+            proposed: valueAt(shownProposal, proposalPath(effect.request, path)),
+            approved: text,
+            // The proposal the card was requested with, its run secrets masked, now with the
+            // user's text: the stored request may hold what that proposal hid.
+            proposal: proposalWithText(shownProposal, proposalPath(effect.request, path), text),
+            card: shown ? { draft: shown, detail: askDraftDetail(shown) } : {},
+          },
+  };
+}
+
+/** Where the body sits in the logged proposal, which wraps a request that is not an object. */
+function proposalPath(request: unknown, path: DraftRecord["path"]): DraftRecord["path"] {
+  return Array.isArray(request) ? ["request", ...path] : path;
+}
+
+function proposalWithText(
+  proposal: unknown,
+  path: DraftRecord["path"],
+  text: string,
+): Record<string, unknown> {
+  const edited = withValueAt(proposal, path, text);
+  return edited && typeof edited === "object" && !Array.isArray(edited)
+    ? (edited as Record<string, unknown>)
+    : {};
+}
+
 /**
  * Answer the pending ask of a waiting_input run inside an existing transaction. Called by
  * answerRunInput, and exported so a caller that already holds a transaction can reuse it.
@@ -922,17 +989,24 @@ export async function answerRunInputInTransaction(
           source: "card",
         },
       });
-    // Edits only make sense on a Create bot approval, answered "allow" by the run's owner. Checked
-    // before any other branch and before any name is read, so the refusal reveals nothing.
+    // Edits only apply to an approval card (a Create bot card or a mail draft), answered "allow"
+    // by the run's owner. Checked before any other branch and before any name is read, so the
+    // refusal reveals nothing.
     if (input.edits) {
       if (pendingAsk.questions?.length || !isApprovalAskBlock(pendingAsk)) {
         throw new InvalidAnswerError("Only a Create bot card can be edited");
       }
       if (input.answer !== "allow") {
-        throw new InvalidAnswerError("Edits can only be sent when creating the bot");
+        throw new InvalidAnswerError(
+          pendingAsk.draft
+            ? "Edits can only be sent with Send"
+            : "Edits can only be sent when creating the bot",
+        );
       }
       if (input.answeredByUserId !== run.userId) {
-        throw new InvalidAnswerError("Only the owner of this run can edit the bot");
+        throw new InvalidAnswerError(
+          `Only the owner of this run can edit the ${pendingAsk.draft ? "message" : "bot"}`,
+        );
       }
     }
 
@@ -1049,11 +1123,14 @@ export async function answerRunInputInTransaction(
     let approvalEffect: {
       id: string;
       kind: string;
+      status: string;
       request: unknown;
+      draft: unknown;
       idempotencyKey: string;
     } | null = null;
     let approvalUserId: string | null = null;
     let spawnBotEdit: SpawnBotEdit | undefined;
+    let draftAnswer: ReturnType<typeof planDraftAnswer> | undefined;
 
     if (approvalAsk) {
       if (!pendingAsk.actions?.some((action) => action.id === input.answer)) return null;
@@ -1066,11 +1143,29 @@ export async function answerRunInputInTransaction(
         },
       });
       if (!approvalEffect) return null;
+      const draft = readDraft(approvalEffect.status, approvalEffect.draft);
+      // A mail draft leaves in the owner's name: nobody else may send, edit or discard it.
+      if (draft && run.userId !== input.answeredByUserId) return null;
       if (input.answer === "always") {
-        if (run.userId !== input.answeredByUserId) return null;
+        if (draft || run.userId !== input.answeredByUserId) return null;
         approvalUserId = input.answeredByUserId;
       }
-      if (input.edits) {
+      if (draft) {
+        const requested = await tx.sessionEntry.findUnique({
+          where: { id: askId },
+          select: { payload: true },
+        });
+        draftAnswer = planDraftAnswer(
+          approvalEffect,
+          draft,
+          input,
+          pendingAsk,
+          (requested?.payload as { proposal?: unknown } | null)?.proposal,
+        );
+      } else if (input.edits) {
+        if (input.edits.text !== undefined) {
+          throw new InvalidAnswerError("Only a mail draft's text can be edited");
+        }
         if (approvalEffect.kind !== "spawn_bot") {
           throw new InvalidAnswerError("Only a Create bot card can be edited");
         }
@@ -1098,7 +1193,7 @@ export async function answerRunInputInTransaction(
 
     if (approvalAsk) {
       const allowed = input.answer === "allow" || input.answer === "always";
-      if (spawnBotEdit) {
+      if (spawnBotEdit || draftAnswer) {
         // Compare-and-set: only the effect the plan was made from may be rewritten. Anything
         // else throws, which rolls back the run update above and leaves the card pending.
         const rewritten = await tx.externalEffect.updateMany({
@@ -1108,9 +1203,13 @@ export async function answerRunInputInTransaction(
             idempotencyKey: approvalEffect!.idempotencyKey,
           },
           data: {
-            request: spawnBotEdit.approved,
-            idempotencyKey: spawnBotEdit.key,
-            status: "approved",
+            ...(spawnBotEdit
+              ? {
+                  request: spawnBotEdit.approved,
+                  idempotencyKey: spawnBotEdit.key,
+                  status: "approved",
+                }
+              : (draftAnswer!.data as Prisma.ExternalEffectUpdateManyMutationInput)),
             answeredAt: new Date(),
           },
         });
@@ -1186,16 +1285,18 @@ export async function answerRunInputInTransaction(
     const answeredAsk = {
       ...pendingAsk,
       ...(spawnBotEdit ? spawnBotEdit.card : {}),
+      ...draftAnswer?.edit?.card,
       status: "answered" as const,
       answer: secretAsk ? "" : freeTextAnswer || input.answer,
     };
     if (approvalEffect) {
       const effectId = approvalEffect.id;
-      if (spawnBotEdit) {
+      const edited = spawnBotEdit?.approved ?? draftAnswer?.edit?.proposal;
+      if (edited) {
         await appendSessionEntryInTransaction(tx, {
           ...runLog,
           type: "effect.edited",
-          payload: { effectId, proposal: spawnBotEdit.approved, card: answeredAsk },
+          payload: { effectId, proposal: edited, card: answeredAsk },
         });
       }
       await appendSessionEntryInTransaction(tx, {
@@ -1215,7 +1316,8 @@ export async function answerRunInputInTransaction(
       });
       if (!secretAsk) await answerEntry(selectedChoice?.label ?? (freeTextAnswer || input.answer));
     }
-    if (spawnBotEdit) {
+    const audit = spawnBotEdit ?? draftAnswer?.edit;
+    if (audit) {
       // The audit keeps what the model proposed next to what the person approved.
       await appendEventInTransaction(tx, {
         spaceId: input.spaceId,
@@ -1225,8 +1327,8 @@ export async function answerRunInputInTransaction(
         runId: input.runId,
         payload: {
           effectId: approvalEffect!.id,
-          proposed: spawnBotEdit.proposed,
-          approved: spawnBotEdit.approved,
+          proposed: audit.proposed,
+          approved: audit.approved,
         },
       });
     }
@@ -1465,6 +1567,13 @@ export async function pauseRunForInput(
     });
     if (attempt.count !== 1) throw new Error("Active run attempt was not available to pause");
 
+    if (input.effect?.reopen) {
+      const reopened = await tx.externalEffect.updateMany({
+        where: { id: input.effect.id, status: { in: ["approved", "executing"] } },
+        data: { status: "intended", draft: input.effect.reopen },
+      });
+      if (reopened.count !== 1) throw new Error("The draft changed before it was shown again");
+    }
     if (input.effect) {
       const { sessionId } = await tx.run.findUniqueOrThrow({
         where: { id: input.runId },

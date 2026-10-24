@@ -321,6 +321,18 @@ export function projectThread(entries: readonly ThreadEntry[]): ProjectedThread 
       }
       case "effect.requested": {
         const { effectId, effectKind, proposal, card } = segment.payload;
+        // Asked again (a draft that did not leave): the same card opens again where it was.
+        const asked = effects.get(effectId);
+        if (asked) {
+          asked.proposal = proposal;
+          asked.decision = null;
+          if (card) asked.card = card;
+          shownBy.set(segment.id, asked.id);
+          cards.set(segment.id, [{ item: asked }]);
+          if (segment.runId)
+            runCards.push({ id: segment.id, runId: segment.runId, seq: segment.seq });
+          break;
+        }
         const effect: EffectItem = {
           kind: "effect",
           id: segment.id,
@@ -368,7 +380,7 @@ export function projectThread(entries: readonly ThreadEntry[]): ProjectedThread 
         break;
       }
       case "effect.applied": {
-        const { target, routineId, change, failed } = segment.payload;
+        const { target, routineId, change, failed, sent, failure } = segment.payload;
         const slot = cards.get(target)?.find((slot) => cardOf(slot)?.kind === "ask");
         const block = slot && cardOf(slot);
         if (slot && block?.kind === "ask") {
@@ -379,6 +391,15 @@ export function projectThread(entries: readonly ThreadEntry[]): ProjectedThread 
               : {}),
             ...(change ? { confirms: change } : {}),
             ...(failed ? { failed } : {}),
+            ...(block.draft && (sent || failure)
+              ? {
+                  draft: {
+                    ...block.draft,
+                    ...(sent ? { sent } : {}),
+                    ...(failure ? { failure } : {}),
+                  },
+                }
+              : {}),
           });
         }
         showWith(segment, target);

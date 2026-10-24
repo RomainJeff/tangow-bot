@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { ComposioEmulator, PostgresSessionLog } from "@rakazo/adapters";
+import { ComposioEmulator, composioEntityId, PostgresSessionLog } from "@rakazo/adapters";
 import type { SessionEntry, SessionId, ThreadEntry } from "@rakazo/contracts";
 import { EntrySeq, SessionId as SessionIdSchema } from "@rakazo/contracts";
 import { projectThreadItems } from "@rakazo/core";
@@ -793,6 +793,151 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
     );
   }, 30_000);
 
+  describe("a mail draft", () => {
+    const mail = {
+      recipient_email: "someone@example.test",
+      subject: "Hello",
+      body: "Draft from the bot.",
+    };
+    const proposeMail: ModelEmulatorStep = {
+      expect(request) {
+        expect(request.tools?.map((tool) => tool.function.name)).toContain("GMAIL_SEND_EMAIL");
+      },
+      response: { type: "tool", id: "journey-mail", name: "GMAIL_SEND_EMAIL", arguments: mail },
+    };
+    /** Gmail connected through the Composio emulator for the fixture's user; its sent mail. */
+    async function connectGmail(composio: ComposioEmulator, fixture: JourneyFixture) {
+      const { spaceId } = await fixture.prisma.bot.findUniqueOrThrow({
+        where: { id: fixture.bot.id },
+        select: { spaceId: true },
+      });
+      await composio.begin(
+        { provider: "GMAIL", redirectUrl: "http://127.0.0.1.invalid/callback" },
+        {
+          operationId: "journey",
+          traceId: "journey",
+          spaceId,
+          userId: fixture.userId,
+          signal: new AbortController().signal,
+        },
+      );
+      await fixture.prisma.connection.create({
+        data: {
+          spaceId,
+          userId: fixture.userId,
+          provider: "GMAIL",
+          displayName: "Gmail",
+          status: "pending",
+        },
+      });
+      return () =>
+        composio
+          .mailboxFor(composioEntityId({ spaceId, userId: fixture.userId }))
+          ?.messages.filter((message) => message.to === mail.recipient_email)
+          .map((message) => message.messageText);
+    }
+    async function answerDraft(fixture: JourneyFixture, runId: string, edits?: { text: string }) {
+      const card = await latestCard(fixture.prisma, runId);
+      await rpc(fixture.app, fixture.cookie, "threads/answer", {
+        botId: fixture.bot.id,
+        runId,
+        messageId: card.id,
+        answer: "allow",
+        ...(edits ? { edits } : {}),
+      });
+    }
+
+    it("leaves once, with the user's edit, before the bot's next turn", async () => {
+      const composio = new ComposioEmulator();
+      await journey(
+        [
+          proposeMail,
+          {
+            expect(request) {
+              expect(JSON.stringify(request.messages)).toContain(
+                "The user sent your draft from its card.",
+              );
+              expect(JSON.stringify(request.messages)).toContain("Edited by me.");
+            },
+            response: reply("Sent."),
+          },
+          DONE,
+        ],
+        async (fixture) => {
+          const mailed = await connectGmail(composio, fixture);
+          const sent = await fixture.send("Mail them hello.");
+          await sent.settled("waiting_input");
+          await answerDraft(fixture, sent.runId, { text: "Edited by me." });
+          await sent.settled("completed");
+          expect(composio.executions.map((call) => [call.tool, call.args])).toEqual([
+            ["GMAIL_SEND_EMAIL", { ...mail, body: "Edited by me.", include_signature: false }],
+          ]);
+          expect(mailed()).toEqual(["Edited by me."]);
+          // The run also records its message_user call, so the mail's row is read by its tool.
+          const effects = await fixture.prisma.externalEffect.findMany({
+            where: { runId: sent.runId, kind: "GMAIL_SEND_EMAIL" },
+          });
+          expect(effects).toMatchObject([
+            { status: "completed", draft: { state: "sent", proposed: "Draft from the bot." } },
+          ]);
+        },
+        { composio },
+      );
+    }, 30_000);
+
+    it("asks the user to check Gmail when the send timed out after it left, sending nothing more", async () => {
+      const composio = new ComposioEmulator();
+      composio.failNext("GMAIL_SEND_EMAIL", { kind: "timeout" });
+      await journey(
+        [proposeMail],
+        async (fixture) => {
+          const mailed = await connectGmail(composio, fixture);
+          const sent = await fixture.send("Mail them hello.");
+          await sent.settled("waiting_input");
+          await answerDraft(fixture, sent.runId);
+          await expect
+            .poll(async () => (await latestCard(fixture.prisma, sent.runId)).block, {
+              timeout: 15_000,
+            })
+            .toMatchObject({
+              status: "pending",
+              draft: { failure: { reason: "Check Gmail before trying again." } },
+            });
+          await sent.settled("waiting_input");
+          expect(mailed()).toEqual(["Draft from the bot."]);
+        },
+        { composio },
+      );
+    }, 30_000);
+
+    it("shows Not sent when Gmail refuses it, and Try again sends it once", async () => {
+      const composio = new ComposioEmulator();
+      composio.failNext("GMAIL_SEND_EMAIL", { kind: "fail", error: "Invalid recipient" });
+      await journey(
+        [proposeMail, { expect() {}, response: reply("Sent.") }, DONE],
+        async (fixture) => {
+          const mailed = await connectGmail(composio, fixture);
+          const sent = await fixture.send("Mail them hello.");
+          await sent.settled("waiting_input");
+          await answerDraft(fixture, sent.runId);
+          await expect
+            .poll(async () => (await latestCard(fixture.prisma, sent.runId)).block, {
+              timeout: 15_000,
+            })
+            .toMatchObject({
+              status: "pending",
+              draft: { failure: { reason: "Invalid recipient" } },
+            });
+          await sent.settled("waiting_input");
+          await answerDraft(fixture, sent.runId);
+          await sent.settled("completed");
+          expect(mailed()).toEqual(["Draft from the bot."]);
+        },
+        { composio },
+      );
+    }, 30_000);
+  });
+
   it("closes a helper as cancelled by whoever stopped its parent", async () => {
     let helperOpened!: () => void;
     const helperHolding = new Promise<void>((resolve) => {
@@ -1492,7 +1637,10 @@ type JourneyFixture = {
 async function journey(
   steps: ModelEmulatorStep[],
   drive: (fixture: JourneyFixture) => Promise<void>,
-  app: Pick<NonNullable<Parameters<typeof createApp>[0]>, "agentRuntime" | "skillLearning"> = {},
+  app: Pick<
+    NonNullable<Parameters<typeof createApp>[0]>,
+    "agentRuntime" | "skillLearning" | "composio"
+  > = {},
 ) {
   const model = await startModelEmulator({ apiKey: fixtureKey, steps });
   const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-offline-product-"));

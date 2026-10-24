@@ -30,6 +30,7 @@ describe("readOutboundCall", () => {
         body: "Hello from Chief.",
         account: undefined,
         args: tracedSend.args,
+        textPath: ["body"],
       },
     });
   });
@@ -176,11 +177,6 @@ describe("readOutboundCall", () => {
       { to: "a@example.com", body: "Hi", signature: "Sent by a bot" },
     ],
     ["no text", "GMAIL_SEND_EMAIL", { to: "a@example.com", subject: "Hi" }],
-    [
-      "a body too long to show",
-      "GMAIL_SEND_EMAIL",
-      { to: "a@example.com", body: "x".repeat(20_001) },
-    ],
     [
       "a reply to everyone the card does not show",
       "OUTLOOK_REPLY_EMAIL",
@@ -400,6 +396,28 @@ describe("readOutboundCall", () => {
   it("drafts a send to many recipients that still fit the card", () => {
     const bcc = Array.from({ length: 100 }, (_, i) => `p${i}@example.test`);
     expect(read("GMAIL_SEND_EMAIL", { to: "a@example.com", bcc, body: "Hi" }).kind).toBe("draft");
+  });
+
+  it.each([
+    ["an empty body", { body: "  \n" }, "This message is empty."],
+    [
+      "a body too long to send",
+      { body: "x".repeat(20_001) },
+      "This message is longer than 20000 characters.",
+    ],
+  ])("refuses %s back to the bot", (_, body, error) => {
+    expect(read("GMAIL_SEND_EMAIL", { to: "a@example.com", ...body })).toEqual({
+      kind: "refuse",
+      error,
+    });
+  });
+
+  it("finds a body nested where the connector puts it", () => {
+    const result = read("mcp__acme-mail__sendMessage", {
+      toRecipients: [{ emailAddress: { address: "a@example.com" } }],
+      email: { body: "Hello" },
+    });
+    expect(result.kind === "draft" && result.draft.textPath).toEqual(["email", "body"]);
   });
 
   it("refuses a batch that sends among other actions, and leaves a batch of reads alone", () => {

@@ -179,6 +179,36 @@ describe("ComposioEmulator", () => {
     ]);
   });
 
+  it("fails the next send as asked, or sends it and then times out", async () => {
+    const emulator = new ComposioEmulator();
+    await emulator.begin({ provider: "GMAIL", redirectUrl: "http://example.test" }, context);
+    const send = { recipient_email: "a@example.test", subject: "Hi", body: "Hello" };
+    const sentCount = () => emulator.mailboxFor(composioEntityId(context))?.messages.length;
+    const before = sentCount();
+
+    emulator.failNext("GMAIL_SEND_EMAIL", { kind: "fail", error: "Invalid recipient" });
+    const failed = await collectResults(emulator, "COMPOSIO_MULTI_EXECUTE_TOOL", {
+      tools: [{ tool_slug: "GMAIL_SEND_EMAIL", arguments: send }],
+    });
+    expect(failed[0]).toMatchObject({
+      data: {
+        successful: false,
+        data: { results: [{ response: { successful: false, error: "Invalid recipient" } }] },
+      },
+    });
+    expect(sentCount()).toBe(before);
+
+    emulator.failNext("GMAIL_SEND_EMAIL", { kind: "timeout" });
+    expect(await collectResults(emulator, "GMAIL_SEND_EMAIL", send)).toEqual([
+      { type: "error", message: "GMAIL_SEND_EMAIL timed out" },
+    ]);
+    expect(sentCount()).toBe(before! + 1);
+
+    expect(await collectResults(emulator, "GMAIL_SEND_EMAIL", send)).toMatchObject([
+      { data: { successful: true } },
+    ]);
+  });
+
   it("accepts BCC-only Gmail send recipients", async () => {
     const emulator = new ComposioEmulator();
     await emulator.begin({ provider: "GMAIL", redirectUrl: "http://example.test" }, context);

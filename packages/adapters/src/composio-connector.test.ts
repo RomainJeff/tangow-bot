@@ -23,6 +23,7 @@ import { DestinationEmulator } from "./destination-emulator.js";
 const composioSdkState = vi.hoisted(() => ({
   created: [] as Array<{ userId: string; config: Record<string, unknown> }>,
   directoryFails: false,
+  executeFails: undefined as Error | undefined,
   executions: [] as Array<{ tool: string; args: Record<string, unknown> }>,
   connectedAccounts: {
     list: async (_query?: Record<string, unknown>) => ({ items: [] as Array<{ id: string }> }),
@@ -118,6 +119,7 @@ vi.mock("@composio/core", () => ({
             : [],
         execute: async (tool: string, args: Record<string, unknown>) => {
           composioSdkState.executions.push({ tool, args });
+          if (composioSdkState.executeFails) throw composioSdkState.executeFails;
           return { data: { ok: true }, error: null, logId: "log-github" };
         },
       };
@@ -452,6 +454,39 @@ describe("composio tool mapping", () => {
     ]);
     await expect(connector.connectionReady(context, "github")).resolves.toBe(true);
     await expect(connector.connectedAccountId(context, "github")).resolves.toBe("ca-github");
+  });
+
+  it("reports a call the SDK threw on, a timeout included, as an error event", async () => {
+    composioSdkState.sessions.clear();
+    composioToolkitDirectory.invalidate();
+    composioSdkState.executeFails = new Error("Request timed out");
+    const connector = new ComposioConnector();
+    const events: ConnectorEvent[] = [];
+    try {
+      for await (const event of connector.execute(
+        { tool: "GITHUB_GET_REPOS", args: {}, executionId: "composio-timeout" },
+        {
+          operationId: "composio-timeout",
+          traceId: "composio-timeout",
+          spaceId: "workspace",
+          userId: "user-1",
+          signal: new AbortController().signal,
+          connectedConnections: [
+            {
+              id: "c-github",
+              connectorId: "composio",
+              externalId: "GITHUB",
+              displayName: "GitHub",
+            },
+          ],
+        },
+      )) {
+        events.push(event);
+      }
+    } finally {
+      composioSdkState.executeFails = undefined;
+    }
+    expect(events).toEqual([{ type: "error", message: "Request timed out" }]);
   });
 
   it("scopes the Composio entity id to the space, not just the user", () => {
