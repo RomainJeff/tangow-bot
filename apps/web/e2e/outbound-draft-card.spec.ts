@@ -275,10 +275,23 @@ for (const width of [1440, 390]) {
     await expect(integrations.getByRole("button", { name: "Close integrations" })).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(integrations).toHaveCount(0);
-    onAnswer = () => drafts.push(...sentAfter(botId, "draft-card-again", EDITED));
+    // Still disconnected: the card asks to reconnect again rather than offering a retry that fails.
+    onAnswer = () =>
+      drafts.push(
+        resolved(botId, "draft-approved-again", 14, "approved"),
+        requested(botId, "draft-card-third", 15, card({}, { body: EDITED, failure })),
+      );
+    await button("Try again").click();
+    expect(answered.body).toMatchObject({ messageId: "draft-card-again", answer: "allow" });
+    await expect(button("Reconnect Mail")).toBeVisible();
+    await expect(button("Try again")).toHaveCount(0);
+    await button("Reconnect Mail").click();
+    await page.keyboard.press("Escape");
+    await expect(integrations).toHaveCount(0);
+    onAnswer = () => drafts.push(...sentAfter(botId, "draft-card-third", EDITED));
     await button("Try again").click();
     await expect(draftCard.getByText(/^Sent to /)).toBeVisible();
-    expect(answered.body).toMatchObject({ messageId: "draft-card-again", answer: "allow" });
+    expect(answered.body).toMatchObject({ messageId: "draft-card-third", answer: "allow" });
 
     // Discard waits five seconds with Undo, then tells the server.
     await reset(waitingDraft(botId));
