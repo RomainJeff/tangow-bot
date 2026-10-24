@@ -3670,6 +3670,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               const retryGate = resolveDuplicateEffectGate(current, name);
               if (retryGate.action === "return") return retryGate.result;
               if (retryGate.action === "uncertain") {
+                if (readDraft(current.status, current.draft)) return DRAFT_SENDING_ELSEWHERE;
                 return settleUncertainEffect(deps.prisma, applied!.effect.id, name);
               }
             }
@@ -3814,6 +3815,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 return requestApproval();
               }
             } else if (gate.action === "uncertain") {
+              if (readDraft(applied.effect.status, applied.effect.draft)) {
+                return DRAFT_SENDING_ELSEWHERE;
+              }
               return settleUncertainEffect(deps.prisma, applied.effect.id, gate.toolName);
             } else if (gate.action === "execute") {
               const early = await claimOrReturn("approved");
@@ -5202,6 +5206,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 return { thrown: true as const };
               },
             );
+            // Another worker claimed it first: its send settles the card.
+            if ("result" in outcome && outcome.result === DRAFT_SENDING_ELSEWHERE) return undefined;
             const after = await deps.prisma.externalEffect.findUnique({
               where: { id: effect.id },
             });
@@ -7917,6 +7923,15 @@ async function failStrandedRoutineCards(
 type RoutineCardOutcome =
   | { routine: CreatedRoutine; change: "created" | "updated"; failed?: never }
   | { failed: true; interrupted?: true };
+
+/**
+ * A draft whose send another worker holds. Its row is left as it is, so that worker settles it;
+ * a crashed holder's row is shown again Not sent when the run resumes.
+ */
+const DRAFT_SENDING_ELSEWHERE = {
+  error: "This message is already being sent. Do not send it again.",
+  uncertain: true,
+} as const;
 
 /** Why a draft that may have left is shown Not sent. */
 function interruptedSend(app: string): DraftFailure {
