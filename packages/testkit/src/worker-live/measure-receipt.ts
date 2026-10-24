@@ -129,6 +129,9 @@ export function summarize(threads: ThreadRecord[], models: MeasuredModel[]) {
         .filter((thread) => thread.scenario === "chain")
         .flatMap((thread) => thread.turns.slice(1));
       const turns = own.flatMap((thread) => thread.turns);
+      // Runs before the pairing fix matched a resumed attempt's frame to an earlier attempt's
+      // reply with the same sequence number, which always reads as negative.
+      const appends = turns.flatMap((turn) => turn.appends).filter((append) => append.ms >= 0);
       // Cache read up to the shared base is reuse across threads; the rest is the thread's own.
       const reuse = {
         sharedBase: 0,
@@ -219,10 +222,9 @@ export function summarize(threads: ThreadRecord[], models: MeasuredModel[]) {
               ];
             }),
           ),
-          transcriptAppendMs: quantiles(turns.flatMap((turn) => turn.appends.map((a) => a.ms))),
-          transcriptAppendQueries: quantiles(
-            turns.flatMap((turn) => turn.appends.map((a) => a.queries)),
-          ),
+          transcriptAppendMs: quantiles(appends.map((append) => append.ms)),
+          transcriptAppendQueries: quantiles(appends.map((append) => append.queries)),
+          transcriptAppendsMispaired: turns.flatMap((turn) => turn.appends).length - appends.length,
         },
       ];
     }),
@@ -271,5 +273,5 @@ const METHOD = {
   restore:
     "From the grant persisted (answerRunInput returned) to the resumed attempt's first model request frame at the controller, minus provisioningMs, the worker provider's ensure call to the guest's hello. Only comparable from a serial run.",
   transcriptAppend:
-    "Controller time and database queries from each native transcript frame to its recorded reply. Only comparable from a serial run.",
+    "Controller time and database queries from each native transcript frame to its recorded reply. Only comparable from a serial run. Receipts recorded before the pairing fix paired some frames of a resumed attempt with an earlier attempt's reply of the same sequence number; those read as negative, are left out, and are counted in transcriptAppendsMispaired.",
 };
