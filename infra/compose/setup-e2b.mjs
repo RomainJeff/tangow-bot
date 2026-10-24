@@ -105,13 +105,12 @@ async function main() {
       "computer-image": { type: "string" },
       "dry-run": { type: "boolean" },
       "migrate-existing": { type: "boolean" },
-      "leave-unmapped": { type: "boolean" },
       help: { type: "boolean" },
     },
   });
   if (values.help) {
     console.log(
-      "Usage: node infra/compose/setup-e2b.mjs --computer-image <registry>/<image>:<tag> [--dry-run] [--migrate-existing] [--leave-unmapped]\nExisting homes are detected and upgraded after explicit consent. Run in the deployed checkout. Docker must be usable without sudo. Domain and hidden API key are requested interactively.",
+      "Usage: node infra/compose/setup-e2b.mjs --computer-image <registry>/<image>:<tag> [--dry-run] [--migrate-existing]\nExisting homes are detected and upgraded after explicit consent. Run in the deployed checkout. Docker must be usable without sudo. Domain and hidden API key are requested interactively.",
     );
     return;
   }

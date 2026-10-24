@@ -360,17 +360,18 @@ test("partial migration stays in maintenance and resumes without another databas
   assert.equal(existsSync(path.join(f.root, ".env.e2b.upgrade.json")), false);
 });
 
-test("unmapped legacy entries need consent before services stop or templates publish", (t) => {
+test("setup warns about retained entries and scopes the migration without another prompt", (t) => {
   const f = fixture(t);
   const result = f.invoke(["--migrate-existing"], { UPGRADE_EXISTING: "1", UNMAPPED: "1" });
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /Unmapped legacy entries/);
-  assert.equal(
-    f.calls().some((c) => c.includes("stop") || c.includes("up") || c.includes("template:build")),
-    false,
-  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Only bots\/ and shared\//);
+  const moves = f.calls().filter((c) => c.includes("scripts/migrate-home-to-volumes.ts"));
+  assert.equal(moves.length, 2);
+  for (const command of moves) {
+    assert.ok(command.includes("--workspace-only"));
+    assert.ok(command.includes("--leave-unmapped"));
+  }
   assert.equal(existsSync(path.join(f.root, ".env.e2b.upgrade.json")), false);
-  assert.equal(statSync(path.join(f.root, ".env.e2b.plan.json")).mode & 0o777, 0o600);
 });
 
 test("worker probe failure keeps an upgraded deployment in maintenance", (t) => {

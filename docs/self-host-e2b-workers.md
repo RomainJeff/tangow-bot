@@ -58,25 +58,25 @@ active runs, live computer leases, concurrent maintenance and unsupported source
 uses the actual source provider to checkpoint and stop each old computer; it does not treat an old
 Docker reference as an E2B sandbox.
 
-Setup previews existing homes before stopping the services and writes the private report to
-`.env.e2b.plan.json`. It asks for explicit consent to the one-way move to volumes. Bot folders and
-the shared folder move to their corresponding volumes. Some legacy entries, such as files outside
-those folders or symbolic links, cannot be mapped by the home mover. Setup shows their count and
-report, then asks separately whether to retain them **only in the original home and backup**.
-They are not deleted, but they are not available in the new worker until restored or moved manually.
-Declining stops setup before any template publication or service shutdown.
+For team computers, setup inspects and migrates only `bots/` and `shared/`; it does not traverse
+other home folders. Dedicated computer homes are already a single bot's private workspace, so
+their root moves to that bot's volume. Setup asks for consent to the one-way move and displays one
+warning: other home entries and non-transferable workspace entries, including symbolic links,
+remain **only in the original home and backup**. They are not available to the new workers.
+There is no separate exclusion prompt. The private plan is `.env.e2b.plan.json`; migration
+manifests detail skipped entries within the inspected workspace.
 
 After consent, setup builds the templates, stops API and worker, rechecks that the deployment is
 idle, and writes a verified Postgres dump under `backups/e2b-<id>/`. It pauses and checkpoints the
 source computers, then archives application data in that backup directory before adopting any
 volumes. It migrates team homes before dedicated homes, verifies copied files and modes, and
 copies legacy user skills to the shared volumes. Original homes and old machines are retained.
-Detailed migration manifests are stored under `DATA_DIR/e2b-upgrade/`.
+Detailed migration manifests are stored under `DATA_DIR/e2b-upgrade/`. The full data backup also
+retains folders outside the migration scope; backup traversal is independent of migration planning.
 
 For noninteractive operation, supply `E2B_DOMAIN` and `E2B_API_KEY` through the environment or
 existing private configuration. Explicitly consent to the home move with `--migrate-existing`.
-Use `--leave-unmapped` only after reviewing the private plan and accepting that the listed entries
-will remain only in their original home and backup:
+The same workspace scope and retention warning apply in noninteractive mode:
 
 ```bash
 node infra/compose/setup-e2b.mjs --computer-image registry.example.com/rakazo-computer:local \

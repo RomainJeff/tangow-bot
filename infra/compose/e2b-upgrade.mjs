@@ -130,23 +130,9 @@ export class HomeUpgrade {
         "Existing homes require migration. No templates or deployment settings changed. Use --migrate-existing for noninteractive consent.",
       );
     }
-    const unmapped = (this.inventory.previews ?? []).reduce(
-      (total, preview) => total + preview.notCopied.length,
-      0,
+    console.log(
+      "Only bots/ and shared/ are inspected and migrated for team computers; dedicated homes are bot-private roots. Other entries and non-transferable workspace entries stay only in original homes and backups. See the private manifest for skipped workspace entries.",
     );
-    this.leaveUnmapped = Boolean(this.flags["leave-unmapped"]);
-    if (unmapped && !this.leaveUnmapped) {
-      console.log(`Private migration report: ${this.planPath}`);
-      this.leaveUnmapped =
-        this.prompt(
-          `${unmapped} legacy entries cannot map to bot/shared volumes. Keep them only in original homes and backups? Type yes`,
-          "no",
-        ) === "yes";
-      if (!this.leaveUnmapped)
-        throw new Error(
-          "Unmapped legacy entries require consent before setup. No service was stopped. Review the private report, then retry with --leave-unmapped if acceptable.",
-        );
-    }
   }
 
   persist() {
@@ -210,7 +196,6 @@ export class HomeUpgrade {
         computers: this.inventory.computers,
         databaseSaved: false,
         dataSaved: false,
-        leaveUnmapped: this.leaveUnmapped || Boolean(this.flags["leave-unmapped"]),
       };
       writeFileSync(this.journalPath, `${JSON.stringify(this.state)}\n`, {
         mode: 0o600,
@@ -234,38 +219,19 @@ export class HomeUpgrade {
     for (const computer of this.inventory.computers) {
       const name = encodeURIComponent(computer.id);
       const reportPath = path.join(this.state.backup, `${name}-plan.json`);
-      const args = ["--computer", computer.id, "--template", this.template];
-      let plan = this.oneoff(
+      const args = [
+        "--computer",
+        computer.id,
+        "--template",
+        this.template,
+        "--workspace-only",
+        "--leave-unmapped",
+      ];
+      const plan = this.oneoff(
         "scripts/migrate-home-to-volumes.ts",
-        [...args, "--dry-run", ...(this.state.leaveUnmapped ? ["--leave-unmapped"] : [])],
+        [...args, "--dry-run"],
         reportPath,
       );
-      if (
-        plan.outcome === "refused" &&
-        plan.refusal?.code === "not_copied" &&
-        !this.state.leaveUnmapped
-      ) {
-        const count = plan.refusal.entries?.length ?? 0;
-        console.log(`Migration report saved in ${reportPath}`);
-        if (
-          !this.flags["leave-unmapped"] &&
-          this.prompt(
-            `${count} legacy entries cannot map to bot/shared volumes. Keep them only in the original home and backup? Type yes`,
-            "no",
-          ) !== "yes"
-        ) {
-          throw new Error(
-            "Unmapped legacy entries need explicit consent. Review the private report, then retry with --leave-unmapped if acceptable.",
-          );
-        }
-        this.state.leaveUnmapped = true;
-        this.persist();
-        plan = this.oneoff(
-          "scripts/migrate-home-to-volumes.ts",
-          [...args, "--dry-run", "--leave-unmapped"],
-          reportPath,
-        );
-      }
       if (plan.outcome === "already_on_volumes") continue;
       if (plan.outcome !== "planned")
         throw new Error(
@@ -274,12 +240,7 @@ export class HomeUpgrade {
       const manifest = `/data/e2b-upgrade/${name}-${randomUUID()}.json`;
       const result = this.oneoff(
         "scripts/migrate-home-to-volumes.ts",
-        [
-          ...args,
-          "--manifest",
-          manifest,
-          ...(this.state.leaveUnmapped ? ["--leave-unmapped"] : []),
-        ],
+        [...args, "--manifest", manifest],
         path.join(this.state.backup, `${name}-result.json`),
       );
       if (result.outcome !== "adopted" && result.outcome !== "already_on_volumes")

@@ -23,7 +23,10 @@ import { fileHandlePath } from "./file-handle-path.js";
 export class LocalAgentHomeStore implements AgentHomeStore {
   private readonly botWrites = new Map<string, Promise<void>>();
 
-  constructor(private readonly root: string) {}
+  constructor(
+    private readonly root: string,
+    private readonly portableRoots?: readonly string[],
+  ) {}
 
   describe() {
     return {
@@ -103,7 +106,7 @@ export class LocalAgentHomeStore implements AgentHomeStore {
     const dir = this.botDir(botId);
     await mkdir(dir, { recursive: true });
     const root = await realpath(dir);
-    yield* walkFiles(root, root);
+    yield* walkFiles(root, root, "", new Set(), this.portableRoots);
   }
 
   async listTree(botId: string, _context: AdapterContext): Promise<HomeTreeEntry[]> {
@@ -112,6 +115,8 @@ export class LocalAgentHomeStore implements AgentHomeStore {
     const entries: HomeTreeEntry[] = [];
     const walk = async (directory: string, prefix: string): Promise<void> => {
       for (const entry of await readdir(directory, { withFileTypes: true })) {
+        if (prefix === "" && this.portableRoots && !this.portableRoots.includes(entry.name))
+          continue;
         const portablePath = path.posix.join(prefix, entry.name);
         const kind = entry.isSymbolicLink()
           ? "symlink"
@@ -371,12 +376,18 @@ async function* walkFiles(
   current: string,
   outputPath = "",
   visited = new Set<string>(),
+  portableRoots?: readonly string[],
 ): AsyncGenerator<PortableFile> {
   const resolvedCurrent = await traversalTarget(root, current).catch(() => null);
   if (!resolvedCurrent || visited.has(resolvedCurrent)) return;
   visited.add(resolvedCurrent);
   const entries = await readdir(resolvedCurrent, { withFileTypes: true }).catch(() => []);
   for (const entry of entries) {
+    if (
+      portableRoots &&
+      (entry.isSymbolicLink() || (outputPath === "" && !portableRoots.includes(entry.name)))
+    )
+      continue;
     const full = await traversalTarget(root, path.join(resolvedCurrent, entry.name)).catch(
       () => null,
     );
@@ -384,7 +395,7 @@ async function* walkFiles(
     const info = await stat(full);
     const portablePath = path.posix.join(outputPath, entry.name);
     if (info.isDirectory()) {
-      yield* walkFiles(root, full, portablePath, visited);
+      yield* walkFiles(root, full, portablePath, visited, portableRoots);
     } else if (info.isFile()) {
       const { content, mode } = await readTraversalFile(root, full);
       yield {

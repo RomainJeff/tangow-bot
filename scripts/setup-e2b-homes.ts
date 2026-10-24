@@ -96,7 +96,13 @@ try {
         previews.push({
           computerId: computer.id,
           ...(await previewHomeVolumeMove(
-            { prisma, home: new LocalAgentHomeStore(process.env.DATA_DIR ?? "/data") },
+            {
+              prisma,
+              home: new LocalAgentHomeStore(
+                process.env.DATA_DIR ?? "/data",
+                computer.scope === "team" ? ["bots", "shared"] : undefined,
+              ),
+            },
             computer.id,
             {
               operationId: "e2b-upgrade-preview",

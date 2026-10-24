@@ -5,7 +5,9 @@
  * changes nothing; after an interruption it resumes the copy.
  *
  *   pnpm exec tsx scripts/migrate-home-to-volumes.ts --computer <id> --manifest <path>
- *     [--dry-run] [--leave-unmapped] [--template <worker template>]
+ *     [--dry-run] [--leave-unmapped] [--workspace-only] [--template <worker template>]
+ *
+ *   --workspace-only limits team-home traversal to bots/ and shared/; dedicated homes stay private roots.
  *
  *   Clear an expired move reservation with --clear-stale-move, without E2B credentials.
  *
@@ -34,6 +36,7 @@ function options() {
       "clear-stale-move": { type: "boolean", default: false },
       "dry-run": { type: "boolean", default: false },
       "leave-unmapped": { type: "boolean", default: false },
+      "workspace-only": { type: "boolean", default: false },
       template: { type: "string", default: "rakazo-worker-pi-native" },
     },
   });
@@ -47,6 +50,7 @@ function options() {
     manifestPath: values.manifest ?? null,
     dryRun,
     leaveUnmapped: values["leave-unmapped"],
+    workspaceOnly: values["workspace-only"],
     template: values.template,
   };
 }
@@ -76,10 +80,17 @@ async function main() {
     const provider = new E2BWorkerProvider({ apiKey, template: input.template });
     const workers = createWorkerLifecycle({ prisma, provider });
     const operationId = randomUUID();
+    const computer = await prisma.computer.findUniqueOrThrow({
+      where: { id: input.computerId },
+      select: { scope: true },
+    });
     const report = await moveHomeToVolumes(
       {
         prisma,
-        home: new LocalAgentHomeStore(process.env.DATA_DIR ?? "./data"),
+        home: new LocalAgentHomeStore(
+          process.env.DATA_DIR ?? "./data",
+          input.workspaceOnly && computer.scope === "team" ? ["bots", "shared"] : undefined,
+        ),
         files,
         workers,
       },
