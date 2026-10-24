@@ -10,7 +10,7 @@ import { draftEdits } from "../lib/draft-edits";
 import { messageTimeLabel } from "../lib/message-time";
 import { userInitials } from "../lib/user-initials";
 import type { CardEdits } from "./AskCard";
-import type { DraftCard as DraftCardBlock, DraftCardView } from "./draft-card-view";
+import type { DraftCard as DraftCardBlock } from "./draft-card-view";
 import { draftCardView } from "./draft-card-view";
 
 /** How long a discarded draft can still be brought back before the bot hears of it. */
@@ -94,7 +94,7 @@ export function DraftCard({
 
   const text = edit ?? draft.body;
   const edited = text !== draft.body;
-  const view: DraftCardView = draftCardView(block, { edited, focused, pending, canAnswer });
+  const view = draftCardView(block, { edited, focused, pending, canAnswer });
 
   function keepEdit(next: string) {
     setEdit(next);
