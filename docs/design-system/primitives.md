@@ -56,10 +56,12 @@ pill, the call view.
 The only framed element of the thread: a decision or a question the bot cannot
 settle alone.
 
-Props: `header?: { who, dot? }`, `question`, `consequence?`, `children?`,
-`actions?`, `actionsAlign?: "end" | "start"` (default `end`), `answered?`.
+Props: `header?: { who, dot?, icon?, status? }`, `question`, `consequence?`,
+`children?`, `actions?`, `actionsAlign?: "end" | "start"` (default `end`),
+`answered?`.
 Anatomy: `bg-surface rounded-block shadow-card` (radius 28 on iPhone),
-padding 20; an optional header line with a 6 px ink dot and
+padding 20; an optional header line with a 6 px ink dot, the `icon` of the app
+the decision acts in, `who`, and a short `status` at the end, in
 `text-block-header`; the question in `text-question`; the consequence in
 `text-meta`; `children` for controls, with anything to read again or type in a
 `well` (`rounded-card`); the actions wrapped in a row of filled capsules.
