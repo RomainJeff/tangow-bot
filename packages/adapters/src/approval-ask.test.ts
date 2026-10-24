@@ -267,8 +267,22 @@ describe("buildApprovalAskBlock", () => {
     });
   });
 
+  it("bounds the other values of a send it cannot read", () => {
+    const notes = Object.fromEntries(
+      Array.from({ length: 10 }, (_, index) => [`note${index}`, "n".repeat(900)]),
+    );
+    const block = buildApprovalAskBlock(
+      "effect-1",
+      "GMAIL_SEND_EMAIL",
+      { to: "a@example.test", ...notes },
+      [],
+      { unreadable: true },
+    );
+    expect(block.kind === "ask" && block.detail?.length).toBe(4_019);
+  });
+
   it("never shortens a long recipient list on a send it cannot read", () => {
-    const bcc = Array.from({ length: 200 }, (_, index) => `person${index}@example.test`);
+    const bcc = Array.from({ length: 100 }, (_, index) => `person${index}@example.test`);
     const block = buildApprovalAskBlock(
       "effect-1",
       "GMAIL_SEND_EMAIL",

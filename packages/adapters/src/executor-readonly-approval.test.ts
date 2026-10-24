@@ -728,6 +728,19 @@ describe("connector read-only metadata and approval enforcement", () => {
       );
     });
 
+    it("refuses a send whose recipients are too many to show, before anything is recorded", async () => {
+      const f = fixture({ name: "GMAIL_SEND_EMAIL", inputSchema });
+      const bcc = Array.from({ length: 300 }, (_, index) => `p${index}@example.com`);
+      f.setCalls([{ args: { ...send, bcc }, executionId: "c1" }]);
+      await f.run();
+      expect(f.results).toEqual([
+        { error: "Too many recipients to show the user. Send to fewer people at a time." },
+      ]);
+      expect(f.effects).toEqual([]);
+      expect(f.execute).not.toHaveBeenCalled();
+      expect(f.pauseRunForInput).not.toHaveBeenCalled();
+    });
+
     it("refuses a batch that sends among other actions before anything is recorded", async () => {
       const f = fixture({
         name: "mcp__composio__COMPOSIO_MULTI_EXECUTE_TOOL",
