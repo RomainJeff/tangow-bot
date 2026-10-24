@@ -1,9 +1,13 @@
 import path from "node:path";
+import { nativeToolsForHarness } from "@rakazo/adapters/runtime-worker";
 import { WORKSPACE_ROOT } from "@rakazo/core";
 import { Sandbox } from "e2b";
 import { toolResult } from "../file-task.js";
+import { nativeCalls } from "../worker-channel-tap.js";
 import { call, finish, liveRun } from "./run.js";
 import { COMPUTER_WORKSPACE, type Lane, POLL_INTERVAL_S, pollFor, sh } from "./session.js";
+
+const NATIVE = new Set(nativeToolsForHarness("pi-native").map((tool) => tool.name));
 
 /**
  * Guest read, write, edit, grep and bash against files a computer wrote on both volumes, and
@@ -79,33 +83,10 @@ async function exchange(
   const runId = await worker.send("Exchange files with the computer.");
   await worker.completed(runId);
   const [mine, shared] = await Promise.all([privateSeen, sharedSeen]);
-  const frames = worker.seen.map(({ at, from, frame }) => ({
-    at,
-    from,
-    message: JSON.parse(Buffer.from(frame).toString()) as {
-      payload?: { seq?: number; re?: number; body?: { type?: string; callId?: string } };
-    },
-  }));
-  /** When the controller granted the guest tool call `callId`, matched by its request's seq. */
-  const grantOf = (callId: string) => {
-    const request = frames.find(
-      ({ from, message }) =>
-        from === "guest" &&
-        message.payload?.body?.type === "tool.call" &&
-        message.payload.body.callId === callId,
-    );
-    const seq = request?.message.payload?.seq;
-    return frames.find(
-      ({ from, message }) =>
-        from === "controller" &&
-        seq !== undefined &&
-        message.payload?.re === seq &&
-        message.payload.body?.type === "tool.grant",
-    )?.at;
-  };
-  /** From the grant of the guest tool that wrote, `e1` for the private file and `b1` the shared. */
-  const sinceGrant = (seenAt: number, callId: string) =>
-    Math.round(seenAt - (grantOf(callId) ?? Number.NaN));
+  const calls = nativeCalls(worker.frames(), NATIVE);
+  /** From the controller recording the native call `id`, before the harness runs it. */
+  const sinceCall = (seenAt: number, id: string) =>
+    Math.round(seenAt - (calls.find((entry) => entry.id === id)?.call?.to ?? Number.NaN));
   const pass =
     (await worker.status(runId)) === "completed" &&
     results.readPrivate?.includes("written by the computer") === true &&
@@ -124,10 +105,10 @@ async function exchange(
       guestToolResults: results,
       computerSawPrivateWrite: mine.out,
       computerSawSharedWrite: shared.out,
-      privateVisibleWithinMsOfGrant: sinceGrant(mine.at, "e1"),
-      sharedVisibleWithinMsOfGrant: sinceGrant(shared.at, "b1"),
+      privateVisibleWithinMsOfCall: sinceCall(mine.at, "e1"),
+      sharedVisibleWithinMsOfCall: sinceCall(shared.at, "b1"),
       pollIntervalMs: POLL_INTERVAL_S * 1000,
-      note: "Null grant timings mean the harness uses native tools without P2 grants. When present, visibility times run from the controller granting the guest tool that wrote, matched by its request's seq (edit e1 for the private file, bash b1 for the shared one), to the host seeing the computer's poller exit. They include the tool's own run and E2B's command stream, so they bound the cross-VM delay from above.",
+      note: "Visibility times run from the controller recording the native call that wrote (edit e1 for the private file, bash b1 for the shared one), which the harness reports before it runs the tool, to the host seeing the computer's poller exit. They include the tool's own run and E2B's command stream, so they bound the cross-VM delay from above.",
     },
   };
 }

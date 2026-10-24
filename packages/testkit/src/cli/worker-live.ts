@@ -14,6 +14,10 @@
  *     Token and cache measurements against a real model. RAKAZO_MODEL_KEY_FILE names a file
  *     outside any git work tree that holds the provider key. `--worker local` runs the guests in
  *     this process instead of E2B, for scenarios without a computer.
+ *   worker-live accept --template <worker> --computer-template <computer> --out <dir>
+ *     [--models 'glm-*-flash'] [--tasks code,app,browser,mcp] [--prepare-computer]
+ *     The four journeys of #200 against one real model, each in its own thread: a cold and a warm
+ *     run of the task, then a run cancelled during a native bash. Same key file as `measure`.
  *   worker-live measure-summary --in <receipt> --out <receipt>
  *     Recomputes a measurement receipt's method and summary from its own threads.
  */
@@ -29,6 +33,8 @@ import type { Api } from "@earendil-works/pi-ai";
 import { WORKER_PROFILE, workerTemplate } from "@rakazo/agent-run-worker/template";
 import type { ConnectionOpts } from "e2b";
 import { Sandbox, Template } from "e2b";
+import type { TaskId } from "../worker-live/accept.js";
+import { acceptTasks, TASKS } from "../worker-live/accept.js";
 import {
   benchLive,
   LANES,
@@ -68,6 +74,7 @@ const { values } = parseArgs({
     worker: { type: "string", default: "e2b" },
     "computer-label": { type: "string", default: "private computer template" },
     "in-flight": { type: "string" },
+    tasks: { type: "string", default: TASKS.join(",") },
     in: { type: "string" },
   },
 });
@@ -427,6 +434,61 @@ async function measure() {
   }
 }
 
+async function accept() {
+  if (!values.out) throw new Error("--out is required");
+  const tasks = values.tasks.split(",") as TaskId[];
+  for (const task of tasks) if (!TASKS.includes(task)) throw new Error(`No task ${task}`);
+  const apiKey = modelKey();
+  const [model, extra] = resolveModels(values.provider, values.models.split(","));
+  if (!model || extra) throw new Error("accept takes exactly one --models pattern");
+  await requireIdleDeployment();
+  const live = session();
+  const startedAt = new Date().toISOString();
+  const records: Array<Record<string, unknown>> = [];
+  const write = () =>
+    writeReceipt(path.join(values.out!, "accept.json"), {
+      startedAt,
+      generatedAt: new Date().toISOString(),
+      harness: values.harness,
+      guest: values.guest ? "uploaded bundle" : "the template's baked guest",
+      workerTemplate: values.template,
+      computerTemplate: values["computer-template"],
+      desktopPreparation: values["prepare-computer"]
+        ? "product E2BSandboxProvider.prepare"
+        : "skipped",
+      provider: values.provider,
+      model: model.id,
+      method: {
+        bootMs: "Worker provider ensure to the guest's hello, at the controller.",
+        firstModelEventMs:
+          "From the run's start to the relay's first streamed model event sent to the guest; includes the worker's boot.",
+        stopAfterCancelMs:
+          "From the database cancel the stop button makes to the attempt's end, cancelled during a native bash.",
+        workerDestroy:
+          "Duration of the product's worker destroy at the attempt's end, with the worker VM's memory in use and CPU busy share since boot, read inside it just before.",
+        sweepMs:
+          "Time to kill what the thread left (the computer) and destroy its volumes, after the thread.",
+        catalogCostUsd: "Tokens of the run's relayed requests at the catalog list prices.",
+      },
+      tasks: records,
+    });
+  try {
+    await acceptTasks({
+      live,
+      model,
+      apiKey,
+      tasks,
+      onTask: async (record) => {
+        records.push(record);
+        await write();
+        console.log(`${String(record.task).padEnd(8)} ${record.pass ? "PASS" : "FAIL"}`);
+      },
+    });
+  } finally {
+    console.error(redact(JSON.stringify(await live.sweep())));
+  }
+}
+
 /** Recomputes a receipt's method and summary from its own threads, with this source. */
 async function measureSummary() {
   if (!values.in || !values.out) throw new Error("--in and --out are required");
@@ -465,6 +527,7 @@ const commands: Record<string, () => Promise<void>> = {
   lane,
   bench,
   measure,
+  accept,
   "measure-summary": measureSummary,
 };
 const run = command ? commands[command] : undefined;

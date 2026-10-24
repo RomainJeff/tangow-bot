@@ -87,6 +87,15 @@ export type Parsed = {
   re?: number;
   type?: string;
   modelLatency?: { re: number; firstEventMs: number };
+  /** The tool calls and the tool results a `transcript` frame reports, by call id. */
+  transcriptCalls?: Array<{ id: string; name: string }>;
+  transcriptResults?: string[];
+};
+
+type TranscriptMessage = {
+  role: string;
+  content?: Array<{ type?: string; id?: string; name?: string }>;
+  toolCallId?: string;
 };
 
 export function parse(seen: Seen[]): Parsed[] {
@@ -96,9 +105,16 @@ export function parse(seen: Seen[]): Parsed[] {
       payload?: {
         seq?: number;
         re?: number;
-        body?: { type?: string; re?: number; firstEventMs?: number };
+        body?: {
+          type?: string;
+          re?: number;
+          firstEventMs?: number;
+          messages?: TranscriptMessage[];
+        };
       };
     };
+    const body = message.payload?.body;
+    const transcript = body?.type === "transcript" ? (body.messages ?? []) : undefined;
     return {
       at,
       from,
@@ -116,6 +132,20 @@ export function parse(seen: Seen[]): Parsed[] {
             },
           }
         : {}),
+      ...(transcript && {
+        transcriptCalls: transcript.flatMap((entry) =>
+          entry.role === "assistant"
+            ? (entry.content ?? []).flatMap((block) =>
+                block.type === "toolCall" && block.id
+                  ? [{ id: block.id, name: block.name ?? "" }]
+                  : [],
+              )
+            : [],
+        ),
+        transcriptResults: transcript.flatMap((entry) =>
+          entry.role === "toolResult" && entry.toolCallId ? [entry.toolCallId] : [],
+        ),
+      }),
     };
   });
 }
@@ -134,4 +164,37 @@ export function settled(frames: Parsed[], request: string, reply: string) {
     );
     return answer ? [{ from: frame.at, to: answer.at }] : [];
   });
+}
+
+/**
+ * Each call of a tool in `native`, the harness's own tools, in the order the harness reported them:
+ * the controller-side span from the transcript frame that reported the call to its `recorded`
+ * reply, and the same for its result.
+ */
+export function nativeCalls(frames: Parsed[], native: ReadonlySet<string>) {
+  const recorded = (frame: Parsed) => {
+    const reply = frames.find(
+      (candidate) =>
+        candidate.from === "controller" &&
+        candidate.re === frame.seq &&
+        candidate.type === "recorded" &&
+        candidate.at >= frame.at,
+    );
+    return reply ? { from: frame.at, to: reply.at } : undefined;
+  };
+  return frames.flatMap((frame) =>
+    frame.from !== "guest"
+      ? []
+      : (frame.transcriptCalls ?? [])
+          .filter(({ name }) => native.has(name))
+          .map(({ id }) => {
+            const result = frames.find(
+              (candidate) =>
+                candidate.from === "guest" &&
+                candidate.at >= frame.at &&
+                candidate.transcriptResults?.includes(id),
+            );
+            return { id, call: recorded(frame), result: result && recorded(result) };
+          }),
+  );
 }
