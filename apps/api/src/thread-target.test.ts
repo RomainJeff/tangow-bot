@@ -2828,6 +2828,57 @@ describe("sendThreadMessage while a proposal card waits", () => {
     expect(tx.externalEffect.updateMany).not.toHaveBeenCalled();
   });
 
+  it("refuses a group reply whose draft's text names a card of a bot it does not reach", async () => {
+    const tx = proposalTx({ effect: mailDraft });
+    tx.$queryRaw.mockResolvedValue([{ id: "group-1" }]);
+    tx.run.findMany.mockResolvedValue([]);
+    const run = { id: "run-beta", taskId: "task-beta", botId: "bot-2", status: "queued" };
+    const group = Object.assign(tx, {
+      chatGroup: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "group-1",
+          members: [
+            { bot: { id: "bot-1", name: "Alpha", color: null } },
+            { bot: { id: "bot-2", name: "Beta", color: null } },
+          ],
+        }),
+        update: vi.fn().mockResolvedValue({ id: "group-1" }),
+      },
+    });
+    group.task.create.mockResolvedValue({ id: "task-beta" });
+    Object.assign(group.run, { create: vi.fn().mockResolvedValue(run) });
+    await expect(
+      sendThreadMessage(
+        {
+          prisma: {
+            $queryRaw: vi.fn().mockResolvedValue([]),
+            $transaction: vi.fn(async (callback: (client: typeof group) => unknown) =>
+              callback(group),
+            ),
+          } as unknown as PrismaClient,
+          events: { notify: vi.fn().mockResolvedValue(undefined) } as never,
+          jobs: { enqueue: vi.fn().mockResolvedValue(undefined) } as never,
+        },
+        { spaceId: "workspace-1", userId: "user-1" } as Actor,
+        {
+          kind: "group",
+          groupId: "group-1",
+          groupName: "Group",
+          threadId: "thread-1",
+          members: [],
+          memberBotIds: ["bot-1", "bot-2"],
+        } satisfies ThreadTarget,
+        {
+          text: "Beta, take a look.",
+          mentions: ["bot-2"],
+          clientNonce: "nonce-group-other",
+          draft: { messageId: "card-msg", text: "Hello, edited." },
+        },
+      ),
+    ).rejects.toMatchObject({ code: "CONFLICT", message: "This draft is no longer waiting." });
+    expect(tx.externalEffect.updateMany).not.toHaveBeenCalled();
+  });
+
   it("still asks to answer a routine proposal first in a group", async () => {
     const tx = proposalTx();
     await expect(groupSend(tx)).rejects.toMatchObject({
