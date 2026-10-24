@@ -1,4 +1,5 @@
-import type { MessageBlock } from "@rakazo/contracts";
+import type { AskDraftEdits, MessageBlock } from "@rakazo/contracts";
+import { draftChanges } from "./draft-card-view.js";
 import type { ThreadView } from "./session-log/project-thread-view.js";
 import type { WaitingCard } from "./session-log/project-ui.js";
 
@@ -31,16 +32,21 @@ export function waitingAnswerTarget(
 
 /**
  * The waiting mail draft a message sent now replaces, when the person edited it: the bot reads
- * the text as they left it. `editOf` reads the text kept on the device for a card.
+ * it as they left it. `editOf` reads what is kept on the device for a card: its edits, or its
+ * text alone.
  */
 export function editedWaitingDraft(
   view: WaitingView,
-  editOf: (itemId: string) => string | undefined,
-): { itemId: string; draft: { messageId: string; text: string } } | undefined {
+  editOf: (itemId: string) => AskDraftEdits | string | undefined,
+): { itemId: string; draft: AskDraftEdits & { messageId: string; text: string } } | undefined {
   const waiting = view.waiting;
   const draft = waitingAskBlock(view)?.draft;
   if (!waiting || !draft) return undefined;
-  const text = editOf(waiting.itemId);
-  if (text === undefined || text === draft.body) return undefined;
-  return { itemId: waiting.itemId, draft: { messageId: waiting.entryId, text } };
+  const edit = editOf(waiting.itemId);
+  const changes = draftChanges(draft, typeof edit === "string" ? { text: edit } : edit);
+  if (!Object.keys(changes).length) return undefined;
+  return {
+    itemId: waiting.itemId,
+    draft: { ...changes, messageId: waiting.entryId, text: changes.text ?? draft.body },
+  };
 }

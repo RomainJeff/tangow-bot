@@ -1,4 +1,4 @@
-import type { AskDraft } from "@rakazo/contracts";
+import type { AskDraft, AskDraftEdits } from "@rakazo/contracts";
 import { askDraftState } from "@rakazo/contracts";
 
 /** How long a discarded draft can still be brought back before the bot hears of it. */
@@ -98,4 +98,22 @@ export function draftAddresses(draft: AskDraft, role?: AskDraft["recipients"][nu
 /** Who a sent draft's line names: its To recipients, or everyone when it had no To. */
 export function draftSentTo(draft: AskDraft): string {
   return draftAddresses(draft, "to") || draftAddresses(draft);
+}
+
+/**
+ * What the person changed on a draft card, kept on the device until Send: only the parts that
+ * differ from what the card shows, so an empty object means nothing changed.
+ */
+export function draftChanges(draft: AskDraft, edit: AskDraftEdits | undefined): AskDraftEdits {
+  const changes: AskDraftEdits = {};
+  if (edit?.text !== undefined && edit.text !== draft.body) changes.text = edit.text;
+  const listed = (recipients: AskDraft["recipients"]) =>
+    recipients.map((recipient) => `${recipient.role} ${recipient.address}`).join("\n");
+  if (edit?.recipients && listed(edit.recipients) !== listed(draft.recipients)) {
+    changes.recipients = edit.recipients;
+  }
+  if (edit?.subject !== undefined && edit.subject !== (draft.subject ?? "")) {
+    changes.subject = edit.subject;
+  }
+  return changes;
 }
