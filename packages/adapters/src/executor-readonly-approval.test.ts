@@ -628,6 +628,16 @@ describe("connector read-only metadata and approval enforcement", () => {
       expect(f.pauseRunForInput).not.toHaveBeenCalled();
     });
 
+    it("refuses a mail draft whose batch account holds a run secret", async () => {
+      const f = fixture({ name, catalog: true, inputSchema, secrets: ["sk-live-123"] });
+      f.setCalls([{ args: batch({ ...mail, account: "gmail_sk-live-123" }), executionId: "c1" }]);
+      await f.run();
+      expect(f.results).toEqual([
+        { error: "This message contains a secret. Write it without the secret." },
+      ]);
+      expect(f.effects).toEqual([]);
+    });
+
     it("sends a mail draft inside a batch once, with the user's text and no signature", async () => {
       const f = fixture({ name, catalog: true, inputSchema });
       f.setCalls([{ args: batch(mail), executionId: "c1" }]);
@@ -973,6 +983,7 @@ describe("connector read-only metadata and approval enforcement", () => {
         ["its body", { body: "Your key is sk-live-123." }],
         ["its subject", { subject: "Key sk-live-123" }],
         ["a recipient", { cc: ["sk-live-123@example.com"] }],
+        ["the sending account", { from_email: "sk-live-123@example.com" }],
       ])(
         "refuses a draft with a run secret in %s back to the bot, showing nothing",
         async (_, part) => {

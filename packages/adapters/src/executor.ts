@@ -2646,14 +2646,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 )
               : undefined;
           if (outbound.kind === "draft" && !drafted) outbound = { kind: "classic" };
-          // The card masks run secrets, so a draft holding one would send what it does not show.
+          // The card masks run secrets, so a draft holding one anywhere in its call, the sending
+          // account or a batch item's account included, would send what it does not show.
           if (
             outbound.kind === "draft" &&
             !approvedReplayConsumed &&
-            containsSecret(
-              [outbound.draft.recipients, outbound.draft.subject, outbound.draft.body],
-              runSecrets,
-            )
+            containsSecret(args, runSecrets)
           ) {
             return { error: "This message contains a secret. Write it without the secret." };
           }
