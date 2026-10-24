@@ -945,7 +945,9 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
           {
             expect(request) {
               const seen = JSON.stringify(request.messages);
-              expect(seen).toContain("The user wrote to you instead of sending this draft");
+              expect(seen).toContain(
+                "The user sent the message below instead of sending your draft, so nothing was sent.",
+              );
               expect(seen).toContain("Edited by me.");
               expect(seen).toContain("Make it shorter.");
             },
