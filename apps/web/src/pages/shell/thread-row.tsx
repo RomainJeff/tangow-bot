@@ -219,7 +219,15 @@ function MessageRowView({
       onAnswer={
         waiting && onAnswer && waiting.itemId === item.id
           ? (text, edits) =>
-              onAnswer({ runId: waiting.runId, messageId: waiting.entryId }, text, edits)
+              onAnswer(
+                {
+                  thread: context.artifactTarget,
+                  runId: waiting.runId,
+                  messageId: waiting.entryId,
+                },
+                text,
+                edits,
+              )
           : undefined
       }
       onOpenComputer={context.takeoverItemId === item.id ? context.onOpenComputer : undefined}
@@ -424,7 +432,11 @@ function EffectCard({ item, context }: { item: ItemOf<"effect">; context: RowCon
   const answer =
     waiting?.itemId === item.id && onAnswer
       ? (text: string, edits?: CardEdits) =>
-          onAnswer({ runId: waiting.runId, messageId: waiting.entryId }, text, edits)
+          onAnswer(
+            { thread: context.artifactTarget, runId: waiting.runId, messageId: waiting.entryId },
+            text,
+            edits,
+          )
       : undefined;
   return (
     <AskCard
