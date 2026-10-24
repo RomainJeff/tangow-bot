@@ -1481,6 +1481,8 @@ export interface DismissProposalWithTextInput {
   runId: string;
   /** Who typed: only the run's own user puts its card away. */
   userId: string;
+  /** A mail draft's text as the user left it on the card they typed over, named by its entry. */
+  draft?: { messageId: string; text: string };
 }
 
 /**
@@ -1496,11 +1498,13 @@ export type DismissProposalWithTextResult =
 const STEERABLE_AFTER_ANSWER = new Set(["queued", "leased", "running"]);
 
 /**
- * Puts away a proposal card the user answered by typing instead of tapping. Separate
+ * Puts away a proposal or mail draft card the user answered by typing instead of tapping. Separate
  * from resumeAskWithComposerTextInTransaction, which never writes an effect. The card's kind is
  * read from the stored effect, never from the block; the only transition written is
  * intended → denied, marked dismissed so no guard counts it as a no. The run keeps its checkpoint:
- * the pending call resumes and reads that it was dismissed, then the typed message steers it.
+ * the pending call resumes and reads that it was dismissed, then the typed message steers it. A
+ * mail draft ends replaced, never sent, its body set to the text the user left on that card; the
+ * bot reads it in its next turn prompt.
  */
 export async function dismissProposalWithTextInTransaction(
   tx: Prisma.TransactionClient,
@@ -1521,17 +1525,38 @@ export async function dismissProposalWithTextInTransaction(
   const pendingAsk = card.block;
   const effect = await tx.externalEffect.findFirst({
     where: { id: pendingAsk.approvalEffectId, spaceId: input.spaceId, runId: input.runId },
-    select: { id: true, kind: true, status: true },
+    select: { id: true, kind: true, status: true, request: true, draft: true },
   });
-  if (!effect || !DISMISSABLE_EFFECT_KINDS.has(effect.kind)) return { outcome: "keep" };
+  if (!effect) return { outcome: "keep" };
+  const draft = readDraft(effect.status, effect.draft);
+  const replacing = draft?.state === "pending";
+  // A text is only ever for the very draft card it was edited on, still waiting.
+  if (input.draft && (!replacing || !waiting || input.draft.messageId !== card.entryId)) {
+    return { outcome: "keep" };
+  }
+  if (!replacing && !DISMISSABLE_EFFECT_KINDS.has(effect.kind)) return { outcome: "keep" };
   if (!waiting) {
     return STEERABLE_AFTER_ANSWER.has(run.status)
       ? { outcome: "settled", status: run.status }
       : { outcome: "keep" };
   }
+  const request =
+    replacing && input.draft
+      ? withValueAt(effect.request, draft.path, input.draft.text)
+      : effect.request;
+  if (replacing && request === undefined) return { outcome: "keep" };
   const dismissed = await tx.externalEffect.updateMany({
-    where: { id: effect.id, status: "intended", kind: { in: [...DISMISSABLE_EFFECT_KINDS] } },
-    data: { status: "denied", answeredAt: new Date(), result: DISMISSED_EFFECT_RESULT },
+    where: replacing
+      ? { id: effect.id, status: "intended" }
+      : { id: effect.id, status: "intended", kind: { in: [...DISMISSABLE_EFFECT_KINDS] } },
+    data: replacing
+      ? {
+          status: "denied",
+          answeredAt: new Date(),
+          request: request as Prisma.InputJsonValue,
+          draft: { path: draft.path, proposed: draft.proposed, state: "replaced" },
+        }
+      : { status: "denied", answeredAt: new Date(), result: DISMISSED_EFFECT_RESULT },
   });
   // Answered while the run still waits: steering into it would reach a run that never wakes, so
   // the caller keeps the usual pending-card rule.
