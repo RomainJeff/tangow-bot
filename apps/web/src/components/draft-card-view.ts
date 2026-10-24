@@ -71,3 +71,15 @@ function editStatus(local: DraftLocal): "editing" | "edited" | null {
   if (local.focused) return "editing";
   return local.edited ? "edited" : null;
 }
+
+/**
+ * The card's main action: Send, Try again after a failure, and Reconnect first when the app is
+ * disconnected, since sending again before reconnecting can only fail the same way.
+ */
+export function draftPrimaryAction(
+  failure: AskDraft["failure"],
+  reconnectOpened: boolean,
+): "send" | "try_again" | "reconnect" {
+  if (!failure) return "send";
+  return failure.disconnected && !reconnectOpened ? "reconnect" : "try_again";
+}

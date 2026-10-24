@@ -69,6 +69,7 @@ export const Transcript = memo(function Transcript({
   onBotChanged,
   onAddRoutine,
   onOpenSkill,
+  onOpenIntegrations,
   voiceReady,
   speakingMessageId,
   onSpeak,
@@ -107,6 +108,8 @@ export const Transcript = memo(function Transcript({
   onBotChanged: () => Promise<void>;
   onAddRoutine: (name: string, prompt: string) => void;
   onOpenSkill?: (skill: SkillSourceBlock) => void;
+  /** Opens the integrations screen, where a disconnected app is reconnected. */
+  onOpenIntegrations?: () => void;
   voiceReady: boolean;
   speakingMessageId: string | null;
   onSpeak: (message: MessageItem) => void;
@@ -172,6 +175,7 @@ export const Transcript = memo(function Transcript({
       onBotChanged,
       onAddRoutine,
       onOpenSkill,
+      onOpenIntegrations,
       messageOfEntry: (entryId) => {
         const itemId = rowOf.get(entryId);
         return itemId ? messageById.get(itemId) : undefined;
@@ -194,6 +198,7 @@ export const Transcript = memo(function Transcript({
     onBotChanged,
     onAddRoutine,
     onOpenSkill,
+    onOpenIntegrations,
     messages,
     rowOf,
   ]);

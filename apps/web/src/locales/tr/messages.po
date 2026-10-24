@@ -98,7 +98,7 @@ msgstr ""
 msgid "{0}'s screen"
 msgstr "{0} adlı botun ekranı"
 
-#: src/components/DraftCard.tsx:232
+#: src/components/DraftCard.tsx:254
 msgid "{app} is disconnected."
 msgstr ""
 
@@ -127,7 +127,7 @@ msgid "{failures, plural, one {# failure since {since}} other {# failures since 
 msgstr ""
 
 #: src/pages/shell/message-view.tsx:336
-#: src/pages/shell/thread-row.tsx:363
+#: src/pages/shell/thread-row.tsx:373
 msgid "{from} handed the thread to {to}"
 msgstr ""
 
@@ -191,7 +191,7 @@ msgstr ""
 msgid "{what} · paused"
 msgstr "{what} · duraklatıldı"
 
-#: src/pages/shell/transcript.tsx:203
+#: src/pages/shell/transcript.tsx:208
 msgid "{workingBotName} is working"
 msgstr "{workingBotName} çalışıyor"
 
@@ -676,7 +676,7 @@ msgstr "Oturum açmaya geri dön"
 msgid "Base URL"
 msgstr "Temel URL"
 
-#: src/components/DraftCard.tsx:226
+#: src/components/DraftCard.tsx:247
 msgid "Bcc"
 msgstr ""
 
@@ -696,14 +696,14 @@ msgstr "{0} adlı botun bilgisayarı başlatılıyor"
 
 #: src/pages/shell/message-view.tsx:324
 #: src/pages/shell/message-view.tsx:325
-#: src/pages/shell/thread-row.tsx:354
-#: src/pages/shell/thread-row.tsx:355
+#: src/pages/shell/thread-row.tsx:364
+#: src/pages/shell/thread-row.tsx:365
 msgid "bot"
 msgstr "bot"
 
 #: src/pages/IntegrationSetup.tsx:51
 #: src/pages/shell/message-view.tsx:223
-#: src/pages/shell/thread-row.tsx:322
+#: src/pages/shell/thread-row.tsx:332
 #: src/pages/shell/use-composer-draft.ts:53
 msgid "Bot"
 msgstr "Bot"
@@ -736,7 +736,7 @@ msgstr "Bağlanacak bot"
 msgid "Bots act without asking by default. Add an exception only when you want to review a type of action first."
 msgstr "Botlar varsayılan olarak sormadan hareket eder. Yalnızca belirli bir işlem türünü önce incelemek istediğinde istisna ekle."
 
-#: src/pages/shell/transcript.tsx:204
+#: src/pages/shell/transcript.tsx:209
 msgid "Bots are working"
 msgstr "Botlar çalışıyor"
 
@@ -797,7 +797,7 @@ msgstr "Yanıtı iptal et"
 msgid "Cancelled"
 msgstr "İptal edildi"
 
-#: src/components/DraftCard.tsx:226
+#: src/components/DraftCard.tsx:247
 msgid "Cc"
 msgstr ""
 
@@ -1155,11 +1155,11 @@ msgstr ""
 msgid "Continue with email"
 msgstr "E-posta ile devam et"
 
-#: src/pages/shell/thread-row.tsx:440
+#: src/pages/shell/thread-row.tsx:450
 msgid "Conversation cleared"
 msgstr ""
 
-#: src/components/DraftCard.tsx:274
+#: src/components/DraftCard.tsx:297
 #: src/pages/shell/message-actions-sheet.tsx:75
 #: src/pages/shell/message-hover-actions.tsx:98
 #: src/pages/shell/message-hover-actions.tsx:169
@@ -1524,9 +1524,9 @@ msgstr "OAuth başlatılamadı"
 msgid "Could not start teaching"
 msgstr "Öğretme başlatılamadı"
 
-#: src/components/AskCard.tsx:196
-#: src/components/DraftCard.tsx:117
-#: src/components/DraftCard.tsx:129
+#: src/components/AskCard.tsx:199
+#: src/components/DraftCard.tsx:136
+#: src/components/DraftCard.tsx:149
 msgid "Could not submit this answer"
 msgstr "Bu yanıt gönderilemedi"
 
@@ -1596,7 +1596,7 @@ msgstr "Hesap oluştur"
 msgid "Create bot"
 msgstr "Bot oluştur"
 
-#: src/components/AskCard.tsx:416
+#: src/components/AskCard.tsx:421
 msgid "Create bot?"
 msgstr "Bot oluşturulsun mu?"
 
@@ -1812,12 +1812,12 @@ msgstr ""
 msgid "Disabled"
 msgstr "Devre dışı"
 
-#: src/components/DraftCard.tsx:265
+#: src/components/DraftCard.tsx:288
 msgid "Discard"
 msgstr ""
 
-#: src/components/DraftCard.tsx:196
-#: src/components/DraftCard.tsx:206
+#: src/components/DraftCard.tsx:217
+#: src/components/DraftCard.tsx:227
 msgid "Discarded"
 msgstr ""
 
@@ -1920,11 +1920,11 @@ msgstr "Çoğalt"
 msgid "Earlier message"
 msgstr "Önceki mesaj"
 
-#: src/pages/shell/thread-row.tsx:437
+#: src/pages/shell/thread-row.tsx:447
 msgid "Earlier messages summarized"
 msgstr ""
 
-#: src/components/AskCard.tsx:320
+#: src/components/AskCard.tsx:325
 msgid "Edit"
 msgstr "Düzenle"
 
@@ -1933,7 +1933,7 @@ msgstr "Düzenle"
 msgid "Edit and resend"
 msgstr "Düzenle ve yeniden gönder"
 
-#: src/components/DraftCard.tsx:295
+#: src/components/DraftCard.tsx:339
 msgid "Edit message"
 msgstr ""
 
@@ -1941,11 +1941,11 @@ msgstr ""
 msgid "Edit Profile"
 msgstr "Profili Düzenle"
 
-#: src/components/DraftCard.tsx:230
+#: src/components/DraftCard.tsx:251
 msgid "Edited"
 msgstr ""
 
-#: src/components/DraftCard.tsx:229
+#: src/components/DraftCard.tsx:250
 msgid "Editing"
 msgstr ""
 
@@ -2139,7 +2139,7 @@ msgstr "Ücretsiz"
 msgid "Fullscreen"
 msgstr "Tam ekran"
 
-#: src/pages/shell/thread-row.tsx:389
+#: src/pages/shell/thread-row.tsx:399
 msgid "FYI"
 msgstr ""
 
@@ -2310,7 +2310,7 @@ msgstr "Instance API anahtarı"
 msgid "Instruction"
 msgstr "Talimat"
 
-#: src/components/AskCard.tsx:358
+#: src/components/AskCard.tsx:363
 #: src/pages/bot-page/SettingDetails.tsx:51
 #: src/pages/bot-page/SettingsTab.tsx:26
 msgid "Instructions"
@@ -2417,7 +2417,7 @@ msgstr ""
 msgid "Listening"
 msgstr ""
 
-#: src/pages/shell/transcript.tsx:242
+#: src/pages/shell/transcript.tsx:247
 msgid "Load earlier messages"
 msgstr "Önceki mesajları yükle"
 
@@ -2459,7 +2459,7 @@ msgstr "Ses sağlayıcıları yükleniyor…"
 #: src/pages/Onboarding.tsx:378
 #: src/pages/PeerMessagesOverlay.tsx:142
 #: src/pages/shell/session-view.tsx:108
-#: src/pages/shell/transcript.tsx:242
+#: src/pages/shell/transcript.tsx:247
 msgid "Loading…"
 msgstr "Yükleniyor…"
 
@@ -2597,7 +2597,7 @@ msgstr ""
 msgid "Message composer"
 msgstr "Mesaj düzenleyici"
 
-#: src/pages/shell/thread-row.tsx:439
+#: src/pages/shell/thread-row.tsx:449
 msgid "Message edited"
 msgstr ""
 
@@ -2605,8 +2605,8 @@ msgstr ""
 msgid "Message event"
 msgstr ""
 
-#: src/pages/shell/thread-row.tsx:391
-#: src/pages/shell/thread-row.tsx:430
+#: src/pages/shell/thread-row.tsx:401
+#: src/pages/shell/thread-row.tsx:440
 msgid "Message from {peer}"
 msgstr "{peer} botundan mesaj"
 
@@ -2614,8 +2614,8 @@ msgstr "{peer} botundan mesaj"
 msgid "Message…"
 msgstr "Mesaj…"
 
-#: src/pages/shell/thread-row.tsx:391
-#: src/pages/shell/thread-row.tsx:430
+#: src/pages/shell/thread-row.tsx:401
+#: src/pages/shell/thread-row.tsx:440
 msgid "Messaged {peer}"
 msgstr "{peer} botuna mesaj gönderildi"
 
@@ -2723,7 +2723,7 @@ msgstr "Taşı"
 msgid "Mute"
 msgstr ""
 
-#: src/components/AskCard.tsx:339
+#: src/components/AskCard.tsx:344
 #: src/components/teach/SkillDraftCard.tsx:79
 #: src/pages/Auth.tsx:132
 #: src/pages/bot-page/BotHero.tsx:49
@@ -2758,7 +2758,7 @@ msgstr "Devralma bekliyor"
 msgid "Needs you"
 msgstr "Sizi bekliyor"
 
-#: src/components/AskCard.tsx:234
+#: src/components/AskCard.tsx:239
 msgid "Needs your call"
 msgstr ""
 
@@ -2852,8 +2852,8 @@ msgid "No integrations installed yet."
 msgstr "Henüz kurulu entegrasyon yok."
 
 #: src/components/ask/AskSettled.tsx:28
-#: src/components/AskCard.tsx:255
-#: src/components/DraftCard.tsx:213
+#: src/components/AskCard.tsx:260
+#: src/components/DraftCard.tsx:234
 msgid "No longer active"
 msgstr "Artık etkin değil"
 
@@ -2940,7 +2940,7 @@ msgstr "Eklenti kataloğunda değil"
 msgid "Not now"
 msgstr "Şimdi değil"
 
-#: src/components/DraftCard.tsx:228
+#: src/components/DraftCard.tsx:249
 msgid "Not sent"
 msgstr ""
 
@@ -3201,7 +3201,7 @@ msgstr "Sağlayıcı"
 msgid "Providers"
 msgstr "Sağlayıcılar"
 
-#: src/pages/shell/thread-row.tsx:387
+#: src/pages/shell/thread-row.tsx:397
 msgid "Question"
 msgstr ""
 
@@ -3250,6 +3250,10 @@ msgstr ""
 
 #: src/components/ask/QuestionCard.tsx:160
 msgid "Recommended · {description}"
+msgstr ""
+
+#: src/components/DraftCard.tsx:313
+msgid "Reconnect {app}"
 msgstr ""
 
 #: src/pages/McpServersOverlay.tsx:39
@@ -3414,7 +3418,7 @@ msgstr "API anahtarını değiştir"
 msgid "Replace key"
 msgstr "Anahtarı değiştir"
 
-#: src/components/DraftCard.tsx:210
+#: src/components/DraftCard.tsx:231
 msgid "Replaced"
 msgstr ""
 
@@ -3432,7 +3436,7 @@ msgstr "Birkaç kısa mesajla yanıtla"
 msgid "Replying to {replyName}"
 msgstr "{replyName} yanıtlanıyor"
 
-#: src/pages/shell/thread-row.tsx:385
+#: src/pages/shell/thread-row.tsx:395
 msgid "Request"
 msgstr ""
 
@@ -3484,7 +3488,7 @@ msgstr "Kaydedilmemiş metni geri yükle"
 msgid "Restoring your workspace"
 msgstr ""
 
-#: src/pages/shell/thread-row.tsx:386
+#: src/pages/shell/thread-row.tsx:396
 msgid "Result"
 msgstr ""
 
@@ -3580,7 +3584,7 @@ msgstr "Çalışıyor…"
 msgid "Runs when this bot receives a verified message from this provider."
 msgstr ""
 
-#: src/components/AskCard.tsx:400
+#: src/components/AskCard.tsx:405
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/ExternalConversationSettings.tsx:255
 #: src/pages/GroupPanel.tsx:279
@@ -3615,7 +3619,7 @@ msgstr ""
 msgid "Saving..."
 msgstr ""
 
-#: src/components/AskCard.tsx:400
+#: src/components/AskCard.tsx:405
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/bot-page/page-kit.tsx:49
 #: src/pages/GroupPanel.tsx:279
@@ -3687,7 +3691,7 @@ msgstr "Bir bot seç"
 
 #: src/components/ask/QuestionCard.tsx:205
 #: src/components/ask/QuestionCard.tsx:306
-#: src/components/DraftCard.tsx:287
+#: src/components/DraftCard.tsx:324
 #: src/pages/shell/composer.tsx:407
 msgid "Send"
 msgstr "Gönder"
@@ -3700,12 +3704,12 @@ msgstr "10 dakika içinde sohbet uygulamanızdan hatta <0>{linkCode}</0> gönder
 msgid "Send reset link"
 msgstr "Sıfırlama bağlantısı gönder"
 
-#: src/components/AskCard.tsx:299
-#: src/components/DraftCard.tsx:287
+#: src/components/AskCard.tsx:304
+#: src/components/DraftCard.tsx:324
 msgid "Sending…"
 msgstr "Gönderiliyor…"
 
-#: src/components/DraftCard.tsx:188
+#: src/components/DraftCard.tsx:209
 msgid "Sent to {recipient} · {time}"
 msgstr ""
 
@@ -3910,7 +3914,7 @@ msgstr "Başlıyor"
 msgid "Starting…"
 msgstr "Başlatılıyor…"
 
-#: src/pages/shell/thread-row.tsx:388
+#: src/pages/shell/thread-row.tsx:398
 msgid "Status"
 msgstr ""
 
@@ -3947,11 +3951,11 @@ msgstr "Şifreli saklanıyor"
 msgid "Stored securely. Never shown here."
 msgstr "Güvenle saklanır. Burada gösterilmez."
 
-#: src/pages/shell/thread-row.tsx:273
+#: src/pages/shell/thread-row.tsx:283
 msgid "subagent"
 msgstr "alt ajan"
 
-#: src/components/DraftCard.tsx:255
+#: src/components/DraftCard.tsx:277
 msgid "Subject"
 msgstr ""
 
@@ -3988,7 +3992,7 @@ msgstr "Sistem"
 msgid "Teach a task"
 msgstr "Görev öğret"
 
-#: src/pages/shell/shell-main.tsx:217
+#: src/pages/shell/shell-main.tsx:218
 msgid "Teaching in progress. Stop teaching before sending a new message."
 msgstr "Öğretme sürüyor. Yeni mesaj göndermeden önce öğretmeyi durdur."
 
@@ -4103,8 +4107,8 @@ msgstr "Günün saati"
 msgid "Title"
 msgstr "Başlık"
 
-#: src/components/DraftCard.tsx:167
-#: src/components/DraftCard.tsx:226
+#: src/components/DraftCard.tsx:188
+#: src/components/DraftCard.tsx:247
 msgid "To"
 msgstr ""
 
@@ -4114,7 +4118,7 @@ msgstr "Kime:"
 
 #: src/pages/bot-page/BotActivity.tsx:222
 #: src/pages/PeerMessagesOverlay.tsx:180
-#: src/pages/shell/thread-row.tsx:106
+#: src/pages/shell/thread-row.tsx:108
 msgid "Today"
 msgstr "Bugün"
 
@@ -4134,7 +4138,7 @@ msgstr ""
 msgid "Treg token"
 msgstr "Treg token'ı"
 
-#: src/components/DraftCard.tsx:287
+#: src/components/DraftCard.tsx:324
 #: src/pages/Onboarding.tsx:685
 msgid "Try again"
 msgstr "Tekrar dene"
@@ -4151,7 +4155,7 @@ msgstr "Atanmamış"
 msgid "Unavailable"
 msgstr "Kullanılamıyor"
 
-#: src/components/DraftCard.tsx:202
+#: src/components/DraftCard.tsx:223
 msgid "Undo"
 msgstr ""
 
@@ -4378,11 +4382,11 @@ msgstr "Her yıl {date} {time}"
 
 #: src/pages/bot-page/BotActivity.tsx:223
 #: src/pages/PeerMessagesOverlay.tsx:181
-#: src/pages/shell/thread-row.tsx:107
+#: src/pages/shell/thread-row.tsx:109
 msgid "Yesterday"
 msgstr "Dün"
 
-#: src/components/DraftCard.tsx:50
+#: src/components/DraftCard.tsx:63
 #: src/pages/Shell.tsx:136
 #: src/pages/shell/use-composer-draft.ts:52
 msgid "You"

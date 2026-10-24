@@ -11,7 +11,7 @@ import { messageTimeLabel } from "../lib/message-time";
 import { userInitials } from "../lib/user-initials";
 import type { CardEdits } from "./AskCard";
 import type { DraftCard as DraftCardBlock, DraftLocal } from "./draft-card-view";
-import { draftCardView } from "./draft-card-view";
+import { draftCardView, draftPrimaryAction } from "./draft-card-view";
 
 /** How long a discarded draft can still be brought back before the bot hears of it. */
 const UNDO_MS = 5000;
@@ -89,12 +89,14 @@ export function DraftCard({
   canAnswer,
   viewerUserId,
   onAnswer,
+  onReconnect,
   messageId,
 }: {
   block: DraftCardBlock;
   canAnswer: boolean;
   viewerUserId?: string;
   onAnswer: (text: string, edits?: CardEdits) => Promise<void>;
+  onReconnect?: () => void;
   /** The card's thread item: its edits are kept under it. */
   messageId: string;
 }) {
@@ -104,6 +106,7 @@ export function DraftCard({
   const [focused, setFocused] = useState(false);
   const [pending, setPending] = useState<DraftLocal["pending"]>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reconnectOpened, setReconnectOpened] = useState(false);
   const discardTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const commitDiscardRef = useRef<() => void>(() => undefined);
 
@@ -247,6 +250,7 @@ export function DraftCard({
     editing: <StateMark tone="ink">{t`Editing`}</StateMark>,
     edited: <StateMark tone="ink">{t`Edited`}</StateMark>,
   };
+  const primary = draftPrimaryAction(view.failure, reconnectOpened);
   const reason = view.failure?.disconnected ? t`${app} is disconnected.` : view.failure?.reason;
 
   return (
@@ -296,15 +300,30 @@ export function DraftCard({
             >
               <Copy className="size-4" aria-hidden="true" />
             </Button>
-            <Button
-              variant="capsule"
-              size="capsule"
-              consequential
-              disabled={view.sending || !text.trim()}
-              onClick={() => void send()}
-            >
-              {view.sending ? t`Sending…` : view.failure ? t`Try again` : t`Send`}
-            </Button>
+            {primary === "reconnect" ? (
+              onReconnect ? (
+                <Button
+                  variant="capsule"
+                  size="capsule"
+                  onClick={() => {
+                    setReconnectOpened(true);
+                    onReconnect();
+                  }}
+                >
+                  {t`Reconnect ${app}`}
+                </Button>
+              ) : null
+            ) : (
+              <Button
+                variant="capsule"
+                size="capsule"
+                consequential
+                disabled={view.sending || !text.trim()}
+                onClick={() => void send()}
+              >
+                {view.sending ? t`Sending…` : primary === "try_again" ? t`Try again` : t`Send`}
+              </Button>
+            )}
           </>
         )
       }

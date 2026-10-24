@@ -98,7 +98,7 @@ msgstr ""
 msgid "{0}'s screen"
 msgstr "{0}s Bildschirm"
 
-#: src/components/DraftCard.tsx:232
+#: src/components/DraftCard.tsx:254
 msgid "{app} is disconnected."
 msgstr ""
 
@@ -127,7 +127,7 @@ msgid "{failures, plural, one {# failure since {since}} other {# failures since 
 msgstr ""
 
 #: src/pages/shell/message-view.tsx:336
-#: src/pages/shell/thread-row.tsx:363
+#: src/pages/shell/thread-row.tsx:373
 msgid "{from} handed the thread to {to}"
 msgstr ""
 
@@ -191,7 +191,7 @@ msgstr ""
 msgid "{what} · paused"
 msgstr "{what} · pausiert"
 
-#: src/pages/shell/transcript.tsx:203
+#: src/pages/shell/transcript.tsx:208
 msgid "{workingBotName} is working"
 msgstr "{workingBotName} arbeitet"
 
@@ -676,7 +676,7 @@ msgstr "Zurück zur Anmeldung"
 msgid "Base URL"
 msgstr "Basis-URL"
 
-#: src/components/DraftCard.tsx:226
+#: src/components/DraftCard.tsx:247
 msgid "Bcc"
 msgstr ""
 
@@ -696,14 +696,14 @@ msgstr "Computer von {0} wird gestartet"
 
 #: src/pages/shell/message-view.tsx:324
 #: src/pages/shell/message-view.tsx:325
-#: src/pages/shell/thread-row.tsx:354
-#: src/pages/shell/thread-row.tsx:355
+#: src/pages/shell/thread-row.tsx:364
+#: src/pages/shell/thread-row.tsx:365
 msgid "bot"
 msgstr "Bot"
 
 #: src/pages/IntegrationSetup.tsx:51
 #: src/pages/shell/message-view.tsx:223
-#: src/pages/shell/thread-row.tsx:322
+#: src/pages/shell/thread-row.tsx:332
 #: src/pages/shell/use-composer-draft.ts:53
 msgid "Bot"
 msgstr "Bot"
@@ -736,7 +736,7 @@ msgstr "Zu verknüpfender Bot"
 msgid "Bots act without asking by default. Add an exception only when you want to review a type of action first."
 msgstr "Bots handeln standardmäßig ohne Nachfrage. Füge nur dann eine Ausnahme hinzu, wenn du eine Aktionsart zuerst prüfen möchtest."
 
-#: src/pages/shell/transcript.tsx:204
+#: src/pages/shell/transcript.tsx:209
 msgid "Bots are working"
 msgstr "Bots arbeiten"
 
@@ -797,7 +797,7 @@ msgstr "Antwort abbrechen"
 msgid "Cancelled"
 msgstr "Abgebrochen"
 
-#: src/components/DraftCard.tsx:226
+#: src/components/DraftCard.tsx:247
 msgid "Cc"
 msgstr ""
 
@@ -1155,11 +1155,11 @@ msgstr ""
 msgid "Continue with email"
 msgstr "Mit E-Mail fortfahren"
 
-#: src/pages/shell/thread-row.tsx:440
+#: src/pages/shell/thread-row.tsx:450
 msgid "Conversation cleared"
 msgstr ""
 
-#: src/components/DraftCard.tsx:274
+#: src/components/DraftCard.tsx:297
 #: src/pages/shell/message-actions-sheet.tsx:75
 #: src/pages/shell/message-hover-actions.tsx:98
 #: src/pages/shell/message-hover-actions.tsx:169
@@ -1524,9 +1524,9 @@ msgstr "OAuth konnte nicht gestartet werden"
 msgid "Could not start teaching"
 msgstr "Lernmodus konnte nicht gestartet werden"
 
-#: src/components/AskCard.tsx:196
-#: src/components/DraftCard.tsx:117
-#: src/components/DraftCard.tsx:129
+#: src/components/AskCard.tsx:199
+#: src/components/DraftCard.tsx:136
+#: src/components/DraftCard.tsx:149
 msgid "Could not submit this answer"
 msgstr "Antwort konnte nicht gesendet werden"
 
@@ -1596,7 +1596,7 @@ msgstr "Konto erstellen"
 msgid "Create bot"
 msgstr "Bot erstellen"
 
-#: src/components/AskCard.tsx:416
+#: src/components/AskCard.tsx:421
 msgid "Create bot?"
 msgstr "Bot erstellen?"
 
@@ -1812,12 +1812,12 @@ msgstr ""
 msgid "Disabled"
 msgstr "Deaktiviert"
 
-#: src/components/DraftCard.tsx:265
+#: src/components/DraftCard.tsx:288
 msgid "Discard"
 msgstr ""
 
-#: src/components/DraftCard.tsx:196
-#: src/components/DraftCard.tsx:206
+#: src/components/DraftCard.tsx:217
+#: src/components/DraftCard.tsx:227
 msgid "Discarded"
 msgstr ""
 
@@ -1920,11 +1920,11 @@ msgstr "Duplizieren"
 msgid "Earlier message"
 msgstr "Frühere Nachricht"
 
-#: src/pages/shell/thread-row.tsx:437
+#: src/pages/shell/thread-row.tsx:447
 msgid "Earlier messages summarized"
 msgstr ""
 
-#: src/components/AskCard.tsx:320
+#: src/components/AskCard.tsx:325
 msgid "Edit"
 msgstr "Bearbeiten"
 
@@ -1933,7 +1933,7 @@ msgstr "Bearbeiten"
 msgid "Edit and resend"
 msgstr "Bearbeiten und erneut senden"
 
-#: src/components/DraftCard.tsx:295
+#: src/components/DraftCard.tsx:339
 msgid "Edit message"
 msgstr ""
 
@@ -1941,11 +1941,11 @@ msgstr ""
 msgid "Edit Profile"
 msgstr "Profil bearbeiten"
 
-#: src/components/DraftCard.tsx:230
+#: src/components/DraftCard.tsx:251
 msgid "Edited"
 msgstr ""
 
-#: src/components/DraftCard.tsx:229
+#: src/components/DraftCard.tsx:250
 msgid "Editing"
 msgstr ""
 
@@ -2139,7 +2139,7 @@ msgstr "Kostenlos"
 msgid "Fullscreen"
 msgstr "Vollbild"
 
-#: src/pages/shell/thread-row.tsx:389
+#: src/pages/shell/thread-row.tsx:399
 msgid "FYI"
 msgstr ""
 
@@ -2310,7 +2310,7 @@ msgstr "Instanz-API-Schlüssel"
 msgid "Instruction"
 msgstr "Anweisung"
 
-#: src/components/AskCard.tsx:358
+#: src/components/AskCard.tsx:363
 #: src/pages/bot-page/SettingDetails.tsx:51
 #: src/pages/bot-page/SettingsTab.tsx:26
 msgid "Instructions"
@@ -2417,7 +2417,7 @@ msgstr ""
 msgid "Listening"
 msgstr ""
 
-#: src/pages/shell/transcript.tsx:242
+#: src/pages/shell/transcript.tsx:247
 msgid "Load earlier messages"
 msgstr "Frühere Nachrichten laden"
 
@@ -2459,7 +2459,7 @@ msgstr "Stimmanbieter werden geladen…"
 #: src/pages/Onboarding.tsx:378
 #: src/pages/PeerMessagesOverlay.tsx:142
 #: src/pages/shell/session-view.tsx:108
-#: src/pages/shell/transcript.tsx:242
+#: src/pages/shell/transcript.tsx:247
 msgid "Loading…"
 msgstr "Wird geladen…"
 
@@ -2597,7 +2597,7 @@ msgstr ""
 msgid "Message composer"
 msgstr "Nachrichteneditor"
 
-#: src/pages/shell/thread-row.tsx:439
+#: src/pages/shell/thread-row.tsx:449
 msgid "Message edited"
 msgstr ""
 
@@ -2605,8 +2605,8 @@ msgstr ""
 msgid "Message event"
 msgstr ""
 
-#: src/pages/shell/thread-row.tsx:391
-#: src/pages/shell/thread-row.tsx:430
+#: src/pages/shell/thread-row.tsx:401
+#: src/pages/shell/thread-row.tsx:440
 msgid "Message from {peer}"
 msgstr "Nachricht von {peer}"
 
@@ -2614,8 +2614,8 @@ msgstr "Nachricht von {peer}"
 msgid "Message…"
 msgstr "Nachricht…"
 
-#: src/pages/shell/thread-row.tsx:391
-#: src/pages/shell/thread-row.tsx:430
+#: src/pages/shell/thread-row.tsx:401
+#: src/pages/shell/thread-row.tsx:440
 msgid "Messaged {peer}"
 msgstr "Nachricht an {peer} gesendet"
 
@@ -2723,7 +2723,7 @@ msgstr "Verschieben nach"
 msgid "Mute"
 msgstr ""
 
-#: src/components/AskCard.tsx:339
+#: src/components/AskCard.tsx:344
 #: src/components/teach/SkillDraftCard.tsx:79
 #: src/pages/Auth.tsx:132
 #: src/pages/bot-page/BotHero.tsx:49
@@ -2758,7 +2758,7 @@ msgstr "Übernahme erforderlich"
 msgid "Needs you"
 msgstr "Braucht dich"
 
-#: src/components/AskCard.tsx:234
+#: src/components/AskCard.tsx:239
 msgid "Needs your call"
 msgstr ""
 
@@ -2852,8 +2852,8 @@ msgid "No integrations installed yet."
 msgstr "Noch keine Integrationen installiert."
 
 #: src/components/ask/AskSettled.tsx:28
-#: src/components/AskCard.tsx:255
-#: src/components/DraftCard.tsx:213
+#: src/components/AskCard.tsx:260
+#: src/components/DraftCard.tsx:234
 msgid "No longer active"
 msgstr "Nicht mehr aktiv"
 
@@ -2940,7 +2940,7 @@ msgstr "Nicht im Plugin-Katalog"
 msgid "Not now"
 msgstr "Jetzt nicht"
 
-#: src/components/DraftCard.tsx:228
+#: src/components/DraftCard.tsx:249
 msgid "Not sent"
 msgstr ""
 
@@ -3201,7 +3201,7 @@ msgstr "Anbieter"
 msgid "Providers"
 msgstr "Anbieter"
 
-#: src/pages/shell/thread-row.tsx:387
+#: src/pages/shell/thread-row.tsx:397
 msgid "Question"
 msgstr ""
 
@@ -3250,6 +3250,10 @@ msgstr ""
 
 #: src/components/ask/QuestionCard.tsx:160
 msgid "Recommended · {description}"
+msgstr ""
+
+#: src/components/DraftCard.tsx:313
+msgid "Reconnect {app}"
 msgstr ""
 
 #: src/pages/McpServersOverlay.tsx:39
@@ -3414,7 +3418,7 @@ msgstr "API-Schlüssel ersetzen"
 msgid "Replace key"
 msgstr "Schlüssel ersetzen"
 
-#: src/components/DraftCard.tsx:210
+#: src/components/DraftCard.tsx:231
 msgid "Replaced"
 msgstr ""
 
@@ -3432,7 +3436,7 @@ msgstr "In mehreren kurzen Nachrichten antworten"
 msgid "Replying to {replyName}"
 msgstr "Antwort an {replyName}"
 
-#: src/pages/shell/thread-row.tsx:385
+#: src/pages/shell/thread-row.tsx:395
 msgid "Request"
 msgstr ""
 
@@ -3484,7 +3488,7 @@ msgstr "Ungespeicherten Text wiederherstellen"
 msgid "Restoring your workspace"
 msgstr ""
 
-#: src/pages/shell/thread-row.tsx:386
+#: src/pages/shell/thread-row.tsx:396
 msgid "Result"
 msgstr ""
 
@@ -3580,7 +3584,7 @@ msgstr "Wird ausgeführt…"
 msgid "Runs when this bot receives a verified message from this provider."
 msgstr ""
 
-#: src/components/AskCard.tsx:400
+#: src/components/AskCard.tsx:405
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/ExternalConversationSettings.tsx:255
 #: src/pages/GroupPanel.tsx:279
@@ -3615,7 +3619,7 @@ msgstr ""
 msgid "Saving..."
 msgstr ""
 
-#: src/components/AskCard.tsx:400
+#: src/components/AskCard.tsx:405
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/bot-page/page-kit.tsx:49
 #: src/pages/GroupPanel.tsx:279
@@ -3687,7 +3691,7 @@ msgstr "Bot auswählen"
 
 #: src/components/ask/QuestionCard.tsx:205
 #: src/components/ask/QuestionCard.tsx:306
-#: src/components/DraftCard.tsx:287
+#: src/components/DraftCard.tsx:324
 #: src/pages/shell/composer.tsx:407
 msgid "Send"
 msgstr "Senden"
@@ -3700,12 +3704,12 @@ msgstr "Sende <0>{linkCode}</0> innerhalb von 10 Minuten aus deiner Chat-App an 
 msgid "Send reset link"
 msgstr "Link zum Zurücksetzen senden"
 
-#: src/components/AskCard.tsx:299
-#: src/components/DraftCard.tsx:287
+#: src/components/AskCard.tsx:304
+#: src/components/DraftCard.tsx:324
 msgid "Sending…"
 msgstr "Wird gesendet…"
 
-#: src/components/DraftCard.tsx:188
+#: src/components/DraftCard.tsx:209
 msgid "Sent to {recipient} · {time}"
 msgstr ""
 
@@ -3910,7 +3914,7 @@ msgstr "Startet"
 msgid "Starting…"
 msgstr "Wird gestartet…"
 
-#: src/pages/shell/thread-row.tsx:388
+#: src/pages/shell/thread-row.tsx:398
 msgid "Status"
 msgstr ""
 
@@ -3947,11 +3951,11 @@ msgstr "Verschlüsselt gespeichert"
 msgid "Stored securely. Never shown here."
 msgstr "Sicher gespeichert. Hier nie angezeigt."
 
-#: src/pages/shell/thread-row.tsx:273
+#: src/pages/shell/thread-row.tsx:283
 msgid "subagent"
 msgstr "Subagent"
 
-#: src/components/DraftCard.tsx:255
+#: src/components/DraftCard.tsx:277
 msgid "Subject"
 msgstr ""
 
@@ -3988,7 +3992,7 @@ msgstr "System"
 msgid "Teach a task"
 msgstr "Aufgabe anlernen"
 
-#: src/pages/shell/shell-main.tsx:217
+#: src/pages/shell/shell-main.tsx:218
 msgid "Teaching in progress. Stop teaching before sending a new message."
 msgstr "Aufgabe wird angelernt. Beende das Anlernen, bevor du eine neue Nachricht sendest."
 
@@ -4103,8 +4107,8 @@ msgstr "Uhrzeit"
 msgid "Title"
 msgstr "Titel"
 
-#: src/components/DraftCard.tsx:167
-#: src/components/DraftCard.tsx:226
+#: src/components/DraftCard.tsx:188
+#: src/components/DraftCard.tsx:247
 msgid "To"
 msgstr ""
 
@@ -4114,7 +4118,7 @@ msgstr "An:"
 
 #: src/pages/bot-page/BotActivity.tsx:222
 #: src/pages/PeerMessagesOverlay.tsx:180
-#: src/pages/shell/thread-row.tsx:106
+#: src/pages/shell/thread-row.tsx:108
 msgid "Today"
 msgstr "Heute"
 
@@ -4134,7 +4138,7 @@ msgstr ""
 msgid "Treg token"
 msgstr "Treg-Token"
 
-#: src/components/DraftCard.tsx:287
+#: src/components/DraftCard.tsx:324
 #: src/pages/Onboarding.tsx:685
 msgid "Try again"
 msgstr "Erneut versuchen"
@@ -4151,7 +4155,7 @@ msgstr "Nicht zugewiesen"
 msgid "Unavailable"
 msgstr "Nicht verfügbar"
 
-#: src/components/DraftCard.tsx:202
+#: src/components/DraftCard.tsx:223
 msgid "Undo"
 msgstr ""
 
@@ -4378,11 +4382,11 @@ msgstr "Jährlich am {date} um {time}"
 
 #: src/pages/bot-page/BotActivity.tsx:223
 #: src/pages/PeerMessagesOverlay.tsx:181
-#: src/pages/shell/thread-row.tsx:107
+#: src/pages/shell/thread-row.tsx:109
 msgid "Yesterday"
 msgstr "Gestern"
 
-#: src/components/DraftCard.tsx:50
+#: src/components/DraftCard.tsx:63
 #: src/pages/Shell.tsx:136
 #: src/pages/shell/use-composer-draft.ts:52
 msgid "You"

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DraftCard, DraftLocal } from "./draft-card-view";
-import { draftCardView } from "./draft-card-view";
+import { draftCardView, draftPrimaryAction } from "./draft-card-view";
 
 const draft: DraftCard["draft"] = {
   app: { name: "Mail", logo: null, account: "ana@example.com" },
@@ -113,5 +113,15 @@ describe("draftCardView", () => {
 
   it("says a waiting draft is no longer active once its run stops waiting on it", () => {
     expect(draftCardView(waiting, { ...idle, canAnswer: false })).toEqual({ kind: "inactive" });
+  });
+});
+
+describe("draftPrimaryAction", () => {
+  it("asks to reconnect a disconnected app before offering to try again", () => {
+    const disconnected = { reason: "Mail is disconnected.", disconnected: true as const };
+    expect(draftPrimaryAction(undefined, false)).toBe("send");
+    expect(draftPrimaryAction(disconnected, false)).toBe("reconnect");
+    expect(draftPrimaryAction(disconnected, true)).toBe("try_again");
+    expect(draftPrimaryAction({ reason: "Mail refused it." }, false)).toBe("try_again");
   });
 });
