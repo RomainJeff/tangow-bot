@@ -854,7 +854,9 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
           proposeMail,
           {
             expect(request) {
-              expect(JSON.stringify(request.messages)).toContain("The user sent your draft from its card.");
+              expect(JSON.stringify(request.messages)).toContain(
+                "The user sent your draft from its card.",
+              );
               expect(JSON.stringify(request.messages)).toContain("Edited by me.");
             },
             response: reply("Sent."),
