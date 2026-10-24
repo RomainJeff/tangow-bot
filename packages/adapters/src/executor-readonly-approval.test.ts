@@ -32,6 +32,7 @@ type Effect = {
   result?: unknown;
   reviewDecision?: string;
   runId?: string;
+  run?: { threadId: string; botId: string; status: string };
 };
 
 function fixture({
@@ -79,6 +80,7 @@ function fixture({
           runId?: string | { not: string };
           status?: string;
           kind?: string;
+          run?: Partial<NonNullable<Effect["run"]>>;
         };
       } = {}) =>
         effects.filter((effect) => {
@@ -89,6 +91,13 @@ function fixture({
             return false;
           }
           if (where?.id && effect.id !== where.id) return false;
+          if (where?.run) {
+            const { run } = effect;
+            if (!run) return false;
+            for (const key of ["threadId", "botId", "status"] as const) {
+              if (where.run[key] !== undefined && run[key] !== where.run[key]) return false;
+            }
+          }
           return true;
         }),
     ),
@@ -703,21 +712,38 @@ describe("connector read-only metadata and approval enforcement", () => {
       expect(f.pauseRunForInput).not.toHaveBeenCalled();
     });
 
+    const waitingDraft = (run: Partial<NonNullable<Effect["run"]>> = {}): Effect => ({
+      id: "waiting",
+      kind: "GMAIL_SEND_EMAIL",
+      idempotencyKey: "waiting-key",
+      status: "intended",
+      request: { recipient_email: "first@example.com", body: "First" },
+      runId: "run-0",
+      run: { threadId: "thread-1", botId: "bot-1", status: "waiting_input", ...run },
+    });
+
     it("refuses a second draft while one from this bot waits in the thread", async () => {
       const f = fixture({ name: "GMAIL_SEND_EMAIL", inputSchema });
-      f.effects.push({
-        id: "waiting",
-        kind: "GMAIL_SEND_EMAIL",
-        idempotencyKey: "waiting-key",
-        status: "intended",
-        request: { recipient_email: "first@example.com", body: "First" },
-        runId: "run-0",
-      });
+      f.effects.push(waitingDraft());
       f.setCalls([{ args: send, executionId: "c1" }]);
       await f.run();
       expect(f.results).toEqual([{ error: "A draft is already waiting for the user." }]);
       expect(f.effects.map((effect) => effect.id)).toEqual(["waiting"]);
       expect(f.pauseRunForInput).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ["another bot", { botId: "bot-2" }],
+      ["another thread", { threadId: "thread-2" }],
+      ["a run that is no longer waiting", { status: "completed" }],
+    ])("still shows a card when the waiting draft belongs to %s", async (_, run) => {
+      const f = fixture({ name: "GMAIL_SEND_EMAIL", inputSchema });
+      f.effects.push(waitingDraft(run));
+      f.setCalls([{ args: send, executionId: "c1" }]);
+      await f.run();
+      expect(f.pauseRunForInput).toHaveBeenCalledWith(
+        expect.objectContaining({ blocks: [expect.objectContaining(draftCard)] }),
+      );
     });
 
     it("leaves a send that is not mail to the usual gate", async () => {
