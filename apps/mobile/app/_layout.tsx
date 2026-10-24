@@ -144,6 +144,15 @@ export default function Layout() {
                   }}
                 />
                 <Stack.Screen
+                  name="edit-draft"
+                  options={{
+                    title: t("Edit message"),
+                    presentation: "formSheet",
+                    sheetAllowedDetents: [0.6, 1],
+                    sheetGrabberVisible: true,
+                  }}
+                />
+                <Stack.Screen
                   name="sheet"
                   options={{
                     headerShown: false,

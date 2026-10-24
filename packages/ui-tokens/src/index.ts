@@ -382,6 +382,8 @@ export const sizes = {
   composerAction: 36,
   capsule: 36,
   mobileStack: 44,
+  /** Mobile: an action in a decision card's row, round or capsule (a mail draft's). */
+  mobileAction: 48,
   callButton: 52,
   /** The ring of a chosen option, or of an answer field being typed in. */
   selectedRing: 1.5,

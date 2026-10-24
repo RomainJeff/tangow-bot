@@ -114,6 +114,7 @@ import { ComposerLinkPreview } from "../components/composer-link-preview";
 import { ComposerAttachBubble, ComposerShell } from "../components/composer-shell";
 import { ComputerCard } from "../components/computer-card";
 import { DictationPreview } from "../components/dictation-preview";
+import { DraftCard } from "../components/draft-card";
 import { FramedBlock } from "../components/framed-block";
 import { useReduceTransparency } from "../components/glass";
 import { GroupAvatar } from "../components/group-avatar";
@@ -178,6 +179,8 @@ import { botMessageCard } from "../lib/bot-message-card";
 import { noteBotRunEnded } from "../lib/bot-page-state";
 import { CHAT_MOTION } from "../lib/chat-motion";
 import { useDebugMode } from "../lib/debug-mode";
+import type { CardEdits } from "../lib/draft-edit";
+import { dropDraftEdit, replacedDraft, syncDraftEdit } from "../lib/draft-edit";
 import { cancelFocusPrompt, focusPromptThreadActive } from "../lib/focus-prompt";
 import { commitHaptic, selectionHaptic, sendHaptic, successHaptic } from "../lib/haptics";
 import { dateLocaleForUi, t, useI18n } from "../lib/i18n";
@@ -214,7 +217,6 @@ import { reactionPopKey, useReactionPops } from "../lib/reaction-pop";
 import { threadRefreshDelayMs } from "../lib/refresh";
 import { isViewedRunLine, originSession } from "../lib/session-sheet";
 import { closeSheet, openSheet } from "../lib/sheet";
-import type { SpawnBotEdits } from "../lib/spawn-bot-edit";
 import { openSpawnBotEdit, syncSpawnBotEdit } from "../lib/spawn-bot-edit";
 import { hexWithAlpha } from "../lib/stop-contour-math";
 import { shadowsForAppearance } from "../lib/theme";
@@ -1502,6 +1504,7 @@ function Thread() {
         rewindApplied = true;
       }
       const clientNonce = newClientNonce();
+      const replaced = reroutedToGroup ? undefined : replacedDraft(view);
       await rpc(
         "threads/send",
         groupTarget
@@ -1515,6 +1518,7 @@ function Thread() {
                 ? undefined
                 : composerSnapshot.replyTarget?.messageId,
               linkPreview: withoutLinkPreview ? (false as const) : undefined,
+              draft: replaced?.draft,
             }
           : {
               botId: botTarget!,
@@ -1524,9 +1528,11 @@ function Thread() {
               artifactIds: artifactIds.length ? artifactIds : undefined,
               replyToMessageId: composerSnapshot.replyTarget?.messageId,
               linkPreview: withoutLinkPreview ? (false as const) : undefined,
+              draft: replaced?.draft,
             },
       );
       delivered = true;
+      if (replaced) dropDraftEdit(replaced.itemId);
       dropDelayedSetup();
       void loadSessionToken()
         .then((token) => resumeLiveNotifications(currentApiBase(), token, selectedSpaceId() ?? ""))
@@ -1608,7 +1614,7 @@ function Thread() {
   }
 
   const answerCard = useCallback(
-    async (card: CardTarget, answer: string, edits?: SpawnBotEdits) => {
+    async (card: CardTarget, answer: string, edits?: CardEdits) => {
       const targetBotId = botId;
       const targetGroupId = groupId;
       if (!targetBotId && !targetGroupId) return;
@@ -1633,10 +1639,11 @@ function Thread() {
     },
     [botId, groupId],
   );
+  // A draft that did not leave is asked again under a new entry: the answer names the latest one.
   const answerMessage = useCallback(
-    async (message: MobileMessage, answer: string, edits?: SpawnBotEdits) => {
+    async (item: { id: string }, answer: string, edits?: CardEdits) => {
       const card = waitingRef.current;
-      if (card?.itemId !== message.id) return;
+      if (card?.itemId !== item.id) return;
       await answerCard({ runId: card.runId, entryId: card.entryId }, answer, edits);
     },
     [answerCard],
@@ -1723,7 +1730,10 @@ function Thread() {
 
   const answerableAskMessageId = waiting?.itemId ?? null;
   // The edit sheet lives only while its card can still be answered.
-  useEffect(() => syncSpawnBotEdit(answerableAskMessageId), [answerableAskMessageId]);
+  useEffect(() => {
+    syncSpawnBotEdit(answerableAskMessageId);
+    syncDraftEdit(answerableAskMessageId);
+  }, [answerableAskMessageId]);
   // Only the run's owner may edit a Create bot card; until this loads, nobody gets Edit.
   const [viewerUserId, setViewerUserId] = useState<string>();
   useEffect(() => {
@@ -2096,7 +2106,7 @@ function Thread() {
               isNew={isNew}
               canAnswer={item.id === answerableAskMessageId}
               viewerUserId={viewerUserId}
-              onAnswer={answerCard}
+              onAnswer={answerMessage}
             />
           )}
         </View>
@@ -3435,7 +3445,7 @@ const MessageBubble = memo(function MessageBubble({
   /** This message is the computer card of a run still waiting for the user's screen. */
   takeoverLive?: boolean;
   viewerUserId?: string;
-  onAnswer: (message: MobileMessage, answer: string, edits?: SpawnBotEdits) => Promise<void>;
+  onAnswer: (message: MobileMessage, answer: string, edits?: CardEdits) => Promise<void>;
   onOpenBot: (botId: string, name: string) => void;
   onOpenComputer?: (botId: string) => void;
   onPreviewMarkdown: (target: MarkdownArtifactPreviewTarget) => void;
@@ -3869,11 +3879,25 @@ function ApprovalCard({
   canAnswer: boolean;
   viewerUserId?: string;
   actionProps: MessageActionProps;
-  onAnswer: (answer: string, edits?: SpawnBotEdits) => Promise<void>;
+  onAnswer: (answer: string, edits?: CardEdits) => Promise<void>;
 }) {
   const tokens = mobileTokens();
   const { t } = useI18n();
   const router = useRouter();
+  if (block.draft) {
+    return (
+      <DraftCard
+        key={cardId}
+        block={block}
+        draft={block.draft}
+        messageId={cardId}
+        canAnswer={canAnswer}
+        viewerUserId={viewerUserId}
+        onAnswer={onAnswer}
+        onReconnect={() => router.push("/integrations")}
+      />
+    );
+  }
   const approval = isApprovalAskBlock(block);
   const routineCard = approval ? block.routine : undefined;
   const header = approval && !routineCard ? { who: t("Needs your call") } : undefined;
@@ -3984,7 +4008,7 @@ const ItemRow = memo(function ItemRow({
   isNew: boolean;
   canAnswer: boolean;
   viewerUserId?: string;
-  onAnswer?: (card: CardTarget, answer: string, edits?: SpawnBotEdits) => Promise<void>;
+  onAnswer?: (item: { id: string }, answer: string, edits?: CardEdits) => Promise<void>;
   readOnly?: boolean;
 }) {
   const tokens = mobileTokens();
@@ -4111,18 +4135,18 @@ const ItemRow = memo(function ItemRow({
       case "divider":
         return <DividerRow reason={item.reason} />;
       case "effect": {
-        const { card, runId } = item;
+        const { card } = item;
         if (!card) return null;
         return (
           <ApprovalCard
             block={card}
             cardId={item.id}
             cardBotId={item.botId ?? botId}
-            canAnswer={!readOnly && canAnswer && Boolean(runId)}
+            canAnswer={!readOnly && canAnswer}
             viewerUserId={viewerUserId}
             actionProps={NO_ACTIONS}
             onAnswer={async (answer, edits) => {
-              if (runId) await onAnswer?.({ runId, entryId: item.id }, answer, edits);
+              await onAnswer?.(item, answer, edits);
             }}
           />
         );
