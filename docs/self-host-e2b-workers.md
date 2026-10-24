@@ -19,8 +19,9 @@ To add a worker provider, see
   mount the bot and space volumes.
 - A checkout of Rakazo at the commit your API and worker images run. For published images, that
   commit is the `revision` that `GET /health` reports.
-- Node.js and pnpm on a host that reaches the E2B API, to build the templates. For the computer
-  template, Docker and a registry the E2B host can pull from.
+- Node.js 22.22.2 or a later 22, 24, or 26 and later, with pnpm, on a host that reaches the E2B
+  API, to build the templates. pnpm refuses other Node versions. For the computer template, Docker
+  and a registry the E2B host can pull from.
 
 ## Build the templates
 
@@ -29,8 +30,8 @@ rebuild them on every upgrade. Rakazo publishes no shared template. The controll
 worker whose protocol version or harness differs from its own.
 
 Run the builds where the E2B API and its file upload port are reachable. On a self-hosted E2B, that
-is usually the E2B host itself. The E2B SDK reads `E2B_API_KEY` and `E2B_DOMAIN` from the
-environment.
+is usually the E2B host itself. The E2B SDK reads `E2B_API_KEY` and `E2B_DOMAIN`, or `E2B_API_URL`
+and `E2B_SANDBOX_URL`, from the environment.
 
 1. Build the worker template from `apps/agent-run-worker/template`. It bundles the guest and builds
    the template `rakazo-worker-pi-native`:
@@ -41,6 +42,16 @@ environment.
    ```
 
    To build it under another name, pass `--name <name>` and set `WORKER_TEMPLATE` to that name.
+
+   If the E2B host has no checkout or an older Node, bundle the build on another machine and run
+   it on the host with Node 22 or later:
+
+   ```bash
+   pnpm test:worker-live:bundle
+   # copy packages/testkit/dist/worker-live to <dir> on the E2B host, then on the host:
+   node <dir>/bin/worker-live.mjs template --name rakazo-worker-pi-native \
+     --guest <dir>/guest/agent-run-worker.mjs
+   ```
 
 2. Build the computer template `desktop` from `infra/sandboxes/computer/e2b`. Follow its
    [README](../infra/sandboxes/computer/e2b/README.md): build and push the computer image for
@@ -66,9 +77,9 @@ E2B_API_KEY=replace-with-your-e2b-key
 # WORKER_TEMPLATE=rakazo-worker-pi-native
 ```
 
-For a self-hosted E2B, set `E2B_DOMAIN`. The SDK derives the API, sandbox and volume endpoints
-from it. `E2B_API_URL` moves only the API endpoint. With it, also set `E2B_SANDBOX_URL` and
-`E2B_VOLUME_API_URL`, or sandbox and volume calls go to E2B's hosted domain.
+For a self-hosted E2B, set `E2B_DOMAIN`. The SDK derives the API and sandbox endpoints from it.
+`E2B_API_URL` moves only the API endpoint, which also creates and deletes volumes. With it, also
+set `E2B_SANDBOX_URL`, or sandbox calls go to E2B's hosted domain.
 
 Recreate the `api` and `worker` services with the `docker compose ... up -d` command you deploy with.
 The rest of the E2B setup is in the [provider setup guide](./self-host-sandbox-providers.md).
