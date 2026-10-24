@@ -75,7 +75,7 @@ A new `SandboxKind` fails the build until it has an entry in `WORKER_SUPPORT`, s
 
 ## Compose the provider
 
-`WORKER_PROVIDER` selects the provider and `WORKER_TEMPLATE` its guest image (`rakazo-worker-pi-native` by default). `resolveWorkerProvider` in `packages/adapters/src/worker-composition.ts` parses them, and `createWorkerProvider` builds the adapter. Add your provider to both. Do not add a provider-specific environment variable when the provider's own SDK or the connection settings can express it: E2B reads `E2B_API_KEY`, and `E2B_DOMAIN` or `E2B_API_URL` for a self-hosted endpoint.
+The computer provider selects the worker provider. `resolveWorkerProvider` in `packages/adapters/src/worker-composition.ts` returns E2B workers when `SANDBOX_PROVIDER` resolves to `e2b`, and `WORKER_TEMPLATE` only overrides their guest image (`rakazo-worker-pi-native` by default). `createWorkerProvider` builds the adapter. Add your provider to both. Do not add a provider-specific environment variable when the provider's own SDK or the connection settings can express it: E2B reads `E2B_API_KEY`, and `E2B_DOMAIN` or `E2B_API_URL` for a self-hosted endpoint.
 
 Both composition roots, `apps/api/src/app.ts` and `apps/worker/src/index.ts`, call `composeWorkers(prisma, provider)`. It returns the lifecycle that bot and space deletion use, and, with a provider, the executor's `runWorkers` and the reconciler's `reconcileWorkers`.
 
@@ -83,7 +83,7 @@ A deployment that composes no provider keeps every run in process. `plan` then a
 
 ## Migrate the existing homes
 
-A computer keeps `homeStorage = 'snapshot'` until `adoptVolumeHome` moves it. Follow the AgentHomeStore procedure in the handoff for each computer: create the volume rows, provision them, copy the files, then adopt.
+A new E2B computer starts with `homeStorage = 'volumes'`, set by `createBot` in `packages/db/src/repos.ts`, unless its space's team computer is still a snapshot. Any other computer keeps `homeStorage = 'snapshot'` until `adoptVolumeHome` moves it. Follow the AgentHomeStore procedure in the handoff for each computer: create the volume rows, provision them, copy the files, then adopt.
 
 The Docker team home is one directory per computer, holding `shared/` and `bots/<botId>/`. Copy `bots/<botId>/` into that bot's private volume and `shared/` into the space volume. Never copy the whole team home into every private volume. Keep the original directory until the copy is verified.
 

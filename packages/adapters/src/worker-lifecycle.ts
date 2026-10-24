@@ -704,10 +704,10 @@ export function createWorkerLifecycle(deps: {
     },
 
     /**
-     * The only writer of computers.homeStorage: moves a home from snapshots to volumes once every
-     * bot on the computer, and the space for a team computer, has a provisioned volume nobody
-     * writes, nothing runs on the computer, and for a team computer no worker of the space may
-     * still write the shared volume. Called after the files were copied, with the start taken
+     * The only change of computers.homeStorage: moves an existing home from snapshots to volumes
+     * once every bot on the computer, and the space for a team computer, has a provisioned volume
+     * nobody writes, nothing runs on the computer, and for a team computer no worker of the space
+     * may still write the shared volume. Called after the files were copied, with the start taken
      * before the copy; stops automatic import and export for good.
      */
     async adoptVolumeHome(

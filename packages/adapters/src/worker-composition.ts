@@ -4,6 +4,7 @@ import { getLogger } from "@rakazo/logging";
 import { E2BWorkerProvider } from "./e2b-worker.js";
 import type { GuestConnector } from "./runtime-worker/launcher.js";
 import { createRunWorkers } from "./runtime-worker/runtime.js";
+import { resolveSandboxProvider } from "./sandbox-provider-env.js";
 import { createWorkerLifecycle } from "./worker-lifecycle.js";
 
 export type WorkerProviderConfig = { kind: "e2b"; apiKey: string; template: string };
@@ -13,19 +14,20 @@ const DEFAULT_WORKER_TEMPLATE = "rakazo-worker-pi-native";
 const RECONCILE_BATCH = 10;
 
 /**
- * `WORKER_PROVIDER` selects a worker provider, `WORKER_TEMPLATE` its guest image. E2B reads its
- * key here and its self-hosted endpoint from its own `E2B_DOMAIN` or `E2B_API_URL`. Unset means no
- * worker: every run stays in process.
+ * An E2B deployment runs its bots in E2B workers; `WORKER_TEMPLATE` only renames their guest
+ * image. E2B reads its self-hosted endpoint from its own `E2B_DOMAIN` or `E2B_API_URL`. Every
+ * other computer provider keeps runs in process.
  */
 export function resolveWorkerProvider(
   source: NodeJS.ProcessEnv = process.env,
 ): WorkerProviderConfig | null {
-  const kind = source.WORKER_PROVIDER?.trim();
-  if (!kind) return null;
-  if (kind !== "e2b") throw new Error(`Unknown WORKER_PROVIDER: ${kind}`);
   const apiKey = source.E2B_API_KEY?.trim();
-  if (!apiKey) throw new Error("WORKER_PROVIDER=e2b needs E2B_API_KEY");
-  return { kind, apiKey, template: source.WORKER_TEMPLATE?.trim() || DEFAULT_WORKER_TEMPLATE };
+  if (resolveSandboxProvider(source) !== "e2b" || !apiKey) return null;
+  return {
+    kind: "e2b",
+    apiKey,
+    template: source.WORKER_TEMPLATE?.trim() || DEFAULT_WORKER_TEMPLATE,
+  };
 }
 
 export function createWorkerProvider(

@@ -380,6 +380,8 @@ export function createRepos(prisma: PrismaClient) {
             spaceId: actor.spaceId,
             userId: actor.userId,
             kind,
+            // A new E2B home starts on volumes, so its runs go to workers with no move.
+            homeStorage: kind === "e2b" ? "volumes" : "snapshot",
           });
           const created = await tx.bot.create({
             data: {
@@ -420,6 +422,8 @@ export function createRepos(prisma: PrismaClient) {
               userId: actor.userId,
               botId: created.id,
               kind,
+              // A space whose team home is still a snapshot keeps one shared folder until it moves.
+              homeStorage: teamComputer.homeStorage,
             });
             await tx.bot.update({ where: { id: created.id }, data: { computerId: dedicated.id } });
           }
@@ -521,6 +525,7 @@ export function createRepos(prisma: PrismaClient) {
         userId: actor.userId,
         botId,
         kind: bot.computer.kind,
+        homeStorage: bot.computer.homeStorage,
       });
       const updated = await prisma.bot.update({
         where: { id: botId },
