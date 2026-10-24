@@ -104,9 +104,8 @@ function draftDetail(draft: AskDraft): string {
       ? [`${role}: ${addresses.map((recipient) => recipient.address).join(", ")}`]
       : [];
   });
-  // Continuation lines are indented so a line written inside the mail cannot pass for a header.
-  if (draft.subject) lines.push(`subject: ${draft.subject.replaceAll("\n", "\n  ")}`);
-  lines.push("body:", `  ${draft.body.replaceAll("\n", "\n  ")}`);
+  if (draft.subject) lines.push(`subject: ${draft.subject.replace(LINE_BREAKS, "\n  ")}`);
+  lines.push("body:", `  ${draft.body.replace(LINE_BREAKS, "\n  ")}`);
   return lines.join("\n");
 }
 
