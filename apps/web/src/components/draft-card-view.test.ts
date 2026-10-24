@@ -9,18 +9,31 @@ const draft: DraftCard["draft"] = {
   body: "Thursday instead?",
 };
 const waiting: DraftCard = { status: "pending", draft };
-const idle: DraftLocal = { edited: false, focused: false, pending: null, canAnswer: true };
+const idle: DraftLocal = {
+  edited: false,
+  focused: false,
+  pending: null,
+  canAnswer: true,
+  owner: true,
+};
 
 describe("draftCardView", () => {
   it("shows a waiting draft with nothing at rest, then Editing, then Edited", () => {
-    expect(draftCardView(waiting, idle)).toEqual({ kind: "open", sending: false, status: null });
+    expect(draftCardView(waiting, idle)).toEqual({
+      kind: "open",
+      readOnly: false,
+      sending: false,
+      status: null,
+    });
     expect(draftCardView(waiting, { ...idle, focused: true, edited: true })).toEqual({
       kind: "open",
+      readOnly: false,
       sending: false,
       status: "editing",
     });
     expect(draftCardView(waiting, { ...idle, edited: true })).toEqual({
       kind: "open",
+      readOnly: false,
       sending: false,
       status: "edited",
     });
@@ -29,12 +42,14 @@ describe("draftCardView", () => {
   it("freezes the card from the Send tap until the server reports it sent", () => {
     expect(draftCardView(waiting, { ...idle, edited: true, pending: "send" })).toEqual({
       kind: "open",
+      readOnly: false,
       sending: true,
       status: null,
     });
     const approved: DraftCard = { status: "answered", answer: "allow", draft };
     expect(draftCardView(approved, { ...idle, canAnswer: false })).toEqual({
       kind: "open",
+      readOnly: false,
       sending: true,
       status: null,
     });
@@ -53,12 +68,14 @@ describe("draftCardView", () => {
     const notSent: DraftCard = { status: "pending", draft: { ...draft, failure } };
     expect(draftCardView(notSent, { ...idle, edited: true })).toEqual({
       kind: "open",
+      readOnly: false,
       sending: false,
       status: "not_sent",
       failure,
     });
     expect(draftCardView(notSent, { ...idle, pending: "send" })).toEqual({
       kind: "open",
+      readOnly: false,
       sending: true,
       status: null,
     });
@@ -79,6 +96,15 @@ describe("draftCardView", () => {
   it("settles as Replaced when the person wrote to the bot instead", () => {
     const replaced: DraftCard = { status: "answered", answer: "dismissed", draft };
     expect(draftCardView(replaced, { ...idle, canAnswer: false })).toEqual({ kind: "replaced" });
+  });
+
+  it("shows another member the draft read-only, with no state of their own", () => {
+    expect(draftCardView(waiting, { ...idle, owner: false })).toEqual({
+      kind: "open",
+      readOnly: true,
+      sending: false,
+      status: null,
+    });
   });
 
   it("says a waiting draft is no longer active once its run stops waiting on it", () => {

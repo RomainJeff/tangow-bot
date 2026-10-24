@@ -206,6 +206,7 @@ export function AskCard({
         key={messageId}
         block={{ ...block, draft: block.draft }}
         canAnswer={canAnswer}
+        viewerUserId={viewerUserId}
         onAnswer={onAnswer}
         messageId={messageId}
       />

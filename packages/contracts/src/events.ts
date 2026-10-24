@@ -124,6 +124,8 @@ export const AskDraft = z.object({
   failure: z.object({ reason: z.string(), disconnected: z.literal(true).optional() }).optional(),
   /** When it left, and whether the user changed the bot's text first. */
   sent: z.object({ at: z.string(), edited: z.boolean() }).optional(),
+  /** The run's owner, the only person the server lets send, edit or discard the draft. */
+  owner: z.object({ userId: z.string(), name: z.string().optional() }).optional().catch(undefined),
 });
 export type AskDraft = z.infer<typeof AskDraft>;
 

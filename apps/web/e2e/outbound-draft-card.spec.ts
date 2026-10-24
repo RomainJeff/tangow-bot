@@ -271,5 +271,18 @@ for (const width of [1440, 390]) {
       draft: { messageId: "draft-card", text: EDITED },
     });
     await shoot(page, testInfo, "replaced");
+
+    // Another member of the thread sees the owner's draft, read-only and with no actions.
+    const owner = { userId: "another-member", name: "Bo Chen" };
+    await reset([
+      ...waitingDraft(botId).slice(0, -1),
+      requested(botId, "draft-card", 11, card({}, { owner })),
+    ]);
+    await expect(draftCard.getByText("BC", { exact: true })).toBeVisible();
+    await expect(draftCard.getByRole("textbox")).toHaveCount(0);
+    await expect(draftCard.getByRole("button")).toHaveCount(0);
+    await expect(
+      draftCard.getByText("Could we do Thursday instead?", { exact: false }),
+    ).toBeVisible();
   });
 }
