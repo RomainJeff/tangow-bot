@@ -279,6 +279,71 @@ describe("readOutboundCall", () => {
     });
   });
 
+  const nearAddress = `a@${"b.".repeat(100_000)};`;
+
+  const nestedRecipients = (count: number) =>
+    Array.from({ length: count }, (_, i) => ({ emailAddress: { address: `p${i}@example.test` } }));
+
+  it("refuses nested recipients too many to show, wherever they sit", () => {
+    expect(
+      read("OUTLOOK_SEND_EMAIL", {
+        message: { toRecipients: nestedRecipients(2_000), body: "Hi" },
+      }),
+    ).toEqual({
+      kind: "refuse",
+      error: "Too many recipients to show the user. Send to fewer people at a time.",
+    });
+  });
+
+  it("drafts nested recipients that fit, and sends the card the whole list", () => {
+    const result = read("OUTLOOK_SEND_EMAIL", {
+      message: { toRecipients: nestedRecipients(3), body: "Hi" },
+    });
+    expect(result.kind === "draft" && result.draft.recipients.length).toBe(3);
+  });
+
+  it("refuses a send the classic card would cut recipients from", () => {
+    expect(
+      read("OUTLOOK_SEND_EMAIL", {
+        message: { toRecipients: nestedRecipients(3), body: "Hi" },
+        notes: "n",
+      }),
+    ).toEqual({
+      kind: "refuse",
+      error: "Put the recipients in the to, cc and bcc arguments.",
+    });
+  });
+
+  it("gives a subject too long to show the classic card", () => {
+    expect(
+      read("GMAIL_SEND_EMAIL", { to: "a@example.com", body: "Hi", subject: "s".repeat(200_000) }),
+    ).toEqual({ kind: "classic" });
+  });
+
+  it.each([
+    ["a sender", "GMAIL_SEND_EMAIL", { to: "a@example.com", body: "Hi", from_email: nearAddress }],
+    ["a recipient", "GMAIL_SEND_EMAIL", { to: nearAddress, body: "Hi" }],
+    ["a recipient list", "GMAIL_SEND_EMAIL", { to: "a@example.com,".repeat(20_000), body: "Hi" }],
+    [
+      "an unexplained field",
+      "GMAIL_SEND_EMAIL",
+      { to: "a@example.com", body: "Hi", notes: "@".repeat(200_000) },
+    ],
+  ])("reads %s of 200,000 characters in linear time", (_, toolName, args) => {
+    const start = performance.now();
+    read(toolName, args);
+    expect(performance.now() - start).toBeLessThan(2_000);
+  });
+
+  it("does not let a long recipient list read as no send on a tool not named for mail", () => {
+    expect(read("send_message", { to: "a@example.com,".repeat(20_000), body: "Hi" }).kind).toBe(
+      "refuse",
+    );
+    expect(read("send_message", { to: `${"x".repeat(400)}@example.com`, body: "Hi" })).toEqual({
+      kind: "classic",
+    });
+  });
+
   it("drafts a send to many recipients that still fit the card", () => {
     const bcc = Array.from({ length: 100 }, (_, i) => `p${i}@example.test`);
     expect(read("GMAIL_SEND_EMAIL", { to: "a@example.com", bcc, body: "Hi" }).kind).toBe("draft");
@@ -299,6 +364,10 @@ describe("readOutboundCall", () => {
       "cc",
       "bcc",
       "recipient_email",
+      "toRecipients",
+      "emailAddress",
+      "address",
+      "message",
       "body",
       "subject",
       "is_html",

@@ -29,9 +29,11 @@ export type OutboundCall =
   | { kind: "refuse"; error: string };
 
 const OUTBOUND_DRAFT_MAX_LENGTH = 20_000;
+const OUTBOUND_SUBJECT_MAX_LENGTH = 1_000;
 /** What the card can show whole: recipients are never cut, so a longer list is refused. */
 const OUTBOUND_RECIPIENTS_MAX_LENGTH = 4_000;
-// No address is longer, and the address patterns backtrack badly on long input.
+// No address is longer, and the address patterns backtrack badly on long input, so every
+// pattern runs on a string of at most this length and nowhere else.
 const ADDRESS_MAX_LENGTH = 320;
 
 type FieldRole =
@@ -94,7 +96,10 @@ const FIELD_ROLES: Record<string, FieldRole> = {
 const INHERITED_ROLES = new Set<FieldRole | undefined>(["to", "cc", "bcc", "sender", "attachment"]);
 const SEND_VERBS = new Set(["send", "sendmail", "sendemail", "reply", "forward"]);
 const ADDRESS = /^[^\s@<>"',;:]+@[^\s@<>"',;:]+\.[^\s@<>"',;:]+$/;
-const ADDRESS_INSIDE = /[^\s@<>"',;:]+@[^\s@<>"',;:]+\.[^\s@<>"',;:]+/;
+
+function isAddress(value: string): boolean {
+  return value.length <= ADDRESS_MAX_LENGTH && ADDRESS.test(value);
+}
 
 type Reading = {
   recipients: OutboundRecipient[];
@@ -103,6 +108,10 @@ type Reading = {
   sender?: string;
   addressed: boolean;
   unexplained: boolean;
+  /** Length of every recipient-role value as the card prints it, nested ones included. */
+  recipientsLength: number;
+  /** A recipient sits inside another argument, where the classic card could cut it. */
+  buried: boolean;
 };
 
 /** Reads a whole connector call: a batch that sends must send alone. */
@@ -125,15 +134,17 @@ function readOutbound(action: OutboundAction, connectorKinds: string[]): Outboun
     subjects: [],
     addressed: false,
     unexplained: false,
+    recipientsLength: 0,
+    buried: false,
   };
-  const args = readValue(action.args, undefined, reading) as Record<string, unknown>;
+  const args = readValue(action.args, undefined, reading, 0) as Record<string, unknown>;
   const connectorKind = connectorKindFromToolName(action.toolName, connectorKinds);
   const mail =
     reading.addressed ||
     words.some((word) => word.endsWith("mail")) ||
     isEmailConnectorKind(connectorKind);
   if (!mail) return { kind: "none" };
-  if (recipientsLength(action.args) > OUTBOUND_RECIPIENTS_MAX_LENGTH) {
+  if (reading.recipientsLength > OUTBOUND_RECIPIENTS_MAX_LENGTH) {
     return {
       kind: "refuse",
       error: "Too many recipients to show the user. Send to fewer people at a time.",
@@ -146,10 +157,13 @@ function readOutbound(action: OutboundAction, connectorKinds: string[]): Outboun
     body === undefined ||
     reading.texts.length > 1 ||
     reading.subjects.length > 1 ||
+    reading.subjects.some((subject) => subject.length > OUTBOUND_SUBJECT_MAX_LENGTH) ||
     body.length > OUTBOUND_DRAFT_MAX_LENGTH ||
     !reading.recipients.some((recipient) => recipient.role === "to")
   ) {
-    return { kind: "classic" };
+    return reading.buried
+      ? { kind: "refuse", error: "Put the recipients in the to, cc and bcc arguments." }
+      : { kind: "classic" };
   }
   return {
     kind: "draft",
@@ -164,16 +178,6 @@ function readOutbound(action: OutboundAction, connectorKinds: string[]): Outboun
   };
 }
 
-function recipientsLength(args: Record<string, unknown>): number {
-  return Object.entries(args).reduce(
-    (total, [key, value]) =>
-      isRecipientField(key)
-        ? total + (typeof value === "string" ? value : (JSON.stringify(value) ?? "")).length
-        : total,
-    0,
-  );
-}
-
 function toolWords(toolName: string): string[] {
   return toolName
     .replace(/^mcp__.+?__/, "")
@@ -182,7 +186,12 @@ function toolWords(toolName: string): string[] {
     .split(/[^a-z0-9]+/);
 }
 
-function readValue(value: unknown, role: FieldRole | undefined, reading: Reading): unknown {
+function readValue(
+  value: unknown,
+  role: FieldRole | undefined,
+  reading: Reading,
+  depth: number,
+): unknown {
   if (role === "flag") {
     if (typeof value === "boolean") return false;
     if (value != null) reading.unexplained = true;
@@ -192,13 +201,18 @@ function readValue(value: unknown, role: FieldRole | undefined, reading: Reading
     reading.unexplained = true;
     return value;
   }
-  if (Array.isArray(value)) return value.map((item) => readValue(item, role, reading));
+  if (Array.isArray(value)) return value.map((item) => readValue(item, role, reading, depth));
   if (value && typeof value === "object") {
     return Object.fromEntries(
-      Object.entries(value).map(([key, child]) => [
-        key,
-        readValue(child, INHERITED_ROLES.has(role) ? role : FIELD_ROLES[fieldKey(key)], reading),
-      ]),
+      Object.entries(value).map(([key, child]) => {
+        if (INHERITED_ROLES.has(role)) return [key, readValue(child, role, reading, depth + 1)];
+        const childRole = FIELD_ROLES[fieldKey(key)];
+        if (childRole === "to" || childRole === "cc" || childRole === "bcc") {
+          reading.recipientsLength += (JSON.stringify(child) ?? "").length;
+          if (depth > 0) reading.buried = true;
+        }
+        return [key, readValue(child, childRole, reading, depth + 1)];
+      }),
     );
   }
   if (typeof value === "string" && value.trim()) readString(value, role, reading);
@@ -213,14 +227,9 @@ function readString(value: string, role: FieldRole | undefined, reading: Reading
     case "to":
     case "cc":
     case "bcc":
-      if (value.length <= ADDRESS_MAX_LENGTH) {
-        reading.addressed ||= ADDRESS_INSIDE.test(value);
-        if (ADDRESS.test(value.trim())) {
-          reading.recipients.push({ role, address: value.trim() });
-          return;
-        }
-      }
-      reading.unexplained = true;
+      reading.addressed ||= value.includes("@");
+      if (isAddress(value.trim())) reading.recipients.push({ role, address: value.trim() });
+      else reading.unexplained = true;
       return;
     case "text":
       reading.texts.push(value);
@@ -233,7 +242,7 @@ function readString(value: string, role: FieldRole | undefined, reading: Reading
       const sender = value.trim();
       if (sender.toLowerCase() === "me") return;
       const { sender: first } = reading;
-      if (!ADDRESS.test(sender) || (first && first.toLowerCase() !== sender.toLowerCase())) {
+      if (!isAddress(sender) || (first && first.toLowerCase() !== sender.toLowerCase())) {
         reading.unexplained = true;
       } else reading.sender ??= sender;
       return;
