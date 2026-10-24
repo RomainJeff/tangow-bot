@@ -983,7 +983,6 @@ export async function sendThreadMessage(
       const runs: Array<{ id: string; taskId: string; botId: string; status: string }> = [];
       const createdRuns: typeof runs = [];
       let draftPutAway = false;
-      let draftCardKept = false;
       for (const botId of targetBotIds) {
         const botRuns = activeRunsByBotId.get(botId) ?? [];
         const active = botRuns.find((run) => conversationRunIds.has(run.id));
@@ -1003,7 +1002,6 @@ export async function sendThreadMessage(
             runs.push({ ...soleActiveRun, status: putAway.status });
             continue;
           }
-          draftCardKept = true;
           const resolution = await resumeAskWithComposerTextInTransaction(tx, {
             spaceId: actor.spaceId,
             threadId: target.threadId,
@@ -1061,7 +1059,8 @@ export async function sendThreadMessage(
         runs.push(run);
         createdRuns.push(run);
       }
-      if (input.draft && draftCardKept && !draftPutAway) {
+      // A draft's text the reply did not put away names a card that waits, or no longer does.
+      if (input.draft && !draftPutAway) {
         throw new ORPCError("CONFLICT", { message: "This draft is no longer waiting." });
       }
       if (createdRuns.length) {
