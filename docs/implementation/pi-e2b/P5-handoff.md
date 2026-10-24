@@ -1,6 +1,6 @@
 # P5 durable native work handoff
 
-**Status: draft.** The offline contract is merged and proven. The token measurements (S2) and the live E2B receipts (S3) are not in yet. Every place that waits for them is marked `PLACEHOLDER`.
+**Status: the offline contract and the live lanes pass. The measurements are pending.** All six native lanes passed on E2B, including the two new ones. The token measurements (S2) are not in yet, and every place that waits for them is marked `PLACEHOLDER`.
 
 P5 makes the work of a harness with its own loop durable while the attempt runs. Before P5, the guest sent one transcript per agent at the very end of the attempt. A VM that died, a cancel, a timeout or a supersession lost every native bash the bot had already run, and the next attempt could run the same command again.
 
@@ -9,7 +9,7 @@ P5 makes the work of a harness with its own loop durable while the attempt runs.
 - Issue: [#199](https://github.com/RomainJeff/rakazo-bot/issues/199). The plan that replaced its pre-native items moved compaction inside an attempt to the harness, and resumption to a new attempt projected from canonical history. P5 has no Pi checkpoint.
 - S1, incremental transcripts: [#306](https://github.com/RomainJeff/rakazo-bot/pull/306), merged into `feature/pi-e2b-workers` at `455f4d743`.
 - S2, measurements: `PLACEHOLDER: S2 pull request and merge commit`.
-- S3, live lanes and this handoff: `PLACEHOLDER: S3 pull request and merge commit`.
+- S3, live lanes and this handoff: [#309](https://github.com/RomainJeff/rakazo-bot/pull/309). The live lanes ran at `30231d4bdb5cf55636e78d46b62275451d23665e`.
 - Predecessor: the [P4 handoff](P4-handoff.md). The controller still answers every model call through the relay, and the effect journal still owns controller tools.
 
 ## Delta transcript
@@ -106,14 +106,14 @@ Reports are accepted by attempt state as follows:
 
 | Event | Run log and next attempt | Offline proof | Live proof |
 | --- | --- | --- | --- |
-| Worker VM dies during a native bash | The call is logged before bash starts. The next attempt closes it as interrupted, sees that result and does not replay the command. | `runtime-worker-native-transcript.test.ts`, "shows the next attempt a native call whose guest died during it as unknown, and never runs it again" | `native-kill-bash`. `PLACEHOLDER: S3 receipt` |
-| E2B kills the VM at its timeout during a native bash | Same as above. The attempt ends released with its writer lease free. | Same test | `g-timeout`, P4 receipts. Its native branch predates S1. `PLACEHOLDER: S3 replay, if run` |
-| User cancel during a native bash | Native work finished before the cancel stays in the log. The cut call stays without a result. No later attempt takes the run. | "keeps the native work done before a cancel, and the call it cut, without running it again" | `native-cancel`. `PLACEHOLDER: S3 receipt` |
+| Worker VM dies during a native bash | The call is logged before bash starts. The next attempt closes it as interrupted, sees that result and does not replay the command. | `runtime-worker-native-transcript.test.ts`, "shows the next attempt a native call whose guest died during it as unknown, and never runs it again" | `native-kill-bash`, [P5 receipt](evidence/P5/lanes.json) |
+| E2B kills the VM at its timeout during a native bash | Same as above. The attempt ends released with its writer lease free. | Same test | `g-timeout`, replayed in the [P5 receipt](evidence/P5/lanes.json) |
+| User cancel during a native bash | Native work finished before the cancel stays in the log. The cut call stays without a result. No later attempt takes the run. | "keeps the native work done before a cancel, and the call it cut, without running it again" | `native-cancel`, [P5 receipt](evidence/P5/lanes.json) |
 | Another attempt supersedes the run | The new attempt closes every open native call of the earlier one before it reads history. | `executor-history.test.ts`, "closes only a harness's own call an earlier attempt cut, not a controller tool of its name" | None |
 | Native and controller calls interleave | The log holds them in the order the harness made them. | "logs native and controller calls along the session in the order the harness made them"; `executor-history.test.ts`, "logs a native harness's own calls among the controller's as the attempt reports them" | None |
-| Controller tool in flight when the attempt dies | The effect journal owns it. An approved effect runs once; an interrupted one is reported as unknown and not replayed. | `executor-effect-idempotency.test.ts`, `executor-approval-replay.test.ts` | `native-helper-approval`, P4 receipts |
-| Approval pending, then controller restart and concurrent resumes | One approved effect, released attempts. | `runtime-worker-approvals.test.ts`, "does not run the approved call again when the controller died while running it" | `native-helper-approval` and `native-compaction`, P4 receipts |
-| Pi compacts inside an attempt | `harness.summary` is logged. A later attempt replays canonical history, not the summary. | `runtime-worker-native.test.ts`, "compacts with Pi's own compaction, whose summary request goes through the relay" | `native-compaction`, P4 receipts |
+| Controller tool in flight when the attempt dies | The effect journal owns it. An approved effect runs once; an interrupted one is reported as unknown and not replayed. | `executor-effect-idempotency.test.ts`, `executor-approval-replay.test.ts` | `native-helper-approval`, replayed in the P5 receipt |
+| Approval pending, then controller restart and concurrent resumes | One approved effect, released attempts. | `runtime-worker-approvals.test.ts`, "does not run the approved call again when the controller died while running it" | `native-helper-approval` and `native-compaction`, replayed in the P5 receipt |
+| Pi compacts inside an attempt | `harness.summary` is logged. A later attempt replays canonical history, not the summary. | `runtime-worker-native.test.ts`, "compacts with Pi's own compaction, whose summary request goes through the relay" | `native-compaction`, replayed in the P5 receipt |
 | Steering claimed by an attempt that dies before delivery | The retried attempt receives the message once. | "hands a retried attempt a message its dead attempt claimed, once" | None |
 | Report in flight during a controller shutdown or loop-guard stop | The report is revoked and lost. The call stays open until a later attempt closes it as interrupted. | Known limit, no test | None |
 | A transcript after a supersession or cancel | Revoked. The attempt no longer owns the run. | "is refused from an attempt that lost its run" | None |
@@ -154,7 +154,20 @@ The stand-in is not committed. It proves the lane logic and the controller contr
 
 ### Live receipts
 
-`PLACEHOLDER: evidence/P5/lanes.json`, with the source commit, guest SHA-256, runner SHA-256, per-lane result, observed values and the cleanup census. Every lane must end with zero owned sandboxes and volumes.
+The [P5 receipt](evidence/P5/lanes.json) records one serialized batch of six lanes at source `30231d4bdb5cf55636e78d46b62275451d23665e`, with `pi-native`, the `i1-worker` and `i1-computer` templates and the local model protocol fixture. The guest bundle (SHA-256 `e4543af118f89472b4b723ba330d4975b9819311781e97329c5a6673254ef869`) was uploaded into each owned worker. The runner SHA-256 is `a84c72e7e760307a09fb5ed1cb1eebf617e70cd226ac243396f11a307a110d14`. [reproduce.txt](evidence/P5/reproduce.txt) gives the commands.
+
+| Lane | Result | Seconds | What it showed |
+| --- | --- | --- | --- |
+| `native-kill-bash` | pass | 14.7 | Only the call was logged before the kill. The first continue ended "Run setup failed; retrying" and the run was queued. The second attempt saw the interrupted result, the marker held one line and both attempts ended released. |
+| `native-cancel` | pass | 65.6 | The attempt stopped 56.7 seconds after the cancel, at its lease heartbeat. The log held the finished call and result, then the cut call without a result. A second continue changed nothing, and the marker held one line. |
+| `g-timeout` | pass | 32.9 | Replayed because S1 changed its transcript path. |
+| `native-helper-approval` | pass | 10.4 | Replayed. |
+| `native-catalog` | pass | 20.3 | Replayed. |
+| `native-compaction` | pass | 16.1 | Replayed. |
+
+Every lane ended with zero owned sandboxes and volumes. An independent census after the batch listed no sandbox, running or paused, and no volume on the deployment. The remote scratch directory was removed.
+
+Before this batch, the runner refused to start once and created nothing, because a paused sandbox from another session was on the deployment. The maintainer authorized its removal, and the batch then ran on an idle deployment.
 
 ## Measurements
 
@@ -202,4 +215,4 @@ E2B_API_KEY=<key> E2B_DOMAIN=<domain> pnpm test:worker-live lanes \
 
 For a self-hosted deployment, set `E2B_API_URL` and `E2B_SANDBOX_URL` instead of `E2B_DOMAIN`. On a host without a checkout, copy `packages/testkit/dist/worker-live` to `<scratch>` and run `node --expose-gc <scratch>/bin/worker-live.mjs lanes` with the same options and `--guest <scratch>/guest/agent-run-worker.mjs`. The runner refuses a deployment that already runs a sandbox, runs each lane in its own process, and sweeps the session's tagged sandboxes and named volumes after each lane.
 
-S1 changed the transcript path that every native lane uses. To replay the earlier native lanes on the same source, add `g-timeout,native-helper-approval,native-catalog,native-compaction` to `--lanes`. `PLACEHOLDER: whether that replay ran, and its receipt`.
+S1 changed the transcript path that every native lane uses. To replay the earlier native lanes on the same source, add `g-timeout,native-helper-approval,native-catalog,native-compaction` to `--lanes`, as the P5 receipt did.

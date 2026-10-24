@@ -1,0 +1,330 @@
+{
+  "tag": "p3live-<session>",
+  "harness": "pi-native",
+  "model": "local protocol emulator; not a real-model intelligence evaluation",
+  "desktopPreparation": "skipped for plain P3 fixtures; not computer parity evidence",
+  "guestSha256": "e4543af118f89472b4b723ba330d4975b9819311781e97329c5a6673254ef869",
+  "startedAt": "2026-10-24T10:01:26.984Z",
+  "workerTemplate": "i1-worker",
+  "computerTemplate": "i1-computer",
+  "lanes": [
+    {
+      "lane": "g-timeout",
+      "issue": "panne après provisioning (VM tuée au timeout)",
+      "scenario": "A provider whose deployment allows a 20 s sandbox timeout, below the worker TTL; the guest sleeps in bash past it, so E2B kills the VM mid-call",
+      "passWhen": "E2B kills the VM, the attempt ends released with its writer lease free and its bash effect never rerun, and the run completes on a new attempt",
+      "result": "pass",
+      "observed": {
+        "sandboxTimeoutMs": 20000,
+        "firstContinue": "Run setup failed; retrying",
+        "firstAttemptEndedAfterMs": 24011,
+        "afterKill": {
+          "status": "queued",
+          "attempts": [
+            {
+              "workerState": "released",
+              "stopPhase": "process_ended"
+            }
+          ],
+          "writerLeasesHeld": 0,
+          "sandboxesAlive": 0
+        },
+        "retriedCallResult": "started\nrecovered\n",
+        "nativeMarkers": {
+          "started": "started\n",
+          "completed": false
+        },
+        "guestUploadDeadlines": [
+          {
+            "before": "2026-10-24T10:01:54.290Z",
+            "after": "2026-10-24T10:01:54.314Z",
+            "timeoutMs": 19979
+          },
+          {
+            "before": "2026-10-24T10:02:17.128Z",
+            "after": "2026-10-24T10:02:17.144Z",
+            "timeoutMs": 19986
+          }
+        ],
+        "final": {
+          "status": "completed",
+          "attempts": [
+            "released",
+            "released"
+          ],
+          "effects": [
+            {
+              "kind": "message_user",
+              "status": "completed"
+            }
+          ],
+          "sandboxesLeft": 0
+        }
+      },
+      "seconds": 32.9,
+      "memAvailableMiB": {
+        "before": 3022,
+        "after": 2501
+      },
+      "controllerRssMiB": 747,
+      "cleanup": {
+        "killed": 0,
+        "destroyed": 2,
+        "left": {
+          "sandboxes": 0,
+          "volumes": 0
+        }
+      }
+    },
+    {
+      "lane": "native-helper-approval",
+      "issue": "N13 native helper ownership and approval recovery",
+      "scenario": "A native helper submits a connector action requiring approval, then concurrent resumes after controller restart settle the effect once",
+      "passWhen": "The helper sees its own task without root history, uses the parent's worker, persists one child run, and the approved action executes once after restart",
+      "result": "pass",
+      "observed": {
+        "paused": "waiting_input",
+        "beforeApproval": 0,
+        "answered": true,
+        "helperOwnContext": true,
+        "launchesBeforeApproval": 1,
+        "launchesAfterResume": 2,
+        "childStatuses": [
+          "completed"
+        ],
+        "published": [
+          {
+            "title": "Synthetic plan"
+          }
+        ],
+        "effectStatuses": [
+          "completed"
+        ],
+        "attempts": [
+          "released",
+          "released"
+        ]
+      },
+      "seconds": 10.4,
+      "memAvailableMiB": {
+        "before": 2997,
+        "after": 2455
+      },
+      "controllerRssMiB": 821,
+      "cleanup": {
+        "killed": 0,
+        "destroyed": 0,
+        "left": {
+          "sandboxes": 0,
+          "volumes": 0
+        }
+      }
+    },
+    {
+      "lane": "native-catalog",
+      "issue": "N13 native MCP catalog transport and controller authority",
+      "scenario": "Real Pi in E2B uses direct and deferred synthetic MCP catalogs with long and colliding names, approval, revocation and fake secret canaries",
+      "passWhen": "Only selected deferred schemas reach the model, SDK-assigned names remain distinct, one approved effect executes and revocation prevents another, with secrets absent from worker/model/canonical history",
+      "result": "pass",
+      "observed": {
+        "model": "protocol emulator",
+        "mcp": "synthetic authenticated protocol fixture",
+        "direct": {
+          "exposure": "direct",
+          "catalogSize": 3,
+          "assignedNames": [
+            "mcp__rakazo__mcp__n13__publish_note_note_note_note_note_a1ee4c42",
+            "mcp__rakazo__mcp__n13__notes_write_112ff865",
+            "mcp__rakazo__mcp__n13__notes_write_21838c2a"
+          ],
+          "approvedEffects": 1,
+          "revokedEffects": 0,
+          "canaryAbsentFromFramesModelAndCanonicalLog": true,
+          "controllerAuthenticated": true,
+          "computerRows": 0,
+          "prefixStableWithinAttempt": true,
+          "attempts": [
+            "released",
+            "released"
+          ]
+        },
+        "deferred": {
+          "exposure": "deferred",
+          "catalogSize": 30,
+          "assignedNames": [
+            "mcp__rakazo__mcp__n13__publish_note_note_note_note_note_a1ee4c42",
+            "mcp__rakazo__mcp__n13__notes_write_112ff865",
+            "mcp__rakazo__mcp__n13__notes_write_21838c2a"
+          ],
+          "approvedEffects": 1,
+          "revokedEffects": 0,
+          "canaryAbsentFromFramesModelAndCanonicalLog": true,
+          "controllerAuthenticated": true,
+          "computerRows": 0,
+          "prefixStableWithinAttempt": true,
+          "attempts": [
+            "released",
+            "released"
+          ]
+        }
+      },
+      "seconds": 20.3,
+      "memAvailableMiB": {
+        "before": 2987,
+        "after": 2339
+      },
+      "controllerRssMiB": 864,
+      "cleanup": {
+        "killed": 0,
+        "destroyed": 0,
+        "left": {
+          "sandboxes": 0,
+          "volumes": 0
+        }
+      }
+    },
+    {
+      "lane": "native-compaction",
+      "issue": "N13 actual Pi compaction through the controller relay",
+      "scenario": "An approved controller effect precedes native volume writes, then a model protocol overflow forces Pi to summarize and continue in a configured 32768-token context",
+      "passWhen": "Pi requests summarization through the relay and retries with its summary, the canonical controller log keeps the original paired calls and approval outcome, and a later attempt replays the canonical private recap rather than trusting the harness summary",
+      "result": "pass",
+      "observed": {
+        "model": "protocol emulator, including one controlled context-overflow response and generated summary",
+        "contextWindow": 32768,
+        "replayContextWindow": 131072,
+        "fixtureUsage": "Low synthetic usage suppresses threshold compaction before the controlled overflow",
+        "trigger": "Pi overflow recovery",
+        "summaryRequests": 2,
+        "compactedRequest": true,
+        "replayedCanonicalHistory": true,
+        "approvedEffects": 1,
+        "canonicalToolPairs": 13,
+        "canonicalNativeCalls": 10,
+        "summaries": [
+          {
+            "tokensBefore": 38183
+          }
+        ],
+        "volumeWriteAndRead": true,
+        "prefixStableBeforeCompaction": true,
+        "attempts": [
+          "released",
+          "released"
+        ]
+      },
+      "seconds": 16.1,
+      "memAvailableMiB": {
+        "before": 2974,
+        "after": 2407
+      },
+      "controllerRssMiB": 852,
+      "cleanup": {
+        "killed": 0,
+        "destroyed": 2,
+        "left": {
+          "sandboxes": 0,
+          "volumes": 0
+        }
+      }
+    },
+    {
+      "lane": "native-kill-bash",
+      "issue": "P5 native call durable across a worker VM that dies mid-command",
+      "scenario": "A native Pi bash appends a marker and sleeps; once a second VM sees the marker on the private volume, the lane kills the worker VM through E2B, then the run continues on a new attempt",
+      "passWhen": "The call is in the run log before the kill, the next attempt's first model request shows it closed as interrupted with an unknown outcome, the marker holds one line, the call is never replayed, and no owned sandbox or volume is left",
+      "result": "pass",
+      "observed": {
+        "markerBeforeKill": "started\n",
+        "loggedBeforeKill": [
+          "call slow"
+        ],
+        "killed": true,
+        "firstContinue": "Run setup failed; retrying",
+        "statusAfterKill": "queued",
+        "continues": 1,
+        "retriedRequestShowsInterrupted": true,
+        "log": [
+          "call slow",
+          "result slow The bash call was interrupted, so its outcome is unknown. It was not replayed; check the state before retrying."
+        ],
+        "markerAfter": "started\n",
+        "attempts": [
+          "released",
+          "released"
+        ],
+        "cleanup": {
+          "killed": 0,
+          "destroyed": 2,
+          "left": {
+            "sandboxes": 0,
+            "volumes": 0
+          }
+        }
+      },
+      "seconds": 14.7,
+      "memAvailableMiB": {
+        "before": 2975,
+        "after": 2388
+      },
+      "controllerRssMiB": 838,
+      "cleanup": {
+        "killed": 0,
+        "destroyed": 0,
+        "left": {
+          "sandboxes": 0,
+          "volumes": 0
+        }
+      }
+    },
+    {
+      "lane": "native-cancel",
+      "issue": "P5 native work kept across a user cancel",
+      "scenario": "A native Pi bash finishes, a second one appends a marker and sleeps; once a second VM sees the marker, the run is cancelled as the stop button does, then continued again",
+      "passWhen": "The run ends cancelled with the finished call and its result in the log and the cut call logged without a result, no model request follows the cancel, a later continue takes no attempt, the marker holds one line, and no owned sandbox or volume is left",
+      "result": "pass",
+      "observed": {
+        "markerBeforeCancel": "started\n",
+        "firstContinue": "completed",
+        "stoppedAfterMs": 56722,
+        "status": "cancelled",
+        "logAfterCancel": [
+          "call done",
+          "result done done-ok\n",
+          "call cut"
+        ],
+        "logAfterSecondContinue": [
+          "call done",
+          "result done done-ok\n",
+          "call cut"
+        ],
+        "markerAfter": "started\n",
+        "attempts": [
+          "released"
+        ],
+        "cleanup": {
+          "killed": 0,
+          "destroyed": 2,
+          "left": {
+            "sandboxes": 0,
+            "volumes": 0
+          }
+        }
+      },
+      "seconds": 65.6,
+      "memAvailableMiB": {
+        "before": 2866,
+        "after": 2539
+      },
+      "controllerRssMiB": 670,
+      "cleanup": {
+        "killed": 0,
+        "destroyed": 0,
+        "left": {
+          "sandboxes": 0,
+          "volumes": 0
+        }
+      }
+    }
+  ]
+}
