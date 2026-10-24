@@ -83,6 +83,12 @@ describe("FramedBlock", () => {
     );
   });
 
+  it("settles on its answer alone when there is no question to repeat", () => {
+    const html = renderToString(<FramedBlock answered="Replaced" />);
+    expect(html).not.toContain('data-slot="framed-block-question"');
+    expect(html).toContain('data-slot="framed-block-answered"');
+  });
+
   it("passes a className and the remaining props through", () => {
     const html = renderToString(
       <FramedBlock

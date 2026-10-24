@@ -183,36 +183,36 @@ export function DraftCard({
     icon: <AppLogo app={draft.app} />,
   };
   const to = addressesOf(draft, "to");
-  const toLine = (
-    <span className="break-words">
-      <span className="font-normal text-muted-foreground">{t`To`}</span> {to}
-    </span>
-  );
 
-  if (view.kind !== "open") {
-    let answered: ReactNode;
-    let question: ReactNode = toLine;
-    switch (view.kind) {
-      case "sent": {
-        const time = messageTimeLabel(view.at, i18n.locale);
-        const recipient = to || draft.recipients.map((each) => each.address).join(", ");
-        question = (
+  if (view.kind === "sent") {
+    const time = messageTimeLabel(view.at, i18n.locale);
+    const recipient = to || draft.recipients.map((each) => each.address).join(", ");
+    return (
+      <FramedBlock
+        data-testid="draft-card"
+        header={header}
+        question={
           <Sender owner={draft.owner}>
             <p className="min-w-0 flex-1 whitespace-pre-wrap break-words font-normal">
               {draft.body}
             </p>
           </Sender>
-        );
-        answered = (
+        }
+        answered={
           <span className="inline-flex items-center gap-1">
             <Check className="size-3.5 shrink-0" aria-hidden="true" />
             {t`Sent to ${recipient} · ${time}`}
           </span>
-        );
-        break;
-      }
+        }
+      />
+    );
+  }
+
+  if (view.kind !== "open") {
+    let state: ReactNode;
+    switch (view.kind) {
       case "discarded":
-        answered = view.undo ? (
+        state = view.undo ? (
           <>
             {t`Discarded`} ·{" "}
             <button
@@ -228,18 +228,21 @@ export function DraftCard({
         );
         break;
       case "replaced":
-        answered = t`Replaced`;
+        state = t`Replaced`;
         break;
       case "inactive":
-        answered = t`No longer active`;
+        state = t`No longer active`;
         break;
     }
     return (
       <FramedBlock
         data-testid="draft-card"
-        header={header}
-        question={question}
-        answered={answered}
+        answered={
+          <span className="inline-flex items-center gap-2">
+            <AppLogo app={draft.app} />
+            <span>{state}</span>
+          </span>
+        }
       />
     );
   }

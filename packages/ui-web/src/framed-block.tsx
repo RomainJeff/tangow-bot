@@ -23,7 +23,8 @@ export interface FramedBlockProps extends Omit<ComponentPropsWithoutRef<"div">, 
   /** Omitted when the row above already names who is asking (a bot row's
    * author line) — the question then opens the card with no header line. */
   header?: FramedBlockHeader;
-  question: ReactNode;
+  /** Left out only on a settled block whose answer says it all on one line. */
+  question?: ReactNode;
   /** What pressing the primary action will do, one line under the question. */
   consequence?: ReactNode;
   /** Controls between the question and the actions (options, a text field). */
@@ -90,12 +91,14 @@ export function FramedBlock({
           ) : null}
         </div>
       ) : null}
-      <div
-        data-slot="framed-block-question"
-        className={cn("text-foreground", answered ? "text-body font-medium" : "text-question")}
-      >
-        {question}
-      </div>
+      {question != null ? (
+        <div
+          data-slot="framed-block-question"
+          className={cn("text-foreground", answered ? "text-body font-medium" : "text-question")}
+        >
+          {question}
+        </div>
+      ) : null}
       {consequence ? (
         <div data-slot="framed-block-consequence" className="text-meta text-muted-foreground">
           {consequence}

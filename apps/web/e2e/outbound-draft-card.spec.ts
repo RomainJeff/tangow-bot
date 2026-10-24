@@ -257,12 +257,12 @@ for (const width of [1440, 390]) {
     await reset(waitingDraft(botId));
     answered.body = undefined;
     await button("Discard").click();
-    await expect(draftCard).toContainText("Discarded · Undo");
+    await expect(draftCard).toHaveText("Discarded · Undo");
     await draftCard.getByRole("button", { name: "Undo", exact: true }).click();
     await expect(button("Send")).toBeVisible();
     onAnswer = () => drafts.push(resolved(botId, "draft-denied", 12, "denied"));
     await button("Discard").click();
-    await expect(draftCard).toHaveText(/Discarded$/, { timeout: 10_000 });
+    await expect(draftCard).toHaveText("Discarded", { timeout: 10_000 });
     expect(answered.body).toMatchObject({ messageId: "draft-card", answer: "deny" });
 
     // Typing to the bot while the draft waits replaces it and carries the edited text.
@@ -271,7 +271,7 @@ for (const width of [1440, 390]) {
     const composer = page.locator('textarea[name="chat-message"]');
     await composer.fill("Make it Friday instead.");
     await composer.press("Enter");
-    await expect(draftCard).toContainText("Replaced");
+    await expect(draftCard).toHaveText("Replaced");
     expect(sent.body).toMatchObject({
       text: "Make it Friday instead.",
       draft: { messageId: "draft-card", text: EDITED },
