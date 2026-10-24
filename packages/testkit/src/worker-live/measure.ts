@@ -86,9 +86,10 @@ export type ThreadRecord = {
   rateLimitRetries?: number;
   /**
    * The thread's first provider request body against those of the model's earlier threads: the
-   * longest prefix it shares with one of them, its length and where its nonce starts, in characters.
+   * longest prefix it shares with one of them, its length, and where its tools and its nonce start,
+   * in characters.
    */
-  sharedBase?: { sharedChars: number; bodyChars: number; nonceAt: number };
+  sharedBase?: { sharedChars: number; bodyChars: number; nonceAt: number; toolsAt: number };
   /** Whether that first body carried provider cache markers (`cache_control`). */
   cacheMarkersSent?: boolean;
   left?: { sandboxes: number; volumes: number };
@@ -486,6 +487,7 @@ export async function measureTokens(options: {
           sharedChars: Math.max(...earlier.map(shared)),
           bodyChars: body.length,
           nonceAt: body.indexOf(nonce),
+          toolsAt: body.indexOf('"tools":'),
         };
       earlierBodies.set(model.id, [...earlier, body]);
     }

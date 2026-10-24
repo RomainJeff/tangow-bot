@@ -99,6 +99,7 @@ describe("token and cache measurements", () => {
     for (const thread of threads.slice(1)) {
       expect(thread.sharedBase!.sharedChars).toBeGreaterThan(0);
       expect(thread.sharedBase!.sharedChars).toBeLessThan(thread.sharedBase!.nonceAt);
+      expect(thread.sharedBase!.toolsAt).toBeGreaterThan(thread.sharedBase!.sharedChars);
     }
 
     const summary = summarize(threads, models)[models[0]!.id]!;
