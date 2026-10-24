@@ -1,12 +1,15 @@
 import type { AgentRunRequest, ConnectorCall, ConnectorTool } from "@rakazo/adapter-kit";
-import type { ActionApprovalRule } from "@rakazo/core";
+import type { MessageBlock } from "@rakazo/contracts";
+import { askDraftState } from "@rakazo/contracts";
+import type { ActionApprovalRule, DraftRecord } from "@rakazo/core";
+import { withValueAt } from "@rakazo/core";
 import { approvalEffectKey, toolEffectIdempotencyKey } from "@rakazo/core/node/approval-effect-key";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { isApprovalPausedResult } from "./approval-effect.js";
 import type * as AutoReviewModule from "./auto-review.js";
 import { runAutoReviewJudge } from "./auto-review.js";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
-import { createRunExecutor } from "./executor.js";
+import { createRunExecutor, settleCancelledRunCards } from "./executor.js";
 import { catalogEntries, resolveCatalogCall } from "./lazy-tool-catalog.js";
 import { recordingSessionLog } from "./session-log/recording.test-support.js";
 
@@ -33,6 +36,7 @@ type Effect = {
   reviewDecision?: string;
   runId?: string;
   run?: { threadId: string; botId: string; status: string };
+  draft?: unknown;
 };
 
 function fixture({
@@ -78,13 +82,16 @@ function fixture({
         where?: {
           id?: string;
           runId?: string | { not: string };
-          status?: string;
+          status?: string | { in: string[] };
           kind?: string;
           run?: Partial<NonNullable<Effect["run"]>>;
         };
       } = {}) =>
         effects.filter((effect) => {
-          if (where?.status && effect.status !== where.status) return false;
+          if (typeof where?.status === "string" && effect.status !== where.status) return false;
+          if (typeof where?.status === "object" && !where.status.in.includes(effect.status)) {
+            return false;
+          }
           if (where?.kind && effect.kind !== where.kind) return false;
           if (typeof where?.runId === "object" && effect.runId === where.runId.not) return false;
           if (typeof where?.runId === "string" && effect.runId && effect.runId !== where.runId) {
@@ -127,14 +134,39 @@ function fixture({
     ),
   };
   const log = recordingSessionLog();
+  const pauseRunForInput = vi.fn(
+    async (input: { blocks: unknown[]; effect?: { id: string; reopen?: unknown } }) => {
+      if (input.effect?.reopen) {
+        Object.assign(effects.find((effect) => effect.id === input.effect!.id)!, {
+          status: "intended",
+          draft: input.effect.reopen,
+        });
+      }
+      run.status = "waiting_input";
+      return true;
+    },
+  );
   const prisma = {
-    sessionEntry: log.sessionEntry,
+    sessionEntry: {
+      ...log.sessionEntry,
+      // The card an effect shows, and the entry it settles on: the one it last paused with.
+      findFirst: vi.fn(async ({ where }: { where?: { payload?: { path?: string[] } } }) => {
+        if (where?.payload?.path?.[0] !== "effectId") return null;
+        const paused = pauseRunForInput.mock.calls.at(-1)?.[0];
+        return paused ? { id: "card-entry", payload: { card: paused.blocks[0] } } : null;
+      }),
+      findUnique: vi.fn(async () => ({ sessionId: "session-main" })),
+    },
     $queryRaw: log.queryRaw,
     $transaction: async (work: (tx: unknown) => unknown) => work(prisma),
     run: {
       findUnique: vi.fn(async () => run),
       findUniqueOrThrow: vi.fn(async () => run),
       updateMany: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+        // One worker leases a run: a second claim finds it taken.
+        if (data.status === "leased" && !["queued", "waiting_input"].includes(run.status)) {
+          return { count: 0 };
+        }
         Object.assign(run, data);
         return { count: 1 };
       }),
@@ -155,7 +187,9 @@ function fixture({
       update: vi.fn(),
       updateMany: vi.fn(async () => ({ count: 1 })),
     },
-    thread: { findUniqueOrThrow: vi.fn(async () => ({ id: run.threadId, groupId: null })) },
+    thread: {
+      findUniqueOrThrow: vi.fn(async () => ({ id: run.threadId, groupId: null, nextEventSeq: 2 })),
+    },
     task: { findUniqueOrThrow: vi.fn(async () => ({ id: run.taskId, prompt: "Read the item" })) },
     connection: { findMany: vi.fn(async () => []) },
     spaceModelPreference: { findFirst: vi.fn(async () => null) },
@@ -177,10 +211,6 @@ function fixture({
     actionAutoReviewPreference: { findUnique: vi.fn(async () => ({ enabled: autoReview })) },
     externalEffect,
   };
-  const pauseRunForInput = vi.fn(async () => {
-    run.status = "waiting_input";
-    return true;
-  });
   const finalizeRun = vi.fn(async () => ({ continuationRunId: null }));
   const execute = vi.fn(async function* (call: ConnectorCall) {
     yield { type: "result" as const, data: { item: call.args.id } };
@@ -200,22 +230,31 @@ function fixture({
     }
     yield { type: "done" as const, text: "Done" };
   });
+  const events = {
+    append: vi.fn(async () => undefined),
+    pauseRunForInput,
+    finalizeRun,
+    notify: vi.fn(async () => undefined),
+  };
+  let connected = true;
   const executor = createRunExecutor({
     sessionLog: log.sessionLog,
     prisma,
     runtime: { describe: () => ({ capabilities: { scripted: false } }), run: runtimeRun },
     connector: {
       discoverTools: async () =>
-        catalog
-          ? [
-              {
-                name: "demo_execute_tool",
-                description: "Execute a catalog tool",
-                inputSchema: { type: "object" },
-                route: { connectorId: "demo", toolName: "__catalog_execute" },
-              },
-            ]
-          : [tool],
+        !connected
+          ? []
+          : catalog
+            ? [
+                {
+                  name: "demo_execute_tool",
+                  description: "Execute a catalog tool",
+                  inputSchema: { type: "object" },
+                  route: { connectorId: "demo", toolName: "__catalog_execute" },
+                },
+              ]
+            : [tool],
       resolveCall: async (call: ConnectorCall) =>
         catalog ? resolveCatalogCall(call, catalogEntries([tool])) : undefined,
       execute,
@@ -223,7 +262,7 @@ function fixture({
     sandbox: { describe: () => ({ capabilities: { graphical: false } }) },
     memory: { read: async () => ({ documents: [] }) },
     memoryProviders: { resolve: async () => null },
-    events: { append: vi.fn(async () => undefined), pauseRunForInput, finalizeRun },
+    events,
     jobs: { enqueue: vi.fn(async () => undefined) },
     secrets: [],
   } as unknown as Parameters<typeof createRunExecutor>[0]);
@@ -232,17 +271,37 @@ function fixture({
     results,
     execute,
     pauseRunForInput,
+    runtimeRun,
+    prisma,
+    events,
+    log,
+    runRow: run,
+    disconnect() {
+      connected = false;
+    },
     setCalls(next: typeof calls) {
       calls = next;
     },
-    async run() {
+    async run(...workers: string[]) {
       run.status = "queued";
-      await executor.continueRun(run.id, "worker-1");
+      await Promise.all(
+        (workers.length ? workers : ["worker-1"]).map((worker) =>
+          executor.continueRun(run.id, worker),
+        ),
+      );
       expect(runtimeRun).toHaveBeenCalled();
       expect(prisma.attempt.update).not.toHaveBeenCalled();
       expect(finalizeRun).not.toHaveBeenCalledWith(expect.objectContaining({ outcome: "failed" }));
     },
   };
+}
+
+/** What the server writes when the owner taps Send, the text edited or not. */
+function approve(effect: Effect, text?: string) {
+  const draft = effect.draft as DraftRecord;
+  effect.status = "approved";
+  effect.draft = { path: draft.path, proposed: draft.proposed, state: "approved" };
+  if (text !== undefined) effect.request = withValueAt(effect.request, draft.path, text);
 }
 
 describe("connector read-only metadata and approval enforcement", () => {
@@ -545,17 +604,19 @@ describe("connector read-only metadata and approval enforcement", () => {
       expect(f.pauseRunForInput).not.toHaveBeenCalled();
     });
 
-    it("sends an approved mail draft by replaying the batch once", async () => {
+    it("sends a mail draft inside a batch once, with the user's text and no signature", async () => {
       const f = fixture({ name, catalog: true, inputSchema });
       f.setCalls([{ args: batch(mail), executionId: "c1" }]);
       await f.run();
-      f.effects[0]!.status = "approved";
-      f.setCalls([{ args: batch(mail), executionId: "c2" }]);
+      approve(f.effects[0]!, "Hello, edited.");
+      f.setCalls([]);
       await f.run();
       expect(f.execute).toHaveBeenCalledOnce();
-      expect(f.execute).toHaveBeenCalledWith(
-        expect.objectContaining({ args: batch(mail) }),
-        expect.anything(),
+      expect(f.execute.mock.calls[0]![0].args).toEqual(
+        batch({
+          ...mail,
+          arguments: { ...mail.arguments, body: "Hello, edited.", include_signature: false },
+        }),
       );
       expect(f.effects[0]!.status).toBe("completed");
     });
@@ -731,6 +792,7 @@ describe("connector read-only metadata and approval enforcement", () => {
       idempotencyKey: "waiting-key",
       status: "intended",
       request: { recipient_email: "first@example.com", body: "First" },
+      draft: { state: "pending", path: ["body"], proposed: "First" },
       runId: "run-0",
       run: { threadId: "thread-1", botId: "bot-1", status: "waiting_input", ...run },
     });
@@ -768,6 +830,190 @@ describe("connector read-only metadata and approval enforcement", () => {
       await f.run();
       expect(f.execute).toHaveBeenCalledOnce();
       expect(f.pauseRunForInput).not.toHaveBeenCalled();
+    });
+
+    describe("once the user sends the draft", () => {
+      async function drafted() {
+        const f = fixture({ name: "GMAIL_SEND_EMAIL", inputSchema });
+        f.setCalls([{ args: send, executionId: "c1" }]);
+        await f.run();
+        return f;
+      }
+      const sentResult = (body: string, editedByUser: boolean) => ({
+        ok: true,
+        sent: {
+          recipients: draftCard.draft.recipients,
+          subject: "Test Chief",
+          body,
+        },
+        editedByUser,
+        note: "The user sent this message from the draft card. Do not send it again.",
+      });
+      const lastCard = (f: Awaited<ReturnType<typeof drafted>>) =>
+        f.pauseRunForInput.mock.calls.at(-1)![0].blocks[0] as Extract<
+          MessageBlock,
+          { kind: "ask" }
+        >;
+
+      it("sends the edited text once before the model's turn, and tells the bot what left", async () => {
+        const f = await drafted();
+        approve(f.effects[0]!, "Hello, edited by me.");
+        f.setCalls([]);
+        await f.run();
+        expect(f.execute.mock.calls.map(([call]) => call.args)).toEqual([
+          { ...send, body: "Hello, edited by me." },
+        ]);
+        expect(f.effects[0]).toMatchObject({
+          status: "completed",
+          result: sentResult("Hello, edited by me.", true),
+          draft: { state: "sent", proposed: "Hello from Chief." },
+        });
+        expect(f.log.drafts.filter((entry) => entry.type === "effect.applied")).toEqual([
+          expect.objectContaining({
+            payload: { target: "card-entry", sent: { at: expect.any(String), edited: true } },
+          }),
+        ]);
+        expect(f.runtimeRun.mock.calls.at(-1)![0].prompt).toContain(
+          `Sent from the draft card: ${JSON.stringify(sentResult("Hello, edited by me.", true))}`,
+        );
+      });
+
+      it("answers the bot's own identical call after Sent with what left, sending nothing more", async () => {
+        const f = await drafted();
+        approve(f.effects[0]!);
+        f.setCalls([{ args: send, executionId: "c2" }]);
+        await f.run();
+        f.setCalls([{ args: send, executionId: "c3" }]);
+        await f.run();
+        expect(f.execute).toHaveBeenCalledOnce();
+        expect(f.results.slice(-2)).toEqual([
+          sentResult("Hello from Chief.", false),
+          sentResult("Hello from Chief.", false),
+        ]);
+        expect(f.effects).toHaveLength(1);
+      });
+
+      it("sends once when two workers resume the run together", async () => {
+        const f = await drafted();
+        approve(f.effects[0]!);
+        f.setCalls([]);
+        await f.run("worker-1", "worker-2");
+        expect(f.execute).toHaveBeenCalledOnce();
+        expect(f.effects[0]!.status).toBe("completed");
+      });
+
+      it("shows the card again, Not sent, when the app refuses it, and Try again sends once", async () => {
+        const f = await drafted();
+        f.execute.mockImplementationOnce(async function* () {
+          yield {
+            type: "result" as const,
+            data: { successful: false, error: "Invalid recipient", data: null } as never,
+          };
+        });
+        approve(f.effects[0]!, "Edited.");
+        f.setCalls([]);
+        const turns = f.runtimeRun.mock.calls.length;
+        await f.run();
+        expect(f.runtimeRun.mock.calls.length).toBe(turns);
+        expect(f.effects[0]).toMatchObject({
+          status: "intended",
+          draft: { state: "pending", failure: { reason: "Invalid recipient" } },
+        });
+        expect(lastCard(f)).toMatchObject({
+          status: "pending",
+          draft: { body: "Edited.", failure: { reason: "Invalid recipient" } },
+        });
+        expect(askDraftState(lastCard(f))).toBe("not_sent");
+
+        approve(f.effects[0]!);
+        await f.run();
+        expect(f.execute.mock.calls.map(([call]) => call.args.body)).toEqual([
+          "Edited.",
+          "Edited.",
+        ]);
+        expect(f.effects[0]!.status).toBe("completed");
+      });
+
+      it.each([
+        [
+          "the worker died while sending",
+          (f: Awaited<ReturnType<typeof drafted>>) => {
+            f.effects[0]!.status = "executing";
+          },
+          0,
+        ],
+        [
+          "the app timed out after sending",
+          (f: Awaited<ReturnType<typeof drafted>>) => {
+            f.execute.mockImplementationOnce(async function* () {
+              yield* [];
+              throw new Error("timed out");
+            });
+          },
+          1,
+        ],
+      ])("never sends again when %s: the card asks the user to check", async (_, crash, sends) => {
+        const f = await drafted();
+        approve(f.effects[0]!);
+        crash(f);
+        f.setCalls([]);
+        await f.run();
+        expect(f.execute).toHaveBeenCalledTimes(sends);
+        expect(f.effects[0]).toMatchObject({ status: "intended", draft: { state: "pending" } });
+        expect(lastCard(f).draft?.failure).toEqual({ reason: "Check Gmail before trying again." });
+        await f.run();
+        expect(f.execute).toHaveBeenCalledTimes(sends);
+      });
+
+      it("shows the card again, disconnected, when the app is gone, sending nothing", async () => {
+        const f = await drafted();
+        approve(f.effects[0]!);
+        f.disconnect();
+        f.setCalls([]);
+        await f.run();
+        expect(f.execute).not.toHaveBeenCalled();
+        expect(f.effects[0]!.status).toBe("intended");
+        expect(lastCard(f).draft?.failure).toEqual({
+          reason: "Gmail is disconnected.",
+          disconnected: true,
+        });
+      });
+
+      it("ends Not sent when the run stops after Send, before it left", async () => {
+        const f = await drafted();
+        approve(f.effects[0]!);
+        const { id, spaceId, threadId, botId } = f.runRow;
+        await settleCancelledRunCards(
+          {
+            prisma: {
+              ...f.prisma,
+              run: { findMany: async () => [{ id, spaceId, threadId, botId }] },
+            },
+            events: f.events,
+            sessionLog: f.log.sessionLog,
+          } as never,
+          [id],
+        );
+        expect(f.execute).not.toHaveBeenCalled();
+        expect(f.effects[0]).toMatchObject({ status: "denied", draft: { state: "unsent" } });
+        expect(f.log.drafts.filter((entry) => entry.type === "effect.applied")).toEqual([
+          expect.objectContaining({ payload: { target: "card-entry", failed: true } }),
+        ]);
+      });
+
+      it("tells the bot's next call that the user discarded the draft", async () => {
+        const f = await drafted();
+        f.effects[0]!.status = "denied";
+        f.effects[0]!.draft = { ...(f.effects[0]!.draft as DraftRecord), state: "discarded" };
+        f.setCalls([{ args: send, executionId: "c2" }]);
+        await f.run();
+        expect(f.execute).not.toHaveBeenCalled();
+        expect(f.results.at(-1)).toEqual({
+          ok: false,
+          discarded: true,
+          note: "The user discarded this draft. Do not send it again unless they ask.",
+        });
+      });
     });
   });
 });

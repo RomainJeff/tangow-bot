@@ -1,5 +1,5 @@
 import type { AgentToolExecutionResult } from "@rakazo/adapter-kit";
-import { refusedProposalResult } from "@rakazo/core";
+import { DRAFT_DISCARDED_NOTE, readDraft, refusedProposalResult } from "@rakazo/core";
 
 export type ApprovalPausedToolResult = AgentToolExecutionResult & { terminate: true };
 
@@ -348,6 +348,12 @@ export type ExternalEffectStore = {
   };
 };
 
+export const DRAFT_DISCARDED_RESULT = {
+  ok: false,
+  discarded: true,
+  note: DRAFT_DISCARDED_NOTE,
+} as const;
+
 /** A cancelled card is a decision, not a failure: the bot is told once and must not retry. */
 export const SPAWN_BOT_CANCELLED_RESULT = {
   ok: false,
@@ -356,13 +362,16 @@ export const SPAWN_BOT_CANCELLED_RESULT = {
 } as const;
 
 export function resolveDuplicateEffectGate(
-  effect: { status: string; result?: unknown; kind?: string },
+  effect: { status: string; result?: unknown; kind?: string; draft?: unknown },
   toolName: string,
 ): DuplicateEffectGate {
   if (effect.status === "completed") {
     return { action: "return", result: effect.result ?? { duplicate: true } };
   }
   if (effect.status === "denied") {
+    if (readDraft(effect.status, effect.draft)?.state === "discarded") {
+      return { action: "return", result: { ...DRAFT_DISCARDED_RESULT } };
+    }
     return {
       action: "return",
       result:

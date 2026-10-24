@@ -1,8 +1,10 @@
 import type { AskDraft, MessageBlock } from "@rakazo/contracts";
 import type { RoutineCard } from "@rakazo/core";
 import {
+  askDraftDetail,
   CARD_VALUE_MAX_LENGTH,
   isWholeField,
+  LINE_BREAKS,
   redactSecrets,
   routineCardBlock,
   spawnBotApprovalBlock,
@@ -12,8 +14,6 @@ import type { ConnectorAction } from "./connector-actions.js";
 const MAX_APPROVAL_SUMMARY_LENGTH = 500;
 const MAX_APPROVAL_DETAIL_LENGTH = 4_000;
 const LONG_APPROVAL_VALUE_LENGTH = 500;
-// Continuation lines are indented so a line written inside a value cannot pass for a field.
-const LINE_BREAKS = /\r\n|[\n\v\f\r\u0085\u2028\u2029]/g;
 
 export function buildApprovalAskBlock(
   effectId: string,
@@ -65,7 +65,7 @@ export function buildApprovalAskBlock(
       ),
       MAX_APPROVAL_SUMMARY_LENGTH,
     ),
-    detail: draft ? draftDetail(draft) : shownDetail,
+    detail: draft ? askDraftDetail(draft) : shownDetail,
     status: "pending",
     actions: draft
       ? [
@@ -95,19 +95,6 @@ function redactDraft(draft: AskDraft, secrets: string[]): AskDraft {
     subject: draft.subject === undefined ? undefined : redactSecrets(draft.subject, secrets),
     body: redactSecrets(draft.body, secrets),
   };
-}
-
-function draftDetail(draft: AskDraft): string {
-  const lines = draft.app.account ? [`from: ${draft.app.account}`] : [];
-  for (const role of ["to", "cc", "bcc"] as const) {
-    const addresses = draft.recipients.filter((recipient) => recipient.role === role);
-    if (addresses.length) {
-      lines.push(`${role}: ${addresses.map((recipient) => recipient.address).join(", ")}`);
-    }
-  }
-  if (draft.subject) lines.push(`subject: ${draft.subject.replace(LINE_BREAKS, "\n  ")}`);
-  lines.push("body:", `  ${draft.body.replace(LINE_BREAKS, "\n  ")}`);
-  return lines.join("\n");
 }
 
 function describeApprovalAction(toolName: string, args: Record<string, unknown>): string {
