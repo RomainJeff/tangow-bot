@@ -873,7 +873,7 @@ function Thread() {
         // A group has no bot actions: a plain title, so iOS never draws it as a disabled control.
         if (inGroup || !botId) {
           return (
-            <View accessibilityLabel={displayName || t("Thread")} style={titleStyle}>
+            <View accessible accessibilityLabel={displayName || t("Thread")} style={titleStyle}>
               {title}
             </View>
           );

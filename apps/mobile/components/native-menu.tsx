@@ -30,7 +30,7 @@ type NativeMenuProps = {
   /** Replaces the Android action sheet, for a trigger that keeps its own dialog there. */
   onAndroidOpen?: () => void;
   style?: PressableProps["style"];
-  /** Android only: widens the touch target like the Pressable it replaces. */
+  /** Android only: widens the touch target. */
   hitSlop?: PressableProps["hitSlop"];
   accessibilityLabel?: string;
   accessibilityValue?: string;
