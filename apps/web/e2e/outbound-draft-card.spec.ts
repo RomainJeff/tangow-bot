@@ -241,7 +241,13 @@ for (const width of [1440, 390]) {
     await expect(header).toContainText("Not sent");
     await expect(draftCard.getByText("Mail is disconnected.", { exact: true })).toBeVisible();
     await expect(text).toHaveValue(EDITED);
+    await expect(button("Try again")).toHaveCount(0);
     await shoot(page, testInfo, "not-sent");
+    await button("Reconnect Mail").click();
+    const integrations = page.getByRole("dialog");
+    await expect(integrations.getByRole("button", { name: "Close integrations" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(integrations).toHaveCount(0);
     onAnswer = () => drafts.push(...sentAfter(botId, "draft-card-again", EDITED));
     await button("Try again").click();
     await expect(draftCard.getByText(/^Sent to /)).toBeVisible();

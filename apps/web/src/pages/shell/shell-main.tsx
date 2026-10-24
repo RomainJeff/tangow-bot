@@ -208,6 +208,7 @@ export function ShellMain({
               onBotChanged={refreshBots}
               onAddRoutine={addSkillRoutine}
               onOpenSkill={inGroup ? undefined : openSkill}
+              onOpenIntegrations={() => overlays.setCustomizeOpen(true)}
               voiceReady={Boolean(voiceStatus?.ready)}
               speakingMessageId={voice.speakingMessageId}
               onSpeak={voice.speakMessage}

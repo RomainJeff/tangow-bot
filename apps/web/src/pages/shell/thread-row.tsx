@@ -61,6 +61,8 @@ export type RowContext = {
   onBotChanged: () => Promise<void>;
   onAddRoutine: (name: string, prompt: string) => void;
   onOpenSkill?: (skill: SkillSourceBlock) => void;
+  /** Opens the integrations screen, where a disconnected app is reconnected. */
+  onOpenIntegrations?: () => void;
   messageOfEntry: (entryId: string) => MessageItem | undefined;
 };
 
@@ -444,6 +446,7 @@ function EffectCard({ item, context }: { item: ItemOf<"effect">; context: RowCon
       canAnswer={Boolean(answer)}
       viewerUserId={context.viewerUserId}
       onAnswer={answer ?? noAnswer}
+      onReconnect={context.onOpenIntegrations}
       messageId={item.id}
       botId={item.botId}
     />

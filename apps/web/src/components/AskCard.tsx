@@ -155,6 +155,7 @@ export function AskCard({
   onAnswer,
   messageId,
   botId,
+  onReconnect,
 }: {
   block: AskBlock;
   canAnswer: boolean;
@@ -164,6 +165,8 @@ export function AskCard({
   messageId: string;
   /** The bot that posted the card, whose page a routine card links to. */
   botId?: string;
+  /** Opens where a disconnected app is reconnected, for a mail draft that could not leave. */
+  onReconnect?: () => void;
 }) {
   const { t } = useLingui();
   const fieldId = useId();
@@ -208,6 +211,7 @@ export function AskCard({
         canAnswer={canAnswer}
         viewerUserId={viewerUserId}
         onAnswer={onAnswer}
+        onReconnect={onReconnect}
         messageId={messageId}
       />
     );
