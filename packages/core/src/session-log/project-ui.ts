@@ -374,7 +374,7 @@ export function projectThread(entries: readonly ThreadEntry[]): ProjectedThread 
         break;
       }
       case "effect.applied": {
-        const { target, routineId, change, failed, sent } = segment.payload;
+        const { target, routineId, change, failed, sent, failure } = segment.payload;
         const slot = cards.get(target)?.find((slot) => cardOf(slot)?.kind === "ask");
         const block = slot && cardOf(slot);
         if (slot && block?.kind === "ask") {
@@ -385,7 +385,15 @@ export function projectThread(entries: readonly ThreadEntry[]): ProjectedThread 
               : {}),
             ...(change ? { confirms: change } : {}),
             ...(failed ? { failed } : {}),
-            ...(sent && block.draft ? { draft: { ...block.draft, sent } } : {}),
+            ...(block.draft && (sent || failure)
+              ? {
+                  draft: {
+                    ...block.draft,
+                    ...(sent ? { sent } : {}),
+                    ...(failure ? { failure } : {}),
+                  },
+                }
+              : {}),
           });
         }
         showWith(segment, target);

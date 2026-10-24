@@ -355,6 +355,8 @@ const EntryShapes = z.discriminatedUnion("type", [
       failed: z.literal(true).optional(),
       /** A mail draft left: when, and whether the user changed its text. */
       sent: z.object({ at: z.string(), edited: z.boolean() }).optional(),
+      /** Why a mail draft the run stopped while sending may not have left. */
+      failure: z.object({ reason: z.string() }).optional(),
     }),
   ),
   /**

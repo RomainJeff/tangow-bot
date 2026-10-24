@@ -5165,13 +5165,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
             orderBy: APPROVED_EFFECT_REPLAY_ORDER,
           });
           const exposed = new Set(tools.map((tool) => tool.name));
-          const interrupted = (app: string) => ({ reason: `Check ${app} before trying again.` });
           const sent: unknown[] = [];
           for (const effect of effects) {
             const draft = readDraft(effect.status, effect.draft);
             if (!draft) continue;
             if (effect.status === "executing") {
-              await reRequestDraft(effect, draft, interrupted);
+              await reRequestDraft(effect, draft, interruptedSend);
               return undefined;
             }
             const call = approvedReplayModelCall(effect, exposed);
@@ -5210,7 +5209,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               await reRequestDraft(
                 after,
                 draft,
-                reason === undefined ? interrupted : () => ({ reason }),
+                reason === undefined ? interruptedSend : () => ({ reason }),
               );
               return undefined;
             }
@@ -7881,27 +7880,39 @@ async function failStrandedRoutineCards(
   target: { spaceId: string; threadId: string; botId: string; runId: string },
 ): Promise<void> {
   const stranded = await deps.prisma.externalEffect.findMany({
-    where: { runId: target.runId, status: "approved" },
+    where: { runId: target.runId, status: { in: ["approved", "executing"] } },
     select: { id: true, kind: true, status: true, draft: true },
   });
   for (const { id, kind, status, draft } of stranded) {
     const unsent = readDraft(status, draft);
+    if (!unsent && status !== "approved") continue;
     const settled = unsent
       ? (
           await deps.prisma.externalEffect.updateMany({
-            where: { id, status: "approved" },
+            where: { id, status },
             data: { status: "denied", draft: { ...unsent, state: "unsent" } },
           })
         ).count === 1
       : (PROPOSAL_EFFECT_KINDS as string[]).includes(kind) &&
         (await completeExternalEffect(deps.prisma, id, "approved", ROUTINE_NOT_CREATED_RESULT));
-    if (settled) await settleRoutineCard(deps, target, id, { failed: true });
+    // A draft stopped mid-send may have left: the card asks the user to check, never resends.
+    if (settled) {
+      await settleRoutineCard(deps, target, id, {
+        failed: true,
+        ...(status === "executing" ? { interrupted: true as const } : {}),
+      });
+    }
   }
 }
 
 type RoutineCardOutcome =
   | { routine: CreatedRoutine; change: "created" | "updated"; failed?: never }
-  | { failed: true };
+  | { failed: true; interrupted?: true };
+
+/** Why a draft that may have left is shown Not sent. */
+function interruptedSend(app: string): DraftFailure {
+  return { reason: `Check ${app} before trying again.` };
+}
 
 /**
  * Records what came of an approved routine card: the routine it links to, or the failure.
@@ -7922,9 +7933,11 @@ async function settleRoutineCard(
           type: "effect.requested",
           payload: { path: ["effectId"], equals: effectId },
         },
-        select: { id: true },
+        select: { id: true, payload: true },
       });
       if (!card) return null;
+      const app = AskBlock.safeParse((card.payload as { card?: unknown } | null)?.card).data?.draft
+        ?.app.name;
       await appendCardStateInTransaction(
         tx,
         {
@@ -7933,7 +7946,10 @@ async function settleRoutineCard(
           payload: {
             target: EntryId.parse(card.id),
             ...(outcome.failed
-              ? { failed: true }
+              ? {
+                  failed: true,
+                  ...(outcome.interrupted ? { failure: interruptedSend(app ?? "the app") } : {}),
+                }
               : { routineId: outcome.routine.id, change: outcome.change }),
           },
         },

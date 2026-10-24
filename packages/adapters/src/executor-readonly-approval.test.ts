@@ -1013,9 +1013,17 @@ describe("connector read-only metadata and approval enforcement", () => {
         });
       });
 
-      it("ends Not sent when the run stops after Send, before it left", async () => {
+      it.each([
+        ["after Send, before it left", "approved", { failed: true }],
+        [
+          "while it was sending",
+          "executing",
+          { failed: true, failure: { reason: "Check Gmail before trying again." } },
+        ],
+      ])("ends Not sent when the run stops %s, never sending it", async (_, status, settled) => {
         const f = await drafted();
         approve(f.effects[0]!);
+        f.effects[0]!.status = status;
         const { id, spaceId, threadId, botId } = f.runRow;
         await settleCancelledRunCards(
           {
@@ -1031,7 +1039,7 @@ describe("connector read-only metadata and approval enforcement", () => {
         expect(f.execute).not.toHaveBeenCalled();
         expect(f.effects[0]).toMatchObject({ status: "denied", draft: { state: "unsent" } });
         expect(f.log.drafts.filter((entry) => entry.type === "effect.applied")).toEqual([
-          expect.objectContaining({ payload: { target: "card-entry", failed: true } }),
+          expect.objectContaining({ payload: { target: "card-entry", ...settled } }),
         ]);
       });
 

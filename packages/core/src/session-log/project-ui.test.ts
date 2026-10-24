@@ -1380,6 +1380,27 @@ describe("a mail draft card", () => {
     };
   };
 
+  it("ends Not sent with its reason when the run stopped while sending", () => {
+    const stopped = linkEntries("s", [
+      requested(card),
+      sent,
+      {
+        type: "effect.applied",
+        payload: {
+          target: "s-0",
+          failed: true,
+          failure: { reason: "Check Gmail before trying again." },
+        },
+      },
+    ]);
+    const [item] = projectThread(stopped).items.filter((entry) => entry.kind === "effect");
+    const shown = item?.kind === "effect" ? item.card : undefined;
+    expect(shown && [askDraftState(shown), shown.draft?.failure]).toEqual([
+      "not_sent",
+      { reason: "Check Gmail before trying again." },
+    ]);
+  });
+
   it("stays one card from Send to Not sent to Sent, waiting on its newest request", () => {
     expect(cardsOf(1)).toEqual({
       states: ["pending"],
