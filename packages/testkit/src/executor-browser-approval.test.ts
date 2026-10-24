@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import type { AdapterContext, ComputerRef, SandboxProvider } from "@rakazo/adapter-kit";
-import { ManagedSandboxEmulator } from "@rakazo/adapters";
+import { E2BSandboxEmulator } from "@rakazo/adapters";
 import { HARNESSES } from "@rakazo/agent-run-worker";
 import { afterEach, expect, it, vi } from "vitest";
 import { dockerE2BMachine } from "../../adapters/src/e2b-machine.test-support.js";
@@ -42,7 +42,7 @@ it.skipIf(process.env.VERIFY_DOCKER_TEAM_SCREENS !== "1")(
     let actions: Array<{ kind: "fill" | "click"; ref: string; text?: string }> = [];
     const releases: string[] = [];
     const effects: unknown[] = [];
-    class Computer extends ManagedSandboxEmulator {
+    class Computer extends E2BSandboxEmulator {
       async pageBrowser(...args: Parameters<NonNullable<SandboxProvider["pageBrowser"]>>) {
         const result = await page.pageBrowser(...args);
         if (args[1].command === "snapshot") {
