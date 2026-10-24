@@ -1,11 +1,11 @@
 import { useLingui } from "@lingui/react/macro";
-import type { AskDraft } from "@rakazo/contracts";
+import type { AskDraft, AskDraftEdits } from "@rakazo/contracts";
 import { ASK_DRAFT_TEXT_MAX_LENGTH } from "@rakazo/contracts";
 import type { DraftCard as DraftCardBlock, DraftLocal } from "@rakazo/core";
 import {
   DRAFT_UNDO_MS,
-  draftAddresses,
   draftCardView,
+  draftChanges,
   draftPrimaryAction,
   draftSentTo,
 } from "@rakazo/core";
@@ -18,6 +18,7 @@ import { draftEdits } from "../lib/draft-edits";
 import { messageTimeLabel } from "../lib/message-time";
 import { userInitials } from "../lib/user-initials";
 import type { CardEdits } from "./AskCard";
+import { RecipientLine, SubjectLine } from "./DraftLines";
 
 const ROLES = ["to", "cc", "bcc"] as const;
 
@@ -97,8 +98,10 @@ export function DraftCard({
 }) {
   const { t, i18n } = useLingui();
   const { draft } = block;
-  const [edit, setEdit] = useState(() => draftEdits.get(messageId) ?? null);
+  const [edit, setEdit] = useState<AskDraftEdits>(() => draftEdits.get(messageId) ?? {});
   const [focused, setFocused] = useState(false);
+  // Lines whose field holds text that is not an address: Send would leave it behind.
+  const [invalidLines, setInvalidLines] = useState<ReadonlySet<string>>(new Set());
   const [pending, setPending] = useState<DraftLocal["pending"]>(null);
   const [error, setError] = useState<string | null>(null);
   const [reconnectOpened, setReconnectOpened] = useState(false);
@@ -107,28 +110,41 @@ export function DraftCard({
   const discardTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const commitDiscardRef = useRef<() => void>(() => undefined);
 
-  const text = edit ?? draft.body;
-  const edited = text !== draft.body;
+  const text = edit.text ?? draft.body;
+  const recipients = edit.recipients ?? draft.recipients;
+  const changes = draftChanges(draft, edit);
+  const edited = Object.keys(changes).length > 0;
   const owner = !draft.owner || draft.owner.userId === viewerUserId;
   const view = draftCardView(block, { edited, focused, pending, canAnswer, owner });
+  const sendable =
+    text.trim() !== "" &&
+    recipients.some((recipient) => recipient.role === "to") &&
+    invalidLines.size === 0;
 
-  function keepEdit(next: string) {
-    setEdit(next);
-    draftEdits.set(messageId, next);
+  function keepEdit(next: AskDraftEdits) {
+    const merged = { ...edit, ...next };
+    setEdit(merged);
+    draftEdits.set(messageId, merged);
   }
 
   function dropEdit() {
-    setEdit(null);
+    setEdit({});
     draftEdits.delete(messageId);
   }
 
+  function keepRole(role: AskDraft["recipients"][number]["role"], addresses: string[]) {
+    const others = recipients.filter((recipient) => recipient.role !== role);
+    const next = [...others, ...addresses.map((address) => ({ role, address }))];
+    keepEdit({ recipients: ROLES.flatMap((each) => next.filter((r) => r.role === each)) });
+  }
+
   async function send() {
-    if (pending || !text.trim()) return;
+    if (pending || !sendable) return;
     setReconnectOpened(false);
     setPending("send");
     setError(null);
     try {
-      await onAnswer("allow", edited ? { text } : undefined);
+      await onAnswer("allow", edited ? changes : undefined);
       dropEdit();
     } catch (err) {
       setError(err instanceof Error ? err.message : t`Could not submit this answer`);
@@ -252,28 +268,66 @@ export function DraftCard({
   const primary = draftPrimaryAction(view.failure, reconnectOpened);
   const reason = view.failure?.disconnected ? t`${app} is disconnected.` : view.failure?.reason;
 
+  // Lines change only on a draft that records where its recipients and subject sit.
+  const fields = view.readOnly || view.sending ? undefined : draft.fields;
+  const subject = edit.subject ?? draft.subject ?? "";
+
   return (
     <FramedBlock
       data-testid="draft-card"
       header={{ ...header, status: view.status ? marks[view.status] : undefined }}
+      onFocus={(event) => setFocused(Boolean(event.target.closest("[data-draft-field]")))}
+      onBlur={(event) => {
+        const next = event.relatedTarget;
+        if (!(next instanceof Element && next.closest("[data-draft-field]"))) setFocused(false);
+      }}
       question={
         <div className="flex flex-col gap-1">
           {ROLES.map((role) => {
-            const addresses = draftAddresses(draft, role);
-            if (!addresses) return null;
+            const addresses = recipients
+              .filter((recipient) => recipient.role === role)
+              .map((recipient) => recipient.address);
+            const room = fields?.[role];
+            if (room !== undefined) {
+              return (
+                <RecipientLine
+                  key={role}
+                  label={roleLabel[role]}
+                  addresses={addresses}
+                  room={room}
+                  strong={role === "to"}
+                  onChange={(next) => keepRole(role, next)}
+                  onInvalidChange={(invalid) =>
+                    setInvalidLines((current) => {
+                      const next = new Set(current);
+                      if (invalid) next.add(role);
+                      else next.delete(role);
+                      return next;
+                    })
+                  }
+                />
+              );
+            }
+            if (!addresses.length) return null;
             return (
               <p
                 key={role}
                 className={role === "to" ? "break-words" : "break-words text-body font-normal"}
               >
                 <span className="font-normal text-muted-foreground">{roleLabel[role]}</span>{" "}
-                {addresses}
+                {addresses.join(", ")}
               </p>
             );
           })}
-          {draft.subject ? (
+          {fields?.subject ? (
+            <SubjectLine
+              label={t`Subject`}
+              subject={subject}
+              onChange={(next) => keepEdit({ subject: next })}
+            />
+          ) : subject ? (
             <p className="break-words text-body font-normal">
-              <span className="text-muted-foreground">{t`Subject`}</span> {draft.subject}
+              <span className="text-muted-foreground">{t`Subject`}</span> {subject}
             </p>
           ) : null}
         </div>
@@ -317,7 +371,7 @@ export function DraftCard({
                 variant="capsule"
                 size="capsule"
                 consequential
-                disabled={view.sending || !text.trim()}
+                disabled={view.sending || !sendable}
                 onClick={() => void send()}
               >
                 {view.sending ? t`Sending…` : primary === "try_again" ? t`Try again` : t`Send`}
@@ -335,14 +389,13 @@ export function DraftCard({
             </p>
           ) : (
             <Textarea
+              data-draft-field
               aria-label={t`Edit message`}
               dir="auto"
               value={text}
               readOnly={view.sending}
               maxLength={ASK_DRAFT_TEXT_MAX_LENGTH}
-              onChange={(event) => keepEdit(event.target.value)}
-              onFocus={() => setFocused(true)}
-              onBlur={() => setFocused(false)}
+              onChange={(event) => keepEdit({ text: event.target.value })}
               className="min-h-0 w-auto min-w-0 flex-1 resize-none rounded-card border-0 bg-well px-4 py-3 text-body text-foreground duration-(--duration-hover) ease-quiet read-only:text-muted-foreground hover:ring-1 hover:ring-option-ring-hover focus-visible:ring-selected focus-visible:ring-foreground md:text-body dark:bg-well"
             />
           )}

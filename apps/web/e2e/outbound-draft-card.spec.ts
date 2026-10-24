@@ -93,7 +93,12 @@ function waitingDraft(botId: string): EntryDraft[] {
 }
 
 /** What the server logs once a Send left: the edited card, the approval, the sent mail. */
-function sentAfter(botId: string, target: string, body: string): EntryDraft[] {
+function sentAfter(
+  botId: string,
+  target: string,
+  body: string,
+  draft: Record<string, unknown> = {},
+): EntryDraft[] {
   return [
     {
       id: `${target}-edited`,
@@ -101,7 +106,7 @@ function sentAfter(botId: string, target: string, body: string): EntryDraft[] {
       type: "effect.edited",
       botId,
       runId: RUN,
-      payload: { effectId: EFFECT, proposal: {}, card: card({}, { body }) },
+      payload: { effectId: EFFECT, proposal: {}, card: card({}, { body, ...draft }) },
     },
     resolved(botId, `${target}-approved`, 12, "approved"),
     {
@@ -379,3 +384,105 @@ test("a discard still reaches its own thread when the person moves to another on
       answer: "deny",
     });
 });
+
+/** A draft that records where its recipients and subject sit: every line is offered for editing. */
+const fielded = card(
+  {},
+  {
+    recipients: [
+      { role: "to", address: "bo@example.com" },
+      { role: "to", address: "cy@example.com" },
+    ],
+    fields: { to: null, cc: null, bcc: null, subject: true },
+  },
+);
+
+for (const width of [1440, 390]) {
+  test(`a mail draft's recipients and subject are edited in place and leave as shown (${width})`, async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(90_000);
+    await page.setViewportSize({ width, height: 900 });
+    await signup(
+      page,
+      `outbound-fields-${width}-${Date.now()}@rakazo.test`,
+      "password12",
+      "Ana Lima",
+    );
+    await completeOnboarding(page);
+    const botId = activeBotId(page);
+    const drafts = [
+      ...waitingDraft(botId).slice(0, -1),
+      requested(botId, "draft-card", 11, fielded),
+    ];
+    let onAnswer: () => void = () => undefined;
+    const answered = await answerRpc(page, "answer", () => {
+      onAnswer();
+      return { ok: true };
+    });
+    await showThread(page, drafts, { run: null });
+
+    const draftCard = page.getByTestId("draft-card");
+    const header = draftCard.locator('[data-slot="framed-block-header"]');
+    const send = draftCard.getByRole("button", { name: "Send", exact: true });
+    const to = draftCard.getByRole("textbox", { name: "To", exact: true });
+    const cc = draftCard.getByRole("textbox", { name: "Cc", exact: true });
+    const subject = draftCard.getByRole("textbox", { name: "Subject", exact: true });
+
+    // At rest: the addresses as text, a Cc and a Bcc the send accepts offered empty, no state.
+    // An empty line shows no example address, which would read as a recipient.
+    await expect(draftCard.getByText("bo@example.com,", { exact: true })).toBeVisible();
+    await expect(cc).toHaveValue("");
+    await expect(draftCard.getByRole("textbox", { name: "Bcc", exact: true })).toBeVisible();
+    await expect(subject).toHaveValue("Thursday instead of Wednesday");
+    await expect(draftCard.locator('[data-slot="framed-block-status"]')).toHaveCount(0);
+    const remove = draftCard.getByRole("button", { name: "Remove cy@example.com", exact: true });
+    await expect(remove).toHaveCSS("opacity", "0");
+
+    // A hovered line offers each address's remove button; a typed address joins the line.
+    await draftCard.getByText("cy@example.com", { exact: true }).hover();
+    await remove.click();
+    await expect(header).toContainText("Editing");
+    await to.fill("ana@example.com");
+    await to.press("Enter");
+    await expect(draftCard.getByText("ana@example.com", { exact: true })).toBeVisible();
+
+    // What is not an address stays in the field, marked, and Send waits for it.
+    await cc.fill("dee at partners");
+    await expect(cc).toHaveAttribute("aria-invalid", "true");
+    await expect(send).toBeDisabled();
+    await cc.fill("dee@partners.example.com,");
+    await expect(cc).toHaveValue("");
+    await expect(send).toBeEnabled();
+    await subject.fill("Friday instead of Wednesday");
+    await shoot(page, testInfo, "fields-editing");
+    await subject.blur();
+    await expect(header).toContainText("Edited");
+    await shoot(page, testInfo, "fields-edited");
+
+    // Send carries the whole list and the subject; the card then names who it left for.
+    const recipients = [
+      { role: "to", address: "bo@example.com" },
+      { role: "to", address: "ana@example.com" },
+      { role: "cc", address: "dee@partners.example.com" },
+    ];
+    onAnswer = () =>
+      drafts.push(
+        ...sentAfter(botId, "draft-card", BODY, {
+          recipients,
+          subject: "Friday instead of Wednesday",
+        }),
+      );
+    await send.click();
+    await expect(draftCard).toHaveAttribute("data-answered", "true");
+    expect(answered.body).toMatchObject({
+      messageId: "draft-card",
+      answer: "allow",
+      edits: { recipients, subject: "Friday instead of Wednesday" },
+    });
+    expect(Object.keys(answered.body?.edits ?? {})).toEqual(["recipients", "subject"]);
+    await expect(
+      draftCard.getByText(/^Sent to bo@example\.com, ana@example\.com · \d/),
+    ).toBeVisible();
+  });
+}

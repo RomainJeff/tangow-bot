@@ -44,6 +44,24 @@ describe("editedWaitingDraft", () => {
     });
   });
 
+  it("hands edited recipients and subject with the text the card shows", () => {
+    const recipients = [{ role: "to" as const, address: "paul@example.com" }];
+    expect(
+      editedWaitingDraft(waitingOn(pendingDraft), () => ({ recipients, subject: "Friday" })),
+    ).toEqual({
+      itemId: "card-1",
+      draft: {
+        messageId: "asked-again-2",
+        text: "Thursday instead?",
+        recipients,
+        subject: "Friday",
+      },
+    });
+    expect(
+      editedWaitingDraft(waitingOn(pendingDraft), () => ({ recipients: draft.recipients })),
+    ).toBeUndefined();
+  });
+
   it("replaces nothing for the bot's own text, an untouched card or a card that is not a draft", () => {
     expect(editedWaitingDraft(waitingOn(pendingDraft), () => "Thursday instead?")).toBeUndefined();
     expect(editedWaitingDraft(waitingOn(pendingDraft), () => undefined)).toBeUndefined();

@@ -1,7 +1,7 @@
 import { t } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { ChatMarkdown } from "@rakazo/chat-ui/web";
-import type { ThreadMessage } from "@rakazo/contracts";
+import type { AskDraftEdits, ThreadMessage } from "@rakazo/contracts";
 import { BOT_NAME_MAX_LENGTH, SPAWN_BOT_INSTRUCTIONS_MAX_LENGTH } from "@rakazo/contracts";
 import {
   askFormOf,
@@ -27,8 +27,8 @@ const DETAIL_CLASS =
 const FIELD_CLASS = "rounded-card border-border bg-well px-3 dark:bg-well";
 
 export type AskBlock = Extract<ThreadMessage["blocks"][number], { kind: "ask" }>;
-/** What a card's owner changed before Send: a Create bot card's fields, or a mail draft's text. */
-export type CardEdits = NonNullable<ReturnType<typeof spawnBotEdits>> | { text: string };
+/** What a card's owner changed before Send: a Create bot card's fields, or a mail draft's message. */
+export type CardEdits = NonNullable<ReturnType<typeof spawnBotEdits>> | AskDraftEdits;
 
 /** The field a server refusal is about, from its text; both when it cannot be told. */
 function invalidBotFields(error: string | null): { name: boolean; instructions: boolean } {
