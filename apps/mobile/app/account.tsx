@@ -19,6 +19,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAvatarStyle } from "../components/avatar-style";
 import { BotAvatar } from "../components/bot-avatar";
+import { NativeMenu } from "../components/native-menu";
 import { ServerSheet } from "../components/server-sheet";
 import { UserAvatar } from "../components/user-avatar";
 import { setDisplayAgentSteps, useDisplayAgentSteps } from "../lib/agent-steps-pref";
@@ -53,8 +54,7 @@ import {
   openPromotedNotificationSettings,
   setLiveNotificationSettings,
 } from "../lib/live-notifications";
-import { presentMessageActionSheet } from "../lib/message-action-sheet";
-import { native, useResolvedAppearance, useThemedStyles } from "../lib/native";
+import { native, useThemedStyles } from "../lib/native";
 import {
   PROFILE_PHOTO_SIZE,
   profilePhotoDataUrl,
@@ -68,7 +68,6 @@ import { ACCOUNT_UI_LOCALES, UI_LOCALE_LABELS } from "../lib/ui-locale";
 /** Render account settings, including the entry point for voice configuration. */
 export default function Account() {
   const { t, locale } = useI18n();
-  const colorScheme = useResolvedAppearance();
   const router = useRouter();
   const { focus } = useLocalSearchParams<{ focus?: string }>();
   const [me, setMe] = useState<MobileMe | null>(null);
@@ -234,20 +233,6 @@ export default function Account() {
       .finally(() => setLocaleSaving(false));
   }
 
-  function openLanguagePicker() {
-    if (localeSaving) return;
-    presentMessageActionSheet({
-      title: t("Language"),
-      actions: ACCOUNT_UI_LOCALES.map((code) => ({
-        text: UI_LOCALE_LABELS[code],
-        onPress: () => applyLocale(code),
-      })),
-      colorScheme,
-      cancel: t("Cancel"),
-      more: t("More"),
-    });
-  }
-
   async function handleDeletion() {
     setPending(true);
     setError(null);
@@ -365,13 +350,17 @@ export default function Account() {
           {avatarError ? <Text style={styles.error}>{avatarError}</Text> : null}
         </View>
 
-        <Pressable
-          accessibilityRole="button"
+        <NativeMenu
+          title={t("Language")}
           accessibilityLabel={t("Language")}
-          accessibilityValue={{ text: UI_LOCALE_LABELS[locale] }}
-          accessibilityState={{ disabled: localeSaving }}
+          accessibilityValue={UI_LOCALE_LABELS[locale]}
           disabled={localeSaving}
-          onPress={openLanguagePicker}
+          options={ACCOUNT_UI_LOCALES.map((code) => ({
+            value: code,
+            label: UI_LOCALE_LABELS[code],
+          }))}
+          selected={locale}
+          onSelect={(code) => applyLocale(code as AccountUiLocale)}
           style={({ pressed }) => [
             styles.settingsButton,
             pressed && styles.pressed,
@@ -383,7 +372,7 @@ export default function Account() {
             <Text style={styles.settingsValue}>{UI_LOCALE_LABELS[locale]}</Text>
             <Text style={styles.chevron}>›</Text>
           </View>
-        </Pressable>
+        </NativeMenu>
         {localeError ? <Text style={styles.error}>{localeError}</Text> : null}
 
         {Platform.OS === "android" ? (
