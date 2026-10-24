@@ -33,68 +33,68 @@ P5 token and cache measurements (S2)
 
 The runner is the `measure` command of packages/testkit/src/cli/worker-live.ts. It drives the
 protocol of native-harness-decisions.md ("P5 measurements") through the production executor,
-worker routing, E2B worker provider, pi-native guest and model relay. Each model request is
-recorded from the relay's agent.worker.model_request event: input, cache read, cache write and
-output tokens, prompt bytes, bytes shared with the previous request, first divergent section.
+worker routing, pi-native guest and model relay, and records every model request from the
+relay's agent.worker.model_request event. Each receipt's `method` block defines every figure.
+  worker-live measure-summary --in <receipt> --out <receipt>
+recomputes a receipt's method and summary from its own raw threads; every committed receipt
+was rendered this way at the source that commits it.
 
-Scenarios, one fresh controller database and thread each, one thread at a time:
+Scenarios, each thread on a fresh controller database, bot and thread:
   chain       short exchanges in one thread, separated by each --gaps value, order rotated per trial
   computer    a browser task on the bot's computer, then a short follow-up
   approval    a note publication that waits on approval, granted after each --approval-delays value
   compaction  three large exchanges, the thread's history.compact job, then two short exchanges
-Each trial runs every model, rotating which goes first. The deployment's owned sandboxes and
-volumes are swept after every thread, in a finally, and the count left is in the receipt.
-
-The receipt also gives, per model and scenario, the list-priced cost of the measured stable
-projection and an estimate of one persistent native session built from the same requests
-(no persistent arm is run). The estimate is generous to the persistent session. If it is cheaper
-by 15% or more, buildPersistentArm is true and a real persistent arm is built outside P5.
-It also gives the restore latency after an approval outside provisioning, and the controller time
-and database queries of each native transcript append.
 
 Model
-  Provider opencode-go through the user's model connection, a plain key on the catalog provider,
-  as the product bills it. There is no provider- or model-specific variable.
-  --models takes catalog patterns where * stands for a dotted version; the newest match wins.
-  With the installed pi-ai 1.3.0, glm-*-flash resolves to glm-5.3-flash (openai-completions,
-  cache-read price only) and gpt-*-luna to gpt-6-luna (openai-responses, cache-read and
-  cache-write prices). Both use the catalog base URL https://opencode.ai/inference/go/v1; a
-  smoke request confirmed gpt-6-luna on its /v1/responses route. Each request's reported cache
-  read and write tokens are recorded, and each model's cache mode is summarized as observed.
-  This model pair is the maintainer's choice and replaces the decisions document's "one explicit
-  and one automatic provider". gpt-6-luna replaced DeepSeek V4.1 Flash, which requires the
-  workspace's Global region setting.
+  Provider opencode-go through the user's model connection, a plain key on the catalog provider.
+  No provider- or model-specific variable. --models takes catalog patterns where * stands for a
+  dotted version; the newest match wins. With pi-ai 1.3.0, glm-*-flash resolves to glm-5.3-flash
+  (openai-completions) and gpt-*-luna to gpt-6-luna (openai-responses), both on the catalog base
+  URL https://opencode.ai/inference/go/v1; a smoke request confirmed gpt-6-luna on /v1/responses.
+  gpt-6-luna replaced DeepSeek V4.1 Flash, which requires the workspace's Global region setting.
+  The pair is the maintainer's choice and replaces the decisions document's "one explicit and one
+  automatic provider".
+
+Key
+  The key sits alone in a private file outside any git work tree, named by RAKAZO_MODEL_KEY_FILE.
+  The runner refuses a file inside a work tree and never prints the key or its path. On the
+  deployment host the key travelled over ssh stdin to a private descriptor of the controller
+  process only (RAKAZO_MODEL_KEY_FILE=/dev/fd/3); the I1 wrapper reads stdin itself, so the key
+  cannot be passed as plain stdin. It was never written to the host and never reached a VM.
 
 Offline proof (no credential, no network)
   pnpm db:generate
   HOME=<temporary directory> pnpm exec vitest run --maxWorkers=2 \
-    packages/testkit/src/worker-live/measure.test.ts
-  The catalog entry points at the local model protocol fixture for the test's lifetime. The four
-  scenarios run on the local worker provider, and the relay events become the receipt's records.
+    packages/testkit/src/worker-live/measure.test.ts packages/testkit/src/worker-channel-tap.test.ts
 
-Computerless run without E2B
+Overlapped computerless runs, local guests (token and cache counts only)
   RAKAZO_MODEL_KEY_FILE=<private key file> pnpm test:worker-live measure --worker local \
-    --scenarios <chain|approval|compaction> --trials <n> --out <scratch>/proof
-  Guests run in the controller process on one stable directory per thread; the key stays with
-  the controller's relay. One stream per model runs at once, since each model's provider cache
-  is its own.
+    --in-flight 10 --scenarios chain --trials 30 --gaps 10s,2m,6m --out <scratch>/chain
+  ... --scenarios compaction --trials 30 --gaps 10s --out <scratch>/compaction
+  ... --scenarios approval --trials 30 --gaps 10s --approval-delays 10s,6m --out <scratch>/approval
+  Both models run at once, up to 10 trials in flight each; a rate-limited thread is rerun after
+  backoff. Each thread's tool catalog carries its own nonce. Guests run in the controller process
+  on one stable directory per thread. Restore and append timings from these runs are marked not
+  comparable. Source 142143709; two earlier local attempts (serial, then overlapped without the
+  tools' position) were set aside and are not in the receipts.
 
-Live run (needs the model key and the E2B forward)
+Serial runs on the deployment host
   pnpm test:worker-live:bundle
-  Copy packages/testkit/dist/worker-live to <scratch>/live, an owned scratch directory on the
-  deployment host. Write the OpenCode Go key alone into a private file outside any git work tree
-  (mode 600). The runner refuses a key file inside a work tree, and never prints the key or its
-  path.
-  Use the existing I1 probes/i1/with-e2b.sh wrapper for the E2B variables, as for P4. Then:
-    RAKAZO_MODEL_KEY_FILE=<private key file> node <scratch>/live/bin/worker-live.mjs measure \
-      --harness pi-native --guest <scratch>/live/guest/agent-run-worker.mjs \
-      --template <worker template> --computer-template <desktop computer template> \
-      --prepare-computer --out <scratch>/proof
-  The computer scenario needs a computer template with a desktop and browser. Without one, pass
-  --scenarios chain,approval,compaction and record the missing scenario as a limit.
-  Defaults: --trials 30, --gaps 10s,2m,5m,10m, --approval-delays 10s,6m. The command prints
-  the time its waits take before it starts: about 24 hours at the defaults. Scenarios can run as
-  separate invocations with --scenarios. The receipt marks fewer than 30 trials as not comparable.
-  token-cache.json is rewritten after every thread, so an interrupted run keeps a partial receipt.
-  Copy <scratch>/proof/token-cache.json into this directory after checking it names no key,
-  endpoint, account, machine or local path.
+  Copy packages/testkit/dist/worker-live to <scratch>/live, an owned scratch directory, and run
+  through the existing I1 wrapper, with the key on descriptor 3 as above:
+    E2B_INSTALL_DIR=<compose-dir> <i1-probes>/with-e2b.sh env RAKAZO_MODEL_KEY_FILE=/dev/fd/3 \
+      node <scratch>/live/bin/worker-live.mjs measure --harness pi-native \
+      --guest <scratch>/live/guest/agent-run-worker.mjs --template i1-worker \
+      --computer-template <private computer template> --prepare-computer \
+      --computer-label "validated private N13 computer candidate" \
+      --scenarios computer --gaps 10s --trials 30 --out <scratch>/proof
+  The serial approval subset used the same command with
+      --scenarios approval --gaps 10s --approval-delays 10s --trials 10
+  The computer run used runner bundle sha256 ea0e38eb7e77b0064f2d15e0b30ee812d9e0ac7f3f3f1cd50237e1ce38f9d9b6
+  (source 59f5c6ad4); the approval subset 0a7570f07c74a6bd047363a220ec8ed3841bf36b98b563a6a9d471aa3e34806d
+  (source 674f89b31). Guest sha256 e4543af118f89472b4b723ba330d4975b9819311781e97329c5a6673254ef869 for both.
+  The receipt writer names the computer template only by --computer-label and replaces any other
+  E2B identifier, so no template, build, sandbox or volume ID reaches a receipt. Each run started
+  on an idle deployment, ran one thread at a time alternating which model went first, and swept
+  its sandboxes and volumes after every thread. An independent census after each run listed no
+  sandbox, running or paused, and no volume; the remote scratch directories were removed.

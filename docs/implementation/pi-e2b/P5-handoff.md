@@ -1,6 +1,6 @@
 # P5 durable native work handoff
 
-**Status: the offline contract and the live lanes pass. The measurements are pending.** All six native lanes passed on E2B, including the two new ones. The token measurements (S2) are not in yet, and every place that waits for them is marked `PLACEHOLDER`.
+**Status: the offline contract, the live lanes and the measurements are in.** All six native lanes passed on E2B, including the two new ones. The token measurements (S2) found no scenario where a persistent native session would save the 15 % that would justify building one.
 
 P5 makes the work of a harness with its own loop durable while the attempt runs. Before P5, the guest sent one transcript per agent at the very end of the attempt. A VM that died, a cancel, a timeout or a supersession lost every native bash the bot had already run, and the next attempt could run the same command again.
 
@@ -8,7 +8,7 @@ P5 makes the work of a harness with its own loop durable while the attempt runs.
 
 - Issue: [#199](https://github.com/RomainJeff/rakazo-bot/issues/199). The plan that replaced its pre-native items moved compaction inside an attempt to the harness, and resumption to a new attempt projected from canonical history. P5 has no Pi checkpoint.
 - S1, incremental transcripts: [#306](https://github.com/RomainJeff/rakazo-bot/pull/306), merged into `feature/pi-e2b-workers` at `455f4d743`.
-- S2, measurements: `PLACEHOLDER: S2 pull request and merge commit`.
+- S2, measurements: [#310](https://github.com/RomainJeff/rakazo-bot/pull/310). The receipts are under [evidence/P5](evidence/P5/).
 - S3, live lanes and this handoff: [#309](https://github.com/RomainJeff/rakazo-bot/pull/309). The live lanes ran at `30231d4bdb5cf55636e78d46b62275451d23665e`.
 - Predecessor: the [P4 handoff](P4-handoff.md). The controller still answers every model call through the relay, and the effect journal still owns controller tools.
 
@@ -171,7 +171,57 @@ Before this batch, the runner refused to start once and created nothing, because
 
 ## Measurements
 
-`PLACEHOLDER: S2 numbers and receipts under evidence/P5/`. The protocol is in the plan for S2: OpenCode Go with GLM 5.3 flash and DeepSeek 4.1 flash, exact model IDs in the receipt, the observed cache mode of each, one real arm with the stable projection measured by the N10 instrumentation, and the estimated cost of a persistent session. Restore outside provisioning and the cost of an append are reported without a gate. If the estimate falls under the 15 % threshold, a real persistent arm is built outside P5.
+The runner is `worker-live measure` (`packages/testkit/src/worker-live/measure.ts`). It drives the protocol of the decisions document through the production executor, worker routing, pi-native guest and model relay, and records every model request from the relay's `agent.worker.model_request` event. Each receipt carries a `method` block that defines every figure. `worker-live measure-summary --in <receipt> --out <receipt>` recomputes a receipt's summary from its raw per-request fields.
+
+Models: OpenCode Go through the user's model connection, `glm-5.3-flash` and `gpt-6-luna`, resolved as the newest catalog matches of `glm-*-flash` and `gpt-*-luna` in pi-ai 1.3.0. `gpt-6-luna` replaced DeepSeek V4.1 Flash, which needs the workspace's Global region setting. The pair replaces the decisions document's "one explicit and one automatic provider" by maintainer choice.
+
+| Receipt | Where | Trials per model | Timings |
+| --- | --- | --- | --- |
+| [token-cache-chain.json](evidence/P5/token-cache-chain.json) | local guests, gaps 10 s, 2 min, 6 min | 30, overlapped | not comparable |
+| [token-cache-compaction.json](evidence/P5/token-cache-compaction.json) | local guests, forced `history.compact` | 30, overlapped | not comparable |
+| [token-cache-approval.json](evidence/P5/token-cache-approval.json) | local guests, grants after 10 s and 6 min | 30, overlapped | not comparable |
+| [token-cache-computer.json](evidence/P5/token-cache-computer.json) | E2B, validated private N13 computer candidate with desktop preparation | 30, serial | comparable |
+| [token-cache-approval-serial.json](evidence/P5/token-cache-approval-serial.json) | E2B, no computer, grant after 10 s | 10, serial | comparable |
+
+Overlapped runs only count tokens and cache. Every thread has its own controller, bot and thread, and a nonce in its tool catalog.
+
+**Cache mode.** Both models are `automatic`. The mode is read from the requests and the provider's usage, not from the catalog. No captured request body carried `cache_control`. pi-ai 1.3.0 adds those markers only on `anthropic-messages` and on `openai-completions` models whose compat names the Anthropic format, and neither arm is one. GLM 5.3 Flash reports cache reads only. GPT-6 Luna reports reads and priced writes. Every request of both models carries the thread's session id in the `x-opencode-session` header, which Rakazo's OpenCode transport sets. Luna's requests also carry it as `prompt_cache_key`. Luna's cache is routed per session: every thread's first request read 0 and wrote the whole prompt. GLM still reused other threads' cache.
+
+**Shared base.** Every bot sends the same harness base prompt and tool catalog, so cache reuse across threads is a real product saving. The receipt splits each cache read into reuse of that shared base and reuse of the thread's own prefix (`cacheReadReuse`).
+
+- In the overlapped runs, no first request of any thread read past the shared base (`firstRequestsOverBase` 0 of 29 per model and scenario).
+- GLM first requests read up to 4736 tokens against an estimated base of about 4618. That base assumes GLM renders the tool catalog before the messages. This is an inference, not confirmed: in request-body order the threads share only about 2.7k tokens.
+- In chain, GLM read 497,784 shared-base tokens and 225,388 per-thread tokens. Luna read 680,362 and 457,021.
+- The serial host approval receipt was captured before the tools' position was recorded, so its first requests are reported apart (`firstRequestsWithoutToolsAt`).
+
+**Persistent session estimate.** The estimate replays each thread's root requests. A persistent session continues every attempt from the previous full prompt and answer, and grows within an attempt as the projection did. Screenshots of earlier turns stay as far as they were still in the previous request after the relay's image cap. They are never dropped at a run boundary. The previous prompt counts as cached whenever the projection read any cache, which is generous to the persistent session. Prices are the catalog list prices per million tokens. The formula is in each receipt's `method.persistentEstimate`.
+
+| Scenario | GLM 5.3 Flash projection, persistent, saving | GPT-6 Luna projection, persistent, saving |
+| --- | --- | --- |
+| chain | $0.1441, $0.1449, -0.6 % | $0.0454, $0.0448, 1.4 % |
+| compaction | $0.2131, $0.2117, 0.6 % | $0.1151, $0.1036, 10.1 % |
+| approval | $0.1533, $0.1594, -3.9 % | $0.0525, $0.0536, -1.9 % |
+| computer | $0.2001, $0.1949, 2.6 % | $0.0750, $0.0760, -1.2 % |
+
+No scenario reaches 15 %, so no persistent arm is built. The highest saving is 10.1 %, for GPT-6 Luna across a forced compaction. In chained exchanges, the share of a turn's first request read from cache did not change with the gap for either model. GLM's median share was 0 at every gap, with a p95 near 0.97. Luna's was 0.945 at 10 s, 2 min and 6 min.
+
+**Restore.** From the serial host approval run only. Restore spans from the grant persisted to the resumed attempt's first relayed model request, minus provisioning (worker provider ensure to guest hello). Provisioning is reported apart.
+
+| Model | Restore p50, p95 | Provisioning p50, p95 |
+| --- | --- | --- |
+| GLM 5.3 Flash | 435 ms, 472 ms | 2291 ms, 2483 ms |
+| GPT-6 Luna | 406 ms, 503 ms | 2294 ms, 2680 ms |
+
+The 6 min grant was not measured serially, because restore does not depend on how long the grant waited. The 6 min delay matters for cache, which the overlapped local approval run measures. Its timings are not comparable.
+
+**Append.** From the serial host runs, controller time from a native transcript frame to its recorded reply:
+
+- Computer: p50 6.0 to 6.6 ms, p95 23.9 ms, with 1 query at the median and at most 6.
+- Serial approval: p50 6.1 to 6.5 ms, p95 12.9 to 13.8 ms, one query.
+
+The runs before the reconnect pairing fix matched some frames of a resumed attempt to an earlier attempt's reply. Those samples read as negative, are left out, and are counted in `transcriptAppendsMispaired`.
+
+**Success.** Every thread completed except one serial approval thread of GLM 5.3 Flash. In 9 of its 10 trials the run finished after the grant; in trial 7 the model asked for input again, with no error. In the overlapped approval run, GLM 5.3 Flash answered without calling the tool in 5 of 30 trials, so no approval was requested. No thread hit a provider error.
 
 ## Rollback compatibility
 

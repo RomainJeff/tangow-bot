@@ -1,0 +1,2766 @@
+{
+  "schemaVersion": 1,
+  "status": "complete",
+  "startedAt": "2026-10-24T11:29:46.617Z",
+  "generatedAt": "2026-10-24T11:39:35.465Z",
+  "harness": "pi-native",
+  "worker": "E2B worker VMs",
+  "guestSha256": "e4543af118f89472b4b723ba330d4975b9819311781e97329c5a6673254ef869",
+  "workerTemplate": "i1-worker",
+  "computerTemplate": "validated private N13 computer candidate",
+  "desktopPreparation": "product E2BSandboxProvider.prepare",
+  "provider": "opencode-go",
+  "protocol": {
+    "scenarios": ["approval"],
+    "trials": 10,
+    "gapsMs": [10000],
+    "approvalDelaysMs": [10000],
+    "comparable": false
+  },
+  "order": "scenarios in turn; each trial runs every model on a fresh controller and thread, rotating which goes first; one thread at a time, its resources swept before the next",
+  "latency": "serial: one thread at a time",
+  "models": [
+    {
+      "id": "glm-5.3-flash",
+      "api": "openai-completions",
+      "catalogBaseUrl": "https://opencode.ai/inference/go/v1",
+      "catalogCostPerMillion": {
+        "input": 0.15,
+        "output": 0.5,
+        "cacheRead": 0.03,
+        "cacheWrite": 0
+      }
+    },
+    {
+      "id": "gpt-6-luna",
+      "api": "openai-responses",
+      "catalogBaseUrl": "https://opencode.ai/inference/go/v1",
+      "catalogCostPerMillion": {
+        "input": 0.1,
+        "output": 0.5,
+        "cacheRead": 0.01,
+        "cacheWrite": 0.125,
+        "tiers": [
+          {
+            "inputTokensAbove": 272000,
+            "input": 0.2,
+            "output": 0.75,
+            "cacheRead": 0.02,
+            "cacheWrite": 0.25
+          }
+        ]
+      }
+    }
+  ],
+  "method": {
+    "source": "One record per model request, from agent.worker.model_request at the controller relay, grouped by thread, turn and attempt.",
+    "inputTokens": "Every prompt token the provider reported, cached or not. Uncached = inputTokens - cacheReadTokens - cacheWriteTokens.",
+    "promptBytes": "UTF-8 bytes of the redacted canonical transcript the relay received (pi-ai-transcript-v1), not provider wire bytes. commonPrefixBytes is the part shared with the previous request of the same thread and bot.",
+    "pricing": "Catalog list price per million tokens (models[].catalogCostPerMillion: input, cacheRead, cacheWrite, output), without long-context tiers. USD = (uncached * input + cacheRead * cacheRead + cacheWrite * cacheWrite + output * output) / 1e6.",
+    "persistentEstimate": "Replays each thread's root requests with usage, in order; helper requests are left out of both arms. Within an attempt the persistent prompt is the projection's inputTokens plus a carried extra. At the first request of a new attempt it is the previous request's prompt + its outputTokens + the tokens this request added past the shared prefix, round((promptBytes - commonPrefixBytes) * inputTokens / promptBytes); extra becomes that prompt minus inputTokens. Cached: if the projection's request read any cache, the whole previous prompt at an attempt start, or the projection's read + extra within an attempt; otherwise none. Written: prompt - cached when the model reported any cache write, else 0. A compacted turn restarts the estimate from the projection. Screenshots and images of earlier turns stay in the carried prompt as far as they were still in the previous request after the relay's image cap, which a persistent session behind the same relay would also hit; they are never dropped at a run boundary. The estimate is generous to the persistent session: its whole previous prompt counts as cached whenever the projection read any cache. persistentSaving = (projectionUsd - persistentUsd) / projectionUsd; buildPersistentArm when it is 0.15 or more.",
+    "cache": "mode is explicit markers when a thread's first provider request carried cache_control, automatic when the provider reported cache reads or writes without markers, none observed otherwise. markersSent is read from the captured request bodies.",
+    "cacheReadReuse": "Each thread's first provider request body is compared with the model's earlier threads; sharedChars is the longest common prefix, before any per-thread byte, and the tool catalog from toolsAt up to the nonce at nonceAt is also identical across threads. That a provider renders tools before messages is an inference, not confirmed: it fits GLM first requests reading more than the message prefix. So the shared base is max(sharedChars, nonceAt - toolsAt) characters, converted to tokens as inputTokens of the thread's first request * chars / bodyChars. Of each request's cache read, up to that base counts as sharedBase reuse and the rest as perThread. firstRequestsOverBase counts first requests that read more than that base (+10% and 128 tokens), which would mean reading another thread's own part.",
+    "restore": "From the grant persisted (answerRunInput returned) to the resumed attempt's first model request frame at the controller, minus provisioningMs, the worker provider's ensure call to the guest's hello. Only comparable from a serial run.",
+    "transcriptAppend": "Controller time and database queries from each native transcript frame to its recorded reply. Only comparable from a serial run. Receipts recorded before the pairing fix paired some frames of a resumed attempt with an earlier attempt's reply of the same sequence number; those read as negative, are left out, and are counted in transcriptAppendsMispaired."
+  },
+  "summary": {
+    "glm-5.3-flash": {
+      "cache": {
+        "mode": "automatic",
+        "markersSent": false,
+        "readsReported": true,
+        "writesReported": false
+      },
+      "requests": 44,
+      "threadErrors": 0,
+      "requestsWithoutUsage": 0,
+      "successRate": 0.9,
+      "cacheReadShareByGapMs": {},
+      "cacheReadReuse": {
+        "sharedBase": 61102,
+        "perThread": 82074,
+        "firstRequestsOverBase": 5,
+        "firstRequests": 9,
+        "firstRequestsWithoutToolsAt": 9
+      },
+      "byScenario": {
+        "approval": {
+          "projection": {
+            "uncached": 168846,
+            "cacheRead": 154568,
+            "cacheWrite": 0,
+            "output": 2213
+          },
+          "persistentEstimate": {
+            "uncached": 170993,
+            "cacheRead": 158257,
+            "cacheWrite": 0,
+            "output": 2213
+          },
+          "projectionUsd": 0.031070439999999998,
+          "persistentUsd": 0.03150316,
+          "persistentSaving": -0.014
+        }
+      },
+      "projectionUsd": 0.031070439999999998,
+      "persistentUsd": 0.03150316,
+      "persistentSaving": -0.014,
+      "buildPersistentArm": false,
+      "restoreByGrantDelayMs": {
+        "10000": {
+          "outsideProvisioningMs": {
+            "count": 10,
+            "p50": 435,
+            "p95": 472,
+            "min": 408,
+            "max": 472
+          },
+          "provisioningMs": {
+            "count": 10,
+            "p50": 2291,
+            "p95": 2483,
+            "min": 1829,
+            "max": 2483
+          }
+        }
+      },
+      "transcriptAppendMs": {
+        "count": 51,
+        "p50": 6.1,
+        "p95": 13.8,
+        "min": 3.4,
+        "max": 17.7
+      },
+      "transcriptAppendQueries": {
+        "count": 51,
+        "p50": 1,
+        "p95": 1,
+        "min": 1,
+        "max": 1
+      },
+      "transcriptAppendsMispaired": 17
+    },
+    "gpt-6-luna": {
+      "cache": {
+        "mode": "automatic",
+        "markersSent": false,
+        "readsReported": true,
+        "writesReported": true
+      },
+      "requests": 51,
+      "threadErrors": 0,
+      "requestsWithoutUsage": 0,
+      "successRate": 1,
+      "cacheReadShareByGapMs": {},
+      "cacheReadReuse": {
+        "sharedBase": 75118,
+        "perThread": 134712,
+        "firstRequestsOverBase": 0,
+        "firstRequests": 9,
+        "firstRequestsWithoutToolsAt": 9
+      },
+      "byScenario": {
+        "approval": {
+          "projection": {
+            "uncached": 153,
+            "cacheRead": 232493,
+            "cacheWrite": 61210,
+            "output": 2232
+          },
+          "persistentEstimate": {
+            "uncached": 0,
+            "cacheRead": 238124,
+            "cacheWrite": 61464,
+            "output": 2232
+          },
+          "projectionUsd": 0.01110748,
+          "persistentUsd": 0.01118024,
+          "persistentSaving": -0.007
+        }
+      },
+      "projectionUsd": 0.01110748,
+      "persistentUsd": 0.01118024,
+      "persistentSaving": -0.007,
+      "buildPersistentArm": false,
+      "restoreByGrantDelayMs": {
+        "10000": {
+          "outsideProvisioningMs": {
+            "count": 10,
+            "p50": 406,
+            "p95": 503,
+            "min": 376,
+            "max": 503
+          },
+          "provisioningMs": {
+            "count": 10,
+            "p50": 2294,
+            "p95": 2680,
+            "min": 1878,
+            "max": 2680
+          }
+        }
+      },
+      "transcriptAppendMs": {
+        "count": 63,
+        "p50": 6.5,
+        "p95": 12.9,
+        "min": 3.1,
+        "max": 17.8
+      },
+      "transcriptAppendQueries": {
+        "count": 63,
+        "p50": 1,
+        "p95": 1,
+        "min": 1,
+        "max": 1
+      },
+      "transcriptAppendsMispaired": 20
+    }
+  },
+  "threads": [
+    {
+      "scenario": "approval",
+      "model": "glm-5.3-flash",
+      "trial": 0,
+      "nonce": "357f7df0",
+      "turns": [
+        {
+          "waitMs": 0,
+          "approveAfterMs": 10000,
+          "compacted": false,
+          "status": "completed",
+          "approvalRequested": true,
+          "restoreOutsideProvisioningMs": 432,
+          "provisioningMs": 2315,
+          "appends": [
+            {
+              "ms": 13.8,
+              "queries": 1
+            },
+            {
+              "ms": 5.4,
+              "queries": 1
+            },
+            {
+              "ms": 17.7,
+              "queries": 1
+            },
+            {
+              "ms": -17588.3,
+              "queries": 0
+            },
+            {
+              "ms": -17452.7,
+              "queries": 0
+            },
+            {
+              "ms": 13.3,
+              "queries": 1
+            }
+          ],
+          "requests": [
+            {
+              "attemptId": "cmvmbh2f200077yhcremoc3cl",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7271,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0,
+              "outputTokens": 20,
+              "promptBytes": 29217,
+              "commonPrefixBytes": 0,
+              "previousRequest": false,
+              "firstDivergingSection": null,
+              "sinceSameModelMs": null
+            },
+            {
+              "attemptId": "cmvmbh2f200077yhcremoc3cl",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7299,
+              "cacheReadTokens": 6528,
+              "cacheWriteTokens": 0,
+              "outputTokens": 162,
+              "promptBytes": 29563,
+              "commonPrefixBytes": 29216,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 2904
+            },
+            {
+              "attemptId": "cmvmbhhln000c7yhcznu8e33m",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7385,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0,
+              "outputTokens": 26,
+              "promptBytes": 29739,
+              "commonPrefixBytes": 28709,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 14691
+            },
+            {
+              "attemptId": "cmvmbhhln000c7yhcznu8e33m",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7420,
+              "cacheReadTokens": 4864,
+              "cacheWriteTokens": 0,
+              "outputTokens": 32,
+              "promptBytes": 30102,
+              "commonPrefixBytes": 29738,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 1303
+            }
+          ]
+        }
+      ],
+      "left": {
+        "sandboxes": 0,
+        "volumes": 0
+      },
+      "cacheMarkersSent": false
+    },
+    {
+      "scenario": "approval",
+      "model": "gpt-6-luna",
+      "trial": 0,
+      "nonce": "66a605fc",
+      "turns": [
+        {
+          "waitMs": 0,
+          "approveAfterMs": 10000,
+          "compacted": false,
+          "status": "completed",
+          "approvalRequested": true,
+          "restoreOutsideProvisioningMs": 503,
+          "provisioningMs": 2601,
+          "appends": [
+            {
+              "ms": 15.6,
+              "queries": 1
+            },
+            {
+              "ms": 9.8,
+              "queries": 1
+            },
+            {
+              "ms": 6.6,
+              "queries": 1
+            },
+            {
+              "ms": 4.7,
+              "queries": 1
+            },
+            {
+              "ms": 6.4,
+              "queries": 1
+            },
+            {
+              "ms": -17503.5,
+              "queries": 0
+            },
+            {
+              "ms": -17446.9,
+              "queries": 0
+            },
+            {
+              "ms": 12.8,
+              "queries": 1
+            }
+          ],
+          "requests": [
+            {
+              "attemptId": "cmvmbhopi000r7yhc3sb8z0lm",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5656,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 5653,
+              "outputTokens": 26,
+              "promptBytes": 29217,
+              "commonPrefixBytes": 0,
+              "previousRequest": false,
+              "firstDivergingSection": null,
+              "sinceSameModelMs": null
+            },
+            {
+              "attemptId": "cmvmbhopi000r7yhc3sb8z0lm",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5703,
+              "cacheReadTokens": 5653,
+              "cacheWriteTokens": 47,
+              "outputTokens": 35,
+              "promptBytes": 29669,
+              "commonPrefixBytes": 29216,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 1477
+            },
+            {
+              "attemptId": "cmvmbhopi000r7yhc3sb8z0lm",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5776,
+              "cacheReadTokens": 5700,
+              "cacheWriteTokens": 73,
+              "outputTokens": 28,
+              "promptBytes": 30227,
+              "commonPrefixBytes": 29668,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 1389
+            },
+            {
+              "attemptId": "cmvmbi1nt000w7yhc45qhi0p0",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5772,
+              "cacheReadTokens": 5541,
+              "cacheWriteTokens": 228,
+              "outputTokens": 32,
+              "promptBytes": 29739,
+              "commonPrefixBytes": 28709,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 14668
+            },
+            {
+              "attemptId": "cmvmbi1nt000w7yhc45qhi0p0",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5826,
+              "cacheReadTokens": 5769,
+              "cacheWriteTokens": 54,
+              "outputTokens": 23,
+              "promptBytes": 30211,
+              "commonPrefixBytes": 29738,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 1277
+            }
+          ]
+        }
+      ],
+      "left": {
+        "sandboxes": 0,
+        "volumes": 0
+      },
+      "cacheMarkersSent": false
+    },
+    {
+      "scenario": "approval",
+      "model": "gpt-6-luna",
+      "trial": 1,
+      "nonce": "6ca4f62c",
+      "turns": [
+        {
+          "waitMs": 0,
+          "approveAfterMs": 10000,
+          "compacted": false,
+          "status": "completed",
+          "approvalRequested": true,
+          "restoreOutsideProvisioningMs": 410,
+          "provisioningMs": 2347,
+          "appends": [
+            {
+              "ms": 9.7,
+              "queries": 1
+            },
+            {
+              "ms": 4.4,
+              "queries": 1
+            },
+            {
+              "ms": 11.6,
+              "queries": 1
+            },
+            {
+              "ms": 3.5,
+              "queries": 1
+            },
+            {
+              "ms": 11.2,
+              "queries": 1
+            },
+            {
+              "ms": -20031.7,
+              "queries": 0
+            },
+            {
+              "ms": -19998.4,
+              "queries": 0
+            },
+            {
+              "ms": 12.9,
+              "queries": 1
+            }
+          ],
+          "requests": [
+            {
+              "attemptId": "cmvmbi8ul001b7yhcvkzlbn39",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5658,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 5655,
+              "outputTokens": 40,
+              "promptBytes": 29217,
+              "commonPrefixBytes": 0,
+              "previousRequest": false,
+              "firstDivergingSection": null,
+              "sinceSameModelMs": 8296
+            },
+            {
+              "attemptId": "cmvmbi8ul001b7yhcvkzlbn39",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5719,
+              "cacheReadTokens": 5655,
+              "cacheWriteTokens": 61,
+              "outputTokens": 81,
+              "promptBytes": 31484,
+              "commonPrefixBytes": 29216,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 3334
+            },
+            {
+              "attemptId": "cmvmbi8ul001b7yhcvkzlbn39",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5838,
+              "cacheReadTokens": 5716,
+              "cacheWriteTokens": 119,
+              "outputTokens": 4,
+              "promptBytes": 35193,
+              "commonPrefixBytes": 31483,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 1841
+            },
+            {
+              "attemptId": "cmvmbiof8001g7yhc1o0u982i",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5774,
+              "cacheReadTokens": 5543,
+              "cacheWriteTokens": 228,
+              "outputTokens": 33,
+              "promptBytes": 29739,
+              "commonPrefixBytes": 28709,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 14882
+            },
+            {
+              "attemptId": "cmvmbiof8001g7yhc1o0u982i",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5829,
+              "cacheReadTokens": 5771,
+              "cacheWriteTokens": 55,
+              "outputTokens": 23,
+              "promptBytes": 30215,
+              "commonPrefixBytes": 29738,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 1977
+            }
+          ]
+        }
+      ],
+      "left": {
+        "sandboxes": 0,
+        "volumes": 0
+      },
+      "cacheMarkersSent": false,
+      "sharedBase": {
+        "sharedChars": 10716,
+        "bodyChars": 29855,
+        "nonceAt": 29648
+      }
+    },
+    {
+      "scenario": "approval",
+      "model": "glm-5.3-flash",
+      "trial": 1,
+      "nonce": "29d70d62",
+      "turns": [
+        {
+          "waitMs": 0,
+          "approveAfterMs": 10000,
+          "compacted": false,
+          "status": "completed",
+          "approvalRequested": true,
+          "restoreOutsideProvisioningMs": 465,
+          "provisioningMs": 2229,
+          "appends": [
+            {
+              "ms": 13.3,
+              "queries": 1
+            },
+            {
+              "ms": 3.8,
+              "queries": 1
+            },
+            {
+              "ms": 9.7,
+              "queries": 1
+            },
+            {
+              "ms": -17957.9,
+              "queries": 0
+            },
+            {
+              "ms": -17939.8,
+              "queries": 0
+            },
+            {
+              "ms": 6.1,
+              "queries": 1
+            }
+          ],
+          "requests": [
+            {
+              "attemptId": "cmvmbiw8t001v7yhcwxkh8hsb",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7270,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0,
+              "outputTokens": 20,
+              "promptBytes": 29217,
+              "commonPrefixBytes": 0,
+              "previousRequest": false,
+              "firstDivergingSection": null,
+              "sinceSameModelMs": 67689
+            },
+            {
+              "attemptId": "cmvmbiw8t001v7yhcwxkh8hsb",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7298,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0,
+              "outputTokens": 109,
+              "promptBytes": 29561,
+              "commonPrefixBytes": 29216,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 3193
+            },
+            {
+              "attemptId": "cmvmbjcj900207yhcmy4kwkns",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7384,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0,
+              "outputTokens": 40,
+              "promptBytes": 29739,
+              "commonPrefixBytes": 28709,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 14820
+            },
+            {
+              "attemptId": "cmvmbjcj900207yhcmy4kwkns",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7433,
+              "cacheReadTokens": 6528,
+              "cacheWriteTokens": 0,
+              "outputTokens": 36,
+              "promptBytes": 30256,
+              "commonPrefixBytes": 29738,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 2065
+            }
+          ]
+        }
+      ],
+      "left": {
+        "sandboxes": 0,
+        "volumes": 0
+      },
+      "cacheMarkersSent": false,
+      "sharedBase": {
+        "sharedChars": 10710,
+        "bodyChars": 30461,
+        "nonceAt": 30303
+      }
+    },
+    {
+      "scenario": "approval",
+      "model": "glm-5.3-flash",
+      "trial": 2,
+      "nonce": "b428c81f",
+      "turns": [
+        {
+          "waitMs": 0,
+          "approveAfterMs": 10000,
+          "compacted": false,
+          "status": "completed",
+          "approvalRequested": true,
+          "restoreOutsideProvisioningMs": 472,
+          "provisioningMs": 2483,
+          "appends": [
+            {
+              "ms": 13.3,
+              "queries": 1
+            },
+            {
+              "ms": 3.9,
+              "queries": 1
+            },
+            {
+              "ms": 5.3,
+              "queries": 1
+            },
+            {
+              "ms": -22356.5,
+              "queries": 0
+            },
+            {
+              "ms": -22306.1,
+              "queries": 0
+            },
+            {
+              "ms": 5.6,
+              "queries": 1
+            }
+          ],
+          "requests": [
+            {
+              "attemptId": "cmvmbjk7j002f7yhcjitvzici",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7270,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0,
+              "outputTokens": 20,
+              "promptBytes": 29217,
+              "commonPrefixBytes": 0,
+              "previousRequest": false,
+              "firstDivergingSection": null,
+              "sinceSameModelMs": 8631
+            },
+            {
+              "attemptId": "cmvmbjk7j002f7yhcjitvzici",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7298,
+              "cacheReadTokens": 2432,
+              "cacheWriteTokens": 0,
+              "outputTokens": 63,
+              "promptBytes": 29563,
+              "commonPrefixBytes": 29216,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 3801
+            },
+            {
+              "attemptId": "cmvmbjz5w002k7yhcwgtz77se",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7384,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0,
+              "outputTokens": 34,
+              "promptBytes": 29739,
+              "commonPrefixBytes": 28709,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 18524
+            },
+            {
+              "attemptId": "cmvmbjz5w002k7yhcwgtz77se",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7427,
+              "cacheReadTokens": 2432,
+              "cacheWriteTokens": 0,
+              "outputTokens": 40,
+              "promptBytes": 30225,
+              "commonPrefixBytes": 29738,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 11149
+            }
+          ]
+        }
+      ],
+      "left": {
+        "sandboxes": 0,
+        "volumes": 0
+      },
+      "cacheMarkersSent": false,
+      "sharedBase": {
+        "sharedChars": 10713,
+        "bodyChars": 30461,
+        "nonceAt": 30303
+      }
+    },
+    {
+      "scenario": "approval",
+      "model": "gpt-6-luna",
+      "trial": 2,
+      "nonce": "77314f0f",
+      "turns": [
+        {
+          "waitMs": 0,
+          "approveAfterMs": 10000,
+          "compacted": false,
+          "status": "completed",
+          "approvalRequested": true,
+          "restoreOutsideProvisioningMs": 447,
+          "provisioningMs": 2103,
+          "appends": [
+            {
+              "ms": 8.5,
+              "queries": 1
+            },
+            {
+              "ms": 4.5,
+              "queries": 1
+            },
+            {
+              "ms": 6.9,
+              "queries": 1
+            },
+            {
+              "ms": 4.2,
+              "queries": 1
+            },
+            {
+              "ms": 11.8,
+              "queries": 1
+            },
+            {
+              "ms": -19250.4,
+              "queries": 0
+            },
+            {
+              "ms": -19246.6,
+              "queries": 0
+            },
+            {
+              "ms": 5,
+              "queries": 1
+            }
+          ],
+          "requests": [
+            {
+              "attemptId": "cmvmbkgqb002z7yhctxt8cm73",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5657,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 5654,
+              "outputTokens": 26,
+              "promptBytes": 29217,
+              "commonPrefixBytes": 0,
+              "previousRequest": false,
+              "firstDivergingSection": null,
+              "sinceSameModelMs": 81247
+            },
+            {
+              "attemptId": "cmvmbkgqb002z7yhctxt8cm73",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5704,
+              "cacheReadTokens": 5654,
+              "cacheWriteTokens": 47,
+              "outputTokens": 78,
+              "promptBytes": 29669,
+              "commonPrefixBytes": 29216,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 2818
+            },
+            {
+              "attemptId": "cmvmbkgqb002z7yhctxt8cm73",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5820,
+              "cacheReadTokens": 5701,
+              "cacheWriteTokens": 116,
+              "outputTokens": 26,
+              "promptBytes": 33245,
+              "commonPrefixBytes": 29668,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 1276
+            },
+            {
+              "attemptId": "cmvmbkvaa00347yhcixw0dgz0",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5773,
+              "cacheReadTokens": 5542,
+              "cacheWriteTokens": 228,
+              "outputTokens": 58,
+              "promptBytes": 29739,
+              "commonPrefixBytes": 28709,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 15119
+            },
+            {
+              "attemptId": "cmvmbkvaa00347yhcixw0dgz0",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5853,
+              "cacheReadTokens": 5770,
+              "cacheWriteTokens": 80,
+              "outputTokens": 23,
+              "promptBytes": 32187,
+              "commonPrefixBytes": 29738,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 1578
+            }
+          ]
+        }
+      ],
+      "left": {
+        "sandboxes": 0,
+        "volumes": 0
+      },
+      "cacheMarkersSent": false,
+      "sharedBase": {
+        "sharedChars": 10714,
+        "bodyChars": 29855,
+        "nonceAt": 29648
+      }
+    },
+    {
+      "scenario": "approval",
+      "model": "gpt-6-luna",
+      "trial": 3,
+      "nonce": "7d892f72",
+      "turns": [
+        {
+          "waitMs": 0,
+          "approveAfterMs": 10000,
+          "compacted": false,
+          "status": "completed",
+          "approvalRequested": true,
+          "restoreOutsideProvisioningMs": 400,
+          "provisioningMs": 2533,
+          "appends": [
+            {
+              "ms": 13.3,
+              "queries": 1
+            },
+            {
+              "ms": 3.8,
+              "queries": 1
+            },
+            {
+              "ms": 6.6,
+              "queries": 1
+            },
+            {
+              "ms": 3.5,
+              "queries": 1
+            },
+            {
+              "ms": 6.3,
+              "queries": 1
+            },
+            {
+              "ms": -18914.8,
+              "queries": 0
+            },
+            {
+              "ms": -18895.9,
+              "queries": 0
+            },
+            {
+              "ms": 5.7,
+              "queries": 1
+            }
+          ],
+          "requests": [
+            {
+              "attemptId": "cmvmbl2sq003j7yhcqp6xo7hg",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5657,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 5654,
+              "outputTokens": 26,
+              "promptBytes": 29217,
+              "commonPrefixBytes": 0,
+              "previousRequest": false,
+              "firstDivergingSection": null,
+              "sinceSameModelMs": 7739
+            },
+            {
+              "attemptId": "cmvmbl2sq003j7yhcqp6xo7hg",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5704,
+              "cacheReadTokens": 5654,
+              "cacheWriteTokens": 47,
+              "outputTokens": 73,
+              "promptBytes": 29669,
+              "commonPrefixBytes": 29216,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 2974
+            },
+            {
+              "attemptId": "cmvmbl2sq003j7yhcqp6xo7hg",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5815,
+              "cacheReadTokens": 5701,
+              "cacheWriteTokens": 111,
+              "outputTokens": 27,
+              "promptBytes": 33291,
+              "commonPrefixBytes": 29668,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 1409
+            },
+            {
+              "attemptId": "cmvmblhgn003o7yhc2wfzwayp",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5773,
+              "cacheReadTokens": 5542,
+              "cacheWriteTokens": 228,
+              "outputTokens": 32,
+              "promptBytes": 29739,
+              "commonPrefixBytes": 28709,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 14552
+            },
+            {
+              "attemptId": "cmvmblhgn003o7yhc2wfzwayp",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5827,
+              "cacheReadTokens": 5770,
+              "cacheWriteTokens": 54,
+              "outputTokens": 22,
+              "promptBytes": 30219,
+              "commonPrefixBytes": 29738,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 1478
+            }
+          ]
+        }
+      ],
+      "left": {
+        "sandboxes": 0,
+        "volumes": 0
+      },
+      "cacheMarkersSent": false,
+      "sharedBase": {
+        "sharedChars": 10716,
+        "bodyChars": 29855,
+        "nonceAt": 29648
+      }
+    },
+    {
+      "scenario": "approval",
+      "model": "glm-5.3-flash",
+      "trial": 3,
+      "nonce": "47a7513b",
+      "turns": [
+        {
+          "waitMs": 0,
+          "approveAfterMs": 10000,
+          "compacted": false,
+          "status": "completed",
+          "approvalRequested": true,
+          "restoreOutsideProvisioningMs": 439,
+          "provisioningMs": 2339,
+          "appends": [
+            {
+              "ms": 11.2,
+              "queries": 1
+            },
+            {
+              "ms": 3.6,
+              "queries": 1
+            },
+            {
+              "ms": 6.4,
+              "queries": 1
+            },
+            {
+              "ms": 4.3,
+              "queries": 1
+            },
+            {
+              "ms": 9,
+              "queries": 1
+            },
+            {
+              "ms": -18804,
+              "queries": 0
+            },
+            {
+              "ms": -18774.2,
+              "queries": 0
+            },
+            {
+              "ms": 5.3,
+              "queries": 1
+            }
+          ],
+          "requests": [
+            {
+              "attemptId": "cmvmbloiw00437yhcipmbz2fl",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7271,
+              "cacheReadTokens": 4736,
+              "cacheWriteTokens": 0,
+              "outputTokens": 20,
+              "promptBytes": 29217,
+              "commonPrefixBytes": 0,
+              "previousRequest": false,
+              "firstDivergingSection": null,
+              "sinceSameModelMs": 64496
+            },
+            {
+              "attemptId": "cmvmbloiw00437yhcipmbz2fl",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7299,
+              "cacheReadTokens": 7232,
+              "cacheWriteTokens": 0,
+              "outputTokens": 114,
+              "promptBytes": 29563,
+              "commonPrefixBytes": 29216,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 2283
+            },
+            {
+              "attemptId": "cmvmbloiw00437yhcipmbz2fl",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7438,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0,
+              "outputTokens": 59,
+              "promptBytes": 30493,
+              "commonPrefixBytes": 29562,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 2211
+            },
+            {
+              "attemptId": "cmvmbm39m00487yhcrtokmvei",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7385,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0,
+              "outputTokens": 25,
+              "promptBytes": 29739,
+              "commonPrefixBytes": 28709,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 14336
+            },
+            {
+              "attemptId": "cmvmbm39m00487yhcrtokmvei",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7419,
+              "cacheReadTokens": 6528,
+              "cacheWriteTokens": 0,
+              "outputTokens": 34,
+              "promptBytes": 30103,
+              "commonPrefixBytes": 29738,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 1516
+            }
+          ]
+        }
+      ],
+      "left": {
+        "sandboxes": 0,
+        "volumes": 0
+      },
+      "cacheMarkersSent": false,
+      "sharedBase": {
+        "sharedChars": 10711,
+        "bodyChars": 30461,
+        "nonceAt": 30303
+      }
+    },
+    {
+      "scenario": "approval",
+      "model": "glm-5.3-flash",
+      "trial": 4,
+      "nonce": "694d42a6",
+      "turns": [
+        {
+          "waitMs": 0,
+          "approveAfterMs": 10000,
+          "compacted": false,
+          "status": "completed",
+          "approvalRequested": true,
+          "restoreOutsideProvisioningMs": 408,
+          "provisioningMs": 2149,
+          "appends": [
+            {
+              "ms": 10,
+              "queries": 1
+            },
+            {
+              "ms": 4.1,
+              "queries": 1
+            },
+            {
+              "ms": 7.9,
+              "queries": 1
+            },
+            {
+              "ms": 6.6,
+              "queries": 1
+            },
+            {
+              "ms": 4.6,
+              "queries": 1
+            },
+            {
+              "ms": 4.2,
+              "queries": 1
+            },
+            {
+              "ms": 3.4,
+              "queries": 1
+            },
+            {
+              "ms": 14.2,
+              "queries": 1
+            }
+          ],
+          "requests": [
+            {
+              "attemptId": "cmvmbma5b004n7yhcs67mkimf",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7271,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0,
+              "outputTokens": 20,
+              "promptBytes": 29217,
+              "commonPrefixBytes": 0,
+              "previousRequest": false,
+              "firstDivergingSection": null,
+              "sinceSameModelMs": 7985
+            },
+            {
+              "attemptId": "cmvmbma5b004n7yhcs67mkimf",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7299,
+              "cacheReadTokens": 6528,
+              "cacheWriteTokens": 0,
+              "outputTokens": 131,
+              "promptBytes": 29563,
+              "commonPrefixBytes": 29216,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 3481
+            },
+            {
+              "attemptId": "cmvmbma5b004n7yhcs67mkimf",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7455,
+              "cacheReadTokens": 6528,
+              "cacheWriteTokens": 0,
+              "outputTokens": 92,
+              "promptBytes": 30606,
+              "commonPrefixBytes": 29562,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 2502
+            },
+            {
+              "attemptId": "cmvmbmq9q004s7yhch9jpug6n",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7385,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0,
+              "outputTokens": 47,
+              "promptBytes": 29739,
+              "commonPrefixBytes": 28709,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 14523
+            },
+            {
+              "attemptId": "cmvmbmq9q004s7yhch9jpug6n",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7441,
+              "cacheReadTokens": 6528,
+              "cacheWriteTokens": 0,
+              "outputTokens": 63,
+              "promptBytes": 30238,
+              "commonPrefixBytes": 29738,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 1974
+            }
+          ]
+        }
+      ],
+      "left": {
+        "sandboxes": 0,
+        "volumes": 0
+      },
+      "cacheMarkersSent": false,
+      "sharedBase": {
+        "sharedChars": 10713,
+        "bodyChars": 30461,
+        "nonceAt": 30303
+      }
+    },
+    {
+      "scenario": "approval",
+      "model": "gpt-6-luna",
+      "trial": 4,
+      "nonce": "225a5047",
+      "turns": [
+        {
+          "waitMs": 0,
+          "approveAfterMs": 10000,
+          "compacted": false,
+          "status": "completed",
+          "approvalRequested": true,
+          "restoreOutsideProvisioningMs": 385,
+          "provisioningMs": 2680,
+          "appends": [
+            {
+              "ms": 12.7,
+              "queries": 1
+            },
+            {
+              "ms": 4.3,
+              "queries": 1
+            },
+            {
+              "ms": 4.8,
+              "queries": 1
+            },
+            {
+              "ms": 5.9,
+              "queries": 1
+            },
+            {
+              "ms": 4.9,
+              "queries": 1
+            },
+            {
+              "ms": -20088,
+              "queries": 0
+            },
+            {
+              "ms": 4.1,
+              "queries": 1
+            },
+            {
+              "ms": -17004.9,
+              "queries": 0
+            },
+            {
+              "ms": 17.8,
+              "queries": 1
+            }
+          ],
+          "requests": [
+            {
+              "attemptId": "cmvmbmxqr00577yhcc1hpzdqo",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5656,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 5653,
+              "outputTokens": 26,
+              "promptBytes": 29217,
+              "commonPrefixBytes": 0,
+              "previousRequest": false,
+              "firstDivergingSection": null,
+              "sinceSameModelMs": 65599
+            },
+            {
+              "attemptId": "cmvmbmxqr00577yhcc1hpzdqo",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5703,
+              "cacheReadTokens": 5653,
+              "cacheWriteTokens": 47,
+              "outputTokens": 81,
+              "promptBytes": 29669,
+              "commonPrefixBytes": 29216,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 3244
+            },
+            {
+              "attemptId": "cmvmbmxqr00577yhcc1hpzdqo",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5822,
+              "cacheReadTokens": 5700,
+              "cacheWriteTokens": 119,
+              "outputTokens": 26,
+              "promptBytes": 33298,
+              "commonPrefixBytes": 29668,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 1636
+            },
+            {
+              "attemptId": "cmvmbnc5t005c7yhcgoiu4llj",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5772,
+              "cacheReadTokens": 5541,
+              "cacheWriteTokens": 228,
+              "outputTokens": 81,
+              "promptBytes": 29739,
+              "commonPrefixBytes": 28709,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 15210
+            },
+            {
+              "attemptId": "cmvmbnc5t005c7yhcgoiu4llj",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5901,
+              "cacheReadTokens": 5769,
+              "cacheWriteTokens": 129,
+              "outputTokens": 71,
+              "promptBytes": 30709,
+              "commonPrefixBytes": 29738,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 2053
+            }
+          ]
+        }
+      ],
+      "left": {
+        "sandboxes": 0,
+        "volumes": 0
+      },
+      "cacheMarkersSent": false,
+      "sharedBase": {
+        "sharedChars": 10714,
+        "bodyChars": 29855,
+        "nonceAt": 29648
+      }
+    },
+    {
+      "scenario": "approval",
+      "model": "gpt-6-luna",
+      "trial": 5,
+      "nonce": "7eb06738",
+      "turns": [
+        {
+          "waitMs": 0,
+          "approveAfterMs": 10000,
+          "compacted": false,
+          "status": "completed",
+          "approvalRequested": true,
+          "restoreOutsideProvisioningMs": 458,
+          "provisioningMs": 1968,
+          "appends": [
+            {
+              "ms": 12.2,
+              "queries": 1
+            },
+            {
+              "ms": 4.5,
+              "queries": 1
+            },
+            {
+              "ms": 6.7,
+              "queries": 1
+            },
+            {
+              "ms": 3.2,
+              "queries": 1
+            },
+            {
+              "ms": 11.9,
+              "queries": 1
+            },
+            {
+              "ms": -18962.7,
+              "queries": 0
+            },
+            {
+              "ms": -18898.2,
+              "queries": 0
+            },
+            {
+              "ms": 9.7,
+              "queries": 1
+            }
+          ],
+          "requests": [
+            {
+              "attemptId": "cmvmbnkbk005s7yhc74c4jxkt",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5656,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 5653,
+              "outputTokens": 26,
+              "promptBytes": 29217,
+              "commonPrefixBytes": 0,
+              "previousRequest": false,
+              "firstDivergingSection": null,
+              "sinceSameModelMs": 8022
+            },
+            {
+              "attemptId": "cmvmbnkbk005s7yhc74c4jxkt",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5703,
+              "cacheReadTokens": 5653,
+              "cacheWriteTokens": 47,
+              "outputTokens": 66,
+              "promptBytes": 29669,
+              "commonPrefixBytes": 29216,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 2577
+            },
+            {
+              "attemptId": "cmvmbnkbk005s7yhc74c4jxkt",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5807,
+              "cacheReadTokens": 5700,
+              "cacheWriteTokens": 104,
+              "outputTokens": 40,
+              "promptBytes": 32276,
+              "commonPrefixBytes": 29668,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 1582
+            },
+            {
+              "attemptId": "cmvmbnz09005x7yhcwg4r1398",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5772,
+              "cacheReadTokens": 5541,
+              "cacheWriteTokens": 228,
+              "outputTokens": 56,
+              "promptBytes": 29739,
+              "commonPrefixBytes": 28709,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 14809
+            },
+            {
+              "attemptId": "cmvmbnz09005x7yhcwg4r1398",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5850,
+              "cacheReadTokens": 5769,
+              "cacheWriteTokens": 78,
+              "outputTokens": 41,
+              "promptBytes": 32163,
+              "commonPrefixBytes": 29738,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 1789
+            }
+          ]
+        }
+      ],
+      "left": {
+        "sandboxes": 0,
+        "volumes": 0
+      },
+      "cacheMarkersSent": false,
+      "sharedBase": {
+        "sharedChars": 10716,
+        "bodyChars": 29855,
+        "nonceAt": 29648
+      }
+    },
+    {
+      "scenario": "approval",
+      "model": "glm-5.3-flash",
+      "trial": 5,
+      "nonce": "d723a41f",
+      "turns": [
+        {
+          "waitMs": 0,
+          "approveAfterMs": 10000,
+          "compacted": false,
+          "status": "completed",
+          "approvalRequested": true,
+          "restoreOutsideProvisioningMs": 457,
+          "provisioningMs": 1829,
+          "appends": [
+            {
+              "ms": 5.3,
+              "queries": 1
+            },
+            {
+              "ms": 4.2,
+              "queries": 1
+            },
+            {
+              "ms": 9.1,
+              "queries": 1
+            },
+            {
+              "ms": 6.3,
+              "queries": 1
+            },
+            {
+              "ms": 12.6,
+              "queries": 1
+            },
+            {
+              "ms": -18159.4,
+              "queries": 0
+            },
+            {
+              "ms": -18161.9,
+              "queries": 0
+            },
+            {
+              "ms": 5.5,
+              "queries": 1
+            }
+          ],
+          "requests": [
+            {
+              "attemptId": "cmvmbo6jm006c7yhcpfzhm5el",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7270,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0,
+              "outputTokens": 20,
+              "promptBytes": 29217,
+              "commonPrefixBytes": 0,
+              "previousRequest": false,
+              "firstDivergingSection": null,
+              "sinceSameModelMs": 66519
+            },
+            {
+              "attemptId": "cmvmbo6jm006c7yhcpfzhm5el",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7298,
+              "cacheReadTokens": 6528,
+              "cacheWriteTokens": 0,
+              "outputTokens": 95,
+              "promptBytes": 29563,
+              "commonPrefixBytes": 29216,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 2214
+            },
+            {
+              "attemptId": "cmvmbo6jm006c7yhcpfzhm5el",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7418,
+              "cacheReadTokens": 6528,
+              "cacheWriteTokens": 0,
+              "outputTokens": 58,
+              "promptBytes": 30399,
+              "commonPrefixBytes": 29562,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 1677
+            },
+            {
+              "attemptId": "cmvmbolfc006h7yhcmmlfjf5f",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7384,
+              "cacheReadTokens": 6528,
+              "cacheWriteTokens": 0,
+              "outputTokens": 41,
+              "promptBytes": 29739,
+              "commonPrefixBytes": 28709,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 14243
+            },
+            {
+              "attemptId": "cmvmbolfc006h7yhcmmlfjf5f",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7434,
+              "cacheReadTokens": 6528,
+              "cacheWriteTokens": 0,
+              "outputTokens": 37,
+              "promptBytes": 30258,
+              "commonPrefixBytes": 29738,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 1535
+            }
+          ]
+        }
+      ],
+      "left": {
+        "sandboxes": 0,
+        "volumes": 0
+      },
+      "cacheMarkersSent": false,
+      "sharedBase": {
+        "sharedChars": 10711,
+        "bodyChars": 30461,
+        "nonceAt": 30303
+      }
+    },
+    {
+      "scenario": "approval",
+      "model": "glm-5.3-flash",
+      "trial": 6,
+      "nonce": "cb85cda5",
+      "turns": [
+        {
+          "waitMs": 0,
+          "approveAfterMs": 10000,
+          "compacted": false,
+          "status": "completed",
+          "approvalRequested": true,
+          "restoreOutsideProvisioningMs": 435,
+          "provisioningMs": 2321,
+          "appends": [
+            {
+              "ms": 9.4,
+              "queries": 1
+            },
+            {
+              "ms": 4,
+              "queries": 1
+            },
+            {
+              "ms": 5.2,
+              "queries": 1
+            },
+            {
+              "ms": 8.7,
+              "queries": 1
+            }
+          ],
+          "requests": [
+            {
+              "attemptId": "cmvmbos5p006w7yhcptnmunno",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7269,
+              "cacheReadTokens": 4736,
+              "cacheWriteTokens": 0,
+              "outputTokens": 20,
+              "promptBytes": 29217,
+              "commonPrefixBytes": 0,
+              "previousRequest": false,
+              "firstDivergingSection": null,
+              "sinceSameModelMs": 7455
+            },
+            {
+              "attemptId": "cmvmbos5p006w7yhcptnmunno",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7297,
+              "cacheReadTokens": 7268,
+              "cacheWriteTokens": 0,
+              "outputTokens": 68,
+              "promptBytes": 29563,
+              "commonPrefixBytes": 29216,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 1597
+            },
+            {
+              "attemptId": "cmvmbp4gw00717yhcmp3if98u",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7383,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0,
+              "outputTokens": 24,
+              "promptBytes": 29739,
+              "commonPrefixBytes": 28709,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 15591
+            }
+          ]
+        }
+      ],
+      "left": {
+        "sandboxes": 0,
+        "volumes": 0
+      },
+      "cacheMarkersSent": false,
+      "sharedBase": {
+        "sharedChars": 10713,
+        "bodyChars": 30461,
+        "nonceAt": 30303
+      }
+    },
+    {
+      "scenario": "approval",
+      "model": "gpt-6-luna",
+      "trial": 6,
+      "nonce": "8eb6fd69",
+      "turns": [
+        {
+          "waitMs": 0,
+          "approveAfterMs": 10000,
+          "compacted": false,
+          "status": "completed",
+          "approvalRequested": true,
+          "restoreOutsideProvisioningMs": 386,
+          "provisioningMs": 2077,
+          "appends": [
+            {
+              "ms": 11.8,
+              "queries": 1
+            },
+            {
+              "ms": 4.5,
+              "queries": 1
+            },
+            {
+              "ms": 12.2,
+              "queries": 1
+            },
+            {
+              "ms": 6.4,
+              "queries": 1
+            },
+            {
+              "ms": 10.4,
+              "queries": 1
+            },
+            {
+              "ms": 7,
+              "queries": 1
+            },
+            {
+              "ms": 5.6,
+              "queries": 1
+            },
+            {
+              "ms": -21523.4,
+              "queries": 0
+            },
+            {
+              "ms": -21504.9,
+              "queries": 0
+            },
+            {
+              "ms": 5,
+              "queries": 1
+            }
+          ],
+          "requests": [
+            {
+              "attemptId": "cmvmbpba0007d7yhcf1arpg9w",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5657,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 5654,
+              "outputTokens": 32,
+              "promptBytes": 29217,
+              "commonPrefixBytes": 0,
+              "previousRequest": false,
+              "firstDivergingSection": null,
+              "sinceSameModelMs": 60612
+            },
+            {
+              "attemptId": "cmvmbpba0007d7yhcf1arpg9w",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5711,
+              "cacheReadTokens": 5654,
+              "cacheWriteTokens": 54,
+              "outputTokens": 26,
+              "promptBytes": 29690,
+              "commonPrefixBytes": 29216,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 1845
+            },
+            {
+              "attemptId": "cmvmbpba0007d7yhcf1arpg9w",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5758,
+              "cacheReadTokens": 5708,
+              "cacheWriteTokens": 47,
+              "outputTokens": 35,
+              "promptBytes": 30142,
+              "commonPrefixBytes": 29689,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 1658
+            },
+            {
+              "attemptId": "cmvmbpba0007d7yhcf1arpg9w",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5831,
+              "cacheReadTokens": 5755,
+              "cacheWriteTokens": 73,
+              "outputTokens": 224,
+              "promptBytes": 30700,
+              "commonPrefixBytes": 30141,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 3526
+            },
+            {
+              "attemptId": "cmvmbprxr007l7yhcoaweu46p",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5812,
+              "cacheReadTokens": 5542,
+              "cacheWriteTokens": 267,
+              "outputTokens": 34,
+              "promptBytes": 29905,
+              "commonPrefixBytes": 28709,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 14510
+            },
+            {
+              "attemptId": "cmvmbprxr007l7yhcoaweu46p",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5868,
+              "cacheReadTokens": 5809,
+              "cacheWriteTokens": 56,
+              "outputTokens": 29,
+              "promptBytes": 30386,
+              "commonPrefixBytes": 29904,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 3730
+            }
+          ]
+        }
+      ],
+      "left": {
+        "sandboxes": 0,
+        "volumes": 0
+      },
+      "cacheMarkersSent": false,
+      "sharedBase": {
+        "sharedChars": 10714,
+        "bodyChars": 29855,
+        "nonceAt": 29648
+      }
+    },
+    {
+      "scenario": "approval",
+      "model": "gpt-6-luna",
+      "trial": 7,
+      "nonce": "b550d508",
+      "turns": [
+        {
+          "waitMs": 0,
+          "approveAfterMs": 10000,
+          "compacted": false,
+          "status": "completed",
+          "approvalRequested": true,
+          "restoreOutsideProvisioningMs": 449,
+          "provisioningMs": 1878,
+          "appends": [
+            {
+              "ms": 5.6,
+              "queries": 1
+            },
+            {
+              "ms": 6.7,
+              "queries": 1
+            },
+            {
+              "ms": 8.6,
+              "queries": 1
+            },
+            {
+              "ms": 3.4,
+              "queries": 1
+            },
+            {
+              "ms": 12.5,
+              "queries": 1
+            },
+            {
+              "ms": -18200.9,
+              "queries": 0
+            },
+            {
+              "ms": -18211,
+              "queries": 0
+            },
+            {
+              "ms": 8.8,
+              "queries": 1
+            }
+          ],
+          "requests": [
+            {
+              "attemptId": "cmvmbq0nh00807yhcmxtwo0nx",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5655,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 5652,
+              "outputTokens": 26,
+              "promptBytes": 29217,
+              "commonPrefixBytes": 0,
+              "previousRequest": false,
+              "firstDivergingSection": null,
+              "sinceSameModelMs": 7619
+            },
+            {
+              "attemptId": "cmvmbq0nh00807yhcmxtwo0nx",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5702,
+              "cacheReadTokens": 5652,
+              "cacheWriteTokens": 47,
+              "outputTokens": 114,
+              "promptBytes": 29669,
+              "commonPrefixBytes": 29216,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 2204
+            },
+            {
+              "attemptId": "cmvmbq0nh00807yhcmxtwo0nx",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5854,
+              "cacheReadTokens": 5699,
+              "cacheWriteTokens": 152,
+              "outputTokens": 4,
+              "promptBytes": 33023,
+              "commonPrefixBytes": 29668,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 1506
+            },
+            {
+              "attemptId": "cmvmbqeqg00857yhcxfn13vxm",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5771,
+              "cacheReadTokens": 5540,
+              "cacheWriteTokens": 228,
+              "outputTokens": 52,
+              "promptBytes": 29739,
+              "commonPrefixBytes": 28709,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 14446
+            },
+            {
+              "attemptId": "cmvmbqeqg00857yhcxfn13vxm",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5845,
+              "cacheReadTokens": 5768,
+              "cacheWriteTokens": 74,
+              "outputTokens": 41,
+              "promptBytes": 32114,
+              "commonPrefixBytes": 29738,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 2026
+            }
+          ]
+        }
+      ],
+      "left": {
+        "sandboxes": 0,
+        "volumes": 0
+      },
+      "cacheMarkersSent": false,
+      "sharedBase": {
+        "sharedChars": 10716,
+        "bodyChars": 29855,
+        "nonceAt": 29648
+      }
+    },
+    {
+      "scenario": "approval",
+      "model": "glm-5.3-flash",
+      "trial": 7,
+      "nonce": "e3418d82",
+      "turns": [
+        {
+          "waitMs": 0,
+          "approveAfterMs": 10000,
+          "compacted": false,
+          "status": "waiting_input",
+          "approvalRequested": true,
+          "restoreOutsideProvisioningMs": 429,
+          "provisioningMs": 2331,
+          "appends": [
+            {
+              "ms": 5.3,
+              "queries": 1
+            },
+            {
+              "ms": 3.9,
+              "queries": 1
+            },
+            {
+              "ms": 12.1,
+              "queries": 1
+            },
+            {
+              "ms": 4.8,
+              "queries": 1
+            },
+            {
+              "ms": 13.2,
+              "queries": 1
+            },
+            {
+              "ms": -18091.8,
+              "queries": 0
+            },
+            {
+              "ms": -18073.7,
+              "queries": 0
+            },
+            {
+              "ms": 5.8,
+              "queries": 1
+            }
+          ],
+          "requests": [
+            {
+              "attemptId": "cmvmbqm9m008k7yhceonfosr8",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7270,
+              "cacheReadTokens": 4736,
+              "cacheWriteTokens": 0,
+              "outputTokens": 20,
+              "promptBytes": 29217,
+              "commonPrefixBytes": 0,
+              "previousRequest": false,
+              "firstDivergingSection": null,
+              "sinceSameModelMs": 69335
+            },
+            {
+              "attemptId": "cmvmbqm9m008k7yhceonfosr8",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7298,
+              "cacheReadTokens": 7232,
+              "cacheWriteTokens": 0,
+              "outputTokens": 37,
+              "promptBytes": 29563,
+              "commonPrefixBytes": 29216,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 1845
+            },
+            {
+              "attemptId": "cmvmbqm9m008k7yhceonfosr8",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7360,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0,
+              "outputTokens": 16,
+              "promptBytes": 30045,
+              "commonPrefixBytes": 29562,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 1859
+            },
+            {
+              "attemptId": "cmvmbr0x4008p7yhce6luc65h",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7384,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0,
+              "outputTokens": 20,
+              "promptBytes": 29739,
+              "commonPrefixBytes": 28709,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 14367
+            },
+            {
+              "attemptId": "cmvmbr0x4008p7yhce6luc65h",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7412,
+              "cacheReadTokens": 6528,
+              "cacheWriteTokens": 0,
+              "outputTokens": 165,
+              "promptBytes": 30085,
+              "commonPrefixBytes": 29738,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 3240
+            }
+          ]
+        }
+      ],
+      "left": {
+        "sandboxes": 0,
+        "volumes": 0
+      },
+      "cacheMarkersSent": false,
+      "sharedBase": {
+        "sharedChars": 10711,
+        "bodyChars": 30461,
+        "nonceAt": 30303
+      }
+    },
+    {
+      "scenario": "approval",
+      "model": "glm-5.3-flash",
+      "trial": 8,
+      "nonce": "fd33a580",
+      "turns": [
+        {
+          "waitMs": 0,
+          "approveAfterMs": 10000,
+          "compacted": false,
+          "status": "completed",
+          "approvalRequested": true,
+          "restoreOutsideProvisioningMs": 417,
+          "provisioningMs": 2291,
+          "appends": [
+            {
+              "ms": 11.2,
+              "queries": 1
+            },
+            {
+              "ms": 4.2,
+              "queries": 1
+            },
+            {
+              "ms": 5.8,
+              "queries": 1
+            },
+            {
+              "ms": 3.4,
+              "queries": 1
+            },
+            {
+              "ms": 9.1,
+              "queries": 1
+            },
+            {
+              "ms": -20232.7,
+              "queries": 0
+            },
+            {
+              "ms": -20229.2,
+              "queries": 0
+            },
+            {
+              "ms": 10,
+              "queries": 1
+            }
+          ],
+          "requests": [
+            {
+              "attemptId": "cmvmbr94g00927yhcuvvvdd6e",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7269,
+              "cacheReadTokens": 4736,
+              "cacheWriteTokens": 0,
+              "outputTokens": 20,
+              "promptBytes": 29217,
+              "commonPrefixBytes": 0,
+              "previousRequest": false,
+              "firstDivergingSection": null,
+              "sinceSameModelMs": 7777
+            },
+            {
+              "attemptId": "cmvmbr94g00927yhcuvvvdd6e",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7297,
+              "cacheReadTokens": 7268,
+              "cacheWriteTokens": 0,
+              "outputTokens": 56,
+              "promptBytes": 29563,
+              "commonPrefixBytes": 29216,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 2288
+            },
+            {
+              "attemptId": "cmvmbr94g00927yhcuvvvdd6e",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7378,
+              "cacheReadTokens": 7296,
+              "cacheWriteTokens": 0,
+              "outputTokens": 66,
+              "promptBytes": 30212,
+              "commonPrefixBytes": 29562,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 2120
+            },
+            {
+              "attemptId": "cmvmbrnvc00977yhcaaf5c113",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7383,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0,
+              "outputTokens": 25,
+              "promptBytes": 29739,
+              "commonPrefixBytes": 28709,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 15865
+            },
+            {
+              "attemptId": "cmvmbrnvc00977yhcaaf5c113",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7417,
+              "cacheReadTokens": 6528,
+              "cacheWriteTokens": 0,
+              "outputTokens": 31,
+              "promptBytes": 30103,
+              "commonPrefixBytes": 29738,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 2083
+            }
+          ]
+        }
+      ],
+      "left": {
+        "sandboxes": 0,
+        "volumes": 0
+      },
+      "cacheMarkersSent": false,
+      "sharedBase": {
+        "sharedChars": 10713,
+        "bodyChars": 30461,
+        "nonceAt": 30303
+      }
+    },
+    {
+      "scenario": "approval",
+      "model": "gpt-6-luna",
+      "trial": 8,
+      "nonce": "94ab88a6",
+      "turns": [
+        {
+          "waitMs": 0,
+          "approveAfterMs": 10000,
+          "compacted": false,
+          "status": "completed",
+          "approvalRequested": true,
+          "restoreOutsideProvisioningMs": 376,
+          "provisioningMs": 2294,
+          "appends": [
+            {
+              "ms": 6.5,
+              "queries": 1
+            },
+            {
+              "ms": 3.6,
+              "queries": 1
+            },
+            {
+              "ms": 6,
+              "queries": 1
+            },
+            {
+              "ms": 3.1,
+              "queries": 1
+            },
+            {
+              "ms": 12.3,
+              "queries": 1
+            },
+            {
+              "ms": -19528.1,
+              "queries": 0
+            },
+            {
+              "ms": -19524.4,
+              "queries": 0
+            },
+            {
+              "ms": 6.1,
+              "queries": 1
+            }
+          ],
+          "requests": [
+            {
+              "attemptId": "cmvmbrwgs009m7yhcb5k4875a",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5657,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 5654,
+              "outputTokens": 42,
+              "promptBytes": 29217,
+              "commonPrefixBytes": 0,
+              "previousRequest": false,
+              "firstDivergingSection": null,
+              "sinceSameModelMs": 67412
+            },
+            {
+              "attemptId": "cmvmbrwgs009m7yhcb5k4875a",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5720,
+              "cacheReadTokens": 5654,
+              "cacheWriteTokens": 63,
+              "outputTokens": 84,
+              "promptBytes": 31508,
+              "commonPrefixBytes": 29216,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 2945
+            },
+            {
+              "attemptId": "cmvmbrwgs009m7yhcb5k4875a",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5842,
+              "cacheReadTokens": 5717,
+              "cacheWriteTokens": 122,
+              "outputTokens": 35,
+              "promptBytes": 35286,
+              "commonPrefixBytes": 31507,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 1844
+            },
+            {
+              "attemptId": "cmvmbsb70009r7yhcbkqnxh9y",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5773,
+              "cacheReadTokens": 5542,
+              "cacheWriteTokens": 228,
+              "outputTokens": 59,
+              "promptBytes": 29739,
+              "commonPrefixBytes": 28709,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 14731
+            },
+            {
+              "attemptId": "cmvmbsb70009r7yhcbkqnxh9y",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5854,
+              "cacheReadTokens": 5770,
+              "cacheWriteTokens": 81,
+              "outputTokens": 23,
+              "promptBytes": 32187,
+              "commonPrefixBytes": 29738,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 1338
+            }
+          ]
+        }
+      ],
+      "left": {
+        "sandboxes": 0,
+        "volumes": 0
+      },
+      "cacheMarkersSent": false,
+      "sharedBase": {
+        "sharedChars": 10714,
+        "bodyChars": 29855,
+        "nonceAt": 29648
+      }
+    },
+    {
+      "scenario": "approval",
+      "model": "gpt-6-luna",
+      "trial": 9,
+      "nonce": "83a9d3f5",
+      "turns": [
+        {
+          "waitMs": 0,
+          "approveAfterMs": 10000,
+          "compacted": false,
+          "status": "completed",
+          "approvalRequested": true,
+          "restoreOutsideProvisioningMs": 406,
+          "provisioningMs": 2350,
+          "appends": [
+            {
+              "ms": 6.2,
+              "queries": 1
+            },
+            {
+              "ms": 7.5,
+              "queries": 1
+            },
+            {
+              "ms": 5.1,
+              "queries": 1
+            },
+            {
+              "ms": 5.2,
+              "queries": 1
+            },
+            {
+              "ms": 8.3,
+              "queries": 1
+            },
+            {
+              "ms": -17538.9,
+              "queries": 0
+            },
+            {
+              "ms": -17497.2,
+              "queries": 0
+            },
+            {
+              "ms": 7.6,
+              "queries": 1
+            }
+          ],
+          "requests": [
+            {
+              "attemptId": "cmvmbsi9e00a67yhcbp7bdu2j",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5659,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 5656,
+              "outputTokens": 26,
+              "promptBytes": 29217,
+              "commonPrefixBytes": 0,
+              "previousRequest": false,
+              "firstDivergingSection": null,
+              "sinceSameModelMs": 7187
+            },
+            {
+              "attemptId": "cmvmbsi9e00a67yhcbp7bdu2j",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5706,
+              "cacheReadTokens": 5656,
+              "cacheWriteTokens": 47,
+              "outputTokens": 34,
+              "promptBytes": 29669,
+              "commonPrefixBytes": 29216,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 1581
+            },
+            {
+              "attemptId": "cmvmbsi9e00a67yhcbp7bdu2j",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5778,
+              "cacheReadTokens": 5703,
+              "cacheWriteTokens": 72,
+              "outputTokens": 4,
+              "promptBytes": 30222,
+              "commonPrefixBytes": 29668,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 1267
+            },
+            {
+              "attemptId": "cmvmbsvap00ab7yhc2fm9w87z",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5775,
+              "cacheReadTokens": 5544,
+              "cacheWriteTokens": 228,
+              "outputTokens": 55,
+              "promptBytes": 29739,
+              "commonPrefixBytes": 28709,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 14684
+            },
+            {
+              "attemptId": "cmvmbsvap00ab7yhc2fm9w87z",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 5852,
+              "cacheReadTokens": 5772,
+              "cacheWriteTokens": 77,
+              "outputTokens": 23,
+              "promptBytes": 32143,
+              "commonPrefixBytes": 29738,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 1391
+            }
+          ]
+        }
+      ],
+      "left": {
+        "sandboxes": 0,
+        "volumes": 0
+      },
+      "cacheMarkersSent": false,
+      "sharedBase": {
+        "sharedChars": 10716,
+        "bodyChars": 29855,
+        "nonceAt": 29648
+      }
+    },
+    {
+      "scenario": "approval",
+      "model": "glm-5.3-flash",
+      "trial": 9,
+      "nonce": "98e2ae09",
+      "turns": [
+        {
+          "waitMs": 0,
+          "approveAfterMs": 10000,
+          "compacted": false,
+          "status": "completed",
+          "approvalRequested": true,
+          "restoreOutsideProvisioningMs": 452,
+          "provisioningMs": 2205,
+          "appends": [
+            {
+              "ms": 13.8,
+              "queries": 1
+            },
+            {
+              "ms": 3.9,
+              "queries": 1
+            },
+            {
+              "ms": 13.8,
+              "queries": 1
+            },
+            {
+              "ms": -17929.3,
+              "queries": 0
+            },
+            {
+              "ms": -17862.8,
+              "queries": 0
+            },
+            {
+              "ms": -16468.9,
+              "queries": 0
+            }
+          ],
+          "requests": [
+            {
+              "attemptId": "cmvmbt2cm00aq7yhc97mp70he",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7270,
+              "cacheReadTokens": 4736,
+              "cacheWriteTokens": 0,
+              "outputTokens": 20,
+              "promptBytes": 29217,
+              "commonPrefixBytes": 0,
+              "previousRequest": false,
+              "firstDivergingSection": null,
+              "sinceSameModelMs": 62931
+            },
+            {
+              "attemptId": "cmvmbt2cm00aq7yhc97mp70he",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7298,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0,
+              "outputTokens": 86,
+              "promptBytes": 29563,
+              "commonPrefixBytes": 29216,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 3128
+            },
+            {
+              "attemptId": "cmvmbtgrr00av7yhcrb4qdr40",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7384,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0,
+              "outputTokens": 46,
+              "promptBytes": 29739,
+              "commonPrefixBytes": 28709,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 14832
+            },
+            {
+              "attemptId": "cmvmbtgrr00av7yhcrb4qdr40",
+              "agent": "root",
+              "usageReported": true,
+              "inputTokens": 7439,
+              "cacheReadTokens": 6528,
+              "cacheWriteTokens": 0,
+              "outputTokens": 35,
+              "promptBytes": 30292,
+              "commonPrefixBytes": 29738,
+              "previousRequest": true,
+              "firstDivergingSection": "history",
+              "sinceSameModelMs": 1663
+            }
+          ]
+        }
+      ],
+      "left": {
+        "sandboxes": 0,
+        "volumes": 0
+      },
+      "cacheMarkersSent": false,
+      "sharedBase": {
+        "sharedChars": 10711,
+        "bodyChars": 30461,
+        "nonceAt": 30303
+      }
+    }
+  ]
+}
