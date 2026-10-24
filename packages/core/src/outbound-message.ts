@@ -29,6 +29,10 @@ export type OutboundCall =
   | { kind: "refuse"; error: string };
 
 const OUTBOUND_DRAFT_MAX_LENGTH = 20_000;
+/** What the card can show whole: recipients are never cut, so a longer list is refused. */
+const OUTBOUND_RECIPIENTS_MAX_LENGTH = 4_000;
+// No address is longer, and the address patterns backtrack badly on long input.
+const ADDRESS_MAX_LENGTH = 320;
 
 type FieldRole =
   | OutboundRecipient["role"]
@@ -129,6 +133,12 @@ function readOutbound(action: OutboundAction, connectorKinds: string[]): Outboun
     words.some((word) => word.endsWith("mail")) ||
     isEmailConnectorKind(connectorKind);
   if (!mail) return { kind: "none" };
+  if (recipientsLength(action.args) > OUTBOUND_RECIPIENTS_MAX_LENGTH) {
+    return {
+      kind: "refuse",
+      error: "Too many recipients to show the user. Send to fewer people at a time.",
+    };
+  }
   const [body] = reading.texts;
   if (
     words.includes("forward") ||
@@ -152,6 +162,16 @@ function readOutbound(action: OutboundAction, connectorKinds: string[]): Outboun
       args,
     },
   };
+}
+
+function recipientsLength(args: Record<string, unknown>): number {
+  return Object.entries(args).reduce(
+    (total, [key, value]) =>
+      isRecipientField(key)
+        ? total + (typeof value === "string" ? value : (JSON.stringify(value) ?? "")).length
+        : total,
+    0,
+  );
 }
 
 function toolWords(toolName: string): string[] {
@@ -193,9 +213,14 @@ function readString(value: string, role: FieldRole | undefined, reading: Reading
     case "to":
     case "cc":
     case "bcc":
-      reading.addressed ||= ADDRESS_INSIDE.test(value);
-      if (ADDRESS.test(value.trim())) reading.recipients.push({ role, address: value.trim() });
-      else reading.unexplained = true;
+      if (value.length <= ADDRESS_MAX_LENGTH) {
+        reading.addressed ||= ADDRESS_INSIDE.test(value);
+        if (ADDRESS.test(value.trim())) {
+          reading.recipients.push({ role, address: value.trim() });
+          return;
+        }
+      }
+      reading.unexplained = true;
       return;
     case "text":
       reading.texts.push(value);

@@ -50,7 +50,7 @@ export function buildApprovalAskBlock(
     options?.unreadable,
   );
   const safeDetail = detail ? redactSecrets(detail, secrets) : undefined;
-  // An unreadable send bounds each value itself: cutting the whole detail could drop a recipient.
+  // An unreadable send keeps its recipients whole and bounds the rest itself.
   const shownDetail =
     safeDetail && !options?.unreadable
       ? truncate(safeDetail, MAX_APPROVAL_DETAIL_LENGTH)
@@ -159,8 +159,8 @@ const DETAIL_LABELS: Record<string, string> = { recipient_email: "to" };
 
 function argLines(args: Record<string, unknown>, everyArgument = false): string[] {
   if (everyArgument) {
-    // Recipients come first and whole, then long text last, so cutting the detail short never
-    // hides a recipient or a flag.
+    // Recipients come first and whole: a send with more than the card can show is refused
+    // upstream. The rest shares one budget, so cutting it never hides a recipient or a flag.
     const values = Object.entries(args).map(([key, value]) => ({
       key,
       text: typeof value === "string" ? value : JSON.stringify(value),
@@ -169,13 +169,21 @@ function argLines(args: Record<string, unknown>, everyArgument = false): string[
     const isLong = ({ text, recipient }: { text: string; recipient: boolean }) =>
       !recipient && text.length > LONG_APPROVAL_VALUE_LENGTH;
     const rest = values.filter(({ recipient }) => !recipient);
-    return [
+    let budget = MAX_APPROVAL_DETAIL_LENGTH;
+    const shown = [
       ...values.filter(({ recipient }) => recipient),
       ...rest.filter((entry) => !isLong(entry)),
       ...rest.filter(isLong),
-    ].map(
-      ({ key, text, recipient }) =>
-        `${key.replace(LINE_BREAKS, " ")}: ${(recipient ? text : truncate(text, MAX_APPROVAL_VALUE_LENGTH)).replace(LINE_BREAKS, "\n  ")}`,
+    ].flatMap(({ key, text, recipient }) => {
+      if (recipient) return [{ key, text }];
+      const room = budget - key.length - 3;
+      if (room <= 0) return [];
+      const kept = truncate(text, Math.min(MAX_APPROVAL_VALUE_LENGTH, room));
+      budget -= key.length + 3 + kept.length;
+      return [{ key, text: kept }];
+    });
+    return shown.map(
+      ({ key, text }) => `${key.replace(LINE_BREAKS, " ")}: ${text.replace(LINE_BREAKS, "\n  ")}`,
     );
   }
   const lines: string[] = [];

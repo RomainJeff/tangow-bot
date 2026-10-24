@@ -258,6 +258,32 @@ describe("readOutboundCall", () => {
     expect(read(toolName, args)).toEqual({ kind: "none" });
   });
 
+  it.each([
+    ["one huge recipient field", { to: "x".repeat(200_000), body: "Hi" }],
+    [
+      "a long recipient list",
+      {
+        to: "a@example.com",
+        bcc: Array.from({ length: 300 }, (_, i) => `p${i}@example.test`),
+        body: "Hi",
+      },
+    ],
+    [
+      "a long recipient list beside a field the card cannot explain",
+      { to: "a@example.com", cc: ["c@example.test".repeat(300)], body: "Hi", notes: "n" },
+    ],
+  ])("refuses %s rather than show it cut", (_, args) => {
+    expect(read("GMAIL_SEND_EMAIL", args)).toEqual({
+      kind: "refuse",
+      error: "Too many recipients to show the user. Send to fewer people at a time.",
+    });
+  });
+
+  it("drafts a send to many recipients that still fit the card", () => {
+    const bcc = Array.from({ length: 100 }, (_, i) => `p${i}@example.test`);
+    expect(read("GMAIL_SEND_EMAIL", { to: "a@example.com", bcc, body: "Hi" }).kind).toBe("draft");
+  });
+
   it("refuses a batch that sends among other actions, and leaves a batch of reads alone", () => {
     const fetch = { toolName: "GMAIL_FETCH_EMAILS", args: {} };
     expect(readOutboundCall([fetch, tracedSend])).toEqual({
