@@ -14,7 +14,7 @@ export type DraftRecord = { path: DraftPath; proposed: string } & (
   | { state: "pending"; failure?: DraftFailure }
   | { state: "approved" }
   | { state: "sent"; at: string }
-  | { state: "discarded" | "replaced" | "unsent" }
+  | { state: "discarded" | "unsent" }
 );
 
 const EFFECT_STATUSES: Record<DraftRecord["state"], readonly string[]> = {
@@ -22,7 +22,6 @@ const EFFECT_STATUSES: Record<DraftRecord["state"], readonly string[]> = {
   approved: ["approved", "executing"],
   sent: ["completed"],
   discarded: ["denied"],
-  replaced: ["denied"],
   unsent: ["denied"],
 };
 
