@@ -4,7 +4,6 @@ import path from "node:path";
 import type { ComputerRef, SandboxProvider } from "@rakazo/adapter-kit";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { createApp } from "../../../apps/api/src/app.ts";
-import { computerTestSandbox } from "./computer-test-config.js";
 import { sessionCookieHeader } from "./index.js";
 
 const live = process.env.RUN_COMPUTER_E2E === "1";
@@ -14,19 +13,11 @@ describeLive("real model and sandbox computer journey", () => {
   let dataDir: string | undefined;
   let handles: Awaited<ReturnType<typeof createApp>>;
   let computer: ComputerRef | undefined;
-  let sandboxProvider: "box" | "e2b";
   let botId: string | undefined;
   let runId: string | undefined;
 
   beforeAll(async () => {
-    const sandbox = computerTestSandbox(process.env.SANDBOX_PROVIDER);
-    sandboxProvider = sandbox.provider;
-    for (const key of [
-      "DATABASE_URL",
-      sandbox.apiKeyEnv,
-      "OPENROUTER_API_KEY",
-      "COMPUTER_E2E_MODEL",
-    ]) {
+    for (const key of ["DATABASE_URL", "E2B_API_KEY", "OPENROUTER_API_KEY", "COMPUTER_E2E_MODEL"]) {
       if (!process.env[key]) throw new Error(`${key} is required for pnpm test:computer`);
     }
     dataDir = mkdtempSync(path.join(tmpdir(), "rakazo-computer-e2e-"));
@@ -34,11 +25,9 @@ describeLive("real model and sandbox computer journey", () => {
     handles = await createApp({
       databaseUrl: process.env.DATABASE_URL!,
       dataDir,
-      sandboxProvider,
+      sandboxProvider: "e2b",
       agentRuntime: "pi",
       e2bApiKey: process.env.E2B_API_KEY,
-      boxApiKey: process.env.BOX_API_KEY,
-      boxApiUrl: process.env.BOX_API_URL ?? process.env.BOX_BASE_URL,
       openRouterKey: process.env.OPENROUTER_API_KEY,
       defaultProvider: "openrouter",
       defaultModel: process.env.COMPUTER_E2E_MODEL,
@@ -69,7 +58,7 @@ describeLive("real model and sandbox computer journey", () => {
             id: stored.providerRef,
             providerRef: stored.providerRef,
             botId: stored.homeKey,
-            kind: sandboxProvider,
+            kind: "e2b",
           };
         }
       } finally {
@@ -113,7 +102,7 @@ describeLive("real model and sandbox computer journey", () => {
       id: stored.providerRef!,
       providerRef: stored.providerRef!,
       botId: stored.homeKey,
-      kind: sandboxProvider,
+      kind: "e2b",
     };
     await installVisualFixture(handles.sandbox, computer);
 
@@ -187,7 +176,7 @@ describeLive("real model and sandbox computer journey", () => {
       id: replacement.providerRef!,
       providerRef: replacement.providerRef!,
       botId: replacement.homeKey,
-      kind: sandboxProvider,
+      kind: "e2b",
     };
     expect(replacement.providerRef).not.toBe(originalRef);
     const restored = await rpc<{ content: string }>(handles.app, cookie, "computer/readFile", {

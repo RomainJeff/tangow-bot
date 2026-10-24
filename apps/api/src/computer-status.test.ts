@@ -1,3 +1,4 @@
+import { ComputerStatusSchema } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
 import { executionBlocksUserTakeover, toComputerStatus } from "./computer-status.js";
 
@@ -30,6 +31,11 @@ describe("toComputerStatus", () => {
   it("passes through the busy bot name when takeover is blocked", () => {
     expect(toComputerStatus("bot-1", 5, baseComputer).busyBotName).toBeNull();
     expect(toComputerStatus("bot-1", 5, baseComputer, "Writer").busyBotName).toBe("Writer");
+  });
+
+  it("keeps a computer left by a removed provider readable", () => {
+    const status = toComputerStatus("bot-1", 5, { ...baseComputer, kind: "daytona" });
+    expect(ComputerStatusSchema.parse(status).kind).toBe("fake");
   });
 
   it("hides update on desktop computers", () => {

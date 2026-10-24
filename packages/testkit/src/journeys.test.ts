@@ -5,9 +5,9 @@ import {
   ComposioEmulator,
   createScheduleFromTool,
   DesktopSandboxProvider,
+  E2BSandboxEmulator,
   FakeSandboxProvider,
   handoffToGroupBot,
-  ManagedSandboxEmulator,
   toComputerRef,
 } from "@rakazo/adapters";
 import type { SessionId, ThreadEntry } from "@rakazo/contracts";
@@ -1371,7 +1371,7 @@ describeJourneys("required product journeys", () => {
       signal: new AbortController().signal,
     };
     const fake = new FakeSandboxProvider();
-    const managed = new ManagedSandboxEmulator();
+    const managed = new E2BSandboxEmulator();
     const desktop = new DesktopSandboxProvider();
     const a = await fake.provision({ botId: "ja", homePath: "/tmp/ja" }, ctx);
     const b = await managed.provision({ botId: "jb", homePath: "/tmp/jb" }, ctx);

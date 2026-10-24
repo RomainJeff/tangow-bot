@@ -3,10 +3,13 @@ export function resolveSandboxProvider(source: NodeJS.ProcessEnv = process.env):
   const configured = source.SANDBOX_PROVIDER;
   if (configured !== undefined && !configured.trim()) return "none";
   const requested = configured?.trim() || "docker";
+  if (requested === "daytona" || requested === "box") {
+    throw new Error(
+      `The ${requested} computer provider was removed. Set SANDBOX_PROVIDER to docker or e2b.`,
+    );
+  }
   if (requested === "none") return "none";
   if (requested === "e2b" && !optional(source.E2B_API_KEY)) return "none";
-  if (requested === "daytona" && !optional(source.DAYTONA_API_KEY)) return "none";
-  if (requested === "box" && !optional(source.BOX_API_KEY)) return "none";
   // Production without a supervisor token cannot run Docker computers; boot as none instead of exiting.
   if (
     requested === "docker" &&

@@ -5,8 +5,8 @@ import type {
   SandboxProvider,
 } from "@rakazo/adapter-kit";
 import {
+  E2BSandboxEmulator,
   InMemoryJobQueue,
-  ManagedSandboxEmulator,
   PiAgentRuntime,
   recoverBrowserApprovalScreens,
 } from "@rakazo/adapters";
@@ -45,7 +45,7 @@ async function pausedBrowser(
   let effects = 0;
   const releases: AdapterContext[] = [];
   const state = { failSetup: false, failRelease: false, pauseAfterApproval: false };
-  class Computer extends ManagedSandboxEmulator {
+  class Computer extends E2BSandboxEmulator {
     async pageBrowser(computer: ComputerRef, request: PageBrowserCommand, context: AdapterContext) {
       await this.connectScreen(computer, {}, context);
       if (request.command === "snapshot")
