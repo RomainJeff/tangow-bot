@@ -360,7 +360,10 @@ export default function Account() {
             label: UI_LOCALE_LABELS[code],
           }))}
           selected={locale}
-          onSelect={(code) => applyLocale(code as AccountUiLocale)}
+          onSelect={(value) => {
+            const code = ACCOUNT_UI_LOCALES.find((locale) => locale === value);
+            if (code) applyLocale(code);
+          }}
           style={({ pressed }) => [
             styles.settingsButton,
             pressed && styles.pressed,

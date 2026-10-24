@@ -15,7 +15,7 @@ import { useI18n } from "../lib/i18n";
 import { presentMessageActionSheet } from "../lib/message-action-sheet";
 import { useResolvedAppearance } from "../lib/native";
 import { headerMenuItems, type MenuAction, splitMenuActions } from "../lib/native-menu";
-import { MoreButton } from "./bot-page/skill-parts";
+import { NativeSymbol } from "./native-symbol";
 
 type MenuOption = { value: string; label: string };
 
@@ -34,8 +34,7 @@ type NativeMenuProps = {
 );
 
 /**
- * Wraps an in-body trigger. iOS opens a native menu anchored to it; Android keeps the action sheet
- * the trigger used before.
+ * Wraps an in-body trigger. iOS opens a native menu anchored to it; Android opens an action sheet.
  */
 export function NativeMenu(props: NativeMenuProps) {
   return Platform.OS === "ios" ? <IosMenu {...props} /> : <AndroidMenu {...props} />;
@@ -162,7 +161,7 @@ function useActionSheet(title?: string) {
 }
 
 /**
- * The header's `⋯`. iOS opens a native menu from the bar item; Android keeps its button and the
+ * The header's `⋯`. iOS opens a native menu from the bar item; Android shows a button that opens an
  * action sheet.
  */
 export function useHeaderMenu(label: string, actions: MenuAction[]) {
@@ -178,4 +177,12 @@ export function useHeaderMenu(label: string, actions: MenuAction[]) {
     ],
     headerRight: () => <MoreButton label={label} onPress={() => present(actions)} />,
   };
+}
+
+function MoreButton({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={label} hitSlop={10} onPress={onPress}>
+      <NativeSymbol ios="ellipsis" android="ellipsis-horizontal" size={20} />
+    </Pressable>
+  );
 }
