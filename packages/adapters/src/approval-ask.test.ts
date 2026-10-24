@@ -246,7 +246,7 @@ describe("buildApprovalAskBlock", () => {
       { unreadable: true },
     );
     expect(block).toMatchObject({
-      detail: 'to: a@example.test\nbody: Hi\nnotes: evil@example.test\ncc: ["b@example.test"]',
+      detail: 'to: a@example.test\ncc: ["b@example.test"]\nbody: Hi\nnotes: evil@example.test',
       actions: [
         { id: "allow", label: "Allow once" },
         { id: "deny", label: "Deny" },
@@ -264,6 +264,20 @@ describe("buildApprovalAskBlock", () => {
     );
     expect(block).toMatchObject({
       detail: "to: a@example.test\nbody: Hello\n  recipient_email: someone@example.test",
+    });
+  });
+
+  it("never shortens a long recipient list on a send it cannot read", () => {
+    const bcc = Array.from({ length: 200 }, (_, index) => `person${index}@example.test`);
+    const block = buildApprovalAskBlock(
+      "effect-1",
+      "GMAIL_SEND_EMAIL",
+      { body: "x".repeat(5_000), bcc, to: "a@example.test", notes: "kept" },
+      [],
+      { unreadable: true },
+    );
+    expect(block).toMatchObject({
+      detail: `bcc: ${JSON.stringify(bcc)}\nto: a@example.test\nnotes: kept\nbody: ${"x".repeat(1_000)}…`,
     });
   });
 

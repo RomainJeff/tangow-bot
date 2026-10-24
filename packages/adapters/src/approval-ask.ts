@@ -1,6 +1,11 @@
 import type { AskDraft, MessageBlock } from "@rakazo/contracts";
 import type { RoutineCard } from "@rakazo/core";
-import { redactSecrets, routineCardBlock, spawnBotApprovalBlock } from "@rakazo/core";
+import {
+  isRecipientField,
+  redactSecrets,
+  routineCardBlock,
+  spawnBotApprovalBlock,
+} from "@rakazo/core";
 import type { ConnectorAction } from "./connector-actions.js";
 
 const MAX_APPROVAL_SUMMARY_LENGTH = 500;
@@ -45,6 +50,11 @@ export function buildApprovalAskBlock(
     options?.unreadable,
   );
   const safeDetail = detail ? redactSecrets(detail, secrets) : undefined;
+  // An unreadable send bounds each value itself: cutting the whole detail could drop a recipient.
+  const shownDetail =
+    safeDetail && !options?.unreadable
+      ? truncate(safeDetail, MAX_APPROVAL_DETAIL_LENGTH)
+      : safeDetail;
   return {
     kind: "ask",
     approvalEffectId: effectId,
@@ -55,11 +65,7 @@ export function buildApprovalAskBlock(
       ),
       MAX_APPROVAL_SUMMARY_LENGTH,
     ),
-    detail: draft
-      ? draftDetail(draft)
-      : safeDetail
-        ? truncate(safeDetail, MAX_APPROVAL_DETAIL_LENGTH)
-        : undefined,
+    detail: draft ? draftDetail(draft) : shownDetail,
     status: "pending",
     actions: draft
       ? [
@@ -153,15 +159,23 @@ const DETAIL_LABELS: Record<string, string> = { recipient_email: "to" };
 
 function argLines(args: Record<string, unknown>, everyArgument = false): string[] {
   if (everyArgument) {
-    // Long text goes last, so cutting the detail short never hides a recipient or a flag.
+    // Recipients come first and whole, then long text last, so cutting the detail short never
+    // hides a recipient or a flag.
     const values = Object.entries(args).map(([key, value]) => ({
       key,
       text: typeof value === "string" ? value : JSON.stringify(value),
+      recipient: isRecipientField(key),
     }));
-    const isLong = ({ text }: { text: string }) => text.length > LONG_APPROVAL_VALUE_LENGTH;
-    return [...values.filter((entry) => !isLong(entry)), ...values.filter(isLong)].map(
-      ({ key, text }) =>
-        `${key.replace(LINE_BREAKS, " ")}: ${truncate(text, MAX_APPROVAL_VALUE_LENGTH).replace(LINE_BREAKS, "\n  ")}`,
+    const isLong = ({ text, recipient }: { text: string; recipient: boolean }) =>
+      !recipient && text.length > LONG_APPROVAL_VALUE_LENGTH;
+    const rest = values.filter(({ recipient }) => !recipient);
+    return [
+      ...values.filter(({ recipient }) => recipient),
+      ...rest.filter((entry) => !isLong(entry)),
+      ...rest.filter(isLong),
+    ].map(
+      ({ key, text, recipient }) =>
+        `${key.replace(LINE_BREAKS, " ")}: ${(recipient ? text : truncate(text, MAX_APPROVAL_VALUE_LENGTH)).replace(LINE_BREAKS, "\n  ")}`,
     );
   }
   const lines: string[] = [];
