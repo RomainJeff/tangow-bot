@@ -35,6 +35,7 @@ const OUTBOUND_RECIPIENTS_MAX_LENGTH = 4_000;
 /** The longest a value shows on the card of a send it cannot read, before it is cut and marked. */
 export const CARD_VALUE_MAX_LENGTH = 1_000;
 const CARD_LINES_MAX_LENGTH = 4_000;
+const MAX_ARGUMENT_DEPTH = 32;
 // No address is longer, and the address patterns backtrack badly on long input, so every
 // pattern runs on a string of at most this length and nowhere else.
 const ADDRESS_MAX_LENGTH = 320;
@@ -116,8 +117,9 @@ type Reading = {
   sender?: string;
   addressed: boolean;
   unexplained: boolean;
-  /** Length of every recipient-role value as the card prints it, nested ones included. */
-  recipientsLength: number;
+  /** Every recipient-role value, nested ones included: the card prints each whole. */
+  recipientValues: unknown[];
+  tooDeep: boolean;
   /** A recipient sits inside another argument, where the classic card could cut it. */
   buried: boolean;
 };
@@ -142,7 +144,8 @@ function readOutbound(action: OutboundAction, connectorKinds: string[]): Outboun
     subjects: [],
     addressed: false,
     unexplained: false,
-    recipientsLength: 0,
+    recipientValues: [],
+    tooDeep: false,
     buried: false,
   };
   const args = readValue(action.args, undefined, reading, 0) as Record<string, unknown>;
@@ -152,7 +155,14 @@ function readOutbound(action: OutboundAction, connectorKinds: string[]): Outboun
     words.some((word) => word.endsWith("mail")) ||
     isEmailConnectorKind(connectorKind);
   if (!mail) return { kind: "none" };
-  if (reading.recipientsLength > OUTBOUND_RECIPIENTS_MAX_LENGTH) {
+  if (reading.tooDeep) {
+    return { kind: "refuse", error: "Send this message with simpler arguments." };
+  }
+  const recipientsLength = reading.recipientValues.reduce<number>(
+    (total, value) => total + serializedLength(value),
+    0,
+  );
+  if (recipientsLength > OUTBOUND_RECIPIENTS_MAX_LENGTH) {
     return {
       kind: "refuse",
       error: "Too many recipients to show the user. Send to fewer people at a time.",
@@ -201,6 +211,11 @@ function readValue(
   reading: Reading,
   depth: number,
 ): unknown {
+  if (depth > MAX_ARGUMENT_DEPTH) {
+    reading.unexplained = true;
+    reading.tooDeep = true;
+    return value;
+  }
   if (role === "flag") {
     if (typeof value === "boolean") return false;
     if (value != null) reading.unexplained = true;
@@ -210,14 +225,18 @@ function readValue(
     reading.unexplained = true;
     return value;
   }
-  if (Array.isArray(value)) return value.map((item) => readValue(item, role, reading, depth));
+  // The card shows a message's text as one string, so a container could hide fields inside it.
+  if ((role === "text" || role === "subject") && value && typeof value === "object") {
+    reading.unexplained = true;
+  }
+  if (Array.isArray(value)) return value.map((item) => readValue(item, role, reading, depth + 1));
   if (value && typeof value === "object") {
     return Object.fromEntries(
       Object.entries(value).map(([key, child]) => {
         if (INHERITED_ROLES.has(role)) return [key, readValue(child, role, reading, depth + 1)];
         const childRole = FIELD_ROLES[fieldKey(key)];
         if (childRole === "to" || childRole === "cc" || childRole === "bcc") {
-          reading.recipientsLength += (JSON.stringify(child) ?? "").length;
+          reading.recipientValues.push(child);
           if (depth > 0) reading.buried = true;
         }
         return [key, readValue(child, childRole, reading, depth + 1)];

@@ -1,6 +1,7 @@
 import * as fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { type OutboundCall, readOutboundCall } from "./outbound-message.js";
+import type { OutboundCall } from "./outbound-message.js";
+import { readOutboundCall } from "./outbound-message.js";
 
 // The send a bot made through Composio's batch tool (trace 2026-10-23), addresses replaced.
 const tracedSend = {
@@ -231,6 +232,16 @@ describe("readOutboundCall", () => {
       { thread_id: { to: "evil@x.example" }, recipient_email: "a@example.com", message_body: "Hi" },
     ],
     [
+      "an inert field hidden inside the body",
+      "GMAIL_SEND_EMAIL",
+      { to: "a@example.com", body: { text: "hi", thought: "SECRET" } },
+    ],
+    [
+      "a subject given as a list",
+      "GMAIL_SEND_EMAIL",
+      { to: "a@example.com", body: "Hi", subject: ["Hello"] },
+    ],
+    [
       "a recipient that is not an address on a mail connector",
       "outlook_send",
       { to: "Marie", body: "Hi" },
@@ -297,7 +308,7 @@ describe("readOutboundCall", () => {
 
   it("drafts nested recipients that fit, and sends the card the whole list", () => {
     const result = read("OUTLOOK_SEND_EMAIL", {
-      message: { toRecipients: nestedRecipients(3), body: "Hi" },
+      payload: { toRecipients: nestedRecipients(3), body: "Hi" },
     });
     expect(result.kind === "draft" && result.draft.recipients.length).toBe(3);
   });
@@ -305,7 +316,7 @@ describe("readOutboundCall", () => {
   it("refuses a send the classic card would cut recipients from", () => {
     expect(
       read("OUTLOOK_SEND_EMAIL", {
-        message: { toRecipients: nestedRecipients(3), body: "Hi" },
+        payload: { toRecipients: nestedRecipients(3), body: "Hi" },
         notes: "n",
       }),
     ).toEqual({
@@ -370,6 +381,20 @@ describe("readOutboundCall", () => {
         attachment: { name: "a.pdf" },
       }),
     ).toEqual({ kind: "classic" });
+  });
+
+  const nestedDeep = (depth: number) =>
+    Array.from({ length: depth }).reduce<Record<string, unknown>>((inner) => ({ a: inner }), {});
+
+  it("refuses a mail whose arguments nest too deep to read, and leaves other sends alone", () => {
+    const deep = { payload: nestedDeep(5_000) };
+    expect(read("GMAIL_SEND_EMAIL", { to: "a@example.com", body: "Hi", ...deep })).toEqual({
+      kind: "refuse",
+      error: "Send this message with simpler arguments.",
+    });
+    expect(read("TWILIO_SEND_SMS", { to: "+15555550100", body: "Hi", ...deep })).toEqual({
+      kind: "none",
+    });
   });
 
   it("drafts a send to many recipients that still fit the card", () => {
