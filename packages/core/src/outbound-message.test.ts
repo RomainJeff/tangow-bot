@@ -81,6 +81,20 @@ describe("readOutboundCall", () => {
     expect(summary(read(toolName, args))).toBe("draft to:a@example.com | - | Hi | -");
   });
 
+  it("shows one sender named twice, and the signed-in mailbox", () => {
+    expect(
+      summary(
+        read("OUTLOOK_SEND_EMAIL", {
+          to: "a@example.com",
+          body: "Hi",
+          from_email: "me@example.com",
+          from_address: "ME@example.com",
+          user_id: "me",
+        }),
+      ),
+    ).toBe("draft to:a@example.com | - | Hi | me@example.com");
+  });
+
   it("drafts a reply that names its recipient and shows no subject", () => {
     expect(
       summary(
@@ -190,6 +204,26 @@ describe("readOutboundCall", () => {
       "a number under a recipient field",
       "GMAIL_SEND_EMAIL",
       { to: "a@example.com", cc: 5, body: "Hi" },
+    ],
+    [
+      "a sender with a display name",
+      "OUTLOOK_SEND_EMAIL",
+      { to: "a@example.com", body: "Hi", from_email: "Boss <boss@corp.example>" },
+    ],
+    [
+      "two different senders",
+      "OUTLOOK_SEND_EMAIL",
+      {
+        to: "a@example.com",
+        body: "Hi",
+        from_email: "a@corp.example",
+        from_address: "b@corp.example",
+      },
+    ],
+    [
+      "another user's mailbox",
+      "GMAIL_SEND_EMAIL",
+      { to: "a@example.com", body: "Hi", user_id: "someone-else" },
     ],
     [
       "a recipient that is not an address on a mail connector",
