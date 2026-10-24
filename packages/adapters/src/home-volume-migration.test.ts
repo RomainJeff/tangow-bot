@@ -879,3 +879,46 @@ it("previews unmapped Docker files without changing storage, allocating volumes 
   expect(after.homeStorage).toBe("snapshot");
   expect(after.maintenanceId).toBeNull();
 });
+
+it("quiesces an idle bot-owned Docker desktop instead of confusing it with live user control", async () => {
+  const { computer } = await teamHome();
+  await prisma.computer.update({
+    where: { id: computer.id },
+    data: { kind: "docker", providerRef: "old-docker", state: "running", controlHolder: "bot" },
+  });
+  await prepareHomeForE2B(
+    { prisma, home, source: new FakeSandboxProvider() },
+    computer.id,
+    fixture.context,
+  );
+  const after = await prisma.computer.findUniqueOrThrow({ where: { id: computer.id } });
+  expect(after.kind).toBe("e2b");
+  expect(after.state).toBe("stopped");
+  expect(after.controlHolder).toBe("none");
+  expect((await move(computer.id)).outcome).toBe("adopted");
+});
+
+it("does not revoke an active user's desktop lease during upgrade preparation", async () => {
+  const { computer, ada } = await teamHome();
+  await prisma.computer.update({
+    where: { id: computer.id },
+    data: {
+      kind: "docker",
+      providerRef: "old-docker",
+      state: "running",
+      controlHolder: "user",
+      controlLeaseId: "user-lease",
+      controlBotId: ada.id,
+      controlLeaseExpiresAt: new Date(Date.now() + 60000),
+    },
+  });
+  const source = new FakeSandboxProvider();
+  const stop = vi.spyOn(source, "stop");
+  await expect(
+    prepareHomeForE2B({ prisma, home, source }, computer.id, fixture.context),
+  ).rejects.toThrow("active");
+  expect(stop).not.toHaveBeenCalled();
+  const after = await prisma.computer.findUniqueOrThrow({ where: { id: computer.id } });
+  expect(after.controlHolder).toBe("user");
+  expect(after.controlLeaseId).toBe("user-lease");
+});

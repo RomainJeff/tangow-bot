@@ -62,7 +62,13 @@ try {
         orderBy: [{ scope: "desc" }, { id: "asc" }],
       }),
       prisma.run.count({ where: { status: { in: [...ACTIVE_RUN_STATUSES] } } }),
-      prisma.computer.count({ where: { controlHolder: { not: "none" } } }),
+      prisma.computer.count({
+        where: {
+          controlHolder: "user",
+          controlLeaseId: { not: null },
+          controlLeaseExpiresAt: { gt: now },
+        },
+      }),
       prisma.computerExecutionLease.count({ where: { expiresAt: { gt: now } } }),
       prisma.computer.count({
         where: {

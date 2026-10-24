@@ -42,7 +42,11 @@ export async function prepareHomeForE2B(
       where: {
         spaceId: computer.spaceId,
         OR: [
-          { controlHolder: { not: "none" } },
+          {
+            controlHolder: "user",
+            controlLeaseId: { not: null },
+            controlLeaseExpiresAt: { gt: now },
+          },
           { maintenanceId: { not: null } },
           { executionLeases: { some: { expiresAt: { gt: now } } } },
         ],
@@ -112,6 +116,11 @@ export async function prepareHomeForE2B(
         providerRef: null,
         screenUrl: null,
         homeRevision: revision,
+        controlHolder: "none",
+        controlLeaseId: null,
+        controlLeaseExpiresAt: null,
+        controlBotId: null,
+        controlRunId: null,
         executionRunId: null,
         executionBotId: null,
         executionLeaseExpiresAt: null,
