@@ -415,7 +415,8 @@ export default function Home() {
               disabled={spaceBusy || !!spaceRecoveryId}
               actions={createActions}
               onAndroidOpen={showCreateMenu}
-              style={styles.circleButton}
+              hitSlop={4}
+              style={({ pressed }) => [styles.circleButton, pressed && styles.circlePressed]}
             >
               <NativeSymbol ios="plus" android="add" size={18} />
             </NativeMenu>

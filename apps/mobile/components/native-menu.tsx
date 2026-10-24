@@ -30,6 +30,8 @@ type NativeMenuProps = {
   /** Replaces the Android action sheet, for a trigger that keeps its own dialog there. */
   onAndroidOpen?: () => void;
   style?: PressableProps["style"];
+  /** Android only: widens the touch target like the Pressable it replaces. */
+  hitSlop?: PressableProps["hitSlop"];
   accessibilityLabel?: string;
   accessibilityValue?: string;
 } & (
@@ -122,7 +124,7 @@ function ValueItems({
 }
 
 function AndroidMenu(props: NativeMenuProps) {
-  const { children, title, disabled, onPrimaryAction, onAndroidOpen, style } = props;
+  const { children, title, disabled, onPrimaryAction, onAndroidOpen, style, hitSlop } = props;
   const present = useActionSheet(title);
   const actions: MenuAction[] =
     "options" in props
@@ -139,6 +141,7 @@ function AndroidMenu(props: NativeMenuProps) {
       accessibilityValue={props.accessibilityValue ? { text: props.accessibilityValue } : undefined}
       accessibilityState={{ disabled: !!disabled }}
       disabled={disabled}
+      hitSlop={hitSlop}
       onPress={onPrimaryAction ?? open}
       onLongPress={onPrimaryAction ? open : undefined}
       style={style}

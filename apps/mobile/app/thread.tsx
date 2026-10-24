@@ -837,22 +837,8 @@ function Thread() {
       headerStyle: { backgroundColor: barTransparent ? "transparent" : tokens.background },
       // Bot actions (bot settings, open computer, clear, archive, delete) live in a menu
       // opened by a long press; a short press opens the bot's page.
-      headerTitle: () => (
-        <NativeMenu
-          compact
-          accessibilityLabel={displayName || t("Thread")}
-          disabled={inGroup || !botId}
-          actions={botMenuActions}
-          onPrimaryAction={() => {
-            if (!botId || inGroup) return;
-            router.push({ pathname: "/bot", params: { botId } });
-          }}
-          onAndroidOpen={() => setBotActionsOpen(true)}
-          style={{
-            alignItems: "center",
-            maxWidth: 240,
-          }}
-        >
+      headerTitle: () => {
+        const title = (
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
             {!inGroup && currentBot ? (
               <BotAvatar
@@ -882,8 +868,29 @@ function Thread() {
               {displayName || t("Thread")}
             </Text>
           </View>
-        </NativeMenu>
-      ),
+        );
+        const titleStyle = { alignItems: "center", maxWidth: 240 } as const;
+        // A group has no bot actions: a plain title, so iOS never draws it as a disabled control.
+        if (inGroup || !botId) {
+          return (
+            <View accessibilityLabel={displayName || t("Thread")} style={titleStyle}>
+              {title}
+            </View>
+          );
+        }
+        return (
+          <NativeMenu
+            compact
+            accessibilityLabel={displayName || t("Thread")}
+            actions={botMenuActions}
+            onPrimaryAction={() => router.push({ pathname: "/bot", params: { botId } })}
+            onAndroidOpen={() => setBotActionsOpen(true)}
+            style={titleStyle}
+          >
+            {title}
+          </NativeMenu>
+        );
+      },
       headerRight: () =>
         inGroup ? (
           <Pressable
