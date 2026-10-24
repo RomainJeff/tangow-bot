@@ -1,7 +1,5 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
-import type { CommandHandle, CommandResult } from "@e2b/desktop";
-import { CommandExitError, Sandbox, TimeoutError } from "@e2b/desktop";
 import type {
   AdapterContext,
   CommandRequest,
@@ -26,6 +24,8 @@ import {
   WORKSPACE_ROOT,
 } from "@rakazo/core";
 import { stopAllDesktopBrowsersCommand } from "@rakazo/core/node/desktop-runtime";
+import type { CommandHandle, CommandResult, ConnectionOpts } from "e2b";
+import { CommandExitError, Sandbox, TimeoutError } from "e2b";
 import { sandboxIdleMs } from "./computer-idle.js";
 import { ComputerScreenUnavailableError } from "./computer-screens.js";
 import { normalizeWorkspacePath, shellQuote, workspacePath } from "./computer-support.js";
@@ -88,6 +88,19 @@ export interface E2BSandboxSdk {
   pause(id: string, options: { apiKey: string }): Promise<void>;
 }
 
+export function e2bComputerSdk(
+  connection: ConnectionOpts = {},
+  template = "desktop",
+): E2BSandboxSdk {
+  return {
+    create: (options) => Sandbox.create(template, { ...connection, ...options }),
+    connect: (id, options) => Sandbox.connect(id, { ...connection, ...options }),
+    pause: async (id, options) => {
+      await Sandbox.pause(id, { ...connection, ...options });
+    },
+  };
+}
+
 /**
  * The set of volumes a computer mounts, as recorded in its metadata: part of its identity, since a
  * running machine cannot mount another volume. A machine created before its home moved has none.
@@ -118,7 +131,6 @@ export function e2bCreateOptions(botId: string, apiKey: string, volumeHome?: Vol
       rakazo: "computer",
       ...(volumeHome ? { home: "volumes", mounts: mountSet(volumeHome) } : {}),
     },
-    resolution: [1280, 800] as [number, number],
     lifecycle: { onTimeout: "pause" as const, autoResume: false },
     ...(volumeHome && {
       volumeMounts: Object.fromEntries(
@@ -199,7 +211,7 @@ export class E2BSandboxProvider implements SandboxProvider {
 
   constructor(
     private readonly apiKey: string,
-    private readonly sdk: E2BSandboxSdk = Sandbox as unknown as E2BSandboxSdk,
+    private readonly sdk: E2BSandboxSdk = e2bComputerSdk({ apiKey }),
   ) {}
 
   describe() {

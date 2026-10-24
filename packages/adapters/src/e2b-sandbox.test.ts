@@ -4,6 +4,7 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { Sandbox, SandboxNotFoundError, TimeoutError } from "@e2b/desktop";
+import { Sandbox as RawSandbox } from "e2b";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
 import { fakeE2BMachine } from "./e2b-machine.test-support.js";
 import type { E2BSandboxSdk } from "./e2b-sandbox.js";
@@ -19,6 +20,22 @@ const context = {
 };
 
 describe("E2B computer backend", () => {
+  it("creates the canonical computer without starting a second SDK desktop", async () => {
+    const machine = fakeE2BMachine("canonical-computer");
+    const create = vi.spyOn(RawSandbox, "create").mockResolvedValue(machine.sandbox);
+    onTestFinished(() => create.mockRestore());
+    const computer = await new E2BSandboxProvider("test-key").provision(
+      { botId: "bot", homePath: "/tmp/test-home" },
+      context,
+    );
+    expect(computer.providerRef).toBe("canonical-computer");
+    expect(machine.killed).toBe(false);
+    expect(create).toHaveBeenCalledWith(
+      "desktop",
+      expect.objectContaining({ metadata: expect.objectContaining({ rakazo: "computer" }) }),
+    );
+  });
+
   it("revokes an extra display's control without starting or waiting for its view", async () => {
     const command = vi.fn(async (value: string) => {
       if (value.includes("RAKAZO_SCREEN_INDEX=")) {

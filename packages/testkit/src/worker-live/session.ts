@@ -3,17 +3,18 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
 import type { AdapterContext, SandboxProvider, WorkerProvider } from "@rakazo/adapter-kit";
+import type { E2BSandboxSdk, E2BWorkerSdk } from "@rakazo/adapters";
 import {
   E2BSandboxProvider,
-  type E2BSandboxSdk,
   E2BVolumeFiles,
   E2BWorkerProvider,
-  type E2BWorkerSdk,
+  e2bComputerSdk,
   e2bVolumeSandbox,
   e2bWorkerSdk,
 } from "@rakazo/adapters";
 import type { GuestConnector } from "@rakazo/adapters/runtime-worker";
-import { type ConnectionOpts, Sandbox, Volume } from "e2b";
+import type { ConnectionOpts } from "e2b";
+import { Sandbox, Volume } from "e2b";
 
 export const MIN_MEM_AVAILABLE_MIB = 1536;
 /** Where the product's E2B computer links its workspace: the volumes' root. */
@@ -117,25 +118,14 @@ export function liveSession(config: LiveConfig) {
   async function ownVolumes() {
     return (await Volume.list(connection)).filter((volume) => volumeNames.has(volume.name));
   }
-  /**
-   * The product's E2B computer, through its SDK seam: this host has no desktop template, so the
-   * machine is a plain sandbox of the computer template, tagged, without the desktop layer.
-   */
+  const productionComputerSdk = e2bComputerSdk(connection, config.computerTemplate);
   const computerSdk: E2BSandboxSdk = {
-    create: async (options) =>
-      (await Sandbox.create(config.computerTemplate, {
-        ...connection,
+    ...productionComputerSdk,
+    create: (options) =>
+      productionComputerSdk.create({
         ...options,
-        apiKey: config.apiKey,
         metadata: { ...options.metadata, p3live: tag },
-      })) as unknown as Awaited<ReturnType<E2BSandboxSdk["create"]>>,
-    connect: async (id, options) =>
-      (await Sandbox.connect(id, { ...connection, ...options })) as unknown as Awaited<
-        ReturnType<E2BSandboxSdk["connect"]>
-      >,
-    pause: async (id, options) => {
-      await Sandbox.pause(id, { ...connection, ...options });
-    },
+      }),
   };
 
   return {
