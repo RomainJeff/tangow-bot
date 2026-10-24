@@ -5,6 +5,8 @@ import type { ConnectorAction } from "./connector-actions.js";
 
 const MAX_APPROVAL_SUMMARY_LENGTH = 500;
 const MAX_APPROVAL_DETAIL_LENGTH = 4_000;
+const MAX_APPROVAL_VALUE_LENGTH = 1_000;
+const LONG_APPROVAL_VALUE_LENGTH = 500;
 
 export function buildApprovalAskBlock(
   effectId: string,
@@ -149,8 +151,14 @@ const DETAIL_LABELS: Record<string, string> = { recipient_email: "to" };
 
 function argLines(args: Record<string, unknown>, everyArgument = false): string[] {
   if (everyArgument) {
-    return Object.entries(args).map(
-      ([key, value]) => `${key}: ${typeof value === "string" ? value : JSON.stringify(value)}`,
+    // Long text goes last, so cutting the detail short never hides a recipient or a flag.
+    const values = Object.entries(args).map(([key, value]) => ({
+      key,
+      text: typeof value === "string" ? value : JSON.stringify(value),
+    }));
+    const isLong = ({ text }: { text: string }) => text.length > LONG_APPROVAL_VALUE_LENGTH;
+    return [...values.filter((entry) => !isLong(entry)), ...values.filter(isLong)].map(
+      ({ key, text }) => `${key}: ${truncate(text, MAX_APPROVAL_VALUE_LENGTH)}`,
     );
   }
   const lines: string[] = [];

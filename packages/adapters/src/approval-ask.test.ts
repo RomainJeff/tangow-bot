@@ -253,4 +253,23 @@ describe("buildApprovalAskBlock", () => {
       ],
     });
   });
+
+  it("keeps every recipient visible on a send it cannot read when the body is long", () => {
+    const block = buildApprovalAskBlock(
+      "effect-1",
+      "GMAIL_SEND_EMAIL",
+      {
+        to: "a@example.test",
+        body: "x".repeat(5_000),
+        bcc: ["hidden@example.test"],
+        notes: "y".repeat(5_000),
+        subject: "Hi",
+      },
+      [],
+      { unreadable: true },
+    );
+    expect(block).toMatchObject({
+      detail: `to: a@example.test\nbcc: ["hidden@example.test"]\nsubject: Hi\nbody: ${"x".repeat(1_000)}…\nnotes: ${"y".repeat(1_000)}…`,
+    });
+  });
 });
