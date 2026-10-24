@@ -14,8 +14,11 @@ export type DraftLocal = {
   /** The text differs from the one the card shows. */
   edited: boolean;
   focused: boolean;
-  /** A tap on its way: Send until the server takes it, Discard during its Undo window. */
-  pending: "send" | "discard" | null;
+  /**
+   * A tap on its way: Send until the server takes it, Discard during its Undo window, then
+   * Discarding once it is on its way and can no longer be undone.
+   */
+  pending: "send" | "discard" | "discarding" | null;
   /** The card is the one its run waits on, so a tap reaches it. */
   canAnswer: boolean;
   /** The viewer owns the run: only they may edit, send or discard the draft. */
@@ -40,6 +43,7 @@ export type DraftCardView =
 /** The one place a draft card's server state and the person's own gesture meet. */
 export function draftCardView(card: DraftCard, local: DraftLocal): DraftCardView {
   if (local.pending === "discard") return { kind: "discarded", undo: true };
+  if (local.pending === "discarding") return { kind: "discarded", undo: false };
   const state = askDraftState(card);
   switch (state) {
     case "sent":

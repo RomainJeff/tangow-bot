@@ -10,7 +10,7 @@ import { draftEdits } from "../lib/draft-edits";
 import { messageTimeLabel } from "../lib/message-time";
 import { userInitials } from "../lib/user-initials";
 import type { CardEdits } from "./AskCard";
-import type { DraftCard as DraftCardBlock } from "./draft-card-view";
+import type { DraftCard as DraftCardBlock, DraftLocal } from "./draft-card-view";
 import { draftCardView } from "./draft-card-view";
 
 /** How long a discarded draft can still be brought back before the bot hears of it. */
@@ -102,7 +102,7 @@ export function DraftCard({
   const { draft } = block;
   const [edit, setEdit] = useState(() => draftEdits.get(messageId) ?? null);
   const [focused, setFocused] = useState(false);
-  const [pending, setPending] = useState<"send" | "discard" | null>(null);
+  const [pending, setPending] = useState<DraftLocal["pending"]>(null);
   const [error, setError] = useState<string | null>(null);
   const discardTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const commitDiscardRef = useRef<() => void>(() => undefined);
@@ -138,6 +138,7 @@ export function DraftCard({
 
   async function commitDiscard() {
     discardTimer.current = null;
+    setPending("discarding");
     try {
       await onAnswer("deny");
       dropEdit();
@@ -157,7 +158,8 @@ export function DraftCard({
   }
 
   function undo() {
-    if (discardTimer.current) clearTimeout(discardTimer.current);
+    if (!discardTimer.current) return;
+    clearTimeout(discardTimer.current);
     discardTimer.current = null;
     setPending(null);
   }
