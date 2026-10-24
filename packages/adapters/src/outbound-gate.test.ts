@@ -29,6 +29,15 @@ function gate(toolName: string, args: Record<string, unknown>): string {
   return read.kind === "refuse" ? `refuse: ${read.error}` : read.kind;
 }
 
+describe("an opaque batch", () => {
+  it("gets the classic card while its tools value fits whole, and is refused when it cannot", () => {
+    expect(gate("COMPOSIO_MULTI_EXECUTE_TOOL", { tools: "[not json" })).toBe("classic");
+    expect(gate("COMPOSIO_MULTI_EXECUTE_TOOL", { tools: `[${"x".repeat(5_000)}` })).toBe(
+      "refuse: Too many arguments to show the user. Send with fewer fields at a time.",
+    );
+  });
+});
+
 describe("readConnectorOutbound", () => {
   it.each([
     ["direct", "GMAIL_SEND_EMAIL", send, "draft"],

@@ -318,18 +318,26 @@ describe("buildApprovalAskBlock", () => {
     });
   });
 
-  it("bounds the other values of a send it cannot read", () => {
-    const notes = Object.fromEntries(
-      Array.from({ length: 10 }, (_, index) => [`note${index}`, "n".repeat(900)]),
-    );
-    const block = buildApprovalAskBlock(
-      "effect-1",
-      "GMAIL_SEND_EMAIL",
-      { to: "a@example.test", ...notes },
-      [],
-      { unreadable: true },
-    );
-    expect(block.kind === "ask" && block.detail?.length).toBe(4_019);
+  it("shows every argument of a send it cannot read, and marks a long value as cut", () => {
+    const args = {
+      ...Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`note${i}`, "n".repeat(490)])),
+      body: "b".repeat(5_000),
+      bcc: ["hidden@example.test"],
+      is_html: true,
+      attachment: { name: "a.pdf" },
+    };
+    const block = buildApprovalAskBlock("effect-1", "GMAIL_SEND_EMAIL", args, [], {
+      unreadable: true,
+    });
+    const lines = block.kind === "ask" ? (block.detail ?? "").split("\n") : [];
+    expect(lines.map((line) => line.split(":")[0])).toEqual([
+      "bcc",
+      ...Array.from({ length: 8 }, (_, i) => `note${i}`),
+      "is_html",
+      "attachment",
+      "body",
+    ]);
+    expect(lines.at(-1)?.endsWith("…")).toBe(true);
   });
 
   it("never shortens a long recipient list on a send it cannot read", () => {
