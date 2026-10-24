@@ -101,7 +101,13 @@ export function stableLocalWorkers(root: string) {
   };
 }
 
-export type MeasuredModel = { provider: string; id: string; api: Api; cost: Model<Api>["cost"] };
+export type MeasuredModel = {
+  provider: string;
+  id: string;
+  api: Api;
+  baseUrl: string;
+  cost: Model<Api>["cost"];
+};
 
 const MODEL_REQUEST = "agent.worker.model_request";
 /** History kept by a forced compaction: about a quarter of this, so only the last turn stays. */
@@ -135,7 +141,8 @@ export function resolveModels(provider: string, patterns: string[]): MeasuredMod
         return 0;
       })[0];
     if (!newest) throw new Error(`No ${provider} catalog model matches ${pattern}`);
-    return { provider, id: newest.id, api: newest.api, cost: newest.cost };
+    const { id, api, baseUrl, cost } = newest;
+    return { provider, id, api, baseUrl, cost };
   });
 }
 

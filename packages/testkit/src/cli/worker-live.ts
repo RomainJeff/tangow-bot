@@ -8,7 +8,7 @@
  *     Each lane runs in a child process: worker-live lane --lane <id> --template ...
  *   worker-live bench --template <worker> --computer-template <computer> --out <dir> [--trials 30] [--database postgresql]
  *   worker-live measure --template <worker> --computer-template <computer> --out <dir> [--trials 30]
- *     [--provider opencode-go] [--models 'glm-*-flash,deepseek-v*-flash'] [--gaps 10s,2m,5m,10m]
+ *     [--provider opencode-go] [--models 'glm-*-flash,gpt-*-luna'] [--gaps 10s,2m,5m,10m]
  *     [--approval-delays 10s,6m] [--scenarios chain,computer,approval,compaction]
  *     [--worker local]
  *     Token and cache measurements against a real model. RAKAZO_MODEL_KEY_FILE names a file
@@ -58,7 +58,7 @@ const { values } = parseArgs({
     database: { type: "string", default: "pglite" },
     trials: { type: "string", default: "30" },
     provider: { type: "string", default: "opencode-go" },
-    models: { type: "string", default: "glm-*-flash,deepseek-v*-flash" },
+    models: { type: "string", default: "glm-*-flash,gpt-*-luna" },
     gaps: { type: "string", default: "10s,2m,5m,10m" },
     "approval-delays": { type: "string", default: "10s,6m" },
     scenarios: { type: "string", default: SCENARIOS.join(",") },
@@ -369,7 +369,12 @@ async function measure() {
           ? "product E2BSandboxProvider.prepare"
           : "skipped",
         provider: values.provider,
-        models: models.map(({ id, api, cost }) => ({ id, api, catalogCostPerMillion: cost })),
+        models: models.map(({ id, api, baseUrl, cost }) => ({
+          id,
+          api,
+          catalogBaseUrl: baseUrl,
+          catalogCostPerMillion: cost,
+        })),
         protocol: { ...protocol, comparable: trials >= 30 },
         order: local
           ? "one stream per model at once; each stream runs the scenarios in turn, one fresh controller and thread per trial"
