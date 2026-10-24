@@ -48,10 +48,7 @@
         ],
         "final": {
           "status": "completed",
-          "attempts": [
-            "released",
-            "released"
-          ],
+          "attempts": ["released", "released"],
           "effects": [
             {
               "kind": "message_user",
@@ -89,21 +86,14 @@
         "helperOwnContext": true,
         "launchesBeforeApproval": 1,
         "launchesAfterResume": 2,
-        "childStatuses": [
-          "completed"
-        ],
+        "childStatuses": ["completed"],
         "published": [
           {
             "title": "Synthetic plan"
           }
         ],
-        "effectStatuses": [
-          "completed"
-        ],
-        "attempts": [
-          "released",
-          "released"
-        ]
+        "effectStatuses": ["completed"],
+        "attempts": ["released", "released"]
       },
       "seconds": 10.4,
       "memAvailableMiB": {
@@ -143,10 +133,7 @@
           "controllerAuthenticated": true,
           "computerRows": 0,
           "prefixStableWithinAttempt": true,
-          "attempts": [
-            "released",
-            "released"
-          ]
+          "attempts": ["released", "released"]
         },
         "deferred": {
           "exposure": "deferred",
@@ -162,10 +149,7 @@
           "controllerAuthenticated": true,
           "computerRows": 0,
           "prefixStableWithinAttempt": true,
-          "attempts": [
-            "released",
-            "released"
-          ]
+          "attempts": ["released", "released"]
         }
       },
       "seconds": 20.3,
@@ -208,10 +192,7 @@
         ],
         "volumeWriteAndRead": true,
         "prefixStableBeforeCompaction": true,
-        "attempts": [
-          "released",
-          "released"
-        ]
+        "attempts": ["released", "released"]
       },
       "seconds": 16.1,
       "memAvailableMiB": {
@@ -236,9 +217,7 @@
       "result": "pass",
       "observed": {
         "markerBeforeKill": "started\n",
-        "loggedBeforeKill": [
-          "call slow"
-        ],
+        "loggedBeforeKill": ["call slow"],
         "killed": true,
         "firstContinue": "Run setup failed; retrying",
         "statusAfterKill": "queued",
@@ -249,10 +228,7 @@
           "result slow The bash call was interrupted, so its outcome is unknown. It was not replayed; check the state before retrying."
         ],
         "markerAfter": "started\n",
-        "attempts": [
-          "released",
-          "released"
-        ],
+        "attempts": ["released", "released"],
         "cleanup": {
           "killed": 0,
           "destroyed": 2,
@@ -288,20 +264,10 @@
         "firstContinue": "completed",
         "stoppedAfterMs": 56722,
         "status": "cancelled",
-        "logAfterCancel": [
-          "call done",
-          "result done done-ok\n",
-          "call cut"
-        ],
-        "logAfterSecondContinue": [
-          "call done",
-          "result done done-ok\n",
-          "call cut"
-        ],
+        "logAfterCancel": ["call done", "result done done-ok\n", "call cut"],
+        "logAfterSecondContinue": ["call done", "result done done-ok\n", "call cut"],
         "markerAfter": "started\n",
-        "attempts": [
-          "released"
-        ],
+        "attempts": ["released"],
         "cleanup": {
           "killed": 0,
           "destroyed": 2,
