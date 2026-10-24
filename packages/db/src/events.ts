@@ -993,10 +993,16 @@ export async function answerRunInputInTransaction(
         throw new InvalidAnswerError("Only a Create bot card can be edited");
       }
       if (input.answer !== "allow") {
-        throw new InvalidAnswerError("Edits can only be sent when creating the bot");
+        throw new InvalidAnswerError(
+          pendingAsk.draft
+            ? "Edits can only be sent with Send"
+            : "Edits can only be sent when creating the bot",
+        );
       }
       if (input.answeredByUserId !== run.userId) {
-        throw new InvalidAnswerError("Only the owner of this run can edit the bot");
+        throw new InvalidAnswerError(
+          `Only the owner of this run can edit the ${pendingAsk.draft ? "message" : "bot"}`,
+        );
       }
     }
 

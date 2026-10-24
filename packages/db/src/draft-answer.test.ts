@@ -259,6 +259,18 @@ describe("answering a mail draft card", () => {
     expect([run, effect.status]).toEqual(["waiting_input", "intended"]);
   });
 
+  it.each([
+    ["with Discard", { answer: "deny" }, "Edits can only be sent with Send"],
+    [
+      "by another member",
+      { answeredByUserId: "user_other" },
+      "Only the owner of this run can edit the message",
+    ],
+  ])("refuses an edit %s in a draft's own words", async (_, input, message) => {
+    const w = await waiting();
+    await expect(w.answer({ ...input, edits: { text: "Hi" } })).rejects.toThrow(message);
+  });
+
   it("refuses a text on a Create bot card", async () => {
     const w = await waiting("spawn_bot");
     await expect(w.answer({ edits: { text: "Hi" } })).rejects.toThrow(
