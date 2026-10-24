@@ -17,7 +17,7 @@ import type { LocalAgentHomeStore } from "./home.js";
 
 export const PORTABLE_TRANSFER_BATCH_BYTES = 8 * 1024 * 1024;
 
-const skippedBrowserProfileDirectories = new Set([
+export const skippedBrowserProfileDirectories = new Set([
   "Cache",
   "Code Cache",
   "GPUCache",
@@ -27,7 +27,7 @@ const skippedBrowserProfileDirectories = new Set([
   "DawnWebGPUCache",
   "Crashpad",
 ]);
-const skippedBrowserProfileFiles = new Set([
+export const skippedBrowserProfileFiles = new Set([
   "BrowserMetrics",
   "DevToolsActivePort",
   "SingletonCookie",

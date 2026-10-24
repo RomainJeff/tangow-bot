@@ -859,6 +859,7 @@ export async function replaceComputer(
           data: { homeRevision: revision, updatedAt: claimStamp },
         });
         if (recorded.count !== 1) throw new ComputerBusyError();
+        await deps.sandbox.preserveBeforeReplace?.(oldRef, context);
       } catch (error) {
         if (mode !== "recover" || error instanceof ComputerBusyError) throw error;
       }
