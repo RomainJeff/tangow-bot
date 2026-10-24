@@ -1,5 +1,6 @@
 import type { HarnessDeclaration } from "@rakazo/adapter-kit";
 import {
+  capabilityWorker,
   createWorkerAgentRuntime,
   encodeMessage,
   readGuestFrame,
@@ -256,4 +257,37 @@ it("accepts the selected native harness after reconnect with reordered capabilit
     { type: "transcript", entries: [], unverifiedCalls: 0 },
     { type: "done" },
   ]);
+});
+
+it("refuses a guest that says hello in the first protocol version", async () => {
+  const expected = HARNESSES["pi-native"]!.declaration;
+  const launcher = manualLauncher(expected);
+  const runtime = createWorkerAgentRuntime({
+    launcher: launcher.launcher,
+    stops: { mark: async () => undefined },
+    clock: stillClock,
+  });
+  const running = consume(runtime.run(request));
+  const launched = await launcher.launchedFor("root");
+  const channel = launched.connect();
+  const received: Uint8Array[] = [];
+  const closed = (async () => {
+    for await (const frame of channel.frames) received.push(frame);
+  })();
+
+  await channel.send(
+    Buffer.from(
+      JSON.stringify({
+        version: 1,
+        kind: "worker.hello",
+        worker: capabilityWorker(launched.capability),
+        capability: launched.capability,
+        harness: expected,
+      }),
+    ),
+  );
+
+  await expect(running.done).rejects.toThrow("The worker broke the run protocol: version");
+  await closed;
+  expect(received).toEqual([]);
 });

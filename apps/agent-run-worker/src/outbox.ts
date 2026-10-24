@@ -6,7 +6,7 @@ import type {
   WorkerIdentity,
   WorkerReplyV1,
 } from "@rakazo/adapter-kit";
-import { ReplyPartSchema } from "@rakazo/adapter-kit";
+import { ReplyPartSchema, WORKER_PROTOCOL_VERSION } from "@rakazo/adapter-kit";
 import { encodeMessage, WORKER_LIMITS } from "@rakazo/adapters/runtime-worker/wire";
 
 const partTypes = new Set<string>(ReplyPartSchema.options.map((option) => option.shape.type.value));
@@ -68,7 +68,7 @@ export function createOutbox(
     while (waiters.length) {
       const waiter = waiters[0]!;
       waiter.frame ??= encodeMessage({
-        version: 1,
+        version: WORKER_PROTOCOL_VERSION,
         kind: "worker.event",
         worker,
         payload: { seq: nextSeq, body: waiter.body },

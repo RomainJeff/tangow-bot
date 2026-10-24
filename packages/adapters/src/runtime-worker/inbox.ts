@@ -5,6 +5,7 @@ import {
   type ReplyFinal,
   type ReplyPart,
   sameWorker,
+  WORKER_PROTOCOL_VERSION,
   type WorkerEventV1,
   type WorkerIdentity,
   type WorkerReplyV1,
@@ -52,7 +53,12 @@ export function createSessionInbox(
   const settledOrder: number[] = [];
 
   const emit = (re: number, part: number, body: ReplyBody) =>
-    send?.({ version: 1, kind: "worker.reply", worker, payload: { re, part, body } });
+    send?.({
+      version: WORKER_PROTOCOL_VERSION,
+      kind: "worker.reply",
+      worker,
+      payload: { re, part, body },
+    });
 
   const reply = (re: number, entry: Entry, body: ReplyBody) => {
     entry.parts.push(body);

@@ -6,7 +6,11 @@ import type {
   WorkerStartV1,
   WorkerStatusV1,
 } from "@rakazo/adapter-kit";
-import { AgentRuntimeBusyError, AgentRuntimeUnavailableError } from "@rakazo/adapter-kit";
+import {
+  AgentRuntimeBusyError,
+  AgentRuntimeUnavailableError,
+  WORKER_PROTOCOL_VERSION,
+} from "@rakazo/adapter-kit";
 import type { HomeStorage } from "@rakazo/contracts";
 import { WorkerState } from "@rakazo/contracts";
 import type { LaunchPlan, MountRefusal, RunNeeds, VolumeRow, WorkerLaunch } from "@rakazo/core";
@@ -478,7 +482,7 @@ export function createWorkerLifecycle(deps: {
       return {
         providerRef,
         start: {
-          version: 1,
+          version: WORKER_PROTOCOL_VERSION,
           kind: "worker.start",
           worker: { runId: launch.runId, attemptId: launch.attemptId, fence: launch.fence },
           workspace: {
@@ -510,7 +514,7 @@ export function createWorkerLifecycle(deps: {
       });
       if (!attempt?.workerState) return null;
       return {
-        version: 1,
+        version: WORKER_PROTOCOL_VERSION,
         kind: "worker.status",
         worker: { runId: attempt.runId, attemptId, fence: attempt.fence },
         state: WorkerState.parse(attempt.workerState),

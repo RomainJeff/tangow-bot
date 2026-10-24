@@ -94,7 +94,6 @@ function e2bIgnoringCancel(root: string): Worker<E2BWorkerProvider> {
         channels: channels(),
         capability: envs.RAKAZO_WORKER_CAPABILITY!,
         harness: HARNESSES["pi-native"]!,
-        spoolDir: path.join(root, "tmp", "tool-output"),
         root,
         home: path.join(root, "home/user"),
         signal: terminated.signal,

@@ -55,7 +55,7 @@ export function createWorkerAgentRuntime(options: {
       const session = sessions.get(runId);
       if (!session) return;
       session.cancel(new Error("The run was cancelled"));
-      await session.stop(undefined);
+      await session.stop();
     },
     async *run(request, context) {
       if (request.script) throw new Error("A worker run cannot follow a script");
@@ -72,7 +72,7 @@ export function createWorkerAgentRuntime(options: {
         }
       } finally {
         context?.signal?.removeEventListener("abort", onAbort);
-        await session.stop(context?.signal);
+        await session.stop();
         if (sessions.get(request.runId) === session) sessions.delete(request.runId);
       }
     },

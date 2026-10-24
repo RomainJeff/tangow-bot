@@ -1,9 +1,7 @@
 import type {
-  ConnectorTool,
   GuestBody,
   GuestRunInput,
   HarnessDeclaration,
-  LocalToolOutput,
   ReplyFinal,
   ReplyPart,
   WorkerIdentity,
@@ -14,11 +12,6 @@ export type InformativeBody = Extract<
   { type: "text" | "progress" | "tool" | "subagent" }
 >;
 export type DoneBody = Extract<GuestBody, { type: "done" }>;
-
-/** How a tool call ended: run by the controller, or granted and run here. */
-export type ToolCallOutcome =
-  | { placement: "controller"; output: unknown }
-  | { placement: "guest"; output: LocalToolOutput };
 
 /** What the guest gives a harness: the channel to its controller, already sequenced and bounded. */
 export interface HarnessHost {
@@ -40,19 +33,16 @@ export interface HarnessHost {
     onPart: (part: ReplyPart) => void,
     signal?: AbortSignal,
   ): Promise<ReplyFinal>;
-  /** One tool call. Must follow the `tool` announcement of the same `callId`. */
+  /**
+   * One call of a controller tool; resolves with its output. Must follow the `tool` announcement
+   * of the same `callId`. The controller refuses a call of the harness's own tools.
+   */
   callTool(
     agent: string,
     name: string,
     args: Record<string, unknown>,
     callId: string,
-  ): Promise<ToolCallOutcome>;
-}
-
-export interface NativeToolContext {
-  cwd: string;
-  spoolDir: string;
-  signal: AbortSignal;
+  ): Promise<unknown>;
 }
 
 /**
@@ -61,13 +51,6 @@ export interface NativeToolContext {
  */
 export interface GuestHarness {
   readonly declaration: HarnessDeclaration;
-  readonly nativeTools: readonly ConnectorTool[];
-  executeNativeTool(
-    name: string,
-    args: Record<string, unknown>,
-    callId: string,
-    context: NativeToolContext,
-  ): Promise<LocalToolOutput>;
   /** Runs the attempt; resolves with its final words, which the controller decides to accept. */
   run(
     start: {

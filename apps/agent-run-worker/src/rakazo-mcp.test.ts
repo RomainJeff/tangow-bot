@@ -61,7 +61,7 @@ function fakeHost(answer: (name: string, args: Record<string, unknown>) => unkno
     },
     callTool: async (_agent, name, args, callId) => {
       calls.push({ name, args, callId });
-      return { placement: "controller", output: await answer(name, args) };
+      return await answer(name, args);
     },
   };
   return { host, announced, calls };

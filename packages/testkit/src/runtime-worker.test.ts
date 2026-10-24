@@ -2,7 +2,6 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { FrameSummary } from "@rakazo/adapters/runtime-worker";
-import { WORKER_NATIVE_TOOLS } from "@rakazo/adapters/runtime-worker";
 import { bundleGuest } from "@rakazo/agent-run-worker/bundle";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { latestCard } from "./index.js";
@@ -289,49 +288,6 @@ describe("a run whose bot runs in a guest", () => {
 
     expect(await run.prisma.scratchpadItem.count()).toBe(0);
     expect(await effects(run, runId)).toEqual([]);
-  });
-
-  it("never lets a runtime start a local tool once its attempt lost the run", async () => {
-    let started = false;
-    let refusal: unknown;
-    const run = await fixture({
-      steps: [],
-      runtime: (prisma) => ({
-        describe: () => ({
-          id: "fenced",
-          contractVersion: "1",
-          adapterVersion: "1",
-          capabilities: {
-            streaming: true,
-            compaction: false,
-            tools: true,
-            scripted: false,
-            localTools: WORKER_NATIVE_TOOLS,
-          },
-        }),
-        abort: async () => {},
-        async *run(request) {
-          yield { type: "tool", name: "bash", args: { command: "true" }, executionId: "late" };
-          await prisma.$executeRaw`UPDATE runs SET "leaseFence" = "leaseFence" + 1 WHERE id = ${request.runId}`;
-          refusal = await request.executeLocalTool!(
-            "bash",
-            { command: "true" },
-            "late",
-            async () => {
-              started = true;
-              return { text: "", isError: false, truncated: false, totalBytes: 0 };
-            },
-          ).catch((error: unknown) => (error as Error).message);
-          yield { type: "done" };
-        },
-      }),
-    });
-    const runId = await run.send("Run true.");
-    await run.continueRun(runId);
-
-    expect(started).toBe(false);
-    expect(refusal).toBe("This attempt no longer holds the run, so bash did not start.");
-    expect(await effects(run, runId)).toEqual([{ kind: "bash", status: "intended" }]);
   });
 
   it("runs nothing a restarted controller finds waiting for approval until the answer is stored", async () => {

@@ -2,10 +2,17 @@ import { randomUUID } from "node:crypto";
 import { createWriteStream } from "node:fs";
 import { mkdir, readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
-import type { LocalToolOutput } from "@rakazo/adapter-kit";
 import { WORKER_LIMITS } from "@rakazo/adapters/runtime-worker/wire";
 
-export type CommandOutput = Extract<LocalToolOutput, { text: string }>;
+/** A command's output for the model; `totalBytes` counts everything, including what was cut. */
+export type CommandOutput = {
+  text: string;
+  isError: boolean;
+  truncated: boolean;
+  totalBytes: number;
+  /** Full output on the mount, when it was cut for the model. */
+  spoolPath?: string;
+};
 
 const MARKER_ROOM_CHARS = 256;
 const MARKER_ROOM_LINES = 4;
@@ -46,7 +53,6 @@ function outputCapture(spoolPath: string) {
 function modelText(
   captured: { head: string; tail: string; totalBytes: number; spooled: number },
   spoolPath: string,
-  readOffset?: number,
   status = "",
 ): { text: string; truncated: boolean } {
   const { localOutputModelChars: maxChars, localOutputModelLines: maxLines } = WORKER_LIMITS;
@@ -67,21 +73,10 @@ function modelText(
       ? `its first ${captured.spooled} bytes are in`
       : "it is in";
   const marker = `[output truncated: ${captured.totalBytes} bytes in total, ${kept} ${spoolPath}]`;
-  if (readOffset !== undefined) {
-    const prefix = captured.head.slice(0, maxChars - MARKER_ROOM_CHARS);
-    const whole = prefix.slice(0, Math.max(0, prefix.lastIndexOf("\n")));
-    const shown = whole ? whole.split("\n").slice(0, maxLines - MARKER_ROOM_LINES) : [];
-    const continuation = shown.length
-      ? `[output truncated. Use offset=${readOffset + shown.length} to continue.]`
-      : `[Line ${readOffset} exceeds the output limit. Use bash to inspect a bounded portion of this line.]`;
-    return { text: `${shown.join("\n")}\n\n${continuation}`, truncated: true };
-  }
   return { text: `${head}\n\n${marker}${status ? `\n${status}` : ""}\n\n${tail}`, truncated: true };
 }
 
-const SPOOL_FILE = /^bash-.+\.log$/;
-const NATIVE_SPOOL_FILE = /^\.rakazo-bash-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\.log$/;
-type SpoolPrefix = "bash" | ".rakazo-bash";
+const SPOOL_FILE = /^\.rakazo-bash-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\.log$/;
 /** Spool files of commands still running in this process: never pruned. */
 const spooling = new Set<string>();
 let pruning = Promise.resolve();
@@ -90,10 +85,9 @@ let pruning = Promise.resolve();
  * Makes room for one more spool file under the cap, oldest first, and claims its path. Calls run
  * one at a time, so concurrent commands do not overshoot the cap. Other files are left alone.
  */
-function claimSpool(spoolDir: string, prefix: SpoolPrefix): Promise<string> {
+function claimSpool(spoolDir: string): Promise<string> {
   const claimed = pruning.then(async () => {
-    const pattern = prefix === "bash" ? SPOOL_FILE : NATIVE_SPOOL_FILE;
-    const names = (await readdir(spoolDir)).filter((name) => pattern.test(name));
+    const names = (await readdir(spoolDir)).filter((name) => SPOOL_FILE.test(name));
     const excess = names.length - (WORKER_LIMITS.localOutputSpoolFiles - 1);
     if (excess > 0) {
       const aged = await Promise.all(
@@ -108,7 +102,7 @@ function claimSpool(spoolDir: string, prefix: SpoolPrefix): Promise<string> {
       aged.sort((a, b) => a.mtimeMs - b.mtimeMs || a.file.localeCompare(b.file));
       await Promise.all(aged.slice(0, excess).map(({ file }) => rm(file, { force: true })));
     }
-    const spoolPath = path.join(spoolDir, `${prefix}-${randomUUID()}.log`);
+    const spoolPath = path.join(spoolDir, `.rakazo-bash-${randomUUID()}.log`);
     spooling.add(spoolPath);
     return spoolPath;
   });
@@ -119,10 +113,10 @@ function claimSpool(spoolDir: string, prefix: SpoolPrefix): Promise<string> {
   return claimed;
 }
 
-/** Claim bounded storage before a native call, then finish its P2 result. */
-export async function captureToolOutput(spoolDir: string, prefix: SpoolPrefix = "bash") {
+/** Claims bounded storage before a command runs, then finishes its output for the model. */
+export async function captureToolOutput(spoolDir: string) {
   await mkdir(spoolDir, { recursive: true });
-  const spoolPath = await claimSpool(spoolDir, prefix);
+  const spoolPath = await claimSpool(spoolDir);
   const capture = outputCapture(spoolPath);
   let streamed = false;
   return {
@@ -130,7 +124,7 @@ export async function captureToolOutput(spoolDir: string, prefix: SpoolPrefix = 
       streamed = true;
       capture.write(data);
     },
-    async finish(text: string, isError: boolean, readOffset?: number): Promise<CommandOutput> {
+    async finish(text: string, isError: boolean): Promise<CommandOutput> {
       try {
         if (!streamed) capture.write(Buffer.from(text));
         const captured = await capture.close();
@@ -139,7 +133,7 @@ export async function captureToolOutput(spoolDir: string, prefix: SpoolPrefix = 
               /(?:^|\n)(Command (?:exited with code \d+|timed out after [^\n]+|aborted))$/,
             )?.[1]
           : undefined;
-        const bounded = modelText(captured, spoolPath, readOffset, status);
+        const bounded = modelText(captured, spoolPath, status);
         if (!bounded.truncated) await rm(spoolPath, { force: true });
         return {
           ...bounded,

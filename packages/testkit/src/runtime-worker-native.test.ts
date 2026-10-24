@@ -66,7 +66,6 @@ async function nativeRun(
           })(),
           capability,
           harness: HARNESSES["pi-native"]!,
-          spoolDir: path.join(root, "spool"),
           root,
           home: path.join(root, "home/user"),
         });
@@ -74,7 +73,7 @@ async function nativeRun(
         return {
           expectedHarness: HARNESSES["pi-native"]!.declaration,
           start: {
-            version: 1,
+            version: 2,
             kind: "worker.start",
             worker,
             workspace: {
@@ -344,44 +343,39 @@ describe("the pi-native harness through the controller", () => {
   });
 
   it("keeps Pi's prompt with the Rakazo addendum, and runs its file tools on the volume without a grant", async () => {
-    const executeLocalTool = vi.fn();
-    const { seen, exit, root } = await nativeRun(
-      [
-        {
-          expect(request) {
-            const system = systemOf(request);
-            expect(system.indexOf("operating inside pi")).toBeGreaterThanOrEqual(0);
-            expect(system.indexOf("<addendum>\nYou are Ada, the user's bot.")).toBeGreaterThan(
-              system.indexOf("operating inside pi"),
-            );
-            expect(system).not.toContain("never sent to a native harness");
-            expect((request.tools ?? []).map((tool) => tool.function.name).sort()).toEqual([
-              "bash",
-              "read",
-            ]);
-          },
-          response: {
-            type: "tool",
-            id: "b1",
-            name: "bash",
-            arguments: { command: "echo drafted > note.txt && echo ok" },
-          },
+    const { seen, exit, root } = await nativeRun([
+      {
+        expect(request) {
+          const system = systemOf(request);
+          expect(system.indexOf("operating inside pi")).toBeGreaterThanOrEqual(0);
+          expect(system.indexOf("<addendum>\nYou are Ada, the user's bot.")).toBeGreaterThan(
+            system.indexOf("operating inside pi"),
+          );
+          expect(system).not.toContain("never sent to a native harness");
+          expect((request.tools ?? []).map((tool) => tool.function.name).sort()).toEqual([
+            "bash",
+            "read",
+          ]);
         },
-        {
-          expect(request) {
-            expect(request.messages.at(-1)).toMatchObject({ role: "tool", content: "ok\n" });
-          },
-          response: { type: "text", text: "Drafted." },
+        response: {
+          type: "tool",
+          id: "b1",
+          name: "bash",
+          arguments: { command: "echo drafted > note.txt && echo ok" },
         },
-      ],
-      { executeLocalTool },
-    );
+      },
+      {
+        expect(request) {
+          expect(request.messages.at(-1)).toMatchObject({ role: "tool", content: "ok\n" });
+        },
+        response: { type: "text", text: "Drafted." },
+      },
+    ]);
 
     expect(exit).toBe("done");
     expect(await readFile(path.join(root, "workspace/bots/bot/note.txt"), "utf8")).toBe(
       "drafted\n",
     );
-    expect(executeLocalTool).not.toHaveBeenCalled();
     expect(seen.filter((event) => event.type === "progress")).toEqual([
       {
         type: "progress",

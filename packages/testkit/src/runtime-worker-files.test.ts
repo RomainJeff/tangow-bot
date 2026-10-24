@@ -1,9 +1,7 @@
 import { readFileSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { ComputerRef, LocalToolOutput } from "@rakazo/adapter-kit";
+import type { ComputerRef } from "@rakazo/adapter-kit";
 import { PiAgentRuntime } from "@rakazo/adapters";
-import { WORKER_NATIVE_TOOLS } from "@rakazo/adapters/runtime-worker";
 import { afterEach, describe, expect, it } from "vitest";
 import { fileTask, nativeFileTask, toolResult } from "./file-task.js";
 import type { ModelEmulatorStep } from "./model-emulator.js";
@@ -136,91 +134,6 @@ describe("a product run in a worker", () => {
 });
 
 /** What a guest reports for a local tool it ran after the controller's grant. */
-const localOutput = (text: string): LocalToolOutput => ({
-  text,
-  isError: false,
-  truncated: false,
-  totalBytes: Buffer.byteLength(text),
-});
-
-it.each(["after", "during"] as const)(
-  "reads fresh native state after an attempt is cut %s a read",
-  async (cut) => {
-    let version = "v1";
-    let run: Awaited<ReturnType<typeof startWorkerRun>>;
-    const results: unknown[] = [];
-    run = await startWorkerRun({
-      steps: [],
-      runtime: () => ({
-        describe: () => ({
-          ...new PiAgentRuntime().describe(),
-          id: "worker",
-          capabilities: { scripted: false, localTools: WORKER_NATIVE_TOOLS },
-        }),
-        async *run(request) {
-          const interrupt = async () => {
-            await run.prisma.run.update({
-              where: { id: request.runId },
-              data: { leaseFence: { increment: 1 }, leaseExpiresAt: new Date(0) },
-            });
-            throw new Error("Attempt interrupted");
-          };
-          const cwd = run.provider.volumePath("bot_private");
-          const file = path.join(cwd, "retry.txt");
-          yield {
-            type: "tool",
-            name: "write",
-            args: { path: "retry.txt", content: version },
-            executionId: "write",
-          };
-          await request.executeLocalTool!(
-            "write",
-            { path: "retry.txt", content: version },
-            "write",
-            async () => {
-              await mkdir(cwd, { recursive: true });
-              await writeFile(file, version);
-              return localOutput("");
-            },
-          );
-          yield {
-            type: "tool",
-            name: "read",
-            args: { path: "retry.txt" },
-            executionId: "read",
-          };
-          results.push(
-            await request.executeLocalTool!("read", { path: "retry.txt" }, "read", async () => {
-              if (version === "v1" && cut === "during") await interrupt();
-              return localOutput(await readFile(file, "utf8"));
-            }),
-          );
-          if (version === "v1") await interrupt();
-          yield { type: "done", text: "Done." };
-        },
-      }),
-    });
-    cleanups.push(() => run.close());
-    const runId = await run.send("Read current state.");
-    await run.continueRun(runId);
-    version = "v2";
-    await run.prisma.run.update({
-      where: { id: runId },
-      data: { status: "queued", leaseOwner: null, leaseExpiresAt: null },
-    });
-    await run.restart().dispose();
-    await run.continueRun(runId);
-    expect(
-      await run.prisma.run.findUniqueOrThrow({
-        where: { id: runId },
-        select: { status: true, error: true },
-      }),
-    ).toEqual({ status: "completed", error: null });
-    expect(results.at(-1)).toMatchObject({ output: "v2" });
-    expect(await run.prisma.externalEffect.count({ where: { runId, kind: "read" } })).toBe(0);
-  },
-);
-
 it("lets webhook routines inspect native files without approval", async () => {
   const run = await startWorkerRun({
     steps: [

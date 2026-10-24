@@ -127,7 +127,7 @@ describe("worker start", () => {
     expect(started).toEqual({
       providerRef: `fake-worker-${attempt.id}`,
       start: {
-        version: 1,
+        version: 2,
         kind: "worker.start",
         worker: { runId: run.id, attemptId: attempt.id, fence: 1 },
         workspace: { cwd: "/workspace", mounts: [] },
@@ -572,7 +572,7 @@ describe("worker release", () => {
     await prisma.run.update({ where: { id: run.id }, data: { leaseFence: 2 } });
 
     await expect(workers.status(attempt.id)).resolves.toEqual({
-      version: 1,
+      version: 2,
       kind: "worker.status",
       worker: { runId: run.id, attemptId: attempt.id, fence: 1 },
       state: "ready",

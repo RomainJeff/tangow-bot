@@ -147,7 +147,6 @@ describe("E2BWorkerProvider", () => {
       envs: {
         RAKAZO_WORKER_HARNESS: "pi-native",
         RAKAZO_WORKER_HOME: "/home/user",
-        RAKAZO_WORKER_SPOOL_DIR: "/workspace/bots/bot_1/.rakazo/tool-output",
       },
       volumeMounts: {
         "/workspace/bots/bot_1": "rakazo-vol_bot",

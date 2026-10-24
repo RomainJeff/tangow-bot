@@ -2,7 +2,6 @@ import type {
   AgentRunModel,
   AgentRunRequest,
   GuestBody,
-  LocalToolOutput,
   ModelDialect,
   RefusalReason,
   ReplyFinal,
@@ -11,7 +10,11 @@ import type {
   WorkerIdentity,
   WorkerSkill,
 } from "@rakazo/adapter-kit";
-import { AgentRuntimeUnavailableError, FRAME_CAPABILITY } from "@rakazo/adapter-kit";
+import {
+  AgentRuntimeUnavailableError,
+  FRAME_CAPABILITY,
+  WORKER_PROTOCOL_VERSION,
+} from "@rakazo/adapter-kit";
 import { redactSecrets, secretRedactor } from "@rakazo/core";
 import { getLogger } from "@rakazo/logging";
 import { isToolPauseResult } from "../approval-effect.js";
@@ -22,7 +25,7 @@ import {
   helperModel,
   isHelperTool,
 } from "../builtin-tools.js";
-import { redactPayloadValue, redactPayloadWith } from "../connector-safety.js";
+import { redactPayloadWith } from "../connector-safety.js";
 import type { CapabilityKey } from "./capability.js";
 import { mintCapability, verifyCapability } from "./capability.js";
 import { relayPiAiCall } from "./dialects/pi-ai.js";
@@ -143,7 +146,6 @@ export function createSession(
   const tools = new Map(request.tools.map((tool) => [tool.name, tool]));
   const announced = new Map<string, string>();
   const open = new Map<string, Promise<unknown>>();
-  const grants = new Map<string, ReturnType<typeof deferred<LocalToolOutput>>>();
   const helpers = new Map<string, Helper>();
   const relays = new Map<number, AbortController>();
   const reportedSkills: WorkerSkill[] = [];
@@ -387,40 +389,6 @@ export function createSession(
     const helper = helperOf(agent);
     if (agent !== "root" && !helper) return refuse("invalid");
     if (paused) return pausedToolCall(paused);
-    if (nativeToolsForHarness(launched!.expectedHarness.name).some((tool) => tool.name === name)) {
-      const executeLocal = helper ? helper.log.executeLocalTool : request.executeLocalTool;
-      if (!executeLocal) return { type: "error", message: `${name} is unavailable here` };
-      const granted = deferred<void>();
-      let denied = false;
-      const call = executeLocal(name, args, callId, () => {
-        // Authorization can outlast the pause: the guest must not start the call then.
-        if (paused) {
-          denied = true;
-          return Promise.reject(new Error(PAUSED_MESSAGE));
-        }
-        const output = deferred<LocalToolOutput>();
-        grants.set(callId, output);
-        granted.resolve();
-        return output.promise;
-      });
-      open.set(callId, call);
-      void call.then(
-        () => open.delete(callId),
-        () => open.delete(callId),
-      );
-      const first = await Promise.race([
-        granted.promise.then(() => ({ granted: true as const })),
-        call.then(
-          (output) => ({ granted: false as const, output }),
-          (error: unknown) => ({ granted: false as const, error }),
-        ),
-      ]);
-      if (first.granted) return { type: "tool.grant" };
-      if (denied) return { type: "tool.result", output: PAUSED_TOOL_RESULT };
-      if ("error" in first) return { type: "error", message: clean(messageOf(first.error)) };
-      if (isToolPauseResult(first.output)) pause();
-      return { type: "tool.result", output: first.output };
-    }
     if (helper && !isHelperTool(name)) return refuse("unknown_tool");
     if (name === "run_subagent" && runsOwnLoop()) {
       const run = runHelper(body, part);
@@ -443,36 +411,6 @@ export function createSession(
       return { type: "error", message: clean(messageOf(error)) };
     } finally {
       open.delete(callId);
-    }
-  }
-
-  async function recordLocalResult(
-    body: Extract<GuestBody, { type: "tool.done" }>,
-  ): Promise<ReplyFinal> {
-    const grant = grants.get(body.callId);
-    if (!grant) return refuse("invalid");
-    grants.delete(body.callId);
-    const { output } = body;
-    grant.resolve(
-      "result" in output
-        ? {
-            result: redactPayloadValue(output.result, [
-              ...(request.secrets ?? []),
-            ]) as typeof output.result,
-          }
-        : {
-            ...output,
-            text: cutText(clean(output.text), WORKER_LIMITS.controllerResultBytes),
-            ...(output.spoolPath ? { spoolPath: clean(output.spoolPath) } : {}),
-          },
-    );
-    try {
-      await open.get(body.callId);
-      return { type: "tool.recorded" };
-    } catch (error) {
-      // The result is not durable: the effect stays started and the attempt ends here.
-      fail(error instanceof Error ? error : new Error(String(error)));
-      return { type: "error", message: "The result could not be recorded" };
     }
   }
 
@@ -658,8 +596,6 @@ export function createSession(
         if (!(await fenceHeld()) || !live()) return revoke();
         if (!paused && ++toolCalls > WORKER_LIMITS.toolCallsPerAttempt) return refuse("budget");
         return transcript.answered(body, await callTool(body, part));
-      case "tool.done":
-        return recordLocalResult(body);
       case "steering.claim": {
         if (paused) return { type: "steering", messages: [] };
         const messages = (await request.claimSteering?.(body.seenIds)) ?? [];
@@ -858,20 +794,13 @@ export function createSession(
     }
   }
 
-  async function stop(signal: AbortSignal | undefined) {
+  async function stop() {
     stopped.resolve();
     helloSettled.resolve();
     inbox.revoke();
     clearRelayPrefixes(worker.attemptId);
     for (const relay of relays.values()) relay.abort();
     events.drain();
-    // The executor stops writing results only once it saw its signal abort.
-    const rejectGrants = () => {
-      for (const grant of grants.values()) grant.reject(new Error("The worker stopped"));
-      grants.clear();
-    };
-    if (!signal || signal.aborted) rejectGrants();
-    else signal.addEventListener("abort", rejectGrants, { once: true });
     const helpersClosed = Promise.all(
       [...helpers.values()].map((helper) =>
         closeHelper(helper, { status: "failed", result: "The worker stopped" }),
@@ -887,7 +816,9 @@ export function createSession(
     // An unconfirmed stop never awaits `ended`, so its late failure must not crash the process.
     ended.catch(() => undefined);
     if (bound) {
-      await bound.send(encodeMessage({ version: 1, kind: "worker.cancel", worker }));
+      await bound.send(
+        encodeMessage({ version: WORKER_PROTOCOL_VERSION, kind: "worker.cancel", worker }),
+      );
     }
     await Promise.race([guest.exited, deps.clock.sleep(WORKER_LIMITS.cancelGraceMs)]);
     const released = guest.release().then(
@@ -910,13 +841,16 @@ export function createSession(
     async open() {
       const capability = mintCapability(deps.key, worker, Date.now());
       launched = await deps.launcher.launch(worker, capability);
+      // The harness runs its own tools in the VM: the controller never runs them for it.
+      for (const tool of nativeToolsForHarness(launched.expectedHarness.name))
+        tools.delete(tool.name);
       void connect(launched).catch((error: unknown) =>
         fail(error instanceof Error ? error : new Error(String(error))),
       );
     },
     /** Idempotent. Resolves once the VM is confirmed gone or recorded as unconfirmed. */
-    stop(signal: AbortSignal | undefined) {
-      stopping ??= stop(signal);
+    stop() {
+      stopping ??= stop();
       return stopping;
     },
     cancel(error: Error) {

@@ -4,7 +4,7 @@ import type {
   ConnectionCatalogItem,
   SandboxKind,
 } from "@rakazo/contracts";
-import type { LocalToolOutput, SkillCollision, WorkerSkill } from "./worker-protocol.js";
+import type { SkillCollision, WorkerSkill } from "./worker-protocol.js";
 
 export interface AdapterContext {
   operationId: string;
@@ -434,12 +434,6 @@ export interface AgentRunRequest {
     /** Present only when the runtime traces this run. */
     trace?: ToolCallTrace,
   ) => Promise<unknown>;
-  /**
-   * Run a tool the runtime executes next to the model. The executor records and authorizes the
-   * call like any other, claims its effect under the run's fence, and only then calls `run` at
-   * most once; what `run` returns is the tool's output. Absent: the runtime has no local tools.
-   */
-  executeLocalTool?: LocalToolExecutor;
   /** Fenced, untrusted guest observations; secrets are scanned by the controller. */
   onSkillIndex?: (
     skills: WorkerSkill[],
@@ -457,13 +451,6 @@ export interface AgentRunRequest {
   /** Open the log of one `run_subagent` call: the helper runs in a session of its own. */
   startSubagent?: (call: SubagentCall) => Promise<SubagentLog>;
 }
-
-export type LocalToolExecutor = (
-  name: string,
-  args: Record<string, unknown>,
-  executionId: string,
-  run: (signal: AbortSignal) => Promise<LocalToolOutput>,
-) => Promise<unknown>;
 
 /** A runtime could not start or was lost. The executor retries within its setup budget. */
 export class AgentRuntimeUnavailableError extends Error {
@@ -493,8 +480,6 @@ export interface SubagentCall {
 export interface SubagentLog {
   /** Run one of the helper's tool calls, writing the call and its result to the helper's log. */
   executeTool: NonNullable<AgentRunRequest["executeTool"]>;
-  /** `AgentRunRequest.executeLocalTool`, for the helper's log. */
-  executeLocalTool?: LocalToolExecutor;
   /** Write a finished block of the helper's own text. */
   text(text: string): Promise<void>;
   /** Close the helper's run and leave its one trace, the `result` it returned, in the parent's log. */
@@ -621,7 +606,7 @@ export interface AgentRuntimeCapabilities {
   compaction: boolean;
   tools: boolean;
   scripted: boolean;
-  /** Tools the runtime runs next to the model, through `executeLocalTool`. Exposed with the rest. */
+  /** Tools the runtime's own loop runs next to the model, offered with the rest. */
   localTools?: readonly ConnectorTool[];
   /**
    * The model reads screens from the bot's home with its own file tool, so a screen tool saves the

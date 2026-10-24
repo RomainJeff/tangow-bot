@@ -198,7 +198,6 @@ export class LocalWorkerProvider implements WorkerProvider, GuestConnector {
       channels: guestSide(),
       capability,
       harness: this.harness,
-      spoolDir: path.join(vm.root, "tmp", "tool-output"),
       root: vm.root,
       home: path.join(vm.root, "home/user"),
     }).then(
@@ -230,7 +229,6 @@ export class LocalWorkerProvider implements WorkerProvider, GuestConnector {
         RAKAZO_WORKER_HARNESS: this.harness.declaration.name,
         RAKAZO_WORKER_ROOT: vm.root,
         RAKAZO_WORKER_HOME: path.join(vm.root, "home/user"),
-        RAKAZO_WORKER_SPOOL_DIR: path.join(vm.root, "tmp", "tool-output"),
       },
     });
     const exited = new Promise<void>((resolve) => {

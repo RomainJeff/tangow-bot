@@ -1,6 +1,9 @@
 import { AskQuestion, VolumeAccess, WorkerState } from "@rakazo/contracts";
 import { z } from "zod";
 
+/** Every wire message carries it. A peer of another version is refused, never coerced. */
+export const WORKER_PROTOCOL_VERSION = 2;
+
 /** Every message names one run attempt and the fence it claimed. */
 export const WorkerIdentitySchema = z.strictObject({
   runId: z.string().min(1),
@@ -46,7 +49,7 @@ export const GuestModelSchema = z.strictObject({
 });
 export type GuestModel = z.infer<typeof GuestModelSchema>;
 
-/** The controller decides where a tool runs: `guest` tools run in the VM after a grant. */
+/** `guest` tools are the harness's own, run by its loop in the VM; `controller` tools are Rakazo's. */
 export const ToolPlacement = z.enum(["controller", "guest"]);
 export type ToolPlacement = z.infer<typeof ToolPlacement>;
 
@@ -111,23 +114,6 @@ export const GuestRunInputSchema = z.strictObject({
   emptyResponseText: z.string().optional(),
 });
 export type GuestRunInput = z.infer<typeof GuestRunInputSchema>;
-
-/**
- * What a guest-run tool reports: a command's output, of which `totalBytes` counts everything
- * including what was cut, or a result object shaped like the one the in-process tool returns.
- */
-export const LocalToolOutputSchema = z.union([
-  z.strictObject({
-    text: z.string(),
-    isError: z.boolean(),
-    truncated: z.boolean(),
-    totalBytes: z.number().int().nonnegative(),
-    /** Full output on the guest disk, when it was cut for the model. */
-    spoolPath: z.string().optional(),
-  }),
-  z.strictObject({ result: JsonRecord }),
-]);
-export type LocalToolOutput = z.infer<typeof LocalToolOutputSchema>;
 
 /**
  * Model-access dialects. A guest harness asks the controller for model calls in one dialect; the
@@ -252,7 +238,6 @@ export const GuestBodySchema = z.discriminatedUnion("type", [
     name: z.string(),
     args: JsonRecord,
   }),
-  z.strictObject({ type: z.literal("tool.done"), callId: Id, output: LocalToolOutputSchema }),
   z.strictObject({ type: z.literal("steering.claim"), seenIds: z.array(Id) }),
   z.strictObject({
     type: z.literal("subagent.open"),
@@ -343,9 +328,6 @@ export const ReplyFinalSchema = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("model.end") }),
   /** A controller-run tool, already executed and logged. */
   z.strictObject({ type: z.literal("tool.result"), output: z.unknown() }),
-  /** A guest tool's start is recorded: run it, then send `tool.done`. */
-  z.strictObject({ type: z.literal("tool.grant") }),
-  z.strictObject({ type: z.literal("tool.recorded") }),
   z.strictObject({
     type: z.literal("steering"),
     messages: z.array(
@@ -370,7 +352,7 @@ export type ReplyBody = ReplyPart | ReplyFinal;
 
 /** Controller to guest, once the worker is ready. */
 export const WorkerStartV1Schema = z.strictObject({
-  version: z.literal(1),
+  version: z.literal(WORKER_PROTOCOL_VERSION),
   kind: z.literal("worker.start"),
   worker: WorkerIdentitySchema,
   workspace: z.strictObject({
@@ -384,7 +366,7 @@ export type WorkerStartV1 = z.infer<typeof WorkerStartV1Schema>;
 
 /** Controller to guest: stop the run. The controller destroys the VM whatever the guest does. */
 export const WorkerCancelV1Schema = z.strictObject({
-  version: z.literal(1),
+  version: z.literal(WORKER_PROTOCOL_VERSION),
   kind: z.literal("worker.cancel"),
   worker: WorkerIdentitySchema,
 });
@@ -392,7 +374,7 @@ export type WorkerCancelV1 = z.infer<typeof WorkerCancelV1Schema>;
 
 /** Controller to guest: one part of the reply to the guest frame `re`, numbered from 0. */
 export const WorkerReplyV1Schema = z.strictObject({
-  version: z.literal(1),
+  version: z.literal(WORKER_PROTOCOL_VERSION),
   kind: z.literal("worker.reply"),
   worker: WorkerIdentitySchema,
   payload: z.strictObject({
@@ -405,7 +387,7 @@ export type WorkerReplyV1 = z.infer<typeof WorkerReplyV1Schema>;
 
 /** The controller's view of a worker, read from the database. Never on the wire. */
 export const WorkerStatusV1Schema = z.strictObject({
-  version: z.literal(1),
+  version: z.literal(WORKER_PROTOCOL_VERSION),
   kind: z.literal("worker.status"),
   worker: WorkerIdentitySchema,
   state: WorkerState,
@@ -443,7 +425,7 @@ export type HarnessDeclaration = z.infer<typeof HarnessDeclarationSchema>;
 
 /** Guest to controller, first on every connection: the capability it was launched with. */
 export const WorkerHelloV1Schema = z.strictObject({
-  version: z.literal(1),
+  version: z.literal(WORKER_PROTOCOL_VERSION),
   kind: z.literal("worker.hello"),
   worker: WorkerIdentitySchema,
   capability: z.string().max(1024),
@@ -453,7 +435,7 @@ export type WorkerHelloV1 = z.infer<typeof WorkerHelloV1Schema>;
 
 /** Guest to controller. Frames are numbered from 1 and resent unchanged after a reconnect. */
 export const WorkerEventV1Schema = z.strictObject({
-  version: z.literal(1),
+  version: z.literal(WORKER_PROTOCOL_VERSION),
   kind: z.literal("worker.event"),
   worker: WorkerIdentitySchema,
   payload: z.strictObject({ seq: Seq, body: GuestBodySchema }),
@@ -487,7 +469,10 @@ function parseWire<T>(schema: z.ZodType<T>, json: unknown): WireParse<T> {
     typeof json === "object" && json !== null && "version" in json ? json.version : undefined;
   return {
     ok: false,
-    reason: version !== undefined && version !== 1 ? "unsupported_version" : "invalid",
+    reason:
+      version !== undefined && version !== WORKER_PROTOCOL_VERSION
+        ? "unsupported_version"
+        : "invalid",
   };
 }
 

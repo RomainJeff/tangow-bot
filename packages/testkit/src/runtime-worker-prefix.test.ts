@@ -76,13 +76,12 @@ describe("prompt bytes at the provider boundary", () => {
               capability,
               harness,
               root,
-              spoolDir: path.join(root, "spool"),
               home: path.join(root, "home/user"),
             });
             return {
               expectedHarness: harness.declaration,
               start: {
-                version: 1,
+                version: 2,
                 kind: "worker.start",
                 worker,
                 computer: "none",
