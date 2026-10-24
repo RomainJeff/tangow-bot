@@ -34,7 +34,7 @@ function renderCall(block: AskBlock): string {
       thread={{
         messages: [],
         running: false,
-        ask: { block, target: { runId: "run-1", messageId: "msg-1" } },
+        ask: { block, target: { thread: { botId: "bot-1" }, runId: "run-1", messageId: "msg-1" } },
       }}
       onSend={async () => {}}
       onFollowUp={async () => {}}

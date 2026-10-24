@@ -288,6 +288,25 @@ describe("buildApprovalAskBlock", () => {
     });
   });
 
+  it("names the run's owner on a draft, the one person who may send it", () => {
+    const block = buildApprovalAskBlock(
+      "effect-1",
+      "GMAIL_SEND_EMAIL",
+      { recipient_email: "bo@example.test", body: "Hi" },
+      [],
+      {
+        runUserId: "user-ana",
+        runUserName: "Ana Lima",
+        draft: {
+          app: { name: "Gmail", logo: null },
+          recipients: [{ role: "to", address: "bo@example.test" }],
+          body: "Hi",
+        },
+      },
+    );
+    expect(block).toMatchObject({ draft: { owner: { userId: "user-ana", name: "Ana Lima" } } });
+  });
+
   it("shows every argument of a send it cannot read, and offers no always-allow", () => {
     const block = buildApprovalAskBlock(
       "effect-1",

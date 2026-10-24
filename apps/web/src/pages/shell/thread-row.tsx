@@ -22,7 +22,7 @@ import {
   StackedAvatars,
 } from "@rakazo/ui-web";
 import type { ReactNode } from "react";
-import type { SpawnBotCardEdits } from "../../components/AskCard";
+import type { CardEdits } from "../../components/AskCard";
 import { AskCard } from "../../components/AskCard";
 import { CollaborationMarker } from "../../components/ai/CollaborationMarker";
 import { TaskCard } from "../../components/TaskCard";
@@ -51,7 +51,7 @@ export type RowContext = {
   /** The item whose computer card is live and opens the bot's screen. */
   takeoverItemId?: string | null;
   onOpenComputer?: () => void;
-  onAnswer?: (target: CardAnswerTarget, text: string, edits?: SpawnBotCardEdits) => Promise<void>;
+  onAnswer?: (target: CardAnswerTarget, text: string, edits?: CardEdits) => Promise<void>;
   memberName?: (botId: string | undefined) => string | undefined;
   peerBot: PeerBot;
   onOpenBot: (botId: string, messageId?: string) => void;
@@ -62,6 +62,8 @@ export type RowContext = {
   onBotChanged: () => Promise<void>;
   onAddRoutine: (name: string, prompt: string) => void;
   onOpenSkill?: (skill: SkillSourceBlock) => void;
+  /** Opens the integrations screen, where a disconnected app is reconnected. */
+  onOpenIntegrations?: () => void;
   messageOfEntry: (entryId: string) => MessageItem | undefined;
 };
 
@@ -226,7 +228,15 @@ function MessageRowView({
       onAnswer={
         waiting && onAnswer && waiting.itemId === item.id
           ? (text, edits) =>
-              onAnswer({ runId: waiting.runId, messageId: waiting.entryId }, text, edits)
+              onAnswer(
+                {
+                  thread: context.artifactTarget,
+                  runId: waiting.runId,
+                  messageId: waiting.entryId,
+                },
+                text,
+                edits,
+              )
           : undefined
       }
       onOpenComputer={context.takeoverItemId === item.id ? context.onOpenComputer : undefined}
@@ -450,11 +460,15 @@ function DividerLine({ reason }: { reason: ItemOf<"divider">["reason"] }) {
 function EffectCard({ item, context }: { item: ItemOf<"effect">; context: RowContext }) {
   const { waiting, onAnswer } = context;
   if (!item.card) return null;
-  const runId = item.runId ?? waiting?.runId;
+  // A draft that did not leave is asked again under a new entry: the answer names the latest one.
   const answer =
-    waiting?.itemId === item.id && onAnswer && runId
-      ? (text: string, edits?: SpawnBotCardEdits) =>
-          onAnswer({ runId, messageId: item.id }, text, edits)
+    waiting?.itemId === item.id && onAnswer
+      ? (text: string, edits?: CardEdits) =>
+          onAnswer(
+            { thread: context.artifactTarget, runId: waiting.runId, messageId: waiting.entryId },
+            text,
+            edits,
+          )
       : undefined;
   return (
     <AskCard
@@ -462,6 +476,7 @@ function EffectCard({ item, context }: { item: ItemOf<"effect">; context: RowCon
       canAnswer={Boolean(answer)}
       viewerUserId={context.viewerUserId}
       onAnswer={answer ?? noAnswer}
+      onReconnect={context.onOpenIntegrations}
       messageId={item.id}
       botId={item.botId}
     />

@@ -6,6 +6,10 @@ export interface FramedBlockHeader {
   who: ReactNode;
   /** Ink dot in front of the header — the bot needs an answer. */
   dot?: boolean;
+  /** The app the decision acts in, such as its logo, in front of `who`. */
+  icon?: ReactNode;
+  /** A short state at the end of the line, such as an edit in progress. */
+  status?: ReactNode;
 }
 
 export type FramedBlockActionsAlign = "end" | "start";
@@ -19,7 +23,8 @@ export interface FramedBlockProps extends Omit<ComponentPropsWithoutRef<"div">, 
   /** Omitted when the row above already names who is asking (a bot row's
    * author line) — the question then opens the card with no header line. */
   header?: FramedBlockHeader;
-  question: ReactNode;
+  /** Left out only on a settled block whose answer says it all on one line. */
+  question?: ReactNode;
   /** What pressing the primary action will do, one line under the question. */
   consequence?: ReactNode;
   /** Controls between the question and the actions (options, a text field). */
@@ -77,15 +82,23 @@ export function FramedBlock({
           {header.dot ? (
             <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-foreground" />
           ) : null}
+          {header.icon}
           <span className="min-w-0 truncate">{header.who}</span>
+          {header.status ? (
+            <span data-slot="framed-block-status" className="ms-auto shrink-0">
+              {header.status}
+            </span>
+          ) : null}
         </div>
       ) : null}
-      <div
-        data-slot="framed-block-question"
-        className={cn("text-foreground", answered ? "text-body font-medium" : "text-question")}
-      >
-        {question}
-      </div>
+      {question != null ? (
+        <div
+          data-slot="framed-block-question"
+          className={cn("text-foreground", answered ? "text-body font-medium" : "text-question")}
+        >
+          {question}
+        </div>
+      ) : null}
       {consequence ? (
         <div data-slot="framed-block-consequence" className="text-meta text-muted-foreground">
           {consequence}
