@@ -18,6 +18,7 @@ import { GlassBackdrop } from "../components/glass";
 import { CircleButton } from "../components/home/circle-button";
 import { ActivitySection, BotRow, GroupRow, SearchRow } from "../components/home/rows";
 import { createHomeStyles } from "../components/home/styles";
+import { NativeMenu } from "../components/native-menu";
 import { NativeSymbol } from "../components/native-symbol";
 import { UserAvatar } from "../components/user-avatar";
 import type { MobileBot } from "../lib/api";
@@ -31,6 +32,7 @@ import type { InboxSpace } from "../lib/inbox-spaces";
 import { canDeleteInboxSpace } from "../lib/inbox-spaces";
 import { dismissThreadNotifications, resumeLiveNotifications } from "../lib/live-notifications";
 import { native, useThemedStyles } from "../lib/native";
+import type { MenuAction } from "../lib/native-menu";
 import { useProfilePhoto } from "../lib/profile-photo";
 import { mobileSearchDestination } from "../lib/search-destination";
 import { openSheet } from "../lib/sheet";
@@ -129,6 +131,21 @@ export default function Home() {
     );
   }
 
+  function confirmDeleteSpace(space: InboxSpace) {
+    Alert.alert(
+      t("Delete {name}?", { name: space.name }),
+      t("This removes the empty space for everyone."),
+      [
+        { text: t("Cancel"), style: "cancel" },
+        {
+          text: t("Delete"),
+          style: "destructive",
+          onPress: () => void deleteInboxSpace(space),
+        },
+      ],
+    );
+  }
+
   function showSpaceActions(space: InboxSpace) {
     if (
       !canDeleteInboxSpace(space) ||
@@ -141,20 +158,16 @@ export default function Home() {
       {
         text: t("Delete space"),
         style: "destructive",
-        onPress: () =>
-          Alert.alert(
-            t("Delete {name}?", { name: space.name }),
-            t("This removes the empty space for everyone."),
-            [
-              { text: t("Cancel"), style: "cancel" },
-              {
-                text: t("Delete"),
-                style: "destructive",
-                onPress: () => void deleteInboxSpace(space),
-              },
-            ],
-          ),
+        onPress: () => confirmDeleteSpace(space),
       },
+    ]);
+  }
+
+  function showCreateMenu() {
+    if (spaceActionRef.current.busy || spaceActionRef.current.recoveryId) return;
+    Alert.alert(t("Create"), undefined, [
+      ...createActions.map(({ label, onPress }) => ({ text: label, onPress })),
+      { text: t("Cancel"), style: "cancel" },
     ]);
   }
 
@@ -188,6 +201,12 @@ export default function Home() {
       creatingBotRef.current = false;
     }
   }, [refreshBots, router, t]);
+
+  const createActions: MenuAction[] = [
+    { label: t("New bot"), onPress: () => void createQuickBot() },
+    { label: t("New group"), onPress: () => router.push("/new-group") },
+    { label: t("New space"), onPress: () => router.push("/new-space") },
+  ];
 
   if (!ready) {
     return (
@@ -280,17 +299,27 @@ export default function Home() {
                   <Text style={styles.spaceTitle}>{item.title}</Text>
                 </Pressable>
                 {canDeleteInboxSpace(item.space) ? (
-                  <Pressable
-                    accessibilityRole="button"
+                  <NativeMenu
+                    compact
+                    title={item.title}
                     accessibilityLabel={t("Space actions for {name}", { name: item.title })}
                     disabled={spaceBusy || !!spaceRecoveryId}
-                    onPress={() => {
+                    actions={[
+                      {
+                        label: t("Delete space"),
+                        destructive: true,
+                        onPress: () => {
+                          if (item.space) confirmDeleteSpace(item.space);
+                        },
+                      },
+                    ]}
+                    onAndroidOpen={() => {
                       if (item.space) showSpaceActions(item.space);
                     }}
                     style={({ pressed }) => [styles.spaceActions, pressed && styles.rowPressed]}
                   >
                     <NativeSymbol ios="ellipsis" android="ellipsis-horizontal" size={20} />
-                  </Pressable>
+                  </NativeMenu>
                 ) : null}
               </View>
             ) : (
@@ -379,20 +408,17 @@ export default function Home() {
             >
               <NativeSymbol ios="magnifyingglass" android="search" size={17} />
             </CircleButton>
-            <CircleButton
+            <NativeMenu
+              compact
+              title={t("Create")}
               accessibilityLabel={t("Create")}
-              onPress={() => {
-                if (spaceActionRef.current.busy || spaceActionRef.current.recoveryId) return;
-                Alert.alert(t("Create"), undefined, [
-                  { text: t("New bot"), onPress: () => void createQuickBot() },
-                  { text: t("New group"), onPress: () => router.push("/new-group") },
-                  { text: t("New space"), onPress: () => router.push("/new-space") },
-                  { text: t("Cancel"), style: "cancel" },
-                ]);
-              }}
+              disabled={spaceBusy || !!spaceRecoveryId}
+              actions={createActions}
+              onAndroidOpen={showCreateMenu}
+              style={styles.circleButton}
             >
               <NativeSymbol ios="plus" android="add" size={18} />
-            </CircleButton>
+            </NativeMenu>
           </View>
         </View>
 
