@@ -168,6 +168,7 @@ export function useThreadSend({
       setSendError(null);
       // Only after successful engagement so a failed upload/send keeps the setup card.
       const dropDelayedSetup = () => cancelFocusPromptFor(initialBotTarget);
+      let replaced: ReturnType<typeof editedWaitingDraft>;
       try {
         if (plan.shouldRunRoutines) {
           const sendNonce = newClientNonce();
@@ -222,7 +223,7 @@ export function useThreadSend({
           );
         }
         const clientNonce = newClientNonce();
-        const replaced = reroutedToGroup ? undefined : editedWaitingDraft(viewRef.current);
+        replaced = reroutedToGroup ? undefined : editedWaitingDraft(viewRef.current);
         if (groupTarget) {
           await rpc.threads.send({
             groupId: groupTarget,
@@ -282,8 +283,9 @@ export function useThreadSend({
         if (groupTarget) await refreshGroupThreadRef.current(groupTarget);
         else if (botTarget) await refreshThreadRef.current(botTarget);
       } catch (error) {
-        // The composer already dropped the text on send, so hand it back for another try.
-        if (rewindMessageId) {
+        // The composer already dropped the text on send, so hand it back for another try: after an
+        // edit, or a reply the server refused because no waiting draft took its text.
+        if (rewindMessageId || replaced) {
           // The person had taken the link preview off this message: the retry keeps it off.
           setRewindDraft({
             key: `retry:${newClientNonce()}`,
