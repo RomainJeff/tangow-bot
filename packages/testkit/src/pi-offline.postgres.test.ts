@@ -873,13 +873,13 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
             ["GMAIL_SEND_EMAIL", { ...mail, body: "Edited by me.", include_signature: false }],
           ]);
           expect(mailed()).toEqual(["Edited by me."]);
-          const effect = await fixture.prisma.externalEffect.findFirstOrThrow({
-            where: { runId: sent.runId },
+          // The run also records its message_user call, so the mail's row is read by its tool.
+          const effects = await fixture.prisma.externalEffect.findMany({
+            where: { runId: sent.runId, kind: "GMAIL_SEND_EMAIL" },
           });
-          expect(effect).toMatchObject({
-            status: "completed",
-            draft: { state: "sent", proposed: "Draft from the bot." },
-          });
+          expect(effects).toMatchObject([
+            { status: "completed", draft: { state: "sent", proposed: "Draft from the bot." } },
+          ]);
         },
         { composio },
       );
