@@ -555,17 +555,24 @@ export class ComposioEmulator implements ComposioProvider {
 
   async *execute(call: ConnectorCall, context: AdapterContext): AsyncIterable<ConnectorEvent> {
     const args = call.args ?? {};
-    const result =
-      call.tool === BATCH_TOOL.name
-        ? this.executeBatch(args, context)
-        : this.executeAction(call.tool, args, context);
+    let result: Record<string, unknown>;
+    try {
+      result =
+        call.tool === BATCH_TOOL.name
+          ? this.executeBatch(args, context)
+          : this.executeAction(call.tool, args, context);
+    } catch (error) {
+      // ComposioConnector reports every thrown error, a timeout included, as an error event.
+      yield { type: "error", message: error instanceof Error ? error.message : String(error) };
+      return;
+    }
     this.executions.push({ userId: context.userId, tool: call.tool, args });
     yield { type: "result", data: result };
   }
 
   /**
    * Test helper: the next call of `tool` fails the way Composio reports a failed action, or does
-   * its work and then times out, so the caller never learns that it did.
+   * its work and then times out, which the caller only sees as an error.
    */
   failNext(tool: string, fault: EmulatedFault): void {
     this.faults.set(tool, fault);

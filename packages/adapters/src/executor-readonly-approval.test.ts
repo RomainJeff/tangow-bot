@@ -1023,11 +1023,10 @@ describe("connector read-only metadata and approval enforcement", () => {
           0,
         ],
         [
-          "the app timed out after sending",
+          "the connector reports an error, as it does when it timed out after sending",
           (f: Awaited<ReturnType<typeof drafted>>) => {
             f.execute.mockImplementationOnce(async function* () {
-              yield* [];
-              throw new Error("timed out");
+              yield { type: "error", message: "Request timed out" } as never;
             });
           },
           1,

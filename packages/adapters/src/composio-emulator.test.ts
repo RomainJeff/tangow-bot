@@ -199,9 +199,9 @@ describe("ComposioEmulator", () => {
     expect(sentCount()).toBe(before);
 
     emulator.failNext("GMAIL_SEND_EMAIL", { kind: "timeout" });
-    await expect(collectResults(emulator, "GMAIL_SEND_EMAIL", send)).rejects.toThrow(
-      "GMAIL_SEND_EMAIL timed out",
-    );
+    expect(await collectResults(emulator, "GMAIL_SEND_EMAIL", send)).toEqual([
+      { type: "error", message: "GMAIL_SEND_EMAIL timed out" },
+    ]);
     expect(sentCount()).toBe(before! + 1);
 
     expect(await collectResults(emulator, "GMAIL_SEND_EMAIL", send)).toMatchObject([
