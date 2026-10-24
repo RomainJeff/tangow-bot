@@ -197,6 +197,20 @@ for (const width of [1440, 390]) {
     // The Undo window is timed: the spec moves the page's clock past it instead of waiting.
     await page.clock.install();
     await showThread(page, drafts, { run: null });
+    // A send the server took, whose thread then fails to load: the reply is in, nothing to retry.
+    let failNextRefresh = false;
+    await page.route(/\/rpc\/threads\/get(?:\?|$)/, async (route) => {
+      if (!failNextRefresh) return route.fallback();
+      failNextRefresh = false;
+      await route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({
+          json: { defined: false, code: "INTERNAL_SERVER_ERROR", status: 500, message: "Offline" },
+          meta: [],
+        }),
+      });
+    });
 
     const draftCard = page.getByTestId("draft-card");
     const text = draftCard.getByRole("textbox", { name: "Edit message", exact: true });
@@ -293,7 +307,12 @@ for (const width of [1440, 390]) {
     await composer.press("Enter");
     await expect(page.getByText("This draft is no longer waiting.")).toBeVisible();
     await expect(composer).toHaveValue("Make it Friday instead.");
+    failNextRefresh = true;
     await composer.press("Enter");
+    await expect.poll(() => failNextRefresh).toBe(false);
+    await expect(page.getByText("Offline", { exact: true })).toBeVisible();
+    await expect(composer).toHaveValue("");
+    await page.reload({ waitUntil: "domcontentloaded" });
     await expect(draftCard).toHaveText("Replaced");
     expect(sent.body).toMatchObject({
       text: "Make it Friday instead.",

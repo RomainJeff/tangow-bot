@@ -261,6 +261,8 @@ export function useThreadSend({
           }
         }
         if (replaced) draftEdits.delete(replaced.itemId);
+        // The server took the reply: a later failure, such as the refresh, has nothing to hand back.
+        replaced = undefined;
         dropDelayedSetup();
         setReplyTarget(null);
         cancelRewind();
