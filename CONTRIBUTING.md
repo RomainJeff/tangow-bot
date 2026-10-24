@@ -49,15 +49,11 @@ deterministic execution tests, computer replay, and real-model quality evals.
 ## Optional live-provider checks
 
 The default Playwright suite uses the fake sandbox. To run the same scripted-agent suite against
-real computers, set the matching `E2B_API_KEY`, `DAYTONA_API_KEY`, or `BOX_API_KEY` and choose a provider:
+real E2B computers, set `E2B_API_KEY` and choose the provider:
 
 ```bash
 pnpm test:e2e -- --sandbox=e2b
-pnpm test:e2e -- --sandbox=daytona
-pnpm test:e2e -- --sandbox=box
 ```
-
-The Playwright workflow also accepts these providers through its manual **Sandbox provider** input.
 These runs provision real machines and destroy them after the suite. Automatic runs use `fake`.
 For the separate real-model desktop acceptance test, see
 [computer verification](docs/computer-runtime.md#verification).

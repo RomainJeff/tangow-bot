@@ -9,7 +9,7 @@ import type {
   ProcessEvent,
   SandboxProvider,
 } from "@rakazo/adapter-kit";
-import { ManagedSandboxEmulator } from "@rakazo/adapters";
+import { E2BSandboxEmulator } from "@rakazo/adapters";
 import type { VolumeHome } from "@rakazo/core";
 import { underVolumeMounts } from "@rakazo/core";
 
@@ -17,7 +17,7 @@ import { underVolumeMounts } from "@rakazo/core";
  * The fake E2B computer, whose files live on the volumes it was provisioned with when its home is
  * on volumes, the way an E2B computer mounts them: the same directories a local worker mounts.
  */
-export class VolumeComputer extends ManagedSandboxEmulator {
+export class VolumeComputer extends E2BSandboxEmulator {
   private readonly homes = new Map<string, VolumeHome>();
 
   constructor(private readonly volumeDir: (volumeRef: string) => string) {
