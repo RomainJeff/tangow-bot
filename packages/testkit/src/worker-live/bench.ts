@@ -4,12 +4,15 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
+import { nativeToolsForHarness } from "@rakazo/adapters/runtime-worker";
 import { LocalWorkerProvider } from "../local-worker-provider.js";
-import { quantiles, queryLog, settled } from "../worker-channel-tap.js";
+import { nativeCalls, quantiles, queryLog, settled } from "../worker-channel-tap.js";
 import { directProxyOverheads } from "./measurements.js";
 import { call, finish, liveRun } from "./run.js";
 import type { Live, ProviderWrap } from "./session.js";
 import { forward, requireHeadroom } from "./session.js";
+
+const NATIVE = new Set(nativeToolsForHarness("pi-native").map((tool) => tool.name));
 
 /** A memory series after each run, and its growth over the first and the last ten runs. */
 function series(values: number[]) {
@@ -25,9 +28,10 @@ function series(values: number[]) {
  * Lane j: `trials` runs of five bash calls in each of three arms: P2's local runner in memory on
  * this machine, an E2B worker of a dedicated computer's bot, and one of a team computer's bot,
  * rotating which arm goes first. Both E2B arms mount the bot's private and the space's shared
- * volume, since every guest tool needs both. Timed at the
- * controller's side of the channel as P2's bench does. Cold boot is the provider's create plus
- * the guest's start, to its hello; the warm run is hello to the accepted end.
+ * volume, since every guest tool needs both. Timed at the controller's side of the channel: a
+ * native bash costs the controller the recording of its call and of its result in the transcript.
+ * Cold boot is the provider's create plus the guest's start, to its hello; the warm run is hello to
+ * the accepted end.
  */
 export async function benchLive(live: Live, trials: number, databaseUrl?: string) {
   const toolsPerRun = 5;
@@ -64,7 +68,8 @@ export async function benchLive(live: Live, trials: number, databaseUrl?: string
       /** The part of each relay before the emulator received the call, and after it answered. */
       relayBeforeUpstream: number[];
       relayAfterUpstream: number[];
-      grantToDone: number[];
+      /** From the controller recording a call to the guest reporting its result: the bash itself. */
+      callToResult: number[];
     }
   >(
     arms.map((arm) => [
@@ -77,7 +82,7 @@ export async function benchLive(live: Live, trials: number, databaseUrl?: string
         proxyOverheadDirect: [],
         relayBeforeUpstream: [],
         relayAfterUpstream: [],
-        grantToDone: [],
+        callToResult: [],
       },
     ]),
   );
@@ -135,16 +140,17 @@ export async function benchLive(live: Live, trials: number, databaseUrl?: string
         const frames = worker.frames();
         const hello = frames.find((frame) => frame.kind === "worker.hello")!;
         const stop = frames.find((frame) => frame.from === "controller" && frame.type === "stop")!;
-        const grants = settled(frames, "tool.call", "tool.grant");
-        const records = settled(frames, "tool.done", "tool.recorded");
+        const calls = nativeCalls(frames, NATIVE).flatMap(({ call, result }) =>
+          call && result ? [{ call, result }] : [],
+        );
         const tools = perTool.get(arm)!;
-        for (const [index, grant] of grants.entries()) {
-          const record = records[index]!;
-          const before = log.within(grant.from, grant.to);
-          const after = log.within(record.from, record.to);
-          tools.control.push(grant.to - grant.from + (record.to - record.from));
+        for (const { call, result } of calls) {
+          const before = log.within(call.from, call.to);
+          const after = log.within(result.from, result.to);
+          tools.control.push(call.to - call.from + (result.to - result.from));
           tools.queries.push(before.count + after.count);
           tools.queryMs.push(before.ms + after.ms);
+          tools.callToResult.push(result.from - call.to);
         }
         tools.proxyOverheadDirect.push(...directProxyOverheads(frames, worker.run.model.served));
         for (const [index, model] of settled(frames, "model.request", "model.end").entries()) {
@@ -155,12 +161,6 @@ export async function benchLive(live: Live, trials: number, databaseUrl?: string
             tools.relayAfterUpstream.push(model.to - upstream.answered);
           }
         }
-        for (const grant of grants) {
-          const done = frames.find(
-            (frame) => frame.from === "guest" && frame.type === "tool.done" && frame.at > grant.to,
-          );
-          if (done) tools.grantToDone.push(done.at - grant.to);
-        }
         gc?.();
         const memory = process.memoryUsage();
         rss.push(memory.rss / 1024 / 1024);
@@ -168,10 +168,7 @@ export async function benchLive(live: Live, trials: number, databaseUrl?: string
         buffers.push(memory.arrayBuffers / 1024 / 1024);
         samples.push({
           arm,
-          ok:
-            (await worker.status(runId)) === "completed" &&
-            grants.length === toolsPerRun &&
-            records.length === toolsPerRun,
+          ok: (await worker.status(runId)) === "completed" && calls.length === toolsPerRun,
           ...(arm !== "local_memory" && {
             coldBootMs: hello.at - ensures[0]!,
             createMs: worker.connects[0]! - ensures[0]!,
@@ -179,7 +176,8 @@ export async function benchLive(live: Live, trials: number, databaseUrl?: string
             guestBootMs: hello.at - worker.connects[0]! - live.guestCommandStarts[0]!,
           }),
           warmRunMs: stop.at - hello.at,
-          controlMedianMs: quantiles(tools.control.slice(-grants.length)).p50 ?? Number.NaN,
+          controlMedianMs:
+            quantiles(tools.control.slice(tools.control.length - calls.length)).p50 ?? Number.NaN,
           runMs,
         });
       }
@@ -227,7 +225,7 @@ export async function benchLive(live: Live, trials: number, databaseUrl?: string
           relayControllerMs: quantiles(perTool.get(arm)!.relay),
           relayBeforeUpstreamMs: quantiles(perTool.get(arm)!.relayBeforeUpstream),
           relayAfterUpstreamMs: quantiles(perTool.get(arm)!.relayAfterUpstream),
-          grantToDoneMs: quantiles(perTool.get(arm)!.grantToDone),
+          callToResultMs: quantiles(perTool.get(arm)!.callToResult),
         },
       ]),
     ),

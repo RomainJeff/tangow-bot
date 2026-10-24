@@ -280,12 +280,14 @@ export const laneGTimeout: Lane = {
         !markers.completed &&
         retried.includes("recovered") &&
         final.attempts.every((state) => state === "released") &&
-        live.guestUploadDeadlines.length === 2 &&
-        live.guestUploadDeadlines.every(
-          (deadline) =>
-            deadline.timeoutMs <= SHORT_TIMEOUT_MS &&
-            Date.parse(deadline.after) - Date.parse(deadline.before) <= 1_000,
-        ) &&
+        // Only an uploaded guest connects to the VM before it starts, which must not extend its life.
+        (live.config.guestBundle === undefined ||
+          (live.guestUploadDeadlines.length === 2 &&
+            live.guestUploadDeadlines.every(
+              (deadline) =>
+                deadline.timeoutMs <= SHORT_TIMEOUT_MS &&
+                Date.parse(deadline.after) - Date.parse(deadline.before) <= 1_000,
+            ))) &&
         final.sandboxesLeft === 0;
       return {
         pass,

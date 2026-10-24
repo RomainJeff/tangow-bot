@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### 2026-10-24
 
+#### Added
+
+- **On E2B, each bot run now works in its own temporary isolated VM with the native Pi harness, its files on persistent volumes shared with its computer.** This replaces runs inside the Rakazo server and home snapshots on E2B deployments, for conversations on web, desktop and iPhone. A computer created before this release moves its home onto volumes once with a script ([setup and move](docs/self-host-e2b-workers.md)).
+
 #### Changed
 
 - On iPhone, menus open from the button you tapped as native iOS menus without the extra Cancel row, and deleting a skill now asks for confirmation on every phone.

@@ -263,7 +263,7 @@
             {
               "workerState": "released",
               "stopPhase": "process_ended",
-              "workerProviderRef": "ix89croyw2vbz1nn2ek3h"
+              "workerProviderRef": "<sandbox-id>"
             }
           ]
         },
@@ -277,7 +277,7 @@
             {
               "workerState": "released",
               "stopPhase": "process_ended",
-              "workerProviderRef": "i9rfirm5ibftd6wwd8dvx"
+              "workerProviderRef": "<sandbox-id>"
             }
           ]
         }

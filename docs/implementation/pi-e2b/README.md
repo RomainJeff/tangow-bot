@@ -35,3 +35,7 @@ The [OpenCode execution decision](opencode-execution.md) describes worker and co
 ## P5
 
 [Issue #199](https://github.com/RomainJeff/rakazo-bot/issues/199) makes a native harness's work durable while the attempt runs. The [P5 handoff](P5-handoff.md) gives the delta transcript, the native call states, the crash, effect, approval and steering matrix with the test or lane behind each cell, rollback compatibility, the limits and the reproduce commands.
+
+## P6
+
+[Issue #200](https://github.com/RomainJeff/rakazo-bot/issues/200) validates the complete workflow on E2B. The [P6 handoff](P6-handoff.md) gives the slices, the scenario and surface matrix, the templates and SHAs, the real-model acceptance, the measurements, the limits, the deviations from the issue and the follow-ups. Operators follow [Self-host E2B workers](../../self-host-e2b-workers.md).
