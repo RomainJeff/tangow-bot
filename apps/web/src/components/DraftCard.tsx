@@ -107,6 +107,8 @@ export function DraftCard({
   const [pending, setPending] = useState<DraftLocal["pending"]>(null);
   const [error, setError] = useState<string | null>(null);
   const [reconnectOpened, setReconnectOpened] = useState(false);
+  // Opening Reconnect answers one failure only: a send, or a card without a failure, starts over.
+  if (reconnectOpened && !draft.failure) setReconnectOpened(false);
   const discardTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const commitDiscardRef = useRef<() => void>(() => undefined);
 
@@ -127,6 +129,7 @@ export function DraftCard({
 
   async function send() {
     if (pending || !text.trim()) return;
+    setReconnectOpened(false);
     setPending("send");
     setError(null);
     try {
