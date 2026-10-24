@@ -6,6 +6,7 @@ import type { FrameChannel } from "@rakazo/adapters/runtime-worker/wire";
 import {
   capabilityWorker,
   encodeMessage,
+  isToolPauseResult,
   readControllerFrame,
   WORKER_LIMITS,
 } from "@rakazo/adapters/runtime-worker/wire";
@@ -204,8 +205,10 @@ async function runAttempt(
     return child;
   };
 
+  let paused = false;
   const host: HarnessHost = {
     signal,
+    paused: () => paused,
     async emit(body: InformativeBody) {
       if (body.type === "text") {
         text += body.text;
@@ -263,7 +266,10 @@ async function runAttempt(
       const reply = await send({ type: "tool.call", agent, callId, name, args }, (part) => {
         if (part.type === "subagent.start" && !helper) helper = startHelper(part);
       }).finally(() => helper?.cancel.abort());
-      if (reply.type === "tool.result") return reply.output;
+      if (reply.type === "tool.result") {
+        if (isToolPauseResult(reply.output)) paused = true;
+        return reply.output;
+      }
       throw new Error(reply.type === "error" ? reply.message : `Unexpected reply ${reply.type}`);
     },
   };

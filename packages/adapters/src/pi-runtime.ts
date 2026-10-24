@@ -79,7 +79,11 @@ import { textContentArg } from "./tool-text.js";
 import type { TraceExporter } from "./trace-export.js";
 import { toolCallBudgetNotice } from "./user-progress.js";
 
-export { stripFakeToolCalls, stripModelControlTokens } from "./agent-text-policy.js";
+export {
+  createAgentTextPolicy,
+  stripFakeToolCalls,
+  stripModelControlTokens,
+} from "./agent-text-policy.js";
 
 const running = new Map<string, { controller: AbortController; work: Promise<void> }>();
 interface ToolCallBudget {

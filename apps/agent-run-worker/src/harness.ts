@@ -43,6 +43,8 @@ export interface HarnessHost {
     args: Record<string, unknown>,
     callId: string,
   ): Promise<unknown>;
+  /** A controller call paused the run on the person: the harness only closes its turn. */
+  paused(): boolean;
 }
 
 /**

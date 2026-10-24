@@ -9,8 +9,8 @@ const SILENT_TOOL_CONTINUATION_PROMPT =
   "Continue the original task from the latest tool result. Do not stop after a tool call; use any remaining tools needed, then deliver the result.";
 const SILENCE_ALLOWED_CONTINUATION_PROMPT =
   "Continue the original task from the latest tool result. Use any remaining tools needed, then deliver the result, or end with no reply if there is nothing to report.";
-const PRIVATE_TEXT_PROMPT =
-  "Nothing you wrote reached the user: only message_user does. If that text was meant for them, send it with message_user now. Otherwise end the turn.";
+const privateTextPrompt = (tool: string) =>
+  `Nothing you wrote reached the user: only ${tool} does. If that text was meant for them, send it with ${tool} now. Otherwise end the turn.`;
 // A long task the user only follows through message_user looks frozen when the model works
 // for many steps without reporting, so it is reminded to check in.
 const CHECK_IN_AFTER_TOOL_CALLS = 30;
@@ -20,15 +20,19 @@ const USER_CONTACT_TOOLS = new Set([
   "request_secret",
   "request_takeover",
 ]);
-const checkInPrompt = (toolCalls: number) =>
-  `Harness note, not from the user: you have made ${toolCalls} tool calls since the user last heard from you. Send them a short progress update with message_user (what you found, what is next), then continue.`;
+const checkInPrompt = (toolCalls: number, tool: string) =>
+  `Harness note, not from the user: you have made ${toolCalls} tool calls since the user last heard from you. Send them a short progress update with ${tool} (what you found, what is next), then continue.`;
 
 type TextPolicyOptions = Pick<
   AgentRunRequest,
   "allowSilentEmpty" | "freeTextIsPrivate" | "runRecap" | "emptyResponseText"
->;
+> & {
+  /** What the model calls message_user; tool calls are still matched by Rakazo's names. */
+  messageUserName?: string;
+};
 
 export function createAgentTextPolicy(options: TextPolicyOptions) {
+  const messageUserName = options.messageUserName ?? "message_user";
   let privateFinalText: string | undefined;
   let silentToolContinuations = 0;
   let toolWorkPendingFinal = false;
@@ -60,7 +64,7 @@ export function createAgentTextPolicy(options: TextPolicyOptions) {
           ? 0
           : toolCallsSinceContact + toolCallNames.length;
         if (toolCallsSinceContact >= CHECK_IN_AFTER_TOOL_CALLS && !paused) {
-          steer.push(checkInPrompt(toolCallsSinceContact));
+          steer.push(checkInPrompt(toolCallsSinceContact, messageUserName));
           toolCallsSinceContact = 0;
         }
       }
@@ -73,7 +77,7 @@ export function createAgentTextPolicy(options: TextPolicyOptions) {
         !paused
       ) {
         privateTextNudged = true;
-        followUp.push(PRIVATE_TEXT_PROMPT);
+        followUp.push(privateTextPrompt(messageUserName));
       }
 
       // Text in a turn that also contains a tool call is narration, not a final

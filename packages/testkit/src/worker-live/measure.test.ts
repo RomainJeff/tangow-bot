@@ -18,22 +18,25 @@ const tool = (id: string, name: string, args: Record<string, unknown>): ModelEmu
   response: { type: "tool", id, name: `mcp__rakazo__${name}`, arguments: args, usage },
 });
 
+/** A turn's answer, sent to the person, then the turn's end. */
+const say = (reply: string) => [tool("say", "message_user", { message: reply }), text("")];
+
 const SCRIPTS: Record<ScenarioId, ModelEmulatorStep[]> = {
-  chain: [text("Repeated prefixes."), text("Cheaper."), text("Faster.")],
-  computer: [tool("look", "computer_observe", {}), text("Example Domain."), text("Nothing.")],
+  chain: [...say("Repeated prefixes."), ...say("Cheaper."), ...say("Faster.")],
+  computer: [tool("look", "computer_observe", {}), ...say("Example Domain."), ...say("Nothing.")],
   approval: [1, 2].flatMap((note) => [
     tool(`publish-${note}`, "publish_note", { title: `Measurement ${note}` }),
     text("Waiting for approval."),
-    text("Published."),
+    ...say("Published."),
   ]),
   compaction: [
-    text("One."),
-    text("Two."),
-    text("Three."),
+    ...say("One."),
+    ...say("Two."),
+    ...say("Three."),
     { expect() {}, response: { type: "text", text: "Excerpts one and two." } },
     { expect() {}, response: { type: "text", text: "Three log excerpts." } },
-    text("Workers."),
-    text("Batches."),
+    ...say("Workers."),
+    ...say("Batches."),
   ],
 };
 
@@ -65,7 +68,7 @@ describe("token and cache measurements", () => {
       ["compaction", ["completed", "completed", "completed", "completed", "completed"]],
     ]);
     const [chain, , approval, compaction] = threads;
-    expect(chain!.turns[1]!.requests).toEqual([
+    expect(chain!.turns[1]!.requests[0]).toEqual(
       expect.objectContaining({
         agent: "root",
         usageReported: true,
@@ -75,7 +78,7 @@ describe("token and cache measurements", () => {
         previousRequest: true,
         firstDivergingSection: "history",
       }),
-    ]);
+    );
     expect(
       approval!.turns.map((turn) => [
         turn.approvalRequested,
@@ -110,7 +113,7 @@ describe("token and cache measurements", () => {
         readsReported: true,
         writesReported: false,
       },
-      requests: 17,
+      requests: 29,
       threadErrors: 0,
       requestsWithoutUsage: 0,
       successRate: 1,

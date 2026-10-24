@@ -41,6 +41,7 @@ it.each(
   const requests: unknown[] = [];
   const host: HarnessHost = {
     signal: cancel.signal,
+    paused: () => false,
     emit: async () => undefined,
     decide: async () => {
       throw new Error("No frame is decided in this test");

@@ -50,6 +50,7 @@ function fakeHost(answer: (name: string, args: Record<string, unknown>) => unkno
   const calls: Array<{ name: string; args: Record<string, unknown>; callId: string }> = [];
   const host: HarnessHost = {
     signal: new AbortController().signal,
+    paused: () => false,
     emit: async (body) => {
       announced.push(body);
     },

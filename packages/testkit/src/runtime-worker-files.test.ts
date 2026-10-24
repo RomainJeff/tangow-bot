@@ -5,7 +5,7 @@ import { PiAgentRuntime } from "@rakazo/adapters";
 import { afterEach, describe, expect, it } from "vitest";
 import { fileTask, nativeFileTask, toolResult } from "./file-task.js";
 import type { ModelEmulatorStep } from "./model-emulator.js";
-import { startWorkerRun } from "./worker-run-fixture.js";
+import { afterPrivateText, startWorkerRun } from "./worker-run-fixture.js";
 
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => {
@@ -144,6 +144,7 @@ it("lets webhook routines inspect native files without approval", async () => {
         },
         response: { type: "text", text: "Files inspected." },
       },
+      afterPrivateText,
     ],
   });
   cleanups.push(() => run.close());

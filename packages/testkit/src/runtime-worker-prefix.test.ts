@@ -9,10 +9,6 @@ import { describe, expect, it, onTestFinished } from "vitest";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.js";
 import { startWorkerRun } from "./worker-run-fixture.js";
 
-const complete: ModelEmulatorStep = {
-  expect() {},
-  response: { type: "text", text: "Done." },
-};
 const text = (request: ModelEmulatorRequest) => JSON.stringify(request.messages);
 const tail = (request: ModelEmulatorRequest) => JSON.stringify(request.messages.at(-1));
 const prefix = (request: ModelEmulatorRequest) =>
@@ -102,27 +98,24 @@ describe("prompt bytes at the provider boundary", () => {
         },
         stops: { mark: async () => undefined },
       });
-      const finishing: ModelEmulatorStep[] =
-        mode === "pi-native"
-          ? [complete]
-          : [
-              {
-                expect() {},
-                response: {
-                  type: "tool",
-                  id: "say",
-                  name: "message_user",
-                  arguments: { message: "Done." },
-                },
-              },
-              {
-                expect() {},
-                response: {
-                  type: "text",
-                  text: JSON.stringify({ version: 1, results: ["Done"], references: [] }),
-                },
-              },
-            ];
+      const finishing: ModelEmulatorStep[] = [
+        {
+          expect() {},
+          response: {
+            type: "tool",
+            id: "say",
+            name: "message_user",
+            arguments: { message: "Done." },
+          },
+        },
+        {
+          expect() {},
+          response: {
+            type: "text",
+            text: JSON.stringify({ version: 1, results: ["Done"], references: [] }),
+          },
+        },
+      ];
       const run = await startWorkerRun({
         steps: [...finishing, ...finishing, ...finishing],
         memory: store,
@@ -192,7 +185,7 @@ describe("prompt bytes at the provider boundary", () => {
       expect(prefix(second!)).toBe(prefix(first!));
       expect(second!.messages.slice(1, 3)).toEqual([
         { role: "user", content: "Plan the launch." },
-        expect.objectContaining({ role: mode === "pi-native" ? "user" : "assistant" }),
+        expect.objectContaining({ role: "assistant" }),
       ]);
       for (const [request, values] of [
         [first!, ["DURABLE_FIRST", "RECALL_FIRST", "WORK_FIRST"]],

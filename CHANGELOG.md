@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Fixed
 
+- Bots running in isolated Pi workers on E2B now send you their answers instead of sometimes finishing a run without a word.
 - Existing self-hosted bots can move from Docker or snapshot-based E2B computers to isolated Pi workers through the [setup command](docs/self-host-e2b-workers.md#configure-an-existing-source-deployment-with-one-command), with backups and a resumable home migration.
 
 ### 2026-10-24
