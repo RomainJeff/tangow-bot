@@ -11,8 +11,8 @@ import { disabled as disabledWhen, pickerStyle, tag } from "@expo/ui/swift-ui/mo
 import type { NativeStackHeaderItem } from "expo-router";
 import type { ReactElement, ReactNode } from "react";
 import { Platform, Pressable, type PressableProps, View } from "react-native";
+import { presentAndroidActionSheet } from "../lib/android-action-sheet";
 import { useI18n } from "../lib/i18n";
-import { presentMessageActionSheet } from "../lib/message-action-sheet";
 import { useResolvedAppearance } from "../lib/native";
 import { headerMenuItems, type MenuAction, splitMenuActions } from "../lib/native-menu";
 import { NativeSymbol } from "./native-symbol";
@@ -25,6 +25,10 @@ type NativeMenuProps = {
   title?: string;
   disabled?: boolean;
   onPrimaryAction?: () => void;
+  /** Sizes the iOS menu to its trigger in both axes; the default fills the width, for rows. */
+  compact?: boolean;
+  /** Replaces the Android action sheet, for a trigger that keeps its own dialog there. */
+  onAndroidOpen?: () => void;
   style?: PressableProps["style"];
   accessibilityLabel?: string;
   accessibilityValue?: string;
@@ -42,13 +46,14 @@ export function NativeMenu(props: NativeMenuProps) {
 
 function IosMenu(props: NativeMenuProps) {
   const { children, disabled, onPrimaryAction, accessibilityLabel, accessibilityValue } = props;
+  const matchContents = props.compact ? true : { vertical: true };
   const colorScheme = useResolvedAppearance();
   const style = typeof props.style === "function" ? props.style({ pressed: false }) : props.style;
   return (
-    <Host colorScheme={colorScheme} matchContents={{ vertical: true }}>
+    <Host colorScheme={colorScheme} matchContents={matchContents}>
       <Menu
         label={
-          <RNHostView matchContents={{ vertical: true }}>
+          <RNHostView matchContents={matchContents}>
             <View
               accessible
               accessibilityRole="button"
@@ -117,7 +122,7 @@ function ValueItems({
 }
 
 function AndroidMenu(props: NativeMenuProps) {
-  const { children, title, disabled, onPrimaryAction, style } = props;
+  const { children, title, disabled, onPrimaryAction, onAndroidOpen, style } = props;
   const present = useActionSheet(title);
   const actions: MenuAction[] =
     "options" in props
@@ -126,7 +131,7 @@ function AndroidMenu(props: NativeMenuProps) {
           onPress: () => props.onSelect(option.value),
         }))
       : props.actions;
-  const open = () => present(actions);
+  const open = onAndroidOpen ?? (() => present(actions));
   return (
     <Pressable
       accessibilityRole="button"
@@ -145,16 +150,14 @@ function AndroidMenu(props: NativeMenuProps) {
 
 function useActionSheet(title?: string) {
   const { t } = useI18n();
-  const colorScheme = useResolvedAppearance();
   return (actions: MenuAction[]) =>
-    presentMessageActionSheet({
+    presentAndroidActionSheet({
       title,
       actions: actions.map(({ label, onPress, destructive }) => ({
         text: label,
         onPress,
         destructive,
       })),
-      colorScheme,
       cancel: t("Cancel"),
       more: t("More"),
     });
