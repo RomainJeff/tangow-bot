@@ -885,6 +885,31 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
       );
     }, 30_000);
 
+    it("asks the user to check Gmail when the send timed out after it left, sending nothing more", async () => {
+      const composio = new ComposioEmulator();
+      composio.failNext("GMAIL_SEND_EMAIL", { kind: "timeout" });
+      await journey(
+        [proposeMail],
+        async (fixture) => {
+          const mailed = await connectGmail(composio, fixture);
+          const sent = await fixture.send("Mail them hello.");
+          await sent.settled("waiting_input");
+          await answerDraft(fixture, sent.runId);
+          await expect
+            .poll(async () => (await latestCard(fixture.prisma, sent.runId)).block, {
+              timeout: 15_000,
+            })
+            .toMatchObject({
+              status: "pending",
+              draft: { failure: { reason: "Check Gmail before trying again." } },
+            });
+          await sent.settled("waiting_input");
+          expect(mailed()).toEqual(["Draft from the bot."]);
+        },
+        { composio },
+      );
+    }, 30_000);
+
     it("shows Not sent when Gmail refuses it, and Try again sends it once", async () => {
       const composio = new ComposioEmulator();
       composio.failNext("GMAIL_SEND_EMAIL", { kind: "fail", error: "Invalid recipient" });

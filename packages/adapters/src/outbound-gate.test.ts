@@ -10,7 +10,7 @@ import {
   draftRequest,
   outboundAskDraft,
   readConnectorOutbound,
-  sendFailure,
+  readSendResult,
 } from "./outbound-gate.js";
 
 // The send a bot made through Composio's batch tool (trace 2026-10-23), account and address
@@ -195,7 +195,7 @@ describe("draftRequest", () => {
   });
 });
 
-describe("sendFailure", () => {
+describe("readSendResult", () => {
   const batch = (response: object) => ({
     successful: false,
     data: { results: [{ response, tool_slug: "GMAIL_SEND_EMAIL", index: 0 }] },
@@ -203,13 +203,13 @@ describe("sendFailure", () => {
   });
 
   it.each([
-    ["a sent mail", { successful: true, data: { id: "m1", labelIds: ["SENT"] } }, undefined],
+    ["a sent mail", { successful: true, data: { id: "m1", labelIds: ["SENT"] } }, "sent"],
     [
       "a batch that sent",
       { successful: true, data: { results: [{ response: { successful: true } }] }, error: null },
-      undefined,
+      "sent",
     ],
-    ["a connector error", { error: "Gmail is not connected" }, "Gmail is not connected"],
+    ["a connector error, which a timeout also gives", { error: "Request timed out" }, "uncertain"],
     [
       "a failed action in a batch",
       batch({ successful: false, error: "Invalid recipient" }),
@@ -231,8 +231,12 @@ describe("sendFailure", () => {
       "Token expired",
     ],
     ["a failure with no words", { successful: false }, "The app did not send it."],
-  ])("reads %s", (_, result, reason) => {
-    expect(sendFailure(result)).toBe(reason);
+  ])("reads %s", (_, result, outcome) => {
+    expect(readSendResult(result)).toEqual(
+      outcome === "sent" || outcome === "uncertain"
+        ? { kind: outcome }
+        : { kind: "not_sent", reason: outcome },
+    );
   });
 });
 

@@ -66,15 +66,24 @@ export function draftRequest(
   return next === undefined ? undefined : { request: next, path: [...at, ...draft.textPath] };
 }
 
+export type SendResult =
+  | { kind: "sent" }
+  | { kind: "not_sent"; reason: string }
+  | { kind: "uncertain" };
+
 /**
- * Why a connector did not send, read from its result: an error, an MCP error result, or a
- * Composio action marked unsuccessful, inside a batch or a JSON text included.
+ * What became of a send, read from the connector's result. Only the app saying so counts as not
+ * sent: an MCP error result, or a Composio action marked unsuccessful, inside a batch or a JSON
+ * text included. A bare connector error is also what a timeout after the send gives, so it is
+ * uncertain.
  */
-export function sendFailure(result: unknown): string | undefined {
+export function readSendResult(result: unknown): SendResult {
   const reason = failureIn(result, 0);
-  return reason === undefined
-    ? undefined
-    : reason.trim().slice(0, 200) || "The app did not send it.";
+  if (reason !== undefined) {
+    return { kind: "not_sent", reason: reason.trim().slice(0, 200) || "The app did not send it." };
+  }
+  const bare = result && typeof result === "object" && "error" in result && result.error;
+  return bare ? { kind: "uncertain" } : { kind: "sent" };
 }
 
 function failureIn(value: unknown, depth: number): string | undefined {
@@ -99,9 +108,8 @@ function failureIn(value: unknown, depth: number): string | undefined {
       return undefined;
     }
   }
-  const error = typeof record.error === "string" ? record.error : "";
-  if (record.successful === false || record.isError === true || (depth === 0 && error)) {
-    return error || textOf(record.content);
+  if (record.successful === false || record.isError === true) {
+    return (typeof record.error === "string" ? record.error : "") || textOf(record.content);
   }
   return undefined;
 }

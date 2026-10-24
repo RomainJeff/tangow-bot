@@ -333,7 +333,7 @@ import {
   draftRequest,
   outboundAskDraft,
   readConnectorOutbound,
-  sendFailure,
+  readSendResult,
 } from "./outbound-gate.js";
 import { toOAuthCredential } from "./pi-credentials.js";
 import {
@@ -4497,20 +4497,20 @@ export function createRunExecutor(deps: ExecutorDeps) {
             const after = await deps.prisma.externalEffect.findUnique({
               where: { id: effect.id },
             });
-            const reason = "result" in outcome ? sendFailure(outcome.result) : undefined;
+            const read = "result" in outcome ? readSendResult(outcome.result) : undefined;
             // Still approved: a replay guard refused it before anything was sent.
             if (after?.status === "approved") {
               await reRequestDraft(after, draft, (app) => ({
-                reason: reason ?? `${app} did not send it.`,
+                reason: (read?.kind === "not_sent" && read.reason) || `${app} did not send it.`,
               }));
               return undefined;
             }
             if (after?.status !== "executing") continue;
-            if (!("result" in outcome) || reason !== undefined) {
+            if (read?.kind !== "sent") {
               await reRequestDraft(
                 after,
                 draft,
-                reason === undefined ? interruptedSend : () => ({ reason }),
+                read?.kind === "not_sent" ? () => ({ reason: read.reason }) : interruptedSend,
               );
               return undefined;
             }
