@@ -13,6 +13,7 @@ describe("readDraft", () => {
     ["completed", { ...base, state: "sent", at: "2026-10-24T10:00:00.000Z" }, "sent"],
     ["denied", { ...base, state: "discarded" }, "discarded"],
     ["denied", { ...base, state: "unsent" }, "unsent"],
+    ["denied", { ...base, state: "replaced" }, "replaced"],
   ])("reads a %s effect's %j", (status, draft, state) => {
     expect(readDraft(status, draft)?.state).toBe(state);
   });
@@ -29,7 +30,7 @@ describe("readDraft", () => {
     ],
     ["a path that is not one", "intended", { ...base, path: "body", state: "pending" }],
     ["an unknown state", "intended", { ...base, state: "superseded" }],
-    ["a state nothing writes yet", "denied", { ...base, state: "replaced" }],
+    ["a replaced draft still waiting", "intended", { ...base, state: "replaced" }],
   ])("treats %s as no draft", (_, status, draft) => {
     expect(readDraft(status, draft)).toBe(undefined);
   });
@@ -63,6 +64,7 @@ describe("withValueAt", () => {
 describe("askDraftState", () => {
   it.each([
     [{ status: "answered", answer: "deny" }, "discarded"],
+    [{ status: "answered", answer: "dismissed" }, "replaced"],
     [{ status: "answered", answer: "allow", failed: true }, "not_sent"],
     [{ status: "answered", answer: "allow" }, "sending"],
   ] as const)("reads %j as %s", (card, state) => {

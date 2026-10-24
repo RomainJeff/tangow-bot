@@ -130,7 +130,7 @@ export type AskDraft = z.infer<typeof AskDraft>;
 /** The longest message body a draft card sends. */
 export const ASK_DRAFT_TEXT_MAX_LENGTH = 20_000;
 
-export type AskDraftState = "pending" | "sending" | "sent" | "not_sent" | "discarded";
+export type AskDraftState = "pending" | "sending" | "sent" | "not_sent" | "discarded" | "replaced";
 
 /** Where a draft card stands, read from the card alone. */
 export function askDraftState(card: {
@@ -140,6 +140,7 @@ export function askDraftState(card: {
   draft?: Pick<AskDraft, "failure" | "sent">;
 }): AskDraftState {
   if (card.status !== "answered") return card.draft?.failure ? "not_sent" : "pending";
+  if (card.answer === ASK_DISMISSED_ANSWER) return "replaced";
   if (card.answer !== "allow") return "discarded";
   if (card.draft?.sent) return "sent";
   return card.failed ? "not_sent" : "sending";

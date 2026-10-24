@@ -1401,6 +1401,25 @@ describe("a mail draft card", () => {
     ]);
   });
 
+  it("ends Replaced, waiting on nothing, once the user wrote instead", () => {
+    const replaced = linkEntries("r", [
+      requested(card),
+      {
+        ...run,
+        type: "effect.resolved",
+        payload: { effectId: "effect_1", decision: "denied", dismissed: true },
+      },
+    ]);
+    const projected = projectThread(replaced);
+    const [item] = projected.items.filter((entry) => entry.kind === "effect");
+    const shown = item?.kind === "effect" ? item.card : undefined;
+    expect([shown && askDraftState(shown), shown?.status, projected.waiting]).toEqual([
+      "replaced",
+      "answered",
+      null,
+    ]);
+  });
+
   it("stays one card from Send to Not sent to Sent, waiting on its newest request", () => {
     expect(cardsOf(1)).toEqual({
       states: ["pending"],
