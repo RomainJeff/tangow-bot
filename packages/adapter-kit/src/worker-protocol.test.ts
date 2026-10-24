@@ -57,7 +57,7 @@ const hello = {
   kind: "worker.hello",
   worker,
   capability: "rkw1.a.b",
-  harness: { name: "pi", capabilities: ["subagents", "steering"] },
+  harness: { name: "pi-native", capabilities: ["subagents", "steering"] },
 };
 const toolCall = {
   type: "tool.call",
@@ -199,7 +199,7 @@ describe("parseGuestMessage", () => {
     ],
     [
       "a hello declaring an unknown capability",
-      { ...hello, harness: { name: "pi", capabilities: ["shell_escape"] } },
+      { ...hello, harness: { name: "pi-native", capabilities: ["shell_escape"] } },
     ],
     ["a frame numbered 0", { ...event(toolCall), payload: { seq: 0, body: toolCall } }],
   ])("refuses %s as invalid", (_name, json) => {

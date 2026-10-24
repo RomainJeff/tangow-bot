@@ -142,28 +142,17 @@ export interface PiAgentRuntimeOptions {
   serviceName?: string;
   /** Replaces every model call, e.g. to relay it to the process that holds the key. */
   streamFn?: PiStreamFn;
-  /** Runtime resource instructions for helpers, separate from the bot's chat instructions. */
-  subagentInstructions?: string;
-  /** Bind the worker's coding-agent session after controller history and tools are reconstructed. */
-  bindSession?: (agent: Agent) => Promise<{
-    prompt(text: string, images: ReturnType<typeof toPiImages>): Promise<void>;
-    dispose(): void;
-  }>;
 }
 
 export class PiAgentRuntime implements AgentRuntime {
   private readonly traceExporter?: TraceExporter;
   private readonly serviceName?: string;
   private readonly streamFn?: PiStreamFn;
-  private readonly subagentInstructions?: string;
-  private readonly bindSession?: PiAgentRuntimeOptions["bindSession"];
 
   constructor(options: PiAgentRuntimeOptions = {}) {
     this.traceExporter = options.traceExporter;
     this.serviceName = options.serviceName;
     this.streamFn = options.streamFn;
-    this.subagentInstructions = options.subagentInstructions;
-    this.bindSession = options.bindSession;
   }
 
   describe() {
@@ -216,9 +205,6 @@ export class PiAgentRuntime implements AgentRuntime {
     const queue = createQueue();
 
     const work = (async () => {
-      let session:
-        | Awaited<ReturnType<NonNullable<PiAgentRuntimeOptions["bindSession"]>>>
-        | undefined;
       let trackedBudget: ToolCallBudget | undefined;
       let resumeHost: ToolHost | undefined;
       let traceRecorder: RunTraceRecorder | undefined;
@@ -254,7 +240,6 @@ export class PiAgentRuntime implements AgentRuntime {
           depth: 0,
           pausePending: false,
           streamFn: this.streamFn,
-          subagentInstructions: this.subagentInstructions,
         };
         resumeHost = host;
         const tools = toAgentTools(toolDefs, host);
@@ -333,15 +318,13 @@ export class PiAgentRuntime implements AgentRuntime {
             return undefined;
           },
           initialState: {
-            systemPrompt: this.bindSession ? "" : systemPrompt,
+            systemPrompt,
             model: completionModel,
             thinkingLevel,
             tools,
             messages: history,
           },
         });
-
-        session = await this.bindSession?.(agent);
 
         const onAbort = () => {
           agent.abort();
@@ -454,8 +437,7 @@ export class PiAgentRuntime implements AgentRuntime {
           ...initialSteering.flatMap((item) => item.images ?? []),
         ]);
         try {
-          if (session) await session.prompt(initialPrompt, images);
-          else await agent.prompt(initialPrompt, images?.length ? images : undefined);
+          await agent.prompt(initialPrompt, images?.length ? images : undefined);
         } finally {
           try {
             await agent.waitForIdle();
@@ -508,7 +490,6 @@ export class PiAgentRuntime implements AgentRuntime {
         const message = sanitizeError(error instanceof Error ? error.message : String(error));
         queue.fail(new Error(message));
       } finally {
-        session?.dispose();
         queue.close();
         if (traceRecorder && this.traceExporter) {
           traceRecorder.finish(traceOutput, traceError);
@@ -1381,7 +1362,7 @@ async function runSubagent(
           pruneComputerScreenshotContext(messages, requestModel.maxImagesPerPrompt),
     finishTurn: async () => (nestedHost.pausePending ? { action: "end" } : undefined),
     initialState: {
-      systemPrompt: helperInstructions(name, host.subagentInstructions, helper.instructions),
+      systemPrompt: helperInstructions(name, helper.instructions),
       model: subagentModel,
       thinkingLevel: thinkingLevelFor(subagentModel, requestModel.thinkingLevel),
       tools: childTools,
@@ -1859,7 +1840,6 @@ interface EventQueue {
 }
 
 interface ToolHost {
-  subagentInstructions?: string;
   queue: EventQueue;
   request: AgentRunRequest;
   models: Models;

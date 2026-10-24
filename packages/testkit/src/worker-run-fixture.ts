@@ -38,6 +38,29 @@ import { VolumeComputer } from "./volume-computer.js";
 import { openBenchPostgres } from "./worker-live/database.js";
 
 const MODEL_KEY = "worker-fixture-model-key";
+
+/** Lets a step call a controller tool by its Rakazo name, which Pi native offers over MCP. */
+function offeredToolNames(step: ModelEmulatorStep): ModelEmulatorStep {
+  return {
+    ...step,
+    response(request) {
+      const reply = typeof step.response === "function" ? step.response(request) : step.response;
+      if (reply.type !== "tool") return reply;
+      const offered = new Set(request.tools?.map((tool) => tool.function.name));
+      const name = (called: string) =>
+        offered.has(called) || !offered.has(`mcp__rakazo__${called}`)
+          ? called
+          : `mcp__rakazo__${called}`;
+      return {
+        ...reply,
+        name: name(reply.name),
+        ...(reply.siblings && {
+          siblings: reply.siblings.map((sibling) => ({ ...sibling, name: name(sibling.name) })),
+        }),
+      };
+    },
+  };
+}
 const SPACE = "space-worker";
 const USER = "user-worker";
 
@@ -91,7 +114,7 @@ export async function startWorkerRun<
   /** The bot's computer instead of the fake one on local volumes. */
   sandbox?: SandboxProvider;
   mode?: "memory" | "child";
-  /** The harness a `memory` guest runs instead of Pi. */
+  /** The harness a `memory` guest runs instead of Pi native. */
   harness?: GuestHarness;
   /** The bundled guest a `child` mode runs instead of the source. */
   guestEntry?: string;
@@ -124,7 +147,7 @@ export async function startWorkerRun<
   if (catalog && !entry) throw new Error(`No catalog model ${catalog.provider}/${catalog.id}`);
   const model = await startModelEmulator({
     apiKey: MODEL_KEY,
-    steps: options.steps,
+    steps: options.steps.map(offeredToolNames),
     ...(entry
       ? { protocol: entry.api === "anthropic-messages" ? "anthropic" : "openai", modelId: entry.id }
       : {}),

@@ -22,7 +22,7 @@ it.each([
   { name: "pi-native", capabilities: ["native-loop"] },
   { name: "pi-native", capabilities: [] },
   { name: "pi-native", capabilities: ["native-loop", "steering", "subagents"] },
-  { name: "pi", capabilities: ["steering"] },
+  { name: "hand-written", capabilities: ["steering"] },
 ] satisfies HarnessDeclaration[])(
   "selected native run with hello $name $capabilities",
   async (hello) => {
@@ -199,7 +199,7 @@ it("still rejects a missing hello when the selected harness is already known", a
 });
 
 it.each([
-  { name: "pi", capabilities: ["subagents", "steering"] },
+  { name: "hand-written", capabilities: ["subagents", "steering"] },
   { name: "pi-native", capabilities: ["steering"] },
 ] satisfies HarnessDeclaration[])(
   "rejects a reconnect that changes hello to $name $capabilities",

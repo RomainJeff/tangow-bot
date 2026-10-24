@@ -19,7 +19,7 @@ const prefix = (request: ModelEmulatorRequest) =>
   JSON.stringify({ system: request.messages[0], tools: request.tools });
 
 describe("prompt bytes at the provider boundary", () => {
-  it.each(["in-process", "pi", "pi-native"] as const)(
+  it.each(["in-process", "pi-native"] as const)(
     "keeps the %s prefix and retained history stable while replacing scoped volatile context",
     async (mode) => {
       let memory = "DURABLE_FIRST";
@@ -63,7 +63,7 @@ describe("prompt bytes at the provider boundary", () => {
       onTestFinished(() => rm(root, { recursive: true, force: true }));
       await mkdir(path.join(root, "workspace/bots/bot"), { recursive: true });
       let launches = 0;
-      const harness = HARNESSES[mode === "pi-native" ? "pi-native" : "pi"]!;
+      const harness = HARNESSES["pi-native"]!;
       const workerRuntime = createWorkerAgentRuntime({
         launcher: {
           async launch(worker, capability) {

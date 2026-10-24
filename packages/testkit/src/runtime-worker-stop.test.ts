@@ -93,7 +93,7 @@ function e2bIgnoringCancel(root: string): Worker<E2BWorkerProvider> {
       const exited = runGuest({
         channels: channels(),
         capability: envs.RAKAZO_WORKER_CAPABILITY!,
-        harness: HARNESSES.pi!,
+        harness: HARNESSES["pi-native"]!,
         spoolDir: path.join(root, "tmp", "tool-output"),
         root,
         home: path.join(root, "home/user"),
@@ -122,7 +122,7 @@ function e2bIgnoringCancel(root: string): Worker<E2BWorkerProvider> {
   };
   return {
     provider: new E2BWorkerProvider(
-      { apiKey: "e2b-test-key", template: "rakazo-worker-pi", harness: "pi" },
+      { apiKey: "e2b-test-key", template: "rakazo-worker-pi-native" },
       sdk,
     ),
     async dispose() {
@@ -200,15 +200,12 @@ async function sleepingRun<P extends WorkerProvider & GuestConnector>(
     model: fixture.model.model,
     attempt,
     executeTool: async () => "unused",
-    executeLocalTool: async (_name, _args, _id, start) => {
-      napping.resolve();
-      return start(new AbortController().signal);
-    },
   });
   const attempt = await claim(1);
   const runtime = await runtimeFor(attempt);
   const events = (async () => {
-    for await (const _event of runtime.run(runRequest(attempt))) {
+    for await (const event of runtime.run(runRequest(attempt))) {
+      if (event.type === "progress" && event.text.startsWith("bash ")) napping.resolve();
     }
   })().catch((error: unknown) => error);
   await napping.promise;
