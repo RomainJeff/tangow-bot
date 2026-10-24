@@ -604,7 +604,7 @@ describe("where a product run executes", () => {
     const run = await fixture([
       {
         expect() {},
-        response: { type: "tool", id: "forget", name: "forget_secret", arguments: { name: "X" } },
+        response: { type: "tool", id: "forget", name: "forget_secret", arguments: { name: "x" } },
       },
       {
         expect(request) {
@@ -619,7 +619,7 @@ describe("where a product run executes", () => {
     await run.prisma.actionAutoReviewPreference.create({
       data: { spaceId: run.spaceId, userId: run.userId, enabled: true },
     });
-    const runId = await run.send("Forget X.");
+    const runId = await run.send("Forget x.");
     await run.continueRun(runId);
 
     run.model.assertComplete();

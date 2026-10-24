@@ -193,35 +193,24 @@ const toolNames = (request: ModelEmulatorRequest) =>
 const lastToolResult = (request: ModelEmulatorRequest) =>
   JSON.stringify(request.messages.filter((message) => message.role === "tool").at(-1)?.content);
 
-/** The lazy flow a model follows: search, load, then execute the loaded tool. */
+/** The lazy flow a model follows: find the tool with Pi's tool search, then call it. */
 function lazySteps(seen: { executed?: string }, between: () => Promise<void> = async () => {}) {
   return [
     {
       expect(request) {
-        expect(toolNames(request)).toEqual(
-          expect.arrayContaining(["mcp_search_tools", "mcp_load_tool", "mcp_execute_tool"]),
-        );
-        expect(toolNames(request).some((name) => name.startsWith("mcp__demo__"))).toBe(false);
+        expect(toolNames(request)).toContain("tool_search");
+        expect(toolNames(request).some((name) => name.includes("mcp__demo__"))).toBe(false);
         expect(JSON.stringify(request.tools)).not.toContain("schema-marker");
       },
-      response: call("search", "mcp_search_tools", { query: "Utility 29" }),
-    },
-    {
-      expect(request) {
-        expect(lastToolResult(request)).toContain("mcp__demo__tool_29");
-        expect(lastToolResult(request)).not.toContain("schema-marker");
-      },
-      response: call("load", "mcp_load_tool", { id: "mcp__demo__tool_29" }),
+      response: call("search", "tool_search", { query: "Utility 29", limit: 1 }),
     },
     {
       async expect(request) {
-        expect(lastToolResult(request)).toContain("schema-marker-29");
+        expect(toolNames(request)).toContain("mcp__rakazo__mcp__demo__tool_29");
+        expect(JSON.stringify(request.tools)).toContain("schema-marker-29");
         await between();
       },
-      response: call("exec", "mcp_execute_tool", {
-        id: "mcp__demo__tool_29",
-        arguments: { value: "x" },
-      }),
+      response: call("exec", "mcp__demo__tool_29", { value: "x" }),
     },
     {
       expect(request) {
@@ -246,7 +235,7 @@ function workerStartTools(seen: Seen[]) {
 }
 
 describe("lazy MCP through a worker run", () => {
-  it("searches, loads and executes on the controller once, with a small initial tool set", async () => {
+  it("finds a tool with Pi's tool search and executes it on the controller once, with a small initial tool set", async () => {
     const outcome: { executed?: string } = {};
     const { run, mcp, seen, server } = await mcpRun({ steps: lazySteps(outcome) });
     const runId = await run.send("Use the demo server.");
@@ -267,7 +256,6 @@ describe("lazy MCP through a worker run", () => {
       expect.objectContaining({ name: "mcp_load_tool", where: "controller" }),
       expect.objectContaining({ name: "mcp_search_tools", where: "controller" }),
     ]);
-    // For a harness with native tool search; the Rakazo loop declares only the fallback above.
     const entries = started.filter((tool) => typeof tool.catalog === "object");
     expect(entries).toHaveLength(30);
     expect(entries[29]).toEqual(

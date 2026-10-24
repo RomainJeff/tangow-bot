@@ -33,7 +33,7 @@ export function nativeToolsForHarness(name: string): readonly ConnectorTool[] {
         },
       },
     ];
-  return name === "pi" ? WORKER_NATIVE_TOOLS : [];
+  return [];
 }
 
 /** The tools a harness uses only through a capability it declares. */

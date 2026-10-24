@@ -86,7 +86,7 @@ function fakeE2B() {
   return { sdk, sandboxes, volumes, guests };
 }
 
-const config = { apiKey: "e2b-test-key", template: "rakazo-worker-pi" };
+const config = { apiKey: "e2b-test-key", template: "rakazo-worker-pi-native" };
 
 function spec(mounts: WorkerSpec["mounts"], overrides: Partial<WorkerSpec> = {}): WorkerSpec {
   return {
@@ -141,7 +141,7 @@ describe("E2BWorkerProvider", () => {
     expect([first, again]).toEqual([{ providerRef: "sbx_1" }, { providerRef: "sbx_1" }]);
     const { requestTimeoutMs, signal, ...created } = e2b.sandboxes.get("sbx_1")!;
     expect(created).toEqual({
-      template: "rakazo-worker-pi",
+      template: "rakazo-worker-pi-native",
       secure: true,
       metadata: { rakazo: "worker", attemptId: "attempt_1" },
       envs: {

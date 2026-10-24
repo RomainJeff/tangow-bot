@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { FrameSummary } from "@rakazo/adapters/runtime-worker";
@@ -65,23 +65,6 @@ afterAll(async () => {
 
 const recap = JSON.stringify({ version: 1, results: ["Wrote notes.txt"], references: [] });
 
-/** A file outside every worker, so it shows what all of a run's guests did. */
-async function probe() {
-  const dir = await mkdtemp(path.join(tmpdir(), "rakazo-worker-probe-"));
-  cleanups.push(() => rm(dir, { recursive: true, force: true }));
-  const file = path.join(dir, "probe.txt");
-  const command = `echo ran >> ${file}`;
-  const step = (expectations: ModelEmulatorStep["expect"] = () => {}): ModelEmulatorStep => ({
-    expect: expectations,
-    response: { type: "tool", id: "probe", name: "bash", arguments: { command } },
-  });
-  return {
-    step,
-    command,
-    lines: async () => (await readFile(file, "utf8").catch(() => "")).split("\n").filter(Boolean),
-  };
-}
-
 /** The bot tells the user it is done, then closes with its recap. */
 const finishing: ModelEmulatorStep[] = [
   {
@@ -90,6 +73,18 @@ const finishing: ModelEmulatorStep[] = [
   },
   { expect() {}, response: { type: "text", text: recap } },
 ];
+
+/** Pi closes its turn with one more model call once a pausing call answers that the run waits. */
+const closingTurn: ModelEmulatorStep = {
+  expect() {},
+  response: { type: "text", text: "Waiting." },
+};
+
+/** A controller tool call with a visible effect. */
+const note: ModelEmulatorStep = {
+  expect() {},
+  response: { type: "tool", id: "note", name: "scratchpad_add", arguments: { title: "Plan" } },
+};
 
 describe("a run whose bot runs in a guest", () => {
   it.each([
@@ -165,9 +160,9 @@ describe("a run whose bot runs in a guest", () => {
         "call bash",
         "result sh false",
         "call scratchpad_add",
-        "result controller false",
+        expect.stringMatching(/^result mcp-[\w-]+ false$/),
         "call message_user",
-        "result say false",
+        expect.stringMatching(/^result mcp-[\w-]+ false$/),
       ]);
       expect(
         await run.prisma.attempt.findMany({
@@ -241,15 +236,14 @@ describe("a run whose bot runs in a guest", () => {
   });
 
   it("starts no effect when the channel is cut before the tool call reaches the controller", async () => {
-    const probed = await probe();
     const run = await fixture({
       faults: { cutBeforeGuestFrame: once((frame) => frame.type === "tool.call") },
-      steps: [probed.step(), probed.step(), ...finishing],
+      steps: [note, note, ...finishing],
     });
-    const runId = await run.send("Append to the probe.");
+    const runId = await run.send("Save a note.");
 
     await expect(run.continueRun(runId)).rejects.toThrow("Run setup failed; retrying");
-    expect(await probed.lines()).toEqual([]);
+    expect(await run.prisma.scratchpadItem.count()).toBe(0);
     expect(await effects(run, runId)).toEqual([]);
     expect((await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
       "queued",
@@ -260,51 +254,14 @@ describe("a run whose bot runs in a guest", () => {
 
     await run.continueRun(runId);
     run.model.assertComplete();
-    expect(await probed.lines()).toEqual(["ran"]);
+    expect(await run.prisma.scratchpadItem.count()).toBe(1);
     expect(await effects(run, runId)).toEqual([
-      { kind: "bash", status: "completed" },
+      { kind: "scratchpad_add", status: "completed" },
       { kind: "message_user", status: "completed" },
     ]);
   });
 
-  it("keeps a guest effect whose result was lost uncertain and never runs it again", async () => {
-    const probed = await probe();
-    const run = await fixture({
-      faults: { cutBeforeGuestFrame: once((frame) => frame.type === "tool.done") },
-      steps: [
-        probed.step(),
-        probed.step(),
-        {
-          expect(request) {
-            expect(toolResult(request)).toContain("its outcome is unknown");
-          },
-          response: {
-            type: "tool",
-            id: "say",
-            name: "message_user",
-            arguments: { message: "Unsure." },
-          },
-        },
-        finishing[1]!,
-      ],
-    });
-    const runId = await run.send("Append to the probe.");
-
-    await expect(run.continueRun(runId)).rejects.toThrow("Run setup failed; retrying");
-    expect(await probed.lines()).toEqual(["ran"]);
-    expect(await effects(run, runId)).toEqual([{ kind: "bash", status: "executing" }]);
-
-    await run.continueRun(runId);
-    run.model.assertComplete();
-    expect(await probed.lines()).toEqual(["ran"]);
-    expect(await effects(run, runId)).toEqual([
-      { kind: "bash", status: "uncertain" },
-      { kind: "message_user", status: "completed" },
-    ]);
-  });
-
-  it("refuses a guest tool asked under a fence another claim replaced, and starts no second guest", async () => {
-    const probed = await probe();
+  it("refuses a controller tool asked under a fence another claim replaced, and starts no second guest", async () => {
     const held = Promise.withResolvers<void>();
     const reached = Promise.withResolvers<void>();
     const run = await fixture({
@@ -315,9 +272,9 @@ describe("a run whose bot runs in a guest", () => {
           return held.promise;
         },
       },
-      steps: [probed.step(), ...finishing],
+      steps: [note, ...finishing],
     });
-    const runId = await run.send("Append to the probe.");
+    const runId = await run.send("Save a note.");
     const first = run.continueRun(runId).catch((error: unknown) => error);
     await reached.promise;
 
@@ -330,7 +287,7 @@ describe("a run whose bot runs in a guest", () => {
     held.resolve();
     await first;
 
-    expect(await probed.lines()).toEqual([]);
+    expect(await run.prisma.scratchpadItem.count()).toBe(0);
     expect(await effects(run, runId)).toEqual([]);
   });
 
@@ -378,9 +335,8 @@ describe("a run whose bot runs in a guest", () => {
   });
 
   it("runs nothing a restarted controller finds waiting for approval until the answer is stored", async () => {
-    const probed = await probe();
     const run = await fixture({
-      steps: [probed.step(), probed.step(), probed.step(), ...finishing],
+      steps: [note, closingTurn, note, closingTurn, ...finishing],
     });
     await run.prisma.actionApprovalRule.create({
       data: {
@@ -388,10 +344,10 @@ describe("a run whose bot runs in a guest", () => {
         createdByUserId: run.userId,
         effect: "require_approval",
         matchKind: "tool",
-        matchValue: "bash",
+        matchValue: "scratchpad_add",
       },
     });
-    const runId = await run.send("Append to the probe.");
+    const runId = await run.send("Save a note.");
     await run.continueRun(runId);
     expect((await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
       "waiting_input",
@@ -406,8 +362,8 @@ describe("a run whose bot runs in a guest", () => {
     expect((await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
       "waiting_input",
     );
-    expect(await probed.lines()).toEqual([]);
-    expect(await effects(run, runId)).toEqual([{ kind: "bash", status: "intended" }]);
+    expect(await run.prisma.scratchpadItem.count()).toBe(0);
+    expect(await effects(run, runId)).toEqual([{ kind: "scratchpad_add", status: "intended" }]);
 
     const card = await latestCard(run.prisma, runId);
     expect(
@@ -426,95 +382,87 @@ describe("a run whose bot runs in a guest", () => {
     expect((await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
       "completed",
     );
-    expect(await probed.lines()).toEqual(["ran"]);
+    expect(await run.prisma.scratchpadItem.count()).toBe(1);
     expect(await effects(run, runId)).toEqual([
-      { kind: "bash", status: "completed" },
+      { kind: "scratchpad_add", status: "completed" },
       { kind: "message_user", status: "completed" },
     ]);
     expect(before.launches).toHaveLength(1);
   });
 
-  it.each([
-    ["before", ["publish_note", "bash"], []],
-    ["after", ["bash", "publish_note"], ["ran"]],
-  ])(
-    "stops a guest's tool batch at a connector approval with a native command %s it, then runs the approved call at the controller",
-    async (_order, batch, probeLines) => {
-      const probed = await probe();
-      const published: string[] = [];
-      const publish = { id: "publish", name: "publish_note", arguments: { title: "Plan" } };
-      const calls = batch.map((name) =>
-        name === "bash" ? { id: "probe", name, arguments: { command: probed.command } } : publish,
-      );
-      let resumed: ModelEmulatorRequest["messages"] = [];
-      const run = await fixture({
-        tools: {
-          describe: () => ({
-            id: "fixture",
-            contractVersion: "1",
-            adapterVersion: "1",
-            capabilities: { discover: true, oauth: false, secretsBrokered: true },
-          }),
-          discoverTools: async () => [
-            {
-              name: "publish_note",
-              description: "Publish a note",
-              inputSchema: { type: "object", properties: { title: { type: "string" } } },
-            },
-          ],
-          async *execute(call) {
-            published.push(call.tool);
-            yield { type: "result", data: { published: true } };
-          },
-        },
-        steps: [
-          { expect() {}, response: { type: "tool", ...calls[0]!, siblings: calls.slice(1) } },
+  it("pauses a guest's parallel tool batch at a connector approval, runs its sibling once, then runs the approved call at the controller", async () => {
+    const published: string[] = [];
+    const publish = { id: "publish", name: "publish_note", arguments: { title: "Plan" } };
+    const sibling = { id: "note", name: "scratchpad_add", arguments: { title: "Plan" } };
+    let resumed = "";
+    const run = await fixture({
+      tools: {
+        describe: () => ({
+          id: "fixture",
+          contractVersion: "1",
+          adapterVersion: "1",
+          capabilities: { discover: true, oauth: false, secretsBrokered: true },
+        }),
+        discoverTools: async () => [
           {
-            expect(request) {
-              resumed = request.messages;
-            },
-            response: finishing[0]!.response,
+            name: "publish_note",
+            description: "Publish a note",
+            inputSchema: { type: "object", properties: { title: { type: "string" } } },
           },
-          finishing[1]!,
         ],
-      });
-      await run.prisma.actionApprovalRule.create({
-        data: {
-          spaceId: run.spaceId,
-          createdByUserId: run.userId,
-          effect: "require_approval",
-          matchKind: "tool",
-          matchValue: "publish_note",
+        async *execute(call) {
+          published.push(call.tool);
+          yield { type: "result", data: { published: true } };
         },
-      });
-      const runId = await run.send("Publish the plan.");
-      await run.continueRun(runId);
-
-      expect(run.model.requests).toHaveLength(1);
-      expect((await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
-        "waiting_input",
-      );
-      expect(published).toEqual([]);
-      expect(await probed.lines()).toEqual(probeLines);
-
-      const card = await latestCard(run.prisma, runId);
-      await run.events.answerRunInput({
+      },
+      steps: [
+        { expect() {}, response: { type: "tool", ...publish, siblings: [sibling] } },
+        closingTurn,
+        {
+          expect(request) {
+            resumed = JSON.stringify(request.messages);
+          },
+          response: finishing[0]!.response,
+        },
+        finishing[1]!,
+      ],
+    });
+    await run.prisma.actionApprovalRule.create({
+      data: {
         spaceId: run.spaceId,
-        threadId: run.thread.id,
-        runId,
-        messageId: card.id,
-        answeredByUserId: run.userId,
-        answer: "allow",
-      });
-      await run.continueRun(runId);
+        createdByUserId: run.userId,
+        effect: "require_approval",
+        matchKind: "tool",
+        matchValue: "publish_note",
+      },
+    });
+    const runId = await run.send("Publish the plan.");
+    await run.continueRun(runId);
 
-      run.model.assertComplete();
-      expect(JSON.stringify(resumed).includes(probed.command)).toBe(probeLines.length > 0);
-      expect(published).toEqual(["publish_note"]);
-      expect(await probed.lines()).toEqual(probeLines);
-      expect((await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
-        "completed",
-      );
-    },
-  );
+    expect((await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
+      "waiting_input",
+    );
+    expect(published).toEqual([]);
+    // Pi runs a turn's calls in parallel: the sibling reaches the controller before the pause.
+    expect(await run.prisma.scratchpadItem.count()).toBe(1);
+
+    const card = await latestCard(run.prisma, runId);
+    await run.events.answerRunInput({
+      spaceId: run.spaceId,
+      threadId: run.thread.id,
+      runId,
+      messageId: card.id,
+      answeredByUserId: run.userId,
+      answer: "allow",
+    });
+    await run.continueRun(runId);
+
+    run.model.assertComplete();
+    expect(published).toEqual(["publish_note"]);
+    expect(await run.prisma.scratchpadItem.count()).toBe(1);
+    expect(resumed).toContain("already ran Scratchpad add");
+    expect((await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
+      "completed",
+    );
+  });
 });

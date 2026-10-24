@@ -27,7 +27,6 @@ function base(bundle: string): TemplateBuilder {
 const piLayer = (template: TemplateBuilder) => template.aptInstall(["ripgrep", "fd-find"]);
 
 const HARNESS_LAYERS: Readonly<Record<string, (template: TemplateBuilder) => TemplateBuilder>> = {
-  pi: piLayer,
   "pi-native": piLayer,
 };
 

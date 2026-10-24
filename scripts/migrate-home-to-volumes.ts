@@ -34,7 +34,7 @@ function options() {
       "clear-stale-move": { type: "boolean", default: false },
       "dry-run": { type: "boolean", default: false },
       "leave-unmapped": { type: "boolean", default: false },
-      template: { type: "string", default: "rakazo-worker-pi" },
+      template: { type: "string", default: "rakazo-worker-pi-native" },
     },
   });
   const dryRun = values["dry-run"];

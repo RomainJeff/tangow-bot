@@ -106,16 +106,7 @@ it.skipIf(process.env.VERIFY_DOCKER_TEAM_SCREENS !== "1")(
       },
     ];
     const run = await startWorkerRun({
-      steps: steps.map((step) => ({
-        ...step,
-        response(request) {
-          const result =
-            typeof step.response === "function" ? step.response(request) : step.response;
-          return result.type === "tool"
-            ? { ...result, name: `mcp__rakazo__${result.name}` }
-            : result;
-        },
-      })),
+      steps,
       sandbox: new Computer(),
       computerScope: "team",
       protocol: "anthropic",

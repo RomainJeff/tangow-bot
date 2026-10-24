@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { ComputerRef } from "@rakazo/adapter-kit";
+import type { ComputerRef, LocalToolOutput } from "@rakazo/adapter-kit";
 import { PiAgentRuntime } from "@rakazo/adapters";
 import { WORKER_NATIVE_TOOLS } from "@rakazo/adapters/runtime-worker";
-import { HARNESSES } from "@rakazo/agent-run-worker";
 import { afterEach, describe, expect, it } from "vitest";
 import { fileTask, nativeFileTask, toolResult } from "./file-task.js";
 import type { ModelEmulatorStep } from "./model-emulator.js";
@@ -135,6 +135,14 @@ describe("a product run in a worker", () => {
   });
 });
 
+/** What a guest reports for a local tool it ran after the controller's grant. */
+const localOutput = (text: string): LocalToolOutput => ({
+  text,
+  isError: false,
+  truncated: false,
+  totalBytes: Buffer.byteLength(text),
+});
+
 it.each(["after", "during"] as const)(
   "reads fresh native state after an attempt is cut %s a read",
   async (cut) => {
@@ -149,7 +157,7 @@ it.each(["after", "during"] as const)(
           id: "worker",
           capabilities: { scripted: false, localTools: WORKER_NATIVE_TOOLS },
         }),
-        async *run(request, context) {
+        async *run(request) {
           const interrupt = async () => {
             await run.prisma.run.update({
               where: { id: request.runId },
@@ -158,11 +166,7 @@ it.each(["after", "during"] as const)(
             throw new Error("Attempt interrupted");
           };
           const cwd = run.provider.volumePath("bot_private");
-          const nativeContext = {
-            cwd,
-            spoolDir: path.join(cwd, ".spool"),
-            signal: context.signal,
-          };
+          const file = path.join(cwd, "retry.txt");
           yield {
             type: "tool",
             name: "write",
@@ -173,13 +177,11 @@ it.each(["after", "during"] as const)(
             "write",
             { path: "retry.txt", content: version },
             "write",
-            (signal) =>
-              HARNESSES.pi.executeNativeTool(
-                "write",
-                { path: "retry.txt", content: version },
-                "write",
-                { ...nativeContext, signal },
-              ),
+            async () => {
+              await mkdir(cwd, { recursive: true });
+              await writeFile(file, version);
+              return localOutput("");
+            },
           );
           yield {
             type: "tool",
@@ -188,18 +190,10 @@ it.each(["after", "during"] as const)(
             executionId: "read",
           };
           results.push(
-            await request.executeLocalTool!(
-              "read",
-              { path: "retry.txt" },
-              "read",
-              async (signal) => {
-                if (version === "v1" && cut === "during") await interrupt();
-                return HARNESSES.pi.executeNativeTool("read", { path: "retry.txt" }, "read", {
-                  ...nativeContext,
-                  signal,
-                });
-              },
-            ),
+            await request.executeLocalTool!("read", { path: "retry.txt" }, "read", async () => {
+              if (version === "v1" && cut === "during") await interrupt();
+              return localOutput(await readFile(file, "utf8"));
+            }),
           );
           if (version === "v1") await interrupt();
           yield { type: "done", text: "Done." };
@@ -237,7 +231,6 @@ it("lets webhook routines inspect native files without approval", async () => {
         },
         response: { type: "text", text: "Files inspected." },
       },
-      { expect() {}, response: { type: "text", text: recap } },
     ],
   });
   cleanups.push(() => run.close());

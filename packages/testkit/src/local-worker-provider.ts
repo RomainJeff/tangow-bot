@@ -82,11 +82,11 @@ export class LocalWorkerProvider implements WorkerProvider, GuestConnector {
       entry?: string;
       /** The baked managed skills a VM gets. Default: the repository's `skills/agent`. */
       managedSkills?: string;
-      /** The harness a `memory` guest runs. Default: Pi. */
+      /** The harness a `memory` guest runs. Default: Pi native. */
       harness?: GuestHarness;
     },
   ) {
-    this.harness = options.harness ?? HARNESSES.pi!;
+    this.harness = options.harness ?? HARNESSES["pi-native"]!;
   }
 
   describe(): AdapterDescriptor<WorkerCapabilities> {

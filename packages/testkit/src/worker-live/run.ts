@@ -35,18 +35,8 @@ export async function liveRun(
   const seen: Seen[] = [];
   const connects: number[] = [];
   const run = await startWorkerRun({
-    steps: options.steps.map((step) => ({
-      ...step,
-      response(request) {
-        const reply = typeof step.response === "function" ? step.response(request) : step.response;
-        if (reply.type !== "tool") return reply;
-        const assigned = request.tools?.find(
-          (tool) => tool.function.name === `mcp__rakazo__${reply.name}`,
-        );
-        return assigned ? { ...reply, name: assigned.function.name } : reply;
-      },
-    })),
-    screensByPath: live.config.harness !== "pi",
+    steps: options.steps,
+    screensByPath: true,
     databaseUrl: options.databaseUrl,
     protocol: options.protocol,
     tools: options.tools,

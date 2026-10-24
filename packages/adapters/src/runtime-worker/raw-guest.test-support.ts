@@ -6,7 +6,7 @@ import type {
   ReplyBody,
   WorkerIdentity,
 } from "@rakazo/adapter-kit";
-import { PI_HARNESS, ReplyPartSchema } from "@rakazo/adapter-kit";
+import { ReplyPartSchema } from "@rakazo/adapter-kit";
 import type { FrameChannel, LaunchedGuest } from "./index.js";
 import {
   capabilityWorker,
@@ -15,11 +15,17 @@ import {
   readControllerFrame,
 } from "./index.js";
 
+/** A harness with no loop of its own: every tool call goes through the controller. */
+const HAND_WRITTEN: HarnessDeclaration = {
+  name: "hand-written",
+  capabilities: ["subagents", "steering"],
+};
+
 /** A guest that speaks the wire by hand, so it can do what a conforming guest never would. */
 export function rawGuest(
   channel: FrameChannel,
   capability: string,
-  harness: HarnessDeclaration = PI_HARNESS,
+  harness: HarnessDeclaration = HAND_WRITTEN,
 ) {
   const worker = capabilityWorker(capability)!;
   const received: ControllerMessageV1[] = [];
@@ -76,7 +82,7 @@ export function rawGuest(
 }
 
 /** Hands every launch to the test: it opens the guest's connections itself. */
-export function manualLauncher(expectedHarness: HarnessDeclaration = PI_HARNESS) {
+export function manualLauncher(expectedHarness: HarnessDeclaration = HAND_WRITTEN) {
   /** `held`: the attempt may act; `owned`: the run is still its own, possibly waiting on the user. */
   const fence = { held: true, owned: true };
   const launched = new Map<string, { capability: string; connect(): FrameChannel }>();

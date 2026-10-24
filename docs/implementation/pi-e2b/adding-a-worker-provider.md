@@ -75,7 +75,7 @@ A new `SandboxKind` fails the build until it has an entry in `WORKER_SUPPORT`, s
 
 ## Compose the provider
 
-`WORKER_PROVIDER` selects the provider and `WORKER_TEMPLATE` its guest image (`rakazo-worker-pi` by default). `resolveWorkerProvider` in `packages/adapters/src/worker-composition.ts` parses them, and `createWorkerProvider` builds the adapter. Add your provider to both. Do not add a provider-specific environment variable when the provider's own SDK or the connection settings can express it: E2B reads `E2B_API_KEY`, and `E2B_DOMAIN` or `E2B_API_URL` for a self-hosted endpoint.
+`WORKER_PROVIDER` selects the provider and `WORKER_TEMPLATE` its guest image (`rakazo-worker-pi-native` by default). `resolveWorkerProvider` in `packages/adapters/src/worker-composition.ts` parses them, and `createWorkerProvider` builds the adapter. Add your provider to both. Do not add a provider-specific environment variable when the provider's own SDK or the connection settings can express it: E2B reads `E2B_API_KEY`, and `E2B_DOMAIN` or `E2B_API_URL` for a self-hosted endpoint.
 
 Both composition roots, `apps/api/src/app.ts` and `apps/worker/src/index.ts`, call `composeWorkers(prisma, provider)`. It returns the lifecycle that bot and space deletion use, and, with a provider, the executor's `runWorkers` and the reconciler's `reconcileWorkers`.
 
