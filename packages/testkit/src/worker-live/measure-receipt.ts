@@ -182,3 +182,21 @@ export function summarize(threads: ThreadRecord[], models: MeasuredModel[]) {
     }),
   );
 }
+
+/** E2B names sandboxes, templates, builds and volumes with 20 lowercase letters and digits. */
+const E2B_ID = /\b[a-z0-9]{20}\b/g;
+
+/**
+ * The receipt as written. Infrastructure identifiers never leave the runner: each private one
+ * passed in becomes its label, and any other E2B identifier becomes `<e2b-id>`.
+ */
+export function measureReceipt(
+  fields: Record<string, unknown>,
+  threads: ThreadRecord[],
+  models: MeasuredModel[],
+  labels: Record<string, string>,
+): unknown {
+  let text = JSON.stringify({ ...fields, summary: summarize(threads, models), threads });
+  for (const [id, label] of Object.entries(labels)) text = text.replaceAll(id, label);
+  return JSON.parse(text.replace(E2B_ID, "<e2b-id>"));
+}

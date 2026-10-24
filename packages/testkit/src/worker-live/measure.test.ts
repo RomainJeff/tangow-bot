@@ -6,7 +6,7 @@ import type { ModelEmulatorStep } from "../model-emulator.js";
 import { VolumeComputer } from "../volume-computer.js";
 import type { ScenarioId, TurnRecord } from "./measure.js";
 import { measureTokens, resolveModels, stableLocalWorkers } from "./measure.js";
-import { persistentEstimate, summarize } from "./measure-receipt.js";
+import { measureReceipt, persistentEstimate, summarize } from "./measure-receipt.js";
 
 const usage = { promptTokens: 1000, completionTokens: 20, cacheReadTokens: 600 };
 const text = (reply: string): ModelEmulatorStep => ({
@@ -104,6 +104,19 @@ describe("token and cache measurements", () => {
       requestsWithoutUsage: 0,
       successRate: 1,
     });
+
+    const template = "q7m2x9c4v1b8n5z3k6j0";
+    const receipt = JSON.stringify(
+      measureReceipt(
+        { computerTemplate: template },
+        [{ ...chain!, error: "sandbox h3k9d2m7p4x8c1v6b5n0 did not start" }],
+        models,
+        { [template]: "validated private computer" },
+      ),
+    );
+    expect(receipt).toContain('"computerTemplate":"validated private computer"');
+    expect(receipt).toContain('"error":"sandbox <e2b-id> did not start"');
+    expect(receipt).not.toMatch(/q7m2x9c4v1b8n5z3k6j0|h3k9d2m7p4x8c1v6b5n0/);
   }, 120_000);
 
   it("estimates one persistent native session from the projection's own requests", () => {

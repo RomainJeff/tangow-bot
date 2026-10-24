@@ -10,7 +10,7 @@
  *   worker-live measure --template <worker> --computer-template <computer> --out <dir> [--trials 30]
  *     [--provider opencode-go] [--models 'glm-*-flash,gpt-*-luna'] [--gaps 10s,2m,5m,10m]
  *     [--approval-delays 10s,6m] [--scenarios chain,computer,approval,compaction]
- *     [--worker local]
+ *     [--worker local] [--computer-label <what the receipt calls the computer template>]
  *     Token and cache measurements against a real model. RAKAZO_MODEL_KEY_FILE names a file
  *     outside any git work tree that holds the provider key. `--worker local` runs the guests in
  *     this process instead of E2B, for scenarios without a computer.
@@ -40,7 +40,7 @@ import {
   SCENARIOS,
   stableLocalWorkers,
 } from "../worker-live/measure.js";
-import { summarize } from "../worker-live/measure-receipt.js";
+import { measureReceipt } from "../worker-live/measure-receipt.js";
 
 const [command, ...rest] = process.argv.slice(2);
 const { values } = parseArgs({
@@ -63,6 +63,7 @@ const { values } = parseArgs({
     "approval-delays": { type: "string", default: "10s,6m" },
     scenarios: { type: "string", default: SCENARIOS.join(",") },
     worker: { type: "string", default: "e2b" },
+    "computer-label": { type: "string", default: "private computer template" },
   },
 });
 
@@ -351,51 +352,57 @@ async function measure() {
   let written = Promise.resolve();
   const write = (status: "complete" | "partial") =>
     (written = written.then(() =>
-      writeReceipt(path.join(values.out!, "token-cache.json"), {
-        schemaVersion: 1,
-        status,
-        startedAt,
-        generatedAt: new Date().toISOString(),
-        harness: values.harness,
-        worker: local
-          ? "local memory guests in the controller process, one stable directory per thread"
-          : "E2B worker VMs",
-        guestSha256: values.guest
-          ? createHash("sha256").update(readFileSync(values.guest)).digest("hex")
-          : null,
-        workerTemplate: values.template,
-        computerTemplate: values["computer-template"],
-        desktopPreparation: values["prepare-computer"]
-          ? "product E2BSandboxProvider.prepare"
-          : "skipped",
-        provider: values.provider,
-        models: models.map(({ id, api, baseUrl, cost }) => ({
-          id,
-          api,
-          catalogBaseUrl: baseUrl,
-          catalogCostPerMillion: cost,
-        })),
-        protocol: { ...protocol, comparable: trials >= 30 },
-        order: local
-          ? "one stream per model at once; each stream runs the scenarios in turn, one fresh controller and thread per trial"
-          : "scenarios in turn; each trial runs every model on a fresh controller and thread, rotating which goes first; one thread at a time, its resources swept before the next",
-        method: {
-          source: "agent.worker.model_request at the controller relay, one per model request",
-          inputTokens:
-            "every prompt token, cached or not; uncached = input - cacheRead - cacheWrite",
-          promptBytes:
-            "UTF-8 bytes of the redacted canonical transcript (pi-ai-transcript-v1), not provider wire bytes",
-          pricing: "catalog list price per million tokens, without long-context tiers",
-          persistentEstimate:
-            "one native session continuing every attempt from the previous full prompt and answer; generous: previous prompt counted cached whenever the projection read cache",
-          restoreOutsideProvisioningMs:
-            "grant to the resumed attempt's first model request, minus provider ensure to guest hello",
-          transcriptAppend:
-            "controller time and database queries from each transcript frame to its recorded reply",
-        },
-        summary: summarize(threads, models),
-        threads,
-      }),
+      writeReceipt(
+        path.join(values.out!, "token-cache.json"),
+        measureReceipt(
+          {
+            schemaVersion: 1,
+            status,
+            startedAt,
+            generatedAt: new Date().toISOString(),
+            harness: values.harness,
+            worker: local
+              ? "local memory guests in the controller process, one stable directory per thread"
+              : "E2B worker VMs",
+            guestSha256: values.guest
+              ? createHash("sha256").update(readFileSync(values.guest)).digest("hex")
+              : null,
+            workerTemplate: values.template,
+            computerTemplate: values["computer-template"],
+            desktopPreparation: values["prepare-computer"]
+              ? "product E2BSandboxProvider.prepare"
+              : "skipped",
+            provider: values.provider,
+            models: models.map(({ id, api, baseUrl, cost }) => ({
+              id,
+              api,
+              catalogBaseUrl: baseUrl,
+              catalogCostPerMillion: cost,
+            })),
+            protocol: { ...protocol, comparable: trials >= 30 },
+            order: local
+              ? "one stream per model at once; each stream runs the scenarios in turn, one fresh controller and thread per trial"
+              : "scenarios in turn; each trial runs every model on a fresh controller and thread, rotating which goes first; one thread at a time, its resources swept before the next",
+            method: {
+              source: "agent.worker.model_request at the controller relay, one per model request",
+              inputTokens:
+                "every prompt token, cached or not; uncached = input - cacheRead - cacheWrite",
+              promptBytes:
+                "UTF-8 bytes of the redacted canonical transcript (pi-ai-transcript-v1), not provider wire bytes",
+              pricing: "catalog list price per million tokens, without long-context tiers",
+              persistentEstimate:
+                "one native session continuing every attempt from the previous full prompt and answer; generous: previous prompt counted cached whenever the projection read cache",
+              restoreOutsideProvisioningMs:
+                "grant to the resumed attempt's first model request, minus provider ensure to guest hello",
+              transcriptAppend:
+                "controller time and database queries from each transcript frame to its recorded reply",
+            },
+          },
+          threads,
+          models,
+          local ? {} : { [values["computer-template"]!]: values["computer-label"] },
+        ),
+      ),
     ));
   try {
     await measureTokens({
