@@ -151,11 +151,24 @@ function fixture({
     sessionEntry: {
       ...log.sessionEntry,
       // The card an effect shows, and the entry it settles on: the one it last paused with.
-      findFirst: vi.fn(async ({ where }: { where?: { payload?: { path?: string[] } } }) => {
-        if (where?.payload?.path?.[0] !== "effectId") return null;
-        const paused = pauseRunForInput.mock.calls.at(-1)?.[0];
-        return paused ? { id: "card-entry", payload: { card: paused.blocks[0] } } : null;
-      }),
+      // Each pause logged its card as `card-entry-<n>`, oldest first unless asked newest first.
+      findFirst: vi.fn(
+        async ({
+          where,
+          orderBy,
+        }: {
+          where?: { payload?: { path?: string[] } };
+          orderBy?: { seq?: string };
+        }) => {
+          if (where?.payload?.path?.[0] !== "effectId") return null;
+          const pauses = pauseRunForInput.mock.calls;
+          const index = orderBy?.seq === "desc" ? pauses.length - 1 : 0;
+          const paused = pauses[index]?.[0];
+          return paused
+            ? { id: `card-entry-${index + 1}`, payload: { card: paused.blocks[0] } }
+            : null;
+        },
+      ),
       findUnique: vi.fn(async () => ({ sessionId: "session-main" })),
     },
     $queryRaw: log.queryRaw,
@@ -871,7 +884,7 @@ describe("connector read-only metadata and approval enforcement", () => {
         });
         expect(f.log.drafts.filter((entry) => entry.type === "effect.applied")).toEqual([
           expect.objectContaining({
-            payload: { target: "card-entry", sent: { at: expect.any(String), edited: true } },
+            payload: { target: "card-entry-1", sent: { at: expect.any(String), edited: true } },
           }),
         ]);
         expect(f.runtimeRun.mock.calls.at(-1)![0].prompt).toContain(
@@ -1035,8 +1048,36 @@ describe("connector read-only metadata and approval enforcement", () => {
         expect(f.execute).not.toHaveBeenCalled();
         expect(f.effects[0]).toMatchObject({ status: "denied", draft: { state: "unsent" } });
         expect(f.log.drafts.filter((entry) => entry.type === "effect.applied")).toEqual([
-          expect.objectContaining({ payload: { target: "card-entry", ...settled } }),
+          expect.objectContaining({ payload: { target: "card-entry-1", ...settled } }),
         ]);
+      });
+
+      it("settles the card the user last saw when the run stops after a Try again", async () => {
+        const f = await drafted();
+        f.execute.mockImplementationOnce(async function* () {
+          yield { type: "result" as const, data: { error: "Quota exceeded" } as never };
+        });
+        approve(f.effects[0]!);
+        f.setCalls([]);
+        await f.run();
+        approve(f.effects[0]!);
+        const { id, spaceId, threadId, botId } = f.runRow;
+        await settleCancelledRunCards(
+          {
+            prisma: {
+              ...f.prisma,
+              run: { findMany: async () => [{ id, spaceId, threadId, botId }] },
+            },
+            events: f.events,
+            sessionLog: f.log.sessionLog,
+          } as never,
+          [id],
+        );
+        expect(
+          f.log.drafts
+            .filter((entry) => entry.type === "effect.applied")
+            .map((entry) => entry.payload),
+        ).toEqual([{ target: "card-entry-2", failed: true }]);
       });
 
       it("tells the bot's next call that the user discarded the draft", async () => {
