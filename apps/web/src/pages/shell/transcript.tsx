@@ -7,7 +7,7 @@ import type { GroupAvatarMember } from "@rakazo/ui-web";
 import { cn } from "@rakazo/ui-web";
 import type { RefObject } from "react";
 import { Fragment, memo, useEffect, useMemo, useRef, useState } from "react";
-import type { SpawnBotCardEdits } from "../../components/AskCard";
+import type { CardEdits } from "../../components/AskCard";
 import { ActiveBotGlyph } from "../../components/ai/CollaborationMarker";
 import { useDisplayAgentSteps } from "../../lib/agent-steps-pref";
 import type { ArtifactTarget } from "../../lib/artifact-open";
@@ -94,7 +94,7 @@ export const Transcript = memo(function Transcript({
   workingStartedAt?: number;
   onLoadOlder: () => void | Promise<void>;
   onOpenBot: (botId: string, messageId?: string) => void;
-  onAnswer: (target: CardAnswerTarget, text: string, edits?: SpawnBotCardEdits) => Promise<void>;
+  onAnswer: (target: CardAnswerTarget, text: string, edits?: CardEdits) => Promise<void>;
   onReply: (message: MessageItem) => void;
   onEdit: (message: MessageItem) => void;
   rewindFromItemId: string | null;

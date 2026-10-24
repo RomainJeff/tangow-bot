@@ -6,6 +6,7 @@ import { ComputerUpdateProgress } from "../components/ComputerUpdateProgress";
 import { authClient } from "../lib/auth";
 import { markAfterPaint, markOnce } from "../lib/performance";
 import { rpc } from "../lib/rpc";
+import { userInitials } from "../lib/user-initials";
 import { HostComputerPrompt } from "./HostComputerPrompt";
 import { useAgentSkillCatalog } from "./shell/agent-skill-catalog";
 import type { BotAction, BotCommands } from "./shell/bot-commands";
@@ -133,12 +134,7 @@ export function ShellPage() {
   const openComputerFromThread = useCallback(() => void openComputerRef.current(), []);
 
   const userName = session.data?.user.name ?? t`You`;
-  const initials = userName
-    .split(" ")
-    .map((p) => p[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
+  const initials = userInitials(userName);
   const userImage = session.data?.user.image ?? null;
 
   // The sidebar menu and the bot page's own menu run the same handlers.

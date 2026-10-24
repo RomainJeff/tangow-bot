@@ -9,13 +9,14 @@ import {
 } from "@rakazo/core";
 import type { GroupAvatarMember } from "@rakazo/ui-web";
 import { useCallback, useMemo, useRef } from "react";
+import type { AskBlock } from "../../components/AskCard";
 import { useDisplayAgentSteps } from "../../lib/agent-steps-pref";
 import type { ArtifactTarget } from "../../lib/artifact-open";
 import { hasRenderableBlock } from "../../lib/message-blocks";
 import { copyableMessageText } from "../../lib/message-text";
 import type { ThreadState } from "../../lib/thread-events";
 import { activeThreadRuns } from "../../lib/thread-events";
-import type { MessageItem } from "../../lib/thread-items";
+import type { CardAnswerTarget, MessageItem } from "../../lib/thread-items";
 import type { CallThread } from "../CallView";
 import { memberName } from "../GroupPanel";
 import { FALLBACK_BOT_COLOR } from "./layout";
@@ -32,6 +33,23 @@ export function isWorking(
 
 export function messageIdOf(view: ThreadView, message: MessageItem): string | undefined {
   return view.rows.find((row) => row.item.id === message.id)?.messageId;
+}
+
+/** The card the thread waits on, and where its answer goes: the entry that asked it last. */
+export function waitingAsk(view: ThreadView): { block: AskBlock; target: CardAnswerTarget } | null {
+  const waiting = view.waiting;
+  if (!waiting) return null;
+  const item = view.rows.find((row) => row.item.id === waiting.itemId)?.item;
+  const block =
+    item?.kind === "message"
+      ? item.blocks.find(
+          (candidate): candidate is AskBlock =>
+            candidate.kind === "ask" && candidate.status !== "answered",
+        )
+      : item?.kind === "effect"
+        ? item.card
+        : undefined;
+  return block ? { block, target: { runId: waiting.runId, messageId: waiting.entryId } } : null;
 }
 
 /** What the open thread's snapshot shows: its rows, who is working, and who a send answers. */
@@ -88,35 +106,14 @@ export function useThreadView(snapshot: ThreadState | null, roster: Roster) {
         .map((message) => copyableMessageText(message)),
     [messageItems],
   );
-  const callThread = useMemo<CallThread>(() => {
-    const waiting = view.waiting;
-    const item = waiting
-      ? view.rows.find((row) => row.item.id === waiting.itemId)?.item
-      : undefined;
-    const block =
-      item?.kind === "message"
-        ? item.blocks.find(
-            (candidate): candidate is Extract<typeof candidate, { kind: "ask" }> =>
-              candidate.kind === "ask" && candidate.status !== "answered",
-          )
-        : item?.kind === "effect"
-          ? item.card
-          : undefined;
-    return {
+  const callThread = useMemo<CallThread>(
+    () => ({
       messages: messageItems,
       running: isWorking(activeSnapshot?.run, view),
-      ask:
-        waiting && block
-          ? {
-              block,
-              target:
-                item?.kind === "effect"
-                  ? { runId: item.runId ?? waiting.runId, messageId: item.id }
-                  : { runId: waiting.runId, messageId: waiting.entryId },
-            }
-          : null,
-    };
-  }, [view, messageItems, activeSnapshot?.run]);
+      ask: waitingAsk(view),
+    }),
+    [view, messageItems, activeSnapshot?.run],
+  );
   const transcriptArtifactTarget = useMemo<ArtifactTarget>(
     () => (inGroup ? { groupId: groupId ?? "" } : { botId: active?.id ?? "" }),
     [active?.id, groupId, inGroup],

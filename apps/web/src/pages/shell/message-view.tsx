@@ -29,7 +29,7 @@ import { memo, useMemo, useRef } from "react";
 import "../../components/ai/beautiful-ui.css";
 import { AgentSteps } from "../../components/AgentSteps";
 import { ArtifactFileCard } from "../../components/ArtifactFileCard";
-import type { SpawnBotCardEdits } from "../../components/AskCard";
+import type { CardEdits } from "../../components/AskCard";
 import { AskCard } from "../../components/AskCard";
 import { SkillDraftCard } from "../../components/teach/SkillDraftCard";
 import { useDisplayAgentSteps } from "../../lib/agent-steps-pref";
@@ -150,7 +150,7 @@ export const MessageView = memo(function MessageView({
   /** Show the avatar for this message: the last message of a group
    * (`isLastOfGroup`). Always false in a mono thread. */
   showAvatar: boolean;
-  onAnswer?: (text: string, edits?: SpawnBotCardEdits) => Promise<void>;
+  onAnswer?: (text: string, edits?: CardEdits) => Promise<void>;
   /** Set only on the live "Needs you" card: opens the bot's screen. */
   onOpenComputer?: () => void;
   onOpenBot: (botId: string) => void;

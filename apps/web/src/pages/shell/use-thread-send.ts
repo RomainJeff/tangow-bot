@@ -8,7 +8,7 @@ import {
 } from "@rakazo/core";
 import { useCallback, useState } from "react";
 import type { NavigateFunction } from "react-router-dom";
-import type { SpawnBotCardEdits } from "../../components/AskCard";
+import type { CardEdits } from "../../components/AskCard";
 import { requestBrowserNotificationPermission } from "../../lib/browser-notifications";
 import { revokePendingAttachmentPreviews } from "../../lib/pending-attachments";
 import { rpc } from "../../lib/rpc";
@@ -73,7 +73,7 @@ export function useThreadSend({
   const [sending, setSending] = useState(false);
 
   const answerCard = useCallback(
-    async (target: CardAnswerTarget, text: string, edits?: SpawnBotCardEdits) => {
+    async (target: CardAnswerTarget, text: string, edits?: CardEdits) => {
       const botId = activeBotId.current;
       const groupId = activeGroupId.current;
       if (!botId && !groupId) return;
