@@ -22,7 +22,7 @@ import {
   StackedAvatars,
 } from "@rakazo/ui-web";
 import type { ReactNode } from "react";
-import type { SpawnBotCardEdits } from "../../components/AskCard";
+import type { CardEdits } from "../../components/AskCard";
 import { AskCard } from "../../components/AskCard";
 import { CollaborationMarker } from "../../components/ai/CollaborationMarker";
 import type { ArtifactTarget } from "../../lib/artifact-open";
@@ -50,7 +50,7 @@ export type RowContext = {
   /** The item whose computer card is live and opens the bot's screen. */
   takeoverItemId?: string | null;
   onOpenComputer?: () => void;
-  onAnswer?: (target: CardAnswerTarget, text: string, edits?: SpawnBotCardEdits) => Promise<void>;
+  onAnswer?: (target: CardAnswerTarget, text: string, edits?: CardEdits) => Promise<void>;
   memberName?: (botId: string | undefined) => string | undefined;
   peerBot: PeerBot;
   onOpenBot: (botId: string, messageId?: string) => void;
@@ -420,11 +420,11 @@ function DividerLine({ reason }: { reason: ItemOf<"divider">["reason"] }) {
 function EffectCard({ item, context }: { item: ItemOf<"effect">; context: RowContext }) {
   const { waiting, onAnswer } = context;
   if (!item.card) return null;
-  const runId = item.runId ?? waiting?.runId;
+  // A draft that did not leave is asked again under a new entry: the answer names the latest one.
   const answer =
-    waiting?.itemId === item.id && onAnswer && runId
-      ? (text: string, edits?: SpawnBotCardEdits) =>
-          onAnswer({ runId, messageId: item.id }, text, edits)
+    waiting?.itemId === item.id && onAnswer
+      ? (text: string, edits?: CardEdits) =>
+          onAnswer({ runId: waiting.runId, messageId: waiting.entryId }, text, edits)
       : undefined;
   return (
     <AskCard
