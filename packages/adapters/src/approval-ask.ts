@@ -25,6 +25,8 @@ export function buildApprovalAskBlock(
     /** A routine proposal card, as resolved before it shows. */
     routineCard?: RoutineCard;
     runUserId?: string;
+    /** The run owner's name, shown as the sender of a draft. */
+    runUserName?: string;
     /** What a batch call runs: the card shows these instead of the wrapper. */
     actions?: ConnectorAction[];
     /** A mail to send: shown in full, sent or discarded, no "always". */
@@ -41,7 +43,16 @@ export function buildApprovalAskBlock(
   const summary = actions
     ? actions.map((action) => describeApprovalAction(action.toolName, action.args)).join(", ")
     : describeApprovalAction(toolName, args);
-  const draft = options?.draft && redactDraft(options.draft, secrets);
+  const owner = options?.runUserId
+    ? {
+        userId: options.runUserId,
+        ...(options.runUserName ? { name: options.runUserName } : {}),
+      }
+    : undefined;
+  const draft = options?.draft && {
+    ...redactDraft(options.draft, secrets),
+    ...(owner ? { owner } : {}),
+  };
   const detail = formatApprovalDetail(
     toolName,
     args,

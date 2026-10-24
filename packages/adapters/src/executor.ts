@@ -2947,6 +2947,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
                     toolAppName: exposedConnectorTools.find((tool) => tool.name === name)?.appName,
                   })
                 : undefined;
+            const owner = draft
+              ? await deps.prisma.user.findUnique({
+                  where: { id: run.userId },
+                  select: { name: true },
+                })
+              : null;
             const paused = await deps.events.pauseRunForInput({
               spaceId: run.spaceId,
               threadId: run.threadId,
@@ -2960,6 +2966,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   reviewReason,
                   routineCard,
                   runUserId: run.userId,
+                  ...(owner?.name ? { runUserName: owner.name } : {}),
                   actions: innerActions,
                   draft,
                   unreadable: outbound.kind === "classic",

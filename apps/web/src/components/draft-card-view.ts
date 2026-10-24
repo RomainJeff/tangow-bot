@@ -18,11 +18,15 @@ export type DraftLocal = {
   pending: "send" | "discard" | null;
   /** The card is the one its run waits on, so a tap reaches it. */
   canAnswer: boolean;
+  /** The viewer owns the run: only they may edit, send or discard the draft. */
+  owner: boolean;
 };
 
 export type DraftCardView =
   | {
       kind: "open";
+      /** Another member sees the draft but cannot act on it. */
+      readOnly: boolean;
       /** Sending freezes the text and the actions until the server answers. */
       sending: boolean;
       status: "editing" | "edited" | "not_sent" | null;
@@ -45,15 +49,16 @@ export function draftCardView(card: DraftCard, local: DraftLocal): DraftCardView
     case "replaced":
       return { kind: "replaced" };
     case "sending":
-      return { kind: "open", sending: true, status: null };
+      return { kind: "open", readOnly: !local.owner, sending: true, status: null };
     case "pending":
     case "not_sent": {
       const sending = local.pending === "send";
       if (!sending && !local.canAnswer) return { kind: "inactive" };
-      if (sending) return { kind: "open", sending, status: null };
+      const readOnly = !local.owner;
+      if (sending) return { kind: "open", readOnly, sending, status: null };
       const failure = card.draft.failure;
-      if (failure) return { kind: "open", sending, status: "not_sent", failure };
-      return { kind: "open", sending, status: editStatus(local) };
+      if (failure) return { kind: "open", readOnly, sending, status: "not_sent", failure };
+      return { kind: "open", readOnly, sending, status: readOnly ? null : editStatus(local) };
     }
   }
 }

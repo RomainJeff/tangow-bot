@@ -221,6 +221,7 @@ function fixture({
     },
     task: { findUniqueOrThrow: vi.fn(async () => ({ id: run.taskId, prompt: "Read the item" })) },
     connection: { findMany: vi.fn(async () => []) },
+    user: { findUnique: vi.fn(async () => ({ name: "Ana Lima" })) },
     spaceModelPreference: { findFirst: vi.fn(async () => null) },
     userModelCredential: { findFirst: vi.fn(async () => null) },
     deploymentSettings: {
@@ -719,6 +720,7 @@ describe("connector read-only metadata and approval enforcement", () => {
         ],
         subject: "Test Chief",
         body: "Hello from Chief.",
+        owner: { userId: "user-1", name: "Ana Lima" },
       },
     };
     const classicActions = [

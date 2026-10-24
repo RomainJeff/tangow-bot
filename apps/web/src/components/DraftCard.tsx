@@ -39,16 +39,29 @@ function addressesOf(draft: AskDraft, role: (typeof ROLES)[number]): string {
     .join(", ");
 }
 
-/** The text with the person in front of it: the mail leaves in their name. */
-function Sender({ children, inWell }: { children: ReactNode; inWell?: boolean }) {
+/**
+ * The text with its sender in front of it: the mail leaves in the run owner's name. The viewer's own
+ * photo when they own it; another member sees the owner's initials.
+ */
+function Sender({
+  children,
+  inWell,
+  owner,
+}: {
+  children: ReactNode;
+  inWell?: boolean;
+  owner: AskDraft["owner"];
+}) {
   const { t } = useLingui();
   const session = authClient.useSession();
   const user = session.data?.user;
+  const own = !owner || owner.userId === user?.id;
+  const name = own ? user?.name : owner.name;
   return (
     <div className="flex items-start gap-3">
       <UserAvatar
-        initials={userInitials(user?.name ?? t`You`)}
-        image={user?.image ?? null}
+        initials={userInitials(name ?? t`You`)}
+        image={own ? (user?.image ?? null) : null}
         className={inWell ? "mt-3 size-6 text-label" : "size-6 text-label"}
       />
       {children}
@@ -74,11 +87,13 @@ function StateMark({ tone, children }: { tone: "ink" | "destructive"; children: 
 export function DraftCard({
   block,
   canAnswer,
+  viewerUserId,
   onAnswer,
   messageId,
 }: {
   block: DraftCardBlock;
   canAnswer: boolean;
+  viewerUserId?: string;
   onAnswer: (text: string, edits?: CardEdits) => Promise<void>;
   /** The card's thread item: its edits are kept under it. */
   messageId: string;
@@ -94,7 +109,8 @@ export function DraftCard({
 
   const text = edit ?? draft.body;
   const edited = text !== draft.body;
-  const view = draftCardView(block, { edited, focused, pending, canAnswer });
+  const owner = !draft.owner || draft.owner.userId === viewerUserId;
+  const view = draftCardView(block, { edited, focused, pending, canAnswer, owner });
 
   function keepEdit(next: string) {
     setEdit(next);
@@ -176,7 +192,7 @@ export function DraftCard({
         const time = messageTimeLabel(view.at, i18n.locale);
         const recipient = to || draft.recipients.map((each) => each.address).join(", ");
         question = (
-          <Sender>
+          <Sender owner={draft.owner}>
             <p className="min-w-0 flex-1 whitespace-pre-wrap break-words font-normal">
               {draft.body}
             </p>
@@ -258,50 +274,58 @@ export function DraftCard({
         </div>
       }
       actions={
-        <>
-          <Button
-            variant="roundIconSecondary"
-            size="roundIcon"
-            aria-label={t`Discard`}
-            disabled={view.sending}
-            onClick={discard}
-          >
-            <Trash2 className="size-4" aria-hidden="true" />
-          </Button>
-          <Button
-            variant="roundIconSecondary"
-            size="roundIcon"
-            aria-label={t`Copy`}
-            disabled={view.sending}
-            onClick={() => void navigator.clipboard?.writeText(text).catch(() => undefined)}
-          >
-            <Copy className="size-4" aria-hidden="true" />
-          </Button>
-          <Button
-            variant="capsule"
-            size="capsule"
-            consequential
-            disabled={view.sending || !text.trim()}
-            onClick={() => void send()}
-          >
-            {view.sending ? t`Sending…` : view.failure ? t`Try again` : t`Send`}
-          </Button>
-        </>
+        view.readOnly ? undefined : (
+          <>
+            <Button
+              variant="roundIconSecondary"
+              size="roundIcon"
+              aria-label={t`Discard`}
+              disabled={view.sending}
+              onClick={discard}
+            >
+              <Trash2 className="size-4" aria-hidden="true" />
+            </Button>
+            <Button
+              variant="roundIconSecondary"
+              size="roundIcon"
+              aria-label={t`Copy`}
+              disabled={view.sending}
+              onClick={() => void navigator.clipboard?.writeText(text).catch(() => undefined)}
+            >
+              <Copy className="size-4" aria-hidden="true" />
+            </Button>
+            <Button
+              variant="capsule"
+              size="capsule"
+              consequential
+              disabled={view.sending || !text.trim()}
+              onClick={() => void send()}
+            >
+              {view.sending ? t`Sending…` : view.failure ? t`Try again` : t`Send`}
+            </Button>
+          </>
+        )
       }
     >
       <div className="flex flex-col gap-2">
-        <Sender inWell>
-          <textarea
-            aria-label={t`Edit message`}
-            dir="auto"
-            value={text}
-            readOnly={view.sending}
-            maxLength={ASK_DRAFT_TEXT_MAX_LENGTH}
-            onChange={(event) => keepEdit(event.target.value)}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
-            className="field-sizing-content min-w-0 flex-1 resize-none rounded-card bg-well px-4 py-3 text-body text-foreground outline-none duration-(--duration-hover) ease-quiet read-only:text-muted-foreground hover:ring-1 hover:ring-option-ring-hover focus-visible:ring-selected focus-visible:ring-foreground"
-          />
+        <Sender inWell owner={draft.owner}>
+          {view.readOnly ? (
+            <p className="min-w-0 flex-1 whitespace-pre-wrap break-words rounded-card bg-well px-4 py-3 text-body text-foreground">
+              {draft.body}
+            </p>
+          ) : (
+            <textarea
+              aria-label={t`Edit message`}
+              dir="auto"
+              value={text}
+              readOnly={view.sending}
+              maxLength={ASK_DRAFT_TEXT_MAX_LENGTH}
+              onChange={(event) => keepEdit(event.target.value)}
+              onFocus={() => setFocused(true)}
+              onBlur={() => setFocused(false)}
+              className="field-sizing-content min-w-0 flex-1 resize-none rounded-card bg-well px-4 py-3 text-body text-foreground outline-none duration-(--duration-hover) ease-quiet read-only:text-muted-foreground hover:ring-1 hover:ring-option-ring-hover focus-visible:ring-selected focus-visible:ring-foreground"
+            />
+          )}
         </Sender>
         {reason ? <p className="ps-9 text-meta text-muted-foreground">{reason}</p> : null}
         {error ? (
