@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import { setTimeout as sleep } from "node:timers/promises";
 import type { Api, Model } from "@earendil-works/pi-ai";
@@ -74,8 +75,11 @@ export type ThreadRecord = {
   model: string;
   trial: number;
   turns: TurnRecord[];
+  /** In the tool catalog, so threads never share a prompt prefix past the harness's own. */
+  nonce: string;
   /** Why the thread stopped before its last turn. */
   error?: string;
+  rateLimitRetries?: number;
   left?: { sandboxes: number; volumes: number };
 };
 
@@ -186,7 +190,8 @@ function turnsOf(scenario: ScenarioId, protocol: MeasureProtocol, trial: number)
   }
 }
 
-const NOTES: ConnectorProvider = {
+/** The note tool, with a per-thread nonce so no two threads share a tool catalog. */
+const notes = (nonce: string): ConnectorProvider => ({
   describe: () => ({
     id: "notes",
     contractVersion: "1",
@@ -196,7 +201,7 @@ const NOTES: ConnectorProvider = {
   discoverTools: async () => [
     {
       name: "publish_note",
-      description: "Publish a note with this title",
+      description: `Notebook ${nonce}: publish a note with this title`,
       inputSchema: { type: "object", properties: { title: { type: "string" } } },
       route: { connectorId: "notes", resourceId: "notes", toolName: "publish_note" },
     },
@@ -204,7 +209,8 @@ const NOTES: ConnectorProvider = {
   async *execute(request) {
     yield { type: "result", data: { published: request.args.title } };
   },
-};
+});
+const RATE_LIMITED = /\b429\b|rate.?limit|too many requests/i;
 
 const count = (value: unknown) =>
   typeof value === "number" && Number.isFinite(value) ? value : undefined;
@@ -247,8 +253,11 @@ export async function measureTokens(options: {
   /** Removes what the thread left on the deployment and counts what remains. */
   cleanup?: () => Promise<{ sandboxes: number; volumes: number }>;
   onThread?: (thread: ThreadRecord) => Promise<void>;
-  /** One stream of threads per model at once, instead of one thread at a time. */
-  concurrentModels?: boolean;
+  /**
+   * Trials of a scenario in flight per model, every model at once. Without it, one thread at a
+   * time, which latency figures need.
+   */
+  inFlight?: number;
 }): Promise<ThreadRecord[]> {
   const events: LogEvent[] = [];
   const previousLogger = getLogger();
@@ -266,13 +275,33 @@ export async function measureTokens(options: {
       threads.push(thread);
       await options.onThread?.(thread);
     };
-    if (options.concurrentModels) {
-      // Each model's provider cache is its own, so their streams cannot warm each other's.
+    if (options.inFlight) {
+      const inFlight = options.inFlight;
+      // Each model's provider cache is its own, and each thread's prompt carries its own nonce.
       await Promise.all(
         options.models.map(async (model) => {
-          for (const scenario of options.protocol.scenarios)
-            for (let trial = 0; trial < options.protocol.trials; trial++)
-              await measure(scenario, model, trial);
+          for (const scenario of options.protocol.scenarios) {
+            let next = 0;
+            await Promise.all(
+              Array.from({ length: inFlight }, async () => {
+                while (next < options.protocol.trials) {
+                  const trial = next++;
+                  for (let retry = 0; ; retry++) {
+                    const thread = await measureThread(scenario, model, trial);
+                    const limited = [thread.error, ...thread.turns.map((turn) => turn.error)].some(
+                      (error) => error !== undefined && RATE_LIMITED.test(error),
+                    );
+                    if (!limited || retry === 3) {
+                      threads.push({ ...thread, ...(retry ? { rateLimitRetries: retry } : {}) });
+                      await options.onThread?.(threads.at(-1)!);
+                      break;
+                    }
+                    await sleep(30_000 * 2 ** retry);
+                  }
+                }
+              }),
+            );
+          }
         }),
       );
     } else {
@@ -299,6 +328,7 @@ export async function measureTokens(options: {
   ): Promise<ThreadRecord> {
     const seen: Seen[] = [];
     const ensures: number[] = [];
+    const nonce = randomBytes(4).toString("hex");
     const log = queryLog();
     const run = await startWorkerRun({
       steps: "script" in options.upstream ? options.upstream.script(scenario, model) : [],
@@ -307,7 +337,7 @@ export async function measureTokens(options: {
         id: model.id,
         ...("apiKey" in options.upstream ? { apiKey: options.upstream.apiKey } : {}),
       },
-      tools: NOTES,
+      tools: notes(nonce),
       prisma: log.wrap,
       computerScope: scenario === "computer" ? "dedicated" : "none",
       sandbox: options.sandbox?.(),
@@ -323,7 +353,7 @@ export async function measureTokens(options: {
       },
       connector: (provider) => tapConnector(provider, seen, []),
     });
-    const record: ThreadRecord = { scenario, model: model.id, trial, turns: [] };
+    const record: ThreadRecord = { scenario, model: model.id, trial, nonce, turns: [] };
     try {
       await run.prisma.actionApprovalRule.create({
         data: {

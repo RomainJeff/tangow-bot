@@ -10,7 +10,7 @@
  *   worker-live measure --template <worker> --computer-template <computer> --out <dir> [--trials 30]
  *     [--provider opencode-go] [--models 'glm-*-flash,gpt-*-luna'] [--gaps 10s,2m,5m,10m]
  *     [--approval-delays 10s,6m] [--scenarios chain,computer,approval,compaction]
- *     [--worker local] [--computer-label <what the receipt calls the computer template>]
+ *     [--worker local [--in-flight 10]] [--computer-label <what the receipt calls the computer template>]
  *     Token and cache measurements against a real model. RAKAZO_MODEL_KEY_FILE names a file
  *     outside any git work tree that holds the provider key. `--worker local` runs the guests in
  *     this process instead of E2B, for scenarios without a computer.
@@ -64,6 +64,7 @@ const { values } = parseArgs({
     scenarios: { type: "string", default: SCENARIOS.join(",") },
     worker: { type: "string", default: "e2b" },
     "computer-label": { type: "string", default: "private computer template" },
+    "in-flight": { type: "string" },
   },
 });
 
@@ -331,6 +332,9 @@ async function measure() {
   };
   if (local && scenarios.includes("computer"))
     throw new Error("The computer scenario needs E2B; drop it with --scenarios");
+  const inFlight = values["in-flight"] === undefined ? undefined : Number(values["in-flight"]);
+  if (inFlight !== undefined && (!local || !Number.isInteger(inFlight) || inFlight < 1))
+    throw new Error("--in-flight takes a positive integer, with --worker local only");
   const apiKey = modelKey();
   const models = resolveModels(values.provider, values.models.split(","));
   const shortest = Math.min(...protocol.gapsMs);
@@ -342,7 +346,7 @@ async function measure() {
       ? protocol.approvalDelaysMs.reduce((sum, delay) => sum + delay, 0)
       : 0);
   console.log(
-    `${models.map((model) => model.id).join(", ")}: ${trials} trials; waits alone take ${Math.round((waits * trials * (local ? 1 : models.length)) / 60_000)} min`,
+    `${models.map((model) => model.id).join(", ")}: ${trials} trials; waits alone take ${Math.round((waits * Math.ceil(trials / (inFlight ?? 1)) * (local ? 1 : models.length)) / 60_000)} min`,
   );
   if (!local) await requireIdleDeployment();
   const live = local ? undefined : session();
@@ -380,9 +384,12 @@ async function measure() {
               catalogCostPerMillion: cost,
             })),
             protocol: { ...protocol, comparable: trials >= 30 },
-            order: local
-              ? "one stream per model at once; each stream runs the scenarios in turn, one fresh controller and thread per trial"
+            order: inFlight
+              ? `every model at once; per model, the scenarios in turn with up to ${inFlight} trials in flight, each on a fresh controller and thread whose tool catalog carries its own nonce`
               : "scenarios in turn; each trial runs every model on a fresh controller and thread, rotating which goes first; one thread at a time, its resources swept before the next",
+            latency: inFlight
+              ? "trials overlapped: restore and append timings are not comparable"
+              : "serial: one thread at a time",
             method: {
               source: "agent.worker.model_request at the controller relay, one per model request",
               inputTokens:
@@ -414,7 +421,7 @@ async function measure() {
         : () => stableLocalWorkers(mkdtempSync(path.join(localRoot!, "thread-"))).provider,
       sandbox: live && (() => live.computer()),
       cleanup: live && (async () => (await live.sweep()).left),
-      concurrentModels: local,
+      ...(inFlight ? { inFlight } : {}),
       onThread: async (thread) => {
         threads.push(thread);
         await write("partial");
