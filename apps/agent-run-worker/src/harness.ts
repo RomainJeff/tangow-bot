@@ -75,6 +75,8 @@ export interface GuestHarness {
       run: GuestRunInput;
       cwd: string;
       skillsDir: string;
+      /** Authorized private mount root; absent for runs without a private volume. */
+      outputRoot?: string;
       /** Controller-assigned helper ref; omitted for the root session. */
       agent?: string;
     },

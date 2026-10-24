@@ -158,7 +158,10 @@ import {
   activeBotNames,
   appendCardStateInTransaction,
   appendRunFinishedInTransaction,
+  BROWSER_APPROVAL_CHECKPOINT_PREFIX,
   blocksOf,
+  browserApprovalCheckpointOf,
+  cancelRunsInTransaction,
   createBotMessageInTransaction,
   createSpaceForMember,
   effectiveMemoryScope,
@@ -235,6 +238,11 @@ import {
   requestWithBotSecret,
   sameSecretDestination,
 } from "./bot-secrets.js";
+import {
+  recoverBrowserApprovalScreens,
+  releaseBrowserApprovalScreen,
+  scheduleBrowserApprovalCleanup,
+} from "./browser-approval.js";
 import { createBrowserProvider } from "./browser-provider-factory.js";
 import {
   BROWSER_ACT_LOCKED_MESSAGE,
@@ -246,6 +254,7 @@ import {
   browserActFromTool,
   browserNavigateFromTool,
   browserSnapshotFromTool,
+  parseBrowserActions,
 } from "./browser-tools.js";
 import {
   agentConnectionTools,
@@ -261,7 +270,7 @@ import {
   needsLivePluginSync,
   planLiveConnectionSync,
 } from "./composio-connector.js";
-import { BACKGROUND_WORK_LAUNCH } from "./computer-idle.js";
+import { BACKGROUND_WORK_LAUNCH, sandboxIdleMs } from "./computer-idle.js";
 import { ComputerBusyError, screenLeaseIdForRun } from "./computer-lifecycle.js";
 import { withComputerScreenAvailability } from "./computer-screens.js";
 import {
@@ -1445,39 +1454,103 @@ export function createRunExecutor(deps: ExecutorDeps) {
     },
 
     async continueRun(runId: string, workerId: string) {
-      const run = await deps.prisma.run.findUnique({ where: { id: runId } });
+      let run = await deps.prisma.run.findUnique({ where: { id: runId } });
       if (!run) return;
-      if (isTerminal(run.status as RunStatus)) return;
+      let approvalHold = browserApprovalCheckpointOf(run.checkpoint);
+      if (
+        approvalHold &&
+        (isTerminal(run.status as RunStatus) || approvalHold.deadline <= Date.now())
+      ) {
+        await recoverBrowserApprovalScreens(deps, { runIds: [runId] });
+        run = await deps.prisma.run.findUniqueOrThrow({ where: { id: runId } });
+        approvalHold = browserApprovalCheckpointOf(run.checkpoint);
+      }
+      if (isTerminal(run.status as RunStatus) || (approvalHold && run.status === "waiting_input"))
+        return;
       let { resumeCheckpoint, heldForTakeover, resumeHeldLease, takeoverResume } =
         takeoverContinuePlan(run);
 
       const fence = nextFence(run.leaseFence);
       const now = new Date();
-      const leased = await deps.prisma.run.updateMany({
-        where: {
-          id: runId,
-          // An archived bot gets no new work, which is what lets deleting it wait out its workers.
-          bot: { archivedAt: null },
-          ...continueRunClaimFence(run),
-          OR: [
-            { status: { in: ["queued", "waiting_input", "waiting_takeover"] } },
-            {
-              status: { in: ["leased", "running"] },
-              leaseExpiresAt: { lte: now },
-            },
-          ],
-        },
-        data: {
-          status: "leased",
-          leaseOwner: workerId,
-          leaseFence: fence,
-          leaseExpiresAt: new Date(Date.now() + 5 * 60_000),
-          error: null,
-          checkpoint: null,
-        },
-      });
+      const claimedRun = run;
+      const claim = async (prisma: Pick<PrismaClient, "run" | "computerExecutionLease">) => {
+        const leased = await prisma.run.updateMany({
+          where: {
+            id: runId,
+            // An archived bot gets no new work, which is what lets deleting it wait out its workers.
+            bot: { archivedAt: null },
+            ...continueRunClaimFence(claimedRun),
+            OR: [
+              { status: { in: ["queued", "waiting_input", "waiting_takeover"] } },
+              {
+                status: { in: ["leased", "running"] },
+                leaseExpiresAt: { lte: now },
+              },
+            ],
+          },
+          data: {
+            status: "leased",
+            leaseOwner: workerId,
+            leaseFence: fence,
+            leaseExpiresAt: new Date(Date.now() + 5 * 60_000),
+            error: null,
+            checkpoint: approvalHold ? claimedRun.checkpoint : null,
+          },
+        });
+        if (leased.count !== 1 || !approvalHold) return leased;
+        let lease = approvalHold.lease;
+        if (lease) {
+          const [reclaimed] = await prisma.computerExecutionLease.updateManyAndReturn({
+            where: lease,
+            data: { fence: { increment: 1 }, expiresAt: new Date(Date.now() + 5 * 60_000) },
+            select: { fence: true },
+          });
+          if (!reclaimed) throw new ComputerBusyError();
+          lease = { ...lease, fence: reclaimed.fence };
+        }
+        approvalHold = {
+          ...approvalHold,
+          lease,
+          runFence: fence,
+          screenLeaseId: screenLeaseIdForRun(lease, runId, fence),
+        };
+        await prisma.run.update({
+          where: { id: runId },
+          data: { checkpoint: JSON.stringify(approvalHold) },
+        });
+        return leased;
+      };
+      const leased = approvalHold
+        ? await deps.prisma.$transaction(async (tx) => {
+            await tx.$queryRaw`SELECT id FROM threads WHERE id = ${claimedRun.threadId} FOR UPDATE`;
+            await tx.$queryRaw`SELECT id FROM runs WHERE id = ${runId} FOR UPDATE`;
+            const current = await tx.run.findUniqueOrThrow({ where: { id: runId } });
+            if (current.checkpoint !== claimedRun.checkpoint) return { count: 0 };
+            if (
+              approvalHold &&
+              approvalHold.deadline <= Date.now() &&
+              (!current.leaseExpiresAt || current.leaseExpiresAt.getTime() <= Date.now())
+            ) {
+              await cancelRunsInTransaction(tx, [current], new Date());
+              return { count: 0 };
+            }
+            return claim(tx);
+          })
+        : await claim(deps.prisma);
       if (leased.count !== 1) return;
 
+      const resumedComputer = approvalHold
+        ? createRunComputer(deps, {
+            computerId: approvalHold.computerId,
+            runId,
+            botId: run.botId,
+            spaceId: run.spaceId,
+            userId: run.userId,
+            fence,
+            resumeHeldLease,
+            approvalHold,
+          })
+        : undefined;
       const current = await deps.prisma.run.findUniqueOrThrow({ where: { id: runId } });
       if (
         current.status === "queued" ||
@@ -1492,11 +1565,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
         data: { status: "running", startedAt: current.startedAt ?? new Date() },
       });
       if (started.count !== 1) return;
-      const { computerId, computerSwitching } = await deps.prisma.bot.findUniqueOrThrow({
-        where: { id: run.botId },
-        select: { computerId: true, computerSwitching: true },
-      });
-      if (computerSwitching) {
+      const { computerId: associatedComputerId, computerSwitching } =
+        await deps.prisma.bot.findUniqueOrThrow({
+          where: { id: run.botId },
+          select: { computerId: true, computerSwitching: true },
+        });
+      const computerId = approvalHold?.computerId ?? associatedComputerId;
+      if (computerSwitching && !approvalHold) {
         await requeueComputerRun(deps, runId, workerId, fence, resumeCheckpoint, heldForTakeover);
         return;
       }
@@ -1507,9 +1582,20 @@ export function createRunExecutor(deps: ExecutorDeps) {
       let leaseValid = true;
       let lastLeaseCheckAt = 0;
       let retainComputerLease = false;
-      const runComputer = computerId
-        ? createRunComputer(deps, { computerId, runId, botId: run.botId, fence, resumeHeldLease })
-        : undefined;
+      const runComputer =
+        resumedComputer ??
+        (computerId
+          ? createRunComputer(deps, {
+              computerId,
+              runId,
+              botId: run.botId,
+              spaceId: run.spaceId,
+              userId: run.userId,
+              fence,
+              resumeHeldLease,
+              approvalHold,
+            })
+          : undefined);
       let runAbortController: AbortController | null = null;
       let detachShutdown: (() => void) | undefined;
       const heartbeat = setInterval(() => {
@@ -1544,6 +1630,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
       let skillNudgeTurn: (() => Promise<void>) | undefined;
       let setupFailures = 0;
       try {
+        if (
+          approvalHold &&
+          (computerSwitching || associatedComputerId !== approvalHold.computerId)
+        ) {
+          throw new RunComputerRequiredError();
+        }
         if (resumeHeldLease) await runComputer?.holdLease();
         setupFailures = await deps.prisma.attempt.count({
           where: {
@@ -2001,6 +2093,20 @@ export function createRunExecutor(deps: ExecutorDeps) {
             await checkpointRunComputerWorkspace(deps, storedComputer, computer, context);
           }
         });
+        const retireApprovalHold = async () => {
+          const current = await deps.prisma.run.findUnique({ where: { id: runId } });
+          if (!browserApprovalCheckpointOf(current?.checkpoint) || !current?.checkpoint) return;
+          if (
+            !(await releaseBrowserApprovalScreen(deps, runId, current.checkpoint, {
+              workerId,
+              fence,
+            }))
+          ) {
+            throw new Error("The browser screen could not be released");
+          }
+          runComputer?.releasedApprovalHold();
+          approvalHold = null;
+        };
         const graphical = Boolean(
           storedComputer &&
             storedComputer.kind !== "desktop" &&
@@ -2214,6 +2320,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
         // once browser_run has stopped short (a confirmation, a block, the step limit) or failed,
         // never for a missing value, which goes back to browser_run.
         let browserActUnlocked = false;
+        let browserUsed = Boolean(approvalHold);
         // Durable chat messages posted mid-turn (message_user / promoted narration).
         // Rehydrate from this run's prior mid-turn entries so a resume after ask/takeover
         // still knows progress was already published (skip hollow finals; status outcome).
@@ -2580,6 +2687,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 : {}),
             }));
             await workspaceCheckpoint.flush();
+            await retireApprovalHold();
             const paused = await deps.events.pauseRunForInput({
               spaceId: run.spaceId,
               threadId: run.threadId,
@@ -3307,6 +3415,22 @@ export function createRunExecutor(deps: ExecutorDeps) {
               return pauseForApproval();
             }
             await workspaceCheckpoint.flush();
+            let browserApprovalCheckpoint = null;
+            if (name === "browser_act" && browserUsed) {
+              try {
+                parseBrowserActions(args.actions);
+                browserApprovalCheckpoint =
+                  runComputer?.approvalCheckpoint(
+                    applied!.effect.id,
+                    approvalHold?.effectId === applied!.effect.id
+                      ? approvalHold.deadline
+                      : Date.now() + sandboxIdleMs(),
+                  ) ?? null;
+              } catch {
+                // Invalid actions do not justify retaining a desktop.
+              }
+            }
+            if (!browserApprovalCheckpoint) await retireApprovalHold();
             const paused = await deps.events.pauseRunForInput({
               spaceId: run.spaceId,
               threadId: run.threadId,
@@ -3330,12 +3454,16 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 ),
               },
               pausedCall: pausedCall(callLog, executionId, "approval"),
+              ...(browserApprovalCheckpoint ? { browserApprovalCheckpoint } : {}),
             });
             // pauseRunForInput returning false after a successful renew means the run row no
             // longer matches this worker. Exiting via pauseForApproval() would leave the run
             // stuck in "running" with no ask card — fail instead so the user can retry.
             if (!paused) {
               throw new Error("Could not pause this run for approval; try sending again.");
+            }
+            if (browserApprovalCheckpoint) {
+              await scheduleBrowserApprovalCleanup(deps.jobs, runId, browserApprovalCheckpoint);
             }
             // The user just wrote: a card the bot proposes on its own waits without a push.
             if (!routineCard) {
@@ -3446,9 +3574,26 @@ export function createRunExecutor(deps: ExecutorDeps) {
             if (await getActiveTeachingSession(deps.prisma, run.spaceId, run.botId)) {
               return { error: "Teaching is in progress. Stop teaching before using the computer." };
             }
-            return computerScreenToolResult(async () =>
-              formatObservation(await deps.sandbox.observe(requireComputer(), context)),
-            );
+            return computerScreenToolResult(async () => {
+              const observation = await deps.sandbox.observe(requireComputer(), context);
+              if (args.attach !== true || !deps.artifacts) return formatObservation(observation);
+              const extension = observation.mimeType === "image/jpeg" ? "jpg" : "png";
+              const attached = await attachWorkspaceFileToThread(
+                { prisma: deps.prisma, artifacts: deps.artifacts },
+                {
+                  spaceId: run.spaceId,
+                  userId: run.userId,
+                  botId: bot.id,
+                  groupId: thread.groupId ?? undefined,
+                  runId: run.id,
+                  filePath: `screen-${observation.frameId.slice(0, 12)}.${extension}`,
+                  bytes: observation.image,
+                  operationId: executionId,
+                },
+              );
+              await publishMessage(deps, run, [attached.block], { toPerson: true });
+              return formatObservation(observation, "screenshot posted to the chat");
+            });
           }
           if (name === "computer_act") {
             if (heldForTakeover) {
@@ -3792,6 +3937,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                       trace,
                     },
                   );
+                  if (!("error" in result && result.error)) browserUsed = true;
                   if (unlocksBrowserAct(result)) browserActUnlocked = true;
                   return result;
                 } catch (error) {
@@ -3813,6 +3959,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             const nudge = decisionProvider && name !== "browser_act";
             return computerScreenToolResult(async () => {
               const result = await tool(browser, requireComputer(), context, args);
+              if (!("error" in result && result.error)) browserUsed = true;
               return nudge && !("error" in result && result.error)
                 ? { ...result, next: BROWSER_RUN_HINT }
                 : result;
@@ -4331,6 +4478,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               return pauseForSecret();
             }
             await workspaceCheckpoint.flush();
+            await retireApprovalHold();
             const paused = await deps.events.pauseRunForInput({
               spaceId: run.spaceId,
               threadId: run.threadId,
@@ -5868,7 +6016,24 @@ export function createRunExecutor(deps: ExecutorDeps) {
       } finally {
         detachShutdown?.();
         clearInterval(heartbeat);
-        if (!retainComputerLease) await runComputer?.release();
+        const finalRun = await deps.prisma.run.findUnique({ where: { id: runId } });
+        const finalHold = browserApprovalCheckpointOf(finalRun?.checkpoint);
+        if (finalHold && finalRun?.checkpoint) {
+          if (isTerminal(finalRun.status as RunStatus)) {
+            await releaseBrowserApprovalScreen(deps, runId, finalRun.checkpoint);
+          }
+          await scheduleBrowserApprovalCleanup(
+            deps.jobs,
+            runId,
+            finalHold,
+            new Date(Math.max(finalHold.deadline, Date.now() + 30_000)),
+          );
+        } else if (
+          !retainComputerLease &&
+          !(approvalHold && finalRun?.status === "waiting_takeover")
+        ) {
+          await runComputer?.release();
+        }
         await deps.prisma.attempt
           .updateMany({
             where: { id: attempt.id, status: "running" },
@@ -6386,7 +6551,10 @@ async function writeComputerRunRequeue(
   const preserve = await prisma.run.updateMany({
     where: {
       ...whereLease,
-      checkpoint: { in: [...TAKEOVER_RESUME_CHECKPOINTS] },
+      OR: [
+        { checkpoint: { in: [...TAKEOVER_RESUME_CHECKPOINTS] } },
+        { checkpoint: { startsWith: BROWSER_APPROVAL_CHECKPOINT_PREFIX } },
+      ],
     },
     data: releasedHold,
   });
@@ -6399,7 +6567,10 @@ async function writeComputerRunRequeue(
   const retried = await prisma.run.updateMany({
     where: {
       ...whereLease,
-      checkpoint: { in: [...TAKEOVER_RESUME_CHECKPOINTS] },
+      OR: [
+        { checkpoint: { in: [...TAKEOVER_RESUME_CHECKPOINTS] } },
+        { checkpoint: { startsWith: BROWSER_APPROVAL_CHECKPOINT_PREFIX } },
+      ],
     },
     data: releasedHold,
   });

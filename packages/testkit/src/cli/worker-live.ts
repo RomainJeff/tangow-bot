@@ -32,8 +32,9 @@ const { values } = parseArgs({
   args: rest,
   options: {
     guest: { type: "string" },
+    "prepare-computer": { type: "boolean", default: false },
     name: { type: "string" },
-    harness: { type: "string", default: "pi" },
+    harness: { type: "string", default: "pi-native" },
     template: { type: "string" },
     "computer-template": { type: "string" },
     out: { type: "string" },
@@ -92,6 +93,9 @@ function session() {
     ...connection,
     apiKey: connection.apiKey!,
     workerTemplate: values.template,
+    harness: values.harness,
+    guestBundle: values.guest,
+    prepareComputer: values["prepare-computer"],
     computerTemplate: values["computer-template"],
   });
   const sweepOnSignal = (signal: NodeJS.Signals) => {
@@ -165,6 +169,14 @@ async function lanes() {
   const startedAt = new Date().toISOString();
   const receipt = () => ({
     tag: "p3live-<session>",
+    harness: values.harness,
+    model: "local protocol emulator; not a real-model intelligence evaluation",
+    desktopPreparation: values["prepare-computer"]
+      ? "product E2BSandboxProvider.prepare"
+      : "skipped for plain P3 fixtures; not computer parity evidence",
+    guestSha256: values.guest
+      ? createHash("sha256").update(readFileSync(values.guest)).digest("hex")
+      : null,
     startedAt,
     workerTemplate: values.template,
     computerTemplate: values["computer-template"],
@@ -183,6 +195,10 @@ async function lanes() {
       process.argv[1]!,
       [
         "lane",
+        "--harness",
+        values.harness,
+        ...(values.guest ? ["--guest", values.guest] : []),
+        ...(values["prepare-computer"] ? ["--prepare-computer"] : []),
         "--lane",
         candidate.id,
         "--template",

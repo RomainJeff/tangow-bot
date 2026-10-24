@@ -618,17 +618,25 @@ export async function renewComputerExecutionLease(
 ): Promise<boolean> {
   if (!lease) return true;
   const now = new Date();
+  const expiresAt = new Date(now.getTime() + EXECUTION_LEASE_MS);
+  const owner = {
+    computerId: lease.computerId,
+    botId: lease.botId,
+    runId: lease.runId,
+    fence: lease.fence,
+  };
+  // A heartbeat admitted before a pause may reach the database after the longer hold commits.
   const renewed = await prisma.computerExecutionLease.updateMany({
-    where: {
-      computerId: lease.computerId,
-      botId: lease.botId,
-      runId: lease.runId,
-      fence: lease.fence,
-      expiresAt: { gt: now },
-    },
-    data: { expiresAt: new Date(now.getTime() + EXECUTION_LEASE_MS) },
+    where: { ...owner, expiresAt: { gt: now, lt: expiresAt } },
+    data: { expiresAt },
   });
-  return renewed.count === 1;
+  if (renewed.count === 1) return true;
+  return Boolean(
+    await prisma.computerExecutionLease.findFirst({
+      where: { ...owner, expiresAt: { gte: expiresAt } },
+      select: { computerId: true },
+    }),
+  );
 }
 
 export async function holdComputerExecutionLeaseForTakeover(
@@ -673,22 +681,22 @@ export async function releaseComputerExecutionLease(
  */
 export async function releaseBotScreen(
   deps: {
-    prisma: PrismaClient;
+    prisma: Pick<PrismaClient, "bot">;
     sandbox: Pick<SandboxProvider, "releaseScreen">;
-    events: Pick<ThreadEvents, "append">;
+    events?: Pick<ThreadEvents, "append">;
   },
   computer: ComputerRef,
   context: AdapterContext,
-): Promise<void> {
-  if (!deps.sandbox.releaseScreen) return;
+): Promise<boolean> {
+  if (!deps.sandbox.releaseScreen) return false;
   try {
     await deps.sandbox.releaseScreen(computer, context);
   } catch {
     // A failed release keeps the slot and its token.
-    return;
+    return false;
   }
   const botId = context.botId;
-  if (!botId) return;
+  if (!botId) return true;
   const bot = await deps.prisma.bot
     .update({
       where: { id: botId },
@@ -700,7 +708,7 @@ export async function releaseBotScreen(
       },
     })
     .catch(() => null);
-  if (!bot?.thread || !bot.computer) return;
+  if (!bot?.thread || !bot.computer || !deps.events) return true;
   await deps.events
     .append({
       spaceId: bot.spaceId,
@@ -710,6 +718,7 @@ export async function releaseBotScreen(
       payload: { status: bot.computer.state },
     })
     .catch(() => undefined);
+  return true;
 }
 
 function isUniqueConstraintError(error: unknown) {

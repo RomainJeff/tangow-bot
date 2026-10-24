@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
-import { type CommandResult, Sandbox, TimeoutError } from "@e2b/desktop";
+import type { CommandHandle, CommandResult } from "@e2b/desktop";
+import { CommandExitError, Sandbox, TimeoutError } from "@e2b/desktop";
 import type {
   AdapterContext,
   CommandRequest,
@@ -10,23 +11,41 @@ import type {
   ComputerObservation,
   ComputerRef,
   ControlLeaseRef,
+  PageBrowserCommand,
+  PageBrowserResult,
   PortableFile,
   ProcessEvent,
   SandboxProvider,
   ScreenRequest,
   ScreenSession,
 } from "@rakazo/adapter-kit";
-import { boundedSandboxCommandTimeoutMs, underVolumeMounts, type VolumeHome } from "@rakazo/core";
+import {
+  boundedSandboxCommandTimeoutMs,
+  underVolumeMounts,
+  type VolumeHome,
+  volumeMountPath,
+  WORKSPACE_ROOT,
+} from "@rakazo/core";
+import { stopAllDesktopBrowsersCommand } from "@rakazo/core/node/desktop-runtime";
 import { sandboxIdleMs } from "./computer-idle.js";
+import { ComputerScreenUnavailableError } from "./computer-screens.js";
 import { normalizeWorkspacePath, shellQuote, workspacePath } from "./computer-support.js";
 import {
   PORTABLE_TRANSFER_BATCH_BYTES,
   shouldSkipPortableWorkspaceFile,
 } from "./computer-workspace.js";
+import { e2bBrowserMetricsCommands } from "./e2b-browser-metrics.js";
+import type { DesktopExecutionOptions } from "./linux-desktop.js";
 import { LinuxDesktop, PREPARE_LINUX_DESKTOP } from "./linux-desktop.js";
 
 const E2B_WORKSPACE = "/home/user/rakazo-home";
-const E2B_BROWSER_PROFILES = `${E2B_WORKSPACE}/.browser-profiles`;
+const E2B_DESKTOP_ENV = {
+  homeDir: "/home/user",
+  workspaceDir: E2B_WORKSPACE,
+  browserProfilesDir: `${E2B_WORKSPACE}/.browser-profiles`,
+  displayStart: 20,
+  portStart: 6100,
+};
 
 export interface E2BSandboxSdk {
   create(options: ReturnType<typeof e2bCreateOptions>): Promise<Sandbox>;
@@ -112,21 +131,33 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/** A self-hosted proxy reached on a local `*.localhost` domain serves plain HTTP. */
+function e2bScreenUrl(host: string): string {
+  const scheme = /^([^.:]+\.)*localhost(:\d+)?$/.test(host) ? "http" : "https";
+  return `${scheme}://${host}/embed.html`;
+}
+
 export class E2BSandboxProvider implements SandboxProvider {
   private readonly desktops = new LinuxDesktop({
-    environment: async () => ({
-      homeDir: "/home/user",
-      workspaceDir: E2B_WORKSPACE,
-      browserProfilesDir: E2B_BROWSER_PROFILES,
-      displayStart: 20,
-      portStart: 6100,
-    }),
-    run: async (computer, command, context) => {
-      const result = await this.runSetupCommand(await this.box(computer), command, context.signal);
+    profileCommands: e2bBrowserMetricsCommands,
+    environment: async (computer, context) => {
+      const onVolumes =
+        computer.writableRoots !== undefined ||
+        (await (await this.box(computer)).getInfo()).metadata.home === "volumes";
+      if (!onVolumes) return E2B_DESKTOP_ENV;
+      if (!context.botId) throw new ComputerScreenUnavailableError();
+      return {
+        ...E2B_DESKTOP_ENV,
+        browserProfilesDir: `${volumeMountPath({ kind: "bot_private", botId: context.botId })}/.browser-profiles`,
+      };
+    },
+    run: async (computer, command, context, options) => {
+      const desktop = await this.box(computer);
+      if (options) return this.runDesktopOperation(desktop, command, context.signal, options);
+      const result = await this.runSetupCommand(desktop, command, context.signal);
       return { code: result.exitCode, stdout: result.stdout, stderr: result.stderr };
     },
-    screenUrl: async (computer, port) =>
-      `https://${(await this.box(computer)).getHost(port)}/vnc.html`,
+    screenUrl: async (computer, port) => e2bScreenUrl((await this.box(computer)).getHost(port)),
   });
   private readonly boxes = new Map<string, Sandbox>();
   private readonly connections = new Map<string, Promise<Sandbox>>();
@@ -259,6 +290,29 @@ export class E2BSandboxProvider implements SandboxProvider {
     };
   }
 
+  private async stopBrowsers(computer: ComputerRef, context: AdapterContext) {
+    const profiles = "RAKAZO_INTERNAL_PROFILES";
+    const stop = stopAllDesktopBrowsersCommand(
+      {
+        ...E2B_DESKTOP_ENV,
+        browserProfilesDir: profiles,
+      },
+      e2bBrowserMetricsCommands,
+    ).replaceAll(shellQuote(profiles), '"$1"');
+    const result = await this.runSetupCommand(
+      await this.box(computer),
+      [
+        "set -eu",
+        `for profiles in ${shellQuote(E2B_DESKTOP_ENV.browserProfilesDir)} ${shellQuote(WORKSPACE_ROOT)}/bots/*/.browser-profiles; do`,
+        '  [ -d "$profiles" ] || continue',
+        `  bash -eu -c ${shellQuote(stop)} desktop "$profiles"`,
+        "done",
+      ].join("\n"),
+      context.signal,
+    );
+    if (result.exitCode !== 0) throw new Error(result.stderr || "computer browsers failed to stop");
+  }
+
   /**
    * A discarded machine's workspace files on no volume: all of them on a machine created before
    * its home moved (`root` null), else those outside the mount points under the volumes' root.
@@ -269,7 +323,7 @@ export class E2BSandboxProvider implements SandboxProvider {
     root: string | null,
     context: AdapterContext,
   ): AsyncIterable<PortableFile> {
-    await this.desktops.stopBrowsers(machine, context);
+    await this.stopBrowsers(machine, context);
     yield* walkE2BWorkspace(desktop, "", context, (relative) =>
       root === null ? true : !underVolumeMounts(path.posix.join(root, relative)),
     );
@@ -345,6 +399,14 @@ export class E2BSandboxProvider implements SandboxProvider {
     return this.desktops.act(computer, request, context);
   }
 
+  async pageBrowser(
+    computer: ComputerRef,
+    request: PageBrowserCommand,
+    context: AdapterContext,
+  ): Promise<PageBrowserResult> {
+    return this.desktops.pageBrowser(computer, request, context);
+  }
+
   async listFiles(
     computer: ComputerRef,
     directory: string,
@@ -410,7 +472,7 @@ export class E2BSandboxProvider implements SandboxProvider {
     context: AdapterContext,
   ): AsyncIterable<PortableFile> {
     const desktop = await this.box(computer);
-    await this.desktops.stopBrowsers(computer, context);
+    await this.stopBrowsers(computer, context);
     yield* walkE2BWorkspace(desktop, "", context);
   }
 
@@ -420,7 +482,7 @@ export class E2BSandboxProvider implements SandboxProvider {
     context: AdapterContext,
   ): Promise<void> {
     const desktop = await this.box(computer);
-    await this.desktops.stopBrowsers(computer, context);
+    await this.stopBrowsers(computer, context);
     let batch: PortableFile[] = [];
     let batchBytes = 0;
     const flush = async () => {
@@ -490,6 +552,88 @@ export class E2BSandboxProvider implements SandboxProvider {
     this.boxes.delete(id);
     this.connections.delete(id);
     this.lastTouchedAt.delete(id);
+  }
+
+  private async runDesktopOperation(
+    desktop: Sandbox,
+    command: string,
+    signal: AbortSignal,
+    options: DesktopExecutionOptions,
+  ) {
+    let handle: CommandHandle | undefined;
+    let inputDispatched = false;
+    let bytes = 0;
+    let stdout = "";
+    let stderr = "";
+    let finished = false;
+    const bounded = new AbortController();
+    const operationSignal = AbortSignal.any([signal, bounded.signal]);
+    const collect = (chunk: string, output: "stdout" | "stderr") => {
+      bytes += Buffer.byteLength(chunk);
+      if (bytes > options.maxOutputBytes) {
+        const error = new Error("page browser output exceeds limit");
+        bounded.abort(error);
+        throw error;
+      }
+      if (output === "stdout") stdout += chunk;
+      else stderr += chunk;
+    };
+    try {
+      operationSignal.throwIfAborted();
+      const timeoutMs = Math.max(1, options.deadline - Date.now());
+      handle = await desktop.commands.run(command, {
+        background: true,
+        stdin: true,
+        signal: operationSignal,
+        timeoutMs,
+        requestTimeoutMs: timeoutMs,
+        onStdout: (chunk) => collect(chunk, "stdout"),
+        onStderr: (chunk) => collect(chunk, "stderr"),
+      });
+      operationSignal.throwIfAborted();
+      if (Date.now() >= options.deadline) throw new Error("page browser operation timed out");
+      // A failed send may still have delivered the permit. Never send it twice.
+      inputDispatched = true;
+      await handle.sendStdin(options.input, {
+        signal: operationSignal,
+        requestTimeoutMs: Math.max(1, options.deadline - Date.now()),
+      });
+      const result = await handle.wait();
+      operationSignal.throwIfAborted();
+      finished = true;
+      return { code: result.exitCode, stdout, stderr, inputDispatched };
+    } catch (error) {
+      return {
+        code: error instanceof CommandExitError ? error.exitCode : 1,
+        stdout,
+        stderr: stderr || errorMessage(error),
+        inputDispatched,
+      };
+    } finally {
+      if (handle) {
+        // EOF stops the helper; a fresh group signal also covers a shell waiting for a lock.
+        // SDK kill is PID-only, so it must never be the first way we stop timeout.
+        const cleanupSignal = AbortSignal.timeout(3000);
+        await Promise.allSettled([
+          handle.closeStdin({ signal: cleanupSignal, requestTimeoutMs: 1000 }),
+          ...(!finished
+            ? [
+                desktop.commands.run(`kill -KILL -- -${handle.pid}`, {
+                  signal: cleanupSignal,
+                  requestTimeoutMs: 2000,
+                  timeoutMs: 2000,
+                }),
+              ]
+            : []),
+        ]);
+        // If group cleanup cannot reach an armed operation, retain its remote watchdog.
+        if (!inputDispatched)
+          await desktop.commands
+            .kill(handle.pid, { signal: cleanupSignal, requestTimeoutMs: 1000 })
+            .catch(() => undefined);
+        await handle.disconnect().catch(() => undefined);
+      }
+    }
   }
 
   /** Apply the deployment timeout (SDK default is 60s) and return failed results instead of throwing. */

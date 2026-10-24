@@ -99,7 +99,14 @@ function browserRunningFunction(profile: string, pidFile: string) {
     '  for pid in "$tracked" "${lock##*-}"; do',
     `    case "$pid" in ''|0|*[!0-9]*) continue ;; esac`,
     `    kill -0 "$pid" 2>/dev/null || continue`,
-    `    tr '\\0' '\\n' <"/proc/$pid/cmdline" 2>/dev/null | grep -Fx -- ${shellQuote(`--user-data-dir=${profile}`)} >/dev/null || continue`,
+    "    profile_match=0",
+    "    while IFS= read -r -d '' arg; do",
+    '      [[ "$arg" == --user-data-dir=* ]] || continue',
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: generated shell parameter expansion
+    "      candidate=${arg#--user-data-dir=}",
+    `      if [ "$candidate" = ${shellQuote(profile)} ] || { [ -d "$candidate" ] && [ -d ${shellQuote(profile)} ] && [ "$candidate" -ef ${shellQuote(profile)} ]; }; then profile_match=1; break; fi`,
+    '    done 2>/dev/null <"/proc/$pid/cmdline" || continue',
+    '    [ "$profile_match" -eq 1 ] || continue',
     `    printf %s "$pid" >${pidFile}`,
     "    return 0",
     "  done",
@@ -176,11 +183,26 @@ function stopBrowserProfileCommand(profile: string, pidFile: string) {
   ].join("\n");
 }
 
+export type DesktopProfileCommands = (profile: string) => { ensure: string; release: string };
+
 /** Quiesce managed profiles before a full workspace export; orchestration excludes active peers. */
-export function stopAllDesktopBrowsersCommand(env = DEFAULT_DESKTOP_ENV) {
+export function stopAllDesktopBrowsersCommand(
+  env = DEFAULT_DESKTOP_ENV,
+  profileCommands?: DesktopProfileCommands,
+) {
   const placeholder = "RAKAZO_INTERNAL_PROFILE";
-  const stop = stopBrowserProfileCommand(placeholder, '"$pid_file"')
-    .replaceAll(shellQuote(`--user-data-dir=${placeholder}`), '"--user-data-dir=$profile"')
+  const stop = [
+    ...(profileCommands
+      ? [
+          "mkdir -p /tmp/rakazo/desktop-assignments",
+          'exec 8>"/tmp/rakazo/desktop-assignments/$hash.lifecycle-lock"',
+          "flock -w 120 8",
+        ]
+      : []),
+    stopBrowserProfileCommand(placeholder, '"$pid_file"'),
+    profileCommands?.(placeholder).release ?? "",
+  ]
+    .join("\n")
     .replaceAll(shellQuote(placeholder), '"$profile"');
   return [
     "set -eu",
@@ -190,7 +212,7 @@ export function stopAllDesktopBrowsersCommand(env = DEFAULT_DESKTOP_ENV) {
     // biome-ignore lint/suspicious/noTemplateCurlyInString: shell parameter expansion
     "  hash=${profile##*chromium-bot-}",
     '  pid_file="/tmp/rakazo/browser-pid-$hash"',
-    `  bash -eu -c ${shellQuote(`profile=$1; pid_file=$2;\n${stop}`)} desktop "$profile" "$pid_file" || failed=1`,
+    `  bash -eu -c ${shellQuote(`profile=$1; pid_file=$2; hash=$3;\n${stop}`)} desktop "$profile" "$pid_file" "$hash" || failed=1`,
     "done",
     '[ "$failed" -eq 0 ] || exit 1',
   ].join("\n");
@@ -459,17 +481,47 @@ export function interactiveScreenCommand(
 const REGISTRY = "/tmp/rakazo/desktop-assignments";
 const TOKEN_PLACEHOLDER = "RAKAZO_INTERNAL_VIEW_TOKEN";
 
-function registryLockCommand(screenId: string) {
+function registryLockCommand(screenId: string, waitSeconds = 120) {
   return [
     "set -eu",
     `dir=${shellQuote(REGISTRY)}`,
     'mkdir -p "$dir"',
     `exec 8>"$dir/${browserKeyForScreen(screenId)}.lifecycle-lock"`,
-    "flock -w 120 8",
+    `flock -w ${waitSeconds} 8`,
     'exec 9>"$dir/.lock"',
-    "flock -w 120 9",
+    `flock -w ${waitSeconds} 9`,
     `slot="$dir/${browserKeyForScreen(screenId)}.slot"`,
   ];
+}
+
+export const DESKTOP_OPERATION_PERMIT = "RAKAZO_DESKTOP_OPERATION";
+
+/** Recheck the admitted lease under the lifecycle lock and retain it through execution. */
+export function managedDesktopOperationCommand(
+  screenId: string,
+  leaseId: string | undefined,
+  env: DesktopEnvironment,
+  argv: string[],
+  timeoutMs: number,
+) {
+  const seconds = Math.max(0.001, timeoutMs / 1000);
+  const operation = [
+    "set -eu",
+    `IFS= read -r -t ${seconds} permit || exit 124`,
+    `[ "$permit" = ${shellQuote(DESKTOP_OPERATION_PERMIT)} ] || exit 75`,
+    ...registryLockCommand(screenId, seconds),
+    '[ -f "$slot" ] || exit 75',
+    `current=$(sed -n "2p" "$slot")`,
+    `[ "$current" = ${shellQuote(leaseId ?? "")} ] || exit 75`,
+    'index=$(sed -n "1p" "$slot")',
+    'set -- "$index"',
+    ...layoutVariables(undefined, env),
+    "flock -u 9; exec 9>&-",
+    `export DISPLAY=":$desktop_display" RAKAZO_CDP_PORT="$desktop_debug" HOME=${shellQuote(env.homeDir)} RAKAZO_BROWSER_WATCH_STDIN=1`,
+    `exec ${argv.map(shellQuote).join(" ")}`,
+  ].join("\n");
+  // timeout owns a process group. Killing only its PID would leave the operation alive.
+  return `exec timeout --signal=KILL ${seconds}s bash -eu -c ${shellQuote(operation)}`;
 }
 
 function acceptLeaseCommand(leaseId?: string, release = false) {
@@ -494,6 +546,7 @@ export function managedDesktopCommand(
   leaseId: string | undefined,
   env: DesktopEnvironment,
   viewToken: string,
+  profileCommands?: DesktopProfileCommands,
 ) {
   return [
     ...registryLockCommand(screenId),
@@ -524,6 +577,7 @@ print(index)
     'printf "%s\\n%s\\n%s\\n" "$index" "$incoming" "$view_token" >"$slot.next"',
     'mv "$slot.next" "$slot"',
     "flock -u 9; exec 9>&-",
+    profileCommands?.(browserProfilePathForScreen(screenId, env)).ensure ?? "",
     `bash -eu -c ${shellQuote(renderEnsureScreenCommand(undefined, screenId, TOKEN_PLACEHOLDER, env).replace(shellQuote(TOKEN_PLACEHOLDER), '"$2"'))} desktop "$index" "$view_token"`,
     'printf "RAKAZO_DESKTOP=%s:%s\\n" "$index" "$view_token"',
   ].join("\n");
@@ -534,6 +588,7 @@ export function releaseDesktopCommand(
   screenId: string,
   leaseId: string | undefined,
   env: DesktopEnvironment,
+  profileCommands?: DesktopProfileCommands,
 ) {
   return [
     ...registryLockCommand(screenId),
@@ -542,6 +597,7 @@ export function releaseDesktopCommand(
     'index=$(sed -n "1p" "$slot")',
     "flock -u 9; exec 9>&-",
     `bash -eu -c ${shellQuote(renderStopExtraScreenCommand(undefined, screenId, env))} desktop "$index"`,
+    profileCommands?.(browserProfilePathForScreen(screenId, env)).release ?? "",
     'exec 9>"$dir/.lock"; flock -w 120 9',
     'rm -f "$slot"',
     'printf "RAKAZO_DESKTOP_RELEASED=%s\\n" "$index"',

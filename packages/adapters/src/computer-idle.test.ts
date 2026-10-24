@@ -476,6 +476,7 @@ function idleHarness(
     updatedAt: new Date("2026-01-01T00:00:00.000Z"),
   };
   const prisma = {
+    $queryRaw: vi.fn().mockResolvedValue([]),
     computer: {
       findUnique: vi.fn(async () => ({ ...computer })),
       updateMany: vi.fn(async (args) => {
@@ -493,7 +494,7 @@ function idleHarness(
         return computer;
       }),
     },
-    run: { findFirst: vi.fn().mockResolvedValue(null) },
+    run: { findFirst: vi.fn().mockResolvedValue(null), findMany: vi.fn().mockResolvedValue([]) },
     agentHome: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
     bot: {
       findMany: vi.fn().mockResolvedValue([{ id: "bot", thread: { id: "thread" } }]),

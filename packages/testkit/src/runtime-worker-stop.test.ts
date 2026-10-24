@@ -121,7 +121,10 @@ function e2bIgnoringCancel(root: string): Worker<E2BWorkerProvider> {
     createVolume: async (name) => name,
   };
   return {
-    provider: new E2BWorkerProvider({ apiKey: "e2b-test-key", template: "rakazo-worker-pi" }, sdk),
+    provider: new E2BWorkerProvider(
+      { apiKey: "e2b-test-key", template: "rakazo-worker-pi", harness: "pi" },
+      sdk,
+    ),
     async dispose() {
       for (const guest of guests) guest.kill();
       await Promise.allSettled(guests.map((guest) => guest.exited));

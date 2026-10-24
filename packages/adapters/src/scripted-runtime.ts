@@ -457,6 +457,9 @@ export function inferScript(
       },
     ];
   }
+  if (lower.includes("send me a screenshot")) {
+    return [{ toolCalls: [{ name: "computer_observe", args: { attach: true } }], complete: true }];
+  }
   if (lower.includes("attach") && (lower.includes("thread") || lower.includes("into the thread"))) {
     const said = /says?\s+(.+)$/i.exec(prompt)?.[1]?.replace(/[.]+$/, "") ?? prompt;
     const content = `${said.trim()}\n`;

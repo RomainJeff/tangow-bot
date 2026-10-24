@@ -1,5 +1,8 @@
 import { laneG, laneGTimeout } from "./lane-faults.js";
 import { laneH, laneHomeMoveFence, laneHProductRecreate } from "./lane-migration.js";
+import { laneNativeApproval } from "./lane-native-approval.js";
+import { laneNativeCatalog } from "./lane-native-catalog.js";
+import { laneNativeCompaction } from "./lane-native-compaction.js";
 import { laneSkills } from "./lane-skills.js";
 import { laneA, laneF, laneI } from "./lanes-files.js";
 import { laneD, laneE, laneEAnthropic, laneERefusals } from "./lanes-tools.js";
@@ -32,4 +35,7 @@ export const LANES: Lane[] = [
   laneHomeMoveFence,
   laneI,
   laneSkills,
+  laneNativeApproval,
+  laneNativeCatalog,
+  laneNativeCompaction,
 ];

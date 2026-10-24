@@ -14,7 +14,7 @@ describe("the worker provider a deployment configures", () => {
     [
       "E2B with its default template",
       { WORKER_PROVIDER: "e2b", E2B_API_KEY: "e2b-key" },
-      { kind: "e2b", apiKey: "e2b-key", template: "rakazo-worker-pi" },
+      { kind: "e2b", apiKey: "e2b-key", template: "rakazo-worker-pi-native" },
     ],
     [
       "E2B with a template of its own",

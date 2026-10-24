@@ -1,0 +1,112 @@
+{
+  "tag": "p3live-<session>",
+  "harness": "pi-native",
+  "model": "local protocol emulator; not a real-model intelligence evaluation",
+  "desktopPreparation": "skipped for plain P3 fixtures; not computer parity evidence",
+  "guestSha256": "b3ace799b31495b1dcdd446864e18c639814cdd204e1937f763e9f0f7b983c3f",
+  "startedAt": "2026-10-22T16:19:30.422Z",
+  "workerTemplate": "i1-worker",
+  "computerTemplate": "i1-computer",
+  "lanes": [
+    {
+      "lane": "native-compaction",
+      "issue": "N13 actual Pi compaction through the controller relay",
+      "scenario": "An approved controller effect precedes native volume writes, then a model protocol overflow forces Pi to summarize and continue in a configured 32768-token context",
+      "passWhen": "Pi requests summarization through the relay and retries with its summary, the canonical controller log keeps the original paired calls and approval outcome, and a later attempt replays the canonical private recap rather than trusting the harness summary",
+      "result": "pass",
+      "observed": {
+        "model": "protocol emulator, including one controlled context-overflow response and generated summary",
+        "contextWindow": 32768,
+        "replayContextWindow": 131072,
+        "fixtureUsage": "Low synthetic usage suppresses threshold compaction before the controlled overflow",
+        "trigger": "Pi overflow recovery",
+        "summaryRequests": 2,
+        "compactedRequest": true,
+        "replayedCanonicalHistory": true,
+        "approvedEffects": 1,
+        "canonicalToolPairs": 13,
+        "canonicalNativeCalls": 10,
+        "summaries": [
+          {
+            "tokensBefore": 38183
+          }
+        ],
+        "volumeWriteAndRead": true,
+        "prefixStableBeforeCompaction": true,
+        "attempts": ["released", "released"]
+      },
+      "seconds": 16.4,
+      "memAvailableMiB": {
+        "before": 3039,
+        "after": 2493
+      },
+      "controllerRssMiB": 809,
+      "cleanup": {
+        "killed": 0,
+        "destroyed": 2,
+        "left": {
+          "sandboxes": 0,
+          "volumes": 0
+        }
+      }
+    }
+  ],
+  "testedSourceSha": "a554f2875cbccdbbd2b13032597138684bef04f1",
+  "runnerSha256": "6bd670202686622e7cdac8f3ae4df67df21d3f7e237115c506c847bf594493c9",
+  "scope": "Targeted native-compaction only, after strengthening the read proof. The historical 19-lane batch does not prove this assertion.",
+  "assertion": {
+    "modelRequest": "Exactly one tool message paired to volume-read, with exact literal volume-effect\\n content.",
+    "canonicalLog": "The volume-read call has a paired result with isError false and exact literal volume-effect\\n output.",
+    "productionChanges": false
+  },
+  "negativeControls": {
+    "execution": "Actual Pi through the production local worker path with the same controlled model protocol fixture; not mocked tool results.",
+    "results": [
+      {
+        "assertion": "old",
+        "control": "wrong-read-result",
+        "exitCode": 0
+      },
+      {
+        "assertion": "old",
+        "control": "missing-read-exit1",
+        "exitCode": 0
+      },
+      {
+        "assertion": "old",
+        "control": "correct-output-exit1",
+        "exitCode": 0
+      },
+      {
+        "assertion": "strengthened",
+        "control": "wrong-read-result",
+        "exitCode": 1
+      },
+      {
+        "assertion": "strengthened",
+        "control": "missing-read-exit1",
+        "exitCode": 1
+      },
+      {
+        "assertion": "strengthened",
+        "control": "correct-output-exit1",
+        "exitCode": 1
+      }
+    ],
+    "realRead": "Passed with the strengthened assertion.",
+    "failureReason": "Each negative fails the exact paired model-result assertion: wrong output, missing file with exit 1, or exit 1 appended to the correct output. All three passed the old history-marker search."
+  },
+  "independentCleanup": {
+    "checkedAt": "2026-10-22T16:19:51.262Z",
+    "sandboxesCreated": 3,
+    "sandboxesDeleted": 3,
+    "sandboxesAbsentAfterTimeout": 0,
+    "volumesCreated": 2,
+    "volumesDeleted": 2,
+    "left": {
+      "sandboxes": 0,
+      "volumes": 0
+    }
+  },
+  "remoteScratchRemoved": true
+}

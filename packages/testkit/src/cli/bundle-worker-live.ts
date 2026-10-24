@@ -8,6 +8,7 @@
  *
  *   pnpm test:worker-live:bundle   →  packages/testkit/dist/worker-live/
  */
+import { execFileSync } from "node:child_process";
 import { cp, mkdir, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
@@ -80,5 +81,12 @@ for (const name of ["glob", "tar"]) {
 }
 await cp(MIGRATIONS, path.join(OUT, "prisma", "migrations"), { recursive: true });
 await bundleGuest(path.join(OUT, "guest", "agent-run-worker.mjs"));
+execFileSync("tar", [
+  "-cf",
+  path.join(OUT, "guest", "managed-skills.tar"),
+  "-C",
+  path.join(OUT, "guest", "managed-skills"),
+  "agent",
+]);
 await build({ ...HOSTILE_GUEST_BUILD, outfile: path.join(OUT, "guest", "hostile-guest.mjs") });
 console.log(`Bundled the live lanes in ${path.relative(process.cwd(), OUT)}`);

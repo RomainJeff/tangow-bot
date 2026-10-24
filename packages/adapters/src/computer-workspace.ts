@@ -39,7 +39,7 @@ const skippedBrowserProfileFiles = new Set([
 
 /** Excludes transient browser state that is unsafe or wasteful to restore. */
 export function shouldSkipPortableWorkspaceFile(relative: string) {
-  if (!relative.startsWith(".browser-profiles/")) return false;
+  if (!/^(?:bots\/[^/]+\/)?\.browser-profiles\//.test(relative)) return false;
   const segments = relative.split("/");
   const name = segments.at(-1) ?? "";
   return (

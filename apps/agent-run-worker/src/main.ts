@@ -9,7 +9,7 @@ import { HARNESSES } from "./harness/index.js";
 globalThis.console = new Console({ stdout: process.stderr, stderr: process.stderr });
 
 const capability = process.env.RAKAZO_WORKER_CAPABILITY;
-const harness = HARNESSES[process.env.RAKAZO_WORKER_HARNESS ?? "pi"];
+const harness = HARNESSES[process.env.RAKAZO_WORKER_HARNESS ?? "pi-native"];
 if (!capability || !harness) {
   console.error("RAKAZO_WORKER_CAPABILITY or RAKAZO_WORKER_HARNESS is missing or unknown");
   process.exit(2);

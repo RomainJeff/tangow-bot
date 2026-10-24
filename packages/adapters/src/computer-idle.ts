@@ -8,6 +8,7 @@ import {
 } from "@rakazo/adapter-kit";
 import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
+import { recoverBrowserApprovalScreens } from "./browser-approval.js";
 import { expireComputerControl, hasActiveComputerControl } from "./computer-control.js";
 import { toComputerRef } from "./computer-lifecycle.js";
 import { checkpointComputerWorkspace } from "./computer-workspace.js";
@@ -192,6 +193,7 @@ export async function sleepComputerIfIdle(
   },
   computerId: string,
 ): Promise<void> {
+  await recoverBrowserApprovalScreens(deps, { computerId });
   let computer = await loadComputer(deps.prisma, computerId);
   if (!computer?.providerRef || computer.state !== "running") return;
 

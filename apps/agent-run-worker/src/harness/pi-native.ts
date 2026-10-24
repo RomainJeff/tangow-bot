@@ -7,6 +7,7 @@ import {
   createMcpExtension,
   createToolSearchExtension,
   DefaultResourceLoader,
+  defineTool,
   SessionManager,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
@@ -21,6 +22,7 @@ import {
 import { skillReadName } from "@rakazo/adapters/volume-skills";
 import type { DoneBody, GuestHarness, HarnessHost } from "../harness.js";
 import { rakazoMcpTools } from "../rakazo-mcp.js";
+import { durableBashTool } from "./durable-bash.js";
 import { relayModelRuntime } from "./pi-session.js";
 import { piToolManifest } from "./pi-tools.js";
 import { rakazoMcpTransport } from "./rakazo-mcp.js";
@@ -105,7 +107,7 @@ export const piNativeHarness: GuestHarness = {
     throw new Error("pi-native runs its own tools");
   },
 
-  async run({ run, cwd, skillsDir, agent = "root" }, host): Promise<DoneBody> {
+  async run({ run, cwd, skillsDir, outputRoot, agent = "root" }, host): Promise<DoneBody> {
     stopIfCancelled(host.signal);
     const model = guestRuntimeModel(relayedModel(run.model));
     const modelRuntime = await relayModelRuntime(
@@ -244,6 +246,7 @@ export const piNativeHarness: GuestHarness = {
         model,
         thinkingLevel: run.model.thinkingLevel ?? undefined,
         resourceLoader: loader,
+        customTools: [defineTool(durableBashTool(cwd, outputRoot ?? agentDir))],
         sessionManager,
         settingsManager,
         tools: [

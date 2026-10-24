@@ -6,10 +6,15 @@ import {
 } from "@rakazo/adapter-kit";
 import type { MessageBlock } from "@rakazo/contracts";
 import type { Pool, PrismaClient, ThreadEvents } from "@rakazo/db";
-import { runMessages } from "@rakazo/db";
+import {
+  BROWSER_APPROVAL_CHECKPOINT_PREFIX,
+  browserApprovalCheckpointOf,
+  runMessages,
+} from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 import type { PoolClient } from "pg";
 import { returnBotMessageOutcome } from "./bot-messages.js";
+import { scheduleBrowserApprovalCleanup } from "./browser-approval.js";
 import { scheduleComputerControlExpiry } from "./computer-control.js";
 
 const DEFAULT_INTERVAL_MS = 30_000;
@@ -198,6 +203,7 @@ export function createJobReconciler(
               {
                 OR: [
                   { status: "queued" },
+                  { checkpoint: { startsWith: BROWSER_APPROVAL_CHECKPOINT_PREFIX } },
                   {
                     status: { in: ["leased", "running"] },
                     leaseExpiresAt: { lte: now },
@@ -209,7 +215,13 @@ export function createJobReconciler(
           },
           orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
           take: batchSize,
-          select: { id: true, updatedAt: true },
+          select: {
+            id: true,
+            updatedAt: true,
+            checkpoint: true,
+            status: true,
+            leaseExpiresAt: true,
+          },
         }),
         deps.prisma.routine.findMany({
           where: {
@@ -327,7 +339,20 @@ export function createJobReconciler(
       }
 
       await Promise.all([
-        ...runs.map((run) => deps.jobs.enqueue(runContinueJob(run.id))),
+        ...runs.flatMap((run) => {
+          const hold = browserApprovalCheckpointOf(run.checkpoint);
+          const cleanup = hold ? [scheduleBrowserApprovalCleanup(deps.jobs, run.id, hold)] : [];
+          if (
+            !hold ||
+            run.status === "queued" ||
+            ((run.status === "running" || run.status === "leased") &&
+              run.leaseExpiresAt &&
+              run.leaseExpiresAt <= now)
+          ) {
+            cleanup.push(deps.jobs.enqueue(runContinueJob(run.id)));
+          }
+          return cleanup;
+        }),
         ...routines.flatMap((routine) =>
           routine.nextRunAt
             ? [deps.jobs.enqueue(routineWakeupJob(routine.id, routine.nextRunAt))]

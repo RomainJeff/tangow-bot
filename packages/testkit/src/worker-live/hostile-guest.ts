@@ -9,6 +9,7 @@
  * the channel.
  */
 import type { GuestBody } from "@rakazo/adapter-kit";
+import { workerHarness } from "@rakazo/adapter-kit";
 import {
   capabilityWorker,
   encodeMessage,
@@ -49,7 +50,7 @@ await channel.send(
     kind: "worker.hello",
     worker,
     capability,
-    harness: { name: "pi", capabilities: [] },
+    harness: workerHarness(process.env.RAKAZO_WORKER_HARNESS ?? "pi-native"),
   }),
 );
 const received: string[] = [];

@@ -7,6 +7,7 @@ export * from "./background-job-handlers.js";
 export * from "./bot-messages.js";
 export * from "./box-emulator.js";
 export * from "./box-sandbox.js";
+export { recoverBrowserApprovalScreens } from "./browser-approval.js";
 export * from "./browser-emulator.js";
 export * from "./browser-provider-factory.js";
 export * from "./browser-tools.js";

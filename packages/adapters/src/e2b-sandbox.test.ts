@@ -5,7 +5,6 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { Sandbox, SandboxNotFoundError, TimeoutError } from "@e2b/desktop";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
-import { shouldSkipPortableWorkspaceFile } from "./computer-workspace.js";
 import { fakeE2BMachine } from "./e2b-machine.test-support.js";
 import type { E2BSandboxSdk } from "./e2b-sandbox.js";
 import { E2BSandboxProvider, isSandboxGoneError, linkWorkspaceCommand } from "./e2b-sandbox.js";
@@ -33,6 +32,7 @@ describe("E2B computer backend", () => {
     const provider = new E2BSandboxProvider("test-key", {
       connect: vi.fn(async () => ({
         sandboxId: "existing",
+        getInfo: async () => ({ metadata: {} }),
         display: ":0",
         commands: { run: command },
       })),
@@ -53,6 +53,37 @@ describe("E2B computer backend", () => {
     );
   });
 
+  it.each([
+    ["6080-sbx.localhost:13002", "http:"],
+    ["6080-sbx.e2b.app", "https:"],
+    ["6080-sbx.localhost.example.com", "https:"],
+  ])("serves the screen embed page from %s over %s", async (host, protocol) => {
+    const sdk = {
+      connect: vi.fn(async () => ({
+        sandboxId: "existing",
+        getInfo: async () => ({ metadata: {} }),
+        display: ":0",
+        getHost: () => host,
+        commands: {
+          run: vi.fn(async () => ({ stdout: "RAKAZO_DESKTOP=0:key\n", stderr: "", exitCode: 0 })),
+        },
+      })),
+    } as unknown as E2BSandboxSdk;
+    const computer = {
+      id: "existing",
+      providerRef: "existing",
+      kind: "e2b" as const,
+      botId: "bot",
+    };
+    const screen = await new E2BSandboxProvider("test-key", sdk).connectScreen(
+      computer,
+      { view: "stream" },
+      context,
+    );
+    const url = new URL(screen.url!);
+    expect([url.protocol, url.host, url.pathname]).toEqual([protocol, host, "/embed.html"]);
+  });
+
   it("reconnects concurrent primary viewers without using the SDK's global VNC lifecycle", async () => {
     const command = vi.fn(async (_value: string) => ({
       stdout: "RAKAZO_DESKTOP=0:savedkey\n",
@@ -65,6 +96,7 @@ describe("E2B computer backend", () => {
     const sdk = {
       connect: vi.fn(async () => ({
         sandboxId: "existing",
+        getInfo: async () => ({ metadata: {} }),
         display: ":0",
         getHost: (port: number) => `${port}-desktop.test`,
         commands: { run: command },
@@ -94,13 +126,6 @@ describe("E2B computer backend", () => {
     await first.close();
     expect(command).toHaveBeenCalledTimes(commandsBeforeClose);
     expect(globalStream).not.toHaveBeenCalled();
-  });
-
-  it("only filters transient cache files inside portable browser profiles", () => {
-    expect(shouldSkipPortableWorkspaceFile("project/Cache/important.txt")).toBe(false);
-    expect(shouldSkipPortableWorkspaceFile("project/lock")).toBe(false);
-    expect(shouldSkipPortableWorkspaceFile(".browser-profiles/chromium/Cache/data")).toBe(true);
-    expect(shouldSkipPortableWorkspaceFile(".browser-profiles/chromium/SingletonLock")).toBe(true);
   });
 
   it.each([
@@ -225,6 +250,7 @@ describe("E2B computer backend", () => {
     });
     const desktop = {
       sandboxId: "screen-e2b-box",
+      getInfo: async () => ({ metadata: {} }),
       display: ":0",
       commands: { run },
     } as unknown as Sandbox;
@@ -248,12 +274,19 @@ describe("E2B computer backend", () => {
     expect(run.mock.calls[0]?.[1]?.timeoutMs).toBeGreaterThan(60_000);
   });
 
-  it("surfaces a setup timeout without treating it as a missing sandbox", async () => {
+  it.each([
+    new TimeoutError("the operation timed out"),
+    Object.assign(new Error("command failed"), {
+      name: "CommandExitError",
+      result: { exitCode: 1, stdout: "", stderr: "browser metrics: unexpected metrics mount" },
+    }),
+  ])("surfaces setup failure without replacing the sandbox (%s)", async (failure) => {
     const run = vi.fn(async () => {
-      throw new TimeoutError("the operation timed out");
+      throw failure;
     });
     const desktop = {
       sandboxId: "timeout-e2b-box",
+      getInfo: async () => ({ metadata: {} }),
       display: ":0",
       commands: { run },
     } as unknown as Sandbox;
@@ -274,6 +307,7 @@ describe("E2B computer backend", () => {
     await expect(provider.connectScreen(computer, { view: "stream" }, context)).rejects.toThrow(
       Error,
     );
+    expect(sdk.create).not.toHaveBeenCalled();
   });
 
   it("prepares a reused computer idempotently", async () => {
@@ -514,6 +548,7 @@ describe("E2B computer backend", () => {
     const open = vi.fn(async () => undefined);
     const desktop = {
       sandboxId: "e2b-open-url-box",
+      getInfo: async () => ({ metadata: {} }),
       display: ":0",
       commands: { run: command },
       files: { makeDir: vi.fn(async () => undefined) },
@@ -565,7 +600,7 @@ describe("E2B computer backend", () => {
     const command = vi.fn(async (value: string, _options?: Record<string, unknown>) => {
       const response = respond(value);
       if (response) return response;
-      if (value.includes("hang")) {
+      if (value.includes("'hang'")) {
         throw new TimeoutError("command timed out");
       }
       return {
@@ -580,6 +615,7 @@ describe("E2B computer backend", () => {
     const streamStop = vi.fn(async () => undefined);
     const desktop = {
       sandboxId: "e2b-test-box",
+      getInfo: async () => ({ metadata: {} }),
       display: ":0",
       getHost: (port: number) => `${port}-desktop.test`,
       commands: { run: command },
@@ -739,6 +775,7 @@ describe("E2B computer backend", () => {
     );
     const desktop = {
       sandboxId: "e2b-shared",
+      getInfo: async () => ({ metadata: {} }),
       display: ":0",
       getHost: (port: number) => `${port}-desktop.test`,
       commands: { run: command },

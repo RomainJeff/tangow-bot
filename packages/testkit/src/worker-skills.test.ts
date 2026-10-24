@@ -260,13 +260,26 @@ it.each(["memory", "child"] as const)(
     );
     const next = await run.send("Use the new skill.");
     await run.continueRun(next);
-    expect((await run.prisma.run.findUniqueOrThrow({ where: { id: next } })).status).toBe(
-      "completed",
-    );
+    const nextRun = await run.prisma.run.findUniqueOrThrow({
+      where: { id: next },
+      select: { status: true, error: true },
+    });
+    const failureEntries =
+      nextRun.status === "completed"
+        ? []
+        : (await run.runEntries(next)).filter(
+            (entry) =>
+              (entry.type === "run.finished" && entry.payload.status === "failed") ||
+              (entry.type === "tool.result" && entry.payload.isError),
+          );
+    expect.soft(nextRun, JSON.stringify({ failureEntries })).toEqual({
+      status: "completed",
+      error: null,
+    });
+    run.model.assertComplete();
     expect(
       await run.prisma.volumeSkill.count({ where: { source: "shared", name: "shared-guide" } }),
     ).toBe(0);
-    run.model.assertComplete();
   },
 );
 
