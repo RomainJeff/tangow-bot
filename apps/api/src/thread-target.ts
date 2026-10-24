@@ -796,7 +796,8 @@ export async function sendThreadMessage(
             userId: actor.userId,
             draft: input.draft,
           }));
-        if (input.draft && dismissal?.outcome !== "dismissed") {
+        // Refused only while a card still waits that the text cannot replace.
+        if (input.draft && dismissal?.outcome === "keep") {
           throw new ORPCError("CONFLICT", { message: "This draft is no longer waiting." });
         }
         if (waitingRun && dismissal && dismissal.outcome !== "keep") {
