@@ -21,6 +21,7 @@
     "db:migrate": "pnpm --filter @rakazo/db migrate",
     "sandbox:build": "docker build -t rakazo/computer:local infra/sandboxes/computer",
     "test": "vitest run",
+    "test:setup-e2b": "node --test infra/compose/setup-e2b.test.mjs",
     "test:compose-smoke": "bash infra/compose/run-smokes.sh",
     "test:integration": "tsx packages/testkit/src/cli/harness.ts --integration",
     "test:e2e": "tsx packages/testkit/src/cli/harness.ts --e2e",

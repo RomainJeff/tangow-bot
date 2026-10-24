@@ -23,6 +23,59 @@ To add a worker provider, see
   API, to build the templates. pnpm refuses other Node versions. For the computer template, Docker
   and a registry the E2B host can pull from.
 
+## Configure an existing source deployment with one command
+
+The setup script builds the two E2B templates separately, then switches the existing API and worker
+services to E2B. It targets `infra/compose/docker-compose.yml`; it does not install E2B or configure
+published-images and production Compose layouts.
+
+Run it on the deployment host, from the checkout matching the running API and worker revision.
+The script refuses a revision mismatch before publishing templates. Runtime sources must have no
+uncommitted changes. Install the Node and pnpm versions listed above and run
+`pnpm install --frozen-lockfile` first. Docker must be accessible to the current user, and that user
+must already be logged into a registry the E2B template builder can pull from.
+
+```bash
+# Inspect the actions without writes, network calls, builds or restarts:
+node infra/compose/setup-e2b.mjs --computer-image registry.example.com/rakazo-computer:local --dry-run
+
+# Build the templates and switch this deployment:
+node infra/compose/setup-e2b.mjs --computer-image registry.example.com/rakazo-computer:local
+```
+
+The terminal asks for the E2B domain and API key. Key entry is hidden; Enter keeps an existing
+value. Without a terminal, provide `E2B_DOMAIN` and `E2B_API_KEY` in the environment or the existing
+`.env`. Custom endpoint layouts must provide both `E2B_API_URL` and `E2B_SANDBOX_URL`; these addresses
+must be reachable from the API and worker containers as well as the build host.
+
+The lightweight `rakazo-worker-pi-native` template uses its own Node-based builder. The Docker
+registry argument is used only for the desktop computer image and its `desktop` template.
+`WORKER_TEMPLATE` selects a different worker template name when set.
+
+The script checks E2B volume API access, publishes the templates and writes
+`.env.e2b.compose.json` with file mode `0600`. This private file contains the credentials, is ignored
+by Git, and leaves the existing `.env` unchanged. Keep it with the deployment configuration and
+protect it like `.env`. Do not paste its contents into issues, commits or logs.
+
+The source Compose file forces Docker even when `.env` selects E2B. For subsequent deployments,
+keep using the override; the script prints the complete command:
+
+```bash
+docker compose --env-file .env -f infra/compose/docker-compose.yml \
+  -f .env.e2b.compose.json up -d --pull never
+```
+
+Setup recreates only `api` and `worker`, without running migrations or changing the database,
+web, supervisor, tunnel or computer containers. If the switch or health check fails, it restores
+the previous override and attempts to restart those services with their previous configuration.
+Already-published template builds are not rolled back. If recovery also fails, configuration is
+restored and the script reports that a manual restart is required.
+
+A successful health check proves startup with E2B selected, not a complete bot run. Follow
+[Verify](#verify) below. Existing homes are never migrated automatically; follow
+[Move existing homes onto volumes](#move-existing-homes-onto-volumes) when needed. Take a current
+backup and let active runs finish before switching a deployment.
+
 ## Build the templates
 
 Build both templates once per deployment, from the same commit as the API and worker images, and
