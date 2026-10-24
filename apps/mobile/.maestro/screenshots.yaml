@@ -147,7 +147,18 @@ tags:
 - longPressOn: "Researcher"
 - assertVisible: "Clear conversation"
 - takeScreenshot: "16-bot-actions"
-- back
+# iOS menus close on a tap outside; Android's list closes on back.
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn:
+          point: "50%,92%"
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - back
 
 - openLink: "rakazo:///bot?botId=${RAKAZO_SCREENSHOT_BOT_ID}&tab=settings"
 - extendedWaitUntil:
