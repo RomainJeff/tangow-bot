@@ -41,17 +41,19 @@ function fixture({
   autoReview = false,
   trigger = "user",
   requireToolApproval = true,
+  inputSchema = {
+    type: "object",
+    properties: { id: { type: "string" } },
+    required: ["id"],
+  } as Record<string, unknown>,
+  routeToolName = undefined as string | undefined,
 } = {}) {
   const tool: ConnectorTool = {
     name,
     description: "Read an item",
     readOnly: true,
-    inputSchema: {
-      type: "object",
-      properties: { id: { type: "string" } },
-      required: ["id"],
-    },
-    route: { connectorId: "demo", resourceId: "resource-1", toolName: name },
+    inputSchema,
+    route: { connectorId: "demo", resourceId: "resource-1", toolName: routeToolName ?? name },
   };
   const effects: Effect[] = [];
   const results: unknown[] = [];
@@ -167,7 +169,9 @@ function fixture({
   const execute = vi.fn(async function* (call: ConnectorCall) {
     yield { type: "result" as const, data: { item: call.args.id } };
   });
-  let calls = [{ args: { id: "item-1" }, executionId: "call-1" }];
+  let calls: Array<{ args: Record<string, unknown>; executionId: string }> = [
+    { args: { id: "item-1" }, executionId: "call-1" },
+  ];
   const runtimeRun = vi.fn(async function* (request: AgentRunRequest) {
     for (const call of calls) {
       const result = await request.executeTool!(
@@ -450,5 +454,94 @@ describe("connector read-only metadata and approval enforcement", () => {
         expect(f.pauseRunForInput).toHaveBeenCalledTimes(decision === "pass" ? 0 : 1);
       },
     );
+  });
+
+  describe("Composio batch", () => {
+    const name = "mcp__composio__COMPOSIO_MULTI_EXECUTE_TOOL";
+    const inputSchema = {
+      type: "object",
+      properties: { tools: { type: "array" }, thought: { type: "string" } },
+      required: ["tools"],
+    };
+    const emailRule: ActionApprovalRule = {
+      effect: "require_approval",
+      matchKind: "category",
+      matchValue: "email",
+    };
+    const batch = (...slugs: string[]) => ({
+      tools: slugs.map((tool_slug) => ({
+        tool_slug,
+        account: "gmail_test",
+        arguments: { recipient_email: "someone@example.com", subject: "Hi", body: "Hello" },
+      })),
+      thought: "Send it",
+    });
+
+    it.each([false, true])("asks for a send inside a batch (catalog = %s)", async (catalog) => {
+      const f = fixture({ name, catalog, inputSchema, rules: [emailRule] });
+      f.setCalls([{ args: batch("GMAIL_SEND_EMAIL"), executionId: "c1" }]);
+      await f.run();
+      expect(f.execute).not.toHaveBeenCalled();
+      expect(f.pauseRunForInput).toHaveBeenCalledWith(
+        expect.objectContaining({
+          blocks: [
+            expect.objectContaining({
+              kind: "ask",
+              text: "Review before GMAIL_SEND_EMAIL → someone@example.com",
+              detail: "to: someone@example.com\nsubject: Hi\nbody: Hello",
+            }),
+          ],
+        }),
+      );
+    });
+
+    it("lets a send inside a batch ask over an always-allow on the wrapper", async () => {
+      const f = fixture({
+        name,
+        catalog: true,
+        inputSchema,
+        rules: [emailRule, { effect: "always_allow", matchKind: "tool", matchValue: name }],
+      });
+      f.setCalls([{ args: batch("GMAIL_FETCH_EMAILS", "GMAIL_SEND_EMAIL"), executionId: "c1" }]);
+      await f.run();
+      expect(f.execute).not.toHaveBeenCalled();
+      expect(f.pauseRunForInput).toHaveBeenCalledOnce();
+    });
+
+    it("asks for a send inside a batch whose tool was renamed to stay unique", async () => {
+      const f = fixture({
+        name: "installed__install-2__COMPOSIO_MULTI_EXECUTE_TOOL",
+        routeToolName: "COMPOSIO_MULTI_EXECUTE_TOOL",
+        inputSchema,
+        rules: [emailRule],
+      });
+      f.setCalls([{ args: batch("GMAIL_SEND_EMAIL"), executionId: "c1" }]);
+      await f.run();
+      expect(f.execute).not.toHaveBeenCalled();
+      expect(f.pauseRunForInput).toHaveBeenCalledOnce();
+    });
+
+    it("runs a batch of reads under the same rule", async () => {
+      const f = fixture({ name, catalog: true, inputSchema, rules: [emailRule] });
+      f.setCalls([{ args: batch("GMAIL_FETCH_EMAILS"), executionId: "c1" }]);
+      await f.run();
+      expect(f.execute).toHaveBeenCalledOnce();
+      expect(f.pauseRunForInput).not.toHaveBeenCalled();
+    });
+
+    it("replays the approved batch once", async () => {
+      const f = fixture({ name, catalog: true, inputSchema, rules: [emailRule] });
+      f.setCalls([{ args: batch("GMAIL_SEND_EMAIL"), executionId: "c1" }]);
+      await f.run();
+      f.effects[0]!.status = "approved";
+      f.setCalls([{ args: batch("GMAIL_SEND_EMAIL"), executionId: "c2" }]);
+      await f.run();
+      expect(f.execute).toHaveBeenCalledOnce();
+      expect(f.execute).toHaveBeenCalledWith(
+        expect.objectContaining({ args: batch("GMAIL_SEND_EMAIL") }),
+        expect.anything(),
+      );
+      expect(f.effects[0]!.status).toBe("completed");
+    });
   });
 });

@@ -71,4 +71,20 @@ describe("a session sheet", () => {
       { sessionId: "ses_digest", title: "Digest" },
     ]);
   });
+
+  it("gives no label to an item that rose from the bot's own run session", () => {
+    const risen = SessionEntrySchema.parse({
+      id: "e_0",
+      seq: 0,
+      parentId: null,
+      ts: "2026-10-10T09:00:00.000Z",
+      sessionId: "ses_main",
+      botId: "bot_ada",
+      runId: "run_reply",
+      type: "assistant.ask",
+      payload: { originSessionId: "ses_reply", block: { kind: "ask", text: "Sell or hold?" } },
+    });
+    const rows = projectThreadView([risen]).rows;
+    expect(rows.map((row) => originSession(row.item))).toEqual([null]);
+  });
 });
