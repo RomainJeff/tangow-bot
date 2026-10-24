@@ -32,6 +32,9 @@ const OUTBOUND_DRAFT_MAX_LENGTH = 20_000;
 const OUTBOUND_SUBJECT_MAX_LENGTH = 1_000;
 /** What the card can show whole: recipients are never cut, so a longer list is refused. */
 const OUTBOUND_RECIPIENTS_MAX_LENGTH = 4_000;
+/** The longest a value shows on the card of a send it cannot read, before it is cut and marked. */
+export const CARD_VALUE_MAX_LENGTH = 1_000;
+const CARD_LINES_MAX_LENGTH = 4_000;
 // No address is longer, and the address patterns backtrack badly on long input, so every
 // pattern runs on a string of at most this length and nowhere else.
 const ADDRESS_MAX_LENGTH = 320;
@@ -101,6 +104,11 @@ function isAddress(value: string): boolean {
   return value.length <= ADDRESS_MAX_LENGTH && ADDRESS.test(value);
 }
 
+export const REFUSE_UNSHOWABLE: OutboundCall = {
+  kind: "refuse",
+  error: "Too many arguments to show the user. Send with fewer fields at a time.",
+};
+
 type Reading = {
   recipients: OutboundRecipient[];
   texts: string[];
@@ -161,9 +169,10 @@ function readOutbound(action: OutboundAction, connectorKinds: string[]): Outboun
     body.length > OUTBOUND_DRAFT_MAX_LENGTH ||
     !reading.recipients.some((recipient) => recipient.role === "to")
   ) {
-    return reading.buried
-      ? { kind: "refuse", error: "Put the recipients in the to, cc and bcc arguments." }
-      : { kind: "classic" };
+    if (reading.buried) {
+      return { kind: "refuse", error: "Put the recipients in the to, cc and bcc arguments." };
+    }
+    return cardFitsArguments(action.args) ? { kind: "classic" } : REFUSE_UNSHOWABLE;
   }
   return {
     kind: "draft",
@@ -258,6 +267,35 @@ function readString(value: string, role: FieldRole | undefined, reading: Reading
 export function isRecipientField(key: string): boolean {
   const role = FIELD_ROLES[fieldKey(key)];
   return role === "to" || role === "cc" || role === "bcc";
+}
+
+/** Arguments a card shows whole: recipients, and the items of a batch it cannot read. */
+export function isWholeField(key: string): boolean {
+  return isRecipientField(key) || fieldKey(key) === "tools";
+}
+
+/**
+ * Whether the card of a send it cannot read can show every argument: whole fields in full,
+ * the others each cut at `CARD_VALUE_MAX_LENGTH`, all within a fixed size.
+ */
+export function cardFitsArguments(args: Record<string, unknown>): boolean {
+  let whole = 0;
+  let lines = 0;
+  for (const [key, value] of Object.entries(args)) {
+    const length = serializedLength(value);
+    if (isWholeField(key)) whole += length;
+    else lines += key.length + 3 + Math.min(length, CARD_VALUE_MAX_LENGTH) + 1;
+  }
+  return whole <= OUTBOUND_RECIPIENTS_MAX_LENGTH && lines <= CARD_LINES_MAX_LENGTH;
+}
+
+function serializedLength(value: unknown): number {
+  if (typeof value === "string") return value.length;
+  try {
+    return (JSON.stringify(value) ?? "").length;
+  } catch {
+    return Number.POSITIVE_INFINITY;
+  }
 }
 
 function fieldKey(key: string): string {

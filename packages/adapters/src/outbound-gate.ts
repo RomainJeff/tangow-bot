@@ -3,8 +3,10 @@ import type { ConnectorCatalogItem } from "@rakazo/adapter-kit";
 import type { AskDraft } from "@rakazo/contracts";
 import type { OutboundCall, OutboundDraft } from "@rakazo/core";
 import {
+  cardFitsArguments,
   FEATURED_CONNECTOR_LABELS,
   matchFeaturedConnectorId,
+  REFUSE_UNSHOWABLE,
   readOutboundCall,
 } from "@rakazo/core";
 import {
@@ -12,7 +14,8 @@ import {
   catalogApprovalDetails,
   catalogApprovalInnerArgs,
 } from "./approval-effect.js";
-import { type ConnectorCallActions, connectorCallActions } from "./connector-actions.js";
+import type { ConnectorCallActions } from "./connector-actions.js";
+import { connectorCallActions } from "./connector-actions.js";
 
 /** How a connector call is gated when it may send a message. */
 export function readConnectorOutbound(
@@ -21,7 +24,9 @@ export function readConnectorOutbound(
   contained: ConnectorCallActions | undefined,
   connectorKinds: string[],
 ): OutboundCall {
-  if (contained?.kind === "opaque") return { kind: "classic" };
+  if (contained?.kind === "opaque") {
+    return cardFitsArguments(args) ? { kind: "classic" } : REFUSE_UNSHOWABLE;
+  }
   const actions = contained?.actions ?? [{ toolName, args }];
   const read = readOutboundCall(actions, connectorKinds);
   if (read.kind !== "draft") return read;

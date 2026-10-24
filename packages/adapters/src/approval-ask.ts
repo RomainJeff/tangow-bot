@@ -1,7 +1,8 @@
 import type { AskDraft, MessageBlock } from "@rakazo/contracts";
 import type { RoutineCard } from "@rakazo/core";
 import {
-  isRecipientField,
+  CARD_VALUE_MAX_LENGTH,
+  isWholeField,
   redactSecrets,
   routineCardBlock,
   spawnBotApprovalBlock,
@@ -10,7 +11,6 @@ import type { ConnectorAction } from "./connector-actions.js";
 
 const MAX_APPROVAL_SUMMARY_LENGTH = 500;
 const MAX_APPROVAL_DETAIL_LENGTH = 4_000;
-const MAX_APPROVAL_VALUE_LENGTH = 1_000;
 const LONG_APPROVAL_VALUE_LENGTH = 500;
 // Continuation lines are indented so a line written inside a value cannot pass for a field.
 const LINE_BREAKS = /\r\n|[\n\v\f\r\u0085\u2028\u2029]/g;
@@ -50,7 +50,7 @@ export function buildApprovalAskBlock(
     options?.unreadable,
   );
   const safeDetail = detail ? redactSecrets(detail, secrets) : undefined;
-  // An unreadable send keeps its recipients whole and bounds the rest itself.
+  // An unreadable send shows every argument, so its size is bounded by the gate instead.
   const shownDetail =
     safeDetail && !options?.unreadable
       ? truncate(safeDetail, MAX_APPROVAL_DETAIL_LENGTH)
@@ -159,32 +159,24 @@ const DETAIL_LABELS: Record<string, string> = { recipient_email: "to" };
 
 function argLines(args: Record<string, unknown>, everyArgument = false): string[] {
   if (everyArgument) {
-    // Recipients come first and whole: a send with more than the card can show is refused
-    // upstream. The rest shares one budget, so cutting it never hides a recipient or a flag.
+    // Every argument shows. Whole fields (recipients) come first, long values last and cut with
+    // a mark; the caller refuses a send whose arguments cannot fit.
     const values = Object.entries(args).map(([key, value]) => ({
       key,
       text: typeof value === "string" ? value : JSON.stringify(value),
-      recipient: isRecipientField(key),
+      whole: isWholeField(key),
     }));
-    const isLong = ({ text, recipient }: { text: string; recipient: boolean }) =>
-      !recipient && text.length > LONG_APPROVAL_VALUE_LENGTH;
-    const rest = values.filter(({ recipient }) => !recipient);
-    let budget = MAX_APPROVAL_DETAIL_LENGTH;
-    const shown = [
-      ...values.filter(({ recipient }) => recipient),
+    const isLong = ({ text, whole }: { text: string; whole: boolean }) =>
+      !whole && text.length > LONG_APPROVAL_VALUE_LENGTH;
+    const rest = values.filter(({ whole }) => !whole);
+    return [
+      ...values.filter(({ whole }) => whole),
       ...rest.filter((entry) => !isLong(entry)),
       ...rest.filter(isLong),
-    ].flatMap(({ key, text, recipient }) => {
-      if (recipient) return [{ key, text }];
-      const room = budget - key.length - 3;
-      if (room <= 0) return [];
-      const kept = truncate(text, Math.min(MAX_APPROVAL_VALUE_LENGTH, room));
-      budget -= key.length + 3 + kept.length;
-      return [{ key, text: kept }];
+    ].map(({ key, text, whole }) => {
+      const shown = whole ? text : truncate(text, CARD_VALUE_MAX_LENGTH);
+      return `${key.replace(LINE_BREAKS, " ")}: ${shown.replace(LINE_BREAKS, "\n  ")}`;
     });
-    return shown.map(
-      ({ key, text }) => `${key.replace(LINE_BREAKS, " ")}: ${text.replace(LINE_BREAKS, "\n  ")}`,
-    );
   }
   const lines: string[] = [];
   for (const key of ["collection", "title", "to", "recipient_email", "subject", "amount", "body"]) {

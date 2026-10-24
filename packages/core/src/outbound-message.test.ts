@@ -344,6 +344,34 @@ describe("readOutboundCall", () => {
     });
   });
 
+  const note = (index: number) => [`note${index}`, "n".repeat(490)];
+
+  it("refuses a send it cannot read when its fields are too many to show", () => {
+    expect(
+      read("GMAIL_SEND_EMAIL", {
+        to: "a@example.com",
+        body: "Hi",
+        ...Object.fromEntries(Array.from({ length: 8 }, (_, index) => note(index))),
+        is_html: true,
+        attachment: { name: "a.pdf" },
+      }),
+    ).toEqual({
+      kind: "refuse",
+      error: "Too many arguments to show the user. Send with fewer fields at a time.",
+    });
+  });
+
+  it("gives a send it cannot read the classic card while its fields fit", () => {
+    expect(
+      read("GMAIL_SEND_EMAIL", {
+        to: "a@example.com",
+        body: "Hi",
+        ...Object.fromEntries(Array.from({ length: 3 }, (_, index) => note(index))),
+        attachment: { name: "a.pdf" },
+      }),
+    ).toEqual({ kind: "classic" });
+  });
+
   it("drafts a send to many recipients that still fit the card", () => {
     const bcc = Array.from({ length: 100 }, (_, i) => `p${i}@example.test`);
     expect(read("GMAIL_SEND_EMAIL", { to: "a@example.com", bcc, body: "Hi" }).kind).toBe("draft");
