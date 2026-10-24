@@ -14,6 +14,8 @@
  *     Token and cache measurements against a real model. RAKAZO_MODEL_KEY_FILE names a file
  *     outside any git work tree that holds the provider key. `--worker local` runs the guests in
  *     this process instead of E2B, for scenarios without a computer.
+ *   worker-live measure-summary --in <receipt> --out <receipt>
+ *     Recomputes a measurement receipt's method and summary from its own threads.
  */
 import { execFileSync, fork } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -23,6 +25,7 @@ import os from "node:os";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { parseArgs } from "node:util";
+import type { Api } from "@earendil-works/pi-ai";
 import { WORKER_PROFILE, workerTemplate } from "@rakazo/agent-run-worker/template";
 import type { ConnectionOpts } from "e2b";
 import { Sandbox, Template } from "e2b";
@@ -33,7 +36,7 @@ import {
   memAvailableMiB,
   requireHeadroom,
 } from "../worker-live/index.js";
-import type { ScenarioId, ThreadRecord } from "../worker-live/measure.js";
+import type { MeasuredModel, ScenarioId, ThreadRecord } from "../worker-live/measure.js";
 import {
   measureTokens,
   resolveModels,
@@ -65,12 +68,13 @@ const { values } = parseArgs({
     worker: { type: "string", default: "e2b" },
     "computer-label": { type: "string", default: "private computer template" },
     "in-flight": { type: "string" },
+    in: { type: "string" },
   },
 });
 
 const local = command === "measure" && values.worker === "local";
 const apiKey = process.env.E2B_API_KEY;
-if (!apiKey && !local) throw new Error("E2B_API_KEY is not set");
+if (!apiKey && !local && command !== "measure-summary") throw new Error("E2B_API_KEY is not set");
 const connection: ConnectionOpts = {
   apiKey,
   apiUrl: process.env.E2B_API_URL,
@@ -390,20 +394,6 @@ async function measure() {
             latency: inFlight
               ? "trials overlapped: restore and append timings are not comparable"
               : "serial: one thread at a time",
-            method: {
-              source: "agent.worker.model_request at the controller relay, one per model request",
-              inputTokens:
-                "every prompt token, cached or not; uncached = input - cacheRead - cacheWrite",
-              promptBytes:
-                "UTF-8 bytes of the redacted canonical transcript (pi-ai-transcript-v1), not provider wire bytes",
-              pricing: "catalog list price per million tokens, without long-context tiers",
-              persistentEstimate:
-                "one native session continuing every attempt from the previous full prompt and answer; generous: previous prompt counted cached whenever the projection read cache",
-              restoreOutsideProvisioningMs:
-                "grant to the resumed attempt's first model request, minus provider ensure to guest hello",
-              transcriptAppend:
-                "controller time and database queries from each transcript frame to its recorded reply",
-            },
           },
           threads,
           models,
@@ -437,7 +427,46 @@ async function measure() {
   }
 }
 
-const commands: Record<string, () => Promise<void>> = { template, lanes, lane, bench, measure };
+/** Recomputes a receipt's method and summary from its own threads, with this source. */
+async function measureSummary() {
+  if (!values.in || !values.out) throw new Error("--in and --out are required");
+  const { threads, models, ...fields } = JSON.parse(readFileSync(values.in, "utf8")) as {
+    threads: ThreadRecord[];
+    models: Array<{
+      id: string;
+      api: Api;
+      catalogBaseUrl: string;
+      catalogCostPerMillion: MeasuredModel["cost"];
+    }>;
+    provider: string;
+  } & Record<string, unknown>;
+  delete fields.method;
+  delete fields.summary;
+  await writeReceipt(
+    values.out,
+    measureReceipt(
+      { ...fields, models },
+      threads,
+      models.map((model) => ({
+        provider: fields.provider,
+        id: model.id,
+        api: model.api,
+        baseUrl: model.catalogBaseUrl,
+        cost: model.catalogCostPerMillion,
+      })),
+      {},
+    ),
+  );
+}
+
+const commands: Record<string, () => Promise<void>> = {
+  template,
+  lanes,
+  lane,
+  bench,
+  measure,
+  "measure-summary": measureSummary,
+};
 const run = command ? commands[command] : undefined;
 if (!run) throw new Error(`usage: worker-live <${Object.keys(commands).join("|")}> [options]`);
 await run();

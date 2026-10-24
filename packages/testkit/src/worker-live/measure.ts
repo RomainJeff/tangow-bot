@@ -63,8 +63,12 @@ export type TurnRecord = {
   status: string;
   error?: string;
   approvalRequested: boolean;
-  /** Grant to the resumed attempt's first model request, minus the worker's provisioning. */
+  /**
+   * From the grant's persistence to the resumed attempt's first relayed model request, minus the
+   * worker's provisioning (provider ensure to guest hello), which is `provisioningMs`.
+   */
   restoreOutsideProvisioningMs?: number | null;
+  provisioningMs?: number;
   /** Each native transcript delta's append at the controller. */
   appends: Array<{ ms: number; queries: number }>;
   requests: RequestRecord[];
@@ -85,6 +89,8 @@ export type ThreadRecord = {
    * longest prefix it shares with one of them, its length and where its nonce starts, in characters.
    */
   sharedBase?: { sharedChars: number; bodyChars: number; nonceAt: number };
+  /** Whether that first body carried provider cache markers (`cache_control`). */
+  cacheMarkersSent?: boolean;
   left?: { sandboxes: number; volumes: number };
 };
 
@@ -402,10 +408,10 @@ export async function measureTokens(options: {
         let settledStatus = outcome.status;
         const approvalRequested = settledStatus === "waiting_input";
         let restoreOutsideProvisioningMs: number | null | undefined;
+        let provisioningMs: number | undefined;
         if (approvalRequested && turn.approveAfterMs !== undefined) {
           await sleep(turn.approveAfterMs);
           const card = await latestCard(run.prisma, runId);
-          const answeredAt = performance.now();
           await run.events.answerRunInput({
             spaceId: run.spaceId,
             threadId: run.thread.id,
@@ -414,6 +420,7 @@ export async function measureTokens(options: {
             answeredByUserId: run.userId,
             answer: "allow",
           });
+          const answeredAt = performance.now();
           await run.continueRun(runId);
           outcome = await row();
           settledStatus = outcome.status;
@@ -423,10 +430,12 @@ export async function measureTokens(options: {
           const requestAt = after.find(
             (frame) => frame.from === "guest" && frame.type === "model.request",
           )?.at;
+          if (ensureAt !== undefined && helloAt !== undefined)
+            provisioningMs = Math.round(helloAt - ensureAt);
           restoreOutsideProvisioningMs =
-            ensureAt === undefined || helloAt === undefined || requestAt === undefined
+            provisioningMs === undefined || requestAt === undefined
               ? null
-              : Math.round(requestAt - answeredAt - (helloAt - ensureAt));
+              : Math.round(requestAt - answeredAt - provisioningMs);
         }
         const frames = parse(seen).filter((frame) => frame.at >= startedAt);
         record.turns.push({
@@ -438,6 +447,7 @@ export async function measureTokens(options: {
           ...(outcome.error ? { error: outcome.error.slice(0, 500) } : {}),
           approvalRequested,
           ...(restoreOutsideProvisioningMs === undefined ? {} : { restoreOutsideProvisioningMs }),
+          ...(provisioningMs === undefined ? {} : { provisioningMs }),
           appends: settled(frames, "transcript", "recorded").map(({ from: at, to }) => ({
             ms: Math.round((to - at) * 10) / 10,
             queries: log.within(at, to).count,
@@ -464,6 +474,7 @@ export async function measureTokens(options: {
     const body = firstBodies.get(nonce);
     if (body) {
       firstBodies.delete(nonce);
+      record.cacheMarkersSent = body.includes('"cache_control"');
       const earlier = earlierBodies.get(model.id) ?? [];
       const shared = (other: string) => {
         let index = 0;

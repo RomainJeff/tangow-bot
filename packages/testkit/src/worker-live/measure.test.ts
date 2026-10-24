@@ -103,7 +103,12 @@ describe("token and cache measurements", () => {
 
     const summary = summarize(threads, models)[models[0]!.id]!;
     expect(summary).toMatchObject({
-      observedCacheMode: "automatic",
+      cache: {
+        mode: "automatic",
+        markersSent: false,
+        readsReported: true,
+        writesReported: false,
+      },
       requests: 17,
       threadErrors: 0,
       requestsWithoutUsage: 0,

@@ -148,7 +148,18 @@ export function summarize(threads: ThreadRecord[], models: MeasuredModel[]) {
       return [
         model.id,
         {
-          observedCacheMode: writes ? "explicit" : reads ? "automatic" : "none observed",
+          cache: {
+            mode: own.some((thread) => thread.cacheMarkersSent)
+              ? "explicit markers"
+              : reads || writes
+                ? "automatic"
+                : "none observed",
+            markersSent: own.some((thread) => thread.cacheMarkersSent === undefined)
+              ? "not captured"
+              : own.some((thread) => thread.cacheMarkersSent),
+            readsReported: reads,
+            writesReported: writes,
+          },
           requests: requests.length,
           threadErrors: own.filter((thread) => thread.error !== undefined).length,
           requestsWithoutUsage: requests.filter((request) => !request.usageReported).length,
@@ -171,24 +182,29 @@ export function summarize(threads: ThreadRecord[], models: MeasuredModel[]) {
                 ),
               ]),
           ),
-          cacheReadReuse: reuse,
+          cacheReadReuse: reuse.firstRequests > 0 ? reuse : "not captured",
           byScenario,
           projectionUsd: totals.projectionUsd,
           persistentUsd: totals.persistentUsd,
           persistentSaving: saving,
           buildPersistentArm: saving !== null && saving >= 0.15,
-          restoreOutsideProvisioningMs: Object.fromEntries(
-            [...new Set(turns.flatMap((turn) => turn.approveAfterMs ?? []))].map((delay) => [
-              delay,
-              quantiles(
-                turns.flatMap((turn) =>
-                  turn.approveAfterMs === delay &&
-                  typeof turn.restoreOutsideProvisioningMs === "number"
-                    ? [turn.restoreOutsideProvisioningMs]
-                    : [],
-                ),
-              ),
-            ]),
+          restoreByGrantDelayMs: Object.fromEntries(
+            [...new Set(turns.flatMap((turn) => turn.approveAfterMs ?? []))].map((delay) => {
+              const granted = turns.filter((turn) => turn.approveAfterMs === delay);
+              const measured = (key: "restoreOutsideProvisioningMs" | "provisioningMs") =>
+                quantiles(
+                  granted.flatMap((turn) =>
+                    typeof turn[key] === "number" ? [turn[key] as number] : [],
+                  ),
+                );
+              return [
+                delay,
+                {
+                  outsideProvisioningMs: measured("restoreOutsideProvisioningMs"),
+                  provisioningMs: measured("provisioningMs"),
+                },
+              ];
+            }),
           ),
           transcriptAppendMs: quantiles(turns.flatMap((turn) => turn.appends.map((a) => a.ms))),
           transcriptAppendQueries: quantiles(
@@ -213,7 +229,34 @@ export function measureReceipt(
   models: MeasuredModel[],
   labels: Record<string, string>,
 ): unknown {
-  let text = JSON.stringify({ ...fields, summary: summarize(threads, models), threads });
+  let text = JSON.stringify({
+    ...fields,
+    method: METHOD,
+    summary: summarize(threads, models),
+    threads,
+  });
   for (const [id, label] of Object.entries(labels)) text = text.replaceAll(id, label);
   return JSON.parse(text.replace(E2B_ID, "<e2b-id>"));
 }
+
+/** How every figure of the receipt is derived from its `threads`, so it can be recomputed. */
+const METHOD = {
+  source:
+    "One record per model request, from agent.worker.model_request at the controller relay, grouped by thread, turn and attempt.",
+  inputTokens:
+    "Every prompt token the provider reported, cached or not. Uncached = inputTokens - cacheReadTokens - cacheWriteTokens.",
+  promptBytes:
+    "UTF-8 bytes of the redacted canonical transcript the relay received (pi-ai-transcript-v1), not provider wire bytes. commonPrefixBytes is the part shared with the previous request of the same thread and bot.",
+  pricing:
+    "Catalog list price per million tokens (models[].catalogCostPerMillion: input, cacheRead, cacheWrite, output), without long-context tiers. USD = (uncached * input + cacheRead * cacheRead + cacheWrite * cacheWrite + output * output) / 1e6.",
+  persistentEstimate:
+    "Replays each thread's root requests with usage, in order; helper requests are left out of both arms. Within an attempt the persistent prompt is the projection's inputTokens plus a carried extra. At the first request of a new attempt it is the previous request's prompt + its outputTokens + the tokens this request added past the shared prefix, round((promptBytes - commonPrefixBytes) * inputTokens / promptBytes); extra becomes that prompt minus inputTokens. Cached: if the projection's request read any cache, the whole previous prompt at an attempt start, or the projection's read + extra within an attempt; otherwise none. Written: prompt - cached when the model reported any cache write, else 0. A compacted turn restarts the estimate from the projection. Screenshots and images of earlier turns stay in the carried prompt as far as they were still in the previous request after the relay's image cap, which a persistent session behind the same relay would also hit; they are never dropped at a run boundary. The estimate is generous to the persistent session: its whole previous prompt counts as cached whenever the projection read any cache. persistentSaving = (projectionUsd - persistentUsd) / projectionUsd; buildPersistentArm when it is 0.15 or more.",
+  cache:
+    "mode is explicit markers when a thread's first provider request carried cache_control, automatic when the provider reported cache reads or writes without markers, none observed otherwise. markersSent is read from the captured request bodies.",
+  cacheReadReuse:
+    "Each thread's first provider request body is compared with the model's earlier threads; sharedChars is the longest common prefix, before any per-thread byte. Of each request's cache read, up to inputTokens of the thread's first request * sharedChars / bodyChars counts as sharedBase reuse and the rest as perThread. firstRequestsOverBase counts first requests that read more than that base (+10% and 128 tokens), which would mean reading another thread's own part.",
+  restore:
+    "From the grant persisted (answerRunInput returned) to the resumed attempt's first model request frame at the controller, minus provisioningMs, the worker provider's ensure call to the guest's hello. Only comparable from a serial run.",
+  transcriptAppend:
+    "Controller time and database queries from each native transcript frame to its recorded reply. Only comparable from a serial run.",
+};
