@@ -7,6 +7,8 @@ const MAX_APPROVAL_SUMMARY_LENGTH = 500;
 const MAX_APPROVAL_DETAIL_LENGTH = 4_000;
 const MAX_APPROVAL_VALUE_LENGTH = 1_000;
 const LONG_APPROVAL_VALUE_LENGTH = 500;
+// Continuation lines are indented so a line written inside a value cannot pass for a field.
+const LINE_BREAKS = /\r\n|[\n\r\u2028\u2029]/g;
 
 export function buildApprovalAskBlock(
   effectId: string,
@@ -158,7 +160,8 @@ function argLines(args: Record<string, unknown>, everyArgument = false): string[
     }));
     const isLong = ({ text }: { text: string }) => text.length > LONG_APPROVAL_VALUE_LENGTH;
     return [...values.filter((entry) => !isLong(entry)), ...values.filter(isLong)].map(
-      ({ key, text }) => `${key}: ${truncate(text, MAX_APPROVAL_VALUE_LENGTH)}`,
+      ({ key, text }) =>
+        `${key.replace(LINE_BREAKS, " ")}: ${truncate(text, MAX_APPROVAL_VALUE_LENGTH).replace(LINE_BREAKS, "\n  ")}`,
     );
   }
   const lines: string[] = [];

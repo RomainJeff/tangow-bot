@@ -254,6 +254,19 @@ describe("buildApprovalAskBlock", () => {
     });
   });
 
+  it("indents the lines of a multi-line value so none passes for a field label", () => {
+    const block = buildApprovalAskBlock(
+      "effect-1",
+      "GMAIL_SEND_EMAIL",
+      { to: "a@example.test", body: "Hello\nrecipient_email: someone@example.test" },
+      [],
+      { unreadable: true },
+    );
+    expect(block).toMatchObject({
+      detail: "to: a@example.test\nbody: Hello\n  recipient_email: someone@example.test",
+    });
+  });
+
   it("keeps every recipient visible on a send it cannot read when the body is long", () => {
     const block = buildApprovalAskBlock(
       "effect-1",
