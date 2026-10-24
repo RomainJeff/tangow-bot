@@ -390,6 +390,17 @@ describe("writing to the bot while a mail draft waits", () => {
     ]);
   });
 
+  it("puts away only a draft in a group, where a routine proposal still waits for its tap", async () => {
+    const proposal = await waiting("routine_proposal");
+    await expect(proposal.typed({ draftsOnly: true })).resolves.toEqual({ outcome: "keep" });
+    const mail = await waiting();
+    await expect(mail.typed({ draftsOnly: true })).resolves.toMatchObject({
+      outcome: "dismissed",
+    });
+    const [kept, replaced] = await Promise.all([proposal.state(), mail.state()]);
+    expect([kept.effect.status, replaced.effect.status]).toEqual(["intended", "denied"]);
+  });
+
   it("keeps a routine proposal a draft text was sent with", async () => {
     const w = await waiting("routine_proposal");
     await expect(
