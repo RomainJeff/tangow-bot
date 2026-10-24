@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-10-24
+
+#### Fixed
+
+- Action confirmations now apply to what a bot does through Composio's batch tool, so "Ask before email actions" shows a card, with the recipient, before a bot sends Gmail that way instead of letting the email go out unasked.
+
 ### 2026-10-21
 
 #### Changed
