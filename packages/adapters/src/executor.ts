@@ -7942,6 +7942,7 @@ async function settleRoutineCard(
           type: "effect.requested",
           payload: { path: ["effectId"], equals: effectId },
         },
+        orderBy: { seq: "desc" },
         select: { id: true, payload: true },
       });
       if (!card) return null;
