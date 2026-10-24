@@ -1,5 +1,11 @@
 import type { AgentToolExecutionResult } from "@rakazo/adapter-kit";
-import { DRAFT_DISCARDED_NOTE, readDraft, refusedProposalResult } from "@rakazo/core";
+import {
+  DRAFT_DISCARDED_NOTE,
+  draftReplacedResult,
+  readDraft,
+  refusedProposalResult,
+  valueAt,
+} from "@rakazo/core";
 
 export type ApprovalPausedToolResult = AgentToolExecutionResult & { terminate: true };
 
@@ -361,8 +367,21 @@ export const SPAWN_BOT_CANCELLED_RESULT = {
   note: "The user cancelled creating this bot. Do not call spawn_bot for it again unless they ask.",
 } as const;
 
+/** What the bot reads about a draft the user wrote over instead of sending, or undefined. */
+export function replacedDraftResult(effect: {
+  status: string;
+  draft?: unknown;
+  request?: unknown;
+}) {
+  const draft = readDraft(effect.status, effect.draft);
+  if (draft?.state !== "replaced") return undefined;
+  const text = valueAt(effect.request, draft.path);
+  const body = typeof text === "string" ? text : "";
+  return draftReplacedResult(body, body !== draft.proposed);
+}
+
 export function resolveDuplicateEffectGate(
-  effect: { status: string; result?: unknown; kind?: string; draft?: unknown },
+  effect: { status: string; result?: unknown; kind?: string; draft?: unknown; request?: unknown },
   toolName: string,
 ): DuplicateEffectGate {
   if (effect.status === "completed") {
@@ -372,6 +391,8 @@ export function resolveDuplicateEffectGate(
     if (readDraft(effect.status, effect.draft)?.state === "discarded") {
       return { action: "return", result: { ...DRAFT_DISCARDED_RESULT } };
     }
+    const replaced = replacedDraftResult(effect);
+    if (replaced) return { action: "return", result: replaced };
     return {
       action: "return",
       result:
