@@ -63,6 +63,7 @@ function fixture({
   };
   const effects: Effect[] = [];
   const results: unknown[] = [];
+  let claimTakenElsewhere = false;
   const run = {
     id: "run-1",
     botId: "bot-1",
@@ -129,6 +130,12 @@ function fixture({
           (effect) => effect.id === where.id && effect.status === where.status,
         );
         if (!effect) return { count: 0 };
+        if (claimTakenElsewhere && data.status === "executing") {
+          // Another worker claimed it a moment earlier and is sending it.
+          claimTakenElsewhere = false;
+          effect.status = "executing";
+          return { count: 0 };
+        }
         Object.assign(effect, data);
         return { count: 1 };
       },
@@ -292,6 +299,9 @@ function fixture({
     runRow: run,
     disconnect() {
       connected = false;
+    },
+    takeNextClaimElsewhere() {
+      claimTakenElsewhere = true;
     },
     setCalls(next: typeof calls) {
       calls = next;
@@ -914,6 +924,17 @@ describe("connector read-only metadata and approval enforcement", () => {
         await f.run("worker-1", "worker-2");
         expect(f.execute).toHaveBeenCalledOnce();
         expect(f.effects[0]!.status).toBe("completed");
+      });
+
+      it("leaves a draft another worker is sending to that worker", async () => {
+        const f = await drafted();
+        approve(f.effects[0]!);
+        f.takeNextClaimElsewhere();
+        f.setCalls([]);
+        await f.run();
+        expect(f.execute).not.toHaveBeenCalled();
+        expect(f.effects[0]!.status).toBe("executing");
+        expect(f.pauseRunForInput).toHaveBeenCalledOnce();
       });
 
       it("shows the card again, Not sent, when the app refuses it, and Try again sends once", async () => {
