@@ -86,6 +86,10 @@ describe("draftCardView", () => {
       kind: "discarded",
       undo: true,
     });
+    expect(draftCardView(waiting, { ...idle, pending: "discarding" })).toEqual({
+      kind: "discarded",
+      undo: false,
+    });
     const denied: DraftCard = { status: "answered", answer: "deny", draft };
     expect(draftCardView(denied, { ...idle, canAnswer: false })).toEqual({
       kind: "discarded",
