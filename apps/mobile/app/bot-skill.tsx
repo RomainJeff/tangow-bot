@@ -4,12 +4,11 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { Alert, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput } from "react-native";
 import { LoadFailed, useFocusedRead } from "../components/bot-page/kit";
-import { MoreButton } from "../components/bot-page/skill-parts";
+import { useHeaderMenu } from "../components/native-menu";
 import { rpc } from "../lib/api";
 import { mobileTokens } from "../lib/appearance";
 import { useI18n } from "../lib/i18n";
-import { presentMessageActionSheet } from "../lib/message-action-sheet";
-import { native, useMobileTokens, useResolvedAppearance, useThemedStyles } from "../lib/native";
+import { native, useMobileTokens, useThemedStyles } from "../lib/native";
 import { serverMessage } from "../lib/server-error";
 import { skillDirty, skillText } from "../lib/skill-draft";
 import { nativeTextStyle } from "../lib/typography";
@@ -23,7 +22,6 @@ export default function BotSkillScreen() {
   const [skillId, setSkillId] = useState(linked);
   const styles = useThemedStyles(createSkillStyles);
   const tokens = useMobileTokens();
-  const colorScheme = useResolvedAppearance();
   const { t } = useI18n();
   const router = useRouter();
   const { read, write, retry } = useFocusedRead(
@@ -74,24 +72,23 @@ export default function BotSkillScreen() {
     }
   };
 
-  const remove = () =>
-    presentMessageActionSheet({
-      actions: [
-        {
-          text: t("Delete"),
-          destructive: true,
-          onPress: () => {
-            rpc("agentSkills/remove", { skillId }).then(
-              () => router.back(),
-              (error: unknown) => Alert.alert(serverMessage(error) || t("Could not delete skill")),
-            );
-          },
+  const confirmRemove = () =>
+    Alert.alert(t("Delete {name}?", { name: skill?.name ?? "" }), undefined, [
+      { text: t("Cancel"), style: "cancel" },
+      {
+        text: t("Delete"),
+        style: "destructive",
+        onPress: () => {
+          rpc("agentSkills/remove", { skillId }).then(
+            () => router.back(),
+            (error: unknown) => Alert.alert(serverMessage(error) || t("Could not delete skill")),
+          );
         },
-      ],
-      colorScheme,
-      cancel: t("Cancel"),
-      more: t("More"),
-    });
+      },
+    ]);
+  const menu = useHeaderMenu(t("More"), [
+    { label: t("Delete"), destructive: true, onPress: confirmRemove },
+  ]);
 
   const writable = skill !== null && !skill.readOnly;
   return (
@@ -138,7 +135,9 @@ export default function BotSkillScreen() {
                   onPress: () => void save(),
                 },
               ]
-            : undefined,
+            : writable
+              ? menu.unstable_headerRightItems
+              : undefined,
           headerRight: editing
             ? () => (
                 <Pressable
@@ -151,7 +150,9 @@ export default function BotSkillScreen() {
                   <Text style={styles.headerSaveLabel}>{busy ? t("Saving…") : t("Save")}</Text>
                 </Pressable>
               )
-            : () => (writable ? <MoreButton label={t("More")} onPress={remove} /> : null),
+            : writable
+              ? menu.headerRight
+              : () => null,
         }}
       />
       {read.kind === "failed" ? (
