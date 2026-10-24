@@ -919,24 +919,27 @@ function planDraftAnswer(
       text === current
         ? undefined
         : {
-            proposed: current,
+            proposed: valueAt(shownProposal, proposalPath(effect.request, path)),
             approved: text,
             // The proposal the card was requested with, its run secrets masked, now with the
             // user's text: the stored request may hold what that proposal hid.
-            proposal: proposalWithText(shownProposal, effect.request, path, text),
+            proposal: proposalWithText(shownProposal, proposalPath(effect.request, path), text),
             card: shown ? { draft: shown, detail: askDraftDetail(shown) } : {},
           },
   };
 }
 
+/** Where the body sits in the logged proposal, which wraps a request that is not an object. */
+function proposalPath(request: unknown, path: DraftRecord["path"]): DraftRecord["path"] {
+  return Array.isArray(request) ? ["request", ...path] : path;
+}
+
 function proposalWithText(
   proposal: unknown,
-  request: unknown,
   path: DraftRecord["path"],
   text: string,
 ): Record<string, unknown> {
-  // effectProposal wraps a request that is not an object as `{ request }`.
-  const edited = withValueAt(proposal, Array.isArray(request) ? ["request", ...path] : path, text);
+  const edited = withValueAt(proposal, path, text);
   return edited && typeof edited === "object" && !Array.isArray(edited)
     ? (edited as Record<string, unknown>)
     : {};

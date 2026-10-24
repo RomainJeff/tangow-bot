@@ -969,10 +969,25 @@ describe("connector read-only metadata and approval enforcement", () => {
         expect(f.effects[0]!.status).toBe("completed");
       });
 
-      it("keeps a run secret out of the card it shows again", async () => {
-        const f = await drafted({ ...send, body: "Your key is sk-live-123." }, ["sk-live-123"]);
-        expect(JSON.stringify(lastCard(f))).not.toContain("sk-live-123");
-        approve(f.effects[0]!);
+      it.each([
+        ["its body", { body: "Your key is sk-live-123." }],
+        ["its subject", { subject: "Key sk-live-123" }],
+        ["a recipient", { cc: ["sk-live-123@example.com"] }],
+      ])(
+        "refuses a draft with a run secret in %s back to the bot, showing nothing",
+        async (_, part) => {
+          const f = await drafted({ ...send, ...part }, ["sk-live-123"]);
+          expect(f.results).toEqual([
+            { error: "This message contains a secret. Write it without the secret." },
+          ]);
+          expect(f.effects).toEqual([]);
+          expect(f.pauseRunForInput).not.toHaveBeenCalled();
+        },
+      );
+
+      it("keeps a secret the user typed out of the card it shows again", async () => {
+        const f = await drafted(send, ["sk-live-123"]);
+        approve(f.effects[0]!, "Your key is sk-live-123.");
         f.effects[0]!.status = "executing";
         f.setCalls([]);
         await f.run();
