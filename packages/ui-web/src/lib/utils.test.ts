@@ -18,4 +18,13 @@ describe("cn", () => {
     expect(cn("size-8", "size-composer-icon")).toBe("size-composer-icon");
     expect(cn("h-9", "h-capsule")).toBe("h-capsule");
   });
+
+  it("keeps the selected ring's width apart from its colour", () => {
+    expect(
+      cn(
+        "focus-visible:ring-3 focus-visible:ring-ring/50",
+        "focus-visible:ring-selected focus-visible:ring-foreground",
+      ),
+    ).toBe("focus-visible:ring-selected focus-visible:ring-foreground");
+  });
 });
