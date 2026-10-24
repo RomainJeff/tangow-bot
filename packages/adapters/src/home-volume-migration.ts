@@ -216,6 +216,21 @@ async function planHome(
   return { planned, notCopied, exported, links };
 }
 
+/** Read-only planning before an operator agrees to an upgrade, including Docker source homes. */
+export async function previewHomeVolumeMove(
+  deps: { prisma: PrismaClient; home: AgentHomeStore },
+  computerId: string,
+  context: AdapterContext,
+) {
+  const computer = await readComputer(deps.prisma, computerId);
+  const plan = await planHome(deps.home, computer, context);
+  return {
+    files: plan.planned.length,
+    bytes: plan.planned.reduce((total, file) => total + file.size, 0),
+    notCopied: plan.notCopied,
+  };
+}
+
 /**
  * What already sits on a target volume, against what the move plans for it. A file the move
  * planned with the same content and mode is not foreign, so a move interrupted mid-copy resumes.

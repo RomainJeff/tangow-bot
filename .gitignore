@@ -57,4 +57,11 @@ apps/mobile/builds/
 
 # Private E2B deployment settings
 .env.e2b.compose.json
-.env.e2b.compose.json.tmp
+.env.e2b.compose.json.tmp*
+
+.env.e2b.upgrade.json
+.env.e2b.upgrade.json.tmp*
+
+.env.e2b.plan.json
+
+.env.e2b.setup.lock

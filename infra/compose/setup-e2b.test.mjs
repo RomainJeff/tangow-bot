@@ -23,6 +23,8 @@ function fixture(t) {
   mkdirSync(path.join(root, "infra/compose"), { recursive: true });
   mkdirSync(path.join(root, "bin"));
   copyFileSync(source, path.join(root, "infra/compose/setup-e2b.mjs"));
+  const upgrade = fileURLToPath(new URL("./e2b-upgrade.mjs", import.meta.url));
+  if (existsSync(upgrade)) copyFileSync(upgrade, path.join(root, "infra/compose/e2b-upgrade.mjs"));
   copyFileSync(
     fileURLToPath(new URL("../../.gitignore", import.meta.url)),
     path.join(root, ".gitignore"),
@@ -37,6 +39,20 @@ const fs = require('node:fs');
 const args = process.argv.slice(2);
 const name = require('node:path').basename(process.argv[1]);
 fs.appendFileSync(process.env.CALLS, JSON.stringify([name,...args])+'\\n');
+if (name === 'tar') { fs.writeFileSync(args[args.indexOf('-czf')+1], 'fake-data-backup'); process.exit(0); }
+if (name === 'docker' && args.includes('scripts/setup-e2b-homes.ts')) {
+ if (args.includes('--verify') && process.env.FAIL_VERIFY) process.exit(1);
+ if (args.includes('--verify') && process.env.EXPECT_TEMPLATE && (args.includes('WORKER_TEMPLATE') ? process.env.WORKER_TEMPLATE : 'rakazo-worker-pi-native') !== process.env.EXPECT_TEMPLATE) process.exit(1);
+ const computers=process.env.UPGRADE_EXISTING && !fs.existsSync('.upgraded') ? [{id:'computer-old',spaceId:'space-old',scope:'team'}] : [];
+ console.log(JSON.stringify(args.includes('--prepare') ? {prepared:'computer-old'} : {computers,previews:process.env.UNMAPPED && args.includes('--plans') ? [{computerId:'computer-old',notCopied:[{homePath:'legacy.txt',kind:'unmapped'}]}] : [],blockers:{runs:process.env.BUSY_RUNS?1:0,controls:0,leases:0,maintenance:0,unsupported:0}})); process.exit(0);
+}
+if (name === 'docker' && args.includes('scripts/migrate-home-to-volumes.ts')) {
+ if (process.env.FAIL_MIGRATION && !args.includes('--dry-run')) process.exit(1);
+ if (!args.includes('--dry-run')) fs.writeFileSync('.upgraded','yes');
+ console.log(JSON.stringify({outcome:args.includes('--dry-run')?'planned':'adopted'})); process.exit(0);
+}
+if (name === 'docker' && args.includes('scripts/migrate-skills-to-volumes.ts')) { console.log(JSON.stringify({events:[]})); process.exit(0); }
+if (name === 'docker' && args.includes('postgres')) { console.log('fake-database-backup'); process.exit(0); }
 if (name === 'git') {
  if (args.includes('rev-parse')) console.log('${sha}');
 } else if (name === 'docker') {
@@ -52,7 +68,7 @@ if (name === 'git') {
  }
 } else if (name === 'pnpm' && process.env.FAIL_BUILD && args.includes('template:build')) process.exit(1);
 `;
-  for (const name of ["git", "docker", "pnpm"])
+  for (const name of ["git", "docker", "pnpm", "tar"])
     writeFileSync(path.join(root, "bin", name), fake, { mode: 0o755 });
   const calls = path.join(root, "calls");
   const baseEnv = { ...process.env };
@@ -297,4 +313,92 @@ test("unreachable E2B from the application containers refuses before template pu
     false,
   );
   assert.equal(existsSync(path.join(f.root, ".env.e2b.compose.json")), false);
+});
+
+test("existing homes are upgraded before services restart and no snapshots remain", (t) => {
+  const f = fixture(t);
+  const result = f.invoke(["--migrate-existing"], { UPGRADE_EXISTING: "1" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(existsSync(path.join(f.root, ".upgraded")), true);
+  const calls = f.calls();
+  const migrate = calls.findIndex(
+    (c) => c.includes("scripts/migrate-home-to-volumes.ts") && !c.includes("--dry-run"),
+  );
+  const start = calls.findIndex((c) => c.includes("up"));
+  assert.ok(migrate >= 0 && start > migrate);
+  const verify = calls.findIndex(
+    (c) => c.includes("scripts/setup-e2b-homes.ts") && c.includes("--verify"),
+  );
+  assert.ok(verify > migrate && verify < start);
+  assert.equal(existsSync(path.join(f.root, ".env.e2b.upgrade.json")), false);
+});
+
+test("active generations refuse the upgrade before any build or service change", (t) => {
+  const f = fixture(t);
+  const result = f.invoke(["--migrate-existing"], { UPGRADE_EXISTING: "1", BUSY_RUNS: "1" });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Active generations/);
+  assert.equal(
+    f.calls().some((c) => c.includes("template:build") || c.includes("stop") || c.includes("up")),
+    false,
+  );
+});
+
+test("partial migration stays in maintenance and resumes without another database backup", (t) => {
+  const f = fixture(t);
+  const first = f.invoke(["--migrate-existing"], { UPGRADE_EXISTING: "1", FAIL_MIGRATION: "1" });
+  assert.notEqual(first.status, 0);
+  assert.equal(existsSync(path.join(f.root, ".env.e2b.upgrade.json")), true);
+  assert.equal(
+    f.calls().some((c) => c.includes("up")),
+    false,
+  );
+  const again = f.invoke([], { UPGRADE_EXISTING: "1" });
+  assert.equal(again.status, 0, again.stderr);
+  assert.equal(existsSync(path.join(f.root, ".upgraded")), true);
+  assert.equal(f.calls().filter((c) => c.some((v) => v.includes("pg_dump"))).length, 1);
+  assert.equal(existsSync(path.join(f.root, ".env.e2b.upgrade.json")), false);
+});
+
+test("unmapped legacy entries need consent before services stop or templates publish", (t) => {
+  const f = fixture(t);
+  const result = f.invoke(["--migrate-existing"], { UPGRADE_EXISTING: "1", UNMAPPED: "1" });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Unmapped legacy entries/);
+  assert.equal(
+    f.calls().some((c) => c.includes("stop") || c.includes("up") || c.includes("template:build")),
+    false,
+  );
+  assert.equal(existsSync(path.join(f.root, ".env.e2b.upgrade.json")), false);
+  assert.equal(statSync(path.join(f.root, ".env.e2b.plan.json")).mode & 0o777, 0o600);
+});
+
+test("worker probe failure keeps an upgraded deployment in maintenance", (t) => {
+  const f = fixture(t);
+  const result = f.invoke(["--migrate-existing"], { UPGRADE_EXISTING: "1", FAIL_VERIFY: "1" });
+  assert.notEqual(result.status, 0);
+  assert.equal(existsSync(path.join(f.root, ".upgraded")), true);
+  assert.equal(existsSync(path.join(f.root, ".env.e2b.upgrade.json")), true);
+  assert.equal(f.calls().at(-1).includes("stop"), true);
+});
+
+test("a concurrent installer refuses before commands run and a stale lock can be retried", (t) => {
+  const f = fixture(t);
+  writeFileSync(path.join(f.root, ".env.e2b.setup.lock"), String(process.pid));
+  const blocked = f.invoke();
+  assert.notEqual(blocked.status, 0);
+  assert.deepEqual(f.calls(), []);
+  writeFileSync(path.join(f.root, ".env.e2b.setup.lock"), "2147483646");
+  const retried = f.invoke();
+  assert.equal(retried.status, 0, retried.stderr);
+  assert.equal(existsSync(path.join(f.root, ".env.e2b.setup.lock")), false);
+});
+
+test("the final probe uses a custom worker template selected by the operator", (t) => {
+  const f = fixture(t);
+  const result = f.invoke([], {
+    WORKER_TEMPLATE: "custom-pi-worker",
+    EXPECT_TEMPLATE: "custom-pi-worker",
+  });
+  assert.equal(result.status, 0, result.stderr);
 });

@@ -20,6 +20,22 @@ const context = {
 };
 
 describe("E2B computer backend", () => {
+  it("does not report a stopped computer when pausing fails at the provider", async () => {
+    const sdk: E2BSandboxSdk = {
+      create: vi.fn(),
+      connect: vi.fn(),
+      pause: vi.fn(async () => {
+        throw new Error("provider unreachable");
+      }),
+    };
+    await expect(
+      new E2BSandboxProvider("test-key", sdk).stop(
+        { id: "old", providerRef: "old", kind: "e2b", botId: "home" },
+        context,
+      ),
+    ).rejects.toThrow("provider unreachable");
+  });
+
   it("creates the canonical computer without starting a second SDK desktop", async () => {
     const machine = fakeE2BMachine("canonical-computer");
     const create = vi.spyOn(RawSandbox, "create").mockResolvedValue(machine.sandbox);

@@ -11,12 +11,13 @@ import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { ComputerBusyError, provisionComputer } from "./computer-lifecycle.js";
 import { checkpointComputerWorkspace, restoreComputerWorkspace } from "./computer-workspace.js";
+import { prepareHomeForE2B } from "./e2b-home-upgrade.js";
 import { FakeSandboxProvider } from "./fake-sandbox.js";
 import { MemoryVolumeFiles } from "./fake-volume-files.js";
 import { FakeWorkerProvider } from "./fake-worker-provider.js";
 import { LocalAgentHomeStore } from "./home.js";
 import type { HomeMoveOptions } from "./home-volume-migration.js";
-import { moveHomeToVolumes } from "./home-volume-migration.js";
+import { moveHomeToVolumes, previewHomeVolumeMove } from "./home-volume-migration.js";
 import { createJobReconciler } from "./job-reconciler.js";
 import { InMemoryJobQueue } from "./wakeup.js";
 import { composeWorkers } from "./worker-composition.js";
@@ -781,4 +782,100 @@ describe("moving a home from snapshots to volumes", () => {
     expect(await homeFiles(computer.homeKey)).toEqual(original);
     expect(original[`bots/${ada.id}/notes.md`]).toBe("ada notes");
   });
+});
+
+it("prepares a stopped Docker home for verified volume adoption without changing its files", async () => {
+  const { computer, ada } = await teamHome();
+  await prisma.computer.update({
+    where: { id: computer.id },
+    data: { kind: "docker", providerRef: "old-docker" },
+  });
+  const source = new FakeSandboxProvider();
+  await prepareHomeForE2B({ prisma, home, source }, computer.id, fixture.context);
+  const prepared = await prisma.computer.findUniqueOrThrow({ where: { id: computer.id } });
+  expect(prepared.kind).toBe("e2b");
+  expect(prepared.providerRef).toBeNull();
+  expect(prepared.homeStorage).toBe("snapshot");
+  expect(prepared.maintenanceId).toBeNull();
+  expect(await homeFiles(computer.homeKey)).toMatchObject({
+    [`bots/${ada.id}/notes.md`]: "ada notes",
+  });
+  expect((await move(computer.id)).outcome).toBe("adopted");
+  expect(await homeStorageOf(computer.id)).toBe("volumes");
+});
+
+it("refuses upgrade preparation while a bot is generating, before touching its source", async () => {
+  const { computer, ada } = await teamHome();
+  await prisma.computer.update({
+    where: { id: computer.id },
+    data: { kind: "docker", providerRef: "old-docker" },
+  });
+  await fixture.seedRun(ada);
+  const source = new FakeSandboxProvider();
+  const stop = vi.spyOn(source, "stop");
+  await expect(
+    prepareHomeForE2B({ prisma, home, source }, computer.id, fixture.context),
+  ).rejects.toThrow("active");
+  expect(stop).not.toHaveBeenCalled();
+  const after = await prisma.computer.findUniqueOrThrow({ where: { id: computer.id } });
+  expect(after.kind).toBe("docker");
+  expect(after.providerRef).toBe("old-docker");
+  expect(after.maintenanceId).toBeNull();
+});
+
+it("recovers an expired dedicated preparation before restarting its team upgrade", async () => {
+  const { computer, spaceId } = await teamHome();
+  await prisma.computer.update({
+    where: { id: computer.id },
+    data: { kind: "docker", providerRef: "old-docker" },
+  });
+  const dedicated = await fixture.seedComputer(spaceId, { scope: "dedicated" });
+  await prisma.computer.update({
+    where: { id: dedicated.id },
+    data: { maintenanceId: `home-move:${dedicated.id}:expired`, homeMoveExpiresAt: new Date(0) },
+  });
+  await prepareHomeForE2B(
+    { prisma, home, source: new FakeSandboxProvider() },
+    computer.id,
+    fixture.context,
+  );
+  expect(
+    (await prisma.computer.findUniqueOrThrow({ where: { id: dedicated.id } })).maintenanceId,
+  ).toBeNull();
+  expect((await prisma.computer.findUniqueOrThrow({ where: { id: computer.id } })).kind).toBe(
+    "e2b",
+  );
+});
+
+it("retains the source reference when stopping the source computer fails", async () => {
+  const { computer } = await teamHome();
+  await prisma.computer.update({
+    where: { id: computer.id },
+    data: { kind: "docker", providerRef: "old-docker" },
+  });
+  const source = new FakeSandboxProvider();
+  vi.spyOn(source, "stop").mockRejectedValue(new Error("stop failed"));
+  await expect(
+    prepareHomeForE2B({ prisma, home, source }, computer.id, fixture.context),
+  ).rejects.toThrow("stop failed");
+  const after = await prisma.computer.findUniqueOrThrow({ where: { id: computer.id } });
+  expect(after.kind).toBe("docker");
+  expect(after.providerRef).toBe("old-docker");
+  expect(after.maintenanceId).toBeNull();
+});
+
+it("previews unmapped Docker files without changing storage, allocating volumes or taking maintenance", async () => {
+  const { computer, spaceId } = await teamHome();
+  await prisma.computer.update({ where: { id: computer.id }, data: { kind: "docker" } });
+  await writeFile(path.join(home.pathFor(computer.homeKey), "legacy.txt"), "original legacy file");
+  const before = await homeFiles(computer.homeKey);
+  const plan = await previewHomeVolumeMove({ prisma, home }, computer.id, fixture.context);
+  expect(plan.files).toBe(3);
+  expect(plan.notCopied).toEqual([{ homePath: "legacy.txt", kind: "unmapped" }]);
+  expect(await homeFiles(computer.homeKey)).toEqual(before);
+  expect(await prisma.volume.count({ where: { spaceId } })).toBe(0);
+  const after = await prisma.computer.findUniqueOrThrow({ where: { id: computer.id } });
+  expect(after.kind).toBe("docker");
+  expect(after.homeStorage).toBe("snapshot");
+  expect(after.maintenanceId).toBeNull();
 });

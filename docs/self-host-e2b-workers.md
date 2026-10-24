@@ -25,57 +25,92 @@ To add a worker provider, see
 
 ## Configure an existing source deployment with one command
 
-The setup script builds the two E2B templates separately, then switches the existing API and worker
-services to E2B. It targets `infra/compose/docker-compose.yml`; it does not install E2B or configure
-published-images and production Compose layouts.
+Run setup on the deployment host from the checkout matching the running API and worker revision.
+It builds the lightweight Pi worker and desktop computer templates separately, upgrades existing
+Docker or snapshot-based E2B homes, and starts the application only after the upgrade is complete.
+It targets `infra/compose/docker-compose.yml`; it does not install E2B or configure other Compose
+layouts.
 
-Run it on the deployment host, from the checkout matching the running API and worker revision.
-The script refuses a revision mismatch before publishing templates. Runtime sources must have no
-uncommitted changes. Install the Node and pnpm versions listed above and run
-`pnpm install --frozen-lockfile` first. Docker must be accessible to the current user, and that user
-must already be logged into a registry the E2B template builder can pull from.
+Install the Node and pnpm versions listed above and install dependencies first. `CI=true` prevents
+pnpm from leaving a noninteractive reinstall waiting at its confirmation prompt:
 
 ```bash
-# Inspect the actions without writes, network calls, builds or restarts:
+CI=true pnpm install --frozen-lockfile
 node infra/compose/setup-e2b.mjs --computer-image registry.example.com/rakazo-computer:local --dry-run
-
-# Build the templates and switch this deployment:
 node infra/compose/setup-e2b.mjs --computer-image registry.example.com/rakazo-computer:local
 ```
 
-The terminal asks for the E2B domain and API key. Key entry is hidden; Enter keeps an existing
-value. Without a terminal, provide `E2B_DOMAIN` and `E2B_API_KEY` in the environment or the existing
-`.env`. Custom endpoint layouts must provide both `E2B_API_URL` and `E2B_SANDBOX_URL`; these addresses
-must be reachable from the API and worker containers as well as the build host.
+Docker must be accessible to the current user, with push access to a registry the E2B builder can
+pull from. Runtime sources must have no uncommitted changes. The script checks the application
+revision before publishing templates. The registry argument applies only to the desktop image;
+the Pi worker has its own Node-based builder. `WORKER_TEMPLATE` can select another worker name.
 
-The lightweight `rakazo-worker-pi-native` template uses its own Node-based builder. The Docker
-registry argument is used only for the desktop computer image and its `desktop` template.
-`WORKER_TEMPLATE` selects a different worker template name when set.
+The terminal asks for the E2B domain and API key. Key entry is hidden; Enter keeps a saved value.
+For a custom endpoint layout, set both `E2B_API_URL` and `E2B_SANDBOX_URL`. Both must be reachable
+from the host and the API/worker containers. A loopback address inside an application container
+points at that container, not the E2B host. Setup probes volume API access from both containers
+before building. Keep the template upload port private.
 
-The script checks E2B volume API access from the host and both application containers before any
-build, publishes the templates and writes
-`.env.e2b.compose.json` with file mode `0600`. This private file contains the credentials, is ignored
-by Git, and leaves the existing `.env` unchanged. Keep it with the deployment configuration and
-protect it like `.env`. Do not paste its contents into issues, commits or logs.
+### Upgrade existing bots
 
-The source Compose file forces Docker even when `.env` selects E2B. For subsequent deployments,
-keep using the override; the script prints the complete command:
+Finish or cancel active generations and release computer control before setup. The script refuses
+active runs, live computer leases, concurrent maintenance and unsupported source providers. It
+uses the actual source provider to checkpoint and stop each old computer; it does not treat an old
+Docker reference as an E2B sandbox.
+
+Setup previews existing homes before stopping the services and writes the private report to
+`.env.e2b.plan.json`. It asks for explicit consent to the one-way move to volumes. Bot folders and
+the shared folder move to their corresponding volumes. Some legacy entries, such as files outside
+those folders or symbolic links, cannot be mapped by the home mover. Setup shows their count and
+report, then asks separately whether to retain them **only in the original home and backup**.
+They are not deleted, but they are not available in the new worker until restored or moved manually.
+Declining stops setup before any template publication or service shutdown.
+
+After consent, setup builds the templates, stops API and worker, rechecks that the deployment is
+idle, and writes a verified Postgres dump under `backups/e2b-<id>/`. It pauses and checkpoints the
+source computers, then archives application data in that backup directory before adopting any
+volumes. It migrates team homes before dedicated homes, verifies copied files and modes, and
+copies legacy user skills to the shared volumes. Original homes and old machines are retained.
+Detailed migration manifests are stored under `DATA_DIR/e2b-upgrade/`.
+
+For noninteractive operation, supply `E2B_DOMAIN` and `E2B_API_KEY` through the environment or
+existing private configuration. Explicitly consent to the home move with `--migrate-existing`.
+Use `--leave-unmapped` only after reviewing the private plan and accepting that the listed entries
+will remain only in their original home and backup:
+
+```bash
+node infra/compose/setup-e2b.mjs --computer-image registry.example.com/rakazo-computer:local \
+  --migrate-existing
+```
+
+A successful setup requires every existing computer home to use E2B volumes, API and worker to be
+ready, and a temporary worker VM to read its guest and skills and perform a file round trip on a
+private volume. Setup deletes that VM and its probe file afterward. It does not test a real model
+credential or renew expired MCP authorization; use [Verify](#verify) for a conversation-level check.
+
+### Configuration and recovery
+
+Credentials are stored in `.env.e2b.compose.json`, ignored by Git with mode `0600`; the base `.env`
+is unchanged. The source Compose file forces Docker without this override. Use the full command
+printed by setup for subsequent deployments:
 
 ```bash
 docker compose --env-file .env -f infra/compose/docker-compose.yml \
   -f .env.e2b.compose.json up -d --pull never
 ```
 
-Setup recreates only `api` and `worker`, without running migrations or changing the database,
-web, supervisor, tunnel or computer containers. If the switch or health check fails, it restores
-the previous override and attempts to restart those services with their previous configuration.
-Already-published template builds are not rolled back. If recovery also fails, configuration is
-restored and the script reports that a manual restart is required.
+The private `.env.e2b.upgrade.json` journal records progress. If preparation or migration fails,
+API and worker remain stopped, E2B configuration stays in place, and setup reports an incomplete
+upgrade. Resolve the reported issue and rerun the same setup command to resume. It reuses the
+backup and already-adopted homes, retains previous manifests and restarts services only after all
+homes and skills are ready. Do not delete the journal or manually start services during a partial
+upgrade. An expired preparation reservation is cleared safely on retry.
 
-A successful health check proves startup with E2B selected, not a complete bot run. Follow
-[Verify](#verify) below. Existing homes are never migrated automatically; follow
-[Move existing homes onto volumes](#move-existing-homes-onto-volumes) when needed. Take a current
-backup and let active runs finish before switching a deployment.
+Before home preparation starts, a startup failure restores the previous application configuration.
+After home preparation starts, automatically reverting to Docker could separate computers from
+already-adopted volumes, so setup stays in maintenance instead. Published template builds are never
+rolled back. Protect the override, journal, plans, manifests and backups as private deployment data;
+never paste their contents into commits, issues or public logs.
 
 ## Build the templates
 
@@ -143,8 +178,8 @@ The rest of the E2B setup is in the [provider setup guide](./self-host-sandbox-p
 A new space on E2B gets a team computer whose home is on volumes. A dedicated computer created
 later takes the storage of its space's team computer. Its runs go to workers with no move.
 
-A computer created before this release keeps its home in snapshots under `DATA_DIR`, and its runs
-stay in process. Move each such home once with `scripts/migrate-home-to-volumes.ts`. The move is
+Until upgraded, a computer created before this release keeps its home in snapshots under `DATA_DIR`,
+and its runs stay in process. The setup command above moves these homes as part of the upgrade. The following manual commands are for controlled recovery or standalone moves with `scripts/migrate-home-to-volumes.ts`. The move is
 one way: Rakazo has no command to move a home back to snapshots. The snapshot stays in `DATA_DIR`
 as the pre-move original, and nothing writes to it after the move.
 

@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-10-25
+
+#### Fixed
+
+- Existing self-hosted bots can move from Docker or snapshot-based E2B computers to isolated Pi workers through the [setup command](docs/self-host-e2b-workers.md#configure-an-existing-source-deployment-with-one-command), with backups and a resumable home migration.
+
 ### 2026-10-24
 
 #### Added

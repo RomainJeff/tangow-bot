@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import {
   chmodSync,
   closeSync,
@@ -15,6 +16,7 @@ import {
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs, parseEnv } from "node:util";
+import { acquireSetupLock, HomeUpgrade } from "./e2b-upgrade.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const overridePath = path.join(root, ".env.e2b.compose.json");
@@ -82,11 +84,14 @@ function prompt(label, fallback, hidden = false) {
 }
 
 function atomicWrite(filename, contents) {
-  const temporary = `${filename}.tmp`;
+  const temporary = `${filename}.tmp-${randomUUID()}`;
   const file = openSync(temporary, "wx", 0o600);
   try {
-    writeFileSync(file, contents);
-    closeSync(file);
+    try {
+      writeFileSync(file, contents);
+    } finally {
+      closeSync(file);
+    }
     renameSync(temporary, filename);
     chmodSync(filename, 0o600);
   } finally {
@@ -99,12 +104,14 @@ async function main() {
     options: {
       "computer-image": { type: "string" },
       "dry-run": { type: "boolean" },
+      "migrate-existing": { type: "boolean" },
+      "leave-unmapped": { type: "boolean" },
       help: { type: "boolean" },
     },
   });
   if (values.help) {
     console.log(
-      "Usage: node infra/compose/setup-e2b.mjs --computer-image <registry>/<image>:<tag> [--dry-run]\nRun in the deployed checkout. Docker must be usable without sudo. Domain and hidden API key are requested interactively.",
+      "Usage: node infra/compose/setup-e2b.mjs --computer-image <registry>/<image>:<tag> [--dry-run] [--migrate-existing] [--leave-unmapped]\nExisting homes are detected and upgraded after explicit consent. Run in the deployed checkout. Docker must be usable without sudo. Domain and hidden API key are requested interactively.",
     );
     return;
   }
@@ -118,7 +125,7 @@ async function main() {
     throw new Error("Pass --computer-image <registry>/<image>:<tag> with push access.");
   if (values["dry-run"]) {
     console.log(
-      `Dry run: check tools and deployed revision; request E2B domain and hidden key; probe volumes; build Pi worker; build/push ${image}; build desktop; write private Compose override; recreate api/worker; check health. No files, network calls or services changed.`,
+      `Dry run: check tools and deployed revision; request E2B domain and hidden key; probe volumes; build Pi worker; build/push ${image}; build desktop; inspect existing homes and active work; back up database/data; stop services and source computers; migrate homes and skills with manifests; write private Compose override; recreate api/worker; check health and remaining homes. No files, network calls or services changed.`,
     );
     return;
   }
@@ -131,6 +138,7 @@ async function main() {
     )
   )
     throw new Error("Node 22.22.2+, 24, or 26+ is required.");
+  acquireSetupLock(root);
   if (!existsSync(envPath) || !existsSync(composePath))
     throw new Error("Run from a deployed source checkout with .env and source Compose.");
   run("pnpm", ["--version"]);
@@ -160,7 +168,7 @@ async function main() {
   const revisionFormat =
     '{{range .Config.Env}}{{if eq (index (split . "=") 0) "GIT_SHA"}}{{index (split . "=") 1}}{{end}}{{end}}';
   for (const service of ["api", "worker"]) {
-    const id = run("docker", [...oldCompose, "ps", "-q", service]);
+    const id = run("docker", [...oldCompose, "ps", "-a", "-q", service]);
     if (
       !id ||
       id.includes("\n") ||
@@ -189,6 +197,18 @@ async function main() {
     }
   const buildEnv = { ...process.env, ...connection };
   const workerTemplate = env.WORKER_TEMPLATE || "rakazo-worker-pi-native";
+  const upgrade = new HomeUpgrade({
+    root,
+    compose: oldCompose,
+    env: buildEnv,
+    run,
+    prompt,
+    flags: values,
+    template: workerTemplate,
+  });
+  if (upgrade.active) run("docker", [...oldCompose, "stop", "api", "worker"]);
+  upgrade.inspect(!upgrade.active);
+  upgrade.confirm();
   console.log("Checking E2B API and volume access...");
   run(
     "pnpm",
@@ -203,47 +223,55 @@ async function main() {
     ],
     buildEnv,
   );
-  console.log("Checking E2B access from API and worker containers...");
-  for (const service of ["api", "worker"]) {
+  if (!upgrade.active) {
+    console.log("Checking E2B access from API and worker containers...");
+    for (const service of ["api", "worker"]) {
+      run(
+        "docker",
+        [
+          ...oldCompose,
+          "exec",
+          "-T",
+          ...Object.keys(connection).flatMap((name) => ["-e", name]),
+          service,
+          "pnpm",
+          "--filter",
+          "@rakazo/adapters",
+          "exec",
+          "node",
+          "--input-type=module",
+          "-e",
+          'import { Volume } from "e2b"; await Volume.list({ requestTimeoutMs: 10000 });',
+        ],
+        buildEnv,
+        15000,
+      );
+    }
+    console.log("Building lightweight Pi worker template...");
     run(
-      "docker",
-      [
-        ...oldCompose,
-        "exec",
-        "-T",
-        ...Object.keys(connection).flatMap((name) => ["-e", name]),
-        service,
-        "pnpm",
-        "--filter",
-        "@rakazo/adapters",
-        "exec",
-        "node",
-        "--input-type=module",
-        "-e",
-        'import { Volume } from "e2b"; await Volume.list({ requestTimeoutMs: 10000 });',
-      ],
+      "pnpm",
+      ["--filter", "@rakazo/agent-run-worker", "template:build", "--name", workerTemplate],
       buildEnv,
-      15000,
+    );
+    console.log("Building and pushing desktop computer image...");
+    run("docker", ["build", "--platform", "linux/amd64", "-t", image, "infra/sandboxes/computer"]);
+    run("docker", ["push", image]);
+    const digest = run("docker", [
+      "image",
+      "inspect",
+      "--format",
+      "{{index .RepoDigests 0}}",
+      image,
+    ]);
+    if (!/^[^\s]+@sha256:[a-f0-9]{64}$/.test(digest))
+      throw new Error("Registry did not return an immutable image digest.");
+    console.log("Building desktop E2B template...");
+    run(
+      "pnpm",
+      ["--filter", "@rakazo/computer-e2b-template", "template:build", "--image", digest],
+      buildEnv,
     );
   }
-  console.log("Building lightweight Pi worker template...");
-  run(
-    "pnpm",
-    ["--filter", "@rakazo/agent-run-worker", "template:build", "--name", workerTemplate],
-    buildEnv,
-  );
-  console.log("Building and pushing desktop computer image...");
-  run("docker", ["build", "--platform", "linux/amd64", "-t", image, "infra/sandboxes/computer"]);
-  run("docker", ["push", image]);
-  const digest = run("docker", ["image", "inspect", "--format", "{{index .RepoDigests 0}}", image]);
-  if (!/^[^\s]+@sha256:[a-f0-9]{64}$/.test(digest))
-    throw new Error("Registry did not return an immutable image digest.");
-  console.log("Building desktop E2B template...");
-  run(
-    "pnpm",
-    ["--filter", "@rakazo/computer-e2b-template", "template:build", "--image", digest],
-    buildEnv,
-  );
   const environment = { ...connection, SANDBOX_PROVIDER: "e2b", WORKER_TEMPLATE: workerTemplate };
   const next = { services: { api: { environment }, worker: { environment } } };
   const nextCompose = [...compose, "-f", overridePath];
@@ -252,6 +280,8 @@ async function main() {
   atomicWrite(overridePath, `${JSON.stringify(next, null, 2)}\n`);
   try {
     run("docker", [...nextCompose, "config", "--quiet"]);
+    upgrade.perform();
+    upgrade.verify();
     run("docker", [...nextCompose, ...start]);
     const check = `const response = await fetch('http://127.0.0.1:3100/health', { signal: AbortSignal.timeout(5000) }); const body = await response.json(); if (!response.ok || !body.ok || body.sandbox !== 'e2b' || body.revision !== '${sha}') process.exit(1);`;
     let healthy = false;
@@ -285,6 +315,16 @@ async function main() {
     }
     if (!healthy) throw new Error("E2B API or worker readiness check failed.");
   } catch (error) {
+    if (upgrade.active) {
+      try {
+        run("docker", [...nextCompose, "stop", "api", "worker"]);
+      } catch {
+        /* The journal still prevents a false success on retry. */
+      }
+      throw new Error(
+        `${error.message} Existing-home upgrade is incomplete. API and worker remain stopped; keep the E2B override and rerun this setup command to resume. Journal: ${upgrade.journalPath}`,
+      );
+    }
     if (previous) atomicWrite(overridePath, previous);
     else rmSync(overridePath, { force: true });
     try {
@@ -298,9 +338,10 @@ async function main() {
       `${error.message} Previous application configuration restored. Published template builds are not rolled back.`,
     );
   }
+  upgrade.complete();
   const quote = (value) => `'${value.replaceAll("'", "'\\''")}'`;
   console.log(
-    `E2B configured. Keep using this Compose command:\ndocker ${nextCompose.map(quote).join(" ")} up -d --pull never\nExisting homes are not migrated. Open a bot computer and verify a worker run before considering E2B fully validated. See docs/self-host-e2b-workers.md.`,
+    `E2B configured. Keep using this Compose command:\ndocker ${nextCompose.map(quote).join(" ")} up -d --pull never\nExisting homes use E2B volumes. Open a bot computer and verify a worker run before considering E2B fully validated. See docs/self-host-e2b-workers.md.`,
   );
 }
 
