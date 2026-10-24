@@ -929,6 +929,7 @@ function planDraftAnswer(
   { path, proposed }: DraftRecord,
   input: Pick<AnswerRunInput, "answer" | "edits">,
   card: AskCard,
+  shownProposal: unknown,
 ) {
   if (input.edits?.name !== undefined || input.edits?.instructions !== undefined) {
     throw new InvalidAnswerError("Only the message text can be edited");
@@ -951,13 +952,25 @@ function planDraftAnswer(
         : {
             proposed: current,
             approved: text,
-            // Shaped like the proposal the card was requested with (executor effectProposal).
-            proposal: (request && typeof request === "object" && !Array.isArray(request)
-              ? request
-              : { request }) as Record<string, unknown>,
+            // The proposal the card was requested with, its run secrets masked, now with the
+            // user's text: the stored request may hold what that proposal hid.
+            proposal: proposalWithText(shownProposal, effect.request, path, text),
             card: shown ? { draft: shown, detail: askDraftDetail(shown) } : {},
           },
   };
+}
+
+function proposalWithText(
+  proposal: unknown,
+  request: unknown,
+  path: DraftRecord["path"],
+  text: string,
+): Record<string, unknown> {
+  // effectProposal wraps a request that is not an object as `{ request }`.
+  const edited = withValueAt(proposal, Array.isArray(request) ? ["request", ...path] : path, text);
+  return edited && typeof edited === "object" && !Array.isArray(edited)
+    ? (edited as Record<string, unknown>)
+    : {};
 }
 
 /**
@@ -1159,7 +1172,17 @@ export async function answerRunInputInTransaction(
         approvalUserId = input.answeredByUserId;
       }
       if (draft) {
-        draftAnswer = planDraftAnswer(approvalEffect, draft, input, pendingAsk);
+        const requested = await tx.sessionEntry.findUnique({
+          where: { id: askId },
+          select: { payload: true },
+        });
+        draftAnswer = planDraftAnswer(
+          approvalEffect,
+          draft,
+          input,
+          pendingAsk,
+          (requested?.payload as { proposal?: unknown } | null)?.proposal,
+        );
       } else if (input.edits) {
         if (input.edits.text !== undefined) {
           throw new InvalidAnswerError("Only a mail draft's text can be edited");
