@@ -212,6 +212,7 @@ for (const width of [1440, 390]) {
     // Editing in place: the state reads Editing while typing, Edited once the field is left.
     await text.click();
     await expect(header).toContainText("Editing");
+    await expect(text).toHaveCSS("box-shadow", /0px 0px 0px 1\.5px/);
     await text.fill(EDITED);
     await shoot(page, testInfo, "editing");
     await draftCard.getByText("Subject").click();

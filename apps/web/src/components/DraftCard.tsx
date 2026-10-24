@@ -1,7 +1,7 @@
 import { useLingui } from "@lingui/react/macro";
 import type { AskDraft } from "@rakazo/contracts";
 import { ASK_DRAFT_TEXT_MAX_LENGTH } from "@rakazo/contracts";
-import { Button, FramedBlock, UserAvatar } from "@rakazo/ui-web";
+import { Button, FramedBlock, Textarea, UserAvatar } from "@rakazo/ui-web";
 import { Check, Copy, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
@@ -215,13 +215,13 @@ export function DraftCard({
         state = view.undo ? (
           <>
             {t`Discarded`} ·{" "}
-            <button
-              type="button"
+            <Button
+              variant="link"
               onClick={undo}
-              className="text-foreground underline decoration-border underline-offset-2 duration-(--duration-hover) ease-quiet hover:decoration-foreground"
+              className="h-auto p-0 text-meta font-normal text-foreground underline decoration-border underline-offset-2 duration-(--duration-hover) ease-quiet hover:decoration-foreground"
             >
               {t`Undo`}
-            </button>
+            </Button>
           </>
         ) : (
           t`Discarded`
@@ -338,7 +338,7 @@ export function DraftCard({
               {draft.body}
             </p>
           ) : (
-            <textarea
+            <Textarea
               aria-label={t`Edit message`}
               dir="auto"
               value={text}
@@ -347,7 +347,7 @@ export function DraftCard({
               onChange={(event) => keepEdit(event.target.value)}
               onFocus={() => setFocused(true)}
               onBlur={() => setFocused(false)}
-              className="field-sizing-content min-w-0 flex-1 resize-none rounded-card bg-well px-4 py-3 text-body text-foreground outline-none duration-(--duration-hover) ease-quiet read-only:text-muted-foreground hover:ring-1 hover:ring-option-ring-hover focus-visible:ring-selected focus-visible:ring-foreground"
+              className="min-h-0 w-auto min-w-0 flex-1 resize-none rounded-card border-0 bg-well px-4 py-3 text-body text-foreground duration-(--duration-hover) ease-quiet read-only:text-muted-foreground hover:ring-1 hover:ring-option-ring-hover focus-visible:ring-selected focus-visible:ring-foreground md:text-body dark:bg-well"
             />
           )}
         </Sender>
