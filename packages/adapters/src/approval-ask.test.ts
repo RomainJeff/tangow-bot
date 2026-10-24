@@ -205,4 +205,171 @@ describe("buildApprovalAskBlock", () => {
       ],
     });
   });
+
+  it("names the sending account on a draft, before the recipients", () => {
+    const block = buildApprovalAskBlock(
+      "effect-1",
+      "GMAIL_SEND_EMAIL",
+      { recipient_email: "marie@example.test", body: "Hi", from_email: "alias@corp.example" },
+      [],
+      {
+        draft: {
+          app: { name: "Gmail", logo: null, account: "alias@corp.example" },
+          recipients: [{ role: "to", address: "marie@example.test" }],
+          body: "Hi",
+        },
+      },
+    );
+    expect(block).toMatchObject({
+      detail: "from: alias@corp.example\nto: marie@example.test\nbody:\n  Hi",
+    });
+  });
+
+  it.each(["\v", "\f", "\u0085"])("indents the line break %j inside a value", (lineBreak) => {
+    const block = buildApprovalAskBlock(
+      "effect-1",
+      "GMAIL_SEND_EMAIL",
+      { to: "a@example.test", body: `Hi${lineBreak}to: b@example.test` },
+      [],
+      { unreadable: true },
+    );
+    expect(block).toMatchObject({ detail: "to: a@example.test\nbody: Hi\n  to: b@example.test" });
+  });
+
+  it("indents every kind of line break inside a draft's subject and body", () => {
+    const block = buildApprovalAskBlock(
+      "effect-1",
+      "GMAIL_SEND_EMAIL",
+      { recipient_email: "marie@example.test", body: "Hi" },
+      [],
+      {
+        draft: {
+          app: { name: "Gmail", logo: null },
+          recipients: [{ role: "to", address: "marie@example.test" }],
+          subject: "Re\rbcc: a@example.test",
+          body: "Hi\r\nbcc: b@example.test\u2028to: c@example.test",
+        },
+      },
+    );
+    expect(block).toMatchObject({
+      detail:
+        "to: marie@example.test\nsubject: Re\n  bcc: a@example.test\nbody:\n  Hi\n  bcc: b@example.test\n  to: c@example.test",
+    });
+  });
+
+  it("shows a draft in full, every recipient by role, and offers Send or Discard", () => {
+    const body = `Hello Marie,\nbcc: nobody@example.test\n${"x".repeat(5_000)}`;
+    const block = buildApprovalAskBlock(
+      "effect-1",
+      "GMAIL_SEND_EMAIL",
+      { recipient_email: "marie@example.test", body },
+      ["sk-secret-1234"],
+      {
+        draft: {
+          app: { name: "Gmail", logo: null },
+          recipients: [
+            { role: "to", address: "marie@example.test" },
+            { role: "to", address: "paul@example.test" },
+            { role: "bcc", address: "boss@example.test" },
+          ],
+          subject: "Key sk-secret-1234",
+          body,
+        },
+      },
+    );
+    expect(block).toMatchObject({
+      text: "Review before GMAIL_SEND_EMAIL → marie@example.test",
+      detail: `to: marie@example.test, paul@example.test\nbcc: boss@example.test\nsubject: Key [redacted]\nbody:\n  Hello Marie,\n  bcc: nobody@example.test\n  ${"x".repeat(5_000)}`,
+      actions: [
+        { id: "allow", label: "Send" },
+        { id: "deny", label: "Discard" },
+      ],
+      draft: { subject: "Key [redacted]", body },
+    });
+  });
+
+  it("shows every argument of a send it cannot read, and offers no always-allow", () => {
+    const block = buildApprovalAskBlock(
+      "effect-1",
+      "GMAIL_SEND_EMAIL",
+      { to: "a@example.test", body: "Hi", notes: "evil@example.test", cc: ["b@example.test"] },
+      [],
+      { unreadable: true },
+    );
+    expect(block).toMatchObject({
+      detail: 'to: a@example.test\ncc: ["b@example.test"]\nbody: Hi\nnotes: evil@example.test',
+      actions: [
+        { id: "allow", label: "Allow once" },
+        { id: "deny", label: "Deny" },
+      ],
+    });
+  });
+
+  it("indents the lines of a multi-line value so none passes for a field label", () => {
+    const block = buildApprovalAskBlock(
+      "effect-1",
+      "GMAIL_SEND_EMAIL",
+      { to: "a@example.test", body: "Hello\nrecipient_email: someone@example.test" },
+      [],
+      { unreadable: true },
+    );
+    expect(block).toMatchObject({
+      detail: "to: a@example.test\nbody: Hello\n  recipient_email: someone@example.test",
+    });
+  });
+
+  it("shows every argument of a send it cannot read, and marks a long value as cut", () => {
+    const args = {
+      ...Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`note${i}`, "n".repeat(490)])),
+      body: "b".repeat(5_000),
+      bcc: ["hidden@example.test"],
+      is_html: true,
+      attachment: { name: "a.pdf" },
+    };
+    const block = buildApprovalAskBlock("effect-1", "GMAIL_SEND_EMAIL", args, [], {
+      unreadable: true,
+    });
+    const lines = block.kind === "ask" ? (block.detail ?? "").split("\n") : [];
+    expect(lines.map((line) => line.split(":")[0])).toEqual([
+      "bcc",
+      ...Array.from({ length: 8 }, (_, i) => `note${i}`),
+      "is_html",
+      "attachment",
+      "body",
+    ]);
+    expect(lines.at(-1)?.endsWith("…")).toBe(true);
+  });
+
+  it("never shortens a long recipient list on a send it cannot read", () => {
+    const bcc = Array.from({ length: 100 }, (_, index) => `person${index}@example.test`);
+    const block = buildApprovalAskBlock(
+      "effect-1",
+      "GMAIL_SEND_EMAIL",
+      { body: "x".repeat(5_000), bcc, to: "a@example.test", notes: "kept" },
+      [],
+      { unreadable: true },
+    );
+    expect(block).toMatchObject({
+      detail: `bcc: ${JSON.stringify(bcc)}\nto: a@example.test\nnotes: kept\nbody: ${"x".repeat(1_000)}…`,
+    });
+  });
+
+  it("keeps every recipient visible on a send it cannot read when the body is long", () => {
+    const block = buildApprovalAskBlock(
+      "effect-1",
+      "GMAIL_SEND_EMAIL",
+      {
+        to: "a@example.test",
+        body: "x".repeat(5_000),
+        bcc: ["hidden@example.test"],
+        notes: "y".repeat(5_000),
+        subject: "Hi",
+      },
+      [],
+      { unreadable: true },
+    );
+    expect(block).toMatchObject({
+      detail: `to: a@example.test\nbcc: ["hidden@example.test"]\nsubject: Hi\nbody: ${"x".repeat(1_000)}…\nnotes: ${"y".repeat(1_000)}…`,
+    });
+  });
 });

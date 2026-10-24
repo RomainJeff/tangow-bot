@@ -138,6 +138,20 @@ export const ASK_DISMISSED_ANSWER = "dismissed";
 export const ProposalKind = z.enum(["routine"]);
 export type ProposalKind = z.infer<typeof ProposalKind>;
 
+/** A mail the bot proposes to send: the card shows it as it will leave. */
+export const AskDraft = z.object({
+  app: z.object({
+    name: z.string(),
+    logo: z.string().nullable(),
+    /** The sending account, when the send names it. */
+    account: z.string().optional(),
+  }),
+  recipients: z.array(z.object({ role: z.enum(["to", "cc", "bcc"]), address: z.string() })).min(1),
+  subject: z.string().optional(),
+  body: z.string(),
+});
+export type AskDraft = z.infer<typeof AskDraft>;
+
 export const AskBlock = z.object({
   kind: z.literal("ask"),
   text: z.string(),
@@ -188,6 +202,8 @@ export const AskBlock = z.object({
    * `answer`, so nothing the user typed in the app is in it.
    */
   confirms: z.enum(["created", "updated"]).optional(),
+  /** An outbound mail: a draft the user sends. A shape this client cannot read shows as the plain card. */
+  draft: AskDraft.optional().catch(undefined),
 });
 
 export const CHOICE_DISMISSED_ANSWER_ID = "_dismissed";

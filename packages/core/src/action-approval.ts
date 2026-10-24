@@ -64,6 +64,10 @@ export type ActionApprovalRule = Pick<
   "effect" | "matchKind" | "matchValue"
 >;
 
+export function isEmailConnectorKind(connectorKind: string): boolean {
+  return EMAIL_CONNECTOR_SLUGS.has(connectorKind.toLowerCase());
+}
+
 export function connectorKindFromToolName(toolName: string, connectorKinds: string[] = []): string {
   const normalizedTool = toolName.toLowerCase();
   const matched = connectorKinds
@@ -126,7 +130,7 @@ function categoryMatches(category: string, toolName: string, connectorKind: stri
   const normalized = category.toLowerCase();
   const consequential = connectorToolRequiresApproval(toolName);
   if (normalized === "email") {
-    if (EMAIL_CONNECTOR_SLUGS.has(connectorKind.toLowerCase())) return consequential;
+    if (isEmailConnectorKind(connectorKind)) return consequential;
     return consequential && /send.*mail|gmail_send|outlook_send/i.test(toolName);
   }
   if (normalized === "purchase") {

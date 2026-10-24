@@ -1,10 +1,19 @@
-import type { MessageBlock } from "@rakazo/contracts";
+import type { AskDraft, MessageBlock } from "@rakazo/contracts";
 import type { RoutineCard } from "@rakazo/core";
-import { redactSecrets, routineCardBlock, spawnBotApprovalBlock } from "@rakazo/core";
+import {
+  CARD_VALUE_MAX_LENGTH,
+  isWholeField,
+  redactSecrets,
+  routineCardBlock,
+  spawnBotApprovalBlock,
+} from "@rakazo/core";
 import type { ConnectorAction } from "./connector-actions.js";
 
 const MAX_APPROVAL_SUMMARY_LENGTH = 500;
 const MAX_APPROVAL_DETAIL_LENGTH = 4_000;
+const LONG_APPROVAL_VALUE_LENGTH = 500;
+// Continuation lines are indented so a line written inside a value cannot pass for a field.
+const LINE_BREAKS = /\r\n|[\n\v\f\r\u0085\u2028\u2029]/g;
 
 export function buildApprovalAskBlock(
   effectId: string,
@@ -18,6 +27,10 @@ export function buildApprovalAskBlock(
     runUserId?: string;
     /** What a batch call runs: the card shows these instead of the wrapper. */
     actions?: ConnectorAction[];
+    /** A mail to send: shown in full, sent or discarded, no "always". */
+    draft?: AskDraft;
+    /** A possible send the card cannot read field by field: every argument shows, no "always". */
+    unreadable?: boolean;
   },
 ): MessageBlock {
   // spawn_bot and schedule_create arguments are redacted before they become the effect request,
@@ -28,8 +41,20 @@ export function buildApprovalAskBlock(
   const summary = actions
     ? actions.map((action) => describeApprovalAction(action.toolName, action.args)).join(", ")
     : describeApprovalAction(toolName, args);
-  const detail = formatApprovalDetail(toolName, args, options?.reviewReason, actions);
+  const draft = options?.draft && redactDraft(options.draft, secrets);
+  const detail = formatApprovalDetail(
+    toolName,
+    args,
+    options?.reviewReason,
+    actions,
+    options?.unreadable,
+  );
   const safeDetail = detail ? redactSecrets(detail, secrets) : undefined;
+  // An unreadable send shows every argument, so its size is bounded by the gate instead.
+  const shownDetail =
+    safeDetail && !options?.unreadable
+      ? truncate(safeDetail, MAX_APPROVAL_DETAIL_LENGTH)
+      : safeDetail;
   return {
     kind: "ask",
     approvalEffectId: effectId,
@@ -40,10 +65,14 @@ export function buildApprovalAskBlock(
       ),
       MAX_APPROVAL_SUMMARY_LENGTH,
     ),
-    detail: safeDetail ? truncate(safeDetail, MAX_APPROVAL_DETAIL_LENGTH) : undefined,
+    detail: draft ? draftDetail(draft) : shownDetail,
     status: "pending",
-    actions:
-      toolName === "create_space"
+    actions: draft
+      ? [
+          { id: "allow", label: "Send" },
+          { id: "deny", label: "Discard" },
+        ]
+      : toolName === "create_space"
         ? [
             { id: "allow", label: "Create space", outcome: "created" },
             { id: "deny", label: "Cancel", outcome: "cancelled" },
@@ -51,10 +80,34 @@ export function buildApprovalAskBlock(
         : [
             { id: "allow", label: "Allow once" },
             // "Always" would allow the batch wrapper, so every future batch, not the action shown.
-            ...(actions ? [] : [{ id: "always", label: "Always allow this tool" }]),
+            ...(actions || options?.unreadable
+              ? []
+              : [{ id: "always", label: "Always allow this tool" }]),
             { id: "deny", label: "Deny" },
           ],
+    ...(draft ? { draft } : {}),
   };
+}
+
+function redactDraft(draft: AskDraft, secrets: string[]): AskDraft {
+  return {
+    ...draft,
+    subject: draft.subject === undefined ? undefined : redactSecrets(draft.subject, secrets),
+    body: redactSecrets(draft.body, secrets),
+  };
+}
+
+function draftDetail(draft: AskDraft): string {
+  const lines = draft.app.account ? [`from: ${draft.app.account}`] : [];
+  for (const role of ["to", "cc", "bcc"] as const) {
+    const addresses = draft.recipients.filter((recipient) => recipient.role === role);
+    if (addresses.length) {
+      lines.push(`${role}: ${addresses.map((recipient) => recipient.address).join(", ")}`);
+    }
+  }
+  if (draft.subject) lines.push(`subject: ${draft.subject.replace(LINE_BREAKS, "\n  ")}`);
+  lines.push("body:", `  ${draft.body.replace(LINE_BREAKS, "\n  ")}`);
+  return lines.join("\n");
 }
 
 function describeApprovalAction(toolName: string, args: Record<string, unknown>): string {
@@ -80,6 +133,7 @@ function formatApprovalDetail(
   args: Record<string, unknown>,
   reviewReason?: string,
   actions?: ConnectorAction[],
+  everyArgument = false,
 ): string | undefined {
   const lines: string[] = [];
   if (reviewReason?.trim()) {
@@ -95,7 +149,7 @@ function formatApprovalDetail(
       lines.push(action.toolName, ...argLines(action.args).map((line) => `  ${line}`));
     }
   } else {
-    lines.push(...argLines(actions?.[0]?.args ?? args));
+    lines.push(...argLines(actions?.[0]?.args ?? args, everyArgument));
   }
   if (lines.length === 0) return undefined;
   return lines.join("\n");
@@ -103,7 +157,27 @@ function formatApprovalDetail(
 
 const DETAIL_LABELS: Record<string, string> = { recipient_email: "to" };
 
-function argLines(args: Record<string, unknown>): string[] {
+function argLines(args: Record<string, unknown>, everyArgument = false): string[] {
+  if (everyArgument) {
+    // Every argument shows. Whole fields (recipients) come first, long values last and cut with
+    // a mark; the caller refuses a send whose arguments cannot fit.
+    const values = Object.entries(args).map(([key, value]) => ({
+      key,
+      text: typeof value === "string" ? value : JSON.stringify(value),
+      whole: isWholeField(key),
+    }));
+    const isLong = ({ text, whole }: { text: string; whole: boolean }) =>
+      !whole && text.length > LONG_APPROVAL_VALUE_LENGTH;
+    const rest = values.filter(({ whole }) => !whole);
+    return [
+      ...values.filter(({ whole }) => whole),
+      ...rest.filter((entry) => !isLong(entry)),
+      ...rest.filter(isLong),
+    ].map(({ key, text, whole }) => {
+      const shown = whole ? text : truncate(text, CARD_VALUE_MAX_LENGTH);
+      return `${key.replace(LINE_BREAKS, " ")}: ${shown.replace(LINE_BREAKS, "\n  ")}`;
+    });
+  }
   const lines: string[] = [];
   for (const key of ["collection", "title", "to", "recipient_email", "subject", "amount", "body"]) {
     const value = args[key];
