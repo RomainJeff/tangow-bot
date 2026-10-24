@@ -132,6 +132,8 @@ export async function startWorkerRun<
   workers?: (workers: RunWorkers) => RunWorkers;
   /** The guest reads screens from the bot's home instead of getting them in tool results. */
   screensByPath?: boolean;
+  /** The connection's model sees at most this many images a request. */
+  maxImagesPerPrompt?: number;
 }) {
   const database = options.databaseUrl
     ? await openBenchPostgres(options.databaseUrl)
@@ -218,7 +220,15 @@ export async function startWorkerRun<
   const sealed = await secretStore.put(
     catalog
       ? (catalog.apiKey ?? MODEL_KEY)
-      : JSON.stringify({ kind: "openai_compatible", baseUrl: model.baseUrl, apiKey: MODEL_KEY }),
+      : JSON.stringify({
+          kind: "openai_compatible",
+          baseUrl: model.baseUrl,
+          apiKey: MODEL_KEY,
+          ...(options.maxImagesPerPrompt && {
+            visionModelIds: [model.model.id],
+            maxImagesPerPrompt: options.maxImagesPerPrompt,
+          }),
+        }),
     {
       operationId: "fixture",
       traceId: "fixture",

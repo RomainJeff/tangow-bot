@@ -19,7 +19,6 @@ import type {
   ReplyFinal,
   ReplyPart,
 } from "@rakazo/adapter-kit";
-import type { PiStreamFn } from "../../pi-runtime.js";
 import { conversationSessionId, streamRunModel } from "../../pi-runtime.js";
 import { billedPromptTokens, providerCacheTokens } from "../../pi-runtime-limits.js";
 import type { ModelRelay, RelayUsage } from "../model-relay.js";
@@ -263,21 +262,22 @@ function modelEventDecoder() {
 
 /** Sends one model request and settles with its final reply; parts arrive through `onPart`. */
 export type RelayRequest = (
-  body: { type: "model.request"; agent: string; dialect: "pi-ai"; call: PiAiModelCall },
+  body: { type: "model.request"; dialect: "pi-ai"; call: PiAiModelCall },
   onPart: (part: ReplyPart) => void,
   /** Aborting stops the controller's upstream call too. */
   signal?: AbortSignal,
 ) => Promise<ReplyFinal>;
 
 /**
- * Guest half: a stream function that sends every model call to the controller. `agentRef` maps a
- * helper's agent id to the ref the controller gave it.
+ * Guest half: the relay as a Pi provider's stream. Every call of a native Pi session, compaction
+ * included, goes to the controller through `request`, which adds the agent.
  */
-export function piAiStreamFn(
-  request: RelayRequest,
-  agentRef: (agentId: string | undefined) => string,
-): PiStreamFn {
-  return (model, context, options, agentId) => {
+export function piAiProviderStream(request: RelayRequest) {
+  return (
+    model: Model<Api>,
+    context: TranscriptContext,
+    options?: SimpleStreamOptions,
+  ): AssistantMessageEventStream => {
     const stream = createAssistantMessageEventStream();
     const decode = modelEventDecoder();
     let ended = false;
@@ -297,7 +297,6 @@ export function piAiStreamFn(
     request(
       {
         type: "model.request",
-        agent: agentRef(agentId),
         dialect: "pi-ai",
         call: {
           context: {
@@ -323,13 +322,6 @@ export function piAiStreamFn(
       .finally(() => options?.signal?.removeEventListener("abort", onAbort));
     return stream;
   };
-}
-
-/** The relay as a Pi provider's stream: every call of a native Pi session, compaction included. */
-export function piAiProviderStream(request: RelayRequest) {
-  const stream = piAiStreamFn(request, () => "root");
-  return (model: Model<Api>, context: TranscriptContext, options?: SimpleStreamOptions) =>
-    stream(model, context, options, undefined) as AssistantMessageEventStream;
 }
 
 export * from "./pi-ai-history.js";
