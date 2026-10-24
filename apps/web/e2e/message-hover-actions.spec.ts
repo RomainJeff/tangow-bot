@@ -1,6 +1,6 @@
 import { activeBotId, captureScreenshot, completeOnboarding, signup } from "./helpers";
 import { expect, type Locator, type Page, test } from "./test";
-import { reshapeThreadPages, threadEntries } from "./thread-log";
+import { finishedRuns, reshapeThreadPages, threadEntries } from "./thread-log";
 
 /** Submit from the Send control so an in-flight prior send cannot swallow Enter. */
 async function sendComposerMessage(page: Page, composer: Locator, text: string) {
@@ -397,9 +397,7 @@ test("a send after a search jump lands on the latest messages", async ({ page })
               entry.type === "user.message" && JSON.stringify(entry.payload).includes(marker),
           );
           id = sent?.id;
-          return entries.some(
-            (entry) => entry.type === "run.finished" && entry.seq > (sent?.seq ?? Infinity),
-          );
+          return finishedRuns(entries).some((entry) => entry.seq > (sent?.seq ?? Infinity));
         },
         { timeout: 60_000 },
       )
