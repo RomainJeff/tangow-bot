@@ -12,6 +12,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - On iPhone, menus open from the button you tapped as native iOS menus without the extra Cancel row, and deleting a skill now asks for confirmation on every phone.
 
+#### Fixed
+
+- Action confirmations now apply to what a bot does through Composio's batch tool, so "Ask before email actions" shows a card, with the recipient, before a bot sends Gmail that way instead of letting the email go out unasked.
+
 ### 2026-10-21
 
 #### Changed

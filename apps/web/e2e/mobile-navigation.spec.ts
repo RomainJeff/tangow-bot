@@ -1,32 +1,10 @@
-import type { Page } from "@playwright/test";
 import { captureScreenshot, completeOnboarding, signup } from "./helpers";
 import { expect, test } from "./test";
-
-async function prepareOnboarding(page: Page) {
-  await page.route("**/rpc/me", async (route) => {
-    const response = await route.fetch();
-    const body = (await response.json()) as { json: Record<string, unknown> };
-    await route.fulfill({ response, json: { json: { ...body.json, needsModel: false } } });
-  });
-  await page.route("**/rpc/integrationSetup/get", (route) =>
-    route.fulfill({
-      json: {
-        json: {
-          canConfigure: false,
-          needsSetup: false,
-          providers: [],
-          webUrl: "https://example.test/integrations/setup",
-        },
-      },
-    }),
-  );
-}
 
 /** At phone width the bot list is its own page, as in the iPhone app: open a chat, go back. */
 test("the phone bot list is a page that a chat opens from and returns to", async ({
   page,
 }, testInfo) => {
-  await prepareOnboarding(page);
   await signup(page, `mobile-nav-${Date.now()}@rakazo.test`, "password12", "Phone Nav");
   await completeOnboarding(page);
   await page.setViewportSize({ width: 390, height: 844 });
