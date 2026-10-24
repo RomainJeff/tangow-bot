@@ -1989,7 +1989,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
         // Denied rows stay denied: only the cards answered since the last pause are this resume's.
         const lastPause = deniedInRun.length
           ? await deps.prisma.attempt.findFirst({
-              where: { runId, status: "waiting_input" },
+              where: { runId, status: { in: ["waiting_input", "waiting_takeover"] } },
               orderBy: { startedAt: "desc" },
               select: { finishedAt: true },
             })

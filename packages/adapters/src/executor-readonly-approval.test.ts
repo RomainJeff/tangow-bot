@@ -58,7 +58,8 @@ function fixture({
   const effects: Effect[] = [];
   const results: unknown[] = [];
   const prompts: string[] = [];
-  const pauses: Date[] = [];
+  const pauses: { status: string; finishedAt: Date }[] = [];
+  let takeover = false;
   let clock = 0;
   const tick = () => new Date(++clock);
   const run = {
@@ -140,13 +141,18 @@ function fixture({
     },
     attempt: {
       create: vi.fn(async () => ({ id: "attempt-1" })),
-      findFirst: vi.fn(async () =>
-        pauses.length ? { finishedAt: pauses[pauses.length - 1] } : null,
+      findFirst: vi.fn(
+        async ({ where }: { where: { status: { in: string[] } } }) =>
+          pauses.findLast((pause) => where.status.in.includes(pause.status)) ?? null,
       ),
       update: vi.fn(),
       updateMany: vi.fn(async () => ({ count: 1 })),
     },
-    thread: { findUniqueOrThrow: vi.fn(async () => ({ id: run.threadId, groupId: null })) },
+    thread: {
+      findUniqueOrThrow: vi.fn(async () => ({ id: run.threadId, groupId: null })),
+      update: vi.fn(async () => ({ sessionId: "session-main", botId: run.botId })),
+    },
+    event: { create: vi.fn(async () => ({ id: "event-1" })) },
     task: { findUniqueOrThrow: vi.fn(async () => ({ id: run.taskId, prompt: "Read the item" })) },
     connection: { findMany: vi.fn(async () => []) },
     spaceModelPreference: { findFirst: vi.fn(async () => null) },
@@ -170,7 +176,12 @@ function fixture({
   };
   const pauseRunForInput = vi.fn(async () => {
     run.status = "waiting_input";
-    pauses.push(tick());
+    pauses.push({ status: "waiting_input", finishedAt: tick() });
+    return true;
+  });
+  const pauseRunForTakeover = vi.fn(async () => {
+    run.status = "waiting_takeover";
+    pauses.push({ status: "waiting_takeover", finishedAt: tick() });
     return true;
   });
   const finalizeRun = vi.fn(async () => ({ continuationRunId: null }));
@@ -180,6 +191,10 @@ function fixture({
   let calls = [{ args: { id: "item-1" }, executionId: "call-1" }];
   const runtimeRun = vi.fn(async function* (request: AgentRunRequest) {
     prompts.push(request.prompt);
+    if (takeover) {
+      yield { type: "takeover" as const, reason: "Sign in" };
+      return;
+    }
     for (const call of calls) {
       const result = await request.executeTool!(
         catalog ? "demo_execute_tool" : name,
@@ -214,7 +229,13 @@ function fixture({
     sandbox: { describe: () => ({ capabilities: { graphical: false } }) },
     memory: { read: async () => ({ documents: [] }) },
     memoryProviders: { resolve: async () => null },
-    events: { append: vi.fn(async () => undefined), pauseRunForInput, finalizeRun },
+    events: {
+      append: vi.fn(async () => undefined),
+      pauseRunForInput,
+      pauseRunForTakeover,
+      notify: vi.fn(async () => undefined),
+      finalizeRun,
+    },
     jobs: { enqueue: vi.fn(async () => undefined) },
     secrets: [],
   } as unknown as Parameters<typeof createRunExecutor>[0]);
@@ -226,6 +247,9 @@ function fixture({
     pauseRunForInput,
     setCalls(next: typeof calls) {
       calls = next;
+    },
+    setTakeover(next: boolean) {
+      takeover = next;
     },
     answer(index: number, status: "approved" | "denied", result?: unknown) {
       Object.assign(effects[index]!, { status, answeredAt: tick(), result });
@@ -278,6 +302,21 @@ describe("connector read-only metadata and approval enforcement", () => {
     expect(f.prompts[2]).not.toContain("the user declined");
     expect(f.execute).toHaveBeenCalledOnce();
     expect(f.results.at(-1)).toEqual({ item: "item-2" });
+  });
+
+  it("does not repeat a denial after a later takeover pause", async () => {
+    const f = fixture({
+      rules: [{ effect: "require_approval", matchKind: "tool", matchValue: "demo_get_item" }],
+    });
+    await f.run();
+    f.answer(0, "denied");
+    f.setTakeover(true);
+    await f.run();
+    expect(f.prompts[1]).toContain("the user declined");
+    f.setTakeover(false);
+    f.setCalls([]);
+    await f.run();
+    expect(f.prompts[2]).not.toContain("the user declined");
   });
 
   it("does not report a denial for a card put away by a typed reply", async () => {
