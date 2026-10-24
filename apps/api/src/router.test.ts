@@ -967,7 +967,9 @@ describe("thread stop", () => {
     const matchesRun = (where: { status: unknown; routineId?: unknown }) =>
       where.routineId === undefined && (where.status !== "cancelled" || runStatus === "cancelled");
     let runStatus = "running";
-    const effects = [{ id: "effect-1", status: "approved", result: null as unknown }];
+    const effects = [
+      { id: "effect-1", kind: "routine_proposal", status: "approved", result: null as unknown },
+    ];
     const skillWrites: Array<{ runId: string; kind: string; status: string; result: unknown }> = [];
     const sessionLog = { append: vi.fn() };
     const prisma = {
@@ -1086,6 +1088,7 @@ describe("thread stop", () => {
     );
     expect(effects[0]).toEqual({
       id: "effect-1",
+      kind: "routine_proposal",
       status: "completed",
       result: { error: "The run ended before this routine was created." },
     });

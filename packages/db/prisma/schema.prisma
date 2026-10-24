@@ -705,6 +705,8 @@ model ExternalEffect {
   status         String
   request        Json
   result         Json?
+  // An outbound mail draft: where its body sits in `request` and what became of it.
+  draft          Json?
   reviewDecision String?
   reviewReason   String?
   reviewModel    String?
