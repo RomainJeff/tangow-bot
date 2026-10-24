@@ -52,6 +52,7 @@ function fixture({
     required: ["id"],
   } as Record<string, unknown>,
   routeToolName = undefined as string | undefined,
+  secrets = [] as string[],
 } = {}) {
   const tool: ConnectorTool = {
     name,
@@ -264,7 +265,7 @@ function fixture({
     memoryProviders: { resolve: async () => null },
     events,
     jobs: { enqueue: vi.fn(async () => undefined) },
-    secrets: [],
+    secrets,
   } as unknown as Parameters<typeof createRunExecutor>[0]);
   return {
     effects,
@@ -833,9 +834,9 @@ describe("connector read-only metadata and approval enforcement", () => {
     });
 
     describe("once the user sends the draft", () => {
-      async function drafted() {
-        const f = fixture({ name: "GMAIL_SEND_EMAIL", inputSchema });
-        f.setCalls([{ args: send, executionId: "c1" }]);
+      async function drafted(args: Record<string, unknown> = send, secrets: string[] = []) {
+        const f = fixture({ name: "GMAIL_SEND_EMAIL", inputSchema, secrets });
+        f.setCalls([{ args, executionId: "c1" }]);
         await f.run();
         return f;
       }
@@ -932,6 +933,17 @@ describe("connector read-only metadata and approval enforcement", () => {
           "Edited.",
         ]);
         expect(f.effects[0]!.status).toBe("completed");
+      });
+
+      it("keeps a run secret out of the card it shows again", async () => {
+        const f = await drafted({ ...send, body: "Your key is sk-live-123." }, ["sk-live-123"]);
+        expect(JSON.stringify(lastCard(f))).not.toContain("sk-live-123");
+        approve(f.effects[0]!);
+        f.effects[0]!.status = "executing";
+        f.setCalls([]);
+        await f.run();
+        expect(lastCard(f).draft?.failure).toBeDefined();
+        expect(JSON.stringify(lastCard(f))).not.toContain("sk-live-123");
       });
 
       it.each([

@@ -4421,7 +4421,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 ...card,
                 status: "pending",
                 ...(card.draft && typeof body === "string"
-                  ? { draft: { ...card.draft, body, failure: failed } }
+                  ? { draft: { ...card.draft, body: redactSecrets(body, runSecrets), failure: failed } }
                   : {}),
               },
             ],
