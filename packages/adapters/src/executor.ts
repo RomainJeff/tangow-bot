@@ -84,6 +84,7 @@ import {
   appendToolCallSegment,
   applyJudgeDecision,
   approvedReplayCall,
+  askDraftDetail,
   assertTransition,
   attemptOwnsFence,
   avatarIdentitySeed,
@@ -5122,6 +5123,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
           const { answer: _answer, ...card } = shown;
           const failed = failure(card.draft?.app.name ?? effect.kind);
           const body = valueAt(effect.request, draft.path);
+          const shownDraft =
+            card.draft && typeof body === "string"
+              ? { ...card.draft, body: redactSecrets(body, runSecrets), failure: failed }
+              : undefined;
           const paused = await deps.events.pauseRunForInput({
             spaceId: run.spaceId,
             threadId: run.threadId,
@@ -5134,8 +5139,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
               {
                 ...card,
                 status: "pending",
-                ...(card.draft && typeof body === "string"
-                  ? { draft: { ...card.draft, body: redactSecrets(body, runSecrets), failure: failed } }
+                // A client that does not read drafts shows the reason in the detail.
+                ...(shownDraft
+                  ? {
+                      draft: shownDraft,
+                      detail: `Not sent. ${failed.reason}\n${askDraftDetail(shownDraft)}`,
+                    }
                   : {}),
               },
             ],

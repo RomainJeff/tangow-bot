@@ -1011,6 +1011,24 @@ describe("connector read-only metadata and approval enforcement", () => {
         expect(f.execute).toHaveBeenCalledTimes(sends);
       });
 
+      it("tells a client that does not know drafts why the card is back, Allow being its Try again", async () => {
+        const f = await drafted();
+        approve(f.effects[0]!);
+        f.effects[0]!.status = "executing";
+        f.setCalls([]);
+        await f.run();
+        expect(lastCard(f)).toMatchObject({
+          status: "pending",
+          detail:
+            "Not sent. Check Gmail before trying again.\nto: someone@example.com\ncc: copy@example.com\nsubject: Test Chief\nbody:\n  Hello from Chief.",
+          actions: draftCard.actions,
+        });
+        expect(f.execute).not.toHaveBeenCalled();
+        approve(f.effects[0]!);
+        await f.run();
+        expect(f.execute).toHaveBeenCalledOnce();
+      });
+
       it("shows the card again, disconnected, when the app is gone, sending nothing", async () => {
         const f = await drafted();
         approve(f.effects[0]!);
