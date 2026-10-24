@@ -253,7 +253,7 @@ msgstr "Действия для пространства"
 #: src/pages/bot-page/RoutineCreateForm.tsx:118
 #: src/pages/bot-page/RoutineDetail.tsx:127
 #: src/pages/bot-page/RoutinesTab.tsx:107
-#: src/pages/KnowledgeSection.tsx:446
+#: src/pages/KnowledgeSection.tsx:447
 msgid "Active"
 msgstr "Активный"
 
@@ -394,7 +394,7 @@ msgstr "Расширенные..."
 msgid "Agent connections"
 msgstr "Подключения агента"
 
-#: src/pages/KnowledgeSection.tsx:449
+#: src/pages/KnowledgeSection.tsx:450
 msgid "Agents"
 msgstr ""
 
@@ -403,7 +403,7 @@ msgstr ""
 msgid "Agents:"
 msgstr "Агенты:"
 
-#: src/pages/KnowledgeSection.tsx:445
+#: src/pages/KnowledgeSection.tsx:446
 msgid "All"
 msgstr ""
 
@@ -754,8 +754,8 @@ msgstr "Не удаётся связаться с сервером."
 #: src/lib/approval-labels.ts:14
 #: src/pages/bot-page/page-kit.tsx:149
 #: src/pages/bot-page/RoutineTriggers.tsx:296
-#: src/pages/KnowledgeSection.tsx:226
-#: src/pages/KnowledgeSection.tsx:684
+#: src/pages/KnowledgeSection.tsx:227
+#: src/pages/KnowledgeSection.tsx:692
 #: src/pages/PluginsOverlay.tsx:1168
 #: src/pages/shell/dialogs.tsx:88
 #: src/pages/shell/dialogs.tsx:199
@@ -895,8 +895,8 @@ msgstr "ID клиента"
 msgid "Client secret"
 msgstr "Секрет клиента"
 
-#: src/pages/KnowledgeSection.tsx:684
-#: src/pages/KnowledgeSection.tsx:840
+#: src/pages/KnowledgeSection.tsx:692
+#: src/pages/KnowledgeSection.tsx:848
 #: src/pages/MessagingSettingsOverlay.tsx:361
 #: src/pages/PeerMessagesOverlay.tsx:133
 #: src/pages/PeerMessagesOverlay.tsx:136
@@ -1035,7 +1035,7 @@ msgstr "Настраивается путем развертывания"
 msgid "Configured servers"
 msgstr "Настроенные серверы"
 
-#: src/pages/KnowledgeSection.tsx:679
+#: src/pages/KnowledgeSection.tsx:687
 #: src/pages/McpServersOverlay.tsx:506
 msgid "Confirm delete"
 msgstr "Подтвердить удаление"
@@ -1132,6 +1132,10 @@ msgstr "Подключение…"
 #: src/pages/PluginsOverlay.tsx:273
 msgid "Connection to {0} is still pending. You can close this and check again."
 msgstr "Соединение с {0} все еще не завершено. Вы можете закрыть это и проверить еще раз."
+
+#: src/pages/KnowledgeSection.tsx:658
+msgid "Content lives on the shared volume."
+msgstr ""
 
 #: src/pages/ModelSettingsOverlay.tsx:587
 #: src/pages/Onboarding.tsx:517
@@ -1277,7 +1281,7 @@ msgstr "Не удалось удалить сервер MCP."
 msgid "Could not delete routine"
 msgstr "Не удалось удалить задачу"
 
-#: src/pages/KnowledgeSection.tsx:640
+#: src/pages/KnowledgeSection.tsx:641
 msgid "Could not delete skill"
 msgstr "Не удалось удалить навык"
 
@@ -1314,7 +1318,7 @@ msgstr "Не удалось загрузить {0}. Попробуйте еще 
 msgid "Could not download {name}. Try again."
 msgstr "Не удалось загрузить {name}. Попробуйте еще раз."
 
-#: src/pages/KnowledgeSection.tsx:365
+#: src/pages/KnowledgeSection.tsx:366
 msgid "Could not import skill"
 msgstr ""
 
@@ -1324,12 +1328,12 @@ msgstr "Не удалось установить коннектор"
 
 #: src/pages/bot-page/KnowledgeTab.tsx:148
 #: src/pages/bot-page/page-kit.tsx:81
-#: src/pages/KnowledgeSection.tsx:89
-#: src/pages/KnowledgeSection.tsx:118
-#: src/pages/KnowledgeSection.tsx:300
-#: src/pages/KnowledgeSection.tsx:321
-#: src/pages/KnowledgeSection.tsx:361
-#: src/pages/KnowledgeSection.tsx:753
+#: src/pages/KnowledgeSection.tsx:90
+#: src/pages/KnowledgeSection.tsx:119
+#: src/pages/KnowledgeSection.tsx:301
+#: src/pages/KnowledgeSection.tsx:322
+#: src/pages/KnowledgeSection.tsx:362
+#: src/pages/KnowledgeSection.tsx:761
 msgid "Could not load"
 msgstr "Не удалось загрузить"
 
@@ -1363,7 +1367,7 @@ msgstr "Не удалось загрузить серверы MCP."
 msgid "Could not load model settings"
 msgstr "Не удалось загрузить настройки модели."
 
-#: src/pages/KnowledgeSection.tsx:601
+#: src/pages/KnowledgeSection.tsx:602
 msgid "Could not load skill"
 msgstr "Не удалось загрузить навык"
 
@@ -1410,7 +1414,7 @@ msgstr "Не удалось связаться с сервером"
 msgid "Could not reach this model server"
 msgstr "Не удалось связаться с сервером этой модели."
 
-#: src/pages/KnowledgeSection.tsx:773
+#: src/pages/KnowledgeSection.tsx:781
 msgid "Could not read this file"
 msgstr ""
 
@@ -1458,7 +1462,7 @@ msgstr "Не удалось запустить задачу"
 #: src/pages/bot-page/page-kit.tsx:52
 #: src/pages/bot-page/RoutineDetail.tsx:87
 #: src/pages/ExternalConversationSettings.tsx:250
-#: src/pages/KnowledgeSection.tsx:206
+#: src/pages/KnowledgeSection.tsx:207
 msgid "Could not save"
 msgstr "Не удалось сохранить"
 
@@ -1482,7 +1486,7 @@ msgstr "Не удалось сохранить задачу"
 msgid "Could not save rule"
 msgstr "Не удалось сохранить правило."
 
-#: src/pages/KnowledgeSection.tsx:623
+#: src/pages/KnowledgeSection.tsx:624
 msgid "Could not save skill"
 msgstr "Не удалось сохранить навык"
 
@@ -1531,7 +1535,7 @@ msgstr "Не смог взять под контроль"
 msgid "Could not update"
 msgstr "Не удалось обновить"
 
-#: src/pages/KnowledgeSection.tsx:343
+#: src/pages/KnowledgeSection.tsx:344
 #: src/pages/McpServersOverlay.tsx:210
 msgid "Could not update agent access"
 msgstr "Не удалось обновить доступ агента."
@@ -1710,7 +1714,7 @@ msgstr "Область действия по умолчанию"
 
 #: src/pages/bot-page/BotPage.tsx:378
 #: src/pages/BotContextMenu.tsx:150
-#: src/pages/KnowledgeSection.tsx:679
+#: src/pages/KnowledgeSection.tsx:687
 #: src/pages/McpServersOverlay.tsx:508
 #: src/pages/shell/dialogs.tsx:409
 #: src/pages/shell/dialogs.tsx:470
@@ -1803,8 +1807,8 @@ msgstr ""
 msgid "Direct MCP"
 msgstr "Прямой MCP"
 
-#: src/pages/KnowledgeSection.tsx:386
-#: src/pages/KnowledgeSection.tsx:447
+#: src/pages/KnowledgeSection.tsx:387
+#: src/pages/KnowledgeSection.tsx:448
 msgid "Disabled"
 msgstr ""
 
@@ -1867,7 +1871,7 @@ msgstr "У вас нет учетной записи?"
 msgid "Done"
 msgstr "Готово"
 
-#: src/pages/KnowledgeSection.tsx:833
+#: src/pages/KnowledgeSection.tsx:841
 msgid "Download"
 msgstr ""
 
@@ -1882,7 +1886,7 @@ msgstr "Скачать {0}"
 msgid "Download {name}"
 msgstr "Скачать {name}"
 
-#: src/pages/KnowledgeSection.tsx:170
+#: src/pages/KnowledgeSection.tsx:171
 msgid "Download as markdown"
 msgstr "Скачать как Markdown"
 
@@ -2069,7 +2073,7 @@ msgstr ""
 msgid "Files"
 msgstr ""
 
-#: src/pages/KnowledgeSection.tsx:442
+#: src/pages/KnowledgeSection.tsx:443
 msgid "Filter skills"
 msgstr ""
 
@@ -2137,7 +2141,7 @@ msgstr "Подготовка"
 msgid "Git event"
 msgstr "Git-событие"
 
-#: src/pages/KnowledgeSection.tsx:387
+#: src/pages/KnowledgeSection.tsx:388
 msgid "Global"
 msgstr ""
 
@@ -2248,7 +2252,7 @@ msgstr "Если вы это услышали, голос готов."
 msgid "Ignore"
 msgstr "игнорировать"
 
-#: src/pages/KnowledgeSection.tsx:426
+#: src/pages/KnowledgeSection.tsx:427
 msgid "Import"
 msgstr ""
 
@@ -2765,7 +2769,7 @@ msgstr "Новая задача"
 msgid "New section"
 msgstr "Новый раздел"
 
-#: src/pages/KnowledgeSection.tsx:406
+#: src/pages/KnowledgeSection.tsx:407
 msgid "New skill"
 msgstr "Новый навык"
 
@@ -2814,7 +2818,7 @@ msgstr "Приложения для чата пока не связаны."
 msgid "No exceptions. Actions run automatically."
 msgstr "Никаких исключений. Действия выполняются автоматически."
 
-#: src/pages/KnowledgeSection.tsx:847
+#: src/pages/KnowledgeSection.tsx:855
 msgid "No files yet"
 msgstr ""
 
@@ -2876,11 +2880,11 @@ msgstr "Без отчёта"
 msgid "No results"
 msgstr "Нет результатов"
 
-#: src/pages/KnowledgeSection.tsx:463
+#: src/pages/KnowledgeSection.tsx:464
 msgid "No skills match"
 msgstr ""
 
-#: src/pages/KnowledgeSection.tsx:463
+#: src/pages/KnowledgeSection.tsx:464
 msgid "No skills yet"
 msgstr "Навыков пока нет"
 
@@ -2919,7 +2923,7 @@ msgid "Nothing is still running"
 msgstr ""
 
 #: src/pages/bot-page/KnowledgeTab.tsx:42
-#: src/pages/KnowledgeSection.tsx:41
+#: src/pages/KnowledgeSection.tsx:42
 msgid "Nothing remembered yet"
 msgstr "Пока ничего не запомнено"
 
@@ -3196,7 +3200,7 @@ msgstr ""
 msgid "Read replies aloud"
 msgstr "Читать ответы вслух"
 
-#: src/pages/KnowledgeSection.tsx:492
+#: src/pages/KnowledgeSection.tsx:493
 msgid "read-only"
 msgstr "только для чтения"
 
@@ -3477,7 +3481,7 @@ msgid "Return to Rakazo"
 msgstr "Вернуться в Rakazo"
 
 #. placeholder {0}: doc.revision
-#: src/pages/KnowledgeSection.tsx:144
+#: src/pages/KnowledgeSection.tsx:145
 msgid "rev {0}"
 msgstr "версия {0}"
 
@@ -3554,8 +3558,8 @@ msgstr "Запускается, когда этот бот получает пр
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/ExternalConversationSettings.tsx:255
 #: src/pages/GroupPanel.tsx:279
-#: src/pages/KnowledgeSection.tsx:234
-#: src/pages/KnowledgeSection.tsx:698
+#: src/pages/KnowledgeSection.tsx:235
+#: src/pages/KnowledgeSection.tsx:706
 #: src/pages/ModelSettingsOverlay.tsx:791
 #: src/pages/shell/dialogs.tsx:266
 msgid "Save"
@@ -3641,8 +3645,8 @@ msgstr "Поиск моделей"
 msgid "Search providers"
 msgstr "Поиск поставщиков"
 
-#: src/pages/KnowledgeSection.tsx:432
 #: src/pages/KnowledgeSection.tsx:433
+#: src/pages/KnowledgeSection.tsx:434
 msgid "Search skills"
 msgstr ""
 
@@ -3727,7 +3731,7 @@ msgstr "Общий"
 msgid "Shared chat with 2-6 bots. They all reply in the same thread."
 msgstr "Общий чат с 2-6 ботами. Все отвечают в одной ветке."
 
-#: src/pages/KnowledgeSection.tsx:36
+#: src/pages/KnowledgeSection.tsx:37
 msgid "Shared documents"
 msgstr "Общие документы"
 
@@ -3745,13 +3749,13 @@ msgstr "Показать более ранние"
 msgid "Show key"
 msgstr ""
 
-#: src/pages/KnowledgeSection.tsx:885
+#: src/pages/KnowledgeSection.tsx:893
 #: src/pages/shell/message-view.tsx:80
 msgid "Show less"
 msgstr ""
 
 #: src/pages/bot-page/BotActivity.tsx:460
-#: src/pages/KnowledgeSection.tsx:885
+#: src/pages/KnowledgeSection.tsx:893
 #: src/pages/PluginsOverlay.tsx:873
 #: src/pages/shell/message-view.tsx:80
 msgid "Show more"
@@ -3856,7 +3860,7 @@ msgstr "Только озвучить"
 msgid "Speak this reply"
 msgstr "Озвучить этот ответ"
 
-#: src/pages/KnowledgeSection.tsx:388
+#: src/pages/KnowledgeSection.tsx:389
 msgid "Specific agents"
 msgstr ""
 
@@ -4316,7 +4320,7 @@ msgstr "Где должны работать боты?"
 msgid "Working…"
 msgstr "Выполняется…"
 
-#: src/pages/KnowledgeSection.tsx:795
+#: src/pages/KnowledgeSection.tsx:803
 msgid "Workspace root"
 msgstr ""
 

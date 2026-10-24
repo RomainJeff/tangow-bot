@@ -2359,6 +2359,8 @@ describe("stopThreadRuns", () => {
       },
     };
     const prisma = {
+      run: { findMany: vi.fn().mockResolvedValue([]) },
+      $queryRaw: vi.fn().mockResolvedValue([]),
       $transaction: vi.fn(async (callback: (client: typeof transaction) => unknown) =>
         callback(transaction),
       ),
@@ -2511,6 +2513,8 @@ describe("stopThreadRuns", () => {
       },
     };
     const prisma = {
+      run: { findMany: vi.fn().mockResolvedValue([]) },
+      $queryRaw: vi.fn().mockResolvedValue([]),
       $transaction: vi.fn(async (callback: (client: typeof transaction) => unknown) =>
         callback(transaction),
       ),

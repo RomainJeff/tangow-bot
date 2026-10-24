@@ -1,4 +1,4 @@
-import { redactSecrets } from "@rakazo/core";
+import { redactSecrets, secretRedactor } from "@rakazo/core";
 
 export function combineSignals(...signals: Array<AbortSignal | undefined>): AbortSignal {
   return AbortSignal.any(signals.filter((signal): signal is AbortSignal => Boolean(signal)));
@@ -40,18 +40,21 @@ export function redactConnectorPayload(value: unknown, secrets: string[]): unkno
   }
 }
 
-function redactPayloadValue(value: unknown, secrets: string[]): unknown {
-  if (typeof value === "string") return redactSecrets(value, secrets);
-  if (Array.isArray(value)) return value.map((item) => redactPayloadValue(item, secrets));
+/** Masks secrets in a value that is already plain JSON, such as a parsed frame. */
+export function redactPayloadValue(value: unknown, secrets: string[]): unknown {
+  return redactPayloadWith(value, secretRedactor(secrets));
+}
+
+/** `redactPayloadValue` with the secrets already prepared, for a caller that walks the value itself. */
+export function redactPayloadWith(value: unknown, redact: (text: string) => string): unknown {
+  if (typeof value === "string") return redact(value);
+  if (Array.isArray(value)) return value.map((item) => redactPayloadWith(item, redact));
   if (value === null || typeof value === "number" || typeof value === "boolean") {
     const serialized = String(value);
-    return redactSecrets(serialized, secrets) === serialized ? value : "[redacted]";
+    return redact(serialized) === serialized ? value : "[redacted]";
   }
   if (typeof value !== "object") return value;
   return Object.fromEntries(
-    Object.entries(value).map(([key, item]) => [
-      redactSecrets(key, secrets),
-      redactPayloadValue(item, secrets),
-    ]),
+    Object.entries(value).map(([key, item]) => [redact(key), redactPayloadWith(item, redact)]),
   );
 }

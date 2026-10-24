@@ -10,7 +10,7 @@ for the sharing and persistence contract.
 | --- | --- | --- |
 | Local Docker computers | `SANDBOX_PROVIDER=docker` | `SANDBOX_SUPERVISOR_TOKEN`, computer image, Docker socket for supervisor |
 | UI only, no computers | `SANDBOX_PROVIDER=none` | No provider credential; published-images Compose still requires `SANDBOX_SUPERVISOR_TOKEN` |
-| Managed remote desktop | `SANDBOX_PROVIDER=e2b` | `SANDBOX_SUPERVISOR_TOKEN` (published-images Compose), `E2B_API_KEY` |
+| Managed remote desktop | `SANDBOX_PROVIDER=e2b` | `SANDBOX_SUPERVISOR_TOKEN` (published-images Compose), `E2B_API_KEY`, [E2B templates](./self-host-e2b-workers.md) |
 
 Published-images [Compose](../infra/compose/docker-compose.images.yml) defaults to **`docker`**.
 It always starts the supervisor and requires `SANDBOX_SUPERVISOR_TOKEN`, including for `none`
@@ -45,7 +45,9 @@ Runs API/web without provisioning bot computers.
 
 ## Remote provider
 
-Set `SANDBOX_PROVIDER=e2b` and `E2B_API_KEY` for hosted E2B sandboxes.
+Set `SANDBOX_PROVIDER=e2b` and `E2B_API_KEY` for hosted E2B sandboxes. Each bot run then works in
+its own E2B worker VM. Build the worker and computer templates and move existing homes as
+[E2B workers](./self-host-e2b-workers.md) describes.
 
 Daytona and Box were removed: the API and worker refuse to start with
 `SANDBOX_PROVIDER=daytona` or `box`. Before upgrading, let those computers go idle so their

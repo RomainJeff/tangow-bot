@@ -1,4 +1,9 @@
-import { resolveDeploymentModel, resolveSandboxProvider } from "@rakazo/adapters";
+import type { WorkerProviderConfig } from "@rakazo/adapters";
+import {
+  resolveDeploymentModel,
+  resolveSandboxProvider,
+  resolveWorkerProvider,
+} from "@rakazo/adapters";
 import type { SkillLearningMode } from "@rakazo/core";
 import {
   parseSkillLearningMode,
@@ -34,6 +39,8 @@ export interface AppEnv {
   agentRuntime: string;
   deploymentModelKey: string | undefined;
   e2bApiKey: string | undefined;
+  /** E2B workers on an E2B deployment; null keeps every run in process. */
+  workerProvider: WorkerProviderConfig | null;
   composioApiKey: string | undefined;
   /** Optional integrations.sh-compatible catalog base URL. */
   integrationsCatalogUrl: string | undefined;
@@ -114,6 +121,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     // Provider, model and key resolve together: see resolveDeploymentModel.
     deploymentModelKey: deploymentModel.key,
     e2bApiKey: source.E2B_API_KEY,
+    workerProvider: resolveWorkerProvider(source),
     composioApiKey: source.COMPOSIO_API_KEY,
     integrationsCatalogUrl: optional(source.INTEGRATIONS_CATALOG_URL),
     pipedreamClientId: optional(source.PIPEDREAM_CLIENT_ID),

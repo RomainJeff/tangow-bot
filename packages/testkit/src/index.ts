@@ -29,3 +29,4 @@ export async function latestCard(prisma: Pick<PrismaClient, "sessionEntry">, run
   const { block, card } = entry.payload as { block?: object; card?: object };
   return { id: entry.id, block: card ?? block };
 }
+export * from "./local-worker-provider.js";

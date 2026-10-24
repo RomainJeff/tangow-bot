@@ -253,7 +253,7 @@ msgstr "Actions for space"
 #: src/pages/bot-page/RoutineCreateForm.tsx:118
 #: src/pages/bot-page/RoutineDetail.tsx:127
 #: src/pages/bot-page/RoutinesTab.tsx:107
-#: src/pages/KnowledgeSection.tsx:446
+#: src/pages/KnowledgeSection.tsx:447
 msgid "Active"
 msgstr "Active"
 
@@ -394,7 +394,7 @@ msgstr "Advanced..."
 msgid "Agent connections"
 msgstr "Agent connections"
 
-#: src/pages/KnowledgeSection.tsx:449
+#: src/pages/KnowledgeSection.tsx:450
 msgid "Agents"
 msgstr "Agents"
 
@@ -403,7 +403,7 @@ msgstr "Agents"
 msgid "Agents:"
 msgstr "Agents:"
 
-#: src/pages/KnowledgeSection.tsx:445
+#: src/pages/KnowledgeSection.tsx:446
 msgid "All"
 msgstr "All"
 
@@ -754,8 +754,8 @@ msgstr "Can't reach the server."
 #: src/lib/approval-labels.ts:14
 #: src/pages/bot-page/page-kit.tsx:149
 #: src/pages/bot-page/RoutineTriggers.tsx:296
-#: src/pages/KnowledgeSection.tsx:226
-#: src/pages/KnowledgeSection.tsx:684
+#: src/pages/KnowledgeSection.tsx:227
+#: src/pages/KnowledgeSection.tsx:692
 #: src/pages/PluginsOverlay.tsx:1168
 #: src/pages/shell/dialogs.tsx:88
 #: src/pages/shell/dialogs.tsx:199
@@ -895,8 +895,8 @@ msgstr "Client ID"
 msgid "Client secret"
 msgstr "Client secret"
 
-#: src/pages/KnowledgeSection.tsx:684
-#: src/pages/KnowledgeSection.tsx:840
+#: src/pages/KnowledgeSection.tsx:692
+#: src/pages/KnowledgeSection.tsx:848
 #: src/pages/MessagingSettingsOverlay.tsx:361
 #: src/pages/PeerMessagesOverlay.tsx:133
 #: src/pages/PeerMessagesOverlay.tsx:136
@@ -1035,7 +1035,7 @@ msgstr "Configured by deployment"
 msgid "Configured servers"
 msgstr "Configured servers"
 
-#: src/pages/KnowledgeSection.tsx:679
+#: src/pages/KnowledgeSection.tsx:687
 #: src/pages/McpServersOverlay.tsx:506
 msgid "Confirm delete"
 msgstr "Confirm delete"
@@ -1132,6 +1132,10 @@ msgstr "Connecting…"
 #: src/pages/PluginsOverlay.tsx:273
 msgid "Connection to {0} is still pending. You can close this and check again."
 msgstr "Connection to {0} is still pending. You can close this and check again."
+
+#: src/pages/KnowledgeSection.tsx:658
+msgid "Content lives on the shared volume."
+msgstr "Content lives on the shared volume."
 
 #: src/pages/ModelSettingsOverlay.tsx:587
 #: src/pages/Onboarding.tsx:517
@@ -1277,7 +1281,7 @@ msgstr "Could not delete MCP server"
 msgid "Could not delete routine"
 msgstr "Could not delete routine"
 
-#: src/pages/KnowledgeSection.tsx:640
+#: src/pages/KnowledgeSection.tsx:641
 msgid "Could not delete skill"
 msgstr "Could not delete skill"
 
@@ -1314,7 +1318,7 @@ msgstr "Could not download {0}. Try again."
 msgid "Could not download {name}. Try again."
 msgstr "Could not download {name}. Try again."
 
-#: src/pages/KnowledgeSection.tsx:365
+#: src/pages/KnowledgeSection.tsx:366
 msgid "Could not import skill"
 msgstr "Could not import skill"
 
@@ -1324,12 +1328,12 @@ msgstr "Could not install connector"
 
 #: src/pages/bot-page/KnowledgeTab.tsx:148
 #: src/pages/bot-page/page-kit.tsx:81
-#: src/pages/KnowledgeSection.tsx:89
-#: src/pages/KnowledgeSection.tsx:118
-#: src/pages/KnowledgeSection.tsx:300
-#: src/pages/KnowledgeSection.tsx:321
-#: src/pages/KnowledgeSection.tsx:361
-#: src/pages/KnowledgeSection.tsx:753
+#: src/pages/KnowledgeSection.tsx:90
+#: src/pages/KnowledgeSection.tsx:119
+#: src/pages/KnowledgeSection.tsx:301
+#: src/pages/KnowledgeSection.tsx:322
+#: src/pages/KnowledgeSection.tsx:362
+#: src/pages/KnowledgeSection.tsx:761
 msgid "Could not load"
 msgstr "Could not load"
 
@@ -1363,7 +1367,7 @@ msgstr "Could not load MCP servers"
 msgid "Could not load model settings"
 msgstr "Could not load model settings"
 
-#: src/pages/KnowledgeSection.tsx:601
+#: src/pages/KnowledgeSection.tsx:602
 msgid "Could not load skill"
 msgstr "Could not load skill"
 
@@ -1410,7 +1414,7 @@ msgstr "Could not reach the server"
 msgid "Could not reach this model server"
 msgstr "Could not reach this model server"
 
-#: src/pages/KnowledgeSection.tsx:773
+#: src/pages/KnowledgeSection.tsx:781
 msgid "Could not read this file"
 msgstr "Could not read this file"
 
@@ -1458,7 +1462,7 @@ msgstr "Could not run routine"
 #: src/pages/bot-page/page-kit.tsx:52
 #: src/pages/bot-page/RoutineDetail.tsx:87
 #: src/pages/ExternalConversationSettings.tsx:250
-#: src/pages/KnowledgeSection.tsx:206
+#: src/pages/KnowledgeSection.tsx:207
 msgid "Could not save"
 msgstr "Could not save"
 
@@ -1482,7 +1486,7 @@ msgstr "Could not save routine"
 msgid "Could not save rule"
 msgstr "Could not save rule"
 
-#: src/pages/KnowledgeSection.tsx:623
+#: src/pages/KnowledgeSection.tsx:624
 msgid "Could not save skill"
 msgstr "Could not save skill"
 
@@ -1531,7 +1535,7 @@ msgstr "Could not take control"
 msgid "Could not update"
 msgstr "Could not update"
 
-#: src/pages/KnowledgeSection.tsx:343
+#: src/pages/KnowledgeSection.tsx:344
 #: src/pages/McpServersOverlay.tsx:210
 msgid "Could not update agent access"
 msgstr "Could not update agent access"
@@ -1710,7 +1714,7 @@ msgstr "Default scope"
 
 #: src/pages/bot-page/BotPage.tsx:378
 #: src/pages/BotContextMenu.tsx:150
-#: src/pages/KnowledgeSection.tsx:679
+#: src/pages/KnowledgeSection.tsx:687
 #: src/pages/McpServersOverlay.tsx:508
 #: src/pages/shell/dialogs.tsx:409
 #: src/pages/shell/dialogs.tsx:470
@@ -1803,8 +1807,8 @@ msgstr "Dictating"
 msgid "Direct MCP"
 msgstr "Direct MCP"
 
-#: src/pages/KnowledgeSection.tsx:386
-#: src/pages/KnowledgeSection.tsx:447
+#: src/pages/KnowledgeSection.tsx:387
+#: src/pages/KnowledgeSection.tsx:448
 msgid "Disabled"
 msgstr "Disabled"
 
@@ -1867,7 +1871,7 @@ msgstr "Don’t have an account?"
 msgid "Done"
 msgstr "Done"
 
-#: src/pages/KnowledgeSection.tsx:833
+#: src/pages/KnowledgeSection.tsx:841
 msgid "Download"
 msgstr "Download"
 
@@ -1882,7 +1886,7 @@ msgstr "Download {0}"
 msgid "Download {name}"
 msgstr "Download {name}"
 
-#: src/pages/KnowledgeSection.tsx:170
+#: src/pages/KnowledgeSection.tsx:171
 msgid "Download as markdown"
 msgstr "Download as markdown"
 
@@ -2069,7 +2073,7 @@ msgstr "Featured"
 msgid "Files"
 msgstr "Files"
 
-#: src/pages/KnowledgeSection.tsx:442
+#: src/pages/KnowledgeSection.tsx:443
 msgid "Filter skills"
 msgstr "Filter skills"
 
@@ -2137,7 +2141,7 @@ msgstr "Getting ready"
 msgid "Git event"
 msgstr "Git event"
 
-#: src/pages/KnowledgeSection.tsx:387
+#: src/pages/KnowledgeSection.tsx:388
 msgid "Global"
 msgstr "Global"
 
@@ -2248,7 +2252,7 @@ msgstr "If you heard that, voice is ready."
 msgid "Ignore"
 msgstr "Ignore"
 
-#: src/pages/KnowledgeSection.tsx:426
+#: src/pages/KnowledgeSection.tsx:427
 msgid "Import"
 msgstr "Import"
 
@@ -2765,7 +2769,7 @@ msgstr "New routine"
 msgid "New section"
 msgstr "New section"
 
-#: src/pages/KnowledgeSection.tsx:406
+#: src/pages/KnowledgeSection.tsx:407
 msgid "New skill"
 msgstr "New skill"
 
@@ -2814,7 +2818,7 @@ msgstr "No chat apps linked yet."
 msgid "No exceptions. Actions run automatically."
 msgstr "No exceptions. Actions run automatically."
 
-#: src/pages/KnowledgeSection.tsx:847
+#: src/pages/KnowledgeSection.tsx:855
 msgid "No files yet"
 msgstr "No files yet"
 
@@ -2876,11 +2880,11 @@ msgstr "No report"
 msgid "No results"
 msgstr "No results"
 
-#: src/pages/KnowledgeSection.tsx:463
+#: src/pages/KnowledgeSection.tsx:464
 msgid "No skills match"
 msgstr "No skills match"
 
-#: src/pages/KnowledgeSection.tsx:463
+#: src/pages/KnowledgeSection.tsx:464
 msgid "No skills yet"
 msgstr "No skills yet"
 
@@ -2919,7 +2923,7 @@ msgid "Nothing is still running"
 msgstr "Nothing is still running"
 
 #: src/pages/bot-page/KnowledgeTab.tsx:42
-#: src/pages/KnowledgeSection.tsx:41
+#: src/pages/KnowledgeSection.tsx:42
 msgid "Nothing remembered yet"
 msgstr "Nothing remembered yet"
 
@@ -3196,7 +3200,7 @@ msgstr "Reactions"
 msgid "Read replies aloud"
 msgstr "Read replies aloud"
 
-#: src/pages/KnowledgeSection.tsx:492
+#: src/pages/KnowledgeSection.tsx:493
 msgid "read-only"
 msgstr "read-only"
 
@@ -3477,7 +3481,7 @@ msgid "Return to Rakazo"
 msgstr "Return to Rakazo"
 
 #. placeholder {0}: doc.revision
-#: src/pages/KnowledgeSection.tsx:144
+#: src/pages/KnowledgeSection.tsx:145
 msgid "rev {0}"
 msgstr "rev {0}"
 
@@ -3554,8 +3558,8 @@ msgstr "Runs when this bot receives a verified message from this provider."
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/ExternalConversationSettings.tsx:255
 #: src/pages/GroupPanel.tsx:279
-#: src/pages/KnowledgeSection.tsx:234
-#: src/pages/KnowledgeSection.tsx:698
+#: src/pages/KnowledgeSection.tsx:235
+#: src/pages/KnowledgeSection.tsx:706
 #: src/pages/ModelSettingsOverlay.tsx:791
 #: src/pages/shell/dialogs.tsx:266
 msgid "Save"
@@ -3641,8 +3645,8 @@ msgstr "Search models"
 msgid "Search providers"
 msgstr "Search providers"
 
-#: src/pages/KnowledgeSection.tsx:432
 #: src/pages/KnowledgeSection.tsx:433
+#: src/pages/KnowledgeSection.tsx:434
 msgid "Search skills"
 msgstr "Search skills"
 
@@ -3727,7 +3731,7 @@ msgstr "Shared"
 msgid "Shared chat with 2-6 bots. They all reply in the same thread."
 msgstr "Shared chat with 2-6 bots. They all reply in the same thread."
 
-#: src/pages/KnowledgeSection.tsx:36
+#: src/pages/KnowledgeSection.tsx:37
 msgid "Shared documents"
 msgstr "Shared documents"
 
@@ -3745,13 +3749,13 @@ msgstr "Show earlier"
 msgid "Show key"
 msgstr "Show key"
 
-#: src/pages/KnowledgeSection.tsx:885
+#: src/pages/KnowledgeSection.tsx:893
 #: src/pages/shell/message-view.tsx:80
 msgid "Show less"
 msgstr "Show less"
 
 #: src/pages/bot-page/BotActivity.tsx:460
-#: src/pages/KnowledgeSection.tsx:885
+#: src/pages/KnowledgeSection.tsx:893
 #: src/pages/PluginsOverlay.tsx:873
 #: src/pages/shell/message-view.tsx:80
 msgid "Show more"
@@ -3856,7 +3860,7 @@ msgstr "Speak only"
 msgid "Speak this reply"
 msgstr "Speak this reply"
 
-#: src/pages/KnowledgeSection.tsx:388
+#: src/pages/KnowledgeSection.tsx:389
 msgid "Specific agents"
 msgstr "Specific agents"
 
@@ -4316,7 +4320,7 @@ msgstr "Where should bots run?"
 msgid "Working…"
 msgstr "Working…"
 
-#: src/pages/KnowledgeSection.tsx:795
+#: src/pages/KnowledgeSection.tsx:803
 msgid "Workspace root"
 msgstr "Workspace root"
 

@@ -200,7 +200,13 @@ const EntryShapes = z.discriminatedUnion("type", [
   runEntry("assistant.choice", z.object({ ...risen, block: ChoiceBlock })),
   runEntry(
     "tool.call",
-    z.object({ callId: z.string().min(1), name: z.string(), input: z.string() }),
+    z.object({
+      callId: z.string().min(1),
+      name: z.string(),
+      input: z.string(),
+      /** Run by a harness with its own loop, outside the controller's effect journal. */
+      native: z.literal(true).optional(),
+    }),
   ),
   runEntry(
     "tool.result",
@@ -374,6 +380,14 @@ const EntryShapes = z.discriminatedUnion("type", [
     payload: z.strictObject({ edit: z.literal(true).optional() }),
   }),
   entry("harness.session", z.object({ harness: z.string(), sessionId: z.string() })),
+  /**
+   * A compaction summary a harness with its own loop wrote inside one attempt. The harness's own
+   * words, kept for the run's trace: no history reads it as the controller's compaction.
+   */
+  runEntry(
+    "harness.summary",
+    z.object({ summary: z.string(), tokensBefore: z.number().int().nonnegative() }),
+  ),
 ]);
 
 type WithoutSession<T> = T extends unknown ? Omit<T, "sessionId"> : never;
@@ -480,6 +494,7 @@ export const ENTRY_AUDIENCE = {
   rewind: { inference: "no", ui: true },
   clear: { inference: "no", ui: true },
   "harness.session": { inference: "no", ui: false },
+  "harness.summary": { inference: "no", ui: false },
 } as const satisfies Record<SessionEntryType, EntryAudience>;
 
 type Audience = typeof ENTRY_AUDIENCE;
@@ -507,6 +522,7 @@ export const RUN_TRACE_TYPES: ReadonlySet<SessionEntryType> = new Set([
   "tool.call",
   "tool.result",
   "subagent",
+  "harness.summary",
 ] satisfies SessionEntryType[]);
 
 /**

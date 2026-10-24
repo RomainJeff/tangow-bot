@@ -28,6 +28,7 @@ import type {
   PiOAuthLogins,
   RemoteConnectorDependencies,
   SkillOwnerLock,
+  WorkerLifecycle,
 } from "@rakazo/adapters";
 import {
   acquireComputerExecutionLease,
@@ -64,6 +65,7 @@ import {
   probeOpenAiCompatibleModels,
   provisionComputer,
   queueComputerUpdate,
+  recoverBrowserApprovalScreens,
   releaseBotScreen,
   releaseComputerExecutionLease,
   replaceComputer,
@@ -133,6 +135,7 @@ import {
   lockOwnedGroup,
   newestModelCredentialOrder,
   newestVoiceCredentialOrder,
+  OwnerWorkerLiveError,
   Prisma,
   parseComputerMode,
   RESOURCE_NOT_FOUND,
@@ -490,6 +493,7 @@ export interface RouterDeps {
   auth: Auth;
   jobs: JobPublisher;
   sandbox: SandboxProvider;
+  workerLifecycle?: Pick<WorkerLifecycle, "releaseOwnerWorkers" | "sweepVolumes">;
   memory: MemoryStore;
   memoryProviders: MemoryProviderResolver;
   home: AgentHomeStore;
@@ -723,12 +727,25 @@ export function createRouter(deps: RouterDeps) {
             });
           }
           await assertClaim();
+          // Destroying a worker reaches the provider: like a computer teardown, only a finished
+          // deletion may then unblock the space.
+          const released = await deps.workerLifecycle?.releaseOwnerWorkers(
+            { spaceId: input.spaceId },
+            adapterContext,
+          );
+          if (released) claimReleasable = false;
+          await assertClaim();
           claimActive = false;
           if (claimRenewal) {
             clearInterval(claimRenewal);
             claimRenewal = null;
           }
           const fallback = await deleteEmptySpaceForMember(deps.prisma, claimedInput);
+          await deps.workerLifecycle
+            ?.sweepVolumes(adapterContext)
+            .catch((sweepError) =>
+              getLogger().error("volume sweep after space deletion", sweepError),
+            );
           return { ok: true as const, activeSpaceId: fallback.id };
         } catch (error) {
           if (context.signal?.aborted) claimReleasable = false;
@@ -745,7 +762,10 @@ export function createRouter(deps: RouterDeps) {
           if (error instanceof CannotDeleteSpaceAsNonOwnerError) {
             throw new ORPCError("FORBIDDEN", { message: error.message });
           }
-          if (error instanceof SpaceDeletionInProgressError) {
+          if (
+            error instanceof SpaceDeletionInProgressError ||
+            error instanceof OwnerWorkerLiveError
+          ) {
             throw new ORPCError("CONFLICT", { message: error.message });
           }
           if (
@@ -1308,6 +1328,7 @@ export function createRouter(deps: RouterDeps) {
             events: deps.events,
             artifacts: deps.artifacts,
             dataDir: deps.dataDir,
+            workerLifecycle: deps.workerLifecycle,
           },
           bot,
           {
@@ -1318,7 +1339,12 @@ export function createRouter(deps: RouterDeps) {
             signal: new AbortController().signal,
           },
           { deleteMemories: input.deleteMemories },
-        );
+        ).catch((error: unknown) => {
+          if (error instanceof OwnerWorkerLiveError) {
+            throw new ORPCError("CONFLICT", { message: error.message });
+          }
+          throw error;
+        });
         return { ok: true as const };
       }),
       webhookSecret: authed.bots.webhookSecret.handler(async ({ context, input }) => {
@@ -1551,6 +1577,7 @@ export function createRouter(deps: RouterDeps) {
         await Promise.all(
           cancelledRunIds.map((runId) => deps.jobs.cancel(runJobKey(runId)).catch(() => undefined)),
         );
+        await recoverBrowserApprovalScreens(deps, { runIds: cancelledRunIds });
         await purgeCompactedHistoryMemory(
           deps,
           context.actor,
@@ -1586,6 +1613,7 @@ export function createRouter(deps: RouterDeps) {
             deps.jobs.cancel(runJobKey(runId)).catch(() => undefined),
           ),
         );
+        await recoverBrowserApprovalScreens(deps, { runIds: rewound.cancelledRunIds });
         if (rewound.historyGeneration !== undefined) {
           await purgeCompactedHistoryMemory(
             deps,

@@ -95,6 +95,7 @@ async function main() {
     if (integration) {
       const suites = [
         "packages/testkit/src/pi-offline.postgres.test.ts",
+        "packages/testkit/src/worker-skills.test.ts",
         "packages/testkit/src/computer-approval.postgres.test.ts",
         "packages/testkit/src/eval-history.postgres.test.ts",
         "packages/testkit/src/eval-customer-support.postgres.test.ts",
@@ -116,6 +117,7 @@ async function main() {
         "packages/adapters/src/job-reconciler.postgres.test.ts",
         "packages/adapters/src/executor-run-log.postgres.test.ts",
         "packages/adapters/src/skill-lock.postgres.test.ts",
+        "packages/adapters/src/worker-lifecycle.postgres.test.ts",
       ];
       // Each app reconciles all durable work in its database, including intentionally
       // unfinished fixture runs. Clone the pristine migrated schema so one suite

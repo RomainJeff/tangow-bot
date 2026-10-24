@@ -1,0 +1,675 @@
+{
+  "startedAt": "2026-10-24T19:41:06.231Z",
+  "generatedAt": "2026-10-24T19:48:27.574Z",
+  "harness": "pi-native",
+  "guest": "the template's baked guest",
+  "workerTemplate": "rakazo-worker-pi-native",
+  "computerTemplate": "desktop",
+  "desktopPreparation": "product E2BSandboxProvider.prepare",
+  "provider": "opencode-go",
+  "model": "glm-5.3-flash",
+  "method": {
+    "bootMs": "Worker provider ensure to the guest's hello, at the controller.",
+    "firstModelEventMs": "From the run's start to the relay's first streamed model event sent to the guest; includes the worker's boot.",
+    "stopAfterCancelMs": "From the database cancel the stop button makes to the attempt's end, cancelled during a native bash.",
+    "workerDestroy": "Duration of the product's worker destroy at the attempt's end, with the worker VM's memory in use and CPU busy share since boot, read inside it just before.",
+    "sweepMs": "Time to kill what the thread left (the computer) and destroy its volumes, after the thread.",
+    "catalogCostUsd": "Tokens of the run's relayed requests at the catalog list prices."
+  },
+  "tasks": [
+    {
+      "task": "code",
+      "passWhen": "Each script is written and run with the worker's native tools, the computer runs the same file, and the reply gives the sequence",
+      "samples": [
+        {
+          "label": "cold",
+          "status": "completed",
+          "bootMs": 2672,
+          "firstModelEventMs": 5014,
+          "runMs": 16836,
+          "workerDestroy": [
+            {
+              "ms": 27,
+              "vm": {
+                "uptimeS": 25,
+                "cpuBusyShareSinceBoot": 0.227,
+                "memUsedMiB": 174,
+                "memTotalMiB": 977
+              }
+            }
+          ],
+          "workersLeftAfterRun": 0,
+          "usage": {
+            "requests": 5,
+            "inputTokens": 61854,
+            "cacheReadTokens": 35904,
+            "outputTokens": 425,
+            "catalogCostUsd": 0.005182
+          },
+          "tools": [
+            {
+              "name": "write",
+              "native": true
+            },
+            {
+              "name": "bash",
+              "native": true
+            },
+            {
+              "name": "computer_exec",
+              "native": false
+            },
+            {
+              "name": "message_user",
+              "native": false
+            }
+          ],
+          "reply": "Both runs print the same thing:\n\n```\n0 1 1 2 3 5 8 13 21 34\n```\n\n- Workspace run (`bash p6-fib.sh` in my workspace): `0 1 1 2 3 5 8 13 21 34`\n- Computer run (`sh p6-fib.sh` via computer_exec in the same directory): `0 1 1 2 3 5 8 13 21 34`\n\nThe script `p6-fib.sh` is in your workspace root.",
+          "prompt": "Write a shell script p6-fib.sh in your workspace that prints the first 10 Fibonacci numbers on one line, starting 0 1, and run it. Then run the same file on your computer with computer_exec. Tell me both outputs.",
+          "check": {
+            "pass": true,
+            "nativeTools": ["write", "bash"],
+            "computerExec": true
+          }
+        },
+        {
+          "label": "warm",
+          "status": "completed",
+          "bootMs": 2471,
+          "firstModelEventMs": 3567,
+          "runMs": 11763,
+          "workerDestroy": [
+            {
+              "ms": 21,
+              "vm": {
+                "uptimeS": 20,
+                "cpuBusyShareSinceBoot": 0.281,
+                "memUsedMiB": 175,
+                "memTotalMiB": 977
+              }
+            }
+          ],
+          "workersLeftAfterRun": 0,
+          "usage": {
+            "requests": 3,
+            "inputTokens": 37776,
+            "cacheReadTokens": 9728,
+            "outputTokens": 319,
+            "catalogCostUsd": 0.004659
+          },
+          "tools": [
+            {
+              "name": "write",
+              "native": true
+            },
+            {
+              "name": "bash",
+              "native": true
+            },
+            {
+              "name": "computer_exec",
+              "native": false
+            }
+          ],
+          "reply": "",
+          "prompt": "Write a shell script p6-fib12.sh in your workspace that prints the first 12 Fibonacci numbers on one line, starting 0 1, and run it. Then run the same file on your computer with computer_exec. Tell me both outputs.",
+          "check": {
+            "pass": false,
+            "nativeTools": ["write", "bash"],
+            "computerExec": true
+          }
+        }
+      ],
+      "abort": {
+        "label": "warm",
+        "status": "cancelled",
+        "bootMs": 2492,
+        "firstModelEventMs": 3465,
+        "runMs": 60188,
+        "stopAfterCancelMs": 55014,
+        "workerDestroy": [
+          {
+            "ms": 15,
+            "vm": {
+              "uptimeS": 69,
+              "cpuBusyShareSinceBoot": 0.079,
+              "memUsedMiB": 176,
+              "memTotalMiB": 977
+            }
+          }
+        ],
+        "workersLeftAfterRun": 0,
+        "usage": {
+          "requests": 1,
+          "inputTokens": 12552,
+          "cacheReadTokens": 9728,
+          "outputTokens": 38,
+          "catalogCostUsd": 0.000734
+        },
+        "tools": [
+          {
+            "name": "bash",
+            "native": true
+          }
+        ],
+        "reply": "",
+        "prompt": "Run `sleep 300` with bash, then tell me it finished."
+      },
+      "pass": false,
+      "computerVm": {
+        "uptimeS": 93,
+        "cpuBusyShareSinceBoot": 0.055,
+        "memUsedMiB": 353,
+        "memTotalMiB": 3931
+      },
+      "cleanup": {
+        "killed": 1,
+        "destroyed": 2,
+        "left": {
+          "sandboxes": 0,
+          "volumes": 0
+        },
+        "sweepMs": 31
+      }
+    },
+    {
+      "task": "app",
+      "passWhen": "The server runs on the computer, the reply quotes its answer, and it still answers from the computer after the run",
+      "samples": [
+        {
+          "label": "cold",
+          "status": "completed",
+          "bootMs": 2288,
+          "firstModelEventMs": 4686,
+          "runMs": 57161,
+          "workerDestroy": [
+            {
+              "ms": 16,
+              "vm": {
+                "uptimeS": 66,
+                "cpuBusyShareSinceBoot": 0.124,
+                "memUsedMiB": 175,
+                "memTotalMiB": 977
+              }
+            }
+          ],
+          "workersLeftAfterRun": 0,
+          "usage": {
+            "requests": 11,
+            "inputTokens": 147821,
+            "cacheReadTokens": 68096,
+            "outputTokens": 1528,
+            "catalogCostUsd": 0.014766
+          },
+          "tools": [
+            {
+              "name": "computer_exec",
+              "native": false
+            },
+            {
+              "name": "computer_exec",
+              "native": false
+            },
+            {
+              "name": "write",
+              "native": true
+            },
+            {
+              "name": "computer_exec",
+              "native": false
+            },
+            {
+              "name": "computer_exec",
+              "native": false
+            },
+            {
+              "name": "computer_exec",
+              "native": false
+            },
+            {
+              "name": "computer_exec",
+              "native": false
+            },
+            {
+              "name": "computer_exec",
+              "native": false
+            },
+            {
+              "name": "computer_exec",
+              "native": false
+            },
+            {
+              "name": "computer_exec",
+              "native": false
+            }
+          ],
+          "reply": "",
+          "prompt": "On your computer, start a web server on port 8080 that answers every request with the text p6-app-ok. Leave it running in the background, check it with curl on the computer, and tell me what it answered.",
+          "check": {
+            "pass": false,
+            "computerExec": true,
+            "servedAfterRun": "p6-app-ok"
+          }
+        },
+        {
+          "label": "warm",
+          "status": "completed",
+          "bootMs": 2598,
+          "firstModelEventMs": 3527,
+          "runMs": 49568,
+          "workerDestroy": [
+            {
+              "ms": 12,
+              "vm": {
+                "uptimeS": 58,
+                "cpuBusyShareSinceBoot": 0.152,
+                "memUsedMiB": 175,
+                "memTotalMiB": 977
+              }
+            }
+          ],
+          "workersLeftAfterRun": 0,
+          "usage": {
+            "requests": 14,
+            "inputTokens": 188800,
+            "cacheReadTokens": 107008,
+            "outputTokens": 1474,
+            "catalogCostUsd": 0.016216
+          },
+          "tools": [
+            {
+              "name": "computer_exec",
+              "native": false
+            },
+            {
+              "name": "computer_exec",
+              "native": false
+            },
+            {
+              "name": "computer_exec",
+              "native": false
+            },
+            {
+              "name": "computer_exec",
+              "native": false
+            },
+            {
+              "name": "edit",
+              "native": true
+            },
+            {
+              "name": "computer_exec",
+              "native": false
+            },
+            {
+              "name": "computer_exec",
+              "native": false
+            },
+            {
+              "name": "computer_exec",
+              "native": false
+            },
+            {
+              "name": "computer_exec",
+              "native": false
+            },
+            {
+              "name": "computer_exec",
+              "native": false
+            },
+            {
+              "name": "computer_exec",
+              "native": false
+            },
+            {
+              "name": "computer_exec",
+              "native": false
+            },
+            {
+              "name": "message_user",
+              "native": false
+            }
+          ],
+          "reply": "The server on port 8080 has been updated. I edited its script to reply with `p6-app-warm`, restarted it (now running in the background as a Python process), and checked with curl on the computer. It answered: **p6-app-warm**.",
+          "prompt": "Change the server on port 8080 of your computer so that it answers p6-app-warm instead, leave it running, check it with curl on the computer, and tell me what it answered.",
+          "check": {
+            "pass": true,
+            "computerExec": true,
+            "servedAfterRun": "p6-app-warm"
+          }
+        }
+      ],
+      "abort": {
+        "label": "warm",
+        "status": "cancelled",
+        "bootMs": 2428,
+        "firstModelEventMs": 3446,
+        "runMs": 60289,
+        "stopAfterCancelMs": 56169,
+        "workerDestroy": [
+          {
+            "ms": 16,
+            "vm": {
+              "uptimeS": 69,
+              "cpuBusyShareSinceBoot": 0.076,
+              "memUsedMiB": 175,
+              "memTotalMiB": 977
+            }
+          }
+        ],
+        "workersLeftAfterRun": 0,
+        "usage": {
+          "requests": 1,
+          "inputTokens": 12478,
+          "cacheReadTokens": 9728,
+          "outputTokens": 22,
+          "catalogCostUsd": 0.000715
+        },
+        "tools": [
+          {
+            "name": "bash",
+            "native": true
+          }
+        ],
+        "reply": "",
+        "prompt": "Run `sleep 300` with bash, then tell me it finished."
+      },
+      "pass": false,
+      "computerVm": {
+        "uptimeS": 175,
+        "cpuBusyShareSinceBoot": 0.036,
+        "memUsedMiB": 354,
+        "memTotalMiB": 3931
+      },
+      "cleanup": {
+        "killed": 1,
+        "destroyed": 2,
+        "left": {
+          "sandboxes": 0,
+          "volumes": 0
+        },
+        "sweepMs": 29
+      }
+    },
+    {
+      "task": "browser",
+      "passWhen": "A browser tool ran on the computer and the reply gives the page's heading",
+      "samples": [
+        {
+          "label": "cold",
+          "status": "completed",
+          "bootMs": 2523,
+          "firstModelEventMs": 4771,
+          "runMs": 14115,
+          "workerDestroy": [
+            {
+              "ms": 14,
+              "vm": {
+                "uptimeS": 22,
+                "cpuBusyShareSinceBoot": 0.23,
+                "memUsedMiB": 175,
+                "memTotalMiB": 977
+              }
+            }
+          ],
+          "workersLeftAfterRun": 0,
+          "usage": {
+            "requests": 3,
+            "inputTokens": 36902,
+            "cacheReadTokens": 23936,
+            "outputTokens": 134,
+            "catalogCostUsd": 0.00273
+          },
+          "tools": [
+            {
+              "name": "browser_navigate",
+              "native": false
+            },
+            {
+              "name": "browser_snapshot",
+              "native": false
+            }
+          ],
+          "reply": "",
+          "prompt": "Use the browser on your computer to open https://example.com and tell me its main heading.",
+          "check": {
+            "pass": false,
+            "browserTools": ["browser_navigate", "browser_snapshot"]
+          }
+        },
+        {
+          "label": "warm",
+          "status": "completed",
+          "bootMs": 2542,
+          "firstModelEventMs": 3649,
+          "runMs": 19189,
+          "workerDestroy": [
+            {
+              "ms": 21,
+              "vm": {
+                "uptimeS": 27,
+                "cpuBusyShareSinceBoot": 0.209,
+                "memUsedMiB": 174,
+                "memTotalMiB": 977
+              }
+            }
+          ],
+          "workersLeftAfterRun": 0,
+          "usage": {
+            "requests": 4,
+            "inputTokens": 50000,
+            "cacheReadTokens": 29184,
+            "outputTokens": 139,
+            "catalogCostUsd": 0.004067
+          },
+          "tools": [
+            {
+              "name": "browser_navigate",
+              "native": false
+            },
+            {
+              "name": "browser_snapshot",
+              "native": false
+            },
+            {
+              "name": "message_user",
+              "native": false
+            }
+          ],
+          "reply": "The main heading on https://example.org is **\"Example Domain\"**.",
+          "prompt": "Use the browser on your computer to open https://example.org and tell me its main heading.",
+          "check": {
+            "pass": true,
+            "browserTools": ["browser_navigate", "browser_snapshot"]
+          }
+        }
+      ],
+      "abort": {
+        "label": "warm",
+        "status": "cancelled",
+        "bootMs": 2613,
+        "firstModelEventMs": 3626,
+        "runMs": 60356,
+        "stopAfterCancelMs": 54160,
+        "workerDestroy": [
+          {
+            "ms": 24,
+            "vm": {
+              "uptimeS": 69,
+              "cpuBusyShareSinceBoot": 0.082,
+              "memUsedMiB": 177,
+              "memTotalMiB": 977
+            }
+          }
+        ],
+        "workersLeftAfterRun": 0,
+        "usage": {
+          "requests": 1,
+          "inputTokens": 12414,
+          "cacheReadTokens": 0,
+          "outputTokens": 82,
+          "catalogCostUsd": 0.001903
+        },
+        "tools": [
+          {
+            "name": "bash",
+            "native": true
+          }
+        ],
+        "reply": "",
+        "prompt": "Run `sleep 300` with bash, then tell me it finished."
+      },
+      "pass": false,
+      "computerVm": {
+        "uptimeS": 102,
+        "cpuBusyShareSinceBoot": 0.104,
+        "memUsedMiB": 388,
+        "memTotalMiB": 3931
+      },
+      "cleanup": {
+        "killed": 1,
+        "destroyed": 2,
+        "left": {
+          "sandboxes": 0,
+          "volumes": 0
+        },
+        "sweepMs": 29
+      }
+    },
+    {
+      "task": "mcp",
+      "passWhen": "Each note is published by the controller's tool, and the bot has no computer and no volume",
+      "samples": [
+        {
+          "label": "cold",
+          "status": "completed",
+          "bootMs": 2166,
+          "firstModelEventMs": 3191,
+          "runMs": 8490,
+          "workerDestroy": [
+            {
+              "ms": 14,
+              "vm": {
+                "uptimeS": 17,
+                "cpuBusyShareSinceBoot": 0.284,
+                "memUsedMiB": 223,
+                "memTotalMiB": 977
+              }
+            }
+          ],
+          "workersLeftAfterRun": 0,
+          "usage": {
+            "requests": 3,
+            "inputTokens": 22101,
+            "cacheReadTokens": 9728,
+            "outputTokens": 116,
+            "catalogCostUsd": 0.002206
+          },
+          "tools": [
+            {
+              "name": "publish_note",
+              "native": false
+            },
+            {
+              "name": "message_user",
+              "native": false
+            }
+          ],
+          "reply": "Published the note \"P6 acceptance\" on 2026-10-24.",
+          "prompt": "Publish a note titled \"P6 acceptance\" with the publish_note tool, then confirm in one sentence.",
+          "check": {
+            "pass": true,
+            "published": ["P6 acceptance"],
+            "computers": 0,
+            "volumes": 0
+          }
+        },
+        {
+          "label": "warm",
+          "status": "completed",
+          "bootMs": 2418,
+          "firstModelEventMs": 3269,
+          "runMs": 9769,
+          "workerDestroy": [
+            {
+              "ms": 24,
+              "vm": {
+                "uptimeS": 18,
+                "cpuBusyShareSinceBoot": 0.27,
+                "memUsedMiB": 221,
+                "memTotalMiB": 977
+              }
+            }
+          ],
+          "workersLeftAfterRun": 0,
+          "usage": {
+            "requests": 2,
+            "inputTokens": 15021,
+            "cacheReadTokens": 4864,
+            "outputTokens": 134,
+            "catalogCostUsd": 0.001736
+          },
+          "tools": [
+            {
+              "name": "publish_note",
+              "native": false
+            }
+          ],
+          "reply": "",
+          "prompt": "Publish a note titled \"P6 acceptance warm\" with the publish_note tool, then confirm in one sentence.",
+          "check": {
+            "pass": true,
+            "published": ["P6 acceptance", "P6 acceptance warm"],
+            "computers": 0,
+            "volumes": 0
+          }
+        }
+      ],
+      "abort": {
+        "label": "warm",
+        "status": "cancelled",
+        "bootMs": 2181,
+        "firstModelEventMs": 2972,
+        "runMs": 60254,
+        "stopAfterCancelMs": 54095,
+        "workerDestroy": [
+          {
+            "ms": 15,
+            "vm": {
+              "uptimeS": 69,
+              "cpuBusyShareSinceBoot": 0.072,
+              "memUsedMiB": 175,
+              "memTotalMiB": 977
+            }
+          }
+        ],
+        "workersLeftAfterRun": 0,
+        "usage": {
+          "requests": 1,
+          "inputTokens": 7550,
+          "cacheReadTokens": 4864,
+          "outputTokens": 21,
+          "catalogCostUsd": 0.000559
+        },
+        "tools": [
+          {
+            "name": "wait_for_review",
+            "native": false
+          }
+        ],
+        "reply": "",
+        "prompt": "Call wait_for_review, then tell me it finished."
+      },
+      "pass": true,
+      "cleanup": {
+        "killed": 0,
+        "destroyed": 0,
+        "left": {
+          "sandboxes": 0,
+          "volumes": 0
+        },
+        "sweepMs": 13
+      }
+    }
+  ]
+}

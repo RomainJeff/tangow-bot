@@ -26,6 +26,7 @@ import {
 import { approvalEffectKey } from "@rakazo/core/node/approval-effect-key";
 import { getLogger } from "@rakazo/logging";
 import { activeBotNames } from "./bot-names.js";
+import type { BrowserApprovalCheckpoint } from "./browser-approval-checkpoint.js";
 import { cancelRunsInTransaction } from "./cancel-runs.js";
 import type { Prisma, PrismaClient, Run } from "./client.js";
 import { expireComputerExecutionLeases } from "./computers.js";
@@ -185,6 +186,7 @@ export interface PauseRunForInput {
    * (not in message blocks) so clients still see redacted labels.
    */
   offeredActions?: Array<{ id: string; label: string }>;
+  browserApprovalCheckpoint?: BrowserApprovalCheckpoint;
   /** The effect an approval card asks about; its proposal is already redacted. */
   effect?: { id: string; kind: string; proposal: Record<string, unknown> };
   /** The logged tool call the run pauses on, which gets its one result here, naming the pause. */
@@ -1450,9 +1452,20 @@ export async function pauseRunForInput(
         ...(input.offeredActions?.length
           ? { checkpoint: choiceAskCheckpoint(input.offeredActions) }
           : {}),
+        ...(input.browserApprovalCheckpoint
+          ? { checkpoint: JSON.stringify(input.browserApprovalCheckpoint) }
+          : {}),
       },
     });
     if (paused.count !== 1) return null;
+    const hold = input.browserApprovalCheckpoint;
+    if (hold?.lease) {
+      const retained = await tx.computerExecutionLease.updateMany({
+        where: { ...hold.lease, expiresAt: { gt: new Date() } },
+        data: { expiresAt: new Date(hold.deadline) },
+      });
+      if (retained.count !== 1) throw new Error("The browser approval lost its computer lease");
+    }
 
     const attempt = await tx.attempt.updateMany({
       where: {
@@ -1783,7 +1796,7 @@ async function finalizeRunOnce(
         id: input.attemptId,
         runId: input.runId,
         fence: input.leaseFence,
-        status: "running",
+        status: { in: ["setting_up", "running"] },
       },
       data: {
         status: input.outcome,

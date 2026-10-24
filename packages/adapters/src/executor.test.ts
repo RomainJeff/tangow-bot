@@ -13,6 +13,7 @@ import type { PrismaClient } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
 import {
   appendToolCompletionAudit,
+  buildHarnessAddendum,
   buildSystemInstructions,
   CHAT_VOICE_INSTRUCTIONS,
   createRunExecutor,
@@ -1063,11 +1064,11 @@ description: Prepare standup notes
   it("restores a takeover checkpoint when a switching computer requeues the run", async () => {
     const updateMany = vi.fn(
       async (args: {
-        where: { checkpoint?: string | null | { in: string[] } };
+        where: { checkpoint?: string | null; OR?: Array<{ checkpoint: { in?: string[] } }> };
         data: { status?: string; checkpoint?: string | null };
       }) => {
         if (args.data.status === "leased" || args.data.status === "running") return { count: 1 };
-        if (args.where.checkpoint && typeof args.where.checkpoint === "object") return { count: 0 };
+        if (args.where.OR) return { count: 0 };
         return { count: 1 };
       },
     );
@@ -1113,7 +1114,7 @@ description: Prepare standup notes
     let checkpoint: string | null = null;
     const updateMany = vi.fn(
       async (args: {
-        where: { checkpoint?: string | null | { in: string[] } };
+        where: { checkpoint?: string | null; OR?: Array<{ checkpoint: { in?: string[] } }> };
         data: { status?: string; checkpoint?: string | null };
       }) => {
         if (args.data.status === "leased") {
@@ -1124,8 +1125,11 @@ description: Prepare standup notes
           checkpoint = "takeover";
           return { count: 1 };
         }
-        if (args.where.checkpoint && typeof args.where.checkpoint === "object") {
-          return { count: args.where.checkpoint.in.includes(checkpoint ?? "") ? 1 : 0 };
+        if (args.where.OR) {
+          const held = args.where.OR.some((match) =>
+            match.checkpoint.in?.includes(checkpoint ?? ""),
+          );
+          return { count: held ? 1 : 0 };
         }
         return { count: args.where.checkpoint === null && checkpoint === null ? 1 : 0 };
       },
@@ -1161,7 +1165,7 @@ description: Prepare standup notes
     expect(updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          checkpoint: { in: ["takeover", "takeover-skipped"] },
+          OR: expect.arrayContaining([{ checkpoint: { in: ["takeover", "takeover-skipped"] } }]),
         }),
         data: expect.objectContaining({ status: "queued" }),
       }),
@@ -1179,11 +1183,11 @@ description: Prepare standup notes
   it("returns a held takeover to waiting_takeover when the computer is switching", async () => {
     const updateMany = vi.fn(
       async (args: {
-        where: { checkpoint?: string | null | { in: string[] } };
+        where: { checkpoint?: string | null; OR?: Array<{ checkpoint: { in?: string[] } }> };
         data: { status?: string; checkpoint?: string | null };
       }) => {
         if (args.data.status === "leased" || args.data.status === "running") return { count: 1 };
-        if (args.where.checkpoint && typeof args.where.checkpoint === "object") return { count: 0 };
+        if (args.where.OR) return { count: 0 };
         return { count: 1 };
       },
     );
@@ -1271,6 +1275,7 @@ description: Prepare standup notes
         findUniqueOrThrow: vi.fn(async () => ({ scope: "private", state: "running" })),
       },
       attempt: {
+        count: vi.fn(async () => 0),
         create: vi.fn(async () => ({ id: "attempt-1" })),
         updateMany: vi.fn(async () => ({ count: 1 })),
       },
@@ -1728,6 +1733,17 @@ describe("buildSystemInstructions", () => {
 
   it("keeps the clock out of the system prefix", () => {
     expect(buildSystemInstructions(parts)).not.toContain("Current date and time");
+  });
+
+  it("gives a harness with its own prompt the bot's guidance without credentials or helpers", () => {
+    const instructions = buildSystemInstructions(parts);
+    const addendum = buildHarnessAddendum(parts);
+    expect(addendum).toContain("Ada: research bot");
+    expect(addendum).toContain("This entire computer workspace is your private home.");
+    expect(instructions).toContain("Environment: linux");
+    expect(addendum).not.toContain("Environment: linux");
+    expect(instructions).toContain("run_subagent");
+    expect(addendum).not.toContain("subagent");
   });
 
   it("is byte-identical across runs when the directory is unchanged", () => {

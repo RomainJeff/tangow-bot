@@ -18,6 +18,7 @@ const context = {
   signal: new AbortController().signal,
 };
 const roots: string[] = [];
+const snapshot = { homeKey: "bot-1", homeStorage: "snapshot", homeRevision: "empty" };
 
 afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
@@ -56,7 +57,7 @@ describe("provider-neutral computer workspace", () => {
     const revision = await checkpointComputerWorkspace(
       home,
       firstProvider,
-      "bot-1",
+      snapshot,
       first,
       context,
     );
@@ -66,7 +67,7 @@ describe("provider-neutral computer workspace", () => {
       { botId: "bot-1", homePath: "/different-provider" },
       context,
     );
-    await restoreComputerWorkspace(home, replacementProvider, "bot-1", replacement, context);
+    await restoreComputerWorkspace(home, replacementProvider, snapshot, replacement, context);
 
     expect(revision).toMatch(/^rev-/);
     expect(
@@ -74,6 +75,42 @@ describe("provider-neutral computer workspace", () => {
         await replacementProvider.readFile(replacement, "notes/result.txt", context),
       ),
     ).toBe("portable");
+  });
+
+  it("checkpoints a Docker computer on the local store by revision, without copying", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "rakazo-workspace-store-"));
+    roots.push(root);
+    const provider = new FakeSandboxProvider();
+    const computer = await provider.provision({ botId: "bot-1", homePath: root }, context);
+    const docker = { ...computer, kind: "docker" as const };
+    const importWorkspace = vi.spyOn(provider, "importWorkspace");
+    const exportWorkspace = vi.spyOn(provider, "exportWorkspace");
+    const home = new LocalAgentHomeStore(root);
+
+    await restoreComputerWorkspace(home, provider, snapshot, docker, context);
+    const revision = await checkpointComputerWorkspace(home, provider, snapshot, docker, context);
+
+    expect(revision).toMatch(/^rev-/);
+    expect(importWorkspace).not.toHaveBeenCalled();
+    expect(exportWorkspace).not.toHaveBeenCalled();
+  });
+
+  it("never imports or exports a home that lives on volumes", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "rakazo-workspace-store-"));
+    roots.push(root);
+    const provider = new FakeSandboxProvider();
+    const computer = await provider.provision({ botId: "bot-1", homePath: root }, context);
+    const importWorkspace = vi.spyOn(provider, "importWorkspace");
+    const exportWorkspace = vi.spyOn(provider, "exportWorkspace");
+    const home = new LocalAgentHomeStore(root);
+    const migrated = { homeKey: "bot-1", homeStorage: "volumes", homeRevision: "rev-stored" };
+
+    await restoreComputerWorkspace(home, provider, migrated, computer, context);
+    const revision = await checkpointComputerWorkspace(home, provider, migrated, computer, context);
+
+    expect(revision).toBe("rev-stored");
+    expect(importWorkspace).not.toHaveBeenCalled();
+    expect(exportWorkspace).not.toHaveBeenCalled();
   });
 });
 
@@ -85,7 +122,13 @@ describe("Team run checkpoints", () => {
     const deps = { sandbox: { exportWorkspace }, home: {}, prisma: { computer: { updateMany } } };
     const result = await checkpointRunComputerWorkspace(
       deps as never,
-      { id: "team", homeKey: "team", scope: "team" },
+      {
+        id: "team",
+        homeKey: "team",
+        scope: "team",
+        homeStorage: "snapshot",
+        homeRevision: "empty",
+      },
       { id: "remote", providerRef: "remote", kind: "e2b", botId: "team" },
       { ...context, botId: "writer", screenLeaseId: "run-a:2" },
     );
@@ -115,7 +158,13 @@ describe("Team run checkpoints", () => {
     await expect(
       checkpointRunComputerWorkspace(
         deps as never,
-        { id: "team", homeKey: "team", scope: "team" },
+        {
+          id: "team",
+          homeKey: "team",
+          scope: "team",
+          homeStorage: "snapshot",
+          homeRevision: "empty",
+        },
         { id: "remote", providerRef: "remote", kind: "e2b", botId: "team" },
         { ...context, botId: "writer", screenLeaseId: "run-a:2" },
       ),

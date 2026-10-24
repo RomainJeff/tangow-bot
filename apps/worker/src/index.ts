@@ -11,6 +11,7 @@ loadRootEnv();
 
 import {
   ChatSdkMessagingSurface,
+  composeWorkers,
   createBackgroundJobHandlers,
   createConnectorStack,
   createJobReconciler,
@@ -24,6 +25,7 @@ import {
   createSkillLineSweep,
   createTraceExporterFromEnv,
   createWebProvider,
+  createWorkerProvider,
   databaseCapacityBackoffMs,
   EncryptedSecretStore,
   ExpoPushProvider,
@@ -48,6 +50,7 @@ import {
   reconcileComputerUpdates,
   resolveDeploymentModel,
   resolveSandboxProvider,
+  resolveWorkerProvider,
   ScriptedAgentRuntime,
   SpaceDecisionProviderResolver,
   SpaceMemoryProviderResolver,
@@ -167,6 +170,7 @@ async function main() {
   const decisionProviders = new SpaceDecisionProviderResolver(prisma, secrets);
   const home = new LocalAgentHomeStore(dataDir);
   const artifacts = new LocalArtifactStore(dataDir);
+  const workers = composeWorkers(prisma, createWorkerProvider(resolveWorkerProvider(process.env)));
   const inMemoryJobs = process.env.WAKEUP_DRIVER === "memory" ? new InMemoryJobQueue() : undefined;
   const jobs: JobPublisher = inMemoryJobs ?? new GraphileJobPublisher(pool);
   const jobHost: JobWorkerHost =
@@ -199,6 +203,7 @@ async function main() {
     sessionLog,
     skillLock,
     runtime,
+    workers: workers.runWorkers,
     sandbox,
     memory,
     memoryProviders,
@@ -286,6 +291,7 @@ async function main() {
       sessionLog,
       lineOnlyMessages: skillLearning !== "off",
     }),
+    reconcileWorkers: workers.reconcileWorkers,
   });
   reconciler.start();
 

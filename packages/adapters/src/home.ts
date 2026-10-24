@@ -12,13 +12,21 @@ import {
   writeFile,
 } from "node:fs/promises";
 import path from "node:path";
-import type { AdapterContext, AgentHomeStore, PortableFile } from "@rakazo/adapter-kit";
+import type {
+  AdapterContext,
+  AgentHomeStore,
+  HomeTreeEntry,
+  PortableFile,
+} from "@rakazo/adapter-kit";
 import { fileHandlePath } from "./file-handle-path.js";
 
 export class LocalAgentHomeStore implements AgentHomeStore {
   private readonly botWrites = new Map<string, Promise<void>>();
 
-  constructor(private readonly root: string) {}
+  constructor(
+    private readonly root: string,
+    private readonly portableRoots?: readonly string[],
+  ) {}
 
   describe() {
     return {
@@ -98,7 +106,33 @@ export class LocalAgentHomeStore implements AgentHomeStore {
     const dir = this.botDir(botId);
     await mkdir(dir, { recursive: true });
     const root = await realpath(dir);
-    yield* walkFiles(root, root);
+    yield* walkFiles(root, root, "", new Set(), this.portableRoots);
+  }
+
+  async listTree(botId: string, _context: AdapterContext): Promise<HomeTreeEntry[]> {
+    await this.waitForBotWrite(botId);
+    await this.recoverInterruptedCommit(botId);
+    const entries: HomeTreeEntry[] = [];
+    const walk = async (directory: string, prefix: string): Promise<void> => {
+      for (const entry of await readdir(directory, { withFileTypes: true })) {
+        if (prefix === "" && this.portableRoots && !this.portableRoots.includes(entry.name))
+          continue;
+        const portablePath = path.posix.join(prefix, entry.name);
+        const kind = entry.isSymbolicLink()
+          ? "symlink"
+          : entry.isDirectory()
+            ? "dir"
+            : entry.isFile()
+              ? "file"
+              : "other";
+        entries.push({ path: portablePath, kind });
+        if (kind === "dir") await walk(path.join(directory, entry.name), portablePath);
+      }
+    };
+    const dir = this.botDir(botId);
+    await mkdir(dir, { recursive: true });
+    await walk(await realpath(dir), "");
+    return entries;
   }
 
   async readFile(
@@ -342,12 +376,18 @@ async function* walkFiles(
   current: string,
   outputPath = "",
   visited = new Set<string>(),
+  portableRoots?: readonly string[],
 ): AsyncGenerator<PortableFile> {
   const resolvedCurrent = await traversalTarget(root, current).catch(() => null);
   if (!resolvedCurrent || visited.has(resolvedCurrent)) return;
   visited.add(resolvedCurrent);
   const entries = await readdir(resolvedCurrent, { withFileTypes: true }).catch(() => []);
   for (const entry of entries) {
+    if (
+      portableRoots &&
+      (entry.isSymbolicLink() || (outputPath === "" && !portableRoots.includes(entry.name)))
+    )
+      continue;
     const full = await traversalTarget(root, path.join(resolvedCurrent, entry.name)).catch(
       () => null,
     );
@@ -355,13 +395,14 @@ async function* walkFiles(
     const info = await stat(full);
     const portablePath = path.posix.join(outputPath, entry.name);
     if (info.isDirectory()) {
-      yield* walkFiles(root, full, portablePath, visited);
+      yield* walkFiles(root, full, portablePath, visited, portableRoots);
     } else if (info.isFile()) {
       const { content, mode } = await readTraversalFile(root, full);
       yield {
         path: portablePath,
         content: new Uint8Array(content),
         executable: Boolean(mode & 0o100),
+        mode: mode & 0o777,
       };
     }
   }

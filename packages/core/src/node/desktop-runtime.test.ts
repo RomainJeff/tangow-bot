@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -15,6 +15,7 @@ import {
   resetDesktopRuntimeCommand,
   screenPorts,
   shellQuote,
+  stopAllDesktopBrowsersCommand,
   stopExtraScreenCommand,
 } from "./desktop-runtime.js";
 
@@ -83,6 +84,61 @@ describe("shared Linux desktop lifecycle", () => {
     expect(f.ensure("c").stdout).toContain("RAKAZO_DESKTOP=2:view-c");
     expect(f.release("a").status).toBe(0);
     expect(f.ensure("d").stdout).toContain("RAKAZO_DESKTOP=0:view-d");
+  });
+
+  it("prepares only admitted leases under the lifecycle lock and retains failed cleanup reservations", () => {
+    const f = fixture();
+    const record = path.join(f.root, "events");
+    const append = (value: string) => `printf '%s\\n' ${shellQuote(value)} >>${shellQuote(record)}`;
+    const commands = {
+      ensure: `test -e /dev/fd/8; test ! -e /dev/fd/9; ${append("prepare")}`,
+      release: `${append("cleanup")}; exit 1`,
+    };
+    const render = () => commands;
+    const run = (script: string) => f.run(`bash() { ${append("browser lifecycle")}; };\n${script}`);
+    expect(run(managedDesktopCommand("a", "run:2", env, "view-a", render)).status).toBe(0);
+    expect(readFileSync(record, "utf8")).toBe("prepare\nbrowser lifecycle\n");
+    expect(run(managedDesktopCommand("a", "run:1", env, "view-a", render)).status).toBe(75);
+    expect(readFileSync(record, "utf8")).toBe("prepare\nbrowser lifecycle\n");
+    commands.ensure = `${append("failed prepare")}; exit 1`;
+    expect(run(managedDesktopCommand("a", "run:2", env, "view-a", render)).status).toBe(1);
+    expect(readFileSync(record, "utf8")).toBe("prepare\nbrowser lifecycle\nfailed prepare\n");
+    expect(run(releaseDesktopCommand("a", "run:2", env, render)).status).toBe(1);
+    expect(readFileSync(record, "utf8")).toBe(
+      "prepare\nbrowser lifecycle\nfailed prepare\nbrowser lifecycle\ncleanup\n",
+    );
+    expect(f.ensure("b").stdout).toContain("RAKAZO_DESKTOP=1:view-b");
+    commands.release = append("cleanup retry");
+    expect(run(releaseDesktopCommand("a", "run:2", env, render)).status).toBe(0);
+    expect(f.ensure("c").stdout).toContain("RAKAZO_DESKTOP=0:view-c");
+  });
+
+  it("quiesces each exported profile under its lifecycle lock and propagates cleanup failure", () => {
+    const f = fixture();
+    const profiles = path.join(f.root, "profiles");
+    for (const hash of ["a".repeat(32), "b".repeat(32)])
+      mkdirSync(path.join(profiles, `chromium-bot-${hash}`), { recursive: true });
+    const events = path.join(f.root, "export-cleanups");
+    const command = stopAllDesktopBrowsersCommand(
+      { ...env, browserProfilesDir: profiles },
+      (profile) => ({
+        ensure: "exit 99",
+        release: `test -e /dev/fd/8; printf '%s\\n' ${shellQuote(profile)} >>${shellQuote(events)}; exit 1`,
+      }),
+    ).replaceAll("/tmp/rakazo", f.root);
+    const result = spawnSync(
+      "bash",
+      ["-eu", "-c", `flock() { :; }; export -f flock;\n${command}`],
+      {
+        encoding: "utf8",
+        timeout: 5000,
+      },
+    );
+    expect(result.status, result.stderr).toBe(1);
+    expect(readFileSync(events, "utf8").split("\n").filter(Boolean)).toEqual([
+      path.join(profiles, `chromium-bot-${"a".repeat(32)}`),
+      path.join(profiles, `chromium-bot-${"b".repeat(32)}`),
+    ]);
   });
 
   it("does not create a screen on control release and keeps newer fences", () => {

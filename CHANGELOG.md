@@ -6,7 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-10-25
+
+#### Fixed
+
+- Existing self-hosted bots can move from Docker or snapshot-based E2B computers to isolated Pi workers through the [setup command](docs/self-host-e2b-workers.md#configure-an-existing-source-deployment-with-one-command), with backups and a resumable home migration.
+
 ### 2026-10-24
+
+#### Added
+
+- **On E2B, each bot run now works in its own temporary isolated VM with the native Pi harness, its files on persistent volumes shared with its computer.** This replaces runs inside the Rakazo server and home snapshots on E2B deployments, for conversations on web, desktop and iPhone. A computer created before this release moves its home onto volumes once with a script ([setup and move](docs/self-host-e2b-workers.md)).
 
 #### Changed
 

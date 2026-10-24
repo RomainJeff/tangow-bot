@@ -5,7 +5,6 @@ import type { AgentRunRequest, SemanticMemoryRecallRequest } from "@rakazo/adapt
 import type { SessionEntry } from "@rakazo/contracts";
 import { SessionEntrySchema } from "@rakazo/contracts";
 import { describe, expect, it, vi } from "vitest";
-import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
 import { createRunExecutor } from "./executor.js";
 import { PiAgentRuntime } from "./pi-runtime.js";
 import { recordingSessionLog } from "./session-log/recording.test-support.js";
@@ -37,12 +36,6 @@ vi.mock("@earendil-works/pi-ai/providers/all", async (importOriginal) => {
     },
   };
 });
-
-vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof ComputerLifecycleModule>()),
-  acquireComputerExecutionLease: async () => null,
-  provisionComputer: async () => ({ id: "computer-1", kind: "desktop" }),
-}));
 
 const BOT = "bot-1";
 
@@ -124,12 +117,13 @@ async function turn(options: {
         title: "Assistant",
         description: "Test assistant",
         memoryScope: "isolated",
-        computerId: "computer-1",
-        computer: { id: "computer-1", scope: "dedicated" },
+        computerId: null,
+        computer: null,
       })),
       findMany: vi.fn(async () => []),
     },
     attempt: {
+      count: vi.fn(async () => 0),
       create: vi.fn(async () => ({ id: "attempt-1" })),
       update: vi.fn(),
       updateMany: vi.fn(async () => ({ count: 1 })),

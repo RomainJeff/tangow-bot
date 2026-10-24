@@ -71,7 +71,7 @@ From `.env.images.example` (images installer). Leave blank if unused:
 | --- | --- |
 | `OPENROUTER_API_KEY` | Deployment-wide OpenRouter models |
 | `COMPOSIO_API_KEY` | Composio managed catalog |
-| `E2B_API_KEY` | Remote computers when `SANDBOX_PROVIDER=e2b` |
+| `E2B_API_KEY` | Remote computers and run workers when `SANDBOX_PROVIDER=e2b` ([E2B workers](./self-host-e2b-workers.md)) |
 | `SMTP_URL` / `EMAIL_FROM` | Password-recovery email |
 | Messaging tokens (Slack, Telegram, …) | Only if you enable those surfaces |
 

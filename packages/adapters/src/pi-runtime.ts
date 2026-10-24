@@ -8,12 +8,14 @@ import {
 import {
   type Api,
   type AssistantMessage,
+  type AssistantMessageEventStream,
   clampThinkingLevel,
   type Model,
   type Models,
   type ModelThinkingLevel,
   type SimpleStreamOptions,
   type ToolCall,
+  type TranscriptContext,
   Type,
   type Usage,
 } from "@earendil-works/pi-ai";
@@ -30,12 +32,25 @@ import type {
   SubagentLog,
   ToolCallTrace,
 } from "@rakazo/adapter-kit";
-import type { AskQuestion } from "@rakazo/contracts";
 import { redactSecrets } from "@rakazo/core";
 import { getLogger, redactSensitiveText } from "@rakazo/logging";
 import { z } from "zod";
+import {
+  createAgentTextPolicy,
+  stripFakeToolCalls,
+  stripModelControlTokens,
+} from "./agent-text-policy.js";
 import { isToolPauseResult } from "./approval-effect.js";
-import { builtinAgentTools, DELEGATION_TOOL_NAMES } from "./builtin-tools.js";
+import { askUserCard } from "./ask-user.js";
+import {
+  builtinAgentTools,
+  COMPUTER_COMMAND_TOOLS,
+  HELPER_STOPPED_FOR_PAUSE,
+  helperCallOf,
+  helperInstructions,
+  helperModel,
+  isHelperTool,
+} from "./builtin-tools.js";
 import { DEFAULT_OPENROUTER_MODEL_ID } from "./deployment-model.js";
 import { piProviderId } from "./model-catalog.js";
 import {
@@ -54,6 +69,7 @@ import {
   billedPromptTokens,
   clipToolResultContent,
   clipToolResultText,
+  MAX_PARALLEL_SUBAGENTS,
   MODEL_STREAM_MAX_RETRIES,
   MODEL_STREAM_TIMEOUT_MS,
   providerCacheTokens,
@@ -61,98 +77,9 @@ import {
 } from "./pi-runtime-limits.js";
 import { textContentArg } from "./tool-text.js";
 import type { TraceExporter } from "./trace-export.js";
-import { TOOL_FINAL_RESPONSE_FALLBACK, toolCallBudgetNotice } from "./user-progress.js";
+import { toolCallBudgetNotice } from "./user-progress.js";
 
-// C0 and C1 controls (whitespace aside, collapsed below), bidi marks and overrides, and zero-width
-// characters. U+200D stays: it joins emoji.
-const INVISIBLE =
-  // biome-ignore lint/suspicious/noControlCharactersInRegex: these are the characters removed
-  /[\u0000-\u0008\u000E-\u001F\u007F-\u009F\u061C\u200B\u200E\u200F\u202A-\u202E\u2060\u2066-\u2069\uFEFF]/g;
-
-/** Model text a card shows as plain text: visible characters on one line, NFC, at most `max` code points. */
-function cardText(value: unknown, max = Number.POSITIVE_INFINITY, keepLines = false): string {
-  if (typeof value !== "string") return "";
-  const cleaned = value.replace(INVISIBLE, "");
-  // A question is Markdown, so its line breaks carry lists and paragraphs: fold spaces per line only.
-  const folded = keepLines
-    ? cleaned
-        .split(/\r?\n/)
-        .map((line) => {
-          const indent = /^[ \t]*/.exec(line)?.[0] ?? "";
-          return indent + line.slice(indent.length).replace(/\s+/g, " ").trim();
-        })
-        .join("\n")
-        .replace(/\n{3,}/g, "\n\n")
-    : cleaned.replace(/\s+/g, " ");
-  const text = folded.trim().normalize("NFC");
-  return Array.from(text).slice(0, max).join("").trimEnd();
-}
-
-type AskOptionInput = { label: string; description?: string; recommended?: true };
-
-function askOption(raw: unknown): AskOptionInput {
-  if (typeof raw === "string") return { label: cardText(raw) };
-  const option = (raw ?? {}) as Record<string, unknown>;
-  const label = cardText(option.label);
-  if (!label) {
-    throw new Error('each ask_user option is a string or an object with a non-empty "label"');
-  }
-  const description = cardText(option.description, 80);
-  return {
-    label,
-    ...(description ? { description } : {}),
-    ...(option.recommended === true ? { recommended: true } : {}),
-  };
-}
-
-/**
- * Normalize the ask_user v2 `questions` argument into validated AskQuestion[] with stable ids.
- * Returns null when no `questions` array is present (caller falls back to the legacy single
- * question + options shape). Throws on a malformed questions array so the model sees the error.
- */
-export function normalizeAskQuestions(raw: Record<string, unknown>): AskQuestion[] | null {
-  if (!Array.isArray(raw.questions)) return null;
-  const rawQuestions = raw.questions;
-  if (rawQuestions.length < 1 || rawQuestions.length > 4) {
-    throw new Error("ask_user accepts one to four questions");
-  }
-  return rawQuestions.map((entry, qIndex) => {
-    const q = (entry ?? {}) as Record<string, unknown>;
-    const question = cardText(q.question, 240, true);
-    if (!question) throw new Error("each ask_user question needs non-empty question text");
-    const options = Array.isArray(q.options) ? q.options.map(askOption) : [];
-    const labels = options.map((option) => option.label);
-    if (
-      options.length > 0 &&
-      (options.length < 2 ||
-        options.length > 4 ||
-        labels.some((label) => label.length === 0 || label.length > 80) ||
-        new Set(labels).size !== labels.length)
-    ) {
-      throw new Error(
-        "each ask_user question offers two to four unique, non-empty options (or none for a free-text answer)",
-      );
-    }
-    const recommended = options.findIndex((option) => option.recommended);
-    const header = cardText(q.header, 24);
-    return {
-      id: `q${qIndex + 1}`,
-      ...(header ? { header } : {}),
-      question,
-      ...(options.length
-        ? {
-            options: options.map(({ recommended: _, ...option }, oIndex) => ({
-              id: `q${qIndex + 1}o${oIndex + 1}`,
-              ...option,
-              ...(oIndex === recommended ? { recommended: true } : {}),
-            })),
-          }
-        : {}),
-      ...(q.multiSelect === true ? { multiSelect: true } : {}),
-      ...(q.required === false ? { required: false } : {}),
-    };
-  });
-}
+export { stripFakeToolCalls, stripModelControlTokens } from "./agent-text-policy.js";
 
 const running = new Map<string, { controller: AbortController; work: Promise<void> }>();
 interface ToolCallBudget {
@@ -171,29 +98,7 @@ function catalogModels(): Models {
   catalogModelsCache ??= registerOpenAiCompatibleCatalog(registerLocalProvider(builtinModels()));
   return catalogModelsCache;
 }
-const MAX_PARALLEL_SUBAGENTS = 4;
-// Some OpenAI-compatible models return EOS immediately after a tool result
-// instead of taking another assistant turn. A bounded internal follow-up keeps
-// that provider quirk from making a long task look complete after one step.
-const MAX_SILENT_TOOL_CONTINUATIONS = 3;
-const SILENT_TOOL_CONTINUATION_PROMPT =
-  "Continue the original task from the latest tool result. Do not stop after a tool call; use any remaining tools needed, then deliver the result.";
-const SILENCE_ALLOWED_CONTINUATION_PROMPT =
-  "Continue the original task from the latest tool result. Use any remaining tools needed, then deliver the result, or end with no reply if there is nothing to report.";
-const PRIVATE_TEXT_PROMPT =
-  "Nothing you wrote reached the user: only message_user does. If that text was meant for them, send it with message_user now. Otherwise end the turn.";
-// A long task the user only follows through message_user looks frozen when the model works
-// for many steps without reporting, so it is reminded to check in.
-const CHECK_IN_AFTER_TOOL_CALLS = 30;
-const USER_CONTACT_TOOLS = new Set([
-  "message_user",
-  "ask_user",
-  "request_secret",
-  "request_takeover",
-]);
-const checkInPrompt = (toolCalls: number) =>
-  `Harness note, not from the user: you have made ${toolCalls} tool calls since the user last heard from you. Send them a short progress update with message_user (what you found, what is next), then continue.`;
-const DEFAULT_COMPUTER_SCREENSHOTS_TO_KEEP = 2;
+export const DEFAULT_COMPUTER_SCREENSHOTS_TO_KEEP = 2;
 // Reasoning-capable models must not start at "off": for OpenRouter, pi-ai maps
 // that to reasoning.effort "none", which 400s on endpoints that mandate
 // reasoning (e.g. google/gemini-3.7-flash). Keep a real level when model.reasoning
@@ -411,18 +316,10 @@ export class PiAgentRuntime implements AgentRuntime {
         signal.addEventListener("abort", onAbort);
 
         let streamed = "";
-        let privateFinalText: string | undefined;
         let runtimeNotice: string | undefined;
         let toolCalls = 0;
         let toolActivityShowing = false;
-        let silentToolContinuations = 0;
-        let toolWorkPendingFinal = false;
-        // A run that may end without a word, and whose free text is not private scratch, can mean
-        // its empty turn: one follow-up that allows silence tells a stall from that answer.
-        const emptyFinalMayBeSilence = request.allowSilentEmpty && !request.freeTextIsPrivate;
-        let messagedUser = false;
-        let privateTextNudged = false;
-        let toolCallsSinceContact = 0;
+        const textPolicy = createAgentTextPolicy(request);
         agent.subscribe(async (event) => {
           if (event.type === "message_end") {
             traceRecorder?.message(event.message);
@@ -477,71 +374,18 @@ export class PiAgentRuntime implements AgentRuntime {
                     part.type === "toolCall" ? [part.name] : [],
                   )
                 : [];
-            const hasToolCalls = toolCallNames.length > 0;
-            if (request.runRecap) privateFinalText = hasToolCalls ? undefined : messageText;
-            const hasToolResults = event.toolResults.length > 0;
-            // An update sent before more tool work did not deliver what that work found.
-            if (hasToolCalls) messagedUser = toolCallNames.includes("message_user");
-            if (request.freeTextIsPrivate) {
-              toolCallsSinceContact = toolCallNames.some((name) => USER_CONTACT_TOOLS.has(name))
-                ? 0
-                : toolCallsSinceContact + toolCallNames.length;
-              if (toolCallsSinceContact >= CHECK_IN_AFTER_TOOL_CALLS && !host.pausePending) {
-                agent.steer({
-                  role: "user",
-                  content: checkInPrompt(toolCallsSinceContact),
-                  timestamp: Date.now(),
-                });
-                toolCallsSinceContact = 0;
-              }
-            }
-            if (
-              request.freeTextIsPrivate &&
-              !hasToolCalls &&
-              messageText.trim() &&
-              !messagedUser &&
-              !privateTextNudged &&
-              !host.pausePending
-            ) {
-              privateTextNudged = true;
-              agent.followUp({
-                role: "user",
-                content: PRIVATE_TEXT_PROMPT,
-                timestamp: Date.now(),
-              });
-            }
-
-            // Text in a turn that also contains a tool call is narration, not a final
-            // response. Keep the run alive until a later text-only turn answers the user,
-            // or a turn that only messages the user, which already delivered the answer.
-            if (
-              toolCallNames.length > 0 &&
-              toolCallNames.every((name) => name === "message_user")
-            ) {
-              toolWorkPendingFinal = false;
-              silentToolContinuations = 0;
-            } else if (hasToolCalls && hasToolResults && !host.pausePending) {
-              toolWorkPendingFinal = true;
-              silentToolContinuations = 0;
-            } else if (toolWorkPendingFinal && !hasToolCalls && !hasToolResults) {
-              if (messageText.trim() || (emptyFinalMayBeSilence && silentToolContinuations > 0)) {
-                toolWorkPendingFinal = false;
-                silentToolContinuations = 0;
-              } else if (
-                !host.pausePending &&
-                silentToolContinuations < MAX_SILENT_TOOL_CONTINUATIONS
-              ) {
-                silentToolContinuations += 1;
-                agent.followUp({
-                  role: "user",
-                  content: emptyFinalMayBeSilence
-                    ? SILENCE_ALLOWED_CONTINUATION_PROMPT
-                    : SILENT_TOOL_CONTINUATION_PROMPT,
-                  timestamp: Date.now(),
-                });
-              }
-            }
+            const prompts = textPolicy.turn({
+              messageText,
+              toolCallNames,
+              hasToolResults: event.toolResults.length > 0,
+              paused: host.pausePending,
+            });
+            for (const content of prompts.steer)
+              agent.steer({ role: "user", content, timestamp: Date.now() });
+            for (const content of prompts.followUp)
+              agent.followUp({ role: "user", content, timestamp: Date.now() });
           }
+
           if (event.type === "message_end" && event.message.role === "assistant") {
             const text = assistantText(event.message);
             if (text && !streamed) {
@@ -588,6 +432,13 @@ export class PiAgentRuntime implements AgentRuntime {
         if (error && !budgetExceeded && !host.pausePending) {
           throw new Error(sanitizeProviderError(model.provider, error));
         }
+        const lastMessage = agent.state.messages.at(-1);
+        const final = textPolicy.finish({
+          streamed,
+          fallback: lastMessage?.role === "assistant" ? assistantText(lastMessage) : "",
+          toolCalls,
+          paused: host.pausePending,
+        });
         if (budgetExceeded) {
           const budgetMessage = toolCallBudgetExceededMessage(host.toolCallBudget.limit);
           runtimeNotice = budgetMessage;
@@ -599,34 +450,17 @@ export class PiAgentRuntime implements AgentRuntime {
             queue.push({ type: "text", text: budgetMessage });
             streamed = budgetMessage;
           }
-        } else if (!host.pausePending && toolWorkPendingFinal) {
-          // Discard cumulative pre-tool narration from the terminal payload and make the
-          // missing final response visible to the user instead of silently completing.
-          streamed = TOOL_FINAL_RESPONSE_FALLBACK;
-          runtimeNotice = streamed;
-          queue.push({ type: "text", text: streamed });
-        } else if (!streamed.trim() && !host.pausePending) {
-          streamed = "";
-          const lastMessage = agent.state.messages.at(-1);
-          const fallback = lastMessage?.role === "assistant" ? assistantText(lastMessage) : "";
-          if (fallback.trim()) {
-            queue.push({ type: "text", text: fallback });
-            streamed = fallback;
-          } else if (toolWorkPendingFinal) {
-            // A tool-bearing run must never finish with only a progress/narration message.
-            streamed = TOOL_FINAL_RESPONSE_FALLBACK;
-            runtimeNotice = streamed;
-            queue.push({ type: "text", text: streamed });
-          } else if (toolCalls === 0 && !request.allowSilentEmpty) {
-            streamed = request.emptyResponseText?.trim() || "No response. Try again.";
-            queue.push({ type: "text", text: streamed });
-          }
+        } else {
+          if (final.runtimeNotice || (final.text !== streamed && final.text))
+            queue.push({ type: "text", text: final.text });
+          streamed = final.text;
+          runtimeNotice = final.runtimeNotice;
         }
         traceOutput = streamed;
         queue.push({
           type: "done",
           ...(streamed.trim() ? { text: streamed } : {}),
-          ...(request.runRecap ? { privateFinalText: privateFinalText ?? "" } : {}),
+          ...(request.runRecap ? { privateFinalText: final.privateFinalText ?? "" } : {}),
           ...(runtimeNotice ? { runtimeNotice } : {}),
         });
       } catch (error) {
@@ -731,6 +565,38 @@ function resolveRuntimeModel(modelConfig: AgentRunRequest["model"]): {
   return { provider, modelId, models, model, apiKey };
 }
 
+/**
+ * One model call as the runtime makes it, with the key this process holds: what a relay runs
+ * for a guest that has no key. Throws for a model the catalog does not know.
+ */
+export function streamRunModel(
+  config: AgentRunRequest["model"],
+  context: TranscriptContext,
+  options: { sessionId?: string; signal?: AbortSignal } = {},
+): { model: Model<Api>; stream: AssistantMessageEventStream } {
+  const selected = resolveRuntimeModel(config);
+  if (!selected.model) throw new Error(`Unknown model ${selected.provider}/${selected.modelId}`);
+  const model = modelForCompletion(selected.model, config.maxTokens);
+  const thinkingLevel = thinkingLevelFor(model, config.thinkingLevel);
+  const stream = selected.models.streamSimple(model, context, {
+    ...reliableStreamOptions(
+      model,
+      { ...options, reasoning: thinkingLevel === "off" ? undefined : thinkingLevel },
+      config.maxTokens,
+    ),
+    apiKey: selected.apiKey,
+  });
+  return { model, stream };
+}
+
+/** The catalog model a guest names for its own runtime. Its calls go through the relay. */
+export function guestRuntimeModel(config: AgentRunRequest["model"]): Model<Api> {
+  const selected = resolveRuntimeModel(config);
+  if (!selected.model) throw new Error(`Unknown model ${selected.provider}/${selected.modelId}`);
+  const model = modelForCompletion(selected.model, config.maxTokens);
+  return config.contextWindow ? { ...model, contextWindow: config.contextWindow } : model;
+}
+
 export function modelsForRequest(
   request: Pick<AgentRunRequest, "model">,
   provider: string,
@@ -792,9 +658,15 @@ const TOOL_ACTIVITY = new Map<string, string>([
   ["list_files", "Skimming a folder"],
   ["write_file", "Saving a file"],
   ["edit_file", "Editing a file"],
+  ["read", "Reading a file"],
+  ["ls", "Skimming a folder"],
+  ["write", "Saving a file"],
+  ["edit", "Editing a file"],
+  ["bash", "Working the terminal"],
   ["attach_file", "Attaching a file"],
   ["open_path", "Opening a file"],
   ["shell", "Working the terminal"],
+  ["computer_exec", "Working the terminal"],
   ["web_search", "Searching the web"],
   ["web_fetch", "Reading a web page"],
   ["browser_navigate", "Heading to a website"],
@@ -899,48 +771,6 @@ function sealAssistantTurnMarkers(content: string): string {
   return content
     .replaceAll(ASSISTANT_TURN_OPEN, "&lt;assistant_turn&gt;")
     .replaceAll(ASSISTANT_TURN_CLOSE, "&lt;/assistant_turn&gt;");
-}
-
-const FAKE_TOOL_CALL_START = /\[tool \w+\(/g;
-const FAKE_TOOL_CALL_ONLY = "(earlier reply omitted: it was malformed)";
-
-/**
- * Replies stored before tool calls were replayed as real turns can contain the
- * old `[tool name(args) → output]` trace written as text. Replayed as-is they
- * teach the model to keep writing calls instead of making them, so each span is
- * cut, bracket-balanced and JSON-string aware; an unclosed span runs to the end.
- */
-export function stripFakeToolCalls(content: string): string {
-  let result = "";
-  let cursor = 0;
-  let stripped = false;
-  for (const match of content.matchAll(FAKE_TOOL_CALL_START)) {
-    if (match.index < cursor) continue;
-    let end = content.length;
-    let depth = 0;
-    let inString = false;
-    for (let i = match.index; i < content.length; i += 1) {
-      const char = content[i];
-      if (inString) {
-        if (char === "\\") i += 1;
-        else if (char === '"') inString = false;
-      } else if (char === '"') inString = true;
-      else if (char === "[" || char === "(" || char === "{") depth += 1;
-      else if (char === "]" || char === ")" || char === "}") {
-        depth -= 1;
-        if (depth === 0) {
-          end = i + 1;
-          break;
-        }
-      }
-    }
-    result += content.slice(cursor, match.index);
-    cursor = end;
-    stripped = true;
-  }
-  if (!stripped) return content;
-  const cleaned = (result + content.slice(cursor)).replace(/\n{3,}/g, "\n\n").trim();
-  return cleaned || FAKE_TOOL_CALL_ONLY;
 }
 
 /**
@@ -1202,7 +1032,7 @@ function toAgentTool(tool: ConnectorTool, host: ToolHost, exposedName: string): 
           uri: raw.uri ? String(raw.uri) : "",
         };
       }
-      if (tool.name === "shell") {
+      if (COMPUTER_COMMAND_TOOLS.has(tool.name)) {
         return {
           command: String(raw.command ?? ""),
           // The executor chooses the bot-scoped default, including Team workspaces.
@@ -1257,6 +1087,14 @@ function toAgentTool(tool: ConnectorTool, host: ToolHost, exposedName: string): 
       try {
         result = await (async () => {
           if (tool.name === "request_takeover") {
+            // The executor starts the computer the person takes over, or says why it cannot.
+            const ready = await host.request.executeTool?.(tool.name, args, executionId);
+            if (ready && typeof ready === "object" && "error" in ready) {
+              return {
+                content: [{ type: "text", text: summarizeToolResult(ready) }],
+                details: ready,
+              };
+            }
             host.pausePending = true;
             host.queue.push({
               type: "takeover",
@@ -1269,52 +1107,11 @@ function toAgentTool(tool: ConnectorTool, host: ToolHost, exposedName: string): 
             };
           }
           if (tool.name === "ask_user") {
-            const questions = normalizeAskQuestions(args);
-            if (questions) {
-              host.pausePending = true;
-              host.queue.push({
-                type: "ask",
-                // Push notifications and TTS read this text, so a multi-question card still
-                // needs a non-empty body: list every question rather than sending nothing.
-                text: questions.map((entry) => entry.question).join("\n"),
-                questions,
-              });
-              return {
-                content: [{ type: "text", text: "Waiting for the user's answers." }],
-                details: args,
-                terminate: true,
-              };
-            }
-            if (
-              Array.isArray(args.options) &&
-              args.options.some((option) => typeof option !== "string")
-            ) {
-              throw new Error(
-                "ask_user's top-level options are plain strings; give an option a description or a recommended mark inside questions[].options",
-              );
-            }
-            const options = Array.isArray(args.options)
-              ? args.options.map((option) => cardText(option))
-              : [];
-            if (
-              options.length < 2 ||
-              options.length > 4 ||
-              options.some((option) => option.length === 0 || option.length > 80) ||
-              new Set(options).size !== options.length
-            ) {
-              throw new Error("ask_user requires two to four unique, non-empty options");
-            }
+            const { card, reply } = askUserCard(args);
             host.pausePending = true;
-            host.queue.push({
-              type: "ask",
-              text: String(args.question ?? "What should I use?"),
-              actions: options.map((label, index) => ({
-                id: `choice-${index + 1}`,
-                label,
-              })),
-            });
+            host.queue.push(card);
             return {
-              content: [{ type: "text", text: "Waiting for the user's choice." }],
+              content: [{ type: "text", text: reply }],
               details: args,
               terminate: true,
             };
@@ -1395,8 +1192,8 @@ type SubagentOutcome = { status: "completed" | "failed"; result: string; toolRes
 
 const stoppedForPause: SubagentOutcome = {
   status: "completed",
-  result: "Stopped: the run is waiting for the user.",
-  toolResult: "Stopped: the run is waiting for the user.",
+  result: HELPER_STOPPED_FOR_PAUSE,
+  toolResult: HELPER_STOPPED_FOR_PAUSE,
 };
 
 function subagentFailed(message: string): SubagentOutcome {
@@ -1407,11 +1204,7 @@ async function executeSubagent(host: ToolHost, executionId: string, args: Record
   if (host.depth > 0) return "Subagents cannot nest further.";
   await host.subagentGate.acquire();
   const agentId = executionId;
-  const name =
-    String(args.name ?? "helper")
-      .trim()
-      .slice(0, 80) || "helper";
-  const task = String(args.task ?? "").trim();
+  const { name, task, provider: requestedProvider, modelId: requestedModelId } = helperCallOf(args);
   try {
     host.queue.push({
       type: "subagent",
@@ -1421,8 +1214,6 @@ async function executeSubagent(host: ToolHost, executionId: string, args: Record
       status: "running",
       progress: "starting…",
     });
-    const requestedProvider = String(args.model_provider ?? "").trim();
-    const requestedModelId = String(args.model_id ?? "").trim();
     const usage = { inputTokens: 0, outputTokens: 0 };
     let log: SubagentLog | undefined;
     let outcome: SubagentOutcome;
@@ -1499,20 +1290,10 @@ async function runSubagent(
   },
 ): Promise<SubagentOutcome> {
   const { agentId, name, task, args, log, usage } = call;
-  const extra = args.instructions ? String(args.instructions).trim() : "";
-  const requestedProvider = String(args.model_provider ?? "").trim();
-  const requestedModelId = String(args.model_id ?? "").trim();
-  let requestModel = host.request.model;
+  const helper = helperCallOf(args);
+  let requestModel: AgentRunRequest["model"];
   try {
-    if (Boolean(requestedProvider) !== Boolean(requestedModelId)) {
-      throw new Error("model_provider and model_id must both be set");
-    }
-    if (requestedProvider && requestedModelId) {
-      if (!host.request.resolveModel) {
-        throw new Error("Per-call subagent model selection is unavailable");
-      }
-      requestModel = await host.request.resolveModel(requestedProvider, requestedModelId);
-    }
+    requestModel = await helperModel(host.request, helper);
   } catch (error) {
     return subagentFailed(sanitizeError(error instanceof Error ? error.message : String(error)));
   }
@@ -1523,9 +1304,8 @@ async function runSubagent(
   }
   const subagentModel = modelForCompletion(selectedModel.model, requestModel.maxTokens);
 
-  // A helper reports back to the bot that ran it, never to the user.
   const childDefs = (host.request.tools.length ? host.request.tools : builtinAgentTools).filter(
-    (tool) => !DELEGATION_TOOL_NAMES.has(tool.name) && tool.name !== "message_user",
+    (tool) => isHelperTool(tool.name),
   );
   const nestedHost: ToolHost = {
     ...host,
@@ -1556,14 +1336,7 @@ async function runSubagent(
       pruneComputerScreenshotContext(messages, requestModel.maxImagesPerPrompt),
     finishTurn: async () => (nestedHost.pausePending ? { action: "end" } : undefined),
     initialState: {
-      systemPrompt: [
-        `You are a Rakazo subagent named "${name}".`,
-        "You run inside the parent bot's turn — you are not a separate bot chat.",
-        "Complete the task and return a concise result. Do not spawn bots or further subagents.",
-        extra,
-      ]
-        .filter(Boolean)
-        .join(" "),
+      systemPrompt: helperInstructions(name, helper.instructions),
       model: subagentModel,
       thinkingLevel: thinkingLevelFor(subagentModel, requestModel.thinkingLevel),
       tools: childTools,
@@ -1738,7 +1511,7 @@ function builtinParameters(tool: ConnectorTool) {
   if (tool.name === "remember") {
     return Type.Object({ content: Type.String(), path: Type.String() });
   }
-  if (tool.name === "shell") {
+  if (COMPUTER_COMMAND_TOOLS.has(tool.name)) {
     return Type.Object({
       command: Type.String(),
       cwd: Type.Optional(Type.String()),
@@ -1970,19 +1743,6 @@ function boundAgentToolResult<T>(result: AgentToolResult<T>): AgentToolResult<T>
     ...result,
     content: clipToolResultContent(result.content),
   };
-}
-
-/**
- * Remove model control / special tokens that leak into assistant text. Some models and
- * OpenAI-compatible proxies surface their end-of-turn or role markers as literal text —
- * `<|eos|>`, `<|eot_id|>`, `<|im_end|>`, `<|end_of_turn|>`, `<|assistant|>`, ... — instead of
- * treating them as stop tokens. They must never reach the thread. Matches the `<|token|>` shape
- * generically (no spaces inside) so it is robust across whatever model the user picks, without
- * touching ordinary prose. Exported for tests.
- */
-export function stripModelControlTokens(text: string): string {
-  if (!text.includes("<|")) return text;
-  return text.replace(/<\|[^\s|>]{1,64}\|>/g, "");
 }
 
 function assistantText(message: unknown): string {

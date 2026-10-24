@@ -116,6 +116,10 @@ tags:
     visible: "New skill"
     timeout: 10000
 - takeScreenshot: "14b-skills"
+- tapOn: "team-review"
+- assertVisible: "Review shared work before publishing."
+- assertVisible: "Content lives on the shared volume."
+- takeScreenshot: "14c-shared-skill"
 
 - openLink: "rakazo:///thread?botId=${RAKAZO_SCREENSHOT_BOT_ID}&name=Researcher"
 - extendedWaitUntil:

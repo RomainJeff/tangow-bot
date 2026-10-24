@@ -253,7 +253,7 @@ msgstr ""
 #: src/pages/bot-page/RoutineCreateForm.tsx:118
 #: src/pages/bot-page/RoutineDetail.tsx:127
 #: src/pages/bot-page/RoutinesTab.tsx:107
-#: src/pages/KnowledgeSection.tsx:446
+#: src/pages/KnowledgeSection.tsx:447
 msgid "Active"
 msgstr "Etkin"
 
@@ -394,7 +394,7 @@ msgstr "Gelişmiş…"
 msgid "Agent connections"
 msgstr "Ajan bağlantıları"
 
-#: src/pages/KnowledgeSection.tsx:449
+#: src/pages/KnowledgeSection.tsx:450
 msgid "Agents"
 msgstr "Ajanlar"
 
@@ -403,7 +403,7 @@ msgstr "Ajanlar"
 msgid "Agents:"
 msgstr "Agent'lar:"
 
-#: src/pages/KnowledgeSection.tsx:445
+#: src/pages/KnowledgeSection.tsx:446
 msgid "All"
 msgstr "Tümü"
 
@@ -754,8 +754,8 @@ msgstr "Sunucuya ulaşılamıyor."
 #: src/lib/approval-labels.ts:14
 #: src/pages/bot-page/page-kit.tsx:149
 #: src/pages/bot-page/RoutineTriggers.tsx:296
-#: src/pages/KnowledgeSection.tsx:226
-#: src/pages/KnowledgeSection.tsx:684
+#: src/pages/KnowledgeSection.tsx:227
+#: src/pages/KnowledgeSection.tsx:692
 #: src/pages/PluginsOverlay.tsx:1168
 #: src/pages/shell/dialogs.tsx:88
 #: src/pages/shell/dialogs.tsx:199
@@ -895,8 +895,8 @@ msgstr ""
 msgid "Client secret"
 msgstr ""
 
-#: src/pages/KnowledgeSection.tsx:684
-#: src/pages/KnowledgeSection.tsx:840
+#: src/pages/KnowledgeSection.tsx:692
+#: src/pages/KnowledgeSection.tsx:848
 #: src/pages/MessagingSettingsOverlay.tsx:361
 #: src/pages/PeerMessagesOverlay.tsx:133
 #: src/pages/PeerMessagesOverlay.tsx:136
@@ -1035,7 +1035,7 @@ msgstr "Dağıtım tarafından yapılandırıldı"
 msgid "Configured servers"
 msgstr "Yapılandırılmış sunucular"
 
-#: src/pages/KnowledgeSection.tsx:679
+#: src/pages/KnowledgeSection.tsx:687
 #: src/pages/McpServersOverlay.tsx:506
 msgid "Confirm delete"
 msgstr "Silmeyi onayla"
@@ -1132,6 +1132,10 @@ msgstr "Bağlanıyor…"
 #: src/pages/PluginsOverlay.tsx:273
 msgid "Connection to {0} is still pending. You can close this and check again."
 msgstr "{0} bağlantısı hâlâ beklemede. Bunu kapatıp daha sonra tekrar kontrol edebilirsin."
+
+#: src/pages/KnowledgeSection.tsx:658
+msgid "Content lives on the shared volume."
+msgstr ""
 
 #: src/pages/ModelSettingsOverlay.tsx:587
 #: src/pages/Onboarding.tsx:517
@@ -1277,7 +1281,7 @@ msgstr "MCP sunucusu silinemedi"
 msgid "Could not delete routine"
 msgstr "Rutin silinemedi"
 
-#: src/pages/KnowledgeSection.tsx:640
+#: src/pages/KnowledgeSection.tsx:641
 msgid "Could not delete skill"
 msgstr "Beceri silinemedi"
 
@@ -1314,7 +1318,7 @@ msgstr "{0} indirilemedi. Tekrar dene."
 msgid "Could not download {name}. Try again."
 msgstr "{name} indirilemedi. Tekrar dene."
 
-#: src/pages/KnowledgeSection.tsx:365
+#: src/pages/KnowledgeSection.tsx:366
 msgid "Could not import skill"
 msgstr "Yetenek içe aktarılamadı"
 
@@ -1324,12 +1328,12 @@ msgstr "Bağlayıcı kurulamadı"
 
 #: src/pages/bot-page/KnowledgeTab.tsx:148
 #: src/pages/bot-page/page-kit.tsx:81
-#: src/pages/KnowledgeSection.tsx:89
-#: src/pages/KnowledgeSection.tsx:118
-#: src/pages/KnowledgeSection.tsx:300
-#: src/pages/KnowledgeSection.tsx:321
-#: src/pages/KnowledgeSection.tsx:361
-#: src/pages/KnowledgeSection.tsx:753
+#: src/pages/KnowledgeSection.tsx:90
+#: src/pages/KnowledgeSection.tsx:119
+#: src/pages/KnowledgeSection.tsx:301
+#: src/pages/KnowledgeSection.tsx:322
+#: src/pages/KnowledgeSection.tsx:362
+#: src/pages/KnowledgeSection.tsx:761
 msgid "Could not load"
 msgstr "Yüklenemedi"
 
@@ -1363,7 +1367,7 @@ msgstr "MCP sunucuları yüklenemedi"
 msgid "Could not load model settings"
 msgstr "Model ayarları yüklenemedi"
 
-#: src/pages/KnowledgeSection.tsx:601
+#: src/pages/KnowledgeSection.tsx:602
 msgid "Could not load skill"
 msgstr "Beceri yüklenemedi"
 
@@ -1410,7 +1414,7 @@ msgstr "Sunucuya ulaşılamadı"
 msgid "Could not reach this model server"
 msgstr "Bu model sunucusuna ulaşılamadı"
 
-#: src/pages/KnowledgeSection.tsx:773
+#: src/pages/KnowledgeSection.tsx:781
 msgid "Could not read this file"
 msgstr "Bu dosya okunamadı"
 
@@ -1458,7 +1462,7 @@ msgstr "Rutin çalıştırılamadı"
 #: src/pages/bot-page/page-kit.tsx:52
 #: src/pages/bot-page/RoutineDetail.tsx:87
 #: src/pages/ExternalConversationSettings.tsx:250
-#: src/pages/KnowledgeSection.tsx:206
+#: src/pages/KnowledgeSection.tsx:207
 msgid "Could not save"
 msgstr "Kaydedilemedi"
 
@@ -1482,7 +1486,7 @@ msgstr "Rutin kaydedilemedi"
 msgid "Could not save rule"
 msgstr "Kural kaydedilemedi"
 
-#: src/pages/KnowledgeSection.tsx:623
+#: src/pages/KnowledgeSection.tsx:624
 msgid "Could not save skill"
 msgstr "Beceri kaydedilemedi"
 
@@ -1531,7 +1535,7 @@ msgstr "Kontrol alınamadı"
 msgid "Could not update"
 msgstr "Güncellenemedi"
 
-#: src/pages/KnowledgeSection.tsx:343
+#: src/pages/KnowledgeSection.tsx:344
 #: src/pages/McpServersOverlay.tsx:210
 msgid "Could not update agent access"
 msgstr "Agent erişimi güncellenemedi"
@@ -1710,7 +1714,7 @@ msgstr "Varsayılan kapsam"
 
 #: src/pages/bot-page/BotPage.tsx:378
 #: src/pages/BotContextMenu.tsx:150
-#: src/pages/KnowledgeSection.tsx:679
+#: src/pages/KnowledgeSection.tsx:687
 #: src/pages/McpServersOverlay.tsx:508
 #: src/pages/shell/dialogs.tsx:409
 #: src/pages/shell/dialogs.tsx:470
@@ -1803,8 +1807,8 @@ msgstr ""
 msgid "Direct MCP"
 msgstr ""
 
-#: src/pages/KnowledgeSection.tsx:386
-#: src/pages/KnowledgeSection.tsx:447
+#: src/pages/KnowledgeSection.tsx:387
+#: src/pages/KnowledgeSection.tsx:448
 msgid "Disabled"
 msgstr "Devre dışı"
 
@@ -1867,7 +1871,7 @@ msgstr "Hesabın yok mu?"
 msgid "Done"
 msgstr "Bitti"
 
-#: src/pages/KnowledgeSection.tsx:833
+#: src/pages/KnowledgeSection.tsx:841
 msgid "Download"
 msgstr "İndir"
 
@@ -1882,7 +1886,7 @@ msgstr "{0} indir"
 msgid "Download {name}"
 msgstr "{name} indir"
 
-#: src/pages/KnowledgeSection.tsx:170
+#: src/pages/KnowledgeSection.tsx:171
 msgid "Download as markdown"
 msgstr "Markdown olarak indir"
 
@@ -2069,7 +2073,7 @@ msgstr "Öne çıkanlar"
 msgid "Files"
 msgstr "Dosyalar"
 
-#: src/pages/KnowledgeSection.tsx:442
+#: src/pages/KnowledgeSection.tsx:443
 msgid "Filter skills"
 msgstr "Yetenekleri filtrele"
 
@@ -2137,7 +2141,7 @@ msgstr ""
 msgid "Git event"
 msgstr "Git olayı"
 
-#: src/pages/KnowledgeSection.tsx:387
+#: src/pages/KnowledgeSection.tsx:388
 msgid "Global"
 msgstr "Genel"
 
@@ -2248,7 +2252,7 @@ msgstr "Bunu duyduysan ses hazır."
 msgid "Ignore"
 msgstr ""
 
-#: src/pages/KnowledgeSection.tsx:426
+#: src/pages/KnowledgeSection.tsx:427
 msgid "Import"
 msgstr "İçe aktar"
 
@@ -2765,7 +2769,7 @@ msgstr "Yeni rutin"
 msgid "New section"
 msgstr "Yeni bölüm"
 
-#: src/pages/KnowledgeSection.tsx:406
+#: src/pages/KnowledgeSection.tsx:407
 msgid "New skill"
 msgstr "Yeni beceri"
 
@@ -2814,7 +2818,7 @@ msgstr "Henüz bağlı sohbet uygulaması yok."
 msgid "No exceptions. Actions run automatically."
 msgstr "İstisna yok. İşlemler otomatik çalışır."
 
-#: src/pages/KnowledgeSection.tsx:847
+#: src/pages/KnowledgeSection.tsx:855
 msgid "No files yet"
 msgstr "Henüz dosya yok"
 
@@ -2876,11 +2880,11 @@ msgstr "Rapor yok"
 msgid "No results"
 msgstr "Sonuç yok"
 
-#: src/pages/KnowledgeSection.tsx:463
+#: src/pages/KnowledgeSection.tsx:464
 msgid "No skills match"
 msgstr "Eşleşen yetenek yok"
 
-#: src/pages/KnowledgeSection.tsx:463
+#: src/pages/KnowledgeSection.tsx:464
 msgid "No skills yet"
 msgstr "Henüz beceri yok"
 
@@ -2919,7 +2923,7 @@ msgid "Nothing is still running"
 msgstr "Hâlâ çalışan bir şey yok"
 
 #: src/pages/bot-page/KnowledgeTab.tsx:42
-#: src/pages/KnowledgeSection.tsx:41
+#: src/pages/KnowledgeSection.tsx:42
 msgid "Nothing remembered yet"
 msgstr "Henüz hatırlanan bir şey yok"
 
@@ -3196,7 +3200,7 @@ msgstr "Tepkiler"
 msgid "Read replies aloud"
 msgstr "Yanıtları sesli oku"
 
-#: src/pages/KnowledgeSection.tsx:492
+#: src/pages/KnowledgeSection.tsx:493
 msgid "read-only"
 msgstr "salt okunur"
 
@@ -3477,7 +3481,7 @@ msgid "Return to Rakazo"
 msgstr "Rakazo'ya dön"
 
 #. placeholder {0}: doc.revision
-#: src/pages/KnowledgeSection.tsx:144
+#: src/pages/KnowledgeSection.tsx:145
 msgid "rev {0}"
 msgstr "rev {0}"
 
@@ -3554,8 +3558,8 @@ msgstr ""
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/ExternalConversationSettings.tsx:255
 #: src/pages/GroupPanel.tsx:279
-#: src/pages/KnowledgeSection.tsx:234
-#: src/pages/KnowledgeSection.tsx:698
+#: src/pages/KnowledgeSection.tsx:235
+#: src/pages/KnowledgeSection.tsx:706
 #: src/pages/ModelSettingsOverlay.tsx:791
 #: src/pages/shell/dialogs.tsx:266
 msgid "Save"
@@ -3641,8 +3645,8 @@ msgstr "Modellerde ara"
 msgid "Search providers"
 msgstr "Sağlayıcı ara"
 
-#: src/pages/KnowledgeSection.tsx:432
 #: src/pages/KnowledgeSection.tsx:433
+#: src/pages/KnowledgeSection.tsx:434
 msgid "Search skills"
 msgstr "Yeteneklerde ara"
 
@@ -3727,7 +3731,7 @@ msgstr "Ortak"
 msgid "Shared chat with 2-6 bots. They all reply in the same thread."
 msgstr ""
 
-#: src/pages/KnowledgeSection.tsx:36
+#: src/pages/KnowledgeSection.tsx:37
 msgid "Shared documents"
 msgstr "Paylaşılan belgeler"
 
@@ -3745,13 +3749,13 @@ msgstr "Öncekileri göster"
 msgid "Show key"
 msgstr ""
 
-#: src/pages/KnowledgeSection.tsx:885
+#: src/pages/KnowledgeSection.tsx:893
 #: src/pages/shell/message-view.tsx:80
 msgid "Show less"
 msgstr ""
 
 #: src/pages/bot-page/BotActivity.tsx:460
-#: src/pages/KnowledgeSection.tsx:885
+#: src/pages/KnowledgeSection.tsx:893
 #: src/pages/PluginsOverlay.tsx:873
 #: src/pages/shell/message-view.tsx:80
 msgid "Show more"
@@ -3856,7 +3860,7 @@ msgstr "Yalnızca seslendir"
 msgid "Speak this reply"
 msgstr "Bu yanıtı seslendir"
 
-#: src/pages/KnowledgeSection.tsx:388
+#: src/pages/KnowledgeSection.tsx:389
 msgid "Specific agents"
 msgstr "Belirli ajanlar"
 
@@ -4316,7 +4320,7 @@ msgstr "Botlar nerede çalışsın?"
 msgid "Working…"
 msgstr "Çalışıyor…"
 
-#: src/pages/KnowledgeSection.tsx:795
+#: src/pages/KnowledgeSection.tsx:803
 msgid "Workspace root"
 msgstr "Çalışma alanı kökü"
 

@@ -9,9 +9,11 @@ const APPROVAL_EXEMPT_TOOLS = new Set([
   "browser_run",
   "list_files",
   "read_file",
+  "grep",
   "write_file",
   "edit_file",
   "shell",
+  "computer_exec",
   "open_path",
   "launch_app",
   "remember",
@@ -40,6 +42,7 @@ const UNATTENDED_SAFE_BUILTIN_TOOLS = new Set([
   "list_files",
   "list_secrets",
   "read_file",
+  "grep",
   "recall_memory",
   "request_takeover",
   "run_subagent",
@@ -115,11 +118,12 @@ export function unattendedTriggerToolRequiresApproval(
   run: { trigger: string; requireToolApproval: boolean },
   toolName: string,
   viaConnector: boolean,
+  localTool?: { readOnly?: boolean },
 ): boolean {
   if (run.trigger !== "webhook" || !run.requireToolApproval) return false;
   return viaConnector
     ? connectorToolRequiresApproval(toolName)
-    : !UNATTENDED_SAFE_BUILTIN_TOOLS.has(toolName);
+    : !(localTool?.readOnly ?? UNATTENDED_SAFE_BUILTIN_TOOLS.has(toolName));
 }
 
 function categoryMatches(category: string, toolName: string, connectorKind: string): boolean {

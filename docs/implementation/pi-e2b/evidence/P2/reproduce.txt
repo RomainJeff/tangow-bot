@@ -1,0 +1,39 @@
+P2 reproduction sheet
+
+Requirements: Node 24, pnpm 9.15.0, bash on the PATH for the guest's bash tool, Docker for the PostgreSQL harness. No vendor credentials and no network beyond loopback.
+Start from a clean checkout of the P2 slice.
+
+Setup
+  pnpm install --frozen-lockfile
+  pnpm db:generate
+
+Checks
+  pnpm check
+  pnpm lint
+  pnpm --filter @rakazo/adapters check
+
+The ten protocol lanes and the other P2 tests, on PGlite with every migration
+  pnpm exec vitest run packages/testkit/src/runtime-worker packages/adapters/src/runtime-worker apps/agent-run-worker/src packages/adapter-kit/src/worker-protocol.test.ts
+
+One lane, for example lane 6
+  pnpm exec vitest run packages/testkit/src/runtime-worker.test.ts -t "never runs it again"
+
+The PostgreSQL harness (Testcontainers PostgreSQL 16), with the stop-phase migration
+  pnpm test:integration
+
+Control cost per guest tool and stop delay, local runner in memory and child-process modes
+  pnpm bench:worker-channel --out bench.json
+  Defaults: 30 trials after 3 warm-up trials, 5 bash calls per run, 30 stop trials per stop case.
+  Trials rotate the in-process, memory and child arms. Run it on an otherwise idle machine.
+
+Lane capture
+  The capture prints lanes.json as text, one line per lane and test, and renders it with Playwright's Chromium at 1280 px width.
+
+Observed at the tested commit (see verification.json)
+  pnpm check: 24 tasks passed.
+  pnpm lint: passed with 47 warnings and 1 info, the same as the feature base.
+  pnpm test: 7991 passed, 208 skipped.
+  P2 tests: 77 passed in 11 files.
+  pnpm test:integration: 162 passed in 23 suites.
+  Control per guest tool, p95: 9.2 ms in memory and 10.6 ms in a child process for the first tool of an attempt, 8.6 ms and 10.2 ms for later tools. The same journaling in process: 5.0 ms and 4.0 ms. Budget 200 ms.
+  Stop, cancel to destroyed: at most 7.7 ms in memory and 26.6 ms in a child process when the guest honors its cancel, at most 2.04 s when it ignores it. Budget 10 s. Every stop was recorded as process ended and released.
