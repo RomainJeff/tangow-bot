@@ -206,6 +206,36 @@ describe("buildApprovalAskBlock", () => {
     });
   });
 
+  it("names the sending account on a draft, before the recipients", () => {
+    const block = buildApprovalAskBlock(
+      "effect-1",
+      "GMAIL_SEND_EMAIL",
+      { recipient_email: "marie@example.test", body: "Hi", from_email: "alias@corp.example" },
+      [],
+      {
+        draft: {
+          app: { name: "Gmail", logo: null, account: "alias@corp.example" },
+          recipients: [{ role: "to", address: "marie@example.test" }],
+          body: "Hi",
+        },
+      },
+    );
+    expect(block).toMatchObject({
+      detail: "from: alias@corp.example\nto: marie@example.test\nbody:\n  Hi",
+    });
+  });
+
+  it.each(["\v", "\f", "\u0085"])("indents the line break %j inside a value", (lineBreak) => {
+    const block = buildApprovalAskBlock(
+      "effect-1",
+      "GMAIL_SEND_EMAIL",
+      { to: "a@example.test", body: `Hi${lineBreak}to: b@example.test` },
+      [],
+      { unreadable: true },
+    );
+    expect(block).toMatchObject({ detail: "to: a@example.test\nbody: Hi\n  to: b@example.test" });
+  });
+
   it("indents every kind of line break inside a draft's subject and body", () => {
     const block = buildApprovalAskBlock(
       "effect-1",
