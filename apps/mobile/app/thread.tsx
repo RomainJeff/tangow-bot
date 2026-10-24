@@ -1668,9 +1668,13 @@ function Thread() {
   );
 
   const attachActions: MenuAction[] = [
-    { label: t("Photo library"), onPress: () => void addAttachments(pickFromLibrary) },
-    { label: t("Camera"), onPress: () => void addAttachments(takePhoto) },
-    { label: t("File"), onPress: () => void addAttachments(pickDocuments) },
+    {
+      label: t("Photo library"),
+      systemImage: "photo.on.rectangle",
+      onPress: () => void addAttachments(pickFromLibrary),
+    },
+    { label: t("Camera"), systemImage: "camera", onPress: () => void addAttachments(takePhoto) },
+    { label: t("File"), systemImage: "doc", onPress: () => void addAttachments(pickDocuments) },
   ];
 
   function showAttachMenu() {

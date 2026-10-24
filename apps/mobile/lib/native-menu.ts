@@ -1,9 +1,16 @@
+import type { ButtonProps } from "@expo/ui/swift-ui";
 import type {
   NativeStackHeaderItemMenuAction,
   NativeStackHeaderItemMenuSubmenu,
 } from "expo-router";
 
-export type MenuAction = { label: string; onPress: () => void; destructive?: boolean };
+export type MenuAction = {
+  label: string;
+  onPress: () => void;
+  destructive?: boolean;
+  /** iOS only: the SF Symbol drawn beside the label in an in-body menu. */
+  systemImage?: ButtonProps["systemImage"];
+};
 
 export function splitMenuActions(actions: MenuAction[]): {
   regular: MenuAction[];

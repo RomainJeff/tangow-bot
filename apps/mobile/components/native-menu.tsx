@@ -82,7 +82,12 @@ function ActionItems({ actions }: { actions: MenuAction[] }): ReactElement {
   return (
     <>
       {regular.map((action) => (
-        <Button key={action.label} label={action.label} onPress={action.onPress} />
+        <Button
+          key={action.label}
+          label={action.label}
+          systemImage={action.systemImage}
+          onPress={action.onPress}
+        />
       ))}
       {regular.length && destructive.length ? <Divider /> : null}
       {destructive.map((action) => (
