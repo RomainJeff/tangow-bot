@@ -6,7 +6,12 @@ import {
   DIRECT_APPROVAL_TAG,
 } from "./approval-effect.js";
 import { connectorCallActions } from "./connector-actions.js";
-import { isStoredDraft, outboundAskDraft, readConnectorOutbound } from "./outbound-gate.js";
+import {
+  draftRequest,
+  outboundAskDraft,
+  readConnectorOutbound,
+  sendFailure,
+} from "./outbound-gate.js";
 
 // The send a bot made through Composio's batch tool (trace 2026-10-23), account and address
 // replaced.
@@ -99,42 +104,135 @@ describe("readConnectorOutbound", () => {
       "none",
     ],
     ["unreadable batch", "COMPOSIO_MULTI_EXECUTE_TOOL", { tools: "[" }, "classic"],
-    ["send that turns on HTML", "GMAIL_SEND_EMAIL", { ...send, is_html: true }, "classic"],
   ])("%s gives %s", (_, toolName, args, expected) => {
     expect(gate(toolName, args)).toBe(expected);
   });
+
+  it.each([
+    [
+      "Gmail send",
+      "GMAIL_SEND_EMAIL",
+      { to: "a@example.com", body: "Hi", is_html: true },
+      {
+        to: "a@example.com",
+        body: "Hi",
+        is_html: false,
+        include_signature: false,
+      },
+    ],
+    [
+      "Gmail reply behind MCP",
+      "mcp__composio__GMAIL_REPLY_TO_THREAD",
+      { thread_id: "t1", recipient_email: "a@example.com", message_body: "Ok" },
+      {
+        thread_id: "t1",
+        recipient_email: "a@example.com",
+        message_body: "Ok",
+        include_signature: false,
+      },
+    ],
+    [
+      "Outlook send",
+      "OUTLOOK_SEND_EMAIL",
+      { to: "a@example.com", body: "Hi" },
+      {
+        to: "a@example.com",
+        body: "Hi",
+      },
+    ],
+  ])(
+    "sends a %s with what the card shows, no HTML and no signature it adds",
+    (_, name, args, sent) => {
+      const read = readConnectorOutbound(name, args, undefined, []);
+      expect(read.kind === "draft" && read.draft.args).toEqual(sent);
+    },
+  );
 });
 
-describe("isStoredDraft", () => {
+describe("draftRequest", () => {
   const marker = "__marker";
+  const route = { connectorId: "mcp", resourceId: "r1", toolName: "COMPOSIO_MULTI_EXECUTE_TOOL" };
+  const draft = (args: Record<string, unknown>): OutboundDraft => ({
+    connectorKind: "gmail",
+    recipients: [{ role: "to", address: "someone@example.com" }],
+    body: "Hello from Chief.",
+    args: { ...args, include_signature: false },
+    textPath: ["body"],
+  });
 
-  it("reads a draft back from each way a request is stored", () => {
-    const route = { connectorId: "mcp", resourceId: "r1", toolName: "COMPOSIO_MULTI_EXECUTE_TOOL" };
-    const stored = [
-      { kind: "GMAIL_SEND_EMAIL", request: send },
+  it.each([
+    ["a direct call", send, false, ["body"]],
+    [
+      "a catalog batch",
+      catalogApprovalRequest(
+        "mcp_execute_tool",
+        { id: "r1:COMPOSIO_MULTI_EXECUTE_TOOL", arguments: { tools: [tracedItem] } },
+        marker,
+        route,
+      ),
+      true,
+      [2, "arguments", "tools", 0, "arguments", "body"],
+    ],
+    [
+      "a bound batch",
+      boundDirectApprovalRequest(route, { tools: [tracedItem] }, marker),
+      true,
+      [2, "args", "tools", 0, "arguments", "body"],
+    ],
+  ])("stores the draft's arguments in %s and finds its body", (_, request, batched, path) => {
+    const stored = draftRequest(request, marker, batched, draft({ ...send, is_html: false }));
+    expect(stored?.path).toEqual(path);
+    expect(JSON.stringify(stored?.request)).toContain('"include_signature":false');
+    expect(stored && path.reduce<unknown>((at, key) => (at as never)[key], stored.request)).toBe(
+      "Hello from Chief.",
+    );
+  });
+
+  it("has no place for a draft in a request that is not an object", () => {
+    expect(draftRequest([marker, DIRECT_APPROVAL_TAG, {}], marker, false, draft(send))).toBe(
+      undefined,
+    );
+  });
+});
+
+describe("sendFailure", () => {
+  const batch = (response: object) => ({
+    successful: false,
+    data: { results: [{ response, tool_slug: "GMAIL_SEND_EMAIL", index: 0 }] },
+    error: null,
+  });
+
+  it.each([
+    ["a sent mail", { successful: true, data: { id: "m1", labelIds: ["SENT"] } }, undefined],
+    [
+      "a batch that sent",
+      { successful: true, data: { results: [{ response: { successful: true } }] }, error: null },
+      undefined,
+    ],
+    ["a connector error", { error: "Gmail is not connected" }, "Gmail is not connected"],
+    [
+      "a failed action in a batch",
+      batch({ successful: false, error: "Invalid recipient" }),
+      "Invalid recipient",
+    ],
+    [
+      "a failed action in an MCP text result",
       {
-        kind: "mcp__composio__COMPOSIO_MULTI_EXECUTE_TOOL",
-        request: catalogApprovalRequest(
-          "mcp_execute_tool",
-          { id: "r1:COMPOSIO_MULTI_EXECUTE_TOOL", arguments: { tools: [tracedItem] } },
-          marker,
-          route,
-        ),
+        content: [
+          { type: "text", text: JSON.stringify(batch({ successful: false, error: "Quota" })) },
+        ],
+        isError: false,
       },
-      {
-        kind: "mcp__composio__COMPOSIO_MULTI_EXECUTE_TOOL",
-        request: boundDirectApprovalRequest(route, { tools: [tracedItem] }, marker),
-      },
-      { kind: "GMAIL_FETCH_EMAILS", request: { query: "x" } },
-      { kind: "spawn_bot", request: [marker, DIRECT_APPROVAL_TAG, {}] },
-    ];
-    expect(stored.map((effect) => isStoredDraft(effect, marker, []))).toEqual([
-      true,
-      true,
-      true,
-      false,
-      false,
-    ]);
+      "Quota",
+    ],
+    [
+      "an MCP error result",
+      { content: [{ type: "text", text: "Token expired" }], isError: true },
+      "Token expired",
+    ],
+    ["a failure with no words", { successful: false }, "The app did not send it."],
+  ])("reads %s", (_, result, reason) => {
+    expect(sendFailure(result)).toBe(reason);
   });
 });
 
@@ -146,6 +244,7 @@ describe("outboundAskDraft", () => {
     body: "Hello",
     account: "me@example.com",
     args: {},
+    textPath: ["body"],
   };
 
   it("names the app from the connector catalog, with its logo and the sending account", async () => {

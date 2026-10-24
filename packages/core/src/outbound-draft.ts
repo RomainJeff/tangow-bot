@@ -92,17 +92,21 @@ export function withValueAt(value: unknown, path: DraftPath, next: unknown): unk
   return undefined;
 }
 
+/** Every line break a client may render, so a card can indent each one. */
+export const LINE_BREAKS = /\r\n|[\n\v\f\r\u0085\u2028\u2029]/g;
+
 /** The card's text lines for a draft, read by clients that do not know drafts. */
 export function askDraftDetail(draft: AskDraft): string {
-  const lines = (["to", "cc", "bcc"] as const).flatMap((role) => {
+  const lines = draft.app.account ? [`from: ${draft.app.account}`] : [];
+  for (const role of ["to", "cc", "bcc"] as const) {
     const addresses = draft.recipients.filter((recipient) => recipient.role === role);
-    return addresses.length
-      ? [`${role}: ${addresses.map((recipient) => recipient.address).join(", ")}`]
-      : [];
-  });
+    if (addresses.length) {
+      lines.push(`${role}: ${addresses.map((recipient) => recipient.address).join(", ")}`);
+    }
+  }
   // Continuation lines are indented so a line written inside the mail cannot pass for a header.
-  if (draft.subject) lines.push(`subject: ${draft.subject.replaceAll("\n", "\n  ")}`);
-  lines.push("body:", `  ${draft.body.replaceAll("\n", "\n  ")}`);
+  if (draft.subject) lines.push(`subject: ${draft.subject.replace(LINE_BREAKS, "\n  ")}`);
+  lines.push("body:", `  ${draft.body.replace(LINE_BREAKS, "\n  ")}`);
   return lines.join("\n");
 }
 
