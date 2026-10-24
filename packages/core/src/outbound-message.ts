@@ -217,6 +217,12 @@ function readString(value: string, role: FieldRole | undefined, reading: Reading
   }
 }
 
+/** Whether an argument name carries recipients, so a card never shortens it. */
+export function isRecipientField(key: string): boolean {
+  const role = FIELD_ROLES[fieldKey(key)];
+  return role === "to" || role === "cc" || role === "bcc";
+}
+
 function fieldKey(key: string): string {
   return key.toLowerCase().replace(/[-_\s]/g, "");
 }
