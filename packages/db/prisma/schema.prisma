@@ -685,6 +685,8 @@ model SteeringMessage {
   // Sent by someone other than the user (a webhook, a messaging contact, another bot): the run
   // it steers may not save skills.
   untrusted Boolean  @default(false)
+  // What the server tells the bot beside this message, already framed: a draft it replaced.
+  context   String?
   claimedAt DateTime?
   createdAt DateTime @default(now())
 

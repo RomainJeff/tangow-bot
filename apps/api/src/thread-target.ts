@@ -810,6 +810,9 @@ export async function sendThreadMessage(
               botId: target.botId,
               userId: actor.userId,
               runId: waitingRun.id,
+              ...(dismissal.outcome === "dismissed" && dismissal.context
+                ? { context: dismissal.context }
+                : {}),
             },
           });
           return {
