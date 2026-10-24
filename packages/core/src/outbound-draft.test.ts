@@ -29,6 +29,7 @@ describe("readDraft", () => {
     ],
     ["a path that is not one", "intended", { ...base, path: "body", state: "pending" }],
     ["an unknown state", "intended", { ...base, state: "superseded" }],
+    ["a state nothing writes yet", "denied", { ...base, state: "replaced" }],
   ])("treats %s as no draft", (_, status, draft) => {
     expect(readDraft(status, draft)).toBe(undefined);
   });

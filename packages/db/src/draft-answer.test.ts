@@ -1,7 +1,8 @@
 import type { SessionId } from "@rakazo/contracts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { PrismaClient } from "./client.js";
-import { type AnswerRunInput, answerRunInput, InvalidAnswerError } from "./events.js";
+import type { AnswerRunInput } from "./events.js";
+import { answerRunInput, InvalidAnswerError } from "./events.js";
 import type { PgliteDatabase } from "./pglite.test-support.js";
 import { openPgliteDatabase } from "./pglite.test-support.js";
 import { appendSessionEntryInTransaction } from "./sessions.js";
