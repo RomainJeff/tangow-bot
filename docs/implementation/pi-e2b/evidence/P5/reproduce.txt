@@ -1,3 +1,34 @@
+P5 S3 live lanes
+
+Tested source: 30231d4bdb5cf55636e78d46b62275451d23665e (head of PR #309).
+Guest SHA-256: e4543af118f89472b4b723ba330d4975b9819311781e97329c5a6673254ef869.
+Runner SHA-256: a84c72e7e760307a09fb5ed1cb1eebf617e70cd226ac243396f11a307a110d14.
+Both remote hashes matched the local build before the run.
+
+Build with the repository's pinned Node and pnpm:
+  pnpm test:worker-live:bundle
+
+Copy packages/testkit/dist/worker-live to an owned scratch directory on the deployment host.
+Use the existing I1 wrapper, which reads the credentials locally and exports them only to the
+command. Never copy .env.
+  E2B_INSTALL_DIR=<compose-dir> <i1-probes>/with-e2b.sh node --expose-gc <scratch>/bin/worker-live.mjs lanes \
+    --harness pi-native --guest <scratch>/guest/agent-run-worker.mjs \
+    --template i1-worker --computer-template i1-computer --out <scratch>/proof \
+    --lanes native-kill-bash,native-cancel,g-timeout,native-helper-approval,native-catalog,native-compaction
+
+--guest is required: a guest baked into a template before PR #306 sends the removed systemPrompt
+field, and the strict frame schema refuses it.
+
+The runner refused a non-idle deployment once, before creating anything, because a paused sandbox
+from another session was present. The maintainer authorized its removal; the batch then ran on an
+idle deployment in one serialized run, one child process per lane.
+
+All six lanes passed. Every lane ended with zero owned sandboxes and volumes. An independent
+census after the batch listed zero sandboxes (running or paused) and zero volumes on the
+deployment. The remote scratch directory was removed. The model is the local protocol fixture,
+so these runs prove runtime and transport behavior, not model intelligence.
+
+
 P5 token and cache measurements (S2)
 
 The runner is the `measure` command of packages/testkit/src/cli/worker-live.ts. It drives the

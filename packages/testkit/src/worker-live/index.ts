@@ -3,6 +3,7 @@ import { laneH, laneHomeMoveFence, laneHProductRecreate } from "./lane-migration
 import { laneNativeApproval } from "./lane-native-approval.js";
 import { laneNativeCatalog } from "./lane-native-catalog.js";
 import { laneNativeCompaction } from "./lane-native-compaction.js";
+import { laneNativeCancel, laneNativeKillBash } from "./lane-native-interrupts.js";
 import { laneSkills } from "./lane-skills.js";
 import { laneA, laneF, laneI } from "./lanes-files.js";
 import { laneD, laneE, laneEAnthropic, laneERefusals } from "./lanes-tools.js";
@@ -38,4 +39,6 @@ export const LANES: Lane[] = [
   laneNativeApproval,
   laneNativeCatalog,
   laneNativeCompaction,
+  laneNativeKillBash,
+  laneNativeCancel,
 ];

@@ -31,3 +31,7 @@ The application baseline is `a34028112d43c75cb6e13d0b121d843015696de0`. The infr
 [Issue #198](https://github.com/RomainJeff/rakazo-bot/issues/198) moves the worker to the native harness loop. The [native harness decisions](native-harness-decisions.md) give the ownership split between the controller and the harness, the run model, the token efficiency rules, how Rakazo tools reach the harness, and the P5 measurements.
 
 The [OpenCode execution decision](opencode-execution.md) describes worker and computer commands, shared paths, managed coding skills and the N13 live lane.
+
+## P5
+
+[Issue #199](https://github.com/RomainJeff/rakazo-bot/issues/199) makes a native harness's work durable while the attempt runs. The [P5 handoff](P5-handoff.md) gives the delta transcript, the native call states, the crash, effect, approval and steering matrix with the test or lane behind each cell, rollback compatibility, the limits and the reproduce commands.
