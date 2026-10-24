@@ -226,6 +226,11 @@ describe("readOutboundCall", () => {
       { to: "a@example.com", body: "Hi", user_id: "someone-else" },
     ],
     [
+      "a recipient hidden under a message id",
+      "GMAIL_REPLY_TO_THREAD",
+      { thread_id: { to: "evil@x.example" }, recipient_email: "a@example.com", message_body: "Hi" },
+    ],
+    [
       "a recipient that is not an address on a mail connector",
       "outlook_send",
       { to: "Marie", body: "Hi" },

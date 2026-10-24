@@ -87,14 +87,7 @@ const FIELD_ROLES: Record<string, FieldRole> = {
   thought: "inert",
 };
 
-const INHERITED_ROLES = new Set<FieldRole | undefined>([
-  "to",
-  "cc",
-  "bcc",
-  "sender",
-  "attachment",
-  "inert",
-]);
+const INHERITED_ROLES = new Set<FieldRole | undefined>(["to", "cc", "bcc", "sender", "attachment"]);
 const SEND_VERBS = new Set(["send", "sendmail", "sendemail", "reply", "forward"]);
 const ADDRESS = /^[^\s@<>"',;:]+@[^\s@<>"',;:]+\.[^\s@<>"',;:]+$/;
 const ADDRESS_INSIDE = /[^\s@<>"',;:]+@[^\s@<>"',;:]+\.[^\s@<>"',;:]+/;
@@ -173,6 +166,10 @@ function readValue(value: unknown, role: FieldRole | undefined, reading: Reading
   if (role === "flag") {
     if (typeof value === "boolean") return false;
     if (value != null) reading.unexplained = true;
+    return value;
+  }
+  if (role === "inert" && value && typeof value === "object") {
+    reading.unexplained = true;
     return value;
   }
   if (Array.isArray(value)) return value.map((item) => readValue(item, role, reading));
