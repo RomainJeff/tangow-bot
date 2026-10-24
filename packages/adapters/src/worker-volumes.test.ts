@@ -1,16 +1,18 @@
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import type { Actor, ComputerMode } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
 import {
   claimEmptySpaceDeletionForMember,
+  createRepos,
   createThreadEvents,
   deleteEmptySpaceForMember,
   deleteOwnerVolumes,
 } from "@rakazo/db";
 import type { PgliteDatabase } from "@rakazo/db/pglite.test-support";
 import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { destroyBot } from "./child-bots.js";
 import { provisionComputer } from "./computer-lifecycle.js";
 import { fakeE2BMachine } from "./e2b-machine.test-support.js";
@@ -164,6 +166,86 @@ describe("volume provisioning and home adoption", () => {
     await fixture.seedVolume("bot_private", spaceA, bot.id);
 
     await expect(adopt(computer.id)).resolves.toBe("computer_kind_unsupported");
+  });
+});
+
+describe("the home of a computer created with a bot", () => {
+  let owner: ReturnType<typeof workerFixture>;
+  beforeAll(async () => {
+    owner = workerFixture(prisma);
+    await owner.seedOwner();
+  });
+  afterEach(() => vi.unstubAllEnvs());
+
+  async function memberOf(spaceId: string): Promise<Actor> {
+    const { organizationId } = await prisma.space.findUniqueOrThrow({ where: { id: spaceId } });
+    const { userId } = owner;
+    const createdAt = new Date();
+    await prisma.member.upsert({
+      where: { organizationId_userId: { organizationId, userId } },
+      create: { id: owner.unique("member"), organizationId, userId, role: "owner", createdAt },
+      update: {},
+    });
+    await prisma.spaceMember.create({
+      data: { id: owner.unique("sm"), spaceId, organizationId, userId, createdAt },
+    });
+    return { userId, spaceId, email: "w@rakazo.test", isDeploymentOwner: false };
+  }
+
+  async function createBot(actor: Actor, sandbox: string, computerMode: ComputerMode = "team") {
+    vi.stubEnv("SANDBOX_PROVIDER", sandbox);
+    const bot = await createRepos(prisma).createBot(actor, {
+      name: owner.unique("bot"),
+      title: "",
+      description: "",
+      instructions: "",
+      notifyOnFinish: false,
+      computerMode,
+    });
+    return prisma.computer.findFirstOrThrow({
+      where: { bots: { some: { id: bot.id } } },
+      select: { id: true, scope: true, homeStorage: true },
+    });
+  }
+
+  it("starts a new E2B team home on volumes, and gives each of its bots a volume", async () => {
+    const actor = await memberOf(await owner.seedSpace());
+    const ada = await createBot(actor, "e2b");
+    const bob = await createBot(actor, "e2b");
+    expect([ada, bob]).toEqual([
+      { id: ada.id, scope: "team", homeStorage: "volumes" },
+      { id: ada.id, scope: "team", homeStorage: "volumes" },
+    ]);
+
+    await workers.provisionHomeVolumes(ada.id, fixture.context);
+
+    const volumes = await prisma.volume.findMany({
+      where: { spaceId: actor.spaceId },
+      select: { kind: true, providerRef: true },
+      orderBy: { kind: "asc" },
+    });
+    const provisioned = { providerRef: expect.stringMatching(/^rakazo-/) };
+    expect(volumes).toEqual([
+      { kind: "bot_private", ...provisioned },
+      { kind: "bot_private", ...provisioned },
+      { kind: "space_shared", ...provisioned },
+    ]);
+  });
+
+  it("gives a new dedicated E2B computer its space's team home storage", async () => {
+    const moved = await memberOf(await owner.seedSpace());
+    await createBot(moved, "e2b");
+    const notMoved = await memberOf(await owner.seedSpace());
+    const team = await createBot(notMoved, "e2b");
+    await prisma.computer.update({ where: { id: team.id }, data: { homeStorage: "snapshot" } });
+
+    expect([
+      await createBot(moved, "e2b", "dedicated"),
+      await createBot(notMoved, "e2b", "dedicated"),
+    ]).toMatchObject([
+      { scope: "dedicated", homeStorage: "volumes" },
+      { scope: "dedicated", homeStorage: "snapshot" },
+    ]);
   });
 });
 

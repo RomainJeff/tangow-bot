@@ -8,28 +8,21 @@ import { createJobReconciler } from "./job-reconciler.js";
 import { composeWorkers, resolveWorkerProvider } from "./worker-composition.js";
 import { privateFiles, workerFixture } from "./worker-fixture.test-support.js";
 
-describe("the worker provider a deployment configures", () => {
+describe("the worker provider a deployment runs", () => {
   it.each([
-    ["none", {}, null],
     [
-      "E2B with its default template",
-      { WORKER_PROVIDER: "e2b", E2B_API_KEY: "e2b-key" },
+      "E2B workers with the default template on an E2B deployment",
+      { SANDBOX_PROVIDER: "e2b", E2B_API_KEY: "e2b-key" },
       { kind: "e2b", apiKey: "e2b-key", template: "rakazo-worker-pi-native" },
     ],
     [
-      "E2B with a template of its own",
-      { WORKER_PROVIDER: " e2b ", E2B_API_KEY: "e2b-key", WORKER_TEMPLATE: "pilot-worker" },
-      { kind: "e2b", apiKey: "e2b-key", template: "pilot-worker" },
+      "E2B workers with a template of its own",
+      { SANDBOX_PROVIDER: "e2b", E2B_API_KEY: "e2b-key", WORKER_TEMPLATE: " own-worker " },
+      { kind: "e2b", apiKey: "e2b-key", template: "own-worker" },
     ],
-  ])("reads %s", (_name, env, expected) => {
+    ["no worker on a Docker deployment", { SANDBOX_PROVIDER: "docker" }, null],
+  ])("resolves %s", (_name, env, expected) => {
     expect(resolveWorkerProvider(env)).toEqual(expected);
-  });
-
-  it.each([
-    [{ WORKER_PROVIDER: "docker" }, "Unknown WORKER_PROVIDER: docker"],
-    [{ WORKER_PROVIDER: "e2b" }, "WORKER_PROVIDER=e2b needs E2B_API_KEY"],
-  ])("refuses %o", (env, message) => {
-    expect(() => resolveWorkerProvider(env)).toThrow(message);
   });
 });
 
