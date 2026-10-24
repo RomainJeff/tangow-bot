@@ -65,6 +65,24 @@ describe("FramedBlock", () => {
     expect(html).not.toContain("<input");
   });
 
+  it("lines the header up as icon, who, then a state at the end", () => {
+    const html = renderToString(
+      <FramedBlock
+        header={{
+          who: "Mail · ana@example.com",
+          icon: <img alt="" src="logo.png" />,
+          status: "Edited",
+        }}
+        question="To bo@example.com"
+      />,
+    );
+    const header = html.slice(html.indexOf('data-slot="framed-block-header"'));
+    expect(header.indexOf("logo.png")).toBeLessThan(header.indexOf("Mail · ana@example.com"));
+    expect(header).toContain(
+      '<span data-slot="framed-block-status" class="ms-auto shrink-0">Edited</span>',
+    );
+  });
+
   it("passes a className and the remaining props through", () => {
     const html = renderToString(
       <FramedBlock
