@@ -27,6 +27,7 @@ import {
   resolveGroupTargetBotIds,
   runFailureError,
 } from "@rakazo/core";
+import type { DraftLeft } from "@rakazo/db";
 import {
   blocksOf,
   browserApprovalCheckpointOf,
@@ -720,7 +721,7 @@ async function putCardAwayWithMessage(
   run: { id: string },
   input: {
     messageId: string;
-    draft?: { messageId: string; text: string };
+    draft?: DraftLeft;
     draftsOnly?: true;
   },
 ): Promise<{ status: string } | undefined> {
@@ -763,7 +764,7 @@ export async function sendThreadMessage(
     replyQuote?: string;
     clientNonce?: string;
     linkPreview?: false;
-    draft?: { messageId: string; text: string };
+    draft?: DraftLeft;
   },
 ) {
   const existing = await replayExistingSend(deps, target.threadId, input.clientNonce);

@@ -1,11 +1,27 @@
+import type { AskDraftRecipient } from "@rakazo/contracts";
+import { ASK_DRAFT_SUBJECT_MAX_LENGTH } from "@rakazo/contracts";
 import { connectorKindFromToolName, isEmailConnectorKind } from "./action-approval.js";
-import type { DraftPath } from "./outbound-draft.js";
+import type { DraftPath, DraftSlots, RecipientRole, RecipientSlot } from "./draft-fields.js";
+import {
+  addressesIn,
+  isMailAddress,
+  isRecord,
+  OUTBOUND_RECIPIENTS_MAX_LENGTH,
+  serializedLength,
+} from "./draft-fields.js";
 import { draftTextError } from "./outbound-draft.js";
 
-/** One tool invocation a connector call performs, in the connector's own naming. */
-export type OutboundAction = { toolName: string; args: Record<string, unknown> };
+/**
+ * One tool invocation a connector call performs, in the connector's own naming, with the tool's
+ * input schema when the call itself is that tool's.
+ */
+export type OutboundAction = {
+  toolName: string;
+  args: Record<string, unknown>;
+  schema?: Record<string, unknown>;
+};
 
-export type OutboundRecipient = { role: "to" | "cc" | "bcc"; address: string };
+export type OutboundRecipient = AskDraftRecipient;
 
 export type OutboundDraft = {
   /** The app that sends, as approval rules name it. */
@@ -19,6 +35,8 @@ export type OutboundDraft = {
   args: Record<string, unknown>;
   /** Where the body sits in `args`. */
   textPath: DraftPath;
+  /** Where the recipients and subject sit in `args`, when every one can be written back. */
+  fields?: DraftSlots;
 };
 
 /**
@@ -32,16 +50,10 @@ export type OutboundCall =
   | { kind: "classic" }
   | { kind: "refuse"; error: string };
 
-const OUTBOUND_SUBJECT_MAX_LENGTH = 1_000;
-/** What the card can show whole: recipients are never cut, so a longer list is refused. */
-const OUTBOUND_RECIPIENTS_MAX_LENGTH = 4_000;
 /** The longest a value shows on the card of a send it cannot read, before it is cut and marked. */
 export const CARD_VALUE_MAX_LENGTH = 1_000;
 const CARD_LINES_MAX_LENGTH = 4_000;
 const MAX_ARGUMENT_DEPTH = 32;
-// No address is longer, and the address patterns backtrack badly on long input, so every
-// pattern runs on a string of at most this length and nowhere else.
-const ADDRESS_MAX_LENGTH = 320;
 
 type FieldRole =
   | OutboundRecipient["role"]
@@ -102,11 +114,6 @@ const FIELD_ROLES: Record<string, FieldRole> = {
 
 const INHERITED_ROLES = new Set<FieldRole | undefined>(["to", "cc", "bcc", "sender", "attachment"]);
 const SEND_VERBS = new Set(["send", "sendmail", "sendemail", "reply", "forward"]);
-const ADDRESS = /^[^\s@<>"',;:]+@[^\s@<>"',;:]+\.[^\s@<>"',;:]+$/;
-
-function isAddress(value: string): boolean {
-  return value.length <= ADDRESS_MAX_LENGTH && ADDRESS.test(value);
-}
 
 export const REFUSE_UNSHOWABLE: OutboundCall = {
   kind: "refuse",
@@ -177,7 +184,7 @@ function readOutbound(action: OutboundAction, connectorKinds: string[]): Outboun
     reading.unexplained ||
     texts.length !== 1 ||
     reading.subjects.length > 1 ||
-    reading.subjects.some((subject) => subject.length > OUTBOUND_SUBJECT_MAX_LENGTH) ||
+    reading.subjects.some((subject) => subject.length > ASK_DRAFT_SUBJECT_MAX_LENGTH) ||
     !reading.recipients.some((recipient) => recipient.role === "to")
   ) {
     if (reading.buried) {
@@ -198,6 +205,7 @@ function readOutbound(action: OutboundAction, connectorKinds: string[]): Outboun
       account: reading.sender,
       args,
       textPath,
+      fields: draftSlots(args, action.schema),
     },
   };
 }
@@ -259,11 +267,13 @@ function readString(value: string, role: FieldRole | undefined, reading: Reading
   switch (role) {
     case "to":
     case "cc":
-    case "bcc":
+    case "bcc": {
       reading.addressed ||= value.includes("@");
-      if (isAddress(value.trim())) reading.recipients.push({ role, address: value.trim() });
+      const addresses = addressesIn(value);
+      if (addresses) for (const address of addresses) reading.recipients.push({ role, address });
       else reading.unexplained = true;
       return;
+    }
     case "text":
       reading.texts.push(value);
       return;
@@ -275,7 +285,7 @@ function readString(value: string, role: FieldRole | undefined, reading: Reading
       const sender = value.trim();
       if (sender.toLowerCase() === "me") return;
       const { sender: first } = reading;
-      if (!isAddress(sender) || (first && first.toLowerCase() !== sender.toLowerCase())) {
+      if (!isMailAddress(sender) || (first && first.toLowerCase() !== sender.toLowerCase())) {
         reading.unexplained = true;
       } else reading.sender ??= sender;
       return;
@@ -313,15 +323,6 @@ export function cardFitsArguments(args: Record<string, unknown>): boolean {
   return whole <= OUTBOUND_RECIPIENTS_MAX_LENGTH && lines <= CARD_LINES_MAX_LENGTH;
 }
 
-function serializedLength(value: unknown): number {
-  if (typeof value === "string") return value.length;
-  try {
-    return (JSON.stringify(value) ?? "").length;
-  } catch {
-    return Number.POSITIVE_INFINITY;
-  }
-}
-
 /** Every string the reader takes as the body, blank ones included, with where it sits. */
 function textLeaves(
   value: unknown,
@@ -345,4 +346,144 @@ function textLeaves(
 
 function fieldKey(key: string): string {
   return key.toLowerCase().replace(/[-_\s]/g, "");
+}
+
+type FieldLeaf = { role: RecipientRole | "subject"; path: DraftPath; value: unknown };
+
+/** Each recipient and subject argument, wherever it sits, with the value it holds. */
+function fieldLeaves(value: unknown, path: DraftPath = []): FieldLeaf[] {
+  const children: Array<[string | number, unknown]> = Array.isArray(value)
+    ? value.map((item, index) => [index, item])
+    : isRecord(value)
+      ? Object.entries(value)
+      : [];
+  return children.flatMap(([key, child]) => {
+    const role = typeof key === "string" ? FIELD_ROLES[fieldKey(key)] : undefined;
+    if (role === "to" || role === "cc" || role === "bcc" || role === "subject") {
+      return [{ role, path: [...path, key], value: child }];
+    }
+    return role === undefined ? fieldLeaves(child, [...path, key]) : [];
+  });
+}
+
+/**
+ * Where a draft's recipients and subject sit, so edits go back in the tool's own shapes. A role the
+ * call leaves out is offered from the tool's schema when known: one argument that holds many
+ * addresses, or else the first that holds one. Undefined when a recipient argument has a shape
+ * this cannot write back: the draft then only lets its text change.
+ */
+function draftSlots(
+  args: Record<string, unknown>,
+  schema: Record<string, unknown> | undefined,
+): DraftSlots | undefined {
+  const leaves = fieldLeaves(args);
+  const present: RecipientSlot[] = [];
+  for (const { role, path, value } of leaves) {
+    if (role === "subject" || value == null) continue;
+    const slot = slotOf(role, path, value, propertySchema(schema, path));
+    if (!slot) return undefined;
+    present.push(slot);
+  }
+  const offered = Object.entries(schemaProperties(schema)).flatMap(([key, property]) => {
+    const role = FIELD_ROLES[fieldKey(key)];
+    if ((role !== "to" && role !== "cc" && role !== "bcc") || key in args) return [];
+    const slot = slotOf(role, [key], emptyOf(property), property);
+    return slot ? [slot] : [];
+  });
+  const recipients = (["to", "cc", "bcc"] as const).flatMap((role) => {
+    const own = present.filter((slot) => slot.role === role);
+    const absent = offered.filter((slot) => slot.role === role);
+    const extra = own.some((slot) => slot.shape !== "one")
+      ? undefined
+      : (absent.find((slot) => slot.shape !== "one") ??
+        (own.length ? undefined : absent.find((slot) => slot.shape === "one")));
+    return [...own, ...(extra ? [extra] : [])].sort(
+      (left, right) => Number(left.shape !== "one") - Number(right.shape !== "one"),
+    );
+  });
+  const subjects = leaves.filter(
+    (leaf) => leaf.role === "subject" && typeof leaf.value === "string",
+  );
+  return {
+    recipients,
+    ...(subjects.length === 1 ? { subject: subjects[0]!.path } : {}),
+  };
+}
+
+/** How `value` holds a role's addresses, or undefined when it cannot be written back as is. */
+function slotOf(
+  role: RecipientRole,
+  path: DraftPath,
+  value: unknown,
+  property: Record<string, unknown> | undefined,
+): RecipientSlot | undefined {
+  if (typeof value === "string") {
+    const addresses = value.trim() ? addressesIn(value) : [];
+    if (!addresses) return undefined;
+    return { role, path, shape: addresses.length > 1 ? "list" : "one" };
+  }
+  if (!Array.isArray(value)) return undefined;
+  if (value.every((item) => typeof item === "string")) {
+    if (value.some((item) => addressesIn(item)?.length !== 1)) return undefined;
+    const items = isRecord(property?.items) ? property.items : undefined;
+    if (value.length || !hasType(items, "object")) return { role, path, shape: "array" };
+    const address = addressPath(emptyOf(items));
+    return address ? { role, path, shape: "objects", address } : undefined;
+  }
+  const paths = value.map(addressPath);
+  const [first] = paths;
+  if (!first || paths.some((each) => each?.join("\0") !== first.join("\0"))) return undefined;
+  return { role, path, shape: "objects", address: first };
+}
+
+/** The one place an address sits in an item, or a schema item's skeleton. */
+function addressPath(item: unknown): DraftPath | undefined {
+  const leaves: DraftPath[] = [];
+  const walk = (value: unknown, path: string[]) => {
+    if (isRecord(value))
+      for (const [key, child] of Object.entries(value)) walk(child, [...path, key]);
+    else leaves.push(path);
+  };
+  if (!isRecord(item)) return undefined;
+  walk(item, []);
+  return leaves.length === 1 && leaves[0]!.length ? leaves[0] : undefined;
+}
+
+/**
+ * An empty value of a schema's type, objects spelled out down to their leaves so an item's address
+ * path can be read from it.
+ */
+function emptyOf(schema: unknown): unknown {
+  if (!isRecord(schema)) return undefined;
+  if (hasType(schema, "string")) return "";
+  if (hasType(schema, "array")) return [];
+  if (hasType(schema, "object")) {
+    return Object.fromEntries(
+      Object.entries(schemaProperties(schema)).map(([key, child]) => [key, emptyOf(child)]),
+    );
+  }
+  return undefined;
+}
+
+function hasType(schema: Record<string, unknown> | undefined, type: string): boolean {
+  const declared = schema?.type;
+  return declared === type || (Array.isArray(declared) && declared.includes(type));
+}
+
+function schemaProperties(schema: unknown): Record<string, Record<string, unknown>> {
+  const properties = isRecord(schema) ? schema.properties : undefined;
+  if (!isRecord(properties)) return {};
+  return Object.fromEntries(
+    Object.entries(properties).filter((entry): entry is [string, Record<string, unknown>] =>
+      isRecord(entry[1]),
+    ),
+  );
+}
+
+/** The schema of a top-level argument; nested arguments go without. */
+function propertySchema(
+  schema: Record<string, unknown> | undefined,
+  path: DraftPath,
+): Record<string, unknown> | undefined {
+  return path.length === 1 ? schemaProperties(schema)[String(path[0])] : undefined;
 }

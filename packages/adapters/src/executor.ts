@@ -100,6 +100,7 @@ import {
   deriveRunNeeds,
   DRAFT_AS_DATA,
   draftSentResult,
+  draftWithState,
   endsSentence,
   escapePromptData,
   expandSkillReferencesInPrompt,
@@ -3369,7 +3370,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
           const innerActions = contained?.kind === "actions" ? contained.actions : undefined;
           // A mail always shows to its owner: no rule, review or trusted trigger lets it leave.
           let outbound: OutboundCall = viaConnector
-            ? readConnectorOutbound(ownToolName, args, contained, pluginProviders)
+            ? readConnectorOutbound(
+                ownToolName,
+                args,
+                contained,
+                pluginProviders,
+                resolvedToolSchema ?? connectorSchemas.get(name),
+              )
             : { kind: "none" };
           if (outbound.kind === "refuse") return { error: outbound.error };
           const drafted =
@@ -3530,7 +3537,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 executionId,
                 consumedEffectIds,
                 drafted && outbound.kind === "draft"
-                  ? { state: "pending", path: drafted.path, proposed: outbound.draft.body }
+                  ? draftWithState(drafted.binding, { state: "pending" })
                   : undefined,
               );
           if (name === "spawn_bot" && applied && !applied.duplicate) {
@@ -5176,12 +5183,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               id: effect.id,
               kind: effect.kind,
               proposal: effectProposal(redactConnectorPayload(effect.request, runSecrets)),
-              reopen: {
-                path: draft.path,
-                proposed: draft.proposed,
-                state: "pending",
-                failure: failed,
-              },
+              reopen: draftWithState(draft, { state: "pending", failure: failed }),
             },
           });
           if (!paused) throw new Error("Could not pause this run for approval; try sending again.");
@@ -5258,9 +5260,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
           effect: { id: string; request: unknown },
           draft: DraftRecord,
         ) => {
-          const text = String(valueAt(effect.request, draft.path));
-          const edited = text !== draft.proposed;
-          const result = draftSentResult((await draftCard(effect.id))?.draft, text, edited);
+          const result = draftSentResult(
+            (await draftCard(effect.id))?.draft,
+            effect.request,
+            draft,
+          );
+          const edited = result.editedByUser.length > 0;
           const at = new Date().toISOString();
           const seq = await deps.prisma.$transaction(async (tx) => {
             await tx.$queryRaw`SELECT id FROM threads WHERE id = ${thread.id} FOR UPDATE`;
@@ -5269,7 +5274,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               data: {
                 status: "completed",
                 result,
-                draft: { path: draft.path, proposed: draft.proposed, state: "sent", at },
+                draft: draftWithState(draft, { state: "sent", at }),
               },
             });
             if (settled.count !== 1) return null;
@@ -7925,7 +7930,7 @@ async function failStrandedRoutineCards(
       ? (
           await deps.prisma.externalEffect.updateMany({
             where: { id, status },
-            data: { status: "denied", draft: { ...unsent, state: "unsent" } },
+            data: { status: "denied", draft: draftWithState(unsent, { state: "unsent" }) },
           })
         ).count === 1
       : (PROPOSAL_EFFECT_KINDS as string[]).includes(kind) &&
