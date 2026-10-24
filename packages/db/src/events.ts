@@ -21,6 +21,7 @@ import {
   messagingChannelId,
   normalizeSpawnBotArgs,
   readDraft,
+  replacedDraftContext,
   runStartedByUser,
   sanitizeJsonValue,
   spawnBotApprovalBlock,
@@ -143,6 +144,8 @@ export interface ClaimedSteeringMessage {
   id: string;
   messageId: string;
   text: string;
+  /** What the server tells the bot beside the message, already framed. */
+  context?: string;
   blocks: MessageBlock[];
   untrusted: boolean;
 }
@@ -809,6 +812,7 @@ export async function claimSteering(
         id: item.id,
         messageId: item.messageId,
         text: blocksToAgentHistoryText(blocks),
+        ...(item.context ? { context: item.context } : {}),
         blocks,
         untrusted: item.untrusted,
       };
@@ -1450,6 +1454,10 @@ export interface DismissProposalWithTextInput {
   runId: string;
   /** Who typed: only the run's own user puts its card away. */
   userId: string;
+  /** A mail draft's text as the user left it on the card they typed over, named by its entry. */
+  draft?: { messageId: string; text: string };
+  /** Put away only a mail draft, as in a group, where other approval cards wait for a tap. */
+  draftsOnly?: true;
 }
 
 /**
@@ -1458,18 +1466,20 @@ export interface DismissProposalWithTextInput {
  * `keep`: not a card a reply puts away; the caller applies the usual rule.
  */
 export type DismissProposalWithTextResult =
-  | { outcome: "dismissed"; status: "queued" }
+  | { outcome: "dismissed"; status: "queued"; context?: string }
   | { outcome: "settled"; status: string }
   | { outcome: "keep" };
 
 const STEERABLE_AFTER_ANSWER = new Set(["queued", "leased", "running"]);
 
 /**
- * Puts away a proposal card the user answered by typing instead of tapping. Separate
+ * Puts away a proposal or mail draft card the user answered by typing instead of tapping. Separate
  * from resumeAskWithComposerTextInTransaction, which never writes an effect. The card's kind is
  * read from the stored effect, never from the block; the only transition written is
  * intended → denied, marked dismissed so no guard counts it as a no. The run keeps its checkpoint:
- * the pending call resumes and reads that it was dismissed, then the typed message steers it.
+ * the pending call resumes and reads that it was dismissed, then the typed message steers it. A
+ * mail draft ends replaced, never sent, its body set to the text the user left on that card; the
+ * bot reads that beside the typed message, as `context`.
  */
 export async function dismissProposalWithTextInTransaction(
   tx: Prisma.TransactionClient,
@@ -1490,17 +1500,45 @@ export async function dismissProposalWithTextInTransaction(
   const pendingAsk = card.block;
   const effect = await tx.externalEffect.findFirst({
     where: { id: pendingAsk.approvalEffectId, spaceId: input.spaceId, runId: input.runId },
-    select: { id: true, kind: true, status: true },
+    select: { id: true, kind: true, status: true, request: true, draft: true },
   });
-  if (!effect || !DISMISSABLE_EFFECT_KINDS.has(effect.kind)) return { outcome: "keep" };
+  if (!effect) return { outcome: "keep" };
+  const draft = readDraft(effect.status, effect.draft);
+  if (!draft && (input.draftsOnly || !DISMISSABLE_EFFECT_KINDS.has(effect.kind))) {
+    return { outcome: "keep" };
+  }
+  // A tap answered the card first: the reply steers its run, and a draft's text is moot.
   if (!waiting) {
     return STEERABLE_AFTER_ANSWER.has(run.status)
       ? { outcome: "settled", status: run.status }
       : { outcome: "keep" };
   }
+  const replacing = draft?.state === "pending";
+  // A text is only ever for the very draft card it was edited on.
+  if (input.draft && (!replacing || input.draft.messageId !== card.entryId)) {
+    return { outcome: "keep" };
+  }
+  if (draft && !replacing) return { outcome: "keep" };
+  const request =
+    replacing && input.draft
+      ? withValueAt(effect.request, draft.path, input.draft.text)
+      : effect.request;
+  if (replacing && request === undefined) return { outcome: "keep" };
+  const replaced: DraftRecord | undefined = replacing
+    ? { path: draft.path, proposed: draft.proposed, state: "replaced" }
+    : undefined;
   const dismissed = await tx.externalEffect.updateMany({
-    where: { id: effect.id, status: "intended", kind: { in: [...DISMISSABLE_EFFECT_KINDS] } },
-    data: { status: "denied", answeredAt: new Date(), result: DISMISSED_EFFECT_RESULT },
+    where: replaced
+      ? { id: effect.id, status: "intended" }
+      : { id: effect.id, status: "intended", kind: { in: [...DISMISSABLE_EFFECT_KINDS] } },
+    data: replaced
+      ? {
+          status: "denied",
+          answeredAt: new Date(),
+          request: request as Prisma.InputJsonValue,
+          draft: replaced,
+        }
+      : { status: "denied", answeredAt: new Date(), result: DISMISSED_EFFECT_RESULT },
   });
   // Answered while the run still waits: steering into it would reach a run that never wakes, so
   // the caller keeps the usual pending-card rule.
@@ -1523,7 +1561,12 @@ export async function dismissProposalWithTextInTransaction(
     runId: input.runId,
     payload: { effectId: effect.id, decision: "denied", dismissed: true },
   });
-  return { outcome: "dismissed", status: "queued" };
+  // What the bot reads beside the typed message, which the caller steers into the run.
+  return {
+    outcome: "dismissed",
+    status: "queued",
+    ...(replaced ? { context: replacedDraftContext(replaced, request) } : {}),
+  };
 }
 
 export async function pauseRunForInput(

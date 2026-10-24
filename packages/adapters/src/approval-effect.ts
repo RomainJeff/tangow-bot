@@ -1,5 +1,10 @@
 import type { AgentToolExecutionResult } from "@rakazo/adapter-kit";
-import { DRAFT_DISCARDED_NOTE, readDraft, refusedProposalResult } from "@rakazo/core";
+import {
+  DRAFT_DISCARDED_NOTE,
+  readDraft,
+  refusedProposalResult,
+  replacedDraftResult,
+} from "@rakazo/core";
 
 export type ApprovalPausedToolResult = AgentToolExecutionResult & { terminate: true };
 
@@ -362,7 +367,7 @@ export const SPAWN_BOT_CANCELLED_RESULT = {
 } as const;
 
 export function resolveDuplicateEffectGate(
-  effect: { status: string; result?: unknown; kind?: string; draft?: unknown },
+  effect: { status: string; result?: unknown; kind?: string; draft?: unknown; request?: unknown },
   toolName: string,
 ): DuplicateEffectGate {
   if (effect.status === "completed") {
@@ -372,6 +377,8 @@ export function resolveDuplicateEffectGate(
     if (readDraft(effect.status, effect.draft)?.state === "discarded") {
       return { action: "return", result: { ...DRAFT_DISCARDED_RESULT } };
     }
+    const replaced = replacedDraftResult(effect);
+    if (replaced) return { action: "return", result: replaced };
     return {
       action: "return",
       result:

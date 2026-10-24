@@ -704,6 +704,45 @@ function mapRun(run: {
   };
 }
 
+/**
+ * Puts away the card a bot's sole waiting run shows when its owner types instead, and steers the
+ * message into that run with what the bot reads beside it. Undefined: the usual rule applies.
+ */
+async function putCardAwayWithMessage(
+  tx: Prisma.TransactionClient,
+  actor: Actor,
+  threadId: string,
+  botId: string,
+  run: { id: string },
+  input: {
+    messageId: string;
+    draft?: { messageId: string; text: string };
+    draftsOnly?: true;
+  },
+): Promise<{ status: string } | undefined> {
+  const dismissal = await dismissProposalWithTextInTransaction(tx, {
+    spaceId: actor.spaceId,
+    threadId,
+    runId: run.id,
+    userId: actor.userId,
+    draft: input.draft,
+    draftsOnly: input.draftsOnly,
+  });
+  if (dismissal.outcome === "keep") return undefined;
+  await tx.steeringMessage.create({
+    data: {
+      messageId: input.messageId,
+      botId,
+      userId: actor.userId,
+      runId: run.id,
+      ...(dismissal.outcome === "dismissed" && dismissal.context
+        ? { context: dismissal.context }
+        : {}),
+    },
+  });
+  return { status: dismissal.status };
+}
+
 export async function sendThreadMessage(
   deps: {
     prisma: PrismaClient;
@@ -720,6 +759,7 @@ export async function sendThreadMessage(
     replyQuote?: string;
     clientNonce?: string;
     linkPreview?: false;
+    draft?: { messageId: string; text: string };
   },
 ) {
   const existing = await replayExistingSend(deps, target.threadId, input.clientNonce);
@@ -786,26 +826,20 @@ export async function sendThreadMessage(
         const waitingRun = soleActiveRun?.status === "waiting_input" ? soleActiveRun : undefined;
         // A card the bot proposed on its own is put away by the reply, which then steers the run;
         // when a tap answered it first, the reply steers the run that tap resumed.
-        const dismissal =
+        const putAway =
           waitingRun &&
-          (await dismissProposalWithTextInTransaction(tx, {
-            spaceId: actor.spaceId,
-            threadId: target.threadId,
-            runId: waitingRun.id,
-            userId: actor.userId,
+          (await putCardAwayWithMessage(tx, actor, target.threadId, target.botId, waitingRun, {
+            messageId: message.id,
+            draft: input.draft,
           }));
-        if (waitingRun && dismissal && dismissal.outcome !== "keep") {
-          await tx.steeringMessage.create({
-            data: {
-              messageId: message.id,
-              botId: target.botId,
-              userId: actor.userId,
-              runId: waitingRun.id,
-            },
-          });
+        // Refused only while a card still waits that the text cannot replace.
+        if (input.draft && waitingRun && !putAway) {
+          throw new ORPCError("CONFLICT", { message: "This draft is no longer waiting." });
+        }
+        if (waitingRun && putAway) {
           return {
             message,
-            runs: [{ id: waitingRun.id, taskId: waitingRun.taskId, status: dismissal.status }],
+            runs: [{ id: waitingRun.id, taskId: waitingRun.taskId, status: putAway.status }],
             eventSeq: await threadEventSeq(tx, target.threadId),
           };
         }
@@ -944,11 +978,26 @@ export async function sendThreadMessage(
       const conversationRunIds = await findConversationRunIds(tx, activeRuns);
       const runs: Array<{ id: string; taskId: string; botId: string; status: string }> = [];
       const createdRuns: typeof runs = [];
+      let draftPutAway = false;
       for (const botId of targetBotIds) {
         const botRuns = activeRunsByBotId.get(botId) ?? [];
         const active = botRuns.find((run) => conversationRunIds.has(run.id));
         const soleActiveRun = botRuns.length === 1 ? botRuns[0] : undefined;
         if (soleActiveRun?.status === "waiting_input") {
+          // In a group a reply puts away only a mail draft; other approval cards still wait.
+          const putAway = await putCardAwayWithMessage(
+            tx,
+            actor,
+            target.threadId,
+            botId,
+            soleActiveRun,
+            { messageId: message.id, draft: input.draft, draftsOnly: true },
+          );
+          if (putAway) {
+            draftPutAway = true;
+            runs.push({ ...soleActiveRun, status: putAway.status });
+            continue;
+          }
           const resolution = await resumeAskWithComposerTextInTransaction(tx, {
             spaceId: actor.spaceId,
             threadId: target.threadId,
@@ -1005,6 +1054,10 @@ export async function sendThreadMessage(
         });
         runs.push(run);
         createdRuns.push(run);
+      }
+      // A draft's text the reply did not put away names a card that waits, or no longer does.
+      if (input.draft && !draftPutAway) {
+        throw new ORPCError("CONFLICT", { message: "This draft is no longer waiting." });
       }
       if (createdRuns.length) {
         await cancelSupersededQueuedRuns(tx, {
