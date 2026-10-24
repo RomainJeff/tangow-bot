@@ -22,7 +22,7 @@ function decodedAsText(bytes: Buffer, cuts: number[]) {
 const worker = { runId: "run_1", attemptId: "attempt_1", fence: 1 };
 const event = (body: unknown) =>
   Buffer.from(
-    JSON.stringify({ version: 1, kind: "worker.event", worker, payload: { seq: 1, body } }),
+    JSON.stringify({ version: 2, kind: "worker.event", worker, payload: { seq: 1, body } }),
   );
 
 describe("readFrameLines", () => {
@@ -65,13 +65,7 @@ describe("readGuestFrame", () => {
         call: { context: { messages: [{ role: "user", content: big }] }, options: {} },
       }),
     );
-    const result = readGuestFrame(
-      event({
-        type: "tool.done",
-        callId: "c1",
-        output: { text: big, isError: false, truncated: false, totalBytes: big.length },
-      }),
-    );
+    const result = readGuestFrame(event({ type: "text", text: big }));
 
     expect(request.ok).toBe(true);
     expect(result).toEqual({ ok: false, reason: "too_large" });
@@ -81,7 +75,7 @@ describe("readGuestFrame", () => {
     ["bytes that are not JSON", Buffer.from("{"), "invalid"],
     [
       "another protocol version",
-      Buffer.from(JSON.stringify({ version: 2, kind: "worker.event", worker })),
+      Buffer.from(JSON.stringify({ version: 1, kind: "worker.event", worker })),
       "version",
     ],
   ])("refuses %s", (_name, frame, reason) => {

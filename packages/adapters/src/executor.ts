@@ -15,8 +15,6 @@ import type {
   ConnectorTool,
   HarnessTranscriptEntry,
   JobPublisher,
-  LocalToolExecutor,
-  LocalToolOutput,
   ManagedConnectorProvider,
   MemoryStore,
   NotificationMessage,
@@ -2419,7 +2417,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
           args: Record<string, unknown>,
           executionId: string,
           trace?: ToolCallTrace,
-          local?: Parameters<LocalToolExecutor>[3],
         ) => {
           // A served pause writes nothing to the tool log: the card is its record.
           const refused =
@@ -2442,15 +2439,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
             });
           const result =
             refused ??
-            (await applyTool(name, args, executionId, log, trace, local).catch(
-              async (error: unknown) => {
-                // An aborted call stays unanswered so a resumed worker replays it.
-                if (!context.signal.aborted) {
-                  await answer(error instanceof Error ? error.message : String(error), true, []);
-                }
-                throw error;
-              },
-            ));
+            (await applyTool(name, args, executionId, log, trace).catch(async (error: unknown) => {
+              // An aborted call stays unanswered so a resumed worker replays it.
+              if (!context.signal.aborted) {
+                await answer(error instanceof Error ? error.message : String(error), true, []);
+              }
+              throw error;
+            }));
           recordToolOutput(executionId, result);
           if (!isToolPauseResult(result)) {
             await answer(result, isFailedToolResult(result), toolArtifactIds(result));
@@ -2522,8 +2517,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
           return {
             executeTool: (name, args, executionId, _route, trace) =>
               runLoggedTool(helper.log, writeHelperEntry, name, args, executionId, trace),
-            executeLocalTool: (name, args, executionId, run) =>
-              runLoggedTool(helper.log, writeHelperEntry, name, args, executionId, undefined, run),
             text: (text) =>
               inOrder(() =>
                 logEntry({
@@ -2907,7 +2900,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
           executionId: string,
           callLog: RunLog,
           trace?: ToolCallTrace,
-          local?: Parameters<LocalToolExecutor>[3],
         ) => {
           context.signal.throwIfAborted();
           if (handedOff) {
@@ -3575,16 +3567,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
               : Promise.resolve(true);
           const finish = async (result: unknown) =>
             (await persistEffectResult(result)) ? result : uncertainEffectResult(name);
-          if (local) {
-            // A read-only tool records no effect: the worker checked the fence before the call.
-            if (!applied) return localToolResult(await local(context.signal));
-            // A runtime-run tool that changes anything starts from a fenced claim, approved or not.
-            if (!claimedEffect) {
-              const early = await claimOrReturn("intended");
-              if (early !== undefined) return early;
-            }
-            return finish(localToolResult(await local(context.signal)));
-          }
           const unavailable = await computerUnavailable(name);
           if (unavailable) return unavailable;
           if (name === "computer_observe") {
@@ -5262,20 +5244,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 : async (name, args, executionId, _route, trace) => {
                     await afterToolAnnounced(executionId);
                     return runLoggedTool(runLog, writeRunEntry, name, args, executionId, trace);
-                  },
-              executeLocalTool: scripted
-                ? undefined
-                : async (name, args, executionId, run) => {
-                    await afterToolAnnounced(executionId);
-                    return runLoggedTool(
-                      runLog,
-                      writeRunEntry,
-                      name,
-                      args,
-                      executionId,
-                      undefined,
-                      run,
-                    );
                   },
               onSkillUsed: (name) => recordSkillUse(name, "read"),
               onSkillCollision: async (collision) => {
@@ -7575,17 +7543,6 @@ async function claimEffectUnderFence(
     });
     return claimed.count === 1 ? "claimed" : "duplicate";
   });
-}
-
-function localToolResult(output: LocalToolOutput) {
-  if ("result" in output) return output.result;
-  if (output.isError) return { error: output.text };
-  return {
-    output: output.text,
-    truncated: output.truncated,
-    totalBytes: output.totalBytes,
-    ...(output.spoolPath ? { spoolPath: output.spoolPath } : {}),
-  };
 }
 
 function uncertainEffectError(toolName: string): Error {

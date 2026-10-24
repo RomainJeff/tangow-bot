@@ -6,7 +6,6 @@ import type {
   WorkerSpec,
 } from "@rakazo/adapter-kit";
 import { workerHarness } from "@rakazo/adapter-kit";
-import { volumeMountPath } from "@rakazo/core";
 import { getLogger } from "@rakazo/logging";
 import type { ConnectionOpts, SandboxOpts } from "e2b";
 import { CommandExitError, Sandbox, Volume } from "e2b";
@@ -234,7 +233,6 @@ export class E2BWorkerProvider implements WorkerProvider, GuestConnector {
     if (existing) return { providerRef: existing };
     const remainingMs = deadline - Date.now();
     if (remainingMs <= 0) throw new Error(`The worker of ${spec.attemptId} missed its deadline`);
-    const privateMount = volumeMountPath({ kind: "bot_private", botId: spec.botId });
     const providerRef = await this.sdk.createSandbox({
       template: this.config.template,
       secure: true,
@@ -242,9 +240,6 @@ export class E2BWorkerProvider implements WorkerProvider, GuestConnector {
       envs: {
         RAKAZO_WORKER_HARNESS: this.expectedHarness.name,
         RAKAZO_WORKER_HOME: "/home/user",
-        ...(spec.mounts.some((mount) => mount.path === privateMount) && {
-          RAKAZO_WORKER_SPOOL_DIR: `${privateMount}/.rakazo/tool-output`,
-        }),
       },
       volumeMounts: Object.fromEntries(spec.mounts.map((mount) => [mount.path, mount.volumeRef])),
       timeoutMs: this.sandboxTimeoutMs(spec),

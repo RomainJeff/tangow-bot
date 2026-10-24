@@ -182,8 +182,7 @@ export function rakazoMcpServer(
         ? [tool.catalog.via, { id: tool.catalog.id, arguments: args }]
         : [tool.name, args as Record<string, unknown>];
       await host.emit({ type: "tool", name, args: relayed, executionId: callId });
-      const outcome = await host.callTool("root", name, relayed, callId);
-      return await mcpResult(outcome.output, screensDir);
+      return await mcpResult(await host.callTool("root", name, relayed, callId), screensDir);
     } catch (error) {
       const text = error instanceof Error ? error.message : String(error);
       return { content: clipToolResultContent([{ type: "text", text }]), isError: true };

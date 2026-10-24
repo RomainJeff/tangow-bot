@@ -9,7 +9,7 @@
  * the channel.
  */
 import type { GuestBody } from "@rakazo/adapter-kit";
-import { workerHarness } from "@rakazo/adapter-kit";
+import { WORKER_PROTOCOL_VERSION, workerHarness } from "@rakazo/adapter-kit";
 import {
   capabilityWorker,
   encodeMessage,
@@ -46,7 +46,7 @@ if (!worker || !request) {
 const channel = streamChannel(process.stdin, process.stdout, WORKER_LIMITS.controllerFrameBytes);
 await channel.send(
   encodeMessage({
-    version: 1,
+    version: WORKER_PROTOCOL_VERSION,
     kind: "worker.hello",
     worker,
     capability,
@@ -66,7 +66,7 @@ for await (const frame of channel.frames) {
   if (message.kind === "worker.start") {
     await channel.send(
       encodeMessage({
-        version: 1,
+        version: WORKER_PROTOCOL_VERSION,
         kind: "worker.event",
         worker,
         payload: { seq: 1, body: request },

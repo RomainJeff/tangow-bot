@@ -5,7 +5,7 @@ import { createSessionInbox, type InboxHandler } from "./inbox.js";
 const worker = { runId: "run_1", attemptId: "attempt_1", fence: 2 };
 const call = { type: "tool.call", agent: "root", callId: "c1", name: "bash", args: {} } as const;
 const frame = (seq: number, identity = worker): WorkerEventV1 => ({
-  version: 1,
+  version: 2,
   kind: "worker.event",
   worker: identity,
   payload: { seq, body: call },

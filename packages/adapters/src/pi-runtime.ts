@@ -127,32 +127,20 @@ export function maxToolCallsPerTurn(env: NodeJS.ProcessEnv = process.env): numbe
   return Math.floor(parsed);
 }
 
-/** One model call. `agentId` names the helper making it; absent for the bot itself. */
-export type PiStreamFn = (
-  model: Model<Api>,
-  context: TranscriptContext,
-  options: SimpleStreamOptions | undefined,
-  agentId: string | undefined,
-) => AssistantMessageEventStream | Promise<AssistantMessageEventStream>;
-
 export interface PiAgentRuntimeOptions {
   /** Optional trace exporter. Omit to record nothing at all. */
   traceExporter?: TraceExporter;
   /** Name this process appears under in exported traces. */
   serviceName?: string;
-  /** Replaces every model call, e.g. to relay it to the process that holds the key. */
-  streamFn?: PiStreamFn;
 }
 
 export class PiAgentRuntime implements AgentRuntime {
   private readonly traceExporter?: TraceExporter;
   private readonly serviceName?: string;
-  private readonly streamFn?: PiStreamFn;
 
   constructor(options: PiAgentRuntimeOptions = {}) {
     this.traceExporter = options.traceExporter;
     this.serviceName = options.serviceName;
-    this.streamFn = options.streamFn;
   }
 
   describe() {
@@ -239,7 +227,6 @@ export class PiAgentRuntime implements AgentRuntime {
           signal,
           depth: 0,
           pausePending: false,
-          streamFn: this.streamFn,
         };
         resumeHost = host;
         const tools = toAgentTools(toolDefs, host);
@@ -288,19 +275,10 @@ export class PiAgentRuntime implements AgentRuntime {
           sessionId: conversationSessionId(request.threadId, request.botId),
           steeringMode: "all",
           streamFn: (m, ctx, options) =>
-            this.streamFn
-              ? this.streamFn(m, ctx, options, undefined)
-              : models.streamSimple(
-                  m,
-                  ctx,
-                  reliableStreamOptions(m, options, request.model.maxTokens),
-                ),
+            models.streamSimple(m, ctx, reliableStreamOptions(m, options, request.model.maxTokens)),
           getApiKey: async () => apiKey,
-          // A relayed call is pruned by the relay, which needs the whole history to evict in blocks.
-          transformContext: this.streamFn
-            ? undefined
-            : async (messages) =>
-                pruneComputerScreenshotContext(messages, request.model.maxImagesPerPrompt),
+          transformContext: async (messages) =>
+            pruneComputerScreenshotContext(messages, request.model.maxImagesPerPrompt),
           finishTurn: async () => (host.pausePending ? { action: "end" } : undefined),
           prepareNextTurnWithContext: async () => {
             if (!request.claimSteering) return undefined;
@@ -1348,18 +1326,14 @@ async function runSubagent(
   const nested = new Agent({
     sessionId: conversationSessionId(host.request.threadId, host.request.botId, agentId),
     streamFn: (m, ctx, options) =>
-      host.streamFn
-        ? host.streamFn(m, ctx, options, agentId)
-        : selectedModel.models.streamSimple(
-            m,
-            ctx,
-            reliableStreamOptions(m, options, requestModel.maxTokens),
-          ),
+      selectedModel.models.streamSimple(
+        m,
+        ctx,
+        reliableStreamOptions(m, options, requestModel.maxTokens),
+      ),
     getApiKey: async () => selectedModel.apiKey,
-    transformContext: host.streamFn
-      ? undefined
-      : async (messages) =>
-          pruneComputerScreenshotContext(messages, requestModel.maxImagesPerPrompt),
+    transformContext: async (messages) =>
+      pruneComputerScreenshotContext(messages, requestModel.maxImagesPerPrompt),
     finishTurn: async () => (nestedHost.pausePending ? { action: "end" } : undefined),
     initialState: {
       systemPrompt: helperInstructions(name, helper.instructions),
@@ -1854,7 +1828,6 @@ interface ToolHost {
   signal: AbortSignal;
   depth: number;
   pausePending: boolean;
-  streamFn?: PiStreamFn;
   /** Set only when the run is traced. */
   toolTrace?: (toolCallId: string) => ToolCallTrace;
 }

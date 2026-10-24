@@ -7,7 +7,6 @@ import type {
   ControllerMessageV1,
   GuestBody,
   HarnessDeclaration,
-  LocalToolOutput,
   ReplyBody,
   WorkerIdentity,
 } from "@rakazo/adapter-kit";
@@ -66,7 +65,7 @@ function rawGuest(channel: FrameChannel, capability: string, harness = HAND_WRIT
     hello() {
       void channel.send(
         encodeMessage({
-          version: 1,
+          version: 2,
           kind: "worker.hello",
           worker,
           capability,
@@ -77,7 +76,7 @@ function rawGuest(channel: FrameChannel, capability: string, harness = HAND_WRIT
     },
     send(seq: number, body: GuestBody) {
       void channel.send(
-        encodeMessage({ version: 1, kind: "worker.event", worker, payload: { seq, body } }),
+        encodeMessage({ version: 2, kind: "worker.event", worker, payload: { seq, body } }),
       );
     },
     /** Every reply body to `seq`, once one settles it or `count` arrived. */
@@ -119,7 +118,7 @@ function manualLauncher(harness = HAND_WRITTEN) {
         return {
           expectedHarness: harness,
           start: {
-            version: 1,
+            version: 2,
             kind: "worker.start",
             worker,
             workspace: { cwd: "/workspace", mounts: [] },
@@ -203,19 +202,12 @@ const callBash = (callId: string): GuestBody => ({
   name: "bash",
   args: { command: "true" },
 });
-const output = (text: string): LocalToolOutput => ({
-  text,
-  isError: false,
-  truncated: false,
-  totalBytes: Buffer.byteLength(text),
-});
 
 describe("a hostile guest", () => {
   it("cannot use another run's capability, nor reuse its own while it is bound", async () => {
     const { runtime, launchedFor } = setup();
     const callbacks = {
       executeTool: vi.fn(),
-      executeLocalTool: vi.fn(),
       claimSteering: vi.fn(),
       startSubagent: vi.fn(),
       resolveModel: vi.fn(),
@@ -287,71 +279,37 @@ describe("a hostile guest", () => {
     ]);
   });
 
-  it("gets the output of a native call it reports cut and redacted with the run's current secrets, and a frame over the limit ends the run", async () => {
+  it.each([
+    ["asks the controller to run its own bash", [bash("own"), callBash("own")], "unknown_tool"],
+    [
+      "reports the result of a tool it ran itself",
+      [
+        {
+          type: "tool.done",
+          callId: "own",
+          output: { text: "done", isError: false, truncated: false, totalBytes: 4 },
+        } as unknown as GuestBody,
+      ],
+      "invalid",
+    ],
+    [
+      "sends a frame over the limit",
+      [{ type: "text", text: "y".repeat(2 * 1024 * 1024) } as GuestBody],
+      "too_large",
+    ],
+  ])("ends a pi-native run that %s", async (_name, bodies, reason) => {
+    const executeTool = vi.fn();
     const { runtime, launchedFor } = setup(stillClock, PI_NATIVE_HARNESS);
-    const results: LocalToolOutput[] = [];
-    const secrets = ["hunter2-secret"];
-    const run = consume(
-      runtime.run(
-        request("run_big", {
-          secrets,
-          executeLocalTool: async (_name, _args, _id, start) => {
-            results.push(await start(new AbortController().signal));
-            return "recorded";
-          },
-        }),
-      ),
-    );
-    const launched = await launchedFor("run_big");
+    const run = consume(runtime.run(request("run_own_tools", { executeTool })));
+    const launched = await launchedFor("run_own_tools");
     const guest = rawGuest(launched.connect(), launched.capability, PI_NATIVE_HARNESS);
     await guest.hello();
 
-    guest.send(1, bash("big"));
-    guest.send(2, callBash("big"));
-    await guest.replies(2);
-    guest.send(3, {
-      type: "tool.done",
-      callId: "big",
-      output: output(`hunter2-secret ${"x".repeat(200 * 1024)}`),
-    });
-    expect(await guest.replies(3)).toEqual([{ type: "tool.recorded" }]);
-    const [result] = results;
-    expect(Buffer.byteLength(result!.text)).toBeLessThanOrEqual(
-      WORKER_LIMITS.controllerResultBytes,
-    );
-    expect(result!.text.startsWith("[redacted] xxx")).toBe(true);
-    expect(
-      result!.text.endsWith(
-        `[cut by the controller at ${WORKER_LIMITS.controllerResultBytes} bytes]`,
-      ),
-    ).toBe(true);
+    for (const [index, body] of bodies.entries()) guest.send(index + 1, body);
 
-    secrets.push("revealed-later");
-    guest.send(4, bash("object"));
-    guest.send(5, callBash("object"));
-    await guest.replies(5);
-    guest.send(6, {
-      type: "tool.done",
-      callId: "object",
-      output: {
-        result: { content: "hunter2-secret and revealed-later", lines: ["hunter2-secret"] },
-      },
-    });
-    expect(await guest.replies(6)).toEqual([{ type: "tool.recorded" }]);
-    expect(results[1]).toEqual({
-      result: { content: "[redacted] and [redacted]", lines: ["[redacted]"] },
-    });
-
-    guest.send(7, bash("huge"));
-    guest.send(8, callBash("huge"));
-    await guest.replies(8);
-    guest.send(9, {
-      type: "tool.done",
-      callId: "huge",
-      output: output("y".repeat(2 * 1024 * 1024)),
-    });
-    await expect(run.done).rejects.toThrow("The worker broke the run protocol: too_large");
-    expect(results).toHaveLength(2);
+    await expect(run.done).rejects.toThrow(`The worker broke the run protocol: ${reason}`);
+    expect(run.seen).toEqual([]);
+    expect(executeTool).not.toHaveBeenCalled();
   });
 
   it("cannot name the model, connection or endpoint its model calls go to", async () => {
@@ -675,64 +633,6 @@ describe("the controller's pause guard, against a hostile harness", () => {
 
     await run.done;
     expect(run.seen).toEqual([{ type: "ask", text: "Which address?" }]);
-    expect(executeTool).not.toHaveBeenCalled();
-  });
-
-  it("does not grant a native call whose authorization ends after the pause", async () => {
-    const authorized = Promise.withResolvers<void>();
-    const started = Promise.withResolvers<string>();
-    const { runtime, launchedFor } = setup(stillClock, PI_NATIVE_HARNESS);
-    const { run, ask } = await startGuest(
-      runtime,
-      launchedFor,
-      "run_late_grant",
-      {
-        executeLocalTool: async (_name, _args, _id, start) => {
-          await authorized.promise;
-          return start(new AbortController().signal).then(
-            () => started.resolve("started"),
-            (error: Error) => started.resolve(error.message),
-          );
-        },
-      },
-      PI_NATIVE_HARNESS,
-    );
-    await ask(bash("late"));
-    const reply = ask(callBash("late"));
-    expect(await ask({ type: "ask", text: "Which address?" })).toEqual({ type: "recorded" });
-    authorized.resolve();
-
-    expect(await reply).toEqual(notRun);
-    expect(await started.promise).toBe("This run is paused until the user answers.");
-    expect(await ask({ type: "done" })).toEqual({ type: "stop", reason: "paused" });
-    await run.done;
-  });
-
-  it("pauses when a native call's authorization pauses the run", async () => {
-    const executeTool = vi.fn(async () => "saved");
-    const { runtime, launchedFor } = setup(stillClock, PI_NATIVE_HARNESS);
-    const { run, ask } = await startGuest(
-      runtime,
-      launchedFor,
-      "run_native_pause",
-      {
-        executeTool,
-        executeLocalTool: async () => PAUSED,
-      },
-      PI_NATIVE_HARNESS,
-    );
-    await ask(bash("native"));
-    expect(await ask(callBash("native"))).toEqual({ type: "tool.result", output: PAUSED });
-
-    await ask(announce("remember", "after"));
-    expect(await ask(call("remember", "after"))).toEqual(notRun);
-    expect(await ask({ type: "text", text: "Ran it anyway!" })).toEqual({ type: "ack" });
-    expect(await ask({ type: "done" })).toEqual({ type: "stop", reason: "paused" });
-
-    await run.done;
-    expect(run.seen).toEqual([
-      { type: "tool", name: "bash", args: { command: "true" }, executionId: "native" },
-    ]);
     expect(executeTool).not.toHaveBeenCalled();
   });
 

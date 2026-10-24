@@ -1,7 +1,7 @@
 import { readdir, unlink } from "node:fs/promises";
 import path from "node:path";
 import type { GuestBody, ReplyFinal, ReplyPart, WorkerStartV1 } from "@rakazo/adapter-kit";
-import { FRAME_CAPABILITY, sameWorker } from "@rakazo/adapter-kit";
+import { FRAME_CAPABILITY, sameWorker, WORKER_PROTOCOL_VERSION } from "@rakazo/adapter-kit";
 import type { FrameChannel } from "@rakazo/adapters/runtime-worker/wire";
 import {
   capabilityWorker,
@@ -14,7 +14,6 @@ import {
   convergeSkills,
   discoverVolumeSkills,
   reportVolumeSkill,
-  skillReadName,
 } from "@rakazo/adapters/volume-skills";
 import type { GuestHarness, HarnessHost, InformativeBody } from "./harness.js";
 import type { Outbox } from "./outbox.js";
@@ -28,8 +27,6 @@ export interface GuestOptions {
   channels: AsyncIterable<FrameChannel>;
   capability: string;
   harness: GuestHarness;
-  /** Where tools keep output too long for the model. */
-  spoolDir: string;
   /** Explicit VM home. Never infer the controller or test runner's home. */
   home: string;
   /** Prefix of every guest path the controller names. `/` in a VM. */
@@ -47,9 +44,8 @@ function deferred<T>() {
 }
 
 /**
- * Runs one attempt's harness against its controller. The guest holds no key and no secret. A
- * guest-placed tool runs here only after the controller granted its start, and its result counts
- * once the controller recorded it.
+ * Runs one attempt's harness against its controller. The guest holds no key and no secret. The
+ * harness runs its own tools; every Rakazo tool runs at the controller.
  */
 export async function runGuest(options: GuestOptions): Promise<GuestExit> {
   const worker = capabilityWorker(options.capability);
@@ -66,7 +62,7 @@ export async function runGuest(options: GuestOptions): Promise<GuestExit> {
       current = channel;
       await channel.send(
         encodeMessage({
-          version: 1,
+          version: WORKER_PROTOCOL_VERSION,
           kind: "worker.hello",
           worker,
           capability: options.capability,
@@ -125,7 +121,6 @@ async function runAttempt(
   const nativeOutput = outputRoot ? { outputRoot: rooted(outputRoot) } : {};
   const home = options.home;
   const declared = new Set(options.harness.declaration.capabilities);
-  const placement = new Map(run.tools.map((tool) => [tool.name, tool.where]));
   const announcements = new Map<string, ReturnType<typeof deferred<void>>>();
   const announcement = (callId: string) => {
     const existing = announcements.get(callId);
@@ -268,31 +263,8 @@ async function runAttempt(
       const reply = await send({ type: "tool.call", agent, callId, name, args }, (part) => {
         if (part.type === "subagent.start" && !helper) helper = startHelper(part);
       }).finally(() => helper?.cancel.abort());
-      if (reply.type === "tool.result") return { placement: "controller", output: reply.output };
-      if (reply.type !== "tool.grant") {
-        throw new Error(reply.type === "error" ? reply.message : `Unexpected reply ${reply.type}`);
-      }
-      const tool =
-        placement.get(name) === "guest" &&
-        options.harness.nativeTools.some((tool) => tool.name === name);
-      const output = tool
-        ? await options.harness.executeNativeTool(name, args, callId, {
-            cwd,
-            signal,
-            spoolDir: options.spoolDir,
-          })
-        : {
-            text: `${name} cannot run in this worker.`,
-            isError: true,
-            truncated: false,
-            totalBytes: 0,
-          };
-      await decide({ type: "tool.done", callId, output }, "tool.recorded");
-      if (name === "read" && !("isError" in output && output.isError)) {
-        const name = await skillReadName(cwd, args.path);
-        if (name) await decide({ type: "skills.used", name }, "recorded");
-      }
-      return { placement: "guest", output };
+      if (reply.type === "tool.result") return reply.output;
+      throw new Error(reply.type === "error" ? reply.message : `Unexpected reply ${reply.type}`);
     },
   };
 

@@ -24,7 +24,6 @@ import type { DoneBody, GuestHarness, HarnessHost } from "../harness.js";
 import { rakazoMcpTools } from "../rakazo-mcp.js";
 import { durableBashTool } from "./durable-bash.js";
 import { relayModelRuntime } from "./pi-session.js";
-import { piToolManifest } from "./pi-tools.js";
 import { rakazoMcpTransport } from "./rakazo-mcp.js";
 
 type SteeringMessage = Extract<ReplyFinal, { type: "steering" }>["messages"][number];
@@ -99,14 +98,10 @@ function rakazoExtension(
 
 /**
  * Pi with its own loop, prompt, tools, retries and compaction. The VM is the boundary: the file
- * and shell tools run here without a grant. Every model call goes through the controller's relay.
+ * and shell tools run here. Every model call goes through the controller's relay.
  */
 export const piNativeHarness: GuestHarness = {
   declaration: PI_NATIVE_HARNESS,
-  nativeTools: piToolManifest(),
-  async executeNativeTool() {
-    throw new Error("pi-native runs its own tools");
-  },
 
   async run({ run, cwd, skillsDir, outputRoot, agent = "root" }, host): Promise<DoneBody> {
     stopIfCancelled(host.signal);

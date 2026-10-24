@@ -7,7 +7,7 @@ import { WORKER_LIMITS } from "./limits.js";
 
 const MiB = 1024 * 1024;
 const ENVELOPE: Omit<WorkerStartV1, "run"> = {
-  version: 1,
+  version: 2,
   kind: "worker.start",
   worker: { runId: "r".repeat(256), attemptId: "a".repeat(256), fence: 1 },
   workspace: {

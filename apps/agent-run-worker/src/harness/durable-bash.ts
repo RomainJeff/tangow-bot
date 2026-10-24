@@ -14,7 +14,7 @@ export function durableBashTool(
   return {
     ...definition,
     execute: async (...args: Parameters<typeof definition.execute>) => {
-      const capture = await captureToolOutput(outputRoot, ".rakazo-bash");
+      const capture = await captureToolOutput(outputRoot);
       const local = createLocalBashOperations();
       let sdkBytes = 0;
       const tool = createBashToolDefinition(cwd, {

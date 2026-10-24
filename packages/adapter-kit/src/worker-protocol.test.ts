@@ -32,7 +32,7 @@ const run = {
   runRecap: true,
 };
 const start = {
-  version: 1,
+  version: 2,
   kind: "worker.start",
   worker,
   workspace: {
@@ -47,13 +47,13 @@ const start = {
 };
 
 const event = (body: unknown) => ({
-  version: 1,
+  version: 2,
   kind: "worker.event",
   worker,
   payload: { seq: 1, body },
 });
 const hello = {
-  version: 1,
+  version: 2,
   kind: "worker.hello",
   worker,
   capability: "rkw1.a.b",
@@ -69,11 +69,11 @@ const toolCall = {
 
 describe("parseControllerMessage", () => {
   it.each([
-    ["a v1 start message", start],
+    ["a start message", start],
     [
       "a streamed model event",
       {
-        version: 1,
+        version: 2,
         kind: "worker.reply",
         worker,
         payload: {
@@ -86,15 +86,6 @@ describe("parseControllerMessage", () => {
         },
       },
     ],
-    [
-      "a tool grant",
-      {
-        version: 1,
-        kind: "worker.reply",
-        worker,
-        payload: { re: 4, part: 0, body: { type: "tool.grant" } },
-      },
-    ],
   ])("accepts %s as sent", (_name, message) => {
     expect(parseControllerMessage(JSON.parse(JSON.stringify(message)))).toEqual({
       ok: true,
@@ -102,8 +93,8 @@ describe("parseControllerMessage", () => {
     });
   });
 
-  it("refuses an unknown protocol version", () => {
-    expect(parseControllerMessage({ version: 2, kind: "worker.cancel", worker })).toEqual({
+  it("refuses a message of another protocol version", () => {
+    expect(parseControllerMessage({ version: 1, kind: "worker.cancel", worker })).toEqual({
       ok: false,
       reason: "unsupported_version",
     });
@@ -167,7 +158,7 @@ describe("parseGuestMessage", () => {
     [
       "a status claiming to be active",
       {
-        version: 1,
+        version: 2,
         kind: "worker.status",
         worker,
         state: "ready",
@@ -206,8 +197,8 @@ describe("parseGuestMessage", () => {
     expect(parseGuestMessage(json)).toEqual({ ok: false, reason: "invalid" });
   });
 
-  it("refuses an event of an unknown protocol version", () => {
-    expect(parseGuestMessage({ ...event(toolCall), version: 2 })).toEqual({
+  it("refuses an event of another protocol version", () => {
+    expect(parseGuestMessage({ ...event(toolCall), version: 1 })).toEqual({
       ok: false,
       reason: "unsupported_version",
     });

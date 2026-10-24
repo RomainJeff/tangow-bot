@@ -3,13 +3,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from 
 import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type {
-  GuestBody,
-  GuestTool,
-  LocalToolOutput,
-  ReplyFinal,
-  WorkerStartV1,
-} from "@rakazo/adapter-kit";
+import type { GuestBody, GuestTool, ReplyFinal, WorkerStartV1 } from "@rakazo/adapter-kit";
 import type { FrameChannel } from "@rakazo/adapters/runtime-worker";
 import {
   createCapabilityKey,
@@ -40,9 +34,9 @@ async function* once(channel: FrameChannel) {
 }
 
 /**
- * Runs a harness (Pi native by default) in a real guest against a session inbox that grants every guest
- * tool and relays model calls to the emulator, unless `reply` answers a frame first. Returns what
- * the controller recorded and the frames it read.
+ * Runs a harness (Pi native by default) in a real guest against a session inbox that answers
+ * controller tools and relays model calls to the emulator, unless `reply` answers a frame first.
+ * Returns the frames it read and the controller tools called.
  */
 async function driveGuest(options: {
   steps: ModelEmulatorStep[];
@@ -50,7 +44,6 @@ async function driveGuest(options: {
   prompt: string;
   cwd: string;
   root?: string;
-  spoolDir: string;
   harness?: GuestHarness;
   reply?: (body: GuestBody) => ReplyFinal | undefined;
   cancel?: (body: GuestBody) => boolean;
@@ -60,7 +53,7 @@ async function driveGuest(options: {
   const key = createCapabilityKey();
   const pair = memoryChannelPair();
   const start: WorkerStartV1 = {
-    version: 1,
+    version: 2,
     kind: "worker.start",
     worker,
     workspace: {
@@ -79,11 +72,7 @@ async function driveGuest(options: {
       model: guestModelOf(server.model),
     },
   };
-  const guestTools = new Set(
-    options.tools.filter((tool) => tool.where === "guest").map((tool) => tool.name),
-  );
   const controllerCalls: string[] = [];
-  const recorded: LocalToolOutput[] = [];
   const frames: Array<{ type: string; bytes: number; body: GuestBody }> = [];
   const latencies: Array<{ re: number; firstEventMs: number }> = [];
   const inbox = createSessionInbox(worker, async (_seq, body, part) => {
@@ -102,14 +91,10 @@ async function driveGuest(options: {
         );
         return { type: "model.end" };
       case "tool.call":
-        if (guestTools.has(body.name)) return { type: "tool.grant" };
         controllerCalls.push(body.name);
         return { type: "tool.result", output: { controller: body.name } };
       case "steering.claim":
         return { type: "steering", messages: [] };
-      case "tool.done":
-        recorded.push(body.output);
-        return { type: "tool.recorded" };
       case "skills.index":
       case "skills.index.end":
       case "skills.collision":
@@ -137,7 +122,7 @@ async function driveGuest(options: {
       const body = read.message.payload.body;
       frames.push({ type: body.type, bytes: frame.byteLength, body });
       if (options.cancel?.(body))
-        await pair.controller.send(encodeMessage({ version: 1, kind: "worker.cancel", worker }));
+        await pair.controller.send(encodeMessage({ version: 2, kind: "worker.cancel", worker }));
       if (body.type === "model.latency") latencies.push(body);
       expect(inbox.accept(read.message)).toEqual({ ok: true });
     }
@@ -147,13 +132,12 @@ async function driveGuest(options: {
     channels: once(pair.guest),
     capability: mintCapability(key, worker, Date.now()),
     harness: options.harness ?? HARNESSES["pi-native"]!,
-    spoolDir: options.spoolDir,
     root: options.root,
     home: path.join(options.root ?? options.cwd, ".guest-home"),
   });
   await controller;
   server.assertComplete();
-  return { exit, recorded, frames, controllerCalls, latencies };
+  return { exit, frames, controllerCalls, latencies };
 }
 
 const bashTool: GuestTool = {
@@ -182,7 +166,6 @@ describe("the skills catalog in the pi-native prompt", () => {
       const { exit } = await driveGuest({
         cwd: "/workspace/bots/bot_guest",
         root,
-        spoolDir: path.join(root, "spool"),
         prompt: "Reply briefly.",
         tools: read
           ? [{ name: "read", description: "Read", inputSchema: { type: "object" }, where: "guest" }]
@@ -259,7 +242,6 @@ describe("run channel conformance of the pi-native harness", () => {
         harness,
         cwd: "/workspace/bots/bot_guest",
         root,
-        spoolDir: path.join(root, "spool"),
         prompt: "Finish.",
         tools: [],
         steps: [],
@@ -303,7 +285,6 @@ describe("run channel conformance of the pi-native harness", () => {
           },
           cwd: "/workspace/bots/bot_guest",
           root,
-          spoolDir: path.join(root, "spool"),
           prompt: "Finish.",
           tools: [],
           steps: [],
@@ -332,7 +313,6 @@ describe("run channel conformance of the pi-native harness", () => {
       harness: piNative,
       cwd: "/workspace/bots/bot_guest",
       root,
-      spoolDir: path.join(root, "spool"),
       prompt: "Write a note.",
       tools: [bashTool],
       steps: [
@@ -358,7 +338,7 @@ describe("run channel conformance of the pi-native harness", () => {
     });
 
     expect(exit).toBe("done");
-    const lifecycle = new Set(["tool", "tool.call", "tool.done", "transcript", "done"]);
+    const lifecycle = new Set(["tool", "tool.call", "transcript", "done"]);
     expect(frames.map((frame) => frame.type).filter((type) => lifecycle.has(type))).toEqual([
       "transcript",
       "transcript",
@@ -418,7 +398,6 @@ describe("run channel conformance of the pi-native harness", () => {
       harness: piNative,
       cwd: "/workspace/bots/bot_guest",
       root,
-      spoolDir: path.join(root, "spool"),
       prompt: "Reply briefly.",
       tools: [
         { name: "read", description: "Read", inputSchema: { type: "object" }, where: "guest" },
@@ -456,7 +435,6 @@ describe("run channel conformance of the pi-native harness", () => {
         harness: piNative,
         cwd: "/workspace/bots/bot_guest",
         root,
-        spoolDir: path.join(root, "spool"),
         prompt: "Reply briefly.",
         tools: [],
         steps: requests > 1 ? [{ expect() {}, response: { type: "text", text: "Done." } }] : [],

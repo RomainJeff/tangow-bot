@@ -14,18 +14,13 @@ function handGuest(attempts: Call[][]) {
   const seen: Array<{ prompt: string; replies: unknown[] }> = [];
   const harness: GuestHarness = {
     declaration: { name: "hand", capabilities: [] },
-    nativeTools: [],
-    executeNativeTool: async () => {
-      throw new Error("This harness has no native tools");
-    },
     async run({ run }, host) {
       const attempt = { prompt: run.prompt, replies: [] as unknown[] };
       seen.push(attempt);
       for (const [index, call] of (attempts[seen.length - 1] ?? []).entries()) {
         const callId = `call-${seen.length}-${index + 1}`;
         await host.emit({ type: "tool", name: call.name, args: call.args, executionId: callId });
-        const outcome = await host.callTool("root", call.name, call.args, callId);
-        attempt.replies.push(outcome.placement === "controller" ? outcome.output : outcome);
+        attempt.replies.push(await host.callTool("root", call.name, call.args, callId));
       }
       return { type: "done", text: "Done." };
     },
@@ -87,8 +82,7 @@ describe("pausing tools a worker harness leaves to the controller", () => {
           "subagent.opened",
         );
         await host.emit({ type: "tool", name: "ask_user", args: city, executionId: "question" });
-        const outcome = await host.callTool(helper.agent, "ask_user", city, "question");
-        reply = outcome.placement === "controller" ? outcome.output : outcome;
+        reply = await host.callTool(helper.agent, "ask_user", city, "question");
         await host.decide(
           {
             type: "subagent.finish",

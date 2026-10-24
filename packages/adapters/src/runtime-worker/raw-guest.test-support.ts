@@ -6,7 +6,7 @@ import type {
   ReplyBody,
   WorkerIdentity,
 } from "@rakazo/adapter-kit";
-import { ReplyPartSchema } from "@rakazo/adapter-kit";
+import { ReplyPartSchema, WORKER_PROTOCOL_VERSION } from "@rakazo/adapter-kit";
 import type { FrameChannel, LaunchedGuest } from "./index.js";
 import {
   capabilityWorker,
@@ -56,7 +56,7 @@ export function rawGuest(
     hello() {
       void channel.send(
         encodeMessage({
-          version: 1,
+          version: WORKER_PROTOCOL_VERSION,
           kind: "worker.hello",
           worker,
           capability,
@@ -67,7 +67,12 @@ export function rawGuest(
     },
     send(seq: number, body: GuestBody) {
       void channel.send(
-        encodeMessage({ version: 1, kind: "worker.event", worker, payload: { seq, body } }),
+        encodeMessage({
+          version: WORKER_PROTOCOL_VERSION,
+          kind: "worker.event",
+          worker,
+          payload: { seq, body },
+        }),
       );
     },
     /** Every reply body to `seq`, once one settles it or `count` arrived. */
@@ -106,7 +111,7 @@ export function manualLauncher(expectedHarness: HarnessDeclaration = HAND_WRITTE
         return {
           expectedHarness,
           start: {
-            version: 1,
+            version: WORKER_PROTOCOL_VERSION,
             kind: "worker.start",
             worker,
             workspace: { cwd: "/workspace", mounts: [] },
