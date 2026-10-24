@@ -2,6 +2,7 @@ import type {
   AgentRunRequest,
   AgentRuntimeEvent,
   GuestBody,
+  HarnessTranscriptEntry,
   SemanticMemoryRecallRequest,
   SessionLog,
 } from "@rakazo/adapter-kit";
@@ -1492,7 +1493,7 @@ describe("interactive executor sessions with durable history", () => {
     ]);
   });
 
-  it("logs a native harness's own calls among the controller's, in the order the attempt worked", async () => {
+  it("logs a native harness's own calls among the controller's as the attempt reports them", async () => {
     const c = await conversation();
     const secret = "hunter2-secret";
     await fixture({
@@ -1505,39 +1506,35 @@ describe("interactive executor sessions with durable history", () => {
         },
       },
       runtime: async function* (request) {
+        const reported = (entries: HarnessTranscriptEntry[]) =>
+          ({ type: "transcript", entries, unverifiedCalls: 0 }) as const;
+        yield reported([
+          { kind: "text", turn: 0, text: "Looking first." },
+          {
+            kind: "call",
+            turn: 0,
+            callId: "bash-1",
+            name: "bash",
+            args: { command: `grep ${secret} notes.md` },
+          },
+          { kind: "controller", turn: 0, name: "list_files" },
+        ]);
+        yield reported([
+          { kind: "result", callId: "bash-1", output: `notes.md: ${secret}`, isError: false },
+        ]);
         await request.executeTool!("list_files", { path: "/" }, "ls-1").catch(() => {});
-        yield {
-          type: "transcript",
-          entries: [
-            { kind: "text", turn: 0, text: "Looking first." },
-            {
-              kind: "call",
-              turn: 0,
-              callId: "bash-1",
-              name: "bash",
-              args: { command: `grep ${secret} notes.md` },
-              output: `notes.md: ${secret}`,
-              isError: false,
-            },
-            { kind: "controller", turn: 0, callId: "ls-1", name: "list_files" },
-            {
-              kind: "call",
-              turn: 1,
-              callId: "bash-2",
-              name: "bash",
-              args: { command: "false" },
-              output: "exit 1",
-              isError: true,
-            },
-            {
-              kind: "summary",
-              turn: 2,
-              summary: `Searched notes.md for ${secret}.`,
-              tokensBefore: 9000,
-            },
-          ],
-          unverifiedCalls: 0,
-        };
+        yield reported([
+          { kind: "call", turn: 1, callId: "bash-2", name: "bash", args: { command: "false" } },
+        ]);
+        yield reported([
+          { kind: "result", callId: "bash-2", output: "exit 1", isError: true },
+          {
+            kind: "summary",
+            turn: 2,
+            summary: `Searched notes.md for ${secret}.`,
+            tokensBefore: 9000,
+          },
+        ]);
         yield { type: "done", text: "Found it." };
       },
     }).request();
@@ -1616,15 +1613,8 @@ describe("interactive executor sessions with durable history", () => {
         yield {
           type: "transcript",
           entries: [
-            {
-              kind: "call",
-              turn: 0,
-              callId: "bash-1",
-              name: "bash",
-              args: { command: "ls" },
-              output: "late",
-              isError: false,
-            },
+            { kind: "call", turn: 0, callId: "bash-1", name: "bash", args: { command: "ls" } },
+            { kind: "result", callId: "bash-1", output: "late", isError: false },
           ],
           unverifiedCalls: 0,
         };

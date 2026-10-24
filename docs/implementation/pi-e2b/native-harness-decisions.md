@@ -73,14 +73,14 @@ The native Pi session loads its MCP and tool-search extensions explicitly. The
 `rakazo` server uses only the in-memory facade over the controller channel.
 Ordinary product tools are direct; connector catalog entries are deferred until
 Pi's `tool_search` loads them. Catalog aliases are normalized to their controller
-execution tool in the final transcript, whose results still come from the
+execution tool in the reported transcript, whose results still come from the
 controller journal. Harnesses without native search retain search/load/execute.
 
 Screen files use `.rakazo-screen-<random UUID>.png` directly at the private bot
 home root. The controller chooses the name; tool arguments cannot choose a screen
 write path. Hybrid images use exclusive file creation at the same root. Native
 `read` detects the image format from its bytes. Attempt teardown unlinks matching
-files and symlinks after the harness has finished, including its final transcript
+files and symlinks after the harness has finished, including its last transcript report
 and pause grace. It leaves directories and other home files alone. The private
 volume writer lease must remain held until the guest exits; N13 still verifies
 that the real mount root cannot be replaced.
@@ -95,4 +95,3 @@ Offline coverage uses actual Pi sessions and the MCP adapter for deferred
 discovery, controller invocation, approval resume after restart, connection
 revocation, secret redaction, image reads, and MCP-only runs without a computer
 lease. The guest lifecycle owns success, cancellation and failure cleanup tests.
-Canonical native/controller replay ordering remains the accepted D9 limitation.

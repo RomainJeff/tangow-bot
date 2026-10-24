@@ -13,6 +13,7 @@ import type {
   ConnectorCall,
   ConnectorProvider,
   ConnectorTool,
+  HarnessTranscriptEntry,
   JobPublisher,
   LocalToolExecutor,
   LocalToolOutput,
@@ -34,6 +35,7 @@ import {
   AgentRuntimeUnavailableError,
   historyCompactJob,
   linkPreviewJob,
+  PI_NATIVE_HARNESS,
   routineJobKey,
   routineWakeupJob,
   runContinueJob,
@@ -361,6 +363,7 @@ import {
   tryCompleteConnectionWithCode,
 } from "./run-secret.js";
 import { withRuntimeCleanup } from "./runtime-stream.js";
+import { nativeToolsForHarness } from "./runtime-worker/guest-input.js";
 import type { RunWorkers } from "./runtime-worker/runtime.js";
 import {
   cancelScheduleFromTool,
@@ -1646,6 +1649,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
         });
         if (setupFailures >= MAX_SETUP_ATTEMPTS) {
           throw new Error("Earlier run setup did not finish");
+        }
+        if (claimedRun.leaseFence > 0) {
+          await closeInterruptedNativeCalls(
+            deps,
+            { sessionId: run.sessionId as SessionId, runId, botId: run.botId },
+            { runId, fence },
+          );
         }
         // A follow_up's source message tells whether the user or another bot started it.
         const sourceMessage =
@@ -5215,7 +5225,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               data: { status: "running" },
             });
           }
-          let nativeText: ReturnType<typeof nativeTranscriptText> | undefined;
+          let nativeSteps: HarnessTranscriptEntry[] | undefined;
           const runtimeEvents = runtime.run(
             {
               botId: bot.id,
@@ -5364,13 +5374,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
           );
           for await (const event of withRuntimeCleanup(runtimeEvents, runAbortController)) {
             if (approvalPausePending) {
-              // A paused worker attempt concludes under the session's guard, and its harness's
-              // last transcript is still the run's: wait for it instead of cutting the guest off.
+              // A paused worker attempt concludes under the session's guard, which ends its
+              // events, and what its harness reports until then is still the run's.
               if (event.type === "transcript") {
                 await logHarnessTranscript(deps, runLog, { runId, fence }, event, runSecrets);
               }
-              const concluded = event.type === "transcript" || event.type === "done";
-              if (concluded || runtime.describe().id !== "worker") return;
+              if (event.type === "done" || runtime.describe().id !== "worker") return;
               continue;
             }
             if (!leaseValid) return;
@@ -5546,17 +5555,24 @@ export function createRunExecutor(deps: ExecutorDeps) {
               await recordRunUsage(deps, { ...run, botId: bot.id, runId }, event);
             } else if (event.type === "transcript") {
               await logHarnessTranscript(deps, runLog, { runId, fence }, event, runSecrets);
-              nativeText = nativeTranscriptText(event.entries, {
-                allowSilentEmpty: allowSilentEmpty || messagingChannelRun,
-                freeTextIsPrivate: freeTextIsPrivate && !messagingChannelRun,
-                runRecap: recapRequested,
-                emptyResponseText,
-              });
-              dropMidTurnNarration();
-              assembled = nativeText.text;
-              currentTextSegment = nativeText.text;
-              tryFlushPendingTools();
+              nativeSteps ??= [];
+              nativeSteps.push(...event.entries);
             } else if (event.type === "done") {
+              const nativeText =
+                nativeSteps === undefined
+                  ? undefined
+                  : nativeTranscriptText(nativeSteps, {
+                      allowSilentEmpty: allowSilentEmpty || messagingChannelRun,
+                      freeTextIsPrivate: freeTextIsPrivate && !messagingChannelRun,
+                      runRecap: recapRequested,
+                      emptyResponseText,
+                    });
+              if (nativeText) {
+                dropMidTurnNarration();
+                assembled = nativeText.text;
+                currentTextSegment = nativeText.text;
+                tryFlushPendingTools();
+              }
               const terminal = nativeText ?? event;
               runtimeNotice = terminal.runtimeNotice;
               if (recapRequested) {
@@ -6632,11 +6648,10 @@ function safeStringifyToolPayload(value: unknown, secrets: string[]): string {
 type RunLog = { sessionId: SessionId; runId: string; botId: string };
 
 /**
- * What a harness with its own loop did outside the controller, logged as its run's work: each
- * call of the harness's own tools with the result the harness reported, and each summary its
- * compaction wrote. The controller's own calls are already in the log as it answered them, so a
- * step is dated just before the next of them the transcript references: the run then reads in
- * the order the attempt worked. All of it lands while the attempt still owns its run, or none.
+ * What a harness with its own loop did outside the controller, logged as its run's work as the
+ * attempt reports it: each call of the harness's own tools, its result once reported, and each
+ * summary its compaction wrote. The controller's own calls are already in the log as it answered
+ * them. A report lands while the attempt still owns its run, or not at all.
  */
 async function logHarnessTranscript(
   deps: Pick<ExecutorDeps, "prisma" | "sessionLog">,
@@ -6651,7 +6666,60 @@ async function logHarnessTranscript(
       unverifiedCalls: event.unverifiedCalls,
     });
   }
-  if (!event.entries.some((entry) => entry.kind === "call" || entry.kind === "summary")) return;
+  const drafts = event.entries.flatMap((entry): SessionEntryDraft[] => {
+    switch (entry.kind) {
+      case "call":
+        return [
+          {
+            ...log,
+            type: "tool.call",
+            payload: {
+              callId: entry.callId,
+              name: entry.name,
+              input: describeToolPayload(entry.args, secrets),
+            },
+          },
+        ];
+      case "result":
+        return [
+          {
+            ...log,
+            type: "tool.result",
+            payload: {
+              callId: entry.callId,
+              output: describeToolPayload(entry.output, secrets),
+              isError: entry.isError,
+              artifactIds: [],
+            },
+          },
+        ];
+      case "summary":
+        return [
+          {
+            ...log,
+            type: "harness.summary",
+            payload: {
+              summary: redactSecrets(entry.summary, secrets),
+              tokensBefore: entry.tokensBefore,
+            },
+          },
+        ];
+      default:
+        return [];
+    }
+  });
+  if (drafts.length === 0) return;
+  await whileAttemptOwnsRun(deps, lease, async (tx) => {
+    for (const draft of drafts) await deps.sessionLog.append(tx, draft);
+  });
+}
+
+/** Runs `work` only while the attempt still owns its run, holding the run until it commits. */
+async function whileAttemptOwnsRun(
+  deps: Pick<ExecutorDeps, "prisma">,
+  lease: { runId: string; fence: number },
+  work: (tx: Prisma.TransactionClient) => Promise<void>,
+) {
   await deps.prisma.$transaction(
     async (tx) => {
       // Thread, then run, then session, the order cancellation and every append take them.
@@ -6659,80 +6727,61 @@ async function logHarnessTranscript(
         SELECT id FROM threads WHERE id = (SELECT "threadId" FROM runs WHERE id = ${lease.runId}) FOR UPDATE`;
       const [run] = await tx.$queryRaw<Array<{ leaseFence: number; status: string }>>`
         SELECT "leaseFence", status FROM runs WHERE id = ${lease.runId} FOR NO KEY UPDATE`;
-      if (!run || !attemptOwnsFence(lease, run)) return;
-      const logged = await tx.sessionEntry.findMany({
-        where: {
-          sessionId: log.sessionId,
-          runId: log.runId,
-          type: { in: ["tool.call", "tool.result"] },
-        },
-        orderBy: { seq: "asc" },
-        select: { type: true, payload: true, createdAt: true },
-      });
-      const calledAt = new Map<string, Date>();
-      const answeredAt = new Map<string, Date>();
-      for (const entry of logged) {
-        const { callId } = entry.payload as { callId: string };
-        (entry.type === "tool.call" ? calledAt : answeredAt).set(callId, entry.createdAt);
-      }
-      let previous: Date | undefined;
-      let next: Date | undefined;
-      const before: (Date | undefined)[] = [];
-      for (const entry of event.entries.toReversed()) {
-        if (entry.kind === "controller") next = calledAt.get(entry.callId) ?? next;
-        before.unshift(next);
-      }
-      for (const [index, entry] of event.entries.entries()) {
-        if (entry.kind === "text") continue;
-        if (entry.kind === "controller") {
-          previous = answeredAt.get(entry.callId) ?? calledAt.get(entry.callId) ?? previous;
-          continue;
-        }
-        const bound = before[index];
-        const at = bound
-          ? new Date(Math.max(previous?.getTime() ?? 0, bound.getTime() - 1)).toISOString()
-          : undefined;
-        const drafts: SessionEntryDraft[] =
-          entry.kind === "summary"
-            ? [
-                {
-                  ...log,
-                  ts: at,
-                  type: "harness.summary",
-                  payload: {
-                    summary: redactSecrets(entry.summary, secrets),
-                    tokensBefore: entry.tokensBefore,
-                  },
-                },
-              ]
-            : [
-                {
-                  ...log,
-                  ts: at,
-                  type: "tool.call",
-                  payload: {
-                    callId: entry.callId,
-                    name: entry.name,
-                    input: describeToolPayload(entry.args, secrets),
-                  },
-                },
-                {
-                  ...log,
-                  ts: at,
-                  type: "tool.result",
-                  payload: {
-                    callId: entry.callId,
-                    output: describeToolPayload(entry.output, secrets),
-                    isError: entry.isError,
-                    artifactIds: [],
-                  },
-                },
-              ];
-        for (const draft of drafts) await deps.sessionLog.append(tx, draft);
-      }
+      if (run && attemptOwnsFence(lease, run)) await work(tx);
     },
     { timeout: 60_000 },
   );
+}
+
+const HARNESS_NATIVE_TOOLS: ReadonlySet<string> = new Set(
+  nativeToolsForHarness(PI_NATIVE_HARNESS.name).map((tool) => tool.name),
+);
+
+/**
+ * A harness's own call whose attempt ended before it reported a result: the attempt died with it
+ * running, so nobody knows what it did. Before a later attempt reads the run's history, each one
+ * gets a result saying so, which is never a replay. The controller's own calls are left to the
+ * effect journal. A second pass finds every call answered and appends nothing.
+ */
+async function closeInterruptedNativeCalls(
+  deps: Pick<ExecutorDeps, "prisma" | "sessionLog">,
+  log: RunLog,
+  lease: { runId: string; fence: number },
+) {
+  await whileAttemptOwnsRun(deps, lease, async (tx) => {
+    const logged = await tx.sessionEntry.findMany({
+      where: {
+        sessionId: log.sessionId,
+        runId: log.runId,
+        type: { in: ["tool.call", "tool.result"] },
+      },
+      orderBy: { seq: "asc" },
+      select: { type: true, payload: true },
+    });
+    // A result answers the latest earlier call of its id still open, as the history reads it.
+    const open = new Map<string, string[]>();
+    for (const entry of logged) {
+      const { callId, name } = entry.payload as { callId: string; name: string };
+      const names = open.get(callId) ?? [];
+      if (entry.type === "tool.call") names.push(name);
+      else names.pop();
+      open.set(callId, names);
+    }
+    for (const [callId, names] of open) {
+      for (const name of names.filter((name) => HARNESS_NATIVE_TOOLS.has(name))) {
+        await deps.sessionLog.append(tx, {
+          ...log,
+          type: "tool.result",
+          payload: {
+            callId,
+            output: `The ${name} call was interrupted, so its outcome is unknown. It was not replayed; check the state before retrying.`,
+            isError: true,
+            artifactIds: [],
+          },
+        });
+      }
+    }
+  });
 }
 
 type ToolLogEntry =

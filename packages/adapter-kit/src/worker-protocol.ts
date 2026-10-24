@@ -293,9 +293,9 @@ export const GuestBodySchema = z.discriminatedUnion("type", [
   }),
   z.strictObject({ type: z.literal("failed"), message: z.string() }),
   /**
-   * A harness that runs its own loop reports what the attempt added to its native session, in its
-   * model-access dialect, once before `done`. The controller ingests it into canonical history; it
-   * never trusts the results the harness claims for controller tools.
+   * A harness that runs its own loop reports each message of its native session as it ends, in
+   * its model-access dialect, before acting on it. The controller ingests them into canonical
+   * history; it never trusts the results the harness claims for controller tools.
    */
   z.strictObject({
     type: z.literal("transcript"),
@@ -303,11 +303,6 @@ export const GuestBodySchema = z.discriminatedUnion("type", [
     agent: Id.optional(),
     dialect: ModelDialect,
     messages: z.array(z.looseObject({ role: z.string().min(1).max(64) })).max(4096),
-    /** The system prompt the harness says it sent. The controller traces the relayed one too. */
-    systemPrompt: z
-      .string()
-      .max(256 * 1024)
-      .optional(),
   }),
 ]);
 export type GuestBody = z.infer<typeof GuestBodySchema>;

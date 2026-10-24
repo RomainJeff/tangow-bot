@@ -43,77 +43,65 @@ describe("canonical history and a native Pi session", () => {
             : [],
       ),
     ).toEqual(["bash", "remember", "result:bash", "result:remember"]);
-    expect(
-      ingestPiAi([PROMPT, ...projected], {
-        ...tools,
-        answers: [{ callId: "controller-1", name: "remember", output: "Saved." }],
-        clean: (text) => text,
-      }).entries,
-    ).toEqual(history.map((turn) => ({ kind: "turn", turn })));
+    const ingest = ingestPiAi({
+      ...tools,
+      answered: new Map([["remember", 1]]),
+      clean: (text) => text,
+    });
+    expect(ingest([PROMPT, ...projected])).toEqual({
+      steps: [
+        { kind: "text", turn: 0, text: "Looking first." },
+        { kind: "call", turn: 0, callId: "call-ls", name: "bash", args: { command: "ls" } },
+        { kind: "controller", turn: 0, name: "remember" },
+        { kind: "result", callId: "call-ls", output: "notes.md", isError: false },
+        { kind: "text", turn: 1, text: "They are in notes.md." },
+      ],
+      unverifiedCalls: 0,
+    });
   });
 
-  it("keeps the controller's answer over the transcript's and counts calls it never answered", () => {
-    const transcript = [
-      PROMPT,
-      {
-        role: "assistant",
-        content: [
-          { type: "thinking", thinking: "Save it, then mail it." },
-          { type: "toolCall", id: "c1", name: "remember", arguments: { text: "x" } },
-          { type: "toolCall", id: "c2", name: "remember", arguments: { text: "y" } },
-          { type: "toolCall", id: "c3", name: "bash", arguments: { command: "cat notes.md" } },
-        ],
-      },
-      {
-        role: "toolResult",
-        toolCallId: "c1",
-        content: [{ type: "text", text: "Saved 40 facts." }],
-      },
-      { role: "toolResult", toolCallId: "c2", content: "Saved again." },
-      { role: "toolResult", toolCallId: "c3", content: [{ type: "text", text: "- milk" }] },
-      { role: "compactionSummary", summary: "Read the notes.", tokensBefore: 12000 },
-      { role: "bashExecution", command: "rm -rf /" },
-    ];
+  it("ingests a session as it reports it, never taking a controller result from it", () => {
+    const answered = new Map<string, number>();
+    const ingest = ingestPiAi({ ...tools, answered, clean: (text) => text.toUpperCase() });
 
     expect(
-      ingestPiAi(transcript, {
-        ...tools,
-        answers: [{ callId: "controller-1", name: "remember", output: "Saved." }],
-        clean: (text) => text.toUpperCase(),
-      }),
+      ingest([
+        PROMPT,
+        {
+          role: "assistant",
+          content: [
+            { type: "thinking", thinking: "Save it, then read it." },
+            { type: "toolCall", id: "c1", name: "remember", arguments: { text: "x" } },
+            { type: "toolCall", id: "c2", name: "remember", arguments: { text: "y" } },
+            { type: "toolCall", id: "c3", name: "bash", arguments: { command: "cat notes.md" } },
+          ],
+        },
+      ]),
     ).toEqual({
-      entries: [
-        {
-          kind: "turn",
-          turn: {
-            role: "assistant",
-            content: "",
-            parts: [
-              {
-                type: "toolCalls",
-                calls: [
-                  { id: "c1", name: "remember", args: { text: "x" }, output: "Saved." },
-                  { id: "c2", name: "remember", args: { text: "y" }, output: "" },
-                  { id: "c3", name: "bash", args: { command: "cat notes.md" }, output: "- MILK" },
-                ],
-              },
-            ],
-          },
-        },
-        { kind: "summary", summary: "READ THE NOTES.", tokensBefore: 12000 },
-      ],
       steps: [
-        { kind: "controller", turn: 0, callId: "controller-1", name: "remember" },
-        {
-          kind: "call",
-          turn: 0,
-          callId: "c3",
-          name: "bash",
-          args: { command: "cat notes.md" },
-          output: "- MILK",
-          isError: false,
-        },
+        { kind: "controller", turn: 0, name: "remember" },
+        { kind: "controller", turn: 0, name: "remember" },
+        { kind: "call", turn: 0, callId: "c3", name: "bash", args: { command: "cat notes.md" } },
+      ],
+      unverifiedCalls: 0,
+    });
+
+    answered.set("remember", 1);
+    expect(
+      ingest([
+        { role: "toolResult", toolCallId: "c1", content: [{ type: "text", text: "Saved 40." }] },
+        { role: "toolResult", toolCallId: "c2", content: "Saved again." },
+        { role: "toolResult", toolCallId: "c3", content: [{ type: "text", text: "- milk" }] },
+        { role: "toolResult", toolCallId: "c3", content: "a second claim" },
+        { role: "compactionSummary", summary: "Read the notes.", tokensBefore: 12000 },
+        { role: "bashExecution", command: "rm -rf /" },
+        { role: "assistant", content: [] },
+      ]),
+    ).toEqual({
+      steps: [
+        { kind: "result", callId: "c3", output: "- MILK", isError: false },
         { kind: "summary", turn: 1, summary: "READ THE NOTES.", tokensBefore: 12000 },
+        { kind: "text", turn: 1, text: "" },
       ],
       unverifiedCalls: 1,
     });

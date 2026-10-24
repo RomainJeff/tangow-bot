@@ -153,7 +153,7 @@ export function nativeTranscriptText(
     else streamed += stripModelControlTokens(messageText);
   };
   for (const entry of entries) {
-    if (entry.kind === "summary") continue;
+    if (entry.kind === "summary" || entry.kind === "result") continue;
     if (turn !== entry.turn) {
       flush();
       turn = entry.turn;

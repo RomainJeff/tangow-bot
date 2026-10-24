@@ -11,7 +11,7 @@ import {
   SessionManager,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
-import type { GuestImage, ReplyFinal } from "@rakazo/adapter-kit";
+import type { GuestBody, GuestImage, ReplyFinal } from "@rakazo/adapter-kit";
 import { PI_NATIVE_HARNESS } from "@rakazo/adapter-kit";
 import { guestRuntimeModel } from "@rakazo/adapters/pi-runtime";
 import {
@@ -28,6 +28,7 @@ import { piToolManifest } from "./pi-tools.js";
 import { rakazoMcpTransport } from "./rakazo-mcp.js";
 
 type SteeringMessage = Extract<ReplyFinal, { type: "steering" }>["messages"][number];
+type TranscriptMessage = Extract<GuestBody, { type: "transcript" }>["messages"][number];
 
 function stopIfCancelled(signal: AbortSignal) {
   if (signal.aborted) throw new Error("The run was cancelled");
@@ -121,6 +122,21 @@ export const piNativeHarness: GuestHarness = {
       projectTrusted: false,
     });
     let session: AgentSession | undefined;
+    let reportFailed: { error: unknown } | undefined;
+    let lastAssistant: { stopReason?: unknown; errorMessage?: unknown } | undefined;
+    // Each message is the controller's before the loop acts on it, so a call is logged before it runs.
+    const report = async (message: TranscriptMessage) => {
+      if (reportFailed || host.signal.aborted) return;
+      try {
+        await host.decide(
+          { type: "transcript", agent, dialect: "pi-ai", messages: [message] },
+          "recorded",
+        );
+      } catch (error) {
+        reportFailed = { error };
+        void session?.abort();
+      }
+    };
     try {
       const controllerTools = run.tools.filter((tool) => tool.where === "controller");
       const assignedNames = new Map<string, string>();
@@ -221,6 +237,28 @@ export const piNativeHarness: GuestHarness = {
               return { messages };
             });
           },
+          (pi) => {
+            pi.on("message_end", async (event) => {
+              const message = structuredClone(event.message);
+              if (message.role === "assistant") {
+                lastAssistant = message;
+                for (const block of message.content) {
+                  if (block.type === "toolCall")
+                    block.name = controllerNames.get(block.name) ?? block.name;
+                }
+              } else if (message.role === "toolResult") {
+                message.toolName = controllerNames.get(message.toolName) ?? message.toolName;
+              } else return;
+              await report(message as TranscriptMessage);
+            });
+            pi.on("session_compact", ({ compactionEntry }) =>
+              report({
+                role: "compactionSummary",
+                summary: compactionEntry.summary,
+                tokensBefore: compactionEntry.tokensBefore,
+              }),
+            );
+          },
           rakazoExtension(host, cwd, agent, (message) =>
             session?.agent.steer({
               role: "user",
@@ -259,28 +297,6 @@ export const piNativeHarness: GuestHarness = {
       }));
       const active = session;
 
-      // What the attempt adds, in order: the controller ingests it into canonical history.
-      const added: Array<{ role: string } & Record<string, unknown>> = [];
-      const unsubscribe = active.subscribe((event) => {
-        if (event.type === "message_end") {
-          const message = structuredClone(event.message);
-          if (message.role === "assistant") {
-            for (const block of message.content) {
-              if (block.type === "toolCall")
-                block.name = controllerNames.get(block.name) ?? block.name;
-            }
-          } else if (message.role === "toolResult") {
-            message.toolName = controllerNames.get(message.toolName) ?? message.toolName;
-          }
-          added.push(message as (typeof added)[number]);
-        } else if (event.type === "compaction_end" && event.result) {
-          added.push({
-            role: "compactionSummary",
-            summary: event.result.summary,
-            tokensBefore: event.result.tokensBefore,
-          });
-        }
-      });
       const abort = () => void active.abort();
       host.signal.addEventListener("abort", abort, { once: true });
       try {
@@ -294,23 +310,11 @@ export const piNativeHarness: GuestHarness = {
         });
       } finally {
         host.signal.removeEventListener("abort", abort);
-        unsubscribe();
-        if (!host.signal.aborted || added.length > 0)
-          await host.decide(
-            {
-              type: "transcript",
-              agent,
-              dialect: "pi-ai",
-              messages: added,
-              systemPrompt: active.systemPrompt,
-            },
-            "recorded",
-          );
       }
       stopIfCancelled(host.signal);
-      const last = added.findLast((message) => message.role === "assistant");
-      if (last?.stopReason === "error") {
-        throw new Error(String(last.errorMessage ?? "The model call failed"));
+      if (reportFailed) throw reportFailed.error;
+      if (lastAssistant?.stopReason === "error") {
+        throw new Error(String(lastAssistant.errorMessage ?? "The model call failed"));
       }
       return { type: "done", text: active.getLastAssistantText() ?? undefined };
     } finally {

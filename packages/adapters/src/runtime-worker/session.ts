@@ -294,7 +294,7 @@ export function createSession(
   /**
    * A harness with its own loop never launches helpers itself: the controller opens the helper,
    * projects its session and holds the parent's call until the helper closes or the run pauses.
-   * A pause settles the parent at once while the helper can still send its final transcript.
+   * A pause settles the parent at once while the helper can still report its transcript.
    */
   async function runHelper(
     body: Extract<GuestBody, { type: "tool.call" }>,
@@ -780,7 +780,6 @@ export function createSession(
         const helper = helperOf(agent);
         if (agent !== "root" && !helper) return refuse("invalid");
         const ingested = transcript.ingest(agent, body, launched!.expectedHarness.name);
-        if (!ingested) return refuse("invalid");
         if (!helper) {
           rootTranscriptAccepted = true;
           await events.push(ingested);
