@@ -2761,6 +2761,87 @@ describe("sendThreadMessage while a proposal card waits", () => {
     expect(tx.steeringMessage.create).not.toHaveBeenCalled();
   });
 
+  /** The same waiting run, its bot the one member of a group the reply is sent to. */
+  function groupSend(
+    tx: ReturnType<typeof proposalTx>,
+    draft?: { messageId: string; text: string },
+  ) {
+    tx.run.findMany.mockResolvedValue([
+      { id: "run-waiting", taskId: "task-1", botId: "bot-1", status: "waiting_input" },
+    ]);
+    tx.$queryRaw.mockResolvedValue([{ id: "group-1" }]);
+    const group = Object.assign(tx, {
+      chatGroup: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "group-1",
+          members: [{ bot: { id: "bot-1", name: "Alpha", color: null } }],
+        }),
+        update: vi.fn().mockResolvedValue({ id: "group-1" }),
+      },
+    });
+    return sendThreadMessage(
+      {
+        prisma: {
+          $queryRaw: vi.fn().mockResolvedValue([]),
+          $transaction: vi.fn(async (callback: (client: typeof group) => unknown) =>
+            callback(group),
+          ),
+        } as unknown as PrismaClient,
+        events: { notify: vi.fn().mockResolvedValue(undefined) } as never,
+        jobs: { enqueue: vi.fn().mockResolvedValue(undefined) } as never,
+      },
+      { spaceId: "workspace-1", userId: "user-1" } as Actor,
+      {
+        kind: "group",
+        groupId: "group-1",
+        groupName: "Group",
+        threadId: "thread-1",
+        members: [],
+        memberBotIds: ["bot-1"],
+      } satisfies ThreadTarget,
+      { text: "Make it shorter.", clientNonce: "nonce-group-draft", draft },
+    );
+  }
+
+  it("replaces a waiting draft in a group as in the bot's own thread", async () => {
+    const tx = proposalTx({ effect: mailDraft });
+    await expect(
+      groupSend(tx, { messageId: "card-msg", text: "Hello, edited." }),
+    ).resolves.toMatchObject({ runIds: ["run-waiting"] });
+    expect(tx.externalEffect.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "denied",
+          request: { recipient_email: "a@example.com", body: "Hello, edited." },
+        }),
+      }),
+    );
+    expect(tx.steeringMessage.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        botId: "bot-1",
+        runId: "run-waiting",
+        context: expect.stringContaining('"draft":{"body":"Hello, edited.","editedByUser":true}'),
+      }),
+    });
+  });
+
+  it("refuses a group reply a draft's text came with for a card that is gone", async () => {
+    const tx = proposalTx({ effect: mailDraft });
+    await expect(
+      groupSend(tx, { messageId: "entry-stale", text: "Hello, edited." }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(tx.externalEffect.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("still asks to answer a routine proposal first in a group", async () => {
+    const tx = proposalTx();
+    await expect(groupSend(tx)).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: "Answer the pending ask first.",
+    });
+    expect(tx.externalEffect.updateMany).not.toHaveBeenCalled();
+  });
+
   it("still asks to answer a Create bot card first", async () => {
     const tx = proposalTx({ kind: "spawn_bot" });
     await expect(send(tx)).rejects.toMatchObject({

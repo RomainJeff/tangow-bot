@@ -1487,6 +1487,8 @@ export interface DismissProposalWithTextInput {
   userId: string;
   /** A mail draft's text as the user left it on the card they typed over, named by its entry. */
   draft?: { messageId: string; text: string };
+  /** Put away only a mail draft, as in a group, where other approval cards wait for a tap. */
+  draftsOnly?: true;
 }
 
 /**
@@ -1533,7 +1535,9 @@ export async function dismissProposalWithTextInTransaction(
   });
   if (!effect) return { outcome: "keep" };
   const draft = readDraft(effect.status, effect.draft);
-  if (!draft && !DISMISSABLE_EFFECT_KINDS.has(effect.kind)) return { outcome: "keep" };
+  if (!draft && (input.draftsOnly || !DISMISSABLE_EFFECT_KINDS.has(effect.kind))) {
+    return { outcome: "keep" };
+  }
   // A tap answered the card first: the reply steers its run, and a draft's text is moot.
   if (!waiting) {
     return STEERABLE_AFTER_ANSWER.has(run.status)
