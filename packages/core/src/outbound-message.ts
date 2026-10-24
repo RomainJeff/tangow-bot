@@ -48,6 +48,11 @@ const FIELD_ROLES: Record<string, FieldRole> = {
   extrarecipients: "to",
   toemail: "to",
   torecipients: "to",
+  toaddress: "to",
+  toaddresses: "to",
+  recipientaddress: "to",
+  sendto: "to",
+  emailaddress: "to",
   cc: "cc",
   ccemails: "cc",
   ccrecipients: "cc",
@@ -90,7 +95,7 @@ const INHERITED_ROLES = new Set<FieldRole | undefined>([
   "attachment",
   "inert",
 ]);
-const SEND_VERBS = new Set(["send", "reply", "forward"]);
+const SEND_VERBS = new Set(["send", "sendmail", "sendemail", "reply", "forward"]);
 const ADDRESS = /^[^\s@<>"',;:]+@[^\s@<>"',;:]+\.[^\s@<>"',;:]+$/;
 const ADDRESS_INSIDE = /[^\s@<>"',;:]+@[^\s@<>"',;:]+\.[^\s@<>"',;:]+/;
 
