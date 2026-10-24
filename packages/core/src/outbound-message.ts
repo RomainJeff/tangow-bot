@@ -74,8 +74,11 @@ const FIELD_ROLES: Record<string, FieldRole> = {
   attachments: "attachment",
   file: "attachment",
   files: "attachment",
+  attachmentid: "attachment",
+  attachmentids: "attachment",
   threadid: "inert",
   messageid: "inert",
+  savetosentitems: "inert",
   thought: "inert",
 };
 
@@ -178,6 +181,9 @@ function readValue(value: unknown, role: FieldRole | undefined, reading: Reading
     );
   }
   if (typeof value === "string" && value.trim()) readString(value, role, reading);
+  if ((typeof value === "boolean" || typeof value === "number") && role !== "inert") {
+    reading.unexplained = true;
+  }
   return value;
 }
 

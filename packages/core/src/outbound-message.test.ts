@@ -154,6 +154,31 @@ describe("readOutboundCall", () => {
       { to: "a@example.com", body: "x".repeat(20_001) },
     ],
     [
+      "a reply to everyone the card does not show",
+      "OUTLOOK_REPLY_EMAIL",
+      { message_id: "m1", to: "a@example.com", body: "Ok", reply_all: true },
+    ],
+    [
+      "a reply-all switched off",
+      "OUTLOOK_REPLY_EMAIL",
+      { message_id: "m1", to: "a@example.com", body: "Ok", replyAll: false },
+    ],
+    [
+      "attachment ids",
+      "OUTLOOK_SEND_EMAIL",
+      { to: "a@example.com", body: "Hi", attachment_ids: [1, 2] },
+    ],
+    [
+      "a numeric attachment id",
+      "OUTLOOK_SEND_EMAIL",
+      { to: "a@example.com", body: "Hi", attachment_id: 42 },
+    ],
+    [
+      "a number under a recipient field",
+      "GMAIL_SEND_EMAIL",
+      { to: "a@example.com", cc: 5, body: "Hi" },
+    ],
+    [
       "a recipient that is not an address on a mail connector",
       "outlook_send",
       { to: "Marie", body: "Hi" },
@@ -196,8 +221,9 @@ describe("readOutboundCall", () => {
     );
     const value = fc.letrec((tie) => ({
       leaf: fc.oneof(
-        fc.constantFrom("a@example.com", "Marie <m@example.com>", "Hello", "", true, null),
+        fc.constantFrom("a@example.com", "Marie <m@example.com>", "Hello", "", true, false, null),
         fc.string(),
+        fc.integer(),
       ),
       node: fc.oneof(
         { depthSize: "small" },
@@ -216,6 +242,9 @@ describe("readOutboundCall", () => {
           result.draft.subject,
           ...result.draft.recipients.map((recipient) => recipient.address),
         ];
+        for (const path of flagPaths(args)) {
+          expect(path.some((key) => /^(is_html|thread_id)$/.test(key))).toBe(true);
+        }
         for (const [path, leaf] of stringLeaves(args)) {
           if (!leaf.trim() || path.includes("thread_id")) continue;
           expect(shown).toContain(
@@ -240,6 +269,15 @@ function stringLeaves(value: unknown, path: string[] = []): Array<[string[], str
   if (Array.isArray(value)) return value.flatMap((item) => stringLeaves(item, path));
   if (value && typeof value === "object") {
     return Object.entries(value).flatMap(([key, child]) => stringLeaves(child, [...path, key]));
+  }
+  return [];
+}
+
+function flagPaths(value: unknown, path: string[] = []): string[][] {
+  if (typeof value === "boolean" || typeof value === "number") return [path];
+  if (Array.isArray(value)) return value.flatMap((item) => flagPaths(item, path));
+  if (value && typeof value === "object") {
+    return Object.entries(value).flatMap(([key, child]) => flagPaths(child, [...path, key]));
   }
   return [];
 }
