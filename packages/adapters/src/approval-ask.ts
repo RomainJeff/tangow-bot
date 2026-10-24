@@ -13,7 +13,7 @@ const MAX_APPROVAL_DETAIL_LENGTH = 4_000;
 const MAX_APPROVAL_VALUE_LENGTH = 1_000;
 const LONG_APPROVAL_VALUE_LENGTH = 500;
 // Continuation lines are indented so a line written inside a value cannot pass for a field.
-const LINE_BREAKS = /\r\n|[\n\r\u2028\u2029]/g;
+const LINE_BREAKS = /\r\n|[\n\v\f\r\u0085\u2028\u2029]/g;
 
 export function buildApprovalAskBlock(
   effectId: string,
@@ -98,12 +98,13 @@ function redactDraft(draft: AskDraft, secrets: string[]): AskDraft {
 }
 
 function draftDetail(draft: AskDraft): string {
-  const lines = (["to", "cc", "bcc"] as const).flatMap((role) => {
+  const lines = draft.app.account ? [`from: ${draft.app.account}`] : [];
+  for (const role of ["to", "cc", "bcc"] as const) {
     const addresses = draft.recipients.filter((recipient) => recipient.role === role);
-    return addresses.length
-      ? [`${role}: ${addresses.map((recipient) => recipient.address).join(", ")}`]
-      : [];
-  });
+    if (addresses.length) {
+      lines.push(`${role}: ${addresses.map((recipient) => recipient.address).join(", ")}`);
+    }
+  }
   if (draft.subject) lines.push(`subject: ${draft.subject.replace(LINE_BREAKS, "\n  ")}`);
   lines.push("body:", `  ${draft.body.replace(LINE_BREAKS, "\n  ")}`);
   return lines.join("\n");
