@@ -129,6 +129,22 @@ export function summarize(threads: ThreadRecord[], models: MeasuredModel[]) {
         .filter((thread) => thread.scenario === "chain")
         .flatMap((thread) => thread.turns.slice(1));
       const turns = own.flatMap((thread) => thread.turns);
+      // Cache read up to the shared base is reuse across threads; the rest is the thread's own.
+      const reuse = { sharedBase: 0, perThread: 0, firstRequestsOverBase: 0, firstRequests: 0 };
+      for (const thread of own) {
+        const first = thread.turns[0]?.requests[0];
+        if (!thread.sharedBase || !first?.inputTokens) continue;
+        const base = Math.round(
+          (first.inputTokens * thread.sharedBase.sharedChars) / thread.sharedBase.bodyChars,
+        );
+        reuse.firstRequests += 1;
+        if ((first.cacheReadTokens ?? 0) > base * 1.1 + 128) reuse.firstRequestsOverBase += 1;
+        for (const request of thread.turns.flatMap((turn) => turn.requests)) {
+          const read = request.cacheReadTokens ?? 0;
+          reuse.sharedBase += Math.min(read, base);
+          reuse.perThread += read - Math.min(read, base);
+        }
+      }
       return [
         model.id,
         {
@@ -155,6 +171,7 @@ export function summarize(threads: ThreadRecord[], models: MeasuredModel[]) {
                 ),
               ]),
           ),
+          cacheReadReuse: reuse,
           byScenario,
           projectionUsd: totals.projectionUsd,
           persistentUsd: totals.persistentUsd,

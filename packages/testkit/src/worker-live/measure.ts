@@ -80,6 +80,11 @@ export type ThreadRecord = {
   /** Why the thread stopped before its last turn. */
   error?: string;
   rateLimitRetries?: number;
+  /**
+   * The thread's first provider request body against those of the model's earlier threads: the
+   * longest prefix it shares with one of them, its length and where its nonce starts, in characters.
+   */
+  sharedBase?: { sharedChars: number; bodyChars: number; nonceAt: number };
   left?: { sandboxes: number; volumes: number };
 };
 
@@ -268,6 +273,17 @@ export async function measureTokens(options: {
     }),
   );
   const lastByModel = new Map<string, number>();
+  // The controller sends every provider request, so its first body per thread shows which bytes
+  // threads share; the tool catalog's nonce names the thread.
+  const firstBodies = new Map<string, string>();
+  const earlierBodies = new Map<string, string[]>();
+  const providerFetch = globalThis.fetch;
+  globalThis.fetch = (input, init) => {
+    const body = typeof init?.body === "string" ? init.body : undefined;
+    const nonce = body && /Notebook ([0-9a-f]{8})/.exec(body)?.[1];
+    if (nonce && !firstBodies.has(nonce)) firstBodies.set(nonce, body);
+    return providerFetch(input, init);
+  };
   const threads: ThreadRecord[] = [];
   try {
     const measure = async (scenario: ScenarioId, model: MeasuredModel, trial: number) => {
@@ -318,6 +334,7 @@ export async function measureTokens(options: {
     }
   } finally {
     installLogger(previousLogger);
+    globalThis.fetch = providerFetch;
   }
   return threads;
 
@@ -443,6 +460,23 @@ export async function measureTokens(options: {
       await run.close();
       const left = await options.cleanup?.();
       if (left) record.left = left;
+    }
+    const body = firstBodies.get(nonce);
+    if (body) {
+      firstBodies.delete(nonce);
+      const earlier = earlierBodies.get(model.id) ?? [];
+      const shared = (other: string) => {
+        let index = 0;
+        while (index < other.length && other[index] === body[index]) index++;
+        return index;
+      };
+      if (earlier.length > 0)
+        record.sharedBase = {
+          sharedChars: Math.max(...earlier.map(shared)),
+          bodyChars: body.length,
+          nonceAt: body.indexOf(nonce),
+        };
+      earlierBodies.set(model.id, [...earlier, body]);
     }
     return record;
   }

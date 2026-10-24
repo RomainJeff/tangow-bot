@@ -96,6 +96,11 @@ describe("token and cache measurements", () => {
       expect(turn.appends.every((append) => append.queries > 0)).toBe(true);
     }
 
+    for (const thread of threads.slice(1)) {
+      expect(thread.sharedBase!.sharedChars).toBeGreaterThan(0);
+      expect(thread.sharedBase!.sharedChars).toBeLessThan(thread.sharedBase!.nonceAt);
+    }
+
     const summary = summarize(threads, models)[models[0]!.id]!;
     expect(summary).toMatchObject({
       observedCacheMode: "automatic",
