@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { ComposioEmulator, composioEntityId, PostgresSessionLog } from "@rakazo/adapters";
 import type { SessionEntry, SessionId, ThreadEntry } from "@rakazo/contracts";
-import { EntrySeq, SessionId as SessionIdSchema } from "@rakazo/contracts";
+import { askDraftState, EntrySeq, SessionId as SessionIdSchema } from "@rakazo/contracts";
 import { projectThreadItems } from "@rakazo/core";
 import { describe, expect, it } from "vitest";
 import type { createApp } from "../../../apps/api/src/app.ts";
@@ -936,6 +936,60 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
         { composio },
       );
     }, 30_000);
+
+    it("is replaced by what the user writes, the bot reading their edit and nothing leaving", async () => {
+      const composio = new ComposioEmulator();
+      await journey(
+        [
+          proposeMail,
+          {
+            expect(request) {
+              const seen = JSON.stringify(request.messages);
+              expect(seen).toContain("The user wrote to you instead of sending this draft");
+              expect(seen).toContain("Edited by me.");
+              expect(seen).toContain("Make it shorter.");
+            },
+            response: reply("Here is a shorter one."),
+          },
+          DONE,
+        ],
+        async (fixture) => {
+          await connectGmail(composio, fixture);
+          const sent = await fixture.send("Mail them hello.");
+          await sent.settled("waiting_input");
+          const card = await latestCard(fixture.prisma, sent.runId);
+          await expect(
+            fixture.send("Make it shorter.", {
+              draft: { messageId: "entry_stale", text: "Edited by me." },
+            }),
+          ).rejects.toThrow("threads/send: 409");
+          await fixture.send("Make it shorter.", {
+            draft: { messageId: card.id, text: "Edited by me." },
+          });
+          await sent.settled("completed");
+
+          expect(composio.executions).toEqual([]);
+          const effect = await fixture.prisma.externalEffect.findFirstOrThrow({
+            where: { runId: sent.runId, kind: "GMAIL_SEND_EMAIL" },
+          });
+          expect(effect).toMatchObject({
+            status: "denied",
+            draft: { state: "replaced", proposed: "Draft from the bot." },
+          });
+          const thread = await rpc<{ entries: ThreadEntry[] }>(
+            fixture.app,
+            fixture.cookie,
+            "threads/get",
+            { botId: fixture.bot.id },
+          );
+          const cards = projectThreadItems(thread.entries).flatMap((item) =>
+            item.kind === "effect" && item.card ? [askDraftState(item.card)] : [],
+          );
+          expect(cards).toEqual(["replaced"]);
+        },
+        { composio },
+      );
+    }, 30_000);
   });
 
   it("closes a helper as cancelled by whoever stopped its parent", async () => {
@@ -1625,7 +1679,12 @@ type JourneyFixture = {
   log: PostgresSessionLog;
   send: (
     text: string,
-    options?: { replyToMessageId?: string; replyQuote?: string; clientNonce?: string },
+    options?: {
+      replyToMessageId?: string;
+      replyQuote?: string;
+      clientNonce?: string;
+      draft?: { messageId: string; text: string };
+    },
   ) => Promise<{
     runId: string;
     sessionId: SessionId;
