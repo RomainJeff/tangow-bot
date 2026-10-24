@@ -1,5 +1,5 @@
 import type { Request, Route } from "@playwright/test";
-import { activeBotId, captureScreenshot, completeOnboarding, signup } from "./helpers";
+import { activeBotId, captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
 import { expect, type Page, type TestInfo, test } from "./test";
 import { at, type EntryDraft, runStarted, showThread } from "./thread-log";
 
@@ -286,3 +286,35 @@ for (const width of [1440, 390]) {
     ).toBeVisible();
   });
 }
+
+test("a discard still reaches its own thread when the person moves to another one within Undo", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signup(page, `outbound-draft-move-${Date.now()}@rakazo.test`, "password12", "Ana Lima");
+  await completeOnboarding(page);
+  const botId = activeBotId(page);
+  const other = await rpc<{ id: string }>(page, "bots/create", {
+    name: "Scout",
+    title: "",
+    description: "",
+    notifyOnFinish: true,
+    computerMode: "team",
+  });
+  const answered = await answerRpc(page, "answer", () => ({ ok: true }));
+  await showThread(page, waitingDraft(botId), { run: null });
+  const draftCard = page.getByTestId("draft-card");
+  await draftCard.getByRole("button", { name: "Discard", exact: true }).click();
+  await expect(draftCard).toContainText("Discarded · Undo");
+
+  await page.getByText("Scout", { exact: true }).filter({ visible: true }).first().click();
+  await page.waitForURL(new RegExp(`/app/${other.id}$`));
+  await expect
+    .poll(() => answered.body)
+    .toMatchObject({
+      botId,
+      runId: RUN,
+      messageId: "draft-card",
+      answer: "deny",
+    });
+});

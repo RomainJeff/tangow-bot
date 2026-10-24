@@ -35,8 +35,10 @@ export function messageIdOf(view: ThreadView, message: MessageItem): string | un
   return view.rows.find((row) => row.item.id === message.id)?.messageId;
 }
 
-/** The card the thread waits on, and where its answer goes: the entry that asked it last. */
-export function waitingAsk(view: ThreadView): { block: AskBlock; target: CardAnswerTarget } | null {
+/** The card the thread waits on, and the run and entry its answer goes to: the one that asked last. */
+export function waitingAsk(
+  view: ThreadView,
+): { block: AskBlock; target: Omit<CardAnswerTarget, "thread"> } | null {
   const waiting = view.waiting;
   if (!waiting) return null;
   const item = view.rows.find((row) => row.item.id === waiting.itemId)?.item;
@@ -106,18 +108,21 @@ export function useThreadView(snapshot: ThreadState | null, roster: Roster) {
         .map((message) => copyableMessageText(message)),
     [messageItems],
   );
-  const callThread = useMemo<CallThread>(
-    () => ({
-      messages: messageItems,
-      running: isWorking(activeSnapshot?.run, view),
-      ask: waitingAsk(view),
-    }),
-    [view, messageItems, activeSnapshot?.run],
-  );
   const transcriptArtifactTarget = useMemo<ArtifactTarget>(
     () => (inGroup ? { groupId: groupId ?? "" } : { botId: active?.id ?? "" }),
     [active?.id, groupId, inGroup],
   );
+  const callThread = useMemo<CallThread>(() => {
+    const ask = waitingAsk(view);
+    return {
+      messages: messageItems,
+      running: isWorking(activeSnapshot?.run, view),
+      ask: ask && {
+        block: ask.block,
+        target: { thread: transcriptArtifactTarget, ...ask.target },
+      },
+    };
+  }, [view, messageItems, activeSnapshot?.run, transcriptArtifactTarget]);
   const transcriptMembers = activeSnapshot?.members ?? activeGroup?.members;
   const resolveTranscriptBot = useCallback(
     (botId: string) => {

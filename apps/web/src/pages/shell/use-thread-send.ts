@@ -88,11 +88,11 @@ export function useThreadSend({
 
   const answerCard = useCallback(
     async (target: CardAnswerTarget, text: string, edits?: CardEdits) => {
-      const botId = activeBotId.current;
-      const groupId = activeGroupId.current;
-      if (!botId && !groupId) return;
+      const { thread } = target;
+      const groupId = "groupId" in thread ? thread.groupId : undefined;
+      const botId = "botId" in thread ? thread.botId : undefined;
       await rpc.threads.answer({
-        ...(groupId ? { groupId } : { botId: botId! }),
+        ...thread,
         runId: target.runId,
         messageId: target.messageId,
         answer: text,
