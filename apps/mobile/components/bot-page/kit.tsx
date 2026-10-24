@@ -23,10 +23,12 @@ import {
 import { mobileTokens, resolveMobileAppearance } from "../../lib/appearance";
 import { dateLocaleForUi, useI18n } from "../../lib/i18n";
 import { useMobileTokens, useResolvedAppearance, useThemedStyles } from "../../lib/native";
+import type { MenuAction } from "../../lib/native-menu";
 import { claimSaveAnnouncement } from "../../lib/save-announce";
 import type { ReadState } from "../../lib/shared-read";
 import { shadowsForAppearance } from "../../lib/theme";
 import { nativeTextStyle } from "../../lib/typography";
+import { NativeMenu } from "../native-menu";
 import { NativeSymbol } from "../native-symbol";
 
 /** A labelled group of rows on one surface, hairlines inset from the leading edge; no surface without rows. */
@@ -116,6 +118,7 @@ export function Row({
   leading,
   disabled,
   onPress,
+  menu,
   accessibilityLabel,
 }: {
   label: string;
@@ -131,6 +134,8 @@ export function Row({
   leading?: ReactNode;
   disabled?: boolean;
   onPress?: () => void;
+  /** Tapping the row opens this menu instead; a row with a menu has no control or meta. */
+  menu?: { title?: string; actions: MenuAction[] };
   accessibilityLabel?: string;
 }) {
   const styles = useThemedStyles(createKitStyles);
@@ -177,6 +182,18 @@ export function Row({
       ) : null}
     </>
   );
+  if (menu) {
+    return (
+      <NativeMenu
+        {...menu}
+        disabled={disabled}
+        accessibilityLabel={accessibilityLabel}
+        style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+      >
+        {body(null)}
+      </NativeMenu>
+    );
+  }
   if (!onPress) {
     return (
       <View style={styles.row}>

@@ -69,12 +69,10 @@ import type { ReactNode } from "react";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   AccessibilityInfo,
-  ActionSheetIOS,
   ActivityIndicator,
   Alert,
   AppState,
   FlatList,
-  findNodeHandle,
   Modal,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -129,6 +127,7 @@ import {
 import type { MessageSheetAction } from "../components/message-actions-sheet";
 import { MessageActionsSheet } from "../components/message-actions-sheet";
 import { MessageRow } from "../components/message-row";
+import { NativeMenu } from "../components/native-menu";
 import { NativeSymbol } from "../components/native-symbol";
 import { PreviewSheet } from "../components/preview-sheet";
 import { QuestionCard } from "../components/question-card";
@@ -204,6 +203,7 @@ import {
   visibleMessageBlocks,
 } from "../lib/message-presentation";
 import { native, useMobileTokens, useResolvedAppearance } from "../lib/native";
+import type { MenuAction } from "../lib/native-menu";
 import {
   type PickedAttachment,
   pickDocuments,
@@ -492,11 +492,9 @@ function Thread() {
   const [selectedMentions, setSelectedMentions] = useState<ComposerMention[]>([]);
   const [selectedSkill, setSelectedSkill] = useState<AgentSkillCatalogEntry | null>(null);
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
-  // the single source of truth for the + bubble's icon/label and the
-  // attach sheet's open state — closed by `presentAttachSheet` on every path
+  // Android only: the attach dialog's open state, closed by `presentAttachSheet` on every path
   // out, and as a safety net below when the app returns to the foreground.
   const [attachSheetOpen, setAttachSheetOpen] = useState(false);
-  const attachBubbleRef = useRef<View>(null);
   const textInputRef = useRef<TextInput>(null);
   const [replyTarget, setReplyTarget] = useState<ReplyTarget | null>(null);
   const [rewindTarget, setRewindTarget] = useState<MobileMessage | null>(null);
@@ -779,13 +777,56 @@ function Thread() {
     [snap?.members],
   );
 
-  // `showBotActions` closes over `botActions` (and `name`), which are rebuilt
-  // every render; keeping only this ref out of the header effect's deps means
-  // a long press always reads the latest bot-actions sheet without the
-  // effect re-running (and reassigning `navigation.setOptions`) on renders
-  // that don't otherwise change the header.
-  const showBotActionsRef = useRef(showBotActions);
-  showBotActionsRef.current = showBotActions;
+  const botActions: MenuAction[] = [
+    {
+      label: t("Bot settings"),
+      onPress: () =>
+        router.push({
+          pathname: "/bot",
+          params: { botId: botId ?? "", tab: "settings" },
+        }),
+    },
+    {
+      label: t("Open computer"),
+      onPress: () =>
+        router.push({
+          pathname: "/computer",
+          params: { botId: botId ?? "", name: displayName ?? t("Bot") },
+        }),
+    },
+    {
+      label: t("Clear conversation"),
+      destructive: true,
+      onPress: () => confirmClearConversation(clearThread),
+    },
+    {
+      label: t("Archive"),
+      onPress: () => {
+        if (botId) archiveBot(botId, leaveBot);
+      },
+    },
+    {
+      label: t("Delete…"),
+      destructive: true,
+      onPress: () => confirmDeleteBot({ id: botId ?? "", name: displayName || t("Bot") }, leaveBot),
+    },
+  ];
+
+  // `botActions` is rebuilt every render; the header menu keeps stable labels and reads the
+  // latest handlers through this ref, so the header effect does not re-run on every render.
+  const botActionsRef = useRef(botActions);
+  botActionsRef.current = botActions;
+  const botMenuActions = useMemo(
+    () =>
+      botActions.map(
+        (action, index): MenuAction => ({
+          label: action.label,
+          destructive: action.destructive,
+          onPress: () => botActionsRef.current[index]?.onPress(),
+        }),
+      ),
+    [t],
+  );
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -794,23 +835,10 @@ function Thread() {
       // Under Reduce Transparency the bar stays opaque: iOS hides a thread laid under a transparent one.
       headerTransparent: barTransparent,
       headerStyle: { backgroundColor: barTransparent ? "transparent" : tokens.background },
-      // Bot actions (bot settings, open computer, clear, archive, delete) live
-      // on a long press; a short press opens the bot's page.
-      headerTitle: () => (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={displayName || t("Thread")}
-          disabled={inGroup || !botId}
-          onPress={() => {
-            if (!botId || inGroup) return;
-            router.push({ pathname: "/bot", params: { botId } });
-          }}
-          onLongPress={!inGroup && botId ? () => showBotActionsRef.current() : undefined}
-          style={{
-            alignItems: "center",
-            maxWidth: 240,
-          }}
-        >
+      // Bot actions (bot settings, open computer, clear, archive, delete) live in a menu
+      // opened by a long press; a short press opens the bot's page.
+      headerTitle: () => {
+        const title = (
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
             {!inGroup && currentBot ? (
               <BotAvatar
@@ -840,8 +868,29 @@ function Thread() {
               {displayName || t("Thread")}
             </Text>
           </View>
-        </Pressable>
-      ),
+        );
+        const titleStyle = { alignItems: "center", maxWidth: 240 } as const;
+        // A group has no bot actions: a plain title, so iOS never draws it as a disabled control.
+        if (inGroup || !botId) {
+          return (
+            <View accessible accessibilityLabel={displayName || t("Thread")} style={titleStyle}>
+              {title}
+            </View>
+          );
+        }
+        return (
+          <NativeMenu
+            compact
+            accessibilityLabel={displayName || t("Thread")}
+            actions={botMenuActions}
+            onPrimaryAction={() => router.push({ pathname: "/bot", params: { botId } })}
+            onAndroidOpen={() => setBotActionsOpen(true)}
+            style={titleStyle}
+          >
+            {title}
+          </NativeMenu>
+        );
+      },
       headerRight: () =>
         inGroup ? (
           <Pressable
@@ -891,6 +940,7 @@ function Thread() {
     groupId,
     groupMemberNames,
     inGroup,
+    botMenuActions,
     navigation,
     router,
     t,
@@ -911,61 +961,6 @@ function Thread() {
       pinnedAroundRef.current = null;
       historyEpoch.current += 1;
     });
-  }
-
-  const botActions = [
-    {
-      text: t("Bot settings"),
-      onPress: () =>
-        router.push({
-          pathname: "/bot",
-          params: { botId: botId ?? "", tab: "settings" },
-        }),
-    },
-    {
-      text: t("Open computer"),
-      onPress: () =>
-        router.push({
-          pathname: "/computer",
-          params: { botId: botId ?? "", name: displayName ?? t("Bot") },
-        }),
-    },
-    {
-      text: t("Clear conversation"),
-      destructive: true,
-      onPress: () => confirmClearConversation(clearThread),
-    },
-    {
-      text: t("Archive"),
-      onPress: () => {
-        if (botId) archiveBot(botId, leaveBot);
-      },
-    },
-    {
-      text: t("Delete…"),
-      destructive: true,
-      onPress: () => confirmDeleteBot({ id: botId ?? "", name: displayName || t("Bot") }, leaveBot),
-    },
-  ];
-
-  function showBotActions() {
-    if (!botId) return;
-    if (Platform.OS === "ios") {
-      ActionSheetIOS.showActionSheetWithOptions(
-        {
-          title: name || t("Bot"),
-          userInterfaceStyle: colorScheme,
-          options: [...botActions.map((action) => action.text), t("Cancel")],
-          cancelButtonIndex: botActions.length,
-          destructiveButtonIndex: botActions.flatMap((action, index) =>
-            action.destructive ? [index] : [],
-          ),
-        },
-        (index) => botActions[index]?.onPress(),
-      );
-      return;
-    }
-    setBotActionsOpen(true);
   }
 
   async function refresh() {
@@ -1672,18 +1667,22 @@ function Thread() {
     [botId, snap?.members],
   );
 
+  const attachActions: MenuAction[] = [
+    {
+      label: t("Photo library"),
+      systemImage: "photo.on.rectangle",
+      onPress: () => void addAttachments(pickFromLibrary),
+    },
+    { label: t("Camera"), systemImage: "camera", onPress: () => void addAttachments(takePhoto) },
+    { label: t("File"), systemImage: "doc", onPress: () => void addAttachments(pickDocuments) },
+  ];
+
   function showAttachMenu() {
     presentAttachSheet({
       title: t("Attach"),
       cancel: t("Cancel"),
-      colorScheme,
-      anchor: findNodeHandle(attachBubbleRef.current),
       onOpenChange: setAttachSheetOpen,
-      options: [
-        { text: t("Photo library"), onPress: () => void addAttachments(pickFromLibrary) },
-        { text: t("Camera"), onPress: () => void addAttachments(takePhoto) },
-        { text: t("File"), onPress: () => void addAttachments(pickDocuments) },
-      ],
+      options: attachActions.map(({ label, onPress }) => ({ text: label, onPress })),
     });
   }
 
@@ -2743,10 +2742,10 @@ function Thread() {
           >
             {dictation.dictating ? null : (
               <ComposerAttachBubble
-                ref={attachBubbleRef}
                 open={attachSheetOpen}
                 focused={composerFocused}
-                onPress={showAttachMenu}
+                actions={attachActions}
+                onAndroidOpen={showAttachMenu}
               />
             )}
             <ComposerShell
@@ -3083,7 +3082,7 @@ function Thread() {
             >
               {botActions.map((action) => (
                 <Pressable
-                  key={action.text}
+                  key={action.label}
                   accessibilityRole="button"
                   onPress={() => {
                     setBotActionsOpen(false);
@@ -3101,7 +3100,7 @@ function Thread() {
                       fontSize: 16,
                     }}
                   >
-                    {action.text}
+                    {action.label}
                   </Text>
                 </Pressable>
               ))}
