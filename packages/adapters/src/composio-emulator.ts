@@ -464,11 +464,14 @@ function sentResult(message: MailMessage): Record<string, unknown> {
   };
 }
 
+export type EmulatedFault = { kind: "fail"; error: string } | { kind: "timeout" };
+
 /** Deterministic, offline Composio catalog and connection emulator for product tests. */
 export class ComposioEmulator implements ComposioProvider {
   private readonly connectedByEntity = new Map<string, string[]>();
   private readonly mailboxesByEntity = new Map<string, Mailbox>();
   private githubReleases: EmulatedGithubRelease[] = [...DEFAULT_RAKAZO_EMULATED_RELEASES];
+  private readonly faults = new Map<string, EmulatedFault>();
   private nextAccountSeq = 0;
   readonly executions: Array<{
     userId: string;
@@ -560,7 +563,28 @@ export class ComposioEmulator implements ComposioProvider {
     yield { type: "result", data: result };
   }
 
+  /**
+   * Test helper: the next call of `tool` fails the way Composio reports a failed action, or does
+   * its work and then times out, so the caller never learns that it did.
+   */
+  failNext(tool: string, fault: EmulatedFault): void {
+    this.faults.set(tool, fault);
+  }
+
   private executeAction(
+    tool: string,
+    args: Record<string, unknown>,
+    context: AdapterContext,
+  ): Record<string, unknown> {
+    const fault = this.faults.get(tool);
+    this.faults.delete(tool);
+    if (fault?.kind === "fail") return { successful: false, error: fault.error, data: null };
+    const result = this.performAction(tool, args, context);
+    if (fault?.kind === "timeout") throw new Error(`${tool} timed out`);
+    return result;
+  }
+
+  private performAction(
     tool: string,
     args: Record<string, unknown>,
     context: AdapterContext,
