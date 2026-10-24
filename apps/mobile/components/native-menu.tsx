@@ -102,7 +102,12 @@ function ValueItems({
   onSelect: (value: string) => void;
 }): ReactElement {
   return (
-    <Picker selection={selected} onSelectionChange={onSelect} modifiers={[pickerStyle("inline")]}>
+    <Picker
+      key={selected}
+      selection={selected}
+      onSelectionChange={onSelect}
+      modifiers={[pickerStyle("inline")]}
+    >
       {options.map((option) => (
         <SwiftText key={option.value} modifiers={[tag(option.value)]}>
           {option.label}
