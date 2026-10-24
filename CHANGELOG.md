@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Fixed
 
 - After you deny an approval card, the bot now tells you it did not do the action instead of asking you to approve it again, on web, desktop and iPhone.
+- Action confirmations now apply to what a bot does through Composio's batch tool, so "Ask before email actions" shows a card, with the recipient, before a bot sends Gmail that way instead of letting the email go out unasked.
 
 ### 2026-10-21
 
