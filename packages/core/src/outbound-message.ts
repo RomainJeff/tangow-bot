@@ -103,7 +103,7 @@ type Reading = {
   recipients: OutboundRecipient[];
   texts: string[];
   subjects: string[];
-  senders: string[];
+  sender?: string;
   addressed: boolean;
   unexplained: boolean;
 };
@@ -126,7 +126,6 @@ function readOutbound(action: OutboundAction, connectorKinds: string[]): Outboun
     recipients: [],
     texts: [],
     subjects: [],
-    senders: [],
     addressed: false,
     unexplained: false,
   };
@@ -156,7 +155,7 @@ function readOutbound(action: OutboundAction, connectorKinds: string[]): Outboun
       recipients: reading.recipients,
       subject: reading.subjects[0],
       body,
-      account: reading.senders.find((sender) => ADDRESS.test(sender)),
+      account: reading.sender,
       args,
     },
   };
@@ -207,9 +206,16 @@ function readString(value: string, role: FieldRole | undefined, reading: Reading
     case "subject":
       reading.subjects.push(value);
       return;
-    case "sender":
-      reading.senders.push(value);
+    case "sender": {
+      // The card names one sending account, so only that bare address (or "me") is explained.
+      const sender = value.trim();
+      if (sender.toLowerCase() === "me") return;
+      const { sender: first } = reading;
+      if (!ADDRESS.test(sender) || (first && first.toLowerCase() !== sender.toLowerCase())) {
+        reading.unexplained = true;
+      } else reading.sender ??= sender;
       return;
+    }
     case "inert":
       return;
     default:
