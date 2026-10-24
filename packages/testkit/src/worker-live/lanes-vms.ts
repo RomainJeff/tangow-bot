@@ -272,7 +272,11 @@ export const laneC: Lane = {
         background: true,
         timeoutMs: 0,
       });
-      await sh(computer, "sleep 1");
+      // A desktop computer still booting can take a few seconds to start Node.
+      await sh(
+        computer,
+        `for i in $(seq 50); do (exec 3<>/dev/tcp/127.0.0.1/${COMPUTER_PORT}) 2>/dev/null && break; sleep 0.2; done`,
+      );
       const computerBoot = await sh(computer, "cat /proc/sys/kernel/random/boot_id");
       const computerSelf = await sh(computer, probe(COMPUTER_PORT));
       const computerOwn = await sh(
