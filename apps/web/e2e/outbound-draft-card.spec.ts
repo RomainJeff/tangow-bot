@@ -117,6 +117,9 @@ function sentAfter(botId: string, target: string, body: string): EntryDraft[] {
 
 type Captured = { body: Record<string, unknown> | undefined };
 
+/** A send the server refuses, as it does when no waiting card took the draft's text. */
+const CONFLICT = { status: 409, code: "CONFLICT", message: "This draft is no longer waiting." };
+
 /**
  * The served app has no mail connector to send through, so Send, Discard and a typed reply are
  * answered here: each records what the card asked for and logs what the server would have.
@@ -131,10 +134,12 @@ async function answerRpc(
     const request: Request = route.request();
     const body = (request.postDataJSON() as { json: Record<string, unknown> }).json;
     captured.body = body;
+    const output = respond(body);
+    const refused = output === CONFLICT;
     await route.fulfill({
-      status: 200,
+      status: refused ? CONFLICT.status : 200,
       contentType: "application/json",
-      body: JSON.stringify({ json: respond(body) }),
+      body: JSON.stringify({ json: refused ? { defined: false, ...CONFLICT } : output, meta: [] }),
     });
   });
   return captured;
@@ -175,7 +180,12 @@ for (const width of [1440, 390]) {
       onAnswer(body);
       return { ok: true };
     });
+    let refuseSend = false;
     const sent = await answerRpc(page, "send", (body) => {
+      if (refuseSend) {
+        refuseSend = false;
+        return CONFLICT;
+      }
       drafts.push(resolved(botId, "draft-replaced", 13, "denied", true), {
         id: "draft-typed",
         ts: at(13),
@@ -277,7 +287,12 @@ for (const width of [1440, 390]) {
     await reset(waitingDraft(botId));
     await text.fill(EDITED);
     const composer = page.locator('textarea[name="chat-message"]');
+    // A refused send hands the typed text back instead of losing it.
+    refuseSend = true;
     await composer.fill("Make it Friday instead.");
+    await composer.press("Enter");
+    await expect(page.getByText("This draft is no longer waiting.")).toBeVisible();
+    await expect(composer).toHaveValue("Make it Friday instead.");
     await composer.press("Enter");
     await expect(draftCard).toHaveText("Replaced");
     expect(sent.body).toMatchObject({
