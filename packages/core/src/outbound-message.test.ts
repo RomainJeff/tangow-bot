@@ -31,6 +31,11 @@ describe("readOutboundCall", () => {
         account: undefined,
         args: tracedSend.args,
         textPath: ["body"],
+        // No schema reaches through the batch, so only the one To and the subject can change.
+        fields: {
+          recipients: [{ role: "to", path: ["recipient_email"], shape: "one" }],
+          subject: ["subject"],
+        },
       },
     });
   });
@@ -475,9 +480,10 @@ describe("readOutboundCall", () => {
         }
         for (const [path, leaf] of stringLeaves(args)) {
           if (!leaf.trim() || path.includes("thread_id")) continue;
-          expect(shown).toContain(
-            path.some((key) => /to|cc|recipient/.test(key)) ? leaf.trim() : leaf,
-          );
+          const parts = path.some((key) => /to|cc|recipient/.test(key))
+            ? leaf.split(",").map((part) => part.trim())
+            : [leaf];
+          for (const part of parts) expect(shown).toContain(part);
         }
       }),
       { numRuns: 500 },

@@ -158,6 +158,10 @@ describe("draftRequest", () => {
     body: "Hello from Chief.",
     args: { ...args, include_signature: false },
     textPath: ["body"],
+    fields: {
+      recipients: [{ role: "to", path: ["recipient_email"], shape: "one" }],
+      subject: ["subject"],
+    },
   });
 
   it.each([
@@ -179,9 +183,18 @@ describe("draftRequest", () => {
       true,
       [2, "args", "tools", 0, "arguments", "body"],
     ],
-  ])("stores the draft's arguments in %s and finds its body", (_, request, batched, path) => {
+  ])("stores the draft's arguments in %s and finds its message", (_, request, batched, path) => {
     const stored = draftRequest(request, marker, batched, draft({ ...send, is_html: false }));
-    expect(stored?.path).toEqual(path);
+    const at = path.slice(0, -1);
+    expect(stored?.binding).toEqual({
+      path,
+      proposed: "Hello from Chief.",
+      fields: {
+        recipients: [{ role: "to", path: [...at, "recipient_email"], shape: "one" }],
+        subject: [...at, "subject"],
+        proposed: { recipients: [{ role: "to", address: "someone@example.com" }] },
+      },
+    });
     expect(JSON.stringify(stored?.request)).toContain('"include_signature":false');
     expect(stored && path.reduce<unknown>((at, key) => (at as never)[key], stored.request)).toBe(
       "Hello from Chief.",

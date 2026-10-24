@@ -1,6 +1,7 @@
 import { askDraftState } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
-import { readDraft, withValueAt } from "./outbound-draft.js";
+import { withValueAt } from "./draft-fields.js";
+import { readDraft } from "./outbound-draft.js";
 
 const base = { path: [2, "arguments", "body"], proposed: "Hello" };
 

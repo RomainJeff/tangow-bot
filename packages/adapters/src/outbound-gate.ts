@@ -1,7 +1,8 @@
 import type { ConnectorCatalogItem } from "@rakazo/adapter-kit";
 import type { AskDraft } from "@rakazo/contracts";
-import type { DraftPath, OutboundCall, OutboundDraft } from "@rakazo/core";
+import type { DraftBinding, DraftPath, OutboundCall, OutboundDraft } from "@rakazo/core";
 import {
+  askDraftFields,
   cardFitsArguments,
   FEATURED_CONNECTOR_LABELS,
   matchFeaturedConnectorId,
@@ -16,17 +17,21 @@ import type { ConnectorCallActions } from "./connector-actions.js";
 /** Composio's Gmail sends add the account's signature unless told not to. */
 const COMPOSIO_SIGNED_SENDS = new Set(["GMAIL_SEND_EMAIL", "GMAIL_REPLY_TO_THREAD"]);
 
-/** How a connector call is gated when it may send a message. */
+/**
+ * How a connector call is gated when it may send a message. `schema` is the called tool's own: a
+ * batch's items go without, since the batch tool's schema does not describe them.
+ */
 export function readConnectorOutbound(
   toolName: string,
   args: Record<string, unknown>,
   contained: ConnectorCallActions | undefined,
   connectorKinds: string[],
+  schema?: Record<string, unknown>,
 ): OutboundCall {
   if (contained?.kind === "opaque") {
     return cardFitsArguments(args) ? { kind: "classic" } : REFUSE_UNSHOWABLE;
   }
-  const actions = contained?.actions ?? [{ toolName, args }];
+  const actions = contained?.actions ?? [{ toolName, args, schema }];
   const read = readOutboundCall(actions, connectorKinds);
   if (read.kind !== "draft") return read;
   // The draft's arguments are stored in place of the call's, and items sent as one JSON string
@@ -45,15 +50,15 @@ export function readConnectorOutbound(
 }
 
 /**
- * The stored request with the draft's arguments in place of the call's, and where its body sits,
- * or undefined when the request has no place for them.
+ * The stored request with the draft's arguments in place of the call's, and where its message
+ * sits, or undefined when the request has no place for them.
  */
 export function draftRequest(
   request: unknown,
   marker: string,
   batched: boolean,
   draft: OutboundDraft,
-): { request: unknown; path: DraftPath } | undefined {
+): { request: unknown; binding: DraftBinding } | undefined {
   const envelope: DraftPath = boundDirectApprovalDetails(request, marker)
     ? [2, "args"]
     : catalogApprovalDetails(request, marker)
@@ -63,7 +68,25 @@ export function draftRequest(
   const current = valueAt(request, at);
   if (!current || typeof current !== "object" || Array.isArray(current)) return undefined;
   const next = withValueAt(request, at, draft.args);
-  return next === undefined ? undefined : { request: next, path: [...at, ...draft.textPath] };
+  if (next === undefined) return undefined;
+  const { fields } = draft;
+  const within = (path: DraftPath): DraftPath => [...at, ...path];
+  return {
+    request: next,
+    binding: {
+      path: within(draft.textPath),
+      proposed: draft.body,
+      ...(fields
+        ? {
+            fields: {
+              recipients: fields.recipients.map((slot) => ({ ...slot, path: within(slot.path) })),
+              ...(fields.subject ? { subject: within(fields.subject) } : {}),
+              proposed: { recipients: draft.recipients, subject: draft.subject },
+            },
+          }
+        : {}),
+    },
+  };
 }
 
 export type SendResult =
@@ -149,6 +172,7 @@ export async function outboundAskDraft(
     },
     recipients: draft.recipients,
     subject: draft.subject,
+    ...(draft.fields ? { fields: askDraftFields(draft.fields) } : {}),
     body: draft.body,
   };
 }

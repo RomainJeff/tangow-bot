@@ -76,7 +76,12 @@ import {
   VoiceInfoSchema,
   VoiceStatusSchema,
 } from "./domain.js";
-import { ASK_ANSWER_MAX_LENGTH, ASK_DRAFT_TEXT_MAX_LENGTH, ProductEventSchema } from "./events.js";
+import {
+  ASK_ANSWER_MAX_LENGTH,
+  ASK_DRAFT_TEXT_MAX_LENGTH,
+  AskDraftEdits,
+  ProductEventSchema,
+} from "./events.js";
 import { Id, IsoDate } from "./ids.js";
 import {
   IntegrationProviderConfigSchema,
@@ -146,9 +151,8 @@ const threadSendInput = threadTarget
     clientNonce: z.string().min(1).max(200).optional(),
     /** `false` opts this message out of any link preview, whatever its first link. */
     linkPreview: z.literal(false).optional(),
-    /** The waiting mail draft this message replaces, with its text as the user left it. */
-    draft: z
-      .object({ messageId: Id, text: z.string().max(ASK_DRAFT_TEXT_MAX_LENGTH) })
+    /** The waiting mail draft this message replaces, as the user left it. */
+    draft: AskDraftEdits.extend({ messageId: Id, text: z.string().max(ASK_DRAFT_TEXT_MAX_LENGTH) })
       .strict()
       .optional(),
   })
@@ -372,17 +376,14 @@ export const appContract = {
             .min(1)
             .max(16 * ASK_ANSWER_MAX_LENGTH),
           /**
-           * Changes to a Create bot card, only with "allow". The bounds sit above the product
-           * limits so an enormous body is refused before any lock; the limits themselves are
-           * applied by validateSpawnBotArgs.
+           * Changes to a Create bot card or a mail draft, only with "allow". The bounds sit above
+           * the product limits so an enormous body is refused before any lock; the limits
+           * themselves are applied by validateSpawnBotArgs and the draft's own checks.
            */
-          edits: z
-            .object({
-              name: z.string().max(200).optional(),
-              instructions: z.string().max(4000).optional(),
-              /** A mail draft's body as the user sends it. */
-              text: z.string().max(ASK_DRAFT_TEXT_MAX_LENGTH).optional(),
-            })
+          edits: AskDraftEdits.extend({
+            name: z.string().max(200).optional(),
+            instructions: z.string().max(4000).optional(),
+          })
             .strict()
             .optional(),
         }),
