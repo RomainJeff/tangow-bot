@@ -89,7 +89,7 @@ export type ThreadRecord = {
    * longest prefix it shares with one of them, its length, and where its tools and its nonce start,
    * in characters.
    */
-  sharedBase?: { sharedChars: number; bodyChars: number; nonceAt: number; toolsAt: number };
+  sharedBase?: { sharedChars: number; bodyChars: number; nonceAt: number; toolsAt?: number };
   /** Whether that first body carried provider cache markers (`cache_control`). */
   cacheMarkersSent?: boolean;
   left?: { sandboxes: number; volumes: number };

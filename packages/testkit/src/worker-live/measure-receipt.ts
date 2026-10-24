@@ -130,13 +130,21 @@ export function summarize(threads: ThreadRecord[], models: MeasuredModel[]) {
         .flatMap((thread) => thread.turns.slice(1));
       const turns = own.flatMap((thread) => thread.turns);
       // Cache read up to the shared base is reuse across threads; the rest is the thread's own.
-      const reuse = { sharedBase: 0, perThread: 0, firstRequestsOverBase: 0, firstRequests: 0 };
+      const reuse = {
+        sharedBase: 0,
+        perThread: 0,
+        firstRequestsOverBase: 0,
+        firstRequests: 0,
+        /** Captured before the tools' position was: their base is the message prefix only. */
+        firstRequestsWithoutToolsAt: 0,
+      };
       for (const thread of own) {
         const first = thread.turns[0]?.requests[0];
         if (!thread.sharedBase || !first?.inputTokens) continue;
         // A provider may render the tools before the messages, so the shared base is whichever
         // runs longer: the messages before their first per-thread byte, or the tools before the nonce.
-        const { sharedChars, bodyChars, nonceAt, toolsAt } = thread.sharedBase;
+        const { sharedChars, bodyChars, nonceAt, toolsAt = -1 } = thread.sharedBase;
+        if (toolsAt < 0) reuse.firstRequestsWithoutToolsAt += 1;
         const base = Math.round(
           (first.inputTokens *
             Math.max(sharedChars, toolsAt >= 0 && toolsAt < nonceAt ? nonceAt - toolsAt : 0)) /
@@ -259,7 +267,7 @@ const METHOD = {
   cache:
     "mode is explicit markers when a thread's first provider request carried cache_control, automatic when the provider reported cache reads or writes without markers, none observed otherwise. markersSent is read from the captured request bodies.",
   cacheReadReuse:
-    "Each thread's first provider request body is compared with the model's earlier threads; sharedChars is the longest common prefix, before any per-thread byte, and the tool catalog from toolsAt up to the nonce at nonceAt is also identical across threads. A provider may render tools before messages, so the shared base is max(sharedChars, nonceAt - toolsAt) characters, converted to tokens as inputTokens of the thread's first request * chars / bodyChars. Of each request's cache read, up to that base counts as sharedBase reuse and the rest as perThread. firstRequestsOverBase counts first requests that read more than that base (+10% and 128 tokens), which would mean reading another thread's own part.",
+    "Each thread's first provider request body is compared with the model's earlier threads; sharedChars is the longest common prefix, before any per-thread byte, and the tool catalog from toolsAt up to the nonce at nonceAt is also identical across threads. That a provider renders tools before messages is an inference, not confirmed: it fits GLM first requests reading more than the message prefix. So the shared base is max(sharedChars, nonceAt - toolsAt) characters, converted to tokens as inputTokens of the thread's first request * chars / bodyChars. Of each request's cache read, up to that base counts as sharedBase reuse and the rest as perThread. firstRequestsOverBase counts first requests that read more than that base (+10% and 128 tokens), which would mean reading another thread's own part.",
   restore:
     "From the grant persisted (answerRunInput returned) to the resumed attempt's first model request frame at the controller, minus provisioningMs, the worker provider's ensure call to the guest's hello. Only comparable from a serial run.",
   transcriptAppend:
