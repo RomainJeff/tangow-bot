@@ -64,14 +64,22 @@ export function draftSentResult(
 }
 
 /**
- * What the bot reads once the user wrote to it instead of sending its draft: nothing left, and the
- * body as they left it on the card, which stays data.
+ * What the bot reads about a draft the user wrote over instead of sending, or undefined for any
+ * other effect: nothing left, and the body as they left it on the card, which stays data.
  */
-export function draftReplacedResult(text: string, edited: boolean) {
+export function replacedDraftResult(effect: {
+  status: string;
+  draft?: unknown;
+  request?: unknown;
+}) {
+  const draft = readDraft(effect.status, effect.draft);
+  if (draft?.state !== "replaced") return undefined;
+  const text = valueAt(effect.request, draft.path);
+  const body = typeof text === "string" ? text : "";
   return {
     ok: false,
     replaced: true,
-    draft: { body: text, editedByUser: edited },
+    draft: { body, editedByUser: body !== draft.proposed },
     note: `The user wrote to you instead of sending this draft, so nothing was sent. Their message follows. ${DRAFT_AS_DATA}. To send a message, call the send tool again: the user sends it from a new draft card.`,
   };
 }
