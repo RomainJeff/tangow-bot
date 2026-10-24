@@ -1,6 +1,14 @@
 import { useLingui } from "@lingui/react/macro";
 import type { AskDraft } from "@rakazo/contracts";
 import { ASK_DRAFT_TEXT_MAX_LENGTH } from "@rakazo/contracts";
+import type { DraftCard as DraftCardBlock, DraftLocal } from "@rakazo/core";
+import {
+  DRAFT_UNDO_MS,
+  draftAddresses,
+  draftCardView,
+  draftPrimaryAction,
+  draftSentTo,
+} from "@rakazo/core";
 import { Button, FramedBlock, Textarea, UserAvatar } from "@rakazo/ui-web";
 import { Check, Copy, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -10,11 +18,6 @@ import { draftEdits } from "../lib/draft-edits";
 import { messageTimeLabel } from "../lib/message-time";
 import { userInitials } from "../lib/user-initials";
 import type { CardEdits } from "./AskCard";
-import type { DraftCard as DraftCardBlock, DraftLocal } from "./draft-card-view";
-import { draftCardView, draftPrimaryAction } from "./draft-card-view";
-
-/** How long a discarded draft can still be brought back before the bot hears of it. */
-const UNDO_MS = 5000;
 
 const ROLES = ["to", "cc", "bcc"] as const;
 
@@ -29,14 +32,6 @@ function AppLogo({ app }: { app: AskDraft["app"] }) {
       {app.name.slice(0, 1).toUpperCase()}
     </span>
   );
-}
-
-/** Every address of one role, in the order the bot gave them. */
-function addressesOf(draft: AskDraft, role: (typeof ROLES)[number]): string {
-  return draft.recipients
-    .filter((recipient) => recipient.role === role)
-    .map((recipient) => recipient.address)
-    .join(", ");
 }
 
 /**
@@ -160,7 +155,7 @@ export function DraftCard({
     if (pending) return;
     setError(null);
     setPending("discard");
-    discardTimer.current = setTimeout(() => commitDiscardRef.current(), UNDO_MS);
+    discardTimer.current = setTimeout(() => commitDiscardRef.current(), DRAFT_UNDO_MS);
   }
 
   function undo() {
@@ -185,11 +180,9 @@ export function DraftCard({
     who: draft.app.account ? `${app} · ${draft.app.account}` : app,
     icon: <AppLogo app={draft.app} />,
   };
-  const to = addressesOf(draft, "to");
-
   if (view.kind === "sent") {
     const time = messageTimeLabel(view.at, i18n.locale);
-    const recipient = to || draft.recipients.map((each) => each.address).join(", ");
+    const recipient = draftSentTo(draft);
     return (
       <FramedBlock
         data-testid="draft-card"
@@ -266,7 +259,7 @@ export function DraftCard({
       question={
         <div className="flex flex-col gap-1">
           {ROLES.map((role) => {
-            const addresses = addressesOf(draft, role);
+            const addresses = draftAddresses(draft, role);
             if (!addresses) return null;
             return (
               <p

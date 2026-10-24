@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { DraftCard, DraftLocal } from "./draft-card-view";
-import { draftCardView, draftPrimaryAction } from "./draft-card-view";
+import type { DraftCard, DraftLocal } from "./draft-card-view.js";
+import { draftCardView, draftPrimaryAction, draftSentTo } from "./draft-card-view.js";
 
 const draft: DraftCard["draft"] = {
   app: { name: "Mail", logo: null, account: "ana@example.com" },
@@ -123,5 +123,29 @@ describe("draftPrimaryAction", () => {
     expect(draftPrimaryAction(disconnected, false)).toBe("reconnect");
     expect(draftPrimaryAction(disconnected, true)).toBe("try_again");
     expect(draftPrimaryAction({ reason: "Mail refused it." }, false)).toBe("try_again");
+  });
+});
+
+describe("draftSentTo", () => {
+  it("names the To recipients, and every recipient when the mail had no To", () => {
+    expect(
+      draftSentTo({
+        ...draft,
+        recipients: [
+          { role: "to", address: "bo@example.com" },
+          { role: "cc", address: "cy@example.com" },
+          { role: "to", address: "dee@example.com" },
+        ],
+      }),
+    ).toBe("bo@example.com, dee@example.com");
+    expect(
+      draftSentTo({
+        ...draft,
+        recipients: [
+          { role: "bcc", address: "ed@example.com" },
+          { role: "cc", address: "cy@example.com" },
+        ],
+      }),
+    ).toBe("ed@example.com, cy@example.com");
   });
 });

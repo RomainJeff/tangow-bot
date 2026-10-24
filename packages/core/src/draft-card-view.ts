@@ -1,6 +1,9 @@
 import type { AskDraft } from "@rakazo/contracts";
 import { askDraftState } from "@rakazo/contracts";
 
+/** How long a discarded draft can still be brought back before the bot hears of it. */
+export const DRAFT_UNDO_MS = 5000;
+
 /** A mail draft card as the thread shows it. */
 export type DraftCard = {
   status?: "pending" | "answered";
@@ -82,4 +85,17 @@ export function draftPrimaryAction(
 ): "send" | "try_again" | "reconnect" {
   if (!failure) return "send";
   return failure.disconnected && !reconnectOpened ? "reconnect" : "try_again";
+}
+
+/** Every address of one role, in the order the bot gave them, or every address without a role. */
+export function draftAddresses(draft: AskDraft, role?: AskDraft["recipients"][number]["role"]) {
+  return draft.recipients
+    .filter((recipient) => !role || recipient.role === role)
+    .map((recipient) => recipient.address)
+    .join(", ");
+}
+
+/** Who a sent draft's line names: its To recipients, or everyone when it had no To. */
+export function draftSentTo(draft: AskDraft): string {
+  return draftAddresses(draft, "to") || draftAddresses(draft);
 }
