@@ -294,7 +294,7 @@ export function createSession(
   /**
    * A harness with its own loop never launches helpers itself: the controller opens the helper,
    * projects its session and holds the parent's call until the helper closes or the run pauses.
-   * A pause settles the parent at once while the helper can still send its final transcript.
+   * A pause settles the parent at once while the helper can still report its transcript.
    */
   async function runHelper(
     body: Extract<GuestBody, { type: "tool.call" }>,
@@ -625,6 +625,7 @@ export function createSession(
         if (Buffer.byteLength(JSON.stringify(body.args)) > WORKER_LIMITS.toolArgsBytes) {
           return refuse("too_large");
         }
+        if (!transcript.claim(body.executionId)) return refuse("invalid");
         announced.set(body.executionId, body.name);
         if (paused) return { type: "ack" };
         await events.push({
@@ -644,6 +645,7 @@ export function createSession(
         });
         return { type: "ack" };
       case "model.request":
+        transcript.requested(body.agent);
         return helperOverBudget(body.agent) ?? relayModel(seq, body, part);
       case "model.latency":
         // Guest diagnostics never authorize work or affect the run's outcome.
@@ -778,9 +780,9 @@ export function createSession(
         if (!(await fenceOwned()) || !live()) return revoke();
         const agent = body.agent ?? "root";
         const helper = helperOf(agent);
-        if (agent !== "root" && !helper) return refuse("invalid");
+        if ((agent !== "root" && !helper) || helper?.closed) return refuse("invalid");
         const ingested = transcript.ingest(agent, body, launched!.expectedHarness.name);
-        if (!ingested) return refuse("invalid");
+        if (typeof ingested === "string") return refuse(ingested);
         if (!helper) {
           rootTranscriptAccepted = true;
           await events.push(ingested);

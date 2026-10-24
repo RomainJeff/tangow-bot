@@ -447,10 +447,7 @@ describe("run channel conformance of the pi-native harness", () => {
           }
           await host.emit({ type: "text", text: "Finishing." });
           expect(await readFile(path.join(cwd, screen), "utf8")).toBe("capture");
-          await host.decide(
-            { type: "transcript", dialect: "pi-ai", messages: [], systemPrompt: "" },
-            "recorded",
-          );
+          await host.decide({ type: "transcript", dialect: "pi-ai", messages: [] }, "recorded");
           expect(await readFile(path.join(cwd, screen), "utf8")).toBe("capture");
           return { type: "done" };
         },
@@ -524,8 +521,10 @@ describe("run channel conformance of the pi-native harness", () => {
     },
   );
 
-  it("runs its own tools without a grant and reports what it added before done", async () => {
+  it("runs its own tools without a grant and reports each call before it runs", async () => {
     const root = await guestRoot();
+    const note = path.join(root, "workspace/bots/bot_guest/note.md");
+    const reported: string[] = [];
     const { exit, frames } = await driveGuest({
       harness: piNative,
       cwd: "/workspace/bots/bot_guest",
@@ -545,24 +544,29 @@ describe("run channel conformance of the pi-native harness", () => {
         },
         { expect() {}, response: { type: "text", text: "Written." } },
       ],
+      reply(body) {
+        if (body.type !== "transcript") return undefined;
+        const [message] = body.messages;
+        const role =
+          message?.role === "toolResult" ? `toolResult:${message.toolName}` : message?.role;
+        reported.push(`${role} note=${fs.existsSync(note)}`);
+        return undefined;
+      },
     });
 
     expect(exit).toBe("done");
     const lifecycle = new Set(["tool", "tool.call", "tool.done", "transcript", "done"]);
     expect(frames.map((frame) => frame.type).filter((type) => lifecycle.has(type))).toEqual([
       "transcript",
+      "transcript",
+      "transcript",
       "done",
     ]);
-    const transcript = frames.find((frame) => frame.type === "transcript")?.body;
-    if (transcript?.type !== "transcript") throw new Error("No transcript");
-    expect(transcript.systemPrompt).toContain("<addendum>\nUse the tools.\n</addendum>");
-    expect(
-      transcript.messages
-        .filter((message) => message.role !== "system")
-        .map((message) =>
-          message.role === "toolResult" ? `toolResult:${message.toolName}` : message.role,
-        ),
-    ).toEqual(["user", "assistant", "toolResult:bash", "assistant"]);
+    expect(reported).toEqual([
+      "assistant note=false",
+      "toolResult:bash note=true",
+      "assistant note=true",
+    ]);
   });
 
   it("reads the volume's AGENTS.md and the converged skills, never the volume's .pi/", async () => {

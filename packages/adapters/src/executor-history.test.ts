@@ -2,6 +2,7 @@ import type {
   AgentRunRequest,
   AgentRuntimeEvent,
   GuestBody,
+  HarnessTranscriptEntry,
   SemanticMemoryRecallRequest,
   SessionLog,
 } from "@rakazo/adapter-kit";
@@ -47,6 +48,21 @@ beforeAll(() => {
   vi.stubEnv("RAKAZO_LOCAL_MAX_TOKENS", "32768");
 });
 afterAll(() => vi.unstubAllEnvs());
+
+/** The transcript event the session builds, after the model requests that produced it. */
+function nativeTranscript(
+  ingest: ReturnType<typeof transcriptIngest>,
+  messages: Extract<GuestBody, { type: "transcript" }>["messages"],
+) {
+  for (const _ of messages) ingest.requested("root");
+  const event = ingest.ingest(
+    "root",
+    { type: "transcript", dialect: "pi-ai", messages },
+    "pi-native",
+  );
+  if (typeof event === "string") throw new Error(event);
+  return event;
+}
 
 const RUN = "run-1";
 const BOT = "bot-1";
@@ -228,6 +244,7 @@ function fixture(
       thread: db.thread,
       routine: db.routine,
       sessionEntry: db.sessionEntry,
+      usageRecord: db.usageRecord,
       $transaction: db.$transaction.bind(db),
       $queryRaw: db.$queryRaw.bind(db),
     });
@@ -1149,6 +1166,18 @@ describe("interactive executor sessions with durable history", () => {
                       },
                     ],
             } satisfies Extract<GuestBody, { type: "transcript" }>;
+            // Each reported response needs a model request the controller relayed.
+            const responses =
+              transcriptCase === "duplicate" ? 2 : transcriptCase === "present" ? 1 : 0;
+            for (let i = 0; i < responses; i++) {
+              guest.send(seq, {
+                type: "model.request",
+                agent: "root",
+                dialect: "pi-ai",
+                call: { context: { messages: [] }, options: {} },
+              });
+              expect((await guest.replies(seq++)).at(-1)).toEqual({ type: "model.end" });
+            }
             if (
               transcriptCase === "empty" ||
               transcriptCase === "present" ||
@@ -1229,36 +1258,30 @@ describe("interactive executor sessions with durable history", () => {
         database: c.prisma,
         run,
         runtime: async function* () {
-          const ingest = transcriptIngest((text) => text);
           yield { type: "text", text: "Private work" };
-          yield ingest.ingest(
-            "root",
-            {
-              type: "transcript",
-              dialect: "pi-ai",
-              messages: [
-                {
-                  role: "assistant",
-                  content: [
-                    { type: "text", text: "Private work" },
-                    {
-                      type: "toolCall",
-                      id: "native-read",
-                      name: "read",
-                      arguments: { path: "notes.txt" },
-                    },
-                  ],
-                },
-                { role: "toolResult", toolCallId: "native-read", content: "nothing to report" },
-                ...Array.from({ length: emptyTurns }, (_, index) => ({
-                  role: "assistant",
-                  content: index === 0 ? [] : [{ type: "text", text: "" }],
-                })),
-                ...(final ? [{ role: "assistant", content: [{ type: "text", text: final }] }] : []),
-              ],
-            },
-            "pi-native",
-          )!;
+          yield nativeTranscript(
+            transcriptIngest((text) => text),
+            [
+              {
+                role: "assistant",
+                content: [
+                  { type: "text", text: "Private work" },
+                  {
+                    type: "toolCall",
+                    id: "native-read",
+                    name: "read",
+                    arguments: { path: "notes.txt" },
+                  },
+                ],
+              },
+              { role: "toolResult", toolCallId: "native-read", content: "nothing to report" },
+              ...Array.from({ length: emptyTurns }, (_, index) => ({
+                role: "assistant",
+                content: index === 0 ? [] : [{ type: "text", text: "" }],
+              })),
+              ...(final ? [{ role: "assistant", content: [{ type: "text", text: final }] }] : []),
+            ],
+          );
           yield {
             type: "done",
             text: "Private work",
@@ -1294,6 +1317,32 @@ describe("interactive executor sessions with durable history", () => {
     },
   );
 
+  it("closes only a harness's own call an earlier attempt cut, not a controller tool of its name", async () => {
+    const c = await conversation();
+    const call = (callId: string, native?: true) =>
+      c.prisma.$transaction((tx) =>
+        c.log.append(tx, {
+          sessionId: c.run.sessionId as SessionId,
+          botId: BOT,
+          runId: c.run.id,
+          type: "tool.call",
+          payload: { callId, name: "read", input: "{}", ...(native ? { native } : {}) },
+        }),
+      );
+    await call("harness-read", true);
+    await call("connector-read");
+    const run = await c.prisma.run.update({ where: { id: c.run.id }, data: { leaseFence: 1 } });
+    await fixture({ database: c.prisma, run }).request();
+
+    expect(
+      (await c.log.readRun(run.id)).flatMap((entry) =>
+        entry.type === "tool.result" ? [`${entry.payload.callId}: ${entry.payload.output}`] : [],
+      ),
+    ).toEqual([
+      "harness-read: The read call was interrupted, so its outcome is unknown. It was not replayed; check the state before retrying.",
+    ]);
+  });
+
   it.each([
     { empty: false, messageUser: false },
     { empty: true, messageUser: false },
@@ -1317,34 +1366,26 @@ describe("interactive executor sessions with durable history", () => {
               { type: "tool.result", output },
             );
           }
-          yield ingest.ingest(
-            "root",
+          yield nativeTranscript(ingest, [
             {
-              type: "transcript",
-              dialect: "pi-ai",
-              messages: [
-                {
-                  role: "assistant",
-                  content: [
-                    { type: "text", text: "Private work" },
-                    ...(messageUser
-                      ? [
-                          {
-                            type: "toolCall",
-                            id: "guest-say",
-                            name: "message_user",
-                            arguments: args,
-                          },
-                        ]
-                      : []),
-                  ],
-                },
-                { role: "assistant", content: [{ type: "text", text: recap }] },
-                ...(empty ? [{ role: "assistant", content: [] }] : []),
+              role: "assistant",
+              content: [
+                { type: "text", text: "Private work" },
+                ...(messageUser
+                  ? [
+                      {
+                        type: "toolCall",
+                        id: "guest-say",
+                        name: "message_user",
+                        arguments: args,
+                      },
+                    ]
+                  : []),
               ],
             },
-            "pi-native",
-          )!;
+            { role: "assistant", content: [{ type: "text", text: recap }] },
+            ...(empty ? [{ role: "assistant", content: [] }] : []),
+          ]);
           yield {
             type: "done",
             text: recap,
@@ -1492,7 +1533,7 @@ describe("interactive executor sessions with durable history", () => {
     ]);
   });
 
-  it("logs a native harness's own calls among the controller's, in the order the attempt worked", async () => {
+  it("logs a native harness's own calls among the controller's as the attempt reports them", async () => {
     const c = await conversation();
     const secret = "hunter2-secret";
     await fixture({
@@ -1505,39 +1546,35 @@ describe("interactive executor sessions with durable history", () => {
         },
       },
       runtime: async function* (request) {
+        const reported = (entries: HarnessTranscriptEntry[]) =>
+          ({ type: "transcript", entries, unverifiedCalls: 0 }) as const;
+        yield reported([
+          { kind: "text", turn: 0, text: "Looking first." },
+          {
+            kind: "call",
+            turn: 0,
+            callId: "bash-1",
+            name: "bash",
+            args: { command: `grep ${secret} notes.md` },
+          },
+          { kind: "controller", turn: 0, name: "list_files" },
+        ]);
+        yield reported([
+          { kind: "result", callId: "bash-1", output: `notes.md: ${secret}`, isError: false },
+        ]);
         await request.executeTool!("list_files", { path: "/" }, "ls-1").catch(() => {});
-        yield {
-          type: "transcript",
-          entries: [
-            { kind: "text", turn: 0, text: "Looking first." },
-            {
-              kind: "call",
-              turn: 0,
-              callId: "bash-1",
-              name: "bash",
-              args: { command: `grep ${secret} notes.md` },
-              output: `notes.md: ${secret}`,
-              isError: false,
-            },
-            { kind: "controller", turn: 0, callId: "ls-1", name: "list_files" },
-            {
-              kind: "call",
-              turn: 1,
-              callId: "bash-2",
-              name: "bash",
-              args: { command: "false" },
-              output: "exit 1",
-              isError: true,
-            },
-            {
-              kind: "summary",
-              turn: 2,
-              summary: `Searched notes.md for ${secret}.`,
-              tokensBefore: 9000,
-            },
-          ],
-          unverifiedCalls: 0,
-        };
+        yield reported([
+          { kind: "call", turn: 1, callId: "bash-2", name: "bash", args: { command: "false" } },
+        ]);
+        yield reported([
+          { kind: "result", callId: "bash-2", output: "exit 1", isError: true },
+          {
+            kind: "summary",
+            turn: 2,
+            summary: `Searched notes.md for ${secret}.`,
+            tokensBefore: 9000,
+          },
+        ]);
         yield { type: "done", text: "Found it." };
       },
     }).request();
@@ -1554,6 +1591,7 @@ describe("interactive executor sessions with durable history", () => {
           callId: "bash-1",
           name: "bash",
           input: '{\n  "command": "grep [redacted] notes.md"\n}',
+          native: true,
         },
       },
       {
@@ -1580,7 +1618,12 @@ describe("interactive executor sessions with durable history", () => {
       },
       {
         type: "tool.call",
-        payload: { callId: "bash-2", name: "bash", input: '{\n  "command": "false"\n}' },
+        payload: {
+          callId: "bash-2",
+          name: "bash",
+          input: '{\n  "command": "false"\n}',
+          native: true,
+        },
       },
       {
         type: "tool.result",
@@ -1616,15 +1659,8 @@ describe("interactive executor sessions with durable history", () => {
         yield {
           type: "transcript",
           entries: [
-            {
-              kind: "call",
-              turn: 0,
-              callId: "bash-1",
-              name: "bash",
-              args: { command: "ls" },
-              output: "late",
-              isError: false,
-            },
+            { kind: "call", turn: 0, callId: "bash-1", name: "bash", args: { command: "ls" } },
+            { kind: "result", callId: "bash-1", output: "late", isError: false },
           ],
           unverifiedCalls: 0,
         };

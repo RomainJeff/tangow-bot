@@ -28,6 +28,17 @@ afterEach(() => vi.unstubAllEnvs());
 
 const stillClock: WorkerClock = { sleep: () => new Promise<void>(() => {}) };
 
+type TranscriptEvent = Extract<AgentRuntimeEvent, { type: "transcript" }>;
+
+const transcriptOf = (events: readonly AgentRuntimeEvent[]): TranscriptEvent => ({
+  type: "transcript",
+  entries: events.flatMap((event) => (event.type === "transcript" ? event.entries : [])),
+  unverifiedCalls: events.reduce(
+    (sum, event) => sum + (event.type === "transcript" ? event.unverifiedCalls : 0),
+    0,
+  ),
+});
+
 const systemOf = (request: ModelEmulatorRequest) =>
   String(request.messages.find((message) => message.role === "system")?.content);
 
@@ -153,10 +164,9 @@ describe("the pi-native harness through the controller", () => {
         },
       ]);
       expect(first.exit).toBe("done");
-      const entry = first.seen
-        .flatMap((event) => (event.type === "transcript" ? event.entries : []))
-        .find((entry) => entry.kind === "call" && entry.name === "bash");
-      expect(entry).toMatchObject({ isError });
+      expect(
+        transcriptOf(first.seen).entries.find((entry) => entry.kind === "result"),
+      ).toMatchObject({ callId: "long", isError });
       if (status === "failure") expect(shown).toContain("Command exited with code 7");
       if (status === "timeout") expect(shown).toContain("Command timed out after 0.2 seconds");
       const outputPath = /it is in ([^\]\n]+)/.exec(shown)?.[1];
@@ -379,7 +389,7 @@ describe("the pi-native harness through the controller", () => {
         activity: true,
       },
     ]);
-    expect(seen.find((event) => event.type === "transcript")).toEqual({
+    expect(transcriptOf(seen)).toEqual({
       type: "transcript",
       entries: [
         {
@@ -388,9 +398,8 @@ describe("the pi-native harness through the controller", () => {
           callId: "b1",
           name: "bash",
           args: { command: "echo drafted > note.txt && echo ok" },
-          output: "ok\n",
-          isError: false,
         },
+        { kind: "result", callId: "b1", output: "ok\n", isError: false },
         { kind: "text", turn: 1, text: "Drafted." },
       ],
       unverifiedCalls: 0,
@@ -464,11 +473,9 @@ describe("the pi-native harness through the controller", () => {
       id: "notes:29",
       arguments: { title: "Plan" },
     });
-    expect(seen.find((event) => event.type === "transcript")).toMatchObject({
+    expect(transcriptOf(seen)).toMatchObject({
       unverifiedCalls: 0,
-      entries: expect.arrayContaining([
-        { kind: "controller", turn: 1, callId: expect.any(String), name: "mcp_execute_tool" },
-      ]),
+      entries: expect.arrayContaining([{ kind: "controller", turn: 1, name: "mcp_execute_tool" }]),
     });
   });
 
@@ -572,15 +579,10 @@ describe("the pi-native harness through the controller", () => {
       expect(executeTool.mock.calls[0]?.slice(0, 2)).toEqual([canonicalName, args("Plan")]);
       const announced = seen.find((event) => event.type === "tool" && event.name === canonicalName);
       expect(announced).toMatchObject({ type: "tool", args: args("Plan") });
-      const transcript = seen.find((event) => event.type === "transcript");
-      expect(transcript?.unverifiedCalls).toBe(0);
-      expect(transcript?.entries.filter((entry) => entry.kind === "controller")).toEqual([
-        {
-          kind: "controller",
-          turn: deferred ? 1 : 0,
-          callId: announced?.type === "tool" ? announced.executionId : undefined,
-          name: canonicalName,
-        },
+      const transcript = transcriptOf(seen);
+      expect(transcript.unverifiedCalls).toBe(0);
+      expect(transcript.entries.filter((entry) => entry.kind === "controller")).toEqual([
+        { kind: "controller", turn: deferred ? 1 : 0, name: canonicalName },
       ]);
       await nativeRun(
         [
@@ -742,12 +744,9 @@ describe("the pi-native harness through the controller", () => {
       expect(startSubagent).toHaveBeenCalledTimes(1);
       expect(helperTool).toHaveBeenCalledTimes(1);
       expect(executeTool).not.toHaveBeenCalled();
-      expect(transcripts).toHaveLength(1);
-      expect(transcripts[0]).toMatchObject({
+      expect(transcriptOf(transcripts)).toMatchObject({
         unverifiedCalls: 0,
-        entries: expect.arrayContaining([
-          { kind: "controller", turn: 0, callId: expect.any(String), name: "remember" },
-        ]),
+        entries: expect.arrayContaining([{ kind: "controller", turn: 0, name: "remember" }]),
       });
       expect(
         seen
@@ -755,11 +754,9 @@ describe("the pi-native harness through the controller", () => {
           .map((event) => event.text)
           .join(""),
       ).not.toContain("Found the child note.");
-      expect(seen.find((event) => event.type === "transcript")).toMatchObject({
+      expect(transcriptOf(seen)).toMatchObject({
         unverifiedCalls: 0,
-        entries: expect.arrayContaining([
-          { kind: "controller", turn: 0, callId: expect.any(String), name: "run_subagent" },
-        ]),
+        entries: expect.arrayContaining([{ kind: "controller", turn: 0, name: "run_subagent" }]),
       });
       if (outcome === "unsaved") expect(abandoned).toEqual(["history unavailable"]);
       else
@@ -918,18 +915,14 @@ describe("the pi-native harness through the controller", () => {
       expect(exit).toBe(paused ? "paused" : "done");
       expect([...logs.keys()].sort()).toEqual(["peer", "slow"]);
       for (const log of logs.values()) {
-        expect(log.transcripts).toHaveLength(1);
-        expect(log.transcripts[0]?.unverifiedCalls).toBe(0);
+        expect(transcriptOf(log.transcripts).unverifiedCalls).toBe(0);
         expect(log.finished).toHaveLength(1);
       }
       if (paused) {
         await expect.poll(() => slowClosed).toBe(true);
         expect(
-          logs
-            .get("slow")
-            ?.transcripts[0]?.entries.flatMap((entry) =>
-              entry.kind === "text" ? [entry.text] : [],
-            )
+          transcriptOf(logs.get("slow")?.transcripts ?? [])
+            .entries.flatMap((entry) => (entry.kind === "text" ? [entry.text] : []))
             .join(""),
         ).toBe("");
       } else {
@@ -969,7 +962,7 @@ describe("the pi-native harness through the controller", () => {
 
     expect(exit).toBe("done");
     expect(kinds).toEqual(["summary", "turn"]);
-    expect(seen.find((event) => event.type === "transcript")).toMatchObject({
+    expect(transcriptOf(seen)).toMatchObject({
       type: "transcript",
       entries: [
         {

@@ -200,7 +200,13 @@ const EntryShapes = z.discriminatedUnion("type", [
   runEntry("assistant.choice", z.object({ ...risen, block: ChoiceBlock })),
   runEntry(
     "tool.call",
-    z.object({ callId: z.string().min(1), name: z.string(), input: z.string() }),
+    z.object({
+      callId: z.string().min(1),
+      name: z.string(),
+      input: z.string(),
+      /** Run by a harness with its own loop, outside the controller's effect journal. */
+      native: z.literal(true).optional(),
+    }),
   ),
   runEntry(
     "tool.result",
