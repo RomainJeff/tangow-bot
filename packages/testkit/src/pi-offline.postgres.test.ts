@@ -990,6 +990,64 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
         { composio },
       );
     }, 30_000);
+
+    it("tells the bot about the replaced draft once, not again after its next card", async () => {
+      const composio = new ComposioEmulator();
+      // How often the bot reads the replaced draft, and whether only beside the user's message.
+      const told = (request: ModelEmulatorRequest) => {
+        const seen = JSON.stringify(request.messages);
+        const besideMessage = seen.slice(seen.indexOf("Additional user context:"));
+        return [seen.split("editedByUser").length - 1, besideMessage.includes("editedByUser")];
+      };
+      await journey(
+        [
+          proposeMail,
+          {
+            expect(request) {
+              expect(told(request)).toEqual([1, true]);
+            },
+            response: {
+              type: "tool",
+              id: "journey-which",
+              name: "ask_user",
+              arguments: { question: "Formal or casual?", options: ["Formal", "Casual"] },
+            },
+          },
+          {
+            expect(request) {
+              expect(told(request)).toEqual([1, true]);
+            },
+            response: reply("Here is a casual one."),
+          },
+          DONE,
+        ],
+        async (fixture) => {
+          await connectGmail(composio, fixture);
+          const sent = await fixture.send("Mail them hello.");
+          await sent.settled("waiting_input");
+          const card = await latestCard(fixture.prisma, sent.runId);
+          await fixture.send("Make it shorter.", {
+            draft: { messageId: card.id, text: "Edited by me." },
+          });
+          await expect
+            .poll(async () => (await latestCard(fixture.prisma, sent.runId)).id, {
+              timeout: 15_000,
+            })
+            .not.toBe(card.id);
+          await sent.settled("waiting_input");
+          const question = await latestCard(fixture.prisma, sent.runId);
+          await rpc(fixture.app, fixture.cookie, "threads/answer", {
+            botId: fixture.bot.id,
+            runId: sent.runId,
+            messageId: question.id,
+            answer: "choice-2",
+          });
+          await sent.settled("completed");
+          expect(composio.executions).toEqual([]);
+        },
+        { composio },
+      );
+    }, 30_000);
   });
 
   it("closes a helper as cancelled by whoever stopped its parent", async () => {

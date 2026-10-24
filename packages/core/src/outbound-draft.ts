@@ -84,6 +84,19 @@ export function replacedDraftResult(effect: {
   };
 }
 
+/** What the bot reads beside the message that replaced its draft, or undefined for any other effect. */
+export function replacedDraftContext(effect: {
+  status: string;
+  draft?: unknown;
+  request?: unknown;
+}): string | undefined {
+  const result = replacedDraftResult(effect);
+  return (
+    result &&
+    `The user wrote this instead of sending your draft. ${DRAFT_AS_DATA}: ${JSON.stringify(result)}`
+  );
+}
+
 /** Why a body cannot be sent, or undefined when it can. */
 export function draftTextError(text: string): string | undefined {
   if (!text.trim()) return "This message is empty.";

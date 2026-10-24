@@ -2598,7 +2598,16 @@ describe("sendThreadMessage while a proposal card waits", () => {
       { id: "deny", label: "Not now", outcome: "cancelled" },
     ],
   };
-  function proposalTx(options: { kind?: string; runStatus?: string } = {}) {
+  const mailDraft = {
+    id: "effect-1",
+    kind: "GMAIL_SEND_EMAIL",
+    status: "intended",
+    request: { recipient_email: "a@example.com", body: "Hello from Chief." },
+    draft: { state: "pending", path: ["body"], proposed: "Hello from Chief." },
+  };
+  function proposalTx(
+    options: { kind?: string; runStatus?: string; effect?: Record<string, unknown> } = {},
+  ) {
     return {
       $queryRaw: vi.fn().mockResolvedValue([]),
       thread: { findUniqueOrThrow: vi.fn().mockResolvedValue(THREAD) },
@@ -2618,11 +2627,13 @@ describe("sendThreadMessage while a proposal card waits", () => {
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
       externalEffect: {
-        findFirst: vi.fn().mockResolvedValue({
-          id: "effect-1",
-          kind: options.kind ?? "routine_proposal",
-          status: "intended",
-        }),
+        findFirst: vi.fn().mockResolvedValue(
+          options.effect ?? {
+            id: "effect-1",
+            kind: options.kind ?? "routine_proposal",
+            status: "intended",
+          },
+        ),
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
       steeringMessage: { create: vi.fn() },
@@ -2688,6 +2699,27 @@ describe("sendThreadMessage while a proposal card waits", () => {
         userId: "user-1",
         runId: "run-waiting",
       },
+    });
+  });
+
+  it("replaces a waiting draft, steering the reply with the text the user left on it", async () => {
+    const tx = proposalTx({ effect: mailDraft });
+    await expect(
+      send(tx, { messageId: "card-msg", text: "Hello, edited." }),
+    ).resolves.toMatchObject({ runIds: ["run-waiting"] });
+    expect(tx.externalEffect.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "denied",
+          request: { recipient_email: "a@example.com", body: "Hello, edited." },
+        }),
+      }),
+    );
+    expect(tx.steeringMessage.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        runId: "run-waiting",
+        context: expect.stringContaining('"draft":{"body":"Hello, edited.","editedByUser":true}'),
+      }),
     });
   });
 

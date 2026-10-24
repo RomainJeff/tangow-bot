@@ -4627,13 +4627,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
           : taskPrompt;
         const sentDrafts = await sendApprovedDrafts();
         if (!sentDrafts) return;
-        // Told until the bot acts again: its newest effect is then no longer this draft.
-        const [newestEffect] = await deps.prisma.externalEffect.findMany({
-          where: { runId },
-          orderBy: { createdAt: "desc" },
-          take: 1,
-        });
-        const replacedDraft = newestEffect && replacedDraftResult(newestEffect);
         const approvalContinuation = buildApprovalContinuation(
           approvedEffects.filter((effect) => !readDraft(effect.status, effect.draft)),
           (request) => redactSecrets(JSON.stringify(request), runSecrets),
@@ -4657,8 +4650,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
             (sent) =>
               `The user sent your draft from its card. ${DRAFT_AS_DATA}: ${redactSecrets(JSON.stringify(sent), runSecrets)}`,
           ),
-          replacedDraft &&
-            `The user wrote to you instead of sending your draft. ${DRAFT_AS_DATA}: ${redactSecrets(JSON.stringify(replacedDraft), runSecrets)}`,
         ];
         const turnPrompt = (recall: string | undefined) =>
           [clock, ...turnHead, recall, ...turnTail].filter(Boolean).join("\n\n");
@@ -4944,6 +4935,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                           text: buildSteeringMessageText(
                             [
                               await loadReplyContext(deps.prisma, thread.id, item.messageId),
+                              item.context && redactSecrets(item.context, runSecrets),
                               item.text,
                             ]
                               .filter(Boolean)
