@@ -146,6 +146,11 @@ const threadSendInput = threadTarget
     clientNonce: z.string().min(1).max(200).optional(),
     /** `false` opts this message out of any link preview, whatever its first link. */
     linkPreview: z.literal(false).optional(),
+    /** The waiting mail draft this message replaces, with its text as the user left it. */
+    draft: z
+      .object({ messageId: Id, text: z.string().max(ASK_DRAFT_TEXT_MAX_LENGTH) })
+      .strict()
+      .optional(),
   })
   .superRefine((input, ctx) => {
     const text = input.text?.trim() ?? "";

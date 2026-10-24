@@ -2629,7 +2629,7 @@ describe("sendThreadMessage while a proposal card waits", () => {
       task: { create: vi.fn(), updateMany: vi.fn() },
     };
   }
-  const send = (tx: ReturnType<typeof proposalTx>) =>
+  const send = (tx: ReturnType<typeof proposalTx>, draft?: { messageId: string; text: string }) =>
     sendThreadMessage(
       {
         prisma: {
@@ -2646,7 +2646,7 @@ describe("sendThreadMessage while a proposal card waits", () => {
         threadId: "thread-1",
         bot: { computer: null },
       } as ThreadTarget,
-      { text: "Plutôt le mardi", clientNonce: "nonce-dismiss" },
+      { text: "Plutôt le mardi", clientNonce: "nonce-dismiss", draft },
     );
 
   it("puts the card away and steers the reply into the run it resumes", async () => {
@@ -2689,6 +2689,16 @@ describe("sendThreadMessage while a proposal card waits", () => {
         runId: "run-waiting",
       },
     });
+  });
+
+  it("refuses a draft's text sent over a card that is not a draft, sending nothing", async () => {
+    const tx = proposalTx();
+    await expect(send(tx, { messageId: "card-msg", text: "Hello" })).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: "This draft is no longer waiting.",
+    });
+    expect(tx.externalEffect.updateMany).not.toHaveBeenCalled();
+    expect(tx.steeringMessage.create).not.toHaveBeenCalled();
   });
 
   it("still asks to answer a Create bot card first", async () => {

@@ -720,6 +720,7 @@ export async function sendThreadMessage(
     replyQuote?: string;
     clientNonce?: string;
     linkPreview?: false;
+    draft?: { messageId: string; text: string };
   },
 ) {
   const existing = await replayExistingSend(deps, target.threadId, input.clientNonce);
@@ -793,7 +794,11 @@ export async function sendThreadMessage(
             threadId: target.threadId,
             runId: waitingRun.id,
             userId: actor.userId,
+            draft: input.draft,
           }));
+        if (input.draft && dismissal?.outcome !== "dismissed") {
+          throw new ORPCError("CONFLICT", { message: "This draft is no longer waiting." });
+        }
         if (waitingRun && dismissal && dismissal.outcome !== "keep") {
           await tx.steeringMessage.create({
             data: {
@@ -884,6 +889,9 @@ export async function sendThreadMessage(
         };
       }
 
+      // A typed reply puts a card away only in a bot's own thread; in a group it waits as before.
+      if (input.draft)
+        throw new ORPCError("CONFLICT", { message: "Answer the pending ask first." });
       const members = await lockAndLoadGroupMembers(tx, actor, target);
       const memberBotIds = members.map((member) => member.botId);
       const mentionTargets = splitMentionTargets(input.mentions);
