@@ -1726,6 +1726,7 @@ describe("buildSystemInstructions", () => {
     workspaceInstruction: "This entire computer workspace is your private home.",
     agentEnvironmentInstruction: "Environment: linux",
     pluginLine: "No plugins are connected yet.",
+    catalogIndex: "Connected tool catalog: mcp__mail__send",
     agentSkillsLine: "Skills: none",
     taughtSkillsLine: "Saved taught skills:\n- brief",
     botDirectory: "<bots>peer</bots>",
@@ -1740,6 +1741,7 @@ describe("buildSystemInstructions", () => {
       [buildSystemInstructions(parts), ""],
       [buildHarnessAddendum(parts), "mcp__rakazo__"],
     ]) {
+      expect(instructions).toContain("Connected tool catalog: mcp__mail__send");
       expect(instructions).toContain("Use the simplest suitable method");
       expect(instructions).toContain(`For a known public URL, use ${prefix}web_fetch directly`);
       expect(instructions).toContain("auth_required or permission_denied");

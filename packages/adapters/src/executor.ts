@@ -308,6 +308,7 @@ import {
 import {
   assertConnectorToolArgs,
   CATALOG_EXECUTE,
+  catalogIndexText,
   uniquifyInstalledToolName,
 } from "./lazy-tool-catalog.js";
 import {
@@ -1067,6 +1068,7 @@ export type SystemInstructionParts = {
   workspaceInstruction: string;
   agentEnvironmentInstruction?: string;
   pluginLine?: string;
+  catalogIndex?: string;
   agentSkillsLine?: string;
   taughtSkillsLine?: string;
   botDirectory?: string;
@@ -1166,6 +1168,7 @@ export function buildSystemInstructions(parts: SystemInstructionParts): string {
       : undefined,
     `${tool("archive_bot")} safely archives a bot this bot created, and only that bot. Use it when the user asks to remove that bot or when it is finished and unused. The user can restore it or permanently delete it later. confirm_name must exactly match its name.`,
     parts.pluginLine,
+    parts.catalogIndex,
     parts.agentSkillsLine,
     parts.taughtSkillsLine,
     `For charts and data visualization, use the ${tool("render_plot")} tool: it renders bar, line, scatter, histogram, heatmap, faceted and many more chart types from a JSON spec and attaches the PNG to the chat. Call ${tool("render_plot")} with {"help": true} before your first chart to read the full guide.`,
@@ -5105,6 +5108,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             workspaceInstruction,
             agentEnvironmentInstruction,
             pluginLine,
+            catalogIndex: catalogIndexText(tools),
             agentSkillsLine,
             taughtSkillsLine,
             botDirectory,

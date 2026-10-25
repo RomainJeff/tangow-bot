@@ -293,8 +293,7 @@ describe("MCP connector session cache", () => {
       },
     ]);
     expect(JSON.stringify(indexed)).not.toContain("inputSchema");
-    expect(search!.description).toContain("demo:");
-    expect(search!.description).toContain("tool_00");
+    expect(search!.description).not.toContain("tool_00");
 
     const expanded = await collect({
       tool: search!.name,
