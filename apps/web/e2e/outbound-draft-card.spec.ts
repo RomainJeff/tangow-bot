@@ -742,3 +742,49 @@ test("a one-address line keeps what does not fit in its field, marked", async ({
   await to.blur();
   await expect(to).toHaveCount(0);
 });
+
+test.describe("the open card's shadow", () => {
+  // Twice the pixels: a shadow cut by an ancestor shows as a hard edge in the capture.
+  test.use({ deviceScaleFactor: 2 });
+
+  test("has room inside every ancestor that clips it", async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await signup(page, `outbound-shadow-${Date.now()}@rakazo.test`, "password12", "Ana Lima");
+    await completeOnboarding(page);
+    await showThread(page, waitingDraft(activeBotId(page)), { run: null });
+    const draftCard = page.getByTestId("draft-card");
+    await expect(draftCard).toBeVisible();
+
+    // shadow-card reaches 28 px sideways and 44 px below in dark, its widest.
+    const room = await draftCard.evaluate((card) => {
+      const box = card.getBoundingClientRect();
+      const rooms: { sides: number; below: number }[] = [];
+      for (let el = card.parentElement; el; el = el.parentElement) {
+        const style = getComputedStyle(el);
+        if (style.overflowX === "visible" && style.overflowY === "visible") continue;
+        const edge = el.getBoundingClientRect();
+        rooms.push({
+          sides: Math.min(box.left - edge.left, edge.left + el.clientWidth - box.right),
+          below: parseFloat(style.paddingBottom),
+        });
+      }
+      return rooms;
+    });
+    expect(room.length).toBeGreaterThan(0);
+    // The shell's own overflow sits a column and a sidebar away: only the nearest clip is tight.
+    expect(room[0]!.sides).toBeGreaterThanOrEqual(28);
+    expect(room[0]!.below).toBeGreaterThanOrEqual(44);
+
+    const box = (await draftCard.boundingBox())!;
+    for (const theme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: theme });
+      await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+      const path = testInfo.outputPath(`outbound-draft-shadow-room-${theme}-1440.png`);
+      await page.screenshot({
+        path,
+        clip: { x: box.x - 60, y: box.y - 20, width: box.width + 120, height: box.height + 90 },
+      });
+      await testInfo.attach(`shadow-room-${theme}`, { contentType: "image/png", path });
+    }
+  });
+});
