@@ -78,7 +78,8 @@ E2B volume of the same name, verifies their SHA-256 and mode, then switches the 
 computer to E2B. A space's shared volume is copied once. Symbolic links, special files, empty
 folders and files over 1 GiB are never followed or copied; the plan lists them, a large file as
 `too_large`. Dotfiles and browser profiles in
-`DATA_DIR/homes` stay behind, as for a team home. The local volume directories are left in place:
+`DATA_DIR/homes` stay behind, as for a team home, so each bot starts E2B with a fresh browser and
+must sign in again to the sites it used. The local volume directories are left in place:
 delete them once the bots work on E2B. See
 [Carry Docker volumes to E2B](#carry-docker-volumes-to-e2b) to run it by hand.
 
