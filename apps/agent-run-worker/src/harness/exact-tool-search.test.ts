@@ -85,13 +85,16 @@ it.each(["send an email", "GMAIL_SEND_EMAIL inbox", "direct_tool", "model_tool",
   },
 );
 
-it("does not add an already-active tool again", async () => {
+it("keeps active exact names available and loads only the remaining names", async () => {
   const wrapped = await searchExtension(exactToolSearchExtension(), ["tool_search", send]);
-  const original = await searchExtension(createToolSearchExtension(), ["tool_search", send]);
 
-  expect(await wrapped.search("GMAIL_SEND_EMAIL")).toEqual(
-    await original.search("GMAIL_SEND_EMAIL"),
-  );
-  expect(wrapped.active()).toEqual(original.active());
-  expect(wrapped.active().filter((name) => name === send)).toHaveLength(1);
+  expect(await wrapped.search("GMAIL_SEND_EMAIL")).toEqual({
+    content: [{ type: "text", text: "The requested tools are already available." }],
+    details: { loaded: [] },
+  });
+  expect(wrapped.active()).toEqual(["tool_search", send]);
+  expect((await wrapped.search("GMAIL_SEND_EMAIL, GMAIL_FETCH_EMAILS")).details).toEqual({
+    loaded: [fetch],
+  });
+  expect(wrapped.active()).toEqual(["tool_search", send, fetch]);
 });

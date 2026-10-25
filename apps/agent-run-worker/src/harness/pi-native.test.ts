@@ -88,3 +88,87 @@ it("relays a ChatGPT subscription model, whose credential only the controller ho
   }).catch(() => undefined);
   expect(requests).not.toEqual([]);
 });
+
+it("loads original connector names through pi's real MCP registration and wrapped tool_search", async () => {
+  const long = "GITHUB_GET_A_THREAD_SUBSCRIPTION_FOR_THE_AUTHENTICATED_USER_WITH_NOTIFICATIONS";
+  const hyphenated = "mail.send-message";
+  const assigned = [
+    "mcp__rakazo__GITHUB_GET_A_THREAD_SUBSCRIPTION_FOR_THE_A_4a24c604",
+    "mcp__rakazo__mail_send_message",
+  ];
+  const queries = [`${long}, mcp__rakazo__${hyphenated}`, assigned.join(", ")];
+  const transcripts: unknown[] = [];
+  const { host } = recordingHost(new AbortController().signal);
+  host.decide = (async (body, expected) => {
+    if (body.type === "transcript") transcripts.push(...body.messages);
+    return expected === "steering" ? { type: "steering", messages: [] } : { type: "recorded" };
+  }) as HarnessHost["decide"];
+  host.model = async (_body, onPart) => {
+    const query = queries.shift();
+    onPart({
+      type: "model.event",
+      event: {
+        type: "done",
+        reason: query ? "toolUse" : "stop",
+        message: {
+          role: "assistant",
+          content: query
+            ? [
+                {
+                  type: "toolCall",
+                  id: `search-${queries.length}`,
+                  name: "tool_search",
+                  arguments: { query, limit: 1 },
+                },
+              ]
+            : [{ type: "text", text: "Done." }],
+          api: "openai-completions",
+          provider: "openai-compatible",
+          model: "offline-fixture",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: query ? "toolUse" : "stop",
+          timestamp: 0,
+        },
+      },
+    });
+    return { type: "model.end" };
+  };
+
+  await runPi(host, {
+    run: {
+      ...run,
+      tools: [long, hyphenated].map((name) => ({
+        name,
+        description: "Read connected app data.",
+        inputSchema: { type: "object", properties: {} },
+        where: "controller",
+        catalog: { via: "mcp_execute_tool", id: name },
+      })),
+    },
+  });
+
+  expect(transcripts).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        role: "toolResult",
+        toolName: "tool_search",
+        details: { loaded: assigned },
+        isError: false,
+      }),
+      expect.objectContaining({
+        role: "toolResult",
+        toolName: "tool_search",
+        details: { loaded: [] },
+        isError: false,
+        content: [{ type: "text", text: "The requested tools are already available." }],
+      }),
+    ]),
+  );
+});

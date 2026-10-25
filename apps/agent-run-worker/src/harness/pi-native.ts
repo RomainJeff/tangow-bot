@@ -183,7 +183,12 @@ export const piNativeHarness: GuestHarness = {
         noPromptTemplates: true,
         noThemes: true,
         extensionFactories: [
-          exactToolSearchExtension(),
+          exactToolSearchExtension(
+            (term) =>
+              assignedNames.get(
+                term.startsWith(RAKAZO_TOOL_PREFIX) ? term.slice(RAKAZO_TOOL_PREFIX.length) : term,
+              ) ?? term,
+          ),
           (pi) =>
             createMcpExtension({
               loadConfig: () => ({

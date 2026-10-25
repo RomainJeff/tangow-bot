@@ -7,7 +7,9 @@ import type {
 import { createToolSearchExtension } from "@earendil-works/pi-coding-agent";
 import { RAKAZO_TOOL_PREFIX } from "@rakazo/adapter-kit";
 
-export function exactToolSearchExtension(): ExtensionFactory {
+export function exactToolSearchExtension(
+  resolveName: (term: string) => string = (term) => term,
+): ExtensionFactory {
   return (pi) => {
     const api: ExtensionAPI = {
       ...pi,
@@ -27,8 +29,9 @@ export function exactToolSearchExtension(): ExtensionFactory {
             const searchable = new Map<string, ToolInfo>();
             for (const candidate of pi.getAllTools()) {
               if (
-                (candidate.exposure === "deferred" || candidate.exposure === "codemode") &&
-                !active.includes(candidate.name)
+                candidate.exposure === "deferred" ||
+                candidate.exposure === "codemode" ||
+                active.includes(candidate.name)
               ) {
                 searchable.set(candidate.name, candidate);
                 if (candidate.name.startsWith(RAKAZO_TOOL_PREFIX)) {
@@ -36,12 +39,18 @@ export function exactToolSearchExtension(): ExtensionFactory {
                 }
               }
             }
-            const matches = terms.map((term) => searchable.get(term));
+            const matches = terms.map((term) => searchable.get(resolveName(term)));
             if (matches.length === 0 || !matches.every((match) => match !== undefined)) {
               return tool.execute(...args);
             }
-            const loaded = [...new Set(matches)];
+            const loaded = [...new Set(matches)].filter((match) => !active.includes(match.name));
             const names = loaded.map((match) => match.name);
+            if (names.length === 0) {
+              return {
+                content: [{ type: "text", text: "The requested tools are already available." }],
+                details: { loaded: [] },
+              };
+            }
             pi.setActiveTools([...active, ...names]);
             return {
               content: [
