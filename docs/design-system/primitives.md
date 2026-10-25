@@ -97,6 +97,21 @@ second shadow or a bordered card inside it.
 Used by: approval asks, bot questions (`ask`, `ask_user`, `choice`) and secret
 asks, each rendered as a normal bot row.
 
+### Outbound draft card
+
+A message the bot wrote in the person's name, in a `FramedBlock`. The header
+holds the app's mark, from the bundled marks in `@rakazo/core` (Gmail, Outlook,
+Slack), else a neutral glyph in `mutedForeground`, never a letter; a catalog
+`logo` wins over both. Open, it reads as a grid: a 64 px label column, then From
+(avatar, name, account), To in 500, Cc, Bcc, Subject, all at `text-row-name`,
+and the text in a `well`. Values start 16 px in, where a field's text sits, so
+nothing moves sideways when editing starts. Touching a field turns each
+editable line into a 44 px field on the `well` (`rounded-card`, `px-4`,
+`text-body`, the body's hover and selected rings); recipients become chips with
+their own 24 px remove button, and Cc and Bcc are buttons at the end of the To
+field that open their own row. Labels stay outside the fields. The lines stay
+fields until the card is answered, so Send never moves from under the pointer.
+
 ## OptionTile
 
 One answer of a question card (`ask_user`, a legacy choice): a full-width

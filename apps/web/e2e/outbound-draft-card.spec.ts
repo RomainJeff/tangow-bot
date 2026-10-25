@@ -225,11 +225,27 @@ for (const width of [1440, 390]) {
     const button = (name: string) => draftCard.getByRole("button", { name, exact: true });
 
     // At rest: the app and account, every recipient by role, the subject, the text, nothing else.
-    await expect(header).toHaveText("Mail · ana@example.com");
-    await expect(draftCard.getByText("To bo@example.com, cy@example.com")).toBeVisible();
-    await expect(draftCard.getByText("Cc dee.long-address@partners.example.com")).toBeVisible();
-    await expect(draftCard.getByText("Bcc ed@example.com")).toBeVisible();
-    await expect(draftCard.getByText("Subject Thursday instead of Wednesday")).toBeVisible();
+    await expect(header).toHaveText("Mail");
+    await expect(draftCard.getByText("Ana Lima", { exact: true })).toBeVisible();
+    await expect(draftCard.getByText("ana@example.com", { exact: true })).toBeVisible();
+    await expect(
+      draftCard.getByText("bo@example.com, cy@example.com", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      draftCard.getByText("dee.long-address@partners.example.com", { exact: true }),
+    ).toBeVisible();
+    await expect(draftCard.getByText("ed@example.com", { exact: true })).toBeVisible();
+    await expect(
+      draftCard.getByText("Thursday instead of Wednesday", { exact: true }),
+    ).toBeVisible();
+    // Labels share one column and the values start together.
+    const [toLabel, toValue, subjectValue] = await Promise.all([
+      draftCard.getByText("To", { exact: true }).boundingBox(),
+      draftCard.getByText("bo@example.com, cy@example.com", { exact: true }).boundingBox(),
+      draftCard.getByText("Thursday instead of Wednesday", { exact: true }).boundingBox(),
+    ]);
+    expect(toLabel!.x).toBeLessThan(toValue!.x);
+    expect(toValue!.x).toBeCloseTo(subjectValue!.x, 0);
     await expect(text).toHaveValue(BODY);
     await expect(draftCard.locator('[data-slot="framed-block-status"]')).toHaveCount(0);
     const [trash, copy, send] = await Promise.all(
@@ -406,7 +422,7 @@ for (const width of [1440, 390]) {
 
     // The person as Slack names them, no subject or copy line, and the text the only field.
     await expect(header).toHaveText("Slack");
-    await expect(draftCard.getByText("To Marie Dupont @marie", { exact: true })).toBeVisible();
+    await expect(draftCard.getByText("Marie Dupont @marie", { exact: true })).toBeVisible();
     await expect(draftCard).not.toContainText("D0MARIE");
     await expect(draftCard).not.toContainText("Subject");
     await expect(draftCard.getByRole("textbox")).toHaveCount(1);
@@ -417,7 +433,7 @@ for (const width of [1440, 390]) {
     await expect(header).toContainText("Editing");
     await text.fill(SLACK_EDITED);
     await shoot(page, testInfo, "slack-editing");
-    await draftCard.getByText("To Marie Dupont @marie").click();
+    await draftCard.getByText("Marie Dupont @marie").click();
     await expect(header).toContainText("Edited");
 
     // Send carries only the edited text: the recipient is Slack's, never the card's to change.
@@ -437,7 +453,7 @@ for (const width of [1440, 390]) {
       ...waiting({ conversation: { kind: "channel", name: "general" } }),
     );
     await page.reload({ waitUntil: "domcontentloaded" });
-    await expect(draftCard.getByText("To #general", { exact: true })).toBeVisible();
+    await expect(draftCard.getByText("#general", { exact: true })).toBeVisible();
     await shoot(page, testInfo, "slack-channel");
     onAnswer = () =>
       drafts.push(
@@ -446,7 +462,11 @@ for (const width of [1440, 390]) {
           conversation: { kind: "channel", name: "general" },
         }),
       );
+    answered.body = undefined;
     await draftCard.getByRole("button", { name: "Send", exact: true }).click();
+    await expect
+      .poll(() => answered.body)
+      .toMatchObject({ messageId: "draft-card", answer: "allow" });
     expect(answered.body?.edits).toBeUndefined();
     await expect(draftCard.getByText(/^Sent to #general · \d/)).toBeVisible();
   });
@@ -549,14 +569,21 @@ for (const width of [1440, 390]) {
     await expect(subject).toHaveValue("Thursday instead of Wednesday");
     await expect(draftCard.locator('[data-slot="framed-block-status"]')).toHaveCount(0);
     const remove = button("Remove cy@example.com");
-    await expect(remove).toHaveCSS("opacity", "0");
-    await expect(button("Cc")).toHaveCSS("opacity", "0");
-    await expect(button("Cc")).toHaveCSS("width", "0px");
+    await expect(remove).toHaveCount(0);
+    await expect(button("Cc")).toHaveCount(0);
 
+    // Editing starts: each line becomes a 44 px field and its text stays where it was read.
+    const readAt = (await draftCard.getByText("bo@example.com,", { exact: true }).boundingBox())!;
+    const subjectCell = subject.locator("xpath=..");
+    expect((await subjectCell.boundingBox())!.height).toBeLessThan(44);
     // The focused To line offers the Cc and Bcc the send accepts; pressing one opens its field.
     await to.focus();
-    await expect(button("Cc")).toHaveCSS("opacity", "1");
-    await expect(button("Bcc")).toHaveCSS("opacity", "1");
+    const editAt = (await draftCard.getByText("bo@example.com", { exact: true }).boundingBox())!;
+    expect(editAt.x).toBeCloseTo(readAt.x, 0);
+    expect((await to.locator("xpath=..").boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    expect((await subjectCell.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    await expect(button("Cc")).toBeVisible();
+    await expect(button("Bcc")).toBeVisible();
     const [removeBox, ccBox] = await Promise.all([
       remove.boundingBox(),
       button("Cc").boundingBox(),
@@ -565,31 +592,30 @@ for (const width of [1440, 390]) {
     expect(ccBox!.height).toBeGreaterThanOrEqual(24);
     await shoot(page, testInfo, "fields-cc-reveal");
     // Typing folds them away: the field runs to the line's end for a long address.
-    await to.pressSequentially("ana@exa");
+    await to.pressSequentially("lou@exa");
     await expect(button("Cc")).toHaveCount(0);
     const [toBox, toLine] = await Promise.all([
       to.boundingBox(),
       to.locator("xpath=..").boundingBox(),
     ]);
-    // The line's inner padding is 6 px.
-    expect(toBox!.x + toBox!.width).toBeCloseTo(toLine!.x + toLine!.width - 6, 0);
+    // The field's inner padding is 8 px.
+    expect(toBox!.x + toBox!.width).toBeCloseTo(toLine!.x + toLine!.width - 8, 0);
     await to.fill("");
     await button("Cc").click();
     await expect(cc).toBeFocused();
     await expect(button("Cc")).toHaveCount(0);
 
-    // A hovered line offers each address's remove button; a typed address joins the line.
-    await draftCard.getByText("cy@example.com", { exact: true }).hover();
+    // An edited line offers each address's remove button; a typed address joins the line.
     await remove.click();
     await expect(header).toContainText("Editing");
-    await to.fill("ana@example.com");
+    await to.fill("lou@example.com");
     await to.press("Enter");
-    await expect(draftCard.getByText("ana@example.com", { exact: true })).toBeVisible();
+    await expect(draftCard.getByText("lou@example.com", { exact: true })).toBeVisible();
     // Backspace in an empty field takes the line's last address back off.
     await to.press("Backspace");
-    await expect(draftCard.getByText("ana@example.com", { exact: true })).toHaveCount(0);
-    await to.fill("ana@example.com,");
-    await expect(draftCard.getByText("ana@example.com", { exact: true })).toBeVisible();
+    await expect(draftCard.getByText("lou@example.com", { exact: true })).toHaveCount(0);
+    await to.fill("lou@example.com,");
+    await expect(draftCard.getByText("lou@example.com", { exact: true })).toBeVisible();
     // The same address in another case is already on the line.
     await to.fill("Bo@Example.com,");
     await expect(to).toHaveValue("");
@@ -650,7 +676,7 @@ for (const width of [1440, 390]) {
     await bcc.pressSequentially("ed@example.com");
     const recipients = [
       { role: "to", address: "bo@example.com" },
-      { role: "to", address: "ana@example.com" },
+      { role: "to", address: "lou@example.com" },
       { role: "cc", address: "dee@partners.example.com" },
       { role: "bcc", address: "ed@example.com" },
     ];
@@ -670,12 +696,12 @@ for (const width of [1440, 390]) {
     });
     expect(Object.keys(answered.body?.edits ?? {})).toEqual(["recipients", "subject"]);
     await expect(
-      draftCard.getByText(/^Sent to bo@example\.com, ana@example\.com · \d/),
+      draftCard.getByText(/^Sent to bo@example\.com, lou@example\.com · \d/),
     ).toBeVisible();
 
     // Typing to the bot while the draft waits hands over its lines as they were left.
     await reset(waiting());
-    await draftCard.getByText("cy@example.com", { exact: true }).hover();
+    await to.focus();
     await remove.click();
     await subject.fill("Friday instead of Wednesday");
     const composer = page.locator('textarea[name="chat-message"]');
@@ -696,8 +722,12 @@ for (const width of [1440, 390]) {
     await reset(
       waiting(card({}, { ...fielded.draft, owner: { userId: "another", name: "Bo Chen" } })),
     );
-    await expect(draftCard.getByText("To bo@example.com, cy@example.com")).toBeVisible();
-    await expect(draftCard.getByText("Subject Thursday instead of Wednesday")).toBeVisible();
+    await expect(
+      draftCard.getByText("bo@example.com, cy@example.com", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      draftCard.getByText("Thursday instead of Wednesday", { exact: true }),
+    ).toBeVisible();
     await expect(draftCard.getByRole("textbox")).toHaveCount(0);
     await expect(draftCard.getByRole("button")).toHaveCount(0);
   });
@@ -723,9 +753,10 @@ test("a one-address line keeps what does not fit in its field, marked", async ({
   const to = draftCard.getByRole("textbox", { name: "To", exact: true });
   const send = draftCard.getByRole("button", { name: "Send", exact: true });
 
-  // A full line has no field; removing its address opens the field, focused.
+  // A full line has no field; pressing it starts editing, and removing its address opens the
+  // field, focused.
   await expect(to).toHaveCount(0);
-  await draftCard.getByText("bo@example.com", { exact: true }).hover();
+  await draftCard.getByText("bo@example.com", { exact: true }).click();
   await draftCard.getByRole("button", { name: "Remove bo@example.com", exact: true }).click();
   await expect(to).toBeFocused();
 
