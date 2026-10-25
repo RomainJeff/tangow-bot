@@ -235,6 +235,51 @@ const OUTLOOK_TOOLS: ConnectorTool[] = [
   },
 ];
 
+/** Composio's Slack send and the two reads that name its recipient (toolkit 2026-10). */
+const SLACK_TOOLS: ConnectorTool[] = [
+  {
+    name: "SLACK_SEND_MESSAGE",
+    description: "Post a message to a Slack channel or direct message",
+    inputSchema: {
+      type: "object",
+      properties: {
+        channel: { type: "string", description: "Channel or direct message id" },
+        markdown_text: { type: "string" },
+        blocks: { type: "array", items: { type: "object" } },
+        thread_ts: { type: "string" },
+        unfurl_links: { type: "boolean" },
+        unfurl_media: { type: "boolean" },
+        fallback_text: { type: "string" },
+        reply_broadcast: { type: "boolean" },
+      },
+      required: ["channel"],
+    },
+  },
+  {
+    name: "SLACK_RETRIEVE_CONVERSATION_INFORMATION",
+    description: "Read a Slack conversation's details",
+    readOnly: true,
+    inputSchema: { type: "object", properties: { channel: { type: "string" } } },
+  },
+  {
+    name: "SLACK_RETRIEVE_DETAILED_USER_INFORMATION",
+    description: "Read a Slack user's details",
+    readOnly: true,
+    inputSchema: { type: "object", properties: { user: { type: "string" } } },
+  },
+];
+
+/** The emulated Slack workspace: its people, and the channels and direct messages they share. */
+const SLACK_USERS = [
+  { id: "U0MARIE", name: "marie", real_name: "Marie Dupont" },
+  { id: "U0BOB", name: "bob", real_name: "Bob Martin" },
+];
+const SLACK_CONVERSATIONS: Record<string, Record<string, unknown>> = {
+  C0GENERAL: { id: "C0GENERAL", name: "general", is_channel: true },
+  C0LAUNCH: { id: "C0LAUNCH", name: "launch", is_channel: true, is_private: true },
+  D0MARIE: { id: "D0MARIE", is_im: true, user: "U0MARIE" },
+};
+
 const strings = { type: "array", items: { type: "string" } };
 
 /**
@@ -489,6 +534,43 @@ function sentResult(message: MailMessage): Record<string, unknown> {
   };
 }
 
+/** Slack's own answers, as Composio passes them on under `data`. */
+function executeSlack(tool: string, args: Record<string, unknown>): Record<string, unknown> {
+  const failed = (error: string) => ({ successful: false, error, data: { ok: false, error } });
+  switch (tool) {
+    case "SLACK_SEND_MESSAGE": {
+      const conversation = SLACK_CONVERSATIONS[asString(args.channel)];
+      if (!conversation) return failed("channel_not_found");
+      const text = asString(args.markdown_text);
+      if (!text.trim()) return failed("no_text");
+      return {
+        successful: true,
+        data: { ok: true, channel: conversation.id, ts: "1761400000.000100", message: { text } },
+      };
+    }
+    case "SLACK_RETRIEVE_CONVERSATION_INFORMATION": {
+      const conversation = SLACK_CONVERSATIONS[asString(args.channel)];
+      return conversation
+        ? { successful: true, data: { ok: true, channel: conversation } }
+        : failed("channel_not_found");
+    }
+    case "SLACK_RETRIEVE_DETAILED_USER_INFORMATION": {
+      const user = SLACK_USERS.find((each) => each.id === args.user);
+      return user
+        ? {
+            successful: true,
+            data: {
+              ok: true,
+              user: { ...user, profile: { real_name: user.real_name, display_name: user.name } },
+            },
+          }
+        : failed("user_not_found");
+    }
+    default:
+      return failed(`Unknown Slack tool: ${tool}`);
+  }
+}
+
 export type EmulatedFault =
   | { kind: "fail"; error: string }
   | { kind: "timeout" }
@@ -568,6 +650,10 @@ export class ComposioEmulator implements ComposioProvider {
         tools.push(...OUTLOOK_TOOLS);
         continue;
       }
+      if (slug === "SLACK") {
+        tools.push(...SLACK_TOOLS);
+        continue;
+      }
       tools.push(thinEmulatedTool(slug));
     }
     if (tools.length > 0) tools.push(BATCH_TOOL);
@@ -629,6 +715,7 @@ export class ComposioEmulator implements ComposioProvider {
   ): Record<string, unknown> {
     const entityId = composioEntityId(context);
     if (tool.startsWith("GMAIL_")) return this.executeGmail(tool, args, entityId);
+    if (tool.startsWith("SLACK_")) return executeSlack(tool, args);
     if (tool === "OUTLOOK_SEND_EMAIL") {
       sendMessage(this.ensureMailbox(entityId), {
         to: asString(args.to),

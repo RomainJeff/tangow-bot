@@ -83,6 +83,7 @@ describe("batchItemSchemaIn", () => {
       { data: { tool_schemas: { GMAIL_SEND_EMAIL: { input_schema: { type: "object" } } } } },
     ],
     ["an error", { error: "Unknown tool" }],
+    ["schemas under a key the lookup does not answer in", { echo: { request: answer.data } }],
   ])("reads nothing from %s", (_, result) => {
     expect(batchItemSchemaIn(result, "GMAIL_SEND_EMAIL")).toBe(undefined);
   });

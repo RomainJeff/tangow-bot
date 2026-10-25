@@ -809,7 +809,7 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
     async function connectGmail(
       composio: ComposioEmulator,
       fixture: JourneyFixture,
-      provider: "GMAIL" | "OUTLOOK" = "GMAIL",
+      provider: "GMAIL" | "OUTLOOK" | "SLACK" = "GMAIL",
     ) {
       const { spaceId } = await fixture.prisma.bot.findUniqueOrThrow({
         where: { id: fixture.bot.id },
@@ -830,7 +830,7 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
           spaceId,
           userId: fixture.userId,
           provider,
-          displayName: provider === "GMAIL" ? "Gmail" : "Outlook",
+          displayName: { GMAIL: "Gmail", OUTLOOK: "Outlook", SLACK: "Slack" }[provider],
           status: "pending",
         },
       });
@@ -1050,6 +1050,60 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
                 bcc_emails: ["cy@example.test"],
               },
             ],
+          ]);
+        },
+        { composio },
+      );
+    }, 30_000);
+
+    it("posts a Slack message once, to the person Slack named, with the user's edit", async () => {
+      const composio = new ComposioEmulator();
+      const message = { channel: "D0MARIE", markdown_text: "Draft from the bot." };
+      await journey(
+        [
+          {
+            expect(request) {
+              expect(request.tools?.map((tool) => tool.function.name)).toContain(
+                "SLACK_SEND_MESSAGE",
+              );
+            },
+            response: {
+              type: "tool",
+              id: "journey-slack",
+              name: "SLACK_SEND_MESSAGE",
+              arguments: message,
+            },
+          },
+          {
+            expect(request) {
+              expect(JSON.stringify(request.messages)).toContain("Edited by me.");
+            },
+            response: reply("Sent."),
+          },
+          DONE,
+        ],
+        async (fixture) => {
+          await connectGmail(composio, fixture, "SLACK");
+          const sent = await fixture.send("Tell Marie on Slack.");
+          await sent.settled("waiting_input");
+          expect((await latestCard(fixture.prisma, sent.runId)).block.draft).toMatchObject({
+            app: { name: "Slack" },
+            recipients: [{ role: "to", address: "D0MARIE" }],
+            conversation: { kind: "person", name: "Marie Dupont", handle: "marie" },
+            body: "Draft from the bot.",
+          });
+          await answerDraft(fixture, sent.runId, { text: "Edited by me." });
+          await sent.settled("completed");
+          expect(composio.executions.map((call) => [call.tool, call.args])).toEqual([
+            ["SLACK_RETRIEVE_CONVERSATION_INFORMATION", { channel: "D0MARIE" }],
+            ["SLACK_RETRIEVE_DETAILED_USER_INFORMATION", { user: "U0MARIE" }],
+            ["SLACK_SEND_MESSAGE", { ...message, markdown_text: "Edited by me." }],
+          ]);
+          const effects = await fixture.prisma.externalEffect.findMany({
+            where: { runId: sent.runId, kind: "SLACK_SEND_MESSAGE" },
+          });
+          expect(effects).toMatchObject([
+            { status: "completed", draft: { state: "sent", proposed: "Draft from the bot." } },
           ]);
         },
         { composio },

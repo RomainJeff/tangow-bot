@@ -13,6 +13,7 @@ import {
 } from "@rakazo/core";
 import { boundDirectApprovalDetails, catalogApprovalDetails } from "./approval-effect.js";
 import type { ConnectorCallActions } from "./connector-actions.js";
+import { CHAT_APPS } from "./slack-recipient.js";
 
 /** Composio's Gmail sends add the account's signature unless told not to. */
 const COMPOSIO_SIGNED_SENDS = new Set(["GMAIL_SEND_EMAIL", "GMAIL_REPLY_TO_THREAD"]);
@@ -36,13 +37,14 @@ export function readConnectorOutbound(
         contained.actions.length === 1 ? { ...action, schema } : action,
       )
     : [{ toolName, args, schema }];
-  const read = readOutboundCall(actions, connectorKinds);
-  if (read.kind !== "draft") return read;
+  const read = readOutboundCall(actions, connectorKinds, CHAT_APPS);
+  if (read.kind !== "draft" && read.kind !== "chat") return read;
   // The draft's arguments are stored in place of the call's, and items sent as one JSON string
   // have no place to put them back.
   if (contained?.serialized) {
     return cardFitsArguments(args) ? { kind: "classic" } : REFUSE_UNSHOWABLE;
   }
+  if (read.kind === "chat") return read;
   const action = actions[0]!.toolName.replace(/^mcp__.+?__/, "").toUpperCase();
   if (COMPOSIO_SIGNED_SENDS.has(action) && !("include_signature" in read.draft.args)) {
     return {
@@ -175,6 +177,7 @@ export async function outboundAskDraft(
       account: draft.account,
     },
     recipients: draft.recipients,
+    ...(draft.conversation ? { conversation: draft.conversation } : {}),
     subject: draft.subject,
     ...(draft.fields ? { fields: askDraftFields(draft.fields) } : {}),
     body: draft.body,
