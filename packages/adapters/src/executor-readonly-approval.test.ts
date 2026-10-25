@@ -802,6 +802,7 @@ describe("connector read-only metadata and approval enforcement", () => {
     });
 
     describe("a Composio batch whose item's schema its server gives", () => {
+      const strings = { type: "array", items: { type: "string" } };
       const batchSchema = {
         type: "object",
         properties: { tools: { type: "array" }, thought: { type: "string" } },
@@ -816,10 +817,10 @@ describe("connector read-only metadata and approval enforcement", () => {
       const batch = (body = traced.body) => ({
         tools: [{ tool_slug: "GMAIL_SEND_EMAIL", arguments: { ...traced, body } }],
       });
-      function batched(emulator: ComposioEmulator) {
+      function batched(emulator: ComposioEmulator, inputSchema = batchSchema) {
         const f = fixture({
           name: "COMPOSIO_MULTI_EXECUTE_TOOL",
-          inputSchema: batchSchema,
+          inputSchema,
           connector: emulator,
         });
         f.setCalls([{ args: batch(), executionId: "c1" }]);
@@ -852,6 +853,7 @@ describe("connector read-only metadata and approval enforcement", () => {
         });
         f.setCalls([]);
         await f.run();
+        expect(lookups(emulator)).toHaveLength(1);
         const sent = emulator.executions.filter(
           (call) => call.tool === "COMPOSIO_MULTI_EXECUTE_TOOL",
         );
@@ -874,6 +876,15 @@ describe("connector read-only metadata and approval enforcement", () => {
         const emulator = new ComposioEmulator();
         emulator.failNext("COMPOSIO_GET_TOOL_SCHEMAS", fault);
         const f = batched(emulator);
+        await f.run();
+        expect(offered(f)).toEqual({ to: 1, subject: true });
+      });
+
+      it("never reads the item against the batch tool's own schema", async () => {
+        const emulator = new ComposioEmulator();
+        emulator.failNext("COMPOSIO_GET_TOOL_SCHEMAS", { kind: "fail", error: "Unknown tool" });
+        const withCc = { ...batchSchema, properties: { ...batchSchema.properties, cc: strings } };
+        const f = batched(emulator, withCc);
         await f.run();
         expect(offered(f)).toEqual({ to: 1, subject: true });
       });

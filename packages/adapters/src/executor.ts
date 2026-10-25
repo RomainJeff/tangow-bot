@@ -2643,7 +2643,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 args,
                 contained,
                 pluginProviders,
-                resolvedToolSchema ?? connectorSchemas.get(name),
+                // The called tool's schema describes a batch's envelope, never its item.
+                contained ? undefined : (resolvedToolSchema ?? connectorSchemas.get(name)),
               )
             : { kind: "none" };
           // A batch item carries no schema, so the lines its tool would take are asked of its server.
@@ -2655,12 +2656,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
             connector
           ) {
             const itemSchema = await lookUpBatchItemSchema(
-              (call, callContext) => connector.execute(call, callContext),
+              connector,
               { ...connectorCall, tool: name, args, executionId },
               innerActions[0]!.toolName,
               context,
               batchItemSchemas,
             );
+            context.signal.throwIfAborted();
             if (itemSchema) {
               const reread = readConnectorOutbound(
                 ownToolName,
