@@ -78,7 +78,9 @@ describe.skipIf(!dockerWorkersEnabled)("Docker workers", () => {
       const runId = await run.send("Write the notes.");
       await run.continueRun(runId);
       run.model.assertComplete();
-      expect(seen[0]).toBe(`${sandboxUser.uid}\n/workspace/bots/${run.bot.id}\nwritten on the computer`);
+      expect(seen[0]).toBe(
+        `${sandboxUser.uid}\n/workspace/bots/${run.bot.id}\nwritten on the computer`,
+      );
       expect(seen[1]).toContain("Successfully wrote");
       const volumes = await run.prisma.volume.findMany();
       const ref = (kind: string) => volumes.find((volume) => volume.kind === kind)!.providerRef!;
