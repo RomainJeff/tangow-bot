@@ -156,6 +156,24 @@ describe("sealed screen capabilities", () => {
         ?.target.interactive,
     ).toBe(true);
   });
+  it("seals the routing host of a private screen gateway with the target", () => {
+    const value = new URL(
+      sealScreenCapability(
+        "http://172.18.0.1:3002/embed.html?view_only=true",
+        "fake-secret",
+        "https://app.example",
+        scope,
+        100,
+        "6100-sbx.e2b.example.com",
+      ),
+    );
+    expect(value.toString()).not.toContain("e2b.example.com");
+    expect(openScreenCapability(value.pathname, "fake-secret", 101)?.target).toMatchObject({
+      hostname: "172.18.0.1",
+      port: 3002,
+      host: "6100-sbx.e2b.example.com",
+    });
+  });
   it("accepts a loopback *.localhost target", () => {
     expect(
       openScreenCapability(path("http://6080-sbx.localhost:13002/vnc.html"), "fake-secret", 101)

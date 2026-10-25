@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Fixed
 
+- On a self-hosted E2B reached through `E2B_SANDBOX_URL`, a bot's computer screen and taking control of it now open instead of showing a "Bad gateway" page.
 - Bots running in isolated Pi workers on E2B now send you their answers instead of sometimes finishing a run without a word.
 - Bots signed in with ChatGPT Plus/Pro answer again on E2B workers instead of failing every run with "No API key found for openai-codex".
 - Existing self-hosted bots can move from Docker or snapshot-based E2B computers to isolated Pi workers through the [setup command](docs/self-host-e2b-workers.md#configure-an-existing-source-deployment-with-one-command), with backups and a resumable home migration.

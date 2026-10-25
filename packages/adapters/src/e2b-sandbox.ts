@@ -25,7 +25,7 @@ import {
 } from "@rakazo/core";
 import { stopAllDesktopBrowsersCommand } from "@rakazo/core/node/desktop-runtime";
 import type { CommandHandle, CommandResult, ConnectionOpts } from "e2b";
-import { CommandExitError, Sandbox, TimeoutError } from "e2b";
+import { CommandExitError, ConnectionConfig, Sandbox, TimeoutError } from "e2b";
 import { sandboxIdleMs } from "./computer-idle.js";
 import { ComputerScreenUnavailableError } from "./computer-screens.js";
 import { normalizeWorkspacePath, shellQuote, workspacePath } from "./computer-support.js";
@@ -180,10 +180,15 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** A self-hosted proxy reached on a local `*.localhost` domain serves plain HTTP. */
-function e2bScreenUrl(host: string): string {
+/**
+ * A self-hosted E2B reached through `E2B_SANDBOX_URL` serves screens from that sandbox proxy,
+ * which routes by host name. Otherwise a proxy on a local `*.localhost` domain serves plain HTTP.
+ */
+function e2bScreenUrl(host: string): { url: string; host?: string } {
+  const sandboxUrl = new ConnectionConfig().sandboxUrl;
+  if (sandboxUrl) return { url: new URL("/embed.html", sandboxUrl).toString(), host };
   const scheme = /^([^.:]+\.)*localhost(:\d+)?$/.test(host) ? "http" : "https";
-  return `${scheme}://${host}/embed.html`;
+  return { url: `${scheme}://${host}/embed.html` };
 }
 
 export class E2BSandboxProvider implements SandboxProvider {

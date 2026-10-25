@@ -55,7 +55,11 @@ export interface LinuxDesktopHost {
     context: AdapterContext,
     options?: DesktopExecutionOptions,
   ): Promise<{ code: number; stdout: string; stderr?: string; inputDispatched?: boolean }>;
-  screenUrl(computer: ComputerRef, port: number, context: AdapterContext): Promise<string>;
+  screenUrl(
+    computer: ComputerRef,
+    port: number,
+    context: AdapterContext,
+  ): Promise<{ url: string; host?: string }>;
 }
 
 const pageBrowserResultSchema = z.object({
@@ -138,12 +142,17 @@ export class LinuxDesktop {
         context,
       );
     }
-    const url = await this.host.screenUrl(
+    const { url, host } = await this.host.screenUrl(
       computer,
       request.interactive ? screen.layout.controlPort : screen.layout.viewPort,
       context,
     );
-    return { url: desktopUrl(url, token), mimeType: "text/html", close: async () => undefined };
+    return {
+      url: desktopUrl(url, token),
+      ...(host ? { host } : {}),
+      mimeType: "text/html",
+      close: async () => undefined,
+    };
   }
 
   async setScreenControl(

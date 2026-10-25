@@ -75,7 +75,7 @@ function attachNovncProxy(server: ViteDevServer | PreviewServer, secret: string,
     }
     const headers = {
       ...safeProxyHeaders(req.headers),
-      host: `${target.hostname}:${target.port}`,
+      host: target.host ?? `${target.hostname}:${target.port}`,
     };
     const transport = target.protocol === "https:" ? https : http;
     let upstream: ClientRequest | undefined;
@@ -183,7 +183,7 @@ function attachNovncProxy(server: ViteDevServer | PreviewServer, secret: string,
     upstream.once(target.protocol === "https:" ? "secureConnect" : "connect", () => {
       const headerLines = [
         `${req.method ?? "GET"} ${target.path} HTTP/1.1`,
-        `Host: ${target.hostname}:${target.port}`,
+        `Host: ${target.host ?? `${target.hostname}:${target.port}`}`,
       ];
       for (const [key, value] of Object.entries(safeProxyHeaders(req.headers))) {
         headerLines.push(`${key}: ${Array.isArray(value) ? value.join(",") : value}`);

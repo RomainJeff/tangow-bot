@@ -117,6 +117,36 @@ describe("E2B computer backend", () => {
     expect([url.protocol, url.host, url.pathname]).toEqual([protocol, host, "/embed.html"]);
   });
 
+  it("serves the screen through the self-hosted sandbox proxy, routed by host name", async () => {
+    vi.stubEnv("E2B_SANDBOX_URL", "http://172.18.0.1:3002");
+    try {
+      const sdk = {
+        connect: vi.fn(async () => ({
+          sandboxId: "existing",
+          getInfo: async () => ({ metadata: {} }),
+          display: ":0",
+          getHost: (port: number) => `${port}-existing.e2b.example.com`,
+          commands: {
+            run: vi.fn(async () => ({ stdout: "RAKAZO_DESKTOP=0:key\n", stderr: "", exitCode: 0 })),
+          },
+        })),
+      } as unknown as E2BSandboxSdk;
+      const screen = await new E2BSandboxProvider("test-key", sdk).connectScreen(
+        { id: "existing", providerRef: "existing", kind: "e2b" as const, botId: "bot" },
+        { view: "stream" },
+        context,
+      );
+      const url = new URL(screen.url!);
+      expect([url.origin, url.pathname, screen.host]).toEqual([
+        "http://172.18.0.1:3002",
+        "/embed.html",
+        "6100-existing.e2b.example.com",
+      ]);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("reconnects concurrent primary viewers without using the SDK's global VNC lifecycle", async () => {
     const command = vi.fn(async (_value: string) => ({
       stdout: "RAKAZO_DESKTOP=0:savedkey\n",
