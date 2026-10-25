@@ -1,11 +1,30 @@
+import type { AskDraftEdits } from "@rakazo/contracts";
 import { ASK_DRAFT_TEXT_MAX_LENGTH } from "@rakazo/contracts";
-import { draftAddresses } from "@rakazo/core";
+import type { RecipientRole } from "@rakazo/core";
+import {
+  addressesOf,
+  changeLine,
+  draftAddresses,
+  foldedRoles,
+  RECIPIENT_ROLES,
+} from "@rakazo/core";
 import { radii } from "@rakazo/ui-tokens";
 import { Stack, useRouter } from "expo-router";
+import { usePreventRemove } from "expo-router/react-navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  AccessibilityInfo,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AppLogo } from "../components/draft-card";
+import { MoreRecipientsRow, RecipientRow, SubjectRow } from "../components/draft-lines";
 import { mobileTokens } from "../lib/appearance";
 import type { DraftEditTarget } from "../lib/draft-edit";
 import {
@@ -15,12 +34,14 @@ import {
   keepDraftEdit,
   subscribeDraftEdit,
 } from "../lib/draft-edit";
+import type { TypedLines } from "../lib/draft-sheet";
+import { finishLines, sheetChanged } from "../lib/draft-sheet";
 import { useI18n } from "../lib/i18n";
 import { native, useMobileTokens, useThemedStyles } from "../lib/native";
 import { nativeTextStyle } from "../lib/typography";
 
-// Presented as a formSheet from a waiting mail draft card. The text goes back to the card as it
-// is typed; the card sends it. Its content comes from the in-memory registry, never from route
+// Presented as a formSheet from a waiting mail draft card. What is typed goes back to the card as
+// it changes; the card sends it. Its content comes from the in-memory registry, never from route
 // params: a deep link to this route has nothing to show and the sheet closes itself.
 export default function EditDraft() {
   const router = useRouter();
@@ -30,21 +51,25 @@ export default function EditDraft() {
   const target = useSyncExternalStore(subscribeDraftEdit, draftEditTarget);
   const shown = useRef<DraftEditTarget | null>(target);
   if (target) shown.current = target;
-  const subject = shown.current;
-  const [opening] = useState(() =>
-    subject ? (draftEdit(subject.messageId) ?? subject.draft.body) : "",
-  );
-  const [text, setText] = useState(opening);
-  const closing = useRef(false);
+  const card = shown.current;
+  const [opening] = useState<AskDraftEdits>(() => (card ? (draftEdit(card.messageId) ?? {}) : {}));
+  const [edit, setEdit] = useState(opening);
+  const [typed, setTyped] = useState<TypedLines>({});
+  const [opened, setOpened] = useState<ReadonlySet<RecipientRole>>(new Set());
+  const [leaving, setLeaving] = useState(false);
   const mounted = useRef(true);
-  const messageId = useRef(subject?.messageId);
+  const messageId = useRef(card?.messageId);
+  const doneRef = useRef<() => void>(() => undefined);
 
-  function close() {
-    if (closing.current) return;
-    closing.current = true;
+  // Leaving waits a render, so a swipe held back for typing no longer is.
+  const close = () => setLeaving(true);
+  useEffect(() => {
+    if (!leaving) return;
     if (router.canGoBack()) router.back();
     else router.replace("/");
-  }
+  }, [leaving, router]);
+  // A swipe down while a row holds typing would skip Done: it runs Done instead.
+  usePreventRemove(!leaving && Object.values(typed).some(Boolean), () => doneRef.current());
 
   useEffect(() => {
     mounted.current = true;
@@ -61,27 +86,48 @@ export default function EditDraft() {
     if (!target) close();
   });
 
-  function change(next: string) {
-    setText(next);
-    if (subject) keepDraftEdit(subject.messageId, next);
+  if (!card) return null;
+  const { draft } = card;
+  // Recipients and subject change only on a draft that records where they sit.
+  const fields = draft.fields;
+  const text = edit.text ?? draft.body;
+  const recipients = edit.recipients ?? draft.recipients;
+  const subject = edit.subject ?? draft.subject ?? "";
+  const folded = foldedRoles(fields, recipients, typed, opened);
+  const roleLabel = { to: t("To"), cc: t("Cc"), bcc: t("Bcc") };
+
+  function keep(next: AskDraftEdits) {
+    if (!card) return;
+    const merged = { ...edit, ...next };
+    setEdit(merged);
+    keepDraftEdit(card.messageId, merged);
   }
 
+  function done() {
+    if (!fields) return close();
+    const finished = finishLines(fields, recipients, typed);
+    if (finished.recipients.length !== recipients.length) keep({ recipients: finished.recipients });
+    setTyped(finished.typed);
+    if (!finished.held) return close();
+    AccessibilityInfo.announceForAccessibility(t("Not an email address"));
+  }
+  doneRef.current = done;
+
   function cancel() {
-    if (text === opening) return close();
+    if (!sheetChanged(draft, opening, edit, typed)) return close();
     Alert.alert(t("Discard changes?"), undefined, [
       { text: t("Keep editing"), style: "cancel" },
       {
         text: t("Discard"),
         style: "destructive",
         onPress: () => {
-          if (subject) keepDraftEdit(subject.messageId, opening);
+          if (card) keepDraftEdit(card.messageId, opening);
+          setTyped({});
           close();
         },
       },
     ]);
   }
-
-  const to = subject ? draftAddresses(subject.draft, "to") : "";
 
   return (
     <SafeAreaView edges={["bottom"]} style={styles.screen}>
@@ -103,7 +149,7 @@ export default function EditDraft() {
             },
           ],
           headerRight: () => (
-            <Pressable accessibilityRole="button" hitSlop={8} onPress={close}>
+            <Pressable accessibilityRole="button" hitSlop={8} onPress={done}>
               <Text style={[styles.headerLabel, styles.done]}>{t("Done")}</Text>
             </Pressable>
           ),
@@ -114,7 +160,7 @@ export default function EditDraft() {
               icon: { type: "sfSymbol", name: "checkmark" },
               variant: "prominent",
               tintColor: tokens.primary,
-              onPress: close,
+              onPress: done,
             },
           ],
         }}
@@ -125,21 +171,57 @@ export default function EditDraft() {
         automaticallyAdjustKeyboardInsets
         contentContainerStyle={styles.content}
       >
-        {subject ? (
+        {fields ? (
+          <View>
+            {RECIPIENT_ROLES.map((role) => {
+              const room = fields[role];
+              if (room === undefined || folded.includes(role)) return null;
+              return (
+                <RecipientRow
+                  key={role}
+                  label={roleLabel[role]}
+                  addresses={addressesOf(recipients, role)}
+                  typed={typed[role] ?? ""}
+                  room={room}
+                  autoFocus={opened.has(role) && role === [...opened][0]}
+                  onChange={(next) => {
+                    const changed = changeLine(recipients, opened, role, next);
+                    keep({ recipients: changed.recipients });
+                    setOpened(changed.opened);
+                  }}
+                  onTyped={(next) => setTyped((current) => ({ ...current, [role]: next }))}
+                />
+              );
+            })}
+            {folded.length ? (
+              <MoreRecipientsRow
+                label={folded.map((role) => roleLabel[role]).join("/")}
+                onPress={() => setOpened(new Set([...opened, ...folded]))}
+              />
+            ) : null}
+            {fields.subject ? (
+              <SubjectRow
+                label={t("Subject")}
+                subject={subject}
+                onChange={(next) => keep({ subject: next })}
+              />
+            ) : null}
+          </View>
+        ) : (
           <View style={styles.to}>
-            <AppLogo app={subject.draft.app} />
+            <AppLogo app={draft.app} />
             <Text style={styles.toText}>
-              <Text style={styles.toLabel}>{t("To")}</Text> {to}
+              <Text style={styles.toLabel}>{t("To")}</Text> {draftAddresses(draft, "to")}
             </Text>
           </View>
-        ) : null}
+        )}
         <TextInput
           accessibilityLabel={t("Edit message")}
           value={text}
-          onChangeText={change}
+          onChangeText={(next) => keep({ text: next })}
           maxLength={ASK_DRAFT_TEXT_MAX_LENGTH}
           multiline
-          autoFocus
+          autoFocus={!fields}
           scrollEnabled={false}
           placeholderTextColor={tokens.mutedForeground}
           style={styles.field}

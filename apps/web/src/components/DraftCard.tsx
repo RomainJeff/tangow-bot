@@ -1,13 +1,18 @@
 import { useLingui } from "@lingui/react/macro";
 import type { AskDraft, AskDraftEdits } from "@rakazo/contracts";
 import { ASK_DRAFT_TEXT_MAX_LENGTH } from "@rakazo/contracts";
-import type { DraftCard as DraftCardBlock, DraftLocal } from "@rakazo/core";
+import type { DraftCard as DraftCardBlock, DraftLocal, RecipientRole } from "@rakazo/core";
 import {
+  addressesOf,
+  changeLine,
   DRAFT_UNDO_MS,
   draftCardView,
   draftChanges,
   draftPrimaryAction,
   draftSentTo,
+  foldedRoles,
+  heldBack,
+  RECIPIENT_ROLES,
 } from "@rakazo/core";
 import { Button, FramedBlock, Textarea, UserAvatar } from "@rakazo/ui-web";
 import { Check, Copy, Trash2 } from "lucide-react";
@@ -19,10 +24,7 @@ import { draftEdits } from "../lib/draft-edits";
 import { messageTimeLabel } from "../lib/message-time";
 import { userInitials } from "../lib/user-initials";
 import type { CardEdits } from "./AskCard";
-import { heldBack, RecipientLine, SubjectLine } from "./DraftLines";
-
-const ROLES = ["to", "cc", "bcc"] as const;
-type Role = (typeof ROLES)[number];
+import { RecipientLine, SubjectLine } from "./DraftLines";
 
 function AppLogo({ app }: { app: AskDraft["app"] }) {
   return app.logo ? (
@@ -103,9 +105,9 @@ export function DraftCard({
   const [edit, setEdit] = useState<AskDraftEdits>(() => draftEdits.get(messageId) ?? {});
   const [focused, setFocused] = useState(false);
   // What each line's field holds, not yet an address: kept here so it outlives the line.
-  const [typed, setTyped] = useState<Partial<Record<Role, string>>>({});
+  const [typed, setTyped] = useState<Partial<Record<RecipientRole, string>>>({});
   // Cc and Bcc lines the person opened or changed: they stay shown even when empty.
-  const [opened, setOpened] = useState<ReadonlySet<Role>>(new Set());
+  const [opened, setOpened] = useState<ReadonlySet<RecipientRole>>(new Set());
   const lineId = useId();
   const [pending, setPending] = useState<DraftLocal["pending"]>(null);
   const [error, setError] = useState<string | null>(null);
@@ -124,7 +126,7 @@ export function DraftCard({
   const sendable =
     text.trim() !== "" &&
     recipients.some((recipient) => recipient.role === "to") &&
-    !ROLES.some((role) => heldBack(typed[role] ?? ""));
+    !RECIPIENT_ROLES.some((role) => heldBack(typed[role] ?? ""));
 
   function keepEdit(next: AskDraftEdits) {
     const merged = { ...edit, ...next };
@@ -137,14 +139,12 @@ export function DraftCard({
     draftEdits.delete(messageId);
   }
 
-  function keepRole(role: Role, addresses: string[]) {
-    const others = recipients.filter((recipient) => recipient.role !== role);
-    const next = [...others, ...addresses.map((address) => ({ role, address }))];
-    keepEdit({ recipients: ROLES.flatMap((each) => next.filter((r) => r.role === each)) });
-    if (role !== "to") setOpened((current) => new Set(current).add(role));
+  function keepRole(role: RecipientRole, addresses: string[]) {
+    keepEdit({ recipients: changeLine(recipients, opened, role, addresses).recipients });
+    setOpened((current) => changeLine(recipients, current, role, addresses).opened);
   }
 
-  function openLine(role: Role) {
+  function openLine(role: RecipientRole) {
     flushSync(() => setOpened((current) => new Set(current).add(role)));
     document.getElementById(`${lineId}-${role}`)?.focus();
   }
@@ -282,12 +282,8 @@ export function DraftCard({
   // Lines change only on a draft that records where its recipients and subject sit.
   const fields = view.readOnly || view.sending ? undefined : draft.fields;
   const subject = edit.subject ?? draft.subject ?? "";
-  const addressesOf = (role: Role) =>
-    recipients.filter((recipient) => recipient.role === role).map((recipient) => recipient.address);
   // An empty Cc or Bcc names nobody: it opens from the To line on demand.
-  const shown = (role: Role) =>
-    role === "to" || addressesOf(role).length > 0 || Boolean(typed[role]) || opened.has(role);
-  const hidden = ROLES.filter((role) => fields?.[role] !== undefined && !shown(role));
+  const hidden = foldedRoles(fields, recipients, typed, opened);
 
   return (
     <FramedBlock
@@ -300,11 +296,11 @@ export function DraftCard({
       }}
       question={
         <div className="flex flex-col gap-1">
-          {ROLES.map((role) => {
-            const addresses = addressesOf(role);
+          {RECIPIENT_ROLES.map((role) => {
+            const addresses = addressesOf(recipients, role);
             const room = fields?.[role];
             if (room !== undefined) {
-              if (!shown(role)) return null;
+              if (hidden.includes(role)) return null;
               return (
                 <RecipientLine
                   key={role}

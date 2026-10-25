@@ -1,6 +1,6 @@
 import { useLingui } from "@lingui/react/macro";
 import { ASK_DRAFT_SUBJECT_MAX_LENGTH } from "@rakazo/contracts";
-import { isMailAddress, LINE_BREAKS } from "@rakazo/core";
+import { heldBack, LINE_BREAKS, takeAddresses } from "@rakazo/core";
 import { Textarea } from "@rakazo/ui-web";
 import { X } from "lucide-react";
 import type { KeyboardEvent } from "react";
@@ -15,16 +15,10 @@ const FIELD =
 // A line's controls take no room and no tap at rest, and show while the line is hovered or focused.
 const LINE_CONTROL =
   "pointer-events-none -my-1.5 h-6 w-0 shrink-0 self-center overflow-hidden opacity-0 outline-none focus-visible:ring-1 focus-visible:ring-foreground group-focus-within/line:pointer-events-auto group-focus-within/line:opacity-100 group-hover/line:pointer-events-auto group-hover/line:opacity-100";
-const SEPARATORS = /[\s,;]+/;
 
 /** Whether a key press belongs to an input method still composing its text. */
 function composing(event: KeyboardEvent) {
   return event.nativeEvent.isComposing || event.keyCode === 229;
-}
-
-/** Whether a line's field holds a finished word that could not join the line: Send would leave it. */
-export function heldBack(typed: string): boolean {
-  return /[^\s,;][\s,;]/.test(typed);
 }
 
 /**
@@ -64,16 +58,9 @@ export function RecipientLine({
 
   /** Moves every address finished by a separator into the line, or every one when `final`. */
   function take(value: string, final: boolean) {
-    const cut = final ? value.length : value.search(/[^\s,;]*$/);
-    const kept = [...addresses];
-    let back = "";
-    for (const word of value.slice(0, cut).split(SEPARATORS).filter(Boolean)) {
-      if (kept.some((address) => address.toLowerCase() === word.toLowerCase())) continue;
-      if (isMailAddress(word) && (room === null || kept.length < room)) kept.push(word);
-      else back += `${word} `;
-    }
-    if (kept.length > addresses.length) onChange(kept);
-    onTyped(back + value.slice(cut));
+    const next = takeAddresses(addresses, value, room, final);
+    if (next.addresses.length > addresses.length) onChange(next.addresses);
+    onTyped(next.typed);
   }
 
   return (
