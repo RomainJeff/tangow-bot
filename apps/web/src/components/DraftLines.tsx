@@ -3,18 +3,61 @@ import { ASK_DRAFT_SUBJECT_MAX_LENGTH } from "@rakazo/contracts";
 import { heldBack, LINE_BREAKS, takeAddresses } from "@rakazo/core";
 import { Textarea } from "@rakazo/ui-web";
 import { X } from "lucide-react";
-import type { KeyboardEvent } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
 import { useId, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 
-// The body's edit grammar, on a line: an outline on hover, the selected ring while typing.
-const EDITABLE_LINE =
-  "-mx-1.5 rounded-chip px-1.5 duration-(--duration-hover) ease-quiet hover:ring-1 hover:ring-option-ring-hover focus-within:ring-selected focus-within:ring-foreground";
+// The body's edit grammar, on a line: an outline on hover, the selected ring while typing. Read,
+// a line is its text on the card; editing, the same cell becomes a field on the well.
+const LINE_CELL =
+  "flex min-w-0 cursor-text flex-wrap items-center gap-x-1.5 rounded-card transition-[background-color,box-shadow] duration-(--duration-hover) ease-quiet hover:ring-1 hover:ring-option-ring-hover focus-within:ring-selected focus-within:ring-foreground";
 const FIELD =
   "min-w-0 bg-transparent text-foreground outline-none placeholder:text-muted-foreground";
-// A line's controls take no room and no tap at rest, and show while the line is hovered or focused.
-const LINE_CONTROL =
-  "pointer-events-none -my-1.5 h-6 w-0 shrink-0 self-center overflow-hidden opacity-0 outline-none focus-visible:ring-1 focus-visible:ring-foreground group-focus-within/line:pointer-events-auto group-focus-within/line:opacity-100 group-hover/line:pointer-events-auto group-hover/line:opacity-100";
+// Only a line being edited has controls, at the 24 px a finger or a pointer needs.
+const EDIT_CONTROL =
+  "inline-flex h-6 shrink-0 items-center justify-center outline-none focus-visible:ring-1 focus-visible:ring-foreground";
+
+/** A line's label, outside its field, centred on the field's first line. */
+export function RowLabel({
+  children,
+  editing,
+  htmlFor,
+}: {
+  children: ReactNode;
+  editing?: boolean;
+  htmlFor?: string;
+}) {
+  const className = `flex ${editing ? "h-11" : "h-6"} items-center text-muted-foreground`;
+  return htmlFor ? (
+    <label htmlFor={htmlFor} className={className}>
+      {children}
+    </label>
+  ) : (
+    <span className={className}>{children}</span>
+  );
+}
+
+/** A line the person cannot change, as text under its label. */
+export function ReadRow({
+  label,
+  strong,
+  children,
+}: {
+  label: string;
+  strong?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <>
+      <RowLabel>{label}</RowLabel>
+      <div
+        className={`flex min-h-6 min-w-0 items-center break-words px-4 ${strong ? "font-medium" : ""}`}
+      >
+        <span className="min-w-0">{children}</span>
+      </div>
+    </>
+  );
+}
 
 /** Whether a key press belongs to an input method still composing its text. */
 function composing(event: KeyboardEvent) {
@@ -22,9 +65,10 @@ function composing(event: KeyboardEvent) {
 }
 
 /**
- * One recipient line of a draft: its addresses as text, each with its remove button once the line
- * is hovered or focused, then a field that takes more until the line is full. A finished word that
- * cannot join the line, not an address or past its room, stays in the field, marked.
+ * One recipient line of a draft, a label and its cell in the card's grid. Read, the addresses are
+ * text; editing, the cell is a field holding a chip per address, each with its remove button, then
+ * room to type more until the line is full. A finished word
+ * that cannot join the line, not an address or past its room, stays in the field, marked.
  */
 export function RecipientLine({
   id,
@@ -36,6 +80,8 @@ export function RecipientLine({
   onTyped,
   more = [],
   strong,
+  editing,
+  onEdit,
 }: {
   id: string;
   label: string;
@@ -49,9 +95,13 @@ export function RecipientLine({
   /** Hidden lines this one offers to open, shown with its controls. */
   more?: { label: string; open: () => void }[];
   strong?: boolean;
+  editing: boolean;
+  /** Starts editing the card's lines, when the line has no field to focus. */
+  onEdit: () => void;
 }) {
   const { t } = useLingui();
   const input = useRef<HTMLInputElement>(null);
+  const cell = useRef<HTMLDivElement>(null);
   // A full line keeps its field while it has focus, so focus never falls out of the card.
   const [focused, setFocused] = useState(false);
   const full = room !== null && addresses.length >= room;
@@ -64,86 +114,106 @@ export function RecipientLine({
   }
 
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: a click on the line's blank space focuses its field, which keeps its own keyboard access.
-    // biome-ignore lint/a11y/useKeyWithClickEvents: the field inside is the keyboard target.
-    <div
-      data-draft-field
-      onClick={() => input.current?.focus()}
-      className={`group/line flex cursor-text flex-wrap items-baseline gap-x-1.5 gap-y-0.5 break-words ${
-        strong ? "" : "text-body font-normal"
-      } ${EDITABLE_LINE}`}
-    >
-      <label htmlFor={id} className="font-normal text-muted-foreground">
+    <>
+      <RowLabel htmlFor={id} editing={editing}>
         {label}
-      </label>
-      {addresses.map((address, index) => (
-        <span key={address} className="inline-flex min-w-0 items-baseline break-all">
-          {index < addresses.length - 1 ? `${address},` : address}
-          <button
-            type="button"
-            aria-label={t`Remove ${address}`}
-            onClick={(event) => {
-              event.stopPropagation();
-              // A full line shows its field only once the address is gone.
-              flushSync(() => onChange(addresses.filter((each) => each !== address)));
-              input.current?.focus();
-            }}
-            className={`${LINE_CONTROL} inline-flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground group-focus-within/line:-me-1.5 group-focus-within/line:w-6 group-hover/line:-me-1.5 group-hover/line:w-6`}
-          >
-            <X className="size-3 shrink-0" aria-hidden="true" />
-          </button>
-        </span>
-      ))}
-      {full && !typed && !focused ? null : (
-        <input
-          ref={input}
-          id={id}
-          inputMode="email"
-          dir="auto"
-          autoComplete="off"
-          spellCheck={false}
-          value={typed}
-          aria-invalid={heldBack(typed) || undefined}
-          onChange={(event) => take(event.target.value, false)}
-          onFocus={() => setFocused(true)}
-          onBlur={() => {
-            setFocused(false);
-            take(typed, true);
-          }}
-          onKeyDown={(event) => {
-            if (composing(event)) return;
-            if (event.key === "Enter") {
-              event.preventDefault();
-              take(typed, true);
-            } else if (event.key === "Backspace" && !typed && addresses.length) {
-              onChange(addresses.slice(0, -1));
+      </RowLabel>
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: a click on the line's blank space focuses its field, which keeps its own keyboard access. */}
+      {/* biome-ignore lint/a11y/useKeyWithClickEvents: the field inside is the keyboard target. */}
+      <div
+        ref={cell}
+        data-draft-field
+        onClick={() => {
+          if (input.current) return input.current.focus();
+          // A full line has no field: pressing it starts editing and focuses its first remove button.
+          flushSync(onEdit);
+          cell.current?.querySelector("button")?.focus();
+        }}
+        className={`${LINE_CELL} ${
+          editing ? "min-h-11 gap-y-1 bg-well px-2 py-2" : "min-h-6 px-4 break-words"
+        } ${strong && !editing ? "font-medium" : ""}`}
+      >
+        {addresses.map((address, index) => (
+          <span
+            key={address}
+            className={
+              editing
+                ? "inline-flex h-7 min-w-0 max-w-full items-center rounded-chip bg-surface ps-2 pe-0.5 text-row-name font-medium shadow-group"
+                : "inline-flex min-w-0 items-baseline break-all"
             }
-          }}
-          className={`w-24 flex-1 ${FIELD} aria-invalid:text-destructive aria-invalid:underline aria-invalid:decoration-destructive aria-invalid:decoration-wavy`}
-        />
-      )}
-      {more.length && !typed ? (
-        // Cancels the line's gap so the hidden buttons take no room at rest. They fold away once
-        // typing starts, so the field keeps its width.
-        <span className="-ms-1.5 flex">
-          {more.map((line) => (
-            <button
-              key={line.label}
-              type="button"
-              // Keeps the line focused, and so these buttons shown, while one is pressed.
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={(event) => {
-                event.stopPropagation();
-                line.open();
-              }}
-              className={`${LINE_CONTROL} rounded-chip text-body font-normal text-muted-foreground hover:text-foreground group-focus-within/line:ms-1.5 group-focus-within/line:w-auto group-focus-within/line:px-1 group-hover/line:ms-1.5 group-hover/line:w-auto group-hover/line:px-1`}
-            >
-              {line.label}
-            </button>
-          ))}
-        </span>
-      ) : null}
-    </div>
+          >
+            <span className="min-w-0 break-all">
+              {!editing && index < addresses.length - 1 ? `${address},` : address}
+            </span>
+            {editing ? (
+              <button
+                type="button"
+                aria-label={t`Remove ${address}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  // A full line shows its field only once the address is gone.
+                  flushSync(() => onChange(addresses.filter((each) => each !== address)));
+                  input.current?.focus();
+                }}
+                className={`${EDIT_CONTROL} w-6 rounded-full text-muted-foreground hover:text-foreground`}
+              >
+                <X className="size-3.5 shrink-0" aria-hidden="true" />
+              </button>
+            ) : null}
+          </span>
+        ))}
+        {full && !typed && !focused ? null : (
+          <input
+            ref={input}
+            id={id}
+            inputMode="email"
+            dir="auto"
+            autoComplete="off"
+            spellCheck={false}
+            value={typed}
+            aria-invalid={heldBack(typed) || undefined}
+            onChange={(event) => take(event.target.value, false)}
+            onFocus={() => setFocused(true)}
+            onBlur={() => {
+              setFocused(false);
+              take(typed, true);
+            }}
+            onKeyDown={(event) => {
+              if (composing(event)) return;
+              if (event.key === "Enter") {
+                event.preventDefault();
+                take(typed, true);
+              } else if (event.key === "Backspace" && !typed && addresses.length) {
+                onChange(addresses.slice(0, -1));
+              }
+            }}
+            className={`w-24 flex-1 ${FIELD} ${
+              editing ? "px-2 text-body" : ""
+            } aria-invalid:text-destructive aria-invalid:underline aria-invalid:decoration-destructive aria-invalid:decoration-wavy`}
+          />
+        )}
+        {editing && more.length && !typed ? (
+          // They fold away once typing starts, so the field keeps its width.
+          <span className="ms-auto flex gap-0.5">
+            {more.map((line) => (
+              <button
+                key={line.label}
+                type="button"
+                // Keeps the line focused, and so these buttons shown, while one is pressed.
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  line.open();
+                }}
+                className={`${EDIT_CONTROL} h-7 rounded-row px-2 text-row-name font-medium text-foreground`}
+              >
+                {line.label}
+              </button>
+            ))}
+          </span>
+        ) : null}
+      </div>
+    </>
   );
 }
 
@@ -152,42 +222,48 @@ export function SubjectLine({
   label,
   subject,
   onChange,
+  editing,
 }: {
   label: string;
   subject: string;
   onChange: (subject: string) => void;
+  editing: boolean;
 }) {
   const id = useId();
   return (
-    <div
-      data-draft-field
-      className={`flex items-start gap-1.5 text-body font-normal ${EDITABLE_LINE}`}
-    >
-      <label htmlFor={id} className="shrink-0 text-muted-foreground">
+    <>
+      <RowLabel htmlFor={id} editing={editing}>
         {label}
-      </label>
-      <Textarea
-        id={id}
-        dir="auto"
-        rows={1}
-        value={subject}
-        maxLength={ASK_DRAFT_SUBJECT_MAX_LENGTH}
-        // The server takes a subject on one line.
-        onKeyDown={(event) => {
-          if (event.key === "Enter" && !composing(event)) event.preventDefault();
-        }}
-        onPaste={(event) => {
-          const pasted = event.clipboardData.getData("text");
-          if (pasted.search(LINE_BREAKS) === -1) return;
-          event.preventDefault();
-          const field = event.currentTarget;
-          const clean = pasted.replace(LINE_BREAKS, " ");
-          field.setRangeText(clean, field.selectionStart, field.selectionEnd, "end");
-          onChange(field.value.slice(0, ASK_DRAFT_SUBJECT_MAX_LENGTH));
-        }}
-        onChange={(event) => onChange(event.target.value.replace(LINE_BREAKS, " "))}
-        className={`min-h-0 w-auto flex-1 resize-none rounded-none border-0 p-0 text-body focus-visible:ring-0 md:text-body dark:bg-transparent ${FIELD}`}
-      />
-    </div>
+      </RowLabel>
+      <div
+        data-draft-field
+        className={`${LINE_CELL} items-start ${editing ? "min-h-11 bg-well px-4 py-2.5" : "min-h-6 px-4"}`}
+      >
+        <Textarea
+          id={id}
+          dir="auto"
+          rows={1}
+          value={subject}
+          maxLength={ASK_DRAFT_SUBJECT_MAX_LENGTH}
+          // The server takes a subject on one line.
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !composing(event)) event.preventDefault();
+          }}
+          onPaste={(event) => {
+            const pasted = event.clipboardData.getData("text");
+            if (pasted.search(LINE_BREAKS) === -1) return;
+            event.preventDefault();
+            const field = event.currentTarget;
+            const clean = pasted.replace(LINE_BREAKS, " ");
+            field.setRangeText(clean, field.selectionStart, field.selectionEnd, "end");
+            onChange(field.value.slice(0, ASK_DRAFT_SUBJECT_MAX_LENGTH));
+          }}
+          onChange={(event) => onChange(event.target.value.replace(LINE_BREAKS, " "))}
+          className={`min-h-0 w-auto flex-1 resize-none rounded-none border-0 p-0 focus-visible:ring-0 dark:bg-transparent ${
+            editing ? "text-body md:text-body" : "text-row-name md:text-row-name"
+          } ${FIELD}`}
+        />
+      </div>
+    </>
   );
 }
