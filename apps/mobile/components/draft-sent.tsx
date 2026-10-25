@@ -8,6 +8,8 @@ import { nativeTextStyle } from "../lib/typography";
 import { AppLogo } from "./app-logo";
 import { NativeSymbol } from "./native-symbol";
 
+// The marker a translated line carries where the styled recipient goes.
+const RECIPIENT_SLOT = "\u0000";
 const DISC = 32;
 const DISC_GAP = 12;
 
@@ -19,6 +21,11 @@ export function DraftSent({ draft, time }: { draft: AskDraft; time: string }) {
   const { t } = useI18n();
   const tokens = useMobileTokens();
   const styles = useThemedStyles(createStyles);
+  // One message holds the whole line, so a translation can put the recipient where it belongs.
+  const [before = "", after = ""] = t("to {recipient}", { recipient: RECIPIENT_SLOT }).split(
+    RECIPIENT_SLOT,
+  );
+  const toLine = { before, after };
   return (
     <View style={styles.root}>
       <View style={styles.head}>
@@ -27,7 +34,6 @@ export function DraftSent({ draft, time }: { draft: AskDraft; time: string }) {
             ios="checkmark"
             android="checkmark"
             size={16}
-            weight="bold"
             color={tokens.primaryForeground}
           />
         </View>
@@ -37,7 +43,9 @@ export function DraftSent({ draft, time }: { draft: AskDraft; time: string }) {
             <Text style={styles.time}>{time}</Text>
           </View>
           <Text numberOfLines={1} style={styles.to}>
-            {t("to")} <Text style={styles.recipient}>{draftSentTo(draft)}</Text>
+            {toLine.before}
+            <Text style={styles.recipient}>{draftSentTo(draft)}</Text>
+            {toLine.after}
           </Text>
         </View>
       </View>

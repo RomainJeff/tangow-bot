@@ -232,11 +232,11 @@ export const Transcript = memo(function Transcript({
         ref={scrollRef}
         data-testid="transcript"
         {...scrollerHandlers}
-        // The scroller reaches past the column's own padding (-mx) and pads back in (px), so the
-        // cards keep their place while a card's shadow (shadow-card reaches 28px sideways in dark)
-        // has room inside this overflow instead of being cut. At phone width the screen's edge is
-        // the limit, so it only cancels the padding.
-        className="rk-scroll rk-thread-mask flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto -mx-3.5 px-6.5 pt-21 md:-mx-4 md:px-7"
+        // The scroller spans the column (-mx cancels its padding) and pads back in, so the cards
+        // keep their place while a card's shadow has room inside this overflow instead of being cut:
+        // 26px sideways, past the 20px shadow-card reaches in light and the 28px its blur radius
+        // names in dark, where the visible part ends well short of it.
+        className="rk-scroll rk-thread-mask flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto -mx-3.5 px-6.5 pt-21"
       >
         {olderCursor != null ? (
           <button

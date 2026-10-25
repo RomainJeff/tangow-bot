@@ -843,7 +843,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   Replaced: "已替换",
   From: "发件人",
   Sent: "已发送",
-  to: "发给",
+  "to {recipient}": "发给 {recipient}",
   Subject: "主题",
   To: "收件人",
   "Try again": "重试",

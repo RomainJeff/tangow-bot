@@ -1949,7 +1949,7 @@ msgstr "Bearbeiten"
 msgid "Edit and resend"
 msgstr "Bearbeiten und erneut senden"
 
-#: src/components/DraftCard.tsx:395
+#: src/components/DraftCard.tsx:397
 msgid "Edit message"
 msgstr ""
 
@@ -3377,7 +3377,7 @@ msgstr "Entfernen"
 msgid "Remove {0}"
 msgstr "{0} entfernen"
 
-#: src/components/DraftLines.tsx:151
+#: src/components/DraftLines.tsx:159
 msgid "Remove {address}"
 msgstr ""
 
@@ -3984,8 +3984,8 @@ msgstr "Sicher gespeichert. Hier nie angezeigt."
 msgid "subagent"
 msgstr "Subagent"
 
-#: src/components/DraftCard.tsx:379
-#: src/components/DraftCard.tsx:385
+#: src/components/DraftCard.tsx:380
+#: src/components/DraftCard.tsx:387
 msgid "Subject"
 msgstr ""
 
