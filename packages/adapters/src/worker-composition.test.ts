@@ -20,7 +20,21 @@ describe("the worker provider a deployment runs", () => {
       { SANDBOX_PROVIDER: "e2b", E2B_API_KEY: "e2b-key", WORKER_TEMPLATE: " own-worker " },
       { kind: "e2b", apiKey: "e2b-key", template: "own-worker" },
     ],
-    ["no worker on a Docker deployment", { SANDBOX_PROVIDER: "docker" }, null],
+    [
+      "Docker workers on the supervisor and DATA_DIR of a Docker deployment",
+      {
+        SANDBOX_PROVIDER: "docker",
+        SANDBOX_SUPERVISOR_URL: "http://supervisor:7091",
+        SANDBOX_SUPERVISOR_TOKEN: "supervisor-token-of-at-least-32-chars",
+        DATA_DIR: "/data",
+      },
+      {
+        kind: "docker",
+        supervisorUrl: "http://supervisor:7091",
+        supervisorToken: "supervisor-token-of-at-least-32-chars",
+        dataDir: "/data",
+      },
+    ],
   ])("resolves %s", (_name, env, expected) => {
     expect(resolveWorkerProvider(env)).toEqual(expected);
   });
