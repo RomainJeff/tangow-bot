@@ -449,6 +449,10 @@ export async function createApp(
     deploymentModelKey: env.deploymentModelKey,
     messaging,
     artifacts,
+    homeMove:
+      env.sandboxProvider === "docker"
+        ? { prisma, workers: workers.lifecycle, dataDir: env.dataDir }
+        : undefined,
   });
   if (inMemoryJobs) {
     await inMemoryJobs.start(jobHandlers);

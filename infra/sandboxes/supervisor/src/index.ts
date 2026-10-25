@@ -32,6 +32,8 @@ import {
   computerNetworkNameFor,
   computerNetworkNamesForCleanup,
   computerResourceLimits,
+  computerVolumeHome,
+  computerWorkspace,
   containerCreateOptions,
   containerNameFor,
   controlPortPublicationMatches,
@@ -48,6 +50,7 @@ import {
   screenPorts,
   screenUrlFor,
   screenUrlWithToken,
+  volumeHomeMatches,
   WORKER_GUEST_ENTRY,
   WORKER_NETWORK,
   workerCreateOptions,
@@ -63,6 +66,7 @@ import {
   browserProfilePathForScreen,
   ComputerControlUnavailableError,
   clearComputerScreenRegistry,
+  commandWorkingDir,
   computerActionSchema,
   computerControlTimeoutMs,
   containerActionSteps,
@@ -181,6 +185,15 @@ app.post("/computers", async (c) => {
       homePath: z.string().min(1),
       spaceId: PathSegment,
       userId: PathSegment,
+      volumeHome: z
+        .object({
+          root: z.string(),
+          mounts: z
+            .array(z.object({ volume: z.string(), path: z.string() }))
+            .min(1)
+            .max(64),
+        })
+        .optional(),
     })
     .parse(await c.req.json());
   try {
@@ -201,6 +214,10 @@ app.post("/computers", async (c) => {
       // user-controlled paths at runtime; Compose data-init handles legacy data.
       if (hostUid !== 0) await mkdir(serviceHomePath, { recursive: true });
       const storage = computerHomeStorage(serviceHomePath, dataDir, runtimeInfo);
+      // The volume directories are the provider's: the supervisor never creates or deletes them.
+      const volumeHome = body.volumeHome
+        ? computerVolumeHome(body.volumeHome, dataDir, runtimeInfo)
+        : undefined;
       if (storage.homeVolume) {
         assertVolumeSubpathSupport((await docker.version()).ApiVersion);
       }
@@ -223,7 +240,8 @@ app.post("/computers", async (c) => {
           info.Config.User === computerUser &&
           skillsBinds.every((bind) => info.HostConfig.Binds?.includes(bind)) &&
           controlPublishOk &&
-          (!storage.homeVolume || homeVolumeMatches(info.HostConfig.Mounts, storage.homeVolume))
+          (!storage.homeVolume || homeVolumeMatches(info.HostConfig.Mounts, storage.homeVolume)) &&
+          volumeHomeMatches(info.Config.Labels, volumeHome)
         ) {
           if (!info.State.Running) await existing.start();
           return c.json({
@@ -278,6 +296,7 @@ app.post("/computers", async (c) => {
               botId: body.botId,
               spaceId: body.spaceId,
               ...storage,
+              volumeHome,
               user: computerUser,
               networkMode,
               controlToken: randomUUID(),
@@ -341,7 +360,7 @@ app.post("/computers/:id/exec", async (c) => {
     })
     .parse(await c.req.json());
   try {
-    const { container } = await managedContainer(
+    const { container, info } = await managedContainer(
       id,
       c.req.header("x-rakazo-bot-id"),
       c.req.header("x-rakazo-space-id"),
@@ -353,7 +372,7 @@ app.post("/computers/:id/exec", async (c) => {
       container,
       body.argv.length ? body.argv : ["/bin/echo", "ready"],
       {
-        workingDir: body.cwd ?? "/home/rakazo",
+        workingDir: commandWorkingDir(body.cwd, computerWorkspace(info.Config.Labels)),
         env: [
           `DISPLAY=${layout.display}`,
           "HOME=/home/rakazo",
@@ -497,6 +516,7 @@ app.post("/computers/:id/actions", async (c) => {
       c.req.header("x-rakazo-screen-lease-id"),
     );
     const control = computerControlEndpoint(info);
+    const workspace = computerWorkspace(info.Config.Labels);
     const attempt = await attemptComputerControl(
       control
         ? () =>
@@ -507,13 +527,20 @@ app.post("/computers/:id/actions", async (c) => {
               browserProfile,
               body.observe !== false,
               body.settleMs ?? 0,
+              workspace,
             )
         : undefined,
     );
     if (attempt.status === "failed") throw attempt.error;
     const controlResult = attempt.status === "ok" ? attempt.value : undefined;
     if (shouldReplayComputerActions(attempt) && body.actions.length)
-      await applyContainerActions(container, body.actions, layout.display, browserProfile);
+      await applyContainerActions(
+        container,
+        body.actions,
+        layout.display,
+        browserProfile,
+        workspace,
+      );
     if (shouldReplayComputerActions(attempt) && body.settleMs)
       await new Promise((resolve) => setTimeout(resolve, body.settleMs));
     return c.json({
@@ -533,13 +560,13 @@ app.post("/computers/:id/actions", async (c) => {
 
 app.get("/computers/:id/files", async (c) => {
   try {
-    const { container } = await managedContainer(
+    const { container, info } = await managedContainer(
       c.req.param("id"),
       c.req.header("x-rakazo-bot-id"),
       c.req.header("x-rakazo-space-id"),
     );
     const relative = normalizeWorkspaceRelative(c.req.query("path") ?? "");
-    const target = workspaceTarget(relative);
+    const target = workspaceTarget(relative, computerWorkspace(info.Config.Labels));
     if (c.req.query("mode") === "read") {
       const maxBytesRaw = c.req.query("maxBytes");
       const maxBytes = maxBytesRaw === undefined ? undefined : Number(maxBytesRaw);
@@ -602,12 +629,15 @@ app.post("/computers/:id/files", async (c) => {
     })
     .parse(await c.req.json());
   try {
-    const { container } = await managedContainer(
+    const { container, info } = await managedContainer(
       c.req.param("id"),
       c.req.header("x-rakazo-bot-id"),
       c.req.header("x-rakazo-space-id"),
     );
-    const target = workspaceTarget(normalizeWorkspaceRelative(body.path));
+    const target = workspaceTarget(
+      normalizeWorkspaceRelative(body.path),
+      computerWorkspace(info.Config.Labels),
+    );
     await writeContainerFile(
       container,
       target,
@@ -1282,6 +1312,7 @@ export async function controlDesktop(
   browserProfile: string,
   observe: boolean,
   settleMs: number,
+  workspace?: string,
 ) {
   const signal = AbortSignal.timeout(computerControlTimeoutMs(actions, settleMs));
   let response: Response;
@@ -1296,7 +1327,7 @@ export async function controlDesktop(
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        steps: containerActionSteps(actions, display, browserProfile),
+        steps: containerActionSteps(actions, display, browserProfile, workspace),
         display,
         observe,
         settleMs,
@@ -1604,6 +1635,7 @@ async function applyContainerActions(
   actions: Array<z.infer<typeof computerActionSchema>>,
   display = ":1",
   browserProfile?: string,
+  workspace?: string,
 ) {
   const script = [
     "import json, subprocess, sys, time",
@@ -1617,7 +1649,7 @@ async function applyContainerActions(
     "python3",
     "-c",
     script,
-    JSON.stringify(containerActionSteps(actions, display, browserProfile)),
+    JSON.stringify(containerActionSteps(actions, display, browserProfile, workspace)),
   ]);
   if (result.code !== 0) throw new Error(result.stderr || "computer action failed");
 }

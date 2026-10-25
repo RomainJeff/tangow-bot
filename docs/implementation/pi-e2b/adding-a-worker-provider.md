@@ -1,8 +1,8 @@
 # How to add a worker provider
 
-This guide adds a provider that runs one worker per run attempt and mounts bot and space volumes. The worked example is Docker. Two providers exist: E2B in `packages/adapters/src/e2b-worker.ts`, and Docker in `packages/adapters/src/docker-worker.ts`, which drives containers through the sandbox supervisor ([#317](https://github.com/RomainJeff/rakazo-bot/issues/317)). Until the three switches below are flipped for Docker, a run that uses its Docker computer's files stays in process; a run without file tools already runs in a Docker worker. Read the [P1 handoff](P1-handoff.md) for the contract history.
+This guide adds a provider that runs one worker per run attempt and mounts bot and space volumes. The worked example is Docker. Two providers exist: E2B in `packages/adapters/src/e2b-worker.ts`, and Docker in `packages/adapters/src/docker-worker.ts`, which drives containers through the sandbox supervisor ([#317](https://github.com/RomainJeff/rakazo-bot/issues/317)). Both computer kinds keep their homes on volumes. Read the [P1 handoff](P1-handoff.md) for the contract history.
 
-A provider is an adapter that implements `WorkerProvider` and `GuestConnector`, a guest image, and three switches that say which computer kinds keep their home on volumes. Nothing else in the controller changes. Harness concerns, such as native tools, transcripts and the guest's model relay, belong to [how to add a harness](adding-a-harness.md).
+A provider is an adapter that implements `WorkerProvider` and `GuestConnector`, a guest image, a computer that mounts the same volumes, and a way to move existing homes onto them. Nothing else in the controller changes. Harness concerns, such as native tools, transcripts and the guest's model relay, belong to [how to add a harness](adding-a-harness.md).
 
 ## Know what the controller already guarantees
 
@@ -59,21 +59,9 @@ Every frame carries the protocol version from `packages/adapter-kit/src/worker-p
 
 ## Enable the computer kind
 
-Three switches decide which computer kinds keep their home on volumes. Change all three in the same pull request.
+Two places decide which computer kinds keep their home on volumes. Change both in the same pull request.
 
-1. In `packages/core/src/worker-plan.ts`, set the kind to `"worker"` in `WORKER_SUPPORT`:
-
-	```ts
-	export const WORKER_SUPPORT = {
-		e2b: "worker",
-		docker: "worker",
-		// ...
-	} as const satisfies Record<SandboxKind, "worker" | "in_process">;
-	```
-
-	A new `SandboxKind` fails the build until it has an entry here.
-
-2. Add a migration that extends `computers_home_storage_check`, which today allows `volumes` only for `e2b`. Drop and recreate the constraint as `NOT VALID`, then validate it in a second migration, as `20261019120005_validate_worker_checks` does:
+1. Add a migration that extends `computers_home_storage_check`, which allows `volumes` on `e2b` and `docker` computers. Drop and recreate the constraint as `NOT VALID`, then validate it in a second migration, as `20261026000000_docker_home_volumes` and `20261026000001_validate_docker_home_volumes` do:
 
 	```sql
 	ALTER TABLE "computers" DROP CONSTRAINT "computers_home_storage_check";
@@ -82,9 +70,9 @@ Three switches decide which computer kinds keep their home on volumes. Change al
 	) NOT VALID;
 	```
 
-3. In `createBot` in `packages/db/src/repos.ts`, a new team computer starts on volumes when its kind is `e2b`. Extend that condition to the new kind. A dedicated computer created later takes its team computer's `homeStorage`.
+2. In `createBot` in `packages/db/src/repos.ts`, a new team computer starts on volumes when its kind is `e2b` or `docker`. Extend that condition to the new kind. A dedicated computer created later takes its team computer's `homeStorage`.
 
-`WORKER_SUPPORT` is keyed by the computer kind. That fits a deployment where workers and the computer use the same provider. To run Docker workers next to an E2B computer, key it by the worker provider instead. No code does that today.
+The lifecycle no longer checks the kind before it adopts a home: the constraint is the only guard, and the `fake` computer of the tests stays on snapshots.
 
 ## Compose the provider
 
@@ -98,13 +86,15 @@ A deployment that composes no provider keeps every run in process. `plan` then a
 
 A computer whose home is on volumes mounts the same bot and space volumes at the same paths as the workers, so a file a worker writes is the file the computer sees. The E2B computer in `packages/adapters/src/e2b-sandbox.ts` mounts them by name, links `/home/user/rakazo-home` to their root, and records `home: "volumes"` and a digest of its mounts in its metadata. A machine with another set of mounts is replaced. Nothing imports a snapshot over the volumes or exports them back.
 
-A Docker computer that runs with the `local-fs` store persists as `mounted` today: its home directory is the container disk. After its home moves, it persists as `volumes` and must mount the Docker volumes instead.
+The Docker computer in `packages/adapters/src/docker-sandbox.ts` sends the volume names and the workspace root to the supervisor's `POST /computers`. The supervisor validates them as it validates a worker's (`computerVolumeHome` in `infra/sandboxes/supervisor/src/computer-spec.ts`), mounts each at its `/workspace` path as a bind or a `Subpath` of the `appdata` volume, and records the labels `rakazo.home=volumes`, `rakazo.mounts=<digest>` and `rakazo.workspace=<root>`. A container whose digest differs is replaced; the home directory and the volumes outlive it, so nothing is archived. The workspace root, `/workspace` for a team computer and `/workspace/bots/<botId>` for a dedicated one, is where commands start and where the file routes resolve relative paths, so a relative path means the same file before and after the move. `/home/rakazo` stays on the `homes/<homeKey>` bind for dotfiles and browser profiles, and `~/workspace` links to the root. The supervisor never creates or deletes a volume directory.
 
 ## Move the existing homes
 
-`scripts/migrate-home-to-volumes.ts` moves one stopped computer's home from AgentHomeStore snapshots onto its volumes. It plans, copies, verifies every file by hash and mode, then adopts. The [operator guide](../../self-host-e2b-workers.md#move-existing-homes-onto-volumes) gives the procedure. The script and `scripts/migrate-skills-to-volumes.ts` reach each volume through `E2BVolumeFiles`. A new provider implements `VolumeFiles` from `@rakazo/adapter-kit` for its volumes.
+A team home holds `shared/` and `bots/<botId>/`, on Docker as on E2B: `bots/<botId>/` goes to that bot's private volume and `shared/` to the space volume. A dedicated home goes to its bot's private volume.
 
-A team home holds `shared/` and `bots/<botId>/`, on Docker as on E2B. `packages/adapters/src/home-volume-migration.ts` copies `bots/<botId>/` into that bot's private volume and `shared/` into the space volume. It never copies the whole team home into every private volume. A dedicated home goes to its bot's private volume.
+On E2B, `scripts/migrate-home-to-volumes.ts` moves one stopped computer's home from AgentHomeStore snapshots onto its volumes. It plans, copies, verifies every file by hash and mode, then adopts. The [operator guide](../../self-host-e2b-workers.md#move-existing-homes-onto-volumes) gives the procedure. The script and `scripts/migrate-skills-to-volumes.ts` reach each volume through `E2BVolumeFiles`, an implementation of `VolumeFiles` from `@rakazo/adapter-kit`. The API refuses to start while an E2B home is still on snapshots.
+
+On Docker, homes and volumes are directories of the same `DATA_DIR` storage, so `packages/adapters/src/docker-home-migration.ts` renames instead of copying: `homes/<homeKey>/bots/<botId>` becomes `volumes/rakazo-<privateVolumeId>`, `homes/<homeKey>/shared` becomes `volumes/rakazo-<sharedVolumeId>`, and each root entry of a dedicated home except its dot entries moves into the private volume. Links and special files move as they are, and nothing is left behind. It never follows a link when it resolves a root, and it resumes after an interruption: a target whose source is gone is done. The Compose `migrate` service runs `scripts/migrate-docker-homes.ts` for every idle computer before the API and the worker start, and the idle job moves a busy one once it suspends.
 
 ## Prove the isolation
 
@@ -120,7 +110,7 @@ Reuse I1's attack list for E2B: direct mounts, guessed identifiers, links and pa
 
 ## Test the adapter
 
-Keep these tests deterministic and offline. Gate any test that needs a real Docker daemon, and list it with the other suites that need Docker. The Docker workers' run, fault and isolation suites, `packages/testkit/src/docker-worker*.docker.test.ts`, run with `VERIFY_DOCKER_WORKERS=1` once the worker image is built. On Docker Desktop, `host.docker.internal` reaches the host's localhost, and the Linux-only assertions are skipped.
+Keep these tests deterministic and offline. Gate any test that needs a real Docker daemon, and list it with the other suites that need Docker. The Docker workers' run, fault and isolation suites, `packages/testkit/src/docker-worker*.docker.test.ts`, run with `VERIFY_DOCKER_WORKERS=1` once the worker image is built; the run suite also starts a Docker computer from `RAKAZO_COMPUTER_IMAGE` to check that it sees a worker's files at the same paths. On Docker Desktop, `host.docker.internal` reaches the host's localhost, which is accepted like open egress, and the Linux-only assertions are skipped.
 
 - Test the adapter against a fake of its SDK, as `packages/adapters/src/e2b-worker.test.ts` does. Cover that `ensure` and `ensureVolume` create nothing after their deadlines, that `ensureVolume` returns the requested name twice, that `destroy` without a reference finds a worker by its attempt tag and returns `absent` once nothing is left, and that `connect` carries frames both ways and settles `exited` once the guest is gone.
 - The controller suites, `packages/adapters/src/worker-lifecycle.test.ts` and `worker-volumes.test.ts`, run against `FakeWorkerProvider` and define the behavior your adapter must match: one destroy per release, leases held while a destroy is unconfirmed, and deletion records kept through the grace period.

@@ -31,6 +31,7 @@ export * from "./decision.js";
 export * from "./decision-provider-factory.js";
 export * from "./deployment-model.js";
 export * from "./destination-emulator.js";
+export * from "./docker-home-migration.js";
 export * from "./docker-sandbox.js";
 export * from "./docker-worker.js";
 export * from "./e2b-emulator.js";

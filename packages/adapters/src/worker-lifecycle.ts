@@ -22,7 +22,6 @@ import {
   LIVE_WORKER_STATES,
   lostSetupMove,
   planLaunch,
-  supportsWorkers,
   takesWriterLease,
   WORKER_TTL_SECONDS,
   WORKSPACE_ROOT,
@@ -61,11 +60,7 @@ export class VolumeBusyError extends Error {
 export type StartedWorker = { providerRef: string; start: Omit<WorkerStartV1, "run"> };
 
 /** Why a home cannot move onto volumes now. */
-export type HomeMoveBlocker =
-  | "computer_kind_unsupported"
-  | "computer_active"
-  | "volume_busy"
-  | "space_worker_live";
+export type HomeMoveBlocker = "computer_active" | "volume_busy" | "space_worker_live";
 
 /**
  * What a home move saw when it started. Adoption refuses once the home has a new revision, or once
@@ -127,8 +122,7 @@ async function computerBlocker(
   db: Db,
   computerId: string,
   computer: HomeComputer,
-): Promise<"computer_kind_unsupported" | "computer_active" | null> {
-  if (!supportsWorkers(computer.kind)) return "computer_kind_unsupported";
+): Promise<"computer_active" | null> {
   const executing = await db.computerExecutionLease.count({
     where: { computerId, expiresAt: { gt: new Date() } },
   });

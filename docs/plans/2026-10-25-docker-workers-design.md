@@ -48,8 +48,8 @@ api / job worker ──HTTP──▶ supervisor ──socket──▶ dockerd
 
 - **`ensureVolume` et `deleteVolume` tournent dans le provider**, côté api et job worker, avec l'uid 1000, sous `DATA_DIR/volumes/`. Ces deux services montent déjà `/data`, et `LocalWorkerProvider` fait déjà la même chose. Le supervisor, qui tourne en root, ne crée et ne supprime jamais un dossier que le guest peut écrire, ce qui évite le risque des symlinks.
 - **Le supervisor reçoit seulement des noms de volume.** Il les valide contre `rakazo-<id>` et calcule lui-même les chemins, comme `computerHomeStorage`. Il sait déjà monter un sous-dossier de son stockage, que `DATA_DIR` soit un dossier de l'hôte (bind, `docker-compose.yml`) ou un volume nommé (`appdata` avec `Subpath`, `docker-compose.images.yml`).
-- **Le computer Docker garde `/home/rakazo` sur le bind existant `homes/<botId>`**, pour les dotfiles et le profil Chrome (`.browser-profiles`), sans étape d'archivage. Les volumes sont montés aux chemins `/workspace` du `WorkerSpec`, et un lien pointe vers leur racine, comme sur E2B (`e2b-sandbox.ts:41`).
-- **La migration des homes existants réutilise la copie vérifiée.** `home-volume-migration.ts` sait déjà répartir `bots/<botId>/` vers le volume privé et `shared/` vers le volume d'espace. Il reçoit une implémentation `VolumeFiles` locale. C'est une copie suivie d'une vérification des hashs, pas un `rename`.
+- **Le computer Docker garde `/home/rakazo` sur le bind existant `homes/<botId>`**, pour les dotfiles et le profil Chrome (`.browser-profiles`), sans étape d'archivage. Les volumes sont montés aux chemins `/workspace` du `WorkerSpec`. Comme sur E2B, la racine du workspace devient celle des volumes : `/workspace` pour un computer d'équipe, `/workspace/bots/<botId>` pour un computer dédié. Les chemins relatifs ne changent donc pas. `HOME` reste `/home/rakazo`, et `/home/rakazo/workspace` pointe vers la racine. Le supervisor apprend la racine et un digest des montages par des labels du conteneur (`rakazo.workspace`, `rakazo.mounts`) : un computer dont les montages changent est remplacé.
+- **La migration des homes Docker est un `rename` sur le même stockage**, pas la copie vérifiée. `DATA_DIR/homes` et `DATA_DIR/volumes` sont sur le même stockage, un bind ou le volume nommé `appdata`. `homes/<key>/bots/<botId>` devient `volumes/rakazo-<idVolumePrivé>` et `homes/<key>/shared` devient `volumes/rakazo-<idVolumeEspace>`. Un home dédié déplace une à une ses entrées de premier niveau, sauf celles qui commencent par un point, qui restent sur le bind du home. Rien ne reste derrière : les liens et les fichiers spéciaux partent tels quels, et la question de `leaveUnmapped` ne se pose pas. Le `rename` reprend après une interruption : une cible dont la source a disparu est faite. Il ne suit jamais un lien pour résoudre les racines. Il n'y a pas de `VolumeFiles` locale. La migration E2B garde sa copie vérifiée.
 
 ## Isolation
 
@@ -78,7 +78,7 @@ L'image `rakazo/worker` contient exactement ce que contient le template E2B (`ap
   - les suites `transport`, `models`, `control-tokens`, `tool-schema` et `secret-schema`, qui testent ces helpers ;
   - `pi-runtime-limits` reste en place, puisque l'exécuteur l'utilise.
   - `executor-approval-pi`, `executor-secret-pi`, `executor-prompt-prefix` et `runtime-worker-hostile.test.ts` importent aussi `PiAgentRuntime` et sont à adapter.
-- **Les trois switches de la checklist provider** : `WORKER_SUPPORT`, la contrainte `computers_home_storage_check` (migration) et la condition de `createBot`.
+- **Les trois switches de la checklist provider** : `WORKER_SUPPORT` est supprimé, puisque les deux sortes de computer passent sur volumes ; la contrainte `computers_home_storage_check` accepte `docker` (migration) ; la condition de `createBot` fait naître les computers Docker sur volumes.
 - **`none`** : `none-sandbox.ts`, `ComputersUnavailableHint.tsx` et ses traductions.
 - **« This Mac »** :
   - `desktop-sandbox*.ts`, `host-aware-sandbox.ts` et `HostComputerPrompt.tsx` ;
@@ -95,7 +95,7 @@ Les E2E et la topologie tournent avec `ScriptedAgentRuntime`, en in-process. On 
 
 La tranche 4 supprime le chemin in-process. Un computer dont le home est encore sur snapshots ne pourrait alors plus tourner.
 
-- **Docker** : la migration tourne automatiquement dans le service Compose `migrate`, avant le démarrage de l'api et du job worker.
+- **Docker** : la migration tourne automatiquement dans le service Compose `migrate`, avant le démarrage de l'api et du job worker. Ce service monte `/data` et tourne avec l'uid 1000 de l'image. Il ne déplace que les computers au repos : arrêtés ou suspendus, sans personne aux commandes et sans bail vivant. Les autres sont déplacés par le job de mise en veille quand ils se suspendent, avant leur prochain démarrage. La tranche 4b ajoute pour Docker le même refus au démarrage que pour E2B, tant qu'un home n'est pas migré.
 - **E2B** : l'api refuse de démarrer tant qu'un computer E2B a encore son home sur snapshots, et l'opérateur le migre avec le script de #241. C'est déjà le parcours prévu par P6 : les nouveaux computers E2B naissent sur volumes.
 
 ## Spike
@@ -133,7 +133,7 @@ Feature branch `feature/docker-workers`, sauf la tranche 0. Les tranches 1 et 2 
 2. **`DockerWorkerProvider` et composition** :
    - tests contre un faux supervisor, sur le modèle d'`e2b-worker.test.ts` : aucune création après la deadline, `ensureVolume` qui rend deux fois le même nom, `destroy` sans ref qui rend `absent`, frames dans les deux sens ;
    - test Docker marqué comme tel : fichiers sur les volumes, visibilité et isolation entre workers, nettoyage après une panne, refus du modèle hostile. C'est l'équivalent des lanes `a`, `b`, `c`, `g` et `e-refusals`, sans portage des lanes live.
-3. **Computer Docker sur volumes et migration des homes** : montages aux chemins `/workspace`, `VolumeFiles` locale, migration automatique dans `migrate`, et les trois switches. La lane `h` devient un test de migration avec la `VolumeFiles` locale.
+3. **Computer Docker sur volumes et migration des homes** : montages aux chemins `/workspace`, racine du workspace sur les volumes, migration par `rename` dans `migrate` et à la mise en veille, refus au démarrage pour E2B, et les trois switches. La lane `h` devient un test de la migration par `rename`.
 4. **Supprimer `PiAgentRuntime`**, en deux temps :
    - **4a, PR directe sur `main`** : sortir de `pi-runtime.ts` les helpers que le relais et `pi-native.ts` importent, avec leurs tests. C'est un refactor pur, possible tout de suite ;
    - **4b, dans la feature** : supprimer la boucle et `pi-live-eval`, puis ajouter l'entrée CHANGELOG de la feature. Cette partie attend les tranches 0 et 3.
@@ -151,7 +151,7 @@ Les tranches 0, 1, 2 et 4a avancent en parallèle. La tranche 3 attend 1 et 2.
 | 5 | Garder le rootfs en écriture | Acceptée : même comportement qu'E2B |
 | 6 | `enable_icc=false` sur `rakazo-workers` | Acceptée |
 | 7 | Image identique au template E2B | Acceptée |
-| 8 | Copie vérifiée au lieu d'un `rename`, et migration de chaque déploiement avant la tranche 4 | Acceptée : migration automatique pour Docker, refus au démarrage pour E2B |
+| 8 | Copie vérifiée au lieu d'un `rename`, et migration de chaque déploiement avant la tranche 4 | Acceptée pour E2B, avec refus au démarrage. Revue à la tranche 3 pour Docker : homes et volumes partagent le même stockage, donc un `rename` qui reprend après interruption ne laisse rien derrière, sans copie |
 | 9 | Ajouter les deux autres switches, et transformer les replis vers `none` en erreurs au démarrage | Acceptée |
 | 10 | `/home/rakazo` reste sur le bind `homes/<botId>`, les volumes vont sous `/workspace` | Acceptée |
 | 11 | Liste de suppression complète, avec les helpers et tests à déplacer | Acceptée |

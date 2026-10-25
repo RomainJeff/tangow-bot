@@ -89,17 +89,25 @@ services:
       - ../../data:/data
 
   # Applies the migrations before the API and the worker start, writing the session log from the
-  # legacy messages first when an upgrade needs it. On a large database that takes minutes.
+  # legacy messages first when an upgrade needs it. On a large database that takes minutes. Then
+  # moves each idle computer's home onto its volumes, on the same /data as the supervisor.
   migrate:
     image: rakazo/app:local
     pull_policy: never
-    command: ["pnpm", "exec", "tsx", "scripts/backfill-session-log.ts"]
+    command:
+      - sh
+      - -c
+      - pnpm exec tsx scripts/backfill-session-log.ts && pnpm exec tsx scripts/migrate-docker-homes.ts
     restart: "no"
     environment:
       <<: *app-env
+    volumes:
+      - ../../data:/data
     depends_on:
       postgres:
         condition: service_healthy
+      data-init:
+        condition: service_completed_successfully
 
   api:
     # One image for api, worker and web: same context, same Dockerfile, only the

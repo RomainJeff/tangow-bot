@@ -328,7 +328,11 @@ The Electron desktop app is a client of the same API, with the same Docker or E2
   Optional: set `e2b` plus `E2B_API_KEY` for remote computers.
 - **Docker** is the quick-start default for published images and for a source checkout / full local
   Compose stack. Workspace bots share a persistent Team Computer by default; Private computers are
-  optional. Keep the supervisor private, as the included Compose files do.
+  optional. Each bot run that uses files works in its own worker container, and bot homes live on
+  volumes under `DATA_DIR/volumes`, mounted by the workers and the computer alike. Keep the
+  supervisor private, as the included Compose files do. On Docker Desktop (macOS, Windows) a worker
+  can reach the host's localhost through `host.docker.internal`; see
+  [homes on volumes](./self-host-sandbox-providers.md#homes-on-volumes).
 - **E2B** runs bot computers away from the Rakazo host and is a good choice for public or multi-user
   production deployments. Each bot run works in its own E2B worker VM, and bot homes live on E2B
   volumes. Set it up with [E2B workers](./self-host-e2b-workers.md).
@@ -562,6 +566,7 @@ A source checkout (not Compose) upgrades with its API and worker stopped:
 git pull
 pnpm install --frozen-lockfile
 pnpm exec tsx scripts/backfill-session-log.ts
+pnpm exec tsx scripts/migrate-docker-homes.ts
 ```
 
 then starts them again. Product contracts stay compatible across cloud and self-hosted.
@@ -650,6 +655,16 @@ that has none yet:
 pnpm exec tsx scripts/session-log-export.ts <thread-id> <directory>
 pnpm exec tsx scripts/session-log-import.ts <directory> <thread-id>
 ```
+
+### Homes on volumes
+
+On Docker, the `migrate` service then moves each idle computer's home onto its volumes, renaming
+its folders inside `DATA_DIR` (`scripts/migrate-docker-homes.ts`). A computer still running moves
+the next time it goes to sleep. See [homes on volumes](./self-host-sandbox-providers.md#homes-on-volumes).
+
+On E2B, the API refuses to start while a computer still keeps its home on snapshots, and names
+each one. Move them with `scripts/migrate-home-to-volumes.ts` as
+[E2B workers](./self-host-e2b-workers.md#move-existing-homes-onto-volumes) describes.
 
 ### Space privacy-boundary migration
 

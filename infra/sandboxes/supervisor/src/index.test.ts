@@ -24,6 +24,7 @@ import {
   browserProfilePathForScreen,
   ComputerControlUnavailableError,
   clearComputerScreenRegistry,
+  commandWorkingDir,
   completeReleasedScreen,
   computerControlTimeoutMs,
   containerActionStep,
@@ -281,6 +282,17 @@ describe("sandbox supervisor input containment", () => {
     expect(() => normalizeWorkspaceRelative("../outside")).toThrow(/escapes/);
     expect(() => normalizeWorkspaceRelative("notes/./result.txt")).toThrow(/escapes/);
     expect(() => normalizeWorkspaceRelative("notes/../outside")).toThrow(/escapes/);
+  });
+
+  it("runs commands from the same relative place once the workspace is the volumes' root", () => {
+    expect(commandWorkingDir(undefined, "/workspace")).toBe("/workspace");
+    expect(commandWorkingDir("/home/rakazo/bots/ada", "/workspace")).toBe("/workspace/bots/ada");
+    expect(commandWorkingDir("/workspace/shared/x", "/workspace/bots/ada")).toBe(
+      "/workspace/shared/x",
+    );
+    expect(commandWorkingDir("/workspace/shared", undefined)).toBe("/home/rakazo/workspace/shared");
+    expect(commandWorkingDir("/home/rakazo/notes")).toBe("/home/rakazo/notes");
+    expect(() => commandWorkingDir("/workspace/../etc", "/workspace")).toThrow(/escapes/);
   });
 
   it("requires both bot and workspace identities to match", () => {

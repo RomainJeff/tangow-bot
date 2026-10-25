@@ -146,12 +146,17 @@ services:
       retries: 30
 
   # Applies the migrations before the API and the worker start, writing the session log from the
-  # legacy messages first when an upgrade needs it.
+  # legacy messages first when an upgrade needs it, then moves idle homes onto their volumes.
   migrate:
     image: ${TOPOLOGY_APP_IMAGE:-rakazo/app:topology}
-    command: ["pnpm", "exec", "tsx", "scripts/backfill-session-log.ts"]
+    command:
+      - sh
+      - -c
+      - pnpm exec tsx scripts/backfill-session-log.ts && pnpm exec tsx scripts/migrate-docker-homes.ts
     restart: "no"
     environment: *app-environment
+    volumes:
+      - appdata:/data
     depends_on:
       app-image:
         condition: service_completed_successfully

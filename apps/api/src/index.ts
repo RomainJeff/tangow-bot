@@ -4,6 +4,7 @@ import { loadRootEnv } from "@rakazo/core/node/load-root-env";
 loadRootEnv();
 
 import { serve } from "@hono/node-server";
+import { assertE2BHomesOnVolumes, E2BHomesNotMigrated } from "@rakazo/adapters";
 import { createDb, moveLegacyMessages, RoundRefused } from "@rakazo/db";
 import { SERVICE_NAMES } from "@rakazo/logging";
 import { createRootLogger } from "@rakazo/logging/axiom";
@@ -19,6 +20,7 @@ try {
   const legacy = createDb(env.databaseUrl, { poolMax: 1 });
   try {
     await moveLegacyMessages(legacy.prisma, { log: (line) => logger.info(line) });
+    await assertE2BHomesOnVolumes(legacy.prisma);
   } finally {
     await legacy.prisma.$disconnect();
     await legacy.pool.end();
@@ -54,7 +56,9 @@ try {
   process.once("SIGTERM", () => void shutdown());
   process.once("SIGINT", () => void shutdown());
 } catch (error) {
-  if (error instanceof RoundRefused) process.stderr.write(`${error.message}\n`);
+  if (error instanceof RoundRefused || error instanceof E2BHomesNotMigrated) {
+    process.stderr.write(`${error.message}\n`);
+  }
   logger.error("api startup failed", error);
   await logger.flush({ timeoutMs: 2_000 });
   process.exit(1);

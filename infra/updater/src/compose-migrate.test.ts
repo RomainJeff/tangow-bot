@@ -19,7 +19,9 @@ describe.each([
   };
 
   it("migrates once, before the API and the worker start", () => {
-    expect(services.migrate?.command).toContain("scripts/backfill-session-log.ts");
+    const command = services.migrate?.command?.join(" ");
+    expect(command).toContain("scripts/backfill-session-log.ts");
+    expect(command).toContain("scripts/migrate-docker-homes.ts");
     for (const name of ["api", "worker"]) {
       expect(services[name]?.depends_on?.migrate).toEqual({
         condition: "service_completed_successfully",

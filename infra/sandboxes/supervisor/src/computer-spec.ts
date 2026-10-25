@@ -208,6 +208,78 @@ export function homeVolumeMatches(
   );
 }
 
+/** A computer whose home is on volumes: what it mounts, where its workspace starts, and their digest. */
+export interface ComputerVolumeHome {
+  root: string;
+  mounts: WorkerMountSource[];
+  digest: string;
+}
+
+/**
+ * The volumes a computer mounts, validated as a worker's are, at the same paths. The workspace
+ * root is `/workspace` for a team computer or its bot's volume for a dedicated one. The digest is
+ * the computer's identity: a running container cannot mount another volume, so it is replaced.
+ */
+export function computerVolumeHome(
+  input: { root: string; mounts: ReadonlyArray<{ volume: string; path: string }> },
+  dataDir: string,
+  info: Docker.ContainerInspectInfo | undefined,
+): ComputerVolumeHome {
+  const mounts = workerMounts(
+    input.mounts.map((mount) => ({ ...mount, readOnly: false })),
+    dataDir,
+    info,
+  );
+  if (input.root !== "/workspace" && !input.mounts.some((mount) => mount.path === input.root)) {
+    throw new Error("the computer workspace must be /workspace or one of its volumes");
+  }
+  const sorted = input.mounts.map((mount) => [mount.path, mount.volume]).sort();
+  const digest = createHash("sha256")
+    .update(JSON.stringify({ root: input.root, mounts: sorted }))
+    .digest("hex");
+  return { root: input.root, mounts, digest };
+}
+
+/** The labels that record a computer's volumes. A computer created before its home moved has none. */
+export function volumeHomeLabels(
+  volumeHome: ComputerVolumeHome | undefined,
+): Record<string, string> {
+  return volumeHome
+    ? {
+        "rakazo.home": "volumes",
+        "rakazo.mounts": volumeHome.digest,
+        "rakazo.workspace": volumeHome.root,
+      }
+    : {};
+}
+
+export function volumeHomeMatches(
+  labels: Record<string, string> | undefined,
+  volumeHome: ComputerVolumeHome | undefined,
+) {
+  return (labels?.["rakazo.mounts"] ?? null) === (volumeHome?.digest ?? null);
+}
+
+/** Where the computer's workspace starts: its home, or the root of its volumes. */
+export function computerWorkspace(labels: Record<string, string> | undefined) {
+  return labels?.["rakazo.workspace"] ?? "/home/rakazo";
+}
+
+function dockerMount(mount: WorkerMountSource): Docker.MountSettings {
+  return "bind" in mount.source
+    ? { Type: "bind", Source: mount.source.bind, Target: mount.target, ReadOnly: mount.readOnly }
+    : {
+        Type: "volume",
+        Source: mount.source.volume,
+        Target: mount.target,
+        ReadOnly: mount.readOnly,
+        VolumeOptions: {
+          NoCopy: true,
+          Subpath: mount.source.subpath,
+        } as Docker.MountSettings["VolumeOptions"],
+      };
+}
+
 export interface ComputerCreateInput {
   name: string;
   image: string;
@@ -215,6 +287,7 @@ export interface ComputerCreateInput {
   spaceId: string;
   homePath: string;
   homeVolume?: { name: string; subpath: string };
+  volumeHome?: ComputerVolumeHome;
   user?: string;
   controlToken?: string;
   networkMode?: string;
@@ -238,6 +311,7 @@ export type SandboxInput =
 
 export function containerCreateOptions(input: ComputerCreateInput) {
   const ports = computerPortBindings(input.publishControlPort);
+  const volumeMounts = input.volumeHome?.mounts.map(dockerMount) ?? [];
   return {
     Image: input.image,
     name: input.name,
@@ -255,6 +329,7 @@ export function containerCreateOptions(input: ComputerCreateInput) {
       "rakazo.managed": "true",
       "rakazo.botId": input.botId,
       "rakazo.spaceId": input.spaceId,
+      ...volumeHomeLabels(input.volumeHome),
     },
     ExposedPorts: ports.ExposedPorts,
     HostConfig: {
@@ -272,11 +347,12 @@ export function containerCreateOptions(input: ComputerCreateInput) {
                   Subpath: input.homeVolume.subpath,
                 } as Docker.MountSettings["VolumeOptions"],
               },
+              ...volumeMounts,
             ],
           }
         : {
             Binds: [`${input.homePath}:/home/rakazo`, ...(input.skillsBinds ?? [])],
-            Mounts: undefined,
+            Mounts: volumeMounts.length ? volumeMounts : undefined,
           }),
       PortBindings: ports.PortBindings,
       ShmSize: 256 * 1024 * 1024,
@@ -287,7 +363,7 @@ export function containerCreateOptions(input: ComputerCreateInput) {
       AutoRemove: false,
       NetworkMode: input.networkMode ?? "bridge",
     },
-    WorkingDir: "/home/rakazo",
+    WorkingDir: input.volumeHome?.root ?? "/home/rakazo",
   };
 }
 
@@ -534,25 +610,7 @@ export function workerCreateOptions(input: {
       SecurityOpt: ["no-new-privileges:true"],
       ...WORKER_LIMITS,
       NetworkMode: WORKER_NETWORK,
-      Mounts: input.mounts.map((mount) =>
-        "bind" in mount.source
-          ? {
-              Type: "bind" as const,
-              Source: mount.source.bind,
-              Target: mount.target,
-              ReadOnly: mount.readOnly,
-            }
-          : {
-              Type: "volume" as const,
-              Source: mount.source.volume,
-              Target: mount.target,
-              ReadOnly: mount.readOnly,
-              VolumeOptions: {
-                NoCopy: true,
-                Subpath: mount.source.subpath,
-              } as Docker.MountSettings["VolumeOptions"],
-            },
-      ),
+      Mounts: input.mounts.map(dockerMount),
     },
   };
 }
