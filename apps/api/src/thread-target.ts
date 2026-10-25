@@ -740,9 +740,6 @@ async function putCardAwayWithMessage(
       botId,
       userId: actor.userId,
       runId: run.id,
-      ...(dismissal.outcome === "dismissed" && dismissal.context
-        ? { context: dismissal.context }
-        : {}),
     },
   });
   return { status: dismissal.status };

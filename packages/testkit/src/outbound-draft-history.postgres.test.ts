@@ -1,0 +1,167 @@
+import { ComposioEmulator, composioEntityId } from "@rakazo/adapters";
+import { describe, expect, it } from "vitest";
+import { latestCard } from "./index.js";
+import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.js";
+import type { JourneyFixture } from "./pi-journey.test-support.js";
+import { DONE, journey, reply, rpc } from "./pi-journey.test-support.js";
+
+const databaseAvailable = process.env.VERIFY_DATABASE === "1" && Boolean(process.env.DATABASE_URL);
+
+const SENT_NOTE = "The user sent this message from the draft card.";
+const DISCARDED_NOTE = "The user discarded this draft.";
+const PAUSED = "paused: awaiting approval";
+
+const mailTo = (address: string, id: string, extra: Record<string, unknown> = {}) =>
+  ({
+    expect() {},
+    response: {
+      type: "tool",
+      id,
+      name: "GMAIL_SEND_EMAIL",
+      arguments: { recipient_email: address, subject: "Hello", body: `Hi ${address}.`, ...extra },
+    },
+  }) satisfies ModelEmulatorStep;
+
+/** The send calls the model reads back among its earlier steps, each with its recipient and result. */
+const sends = (request: ModelEmulatorRequest) =>
+  JSON.stringify(request.messages)
+    .split("(already ran Gmail send email")
+    .slice(1)
+    .map((step) => step.split(")\\n")[0]!);
+
+const count = (text: string, part: string) => text.split(part).length - 1;
+
+async function connectGmail(composio: ComposioEmulator, { prisma, bot, userId }: JourneyFixture) {
+  const { spaceId } = await prisma.bot.findUniqueOrThrow({
+    where: { id: bot.id },
+    select: { spaceId: true },
+  });
+  await composio.begin(
+    { provider: "GMAIL", redirectUrl: "http://127.0.0.1.invalid/callback" },
+    {
+      operationId: "draft-history",
+      traceId: "draft-history",
+      spaceId,
+      userId,
+      signal: new AbortController().signal,
+    },
+  );
+  await prisma.connection.create({
+    data: { spaceId, userId, provider: "GMAIL", displayName: "Gmail", status: "pending" },
+  });
+  return () =>
+    composio
+      .mailboxFor(composioEntityId({ spaceId, userId }))
+      ?.messages.filter(
+        (message) =>
+          message.to.endsWith("@example.test") &&
+          message.to !== "me@example.test" &&
+          message.to !== "teammate@example.test",
+      )
+      .map((message) => [message.to, message.messageText]);
+}
+
+async function answerDraft(
+  { prisma, app, cookie, bot }: JourneyFixture,
+  runId: string,
+  answer: "allow" | "deny",
+) {
+  const card = await latestCard(prisma, runId);
+  await rpc(app, cookie, "threads/answer", { botId: bot.id, runId, messageId: card.id, answer });
+}
+
+describe.skipIf(!databaseAvailable)("a draft's outcome in the bot's history", () => {
+  it("tells the bot how each of two drafts ended, once, whatever it does next", async () => {
+    const composio = new ComposioEmulator();
+    await journey(
+      [
+        mailTo("anna@example.test", "mail-a"),
+        {
+          expect(request) {
+            const [first, ...rest] = sends(request);
+            expect(rest).toEqual([]);
+            expect(first).toContain("anna@example.test");
+            expect(count(first!, SENT_NOTE)).toBe(1);
+            expect(JSON.stringify(request.messages)).not.toContain(PAUSED);
+          },
+          response: mailTo("ben@example.test", "mail-b").response,
+        },
+        {
+          expect(request) {
+            const [first, second, ...rest] = sends(request);
+            expect(rest).toEqual([]);
+            expect([first, second].map((step) => count(step!, SENT_NOTE))).toEqual([1, 1]);
+            expect(first).toContain("anna@example.test");
+            expect(second).toContain("ben@example.test");
+            expect(JSON.stringify(request.messages)).not.toContain(PAUSED);
+          },
+          response: reply("Both sent."),
+        },
+        DONE,
+      ],
+      async (fixture) => {
+        const mailed = await connectGmail(composio, fixture);
+        const sent = await fixture.send("Mail Anna, then Ben.");
+        await sent.settled("waiting_input");
+        await answerDraft(fixture, sent.runId, "allow");
+        await expect
+          .poll(async () => (await latestCard(fixture.prisma, sent.runId)).block.draft?.body, {
+            timeout: 15_000,
+          })
+          .toBe("Hi ben@example.test.");
+        await sent.settled("waiting_input");
+        await answerDraft(fixture, sent.runId, "allow");
+        await sent.settled("completed");
+        expect(mailed()).toEqual([
+          ["anna@example.test", "Hi anna@example.test."],
+          ["ben@example.test", "Hi ben@example.test."],
+        ]);
+      },
+      { composio },
+    );
+  }, 60_000);
+
+  it("tells the bot a draft was discarded, and a re-issued mail with other notes opens no new card", async () => {
+    const composio = new ComposioEmulator();
+    let answered: unknown;
+    await journey(
+      [
+        mailTo("anna@example.test", "mail-1", { thought: "Mail Anna." }),
+        {
+          expect(request) {
+            const [only, ...rest] = sends(request);
+            expect(rest).toEqual([]);
+            expect(count(only!, DISCARDED_NOTE)).toBe(1);
+            expect(JSON.stringify(request.messages)).not.toContain(PAUSED);
+          },
+          response: mailTo("anna@example.test", "mail-2", { thought: "Mail Anna again." }).response,
+        },
+        {
+          expect(request) {
+            answered = JSON.parse(
+              String(request.messages.findLast((message) => message.role === "tool")?.content),
+            );
+          },
+          response: reply("Understood, nothing was sent."),
+        },
+        DONE,
+      ],
+      async (fixture) => {
+        const mailed = await connectGmail(composio, fixture);
+        const sent = await fixture.send("Mail Anna.");
+        await sent.settled("waiting_input");
+        await answerDraft(fixture, sent.runId, "deny");
+        await sent.settled("completed");
+        expect(answered).toMatchObject({ ok: false, discarded: true });
+        expect(
+          await fixture.prisma.externalEffect.findMany({
+            where: { runId: sent.runId, kind: "GMAIL_SEND_EMAIL" },
+            select: { status: true, draft: true },
+          }),
+        ).toMatchObject([{ status: "denied", draft: { state: "discarded" } }]);
+        expect(mailed()).toEqual([]);
+      },
+      { composio },
+    );
+  }, 60_000);
+});

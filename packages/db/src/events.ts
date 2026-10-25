@@ -26,7 +26,6 @@ import {
   messagingChannelId,
   normalizeSpawnBotArgs,
   readDraft,
-  replacedDraftContext,
   runStartedByUser,
   sanitizeJsonValue,
   spawnBotApprovalBlock,
@@ -151,8 +150,6 @@ export interface ClaimedSteeringMessage {
   id: string;
   messageId: string;
   text: string;
-  /** What the server tells the bot beside the message, already framed. */
-  context?: string;
   blocks: MessageBlock[];
   untrusted: boolean;
 }
@@ -846,7 +843,6 @@ export async function claimSteering(
         id: item.id,
         messageId: item.messageId,
         text: run.trigger === "helper" ? fromParent(text) : text,
-        ...(item.context ? { context: item.context } : {}),
         blocks,
         untrusted: item.untrusted,
       };
@@ -1515,7 +1511,7 @@ export interface DismissProposalWithTextInput {
  * `keep`: not a card a reply puts away; the caller applies the usual rule.
  */
 export type DismissProposalWithTextResult =
-  | { outcome: "dismissed"; status: "queued"; context?: string }
+  | { outcome: "dismissed"; status: "queued" }
   | { outcome: "settled"; status: string }
   | { outcome: "keep" };
 
@@ -1528,7 +1524,7 @@ const STEERABLE_AFTER_ANSWER = new Set(["queued", "leased", "running"]);
  * intended → denied, marked dismissed so no guard counts it as a no. The run keeps its checkpoint:
  * the pending call resumes and reads that it was dismissed, then the typed message steers it. A
  * mail draft ends replaced, never sent, its body set to the text the user left on that card; the
- * bot reads that beside the typed message, as `context`.
+ * run logs that as the draft call's result when it resumes.
  */
 export async function dismissProposalWithTextInTransaction(
   tx: Prisma.TransactionClient,
@@ -1616,12 +1612,7 @@ export async function dismissProposalWithTextInTransaction(
     runId: input.runId,
     payload: { effectId: effect.id, decision: "denied", dismissed: true },
   });
-  // What the bot reads beside the typed message, which the caller steers into the run.
-  return {
-    outcome: "dismissed",
-    status: "queued",
-    ...(replaced ? { context: replacedDraftContext(replaced, request) } : {}),
-  };
+  return { outcome: "dismissed", status: "queued" };
 }
 
 export async function pauseRunForInput(

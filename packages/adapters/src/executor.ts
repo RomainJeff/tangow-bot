@@ -62,6 +62,7 @@ import {
   isAttachmentImageMimeType,
   OPENAI_COMPATIBLE_PROVIDER_ID,
   parseRunRecap,
+  pausedOutput,
   RunTrigger,
   SessionId,
 } from "@rakazo/contracts";
@@ -314,6 +315,7 @@ import { redactConnectorPayload, sanitizeConnectorError } from "./connector-safe
 import { formatCurrentTimeInstruction } from "./current-time.js";
 import type { DecisionProviderResolver } from "./decision-provider-factory.js";
 import { resolveDeploymentModel } from "./deployment-model.js";
+import { endedDraftOutcomes } from "./draft-outcome.js";
 import { FILE_TOOL_NAMES, runFileTool } from "./file-tools.js";
 import { handoffToGroupBot, loadGroupContext } from "./group-handoff.js";
 import {
@@ -5266,22 +5268,22 @@ export function createRunExecutor(deps: ExecutorDeps) {
 
         /**
          * Sends what the user approved on a draft card before any model turn, through applyTool so
-         * every replay guard holds. Returns what was sent for the turn prompt, or undefined once the
-         * run is parked on a draft that did not leave. A send that may have left is never resent.
+         * every replay guard holds. Returns false once the run is parked on a draft that did not
+         * leave. A send that may have left is never resent. What came of each draft reaches the
+         * model through logDraftOutcomes.
          */
-        const sendApprovedDrafts = async (): Promise<unknown[] | undefined> => {
+        const sendApprovedDrafts = async (): Promise<boolean> => {
           const effects = await deps.prisma.externalEffect.findMany({
             where: { runId, status: { in: ["approved", "executing"] } },
             orderBy: APPROVED_EFFECT_REPLAY_ORDER,
           });
           const exposed = new Set(tools.map((tool) => tool.name));
-          const sent: unknown[] = [];
           for (const effect of effects) {
             const draft = readDraft(effect.status, effect.draft);
             if (!draft) continue;
             if (effect.status === "executing") {
               await reRequestDraft(effect, draft, interruptedSend);
-              return undefined;
+              return false;
             }
             const call = approvedReplayModelCall(effect, exposed);
             if (!exposed.has(call.tool)) {
@@ -5289,7 +5291,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 reason: `${app} is disconnected.`,
                 disconnected: true,
               }));
-              return undefined;
+              return false;
             }
             const outcome = await applyTool(
               call.tool,
@@ -5304,7 +5306,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               },
             );
             // Another worker claimed it first: its send settles the card.
-            if ("result" in outcome && outcome.result === DRAFT_SENDING_ELSEWHERE) return undefined;
+            if ("result" in outcome && outcome.result === DRAFT_SENDING_ELSEWHERE) return false;
             const after = await deps.prisma.externalEffect.findUnique({
               where: { id: effect.id },
             });
@@ -5312,7 +5314,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             // internal, so the card gives a plain reason.
             if (after?.status === "approved") {
               await reRequestDraft(after, draft, (app) => ({ reason: `${app} did not send it.` }));
-              return undefined;
+              return false;
             }
             if (after?.status !== "executing") continue;
             const read = "result" in outcome ? readSendResult(outcome.result) : undefined;
@@ -5322,13 +5324,63 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 draft,
                 read?.kind === "not_sent" ? () => ({ reason: read.reason }) : interruptedSend,
               );
-              return undefined;
+              return false;
             }
-            sent.push(await settleSentDraft(after, draft));
+            await settleSentDraft(after, draft);
           }
           // The server's sends are not the model's: its own identical call reads the stored outcome.
           mutatingEffectOccurrences.clear();
-          return sent;
+          return true;
+        };
+
+        /**
+         * Gives each call a draft card paused the outcome of its card, as the result the model
+         * reads from then on, in every later attempt of the run. Written once under the thread
+         * lock: a call whose pause the log already replaced is left alone, so a crash between
+         * the send and this write only delays it to the next attempt.
+         */
+        const logDraftOutcomes = async (): Promise<SessionEntry[]> => {
+          const effects = await deps.prisma.externalEffect.findMany({
+            where: {
+              runId,
+              draft: { not: Prisma.DbNull },
+              status: { in: ["completed", "denied"] },
+            },
+            orderBy: APPROVED_EFFECT_REPLAY_ORDER,
+            select: {
+              id: true,
+              kind: true,
+              status: true,
+              request: true,
+              result: true,
+              draft: true,
+            },
+          });
+          if (effects.length === 0) return [];
+          return deps.prisma.$transaction(async (tx) => {
+            await tx.$queryRaw`SELECT id FROM threads WHERE id = ${thread.id} FOR UPDATE`;
+            if (!(await renewRunLease({ prisma: tx }, runId, workerId, fence))) {
+              throw new Error("This attempt no longer holds the run.");
+            }
+            const outcomes = endedDraftOutcomes(effects, await deps.sessionLog.readRun(runId));
+            const logged: SessionEntry[] = [];
+            for (const { callId, result } of outcomes) {
+              const shown = redactConnectorPayload(result, runSecrets);
+              logged.push(
+                await deps.sessionLog.append(tx, {
+                  ...runLog,
+                  type: "tool.result",
+                  payload: {
+                    callId,
+                    output: describeToolPayload(shown, runSecrets),
+                    isError: isFailedToolResult(shown),
+                    artifactIds: [],
+                  },
+                }),
+              );
+            }
+            return logged;
+          });
         };
 
         const settleSentDraft = async (
@@ -5375,11 +5427,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
             }
             return threadEventSeq(tx, thread.id);
           });
-          if (seq === null) return uncertainEffectResult("send");
+          if (seq === null) return;
           await deps.events.notify(thread.id, seq).catch((error) => {
             getLogger().error("draft card update", error);
           });
-          return result;
         };
 
         const pluginLine =
@@ -5431,8 +5482,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
               parsePlaybook(invokedSkill.playbook),
             )}\n\n${taskPrompt}`
           : taskPrompt;
-        const sentDrafts = await sendApprovedDrafts();
-        if (!sentDrafts) return;
+        if (!(await sendApprovedDrafts())) return;
+        const draftOutcomes = await logDraftOutcomes();
         const approvalContinuation = buildApprovalContinuation(
           replayedEffects.filter((effect) => !readDraft(effect.status, effect.draft)),
           (request) => redactSecrets(JSON.stringify(request), runSecrets),
@@ -5458,10 +5509,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
           approvalContinuation,
           settledEffects.length > 0 ? SETTLED_APPROVAL_NOTE : undefined,
           activeHelpers ? redactSecrets(activeHelpers, promptSecrets) : undefined,
-          ...sentDrafts.map(
-            (sent) =>
-              `The user sent your draft from its card. ${DRAFT_AS_DATA}: ${redactSecrets(JSON.stringify(sent), runSecrets)}`,
-          ),
         ];
         const turnPrompt = (recall: string | undefined) =>
           [clock, ...turnHead, recall, ...turnTail].filter(Boolean).join("\n\n");
@@ -5532,11 +5579,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
 
         try {
           if (refusal) throw new Error(refusal);
+          // Entries this attempt added before the model's turn, which its history must hold.
+          const settled: SessionEntry[] = [...draftOutcomes];
           if (settledEffects.length > 0 && persistence?.start.mode !== "resume") {
             if (!(await renewRunLease(deps, runId, workerId, fence))) return;
             // The approved request takes the guarded path a model's call takes, so it runs only
             // under the effect's claim; the effect's id as call id lets a later attempt find it.
-            const settled: SessionEntry[] = [];
             const write = async (entry: ToolLogEntry) => {
               const logged = await writeRunEntry(entry);
               settled.push(logged);
@@ -5606,6 +5654,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 });
               }
             }
+          }
+          if (settled.length > 0) {
             ({ uncompactedHistory, activeHistory, finishedHistory } = projectHistory([
               ...historyEntries,
               ...settled,
@@ -6039,7 +6089,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
                             : buildSteeringMessageText(
                                 [
                                   await loadReplyContext(deps.prisma, thread.id, item.messageId),
-                                  item.context && redactSecrets(item.context, runSecrets),
                                   item.text,
                                 ]
                                   .filter(Boolean)
@@ -7354,7 +7403,7 @@ type ToolLogEntry =
   | { type: "tool.result"; payload: SessionEntryOf<"tool.result">["payload"] };
 
 function pausedCall(log: RunLog, callId: string, awaiting: "approval" | "answer") {
-  return { ...log, callId, output: `paused: awaiting ${awaiting}` };
+  return { ...log, callId, output: pausedOutput(awaiting) };
 }
 
 function effectProposal(request: unknown): Record<string, unknown> {
