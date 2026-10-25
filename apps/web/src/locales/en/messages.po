@@ -4370,3 +4370,46 @@ msgstr "Your name"
 #: src/pages/Welcome.tsx:21
 msgid "Your team of always-on agents<0/>that you can give real work to."
 msgstr "Your team of always-on agents<0/>that you can give real work to."
+
+#. placeholder {0}: item.status.busyBotName
+#: src/pages/ComputerSettingsPanel.tsx:111
+msgid "{0} is using it"
+msgstr "{0} is using it"
+
+#. placeholder {0}: item.bots.map((bot) => bot.name).join(", ")
+#: src/pages/ComputerSettingsPanel.tsx:103
+msgid "Bots: {0}"
+msgstr "Bots: {0}"
+
+#: src/pages/ComputerSettingsPanel.tsx:67
+msgid "Busy. Try again when idle."
+msgstr "Busy. Try again when idle."
+
+#: src/pages/ComputerSettingsPanel.tsx:78
+msgid "Could not load computers"
+msgstr "Could not load computers"
+
+#: src/pages/ComputerSettingsPanel.tsx:80
+msgid "Could not update computers"
+msgstr "Could not update computers"
+
+#: src/pages/ComputerSettingsPanel.tsx:90
+msgid "No computers"
+msgstr "No computers"
+
+#: src/pages/ComputerSettingsPanel.tsx:102
+msgid "Private Computer"
+msgstr "Private Computer"
+
+#: src/pages/ComputerSettingsPanel.tsx:57
+msgid "Update all computers"
+msgstr "Update all computers"
+
+#: src/pages/ComputerSettingsPanel.tsx:69
+msgid "Updates are unavailable on this device"
+msgstr "Updates are unavailable on this device"
+
+#. placeholder {0}: result.queued.length
+#: src/pages/ComputerSettingsPanel.tsx:61
+msgid "Updates queued: {0}"
+msgstr "Updates queued: {0}"
