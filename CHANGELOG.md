@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Changed
 
-- Bots on web, desktop and iPhone find the right tools of connected apps that expose many tools more reliably.
+- Bots on web, desktop and iPhone find tools in connected apps with large catalogs more reliably, including loading the exact tool they ask for by name.
 
 - Bots on web, desktop and iPhone now prefer suitable connected tools and direct page reads before browser interaction, and distinguish connector failures before choosing another method.
 - On web, desktop and iPhone, global Settings now lists each computer with its bots and visible maintenance actions, and can update all available computers at once, reporting busy computers for a later retry without opening their screens or taking control.
