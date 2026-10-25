@@ -1,21 +1,53 @@
-import type { AskDraft } from "@rakazo/contracts";
+import type { AskDraft, AskDraftEdits, AskDraftRecipient } from "@rakazo/contracts";
 import { ASK_DRAFT_TEXT_MAX_LENGTH } from "@rakazo/contracts";
-
-/** Where the body sits inside an effect's stored request. */
-export type DraftPath = Array<string | number>;
+import type { DraftPath, DraftSlots } from "./draft-fields.js";
+import {
+  askDraftFields,
+  DRAFT_GONE,
+  draftFieldsError,
+  isPath,
+  isRecipientRole,
+  isRecord,
+  LINE_BREAKS,
+  readDraftSlots,
+  slotRecipients,
+  valueAt,
+  withSlotRecipients,
+  withValueAt,
+} from "./draft-fields.js";
 
 export type DraftFailure = NonNullable<AskDraft["failure"]>;
 
+/** Where a draft's recipients and subject sit in its request, and what the bot proposed there. */
+export type DraftFields = DraftSlots & {
+  proposed: { recipients: AskDraftRecipient[]; subject?: string };
+};
+
 /**
- * What an `ExternalEffect.draft` holds beside the effect's status. `proposed` is the bot's text;
- * the text that leaves is always the one at `path` in the stored request.
+ * Where a draft's message sits in its effect's stored request. `proposed` is the bot's text; what
+ * leaves is always what the request holds at `path` and at the `fields`, which a draft recorded
+ * before recipients and subject were editable lacks.
  */
-export type DraftRecord = { path: DraftPath; proposed: string } & (
+export type DraftBinding = { path: DraftPath; proposed: string; fields?: DraftFields };
+
+export type DraftState =
   | { state: "pending"; failure?: DraftFailure }
   | { state: "approved" }
   | { state: "sent"; at: string }
-  | { state: "discarded" | "replaced" | "unsent" }
-);
+  | { state: "discarded" | "replaced" | "unsent" };
+
+/** What an `ExternalEffect.draft` holds beside the effect's status. */
+export type DraftRecord = DraftBinding & DraftState;
+
+/** The draft moved to `next`, its binding kept and nothing of its former state. */
+export function draftWithState(draft: DraftBinding, next: DraftState): DraftRecord {
+  return {
+    path: draft.path,
+    proposed: draft.proposed,
+    ...(draft.fields ? { fields: draft.fields } : {}),
+    ...next,
+  };
+}
 
 const EFFECT_STATUSES: Record<DraftRecord["state"], readonly string[]> = {
   pending: ["intended"],
@@ -46,28 +78,132 @@ export function readDraft(status: string, draft: unknown): DraftRecord | undefin
   ) {
     return undefined;
   }
-  return draft as DraftRecord;
+  const { fields, ...rest } = draft;
+  const parsed = readDraftFields(fields);
+  return { ...rest, ...(parsed ? { fields: parsed } : {}) } as DraftRecord;
 }
 
-/** What the bot reads once its draft left: exactly what was sent, and whether the user edited it. */
+/** A stored draft's fields; ones that do not parse leave the draft editable in its text only. */
+function readDraftFields(value: unknown): DraftFields | undefined {
+  const slots = readDraftSlots(value);
+  const proposed = isRecord(value) ? value.proposed : undefined;
+  if (!slots || !isRecord(proposed) || !Array.isArray(proposed.recipients)) return undefined;
+  const recipients = proposed.recipients.filter(
+    (recipient): recipient is AskDraftRecipient =>
+      isRecord(recipient) &&
+      isRecipientRole(recipient.role) &&
+      typeof recipient.address === "string",
+  );
+  if (recipients.length !== proposed.recipients.length) return undefined;
+  if (proposed.subject !== undefined && typeof proposed.subject !== "string") return undefined;
+  return {
+    ...slots,
+    proposed: {
+      recipients,
+      ...(proposed.subject !== undefined ? { subject: proposed.subject } : {}),
+    },
+  };
+}
+
+/** A draft's message as its request holds it; recipients and subject only when recorded. */
+export function draftMessage(
+  request: unknown,
+  draft: DraftBinding,
+): { recipients?: AskDraftRecipient[]; subject?: string; body: string } {
+  const text = valueAt(request, draft.path);
+  const body = typeof text === "string" ? text : "";
+  if (!draft.fields) return { body };
+  const subject = draft.fields.subject && valueAt(request, draft.fields.subject);
+  return {
+    recipients: slotRecipients(request, draft.fields),
+    ...(typeof subject === "string" ? { subject } : {}),
+    body,
+  };
+}
+
+export type DraftEditedField = "recipients" | "subject" | "body";
+
+/** What the user changed from the bot's draft. */
+export function draftEditedFields(
+  draft: DraftBinding,
+  message: ReturnType<typeof draftMessage>,
+): DraftEditedField[] {
+  const edited: DraftEditedField[] = [];
+  const { fields } = draft;
+  if (
+    fields &&
+    message.recipients &&
+    !sameRecipients(message.recipients, fields.proposed.recipients)
+  ) {
+    edited.push("recipients");
+  }
+  if (fields?.subject && (message.subject ?? "") !== (fields.proposed.subject ?? "")) {
+    edited.push("subject");
+  }
+  if (message.body !== draft.proposed) edited.push("body");
+  return edited;
+}
+
+function sameRecipients(left: AskDraftRecipient[], right: AskDraftRecipient[]): boolean {
+  const key = (list: AskDraftRecipient[]) =>
+    list
+      .map((recipient) => `${recipient.role} ${recipient.address.toLowerCase()}`)
+      .sort()
+      .join("\n");
+  return key(left) === key(right);
+}
+
+/**
+ * The request with the user's edits written where the draft's message sits, in the shapes the tool
+ * used, or why they cannot be sent. Nothing is written unless every edit is valid.
+ */
+export function editDraftRequest(
+  request: unknown,
+  draft: DraftBinding,
+  edits: AskDraftEdits,
+): { request: unknown } | { error: string } {
+  const error =
+    (edits.text !== undefined ? draftTextError(edits.text) : undefined) ??
+    draftFieldsError(draft.fields && askDraftFields(draft.fields), edits);
+  if (error) return { error };
+  let next = edits.text === undefined ? request : withValueAt(request, draft.path, edits.text);
+  if (edits.recipients && draft.fields) {
+    const written = withSlotRecipients(next, draft.fields, edits.recipients);
+    if ("error" in written) return written;
+    next = written.value;
+  }
+  if (edits.subject !== undefined && draft.fields?.subject) {
+    next = withValueAt(next, draft.fields.subject, edits.subject);
+  }
+  return next === undefined ? { error: DRAFT_GONE } : { request: next };
+}
+
+/**
+ * What the bot reads once its draft left: exactly what was sent, read from the request that left,
+ * and what the user changed. A draft without recorded fields takes its recipients from its card.
+ */
 export function draftSentResult(
-  draft: Pick<AskDraft, "recipients" | "subject"> | undefined,
-  text: string,
-  edited: boolean,
+  card: Pick<AskDraft, "recipients" | "subject"> | undefined,
+  request: unknown,
+  draft: DraftBinding,
 ) {
+  const message = draftMessage(request, draft);
   return {
     ok: true,
-    sent: { recipients: draft?.recipients ?? [], subject: draft?.subject, body: text },
-    editedByUser: edited,
+    sent: {
+      recipients: message.recipients ?? card?.recipients ?? [],
+      subject: draft.fields?.subject ? message.subject : card?.subject,
+      body: message.body,
+    },
+    editedByUser: draftEditedFields(draft, message),
     note: "The user sent this message from the draft card. Do not send it again.",
   };
 }
 
-/** The body a replaced draft ended with, and whether the user changed the bot's text. */
-function replacedDraftData({ path, proposed }: DraftRecord, request: unknown) {
-  const text = valueAt(request, path);
-  const body = typeof text === "string" ? text : "";
-  return { body, editedByUser: body !== proposed };
+/** The message a replaced draft ended with, and what the user changed from the bot's. */
+function replacedDraftData(draft: DraftRecord, request: unknown) {
+  const message = draftMessage(request, draft);
+  return { ...message, editedByUser: draftEditedFields(draft, message) };
 }
 
 /** What the bot's own call reads about a draft the user wrote over, or undefined for any other. */
@@ -100,32 +236,6 @@ export function draftTextError(text: string): string | undefined {
   return undefined;
 }
 
-export function valueAt(value: unknown, path: DraftPath): unknown {
-  return path.reduce<unknown>(
-    (current, key) =>
-      isRecord(current) || Array.isArray(current) ? current[key as never] : undefined,
-    value,
-  );
-}
-
-/** A copy of `value` with `next` at `path`, or undefined when the path does not exist. */
-export function withValueAt(value: unknown, path: DraftPath, next: unknown): unknown {
-  if (path.length === 0) return next;
-  const [key, ...rest] = path;
-  if (Array.isArray(value) && typeof key === "number" && key < value.length) {
-    const child = withValueAt(value[key], rest, next);
-    return child === undefined ? undefined : value.with(key, child);
-  }
-  if (isRecord(value) && typeof key === "string" && key in value) {
-    const child = withValueAt(value[key], rest, next);
-    return child === undefined ? undefined : { ...value, [key]: child };
-  }
-  return undefined;
-}
-
-/** Every line break a client may render, so a card can indent each one. */
-export const LINE_BREAKS = /\r\n|[\n\v\f\r\u0085\u2028\u2029]/g;
-
 /** The card's text lines for a draft, read by clients that do not know drafts. */
 export function askDraftDetail(draft: AskDraft): string {
   const lines = draft.app.account ? [`from: ${draft.app.account}`] : [];
@@ -139,15 +249,4 @@ export function askDraftDetail(draft: AskDraft): string {
   if (draft.subject) lines.push(`subject: ${draft.subject.replace(LINE_BREAKS, "\n  ")}`);
   lines.push("body:", `  ${draft.body.replace(LINE_BREAKS, "\n  ")}`);
   return lines.join("\n");
-}
-
-function isPath(value: unknown): value is DraftPath {
-  return (
-    Array.isArray(value) &&
-    value.every((key) => typeof key === "string" || (Number.isInteger(key) && key >= 0))
-  );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }

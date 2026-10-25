@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { ComposioEmulator, composioEntityId, PostgresSessionLog } from "@rakazo/adapters";
-import type { SessionEntry, SessionId, ThreadEntry } from "@rakazo/contracts";
+import type { AskDraftEdits, SessionEntry, SessionId, ThreadEntry } from "@rakazo/contracts";
 import { askDraftState, EntrySeq, SessionId as SessionIdSchema } from "@rakazo/contracts";
 import { projectThreadItems } from "@rakazo/core";
 import { describe, expect, it } from "vitest";
@@ -806,13 +806,17 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
       response: { type: "tool", id: "journey-mail", name: "GMAIL_SEND_EMAIL", arguments: mail },
     };
     /** Gmail connected through the Composio emulator for the fixture's user; its sent mail. */
-    async function connectGmail(composio: ComposioEmulator, fixture: JourneyFixture) {
+    async function connectGmail(
+      composio: ComposioEmulator,
+      fixture: JourneyFixture,
+      provider: "GMAIL" | "OUTLOOK" = "GMAIL",
+    ) {
       const { spaceId } = await fixture.prisma.bot.findUniqueOrThrow({
         where: { id: fixture.bot.id },
         select: { spaceId: true },
       });
       await composio.begin(
-        { provider: "GMAIL", redirectUrl: "http://127.0.0.1.invalid/callback" },
+        { provider, redirectUrl: "http://127.0.0.1.invalid/callback" },
         {
           operationId: "journey",
           traceId: "journey",
@@ -825,8 +829,8 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
         data: {
           spaceId,
           userId: fixture.userId,
-          provider: "GMAIL",
-          displayName: "Gmail",
+          provider,
+          displayName: provider === "GMAIL" ? "Gmail" : "Outlook",
           status: "pending",
         },
       });
@@ -836,7 +840,7 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
           ?.messages.filter((message) => message.to === mail.recipient_email)
           .map((message) => message.messageText);
     }
-    async function answerDraft(fixture: JourneyFixture, runId: string, edits?: { text: string }) {
+    async function answerDraft(fixture: JourneyFixture, runId: string, edits?: AskDraftEdits) {
       const card = await latestCard(fixture.prisma, runId);
       await rpc(fixture.app, fixture.cookie, "threads/answer", {
         botId: fixture.bot.id,
@@ -879,6 +883,117 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
           });
           expect(effects).toMatchObject([
             { status: "completed", draft: { state: "sent", proposed: "Draft from the bot." } },
+          ]);
+        },
+        { composio },
+      );
+    }, 30_000);
+
+    it("leaves with the recipients and subject the user set, in Gmail's own fields", async () => {
+      const composio = new ComposioEmulator();
+      await journey(
+        [
+          proposeMail,
+          {
+            expect(request) {
+              const seen = JSON.stringify(request.messages);
+              expect(seen).toContain("bo@example.test");
+              expect(seen).toContain("Thursday instead");
+            },
+            response: reply("Sent."),
+          },
+          DONE,
+        ],
+        async (fixture) => {
+          await connectGmail(composio, fixture);
+          const sent = await fixture.send("Mail them hello.");
+          await sent.settled("waiting_input");
+          // Gmail's schema reaches the card, so every line is offered.
+          expect((await latestCard(fixture.prisma, sent.runId)).block.draft?.fields).toEqual({
+            to: null,
+            cc: null,
+            bcc: null,
+            subject: true,
+          });
+          await answerDraft(fixture, sent.runId, {
+            recipients: [
+              { role: "to", address: "ana@example.test" },
+              { role: "to", address: "bo@example.test" },
+              { role: "cc", address: "cy@example.test" },
+            ],
+            subject: "Thursday instead",
+          });
+          await sent.settled("completed");
+          expect(composio.executions.map((call) => [call.tool, call.args])).toEqual([
+            [
+              "GMAIL_SEND_EMAIL",
+              {
+                recipient_email: "ana@example.test",
+                subject: "Thursday instead",
+                body: "Draft from the bot.",
+                include_signature: false,
+                extra_recipients: ["bo@example.test"],
+                cc: ["cy@example.test"],
+              },
+            ],
+          ]);
+        },
+        { composio },
+      );
+    }, 30_000);
+
+    it("leaves with the recipients and subject the user set, in Outlook's own fields", async () => {
+      const composio = new ComposioEmulator();
+      const outlook = { to: "someone@example.test", subject: "Hello", body: "Draft from the bot." };
+      await journey(
+        [
+          {
+            expect(request) {
+              expect(request.tools?.map((tool) => tool.function.name)).toContain(
+                "OUTLOOK_SEND_EMAIL",
+              );
+            },
+            response: {
+              type: "tool",
+              id: "journey-outlook",
+              name: "OUTLOOK_SEND_EMAIL",
+              arguments: outlook,
+            },
+          },
+          { expect() {}, response: reply("Sent.") },
+          DONE,
+        ],
+        async (fixture) => {
+          await connectGmail(composio, fixture, "OUTLOOK");
+          const sent = await fixture.send("Mail them hello.");
+          await sent.settled("waiting_input");
+          // Outlook's To is one address; its copies take any number.
+          expect((await latestCard(fixture.prisma, sent.runId)).block.draft?.fields).toEqual({
+            to: 1,
+            cc: null,
+            bcc: null,
+            subject: true,
+          });
+          await answerDraft(fixture, sent.runId, {
+            recipients: [
+              { role: "to", address: "ana@example.test" },
+              { role: "cc", address: "bo@example.test" },
+              { role: "bcc", address: "cy@example.test" },
+            ],
+            subject: "Thursday instead",
+          });
+          await sent.settled("completed");
+          expect(composio.executions.map((call) => [call.tool, call.args])).toEqual([
+            [
+              "OUTLOOK_SEND_EMAIL",
+              {
+                to: "ana@example.test",
+                subject: "Thursday instead",
+                body: "Draft from the bot.",
+                cc_emails: ["bo@example.test"],
+                bcc_emails: ["cy@example.test"],
+              },
+            ],
           ]);
         },
         { composio },
@@ -1743,7 +1858,7 @@ type JourneyFixture = {
       replyToMessageId?: string;
       replyQuote?: string;
       clientNonce?: string;
-      draft?: { messageId: string; text: string };
+      draft?: AskDraftEdits & { messageId: string; text: string };
     },
   ) => Promise<{
     runId: string;

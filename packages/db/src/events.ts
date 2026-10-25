@@ -1,5 +1,5 @@
 import type { RealtimeFanout } from "@rakazo/adapter-kit";
-import type { AskAnswers, FactualRunRecap, SessionId } from "@rakazo/contracts";
+import type { AskAnswers, AskDraftEdits, FactualRunRecap, SessionId } from "@rakazo/contracts";
 import {
   ASK_ANSWER_MAX_LENGTH,
   type AskQuestion,
@@ -15,7 +15,10 @@ import {
   blocksToAgentHistoryText,
   DISMISSABLE_EFFECT_KINDS,
   DISMISSED_EFFECT_RESULT,
-  draftTextError,
+  DRAFT_GONE,
+  draftMessage,
+  draftWithState,
+  editDraftRequest,
   isApprovalAskBlock,
   isSecretAskBlock,
   messagingChannelId,
@@ -260,7 +263,7 @@ export interface AnswerRunInput {
   answeredByUserId: string;
   answer: string;
   /** Changes to a Create bot card or a mail draft, applied with "allow" by the run's owner only. */
-  edits?: { name?: string; instructions?: string; text?: string };
+  edits?: AskDraftEdits & { name?: string; instructions?: string };
 }
 
 export interface SendUserMessageInput {
@@ -894,58 +897,69 @@ async function planSpawnBotEdit(
 type AskCard = Extract<MessageBlock, { kind: "ask" }>;
 
 /**
- * What answering a draft card writes: Send approves the request with the user's text in place of
- * the bot's, Discard denies it. The key never changes, so the bot's own call finds the effect.
+ * What answering a draft card writes: Send approves the request with the user's edits written
+ * where the bot's message sat, Discard denies it. The key never changes, so the bot's own call
+ * finds the effect.
  */
 function planDraftAnswer(
   effect: { request: unknown },
-  { path, proposed }: DraftRecord,
+  draft: DraftRecord,
   input: Pick<AnswerRunInput, "answer" | "edits">,
   card: AskCard,
   shownProposal: unknown,
 ) {
   if (input.edits?.name !== undefined || input.edits?.instructions !== undefined) {
-    throw new InvalidAnswerError("Only the message text can be edited");
+    throw new InvalidAnswerError("Only the message can be edited");
   }
   if (input.answer !== "allow") {
-    return { data: { status: "denied", draft: { path, proposed, state: "discarded" } } };
+    return { data: { status: "denied", draft: draftWithState(draft, { state: "discarded" }) } };
   }
-  const current = valueAt(effect.request, path);
-  const text = input.edits?.text ?? (typeof current === "string" ? current : "");
-  const invalid = draftTextError(text);
-  if (invalid) throw new InvalidAnswerError(invalid);
-  const request = withValueAt(effect.request, path, text);
-  if (request === undefined) throw new InvalidAnswerError("This draft can no longer be edited");
-  const shown = card.draft && { ...card.draft, body: text, failure: undefined };
+  const before = draftMessage(effect.request, draft);
+  const edits: AskDraftEdits = {
+    text: input.edits?.text ?? before.body,
+    recipients: input.edits?.recipients,
+    subject: input.edits?.subject,
+  };
+  const edited = editDraftRequest(effect.request, draft, edits);
+  if ("error" in edited) throw new InvalidAnswerError(edited.error);
+  const after = draftMessage(edited.request, draft);
+  const shown = card.draft && {
+    ...card.draft,
+    ...after,
+    recipients: after.recipients ?? card.draft.recipients,
+    failure: undefined,
+  };
+  // The proposal the card was requested with, its run secrets masked, which the stored request
+  // may hold unmasked: the audit reads it, now with the user's edits.
+  const proposed = proposalRequest(shownProposal, effect.request);
+  const proposal = editDraftRequest(proposed, draft, edits);
   return {
-    data: { status: "approved", request, draft: { path, proposed, state: "approved" } },
+    data: {
+      status: "approved",
+      request: edited.request,
+      draft: draftWithState(draft, { state: "approved" }),
+    },
     edit:
-      text === current
+      JSON.stringify(after) === JSON.stringify(before)
         ? undefined
         : {
-            proposed: valueAt(shownProposal, proposalPath(effect.request, path)),
-            approved: text,
-            // The proposal the card was requested with, its run secrets masked, now with the
-            // user's text: the stored request may hold what that proposal hid.
-            proposal: proposalWithText(shownProposal, proposalPath(effect.request, path), text),
+            proposed: draftMessage(proposed, draft),
+            approved: after,
+            proposal: "request" in proposal ? asProposal(proposal.request, effect.request) : {},
             card: shown ? { draft: shown, detail: askDraftDetail(shown) } : {},
           },
   };
 }
 
-/** Where the body sits in the logged proposal, which wraps a request that is not an object. */
-function proposalPath(request: unknown, path: DraftRecord["path"]): DraftRecord["path"] {
-  return Array.isArray(request) ? ["request", ...path] : path;
+/** The request inside a logged proposal, which wraps a request that is not an object. */
+function proposalRequest(proposal: unknown, request: unknown): unknown {
+  return Array.isArray(request) ? valueAt(proposal, ["request"]) : proposal;
 }
 
-function proposalWithText(
-  proposal: unknown,
-  path: DraftRecord["path"],
-  text: string,
-): Record<string, unknown> {
-  const edited = withValueAt(proposal, path, text);
-  return edited && typeof edited === "object" && !Array.isArray(edited)
-    ? (edited as Record<string, unknown>)
+function asProposal(edited: unknown, request: unknown): Record<string, unknown> {
+  const proposal = Array.isArray(request) ? { request: edited } : edited;
+  return proposal && typeof proposal === "object" && !Array.isArray(proposal)
+    ? (proposal as Record<string, unknown>)
     : {};
 }
 
@@ -1167,8 +1181,9 @@ export async function answerRunInputInTransaction(
           (requested?.payload as { proposal?: unknown } | null)?.proposal,
         );
       } else if (input.edits) {
-        if (input.edits.text !== undefined) {
-          throw new InvalidAnswerError("Only a mail draft's text can be edited");
+        const { text, recipients, subject } = input.edits;
+        if (text !== undefined || recipients !== undefined || subject !== undefined) {
+          throw new InvalidAnswerError("Only a mail draft's message can be edited");
         }
         if (approvalEffect.kind !== "spawn_bot") {
           throw new InvalidAnswerError("Only a Create bot card can be edited");
@@ -1448,14 +1463,17 @@ export async function resumeAskWithComposerTextInTransaction(
   return { resolvable: true, runId: input.runId };
 }
 
+/** A waiting mail draft as the user left it, named by its card's entry. */
+export type DraftLeft = AskDraftEdits & { messageId: string; text: string };
+
 export interface DismissProposalWithTextInput {
   spaceId: string;
   threadId: string;
   runId: string;
   /** Who typed: only the run's own user puts its card away. */
   userId: string;
-  /** A mail draft's text as the user left it on the card they typed over, named by its entry. */
-  draft?: { messageId: string; text: string };
+  /** A mail draft as the user left it on the card they typed over, named by its entry. */
+  draft?: DraftLeft;
   /** Put away only a mail draft, as in a group, where other approval cards wait for a tap. */
   draftsOnly?: true;
 }
@@ -1519,14 +1537,20 @@ export async function dismissProposalWithTextInTransaction(
     return { outcome: "keep" };
   }
   if (draft && !replacing) return { outcome: "keep" };
-  const request =
+  // Nothing leaves a replaced draft, so its text may be left empty; its recipients and subject
+  // are checked as on Send, since the bot reads them back.
+  const left =
     replacing && input.draft
-      ? withValueAt(effect.request, draft.path, input.draft.text)
-      : effect.request;
-  if (replacing && request === undefined) return { outcome: "keep" };
-  const replaced: DraftRecord | undefined = replacing
-    ? { path: draft.path, proposed: draft.proposed, state: "replaced" }
-    : undefined;
+      ? editDraftRequest(withValueAt(effect.request, draft.path, input.draft.text), draft, {
+          recipients: input.draft.recipients,
+          subject: input.draft.subject,
+        })
+      : { request: effect.request };
+  // A request with no place for the text is no longer this draft's: the usual rule applies.
+  if ("error" in left && left.error === DRAFT_GONE) return { outcome: "keep" };
+  if ("error" in left) throw new InvalidAnswerError(left.error);
+  const { request } = left;
+  const replaced = replacing ? draftWithState(draft, { state: "replaced" }) : undefined;
   const dismissed = await tx.externalEffect.updateMany({
     where: replaced
       ? { id: effect.id, status: "intended" }

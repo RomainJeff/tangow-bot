@@ -27,6 +27,18 @@ export * from "./computer-updates.js";
 export * from "./cron.js";
 export * from "./dictation-language.js";
 export * from "./draft-card-view.js";
+export type { DraftPath, DraftSlots, RecipientRole, RecipientSlot } from "./draft-fields.js";
+export {
+  askDraftFields,
+  DRAFT_GONE,
+  draftFieldsError,
+  isMailAddress,
+  isRecipientRole,
+  LINE_BREAKS,
+  RECIPIENT_ROLES,
+  valueAt,
+  withValueAt,
+} from "./draft-fields.js";
 export * from "./events.js";
 export * from "./featured-connectors.js";
 export * from "./field-save.js";

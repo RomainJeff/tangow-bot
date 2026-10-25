@@ -138,6 +138,37 @@ export const ASK_DISMISSED_ANSWER = "dismissed";
 export const ProposalKind = z.enum(["routine"]);
 export type ProposalKind = z.infer<typeof ProposalKind>;
 
+/** The longest message body a draft card sends. */
+export const ASK_DRAFT_TEXT_MAX_LENGTH = 20_000;
+export const ASK_DRAFT_SUBJECT_MAX_LENGTH = 1_000;
+/** No mail address is longer. */
+export const ASK_DRAFT_ADDRESS_MAX_LENGTH = 320;
+
+export const AskDraftRecipient = z.object({
+  role: z.enum(["to", "cc", "bcc"]),
+  address: z.string(),
+});
+export type AskDraftRecipient = z.infer<typeof AskDraftRecipient>;
+
+/** The most addresses a recipient line takes, or null when any number fits. */
+const AskDraftRoom = z.number().int().positive().nullable();
+
+/**
+ * What the user changed on a mail draft before it leaves: its text, its whole recipient list, its
+ * subject. The bounds refuse an enormous edit before any lock; the server applies the real limits.
+ */
+export const AskDraftEdits = z.object({
+  text: z.string().max(ASK_DRAFT_TEXT_MAX_LENGTH).optional(),
+  recipients: z
+    .array(
+      AskDraftRecipient.extend({ address: z.string().max(ASK_DRAFT_ADDRESS_MAX_LENGTH) }).strict(),
+    )
+    .max(1_000)
+    .optional(),
+  subject: z.string().max(ASK_DRAFT_SUBJECT_MAX_LENGTH).optional(),
+});
+export type AskDraftEdits = z.infer<typeof AskDraftEdits>;
+
 /** A mail the bot proposes to send: the card shows it as it will leave. */
 export const AskDraft = z.object({
   app: z.object({
@@ -146,20 +177,31 @@ export const AskDraft = z.object({
     /** The sending account, when the send names it. */
     account: z.string().optional(),
   }),
-  recipients: z.array(z.object({ role: z.enum(["to", "cc", "bcc"]), address: z.string() })).min(1),
+  recipients: z.array(AskDraftRecipient).min(1),
   subject: z.string().optional(),
+  /**
+   * The lines the user may edit besides the text, each offered even when empty. Absent on a draft
+   * whose recipients and subject stay as the bot wrote them.
+   */
+  fields: z
+    .object({
+      to: AskDraftRoom,
+      cc: AskDraftRoom.optional(),
+      bcc: AskDraftRoom.optional(),
+      subject: z.literal(true).optional(),
+    })
+    .optional()
+    .catch(undefined),
   body: z.string(),
   /** Why the last Send did not go out; `disconnected` when the app needs reconnecting. */
   failure: z.object({ reason: z.string(), disconnected: z.literal(true).optional() }).optional(),
-  /** When it left, and whether the user changed the bot's text first. */
+  /** When it left, and whether the user changed the bot's message first. */
   sent: z.object({ at: z.string(), edited: z.boolean() }).optional(),
   /** The run's owner, the only person the server lets send, edit or discard the draft. */
   owner: z.object({ userId: z.string(), name: z.string().optional() }).optional().catch(undefined),
 });
 export type AskDraft = z.infer<typeof AskDraft>;
-
-/** The longest message body a draft card sends. */
-export const ASK_DRAFT_TEXT_MAX_LENGTH = 20_000;
+export type AskDraftFields = NonNullable<AskDraft["fields"]>;
 
 export type AskDraftState = "pending" | "sending" | "sent" | "not_sent" | "discarded" | "replaced";
 
