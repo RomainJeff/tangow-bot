@@ -880,11 +880,16 @@ describe("docker worker spec", () => {
     Mounts: [{ Type: "volume", Name: "example_appdata", Destination: "/data" }],
   } as Docker.ContainerInspectInfo;
 
-  it("runs a hardened, self-removing container labelled with its attempt", () => {
-    const options = workerCreateOptions({ attemptId: "attempt-1", ttlSeconds: 600, mounts: [] });
+  it("runs a hardened, self-removing container labelled with its attempt, as its computer's user", () => {
+    const options = workerCreateOptions({
+      attemptId: "attempt-1",
+      ttlSeconds: 600,
+      mounts: [],
+      user: "1001:1001",
+    });
     expect(options).toMatchObject({
       Image: "rakazo/worker:local",
-      User: "1000:1000",
+      User: "1001:1001",
       Cmd: ["sleep", "600"],
       Labels: { "rakazo.worker": "true", "rakazo.attempt": "attempt-1" },
       HostConfig: {
@@ -900,7 +905,8 @@ describe("docker worker spec", () => {
     });
     expect(options.HostConfig?.ReadonlyRootfs).toBeUndefined();
     expect(options.HostConfig?.Binds).toBeUndefined();
-    expect(options.Env).toBeUndefined();
+    // The capability travels with the guest's exec, never in the container's environment.
+    expect(options.Env).toEqual(["HOME=/home/user"]);
   });
 
   it("derives mounts from volume names, as binds or as subpaths of the data volume", () => {
@@ -917,6 +923,7 @@ describe("docker worker spec", () => {
       attemptId: "attempt-1",
       ttlSeconds: 60,
       mounts: workerMounts(requested, "/data", appdata),
+      user: "1000:1000",
     });
     expect(options.HostConfig?.Mounts).toEqual([
       {

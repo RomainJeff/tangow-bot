@@ -6,6 +6,7 @@ import {
   readdir,
   readFile,
   readlink,
+  rm,
   symlink,
   writeFile,
 } from "node:fs/promises";
@@ -18,6 +19,7 @@ import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { provisionComputer } from "./computer-lifecycle.js";
 import {
+  copyLegacyUserSkills,
   homeMovePending,
   moveDockerHomeToVolumes,
   moveIdleDockerHomes,
@@ -26,6 +28,7 @@ import { DockerWorkerProvider } from "./docker-worker.js";
 import { FakeSandboxProvider } from "./fake-sandbox.js";
 import { LocalAgentHomeStore } from "./home.js";
 import { assertE2BHomesOnVolumes, E2BHomesNotMigrated } from "./home-volume-migration.js";
+import { skillDirName } from "./skill-store.js";
 import { InMemoryJobQueue } from "./wakeup.js";
 import { workerFixture } from "./worker-fixture.test-support.js";
 import { createWorkerLifecycle } from "./worker-lifecycle.js";
@@ -267,6 +270,104 @@ describe("moving a Docker home onto its volumes", () => {
     expect(await readdir(path.join(dataDir, "homes", computer.homeKey, "bots"))).toEqual([
       bots[0]!.id,
     ]);
+  });
+
+  it.each([
+    { state: "error", minutesAgo: 0, moves: true },
+    { state: "booting", minutesAgo: 10, moves: true },
+    { state: "suspending", minutesAgo: 10, moves: true },
+    { state: "booting", minutesAgo: 1, moves: false },
+  ])(
+    "moves a home whose computer an upgrade left $state $minutesAgo min ago: $moves",
+    async ({ state, minutesAgo, moves }) => {
+      const { computer, bots } = await dockerComputer("team");
+      await put(`homes/${computer.homeKey}/bots/${bots[0]!.id}/notes.md`);
+      await prisma.$executeRaw`UPDATE computers SET state = ${state},
+      "updatedAt" = ${new Date(Date.now() - minutesAgo * 60_000)} WHERE id = ${computer.id}`;
+
+      await expect(moveIdleDockerHomes(deps, fixture.context, computer.id)).resolves.toEqual({
+        adopted: moves ? 1 : 0,
+        deferred: moves ? 0 : 1,
+      });
+      expect(await storageOf(computer.id)).toBe(moves ? "volumes" : "snapshot");
+    },
+  );
+
+  it("skips a dedicated home whose bot moved away, on a DATA_DIR with no volumes yet", async () => {
+    const { computer, bots } = await dockerComputer("dedicated");
+    await put(`homes/${computer.homeKey}/notes.md`, "notes");
+    await prisma.bot.update({ where: { id: bots[0]!.id }, data: { computerId: null } });
+
+    await expect(moveIdleDockerHomes(deps, fixture.context, computer.id)).resolves.toEqual({
+      adopted: 0,
+      deferred: 1,
+    });
+    expect(await storageOf(computer.id)).toBe("snapshot");
+    expect(await readdir(path.join(dataDir, "homes", computer.homeKey))).toEqual(["notes.md"]);
+  });
+
+  it("lets a computer other than Docker boot with a move marker in its home", async () => {
+    const spaceId = await fixture.seedSpace();
+    const computer = await fixture.seedComputer(spaceId, { kind: "e2b" });
+    await put(`homes/${computer.homeKey}/.rakazo-move-pending`, "");
+
+    const boot = provisionComputer(
+      {
+        prisma,
+        sandbox: new FakeSandboxProvider(),
+        home: new LocalAgentHomeStore(dataDir),
+        jobs: new InMemoryJobQueue(),
+        events: createThreadEvents(prisma),
+        dataDir,
+      },
+      computer.id,
+      { ...fixture.context, spaceId },
+    );
+
+    await expect(boot).resolves.toBeDefined();
+  });
+});
+
+describe("copying legacy user skills to the shared volume", () => {
+  const skill = (spaceId: string, user: string, name: string, body = "Steps.") =>
+    put(
+      `skills/user/${spaceId}/${user}/${name}/SKILL.md`,
+      `---\nname: ${name}\ndescription: Does ${name}.\n---\n${body}\n`,
+    );
+
+  it("waits for the team home, then copies once, never through a link, never over a file", async () => {
+    const { computer } = await dockerComputer("team");
+    const { spaceId } = computer;
+    await put(`homes/${computer.homeKey}/shared/team.txt`, "team");
+    await skill(spaceId, "ada", "deploy");
+    await skill(spaceId, "ada", "taken", "Ada's steps.");
+    await mkdir(path.join(dataDir, `skills/user/${spaceId}/ada/linked`));
+    await symlink("/etc/passwd", path.join(dataDir, `skills/user/${spaceId}/ada/linked/SKILL.md`));
+
+    await expect(copyLegacyUserSkills(deps, spaceId, fixture.context)).resolves.toBe("waiting");
+
+    await moveDockerHomeToVolumes(deps, computer.id, fixture.context);
+    const volume = await volumeDir("space_shared", { spaceId });
+    const taken = path.join(volume, "skills", skillDirName("taken"), "SKILL.md");
+    await mkdir(path.dirname(taken), { recursive: true });
+    await writeFile(taken, "the volume's own");
+    await expect(copyLegacyUserSkills(deps, spaceId, fixture.context)).resolves.toBe("copied");
+
+    expect(await readFile(path.join(volume, "team.txt"), "utf8")).toBe("team");
+    expect(
+      await readFile(path.join(volume, "skills", skillDirName("deploy"), "SKILL.md"), "utf8"),
+    ).toContain("name: deploy");
+    expect(await readFile(taken, "utf8")).toBe("the volume's own");
+    expect((await readdir(path.join(volume, "skills"))).sort()).toEqual(
+      [skillDirName("deploy"), skillDirName("taken")].sort(),
+    );
+
+    // Copied once: a skill the bots deleted since is not brought back.
+    await rm(path.join(volume, "skills", skillDirName("deploy")), { recursive: true });
+    await expect(copyLegacyUserSkills(deps, spaceId, fixture.context)).resolves.toBe(
+      "already_copied",
+    );
+    expect(await readdir(path.join(volume, "skills"))).toEqual([skillDirName("taken")]);
   });
 });
 

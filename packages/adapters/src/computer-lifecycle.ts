@@ -223,7 +223,9 @@ export async function provisionComputer(
   }
   const homePath = resolveAgentHomePath(deps.home, existing.homeKey, deps.dataDir ?? "./data");
   // A Docker home half-moved onto its volumes must not boot until the move finishes.
-  if (await homeMovePending(homePath)) throw new ComputerBusyError("home_move_incomplete");
+  if (existing.kind === "docker" && (await homeMovePending(homePath))) {
+    throw new ComputerBusyError("home_move_incomplete");
+  }
   await mkdir(homePath, { recursive: true });
   // Docker would create missing bind sources as root; create them as the worker user first.
   if (deps.dataDir) {

@@ -20,6 +20,13 @@ const SUPERVISOR = fileURLToPath(
 export const docker = (...args: string[]) =>
   execFileSync("docker", args, { encoding: "utf8", timeout: 120_000 }).trim();
 
+/** The supervisor here runs on the host, so workers run as the host user, as its computers do. */
+const hostUid = process.getuid?.();
+export const sandboxUser =
+  hostUid === undefined || hostUid === 0
+    ? { uid: 1000, gid: 1000 }
+    : { uid: hostUid, gid: process.getgid?.() ?? hostUid };
+
 export const dockerDesktop =
   dockerWorkersEnabled && docker("info", "--format", "{{.OperatingSystem}}") === "Docker Desktop";
 

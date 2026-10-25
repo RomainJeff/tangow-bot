@@ -10,10 +10,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Added
 
-- **Docker installs now run each bot run in its own short-lived, isolated container, with the same agent as E2B.** Bot and space files live on volumes the bot's computer shares, and existing homes move onto them automatically when you upgrade ([self-hosting guide](docs/self-host.md#choosing-a-computer-provider)).
+- **Docker installs now run each bot run in its own short-lived, isolated container, with the same agent as E2B.** Bot and space files live on volumes the bot's computer shares, and existing homes move onto them automatically when you upgrade; a computer still running at upgrade time can't do file work until it next goes to sleep ([self-hosting guide](docs/self-host.md#choosing-a-computer-provider)).
 
 #### Changed
 
+- A self-hosted E2B server now refuses to start while any E2B computer's home is still on snapshots, and names the script that moves it onto volumes ([move existing homes](docs/self-host-e2b-workers.md#move-existing-homes-onto-volumes)).
 - Bots on web, desktop and iPhone call the actions of apps connected through Composio directly, and activity and approvals name the real action; saved "always allow" rules on the old Composio batch tool no longer apply, so those actions may ask for approval again.
 - Bots on web, desktop and iPhone find tools in connected apps with large catalogs more reliably, including loading the exact tool they ask for by name.
 - Bots on web, desktop and iPhone now prefer suitable connected tools and direct page reads before browser interaction, and distinguish connector failures before choosing another method.

@@ -28,8 +28,7 @@ replace user directories or unowned entries.
 
 Pi loads only that folder with pi-coding-agent's `loadSkills`, defaults off, through an explicit
 ResourceLoader. Its SDK catalog replaces the controller catalog in worker prompts. Native `read`
-loads SKILL.md and native `bash` executes scripts. The in-process path retains its existing
-skill tools and user store, with managed skills always enabled.
+loads SKILL.md and native `bash` executes scripts.
 
 At run end, a bounded file report updates the controller's DB index and skills screen. The
 controller refuses to index reported skills containing a known run secret, including in scripts;
@@ -40,7 +39,9 @@ limits, migration and computer convergence limitations.
 Existing user skills can be copied, without deleting originals, by
 `scripts/migrate-skills-to-volumes.ts --space <space-id>`. Stop writers first. Conflicting targets
 are refused and identical copies are unchanged on retry. All migrated skills go to shared/skills
-so every bot in the space retains them. Marketplace files are outside this migration.
+so every bot in the space retains them. Marketplace files are outside this migration. On Docker,
+the home move (`scripts/migrate-docker-homes.ts`, then each sleep) makes the same copy once per
+space, after the space's team home has moved.
 
 ## Coding work by environment
 

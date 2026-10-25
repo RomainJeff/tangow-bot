@@ -22,13 +22,13 @@ mode without computers.
 ## `docker` (in-stack supervisor)
 
 Compose starts a **sandbox supervisor** (from the app image) on the internal
-network (port `7091`). It creates sibling **computer** containers from the computer image
-built by `pnpm sandbox:build`.
+network (port `7091`). It creates sibling **computer** containers, and a **worker** container for
+each bot run, from the computer and worker images built by `pnpm sandbox:build`.
 
 Requirements:
 
 - Non-empty `SANDBOX_SUPERVISOR_TOKEN` (distinct from auth / screen / encryption secrets)
-- The computer image built on the host (`pnpm sandbox:build`, or the Compose `computer` service)
+- The computer and worker images built on the host (`pnpm sandbox:build`, or the Compose `computer` and `worker-image` services)
 - Docker Engine available to the supervisor (socket mount on the Compose path)
 
 Verify:

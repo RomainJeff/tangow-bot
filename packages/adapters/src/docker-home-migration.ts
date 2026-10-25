@@ -1,16 +1,30 @@
 import type { Stats } from "node:fs";
 import { constants } from "node:fs";
-import { lstat, open, readdir, rename, rm, rmdir, unlink } from "node:fs/promises";
+import {
+  lstat,
+  mkdir,
+  open,
+  readdir,
+  rename,
+  rm,
+  rmdir,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
 import path from "node:path";
 import type { AdapterContext } from "@rakazo/adapter-kit";
 import type { PrismaClient } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
+import { DockerVolumeFiles } from "./docker-volume-files.js";
+import { migrateUserSkillsToShared } from "./skill-volume-migration.js";
 import type { HomeAdoption, HomeMoveBlocker, WorkerLifecycle } from "./worker-lifecycle.js";
 import { HOME_MOVE_TTL_MS } from "./worker-lifecycle.js";
 
 export type DockerHomeMove =
   | { outcome: "already_on_volumes" }
   | { outcome: "refused"; code: HomeMoveBlocker | Exclude<HomeAdoption, "adopted"> }
+  /** A dedicated computer whose bot moved to another computer: no volume receives its home. */
+  | { outcome: "skipped"; reason: "no_bot" }
   | { outcome: "adopted"; moved: string[] };
 
 /** A home whose content conflicts with its volumes: only that computer waits for an operator. */
@@ -80,6 +94,7 @@ export async function moveDockerHomeToVolumes(
     homeKey: computer.homeKey,
   };
   if (onVolumes && !(await homeMovePending(home))) return { outcome: "already_on_volumes" };
+  if (!layout.team && layout.botIds.length === 0) return { outcome: "skipped", reason: "no_bot" };
 
   const { start } = await workers.inspectHomeMove(computerId);
   const reservation = await workers.reserveHomeMove(computerId);
@@ -105,6 +120,7 @@ export async function moveDockerHomeToVolumes(
       const owner = { kind: "space_shared" as const, spaceId: computer.spaceId };
       refs.set("", (await workers.ensureVolume(owner, context)).providerRef);
     }
+    await mkdir(path.join(data, "volumes"), { recursive: true });
     const volumes = await realDirectory(data, "volumes");
     const volumeOf = async (destination: Destination) => {
       const ref = refs.get(destination.scope === "shared" ? "" : destination.botId);
@@ -146,7 +162,8 @@ export async function moveDockerHomeToVolumes(
  * Moves the Docker homes left to move, every one or only `computerId`: those still off volumes,
  * and those whose home still holds the move marker. A busy computer, or one whose home conflicts
  * with its volumes, is logged and skipped; the others still move. Any other error throws: storage
- * the move cannot use (EXDEV, EACCES, EROFS, ENOSPC, EIO) or a database failure.
+ * the move cannot use (EXDEV, EACCES, EROFS, ENOSPC, EIO) or a database failure. Then each visited
+ * space's legacy user skills are copied once to its shared volume (`copyLegacyUserSkills`).
  */
 export async function moveIdleDockerHomes(
   deps: { prisma: PrismaClient; workers: WorkerLifecycle; dataDir: string },
@@ -155,7 +172,7 @@ export async function moveIdleDockerHomes(
 ): Promise<{ adopted: number; deferred: number }> {
   const computers = await deps.prisma.computer.findMany({
     where: { kind: "docker", ...(computerId && { id: computerId }) },
-    select: { id: true },
+    select: { id: true, spaceId: true },
     orderBy: { id: "asc" },
   });
   const counts = { adopted: 0, deferred: 0 };
@@ -168,6 +185,12 @@ export async function moveIdleDockerHomes(
         // A busy computer is tried again at each sleep attempt, so its wait stays quiet.
         getLogger().debug("docker home move deferred", { computerId: id, reason: move.code });
       }
+      if (move.outcome === "skipped") {
+        counts.deferred += 1;
+        getLogger().warn("docker home move skipped: no bot on this computer receives its home", {
+          computerId: id,
+        });
+      }
     } catch (error) {
       if (!isHomeConflict(error)) throw error;
       counts.deferred += 1;
@@ -177,7 +200,62 @@ export async function moveIdleDockerHomes(
       });
     }
   }
+  for (const spaceId of new Set(computers.map((computer) => computer.spaceId))) {
+    // A copy that failed leaves no marker, so the next sweep tries again.
+    await copyLegacyUserSkills(deps, spaceId, context).catch((error: unknown) =>
+      getLogger().error("legacy user skills copy failed", error, { spaceId }),
+    );
+  }
   return counts;
+}
+
+/** In `DATA_DIR/skills/user/<space>`, which no computer mounts: the space's copy ran. */
+const SKILLS_COPIED_MARKER = ".copied-to-shared-volume";
+
+/**
+ * Copies a space's legacy user skills, `DATA_DIR/skills/user/<space>/<user>/<skill>`, to
+ * `skills/` on its shared volume, once, as the E2B upgrade does: worker runs read only managed,
+ * bot and shared volume skills. Links are never followed, nothing on the volume is replaced, and a
+ * bundle that differs from the volume's is logged and left. It waits while a team home of the
+ * space has not finished moving, since that move needs the shared volume empty.
+ */
+export async function copyLegacyUserSkills(
+  deps: { prisma: PrismaClient; workers: WorkerLifecycle; dataDir: string },
+  spaceId: string,
+  context: AdapterContext,
+): Promise<"copied" | "already_copied" | "waiting"> {
+  const data = path.resolve(deps.dataDir);
+  const source = path.join(data, "skills", "user", spaceId);
+  if (await lstatOrNull(path.join(source, SKILLS_COPIED_MARKER))) return "already_copied";
+  const teamHomes = await deps.prisma.computer.findMany({
+    where: { spaceId, kind: "docker", scope: "team" },
+    select: { homeKey: true, homeStorage: true },
+  });
+  for (const { homeKey, homeStorage } of teamHomes) {
+    if (homeStorage !== "volumes" || (await homeMovePending(path.join(data, "homes", homeKey)))) {
+      return "waiting";
+    }
+  }
+  const owner = { kind: "space_shared" as const, spaceId };
+  const { providerRef } = await deps.workers.ensureVolume(owner, context);
+  const report = await migrateUserSkillsToShared(
+    { source, volumeRef: providerRef, files: new DockerVolumeFiles(path.join(data, "volumes")) },
+    context,
+  );
+  const conflicts = report.events.filter((event) => event.kind === "conflict").length;
+  if (conflicts > 0) {
+    getLogger().warn("legacy user skills left in place: they differ from the shared volume's", {
+      spaceId,
+      conflicts,
+    });
+  }
+  await mkdir(source, { recursive: true });
+  await writeFile(path.join(source, SKILLS_COPIED_MARKER), "", { flag: "wx" }).catch(
+    (error: NodeJS.ErrnoException) => {
+      if (error.code !== "EEXIST") throw error;
+    },
+  );
+  return "copied";
 }
 
 /** What a home or a volume a guest shaped can raise: only that computer waits. */

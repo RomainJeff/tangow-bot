@@ -33,6 +33,7 @@ async function main() {
   if (!url) throw new Error("DATABASE_URL is not set");
   const apiKey = process.env.E2B_API_KEY;
   if (!apiKey) throw new Error("E2B_API_KEY is not set");
+  const dataDir = process.env.DATA_DIR ?? "/data";
   const { prisma, pool } = createDb(url);
   const files = new E2BVolumeFiles(e2bVolumeSandbox({ template: values.template }));
   try {
@@ -40,11 +41,12 @@ async function main() {
     const report = await carryDockerVolumesToE2B(
       {
         prisma,
+        dataDir,
         // Only its volume paths under DATA_DIR are used: the supervisor is never called.
         source: new DockerWorkerProvider({
           supervisorUrl: "http://127.0.0.1:9",
           supervisorToken: "unused",
-          dataDir: process.env.DATA_DIR ?? "/data",
+          dataDir,
         }),
         // The SDK reads E2B_DOMAIN or E2B_API_URL itself.
         target: new E2BWorkerProvider({ apiKey, template: values.template }),
@@ -61,6 +63,11 @@ async function main() {
     );
     console.log(JSON.stringify(report, null, 2));
     if (report.outcome === "refused") process.exitCode = 1;
+    if (report.outcome === "refused" && report.refusal.code === "home_move_incomplete") {
+      console.error(
+        "Its home is still moving onto its Docker volumes: run scripts/migrate-docker-homes.ts first.",
+      );
+    }
   } finally {
     // A sandbox left behind dies at its timeout: say so, without replacing the report.
     await files.close().catch((error: unknown) => {
