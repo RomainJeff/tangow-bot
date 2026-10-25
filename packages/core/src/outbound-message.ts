@@ -58,6 +58,24 @@ export type OutboundCall =
   | { kind: "classic" }
   | { kind: "refuse"; error: string };
 
+/**
+ * What a draft would send, as the key of its effect: the app, the recipients, the subject, the text
+ * and the sending account. Every other argument of a call that reads as a draft is explained as
+ * leaving the message as it is (a flag, a toggle, a thread id, the bot's own `thought`), so the
+ * same mail issued again with other words there is the same effect, whatever the tool's envelope.
+ */
+export function outboundDraftIdentity(draft: OutboundDraft): Record<string, unknown> {
+  return {
+    app: draft.connectorKind,
+    recipients: draft.recipients
+      .map((recipient) => `${recipient.role} ${recipient.address.toLowerCase()}`)
+      .sort(),
+    ...(draft.subject === undefined ? {} : { subject: draft.subject }),
+    body: draft.body,
+    ...(draft.account === undefined ? {} : { account: draft.account.toLowerCase() }),
+  };
+}
+
 /** The longest a value shows on the card of a send it cannot read, before it is cut and marked. */
 export const CARD_VALUE_MAX_LENGTH = 1_000;
 const CARD_LINES_MAX_LENGTH = 4_000;

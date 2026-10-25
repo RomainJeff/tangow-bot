@@ -6,7 +6,7 @@ import type {
   ThreadEntry,
   ThreadEntryOf,
 } from "@rakazo/contracts";
-import { CARD_STATE_TYPES } from "@rakazo/contracts";
+import { CARD_STATE_TYPES, isPausedOutput, pausedOutput } from "@rakazo/contracts";
 import { appendToolCallSegment } from "../events.js";
 import { originSessionIdOf } from "./child-sessions.js";
 
@@ -127,10 +127,12 @@ export function foldRuns(
  * run to run and within a run once it resumes, so a `tool.result` or `subagent` entry answers the
  * latest earlier call of its run and call id that has no answer yet. A call a crash cut stays
  * unanswered under the replay that follows it, and a result whose call a compaction cut answers
- * nothing.
+ * nothing. A call answered only by its pause, while its run waited on a card, takes the next
+ * result written for its id: the outcome of the card, which replaces the pause.
  */
 export function toolAnswers(entries: readonly ThreadEntry[]): ToolAnswers {
   const unanswered = new Map<string, EntryId[]>();
+  const paused = new Map<string, EntryId[]>();
   const answerOf = new Map<EntryId, ToolAnswer>();
   const callOf = new Map<EntryId, EntryId>();
   for (const entry of entries) {
@@ -144,12 +146,41 @@ export function toolAnswers(entries: readonly ThreadEntry[]): ToolAnswers {
       calls.push(entry.id);
       continue;
     }
-    const call = calls.pop();
+    const pausedCalls = paused.get(key) ?? [];
+    paused.set(key, pausedCalls);
+    const call = calls.pop() ?? pausedCalls.pop();
     if (call === undefined) continue;
     answerOf.set(call, entry);
     callOf.set(entry.id, call);
+    if (isPausedOutput(outputOf(entry))) pausedCalls.push(call);
   }
   return { answerOf, callOf };
+}
+
+/**
+ * The call a card's pause answered, while the pause is still its answer, or undefined once the
+ * card's outcome replaced it. The pause is written in the transaction that first shows the card,
+ * after the card's own entry, so it is the first one that follows it.
+ */
+export function pausedCallOfEffect(
+  entries: readonly ThreadEntry[],
+  effectId: string,
+): string | undefined {
+  const start = entries.findIndex(
+    (entry) => entry.type === "effect.requested" && entry.payload.effectId === effectId,
+  );
+  if (start < 0) return undefined;
+  const { answerOf, callOf } = toolAnswers(entries);
+  for (const entry of entries.slice(start + 1)) {
+    if (entry.type === "effect.requested") return undefined;
+    if (entry.type !== "tool.result" || entry.payload.output !== pausedOutput("approval")) continue;
+    const call = callOf.get(entry.id);
+    const answer = call === undefined ? undefined : answerOf.get(call);
+    return answer?.type === "tool.result" && isPausedOutput(answer.payload.output)
+      ? entry.payload.callId
+      : undefined;
+  }
+  return undefined;
 }
 
 function outputOf(answer: ToolAnswer): string {
