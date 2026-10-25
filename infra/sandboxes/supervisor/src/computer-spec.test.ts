@@ -34,6 +34,9 @@ import {
   screenPorts,
   screenUrlFor,
   screenUrlWithToken,
+  WORKER_NETWORK,
+  workerCreateOptions,
+  workerMounts,
   xdotoolCommand,
 } from "./computer-spec.js";
 
@@ -866,5 +869,84 @@ describe("computer home storage", () => {
       expect(() => assertVolumeSubpathSupport(version)).toThrow(/Docker Engine 26/);
     for (const version of ["1.45", "1.46", "2.0"])
       expect(() => assertVolumeSubpathSupport(version)).not.toThrow();
+  });
+});
+
+describe("docker worker spec", () => {
+  const appdata = {
+    Mounts: [{ Type: "volume", Name: "example_appdata", Destination: "/data" }],
+  } as Docker.ContainerInspectInfo;
+
+  it("runs a hardened, self-removing container labelled with its attempt", () => {
+    const options = workerCreateOptions({ attemptId: "attempt-1", ttlSeconds: 600, mounts: [] });
+    expect(options).toMatchObject({
+      Image: "rakazo/worker:local",
+      User: "1000:1000",
+      Cmd: ["sleep", "600"],
+      Labels: { "rakazo.worker": "true", "rakazo.attempt": "attempt-1" },
+      HostConfig: {
+        Init: true,
+        AutoRemove: true,
+        CapDrop: ["ALL"],
+        SecurityOpt: ["no-new-privileges:true"],
+        NetworkMode: WORKER_NETWORK,
+        Memory: 1024 ** 3,
+        NanoCpus: 1e9,
+        PidsLimit: 2048,
+      },
+    });
+    expect(options.HostConfig?.ReadonlyRootfs).toBeUndefined();
+    expect(options.HostConfig?.Binds).toBeUndefined();
+    expect(options.Env).toBeUndefined();
+  });
+
+  it("derives mounts from volume names, as binds or as subpaths of the data volume", () => {
+    const requested = [
+      { volume: "rakazo-private", path: "/workspace/bot", readOnly: false },
+      { volume: "rakazo-shared", path: "/workspace/space", readOnly: true },
+    ];
+    const bound = workerMounts(requested, "/data", undefined);
+    expect(bound.map((mount) => mount.source)).toEqual([
+      { bind: "/data/volumes/rakazo-private" },
+      { bind: "/data/volumes/rakazo-shared" },
+    ]);
+    const options = workerCreateOptions({
+      attemptId: "attempt-1",
+      ttlSeconds: 60,
+      mounts: workerMounts(requested, "/data", appdata),
+    });
+    expect(options.HostConfig?.Mounts).toEqual([
+      {
+        Type: "volume",
+        Source: "example_appdata",
+        Target: "/workspace/bot",
+        ReadOnly: false,
+        VolumeOptions: { NoCopy: true, Subpath: "volumes/rakazo-private" },
+      },
+      {
+        Type: "volume",
+        Source: "example_appdata",
+        Target: "/workspace/space",
+        ReadOnly: true,
+        VolumeOptions: { NoCopy: true, Subpath: "volumes/rakazo-shared" },
+      },
+    ]);
+  });
+
+  it("rejects volume names and targets that could escape their roots", () => {
+    for (const volume of ["../homes/bot", "rakazo-a/../../b", "rakazo-", "homes", "rakazo-a b"])
+      expect(() =>
+        workerMounts([{ volume, path: "/workspace/a", readOnly: false }], "/data", undefined),
+      ).toThrow(/volume name/);
+    for (const target of [
+      "/workspace",
+      "/workspace/../etc",
+      "/home/user",
+      "workspace/a",
+      "/workspace/a/./b",
+    ])
+      expect(() =>
+        workerMounts([{ volume: "rakazo-a", path: target, readOnly: false }], "/data", undefined),
+      ).toThrow(/under \/workspace/);
   });
 });

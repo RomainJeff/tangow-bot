@@ -1,16 +1,20 @@
 import { spawnSync } from "node:child_process";
 import http from "node:http";
 import net from "node:net";
+import { duplexPair } from "node:stream";
 import { resolveSupervisorToken } from "@rakazo/core";
 import { stopBrowserCommand } from "@rakazo/core/node/desktop-runtime";
-import { describe, expect, it } from "vitest";
+import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   MAX_SUPERVISOR_FILE_REQUEST_BYTES,
   MAX_SUPERVISOR_REQUEST_BYTES,
+  relayWorkerGuest,
   resolveDockerSocketPath,
   skillsBindsFor,
   supervisorApp,
   supervisorRequestBodyLimit,
+  upgradeWorkerGuest,
   waitForScreenReady,
 } from "./index.js";
 import type { ScreenAssignment } from "./supervisor-logic.js";
@@ -154,6 +158,8 @@ describe("sandbox supervisor HTTP boundary", () => {
       ["POST", "/computers/id/input"],
       ["POST", "/computers/id/stop"],
       ["DELETE", "/computers/id"],
+      ["POST", "/workers"],
+      ["DELETE", "/workers?attempt=a"],
     ];
 
     for (const [method, pathname] of protectedRequests) {
@@ -847,5 +853,102 @@ describe("docker exec stream demux", () => {
       stdout: padded.toString("utf8"),
       stderr: "",
     });
+  });
+});
+
+describe("docker worker guest upgrade", () => {
+  async function upgrade(path: string, headers: Record<string, string>) {
+    const server = http.createServer();
+    server.on("upgrade", (request, socket, head) => void upgradeWorkerGuest(request, socket, head));
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("expected a TCP address");
+    try {
+      return await new Promise<number | undefined>((resolve, reject) => {
+        const request = http.request({
+          host: "127.0.0.1",
+          port: address.port,
+          path,
+          headers: { connection: "Upgrade", upgrade: "rakazo-guest", ...headers },
+        });
+        request.on("response", (response) => resolve(response.statusCode));
+        request.on("upgrade", () => resolve(101));
+        request.on("error", reject);
+        request.end();
+      });
+    } finally {
+      server.close();
+    }
+  }
+
+  it("checks the supervisor token itself, before anything else", async () => {
+    const capability = { "x-rakazo-worker-capability": "capability" };
+    expect(await upgrade("/workers/abc/guest", capability)).toBe(401);
+    expect(await upgrade("/elsewhere", capability)).toBe(401);
+    expect(
+      await upgrade("/workers/abc/guest", {
+        ...capability,
+        authorization: `Bearer ${"x".repeat(token.length)}`,
+      }),
+    ).toBe(401);
+    const authorization = `Bearer ${token}`;
+    expect(await upgrade("/workers/../guest", { ...capability, authorization })).toBe(404);
+    expect(await upgrade("/workers/abc/guest", { authorization })).toBe(400);
+  });
+  it("survives a client that resets while the guest is being set up", async () => {
+    const [socket] = duplexPair();
+    const request = Object.assign(new http.IncomingMessage(new net.Socket()), {
+      url: "/workers/abc/guest",
+      headers: { authorization: `Bearer ${token}`, "x-rakazo-worker-capability": "capability" },
+    });
+    const upgrading = upgradeWorkerGuest(request, socket);
+    expect(() => socket.emit("error", new Error("read ECONNRESET"))).not.toThrow();
+    await upgrading;
+    expect(socket.destroyed).toBe(true);
+  });
+});
+
+describe("docker worker guest relay", () => {
+  afterEach(() => installLogger(createLogger({ service: "test", level: "off", sinks: [] })));
+
+  const frame = (stream: 1 | 2, text: string) => {
+    const header = Buffer.alloc(8);
+    header[0] = stream;
+    header.writeUInt32BE(Buffer.byteLength(text), 4);
+    return Buffer.concat([header, Buffer.from(text)]);
+  };
+
+  it("carries stdin and stdout only, and logs the exit code and stderr tail of a failed guest", async () => {
+    const sink = createTestSink();
+    installLogger(createLogger({ service: "test", sinks: [sink] }));
+    const [socket, controller] = duplexPair();
+    const [exec, guest] = duplexPair();
+    relayWorkerGuest({
+      socket,
+      stream: exec,
+      attemptId: "attempt-1",
+      exitCode: async () => 3,
+    });
+    const stdin = new Promise<string>((resolve) =>
+      guest.once("data", (chunk) => resolve(String(chunk))),
+    );
+    const received: Buffer[] = [];
+    controller.on("data", (chunk: Buffer) => received.push(chunk));
+    const ended = new Promise((resolve) => controller.on("end", resolve));
+    controller.write("frame-in\n");
+    guest.end(Buffer.concat([frame(1, "frame-out\n"), frame(2, "boom: ".repeat(1000))]));
+    await ended;
+    await new Promise((resolve) => setImmediate(resolve));
+    const stdout = Buffer.concat(received).toString();
+    expect(await stdin).toBe("frame-in\n");
+    expect(stdout).toBe("frame-out\n");
+    const [event] = sink.events;
+    expect(event).toMatchObject({
+      message: "docker worker guest exited with an error",
+      attemptId: "attempt-1",
+      exitCode: 3,
+    });
+    expect(String(event?.stderrTail)).toMatch(/^.*boom: $/);
+    expect(String(event?.stderrTail).length).toBe(2048);
   });
 });

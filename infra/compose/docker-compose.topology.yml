@@ -20,6 +20,14 @@ services:
     command: ["true"]
     restart: "no"
 
+  worker-image:
+    image: ${TOPOLOGY_WORKER_IMAGE:-rakazo/worker:topology}
+    build:
+      context: ../..
+      dockerfile: apps/agent-run-worker/Dockerfile
+    command: ["true"]
+    restart: "no"
+
   app-image:
     image: ${TOPOLOGY_APP_IMAGE:-rakazo/app:topology}
     build:
@@ -40,6 +48,7 @@ services:
       SANDBOX_SUPERVISOR_TOKEN: topology-only-supervisor-token-at-least-32-characters
       DOCKER_SOCKET: /var/run/docker.sock
       RAKAZO_COMPUTER_IMAGE: ${TOPOLOGY_COMPUTER_IMAGE:-rakazo/computer:topology}
+      RAKAZO_WORKER_IMAGE: ${TOPOLOGY_WORKER_IMAGE:-rakazo/worker:topology}
       RAKAZO_COMPUTER_MEMORY: ${RAKAZO_COMPUTER_MEMORY:-8g}
       RAKAZO_COMPUTER_CPUS: ${RAKAZO_COMPUTER_CPUS:-4}
       RAKAZO_COMPUTER_PIDS_LIMIT: ${RAKAZO_COMPUTER_PIDS_LIMIT:-2048}
@@ -52,6 +61,8 @@ services:
       app-image:
         condition: service_completed_successfully
       computer-image:
+        condition: service_completed_successfully
+      worker-image:
         condition: service_completed_successfully
     healthcheck:
       test:
