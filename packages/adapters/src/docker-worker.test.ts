@@ -18,7 +18,7 @@ async function fakeSupervisor() {
   const workers = new Map<string, string>();
   const requests: Request[] = [];
   const guests: GuestSocket[] = [];
-  const faults = { resetNext: 0, stallCreate: false, refuseUpgrade: false };
+  const faults = { resetNext: 0, stallCreate: false, refuseUpgrade: false, failDelete: false };
   let created = 0;
   const server = http.createServer(async (req, res) => {
     if (faults.resetNext > 0) {
@@ -47,6 +47,7 @@ async function fakeSupervisor() {
       return json(200, { id });
     }
     if (req.method === "DELETE" && url.pathname === "/workers") {
+      if (faults.failDelete) return json(500, { error: "removal failed" });
       return json(200, { destroyed: workers.delete(url.searchParams.get("attempt")!) });
     }
     json(404, { error: "not found" });
@@ -174,11 +175,27 @@ describe("DockerWorkerProvider", () => {
     ).rejects.toMatchObject({ name: "TimeoutError" });
   });
 
-  it("retries a call once when the supervisor resets the connection under it", async () => {
+  it("retries a destroy once when the supervisor resets the connection under it", async () => {
     await worker.ensure(spec([]));
     supervisor.faults.resetNext = 1;
 
     expect(await worker.destroy({ attemptId: "attempt_1" })).toBe("destroyed");
+  });
+
+  it("never resends a create, which could start a second container on the same volumes", async () => {
+    supervisor.faults.resetNext = 1;
+
+    await expect(worker.ensure(spec([]))).rejects.toThrow();
+    expect(supervisor.faults.resetNext).toBe(0);
+    expect(supervisor.workers.size).toBe(0);
+  });
+
+  it("reports a removal the supervisor could not confirm as an error, never as absent", async () => {
+    supervisor.faults.failDelete = true;
+
+    await expect(worker.destroy({ attemptId: "attempt_1" })).rejects.toThrow(
+      "Supervisor DELETE /workers failed with 500: removal failed",
+    );
   });
 
   it("destroys the attempt's worker without a ref, then reports none left", async () => {

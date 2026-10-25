@@ -66,13 +66,14 @@ export class DockerWorkerProvider implements WorkerProvider, GuestConnector {
   }
 
   /**
-   * Both supervisor calls are idempotent by attempt label, so one connection reset is retried: it
-   * is how a keep-alive connection the supervisor already closed shows up.
+   * A `DELETE` retries once on a connection reset, which is how a keep-alive connection the
+   * supervisor already closed shows up. A `POST` never does: the supervisor may already be creating
+   * the worker, and a second create could start another container on the same volumes.
    */
   private async call<T>(
     method: "POST" | "DELETE",
     route: string,
-    options: { body?: unknown; signal?: () => AbortSignal } = {},
+    options: { body?: unknown; signal?: AbortSignal } = {},
   ): Promise<T> {
     const send = () =>
       fetch(new URL(route, this.config.supervisorUrl), {
@@ -82,10 +83,10 @@ export class DockerWorkerProvider implements WorkerProvider, GuestConnector {
           ...(options.body === undefined ? {} : { "content-type": "application/json" }),
         },
         body: options.body === undefined ? undefined : JSON.stringify(options.body),
-        signal: options.signal?.(),
+        signal: options.signal,
       });
     const response = await send().catch((error: unknown) => {
-      if (isConnectionReset(error)) return send();
+      if (method === "DELETE" && isConnectionReset(error)) return send();
       throw error;
     });
     const text = await response.text();
@@ -103,12 +104,8 @@ export class DockerWorkerProvider implements WorkerProvider, GuestConnector {
 
   async ensure(spec: WorkerSpec): Promise<{ providerRef: string }> {
     const deadline = spec.ensureDeadline.getTime() - DOCKER_CREATE_MARGIN_MS;
-    const remaining = () => {
-      const ms = deadline - Date.now();
-      if (ms <= 0) throw new Error(`The worker of ${spec.attemptId} missed its deadline`);
-      return AbortSignal.timeout(ms);
-    };
-    remaining();
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) throw new Error(`The worker of ${spec.attemptId} missed its deadline`);
     const { id } = await this.call<{ id: string }>("POST", "/workers", {
       body: {
         attemptId: spec.attemptId,
@@ -119,7 +116,7 @@ export class DockerWorkerProvider implements WorkerProvider, GuestConnector {
           readOnly: mount.access === "ro",
         })),
       },
-      signal: remaining,
+      signal: AbortSignal.timeout(remainingMs),
     });
     return { providerRef: id };
   }
