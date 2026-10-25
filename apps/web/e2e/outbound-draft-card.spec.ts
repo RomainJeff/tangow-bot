@@ -465,6 +465,16 @@ for (const width of [1440, 390]) {
     expect(removeBox!.width).toBeGreaterThanOrEqual(24);
     expect(ccBox!.height).toBeGreaterThanOrEqual(24);
     await shoot(page, testInfo, "fields-cc-reveal");
+    // Typing folds them away: the field runs to the line's end for a long address.
+    await to.pressSequentially("ana@exa");
+    await expect(button("Cc")).toHaveCount(0);
+    const [toBox, toLine] = await Promise.all([
+      to.boundingBox(),
+      to.locator("xpath=..").boundingBox(),
+    ]);
+    // The line's inner padding is 6 px.
+    expect(toBox!.x + toBox!.width).toBeCloseTo(toLine!.x + toLine!.width - 6, 0);
+    await to.fill("");
     await button("Cc").click();
     await expect(cc).toBeFocused();
     await expect(button("Cc")).toHaveCount(0);
@@ -481,6 +491,10 @@ for (const width of [1440, 390]) {
     await expect(draftCard.getByText("ana@example.com", { exact: true })).toHaveCount(0);
     await to.fill("ana@example.com,");
     await expect(draftCard.getByText("ana@example.com", { exact: true })).toBeVisible();
+    // The same address in another case is already on the line.
+    await to.fill("Bo@Example.com,");
+    await expect(to).toHaveValue("");
+    await expect(draftCard.getByText("Bo@Example.com", { exact: true })).toHaveCount(0);
 
     // A finished word that is not an address stays in the field, marked, and Send waits for it.
     // An unfinished one marks nothing and holds nothing back.
@@ -507,6 +521,19 @@ for (const width of [1440, 390]) {
     await expect(subject).toHaveValue("Friday instead of Wednesday");
     await subject.press("Enter");
     await expect(subject).toHaveValue("Friday instead of Wednesday");
+    // A pasted line break becomes a space, and the caret stays after the pasted text.
+    await subject.evaluate((field: HTMLTextAreaElement) => {
+      field.focus();
+      field.setSelectionRange(6, 6);
+      const clipboardData = new DataTransfer();
+      clipboardData.setData("text/plain", " the\n13th");
+      field.dispatchEvent(
+        new ClipboardEvent("paste", { clipboardData, bubbles: true, cancelable: true }),
+      );
+    });
+    await expect(subject).toHaveValue("Friday the 13th instead of Wednesday");
+    await page.keyboard.type("!");
+    await expect(subject).toHaveValue("Friday the 13th! instead of Wednesday");
     const oneLine = (await subject.boundingBox())!.height;
     await subject.fill(
       `Friday instead of Wednesday, ${"and the week after if Friday is full, ".repeat(4)}`,
@@ -609,7 +636,10 @@ test("a one-address line keeps what does not fit in its field, marked", async ({
   await expect(to).toHaveValue("foo dee@example.com ");
   await expect(to).toHaveAttribute("aria-invalid", "true");
   await expect(send).toBeDisabled();
+  // A full line keeps its field while it has focus, and folds it once left.
   await to.fill("");
-  await expect(to).toHaveCount(0);
+  await expect(to).toBeFocused();
   await expect(send).toBeEnabled();
+  await to.blur();
+  await expect(to).toHaveCount(0);
 });

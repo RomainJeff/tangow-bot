@@ -3353,7 +3353,7 @@ msgstr "हटाएं"
 msgid "Remove {0}"
 msgstr "{0} हटाएं"
 
-#: src/components/DraftLines.tsx:89
+#: src/components/DraftLines.tsx:97
 msgid "Remove {address}"
 msgstr ""
 

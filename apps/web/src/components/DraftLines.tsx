@@ -3,7 +3,8 @@ import { ASK_DRAFT_SUBJECT_MAX_LENGTH } from "@rakazo/contracts";
 import { isMailAddress, LINE_BREAKS } from "@rakazo/core";
 import { Textarea } from "@rakazo/ui-web";
 import { X } from "lucide-react";
-import { useId, useRef } from "react";
+import type { KeyboardEvent } from "react";
+import { useId, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 
 // The body's edit grammar, on a line: an outline on hover, the selected ring while typing.
@@ -15,6 +16,11 @@ const FIELD =
 const LINE_CONTROL =
   "pointer-events-none -my-1.5 h-6 w-0 shrink-0 self-center overflow-hidden opacity-0 outline-none focus-visible:ring-1 focus-visible:ring-foreground group-focus-within/line:pointer-events-auto group-focus-within/line:opacity-100 group-hover/line:pointer-events-auto group-hover/line:opacity-100";
 const SEPARATORS = /[\s,;]+/;
+
+/** Whether a key press belongs to an input method still composing its text. */
+function composing(event: KeyboardEvent) {
+  return event.nativeEvent.isComposing || event.keyCode === 229;
+}
 
 /** Whether a line's field holds a finished word that could not join the line: Send would leave it. */
 export function heldBack(typed: string): boolean {
@@ -52,6 +58,8 @@ export function RecipientLine({
 }) {
   const { t } = useLingui();
   const input = useRef<HTMLInputElement>(null);
+  // A full line keeps its field while it has focus, so focus never falls out of the card.
+  const [focused, setFocused] = useState(false);
   const full = room !== null && addresses.length >= room;
 
   /** Moves every address finished by a separator into the line, or every one when `final`. */
@@ -60,7 +68,7 @@ export function RecipientLine({
     const kept = [...addresses];
     let back = "";
     for (const word of value.slice(0, cut).split(SEPARATORS).filter(Boolean)) {
-      if (kept.includes(word)) continue;
+      if (kept.some((address) => address.toLowerCase() === word.toLowerCase())) continue;
       if (isMailAddress(word) && (room === null || kept.length < room)) kept.push(word);
       else back += `${word} `;
     }
@@ -99,7 +107,7 @@ export function RecipientLine({
           </button>
         </span>
       ))}
-      {full && !typed ? null : (
+      {full && !typed && !focused ? null : (
         <input
           ref={input}
           id={id}
@@ -110,8 +118,13 @@ export function RecipientLine({
           value={typed}
           aria-invalid={heldBack(typed) || undefined}
           onChange={(event) => take(event.target.value, false)}
-          onBlur={() => take(typed, true)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => {
+            setFocused(false);
+            take(typed, true);
+          }}
           onKeyDown={(event) => {
+            if (composing(event)) return;
             if (event.key === "Enter") {
               event.preventDefault();
               take(typed, true);
@@ -122,8 +135,9 @@ export function RecipientLine({
           className={`w-24 flex-1 ${FIELD} aria-invalid:text-destructive aria-invalid:underline aria-invalid:decoration-destructive aria-invalid:decoration-wavy`}
         />
       )}
-      {more.length ? (
-        // Cancels the line's gap so the hidden buttons take no room at rest.
+      {more.length && !typed ? (
+        // Cancels the line's gap so the hidden buttons take no room at rest. They fold away once
+        // typing starts, so the field keeps its width.
         <span className="-ms-1.5 flex">
           {more.map((line) => (
             <button
@@ -173,7 +187,16 @@ export function SubjectLine({
         maxLength={ASK_DRAFT_SUBJECT_MAX_LENGTH}
         // The server takes a subject on one line.
         onKeyDown={(event) => {
-          if (event.key === "Enter") event.preventDefault();
+          if (event.key === "Enter" && !composing(event)) event.preventDefault();
+        }}
+        onPaste={(event) => {
+          const pasted = event.clipboardData.getData("text");
+          if (pasted.search(LINE_BREAKS) === -1) return;
+          event.preventDefault();
+          const field = event.currentTarget;
+          const clean = pasted.replace(LINE_BREAKS, " ");
+          field.setRangeText(clean, field.selectionStart, field.selectionEnd, "end");
+          onChange(field.value.slice(0, ASK_DRAFT_SUBJECT_MAX_LENGTH));
         }}
         onChange={(event) => onChange(event.target.value.replace(LINE_BREAKS, " "))}
         className={`min-h-0 w-auto flex-1 resize-none rounded-none border-0 p-0 text-body focus-visible:ring-0 md:text-body dark:bg-transparent ${FIELD}`}
