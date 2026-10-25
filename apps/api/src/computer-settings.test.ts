@@ -1,7 +1,11 @@
 import { RPCHandler } from "@orpc/server/fetch";
 import { acquireComputerExecutionLease, releaseComputerExecutionLease } from "@rakazo/adapters";
 import type { Actor } from "@rakazo/contracts";
-import { ComputerListItemSchema, ComputerUpdateAllResultSchema } from "@rakazo/contracts";
+import {
+  ComputerListItemSchema,
+  ComputerUpdateAllResultSchema,
+  ComputerUpdateSchema,
+} from "@rakazo/contracts";
 import type { PgliteDatabase } from "@rakazo/db/pglite.test-support";
 import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
 import { afterAll, beforeAll, expect, it } from "vitest";
@@ -65,9 +69,9 @@ it("lists each owned active computer once and queues only idle computers in the 
   const archivedBot = await fixture.seedBot(spaceId, archived.id);
   await prisma.bot.update({ where: { id: archivedBot.id }, data: { archivedAt: new Date() } });
   const foreignUser = await outsider.seedComputer(spaceId);
-  await outsider.seedBot(spaceId, foreignUser.id);
+  const foreignUserBot = await outsider.seedBot(spaceId, foreignUser.id);
   const foreignSpace = await fixture.seedComputer(otherSpaceId);
-  await fixture.seedBot(otherSpaceId, foreignSpace.id);
+  const foreignSpaceBot = await fixture.seedBot(otherSpaceId, foreignSpace.id);
   await prisma.computer.update({
     where: { id: controlled.id },
     data: {
@@ -99,12 +103,12 @@ it("lists each owned active computer once and queues only idle computers in the 
     email: "test@rakazo.test",
     isDeploymentOwner: true,
   } satisfies Actor;
-  async function call(path: string) {
+  async function call(path: string, input: unknown = null) {
     const { response } = await handler.handle(
       new Request(`http://127.0.0.1/rpc/computer/${path}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ json: null }),
+        body: JSON.stringify({ json: input }),
       }),
       { prefix: "/rpc", context: { actor } },
     );
@@ -170,6 +174,21 @@ it("lists each owned active computer once and queues only idle computers in the 
       1,
     );
     expect(sandbox.boxes.size).toBe(0);
+    const queued = result.queued[0];
+    if (!queued) throw new Error("missing admitted update");
+    await prisma.computerUpdate.update({ where: { id: queued.id }, data: { status: "completed" } });
+    const foreignCompletion = await prisma.computerUpdate.create({
+      data: { computerId: foreignUser.id, botId: foreignUserBot.id, status: "completed" },
+    });
+    const otherSpaceCompletion = await prisma.computerUpdate.create({
+      data: { computerId: foreignSpace.id, botId: foreignSpaceBot.id, status: "completed" },
+    });
+    for (const input of [undefined, null, {}]) expect(await call("updates", input)).toEqual([]);
+    const tracked = ComputerUpdateSchema.array().parse(
+      await call("updates", { ids: [queued.id, foreignCompletion.id, otherSpaceCompletion.id] }),
+    );
+    expect(tracked).toEqual([expect.objectContaining({ id: queued.id, status: "completed" })]);
+    expect(await call("updates", { ids: [] })).toEqual([]);
   } finally {
     await releaseComputerExecutionLease(prisma, lease);
   }

@@ -1964,10 +1964,13 @@ export function createRouter(deps: RouterDeps) {
           throw error;
         }
       }),
-      updates: authed.computer.updates.handler(async ({ context }) => {
+      updates: authed.computer.updates.handler(async ({ context, input }) => {
         const rows = await deps.prisma.computerUpdate.findMany({
           where: {
-            status: { in: ["queued", "running", "interrupted", "failed"] },
+            OR: [
+              { status: { in: ["queued", "running", "interrupted", "failed"] } },
+              { status: "completed", id: { in: input?.ids ?? [] } },
+            ],
             computer: {
               spaceId: context.actor.spaceId,
               bots: { some: { userId: context.actor.userId, archivedAt: null } },
