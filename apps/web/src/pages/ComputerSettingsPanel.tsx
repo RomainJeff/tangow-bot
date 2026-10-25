@@ -37,8 +37,9 @@ export function ComputerSettingsPanel() {
     setError(null);
     setResult(null);
     try {
-      setResult(await rpc.computer.updateAll());
-      await computerUpdates.refresh();
+      const next = await rpc.computer.updateAll();
+      setResult(next);
+      await computerUpdates.refresh(next.queued);
       await refresh();
     } catch {
       setError("update");

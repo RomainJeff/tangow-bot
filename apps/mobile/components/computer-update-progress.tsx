@@ -1,4 +1,5 @@
-import { COMPUTER_UPDATE_STAGES, type ComputerUpdate } from "@rakazo/contracts";
+import type { ComputerUpdate } from "@rakazo/contracts";
+import { COMPUTER_UPDATE_STAGES } from "@rakazo/contracts";
 import { computerUpdateNeedsAttention, computerUpdateStages } from "@rakazo/core";
 import { usePathname } from "expo-router";
 import { useEffect, useState, useSyncExternalStore } from "react";
@@ -28,8 +29,10 @@ export function ComputerUpdateProgress() {
     t("Restoring your workspace"),
     t("Reconnecting"),
   ];
-  const title = (update: ComputerUpdate) =>
-    computerUpdateNeedsAttention(update)
+  const title = (update: ComputerUpdate) => {
+    if (update.status === "completed")
+      return update.action === "recover" ? t("Computer recovered") : t("Computer updated");
+    return computerUpdateNeedsAttention(update)
       ? update.action === "recover"
         ? t("Recovery failed")
         : t("Update failed")
@@ -40,6 +43,7 @@ export function ComputerUpdateProgress() {
         : update.mode === "team"
           ? t("Updating Team Computer")
           : t("Updating {name}’s Computer", { name: update.name });
+  };
   const selected = updates.find((item) => item.id === openId);
   if (!authenticated) return null;
   return (
@@ -55,13 +59,19 @@ export function ComputerUpdateProgress() {
             }}
             style={[styles.pill, { backgroundColor: tokens.card, borderColor: tokens.border }]}
           >
-            {!computerUpdateNeedsAttention(update) ? (
+            {update.status === "completed" ? (
+              <Text style={{ color: tokens.success }}>✓</Text>
+            ) : !computerUpdateNeedsAttention(update) ? (
               <ActivityIndicator color={tokens.foreground} />
             ) : null}
             <View>
               <Text style={{ color: tokens.foreground }}>{title(update)}</Text>
               <Text style={[styles.secondary, { color: tokens.mutedForeground }]}>
-                {labels[COMPUTER_UPDATE_STAGES.indexOf(update.stage)]}
+                {update.status === "completed"
+                  ? update.mode === "team"
+                    ? t("Team Computer")
+                    : update.name
+                  : labels[COMPUTER_UPDATE_STAGES.indexOf(update.stage)]}
               </Text>
             </View>
           </Pressable>
@@ -78,7 +88,14 @@ export function ComputerUpdateProgress() {
             <Text accessibilityRole="header" style={[styles.title, { color: tokens.foreground }]}>
               {title(selected)}
             </Text>
-            {computerUpdateNeedsAttention(selected) ? (
+            {selected.status === "completed" ? (
+              <View style={styles.step}>
+                <Text style={{ color: tokens.success }}>✓</Text>
+                <Text style={{ color: tokens.mutedForeground }}>
+                  {selected.mode === "team" ? t("Team Computer") : selected.name}
+                </Text>
+              </View>
+            ) : computerUpdateNeedsAttention(selected) ? (
               <Text style={{ color: tokens.mutedForeground }}>
                 {selected.status === "interrupted"
                   ? t("Recovery is unavailable until the previous operation has stopped.")
@@ -163,13 +180,17 @@ export function ComputerUpdateProgress() {
               accessibilityRole="button"
               style={styles.button}
               onPress={() => {
-                if (selected.status === "failed")
+                if (selected.status === "failed" || selected.status === "completed")
                   void computerUpdates.dismiss(selected.id).catch(() => setError(true));
                 else computerUpdates.open(null);
               }}
             >
               <Text style={{ color: tokens.foreground }}>
-                {selected.status === "failed" ? t("Dismiss") : t("Continue in Background")}
+                {selected.status === "completed"
+                  ? t("Done")
+                  : selected.status === "failed"
+                    ? t("Dismiss")
+                    : t("Continue in Background")}
               </Text>
             </Pressable>
           </View>

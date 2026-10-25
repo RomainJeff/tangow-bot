@@ -39,8 +39,12 @@ export function ComputerUpdateProgress({ onCompleted }: { onCompleted: () => voi
       previous.current.some(
         (old) =>
           old.status !== "failed" &&
+          old.status !== "completed" &&
           (!updates.some((item) => item.id === old.id) ||
-            updates.some((item) => item.id === old.id && item.status === "failed")),
+            updates.some(
+              (item) =>
+                item.id === old.id && (item.status === "failed" || item.status === "completed"),
+            )),
       )
     )
       completed.current();
@@ -53,18 +57,24 @@ export function ComputerUpdateProgress({ onCompleted }: { onCompleted: () => voi
     t`Restoring your workspace`,
     t`Reconnecting`,
   ];
+  const computerName = (update: ComputerUpdate) =>
+    update.mode === "team" ? t`Team Computer` : update.name;
   const title = (update: ComputerUpdate) =>
-    computerUpdateNeedsAttention(update)
+    update.status === "completed"
       ? update.action === "recover"
-        ? t`Recovery failed`
-        : t`Update failed`
-      : update.action === "recover"
-        ? update.mode === "team"
-          ? t`Recovering Team Computer`
-          : t`Recovering ${update.name}’s Computer`
-        : update.mode === "team"
-          ? t`Updating Team Computer`
-          : t`Updating ${update.name}’s Computer`;
+        ? t`Computer recovered`
+        : t`Computer updated`
+      : computerUpdateNeedsAttention(update)
+        ? update.action === "recover"
+          ? t`Recovery failed`
+          : t`Update failed`
+        : update.action === "recover"
+          ? update.mode === "team"
+            ? t`Recovering Team Computer`
+            : t`Recovering ${update.name}’s Computer`
+          : update.mode === "team"
+            ? t`Updating Team Computer`
+            : t`Updating ${update.name}’s Computer`;
   const selected = updates.find((update) => update.id === openId);
   return (
     <>
@@ -79,7 +89,9 @@ export function ComputerUpdateProgress({ onCompleted }: { onCompleted: () => voi
               computerUpdates.open(update.id);
             }}
           >
-            {computerUpdateNeedsAttention(update) ? (
+            {update.status === "completed" ? (
+              <CheckCircle2 className="text-success" />
+            ) : computerUpdateNeedsAttention(update) ? (
               <CircleAlert className="text-destructive" />
             ) : (
               <LoadingState
@@ -92,7 +104,9 @@ export function ComputerUpdateProgress({ onCompleted }: { onCompleted: () => voi
             <span className="text-center">
               <span className="block">{title(update)}</span>
               <span className="block text-xs text-muted-foreground">
-                {labels[COMPUTER_UPDATE_STAGES.indexOf(update.stage)]}
+                {update.status === "completed"
+                  ? computerName(update)
+                  : labels[COMPUTER_UPDATE_STAGES.indexOf(update.stage)]}
               </span>
             </span>
           </Button>
@@ -112,9 +126,16 @@ export function ComputerUpdateProgress({ onCompleted }: { onCompleted: () => voi
             data-testid="computer-update-dialog"
           >
             <div className="border-b border-border px-6 py-5">
-              <DialogTitle className="text-lg font-semibold">{title(selected)}</DialogTitle>
+              <DialogTitle aria-live="polite" className="text-lg font-semibold">
+                {title(selected)}
+              </DialogTitle>
             </div>
-            {!computerUpdateNeedsAttention(selected) ? (
+            {selected.status === "completed" ? (
+              <div role="status" className="flex items-center gap-3 px-6 py-6">
+                <CheckCircle2 aria-hidden className="size-5 text-success" />
+                <span>{computerName(selected)}</span>
+              </div>
+            ) : !computerUpdateNeedsAttention(selected) ? (
               <ol className="space-y-4 px-6 py-6" aria-label={t`Update progress`}>
                 {computerUpdateStages(selected.action).map((stage, index) => {
                   const current = computerUpdateStages(selected.action).indexOf(selected.stage);
@@ -164,11 +185,11 @@ export function ComputerUpdateProgress({ onCompleted }: { onCompleted: () => voi
                   </Trans>
                 )}
               </p>
-            ) : (
+            ) : selected.status !== "completed" ? (
               <span role="status" className="sr-only">
                 {labels[COMPUTER_UPDATE_STAGES.indexOf(selected.stage)]}
               </span>
-            )}
+            ) : null}
             {error ? (
               <p role="alert" className="px-6 pb-3 text-sm text-destructive">
                 <Trans>Could not complete action</Trans>
@@ -180,7 +201,11 @@ export function ComputerUpdateProgress({ onCompleted }: { onCompleted: () => voi
                   <Trans>Release computer</Trans>
                 </Button>
               ) : null}
-              {selected.status === "failed" ? (
+              {selected.status === "completed" ? (
+                <Button onClick={() => void computerUpdates.dismiss(selected.id)}>
+                  <Trans>Done</Trans>
+                </Button>
+              ) : selected.status === "failed" ? (
                 <Button
                   variant="outline"
                   onClick={() =>

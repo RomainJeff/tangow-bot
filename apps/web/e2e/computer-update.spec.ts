@@ -102,9 +102,14 @@ test("computer maintenance shows durable background progress and failure recover
     status: "running",
     stage: "restoring",
   };
-  await page.route("**/rpc/computer/updates", (route) =>
-    route.fulfill({ json: { json: updates } }),
-  );
+  await page.route("**/rpc/computer/updates", (route) => {
+    const ids: string[] = route.request().postDataJSON()?.json?.ids ?? [];
+    return route.fulfill({
+      json: {
+        json: updates.filter((item) => item.status !== "completed" || ids.includes(item.id)),
+      },
+    });
+  });
   await page.route("**/rpc/computer/update", (route) => {
     updates = [updating];
     return route.fulfill({ json: { json: updating } });
@@ -135,10 +140,22 @@ test("computer maintenance shows durable background progress and failure recover
     settings.getByRole("button", { name: "Recover computer", exact: true }),
   ).toBeDisabled();
   await captureScreenshot(page, testInfo, "computer-update-background");
-  updates = [];
+  updates = [{ ...updating, status: "completed", stage: "reconnecting" }];
   await expect(
     settings.getByRole("button", { name: "Recover computer", exact: true }),
   ).toBeEnabled();
+  await settings.getByRole("button", { name: "Close user settings" }).click();
+  await expect(settings).not.toBeVisible();
+  await page.getByRole("button", { name: /Computer updated/ }).click();
+  await expect(dialog.getByRole("heading")).toHaveText("Computer updated");
+  await expect(dialog.getByRole("button", { name: "Continue in Background" })).toHaveCount(0);
+  await captureScreenshot(page, testInfo, "computer-update-success-desktop");
+  const viewport = page.viewportSize();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await captureScreenshot(page, testInfo, "computer-update-success-phone");
+  if (viewport) await page.setViewportSize(viewport);
+  await dialog.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(dialog).not.toBeVisible();
   updates = [updating];
   await page.reload();
   await page.getByRole("button", { name: /Updating Team Computer/ }).click();
@@ -164,7 +181,10 @@ test("computer maintenance shows durable background progress and failure recover
   await dialog.getByRole("button", { name: "Recover computer" }).click();
   await expect(dialog.getByRole("heading")).toHaveText("Recovering Team Computer");
   await captureScreenshot(page, testInfo, "computer-recovery-progress");
-  updates = [];
+  updates = updates.map((item) => ({ ...item, status: "completed", stage: "reconnecting" }));
+  await expect(dialog.getByRole("heading")).toHaveText("Computer recovered");
+  await captureScreenshot(page, testInfo, "computer-recovery-success");
+  await dialog.getByRole("button", { name: "Done", exact: true }).click();
   await expect(dialog).not.toBeVisible();
   await expect(page.getByRole("button", { name: /Recovering Team Computer/ })).toHaveCount(0);
 });

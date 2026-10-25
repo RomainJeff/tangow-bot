@@ -4413,3 +4413,11 @@ msgstr "Updates are unavailable on this device"
 #: src/pages/ComputerSettingsPanel.tsx:61
 msgid "Updates queued: {0}"
 msgstr "Updates queued: {0}"
+
+#: src/components/ComputerUpdateProgress.tsx:65
+msgid "Computer recovered"
+msgstr "Computer recovered"
+
+#: src/components/ComputerUpdateProgress.tsx:66
+msgid "Computer updated"
+msgstr "Computer updated"

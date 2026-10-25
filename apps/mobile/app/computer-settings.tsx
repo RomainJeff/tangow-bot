@@ -62,7 +62,7 @@ export default function ComputerSettings() {
     try {
       const next = await rpc<ComputerUpdateAllResult>("computer/updateAll");
       setResult(next);
-      await computerUpdates.refresh();
+      await computerUpdates.refresh(next.queued);
       await refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t("Could not update computers"));
