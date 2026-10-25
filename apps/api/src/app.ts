@@ -31,8 +31,8 @@ import {
   createMessagingTeamChatSender,
   createPostgresSkillLock,
   createRunExecutor,
-  createRunSandbox,
   createRunSecretWriter,
+  createSandboxProvider,
   createSkillLineSweep,
   createTraceExporterFromEnv,
   createWebProvider,
@@ -229,12 +229,10 @@ export async function createApp(
       );
   const sandbox: SandboxProvider =
     sandboxOverride ??
-    createRunSandbox(env.sandboxProvider, {
+    createSandboxProvider(env.sandboxProvider, {
       supervisorUrl: env.sandboxSupervisorUrl,
       supervisorToken: env.sandboxSupervisorToken,
       e2bApiKey: env.e2bApiKey,
-      dataDir: env.dataDir,
-      prisma,
     });
   const mcpOAuth = new McpOAuthBroker(prisma, secrets, remoteConnectors);
   const memoryProviders = new SpaceMemoryProviderResolver(prisma, secrets);

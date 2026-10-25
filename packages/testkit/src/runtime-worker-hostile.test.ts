@@ -23,7 +23,7 @@ import {
 } from "@rakazo/adapters/runtime-worker";
 import { createLogger, createTestSink, getLogger, installLogger } from "@rakazo/logging";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
-import * as piRuntime from "../../adapters/src/pi-runtime.js";
+import * as piRunModel from "../../adapters/src/pi-run-model.js";
 import type { ModelEmulatorRequest } from "./model-emulator.js";
 import { startModelEmulator } from "./model-emulator.js";
 
@@ -829,7 +829,7 @@ describe("the controller's pause guard, against a hostile harness", () => {
       const stream = createAssistantMessageEventStream();
       const signals: AbortSignal[] = [];
       const relay = vi
-        .spyOn(piRuntime, "streamRunModel")
+        .spyOn(piRunModel, "streamRunModel")
         .mockImplementation((_config, _context, options) => {
           if (options?.signal) signals.push(options.signal);
           return { model: ANTHROPIC_MODELS["claude-haiku-4-5"], stream };

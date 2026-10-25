@@ -2148,11 +2148,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           runComputer?.releasedApprovalHold();
           approvalHold = null;
         };
-        const graphical = Boolean(
-          storedComputer &&
-            storedComputer.kind !== "desktop" &&
-            deps.sandbox.describe().capabilities.graphical,
-        );
+        const graphical = Boolean(storedComputer && deps.sandbox.describe().capabilities.graphical);
         // Gate on the model this run will actually call — the pair written to the run row
         // above. Deriving it a second time here dropped the deployment fallback, so a
         // vision-capable default was gated as "scripted" and lost its screenshot tools.

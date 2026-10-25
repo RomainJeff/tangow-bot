@@ -1,25 +1,10 @@
-import { randomUUID } from "node:crypto";
 import {
   Agent,
   type AgentMessage,
   type AgentTool,
   type AgentToolResult,
 } from "@earendil-works/pi-agent-core";
-import {
-  type Api,
-  type AssistantMessage,
-  type AssistantMessageEventStream,
-  clampThinkingLevel,
-  type Model,
-  type Models,
-  type ModelThinkingLevel,
-  type SimpleStreamOptions,
-  type ToolCall,
-  type TranscriptContext,
-  Type,
-  type Usage,
-} from "@earendil-works/pi-ai";
-import { builtinModels } from "@earendil-works/pi-ai/providers/all";
+import { type Api, type Model, type Models, Type } from "@earendil-works/pi-ai";
 import type {
   AdapterContext,
   AgentRunRequest,
@@ -34,10 +19,9 @@ import type {
 } from "@rakazo/adapter-kit";
 import { redactSecrets } from "@rakazo/core";
 import { getLogger, redactSensitiveText } from "@rakazo/logging";
-import { z } from "zod";
 import {
   createAgentTextPolicy,
-  stripFakeToolCalls,
+  describeToolActivity,
   stripModelControlTokens,
 } from "./agent-text-policy.js";
 import { isToolPauseResult } from "./approval-effect.js";
@@ -51,39 +35,31 @@ import {
   helperModel,
   isHelperTool,
 } from "./builtin-tools.js";
-import { DEFAULT_OPENROUTER_MODEL_ID } from "./deployment-model.js";
-import { piProviderId } from "./model-catalog.js";
 import {
   normalizeOpenAiToolParameters,
   openAiToolParametersNeedNormalization,
 } from "./openai-tool-parameters.js";
-import { PiRuntimeCredentialStore, toOAuthCredential } from "./pi-credentials.js";
-import { registerLocalProvider } from "./pi-local-provider.js";
 import {
-  OPENAI_COMPATIBLE_PROVIDER_ID,
-  registerOpenAiCompatibleCatalog,
-  registerOpenAiCompatibleRuntime,
-} from "./pi-openai-compatible-provider.js";
+  conversationSessionId,
+  isOpenCodeProvider,
+  modelForCompletion,
+  reliableStreamOptions,
+  resolveRuntimeModel,
+  thinkingLevelFor,
+} from "./pi-run-model.js";
 import { RunTraceRecorder } from "./pi-run-trace.js";
 import {
   billedPromptTokens,
   clipToolResultContent,
   clipToolResultText,
   MAX_PARALLEL_SUBAGENTS,
-  MODEL_STREAM_MAX_RETRIES,
-  MODEL_STREAM_TIMEOUT_MS,
   providerCacheTokens,
-  resolveCompletionMaxTokens,
 } from "./pi-runtime-limits.js";
+import { toHistory } from "./runtime-worker/dialects/pi-ai-history.js";
+import { DEFAULT_COMPUTER_SCREENSHOTS_TO_KEEP } from "./runtime-worker/dialects/pi-ai-images.js";
 import { textContentArg } from "./tool-text.js";
 import type { TraceExporter } from "./trace-export.js";
 import { toolCallBudgetNotice } from "./user-progress.js";
-
-export {
-  createAgentTextPolicy,
-  stripFakeToolCalls,
-  stripModelControlTokens,
-} from "./agent-text-policy.js";
 
 const running = new Map<string, { controller: AbortController; work: Promise<void> }>();
 interface ToolCallBudget {
@@ -94,28 +70,6 @@ interface ToolCallBudget {
 }
 // Optional fuse is process-local. continueRun on another worker starts at zero.
 const toolCallBudgetsByRun = new Map<string, ToolCallBudget>();
-// Built on first use, not at module load: entry points call loadRootEnv() after
-// their imports, and ESM hoists those imports, so module-level env reads here
-// would run before .env is loaded and miss the local provider entirely.
-let catalogModelsCache: Models | undefined;
-function catalogModels(): Models {
-  catalogModelsCache ??= registerOpenAiCompatibleCatalog(registerLocalProvider(builtinModels()));
-  return catalogModelsCache;
-}
-export const DEFAULT_COMPUTER_SCREENSHOTS_TO_KEEP = 2;
-// Reasoning-capable models must not start at "off": for OpenRouter, pi-ai maps
-// that to reasoning.effort "none", which 400s on endpoints that mandate
-// reasoning (e.g. google/gemini-3.7-flash). Keep a real level when model.reasoning
-// is set; plain models stay off.
-const REASONING_MODEL_THINKING_LEVEL: ModelThinkingLevel = "medium";
-function thinkingLevelFor(
-  model: Model<Api>,
-  preferred?: ModelThinkingLevel | null,
-): ModelThinkingLevel {
-  if (!model.reasoning) return "off";
-  if (preferred) return clampThinkingLevel(model, preferred);
-  return clampThinkingLevel(model, REASONING_MODEL_THINKING_LEVEL);
-}
 // Pi forwards these names to OpenAI Responses, whose function-name contract is
 // ^[a-zA-Z0-9_-]+$ with a maximum length of 64 characters.
 const AGENT_TOOL_NAME_PATTERN = /^[a-zA-Z0-9_-]+$/;
@@ -511,133 +465,6 @@ function toPiImages(images: AgentRunRequest["currentTurnImages"]) {
   }));
 }
 
-function configuredOpenRouterModel(id: string): Model<"openai-completions"> {
-  // A configured model can intentionally be newer than Pi's static catalog. Keep
-  // pricing conservative, but enable reasoning: unknown OpenRouter endpoints
-  // (e.g. gemini-3.7-flash before the snapshot catches up) often mandate it, and
-  // thinkingLevel "off" becomes effort "none" which those endpoints reject.
-  return {
-    id,
-    name: id,
-    api: "openai-completions",
-    provider: "openrouter",
-    baseUrl: "https://openrouter.ai/api/v1",
-    reasoning: true,
-    input: ["text"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: 16_384,
-    maxTokens: 4_096,
-  };
-}
-
-function resolveRuntimeModel(modelConfig: AgentRunRequest["model"]): {
-  provider: string;
-  modelId: string;
-  models: Models;
-  model: Model<Api> | undefined;
-  apiKey: string | undefined;
-} {
-  const provider =
-    modelConfig.provider === "scripted" ? "openrouter" : piProviderId(modelConfig.provider);
-  const envDefaultModel = process.env.PI_DEFAULT_MODEL?.trim();
-  const envDefaultProvider = process.env.PI_DEFAULT_PROVIDER?.trim() || "openrouter";
-  const modelId =
-    modelConfig.id === "scripted"
-      ? envDefaultModel || DEFAULT_OPENROUTER_MODEL_ID
-      : modelConfig.id.trim();
-  const models = modelsForRequest({ model: modelConfig }, provider);
-  let model = models.getModel(provider, modelId);
-  if (!model && provider !== "openrouter" && provider !== OPENAI_COMPATIBLE_PROVIDER_ID) {
-    model = models.getModel("openrouter", modelId);
-  }
-  if (
-    !model &&
-    provider === "openrouter" &&
-    envDefaultProvider === "openrouter" &&
-    modelId === envDefaultModel
-  ) {
-    model = configuredOpenRouterModel(modelId);
-  }
-  const apiKey = modelConfig.oauth
-    ? undefined
-    : modelConfig.provider === OPENAI_COMPATIBLE_PROVIDER_ID
-      ? modelConfig.apiKey || "local"
-      : // Only OpenRouter may fall back to the OpenRouter env key. Handing it to
-        // another provider would ship our key to a vendor it was not issued for.
-        (modelConfig.apiKey ??
-        (provider === "openrouter" ? process.env.OPENROUTER_API_KEY : undefined));
-  return { provider, modelId, models, model, apiKey };
-}
-
-/**
- * One model call as the runtime makes it, with the key this process holds: what a relay runs
- * for a guest that has no key. Throws for a model the catalog does not know.
- */
-export function streamRunModel(
-  config: AgentRunRequest["model"],
-  context: TranscriptContext,
-  options: { sessionId?: string; signal?: AbortSignal } = {},
-): { model: Model<Api>; stream: AssistantMessageEventStream } {
-  const selected = resolveRuntimeModel(config);
-  if (!selected.model) throw new Error(`Unknown model ${selected.provider}/${selected.modelId}`);
-  const model = modelForCompletion(selected.model, config.maxTokens);
-  const thinkingLevel = thinkingLevelFor(model, config.thinkingLevel);
-  const stream = selected.models.streamSimple(model, context, {
-    ...reliableStreamOptions(
-      model,
-      { ...options, reasoning: thinkingLevel === "off" ? undefined : thinkingLevel },
-      config.maxTokens,
-    ),
-    apiKey: selected.apiKey,
-  });
-  return { model, stream };
-}
-
-/** The catalog model a guest names for its own runtime. Its calls go through the relay. */
-export function guestRuntimeModel(config: AgentRunRequest["model"]): Model<Api> {
-  const selected = resolveRuntimeModel(config);
-  if (!selected.model) throw new Error(`Unknown model ${selected.provider}/${selected.modelId}`);
-  const model = modelForCompletion(selected.model, config.maxTokens);
-  return config.contextWindow ? { ...model, contextWindow: config.contextWindow } : model;
-}
-
-export function modelsForRequest(
-  request: Pick<AgentRunRequest, "model">,
-  provider: string,
-): Models {
-  const oauth = request.model.oauth;
-  if (oauth) {
-    const persist = oauth.persist;
-    return registerOpenAiCompatibleCatalog(
-      registerLocalProvider(
-        builtinModels({
-          credentials: new PiRuntimeCredentialStore(
-            provider,
-            toOAuthCredential(oauth.credential),
-            persist ? (next) => persist(next) : undefined,
-          ),
-        }),
-      ),
-    );
-  }
-  if (
-    provider === OPENAI_COMPATIBLE_PROVIDER_ID &&
-    request.model.baseUrl &&
-    request.model.id.trim()
-  ) {
-    const models = registerOpenAiCompatibleCatalog(registerLocalProvider(builtinModels()));
-    return registerOpenAiCompatibleRuntime(models, {
-      modelId: request.model.id,
-      baseUrl: request.model.baseUrl,
-      reasoning: request.model.reasoning,
-      acceptsImages: request.model.acceptsImages,
-      maxTokens: request.model.maxTokens,
-      contextWindow: request.model.contextWindow,
-    });
-  }
-  return catalogModels();
-}
-
 function toAgentTools(toolDefs: readonly ConnectorTool[], host: ToolHost): AgentTool[] {
   const names = normalizeAgentToolNames(toolDefs);
   return toolDefs.map((tool, index) => toAgentTool(tool, host, names[index]!));
@@ -655,49 +482,6 @@ export function normalizeAgentToolName(name: string): string {
     .replace(/[^a-zA-Z0-9_-]+/g, "_")
     .replace(/^_+|_+$/g, "");
   return (normalized || FALLBACK_AGENT_TOOL_NAME).slice(0, MAX_AGENT_TOOL_NAME_LENGTH);
-}
-
-const TOOL_ACTIVITY = new Map<string, string>([
-  ["read_file", "Reading a file"],
-  ["list_files", "Skimming a folder"],
-  ["write_file", "Saving a file"],
-  ["edit_file", "Editing a file"],
-  ["read", "Reading a file"],
-  ["ls", "Skimming a folder"],
-  ["write", "Saving a file"],
-  ["edit", "Editing a file"],
-  ["bash", "Working the terminal"],
-  ["attach_file", "Attaching a file"],
-  ["open_path", "Opening a file"],
-  ["shell", "Working the terminal"],
-  ["computer_exec", "Working the terminal"],
-  ["web_search", "Searching the web"],
-  ["web_fetch", "Reading a web page"],
-  ["browser_navigate", "Heading to a website"],
-  ["browser_snapshot", "Reading the page"],
-  ["browser_act", "Clicking through a site"],
-  ["browser_run", "Clicking through a site"],
-  ["computer_observe", "Glancing at the screen"],
-  ["computer_act", "Taking the mouse"],
-  ["run_subagent", "Briefing a helper"],
-  ["remember", "Tucking it into memory"],
-  ["render_plot", "Plotting a chart"],
-  ["skill_read", "Pulling up a skill"],
-  ["skill_search", "Looking up a skill"],
-  ["skill_create", "Learning a new trick"],
-  ["skill_update", "Refining a skill"],
-  ["skill_delete", "Deleting a skill"],
-  ["create_space", "Setting up a space"],
-  ["add_mcp_server", "Plugging in an app"],
-]);
-
-/**
- * The kind of work a tool call is doing, shown live in the thread. It never carries the call's
- * arguments: paths, commands, queries and URLs stay out of the thread.
- */
-export function describeToolActivity(toolName: string, appName?: string): string {
-  if (appName) return `Stepping into ${appName}`;
-  return TOOL_ACTIVITY.get(toolName) ?? "Seeing to it";
 }
 
 /** Model-facing tool name to connected app display name, for the activity line. */
@@ -760,158 +544,6 @@ function stableToolNameHash(name: string): string {
     hash = Math.imul(hash, 16777619);
   }
   return (hash >>> 0).toString(36);
-}
-
-const ASSISTANT_TURN_OPEN = "<assistant_turn>";
-const ASSISTANT_TURN_CLOSE = "</assistant_turn>";
-
-/**
- * Stored text can contain anything, including our own turn delimiter, so a user
- * (or a peer quoting one) could otherwise write a line the flattening cannot
- * tell from a real assistant turn. Escape it the way prompt data is escaped
- * elsewhere; only the wrapper below emits the literal tag.
- */
-function sealAssistantTurnMarkers(content: string): string {
-  return content
-    .replaceAll(ASSISTANT_TURN_OPEN, "&lt;assistant_turn&gt;")
-    .replaceAll(ASSISTANT_TURN_CLOSE, "&lt;/assistant_turn&gt;");
-}
-
-/**
- * What a rehydrated turn reports it cost: nothing. Those tokens were billed on
- * the run that produced the turn, so replaying it must not reach a counter twice.
- */
-function noUsage(): Usage {
-  return {
-    input: 0,
-    output: 0,
-    cacheRead: 0,
-    cacheWrite: 0,
-    totalTokens: 0,
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-  };
-}
-
-/**
- * Replayed turns are stamped with a model id no provider uses, so pi-ai always treats them as
- * foreign: it rewrites stored tool-call ids into the current provider's format (the thread may
- * have switched model since) and never pairs them with reasoning items we did not keep.
- */
-const REPLAYED_HISTORY_MODEL = "rakazo-replayed-history";
-const NO_TOOL_OUTPUT = "(no output recorded)";
-
-/**
- * Rehydrate a thread into the messages this runtime sends.
- *
- * The bot's own past turns come back as `assistant` messages: the shape models
- * are trained on, and structure a peer cannot forge from text. When a turn ran
- * tools with a stored call id, those calls come back as real tool calls, each
- * followed by its result, so the model sees how it called tools instead of a
- * text trace it could learn to imitate. User turns and peer turns stay on the
- * user side, peers keeping the `<bot_message from=…>` block the wake prompt
- * already delivers them in.
- *
- * The oldest kept turn is the exception: a provider can refuse a request whose
- * first message is an assistant turn, so that one falls back to the marked user
- * rendering (tool calls as prose) instead of being dropped.
- */
-export function toHistory(
-  history: AgentRunRequest["history"],
-  prompt: string,
-  model: Pick<Model<Api>, "api" | "provider" | "id">,
-  sourceMessageId?: string | null,
-): AgentMessage[] {
-  let duplicatePromptIndex = -1;
-  for (let index = history.length - 1; index >= 0; index -= 1) {
-    const message = history[index];
-    if (
-      message?.role === "user" &&
-      (sourceMessageId ? message.id === sourceMessageId : message.content === prompt)
-    ) {
-      duplicatePromptIndex = index;
-      break;
-    }
-  }
-  const prior =
-    duplicatePromptIndex < 0
-      ? history
-      : history.filter((_, index) => index !== duplicatePromptIndex);
-  const usedToolCallIds = new Set<string>();
-  // Ids must be unique across the whole request: pi-ai maps results to calls by id.
-  const uniqueToolCallId = (id: string) => {
-    let unique = id;
-    for (let n = 2; usedToolCallIds.has(unique); n += 1) unique = `h${n}_${id}`;
-    usedToolCallIds.add(unique);
-    return unique;
-  };
-  return prior.flatMap((m, index): AgentMessage[] => {
-    const timestamp = Date.now();
-    const assistant = (
-      content: AssistantMessage["content"],
-      stopReason: AssistantMessage["stopReason"],
-    ): AssistantMessage => ({
-      role: "assistant",
-      content,
-      api: model.api,
-      provider: model.provider,
-      model: REPLAYED_HISTORY_MODEL,
-      usage: noUsage(),
-      stopReason,
-      timestamp,
-    });
-    if (m.role === "assistant" && index > 0 && m.parts) {
-      const messages: AgentMessage[] = [];
-      let text: AssistantMessage["content"] = [];
-      for (const part of m.parts) {
-        if (part.type === "text") {
-          text.push({
-            type: "text",
-            text: sealAssistantTurnMarkers(stripFakeToolCalls(part.text)),
-          });
-          continue;
-        }
-        const calls = part.calls.map((call) => ({ ...call, id: uniqueToolCallId(call.id) }));
-        const toolCalls: ToolCall[] = calls.map((call) => ({
-          type: "toolCall",
-          id: call.id,
-          name: call.name,
-          arguments: z.record(z.string(), z.json()).parse(call.args),
-        }));
-        messages.push(assistant([...text, ...toolCalls], "toolUse"));
-        text = [];
-        // Every call gets its result, also when none was recorded (the run stopped or failed
-        // mid-tool): a call without a result is refused by most providers.
-        for (const call of calls) {
-          messages.push({
-            role: "toolResult",
-            toolCallId: call.id,
-            toolName: call.name,
-            content: [{ type: "text", text: call.output || NO_TOOL_OUTPUT }],
-            isError: false,
-            timestamp,
-          });
-        }
-      }
-      if (text.length > 0) messages.push(assistant(text, "stop"));
-      return messages;
-    }
-    const content = sealAssistantTurnMarkers(
-      m.role === "assistant" ? stripFakeToolCalls(m.content) : m.content,
-    );
-    if (m.role === "assistant" && index > 0) {
-      return [assistant([{ type: "text", text: content }], "stop")];
-    }
-    return [
-      {
-        role: "user",
-        content:
-          m.role === "assistant"
-            ? `${ASSISTANT_TURN_OPEN}\n${content}\n${ASSISTANT_TURN_CLOSE}`
-            : content,
-        timestamp,
-      },
-    ];
-  });
 }
 
 function withoutSteeringMessages(
@@ -1783,15 +1415,6 @@ function sanitizeError(message: string) {
   return sanitizeSensitiveText(message);
 }
 
-/** Stable OpenCode affinity id for a bot conversation (and optional nested agent). */
-export function conversationSessionId(threadId: string, botId: string, agentId?: string): string {
-  return agentId ? `${threadId}:${botId}:${agentId}` : `${threadId}:${botId}`;
-}
-
-export function isOpenCodeProvider(provider: string): boolean {
-  return provider === "opencode" || provider === "opencode-go";
-}
-
 const OPENCODE_SESSION_ERROR = "OpenCode rejected this chat session. Send the message again.";
 
 function looksLikeOpenCodeSessionError(message: string): boolean {
@@ -1898,12 +1521,6 @@ function endToolCall(host: ToolHost) {
   maybeAbortToolCallBudget(host);
 }
 
-function modelForCompletion(model: Model<Api>, configuredMaxTokens?: number): Model<Api> {
-  const maxTokens = resolveCompletionMaxTokens(model.maxTokens, configuredMaxTokens);
-  if (maxTokens === model.maxTokens) return model;
-  return { ...model, maxTokens };
-}
-
 function createGate(max: number) {
   let active = 0;
   const waiters: Array<() => void> = [];
@@ -1956,41 +1573,4 @@ function createQueue(): EventQueue {
       }
     },
   };
-}
-
-export function reliableStreamOptions(
-  model: Pick<Model<Api>, "api" | "provider" | "maxTokens">,
-  options?: SimpleStreamOptions,
-  configuredMaxTokens?: number,
-): SimpleStreamOptions {
-  let next: SimpleStreamOptions = {
-    ...options,
-    timeoutMs: options?.timeoutMs ?? MODEL_STREAM_TIMEOUT_MS,
-    maxRetries: options?.maxRetries ?? MODEL_STREAM_MAX_RETRIES,
-    maxTokens: resolveCompletionMaxTokens(model.maxTokens, configuredMaxTokens, options?.maxTokens),
-  };
-
-  if (model.provider === "openai-codex" || model.api === "openai-codex-responses") {
-    // Pi cannot fall back after a WebSocket has emitted its start event. Long tool
-    // runs then surface abnormal close 1006 as a terminal model error. SSE has
-    // bounded network retries and no long-lived connection between tool turns.
-    next = { ...next, transport: "sse" };
-  }
-
-  // OpenCode Go/Zen require a sticky x-opencode-session header (affinity + some
-  // models 400 without it). Pi 0.85.1 does not attach that header on its own.
-  if (isOpenCodeProvider(model.provider)) {
-    const sessionId = next.sessionId?.trim() || randomUUID();
-    next = {
-      ...next,
-      sessionId,
-      headers: {
-        "x-opencode-session": sessionId,
-        "x-opencode-client": "rakazo",
-        ...next.headers,
-      },
-    };
-  }
-
-  return next;
 }

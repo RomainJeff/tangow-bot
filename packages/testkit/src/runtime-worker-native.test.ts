@@ -379,7 +379,7 @@ describe("the pi-native harness through the controller", () => {
     expect(seen.filter((event) => event.type === "progress")).toEqual([
       {
         type: "progress",
-        text: 'bash {"command":"echo drafted > note.txt && echo ok"}',
+        text: "Working the terminal",
         activity: true,
       },
     ]);

@@ -89,7 +89,7 @@ msgstr ""
 
 #. placeholder {0}: usage.runs
 #. placeholder {1}: usage.inputTokens + usage.outputTokens
-#: src/pages/AccountSettingsOverlay.tsx:233
+#: src/pages/AccountSettingsOverlay.tsx:232
 msgid "{0} runs · {1} tokens"
 msgstr "{0} execuções · {1} tokens"
 
@@ -99,7 +99,7 @@ msgid "{0} will still respond to direct mentions."
 msgstr ""
 
 #. placeholder {0}: bot.name
-#: src/pages/shell/computer-preview.tsx:86
+#: src/pages/shell/computer-preview.tsx:74
 msgid "{0}'s screen"
 msgstr "Tela de {0}"
 
@@ -111,7 +111,7 @@ msgstr ""
 msgid "{botName} is speaking"
 msgstr ""
 
-#: src/pages/shell/computer-preview.tsx:115
+#: src/pages/shell/computer-preview.tsx:93
 msgid "{botName}’s computer"
 msgstr "Computador do {botName}"
 
@@ -223,7 +223,7 @@ msgstr ""
 msgid "Access token (optional)"
 msgstr "Token de acesso (opcional)"
 
-#: src/pages/AccountSettingsOverlay.tsx:86
+#: src/pages/AccountSettingsOverlay.tsx:85
 msgid "Account"
 msgstr "Conta"
 
@@ -385,7 +385,7 @@ msgstr ""
 msgid "Adding…"
 msgstr "Adicionando"
 
-#: src/pages/AccountSettingsOverlay.tsx:196
+#: src/pages/AccountSettingsOverlay.tsx:195
 #: src/pages/DecisionModelSettingsPanel.tsx:132
 #: src/pages/McpServersOverlay.tsx:343
 #: src/pages/model-settings/model-detail.tsx:168
@@ -518,8 +518,8 @@ msgstr "Chave de API"
 msgid "API key header"
 msgstr "Cabeçalho da chave API"
 
-#: src/pages/AccountSettingsOverlay.tsx:111
-#: src/pages/AccountSettingsOverlay.tsx:288
+#: src/pages/AccountSettingsOverlay.tsx:110
+#: src/pages/AccountSettingsOverlay.tsx:273
 #: src/pages/bot-page/BotHero.tsx:123
 #: src/pages/bot-page/BotHero.tsx:144
 msgid "Appearance"
@@ -661,7 +661,7 @@ msgstr "Forma automática"
 msgid "Available when {0} is idle"
 msgstr "Disponível quando {0} estiver livre"
 
-#: src/pages/AccountSettingsOverlay.tsx:153
+#: src/pages/AccountSettingsOverlay.tsx:152
 msgid "Avatars"
 msgstr "Avatares"
 
@@ -690,12 +690,12 @@ msgstr ""
 msgid "Bearer token"
 msgstr "Token portador"
 
-#: src/pages/shell/computer-preview.tsx:107
+#: src/pages/shell/computer-preview.tsx:85
 msgid "Booting live desktop…"
 msgstr "Iniciando a área de trabalho ao vivo..."
 
 #. placeholder {0}: active?.name
-#: src/pages/shell/side-panel.tsx:275
+#: src/pages/shell/side-panel.tsx:271
 msgid "Booting up {0}’s computer"
 msgstr "Inicializando o computador do {0}"
 
@@ -718,11 +718,11 @@ msgstr "Bot"
 msgid "Bot"
 msgstr "Bot"
 
-#: src/pages/shell/side-panel.tsx:402
+#: src/pages/shell/side-panel.tsx:395
 msgid "Bot screen"
 msgstr "Tela do bot"
 
-#: src/pages/shell/computer-preview.tsx:51
+#: src/pages/shell/computer-preview.tsx:43
 msgid "Bot screen preview"
 msgstr "Pré-visualização da tela"
 
@@ -768,7 +768,7 @@ msgstr "Não é possível acessar o servidor."
 
 #: src/components/ComputerMaintenanceActions.tsx:100
 #: src/components/ComputerUpdateProgress.tsx:258
-#: src/components/teach/TeachComputerOverlay.tsx:271
+#: src/components/teach/TeachComputerOverlay.tsx:265
 #: src/lib/approval-labels.ts:14
 #: src/pages/bot-page/page-kit.tsx:148
 #: src/pages/bot-page/RoutineTriggers.tsx:296
@@ -839,7 +839,7 @@ msgstr "Falha na renderização do gráfico: {error}"
 msgid "Chat apps"
 msgstr "Apps de chat"
 
-#: src/pages/AccountSettingsOverlay.tsx:101
+#: src/pages/AccountSettingsOverlay.tsx:100
 msgid "Chat apps, group channels, and agent connections."
 msgstr "Apps de chat, canais de grupo e conexões de agentes."
 
@@ -931,7 +931,7 @@ msgstr "Fechar"
 msgid "Close chart"
 msgstr "Fechar gráfico"
 
-#: src/pages/shell/side-panel.tsx:380
+#: src/pages/shell/side-panel.tsx:375
 msgid "Close computer"
 msgstr "Fechar computador"
 
@@ -948,7 +948,7 @@ msgid "Close MCP servers"
 msgstr "Fechar servidores MCP"
 
 #: src/pages/MemorySettingsOverlay.tsx:168
-#: src/pages/SettingsOverlay.tsx:117
+#: src/pages/SettingsOverlay.tsx:112
 msgid "Close memory settings"
 msgstr "Fechar configurações de memória"
 
@@ -957,12 +957,12 @@ msgid "Close messaging settings"
 msgstr "Fechar as configurações de mensagens"
 
 #: src/pages/ModelSettingsOverlay.tsx:68
-#: src/pages/SettingsOverlay.tsx:115
+#: src/pages/SettingsOverlay.tsx:110
 msgid "Close model settings"
 msgstr "Fechar configurações do modelo"
 
 #: src/pages/bot-page/BotPage.tsx:183
-#: src/pages/shell/side-panel.tsx:157
+#: src/pages/shell/side-panel.tsx:154
 msgid "Close panel"
 msgstr "Fechar painel"
 
@@ -974,11 +974,11 @@ msgstr "Fechar pré-visualização"
 msgid "Close skills"
 msgstr "Fechar skills"
 
-#: src/pages/SettingsOverlay.tsx:120
+#: src/pages/SettingsOverlay.tsx:115
 msgid "Close user settings"
 msgstr "Fechar configurações do usuário"
 
-#: src/pages/SettingsOverlay.tsx:119
+#: src/pages/SettingsOverlay.tsx:114
 #: src/pages/VoiceSettingsOverlay.tsx:174
 msgid "Close voice settings"
 msgstr "Fechar configurações de voz"
@@ -1011,25 +1011,25 @@ msgstr "Concluir"
 
 #: src/pages/bot-page/SettingsTab.tsx:109
 #: src/pages/bot-page/SettingsTab.tsx:118
-#: src/pages/SettingsOverlay.tsx:105
+#: src/pages/SettingsOverlay.tsx:100
 #: src/pages/shell/block-views.tsx:131
 #: src/pages/shell/bot-panel.tsx:28
 msgid "Computer"
 msgstr "Computador"
 
-#: src/pages/shell/computer-preview.tsx:110
+#: src/pages/shell/computer-preview.tsx:88
 msgid "Computer failed to boot"
 msgstr "Falha ao inicializar o computador"
 
-#: src/pages/shell/side-panel.tsx:421
+#: src/pages/shell/side-panel.tsx:414
 msgid "Computer is asleep"
 msgstr "O computador está dormindo"
 
-#: src/pages/shell/computer-preview.tsx:109
+#: src/pages/shell/computer-preview.tsx:87
 msgid "Computer is asleep. Open it to wake."
 msgstr "O computador está em suspensão. Abra-o para acordá-lo."
 
-#: src/pages/shell/computer-preview.tsx:111
+#: src/pages/shell/computer-preview.tsx:89
 msgid "Computer is stopped"
 msgstr "O computador está parado"
 
@@ -1044,14 +1044,6 @@ msgstr "Computador indisponível"
 #: src/components/ComputerUpdateProgress.tsx:66
 msgid "Computer updated"
 msgstr ""
-
-#: src/pages/AccountSettingsOverlay.tsx:252
-msgid "Computers"
-msgstr "Computadores"
-
-#: src/components/ComputersUnavailableHint.tsx:7
-msgid "Computers are off. Set SANDBOX_PROVIDER=docker with SANDBOX_SUPERVISOR_TOKEN, or set SANDBOX_PROVIDER to e2b with its API key. Recreate the stack after changing .env."
-msgstr "Computadores estão desligados. Defina SANDBOX_PROVIDER=docker com SANDBOX_SUPERVISOR_TOKEN, ou SANDBOX_PROVIDER como e2b com a chave de API. Recrie o stack após alterar o .env."
 
 #: src/pages/ModelSettingsOverlay.tsx:88
 msgid "Configured by deployment"
@@ -1220,7 +1212,7 @@ msgstr "Não foi possível alterar a senha"
 msgid "Could not change the default model"
 msgstr "Não foi possível alterar o modelo padrão"
 
-#: src/components/teach/TeachComputerOverlay.tsx:94
+#: src/components/teach/TeachComputerOverlay.tsx:91
 msgid "Could not check teaching status. Refresh the view to continue."
 msgstr "Não foi possível verificar o status do aprendizado. Atualize a visualização para continuar."
 
@@ -1521,10 +1513,6 @@ msgstr "Não foi possível salvar"
 msgid "Could not save skill"
 msgstr "Não foi possível salvar a habilidade"
 
-#: src/pages/HostComputerPrompt.tsx:47
-msgid "Could not save that choice"
-msgstr "Não foi possível salvar essa opção"
-
 #: src/pages/VoiceSettingsOverlay.tsx:139
 msgid "Could not save that voice"
 msgstr "Não foi possível salvar essa voz"
@@ -1550,7 +1538,7 @@ msgstr "Não foi possível enviar"
 msgid "Could not start OAuth"
 msgstr "Não foi possível iniciar o OAuth"
 
-#: src/components/teach/TeachComputerOverlay.tsx:175
+#: src/components/teach/TeachComputerOverlay.tsx:169
 msgid "Could not start teaching"
 msgstr "Não foi possível iniciar o aprendizado"
 
@@ -1603,7 +1591,7 @@ msgstr "Não foi possível criar"
 msgid "Couldn't load messaging settings"
 msgstr "Não foi possível carregar as configurações de mensagens"
 
-#: src/pages/AccountSettingsOverlay.tsx:76
+#: src/pages/AccountSettingsOverlay.tsx:75
 msgid "Couldn't update avatars"
 msgstr "Não foi possível atualizar os avatares"
 
@@ -1716,7 +1704,7 @@ msgstr "Suporte ao cliente"
 msgid "Customize"
 msgstr "Personalizar"
 
-#: src/pages/AccountSettingsOverlay.tsx:283
+#: src/pages/AccountSettingsOverlay.tsx:268
 msgid "Dark"
 msgstr "Escuro"
 
@@ -1728,7 +1716,7 @@ msgstr "dia"
 msgid "days"
 msgstr "dias"
 
-#: src/pages/SettingsOverlay.tsx:102
+#: src/pages/SettingsOverlay.tsx:97
 msgid "Decision Model"
 msgstr ""
 
@@ -1870,7 +1858,7 @@ msgid "Disconnecting…"
 msgstr "Desconectando…"
 
 #: src/components/ComputerUpdateProgress.tsx:215
-#: src/components/teach/TeachComputerOverlay.tsx:291
+#: src/components/teach/TeachComputerOverlay.tsx:285
 #: src/pages/shell/message-cards.tsx:89
 msgid "Dismiss"
 msgstr "Dispensar"
@@ -1883,8 +1871,8 @@ msgstr "Dispensar o erro"
 msgid "Dismissed. Reconnect anytime from MCP settings."
 msgstr "Dispensado. Reconecte a qualquer momento a partir das configurações do MCP."
 
-#: src/pages/AccountSettingsOverlay.tsx:126
-#: src/pages/AccountSettingsOverlay.tsx:134
+#: src/pages/AccountSettingsOverlay.tsx:125
+#: src/pages/AccountSettingsOverlay.tsx:133
 msgid "Display agent steps"
 msgstr "Exibir as etapas do agente"
 
@@ -1896,14 +1884,6 @@ msgstr "Nome de exibição"
 #: src/components/teach/TeachRecordingChrome.tsx:67
 msgid "Do not type passwords into the demo. Use Take control for credentials."
 msgstr "Não digite senhas na demonstração. Use Assuma o controle das credenciais."
-
-#: src/pages/HostComputerPrompt.tsx:84
-msgid "Docker"
-msgstr "Docker"
-
-#: src/pages/HostComputerPrompt.tsx:63
-msgid "Docker limits access to your computer for added security. Using {hostLabel} lets bots work with your local files and tools."
-msgstr "O Docker limita o acesso ao seu computador para maior segurança. Usar {hostLabel} permite que os bots trabalhem com seus arquivos e ferramentas locais."
 
 #: src/pages/Auth.tsx:224
 msgid "Don’t have an account?"
@@ -2075,7 +2055,7 @@ msgstr "Expandir {0}"
 msgid "Export"
 msgstr "Exportar"
 
-#: src/components/teach/TeachComputerOverlay.tsx:252
+#: src/components/teach/TeachComputerOverlay.tsx:246
 msgid "Export this week's list from the CRM and drop it in the shared folder"
 msgstr "Exporte a lista desta semana do CRM e solte-a na pasta compartilhada"
 
@@ -2179,8 +2159,8 @@ msgstr "Tela Cheia"
 msgid "FYI"
 msgstr ""
 
-#: src/pages/SettingsOverlay.tsx:99
-#: src/pages/SettingsOverlay.tsx:111
+#: src/pages/SettingsOverlay.tsx:94
+#: src/pages/SettingsOverlay.tsx:106
 msgid "General"
 msgstr "Geral"
 
@@ -2297,7 +2277,7 @@ msgstr "Como este bot deve se comportar"
 msgid "How to check"
 msgstr "Como verificar"
 
-#: src/pages/shell/side-panel.tsx:451
+#: src/pages/shell/side-panel.tsx:444
 msgid "I’m done"
 msgstr "Eu terminei."
 
@@ -2411,9 +2391,9 @@ msgstr "chave"
 msgid "Knowledge"
 msgstr "Conhecimento"
 
-#: src/pages/AccountSettingsOverlay.tsx:146
-#: src/pages/AccountSettingsOverlay.tsx:404
-#: src/pages/AccountSettingsOverlay.tsx:421
+#: src/pages/AccountSettingsOverlay.tsx:145
+#: src/pages/AccountSettingsOverlay.tsx:389
+#: src/pages/AccountSettingsOverlay.tsx:406
 msgid "Language"
 msgstr "Idioma"
 
@@ -2437,7 +2417,7 @@ msgstr "Sair"
 msgid "Let bots complete multi-step web page tasks faster."
 msgstr ""
 
-#: src/pages/AccountSettingsOverlay.tsx:282
+#: src/pages/AccountSettingsOverlay.tsx:267
 msgid "Light"
 msgstr "Claro"
 
@@ -2503,10 +2483,6 @@ msgstr "Carregando..."
 msgid "Local"
 msgstr "Local"
 
-#: src/pages/HostComputerPrompt.tsx:69
-msgid "Local access lets bots run commands without asking. Avoid it on shared or public servers."
-msgstr "O acesso local permite que os bots executem comandos sem perguntar. Evite usá-lo em servidores compartilhados ou públicos."
-
 #: src/pages/LocalSettings.tsx:22
 msgid "Local Server Settings"
 msgstr ""
@@ -2529,7 +2505,7 @@ msgstr "Confirme que nada ainda está em execução neste computador."
 msgid "Manage MCP servers"
 msgstr "Gerenciar servidores MCP"
 
-#: src/pages/AccountSettingsOverlay.tsx:104
+#: src/pages/AccountSettingsOverlay.tsx:103
 msgid "Manage messaging settings"
 msgstr "Gerenciar as configurações de mensagens"
 
@@ -2594,7 +2570,7 @@ msgstr "Membros (escolha {GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})"
 
 #: src/pages/bot-page/KnowledgeTab.tsx:36
 #: src/pages/MemorySettingsOverlay.tsx:159
-#: src/pages/SettingsOverlay.tsx:101
+#: src/pages/SettingsOverlay.tsx:96
 msgid "Memory"
 msgstr "Memória"
 
@@ -2655,7 +2631,7 @@ msgstr "Mensagem…"
 msgid "Messaged {peer}"
 msgstr "Enviou mensagem para {peer}"
 
-#: src/pages/AccountSettingsOverlay.tsx:98
+#: src/pages/AccountSettingsOverlay.tsx:97
 #: src/pages/MessagingSettingsOverlay.tsx:99
 msgid "Messaging"
 msgstr "Mensagens"
@@ -2712,7 +2688,7 @@ msgstr "ID do modelo"
 msgid "Model options"
 msgstr "Opções do modelo"
 
-#: src/pages/AccountSettingsOverlay.tsx:239
+#: src/pages/AccountSettingsOverlay.tsx:238
 msgid "Model spend uses your provider keys."
 msgstr "O modelo de gasto usa suas chaves de provedor."
 
@@ -2722,7 +2698,7 @@ msgstr "Modelo Atualizado"
 
 #: src/pages/LocalSettings.tsx:36
 #: src/pages/ModelSettingsOverlay.tsx:61
-#: src/pages/SettingsOverlay.tsx:100
+#: src/pages/SettingsOverlay.tsx:95
 msgid "Models"
 msgstr "Modelos"
 
@@ -2790,7 +2766,7 @@ msgstr "Dê um nome a esta rotina"
 msgid "Needs takeover"
 msgstr "Requer assumir o controle"
 
-#: src/pages/shell/side-panel.tsx:324
+#: src/pages/shell/side-panel.tsx:320
 msgid "Needs you"
 msgstr "Precisa de você"
 
@@ -3059,8 +3035,8 @@ msgstr "Somente as primeiras 50 skills são mostradas ao agente."
 
 #: src/pages/ScratchpadSection.tsx:159
 #: src/pages/shell/block-views.tsx:146
-#: src/pages/shell/computer-preview.tsx:75
-#: src/pages/shell/computer-preview.tsx:80
+#: src/pages/shell/computer-preview.tsx:63
+#: src/pages/shell/computer-preview.tsx:68
 msgid "Open"
 msgstr "Abrir"
 
@@ -3073,7 +3049,7 @@ msgstr "Abrir {0}"
 msgid "Open in chat"
 msgstr "Abrir no chat"
 
-#: src/pages/shell/computer-preview.tsx:44
+#: src/pages/shell/computer-preview.tsx:38
 msgid "Open in full window"
 msgstr "Abrir em janela cheia"
 
@@ -3107,7 +3083,7 @@ msgstr ""
 msgid "Optional"
 msgstr "Opcional"
 
-#: src/pages/AccountSettingsOverlay.tsx:199
+#: src/pages/AccountSettingsOverlay.tsx:198
 msgid "Optional controls most people never need"
 msgstr "Controles opcionais que a maioria das pessoas nunca precisa"
 
@@ -3123,7 +3099,7 @@ msgstr "Ou conecte uma chave de API"
 msgid "Or paste an API key"
 msgstr "Ou cole uma chave de API"
 
-#: src/pages/AccountSettingsOverlay.tsx:171
+#: src/pages/AccountSettingsOverlay.tsx:170
 msgid "Organic"
 msgstr "Orgânica"
 
@@ -3310,13 +3286,13 @@ msgstr "Reconectar OAuth"
 msgid "Reconnecting"
 msgstr "Reconectando"
 
-#: src/components/teach/TeachComputerOverlay.tsx:85
-#: src/components/teach/TeachComputerOverlay.tsx:136
-#: src/components/teach/TeachComputerOverlay.tsx:169
+#: src/components/teach/TeachComputerOverlay.tsx:82
+#: src/components/teach/TeachComputerOverlay.tsx:130
+#: src/components/teach/TeachComputerOverlay.tsx:163
 msgid "Recording may have started, but the view could not refresh"
 msgstr "A gravação pode ter começado, mas a visualização não pôde ser atualizada"
 
-#: src/components/teach/TeachComputerOverlay.tsx:283
+#: src/components/teach/TeachComputerOverlay.tsx:277
 msgid "Recording started. Refresh the view to continue."
 msgstr "Gravação iniciada. Atualize a visualização para continuar."
 
@@ -3360,15 +3336,15 @@ msgstr ""
 msgid "Recreating the computer"
 msgstr ""
 
-#: src/components/teach/TeachComputerOverlay.tsx:288
+#: src/components/teach/TeachComputerOverlay.tsx:282
 msgid "Refresh view"
 msgstr "Atualizar a visualização"
 
-#: src/components/teach/TeachComputerOverlay.tsx:288
+#: src/components/teach/TeachComputerOverlay.tsx:282
 msgid "Refreshing…"
 msgstr "Atualizando…"
 
-#: src/pages/shell/side-panel.tsx:441
+#: src/pages/shell/side-panel.tsx:434
 msgid "Release"
 msgstr "Libere"
 
@@ -3569,7 +3545,7 @@ msgstr "rev {0}"
 msgid "Revoke"
 msgstr "Revogar"
 
-#: src/pages/AccountSettingsOverlay.tsx:171
+#: src/pages/AccountSettingsOverlay.tsx:170
 msgid "Robot"
 msgstr "Robô"
 
@@ -3763,7 +3739,7 @@ msgid "Sent to {recipient} · {time}"
 msgstr ""
 
 #: src/components/integrations/IntegrationSetup.tsx:132
-#: src/pages/AccountSettingsOverlay.tsx:187
+#: src/pages/AccountSettingsOverlay.tsx:186
 #: src/pages/LocalSettings.tsx:42
 msgid "Server integrations"
 msgstr ""
@@ -3782,8 +3758,8 @@ msgstr "URL do servidor"
 
 #: src/pages/bot-page/BotPage.tsx:101
 #: src/pages/MessagingSettingsOverlay.tsx:362
-#: src/pages/SettingsOverlay.tsx:111
-#: src/pages/SettingsOverlay.tsx:167
+#: src/pages/SettingsOverlay.tsx:106
+#: src/pages/SettingsOverlay.tsx:162
 #: src/pages/shell/sidebar-footer.tsx:199
 #: src/pages/shell/sidebar-footer.tsx:206
 msgid "Settings"
@@ -3850,7 +3826,7 @@ msgstr "Mostrar mais"
 msgid "Show password"
 msgstr "Mostrar senha"
 
-#: src/pages/AccountSettingsOverlay.tsx:129
+#: src/pages/AccountSettingsOverlay.tsx:128
 msgid "Show the tools a bot used, with their input and output."
 msgstr "Mostra as ferramentas que um bot usou, com sua entrada e saída."
 
@@ -3896,7 +3872,7 @@ msgstr "Habilidades"
 
 #: src/components/ask/QuestionCard.tsx:194
 #: src/components/integrations/IntegrationSetup.tsx:364
-#: src/pages/shell/side-panel.tsx:448
+#: src/pages/shell/side-panel.tsx:441
 msgid "Skip"
 msgstr "Pular"
 
@@ -3949,7 +3925,7 @@ msgstr "Fale esta resposta"
 msgid "Specific agents"
 msgstr "Agentes específicos"
 
-#: src/components/teach/TeachComputerOverlay.tsx:267
+#: src/components/teach/TeachComputerOverlay.tsx:261
 msgid "Start recording"
 msgstr "Começar a gravar"
 
@@ -3957,7 +3933,7 @@ msgstr "Começar a gravar"
 msgid "Starting"
 msgstr "Iniciando"
 
-#: src/components/teach/TeachComputerOverlay.tsx:265
+#: src/components/teach/TeachComputerOverlay.tsx:259
 #: src/pages/model-settings/subscription-sign-in.tsx:101
 #: src/pages/Onboarding.tsx:621
 msgid "Starting…"
@@ -3972,8 +3948,8 @@ msgid "Steps"
 msgstr "Passos"
 
 #: src/pages/shell/composer.tsx:299
-#: src/pages/shell/side-panel.tsx:340
-#: src/pages/shell/side-panel.tsx:345
+#: src/pages/shell/side-panel.tsx:336
+#: src/pages/shell/side-panel.tsx:341
 msgid "Stop"
 msgstr "Parar"
 
@@ -4032,13 +4008,13 @@ msgstr "Trocar de bot"
 msgid "Switching…"
 msgstr "Alternando…"
 
-#: src/pages/AccountSettingsOverlay.tsx:281
+#: src/pages/AccountSettingsOverlay.tsx:266
 msgid "System"
 msgstr "Sistema"
 
 #: src/components/ComputerMaintenanceActions.tsx:160
-#: src/components/teach/TeachComputerOverlay.tsx:219
-#: src/components/teach/TeachComputerOverlay.tsx:230
+#: src/components/teach/TeachComputerOverlay.tsx:213
+#: src/components/teach/TeachComputerOverlay.tsx:224
 msgid "Teach a task"
 msgstr "Ensinar uma tarefa"
 
@@ -4053,7 +4029,7 @@ msgstr "Equipe"
 
 #: src/components/ComputerUpdateProgress.tsx:61
 #: src/pages/ComputerSettingsPanel.tsx:103
-#: src/pages/shell/computer-preview.tsx:115
+#: src/pages/shell/computer-preview.tsx:93
 msgid "Team Computer"
 msgstr "Computador da equipe"
 
@@ -4093,10 +4069,6 @@ msgstr "O provedor de memória selecionado não está disponível nesta compila�
 msgid "Thinking"
 msgstr "Pensando"
 
-#: src/pages/shell/computer-preview.tsx:95
-msgid "This bot runs on this computer, not a Linux desktop. Shell and files use your home folder."
-msgstr "Este bot é executado neste computador, não em um desktop Linux. Shell e arquivos usam sua pasta inicial."
-
 #: src/components/AgentSteps.tsx:83
 msgid "This call ran before step details were recorded."
 msgstr "Esta chamada foi executada antes de os detalhes das etapas serem registrados."
@@ -4110,17 +4082,9 @@ msgstr "Essa ação não pode ser desfeita."
 msgid "This chat is view-only"
 msgstr "Este chat é somente leitura"
 
-#: src/pages/HostComputerPrompt.tsx:22
-msgid "this computer"
-msgstr "Este computador"
-
 #: src/components/ArtifactFileCard.tsx:132
 msgid "This file is not valid UTF-8 Markdown."
 msgstr "Este arquivo não é válido UTF-8 Markdown."
-
-#: src/pages/HostComputerPrompt.tsx:22
-msgid "this Mac"
-msgstr "esse Mac"
 
 #: src/pages/shell/dialogs.tsx:296
 msgid "This permanently removes every message and stops current work. The chat remains available."
@@ -4267,7 +4231,7 @@ msgstr ""
 msgid "Updated"
 msgstr "Atualizado"
 
-#: src/pages/SettingsOverlay.tsx:106
+#: src/pages/SettingsOverlay.tsx:101
 msgid "Updates"
 msgstr "Atualizações"
 
@@ -4295,16 +4259,12 @@ msgstr ""
 msgid "Updating…"
 msgstr "Atualizando…"
 
-#: src/pages/AccountSettingsOverlay.tsx:229
-#: src/pages/SettingsOverlay.tsx:104
+#: src/pages/AccountSettingsOverlay.tsx:228
+#: src/pages/SettingsOverlay.tsx:99
 #: src/pages/shell/sidebar-footer.tsx:211
 #: src/pages/shell/sidebar-footer.tsx:222
 msgid "Usage"
 msgstr "Uso"
-
-#: src/pages/HostComputerPrompt.tsx:92
-msgid "Use {hostLabel}"
-msgstr "Usar {hostLabel}"
 
 #: src/pages/model-settings/model-detail.tsx:155
 #: src/pages/Onboarding.tsx:486
@@ -4330,7 +4290,7 @@ msgstr "Verificando…"
 
 #: src/pages/bot-page/SettingDetails.tsx:183
 #: src/pages/bot-page/SettingDetails.tsx:187
-#: src/pages/SettingsOverlay.tsx:103
+#: src/pages/SettingsOverlay.tsx:98
 #: src/pages/shell/thread-header.tsx:139
 #: src/pages/shell/thread-header.tsx:140
 #: src/pages/VoiceSettingsOverlay.tsx:170
@@ -4388,7 +4348,7 @@ msgstr "E suas memórias?"
 msgid "What it does, in one line"
 msgstr "O que ele faz, em uma linha"
 
-#: src/components/teach/TeachComputerOverlay.tsx:244
+#: src/components/teach/TeachComputerOverlay.tsx:238
 msgid "What result will you demonstrate?"
 msgstr "Que resultado você demonstrará?"
 
@@ -4424,10 +4384,6 @@ msgstr "Quando executar"
 msgid "When to use"
 msgstr "Quando usar"
 
-#: src/pages/HostComputerPrompt.tsx:59
-msgid "Where should bots run?"
-msgstr "Onde os bots devem ser executados?"
-
 #: src/pages/Auth.tsx:212
 #: src/pages/Auth.tsx:320
 msgid "Working…"
@@ -4452,7 +4408,7 @@ msgid "Yesterday"
 msgstr "Ontem"
 
 #: src/components/DraftCard.tsx:64
-#: src/pages/Shell.tsx:136
+#: src/pages/Shell.tsx:135
 #: src/pages/shell/use-composer-draft.ts:52
 msgid "You"
 msgstr "Você"
@@ -4466,7 +4422,7 @@ msgid "You can close this window."
 msgstr "Você pode fechar esta janela."
 
 #: src/pages/ComputerSettingsPanel.tsx:109
-#: src/pages/shell/side-panel.tsx:328
+#: src/pages/shell/side-panel.tsx:324
 msgid "You have control"
 msgstr "Você tem o controle"
 

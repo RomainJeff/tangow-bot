@@ -1,9 +1,5 @@
-import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
-import type { ComputerRef, ProcessEvent, SandboxProvider } from "@rakazo/adapter-kit";
+import type { ComputerRef, SandboxProvider } from "@rakazo/adapter-kit";
 import { describe, expect, it } from "vitest";
-import { DesktopSandboxProvider } from "./desktop-sandbox.js";
 import { E2BSandboxEmulator } from "./e2b-emulator.js";
 import { FakeSandboxProvider } from "./fake-sandbox.js";
 import { provisionPrepared } from "./sandbox-test-support.js";
@@ -26,31 +22,20 @@ async function drain(provider: SandboxProvider, computer: ComputerRef) {
 }
 
 describe("sandbox conformance", () => {
-  it("runs the same graphical command across fake, the E2B emulator, and desktop", async () => {
+  it("runs the same graphical command across fake and the E2B emulator", async () => {
     const fake = new FakeSandboxProvider();
     const managed = new E2BSandboxEmulator();
-    const desktop = new DesktopSandboxProvider();
     const a = await provisionPrepared(fake, { botId: "bot-a", homePath: "/tmp/a" }, ctx);
     const b = await provisionPrepared(managed, { botId: "bot-b", homePath: "/tmp/b" }, ctx);
-    const c = await provisionPrepared(desktop, { botId: "bot-c", homePath: "/tmp/c" }, ctx);
-    const outA = await drain(fake, a);
-    const outB = await drain(managed, b);
-    const outC = await drain(desktop, c);
-    expect(outA).toContain("graphical-ok");
-    expect(outB).toContain("graphical-ok");
-    expect(outC).toContain("graphical-ok");
-    expect(new Set([a.id, b.id, c.id]).size).toBe(3);
+    expect(await drain(fake, a)).toContain("graphical-ok");
+    expect(await drain(managed, b)).toContain("graphical-ok");
+    expect(a.id).not.toBe(b.id);
     await fake.destroy(a, ctx);
     await managed.destroy(b, ctx);
-    await desktop.destroy(c, ctx);
   });
 
   it("offers the same observation, action, and workspace contract across providers", async () => {
-    const providers: SandboxProvider[] = [
-      new FakeSandboxProvider(),
-      new E2BSandboxEmulator(),
-      new DesktopSandboxProvider(),
-    ];
+    const providers: SandboxProvider[] = [new FakeSandboxProvider(), new E2BSandboxEmulator()];
     for (const [index, provider] of providers.entries()) {
       const computer = await provisionPrepared(
         provider,
@@ -97,86 +82,8 @@ describe("sandbox conformance", () => {
     }
   });
 
-  it("desktop executor refuses paths outside the computer home", async () => {
-    const desktop = new DesktopSandboxProvider();
-    const computer = await desktop.provision({ botId: "grant", homePath: "/tmp/grant" }, ctx);
-    let stderr = "";
-    let code = 0;
-    for await (const event of desktop.execute(
-      computer,
-      { argv: ["echo", "nope"], cwd: "/etc" },
-      ctx,
-    )) {
-      if (event.type === "stderr") stderr += event.data;
-      if (event.type === "exit") code = event.code;
-    }
-    expect(code).toBe(1);
-    expect(stderr).toMatch(/outside this computer's home/i);
-    await desktop.destroy(computer, ctx);
-  });
-
-  it("desktop executor times out and kills descendants that inherited its pipes", async () => {
-    const root = mkdtempSync(path.join(tmpdir(), "rakazo-desktop-timeout-"));
-    const desktop = new DesktopSandboxProvider({ root });
-    const computer = await desktop.provision({ botId: "timeout", homePath: "/unused" }, ctx);
-    const marker = path.join(computer.providerRef, "descendant-survived");
-    const events: ProcessEvent[] = [];
-    const startedAt = Date.now();
-
-    for await (const event of desktop.execute(
-      computer,
-      {
-        argv: ["bash", "-lc", "(sleep 0.2; printf survived > descendant-survived) & wait"],
-        timeoutMs: 40,
-      },
-      ctx,
-    )) {
-      events.push(event);
-    }
-
-    expect(Date.now() - startedAt).toBeLessThan(1_000);
-    expect(events).toContainEqual({ type: "exit", code: 124 });
-    expect(events).toContainEqual({
-      type: "stderr",
-      data: "command timed out after 40 ms\n",
-    });
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    expect(() => readFileSync(marker)).toThrow();
-
-    await desktop.destroy(computer, ctx);
-    rmSync(root, { recursive: true, force: true });
-  });
-
-  it("desktop executor aborts and kills a running command", async () => {
-    const root = mkdtempSync(path.join(tmpdir(), "rakazo-desktop-abort-"));
-    const desktop = new DesktopSandboxProvider({ root });
-    const computer = await desktop.provision({ botId: "abort", homePath: "/unused" }, ctx);
-    const controller = new AbortController();
-    const events: ProcessEvent[] = [];
-    setTimeout(() => controller.abort(), 25);
-
-    for await (const event of desktop.execute(
-      computer,
-      { argv: ["bash", "-lc", "sleep 10"], timeoutMs: 5_000 },
-      { ...ctx, signal: controller.signal },
-    )) {
-      events.push(event);
-    }
-
-    expect(events).toContainEqual({ type: "exit", code: 130 });
-    expect(events).toContainEqual({ type: "stderr", data: "command aborted\n" });
-
-    await desktop.destroy(computer, ctx);
-    rmSync(root, { recursive: true, force: true });
-  });
-
   it("treats a repeated destroy as success so a stale deletion retry is safe", async () => {
-    const root = mkdtempSync(path.join(tmpdir(), "rakazo-destroy-idempotent-"));
-    const providers: SandboxProvider[] = [
-      new FakeSandboxProvider(),
-      new E2BSandboxEmulator(),
-      new DesktopSandboxProvider({ root }),
-    ];
+    const providers: SandboxProvider[] = [new FakeSandboxProvider(), new E2BSandboxEmulator()];
     for (const [index, provider] of providers.entries()) {
       const computer = await provisionPrepared(
         provider,
@@ -186,40 +93,5 @@ describe("sandbox conformance", () => {
       await provider.destroy(computer, ctx);
       await expect(provider.destroy(computer, ctx)).resolves.toBeUndefined();
     }
-    rmSync(root, { recursive: true, force: true });
-  });
-
-  it("reuses one desktop machine per bot", async () => {
-    const root = mkdtempSync(path.join(tmpdir(), "rakazo-desktop-reuse-"));
-    const desktop = new DesktopSandboxProvider({ root });
-    const first = await desktop.provision({ botId: "stable", homePath: "/unused" }, ctx);
-    const second = await desktop.provision({ botId: "stable", homePath: "/unused" }, ctx);
-
-    expect(first).toMatchObject({ fresh: true });
-    expect(second).toMatchObject({ id: first.id, providerRef: first.providerRef, fresh: false });
-    expect(desktop.boxes.size).toBe(1);
-
-    await desktop.destroy(second, ctx);
-    rmSync(root, { recursive: true, force: true });
-  });
-
-  it("desktop file writes do not follow a final symlink outside the workspace", async () => {
-    const root = mkdtempSync(path.join(tmpdir(), "rakazo-desktop-symlink-"));
-    const desktop = new DesktopSandboxProvider({ root });
-    const computer = await desktop.provision({ botId: "symlink", homePath: "/unused" }, ctx);
-    const outside = path.join(root, "outside.txt");
-    writeFileSync(outside, "before");
-    symlinkSync(outside, path.join(computer.providerRef, "escape.txt"));
-
-    await expect(
-      desktop.writeFile(computer, {
-        path: "escape.txt",
-        content: new TextEncoder().encode("after"),
-      }),
-    ).rejects.toThrow();
-    expect(readFileSync(outside, "utf8")).toBe("before");
-
-    await desktop.destroy(computer, ctx);
-    rmSync(root, { recursive: true, force: true });
   });
 });

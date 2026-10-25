@@ -1,7 +1,11 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { DEFAULT_MODEL_MAX_TOKENS } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
-import { conversationSessionId, isOpenCodeProvider, reliableStreamOptions } from "./pi-runtime.js";
+import {
+  conversationSessionId,
+  isOpenCodeProvider,
+  reliableStreamOptions,
+} from "./pi-run-model.js";
 import { MODEL_STREAM_MAX_RETRIES, MODEL_STREAM_TIMEOUT_MS } from "./pi-runtime-limits.js";
 
 const streamDefaults = {
@@ -10,7 +14,7 @@ const streamDefaults = {
   maxTokens: DEFAULT_MODEL_MAX_TOKENS,
 };
 
-describe("Pi runtime transport", () => {
+describe("run model transport", () => {
   it.each([
     { source: "provider", provider: "openai-codex", api: "openai-completions" },
     { source: "API", provider: "custom-provider", api: "openai-codex-responses" },

@@ -1,9 +1,5 @@
-import { mkdtemp, realpath, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
 import type { PortableFile, SandboxProvider } from "@rakazo/adapter-kit";
-import { afterEach, describe, expect, it } from "vitest";
-import { DesktopSandboxProvider } from "./desktop-sandbox.js";
+import { describe, expect, it } from "vitest";
 import { E2BSandboxEmulator } from "./e2b-emulator.js";
 import { FakeSandboxProvider } from "./fake-sandbox.js";
 import { provisionPrepared } from "./sandbox-test-support.js";
@@ -16,25 +12,9 @@ const context = {
   signal: new AbortController().signal,
 };
 
-const temporaryRoots: string[] = [];
-
-afterEach(async () => {
-  await Promise.all(
-    temporaryRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })),
-  );
-});
-
 describe.each([
   ["fake", () => Promise.resolve(new FakeSandboxProvider())],
   ["managed emulator", () => Promise.resolve(new E2BSandboxEmulator())],
-  [
-    "desktop",
-    async () => {
-      const root = await mkdtemp(path.join(tmpdir(), "rakazo-sandbox-faults-"));
-      temporaryRoots.push(root);
-      return new DesktopSandboxProvider({ root: await realpath(root) });
-    },
-  ],
 ] as const)("%s sandbox negative contract", (_name, makeProvider) => {
   it("rejects traversal through every portable workspace entry point", async () => {
     const provider = await makeProvider();
@@ -144,18 +124,10 @@ describe.each([
     await provider.destroy(resumed, context);
     await provider.destroy(resumed, context);
     const replacement = await provisionPrepared(provider, request, context);
-    if (provider instanceof DesktopSandboxProvider) {
-      // A configured desktop root retains its workspace through destroy.
-      expect(replacement.fresh).toBe(false);
-      expect(
-        new TextDecoder().decode(await provider.readFile(replacement, "state.txt", context)),
-      ).toBe("preserved");
-    } else {
-      expect(replacement.fresh).toBe(true);
-      await expect(provider.readFile(replacement, "state.txt", context)).rejects.toThrow(
-        /not found/i,
-      );
-    }
+    expect(replacement.fresh).toBe(true);
+    await expect(provider.readFile(replacement, "state.txt", context)).rejects.toThrow(
+      /not found/i,
+    );
     await provider.destroy(replacement, context);
   });
 
@@ -195,8 +167,8 @@ describe.each([
 
 describe("portable workspace transfer", () => {
   it("preserves binary bytes and executable metadata across every provider pairing", async () => {
-    const sourceProviders = await providerSet("source");
-    const targetProviders = await providerSet("target");
+    const sourceProviders = providerSet();
+    const targetProviders = providerSet();
     const binary = Uint8Array.from([0, 255, 1, 128, 2, 127]);
 
     for (const [sourceName, source] of sourceProviders) {
@@ -270,13 +242,10 @@ function faultOnce(provider: SandboxProvider, methods: FaultableMethod[]): Sandb
   });
 }
 
-async function providerSet(label: string): Promise<Array<[string, SandboxProvider]>> {
-  const root = await mkdtemp(path.join(tmpdir(), `rakazo-sandbox-transfer-${label}-`));
-  temporaryRoots.push(root);
+function providerSet(): Array<[string, SandboxProvider]> {
   return [
     ["fake", new FakeSandboxProvider()],
     ["managed", new E2BSandboxEmulator()],
-    ["desktop", new DesktopSandboxProvider({ root: await realpath(root) })],
   ];
 }
 

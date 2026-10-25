@@ -4,9 +4,6 @@ import path from "node:path";
 import {
   ComposioEmulator,
   createScheduleFromTool,
-  DesktopSandboxProvider,
-  E2BSandboxEmulator,
-  FakeSandboxProvider,
   handoffToGroupBot,
   toComputerRef,
 } from "@rakazo/adapters";
@@ -1362,34 +1359,6 @@ describeJourneys("required product journeys", () => {
     expect(entries.map((row) => row.seq)).toEqual(Array.from({ length: 40 }, (_, i) => i));
   });
 
-  it("6: fake, managed-sandbox emulator, and desktop executor run the same graphical task", async () => {
-    const ctx = {
-      operationId: "1",
-      traceId: "1",
-      spaceId: "w",
-      userId: "u",
-      signal: new AbortController().signal,
-    };
-    const fake = new FakeSandboxProvider();
-    const managed = new E2BSandboxEmulator();
-    const desktop = new DesktopSandboxProvider();
-    const a = await fake.provision({ botId: "ja", homePath: "/tmp/ja" }, ctx);
-    const b = await managed.provision({ botId: "jb", homePath: "/tmp/jb" }, ctx);
-    const c = await desktop.provision({ botId: "jc", homePath: "/tmp/jc" }, ctx);
-    let out = "";
-    for await (const event of fake.execute(a, { argv: ["echo", "same-task"] }, ctx)) {
-      if (event.type === "stdout") out += event.data;
-    }
-    for await (const event of managed.execute(b, { argv: ["echo", "same-task"] }, ctx)) {
-      if (event.type === "stdout") out += event.data;
-    }
-    for await (const event of desktop.execute(c, { argv: ["echo", "same-task"] }, ctx)) {
-      if (event.type === "stdout") out += event.data;
-    }
-    expect(out.match(/same-task/g)?.length).toBe(3);
-    await desktop.destroy(c, ctx);
-  });
-
   it("7: destination write is independently inspectable and credentials stay out of the thread", async () => {
     const cookie = await signup(app, `dest-j-${stamp}@rakazo.test`, "Dest");
     const bot = await rpc<Bot>(app, cookie, "bots/create", {
@@ -1850,20 +1819,6 @@ describeJourneys("required product journeys", () => {
     const docs = readFileSync(path.resolve("docs/self-host.md"), "utf8");
     expect(docs).toMatch(/pg_dump/);
     expect(docs).toMatch(/Restore/);
-  });
-
-  it("14: this-mac is refused unless the sandbox is docker", async () => {
-    const cookie = await signup(app, `host-j-${stamp}@rakazo.test`, "Host");
-    const me = await rpc<Me>(app, cookie, "me");
-    expect(me.canChooseHostComputer).toBe(false);
-    await prisma.deploymentSettings.update({
-      where: { id: "default" },
-      data: { ownerUserId: me.userId },
-    });
-    const res = await raw(app, cookie, "deployment/update", { computerHost: "this-mac" });
-    const text = await res.text();
-    expect(res.status).toBeGreaterThanOrEqual(400);
-    expect(text).toMatch(/This Mac mode is only available/i);
   });
 
   it("15: ask, answer, stop, follow-up, and clientNonce stay consistent", async () => {
@@ -3137,7 +3092,7 @@ describeJourneys("required product journeys", () => {
   });
 });
 
-type Me = { spaceId: string; userId: string; canChooseHostComputer: boolean };
+type Me = { spaceId: string; userId: string };
 type Bot = {
   id: string;
   name: string;
