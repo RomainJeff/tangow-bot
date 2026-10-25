@@ -70,9 +70,10 @@
   /* The thread fades in under the header, so a dark bubble leaves no smear
      behind the title, and out across the composer's bar: its glass blurs the
      thread above, and nothing shows in the gap under it. Its end padding keeps
-     the last message 32 px above the composer. */
+     the last message 32 px above the composer, and never under 44 px, the room
+     a card's shadow needs below it. */
   .rk-thread-mask {
-    padding-bottom: calc(var(--thread-overlap, 0px) + 2rem);
+    padding-bottom: max(calc(var(--thread-overlap, 0px) + 2rem), 2.75rem);
     mask-image: linear-gradient(
       to bottom,
       transparent var(--thread-fade-top-start),
