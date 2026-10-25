@@ -146,14 +146,14 @@ const CONFLICT = { status: 409, code: "CONFLICT", message: "This draft is no lon
 async function answerRpc(
   page: Page,
   procedure: "answer" | "send",
-  respond: (body: Record<string, unknown>) => unknown,
+  respond: (body: Record<string, unknown>) => unknown | Promise<unknown>,
 ) {
   const captured: Captured = { body: undefined };
   await page.route(new RegExp(`/rpc/threads/${procedure}(?:\\?|$)`), async (route: Route) => {
     const request: Request = route.request();
     const body = (request.postDataJSON() as { json: Record<string, unknown> }).json;
     captured.body = body;
-    const output = respond(body);
+    const output = await respond(body);
     const refused = output === CONFLICT;
     await route.fulfill({
       status: refused ? CONFLICT.status : 200,
@@ -790,6 +790,103 @@ for (const width of [1440, 390]) {
     await expect(draftCard.getByRole("button")).toHaveCount(0);
   });
 }
+
+test("the card keeps its shape while a send is on its way", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signup(page, `outbound-sending-${Date.now()}@rakazo.test`, "password12", "Ana Lima");
+  await completeOnboarding(page);
+  const botId = activeBotId(page);
+  let release: () => void = () => undefined;
+  let gate = Promise.resolve();
+  const hold = () => {
+    gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+  };
+  await answerRpc(page, "answer", async () => {
+    await gate;
+    return { ok: true };
+  });
+  await showThread(
+    page,
+    [...waitingDraft(botId).slice(0, -1), requested(botId, "draft-card", 11, fielded)],
+    { run: null },
+  );
+  const draftCard = page.getByTestId("draft-card");
+  const height = async () => (await draftCard.boundingBox())!.height;
+
+  // Pressing Send, at rest and then with the lines turned into fields, changes nothing in the
+  // card's height: Send stays under the pointer, and the fields only stop taking typing.
+  for (const touched of [false, true]) {
+    if (touched) await draftCard.getByRole("textbox", { name: "Subject", exact: true }).focus();
+    const before = await height();
+    hold();
+    await draftCard.getByRole("button", { name: "Send", exact: true }).click();
+    await expect(draftCard.getByRole("button", { name: "Sending…", exact: true })).toBeVisible();
+    expect(await height()).toBe(before);
+    await expect(draftCard.getByRole("textbox", { name: "Subject", exact: true })).toHaveJSProperty(
+      "readOnly",
+      true,
+    );
+    if (touched) await shoot(page, testInfo, "sending");
+    release();
+    await expect(draftCard.getByRole("button", { name: "Send", exact: true })).toBeVisible();
+    expect(await height()).toBe(before);
+  }
+});
+
+test("a sent card fits a 320 px screen without scrolling the thread sideways", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  await signup(page, `outbound-narrow-${Date.now()}@rakazo.test`, "password12", "Ana Lima");
+  await completeOnboarding(page);
+  const botId = activeBotId(page);
+  await showThread(page, [...waitingDraft(botId), ...sentAfter(botId, "draft-card", BODY)], {
+    run: null,
+  });
+  const draftCard = page.getByTestId("draft-card");
+  await expect(draftCard).toHaveAttribute("data-answered", "true");
+  const overflow = await page
+    .getByTestId("transcript")
+    .evaluate((el) => el.scrollWidth - el.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
+  const box = (await draftCard.boundingBox())!;
+  expect(box.x + box.width).toBeLessThanOrEqual(320);
+  await shoot(page, testInfo, "sent-narrow");
+});
+
+test("a full recipient line is a keyboard stop that starts editing", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signup(page, `outbound-keys-${Date.now()}@rakazo.test`, "password12", "Ana Lima");
+  await completeOnboarding(page);
+  const botId = activeBotId(page);
+  const oneTo = card(
+    {},
+    { recipients: [{ role: "to", address: "bo@example.com" }], fields: { to: 1, subject: true } },
+  );
+  await showThread(
+    page,
+    [...waitingDraft(botId).slice(0, -1), requested(botId, "draft-card", 11, oneTo)],
+    { run: null },
+  );
+  const draftCard = page.getByTestId("draft-card");
+  const line = draftCard.getByRole("group", { name: "To", exact: true });
+
+  // Tab from the From line lands on the To line, which has no field: it names itself and, once
+  // focused, starts editing.
+  await draftCard.getByText("Ana Lima", { exact: true }).click();
+  await page.keyboard.press("Tab");
+  await expect(line).toBeFocused();
+  await expect(draftCard.locator('[data-slot="framed-block-header"]')).toContainText("Editing");
+  await expect(draftCard.locator("label[for]").filter({ hasText: /^To$/ })).toHaveCount(0);
+  // Tab reaches the address's remove button; pressing it takes the address off and opens the field.
+  await page.keyboard.press("Tab");
+  const remove = draftCard.getByRole("button", { name: "Remove bo@example.com", exact: true });
+  await expect(remove).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(draftCard.getByRole("textbox", { name: "To", exact: true })).toBeFocused();
+});
 
 test("a one-address line keeps what does not fit in its field, marked", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });

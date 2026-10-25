@@ -208,7 +208,7 @@ export function DraftCard({
     return (
       <FramedBlock
         data-testid="draft-card"
-        className="min-w-80"
+        className="min-w-[min(20rem,100%)]"
         answered={<DraftSent draft={draft} time={messageTimeLabel(view.at, i18n.locale)} />}
       />
     );
@@ -263,7 +263,7 @@ export function DraftCard({
   const reason = view.failure?.disconnected ? t`${app} is disconnected.` : view.failure?.reason;
 
   // Lines change only on a draft that records where its recipients and subject sit.
-  const fields = view.readOnly || view.sending ? undefined : draft.fields;
+  const fields = view.readOnly ? undefined : draft.fields;
   const asFields = fields !== undefined && (touched || edited);
   const subject = edit.subject ?? draft.subject ?? "";
   // An empty Cc or Bcc names nobody: it opens from the To line on demand.
@@ -350,6 +350,7 @@ export function DraftCard({
                   room={room}
                   strong={role === "to"}
                   editing={asFields}
+                  sending={view.sending}
                   onEdit={() => setTouched(true)}
                   onChange={(next) => keepRole(role, next)}
                   onTyped={(next) => setTyped((current) => ({ ...current, [role]: next }))}
@@ -379,6 +380,7 @@ export function DraftCard({
               label={t`Subject`}
               subject={subject}
               editing={asFields}
+              sending={view.sending}
               onChange={(next) => keepEdit({ subject: next })}
             />
           ) : subject ? (

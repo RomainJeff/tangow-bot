@@ -17,7 +17,7 @@ export function DraftSent({ draft, time }: { draft: AskDraft; time: string }) {
         aria-hidden="true"
         className="row-span-2 grid size-7 place-items-center rounded-full bg-success text-primary-foreground"
       >
-        <Check className="size-4" strokeWidth={2.6} />
+        <Check className="size-4" />
       </span>
       <span className="text-title">{t`Sent`}</span>
       <span className="justify-self-end text-time tabular-nums text-muted-foreground">{time}</span>
