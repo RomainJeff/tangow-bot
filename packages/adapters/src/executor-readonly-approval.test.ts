@@ -1,4 +1,10 @@
-import type { AgentRunRequest, ConnectorCall, ConnectorTool } from "@rakazo/adapter-kit";
+import type {
+  AdapterContext,
+  AgentRunRequest,
+  ConnectorCall,
+  ConnectorEvent,
+  ConnectorTool,
+} from "@rakazo/adapter-kit";
 import type { AskDraftEdits, MessageBlock } from "@rakazo/contracts";
 import { askDraftState } from "@rakazo/contracts";
 import type { ActionApprovalRule, DraftRecord } from "@rakazo/core";
@@ -8,6 +14,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { isApprovalPausedResult } from "./approval-effect.js";
 import type * as AutoReviewModule from "./auto-review.js";
 import { runAutoReviewJudge } from "./auto-review.js";
+import { ComposioEmulator } from "./composio-emulator.js";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
 import { createRunExecutor, settleCancelledRunCards } from "./executor.js";
 import { catalogEntries, resolveCatalogCall } from "./lazy-tool-catalog.js";
@@ -53,6 +60,10 @@ function fixture({
   } as Record<string, unknown>,
   routeToolName = undefined as string | undefined,
   secrets = [] as string[],
+  /** The connector that answers every call, such as the Composio emulator; a stub by default. */
+  connector = undefined as
+    | { execute(call: ConnectorCall, context: AdapterContext): AsyncIterable<ConnectorEvent> }
+    | undefined,
 } = {}) {
   const tool: ConnectorTool = {
     name,
@@ -242,8 +253,9 @@ function fixture({
     externalEffect,
   };
   const finalizeRun = vi.fn(async () => ({ continuationRunId: null }));
-  const execute = vi.fn(async function* (call: ConnectorCall) {
-    yield { type: "result" as const, data: { item: call.args.id } };
+  const execute = vi.fn(async function* (call: ConnectorCall, context: AdapterContext) {
+    if (connector) yield* connector.execute(call, context);
+    else yield { type: "result" as const, data: { item: call.args.id } };
   });
   let calls: Array<{ args: Record<string, unknown>; executionId: string }> = [
     { args: { id: "item-1" }, executionId: "call-1" },
@@ -680,8 +692,12 @@ describe("connector read-only metadata and approval enforcement", () => {
       approve(f.effects[0]!, "Hello, edited.");
       f.setCalls([]);
       await f.run();
-      expect(f.execute).toHaveBeenCalledOnce();
-      expect(f.execute.mock.calls[0]![0].args).toEqual(
+      // The draft first asked the batch's server for its item's schema, a read that sends nothing.
+      const sends = f.execute.mock.calls.filter(
+        ([call]) => call.route?.toolName !== "COMPOSIO_GET_TOOL_SCHEMAS",
+      );
+      expect(sends).toHaveLength(1);
+      expect(sends[0]![0].args).toEqual(
         batch({
           ...mail,
           arguments: { ...mail.arguments, body: "Hello, edited.", include_signature: false },
@@ -776,10 +792,114 @@ describe("connector read-only metadata and approval enforcement", () => {
         },
       ]);
       await f.run();
-      expect(f.execute).not.toHaveBeenCalled();
+      // Only the item's schema was asked for, and this server gave none, so nothing more shows.
+      expect(f.execute.mock.calls.map(([call]) => call.route?.toolName)).toEqual([
+        "COMPOSIO_GET_TOOL_SCHEMAS",
+      ]);
       expect(f.pauseRunForInput).toHaveBeenCalledWith(
         expect.objectContaining({ blocks: [expect.objectContaining(draftCard)] }),
       );
+    });
+
+    describe("a Composio batch whose item's schema its server gives", () => {
+      const strings = { type: "array", items: { type: "string" } };
+      const batchSchema = {
+        type: "object",
+        properties: { tools: { type: "array" }, thought: { type: "string" } },
+      };
+      const traced = {
+        recipient_email: "someone@example.com",
+        subject: "Test Chief",
+        body: "Hello from Chief.",
+        is_html: false,
+        include_signature: false,
+      };
+      const batch = (body = traced.body) => ({
+        tools: [{ tool_slug: "GMAIL_SEND_EMAIL", arguments: { ...traced, body } }],
+      });
+      function batched(emulator: ComposioEmulator, inputSchema = batchSchema) {
+        const f = fixture({
+          name: "COMPOSIO_MULTI_EXECUTE_TOOL",
+          inputSchema,
+          connector: emulator,
+        });
+        f.setCalls([{ args: batch(), executionId: "c1" }]);
+        return f;
+      }
+      const lookups = (emulator: ComposioEmulator) =>
+        emulator.executions.filter((call) => call.tool === "COMPOSIO_GET_TOOL_SCHEMAS");
+      const offered = (f: ReturnType<typeof fixture>) =>
+        (
+          f.pauseRunForInput.mock.calls.at(-1)![0].blocks[0] as Extract<
+            MessageBlock,
+            { kind: "ask" }
+          >
+        ).draft?.fields;
+
+      it("offers Cc and Bcc, and an added Cc leaves inside the batch item", async () => {
+        const emulator = new ComposioEmulator();
+        const f = batched(emulator);
+        await f.run();
+        expect(lookups(emulator).map((call) => call.args)).toEqual([
+          { tool_slugs: ["GMAIL_SEND_EMAIL"] },
+        ]);
+        expect(offered(f)).toEqual({ to: null, cc: null, bcc: null, subject: true });
+
+        approve(f.effects[0]!, {
+          recipients: [
+            { role: "to", address: "someone@example.com" },
+            { role: "cc", address: "copy@example.com" },
+          ],
+        });
+        f.setCalls([]);
+        await f.run();
+        expect(lookups(emulator)).toHaveLength(1);
+        const sent = emulator.executions.filter(
+          (call) => call.tool === "COMPOSIO_MULTI_EXECUTE_TOOL",
+        );
+        expect(sent.map((call) => call.args)).toEqual([
+          {
+            tools: [
+              {
+                tool_slug: "GMAIL_SEND_EMAIL",
+                arguments: { ...traced, cc: ["copy@example.com"] },
+              },
+            ],
+          },
+        ]);
+      });
+
+      it.each([
+        ["refuses", { kind: "fail", error: "Unknown tool" } as const],
+        ["never answers", { kind: "hang" } as const],
+      ])("offers only what the call holds when the lookup %s", async (_, fault) => {
+        const emulator = new ComposioEmulator();
+        emulator.failNext("COMPOSIO_GET_TOOL_SCHEMAS", fault);
+        const f = batched(emulator);
+        await f.run();
+        expect(offered(f)).toEqual({ to: 1, subject: true });
+      });
+
+      it("never reads the item against the batch tool's own schema", async () => {
+        const emulator = new ComposioEmulator();
+        emulator.failNext("COMPOSIO_GET_TOOL_SCHEMAS", { kind: "fail", error: "Unknown tool" });
+        const withCc = { ...batchSchema, properties: { ...batchSchema.properties, cc: strings } };
+        const f = batched(emulator, withCc);
+        await f.run();
+        expect(offered(f)).toEqual({ to: 1, subject: true });
+      });
+
+      it("asks once per tool, then reads the schema it kept", async () => {
+        const emulator = new ComposioEmulator();
+        const f = batched(emulator);
+        await f.run();
+        replace(f.effects[0]!);
+        f.setCalls([{ args: batch("Hello again."), executionId: "c2" }]);
+        await f.run();
+        expect(f.effects.map((effect) => effect.status)).toEqual(["denied", "intended"]);
+        expect(offered(f)).toEqual({ to: null, cc: null, bcc: null, subject: true });
+        expect(lookups(emulator)).toHaveLength(1);
+      });
     });
 
     it("shows a send it cannot read on the plain card, every argument shown, never always", async () => {

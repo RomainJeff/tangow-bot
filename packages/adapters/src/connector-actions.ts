@@ -21,7 +21,7 @@ export function connectorCallActions(
   toolName: string,
   args: Record<string, unknown>,
 ): ConnectorCallActions | undefined {
-  if (wrapperName(toolName) !== COMPOSIO_BATCH_TOOL) return undefined;
+  if (!isComposioBatch(toolName)) return undefined;
   const tools = parseTools(args.tools);
   if (!tools?.length) return OPAQUE;
   const actions: ConnectorAction[] = [];
@@ -32,6 +32,11 @@ export function connectorCallActions(
     actions.push({ toolName: item.tool_slug, args: itemArgs });
   }
   return { kind: "actions", actions, serialized: typeof args.tools === "string" };
+}
+
+/** Whether a tool is Composio's batch, whether named bare, MCP-prefixed or as a catalog id. */
+export function isComposioBatch(toolName: string): boolean {
+  return wrapperName(toolName) === COMPOSIO_BATCH_TOOL;
 }
 
 /** The tool's own name, whether it comes bare, MCP-prefixed or as a catalog id. */
