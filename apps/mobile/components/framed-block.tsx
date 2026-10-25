@@ -47,7 +47,10 @@ export interface FramedBlockProps extends Omit<ViewProps, "children"> {
    * and the actions are gone and only this line remains.
    */
   answered?: ReactNode;
-  /** What leads the answered line in place of the check, such as the app a draft was for. */
+  /**
+   * What leads the answered line in place of the check, such as the app a draft was for. `null`
+   * leaves nothing in front, for an answer that draws its own.
+   */
   answeredMark?: ReactNode;
 }
 
@@ -139,8 +142,10 @@ export function FramedBlock({
           }
           style={styles.answered}
         >
-          {answeredMark ?? (
+          {answeredMark === undefined ? (
             <AnsweredCheck color={tokens.foreground} animate={didTransition && !reducedMotion} />
+          ) : (
+            answeredMark
           )}
           {typeof answered === "string" ? (
             <Text style={styles.answeredText}>{answered}</Text>

@@ -1,21 +1,45 @@
 import { ASK_DRAFT_SUBJECT_MAX_LENGTH } from "@rakazo/contracts";
 import { heldBack, LINE_BREAKS, takeAddresses } from "@rakazo/core";
 import { radii, sizes } from "@rakazo/ui-tokens";
-import { useRef, useState } from "react";
+import type { ReactNode } from "react";
+import { Children, Fragment, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { mobileTokens } from "../lib/appearance";
+import { mobileTokens, resolveMobileAppearance } from "../lib/appearance";
 import { useI18n } from "../lib/i18n";
 import { useMobileTokens, useThemedStyles } from "../lib/native";
+import { shadowsForAppearance } from "../lib/theme";
 import { nativeTextStyle } from "../lib/typography";
 import { NativeSymbol } from "./native-symbol";
 
+/** A row's height and its label column, as the mockup's grouped rows. */
+const ROW_HEIGHT = 56;
+const LABEL_WIDTH = 72;
 const REMOVE_ICON = 16;
 const ROW_GAP = 6;
 const CHIP_PADDING = 4;
 const CHIP_HEIGHT = nativeTextStyle("body").lineHeight + 2 * CHIP_PADDING;
+const INPUT_HEIGHT = nativeTextStyle("composer").lineHeight + 12;
+// A row's label is centred on its first line, which a chip or the field sets.
+const FIRST_LINE = Math.max(CHIP_HEIGHT, INPUT_HEIGHT);
 // iOS stops a tap at the chip's edge, so no slop can grow the remove glyph past it: the button is a
 // real 48 pt frame that spills out of the chip, by no more than the gap to the next one.
 const REMOVE_SPILL = (sizes.mobileAction - REMOVE_ICON) / 2;
+
+/** The sheet's rows in one rounded group, a hairline between them, as a native grouped list. */
+export function DraftGroup({ children }: { children: ReactNode }) {
+  const styles = useThemedStyles(createStyles);
+  const rows = Children.toArray(children);
+  return (
+    <View style={styles.group}>
+      {rows.map((row, index) => (
+        <Fragment key={typeof row === "object" && "key" in row ? row.key : index}>
+          {index ? <View style={styles.hairline} /> : null}
+          {row}
+        </Fragment>
+      ))}
+    </View>
+  );
+}
 
 /**
  * One recipient row of the Edit message sheet, like Mail's compose sheet: its label, its addresses
@@ -58,54 +82,58 @@ export function RecipientRow({
 
   return (
     <Pressable accessible={false} onPress={() => own.current?.focus()} style={styles.row}>
-      <Text style={styles.label}>{label}</Text>
-      {addresses.map((address) => (
-        <View key={address} style={styles.address}>
-          <Text style={styles.addressText}>{address}</Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t("Remove {address}", { address })}
-            onPress={() => onChange(addresses.filter((each) => each !== address))}
-            style={styles.remove}
-          >
-            <NativeSymbol
-              ios="xmark.circle.fill"
-              android="close-circle"
-              size={REMOVE_ICON}
-              color={tokens.mutedForeground}
-            />
-          </Pressable>
-        </View>
-      ))}
-      {full && !typed && !focused ? null : (
-        <TextInput
-          ref={own}
-          autoFocus={autoFocus}
-          accessibilityLabel={label}
-          // The red underline says it on screen; VoiceOver hears it here.
-          accessibilityHint={invalid ? t("Not an email address") : undefined}
-          value={typed}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          autoCorrect={false}
-          autoComplete="off"
-          spellCheck={false}
-          submitBehavior="submit"
-          onChangeText={(value) => take(value, false)}
-          onSubmitEditing={() => take(typed, true)}
-          onFocus={() => setFocused(true)}
-          onBlur={() => {
-            setFocused(false);
-            take(typed, true);
-          }}
-          onKeyPress={(event) => {
-            if (event.nativeEvent.key === "Backspace" && !typed && addresses.length) {
-              onChange(addresses.slice(0, -1));
-            }
-          }}
-          style={[styles.input, invalid ? styles.invalid : undefined]}
-        />
-      )}
+      <View style={styles.labelCell}>
+        <Text style={styles.label}>{label}</Text>
+      </View>
+      <View style={styles.items}>
+        {addresses.map((address) => (
+          <View key={address} style={styles.address}>
+            <Text style={styles.addressText}>{address}</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t("Remove {address}", { address })}
+              onPress={() => onChange(addresses.filter((each) => each !== address))}
+              style={styles.remove}
+            >
+              <NativeSymbol
+                ios="xmark.circle.fill"
+                android="close-circle"
+                size={REMOVE_ICON}
+                color={tokens.mutedForeground}
+              />
+            </Pressable>
+          </View>
+        ))}
+        {full && !typed && !focused ? null : (
+          <TextInput
+            ref={own}
+            autoFocus={autoFocus}
+            accessibilityLabel={label}
+            // The red underline says it on screen; VoiceOver hears it here.
+            accessibilityHint={invalid ? t("Not an email address") : undefined}
+            value={typed}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete="off"
+            spellCheck={false}
+            submitBehavior="submit"
+            onChangeText={(value) => take(value, false)}
+            onSubmitEditing={() => take(typed, true)}
+            onFocus={() => setFocused(true)}
+            onBlur={() => {
+              setFocused(false);
+              take(typed, true);
+            }}
+            onKeyPress={(event) => {
+              if (event.nativeEvent.key === "Backspace" && !typed && addresses.length) {
+                onChange(addresses.slice(0, -1));
+              }
+            }}
+            style={[styles.input, invalid ? styles.invalid : undefined]}
+          />
+        )}
+      </View>
     </Pressable>
   );
 }
@@ -115,7 +143,9 @@ export function MoreRecipientsRow({ label, onPress }: { label: string; onPress: 
   const styles = useThemedStyles(createStyles);
   return (
     <Pressable accessibilityRole="button" onPress={onPress} style={styles.row}>
-      <Text style={styles.label}>{label}</Text>
+      <View style={styles.labelCell}>
+        <Text style={styles.label}>{label}</Text>
+      </View>
     </Pressable>
   );
 }
@@ -133,34 +163,59 @@ export function SubjectRow({
   const styles = useThemedStyles(createStyles);
   return (
     <View style={styles.row}>
-      <Text style={styles.label}>{label}</Text>
-      <TextInput
-        accessibilityLabel={label}
-        value={subject}
-        maxLength={ASK_DRAFT_SUBJECT_MAX_LENGTH}
-        multiline
-        submitBehavior="blurAndSubmit"
-        onChangeText={(value) => onChange(value.replace(LINE_BREAKS, " "))}
-        style={styles.input}
-      />
+      <View style={styles.labelCell}>
+        <Text style={styles.label}>{label}</Text>
+      </View>
+      <View style={styles.items}>
+        <TextInput
+          accessibilityLabel={label}
+          value={subject}
+          maxLength={ASK_DRAFT_SUBJECT_MAX_LENGTH}
+          multiline
+          submitBehavior="blurAndSubmit"
+          onChangeText={(value) => onChange(value.replace(LINE_BREAKS, " "))}
+          style={styles.input}
+        />
+      </View>
     </View>
   );
 }
 
 function createStyles() {
   const tokens = mobileTokens();
+  const shadows = shadowsForAppearance(resolveMobileAppearance());
   return StyleSheet.create({
+    group: {
+      overflow: "hidden",
+      borderRadius: radii.mobileGroup,
+      backgroundColor: tokens.group,
+      boxShadow: shadows.group,
+    },
+    hairline: {
+      height: StyleSheet.hairlineWidth,
+      marginStart: 16,
+      backgroundColor: tokens.input,
+    },
     row: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      minHeight: ROW_HEIGHT,
+      paddingHorizontal: 16,
+      paddingVertical: (ROW_HEIGHT - FIRST_LINE) / 2,
+    },
+    labelCell: { width: LABEL_WIDTH, height: FIRST_LINE, justifyContent: "center" },
+    items: {
+      flex: 1,
+      minWidth: 0,
       flexDirection: "row",
       flexWrap: "wrap",
       alignItems: "center",
       gap: ROW_GAP,
-      minHeight: sizes.mobileAction,
-      paddingVertical: 6,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: tokens.border,
     },
-    label: { color: tokens.mutedForeground, ...nativeTextStyle("composer") },
+    label: {
+      color: tokens.mutedForeground,
+      ...nativeTextStyle("rowName", { size: 15, leading: 20 / 15 }),
+    },
     address: {
       flexDirection: "row",
       alignItems: "center",
@@ -184,7 +239,7 @@ function createStyles() {
     addressText: { flexShrink: 1, color: tokens.foreground, ...nativeTextStyle("body") },
     input: {
       flexGrow: 1,
-      minWidth: 120,
+      minWidth: 56,
       paddingVertical: 6,
       color: tokens.foreground,
       ...nativeTextStyle("composer"),

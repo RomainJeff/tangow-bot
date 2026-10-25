@@ -7,7 +7,6 @@ import {
   draftCardView,
   draftChanges,
   draftPrimaryAction,
-  draftSentTo,
 } from "@rakazo/core";
 import { radii, sizes } from "@rakazo/ui-tokens";
 import { useRouter } from "expo-router";
@@ -32,6 +31,7 @@ import { useProfilePhoto } from "../lib/profile-photo";
 import { nativeTextStyle } from "../lib/typography";
 import { CapsuleButton } from "./AskActions";
 import { AppLogo } from "./app-logo";
+import { DraftSent } from "./draft-sent";
 import { FramedBlock } from "./framed-block";
 import { NativeSymbol } from "./native-symbol";
 import { UserAvatar } from "./user-avatar";
@@ -42,6 +42,7 @@ type AskBlock = Extract<MessageBlock, { kind: "ask" }>;
 
 const ROLES = ["to", "cc", "bcc"] as const;
 const AVATAR_SIZE = 24;
+const GRID_TEXT = nativeTextStyle("rowName", { size: 15, leading: 20 / 15 });
 // Undo is one line of meta text: the slop grows its target to a 48 pt action's height.
 const UNDO_LINE = nativeTextStyle("meta").lineHeight;
 const UNDO_HIT_SLOP = {
@@ -51,28 +52,50 @@ const UNDO_HIT_SLOP = {
   right: 16,
 };
 
-/** The text with its sender in front of it: the mail leaves in the run owner's name. */
-function Sender({
+/** The grid's label column: 72 pt, as the edit sheet's rows. */
+const LABEL_WIDTH = 72;
+
+/** One line of the card's grid: its label, then its value, both starting at the same x. */
+function GridRow({ label, children }: { label: string; children: ReactNode }) {
+  const styles = useThemedStyles(createStyles);
+  return (
+    <View style={styles.gridRow}>
+      <Text style={styles.gridLabel}>{label}</Text>
+      <View style={styles.gridValue}>{children}</View>
+    </View>
+  );
+}
+
+/** Who the mail leaves as: the run owner's name and the sending account. */
+function FromRow({
+  account,
+  label,
   owner,
   own,
-  children,
 }: {
+  account?: string;
+  label: string;
   owner: AskDraft["owner"];
   own: boolean;
-  children: ReactNode;
 }) {
   const styles = useThemedStyles(createStyles);
   const photo = useProfilePhoto();
   return (
-    <View style={styles.sender}>
-      <UserAvatar
-        initials={userInitials(owner?.name ?? "")}
-        image={own ? photo : null}
-        size={AVATAR_SIZE}
-        style={styles.avatar}
-      />
-      {children}
-    </View>
+    <GridRow label={label}>
+      <View style={styles.from}>
+        <UserAvatar
+          initials={userInitials(owner?.name ?? "")}
+          image={own ? photo : null}
+          size={AVATAR_SIZE}
+        />
+        {owner?.name ? <Text style={styles.fromName}>{owner.name}</Text> : null}
+        {account ? (
+          <Text numberOfLines={1} style={styles.fromAccount}>
+            {account}
+          </Text>
+        ) : null}
+      </View>
+    </GridRow>
   );
 }
 
@@ -237,7 +260,7 @@ export function DraftCard({
 
   const app = draft.app.name;
   const header = {
-    who: draft.app.account ? `${app} · ${draft.app.account}` : app,
+    who: app,
     icon: <AppLogo app={draft.app} chat={Boolean(draft.conversation)} />,
   };
 
@@ -248,13 +271,9 @@ export function DraftCard({
     }).format(new Date(view.at));
     return (
       <FramedBlock
-        header={header}
-        lead={
-          <Sender owner={draft.owner} own={own}>
-            <Text style={styles.sentBody}>{draft.body}</Text>
-          </Sender>
-        }
-        answered={t("Sent to {recipient} · {time}", { recipient: draftSentTo(draft), time })}
+        style={styles.sent}
+        answeredMark={null}
+        answered={<DraftSent draft={draft} time={time} />}
       />
     );
   }
@@ -287,21 +306,23 @@ export function DraftCard({
 
   const roleLabel = { to: t("To"), cc: t("Cc"), bcc: t("Bcc") };
   const chat = draft.conversation && conversationLabel(draft.conversation);
-  const lines = ROLES.flatMap((role) => {
+  const rows = ROLES.flatMap((role) => {
     const addresses = draftAddresses(shown, role);
     if (!addresses) return [];
     return [
-      <Text key={role} style={role === "to" ? undefined : styles.detail}>
-        <Text style={styles.label}>{roleLabel[role]}</Text> {chat ? chat.name : addresses}
-        {chat?.handle ? <Text style={styles.label}> @{chat.handle}</Text> : null}
-      </Text>,
+      <GridRow key={role} label={roleLabel[role]}>
+        <Text style={[styles.value, role === "to" ? styles.strong : undefined]}>
+          {chat ? chat.name : addresses}
+          {chat?.handle ? <Text style={styles.label}> @{chat.handle}</Text> : null}
+        </Text>
+      </GridRow>,
     ];
   });
   if (shown.subject) {
-    lines.push(
-      <Text key="subject" style={styles.detail}>
-        <Text style={styles.label}>{t("Subject")}</Text> {shown.subject}
-      </Text>,
+    rows.push(
+      <GridRow key="subject" label={t("Subject")}>
+        <Text style={styles.value}>{shown.subject}</Text>
+      </GridRow>,
     );
   }
   const status =
@@ -321,7 +342,6 @@ export function DraftCard({
   return (
     <FramedBlock
       header={{ ...header, status }}
-      question={lines.flatMap((line, index) => (index ? ["\n", line] : [line]))}
       actions={
         view.readOnly ? undefined : (
           <View style={styles.actionRow}>
@@ -379,27 +399,29 @@ export function DraftCard({
       }
     >
       <View style={styles.content}>
-        <Sender owner={draft.owner} own={own}>
-          <Pressable
-            accessibilityRole={editable ? "button" : undefined}
-            accessibilityHint={editable ? t("Edit message") : undefined}
-            disabled={!editable}
-            onPress={() => openDraftEdit(router, { threadKey, messageId, draft })}
-            style={styles.well}
-          >
-            <Text style={[styles.body, view.sending ? styles.frozen : undefined]}>{text}</Text>
-            {editable ? (
-              <View style={styles.pencil}>
-                <NativeSymbol
-                  ios="pencil"
-                  android="pencil-outline"
-                  size={14}
-                  color={tokens.mutedForeground}
-                />
-              </View>
-            ) : null}
-          </Pressable>
-        </Sender>
+        <View style={styles.grid}>
+          <FromRow account={draft.app.account} label={t("From")} owner={draft.owner} own={own} />
+          {rows}
+        </View>
+        <Pressable
+          accessibilityRole={editable ? "button" : undefined}
+          accessibilityHint={editable ? t("Edit message") : undefined}
+          disabled={!editable}
+          onPress={() => openDraftEdit(router, { threadKey, messageId, draft })}
+          style={styles.well}
+        >
+          <Text style={[styles.body, view.sending ? styles.frozen : undefined]}>{text}</Text>
+          {editable ? (
+            <View style={styles.pencil}>
+              <NativeSymbol
+                ios="pencil"
+                android="pencil-outline"
+                size={14}
+                color={tokens.mutedForeground}
+              />
+            </View>
+          ) : null}
+        </Pressable>
         {reason ? <Text style={styles.note}>{reason}</Text> : null}
         {error ? (
           <Text accessibilityRole="alert" style={[styles.note, styles.error]}>
@@ -414,32 +436,32 @@ export function DraftCard({
 function createStyles() {
   const tokens = mobileTokens();
   return StyleSheet.create({
-    sender: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
-    avatar: { marginTop: 12 },
     mark: { flexDirection: "row", alignItems: "center", gap: 6 },
     markDot: { width: 6, height: 6, borderRadius: 3 },
     markText: nativeTextStyle("blockHeader"),
     label: { color: tokens.mutedForeground, fontWeight: "400" },
-    detail: { color: tokens.foreground, ...nativeTextStyle("body") },
-    content: { gap: 8 },
+    content: { gap: 12 },
+    sent: { alignSelf: "stretch", maxWidth: "100%" },
+    grid: { gap: 8 },
+    gridRow: { flexDirection: "row", alignItems: "center", minHeight: AVATAR_SIZE },
+    gridLabel: { width: LABEL_WIDTH, color: tokens.mutedForeground, ...GRID_TEXT },
+    gridValue: { flex: 1, minWidth: 0 },
+    value: { color: tokens.foreground, ...GRID_TEXT },
+    strong: { fontWeight: "500" },
+    from: { flexDirection: "row", alignItems: "center", gap: 8 },
+    fromName: { color: tokens.foreground, ...GRID_TEXT, fontWeight: "500" },
+    fromAccount: { flexShrink: 1, color: tokens.mutedForeground, ...GRID_TEXT },
     well: {
-      flex: 1,
-      minWidth: 0,
       paddingStart: 16,
-      paddingEnd: 36,
+      paddingEnd: 40,
       paddingVertical: 12,
       borderRadius: radii.card,
       backgroundColor: tokens.well,
     },
     body: { color: tokens.foreground, ...nativeTextStyle("composer") },
     frozen: { color: tokens.mutedForeground },
-    pencil: { position: "absolute", top: 12, end: 12 },
-    sentBody: { flexShrink: 1, color: tokens.foreground, ...nativeTextStyle("body") },
-    note: {
-      paddingStart: AVATAR_SIZE + 12,
-      color: tokens.mutedForeground,
-      ...nativeTextStyle("meta"),
-    },
+    pencil: { position: "absolute", top: 13, end: 14 },
+    note: { color: tokens.mutedForeground, ...nativeTextStyle("meta") },
     error: { color: tokens.destructive },
     answeredText: { color: tokens.mutedForeground, ...nativeTextStyle("meta") },
     discarded: { flexDirection: "row", alignItems: "center", gap: 4 },
