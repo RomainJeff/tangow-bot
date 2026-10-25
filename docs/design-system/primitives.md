@@ -112,6 +112,13 @@ their own 24 px remove button, and Cc and Bcc are buttons at the end of the To
 field that open their own row. Labels stay outside the fields. The lines stay
 fields until the card is answered, so Send never moves from under the pointer.
 
+Sent, the card settles on the bot's paper (`FramedBlock` `answered`): the
+success disc on the left spanning "Sent" (`text-title`) and "to …" (`text-meta`,
+the address in ink), the time at the end of the "Sent" row (`text-time`), then
+one line under the text column with the app's mark and the subject, or the
+text's first line for chat. There is no Undo after Send. Discarded is one line:
+the mark, "Discarded", and "· Undo" while the 5 s window is open.
+
 ## OptionTile
 
 One answer of a question card (`ask_user`, a legacy choice): a full-width

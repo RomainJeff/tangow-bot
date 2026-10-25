@@ -103,7 +103,7 @@ msgstr "{0} по-прежнему будет отвечать на прямые 
 msgid "{0}'s screen"
 msgstr "Экран {0}"
 
-#: src/components/DraftCard.tsx:271
+#: src/components/DraftCard.tsx:263
 msgid "{app} is disconnected."
 msgstr ""
 
@@ -681,7 +681,7 @@ msgstr "Вернуться ко входу"
 msgid "Base URL"
 msgstr "Базовый URL"
 
-#: src/components/DraftCard.tsx:264
+#: src/components/DraftCard.tsx:256
 msgid "Bcc"
 msgstr ""
 
@@ -811,7 +811,7 @@ msgstr "Отменить ответ"
 msgid "Cancelled"
 msgstr "Отменено"
 
-#: src/components/DraftCard.tsx:264
+#: src/components/DraftCard.tsx:256
 msgid "Cc"
 msgstr ""
 
@@ -1177,7 +1177,7 @@ msgstr "Продолжить по электронной почте"
 msgid "Conversation cleared"
 msgstr ""
 
-#: src/components/DraftCard.tsx:309
+#: src/components/DraftCard.tsx:301
 #: src/pages/shell/message-actions-sheet.tsx:75
 #: src/pages/shell/message-hover-actions.tsx:98
 #: src/pages/shell/message-hover-actions.tsx:169
@@ -1835,12 +1835,12 @@ msgstr "Прямой MCP"
 msgid "Disabled"
 msgstr ""
 
-#: src/components/DraftCard.tsx:300
+#: src/components/DraftCard.tsx:292
 msgid "Discard"
 msgstr ""
 
-#: src/components/DraftCard.tsx:231
-#: src/components/DraftCard.tsx:241
+#: src/components/DraftCard.tsx:223
+#: src/components/DraftCard.tsx:233
 msgid "Discarded"
 msgstr ""
 
@@ -1949,7 +1949,7 @@ msgstr "Изменить"
 msgid "Edit and resend"
 msgstr ""
 
-#: src/components/DraftCard.tsx:403
+#: src/components/DraftCard.tsx:395
 msgid "Edit message"
 msgstr ""
 
@@ -1957,11 +1957,11 @@ msgstr ""
 msgid "Edit Profile"
 msgstr "Редактировать профиль"
 
-#: src/components/DraftCard.tsx:268
+#: src/components/DraftCard.tsx:260
 msgid "Edited"
 msgstr ""
 
-#: src/components/DraftCard.tsx:267
+#: src/components/DraftCard.tsx:259
 msgid "Editing"
 msgstr ""
 
@@ -2151,7 +2151,7 @@ msgstr "Забыли пароль?"
 msgid "Free"
 msgstr "Бесплатно"
 
-#: src/components/DraftCard.tsx:345
+#: src/components/DraftCard.tsx:337
 msgid "From"
 msgstr ""
 
@@ -2873,7 +2873,7 @@ msgstr ""
 
 #: src/components/ask/AskSettled.tsx:28
 #: src/components/AskCard.tsx:260
-#: src/components/DraftCard.tsx:248
+#: src/components/DraftCard.tsx:240
 msgid "No longer active"
 msgstr "Больше не активен"
 
@@ -2960,7 +2960,7 @@ msgstr "Нет в каталоге плагинов"
 msgid "Not now"
 msgstr "Не сейчас"
 
-#: src/components/DraftCard.tsx:266
+#: src/components/DraftCard.tsx:258
 msgid "Not sent"
 msgstr ""
 
@@ -3276,7 +3276,7 @@ msgstr ""
 msgid "Recommended · {description}"
 msgstr ""
 
-#: src/components/DraftCard.tsx:325
+#: src/components/DraftCard.tsx:317
 msgid "Reconnect {app}"
 msgstr ""
 
@@ -3446,7 +3446,7 @@ msgstr "Заменить ключ API"
 msgid "Replace key"
 msgstr "Заменить ключ"
 
-#: src/components/DraftCard.tsx:245
+#: src/components/DraftCard.tsx:237
 msgid "Replaced"
 msgstr ""
 
@@ -3720,7 +3720,7 @@ msgstr "Выберите бота"
 
 #: src/components/ask/QuestionCard.tsx:205
 #: src/components/ask/QuestionCard.tsx:306
-#: src/components/DraftCard.tsx:336
+#: src/components/DraftCard.tsx:328
 #: src/pages/shell/composer.tsx:407
 msgid "Send"
 msgstr "Отправить"
@@ -3734,12 +3734,12 @@ msgid "Send reset link"
 msgstr "Отправить ссылку для сброса"
 
 #: src/components/AskCard.tsx:304
-#: src/components/DraftCard.tsx:336
+#: src/components/DraftCard.tsx:328
 msgid "Sending…"
 msgstr "Отправка…"
 
-#: src/components/DraftCard.tsx:218
-msgid "Sent to {recipient} · {time}"
+#: src/components/DraftSent.tsx:22
+msgid "Sent"
 msgstr ""
 
 #: src/components/integrations/IntegrationSetup.tsx:132
@@ -3984,8 +3984,8 @@ msgstr "Хранится безопасно. Здесь не отображае�
 msgid "subagent"
 msgstr "субагент"
 
-#: src/components/DraftCard.tsx:387
-#: src/components/DraftCard.tsx:393
+#: src/components/DraftCard.tsx:379
+#: src/components/DraftCard.tsx:385
 msgid "Subject"
 msgstr ""
 
@@ -4127,8 +4127,12 @@ msgstr "Время суток"
 msgid "Title"
 msgstr "Заголовок"
 
-#: src/components/DraftCard.tsx:264
+#: src/components/DraftCard.tsx:256
 msgid "To"
+msgstr ""
+
+#: src/components/DraftSent.tsx:25
+msgid "to <0>{recipient}</0>"
 msgstr ""
 
 #: src/pages/shell/bot-picker.tsx:50
@@ -4157,7 +4161,7 @@ msgstr "Считать человеком"
 msgid "Treg token"
 msgstr "Токен Treg"
 
-#: src/components/DraftCard.tsx:336
+#: src/components/DraftCard.tsx:328
 #: src/pages/Onboarding.tsx:685
 msgid "Try again"
 msgstr ""
@@ -4174,7 +4178,7 @@ msgstr "Без раздела"
 msgid "Unavailable"
 msgstr "Недоступно"
 
-#: src/components/DraftCard.tsx:237
+#: src/components/DraftCard.tsx:229
 msgid "Undo"
 msgstr ""
 

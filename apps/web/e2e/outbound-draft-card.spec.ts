@@ -1,6 +1,6 @@
 import type { Request, Route } from "@playwright/test";
 import { activeBotId, captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
-import { expect, type Page, type TestInfo, test } from "./test";
+import { expect, type Locator, type Page, type TestInfo, test } from "./test";
 import { at, type EntryDraft, runStarted, showThread } from "./thread-log";
 
 const RUN = "draft-run";
@@ -120,6 +120,18 @@ function sentAfter(
       payload: { target, sent: { at: "2026-09-17T10:44:00.000Z", edited: body !== BODY } },
     },
   ];
+}
+
+/** The sent card leads with a 28 px success disc to the left of its title, the only green. */
+async function expectSuccessDiscFirst(draftCard: Locator) {
+  const disc = draftCard.locator(".bg-success");
+  const [box, title] = await Promise.all([
+    disc.boundingBox(),
+    draftCard.getByText("Sent", { exact: true }).boundingBox(),
+  ]);
+  expect(box!.width).toBe(28);
+  expect(box!.x + box!.width).toBeLessThan(title!.x);
+  await expect(disc).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
 }
 
 type Captured = { body: Record<string, unknown> | undefined };
@@ -275,10 +287,16 @@ for (const width of [1440, 390]) {
       answer: "allow",
       edits: { text: EDITED },
     });
+    // The settled card: the success disc leads, then Sent and its time, who it went to, and the
+    // subject behind the app's mark. The text itself is gone.
+    await expect(draftCard.getByText("Sent", { exact: true })).toBeVisible();
+    await expect(draftCard.getByText(/^\d{1,2}:\d{2}/)).toBeVisible();
     await expect(
-      draftCard.getByText(/^Sent to bo@example\.com, cy@example\.com · \d/),
+      draftCard.getByText("to bo@example.com, cy@example.com", { exact: true }),
     ).toBeVisible();
-    await expect(draftCard).toContainText("Tell me if 8pm is OK.");
+    await expect(draftCard).toContainText("Thursday instead of Wednesday");
+    await expect(draftCard).not.toContainText("Tell me if 8pm is OK.");
+    await expectSuccessDiscFirst(draftCard);
     await shoot(page, testInfo, "sent");
 
     // A send that did not leave opens again, Not sent with its reason, answered under its new entry.
@@ -313,7 +331,7 @@ for (const width of [1440, 390]) {
     await expect(integrations).toHaveCount(0);
     onAnswer = () => drafts.push(...sentAfter(botId, "draft-card-third", EDITED));
     await button("Try again").click();
-    await expect(draftCard.getByText(/^Sent to /)).toBeVisible();
+    await expect(draftCard.getByText("Sent", { exact: true })).toBeVisible();
     expect(answered.body).toMatchObject({ messageId: "draft-card-third", answer: "allow" });
 
     // Discard waits five seconds with Undo, then tells the server.
@@ -321,6 +339,7 @@ for (const width of [1440, 390]) {
     answered.body = undefined;
     await button("Discard").click();
     await expect(draftCard).toHaveText("Discarded · Undo");
+    await shoot(page, testInfo, "discarded");
     await draftCard.getByRole("button", { name: "Undo", exact: true }).click();
     await expect(button("Send")).toBeVisible();
     await page.clock.fastForward(6_000);
@@ -442,8 +461,10 @@ for (const width of [1440, 390]) {
     await expect(draftCard).toHaveAttribute("data-answered", "true");
     expect(answered.body).toMatchObject({ messageId: "draft-card", answer: "allow" });
     expect(answered.body?.edits).toEqual({ text: SLACK_EDITED });
-    await expect(draftCard.getByText(/^Sent to Marie Dupont · \d/)).toBeVisible();
+    await expect(draftCard.getByText("to Marie Dupont", { exact: true })).toBeVisible();
+    // The text's first line stands for the message: a chat message has no subject.
     await expect(draftCard).toContainText("Tell me if 8pm is OK.");
+    await expectSuccessDiscFirst(draftCard);
     await shoot(page, testInfo, "slack-sent");
 
     // A channel reads with its #, and so does the line once it is sent.
@@ -468,9 +489,45 @@ for (const width of [1440, 390]) {
       .poll(() => answered.body)
       .toMatchObject({ messageId: "draft-card", answer: "allow" });
     expect(answered.body?.edits).toBeUndefined();
-    await expect(draftCard.getByText(/^Sent to #general · \d/)).toBeVisible();
+    await expect(draftCard.getByText("to #general", { exact: true })).toBeVisible();
   });
 }
+
+test("an app without a catalog logo shows its bundled mark, or a neutral glyph, never a letter", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signup(page, `outbound-marks-${Date.now()}@rakazo.test`, "password12", "Ana Lima");
+  await completeOnboarding(page);
+  const botId = activeBotId(page);
+  const drafts = waitingDraft(botId, card({}, { app: { name: "Gmail", logo: null } }));
+  await showThread(page, drafts, { run: null });
+  const icon = page
+    .getByTestId("draft-card")
+    .locator('[data-slot="framed-block-header"]')
+    .locator("svg, img");
+  const shown = async (app: string, conversation?: Record<string, unknown>) => {
+    drafts.splice(
+      0,
+      drafts.length,
+      ...waitingDraft(botId, card({}, { app: { name: app, logo: null }, conversation })),
+    );
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expect(icon).toHaveCount(1);
+    await shoot(page, testInfo, `mark-${app.toLowerCase().replace(/\W+/g, "-")}`);
+  };
+  await expect(icon).toHaveAttribute("viewBox", "52 42 88 66");
+  await shoot(page, testInfo, "mark-gmail");
+  await shown("Microsoft Outlook");
+  await expect(icon).toHaveAttribute("viewBox", "0 0 32 32");
+  await shown("Slack", { kind: "channel", name: "general" });
+  await expect(icon).toHaveAttribute("viewBox", "0 0 127 127");
+  await shown("Fastmail");
+  await expect(icon).toHaveClass(/lucide-mail/);
+  await shown("Mattermost", { kind: "channel", name: "general" });
+  await expect(icon).toHaveClass(/lucide-message-square/);
+  await expect(page.getByTestId("draft-card")).not.toContainText(/^M\b/);
+});
 
 test("a discard still reaches its own thread when the person moves to another one within Undo", async ({
   page,
@@ -571,6 +628,7 @@ for (const width of [1440, 390]) {
     const remove = button("Remove cy@example.com");
     await expect(remove).toHaveCount(0);
     await expect(button("Cc")).toHaveCount(0);
+    await shoot(page, testInfo, "fields-rest");
 
     // Editing starts: each line becomes a 44 px field and its text stays where it was read.
     const readAt = (await draftCard.getByText("bo@example.com,", { exact: true }).boundingBox())!;
@@ -696,7 +754,7 @@ for (const width of [1440, 390]) {
     });
     expect(Object.keys(answered.body?.edits ?? {})).toEqual(["recipients", "subject"]);
     await expect(
-      draftCard.getByText(/^Sent to bo@example\.com, lou@example\.com · \d/),
+      draftCard.getByText("to bo@example.com, lou@example.com", { exact: true }),
     ).toBeVisible();
 
     // Typing to the bot while the draft waits hands over its lines as they were left.
