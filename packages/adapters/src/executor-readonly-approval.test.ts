@@ -1643,6 +1643,33 @@ describe("connector read-only metadata and approval enforcement", () => {
           note: "The user discarded this draft. Do not send it again unless they ask.",
         });
       });
+
+      it.each([
+        ["another thought", { thought: "Retrying the mail." }],
+        ["its recipients in another case", { recipient_email: "Someone@Example.com" }],
+      ])(
+        "answers the same mail with %s as the stored outcome, opening no card",
+        async (_, other) => {
+          const f = await drafted();
+          f.effects[0]!.status = "denied";
+          f.effects[0]!.draft = { ...(f.effects[0]!.draft as DraftRecord), state: "discarded" };
+          f.pauseRunForInput.mockClear();
+          f.setCalls([{ args: { ...send, ...other }, executionId: "c2" }]);
+          await f.run();
+          expect(f.results.at(-1)).toMatchObject({ ok: false, discarded: true });
+          expect(f.effects).toHaveLength(1);
+          expect(f.pauseRunForInput).not.toHaveBeenCalled();
+        },
+      );
+
+      it("opens a new card for a mail with another text", async () => {
+        const f = await drafted();
+        f.effects[0]!.status = "denied";
+        f.effects[0]!.draft = { ...(f.effects[0]!.draft as DraftRecord), state: "discarded" };
+        f.setCalls([{ args: { ...send, body: "Another text." }, executionId: "c2" }]);
+        await f.run();
+        expect(f.effects.map((effect) => effect.status)).toEqual(["denied", "intended"]);
+      });
     });
   });
 });
