@@ -399,7 +399,7 @@ function renderEnsureScreenCommand(
           `  printf '\\nsession.menuFile: %s\\n' ${fluxHome}/.fluxbox/menu >>${fluxHome}/.fluxbox/init`,
           `  HOME=${shellQuote(env.homeDir)} CHROME_USER_DATA_DIR=${shellQuote(profile)} BROWSER=${browserLauncherPath(layout.displayNumber)} DISPLAY=${layout.display} nohup fluxbox -rc ${fluxHome}/.fluxbox/init 8>&- 9>&- </dev/null >${log}-fluxbox.log 2>&1 &`,
           // Each display gets its own dock and session bus; both exit with the display.
-          `  if [ -d /etc/rakazo/plank/dock1 ]; then mkdir -p ${fluxHome}/config/plank && cp -R /etc/rakazo/plank/dock1 ${fluxHome}/config/plank/ && HOME=${shellQuote(env.homeDir)} XDG_CONFIG_HOME=${fluxHome}/config DISPLAY=${layout.display} nohup dbus-launch --exit-with-x11 plank 8>&- 9>&- </dev/null >${log}-plank.log 2>&1 & fi`,
+          `  if [ -d /etc/rakazo/plank/dock1 ]; then mkdir -p ${fluxHome}/config/plank && cp -R /etc/rakazo/plank/dock1 ${fluxHome}/config/plank/ && { HOME=${shellQuote(env.homeDir)} XDG_CONFIG_HOME=${fluxHome}/config DISPLAY=${layout.display} nohup dbus-launch --exit-with-x11 plank </dev/null >${log}-plank.log 2>&1 & } 8>&- 9>&-; fi`,
           "fi",
         ];
   const targetFile = `${TARGETS}/view-${layout.displayNumber}`;
