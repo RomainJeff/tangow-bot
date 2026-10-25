@@ -215,6 +215,11 @@ const EntryShapes = z.discriminatedUnion("type", [
       output: z.string(),
       isError: z.boolean(),
       artifactIds: z.array(Id),
+      /**
+       * The pause this result replaces: the entry that answered the call while its run waited on
+       * a card. The result is the call's answer from then on, whatever the call id.
+       */
+      replaces: EntryId.optional(),
     }),
   ),
   runEntry(
@@ -463,9 +468,18 @@ export function pausedOutput(awaiting: "approval" | "answer"): string {
   return `paused: awaiting ${awaiting}`;
 }
 
-/** Whether a result is only the pause of its call: a later result for the call replaces it. */
-export function isPausedOutput(output: string): boolean {
-  return output === pausedOutput("approval") || output === pausedOutput("answer");
+/** What a tool answers while its run waits on the card it raised. */
+export const APPROVAL_WAITING_TEXT = "Waiting for approval.";
+
+/** What a helper's `run_subagent` call reads when the helper stopped for a pause of the run. */
+export const HELPER_STOPPED_FOR_PAUSE = "Stopped: the run is waiting for the user.";
+
+/**
+ * Whether a helper's result is that of one stopped by a card: the one it raised, or a sibling's
+ * that the run's pause stopped with it.
+ */
+export function isHelperPauseResult(result: string): boolean {
+  return result === APPROVAL_WAITING_TEXT || result === HELPER_STOPPED_FOR_PAUSE;
 }
 
 export type EntryAudience = { inference: "yes" | "no" | "context"; ui: boolean };

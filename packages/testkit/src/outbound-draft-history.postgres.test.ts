@@ -1,4 +1,9 @@
-import { ComposioEmulator, composioEntityId } from "@rakazo/adapters";
+import {
+  ComposioEmulator,
+  composioEntityId,
+  logDraftOutcomes,
+  settleCancelledRunCards,
+} from "@rakazo/adapters";
 import { describe, expect, it } from "vitest";
 import { latestCard } from "./index.js";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.js";
@@ -165,6 +170,42 @@ describe.skipIf(!databaseAvailable)("a draft's outcome in the bot's history", ()
     );
   }, 60_000);
 
+  it("tells the bot how a draft its helper raised ended, on the call that started the helper", async () => {
+    const composio = new ComposioEmulator();
+    await journey(
+      [
+        {
+          expect() {},
+          response: {
+            type: "tool",
+            id: "helper",
+            name: "run_subagent",
+            arguments: { name: "mailer", task: "Mail Anna." },
+          },
+        },
+        mailTo("anna@example.test", "mail-h"),
+        {
+          expect(request) {
+            const history = JSON.stringify(request.messages);
+            expect(count(history, SENT_NOTE)).toBe(1);
+            expect(history).not.toContain("the run is waiting for the user");
+          },
+          response: reply("Sent."),
+        },
+        DONE,
+      ],
+      async (fixture) => {
+        const mailed = await connectGmail(composio, fixture);
+        const sent = await fixture.send("Have the helper mail Anna.");
+        await sent.settled("waiting_input");
+        await answerDraft(fixture, sent.runId, "allow");
+        await sent.settled("completed");
+        expect(mailed()).toEqual([["anna@example.test", "Hi anna@example.test."]]);
+      },
+      { composio },
+    );
+  }, 60_000);
+
   it("gives a replaced draft's text to the bot whole, however long the user's edit", async () => {
     const composio = new ComposioEmulator();
     const edit = `${"A much longer text than the bot wrote. ".repeat(20)}Goodbye.`;
@@ -190,4 +231,99 @@ describe.skipIf(!databaseAvailable)("a draft's outcome in the bot's history", ()
       { composio },
     );
   }, 60_000);
+
+  describe("a send the run ended on", () => {
+    const stranded = async (fixture: JourneyFixture, composio: ComposioEmulator) => {
+      const mailed = await connectGmail(composio, fixture);
+      const sent = await fixture.send("Mail Anna.");
+      await sent.settled("waiting_input");
+      const effect = await fixture.prisma.externalEffect.findFirstOrThrow({
+        where: { runId: sent.runId, kind: "GMAIL_SEND_EMAIL" },
+      });
+      return { mailed, runId: sent.runId, effect };
+    };
+
+    it("is told to the bot as a result that says it may or may not have left", async () => {
+      const composio = new ComposioEmulator();
+      await journey(
+        [mailTo("anna@example.test", "mail-1")],
+        async (fixture) => {
+          const { mailed, runId, effect } = await stranded(fixture, composio);
+          const { threadId } = await fixture.prisma.run.findUniqueOrThrow({ where: { id: runId } });
+          await fixture.prisma.externalEffect.update({
+            where: { id: effect.id },
+            data: {
+              status: "denied",
+              answeredAt: new Date(),
+              draft: { ...(effect.draft as object), state: "unsent" },
+            },
+          });
+          await logDraftOutcomes(
+            { prisma: fixture.prisma, sessionLog: fixture.log } as never,
+            { runId, threadId },
+            [],
+          );
+          const entries = await fixture.log.readRun(runId);
+          const pause = entries.find(
+            (entry) => entry.type === "tool.result" && entry.payload.output === PAUSED,
+          );
+          expect(
+            entries.filter((entry) => entry.type === "tool.result" && entry.payload.replaces),
+          ).toMatchObject([
+            {
+              payload: {
+                callId: "mail-1",
+                replaces: pause?.id,
+                output: expect.stringContaining("outcome is unknown"),
+              },
+            },
+          ]);
+          await logDraftOutcomes(
+            { prisma: fixture.prisma, sessionLog: fixture.log } as never,
+            { runId, threadId },
+            [],
+          );
+          expect(
+            (await fixture.log.readRun(runId)).filter(
+              (entry) => entry.type === "tool.result" && entry.payload.replaces,
+            ),
+          ).toHaveLength(1);
+          expect(mailed()).toEqual([]);
+        },
+        { composio },
+      );
+    }, 60_000);
+
+    it("leaves a cancelled run's log as it is, without failing the stop", async () => {
+      const composio = new ComposioEmulator();
+      await journey(
+        [mailTo("anna@example.test", "mail-1")],
+        async (fixture) => {
+          const { runId, effect } = await stranded(fixture, composio);
+          await fixture.prisma.externalEffect.update({
+            where: { id: effect.id },
+            data: { status: "approved", draft: { ...(effect.draft as object), state: "approved" } },
+          });
+          await fixture.prisma.run.update({ where: { id: runId }, data: { status: "cancelled" } });
+          await settleCancelledRunCards(
+            {
+              prisma: fixture.prisma,
+              events: { notify: async () => undefined },
+              sessionLog: fixture.log,
+            } as never,
+            [runId],
+          );
+          expect(
+            await fixture.prisma.externalEffect.findUniqueOrThrow({ where: { id: effect.id } }),
+          ).toMatchObject({ status: "denied", draft: { state: "unsent" } });
+          expect(
+            (await fixture.log.readRun(runId)).filter(
+              (entry) => entry.type === "tool.result" && entry.payload.replaces,
+            ),
+          ).toEqual([]);
+        },
+        { composio },
+      );
+    }, 60_000);
+  });
 });

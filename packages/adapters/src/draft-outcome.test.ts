@@ -1,5 +1,5 @@
 import type { SessionEntry } from "@rakazo/contracts";
-import { SessionEntrySchema } from "@rakazo/contracts";
+import { HELPER_STOPPED_FOR_PAUSE, SessionEntrySchema } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
 import { DRAFT_DISCARDED_RESULT } from "./approval-effect.js";
 import type { EndedDraftEffect } from "./draft-outcome.js";
@@ -72,10 +72,11 @@ describe("endedDraftOutcomes", () => {
         entries,
       ),
     ).toEqual([
-      { callId: "call_a", result: SENT },
-      { callId: "call_b", result: DRAFT_DISCARDED_RESULT },
+      { callId: "call_a", pauseId: "entry-2", result: SENT },
+      { callId: "call_b", pauseId: "entry-5", result: DRAFT_DISCARDED_RESULT },
       {
         callId: "call_c",
+        pauseId: "entry-8",
         result: expect.objectContaining({
           ok: false,
           replaced: true,
@@ -85,12 +86,8 @@ describe("endedDraftOutcomes", () => {
     ]);
   });
 
-  it("leaves a draft that is waiting, shown again, or never sent without an outcome", () => {
-    const entries = link([
-      ...pausedOn("call_a", "effect_a"),
-      ...pausedOn("call_b", "effect_b"),
-      ...pausedOn("call_c", "effect_c"),
-    ]);
+  it("leaves a draft that is waiting, or shown again as Not sent, without an outcome", () => {
+    const entries = link([...pausedOn("call_a", "effect_a"), ...pausedOn("call_b", "effect_b")]);
     expect(
       endedDraftOutcomes(
         [
@@ -100,11 +97,55 @@ describe("endedDraftOutcomes", () => {
             state: "pending",
             failure: { reason: "Check Gmail before trying again." },
           }),
-          effect("effect_c", "denied", { ...BINDING, state: "unsent" }),
         ],
         entries,
       ),
     ).toEqual([]);
+  });
+
+  it("tells the bot a send the run ended on may or may not have left", () => {
+    const [outcome] = endedDraftOutcomes(
+      [effect("effect_a", "denied", { ...BINDING, state: "unsent" })],
+      link(pausedOn("call_a", "effect_a")),
+    );
+    expect(outcome).toEqual({
+      callId: "call_a",
+      pauseId: "entry-2",
+      result: {
+        error: expect.stringContaining("outcome is unknown"),
+        uncertain: true,
+      },
+    });
+  });
+
+  it("gives a helper's draft the outcome on the run_subagent call it stopped", () => {
+    const entries = link([
+      { ...run, type: "tool.call", payload: { callId: "sub", name: "run_subagent", input: "{}" } },
+      {
+        ...run,
+        type: "effect.requested",
+        payload: { effectId: "effect_a", effectKind: "GMAIL_SEND_EMAIL", proposal: {} },
+      },
+      {
+        ...run,
+        type: "subagent",
+        payload: {
+          callId: "sub",
+          name: "mailer",
+          task: "Mail Anna.",
+          model: { provider: "openai-compatible", id: "offline" },
+          status: "completed",
+          result: HELPER_STOPPED_FOR_PAUSE,
+          usage: { inputTokens: 0, outputTokens: 0 },
+        },
+      },
+    ]);
+    expect(
+      endedDraftOutcomes(
+        [effect("effect_a", "denied", { ...BINDING, state: "discarded" })],
+        entries,
+      ),
+    ).toEqual([{ callId: "sub", pauseId: "entry-2", result: DRAFT_DISCARDED_RESULT }]);
   });
 
   it("lists a call once: its pause replaced by the outcome is not replaced again", () => {
@@ -121,6 +162,7 @@ describe("endedDraftOutcomes", () => {
           output: JSON.stringify(DRAFT_DISCARDED_RESULT),
           isError: false,
           artifactIds: [],
+          replaces: "entry-2",
         },
       },
     ]);

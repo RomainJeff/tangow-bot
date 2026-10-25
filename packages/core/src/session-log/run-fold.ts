@@ -6,7 +6,7 @@ import type {
   ThreadEntry,
   ThreadEntryOf,
 } from "@rakazo/contracts";
-import { CARD_STATE_TYPES, isPausedOutput, pausedOutput } from "@rakazo/contracts";
+import { CARD_STATE_TYPES, isHelperPauseResult, pausedOutput } from "@rakazo/contracts";
 import { appendToolCallSegment } from "../events.js";
 import { originSessionIdOf } from "./child-sessions.js";
 
@@ -127,12 +127,11 @@ export function foldRuns(
  * run to run and within a run once it resumes, so a `tool.result` or `subagent` entry answers the
  * latest earlier call of its run and call id that has no answer yet. A call a crash cut stays
  * unanswered under the replay that follows it, and a result whose call a compaction cut answers
- * nothing. A call answered only by its pause, while its run waited on a card, takes the next
- * result written for its id: the outcome of the card, which replaces the pause.
+ * nothing. A result that names the pause it replaces answers the call that pause answered, never
+ * another call of the same id; with that pause cut, it answers nothing.
  */
 export function toolAnswers(entries: readonly ThreadEntry[]): ToolAnswers {
   const unanswered = new Map<string, EntryId[]>();
-  const paused = new Map<string, EntryId[]>();
   const answerOf = new Map<EntryId, ToolAnswer>();
   const callOf = new Map<EntryId, EntryId>();
   for (const entry of entries) {
@@ -146,26 +145,26 @@ export function toolAnswers(entries: readonly ThreadEntry[]): ToolAnswers {
       calls.push(entry.id);
       continue;
     }
-    const pausedCalls = paused.get(key) ?? [];
-    paused.set(key, pausedCalls);
-    const call = calls.pop() ?? pausedCalls.pop();
+    const replaced = entry.type === "tool.result" ? entry.payload.replaces : undefined;
+    const call = replaced === undefined ? calls.pop() : callOf.get(replaced);
     if (call === undefined) continue;
     answerOf.set(call, entry);
     callOf.set(entry.id, call);
-    if (isPausedOutput(outputOf(entry))) pausedCalls.push(call);
   }
   return { answerOf, callOf };
 }
 
 /**
- * The call a card's pause answered, while the pause is still its answer, or undefined once the
- * card's outcome replaced it. The pause is written in the transaction that first shows the card,
- * after the card's own entry, so it is the first one that follows it.
+ * The pause that answered the call a draft card raised, while it still does, or undefined once a
+ * result replaced it. A card's pause is written in the transaction that first shows it, so it is
+ * the first one after the card: the call's own `paused` result, or, when a helper raised the card,
+ * the helper's answer to the `run_subagent` call that started it, which reads that it waits on a
+ * card. Two helpers stopped by one pause cannot be told apart, so the first one has it.
  */
-export function pausedCallOfEffect(
+export function pendingPauseOfEffect(
   entries: readonly ThreadEntry[],
   effectId: string,
-): string | undefined {
+): { callId: string; pauseId: EntryId } | undefined {
   const start = entries.findIndex(
     (entry) => entry.type === "effect.requested" && entry.payload.effectId === effectId,
   );
@@ -173,11 +172,14 @@ export function pausedCallOfEffect(
   const { answerOf, callOf } = toolAnswers(entries);
   for (const entry of entries.slice(start + 1)) {
     if (entry.type === "effect.requested") return undefined;
-    if (entry.type !== "tool.result" || entry.payload.output !== pausedOutput("approval")) continue;
+    const pause =
+      (entry.type === "tool.result" && entry.payload.output === pausedOutput("approval")) ||
+      (entry.type === "subagent" && isHelperPauseResult(entry.payload.result));
+    if (!pause || (entry.type !== "tool.result" && entry.type !== "subagent")) continue;
     const call = callOf.get(entry.id);
     const answer = call === undefined ? undefined : answerOf.get(call);
-    return answer?.type === "tool.result" && isPausedOutput(answer.payload.output)
-      ? entry.payload.callId
+    return answer?.id === entry.id
+      ? { callId: entry.payload.callId, pauseId: entry.id }
       : undefined;
   }
   return undefined;
