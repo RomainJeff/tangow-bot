@@ -103,7 +103,7 @@ msgstr ""
 msgid "{0}'s screen"
 msgstr "Tela de {0}"
 
-#: src/components/DraftCard.tsx:282
+#: src/components/DraftCard.tsx:271
 msgid "{app} is disconnected."
 msgstr ""
 
@@ -681,7 +681,7 @@ msgstr "Voltar para o login"
 msgid "Base URL"
 msgstr "URL Base"
 
-#: src/components/DraftCard.tsx:275
+#: src/components/DraftCard.tsx:264
 msgid "Bcc"
 msgstr ""
 
@@ -811,7 +811,7 @@ msgstr "cancelar resposta"
 msgid "Cancelled"
 msgstr "Cancelado"
 
-#: src/components/DraftCard.tsx:275
+#: src/components/DraftCard.tsx:264
 msgid "Cc"
 msgstr ""
 
@@ -1177,7 +1177,7 @@ msgstr "Continuar com e-mail"
 msgid "Conversation cleared"
 msgstr ""
 
-#: src/components/DraftCard.tsx:371
+#: src/components/DraftCard.tsx:309
 #: src/pages/shell/message-actions-sheet.tsx:75
 #: src/pages/shell/message-hover-actions.tsx:98
 #: src/pages/shell/message-hover-actions.tsx:169
@@ -1543,8 +1543,8 @@ msgid "Could not start teaching"
 msgstr "Não foi possível iniciar o aprendizado"
 
 #: src/components/AskCard.tsx:199
-#: src/components/DraftCard.tsx:163
-#: src/components/DraftCard.tsx:176
+#: src/components/DraftCard.tsx:158
+#: src/components/DraftCard.tsx:171
 msgid "Could not submit this answer"
 msgstr "Não foi possível enviar esta resposta"
 
@@ -1835,12 +1835,12 @@ msgstr ""
 msgid "Disabled"
 msgstr "Desativado"
 
-#: src/components/DraftCard.tsx:362
+#: src/components/DraftCard.tsx:300
 msgid "Discard"
 msgstr ""
 
-#: src/components/DraftCard.tsx:242
-#: src/components/DraftCard.tsx:252
+#: src/components/DraftCard.tsx:231
+#: src/components/DraftCard.tsx:241
 msgid "Discarded"
 msgstr ""
 
@@ -1949,7 +1949,7 @@ msgstr "Editar"
 msgid "Edit and resend"
 msgstr "Editar e reenviar"
 
-#: src/components/DraftCard.tsx:414
+#: src/components/DraftCard.tsx:403
 msgid "Edit message"
 msgstr ""
 
@@ -1957,11 +1957,11 @@ msgstr ""
 msgid "Edit Profile"
 msgstr "Editar Perfil"
 
-#: src/components/DraftCard.tsx:279
+#: src/components/DraftCard.tsx:268
 msgid "Edited"
 msgstr ""
 
-#: src/components/DraftCard.tsx:278
+#: src/components/DraftCard.tsx:267
 msgid "Editing"
 msgstr ""
 
@@ -2150,6 +2150,10 @@ msgstr "Esqueceu a senha?"
 #: src/pages/model-settings/model-picker.tsx:315
 msgid "Free"
 msgstr "Grátis"
+
+#: src/components/DraftCard.tsx:345
+msgid "From"
+msgstr ""
 
 #: src/pages/WindowChrome.tsx:33
 msgid "Fullscreen"
@@ -2433,7 +2437,7 @@ msgstr ""
 msgid "Listening"
 msgstr ""
 
-#: src/pages/shell/transcript.tsx:247
+#: src/pages/shell/transcript.tsx:248
 msgid "Load earlier messages"
 msgstr "Carregar mensagens anteriores..."
 
@@ -2475,7 +2479,7 @@ msgstr "Carregando provedores de voz..."
 #: src/pages/Onboarding.tsx:378
 #: src/pages/PeerMessagesOverlay.tsx:142
 #: src/pages/shell/session-view.tsx:108
-#: src/pages/shell/transcript.tsx:247
+#: src/pages/shell/transcript.tsx:248
 msgid "Loading…"
 msgstr "Carregando..."
 
@@ -2869,7 +2873,7 @@ msgstr "Ainda não há integrações instaladas."
 
 #: src/components/ask/AskSettled.tsx:28
 #: src/components/AskCard.tsx:260
-#: src/components/DraftCard.tsx:259
+#: src/components/DraftCard.tsx:248
 msgid "No longer active"
 msgstr "Não está mais ativo"
 
@@ -2956,7 +2960,7 @@ msgstr "Não está no catálogo de plugins"
 msgid "Not now"
 msgstr "Agora não"
 
-#: src/components/DraftCard.tsx:277
+#: src/components/DraftCard.tsx:266
 msgid "Not sent"
 msgstr ""
 
@@ -3272,7 +3276,7 @@ msgstr ""
 msgid "Recommended · {description}"
 msgstr ""
 
-#: src/components/DraftCard.tsx:387
+#: src/components/DraftCard.tsx:325
 msgid "Reconnect {app}"
 msgstr ""
 
@@ -3373,7 +3377,7 @@ msgstr "Remover"
 msgid "Remove {0}"
 msgstr "Remover {0}"
 
-#: src/components/DraftLines.tsx:84
+#: src/components/DraftLines.tsx:151
 msgid "Remove {address}"
 msgstr ""
 
@@ -3442,7 +3446,7 @@ msgstr "Substituir chave de API"
 msgid "Replace key"
 msgstr "Substituir chave"
 
-#: src/components/DraftCard.tsx:256
+#: src/components/DraftCard.tsx:245
 msgid "Replaced"
 msgstr ""
 
@@ -3716,7 +3720,7 @@ msgstr "Selecione um bot"
 
 #: src/components/ask/QuestionCard.tsx:205
 #: src/components/ask/QuestionCard.tsx:306
-#: src/components/DraftCard.tsx:398
+#: src/components/DraftCard.tsx:336
 #: src/pages/shell/composer.tsx:407
 msgid "Send"
 msgstr "Enviar"
@@ -3730,11 +3734,11 @@ msgid "Send reset link"
 msgstr "Enviar link de redefinição"
 
 #: src/components/AskCard.tsx:304
-#: src/components/DraftCard.tsx:398
+#: src/components/DraftCard.tsx:336
 msgid "Sending…"
 msgstr "Enviando…"
 
-#: src/components/DraftCard.tsx:229
+#: src/components/DraftCard.tsx:218
 msgid "Sent to {recipient} · {time}"
 msgstr ""
 
@@ -3980,8 +3984,8 @@ msgstr "Armazenado com segurança. Nunca mostrado aqui."
 msgid "subagent"
 msgstr "subagente"
 
-#: src/components/DraftCard.tsx:345
-#: src/components/DraftCard.tsx:351
+#: src/components/DraftCard.tsx:387
+#: src/components/DraftCard.tsx:393
 msgid "Subject"
 msgstr ""
 
@@ -4123,7 +4127,7 @@ msgstr "Hora do dia"
 msgid "Title"
 msgstr "Título"
 
-#: src/components/DraftCard.tsx:275
+#: src/components/DraftCard.tsx:264
 msgid "To"
 msgstr ""
 
@@ -4153,7 +4157,7 @@ msgstr ""
 msgid "Treg token"
 msgstr "Token Treg"
 
-#: src/components/DraftCard.tsx:398
+#: src/components/DraftCard.tsx:336
 #: src/pages/Onboarding.tsx:685
 msgid "Try again"
 msgstr "Tentar novamente"
@@ -4170,7 +4174,7 @@ msgstr "Não atribuído"
 msgid "Unavailable"
 msgstr "Indisponível"
 
-#: src/components/DraftCard.tsx:248
+#: src/components/DraftCard.tsx:237
 msgid "Undo"
 msgstr ""
 
@@ -4407,7 +4411,7 @@ msgstr "Todo ano em {date} às {time}"
 msgid "Yesterday"
 msgstr "Ontem"
 
-#: src/components/DraftCard.tsx:64
+#: src/components/DraftCard.tsx:54
 #: src/pages/Shell.tsx:135
 #: src/pages/shell/use-composer-draft.ts:52
 msgid "You"

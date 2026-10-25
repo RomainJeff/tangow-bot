@@ -26,19 +26,19 @@ import { messageTimeLabel } from "../lib/message-time";
 import { userInitials } from "../lib/user-initials";
 import { AppLogo } from "./AppLogo";
 import type { CardEdits } from "./AskCard";
-import { RecipientLine, SubjectLine } from "./DraftLines";
+import { ReadRow, RecipientLine, RowLabel, SubjectLine } from "./DraftLines";
 
 /**
- * The text with its sender in front of it: the mail leaves in the run owner's name. The viewer's own
- * photo when they own it; another member sees the owner's initials.
+ * Who the mail leaves as, in the card's grid: the run owner's name and the sending account. The
+ * viewer's own photo when they own it; another member sees the owner's initials.
  */
-function Sender({
-  children,
-  inWell,
+function FromRow({
+  account,
+  label,
   owner,
 }: {
-  children: ReactNode;
-  inWell?: boolean;
+  account?: string;
+  label: string;
   owner: AskDraft["owner"];
 }) {
   const { t } = useLingui();
@@ -47,14 +47,18 @@ function Sender({
   const own = !owner || owner.userId === user?.id;
   const name = own ? user?.name : owner.name;
   return (
-    <div className="flex items-start gap-3">
-      <UserAvatar
-        initials={userInitials(name ?? t`You`)}
-        image={own ? (user?.image ?? null) : null}
-        className={inWell ? "mt-3 size-6 text-label" : "size-6 text-label"}
-      />
-      {children}
-    </div>
+    <>
+      <RowLabel>{label}</RowLabel>
+      <div className="flex min-h-6 min-w-0 items-center gap-2 px-4">
+        <UserAvatar
+          initials={userInitials(name ?? t`You`)}
+          image={own ? (user?.image ?? null) : null}
+          className="size-6 text-label"
+        />
+        {name ? <span className="shrink-0 font-medium">{name}</span> : null}
+        {account ? <span className="min-w-0 truncate text-muted-foreground">{account}</span> : null}
+      </div>
+    </>
   );
 }
 
@@ -94,6 +98,9 @@ export function DraftCard({
   const { draft } = block;
   const [edit, setEdit] = useState<AskDraftEdits>(() => draftEdits.get(messageId) ?? {});
   const [focused, setFocused] = useState(false);
+  // Once a field is touched the lines stay fields: a card that folds back to text when focus moves
+  // to Send would move Send from under the pointer.
+  const [touched, setTouched] = useState(false);
   // What each line's field holds, not yet an address: kept here so it outlives the line.
   const [typed, setTyped] = useState<Partial<Record<RecipientRole, string>>>({});
   // Cc and Bcc lines the person opened or changed: they stay shown even when empty.
@@ -194,7 +201,7 @@ export function DraftCard({
 
   const app = draft.app.name;
   const header = {
-    who: draft.app.account ? `${app} · ${draft.app.account}` : app,
+    who: app,
     icon: <AppLogo app={draft.app} chat={Boolean(draft.conversation)} />,
   };
   if (view.kind === "sent") {
@@ -204,13 +211,7 @@ export function DraftCard({
       <FramedBlock
         data-testid="draft-card"
         header={header}
-        question={
-          <Sender owner={draft.owner}>
-            <p className="min-w-0 flex-1 whitespace-pre-wrap break-words font-normal">
-              {draft.body}
-            </p>
-          </Sender>
-        }
+        question={<p className="whitespace-pre-wrap break-words font-normal">{draft.body}</p>}
         answered={
           <span className="inline-flex items-center gap-1">
             <Check className="size-3.5 shrink-0" aria-hidden="true" />
@@ -271,6 +272,7 @@ export function DraftCard({
 
   // Lines change only on a draft that records where its recipients and subject sit.
   const fields = view.readOnly || view.sending ? undefined : draft.fields;
+  const asFields = fields !== undefined && (touched || edited);
   const subject = edit.subject ?? draft.subject ?? "";
   // An empty Cc or Bcc names nobody: it opens from the To line on demand.
   const hidden = foldedRoles(fields, recipients, typed, opened);
@@ -280,67 +282,15 @@ export function DraftCard({
     <FramedBlock
       data-testid="draft-card"
       header={{ ...header, status: view.status ? marks[view.status] : undefined }}
-      onFocus={(event) => setFocused(Boolean(event.target.closest("[data-draft-field]")))}
+      onFocus={(event) => {
+        const field = Boolean(event.target.closest("[data-draft-field]"));
+        setFocused(field);
+        if (field) setTouched(true);
+      }}
       onBlur={(event) => {
         const next = event.relatedTarget;
         if (!(next instanceof Element && next.closest("[data-draft-field]"))) setFocused(false);
       }}
-      question={
-        <div className="flex flex-col gap-1">
-          {RECIPIENT_ROLES.map((role) => {
-            const addresses = addressesOf(recipients, role);
-            const room = fields?.[role];
-            if (room !== undefined) {
-              if (hidden.includes(role)) return null;
-              return (
-                <RecipientLine
-                  key={role}
-                  id={`${lineId}-${role}`}
-                  label={roleLabel[role]}
-                  addresses={addresses}
-                  typed={typed[role] ?? ""}
-                  room={room}
-                  strong={role === "to"}
-                  onChange={(next) => keepRole(role, next)}
-                  onTyped={(next) => setTyped((current) => ({ ...current, [role]: next }))}
-                  more={
-                    role === "to"
-                      ? hidden.map((each) => ({
-                          label: roleLabel[each],
-                          open: () => openLine(each),
-                        }))
-                      : undefined
-                  }
-                />
-              );
-            }
-            if (!addresses.length) return null;
-            return (
-              <p
-                key={role}
-                className={role === "to" ? "break-words" : "break-words text-body font-normal"}
-              >
-                <span className="font-normal text-muted-foreground">{roleLabel[role]}</span>{" "}
-                {chat ? chat.name : addresses.join(", ")}
-                {chat?.handle ? (
-                  <span className="font-normal text-muted-foreground"> @{chat.handle}</span>
-                ) : null}
-              </p>
-            );
-          })}
-          {fields?.subject ? (
-            <SubjectLine
-              label={t`Subject`}
-              subject={subject}
-              onChange={(next) => keepEdit({ subject: next })}
-            />
-          ) : subject ? (
-            <p className="break-words text-body font-normal">
-              <span className="text-muted-foreground">{t`Subject`}</span> {subject}
-            </p>
-          ) : null}
-        </div>
-      }
       actions={
         view.readOnly ? undefined : (
           <>
@@ -390,28 +340,78 @@ export function DraftCard({
         )
       }
     >
-      <div className="flex flex-col gap-2">
-        <Sender inWell owner={draft.owner}>
-          {view.readOnly ? (
-            <p className="min-w-0 flex-1 whitespace-pre-wrap break-words rounded-card bg-well px-4 py-3 text-body text-foreground">
-              {draft.body}
-            </p>
-          ) : (
-            <Textarea
-              data-draft-field
-              aria-label={t`Edit message`}
-              dir="auto"
-              value={text}
-              readOnly={view.sending}
-              maxLength={ASK_DRAFT_TEXT_MAX_LENGTH}
-              onChange={(event) => keepEdit({ text: event.target.value })}
-              className="min-h-0 w-auto min-w-0 flex-1 resize-none rounded-card border-0 bg-well px-4 py-3 text-body text-foreground duration-(--duration-hover) ease-quiet read-only:text-muted-foreground hover:ring-1 hover:ring-option-ring-hover focus-visible:ring-selected focus-visible:ring-foreground md:text-body dark:bg-well"
+      <div className="flex flex-col gap-3">
+        <div className="grid grid-cols-[4rem_minmax(0,1fr)] gap-y-2 text-row-name">
+          <FromRow account={draft.app.account} label={t`From`} owner={draft.owner} />
+          {RECIPIENT_ROLES.map((role) => {
+            const addresses = addressesOf(recipients, role);
+            const room = fields?.[role];
+            if (room !== undefined) {
+              if (hidden.includes(role)) return null;
+              return (
+                <RecipientLine
+                  key={role}
+                  id={`${lineId}-${role}`}
+                  label={roleLabel[role]}
+                  addresses={addresses}
+                  typed={typed[role] ?? ""}
+                  room={room}
+                  strong={role === "to"}
+                  editing={asFields}
+                  onEdit={() => setTouched(true)}
+                  onChange={(next) => keepRole(role, next)}
+                  onTyped={(next) => setTyped((current) => ({ ...current, [role]: next }))}
+                  more={
+                    role === "to"
+                      ? hidden.map((each) => ({
+                          label: roleLabel[each],
+                          open: () => openLine(each),
+                        }))
+                      : undefined
+                  }
+                />
+              );
+            }
+            if (!addresses.length) return null;
+            return (
+              <ReadRow key={role} label={roleLabel[role]} strong={role === "to"}>
+                {chat ? chat.name : addresses.join(", ")}
+                {chat?.handle ? (
+                  <span className="font-normal text-muted-foreground"> @{chat.handle}</span>
+                ) : null}
+              </ReadRow>
+            );
+          })}
+          {fields?.subject ? (
+            <SubjectLine
+              label={t`Subject`}
+              subject={subject}
+              editing={asFields}
+              onChange={(next) => keepEdit({ subject: next })}
             />
-          )}
-        </Sender>
-        {reason ? <p className="ps-9 text-meta text-muted-foreground">{reason}</p> : null}
+          ) : subject ? (
+            <ReadRow label={t`Subject`}>{subject}</ReadRow>
+          ) : null}
+        </div>
+        {view.readOnly ? (
+          <p className="min-w-0 whitespace-pre-wrap break-words rounded-card bg-well px-4 py-3 text-body text-foreground">
+            {draft.body}
+          </p>
+        ) : (
+          <Textarea
+            data-draft-field
+            aria-label={t`Edit message`}
+            dir="auto"
+            value={text}
+            readOnly={view.sending}
+            maxLength={ASK_DRAFT_TEXT_MAX_LENGTH}
+            onChange={(event) => keepEdit({ text: event.target.value })}
+            className="min-h-0 w-auto min-w-0 resize-none rounded-card border-0 bg-well px-4 py-3 text-body text-foreground duration-(--duration-hover) ease-quiet read-only:text-muted-foreground hover:ring-1 hover:ring-option-ring-hover focus-visible:ring-selected focus-visible:ring-foreground md:text-body dark:bg-well"
+          />
+        )}
+        {reason ? <p className="text-meta text-muted-foreground">{reason}</p> : null}
         {error ? (
-          <p role="alert" className="ps-9 text-meta text-destructive">
+          <p role="alert" className="text-meta text-destructive">
             {error}
           </p>
         ) : null}
