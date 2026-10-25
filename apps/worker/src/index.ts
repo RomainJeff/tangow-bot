@@ -155,15 +155,17 @@ async function main() {
   const decisionProviders = new SpaceDecisionProviderResolver(prisma, secrets);
   const home = new LocalAgentHomeStore(dataDir);
   const artifacts = new LocalArtifactStore(dataDir);
-  const workers = composeWorkers(prisma, createWorkerProvider(resolveWorkerProvider(process.env)));
-  // Optional trace export of the controller's model calls. Without configuration this resolves
-  // to nothing, so no span is recorded and no vendor endpoint is ever contacted.
+  // Optional trace export of worker runs and the controller's model calls. Without configuration
+  // this resolves to nothing, so no span is recorded and no vendor endpoint is ever contacted.
   const traceExport = createTraceExporterFromEnv(process.env);
   if (traceExport.warning) logger.warn(traceExport.warning);
-  const runtime = composeInProcessRuntime(process.env.AGENT_RUNTIME ?? "", workers, {
-    exporter: traceExport.exporter,
-    serviceName: SERVICE_NAMES.worker,
-  });
+  const trace = { exporter: traceExport.exporter, serviceName: SERVICE_NAMES.worker };
+  const workers = composeWorkers(
+    prisma,
+    createWorkerProvider(resolveWorkerProvider(process.env)),
+    trace,
+  );
+  const runtime = composeInProcessRuntime(process.env.AGENT_RUNTIME ?? "", workers, trace);
   const inMemoryJobs = process.env.WAKEUP_DRIVER === "memory" ? new InMemoryJobQueue() : undefined;
   const jobs: JobPublisher = inMemoryJobs ?? new GraphileJobPublisher(pool);
   const jobHost: JobWorkerHost =

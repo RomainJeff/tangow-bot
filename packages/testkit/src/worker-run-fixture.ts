@@ -24,7 +24,12 @@ import {
   PostgresSessionLog,
   provisionComputer,
 } from "@rakazo/adapters";
-import type { GuestConnector, RunWorkers, WorkerClock } from "@rakazo/adapters/runtime-worker";
+import type {
+  GuestConnector,
+  RunWorkers,
+  WorkerClock,
+  WorkerTrace,
+} from "@rakazo/adapters/runtime-worker";
 import { createRunWorkers } from "@rakazo/adapters/runtime-worker";
 import type { GuestHarness } from "@rakazo/agent-run-worker";
 import type { SessionEntry } from "@rakazo/contracts";
@@ -150,6 +155,8 @@ export async function startWorkerRun<
   screensByPath?: boolean;
   /** The connection's model sees at most this many images a request. */
   maxImagesPerPrompt?: number;
+  /** Exports each worker run's trace here. */
+  trace?: WorkerTrace;
 }) {
   const database = options.databaseUrl
     ? await openBenchPostgres(options.databaseUrl)
@@ -305,6 +312,7 @@ export async function startWorkerRun<
           connector: options.connector?.(provider) ?? provider,
           clock: options.clock,
           screensByPath: options.screensByPath,
+          trace: options.trace,
         });
     const workers = routing && (options.workers?.(routing) ?? routing);
     const executor = createRunExecutor({

@@ -211,6 +211,7 @@ import {
   completeExternalEffect,
   createApprovedEffectReplayQueue,
   inputPausedToolResult,
+  isFailedToolResult,
   isToolPauseResult,
   parseCatalogApprovalTarget,
   replaceCompletedExternalEffectResult,
@@ -806,12 +807,6 @@ function isAuditableToolResult(value: unknown): value is {
     (value as { kind?: unknown }).kind === "agent_tool_result" &&
     Array.isArray((value as { content?: unknown }).content)
   );
-}
-
-function isFailedToolResult(value: unknown): value is { error: unknown } {
-  if (!value || typeof value !== "object" || !("error" in value)) return false;
-  const error = (value as { error?: unknown }).error;
-  return error !== undefined && error !== null;
 }
 
 export function toolCompletionFromResult(

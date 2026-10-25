@@ -1,12 +1,19 @@
 import type { AdapterContext, AgentRuntime } from "@rakazo/adapter-kit";
 import type { LaunchPlan, RunNeeds, WorkerLaunch } from "@rakazo/core";
+import { redactSecrets } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
+import { redactSensitiveText } from "@rakazo/logging";
+import { RunTraceRecorder } from "../pi-run-trace.js";
+import type { TraceExporter } from "../trace-export.js";
 import type { WorkerLifecycle } from "../worker-lifecycle.js";
 import { createCapabilityKey } from "./capability.js";
 import { WORKER_NATIVE_TOOLS } from "./guest-input.js";
 import { createLifecycleLauncher, type GuestConnector, type WorkerLauncher } from "./launcher.js";
 import { createSession, type WorkerClock } from "./session.js";
 import { createStopJournal, type StopJournal } from "./stop-journal.js";
+
+/** Where worker runs are exported as traces; without an exporter nothing is recorded. */
+export type WorkerTrace = { exporter?: TraceExporter; serviceName?: string };
 
 const realClock: WorkerClock = {
   sleep: (ms) =>
@@ -18,7 +25,8 @@ const realClock: WorkerClock = {
 /**
  * The run's agent harness lives in a guest VM, one per attempt. The executor keeps every
  * authority: this runtime turns guest frames into its events and callbacks, refuses what the
- * guest may not choose, measures usage on the model relay, and confirms the guest's stop.
+ * guest may not choose, measures usage on the model relay, and confirms the guest's stop. A trace
+ * is recorded here, from what the controller saw, never from the guest.
  */
 export function createWorkerAgentRuntime(options: {
   launcher: WorkerLauncher;
@@ -26,6 +34,7 @@ export function createWorkerAgentRuntime(options: {
   clock?: WorkerClock;
   /** The guest harness reads screens from the bot's home with its own file tool. */
   screensByPath?: boolean;
+  trace?: WorkerTrace;
 }): AgentRuntime {
   const key = createCapabilityKey();
   const sessions = new Map<string, ReturnType<typeof createSession>>();
@@ -59,21 +68,53 @@ export function createWorkerAgentRuntime(options: {
     },
     async *run(request, context) {
       if (request.script) throw new Error("A worker run cannot follow a script");
-      const session = createSession(request, deps);
+      const exporter = options.trace?.exporter;
+      const recorder =
+        exporter &&
+        new RunTraceRecorder({
+          runId: request.runId,
+          threadId: request.threadId,
+          botId: request.botId,
+          userId: context?.userId,
+          correlationTraceId: context?.traceId,
+          provider: request.model.provider,
+          model: request.model.id,
+          thinkingLevel: request.model.thinkingLevel ?? undefined,
+          systemPrompt: request.instructions,
+          history: [],
+          prompt: request.prompt,
+        });
+      const session = createSession(request, { ...deps, recorder });
       sessions.set(request.runId, session);
       const onAbort = () => session.cancel(new Error("The run was cancelled"));
       context?.signal?.addEventListener("abort", onAbort, { once: true });
+      let text = "";
+      let failure: unknown;
       try {
         await session.open();
         while (true) {
           const event = await session.events.next();
           if (!event) return;
+          if (event.type === "done") text = event.text ?? "";
           yield event;
         }
+      } catch (error) {
+        failure = error;
+        throw error;
       } finally {
         context?.signal?.removeEventListener("abort", onAbort);
         await session.stop();
         if (sessions.get(request.runId) === session) sessions.delete(request.runId);
+        if (recorder && exporter) {
+          recorder.finish(text, failure);
+          const secrets = request.secrets ?? [];
+          exporter.export(recorder.trace, {
+            userId: context?.userId,
+            spaceId: context?.spaceId,
+            serviceName: options.trace?.serviceName,
+            redact: (value) => redactSensitiveText(redactSecrets(value, [...secrets])),
+          });
+        }
       }
     },
   };
@@ -93,6 +134,7 @@ export function createRunWorkers(deps: {
   connector: GuestConnector;
   clock?: WorkerClock;
   screensByPath?: boolean;
+  trace?: WorkerTrace;
 }): RunWorkers {
   const stops = createStopJournal(deps.prisma);
   return {
@@ -105,6 +147,7 @@ export function createRunWorkers(deps: {
         stops,
         clock: deps.clock,
         screensByPath: deps.screensByPath,
+        trace: deps.trace,
       }),
   };
 }

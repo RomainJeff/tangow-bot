@@ -1,6 +1,10 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { Usage } from "@earendil-works/pi-ai";
-import type { ToolCallGenerationResult, ToolCallTrace } from "@rakazo/adapter-kit";
+import type {
+  AgentRuntimeEvent,
+  ToolCallGenerationResult,
+  ToolCallTrace,
+} from "@rakazo/adapter-kit";
 
 import { RunTrace, type RunTraceSpan } from "./run-trace.js";
 
@@ -15,8 +19,8 @@ export interface RunTraceRecorderOptions {
   correlationTraceId?: string;
   provider: string;
   model: string;
-  /** Thinking level actually sent to the provider, after clamping to the model. */
-  thinkingLevel: string;
+  /** Thinking level actually sent to the provider, after clamping to the model, when known. */
+  thinkingLevel?: string;
   /** Injectable clock, so tests produce deterministic timestamps. */
   now?: () => number;
   systemPrompt: string;
@@ -167,6 +171,49 @@ export class RunTraceRecorder {
         : {}),
     });
     span.end();
+  }
+
+  /**
+   * Opens a generation for one model request relayed for a worker. Requests can overlap, so each
+   * gets its own span. The guest's context is not recorded: every request repeats the whole history.
+   */
+  modelRequest(agent: string): {
+    end(usage?: Extract<AgentRuntimeEvent, { type: "usage" }>, error?: unknown): void;
+  } {
+    this.turns += 1;
+    const span = this.trace.openSpan(
+      {
+        name: `generation ${this.turns}`,
+        attributes: {
+          "langfuse.observation.type": "generation",
+          "langfuse.observation.model.name": this.options.model,
+          "langfuse.observation.metadata.thinkingLevel": this.options.thinkingLevel,
+          ...(agent === "root" ? {} : { "langfuse.observation.metadata.agent": agent }),
+        },
+      },
+      this.root,
+    );
+    return {
+      end: (usage, error) => {
+        if (!span) return;
+        if (usage) {
+          const cacheRead = usage.cacheReadTokens ?? 0;
+          const cacheWrite = usage.cacheWriteTokens ?? 0;
+          span.setAttributes({
+            "langfuse.observation.model.name": usage.model,
+            "langfuse.observation.usage_details": serialize({
+              // The relay counts cached prompt tokens as input; the trace splits them out.
+              input: Math.max(0, usage.inputTokens - cacheRead - cacheWrite),
+              output: usage.outputTokens,
+              cache_read: cacheRead,
+              cache_write: cacheWrite,
+              total: usage.inputTokens + usage.outputTokens,
+            }),
+          });
+        }
+        span.end(error === undefined ? { ok: true } : { ok: false, error });
+      },
+    };
   }
 
   toolStart(toolCallId: string, toolName: string, args: unknown): void {

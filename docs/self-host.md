@@ -123,14 +123,16 @@ child commands do not receive them.
 
 ### Agent traces
 
-Bot runs in workers are not exported yet; Rakazo's own model calls (history compaction, learned
-facts, the team-chat judge and auto-review) are, one trace per call.
-
 Exporting agent traces is optional and off unless configured. Set both `LANGFUSE_PUBLIC_KEY` and
-`LANGFUSE_SECRET_KEY` to send each run to an OpenTelemetry endpoint as a tree: the run, one
-generation per turn, one span per tool call, with prompts, responses, tool results, token counts and
-cost. A `browser_run` call nests one generation per decision step under its tool span, carrying the
-redacted request, the answers (or why none was usable), the gate, model, tokens and cost.
+`LANGFUSE_SECRET_KEY` to send each bot run to an OpenTelemetry endpoint as a tree: the run with its
+instructions, prompt and final output, one generation per model request with its model, token counts and latency,
+and one span per tool call with its arguments, result and status. The controller records this from
+what it relays for the worker, never from the worker itself: a generation carries no prompt or
+response of its own, and a call of the worker's own tools (shell, files) is timed by when the worker
+reports it. A `browser_run` call nests one generation per decision step under its tool span,
+carrying the redacted request, the answers (or why none was usable), the gate, model, tokens and
+cost. Rakazo's own model calls (history compaction, learned facts, the team-chat judge and
+auto-review) are exported too, one trace per call.
 `LANGFUSE_BASE_URL` defaults to `https://cloud.langfuse.com` and points a self-hosted instance
 or any other OTLP/HTTP backend at the same traces; it must be https unless it is loopback.
 `LANGFUSE_ENVIRONMENT` labels the traces (`production`, `staging`). A partial configuration logs a
