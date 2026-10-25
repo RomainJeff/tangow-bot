@@ -2924,6 +2924,32 @@ export function createRunExecutor(deps: ExecutorDeps) {
           }
         };
 
+        /**
+         * The key a draft's effect is recorded under: `base`, unless that draft was discarded or
+         * replaced and the person has written in the thread since, when the same mail may be wanted
+         * after all and gets the next key. Without a newer message the stored outcome stands.
+         */
+        const keyPastAnsweredDrafts = async (base: string) => {
+          let key = base;
+          for (let generation = 1; ; generation += 1) {
+            const existing = await deps.prisma.externalEffect.findUnique({
+              where: { idempotencyKey: key },
+              select: { status: true, draft: true, answeredAt: true },
+            });
+            const state = existing && readDraft(existing.status, existing.draft)?.state;
+            if (!existing?.answeredAt || (state !== "discarded" && state !== "replaced"))
+              return key;
+            const written = await deps.prisma.sessionEntry.count({
+              where: {
+                sessionId: thread.sessionId,
+                type: "user.message",
+                createdAt: { gt: existing.answeredAt },
+              },
+            });
+            if (written === 0) return key;
+            key = `${base}:${generation}`;
+          }
+        };
         const mutatingEffectOccurrences = new Map<string, number>();
         const consumedEffectIds = new Set<string>();
         const nextMutatingEffectOccurrence = (toolName: string, args: Record<string, unknown>) => {
@@ -3333,7 +3359,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
             requiresApprovalByDefault;
           // A draft is one effect per message it would send: the bot's own words in the call's
           // other arguments, a `thought` or a step note, change on every retry.
-          const keyArgs = outbound.kind === "draft" ? outboundDraftIdentity(outbound.draft) : args;
+          const keyArgs =
+            outbound.kind === "draft"
+              ? outboundDraftIdentity(outbound.draft, innerActions?.[0]?.toolName)
+              : args;
           // Count before choosing a key so an approved replay (occurrence 0 / base
           // key) cannot collide with a later identical-args call in this attempt.
           // request_secret stays single-use: retries must reuse the same card.
@@ -3341,12 +3370,18 @@ export function createRunExecutor(deps: ExecutorDeps) {
             name === "request_secret"
               ? 0
               : nextMutatingEffectOccurrence(replayEffectToolName, keyArgs);
-          const effectKey =
+          const calledKey =
             approvedReplayConsumed && nextApprovedKey
               ? nextApprovedKey
               : usesApprovalKey && occurrence === 0
                 ? approvalEffectKey(runId, replayEffectToolName, keyArgs)
                 : toolEffectIdempotencyKey(runId, replayEffectToolName, keyArgs, occurrence);
+          // A draft the user discarded or replaced, then wrote to the bot again, no longer stands
+          // for the same mail: the identical call opens a new card, under the next key.
+          const effectKey =
+            outbound.kind === "draft" && !approvedReplayConsumed
+              ? await keyPastAnsweredDrafts(calledKey)
+              : calledKey;
           // A first call is validated and rate-limited before it can record an effect or show a
           // card. A resumed approval, or an effect that already exists for this key, returns its
           // stored outcome instead: it must never trip over a name it took itself.
