@@ -55,11 +55,22 @@ const UNDO_HIT_SLOP = {
 /** The grid's label column: 72 pt, as the edit sheet's rows. */
 const LABEL_WIDTH = 72;
 
-/** One line of the card's grid: its label, then its value, both starting at the same x. */
-function GridRow({ label, children }: { label: string; children: ReactNode }) {
+/**
+ * One line of the card's grid: its label, then its value, both starting at the same x. VoiceOver
+ * reads the pair as one stop, "To, camille@…", where `spoken` is the value as text.
+ */
+function GridRow({
+  label,
+  spoken,
+  children,
+}: {
+  label: string;
+  spoken: string;
+  children: ReactNode;
+}) {
   const styles = useThemedStyles(createStyles);
   return (
-    <View style={styles.gridRow}>
+    <View accessible accessibilityLabel={`${label}, ${spoken}`} style={styles.gridRow}>
       <Text style={styles.gridLabel}>{label}</Text>
       <View style={styles.gridValue}>{children}</View>
     </View>
@@ -81,7 +92,7 @@ function FromRow({
   const styles = useThemedStyles(createStyles);
   const photo = useProfilePhoto();
   return (
-    <GridRow label={label}>
+    <GridRow label={label} spoken={[owner?.name, account].filter(Boolean).join(", ")}>
       <View style={styles.from}>
         <UserAvatar
           initials={userInitials(owner?.name ?? "")}
@@ -309,8 +320,9 @@ export function DraftCard({
   const rows = ROLES.flatMap((role) => {
     const addresses = draftAddresses(shown, role);
     if (!addresses) return [];
+    const value = chat ? `${chat.name}${chat.handle ? ` @${chat.handle}` : ""}` : addresses;
     return [
-      <GridRow key={role} label={roleLabel[role]}>
+      <GridRow key={role} label={roleLabel[role]} spoken={value}>
         <Text style={[styles.value, role === "to" ? styles.strong : undefined]}>
           {chat ? chat.name : addresses}
           {chat?.handle ? <Text style={styles.label}> @{chat.handle}</Text> : null}
@@ -320,7 +332,7 @@ export function DraftCard({
   });
   if (shown.subject) {
     rows.push(
-      <GridRow key="subject" label={t("Subject")}>
+      <GridRow key="subject" label={t("Subject")} spoken={shown.subject}>
         <Text style={styles.value}>{shown.subject}</Text>
       </GridRow>,
     );

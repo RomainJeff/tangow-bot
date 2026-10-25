@@ -862,7 +862,7 @@ export const RU_MESSAGES: Record<string, string> = {
   Replaced: "Заменено",
   From: "От",
   Sent: "Отправлено",
-  to: "кому:",
+  "to {recipient}": "кому: {recipient}",
   Subject: "Тема",
   To: "Кому",
   "Try again": "Повторить",
