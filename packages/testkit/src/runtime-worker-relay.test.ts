@@ -6,7 +6,7 @@ import { relayPiAiCall } from "@rakazo/adapters/runtime-worker/pi-ai";
 import { afterEach, describe, expect, it } from "vitest";
 import { toolResult } from "./file-task.js";
 import type { ModelEmulatorRequest } from "./model-emulator.js";
-import { startWorkerRun } from "./worker-run-fixture.js";
+import { afterPrivateText, startWorkerRun } from "./worker-run-fixture.js";
 
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => {
@@ -42,6 +42,7 @@ describe("a worker run whose native reads return images", () => {
             text: JSON.stringify({ version: 1, results: ["Read"], references: [] }),
           },
         },
+        afterPrivateText,
       ],
     });
     cleanups.push(() => run.close());

@@ -11,9 +11,13 @@ import {
   SessionManager,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
-import type { GuestBody, GuestImage, ReplyFinal } from "@rakazo/adapter-kit";
-import { PI_NATIVE_HARNESS } from "@rakazo/adapter-kit";
-import { guestRuntimeModel } from "@rakazo/adapters/pi-runtime";
+import type { GuestBody, GuestImage, GuestRunInput, ReplyFinal } from "@rakazo/adapter-kit";
+import { PI_NATIVE_HARNESS, RAKAZO_TOOL_PREFIX } from "@rakazo/adapter-kit";
+import {
+  createAgentTextPolicy,
+  guestRuntimeModel,
+  stripModelControlTokens,
+} from "@rakazo/adapters/pi-runtime";
 import {
   piAiProviderStream,
   projectPiAi,
@@ -54,11 +58,19 @@ const PI_SETTINGS = {
 /** Rakazo's hooks into Pi's own loop. Pi awaits each one, so the channel paces the loop. */
 function rakazoExtension(
   host: HarnessHost,
+  run: GuestRunInput,
   cwd: string,
   agent: string,
+  controllerNames: ReadonlyMap<string, string>,
   steer: (message: SteeringMessage) => void,
+  nudge: (text: string, mode: "steer" | "followUp") => void,
 ) {
   const seenIds: string[] = [];
+  // The same reminders as Rakazo's own loop, worded with the name this model knows.
+  const textPolicy = createAgentTextPolicy({
+    ...run,
+    messageUserName: `${RAKAZO_TOOL_PREFIX}message_user`,
+  });
   return (pi: ExtensionAPI) => {
     pi.on("message_update", async (event) => {
       if (event.assistantMessageEvent.type === "text_delta") {
@@ -82,8 +94,24 @@ function rakazoExtension(
       if (name) await host.decide({ type: "skills.used", name }, "recorded");
     });
     pi.on("turn_end", async (event) => {
+      if (agent !== "root") return;
+      if (event.message.role === "assistant") {
+        const { content } = event.message;
+        const prompts = textPolicy.turn({
+          messageText: stripModelControlTokens(
+            content.map((block) => (block.type === "text" ? block.text : "")).join(""),
+          ),
+          toolCallNames: content.flatMap((block) =>
+            block.type === "toolCall" ? [controllerNames.get(block.name) ?? block.name] : [],
+          ),
+          hasToolResults: event.toolResults.length > 0,
+          paused: host.paused(),
+        });
+        for (const text of prompts.steer) nudge(text, "steer");
+        for (const text of prompts.followUp) nudge(text, "followUp");
+      }
       // Only a turn the loop goes on from: a claimed message must reach the model in this attempt.
-      if (agent !== "root" || event.toolResults.length === 0) return;
+      if (event.toolResults.length === 0) return;
       const reply = await host.decide(
         { type: "steering.claim", seenIds: [...seenIds] },
         "steering",
@@ -254,12 +282,24 @@ export const piNativeHarness: GuestHarness = {
               }),
             );
           },
-          rakazoExtension(host, cwd, agent, (message) =>
-            session?.agent.steer({
-              role: "user",
-              content: [{ type: "text", text: message.text }, ...piImages(message.images ?? [])],
-              timestamp: Date.now(),
-            }),
+          rakazoExtension(
+            host,
+            run,
+            cwd,
+            agent,
+            controllerNames,
+            (message) =>
+              session?.agent.steer({
+                role: "user",
+                content: [{ type: "text", text: message.text }, ...piImages(message.images ?? [])],
+                timestamp: Date.now(),
+              }),
+            (text, mode) =>
+              session?.agent[mode]({
+                role: "user",
+                content: [{ type: "text", text }],
+                timestamp: Date.now(),
+              }),
           ),
         ],
         appendSystemPromptOverride: () => [run.instructions],
@@ -284,7 +324,7 @@ export const piNativeHarness: GuestHarness = {
         settingsManager,
         tools: [
           ...run.tools.filter((tool) => tool.where === "guest").map((tool) => tool.name),
-          "mcp__rakazo__*",
+          `${RAKAZO_TOOL_PREFIX}*`,
           ...(controllerTools.some((tool) => typeof tool.catalog === "object")
             ? ["tool_search"]
             : []),

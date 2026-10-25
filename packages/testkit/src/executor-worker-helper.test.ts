@@ -5,7 +5,7 @@ import {
   manualLauncher,
   rawGuest,
 } from "../../adapters/src/runtime-worker/raw-guest.test-support.js";
-import { startWorkerRun } from "./worker-run-fixture.js";
+import { afterPrivateText, startWorkerRun } from "./worker-run-fixture.js";
 
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => {
@@ -179,6 +179,7 @@ it("runs native Pi helpers in separate persisted sessions and resumes the parent
         },
         response: { type: "text", text: "Resumed privately." },
       },
+      afterPrivateText,
     ],
   });
   cleanups.push(() => run.close());

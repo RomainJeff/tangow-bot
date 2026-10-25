@@ -33,6 +33,7 @@ import {
   AgentRuntimeUnavailableError,
   historyCompactJob,
   linkPreviewJob,
+  RAKAZO_TOOL_PREFIX,
   routineJobKey,
   routineWakeupJob,
   runContinueJob,
@@ -1074,18 +1075,20 @@ export type SystemInstructionParts = {
   offerProposals?: boolean;
   /** message_user is offered (see selectBuiltinToolsForRun); otherwise the final reply speaks. */
   messageUserExposed?: boolean;
+  /** What the model calls message_user, when its harness names Rakazo tools its own way. */
+  messageUserName?: string;
   /** run_subagent is offered. A harness with its own loop does without it. */
   subagentsExposed?: boolean;
 };
 
 /** Human conversation uses message_user; delegated work returns its final reply. */
-export function chatVoiceInstructions(messageUserExposed: boolean): string {
+export function chatVoiceInstructions(messageUserExposed: boolean, tool = "message_user"): string {
   const channel = messageUserExposed
-    ? "message_user is the only way to reach the user. Everything else you write, your final reply included, is private scratch space they never see, like your reasoning and tool output. A turn that ends without message_user is a turn where you said nothing. Send answers, useful updates, questions, and the final outcome with message_user, then end the turn without repeating them."
+    ? `${tool} is the only way to reach the user. Everything else you write, your final reply included, is private scratch space they never see, like your reasoning and tool output. A turn that ends without ${tool} is a turn where you said nothing. Send answers, useful updates, questions, and the final outcome with ${tool}, then end the turn without repeating them.`
     : "Your final reply is what gets seen. Text you write before a tool call is discarded, so put everything that matters in your final reply.";
-  const viaMessageUser = messageUserExposed ? " with message_user" : "";
+  const viaMessageUser = messageUserExposed ? ` with ${tool}` : "";
   const silence = messageUserExposed
-    ? "end the turn without message_user"
+    ? `end the turn without ${tool}`
     : "end the turn with no reply";
   return `## How you communicate with the user
 
@@ -1160,7 +1163,7 @@ export function buildSystemInstructions(parts: SystemInstructionParts): string {
     'For charts and data visualization, use the render_plot tool: it renders bar, line, scatter, histogram, heatmap, faceted and many more chart types from a JSON spec and attaches the PNG to the chat. Call render_plot with {"help": true} before your first chart to read the full guide.',
     "When the user asks you to add or connect an MCP server (and gives you its details), use add_mcp_server. If it uses browser sign-in, an approval card appears in the chat — tell the user to click Authorize on it.",
     "Never print API keys, access tokens, or secret values. Prefer tools over claiming you already did the work.",
-    chatVoiceInstructions(parts.messageUserExposed ?? true),
+    chatVoiceInstructions(parts.messageUserExposed ?? true, parts.messageUserName),
     // Last in the stable part: it flips between user turns and automatic wakes of the same thread.
     parts.userTurn ? BOT_OFFER_DEDICATED_BOT : undefined,
     parts.offerProposals ? BOT_OFFER_PROPOSALS : undefined,
@@ -1176,13 +1179,20 @@ export function buildSystemInstructions(parts: SystemInstructionParts): string {
  * credentials never reach it, and the harness brings no helpers.
  */
 export function buildHarnessAddendum(parts: SystemInstructionParts): string {
+  const messageUserName = `${RAKAZO_TOOL_PREFIX}message_user`;
+  // Up front, ahead of everything the harness's own prompt says about answering.
+  const voice =
+    (parts.messageUserExposed ?? true)
+      ? ` The user sees only what you send with ${messageUserName}: your own replies, the final one included, never reach them.`
+      : "";
   return [
-    "You are not a general coding assistant here: you are the bot described below, working for its user. Your own tools do the work in your workspace. When anything below differs from the guidance above, follow what is below.",
-    "Call Rakazo tools as mcp__rakazo__<name>. Use tool_search for deferred connectors, or the offered search/load/execute tools. Use native read, write, edit and bash for workspace files and commands.",
+    `You are not a general coding assistant here: you are the bot described below, working for its user.${voice} Your own tools do the work in your workspace. When anything below differs from the guidance above, follow what is below.`,
+    `Call Rakazo tools as ${RAKAZO_TOOL_PREFIX}<name>. Use tool_search for deferred connectors, or the offered search/load/execute tools. Use native read, write, edit and bash for workspace files and commands.`,
     buildSystemInstructions({
       ...parts,
       agentEnvironmentInstruction: undefined,
       subagentsExposed: false,
+      messageUserName,
     }),
   ].join("\n\n");
 }

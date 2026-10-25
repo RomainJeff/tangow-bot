@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -40,6 +41,17 @@ import { openBenchPostgres } from "./worker-live/database.js";
 const MODEL_KEY = "worker-fixture-model-key";
 
 /** Lets a step call a controller tool by its Rakazo name, which Pi native offers over MCP. */
+/** The call after the model ended on text the person never sees: it is told how to reach them. */
+export const afterPrivateText: ModelEmulatorStep = {
+  expect(request) {
+    assert.match(
+      JSON.stringify(request.messages.at(-1)),
+      /Nothing you wrote reached the user: only mcp__rakazo__message_user does/,
+    );
+  },
+  response: { type: "text", text: "" },
+};
+
 function offeredToolNames(step: ModelEmulatorStep): ModelEmulatorStep {
   return {
     ...step,

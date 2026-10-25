@@ -7,7 +7,7 @@ import { HARNESSES } from "@rakazo/agent-run-worker";
 import { cancelRunsInTransaction } from "@rakazo/db";
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.js";
-import { startWorkerRun } from "./worker-run-fixture.js";
+import { afterPrivateText, startWorkerRun } from "./worker-run-fixture.js";
 
 type WorkerRun = Awaited<ReturnType<typeof startWorkerRun>>;
 
@@ -73,6 +73,30 @@ const earlierWork = (request: ModelEmulatorRequest | undefined) =>
     return work ? work.split("\n") : [];
   });
 
+it("reminds a model that ended on private text to send it, so the person reads the answer", async () => {
+  const run = await fixture([
+    { expect() {}, response: { type: "text", text: "Paris." } },
+    {
+      ...afterPrivateText,
+      response: {
+        type: "tool",
+        id: "say",
+        name: "message_user",
+        arguments: { message: "Paris." },
+      },
+    },
+    { expect() {}, response: { type: "text", text: "" } },
+  ]);
+  const runId = await run.send("Which city?");
+  await run.continueRun(runId);
+
+  run.model.assertComplete();
+  const toPerson = (await run.runEntries(runId)).flatMap((entry) =>
+    entry.type === "assistant.text" && entry.payload.toPerson ? entry.payload.blocks : [],
+  );
+  expect(toPerson).toEqual([expect.objectContaining({ kind: "text", text: "Paris." })]);
+});
+
 it("shows the next attempt a native call whose guest died during it as unknown, and never runs it again", async () => {
   const probed = await probe();
   let retried: ModelEmulatorRequest | undefined;
@@ -84,6 +108,7 @@ it("shows the next attempt a native call whose guest died during it as unknown, 
       },
       response: { type: "text", text: "I could not tell whether it ran." },
     },
+    afterPrivateText,
   ]);
   const runId = await run.send("Append to the probe.");
   const first = settled(run.continueRun(runId));
@@ -116,6 +141,7 @@ it("logs native and controller calls along the session in the order the harness 
     },
     bash("second", "echo two"),
     { expect() {}, response: { type: "text", text: recap } },
+    afterPrivateText,
   ]);
   const runId = await run.send("Work in three steps.");
   await run.continueRun(runId);
@@ -178,6 +204,7 @@ it("hands a retried attempt a message its dead attempt claimed, once", async () 
       },
       response: { type: "text", text: "Checked them too." },
     },
+    afterPrivateText,
   ]);
   const runId = await run.send("Wait, then report.");
   const first = settled(run.continueRun(runId));

@@ -1744,6 +1744,8 @@ describe("buildSystemInstructions", () => {
     expect(addendum).not.toContain("Environment: linux");
     expect(instructions).toContain("run_subagent");
     expect(addendum).not.toContain("subagent");
+    expect(addendum).toContain("mcp__rakazo__message_user");
+    expect(addendum).not.toMatch(/(?<!mcp__rakazo__)message_user/);
   });
 
   it("is byte-identical across runs when the directory is unchanged", () => {

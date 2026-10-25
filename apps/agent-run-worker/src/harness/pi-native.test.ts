@@ -32,6 +32,7 @@ function recordingHost(signal: AbortSignal) {
   const requests: unknown[] = [];
   const host: HarnessHost = {
     signal,
+    paused: () => false,
     emit: async () => undefined,
     decide: async () => {
       throw new Error("No frame is decided in this test");
