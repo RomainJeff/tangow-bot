@@ -252,8 +252,10 @@ const DOCUMENTED_INPUT_SCHEMAS: Record<string, Record<string, unknown>> = {
       subject: { type: "string" },
       body: { type: "string" },
       is_html: { type: "boolean" },
-      attachment: { type: "object" },
+      attachment: { type: "string" },
       include_signature: { type: "boolean" },
+      user_id: { type: "string" },
+      from_email: { type: "string" },
     },
   },
 };
