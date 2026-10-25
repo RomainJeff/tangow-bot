@@ -462,7 +462,7 @@ function createStyles() {
     body: { color: tokens.foreground, ...nativeTextStyle("composer") },
     frozen: { color: tokens.mutedForeground },
     pencil: { position: "absolute", top: 12, end: 12 },
-    sentBody: { flex: 1, color: tokens.foreground, ...nativeTextStyle("body") },
+    sentBody: { flexShrink: 1, color: tokens.foreground, ...nativeTextStyle("body") },
     note: {
       paddingStart: AVATAR_SIZE + 12,
       color: tokens.mutedForeground,
