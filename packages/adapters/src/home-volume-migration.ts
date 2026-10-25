@@ -113,7 +113,7 @@ type HomeComputer = {
   botIds: Set<string>;
 };
 
-type TargetVolume = ManifestVolume & { files: HomeFile[] };
+export type TargetVolume = ManifestVolume & { files: HomeFile[] };
 
 type HomePlan = {
   planned: HomeFile[];
@@ -547,10 +547,10 @@ async function existingVolume(
   return volume ? { volumeId: volume.id, providerRef: volume.providerRef } : null;
 }
 
-type Inspection = { target: TargetVolume; foreign: string[]; missing: HomeFile[] };
+export type Inspection = { target: TargetVolume; foreign: string[]; missing: HomeFile[] };
 
 /** A volume not provisioned yet holds nothing, so every planned file is missing from it. */
-async function inspectTargets(
+export async function inspectTargets(
   files: VolumeFiles,
   targets: TargetVolume[],
   context: AdapterContext,
@@ -571,7 +571,7 @@ async function inspectTargets(
   return inspections;
 }
 
-function conflictOf({ target, foreign, missing }: Inspection): VolumeConflict {
+export function conflictOf({ target, foreign, missing }: Inspection): VolumeConflict {
   return {
     destination: target.destination,
     volumeId: target.volumeId,
