@@ -129,6 +129,17 @@ test("dry-run leaves files untouched and runs no external commands", (t) => {
   assert.doesNotMatch(result.stdout + result.stderr, /fake-test-secret/);
 });
 
+test("an incomplete Docker migration blocks standalone E2B setup before any command or config change", (t) => {
+  const f = fixture(t);
+  const environment = readFileSync(path.join(f.root, ".env"), "utf8");
+  writeFileSync(path.join(f.root, ".env.tangow.docker.json"), "{}");
+  const result = f.invoke();
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Resume tangow provider docker/);
+  assert.deepEqual(f.calls(), []);
+  assert.equal(readFileSync(path.join(f.root, ".env"), "utf8"), environment);
+});
+
 test("refuses a built image that does not match the checkout before probing or publishing", (t) => {
   const f = fixture(t);
   const result = f.invoke([], { MISMATCH: "1" });

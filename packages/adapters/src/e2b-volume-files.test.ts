@@ -1,5 +1,17 @@
 import { execFile } from "node:child_process";
-import { lstat, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  stat,
+  symlink,
+  truncate,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -124,6 +136,32 @@ const context = {
 const text = (value: string) => new TextEncoder().encode(value);
 
 describe("E2B volume files", () => {
+  it("exports verified file metadata and empty directories, and refuses unsupported entries before reading them", async () => {
+    const { files, dirs } = await localVolumes();
+    await files.write("export", { path: "note.txt", content: text("hello"), mode: 0o640 }, context);
+    const directory = dirs.get("export")!;
+    await chmod(directory, 0o750);
+    await mkdir(path.join(directory, "empty"), { mode: 0o700 });
+    expect(await files.inspect("export", context)).toEqual({
+      mode: 0o750,
+      entries: [
+        { kind: "dir", path: "empty", mode: 0o700 },
+        {
+          kind: "file",
+          path: "note.txt",
+          mode: 0o640,
+          size: 5,
+          sha256: "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+        },
+      ],
+    });
+    await symlink("note.txt", path.join(directory, "link"));
+    await expect(files.inspect("export", context)).rejects.toThrow("symbolic link or special file");
+    await rm(path.join(directory, "link"));
+    await truncate(path.join(directory, "note.txt"), 256 * 1024 ** 2 + 1);
+    await expect(files.inspect("export", context)).rejects.toThrow("exceeds 256 MiB");
+    await files.close();
+  });
   it("writes files with their mode through one sandbox per volume, lists and reads them back", async () => {
     const { files, opened, killed, dirs } = await localVolumes();
 

@@ -30,7 +30,7 @@ function fixture(t, { e2b = false } = {}) {
     fileURLToPath(new URL("./tangow-options.mjs", import.meta.url)),
     path.join(root, "scripts/tangow-options.mjs"),
   );
-  for (const name of ["tangow-builds.mjs", "tangow-deployment.mjs"])
+  for (const name of ["tangow-builds.mjs", "tangow-deployment.mjs", "tangow-docker.mjs"])
     copyFileSync(
       fileURLToPath(new URL(`./${name}`, import.meta.url)),
       path.join(root, "scripts", name),
@@ -40,7 +40,8 @@ function fixture(t, { e2b = false } = {}) {
     path.join(root, "infra/compose/setup-e2b.mjs"),
     `import {writeFileSync} from 'node:fs';writeFileSync('setup-args.json',JSON.stringify(process.argv.slice(2)));`,
   );
-  writeFileSync(path.join(root, ".gitignore"), ".env*\n");
+  writeFileSync(path.join(root, ".gitignore"), ".env*\nbackups/\ndata/\n");
+  mkdirSync(path.join(root, "data"));
   writeFileSync(
     path.join(root, ".env"),
     'SECRET=fake-test-secret\nAGENT_RUNTIME=pi\nGIT_SHA=old\nUNRELATED="$(touch must-not-exist)"\n',
@@ -92,13 +93,17 @@ if(name==='sudo'){
  if(args[1]==='cat'){const mode=fs.statSync(args[2]).mode;fs.chmodSync(args[2],0o600);try{process.stdout.write(fs.readFileSync(args[2]));}finally{fs.chmodSync(args[2],mode);}process.exit(0);}
  if(args[0]!=='-n'||args[1]!=='docker')process.exit(2);args=args.slice(2);
 }
+if(name==='tar'){fs.writeFileSync(args[args.indexOf('-czf')+1],'fixture-data-backup');process.exit(0);}
+const provider=args.includes('.env.e2b.compose.json')||args.includes('.env.tangow.docker.source.json')?'e2b':'docker';
 if(name==='pnpm'){if(args.includes('template:build')&&process.env.E2B_API_KEY!=='fake-test-secret')process.exit(1);process.exit(0);}
 if(args.includes('build')&&process.env.FAIL_BUILD){console.error('fake-test-secret');process.exit(1);}
-if(args.includes('config')){console.log(JSON.stringify({services:{api:{environment:{SANDBOX_PROVIDER:process.env.PROVIDER,SANDBOX_SUPERVISOR_TOKEN:process.env.NO_TOKEN?'':'fake-token',E2B_API_KEY:process.env.NO_KEY?'':'fake-test-secret',AGENT_RUNTIME:process.env.SCRIPTED?'scripted':undefined}},worker:{environment:{SANDBOX_PROVIDER:process.env.PROVIDER,SANDBOX_SUPERVISOR_TOKEN:process.env.NO_TOKEN?'':'fake-token',E2B_API_KEY:process.env.NO_KEY?'':'fake-test-secret'}}}}));process.exit(0);}
+if(args.includes('config')){console.log(JSON.stringify({services:{api:{environment:{SANDBOX_PROVIDER:provider,SANDBOX_SUPERVISOR_TOKEN:process.env.NO_TOKEN?'':'fake-token',E2B_API_KEY:process.env.NO_KEY?'':'fake-test-secret',AGENT_RUNTIME:process.env.SCRIPTED?'scripted':undefined}},worker:{environment:{SANDBOX_PROVIDER:provider,SANDBOX_SUPERVISOR_TOKEN:process.env.NO_TOKEN?'':'fake-token',E2B_API_KEY:process.env.NO_KEY?'':'fake-test-secret'}}}}));process.exit(0);}
 if(args.includes('wait')&&process.env.FAIL_MIGRATE)process.exit(1);
+if(args.includes('scripts/migrate-e2b-to-docker.ts')){if(args.includes('--inspect')){console.log(JSON.stringify({blockers:{runs:process.env.DOCKER_MIGRATION_BUSY?1:0}}));process.exit(0);}if(process.env.FAIL_DOCKER_COPY){console.error('fake-test-secret');process.exit(1);}console.log(JSON.stringify({outcome:'migrated',volumes:3,computers:1}));process.exit(0);}
+if(args.includes('up')&&args.includes('api')&&process.env.FAIL_DOCKER_START)process.exit(1);
 if(args.includes('scripts/setup-e2b-homes.ts')){console.log(JSON.stringify({computers:process.env.E2B_SNAPSHOTS?[{id:'computer-old',kind:'e2b',homeStorage:'snapshot'}]:[]}));process.exit(0);}
 if(args.includes('scripts/migrate-docker-homes.ts')){console.log(JSON.stringify({deferred:process.env.DEFERRED?[{id:'computer-busy',state:'running',bots:[{name:'Fixture bot'}],reason:'snapshot'}]:[]}));process.exit(0);}
-if(args.includes('exec')&&args.includes('api'))console.log(JSON.stringify({ok:true,revision:process.env.TARGET,sandbox:process.env.PROVIDER}));
+if(args.includes('exec')&&args.includes('api'))console.log(JSON.stringify({ok:true,revision:process.env.TARGET,sandbox:provider}));
 else if(args.includes('ps')&&args.includes('-q'))console.log(args.at(-1)+'-container');
 else if(args.includes('ps'))console.log('api running\\nworker running\\nweb running');
 else if(args.includes('{{json .RepoDigests}}'))console.log(JSON.stringify(process.env.NO_DIGEST?[]:['registry.example.com/computer@sha256:'+'c'.repeat(64)]));
@@ -107,7 +112,7 @@ else if(args[0]==='image'&&args.includes('inspect'))console.log(args.includes('{
 else if(args[0]==='inspect'&&args.some(a=>a.includes('.State.ExitCode')))console.log('exited 0 '+(args.at(-1)==='worker-image-container'?'sha256:guest':process.env.BAD_MIGRATE_IMAGE?'sha256:old':'sha256:app'));
 else if(args[0]==='inspect')console.log(args.includes('{{.Image}}')?'sha256:app':args.some(a=>a.includes('Config.Env'))?process.env.TARGET:args.at(-1)==='supervisor-container'?'sha256:supervisor true 0':'sha256:app true 0');
 `;
-  for (const name of ["docker", "sudo", "pnpm"])
+  for (const name of ["docker", "sudo", "pnpm", "tar"])
     writeFileSync(path.join(bin, name), fake, { mode: 0o755 });
   const invoke = (args, env = {}) =>
     spawnSync(process.execPath, [source, "--path", root, ...args], {
@@ -245,7 +250,7 @@ test("cleanup requires consent and only prunes unused cache and images", (t) => 
   ]);
 });
 
-test("provider setup forwards sudo and migration consent without reversing E2B homes", (t) => {
+test("provider setup forwards sudo and requires consent before migrating E2B homes", (t) => {
   const f = fixture(t, { e2b: true });
   assert.notEqual(f.invoke(["provider", "docker"]).status, 0);
   writeFileSync(path.join(f.root, ".env.e2b.upgrade.json"), "{}");
@@ -264,6 +269,104 @@ test("provider setup forwards sudo and migration consent without reversing E2B h
     "--sudo",
     "--migrate-existing",
   ]);
+});
+
+test("Docker migration backs up before copying and starts Docker only after adoption", (t) => {
+  const f = fixture(t, { e2b: true });
+  f.git("merge", "--ff-only", "origin/main");
+  const override = readFileSync(path.join(f.root, ".env.e2b.compose.json"), "utf8");
+  const result = f.invoke(["provider", "docker", "--migrate-existing"]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Docker migration complete/);
+  assert.equal(existsSync(path.join(f.root, ".env.e2b.compose.json")), false);
+  assert.equal(existsSync(path.join(f.root, ".env.tangow.docker.json")), false);
+  const calls = f.calls();
+  const build = calls.findIndex((c) => c.includes("build") && c.includes("worker-image"));
+  const stop = calls.findIndex((c) => c.includes("stop") && c.includes("api"));
+  const backup = calls.findIndex((c) => c.some((arg) => arg.includes("pg_dump")));
+  const copy = calls.findIndex(
+    (c) => c.includes("scripts/migrate-e2b-to-docker.ts") && !c.includes("--inspect"),
+  );
+  const start = calls.findIndex((c) => c.includes("up") && c.includes("api"));
+  assert.ok(build >= 0 && stop > build && backup > stop && copy > backup && start > copy);
+  const operation = calls[copy][calls[copy].indexOf("--operation") + 1];
+  assert.equal(
+    readFileSync(
+      path.join(f.root, "backups", `docker-${operation}`, "original-e2b-compose.json"),
+      "utf8",
+    ),
+    override,
+  );
+  assert.doesNotMatch(result.stdout + result.stderr + JSON.stringify(calls), /fake-test-secret/);
+  assert.ok(calls.every((c) => !c.includes("down") && !c.includes("prune")));
+});
+
+test("Docker migration refuses busy work before stopping the running deployment", (t) => {
+  const f = fixture(t, { e2b: true });
+  f.git("merge", "--ff-only", "origin/main");
+  const result = f.invoke(["provider", "docker", "--migrate-existing"], {
+    DOCKER_MIGRATION_BUSY: "1",
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /services were not stopped/);
+  assert.ok(f.calls().every((c) => !c.includes("stop") && !c.includes("up")));
+  assert.equal(existsSync(path.join(f.root, ".env.tangow.docker.json")), false);
+  assert.equal(existsSync(path.join(f.root, ".env.e2b.compose.json")), true);
+});
+
+test("failed Docker copy keeps source settings and blocks mutations until the same operation resumes", (t) => {
+  const f = fixture(t, { e2b: true });
+  f.git("merge", "--ff-only", "origin/main");
+  const failure = f.invoke(["provider", "docker", "--migrate-existing"], { FAIL_DOCKER_COPY: "1" });
+  assert.notEqual(failure.status, 0);
+  assert.doesNotMatch(failure.stdout + failure.stderr, /fake-test-secret/);
+  const journal = path.join(f.root, ".env.tangow.docker.json");
+  const state = JSON.parse(readFileSync(journal, "utf8"));
+  assert.equal(state.phase, "copying");
+  assert.equal(existsSync(path.join(f.root, ".env.e2b.compose.json")), true);
+  const before = f.calls().length;
+  for (const args of [
+    ["update"],
+    ["restart"],
+    ["cleanup", "--yes"],
+    ["computers", "build"],
+    ["provider", "e2b"],
+  ]) {
+    assert.notEqual(f.invoke(args).status, 0);
+  }
+  assert.equal(f.calls().length, before);
+  const resumed = f.invoke(["provider", "docker"]);
+  assert.equal(resumed.status, 0, resumed.stderr);
+  const copies = f
+    .calls()
+    .filter((c) => c.includes("scripts/migrate-e2b-to-docker.ts") && !c.includes("--inspect"));
+  assert.equal(copies.length, 2);
+  for (const copy of copies) assert.equal(copy[copy.indexOf("--operation") + 1], state.operationId);
+  assert.equal(existsSync(journal), false);
+});
+
+test("failed Docker startup resumes after configuration cutover without reimporting volumes", (t) => {
+  const f = fixture(t, { e2b: true });
+  f.git("merge", "--ff-only", "origin/main");
+  const failure = f.invoke(["provider", "docker", "--migrate-existing"], {
+    FAIL_DOCKER_START: "1",
+  });
+  assert.notEqual(failure.status, 0);
+  assert.equal(existsSync(path.join(f.root, ".env.e2b.compose.json")), false);
+  assert.equal(
+    JSON.parse(readFileSync(path.join(f.root, ".env.tangow.docker.json"), "utf8")).phase,
+    "configured",
+  );
+  assert.deepEqual(f.calls().at(-1).slice(-3), ["stop", "api", "worker"]);
+  const resumed = f.invoke(["provider", "docker"]);
+  assert.equal(resumed.status, 0, resumed.stderr);
+  assert.equal(
+    f
+      .calls()
+      .filter((c) => c.includes("scripts/migrate-e2b-to-docker.ts") && !c.includes("--inspect"))
+      .length,
+    1,
+  );
 });
 
 test("sudo reads a root-private override without exposing credentials", {

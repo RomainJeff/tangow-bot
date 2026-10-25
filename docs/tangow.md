@@ -130,8 +130,55 @@ use existing private configuration or `E2B_DOMAIN` and `E2B_API_KEY` on the serv
 setup saves the selected registry image and sudo preference in `.env.tangow.json` for later updates.
 
 Chrome profiles are not copied; bots must sign in again to their sites. Originals and backups are retained. Unsupported home entries stay in originals and backups,
-outside the new volumes; the setup guide documents the scope. `provider docker` confirms an
-existing Docker deployment but refuses E2B because reverse home migration is unsupported.
+outside the new volumes; the setup guide documents the scope.
+
+## Switch E2B to Docker
+
+Run this on the source deployment server, with a clean checkout containing this command,
+Docker access and enough local disk for backups and the E2B volumes. Keep the current private
+E2B override and credentials. Docker also needs `SANDBOX_SUPERVISOR_TOKEN` in `.env`.
+
+```bash
+./tangow provider docker --dry-run
+./tangow provider docker --migrate-existing
+```
+
+The consent flag authorizes a maintenance window. Finish or cancel queued and active runs,
+release computer control and let execution leases end first. Homes must already use volumes;
+finish the existing E2B home upgrade before migrating snapshot homes.
+
+Tangow builds matching Docker application, worker, supervisor and computer images, stops API
+and worker, backs up the database and local data, then confirms E2B worker and computer teardown.
+Computer VMs are destroyed to release their mounts; persistent E2B volumes are retained.
+Running processes, browser profiles and other files outside bot/shared volumes do not migrate.
+Bots may need to sign in again.
+
+Every E2B bot-private volume, including archived bots and bots without an active computer, and
+every space-shared volume is copied once into `data/volumes/rakazo-<volumeId>`. Copies preserve
+files, executable and permission bits, and empty directories, and are verified by file hashes
+and a complete inventory before database references switch. Bot, space and volume IDs stay the
+same. An existing Docker directory is reused only when it matches exactly; differing copies
+are retained and block migration. Symbolic links, special files, unsupported paths and files
+larger than 256 MiB block migration rather than being skipped. Resolve these entries before
+retrying; this version does not stream large files.
+
+The preflight checks database blockers before downtime. Source file inventories and import
+space checks run after E2B computers have stopped. An unsupported entry or insufficient import
+space therefore leaves the deployment in maintenance until resolved; this version does not
+provide a complete source-file inventory or total storage estimate before the maintenance window.
+
+Tangow retains `.env.tangow.docker.json`, a private source override and an import journal in
+`data/docker-provider-migration/` until cutover succeeds. On failure, leave services stopped and
+rerun `./tangow provider docker` from the same revision. Verified volumes are reused; an
+incomplete staging directory is recopied. After configuration cutover, retrying startup does
+not copy E2B files over Docker data. Ordinary Tangow mutations and E2B setup refuse an incomplete
+Docker migration. Do not delete journals, manually restart Compose or restore an older database
+or configuration. Recovery proceeds toward Docker.
+
+Completion verifies Docker revision, images and service readiness. Then check a real bot run
+and its computer, including private-file writes and shared-file access, before removing any
+E2B resources. Original E2B volumes and private backups under `backups/docker-<operationId>`
+are never deleted by this command. A local `data` backup alone does not back up remote E2B files.
 
 ## Recover an interrupted operation
 
