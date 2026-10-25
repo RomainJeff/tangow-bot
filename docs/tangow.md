@@ -2,7 +2,8 @@
 
 Tangow runs **directly on the server**, from a Rakazo source checkout. It updates the application
 and the computer builds for the configured provider. Run `./tangow` or `pnpm tangow`; it does not
-operate the published-image installer or install E2B infrastructure.
+operate the published-image installer or install E2B infrastructure. Coding agents can use the project [Tangow skill](../.agents/skills/tangow/SKILL.md)
+for lifecycle operations and recovery.
 
 ```bash
 ./tangow status

@@ -252,7 +252,12 @@ test("provider setup forwards sudo and migration consent without reversing E2B h
   ]);
 });
 
-test("sudo reads a root-private override without exposing credentials", (t) => {
+test("sudo reads a root-private override without exposing credentials", {
+  skip:
+    process.getuid?.() === 0
+      ? "Root bypasses file permission checks; exercise this case as an unprivileged user."
+      : false,
+}, (t) => {
   const f = fixture(t, { e2b: true });
   const filename = path.join(f.root, ".env.e2b.compose.json");
   chmodSync(filename, 0);
