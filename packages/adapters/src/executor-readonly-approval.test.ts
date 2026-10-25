@@ -24,7 +24,7 @@ import { SlackMcpEmulator } from "./slack-mcp-emulator.js";
 vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ComputerLifecycleModule>()),
   acquireComputerExecutionLease: async () => null,
-  provisionComputer: async () => ({ id: "computer-1", kind: "desktop" }),
+  provisionComputer: async () => ({ id: "computer-1", kind: "docker" }),
 }));
 
 vi.mock("./auto-review.js", async (importOriginal) => ({

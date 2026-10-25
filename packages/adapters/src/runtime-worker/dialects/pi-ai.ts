@@ -19,7 +19,7 @@ import type {
   ReplyFinal,
   ReplyPart,
 } from "@rakazo/adapter-kit";
-import { conversationSessionId, streamRunModel } from "../../pi-runtime.js";
+import { conversationSessionId, streamRunModel } from "../../pi-run-model.js";
 import { billedPromptTokens, providerCacheTokens } from "../../pi-runtime-limits.js";
 import type { ModelRelay, RelayUsage } from "../model-relay.js";
 import { prunePiAiImages } from "./pi-ai-images.js";

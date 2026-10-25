@@ -12,7 +12,6 @@ import {
 } from "react";
 import { Link } from "react-router-dom";
 import { ApprovalRulesSettings } from "../components/ApprovalRulesSettings";
-import { ComputersUnavailableHint } from "../components/ComputersUnavailableHint";
 import { DesktopUpdateSection } from "../components/DesktopUpdates";
 import { SoftwareUpdateSection } from "../components/SoftwareUpdateSection";
 import { getDisplayAgentSteps, setDisplayAgentSteps } from "../lib/agent-steps-pref";
@@ -238,20 +237,6 @@ export function UsageSettingsPanel({
       <p className={`text-[12.5px] text-muted-foreground/80 ${usage ? "mt-2" : "mt-3"}`}>
         <Trans>Model spend uses your provider keys.</Trans>
       </p>
-    </div>
-  );
-}
-
-export function ComputerSettingsPanel() {
-  return (
-    <div
-      data-testid="computers-setup-settings"
-      className="rounded-card bg-group shadow-group px-4 py-4"
-    >
-      <h3 className="text-[15px] font-medium text-foreground">
-        <Trans>Computers</Trans>
-      </h3>
-      <ComputersUnavailableHint className="mt-3 text-[13px] leading-relaxed text-muted-foreground" />
     </div>
   );
 }

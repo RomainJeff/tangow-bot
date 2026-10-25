@@ -1,5 +1,4 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import type { ComputerStatus } from "@rakazo/contracts";
 import { Button, Label, Popover, PopoverContent, PopoverTrigger, Textarea } from "@rakazo/ui-web";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
@@ -21,13 +20,11 @@ export type TeachMenuAction = { disabled: boolean; onSelect: () => void };
  */
 export function TeachComputerOverlayControl({
   botId,
-  computer,
   busy: busyProp,
   onRefresh,
   children,
 }: {
   botId: string;
-  computer: ComputerStatus | null;
   busy?: boolean;
   onRefresh: () => Promise<void>;
   children?: (teach: TeachMenuAction | null) => ReactNode;
@@ -101,9 +98,6 @@ export function TeachComputerOverlayControl({
       cancelled = true;
     };
   }, [botId, onRefresh]); // t omitted: identity churn must not re-lock Start
-
-  // Hide only for desktop-host bots. Null computer still shows the control so teaching can boot.
-  if (computer?.kind === "desktop") return <>{children?.(null)}</>;
 
   async function refreshView() {
     const requestBotId = botId;

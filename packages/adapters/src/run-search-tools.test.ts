@@ -27,7 +27,7 @@ import { InMemoryJobQueue } from "./wakeup.js";
 vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ComputerLifecycle>()),
   acquireComputerExecutionLease: async () => null,
-  provisionComputer: async () => ({ id: "search-computer", kind: "desktop" }),
+  provisionComputer: async () => ({ id: "search-computer", kind: "docker" }),
 }));
 
 const unmasked = { redact: (text: string) => text };
@@ -197,7 +197,7 @@ describe("search_runs authorization and archive discovery", () => {
           scope: "dedicated",
           scopeKey: "search-computer",
           homeKey: "search-computer",
-          kind: "desktop",
+          kind: "docker",
         },
       });
       await database.prisma.bot.update({

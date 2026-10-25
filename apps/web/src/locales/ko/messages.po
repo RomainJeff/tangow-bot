@@ -89,7 +89,7 @@ msgstr ""
 
 #. placeholder {0}: usage.runs
 #. placeholder {1}: usage.inputTokens + usage.outputTokens
-#: src/pages/AccountSettingsOverlay.tsx:233
+#: src/pages/AccountSettingsOverlay.tsx:232
 msgid "{0} runs · {1} tokens"
 msgstr "{0}회 실행 · 토큰 {1}개"
 
@@ -99,7 +99,7 @@ msgid "{0} will still respond to direct mentions."
 msgstr ""
 
 #. placeholder {0}: bot.name
-#: src/pages/shell/computer-preview.tsx:86
+#: src/pages/shell/computer-preview.tsx:74
 msgid "{0}'s screen"
 msgstr "{0}의 화면"
 
@@ -111,7 +111,7 @@ msgstr ""
 msgid "{botName} is speaking"
 msgstr ""
 
-#: src/pages/shell/computer-preview.tsx:115
+#: src/pages/shell/computer-preview.tsx:93
 msgid "{botName}’s computer"
 msgstr "{botName}의 컴퓨터"
 
@@ -223,7 +223,7 @@ msgstr ""
 msgid "Access token (optional)"
 msgstr "액세스 토큰(선택 사항)"
 
-#: src/pages/AccountSettingsOverlay.tsx:86
+#: src/pages/AccountSettingsOverlay.tsx:85
 msgid "Account"
 msgstr "계정"
 
@@ -385,7 +385,7 @@ msgstr ""
 msgid "Adding…"
 msgstr "추가 중…"
 
-#: src/pages/AccountSettingsOverlay.tsx:196
+#: src/pages/AccountSettingsOverlay.tsx:195
 #: src/pages/DecisionModelSettingsPanel.tsx:132
 #: src/pages/McpServersOverlay.tsx:343
 #: src/pages/model-settings/model-detail.tsx:168
@@ -518,8 +518,8 @@ msgstr "API 키"
 msgid "API key header"
 msgstr "API 키 헤더"
 
-#: src/pages/AccountSettingsOverlay.tsx:111
-#: src/pages/AccountSettingsOverlay.tsx:288
+#: src/pages/AccountSettingsOverlay.tsx:110
+#: src/pages/AccountSettingsOverlay.tsx:273
 #: src/pages/bot-page/BotHero.tsx:123
 #: src/pages/bot-page/BotHero.tsx:144
 msgid "Appearance"
@@ -661,7 +661,7 @@ msgstr "자동 모양"
 msgid "Available when {0} is idle"
 msgstr "{0}이(가) 쉬고 있을 때 사용 가능"
 
-#: src/pages/AccountSettingsOverlay.tsx:153
+#: src/pages/AccountSettingsOverlay.tsx:152
 msgid "Avatars"
 msgstr "아바타"
 
@@ -690,12 +690,12 @@ msgstr ""
 msgid "Bearer token"
 msgstr "Bearer 토큰"
 
-#: src/pages/shell/computer-preview.tsx:107
+#: src/pages/shell/computer-preview.tsx:85
 msgid "Booting live desktop…"
 msgstr "라이브 데스크톱 시작 중…"
 
 #. placeholder {0}: active?.name
-#: src/pages/shell/side-panel.tsx:275
+#: src/pages/shell/side-panel.tsx:271
 msgid "Booting up {0}’s computer"
 msgstr "{0}의 컴퓨터를 켜는 중"
 
@@ -718,11 +718,11 @@ msgstr "봇"
 msgid "Bot"
 msgstr "Bot"
 
-#: src/pages/shell/side-panel.tsx:402
+#: src/pages/shell/side-panel.tsx:395
 msgid "Bot screen"
 msgstr "Bot 화면"
 
-#: src/pages/shell/computer-preview.tsx:51
+#: src/pages/shell/computer-preview.tsx:43
 msgid "Bot screen preview"
 msgstr "Bot 화면 미리보기"
 
@@ -768,7 +768,7 @@ msgstr "서버에 연결할 수 없습니다."
 
 #: src/components/ComputerMaintenanceActions.tsx:100
 #: src/components/ComputerUpdateProgress.tsx:258
-#: src/components/teach/TeachComputerOverlay.tsx:271
+#: src/components/teach/TeachComputerOverlay.tsx:265
 #: src/lib/approval-labels.ts:14
 #: src/pages/bot-page/page-kit.tsx:148
 #: src/pages/bot-page/RoutineTriggers.tsx:296
@@ -839,7 +839,7 @@ msgstr "차트를 표시하지 못했습니다: {error}"
 msgid "Chat apps"
 msgstr "채팅 앱"
 
-#: src/pages/AccountSettingsOverlay.tsx:101
+#: src/pages/AccountSettingsOverlay.tsx:100
 msgid "Chat apps, group channels, and agent connections."
 msgstr "채팅 앱, 그룹 채널 및 Agent 연결을 관리합니다."
 
@@ -931,7 +931,7 @@ msgstr "닫기"
 msgid "Close chart"
 msgstr "차트 닫기"
 
-#: src/pages/shell/side-panel.tsx:380
+#: src/pages/shell/side-panel.tsx:375
 msgid "Close computer"
 msgstr "컴퓨터 닫기"
 
@@ -948,7 +948,7 @@ msgid "Close MCP servers"
 msgstr "MCP 서버 설정 닫기"
 
 #: src/pages/MemorySettingsOverlay.tsx:168
-#: src/pages/SettingsOverlay.tsx:117
+#: src/pages/SettingsOverlay.tsx:112
 msgid "Close memory settings"
 msgstr "기억 설정 닫기"
 
@@ -957,12 +957,12 @@ msgid "Close messaging settings"
 msgstr "메시징 설정 닫기"
 
 #: src/pages/ModelSettingsOverlay.tsx:68
-#: src/pages/SettingsOverlay.tsx:115
+#: src/pages/SettingsOverlay.tsx:110
 msgid "Close model settings"
 msgstr "AI 모델 설정 닫기"
 
 #: src/pages/bot-page/BotPage.tsx:183
-#: src/pages/shell/side-panel.tsx:157
+#: src/pages/shell/side-panel.tsx:154
 msgid "Close panel"
 msgstr "패널 닫기"
 
@@ -974,11 +974,11 @@ msgstr "미리보기 닫기"
 msgid "Close skills"
 msgstr "스킬 닫기"
 
-#: src/pages/SettingsOverlay.tsx:120
+#: src/pages/SettingsOverlay.tsx:115
 msgid "Close user settings"
 msgstr "계정 설정 닫기"
 
-#: src/pages/SettingsOverlay.tsx:119
+#: src/pages/SettingsOverlay.tsx:114
 #: src/pages/VoiceSettingsOverlay.tsx:174
 msgid "Close voice settings"
 msgstr "음성 설정 닫기"
@@ -1011,25 +1011,25 @@ msgstr "완료"
 
 #: src/pages/bot-page/SettingsTab.tsx:109
 #: src/pages/bot-page/SettingsTab.tsx:118
-#: src/pages/SettingsOverlay.tsx:105
+#: src/pages/SettingsOverlay.tsx:100
 #: src/pages/shell/block-views.tsx:131
 #: src/pages/shell/bot-panel.tsx:28
 msgid "Computer"
 msgstr "컴퓨터"
 
-#: src/pages/shell/computer-preview.tsx:110
+#: src/pages/shell/computer-preview.tsx:88
 msgid "Computer failed to boot"
 msgstr "컴퓨터를 시작하지 못했습니다"
 
-#: src/pages/shell/side-panel.tsx:421
+#: src/pages/shell/side-panel.tsx:414
 msgid "Computer is asleep"
 msgstr "컴퓨터가 절전 상태입니다"
 
-#: src/pages/shell/computer-preview.tsx:109
+#: src/pages/shell/computer-preview.tsx:87
 msgid "Computer is asleep. Open it to wake."
 msgstr "컴퓨터가 절전 상태입니다. 열어 깨우세요."
 
-#: src/pages/shell/computer-preview.tsx:111
+#: src/pages/shell/computer-preview.tsx:89
 msgid "Computer is stopped"
 msgstr "컴퓨터가 중지됨"
 
@@ -1044,14 +1044,6 @@ msgstr "컴퓨터를 사용할 수 없음"
 #: src/components/ComputerUpdateProgress.tsx:66
 msgid "Computer updated"
 msgstr ""
-
-#: src/pages/AccountSettingsOverlay.tsx:252
-msgid "Computers"
-msgstr "컴퓨터"
-
-#: src/components/ComputersUnavailableHint.tsx:7
-msgid "Computers are off. Set SANDBOX_PROVIDER=docker with SANDBOX_SUPERVISOR_TOKEN, or set SANDBOX_PROVIDER to e2b with its API key. Recreate the stack after changing .env."
-msgstr "컴퓨터가 꺼져 있습니다. SANDBOX_PROVIDER=docker와 SANDBOX_SUPERVISOR_TOKEN을 설정하거나, SANDBOX_PROVIDER를 e2b로 두고 해당 API 키를 넣으세요. .env 변경 후 스택을 다시 만드세요."
 
 #: src/pages/ModelSettingsOverlay.tsx:88
 msgid "Configured by deployment"
@@ -1220,7 +1212,7 @@ msgstr "비밀번호를 변경할 수 없습니다"
 msgid "Could not change the default model"
 msgstr "기본 모델을 변경하지 못했습니다."
 
-#: src/components/teach/TeachComputerOverlay.tsx:94
+#: src/components/teach/TeachComputerOverlay.tsx:91
 msgid "Could not check teaching status. Refresh the view to continue."
 msgstr "가르치기 상태를 확인하지 못했습니다. 화면을 새로고침한 뒤 이어가세요."
 
@@ -1521,10 +1513,6 @@ msgstr "확인 규칙을 저장하지 못했습니다."
 msgid "Could not save skill"
 msgstr "스킬을 저장하지 못했습니다"
 
-#: src/pages/HostComputerPrompt.tsx:47
-msgid "Could not save that choice"
-msgstr "선택 내용을 저장하지 못했습니다."
-
 #: src/pages/VoiceSettingsOverlay.tsx:139
 msgid "Could not save that voice"
 msgstr "목소리를 저장하지 못했습니다."
@@ -1550,7 +1538,7 @@ msgstr "메시지를 보내지 못했습니다."
 msgid "Could not start OAuth"
 msgstr "OAuth 인증을 시작하지 못했습니다."
 
-#: src/components/teach/TeachComputerOverlay.tsx:175
+#: src/components/teach/TeachComputerOverlay.tsx:169
 msgid "Could not start teaching"
 msgstr "가르치기를 시작하지 못했습니다."
 
@@ -1603,7 +1591,7 @@ msgstr "만들 수 없음"
 msgid "Couldn't load messaging settings"
 msgstr "메시징 설정을 불러올 수 없습니다"
 
-#: src/pages/AccountSettingsOverlay.tsx:76
+#: src/pages/AccountSettingsOverlay.tsx:75
 msgid "Couldn't update avatars"
 msgstr "아바타를 업데이트할 수 없습니다"
 
@@ -1716,7 +1704,7 @@ msgstr "고객 지원"
 msgid "Customize"
 msgstr "사용자 지정"
 
-#: src/pages/AccountSettingsOverlay.tsx:283
+#: src/pages/AccountSettingsOverlay.tsx:268
 msgid "Dark"
 msgstr "다크"
 
@@ -1728,7 +1716,7 @@ msgstr "일"
 msgid "days"
 msgstr "일"
 
-#: src/pages/SettingsOverlay.tsx:102
+#: src/pages/SettingsOverlay.tsx:97
 msgid "Decision Model"
 msgstr ""
 
@@ -1870,7 +1858,7 @@ msgid "Disconnecting…"
 msgstr "연결 해제 중…"
 
 #: src/components/ComputerUpdateProgress.tsx:215
-#: src/components/teach/TeachComputerOverlay.tsx:291
+#: src/components/teach/TeachComputerOverlay.tsx:285
 #: src/pages/shell/message-cards.tsx:89
 msgid "Dismiss"
 msgstr "닫기"
@@ -1883,8 +1871,8 @@ msgstr "오류 닫기"
 msgid "Dismissed. Reconnect anytime from MCP settings."
 msgstr "지금은 연결하지 않았습니다. MCP 설정에서 언제든 다시 연결할 수 있습니다."
 
-#: src/pages/AccountSettingsOverlay.tsx:126
-#: src/pages/AccountSettingsOverlay.tsx:134
+#: src/pages/AccountSettingsOverlay.tsx:125
+#: src/pages/AccountSettingsOverlay.tsx:133
 msgid "Display agent steps"
 msgstr "에이전트 단계 표시"
 
@@ -1896,14 +1884,6 @@ msgstr "표시 이름"
 #: src/components/teach/TeachRecordingChrome.tsx:67
 msgid "Do not type passwords into the demo. Use Take control for credentials."
 msgstr "시연 중에는 비밀번호를 입력하지 마세요. 인증이 필요하면 직접 조작을 사용하세요."
-
-#: src/pages/HostComputerPrompt.tsx:84
-msgid "Docker"
-msgstr "Docker"
-
-#: src/pages/HostComputerPrompt.tsx:63
-msgid "Docker limits access to your computer for added security. Using {hostLabel} lets bots work with your local files and tools."
-msgstr "Docker는 보안을 위해 컴퓨터 접근을 제한합니다. {hostLabel}에서는 Bot이 로컬 파일과 도구로 작업할 수 있습니다."
 
 #: src/pages/Auth.tsx:224
 msgid "Don’t have an account?"
@@ -2075,7 +2055,7 @@ msgstr "{0} 펼치기"
 msgid "Export"
 msgstr "내보내기"
 
-#: src/components/teach/TeachComputerOverlay.tsx:252
+#: src/components/teach/TeachComputerOverlay.tsx:246
 msgid "Export this week's list from the CRM and drop it in the shared folder"
 msgstr "CRM에서 이번 주 목록을 내려받아 공유 폴더에 넣기"
 
@@ -2179,8 +2159,8 @@ msgstr "전체 화면"
 msgid "FYI"
 msgstr ""
 
-#: src/pages/SettingsOverlay.tsx:99
-#: src/pages/SettingsOverlay.tsx:111
+#: src/pages/SettingsOverlay.tsx:94
+#: src/pages/SettingsOverlay.tsx:106
 msgid "General"
 msgstr "일반"
 
@@ -2297,7 +2277,7 @@ msgstr "이 봇이 어떻게 동작해야 하는지"
 msgid "How to check"
 msgstr "완료 확인 방법"
 
-#: src/pages/shell/side-panel.tsx:451
+#: src/pages/shell/side-panel.tsx:444
 msgid "I’m done"
 msgstr "조작 끝내기"
 
@@ -2411,9 +2391,9 @@ msgstr "key"
 msgid "Knowledge"
 msgstr "지식"
 
-#: src/pages/AccountSettingsOverlay.tsx:146
-#: src/pages/AccountSettingsOverlay.tsx:404
-#: src/pages/AccountSettingsOverlay.tsx:421
+#: src/pages/AccountSettingsOverlay.tsx:145
+#: src/pages/AccountSettingsOverlay.tsx:389
+#: src/pages/AccountSettingsOverlay.tsx:406
 msgid "Language"
 msgstr "언어"
 
@@ -2437,7 +2417,7 @@ msgstr "나가기"
 msgid "Let bots complete multi-step web page tasks faster."
 msgstr ""
 
-#: src/pages/AccountSettingsOverlay.tsx:282
+#: src/pages/AccountSettingsOverlay.tsx:267
 msgid "Light"
 msgstr "라이트"
 
@@ -2503,10 +2483,6 @@ msgstr "불러오는 중…"
 msgid "Local"
 msgstr "로컬"
 
-#: src/pages/HostComputerPrompt.tsx:69
-msgid "Local access lets bots run commands without asking. Avoid it on shared or public servers."
-msgstr "로컬 접근을 허용하면 Bot이 묻지 않고 명령을 실행할 수 있습니다. 공유 서버나 공개 서버에서는 허용하지 마세요."
-
 #: src/pages/LocalSettings.tsx:22
 msgid "Local Server Settings"
 msgstr ""
@@ -2529,7 +2505,7 @@ msgstr "이 컴퓨터에서 실행 중인 작업이 없는지 확인하세요."
 msgid "Manage MCP servers"
 msgstr "MCP 서버 관리"
 
-#: src/pages/AccountSettingsOverlay.tsx:104
+#: src/pages/AccountSettingsOverlay.tsx:103
 msgid "Manage messaging settings"
 msgstr "메시징 설정 관리"
 
@@ -2594,7 +2570,7 @@ msgstr "참여 Bot ({GROUP_MEMBER_MIN}~{GROUP_MEMBER_MAX}개 선택)"
 
 #: src/pages/bot-page/KnowledgeTab.tsx:36
 #: src/pages/MemorySettingsOverlay.tsx:159
-#: src/pages/SettingsOverlay.tsx:101
+#: src/pages/SettingsOverlay.tsx:96
 msgid "Memory"
 msgstr "기억"
 
@@ -2655,7 +2631,7 @@ msgstr "메시지를 입력하세요"
 msgid "Messaged {peer}"
 msgstr "{peer}에게 메시지 보냄"
 
-#: src/pages/AccountSettingsOverlay.tsx:98
+#: src/pages/AccountSettingsOverlay.tsx:97
 #: src/pages/MessagingSettingsOverlay.tsx:99
 msgid "Messaging"
 msgstr "메시징"
@@ -2712,7 +2688,7 @@ msgstr "모델 ID"
 msgid "Model options"
 msgstr "모델 선택지"
 
-#: src/pages/AccountSettingsOverlay.tsx:239
+#: src/pages/AccountSettingsOverlay.tsx:238
 msgid "Model spend uses your provider keys."
 msgstr "모델 사용 비용은 연결한 서비스의 API 키로 청구됩니다."
 
@@ -2722,7 +2698,7 @@ msgstr "모델이 변경되었습니다."
 
 #: src/pages/LocalSettings.tsx:36
 #: src/pages/ModelSettingsOverlay.tsx:61
-#: src/pages/SettingsOverlay.tsx:100
+#: src/pages/SettingsOverlay.tsx:95
 msgid "Models"
 msgstr "AI 모델"
 
@@ -2790,7 +2766,7 @@ msgstr "이 루틴의 이름을 정하세요"
 msgid "Needs takeover"
 msgstr "인수 필요"
 
-#: src/pages/shell/side-panel.tsx:324
+#: src/pages/shell/side-panel.tsx:320
 msgid "Needs you"
 msgstr "확인 필요"
 
@@ -3059,8 +3035,8 @@ msgstr "에이전트에는 처음 50개 스킬만 표시됩니다."
 
 #: src/pages/ScratchpadSection.tsx:159
 #: src/pages/shell/block-views.tsx:146
-#: src/pages/shell/computer-preview.tsx:75
-#: src/pages/shell/computer-preview.tsx:80
+#: src/pages/shell/computer-preview.tsx:63
+#: src/pages/shell/computer-preview.tsx:68
 msgid "Open"
 msgstr "열기"
 
@@ -3073,7 +3049,7 @@ msgstr "{0} 열기"
 msgid "Open in chat"
 msgstr "채팅에서 열기"
 
-#: src/pages/shell/computer-preview.tsx:44
+#: src/pages/shell/computer-preview.tsx:38
 msgid "Open in full window"
 msgstr "전체 창으로 열기"
 
@@ -3107,7 +3083,7 @@ msgstr ""
 msgid "Optional"
 msgstr "선택 사항"
 
-#: src/pages/AccountSettingsOverlay.tsx:199
+#: src/pages/AccountSettingsOverlay.tsx:198
 msgid "Optional controls most people never need"
 msgstr "필요할 때만 쓰는 세부 설정"
 
@@ -3123,7 +3099,7 @@ msgstr "또는 API 키 연결"
 msgid "Or paste an API key"
 msgstr "또는 API 키 붙여넣기"
 
-#: src/pages/AccountSettingsOverlay.tsx:171
+#: src/pages/AccountSettingsOverlay.tsx:170
 msgid "Organic"
 msgstr "자연스럽게"
 
@@ -3310,13 +3286,13 @@ msgstr "OAuth 다시 연결"
 msgid "Reconnecting"
 msgstr "다시 연결 중"
 
-#: src/components/teach/TeachComputerOverlay.tsx:85
-#: src/components/teach/TeachComputerOverlay.tsx:136
-#: src/components/teach/TeachComputerOverlay.tsx:169
+#: src/components/teach/TeachComputerOverlay.tsx:82
+#: src/components/teach/TeachComputerOverlay.tsx:130
+#: src/components/teach/TeachComputerOverlay.tsx:163
 msgid "Recording may have started, but the view could not refresh"
 msgstr "녹화가 시작됐을 수 있지만 화면을 새로고침하지 못했습니다"
 
-#: src/components/teach/TeachComputerOverlay.tsx:283
+#: src/components/teach/TeachComputerOverlay.tsx:277
 msgid "Recording started. Refresh the view to continue."
 msgstr "녹화가 시작되었습니다. 화면을 새로고침한 뒤 이어가세요."
 
@@ -3360,15 +3336,15 @@ msgstr ""
 msgid "Recreating the computer"
 msgstr ""
 
-#: src/components/teach/TeachComputerOverlay.tsx:288
+#: src/components/teach/TeachComputerOverlay.tsx:282
 msgid "Refresh view"
 msgstr "화면 새로고침"
 
-#: src/components/teach/TeachComputerOverlay.tsx:288
+#: src/components/teach/TeachComputerOverlay.tsx:282
 msgid "Refreshing…"
 msgstr "새로고침 중…"
 
-#: src/pages/shell/side-panel.tsx:441
+#: src/pages/shell/side-panel.tsx:434
 msgid "Release"
 msgstr "제어권 돌려주기"
 
@@ -3569,7 +3545,7 @@ msgstr "리비전 {0}"
 msgid "Revoke"
 msgstr "연결 해제"
 
-#: src/pages/AccountSettingsOverlay.tsx:171
+#: src/pages/AccountSettingsOverlay.tsx:170
 msgid "Robot"
 msgstr "로봇"
 
@@ -3763,7 +3739,7 @@ msgid "Sent to {recipient} · {time}"
 msgstr ""
 
 #: src/components/integrations/IntegrationSetup.tsx:132
-#: src/pages/AccountSettingsOverlay.tsx:187
+#: src/pages/AccountSettingsOverlay.tsx:186
 #: src/pages/LocalSettings.tsx:42
 msgid "Server integrations"
 msgstr ""
@@ -3782,8 +3758,8 @@ msgstr "서버 URL"
 
 #: src/pages/bot-page/BotPage.tsx:101
 #: src/pages/MessagingSettingsOverlay.tsx:362
-#: src/pages/SettingsOverlay.tsx:111
-#: src/pages/SettingsOverlay.tsx:167
+#: src/pages/SettingsOverlay.tsx:106
+#: src/pages/SettingsOverlay.tsx:162
 #: src/pages/shell/sidebar-footer.tsx:199
 #: src/pages/shell/sidebar-footer.tsx:206
 msgid "Settings"
@@ -3850,7 +3826,7 @@ msgstr "더 보기"
 msgid "Show password"
 msgstr "비밀번호 표시"
 
-#: src/pages/AccountSettingsOverlay.tsx:129
+#: src/pages/AccountSettingsOverlay.tsx:128
 msgid "Show the tools a bot used, with their input and output."
 msgstr "봇이 사용한 도구를 입력 및 출력과 함께 표시합니다."
 
@@ -3896,7 +3872,7 @@ msgstr "스킬"
 
 #: src/components/ask/QuestionCard.tsx:194
 #: src/components/integrations/IntegrationSetup.tsx:364
-#: src/pages/shell/side-panel.tsx:448
+#: src/pages/shell/side-panel.tsx:441
 msgid "Skip"
 msgstr "건너뛰기"
 
@@ -3949,7 +3925,7 @@ msgstr "이 답변 읽기"
 msgid "Specific agents"
 msgstr "특정 에이전트"
 
-#: src/components/teach/TeachComputerOverlay.tsx:267
+#: src/components/teach/TeachComputerOverlay.tsx:261
 msgid "Start recording"
 msgstr "작업 녹화 시작"
 
@@ -3957,7 +3933,7 @@ msgstr "작업 녹화 시작"
 msgid "Starting"
 msgstr "시작 중"
 
-#: src/components/teach/TeachComputerOverlay.tsx:265
+#: src/components/teach/TeachComputerOverlay.tsx:259
 #: src/pages/model-settings/subscription-sign-in.tsx:101
 #: src/pages/Onboarding.tsx:621
 msgid "Starting…"
@@ -3972,8 +3948,8 @@ msgid "Steps"
 msgstr "실행 단계"
 
 #: src/pages/shell/composer.tsx:299
-#: src/pages/shell/side-panel.tsx:340
-#: src/pages/shell/side-panel.tsx:345
+#: src/pages/shell/side-panel.tsx:336
+#: src/pages/shell/side-panel.tsx:341
 msgid "Stop"
 msgstr "중지"
 
@@ -4032,13 +4008,13 @@ msgstr "봇 전환"
 msgid "Switching…"
 msgstr "전환 중…"
 
-#: src/pages/AccountSettingsOverlay.tsx:281
+#: src/pages/AccountSettingsOverlay.tsx:266
 msgid "System"
 msgstr "시스템"
 
 #: src/components/ComputerMaintenanceActions.tsx:160
-#: src/components/teach/TeachComputerOverlay.tsx:219
-#: src/components/teach/TeachComputerOverlay.tsx:230
+#: src/components/teach/TeachComputerOverlay.tsx:213
+#: src/components/teach/TeachComputerOverlay.tsx:224
 msgid "Teach a task"
 msgstr "작업 가르치기"
 
@@ -4053,7 +4029,7 @@ msgstr "팀 공용"
 
 #: src/components/ComputerUpdateProgress.tsx:61
 #: src/pages/ComputerSettingsPanel.tsx:103
-#: src/pages/shell/computer-preview.tsx:115
+#: src/pages/shell/computer-preview.tsx:93
 msgid "Team Computer"
 msgstr "팀 컴퓨터"
 
@@ -4093,10 +4069,6 @@ msgstr "선택한 기억 서비스는 현재 빌드에서 사용할 수 없습�
 msgid "Thinking"
 msgstr "생각 깊이"
 
-#: src/pages/shell/computer-preview.tsx:95
-msgid "This bot runs on this computer, not a Linux desktop. Shell and files use your home folder."
-msgstr "이 Bot은 별도 Linux 화면이 아니라 현재 컴퓨터에서 실행됩니다. 터미널과 파일 작업은 홈 폴더를 사용합니다."
-
 #: src/components/AgentSteps.tsx:83
 msgid "This call ran before step details were recorded."
 msgstr "이 호출은 단계 세부 정보가 기록되기 전에 실행되었습니다."
@@ -4110,17 +4082,9 @@ msgstr "이 작업은 되돌릴 수 없습니다."
 msgid "This chat is view-only"
 msgstr "이 채팅은 읽기 전용입니다"
 
-#: src/pages/HostComputerPrompt.tsx:22
-msgid "this computer"
-msgstr "이 컴퓨터"
-
 #: src/components/ArtifactFileCard.tsx:132
 msgid "This file is not valid UTF-8 Markdown."
 msgstr "이 파일은 올바른 UTF-8 Markdown 형식이 아닙니다."
-
-#: src/pages/HostComputerPrompt.tsx:22
-msgid "this Mac"
-msgstr "이 Mac"
 
 #: src/pages/shell/dialogs.tsx:296
 msgid "This permanently removes every message and stops current work. The chat remains available."
@@ -4267,7 +4231,7 @@ msgstr ""
 msgid "Updated"
 msgstr "업데이트됨"
 
-#: src/pages/SettingsOverlay.tsx:106
+#: src/pages/SettingsOverlay.tsx:101
 msgid "Updates"
 msgstr "업데이트"
 
@@ -4295,16 +4259,12 @@ msgstr ""
 msgid "Updating…"
 msgstr "업데이트 중…"
 
-#: src/pages/AccountSettingsOverlay.tsx:229
-#: src/pages/SettingsOverlay.tsx:104
+#: src/pages/AccountSettingsOverlay.tsx:228
+#: src/pages/SettingsOverlay.tsx:99
 #: src/pages/shell/sidebar-footer.tsx:211
 #: src/pages/shell/sidebar-footer.tsx:222
 msgid "Usage"
 msgstr "사용량"
-
-#: src/pages/HostComputerPrompt.tsx:92
-msgid "Use {hostLabel}"
-msgstr "{hostLabel} 사용"
 
 #: src/pages/model-settings/model-detail.tsx:155
 #: src/pages/Onboarding.tsx:486
@@ -4330,7 +4290,7 @@ msgstr "확인 중…"
 
 #: src/pages/bot-page/SettingDetails.tsx:183
 #: src/pages/bot-page/SettingDetails.tsx:187
-#: src/pages/SettingsOverlay.tsx:103
+#: src/pages/SettingsOverlay.tsx:98
 #: src/pages/shell/thread-header.tsx:139
 #: src/pages/shell/thread-header.tsx:140
 #: src/pages/VoiceSettingsOverlay.tsx:170
@@ -4388,7 +4348,7 @@ msgstr "이 Bot의 기억은 어떻게 할까요?"
 msgid "What it does, in one line"
 msgstr "하는 일을 한 줄로"
 
-#: src/components/teach/TeachComputerOverlay.tsx:244
+#: src/components/teach/TeachComputerOverlay.tsx:238
 msgid "What result will you demonstrate?"
 msgstr "어떤 작업을 직접 보여줄까요?"
 
@@ -4424,10 +4384,6 @@ msgstr "실행 시간"
 msgid "When to use"
 msgstr "언제 사용할지"
 
-#: src/pages/HostComputerPrompt.tsx:59
-msgid "Where should bots run?"
-msgstr "Bot을 어디에서 실행할까요?"
-
 #: src/pages/Auth.tsx:212
 #: src/pages/Auth.tsx:320
 msgid "Working…"
@@ -4452,7 +4408,7 @@ msgid "Yesterday"
 msgstr "어제"
 
 #: src/components/DraftCard.tsx:64
-#: src/pages/Shell.tsx:136
+#: src/pages/Shell.tsx:135
 #: src/pages/shell/use-composer-draft.ts:52
 msgid "You"
 msgstr "나"
@@ -4466,7 +4422,7 @@ msgid "You can close this window."
 msgstr "이 창을 닫아도 됩니다."
 
 #: src/pages/ComputerSettingsPanel.tsx:109
-#: src/pages/shell/side-panel.tsx:328
+#: src/pages/shell/side-panel.tsx:324
 msgid "You have control"
 msgstr "직접 조작 중"
 
