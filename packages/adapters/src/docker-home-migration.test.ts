@@ -274,9 +274,10 @@ describe("moving a Docker home onto its volumes", () => {
 
   it.each([
     { state: "error", minutesAgo: 0, moves: true },
-    { state: "booting", minutesAgo: 10, moves: true },
-    { state: "suspending", minutesAgo: 10, moves: true },
-    { state: "booting", minutesAgo: 1, moves: false },
+    { state: "booting", minutesAgo: 31, moves: true },
+    { state: "booting", minutesAgo: 10, moves: false },
+    { state: "suspending", minutesAgo: 6, moves: true },
+    { state: "suspending", minutesAgo: 1, moves: false },
   ])(
     "moves a home whose computer an upgrade left $state $minutesAgo min ago: $moves",
     async ({ state, minutesAgo, moves }) => {

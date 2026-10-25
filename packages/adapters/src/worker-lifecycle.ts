@@ -119,23 +119,30 @@ type HomeComputer = {
 };
 type Db = Pick<PrismaClient, "$queryRaw" | "computerExecutionLease" | "bot">;
 
-/** How long a Docker computer may sit in `booting` or `suspending` before its move counts it idle. */
-const STUCK_TRANSITION_MS = 5 * 60_000;
+/**
+ * How long a Docker computer may sit in a transition before its move counts it idle. A lease-less
+ * first boot that pulls the image can legitimately stay in `booting` for many minutes.
+ */
+const STUCK_TRANSITION_MS: Record<string, number> = {
+  booting: 30 * 60_000,
+  suspending: 5 * 60_000,
+};
 
 /**
  * Whether the computer is at rest for a home move. A Docker home still to move also counts a
  * computer an upgrade caught mid-operation, so it is not refused forever: one left in `error`, or
- * in `booting` or `suspending` for minutes. Its own move reservation, which blocks boots, refreshes
+ * stuck in `booting` or `suspending`. Its own move reservation, which blocks boots, refreshes
  * `updatedAt`, so a held reservation counts too.
  */
 function atRest(computer: HomeComputer): boolean {
   if (["stopped", "suspended"].includes(computer.state)) return true;
   if (computer.kind !== "docker" || computer.homeStorage === "volumes") return false;
   if (computer.state === "error") return true;
-  if (!["booting", "suspending"].includes(computer.state)) return false;
+  const stuckAfter = STUCK_TRANSITION_MS[computer.state];
+  if (stuckAfter === undefined) return false;
   return (
     Boolean(computer.maintenanceId?.startsWith("home-move:")) ||
-    Date.now() - computer.updatedAt.getTime() >= STUCK_TRANSITION_MS
+    Date.now() - computer.updatedAt.getTime() >= stuckAfter
   );
 }
 
