@@ -60,6 +60,9 @@ Put HTTPS in front of port 5173; [docs/self-host.md](./docs/self-host.md#public-
 covers the Caddy setup and host hardening. In the desktop app choose **Existing instance** and enter
 the `https://` address.
 
+For an existing source Compose deployment, use [Tangow](./docs/tangow.md) on the server to update Rakazo, inspect logs,
+rebuild computers or migrate Docker homes to E2B.
+
 ## Local development (source checkout)
 
 You need Node.js 22.22.2 or newer in the 22.x line, Node.js 24.x, or Node.js 26+;

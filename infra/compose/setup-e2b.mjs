@@ -23,16 +23,27 @@ const overridePath = path.join(root, ".env.e2b.compose.json");
 const envPath = path.join(root, ".env");
 const composePath = path.join(root, "infra/compose/docker-compose.yml");
 let apiKey = "";
+let dockerSudo = false;
+const privilegedDocker = [
+  "sudo",
+  "-n",
+  "--preserve-env=E2B_API_KEY,E2B_DOMAIN,E2B_API_URL,E2B_SANDBOX_URL,WORKER_TEMPLATE",
+  "docker",
+];
 
 function run(command, args, env = process.env, timeout) {
-  const result = spawnSync(command, args, {
-    cwd: root,
-    env,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-    maxBuffer: 64 * 1024 * 1024,
-    timeout,
-  });
+  const result = spawnSync(
+    dockerSudo && command === "docker" ? privilegedDocker[0] : command,
+    dockerSudo && command === "docker" ? [...privilegedDocker.slice(1), ...args] : args,
+    {
+      cwd: root,
+      env,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      maxBuffer: 64 * 1024 * 1024,
+      timeout,
+    },
+  );
   if (result.error || result.status !== 0) {
     // Child output can include provider credentials or configuration. Keep failures local and generic.
     throw new Error(`${command} ${args[0] ?? ""} failed. Check tool access and configuration.`);
@@ -104,16 +115,18 @@ async function main() {
     options: {
       "computer-image": { type: "string" },
       "dry-run": { type: "boolean" },
+      sudo: { type: "boolean" },
       "migrate-existing": { type: "boolean" },
       help: { type: "boolean" },
     },
   });
   if (values.help) {
     console.log(
-      "Usage: node infra/compose/setup-e2b.mjs --computer-image <registry>/<image>:<tag> [--dry-run] [--migrate-existing]\nExisting homes are detected and upgraded after explicit consent. Run in the deployed checkout. Docker must be usable without sudo. Domain and hidden API key are requested interactively.",
+      "Usage: node infra/compose/setup-e2b.mjs --computer-image <registry>/<image>:<tag> [--dry-run] [--migrate-existing] [--sudo]\nExisting homes are detected and upgraded after explicit consent. Run in the deployed checkout. Use --sudo when Docker requires sudo -n. Domain and hidden API key are requested interactively.",
     );
     return;
   }
+  dockerSudo = values.sudo ?? false;
   const image = values["computer-image"];
   if (
     !image ||
@@ -156,7 +169,24 @@ async function main() {
   ]);
   const compose = ["compose", "--env-file", envPath, "-f", composePath];
   const hadOverride = existsSync(overridePath);
-  const previous = hadOverride ? readFileSync(overridePath) : null;
+  let previous = null;
+  if (hadOverride) {
+    try {
+      previous = readFileSync(overridePath);
+    } catch (error) {
+      if (error.code !== "EACCES" || !dockerSudo)
+        throw new Error(
+          "Cannot read the private E2B override. Use --sudo for root-owned configuration.",
+        );
+      // Preserve bytes when recovery restores the original override.
+      const result = spawnSync("sudo", ["-n", "cat", overridePath], {
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      if (result.error || result.status !== 0)
+        throw new Error("Cannot read private override with sudo.");
+      previous = result.stdout;
+    }
+  }
   let previousData = {};
   try {
     if (previous) previousData = JSON.parse(previous.toString());
@@ -204,6 +234,7 @@ async function main() {
     prompt,
     flags: values,
     template: workerTemplate,
+    docker: dockerSudo ? privilegedDocker : ["docker"],
   });
   if (upgrade.active) run("docker", [...oldCompose, "stop", "api", "worker"]);
   upgrade.inspect(!upgrade.active);

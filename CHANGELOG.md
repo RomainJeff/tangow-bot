@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### 2026-10-25
 
+#### Added
+
+- **Tangow manages an existing source deployment from the server command line.** Update Rakazo and automatically rebuild the configured Docker images or E2B templates, inspect services and logs, clean unused Docker builds, or migrate Docker computer homes to E2B with the existing backup and recovery flow ([usage](docs/tangow.md)).
+
 #### Changed
 
 - On web, desktop and iPhone, global Settings now lists each computer with its bots and visible maintenance actions, and can update all available computers at once, reporting busy computers for a later retry without opening their screens or taking control.

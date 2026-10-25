@@ -38,8 +38,8 @@ export function acquireSetupLock(root) {
 
 /** The journal is also the rollback boundary: after preparation starts the old provider cannot safely resume. */
 export class HomeUpgrade {
-  constructor({ root, compose, env, run, prompt, flags, template }) {
-    Object.assign(this, { root, compose, env, run, prompt, flags, template });
+  constructor({ root, compose, env, run, prompt, flags, template, docker = ["docker"] }) {
+    Object.assign(this, { root, compose, env, run, prompt, flags, template, docker });
     this.journalPath = path.join(root, ".env.e2b.upgrade.json");
     this.state = existsSync(this.journalPath)
       ? JSON.parse(readFileSync(this.journalPath, "utf8"))
@@ -69,7 +69,7 @@ export class HomeUpgrade {
       script,
       ...args,
     ];
-    const result = spawnSync("docker", command, {
+    const result = spawnSync(this.docker[0], [...this.docker.slice(1), ...command], {
       cwd: this.root,
       env: { ...this.env, WORKER_TEMPLATE: this.template },
       stdio: ["ignore", "pipe", "pipe"],
@@ -149,8 +149,9 @@ export class HomeUpgrade {
     let result;
     try {
       result = spawnSync(
-        "docker",
+        this.docker[0],
         [
+          ...this.docker.slice(1),
           ...this.compose,
           "exec",
           "-T",
@@ -169,8 +170,16 @@ export class HomeUpgrade {
     const input = openSync(path.join(this.state.backup, "database.dump"), "r");
     try {
       result = spawnSync(
-        "docker",
-        [...this.compose, "exec", "-T", "postgres", "pg_restore", "--list"],
+        this.docker[0],
+        [
+          ...this.docker.slice(1),
+          ...this.compose,
+          "exec",
+          "-T",
+          "postgres",
+          "pg_restore",
+          "--list",
+        ],
         { cwd: this.root, stdio: [input, "ignore", "pipe"] },
       );
     } finally {

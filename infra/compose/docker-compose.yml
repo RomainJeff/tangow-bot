@@ -34,6 +34,7 @@ services:
       retries: 20
 
   supervisor:
+    image: rakazo/supervisor:local
     build:
       context: ../..
       dockerfile: infra/sandboxes/supervisor/Dockerfile

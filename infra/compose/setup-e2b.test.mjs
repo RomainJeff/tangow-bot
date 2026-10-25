@@ -39,6 +39,15 @@ const fs = require('node:fs');
 const args = process.argv.slice(2);
 const name = require('node:path').basename(process.argv[1]);
 fs.appendFileSync(process.env.CALLS, JSON.stringify([name,...args])+'\\n');
+if (name === 'sudo') {
+ if (args[0] !== '-n') process.exit(2);
+ const preserve = args[1]?.startsWith('--preserve-env=') ? args[1].split('=')[1].split(',') : [];
+ const index = preserve.length ? 2 : 1;
+ if (args[index] !== 'docker') process.exit(2);
+ const env = {...process.env};
+ for (const key of Object.keys(env)) if ((key.startsWith('E2B_') || key === 'WORKER_TEMPLATE') && !preserve.includes(key)) delete env[key];
+ const result = require('node:child_process').spawnSync('docker', args.slice(index+1), {stdio:'inherit', env}); process.exit(result.status ?? 1);
+}
 if (name === 'tar') { fs.writeFileSync(args[args.indexOf('-czf')+1], 'fake-data-backup'); process.exit(0); }
 if (name === 'docker' && args.includes('scripts/setup-e2b-homes.ts')) {
  if (args.includes('--verify') && process.env.FAIL_VERIFY) process.exit(1);
@@ -61,14 +70,14 @@ if (name === 'git') {
  if (args[0] === 'image') console.log('registry.example.com/computer@sha256:'+'c'.repeat(64));
  if (args.includes('up') && process.env.FAIL_START && fs.existsSync('.env.e2b.compose.json')) process.exit(1);
  if (args.includes('logs')) console.log('worker ready');
- if (args.includes('@rakazo/adapters') && process.env.FAIL_CONTAINER_CONNECT) process.exit(1);
+ if (args.includes('@rakazo/adapters') && (process.env.FAIL_CONTAINER_CONNECT || !process.env.E2B_API_KEY)) process.exit(1);
  if (args.includes('exec') && !args.includes('ps') && !args.includes('@rakazo/adapters')) {
    global.fetch = async () => ({ ok: true, json: async () => ({ok:true,sandbox:process.env.FAIL_HEALTH?'docker':'e2b',revision:'${sha}'}) });
    eval('(async () => {' + args.at(-1) + '})()').catch(() => process.exit(1));
  }
 } else if (name === 'pnpm' && process.env.FAIL_BUILD && args.includes('template:build')) process.exit(1);
 `;
-  for (const name of ["git", "docker", "pnpm", "tar"])
+  for (const name of ["git", "docker", "pnpm", "tar", "sudo"])
     writeFileSync(path.join(root, "bin", name), fake, { mode: 0o755 });
   const calls = path.join(root, "calls");
   const baseEnv = { ...process.env };
@@ -402,4 +411,22 @@ test("the final probe uses a custom worker template selected by the operator", (
     EXPECT_TEMPLATE: "custom-pi-worker",
   });
   assert.equal(result.status, 0, result.stderr);
+});
+
+test("sudo covers migration inventory and database backup and restore verification", (t) => {
+  const f = fixture(t);
+  const result = f.invoke(["--sudo", "--migrate-existing"], { UPGRADE_EXISTING: "1" });
+  assert.equal(result.status, 0, result.stderr);
+  const calls = f.calls();
+  const privileged = calls.filter((c) => c[0] === "sudo");
+  assert.equal(privileged.length, calls.filter((c) => c[0] === "docker").length);
+  assert.ok(
+    privileged.every(
+      (c) => c[1] === "-n" && c[2].startsWith("--preserve-env=E2B_API_KEY,") && c[3] === "docker",
+    ),
+  );
+  assert.ok(privileged.some((c) => c.includes("scripts/setup-e2b-homes.ts")));
+  assert.ok(privileged.some((c) => c.some((arg) => arg.includes("pg_dump"))));
+  assert.ok(privileged.some((c) => c.includes("pg_restore")));
+  assert.doesNotMatch(result.stdout + result.stderr, /fake-test-secret/);
 });

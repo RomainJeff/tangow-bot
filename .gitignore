@@ -65,3 +65,7 @@ apps/mobile/builds/
 .env.e2b.plan.json
 
 .env.e2b.setup.lock
+
+# Tangow deployment lock and private atomic environment writes
+.env.tangow.*
+.env.tangow-*
