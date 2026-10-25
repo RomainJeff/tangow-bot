@@ -126,8 +126,10 @@ export function projectThread(entries: readonly ThreadEntry[]): ProjectedThread 
           }
           if (entry.type !== "tool.call" || entry.payload.name !== "run_subagent") continue;
           const answer = answers.answerOf.get(entry.id);
-          if (answer?.type === "subagent") {
-            push(subagentItem(answer), answer.id);
+          // A card's outcome may have replaced the helper's answer; the helper still shows.
+          const helperAnswer = answers.replacedOf.get(entry.id) ?? answer;
+          if (helperAnswer?.type === "subagent") {
+            push(subagentItem(helperAnswer), helperAnswer.id);
           } else if (!answer && !finishedAt.has(entry.runId)) {
             const helper: SubagentItem = {
               kind: "subagent",

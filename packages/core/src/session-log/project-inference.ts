@@ -13,7 +13,6 @@ import { isInferenceEntry, needsThePerson, REPLY_QUOTE_MAX_LENGTH } from "@rakaz
 import { blocksToAgentHistoryText } from "../attachments.js";
 import { escapeDirectoryField, escapePromptData, renderBotMessageBlock } from "../bot-messages.js";
 import { messageReaction } from "../message-reactions.js";
-import { isReplacedDraftOutput } from "../outbound-draft.js";
 import type { ChildSession } from "./child-sessions.js";
 import { childSessionsOf } from "./child-sessions.js";
 import { foldRuns, toolAnswers } from "./run-fold.js";
@@ -451,8 +450,8 @@ function replayParts(
       calls: block.steps
         .flatMap((step) => step.calls ?? [])
         .map((call) => {
-          // What the user left on a replaced draft is read whole: the bot has no other copy.
-          if (isReplacedDraftOutput(call.output)) {
+          // A card's outcome is read whole: it holds what the user left, with no other copy.
+          if (call.outcome) {
             return {
               id: call.id ?? "",
               name: call.name,

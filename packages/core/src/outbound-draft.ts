@@ -229,14 +229,6 @@ export function replacedDraftResult(effect: {
   };
 }
 
-/**
- * Whether a tool result, as logged, is a replaced draft's: it holds what the user left, which the
- * bot has no other way to read, so a short replay of past results keeps it whole.
- */
-export function isReplacedDraftOutput(output: string): boolean {
-  return /^\{\s*"ok":\s*false,\s*"replaced":\s*true/.test(output);
-}
-
 /** Why a body cannot be sent, or undefined when it can. */
 export function draftTextError(text: string): string | undefined {
   if (!text.trim()) return "This message is empty.";
