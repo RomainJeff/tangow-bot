@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Fixed
 
+- Every bot's computer screen now has the dock with Browser, Files and Terminal, on E2B and for the additional bots of a Docker Team Computer, instead of a bare desktop with only the browser.
 - On a self-hosted E2B reached through `E2B_SANDBOX_URL`, a bot's computer screen and taking control of it now open instead of showing a "Bad gateway" page.
 - Bots running in isolated Pi workers on E2B now send you their answers instead of sometimes finishing a run without a word.
 - Bots signed in with ChatGPT Plus/Pro answer again on E2B workers instead of failing every run with "No API key found for openai-codex".
