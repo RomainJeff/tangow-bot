@@ -29,12 +29,14 @@ export function ComputerMaintenanceActions({
   computer,
   onChanged,
   teach = null,
+  disabled = false,
 }: {
   botId: string;
   computer: ComputerStatus | null;
   onChanged: () => Promise<void>;
   /** Teach a task, offered here only below the sm breakpoint where the chrome hides its button. */
   teach?: TeachMenuAction | null;
+  disabled?: boolean;
 }) {
   const { t } = useLingui();
   // The chrome hides its Teach a task button below Tailwind's sm breakpoint (40rem).
@@ -44,7 +46,11 @@ export function ComputerMaintenanceActions({
   const [confirmReset, setConfirmReset] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const busy = Boolean(computer?.busyBotName) || computer?.state === "booting";
+  const busy =
+    disabled ||
+    Boolean(computer?.busyBotName) ||
+    computer?.state === "booting" ||
+    computer?.controlHolder === "user";
   const showRecover =
     computer?.state === "error" ||
     computer?.state === "running" ||

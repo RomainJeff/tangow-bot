@@ -88,7 +88,14 @@ import {
   verifyMcpInstall,
 } from "@rakazo/adapters";
 import type { Auth } from "@rakazo/auth";
-import type { Actor, ComputerStatus, McpServer, Me, SpaceNavigation } from "@rakazo/contracts";
+import type {
+  Actor,
+  ComputerStatus,
+  ComputerUpdateAllResult,
+  McpServer,
+  Me,
+  SpaceNavigation,
+} from "@rakazo/contracts";
 import {
   appContract,
   IntegrationProviderIdSchema,
@@ -1770,6 +1777,47 @@ export function createRouter(deps: RouterDeps) {
       }),
     },
     computer: {
+      list: authed.computer.list.handler(async ({ context }) => {
+        const computers = await listAccessibleComputers(deps.prisma, context.actor);
+        return Promise.all(
+          computers.flatMap((computer) => {
+            const bot = computer.bots[0];
+            return bot
+              ? [
+                  computerStatus(deps, context.actor, bot.id).then((status) => ({
+                    botId: bot.id,
+                    name: bot.name,
+                    status,
+                  })),
+                ]
+              : [];
+          }),
+        );
+      }),
+      updateAll: authed.computer.updateAll.handler(async ({ context }) => {
+        const computers = await listAccessibleComputers(deps.prisma, context.actor);
+        const result: ComputerUpdateAllResult = { queued: [], skipped: [] };
+        for (const computer of computers) {
+          const bot = computer.bots[0];
+          if (!bot) continue;
+          if (!computerSupportsUpdate(computer.kind)) {
+            result.skipped.push({ botId: bot.id, name: bot.name, reason: "unsupported" });
+            continue;
+          }
+          try {
+            result.queued.push(await queueComputerUpdate(deps, computer.id, bot.id));
+          } catch (error) {
+            const reason = error instanceof ComputerBusyError ? "busy" : "failed";
+            if (reason === "failed") {
+              getLogger().error("computer batch update admission failed", error, {
+                computerId: computer.id,
+              });
+            }
+            result.skipped.push({ botId: bot.id, name: bot.name, reason });
+          }
+        }
+        return result;
+      }),
       status: authed.computer.status.handler(async ({ context, input }) =>
         computerStatus(deps, context.actor, input.botId),
       ),
@@ -5079,6 +5127,24 @@ async function modelSetup(deps: RouterDeps, actor: Actor) {
     settings,
     needsModel: deps.env.agentRuntime !== "scripted" && !credential && !hasDeployment,
   };
+}
+
+function listAccessibleComputers(prisma: PrismaClient, actor: Actor) {
+  const ownedActiveBot = { spaceId: actor.spaceId, userId: actor.userId, archivedAt: null };
+  return prisma.computer.findMany({
+    where: { spaceId: actor.spaceId, bots: { some: ownedActiveBot } },
+    select: {
+      id: true,
+      kind: true,
+      bots: {
+        where: ownedActiveBot,
+        select: { id: true, name: true },
+        orderBy: { id: "asc" },
+        take: 1,
+      },
+    },
+    orderBy: { id: "asc" },
+  });
 }
 
 async function computerStatus(

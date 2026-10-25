@@ -56,6 +56,9 @@ export function createComputerUpdates(client: {
       state = { ...state, openId: id };
       emit();
     },
+    async refresh() {
+      await poll(generation);
+    },
     async start(botId: string, action: "update" | "recover" = "update") {
       const epoch = generation;
       const update = await client.start(botId, action);
