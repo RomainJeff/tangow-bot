@@ -7,6 +7,8 @@ import type {
 } from "@rakazo/adapter-kit";
 import type { PrismaClient } from "@rakazo/db";
 import { z } from "zod";
+import { ConnectorError } from "./connector-error.js";
+import { connectorError, connectorResult } from "./connector-errors.js";
 import {
   AuthSchema,
   applyCredential,
@@ -19,11 +21,7 @@ import {
   readBoundedText,
   requireCredential,
 } from "./connector-http.js";
-import {
-  combineSignals,
-  redactConnectorPayload,
-  sanitizeConnectorError,
-} from "./connector-safety.js";
+import { combineSignals } from "./connector-safety.js";
 import { executeGraphqlOperation, GraphqlConfigSchema } from "./graphql-connectors.js";
 import {
   CATALOG_EXECUTE,
@@ -216,13 +214,17 @@ export class InstalledConnectorProvider implements ConnectorProvider {
           (resolved) => this.execute(resolved, context),
         );
       } catch (error) {
-        yield { type: "error", message: sanitizeConnectorError(error) };
+        yield connectorError(error);
       }
       return;
     }
     const installId = call.route?.resourceId;
     if (!installId) {
-      yield { type: "error", message: "Installed connector route is missing" };
+      yield {
+        type: "error",
+        kind: "invalid_arguments",
+        message: "Installed connector route is missing",
+      };
       return;
     }
     const install = await this.prisma.capabilityInstall.findFirst({
@@ -234,7 +236,11 @@ export class InstalledConnectorProvider implements ConnectorProvider {
       },
     });
     if (!install) {
-      yield { type: "error", message: "Installed connector is unavailable" };
+      yield {
+        type: "error",
+        kind: "permission_denied",
+        message: "Installed connector is unavailable",
+      };
       return;
     }
     let credential: string | undefined;
@@ -253,10 +259,7 @@ export class InstalledConnectorProvider implements ConnectorProvider {
           call.route?.toolName ?? call.tool,
           call.args,
         );
-        yield {
-          type: "result",
-          data: redactConnectorPayload(result, credential ? [credential] : []),
-        };
+        yield connectorResult(result, credential ? [credential] : []);
         return;
       }
       if (install.kind === "graphql") {
@@ -264,7 +267,7 @@ export class InstalledConnectorProvider implements ConnectorProvider {
         const operation = config.operations.find(
           (candidate) => candidate.id === (call.route?.toolName ?? call.tool),
         );
-        if (!operation) throw new Error("GraphQL operation is unavailable");
+        if (!operation) throw new ConnectorError("unsupported", "GraphQL operation is unavailable");
         const result = await executeGraphqlOperation(
           install.source,
           config,
@@ -274,17 +277,14 @@ export class InstalledConnectorProvider implements ConnectorProvider {
           context.signal,
           this.remote,
         );
-        yield {
-          type: "result",
-          data: redactConnectorPayload(result, credential ? [credential] : []),
-        };
+        yield connectorResult(result, credential ? [credential] : []);
         return;
       }
       const config = ApiConfigSchema.parse(install.config);
       const operation = config.operations.find(
         (candidate) => candidate.id === (call.route?.toolName ?? call.tool),
       );
-      if (!operation) throw new Error("API operation is unavailable");
+      if (!operation) throw new ConnectorError("unsupported", "API operation is unavailable");
       const result = await executeApiOperation(
         install.source,
         config,
@@ -294,15 +294,9 @@ export class InstalledConnectorProvider implements ConnectorProvider {
         context.signal,
         this.remote,
       );
-      yield {
-        type: "result",
-        data: redactConnectorPayload(result, credential ? [credential] : []),
-      };
+      yield connectorResult(result, credential ? [credential] : []);
     } catch (error) {
-      yield {
-        type: "error",
-        message: sanitizeConnectorError(error, credential ? [credential] : []),
-      };
+      yield connectorError(error, credential ? [credential] : []);
     }
   }
 

@@ -40,16 +40,41 @@ describe("browser tools", () => {
     expect(() => parseBrowserActions([{ kind: "fill", ref: "e1" }])).toThrow(/text/i);
   });
 
-  it("rejects URL credentials before invoking the browser", async () => {
+  it.each(["not a URL", "file:///tmp/page.html", "https://example:fake-password@example.test"])(
+    "rejects invalid navigation without suggesting desktop control: %s",
+    async (url) => {
+      const browser = new FakeBrowserProvider();
+      browser.navigateError = new Error("must not invoke browser");
+      expect(await browserNavigateFromTool(browser, computer, context, { url })).toEqual({
+        error: "An HTTP(S) URL without embedded credentials is required",
+      });
+    },
+  );
+
+  it("rejects invalid actions before dispatch without declaring an uncertain outcome", async () => {
     const browser = new FakeBrowserProvider();
-    browser.navigateError = new Error("must not invoke browser");
-    for (const scheme of ["http", "https"]) {
-      expect(
-        await browserNavigateFromTool(browser, computer, context, {
-          url: `${scheme}://example:fake-password@example.test`,
-        }),
-      ).toMatchObject({ error: expect.stringContaining("credentials") });
-    }
+    browser.actError = new Error("must not invoke browser");
+    expect(await browserActFromTool(browser, computer, context, { actions: [] })).toEqual({
+      error: "browser_act requires at least one action",
+    });
+  });
+
+  it("reports unexpected provider failures without suggesting desktop control", async () => {
+    const browser = new FakeBrowserProvider();
+    browser.navigateError = new Error("navigation failed");
+    browser.snapshotError = new Error("snapshot failed");
+    browser.actError = new Error("action failed");
+    expect(
+      await browserNavigateFromTool(browser, computer, context, { url: "https://example.test" }),
+    ).toEqual({ error: "navigation failed" });
+    expect(await browserSnapshotFromTool(browser, computer, context, {})).toEqual({
+      error: "snapshot failed",
+    });
+    expect(
+      await browserActFromTool(browser, computer, context, {
+        actions: [{ kind: "click", ref: "e1" }],
+      }),
+    ).toEqual({ ok: false, uncertain: true, error: "action failed" });
   });
 
   it("navigates, snapshots, and acts through the tool helpers", async () => {

@@ -418,48 +418,62 @@ describe("OpenAPI connector import", () => {
     ).resolves.toEqual([]);
   });
 
-  it("executes an installed API operation whose id matches a catalog control", async () => {
-    const install = {
-      id: "api-reserved",
-      kind: "api",
-      source: "https://93.184.216.34",
-      secretId: null,
-      createdAt: new Date(0),
-      config: {
-        auth: { type: "none" },
-        operations: [
-          {
-            id: "__catalog_execute",
-            method: "GET",
-            path: "/reserved",
-            inputSchema: { type: "object" },
-          },
-        ],
-      },
-    };
-    const prisma = {
-      capabilityInstall: {
-        findMany: vi.fn().mockResolvedValue([install]),
-        findFirst: vi.fn().mockResolvedValue(install),
-      },
-    };
-    const fetch = vi.fn().mockResolvedValue(Response.json({ ok: true }));
-    const provider = new InstalledConnectorProvider(prisma as never, {} as never, { fetch });
-    const context = {
-      workspaceId: "workspace-1",
-      userId: "user-1",
-      signal: new AbortController().signal,
-    } as never;
-    const [tool] = await provider.discoverTools(context);
-    const call = { tool: tool!.name, args: {}, executionId: "reserved", route: tool!.route };
+  it.each([200, 401])(
+    "executes an installed API operation whose id matches a catalog control and preserves HTTP failure status %s",
+    async (status) => {
+      const install = {
+        id: "api-reserved",
+        kind: "api",
+        source: "https://93.184.216.34",
+        secretId: null,
+        createdAt: new Date(0),
+        config: {
+          auth: { type: "none" },
+          operations: [
+            {
+              id: "__catalog_execute",
+              method: "GET",
+              path: "/reserved",
+              inputSchema: { type: "object" },
+            },
+          ],
+        },
+      };
+      const prisma = {
+        capabilityInstall: {
+          findMany: vi.fn().mockResolvedValue([install]),
+          findFirst: vi.fn().mockResolvedValue(install),
+        },
+      };
+      const fetch = vi.fn().mockResolvedValue(Response.json({ ok: status === 200 }, { status }));
+      const provider = new InstalledConnectorProvider(prisma as never, {} as never, { fetch });
+      const context = {
+        workspaceId: "workspace-1",
+        userId: "user-1",
+        signal: new AbortController().signal,
+      } as never;
+      const [tool] = await provider.discoverTools(context);
+      const call = { tool: tool!.name, args: {}, executionId: "reserved", route: tool!.route };
 
-    await expect(provider.resolveCall(call, context)).resolves.toBeUndefined();
-    const events = [];
-    for await (const event of provider.execute(call, context)) events.push(event);
+      await expect(provider.resolveCall(call, context)).resolves.toBeUndefined();
+      const events = [];
+      for await (const event of provider.execute(call, context)) events.push(event);
 
-    expect(events).toEqual([{ type: "result", data: { status: 200, data: { ok: true } } }]);
-    expect(fetch).toHaveBeenCalledOnce();
-  });
+      expect(events).toEqual(
+        status === 200
+          ? [{ type: "result", data: { status: 200, data: { ok: true } } }]
+          : [
+              {
+                type: "error",
+                kind: "auth_required",
+                message: "Connector tool reported an error. See details.",
+                details: { error: true, status: 401, data: { ok: false } },
+              },
+            ],
+      );
+      expect(fetch).toHaveBeenCalledOnce();
+    },
+  );
 
   it("maps operation ids, parameters, and JSON bodies to bounded agent tools", () => {
     const imported = importOpenApiDocument({

@@ -223,10 +223,25 @@ export interface ConnectorCall {
   route?: ConnectorRoute;
 }
 
+export type ConnectorFailureKind =
+  | "invalid_arguments"
+  | "auth_required"
+  | "permission_denied"
+  | "unsupported"
+  | "transient"
+  | "unknown";
+
 export type ConnectorEvent =
   | { type: "log"; message: string }
   | { type: "result"; data: unknown }
-  | { type: "error"; message: string };
+  | {
+      type: "error";
+      message: string;
+      /** Omitted by older adapters; consumers treat it as unknown. */
+      kind?: ConnectorFailureKind;
+      /** Provider response, with credentials redacted by the adapter. */
+      details?: unknown;
+    };
 
 export interface ConnectorCapabilities {
   discover: boolean;

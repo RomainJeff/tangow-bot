@@ -5,6 +5,7 @@ import type {
   ConnectorTool,
 } from "@rakazo/adapter-kit";
 import { z } from "zod";
+import { ConnectorError } from "./connector-error.js";
 
 export const DIRECT_TOOL_LIMIT = 20;
 export const TOOL_SEARCH_LIMIT = 10;
@@ -242,7 +243,7 @@ export function resolveCatalogCall(
   const entry = loadCatalogEntry(entries, call.args);
   const args = call.args.arguments;
   if (!args || typeof args !== "object" || Array.isArray(args)) {
-    throw new Error("Tool arguments must be an object");
+    throw new ConnectorError("invalid_arguments", "Tool arguments must be an object");
   }
   const parsed = parseConnectorToolArgs(entry.tool.inputSchema, args as Record<string, unknown>);
   return {
@@ -271,7 +272,10 @@ export function parseConnectorToolArgs(
   const schema = z.fromJSONSchema(inputSchema as never);
   const parsed = schema.safeParse(args);
   if (!parsed.success) {
-    throw new Error(`Tool arguments are invalid: ${z.prettifyError(parsed.error)}`);
+    throw new ConnectorError(
+      "invalid_arguments",
+      `Tool arguments are invalid: ${z.prettifyError(parsed.error)}`,
+    );
   }
   return parsed.data as Record<string, unknown>;
 }
