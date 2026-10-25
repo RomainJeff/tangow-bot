@@ -230,6 +230,8 @@ import {
   resolveAutoReviewChecker,
   runAutoReviewJudge,
 } from "./auto-review.js";
+import type { BatchItemSchemaCache } from "./batch-item-schema.js";
+import { lookUpBatchItemSchema } from "./batch-item-schema.js";
 import { messageBot, resolveRunHop, returnBotMessageOutcome } from "./bot-messages.js";
 import {
   findBotSecret,
@@ -1089,6 +1091,7 @@ export function buildSystemInstructions(parts: SystemInstructionParts): string {
 }
 
 export function createRunExecutor(deps: ExecutorDeps) {
+  const batchItemSchemas: BatchItemSchemaCache = new Map();
   const web = deps.web ?? createWebProvider();
   // Skills live under DATA_DIR/skills; same default as apps/api env + apps/worker.
   const learning = deps.skillLearning ?? DEFAULT_SKILL_LEARNING;
@@ -2643,6 +2646,32 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 resolvedToolSchema ?? connectorSchemas.get(name),
               )
             : { kind: "none" };
+          // A batch item carries no schema, so the lines its tool would take are asked of its server.
+          const { connector } = deps;
+          if (
+            outbound.kind === "draft" &&
+            innerActions?.length === 1 &&
+            !approvedReplayConsumed &&
+            connector
+          ) {
+            const itemSchema = await lookUpBatchItemSchema(
+              (call, callContext) => connector.execute(call, callContext),
+              { ...connectorCall, tool: name, args, executionId },
+              innerActions[0]!.toolName,
+              context,
+              batchItemSchemas,
+            );
+            if (itemSchema) {
+              const reread = readConnectorOutbound(
+                ownToolName,
+                args,
+                contained,
+                pluginProviders,
+                itemSchema,
+              );
+              if (reread.kind === "draft") outbound = reread;
+            }
+          }
           if (outbound.kind === "refuse") return { error: outbound.error };
           const drafted =
             outbound.kind === "draft"

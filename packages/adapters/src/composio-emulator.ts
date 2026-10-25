@@ -235,6 +235,29 @@ const OUTLOOK_TOOLS: ConnectorTool[] = [
   },
 ];
 
+const strings = { type: "array", items: { type: "string" } };
+
+/**
+ * What `COMPOSIO_GET_TOOL_SCHEMAS` answers for a slug, in the shape Composio's docs give (2026-10):
+ * the send's own fields only, without the emulator's convenience aliases.
+ */
+const DOCUMENTED_INPUT_SCHEMAS: Record<string, Record<string, unknown>> = {
+  GMAIL_SEND_EMAIL: {
+    type: "object",
+    properties: {
+      recipient_email: { type: "string" },
+      extra_recipients: strings,
+      cc: strings,
+      bcc: strings,
+      subject: { type: "string" },
+      body: { type: "string" },
+      is_html: { type: "boolean" },
+      attachment: { type: "object" },
+      include_signature: { type: "boolean" },
+    },
+  },
+};
+
 const BATCH_TOOL: ConnectorTool = {
   name: "COMPOSIO_MULTI_EXECUTE_TOOL",
   description: "Run several connected-app actions in one call",
@@ -464,7 +487,11 @@ function sentResult(message: MailMessage): Record<string, unknown> {
   };
 }
 
-export type EmulatedFault = { kind: "fail"; error: string } | { kind: "timeout" };
+export type EmulatedFault =
+  | { kind: "fail"; error: string }
+  | { kind: "timeout" }
+  /** The call never answers until the caller gives up. */
+  | { kind: "hang" };
 
 /** Deterministic, offline Composio catalog and connection emulator for product tests. */
 export class ComposioEmulator implements ComposioProvider {
@@ -547,12 +574,22 @@ export class ComposioEmulator implements ComposioProvider {
 
   async *execute(call: ConnectorCall, context: AdapterContext): AsyncIterable<ConnectorEvent> {
     const args = call.args ?? {};
+    if (this.faults.get(call.tool)?.kind === "hang") {
+      this.faults.delete(call.tool);
+      if (!context.signal.aborted) {
+        await new Promise((resolve) => context.signal.addEventListener("abort", resolve));
+      }
+      yield { type: "error", message: `${call.tool} was cancelled` };
+      return;
+    }
     let result: Record<string, unknown>;
     try {
       result =
         call.tool === BATCH_TOOL.name
           ? this.executeBatch(args, context)
-          : this.executeAction(call.tool, args, context);
+          : call.tool === "COMPOSIO_GET_TOOL_SCHEMAS"
+            ? this.executeSchemaLookup(args)
+            : this.executeAction(call.tool, args, context);
     } catch (error) {
       // ComposioConnector reports every thrown error, a timeout included, as an error event.
       yield { type: "error", message: error instanceof Error ? error.message : String(error) };
@@ -606,6 +643,29 @@ export class ComposioEmulator implements ComposioProvider {
       return this.executeGithub(tool, args);
     }
     return { ok: true, tool, args };
+  }
+
+  /** Composio's schema lookup, answered from the documented schemas above. */
+  private executeSchemaLookup(args: Record<string, unknown>): Record<string, unknown> {
+    const fault = this.faults.get("COMPOSIO_GET_TOOL_SCHEMAS");
+    this.faults.delete("COMPOSIO_GET_TOOL_SCHEMAS");
+    if (fault?.kind === "fail") return { successful: false, error: fault.error, data: null };
+    const slugs = Array.isArray(args.tool_slugs) ? args.tool_slugs.map(String) : [];
+    const found = slugs.filter((slug) => slug in DOCUMENTED_INPUT_SCHEMAS);
+    return {
+      successful: true,
+      error: null,
+      data: {
+        success: found.length === slugs.length,
+        tool_schemas: Object.fromEntries(
+          found.map((slug) => [
+            slug,
+            { tool_slug: slug, toolkit: "gmail", input_schema: DOCUMENTED_INPUT_SCHEMAS[slug] },
+          ]),
+        ),
+        not_found: slugs.filter((slug) => !found.includes(slug)),
+      },
+    };
   }
 
   /** Composio's batch: one response per action, in order, under `data.results`. */
