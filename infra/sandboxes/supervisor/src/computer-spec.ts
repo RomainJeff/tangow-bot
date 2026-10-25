@@ -465,3 +465,94 @@ function mapKey(key: string) {
   if (lower === "meta" || lower === "cmd" || lower === "super") return "super";
   return key;
 }
+
+export const WORKER_IMAGE = process.env.RAKAZO_WORKER_IMAGE ?? "rakazo/worker:local";
+export const WORKER_NETWORK = "rakazo-workers";
+export const WORKER_GUEST_ENTRY = "/opt/rakazo/agent-run-worker.mjs";
+/** The E2B worker profile (`apps/agent-run-worker/template/template.ts`), and #343's pids ceiling. */
+const WORKER_LIMITS = {
+  Memory: 1024 ** 3,
+  MemorySwap: 1024 ** 3,
+  NanoCpus: 1e9,
+  PidsLimit: 2048,
+};
+
+const WORKER_VOLUME_NAME = /^rakazo-[A-Za-z0-9_-]{1,64}$/;
+
+export interface WorkerMountSource {
+  target: string;
+  readOnly: boolean;
+  /** A host path to bind, or a subpath of the named volume that holds `DATA_DIR`. */
+  source: { bind: string } | { volume: string; subpath: string };
+}
+
+/**
+ * The controller sends only volume names. Each is checked against `rakazo-<id>` before it becomes
+ * `DATA_DIR/volumes/<name>`, and each target must be a normalized path under /workspace. The
+ * directories are the provider's to create: the supervisor never creates or deletes them.
+ */
+export function workerMounts(
+  mounts: ReadonlyArray<{ volume: string; path: string; readOnly: boolean }>,
+  dataDir: string,
+  info: Docker.ContainerInspectInfo | undefined,
+): WorkerMountSource[] {
+  return mounts.map((mount) => {
+    if (!WORKER_VOLUME_NAME.test(mount.volume)) throw new Error("invalid worker volume name");
+    if (!mount.path.startsWith("/workspace/") || path.posix.normalize(mount.path) !== mount.path) {
+      throw new Error("worker mounts must be normalized paths under /workspace");
+    }
+    const storage = computerHomeStorage(path.join(dataDir, "volumes", mount.volume), dataDir, info);
+    return {
+      target: mount.path,
+      readOnly: mount.readOnly,
+      source: storage.homeVolume
+        ? { volume: storage.homeVolume.name, subpath: storage.homeVolume.subpath }
+        : { bind: storage.homePath },
+    };
+  });
+}
+
+export function workerCreateOptions(input: {
+  attemptId: string;
+  ttlSeconds: number;
+  mounts: WorkerMountSource[];
+}): Docker.ContainerCreateOptions {
+  return {
+    Image: WORKER_IMAGE,
+    User: COMPUTER_USER,
+    Cmd: ["sleep", String(input.ttlSeconds)],
+    Labels: {
+      "rakazo.managed": "true",
+      "rakazo.worker": "true",
+      "rakazo.attempt": input.attemptId,
+    },
+    WorkingDir: "/workspace",
+    HostConfig: {
+      Init: true,
+      AutoRemove: true,
+      CapDrop: ["ALL"],
+      SecurityOpt: ["no-new-privileges:true"],
+      ...WORKER_LIMITS,
+      NetworkMode: WORKER_NETWORK,
+      Mounts: input.mounts.map((mount) =>
+        "bind" in mount.source
+          ? {
+              Type: "bind" as const,
+              Source: mount.source.bind,
+              Target: mount.target,
+              ReadOnly: mount.readOnly,
+            }
+          : {
+              Type: "volume" as const,
+              Source: mount.source.volume,
+              Target: mount.target,
+              ReadOnly: mount.readOnly,
+              VolumeOptions: {
+                NoCopy: true,
+                Subpath: mount.source.subpath,
+              } as Docker.MountSettings["VolumeOptions"],
+            },
+      ),
+    },
+  };
+}
