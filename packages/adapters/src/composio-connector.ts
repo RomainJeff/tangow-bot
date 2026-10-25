@@ -10,65 +10,31 @@ import type {
   ManagedConnectorProvider,
 } from "@rakazo/adapter-kit";
 import { getLogger } from "@rakazo/logging";
+import type { ToolkitDirectoryEntry } from "./composio-catalog-cache.js";
 import {
   composioToolkitDirectory,
+  composioToolSchemas,
+  createToolkitDirectoryCache,
   mergeCatalogWithConnected,
-  type ToolkitDirectoryEntry,
 } from "./composio-catalog-cache.js";
+import { ConnectorError } from "./connector-error.js";
 import { connectorError } from "./connector-errors.js";
 import { DestinationEmulator } from "./destination-emulator.js";
+import {
+  CATALOG_EXECUTE,
+  catalogEntries,
+  DIRECT_TOOL_LIMIT,
+  executeLazyCatalogControl,
+  isLazyCatalogControlRoute,
+  lazyCatalogTools,
+  resolveCatalogCall,
+} from "./lazy-tool-catalog.js";
 import { isVitestRuntime } from "./test-runtime.js";
 
 type ComposioSession = Awaited<ReturnType<Composio["create"]>>;
 
 export function isComposioEnabled(apiKey: string | undefined): boolean {
   return Boolean(apiKey) && !isVitestRuntime();
-}
-
-export function asConnectorTools(input: unknown): ConnectorTool[] {
-  const items = Array.isArray(input)
-    ? input
-    : input && typeof input === "object" && Array.isArray((input as { items?: unknown }).items)
-      ? ((input as { items: unknown[] }).items ?? [])
-      : [];
-  const tools: ConnectorTool[] = [];
-  for (const item of items) {
-    const mapped = mapOneTool(item);
-    if (mapped) tools.push(mapped);
-  }
-  return tools;
-}
-
-function mapOneTool(item: unknown): ConnectorTool | undefined {
-  if (!item || typeof item !== "object") return undefined;
-  const raw = item as Record<string, unknown>;
-  if (raw.type === "function" && raw.function && typeof raw.function === "object") {
-    const fn = raw.function as Record<string, unknown>;
-    const name = String(fn.name ?? "");
-    if (!name) return undefined;
-    return {
-      name,
-      description: String(fn.description ?? name),
-      inputSchema: asObject(fn.parameters) ?? { type: "object", properties: {} },
-      route: { connectorId: "composio", toolName: name },
-    };
-  }
-  const name = String(raw.slug ?? raw.name ?? "");
-  if (!name) return undefined;
-  return {
-    name,
-    description: String(raw.description ?? name),
-    inputSchema: asObject(raw.inputParameters) ??
-      asObject(raw.inputSchema) ??
-      asObject(raw.parameters) ?? { type: "object", properties: {} },
-    route: { connectorId: "composio", toolName: name },
-  };
-}
-
-function asObject(value: unknown): Record<string, unknown> | undefined {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : undefined;
 }
 
 export type ComposioCatalogItem = Omit<ConnectorCatalogItem, "connectorId">;
@@ -116,24 +82,6 @@ export async function collectPages<T>(
 
 function composioSlugKey(slug: string): string {
   return slug.trim().toLowerCase();
-}
-
-export function executeSessionKey(
-  toolkits: string[],
-  connectedAccounts: Record<string, string[]> = {},
-): string {
-  const unique = new Map<string, string>();
-  for (const slug of toolkits) {
-    const trimmed = slug.trim();
-    const key = composioSlugKey(trimmed);
-    if (key && !unique.has(key)) unique.set(key, trimmed);
-  }
-  const toolkitKey = [...unique.values()].sort().join(",");
-  const accountKey = Object.entries(connectedAccounts)
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([toolkit, ids]) => `${toolkit}:${[...new Set(ids)].sort().join(",")}`)
-    .join(";");
-  return accountKey ? `${toolkitKey}|${accountKey}` : toolkitKey;
 }
 
 export type PluginConnectionRow = {
@@ -218,7 +166,6 @@ export class ComposioConnector implements ComposioProvider {
   constructor(private readonly apiKey?: string) {}
   private client: Composio | undefined;
   private readonly catalogSessions = new Map<string, string>();
-  private readonly executeSessions = new Map<string, { sessionId: string; key: string }>();
 
   describe() {
     return {
@@ -244,67 +191,6 @@ export class ComposioConnector implements ComposioProvider {
       sandbox: { enable: false },
     });
     this.catalogSessions.set(entityId, session.sessionId);
-    return session;
-  }
-
-  async sessionForExecute(
-    entityId: string,
-    connections: ReturnType<typeof connectedComposioConnections>,
-  ): Promise<ComposioSession> {
-    const canonicalToolkits = await this.canonicalizeToolkits(
-      connections.map((connection) => connection.externalId),
-    );
-    const canonicalByKey = new Map(
-      canonicalToolkits.map((toolkit) => [composioSlugKey(toolkit), toolkit]),
-    );
-    const accountIdsByToolkit = new Map<string, Set<string>>();
-    for (const connection of connections) {
-      const accountId = connection.providerRef?.trim();
-      if (!accountId) continue;
-      // No-auth and legacy rows store the toolkit slug rather than a remote
-      // connected-account id. Only concrete account ids can scope a session.
-      if (composioSlugKey(accountId) === composioSlugKey(connection.externalId)) continue;
-      const toolkit = canonicalByKey.get(composioSlugKey(connection.externalId));
-      if (!toolkit) continue;
-      const ids = accountIdsByToolkit.get(toolkit) ?? new Set<string>();
-      ids.add(accountId);
-      accountIdsByToolkit.set(toolkit, ids);
-    }
-    const connectedAccounts: Record<string, string[]> = {};
-    for (const [toolkit, ids] of accountIdsByToolkit) {
-      connectedAccounts[toolkit] = [...ids].sort();
-    }
-    const key = executeSessionKey(canonicalToolkits, connectedAccounts);
-    if (!key) return this.sessionFor(entityId);
-    const composio = this.sdk();
-    const existing = this.executeSessions.get(entityId);
-    if (existing?.key === key) {
-      try {
-        return await composio.sessions.use(existing.sessionId);
-      } catch {
-        this.executeSessions.delete(entityId);
-      }
-    }
-    // Non-multi-account sessions cap connectedAccounts at one id per toolkit.
-    // requireExplicitSelection would also break single-account / no-auth
-    // execute paths that do not pass an account parameter.
-    const needsMultiAccount = Object.values(connectedAccounts).some((ids) => ids.length >= 2);
-    const session = await composio.create(entityId, {
-      manageConnections: false,
-      sandbox: { enable: false },
-      toolkits: canonicalToolkits,
-      ...(Object.keys(connectedAccounts).length > 0 ? { connectedAccounts } : {}),
-      ...(needsMultiAccount
-        ? {
-            multiAccount: {
-              enable: true,
-              maxAccountsPerToolkit: 10,
-              requireExplicitSelection: true,
-            },
-          }
-        : {}),
-    });
-    this.executeSessions.set(entityId, { sessionId: session.sessionId, key });
     return session;
   }
 
@@ -364,32 +250,137 @@ export class ComposioConnector implements ComposioProvider {
   }
 
   async discoverTools(context: AdapterContext): Promise<ConnectorTool[]> {
+    const tools = await this.authorizedTools(context);
+    if (tools.length <= DIRECT_TOOL_LIMIT) return tools;
+    return lazyCatalogTools("composio", "composio", "app", catalogEntries(tools));
+  }
+
+  async resolveCall(call: ConnectorCall, context: AdapterContext) {
+    if (call.route?.resourceId || call.route?.toolName !== CATALOG_EXECUTE) return undefined;
+    return resolveCatalogCall(call, catalogEntries(await this.authorizedTools(context)));
+  }
+
+  private async authorizedTools(context: AdapterContext): Promise<ConnectorTool[]> {
     const connections = connectedComposioConnections(context);
-    if (connections.length === 0) return [];
-    const session = await this.sessionForExecute(composioEntityId(context), connections);
-    const raw = await session.tools();
-    return asConnectorTools(raw);
+    if (!connections.length) return [];
+    const toolkits = await this.canonicalizeToolkits(
+      connections.map((connection) => connection.externalId),
+    );
+    const directory = await this.directory().catch(() => []);
+    const groups = await Promise.all(
+      toolkits.map(async (toolkit): Promise<ConnectorTool[]> => {
+        try {
+          let cache = composioToolSchemas.get(toolkit);
+          if (!cache) {
+            cache = createToolkitDirectoryCache<ConnectorTool>();
+            composioToolSchemas.set(toolkit, cache);
+          }
+          const tools = await cache.get(async () => {
+            const [raw, important] = await Promise.all([
+              this.sdk().tools.getRawComposioTools({ toolkits: [toolkit], limit: 1000 }),
+              this.sdk().tools.getRawComposioTools({
+                toolkits: [toolkit],
+                important: true,
+                limit: 1000,
+              }),
+            ]);
+            const featured = new Set(important.map((tool) => tool.slug));
+            const appName =
+              directory.find((item) => composioSlugKey(item.slug) === composioSlugKey(toolkit))
+                ?.name ?? toolkit;
+            return raw.flatMap((tool): ConnectorTool[] => {
+              if (tool.isDeprecated) return [];
+              if (!tool.version) {
+                getLogger().warn("composio tool has no version", { tool: tool.slug });
+                return [];
+              }
+              return [
+                {
+                  name: tool.slug,
+                  description: tool.description ?? tool.slug,
+                  inputSchema: tool.inputParameters ?? { type: "object", properties: {} },
+                  appName,
+                  readOnly: tool.tags?.includes("readOnlyHint") || undefined,
+                  featured: featured.has(tool.slug) || undefined,
+                  route: {
+                    connectorId: "composio",
+                    resourceId: toolkit,
+                    resourceRevision: tool.version,
+                    toolName: tool.slug,
+                    catalogGroup: toolkit.toLowerCase(),
+                  },
+                },
+              ];
+            });
+          });
+          const accounts = toolkitAccounts(toolkit, context);
+          if (accounts.length < 2) return tools;
+          return tools.map((tool) => ({
+            ...tool,
+            inputSchema: {
+              ...tool.inputSchema,
+              properties: {
+                ...schemaProperties(tool.inputSchema.properties),
+                account: { type: "string", enum: accounts.map((account) => account.label) },
+              },
+              required: [
+                ...(Array.isArray(tool.inputSchema.required) ? tool.inputSchema.required : []),
+                "account",
+              ],
+            },
+          }));
+        } catch (error) {
+          getLogger().error(
+            `composio discovery failed for toolkit ${toolkit}:`,
+            sanitizeComposioError(error),
+          );
+          return [];
+        }
+      }),
+    );
+    return groups.flat();
   }
 
   async *execute(call: ConnectorCall, context: AdapterContext): AsyncIterable<ConnectorEvent> {
     try {
-      const session = await this.sessionForExecute(
-        composioEntityId(context),
-        connectedComposioConnections(context),
-      );
-      const result = await session.execute(call.tool, call.args ?? {});
+      if (isLazyCatalogControlRoute(call.route)) {
+        yield* executeLazyCatalogControl(
+          call,
+          catalogEntries(await this.authorizedTools(context)),
+          (resolved) => this.execute(resolved, context),
+        );
+        return;
+      }
+      if (!call.route?.resourceId || !call.route.resourceRevision) {
+        throw new ConnectorError(
+          "invalid_arguments",
+          "Composio toolkit and tool version are required",
+        );
+      }
+      const { account, ...args } = call.args ?? {};
+      const accounts = toolkitAccounts(call.route.resourceId, context);
+      const selected =
+        account === undefined && accounts.length < 2
+          ? accounts[0]
+          : accounts.find((item) => item.label === account);
+      if ((account !== undefined || accounts.length >= 2) && !selected) {
+        throw new ConnectorError(
+          "invalid_arguments",
+          "Select a valid account for this Composio toolkit",
+        );
+      }
+      const result = await this.sdk().tools.execute(call.route.toolName, {
+        userId: composioEntityId(context),
+        ...(selected ? { connectedAccountId: selected.id } : {}),
+        arguments: args,
+        version: String(call.route.resourceRevision),
+      });
       if (result.error) {
         yield { ...connectorError(result.error), message: sanitizeComposioError(result.error) };
         return;
       }
       const logId = collectLogIds(result)[0] ?? "";
-      yield {
-        type: "result",
-        data: {
-          data: sanitizePayload(result.data),
-          logId,
-        },
-      };
+      yield { type: "result", data: { data: sanitizePayload(result.data), logId } };
     } catch (error) {
       yield { ...connectorError(error), message: sanitizeComposioError(error) };
     }
@@ -682,6 +673,34 @@ function isManagedConnectorProvider(
     typeof candidate.listConnectedExternalIds === "function" &&
     typeof candidate.revoke === "function"
   );
+}
+
+function schemaProperties(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? { ...value } : {};
+}
+
+function toolkitAccounts(
+  toolkit: string,
+  context: AdapterContext,
+): Array<{ id: string; label: string }> {
+  const accounts = new Map<string, string>();
+  for (const connection of connectedComposioConnections(context)) {
+    const id = connection.providerRef?.trim();
+    if (
+      composioSlugKey(connection.externalId) !== composioSlugKey(toolkit) ||
+      !id ||
+      composioSlugKey(id) === composioSlugKey(toolkit)
+    )
+      continue;
+    if (!accounts.has(id)) accounts.set(id, connection.displayName);
+  }
+  return [...accounts].map(([id, name]) => ({
+    id,
+    label:
+      [...accounts.values()].filter((other) => other === name).length > 1
+        ? `${name} (${id.slice(-4)})`
+        : name,
+  }));
 }
 
 function connectedComposioConnections(context: AdapterContext): ConnectedConnector[] {

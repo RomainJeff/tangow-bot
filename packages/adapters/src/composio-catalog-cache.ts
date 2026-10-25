@@ -1,3 +1,5 @@
+import type { ConnectorTool } from "@rakazo/adapter-kit";
+
 export type ToolkitDirectoryEntry = {
   slug: string;
   name: string;
@@ -24,13 +26,16 @@ export function mergeCatalogWithConnected(
  * Coalesces directory loads and serves stale entries during refreshes. Failed
  * refreshes preserve stale entries for later retries; cold-load errors propagate.
  */
-export function createToolkitDirectoryCache(opts?: { ttlMs?: number; now?: () => number }) {
+export function createToolkitDirectoryCache<T = ToolkitDirectoryEntry>(opts?: {
+  ttlMs?: number;
+  now?: () => number;
+}) {
   const ttlMs = opts?.ttlMs ?? COMPOSIO_DIRECTORY_TTL_MS;
   const now = opts?.now ?? Date.now;
-  let entry: { items: ToolkitDirectoryEntry[]; fetchedAt: number } | undefined;
-  let inflight: Promise<ToolkitDirectoryEntry[]> | undefined;
+  let entry: { items: T[]; fetchedAt: number } | undefined;
+  let inflight: Promise<T[]> | undefined;
 
-  async function load(loader: () => Promise<ToolkitDirectoryEntry[]>) {
+  async function load(loader: () => Promise<T[]>) {
     inflight ??= loader()
       .then((items) => {
         entry = { items, fetchedAt: now() };
@@ -43,10 +48,10 @@ export function createToolkitDirectoryCache(opts?: { ttlMs?: number; now?: () =>
   }
 
   return {
-    peek(): ToolkitDirectoryEntry[] | undefined {
+    peek(): T[] | undefined {
       return entry?.items;
     },
-    async get(loader: () => Promise<ToolkitDirectoryEntry[]>): Promise<ToolkitDirectoryEntry[]> {
+    async get(loader: () => Promise<T[]>): Promise<T[]> {
       if (!entry) return load(loader);
       if (now() - entry.fetchedAt < ttlMs) return entry.items;
       if (!inflight) {
@@ -62,3 +67,8 @@ export function createToolkitDirectoryCache(opts?: { ttlMs?: number; now?: () =>
 }
 
 export const composioToolkitDirectory = createToolkitDirectoryCache();
+
+export const composioToolSchemas = new Map<
+  string,
+  ReturnType<typeof createToolkitDirectoryCache<ConnectorTool>>
+>();
